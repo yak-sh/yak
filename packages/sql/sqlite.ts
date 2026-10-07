@@ -149,8 +149,10 @@ export let refEqAt = (from: string): Dialect['refEq'] => (c, eids, negate) => {
   let hit = eids.length == 1
     ? { sql: `${c} = (select id from ${from} where eid = ?)`, params: eids }
     : {
-      sql: `${c} in (select id from ${from} where eid in ` +
-        `(select value from json_each(?)))`,
+      // Resolve a finite eid set from its values, never from stale estimates
+      // of the identity table (which can predate retained transcript growth).
+      sql: `${c} in (select "__key".id from json_each(?) as "__ids" ` +
+        `cross join ${from} as "__key" where "__key".eid = "__ids".value)`,
       params: [JSON.stringify(eids)],
     }
   return negate

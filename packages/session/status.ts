@@ -557,7 +557,27 @@ export let sessionStatus = {
           iff(
             // An empty ask table owes no search through legacy entries.
             exists(select({ cols: [lit(1)], from: table(ASK) })),
-            sub(legacyAsk),
+            iff(
+              // Choose within this statement, never from stale statistics:
+              // a small ask set is cheaper than a lifetime of NULL sequences.
+              exists(
+                select({
+                  cols: [lit(1)],
+                  from: table(ASK),
+                  limit: lit(1),
+                  offset: lit(64),
+                }),
+              ),
+              sub(legacyAsk),
+              sub(select({
+                ...legacyAsk,
+                from: table(ASK, 'a'),
+                joins: [{
+                  ...cross(table('entry', 'e')),
+                  on: eq(col('entity', 'a'), col('entity', 'e')),
+                }],
+              })),
+            ),
             lit(null),
           ),
         ),
@@ -835,6 +855,18 @@ export let sessionStatus = {
         where: eq(col('entity', 's'), owner),
       }),
     )
+    let stopped = declared('stop')
+      ? exists(select({
+        cols: [lit(1)],
+        from: from(latest, 'n'),
+        joins: [
+          join(
+            table('stop', 'z'),
+            eq(col('entity', 'z'), col('entity', 'n')),
+          ),
+        ],
+      }))
+      : lit(false)
     return iff(
       ended,
       lit('stopped'),
@@ -842,7 +874,7 @@ export let sessionStatus = {
         'coalesce',
         iff(
           unsequenced,
-          legacy,
+          iff(stopped, lit('stopped'), legacy),
           sub(select({ cols: [col('v', 'x')], from: from(decision, 'x') })),
         ),
         lit('empty'),

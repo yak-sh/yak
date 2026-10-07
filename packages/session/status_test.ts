@@ -609,7 +609,22 @@ test('session status seeks its own turn without reading unrelated asks', () => {
         content: { body: 'hi' },
       },
     ], { trusted: true })
-    for (let [eid, expected] of [[S, 'settled'], ['sparse', 'running']]) {
+    g.apply([{ entity: { eid: 'legacy' }, session: { id: 'legacy' } }])
+    g.apply(
+      Array.from({ length: 3000 }, (_, i) => ({
+        entity: { eid: `legacy-${i}` },
+        entry: { session: 'legacy' },
+        ...i % 2 ? { stop: {} } : { notice: {} },
+      })),
+      { trusted: true },
+    )
+    for (
+      let [eid, expected] of [
+        [S, 'settled'],
+        ['sparse', 'running'],
+        ['legacy', 'stopped'],
+      ]
+    ) {
       let [owner] = d.query(
         select({
           cols: [col('id')],

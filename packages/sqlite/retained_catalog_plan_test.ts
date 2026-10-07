@@ -135,3 +135,82 @@ test('unbounded retained sound catalog reads grow with catalog, never transcript
     db.close()
   }
 })
+
+test('retained output pages seek sparse replies, while dense request lookups seek their session', () => {
+  let db = new Database(':memory:'), d = driver(db)
+  try {
+    let vocab = loadVocab([archetypeDoc, {
+      $defs: {
+        session: { component: true, type: 'object' },
+        entry: {
+          component: true,
+          type: 'object',
+          index: [['session', 'seq']],
+          properties: {
+            session: { type: 'string', ref: 'session' },
+            seq: { type: 'number' },
+          },
+        },
+        output: {
+          component: true,
+          type: 'object',
+          properties: { source: { type: 'string', ref: 'entry' } },
+        },
+        created: {
+          component: true,
+          type: 'object',
+          properties: { at: { type: 'string' } },
+        },
+        notice: { component: true, type: 'object' },
+      },
+    }])
+    let s = storage(d, vocab)
+    s.install()
+    let g = graph({ storage: s, vocab, plugins: [archetypes()] })
+    g.apply([
+      { entity: { eid: 'target' }, session: {} },
+      { entity: { eid: 'other' }, session: {} },
+      ...['old', 'new', 'elsewhere', 'hidden'].map((eid, i) => ({
+        entity: { eid },
+        entry: { session: i == 2 ? 'other' : 'target', seq: i + 1 },
+        output: {},
+        created: { at: String(i) },
+        ...i == 3 ? { notice: {} } : {},
+      })),
+    ])
+    d.query({ t: 'pragma', name: 'optimize', value: 0x10002 })
+    for (let start = 0; start < 5000; start += 500) {
+      s.tx((tx) =>
+        tx.patch(Array.from({ length: 500 }, (_, n) => ({
+          entity: { eid: `legacy-${start + n}` },
+          entry: { session: 'target' },
+          notice: {},
+        })))
+      )
+    }
+    for (
+      let query of [
+        '.entry.session=target .output !notice .order=-created.at .limit=2',
+        '.output .entry.session=target !notice .order=-created.at .limit=2',
+        '.entry.session=target,other .output !notice .order=-created.at .limit=2',
+      ]
+    ) {
+      let q = render(compile(parse(query), vocab, { archetypes: catalog(d) }))
+      let stmt = db.prepare(q.sql)
+      try {
+        equal(
+          stmt.all(...q.params).map((r) => r.eid),
+          query.includes('target,other')
+            ? ['elsewhere', 'new']
+            : ['new', 'old'],
+        )
+        let steps = status.symbols.sqlite3_stmt_status(stmt.unsafeHandle, 4, 0)
+        ok(steps < 1000, `${steps} VM steps\n${q.sql}`)
+      } finally {
+        stmt.finalize()
+      }
+    }
+  } finally {
+    db.close()
+  }
+})

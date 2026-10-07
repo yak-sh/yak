@@ -530,8 +530,8 @@ test('reference equality compares indexed keys, not projected eids', () => {
   let many = compile(parse('.note.about=target,other'), v)
   assert(
     many.sql.includes(
-      '"note"."about" in (select id from "entity" where eid in ' +
-        '(select value from json_each(?)))',
+      '"note"."about" in (select "__key".id from json_each(?) as "__ids" ' +
+        'cross join "entity" as "__key" where "__key".eid = "__ids".value)',
     ),
     many.sql,
   )

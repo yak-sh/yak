@@ -1536,7 +1536,7 @@ let indexedRelation = (
     ? ctx.d.indexed?.(root.comp, root.index)
     : ctx.d.table(root.comp)
   if (!src) return s
-  return {
+  let indexed: Select = {
     ...s,
     from: raw(src),
     // The presence filter was elided when its table was the planned spine.
@@ -1587,6 +1587,87 @@ let indexedRelation = (
       })),
     ],
   }
+  if (ctx.present && root.index && root.comp != ctx.present) {
+    let present = ctx.present
+    // A session range can hold a lifetime of entries while the required
+    // replies/requests number only a handful. Conversely, a populated request
+    // table must not replace a two-entry session seek. Probe a bounded prefix
+    // in this statement, not stale planner statistics or private cached state.
+    // Both roads apply the identical selector, ordering and page afterwards.
+    let cap = Math.max(64, (find<Limit>(clauses, 'limit')?.n ?? 16) * 4)
+    let dense = raw(
+      `exists (select 1 from ${ctx.d.table(present)} limit 1 offset ?)`,
+      [cap],
+    )
+    let sparse = rel(from, o)
+    let presence: Select = {
+      ...sparse,
+      from: raw(ctx.d.table(present)),
+      where: sparse.where,
+      joins: [
+        {
+          how: 'cross',
+          src: raw(from + ' not indexed', [], 'entity'),
+          on: raw(ctx.d.joinOn(present, 'entity')),
+        },
+        ...o.joins.filter((j) => j.source != ctx.d.table(present)).map((
+          j,
+        ): Join => ({
+          how: flattened(clauses).some((c) =>
+              c.kind == 'pred' && !c.not && !c.where &&
+              c.path.length == 2 && ctx.d.table(c.path[0]) == j.source &&
+              needs(opOf(c), flat(c.value))
+            )
+            ? 'cross'
+            : 'left',
+          src: raw(
+            ctx.d.owned && /^"[a-z_0-9]+"$/.test(j.source)
+              ? ctx.d.owned(j.source.slice(1, -1))
+              : j.source,
+          ),
+          on: raw(j.on),
+        })),
+      ],
+    }
+    let gated = (q: Select, enabled: Cond) => {
+      let gate = render({
+        ...q,
+        cols: [raw(ctx.d.ownerKey('entity') + ' as "id"')],
+        order: undefined,
+        limit: { t: 'case', arms: [[enabled, val(-1)]], else: val(0) },
+      })
+      return {
+        t: 'select' as const,
+        cols: [raw('"id"')],
+        from: raw(`(${gate.sql})`, gate.params),
+      }
+    }
+    let arms = render({
+      t: 'compound',
+      op: 'union all',
+      parts: [gated(presence, not(dense)), gated(indexed, dense)],
+    })
+    return {
+      ...s,
+      from: raw(`(${arms.sql}) as "__selected"`, arms.params),
+      where: TRUE,
+      joins: [
+        {
+          how: 'cross',
+          src: raw(from, [], 'entity'),
+          on: raw(`"__selected"."id" = ${ctx.d.ownerKey('entity')}`),
+        },
+        ...(s.joins ?? []).map((j): Join => ({
+          ...j,
+          src:
+            j.src.t == 'raw' && ctx.d.owned && /^"[a-z_0-9]+"$/.test(j.src.sql)
+              ? raw(ctx.d.owned(j.src.sql.slice(1, -1)))
+              : j.src,
+        })),
+      ],
+    }
+  }
+  return indexed
 }
 
 /** A query as the statement that answers it: the one function `compile`
