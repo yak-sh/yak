@@ -76,7 +76,9 @@ test('projected descriptors batch, wake renderers, release, and survive eviction
     })
     archetypeTables(id2)
     await tick()
-    assertEquals(asks().map((a) => a.subscribe), [`.entity.eid=${id},${id2}&.fields=archetype.tables`])
+    assertEquals(asks().map((a) => a.subscribe), [
+      `.entity.eid=${id},${id2}&.fields=archetype.tables`,
+    ])
     await tick()
     assertEquals(seen.at(-1), tables)
     assertEquals(
