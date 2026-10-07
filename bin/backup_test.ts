@@ -1,8 +1,9 @@
-// Backups use private SQLite paths, so a failed or concurrent run cannot
-// replace a database another reader or restore verifier still has open.
-import { test, until } from '@yaks/testing'
+// A night in the bucket restores to the data dir it was taken from; the
+// newest seven complete nights stay; a failed run keeps every night before it
+// and reaches the tracker. The bucket here is a local directory, which rclone
+// treats as a remote like R2.
+import { equal, match, ok, test, until } from '@yaks/testing'
 import { fileURLToPath } from 'node:url'
-import { assert, assertEquals } from '@std/assert'
 import { at, fn, insert, lit, type Stmt } from '@yaks/sql'
 import { open, type Opened } from '@yaks/sqlite/db'
 import { compose } from '../packages/cli/host.ts'
@@ -12,16 +13,17 @@ import { comp } from '../packages/tracker/model.ts'
 
 let script = fileURLToPath(new URL('./backup', import.meta.url))
 let decode = (bytes: Uint8Array) => new TextDecoder().decode(bytes)
-let run = async (cmd: string, args: string[], cwd: string) => {
-  let out = await new Deno.Command(cmd, { args, cwd }).output()
-  assert(out.success, decode(out.stderr))
-  return decode(out.stdout)
+let sqlite = async (db: string, sql: string) => {
+  let out = await new Deno.Command('sqlite3', {
+    args: ['-batch', '-init', '/dev/null', '-noheader', '-list', db, sql],
+  }).output()
+  ok(out.success, decode(out.stderr))
+  return decode(out.stdout).trim()
 }
+let ls = (dir: string) => [...Deno.readDirSync(dir)].map((e) => e.name).sort()
 
-// A searched component, indexed the way @yaks/fts indexes one: an
-// external-content FTS5 mirror plus the trigger that keeps it. Named after no
-// index the script ever hard-coded, because that is the failure — a new index
-// (mail_fts, 5db8be2b) that a list of names could not know about.
+// A searched table beside the graph's own, so the counts must skip an FTS5
+// index and its shadow tables, and a restore must bring the index back whole.
 let fresh = at('new')
 let schema: Stmt[] = [
   {
@@ -71,7 +73,16 @@ let template = () =>
 
 let fixture = async () => {
   let dir = await Deno.makeTempDir({ prefix: 'yak-backup-' })
-  await run('git', ['init', '-q'], dir)
+  let data = `${dir}/data`
+  let remote = `${dir}/remote`
+  let scratch = `${dir}/scratch`
+  for (let d of [`${data}/frozen`, `${data}/roles/r`, `${data}/images`]) {
+    await Deno.mkdir(d, { recursive: true })
+  }
+  await Deno.mkdir(scratch)
+  await Deno.writeTextFile(`${data}/frozen/page.html`, '<p>frozen</p>')
+  await Deno.writeTextFile(`${data}/roles/r/instructions.md`, '# role')
+  await Deno.writeTextFile(`${data}/images/ab12`, 'image bytes')
   // Every supervised run has its own config and spool, never the box's.
   let configPath = `${dir}/tracker.json`
   await Deno.writeTextFile(
@@ -91,77 +102,166 @@ let fixture = async () => {
       ],
     }),
   )
-  await Deno.writeTextFile(`${dir}/.gitignore`, '*.db\n*.db-*\n')
-  await Deno.mkdir(`${dir}/snap`)
   let opened: Opened[] = []
-  let database = async (path: string) => {
-    await Deno.copyFile(await template(), `${dir}/${path}`)
-    let db = open(`${dir}/${path}`)
-    opened.push(db)
-    return db
+  for (let name of ['yak.db', 'tracker.db']) {
+    await Deno.copyFile(await template(), `${data}/${name}`)
+    opened.push(open(`${data}/${name}`))
   }
   // The rows are commits still in the WAL when the backup runs.
-  let db = await database('yak.db')
+  let [db] = opened
   db.query(insert('entity', { id: 1 }))
   db.query(insert('note', { entity: 1, body: 'the words the index holds' }))
-  // Previous versions used these public names. Another process may still
-  // hold either open; a new backup has no ownership of those files.
-  await database('snap/yak.db')
-  await database('snap/.verify.db')
-  // Unbounded unless asked: timeout(1) can take a tenth of a second to see
-  // its command end, and a test waits behind nothing.
-  let command = (snapshotDir: string, bound: string, io = {}) =>
-    new Deno.Command(script, {
-      env: {
-        YAK_DATA: dir,
-        YAK_CONFIG: configPath,
-        YAK_BACKUP_BOUND: bound,
-        YAK_BACKUP_TIMEOUT: bound ? '30' : '0.5',
-        YAK_BACKUP_SNAPSHOT_DIR: snapshotDir,
-      },
-      ...io,
-    })
-  let release = () => {
-    for (let db of opened.splice(0)) db.close()
-  }
+  let env = (more: Record<string, string> = {}) => ({
+    YAK_DATA: data,
+    YAK_CONFIG: configPath,
+    YAK_BACKUP_REMOTE: remote,
+    YAK_BACKUP_SNAPSHOT_DIR: scratch,
+    YAK_BACKUP_BOUND: '1',
+    ...more,
+  })
+  let command = (args: string[], more: Record<string, string>) =>
+    new Deno.Command(script, { args, env: env(more) })
+  // Through the supervisor: its timeout, its key pair and its reports.
+  let watched = { YAK_BACKUP_BOUND: '', YAK_BACKUP_TIMEOUT: '30' }
   return {
     dir,
-    db,
+    data,
+    remote,
+    scratch,
     configPath,
-    supervised: (snapshotDir = '') =>
-      command(snapshotDir, '', {
-        env: {
-          YAK_DATA: dir,
-          YAK_CONFIG: configPath,
-          YAK_BACKUP_BOUND: '',
-          YAK_BACKUP_TIMEOUT: '30',
-          YAK_BACKUP_SNAPSHOT_DIR: snapshotDir,
-        },
-      }).output(),
-    backup: (snapshotDir = '') => command(snapshotDir, '1').output(),
-    // A short real timeout while the backup waits on a held lock.
-    start: () => command('', '', { stdout: 'null', stderr: 'null' }).spawn(),
-    release,
+    // Straight to the bounded child, as the supervisor runs it.
+    backup: (more = {}) => command([], more).output(),
+    restore: (into: string) => command(['restore', into], {}).output(),
+    supervised: (args: string[] = []) => command(args, watched).output(),
+    start: (more = {}) =>
+      new Deno.Command(script, {
+        env: env({ ...watched, ...more }),
+        stdout: 'null',
+        stderr: 'null',
+      }).spawn(),
+    spooled: () => Array.fromAsync(files(`${dir}/spool`).source()),
+    nights: () => ls(`${remote}/snapshots`),
     close: async () => {
-      release()
+      for (let o of opened) o.close()
       await Deno.remove(dir, { recursive: true })
     },
   }
 }
 
-// What the fixture holds open while a backup runs.
-let held = ['yak.db', 'snap/yak.db', 'snap/.verify.db']
-
-// The first two tests read one run with every default: a backup is a few dozen
-// processes, and neither test changes what the other reads. Its directory is
-// the run's scratch, and the first test lets go of its databases.
-let backedUp = async () => {
-  let f = await fixture()
-  let inodes = held.map((p) => Deno.statSync(`${f.dir}/${p}`).ino)
-  return { f, inodes, out: await f.backup() }
+// Nights an earlier run left: complete ones carry `counts`.
+let seed = async (remote: string, nights: string[], complete = true) => {
+  for (let n of nights) {
+    await Deno.mkdir(`${remote}/snapshots/${n}`, { recursive: true })
+    await Deno.writeTextFile(`${remote}/snapshots/${n}/yak.db.zst`, '')
+    if (complete) {
+      await Deno.writeTextFile(`${remote}/snapshots/${n}/counts`, '')
+    }
+  }
 }
-let defaults: ReturnType<typeof backedUp> | undefined
-let once = () => defaults ??= backedUp()
+
+test('a night restores to the data dir it was taken from', async () => {
+  let f = await fixture()
+  try {
+    let out = await f.backup()
+    ok(out.success, decode(out.stderr))
+    match(decode(out.stdout), /backup: \S+: 1 entities, done/)
+    let [night] = f.nights()
+    equal(ls(`${f.remote}/snapshots/${night}`), [
+      'counts',
+      'files.tar.zst',
+      'tracker.db.zst',
+      'yak.db.zst',
+    ])
+    equal(ls(f.scratch), [])
+    let into = `${f.dir}/restored`
+    out = await f.restore(into)
+    ok(out.success, decode(out.stderr))
+    match(decode(out.stdout), new RegExp(`restored ${night} in \\d+s`))
+    equal(ls(into), ['frozen', 'images', 'roles', 'tracker.db', 'yak.db'])
+    equal(
+      await sqlite(`${into}/yak.db`, 'select body from note'),
+      'the words the index holds',
+    )
+    equal(
+      await sqlite(
+        `${into}/yak.db`,
+        "select count(*) from note_fts where note_fts match 'index'",
+      ),
+      '1',
+    )
+    equal(await Deno.readTextFile(`${into}/images/ab12`), 'image bytes')
+    equal(await Deno.readTextFile(`${into}/roles/r/instructions.md`), '# role')
+    // A restore never lands on a directory already in use.
+    out = await f.restore(into)
+    ok(!out.success)
+    match(decode(out.stderr), /is not empty: restore into a new directory/)
+    // Nor does it pass a night whose databases read otherwise than counted.
+    let counts = `${f.remote}/snapshots/${night}/counts`
+    await Deno.writeTextFile(
+      counts,
+      (await Deno.readTextFile(counts)).replace('note\t1', 'note\t2'),
+    )
+    out = await f.restore(`${f.dir}/again`)
+    ok(!out.success)
+    match(decode(out.stderr), /row counts differ from the night's/)
+  } finally {
+    await f.close()
+  }
+})
+
+test('the newest seven complete nights stay, and nothing else', async () => {
+  let f = await fixture()
+  try {
+    let old = [1, 2, 3, 4, 5, 6, 7, 8].map((d) => `2026-01-0${d}T044200Z`)
+    await seed(f.remote, old)
+    await seed(f.remote, ['2026-01-01T000000Z', '2026-01-09T044200Z'], false)
+    let out = await f.backup()
+    ok(out.success, decode(out.stderr))
+    let [tonight] = f.nights().filter((n) => n > '2026-02')
+    equal(f.nights(), [...old.slice(2), tonight])
+  } finally {
+    await f.close()
+  }
+})
+
+test('a damaged database fails the night and drops nothing', async () => {
+  let f = await fixture()
+  try {
+    await seed(f.remote, ['2026-01-01T044200Z'])
+    // A b-tree page whose header is garbage: a page copy keeps it as it is.
+    let file = await Deno.open(`${f.data}/tracker.db`, { write: true })
+    await file.seek(4096, Deno.SeekMode.Start)
+    await file.write(new Uint8Array(64).fill(0xff))
+    file.close()
+    let out = await f.backup()
+    ok(!out.success)
+    match(decode(out.stderr), /tracker\.db failed quick_check/)
+    equal(f.nights(), ['2026-01-01T044200Z'])
+    equal(ls(f.scratch), [])
+  } finally {
+    await f.close()
+  }
+})
+
+test('a snapshot directory without enough space is refused', async () => {
+  let f = await fixture()
+  try {
+    // A sparse terabyte: the capacity gate refuses it before any copy.
+    await Deno.truncate(`${f.data}/yak.db`, 2 ** 40)
+    // Named, and the default: the system's temporary directory.
+    for (let dir of [f.scratch, '']) {
+      let out = await f.backup({
+        YAK_BACKUP_SNAPSHOT_DIR: dir,
+        TMPDIR: f.scratch,
+      })
+      ok(!out.success)
+      match(decode(out.stderr), /snapshot directory needs \d+ KiB/)
+    }
+    equal(ls(f.scratch), [])
+  } finally {
+    await f.close()
+  }
+})
 
 // A process blocked on a lock is listed in /proc/locks as `->` against the
 // locked file's inode, which is how flock(1) waits.
@@ -171,180 +271,41 @@ let waiting = (path: string) => {
     .some((l) => l.includes('->') && l.includes(`:${ino} `))
 }
 
-test(
-  'backup snapshots WAL commits and leaves existing SQLite files attached',
-  async () => {
-    let { f, inodes, out } = await once()
-    try {
-      assert(out.success, decode(out.stderr))
-      assert(decode(out.stdout).includes('backup: snapshot in /dev/shm'))
-      assertEquals(held.map((p) => Deno.statSync(`${f.dir}/${p}`).ino), inodes)
-      assertEquals(f.db.query({ t: 'pragma', name: 'integrity_check' }), [{
-        integrity_check: 'ok',
-      }])
-      await run(
-        'git',
-        ['cat-file', '-e', 'HEAD:snap/graph.sql.part.000.zst'],
-        f.dir,
-      )
-      let sql = await run(
-        'zstd',
-        ['-dcq', 'snap/graph.sql.part.000.zst'],
-        f.dir,
-      )
-      assert(sql.includes('INSERT INTO entity VALUES(1);'), sql)
-      await run('sh', [
-        '-c',
-        '{ cat snap/schema.sql; zstd -dcq snap/graph.sql.part.*.zst snap/journal.sql.part.*.zst; } | sqlite3 restored.db',
-      ], f.dir)
-      assertEquals(
-        await run('sqlite3', [
-          '-batch',
-          '-init',
-          '/dev/null',
-          '-noheader',
-          '-list',
-          'restored.db',
-          'select count(*) from entity',
-        ], f.dir),
-        '1\n',
-      )
-      let pending = [...Deno.readDirSync(`${f.dir}/.git`)]
-        .filter((e) => e.isDirectory && e.name.startsWith('yak-backup.'))
-      assertEquals(pending, [])
-    } finally {
-      f.release()
-    }
-  },
-)
-
-// The dump must carry an index's definition and no byte of the index itself.
-// Its shadow tables cannot be written as plain create TABLEs — VACUUM emits
-// them ahead of the virtual table, so they win and the virtual table then
-// fails to create, which is what left every `insert into mail_fts` with no
-// such table from 2026-09-11. The script's own round-trip gate is the rest of
-// the proof: a run that gets here loaded its dump back.
-test(
-  'the dump defines each FTS5 index and dumps none of its rows',
-  async () => {
-    let { f, out } = await once()
-    assert(out.success, decode(out.stderr))
-    let schema = await run('git', ['show', 'HEAD:snap/schema.sql'], f.dir)
-    assert(schema.includes('CREATE VIRTUAL TABLE "note_fts"'), schema)
-    assert(schema.includes('CREATE TRIGGER "note_fts_insert"'), schema)
-    assert(!/CREATE TABLE ['"]?note_fts_/.test(schema), schema)
-    let sql = await run('zstd', ['-dcq', 'snap/graph.sql.part.000.zst'], f.dir)
-    assert(!sql.includes('note_fts'), sql)
-    assert(
-      sql.includes("INSERT INTO note VALUES(1,'the words the index holds');"),
-      sql,
-    )
-  },
-)
-
-test('a separate snapshot directory is private and cleaned', async () => {
+test('a backup stuck behind another is killed at its bound and reported', async () => {
   let f = await fixture()
-  let scratch = await Deno.makeTempDir({ prefix: 'yak-snapshot-' })
+  let path = `${f.data}/backup.lock`
+  let lock = await Deno.open(path, { create: true, write: true })
+  await lock.lock()
   try {
-    let out = await f.backup(scratch)
-    assert(out.success, decode(out.stderr))
-    assert(decode(out.stdout).includes(`backup: snapshot in ${scratch}`))
-    assertEquals([...Deno.readDirSync(scratch)], [])
-    await run(
-      'git',
-      ['cat-file', '-e', 'HEAD:snap/graph.sql.part.000.zst'],
-      f.dir,
-    )
-  } finally {
-    await f.close()
-    await Deno.remove(scratch)
-  }
-})
-
-test('a snapshot directory without enough space is refused', async () => {
-  let dir = await Deno.makeTempDir({ prefix: 'yak-backup-capacity-' })
-  let scratch = await Deno.makeTempDir({ prefix: 'yak-snapshot-' })
-  try {
-    await run('git', ['init', '-q'], dir)
-    await Deno.writeTextFile(`${dir}/yak.db`, '')
-    await Deno.truncate(`${dir}/yak.db`, 2 ** 40)
-    for (let snapshotDir of ['', scratch]) {
-      let env: Record<string, string> = {
-        YAK_DATA: dir,
-        YAK_BACKUP_BOUND: '1',
-      }
-      if (snapshotDir) env.YAK_BACKUP_SNAPSHOT_DIR = snapshotDir
-      let out = await new Deno.Command(script, {
-        env,
-      }).output()
-      assert(!out.success)
-      assert(decode(out.stderr).includes('snapshot directory needs'))
-    }
-    assertEquals([...Deno.readDirSync(scratch)], [])
-  } finally {
-    await Deno.remove(dir, { recursive: true })
-    await Deno.remove(scratch)
-  }
-})
-
-test('the restore proof compares against snapshot row counts', async () => {
-  let f = await fixture()
-  try {
-    f.db.query({
-      t: 'create table',
-      name: 'echo',
-      cols: [{ name: 'id', type: 'integer' }],
+    // A short bound while the backup waits on the held lock.
+    let backup = f.start({ YAK_BACKUP_TIMEOUT: '0.5' })
+    await until(() => waiting(path), {
+      label: 'the backup to wait on the lock',
     })
-    // The original entity predates this trigger; replaying its INSERT adds a
-    // row to echo that the checked snapshot did not contain.
-    f.db.query({
-      t: 'create trigger',
-      name: 'echo_entity',
-      timing: 'after',
-      event: 'insert',
-      on: 'entity',
-      body: [insert('echo', { id: 1 })],
+    equal((await backup.status).code, 124)
+    let records = await f.spooled()
+    equal(records.length, 1)
+    equal(comp(records[0].rows[0], 'error').tags, {
+      job: 'backup',
+      exit_code: 124,
     })
-    let out = await f.backup()
-    assert(!out.success)
-    assert(
-      decode(out.stderr).includes('round-trip lost rows in echo (0 → 1)'),
-      decode(out.stderr),
-    )
   } finally {
+    await lock.unlock()
+    lock.close()
     await f.close()
   }
 })
 
-test(
-  'a backup timing out on the lock cannot remove the active verifier database',
-  async () => {
-    let f = await fixture()
-    let path = `${f.dir}/.git/yak-backup.lock`
-    let lock = await Deno.open(path, { create: true, write: true })
-    await lock.lock()
-    try {
-      let before = Deno.statSync(`${f.dir}/snap/.verify.db`).ino
-      let backup = f.start()
-      await until(() => waiting(path), {
-        label: 'the backup to wait on the lock',
-      })
-      // The supervisor stays alive when timeout terminates its locked child.
-      assertEquals((await backup.status).code, 124)
-      let records = await Array.fromAsync(files(`${f.dir}/spool`).source())
-      assertEquals(records.length, 1)
-      assertEquals(comp(records[0].rows[0], 'error').tags, {
-        job: 'backup',
-        exit_code: 124,
-      })
-      assertEquals(Deno.statSync(`${f.dir}/snap/.verify.db`).ino, before)
-    } finally {
-      await lock.unlock()
-      lock.close()
-      await f.close()
-    }
-  },
-)
+test('a failed restore is the reader’s, not a tracker bug', async () => {
+  let f = await fixture()
+  try {
+    let out = await f.supervised(['restore', `${f.dir}/restored`])
+    ok(!out.success)
+    equal(await f.spooled(), [])
+  } finally {
+    await f.close()
+  }
+})
 
 test('a failed daily backup becomes a tracker bug; success adds no report', async () => {
   let f = await fixture()
@@ -357,29 +318,31 @@ test('a failed daily backup becomes a tracker bug; success adds no report', asyn
     },
   )
   try {
-    // A sparse scratch database forces the real capacity gate before VACUUM.
+    await seed(f.remote, ['2026-01-01T044200Z'])
+    // A sparse scratch database forces the capacity gate before any copy.
     // Restore its size before the later successful backup; never fill a disk.
-    let size = (await Deno.stat(`${f.dir}/yak.db`)).size
-    await Deno.truncate(`${f.dir}/yak.db`, 2 ** 40)
+    let size = (await Deno.stat(`${f.data}/yak.db`)).size
+    await Deno.truncate(`${f.data}/yak.db`, 2 ** 40)
     let out
     try {
       out = await f.supervised()
     } finally {
-      await Deno.truncate(`${f.dir}/yak.db`, size)
+      await Deno.truncate(`${f.data}/yak.db`, size)
     }
-    assertEquals(out.code, 1)
+    equal(out.code, 1)
     let stderr = decode(out.stderr)
-    assert(stderr.includes('snapshot directory needs'), stderr)
-    let records = await Array.fromAsync(files(`${f.dir}/spool`).source())
-    assertEquals(records.length, 1)
+    ok(stderr.includes('snapshot directory needs'), stderr)
+    equal(f.nights(), ['2026-01-01T044200Z'])
+    let records = await f.spooled()
+    equal(records.length, 1)
     let row = records[0].rows[0]
-    assertEquals(comp(row, 'error').level, 'error')
-    assertEquals(comp(row, 'error').tags, { job: 'backup', exit_code: 1 })
-    assertEquals(comp(row, 'during').kind, 'backup')
-    assert(
+    equal(comp(row, 'error').level, 'error')
+    equal(comp(row, 'error').tags, { job: 'backup', exit_code: 1 })
+    equal(comp(row, 'during').kind, 'backup')
+    ok(
       String(comp(row, 'exception').value).includes('snapshot directory needs'),
     )
-    assertEquals(
+    equal(
       String(comp(row, 'error').at).slice(0, 10),
       new Date().toISOString().slice(0, 10),
     )
@@ -388,18 +351,18 @@ test('a failed daily backup becomes a tracker bug; success adds no report', asyn
     await host.fx.idle()
     let errors = await host.graph.read('.error *')
     let bugs = await host.graph.read('.bug *')
-    assertEquals(errors.length, 1)
-    assertEquals(bugs.length, 1)
-    assertEquals(comp(errors[0], 'error').bug, bugs[0].entity.eid)
-    assertEquals(comp(bugs[0], 'bug').hits, 1)
-    assert(String(comp(bugs[0], 'doc').title).includes('backup failed'))
-    assertEquals(await Array.fromAsync(files(`${f.dir}/spool`).source()), [])
+    equal(errors.length, 1)
+    equal(bugs.length, 1)
+    equal(comp(errors[0], 'error').bug, bugs[0].entity.eid)
+    equal(comp(bugs[0], 'bug').hits, 1)
+    ok(String(comp(bugs[0], 'doc').title).includes('backup failed'))
+    equal(await f.spooled(), [])
     out = await f.supervised()
-    assert(out.success, decode(out.stderr))
-    assertEquals(await Array.fromAsync(files(`${f.dir}/spool`).source()), [])
+    ok(out.success, decode(out.stderr))
+    equal(await f.spooled(), [])
     await host.duties(AbortSignal.abort(), ['@yaks/tracker'])
-    assertEquals((await host.graph.read('.error')).length, 1)
-    assertEquals((await host.graph.read('.bug')).length, 1)
+    equal((await host.graph.read('.error')).length, 1)
+    equal((await host.graph.read('.bug')).length, 1)
   } finally {
     await host.close()
     await f.close()

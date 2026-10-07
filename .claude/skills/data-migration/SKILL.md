@@ -79,20 +79,32 @@ past the graph leaves archetype pointers stale, and filters and whole reads
 then answer wrong; where SQL can't be avoided, `reclassify(driver, eids)`
 inside its transaction sets them right (packages/sqlite/README.md).
 
-Prove it on a copy first. `sqlite3 ~/.yak/yak.db "VACUUM INTO '<scratch>/copy.db'"`
-takes a few minutes; point a scratch config at the copy (`end-to-end-checks`
-has how a probe stays apart from the live graph), run the script, compare
-counts before and after, and run it again to show the second run changes
-nothing. A script that parses sqlite3's output names its mode (`-list`,
-`-json`): a ~/.sqliterc can set `.mode box`, and its borders then read as data,
-eids included. A copy is as big as the live file (`ls -lh ~/.yak/yak.db`)
-and sits on the disk the live graph writes to. Copies left behind have filled
-that disk, so the copy and its scratch config go once the proof is done.
+Prove it on a copy first. This copies the pages as one read transaction saw
+them, in about five minutes:
 
-`bin/backup` snapshots the db into ~/.yak's git history. Cron runs it daily
-and it takes about a quarter of an hour under a lock (each run is in
-~/.tasks-backup.log). When one finished recently, `git -C ~/.yak log -1` shows
-it, and it will do.
+```sh
+sqlite3 -readonly ~/.yak/yak.db BEGIN "select count(*) from sqlite_schema" \
+  ".backup <scratch>/copy.db" COMMIT
+```
+
+Without the BEGIN, `.backup` starts over each time another process commits,
+which on the box is several times a second; `VACUUM INTO` rebuilds every index
+and takes over half an hour on the 10 GB graph. Point a scratch config at the
+copy (`end-to-end-checks` has how a probe stays apart from the live graph),
+run the script, compare counts before and after, and run it again to show the
+second run changes nothing. A script that parses sqlite3's output names its
+mode (`-list`, `-json`): a ~/.sqliterc can set `.mode box`, and its borders
+then read as data, eids included. A copy is as big as the live file
+(`ls -lh ~/.yak/yak.db`) and sits on the disk the live graph writes to. Copies
+left behind have filled that disk, so the copy and its scratch config go once
+the proof is done.
+
+`bin/backup` puts a snapshot of the box's databases in R2 every night and
+keeps the newest seven; `bin/backup restore <new dir>` brings the newest back
+(the script's header has the rest). Cron runs it at 04:42, and it takes about
+25 minutes under a lock; each run is in ~/.tasks-backup.log, ending
+`backup: <night>: <n> entities, done in <s>s`. When one finished recently, it
+will do; otherwise run `bin/backup` before the migration.
 
 The live run belongs to the moment the code that reads the new shape goes
 live: land, then run the migration and `yak restart` back to back. A change

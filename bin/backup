@@ -1,444 +1,257 @@
 #!/bin/sh
-# Back up the yak data dir (~/.yak or $YAK_DATA) as a git commit.
+# Back up the yak data dir (~/.yak or $YAK_DATA) to R2, keeping the newest
+# seven nights there and nothing on the box.
 #
-# The data dir IS a git repo: files (frozen/, images, md) commit as
-# themselves; the LIVE SQLite db never commits — a commit could catch it
-# mid-transaction — so each run snapshots it atomically (VACUUM INTO) and
-# then writes that snapshot as compressed SQL for history to hold.
+# A **night** is one run's prefix in the bucket, snapshots/<UTC time>/:
+#   yak.db.zst, tracker.db.zst  each database page for page, as one read
+#                               transaction saw it, compressed with zstd
+#   files.tar.zst               frozen/, migration/ and roles/
+#   counts                      rows per table in each database, uploaded
+#                               last: a night without it never completed
+# Beside the nights, images/ mirrors the @yaks/blob byte store
+# (packages/blob/backend.ts), which a database alone cannot restore. Its file
+# names are the hashes of their bytes, so each is uploaded once and never
+# changes, and the one mirror serves every night.
 #
-# Restore into a NEW directory with no database or SQLite sidecars, then
-#   { cat snap/schema.sql; zstd -dcq snap/graph.sql.part.*.zst snap/journal.sql.part.*.zst; } | sqlite3 yak.db
-# and start the server. The FTS indexes refill as the rows load — the virtual
-# tables and their sync triggers ride along in schema.sql — and @yaks/fts
-# adopt()/heal() at boot cuts and rebuilds any index the dump predates;
-# embeddings backfill on the embed sweep. That is why neither is dumped.
-# The .part.NNN suffixes are zero-padded, so the glob reassembles them in order.
+# Restore into a NEW directory, then point a config's `db` at it:
+#   bin/backup restore <dir> [night]
+# It takes the newest complete night unless named, decompresses it, copies the
+# images, and compares each database's row counts with `counts`. Away from the
+# box, export YAK_BACKUP_R2_ACCESS_KEY_ID and YAK_BACKUP_R2_SECRET_ACCESS_KEY
+# from 1Password's "yak-graph-backups R2 S3 creds" first; on the box the
+# supervisor reads them out of the vault.
 #
-# TEXT, not the binary, because git cannot delta a SQLite file: every hourly
-# commit stored a near-complete new copy (~167 MB/day, and .git reached 2.5 GB
-# in 15 days), while the whole db as text costs ~29 KB per commit — measured,
-# two real consecutive snapshots. The same change makes the working files
-# smaller than the binary was, since the biggest tables are derived data nobody
-# needs to carry: embeddings and the FTS indexes are over half the db, and all
-# of them rebuild themselves.
+# NIGHTLY SNAPSHOTS, not continuous WAL replication (T-95322). Every process
+# on the box writes yak.db and checkpoints it: measured 2026-10-07, 4 commits
+# and 100 WAL pages a second, 35 GB of WAL a day. Litestream 0.5.17 adds
+# its own tables to the database, holds a read transaction on it for good, and
+# has an open bug (#1540) in which another process's checkpoint drops
+# committed rows from the replica while a restore still passes
+# integrity_check. A backup that can be quietly incomplete is worse than one a
+# night old.
 #
-# SPLIT across files, and SHARDED into parts, because GitHub's hard 100 MB limit
-# is per FILE. The journal is the largest, fastest-growing data and append-only,
-# so it gets its own file; and each big dump is compressed into parts from
-# <50 MB of SQL (schema stays whole). Sharding keeps every byte — pruning old
-# journal rows, would buy the same headroom by discarding the write history, and
-# the journal is mostly MIXED batches that also touch live entities, so pruning it
-# by "legacy" removes almost nothing without losing real undo history.
+# A PAGE COPY inside one read transaction, not VACUUM INTO. VACUUM INTO
+# rebuilds every table and index: on the 10 GB graph it had written 3 GB in 11
+# minutes, keeping the WAL from resetting the whole time. The page copy took 5.
+# `.backup` alone releases its read lock every 100 pages and starts over when
+# another process commits, which here is several times a second, so it runs
+# inside BEGIN, and the copy is the database at that one moment. A page copy
+# also keeps damage where quick_check finds it: VACUUM INTO rebuilt a torn
+# freelist into a clean snapshot (T-34578) and hid it for two days.
 #
-# Cron-safe: explicit PATH, no interactivity, exits 0 on "nothing new".
-# A missing origin is not an error — that is a deliberate local-history-only
-# backup. A push that is REJECTED is, because the off-box copy has stopped
-# advancing while the local one keeps moving.
+# Cron-safe: explicit PATH, no interactivity, and every failure exits nonzero,
+# which the supervisor reports to the tracker.
 set -eu
 export PATH="$HOME/.deno/bin:/home/linuxbrew/.linuxbrew/bin:/usr/local/bin:/usr/bin:/bin"
 
-# BOUNDED, or it is not a backup but an outage. At 3.3 GB one run took over an
-# hour, the cron stacked the next on top, the dump and its verify copy filled
-# the disk, and the server died under the I/O. So the whole run re-execs itself
-# under a hard timeout (30 min; TERM, then KILL 30s later). The restore proof
-# alone needs about 13 min for 177 SQL shards at the measured 14 shards/min;
-# snapshot, dump, commit and push need time too. Every temp file belongs to
-# that run. Interrupted SQLite files stay together in their private directory;
-# a later run never replaces their main file while
-# an old subprocess or recovery journal may still need it.
+# BOUNDED, or it is not a backup but an outage: a run that outlives the night
+# stacks the next on top of it. So the whole run re-execs under a supervisor
+# (bin/backup-run.ts) that kills it at YAK_BACKUP_TIMEOUT, an hour unless set
+# (a night took 25 minutes, the first 37 with every image to upload), and
+# reports a failure. A restore is a person's, and runs unbounded and
+# unreported.
 if [ -z "${YAK_BACKUP_BOUND:-}" ]; then
-  # Resolve before the child changes into the data repo. Deno uses the
-  # checkout's import map, not anything in the backup repository.
   here=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
   exec deno run -A --config "$here/../deno.json" "$here/backup-run.ts" "$@"
 fi
 
 data="${YAK_DATA:-$HOME/.yak}"
-cd "$data"
+remote="${YAK_BACKUP_REMOTE:-r2:yak-graph-backups}"
+keep=7
+databases="yak.db tracker.db"
+files="frozen migration roles"
+tab=$(printf '\t')
 
-[ -d .git ] || { echo "backup: $data is not a git repo (git init it first)" >&2; exit 1; }
-
-started=$(date +%s)
-echo "backup: start $(date -u +%Y-%m-%dT%H:%M:%SZ)"
-# Redaction holds the same lock through its database scrub and published-
-# history report. Otherwise this job could snapshot the old bytes first, wait
-# while redaction reports, then commit and push one new leak afterward.
-# Wait a minute at most: a lock still held past that is a stuck run, and
-# queueing behind it is how runs stacked up before.
-exec 9>.git/yak-backup.lock
-flock -w 60 -x 9 || { echo "backup: another backup or redaction holds the lock" >&2; exit 1; }
-
-# Never recycle a database pathname: a previous crash may have left a hot
-# journal, or a reader may still hold the old inode open. Private paths also
-# mean a run that fails to acquire the lock cannot delete another run's DB.
-work=$(mktemp -d .git/yak-backup.XXXXXXXX)
-outside=
-probe="$work/verify.db"
-cleanup() {
-  rm -rf "$work"
-  [ -z "$outside" ] || rm -rf "$outside"
-}
-trap cleanup EXIT
-# The foreground SQLite child may still be unwinding when a signal reaches
-# this shell. Preserve both private directories instead of unlinking open files.
-abort() {
-  trap - EXIT
-  echo "backup: aborted; retained $work${outside:+ and $outside}" >&2
-  exit 124
-}
-trap abort HUP INT QUIT TERM
-
-# Keep the snapshot off the data disk so it does not overlap the dump and
-# restore probe there. Measure the scratch filesystem on each run: /dev/shm's
-# capacity depends on the host, and a full scratch filesystem must fail before
-# VACUUM starts. An explicit path may use another filesystem.
-YAK_BACKUP_SNAPSHOT_DIR=${YAK_BACKUP_SNAPSHOT_DIR:-/dev/shm}
-case "$YAK_BACKUP_SNAPSHOT_DIR" in
-  /*) ;;
-  *) echo "backup: snapshot directory must be absolute" >&2; exit 1 ;;
-esac
-[ -d "$YAK_BACKUP_SNAPSHOT_DIR" ] || {
-  echo "backup: snapshot directory does not exist: $YAK_BACKUP_SNAPSHOT_DIR" >&2
+say() { echo "backup: $*"; }
+die() {
+  echo "backup: $*" >&2
   exit 1
 }
-size=$(stat -c %s yak.db)
-wal=0
-[ ! -f yak.db-wal ] || wal=$(stat -c %s yak.db-wal)
-need=$(( (size + wal + 67108864 + 1023) / 1024 ))
-free=$(df -Pk "$YAK_BACKUP_SNAPSHOT_DIR" | awk 'NR == 2 { print $4 }')
-case "$free" in
-  ''|*[!0-9]*) echo "backup: cannot measure snapshot space" >&2; exit 1 ;;
-esac
-[ "$free" -ge "$need" ] || {
-  echo "backup: snapshot directory needs $need KiB, has $free KiB" >&2
-  exit 1
-}
-outside=$(mktemp -d "$YAK_BACKUP_SNAPSHOT_DIR/yak-backup.XXXXXXXX")
-snapshot="$outside/snapshot.db"
-echo "backup: snapshot in $YAK_BACKUP_SNAPSHOT_DIR"
-mkdir -p snap
-
-# Plain output regardless of any ~/.sqliterc (box modes break the checks). A
-# lock is waited out, not failed on: the server holds one while it starts.
+# Plain output regardless of any ~/.sqliterc. A lock is waited out, not
+# failed on: the server holds one while it starts.
 sq() { sqlite3 -batch -init /dev/null -cmd '.timeout 60000' -noheader -list "$@"; }
 
-# Catch structural corruption on the LIVE db, which the snapshot check below
-# cannot. VACUUM INTO rebuilds the database from its logical rows, so a torn
-# write in the freelist or page map (a power-loss "2nd reference to page" /
-# "Freelist size" fault, T-34578) is LAUNDERED into a clean snapshot that passes
-# integrity_check — which is why the 2026-09-05 corruption stayed hidden through
-# the daily backup until a page-allocating write hit it two days later. Once the
-# fault turns fatal VACUUM errors and set -e catches it, but the latent window is
-# invisible. quick_check walks the page structure directly (it skips only
-# index-vs-table content) and is fast enough for the bound. A non-zero exit here
-# withholds the deadman stamp, so the fleet is paged the next morning, not days
-# later. Run it before PRAGMA optimize, which is the first write to the live db.
-sq yak.db "PRAGMA quick_check;" | grep -qx ok || {
-  echo "backup: LIVE db failed quick_check — structural corruption on yak.db" >&2
-  exit 1
+# R2 through rclone's S3 backend, defined here and nowhere else: no rclone.conf
+# is read. The key pair arrives in the environment (bin/backup-run.ts). A
+# remote that is a local path, as tests give, needs no keys. 64 MiB parts send
+# a night in about fifty requests rather than the default's six hundred, and
+# the tens of thousands of small images go 32 at a time, not the default 4.
+export RCLONE_CONFIG=/dev/null RCLONE_TRANSFERS=32 RCLONE_CONFIG_R2_TYPE=s3 \
+  RCLONE_CONFIG_R2_PROVIDER=Cloudflare \
+  RCLONE_CONFIG_R2_ENDPOINT=https://0f9613dfd3f0451df0bd0f12a1372ea3.r2.cloudflarestorage.com \
+  RCLONE_CONFIG_R2_NO_CHECK_BUCKET=true RCLONE_CONFIG_R2_CHUNK_SIZE=64M \
+  RCLONE_CONFIG_R2_ACCESS_KEY_ID="${YAK_BACKUP_R2_ACCESS_KEY_ID:-}" \
+  RCLONE_CONFIG_R2_SECRET_ACCESS_KEY="${YAK_BACKUP_R2_SECRET_ACCESS_KEY:-}"
+case "$remote" in
+  r2:*)
+    [ -n "$RCLONE_CONFIG_R2_ACCESS_KEY_ID" ] &&
+      [ -n "$RCLONE_CONFIG_R2_SECRET_ACCESS_KEY" ] ||
+      die "no R2 key pair: neither the vault nor the environment has" \
+        "YAK_BACKUP_R2_ACCESS_KEY_ID and YAK_BACKUP_R2_SECRET_ACCESS_KEY"
+    ;;
+esac
+
+# The nights that completed, oldest first. The names are UTC times, so they
+# sort as they happened. Called as `x=$(completed)`, a failed listing fails the
+# run: an empty answer must never read as "no nights".
+completed() {
+  found=$(rclone lsf -R --files-only --include '/*/counts' "$remote/snapshots")
+  printf '%s\n' "$found" | sed -n 's#/counts$##p' | sort
 }
 
-# The snapshot is still taken atomically and still checked — it is just no
-# longer what history stores. It lives outside the repo (.gitignore) as the
-# consistent point-in-time source the text dump is written from, so the dump
-# can never catch the live db mid-transaction either.
-# Keep the query planner's stats fresh (T-16325): PRAGMA optimize updates
-# sqlite_stat1 for tables that drifted as the graph grew, so plans don't rot
-# with size. Safe on live data — it only rewrites the stat table. The
-# long-lived server connection runs this at graceful shutdown too; this hourly
-# run covers ungraceful exits (crash/kill) that never reach the drain.
-sq yak.db "PRAGMA optimize;"
-
-# VACUUM INTO writes with the syncs of the connection that runs it. The
-# snapshot is deleted once dumped, so this one connection, which writes nothing
-# to yak.db, turns them off.
-quoted=$(printf '%s' "$snapshot" | sed "s/'/''/g")
-sq yak.db "PRAGMA synchronous=OFF; VACUUM INTO '$quoted'"
-sq "$snapshot" "pragma integrity_check;" | grep -qx ok || {
-  echo "backup: snapshot failed integrity_check" >&2
-  exit 1
+# Rows per ordinary table, as `<database> <table> <rows>` lines, in one query.
+# Virtual tables and their shadows are left out: the page copy carries them,
+# and the tables they index are counted.
+counts() {
+  sql=$(sq "$2" "select group_concat(
+      printf('select %Q, %Q, count(*) from \"%w\"', '$1', name, name),
+      ' union all ' order by name)
+    from pragma_table_list
+    where schema = 'main' and type = 'table' and name not glob 'sqlite_*'")
+  sq -separator "$tab" "$2" "$sql"
 }
-snapshot_size=$(stat -c %s "$snapshot")
 
-# The dump or restore probe may each grow to the snapshot's size on the data
-# disk. Refuse either phase unless 5 GiB remains for the live server.
-room() {
-  need=$(( (snapshot_size + 1023) / 1024 + 5242880 ))
-  free=$(df -Pk . | awk 'NR == 2 { print $4 }')
-  case "$free" in
-    ''|*[!0-9]*) echo "backup: cannot measure data disk space" >&2; return 1 ;;
+# quick_check walks every page's structure: 8 to 16 minutes on the 10 GB
+# graph. integrity_check also matches every index against its table, and took
+# 26 minutes for nothing a backup needs.
+checked() {
+  [ "$(sq "$1" 'PRAGMA quick_check')" = ok ] ||
+    die "$1 failed quick_check: the database is damaged"
+}
+
+restore() {
+  [ $# -ge 1 ] || die "usage: bin/backup restore <new dir> [night]"
+  into=$1
+  nights=$(completed)
+  night=${2:-$(printf '%s\n' "$nights" | tail -n 1)}
+  printf '%s\n' "$nights" | grep -qxF "$night" ||
+    die "no complete night ${2:-at all} in $remote"
+  if [ -e "$into" ] && [ -n "$(ls -A "$into")" ]; then
+    die "$into is not empty: restore into a new directory"
+  fi
+  started=$(date +%s)
+  say "restoring $night into $into"
+  mkdir -p "$into"
+  rclone copy "$remote/snapshots/$night" "$into"
+  for db in $databases; do zstd -dq --rm "$into/$db.zst"; done
+  if [ -f "$into/files.tar.zst" ]; then
+    tar -C "$into" --zstd -xf "$into/files.tar.zst"
+    rm "$into/files.tar.zst"
+  fi
+  rclone copy "$remote/images" "$into/images"
+  # No quick_check here: zstd held each file to the checksum it took from the
+  # snapshot that passed one. The counts are a last look that each database
+  # opens and reads as the night did.
+  for db in $databases; do counts "$db" "$into/$db"; done > "$into/restored"
+  diff "$into/counts" "$into/restored" >&2 ||
+    die "row counts differ from the night's"
+  rm "$into/counts" "$into/restored"
+  say "restored $night in $(( $(date +%s) - started ))s"
+}
+
+backup() {
+  started=$(date +%s)
+  night=$(date -u +%Y-%m-%dT%H%M%SZ)
+  say "start $night"
+  [ -f "$data/yak.db" ] || die "no graph in $data"
+  # Wait a minute at most: a lock still held past that is a stuck run, and
+  # queueing behind it is how runs stacked up before.
+  exec 9>"$data/backup.lock"
+  flock -w 60 -x 9 || die "another backup holds the lock"
+
+  # The copies go where YAK_BACKUP_SNAPSHOT_DIR says, by default the system's
+  # temporary directory: not /dev/shm, where a 10 GB snapshot would take
+  # nearly half this box's memory. A snapshot and its compressed copy are on
+  # disk together, and the live graph keeps 5 GiB to grow into.
+  dir=${YAK_BACKUP_SNAPSHOT_DIR:-${TMPDIR:-/tmp}}
+  case "$dir" in
+    /*) ;;
+    *) die "snapshot directory must be absolute" ;;
   esac
-  [ "$free" -ge "$need" ] || {
-    echo "backup: $1 needs $need KiB, has $free KiB" >&2
-    return 1
-  }
-}
-room dump
-
-# Derived tables carry no information the graph cannot rebuild, so their rows
-# never enter the dump — and WHICH tables those are is read out of the
-# snapshot's own SCHEMA, never from a list of names. A name list only knows the
-# indexes that existed the last time someone edited it: @yaks/fts took over
-# search and cut a new mail_fts (5db8be2b), this script went on dumping it, and
-# the restore proof failed every night from 2026-09-11.
-#
-# An FTS5 index announces itself — `using fts5` in its own CREATE — and owns
-# five shadow tables named after it. Its words refill from its three sync
-# triggers as the rows of the table it mirrors load, so index and shadows are
-# both skipped here while the virtual table and the triggers stay in the schema
-# below. The vectors are the other half: `embedding`, `embedding_build`,
-# `embedding_dirty` and `embedding_owed` are @yaks/embedding's tables (TABLE,
-# BUILD, DIRTY and OWED, packages/embedding/ddl.ts); the vectors refill on the
-# embed sweep, and the queue refills from its triggers as the rows it watches
-# load, so a dumped copy of it collides with its own refill; the build row
-# describes codes in `vector0_*`, sqlite-vector's own namespace beside
-# `_sqliteai_vector`, which the sweep's first build cuts again.
-#
-# Every index here is EXTERNAL-CONTENT (`content=` in its CREATE): it is an
-# inverted index over words some other table keeps, which is what makes its
-# rows derived. One without that clause would hold the only copy of its text,
-# and skipping it would drop that text out of the backup — refuse loudly rather
-# than lose it quietly.
-own=$(sq "$snapshot" "select group_concat(name, ' ') from sqlite_master
-  where type = 'table' and lower(sql) like '%using fts5%'
-    and sql not like '%content=%'")
-[ -z "$own" ] || {
-  echo "backup: fts5 index holds its own text, not derived: $own" >&2
-  exit 1
-}
-# A never-matching first element keeps both lists valid when there is no index.
-indexes="''"
-shadows="''"
-for t in $(sq "$snapshot" "select name from sqlite_master
-    where type = 'table' and lower(sql) like '%using fts5%' order by name"); do
-  indexes="$indexes, '$t'"
-  for s in _data _idx _docsize _config _content; do
-    shadows="$shadows, '$t$s'"
+  [ -d "$dir" ] || die "snapshot directory does not exist: $dir"
+  need=5242880
+  for db in $databases; do
+    for f in "$data/$db" "$data/$db-wal"; do
+      [ ! -f "$f" ] || need=$(( need + 2 * ($(stat -c %s "$f") + 1023) / 1024 ))
+    done
   done
-done
-derived="name in ($indexes) or name in ($shadows)
-  or name in ('embedding', 'embedding_build', 'embedding_dirty', 'embedding_owed')
-  or name glob 'vector0_*' or name = '_sqliteai_vector'"
+  free=$(df -Pk "$dir" | awk 'NR == 2 { print $4 }')
+  case "$free" in
+    '' | *[!0-9]*) die "cannot measure snapshot space" ;;
+  esac
+  [ "$free" -ge "$need" ] ||
+    die "snapshot directory needs $need KiB, has $free KiB"
 
-# Data as INSERT statements, no DDL — `.mode insert` names each table, so the
-# files concatenate onto the schema in any order.
-#
-# WRAPPED IN ONE TRANSACTION, which is not a nicety. Bare INSERTs are each
-# their own transaction, so replaying them fsyncs once PER ROW: ~28k fsyncs to
-# load this graph. On a real disk that is over an hour; the hourly job hung in
-# uninterruptible I/O and cron would have stacked a new one on top every hour.
-# It is invisible on tmpfs — where fsync is free — which is exactly how a probe
-# written to /tmp measured 8s for work that takes an hour where it actually
-# runs. Two transactions instead of 28k applies to the RESTORE too, which is
-# the path that matters most and the one nobody times until they need it.
-# Each file wraps itself, so any subset still concatenates and replays.
-dump_data() {
-  echo 'BEGIN TRANSACTION;'
-  for t in $(sq "$snapshot" "select name from sqlite_master
-      where type = 'table' and name not like 'sqlite_%' and not ($derived)
-        and ($1) order by name"); do
-    sqlite3 -batch -init /dev/null "$snapshot" \
-      ".mode insert \"$t\"" "select * from \"$t\";"
+  # Every copy belongs to this run's private directory and goes with it. A
+  # run killed past its bound cannot clean up, and none lives two hours.
+  find "$dir" -maxdepth 1 -type d -name 'yak-backup.*' -mmin +120 \
+    -exec rm -rf {} + 2>/dev/null || true
+  work=$(mktemp -d "$dir/yak-backup.XXXXXXXX")
+  trap 'rm -rf "$work"' EXIT
+  trap 'exit 1' HUP INT QUIT TERM
+  mkdir "$work/night"
+  say "snapshots in $dir"
+
+  # Keep the query planner's stats fresh (T-16325): PRAGMA optimize updates
+  # sqlite_stat1 for tables that drifted as the graph grew. The server runs it
+  # at a graceful shutdown; this covers the exits that never reach the drain.
+  sq "$data/yak.db" "PRAGMA optimize;"
+
+  for db in $databases; do
+    [ -f "$data/$db" ] || die "no $data/$db"
+    copy="$work/$db"
+    sq -readonly "$data/$db" "BEGIN" "SELECT count(*) FROM sqlite_schema" \
+      ".backup '$copy'" "COMMIT" > /dev/null
+    checked "$copy"
+    counts "$db" "$copy" >> "$work/counts"
+    zstd -q -T0 --rm "$copy" -o "$work/night/$db.zst"
   done
-  echo 'COMMIT;'
+  set --
+  for f in $files; do [ ! -e "$data/$f" ] || set -- "$@" "$f"; done
+  [ $# = 0 ] || tar -C "$data" --zstd -cf "$work/night/files.tar.zst" "$@"
+
+  # The proof: the bucket holds these bytes exactly (check --download compares
+  # every one), and each compressed file decodes to what zstd checksummed as
+  # it read the checked snapshot.
+  rclone copy "$work/night" "$remote/snapshots/$night"
+  rclone check -q --download "$work/night" "$remote/snapshots/$night"
+  zstd -tq "$work/night"/*.zst
+  [ ! -d "$data/images" ] ||
+    rclone copy --ignore-existing "$data/images" "$remote/images"
+  rclone copyto "$work/counts" "$remote/snapshots/$night/counts"
+
+  # Only now, with tonight complete, does an old night go: a run that fails
+  # leaves every night before it. Anything not among the newest complete
+  # nights goes, including what a failed run left half uploaded.
+  nights=$(completed)
+  kept=$(printf '%s\n' "$nights" | tail -n "$keep")
+  printf '%s\n' "$kept" | grep -qxF "$night" ||
+    die "$night is not listed complete; every night is kept"
+  all=$(rclone lsf --dirs-only "$remote/snapshots")
+  for old in $(printf '%s\n' "$all" | sed 's#/$##'); do
+    printf '%s\n' "$kept" | grep -qxF "$old" && continue
+    rclone delete "$remote/snapshots/$old"
+    rclone rmdirs "$remote/snapshots/$old"
+    say "dropped $old"
+  done
+
+  n=$(awk -F "$tab" '$1 == "yak.db" && $2 == "entity" { print $3 }' \
+    "$work/counts")
+  say "$night: ${n:-0} entities, done in $(( $(date +%s) - started ))s"
 }
 
-# The schema, minus the FTS SHADOW TABLES only. `.schema` writes those out as
-# ordinary CREATE TABLEs, but creating the virtual table makes them itself, and
-# only one of the two definitions can stand. VACUUM decides which: it re-emits
-# the shadows BEFORE the virtual table they belong to, so the plain CREATEs win
-# the race and `create virtual table mail_fts` then fails with 'table
-# mail_fts_data already exists' — leaving every INSERT behind it with no such
-# table. Drop the shadows and the virtual table makes its own.
-# The filter is on TYPE as well as name so the sync triggers survive: they are
-# named after the index (mail_fts_insert/_delete/_update) and they are the very
-# things that refill it as the rows load — as is the `<comp>_text` view an
-# index whose columns are addresses reads its words back through.
-# glob, not like, for the two namespaces below: `_` is a wildcard in LIKE.
-# sqlite_stat1/sqlite_stat4 are the ANALYZE tables PRAGMA optimize (above)
-# materializes — same kind as the FTS/vector shadows: derived, and rebuilt by
-# ANALYZE, so they carry no information to keep. They MUST be dropped from the
-# dump because they are reserved names sqlite refuses on load ('object name
-# reserved for internal use'), which fails the round-trip gate below. Targeted
-# glob 'sqlite_stat*', not a blanket 'sqlite_%': sqlite_autoindex_* already
-# fall out on `sql is not null`, and were AUTOINCREMENT ever added its
-# sqlite_sequence counters would matter for restore — leave that door shut.
-# One transaction, like the data files: each bare CREATE commits, and every
-# commit is an fsync, which is some 380 of them for this graph's schema.
-{
-  echo 'BEGIN TRANSACTION;'
-  sqlite3 -batch -init /dev/null "$snapshot" \
-    "select sql || ';' from sqlite_master
-     where sql is not null and not (type = 'table'
-       and (name in ($shadows)
-         or name glob 'vector0_*' or name = '_sqliteai_vector'
-         or name glob 'sqlite_stat*'))
-     order by rowid"
-  echo 'COMMIT;'
-} > "$work/schema.sql"
-journal="name in ('journal_tx', 'journal_change', 'journal_field')"
-
-# SHARD the big dumps into parts under GitHub's 100 MB hard limit (target <50 MB
-# of SQL per part); zero-padded numeric suffixes glob in order. Each part is a
-# separate zstd frame, so restore decodes them in that order. Schema stays whole.
-#
-# Cut on LINE boundaries (-C: as many whole lines as fit), not bytes. One
-# inserted row shifts every byte after it, so a byte split changed EVERY later
-# part on every run and git stored each as a new blob — that, hourly, is how
-# the data repo grew by a gigabyte a day and filled the disk. With whole rows
-# per part, a run that touches a few rows changes a few parts and the rest
-# dedupe to the blobs history already holds.
-# Stream each dump into split, and compress each shard as it is cut. The full
-# SQL dump and its uncompressed shards would exceed the free scratch space.
-# The FIFO lets this POSIX shell wait for the dump writer: a plain pipeline
-# reports only split's status, and could verify and commit incomplete output.
-shard_data() {
-  name=$1
-  filter=$2
-  fifo="$work/$name.fifo"
-  mkfifo "$fifo"
-  dump_data "$filter" > "$fifo" &
-  writer=$!
-  if ! split -C 45M -d -a 3 \
-    --filter="zstd -3 -q -c > \"\$FILE.zst\"" \
-    "$fifo" "$work/$name.sql.part."; then
-    kill "$writer" 2>/dev/null || true
-    wait "$writer" 2>/dev/null || true
-    echo "backup: could not shard $name dump" >&2
-    exit 1
-  fi
-  if ! wait "$writer"; then
-    echo "backup: could not write $name dump" >&2
-    exit 1
-  fi
-  rm "$fifo"
+main() {
+  case "${1:-}" in
+    restore)
+      shift
+      restore "$@"
+      ;;
+    '') backup ;;
+    *) die "usage: bin/backup [restore <new dir> [night]]" ;;
+  esac
 }
-shard_data graph "not ($journal)"
-shard_data journal "$journal"
 
-# Keep the source counts before releasing the snapshot. The restore probe can
-# then use its space instead of growing beside it. Counts and the commit's
-# entity total come from the checked snapshot, never from the restored dump.
-n=$(sq "$snapshot" 'select count(*) from entity')
-sq "$snapshot" "select name from sqlite_master
-    where type = 'table' and name not like 'sqlite_%' and not ($derived)
-    order by name" > "$work/tables"
-while IFS= read -r t; do
-  a=$(sq "$snapshot" "select count(*) from \"$t\"")
-  printf '%s\t%s\n' "$a" "$t"
-done < "$work/tables" > "$work/counts"
-rm "$snapshot"
-room restore
-
-# The gate: the dump must restore to the same graph it came from — and it must do
-# so FROM THE SHARDS, so a bad split is caught here, not at restore. Comparing row
-# counts per table catches a truncated write, a quoting bug, a table silently
-# dropped from the dump, and a shard that failed to reassemble — the failures that
-# would otherwise be found at restore time, the one moment there is no second chance.
-# Decode through a FIFO so both sqlite3 and zstd must succeed. A plain pipe
-# would report only sqlite3's status and could miss a damaged compressed part.
-restore_dump() {
-  cat "$work/schema.sql"
-  zstd -dcq "$work"/graph.sql.part.*.zst "$work"/journal.sql.part.*.zst
-}
-fifo="$work/restore.fifo"
-mkfifo "$fifo"
-restore_dump > "$fifo" &
-writer=$!
-# Keep more index pages in memory while replaying; the 64 MiB cache reduced
-# scratch restore time without changing the dump or its proof. The probe is
-# deleted once counted, so none of its commits needs to wait on the disk.
-if ! sqlite3 -batch -init /dev/null -cmd 'PRAGMA cache_size=-65536;' \
-  -cmd 'PRAGMA synchronous=OFF;' "$probe" < "$fifo"; then
-  kill "$writer" 2>/dev/null || true
-  wait "$writer" 2>/dev/null || true
-  echo "backup: dump did not load back" >&2
-  exit 1
-fi
-if ! wait "$writer"; then
-  echo "backup: compressed dump did not decode" >&2
-  exit 1
-fi
-rm "$fifo"
-while read -r a t; do
-  b=$(sq "$probe" "select count(*) from \"$t\"")
-  [ "$a" = "$b" ] || {
-    echo "backup: round-trip lost rows in $t ($a → $b)" >&2
-    exit 1
-  }
-done < "$work/counts"
-rm "$probe"
-# schema whole; graph/journal live only as parts now — drop any monolithic files a
-# previous (pre-shard) run left tracked, so `git add -A` records the switch.
-rm -f snap/graph.sql.part.* snap/journal.sql.part.*
-mv "$work/schema.sql" snap/schema.sql
-mv "$work"/graph.sql.part.*.zst "$work"/journal.sql.part.*.zst snap/
-rm -f snap/graph.sql snap/journal.sql
-
-git add -A
-
-# Size guard, by BYTES not by name (T-20007). GitHub hard-rejects any file over
-# 100 MiB, and the T-19375 push failed a second time on ~800MB stray db copies
-# whose names .gitignore never anticipated — a name-based ignore can only stop
-# the large files we already named. So refuse here, before the commit, if any
-# staged blob exceeds the limit: catch it as a loud failed backup the deadman
-# sees, not as a push rejected off-box after a broken commit already landed.
-# cat-file -s reads the staged blob's own size, so deletions and working-tree
-# churn can't confuse the measure.
-limit=104857600 # 100 MiB — GitHub's hard per-file limit
-over=$(git diff --cached --raw --diff-filter=ACM | while read -r _ _ _ sha _ path; do
-  size=$(git cat-file -s "$sha") || continue
-  if [ "$size" -gt "$limit" ]; then printf '  %s (%s bytes)\n' "$path" "$size"; fi
-done)
-if [ -n "$over" ]; then
-  echo "backup: staged file(s) exceed GitHub's 100 MiB limit — refusing to commit:" >&2
-  echo "$over" >&2
-  exit 1
-fi
-
-# Nothing to commit is only healthy if everything already committed got out.
-# Otherwise a quiet run launders the failure of a noisy one: an earlier push
-# was rejected, this run finds no change, exits 0, and the deadman stamps the
-# backup healthy while the off-box copy sits frozen.
-unpushed() {
-  b=$(git rev-parse --abbrev-ref HEAD)
-  git rev-parse --verify -q "origin/$b" >/dev/null || return 1  # never fetched — cannot tell
-  [ "$(git rev-list --count "origin/$b..HEAD")" != 0 ]
-}
-if git diff --cached --quiet; then
-  echo "backup: nothing new"
-  if git remote get-url origin >/dev/null 2>&1 && unpushed; then
-    echo "backup: nothing new, but local commits are unpushed — off-box copy is stale" >&2
-    exit 1
-  fi
-  exit 0
-fi
-
-git -c user.name=backup -c user.email=backup@yak.sh \
-  commit -qm "backup: $(date -u +%Y-%m-%dT%H:%M:%SZ) — $n entities"
-
-pushed=1
-if git remote get-url origin >/dev/null 2>&1; then
-  git push -q origin HEAD || pushed=0
-fi
-echo "backup: committed $n entities"
-
-# No `git gc` here. A backup is snapshot, dump, restore-proof, commit, push —
-# packing is repo maintenance, and on this history (5+ GB) a full gc runs past
-# any sane backup timeout: measured, the commit and push finished in under 3
-# minutes and gc then ran 12 more before the old 15-minute bound killed it. Pack
-# from the separate weekly cron line (`git -C ~/.yak gc`), never in-line.
-# A gc killed mid-pack leaves a tmp_pack_* the size of the repo that git never
-# reclaims on its own; drop any older than two hours (a live gc is younger).
-find .git/objects/pack -name 'tmp_pack_*' -mmin +120 -delete 2>/dev/null || true
-
-# The commit landed, so say so above — but a rejected push means the only
-# off-box copy has stopped advancing, which is the failure this backup exists
-# to prevent. The fleet deadman gates its stamp on this exit code, so
-# returning 0 here would certify the backup healthy for as long as the push
-# keeps failing. That is the shape that hid an 18h outage; do not repeat it.
-if [ "$pushed" = 0 ]; then
-  echo "backup: push REJECTED — off-box copy is now stale" >&2
-  exit 1
-fi
-echo "backup: done in $(( $(date +%s) - started ))s"
+# One line, read whole before main starts. sh reads a script as it runs, so a
+# file edited in place mid-run hands it the rest of a different file; git
+# replaces the file and is safe, an editor writing over it is not.
+main "$@"; exit

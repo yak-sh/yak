@@ -65,8 +65,9 @@ when its entity is deleted, and can be scoped by a sentinel.
   directory 0700, files 0600, symlinks refused). A graph in memory keeps them in
   memory. A probe's vault sits beside the probe's database, so it holds none of
   the box's secrets.
-- **The box's backup leaves the vault out** (`~/.yak/.gitignore` ignores
-  everything it does not name). A value kept only there is lost with the box.
+- **The box's backup leaves the vault out** (`bin/backup` carries the
+  databases and the directories it names, never `secrets/`). A value kept only
+  there is lost with the box.
 - **1Password**: a value written as `op://<vault>/<item>/<field>` is kept as
   that reference and read with `op read` each time it is used, cached for 30
   seconds (packages/secrets/op.ts, reveal.ts `TTL`). The value never rests on
