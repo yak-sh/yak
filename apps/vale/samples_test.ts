@@ -1,8 +1,10 @@
-// Hosted sound rows name every clip, and replacing an output changes playback.
+// Chosen recordings play by sound identity, including retained creature designs.
 import { test } from '@yaks/testing'
 import { assertEquals, assertStrictEquals } from '@std/assert'
 import { shop } from '../../packages/builders/testing.ts'
 import vale from './vocab.json' with { type: 'json' }
+import { beastOf, useBeasts } from './beasts.ts'
+import { kindOf, useSpawnKinds } from './spawn.ts'
 import {
   accept,
   blendLoop,
@@ -17,9 +19,12 @@ test('sound samples retry a missing blob and share a successful load', async () 
   accept([
     {
       entity: { eid: 'test-output' },
-      built: { build: 'test-build', artifact: 'test-clip' },
+      built: { build: 'test-build', artifact: 'test-clip', current: true },
     },
-    { entity: { eid: 'test-build' }, build: { for: 'test-sound' } },
+    {
+      entity: { eid: 'test-build' },
+      build: { for: 'test-sound', variant: 'main' },
+    },
     { entity: { eid: 'test-sound' }, sfx: { name: 'hammer' } },
     {
       entity: { eid: 'test-clip' },
@@ -87,9 +92,13 @@ test('hosted audio outputs supply every sound clip', () => {
   let output = (name: string, media_type = 'audio/mpeg', sound = true) => [
     {
       entity: { eid: `${name}-output` },
-      built: { build: `${name}-build`, artifact: `${name}-blob` },
+      built: {
+        build: `${name}-build`,
+        artifact: `${name}-blob`,
+        current: true,
+      },
     },
-    { entity: { eid: `${name}-build` }, build: { for: name } },
+    { entity: { eid: `${name}-build` }, build: { for: name, variant: 'main' } },
     ...sound ? [{ entity: { eid: name }, sfx: { name } }] : [],
     {
       entity: { eid: `${name}-blob` },
@@ -118,6 +127,7 @@ test('an ambient overlap meets at neighboring source samples', () => {
 test('the sound query projects current main outputs through qualified references', async () => {
   let { g, failed } = await shop({}, [{ $defs: { sfx: vale.$defs.sfx } }])
   await g.apply([
+    { entity: { eid: 'sample-call' }, call: {}, completed: {} },
     { entity: { eid: 'sound' }, sfx: { name: 'contraction-audio' } },
     {
       entity: { eid: 'clip' },
@@ -130,6 +140,7 @@ test('the sound query projects current main outputs through qualified references
           for: 'sound',
           variant: variant == 'shadow' ? 'candidate' : 'main',
           key: 'current',
+          inputs: 'input',
           stale: variant == 'stale',
         },
       },
@@ -139,6 +150,8 @@ test('the sound query projects current main outputs through qualified references
           build: `${variant}-build`,
           slot: 'main',
           key: 'current',
+          inputs: 'input',
+          call: 'sample-call',
           artifact: 'clip',
         },
         chosen: {},
@@ -156,6 +169,103 @@ test('the sound query projects current main outputs through qualified references
     'main-output',
     'sound',
   ])
-  assertEquals(catalog(rows), { 'contraction-audio': 'audio-blob' })
+  assertEquals(catalog(rows), {
+    sound: 'audio-blob',
+    'contraction-audio': 'audio-blob',
+  })
+  assertEquals(failed, [])
+})
+
+test('a creature hears its chosen design sound despite other takes sharing its name', async () => {
+  let { g, failed } = await shop({}, [{
+    $defs: {
+      sfx: vale.$defs.sfx,
+      sounds: vale.$defs.sounds,
+      beast_design: vale.$defs.beast_design,
+    },
+  }])
+  let run = (source: string, variant = 'main') => ({
+    build: { for: source, variant, key: 'current', inputs: 'input' },
+  })
+  let take = (build: string, slot: string, artifact?: string) => ({
+    built: {
+      build,
+      slot,
+      key: 'current',
+      inputs: 'input',
+      call: 'sample-call',
+      artifact,
+    },
+  })
+  let spawn = { entity: { eid: 'creature-spawn' }, doc: { body: 'Moth' } }
+  await g.apply([
+    spawn,
+    { entity: { eid: 'sample-call' }, call: {}, completed: {} },
+    {
+      entity: { eid: 'creature-build' },
+      ...run('creature-spawn'),
+    },
+    ...['old', 'new'].flatMap((version) => [
+      {
+        entity: { eid: `${version}-design` },
+        beast_design: { name: 'Moth' },
+        sounds: { step: `${version}-step` },
+        ...take('creature-build', 'kind'),
+        ...version == 'old' && { chosen: {} },
+      },
+      {
+        entity: { eid: `${version}-step` },
+        sfx: { name: 'creature-creature-spawn-step' },
+        ...take('creature-build', 'step'),
+        ...version == 'new' && { chosen: {} },
+      },
+      {
+        entity: { eid: `${version}-sound-build` },
+        ...run(`${version}-step`),
+      },
+      {
+        entity: { eid: `${version}-recording` },
+        ...take(`${version}-sound-build`, 'sound', `${version}-blob`),
+        chosen: {},
+      },
+      {
+        entity: { eid: `${version}-blob` },
+        artifact: { address: `${version}-audio`, media_type: 'audio/mpeg' },
+      },
+    ]),
+    {
+      entity: { eid: 'shadow-sound-build' },
+      ...run('old-step', 'shadow:x'),
+    },
+    {
+      entity: { eid: 'shadow-recording' },
+      ...take('shadow-sound-build', 'sound', 'new-blob'),
+      chosen: {},
+    },
+    {
+      entity: { eid: 'unchosen-recording' },
+      ...take('old-sound-build', 'sound', 'new-blob'),
+    },
+  ], { trusted: true })
+  let heard = async () => {
+    useBeasts(await g.read('.beast_design ?sounds'))
+    useSpawnKinds(
+      await g.read(
+        '.built.current=true .built.slot=kind .fields=built.current,built.slot,built.build.build.variant,built.build.build.for',
+      ),
+    )
+    let creature = beastOf(kindOf(spawn)!)!
+    let rows = await g.read(SOUNDS) as Row[]
+    let clips = catalog(rows)
+    assertEquals(catalog(rows.toReversed()), clips)
+    assertEquals(clips['creature-creature-spawn-step'], undefined)
+    return clips[creature.step!]
+  }
+  assertEquals(await heard(), 'old-audio')
+  await g.apply([
+    { entity: { eid: 'old-design' }, chosen: null },
+    { entity: { eid: 'new-design' }, chosen: {} },
+  ], { trusted: true })
+  assertEquals(await heard(), 'new-audio')
   assertEquals(failed, [])
 })

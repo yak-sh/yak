@@ -22,25 +22,27 @@ deno add jsr:@yaks/builders
   binding marks its build stale and retains its outputs; a returning binding
   reuses the same build. An answer that lands after its binding vanished is kept
   too, so a binding returning under the same key has it without asking again.
-- `built{build,slot,key,inputs,definition,call,artifact?}` is one durable output
-  per named slot. Its entity id stays the same when another successful answer
-  replaces its components, citations and artifact reference. `chosen{at,by,via}`
-  marks the output in use. `built.current` means chosen and the binding still
-  exists; a pending replacement keeps the output current. Shadows remain
-  separate variants, never downstream inputs.
-- Builds and outputs keep minted eids, free to cite and link. `build_of` holds
-  `<builder>/<variant>/<match>`. An output's `output_of` holds `<build>/<slot>`.
-  `outputFor(graph, build, slot)` finds the output; an optional fourth `call`
-  argument restricts it to the call currently stored on that output. Legacy
-  outputs are found by their chosen mark until an answer adopts the slot key.
+- `built{build,slot,key,inputs,definition,call,artifact?}` is one retained take
+  of a named slot. `chosen{at,by,via}` marks the take in use, one per
+  build/slot. The newest successful answer is chosen by default. `built.current`
+  means chosen, the binding still exists and its inputs still match; a pending
+  reroll with unchanged inputs keeps the chosen take current. Readers selecting
+  `.built.current=true` need no separate take selection. Shadows remain separate
+  variants, never downstream inputs.
+- Builds and takes keep minted eids, free to cite and link. `build_of` holds
+  `<builder>/<variant>/<match>`. A take's `output_of` holds
+  `<build>/<slot>/<call>`: replay finds that call's takes, a new call adds new
+  ones. `outputFor(graph, build, slot)` finds the chosen take;
+  `outputFor(graph, build, slot, call)` finds that call's take by its key.
 
-A full answer replaces every slot it includes and deletes omitted outputs and
-links. Properties written by the previous answer are cleared when omitted;
-properties added by another writer are kept. Supply replaces only its named
-slot. Late answers and replays leave current outputs alone. Calls retain their
-frozen answers for provenance without creating additional live output rows.
-`yak builder choose <output>` marks an output in use without spending and keeps
-other slots unchanged; it also serves stores with legacy retained outputs.
+  yak builder choose <output>
+
+Choosing spends nothing and does not affect other slots. The choice is
+server-owned and every host enforces one choice per build/slot. All takes are
+queryable with `.built.build=<build>&*`; add `.chosen` for the choice. A late
+answer is retained but does not steal the current choice. Replaying an answer
+also leaves the person's choice alone. A full answer with an omitted slot clears
+that slot's choice, never its historical takes or links.
 
 A changed key writes a fresh `call{to,source,args}` with `source` set to the
 build and `args` containing the frozen binding tree, key, template, using and
@@ -126,11 +128,11 @@ points to it.
 
 A rejected answer, including a store admission refusal, writes `failed{reason}`
 on its build and retains the attempt key. No output from that answer is stored;
-prior outputs remain available. Automatic reconciliation does not spend again on
-the same work. An explicit rebuild or changed inputs starts a fresh call and
-clears the failure. A store refusal ends the answer effect after recording the
-failure; unexpected errors also reach the host's effect reporter. A late answer
-cannot fail a newer call.
+prior chosen takes remain available. Automatic reconciliation does not spend
+again on the same work. An explicit rebuild or changed inputs starts a fresh
+call and clears the failure. A store refusal ends the answer effect after
+recording the failure; unexpected errors also reach the host's effect reporter.
+A late answer cannot fail a newer call.
 
 An output wearing `edge{from,to}` and one relation beside it is a link:
 
@@ -148,9 +150,9 @@ An output wearing `edge{from,to}` and one relation beside it is a link:
 A link is identified by its ends and relation (@yaks/edge), so it lands on that
 derived id and carries an `output_of` key; its slot names it in its answer like
 any output's. One of its ends must be a nonedge sibling output, which makes the
-link this build's alone. An answer that changes its ends replaces the link; an
-answer that omits a link deletes it. `.built.build=<build>&.references` reads
-the build's output links; add `.built.current=true` for current bindings.
+link this take's alone. An answer that omits a link leaves it as history, not
+chosen. `.built.build=<build>&.references` reads every take's links; add
+`.built.current=true` to read chosen links only.
 
 `modelTool()` is an internal registered tool for model builders. It renders
 `content.body` from the frozen binding (`$name` is a variable's value, or its
@@ -158,16 +160,17 @@ distinct values inside a bracket; the variable a bracket binds its members to,
 `$p` in `[$p .note, doc.body=$body]`, says every member as a JSON list of the
 variables it binds, so a member's values stay together), opens an ordinary
 @yaks/session transcript with `using`, and adapts that transcript's reply to the
-same output value. The reply is the output of an ask that called no tools: prose
-beside a tool call is the model at work. It is read once its ask's `attempt`
-completes, since a streamed reply is written as it arrives. A session that fails
-for good records failure while keeping its attempt key, so automatic
-reconciliation does not spend again. A tool's refusal answered to the model and
-a request the runner retries do not fail the build. `using.tools` names the
-tools the session is offered (@yaks/session), so a builder's model reads and
-writes the graph through exactly the tools its builder names. `builder.to`
-points at `modelToolEid()` for this adapter. The tool runner records the call
-and result; builders does not execute models or code itself.
+same output value. Replaying a call reuses its existing session. The reply is
+the output of an ask that called no tools: prose beside a tool call is the model
+at work. It is read once its ask's `attempt` completes, since a streamed reply
+is written as it arrives. A session that fails for good records failure while
+keeping its attempt key, so automatic reconciliation does not spend again. A
+tool's refusal answered to the model and a request the runner retries do not
+fail the build. `using.tools` names the tools the session is offered
+(@yaks/session), so a builder's model reads and writes the graph through exactly
+the tools its builder names. `builder.to` points at `modelToolEid()` for this
+adapter. The tool runner records the call and result; builders does not execute
+models or code itself.
 
 `builder build <builder>` reconciles now, independent of `floor`. Without a redo
 flag, a current output is never touched: only new bindings or changed inputs
@@ -228,8 +231,8 @@ have one meaning. @yaks/sqlite does.
 without calling its tool or spending money. `for` names the binding's first
 entity, and must identify exactly one binding. Supply works on staged builders,
 not archived ones. Build and output ids are found through their `build_of` and
-`output_of` slot keys. Each supply replaces that slot's artifact reference and
-keeps the output entity id.
+`output_of` take keys. Each supply adds a take and chooses it; earlier supplied
+artifacts remain linked to the same binding.
 
 `builder_supply` takes the same arguments as named fields. Optional `args` keeps
 provenance (the original prompt, model, loudness audit) beside the frozen

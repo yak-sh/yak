@@ -54,7 +54,7 @@ test('choice admission enforces one output per slot without moving the prior cho
     () =>
       g.admit(['old', 'new'].map((eid) => ({ entity: { eid }, chosen: {} }))),
     Refused,
-    'choose only one output',
+    'choose only one take',
   )
 })
 

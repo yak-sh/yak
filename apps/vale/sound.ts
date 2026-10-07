@@ -27,7 +27,7 @@ import {
 import { bus, fireLevel } from './bus.ts'
 import { ambience, type Noise, noises, where } from './noises.ts'
 import { music } from './music.ts'
-import { load, loaded, looping, nameOf, watch } from './samples.ts'
+import { load, loaded, looping, watch } from './samples.ts'
 import type { Frame, Vec3 } from './play.ts'
 import type { Vale } from './terrain.ts'
 import * as voices from './voices.ts'
@@ -307,11 +307,9 @@ let loop = (kind: keyof typeof LOOP): Keep => (c, into) => {
   }
 }
 
-// A creature's sound row by its eid, or its procedural voice while it has
-// none, or the row has no name yet.
+// A creature's chosen design points at its sound rows by eid.
 let voiced = (sfx: string | undefined, fallback: Voice, gain: number) => {
-  let name = ctx && sfx ? nameOf(sfx) : undefined
-  return name ? sampled(name, fallback, gain) : fallback
+  return sfx ? sampled(sfx, fallback, gain) : fallback
 }
 
 let noisy = (n: Noise) =>

@@ -9,7 +9,15 @@ import { kernelDoc } from '@yaks/kernel/vocab'
 import { doorOf } from './door.ts'
 import { Store } from './graph.ts'
 import { KERNEL, metaOf } from './meta.ts'
-import { dispatchMove, dispatchRule, doneEffectsRule } from './mover.ts'
+import {
+  dispatchMove,
+  dispatchRule,
+  doneEffectsRule,
+  takeRule,
+} from './mover.ts'
+import { keyed } from '@yaks/key'
+import { buildOf, inputKey } from '@yaks/builders'
+import { toolEid } from '@yaks/tools'
 import { deadMailInboxMove, deadMailInboxRule } from './migrate.ts'
 import { type Rehearsal, type Rule, type Standing } from './mover.ts'
 import { state } from './testing.ts'
@@ -81,6 +89,86 @@ let store = async (n: number, ...rules: Rule[]) => {
 
 let count = async (s: { query: (q: string) => Promise<Bundle[]> }, q: string) =>
   (await s.query(q)).length
+
+test('builder take rehearsal preserves a store, then conversion moves with no calls', async () => {
+  let s = await store(0, takeRule)
+  let binding = {
+    entities: ['source'],
+    vars: { s: 'source', description: 'a turtle' },
+  }
+  await s.apply([
+    { entity: { eid: toolEid('no-call') }, tool: { name: 'no-call' } },
+    {
+      entity: { eid: 'recipe' },
+      builder: {
+        query: '$s .doc.title=Source, doc.body=$description',
+        to: toolEid('no-call'),
+        immediate: true,
+      },
+      staged: {},
+    },
+    { entity: { eid: 'source' }, doc: { title: 'Source', body: 'a turtle' } },
+    {
+      entity: { eid: 'build' },
+      build: {
+        builder: 'recipe',
+        call: 'call',
+        key: 'kept-attempt',
+        inputs: 'old-fingerprint',
+        variant: 'main',
+        match: '["source"]',
+      },
+    },
+    {
+      entity: { eid: 'call' },
+      call: { to: toolEid('no-call'), source: 'build', args: { binding } },
+      completed: {},
+    },
+    {
+      entity: { eid: 'take' },
+      built: {
+        build: 'build',
+        slot: 'kind',
+        call: 'call',
+        key: 'kept-attempt',
+        inputs: 'old-fingerprint',
+      },
+      doc: { body: 'keep this design' },
+    },
+    keyed('output_of', 'take', 'build/kind'),
+    keyed('build_of', 'build', buildOf('recipe', '["source"]')),
+  ])
+  // Activate a selected binding with its old paid attempt already recorded.
+  await s.apply([{ entity: { eid: 'recipe' }, staged: null }])
+  await s.apply([{
+    entity: { eid: 'source' },
+    was: { word: 'gameplay moved' },
+  }])
+  assertEquals(await count(s, '.call'), 1)
+  let before = await s.query('*')
+  let [report] = await s.rehearse()
+  assertEquals([report.rows, report.moved, report.failed], [2, 2, undefined])
+  assertEquals(await s.query('*'), before)
+  await s.alarm()
+  assertEquals(await s.query('*'), before)
+  s.wake({ ...takeRule, live: 'apps' })
+  await s.alarm()
+  let [take] = await s.query('.entity.eid=take&*')
+  assertEquals(take.doc, { title: null, body: 'keep this design' })
+  assertEquals((take.built as Comp).inputs, inputKey(binding))
+  assertEquals(
+    (await s.query('.built.current=true')).map((r) => r.entity.eid),
+    ['take'],
+  )
+  assertEquals(await count(s, '.call'), 1)
+  assertEquals(await count(s, '.built'), 1)
+  let [key] = await s.query('.output_of&*')
+  assertEquals(key.key, { of: 'take', value: 'build/kind/call' })
+  let after = await s.query('*')
+  let [second] = await s.rehearse()
+  assertEquals(second.failed, undefined)
+  assertEquals(await s.query('*'), after)
+})
 
 test('a live rule moves every row from the alarm, and says it is done', async () => {
   let s = await store(250, rule())

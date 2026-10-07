@@ -15,11 +15,17 @@ let details = (using: unknown): [string, unknown][] =>
       .toSorted(([a], [b]) => a.localeCompare(b))
     : []
 
+// Older frozen calls stored each bracket as its member array. The transcript
+// stays immutable; readers use the same members through either encoding.
+export let membersOf = (
+  group: NonNullable<Binding['collections']>[number],
+): Binding[] => Array.isArray(group) ? group : group.members
+
 let tree = (binding: Binding): unknown => [
   binding.entities,
   Object.entries(binding.vars).toSorted(([a], [b]) => a.localeCompare(b)),
   (binding.collections ?? []).map((group) =>
-    group.members.map(tree)
+    membersOf(group).map(tree)
       .toSorted((a, b) => JSON.stringify(a).localeCompare(JSON.stringify(b)))
   ),
 ]

@@ -1,5 +1,7 @@
 // Current outputs belong to still-selected bindings. A pending replacement
 // keeps playing the existing output until its answer lands.
+// T-66411 expansion: retain this reader while the rehearsal-only /19 mover
+// adopts frozen input provenance. Restore input equality once every store moved.
 
 import type { DerivedProp } from '@yaks/sql'
 import {

@@ -15,7 +15,7 @@ import {
 import { held, keyed } from '@yaks/key'
 import type { Vocab } from '@yaks/vocab'
 import { next } from '@yaks/wake'
-import { definitionKey, inputKey, key } from './key.ts'
+import { definitionKey, inputKey, key, membersOf } from './key.ts'
 import { inputs, queried, sync } from './deps.ts'
 import type { Wiring } from './answer.ts'
 
@@ -69,8 +69,8 @@ export let due = (builder: Comp | undefined, at: string): boolean => {
 // A build and an output keep the eid they were minted with, which says nothing
 // about the builder that made them, and each is found again by a key
 // (@yaks/key): a row at an id derived from what it is the build or output of,
-// whose `key.of` names it. An answer replaces its build's named slots;
-// replay and late answers leave the current output alone.
+// whose `key.of` names it. A new answer adds takes; replay finds the takes
+// of that same call without replacing earlier answers.
 export let BUILD_OF = 'build_of'
 export let OUTPUT_OF = 'output_of'
 
@@ -79,8 +79,9 @@ export let OUTPUT_OF = 'output_of'
 export let buildOf = (builder: Eid, match: string, variant = 'main'): string =>
   `${builder}/${variant}/${match}`
 
-/** What an output's key says: its build and named slot. */
-export let outputOf = (build: Eid, slot: string): string => `${build}/${slot}`
+/** What one take's key says: build, slot and producing call. */
+export let outputOf = (build: Eid, slot: string, call: Eid): string =>
+  `${build}/${slot}/${call}`
 
 /** The build a builder made for an outer tuple, found by its key. */
 export let buildFor = async (
@@ -93,28 +94,24 @@ export let buildFor = async (
   return (await held(g, BUILD_OF, [value])).get(value)
 }
 
-/** A stable output slot. Legacy outputs are found by their chosen mark until
- * their next answer adopts the slot key. A call filter names only the answer
- * currently stored on that output. */
+/** One call's take in a slot; omitted call means the chosen take. */
 export let outputFor = async (
   g: Pick<ReadTx, 'get' | 'read'>,
   build: Eid,
   slot = 'main',
   call?: Eid,
 ): Promise<Eid | undefined> => {
-  let value = outputOf(build, slot)
-  let eid = (await held(g, OUTPUT_OF, [value])).get(value)
-  let row = eid
-    ? (await g.get([eid]))[0]
-    : (await g.read(`.built.build=${build}&.chosen&*`))
-      .find((row) => (row.built as Comp).slot == slot)
-  return row && (!call || comp(row, BUILT)?.call == call)
-    ? row.entity.eid
-    : undefined
+  if (!call) {
+    return (await g.read(`.built.build=${build}&.chosen&*`))
+      .find((row) => (row.built as Comp).slot == slot)?.entity.eid
+  }
+  let value = outputOf(build, slot, call)
+  return (await held(g, OUTPUT_OF, [value])).get(value)
 }
 
 export let current = (build: Comp, built: Comp, chosen: boolean): boolean =>
-  chosen && !build.stale && built.call != null
+  chosen && !build.stale && built.call != null &&
+  built.inputs != null && built.inputs == build.inputs
 
 /** The entity a binding is built for: the first its outer tuple holds, which
  * `build.for` names so a query can reach it. A builder with no query has
@@ -124,7 +121,9 @@ export let subject = (binding: Binding): Eid | null =>
 
 export let ids = (binding: Binding): Eid[] => [
   ...binding.entities.filter((eid): eid is Eid => eid != null),
-  ...(binding.collections ?? []).flatMap((group) => group.members.flatMap(ids)),
+  ...(binding.collections ?? []).flatMap((group) =>
+    membersOf(group).flatMap(ids)
+  ),
 ]
 
 // A shadow or this builder's own output is history, never a selected input.

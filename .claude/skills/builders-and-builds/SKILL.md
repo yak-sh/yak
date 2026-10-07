@@ -34,7 +34,7 @@ Redoing work under a new recipe is something you ask for.
 
 packages/builders/README.md is the reference. This is the feel of using it
 well: think in standing instructions, look at three before you build fifty,
-and keep each output as the thing its consumers already hold.
+and treat every take as something worth keeping.
 
 ## The shape
 
@@ -50,15 +50,15 @@ and keep each output as the thing its consumers already hold.
   `$region .region; [$sfx .sfx, sfx.region=$region]` is one build per region.
 - `$name` in the template is that variable's value in the binding; inside a
   bracket it renders as the README's `modelTool()` paragraph says.
-- Each answer replaces `built{build, slot, key, inputs, definition, call,
-  artifact, current}` outputs, keyed by build and slot. A nonedge slot keeps its
-  eid, so consumers' references stay valid. Full answers delete omitted outputs
-  and links; supply replaces only its named slot. Calls keep the frozen answer
-  as provenance, without keeping additional live outputs beside the replacement.
-- `built.current` means chosen while the binding still exists. A pending
-  replacement keeps the output playing; late answers and replays leave it alone.
-  Legacy chosen rows are adopted at their next answer without changing their
-  ids or asking a model just to change a key.
+- Each answer adds `built{build, slot, key, inputs, definition, call, artifact,
+  current}` takes, keyed by build, slot and call. A replay keeps that call's
+  takes. Each slot's newest successful take is `chosen{at, by, via}` by
+  default; old takes and their sibling links stay queryable, and
+  `yak builder choose <output>` picks an earlier one without spending. The
+  server holds one choice per build and slot.
+- `built.current` means chosen while the binding still exists and its inputs
+  still match. A pending reroll with unchanged inputs keeps the choice playing;
+  a late answer or a replay leaves it alone.
 - A build's or an output's eid is minted, never derived from what made it, so
   it's an ordinary entity to cite and link. `buildFor` and `outputFor`
   (@yaks/builders) find one by its key.
@@ -123,7 +123,8 @@ designed in `vocabulary` like any other. Every write lands as one batch, or none
   `{"slot": "needs <item>", "inputs": [], "components": {"edge": {"from":
   "$tome", "to": "<item>"}, "needs": {"count": 2}}}`. It lands on the link's
   own eid (@yaks/edge) and carries an `output_of` key for its slot. One end is
-  a nonedge sibling, and a changed or omitted link is deleted on replacement.
+  a nonedge sibling, and a later answer leaves it linked to its take as
+  history.
 - A rejected answer, including store admission, or a model turn that failed
   for good writes `failed{reason}` on the build and keeps its key, so automatic
   reconciliation does not spend twice. Changed inputs or an explicit rebuild
@@ -182,11 +183,11 @@ and `builder_supply` sit beside it. From the box:
 ## Chaining
 
 A downstream builder selects what an upstream one made with
-`.built.current=true`, so it gathers the existing output while a replacement is
-pending. Shadows are never selected. Bind the upstream properties the
-downstream build uses, such as `built.artifact=$artifact` or
-`doc.body=$description`: output ids stay stable, and the bound values make a
-changed upstream output flow down by itself.
+`.built.current=true`, so it gathers the chosen take while a reroll with
+unchanged inputs is pending. Shadows are never selected. Bind the upstream
+properties the downstream build uses, such as `built.artifact=$artifact` or
+`doc.body=$description`: choosing another take changes the binding and flows
+down by itself.
 
 ## Reading what was built
 
@@ -201,8 +202,9 @@ changed upstream output flow down by itself.
 
 ## Cost
 
-Each call a model builder makes opens one session, and `build.cost` sums what
-its calls spent, computed and never stored. On yaks.app a builder spends the
+Each call a model builder makes opens one session, reused when that call is
+replayed, and `build.cost` sums what its calls spent, computed and never stored.
+On yaks.app a builder spends the
 account's one budget (M-42105) through the store's session runner
 (workers/yak/builders.ts, models.ts), which is why only app editors may write
 one (workers/yak/public/docs/models.md, "Build from stored rows"). A sample's

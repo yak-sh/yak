@@ -1,8 +1,7 @@
 /**
  * A builder defines a graph query and registered tool. Each outer binding has
  * one stable build, whose changing key opens a tool call; named outputs keep
- * their ids while each successful answer replaces their components, citations
- * and artifact references.
+ * their ids, keys, citations and artifact references as build history.
  *
  * @module
  */
@@ -17,3 +16,5 @@ export { type Supply, supply } from './supply.ts'
 export { preserve } from './preserve.ts'
 
 export { choices, choose } from './choice.ts'
+
+export { frozenMove, takeMove } from './takes.ts'

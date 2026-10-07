@@ -97,6 +97,7 @@ test('song subscription projects the current main audio and its qualified riders
           for: 'song',
           variant: variant == 'shadow' ? 'shadow:x' : 'main',
           key: 'current',
+          inputs: 'input',
           stale: variant == 'stale',
         },
       },
@@ -106,11 +107,14 @@ test('song subscription projects the current main audio and its qualified riders
           build: `${variant}-build`,
           slot: 'main',
           key: 'current',
+          inputs: 'input',
+          call: 'sample-call',
           artifact: 'clip',
         },
         chosen: {},
       },
     ]),
+    { entity: { eid: 'sample-call' }, call: {}, completed: {} },
   ], { trusted: true })
   let rows: Row[] = await g.read(SONGS)
   equal(rows.map((row) => row.entity.eid).toSorted(), [

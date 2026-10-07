@@ -39,6 +39,8 @@ import { Unknown } from '@yaks/vocab'
 import { GIT_STORE, PLATFORM_STORE } from './door.ts'
 import { deadMailInboxRule } from './migrate.ts'
 import { doneRun } from '../../packages/effects/cleanup.ts'
+import { frozenMove, takeMove } from '@yaks/builders'
+import { keyEid } from '@yaks/key'
 /** A rule's name: where its stamp is kept in a store's memory, and the
  * `BOUNDARIES` entry its live release adds. */
 export type Mark = `yak/store/${string}`
@@ -109,7 +111,37 @@ export let doneEffectsRule: Rule = {
   find: '.effect.state=done&*',
   move: doneRun,
 }
-export let RULES: Rule[] = [deadMailInboxRule, doneEffectsRule]
+
+/** Fingerprints changed before retained takes were restored. Visit existing
+ * builds and outputs once; the converter returns only the necessary patches.
+ * Calls and output content are read as evidence and never rewritten. */
+export let takeRule: Rule = {
+  mark: 'yak/store/builder-takes/19',
+  find: '.build&*|.built&*',
+  move: (row, read) => {
+    if (!read) throw new Error('take conversion needs its build and call')
+    let made = row.built as Comp | undefined
+    if (!made) {
+      let call = (row.build as Comp).call
+      return frozenMove(
+        row,
+        call ? read(`.entity.eid=${call}&*`)[0] : undefined,
+      )
+    }
+    let old = `${made.build}/${made.slot}`
+    let value = `${old}/${made.call}`
+    return takeMove(row, [
+      ...read(
+        `.entity.eid=${made.build},${made.call},${keyEid('output_of', old)},${
+          keyEid('output_of', value)
+        }&*`,
+      ),
+      ...read(`.built.build=${made.build}&.chosen&*`),
+    ])
+  },
+}
+
+export let RULES: Rule[] = [deadMailInboxRule, doneEffectsRule, takeRule]
 
 /** How far one rule got in one store. `after` is the last row it moved past;
  * `unspoken` is a word the rule reads that this store does not declare, so

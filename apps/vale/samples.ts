@@ -1,47 +1,41 @@
-// Hosted builder outputs name every sound clip. A missing or undecodable
+// Hosted builder outputs supply every sound clip. A missing or undecodable
 // blob leaves the procedural voice in place.
 let clips: Record<string, string> = {}
 
-/** Every output a build now holds for a sound, each with the sound it was
- * built for (`build.for`) and its clip, which ride beside it. */
+/** Each chosen main recording, with its sound row and clip beside it. */
 export let SOUNDS = '.built.current=true&.built.artifact' +
-  '&.built.build.build.variant=main&.fields=built.build.build.for.sfx.name,' +
+  '&.built.build.build.variant=main&.fields=built.current,' +
+  'built.build.build.variant,built.build.build.for.sfx.name,' +
+  'built.build.build.for.built.build,' +
   'built.artifact.artifact.address,built.artifact.artifact.media_type'
 
 export type Row = {
   entity: { eid: string }
-  built?: { build: string; artifact?: string }
-  build?: { for?: string }
+  built?: { build: string; artifact?: string; current?: boolean }
+  build?: { for?: string; variant?: string }
   sfx?: { name: string }
   artifact?: { address: string; media_type: string }
 }
 
-/** The clip of each sound, from {@link SOUNDS}' rows: an audio clip, for a
- * sound. */
+/** Recordings by sound eid. Seed sounds also have their fixed game names;
+ * generated takes share names, so their names never select a recording. */
 export let catalog = (rows: Row[]): Record<string, string> => {
   let at = new Map(rows.map((row) => [row.entity.eid, row]))
   return Object.fromEntries(rows.flatMap(({ built }) => {
-    let made = built && at.get(built.build)?.build?.for
-    let name = made && at.get(made)?.sfx?.name
+    let build = built && at.get(built.build)?.build
+    if (!built?.current || build?.variant != 'main') return []
+    let made = build.for, sound = made ? at.get(made) : undefined
+    if (!made || !sound?.sfx) return []
+    let name = sound.sfx.name
     let blob = built?.artifact && at.get(built.artifact)?.artifact
-    return name && blob && blob.media_type.startsWith('audio/')
-      ? [[name, blob.address]]
+    return blob && blob.media_type.startsWith('audio/')
+      ? [[made, blob.address], ...sound.built ? [] : [[name, blob.address]]]
       : []
   }))
 }
 
 let waiting = new Map<string, Set<(hash: string) => void>>()
 let watching: Promise<void> | null = null
-// Each sound row's name, by its eid, as the store has them.
-let named = new Map<string, string>()
-
-/** The name of the sound row an eid names (a creature's `sounds`), once the
- * store has said; until then a sound plays its procedural voice. */
-export let nameOf = (sfx: string): string | undefined => {
-  void watch()
-  return named.get(sfx)
-}
-
 /** Accept the current catalogue delivered by the store subscription. */
 export let accept = (rows: Row[]) => {
   let current = catalog(rows)
@@ -62,9 +56,6 @@ export let watch = () => {
     .then(({ subscribe }) => {
       subscribe(SOUNDS, (rows: Row[]) => {
         accept(rows)
-      })
-      subscribe('.sfx', (rows: Row[]) => {
-        named = new Map(rows.map((row) => [row.entity.eid, row.sfx!.name]))
       })
     })
     .catch((error) => {

@@ -145,7 +145,7 @@ reference, a stored query, a derived eid) holds an eid.
   and `key` only in its package, which is why agents reach for `identity` where
   a key belongs. @yaks/builders' minted builds are found by `build_of{}` on
   `key{of, value}` (builder/variant/binding tuple), and all outputs by
-  `output_of{}` (build/slot); edge outputs also keep their ends-and-relation
+  `output_of{}` (build/slot/call); edge outputs also keep their ends-and-relation
   identity. `held` (packages/key/resolve.ts) finds a batch of owners with no
   query or scan; `build{builder, match, variant}` and `built{build, slot}` are
   history (stale builds, dropped links), not a second index. A row whose

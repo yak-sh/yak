@@ -62,19 +62,19 @@ test('supply is current, costs zero and rebuilds only after input edits', async 
   await g.apply([{ entity: { eid: source }, doc: { body: 'After' } }])
   await build(g, vocab, { builder: ids.builder }, null)
   assertEquals((await g.read('.call')).length, 2)
-  assertEquals((await g.read('.built.current=true')).length, 1)
+  assertEquals((await g.read('.built.current=true')).length, 0)
   assertEquals(await buildFor(g, ids.builder, [source]), buildId)
   assertEquals(await outputFor(g, buildId, 'song'), id)
 })
 
-test('supply replaces a slot and keeps other slots; replay keeps the latest answer', async () => {
+test('supply adds takes and keeps other chosen slots; replay does not undo a choice', async () => {
   let { g, vocab } = await shop()
   await g.apply(seed())
   let main = await supply(g, vocab, ask(), null)
   let other = await supply(g, vocab, ask('other'), null)
   let next = await supply(g, vocab, ask(), null)
-  assertEquals(next, main)
-  assertEquals((await g.read('.built')).length, 2)
+  assertEquals(next == main, false)
+  assertEquals((await g.read('.built')).length, 3)
   assertEquals((await g.read('.built.current=true')).length, 2)
   let buildId = (await buildFor(g, ids.builder, [source]))!
   assertEquals(await outputFor(g, buildId), next)
@@ -97,7 +97,7 @@ test('supply replaces a slot and keeps other slots; replay keeps the latest answ
     )
   }
   assertEquals(await outputFor(g, buildId), main)
-  assertEquals((await g.read('.built')).length, 2)
+  assertEquals((await g.read('.built')).length, 3)
 })
 
 test('supply refuses invalid or ambiguous bindings without writing a call', async () => {

@@ -544,7 +544,7 @@ test('builder_supply in an app store is current without any model spending', asy
   assertEquals(v.asked, [])
 })
 
-test('hosted supply replaces a named slot without a model turn', async () => {
+test('hosted choose switches takes without a model turn and preserves earlier artifacts', async () => {
   let v = await app()
   let artifact = crypto.randomUUID()
   let replacement = crypto.randomUUID()
@@ -580,17 +580,17 @@ test('hosted supply replaces a named slot without a model turn', async () => {
     by: ADA,
   })
   let second = (await two.json()).output
-  assertEquals(first, second)
+  assert(first != second)
   assertEquals((await v.read('.built.current=true'))[0].entity.eid, second)
   assertEquals(
-    ((await v.read('.built&*'))[0].built as Comp).artifact,
+    ((await v.read('.built.current=true&*'))[0].built as Comp).artifact,
     replacement,
   )
   let calls = await v.read('.call.source.build&*')
   let choice = await v.kernel('/choose', { output: first, by: ADA })
   assertEquals(choice.status, 200)
   assertEquals((await v.read('.built.current=true'))[0].entity.eid, first)
-  assertEquals((await v.read('.built')).length, 1)
+  assertEquals((await v.read('.built')).length, 2)
   assertEquals((await v.read('.call.source.build')).length, calls.length)
   assertEquals(v.asked.length, 0)
 })
