@@ -204,13 +204,8 @@ test('recorded call effects recover pending and crashed calls without reconcilia
   await next.fx.idle()
   assertEquals(next.errors, [])
   assertEquals((await next.g.read('.result')).length, 2)
-  assertEquals(
-    (await next.g.read('.effect')).map((b) => (b.effect as Comp).state),
-    [
-      'done',
-      'done',
-    ],
-  )
+  // Successful runs leave their results, not completed bookkeeping rows.
+  assertEquals(await next.g.read('.effect'), [])
   await next.fx.work(next.g, AbortSignal.abort(), 1)
   assertEquals((await next.g.read('.result')).length, 2)
 })

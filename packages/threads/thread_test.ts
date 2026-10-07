@@ -19,7 +19,7 @@ let part = (b: Bundle | undefined, name: string): Comp | undefined =>
   b?.[name] as Comp | undefined
 
 let fixture = () => {
-  let fx = effects(vocab)
+  let fx = effects(vocab, { owes: 'declared' })
   let g = graph({ storage: ram(vocab), vocab, plugins: [fx] })
   let worker = thread<{ gated?: boolean; fail?: boolean }>(
     new URL('./testing.ts', import.meta.url),
@@ -46,12 +46,7 @@ test('a thread claims effects from the owning RAM graph and writes through its r
     equal(answer.answer, { value: 42, by: worker.me })
     ok(answer.admitted)
     await until(async () =>
-      part((await g.read('.effect.handler=finish'))[0], 'effect')?.state ==
-        'done'
-    )
-    equal(
-      part((await g.read('.effect.handler=finish'))[0], 'effect')?.attempts,
-      1,
+      (await g.read('.effect.handler=finish')).length == 0
     )
     equal(
       part((await g.read('.effect.handler=answered'))[0], 'effect')?.state,
@@ -89,10 +84,7 @@ test('closing a thread drains an effect before closing its graph port', async ()
     await closing
     await live
     equal(part((await g.get(['job']))[0], 'answer')?.value, 10)
-    equal(
-      part((await g.read('.effect.handler=finish'))[0], 'effect')?.state,
-      'done',
-    )
+    equal(await g.read('.effect.handler=finish'), [])
   } finally {
     stop.abort()
     worker.end()
@@ -209,6 +201,7 @@ test('two threads race for one owed effect and only one handler writes', async (
   fx.changed('answer', () => writes++)
   fx.created('answer', () => writes++)
   await g.apply([{ entity: { eid: 'job' }, job: { value: 7 } }])
+  equal((await g.read('.effect.handler=finish')).length, 1)
   let stop = new AbortController()
   let serving = [first, second].map((worker) => {
     worker.plan({ roles: ['effects'], data: {}, graph: g })
@@ -218,9 +211,7 @@ test('two threads race for one owed effect and only one handler writes', async (
   })
   try {
     await until(
-      async () =>
-        part((await g.read('.effect.handler=finish'))[0], 'effect')?.state ==
-          'done',
+      async () => (await g.read('.effect.handler=finish')).length == 0,
       { timeout: 5000 },
     )
     stop.abort()
