@@ -57,7 +57,7 @@ import type {
 import { after, each, isPromise, over } from '@yaks/fp'
 import { during, link, peek, unlink } from '@yaks/trace'
 import { asked, match, reads } from '@yaks/graph'
-import { type Clause, eq, list } from '@yaks/query'
+import { type Clause, eq, fields, list } from '@yaks/query'
 import { type EffectDecl, effectsIn, type Vocab } from '@yaks/vocab'
 import {
   BEFORE,
@@ -70,6 +70,7 @@ import {
   wanting,
 } from './trace.ts'
 import { generation, marked, ORIGIN, unmark, type Write } from './write.ts'
+import { settleStale } from './cleanup.ts'
 import {
   describe,
   type Description,
@@ -207,6 +208,8 @@ export type Effects = Plugin & {
   handle: (handlers: Handlers) => Effects
   /** every registration, declared ones first */
   slots: () => Slot[]
+  /** Settle unclaimed pending runs no longer owed by this declaration/config. */
+  settle: (g: Access, handler: string) => Promise<number>
   /** Documentation derived from the registered slots. */
   docs: () => Description[]
   /** Work the pool: claim what is owed and run it (./pool.ts). A live signal
@@ -317,6 +320,60 @@ export let effects = (vocab: Vocab, opts: Opts = {}): Effects => {
     }
   }
   let depth = opts.depth ?? 2
+  let disabled = new Set(opts.disabled)
+  let TARGETS = '$effectTargets'
+  type Targets = Record<string, Eid[]>
+  // Restrict scope reads to the batch's subjects, never the whole graph.
+  let subjects = (query: string, eids: Eid[], tx: ReadTx) => {
+    let plan = asked(match(query), vocab)
+    if (!plan || !eids.length) return []
+    if (plan.patterns.length != 1 || plan.collections.length) {
+      throw new Error('an effect target must be a single-entity query')
+    }
+    let filter = plan.patterns[0].filter
+    return after(
+      tx.read({
+        ...filter,
+        clauses: [
+          ...filter.clauses,
+          eq('entity.eid', list(...eids)),
+          fields('entity.eid'),
+        ],
+      }),
+      (rows) => rows.map((b) => b.entity.eid),
+    )
+  }
+  let scoped = (bundles: Bundle[], tx: ReadTx) => {
+    let prior = (bundles[0]?.[BEFORE] ?? {}) as Before
+    let eids = [
+      ...new Set([...bundles.map((b) => b.entity.eid), ...Object.keys(prior)]),
+    ]
+    let seen = events(bundles)
+    let queries = [
+      ...new Set(
+        slots.filter((s) =>
+          !disabled.has(s.id) &&
+          seen.some((e) =>
+            watching(s, e) || (s.kind == 'matched' && s.watch?.includes(e.name))
+          )
+        )
+          .map((s) => s.effect?.target).filter((q): q is string => !!q),
+      ),
+    ]
+    if (!queries.length) return bundles
+    return after(
+      each(
+        queries,
+        {} as Targets,
+        (out, query) =>
+          after(subjects(query, eids, tx), (found) => {
+            out[query] = found
+            return out
+          }),
+      ),
+      (targets) => bundles.map((b) => ({ ...b, [TARGETS]: targets })),
+    )
+  }
 
   // The write callback as one run sees it: whatever it writes is marked a
   // generation on from the batch that owed it.
@@ -529,6 +586,23 @@ export let effects = (vocab: Vocab, opts: Opts = {}): Effects => {
     let asking = chosen.filter((s) =>
       s.kind == 'matched' && s.plan && stirred(s, seen)
     )
+    let targets = new Map<string, Set<Eid> | Promise<Set<Eid>>>()
+    let priorTargets = (bundles[0]?.[TARGETS] ?? {}) as Targets
+    let inScope = (s: Slot, e: Event): boolean | Promise<boolean> => {
+      let query = s.effect?.target
+      if (!query) return true
+      if (priorTargets[query]?.includes(e.entity.eid)) return true
+      if (!targets.has(query)) {
+        targets.set(
+          query,
+          after(
+            subjects(query, bundles.map((b) => b.entity.eid), tx),
+            (found) => new Set(found),
+          ),
+        )
+      }
+      return after(targets.get(query)!, (found) => found.has(e.entity.eid))
+    }
     let active = new Map<string, boolean | Promise<boolean>>()
     let enabled = (s: Slot): boolean | Promise<boolean> => {
       let query = s.effect?.active
@@ -563,10 +637,16 @@ export let effects = (vocab: Vocab, opts: Opts = {}): Effects => {
           hits,
           kept,
           (out, pair) =>
-            after(enabled(pair[0]), (yes) => {
-              if (yes) out.push(pair)
-              return out
-            }),
+            after(
+              inScope(...pair),
+              (scoped) =>
+                scoped
+                  ? after(enabled(pair[0]), (yes) => {
+                    if (yes) out.push(pair)
+                    return out
+                  })
+                  : out,
+            ),
         )
       },
     )
@@ -632,7 +712,11 @@ export let effects = (vocab: Vocab, opts: Opts = {}): Effects => {
   let owe: Hook = (bundles, tx, _err, context) => {
     if (generation(bundles) > depth) return bundles
     return after(
-      matched(bundles, tx, (s) => !!s.effect && (owesAll || !!s.run)),
+      matched(
+        bundles,
+        tx,
+        (s) => !!s.effect && !disabled.has(s.id) && (owesAll || !!s.run),
+      ),
       (found) =>
         !found.length ? bundles : after(
           pooled!.owe(tx, found, generation(bundles)),
@@ -664,7 +748,10 @@ export let effects = (vocab: Vocab, opts: Opts = {}): Effects => {
   // started, and every observer runs.
   let effect: Hook = (bundles, tx, _err, context) => {
     let mine = bundles[0] && owed.get(bundles[0])
-    let clean = () => unmark(strip(bundles))
+    let clean = () => {
+      for (let b of bundles) delete b[TARGETS]
+      return unmark(strip(bundles))
+    }
     if (mine) {
       owed.delete(bundles[0])
       pooled!.start(mine)
@@ -705,7 +792,12 @@ export let effects = (vocab: Vocab, opts: Opts = {}): Effects => {
     hooks: {
       // Read the state the batch is about to change, while it still stands.
       precondition: (bundles, tx) =>
-        slots.length ? before(vocab)(bundles, tx) : bundles,
+        slots.length
+          ? after(
+            before(vocab)(bundles, tx),
+            (prepared) => scoped(prepared, tx),
+          )
+          : bundles,
       ...(pooled ? { commit: owe } : {}),
       effect,
     },
@@ -742,11 +834,29 @@ export let effects = (vocab: Vocab, opts: Opts = {}): Effects => {
       for (let [id, run] of Object.entries(handlers)) {
         let mine = slots.filter((s) => s.effect && s.id == id)
         if (!mine.length) throw new Error(`no effect is declared as ${id}`)
-        for (let s of mine) s.run = run
+        if (!disabled.has(id)) { for (let s of mine) s.run = run }
       }
       return fx
     },
     slots: () => [...slots],
+    settle: (g, handler) => {
+      let declared = slots.filter((s) => s.effect && s.id == handler)
+      if (!declared.length) {
+        throw new Error(`no effect is declared as ${handler}`)
+      }
+      return settleStale(g, handler, async (row) => {
+        if (disabled.has(handler)) return false
+        let candidates = declared.filter((s) =>
+          s.kind == row.kind && (s.kind == 'started' || s.comp == row.comp)
+        )
+        if (!candidates.length) return false
+        // A removal's old scope is not recorded; preserve it conservatively.
+        if (row.kind == 'removed') return true
+        let query = candidates[0].effect?.target
+        return !query ||
+          (await subjects(query, [String(row.target)], g.outside)).length > 0
+      })
+    },
     docs: () => describe(slots),
     work: (g, signal, passes) =>
       pooled?.work(g, signal, passes) ?? Promise.resolve(),

@@ -532,10 +532,11 @@ export let sessionStatus = {
     })
     let legacyAsk = select({
       cols: [col('entity', 'e')],
-      from: table(ASK, 'a'),
+      // A transcript with no sequenced ask must not search every other
+      // transcript's asks. Its NULL-sequence range is the fallback's scope.
+      from: table('entry', 'e'),
       joins: [{
-        how: 'cross' as const,
-        src: table('entry', 'e'),
+        ...cross(table(ASK, 'a')),
         on: eq(col('entity', 'a'), col('entity', 'e')),
       }],
       where: and(mine('e'), isNull(col('seq', 'e'))),
@@ -550,7 +551,16 @@ export let sessionStatus = {
       ],
       where: eq(
         col('entity', 'e'),
-        fn('coalesce', sub(sequencedAsk), sub(legacyAsk)),
+        fn(
+          'coalesce',
+          sub(sequencedAsk),
+          iff(
+            // An empty ask table owes no search through legacy entries.
+            exists(select({ cols: [lit(1)], from: table(ASK) })),
+            sub(legacyAsk),
+            lit(null),
+          ),
+        ),
       ),
       order: [desc(col('seq', 'e'))],
       limit: lit(1),

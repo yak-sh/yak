@@ -737,6 +737,8 @@ const doc = {
       created: ['mail'],
       sweep: '.mail !sent',
       tries: 3,
+      option: 'sending',
+      target: '.mail',
     },
   },
 }
@@ -752,15 +754,24 @@ equal(effectsIn(doc), [{
   created: ['mail'],
   sweep: '.mail !sent',
   tries: 3,
+  option: 'sending',
+  target: '.mail',
 }])
 ```
 
 Effect declarations carry `created` and `removed` component lists, `changed`
-component or property lists, `match`, `start`, `active`, `sweep`, `tries` and
-`idempotent`. At least one of `created`, `changed`, `removed`, `match` or
-`start` must owe work. [@yaks/effects](../effects/README.md) defines their
-execution; [@yaks/graph](../graph/README.md#rules) executes rules. These loaders
-read declarations without parsing queries or running either kind of work.
+component or property lists, `match`, `start`, `active`, `target`, `option`,
+`sweep`, `tries` and `idempotent`. At least one of `created`, `changed`,
+`removed`, `match` or `start` must owe work.
+[@yaks/effects](../effects/README.md) defines their execution;
+[@yaks/graph](../graph/README.md#rules) executes rules. These loaders read
+declarations without parsing queries or running either kind of work.
+
+`option` names a boolean option of the declaring plugin: `option: 'sending'`
+owes runs only with `with: { sending: true }`. Graph writers and effects workers
+apply the same gate. `target` limits commit triggers to subjects matching its
+query before or after the write; a matching subject losing a component or moving
+out of the query still owes its reconciliation.
 
 ## A vocabulary as entities
 

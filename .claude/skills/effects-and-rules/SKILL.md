@@ -88,11 +88,19 @@ role claims and runs it.
 
 A declared effect with no registered handler owes no row. Composition registers
 only the code the process has, including conditional handlers, and supplies no
-no-op for a missing one; a store's alarm ignores pending rows for handlers it
-doesn't compose.
+no-op for a missing one. A conditional declaration names its boolean plugin
+`option`, so graph-only writers and workers agree about what is enabled without
+loading effects code into writers. Disabled names do not count against a
+worker serving every enabled effect when it holds the pool's presence lease; a
+store's alarm ignores pending rows for handlers it doesn't compose.
 
 What any errand runner that can't lose work lives with:
 
+- **A scope is the subject.** A declaration's `target` query narrows its
+  component triggers to the entities it reconciles. It is checked before and
+  after the write, so removing a component or moving out of scope still owes
+  reconciliation. A global `active` query instead asks whether the duty is
+  enabled anywhere.
 - **A trigger is broad.** `created: ['completed']` fires for every entity that
   ever gains `completed`, whoever wrote it. `active: '<query>'` or a `match`
   narrows it to the cases meant. An effect row owes no run itself
@@ -186,5 +194,15 @@ work left owed is the next worker's.
 - A store or service that fails at start keeps serving and tries again
   (1fa525581). Production will break, and the system is built to come back on
   its own (M-37965) rather than hold a failure until the next deploy.
+
+When a declaration narrows or an opt-in is disabled, pending runs can outlive
+what owed them. After proving the declaration and settlement on a scratch
+server, `host.fx.settle(host.graph, '<effect>')` settles unclaimed pending runs
+that the declaration or configuration no longer owes, through guarded graph
+writes and the ordinary successful-run cleanup. The pool also settles disabled
+runs an older writer leaves during a rolling restart, without invoking a handler or spending an attempt. Settlement preserves
+failures and claims; removal runs whose old scope is no longer available are
+kept conservatively. Read and count before and after, and repeat to prove there is
+nothing left to settle. Deleting rows by hand bypasses that judgment.
 
 When this skill is wrong or missing something, fix it in the same change.

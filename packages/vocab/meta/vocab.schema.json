@@ -728,6 +728,16 @@
         "effect": {
           "const": true
         },
+        "option": {
+          "description": "The declaring plugin's boolean option that must be true to owe runs.",
+          "type": "string",
+          "minLength": 1
+        },
+        "target": {
+          "description": "Commit trigger subjects must match this query before or after the write.",
+          "type": "string",
+          "minLength": 1
+        },
         "created": {
           "type": "array",
           "items": {

@@ -9,11 +9,17 @@ import {
   token,
 } from '@yaks/graph'
 
-export let doneRun = (row: Bundle): Bundle[] => {
-  let effect = row.effect as Comp | undefined
-  if (effect?.state != 'done') return []
+/** Guarded successful settlement, preserving any other data on the run. */
+export let finishedRun = (row: Bundle): Bundle[] => {
+  let effect = row.effect as Comp
   let guards = Object.fromEntries(
-    Object.entries(effect).map(([p, v]) => [p, token(v ?? null)]),
+    Object.entries({
+      lease_owner: null,
+      lease_token: null,
+      attempts: null,
+      ...effect,
+    })
+      .map(([p, v]) => [p, token(v ?? null)]),
   )
   let other = comps(row).some(([name]) =>
     !['effect', 'created', 'updated'].includes(name)
@@ -24,6 +30,9 @@ export let doneRun = (row: Bundle): Bundle[] => {
     $was: { effect: guards },
   }]
 }
+
+export let doneRun = (row: Bundle): Bundle[] =>
+  (row.effect as Comp | undefined)?.state == 'done' ? finishedRun(row) : []
 
 export let cleanupDone = async (
   g: Access,
@@ -47,4 +56,30 @@ export let cleanupDone = async (
     }
   }
   return removed
+}
+
+/** Owner-invoked settlement of pending errands that the declaration no longer
+ * owes. The predicate is conservative; active claims and failures stay intact.
+ * It completes through the same guarded graph writes as successful-run cleanup. */
+export let settleStale = async (
+  g: Access,
+  handler: string,
+  needed: (effect: Comp) => boolean | Promise<boolean>,
+): Promise<number> => {
+  let settled = 0
+  for (
+    let row of await g.read(
+      `.effect.handler=${handler} .effect.state=pending *`,
+    )
+  ) {
+    let effect = row.effect as Comp
+    if (effect.lease_owner || await needed(effect)) continue
+    try {
+      await g.apply(finishedRun(row), { trusted: true })
+      settled++
+    } catch (e) {
+      if (!(e instanceof Stale)) throw e
+    }
+  }
+  return settled
 }

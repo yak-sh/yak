@@ -29,6 +29,12 @@ export type EffectDecl = {
   /** the entry's own name: what a recorded run names, and what the code that
    * runs it is registered under */
   name: string
+  /** the declaring plugin's boolean option that must be true before a
+   * commit owes this effect; absent means always enabled */
+  option?: string
+  /** commit triggers owe runs only for subjects matching this query before
+   * or after the write, so removals and moves out still reconcile */
+  target?: string
   /** the components whose appearance on an entity owes a run */
   created?: string[]
   /** `comp` for any patch to that component, `comp.prop` for a patch that
@@ -79,7 +85,16 @@ export let effectsIn = (input: VocabDoc | VocabDoc[]): EffectDecl[] => {
         let said = strings(entry[key])
         if (said) decl[key] = said
       }
-      for (let key of ['match', 'sweep', 'active', 'description'] as const) {
+      for (
+        let key of [
+          'match',
+          'sweep',
+          'active',
+          'description',
+          'option',
+          'target',
+        ] as const
+      ) {
         let said = entry[key]
         if (typeof said == 'string') decl[key] = said
       }

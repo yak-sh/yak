@@ -1137,12 +1137,20 @@ let composed = async (
     // The registry, in every process. A process serving `effects` owes runs
     // only for the declared effects it has code for; any other process (the
     // CLI, a server without duties) cannot see that code, so it owes a run for
-    // every declared effect, left for the process that has it. The runs are
+    // every enabled declared effect, left for the process that has it. The
+    // declaration's option gate is read here, beside its plugin's options,
+    // so graph writers and effects workers agree without importing effects
+    // code into a graph writer. The runs are
     // written down with the commit (@yaks/effects), for any process working
     // the pool. An effect writes through the graph's own `apply()`, trusted:
     // what it writes comes from the host, never from a client.
     let fx = watching = effects(vocab, {
       owes: roles.includes('effects') ? 'handled' : 'declared',
+      disabled: vocabs.flatMap(([v, options]) =>
+        effectsIn(v.docs ?? [])
+          .filter((e) => e.option && options[e.option] !== true)
+          .map((e) => e.name)
+      ),
       write: (b) => host.graph.apply(b, { trusted: true }),
       owner: host.me,
       lease: config.lease,

@@ -573,7 +573,7 @@ test("the runner's sweep finds a transcript owed a turn in a Durable Object", ()
 
 // SQLite's statement counters measure engine work, not the number of returned
 // bundles. A transcript lookup returning one row used to visit its history.
-test('a finished session status seeks its newest turn with bounded engine work', () => {
+test('session status seeks its own turn without reading unrelated asks', () => {
   let lib = Deno.dlopen(sqlitePath, {
     sqlite3_next_stmt: {
       parameters: ['pointer', 'pointer'],
@@ -601,35 +601,46 @@ test('a finished session status seeks its newest turn with bounded engine work',
           : said(i + 1, `e${i}`),
     )
     g.apply(transcript, { trusted: true })
-    let [owner] = d.query(
-      select({
-        cols: [col('id')],
-        from: table('entity'),
-        where: eq(col('eid'), val(S)),
-      }),
-    )
-    let query = select({
-      cols: [
-        sessionDerived(vocab)['session.status'].expr(val(Number(owner.id))),
-      ],
-    })
-    let compiled = render(query)
-    let plan = d.query({ t: 'explain query plan', of: query }).map((r) =>
-      String(r.detail)
-    ).join('\n')
-    assert(plan.includes('entry_session_seq'), plan)
-    assert(!/SCAN (?:entry|e)\b/.test(plan), plan)
-    let statement = db.prepare(compiled.sql)
-    assertEquals(
-      Object.values(statement.get(...compiled.params)!)[0],
-      'settled',
-    )
-    // The statement just prepared is SQLite's newest live statement.
-    let handle = lib.symbols.sqlite3_next_stmt(db.unsafeHandle, null)
-    let steps = lib.symbols.sqlite3_stmt_status(handle, 4, 0)
-    console.log('SESSION_STATUS_VM_STEPS', steps)
-    assert(steps < 2000, `finished status executed ${steps} VM steps`)
-    statement.finalize()
+    g.apply([
+      { entity: { eid: 'sparse' }, session: { id: 'sparse' } },
+      {
+        entity: { eid: 'sparse-input' },
+        entry: { session: 'sparse', seq: 1 },
+        content: { body: 'hi' },
+      },
+    ], { trusted: true })
+    for (let [eid, expected] of [[S, 'settled'], ['sparse', 'running']]) {
+      let [owner] = d.query(
+        select({
+          cols: [col('id')],
+          from: table('entity'),
+          where: eq(col('eid'), val(eid)),
+        }),
+      )
+      let query = select({
+        cols: [
+          sessionDerived(vocab)['session.status'].expr(val(Number(owner.id))),
+        ],
+      })
+      let compiled = render(query)
+      let plan = d.query({ t: 'explain query plan', of: query }).map((r) =>
+        String(r.detail)
+      ).join('\n')
+      assert(plan.includes('entry_session_seq'), plan)
+      assert(!/SCAN (?:entry|e)\b/.test(plan), plan)
+      let statement = db.prepare(compiled.sql)
+      try {
+        assertEquals(
+          Object.values(statement.get(...compiled.params)!)[0],
+          expected,
+        )
+        let handle = lib.symbols.sqlite3_next_stmt(db.unsafeHandle, null)
+        let steps = lib.symbols.sqlite3_stmt_status(handle, 4, 0)
+        assert(steps < 2000, `${eid} status executed ${steps} VM steps`)
+      } finally {
+        statement.finalize()
+      }
+    }
   } finally {
     db.close()
     lib.close()

@@ -65,7 +65,7 @@
 // A worker that stays up holds a presence lease while it works, one per
 // process, so a process that only passes through — a command line — can tell
 // whether anyone is working the pool, and leaves the work to them when they
-// are. Only a worker with code for every declared effect holds one: a process
+// are. Only a worker with code for every enabled declared effect holds one: a process
 // lending one effect its code (a terminal running its own transcripts) works
 // that one, and says nothing about the rest.
 
@@ -81,6 +81,7 @@ import type { Event, Kind } from './trace.ts'
 import type { Write } from './write.ts'
 import { HOLD, LEASE, leaseEid, sleep, take } from './lease.ts'
 import { DAY, expireDaily } from './expire.ts'
+import { finishedRun } from './cleanup.ts'
 
 /**
  * This package's components, to load beside your own when effects should be
@@ -152,6 +153,8 @@ export type PoolOpts = {
    * sweeps, or expiration duties. Persist attempts and outcomes for crash
    * recovery and retries. Never enable this for a shared box store. */
   singleOwner?: boolean
+  /** Effects explicitly disabled by this configuration, whose unclaimed runs owe no work. */
+  disabled?: string[]
   /** who this process is: what its claims and its presence lease name. A
    * worker that names nobody claims under a fresh id and holds no presence
    * lease, since a lease's holder is an entity */
@@ -287,6 +290,7 @@ export let pool = (ctx: Ctx, opts: Partial<PoolOpts> = {}): Pool => {
   let mint = opts.mint ?? (() => crypto.randomUUID() as Eid)
   let wait = opts.backoff ?? backoff
   let max = opts.max ?? Infinity
+  let disabled = new Set(opts.disabled)
   let stamp = (ms: number) => new Date(ms).toISOString()
   let limit = (s?: Slot) => s?.effect?.tries ?? opts.tries ?? TRIES
   let safe = (s?: Slot) => s?.effect?.idempotent != false
@@ -491,6 +495,16 @@ export let pool = (ctx: Ctx, opts: Partial<PoolOpts> = {}): Pool => {
       if (!member || running.size >= max) break
       let eid = b.entity.eid
       let row = (b[EFFECT] ?? {}) as Comp
+      // An older writer can still owe an opt-in this config disables. Settle
+      // that obsolete errand without inventing a handler or spending an attempt.
+      if (disabled.has(String(row.handler)) && !row.lease_owner) {
+        try {
+          await g.apply(finishedRun(b), { trusted: true })
+        } catch (e) {
+          if (!(e instanceof Stale)) throw e
+        }
+        continue
+      }
       let s = handled(String(row.handler))
       if (!s || running.has(eid)) continue
       let expiry = row.lease_expiry ? Date.parse(String(row.lease_expiry)) : 0
@@ -626,7 +640,7 @@ export let pool = (ctx: Ctx, opts: Partial<PoolOpts> = {}): Pool => {
   let stay = async (g: Access, signal: AbortSignal) => {
     let seat = `${POOL}/${me}`
     let present = !opts.singleOwner && !!opts.owner && !!g.vocab.comp(LEASE) &&
-      ctx.slots().every((s) => !s.effect || !!s.run)
+      ctx.slots().every((s) => !s.effect || disabled.has(s.id) || !!s.run)
     let until = 0
     let expires = 0
     try {

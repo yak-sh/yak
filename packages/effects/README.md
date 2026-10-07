@@ -358,12 +358,12 @@ a second away. `wake` starts that pass sooner; `nudge` can notify another worker
 after a commit leaves runs unclaimed. `pool(ctx, options)` exposes the same
 operations for a caller supplying registry slots, a writer, and a reporter.
 
-A worker with an `owner` entity and handlers for every effect holds a presence
-lease while its live `work` runs. `working(g)` checks these leases. A one-shot
-`work` leaves the pool to a worker with a presence lease. A worker handling only
-some effects holds no presence lease. Signal abort or `stop` stops further
-claims; `idle` and `stop` wait for started runs while renewing their claims.
-Abort the live `work` signal to end its loop.
+A worker with an `owner` entity and handlers for every enabled effect holds a
+presence lease while its live `work` runs. `working(g)` checks these leases. A
+one-shot `work` leaves the pool to a worker with a presence lease. A worker
+handling only some effects holds no presence lease. Signal abort or `stop` stops
+further claims; `idle` and `stop` wait for started runs while renewing their
+claims. Abort the live `work` signal to end its loop.
 
 ### Single-owner stores
 
@@ -510,8 +510,12 @@ work no commit recorded.
 
 `start: true` owes each joining worker one `started` run, targeting its `owner`.
 Commit-triggered runs can be gated with `active`, a query that must match an
-entity; sweeps use their own query. Writes to pool entities owe no effects,
-preventing pool bookkeeping from producing more runs.
+entity; sweeps use their own query. A `target` query limits triggers to subjects
+matching before or after the write, including removals and moves out of scope.
+An `option` names the declaring plugin's boolean opt-in; the composing host
+passes disabled names to the registry so every writer agrees with its workers.
+Writes to pool entities owe no effects, preventing pool bookkeeping from
+producing more runs.
 
 ```ts
 import { graph } from '@yaks/graph'
@@ -558,6 +562,46 @@ try {
   await fx.stop()
 }
 equal(await working(g), false)
+```
+
+### Settling stale runs
+
+`fx.settle(g, handler)` completes unclaimed pending runs that the current
+configuration disables or the declaration no longer owes. It uses guarded
+successful-run cleanup, leaving failures, active claims and needed runs intact.
+Workers also settle unclaimed runs for explicitly disabled names, including runs
+an older writer leaves during a rolling restart. A removal's old scope is
+unavailable after commit, so its run is preserved unless the effect is disabled.
+
+```ts
+import { graph } from '@yaks/graph'
+import { loadVocab } from '@yaks/vocab'
+import { ram } from '@yaks/ram'
+import { effectDoc, effects } from '@yaks/effects'
+import { equal } from '@yaks/testing'
+
+let vocab = loadVocab([effectDoc, {
+  $defs: {
+    post: { component: true },
+    publish: { effect: true, created: ['post'] },
+  },
+}])
+let fx = effects(vocab, { disabled: ['publish'], owes: 'declared' })
+let g = graph({ vocab, storage: ram(vocab), plugins: [fx] })
+await g.apply([{ entity: { eid: 'p1' }, post: {} }])
+equal(await g.read('.effect'), [])
+await g.apply([{
+  entity: { eid: 'old-run' },
+  effect: {
+    handler: 'publish',
+    target: 'p1',
+    comp: 'post',
+    kind: 'created',
+    state: 'pending',
+  },
+}], { trusted: true })
+equal(await fx.settle(g, 'publish'), 1)
+equal(await fx.settle(g, 'publish'), 0)
 ```
 
 ## Duties and leases

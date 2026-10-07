@@ -306,13 +306,15 @@ lease instead.
    with derived columns, backings of computed components, query extensions,
    optional entity numbers, and the installed full-text indexes.
 4. Builds the graph from plugins and the effect registry. Every process writes
-   down the runs its commits owe, whatever roles it serves.
+   down the runs its commits owe, whatever roles it serves. An effect's `option`
+   names the declaring plugin's boolean option, which must be `true` before any
+   process owes that effect a run.
 5. Joins tool declarations to their `runs` implementations; a declared tool
    without an implementation is an error. Serving `effects`, it handles each
    declared effect with the one plugin `./effects` that gives it code, usually
-   the declaring plugin's own (a declared effect the config gives no code is
-   settled as done, and two plugins handling one is an error), and the tool
-   runner's two effects for calls another process wrote.
+   the declaring plugin's own (a declared effect the config gives no code owes
+   no run, and two plugins handling one is an error), and the tool runner's two
+   effects for calls another process wrote.
 6. Serving `web`, asks the plugin that hosts routes, if the config listed one,
    for the one handler this host answers with.
 7. Creates the current process entity after registrations are ready, except for

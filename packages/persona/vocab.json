@@ -122,7 +122,8 @@
         "contains",
         "reads"
       ],
-      "description": "write the persona files again: a persona, its home, a doc a persona says, or a link carrying or reading one moved"
+      "description": "write the persona files again: a persona, its home, a doc a persona says, or a link carrying or reading one moved",
+      "option": "files"
     },
     "skill": {
       "component": true,
@@ -174,6 +175,7 @@
         "skill",
         "file",
         "content",
+        "doc",
         "edge",
         "repository",
         "worktree",
@@ -199,12 +201,15 @@
         "repository",
         "worktree"
       ],
-      "description": "reconcile repository skills after graph changes when skills mirroring is enabled; exports land through a dedicated worktree"
+      "description": "reconcile skills, their repository files and reference links when skills mirroring is enabled; exports land through a dedicated worktree",
+      "option": "skills",
+      "target": ".skill|.file.path~=.claude/skills/|.references .edge.from.skill|.repository|.worktree"
     },
     "skill_watch": {
       "effect": true,
       "start": true,
-      "description": "reconcile repository skill files at startup and while the filesystem changes, only when skills mirroring is enabled"
+      "description": "reconcile repository skill files at startup and while the filesystem changes, only when skills mirroring is enabled",
+      "option": "skills"
     }
   }
 }

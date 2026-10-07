@@ -9,7 +9,7 @@ import { ram } from '@yaks/ram'
 import { test, until } from '@yaks/testing'
 import { effects, type Handler, type Opts } from './registry.ts'
 import { leaseEid } from './lease.ts'
-import { POOL } from './pool.ts'
+import { POOL, working } from './pool.ts'
 import { pooledBlog } from './testing.ts'
 
 let store = () => ram(pooledBlog, { number: true })
@@ -519,4 +519,46 @@ test('a restart sweep selects identities without projecting every target', async
   await p.fx.idle()
   assertEquals(p.ran.sort(), ['p1', 'p2'])
   assertEquals(p.oops, [])
+})
+
+test('a worker settles disabled runs from older writers without calling a handler', async () => {
+  let storage = store()
+  let writer = proc(storage, { owes: 'declared' })
+  let worker = proc(storage, { disabled: ['post_note'] })
+  worker.fx.handle({ post_note: worker.note })
+  await writer.g.apply([post('old')])
+  assertEquals(
+    (await owed(writer.g)).filter((r) => r.startsWith('post_note ')),
+    ['post_note old pending'],
+  )
+  await worker.fx.work(worker.g)
+  assertEquals(
+    (await owed(writer.g)).filter((r) => r.startsWith('post_note ')),
+    [],
+  )
+  assertEquals(worker.ran, [])
+  // A writer that stayed up through a rolling restart still cannot leave a backlog.
+  await writer.g.apply([post('late')])
+  await worker.fx.work(worker.g)
+  assertEquals(
+    (await owed(writer.g)).filter((r) => r.startsWith('post_note ')),
+    [],
+  )
+  assertEquals(worker.ran, [])
+  await worker.fx.stop()
+})
+
+test('a worker serving every enabled effect keeps the pool presence lease', async () => {
+  let server = proc(store(), { owner: 'server', disabled: ['post_gone'] })
+  server.fx.handle({ post_note: server.note, post_swept: () => {} })
+  let up = new AbortController()
+  let serving = server.fx.work(server.g, up.signal)
+  try {
+    await until(() => working(server.g))
+  } finally {
+    up.abort()
+    await serving
+    await server.fx.stop()
+  }
+  assertEquals(await working(server.g), false)
 })

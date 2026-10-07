@@ -876,6 +876,37 @@ test('a process that runs no effects owes a run for each declared effect it writ
   }
 })
 
+test('graph writers owe an optional effect only when its plugin opts in', async () => {
+  for (let enabled of [undefined, false, 'true', true]) {
+    let plugin = pooled({ effects: () => ({}) })
+    plugin.vocab = {
+      docs: [doc, processDoc, effectDoc, {
+        $defs: {
+          book_seen: { effect: true, created: ['book'], option: 'notes' },
+        },
+      }],
+    }
+    let host = await composing(
+      { db: ':memory:', plugins: [{ use: 'shop', with: { notes: enabled } }] },
+      ['graph'],
+      only({ shop: plugin }),
+    )
+    try {
+      await host.graph.apply([{
+        entity: { eid: 'b1' },
+        book: { title: 'One' },
+      }])
+      let rows = await host.graph.read('.effect')
+      assertEquals(
+        rows.map((b) => (b.effect as Comp).handler),
+        enabled === true ? ['book_seen'] : [],
+      )
+    } finally {
+      await host.close()
+    }
+  }
+})
+
 test('a process coming up owes again what a declared sweep selects', async () => {
   let ran: string[] = []
   let host = await compose(
