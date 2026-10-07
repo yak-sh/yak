@@ -154,3 +154,22 @@ test('socket refusals reach the page tracker with their reason', async () => {
     console.error = original
   }
 })
+
+test('authored narrow reads reach the wire without widening to whole rows', () => {
+  let { c, sent } = replica()
+  try {
+    for (
+      let line of [
+        '.task&?doc&?created',
+        '.task .fields=doc.title .limit=5',
+        '.task&.tally=filed.project',
+        '.task&.distinct=filed.priority',
+      ]
+    ) {
+      c.open(line, line)
+      assertEquals(sent.at(-1)?.subscribe, line)
+    }
+  } finally {
+    c.box.close()
+  }
+})

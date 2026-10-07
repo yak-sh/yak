@@ -4,6 +4,7 @@ import { type Client, client, type Watch, wireIdb } from './mod.ts'
 import { type Bundle } from '@yaks/graph'
 import { type Frame, replicate, type Socket } from '@yaks/sync'
 import type { Vocab } from '@yaks/vocab'
+import { map, parse } from '@yaks/query'
 // A socket that answers nothing: the replica of a process with no host (a
 // test), where frames only ever arrive through `receive`.
 export let quiet = (): Socket => ({
@@ -13,17 +14,28 @@ export let quiet = (): Socket => ({
   addEventListener: () => {},
 })
 
-// The page draws an entity by whatever components it carries (the registry
-// matches on any of them), so every line it watches asks for all of them: `*`,
-// the query grammar's widest projection (@yaks/graph `wanted`). A line that
-// already says what it answers keeps it: `.fields=` names each row's columns,
-// and a `.count` answers no rows.
-export let entire = (line: string): string =>
-  /(^|&)(\*|\.count|\.fields=[^&]*)(&|$)/.test(line)
-    ? line
-    : line
-    ? `${line}&*`
-    : '*'
+// A plain entity watch needs every component for its renderer. An authored
+// projection or aggregate already says what it answers; widening it defeats
+// the caller's read budget and can ship entire transcripts for a list.
+export let entire = (line: string): string => {
+  if (!line) return '*'
+  let shaped = false
+  try {
+    map(parse(line), (clause) => {
+      if (
+        ['every', 'count', 'tally', 'distinct', 'fields'].includes(
+          clause.kind,
+        ) ||
+        clause.kind == 'pred' && clause.op == '?'
+      ) shaped = true
+      return clause
+    })
+  } catch {
+    // Refusal belongs to the server, not the client cache.
+    return line
+  }
+  return shaped ? line : `${line}&*`
+}
 
 export type NamedClient = {
   box: Client

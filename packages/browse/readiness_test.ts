@@ -117,7 +117,7 @@ test('entity holds share one line and close at the last release', () => {
     let a = routeSub('reference', 'doc.title')
     let b = routeSub('reference', 'doc.title')
     assertEquals(sent.flatMap((f) => f.subscribe ?? []), [
-      '.entity.eid=reference&*',
+      '.entity.eid=reference&.fields=doc.title',
     ])
     a()
     assertEquals(sent.some((f) => f.unsubscribe), false)

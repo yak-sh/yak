@@ -47,12 +47,12 @@ export let changesOf = (rows: Bundle[]): Change[] =>
   })
 
 // What a view asks for beside its rows that this host answers some other way:
-// incident edges are subscriptions of their own (live.ts routeSub), and every
-// row arrives whole.
-let aside = /^(?:\.edges(?:\.[a-z]+=.*|\[[^\]]*\])?$|\.fields=)/
+// incident edges are subscriptions of their own (live.ts routeSub). Authored
+// projections still belong to the query and must reach the server unchanged.
+let aside = /^\.edges(?:\.[a-z]+=.*|\[[^\]]*\])?$/
 
 /** A view's query line as the host reads it: an id list is `.entity.eid=`, and the
- * edge riders and projections are left out. */
+ * edge riders are left out; projected columns are preserved. */
 export let yakLine = (q: string): string =>
   q.split('&')
     .filter((term) => !aside.test(term))
