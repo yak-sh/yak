@@ -48,7 +48,12 @@ export type Test = (bundle: Bundle, among: Index) => boolean
  * What a run needs besides the clause: the vocabulary, the reference moment,
  * and the rules that read the vocabulary's computed properties.
  */
-export type Ctx = { v: Vocab; now: number; computed: Computed }
+export type Ctx = {
+  v: Vocab
+  now: number
+  computed: Computed
+  storageOrder?: boolean
+}
 
 /**
  * A set every entity a clause can select is inside of: the entities wearing a

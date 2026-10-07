@@ -81,7 +81,7 @@ import {
   unlink,
 } from '@yaks/trace'
 import { derivedEid, Stale, token } from '@yaks/graph'
-import { and, eq } from '@yaks/query'
+import { after as cursorAfter, and, eq, limit as window } from '@yaks/query'
 import type { VocabDoc } from '@yaks/vocab'
 import doc from './vocab.json' with { type: 'json' }
 import type { Report, Slot } from './registry.ts'
@@ -491,7 +491,15 @@ export let pool = (ctx: Ctx, opts: Partial<PoolOpts> = {}): Pool => {
 
   // One pass over what is owed: every row this process can run that nobody
   // holds and whose backoff is up, claimed and started. Returns the runs.
-  let due = async (g: Access): Promise<Promise<void>[]> => {
+  // A pass admits at most this many candidates, even when concurrency is
+  // unlimited. Separate handler windows keep one backlog from owning the pass.
+  let page = 32
+  let turn = 0
+  let cursors = new Map<string, Eid>()
+  let exhausted = new Set<string>()
+  let scanStarted = false
+  type Pass = { started: Promise<void>[]; more: boolean }
+  let due = async (g: Access): Promise<Pass> => {
     let now = clock()
     let started: Promise<void>[] = []
     // Asked once a pass per owner: a process that ended without letting go
@@ -505,57 +513,111 @@ export let pool = (ctx: Ctx, opts: Partial<PoolOpts> = {}): Pool => {
       }
       return known
     }
-    let rows = await g.read(and(eq(`${EFFECT}.state`, 'pending')))
-    for (let b of rows) {
-      // A worker that left while this pass was going claims no more.
-      if (!member || running.size >= max) break
+    let names = [
+      ...new Set([
+        ...ctx.slots().filter((s) => s.effect && s.run).map((s) => s.id),
+        ...disabled,
+      ]),
+    ]
+    if (!member || running.size >= max || !names.length) {
+      return { started, more: false }
+    }
+    let examine = async (b: Bundle) => {
       let eid = b.entity.eid
       let row = (b[EFFECT] ?? {}) as Comp
       // An older writer can still owe an opt-in this config disables. Settle
       // that obsolete errand without inventing a handler or spending an attempt.
       if (disabled.has(String(row.handler)) && !row.lease_owner) {
         try {
-          await g.apply(finishedRun(b), { trusted: true })
+          let [whole] = await g.get([eid])
+          let current = whole?.[EFFECT] as Comp | undefined
+          if (current?.state == 'pending' && !current.lease_owner) {
+            await g.apply(finishedRun(whole), { trusted: true })
+          }
         } catch (e) {
           if (!(e instanceof Stale)) throw e
         }
-        continue
+        return
       }
       let s = handled(String(row.handler))
-      if (!s || running.has(eid)) continue
+      if (!s || running.has(eid)) return
       let expiry = row.lease_expiry ? Date.parse(String(row.lease_expiry)) : 0
       if (
         !opts.singleOwner && row.lease_owner && expiry > now &&
         !await gone(String(row.lease_owner))
-      ) continue
-      if (row.next && Date.parse(String(row.next)) > now) continue
+      ) return
+      if (row.next && Date.parse(String(row.next)) > now) return
       let attempts = Number(row.attempts ?? 0)
       // Every attempt spent: left failed, with the last error beside it.
       if (attempts >= limit(s)) {
         await swap(g, eid, row, { state: 'failed', next: null, ...free })
-        continue
+        return
       }
       // Claimed and no `next`: interrupted, not reported, so how far it got
       // is unknown — and a second run is not the same as a first.
       if (attempts && !row.next && !safe(s)) {
         let error = `interrupted, and ${row.handler} is not idempotent`
         await swap(g, eid, row, { state: 'failed', error, ...free })
-        continue
+        return
       }
       let mine = { attempts: attempts + 1, next: null, ...claim() }
       if (await swap(g, eid, row, mine)) {
         started.push(start(g, eid, { ...row, ...mine }))
       }
     }
-    return started
+    let budget = page
+    let drained = new Set<string>()
+    while (
+      member && running.size < max && budget > 0 && drained.size < names.length
+    ) {
+      let name = names[turn % names.length]
+      turn = (turn + 1) % names.length
+      if (drained.has(name)) continue
+      // A short slice, then the next handler, not the rest of this backlog.
+      let size = 1
+      let cursor = cursors.get(name)
+      let rows = await g.read(
+        and(
+          eq(`${EFFECT}.handler`, name),
+          eq(`${EFFECT}.state`, 'pending'),
+          window(size),
+          ...(cursor ? [cursorAfter(cursor)] : []),
+        ),
+        { storageOrder: true },
+      )
+      budget -= rows.length || 1
+      if (rows.length < size) exhausted.add(name)
+      else exhausted.delete(name)
+      for (let b of rows) {
+        if (!member || running.size >= max) break
+        cursors.set(name, b.entity.eid)
+        await examine(b)
+      }
+      // Revisit a drained handler's head next pass: a writer can owe it a
+      // new run while another handler still has thousands left to examine.
+      if (rows.length < size) {
+        cursors.delete(name)
+        drained.add(name)
+      }
+    }
+    scanStarted ||= started.length > 0
+    let more = names.some((name) => !exhausted.has(name))
+    if (!more) {
+      // A drain revisits the head once after starts: those runs may have
+      // written more work. An entirely blocked traversal ends, not spins.
+      more = scanStarted
+      scanStarted = false
+      cursors.clear()
+      exhausted.clear()
+    }
+    return { started, more }
   }
 
-  // Single-owner drains may overlap on the same registry. Serialize selection
+  // Drains may overlap on the same registry. Serialize selection
   // through attempt persistence and local admission: another pass must see the
   // running set before reading an attempt just written by this pass.
   let passing: Promise<unknown> = Promise.resolve()
-  let pass = (g: Access): Promise<Promise<void>[]> => {
-    if (!opts.singleOwner) return due(g)
+  let pass = (g: Access): Promise<Pass> => {
     let next = passing.then(() => due(g))
     passing = next.catch(() => {})
     return next
@@ -802,6 +864,8 @@ export let pool = (ctx: Ctx, opts: Partial<PoolOpts> = {}): Pool => {
     },
     work: async (g, signal = AbortSignal.abort(), passes = Infinity) => {
       graph = g
+      exhausted.clear()
+      scanStarted = false
       if (signal.aborted) {
         if (
           !opts.singleOwner &&
@@ -811,8 +875,8 @@ export let pool = (ctx: Ctx, opts: Partial<PoolOpts> = {}): Pool => {
         }
         await join(g)
         for (let n = 0; n < passes; n++) {
-          let started = await pass(g)
-          if (!started.length && (passes != Infinity || !running.size)) break
+          let { started, more } = await pass(g)
+          if (!started.length && !more && !running.size) break
           // A drain refills a slot as soon as its run ends, even while a
           // slower run still holds another. A finite pass settles its batch
           // and leaves newly owed work for the next wake.

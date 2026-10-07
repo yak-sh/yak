@@ -104,6 +104,8 @@ export type BindOpts = {
   backed?: Backings
   extend?: Extension[]
   now?: number
+  /** Unordered windows use physical owner order, not entity numbers. */
+  storageOrder?: boolean
   /** Matching against a current snapshot of this database file's archetypes,
    * done while the statement is being compiled. */
   archetypes?: ArchetypeSet
@@ -120,6 +122,7 @@ type Ctx = {
   backed: Backings
   ext: Extension[]
   now: number
+  storageOrder?: boolean
   tables: Set<string>
   candidates?: Frag
   present?: string
@@ -1536,6 +1539,21 @@ let indexedRelation = (
     ? ctx.d.indexed?.(root.comp, root.index)
     : ctx.d.table(root.comp)
   if (!src) return s
+  // Physical paging must seek the driving index, rather than test its joined
+  // entity after visiting every earlier row in that handler's history.
+  if (
+    ctx.storageOrder && s.where &&
+    !flattened(clauses).some((c) => c.kind == 'order')
+  ) {
+    let w = render(s.where)
+    s = {
+      ...s,
+      where: raw(
+        w.sql.replaceAll(ctx.d.ownerKey('entity'), ctx.d.ownerKey(root.comp)),
+        w.params,
+      ),
+    }
+  }
   let indexed: Select = {
     ...s,
     from: raw(src),
@@ -1696,6 +1714,7 @@ export let bound = (
     backed,
     ext: spine ? [] : opts.extend ?? [],
     now: opts.now ?? Date.now(),
+    storageOrder: opts.storageOrder,
     tables: new Set(),
     archetypes: spine ? undefined : opts.archetypes,
     spine,
@@ -1825,7 +1844,8 @@ export let bound = (
   // Whether this store numbers its entities: @yaks/id's document declares the
   // property, so a vocabulary that loaded it has numbers and one that did not
   // has none (the spine table holds the column either way).
-  let numbered = !ctx.spine && !!ctx.v.prop('entity', 'num')
+  let physical = ctx.storageOrder && !sort && !!(limit || after)
+  let numbered = !physical && !ctx.spine && !!ctx.v.prop('entity', 'num')
   // The cursor names its anchor by that entity's number, so a store which
   // mints none has nothing for it to name: `num < n` over a column of NULLs
   // answers with an empty page instead of saying so.
@@ -1852,12 +1872,12 @@ export let bound = (
   // stands alone where there is no number at all. Left to the num column, a
   // store that mints none would be ordering by the same NULL in every row,
   // which is to say by whatever the planner chose.
-  let down = sort || limit || after ? ' desc' : ''
+  let down = !physical && (sort || limit || after) ? ' desc' : ''
   if (numbered) ordered.push(`"entity"."num"${down}`)
   let owner = ctx.d.ownerKey('entity')
   ordered.push(`${owner}${down}`)
   let windowed = after
-    ? and(where, cond(keyset(ctx, sort, after, numbered)))
+    ? and(where, cond(keyset(ctx, sort, after, numbered, physical)))
     : where
   // The joins the selection itself reads, taken before a projection adds its
   // own.
@@ -1984,9 +2004,13 @@ let keyset = (
   sort: Sort | null,
   after: After,
   numbered: boolean,
+  physical = false,
 ): Frag => {
   if (ctx.spine && 'eid' in after) return backedKeyset(ctx, sort, after.eid)
   let owner = anchor(ctx, after)
+  if (physical) {
+    return { sql: `${ctx.d.ownerKey('entity')} > ${owner}`, params: [] }
+  }
   let exists = `exists (select 1 from ${ctx.d.spine} as "__cur" where ${
     anchorWhere(after)
   })`

@@ -399,6 +399,7 @@ export let ram = (vocab: Vocab, base: RamOpts = {}): Store => {
   ): Bundle[] => {
     let found = matcher(query, vocab, {
       now: opts.now ?? base.now,
+      storageOrder: opts.storageOrder,
       computed: base.computed,
     })(view())
     return comps
@@ -412,6 +413,7 @@ export let ram = (vocab: Vocab, base: RamOpts = {}): Store => {
   let raw = (query: Query, opts: ReadOpts = {}): Row[] =>
     answer(query, vocab, {
       now: opts.now ?? base.now,
+      storageOrder: opts.storageOrder,
       computed: base.computed,
     })(view())
 

@@ -70,6 +70,8 @@ export type Query = string | Ast
 export type MatchOpts = {
   /** the reference moment for time phrases (default: now) */
   now?: number
+  /** Unordered windows use insertion order rather than entity numbers. */
+  storageOrder?: boolean
   /** `comp.prop` → the value for one bundle, for a property the vocabulary
    * declares but never stores. The in-memory equivalent of @yaks/sql's
    * `derived` hook: an unregistered computed property is refused, as it is
@@ -129,7 +131,7 @@ let compare = (a: unknown, b: unknown): number => {
 // the reference moment while compiling keeps that moment beside it and is
 // reused only for the same one.
 type Kind = 'select' | 'filter' | 'rows'
-type Kept = { at?: number; made: unknown }
+type Kept = { at?: number; physical?: boolean; made: unknown }
 let NONE: Computed = {}
 let kept = new WeakMap<
   Vocab,
@@ -154,7 +156,10 @@ let once = <T>(
   let forms = byTree.get(q)
   if (!forms) byTree.set(q, forms = {})
   let hit = forms[kind]
-  if (hit && (hit.at === undefined || hit.at === opts.now)) {
+  if (
+    hit && hit.physical === opts.storageOrder &&
+    (hit.at === undefined || hit.at === opts.now)
+  ) {
     return hit.made as T
   }
   let now = opts.now ?? Date.now()
@@ -166,9 +171,14 @@ let once = <T>(
       return now
     },
     computed: opts.computed ?? {},
+    storageOrder: opts.storageOrder,
   }
   let made = make(ctx)
-  forms[kind] = { at: timed ? opts.now ?? NaN : undefined, made }
+  forms[kind] = {
+    at: timed ? opts.now ?? NaN : undefined,
+    physical: opts.storageOrder,
+    made,
+  }
   return made
 }
 
@@ -245,8 +255,11 @@ let sorter = (
   return (among) => {
     let place = new Map(among.list.map((b, i) => [b.entity.eid, i]))
     let newest = (a: Bundle, b: Bundle) =>
-      -compare(a.entity.num ?? null, b.entity.num ?? null) ||
-      (place.get(b.entity.eid) ?? 0) - (place.get(a.entity.eid) ?? 0)
+      (ctx.storageOrder && !order
+        ? 0
+        : -compare(a.entity.num ?? null, b.entity.num ?? null)) ||
+      (ctx.storageOrder && !order ? 1 : -1) *
+        ((place.get(a.entity.eid) ?? 0) - (place.get(b.entity.eid) ?? 0))
     return read
       ? (a, b) =>
         (desc ? -1 : 1) * compare(read(a, among), read(b, among)) ||
@@ -328,7 +341,15 @@ let selection = (ctx: Ctx, q: And): Select => {
       if (live(b) && test(b, among)) out.push(b)
     }
     if (sort) out.sort(sort)
-    if (after && sort) out = past(out, among.list, after, sort)
+    if (after && sort) {
+      out = past(
+        out,
+        among.list,
+        after,
+        sort,
+        !!ctx.storageOrder && !find<Order>(cs, 'order'),
+      )
+    }
     return limit ? out.slice(0, limit.n) : out
   }
 }
@@ -345,11 +366,12 @@ let past = (
   bundles: readonly Bundle[],
   after: After,
   sort: (a: Bundle, b: Bundle) => number,
+  physical = false,
 ): Bundle[] => {
   let at = bundles.find((b) =>
     'n' in after ? b.entity.num == after.n : b.entity.eid == after.eid
   )
-  return at ? out.filter((b) => sort(at, b) < 0) : out
+  return at ? out.filter((b) => sort(at, b) < 0) : physical ? [] : out
 }
 
 /** One row of {@link rows}: `{ eid }` with any projected values beside it, or

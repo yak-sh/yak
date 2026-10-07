@@ -30,6 +30,9 @@ export type ReadOpts = {
    * subscription membership; skip ask/answer hooks. */
   native?: boolean
   now?: number
+  /** Page in physical insertion order, ignoring imported entity numbers. Only
+   * unordered windows use it; a missing eid cursor answers an empty page. */
+  storageOrder?: boolean
   durable?: boolean
   /** A graph-local runtime activity parent; storage adapters need not use it. */
   parent?: string

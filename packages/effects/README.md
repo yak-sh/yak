@@ -360,8 +360,21 @@ A worker joining the pool claims runs its own commits owe and starts them after
 commit. `defer: true` leaves those runs for `work`; `max` limits simultaneous
 handlers. Other processes' runs are picked up on the next pass, normally at most
 a second away. `wake` starts that pass sooner; `nudge` can notify another worker
-after a commit leaves runs unclaimed. `pool(ctx, options)` exposes the same
-operations for a caller supplying registry slots, a writer, and a reporter.
+after a commit leaves runs unclaimed.
+
+Each pass examines at most 32 candidate runs, one candidate per handler at a
+time. Selection rotates between handled and explicitly disabled handlers; one
+handler's backlog cannot fill every pass ahead of another handler. The `effect`
+index on `handler, state` and physical insertion-order cursors keep SQLite
+selection bounded even when entity numbers were imported out of order. Claims,
+backoff and local admission are checked on each candidate. A blocked slice
+advances its cursor rather than ending a drain; a complete traversal with no
+starts ends the drain. Disabled handlers settle through the same bounded
+selection without spending attempts. These windows do not change `max`, which
+limits concurrent runs rather than candidate reads.
+
+`pool(ctx, options)` exposes the same operations for a caller supplying registry
+slots, a writer, and a reporter.
 
 A worker with an `owner` entity and handlers for every enabled effect holds a
 presence lease while its live `work` runs. `working(g)` checks these leases. A
