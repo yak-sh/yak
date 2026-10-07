@@ -96,6 +96,17 @@ on the graph host. The provider's default directory is used when none is
 recorded. A machine is no more the graph host's by right than any other machine
 (D-66416).
 
+A worktree on the box becomes such a machine by recording the process provider
+attached at its directory; the result's `entity.eid` is the `--machine`:
+
+```sh
+echo '[{"entity":{"eid":"$m"},"machine":{"provider":"process","address":"<worktree>","state":"running"}}]' | yak graph apply --bundles - --json
+```
+
+Without `--machine`, a session on the box gets an empty directory under
+~/.yak/machines, whatever directory the CLI was started in, and a brief that
+names a worktree path doesn't change that.
+
 The process provider (T-66421, packages/process/machine.ts) gives sandboxes their
 own directories and can attach an existing directory. It is not a security
 boundary and supplies no CPU or memory limit: bash and rooted paths can reach
