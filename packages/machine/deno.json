@@ -3,6 +3,7 @@
   "version": "0.2.10",
   "exports": {
     ".": "./mod.ts",
+    "./cloudflare": "./cloudflare.ts",
     "./vocab": "./vocab.ts"
   },
   "license": "Apache-2.0",

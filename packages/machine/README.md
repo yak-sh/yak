@@ -50,10 +50,11 @@ try {
 
 ## Exports
 
-| Export    | Offers                                                                                                                           |
-| --------- | -------------------------------------------------------------------------------------------------------------------------------- |
-| `.`       | `Machine`, `Proc`, `MachineProvider`, `ProviderConfig`, request/reference/file types, `MACHINE`, `MachineRecord`, `MachineState` |
-| `./vocab` | `machineDoc`, `docs`, `description`                                                                                              |
+| Export         | Offers                                                                                                                           |
+| -------------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| `.`            | `Machine`, `Proc`, `MachineProvider`, `ProviderConfig`, request/reference/file types, `MACHINE`, `MachineRecord`, `MachineState` |
+| `./cloudflare` | `cloudflareProvider`, `CloudflareProvider`, namespace and RPC types, image cwd and time limits                                   |
+| `./vocab`      | `machineDoc`, `docs`, `description`                                                                                              |
 
 ## Machine
 
@@ -128,6 +129,44 @@ try {
 } finally {
   await Deno.remove(dir, { recursive: true })
 }
+```
+
+## Cloudflare containers
+
+`cloudflareProvider(namespace, options?)` lends the containers in a deployed
+Cloudflare Sandbox namespace. The request id is the container's name. Request
+sets its idle sleep backstop; wake reaches the same files and processes; release
+destroys the container. The namespace chooses its deployed image, so `from`,
+`image` and existing-machine addresses are refused rather than ignored.
+
+Commands keep completed processes for `look` and `tail`; their ceiling is four
+minutes. SIGTERM and SIGKILL both use the SDK's single kill operation. Export
+reads binary files through the SDK's base64 encoding; relative paths start in
+`/workspace`, and absolute paths are supported for the platform's artifact
+tools.
+
+The host supplies `options.env` at command invocation (for example, a scoped
+grant), `options.retry` for transient RPC failures, and `options.sleepError` to
+report a failed idle configuration. This provider knows no account or meter.
+
+The namespace in this example is a stand-in for the deployed binding:
+
+```ts
+import { equal } from '@yaks/testing'
+import { type Box, cloudflareProvider } from '@yaks/machine/cloudflare'
+
+let destroyed = 0
+let provider = cloudflareProvider({
+  idFromName: (name) => name,
+  get: () =>
+    ({
+      destroy: async () => {
+        destroyed++
+      },
+    }) as unknown as Box,
+})
+await provider.release({ id: 'build-example' })
+equal(destroyed, 1)
 ```
 
 ## Graph record

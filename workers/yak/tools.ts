@@ -167,15 +167,13 @@ import { PAGES, uriOf, whole } from './guide.ts'
 import { asset, EITHER, NO_ARGS, PUBLIC, publics } from './preauth.ts'
 import {
   awake,
-  type Box,
-  boxOf,
   BUDGET,
   CAP,
   CWD,
   paid,
-  sandboxMachine,
   seconds,
   spending,
+  workbench,
 } from './sandbox.ts'
 import { machineDeclared, machineTools } from '@yaks/harness/machine'
 import {
@@ -1828,7 +1826,7 @@ export let call = (ctx: Ctx, name: string, args: Args): Promise<Out> => {
 let bench = async <T>(
   ctx: Ctx,
   space: Space,
-  body: (box: Box) => Promise<T>,
+  body: (bench: Awaited<ReturnType<typeof workbench>>) => Promise<T>,
 ): Promise<T> => {
   let spend = ctx.spend ?? spending()
   let no = await refusedSpend(
@@ -1840,7 +1838,7 @@ let bench = async <T>(
   )
   if (no) throw refuse('limit', no)
   await awake(ctx.env, space, ctx.person)
-  let box = boxOf(ctx.env, space, ctx.person, spend)
+  let box = await workbench(ctx.env, space, ctx.person, spend)
   try {
     return await body(box)
   } finally {
@@ -1876,21 +1874,9 @@ let shipPath = (v: unknown) => {
   return said
 }
 
-// Where that path IS: from the sandbox's working directory, or as written
-// where a model wrote an absolute one. There is nowhere to escape to — the
-// sandbox is the caller's own and sandbox_shell reaches all of it — so this is
-// about `/workspace//workspace/x`, not about a boundary.
-let inBox = (path: string) => path.startsWith('/') ? path : `${CWD}/${path}`
-
-// The bytes of a file read out of the container. base64 whatever it is: a
-// .wasm is not text and would not survive being decoded as text (files.ts
-// serves it by its extension either way).
-let unbase64 = (said: string) =>
-  Uint8Array.from(atob(said.trim()), (c) => c.charCodeAt(0))
-
 // The machine tools (@yaks/harness), declared there once and listed here as
 // sandbox_<name>, run on this space's container (sandbox.ts
-// `sandboxMachine`). The door adds the space to each one's arguments, says
+// `workbench`). The door adds the space to each one's arguments, says
 // what each may do to the world, and caps what it hands back.
 let HINTS: Record<
   string,
@@ -1921,8 +1907,8 @@ let SANDBOX: Row[] = machineDeclared().map((t) => {
       let said = await bench(
         ctx,
         space,
-        async (box) =>
-          await machineTools(sandboxMachine(box), { cwd: () => CWD })
+        async ({ machine }) =>
+          await machineTools(machine, { cwd: () => CWD })
             .find((m) => m.name == t.name)!
             .run(args),
       )
@@ -2918,10 +2904,10 @@ let OURS: Row[] = [
       if (!asked.length) {
         throw refuse('arguments', 'paths: at least one file to copy in')
       }
-      let files = await bench(ctx, space, async (box) => {
+      let files = await bench(ctx, space, async ({ provider, ref }) => {
         // One `ls` expands every glob at once, so a batch of artifacts costs
         // one command rather than one each.
-        let found = await box.exec(`ls -1d -- ${asked.join(' ')}`, { cwd: CWD })
+        let found = await provider.exec(ref, `ls -1d -- ${asked.join(' ')}`)
         let paths = found.stdout.split('\n').map((l) => l.trim()).filter(
           Boolean,
         )
@@ -2932,16 +2918,11 @@ let OURS: Row[] = [
               'sandbox_shell `ls` to see what the build left',
           )
         }
-        return await Promise.all(paths.map(async (path) => ({
-          // The app serves it under its own name: `pkg/app_bg.wasm` arrives
-          // as `app_bg.wasm`, beside index.html, which is where a page's
-          // relative import looks for it.
-          path: path.split('/').pop()!,
-          bytes: unbase64(
-            (await box.readFile(inBox(path), { encoding: 'base64' }))
-              .content,
-          ),
-        })))
+        let files = []
+        for await (let file of provider.export(ref, paths)) {
+          files.push({ path: file.path.split('/').pop()!, bytes: file.bytes })
+        }
+        return files
       })
       let paths = await wrote(ctx.env, space, app, who, files)
       return {

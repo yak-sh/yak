@@ -7,7 +7,13 @@ import type { Space } from './directory.ts'
 import type { Namespace } from './door.ts'
 import type { Env } from './env.ts'
 import { platform } from './testing.ts'
-import { type Box, boxOf, destroyed, named, type Sandboxes } from './sandbox.ts'
+import { destroyed, named, workbench } from './sandbox.ts'
+import {
+  type Box,
+  cloudflareProvider,
+  type Sandboxes,
+} from '@yaks/machine/cloudflare'
+import { retryOnce } from './door.ts'
 import { listen, rostered, told } from './stream.ts'
 
 let space: Space = {
@@ -189,21 +195,20 @@ for (let caller of callers) {
 let methods: Array<{ method: keyof Box; args: unknown[]; result: unknown }> = [
   {
     method: 'exec',
-    args: ['pwd', { cwd: '/app', env: { TEST: 'value' } }],
+    args: ['pwd', { cwd: '/workspace', env: {} }],
     result: { stdout: '/app', stderr: '', exitCode: 0 },
   },
   {
     method: 'writeFile',
-    args: ['/app/a', 'café', { encoding: 'utf8' }],
+    args: ['a', 'café', undefined],
     result: 'written',
   },
   {
     method: 'readFile',
-    args: ['/app/a', { encoding: 'utf8' }],
+    args: ['/app/a', undefined],
     result: { content: 'café' },
   },
   { method: 'destroy', args: [], result: 'destroyed' },
-  { method: 'setSleepAfter', args: ['5m'], result: 'set' },
 ]
 
 for (let { method, args, result } of methods) {
@@ -239,15 +244,26 @@ for (let { method, args, result } of methods) {
               } as unknown as Box
             },
           }
-          let env = { SANDBOX: ns }
-          let box = boxOf(env, space, who.person, { since: Date.now() })
+          let provider = cloudflareProvider(ns, { retry: retryOnce })
+          let ref = { id: named(space) }
+          let { machine } = await provider.wake(ref)
           assertEquals(gets, 0, 'take the stub per invocation, not per box')
           let call = () =>
-            (box[method] as (...args: unknown[]) => Promise<unknown>)(...args)
+            method == 'exec'
+              ? provider.exec(ref, 'pwd')
+              : method == 'writeFile'
+              ? machine.write('a', 'café')
+              : method == 'readFile'
+              ? machine.read('/app/a')
+              : method == 'destroy'
+              ? provider.release(ref)
+              : provider.request!(ref)
           if (errors.length == 2 || errors[0].message == 'bad') {
             assertEquals(await assertRejects(call), errors.at(-1))
           } else {
-            assertEquals(await call(), result)
+            let answer = await call()
+            if (method == 'exec') assertEquals(answer, result)
+            if (method == 'readFile') assertEquals(answer, 'café')
           }
           assertEquals(gets, errors[0].message == 'bad' ? 1 : 2)
           assertEquals(calls, gets)
@@ -269,7 +285,7 @@ test('sandbox cleanup and initial sleep also retry evictions', async () => {
         ++destroy == 1 ? Promise.reject(flagged()) : Promise.resolve(),
     } as unknown as Box),
   }
-  boxOf({ SANDBOX: ns }, space, who.person, { since: null })
+  await workbench({ SANDBOX: ns }, space, who.person, { since: null })
   assertEquals(await destroyed({ SANDBOX: ns }, space), true)
   assertEquals(sleep, 2)
   assertEquals(destroy, 2)

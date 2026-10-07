@@ -16,7 +16,7 @@ import type { Binding } from './post.ts'
 import type { Dispatch, Fetcher, Namespace } from './door.ts'
 import type { Meta } from './meta.ts'
 import type { Limiter } from './rate.ts'
-import type { Sandboxes } from './sandbox.ts'
+import type { Sandboxes } from '@yaks/machine/cloudflare'
 
 // The door's own word, said again here: every part of this kernel names its
 // bindings out of env.ts, and where a request may be handed is the door's to

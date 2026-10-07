@@ -34,7 +34,7 @@ import * as dirPart from './directory.ts'
 import type { App, Host, Space } from './directory.ts'
 import type { Env } from './env.ts'
 import { ai, platform, sandboxes } from './testing.ts'
-import { boxOf, spending } from './sandbox.ts'
+import { spending, workbench } from './sandbox.ts'
 import type { Who } from './session.ts'
 import { trashPlugin } from './trash.ts'
 
@@ -324,7 +324,8 @@ test('a deleted space takes its conversation and its workbench', async () => {
   // Something said to the builder, and a workbench woken under the same key.
   await builder(space.eid).say(held, 'a recipe box please')
   assertEquals(builder(space.eid).said().length, 2)
-  await boxOf(env, space, ADA, spending()).exec('cargo build')
+  let bench = await workbench(env, space, ADA, spending())
+  await bench.provider.exec(bench.ref, 'cargo build')
   assertEquals([...box.alive], [`build-${space.eid}`])
 
   await erase(env, dir, await census(dir, space), who)

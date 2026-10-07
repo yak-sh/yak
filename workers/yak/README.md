@@ -90,6 +90,12 @@ the watched source and no live version is ahead of it. An app-only push starts
 no replacement build and does not supersede the last one. A build that loses the
 race to newer Worker source deploys nothing and says why in its log.
 
+The sandbox tools use the Cloudflare provider in
+[@yaks/machine](../../packages/machine/README.md#cloudflare-containers).
+`sandbox.ts` checks allowances, supplies the caller's scoped grant, and counts
+container seconds; the provider owns container RPCs and lifecycle. Grants and
+the meter remain platform concerns.
+
 The sandbox image is two halves (sandbox/base.ts). `sandbox/base/Dockerfile` is
 the toolchain, pushed to the registry once per version of that file as
 `yak-sandbox:base-<its hash>`; `sandbox/Dockerfile` builds FROM that tag and

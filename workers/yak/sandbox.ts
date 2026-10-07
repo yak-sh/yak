@@ -1,7 +1,7 @@
 // The builder's workbench (T-34264): a container it can run commands in, so
 // the things a browser cannot compile get compiled somewhere and the artifact
 // is shipped into the app as ordinary files. It is the machine this host lends
-// @yaks/harness's machine tools ({@link sandboxMachine}), as a box lends its
+// @yaks/harness's machine tools through @yaks/machine/cloudflare, as a box lends its
 // own through @yaks/process.
 //
 // Owner, 2026-09-05: "and can we also give the agent some sandbox tools so
@@ -53,54 +53,19 @@
 // one per command ({@link signed}), and it dies with the container
 // ({@link destroyed}). It rides the SDK's per-invocation env and is never
 // exported into a shell, so nothing puts it in the builder's transcript.
-import type { Machine } from '@yaks/machine'
+import {
+  cloudflareProvider,
+  NAP,
+  type Sandboxes,
+  TIMEOUT,
+} from '@yaks/machine/cloudflare'
+export { CWD, NAP, SLEEP, TIMEOUT } from '@yaks/machine/cloudflare'
 import type { Space, Tier } from './directory.ts'
 import { retryOnce } from './door.ts'
 import { type Grant, type Kv, ledger, mint, tokenOf } from './grants.ts'
 import { type Host, url } from './host.ts'
 import { refuse } from './tool.ts'
 import { caught } from './sentry.ts'
-
-/** How a command runs in the container: where, for how long at most, and with
- * what beside the container's own environment. */
-type Run = { cwd?: string; timeout?: number; env?: Record<string, string> }
-
-/** One sandbox, as this file asks for it: what the tools do with it, plus the
- * one knob the deploy has no way to set. The SDK's process calls answer
- * objects carrying methods as well; only their data is read here. */
-export type Box = {
-  exec(
-    cmd: string,
-    opts?: Run,
-  ): Promise<{ stdout: string; stderr: string; exitCode: number }>
-  startProcess(
-    cmd: string,
-    opts?: Run & { autoCleanup?: boolean },
-  ): Promise<{ id: string; pid?: number }>
-  getProcess(
-    id: string,
-  ): Promise<{ pid?: number; status: string; exitCode?: number } | null>
-  killProcess(id: string): Promise<unknown>
-  getProcessLogs(id: string): Promise<{ stdout: string; stderr: string }>
-  mkdir(path: string, opts?: { recursive?: boolean }): Promise<unknown>
-  writeFile(
-    path: string,
-    content: string,
-    opts?: { encoding?: string },
-  ): unknown
-  readFile(
-    path: string,
-    opts?: { encoding?: string },
-  ): Promise<{ content: string }>
-  destroy(): Promise<unknown>
-  setSleepAfter?(after: string): unknown
-}
-
-/** The `SANDBOX` binding: a Durable Object namespace handing out one by name. */
-export type Sandboxes = {
-  idFromName(name: string): unknown
-  get(id: unknown): Box
-}
 
 /**
  * The container time one build has spent, and when it started spending it.
@@ -131,20 +96,6 @@ export let seconds = (s: Spend, now = Date.now()) =>
  * release build with room to spare, and a runaway loop stopped well before
  * it costs anything anybody would notice. */
 export let BUDGET = 600
-
-/** How long an idle sandbox stays awake, in seconds and in the form the
- * SDK takes. The build normally destroys its own; this is what catches the
- * build that never got to say so. */
-export let NAP = 300
-export let SLEEP = `${NAP / 60}m`
-
-/** The longest one command may run. Nothing here is interactive, and a
- * command that has not finished in four minutes is a command that is stuck. */
-export let TIMEOUT = 240_000
-
-/** Where a command runs unless it says otherwise — the sandbox's own
- * writable directory. */
-export let CWD = '/workspace'
 
 /** The most output one command hands back. A compiler that failed says why in
  * its first lines; the rest is the same warning again. */
@@ -296,27 +247,6 @@ export let overBudget = (spent: number) =>
  * inside it. */
 export let named = (space: Space) => `build-${space.eid}`
 
-// The object holding it. This is @cloudflare/containers `getContainer`, which
-// is all `getSandbox` does to reach one — the rest of it is preview URLs,
-// sessions and the code interpreter, none of which anything here asks for.
-let stub = (ns: Sandboxes, space: Space): Box => {
-  let call = <T>(send: (box: Box) => T | Promise<T>) =>
-    retryOnce(() => send(ns.get(ns.idFromName(named(space)))))
-  return {
-    exec: (cmd, opts) => call((box) => box.exec(cmd, opts)),
-    startProcess: (cmd, opts) => call((box) => box.startProcess(cmd, opts)),
-    getProcess: (id) => call((box) => box.getProcess(id)),
-    killProcess: (id) => call((box) => box.killProcess(id)),
-    getProcessLogs: (id) => call((box) => box.getProcessLogs(id)),
-    mkdir: (path, opts) => call((box) => box.mkdir(path, opts)),
-    writeFile: (path, content, opts) =>
-      call((box) => box.writeFile(path, content, opts)),
-    readFile: (path, opts) => call((box) => box.readFile(path, opts)),
-    destroy: () => call((box) => box.destroy()),
-    setSleepAfter: (after) => call((box) => box.setSleepAfter?.(after)),
-  }
-}
-
 /** What a grant is made and unmade with: the secret it is sealed under and
  * the ledger it is written in (grants.ts). */
 type Keys = Host & { SESSION_SECRET?: string; OAUTH_KV?: unknown }
@@ -392,111 +322,30 @@ let bared = async (env: Keys, space: Space) => {
   }
 }
 
-/**
- * The build session's sandbox, woken and signed in as the caller. The first
- * call starts the clock; every call after it rides the same container.
- *
- * ```ts ignore
- * let box = boxOf(env, space, person, spend)
- * await box.exec('cargo build --release --target wasm32-unknown-unknown')
- * ```
- */
-export let boxOf = (
+/** The host lends its configured provider after checking the build's budget.
+ * Billing starts at first need; grants are supplied only to command invocations. */
+export let workbench = async (
   env: { SANDBOX?: Sandboxes } & Keys,
   space: Space,
   person: string,
   spend: Spend,
   now = Date.now,
-): Box => {
+) => {
   if (!env.SANDBOX) throw new Error(NO_BOX)
   let spent = seconds(spend, now())
   if (spent >= BUDGET) throw refuse('limit', overBudget(spent))
   let first = spend.since == null
   spend.since ??= now()
-  let box = stub(env.SANDBOX, space)
-  // The idle timeout, set once a build rather than once a call — the SDK's
-  // own `applySandboxConfiguration` is cached per namespace for the same
-  // reason. It is a hop we do not wait for: a container that did not hear it
-  // sleeps on the SDK's own default instead, which is longer, not forever.
-  if (first) {
-    Promise.resolve(box.setSleepAfter?.(SLEEP)).catch((e) =>
-      caught(e, { request: 'sandbox sleep', space: space.slug })
-    )
-  }
-  // The grant rides here — the SDK's per-invocation env, awaited by the first
-  // command and handed to every one after it — rather than `setEnvVars`,
-  // which reaches the container by exporting the token into a shell where an
-  // `echo` would put it in the transcript.
-  let dressed = async <T extends Run>(opts?: T) => ({
-    ...opts,
-    env: {
-      ...await (spend.signing ??= signed(env, space, person)),
-      ...opts?.env,
-    },
+  let provider = cloudflareProvider(env.SANDBOX, {
+    retry: retryOnce,
+    env: () => spend.signing ??= signed(env, space, person),
+    sleepError: (e) =>
+      caught(e, { request: 'sandbox sleep', space: space.slug }),
   })
-  // Named rather than spread: the stub is a Durable Object proxy, and what a
-  // proxy answers is its methods, never its own properties.
-  return {
-    exec: async (cmd, opts) => await box.exec(cmd, await dressed(opts)),
-    startProcess: async (cmd, opts) =>
-      await box.startProcess(cmd, await dressed(opts)),
-    getProcess: (id) => box.getProcess(id),
-    killProcess: (id) => box.killProcess(id),
-    getProcessLogs: (id) => box.getProcessLogs(id),
-    mkdir: (path, opts) => box.mkdir(path, opts),
-    writeFile: (path, content, opts) => box.writeFile(path, content, opts),
-    readFile: (path, opts) => box.readFile(path, opts),
-    destroy: () => box.destroy(),
-    setSleepAfter: (after) => box.setSleepAfter?.(after),
-  }
+  let ref = { id: named(space) }
+  let lent = await (first ? provider.request!(ref) : provider.wake(ref))
+  return { ...lent, provider, ref }
 }
-
-// What the container calls a process that has not ended yet.
-let RUNNING = new Set(['starting', 'running'])
-
-let lines = (said: string) => said ? said.replace(/\n$/, '').split('\n') : []
-
-/**
- * A container as the machine @yaks/harness's machine tools run on
- * (`machineTools`). Every command is a background process of the container's
- * own, bounded by {@link TIMEOUT} and kept after it exits so a later `wait`
- * still finds its code; the container's destruction clears them all.
- *
- * Its output is two streams where a box has one, so an answer's tail is what
- * it printed to stdout followed by what it printed to stderr, where a
- * compiler's errors are. A kill is the container's one kill: it takes no
- * signal, so SIGTERM and SIGKILL are the same call.
- */
-export let sandboxMachine = (box: Box): Machine => ({
-  // Every look is a call into the container, so it looks twice a second.
-  poll: 500,
-  start: async (command, cwd) =>
-    (await box.startProcess(command, {
-      cwd: cwd ?? CWD,
-      timeout: TIMEOUT,
-      autoCleanup: false,
-    })).id,
-  look: async (id) => {
-    let p = await box.getProcess(id)
-    return p && {
-      ...p.pid ? { pid: p.pid } : {},
-      ...RUNNING.has(p.status) ? {} : { exit: { code: p.exitCode ?? null } },
-    }
-  },
-  tail: async (id, n) => {
-    let { stdout, stderr } = await box.getProcessLogs(id)
-    return [...lines(stdout), ...lines(stderr)].slice(-n)
-  },
-  kill: async (id) => {
-    await box.killProcess(id)
-  },
-  read: async (path) => (await box.readFile(path)).content,
-  write: async (path, content) => {
-    let dir = path.slice(0, path.lastIndexOf('/'))
-    if (dir) await box.mkdir(dir, { recursive: true })
-    await box.writeFile(path, content)
-  },
-})
 
 /**
  * This space's container, destroyed. Answers whether there was a binding to
@@ -514,7 +363,9 @@ export let destroyed = async (
 ) => {
   if (!env.SANDBOX) return false
   try {
-    await stub(env.SANDBOX, space).destroy()
+    await cloudflareProvider(env.SANDBOX, { retry: retryOnce }).release({
+      id: named(space),
+    })
   } catch (e) {
     caught(e, { request: 'sandbox destroy', space: space.slug })
   }
@@ -528,8 +379,7 @@ export let destroyed = async (
 
 /**
  * What has been spent so far, counted and the clock started over. The count
- * is meter.ts's `countedSandbox`, passed in rather than imported: this file is
- * about the container and that one is about the bill.
+ * is meter.ts's `countedSandbox`, passed in rather than imported: both stay in the host, not in the provider.
  */
 export let paid = async (
   spend: Spend,

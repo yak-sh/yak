@@ -144,7 +144,9 @@ let door = (server: Harness) =>
       if (mode) headers.set('mf-sec-fetch-mode', mode)
       let res = await server
         .getWorker(
-          path.startsWith('/__tracker_trace_bound/')
+          path.startsWith('/__sandbox_provider/')
+            ? 'probe-sandbox-provider'
+            : path.startsWith('/__tracker_trace_bound/')
             ? 'probe-tracker-trace-bound'
             : path.startsWith('/__store_trace_bound/')
             ? 'probe-store-trace-bound'
@@ -195,10 +197,31 @@ export let probeSuite = async () => {
       SENTRY_DSN: cf.url.replace('://', '://key@') + '/1',
     },
   )
+  // A test Durable Object implements container RPCs; no image is built or run.
+  let objects = kernel.durable_objects as { bindings: Record<string, string>[] }
+  objects.bindings.push({
+    name: 'SANDBOX',
+    class_name: 'ContainerProbe',
+    script_name: 'probe-sandbox-provider',
+  })
   let server: Harness = createTestHarness({
     root: dir,
     workers: [
       { config: kernel },
+      {
+        config: {
+          name: 'probe-sandbox-provider',
+          main: 'sandbox_provider_probe.js',
+          compatibility_date: '2025-05-08',
+          compatibility_flags: kernel.compatibility_flags,
+          tsconfig: kernel.tsconfig,
+          alias: kernel.alias,
+          durable_objects: {
+            bindings: [{ name: 'SANDBOX', class_name: 'ContainerProbe' }],
+          },
+          migrations: [{ tag: 'v1', new_sqlite_classes: ['ContainerProbe'] }],
+        },
+      },
       {
         config: {
           name: 'probe-scripts',

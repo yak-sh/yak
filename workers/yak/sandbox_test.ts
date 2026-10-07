@@ -35,7 +35,6 @@ import { GRANT, held, ledger } from './grants.ts'
 import {
   asleep,
   awake,
-  boxOf,
   BUDGET,
   destroyed,
   egress,
@@ -48,6 +47,7 @@ import {
   released,
   seconds,
   spending,
+  workbench,
 } from './sandbox.ts'
 import { type Ctx, TOOLS } from './tools.ts'
 import { PUBLISHED } from './published.ts'
@@ -297,12 +297,12 @@ test('the budget refuses in a sentence, and only after it is spent', async () =>
   // The first call starts the clock; a call one second past the budget is the
   // one that is refused, and the container is never asked for.
   let spend = spending()
-  boxOf(env, space, ADA, spend, now)
+  await workbench(env, space, ADA, spend, now)
   assertEquals(spend.since, 0)
   clock = BUDGET * 1000 + 1
-  let said = ((): Error => {
+  let said = await (async (): Promise<Error> => {
     try {
-      boxOf(env, space, ADA, spend, now)
+      await workbench(env, space, ADA, spend, now)
       throw new Error('not refused')
     } catch (e) {
       return e as Error
@@ -317,7 +317,8 @@ test('a release answers the seconds held, and the container goes', async () => {
   let { env, space } = await seeded({ SANDBOX: box.SANDBOX } as Partial<Env>)
   let clock = 0
   let spend = spending()
-  await boxOf(env, space, ADA, spend, () => clock).exec('sleep 42')
+  let bench = await workbench(env, space, ADA, spend, () => clock)
+  await bench.provider.exec(bench.ref, 'sleep 42')
   assertEquals([...box.alive], [`build-${space.eid}`])
   clock = 42_300
   let spent = await released(env, space, spend, () => clock)
