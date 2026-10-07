@@ -271,6 +271,7 @@ export let siblingDigest = async (
 let uploadSibling = async (
   args: string[],
   run: (args: string[], unpinned?: boolean) => Promise<number>,
+  wrangler = WRANGLER,
 ) => {
   if (args.includes('--dry-run')) return await run(args, true)
   let config = args[args.indexOf('-c') + 1]
@@ -281,7 +282,7 @@ let uploadSibling = async (
   let started = performance.now()
   let query = async (argv: string[]) => {
     let result = await new Deno.Command('env', {
-      args: [...PINNED.flatMap((v) => ['-u', v]), ...WRANGLER, ...argv],
+      args: [...PINNED.flatMap((v) => ['-u', v]), ...wrangler, ...argv],
       cwd: dir,
       stdout: 'piped',
       stderr: 'piped',
@@ -482,10 +483,10 @@ let envs = (args: string[]): string[] =>
 /** The commits the versions live now were deployed from, as the message this
  * door gives every version says (`--message` below), in the deploy's own
  * environment. Anything wrangler will not answer names no commit. */
-let serving = async (env: string[]): Promise<string[]> => {
+let serving = async (env: string[], wrangler = WRANGLER): Promise<string[]> => {
   let read = async (args: string[]) => {
-    let r = await new Deno.Command(WRANGLER[0], {
-      args: [...WRANGLER.slice(1), ...args, ...env, '--json'],
+    let r = await new Deno.Command(wrangler[0], {
+      args: [...wrangler.slice(1), ...args, ...env, '--json'],
       cwd: dir,
       stdout: 'piped',
       stderr: 'null',
@@ -498,12 +499,17 @@ let serving = async (env: string[]): Promise<string[]> => {
   }
   let deployments: {
     created_on: string
+    annotations?: Record<string, string>
     versions: { version_id: string; percentage: number }[]
   }[] = await read(['deployments', 'list']) ?? []
   let now =
     deployments.toSorted((a, b) =>
       Date.parse(b.created_on) - Date.parse(a.created_on)
     )[0]
+  let annotated = SHA.exec(now?.annotations?.['workers/message'] ?? '')?.[0]
+  if (
+    now?.versions.length == 1 && now.versions[0].percentage == 100 && annotated
+  ) return [annotated]
   let named = await Promise.all(
     (now?.versions ?? []).filter((v) => v.percentage > 0).map(async (v) => {
       let version = await read(['versions', 'view', v.version_id])
@@ -515,6 +521,10 @@ let serving = async (env: string[]): Promise<string[]> => {
 
 if (import.meta.main) {
   let argv = [...Deno.args]
+  // npm ci pins this executable already. npx adds an npm process and package
+  // resolution to every read/upload even when the exact package is installed.
+  let installed = join(dir, 'node_modules/.bin/wrangler')
+  let wrangler = at(installed) ? ['env', installed] : WRANGLER
   // Generated assets/catalog and the read-only supersession guard are
   // independent. Both settle before any upload; neither delays the other.
   let guarded = command(argv) === 'deploy' && !argv.includes('--dry-run')
@@ -578,8 +588,8 @@ if (import.meta.main) {
   let run = async (argv: string[], unpinned = false) => {
     if (interrupted) return 130
     let [cmd, ...args] = unpinned
-      ? ['env', ...PINNED.flatMap((v) => ['-u', v]), ...WRANGLER]
-      : WRANGLER
+      ? ['env', ...PINNED.flatMap((v) => ['-u', v]), ...wrangler]
+      : wrangler
     let child = new Deno.Command(cmd, { args: [...args, ...argv], cwd: dir })
       .spawn()
     children.add(child)
@@ -593,13 +603,14 @@ if (import.meta.main) {
     if (
       command(argv) === 'deploy' &&
       !/(^| )--containers-rollout[= ]none( |$)/.test(argv.join(' '))
-    ) await based({ wrangler: WRANGLER, dry: argv.includes('--dry-run') })
+    ) await based({ wrangler, dry: argv.includes('--dry-run') })
     return argv
   }
   Deno.exit(
     await runWrangler(
       argv,
-      (args, unpinned) => unpinned ? uploadSibling(args, run) : run(args),
+      (args, unpinned) =>
+        unpinned ? uploadSibling(args, run, wrangler) : run(args),
       prepare,
     ),
   )
