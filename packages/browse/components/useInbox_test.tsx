@@ -182,3 +182,68 @@ test('a large inbox finishes every derived read on one socket instead of reconne
     else Reflect.deleteProperty(globalThis, 'document')
   }
 })
+
+test('changing one derived batch retains the other inbox query owners', async () => {
+  let prior = Object.getOwnPropertyDescriptor(globalThis, 'document')
+  let { document } = parseHTML('<main></main>')
+  Object.defineProperty(globalThis, 'document', {
+    value: document,
+    configurable: true,
+  })
+  let root = document.querySelector('main')!
+  let actor = uuid()
+  let data: Bundle[] = [{ entity: { eid: actor }, person: {} }]
+  for (let i = 0; i < 40; i++) {
+    data.push({
+      entity: { eid: uuid() },
+      task: {},
+      created: { by: actor, at: at(1) },
+      doc: { title: `Task ${i}` },
+    })
+  }
+  cache.value = {}
+  let wire = host((a) => ({ bundles: reader(data)(a.subscribe) }))
+  let View = () => <span>{useInboxCount(actor) ?? '?'}</span>
+  try {
+    await act(() => render(<View />, root))
+    await until(() => root.textContent !== '?', { label: 'inbox ready' })
+    let seed = wire.asked().find((a) => a.subscribe.includes('.created.by='))!
+    let before = wire.asked().filter((a) =>
+      a.subscribe.includes('.comment.target=') &&
+      a.subscribe.includes('.entry.session=')
+    )
+    assertEquals(before.length > 1, true)
+    data.splice(1, 1)
+    await act(() =>
+      wire.say({
+        id: seed.id,
+        reset: true,
+        bundles: reader(data)(seed.subscribe),
+      })
+    )
+    await until(() => root.textContent !== '?', {
+      label: 'inbox ready after membership change',
+    })
+    let after = wire.asked().filter((a) =>
+      a.subscribe.includes('.comment.target=') &&
+      a.subscribe.includes('.entry.session=')
+    )
+    // Identity bucketing changes one line; unchanged owners remain subscribed.
+    assertEquals(after.length, before.length + 1)
+    let dropped = before.filter((a) =>
+      wire.sent.some((m) => m.unsubscribe == a.id)
+    )
+    assertEquals(dropped.length, 1)
+    await act(() => render(null, root))
+    assertEquals(
+      wire.sent.filter((m) => m.unsubscribe).length,
+      wire.asked().length,
+    )
+  } finally {
+    await act(() => render(null, root))
+    wire.free()
+    cache.value = {}
+    if (prior) Object.defineProperty(globalThis, 'document', prior)
+    else delete (globalThis as { document?: unknown }).document
+  }
+})

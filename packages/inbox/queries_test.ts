@@ -258,3 +258,17 @@ test('derived read inputs name each thread once before query budget splitting', 
     1,
   )
 })
+
+test('a removed root changes only its identity bucket, not every bounded read', () => {
+  let all: Row[] = Array.from({ length: 1000 }, (_, i) => ({
+    eid: `root${String(i).padStart(4, '0')}`,
+    comps: { task: {} },
+  }))
+  let plan = (input: Row[]) => boundedReads(input, (part) => discussion(part))
+  let before = plan(all)
+  let after = plan(all.slice(1))
+  assertEquals(before.length > 1, true)
+  assertEquals(after.filter((line) => !before.includes(line)).length, 1)
+  assertEquals(before.filter((line) => !after.includes(line)).length, 1)
+  assertEquals(plan(all.toReversed()), before)
+})

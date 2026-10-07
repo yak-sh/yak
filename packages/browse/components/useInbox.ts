@@ -24,7 +24,7 @@ import {
   querySubscription,
   row,
 } from '../live.ts'
-import { useLayoutEffect, useMemo } from 'preact/hooks'
+import { useLayoutEffect, useMemo, useRef } from 'preact/hooks'
 import { parseQuery, resolveRefs } from '../query.ts'
 import { findEid } from '../live.ts'
 import { kindOf, vocab } from '../types.ts'
@@ -56,13 +56,29 @@ let useReads = (queries: string[], enabled: boolean) => {
       line,
       preds: resolveRefs(parseQuery(line), findEid),
     })), [key])
+  let held = useRef(new Map<string, typeof reads[number]>())
   useLayoutEffect(() => {
-    if (!enabled) return
-    for (let { preds, line } of reads) holdQuery(preds, line)
-    return () => {
-      for (let { preds } of reads) dropQuery(preds)
+    let wanted = new Set(enabled ? queries : [])
+    // Retain unchanged query owners. Releasing the entire plan for one changed
+    // batch destroys otherwise ready subscriptions and downloads them again.
+    for (let [line, read] of held.current) {
+      if (wanted.has(line)) continue
+      dropQuery(read.preds)
+      held.current.delete(line)
+    }
+    if (enabled) {
+      for (let read of reads) {
+        if (held.current.has(read.line)) continue
+        holdQuery(read.preds, read.line)
+        held.current.set(read.line, read)
+      }
     }
   }, [reads, enabled])
+  useLayoutEffect(() => () => {
+    for (let read of held.current.values()) dropQuery(read.preds)
+    held.current.clear()
+  }, [])
+
   let eids = new Set<string>()
   let ready = enabled
   if (enabled) {

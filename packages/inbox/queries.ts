@@ -219,7 +219,18 @@ export let boundedReads = (
     split(part.slice(0, middle))
     split(part.slice(middle))
   }
-  split(rows)
+  // Identity-based buckets keep unrelated reads byte-for-byte stable when a
+  // root is added or removed. Array-midpoint splitting shifts every boundary.
+  let buckets: Row[][] = Array.from({ length: 16 }, () => [])
+  let bucket = (id: string) => {
+    let hash = 2166136261
+    for (let c of id) hash = Math.imul(hash ^ c.charCodeAt(0), 16777619)
+    return (hash >>> 0) % buckets.length
+  }
+  for (let row of rows.toSorted((a, b) => a.eid.localeCompare(b.eid))) {
+    buckets[bucket(row.eid)].push(row)
+  }
+  for (let part of buckets) if (part.length) split(part)
   return [...out]
 }
 
