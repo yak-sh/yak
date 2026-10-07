@@ -403,7 +403,7 @@ let probe = async (mode: string, config: string, argv: string[]) => {
       close: within(m.cli, m.close),
       compose: composed?.duration ?? 0,
       parts: {
-        ...Object.fromEntries(
+        split: Object.fromEntries(
           p.spans.filter((s) => s.parent == composed?.id && s.kind == 'phase')
             .map((s) => [
               s.name.replace('@yaks/cli.compose.', ''),
@@ -518,17 +518,13 @@ let num = (n: number) =>
   n >= 100 ? n.toFixed(0) : n >= 10 ? n.toFixed(1) : n.toFixed(2)
 let mb = (bytes: number) => `${(bytes / 1e6).toFixed(0)} MB`
 
-/** Where the median sample's time went, where it says: its three largest
- * shares (of a `split`, or of compose()'s phases). */
+/** Where the median sample's time went, where it says (its `split`): the
+ * three largest shares. */
 let where = (samples: Run['benches'][number]['samples']) => {
   let middle = [...samples].sort((a, b) => a.value - b.value)[
     Math.floor(samples.length / 2)
   ]
-  let details = middle?.details as
-    | { split?: Record<string, number> }
-    | Record<string, unknown>
-    | undefined
-  let by = (details?.split ?? details) as Record<string, unknown> | undefined
+  let by = (middle?.details as { split?: Record<string, unknown> })?.split
   if (!by || typeof by != 'object') return ''
   let parts = Object.entries(by).filter((e): e is [string, number] =>
     typeof e[1] == 'number'
@@ -571,7 +567,10 @@ export let table = (
       }
       let pending = b.samples[0]?.counts?.pending
       if (pending != null && b.name.startsWith('pool/due')) {
-        note = `${pending} pending`
+        let read = b.samples.map((s) =>
+          (s.details as { read?: number } | undefined)?.read ?? 0
+        )
+        note = `${pending} pending, reading them ${num(quantile(read, .5))} ms`
       }
       if (b.name == 'pool/drain') {
         note = `${b.samples.map((s) => s.counts?.runs).join('+')} runs`
