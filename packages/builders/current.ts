@@ -1,7 +1,5 @@
-// Current outputs belong to still-selected bindings. A pending replacement
-// keeps playing the existing output until its answer lands.
-// T-66411 expansion: retain this reader while the rehearsal-only /19 mover
-// adopts frozen input provenance. Restore input equality once every store moved.
+// Current outputs are chosen takes of still-selected bindings. A pending
+// replacement keeps playing the chosen take; history remains queryable.
 
 import type { DerivedProp } from '@yaks/sql'
 import {
@@ -13,6 +11,7 @@ import {
   join,
   lit,
   ne,
+  notNull,
   or,
   select,
   table,
@@ -30,6 +29,8 @@ export let builtCurrent: DerivedProp = {
       ],
       where: and(
         eq(col('entity', 'u'), owner),
+        eq(col('inputs', 'u'), col('inputs', 'b')),
+        notNull(col('call', 'u')),
         exists(select({
           cols: [lit(1)],
           from: table('chosen', 'ch'),
