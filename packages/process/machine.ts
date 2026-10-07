@@ -132,10 +132,19 @@ export let processProvider = (
     }
     return resolve(root, ref.id)
   }
-  let lend = (cwd: string): LentMachine => ({
-    cwd,
-    machine: processMachine(g, o.processes, o.env, cwd),
-  })
+  let lend = async (cwd: string): Promise<LentMachine> => {
+    // Git does not examine a ceiling directory. Use the physical parent,
+    // not cwd itself: the machine's own .git (including a worktree's gitfile)
+    // must remain discoverable from both the root and its subdirectories.
+    let ceiling = dirname(await Deno.realPath(cwd))
+    return {
+      cwd,
+      machine: processMachine(g, o.processes, (session) => ({
+        ...(o.env ?? Deno.env.toObject)(session),
+        GIT_CEILING_DIRECTORIES: ceiling,
+      }), cwd),
+    }
+  }
   let existing = async (ref: MachineRef) => {
     let cwd = directory(ref)
     if (!(await Deno.stat(cwd)).isDirectory) {
@@ -167,7 +176,7 @@ export let processProvider = (
       } catch (e) {
         if (!(e instanceof Deno.errors.NotFound)) throw e
         if (request.from != null) {
-          await o.prepare!(request.from, lend(cwd).machine, cwd)
+          await o.prepare!(request.from, (await lend(cwd)).machine, cwd)
         }
         await Deno.writeTextFile(ready, request.from ?? '')
       }

@@ -166,3 +166,117 @@ test('release stops a sandbox process but not another sandbox process', async ()
     await Deno.remove(dir, { recursive: true })
   }
 })
+
+test('process machines discover their own repositories but never an enclosing repository', async () => {
+  let dir = await Deno.makeTempDir()
+  let git = async (...args: string[]) => {
+    let result = await new Deno.Command('git', {
+      args: ['-C', dir, ...args],
+      stderr: 'piped',
+    }).output()
+    assertEquals(result.code, 0, new TextDecoder().decode(result.stderr))
+  }
+  let environment = {
+    ...Deno.env.toObject(),
+    PROVIDER_VALUE: 'kept',
+    GIT_CEILING_DIRECTORIES: '/',
+  }
+  let originalEnvironment = { ...environment }
+  let options = {
+    dir: `${dir}/machines`,
+    processes: { dir: `${dir}/processes`, poll: 5 },
+    env: () => environment,
+  }
+  let provider = processProvider(tracked(), options)
+  let ref = { id: 'empty' }
+  let run = (
+    machine: Awaited<
+      ReturnType<NonNullable<typeof provider.request>>
+    >['machine'],
+    command: string,
+    cwd?: string,
+  ) =>
+    machineTools(machine).find((t) => t.name == 'shell')!.run({ command, cwd })
+  try {
+    await git('init', '-q')
+    // The provider itself is inside a real repository: without a ceiling,
+    // the empty machine's git status/add/commit would act on that repository.
+    let first = await provider.request!(ref)
+    await first.machine.write('sub/file', 'inside')
+    for (let lent of [first, await provider.wake(ref)]) {
+      for (let cwd of [undefined, 'sub']) {
+        assertMatch(
+          await run(lent.machine, 'git rev-parse --show-toplevel', cwd),
+          /exited 128\n/,
+        )
+      }
+    }
+    assertMatch(
+      await run(
+        first.machine,
+        'test "$PROVIDER_VALUE" = kept && git init -q && echo initialized',
+      ),
+      /exited 0\ninitialized$/,
+    )
+    for (let cwd of [undefined, 'sub']) {
+      assertMatch(
+        await run(
+          first.machine,
+          `test "$(git rev-parse --show-toplevel)" = '${first.cwd}' && echo own`,
+          cwd,
+        ),
+        /exited 0\nown$/,
+      )
+    }
+    // An attached empty directory is protected too, including a symlinked
+    // address whose lexical parent is not the physical discovery boundary.
+    await Deno.mkdir(`${dir}/attached/sub`, { recursive: true })
+    await Deno.mkdir(`${dir}/links`)
+    await Deno.symlink(`${dir}/attached`, `${dir}/links/attached`)
+    let attachedRef = { id: 'attached', address: `${dir}/links/attached` }
+    for (
+      let lent of [
+        await provider.attach!(attachedRef),
+        await provider.wake(attachedRef),
+      ]
+    ) {
+      for (let cwd of [undefined, 'sub']) {
+        assertMatch(
+          await run(lent.machine, 'git rev-parse --show-toplevel', cwd),
+          /exited 128\n/,
+        )
+      }
+    }
+    // A linked worktree has a .git file pointing outside the machine. The
+    // ceiling must stop discovery, not prevent following that explicit link.
+    await git(
+      '-c',
+      'user.name=Test',
+      '-c',
+      'user.email=test@example.com',
+      'commit',
+      '-q',
+      '--allow-empty',
+      '-m',
+      'seed',
+    )
+    await git('worktree', 'add', '-q', '--detach', `${dir}/worktree`)
+    let worktreeRef = { id: 'worktree', address: `${dir}/worktree` }
+    let worktree = await provider.attach!(worktreeRef)
+    await worktree.machine.write('sub/file', 'inside')
+    for (let cwd of [undefined, 'sub']) {
+      assertMatch(
+        await run(
+          worktree.machine,
+          `test "$(git rev-parse --show-toplevel)" = '${worktree.cwd}' && echo own`,
+          cwd,
+        ),
+        /exited 0\nown$/,
+      )
+    }
+    assertEquals(environment, originalEnvironment)
+  } finally {
+    await provider.release(ref)
+    await Deno.remove(dir, { recursive: true })
+  }
+})

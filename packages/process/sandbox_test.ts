@@ -41,6 +41,17 @@ let make = async () => {
 test('sandbox commands and files see only their own workspace and a read-only system', async () => {
   let { dir, provider, ref, tools, cleanup } = await make()
   try {
+    // Even when provider data sits inside a host repository, the namespace
+    // must expose neither that repository nor any discovery path to it.
+    let initialized = await new Deno.Command('git', {
+      args: ['init', '-q', dir],
+      stderr: 'piped',
+    }).output()
+    assertEquals(
+      initialized.code,
+      0,
+      new TextDecoder().decode(initialized.stderr),
+    )
     await Deno.writeTextFile(`${dir}/private`, 'host-secret')
     let first = await provider.request!(ref)
     let second = await provider.request!({ id: 'two' })
@@ -49,6 +60,22 @@ test('sandbox commands and files see only their own workspace and a read-only sy
     await second.machine.write('src/file', 'second')
     assertEquals(await first.machine.read('src/file'), 'first')
     assertEquals(await second.machine.read('src/file'), 'second')
+    for (let cwd of [undefined, 'src']) {
+      assertMatch(
+        await tools(first.machine).shell.run({
+          command: 'git rev-parse --show-toplevel',
+          cwd,
+        }),
+        /exited 128\n/,
+      )
+    }
+    assertMatch(
+      await tools(first.machine).shell.run({
+        command:
+          'git init -q && cd src && test "$(git rev-parse --show-toplevel)" = /workspace && echo own',
+      }),
+      /exited 0\nown$/,
+    )
     assertMatch(
       await tools(first.machine).shell.run({
         command: 'cat src/file; echo; printf "%s" "$HOME"',

@@ -20,6 +20,13 @@ test('CLI lends lazy process machines, prepares graph commits, and detaches exis
     ],
   }, ['graph'])
   try {
+    // Composition must preserve the provider's discovery boundary during
+    // preparation: its data directory can itself be inside a repository.
+    let enclosing = await new Deno.Command('git', {
+      args: ['init', '-q', dir],
+      stderr: 'piped',
+    }).output()
+    equal(enclosing.code, 0)
     let git = index(host.graph, host.artifacts)
     let bytes = new TextEncoder().encode('from the graph\n')
     let sha = await addressOf(bytes)
