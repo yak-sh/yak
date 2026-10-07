@@ -1,5 +1,5 @@
 /// <reference lib="deno.ns" />
-import { equal, test, throws } from '@yaks/testing'
+import { equal, test, throws, until } from '@yaks/testing'
 import { type Bundle, type Comp, graph, Refused } from '@yaks/graph'
 import { ram } from '@yaks/ram'
 import { loadVocab, type VocabDoc } from '@yaks/vocab'
@@ -457,7 +457,8 @@ test('a failed eligibility read can wake again on a relevant stored change', asy
   f.tick(0)
   await Promise.resolve()
   await Promise.resolve()
-  equal(f.failures.length, 1)
+  await until(() => f.failures.length == 1)
+  equal(f.read(), undefined)
   broken = false
   f.g.apply([{ entity: { eid: 'a' }, book: { status: 'shelved' } }])
   f.tick(0)
