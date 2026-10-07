@@ -355,6 +355,24 @@ test('a thread that wrote runs down wakes the worker beside it', async () => {
   await serving
 })
 
+test('a worker that stays drains a backlog wider than a pass without waiting between them', async () => {
+  let s = store()
+  let cli = proc(s)
+  cli.fx.handle(every(cli.note))
+  await cli.g.apply(Array.from({ length: 64 }, (_, i) => post(`p${i}`)))
+  let server = proc(s, { owner: 'server' })
+  server.fx.handle(every(server.note))
+  let up = new AbortController()
+  let serving = server.fx.work(server.g, up.signal)
+  try {
+    // Well inside the pass the worker would otherwise wait for.
+    await until(() => server.ran.length == 64, { timeout: 500 })
+  } finally {
+    up.abort()
+    await serving
+  }
+})
+
 test('a process that stops leaves what it writes next for the others', async () => {
   let a = proc(store())
   a.fx.handle({ post_note: a.note })

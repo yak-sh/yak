@@ -369,9 +369,12 @@ index on `handler, state` and physical insertion-order cursors keep SQLite
 selection bounded even when entity numbers were imported out of order. Claims,
 backoff and local admission are checked on each candidate. A blocked slice
 advances its cursor rather than ending a drain; a complete traversal with no
-starts ends the drain. Disabled handlers settle through the same bounded
-selection without spending attempts. These windows do not change `max`, which
-limits concurrent runs rather than candidate reads.
+starts ends the drain. A worker that stays passes again at once while a
+traversal is unfinished, and waits for the next pass only once one finds nothing
+more to start. A handler found empty costs a pass no candidate, so idle handlers
+cannot crowd a backlog out of it. Disabled handlers settle through the same
+bounded selection without spending attempts. These windows do not change `max`,
+which limits concurrent runs rather than candidate reads.
 
 `pool(ctx, options)` exposes the same operations for a caller supplying registry
 slots, a writer, and a reporter.

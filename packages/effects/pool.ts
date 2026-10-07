@@ -573,32 +573,31 @@ export let pool = (ctx: Ctx, opts: Partial<PoolOpts> = {}): Pool => {
       let name = names[turn % names.length]
       turn = (turn + 1) % names.length
       if (drained.has(name)) continue
-      // A short slice, then the next handler, not the rest of this backlog.
-      let size = 1
+      // One candidate, then the next handler's, not the rest of this backlog.
       let cursor = cursors.get(name)
-      let rows = await g.read(
+      let [b] = await g.read(
         and(
           eq(`${EFFECT}.handler`, name),
           eq(`${EFFECT}.state`, 'pending'),
-          window(size),
+          window(1),
           ...(cursor ? [cursorAfter(cursor)] : []),
         ),
         { storageOrder: true },
       )
-      budget -= rows.length || 1
-      if (rows.length < size) exhausted.add(name)
-      else exhausted.delete(name)
-      for (let b of rows) {
-        if (!member || running.size >= max) break
-        cursors.set(name, b.entity.eid)
-        await examine(b)
-      }
       // Revisit a drained handler's head next pass: a writer can owe it a
       // new run while another handler still has thousands left to examine.
-      if (rows.length < size) {
+      // Finding it empty spends no budget, so idle handlers cannot crowd a
+      // backlog out of the pass.
+      if (!b) {
+        exhausted.add(name)
         cursors.delete(name)
         drained.add(name)
+        continue
       }
+      budget--
+      exhausted.delete(name)
+      cursors.set(name, b.entity.eid)
+      await examine(b)
     }
     scanStarted ||= started.length > 0
     let more = names.some((name) => !exhausted.has(name))
@@ -723,13 +722,16 @@ export let pool = (ctx: Ctx, opts: Partial<PoolOpts> = {}): Pool => {
     let expires = 0
     try {
       while (!signal.aborted) {
+        // A traversal the last pass left unfinished goes on at once; the
+        // worker waits for the next pass only once one finds nothing more.
+        let more = false
         try {
           if (present && until - clock() < HOLD / 2) {
             if (await take(g, seat, { holder: me, now: clock })) {
               until = clock() + HOLD
             }
           }
-          await pass(g)
+          more = (await pass(g)).more
           await renew(g)
           if (!opts.singleOwner && clock() >= expires) {
             await expireDaily(g, { owner: me, now: clock, signal })
@@ -742,7 +744,7 @@ export let pool = (ctx: Ctx, opts: Partial<PoolOpts> = {}): Pool => {
             event: { kind: 'created', entity: { eid: me }, name: EFFECT },
           })
         }
-        await sleep(CAP, AbortSignal.any([signal, nap.signal]))
+        await sleep(more ? 0 : CAP, AbortSignal.any([signal, nap.signal]))
         if (nap.signal.aborted) nap = new AbortController()
       }
     } finally {
