@@ -79,8 +79,8 @@ test('web reader forwards observed query and refusal trees into the waiting requ
         { history: false },
       )
     let [readTree, getTree, refusedTree] = await Promise.all([
-      request('query', () => reader.read('.doc')),
-      request('get', () => reader.get(['one'], ['doc'])),
+      request('query', () => Promise.resolve(reader.read('.doc'))),
+      request('get', () => Promise.resolve(reader.get(['one'], ['doc']))),
       request(
         'refused',
         () => assertRejects(() => Promise.resolve(reader.read('.unknown'))),
