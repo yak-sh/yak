@@ -31,6 +31,9 @@ import {
   captureConsoleIntegration,
   captureException,
   type ErrorEvent,
+  getAsyncContextStrategy,
+  getMainCarrier,
+  setAsyncContextStrategy,
   withScope,
 } from '@sentry/core'
 import { type Bundle, type Comp } from '@yaks/graph'
@@ -57,17 +60,27 @@ export let scrub = (event: ErrorEvent): ErrorEvent => {
   return event
 }
 
+// The Cloudflare SDK installs a fresh AsyncLocalStorage strategy when each
+// Durable Object is constructed, including inside an active gateway request.
+// Its options callback runs immediately afterward: restore this isolate's
+// original carrier so the caller's scope and reporting client remain reachable.
+let context: ReturnType<typeof getAsyncContextStrategy> | undefined
+
 /** The SDK's options for every wrapped handler and object. `dsn`, `release`
  * and `environment` come from the env the SDK is handed. */
-export let options = () => ({
-  // Errors are the point; a few traces are enough to see a slow door.
-  tracesSampleRate: 0.05,
-  sendDefaultPii: false,
-  // A `console.error` anywhere in the kernel is a defect someone wrote down
-  // (a Store answering 500), which is what the old tail worker paged on.
-  integrations: [captureConsoleIntegration({ levels: ['error'] })],
-  beforeSend: scrub,
-})
+export let options = () => {
+  context ??= getAsyncContextStrategy(getMainCarrier())
+  setAsyncContextStrategy(context)
+  return {
+    // Errors are the point; a few traces are enough to see a slow door.
+    tracesSampleRate: 0.05,
+    sendDefaultPii: false,
+    // A `console.error` anywhere in the kernel is a defect someone wrote down
+    // (a Store answering 500), which is what the old tail worker paged on.
+    integrations: [captureConsoleIntegration({ levels: ['error'] })],
+    beforeSend: scrub,
+  }
+}
 
 /** Whether a caught failure is the caller's own no rather than ours: a tool's
  * refusal (`CallError`), an error @yaks/graph's `status` puts below 500 (a
