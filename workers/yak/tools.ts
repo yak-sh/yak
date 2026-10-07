@@ -2336,7 +2336,12 @@ let OURS: Row[] = [
           return { text: went(d, out, ctx.env) }
         }
         await trashSpace(ctx.env, ctx.dir, space, who)
-        return { text: inTrash(d, ctx.env), space }
+        // The answer's unseen rider must see the committed trash mark rather
+        // than ask a store that the notification just made dormant.
+        return {
+          text: inTrash(d, ctx.env),
+          space: (await ctx.dir.space(space.slug))!,
+        }
       }
       if (!ctx.env.SESSION_SECRET) {
         throw new Error('the platform cannot sign a confirmation link here')
@@ -2416,7 +2421,7 @@ let OURS: Row[] = [
           }/ serves ` +
           'again and its apps are yours again. Everything they saved is ' +
           'where it was.',
-        space,
+        space: (await ctx.dir.space(space.slug))!,
       }
     },
   },

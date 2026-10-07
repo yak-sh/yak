@@ -928,3 +928,34 @@ test('an address that reads as the platform is refused', async () => {
     await k.stop()
   }
 })
+
+test('trashing a bot-owned space with an app commits and returns without querying dormant app errors', async () => {
+  let k = await kernel()
+  try {
+    let suffix = crypto.randomUUID().slice(0, 8)
+    let slug = `botbin${suffix}`
+    let them = await signIn(k, `botbin-${suffix}@bot.yak.sh`)
+    let agent = connector(k, them.cookie)
+    await agent.tool('space_new', { slug, title: 'Bot trash regression' })
+    await agent.tool('app_new', { space: slug, slug: 'notes', title: 'Notes' })
+    let before = await k.at(`${slug}.yaks.app`, '/notes/api/query?q=.doc')
+    assertEquals(before.status, 200)
+    await before.body?.cancel()
+    assertStringIncludes(
+      await agent.tool('space_delete', { space: slug }),
+      `${slug}.yaks.app is in the trash`,
+    )
+    let dormant = await k.at(`${slug}.yaks.app`, '/notes/api/query?q=.doc')
+    assertEquals(dormant.status, 404)
+    await dormant.body?.cancel()
+    assertStringIncludes(
+      await agent.tool('space_restore', { space: slug }),
+      `${slug} is back`,
+    )
+    let restored = await k.at(`${slug}.yaks.app`, '/notes/api/query?q=.doc')
+    assertEquals(restored.status, 200)
+    await restored.body?.cancel()
+  } finally {
+    await k.stop()
+  }
+})
