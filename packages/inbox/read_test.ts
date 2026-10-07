@@ -12,7 +12,7 @@ import { type Search, type Thread, threads } from './threads.ts'
 import { readInbox, readThread } from './read.ts'
 
 let defs: Record<string, string[]> = {
-  entity: ['eid'],
+  entity: ['eid', 'archetype'],
   email: ['address'],
   subscription: ['actor', 'target', 'mode'],
   doc: ['title', 'body'],
@@ -66,6 +66,7 @@ let vocab = loadVocab([{
       type: 'object',
       properties: Object.fromEntries(props.map((prop) => [prop, {
         type: prop == 'seq' ? 'number' : 'string',
+        ...(prop == 'archetype' ? { ref: 'archetype' } : {}),
       }])),
     }]),
   ),
@@ -464,4 +465,22 @@ test('sparse vocabulary preserves empty doc and archive marks without unknown qu
   )
   assertEquals(found[0].row.comps.doc, {})
   assertEquals(found[0].row.comps.archived, {})
+})
+
+test('metadata projection carries classified spines without a duplicate identity read', async () => {
+  let { tx, close } = await setup('sqlite', fixture())
+  let identity = 0
+  let counted: Pick<Graph, 'read' | 'get'> = {
+    read: (q, opts) => tx.read(q, opts),
+    get: (ids, comps) => {
+      if (comps?.length === 0) identity++
+      return tx.get(ids, comps)
+    },
+  }
+  try {
+    assert((await readInbox(counted, vocab, 'person')).length > 0)
+    assertEquals(identity, 0)
+  } finally {
+    close()
+  }
 })

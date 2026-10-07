@@ -148,6 +148,7 @@ let reads = (tx: ReadTx, has: Words, mode: Mode) => {
   let comps = components.filter(has)
   let fields = [
     'entity.eid',
+    ...(has('entity.archetype') ? ['entity.archetype'] : []),
     ...scalars.filter(has),
     ...(mode == 'search' ? ['doc.body', 'content.body'].filter(has) : []),
   ].join(',')
@@ -159,14 +160,11 @@ let reads = (tx: ReadTx, has: Words, mode: Mode) => {
         out.push(...rows(await tx.get(part.map((r) => r.eid), comps)))
         continue
       }
-      let projected = new Map(
-        rows(
-          await tx.read(
-            `${ids(part)}&.fields=${fields}`,
-          ),
-        ).map((r) => [r.eid, r]),
-      )
-      let spines = await tx.get(part.map((r) => r.eid), [])
+      let projectedRows = await tx.read(`${ids(part)}&.fields=${fields}`)
+      let projected = new Map(rows(projectedRows).map((r) => [r.eid, r]))
+      let spines = has('entity.archetype')
+        ? projectedRows
+        : await tx.get(part.map((r) => r.eid), [])
       let unknown = [
         ...new Set(
           spines.map((b) => b.entity.archetype)
