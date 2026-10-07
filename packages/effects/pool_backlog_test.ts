@@ -8,7 +8,7 @@ import { ram } from '@yaks/ram'
 import { writing } from '@yaks/sql'
 import { storage } from '@yaks/sqlite'
 import { sqlitePath } from '../sqlite/sqlitepath.ts'
-import { Database } from 'jsr:@db/sqlite@0.13.0'
+import { Database } from '@db/sqlite'
 import { driver } from '../sqlite/native.ts'
 import { test, until } from '@yaks/testing'
 import { effects, type Opts } from './registry.ts'
@@ -131,16 +131,15 @@ let seed = async (f: ReturnType<typeof fixture>, n: number) => {
   await f.g.apply([run('fast', 'post_gone')], { trusted: true })
 }
 
-/** Also used by the opt-in 100k scratch probe; never a default suite size. */
-export let backlogProbe = async (n: number, max = 2) => {
+// One finite pass over `n` pending runs of a held handler and one of another,
+// counting what SQLite read for it.
+let backlogProbe = async (n: number, max = 2) => {
   let f = fixture(true, { max })
   let gate = Promise.withResolvers<void>()
   let started: string[] = []
   let work: Promise<void> | undefined
   try {
-    let before = performance.now()
     await seed(f, n)
-    let seedMs = performance.now() - before
     f.fx.handle({
       post_note: () => {
         started.push('slow')
@@ -153,7 +152,6 @@ export let backlogProbe = async (n: number, max = 2) => {
     f.reset()
     // A finite pass does not drain the fixture. The slow run remains held
     // while we observe that the other handler started in the very first pass.
-    before = performance.now()
     work = f.fx.work(f.g, undefined, 1)
     await until(() => started.includes('fast'), { timeout: 2000 })
     assert(started.filter((name) => name == 'slow').length <= 32)
@@ -162,14 +160,7 @@ export let backlogProbe = async (n: number, max = 2) => {
     assert(counts.rows < (max == Infinity ? 1024 : 256), JSON.stringify(counts))
     assert(counts.steps < 50_000, JSON.stringify(counts))
     assertEquals(f.errors, [])
-    return {
-      pending: n,
-      max,
-      started,
-      seedMs,
-      passMs: performance.now() - before,
-      ...counts,
-    }
+    return counts
   } finally {
     gate.resolve()
     await work
