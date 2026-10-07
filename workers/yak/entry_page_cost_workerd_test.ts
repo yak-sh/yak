@@ -9,3 +9,18 @@ test('a projected latest entry page reads only its selected owners', async () =>
   assertEquals(report.rows[0]['entry.seq'], 20000)
   assert(report.total.read < 100, `latest projection read ${report.total.read}`)
 })
+
+test('descriptor hints do not read every target component column', async () => {
+  let k = workerd(),
+    r = await fetch(`${k.base}/__play_cost/?descriptorgather=1`)
+  assertEquals(r.status, 200, await r.clone().text())
+  let report = await r.json()
+  console.log('DESCRIPTOR_GATHER_COST', JSON.stringify(report))
+  assertEquals(report.rows[0].player.v19, 'holder')
+  assertEquals(report.rows[1].archetype.tables, '["player"]')
+  assert(
+    report.total.read <= 32,
+    `descriptor/target mixed gather read ${report.total.read}`,
+  )
+  assertEquals(report.total.written, 0)
+})

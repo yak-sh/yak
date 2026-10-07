@@ -24,6 +24,7 @@ export type Report = {
   total: Cost
   opening: Cost
   shapes: { sql: string; cost: Cost }[]
+  sourceShapes: Record<string, { sql: string; cost: Cost }[]>
 }
 const person = 'aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa'
 const app = 'bbbbbbbb-bbbb-4bbb-bbbb-bbbbbbbbbbbb'
@@ -51,6 +52,7 @@ export let playMinute = async (
   let source = 'setup', measured = false
   let context = new AsyncLocalStorage<string>()
   let shapes = new Map<string, Cost>()
+  let sourceShapes = new Map<string, Map<string, Cost>>()
   let sources: Record<string, Cost> = {}, components: Record<string, Cost> = {}
   let total = empty(), opening = empty()
   let summaries: Summary[] = []
@@ -96,6 +98,9 @@ export let playMinute = async (
         shapes.get(query) ?? (shapes.set(query, empty()), shapes.get(query)!),
         cost,
       )
+      let own = sourceShapes.get(kind)
+      if (!own) sourceShapes.set(kind, own = new Map())
+      plus(own.get(query) ?? (own.set(query, empty()), own.get(query)!), cost)
       plus(sources[kind] ??= empty(), cost)
       plus(components[component] ??= empty(), cost)
       plus(total, cost)
@@ -363,6 +368,16 @@ export let playMinute = async (
       minutes,
       profile: summaries,
       openingShapes,
+      sourceShapes: Object.fromEntries(
+        [...sourceShapes].map((
+          [k, m],
+        ) => [
+          k,
+          [...m].map(([sql, cost]) => ({ sql, cost })).sort((a, b) =>
+            b.cost.read - a.cost.read
+          ),
+        ]),
+      ),
       sources,
       components,
       total,

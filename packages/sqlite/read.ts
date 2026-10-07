@@ -609,6 +609,35 @@ export let get = (
   // Small, repeated identity reads benefit from one statement. Large gathers
   // still read each worn table once for all its owners, rather than joining
   // the union of every different entity's facets.
+  if (
+    eids.length && eids.length <= 32 && !comps && !pending.size &&
+    eids.every((eid) => remembered.has(eid))
+  ) {
+    let descriptors = eids.filter((eid) => {
+      let names = remembered.get(eid)!
+      return names.length == 1 && names[0] == 'archetype'
+    })
+    if (descriptors.length && descriptors.length < eids.length) {
+      let owners = eids.filter((eid) => !descriptors.includes(eid))
+      let a = joinedGet(
+        driver,
+        vocab,
+        descriptors,
+        opts,
+        ['archetype'],
+        undefined,
+        pending,
+      )
+      let names = [
+        ...new Set(owners.flatMap((eid) => [...remembered.get(eid)!])),
+      ].sort()
+      let b = joinedGet(driver, vocab, owners, opts, names, undefined, pending)
+      if (Array.isArray(a) && Array.isArray(b)) {
+        let at = new Map([...a, ...b].map((row) => [row.entity.eid, row]))
+        return eids.flatMap((eid) => at.get(eid) ?? [])
+      }
+    }
+  }
   if (eids.length && eids.length <= 32) {
     let guess = comps
       ? names
