@@ -572,6 +572,9 @@ let syncRepository = async (
 
 // Advisory locks are process-scoped on some platforms. Serialize callers in
 // this process too; the persistent common-dir lock coordinates other processes.
+// A caller joins the queue before it yields, so callers are served in the order
+// they called: resolving the root asynchronously let a later one finish its
+// lookup first and take the head.
 let pending = new Map<string, Promise<unknown>>()
 export let syncSkills = async (
   g: Graph,
@@ -579,7 +582,7 @@ export let syncSkills = async (
   memory: string,
   opts: SkillSyncOpts = {},
 ): Promise<SkillSync> => {
-  root = await Deno.realPath(root)
+  root = Deno.realPathSync(root)
   let before = pending.get(root) ?? Promise.resolve()
   let next = before.catch(() => {}).then(() =>
     syncRepository(g, root, memory, opts)
