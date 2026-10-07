@@ -80,14 +80,8 @@ machine that already carries the code. `machine{provider, address, from, image,
 state}` is @yaks/machine's record: `from` is a graph commit, not a host path;
 `address` is an existing-machine address its provider understands. See
 packages/machine/README.md and packages/harness/README.md, "Session machines".
-A commit made inside a machine is not automatically a commit the graph holds.
-`yak land --repository <repository> --branch refs/heads/main` checks the
-checkout on the session's recorded machine and asks the graph to accept its
-pack; clone/push endpoints use an authenticated, opt-in repository mapping supplied
-by their host.
-packages/git/README.md, "Clone, push and land on a supplied machine", explains
-the receiving boundary. A moved accepted base means rebase, retest and land
-again, not mutation of another checkout.
+The graph's commit-receiving landing door is T-66426; a commit made inside a
+machine is not automatically a commit the graph holds.
 
 For substrate work that really needs the existing box or checkout, name its
 configured machine explicitly, rather than letting where you happen to start

@@ -1,4 +1,4 @@
-import type { Machine, MachineProvider } from '@yaks/machine'
+import type { MachineProvider } from '@yaks/machine'
 // The portable contract a host lends every plugin. Concrete hosts own drivers,
 // directories and resource lifetime; plugins see the graph and capabilities.
 import type { Bundle, Eid, Graph, NamedTool, Storage } from '@yaks/graph'
@@ -69,9 +69,6 @@ export interface Host {
   artifacts: Blobs
   /** Providers this host explicitly lends; the default supplies sandboxes. */
   machines?: {
-    /** Existing local machine explicitly lent by a CLI host. Not an implied
-     * machine for a remotely invoked session. */
-    local?: Machine
     providers: Record<string, MachineProvider>
     defaultProvider: string
     resolveHome?: (

@@ -35,8 +35,7 @@ import { and, present, want } from '@yaks/query'
 import { human } from '@yaks/id'
 import { verify as entityVerify } from '@yaks/kernel'
 import { CallError, checked, type Finding, type Level } from '@yaks/tools'
-import { LandError, run as git } from './land.ts'
-import { callerMachine, landGraph, type LandingHost } from './landing.ts'
+import { land, LandError, run as git } from './land.ts'
 import {
   CITES,
   FILE,
@@ -118,22 +117,18 @@ let verdict = (
     : ['warn', `no answer: ${got.why}`]
 
 /** The implementations of the tools ./vocab.json declares. */
-export let runs = (host?: LandingHost): Runs => ({
-  land: async (call, graph): Promise<Bundle[]> => {
+export let runs = (): Runs => ({
+  land: async (call): Promise<Bundle[]> => {
     let args = argsOf(call)
-    if (!host) {
-      throw new CallError('machine', 'land: this host lends no machine')
-    }
-    let { machine, cwd } = await callerMachine(host, call, graph)
+    let cwd = checkout(call, 'land')
     // Git's output, exactly as Git wrote it, collected in the order it
     // arrived: what the caller reads is Git's own account, not a summary of
     // it.
     let said: string[] = []
     let outcome
     try {
-      outcome = await landGraph(graph, host.artifacts, machine, cwd, {
-        repository: str(args.repository) || undefined,
-        branch: str(args.branch) || undefined,
+      outcome = await land({
+        cwd,
         allow: str(args['allow-revert']).split(',').filter(Boolean),
         write: (text) => {
           let line = text.trimEnd()

@@ -1,5 +1,42 @@
-// Landing belongs to the caller's machine. The graph supplies the base and
-// accepts a verified commit; this orchestrator only checks/rebases that machine.
+// Landing a branch: the plain Git operation, and the guard that keeps a rebase
+// from quietly reverting the base. It reads nothing from a graph — the
+// checkout you are standing in and `git worktree list` supply every
+// coordinate: the primary worktree is the shared checkout to merge into, and
+// the branch that checkout has checked out is the base every linked worktree
+// lands onto. Landing runs no test suite and hides nothing; its output stays
+// Git's own, so whoever ran it can see exactly what happened. Git exit codes
+// decide every branch in the control flow; Git's prose is diagnostics only.
+//
+// One invocation does at most one thing:
+//   - Fast-forward the current branch into the base. This succeeds exactly
+//     when the base is still an ancestor of the branch — the common case, and
+//     the whole job when it works. A best-effort push follows if the base has
+//     an upstream (config `@{u}`, nothing configured anywhere else).
+//   - If the base moved (it is no longer an ancestor) the fast-forward is
+//     refused: rebase the branch onto the base and return without merging,
+//     printing what happened, a `git diff --stat` of what the base pulled in
+//     (so the caller can judge whether re-running its tests matters — docs-only
+//     versus code it touches), and, on a rebase conflict, Git's conflict output
+//     verbatim. The caller re-runs its tests if needed and lands again, which
+//     then fast-forwards cleanly.
+//
+// A landing is also guarded: before the fast-forward, land refuses a branch
+// whose files carry content no commit on it wrote — the rebase artifact that
+// quietly reverts the base (see {@link reverts}). `allow` names the files
+// whose rewind is deliberate.
+//
+// The `--ff-only` merge is the compare-and-swap that serializes concurrent
+// landers: a lander whose base moved is refused, rebases, and comes back.
+// Landing means landing in the shared checkout — the one that is actually
+// used; pushing to a remote only publishes bytes and is never what makes work
+// take effect, which is why the local fast-forward is the landing and the push
+// is an afterthought.
+//
+// Running a test suite is the caller's job, not this operation's — before
+// landing, and again after a rebase if the incoming diff could affect it. Land
+// neither runs tests nor knows of any. It runs `git` as a subprocess, so like
+// ./host.ts it is kept out of this package's portable entry point (./mod.ts).
+
 /** One run of git. `out` and `err` are RAW, exactly as Git wrote them — a
  * caller that prints Git's own output must not have it trimmed out from under
  * it (land prints `git diff --stat`, whose first line is indented), so
@@ -13,9 +50,10 @@ export type Ran = { ok: boolean; code: number; out: string; err: string }
  * repository. */
 export type Run = (args: string[], cwd: string) => Promise<Ran>
 
-/** A landing refused for the caller’s own state: a detached or dirty
- * checkout, the base branch, or a revert the guard caught. Unexpected Git
- * failures remain plain errors, not successful landings. */
+/** A landing refused for the caller's own state: not in a linked worktree on
+ * a branch, a dirty worktree, local changes in the shared checkout that the
+ * landing would overwrite, or a revert the guard caught. An unexpected Git
+ * command failure is a plain `Error`, a fault somebody has to hear about. */
 export class LandError extends Error {
   constructor(message: string) {
     super(message)
@@ -59,7 +97,8 @@ export let run: Run = async (args, cwd) => {
   }
 }
 
-/** The accepted commit and the caller’s own checkout directory. */
+/** Landed carries the merged commit sha and the shared checkout's path, so
+ * the caller can clean up whatever the merge left behind. */
 export type Landed = { landed: string; root: string }
 
 /** Diverged means the base moved: the branch has been rebased and is waiting,
@@ -69,16 +108,13 @@ export type Diverged = { diverged: true; conflict: boolean }
 
 export type Outcome = Landed | Diverged
 
-/** Landing runs entirely on the caller's machine. The base is a fetched graph
- * revision; accepting HEAD moves the graph's branch, never a shared checkout. */
+/** What a landing takes: which directory to work in, how to run git, where to
+ * print, and the files whose rewind has been approved. */
 export type LandOps = {
-  cwd: string
-  run: Run
-  base: string
-  accept: (head: string) => Promise<void>
-  /** Fetch and return the new base after a concurrent acceptance. */
-  refresh?: () => Promise<string>
+  cwd?: string
+  run?: Run
   write?: (text: string, error?: boolean) => void
+  /** files whose rewind is deliberate: warned about, then landed */
   allow?: string[]
 }
 
@@ -91,6 +127,11 @@ let message = (label: string, r: Ran) => {
   let detail = (r.err || r.out).trim().split('\n').find(Boolean)
   return `${label} failed with exit ${r.code}${detail ? `: ${detail}` : ''}`
 }
+
+// Git prints absolute paths in both outputs, so the only difference between
+// them can be a trailing slash.
+let same = (a: string, b: string) =>
+  a.replace(/\/+$/, '') == b.replace(/\/+$/, '')
 
 // A rebase can leave content that no commit on the branch ever wrote.
 // Resolving a conflict by taking the branch's side wholesale rewinds a file to
@@ -244,42 +285,96 @@ let refusal = async (
   ].join('\n')
 }
 
-/** Land HEAD through the graph, or rebase onto its moved base and stop so
- * the caller can test the newly combined code before trying again. */
-export let land = async (ops: LandOps): Promise<Outcome> => {
-  let command = ops.run
+/** Land the branch you are standing on: fast-forward it into the base, or
+ * rebase onto a base that moved and return, for the caller to re-run its tests
+ * and land again. */
+export let land = async (ops: LandOps = {}): Promise<Outcome> => {
+  let command = ops.run ?? run
   let write = ops.write ?? defaultWrite
-  let cwd = ops.cwd
-  let base = ops.base
-  let git = async (args: string[], show = true) => {
-    let r = await command(args, cwd)
+  let cwd = ops.cwd ?? Deno.cwd()
+  let git = async (at: string, args: string[], show = true) => {
+    let r = await command(args, at)
     if (show) {
       write(r.out)
       write(r.err, true)
     }
     return r
   }
+  let must = (label: string, r: Ran) => {
+    if (r.code) throw new Error(message(label, r))
+    return r.out.trim()
+  }
+  let need = async (label: string, at: string, args: string[]) =>
+    must(label, await git(at, args, false))
+  // What the guard reads: a git command run in this worktree whose output is
+  // raw lines — a failure here is a broken read, never an answer.
   let read = async (args: string[]) => {
-    let r = await git(args, false)
+    let r = await git(tree, args, false)
     if (r.code) throw new Error(message(`git ${args[0]}`, r))
     return r.out
   }
-  let on = await git(['symbolic-ref', '-q', '--short', 'HEAD'], false)
-  if (on.code == 1) throw new LandError('land: the checkout is detached')
+
+  // Every coordinate from git alone. `git worktree list --porcelain` lists the
+  // primary worktree first, whichever worktree you run it in, since worktrees
+  // share one ref store — and the branch that primary worktree has checked out
+  // is the base. A primary worktree with a detached HEAD has no base to land
+  // onto, so refuse rather than guess. A directory git does not know is where
+  // the caller stood, and so is a worktree with no branch checked out. The
+  // worktree's branch, the list and its status need nothing from each other,
+  // so they are asked at once and judged in that order.
+  let top = await git(cwd, ['rev-parse', '--show-toplevel'], false)
+  if (top.code) throw new LandError(message('land: find worktree', top))
+  let tree = top.out.trim()
+  let [on, listed, status] = await Promise.all([
+    git(tree, ['symbolic-ref', '-q', '--short', 'HEAD'], false),
+    git(tree, ['worktree', 'list', '--porcelain'], false),
+    git(tree, ['status', '--porcelain=v1', '--untracked-files=all'], false),
+  ])
+  if (on.code == 1) throw new LandError('land: the worktree is detached')
   if (on.code) throw new Error(message('read branch', on))
   let branch = on.out.trim()
-  if (branch == base.replace(/^refs\/heads\//, '')) {
-    throw new LandError('land: the checkout is on the base branch')
+  let list = must('list worktrees', listed)
+  let head = list.split('\n\n')[0].split('\n')
+  let root = head.find((l) => l.startsWith('worktree '))?.slice(9) ?? ''
+  let base = (head.find((l) => l.startsWith('branch '))?.slice(7) ?? '')
+    .replace(/^refs\/heads\//, '')
+  if (!base) {
+    throw new LandError(
+      'land: the shared checkout is detached — no base to land onto',
+    )
   }
-  let dirty =
-    (await read(['status', '--porcelain=v1', '--untracked-files=all'])).trim()
-  if (dirty) throw new LandError(`land: checkout is dirty:\n${dirty}`)
+  if (same(tree, root)) {
+    throw new LandError(
+      'land: run it inside a linked worktree, not the shared checkout',
+    )
+  }
+  if (branch == base) {
+    throw new LandError('land: the worktree is on the base branch')
+  }
+
+  // Uncommitted work would not land and would break a rebase, so a dirty
+  // worktree is refused: what you land must be what you tested.
+  let dirty = must('git status', status)
+  if (dirty) throw new LandError(`land: worktree is dirty:\n${dirty}`)
+
+  // Ancestry decides which of the two things this invocation does, and it is
+  // asked before the merge because the guard's refusal has to come before the
+  // merge too: once the base has fast-forwarded, the bad content has landed.
   let ancestry = async () => {
-    let r = await git(['merge-base', '--is-ancestor', base, 'HEAD'], false)
-    if (r.code != 0 && r.code != 1) throw new Error(message('read ancestry', r))
+    let r = await git(
+      tree,
+      ['merge-base', '--is-ancestor', base, branch],
+      false,
+    )
+    if (r.code != 0 && r.code != 1) {
+      throw new Error(message('read merge contention', r))
+    }
     return r.code
   }
+
   if (await ancestry() == 0) {
+    // The base has not moved: the branch is rebased onto it (or never left it),
+    // so `base...HEAD` is the landing diff and the guard can read it.
     let found = await reverts(read, base)
     let allow = new Set(ops.allow ?? [])
     let refuse = found.filter((r) => !allow.has(r.file))
@@ -287,33 +382,101 @@ export let land = async (ops: LandOps): Promise<Outcome> => {
     for (let r of found) {
       write(`land: --allow-revert — landing anyway:${why(r, base, '')}`, true)
     }
-    let head = (await read(['rev-parse', 'HEAD'])).trim()
-    try {
-      await ops.accept(head)
-      return { landed: head, root: cwd }
-    } catch (error) {
-      // Only contention turns acceptance failure into a rebase. Corrupt packs,
-      // an unavailable graph, or any other fault must remain visible as such.
-      if (!ops.refresh) throw error
-      let latest = await ops.refresh()
-      // A concurrent receiver may have accepted this exact HEAD, or a
-      // post-acceptance cleanup failed. The graph's answer is authoritative.
-      if (latest == head) return { landed: head, root: cwd }
-      if (latest == base) throw error
-      base = latest
+    // The shared checkout need not be spotless: Git leaves unrelated edits
+    // alone. `read-tree` runs the same two-tree/worktree safety check as the
+    // fast-forward, without changing the index or files. A refusal here is the
+    // checkout's state. A merge can still lose to another landing after this
+    // check; ancestry distinguishes that contention from a Git fault. The
+    // fast-forward refreshes the index before its check and `read-tree` does
+    // not, so the refresh comes first: a file touched but not changed is not
+    // in the way. Its exit code only says some file differs, which the check
+    // reads for itself.
+    await git(root, ['update-index', '-q', '--refresh'], false)
+    let ready = await git(
+      root,
+      ['read-tree', '-n', '-m', '-u', 'HEAD', branch],
+      false,
+    )
+    if (ready.code) {
+      throw new LandError(
+        message('land: shared checkout blocks landing', ready),
+      )
+    }
+    let merged = await git(root, ['merge', '--ff-only', branch])
+    if (merged.code) {
+      if (await ancestry() != 1) throw new Error(message('git merge', merged))
+    } else {
+      let sha = await need('read landed commit', root, ['rev-parse', 'HEAD'])
+      // The worktree and its branch survive landing: the caller does its own
+      // cleanup afterwards, and a command whose working directory was unlinked
+      // under it is refused by the kernel. Unlock it instead — whoever handed the
+      // worktree out locked it to mark it as in use, and this is that worker
+      // reporting it has finished. The unlock's exit code decides nothing: the
+      // only failure reachable is "not locked". Neither it nor the publish
+      // needs the other, and neither throws.
+      await Promise.all([
+        publish(git, write, root, base),
+        git(root, ['worktree', 'unlock', tree], false),
+      ])
+      return { landed: sha, root }
     }
   }
-  write(`land: ${base} moved — rebasing ${branch} onto it, not landing.`)
+
+  // The base moved; rebase onto it and return, for the caller to re-run its
+  // tests and land again. The guard runs on that second landing, once the
+  // rebase is finished.
+
+  write(`land: ${base} moved — rebasing ${branch} onto it, not merging.`)
   write(`land: changes pulled in from ${base}:`)
-  await git(['diff', '--stat', `HEAD...${base}`])
-  let rebased = await git(['rebase', base])
+  // Three dots: from where the branch forked to the base.
+  await git(tree, ['diff', '--stat', `${branch}...${base}`])
+  let rebased = await git(tree, ['rebase', base])
   if (rebased.code) {
+    // The rebase is left in progress on purpose: the caller resolves the
+    // conflict, runs `git rebase --continue`, then lands again. Git printed
+    // the conflict above; this only names the next step.
     write(
-      'land: rebase hit conflicts — resolve them, `git rebase --continue`, then land again.',
+      'land: rebase hit conflicts — resolve them, `git rebase --continue`, ' +
+        'then land again.',
       true,
     )
     return { diverged: true, conflict: true }
   }
-  write('land: rebased cleanly. Re-run the tests, then land again.')
+  write(
+    'land: rebased cleanly. Re-gate if the diff above could affect you, then ' +
+      'land again.',
+  )
   return { diverged: true, conflict: false }
+}
+
+// Best-effort push of the base branch to its upstream, if it has one — just
+// `@{u}`, nothing configured anywhere else. Never throws: an unreachable
+// remote, or no upstream at all, leaves the work landed but unpushed, since
+// the merge has already taken effect in the shared checkout.
+let publish = async (
+  git: (at: string, args: string[], show?: boolean) => Promise<Ran>,
+  write: (text: string, error?: boolean) => void,
+  root: string,
+  base: string,
+) => {
+  let up = await git(root, ['rev-parse', '--abbrev-ref', `${base}@{u}`], false)
+  if (up.code) return
+  let ref = up.out.trim()
+  let cut = ref.indexOf('/')
+  let remote = ref.slice(0, cut)
+  let branch = ref.slice(cut + 1)
+  // One immediate retry: the failures seen in practice were transient
+  // subprocess-spawn errors under load, and a push is idempotent, so a second
+  // attempt costs nothing and turns a blip into a successful push.
+  let push = () =>
+    git(root, ['push', '--quiet', remote, `${base}:${branch}`], false)
+  let sent = await push()
+  if (sent.code) sent = await push()
+  if (sent.code) {
+    write(
+      `${message(`land: publish to ${remote}/${branch}`, sent)} — landed ` +
+        'locally, publish separately',
+      true,
+    )
+  }
 }

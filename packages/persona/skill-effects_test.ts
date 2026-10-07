@@ -1,4 +1,3 @@
-import { store, testMachine } from '../git/testing.ts'
 import { test, until } from '@yaks/testing'
 import { assert, assertEquals, assertRejects } from '@std/assert'
 import { derivedEid, type Graph } from '@yaks/graph'
@@ -9,10 +8,7 @@ import { dirname, join, resolve } from 'node:path'
 import { repositoryEid } from '@yaks/git/host'
 import { run } from '@yaks/git/land'
 import { repoSkills } from './skills.ts'
-import {
-  skillEffects as skillEffectsOnMachine,
-  type SkillRuntime,
-} from './skill-effects.ts'
+import { skillEffects, type SkillRuntime } from './skill-effects.ts'
 import { world } from './testing.ts'
 
 let host = crypto.randomUUID()
@@ -595,17 +591,3 @@ test('skill effects real temp Git and RAM graph preserve import/export agreement
     await Deno.remove(dir, { recursive: true })
   }
 })
-
-let bytesForMirror = store()
-let machineForMirror = testMachine()
-function skillEffects(...args: Parameters<typeof skillEffectsOnMachine>) {
-  return skillEffectsOnMachine(
-    {
-      ...args[0],
-      artifacts: bytesForMirror,
-      machines: { local: machineForMirror },
-    },
-    args[1],
-    args[2],
-  )
-}

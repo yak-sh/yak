@@ -4,9 +4,8 @@
 import { test } from '@yaks/testing'
 import { assert, assertEquals } from '@std/assert'
 import { holds, idleFor, inUse, lost, processCwds, reclaim } from './host.ts'
-import { git, template, testMachine } from './testing.ts'
+import { git, template } from './testing.ts'
 
-let machine = testMachine()
 let there = (path: string) => Deno.stat(path).then(() => true, () => false)
 
 let seeded = template(async (dir) => {
@@ -58,8 +57,8 @@ test('a clean, landed checkout is taken back with its branch', async () => {
   let f = await fixture()
   try {
     let path = await f.cut('done')
-    assertEquals(await holds(path, undefined, machine), undefined)
-    assertEquals(await reclaim(path, undefined, machine), undefined)
+    assertEquals(await holds(path), undefined)
+    assertEquals(await reclaim(path), undefined)
     assertEquals(await there(path), false)
     assertEquals(await f.branches(), 'main')
   } finally {
@@ -72,17 +71,17 @@ test('dirty files and unlanded commits keep a checkout', async () => {
   try {
     let dirty = await f.cut('dirty')
     await Deno.writeTextFile(dirty + '/scratch', 'not committed')
-    assertEquals(await reclaim(dirty, undefined, machine), 'dirty')
+    assertEquals(await reclaim(dirty), 'dirty')
     assert(await there(dirty))
 
     let ahead = await f.cut('ahead')
     await f.commit(ahead, 'unlanded')
-    assertEquals(await reclaim(ahead, undefined, machine), 'unlanded')
+    assertEquals(await reclaim(ahead), 'unlanded')
     assert(await there(ahead))
 
     // Landing it anywhere else is enough: the parent's branch, not only main.
     await git(f.repo, 'branch', 'parent', 'task-ahead')
-    assertEquals(await reclaim(ahead, undefined, machine), undefined)
+    assertEquals(await reclaim(ahead), undefined)
     assertEquals(await there(ahead), false)
     assertEquals(await f.branches(), 'main\nparent\ntask-dirty')
   } finally {
@@ -96,11 +95,11 @@ test('a required landing branch keeps commits held only by another task', async 
     let path = await f.cut('ahead')
     await f.commit(path, 'unlanded')
     await git(f.repo, 'branch', 'parent', 'task-ahead')
-    assertEquals(await holds(path, 'refs/heads/main', machine), 'unlanded')
-    assertEquals(await reclaim(path, 'refs/heads/main', machine), 'unlanded')
+    assertEquals(await holds(path, 'refs/heads/main'), 'unlanded')
+    assertEquals(await reclaim(path, 'refs/heads/main'), 'unlanded')
     assert(await there(path))
     await git(f.repo, 'merge', '--ff-only', 'task-ahead')
-    assertEquals(await reclaim(path, 'refs/heads/main', machine), undefined)
+    assertEquals(await reclaim(path, 'refs/heads/main'), undefined)
     assertEquals(await there(path), false)
     assertEquals(await f.branches(), 'main\nparent')
   } finally {
@@ -113,14 +112,11 @@ test('a required landing keeps fresh and fast-forward-only branches', async () =
   try {
     let fresh = await f.cut('fresh')
     let forwarded = await f.cut('forwarded')
-    assertEquals(await reclaim(fresh, 'refs/heads/main', machine), 'unlanded')
+    assertEquals(await reclaim(fresh, 'refs/heads/main'), 'unlanded')
     await f.commit(f.repo, 'main work')
     await git(forwarded, 'merge', '--ff-only', 'main')
-    assertEquals(
-      await reclaim(forwarded, 'refs/heads/main', machine),
-      'unlanded',
-    )
-    assertEquals(await reclaim(fresh, 'refs/heads/main', machine), 'unlanded')
+    assertEquals(await reclaim(forwarded, 'refs/heads/main'), 'unlanded')
+    assertEquals(await reclaim(fresh, 'refs/heads/main'), 'unlanded')
     assert(await there(fresh))
     assert(await there(forwarded))
     assertEquals(await f.branches(), 'main\ntask-forwarded\ntask-fresh')
@@ -138,11 +134,11 @@ test('rebased commits count as landed work, but missing reflog evidence does not
     await git(f.repo, 'add', '.')
     await git(f.repo, 'commit', '-qm', 'main work')
     await git(path, 'rebase', 'main')
-    assertEquals(await holds(path, 'refs/heads/main', machine), 'unlanded')
+    assertEquals(await holds(path, 'refs/heads/main'), 'unlanded')
     await git(f.repo, 'merge', '--ff-only', 'task-rebased')
-    assertEquals(await holds(path, 'refs/heads/main', machine), undefined)
+    assertEquals(await holds(path, 'refs/heads/main'), undefined)
     await git(path, 'reflog', 'expire', '--expire=all', '--all')
-    assertEquals(await reclaim(path, 'refs/heads/main', machine), 'unlanded')
+    assertEquals(await reclaim(path, 'refs/heads/main'), 'unlanded')
     assert(await there(path))
   } finally {
     await f.free()
@@ -151,7 +147,7 @@ test('rebased commits count as landed work, but missing reflog evidence does not
 
 test('local process directories protect a worktree and its descendants', async () => {
   let cwd = await Deno.realPath(Deno.cwd())
-  assert(inUse(cwd, await processCwds(machine)))
+  assert(inUse(cwd, await processCwds()))
   assert(inUse('/work/tree', new Set(['/work/tree/subdir'])))
   assertEquals(inUse('/work/tree', new Set(['/work/tree-other'])), false)
 })
@@ -162,7 +158,7 @@ test('a required landing keeps an orphan whose work can no longer be verified', 
     let path = await f.cut('orphan')
     await Deno.writeTextFile(path + '/scratch', 'uncommitted')
     await Deno.remove(f.repo + '/.git/worktrees', { recursive: true })
-    assertEquals(await reclaim(path, 'refs/heads/main', machine), 'unlanded')
+    assertEquals(await reclaim(path, 'refs/heads/main'), 'unlanded')
     assertEquals(await Deno.readTextFile(path + '/scratch'), 'uncommitted')
   } finally {
     await f.free()
@@ -172,8 +168,8 @@ test('a required landing keeps an orphan whose work can no longer be verified', 
 test('a path that is not a checkout is kept, never guessed at', async () => {
   let dir = await Deno.makeTempDir()
   try {
-    assertEquals(await holds(dir, undefined, machine), 'unlanded')
-    assertEquals(await holds(dir + '/missing', undefined, machine), 'unlanded')
+    assertEquals(await holds(dir), 'unlanded')
+    assertEquals(await holds(dir + '/missing'), 'unlanded')
   } finally {
     await Deno.remove(dir, { recursive: true })
   }
@@ -185,11 +181,11 @@ test('a checkout whose gitdir is gone is removed outright', async () => {
     let path = await f.cut('orphan')
     await f.commit(path, 'work the runner threw away')
     await Deno.remove(f.repo + '/.git/worktrees', { recursive: true })
-    assert(await lost(path, machine))
-    assertEquals(await reclaim(path, undefined, machine), undefined)
+    assert(await lost(path))
+    assertEquals(await reclaim(path), undefined)
     assertEquals(await there(path), false)
     // A live checkout is not lost, whatever it holds.
-    assertEquals(await lost(await f.cut('live'), machine), false)
+    assertEquals(await lost(await f.cut('live')), false)
   } finally {
     await f.free()
   }
@@ -200,9 +196,9 @@ test('a worktree linked by a relative path is live, and just touched', async () 
   try {
     let path = await f.cut('relative', '--relative-paths')
     await Deno.writeTextFile(path + '/scratch', 'not committed')
-    assertEquals(await lost(path, machine), false)
-    assert(await idleFor(path, undefined, machine) < 60_000)
-    assertEquals(await reclaim(path, undefined, machine), 'dirty')
+    assertEquals(await lost(path), false)
+    assert(await idleFor(path) < 60_000)
+    assertEquals(await reclaim(path), 'dirty')
     assert(await there(path + '/scratch'))
   } finally {
     await f.free()
@@ -230,7 +226,7 @@ test('an opaque local process directory still protects its worktree', async () =
     let ready = child.stdout.getReader()
     await ready.read()
     ready.releaseLock()
-    assert(inUse(await Deno.realPath(dir), await processCwds(machine)))
+    assert(inUse(await Deno.realPath(dir), await processCwds()))
   } finally {
     for (let [i, name] of manager.entries()) {
       let value = before[i]

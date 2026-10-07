@@ -11,10 +11,7 @@ import {
   token,
 } from '@yaks/graph'
 import { and, eq, every, present } from '@yaks/query'
-import type { Blobs } from '@yaks/blob'
-import type { Machine } from '@yaks/machine'
-import { landGraph } from '@yaks/git/landing'
-import { LandError, type Run, run } from '@yaks/git/land'
+import { land, LandError, type Run, run } from '@yaks/git/land'
 import { repositoryEid } from '@yaks/git/host'
 import {
   type Agreed,
@@ -28,12 +25,7 @@ import { agreement, exact, prepareTree } from './skill-mirror-io.ts'
 import { repoSkills, skillFiles, skillLocation } from './skills.ts'
 
 export type SkillSync = Report & { landed?: string; worktree?: string }
-export type SkillSyncOpts = {
-  worktree?: string
-  run?: Run
-  bytes?: Blobs
-  machine?: Machine
-}
+export type SkillSyncOpts = { worktree?: string; run?: Run }
 
 let comp = (b: Bundle | undefined, name: string): Comp =>
   (b?.[name] ?? {}) as Comp
@@ -447,13 +439,7 @@ let syncRepository = async (
     }
     await git(tree, ['add', '--all', '--', '.claude/skills'])
     await git(tree, ['commit', '-m', 'Mirror graph skills'])
-    if (!opts.bytes || !opts.machine) {
-      throw new Refused('Skill export needs explicit Machine and graph bytes')
-    }
-    let outcome = await landGraph(g, opts.bytes, opts.machine, tree, {
-      run: command,
-      write: () => {},
-    })
+    let outcome = await land({ cwd: tree, run: command, write: () => {} })
     // These commits contain validated skill text only. A clean rebase does not
     // require TS tests, but must validate the newly combined documents again.
     if ('diverged' in outcome && !outcome.conflict) {
@@ -462,10 +448,7 @@ let syncRepository = async (
       for (let path of paths.filter(primary)) {
         parseSkill(await Deno.readTextFile(`${tree}/${path}`), titleOf(path))
       }
-      outcome = await landGraph(g, opts.bytes, opts.machine, tree, {
-        run: command,
-        write: () => {},
-      })
+      outcome = await land({ cwd: tree, run: command, write: () => {} })
     }
     if (!('landed' in outcome)) {
       out.conflicts.push(

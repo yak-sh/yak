@@ -7,7 +7,6 @@
 // tree body is binary — raw ids, not text — and that backend stores text. A
 // deployment uses the file or object backend for the same reason.
 
-import type { Machine } from '@yaks/machine'
 import { address, type Blobs, encode } from '@yaks/blob'
 import { edgeDoc, edgeKeywords, edges } from '@yaks/edge'
 import { type Graph, graph, type Plugin } from '@yaks/graph'
@@ -227,70 +226,4 @@ export let COMMITTER = {
   name: 'yaks.app',
   email: 'git@yaks.app',
   at: 1757000000000,
-}
-
-/** Explicit scratch-only machine for filesystem-facing Git tests. */
-export let testMachine = (): Machine => {
-  let results = new Map<
-    string,
-    { child: Deno.ChildProcess; code?: number; out?: string }
-  >()
-  return {
-    poll: 1,
-    start: (command, cwd) => {
-      let id = crypto.randomUUID()
-      let child = new Deno.Command('bash', {
-        args: ['-c', command],
-        cwd,
-        stdout: 'piped',
-        stderr: 'piped',
-      }).spawn()
-      let value: { child: Deno.ChildProcess; code?: number; out?: string } = {
-        child,
-      }
-      results.set(id, value)
-      let reader = child.stdout.getReader()
-      value.out = ''
-      void (async () => {
-        for (;;) {
-          let part = await reader.read()
-          if (part.done) break
-          value.out += dec.decode(part.value, { stream: true })
-        }
-        reader.releaseLock()
-      })()
-      void new Response(child.stderr).text().then(() => {})
-      void child.status.then((status) => {
-        value.code = status.code
-      })
-      return Promise.resolve(id)
-    },
-    look: (id) => {
-      let v = results.get(id)
-      return Promise.resolve(
-        v
-          ? {
-            pid: v.child.pid,
-            ...v.code === undefined ? {} : { exit: { code: v.code } },
-          }
-          : null,
-      )
-    },
-    tail: (id, n) =>
-      Promise.resolve(
-        (results.get(id)?.out ?? '').trimEnd().split('\n').slice(-n),
-      ),
-    kill: async (id, signal) => {
-      let v = results.get(id)
-      if (v && v.code === undefined) v.child.kill(signal)
-      if (v) await v.child.status
-    },
-    read: (path) => Deno.readTextFile(path),
-    write: async (path, content) => {
-      await Deno.mkdir(path.slice(0, path.lastIndexOf('/')), {
-        recursive: true,
-      })
-      await Deno.writeTextFile(path, content)
-    },
-  }
 }

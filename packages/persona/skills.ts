@@ -3,7 +3,6 @@
 
 import { type Bundle, type Comp, type Graph, Refused } from '@yaks/graph'
 import { and, eq, every, present } from '@yaks/query'
-import type { Machine } from '@yaks/machine'
 import { locate } from '@yaks/git/host'
 import { SKILL } from './comp.ts'
 import { parseSkill, renderSkill } from './skill-text.ts'
@@ -228,16 +227,9 @@ let localSkills = async (
 
 /** Without a cwd, read the graph. With one, the checkout's actual directories
  * replace its graph skills, including untracked additions and deletions. */
-export let skillsAt = async (
-  g: Graph,
-  cwd?: string,
-  machine?: Machine,
-): Promise<Bundle[]> => {
+export let skillsAt = async (g: Graph, cwd?: string): Promise<Bundle[]> => {
   if (cwd == undefined) return repoSkills(g)
-  if (!machine) {
-    throw new Refused('A checkout skill view needs an explicit Machine')
-  }
-  let at = await locate(cwd, machine)
+  let at = await locate(cwd)
   if (!at) return []
   let repositories = g.vocab.comps.includes('repository')
     ? await g.read(and(eq('repository.common', at.common), every()))
@@ -254,9 +246,8 @@ export let loadSkill = async (
   g: Graph,
   title: string,
   cwd?: string,
-  machine?: Machine,
 ): Promise<Bundle> => {
-  let found = (await skillsAt(g, cwd, machine)).filter((b) =>
+  let found = (await skillsAt(g, cwd)).filter((b) =>
     text(b, 'doc', 'title') == title
   )
   if (!found.length) throw new Refused(`No skill named ${title}`)
