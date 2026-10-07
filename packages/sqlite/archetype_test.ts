@@ -20,6 +20,7 @@ import {
   lit,
   scan,
   select,
+  type Stmt,
   table,
   tally,
   val,
@@ -506,12 +507,88 @@ test('archetype: deletion removes physical facets outside the writer vocabulary'
   let { driver, store, g, get } = setup()
   driver.query(HIDDEN)
   store.tx((tx) => tx.patch([{ entity: { eid: 'old' }, task: {} }]))
+  // A raw writer names the owners it wrote, as every writer must.
   driver.query(insert('hidden', { entity: idOf(driver, 'old') }))
+  reclassify(driver, ['old'])
   store.install()
   g.apply([{ entity: { eid: 'old' }, $delete: true }])
   assertEquals(get('old').entity.archetype, eidOf(['tombstone']))
   assertEquals(tally(driver, 'hidden'), 0)
   assertEquals(backfill(driver), { entities: 0, archetypes: 0, retired: 0 })
+})
+
+// The tables holding a row for `eid`, read off the file itself.
+let holding = (d: Driver, eid: string) =>
+  componentTables(d).filter((t) => tally(d, t, by({ entity: idOf(d, eid) })))
+
+test('archetype: a delete clears every row its entity holds, however its pointer stands', () => {
+  let point = (d: Driver, to: number | null) =>
+    d.query({
+      t: 'update',
+      table: 'entity',
+      set: { archetype: val(to) },
+      where: eq(col('eid'), val('a')),
+    })
+  let gone = [{ entity: { eid: 'a' }, $delete: true }]
+  let task = [{ entity: { eid: 'a' }, task: {} }]
+  let deletes: Record<string, (s: ReturnType<typeof setup>) => unknown> = {
+    classified: ({ g }) => g.apply(gone),
+    // Rows written in the deleting unit, before any pointer named them.
+    unit: ({ store }) =>
+      store.tx((tx) => {
+        tx.patch(task)
+        tx.remove([{ eid: 'a' }])
+      }),
+    // ... in a unit around the one that deletes.
+    nested: ({ store, g }) =>
+      store.tx((tx) => {
+        tx.patch(task)
+        g.apply(gone)
+      }),
+    // ... by the batch whose cascade deletes it.
+    cascade: ({ g }) =>
+      g.apply([{ entity: { eid: 'a' }, child: { of: 'p' } }, {
+        entity: { eid: 'p' },
+        $delete: true,
+      }]),
+    // A pointer never written, or naming no descriptor.
+    unclassified: ({ driver, g }) => (point(driver, null), g.apply(gone)),
+    dangling: ({ driver, store }) => (
+      point(driver, idOf(driver, 'p')),
+        store.tx((tx) => tx.remove([{ eid: 'a' }]))
+    ),
+  }
+  for (let [name, remove] of Object.entries(deletes)) {
+    let s = setup()
+    s.g.apply([
+      { entity: { eid: 'p' }, doc: {} },
+      { entity: { eid: 'a' }, doc: { title: 'A' }, link: { to: 'p' } },
+    ])
+    remove(s)
+    assertEquals([name, holding(s.driver, 'a')], [name, ['tombstone']])
+    assertEquals([name, s.get('a').entity.archetype], [
+      name,
+      eidOf(['tombstone']),
+    ])
+  }
+})
+
+test('archetype: a delete touches only the tables its entities hold', () => {
+  let { driver, g } = setup()
+  g.apply([
+    { entity: { eid: 'a' }, doc: { title: 'A' }, link: { to: 'b' } },
+    { entity: { eid: 'b' }, task: {} },
+  ])
+  let cleared: string[] = []
+  let send = driver.query.bind(driver), run = driver.run?.bind(driver)
+  let heard = (s: Stmt) => s.t == 'delete' && cleared.push(s.from)
+  driver.query = (s) => (heard(s), send(s))
+  if (run) driver.run = (s) => (heard(s), run(s))
+  g.apply([{ entity: { eid: 'a' }, $delete: true }, {
+    entity: { eid: 'b' },
+    $delete: true,
+  }])
+  assertEquals(cleared.sort(), ['doc', 'link', 'task'])
 })
 
 test('archetype: boot respects number exclusions and the persistent high-water mark', () => {

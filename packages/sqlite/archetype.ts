@@ -25,6 +25,7 @@ import {
   val,
 } from '@yaks/sql'
 import { componentTables } from './physical.ts'
+import { descriptor } from './catalog.ts'
 import { mintSql } from './write.ts'
 import { unit } from './unit.ts'
 import { revision } from '@yaks/sql'
@@ -427,7 +428,13 @@ export type Ledger = {
   born: (eid: string) => void
   pointed: (eid: string) => void
   owed: () => string[]
+  wrote: (eid: string) => Wrote
 }
+
+/** What a unit wrote to one entity since its pointer was: the tables it gave
+ * rows that are there still, and whether the unit minted the entity, when
+ * those rows are all it holds. */
+export type Wrote = { born: boolean; tables: string[] }
 
 /**
  * One unit's account of what its writes did to each entity's archetype, kept
@@ -437,7 +444,8 @@ export type Ledger = {
  * began it, or that was born, with no pointer written since: the ones no
  * tracker classified. A batch that adds a component and drops it again owes
  * nothing, and neither does anything @yaks/graph wrote, since its tracker
- * points every entity it moved after the rows are written.
+ * points every entity it moved after the rows are written. `wrote` is what
+ * the stored pointer does not know yet about one entity ({@link Wrote}).
  */
 export let ledger = (): Ledger => {
   // Per entity, per table: whether it held a row before the unit's first
@@ -464,14 +472,62 @@ export let ledger = (): Ledger => {
       [...new Set([...born, ...rows.keys()])].filter((eid) => (born.has(eid) ||
         [...rows.get(eid)!.values()].some(([was, now]) => was != now))
       ),
+    wrote: (eid: string): Wrote => ({
+      born: born.has(eid),
+      tables: [...rows.get(eid) ?? []].filter(([, [, now]]) => now)
+        .map(([table]) => table),
+    }),
   }
 }
 
 /**
+ * The tables these entities hold rows in, as their removal clears them: each
+ * one's stored archetype, together with what the open units' ledgers say they
+ * wrote since its pointer was ({@link Ledger} `wrote`), among the component
+ * tables the file holds. One statement reads the pointers, so a removal costs
+ * the tables its entities wear rather than every table in the file.
+ *
+ * The pointer is exact wherever no unit is open: every door classifies what it
+ * wrote before its unit closes, and a raw writer calls {@link reclassify}
+ * (what {@link drift} audits). Inside an open unit, a ledger names every row
+ * written since. An entity that is neither, whose pointer is missing or names
+ * no descriptor, and that no open unit minted, is not known this way, and then
+ * every component table the file holds is the answer.
+ */
+export function heldBy(
+  driver: Driver,
+  eids: string[],
+  ledgers: readonly Ledger[] = [],
+): string[] {
+  let all = facets(driver)
+  let held = new Set<string>()
+  let pointers = driver.query(select({
+    cols: [col('eid', 'e'), col('tables', 'a')],
+    from: table('entity', 'e'),
+    joins: [
+      left(
+        table('archetype', 'a'),
+        eq(col('entity', 'a'), col('archetype', 'e')),
+      ),
+    ],
+    where: among(col('eid', 'e'), each([...new Set(eids)])),
+  }))
+  for (let row of pointers) {
+    let wrote = ledgers.map((l) => l.wrote(String(row.eid)))
+    if (row.tables == null && !wrote.some((w) => w.born)) return all
+    if (row.tables != null) {
+      for (let t of descriptor(driver, String(row.tables)).tables) held.add(t)
+    }
+    for (let w of wrote) for (let t of w.tables) held.add(t)
+  }
+  return all.filter((t) => held.has(t))
+}
+
+/**
  * Point these entities, just removed, at the tombstone set, minting its
- * descriptor the first time a store needs one. A removal clears every
- * component table the file holds (./write.ts `remove`), so what each one holds
- * afterwards is its tombstone and nothing else, known without reading a table.
+ * descriptor the first time a store needs one. A removal clears every table
+ * its entities hold rows in ({@link heldBy}), so what each one holds afterwards
+ * is its tombstone and nothing else, known without reading a table.
  * Storage's own removal calls this, so the dead leave their archetype
  * whichever door removed them, and a presence lookup passes them by.
  */

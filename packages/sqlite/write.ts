@@ -75,7 +75,6 @@ import {
   val,
   type Write,
 } from '@yaks/sql'
-import { componentTables } from './physical.ts'
 import { tables } from './ddl.ts'
 import { isJsonb, jsonb, jsonIn } from './jsonb.ts'
 import { get } from './read.ts'
@@ -608,16 +607,17 @@ export let revive = (driver: Driver, eids: string[], moved?: Moved): void => {
 /**
  * Remove these entities: every component row they have goes, and their identity
  * is tombstoned, keeping its eid and number. Exactly the entities named —
- * @yaks/graph decided which they are.
+ * @yaks/graph decided which they are. `held` is the tables they hold rows in,
+ * where the caller knows (a store that keeps archetypes reads them off the
+ * entities' pointers, ./archetype.ts `heldBy`); left out, it is every table the
+ * vocabulary declares.
  */
 export let remove = (
   driver: Driver,
   vocab: Vocab,
   entities: Entity[],
+  held: string[] = tables(vocab),
 ): void => {
   let now = new Date().toISOString()
-  // With table-based identities enabled, deletion must honor that same
-  // physical set even when this writer has a narrower vocabulary.
-  let held = vocab.comp('archetype') ? componentTables(driver) : tables(vocab)
   for (let s of removeSql(held, entities, now)) effect(driver, s)
 }

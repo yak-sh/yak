@@ -60,7 +60,7 @@ import type {
   ReadOpts,
 } from '@yaks/graph'
 import { sha256 } from '@yaks/graph'
-import { after } from '@yaks/fp'
+import { after, isPromise } from '@yaks/fp'
 import { context, scope } from '@yaks/trace'
 import type { Query } from './read.ts'
 import {
@@ -78,7 +78,14 @@ import {
 import { EPOCH, epoch, installed, meta, SCHEMA } from './meta.ts'
 import { doom, get, read, rows, screened, tagOf } from './read.ts'
 import { unit } from './unit.ts'
-import { backfill, entomb, ledger, reclassify } from './archetype.ts'
+import {
+  backfill,
+  entomb,
+  heldBy,
+  type Ledger,
+  ledger,
+  reclassify,
+} from './archetype.ts'
 import { componentTables, shape } from './physical.ts'
 import { patch, remove, revive } from './write.ts'
 import { bindings } from './rules.ts'
@@ -313,6 +320,25 @@ let plan = (vocab: Vocab, derived: Derived = NONE): Plan => {
   return fresh
 }
 
+// The ledgers of the units open on each driver, outermost first (`tracked`).
+let ledgers = new WeakMap<Driver, Ledger[]>()
+
+// The value `body` gives, once `last` has run after it settled, either way.
+let lastly = <R>(body: () => R, last: () => void): R => {
+  let out: R
+  try {
+    out = body()
+  } catch (error) {
+    last()
+    throw error
+  }
+  if (!isPromise(out)) {
+    last()
+    return out
+  }
+  return out.finally(last) as R
+}
+
 /**
  * Bind a store to a driver and a vocabulary — a {@link Storage} @yaks/graph
  * can apply bundles to. `base` options (a derived-property registry, a fixed
@@ -356,10 +382,7 @@ export let storage = (
     bindings: (matches, bundles, covers) =>
       bindings(driver, vocab, matches, bundles, covers, base),
     patch: (bundles) => patch(driver, vocab, bundles, base.number, base.adopt),
-    remove: (entities) => {
-      remove(driver, vocab, entities)
-      if (classified) entomb(driver, entities.map((e) => e.eid), numbered)
-    },
+    remove: (entities) => remove(driver, vocab, entities),
     revive: (eids) => revive(driver, eids),
   }
   // A unit over a store that keeps archetypes keeps every pointer in step,
@@ -369,10 +392,19 @@ export let storage = (
   // `ledger`); what it still owes when the body returns is classified from
   // what those entities hold (`reclassify`), in the same unit. Through the
   // graph that is nothing, since its tracker points every entity it moved, so
-  // its writes gain no read. Removal points what it removes at the tombstone
-  // set itself.
-  let tracked = (): { tx: Tx; settle: () => void } => {
+  // its writes gain no read. Removal clears the tables its entities hold
+  // (`heldBy`) and points them at the tombstone set itself.
+  //
+  // A unit opened inside another (a graph applied in a caller's transaction)
+  // hears what the outer ones wrote and have not classified yet: their ledgers
+  // stay open beside its own, outermost first, so it reads and removes what an
+  // entity holds rather than what its pointer said before they began.
+  let tracked = (): { tx: Tx; settle: () => void; close: () => void } => {
     let l = ledger()
+    let open = ledgers.get(driver) ?? []
+    ledgers.set(driver, open)
+    open.push(l)
+    let owed = () => [...new Set(open.flatMap((o) => o.owed()))]
     let settle = () => {
       let owed = l.owed()
       if (!owed.length) return
@@ -380,12 +412,13 @@ export let storage = (
       for (let eid of owed) l.pointed(eid)
     }
     return {
+      close: () => void open.splice(open.lastIndexOf(l), 1),
       tx: {
         ...tx,
         get: (eids, comps) => {
-          let owed = l.owed()
-          return owed.length
-            ? get(driver, vocab, eids, opts(), comps, owed)
+          let pending = owed()
+          return pending.length
+            ? get(driver, vocab, eids, opts(), comps, pending)
             : memo(tx.get, eids, comps)
         },
         // Pending component rows already stand in this transaction. Read them
@@ -394,7 +427,7 @@ export let storage = (
         read: (query, o) =>
           tx.read(query, {
             ...o,
-            ...(l.owed().length ? { archetypes: () => undefined } : {}),
+            ...(owed().length ? { archetypes: () => undefined } : {}),
           }),
         patch: (bundles) => {
           let born = patch(
@@ -412,8 +445,10 @@ export let storage = (
           return born
         },
         remove: (entities) => {
-          tx.remove(entities)
-          for (let e of entities) l.pointed(e.eid)
+          let eids = entities.map((e) => e.eid)
+          remove(driver, vocab, entities, heldBy(driver, eids, open))
+          entomb(driver, eids, numbered)
+          for (let eid of eids) l.pointed(eid)
         },
         revive: (eids) => revive(driver, eids, l.moved),
       },
@@ -532,15 +567,19 @@ export let storage = (
           get: (eids, comps) => memo(t.get, eids, comps),
         })
         if (!classified) return body(cached(tx))
-        let { tx: t, settle } = tracked()
+        let { tx: t, settle, close } = tracked()
         let tracing = context()
         // An async body settles what it owes before the unit closes, as the
         // unit waits for it (./unit.ts).
-        return after(body(t), (out) => {
-          if (tracing) scope(tracing, settle)
-          else settle()
-          return out
-        }) as R
+        return lastly(
+          () =>
+            after(body(t), (out) => {
+              if (tracing) scope(tracing, settle)
+              else settle()
+              return out
+            }) as R,
+          close,
+        )
       })
     },
   }

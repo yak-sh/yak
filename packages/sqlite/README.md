@@ -154,9 +154,11 @@ removes the tombstone, and the identity keeps its eid, number and integer id;
 which writes bring an entity back is @yaks/graph's to decide. Reference
 properties declare [death behavior](../vocab/README.md#routing-and-references).
 `tx.remove()` removes exactly the entities passed to it; the graph determines
-the full cascade. Where the store keeps archetypes, it also points each one at
-the tombstone set (`entomb`), so a presence lookup passes the dead by however
-they were removed.
+the full cascade. Where the store keeps archetypes, it clears only the tables
+each entity's archetype names, with any rows the open transactions wrote since
+its pointer (`heldBy`); an entity with no pointer, or one naming no descriptor,
+has every component table cleared. It then points each one at the tombstone set
+(`entomb`), so a presence lookup passes the dead by however they were removed.
 
 ## Read
 
@@ -650,20 +652,22 @@ rollback, other writers, and schema changes to remain visible.
 Every `Store.tx(body)` maintains archetype pointers for patches, removals, and
 revivals made through its `Tx`. Its **ledger** records component-table presence
 changes and which entities have already been classified; `ledger().owed()` names
-those still needing classification when the callback finishes. Within the
+those still needing classification when the callback finishes. A transaction
+opened inside another also hears the outer ones' ledgers. Within the
 transaction, `Tx.get` reads pending component changes from their physical rows.
 `Tx.read` classifies pending changes before querying the archetype index; later
 patches continue from that classified shape.
 
 A raw SQL writer, past the store, must call `reclassify(driver, eids)` inside
-its transaction after changing component rows. It returns changed pointers and
-new descriptors as bundles that the application can broadcast; descriptor
-entities and unknown ids are ignored. `drift(driver)` is the audit
-(`archetype_check`): it reads every owner's presence and counts the pointers
-that disagree, writing nothing; `mend(driver)` classifies every one it finds
-again, a few thousand to a unit. Stores without archetypes and unclassified
-low-level writes fall back to inspecting component presence. An incomplete
-catalog declines the query optimization instead of hiding entities.
+its transaction after changing component rows: whole reads, presence filters and
+deletes all go by the pointer. It returns changed pointers and new descriptors
+as bundles that the application can broadcast; descriptor entities and unknown
+ids are ignored. `drift(driver)` is the audit (`archetype_check`): it reads
+every owner's presence and counts the pointers that disagree, writing nothing;
+`mend(driver)` classifies every one it finds again, a few thousand to a unit.
+Stores without archetypes and unclassified low-level writes fall back to
+inspecting component presence. An incomplete catalog declines the query
+optimization instead of hiding entities.
 
 ```ts
 import { open } from '@yaks/sqlite/db'
