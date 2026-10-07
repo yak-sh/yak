@@ -82,7 +82,6 @@ export let effects = (
     // anybody can read which ends it had — always does.
     persona_files: async (e, tx) => {
       if (e.name == DOC) return about(e.entity.eid)
-      if (e.name == EDGE) return about(e.comp?.from, e.comp?.to)
       if (e.kind == 'created' && (e.name == 'contains' || e.name == 'reads')) {
         let [link] = await tx.get([e.entity.eid], [EDGE])
         let ends = link?.[EDGE] as Comp | undefined
