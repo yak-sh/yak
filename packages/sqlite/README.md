@@ -399,9 +399,13 @@ Names contain the logical table and verb, such as `doc select` or
 update`; transaction names omit savepoint identifiers, and pragma names
 omit arguments and values. SQL text and bound values never enter the trace. A
 successful span counts returned rows for reads and affected rows for writes,
-including writes without `returning`. SQL nests under the current phase, hook,
-rule, read or transaction. No subscriber means no statement metadata, spans,
-clocks or counts are allocated.
+including writes without `returning`. Each attempted statement also charges
+`statements`, `rowsRead` and `rowsWritten` to its span and open ancestors;
+failed statements count once without charging a stale affected-row count. These
+inclusive metrics use the returned rows and native changes count, with no
+additional SQL. SQL nests under the current phase, hook, rule, read or
+transaction. No subscriber means no statement metadata, spans, clocks or counts
+are allocated.
 
 ```ts
 import { open } from '@yaks/sqlite/db'
@@ -417,7 +421,12 @@ try {
     () => sql.query(insert('note', { title: 'Hello' })),
   )
   equal(captured.spans[0].name, 'note insert')
-  equal(captured.spans[0].counts, { rows: 1 })
+  equal(captured.spans[0].counts, {
+    rows: 1,
+    statements: 1,
+    rowsRead: 0,
+    rowsWritten: 1,
+  })
 } finally {
   sql.close()
 }

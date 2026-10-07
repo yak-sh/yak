@@ -87,6 +87,10 @@ export let installContext = (next: ContextCarrier | undefined): () => void => {
     if (carrier == next) carrier = before
   }
 }
+let forwards = new WeakMap<
+  Channel,
+  (ctx: Context, events: readonly Event[], origin: number) => void
+>()
 let capacity = 256
 let recordings = new WeakMap<Channel, number>()
 let roots = new WeakMap<
@@ -258,6 +262,41 @@ let create = (): Channel => {
       })
     },
   }
+  forwards.set(out, (ctx, events, origin) => {
+    if (!live(ctx) || (ctx.parent && !open.has(ctx.parent)) || !events.length) {
+      return
+    }
+    let shift = origin - performance.timeOrigin
+    let ids = new Map(events.map((e) => [e.id, `${epoch}.${++sequence}`]))
+    let copied = events.map((e): Event => ({
+      ...e,
+      id: ids.get(e.id)!,
+      parent: e.parent && ids.has(e.parent) ? ids.get(e.parent) : ctx.parent,
+      time: e.time + shift,
+      ...e.start != null ? { start: e.start + shift } : {},
+      ...e.counts ? { counts: counts(e.counts) } : {},
+    }))
+    // The worker already accumulated each span's inclusive measurements. Only
+    // its root charges the still-open caller; charging every child doubles it.
+    if (copied[0].counts) meters.get(out)?.(ctx.parent, copied[0].counts)
+    for (let e of copied) {
+      if (e.stage == 'instant') emit(e)
+      else {
+        let {
+          duration: _duration,
+          outcome: _outcome,
+          counts: _counts,
+          ...start
+        } = e
+        emit({ ...start, stage: 'start', time: e.start ?? e.time })
+      }
+    }
+    // Parents close after descendants, even when the worker's coarse clock
+    // gives them identical timestamps. No local execution is being timed here.
+    for (let e of copied.toReversed()) {
+      if (e.stage == 'end') emit(e)
+    }
+  })
   meters.set(out, (id, input) => {
     let visited = new Set<string>()
     while (id && !visited.has(id)) {
@@ -502,3 +541,13 @@ export function during<T>(
     return failed(error)
   }
 }
+
+/** Import a recorded child tree from a worker into its waiting caller. IDs are
+ * reminted on the caller's channel, clocks are translated from the worker's
+ * performance.timeOrigin, and inclusive root counts charge the caller once.
+ * A disconnected recording or a caller that already ended receives nothing. */
+export let forward = (
+  ctx: Context,
+  events: readonly Event[],
+  origin: number = performance.timeOrigin,
+): void => forwards.get(ctx.channel)?.(ctx, events, origin)

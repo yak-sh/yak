@@ -35,7 +35,7 @@
 
 import type { Bundle, Eid, Graph, Query, ReadOpts } from '@yaks/graph'
 import { after, isPromise, over } from '@yaks/fp'
-import { during, link, parent, peek, unlink } from '@yaks/trace'
+import { during, link, parent, peek, scope, unlink } from '@yaks/trace'
 import {
   coalesced,
   composed,
@@ -134,6 +134,8 @@ export type Opening = { sink: Sink; id: string; query: Ask; opts?: ReadOpts }
 /** The subscription registry: what the socket layer talks to, and what an
  * application can drive directly. */
 export type Subs = {
+  /** Runtime activity target, shared with the graph even through read overlays. */
+  activity?: object
   /** Read bundles using the graph's query and read-option contract, with held
    * peer values unless `durable: true` selects storage alone. */
   read: Graph['read']
@@ -1036,22 +1038,35 @@ export let subscriptions = (graph: Graph, opts: {
     let target = opts.activity ?? graph
     let c = peek(target)
     if (!c) return commitNow(txs)
-    return during(
-      c.begin({
-        kind: 'fanout',
-        name: 'subscriptions',
-        package: '@yaks/api',
-        parent: parent(target, txs[0]),
-      }),
-      () => commitNow(txs),
-      'ok',
-      () => ({
-        transactions: txs.length,
-        bundles: txs.reduce((n, b) => n + b.length, 0),
-        subscriptions: all().length,
-      }),
-    )
+    // Refreshes can run after the writer has already answered. The box host
+    // treats a missing/completed parent as an independent request; a Store
+    // still recording that write keeps this pass in its existing tree.
+    return scope(undefined, () =>
+      during(
+        c.begin({
+          kind: 'request',
+          name: 'ws refresh',
+          package: '@yaks/api',
+          parent: parent(target, txs[0]),
+        }),
+        () =>
+          during(
+            c.begin({
+              kind: 'fanout',
+              name: 'subscriptions',
+              package: '@yaks/api',
+            }),
+            () => commitNow(txs),
+            'ok',
+            () => ({
+              transactions: txs.length,
+              bundles: txs.reduce((n, b) => n + b.length, 0),
+              subscriptions: all().length,
+            }),
+          ),
+      ))
   }
+
   let commitNow = (txs: Bundle[][]) => {
     flush()
     backlinks.clear()
@@ -1790,6 +1805,7 @@ export let subscriptions = (graph: Graph, opts: {
   }
 
   return {
+    activity: opts.activity ?? graph,
     // A host can read while its own graph apply is saving a relay. This read
     // takes the currently admitted held values without entering ordered work.
     read: (query, readOpts) =>

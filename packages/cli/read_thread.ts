@@ -1,6 +1,7 @@
 // A web host's graph reads run in one worker over the same file. The graph's
 // read interface stays the query door; only the thread executing it changes.
 import type { Bundle, Eid, Graph, Query, ReadOpts, Row } from '@yaks/graph'
+import { type Context, context, type Event, forward } from '@yaks/trace'
 
 export type Reader = Pick<Graph, 'read' | 'rows' | 'get'>
 
@@ -8,11 +9,18 @@ type Call =
   | { op: 'read' | 'rows'; query: Query; opts?: ReadOpts }
   | { op: 'get'; eids: Eid[]; comps?: string[] }
 
-export type Said = { start: string } | (Call & { id: number }) | { close: true }
+export type Said =
+  | { start: string }
+  | (Call & { id: number; observed?: boolean })
+  | { close: true }
 
+type Traced = { spans?: Event[]; origin?: number }
 export type Heard =
-  | { id: number; value: unknown }
-  | { id: number; error: { name: string; message: string; details: object } }
+  | ({ id: number; value: unknown } & Traced)
+  | (
+    & { id: number; error: { name: string; message: string; details: object } }
+    & Traced
+  )
   | { closed: true }
 
 export let readThread = (
@@ -23,6 +31,7 @@ export let readThread = (
   let pending = new Map<number, {
     resolve: (value: unknown) => void
     reject: (error: Error) => void
+    trace?: Context
   }>()
   let closed = false
   let ending: Promise<void> | undefined
@@ -45,6 +54,7 @@ export let readThread = (
       let p = pending.get(data.id)
       if (!p) return
       pending.delete(data.id)
+      if (p.trace && data.spans) forward(p.trace, data.spans, data.origin)
       if ('error' in data) {
         let error = Object.assign(
           new Error(data.error.message),
@@ -67,8 +77,9 @@ export let readThread = (
     if (closed) return Promise.reject(new Error('the reader is closed'))
     return new Promise((resolve, reject) => {
       let id = ++next
-      pending.set(id, { resolve, reject })
-      start().postMessage({ ...call, id })
+      let trace = context()
+      pending.set(id, { resolve, reject, trace })
+      start().postMessage({ ...call, id, observed: !!trace })
     })
   }
   return {

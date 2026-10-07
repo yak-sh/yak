@@ -11,6 +11,7 @@
 
 import { fault, refusal } from './refuse.ts'
 import { isPromise } from '@yaks/fp'
+import { during, peek, scope } from '@yaks/trace'
 import { type Bundle, coalescer, type ReadOpts } from '@yaks/graph'
 import { admission } from './admission.ts'
 import type { Frame, Sink, Subs } from './subs.ts'
@@ -275,6 +276,34 @@ export let receive = (
   opts?: ReadOpts,
   writer?: PeerWriter,
 ): void | 'close' | Promise<void> => {
+  let c = subs.activity && peek(subs.activity)
+  if (!c) return dispatch(subs, to, now, input, opts, writer)
+  let msg = 'value' in input && input.value && typeof input.value == 'object'
+    ? input.value as Record<string, unknown>
+    : undefined
+  let name = typeof msg?.subscribe == 'string' || msg?.subscribe === true
+    ? 'ws subscribe'
+    : msg?.unsubscribe != null
+    ? 'ws unsubscribe'
+    : Array.isArray(msg?.relay)
+    ? 'ws relay'
+    : 'ws message'
+  // A Store may already have begun its own message root. Keep that parent;
+  // attach() clears only the upgrade's ambient context at the event boundary.
+  return during(
+    c.begin({ kind: 'request', name, package: '@yaks/api' }),
+    () => dispatch(subs, to, now, input, opts, writer),
+  )
+}
+
+let dispatch = (
+  subs: Subs,
+  to: Sink,
+  now: (() => number) | undefined,
+  input: Incoming,
+  opts?: ReadOpts,
+  writer?: PeerWriter,
+): void | 'close' | Promise<void> => {
   let id = ''
   let fail = (err: unknown) => {
     fault(err, 'socket message')
@@ -346,7 +375,11 @@ export let attach = (
       msg?.acks === true &&
       (typeof msg.subscribe == 'string' || msg.subscribe === true)
     ) q.enable(msg.frames === true)
-    if (receive(subs, to, e.data, now, input, opts, writer) == 'close') {
+    let out = scope(
+      undefined,
+      () => receive(subs, to, e.data, now, input, opts, writer),
+    )
+    if (out == 'close') {
       drop()
       socket.close?.(1008, 'relay flood')
     }

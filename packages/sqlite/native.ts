@@ -5,7 +5,7 @@
 
 import './sqlitepath.ts'
 import { Database } from '@db/sqlite'
-import { context, during, peek } from '@yaks/trace'
+import { context, during, measure, peek } from '@yaks/trace'
 import { statement, writing } from '@yaks/sql'
 import {
   call,
@@ -235,7 +235,18 @@ export let driver = (db: Database): Driver => {
         package: '@yaks/sqlite',
         parent: context()?.channel == c ? context()?.parent : undefined,
       }),
-      () => execute(s),
+      () => {
+        // Count the attempted statement even if SQLite refuses it. Rows come
+        // from this execution, never a telemetry query or a stale changes
+        // count on a failed write. measure charges this span and its open
+        // ancestors once, preserving inclusive request/phase totals.
+        measure({ statements: 1, rowsRead: 0, rowsWritten: 0 })
+        let rows = execute(s)
+        measure(
+          writing(s) ? { rowsWritten: db.changes } : { rowsRead: rows.length },
+        )
+        return rows
+      },
       'ok',
       (rows) => ({
         rows: writing(s) ? db.changes : rows.length,

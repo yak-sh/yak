@@ -126,6 +126,20 @@ import { roles as serveRoles, type Thread } from '@yaks/threads'
 export type { Thread } from '@yaks/threads'
 import { during, outcome, peek as tracing, type Span } from '@yaks/trace'
 import { nativeAnatomy, secretNames } from './anatomy.ts'
+import { AsyncLocalStorage } from 'node:async_hooks'
+import { type Context as TraceContext, installContext } from '@yaks/trace'
+import { spool } from '@yaks/tracker/report'
+import { files } from '@yaks/tracker/file'
+import { type Traces, traces } from './traces.ts'
+import { traceControl } from './trace_control.ts'
+
+// One carrier per runtime, not per composed graph. Multiple CLI hosts can
+// coexist without replacing one another's async context.
+let traceLocal = new AsyncLocalStorage<TraceContext | undefined>()
+installContext({
+  get: () => traceLocal.getStore(),
+  run: (ctx, work) => traceLocal.run(ctx, work),
+})
 
 export {
   type Config,
@@ -955,6 +969,8 @@ let composed = async (
   }
   let sql = open(path, { readOnly: opts.readOnly })
   part?.('migrations')
+  let recorded: Traces | undefined
+  let captureControl: ReturnType<typeof traceControl> | undefined
   try {
     if (installing) {
       installMigrations(sql)
@@ -1190,6 +1206,20 @@ let composed = async (
       ...(self ? { actor: self } : {}),
       plugins: [...contributed, fx],
     })
+    // Read workers return their recorded trees to their caller rather than
+    // duplicating delivery. A passing CLI and every duty/web process observe
+    // their graph, without composing tracker tables into the watched store.
+    if (opts.process !== false) {
+      captureControl = config.tracker ? traceControl(path) : undefined
+      recorded = traces(g, {
+        process: selfEid(),
+        take: captureControl?.take ??
+          (() => Promise.resolve({ requested: false, rate: 0 })),
+        sink: config.tracker
+          ? spool(files(config.tracker.spool).append)
+          : undefined,
+      })
+    }
     // The code behind the plugins' effects, where this process serves
     // `effects` (their facets were never imported anywhere else). Each
     // declared effect has one handler, from whichever plugin gives it code.
@@ -1477,7 +1507,9 @@ let composed = async (
         await ending
         if (!opts.readOnly) await drained()
         await dutiesHost.close()
-        let shut = () => {
+        let shut = async () => {
+          await recorded?.close()
+          captureControl?.close()
           try {
             sql.close()
           } catch { /* already closed */ }
@@ -1497,10 +1529,12 @@ let composed = async (
         try {
           await g!.apply([...await released(g!, selfEid()), ended(code)])
         } catch { /* the file is going either way */ }
-        shut()
+        await shut()
       },
     }
   } catch (error) {
+    await recorded?.close()
+    captureControl?.close()
     await report(error)
     sql.close()
     throw error

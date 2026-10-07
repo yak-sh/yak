@@ -53,6 +53,8 @@ import { external } from './external.ts'
 import { readThread } from './read_thread.ts'
 import { type Aside, thread } from '@yaks/threads'
 import { reconcile } from '@yaks/tools'
+import { during, peek } from '@yaks/trace'
+import { traceCommand } from './trace_control.ts'
 
 // One graph per config path and set of roles, for the life of the process:
 // every call a command makes goes through the same assembled graph, and
@@ -331,11 +333,21 @@ export let commands = async (c: Ctx): Promise<Command[]> => {
       if (!declared.readOnly) await host.runner.ensure([declared.name])
       let id = mint()
       let invoke = declared.readOnly ? host.runner.read : host.runner.call
-      let landed = await invoke({
+      let call = {
         entity: { eid: id },
         call: { to: toolEid(declared.name), args: args ?? {} },
         ...await signer(host, c.via),
-      })
+      }
+      // A server's tool lasts for the process lifetime; its HTTP/socket
+      // requests must be independent roots, not children of that command.
+      let span = declared.roles?.includes('web')
+        ? undefined
+        : peek(host.graph)?.begin({
+          kind: 'request',
+          name: `cli ${declared.name}`,
+          package: '@yaks/cli',
+        })
+      let landed = await during(span, () => invoke(call))
       // `--json` prints the answer as data, the same object an MCP client
       // reads as `structuredContent` (@yaks/tools `structured`).
       let answer = answerOf(landed, id)
@@ -381,8 +393,15 @@ export let commands = async (c: Ctx): Promise<Command[]> => {
         !!declared.readOnly,
       )
       observe(host)
-      return await run(args, host, context)
+      let span = declared.roles?.includes('web')
+        ? undefined
+        : peek(host.graph)?.begin({
+          kind: 'request',
+          name: `cli ${declared.name}`,
+          package: '@yaks/cli',
+        })
+      return await during(span, () => run(args, host, context))
     },
   }))
-  return [...controls, ...tools]
+  return [traceCommand(config), ...controls, ...tools]
 }

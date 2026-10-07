@@ -71,7 +71,15 @@
 
 import type { Access, Bundle, Comp, Eid, HookContext, Tx } from '@yaks/graph'
 import { after } from '@yaks/fp'
-import { outcome, parent, peek, type Span, unlink } from '@yaks/trace'
+import {
+  during,
+  outcome,
+  parent,
+  peek,
+  scope,
+  type Span,
+  unlink,
+} from '@yaks/trace'
 import { derivedEid, Stale, token } from '@yaks/graph'
 import { and, eq } from '@yaks/query'
 import type { VocabDoc } from '@yaks/vocab'
@@ -432,12 +440,14 @@ export let pool = (ctx: Ctx, opts: Partial<PoolOpts> = {}): Pool => {
           attempt,
         )
         if (peek(g) && span?.active) span.end({ counts: { runs: 1 } })
-        await swap(
-          g,
-          eid,
-          { lease_token: held.token, attempts: held.attempts },
-          null,
-        )
+        // Pool bookkeeping follows the completed handler, not its trace.
+        await scope(undefined, () =>
+          swap(
+            g,
+            eid,
+            { lease_token: held.token, attempts: held.attempts },
+            null,
+          ))
       } catch (err) {
         if (peek(g) && span?.active) {
           span.end({ outcome: outcome(err), counts: { runs: 1 } })
@@ -450,17 +460,23 @@ export let pool = (ctx: Ctx, opts: Partial<PoolOpts> = {}): Pool => {
           ctx.report(err, { handler: String(row.handler), event, slot: s })
         }
         let due = Math.max(wait(tries), asked(err))
-        await settle(
-          last ? { state: 'failed', error: said(err), next: null, ...free } : {
-            state: 'pending',
-            error: said(err),
-            next: stamp(clock() + due),
-            ...free,
-          },
-        )
+        await scope(undefined, () =>
+          settle(
+            last
+              ? { state: 'failed', error: said(err), next: null, ...free }
+              : {
+                state: 'pending',
+                error: said(err),
+                next: stamp(clock() + due),
+                ...free,
+              },
+          ))
       }
     }
-    held.run = go()
+    // A host's task-local carrier retains this effect's ancestry across
+    // asynchronous reads and handler work. Explicit write parents still work
+    // for hosts without one, and the existing success/error boundaries end it.
+    held.run = during(span, go)
       .catch((err) => {
         if (peek(g) && span?.active) span.end({ outcome: outcome(err) })
         return ctx.report(err, {

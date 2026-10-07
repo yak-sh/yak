@@ -3,6 +3,7 @@
 // The read side of one file-backed web host. It composes the same graph over
 // another SQLite WAL connection so a long query cannot hold the HTTP thread.
 import { read } from './config.ts'
+import { record } from '@yaks/trace'
 import { compose, facet, type Served } from './host.ts'
 import type { Heard, Said } from './read_thread.ts'
 
@@ -41,12 +42,34 @@ self.onmessage = ({ data }: MessageEvent<Said>) => {
     try {
       if (!host) throw new Error('the reader was not started')
       let graph = (await host).graph
-      let value = data.op == 'get'
-        ? await graph.get(data.eids, data.comps)
-        : data.op == 'read'
-        ? await graph.read(data.query, data.opts)
-        : await graph.rows(data.query, data.opts)
-      tell({ id: data.id, value })
+      let query = () =>
+        data.op == 'get'
+          ? graph.get(data.eids, data.comps)
+          : data.op == 'read'
+          ? graph.read(data.query, data.opts)
+          : graph.rows(data.query, data.opts)
+      if (!data.observed) {
+        tell({ id: data.id, value: await query() })
+        return
+      }
+      // Catch inside the recorder so a refused/failed read returns its tree,
+      // too, without turning an error into an independent worker report.
+      let captured = await record(graph, () => {
+        try {
+          return Promise.resolve(query()).then(
+            (value) => ({ value }),
+            (error) => ({ error: errorOf(error) }),
+          )
+        } catch (error) {
+          return Promise.resolve({ error: errorOf(error) })
+        }
+      }, { history: false })
+      tell({
+        id: data.id,
+        ...captured.result,
+        spans: captured.spans,
+        origin: performance.timeOrigin,
+      })
     } catch (error) {
       tell({ id: data.id, error: errorOf(error) })
     }

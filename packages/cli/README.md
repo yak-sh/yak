@@ -589,3 +589,53 @@ not the letter or tool arguments. Reports go to the spool without opening a
 tracker database. The separate @yaks/tracker role imports it using its own
 config and database; the task graph keeps no tracker error rows. Console
 telemetry remains enabled.
+
+### Box request traces
+
+Every box host records request, effect and apply span trees in memory. HTTP
+`/query`, `/apply`, the web UI's applies, socket messages (`ws subscribe`,
+`ws unsubscribe`, `ws relay`, `ws message`) and subscription refreshes
+(`ws
+refresh`) retain phase, plugin and SQL ancestry. A web reader thread
+returns its query/SQL tree and counts to the requesting server; it does not send
+a duplicate trace. A streamed import has an independent `http stream apply` root
+lasting through the whole import rather than only the HTTP response head.
+
+Only selected completed roots go to `tracker.spool`: work strictly over 10,000
+rows read or written, an armed capture, or an ordinary random sample. Automatic
+traces are admitted once per operation and code name per rolling hour in a host;
+suppressed repeats accompany the next admitted trace as root `repeats{n}`.
+Captures and samples bypass that automatic quota. Sampling defaults to zero.
+Unselected trees stay in memory only: no extra SQL, projection or delivery.
+There are no per-minute timing rows. Traces use `@yaks/timing`'s span entities
+and independent metric components, not JSON trees in the watched store.
+
+Arm the next operations without opening the database:
+
+```sh
+yak trace --config /path/to/yak.json --next 3
+yak trace --config /path/to/yak.json --rate 0.01
+# Only the already-running web server consumes this capture:
+yak trace --config /path/to/yak.json --process <serve-pid> --next 3
+# Disable ordinary sampling for that process:
+yak trace --config /path/to/yak.json --process <serve-pid> --rate 0
+```
+
+`--next` replaces the remaining capture count; omitted settings are unchanged.
+`--rate` is a probability from zero to one. Without `--process`, next captures
+are shared across processes over that database. A PID-specific rate overrides
+the shared rate; PID-specific pending captures are consumed before shared ones.
+The controls are persisted in `<db>.trace.json`, with advisory locking for
+capture consumption and a 250 ms unref poll updating each host's cache. Idle
+requests consult memory only. The command can arm an absent database and never
+opens or creates it; the sidecar directory must be writable. Controls do not
+require a service restart. To target the web server, use its `yak serve` PID,
+not a `yak work` PID.
+
+The separate tracker config must compose `@yaks/timing` beside `@yaks/tracker`
+and its browser/inspect plugins, then be installed with
+`yak upgrade --config
+/path/to/tracker.json`. Both the watched config's
+`tracker.spool` and the tracker service's `with.spool` name the same spool
+directory. Browse `/?q=.trace` on the tracker for grouped traces and each
+trace's flamegraph and places list.

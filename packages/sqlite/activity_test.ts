@@ -3,8 +3,10 @@
 import { equal, ok, test, throws } from '@yaks/testing'
 import {
   channel,
+  type Context,
   context,
   during,
+  installContext,
   peek,
   record,
   type Recorded,
@@ -26,6 +28,7 @@ import { storage } from './mod.ts'
 import { shop } from './testing.ts'
 import { isPromise } from '@yaks/fp'
 import { stub } from '@std/testing/mock'
+import { AsyncLocalStorage } from 'node:async_hooks'
 
 let sync = (out: Bundle[] | Promise<Bundle[]>): Bundle[] => {
   if (isPromise(out)) throw new Error('embedded apply went async')
@@ -95,6 +98,22 @@ test('SQL spans count returned and affected rows without values or SQL text', ()
       ['release', 0, 'ok'],
       ['sample insert', undefined, 'error'],
     ])
+    equal(captured.spans[0].counts, {
+      statements: 9,
+      rowsRead: 9,
+      rowsWritten: 4,
+    })
+    equal(sql[0].counts, {
+      rows: 2,
+      statements: 1,
+      rowsRead: 0,
+      rowsWritten: 2,
+    })
+    equal(sql[8].counts, {
+      statements: 1,
+      rowsRead: 0,
+      rowsWritten: 0,
+    })
     ok(sql.every((s) => s.parent == captured.spans[0].id))
     ok(!JSON.stringify(captured.spans).includes('private'))
     equal(context(), undefined)
@@ -323,5 +342,68 @@ test('a span begun after an await stays above the retained transaction SQL', asy
     ok(captured.spans.some((s) => s.kind == 'sql' && s.parent == rule.id))
   } finally {
     db.close()
+  }
+})
+
+test('SQLite charges async request trees once without crossing interleaved requests', async () => {
+  let local = new AsyncLocalStorage<Context | undefined>()
+  let restore = installContext({
+    get: () => local.getStore(),
+    run: (at, work) => local.run(at, work),
+  })
+  let db = open(':memory:')
+  let store = storage(db, shop)
+  store.install()
+  let g = graph({ storage: store, vocab: shop })
+  let gate = Promise.withResolvers<void>()
+  let entered = Promise.withResolvers<void>()
+  let run = (name: string, wait?: Promise<void>) =>
+    record(g, () => {
+      let c = ok(peek(g))
+      return during(c.begin({ kind: 'request', name }), async () => {
+        if (wait) {
+          entered.resolve()
+          await wait
+        }
+        await g.apply([{ entity: { eid: name }, product: { price: 10 } }])
+        await Promise.resolve()
+        await g.read('.product')
+      })
+    })
+  try {
+    let pending = run('first', gate.promise)
+    await entered.promise
+    let second = await run('second')
+    gate.resolve()
+    let first = await pending
+    let ids = new Set(first.spans.map((s) => s.id))
+    ok(second.spans.every((s) => !ids.has(s.id)))
+    for (let captured of [first, second]) {
+      let sql = captured.spans.filter((s) => s.kind == 'sql')
+      ok(sql.length > 0)
+      let totals = { statements: 0, rowsRead: 0, rowsWritten: 0 }
+      for (let span of sql) {
+        for (let key of Object.keys(totals) as (keyof typeof totals)[]) {
+          totals[key] += span.counts?.[key] ?? 0
+        }
+      }
+      equal(captured.spans[0].counts, totals)
+      equal(totals.statements, sql.length)
+      ok(totals.rowsRead > 0)
+      ok(totals.rowsWritten > 0)
+      ok(captured.spans.some((s) => s.kind == 'apply'))
+      ok(captured.spans.some((s) => s.kind == 'query'))
+      // Every SQL statement belongs to a path ending at this request, not a
+      // neighbouring request or an independent metric read.
+      let spans = new Map(captured.spans.map((s) => [s.id, s]))
+      for (let span of sql) {
+        while (span.parent) span = ok(spans.get(span.parent))
+        equal(span.id, captured.spans[0].id)
+      }
+    }
+  } finally {
+    gate.resolve()
+    db.close()
+    restore()
   }
 })

@@ -20,7 +20,7 @@ import {
 } from '@yaks/graph'
 import type { Actor } from '@yaks/graph'
 import { parse } from '@yaks/query'
-import { parent, peek } from '@yaks/trace'
+import { during, parent, peek, scope } from '@yaks/trace'
 import { signed } from './actor.ts'
 import { readBody, receiveBody } from './body.ts'
 import { fault, json, refusal } from './refuse.ts'
@@ -145,7 +145,7 @@ export let pour = (
   let body = request.body
   if (!body) throw new Refused('/apply takes one bundle per line')
   let check = new URL(request.url).searchParams.has('check')
-  let cause = peek(activity) ? parent(activity, request) : undefined
+  let cause: string | undefined
   let out = new TransformStream<Uint8Array, Uint8Array>()
   let writer = out.writable.getWriter()
   let bytes = new TextEncoder()
@@ -197,7 +197,19 @@ export let pour = (
       await say({ ...refusal(err), line: blame, committed })
     }
   }
-  run().catch(() => {}).finally(() => writer.close().catch(() => {}))
+  let c = peek(activity)
+  let flowing = c
+    ? scope(undefined, () => {
+      let span = c.begin({
+        kind: 'request',
+        name: 'http stream apply',
+        package: '@yaks/api',
+      })
+      cause = span?.id
+      return during(span, run)
+    })
+    : run()
+  flowing.catch(() => {}).finally(() => writer.close().catch(() => {}))
   return new Response(out.readable, {
     headers: { 'content-type': 'application/x-ndjson' },
   })

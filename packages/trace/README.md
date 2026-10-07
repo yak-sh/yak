@@ -226,3 +226,12 @@ A request recorder can use `record(target, run, { history: false })` to keep
 only its returned tree, without retaining its events in channel history. Other
 subscribers that ask for history continue receiving it. The default keeps
 history for live inspection.
+
+`forward(context, spans, origin)` imports a recorded worker tree into the
+still-open caller captured by `context()`. `origin` is the worker's
+`performance.timeOrigin`. The caller's channel remints span IDs, attaches the
+worker root beneath its waiting span and translates every start/time to the
+caller's clock. Each span keeps its inclusive metrics, while only the worker
+root's counts charge the caller and its ancestors. Forwarding into a completed
+caller or disconnected recording does nothing. A host sends only observed worker
+reads through this path; it introduces neither SQL nor durable writes.

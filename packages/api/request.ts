@@ -13,7 +13,7 @@
 // that supplies none has it said on the console, as a failure was before.
 
 import { type Bundle, status } from '@yaks/graph'
-import { link, parent, peek, unlink } from '@yaks/trace'
+import { during, link, parent, peek, unlink } from '@yaks/trace'
 import { fault, json, refusal } from './refuse.ts'
 import type { Handler } from './route.ts'
 
@@ -168,27 +168,29 @@ export let served =
       : undefined
     if (span) link(o.graph!, request, span.id)
     let began = Date.now()
-    let err: unknown
-    let answer: Response
-    try {
-      answer = await handle(request)
-    } catch (e) {
-      err = e
-      answer = json(refusal(e), status(e))
-    }
-    if (span) {
-      if (peek(o.graph!)) {
-        span.end({
-          outcome: answer.status >= 500
-            ? 'error'
-            : answer.status >= 400
-            ? 'refused'
-            : 'ok',
-          counts: { status: answer.status },
-        })
+    // The host's context carrier keeps this request local across awaits, so
+    // plugin routes and graph reads without an explicit request parent still
+    // belong to the HTTP tree. Nested served handlers reuse the same span.
+    let { answer, err } = await during(span, async () => {
+      let err: unknown
+      let answer: Response
+      try {
+        answer = await handle(request)
+      } catch (e) {
+        err = e
+        answer = json(refusal(e), status(e))
       }
-      unlink(o.graph!, request)
-    }
+      span?.end({
+        outcome: answer.status >= 500
+          ? 'error'
+          : answer.status >= 400
+          ? 'refused'
+          : 'ok',
+        counts: { status: answer.status },
+      })
+      return { answer, err }
+    })
+    if (span) unlink(o.graph!, request)
     if (answer.status < 500 || answer.headers.has('x-request-id')) return answer
     let id = crypto.randomUUID()
     let b = requested(id, request, {

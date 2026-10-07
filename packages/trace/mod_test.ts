@@ -4,6 +4,7 @@ import {
   channel,
   context,
   during,
+  forward,
   installContext,
   link,
   measure,
@@ -209,6 +210,7 @@ test('record disconnects on throws and rejections and restores nested calls', as
 })
 
 test('synchronous scopes restore callers on returns, throws and awaits', async () => {
+  // Exercise synchronous-only propagation even when a host installed ALS.
   let restore = installContext(undefined)
   let target = {}
   let c = channel(target)
@@ -399,4 +401,87 @@ test('private captures discard events without suppressing another subscriber his
   )
   equal(c.history().length, 2)
   equal(c.active, false)
+})
+
+test('forward remints worker trees and charges the waiting caller once', () => {
+  let target = {}, c = channel(target)
+  let child: Event[] = [{
+    id: 'foreign-root',
+    kind: 'query',
+    name: 'read',
+    stage: 'end',
+    start: 5,
+    time: 10,
+    duration: 5,
+    outcome: 'ok',
+    counts: { rowsRead: 8, statements: 2 },
+  }, {
+    id: 'foreign-phase',
+    parent: 'foreign-root',
+    kind: 'phase',
+    name: 'project',
+    stage: 'end',
+    start: 6,
+    time: 9,
+    duration: 3,
+    plugin: '@yaks/doc',
+    counts: { rowsRead: 8, statements: 2 },
+  }, {
+    id: 'foreign-sql',
+    parent: 'foreign-phase',
+    kind: 'sql',
+    name: 'doc select',
+    stage: 'end',
+    start: 7,
+    time: 8,
+    duration: 1,
+    counts: { rowsRead: 8, statements: 2 },
+  }]
+  let captured = record(target, () =>
+    during(
+      c.begin({ kind: 'request', name: 'POST query' }),
+      () => {
+        let ctx = ok(context())
+        forward(ctx, child, performance.timeOrigin + 100)
+        forward(ctx, child, performance.timeOrigin + 200)
+      },
+    ))
+  equal(captured.spans.length, 7)
+  equal(captured.spans[0].counts, { rowsRead: 16, statements: 4 })
+  equal(captured.spans[1].parent, captured.spans[0].id)
+  equal(captured.spans[2].parent, captured.spans[1].id)
+  equal(captured.spans[3].parent, captured.spans[2].id)
+  equal(captured.spans[4].parent, captured.spans[0].id)
+  equal(new Set(captured.spans.map((e) => e.id)).size, 7)
+  equal(captured.spans[1].start, 105)
+  equal(captured.spans[1].time, 110)
+  equal(captured.spans[3].start, 107)
+  equal(captured.spans[3].duration, 1)
+  equal(captured.spans[2].plugin, '@yaks/doc')
+  equal(child[0].start, 5)
+})
+
+test('forward ignores disconnected and ended caller contexts', () => {
+  let target = {}, c = channel(target), retained: Context | undefined
+  let spans: Event[] = [{
+    id: 'foreign',
+    kind: 'query',
+    name: 'read',
+    stage: 'end',
+    time: 1,
+    duration: 1,
+    counts: { rowsRead: 4 },
+  }]
+  let stop = c.subscribe(() => {})
+  during(c.begin({ kind: 'request', name: 'request' }), () => {
+    retained = ok(context())
+  })
+  let before = c.history().length
+  forward(ok(retained), spans)
+  equal(c.history().length, before)
+  stop()
+  stop = c.subscribe(() => {})
+  forward(ok(retained), spans)
+  equal(c.history().length, before)
+  stop()
 })
