@@ -83,7 +83,9 @@ Prove it on a copy first. `sqlite3 ~/.yak/yak.db "VACUUM INTO '<scratch>/copy.db
 takes a few minutes; point a scratch config at the copy (`end-to-end-checks`
 has how a probe stays apart from the live graph), run the script, compare
 counts before and after, and run it again to show the second run changes
-nothing. A copy is as big as the live file (`ls -lh ~/.yak/yak.db`)
+nothing. A script that parses sqlite3's output names its mode (`-list`,
+`-json`): a ~/.sqliterc can set `.mode box`, and its borders then read as data,
+eids included. A copy is as big as the live file (`ls -lh ~/.yak/yak.db`)
 and sits on the disk the live graph writes to. Copies left behind have filled
 that disk, so the copy and its scratch config go once the proof is done.
 
