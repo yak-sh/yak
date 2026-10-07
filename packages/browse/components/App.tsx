@@ -102,8 +102,8 @@ export let Page = ({ at }: { at: string }) => {
   let inbox = home && !!vocab.comp('subscription')
   let rootEid = t?.eid
   useEffect(() => {
-    if (rootEid) return effect(() => opened(rootEid))
-  }, [rootEid])
+    if (rootEid && !inbox) return effect(() => opened(rootEid))
+  }, [rootEid, inbox])
   useLayoutEffect(() => rootEid && !inbox ? routeSub(rootEid) : undefined, [
     rootEid,
     inbox,

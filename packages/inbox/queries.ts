@@ -251,7 +251,7 @@ export let summaryQuery = (
   actor: string,
   search: Search = {},
   thread?: string,
-) =>
+): string =>
   `.inbox_summary.actor=${JSON.stringify(actor)}` +
   (search.text ? `&.inbox_summary.text=${JSON.stringify(search.text)}` : '') +
   (search.direction ? `&.inbox_summary.direction=${search.direction}` : '') +

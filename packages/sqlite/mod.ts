@@ -208,6 +208,8 @@ export type Tx = {
 // signature still satisfies `Storage` wherever the generic contract is what is
 // wanted.
 export type Store = {
+  /** Current committed-data invalidation token, including external WAL writes. */
+  revision?: () => unknown
   statements: Statements
   migrations: MigrationControl
   checks: ReturnType<typeof diagnostics>
@@ -489,6 +491,7 @@ export let storage = (
     statements: statements(driver),
     checks: diagnostics(driver),
     migrations: migrations(driver),
+    revision: () => revision(driver, 'data'),
     worn: worn(vocab, base.derived),
     // A caller replaying these statements over a standing file must add new
     // columns before creating their indexes. `schema()` alone describes a

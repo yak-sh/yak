@@ -134,6 +134,10 @@ export type ReadTx = Pick<Tx, 'read' | 'get' | 'whole' | 'about' | 'bindings'>
  * promise.
  */
 export type Storage = {
+  /** A connection-local token invalidated by every committed data/schema
+   * change, including other connections. Optional: read-result memoization
+   * must not survive a call when the store cannot prove this token. */
+  revision?: () => unknown
   /** Whether a value this store reads for the property means its entity
    * wears the component. A stored property's does; a computed one's may be
    * answered from elsewhere (@yaks/sql `worn`). */

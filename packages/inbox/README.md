@@ -110,11 +110,14 @@ The graph facet answers the computed
 all, lane, thread, threads}` component.
 It is not stored policy state. `summaryQuery(actor, search, thread?)` builds its
 query. A summary's `messages` is empty; a query naming `thread` carries complete
-messages. Its subscription refreshes when inbox policy dependencies change. The
-web host executes it in its ordinary read worker. Browser/TUI hooks own one
-summary subscription and hold only the root/latest rows they draw; opening
-detail adds one full-thread subscription. Counts consume those same
-authoritative summaries.
+messages. Its subscription refreshes when inbox policy dependencies change. A
+bounded completed-summary working set is reused only while the storage data
+revision is unchanged; SQLite observes commits from other connections too.
+Stores without a revision token recompute every read. Returned summaries are
+isolated from caller mutations. The web host executes it in its ordinary read
+worker. Browser/TUI hooks own one summary subscription and hold only the
+root/latest rows they draw; opening detail adds one full-thread subscription.
+Counts consume those same authoritative summaries.
 
 The lower-level `candidates`, `discussion`, `requirements` and `dependents`
 query helpers belong to this read implementation. Callers use `readInbox` or
