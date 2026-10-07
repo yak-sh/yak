@@ -8,9 +8,9 @@ test('remote tree follows every span cursor and preserves separate metric compon
     'platform',
     'trace',
     new AbortController().signal,
-    (async (url) => {
+    ((url) => {
       urls.push(String(url))
-      return Response.json({
+      return Promise.resolve(Response.json({
         trace: root,
         spans: [{
           entity: { eid: String(urls.length) },
@@ -18,7 +18,7 @@ test('remote tree follows every span cursor and preserves separate metric compon
           rows_read: { n: urls.length },
         }],
         ...urls.length == 1 ? { next: 'cursor' } : {},
-      })
+      }))
     }) as typeof fetch,
   )
   equal(result.trace, root)
@@ -32,10 +32,12 @@ test('a refused later page never returns a partial remote tree', async () => {
       'platform',
       'trace',
       new AbortController().signal,
-      (async () => {
-        return ++calls == 1
-          ? Response.json({ trace: root, spans: [], next: 'cursor' })
-          : Response.json({ error: 'refused' }, { status: 502 })
+      (() => {
+        return Promise.resolve(
+          ++calls == 1
+            ? Response.json({ trace: root, spans: [], next: 'cursor' })
+            : Response.json({ error: 'refused' }, { status: 502 }),
+        )
       }) as typeof fetch,
     )
   } catch (e) {

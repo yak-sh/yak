@@ -6,7 +6,7 @@ import { derivedEid } from '@yaks/graph'
 import { sign } from './ticket.ts'
 
 export type Options = { remote?: { url?: string; secret?: string } }
-let uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+let uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 let platform = derivedEid('tracker|platform')
 
 /** Only the two bounded trace read endpoints leave the box. */

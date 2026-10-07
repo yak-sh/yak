@@ -6,7 +6,7 @@ import { useEffect, useState } from 'preact/hooks'
 import { matcher } from '@yaks/match'
 import { and, type Clause, parse } from '@yaks/query'
 import type { Answer, Asks, Bundle, Io } from '@yaks/inspect'
-import { Button, Field, Section, Tabs } from '@yaks/ui'
+import { Button, Field, Tabs } from '@yaks/ui'
 
 export type Page = { rows: Bundle[]; next?: string }
 export type Tree = { trace: Bundle; spans: Bundle[]; next?: string }
@@ -133,16 +133,24 @@ export let Side = ({ remote = false }: { remote?: boolean }) =>
 export let Scope = ({ scope }: { scope: string }) =>
   h(
     'form',
-    { method: 'GET', action: '/' },
+    {
+      method: 'GET',
+      action: '/',
+      style: {
+        display: 'flex',
+        gap: '0.5rem',
+        alignItems: 'center',
+        flexWrap: 'wrap',
+      },
+    },
     h('input', { type: 'hidden', name: 'q', value: '.trace' }),
     h('input', { type: 'hidden', name: 'side', value: 'yaks.app' }),
     h(Field, {
       name: 'scope',
       value: scope,
+      style: { flex: '1 1 24rem', minWidth: '12rem' },
       placeholder: 'platform or global space eid',
       'aria-label': 'Tracker scope',
     }),
     h(Button, { type: 'submit' }, 'Read scope'),
   )
-export let unavailable = (a?: Answer) =>
-  a?.error ? h(Section.Sub, { role: 'alert' }, a.error) : null

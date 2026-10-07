@@ -226,7 +226,9 @@ export let ratio = (a: number, b: number): string =>
     ? (a / b == 0.5 ? 'half as many' : `${count(b / a)}× fewer`)
     : `${a / b < 10 ? Number((a / b).toPrecision(2)) : count(a / b)}× as many`
 
-let TracePage = ({ e, io, got }: Props): JSX.Element => {
+let TracePage = (
+  { e, io, got, side = 'box' }: Props & { side?: string },
+): JSX.Element => {
   let t = comp(e, 'trace'), rows = got.spans?.rows ?? []
   let roots = merge(branches(rows))
   let all = totals(rows)
@@ -255,7 +257,7 @@ let TracePage = ({ e, io, got }: Props): JSX.Element => {
       h(
         Head.Sub,
         {},
-        str(got.source?.rows[0]?.entity.eid) || 'box',
+        side,
         ' · ',
         h(Where, { io, e }),
       ),
@@ -346,7 +348,7 @@ let TraceTile = ({ e, io, got }: Props): JSX.Element => {
       Tile.Sub,
       {},
       [
-        str(got.source?.rows[0]?.entity.eid) || 'box',
+        'box',
         io.when(str(t.at)),
         ...root.length ? axes.map((a) => amount(a, all[a])) : [],
       ].join(' · '),
@@ -488,7 +490,7 @@ export let TraceList = (
     ),
     h(Measures, { io, id: state, axis }),
     status(got.traces, 'traces'),
-    status(tops.tops, 'root measurements'),
+    traces.length ? status(tops.tops, 'root measurements') : null,
     !traces.length && got.traces?.ready
       ? h(Section.Sub, {}, 'No recorded trace matches this query.')
       : null,
@@ -615,9 +617,9 @@ let Remote = (
             e: held.tree.trace,
             io: remoteIo,
             ctx: {},
+            side: 'yaks.app',
             got: {
               spans: answer,
-              source: { rows: [{ entity: { eid: 'yaks.app' } }], ready: true },
             },
           })
           : null,

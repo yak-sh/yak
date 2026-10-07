@@ -22,7 +22,7 @@ test('remote trace doors preserve pages and use a platform-admin ticket the Work
         scope == 'platform' ? derivedEid('tracker|platform') : scope,
       )
       ok(access)
-      equal(access.admin, true)
+      equal(access?.admin, true)
       equal(init?.redirect, 'error')
       calls.push(u.pathname + u.search)
       return Response.json({ rows: [{ entity: { eid: id } }], next: id })
@@ -52,7 +52,8 @@ test('remote failures are explicit and contain no upstream body, URL, ticket or 
   let door = routes(
     {},
     { remote: { url: 'https://tracker.invalid', secret } },
-    (async () => new Response(secret, { status: 403 })) as typeof fetch,
+    (() =>
+      Promise.resolve(new Response(secret, { status: 403 }))) as typeof fetch,
   )[0]
   let r = await door.handle(req)
   equal(r.status, 502)
