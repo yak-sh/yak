@@ -15,6 +15,7 @@ import {
   dependents,
   discussion,
   requirements,
+  threadRoots,
   words,
 } from './queries.ts'
 
@@ -152,4 +153,108 @@ test('bounded inbox reads preserve every discussion member within the socket bud
   }
   assertEquals(members.size, input.length)
   assertEquals(boundedReads([], (part) => discussion(part)), [])
+})
+
+test('default discussion excludes internal transcript work without changing attention', async () => {
+  let v = loadVocab({
+    $defs: Object.fromEntries([
+      ['entry', { session: { type: 'string' }, seq: { type: 'number' } }],
+      ['created', { by: { type: 'string' }, at: { type: 'string' } }],
+      ['content', { body: { type: 'string' } }],
+      ['session', { actor: { type: 'string' } }],
+      ...[
+        'output',
+        'reasoning',
+        'prompt',
+        'notice',
+        'result',
+        'ask',
+        'call',
+        'exception',
+        'refusal',
+        'stop',
+      ].map((name) => [name, {}]),
+    ].map((
+      [name, properties],
+    ) => [name, { component: true, type: 'object', properties }])),
+  })
+  let g = graph({ vocab: v, storage: ram(v) })
+  let data: Bundle[] = [
+    {
+      entity: { eid: 'root' },
+      session: { actor: 'person' },
+      created: { by: 'person', at: at(1) },
+    },
+    ...[
+      'input',
+      'answer',
+      'thinking',
+      'tool',
+      'prompt',
+      'notice',
+      'attempt',
+      'failure',
+      'stop',
+    ].map((id, seq) => ({
+      entity: { eid: id },
+      entry: { session: 'root', seq },
+      created: { by: id == 'input' ? 'person' : 'agent', at: at(seq + 1) },
+      content: { body: id },
+      ...id == 'answer'
+        ? { output: {} }
+        : id == 'thinking'
+        ? { output: {}, reasoning: {} }
+        : id == 'tool'
+        ? { call: {} }
+        : id == 'attempt'
+        ? { ask: {} }
+        : id == 'failure'
+        ? { exception: {} }
+        : id == 'input'
+        ? {}
+        : { [id]: {} },
+    })),
+  ]
+  await g.apply(data)
+  let seed = rows([data[0]])
+  let full = rows(
+    await g.read(discussion(seed, words(v), { text: 'thinking' })),
+  )
+  let narrow = rows(await g.read(discussion(seed, words(v))))
+  assertEquals(narrow.map((r) => r.eid).sort(), [
+    'answer',
+    'failure',
+    'input',
+    'root',
+    'stop',
+  ])
+  let policy = (rs: Row[]) =>
+    threads(rs, { actor: 'person' }).map((t) => ({
+      eid: t.eid,
+      lane: t.lane,
+      at: t.at,
+      unread: t.unread,
+      latest: t.latest.eid,
+      messages: t.messages.map((m) => m.eid),
+    }))
+  assertEquals(policy(narrow), policy(full))
+  assertEquals(full.some((r) => r.eid == 'thinking'), true)
+  assertEquals(
+    rows(await g.read(discussion(seed, words(v), { direction: 'received' })))
+      .length,
+    full.length,
+  )
+})
+
+test('derived read inputs name each thread once before query budget splitting', () => {
+  let root: Row = { eid: 'session', comps: { session: {} } }
+  let all: Row[] = Array.from(
+    { length: 2500 },
+    (_, i) => ({ eid: `entry${i}`, comps: { entry: { session: 'session' } } }),
+  )
+  assertEquals(threadRoots([...all, root]), [root])
+  assertEquals(
+    boundedReads(threadRoots([...all, root]), (p) => discussion(p)).length,
+    1,
+  )
 })

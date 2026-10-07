@@ -1,4 +1,5 @@
 import { type Reader, type Row } from './reader.ts'
+import type { Search } from './threads.ts'
 import { threadOf } from './threads.ts'
 
 /** Optional words are queried only when the host declares them. */
@@ -117,11 +118,50 @@ export let candidates = (who: Reader, has: Words = () => true): string => {
   )
 }
 
-/** Second read: complete roots and conversation, including archived activity. */
-export let discussion = (rows: Row[], has: Words = () => true): string => {
+// The lane policy consumes human inputs, visible answers and state changes.
+// Model attempts, tools, reasoning and passive notices do not enter messages,
+// latest, activity or attention. Text/direction search still sees all words.
+let activityEntries = (has: Words): string => {
+  let input = has('content')
+    ? '.content' +
+      [
+        'output',
+        'prompt',
+        'notice',
+        'result',
+        'refusal',
+        'exception',
+        'ask',
+        'call',
+      ]
+        .filter(has).map((name) => `&!${name}`).join('')
+    : ''
+  let output = has('output')
+    ? '.output' + (has('reasoning') ? '&!reasoning' : '')
+    : ''
+  return [
+    input,
+    output,
+    ...['exception', 'refusal', 'stop'].filter(has).map((name) => `.${name}`),
+  ]
+    .filter(Boolean).map((line) => `(${line})`).join('|')
+}
+
+/** Second read: complete roots and policy-relevant conversation. Searches
+ * additionally read words that the attention policy does not otherwise use. */
+export let discussion = (
+  rows: Row[],
+  has: Words = () => true,
+  search: Search = {},
+): string => {
   let targets = rows.filter((r) => !r.comps.edge && !r.comps.subscription).map(
     (r) => threadOf(r),
   )
+  let entries = select('entry.session', targets)
+  let activity = activityEntries(has)
+  if (entries && !search.text?.trim() && !search.direction && activity) {
+    entries += `&(${activity})`
+  }
   return read(
     union([
       select('entity.eid', [
@@ -135,7 +175,7 @@ export let discussion = (rows: Row[], has: Words = () => true): string => {
       select('comment.target', targets),
       select('mail.target', targets),
       select('knock.target', targets),
-      select('entry.session', targets),
+      entries,
       select('commit.target', targets),
     ], has),
     has,
@@ -181,4 +221,17 @@ export let boundedReads = (
   }
   split(rows)
   return [...out]
+}
+
+/** One input per thread before splitting derived reads. Repeating a session
+ * across disjoint batches would download that session's whole discussion in
+ * each batch, even though the caller unions the same rows afterward. */
+export let threadRoots = (rows: Row[]): Row[] => {
+  let roots = new Map<string, Row>()
+  for (let row of rows) {
+    let id = threadOf(row)
+    let prior = roots.get(id)
+    if (!prior || row.eid == id) roots.set(id, row)
+  }
+  return [...roots.values()]
 }

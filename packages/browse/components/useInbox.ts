@@ -12,6 +12,7 @@ import {
   dependents,
   discussion,
   requirements,
+  threadRoots,
   words,
 } from '@yaks/inbox/queries'
 import { isUnread, type Row, uniq } from '../client.ts'
@@ -92,12 +93,12 @@ export let useInboxThreads = (
   let seed = useQueryResult(candidates(who, has), ready, true)
   let first = rows(seed.eids)
   let conversation = useReads(
-    boundedReads(first, (part) => discussion(part, has)),
+    boundedReads(threadRoots(first), (part) => discussion(part, has, search)),
     ready && authoritative(seed),
   )
   let group = uniq([...first, ...rows(conversation.eids)])
   let edges = useReads(
-    boundedReads(group, (part) => requirements(part, has)),
+    boundedReads(threadRoots(group), (part) => requirements(part, has)),
     ready && authoritative(seed) && conversation.ready,
   )
   let tasks = useReads(
