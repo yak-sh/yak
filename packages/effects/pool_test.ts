@@ -6,10 +6,10 @@
 import { assert, assertEquals } from '@std/assert'
 import { type Bundle, type Comp, graph, type Storage } from '@yaks/graph'
 import { ram } from '@yaks/ram'
-import { test, until } from '@yaks/testing'
+import { test, tick, until } from '@yaks/testing'
 import { effects, type Handler, type Opts } from './registry.ts'
 import { leaseEid } from './lease.ts'
-import { POOL, working } from './pool.ts'
+import { MAX, POOL, working } from './pool.ts'
 import { pooledBlog } from './testing.ts'
 
 let store = () => ram(pooledBlog, { number: true })
@@ -161,6 +161,55 @@ test('a worker refills a freed slot while another handler is still running', asy
   assertEquals(active, 0)
   assertEquals(await run(a.g, 'post_note', 'next'), undefined)
   assertEquals(a.oops, [])
+})
+
+// A worker that stays up, over `count` posts whose runs wait on a gate each:
+// what it started, and a way to let one finish.
+let gated = async (count: number, opts: Partial<Opts> = {}) => {
+  let a = proc(store(), { defer: true, ...opts })
+  let gates = new Map<string, () => void>()
+  a.fx.handle({
+    post_note: (e) =>
+      new Promise<void>((done) => {
+        a.ran.push(e.entity.eid)
+        gates.set(e.entity.eid, done)
+      }),
+  })
+  await a.g.apply(Array.from({ length: count }, (_, i) => post(`p${i}`)))
+  let up = new AbortController()
+  let serving = a.fx.work(a.g, up.signal)
+  let stop = async () => {
+    up.abort()
+    for (let done of gates.values()) done()
+    await serving
+    await a.fx.idle()
+  }
+  return { ...a, finish: (eid: string) => gates.get(eid)!(), stop }
+}
+
+test('a worker that stays up starts no more than max, and fills a freed slot at once', async () => {
+  let a = await gated(4, { max: 2 })
+  try {
+    await until(() => a.ran.length == 2)
+    assertEquals(a.fx.running().length, 2)
+    a.finish(a.ran[0])
+    // Sooner than the next pass, a second (CAP) away.
+    await until(() => a.ran.length == 3, { timeout: 500 })
+    assertEquals(a.fx.running().length, 2)
+  } finally {
+    await a.stop()
+  }
+})
+
+test('a worker told no max still starts a backlog a bounded slot at a time', async () => {
+  let a = await gated(MAX + 1)
+  try {
+    await until(() => a.ran.length == MAX)
+    await tick()
+    assertEquals(a.fx.running().length, MAX)
+  } finally {
+    await a.stop()
+  }
 })
 
 test('a run that throws comes back due, and rests failed once its tries are spent', async () => {

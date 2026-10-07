@@ -358,9 +358,11 @@ equal(fx.running(), [])
 
 A worker joining the pool claims runs its own commits owe and starts them after
 commit. `defer: true` leaves those runs for `work`; `max` limits simultaneous
-handlers. Other processes' runs are picked up on the next pass, normally at most
-a second away. `wake` starts that pass sooner; `nudge` can notify another worker
-after a commit leaves runs unclaimed.
+handlers (`MAX`, 64, unless told), so a backlog such as a start-up sweep's
+thousands starts a slot at a time, and a run ending while every slot is taken
+wakes the worker to fill it. Other processes' runs are picked up on the next
+pass, normally at most a second away. `wake` starts that pass sooner; `nudge`
+can notify another worker after a commit leaves runs unclaimed.
 
 Each pass examines at most 32 candidate runs, one candidate per handler at a
 time. Selection rotates between handled and explicitly disabled handlers; one

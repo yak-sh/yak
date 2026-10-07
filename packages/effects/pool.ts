@@ -26,10 +26,14 @@
 // pass, at most {@link CAP} away.
 //
 // A worker shares its thread with whatever hosts it, and a synchronous
-// storage (a Durable Object's SQLite) never hands the thread back on its own:
-// a backlog worked in one go is one turn, and every request to the host waits
-// it out, until a Durable Object's runtime refuses them as overloaded. So a
-// worker gives way between passes, and a pass starts no more than `max` runs.
+// storage (SQLite, on the box or in a Durable Object) never hands the thread
+// back on its own: a backlog worked in one go is one turn, and nothing else in
+// the process happens until it ends — no request is answered (a Durable
+// Object's runtime refuses them as overloaded), no timer fires, no child
+// process is reaped and no signal is heard. So a worker gives way between
+// passes, a pass examines a bounded window, and no more than `max` runs go at
+// once ({@link MAX} unless told): a backlog, a start-up sweep's thousands
+// included, is worked a slot at a time, each freed slot filled at once.
 //
 // Success deletes its run under the same claim guard; it leaves no done row.
 // There are two ways a run does not complete, and they are not the same:
@@ -151,6 +155,9 @@ export type Attempt = {
  * process wrote is picked up. */
 export let CAP = 1_000
 
+/** The most runs a worker has going at once where it is not told (`max`). */
+export let MAX = 64
+
 /** What every worker's presence lease is named under: `@yaks/effects/<eid>`. */
 export let POOL = '@yaks/effects'
 
@@ -167,7 +174,7 @@ export type PoolOpts = {
    * worker that names nobody claims under a fresh id and holds no presence
    * lease, since a lease's holder is an entity */
   owner: Eid
-  /** Maximum handlers this worker runs together. */
+  /** Maximum handlers this worker runs together (default: {@link MAX}). */
   max?: number
   /** Leave committed runs for work() instead of starting them on the writer. */
   defer?: boolean
@@ -297,7 +304,7 @@ export let pool = (ctx: Ctx, opts: Partial<PoolOpts> = {}): Pool => {
   let hold = opts.lease ?? 60_000
   let mint = opts.mint ?? (() => crypto.randomUUID() as Eid)
   let wait = opts.backoff ?? backoff
-  let max = opts.max ?? Infinity
+  let max = opts.max ?? MAX
   let disabled = new Set(opts.disabled)
   let stamp = (ms: number) => new Date(ms).toISOString()
   let limit = (s?: Slot) => s?.effect?.tries ?? opts.tries ?? TRIES
@@ -484,7 +491,10 @@ export let pool = (ctx: Ctx, opts: Partial<PoolOpts> = {}): Pool => {
           event: { kind: 'created', entity: { eid }, name: EFFECT },
         })
       })
-      .finally(() => running.delete(eid))
+      .finally(() => {
+        running.delete(eid)
+        if (full) nap.abort()
+      })
     running.set(eid, held)
     return held.run
   }
@@ -498,10 +508,16 @@ export let pool = (ctx: Ctx, opts: Partial<PoolOpts> = {}): Pool => {
   let cursors = new Map<string, Eid>()
   let exhausted = new Set<string>()
   let scanStarted = false
+  // The last pass found every slot taken: the next run to end wakes the
+  // worker, rather than leaving its slot empty for a nap.
+  let full = false
+  // The worker's wait between passes, which a wake cuts short.
+  let nap = new AbortController()
   type Pass = { started: Promise<void>[]; more: boolean }
   let due = async (g: Access): Promise<Pass> => {
     let now = clock()
     let started: Promise<void>[] = []
+    full = false
     // Asked once a pass per owner: a process that ended without letting go
     // holds nothing, whatever its claims' expiry says.
     let asked = new Map<string, Promise<boolean>>()
@@ -520,6 +536,7 @@ export let pool = (ctx: Ctx, opts: Partial<PoolOpts> = {}): Pool => {
       ]),
     ]
     if (!member || running.size >= max || !names.length) {
+      full = member && running.size >= max
       return { started, more: false }
     }
     let examine = async (b: Bundle) => {
@@ -599,6 +616,7 @@ export let pool = (ctx: Ctx, opts: Partial<PoolOpts> = {}): Pool => {
       cursors.set(name, b.entity.eid)
       await examine(b)
     }
+    full = member && running.size >= max
     scanStarted ||= started.length > 0
     let more = names.some((name) => !exhausted.has(name))
     if (!more) {
@@ -709,9 +727,6 @@ export let pool = (ctx: Ctx, opts: Partial<PoolOpts> = {}): Pool => {
     }
   }
 
-  // The worker's wait between passes, which a wake cuts short.
-  let nap = new AbortController()
-
   // The worker that stays up: present, a pass, the claims renewed, a wait.
   // Its presence lease goes with it, so nobody waits out its expiry.
   let stay = async (g: Access, signal: AbortSignal) => {
@@ -745,7 +760,12 @@ export let pool = (ctx: Ctx, opts: Partial<PoolOpts> = {}): Pool => {
           })
         }
         await sleep(more ? 0 : CAP, AbortSignal.any([signal, nap.signal]))
-        if (nap.signal.aborted) nap = new AbortController()
+        // A wake ends the nap at once, never the turn: what the pass started,
+        // and a signal to stop, are heard before the next pass.
+        if (nap.signal.aborted) {
+          nap = new AbortController()
+          await sleep(0)
+        }
       }
     } finally {
       if (present) {
