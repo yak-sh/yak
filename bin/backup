@@ -47,7 +47,10 @@ export PATH="$HOME/.deno/bin:/home/linuxbrew/.linuxbrew/bin:/usr/local/bin:/usr/
 # a later run never replaces their main file while
 # an old subprocess or recovery journal may still need it.
 if [ -z "${YAK_BACKUP_BOUND:-}" ]; then
-  YAK_BACKUP_BOUND=1 exec timeout -k 30 "${YAK_BACKUP_TIMEOUT:-1800}" "$0" "$@"
+  # Resolve before the child changes into the data repo. Deno uses the
+  # checkout's import map, not anything in the backup repository.
+  here=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+  exec deno run -A --config "$here/../deno.json" "$here/backup-run.ts" "$@"
 fi
 
 data="${YAK_DATA:-$HOME/.yak}"

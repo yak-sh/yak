@@ -5,6 +5,10 @@ import { fileURLToPath } from 'node:url'
 import { assert, assertEquals } from '@std/assert'
 import { at, fn, insert, lit, type Stmt } from '@yaks/sql'
 import { open, type Opened } from '@yaks/sqlite/db'
+import { compose } from '../packages/cli/host.ts'
+import { read } from '../packages/cli/config.ts'
+import { files } from '@yaks/tracker/file'
+import { comp } from '../packages/tracker/model.ts'
 
 let script = fileURLToPath(new URL('./backup', import.meta.url))
 let decode = (bytes: Uint8Array) => new TextDecoder().decode(bytes)
@@ -68,6 +72,25 @@ let template = () =>
 let fixture = async () => {
   let dir = await Deno.makeTempDir({ prefix: 'yak-backup-' })
   await run('git', ['init', '-q'], dir)
+  // Every supervised run has its own config and spool, never the box's.
+  let configPath = `${dir}/tracker.json`
+  await Deno.writeTextFile(
+    configPath,
+    JSON.stringify({
+      tracker: { spool: 'spool' },
+      plugins: [
+        '@yaks/kernel',
+        '@yaks/doc',
+        '@yaks/tools',
+        '@yaks/api',
+        '@yaks/mail',
+        '@yaks/wake',
+        '@yaks/process',
+        '@yaks/effects',
+        '@yaks/tracker',
+      ],
+    }),
+  )
   await Deno.writeTextFile(`${dir}/.gitignore`, '*.db\n*.db-*\n')
   await Deno.mkdir(`${dir}/snap`)
   let opened: Opened[] = []
@@ -91,8 +114,9 @@ let fixture = async () => {
     new Deno.Command(script, {
       env: {
         YAK_DATA: dir,
+        YAK_CONFIG: configPath,
         YAK_BACKUP_BOUND: bound,
-        YAK_BACKUP_TIMEOUT: '30',
+        YAK_BACKUP_TIMEOUT: bound ? '30' : '0.5',
         YAK_BACKUP_SNAPSHOT_DIR: snapshotDir,
       },
       ...io,
@@ -103,8 +127,19 @@ let fixture = async () => {
   return {
     dir,
     db,
+    configPath,
+    supervised: (snapshotDir = '') =>
+      command(snapshotDir, '', {
+        env: {
+          YAK_DATA: dir,
+          YAK_CONFIG: configPath,
+          YAK_BACKUP_BOUND: '',
+          YAK_BACKUP_TIMEOUT: '30',
+          YAK_BACKUP_SNAPSHOT_DIR: snapshotDir,
+        },
+      }).output(),
     backup: (snapshotDir = '') => command(snapshotDir, '1').output(),
-    // A bounded run to signal, with nothing to read back but how it ended.
+    // A short real timeout while the backup waits on a held lock.
     start: () => command('', '', { stdout: 'null', stderr: 'null' }).spawn(),
     release,
     close: async () => {
@@ -294,9 +329,14 @@ test(
       await until(() => waiting(path), {
         label: 'the backup to wait on the lock',
       })
-      // SIGALRM is timeout(1)'s own deadline: its time runs out now.
-      backup.kill('SIGALRM')
+      // The supervisor stays alive when timeout terminates its locked child.
       assertEquals((await backup.status).code, 124)
+      let records = await Array.fromAsync(files(`${f.dir}/spool`).source())
+      assertEquals(records.length, 1)
+      assertEquals(comp(records[0].rows[0], 'error').tags, {
+        job: 'backup',
+        exit_code: 124,
+      })
       assertEquals(Deno.statSync(`${f.dir}/snap/.verify.db`).ino, before)
     } finally {
       await lock.unlock()
@@ -305,3 +345,63 @@ test(
     }
   },
 )
+
+test('a failed daily backup becomes a tracker bug; success adds no report', async () => {
+  let f = await fixture()
+  let host = await compose(
+    { ...read(f.configPath), db: `${f.dir}/tracker.db` },
+    ['graph', 'effects', '@yaks/tracker'],
+    undefined,
+    {
+      install: true,
+    },
+  )
+  try {
+    // A sparse scratch database forces the real capacity gate before VACUUM.
+    // Restore its size before the later successful backup; never fill a disk.
+    let size = (await Deno.stat(`${f.dir}/yak.db`)).size
+    await Deno.truncate(`${f.dir}/yak.db`, 2 ** 40)
+    let out
+    try {
+      out = await f.supervised()
+    } finally {
+      await Deno.truncate(`${f.dir}/yak.db`, size)
+    }
+    assertEquals(out.code, 1)
+    let stderr = decode(out.stderr)
+    assert(stderr.includes('snapshot directory needs'), stderr)
+    let records = await Array.fromAsync(files(`${f.dir}/spool`).source())
+    assertEquals(records.length, 1)
+    let row = records[0].rows[0]
+    assertEquals(comp(row, 'error').level, 'error')
+    assertEquals(comp(row, 'error').tags, { job: 'backup', exit_code: 1 })
+    assertEquals(comp(row, 'during').kind, 'backup')
+    assert(
+      String(comp(row, 'exception').value).includes('snapshot directory needs'),
+    )
+    assertEquals(
+      String(comp(row, 'error').at).slice(0, 10),
+      new Date().toISOString().slice(0, 10),
+    )
+    await host.duties(AbortSignal.abort(), ['@yaks/tracker'])
+    await host.fx.work(host.graph)
+    await host.fx.idle()
+    let errors = await host.graph.read('.error *')
+    let bugs = await host.graph.read('.bug *')
+    assertEquals(errors.length, 1)
+    assertEquals(bugs.length, 1)
+    assertEquals(comp(errors[0], 'error').bug, bugs[0].entity.eid)
+    assertEquals(comp(bugs[0], 'bug').hits, 1)
+    assert(String(comp(bugs[0], 'doc').title).includes('backup failed'))
+    assertEquals(await Array.fromAsync(files(`${f.dir}/spool`).source()), [])
+    out = await f.supervised()
+    assert(out.success, decode(out.stderr))
+    assertEquals(await Array.fromAsync(files(`${f.dir}/spool`).source()), [])
+    await host.duties(AbortSignal.abort(), ['@yaks/tracker'])
+    assertEquals((await host.graph.read('.error')).length, 1)
+    assertEquals((await host.graph.read('.bug')).length, 1)
+  } finally {
+    await host.close()
+    await f.close()
+  }
+})

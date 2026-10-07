@@ -627,6 +627,19 @@ tracker database. The separate @yaks/tracker role imports it using its own
 config and database; the task graph keeps no tracker error rows. Console
 telemetry remains enabled.
 
+The daily `bin/backup` uses this same reporter for nonzero exits, including its
+hard timeout. Its supervisor stays outside the bounded backup child, forwards
+stdout and stderr to the cron log, and retains only the last 8 KiB of stderr in
+the error. The report has `during.kind=backup` and `job`/`exit_code` tags;
+intake groups it into a bug like other box errors. A successful backup writes no
+report. Reporting failure never changes the backup's exit code.
+
+The existing cron command invoking `bin/backup` needs no change. It reads the
+box config (`$YAK_CONFIG`, otherwise `$HOME/.yak/yak.json`) only for reporting;
+it opens no graph. To use another spool, set `YAK_CONFIG=/path/to/yak.json` on
+that cron command. Keep its existing `>> ~/.tasks-backup.log 2>&1` redirection.
+`YAK_BACKUP_BOUND` is internal to the supervised child, not a cron setting.
+
 ### Box request traces
 
 Every box host records request, effect and apply span trees in memory. HTTP
