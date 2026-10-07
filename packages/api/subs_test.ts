@@ -1086,3 +1086,37 @@ test('local ordered windows query members and births, refill from unseen rows af
   assertEquals(e.take().map(ids).at(-1), ['old-1', 'old-2'])
   assertEquals(reads, [window])
 })
+
+test('underfilled local windows send only edited members until their capacity fills', () => {
+  let g = shop()
+  g.apply(
+    Array.from(
+      { length: 5 },
+      (_, i) => ({
+        entity: { eid: 'under' + String.fromCharCode(65 + i) },
+        book: { price: i },
+      }),
+    ),
+  )
+  let seen: string[][] = [],
+    read = g.read.bind(g),
+    spy: Graph = {
+      ...g,
+      read: (q, o) => {
+        let rows = read(q, o) as Bundle[]
+        seen.push(rows.map((b) => b.entity.eid))
+        return rows
+      },
+    }
+  let s = subscriptions(spy), e = ear()
+  s.open(e.to, 'under', '.book&.order=book.price&.limit=10')
+  e.take()
+  seen = []
+  g.apply([{ entity: { eid: 'new-under' }, book: { price: 3 } }])
+  assertEquals(seen, [['new-under']])
+  assertEquals(e.take().map(ids), [['new-under']])
+  g.apply([{ entity: { eid: 'underC' }, book: { price: 20 } }])
+  assertEquals(e.take().map(ids), [['underC']])
+  g.apply([{ entity: { eid: 'underC' }, book: null }])
+  assertEquals(e.take().map((f) => f.gone), [['underC']])
+})

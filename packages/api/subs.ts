@@ -1214,6 +1214,22 @@ export let subscriptions = (graph: Graph, opts: {
               )
               if (local === undefined) return
               if (local) {
+                if (
+                  s.members.size < limit.n &&
+                  [...s.members].filter((id) => !local.has(id)).length +
+                        local.size <= limit.n &&
+                  [...local].every((id) => /^[a-zA-Z0-9_-]+$/.test(id))
+                ) {
+                  let query = s.query + '&.entity.eid=' + [...local].join(',')
+                  return after(load(s, query), (answer) => {
+                    let unaffected = [...s.members].filter((id) =>
+                      !local.has(id)
+                    ).length
+                    return unaffected + answer.found.length <= limit.n
+                      ? push(s, local, () => answer)
+                      : push(s, undefined, load)
+                  })
+                }
                 let candidates = [...new Set([...s.members, ...local])]
                 if (
                   candidates.some((id) => !/^[a-zA-Z0-9_-]+$/.test(id))
