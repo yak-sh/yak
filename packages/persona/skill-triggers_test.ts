@@ -152,3 +152,24 @@ test('settlement retires obsolete content runs and preserves owed, claimed and f
   ])
   equal((await g.get(['result']))[0].content, { body: 'output' })
 })
+
+test('a bare edge touching a skill owes nothing; adding endpoints to its reference locator does', async () => {
+  let { g, queued, clear } = fixture()
+  await g.apply([
+    { entity: { eid: 'skill' }, skill: {} },
+    { entity: { eid: 'document' }, doc: { title: 'Other' } },
+  ])
+  await clear()
+  await g.apply([{
+    entity: { eid: 'plain' },
+    edge: { from: 'skill', to: 'document' },
+  }])
+  equal(await queued(), [])
+  await g.apply([{ entity: { eid: 'locator' }, references: {} }])
+  equal(await queued(), [])
+  await g.apply([{
+    entity: { eid: 'locator' },
+    edge: { from: 'skill', to: 'document' },
+  }])
+  equal((await queued()).length, 1)
+})

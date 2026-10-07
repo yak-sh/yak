@@ -110,7 +110,8 @@
       "effect": true,
       "created": [
         "persona",
-        "edge"
+        "contains",
+        "reads"
       ],
       "changed": [
         "persona.home",

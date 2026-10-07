@@ -19,7 +19,7 @@
 // host shuts down.
 
 import type { Handlers } from '@yaks/effects'
-import type { Eid } from '@yaks/graph'
+import type { Comp, Eid } from '@yaks/graph'
 import { EDGE } from '@yaks/edge'
 import { DOC } from '@yaks/doc'
 import { sync } from '@yaks/mirror'
@@ -71,11 +71,15 @@ export let effects = (
     // A doc or a new link counts when it touches what the last pass said; a
     // persona moving, or a link carrying or reading one going — gone before
     // anybody can read which ends it had — always does.
-    persona_files: (e) =>
-      e.name == DOC
-        ? about(e.entity.eid)
-        : e.name == EDGE
-        ? about(e.comp?.from, e.comp?.to)
-        : soon(),
+    persona_files: async (e, tx) => {
+      if (e.name == DOC) return about(e.entity.eid)
+      if (e.name == EDGE) return about(e.comp?.from, e.comp?.to)
+      if (e.kind == 'created' && (e.name == 'contains' || e.name == 'reads')) {
+        let [link] = await tx.get([e.entity.eid], [EDGE])
+        let ends = link?.[EDGE] as Comp | undefined
+        return about(ends?.from, ends?.to)
+      }
+      return soon()
+    },
   }
 }
