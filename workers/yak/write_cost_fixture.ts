@@ -20,7 +20,11 @@ export let writeCost = async (
     deleteAll(): Promise<void>
   },
 ): Promise<WriteCost> => {
-  let store = new Store({ storage, getWebSockets: () => [], acceptWebSocket: () => {} })
+  let store = new Store({
+    storage,
+    getWebSockets: () => [],
+    acceptWebSocket: () => {},
+  })
   let measured = false, keyed = 0
   let total = { read: 0, written: 0, calls: 0 }
   let log = { read: 0, written: 0, calls: 0 }

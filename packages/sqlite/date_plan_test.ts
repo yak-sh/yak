@@ -8,7 +8,6 @@ import {
   compile,
   type Driver,
   insert,
-  type Param,
   render,
   type Row,
   type Stmt,

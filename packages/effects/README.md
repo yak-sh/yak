@@ -309,13 +309,13 @@ equal(unmark(tagged), bundles)
 ## The pool (optional)
 
 Load `effectDoc` beside your own vocabulary to record runs in the same
-transaction as the batch that owes them. By default a process owes runs only
-for the effects it handles (`owes: 'handled'`), so a declared effect without a
+transaction as the batch that owes them. By default a process owes runs only for
+the effects it handles (`owes: 'handled'`), so a declared effect without a
 handler owes no run there; a process that writes for another to run passes
-`owes: 'declared'` and owes a run for every declared effect. A crash after commit
-cannot lose the recorded run. `work(g)` claims due runs and continues until none
-can start; `work(g, signal)` with a live signal keeps working until the signal
-aborts.
+`owes: 'declared'` and owes a run for every declared effect. A crash after
+commit cannot lose the recorded run. `work(g)` claims due runs and continues
+until none can start; `work(g, signal)` with a live signal keeps working until
+the signal aborts.
 
 A **claim** assigns a run to one worker until an expiry, using the run's
 `lease_owner`, `lease_token`, and `lease_expiry` properties. Claims use graph
