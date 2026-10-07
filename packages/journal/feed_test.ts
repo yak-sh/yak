@@ -12,7 +12,7 @@ import { ddl, grown } from './log.ts'
 import { install, logFor, plugins } from './graph.ts'
 import { mem } from '../sqlite/testing.ts'
 import { statements } from '@yaks/sqlite'
-import { sync, wikiGraph, wikiLog } from './testing.ts'
+import { sync, wiki, wikiGraph, wikiLog } from './testing.ts'
 
 let fixture = (n: number) => {
   let { g, j } = wikiGraph()
@@ -116,7 +116,7 @@ test('a store an older journal made takes the host once it is opened again', () 
   assertEquals(grown(columns()).length, 1)
   let host = { storage: { statements: statements(db) } }
   install(host)
-  plugins(host)
+  plugins({ ...host, vocab: wiki })
   assertEquals(grown(columns()), [])
 })
 

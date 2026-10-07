@@ -58,7 +58,10 @@ try {
     vocab: loaded.vocab,
     plugins: [
       archetypes(),
-      journal(log({ rows: (s) => sql.query(s), derived: loaded.derived })),
+      journal(
+        log({ rows: (s) => sql.query(s), derived: loaded.derived }),
+        loaded.vocab,
+      ),
     ],
   })
   let before = tally(sql, 'effect', eq(col('state'), val('done')))

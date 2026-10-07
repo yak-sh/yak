@@ -157,6 +157,22 @@ test('an entity the journal recorded nothing of cannot come back', () => {
   assertThrows(() => undone(batch), Final, 'p1 was deleted in batch #4')
 })
 
+test('undo restores what the journal recorded, and nothing kept out', () => {
+  let f = fixture()
+  let owed = { state: 'owed' }
+  f.apply([
+    { entity: { eid: 'p1' }, page: { title: 'Kickoff' }, render: owed },
+    { entity: { eid: 'r1' }, render: owed },
+  ])
+  f.apply([{ entity: { eid: 'r1' }, $delete: true }])
+  f.apply([{ entity: { eid: 'p1' }, $delete: true }])
+  f.back(2)
+  assertEquals(
+    [f.page('p1')?.title, f.held('p1').render, f.get('r1').tombstone],
+    ['Kickoff', undefined, {}],
+  )
+})
+
 test('undo of a batch that never happened says so', () => {
   let f = fixture()
   assertThrows(() => f.back(9), Error, 'no journal batch #9')

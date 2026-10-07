@@ -689,6 +689,7 @@ export let loadVocab = (
       wire: wire(name),
       computed: d.computed === true,
       embed: d.embed !== false,
+      journal: d.journal !== false,
       kind: !!d.kind,
       mark: mark(name),
       ...(from[name] ? { package: from[name] } : {}),

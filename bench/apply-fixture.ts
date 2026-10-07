@@ -76,7 +76,7 @@ export function applyFixture(mode: 'file' | 'ram') {
   g.install()
   if (db) {
     for (let stmt of ddl()) db.query(stmt)
-    g.use(journal(log({ rows: (stmt) => db.query(stmt) })))
+    g.use(journal(log({ rows: (stmt) => db.query(stmt) }), applyVocab))
   }
   store.tx((tx) => tx.patch(seeded()))
   // Warm the graph pipeline and both edited stamp shapes before sampling.

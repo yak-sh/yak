@@ -302,7 +302,10 @@ let run = async () => {
       vocab,
       plugins: [
         archetypes(),
-        journal(log({ rows: (s) => db!.query(s), derived: loaded.derived })),
+        journal(
+          log({ rows: (s) => db!.query(s), derived: loaded.derived }),
+          vocab,
+        ),
       ],
     })
     say('integrity-before', integrity(db))

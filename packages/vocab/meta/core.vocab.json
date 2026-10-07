@@ -176,6 +176,11 @@
       "type": "boolean",
       "default": true
     },
+    "journal": {
+      "description": "false = the journal (@yaks/journal) records no write of this component: it has no history and no undo, and other processes following the journal's feed never hear of it. An entity holding nothing else leaves no trace, its deletion included. For a process's own bookkeeping, like an effect run. Default true.",
+      "type": "boolean",
+      "default": true
+    },
     "aliases": {
       "description": "Input forms that resolve to an enum member; output always uses the canonical member.",
       "type": "object",

@@ -49,7 +49,7 @@
  * store.install()
  * for (let s of ddl()) db.query(s)
  * let j = log({ rows: (s) => db.query(s) })
- * let g = graph({ storage: store, vocab, plugins: [journal(j)] })
+ * let g = graph({ storage: store, vocab, plugins: [journal(j, vocab)] })
  *
  * g.apply([{ entity: { eid: 'p1' }, page: { title: 'Kickoff' },
  *           $actor: { by: 'ada' } }])

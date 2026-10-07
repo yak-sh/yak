@@ -40,7 +40,9 @@ let build = () => {
   let g = graph({
     storage: store,
     vocab,
-    plugins: [journal(log({ rows: (s) => db.query(s) }), { now: () => NOW })],
+    plugins: [
+      journal(log({ rows: (s) => db.query(s) }), vocab, { now: () => NOW }),
+    ],
   })
   let apply = (bundles: Bundle[]) => sync(g.apply(bundles))
   apply([{ entity: { eid: 'p1' }, page: { title: 'Kickoff' }, $actor: ada }])

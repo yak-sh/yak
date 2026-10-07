@@ -10,7 +10,7 @@ import { test } from '@yaks/testing'
 import { assert, assertEquals, assertThrows } from '@std/assert'
 import type { Bundle } from '@yaks/graph'
 import { effects } from '@yaks/effects'
-import { ddl, journal, log } from './log.ts'
+import { ddl, journal, type Log, log } from './log.ts'
 import { col, notNull, tally, val } from '@yaks/sql'
 import { mem, raised } from '../sqlite/testing.ts'
 import { storage } from '../sqlite/mod.ts'
@@ -78,6 +78,37 @@ test('the provenance stamps are not recorded twice', () => {
   let stamps = f.j.history('p1').flatMap((b) => b.deltas.map((d) => d.comp))
     .filter((c) => c == 'created' || c == 'updated')
   assertEquals(stamps, [], 'created/updated live on the batch row')
+})
+
+// Every recorded patch, as `seq target comp`, oldest first.
+let told = (f: { j: Log }) =>
+  f.j.since(0).flatMap((e) =>
+    e.patches.map((p) => `${e.seq} ${p.target} ${p.comp}`)
+  )
+
+test('a component kept out of the journal is never recorded', () => {
+  let f = fixture()
+  let owed = { state: 'owed' }
+  f.apply([{ entity: { eid: 'p1' }, page: { title: 'One' } }])
+  f.apply([{ entity: { eid: 'r1' }, render: owed }])
+  f.apply([
+    { entity: { eid: 'p1' }, page: { title: 'Two' }, render: owed },
+    { entity: { eid: 'r1' }, render: { state: 'done' } },
+  ])
+  assertEquals(told(f), ['1 p1 page', '2 p1 page'])
+})
+
+test('an entity holding only what is kept out is deleted without a trace', () => {
+  let f = fixture()
+  let owed = { state: 'owed' }
+  f.apply([
+    { entity: { eid: 'p1' }, page: { title: 'One' }, render: owed },
+    { entity: { eid: 'r1' }, render: owed },
+  ])
+  f.apply([{ entity: { eid: 'r1' }, $delete: true }])
+  f.apply([{ entity: { eid: 'p1' }, $delete: true }])
+  assertEquals(told(f), ['1 p1 page', '2 p1 entity'])
+  assertEquals(f.j.history('r1'), [])
 })
 
 test('a cascade casualty is recorded, whole, under its own entity', () => {
@@ -243,7 +274,7 @@ test('a content-addressed property is recorded by its address', () => {
       value: 'text',
     },
   })
-  let g = graph({ storage: store, vocab: wiki, plugins: [journal(j)] })
+  let g = graph({ storage: store, vocab: wiki, plugins: [journal(j, wiki)] })
   sync(g.apply([{ entity: { eid: 'p1' }, page: { text: 'a long body' } }]))
   sync(g.apply([{ entity: { eid: 'p2' }, page: { text: 'a long body' } }]))
   assertEquals(

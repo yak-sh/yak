@@ -11,6 +11,7 @@
 
 import type { Bundle, Plugin } from '@yaks/graph'
 import { type Derived, type Statements, statements, type Stmt } from '@yaks/sql'
+import type { Vocab } from '@yaks/vocab'
 import { ddl, grown, journal, type Log, log } from './mod.ts'
 import { follow, type Heard } from './feed.ts'
 
@@ -46,8 +47,11 @@ export let install = (host: Bound): void => {
   for (let s of grown(has.map((c) => String(c.name)))) sql.query(s)
 }
 
-/** Bind journal hooks over the tables the installer prepared. */
-export let plugins = (host: Bound): Plugin[] => [journal(logFor(host))]
+/** Bind journal hooks over the tables the installer prepared, recording what
+ * the host's vocabulary does not keep out of the journal. */
+export let plugins = (host: Bound & { vocab: Vocab }): Plugin[] => [
+  journal(logFor(host), host.vocab),
+]
 
 /** How often a host looks for what other hosts committed, in ms, unless the
  * config says (`{"use": "@yaks/journal", "with": {"every": 50}}`). */

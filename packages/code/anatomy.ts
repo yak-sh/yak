@@ -479,6 +479,7 @@ export let anatomyDocuments = (documents: unknown): {
             'wire',
             'computed',
             'embed',
+            'journal',
             'kind',
             'mark',
             'sync',

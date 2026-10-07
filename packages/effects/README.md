@@ -317,6 +317,11 @@ commit cannot lose the recorded run. `work(g)` claims due runs and continues
 until none can start; `work(g, signal)` with a live signal keeps working until
 the signal aborts.
 
+A run is the pool's bookkeeping rather than anyone's data, so `effect` is
+declared `journal: false` ([@yaks/vocab](../vocab/README.md#the-format)): a
+[journal](../journal/README.md) records nothing of a run, from the commit that
+owes it to its deletion once done.
+
 A **claim** assigns a run to one worker until an expiry, using the run's
 `lease_owner`, `lease_token`, and `lease_expiry` properties. Claims use graph
 [preconditions](../graph/README.md#writes-and-reads), so rival workers cannot

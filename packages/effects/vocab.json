@@ -7,6 +7,7 @@
     "effect": {
       "component": true,
       "type": "object",
+      "journal": false,
       "description": "one run a commit owes, written in the commit's own transaction and claimed by whichever process runs it",
       "properties": {
         "handler": {

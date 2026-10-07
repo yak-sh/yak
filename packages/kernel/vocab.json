@@ -138,6 +138,7 @@
     "created": {
       "component": true,
       "type": "object",
+      "journal": false,
       "properties": {
         "by": {
           "type": "string",
@@ -437,6 +438,7 @@
     "updated": {
       "component": true,
       "type": "object",
+      "journal": false,
       "properties": {
         "by": {
           "type": "string",

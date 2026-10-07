@@ -101,6 +101,7 @@ Use a JSON Schema validator with it for full document validation.
 | `kind`, `before`                      | component             | Display kind and the kinds it sorts before                                                                     |
 | `search`                              | property or component | Stored text to index, or another component's text property names                                               |
 | `embed`                               | component             | `false` excludes entities carrying it from embedding                                                           |
+| `journal`                             | component             | `false` keeps its writes, and deletions of entities holding nothing else, out of the journal                   |
 | `aliases`                             | enum property         | Input forms mapped to enum members                                                                             |
 | `unique`, `index`                     | property or component | An individual property flag or composite index declarations                                                    |
 | `required`                            | component             | Properties every stored component must hold                                                                    |

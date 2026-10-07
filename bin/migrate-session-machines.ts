@@ -261,7 +261,10 @@ let run = async () => {
       vocab: loaded.vocab,
       plugins: [
         archetypes(),
-        journal(log({ rows: (s) => db.query(s), derived: loaded.derived })),
+        journal(
+          log({ rows: (s) => db.query(s), derived: loaded.derived }),
+          loaded.vocab,
+        ),
       ],
     })
     let inventory = () =>

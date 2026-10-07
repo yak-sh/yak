@@ -49,7 +49,7 @@ let fixture = () => {
   let g = graph({
     storage: store,
     vocab,
-    plugins: [archetypes(), journal(log({ rows: (s) => db.query(s) }))],
+    plugins: [archetypes(), journal(log({ rows: (s) => db.query(s) }), vocab)],
   })
   return { db, g }
 }

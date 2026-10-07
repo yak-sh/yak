@@ -107,6 +107,8 @@ export type CompInfo = {
   computed: boolean
   /** false = an entity wearing it is never embedded (@yaks/embedding) */
   embed: boolean
+  /** false = the journal records no write of it (@yaks/journal) */
+  journal: boolean
   kind: boolean // this comp names a display kind
   /** it records something that happened to an entity: a server-owned `at`
    * with a `by` or `via`, filled the first time it is written. A kind that is
@@ -279,6 +281,7 @@ export type PropSchema = {
   package?: string
   wire?: boolean
   embed?: boolean
+  journal?: boolean
   // On a property a boolean (this property alone); on a component the composite
   // property lists. `Vocab.indexes` merges the two forms. Stored references are
   // always indexed: index: true is redundant and false does not opt out.

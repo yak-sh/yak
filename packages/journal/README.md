@@ -49,12 +49,58 @@ The tables hold no rows of the entity table and are not included in graph
 snapshots. Normal writes append records; explicit redaction methods can modify
 stored history. The graph reads the records as entities, below.
 
-The plugin skips a transaction with no recorded component changes. Its `journal`
-hook runs inside the graph's transaction. It opens no transaction and uses the
-synchronous `rows(statement)` callback supplied to `log()`, which runs a
-@yaks/sql statement and returns its rows. Atomic recording requires that
-callback to use the graph's active transaction on the same connection. A
-separate unrelated database connection does not provide that guarantee.
+The plugin's `journal` hook runs inside the graph's transaction. It opens no
+transaction and uses the synchronous `rows(statement)` callback supplied to
+`log()`, which runs a @yaks/sql statement and returns its rows. Atomic recording
+requires that callback to use the graph's active transaction on the same
+connection. A separate unrelated database connection does not provide that
+guarantee.
+
+## What it leaves out
+
+A component its vocabulary declares `journal: false` (@yaks/vocab) is not
+recorded: a process's own bookkeeping rather than anyone's data, such as the
+`created` and `updated` stamps (@yaks/kernel), which the transaction row already
+records, or an effect run (@yaks/effects). Such a write has no history and no
+undo, and a host following the feed never hears of it. Deleting an entity that
+held only such components is not recorded either, so it leaves no trace at all;
+the plugin's one read before a write, on the `precondition` phase, is what each
+entity a bundle deletes holds. A transaction with nothing left to record writes
+no row.
+
+```ts
+import { assertEquals } from '@std/assert'
+import { graph } from '@yaks/graph'
+import { statements, storage } from '@yaks/sqlite'
+import { open } from '@yaks/sqlite/db'
+import { loadVocab } from '@yaks/vocab'
+import { ddl, journal } from '@yaks/journal'
+import { logFor } from '@yaks/journal/graph'
+
+let vocab = loadVocab([{
+  $defs: {
+    page: { component: true, properties: { title: { type: 'string' } } },
+    render: {
+      component: true,
+      journal: false,
+      properties: { state: { type: 'string' } },
+    },
+  },
+}])
+let driver = open(':memory:')
+let store = storage(driver, vocab)
+store.install()
+for (let s of ddl()) driver.query(s)
+let j = logFor({ storage: { statements: statements(driver) } })
+let g = graph({ storage: store, vocab, plugins: [journal(j, vocab)] })
+
+g.apply([
+  { entity: { eid: 'p1' }, page: { title: 'Kickoff' } },
+  { entity: { eid: 'r1' }, render: { state: 'owed' } },
+])
+g.apply([{ entity: { eid: 'r1' }, $delete: true }])
+assertEquals(j.since(0).map((e) => e.patches.map((p) => p.target)), [['p1']])
+```
 
 ## Read as entities
 
@@ -108,9 +154,7 @@ than one writer is recorded as one transaction per writer, each holding what its
 entities' bundles wrote (@yaks/graph `writers`).
 
 Authentication and actor selection belong to the API, CLI or tool caller; the
-journal records what the graph passes to it. `created` and `updated` components
-are skipped by default because the transaction already records attribution and
-time. `journal(log, { skip })` changes that component list.
+journal records what the graph passes to it.
 
 The SQL `trace` column is an optional note. The graph plugin leaves it unset;
 `log.write({ at, by, via, note }, patches)` can supply it directly.
@@ -160,7 +204,7 @@ let store = storage(driver, vocab)
 store.install()
 for (let s of ddl()) driver.query(s)
 let j = logFor({ storage: { statements: statements(driver) } })
-let g = graph({ storage: store, vocab, plugins: [journal(j)] })
+let g = graph({ storage: store, vocab, plugins: [journal(j, vocab)] })
 
 g.apply([{ entity: { eid: 'p1' }, page: { title: 'Kickoff' } }])
 g.apply([{ entity: { eid: 'p1' }, page: { title: 'Retro' } }])
@@ -257,8 +301,9 @@ possible intervening edit.
 
 An undone delete cannot give back:
 
-- The `created` and `updated` stamps, which the journal skips. The entity comes
-  back stamped by the undo: its `created` names the undo's writer and time.
+- Components the journal leaves out, such as the `created` and `updated` stamps.
+  The entity comes back stamped by the undo: its `created` names the undo's
+  writer and time.
 - Components written before the journal began. If the journal recorded none of a
   deleted entity's components, `undone()` and `undo()` throw `Final` naming it,
   and nothing is written. If it recorded some, the entity comes back with those,
@@ -280,8 +325,9 @@ reversible changes returns `[]`.
   components and a tombstone from that entity's journal records, and a later
   write that gives the entity a component reads as the tombstone going. The
   retained entity row keeps references valid after deletion.
-- Skipped components, including the default `created` and `updated` stamps, are
-  not restored by undo ("Undo", above).
+- Components declared `journal: false`, including the `created` and `updated`
+  stamps, are not restored by undo ("Undo", above), and an entity holding only
+  them has no history ("What it leaves out", above).
 - An optional `log({ cas })` configuration records selected text by a reference
   to a content store. Supply its lookup layout, selection function and writer;
   this is not enabled automatically by `plugins(host)`.

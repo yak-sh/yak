@@ -79,10 +79,12 @@ let doc: VocabDoc = {
       properties: { who: { type: 'string' } },
     },
     // Provenance: server-owned, so the graph's stamp phase is their only
-    // writer — which is what makes the authenticated actor readable back.
+    // writer — which is what makes the authenticated actor readable back — and
+    // kept out of the journal, as @yaks/kernel's are.
     created: {
       component: true,
       type: 'object',
+      journal: false,
       properties: {
         at: { type: 'string', format: 'date-time', stamped: true },
         by: { type: 'string', ref: 'entity', death: 'keep', stamped: true },
@@ -91,6 +93,7 @@ let doc: VocabDoc = {
     updated: {
       component: true,
       type: 'object',
+      journal: false,
       properties: {
         at: { type: 'string', format: 'date-time', stamped: true },
         by: { type: 'string', ref: 'entity', death: 'keep', stamped: true },

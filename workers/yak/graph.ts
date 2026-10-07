@@ -1050,7 +1050,7 @@ export class Store {
       // kernel's own gate in front of it is the whole rule.
       plugins: [
         ...(vocab.comp('_tx')
-          ? [journal(log({ rows: (s) => drive.query(s), derived }))]
+          ? [journal(log({ rows: (s) => drive.query(s), derived }), vocab)]
           : []),
         ...(declaredLenses(declaration)
           ? [

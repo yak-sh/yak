@@ -15,10 +15,12 @@
 // recorded by its address ({@link Cas}), so logging every revision of every
 // document costs a row rather than the document.
 //
-// Nothing is read in order to write, so there is no precondition phase and
-// nothing is passed forward to a later phase: the log is derived entirely from
-// what was applied, inside the caller's own transaction. A refused transaction
-// leaves no trace; a committed one always has a row.
+// The log is derived from what was applied, inside the caller's own
+// transaction. A refused transaction leaves no trace; a committed one has a row
+// unless everything it wrote is something the vocabulary keeps out of the
+// journal (`journal: false`). The one thing read before the write is what an
+// entity being deleted holds, so the deletion of one that held only such
+// components is left out too (`journal` below).
 //
 // The caller supplies one function: `rows(statement)`, a @yaks/sql node in
 // and its rows out. No platform API, no driver object, and no transaction of
@@ -26,6 +28,8 @@
 
 import type { Actor, Bundle, Comp, Eid, Plugin, Tx } from '@yaks/graph'
 import { comps, dead, TOMBSTONE, writers } from '@yaks/graph'
+import { after } from '@yaks/fp'
+import type { Vocab } from '@yaks/vocab'
 import {
   and,
   as,
@@ -876,29 +880,71 @@ export let log = (opts: LogOpts): Log => {
 
 export { dec, enc }
 
+// The key a deletion rides from the `precondition` hook, which read what its
+// entity held, to the `journal` hook, which records nothing of it. Set here and
+// nowhere else: no plugin answers it as a request, so admission refuses a
+// caller who sends one.
+let UNRECORDED = '$unrecorded'
+
 /**
  * The log as a plugin, so that a graph keeps a journal by listing it:
- * `graph({ storage, vocab, plugins: [journal(log({ rows }))] })`.
+ * `graph({ storage, vocab, plugins: [journal(log({ rows }), vocab)] })`.
  *
- * It registers a hook on the `journal` phase alone: an after-image log needs to
- * read nothing in order to write, so nothing is gathered beforehand and nothing
- * is passed forward to a later phase. The transaction is recorded as applied —
- * one row per component the bundles patched or removed, in the order they
- * arrived — under its writer. A batch carrying more than one writer's work is
- * recorded as one transaction per writer, each holding what its entities'
- * bundles wrote (@yaks/graph `writers`), so an entity's history names who
- * wrote it, as its stamps do.
+ * Its `journal` hook records the transaction as applied — one row per
+ * component the bundles patched or removed, in the order they arrived — under
+ * its writer. A batch carrying more than one writer's work is recorded as one
+ * transaction per writer, each holding what its entities' bundles wrote
+ * (@yaks/graph `writers`), so an entity's history names who wrote it, as its
+ * stamps do.
+ *
+ * A component the vocabulary declares `journal: false` is not recorded: a
+ * process's own bookkeeping, such as the stamps or an effect run. Nor is the
+ * deletion of an entity that held nothing else, so such an entity leaves no
+ * trace at all. That is the one thing read before the write: on the
+ * `precondition` phase, what each entity a bundle deletes holds, gathered with
+ * the batch's other reads (`wants`).
  */
 export let journal = (
   n: Log,
-  opts: { now?: () => string; skip?: string[]; name?: string } = {},
+  vocab: Vocab,
+  opts: { now?: () => string; name?: string } = {},
 ): Plugin => {
   let clock = opts.now ?? (() => new Date().toISOString())
-  let skip = new Set(opts.skip ?? ['created', 'updated'])
+  let kept = (comp: string) => vocab.comp(comp)?.journal !== false
+  let deleting = (bundles: Bundle[]): Eid[] => [
+    ...new Set(
+      bundles.filter((b) => b.$delete === true).map((b) => b.entity.eid),
+    ),
+  ]
+  // An entity as the batch found it, holding something and nothing recorded.
+  let unrecorded = (b: Bundle) => {
+    let held = comps(b)
+    return !dead(b) && held.length > 0 && held.every(([c]) => !kept(c))
+  }
   return {
     name: opts.name ?? '@yaks/journal',
     admission: () => true,
+    wants: (bundles) => {
+      let eids = deleting(bundles)
+      return eids.length ? [{ eids }] : []
+    },
     hooks: {
+      precondition: (bundles: Bundle[], tx: Tx) => {
+        let eids = deleting(bundles)
+        if (!eids.length) return bundles
+        return after(tx.get(eids), (found) => {
+          let quiet = new Set(
+            found.filter(unrecorded).map((b) => b.entity.eid),
+          )
+          return quiet.size
+            ? bundles.map((b) =>
+              b.$delete === true && quiet.has(b.entity.eid)
+                ? { ...b, [UNRECORDED]: true }
+                : b
+            )
+            : bundles
+        })
+      },
       journal: (bundles: Bundle[], _tx: Tx) => {
         let writer = writers(bundles)
         let by = new Map<string, { actor: Actor; applied: Patch[] }>()
@@ -908,6 +954,7 @@ export let journal = (
           by.get(key)!.applied.push(patch)
         }
         for (let b of bundles) {
+          if (b[UNRECORDED]) continue
           let target = b.entity.eid
           let actor = writer(target)
           if (dead(b)) {
@@ -915,8 +962,7 @@ export let journal = (
             continue
           }
           for (let [comp, value] of comps(b)) {
-            if (skip.has(comp)) continue
-            put(actor, { target, comp, value: value ?? null })
+            if (kept(comp)) put(actor, { target, comp, value: value ?? null })
           }
         }
         let at = clock()
@@ -926,7 +972,11 @@ export let journal = (
             applied,
           )
         }
-        return bundles
+        return bundles.map((b) => {
+          if (!(UNRECORDED in b)) return b
+          let { [UNRECORDED]: _, ...rest } = b
+          return rest as Bundle
+        })
       },
     },
   }

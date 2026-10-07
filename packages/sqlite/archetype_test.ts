@@ -306,7 +306,11 @@ test('archetype: the journal sees a descriptor creation, once', () => {
   s.install()
   for (let s of ddl()) d.query(s)
   let j = log({ rows: (s) => d.query(s) })
-  let g = graph({ storage: s, vocab: v, plugins: [journal(j), archetypes()] })
+  let g = graph({
+    storage: s,
+    vocab: v,
+    plugins: [journal(j, v), archetypes()],
+  })
   g.apply([{ entity: { eid: 'a' }, task: {} }])
   assertEquals(tally(d, 'entity', by({ archetype: null })), 0)
   let descriptors = () =>

@@ -4,8 +4,9 @@
 // a page — so a deleted page takes its notes and its citations with it, leaves
 // its children without a parent and drops the pins on it, every way a delete
 // spreads (@yaks/graph's cascade) is something the tests can watch the journal
-// record. A page's text is kept by its address (@yaks/blob), as a body is on
-// the box, so the tests also watch the log read it back as text.
+// record, and a render a worker owes a page is bookkeeping it never records. A
+// page's text is kept by its address (@yaks/blob), as a body is on the box, so
+// the tests also watch the log read it back as text.
 //
 // The log is tables beside the store's own, so a fixture is a database: one
 // `mem()`, the wiki's tables installed on it, the journal's `ddl()` run against
@@ -75,9 +76,18 @@ let doc: VocabDoc = {
       durable: '0s',
       properties: { by: { type: 'string' } },
     },
+    // A server's own bookkeeping, such as a render a worker owes a page: kept,
+    // and never recorded (`journal: false`), as the stamps are not.
+    render: {
+      component: true,
+      type: 'object',
+      journal: false,
+      properties: { state: { type: 'string' } },
+    },
     created: {
       component: true,
       type: 'object',
+      journal: false,
       properties: {
         at: { type: 'string', format: 'date-time', stamped: true },
         by: { type: 'string', ref: 'entity', death: 'keep', stamped: true },
@@ -86,6 +96,7 @@ let doc: VocabDoc = {
     updated: {
       component: true,
       type: 'object',
+      journal: false,
       properties: {
         at: { type: 'string', format: 'date-time', stamped: true },
         by: { type: 'string', ref: 'entity', death: 'keep', stamped: true },
@@ -136,7 +147,7 @@ export let wikiLog = (): {
       storage: store,
       vocab: wiki,
       plugins: [
-        journal(j, { now: () => NOW }),
+        journal(j, wiki, { now: () => NOW }),
         edges(wiki),
         texts,
         ...plugins,
