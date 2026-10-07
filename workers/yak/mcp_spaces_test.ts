@@ -460,6 +460,112 @@ test('deleting the front page puts the space back to the default', async () => {
 // of its own goes in the trash, and everything that names it stops naming it
 // while nothing it holds is touched; then it comes back, whole, and the same
 // four answers are the answers again.
+test('the platform admin trashes and restores an app without a seat', async () => {
+  let k = await kernel()
+  try {
+    let owner = connector(k, (await signIn(k)).cookie)
+    let space = `trash${crypto.randomUUID().slice(0, 8)}`
+    let at = { space, app: 'notes' }
+    await owner.tool('space_new', { slug: space, title: space })
+    await owner.tool('app_new', { space, slug: at.app, title: 'Notes' })
+    await owner.tool('app_files', {
+      ...at,
+      files: [{ path: 'index.html', content: '<!doctype html><p>Notes</p>' }],
+    })
+    await owner.tool('app_deploy', at)
+    let admin = connector(k, k.owner.cookie)
+    let stranger = connector(k, (await signIn(k)).cookie)
+    let directory = meta(k)
+    let row = async () => {
+      let [parent] = await directory.query(`.space.slug=${space}`)
+      let [app] = await directory.query(
+        `.app.space=${parent.entity.eid}&.app.slug=${at.app}&?trashed&?updated`,
+      )
+      return app
+    }
+    let page = () => k.at(`${space}.yaks.app`, `/${at.app}/`)
+
+    // Neither reversible act grants anything to a non-admin non-member.
+    await assertRejects(
+      () => stranger.tool('app_delete', at),
+      Error,
+      'not a member',
+    )
+    await assertRejects(
+      () => stranger.tool('app_restore', at),
+      Error,
+      'not a member',
+    )
+    assertEquals((await row()).trashed, undefined)
+
+    // The admin's wider standing never permits permanent app or space erasure.
+    await assertRejects(
+      () => admin.tool('app_delete', { ...at, forever: true }),
+      Error,
+      'not a member',
+    )
+    for (let forever of [false, true]) {
+      await assertRejects(
+        () => admin.tool('space_delete', { space, forever }),
+        Error,
+        'not a member',
+      )
+    }
+
+    assertStringIncludes(
+      await admin.tool('app_delete', { ...at, forever: false }),
+      'is in the trash',
+    )
+    assertEquals((await page()).status, 404)
+    assertEquals(
+      ((await row()).trashed as { by: { eid: string } }).by.eid,
+      k.owner.person,
+    )
+    assertEquals(
+      ((await row()).updated as { by: { eid: string } }).by.eid,
+      k.owner.person,
+    )
+    await assertRejects(
+      () => stranger.tool('app_restore', at),
+      Error,
+      'not a member',
+    )
+    await assertRejects(
+      () => admin.tool('app_delete', { ...at, forever: true }),
+      Error,
+      'not a member',
+    )
+
+    assertStringIncludes(await admin.tool('app_restore', at), 'is back')
+    assertEquals((await page()).status, 200)
+    assertEquals((await row()).trashed, undefined)
+    assertEquals(
+      ((await row()).updated as { by: { eid: string } }).by.eid,
+      k.owner.person,
+    )
+
+    let guest = await signIn(k)
+    await owner.tool('member_add', {
+      space,
+      email: guest.email,
+      role: 'editor',
+    })
+    await accepted(k, guest.email, guest.cookie)
+    let editor = connector(k, guest.cookie)
+    await assertRejects(
+      () => editor.tool('app_delete', { ...at, forever: true }),
+      Error,
+      'not the owner',
+    )
+
+    // The actual owner still may erase permanently.
+    await owner.tool('app_delete', { ...at, forever: true })
+    assertEquals((await page()).status, 404)
+  } finally {
+    await k.stop()
+  }
+})
+
 test('an app goes to the trash, and app_restore brings it back', async () => {
   let k = await kernel()
   try {

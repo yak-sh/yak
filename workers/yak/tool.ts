@@ -246,9 +246,10 @@ export let admin = async (ctx: Ctx): Promise<boolean> => {
 }
 
 // The caller's role in a space: their seat's. Where the door says `over` —
-// the graph tier naming an app (agent.ts `named`) — the platform's admin
-// stands as an owner in every space, so any app's rows can be read and fixed
-// through the store's own rules and journal, recorded as the admin (T-63550).
+// the graph tier naming an app (agent.ts `named`) and reversible app trash
+// and restore (tools.ts) — the platform's admin stands as an owner in every
+// space. App writes still go through the store's own rules and journal,
+// recorded as the admin (T-63550).
 let roleIn = async (ctx: Ctx, space: Space, over: boolean) => {
   let role = await ctx.dir.role(space, ctx.person)
   return role != 'owner' && over && await admin(ctx) ? 'owner' : role

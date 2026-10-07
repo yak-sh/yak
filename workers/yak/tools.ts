@@ -3743,7 +3743,11 @@ let OURS: Row[] = [
       required: ['app'],
     },
     run: async (ctx, args) => {
-      let { space, app, who } = await inApp(ctx, args, true)
+      let forever = args.forever != null && flag(args.forever, 'forever')
+      // Admin standing covers reversible trash, never permanent erasure.
+      let { space, app, who } = forever
+        ? await ownsApp(ctx, args)
+        : await inApp(ctx, args, true, true)
       // The directory lives in the meta space's own app: deleting it would
       // take every space, app and membership with it, so it is not an app to
       // throw away, whoever owns `yak`.
@@ -3753,7 +3757,6 @@ let OURS: Row[] = [
           `${META.space}/${META.app} is the platform itself`,
         )
       }
-      let forever = args.forever != null && flag(args.forever, 'forever')
       if (!forever) {
         if (app.trashed) {
           throw refuse(
@@ -3804,7 +3807,7 @@ let OURS: Row[] = [
       required: ['app'],
     },
     run: async (ctx, args) => {
-      let { space, app, who } = await inApp(ctx, args, true)
+      let { space, app, who } = await inApp(ctx, args, true, true)
       if (!app.trashed) {
         throw refuse(
           'conflict',
