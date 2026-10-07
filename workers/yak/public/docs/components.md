@@ -535,16 +535,16 @@ These are the names, all of them:
     _pace about access account_alert account_usage alias answer app
     archetype archived artifact ask attachment attempt attribute_writes
     belief binding blob bounced browser build build_of builder
-    builder_answer builder_dep builder_edit
-    builder_model_answer builder_open builder_ring built call call_ready
-    call_woken cancel cancelled checkout chosen cites comment commit compat
-    completed connection contains content cost created delegates deliver
-    delivered deploy dispatch doc edge effect email entity entry error
-    exception execution failed favorite fee feedback file filed finding
-    fired former gallery gitobj grant home hook hostname image imported
-    installed integration integration_install interrupted invite inviting
-    key lease lines mail mail_inbox mail_notice mail_post member memory
-    meter model notice notified opened openrouter order output output_of
+    builder_answer builder_dep builder_edit builder_model_answer
+    builder_open builder_ring built call call_ready call_woken cancel
+    cancelled checkout chosen cites comment commit compat completed
+    connection contains content cost created delegates deliver delivered
+    deploy dispatch doc edge effect email entity entry error exception
+    execution failed favorite fee feedback file filed finding fired former
+    gallery gitobj grant home hook hostname image imported installed
+    integration integration_install interrupted invite inviting key lease
+    lines mail mail_inbox mail_notice mail_post member memory meter model
+    notice notified notify_trash opened openrouter order output output_of
     parent pending person plan price product project provider provisional
     published quarantined questions quote reads recalled ref referenced
     refusal register_writes report repository representation requires

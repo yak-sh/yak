@@ -3281,6 +3281,7 @@ let OURS: Row[] = [
   {
     name: 'store_trace',
     readOnly: false,
+    destructive: false,
     input: {
       type: 'object',
       properties: {
