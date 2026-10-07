@@ -300,6 +300,7 @@ export let BOUNDARIES = [
   'yak/store/interruption/3',
   'yak/store/interruption/4',
   'yak/store/builder-takes/18',
+  'yak/store/builder-takes/19',
   'yak/store/refusal/1',
   'yak/store/refusal-imported/1',
   'yak/store/packages/1',

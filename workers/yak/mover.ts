@@ -117,6 +117,7 @@ export let doneEffectsRule: Rule = {
  * Calls and output content are read as evidence and never rewritten. */
 export let takeRule: Rule = {
   mark: 'yak/store/builder-takes/19',
+  live: 'apps',
   find: '.build.call&*|.built.call&*',
   move: (row, read) => {
     if (!read) throw new Error('take conversion needs its build and call')
