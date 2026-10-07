@@ -156,6 +156,44 @@ boundary need an explicit fresh baseline. `commit` records HEAD; uncommitted
 source changes are included, so retain the diff when comparing revisions.
 Inspect the raw samples and load averages when investigating a noisy result.
 
+## Box bench
+
+`bench/box.ts` measures where time goes when agents use a box's own graph: the
+`yak` commands they run, the phases of one command, the rows a read and a write
+add, `apply()`, and the effect pool. It runs against a **copy**: a database and
+config made from the box's, never the files under `~/.yak`, which it refuses.
+Each run can first reset the copy from a **snapshot**, a read-only backup of the
+box's database, so every run starts from the same bytes:
+
+```sh
+sqlite3 -readonly ~/.yak/yak.db ".backup $HOME/.cache/yak-bench/base.db"
+# yak.json there: ~/.yak/yak.json with `db` naming the copy, its own `port`
+# and `hostname`, and `tracker.spool` and @yaks/spawn's `worktrees` beside it
+deno task bench box -- --config ~/.cache/yak-bench/yak.json \
+  --base ~/.cache/yak-bench/base.db
+```
+
+Copying a 10 GB snapshot takes minutes; without `--base` the copy keeps what
+earlier runs wrote. Every child runs this checkout's code without network
+permission and with no session, token or other graph in its environment; the CLI
+serves no effects, and the in-process pool runs a no-op for every declared
+effect. The suite's sections, each one selectable with `--only`:
+
+| Section   | Benches                                                                                                                                                                                                                                                          |
+| --------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `cli`     | Wall time of each command from spawn to exit, with its CPU time. `deno` is an empty module.                                                                                                                                                                      |
+| `startup` | One help, read and write each, timed from inside by `box-probe.ts`: `boot` (runtime start and module graph load), `import`, `commands` (every plugin's vocabulary), `compose`, `tool`, `close` and `exit`; and `compose()`'s own named phases.                   |
+| `rows`    | The entity, journal change and effect rows one read and one write add.                                                                                                                                                                                           |
+| `graph`   | `box-graph.ts`: `apply()` of 1 to 1,000 comments with its time split by plugin, phase and SQL; one run's owe, claim, run and settle; an unbounded pass draining 50 runs; and one pass over 0, 1k and 100k pending rows, made in a transaction rolled back after. |
+| `db`      | Not run unless named: size by table (it reads every page), entities by archetype, effect rows, journal changes a day.                                                                                                                                            |
+
+A round runs every section; `--rounds` (3) and `--runs` (7 per command a round)
+set the sample counts. The table it prints gives each bench's p50 and p95.
+Results go to `bench/box.results.json`, and `bench:ratchet box` banks
+`bench/box.baseline.json` for `bench:check box`. Wall times on a loaded box
+follow its page cache: compare CPU time and load averages before trusting a
+change in wall time.
+
 ## Box-wide serialization
 
 Throughput and standalone suites acquire an exclusive `flock` on

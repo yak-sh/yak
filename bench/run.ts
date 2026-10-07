@@ -17,6 +17,12 @@ export let main = async (args = Deno.args): Promise<number> => {
     rest = args.slice(2)
     action = 'run'
   }
+  if (name == 'box') {
+    if (!['run', 'check', 'accept', 'ratchet'].includes(action)) {
+      throw new Error(`Unknown action: ${action}`)
+    }
+    return await (await import('./box.ts')).main(action, rest)
+  }
   if (name == 'deploy' || name == 'app-deploy') {
     if (action == 'time') {
       if (name == 'deploy') {
@@ -55,6 +61,7 @@ export let main = async (args = Deno.args): Promise<number> => {
           'throughput',
           'deploy',
           'app-deploy',
+          'box',
           ...standalone.map((b) => b.suite().name),
         ].join('\n'),
       )
