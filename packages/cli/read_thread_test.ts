@@ -18,6 +18,7 @@ test('the web reader sees commits and closes after a refused query', async () =>
   let host = await compose(read(file), ['graph'], undefined, { install: true })
   let reader = readThread(file)
   try {
+    await reader.ready()
     let processes = (await host.graph.read('.process')).length
     await host.graph.apply([{
       entity: { eid: 'one' },
@@ -45,6 +46,7 @@ test('the web reader sees commits and closes after a refused query', async () =>
     await reader.close()
     await host.close()
     let broken = readThread(`${dir}/missing.json`)
+    await assertRejects(() => broken.ready())
     await assertRejects(() => Promise.resolve(broken.read('.doc')))
     await broken.close()
     await Deno.remove(dir, { recursive: true })

@@ -23,9 +23,12 @@ export type Heard =
   )
   | { closed: true }
 
+/** A web host's reader: the graph's reads, run in a worker started on the
+ * first of them, or by `ready`, which settles once the worker can answer, so a
+ * server that waits on it answers its first read as fast as its next. */
 export let readThread = (
   config: string,
-): Reader & { close: () => Promise<void> } => {
+): Reader & { ready: () => Promise<void>; close: () => Promise<void> } => {
   let worker: Worker | undefined
   let next = 0
   let pending = new Map<number, {
@@ -89,6 +92,7 @@ export let readThread = (
       ask({ op: 'rows', query, opts }).then((value) => value as Row[]),
     get: (eids, comps) =>
       ask({ op: 'get', eids, comps }).then((value) => value as Bundle[]),
+    ready: () => ask({ op: 'get', eids: [] }).then(() => {}),
     close: () =>
       ending ??= (async () => {
         closed = true

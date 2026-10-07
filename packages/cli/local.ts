@@ -110,7 +110,9 @@ let open = async (
   let reader = roles.includes('web') && dbOf(config) != ':memory:'
     ? readThread(path)
     : undefined
-  let withReader = (host: Served): Served => {
+  // A web's reads are ready before it is: a server that just took over a port
+  // answers its first read as fast as its next.
+  let withReader = async (host: Served): Promise<Served> => {
     let close = host.close
     host.close = async (code) => {
       try {
@@ -118,6 +120,12 @@ let open = async (
       } finally {
         await reader?.close()
       }
+    }
+    try {
+      await reader?.ready()
+    } catch (error) {
+      await host.close()
+      throw error
     }
     return host
   }
