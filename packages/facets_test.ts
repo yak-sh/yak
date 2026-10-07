@@ -128,7 +128,7 @@ test('every other facet a package exports is shaped the way a host reads it', as
     routes: ['routes', 'filter', 'handler'],
     ui: ['kits', 'ux', 'themes', 'skins'],
     service: ['service'],
-    views: ['views', 'inspectViews'],
+    views: ['views', 'inspectViews', 'destinations'],
   }
   // Every subpath a role imports.
   let facets: string[] = [...Object.values(ROLES).flat(), 'service']
