@@ -39,6 +39,7 @@ import {
   among,
   and,
   col,
+  cross,
   type Expr,
   FALSE,
   type Join,
@@ -270,7 +271,17 @@ export let rule = (
   // gate would fire on every entity that ever failed to satisfy it. So at least
   // one of its patterns must bind an entity the batch wrote — the same thing
   // the hand-written effect rules have always required, expressed in SQL.
-  if (touched) {
+  //
+  // One pattern starts from the batch: its ids are read first and crossed into
+  // the pattern's spine, so the engine looks up the few entities the batch
+  // wrote rather than walking a table whose rows merely might match (a plain
+  // `in` lets it start from every task to find the one the batch touched).
+  // Several are anchored together, any one of them enough.
+  let start: Source[] = []
+  if (touched && anchors.length == 1) {
+    start = [raw(`json_each(?) as "__touched"`, [JSON.stringify(touched)])]
+    conds.push(raw(`${anchors[0]} = "__touched"."value"`))
+  } else if (touched) {
     let ids = JSON.stringify(touched)
     conds.push(
       or(
@@ -303,8 +314,8 @@ export let rule = (
     t: 'select',
     distinct: true,
     cols,
-    from: froms,
-    joins,
+    from: start.length ? start : froms,
+    joins: start.length ? [...froms.map(cross), ...joins] : joins,
     where: and(...conds),
   }
 }

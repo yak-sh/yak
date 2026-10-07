@@ -733,15 +733,16 @@ let statement = rule(
   {},
   { touched: [7] },
 )
-equal(render(statement).params, [1, '[7]'])
+equal(render(statement).params, ['[7]', 1])
 equal(statement.distinct, true)
 ```
 
 `On.at` maps component names to tables or overlay sources; `On.gone` names the
 removed-owner source for `-comp`. `On.touched` requires at least one pattern to
-match an integer id the batch touched. Omit it to read the whole committed
-graph. Collections are evaluated by the storage adapter. Multi-hop variable
-bindings are not routed through their full path yet.
+match an integer id the batch touched; a match of one pattern starts from those
+ids, so its cost follows the batch rather than the tables. Omit it to read the
+whole committed graph. Collections are evaluated by the storage adapter.
+Multi-hop variable bindings are not routed through their full path yet.
 
 ## Deletion lookups and compound statements
 
