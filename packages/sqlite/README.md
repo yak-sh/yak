@@ -197,6 +197,14 @@ try {
 }
 ```
 
+A whole entity `get` reads is kept in memory until a write names it, so an
+entity read again costs no row. A statement that writes a component table
+without naming its entities lets go of every one, as do schema changes and
+another connection's commits; nothing a transaction has written is kept until
+that transaction ends. Transactions are seen where the driver says them: a
+`begin` or savepoint through `query`, or the driver's own `tx`, so a host that
+opens one some other way must not read through the store inside it.
+
 ## API
 
 `storage(driver, vocab, base?)` returns a synchronous `Store`:

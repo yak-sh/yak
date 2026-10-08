@@ -12,17 +12,20 @@ let held = new WeakMap<Driver, {
   catalog: number
   data: number
   descriptors: number
+  outside: number
   schemaVersion?: unknown
   dataVersion?: unknown
 }>()
 
-type Scope = 'schema' | 'catalog' | 'data' | 'descriptors'
+// `outside` moves only for what this connection's statements cannot say:
+// another connection's commit, a loaded library, a template, and DDL.
+type Scope = 'schema' | 'catalog' | 'data' | 'descriptors' | 'outside'
 
 /** A monotonic invalidation token, not a stored row or catalog fingerprint. */
 export function revision(driver: Driver, scope: Scope): number {
   let state = held.get(driver)
   if (!state) {
-    state = { schema: 0, catalog: 0, data: 0, descriptors: 0 }
+    state = { schema: 0, catalog: 0, data: 0, descriptors: 0, outside: 0 }
     held.set(driver, state)
     let current = state
     let invalidate = () => {
@@ -30,6 +33,7 @@ export function revision(driver: Driver, scope: Scope): number {
       current.catalog++
       current.data++
       current.descriptors++
+      current.outside++
     }
     let scopes: {
       name?: string
@@ -145,8 +149,9 @@ export function revision(driver: Driver, scope: Scope): number {
       state.catalog++
       state.data++
       state.descriptors++
+      state.outside++
     }
-    if (scope == 'catalog' || scope == 'data' || scope == 'descriptors') {
+    if (scope != 'schema') {
       let dataVersion = driver.query({ t: 'pragma', name: 'data_version' })[0]
         ?.data_version
       if (dataVersion !== state.dataVersion) {
@@ -154,6 +159,7 @@ export function revision(driver: Driver, scope: Scope): number {
         state.catalog++
         state.data++
         state.descriptors++
+        state.outside++
       }
     }
   }

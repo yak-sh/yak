@@ -224,3 +224,66 @@ test('ordinary transactions reuse authoritative reads while pending component im
   })
   assertEquals(f.get().position, undefined)
 })
+
+// Statements a read costs, transaction boundaries aside.
+let reads = (f: ReturnType<typeof fixture>, read: () => unknown) => {
+  let query = f.d.query, n = 0
+  f.d.query = (stmt) => {
+    if (!['savepoint', 'release', 'begin', 'commit'].includes(stmt.t)) n++
+    return query(stmt)
+  }
+  try {
+    read()
+  } finally {
+    f.d.query = query
+  }
+  return n
+}
+
+test('an entity is read once until a write names it, whoever else is written', () => {
+  let f = fixture()
+  f.s.tx((tx) =>
+    tx.patch([{ entity: { eid: 'other' }, player: { active: false } }])
+  )
+  assertEquals(f.s.get(['hero'])[0].player, { active: true })
+  assertEquals(reads(f, () => f.s.get(['hero'])), 0)
+  assertEquals(reads(f, () => f.get()), 0)
+  f.s.tx((tx) =>
+    tx.patch([{ entity: { eid: 'other' }, player: { active: true } }])
+  )
+  assertEquals(reads(f, () => f.s.get(['hero'])), 0)
+  f.s.tx((tx) => tx.patch([{ entity: { eid: 'hero' }, position: { x: 2 } }]))
+  assertEquals(f.s.get(['hero'])[0].position, { x: 2 })
+  f.s.tx((tx) => tx.remove([{ eid: 'hero' }]))
+  assertEquals('tombstone' in f.s.get(['hero'])[0], true)
+})
+
+test('a rolled-back write is read again; what it never wrote stays held', () => {
+  let f = fixture()
+  f.s.tx((tx) =>
+    tx.patch([{ entity: { eid: 'other' }, player: { active: false } }])
+  )
+  f.s.get(['hero', 'other'])
+  assertThrows(() =>
+    f.s.tx((tx) => {
+      tx.patch([{ entity: { eid: 'hero' }, player: { active: false } }])
+      assertEquals(tx.get(['hero'])[0].player, { active: false })
+      assertEquals(f.s.get(['hero'])[0].player, { active: false })
+      throw new Error('rollback')
+    })
+  )
+  assertEquals(f.s.get(['hero'])[0].player, { active: true })
+  assertEquals(reads(f, () => f.s.get(['other'])), 0)
+  // A write it cannot name keeps nothing until its transaction ends.
+  assertThrows(() =>
+    f.s.tx(() => {
+      f.d.query({ t: 'update', table: 'player', set: { active: val(true) } })
+      assertEquals(f.s.get(['other'])[0].player, { active: true })
+      throw new Error('rollback')
+    })
+  )
+  assertEquals(f.s.get(['hero', 'other']).map((b) => b.player), [
+    { active: true },
+    { active: false },
+  ])
+})

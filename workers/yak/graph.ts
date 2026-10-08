@@ -891,12 +891,19 @@ export class Store {
     })
   }
 
+  // A transaction over this object's storage, through the driver its graph
+  // reads with, so the storage beneath sees where each one begins and ends
+  // (@yaks/sql `revision`, @yaks/sqlite's memory of entities).
+  #tx<T>(body: () => T): T {
+    return this.#sql.tx!(body)
+  }
+
   // One transaction over this object's storage. A failure refuses the object
   // (`#failed`) and forgets the memory's copy, which may hold a word the
   // rollback took back.
   #atomic(body: () => void) {
     try {
-      this.#ctx.storage.transactionSync(body)
+      this.#tx(body)
     } catch (e) {
       this.#kv.clear()
       this.#failed(e)
@@ -2240,7 +2247,7 @@ export class Store {
       this.#trust(patch, null, {
         deferEffects: (run) => void held.push(run),
       }),
-    tx: (body) => this.#ctx.storage.transactionSync(body),
+    tx: (body) => this.#tx(body),
     drop: (paths) => {
       let was = appDoc(this.#get('vocab') ?? '{}')
       this.#put(
@@ -2264,7 +2271,7 @@ export class Store {
         let s: Stamp
         let vocabWas = this.#get('vocab')
         try {
-          s = this.#ctx.storage.transactionSync(() => {
+          s = this.#tx(() => {
             let s = step(this.#mover(held), rule, was, SIZE, now)
             this.#put(rule.mark, JSON.stringify(s))
             return s
@@ -3694,7 +3701,7 @@ export class Store {
       let actor = await this.#auth(request)
       let rollback = Symbol('candidate seed')
       try {
-        this.#ctx.storage.transactionSync(() => {
+        this.#tx(() => {
           let next = this.#get(`vocab:${release}`)
           if (!next) throw new Refused('candidate vocabulary is not staged')
           this.#put('vocab', this.#prepared(next))
@@ -3787,7 +3794,7 @@ export class Store {
           // the directory moves the release pointer.
           let rollback = Symbol('candidate schema')
           try {
-            this.#ctx.storage.transactionSync(() => {
+            this.#tx(() => {
               prepare()
               let { vocab, stamp } = shapeOf(
                 this.#get('name') ?? '',

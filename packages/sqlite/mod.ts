@@ -374,16 +374,28 @@ export let storage = (
   let numbered = typeof base.number == 'object'
     ? !base.number.except.includes('archetype')
     : !!base.number
-  let memo = memoized(() => revision(driver, 'data'), vocab, base.derived)
+  let memo = memoized(driver, vocab, base.derived)
+  let named = (bundles: Bundle[]) => (born: Entity[]) => [
+    ...bundles.map((b) => b.entity.eid),
+    ...born.map((e) => e.eid),
+  ]
   let tx: Tx = {
     read: (query, o) => read(driver, vocab, query, { ...opts(), ...o }),
     get: identity,
     doom: (eids) => doom(driver, vocab, eids),
     bindings: (matches, bundles, covers) =>
       bindings(driver, vocab, matches, bundles, covers, base),
-    patch: (bundles) => patch(driver, vocab, bundles, base.number, base.adopt),
-    remove: (entities) => remove(driver, vocab, entities),
-    revive: (eids) => revive(driver, eids),
+    patch: (bundles) =>
+      memo.writes(
+        () => patch(driver, vocab, bundles, base.number, base.adopt),
+        named(bundles),
+      ),
+    remove: (entities) =>
+      memo.writes(
+        () => remove(driver, vocab, entities),
+        () => entities.map((e) => e.eid),
+      ),
+    revive: (eids) => memo.writes(() => revive(driver, eids), () => eids),
   }
   // A unit over a store that keeps archetypes keeps every pointer in step,
   // whichever door wrote: @yaks/graph's tracker, a hook writing through a
@@ -408,8 +420,15 @@ export let storage = (
     let owed = () => [...new Set(open.flatMap((o) => o.owed()))]
     let settle = () => {
       let dead = l.buried(), owed = l.owed()
-      if (dead.length) entomb(driver, dead, numbered)
-      if (owed.length) reclassify(driver, owed, numbered)
+      memo.writes(
+        () => {
+          if (dead.length) entomb(driver, dead, numbered)
+          if (owed.length) reclassify(driver, owed, numbered)
+        },
+        () => [...dead, ...owed],
+        // A class first worn mints its descriptor (./archetype.ts).
+        owed.length > 0,
+      )
       for (let eid of [...dead, ...owed]) l.pointed(eid)
     }
     return {
@@ -420,7 +439,7 @@ export let storage = (
           let pending = owed()
           return pending.length
             ? get(driver, vocab, eids, opts(), comps, pending)
-            : memo(tx.get, eids, comps)
+            : memo.get(tx.get, eids, comps)
         },
         // Pending component rows already stand in this transaction. Read them
         // directly rather than persisting an intermediate archetype just to
@@ -431,13 +450,10 @@ export let storage = (
             ...(owed().length ? { archetypes: () => undefined } : {}),
           }),
         patch: (bundles) => {
-          let born = patch(
-            driver,
-            vocab,
-            bundles,
-            base.number,
-            base.adopt,
-            l.moved,
+          let born = memo.writes(
+            () =>
+              patch(driver, vocab, bundles, base.number, base.adopt, l.moved),
+            named(bundles),
           )
           for (let e of born) l.born(e.eid)
           for (let b of bundles) {
@@ -447,10 +463,14 @@ export let storage = (
         },
         remove: (entities) => {
           let eids = entities.map((e) => e.eid)
-          remove(driver, vocab, entities, heldBy(driver, eids, open))
+          memo.writes(
+            () => remove(driver, vocab, entities, heldBy(driver, eids, open)),
+            () => eids,
+          )
           for (let eid of eids) l.removed(eid)
         },
-        revive: (eids) => revive(driver, eids, l.moved),
+        revive: (eids) =>
+          memo.writes(() => revive(driver, eids, l.moved), () => eids),
       },
       settle,
     }
@@ -557,14 +577,14 @@ export let storage = (
     get: (eids, comps) => {
       if (!eids.length) return []
       ensure()
-      return unit(driver, () => identity(eids, comps), 'read')
+      return unit(driver, () => memo.get(identity, eids, comps), 'read')
     },
     tx: <R>(body: (tx: Tx) => R, _mode?: { admission?: boolean }): R => {
       ensure()
       return unit(driver, (): R => {
         let cached = (t: Tx): Tx => ({
           ...t,
-          get: (eids, comps) => memo(t.get, eids, comps),
+          get: (eids, comps) => memo.get(t.get, eids, comps),
         })
         if (!classified) return body(cached(tx))
         let { tx: t, settle, close } = tracked()
