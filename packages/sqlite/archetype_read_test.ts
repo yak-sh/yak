@@ -107,11 +107,11 @@ test('classified gathers select only present tables and only their owners', () =
   ])
   asked = []
   get(driver, vocab, ['a', 'b', 'c'])
-  // spine + the descriptors this connection has not read yet + created + doc
-  // + marker; no census
-  assertEquals(asked.length, 5)
+  // spine + created + doc + marker; no census, and no descriptor this
+  // connection wrote
+  assertEquals(asked.length, 4)
   assert(!asked.some((s) => /union all|from "product"/.test(s.sql)))
-  for (let q of asked.slice(3)) {
+  for (let q of asked.slice(2)) {
     assertEquals(JSON.parse(String(q.params[0])).length, 2)
   }
   // What the graph wrote is held; a store bound afresh reads it.

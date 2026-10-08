@@ -463,32 +463,39 @@ test('archetype: stamps join the final set and value-only writes do not assign a
       },
     },
   }])
-  let updates = 0
+  // Whom each pointer write named: an eid, or an integer id.
+  let pointed: unknown[] = []
   let d = spy(mem(), (sql, params) => {
-    if (
-      sql.startsWith('update "entity" set "archetype"') && params.at(-1) == 'a'
-    ) updates++
+    if (sql.startsWith('update "entity" set "archetype"')) {
+      pointed.push(params.at(-1))
+    }
   })
   let s = storage(d, v)
   s.install()
   let g = graph({ storage: s, vocab: v, plugins: [archetypes()] })
   seedIdentities(g, 'b')
   g.apply([{ entity: { eid: 'a' }, doc: { title: 'A' }, task: {} }])
+  let [{ id }] = d.query(select({
+    cols: [col('id')],
+    from: table('entity'),
+    where: eq(col('eid'), val('a')),
+  }))
+  let updates = () => pointed.filter((p) => p == 'a' || p == id).length
   assertEquals(
     s.tx((tx) => tx.get(['a']))[0].entity.archetype,
     eidOf(['doc', 'task', 'created']),
   )
-  assertEquals(updates, 1)
+  assertEquals(updates(), 1)
   g.apply([{ entity: { eid: 'a' }, doc: { title: 'B' } }])
-  assertEquals(updates, 2) // First later touch adds updated.
+  assertEquals(updates(), 2) // First later touch adds updated.
   assertEquals(
     s.tx((tx) => tx.get(['a']))[0].entity.archetype,
     eidOf(['doc', 'task', 'created', 'updated']),
   )
   g.apply([{ entity: { eid: 'a' }, doc: { title: 'C' } }])
-  assertEquals(updates, 2)
+  assertEquals(updates(), 2)
   g.apply([{ entity: { eid: 'a' }, task: null, link: { to: 'b' } }])
-  assertEquals(updates, 3)
+  assertEquals(updates(), 3)
 })
 
 test('archetype: backfill classifies a future descriptor stub in either order', () => {

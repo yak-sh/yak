@@ -60,7 +60,7 @@ import {
 import type { Bundle, Comp } from './bundle.ts'
 import type { Doom, Gone } from '@yaks/graph'
 import { sha256, tombstoned } from '@yaks/graph'
-import { catalog, descriptor } from './catalog.ts'
+import { catalog, described as learn, descriptor } from './catalog.ts'
 import { unit } from './unit.ts'
 import { decoded, jsonOut, projected } from './jsonb.ts'
 import { tables } from './ddl.ts'
@@ -416,6 +416,25 @@ let namedSpine = (vocab: Vocab, eids: string[]): Select => {
 // both into every entity it reads. A new descriptor, a deleted entity or a
 // rollback starts the keeping over (@yaks/sql `revision`).
 let kinds = new WeakMap<Driver, { at: number; held: Map<number, Row> }>()
+
+/**
+ * Descriptors a patch wrote since revision `from`, as its entity's id, eid and
+ * table set, where nothing else moved one: what this connection keeps of the
+ * catalog (./catalog.ts) and of the archetypes its reads name takes them in
+ * rather than reading every descriptor again.
+ */
+export let described = (
+  driver: Driver,
+  from: number,
+  rows: readonly { id: number; eid: string; tables: string }[],
+): void => {
+  let cache = kinds.get(driver)
+  if (cache?.at == from) {
+    for (let r of rows) cache.held.set(r.id, { ...r })
+    cache.at = revision(driver, 'descriptors')
+  }
+  learn(driver, from, rows)
+}
 let kinded = (driver: Driver, vocab: Vocab, rows: Row[]): Row[] => {
   if (!vocab.comp('archetype')) return rows
   let at = revision(driver, 'descriptors')

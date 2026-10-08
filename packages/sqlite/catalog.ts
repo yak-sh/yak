@@ -20,6 +20,7 @@ let caches = new WeakMap<Driver, {
   // The last snapshot and the catalog version it was read at (below).
   descriptorVersion?: number
   descriptors?: ArchetypeSet
+  ids?: Map<string, number>
   version?: number
   set?: ArchetypeSet
 }>()
@@ -73,11 +74,34 @@ function snapshot(driver: Driver): ArchetypeSet | undefined {
       ids.set(a.eid, Number(row.entity))
     }
     cache.descriptors = archetypeSet(cache.sets, ids)
+    cache.ids = ids
     cache.descriptorVersion = version
   }
 
   cache.version = v
   return cache.set = cache.descriptors
+}
+
+/**
+ * Descriptors this connection wrote, by entity id and table set, where they
+ * are all that moved one since revision `from` (@yaks/sql `revision`): a
+ * catalog current then takes them in and stays current, so the next plan
+ * reads none of the descriptors it held. Any other catalog is read again.
+ */
+export function described(
+  driver: Driver,
+  from: number,
+  rows: readonly { id: number; tables: string }[],
+): void {
+  let cache = cacheFor(driver)
+  if (!cache.ids || cache.descriptorVersion != from) return
+  let was = cache.descriptors
+  for (let { id, tables } of rows) {
+    cache.ids.set(descriptor(driver, tables).eid, id)
+  }
+  cache.descriptors = archetypeSet(cache.sets, cache.ids)
+  cache.descriptorVersion = revision(driver, 'descriptors')
+  if (cache.set == was) cache.set = cache.descriptors
 }
 
 /**

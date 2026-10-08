@@ -42,7 +42,7 @@
 // or points at (so a reference may name a target created in the same batch, in
 // any order), numbers each new one, and reports the entities it minted.
 
-import { field } from '@yaks/sql'
+import { field, revision } from '@yaks/sql'
 import type { Vocab } from '@yaks/vocab'
 import type { Bundle, Comp, Entity } from '@yaks/graph'
 import { comps, Refused, TOMBSTONE } from '@yaks/graph'
@@ -78,7 +78,7 @@ import {
 import { tables } from './ddl.ts'
 import { spined } from './memo.ts'
 import { isJsonb, jsonb, jsonIn } from './jsonb.ts'
-import { get } from './read.ts'
+import { described, get } from './read.ts'
 
 // The owner's integer id, as a subquery. Every write keys to it, so an entity
 // minted earlier in the same unit of work resolves without a second question.
@@ -322,14 +322,22 @@ export let dropSql = (eid: string, comp: string): Delete => ({
   where: eq(col('entity'), owner(eid)),
 })
 
-/** The identity metadata write, using the portable eid as an integer lookup. */
-export let archetypeSql = (b: Bundle): Update[] =>
-  b.entity.archetype === undefined ? [] : [{
+/** The identity metadata write: the pointer and its entity by the integer ids
+ * `ids` holds, else by their portable eids. */
+export let archetypeSql = (
+  b: Bundle,
+  ids: ReadonlyMap<string, number> = new Map(),
+): Update[] => {
+  let { eid, archetype } = b.entity
+  if (archetype === undefined) return []
+  let id = ids.get(eid), to = ids.get(archetype)
+  return [{
     t: 'update',
     table: 'entity',
-    set: { archetype: owner(b.entity.archetype) },
-    where: eq(col('eid'), val(b.entity.eid)),
+    set: { archetype: to == null ? owner(archetype) : val(to) },
+    where: id == null ? eq(col('eid'), val(eid)) : eq(col('id'), val(id)),
   }]
+}
 
 /**
  * The statements that patch one bundle in: a plan per component it names, a drop
@@ -503,6 +511,7 @@ export let patch = (
       }
     }
   }
+  let from = revision(driver, 'descriptors')
   let known = spines(driver, [...new Set(touched(vocab, bundles))])
   let alive = bundles.filter((b) => !known.get(b.entity.eid)?.dead)
   let ids = new Map([...known].map(([eid, row]) => [eid, row.id]))
@@ -655,7 +664,24 @@ export let patch = (
   }
 
   // Metadata can classify a tombstone too; on its own it brings nothing back.
-  for (let b of bundles) for (let s of archetypeSql(b)) effect(driver, s)
+  for (let b of bundles) {
+    for (let s of archetypeSql(b, ids)) effect(driver, s)
+  }
+  // The descriptors written here are all that moved one, unless one went.
+  let defined = alive.filter((b) => b.archetype !== undefined)
+  if (
+    defined.length && defined.every((b) => b.archetype && ids.has(b.entity.eid))
+  ) {
+    described(
+      driver,
+      from,
+      defined.map((b) => ({
+        id: ids.get(b.entity.eid)!,
+        eid: b.entity.eid,
+        tables: String((b.archetype as Comp).tables),
+      })),
+    )
+  }
   return born
 }
 

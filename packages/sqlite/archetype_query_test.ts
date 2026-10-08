@@ -1,5 +1,5 @@
 import { test } from '@yaks/testing'
-import { assert, assertEquals } from '@std/assert'
+import { assert, assertEquals, assertThrows } from '@std/assert'
 import { archetypeDoc, archetypes } from '@yaks/archetype'
 import { graph } from '@yaks/graph'
 import {
@@ -436,4 +436,36 @@ test('a screened page answers alike with the catalog cold or held', () => {
   hold()
   page(s, ['b', 'a'], true)
   page(cold(), ['b', 'a'], false)
+})
+
+// A class first worn mints its descriptor in the write's own transaction. The
+// catalog in memory takes it in rather than reading every descriptor again,
+// and is read again after a transaction that rolls back.
+test('a descriptor a write mints joins the catalog held, unless it rolls back', () => {
+  let ran: string[] = []
+  let s = storage(spy(mem(), (sql) => void ran.push(sql)), vocab)
+  s.install()
+  let g = graph({ storage: s, vocab, plugins: [archetypes()] })
+  g.apply([{ entity: { eid: 'a' }, doc: {} }])
+  // Each asks a limit of its own, so no answer kept in memory serves it.
+  let limit = 1
+  let ask = () => {
+    ran = []
+    let rows = s.rows(`!product !archetype .limit=${limit++}0`).map((r) =>
+      r.eid
+    ).sort()
+    return { rows, read: ran.some((sql) => /from "archetype"$/.test(sql)) }
+  }
+  assertEquals(ask(), { rows: ['a'], read: true })
+  g.apply([{ entity: { eid: 'b' }, doc: {}, marker: {} }])
+  assertEquals(ask(), { rows: ['a', 'b'], read: false })
+  assertThrows(() =>
+    s.tx(() => {
+      g.apply([{ entity: { eid: 'c' }, marker: {} }])
+      throw new Error('no')
+    })
+  )
+  assertEquals(ask(), { rows: ['a', 'b'], read: true })
+  g.apply([{ entity: { eid: 'c' }, marker: {} }])
+  assertEquals(ask(), { rows: ['a', 'b', 'c'], read: false })
 })
