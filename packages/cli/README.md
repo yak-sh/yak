@@ -256,7 +256,7 @@ without making plugins know where commands run:
     "providers": {
       "process": {
         "use": "@yaks/process",
-        "with": { "dir": "/srv/yak/machines" }
+        "with": { "dir": "/srv/yak/machines", "poll": 100 }
       }
     }
   }
@@ -265,7 +265,8 @@ without making plugins know where commands run:
 
 Absent that setting, the CLI lends the process provider, keeping sandbox
 directories beside a file-backed graph (under the test's temporary directory for
-a graph in memory). It is directory separation, not security or resource
+a graph in memory). Its `poll` is how often, in ms, a command it runs is looked
+at (default 100). It is directory separation, not security or resource
 isolation. A provider module other than `@yaks/process` exports
 `provider(host, options)` and answers the
 [MachineProvider](../machine/README.md#providers) contract. Provisioning happens

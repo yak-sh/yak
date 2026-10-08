@@ -42,7 +42,12 @@ test('CLI lends lazy process machines, prepares graph commits, and detaches exis
       machines: {
         defaultProvider: 'process',
         providers: {
-          process: { use: '@yaks/process', with: { dir: dir + '/machines' } },
+          // Looked at every 5 ms, so preparing a commit costs the git it
+          // runs rather than the default tenth of a second per look.
+          process: {
+            use: '@yaks/process',
+            with: { dir: dir + '/machines', poll: 5 },
+          },
         },
       },
     }, ':memory:')

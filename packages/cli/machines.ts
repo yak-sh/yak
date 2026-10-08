@@ -45,6 +45,11 @@ export let machineCapabilities = async (
       let options = source.with ?? {}
       providers[name] = processProvider(host.graph, {
         dir: typeof options.dir == 'string' ? options.dir : base + '/machines',
+        // How often a command it runs is looked at (ms, the machine's own
+        // default unless the config says).
+        ...typeof options.poll == 'number'
+          ? { processes: { poll: options.poll } }
+          : {},
         env: (session) => {
           let environment = Deno.env.toObject()
           return session ? sessionEnv(session, environment) : environment
