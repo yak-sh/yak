@@ -1,4 +1,4 @@
-import { tick, until } from '@yaks/testing'
+import { until } from '@yaks/testing'
 import { runTestCommands, type TestCommand } from './phases.ts'
 
 // A runner for test_runner_test.ts to signal, in a process of its own:
@@ -29,20 +29,27 @@ if (import.meta.main) {
     Deno.exit(result.code ?? 1)
   } else if (mode === 'orchestrator') {
     let now = 0
+    let released = () => {
+      try {
+        Deno.statSync(`${dir}/release`)
+        return true
+      } catch (e) {
+        if (!(e instanceof Deno.errors.NotFound)) throw e
+        return false
+      }
+    }
+    // Held until the case has sent every signal, then straight to the
+    // runner's 2s deadline for SIGKILL; after it, time passes as it does, so
+    // the killed group has the runner's whole 2s bound to be reaped in.
     let clock = {
       now: () => now,
-      wait: async () => {
-        await until(() => {
-          try {
-            Deno.statSync(`${dir}/release`)
-            return true
-          } catch (e) {
-            if (!(e instanceof Deno.errors.NotFound)) throw e
-            return false
-          }
-        }, { timeout: 15_000 })
-        await tick()
-        now += 250
+      wait: async (ms: number) => {
+        await until(released, { timeout: 15_000 })
+        if (now < 2_000) now = 2_000
+        else {
+          await new Promise((go) => setTimeout(go, ms))
+          now += ms
+        }
         Deno.writeTextFileSync(`${dir}/clock`, String(now))
       },
     }
