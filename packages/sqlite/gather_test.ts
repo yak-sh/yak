@@ -62,11 +62,8 @@ test('singleton gather reads a wide sparse vocabulary in one probe', () => {
     },
   })
   let queries: string[] = []
-  let s = storage(
-    spy(mem(), (sql) => void (unit(sql) || queries.push(sql))),
-    vocab,
-    { number: false },
-  )
+  let driver = spy(mem(), (sql) => void (unit(sql) || queries.push(sql)))
+  let s = storage(driver, vocab, { number: false })
   s.install()
   seed(s, [{
     entity: { eid: 'sparse' },
@@ -74,8 +71,11 @@ test('singleton gather reads a wide sparse vocabulary in one probe', () => {
     tag0: {},
     tag404: {},
   }])
+  // A store that has kept nothing of what was written reads it.
+  let cold = storage(driver, vocab, { number: false })
+  cold.install()
   queries.length = 0
-  assertEquals(s.tx((tx) => tx.get(['sparse'])), [{
+  assertEquals(cold.tx((tx) => tx.get(['sparse'])), [{
     entity: { eid: 'sparse' },
     data: { present: 'kept' },
     tag0: {},
@@ -97,11 +97,8 @@ test('projected identities read only named facets and preserve projection/rollba
   let opts: BindOpts = {
     derived: { 'doc.body': { tag: 'text', expr: () => lit('hydrated') } },
   }
-  let s = storage(
-    spy(driver, (sql) => void (unit(sql) || queries.push(sql))),
-    shop,
-    opts,
-  )
+  let spied = spy(driver, (sql) => void (unit(sql) || queries.push(sql)))
+  let s = storage(spied, shop, opts)
   s.install()
   seed(s, [
     { entity: { eid: 'maker' }, doc: { title: 'Maker' } },
@@ -111,8 +108,11 @@ test('projected identities read only named facets and preserve projection/rollba
       doc: { title: 'Product' },
     },
   ])
+  // A store that has kept nothing of what was written reads it.
+  let cold = storage(spied, shop, opts)
+  cold.install()
   queries.length = 0
-  let product = s.tx((tx) => tx.get(['p'], ['product']))
+  let product = cold.tx((tx) => tx.get(['p'], ['product']))
   assertEquals(queries.length, 1)
   let whole = s.tx((tx) => tx.get(['p']))[0]
   assertEquals(product, [{ entity: whole.entity, product: whole.product }])

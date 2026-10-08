@@ -30,16 +30,24 @@ test('a projected read fetches only the components it returns', () => {
     product: { price: 12 },
   }])
 
+  // A store bound afresh, which holds nothing the graph wrote.
+  let cold = storage(driver, shop)
+  cold.install()
+  let h = graph({ storage: cold, vocab: shop })
   seen.length = 0
-  assertEquals((g.read('.product') as Bundle[])[0].doc, undefined)
+  assertEquals((h.read('.product') as Bundle[])[0].doc, undefined)
   assert(!seen.some((sql) => /(?:from|join) "doc"/.test(sql)))
 
   seen.length = 0
-  assertEquals((g.read('.product&*') as Bundle[])[0].doc, {
+  assertEquals((h.read('.product&*') as Bundle[])[0].doc, {
     title: 'Mug',
     body: 'large body',
   })
   assert(seen.some((sql) => /(?:from|join) "doc"/.test(sql)))
+  assertEquals(
+    (g.read('.product&*') as Bundle[])[0].doc,
+    (h.read('.product&*') as Bundle[])[0].doc,
+  )
 })
 
 test('an optional component keeps its name beside a property with that name', () => {

@@ -387,10 +387,6 @@ export let storage = (
     ? !base.number.except.includes('archetype')
     : !!base.number
   let memo = memoized(driver, vocab, base.derived)
-  let named = (bundles: Bundle[]) => (born: Entity[]) => [
-    ...bundles.map((b) => b.entity.eid),
-    ...born.map((e) => e.eid),
-  ]
   // A query's rows, from memory while the tables its answer stands on are
   // unwritten (./memo.ts `answer`), in the one snapshot that decides both. A
   // `direct` read takes presence from the component tables, not the archetype
@@ -439,9 +435,18 @@ export let storage = (
     bindings: (matches, bundles, covers) =>
       bindings(driver, vocab, matches, bundles, covers, base),
     patch: (bundles) =>
-      memo.writes(
-        () => patch(driver, vocab, bundles, base.number, base.adopt),
-        named(bundles),
+      memo.patch(
+        bundles,
+        (known) =>
+          patch(
+            driver,
+            vocab,
+            bundles,
+            base.number,
+            base.adopt,
+            undefined,
+            known,
+          ),
       ),
     remove: (entities) =>
       memo.writes(
@@ -525,10 +530,18 @@ export let storage = (
           )
         },
         patch: (bundles) => {
-          let born = memo.writes(
-            () =>
-              patch(driver, vocab, bundles, base.number, base.adopt, l.moved),
-            named(bundles),
+          let born = memo.patch(
+            bundles,
+            (known) =>
+              patch(
+                driver,
+                vocab,
+                bundles,
+                base.number,
+                base.adopt,
+                l.moved,
+                known,
+              ),
           )
           for (let e of born) l.born(e.eid)
           for (let b of bundles) {

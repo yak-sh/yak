@@ -55,6 +55,15 @@ export type Driver = {
    * thousands of. A driver that leaves it out makes every schema itself.
    */
   template?: (key: string, make: () => void) => void
+  /**
+   * The connection this driver speaks through, where other drivers may speak
+   * through it too: a Durable Object's storage, which each driver bound to it
+   * shares. What is remembered of a connection ({@link revision}, and
+   * @yaks/sqlite's memory) is kept once for all of them, so a write through
+   * one is seen through every other. A driver that leaves it out is a
+   * connection of its own.
+   */
+  connection?: object
 }
 
 /** A statement run for its effect, through `run` where the driver has one. */

@@ -7,15 +7,24 @@
 import type { Driver } from './driver.ts'
 import type { Stmt } from './ast.ts'
 
-let held = new WeakMap<Driver, {
+type Tokens = {
   schema: number
   catalog: number
   data: number
   descriptors: number
+}
+type State = Tokens & {
   outside: number
   schemaVersion?: unknown
   dataVersion?: unknown
-}>()
+  /** where each open transaction and savepoint began */
+  scopes: (Tokens & { name?: string })[]
+}
+
+// By connection (`Driver.connection`), and the drivers already speaking into
+// each one's state.
+let held = new WeakMap<object, State>()
+let wrapped = new WeakSet<Driver>()
 
 // `outside` moves only for what this connection's statements cannot say:
 // another connection's commit, a loaded library, a template, and DDL.
@@ -23,10 +32,21 @@ type Scope = 'schema' | 'catalog' | 'data' | 'descriptors' | 'outside'
 
 /** A monotonic invalidation token, not a stored row or catalog fingerprint. */
 export function revision(driver: Driver, scope: Scope): number {
-  let state = held.get(driver)
+  let at = driver.connection ?? driver
+  let state = held.get(at)
   if (!state) {
-    state = { schema: 0, catalog: 0, data: 0, descriptors: 0, outside: 0 }
-    held.set(driver, state)
+    state = {
+      schema: 0,
+      catalog: 0,
+      data: 0,
+      descriptors: 0,
+      outside: 0,
+      scopes: [],
+    }
+    held.set(at, state)
+  }
+  if (!wrapped.has(driver)) {
+    wrapped.add(driver)
     let current = state
     let invalidate = () => {
       current.schema++
@@ -35,21 +55,7 @@ export function revision(driver: Driver, scope: Scope): number {
       current.descriptors++
       current.outside++
     }
-    let scopes: {
-      name?: string
-      schema: number
-      catalog: number
-      data: number
-      descriptors: number
-    }[] = []
-    let undo = (
-      at: {
-        schema: number
-        catalog: number
-        data: number
-        descriptors: number
-      },
-    ) => {
+    let undo = (at: Tokens) => {
       if (current.schema != at.schema) current.schema++
       if (current.catalog != at.catalog) current.catalog++
       if (current.data != at.data) current.data++
@@ -69,9 +75,14 @@ export function revision(driver: Driver, scope: Scope): number {
         s.t == 'update' && s.table == 'archetype' ||
         s.t == 'delete' && (s.from == 'archetype' || s.from == 'entity')
       ) current.descriptors++
+      let { scopes } = current
       if (s.t == 'begin' || s.t == 'savepoint') {
+        let { schema, catalog, data, descriptors } = current
         scopes.push({
-          ...current,
+          schema,
+          catalog,
+          data,
+          descriptors,
           name: s.t == 'savepoint' ? s.name : undefined,
         })
       } else if (s.t == 'rollback') {
@@ -80,7 +91,7 @@ export function revision(driver: Driver, scope: Scope): number {
         if (was) undo(was)
         else invalidate()
         scopes.splice(s.to ? at + 1 : 0)
-      } else if (s.t == 'commit') scopes = []
+      } else if (s.t == 'commit') scopes.length = 0
       else if (s.t == 'release') {
         let at = scopes.findLastIndex((v) => v.name == s.name)
         if (at >= 0) scopes.splice(at)

@@ -481,6 +481,9 @@ let wears = (driver: Driver, tables: string[], eids: string[]): Set<string> => {
  * `moved` hears each component row this patch brought or took away, as the
  * table and whether the entity holds one now: what may have moved its
  * archetype (./archetype.ts `ledger`). A value-only patch says nothing.
+ *
+ * `had` is what memory says an entity held before this patch: a component
+ * it does not hold is written in one statement, as a new entity's are.
  */
 export let patch = (
   driver: Driver,
@@ -489,6 +492,7 @@ export let patch = (
   number: boolean | { except: readonly string[] } = false,
   adopt = false,
   moved?: Moved,
+  had?: Known,
 ): Entity[] => {
   // A computed component's rows are another package's (@yaks/sql `Backing`):
   // there is no table here to write one to.
@@ -622,15 +626,20 @@ export let patch = (
     }
     return need.every((prop) => comp[prop] != null)
   }
-  // A spine minted here holds no row yet, so a whole component is one
-  // INSERT…ON CONFLICT and certainly a row that came. Anywhere else a write's
-  // own count says whether a row came or went: the UPDATE hit, or the absent
-  // INSERT or the drop did something.
+  // A spine minted here holds no row yet, nor does a component memory knows
+  // an entity lacks, so a whole one is one INSERT…ON CONFLICT and certainly a
+  // row that came. Anywhere else a write's own count says whether a row came
+  // or went: the UPDATE hit, or the absent INSERT or the drop did something.
   let fresh = new Set(born.map((e) => e.eid))
+  let lacks = (eid: string, name: string) => {
+    if (fresh.has(eid)) return true
+    let was = had?.(eid)
+    return was !== undefined && was?.[name] == null
+  }
   for (let b of alive) {
     let eid = b.entity.eid
     for (let [name, comp] of comps(b)) {
-      if (comp != null && fresh.has(eid) && full(name, comp)) {
+      if (comp != null && lacks(eid, name) && full(name, comp)) {
         effect(driver, upsertSql(vocab, eid, name, comp, false, resolve))
         moved?.(eid, name, true)
         continue
@@ -654,6 +663,10 @@ export let patch = (
 // else the rows the statement returns.
 let ran = (driver: Driver, w: Insert | Update | Delete): number =>
   driver.run?.(w) ?? driver.query({ ...w, returning: [col('entity')] }).length
+
+/** What memory says an entity holds, read or written before: `null` for one
+ * storage does not hold, `undefined` where memory does not know (./memo.ts). */
+export type Known = (eid: string) => Bundle | null | undefined
 
 /** What hears a component row come (`held`) or go, entity by entity. */
 export type Moved = (eid: string, table: string, held: boolean) => void

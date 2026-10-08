@@ -205,7 +205,17 @@ without naming its entities lets go of every one, as do schema changes and
 another connection's commits; nothing a transaction has written is kept until
 that transaction ends. Transactions are seen where the driver says them: a
 `begin` or savepoint through `query`, or the driver's own `tx`, so a host that
-opens one some other way must not read through the store inside it.
+opens one some other way must not read through the store inside it. Drivers
+naming one `connection` (@yaks/sql `Driver`), as every driver over a Durable
+Object's storage does, keep one memory between them.
+
+An entity a `patch` writes is not read back to be known: what it held before and
+what the patch said make what it holds after, kept once the transaction commits.
+A value storage could return differently than it was given (a number into a text
+column, a derived property, a default the clock fills) leaves that entity to be
+read, as does a transaction that rolls back or a number a patch takes away. What
+memory knows an entity lacks, a patch writes in one statement, as it does a new
+entity's components, rather than updating first and inserting after.
 
 The spines a patch asks about (an eid's integer id, number and grave) are kept
 the same way, so the patches one transaction makes read each entity's once. Any

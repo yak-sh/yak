@@ -10,6 +10,7 @@ import { Denied, members } from '@yaks/member'
 import { club } from '../member/testing.ts'
 import { grant, ids, setMode } from '../member/testing.ts'
 import { mem } from './testing.ts'
+import { get } from './read.ts'
 import { basis } from './memo.ts'
 import { parse } from '@yaks/query'
 
@@ -485,4 +486,156 @@ test('a scan does not push out what is read again', () => {
   )
   assertEquals(f.s.get(many).length, 2100)
   assertEquals(reads(f, () => f.s.get(['hero'])), 0)
+})
+
+test('an entity a transaction patched is known without reading it back', () => {
+  let f = fixture()
+  f.s.get(['hero'])
+  f.s.tx((tx) => tx.patch([{ entity: { eid: 'hero' }, position: { x: 2 } }]))
+  f.s.tx((tx) =>
+    tx.patch([{ entity: { eid: 'mob' }, player: { active: false } }])
+  )
+  assertEquals(
+    reads(f, () =>
+      assertEquals(f.s.get(['hero', 'mob']), [
+        {
+          entity: { eid: 'hero' },
+          player: { active: true },
+          position: { x: 2 },
+        },
+        { entity: { eid: 'mob' }, player: { active: false } },
+      ])),
+    0,
+  )
+})
+
+test('a component an entity is known to lack is written in one statement', () => {
+  let f = fixture()
+  f.s.get(['hero'])
+  let writes = (table: string, body: () => unknown) => {
+    let query = f.d.query, n = 0
+    f.d.query = (stmt) => {
+      if (
+        stmt.t == 'insert' && stmt.into == table ||
+        stmt.t == 'update' && stmt.table == table
+      ) n++
+      return query(stmt)
+    }
+    try {
+      body()
+    } finally {
+      f.d.query = query
+    }
+    return n
+  }
+  let move = (x: number) =>
+    f.s.tx((tx) => tx.patch([{ entity: { eid: 'hero' }, position: { x } }]))
+  assertEquals(writes('position', () => move(1)), 1)
+  assertEquals(writes('position', () => move(2)), 1)
+  assertEquals(f.s.get(['hero'])[0].position, { x: 2 })
+})
+
+test('drivers sharing a connection share what memory keeps of it', () => {
+  let d = mem()
+  let other = { ...d, connection: d }
+  let s = storage(d, vocab), t = storage(other, vocab)
+  s.install()
+  s.tx((tx) => tx.patch([{ entity: { eid: 'hero' }, position: { x: 1 } }]))
+  assertEquals(s.get(['hero'])[0].position, { x: 1 })
+  t.tx((tx) => tx.patch([{ entity: { eid: 'hero' }, position: { x: 2 } }]))
+  assertEquals(s.get(['hero'])[0].position, { x: 2 })
+  t.tx((tx) => tx.remove([{ eid: 'hero' }]))
+  assertEquals('tombstone' in s.get(['hero'])[0], true)
+})
+
+test('a patch after another connection commits builds on what it committed', () => {
+  let dir = Deno.makeTempDirSync({ prefix: 'T-65275-memo-' })
+  let a = open(`${dir}/test.db`), b = open(`${dir}/test.db`)
+  try {
+    let f = fixture(a)
+    f.s.get(['hero'])
+    b.query({ t: 'update', table: 'player', set: { active: val(false) } })
+    f.s.tx((tx) => {
+      tx.patch([{ entity: { eid: 'hero' }, position: { x: 1 } }])
+      tx.get(['other'])
+    })
+    assertEquals(f.s.get(['hero']), get(a, vocab, ['hero']))
+  } finally {
+    a.close()
+    b.close()
+    Deno.removeSync(dir, { recursive: true })
+  }
+})
+
+// Every shape a property stores, with a default a new row takes.
+let wide = loadVocab([{
+  $defs: {
+    kit: {
+      component: true,
+      type: 'object',
+      properties: {
+        name: { type: 'string' },
+        n: { type: 'number' },
+        whole: { type: 'integer' },
+        on: { type: 'boolean' },
+        data: { type: 'object' },
+        list: { type: 'array' },
+        tier: { type: 'string', enum: ['low', 'high'] },
+        level: { type: 'integer', default: 3 },
+        friend: { type: 'string', ref: 'entity', death: 'detach' },
+      },
+    },
+    tag: { component: true, type: 'object' },
+  },
+}])
+
+test('what memory says a patched entity holds is what storage reads', () => {
+  let d = mem(), s = storage(d, wide, { number: true })
+  s.install()
+  let eids = ['a', 'b', 'c', 'd'], all = eids
+  let seed = 7
+  let rand = (n: number) => (seed = (seed * 48271) % 2147483647) % n
+  let pick = <T>(xs: T[]) => xs[rand(xs.length)]
+  let values: Record<string, unknown[]> = {
+    // A number into a text column, and text into a number one, are what
+    // memory leaves storage to say.
+    name: ['x', '', 'long name', 5, null],
+    n: [0, 1.5, -2, 1e21, 0.1 + 0.2, '12', null],
+    whole: [0, 7, -3, 2 ** 40, null],
+    on: [true, false, null],
+    data: [{ b: 1, a: [1, 2.5, { c: null }] }, {}, null],
+    list: [[], [1, 'two', { three: 3 }], null],
+    tier: ['low', 'high', null],
+    level: [1, null],
+    friend: ['a', 'b', 'z', null],
+  }
+  let bundle = (): Bundle => {
+    let b: Bundle = { entity: { eid: pick(all) } }
+    if (rand(4) == 0) b.kit = null
+    else {
+      let kit: Record<string, unknown> = {}
+      for (let p of Object.keys(values)) {
+        if (rand(3) == 0) kit[p] = pick(values[p])
+      }
+      b.kit = kit
+    }
+    if (rand(3) == 0) b.tag = rand(2) ? {} : null
+    return b
+  }
+  for (let round = 0; round < 120; round++) {
+    // Each round may also mint an entity storage has never held.
+    all = [...eids, `new${round}`]
+    s.get(all)
+    let batch = Array.from({ length: 1 + rand(3) }, bundle)
+    try {
+      s.tx((tx) => {
+        tx.patch(batch)
+        if (rand(5) == 0) tx.patch([bundle()])
+        if (rand(7) == 0) throw new Error('rolled back')
+      })
+    } catch (e) {
+      if ((e as Error).message != 'rolled back') throw e
+    }
+    assertEquals(s.get(all), get(d, wide, all), `round ${round}`)
+  }
 })

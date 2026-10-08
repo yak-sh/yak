@@ -25,12 +25,23 @@
 // trusted; what memory can't follow (text, nearness, edges, computed and
 // derived properties, time phrases) is read every time.
 //
+// What a patch leaves an entity holding is worked out from what memory held
+// and what the patch said, the way a read returns it (`patch`), and kept once
+// the transaction commits: an entity written is not read back to be known. A
+// value a read could return differently (a number into a text column, a
+// derived property, a default the clock fills) leaves the entity to be read.
+// What memory says an entity held is the patch's to choose its statements by
+// (./write.ts `patch`'s `had`).
+//
+// Every driver naming one connection (@yaks/sql `Driver.connection`) tells one
+// memory what it ran, so a write through any of them is seen by all.
+//
 // A get naming components is cut from a whole entity held. Returned bundles
 // are copies; dynamic components (computed, or derived from anything but this
 // connection's rows) are read again on every hit. Bounded by count and bytes,
 // the longest unread let go first; a scan is read through, not kept.
-import type { Bundle } from '@yaks/graph'
-import type { Vocab } from '@yaks/vocab'
+import { type Bundle, type Comp, comps, type Entity } from '@yaks/graph'
+import type { Prop, Vocab } from '@yaks/vocab'
 import { type And, bare, type Clause, drifts, type Pred } from '@yaks/query'
 import {
   type Derived,
@@ -40,7 +51,7 @@ import {
   type Stmt,
 } from '@yaks/sql'
 import { tables } from './ddl.ts'
-import type { Spine } from './write.ts'
+import type { Known, Spine } from './write.ts'
 
 type Get = (eids: string[], comps?: string[]) => Bundle[]
 
@@ -57,6 +68,11 @@ export type Memo = {
     eids: (out: R) => Iterable<string>,
     mints?: boolean,
   ) => R
+  /** Run a patch of `bundles`, which returns the entities it minted or
+   * numbered: they and every entity it names are let go as `writes` lets
+   * them go, and what each now holds is kept once the transaction commits.
+   * `body` is told what memory says each entity held before it. */
+  patch: (bundles: Bundle[], body: (known: Known) => Entity[]) => Entity[]
   /** The rows `run` answers the query `key` names with, from memory while no
    * table `tables` names has been written since; `tables` left out (a query
    * memory can't follow, `basis`), from `run` every time. */
@@ -164,9 +180,16 @@ export let basis = (
   return [...out]
 }
 
+// An entity a transaction wrote whose state memory can't work out.
+const LOST: unique symbol = Symbol('lost')
+
 type Kept = {
   /** an entity as read, or `null` for one storage does not hold */
   held: Map<string, Bundle | null>
+  /** what the open transaction's patches leave each entity holding */
+  after: Map<string, Bundle | null | typeof LOST>
+  /** keep what the transaction that just committed left */
+  commit: () => void
   sizes: Map<string, number>
   bytes: number
   answers: Map<string, Answer>
@@ -187,30 +210,46 @@ type Connection = {
   since: Set<string>
   /** how many statements have written each table */
   versions: Map<string, number>
+  /** how many statements have moved a spine */
+  shifts: number
   /** answers kept while a transaction is open, by where they are kept */
   answered: [Map<string, Answer>, string][]
   /** the `outside` revision the spines were kept at */
   outside: number
 }
 
-let connections = new WeakMap<Driver, Connection>()
+// By connection (@yaks/sql `Driver.connection`): every driver speaking
+// through one tells the same memory what it ran.
+let connections = new WeakMap<object, Connection>()
+let told = new WeakSet<Driver>()
 
 let connect = (driver: Driver): Connection => {
-  let known = connections.get(driver)
-  if (known) return known
-  let c: Connection = {
-    kept: new Set(),
-    depth: 0,
-    writing: 0,
-    dirty: new Set(),
-    blind: false,
-    spines: new Map(),
-    since: new Set(),
-    outside: -1,
-    versions: new Map(),
-    answered: [],
+  let at = driver.connection ?? driver
+  let c = connections.get(at) ?? opened()
+  connections.set(at, c)
+  if (!told.has(driver)) {
+    told.add(driver)
+    tell(driver, c)
   }
-  connections.set(driver, c)
+  return c
+}
+
+let opened = (): Connection => ({
+  kept: new Set(),
+  depth: 0,
+  writing: 0,
+  dirty: new Set(),
+  blind: false,
+  spines: new Map(),
+  since: new Set(),
+  outside: -1,
+  versions: new Map(),
+  shifts: 0,
+  answered: [],
+})
+
+// Have `driver` tell the connection `c` each statement and transaction it runs.
+let tell = (driver: Driver, c: Connection) => {
   // What a rolled-back transaction had kept of spines and answers may be gone
   // with it.
   let undone = () => {
@@ -218,12 +257,17 @@ let connect = (driver: Driver): Connection => {
     c.since.clear()
     for (let [answers, key] of c.answered) answers.delete(key)
     c.answered = []
+    for (let k of c.kept) for (let eid of k.after.keys()) k.after.set(eid, LOST)
   }
   let ended = (committed: boolean) => {
+    if (!committed) undone()
+    for (let k of c.kept) {
+      if (committed && !c.blind) k.commit()
+      k.after.clear()
+    }
     c.depth = 0
     c.dirty.clear()
     c.blind = false
-    if (!committed) undone()
     c.since.clear()
     c.answered = []
   }
@@ -262,6 +306,7 @@ let connect = (driver: Driver): Connection => {
       let table = s.t == 'insert' ? s.into : s.t == 'update' ? s.table : s.from
       bump(table)
       if (moves(s)) {
+        c.shifts++
         unspine()
         // A number, an eid or an id itself moved: what any answer ordered,
         // paged or compared a reference by.
@@ -302,11 +347,12 @@ let connect = (driver: Driver): Connection => {
         committed = true
         return out
       } finally {
+        // One nested in another rolls back to where it began.
         if (--c.depth <= 0) ended(committed)
+        else if (!committed) undone()
       }
     }
   }
-  return c
 }
 
 /** The spines kept for the connection `driver` is. */
@@ -362,11 +408,18 @@ export let memoized = (
     sizes: new Map(),
     bytes: 0,
     answers: new Map(),
+    after: new Map(),
     tables: new Set(['entity', 'tombstone', 'blob_text', ...tables(vocab)]),
     clear: () => {
       k.held.clear()
       k.sizes.clear()
       k.bytes = 0
+    },
+    // What a transaction writing more than a scan reads is not kept either.
+    commit: () => {
+      if (k.after.size > SCAN) return
+      for (let [eid, b] of k.after) if (b !== LOST) hold(eid, b)
+      trim()
     },
   }
   c.kept.add(k)
@@ -374,6 +427,18 @@ export let memoized = (
     k.bytes -= k.sizes.get(eid) ?? 0
     k.sizes.delete(eid)
     k.held.delete(eid)
+  }
+  let hold = (eid: string, b: Bundle | null) => {
+    evict(eid)
+    let size = b ? sizeOf(b) : 64
+    k.sizes.set(eid, size)
+    k.bytes += size
+    k.held.set(eid, b && structuredClone(b))
+  }
+  let trim = () => {
+    while (k.held.size > COUNT || k.bytes > BYTES) {
+      evict(k.held.keys().next().value!)
+    }
   }
   let dynamic = new Set(
     Object.entries(derived).filter(([, value]) => !value.stable).map(([p]) =>
@@ -388,6 +453,143 @@ export let memoized = (
       )
     ) dynamic.add(name)
   }
+  let writes = <R>(
+    body: () => R,
+    eids: (out: R) => Iterable<string>,
+    mints = false,
+  ): R => {
+    c.writing++
+    let out
+    try {
+      out = body()
+    } catch (error) {
+      // What it wrote before it failed is not known: keep nothing until
+      // its transaction ends.
+      k.clear()
+      for (let other of c.kept) other.clear()
+      if (c.depth) c.blind = true
+      throw error
+    } finally {
+      c.writing--
+    }
+    let gone = (other: Kept, eid: string) => {
+      other.bytes -= other.sizes.get(eid) ?? 0
+      other.sizes.delete(eid)
+      other.held.delete(eid)
+      if (c.depth) other.after.set(eid, LOST)
+    }
+    for (let eid of eids(out)) {
+      for (let other of c.kept) gone(other, eid)
+      if (c.depth) c.dirty.add(eid)
+    }
+    if (mints) {
+      for (let other of c.kept) {
+        for (let [eid, b] of other.held) if (!b) gone(other, eid)
+        for (let [eid, b] of other.after) if (b === null) gone(other, eid)
+      }
+      if (c.depth) c.blind = true
+    }
+    return out
+  }
+  // What an entity held before this transaction's next patch: what its
+  // patches so far left it, or what memory held while nothing wrote it.
+  let prior = (eid: string): Bundle | null | typeof LOST =>
+    k.after.has(eid)
+      ? k.after.get(eid)!
+      : c.dirty.has(eid) || !k.held.has(eid)
+      ? LOST
+      : k.held.get(eid)!
+  let numbered = !!vocab.prop('entity', 'num')
+  // A component's stored properties, where what a patch gives them is what a
+  // read returns: not one with a derived property, which a read works out
+  // itself, unless it is read again on every hit anyway.
+  let shapes = new Map<string, Map<string, Prop> | null>()
+  let shape = (name: string): Map<string, Prop> | null => {
+    if (!shapes.has(name)) {
+      let props = vocab.comp(name) && k.tables.has(name)
+        ? vocab.props(name).map((p) => vocab.prop(name, p)!)
+        : undefined
+      let exact = props && (dynamic.has(name) ||
+        !props.some((p) => p.computed || derived[`${name}.${p.prop}`]))
+      shapes.set(
+        name,
+        props && exact
+          ? new Map(props.filter((p) => !p.computed).map((p) => [p.prop, p]))
+          : null,
+      )
+    }
+    return shapes.get(name)!
+  }
+  // A value as a read returns it once a patch has stored it, where that is
+  // certain: what SQLite would convert on the way in is not.
+  let cast = (p: Prop, v: unknown): unknown => {
+    if (v == null) return null
+    if (p.category == 'ref') return typeof v == 'string' ? v : LOST
+    if (p.scalar == 'jsonb') {
+      let text = JSON.stringify(v)
+      return text === undefined ? LOST : JSON.parse(text)
+    }
+    if (p.scalar == 'bool') return typeof v == 'boolean' ? v : LOST
+    if (p.affinity == 'text') return typeof v == 'string' ? v : LOST
+    if (p.affinity == 'integer' || p.affinity == 'real') {
+      return typeof v == 'number' && Number.isFinite(v) && !Object.is(v, -0) &&
+          (!Number.isInteger(v) || Number.isSafeInteger(v))
+        ? v
+        : LOST
+    }
+    return LOST
+  }
+  // What one bundle of a patch leaves an entity holding, from what it held
+  // (`null`: nothing) and the spine the patch minted or numbered for it.
+  let fold = (
+    base: Bundle | null,
+    b: Bundle,
+    mint?: Entity,
+  ): Bundle | null | typeof LOST => {
+    let out = base
+      ? structuredClone(base)
+      : mint
+      ? { entity: { eid: b.entity.eid } }
+      : null
+    if (!out) return comps(b).length || b.entity.archetype ? LOST : null
+    if (mint && numbered && mint.num != null) {
+      out.entity = { ...out.entity, num: mint.num }
+    }
+    if (b.entity.archetype !== undefined) {
+      let { archetype: _, ...entity } = out.entity
+      out.entity = b.entity.archetype == null
+        ? entity
+        : { ...entity, archetype: String(b.entity.archetype) }
+    }
+    // A patch writes no rows to the dead (./write.ts `patch`).
+    if ('tombstone' in out) return out
+    for (let [name, comp] of comps(b)) {
+      if (comp == null) {
+        delete out[name]
+        continue
+      }
+      let props = shape(name)
+      if (!props) return LOST
+      let had = out[name] as Comp | undefined
+      let next: Comp = had ? { ...had } : {}
+      // A row this patch brings takes each default it does not give.
+      for (let [p, prop] of had ? [] : props) {
+        if (p in comp) continue
+        let d = prop.default
+        let v = !d ? null : 'now' in d ? LOST : cast(prop, d.value)
+        if (v === LOST) return LOST
+        next[p] = v
+      }
+      for (let [p, v] of Object.entries(comp)) {
+        let prop = props.get(p)
+        let value = prop ? cast(prop, v) : LOST
+        if (value === LOST) return LOST
+        next[p] = value
+      }
+      out[name] = next
+    }
+    return out
+  }
   let seen = -1
   // Another connection's commit, or anything else this one cannot see.
   let sync = () => {
@@ -395,6 +597,7 @@ export let memoized = (
     if (now == seen) return
     k.clear()
     k.answers.clear()
+    for (let eid of k.after.keys()) k.after.set(eid, LOST)
     seen = now
   }
   return {
@@ -437,12 +640,7 @@ export let memoized = (
       )
       if (!wanted && !c.blind && missing.length <= SCAN) {
         for (let eid of missing) {
-          if (c.dirty.has(eid)) continue
-          let b = fresh.get(eid) ?? null
-          let size = b ? sizeOf(b) : 64
-          k.sizes.set(eid, size)
-          k.bytes += size
-          k.held.set(eid, b && structuredClone(b))
+          if (!c.dirty.has(eid)) hold(eid, fresh.get(eid) ?? null)
         }
       }
       let hits = eids.filter((eid) => !fresh.has(eid) && k.held.get(eid))
@@ -479,42 +677,39 @@ export let memoized = (
         }
         return [Object.assign(b, current.get(eid) ?? {})]
       })
-      while (k.held.size > COUNT || k.bytes > BYTES) {
-        evict(k.held.keys().next().value!)
-      }
+      trim()
       return out
     },
-    writes: (body, eids, mints = false) => {
-      c.writing++
-      let out
-      try {
-        out = body()
-      } catch (error) {
-        // What it wrote before it failed is not known: keep nothing until
-        // its transaction ends.
-        k.clear()
-        for (let other of c.kept) other.clear()
-        if (c.depth) c.blind = true
-        throw error
-      } finally {
-        c.writing--
+    writes,
+    patch: (bundles, body) => {
+      sync()
+      let eids = [...new Set(bundles.map((b) => b.entity.eid))]
+      // What each held before, taken before the write lets it go.
+      let now = new Map<string, Bundle | null | typeof LOST>(
+        eids.map((eid) => [eid, prior(eid)]),
+      )
+      let known: Known = (eid) => {
+        let b = now.get(eid)
+        return b === LOST || c.blind ? undefined : b
       }
-      let gone = (other: Kept, eid: string) => {
-        other.bytes -= other.sizes.get(eid) ?? 0
-        other.sizes.delete(eid)
-        other.held.delete(eid)
+      let shifts = c.shifts
+      let born = writes(
+        () => body(known),
+        (born) => [...eids, ...born.map((e) => e.eid)],
+      )
+      if (!c.depth || c.blind) return born
+      // A number the patch took away, or one it gave an entity a reference
+      // minted, is not in what it said.
+      if (c.shifts != shifts) return born
+      let minted = new Map(born.map((e) => [e.eid, e]))
+      // An entity the patch minted or first numbered held nothing before it.
+      for (let eid of minted.keys()) if (now.has(eid)) now.set(eid, null)
+      for (let b of bundles) {
+        let eid = b.entity.eid, base = now.get(eid)!
+        now.set(eid, base === LOST ? LOST : fold(base, b, minted.get(eid)))
       }
-      for (let eid of eids(out)) {
-        for (let other of c.kept) gone(other, eid)
-        if (c.depth) c.dirty.add(eid)
-      }
-      if (mints) {
-        for (let other of c.kept) {
-          for (let [eid, b] of other.held) if (!b) gone(other, eid)
-        }
-        if (c.depth) c.blind = true
-      }
-      return out
+      for (let [eid, b] of now) k.after.set(eid, b)
+      return born
     },
   }
 }

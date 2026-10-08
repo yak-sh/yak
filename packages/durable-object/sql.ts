@@ -193,5 +193,10 @@ export let driver = (
     )
   }
   query({ t: 'pragma', name: 'foreign_keys', value: 'on' })
-  return { query, tx: (body) => durable.transactionSync(body) }
+  return {
+    query,
+    tx: (body) => durable.transactionSync(body),
+    // Every driver over one object's storage is one connection.
+    connection: durable,
+  }
 }

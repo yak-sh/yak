@@ -34,6 +34,16 @@ test('snapshot revisions read no SQL on a single-owner connection', () => {
   assert(revision(d, 'catalog') > catalog)
 })
 
+test('drivers sharing a connection move one revision', () => {
+  let d = mem()
+  let other = { ...d, connection: d }
+  let schema = revision(d, 'schema')
+  revision(other, 'schema')
+  other.query(table('entity'))
+  assert(revision(d, 'schema') > schema)
+  assertEquals(revision(other, 'schema'), revision(d, 'schema'))
+})
+
 test('snapshot revisions invalidate snapshots made inside a rolled back savepoint', () => {
   let d = mem(), inside = 0
   revision(d, 'schema')
