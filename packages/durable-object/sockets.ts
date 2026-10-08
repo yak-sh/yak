@@ -117,6 +117,8 @@ type Held = {
   seen?: string[]
 }
 let CAP = 2048
+/** How long a burst of watch changes may take before its map is stored, ms. */
+export let SETTLE = 1000
 // A `sync: peers` value is held in memory, and this object's memory does not
 // survive hibernation. The attachment keeps keys; saved components are
 // hydrated from storage under those surviving holders. Unsaved components
@@ -256,6 +258,10 @@ export let sockets = (
     /** A host whose authenticated standing expires on wake can require a
      * new handshake before this writer relays again. */
     writer?: (writer: PeerWriter) => boolean | Promise<boolean>
+    /** How a burst of watch changes is put off until its stored map is
+     * written once (default: a timer of {@link SETTLE} ms, which also keeps
+     * the object from hibernating before the write is made). */
+    defer?: (write: () => void) => void
   } = {},
 ): Sockets => {
   let sinks = new Map<
@@ -268,6 +274,25 @@ export let sockets = (
   let queries = new Map<Wire, Record<string, Ask>>()
   let repo: ReturnType<typeof holds> | undefined
   let backing = () => repo ??= holds(ctx.storage)
+  // A page changes its watches in bursts: one that walks into another tile
+  // opens the tiles it reaches and closes the ones it left, a message each.
+  // Its stored map is written once the burst settles, not once a message.
+  let owed = new Map<string, Record<string, Ask>>()
+  let defer = opts.defer ?? ((write) => void setTimeout(write, SETTLE))
+  let pay = () => {
+    let due = [...owed]
+    owed.clear()
+    for (let [ref, map] of due) backing().write(ref, map)
+  }
+  let owe = (ref: string, map: Record<string, Ask>) => {
+    let first = !owed.size
+    owed.set(ref, map)
+    if (first) defer(pay)
+  }
+  let release = (ref: string) => {
+    owed.delete(ref)
+    backing().delete(ref)
+  }
   let asks = (ws: Wire): Record<string, Ask> => {
     let cached = queries.get(ws)
     if (cached) return cached
@@ -296,12 +321,12 @@ export let sockets = (
     }
     if (fits(next)) {
       ws.serializeAttachment(next)
-      if (was.subref) backing().delete(was.subref)
+      if (was.subref) release(was.subref)
     } else {
       let ref = was.subref ?? crypto.randomUUID()
       let short = { ...next, subs: undefined, subref: ref }
       if (!fits(short, nextSubs)) return false
-      backing().write(ref, nextSubs)
+      owe(ref, nextSubs)
       ws.serializeAttachment(short)
     }
     queries.set(ws, nextSubs)
@@ -324,7 +349,7 @@ export let sockets = (
       // The socket can outlive this incarnation. Clear its pointer before
       // deleting the row, so a later wake cannot read a row we removed.
       ws.serializeAttachment({ ...held, subref: undefined, subs: undefined })
-      backing().delete(held.subref)
+      release(held.subref)
     }
     return dropped
   }

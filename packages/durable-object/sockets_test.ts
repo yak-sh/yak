@@ -55,6 +55,8 @@ let hibernation = () => {
   let live: Wire[] = []
   return {
     live,
+    // what an incarnation put off: its timers, which run before it can sleep
+    owed: [] as (() => void)[],
     storage: durable(),
     acceptWebSocket: (ws: Wire) => void live.push(ws),
     getWebSockets: () => live,
@@ -69,8 +71,16 @@ let instance = (
   vocab: Vocab = shop,
   report?: (error: Error) => void,
 ): [Graph, Sockets] => {
+  // An object hibernates only once its timers have run, so the incarnation
+  // before this one has written what it put off.
+  for (let write of ctx.owed.splice(0)) write()
   let g = graph({ storage, vocab })
-  return [g, sockets(subscriptions(g), ctx, report)]
+  return [
+    g,
+    sockets(subscriptions(g), ctx, report, {
+      defer: (write) => void ctx.owed.push(write),
+    }),
+  ]
 }
 
 let ask = (id: string, query: string) =>
@@ -495,9 +505,9 @@ test('a subscription bigger than an attachment survives hibernation', () => {
   let first = ws.sent.at(-1)!
   let ref = (ws.deserializeAttachment() as { subref?: string }).subref!
   assert(ref)
-  assertEquals(Object.keys(holds(ctx.storage).read(ref)), ['big'])
 
   let [g, woken] = instance(storage, ctx)
+  assertEquals(Object.keys(holds(ctx.storage).read(ref)), ['big'])
   woken.wake()
   assertEquals(ws.sent.length, 1, 'the first snapshot still needs its ACK')
   g.apply([{ entity: { eid: 'p1' }, doc: { title } }])
@@ -524,6 +534,39 @@ test('a subscription bigger than an attachment survives hibernation', () => {
   )
 })
 
+test('a burst of watch changes stores its map once', () => {
+  let ctx = hibernation(), storage = store(), ws = wire()
+  ctx.live.push(ws)
+  let stored = 0, exec = ctx.storage.sql.exec.bind(ctx.storage.sql)
+  ctx.storage.sql.exec = (query, ...bindings) => {
+    if (/^insert into "socket_subscriptions"/.test(query)) stored++
+    return exec(query, ...bindings)
+  }
+  let title = (n: number) => String(n).repeat(3000)
+  let [, live] = instance(storage, ctx)
+  for (let n = 0; n < 4; n++) {
+    send(live, ws, {
+      subscribe: `.doc.title=${JSON.stringify(title(n))}`,
+      id: `t${n}`,
+    })
+  }
+  send(live, ws, { unsubscribe: 't0' })
+  assertEquals(stored, 0)
+
+  let [g, woken] = instance(storage, ctx)
+  assertEquals(stored, 1)
+  woken.wake()
+  let sent = ws.sent.length
+  g.apply([
+    { entity: { eid: 'kept' }, doc: { title: title(2) } },
+    { entity: { eid: 'dropped' }, doc: { title: title(0) } },
+  ])
+  assertEquals(
+    ws.sent.slice(sent).map((f) => [f.id, f.bundles?.[0].entity.eid]),
+    [['t2', 'kept']],
+  )
+})
+
 test('a lost subscription row retires its socket without blocking other subscribers', () => {
   let storage = store(), ctx = hibernation()
   let [, first] = instance(storage, ctx)
@@ -535,6 +578,7 @@ test('a lost subscription row retires its socket without blocking other subscrib
   })
   send(first, healthy, { subscribe: '.kind=product', id: 'p' })
   let ref = (stale.deserializeAttachment() as { subref: string }).subref
+  for (let write of ctx.owed.splice(0)) write()
   holds(ctx.storage).delete(ref)
 
   let errors: Error[] = []
@@ -569,6 +613,7 @@ test('a frame on a hibernated socket with a lost row closes it', () => {
     id: 'big',
   })
   let ref = (ws.deserializeAttachment() as { subref: string }).subref
+  for (let write of ctx.owed.splice(0)) write()
   holds(ctx.storage).delete(ref)
 
   let [, woken] = instance(storage, ctx)

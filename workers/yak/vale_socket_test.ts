@@ -41,7 +41,8 @@ let watches = () => {
   ]
   let by = (name: string) => `.${name}.villager=${eids.join(',')}&?created`
   return [
-    area.query,
+    area.moving,
+    ...area.tiles.map((tile) => tile.query),
     looksOf(area, hero),
     ...own,
     `.entity.eid=${q}&?created&*`,
@@ -68,7 +69,20 @@ test('Vale watches fit and recover after Store hibernation', () => {
     acceptWebSocket: (ws: Wire) => void live.push(ws),
     getWebSockets: () => live,
   }
-  let open = () => sockets(subscriptions(graph({ storage: store, vocab })), ctx)
+  // A Store hibernates only once its timers have run, so a woken one finds
+  // what the last incarnation put off already written.
+  let owed: (() => void)[] = []
+  let open = () => {
+    for (let write of owed.splice(0)) write()
+    return sockets(
+      subscriptions(graph({ storage: store, vocab })),
+      ctx,
+      undefined,
+      {
+        defer: (write) => void owed.push(write),
+      },
+    )
+  }
   let ws = wire()
   live.push(ws)
   let first = open()
