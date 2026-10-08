@@ -225,12 +225,14 @@ test('a transaction rolls back on a throw, and nests', () => {
 test('numbering exceptions ask once across tables and entities', () => {
   let selects = 0
   let driver = spy(mem(), (sql, params) => {
-    if (sql.trimStart().startsWith('select')) selects++
+    if (/^select .* from "entity"/.test(sql.trimStart())) selects++
     assert(params.length <= 100)
   })
-  let s = storage(driver, shop, {
-    number: { except: ['shelf', 'bookmark', 'review', 'undeclared'] },
-  })
+  let open = () =>
+    storage(driver, shop, {
+      number: { except: ['shelf', 'bookmark', 'review', 'undeclared'] },
+    })
+  let s = open()
   s.install()
   let products = Array.from({ length: 150 }, (_, i) => ({
     entity: { eid: `p${i}` },
@@ -241,6 +243,9 @@ test('numbering exceptions ask once across tables and entities', () => {
     { entity: { eid: 's' }, shelf: { aisle: 'A', slot: 1 } },
     { entity: { eid: 'r' }, review: { stars: 5 } },
   ])
+  // Another storage over the file holds their identities, but knows nothing
+  // of what they wear.
+  s = open()
   selects = 0
   write(s, [
     ...products,
@@ -272,6 +277,8 @@ test('a patch asks about numbering exceptions only where they decide a number', 
   // the identity is held.
   assertEquals(cost([{ entity: { eid: 's' }, shelf: { slot: 2 } }]), 0)
   assertEquals(cost([{ entity: { eid: 's' }, doc: null }]), 0)
+  // Memory knows what an entity it wrote wholly wears.
+  assertEquals(cost([{ entity: { eid: 'p' }, doc: { title: 'Mug' } }]), 0)
   // A numbered entity given the exception still loses its number.
   write(s, [{ entity: { eid: 'p' }, shelf: { aisle: 'B', slot: 1 } }])
   assertEquals(
@@ -338,6 +345,24 @@ test('partial updates and bare tags respect required columns and SQL defaults', 
   )
   assertEquals(get().doc, { title: 'changed', body: 'body' })
   assertEquals(s.tx((tx) => tx.get(['bad'])), [])
+})
+
+test('a table is asked what it requires once while its schema stands', () => {
+  let asked = 0
+  let d = spy(mem(), (sql) => {
+    if (sql.includes('table_info')) asked++
+  })
+  let s = storage(d, shop)
+  s.install()
+  let cost = (bundles: Bundle[]) => {
+    asked = 0
+    write(s, bundles)
+    return asked
+  }
+  assertEquals(cost([{ entity: { eid: 'a' }, product: { price: 1 } }]), 1)
+  assertEquals(cost([{ entity: { eid: 'b' }, product: { price: 2 } }]), 0)
+  d.query({ t: 'create table', name: 'aside', cols: [{ name: 'x' }] })
+  assertEquals(cost([{ entity: { eid: 'c' }, product: { price: 3 } }]), 1)
 })
 
 // A Durable Object's SQLite binds at most 100 parameters per statement, so a

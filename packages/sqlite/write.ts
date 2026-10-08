@@ -76,6 +76,7 @@ import {
   type Write,
 } from '@yaks/sql'
 import { tables } from './ddl.ts'
+import { required } from './physical.ts'
 import { spined } from './memo.ts'
 import { isJsonb, jsonb, jsonIn } from './jsonb.ts'
 import { described, get } from './read.ts'
@@ -554,7 +555,14 @@ export let patch = (
     // give it.
     let asked = [...new Set(alive.map((b) => b.entity.eid))].filter((eid) => {
       let k = known.get(eid)
-      return k && !excluded.has(eid) && (k.num != null || own.has(eid))
+      if (!k || excluded.has(eid) || (k.num == null && !own.has(eid))) {
+        return false
+      }
+      // Memory answers for an entity it knows wholly: one it knows wears an
+      // exception, or one it knows wears none of them, is not asked about.
+      let held = tables.map((name) => had?.(eid, name))
+      if (held.includes(true)) excluded.add(eid)
+      return !held.includes(true) && held.some((h) => h === undefined)
     })
     for (let eid of wears(driver, tables, asked)) excluded.add(eid)
     for (let eid of excluded) {
@@ -618,22 +626,12 @@ export let patch = (
   // A patch supplying every required value can use one INSERT…ON CONFLICT;
   // a partial one must UPDATE first, since SQLite checks NOT NULL before the
   // conflict handler can preserve the row's omitted values.
-  let required = new Map<string, string[]>()
   let full = (name: string, comp: Comp): boolean => {
     let cols = Object.keys(comp).filter((c) =>
       vocab.prop(name, c)?.computed === false
     )
-    if (!cols.length) return false
-    let need = required.get(name)
-    if (!need) {
-      need = driver.query({ t: 'pragma', name: 'table_info', arg: name })
-        .filter((r) =>
-          r.name != 'entity' && Number(r.notnull) != 0 &&
-          r.dflt_value == null
-        ).map((r) => String(r.name))
-      required.set(name, need)
-    }
-    return need.every((prop) => comp[prop] != null)
+    return cols.length > 0 &&
+      required(driver, name).every((prop) => comp[prop] != null)
   }
   // A spine minted here holds no row yet, nor does a component memory knows
   // an entity lacks, so a whole one is one INSERT…ON CONFLICT and certainly a

@@ -179,6 +179,30 @@ export let columns = (driver: Driver, name: string): string[] =>
   driver.query({ t: 'pragma', name: 'table_info', arg: name })
     .map((c) => String(c.name))
 
+/** The columns a table requires a value for: not null, with no default, as
+ * the file holds them. Asked once a table while the connection's schema
+ * stands. */
+let requirements = new WeakMap<
+  object,
+  { at: number; tables: Map<string, string[]> }
+>()
+
+export let required = (driver: Driver, name: string): string[] => {
+  let at = revision(driver, 'schema')
+  let key = driver.connection ?? driver
+  let held = requirements.get(key)
+  if (held?.at != at) requirements.set(key, held = { at, tables: new Map() })
+  let need = held.tables.get(name)
+  if (!need) {
+    need = driver.query({ t: 'pragma', name: 'table_info', arg: name })
+      .filter((r) =>
+        r.name != 'entity' && Number(r.notnull) != 0 && r.dflt_value == null
+      ).map((r) => String(r.name))
+    held.tables.set(name, need)
+  }
+  return need
+}
+
 /**
  * Component tables actually in the file, irrespective of the loaded vocabulary.
  * Virtual/FTS shadow tables and infrastructure are not component tables. A
