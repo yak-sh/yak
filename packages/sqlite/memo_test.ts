@@ -2,6 +2,7 @@ import { test } from '@yaks/testing'
 import { assert, assertEquals, assertThrows } from '@std/assert'
 import { type Bundle, graph, Refused } from '@yaks/graph'
 import { loadVocab } from '@yaks/vocab'
+import { archetypeDoc } from '@yaks/archetype'
 import { fn, val } from '@yaks/sql'
 import { storage } from './mod.ts'
 import { open } from './db.ts'
@@ -286,4 +287,22 @@ test('a rolled-back write is read again; what it never wrote stays held', () => 
     { active: true },
     { active: false },
   ])
+})
+
+test('a transaction that moved one entity still reads others from memory', () => {
+  let d = mem(), s = storage(d, loadVocab([archetypeDoc, ...vocab.docs]))
+  s.install()
+  s.tx((tx) =>
+    tx.patch([{ entity: { eid: 'hero' }, player: { active: true } }])
+  )
+  let f = { ...fixture(), d, s }
+  f.s.get(['hero'])
+  f.s.tx((tx) => {
+    tx.patch([{ entity: { eid: 'fresh' }, player: { active: false } }])
+    assertEquals(reads(f, () => tx.get(['hero'])), 0)
+    assertEquals(tx.get(['fresh', 'hero']).map((b) => b.player), [
+      { active: false },
+      { active: true },
+    ])
+  })
 })

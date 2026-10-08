@@ -435,11 +435,21 @@ export let storage = (
       close: () => void open.splice(open.lastIndexOf(l), 1),
       tx: {
         ...tx,
+        // An entity whose rows moved in this transaction is read from what
+        // it holds; every other one as its pointer says, or from memory.
         get: (eids, comps) => {
           let pending = owed()
-          return pending.length
-            ? get(driver, vocab, eids, opts(), comps, pending)
-            : memo.get(tx.get, eids, comps)
+          let moving = new Set(pending)
+          let moved = eids.filter((eid) => moving.has(eid))
+          if (!moved.length) return memo.get(tx.get, eids, comps)
+          let rest = eids.filter((eid) => !moving.has(eid))
+          let at = new Map(
+            [
+              ...get(driver, vocab, moved, opts(), comps, pending),
+              ...rest.length ? memo.get(tx.get, rest, comps) : [],
+            ].map((b) => [b.entity.eid, b]),
+          )
+          return eids.flatMap((eid) => at.get(eid) ?? [])
         },
         // Pending component rows already stand in this transaction. Read them
         // directly rather than persisting an intermediate archetype just to
