@@ -1,6 +1,13 @@
 import { equal, ok, test, throws, until } from '@yaks/testing'
 import { traceControl } from './trace_control.ts'
 
+// A control that polls its sidecar every millisecond, and a wait that looks
+// as often, so noticing another instance's arming costs a test a millisecond
+// rather than a quarter second.
+let watching = (db: string, pid: number) => traceControl(db, pid, 1)
+let noticed = (fact: () => Promise<boolean>, label: string) =>
+  until(fact, { poll: 1, label })
+
 let scratch = async (run: (db: string) => void | Promise<void>) => {
   let dir = await Deno.makeTempDir({ prefix: 'T-64930-control-' })
   try {
@@ -12,27 +19,30 @@ let scratch = async (run: (db: string) => void | Promise<void>) => {
 
 test('trace control targets one PID and preserves independent rates and captures', () =>
   scratch(async (db) => {
-    let server = traceControl(db, 101)
-    let worker = traceControl(db, 102)
+    let server = watching(db, 101)
+    let worker = watching(db, 102)
     let arm = traceControl(db, 103)
     try {
       equal(await worker.take(), { requested: false, rate: 0 })
       await arm.set({ process: 101, next: 2, rate: 0.25 })
-      await until(async () => (await server.take()).requested, {
-        label: 'server receives targeted capture',
-      })
+      await noticed(
+        async () => (await server.take()).requested,
+        'server receives targeted capture',
+      )
       equal(await worker.take(), { requested: false, rate: 0 })
       equal(await server.take(), { requested: true, rate: 0.25 })
       equal(await server.take(), { requested: false, rate: 0.25 })
       await arm.set({ rate: 0.5 })
-      await until(async () => (await worker.take()).rate == 0.5, {
-        label: 'worker receives global rate',
-      })
+      await noticed(
+        async () => (await worker.take()).rate == 0.5,
+        'worker receives global rate',
+      )
       equal(await server.take(), { requested: false, rate: 0.25 })
       equal(await arm.set({ next: 1 }), { next: 1, rate: 0.5 })
-      await until(async () => (await worker.take()).requested, {
-        label: 'worker receives shared capture',
-      })
+      await noticed(
+        async () => (await worker.take()).requested,
+        'worker receives shared capture',
+      )
       equal(await server.take(), { requested: false, rate: 0.25 })
     } finally {
       server.close()
@@ -71,7 +81,7 @@ test('independent control instances atomically consume a shared budget', () =>
 test('idle trace controls make no files and notice arming in a newly created parent', () =>
   scratch(async (db) => {
     let nested = db.replace('/watched.db', '/nested/watched.db')
-    let idle = traceControl(nested, 101)
+    let idle = watching(nested, 101)
     let arm = traceControl(nested)
     try {
       for (let i = 0; i < 20; i++) {
@@ -79,9 +89,10 @@ test('idle trace controls make no files and notice arming in a newly created par
       }
       throws(() => Deno.statSync(`${nested}.trace.json`))
       await arm.set({ process: 101, next: 1 })
-      await until(async () => (await idle.take()).requested, {
-        label: 'new directory capture arrives',
-      })
+      await noticed(
+        async () => (await idle.take()).requested,
+        'new directory capture arrives',
+      )
       equal(await idle.take(), { requested: false, rate: 0 })
     } finally {
       idle.close()

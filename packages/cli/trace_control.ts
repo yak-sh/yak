@@ -59,8 +59,9 @@ let decoded = (text: string): State => {
 /** Shared capture budget for this database. A PID-specific budget takes
  * precedence over the global one; a PID rate overrides the global rate.
  * Opening never writes. Only arming or consuming an armed capture writes, and
- * an advisory lock serializes those changes across independent box processes. */
-export let traceControl = (db: string, pid = Deno.pid) => {
+ * an advisory lock serializes those changes across independent box processes.
+ * Another process's arming is noticed within `every` ms. */
+export let traceControl = (db: string, pid = Deno.pid, every = 250) => {
   let memory = db == ':memory:'
   let path = new URL(`${db}.trace.json`, `file://${Deno.cwd()}/`).pathname
   let directory = path.slice(0, path.lastIndexOf('/')) || '.'
@@ -107,7 +108,7 @@ export let traceControl = (db: string, pid = Deno.pid) => {
         signature = next
         refresh()
       }
-    }, 250)
+    }, every)
     Deno.unrefTimer(timer)
   }
   let rate = () => state.processes[String(pid)]?.rate ?? state.rate
