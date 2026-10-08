@@ -194,6 +194,23 @@ Results go to `bench/box.results.json`, and `bench:ratchet box` banks
 follow its page cache: compare CPU time and load averages before trusting a
 change in wall time.
 
+## Effect worker writes
+
+`bench/worker-apply.ts` measures the writes a warm effect worker makes, on the
+same copy and config: the host is composed once, a pool worker stays up over it
+with a no-op handler for every declared effect, and nothing is opened per write.
+It prints the median owing commit, claim and settle, one run's life from the
+commit that owes it to its settle, each of those writes split by phase with its
+statements and rows, and the runs a second the worker settles from a backlog
+written through the graph:
+
+```sh
+deno run -A bench/worker-apply.ts ~/.cache/yak-bench/yak.json 25 20000
+# the drain alone, under a profiler: write the backlog, then drain it
+deno run -A bench/worker-apply.ts ~/.cache/yak-bench/yak.json 0 20000
+deno run -A --cpu-prof bench/worker-apply.ts ~/.cache/yak-bench/yak.json 1 0
+```
+
 ## Box-wide serialization
 
 Throughput and standalone suites acquire an exclusive `flock` on
