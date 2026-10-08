@@ -181,6 +181,6 @@ test('whole reads scale with worn components across one or 100 hits', () => {
   assertEquals(queries.length, 4) // spine + probe + two facets
   queries.length = 0
   assertEquals(s.read(`.${first}`, {}, [first]).length, 100)
-  assertEquals(queries.length, 3) // filter + spine + named facet
+  assertEquals(queries.length, 2) // spine + named facet; the filter's is held
   assert(queries.every((sql) => !sql.includes(last)))
 })

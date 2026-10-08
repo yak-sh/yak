@@ -68,7 +68,7 @@ import { tables } from './ddl.ts'
 // through, so a caller may hand-build one with @yaks/query's builders.
 export type Query = string | And
 
-let ast = (q: Query): And => typeof q == 'string' ? parse(q) : q
+export let ast = (q: Query): And => typeof q == 'string' ? parse(q) : q
 
 // The raw compiled rows for a query — a membership query returns `{ eid }` per
 // match, an aggregate returns its value/count shape, and a `.fields`
@@ -983,9 +983,10 @@ export let read = (
   query: Query,
   opts: BindOpts = {},
   comps?: string[],
+  ask: (query: And) => Row[] = (q) => rows(driver, vocab, q, opts),
 ): Bundle[] => {
   let parsed = ast(query)
-  let selected = rows(driver, vocab, parsed, opts)
+  let selected = ask(parsed)
   return get(
     driver,
     vocab,

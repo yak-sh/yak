@@ -61,14 +61,7 @@ import {
   Refused,
 } from '@yaks/graph'
 import { matcher, net, rows as matchRows } from '@yaks/match'
-import {
-  type And,
-  bare,
-  type Clause,
-  parse,
-  timeEdges,
-  type Value,
-} from '@yaks/query'
+import { type And, bare, drifts, parse } from '@yaks/query'
 import { paceOf, saveOf, syncOf } from '@yaks/vocab'
 import { published } from './publish.ts'
 import { cares, type Interest, interest } from './interest.ts'
@@ -841,34 +834,12 @@ export let subscriptions = (graph: Graph, opts: {
     }
   }
 
-  let moving = (ast: And): boolean => {
-    let text = (v: Value): string =>
-      v.kind == 'list'
-        ? v.items.map(text).join(',')
-        : v.kind == 'range'
-        ? text(v.lo) + (v.exclusiveEnd ? '...' : '..') + text(v.hi)
-        : v.raw
-    let now = Date.now()
-    let visit = (c: Clause): boolean => {
-      if (c.kind == 'and' || c.kind == 'or') return c.clauses.some(visit)
-      if (c.kind != 'pred') return false
-      if (c.where && visit(c.where)) return true
-      if (!c.value) return false
-      // A path no component declares (`.kind`) may be anything: say it moves.
-      let leaf
-      try {
-        leaf = graph.vocab.aim(c.path.join('.'), bare(c)).at(-1)
-      } catch {
-        return true
-      }
-      let p = leaf && graph.vocab.prop(leaf.comp, leaf.prop)
-      if (p?.scalar != 'time' && p?.scalar != 'number') return false
-      let op = c.op == '!=' ? '=' : c.op, value = text(c.value)
-      return JSON.stringify(timeEdges(op, value, now)) !=
-        JSON.stringify(timeEdges(op, value, now + 366 * 86_400_000))
-    }
-    return ast.clauses.some(visit)
-  }
+  // A path no component declares (`.kind`) may be anything: it drifts.
+  let moving = (ast: And): boolean =>
+    drifts(ast, (c) => {
+      let leaf = graph.vocab.aim(c.path.join('.'), bare(c)).at(-1)
+      return leaf && graph.vocab.prop(leaf.comp, leaf.prop)?.scalar
+    })
 
   let open = (
     sink: Sink,

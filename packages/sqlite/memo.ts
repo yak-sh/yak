@@ -18,13 +18,27 @@
 // except a plain mint, which this package tells (`spined().learn`); those kept
 // during a transaction go if it rolls back.
 //
+// A query's rows are kept too, while no table its answer stands on has been
+// written (`answer`, `basis`): a page walking back over tiles it has watched
+// asks them again for nothing while nobody has written a place. Every write
+// statement moves its table's count, so nothing a write says has to be
+// trusted; what memory can't follow (text, nearness, edges, computed and
+// derived properties, time phrases) is read every time.
+//
 // A get naming components is cut from a whole entity held. Returned bundles
 // are copies; dynamic components (computed, or derived from anything but this
 // connection's rows) are read again on every hit. Bounded by count and bytes,
 // the longest unread let go first.
 import type { Bundle } from '@yaks/graph'
 import type { Vocab } from '@yaks/vocab'
-import { type Derived, type Driver, revision, type Stmt } from '@yaks/sql'
+import { type And, bare, type Clause, drifts, type Pred } from '@yaks/query'
+import {
+  type Derived,
+  type Driver,
+  revision,
+  type Row,
+  type Stmt,
+} from '@yaks/sql'
 import { tables } from './ddl.ts'
 import type { Spine } from './write.ts'
 
@@ -43,7 +57,13 @@ export type Memo = {
     eids: (out: R) => Iterable<string>,
     mints?: boolean,
   ) => R
+  /** The rows `run` answers the query `key` names with, from memory while no
+   * table `tables` names has been written since; `tables` left out (a query
+   * memory can't follow, `basis`), from `run` every time. */
+  answer: (key: string, tables: string[] | undefined, run: () => Row[]) => Row[]
 }
+
+type Answer = { tables: [string, number][]; rows: Row[] }
 
 /** The spines a connection keeps. */
 export type Spines = {
@@ -57,12 +77,96 @@ export type Spines = {
 }
 
 const COUNT = 2048, BYTES = 4 << 20, SPINES = 8192
+// Answers are bounded by count, and one too large to keep is read every time.
+const ANSWERS = 256, ANSWER = 16 << 10
+
+/**
+ * The tables a query's answer stands on, or `undefined` for one memory can't
+ * follow: text, nearness, backlinks, edges, walks and rule clauses; a path
+ * nothing declares; a computed or derived property; a time phrase, whose
+ * answer moves with the clock. Every answer stands on the graves and, where
+ * it is `catalogued`, on the archetype catalog. One that requires no component
+ * row (`!product`, `.doc|!doc`) may take in any new entity, so it stands on
+ * every entity. A number or an eid moving lets every answer go (`moves`).
+ */
+export let basis = (
+  vocab: Vocab,
+  q: And,
+  derived: Derived = {},
+  catalogued = false,
+): string[] | undefined => {
+  let out = new Set(['tombstone'])
+  if (catalogued) out.add('archetype')
+  let path = (segs: string[], facet = false): boolean => {
+    let hops
+    try {
+      hops = vocab.aim(segs.join('.'), facet)
+    } catch {
+      return false
+    }
+    for (let { comp, prop } of hops) {
+      out.add(comp)
+      if (comp == 'entity') continue
+      if (!vocab.comp(comp) || vocab.comp(comp)!.computed) return false
+      if (
+        prop &&
+        (vocab.prop(comp, prop)?.computed || derived[`${comp}.${prop}`])
+      ) return false
+    }
+    return true
+  }
+  let visit = (c: Clause): boolean => {
+    switch (c.kind) {
+      case 'and':
+      case 'or':
+        return c.clauses.every(visit)
+      case 'pred':
+        return !c.where && path(c.path, bare(c))
+      case 'fields':
+        return c.fields.every((f) => path(f.path))
+      case 'distinct':
+      case 'tally':
+        return path(c.path)
+      case 'order':
+        return path(c.value.replace(/^-/, '').split('.'))
+      case 'count':
+      case 'limit':
+      case 'after':
+      case 'every':
+      case 'never':
+        return true
+      default:
+        return false
+    }
+  }
+  let scalar = (p: Pred) => {
+    let leaf = vocab.aim(p.path.join('.'), bare(p)).at(-1)
+    return leaf && vocab.prop(leaf.comp, leaf.prop)?.scalar
+  }
+  // Whether a clause holds only for an entity with a row of some component:
+  // one it must hold (`.doc`, parsed as `!` with no value) or a value it must
+  // have, under every arm of an `or`. An absence (`!doc`, `= ''`) is not one.
+  let anchored = (c: Clause): boolean =>
+    c.kind == 'and'
+      ? c.clauses.some(anchored)
+      : c.kind == 'or'
+      ? c.clauses.length > 0 && c.clauses.every(anchored)
+      : c.kind == 'pred' && !c.not && c.path[0] != 'entity' &&
+        (c.op == '!'
+          ? !c.value
+          : ['=', '~=', '<', '<=', '>', '>='].includes(c.op) &&
+            !(c.value?.kind == 'scalar' && c.value.raw == ''))
+  if (!visit(q) || drifts(q, scalar)) return undefined
+  if (!anchored(q)) out.add('entity')
+  return [...out]
+}
 
 type Kept = {
   /** an entity as read, or `null` for one storage does not hold */
   held: Map<string, Bundle | null>
   sizes: Map<string, number>
   bytes: number
+  answers: Map<string, Answer>
   tables: Set<string>
   clear: () => void
 }
@@ -78,6 +182,10 @@ type Connection = {
   spines: Map<string, Spine>
   /** eids whose spine was kept while a transaction is open */
   since: Set<string>
+  /** how many statements have written each table */
+  versions: Map<string, number>
+  /** answers kept while a transaction is open, by where they are kept */
+  answered: [Map<string, Answer>, string][]
   /** the `outside` revision the spines were kept at */
   outside: number
 }
@@ -96,12 +204,17 @@ let connect = (driver: Driver): Connection => {
     spines: new Map(),
     since: new Set(),
     outside: -1,
+    versions: new Map(),
+    answered: [],
   }
   connections.set(driver, c)
-  // What a rolled-back transaction had kept of spines may be gone with it.
+  // What a rolled-back transaction had kept of spines and answers may be gone
+  // with it.
   let undone = () => {
     for (let eid of c.since) c.spines.delete(eid)
     c.since.clear()
+    for (let [answers, key] of c.answered) answers.delete(key)
+    c.answered = []
   }
   let ended = (committed: boolean) => {
     c.depth = 0
@@ -109,7 +222,10 @@ let connect = (driver: Driver): Connection => {
     c.blind = false
     if (!committed) undone()
     c.since.clear()
+    c.answered = []
   }
+  let bump = (table: string) =>
+    c.versions.set(table, (c.versions.get(table) ?? 0) + 1)
   let unspine = () => {
     c.spines.clear()
     c.since.clear()
@@ -140,15 +256,21 @@ let connect = (driver: Driver): Connection => {
     else if (s.t == 'rollback') s.to ? undone() : ended(false)
     else if (s.t == 'release' && --c.depth <= 0) ended(true)
     else if (s.t == 'insert' || s.t == 'update' || s.t == 'delete') {
-      if (moves(s)) unspine()
-      if (!c.writing) {
-        forget(s.t == 'insert' ? s.into : s.t == 'update' ? s.table : s.from)
+      let table = s.t == 'insert' ? s.into : s.t == 'update' ? s.table : s.from
+      bump(table)
+      if (moves(s)) {
+        unspine()
+        // A number, an eid or an id itself moved: what any answer ordered,
+        // paged or compared a reference by.
+        if (table == 'entity') { for (let k of c.kept) k.answers.clear() }
       }
+      if (!c.writing) forget(table)
     } else if (
       s.t.startsWith('create ') || s.t == 'alter table' || s.t == 'drop'
     ) {
       forget()
       unspine()
+      for (let k of c.kept) k.answers.clear()
     }
   }
   let query = driver.query.bind(driver)
@@ -236,6 +358,7 @@ export let memoized = (
     held: new Map(),
     sizes: new Map(),
     bytes: 0,
+    answers: new Map(),
     tables: new Set(['entity', 'tombstone', 'blob_text', ...tables(vocab)]),
     clear: () => {
       k.held.clear()
@@ -263,13 +386,43 @@ export let memoized = (
     ) dynamic.add(name)
   }
   let seen = -1
+  // Another connection's commit, or anything else this one cannot see.
+  let sync = () => {
+    let now = revision(driver, 'outside')
+    if (now == seen) return
+    k.clear()
+    k.answers.clear()
+    seen = now
+  }
   return {
-    get: (get, eids, comps) => {
-      let now = revision(driver, 'outside')
-      if (now != seen) {
-        k.clear()
-        seen = now
+    answer: (key, tables, run) => {
+      if (!tables) return run()
+      sync()
+      let current = (table: string) => c.versions.get(table) ?? 0
+      let held = k.answers.get(key)
+      if (held && held.tables.every(([t, n]) => current(t) == n)) {
+        k.answers.delete(key)
+        k.answers.set(key, held)
+        return structuredClone(held.rows)
       }
+      if (held) k.answers.delete(key)
+      let at = tables.map((t): [string, number] => [t, current(t)])
+      let rows = run()
+      if (at.some(([t, n]) => current(t) != n)) return rows
+      let size = JSON.stringify(
+        rows,
+        (_k, v) => typeof v == 'bigint' ? String(v) : v,
+      ).length * 2
+      if (size > ANSWER) return rows
+      k.answers.set(key, { tables: at, rows: structuredClone(rows) })
+      if (c.depth) c.answered.push([k.answers, key])
+      if (k.answers.size > ANSWERS) {
+        k.answers.delete(k.answers.keys().next().value!)
+      }
+      return rows
+    },
+    get: (get, eids, comps) => {
+      sync()
       // A get naming components is answered from a whole entity held, cut
       // to them; one read for it is not kept, since it is not whole.
       let wanted = comps && new Set(comps)

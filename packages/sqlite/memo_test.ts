@@ -10,6 +10,8 @@ import { Denied, members } from '@yaks/member'
 import { club } from '../member/testing.ts'
 import { grant, ids, setMode } from '../member/testing.ts'
 import { mem } from './testing.ts'
+import { basis } from './memo.ts'
+import { parse } from '@yaks/query'
 
 let vocab = loadVocab([{
   $defs: {
@@ -402,3 +404,57 @@ for (
     assertEquals(f.s.get(['mob'])[0].position, undefined)
   })
 }
+
+test('a query asked again reads nothing until a table it stands on is written', () => {
+  let f = fixture()
+  let active = () => f.s.rows('.player.active=true').map((r) => r.eid)
+  assertEquals(reads(f, active), 1)
+  assertEquals(reads(f, active), 0)
+  f.s.tx((tx) => tx.patch([{ entity: { eid: 'hero' }, position: { x: 1 } }]))
+  assertEquals(reads(f, active), 0)
+  f.s.tx((tx) =>
+    tx.patch([{ entity: { eid: 'mob' }, player: { active: true } }])
+  )
+  assertEquals(active(), ['hero', 'mob'])
+  f.s.tx((tx) => tx.remove([{ eid: 'hero' }]))
+  assertEquals(active(), ['mob'])
+  assertEquals(
+    f.s.tx((tx) => tx.read('.player.active=true')).map((b) => b.entity.eid),
+    ['mob'],
+  )
+})
+
+test('an answer that requires no row takes in every new entity', () => {
+  let f = fixture()
+  let still = () => f.s.rows('!position').map((r) => r.eid)
+  assertEquals(still(), ['hero'])
+  f.s.tx((tx) =>
+    tx.patch([{ entity: { eid: 'mob' }, player: { active: false } }])
+  )
+  assertEquals(still(), ['hero', 'mob'])
+})
+
+test('an answer kept inside a rolled-back transaction goes with it', () => {
+  let f = fixture()
+  let active = () => f.s.rows('.player.active=true').map((r) => r.eid)
+  assertThrows(() =>
+    f.s.tx((tx) => {
+      tx.patch([{ entity: { eid: 'mob' }, player: { active: true } }])
+      assertEquals(active(), ['hero', 'mob'])
+      throw new Error('no')
+    })
+  )
+  assertEquals(active(), ['hero'])
+})
+
+test('what memory cannot follow is read every time', () => {
+  let player = parse('.player.active=true')
+  assertEquals(basis(vocab, player)?.sort(), ['player', 'tombstone'])
+  for (
+    let q of [
+      '.player.active=true hello',
+      '.player.nope=1',
+      '.position.x>today',
+    ]
+  ) assertEquals(basis(vocab, parse(q)), undefined, q)
+})

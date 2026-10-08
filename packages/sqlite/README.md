@@ -211,6 +211,14 @@ the same way, so the patches one transaction makes read each entity's once. Any
 statement that may move a spine lets them all go, and those kept inside a
 transaction that rolls back go with it.
 
+A query's rows are kept as well, while no table its answer stands on has been
+written: every write statement moves its table's count, and an answer is good
+while the counts of the tables it reads (and the graves, and the archetype
+catalog) stand where they were. A query that requires no component row (`!doc`)
+stands on every entity. Text, nearness, edges, walks, backlinks, computed and
+derived properties and time phrases are read every time, as is anything a
+transaction that still owes archetype pointers asks of the catalog.
+
 ## API
 
 `storage(driver, vocab, base?)` returns a synchronous `Store`:

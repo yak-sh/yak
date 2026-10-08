@@ -10,6 +10,8 @@
 // clock in their own local zone, so the phrase stays authored (`today` must
 // advance tomorrow) and `now` rides in as a parameter tests can fix.
 
+import type { Clause, Pred, Value } from './ast.ts'
+
 // `at` is the moment a phrase names when it names one rather than a stretch
 // (`now`, `1 hour ago`, `in 5m`); its span then runs between now and that
 // moment.
@@ -263,4 +265,49 @@ export let timeEdges = (
   }
   let arms = value.split(',').map((s) => item(s, now))
   return arms.every((a): a is Edge[] => a != null) ? arms : null
+}
+
+/**
+ * Whether a query's answer can move with the clock alone: a predicate on a time
+ * or number property whose value is a phrase (`1 hour ago`) naming another
+ * instant a year on. `scalar` says what a predicate's path holds; one it
+ * throws for, a path nothing declares, may hold anything and so drifts.
+ *
+ * ```ts
+ * import { assert } from '@std/assert'
+ * import { drifts, parse } from '@yaks/query'
+ *
+ * let scalar = () => 'time'
+ * assert(drifts(parse('.item.at>today'), scalar))
+ * assert(!drifts(parse('.item.at>2026-01-01'), scalar))
+ * ```
+ */
+export let drifts = (
+  q: Clause,
+  scalar: (p: Pred) => string | undefined,
+  now: number = Date.now(),
+): boolean => {
+  let text = (v: Value): string =>
+    v.kind == 'list'
+      ? v.items.map(text).join(',')
+      : v.kind == 'range'
+      ? text(v.lo) + (v.exclusiveEnd ? '...' : '..') + text(v.hi)
+      : v.raw
+  let visit = (c: Clause): boolean => {
+    if (c.kind == 'and' || c.kind == 'or') return c.clauses.some(visit)
+    if (c.kind != 'pred') return false
+    if (c.where && visit(c.where)) return true
+    if (!c.value) return false
+    let type
+    try {
+      type = scalar(c)
+    } catch {
+      return true
+    }
+    if (type != 'time' && type != 'number') return false
+    let op = c.op == '!=' ? '=' : c.op, value = text(c.value)
+    return JSON.stringify(timeEdges(op, value, now)) !=
+      JSON.stringify(timeEdges(op, value, now + 366 * 86_400_000))
+  }
+  return visit(q)
 }

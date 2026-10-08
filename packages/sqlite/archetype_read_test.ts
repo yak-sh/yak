@@ -131,6 +131,8 @@ test('classified gathers select only present tables and only their owners', () =
   assert(asked[0].sql.includes('"marker"'), asked[0].sql)
   asked = []
   s.rows('.doc .marker')
+  assertEquals(asked.length, 0) // the answer is held
+  s.rows('.marker .doc')
   assertEquals(asked.length, 1) // no catalog SQL until the connection mutates
   assert(!asked.some((q) => q.sql.startsWith('select "entity", "tables" from')))
 })

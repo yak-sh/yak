@@ -40,6 +40,7 @@
 // handle for a server — so nothing here names a concrete SQLite library.
 
 import type { Vocab } from '@yaks/vocab'
+import type { And } from '@yaks/query'
 import {
   type BindOpts,
   type Derived,
@@ -76,7 +77,7 @@ import {
   tabled,
 } from './ddl.ts'
 import { EPOCH, epoch, installed, meta, SCHEMA } from './meta.ts'
-import { doom, get, read, rows, screened, tagOf } from './read.ts'
+import { ast, doom, get, read, rows, screened, tagOf } from './read.ts'
 import { unit } from './unit.ts'
 import {
   backfill,
@@ -89,7 +90,7 @@ import {
 import { componentTables, shape } from './physical.ts'
 import { patch, remove, revive } from './write.ts'
 import { bindings } from './rules.ts'
-import { memoized } from './memo.ts'
+import { basis, memoized } from './memo.ts'
 import { revision } from '@yaks/sql'
 
 export * from './archetype.ts'
@@ -320,6 +321,17 @@ let plan = (vocab: Vocab, derived: Derived = NONE): Plan => {
   return fresh
 }
 
+// The read options a statement is the same under (@yaks/graph `ReadOpts`).
+const UNREAD = new Set([
+  'native',
+  'durable',
+  'parent',
+  'patch',
+  'speaks',
+  'now',
+  'storageOrder',
+])
+
 // The ledgers of the units open on each driver, outermost first (`tracked`).
 let ledgers = new WeakMap<Driver, Ledger[]>()
 
@@ -379,8 +391,42 @@ export let storage = (
     ...bundles.map((b) => b.entity.eid),
     ...born.map((e) => e.eid),
   ]
+  // A query's rows, from memory while the tables its answer stands on are
+  // unwritten (./memo.ts `answer`), in the one snapshot that decides both. A
+  // `direct` read takes presence from the component tables, not the archetype
+  // pointers a transaction still owes; anywhere else an owed pointer means the
+  // catalog can't be trusted yet.
+  let asked = (query: And, o: Opts = {}, direct = false): Row[] => {
+    let catalogued = classified && !direct
+    let owing = catalogued &&
+      (ledgers.get(driver) ?? []).some((l) => l.owed().length)
+    // What a caller's options change of the statement: its order of pages; a
+    // `now` matters only to time phrases, which are read every time.
+    let unread = Object.keys(o).some((k) => !UNREAD.has(k))
+    return unit(driver, () =>
+      memo.answer(
+        JSON.stringify([query, !!o.storageOrder, direct]),
+        owing || unread
+          ? undefined
+          : basis(vocab, query, base.derived, catalogued),
+        () =>
+          rows(driver, vocab, query, {
+            ...opts(),
+            ...o,
+            ...direct ? { archetypes: () => undefined } : {},
+          }),
+      ), 'read')
+  }
   let tx: Tx = {
-    read: (query, o) => read(driver, vocab, query, { ...opts(), ...o }),
+    read: (query, o) =>
+      read(
+        driver,
+        vocab,
+        query,
+        { ...opts(), ...o },
+        undefined,
+        (q) => asked(q, o),
+      ),
     get: identity,
     doom: (eids) => doom(driver, vocab, eids),
     bindings: (matches, bundles, covers) =>
@@ -454,11 +500,21 @@ export let storage = (
         // Pending component rows already stand in this transaction. Read them
         // directly rather than persisting an intermediate archetype just to
         // read before the graph's final stamp/tracker flush.
-        read: (query, o) =>
-          tx.read(query, {
-            ...o,
-            ...(owed().length ? { archetypes: () => undefined } : {}),
-          }),
+        read: (query, o) => {
+          let direct = owed().length > 0
+          return read(
+            driver,
+            vocab,
+            query,
+            {
+              ...opts(),
+              ...o,
+              ...direct ? { archetypes: () => undefined } : {},
+            },
+            undefined,
+            (q) => asked(q, o, direct),
+          )
+        },
         patch: (bundles) => {
           let born = memo.writes(
             () =>
@@ -572,13 +628,21 @@ export let storage = (
       ensure()
       return unit(
         driver,
-        () => read(driver, vocab, query, { ...opts(), ...o }, comps),
+        () =>
+          read(
+            driver,
+            vocab,
+            query,
+            { ...opts(), ...o },
+            comps,
+            (q) => asked(q, o),
+          ),
         'read',
       )
     },
     rows: (query, o) => {
       ensure()
-      return rows(driver, vocab, query, { ...opts(), ...o })
+      return asked(ast(query), o)
     },
     screen: (query, o) => {
       ensure()
