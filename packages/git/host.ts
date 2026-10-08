@@ -457,26 +457,36 @@ export let processCwds = async (): Promise<Set<string>> => {
       'Worktree collection requires a local process directory scan',
     )
   }
-  let paths = new Set([await Deno.realPath(Deno.cwd())])
-  for await (let entry of Deno.readDir('/proc')) {
-    if (!/^\d+$/.test(entry.name)) continue
-    try {
-      // Linux restricts other users' cwd links even when procfs is readable.
-      if ((await Deno.stat(`/proc/${entry.name}`)).uid != Deno.uid()) continue
-      paths.add(await processCwd(entry.name))
-    } catch (error) {
-      // A process may exit between listing it and reading its cwd. ESRCH can
-      // arrive as a plain Error; every other failure keeps the worktrees.
-      if (
-        !(error instanceof Deno.errors.NotFound) &&
-        !(error instanceof Error && /\(os error [23]\)/.test(error.message))
-      ) {
-        throw error
-      }
-    }
-  }
-  return paths
+  let cwds = await scan(await running(), async (pid) => {
+    // Linux restricts other users' cwd links even when procfs is readable.
+    if ((await Deno.stat(`/proc/${pid}`)).uid != Deno.uid()) return []
+    return [await processCwd(pid)]
+  })
+  return new Set([await Deno.realPath(Deno.cwd()), ...cwds])
 }
+
+// Every process listed in procfs, by pid.
+let running = async (): Promise<string[]> =>
+  (await Array.fromAsync(Deno.readDir('/proc')))
+    .map((entry) => entry.name).filter((name) => /^\d+$/.test(name))
+
+// What `read` finds for each process, asked of them all at once: a hidden one
+// is a privileged reader's process of its own, which nothing else waits on. A
+// process may exit between listing it and reading it, and ESRCH can arrive as
+// a plain Error; every other failure refuses the scan, keeping the worktrees.
+let scan = async (
+  pids: string[],
+  read: (pid: string) => Promise<string[]>,
+): Promise<string[]> =>
+  (await Promise.all(pids.map((pid) =>
+    read(pid).catch((error) => {
+      if (
+        error instanceof Deno.errors.NotFound ||
+        error instanceof Error && /\(os error [23]\)/.test(error.message)
+      ) return []
+      throw error
+    })
+  ))).flat()
 
 /** Paths occupied by this user's processes: their directories and open files.
  * Procfs links name the canonical file even when it was opened through a
@@ -488,29 +498,24 @@ export let processPaths = async (
   if (Deno.build.os != 'linux') {
     throw new Error('Worktree collection requires a local process path scan')
   }
-  let paths = new Set<string>()
-  let processes = pids ?? []
-  if (!pids) {
-    for await (let entry of Deno.readDir('/proc')) {
-      if (/^\d+$/.test(entry.name)) processes.push(entry.name)
-    }
-  }
-  for (let pid of processes) {
-    try {
+  return new Set(
+    await scan(pids ?? await running(), async (pid) => {
       let proc = `/proc/${pid}`
-      if ((await Deno.stat(proc)).uid != Deno.uid()) continue
+      if ((await Deno.stat(proc)).uid != Deno.uid()) return []
+      let paths: string[] = []
       try {
-        paths.add(await Deno.realPath(proc + '/cwd'))
+        paths.push(await Deno.realPath(proc + '/cwd'))
         for await (let fd of Deno.readDir(proc + '/fd')) {
           try {
             let path = await Deno.readLink(proc + '/fd/' + fd.name)
             if (path.startsWith('/')) {
-              paths.add(path.replace(/ \(deleted\)$/, ''))
+              paths.push(path.replace(/ \(deleted\)$/, ''))
             }
           } catch (error) {
             if (!(error instanceof Deno.errors.NotFound)) throw error
           }
         }
+        return paths
       } catch (error) {
         if (!(error instanceof Deno.errors.PermissionDenied)) throw error
         // The helper's JSON response proves both cwd and descriptors were
@@ -549,18 +554,10 @@ export let processPaths = async (
             cause: error,
           })
         }
-        for (let path of found) {
-          paths.add(path)
-        }
+        return found as string[]
       }
-    } catch (error) {
-      if (
-        !(error instanceof Deno.errors.NotFound) &&
-        !(error instanceof Error && /\(os error [23]\)/.test(error.message))
-      ) throw error
-    }
-  }
-  return paths
+    }),
+  )
 }
 
 /** A process using any path inside a worktree keeps the whole checkout. */
