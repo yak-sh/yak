@@ -2,7 +2,7 @@
 // Subscriptions over a bookshop: what a subscriber is told when the graph
 // moves under it, and — just as much the point — what it is never told.
 
-import { equal, test, until } from '@yaks/testing'
+import { equal, test, tick, until } from '@yaks/testing'
 import { map as queryMap } from '@yaks/query'
 import { assert, assertEquals } from '@std/assert'
 import { type Bundle, type Graph, graph } from '@yaks/graph'
@@ -130,10 +130,11 @@ test('restoring shared watches reads each answer once and keeps each live', () =
     )
   }
 
+  // A later watch shares the answer the restored ones keep current.
   let later = ear()
   subs.open(later.to, 'later', '.book.price<20')
   assertEquals(ids(later.take()[0]), ['b1', 'b2'])
-  assertEquals(reads, 2)
+  assertEquals(reads, 1)
 })
 
 test('a commit pushes what the query selects, and nothing else', () => {
@@ -879,6 +880,69 @@ test('closing and dropping stop the pushes', () => {
   subs.drop(two.to)
   graph.apply([{ entity: { eid: 'b2' }, book: { price: 9 } }])
   assertEquals(two.take(), [])
+})
+
+// A graph that counts the reads a registry asks of it.
+let counted = () => {
+  let g = shop(), n = { reads: 0 }
+  let spy: Graph = {
+    ...g,
+    read: (q, opts) => (n.reads++, g.read(q, opts)),
+    get: (eids, comps, opts) => (n.reads++, g.get(eids, comps, opts)),
+  }
+  return { g, spy, n }
+}
+
+test('a watch asked again after closing answers from memory, as it stands now', async () => {
+  for (let query of ['.book.price<20', '.book.price<20&*']) {
+    let { g, spy, n } = counted()
+    await g.apply([
+      { entity: { eid: 'b1' }, book: { price: 12 } },
+      { entity: { eid: 'b2' }, book: { price: 9 } },
+      { entity: { eid: 'b3' }, book: { price: 5 } },
+    ])
+    let subs = subscriptions(spy)
+    let e = ear()
+    await subs.open(e.to, 'cheap', query)
+    await subs.close(e.to, 'cheap')
+    // Joined, edited, left, deleted and untouched while nobody watched.
+    await g.apply([
+      { entity: { eid: 'b4' }, book: { price: 3 }, doc: { title: 'New' } },
+      { entity: { eid: 'b1' }, book: { price: 15 }, doc: { title: 'Dune' } },
+      { entity: { eid: 'b2' }, book: { price: 30 } },
+      { entity: { eid: 'b3' }, $delete: true },
+    ])
+    await tick()
+    let before = n.reads
+    await subs.open(e.to, 'again', query)
+    assertEquals(n.reads, before)
+    // An answer is a set: its order is not part of it.
+    let set = (f?: Frame) => ({
+      ...f,
+      bundles: f?.bundles?.toSorted((a, b) =>
+        a.entity.eid.localeCompare(b.entity.eid)
+      ),
+      transientReset: f?.transientReset?.toSorted(),
+    })
+    let fresh = ear()
+    await subscriptions(g).open(fresh.to, 'again', query)
+    assertEquals(set(e.take().at(-1)), set(fresh.take()[0]))
+  }
+})
+
+test('watches asking the same query share one answer', async () => {
+  let { g, spy, n } = counted()
+  await g.apply([{ entity: { eid: 'b1' }, book: { price: 12 } }])
+  let subs = subscriptions(spy)
+  let one = ear(), two = ear()
+  await subs.open(one.to, 'cheap', '.book.price<20&*')
+  let before = n.reads
+  await subs.open(two.to, 'cheap', '.book.price<20&*')
+  assertEquals(n.reads, before)
+  assertEquals(two.take(), one.take())
+  await g.apply([{ entity: { eid: 'b2' }, book: { price: 9 } }])
+  await tick()
+  assertEquals(two.take(), one.take())
 })
 
 test('explicit dependency invalidation refreshes a query on unrelated writes', async () => {

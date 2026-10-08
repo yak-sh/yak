@@ -237,7 +237,21 @@ type Sub = {
   /** what a refresh or an aggregate is read from, or `null` when every
    * commit can move it */
   reads?: Interest | null
+  /** the answer this subscription shares with every other asking the same */
+  shared?: Shared
+  /** closed, and standing only to keep its shared answer current */
+  kept?: boolean
 }
+
+// A routed answer held in memory: the rows a client subscribed all along
+// holds, kept current by the network from what each commit moved, never by
+// asking again. Subscriptions asking the same query with the same options
+// share one, and the last to close leaves it standing, so a page that lets go
+// of a watch and asks for it again (a map walked back across, a reload) is
+// answered from memory. Answers hold at most HELD rows; closed ones KEPT rows
+// between them, the longest unasked let go first.
+type Shared = { key: string; rows: Map<Eid, Bundle>; users: Set<Sub> }
+const HELD = 512, KEPT = 8192
 
 // Membership and projection use storage's vocabulary; delivery uses the caller's.
 let queryOf = (sub: Sub, q = sub.query): Query => {
@@ -525,10 +539,67 @@ export let subscriptions = (graph: Graph, opts: {
       comps(b).some(([comp]) => saveOf(graph.vocab, comp) != null)
     )
   let relays = new Map<Sink, { bundles: Bundle[]; done: Promise<void> }>()
+  let shared = new Map<string, Shared>()
+  // The closed subscriptions keeping a shared answer, longest unasked first.
+  let kept = new Map<string, Sub>()
+  let keyOf = (sub: Sub) => JSON.stringify([sub.query, sub.opts ?? null])
+  let unshare = (share: Shared) => {
+    if (shared.get(share.key) === share) shared.delete(share.key)
+    for (let s of share.users) {
+      s.shared = undefined
+      if (!s.kept) continue
+      kept.delete(share.key)
+      network(s).drop(s)
+    }
+    share.users.clear()
+  }
+  // A routed subscription that reads only what each entity holds, now and
+  // later alike, takes up the answer others asking the same share, or starts
+  // one for them when its own is small enough to hold.
+  let join = (sub: Sub, ast: And, bundles: Bundle[]) => {
+    if (
+      sub.view || sub.peer || sub.agg || sub.plan || sub.reads?.via.size ||
+      moving(ast)
+    ) return
+    let share = shared.get(keyOf(sub))
+    if (!share) {
+      if (bundles.length > HELD) return
+      share = {
+        key: keyOf(sub),
+        rows: new Map(bundles.map((b) => [b.entity.eid, b])),
+        users: new Set(),
+      }
+      shared.set(share.key, share)
+    }
+    for (let k of share.users) {
+      if (!k.kept) continue
+      share.users.delete(k)
+      kept.delete(share.key)
+      network(k).drop(k)
+    }
+    share.users.add(sub)
+    sub.shared = share
+  }
   // A subscription let go of, by its sink closing it or by a new one under
-  // its id: the network lets go of it too.
-  let forget = (sub: Sub | undefined) => {
-    if (sub?.routed) network(sub).drop(sub)
+  // its id: the network lets go of it too, unless it is the last keeping a
+  // shared answer, which it keeps current while the answer stays kept.
+  let forget = (sub: Sub | undefined, keep = true) => {
+    if (!sub?.routed) return
+    let share = sub.shared
+    share?.users.delete(sub)
+    if (share && !share.users.size) {
+      if (!keep) return unshare(share)
+      sub.kept = true
+      share.users.add(sub)
+      kept.set(share.key, sub)
+      let rows = 0
+      for (let k of [...kept.values()].reverse()) {
+        rows += k.shared!.rows.size
+        if (rows > KEPT) unshare(k.shared!)
+      }
+      return
+    }
+    network(sub).drop(sub)
   }
 
   // A subscription whose query is refused is closed, not kept: a query the
@@ -536,7 +607,7 @@ export let subscriptions = (graph: Graph, opts: {
   // the socket.
   let cut = (sub: Sub, err: unknown) => {
     held.get(sub.sink)?.delete(sub.id)
-    forget(sub)
+    forget(sub, false)
     fault(err, 'subscription')
     sub.sink({ id: sub.id, refused: refusal(err) })
   }
@@ -779,7 +850,13 @@ export let subscriptions = (graph: Graph, opts: {
       if (c.kind != 'pred') return false
       if (c.where && visit(c.where)) return true
       if (!c.value) return false
-      let leaf = graph.vocab.aim(c.path.join('.'), bare(c)).at(-1)
+      // A path no component declares (`.kind`) may be anything: say it moves.
+      let leaf
+      try {
+        leaf = graph.vocab.aim(c.path.join('.'), bare(c)).at(-1)
+      } catch {
+        return true
+      }
       let p = leaf && graph.vocab.prop(leaf.comp, leaf.prop)
       if (p?.scalar != 'time' && p?.scalar != 'number') return false
       let op = c.op == '!=' ? '=' : c.op, value = text(c.value)
@@ -880,7 +957,10 @@ export let subscriptions = (graph: Graph, opts: {
               )
             }
             let key = readOpts ? JSON.stringify([line, readOpts]) : line
-            let loaded = rows?.get(key)
+            let share = shared.get(keyOf(sub))
+            let loaded = share
+              ? answered([...share.rows.values()])
+              : rows?.get(key)
             if (!loaded) {
               loaded = sub.peer ? after(read(sub), answered) : ask(sub, line)
               rows?.set(key, loaded)
@@ -897,6 +977,7 @@ export let subscriptions = (graph: Graph, opts: {
                 !sub.plan?.reaches.length && sub.opts?.now == null
               ) {
                 sub.routed = network(sub).add(sub, ast, sub.members)
+                if (sub.routed) join(sub, ast, bundles)
               }
               rememberFields(sub, bundles)
               const snapshots = live.snapshots().filter((f) => visible(sub, f))
@@ -969,6 +1050,13 @@ export let subscriptions = (graph: Graph, opts: {
   let send = (sub: Sub, moved?: Moved) => {
     if (!moved) return
     let { bundles, joined, gone } = moved
+    let share = sub.shared
+    if (share) {
+      for (let b of bundles) share.rows.set(b.entity.eid, b)
+      for (let eid of gone) share.rows.delete(eid)
+      if (share.rows.size > HELD) unshare(share)
+    }
+    if (sub.kept) return
     rememberFields(sub, bundles)
     for (const eid of gone) sub.fields.delete(eid)
     if (bundles.length || gone.length) {
@@ -1090,7 +1178,7 @@ export let subscriptions = (graph: Graph, opts: {
       for (let s of raw) s.send({ id: s.id, bundles })
     }
     let applied = txs.flat()
-    let queries = subs.filter((s) => !s.raw)
+    let queries = [...subs.filter((s) => !s.raw), ...kept.values()]
     let invalidated = new Set(
       queries.filter((s) =>
         s.deferred && applied.some((b) => notices(s, b)) ||
@@ -1153,6 +1241,9 @@ export let subscriptions = (graph: Graph, opts: {
           attempt(s, () => {
             if (!relevant.has(s)) return
             if (invalidated.has(s)) {
+              // An answer asked again whole is no longer one kept current.
+              if (s.shared) unshare(s.shared)
+              if (s.kept) return
               let reset = s.deferred
               if (s.agg) return tell(s)
               let loaded = s.view

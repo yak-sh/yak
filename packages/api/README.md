@@ -335,6 +335,11 @@ Queries that can test one entity at a time use
 use dependency reads or refreshes. Writes return at commit without waiting for
 subscriber reads; commits arriving during a read share the next pass.
 
+A small answer of a query tested one entity at a time is held in memory and kept
+current from what each commit moves. Subscriptions asking the same query with
+the same options share it, and it outlives the last of them for a while: a
+client that closes a subscription and opens it again is answered without a read.
+
 A `.fields` [projection](../graph/README.md#projections) carries `coverage` for
 selected bundles. A covered property omitted from its bundle is absent; an
 uncovered property was not read. Entities reached through references travel in
