@@ -173,3 +173,12 @@ test('decision search attributes questions and answers separately', () => {
   assertEquals(find('sqlite', 'said'), [])
   assertEquals(find('sqlite', 'received'), ['decision'])
 })
+
+test('a thread opens with its root, beside a reply said in the same instant', () => {
+  let letter = row('z-letter', { mail: {}, conversation: {} }, 1, 'stranger')
+  let [thread] = threads(
+    [letter, comment('a-reply', 'z-letter', 1, 'person')],
+    who,
+  )
+  assertEquals(thread.messages.map((r) => r.eid), ['z-letter', 'a-reply'])
+})

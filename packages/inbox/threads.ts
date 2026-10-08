@@ -141,8 +141,11 @@ export let threads = <R extends Row>(
       (r.comps.entry &&
         (saidBy(who, r, byId) || (r.comps.output && !r.comps.reasoning)))
     )
+      // A thread opens with its root: a reply said in the same millisecond
+      // as what it answers still follows it.
       .sort((a, b) =>
-        messageAt(a).localeCompare(messageAt(b)) || a.eid.localeCompare(b.eid)
+        messageAt(a).localeCompare(messageAt(b)) ||
+        +(a.eid != eid) - +(b.eid != eid) || a.eid.localeCompare(b.eid)
       )
     let own = messages.filter((r) => saidBy(who, r, byId))
     let started = saidBy(who, root) ||
