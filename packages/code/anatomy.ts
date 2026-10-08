@@ -169,14 +169,23 @@ let json = (value: unknown, seen = new Set<object>()): unknown => {
     return undefined
   }
   seen.add(value)
-  let descriptors = Object.getOwnPropertyDescriptors(value)
   let out: Record<string, unknown> = {}
-  for (let [key, d] of Object.entries(descriptors)) {
-    if (!d.enumerable || !('value' in d)) continue
+  for (let key of Object.keys(value)) {
+    let d = Object.getOwnPropertyDescriptor(value, key)
+    if (!d || !('value' in d)) continue
     let kept = json(d.value, seen)
-    if (kept !== undefined) {
-      Object.defineProperty(out, key, { value: kept, enumerable: true })
-    }
+    if (kept === undefined) continue
+    // Assigned, which keeps the copy a fast object. A key named `__proto__`
+    // is defined instead: where a runtime keeps that accessor (a browser,
+    // workerd), assigning it would set the copy's prototype.
+    if (key == '__proto__') {
+      Object.defineProperty(out, key, {
+        value: kept,
+        enumerable: true,
+        writable: true,
+        configurable: true,
+      })
+    } else out[key] = kept
   }
   seen.delete(value)
   return Array.isArray(value)
