@@ -322,6 +322,39 @@ test('a get naming components is cut from the whole entity held', () => {
   assertEquals(f.s.get(['hero'], []), [{ entity: { eid: 'hero' } }])
 })
 
+test('a get naming components keeps what it read for one naming no others', () => {
+  let f = fixture()
+  f.s.tx((tx) => tx.patch([{ entity: { eid: 'hero' }, position: { x: 1 } }]))
+  // A store bound afresh has kept nothing of what was written.
+  let s = storage(f.d, vocab)
+  s.install()
+  let g = { ...f, s }
+  let hero = (comps?: string[]) => s.get(['hero'], comps)[0]
+  assertEquals(hero(['position']), {
+    entity: { eid: 'hero' },
+    position: { x: 1 },
+  })
+  assertEquals(reads(g, () => hero(['position'])), 0)
+  assertEquals(hero(['position']).position, { x: 1 })
+  assertEquals(reads(g, () => hero([])), 0)
+  assertEquals(hero([]), { entity: { eid: 'hero' } })
+  // What it did not ask, or all there is, is read.
+  assert(reads(g, () => hero(['player'])) > 0)
+  assertEquals(hero(['player']).player, { active: true })
+  assertEquals(hero(['position']).position, { x: 1 })
+  assert(reads(g, () => hero()) > 0)
+  assertEquals(hero(), {
+    entity: { eid: 'hero' },
+    player: { active: true },
+    position: { x: 1 },
+  })
+  // A write names it.
+  f.s.tx((tx) => tx.patch([{ entity: { eid: 'hero' }, position: { x: 2 } }]))
+  assertEquals(hero(['position']).position, { x: 2 })
+  f.s.tx((tx) => tx.remove([{ eid: 'hero' }]))
+  assertEquals('tombstone' in hero(['position']), true)
+})
+
 let selects = (f: ReturnType<typeof fixture>, body: () => unknown) => {
   let query = f.d.query, n = 0
   f.d.query = (stmt) => {

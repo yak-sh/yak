@@ -38,11 +38,12 @@
 // Every driver naming one connection (@yaks/sql `Driver.connection`) tells one
 // memory what it ran, so a write through any of them is seen by all.
 //
-// A get naming components is cut from a whole entity held. Returned bundles
+// A get naming components is cut from a whole entity held, or from one held
+// in part: what an earlier get naming at least those read. Returned bundles
 // are copies; dynamic components (computed, or derived from anything but this
 // connection's rows) are read again on every hit. Bounded by count and bytes,
 // the longest unread let go first; a scan is read through, not kept.
-import { type Bundle, type Comp, comps, type Entity } from '@yaks/graph'
+import { type Bundle, type Comp, comps, dead, type Entity } from '@yaks/graph'
 import type { Prop, Vocab } from '@yaks/vocab'
 import { type And, bare, type Clause, drifts, type Pred } from '@yaks/query'
 import {
@@ -231,6 +232,9 @@ const LOST: unique symbol = Symbol('lost')
 type Kept = {
   /** an entity as read, or `null` for one storage does not hold */
   held: Map<string, Bundle | null>
+  /** the components a read naming them asked of an entity held in part; an
+   * entity held whole has no entry */
+  part: Map<string, Set<string>>
   /** what the open transaction's patches leave each entity holding */
   after: Map<string, Bundle | null | typeof LOST>
   /** keep what the transaction that just committed left */
@@ -450,6 +454,7 @@ export let memoized = (
   let c = connect(driver)
   let k: Kept = {
     held: new Map(),
+    part: new Map(),
     sizes: new Map(),
     bytes: 0,
     answers: new Map(),
@@ -457,6 +462,7 @@ export let memoized = (
     tables: new Set(['entity', 'tombstone', 'blob_text', ...tables(vocab)]),
     clear: () => {
       k.held.clear()
+      k.part.clear()
       k.sizes.clear()
       k.bytes = 0
     },
@@ -472,13 +478,23 @@ export let memoized = (
     k.bytes -= k.sizes.get(eid) ?? 0
     k.sizes.delete(eid)
     k.held.delete(eid)
+    k.part.delete(eid)
   }
-  let hold = (eid: string, b: Bundle | null) => {
+  // Held whole, or in part: only the components `asked` names.
+  let hold = (eid: string, b: Bundle | null, asked?: Set<string>) => {
     evict(eid)
     let size = b ? sizeOf(b) : 64
     k.sizes.set(eid, size)
     k.bytes += size
     k.held.set(eid, b && structuredClone(b))
+    if (asked) k.part.set(eid, asked)
+  }
+  // Whether memory holds what a read asks of an entity: all of it, or the
+  // components `wanted` names.
+  let holds = (eid: string, wanted?: Set<string>) => {
+    let part = k.part.get(eid)
+    return k.held.has(eid) &&
+      (!part || !!wanted && [...wanted].every((name) => part.has(name)))
   }
   let trim = () => {
     while (k.held.size > COUNT || k.bytes > BYTES) {
@@ -521,6 +537,7 @@ export let memoized = (
       other.bytes -= other.sizes.get(eid) ?? 0
       other.sizes.delete(eid)
       other.held.delete(eid)
+      other.part.delete(eid)
       if (c.depth) other.after.set(eid, LOST)
     }
     for (let eid of eids(out)) {
@@ -541,7 +558,7 @@ export let memoized = (
   let prior = (eid: string): Bundle | null | typeof LOST =>
     k.after.has(eid)
       ? k.after.get(eid)!
-      : c.dirty.has(eid) || !k.held.has(eid)
+      : c.dirty.has(eid) || !holds(eid)
       ? LOST
       : k.held.get(eid)!
   let numbered = !!vocab.prop('entity', 'num')
@@ -705,21 +722,25 @@ export let memoized = (
     },
     get: (get, eids, comps) => {
       sync()
-      // A get naming components is answered from a whole entity held, cut
-      // to them; one read for it is not kept, since it is not whole.
+      // A get naming components is answered from an entity held whole, or
+      // held in part with them, cut to them. What one reads is held in part,
+      // unless it says all there is: an entity storage lacks, or a dead one.
       let wanted = comps && new Set(comps)
-      let missing = [...new Set(eids)].filter((eid) => !k.held.has(eid))
+      let missing = [...new Set(eids)].filter((eid) => !holds(eid, wanted))
+      let read = new Set(missing)
       let fresh = new Map(
         (missing.length ? get(missing, comps) : []).map((
           b,
         ) => [b.entity.eid, b]),
       )
-      if (!wanted && !c.blind && missing.length <= SCAN) {
+      if (!c.blind && missing.length <= SCAN) {
         for (let eid of missing) {
-          if (!c.dirty.has(eid)) hold(eid, fresh.get(eid) ?? null)
+          if (c.dirty.has(eid)) continue
+          let b = fresh.get(eid) ?? null
+          hold(eid, b, wanted && b && !dead(b) ? wanted : undefined)
         }
       }
-      let hits = eids.filter((eid) => !fresh.has(eid) && k.held.get(eid))
+      let hits = eids.filter((eid) => !read.has(eid) && k.held.get(eid))
       // A hit's dynamic components are read now, in one statement.
       let names = [
         ...new Set(
@@ -736,9 +757,7 @@ export let memoized = (
         ) => [b.entity.eid, b]),
       )
       let out = eids.flatMap((eid) => {
-        let row = fresh.get(eid)
-        if (row) return [row]
-        if (!k.held.has(eid)) return []
+        if (read.has(eid)) return fresh.has(eid) ? [fresh.get(eid)!] : []
         let held = k.held.get(eid)!
         k.held.delete(eid)
         k.held.set(eid, held)
