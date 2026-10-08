@@ -29,8 +29,9 @@ let R = (view: string, match: Query, tag: string) => ({
 
 // The app's registry holds these fixtures for one test, and its own renderers
 // again after: the app is one registry, and every other test renders with it.
+// Run alone, nothing has registered the app's views or actions yet: none.
 let fixtures = () => {
-  let { renderers, views, actions } = registry
+  let { renderers, views = [], actions = [] } = registry
   define([
     R('Task', has('doc', 'task'), 'task'),
     R('Doc', has('doc'), 'doc'),
