@@ -36,8 +36,14 @@ export let keysOf = (rows: Bundle[]): Bundle[] =>
       : []
   })
 
+// Made once, so seeding again installs the same rows and keeps every cache
+// read off the index (homes.ts, danger.ts, stock.ts).
+let beasts = rows.filter((r) => r.beast_design)
+let dens = rows.filter((r) => r.den)
+let keys = keysOf(rows)
+
 export let seedBeasts = () => {
-  useBeasts(rows.filter((r) => r.beast_design))
-  useDens(rows.filter((r) => r.den))
-  useNames(keysOf(rows))
+  useBeasts(beasts)
+  useDens(dens)
+  useNames(keys)
 }
