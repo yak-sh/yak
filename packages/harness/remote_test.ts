@@ -387,6 +387,7 @@ test('unbounded graceful close finishes a slow response beyond the old deadline'
   let installed = await harness(db)
   await installed.close()
   let r = await remote({
+    worker: worker(),
     config: at(db),
     cwd: dir,
     fake: 'held',
