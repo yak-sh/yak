@@ -585,7 +585,8 @@ windows. `.order=book.price` is ascending and a leading `-` makes it descending.
 Paths can follow references. Explicit ordering uses descending entity number and
 then integer id to break ties. Without explicit ordering, a `.limit` or `.after`
 window reads newest first; a complete result reads oldest first. Unnumbered
-entities use integer id alone.
+entities use integer id alone. A `.after` cursor is bound like any other value,
+so every page of one query is the same statement.
 
 ```ts
 import { compile } from '@yaks/sql'
@@ -602,10 +603,10 @@ let vocab = loadVocab({
   },
 })
 equal(compile(parse('.book .order=book.price .limit=2'), vocab).params, [2])
-equal(
-  compile(parse('.book .after=b1 .fields=book.price .limit=2'), vocab).params,
-  [2],
-)
+let page = (after: string) =>
+  compile(parse(`.book .after=${after} .fields=book.price .limit=2`), vocab)
+equal(page('b1').params, ['b1', 'b1', 2])
+equal(page('b1').sql, page('b2').sql)
 equal(compile(parse('.book .count'), vocab).sql.includes('count(*) as n'), true)
 equal(
   compile(parse('.book .tally=book.price'), vocab).sql.includes('group by'),

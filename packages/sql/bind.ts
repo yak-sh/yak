@@ -2011,17 +2011,40 @@ let ranked = (ctx: Ctx, field: string, owner?: string): string | null => {
   return null
 }
 
-// Resolve a number or eid to the spine owner used by the order expression.
-// An eid is quoted here because the order hook accepts an expression rather
-// than parameters; doubling apostrophes keeps it a single SQL string literal.
-let anchorWhere = (after: After) =>
+// The anchor's own row, found by its number or eid. The cursor is bound like
+// any other value, so every page of one query is the same statement, prepared
+// once: a pool passing a backlog pages one handler's runs at a time.
+let anchorWhere = (after: After): Frag =>
   'n' in after
-    ? `"__cur"."num" = ${after.n}`
-    : `"__cur"."eid" = '${after.eid.replaceAll("'", "''")}'`
-let anchor = (ctx: Ctx, after: After, field = 'id') =>
-  `(select "__cur"."${field}" from ${ctx.d.spine} as "__cur" where ${
-    anchorWhere(after)
-  })`
+    ? { sql: `"__cur"."num" = ?`, params: [after.n] }
+    : { sql: `"__cur"."eid" = ?`, params: [after.eid] }
+let anchor = (ctx: Ctx, after: After, field = 'id'): Frag => {
+  let where = anchorWhere(after)
+  return {
+    sql:
+      `(select "__cur"."${field}" from ${ctx.d.spine} as "__cur" where ${where.sql})`,
+    params: where.params,
+  }
+}
+
+// Text and fragments in order, as one fragment whose parameters follow its
+// text.
+let spliced = (...parts: (string | Frag)[]): Frag => ({
+  sql: parts.map((p) => typeof p == 'string' ? p : p.sql).join(''),
+  params: parts.flatMap((p) => typeof p == 'string' ? [] : p.params),
+})
+
+// An order's value at the anchor. The order hook takes the anchor's owner as
+// text and writes it into an expression as many times as it needs it, so the
+// anchor's parameters come once for every time it did.
+let atAnchor = (sort: Sort, owner: Frag): Frag => {
+  let sql = sort.at(owner.sql)
+  let times = sql.split(owner.sql).length - 1
+  return {
+    sql,
+    params: Array.from({ length: times }, () => owner.params).flat(),
+  }
+}
 
 // `.after` as a keyset condition over the effective order: the rows strictly
 // past the anchor's own place in it, with the spine breaking ties
@@ -2043,45 +2066,51 @@ let keyset = (
 ): Frag => {
   if (ctx.spine && 'eid' in after) return backedKeyset(ctx, sort, after.eid)
   let owner = anchor(ctx, after)
-  if (physical) {
-    return { sql: `${ctx.d.ownerKey('entity')} > ${owner}`, params: [] }
-  }
-  let exists = `exists (select 1 from ${ctx.d.spine} as "__cur" where ${
-    anchorWhere(after)
-  })`
+  if (physical) return spliced(`${ctx.d.ownerKey('entity')} > `, owner)
+  let exists = spliced(
+    `exists (select 1 from ${ctx.d.spine} as "__cur" where `,
+    anchorWhere(after),
+    ')',
+  )
+  let num = () => anchor(ctx, after, 'num')
   let tie: Frag = 'n' in after
     ? { sql: `"entity"."num" < ?`, params: [after.n] }
     : numbered
-    ? {
-      sql: `("entity"."num" < ${anchor(ctx, after, 'num')}` +
-        ` or ("entity"."num" is null and ${
-          anchor(ctx, after, 'num')
-        } is not null)` +
-        ` or ("entity"."num" is ${anchor(ctx, after, 'num')}` +
-        ` and "entity"."id" < ${owner}))`,
-      params: [],
-    }
-    : { sql: `"entity"."id" < ${owner}`, params: [] }
+    ? spliced(
+      '("entity"."num" < ',
+      num(),
+      ' or ("entity"."num" is null and ',
+      num(),
+      ' is not null) or ("entity"."num" is ',
+      num(),
+      ' and "entity"."id" < ',
+      owner,
+      '))',
+    )
+    : spliced('"entity"."id" < ', owner)
   if (!sort) {
-    return 'n' in after
-      ? tie
-      : { sql: `(not ${exists} or ${tie.sql})`, params: tie.params }
+    return 'n' in after ? tie : spliced('(not ', exists, ' or ', tie, ')')
   }
-  return past(sort, owner, exists, tie)
+  return past(sort, atAnchor(sort, owner), exists, tie)
 }
 
 // Past the anchor in an explicit order: its value first, the tie after.
-let past = (sort: Sort, owner: string, exists: string, tie: Frag): Frag => {
-  let a = sort.at(owner)
+let past = (sort: Sort, a: Frag, exists: Frag, tie: Frag): Frag => {
   let v = sort.row
   let beyond = sort.desc
-    ? `(${v} is null and ${a} is not null) or ${v} < ${a}`
-    : `(${a} is null and ${v} is not null) or ${v} > ${a}`
-  return {
-    sql: `(not ${exists}` +
-      ` or ${beyond} or (${v} is ${a} and ${tie.sql}))`,
-    params: tie.params,
-  }
+    ? spliced(`(${v} is null and `, a, ` is not null) or ${v} < `, a)
+    : spliced('(', a, ` is null and ${v} is not null) or ${v} > `, a)
+  return spliced(
+    '(not ',
+    exists,
+    ' or ',
+    beyond,
+    ` or (${v} is `,
+    a,
+    ' and ',
+    tie,
+    '))',
+  )
 }
 
 // The same keyset on a backed spine, whose eid is its id written out: the
@@ -2091,11 +2120,15 @@ let backedKeyset = (ctx: Ctx, sort: Sort | null, eid: string): Frag => {
   let id = idOf(backingOf(ctx.backed, ctx.spine!).tag, eid)
   if (id == null) return { sql: '1', params: [] }
   let key = ctx.d.ownerKey('entity')
-  let exists = `exists (select 1 from ${
-    source(ctx, ctx.spine!)
-  } as "__cur" where "__cur"."entity" = ${id})`
-  let tie = { sql: `${key} < ${id}`, params: [] }
+  let exists = spliced(
+    `exists (select 1 from ${source(ctx, ctx.spine!)} as "__cur" where `,
+    { sql: `"__cur"."entity" = ?`, params: [id] },
+    ')',
+  )
+  // Written so an order hook's expression can be searched for it.
+  let owner: Frag = { sql: 'cast(? as integer)', params: [id] }
+  let tie = spliced(`${key} < `, owner)
   return sort
-    ? past(sort, String(id), exists, tie)
-    : { sql: `(not ${exists} or ${tie.sql})`, params: [] }
+    ? past(sort, atAnchor(sort, owner), exists, tie)
+    : spliced('(not ', exists, ' or ', tie, ')')
 }

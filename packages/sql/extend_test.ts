@@ -155,7 +155,7 @@ test('a cursor pages within an extension ranking', () => {
   assert(
     sql.includes(
       'case (select "__cur"."id" from "entity" as "__cur" ' +
-        'where "__cur"."num" = 3) when 7 then 0 else 1 end',
+        'where "__cur"."num" = ?) when 7 then 0 else 1 end',
     ),
     sql,
   )

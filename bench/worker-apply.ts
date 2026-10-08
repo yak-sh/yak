@@ -192,12 +192,32 @@ export async function measure(path: string, samples: number, backlog: number) {
         sqlTop.set(k, s)
       })
       : undefined
+    // Imported once the store has loaded its own SQLite library.
+    let { Database } = await import('@db/sqlite')
+    let prepares = new Map<string, number>()
+    let prepare = Database.prototype.prepare
+    if (Deno.env.get('PREPARES')) {
+      Database.prototype.prepare = function (sql: string) {
+        prepares.set(sql, (prepares.get(sql) ?? 0) + 1)
+        return prepare.call(this, sql)
+      }
+    }
     let done = settledAt(owed)
     let cpu = process.cpuUsage()
     let start = performance.now()
     fx.wake()
     let ms = (await done) - start
     let used = process.cpuUsage(cpu)
+    Database.prototype.prepare = prepare
+    if (prepares.size) {
+      let total = [...prepares.values()].reduce((a, b) => a + b, 0)
+      out({ kind: 'prepares', total, distinct: prepares.size })
+      for (
+        let [k, n] of [...prepares].sort((a, b) => b[1] - a[1]).slice(0, 15)
+      ) out({ kind: 'prepared', n, sql: k.slice(0, 250) })
+      let once = [...prepares].filter(([, n]) => n == 1).map(([k]) => k)
+      for (let k of once.slice(-3)) out({ kind: 'prepared once', sql: k })
+    }
     let cpuMs = (used.user + used.system) / 1000
     stop?.()
     for (

@@ -321,12 +321,17 @@ test('a cursor names an entity by number, and a store with none says so', () => 
 })
 
 test('an eid cursor pages a store with no numbers', () => {
-  let { sql } = compile(
-    parse('.task.priority=1&.order=-doc.title&.limit=2&.after=child:abc'),
-    unnumbered,
-  )
-  assert(sql.includes(`"__cur"."eid" = 'child:abc'`), sql)
+  let page = (after: string) =>
+    compile(
+      parse(`.task.priority=1&.order=-doc.title&.limit=2&.after=${after}`),
+      unnumbered,
+    )
+  let { sql, params } = page('child:abc')
+  assert(sql.includes(`"__cur"."eid" = ?`), sql)
+  assert(params.includes('child:abc'), String(params))
   assert(sql.includes('"entity"."id" < (select'), sql)
+  // every page is one statement, its cursor a bound value
+  assertEquals(page('child:xyz').sql, sql)
 })
 
 test('an explicit .order survives a window', () => {
@@ -344,12 +349,13 @@ test('.after pages within the asked order, keyed on the anchor', () => {
   let { sql, params } = compile(parse('.order=doc.title&.limit=2&.after=7'), v)
   // the cursor names an entity by its num — the same form whatever the
   // order — and the anchor's own value is read back to page past it
-  assert(sql.includes('where "__cur"."num" = 7'), sql)
+  assert(sql.includes('where "__cur"."num" = ?'), sql)
   assert(sql.includes('"doc"."title" > (select'), sql)
   // ties fall to the spine num, and an anchor no entity has is the first page
   assert(sql.includes(`"entity"."num" < ?`), sql)
   assert(sql.includes('not exists (select 1 from "entity" as "__cur"'), sql)
-  assertEquals(params, [7, 2])
+  // the anchor, bound wherever it is read, then the tie and the window
+  assertEquals(params, [7, 7, 7, 7, 7, 2])
 })
 
 test('.after over a derived order reads the anchor through the hook', () => {
