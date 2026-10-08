@@ -428,6 +428,24 @@ test('a removal lets go of the spines it buried, and of no other', () => {
   assertEquals(f.s.get(['hero'])[0].player, undefined)
 })
 
+test('an answer stands through a removal of what it never selected', () => {
+  let f = fixture()
+  f.s.tx((tx) =>
+    tx.patch([
+      { entity: { eid: 'mob' }, player: { active: true } },
+      { entity: { eid: 'rock' }, position: { x: 1 } },
+    ])
+  )
+  let active = () => f.s.rows('.player.active=true').map((r) => r.eid)
+  let still = () => f.s.rows('!position').map((r) => r.eid)
+  active(), active(), still(), still()
+  f.s.tx((tx) => tx.remove([{ eid: 'rock' }]))
+  assertEquals(reads(f, active), 0)
+  f.s.tx((tx) => tx.remove([{ eid: 'mob' }]))
+  assertEquals(active(), ['hero'])
+  assertEquals(still(), ['hero'])
+})
+
 // A driver whose transactions are its own (a Durable Object's
 // transactionSync), opened beside the statements the store sees.
 let native = () => {

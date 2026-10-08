@@ -235,8 +235,9 @@ transaction that still owes archetype pointers asks of the catalog.
 An answer also stands through a patch that moved nothing it selects: where the
 query asks about each entity alone (no path through a reference, no `.after`
 cursor) and memory knows what each entity the patch wrote held before and after,
-an entity selected neither before nor after leaves the answer as it was. A write
-the store does not see whole (a removal, raw SQL) moves the counts alone.
+an entity selected neither before nor after leaves the answer as it was. So does
+a removal of an entity the answer selected neither alive nor buried. A write the
+store does not see whole (raw SQL) moves the counts alone.
 
 ## API
 

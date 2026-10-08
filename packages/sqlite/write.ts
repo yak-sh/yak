@@ -715,7 +715,7 @@ export let remove = (
   vocab: Vocab,
   entities: Entity[],
   held: string[] = tables(vocab),
+  at: string = new Date().toISOString(),
 ): void => {
-  let now = new Date().toISOString()
-  for (let s of removeSql(held, entities, now)) effect(driver, s)
+  for (let s of removeSql(held, entities, at)) effect(driver, s)
 }

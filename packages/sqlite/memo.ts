@@ -25,8 +25,8 @@
 // statement moves its table's count, so nothing a write says has to be
 // trusted; what memory can't follow (text, nearness, edges, computed and
 // derived properties, time phrases) is read every time. An answer about each
-// entity alone stands through a patch whose entities it selects neither before
-// nor after (`local`, `stand`).
+// entity alone stands through a patch or a removal whose entities it selects
+// neither before nor after (`local`, `stand`).
 //
 // What a patch leaves an entity holding is worked out from what memory held
 // and what the patch said, the way a read returns it (`patch`), and kept once
@@ -79,6 +79,10 @@ export type Memo = {
    * them go, and what each now holds is kept once the transaction commits.
    * `body` is told what memory says each entity held before it. */
   patch: (bundles: Bundle[], body: (known: Known) => Entity[]) => Entity[]
+  /** Run a removal of the entities `eids`, buried at `at`: they are let go as
+   * `writes` lets them go, and an answer that selected none of them, alive
+   * or buried, stands. */
+  removes: (eids: string[], at: string, body: () => void) => void
   /** The rows `run` answers the query `key` names with, from memory while no
    * table `tables` names has been written since, or while what was written
    * moved nothing `query` selects; `tables` left out (a query memory can't
@@ -811,6 +815,23 @@ export let memoized = (
       return out
     },
     writes,
+    removes: (eids, at, body) => {
+      sync()
+      let was = new Map<string, Bundle | null | typeof LOST>(
+        eids.map((eid) => [eid, prior(eid)]),
+      )
+      let before = new Map(c.versions)
+      writes(body, () => eids)
+      if (!c.depth || c.blind) return
+      // What each holds once buried: its grave, and nothing else.
+      let buried = (eid: string, b: Bundle | null): Bundle => ({
+        entity: b?.entity.num != null ? { eid, num: b.entity.num } : { eid },
+        tombstone: { deleted_at: at },
+      })
+      let now = new Map<string, Bundle | null | typeof LOST>()
+      for (let [eid, b] of was) now.set(eid, b === LOST ? LOST : buried(eid, b))
+      stand(was, now, before)
+    },
     patch: (bundles, body) => {
       sync()
       let eids = [...new Set(bundles.map((b) => b.entity.eid))]

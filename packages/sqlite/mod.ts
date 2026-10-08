@@ -449,11 +449,14 @@ export let storage = (
             known,
           ),
       ),
-    remove: (entities) =>
-      memo.writes(
-        () => remove(driver, vocab, entities),
-        () => entities.map((e) => e.eid),
-      ),
+    remove: (entities) => {
+      let at = new Date().toISOString()
+      memo.removes(
+        entities.map((e) => e.eid),
+        at,
+        () => remove(driver, vocab, entities, undefined, at),
+      )
+    },
     revive: (eids) => memo.writes(() => revive(driver, eids), () => eids),
   }
   // A unit over a store that keeps archetypes keeps every pointer in step,
@@ -552,9 +555,12 @@ export let storage = (
         },
         remove: (entities) => {
           let eids = entities.map((e) => e.eid)
-          memo.writes(
-            () => remove(driver, vocab, entities, heldBy(driver, eids, open)),
-            () => eids,
+          let at = new Date().toISOString()
+          memo.removes(
+            eids,
+            at,
+            () =>
+              remove(driver, vocab, entities, heldBy(driver, eids, open), at),
           )
           for (let eid of eids) l.removed(eid)
         },
