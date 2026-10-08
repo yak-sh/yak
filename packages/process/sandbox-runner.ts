@@ -84,11 +84,16 @@ def reap():
 
 threading.Thread(target=reap, daemon=True).start()
 
-def run_file(args, data=None):
-    result = subprocess.run(argv(['/usr/bin/python3', '-c'] + args), input=data,
-                            stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+# A file operation, run in the guest on its path p. Python starts bare
+# (-I -S) and a failure says the last line of its traceback alone: printing
+# the whole one loads more of Python than the operation does.
+def run_file(code, path, data=None):
+    script = ('import os, sys\np = sys.argv[1]\ntry:\n    ' + code +
+              '\nexcept Exception as e:\n    sys.exit(f"{type(e).__name__}: {e}")')
+    result = subprocess.run(argv(['/usr/bin/python3', '-I', '-S', '-c', script, path]),
+                            input=data, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     if result.returncode:
-        raise RuntimeError(result.stderr.decode(errors='replace'))
+        raise RuntimeError(result.stderr.decode(errors='replace').strip())
     return result.stdout
 
 def handle(request):
@@ -149,17 +154,15 @@ def handle(request):
                     pass
         return None
     if op in ('read', 'export'):
-        code = 'import sys; sys.stdout.buffer.write(open(sys.argv[1], "rb").read())'
+        code = 'sys.stdout.buffer.write(open(p, "rb").read())'
         if op == 'export':
-            code = ('import os,sys; p=os.path.realpath(sys.argv[1]); '
-                    'assert p.startswith("/workspace/"), "export escapes workspace"; '
-                    'sys.stdout.buffer.write(open(p, "rb").read())')
-        return base64.b64encode(run_file([
-            code, request['path']])).decode()
+            code = ('p = os.path.realpath(p); '
+                    'assert p.startswith("/workspace/"), "export escapes workspace"; ' + code)
+        return base64.b64encode(run_file(code, request['path'])).decode()
     if op == 'write':
-        run_file(['import os,sys; p=sys.argv[1]; os.makedirs(os.path.dirname(p),exist_ok=True); '
-                  'open(p,"wb").write(sys.stdin.buffer.read())', request['path']],
-                 base64.b64decode(request['bytes']))
+        run_file('os.makedirs(os.path.dirname(p), exist_ok=True); '
+                 'open(p, "wb").write(sys.stdin.buffer.read())',
+                 request['path'], base64.b64decode(request['bytes']))
         return None
     raise ValueError('unknown sandbox operation')
 

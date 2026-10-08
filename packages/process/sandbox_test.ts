@@ -114,8 +114,7 @@ test('sandbox commands and files see only their own workspace and a read-only sy
       }
     })
     let network = await tools(first.machine).shell.run({
-      command:
-        '/usr/bin/python3 -c "import socket; s=socket.socket(); s.settimeout(0.1); s.connect((\'1.1.1.1\', 80))"',
+      command: 'exec 3<>/dev/tcp/1.1.1.1/80',
     })
     assertMatch(network, /exited 1/)
   } finally {
