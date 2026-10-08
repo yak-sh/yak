@@ -135,12 +135,14 @@ test('hangs', () => new Promise(() => {}), { tags: ['slow'] })
 test('after', () => {}, { tags: ['slow'] })
 test('untagged', () => {})`,
   })
-  let { code, said, text } = await dir.run('--tag=slow', '--timeout=50')
+  // A test that ends at once ends before any timer, so the shortest bound
+  // fails only the one that never does.
+  let { code, said, text } = await dir.run('--tag=slow', '--timeout=1')
   equal(code, 1)
   equal(said, { hangs: 'FAILED', after: 'ok' })
-  ok(text.includes('did not end within 50ms'))
+  ok(text.includes('did not end within 1ms'))
   // A run that picked by tag ran only some, so nothing is recorded.
-  equal(Object.keys((await dir.run('--timeout=50')).said).length, 3)
+  equal(Object.keys((await dir.run('--timeout=1')).said).length, 3)
 })
 
 test('--times says what each test and each load took', async () => {
