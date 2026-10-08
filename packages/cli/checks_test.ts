@@ -112,15 +112,11 @@ test('a composed host finds exactly the two states we broke', async () => {
       await ask(h, 'project_check'),
       'every governed entity is reachable from a project — nothing to report',
     )
-    assert(
-      (await ask(h, 'storage_check')).endsWith('— nothing to report'),
-      await ask(h, 'storage_check'),
-    )
+    let storage = await ask(h, 'storage_check')
+    assert(storage.endsWith('— nothing to report'), storage)
     // One that cannot run says so: this host composes no archetype plugin.
-    assert(
-      (await ask(h, 'archetype_check')).includes('keeps no archetypes'),
-      await ask(h, 'archetype_check'),
-    )
+    let archetype = await ask(h, 'archetype_check')
+    assert(archetype.includes('keeps no archetypes'), archetype)
   } finally {
     h.close()
   }
