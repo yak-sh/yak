@@ -208,9 +208,9 @@ export let chartPatch = (
  * import { spotOf } from './regions.ts'
  * import { seedDesigns } from './designs_fixture.ts'
  * seedDesigns()
- * let px = chart(0, 0, 128, 2)
+ * let px = chart(64, 64, 128, 2)
  * let at = ([x, z]: [number, number]) => {
- *   let i = (Math.floor(x / 2) + Math.floor(z / 2) * 64) * 4
+ *   let i = (Math.floor((x - 64) / 2) + Math.floor((z - 64) / 2) * 64) * 4
  *   return [px[i], px[i + 1], px[i + 2]]
  * }
  * let [r, g, b] = at(spotOf('mossvale', 'lake')!)
