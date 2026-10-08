@@ -288,6 +288,11 @@ test(
         await refused(tool, 'store_retry', { space: mine, app, seq: 999 }),
         'not held for review',
       )
+      // Tracing a store is the platform admin's knob, never its owner's.
+      assertStringIncludes(
+        await refused(tool, 'store_trace', { space: mine, app, next: 1 }),
+        'platform admin required',
+      )
       assertStringIncludes(
         await refused(tool, 'builder_build', {
           space: mine,
