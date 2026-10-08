@@ -1,6 +1,7 @@
 // Hero movement stays live between saves; only players keep a snapshot.
 import { equal, test } from '@yaks/testing'
 import { FakeTime } from '@std/testing/time'
+import { pass } from './clock_fixture.ts'
 import { type Bundle, graph } from '@yaks/graph'
 import { loadVocab } from '@yaks/vocab'
 import { ram } from '@yaks/ram'
@@ -25,7 +26,7 @@ test('hero saves use position age, settle after disconnect and never save wildli
   let stored = () => comp((g.get(['hero']) as Bundle[])[0], 'position')
   await subs.relay(sink, move('hero', 128))
   equal(stored().x, 128)
-  await clock.tickAsync(10_000)
+  await pass(clock, 10_000)
   await subs.relay(sink, move('hero', 135))
   await subs.relay(sink, move('wildlife', 130))
   equal(stored().x, 128)
@@ -36,9 +37,9 @@ test('hero saves use position age, settle after disconnect and never save wildli
   equal(comp((await subs.read(connected))[0], 'position').x, 135)
   await subs.drop(sink)
   equal((await subs.read(connected)).length, 0)
-  await clock.tickAsync(19_999)
+  await pass(clock, 19_999)
   equal(stored().x, 128)
-  await clock.tickAsync(1)
+  await pass(clock, 1)
   equal([stored().x, stored().at], [135, at + 10_000])
   equal(comp((g.get(['wildlife']) as Bundle[])[0], 'position'), {})
 })
@@ -65,10 +66,10 @@ test('hibernation restores surviving hero holders and peer wake observers may re
   })
   await after.relayed(sink, keys)
   equal((await after.read(connected)).map((r) => r.entity.eid), ['connected'])
-  await clock.tickAsync(0)
+  await pass(clock)
   equal(heard[0], 1)
   await after.drop(sink)
-  await clock.tickAsync(0)
+  await pass(clock)
   equal(heard.includes(0), true)
   equal(await after.read(connected), [])
   off()

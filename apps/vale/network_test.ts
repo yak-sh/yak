@@ -17,6 +17,7 @@ import { comp } from './bundle.ts'
 import { flat } from './terrain.ts'
 import { placeOf } from './area.ts'
 import { seedDesigns } from './designs_fixture.ts'
+import { pass } from './clock_fixture.ts'
 import type { Intent } from './input.ts'
 
 let idle: Intent = {
@@ -121,12 +122,12 @@ test('peer relays leave my hero in place and several creatures chasing', async (
   using time = new FakeTime()
   using group = peers()
   let { pages, heroes, mobs } = group
-  await time.tickAsync(0)
+  await pass(time)
   await Promise.all(pages.map((p) => p.net.settle()))
   for (let p of pages) {
     stand(p, 64, 68)
   }
-  await time.tickAsync(200)
+  await pass(time, 200)
   let v = flat(5)
   for (let step = 0; step < 240; step++) {
     for (let p of pages) {
@@ -134,7 +135,7 @@ test('peer relays leave my hero in place and several creatures chasing', async (
       equal([f.body.x, f.body.z], [64, 68])
       if (step > 20) equal(f.others.length, 2)
     }
-    await time.tickAsync(16)
+    await pass(time, 16)
   }
   for (let p of pages) {
     for (let eid of mobs) {
@@ -150,14 +151,14 @@ test('an elected peer keeps chasing a retreating hero until the home leash', asy
   using group = peers()
   let { pages, mobs } = group
   let [owner, runner, witness] = pages
-  await time.tickAsync(0)
+  await pass(time)
   await Promise.all(pages.map((p) => p.net.settle()))
   // Only the runner is inside the authored five-metre wake radius. The
   // first hero owns the creatures from across the clearing.
   stand(owner, 44, 64)
   stand(runner, 64, 68)
   stand(witness, 44, 70)
-  await time.tickAsync(200)
+  await pass(time, 200)
   let v = flat(5)
   let step = async (moving = false) => {
     let frames = pages.map((p) =>
@@ -171,7 +172,7 @@ test('an elected peer keeps chasing a retreating hero until the home leash', asy
         0.016,
       )!
     )
-    await time.tickAsync(16)
+    await pass(time, 16)
     return frames
   }
   let hunts = () => {

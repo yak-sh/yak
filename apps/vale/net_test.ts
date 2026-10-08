@@ -2,6 +2,7 @@
 import { test } from '@yaks/testing'
 import { assert, assertEquals, assertThrows } from '@std/assert'
 import { FakeTime } from '@std/testing/time'
+import { pass } from './clock_fixture.ts'
 import { client } from '@yaks/client'
 import { connect, vocabulary } from './net.ts'
 import { seedDesigns } from './designs_fixture.ts'
@@ -30,10 +31,10 @@ test('a vocabulary 500 recovers before the page can query created', async () => 
         opened = true
         return vocab
       })
-    await time.tickAsync(0)
+    await pass(time)
     assertEquals(calls, 1)
     assertEquals(opened, false)
-    await time.tickAsync(1000)
+    await pass(time, 1000)
     let vocab = await opening
     assertEquals(calls, 2)
     assertEquals(
@@ -374,7 +375,7 @@ test('a gathering refused locally or by the store does not break later writes', 
     let { net, page, receive } = client
     if (where == 'page') receive('.item.owner=', [harvest('first')])
     net.keep(harvest('second'))
-    await time.tickAsync(0)
+    await pass(time)
     assertEquals(trouble.length, 1, where)
     assert(
       String(trouble[0].error ?? trouble[0].refused?.message).includes(
@@ -391,7 +392,7 @@ test('a gathering refused locally or by the store does not break later writes', 
     assertEquals(sent.length, where == 'page' ? 0 : 1, where)
     net.keep(harvest('third', 'another-tree'))
     net.flush()
-    await time.tickAsync(0)
+    await pass(time)
     assertEquals(trouble.length, 1, where)
     assertEquals((await store.read('.gathered')).map((b) => b.entity.eid), [
       'first',
