@@ -359,10 +359,11 @@ equal(
 ```
 
 `pickLine` builds a [query](../query/README.md#query-model) for a reference
-picker. `useHits` asks the host's `find` after 150 ms without further typing,
-aborts the previous request, and clears an empty line without a request. `Find`
-implementations should honor the abort signal. `label` uses the returned
-bundle's `rank.title`, then `doc.title`, then the host's `kind`.
+picker. `useHits` asks `find` once the line has rested `settle` ms (150 by
+default; a picker takes its host's `settle`), aborts the previous request, and
+clears an empty line without a request. `Find` implementations should honor the
+abort signal. `label` uses the returned bundle's `rank.title`, then `doc.title`,
+then the host's `kind`.
 
 ## Completion
 

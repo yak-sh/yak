@@ -236,6 +236,7 @@ let EidEdit = (p: ControlProps) => {
     pickLine(q, !ref || ref == 'entity' ? '' : ref),
     8,
     host.find,
+    host.settle,
   )
   let pick = (v: unknown) => () => choose(host, p, v)
   return h(

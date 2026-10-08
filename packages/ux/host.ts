@@ -83,6 +83,9 @@ export type Host = {
   /** the entities a query line answers, asked of the server: a picker's
    * candidates, over the whole graph rather than what this page holds */
   find: Find<Bundle>
+  /** how long, in ms, a picker's typed line rests unchanged before `find` is
+   * asked; 150 without it */
+  settle?: number
   /** how typed input is read (@yaks/render `edit`) */
   editing?: EditOptions
   /** the values seen so far in a well (a property declared `well`) */

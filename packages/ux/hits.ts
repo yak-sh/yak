@@ -43,10 +43,16 @@ export let pickLine = (q: string, comp = ''): string => {
 }
 
 /** A live picker's hits, asked of `find`: refetched as the line settles
- * (150ms), the last request aborted so a slow answer can't overwrite a newer
- * one. An empty line clears the list without a round trip. The answer is an
- * answer to a query, not a component's own state, so it is held here. */
-export let useHits = <T>(line: string, limit: number, find: Find<T>): T[] => {
+ * (`settle` ms without a change, 150 by default), the last request aborted so
+ * a slow answer can't overwrite a newer one. An empty line clears the list
+ * without a round trip. The answer is an answer to a query, not a component's
+ * own state, so it is held here. */
+export let useHits = <T>(
+  line: string,
+  limit: number,
+  find: Find<T>,
+  settle = 150,
+): T[] => {
   let [found, setFound] = useState<T[]>([])
   useEffect(() => {
     if (!line) {
@@ -56,12 +62,12 @@ export let useHits = <T>(line: string, limit: number, find: Find<T>): T[] => {
     let abort = new AbortController()
     let timer = setTimeout(
       () => find(line, limit, abort.signal).then(setFound).catch(() => {}),
-      150,
+      settle,
     )
     return () => {
       clearTimeout(timer)
       abort.abort()
     }
-  }, [line, limit])
+  }, [line, limit, settle])
   return found
 }

@@ -106,6 +106,7 @@ let page = (more: Partial<Host> = {}) => {
     kind: () => 'task',
     when: (at) => `when ${at}`,
     find: (line) => (asked.push(line), Promise.resolve([person])),
+    settle: 0,
     values: (well) => well == 'domains' ? ['web', 'infra'] : [],
     Float,
     ...more,
@@ -385,9 +386,9 @@ test("a reference is picked from the graph's answer, or cleared", async () => {
   let find = p.$<HTMLInputElement>('.Overlay .Prop_Find')
   find.value = 'draw'
   await p.fire(find, 'input')
+  // The page's picker asks as soon as a line rests (`settle: 0`).
+  await until(() => p.asked.at(-1)?.includes('draw'))
   let row = await until(() => p.$('.Overlay .Prop_Row:not(.Prop_Row-none)'))
-  assertEquals(p.asked.length, 1)
-  assert(p.asked[0].includes('draw'))
   assertEquals(row.textContent, 'T-2 — Draw the map')
   await p.fire(row, 'click')
   await press(p)
