@@ -596,7 +596,9 @@ let composed = async (
   let report = reporter(
     opts.readOnly ? {} : config,
     { by: selfEid(), via: selfEid() },
-    config.tracker && !opts.readOnly ? await revision() : undefined,
+    // Asked now and awaited only by a report: the commit is this run's, and
+    // a command that reports nothing does not wait on git to learn it.
+    config.tracker && !opts.readOnly ? revision() : undefined,
   )
   // Where this graph's secrets are kept (./vault.ts), and each secret an
   // option names read once now, so the option has it the first time a factory

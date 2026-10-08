@@ -29,7 +29,7 @@ export let revision = async (): Promise<string | undefined> => {
 export let reporter = (
   config: Config,
   actor?: Actor,
-  commit?: string,
+  commit?: string | Promise<string | undefined>,
   send?: (event: SentryEvent) => Promise<void>,
 ): (error: unknown, context?: Partial<Context>) => Promise<void> => {
   let sink = config.tracker
@@ -49,11 +49,12 @@ export let reporter = (
     try {
       console.error('box failed —', error)
     } catch { /* telemetry cannot break the caller */ }
+    let at = await commit
     if (sink) {
       await caught(error, {
         sink,
         actor,
-        commit: config.tracker?.commit ?? commit,
+        commit: config.tracker?.commit ?? at,
         environment: 'production',
         ...context,
       })
@@ -68,7 +69,7 @@ export let reporter = (
             }],
           },
           tags: { ...context.tags, ...context.during },
-          extra: { commit, actor },
+          extra: { commit: at, actor },
         })
       } catch (delivery) {
         // Keep telemetry failure out of the watched graph; never recurse into
@@ -78,7 +79,7 @@ export let reporter = (
           await caught(delivery, {
             sink,
             actor,
-            commit,
+            commit: at,
             environment: 'production',
             tags: { step: 'sentry-report' },
           })
