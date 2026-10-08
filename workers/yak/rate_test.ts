@@ -1,11 +1,11 @@
 // The per-source ceilings on the anonymous doors (rate.ts, T-37884), held by
-// the Workers Rate Limiting bindings wrangler.toml declares. `wrangler dev`
-// enforces those locally, counting in fixed minutes from the epoch, so each
-// door gets one burst sent at once where its minute has time left: one past
-// the door's number from one address, of which exactly one is turned away,
-// and then another address that is still let in.
+// the Workers Rate Limiting bindings wrangler.toml declares. The kernel in
+// memory counts each address's minutes from its first request (testing.ts
+// `limiter`), so each door gets one burst sent at once from an address of its
+// own: one past the door's number, of which exactly one is turned away, and
+// then another address that is still let in.
 import { assertEquals, assertStringIncludes } from '@std/assert'
-import { test, until } from '@yaks/testing'
+import { test } from '@yaks/testing'
 import { connector, kernel, seed } from './probe.ts'
 
 let from = (ip: string) => ({ 'cf-connecting-ip': ip })
@@ -16,15 +16,9 @@ let seen = async (r: Response) => ({
   retry: r.headers.get('retry-after'),
 })
 
-// `n` sends at once, ten seconds or more before the minute turns.
-let burst = async <T>(n: number, send: () => Promise<T>) => {
-  await until(() => Date.now() % 60_000 < 50_000, {
-    timeout: 15_000,
-    poll: 250,
-    label: 'ten seconds left in a rate window',
-  })
-  return await Promise.all(Array.from({ length: n }, send))
-}
+// `n` sends at once.
+let burst = <T>(n: number, send: () => Promise<T>) =>
+  Promise.all(Array.from({ length: n }, send))
 
 // The one answer of a burst the door turned away.
 let one = <T>(answers: T[], away: (a: T) => boolean) => {

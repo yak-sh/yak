@@ -628,15 +628,20 @@ export let emailed = async (
 }
 
 /**
- * A rate limiting binding (rate.ts `Limiter`), counting the way Miniflare's
- * does: `limit` calls per key in each `period` seconds, the windows fixed and
- * counted from the epoch.
+ * A rate limiting binding (rate.ts `Limiter`): `limit` calls per key in each
+ * `period` seconds, each key's windows fixed and counted from its first call.
+ * Miniflare counts them from the epoch; counted from a key's first call, a
+ * burst sent from a key of its own lands in one window whenever it is sent,
+ * so a test never waits on the clock for a window with time left in it.
  */
 export let limiter = (limit: number, period: number): Limiter => {
+  let first = new Map<string, number>()
   let seen = new Map<string, number>()
   return {
     limit: ({ key }) => {
-      let at = `${Math.floor(Date.now() / 1000 / period)} ${key}`
+      let now = Date.now()
+      if (!first.has(key)) first.set(key, now)
+      let at = `${Math.floor((now - first.get(key)!) / 1000 / period)} ${key}`
       seen.set(at, (seen.get(at) ?? 0) + 1)
       return Promise.resolve({ success: seen.get(at)! <= limit })
     },
