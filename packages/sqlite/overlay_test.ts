@@ -122,6 +122,18 @@ test('the overlay costs the batch, never the database', () => {
   assertEquals(cost(100), 3)
 })
 
+test('an overlay speaks of an entity the connection knows in its id, unread', () => {
+  let { driver } = shopFloor()
+  let query = driver.query, statements = 0
+  driver.query = (s) => (statements++, query(s))
+  let over = overlay(driver, shop, [
+    { entity: { eid: 'p1' }, doc: { title: 'Moved' } },
+  ], ['product'])
+  driver.query = query
+  assertEquals(statements, 0)
+  assertEquals(seen(driver, over, '.product.price=9'), ['p1'])
+})
+
 test('an overlay covers what will be read and nothing else', () => {
   let { driver } = shopFloor()
   let over = overlay(driver, shop, [

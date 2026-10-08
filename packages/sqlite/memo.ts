@@ -14,9 +14,10 @@
 //
 // Spines (./write.ts `spines`: an eid's integer id, number and grave) are kept
 // for the connection too, so the patches one transaction makes read each
-// entity's spine once. Any statement that may move one lets every spine go,
-// except a plain mint, which this package tells (`spined().learn`); those kept
-// during a transaction go if it rolls back.
+// entity's spine once. A statement that may move one lets every spine go,
+// except a plain mint, which this package tells (`spined().learn`), and a
+// write that names its entities (`writes`), which lets just theirs go; those
+// kept during a transaction go if it rolls back.
 //
 // A query's rows are kept too, while no table its answer stands on has been
 // written (`answer`, `basis`): a page walking back over tiles it has watched
@@ -371,7 +372,9 @@ let tell = (driver: Driver, c: Connection) => {
       bump(table)
       if (moves(s)) {
         c.shifts++
-        unspine()
+        // A write that says which entities it wrote (`writes`) lets go of
+        // just their spines.
+        if (!c.writing) unspine()
         // A number, an eid or an id itself moved: what any answer ordered,
         // paged or compared a reference by.
         if (table == 'entity') { for (let k of c.kept) k.answers.clear() }
@@ -537,6 +540,7 @@ export let memoized = (
     mints = false,
   ): R => {
     c.writing++
+    let shifts = c.shifts
     let out
     try {
       out = body()
@@ -545,6 +549,10 @@ export let memoized = (
       // its transaction ends.
       k.clear()
       for (let other of c.kept) other.clear()
+      if (c.shifts != shifts) {
+        c.spines.clear()
+        c.since.clear()
+      }
       if (c.depth) c.blind = true
       throw error
     } finally {
@@ -560,8 +568,15 @@ export let memoized = (
     for (let eid of eids(out)) {
       for (let other of c.kept) gone(other, eid)
       if (c.depth) c.dirty.add(eid)
+      // An id, a number or a grave it moved is one of these entities'.
+      if (c.shifts != shifts) c.spines.delete(eid)
     }
     if (mints) {
+      // What it minted is not named: neither is whose spine it moved.
+      if (c.shifts != shifts) {
+        c.spines.clear()
+        c.since.clear()
+      }
       for (let other of c.kept) {
         for (let [eid, b] of other.held) if (!b) gone(other, eid)
         for (let [eid, b] of other.after) if (b === null) gone(other, eid)

@@ -70,6 +70,7 @@ import {
   val,
 } from '@yaks/sql'
 import { isJsonb, jsonIn, jsonOut } from './jsonb.ts'
+import { spines } from './write.ts'
 
 /** What an overlaid component's CTE is called. */
 export let OVER = '_over_'
@@ -195,17 +196,12 @@ export let overlay = (
   }
 
   // Every id the overlay speaks in. A committed entity keeps the one storage
-  // gave it; a fresh one is numbered downward from zero, where nothing else
-  // ever is.
-  let ids = new Map<Eid, number>()
+  // gave it, as the connection knows its spine; a fresh one is numbered
+  // downward from zero, where nothing else ever is.
   let eids = named(vocab, bundles)
-  for (
-    let row of driver.query(select({
-      cols: [col('id'), col('eid')],
-      from: table('entity'),
-      where: oneOf(col('eid'), eids),
-    }))
-  ) ids.set(String(row.eid), Number(row.id))
+  let ids = new Map(
+    [...spines(driver, eids)].map(([eid, spine]) => [eid, spine.id]),
+  )
   let next = 0
   let fresh: Eid[] = []
   for (let eid of eids) {

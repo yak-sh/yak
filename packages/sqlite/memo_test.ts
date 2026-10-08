@@ -406,6 +406,28 @@ test('a transaction asks about a spine once, however many patches name it', () =
   assertEquals(f.s.get(['mob'])[0].position, { x: 2 })
 })
 
+test('a removal lets go of the spines it buried, and of no other', () => {
+  let f = fixture()
+  let mob = (x: number) =>
+    f.s.tx((tx) => tx.patch([{ entity: { eid: 'mob' }, position: { x } }]))
+  mob(1)
+  assertEquals(selects(f, () => mob(2)), 0)
+  f.s.tx((tx) => tx.remove([{ eid: 'hero' }]))
+  assertEquals(selects(f, () => mob(3)), 0)
+  // The buried one's spine is read again, and says it is dead.
+  assertEquals(
+    selects(
+      f,
+      () =>
+        f.s.tx((tx) =>
+          tx.patch([{ entity: { eid: 'hero' }, player: { active: false } }])
+        ),
+    ),
+    1,
+  )
+  assertEquals(f.s.get(['hero'])[0].player, undefined)
+})
+
 // A driver whose transactions are its own (a Durable Object's
 // transactionSync), opened beside the statements the store sees.
 let native = () => {

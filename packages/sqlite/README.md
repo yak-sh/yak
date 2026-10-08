@@ -219,9 +219,10 @@ memory knows an entity lacks, a patch writes in one statement, as it does a new
 entity's components, rather than updating first and inserting after.
 
 The spines a patch asks about (an eid's integer id, number and grave) are kept
-the same way, so the patches one transaction makes read each entity's once. Any
-statement that may move a spine lets them all go, and those kept inside a
-transaction that rolls back go with it.
+the same way, so the patches one transaction makes read each entity's once. A
+statement that may move a spine lets them all go, unless the write it belongs to
+names its entities (a patch, a removal, a revival): then theirs go and no
+others. Those kept inside a transaction that rolls back go with it.
 
 A query's rows are kept as well, while no table its answer stands on has been
 written: every write statement moves its table's count, and an answer is good
