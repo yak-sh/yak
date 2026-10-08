@@ -4,7 +4,7 @@
 import { dirname, join, relative, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { parse } from 'es-module-lexer/js'
-import ts from 'npm:typescript@6.0.3'
+import type ts from 'npm:typescript@6.0.3'
 import { expandGlob } from 'jsr:@std/fs@^1.0.0/expand-glob'
 import type { Catalog } from '../packages/esbuild/platform.ts'
 
@@ -46,18 +46,40 @@ let digest = async (text: string) =>
     ),
   ].map((n) => n.toString(16).padStart(2, '0')).join('')
 
-let script = (path: string, source: string) =>
-  ts.transpileModule(source, {
-    fileName: path,
-    compilerOptions: {
-      target: ts.ScriptTarget.ESNext,
-      module: ts.ModuleKind.ESNext,
-      jsx: ts.JsxEmit.ReactJSX,
-      jsxImportSource: 'preact',
-      removeComments: true,
-      newLine: ts.NewLineKind.LineFeed,
-    },
-  }).outputText
+/** What transpiling made of each source, by a digest of this module, the
+ * file's name and its text. TypeScript makes a program for every file, which
+ * is most of a catalog's cost, and the same bytes always come out the same:
+ * `kept` is what an earlier catalog made, `made` what this one used. */
+export type Transpiled = {
+  kept: Record<string, string>
+  made: Record<string, string>
+}
+
+// Loaded for the first source no earlier catalog transpiled.
+let typescript: Promise<typeof ts> | undefined
+let salt = digest(Deno.readTextFileSync(new URL(import.meta.url)))
+
+let script = async (path: string, source: string, memo: Transpiled) => {
+  let key = (await digest(`${await salt}\0${path}\0${source}`)).slice(7)
+  let code = memo.kept[key]
+  if (code == null) {
+    let tsc = await (typescript ??= import('npm:typescript@6.0.3').then((m) =>
+      m.default
+    ))
+    code = tsc.transpileModule(source, {
+      fileName: path,
+      compilerOptions: {
+        target: tsc.ScriptTarget.ESNext,
+        module: tsc.ModuleKind.ESNext,
+        jsx: tsc.JsxEmit.ReactJSX,
+        jsxImportSource: 'preact',
+        removeComments: true,
+        newLine: tsc.NewLineKind.LineFeed,
+      },
+    }).outputText
+  }
+  return memo.made[key] = code
+}
 
 let npm = (spec: string) =>
   /^npm:((?:@[^/]+\/)?[^@/]+)(?:@([^/]+))?(\/.*)?$/.exec(spec)
@@ -78,13 +100,9 @@ type Module = {
 
 // JSR has no npm install identity. Deno resolves its published module graph at
 // platform deployment; the compiler receives those sources as package files.
-let captured = new Map<
-  string,
-  Promise<{ files: Record<string, string>; entry: string }>
->()
-
 let remote = async (
   spec: string,
+  memo: Transpiled,
 ): Promise<{ files: Record<string, string>; entry: string }> => {
   let command = await new Deno.Command('deno', {
     args: ['info', '--json', '--no-lock', spec],
@@ -106,7 +124,11 @@ let remote = async (
   }
   for (let mod of graph.modules.filter((m) => m.local)) {
     let file = files.get(mod.specifier)!
-    let code = script(mod.specifier, Deno.readTextFileSync(mod.local!))
+    let code = await script(
+      mod.specifier,
+      Deno.readTextFileSync(mod.local!),
+      memo,
+    )
     let edits: { start: number; end: number; text: string }[] = []
     for (let imp of parse(code)[0]) {
       if (imp.n == null) continue
@@ -134,13 +156,6 @@ let remote = async (
   return { files: out, entry }
 }
 
-let imported = async (spec: string, member: Member) => {
-  if (!captured.has(spec)) captured.set(spec, remote(spec))
-  let result = await captured.get(spec)!
-  Object.assign(member.files, result.files)
-  return result.entry
-}
-
 let mapped = (spec: string, map: Record<string, string>) => {
   if (map[spec]) return map[spec]
   let prefix = Object.keys(map).sort((a, b) => b.length - a.length)
@@ -154,8 +169,21 @@ let mapped = (spec: string, map: Record<string, string>) => {
 /** Capture the workspace's browser exports and their source dependency graph.
  * Import maps become npm specifiers or workspace names; type-only imports and
  * doctest examples never introduce dependencies. No source is bundled. */
-export let catalog = async (root: string): Promise<Catalog> => {
+export let catalog = async (
+  root: string,
+  memo: Transpiled = { kept: {}, made: {} },
+): Promise<Catalog> => {
   root = resolve(root)
+  let captured = new Map<
+    string,
+    Promise<{ files: Record<string, string>; entry: string }>
+  >()
+  let imported = async (spec: string, member: Member) => {
+    if (!captured.has(spec)) captured.set(spec, remote(spec, memo))
+    let result = await captured.get(spec)!
+    Object.assign(member.files, result.files)
+    return result.entry
+  }
   let config = read(join(root, 'deno.json'))
   let members = new Map<string, Member>()
   for (let path of config.workspace ?? []) {
@@ -233,7 +261,7 @@ export let catalog = async (root: string): Promise<Catalog> => {
     }
     let code: string
     try {
-      code = script(file, source)
+      code = await script(file, source, memo)
     } catch (e) {
       throw new Error(`${name}/${file}: ${e}`, { cause: e })
     }
@@ -325,17 +353,34 @@ let remove = (path: string) => {
 let repo = fileURLToPath(new URL('../', import.meta.url))
 export let CATALOG = join(repo, 'workers/yak/.wrangler/packages.json')
 
-/** Materialize atomically before wrangler reads the compiler wrapper. */
-export let write = async (root = repo, to = CATALOG) => {
-  let packages = await catalog(root)
+let materialize = (to: string, value: unknown) => {
   Deno.mkdirSync(dirname(to), { recursive: true })
   let tmp = `${to}.${crypto.randomUUID()}`
   try {
-    Deno.writeTextFileSync(tmp, JSON.stringify(packages))
+    Deno.writeTextFileSync(tmp, JSON.stringify(value))
     Deno.renameSync(tmp, to)
   } finally {
     remove(tmp)
   }
+}
+
+let kept = (path: string): Record<string, string> => {
+  try {
+    return JSON.parse(Deno.readTextFileSync(path))
+  } catch (e) {
+    if (e instanceof Deno.errors.NotFound || e instanceof SyntaxError) return {}
+    throw e
+  }
+}
+
+/** Materialize atomically before wrangler reads the compiler wrapper, with
+ * what was transpiled for it beside it (`transpiled.json`) for the next. */
+export let write = async (root = repo, to = CATALOG) => {
+  let memo = join(dirname(to), 'transpiled.json')
+  let made: Record<string, string> = {}
+  let packages = await catalog(root, { kept: kept(memo), made })
+  materialize(to, packages)
+  materialize(memo, made)
   return packages
 }
 

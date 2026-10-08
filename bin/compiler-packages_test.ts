@@ -96,22 +96,23 @@ test('compiler catalog captures runtime source closure and npm-shaped exports', 
 
 test('compiler catalog is stable, content-addressed and materialized atomically', async () => {
   await scratch(workspace(), async (root) => {
-    let a = await catalog(root)
+    let to = `${root}/.wrangler/packages.json`
+    let a = await write(root, to)
     assertEquals(await catalog(root), a)
     await Deno.writeTextFile(
       `${root}/packages/a/extra.ts`,
       'export let extra = 4',
     )
-    let b = await write(root, `${root}/.wrangler/packages.json`)
+    // The second write starts from what the first transpiled, and makes
+    // what a catalog from nothing makes.
+    let b = await write(root, to)
+    assertEquals(b, await catalog(root))
     assertEquals(b['@yaks/a'].version == a['@yaks/a'].version, false)
     assertEquals(b['@yaks/b'].version, a['@yaks/b'].version)
+    assertEquals(JSON.parse(await Deno.readTextFile(to)), b)
     assertEquals(
-      JSON.parse(await Deno.readTextFile(`${root}/.wrangler/packages.json`)),
-      b,
-    )
-    assertEquals(
-      [...Deno.readDirSync(`${root}/.wrangler`)].map((f) => f.name),
-      ['packages.json'],
+      [...Deno.readDirSync(`${root}/.wrangler`)].map((f) => f.name).sort(),
+      ['packages.json', 'transpiled.json'],
     )
   })
 })
