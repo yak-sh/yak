@@ -58,7 +58,7 @@ test('populated socket capacity', async () => {
   let clients = Number(Deno.env.get('CAPACITY_CLIENTS') ?? 100)
   let expected = clients * (clients - 1)
   let players = Array.from({ length: clients }, () => crypto.randomUUID())
-  mark('begin', { slug, area: area.query, clients, watches: 14 })
+  mark('begin', { slug, area: area.query, clients })
   try {
     let person = await limit(
       seed(k, [{ slug, apps: ['vale'] }]),
@@ -180,8 +180,11 @@ test('populated socket capacity', async () => {
         3_000,
         `socket ${i}`,
       )
+      // What a page asks the store for: its tiles of stored rows, then the
+      // players and creatures moving near it (apps/vale/net.ts).
       let asks = [
-        area.query,
+        ...area.tiles.map((t) => t.query),
+        area.moving,
         looksOf(area, players[i]),
         `.entity.eid=${JSON.stringify(players[i])}&?created&*`,
         ...records(players[i]),

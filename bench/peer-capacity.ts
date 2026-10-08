@@ -84,7 +84,8 @@ for (let i = 0; i < count; i++) {
   sinks.push(q.send)
   for (
     let [id, line] of [
-      area.query,
+      ...area.tiles.map((t) => t.query),
+      area.moving,
       looksOf(area, players[i]),
       `.entity.eid=${players[i]}&*`,
       ...records(players[i]),
