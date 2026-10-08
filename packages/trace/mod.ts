@@ -70,8 +70,29 @@ export type Channel = {
 
 let channels = new WeakMap<object, Channel>()
 type Scope = Context & { outer?: Scope; ancestor?: string }
-let scopes = new WeakMap<Span, Scope>()
 let current: Scope | undefined
+
+// A span this module began, carrying the scope its work runs in. Thousands
+// begin and end a second in a busy process: a class builds each without
+// defining an accessor or filing it in a side table.
+const SCOPE = Symbol('scope')
+class Begun implements Span {
+  [SCOPE]: Scope
+  constructor(
+    readonly id: string,
+    readonly start: number,
+    scope: Scope,
+    private on: () => boolean,
+    readonly end: (o?: End) => void,
+  ) {
+    this[SCOPE] = scope
+  }
+  get active(): boolean {
+    return this.on()
+  }
+}
+let scopeOf = (span: Span): Scope | undefined =>
+  span instanceof Begun ? span[SCOPE] : undefined
 
 /** A host-provided asynchronous context carrier. The trace package remains
  * web-only; hosts may adapt AsyncLocalStorage or another task-local carrier. */
@@ -218,13 +239,20 @@ let create = (): Channel => {
       let begun = event(a, id, 'start', start)
       begun.start = start
       emit(begun)
-      let span: Span = {
-        get active() {
-          return !ended && !!listeners.size && epoch == recording
-        },
+      let span = new Begun(
         id,
         start,
-        end: (o) => {
+        {
+          channel: out,
+          parent: id,
+          recording,
+          ancestor: a.parent,
+          outer: at?.channel == out && at.parent == a.parent
+            ? at as Scope
+            : undefined,
+        },
+        () => !ended && !!listeners.size && epoch == recording,
+        (o) => {
           if (ended) return
           ended = true
           // A disconnected recording cannot finish in a later recording.
@@ -245,16 +273,7 @@ let create = (): Channel => {
           finished.duration = Math.max(0, finished.time - start)
           emit(finished)
         },
-      }
-      scopes.set(span, {
-        channel: out,
-        parent: id,
-        recording,
-        ancestor: a.parent,
-        outer: at?.channel == out && at.parent == a.parent
-          ? at as Scope
-          : undefined,
-      })
+      )
       return span
     },
     instant: (a, o) => {
@@ -539,7 +558,7 @@ export function during<T>(
     throw error
   }
   try {
-    let value = span ? scope(scopes.get(span), run) : run()
+    let value = span ? scope(scopeOf(span), run) : run()
     return value && typeof (value as Promise<T>).then == 'function'
       ? (value as Promise<T>).then(done, failed)
       : done(value as T)
@@ -562,7 +581,7 @@ export let leaf = <T>(
   own?: (value: T) => Counts,
 ): T => {
   let charge = (value?: T) => {
-    let at = span && scopes.get(span)
+    let at = span && scopeOf(span)
     if (at && live(at)) meters.get(at.channel)?.(span!.id, did(value))
   }
   let value: T
