@@ -776,6 +776,19 @@ export let loadVocab = (
     mark,
   )
 
+  // Where a path leads and what a component indexes are facts of the
+  // vocabulary, asked of it for every clause a query compiles: each is worked
+  // out once, and handed out frozen, since every caller shares it.
+  let aimed = new Map<string, Hop[]>()
+  let indexed = new Map<string, Index[]>()
+  let frozen = <T>(x: T): T => {
+    if (x && typeof x == 'object') {
+      for (let v of Object.values(x)) frozen(v)
+      Object.freeze(x)
+    }
+    return x
+  }
+
   let v: Vocab = {
     docs,
     keywords,
@@ -786,7 +799,14 @@ export let loadVocab = (
     def: (name) => defs[name],
     props: (comp) => routes.get(comp) ?? [],
     prop: propFor,
-    indexes: (comp) => indexesOf(defs[comp], (p) => propFor(comp, p)),
+    indexes: (comp) => {
+      let held = indexed.get(comp)
+      if (!held) {
+        held = indexesOf(defs[comp], (p) => propFor(comp, p))
+        indexed.set(comp, frozen(held))
+      }
+      return held
+    },
     identity: (comp) => identityOf(defs[comp]),
     // A dotted path → the hops it names, two segments at a time: a component
     // and one of its properties, or a component alone at the end. A name no
@@ -797,6 +817,11 @@ export let loadVocab = (
     // table for it. Every non-final hop must be a reference for the
     // dereference to stand.
     aim: (path, facet) => {
+      // A bare unknown name answers differently with `facet`; nothing else
+      // does. A refusal is thrown afresh each time it is asked.
+      let key = facet ? `?${path}` : path
+      let held = aimed.get(key)
+      if (held) return held
       let segs = path.split('.')
       let out: Hop[] = []
       for (let i = 0; i < segs.length; i += 2) {
@@ -822,6 +847,7 @@ export let loadVocab = (
         }
         out.push({ comp: a, prop: b })
       }
+      aimed.set(key, frozen(out))
       return out
     },
     // A plural name → the reverse association it names, or undefined when the
