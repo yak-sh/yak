@@ -4,6 +4,7 @@
 
 import { test } from '@yaks/testing'
 import { assertEquals, assertRejects, assertThrows } from '@std/assert'
+import { FakeTime } from '@std/testing/time'
 import { ModelError, type Request } from '@yaks/model'
 import { body, CODEX, fromChatGPT, fromEnv, items, responses } from './mod.ts'
 
@@ -319,6 +320,7 @@ test('the Model shares refresh, redacted frame hooks, store, and anchor policy',
 })
 
 test('the Model maps the shared watchdog to ModelError', async () => {
+  using time = new FakeTime()
   let model = responses({
     credential: () => codex,
     stallMs: 20,
@@ -329,12 +331,9 @@ test('the Model maps the shared watchdog to ModelError', async () => {
           reject(new DOMException('aborted', 'AbortError')))
       }),
   })
-  let error = await assertRejects(
-    () => model(req),
-    ModelError,
-    'transport stalled',
-  )
-  assertEquals(error.code, 'stalled')
+  let error = assertRejects(() => model(req), ModelError, 'transport stalled')
+  await time.tickAsync(20)
+  assertEquals((await error).code, 'stalled')
 })
 
 test('usage keeps missing counts unknown and rejects invalid counts', async () => {

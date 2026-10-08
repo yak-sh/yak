@@ -2,6 +2,7 @@
 // boundaries are transport facts, so every case stops before runner logic.
 import { test } from '@yaks/testing'
 import { assertEquals, assertRejects } from '@std/assert'
+import { FakeTime } from '@std/testing/time'
 import {
   ResponseEvent,
   ResponseFault,
@@ -619,6 +620,7 @@ let hang = (init?: RequestInit) =>
   })
 
 test('responses fails a connect that never returns a response', async () => {
+  using time = new FakeTime()
   let client = responses({
     credentials: auth(),
     // A stall is transient now (retry_test), so these measure the fault.
@@ -630,13 +632,16 @@ test('responses fails a connect that never returns a response', async () => {
           reject(new DOMException('aborted', 'AbortError')))
       }),
   })
-  let error = await assertRejects(
-    () => client.run({ model: 'm', input: [] }),
-  ) as ResponseFault
-  assertEquals(error.message, 'responses: transport stalled')
+  let error = assertRejects(() => client.run({ model: 'm', input: [] }))
+  await time.tickAsync(20)
+  assertEquals(
+    (await error as ResponseFault).message,
+    'responses: transport stalled',
+  )
 })
 
 test('responses fails a stream that stalls after connecting', async () => {
+  using time = new FakeTime()
   let client = responses({
     credentials: auth(),
     // A stall is transient now (retry_test), so these measure the fault.
@@ -644,10 +649,12 @@ test('responses fails a stream that stalls after connecting', async () => {
     stallMs: 20,
     fetch: (_input, init) => Promise.resolve(new Response(hang(init))),
   })
-  let error = await assertRejects(
-    () => client.run({ model: 'm', input: [] }),
-  ) as ResponseFault
-  assertEquals(error.message, 'responses: stream stalled')
+  let error = assertRejects(() => client.run({ model: 'm', input: [] }))
+  await time.tickAsync(20)
+  assertEquals(
+    (await error as ResponseFault).message,
+    'responses: stream stalled',
+  )
 })
 
 test('reach counts any HTTP answer as connected and names the endpoint', async () => {
@@ -766,6 +773,7 @@ test('a second 401 fails without refreshing again and keeps the request id', asy
 })
 
 test('watchdog bounds both a missing first frame and a stalled HTTP error body', async () => {
+  using time = new FakeTime()
   for (let status of [200, 400]) {
     let client = transport({
       credentials: auth(),
@@ -784,10 +792,12 @@ test('watchdog bounds both a missing first frame and a stalled HTTP error body',
           ),
         ),
     })
-    await assertRejects(
+    let stalled = assertRejects(
       () => client.run({ model: 'm', input: [] }),
       Error,
       'stream stalled',
     )
+    await time.tickAsync(20)
+    await stalled
   }
 })

@@ -1,5 +1,6 @@
 import { test } from '@yaks/testing'
 import { assert, assertEquals, assertRejects } from '@std/assert'
+import { FakeTime } from '@std/testing/time'
 import { ModelError } from '@yaks/model'
 import { ResponseError, responses, transport } from './mod.ts'
 
@@ -408,6 +409,7 @@ let silent = (init?: RequestInit) =>
   )
 
 test('a stall is transient: the attempt after it completes the turn', async () => {
+  using time = new FakeTime()
   let calls = 0
   let pauses: number[] = []
   let client = transport({
@@ -420,7 +422,9 @@ test('a stall is transient: the attempt after it completes the turn', async () =
     fetch: (_url, init) =>
       ++calls == 1 ? silent(init) : Promise.resolve(complete()),
   })
-  assertEquals((await client.run(req)).items, [item('done').item])
+  let ran = client.run(req)
+  await time.tickAsync(20)
+  assertEquals((await ran).items, [item('done').item])
   assertEquals(calls, 2)
   assertEquals(pauses, [1000])
 })
