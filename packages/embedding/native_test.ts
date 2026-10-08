@@ -144,21 +144,34 @@ test('a screen narrows before the nearest are cut, however thin', () => {
 })
 
 test('a screen admitting many, all of them far, reads further', () => {
-  // More codes lie nearer the query than a first scan reads, and the screen
-  // admits none of them, only the many on the far side.
+  // More codes lie nearer the query than a first scan reads (4096), and the
+  // screen admits none of them, only the many on the far side: more than FEW
+  // entities, so the index is asked, a few hundred of them with a vector.
   let db = fresh()
   let next = random(3)
   let here = Float32Array.from({ length: DIM }, () => next() - 0.5)
   let there = here.map((x) => -x)
-  let near = 5000
+  let near = 4200
+  let far = 300
   store(
     db,
     1,
     Array.from(
-      { length: near + FEW + 100 },
+      { length: near + far },
       (_, i) => point(next, i < near ? here : there),
     ),
   )
+  // and the rest of the screen, entities with no vector at all
+  let rest = Array.from(
+    { length: FEW + 100 - far },
+    (_, i) => near + far + 1 + i,
+  )
+  db.atomic(() => {
+    for (let i = 0; i < rest.length; i += 500) {
+      let ids = rest.slice(i, i + 500)
+      db.query(insert('entity', ...ids.map((id) => ({ id, eid: `v-${id}` }))))
+    }
+  })
   install(db)
   assert(build(db))
   let within = render(select({
@@ -167,8 +180,11 @@ test('a screen admitting many, all of them far, reads further', () => {
     where: gt(col('id'), val(near)),
   }))
   let q = anchor(db, 1)
-  let got = names(db, q, { within, limit: 3 })
-  assertEquals(got, names(plain(db), q, { within, limit: 3 }))
+  // Every one admitted points away from the query: no floor, or none is near.
+  let opts = { within, limit: 3, floor: -1 }
+  let got = names(db, q, opts)
+  assertEquals(got.length, 3)
+  assertEquals(got, names(plain(db), q, opts))
   assert(got.every((e) => Number(e.slice(2)) > near))
 })
 
