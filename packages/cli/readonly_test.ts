@@ -3,6 +3,9 @@
 import { equal, ok, test } from '@yaks/testing'
 import { compose, facet } from './host.ts'
 import { read } from './config.ts'
+import { close } from './held.ts'
+import { cli as line } from './run.ts'
+import { TOOLS, YAK } from './yak.ts'
 import { open } from '@yaks/sqlite/db'
 import { col, select, table } from '@yaks/sql'
 
@@ -55,24 +58,21 @@ test('local read commands leave graph bytes unchanged under a concurrent writer'
       }),
     )
     writer.query({ t: 'begin', mode: 'immediate' })
+    // The command line run in this process, as `yak` runs it: the graph it
+    // opens is closed when the line is done.
     let cli = async (...args: string[]) => {
-      let result = await new Deno.Command(Deno.execPath(), {
-        args: [
-          'run',
-          '-A',
-          '--config',
-          new URL('../../deno.json', import.meta.url).pathname,
-          new URL('./yak.ts', import.meta.url).pathname,
-          '--config',
-          file,
-          '--json',
-          ...args,
-        ],
-        stdout: 'piped',
-        stderr: 'piped',
-      }).output()
-      equal(result.code, 0, new TextDecoder().decode(result.stderr))
-      return new TextDecoder().decode(result.stdout)
+      let said: string[] = []
+      let code = await line(TOOLS, {
+        ...YAK,
+        argv: ['--config', file, '--json', ...args],
+        env: () => undefined,
+        reads: { file: () => '', stdin: () => '' },
+        out: (l) => said.push(l),
+        note: (l) => said.push(l),
+      })
+      await close(code)
+      equal(code, 0, said.join('\n'))
+      return said.join('\n')
     }
     ok(
       (await cli(
