@@ -1708,12 +1708,12 @@
     "place": {
       "component": true,
       "type": "object",
-      "description": "The region and chunk a stored world row belongs to. Falls and gatherings wear it; a page watches only the places near its hero. Chunk is the numeric key of ci and ck (area.ts).",
+      "description": "The region and chunk a stored world row belongs to. Falls and gatherings wear it; a page watches only the tiles of chunks near its hero, by chunk. Chunk is the numeric key of ci and ck (area.ts).",
       "properties": {
-        "level": { "type": "string", "index": true },
+        "level": { "type": "string" },
         "chunk": { "type": "number", "index": true },
-        "ci": { "type": "integer", "index": true },
-        "ck": { "type": "integer", "index": true }
+        "ci": { "type": "integer" },
+        "ck": { "type": "integer" }
       }
     },
     "position": {
@@ -1978,7 +1978,7 @@
       "type": "object",
       "description": "A player's share in a creature's fall. The first row after the creature was last up is the fall itself; the others are the players who helped.",
       "properties": {
-        "creature": { "type": "string", "index": true },
+        "creature": { "type": "string" },
         "by": { "type": "string", "index": true, "description": "The player." },
         "beast": {
           "type": "string",
@@ -2025,7 +2025,6 @@
       "properties": {
         "node": {
           "type": "string",
-          "index": true,
           "description": "The node, by the eid its level names it with."
         },
         "life": {
