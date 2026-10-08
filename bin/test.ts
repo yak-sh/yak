@@ -142,9 +142,15 @@ let group = () => {
   return Number(stat.slice(stat.lastIndexOf(')') + 2).split(' ')[2])
 }
 
-// `--bulk [--tag=t]... [--all] [--also=path]... path...`: a runtime of the
-// runner for each platform the paths hold, watched together. A test file
-// runs on its platform; a page's examples run on deno.
+// What every workerd test depends on beside its own graph: the Worker the
+// kernel runs, and its config.
+let KERNEL = ['workers/yak/index.ts', 'workers/yak/wrangler.toml']
+
+// `--bulk [--tag=t]... [--all] path...`: a runtime of the runner for each
+// platform the paths hold, run at once and watched together. A test file runs
+// on its platform; a page's examples run on deno. The workerd platform starts
+// once the run's kernel is up (probe-suite.ts), which this process holds
+// beside the others and stops after its last test.
 if (import.meta.main && Deno.args[0] === '--bulk') {
   // This coordinator and all its children stay in the outer runner's process
   // group: a signal still settles the complete tree, not just a platform's
@@ -169,19 +175,28 @@ if (import.meta.main && Deno.args[0] === '--bulk') {
       paths.filter((f) => tested(f) ? platform(f) == p : p == 'deno'),
     ] as const
   ).filter(([, files]) => files.length)
-  let children = runs.map(([p, files]) =>
-    new Deno.Command(Deno.execPath(), {
-      args: [...common, RUNNER, `--platform=${p}`, ...flags, ...files],
+  let children: Deno.ChildProcess[] = []
+  let spawn = (
+    p: string,
+    files: readonly string[],
+    more: string[] = [],
+    env?: Record<string, string>,
+  ) => {
+    let child = new Deno.Command(Deno.execPath(), {
+      args: [...common, RUNNER, `--platform=${p}`, ...flags, ...more, ...files],
+      env,
       stdin: 'inherit',
       // Keep each reporter intact: interleaved half-lines would also fool
       // test:budget's per-test duration parser. Drain concurrently below.
       stdout: 'piped',
       stderr: 'piped',
     }).spawn()
-  )
+    children.push(child)
+    return child
+  }
   let failed: string[] = []
-  let progress = children.map(() => ({
-    name: 'loading tests',
+  let progress = runs.map(([p]) => ({
+    name: p == 'workerd' ? 'starting the kernel' : 'loading tests',
     completed: Date.now(),
     count: 0,
     said: 0,
@@ -232,31 +247,65 @@ if (import.meta.main && Deno.args[0] === '--bulk') {
       }
     }
   }, pulse)
-  try {
-    await Promise.all(children.map(async (child, i) => {
-      let [stdout, preview] = child.stdout.tee()
-      let [stderr, errors] = child.stderr.tee()
-      let output = new Response(stdout).arrayBuffer()
-      let error = new Response(stderr).arrayBuffer()
-      let followed = Promise.all([
-        observe(preview, progress[i]),
-        observe(errors, progress[i]),
-      ])
-      let status = await child.status
-      await followed
+  let run = async (i: number, child: Deno.ChildProcess) => {
+    let [stdout, preview] = child.stdout.tee()
+    let [stderr, errors] = child.stderr.tee()
+    let output = new Response(stdout).arrayBuffer()
+    let error = new Response(stderr).arrayBuffer()
+    let followed = Promise.all([
+      observe(preview, progress[i]),
+      observe(errors, progress[i]),
+    ])
+    let status = await child.status
+    await followed
+    progress[i].done = true
+    report(Deno.stdout, new Uint8Array(await output))
+    report(Deno.stderr, new Uint8Array(await error))
+    // Every platform runs to its own end and prints its own report.
+    if (!status.success) {
+      failed.push(`test ${runs[i][0]}: ${status.signal ?? status.code}`)
+    }
+  }
+  // The workerd platform, once the kernel it shares is up; the kernel stops
+  // after its last test.
+  let kernel = async (i: number, files: readonly string[]) => {
+    let suite
+    try {
+      suite = await (await import('../workers/yak/probe-suite.ts'))
+        .probeSuite()
+    } catch (e) {
+      console.error(e)
       progress[i].done = true
-      report(Deno.stdout, new Uint8Array(await output))
-      report(Deno.stderr, new Uint8Array(await error))
-      // Every platform runs to its own end and prints its own report.
-      if (!status.success) {
-        failed.push(`test ${runs[i][0]}: ${status.signal ?? status.code}`)
-      }
-    }))
+      failed.push('test workerd: the kernel did not start')
+      return
+    }
+    try {
+      progress[i].name = 'loading tests'
+      progress[i].completed = Date.now()
+      let also = KERNEL.map((k) => `--also=${k}`)
+      await run(i, spawn('workerd', files, also, suite.env))
+    } finally {
+      await suite.stop()
+    }
+  }
+  try {
+    await Promise.all(
+      runs.map(([p, files], i) =>
+        p == 'workerd' ? kernel(i, files) : run(i, spawn(p, files))
+      ),
+    )
   } finally {
     clearInterval(watch)
   }
-  for (let line of failed) console.error(line)
-  if (failed.length) Deno.exit(1)
+  // The closing word on a long run: which platforms were red, after every one
+  // of them has printed its own report.
+  if (failed.length) {
+    console.error(`\n─── ${failed.length} failing platform(s) ───`)
+    for (let line of failed) console.error(`  ${line}`)
+  }
+  // The code is said outright: wrangler's close sets Node's exit code, which
+  // is Deno's.
+  Deno.exit(failed.length ? 1 : 0)
 } else if (import.meta.main) {
   let outer = Deno.env.get(RUN)
   if (outer) {
@@ -274,11 +323,10 @@ if (import.meta.main && Deno.args[0] === '--bulk') {
   let named = PLATFORMS.filter((p) => tags.includes(p))
   let on = (p: string) => !named.length || named.includes(p)
   let { tests, pages } = await find(paths.length ? paths : ROOTS)
-  let local = [
-    ...tests.filter((f) => !workerd(f) && on(platform(f))),
+  let files = [
+    ...tests.filter((f) => on(platform(f))),
     ...on('deno') ? pages : [],
   ]
-  let wd = on('workerd') ? tests.filter(workerd) : []
   // The Worker's npm dependencies, current before any test loads: workerd
   // bundles from workers/yak/node_modules, and the kernel in memory imports
   // the OAuth provider out of it (workers/yak/oauth-provider.ts). `npm ci`
@@ -286,7 +334,7 @@ if (import.meta.main && Deno.args[0] === '--bulk') {
   // left every runtime that loaded its tests meanwhile without that module
   // for the rest of its life, and each kernel in it answered its first
   // sign-in with a 500.
-  let worker = [...local, ...wd].some((f) => f.startsWith('workers/'))
+  let worker = files.some((f) => f.startsWith('workers/'))
   if (worker) await (await import('../workers/yak/wrangler.ts')).ready()
   // The Stripe sandbox every kernel sells in, found once for a run that has
   // the Worker's tests and handed to every process by its environment
@@ -299,70 +347,24 @@ if (import.meta.main && Deno.args[0] === '--bulk') {
       Deno.env.set('STRIPE_PRICE', await plusPrice(stripe))
     }
   }
-  let env: Record<string, string> = { DENO_DIR: denoDir(), ...GIT }
-  // The kernel starts while the deno pass runs, and is ready by its end.
-  let started = wd.length
-    ? import('../workers/yak/probe-suite.ts').then((m) => m.probeSuite())
-    : undefined
-  started?.catch(() => {})
-  let bulk = (label: string, args: string[], extra = {}): TestCommand => ({
+  let bulk: TestCommand = {
     command: Deno.execPath(),
     args: [
       'run',
       '-A',
+      // The kernel's harness loads workers/yak's own wrangler, and Deno
+      // resolves it from there only in this mode (probe-suite.ts).
+      '--node-modules-dir=manual',
       '--unstable-worker-options',
       import.meta.filename!,
       '--bulk',
       ...flags,
-      ...args,
+      ...files,
     ],
-    env: { ...env, ...extra },
-    label,
-  })
-  let failed: string[] = []
-  let options = {
-    onFailure: (spec: TestCommand) =>
-      failed.push(spec.label ?? spec.args.join(' ')),
+    env: { DENO_DIR: denoDir(), ...GIT },
   }
-  let suite: Awaited<typeof started>
-  let result: Result = { code: 0 }
-  try {
-    if (local.length) {
-      result = await runTestCommands([bulk('deno', local)], options)
-    }
-    if (started && !result.signal) {
-      try {
-        suite = await started
-      } catch (e) {
-        console.error(e)
-        failed.push('workerd: the kernel did not start')
-        result = { code: 1 }
-      }
-      if (suite) {
-        // What every workerd test depends on beside its own graph: the
-        // Worker the kernel runs, and its config.
-        let kernel = ['workers/yak/index.ts', 'workers/yak/wrangler.toml']
-        let passed = await runTestCommands(
-          [bulk(
-            'workerd',
-            [...kernel.map((k) => `--also=${k}`), ...wd],
-            suite.env,
-          )],
-          options,
-        )
-        result = passed.signal || !result.code ? passed : result
-      }
-    }
-  } finally {
-    await (suite ?? await started?.catch(() => undefined))?.stop()
-    // The closing word on a long run: which platforms were red, after every
-    // one of them has printed its own report.
-    if (failed.length) {
-      console.error(`\n─── ${failed.length} failing platform(s) ───`)
-      for (let phase of failed) console.error(`  ${phase}`)
-    }
-  }
-  // The code is said last and outright: wrangler's close sets Node's exit
-  // code, which is Deno's.
+  let result: Result = files.length
+    ? await runTestCommands([bulk])
+    : { code: 0 }
   Deno.exit(result.code ?? (result.signal === 'SIGINT' ? 130 : 143))
 }
