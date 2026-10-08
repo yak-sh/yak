@@ -224,13 +224,14 @@ statement that may move a spine lets them all go, unless the write it belongs to
 names its entities (a patch, a removal, a revival): then theirs go and no
 others. Those kept inside a transaction that rolls back go with it.
 
-A query's rows are kept as well, while no table its answer stands on has been
-written: every write statement moves its table's count, and an answer is good
-while the counts of the tables it reads (and the graves, and the archetype
-catalog) stand where they were. A query that requires no component row (`!doc`)
-stands on every entity. Text, nearness, edges, walks, backlinks, computed and
-derived properties and time phrases are read every time, as is anything a
-transaction that still owes archetype pointers asks of the catalog.
+A query's rows are kept as well, once it is asked a second time (most of what a
+write asks, it asks once), while no table its answer stands on has been written:
+every write statement moves its table's count, and an answer is good while the
+counts of the tables it reads (and the graves, and the archetype catalog) stand
+where they were. A query that requires no component row (`!doc`) stands on every
+entity. Text, nearness, edges, walks, backlinks, computed and derived properties
+and time phrases are read every time, as is anything a transaction that still
+owes archetype pointers asks of the catalog.
 
 An answer also stands through a patch that moved nothing it selects: where the
 query asks about each entity alone (no path through a reference, no `.after`

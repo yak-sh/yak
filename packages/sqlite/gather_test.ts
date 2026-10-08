@@ -182,7 +182,10 @@ test('whole reads scale with worn components across one or 100 hits', () => {
   assert(queries.every((sql) => !sql.includes(last)))
   queries.length = 0
   assertEquals(s.read(`.${first}`).length, 100)
-  // spine + probe + the one facet the rest wear: the entity wearing both is
-  // held, and so is the filter's answer
-  assertEquals(queries.length, 3)
+  // filter, asked again and now kept + spine + probe + the one facet the rest
+  // wear: the entity wearing both is held
+  assertEquals(queries.length, 4)
+  queries.length = 0
+  assertEquals(s.read(`.${first}`).length, 100)
+  assertEquals(queries.length, 0) // the filter's answer and every entity held
 })

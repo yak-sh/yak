@@ -503,9 +503,11 @@ for (
   })
 }
 
-test('a query asked again reads nothing until a table it stands on is written', () => {
+test('a query asked again is kept, and reads nothing until a table it stands on is written', () => {
   let f = fixture()
   let active = () => f.s.rows('.player.active=true').map((r) => r.eid)
+  // Asked once, an answer is not kept: most queries are never asked again.
+  assertEquals(reads(f, active), 1)
   assertEquals(reads(f, active), 1)
   assertEquals(reads(f, active), 0)
   f.s.tx((tx) => tx.patch([{ entity: { eid: 'hero' }, position: { x: 1 } }]))
@@ -525,6 +527,7 @@ test('a query asked again reads nothing until a table it stands on is written', 
 test('a read takes its entities from memory', () => {
   let f = fixture()
   let read = () => f.s.read('.player.active=true')
+  read()
   read()
   assertEquals(reads(f, read), 0)
   f.s.tx((tx) => tx.patch([{ entity: { eid: 'hero' }, position: { x: 3 } }]))
@@ -781,6 +784,7 @@ test('what memory says a patched entity holds, and what it answers, is what stor
 test('an answer stands through a write that moves nothing it selects', () => {
   let f = fixture()
   let ask = () => f.s.read('.player.active=true').map((b) => b.entity.eid)
+  assertEquals(ask(), ['hero'])
   assertEquals(ask(), ['hero'])
   let player = (eid: string, active: boolean) =>
     f.s.tx((tx) => tx.patch([{ entity: { eid }, player: { active } }]))

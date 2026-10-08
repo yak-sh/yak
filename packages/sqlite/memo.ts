@@ -19,9 +19,10 @@
 // write that names its entities (`writes`), which lets just theirs go; those
 // kept during a transaction go if it rolls back.
 //
-// A query's rows are kept too, while no table its answer stands on has been
-// written (`answer`, `basis`): a page walking back over tiles it has watched
-// asks them again for nothing while nobody has written a place. Every write
+// A query's rows are kept too, once it is asked again, while no table its
+// answer stands on has been written (`answer`, `basis`): a page walking back
+// over tiles it has watched asks them again for nothing while nobody has
+// written a place. Every write
 // statement moves its table's count, so nothing a write says has to be
 // trusted; what memory can't follow (text, nearness, edges, computed and
 // derived properties, time phrases) is read every time. An answer about each
@@ -119,6 +120,8 @@ const COUNT = 2048, BYTES = 4 << 20, SPINES = 8192
 const SCAN = COUNT / 4
 // Answers are bounded by count, and one too large to keep is read every time.
 const ANSWERS = 256, ANSWER = 16 << 10
+// How many queries asked once are remembered, waiting to be asked again.
+const ASKED = 4 * ANSWERS
 
 /**
  * The tables a query's answer stands on, or `undefined` for one memory can't
@@ -258,6 +261,8 @@ type Kept = {
   sizes: Map<string, number>
   bytes: number
   answers: Map<string, Answer>
+  /** queries asked once and not kept, oldest first */
+  asked: Set<string>
   tables: Set<string>
   clear: () => void
 }
@@ -480,6 +485,7 @@ export let memoized = (
     sizes: new Map(),
     bytes: 0,
     answers: new Map(),
+    asked: new Set(),
     after: new Map(),
     tables: new Set(['entity', 'tombstone', BLOBS, ...tables(vocab)]),
     clear: () => {
@@ -740,6 +746,17 @@ export let memoized = (
         return structuredClone(held.rows)
       }
       if (held) k.answers.delete(key)
+      // Most of what a write asks is asked once: the dependents of the entity
+      // it wrote, what points at one it deletes, the page after a cursor.
+      // Keeping an answer costs a copy of it and a test for it, so an answer
+      // is kept once its query is asked again.
+      else if (!k.asked.delete(key)) {
+        k.asked.add(key)
+        if (k.asked.size > ASKED) {
+          k.asked.delete(k.asked.values().next().value!)
+        }
+        return run()
+      }
       let at = tables.map((t): [string, number] => [t, current(t)])
       let rows = run()
       if (at.some(([t, n]) => current(t) != n)) return rows
