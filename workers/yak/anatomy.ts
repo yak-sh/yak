@@ -29,6 +29,15 @@ let entries = (input: unknown): [string, unknown][] => {
     .filter(([, d]) => d.enumerable && 'value' in d)
     .map(([key, d]) => [key, d.value])
 }
+// What an object holds as values, copied without calling an accessor.
+let held = <T extends object>(input: T): T =>
+  Object.defineProperties(
+    {},
+    Object.fromEntries(
+      Object.entries(Object.getOwnPropertyDescriptors(input))
+        .filter(([, d]) => 'value' in d),
+    ),
+  ) as T
 let text = (input: unknown, key: string) => {
   let v = value(input, key)
   return typeof v == 'string' ? v : undefined
@@ -42,7 +51,12 @@ let hints = (input: unknown) =>
       }),
   ))
 
-/** Capture exists per incarnation. Shared vocabulary caches hold no loading state. */
+/**
+ * Capture exists per incarnation. Shared vocabulary caches hold no loading
+ * state. What the store composed is noted as it builds and projected when the
+ * anatomy is read: a store builds on every wake, and a snapshot is read only
+ * when someone asks for one.
+ */
 export let workerAnatomy = (vocab: Vocab) => {
   let source: AnatomySource = {
     host: 'worker/store',
@@ -79,6 +93,8 @@ export let workerAnatomy = (vocab: Vocab) => {
     },
   }
   let loaded = new Set<string>()
+  // What was composed, in the order it was, waiting for a read.
+  let owed: (() => void)[] = []
   let owner = (name: string) => {
     let row = source.packages!.find((p) => p.name == name)
     if (!row) {
@@ -143,7 +159,9 @@ export let workerAnatomy = (vocab: Vocab) => {
         true
     loaded.add('vocab')
   }
-  let graph = (plugins: GraphPlugin[], domains: Plugin[]) => {
+  let graph = (plugins: GraphPlugin[], domains: Plugin[]) =>
+    void owed.push(() => graphed(plugins, domains))
+  let graphed = (plugins: GraphPlugin[], domains: Plugin[]) => {
     documents()
     source.observed!.roles =
       source.observed!.rules =
@@ -175,7 +193,9 @@ export let workerAnatomy = (vocab: Vocab) => {
       facet(name, 'graph')
     }
   }
-  let commands = (declared: Tools, tools: NamedTool[]) => {
+  let commands = (declared: Tools, tools: NamedTool[]) =>
+    void owed.push(() => commanded(declared, tools))
+  let commanded = (declared: Tools, tools: NamedTool[]) => {
     documents()
     source.observed!.tools = source.observed!.commands = true
     source.commands = entries(declared).map(([name, d]) => ({
@@ -230,10 +250,21 @@ export let workerAnatomy = (vocab: Vocab) => {
           slotOwners.set(s.id, name)
         }
       }
-      facet(name, 'effects')
+      owed.push(() => facet(name, 'effects'))
     }
   }
+  // The slots as they stand now, read later: a slot is the registry's own,
+  // and only what it holds at this moment is evidence of this composition.
   let effects = (slots: Slot[], host = 'worker/store') => {
+    let now = slots.map(held)
+    let owners = new Map(slotOwners)
+    owed.push(() => effected(now, owners, host))
+  }
+  let effected = (
+    slots: Slot[],
+    slotOwners: Map<string, string>,
+    host: string,
+  ) => {
     documents()
     source.observed!.effects = true
     source.roles!.push({
@@ -285,6 +316,7 @@ export let workerAnatomy = (vocab: Vocab) => {
     }
   }
   let read = (): Anatomy => {
+    for (let step of owed.splice(0)) step()
     documents()
     return anatomy(source)
   }
