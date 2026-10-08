@@ -11,8 +11,12 @@
 # unit actions.runner.yak-sh-yak.gh-runner-yak.service. The homelab repo's
 # docs/PROXMOX.md says how it was installed. Its environment (the runner's own
 # .env) carries STRIPE_KEY, a Workers Scripts Read token as
-# CLOUDFLARE_API_TOKEN, and DENO_SQLITE_PATH. `runs-on` names the custom label
-# `yak`, so a workflow can never silently fall back to a hosted runner.
+# CLOUDFLARE_API_TOKEN, and DENO_SQLITE_PATH. The tools the tests call are the
+# box's, from apt: google-chrome-stable, sqlite3, rclone (bin/backup), and
+# bubblewrap and python3 (packages/process sandboxes). yak-runner lingers, so
+# its systemd user manager runs, with cpu, memory and pids delegated, for the
+# sandboxes' scopes. `runs-on` names the custom label `yak`, so a workflow can
+# never silently fall back to a hosted runner.
 #
 #   ssh pve 'pct exec 112 -- systemctl status actions.runner.yak-sh-yak.gh-runner-yak'
 #   gh api repos/yak-sh/yak/actions/runners   # does GitHub agree
@@ -84,13 +88,15 @@ jobs:
 
       # Every platform's tests (bin/test.ts), workerd's included: the money
       # paths reach Stripe's sandbox, so the runner's environment carries
-      # STRIPE_KEY. Quoted: a bare YAML scalar cannot carry a `: ` — the
-      # runner would never see this line, the file would fail to parse.
+      # STRIPE_KEY. A job its system unit starts is not told where the user
+      # manager listens, and the sandboxes' scopes need it: XDG_RUNTIME_DIR.
+      # Quoted: a bare YAML scalar cannot carry a `: ` — the runner would
+      # never see this line, the file would fail to parse.
       - name: tests
         env:
           SUITE_STEP: tests
         # All of it: this machine keeps no record of what passed before.
-        run: 'DB_PATH=:memory: deno task test --all'
+        run: 'XDG_RUNTIME_DIR=/run/user/$(id -u) DB_PATH=:memory: deno task test --all'
 
       # Reads the row `deploy time` wrote; needs no credentials. Until
       # T-35336 rows were only written when someone hand-ran deploy:time, so
