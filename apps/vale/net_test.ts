@@ -312,7 +312,7 @@ test('a returning hero cannot gather a life already known by their bag', () => {
     let [source, query, place] of [
       ['bag projection', '.item.owner=', undefined],
       ['bag outside area', '.item.owner=', placeOf(1000, 1000)],
-      ['nearby', '.place.ci=', placeOf(5, 5)],
+      ['nearby', '.place.chunk=', placeOf(5, 5)],
     ] as const
   ) {
     using client = storePage()

@@ -167,12 +167,28 @@ export let connect = (
   let lookWatch: Watch | null = null
   let lookBy = new Map<string, Bundle>()
   let area: ReturnType<typeof areaOf>
+  // The stored world rows of each tile in the area, and the players and
+  // creatures moving through it. The remote watches bring rows here; the
+  // local view also sees a write this page just made, before the server adds
+  // it to a remote watch's members.
+  let tiles = new Map<number, Watch>()
   let near: Watch
-  // The remote watch brings rows here; the local view also sees a write this
-  // page just made, before the server adds it to the remote watch's members.
   let nearby: Watch
   let pending: { area: typeof area; watch: Watch; off: () => void } | null =
     null
+  // Watch the tiles of one area and no others. A tile the page keeps is never
+  // asked for again, so walking on reads only the rows of the tiles it enters.
+  let hold = (to: typeof area) => {
+    let keep = new Set(to.tiles.map((t) => t.key))
+    for (let [key, watch] of tiles) {
+      if (keep.has(key)) continue
+      watch.close()
+      tiles.delete(key)
+    }
+    for (let t of to.tiles) {
+      if (!tiles.has(t.key)) tiles.set(t.key, c.watch(t.query))
+    }
+  }
   let fightLevel = ''
   let fightWatch: Watch | null = null
   let follow = (x: number, z: number) => {
@@ -191,10 +207,12 @@ export let connect = (
     pending?.watch.close()
     pending = null
     if (next.key == area.key) {
+      hold(area)
       syncLooks()
       return
     }
-    let watch = c.watch(next.query)
+    hold(next)
+    let watch = c.watch(next.moving)
     let swap = () => {
       if (!watch.ready || pending?.watch != watch) return
       pending.off()
@@ -535,7 +553,8 @@ export let connect = (
     world: () => {
       if (!opened) {
         area = areaOf(SIZE / 2, SIZE / 2, REACH)
-        near = c.watch(area.query)
+        hold(area)
+        near = c.watch(area.moving)
         nearby = c.watch(area.query, { remote: false })
         opened = true
       }

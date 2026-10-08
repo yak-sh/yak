@@ -7,7 +7,7 @@ import { ram } from '@yaks/ram'
 import { storage } from '@yaks/sqlite'
 import { loadVocab } from '@yaks/vocab'
 import { mem, spy } from '../../packages/sqlite/testing.ts'
-import { areaOf, looksOf, placeOf, REACH } from './area.ts'
+import { areaOf, looksOf, placeOf, REACH, TILE } from './area.ts'
 import { seedThemes } from './themes_fixture.ts'
 import words from './vocab.json' with { type: 'json' }
 
@@ -53,6 +53,35 @@ test('an area query finds stored rows in generated regions', () => {
       .map((b) => b.entity.eid),
     ['near'],
   )
+})
+
+test("every stored row within reach lies in exactly one of the area's tiles", () => {
+  let vocab = loadVocab([words]), x = 300, z = 70
+  let tiles = areaOf(x, z, REACH).tiles.map((t) => matcher(t.query, vocab))
+  let count = (px: number, pz: number) => {
+    let row = {
+      entity: { eid: `${px},${pz}` },
+      slain: { creature: 'hare-1', by: 'hero-1' },
+      place: placeOf(px, pz),
+    }
+    return tiles.filter((tile) => tile([row]).length).length
+  }
+  for (let dx = -REACH; dx <= REACH; dx += 15) {
+    for (let dz = -REACH; dz <= REACH; dz += 15) {
+      assertEquals(count(x + dx, z + dz), 1, `${dx}, ${dz}`)
+    }
+  }
+  assertEquals(count(x + 3 * REACH, z), 0)
+})
+
+test('walking asks only for the tiles it enters', () => {
+  let keys = (x: number) => areaOf(x, 70, REACH).tiles.map((t) => t.key)
+  let here = keys(300)
+  // across chunks within one tile, the area stands still
+  assertEquals(areaOf(305, 70, REACH).key, areaOf(300, 70, REACH).key)
+  // a tile on, one row of tiles is new and the rest are kept
+  let next = keys(300 + 16 * TILE)
+  assertEquals(next.filter((k) => !here.includes(k)).length, here.length / 5)
 })
 
 test('a nearby creature reaches another page without a stored row', () => {
