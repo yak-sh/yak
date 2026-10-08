@@ -2,8 +2,8 @@
 
 Email storage, incoming-message processing, and outgoing delivery for
 [@yaks/graph](../graph/README.md). Use it to record correspondence, send
-messages when graph entities are created, or provide an inbox through the CLI
-and MCP.
+messages when graph entities are created, or read and answer mail through the
+CLI and MCP.
 
 The graph's storage adapter stores messages, addresses, recipients, and delivery
 outcomes. This package opens no database of its own. You supply the email
@@ -211,14 +211,14 @@ let g = graph({
   vocab,
   plugins: [docs(), mailbox({ domain: 'books.example' })],
 })
-await g.apply([{ entity: { eid: 'inbox' }, doc: { title: 'Inbox' } }])
+await g.apply([{ entity: { eid: 'triage' }, doc: { title: 'Triage' } }])
 
 let message = {
   from: 'ana@books.example',
   to: 'hello@books.example',
   headers: new Headers({ Subject: 'Thursday' }),
 }
-let receive = arrived({ graph: g, domain: 'books.example', triage: 'inbox' })
+let receive = arrived({ graph: g, domain: 'books.example', triage: 'triage' })
 await g.apply(await receive(message, { text: 'See you at seven.' }))
 ```
 
@@ -272,7 +272,7 @@ A plugin entry in a `yak serve` configuration can be:
   "with": {
     "domain": "books.example",
     "local": true,
-    "triage": "inbox",
+    "triage": "triage",
     "sender": {
       "via": "cloudflare",
       "account": "a1b2",
@@ -311,8 +311,8 @@ under `pull`:
   "with": {
     "domain": "books.example",
     "pull": {
-      "url": "https://inbox.books.example",
-      "token": { "secret": "INBOX_TOKEN" },
+      "url": "https://edge.books.example",
+      "token": { "secret": "EDGE_TOKEN" },
       "every": 10000
     }
   }
@@ -341,30 +341,26 @@ the edge and is tried again.
 the vocabulary exposes the following CLI commands and corresponding MCP names
 with underscores, such as `mail_send`:
 
-| Tool                 | Behavior                                                                                              |
-| -------------------- | ----------------------------------------------------------------------------------------------------- |
-| `inbox list`         | Messages addressed to a reader, excluding archived messages; default limit 50, newest inserted first. |
-| `inbox archive <id>` | Add `archived` to the item without deleting it.                                                       |
-| `mail show <id>`     | Show a message and its thread, and mark the message `opened`.                                         |
-| `mail reply <id>`    | Create a threaded reply; archive the original if it was received.                                     |
-| `mail send`          | Create a message with `deliver`, creating an email entity for an unknown recipient address.           |
-| `mail check`         | Find received messages with no sender and report unusable sender configuration.                       |
+| Tool              | Behavior                                                                                      |
+| ----------------- | --------------------------------------------------------------------------------------------- |
+| `mail show <id>`  | Show a message and its thread; mark the message and the first message of its thread `opened`. |
+| `mail reply <id>` | Create a threaded reply; mark a received original and its thread's first message `archived`.  |
+| `mail send`       | Create a message with `deliver`, creating an email entity for an unknown recipient address.   |
+| `mail check`      | Find received messages with no sender and report unusable sender configuration.               |
 
 ```sh
-yak inbox list
 yak mail show E-12
 yak mail reply E-12 --body @answer.md
-yak inbox archive E-11
 yak mail send ana@books.example 'Thursday' --body 'We meet at seven.'
 ```
 
-The inbox selects messages by `mail.target`, `deliver.to`, or the reader's
-address in `mail.to`. `who` defaults to the caller; `--all` includes archived
-items. `●` means unread, `·` read, and `×` archived. Reading leaves a message in
-the inbox. The `opened` and `archived` components belong to
-[@yaks/kernel](../kernel/README.md) and are stored on the message, not
-separately per reader. Load that vocabulary to keep these marks: graph admission
-refuses a component the graph does not declare.
+A thread is a message and the messages that answer it, through `reply_to`. `●`
+means unread, `·` read, and `×` archived. Each mark is removed and added again
+in one batch, so a repeated read or answer gets a fresh time. The `opened` and
+`archived` components belong to [@yaks/kernel](../kernel/README.md) and are
+stored on the message, not separately per reader. Load that vocabulary to keep
+these marks: graph admission refuses a component the graph does not declare.
+Listing what waits for a reader is [@yaks/inbox](../inbox/README.md)'s.
 
 Replies use the original recipient address as sender for received messages, or
 the original sender address when following up on an outgoing message. The reply
@@ -457,6 +453,7 @@ The root import `@yaks/mail` provides:
 | `stash`, `Stash`, `Kept`                                                   | In-memory transport.                                                       |
 | `inbound`, `author`, `messageId`, `verdict`, `Received`, `Arrival`, `Head` | Incoming-message conversion and header interpretation.                     |
 | `arrived`, `wearer`, `named`, `routed`, `known`, `Arrivals`, `Book`        | Graph lookups used when receiving.                                         |
+| `Reading`, `Read`                                                          | What another package makes of an arrival.                                  |
 | `pull`, `edge`, `received`, `hookTo`, `messageIdOf`, `Edge`, `Pulled`      | Pulling arrivals from an edge.                                             |
 | `invited`, `Invite`, `Welcome`, `Seat`                                     | Membership invitation handler and types.                                   |
 | `canon`, `local`, `at`, `parts`, `address`                                 | Address parsing and normalization.                                         |
@@ -466,10 +463,11 @@ The root import `@yaks/mail` provides:
 Separate entry points provide `mailDoc` and `docs` from `@yaks/mail/vocab`,
 `plugins()` from `@yaks/mail/graph`, `effects()` and `post()` from
 `@yaks/mail/effects`, `routes()`, `PATH`, and `Posted` from `@yaks/mail/routes`,
-`service()` and `EVERY` from `@yaks/mail/service`, and `runs()` plus inbox and
-thread helpers from `@yaks/mail/tools`. They are not root re-exports. Their
-`host` argument is the process that opened the graph, represented by the
-services each function needs; for example, `routes()` needs `{ graph }`.
+`service()` and `EVERY` from `@yaks/mail/service`, and `runs()` plus thread
+helpers from `@yaks/mail/tools`. They are not root re-exports. Their `host`
+argument is the process that opened the graph, represented by the services each
+function needs; for example, `routes()` needs `{ graph }`, and
+`{ graph, config }` to ask the configured packages what an arrival means.
 
 ## What is deliberately not here
 
@@ -491,128 +489,50 @@ The core uses standard JavaScript and Web APIs and runs on Deno, Node, browsers,
 and Cloudflare Workers. The Cloudflare sender uses `fetch`; its message types
 are checked against `@cloudflare/workers-types` in `conform.ts`.
 
-## Email is an inbox door
+## What else a letter means
 
-Automatic inbox mail is opt-in in the mail plugin's `with.inbox` option:
+Mail records a letter: its envelope, its words, whom it is for and which letter
+it answers. Whether it also starts a conversation, answers a question or
+comments on a task is another package's to say, and only at the door, where the
+whole message (its headers included) is still in hand.
 
-```json
-{
-  "person": "<person eid>",
-  "from": "inbox@example.com",
-  "base": "https://your-graph.example",
-  "hour": 9
-}
-```
+A package says it through a `./mail` facet, the way an application offers
+@yaks/web its page through `./web`: `reading(options)` takes that package's own
+options from the config and returns a `Reading`, or nothing. Both receiving
+doors, `POST /mail/inbound` and the pull service, ask every configured package
+for its reading at their first letter, and `arrived()` asks each reading in
+config order. The first that answers says what is recorded in place of the
+letter alone; a config that names none records letters and nothing else.
 
-The person needs `email.address`; the mail plugin still needs its sender and
-inbound route or pull configuration. `hour` is UTC, default 9. The mail service
-reads the inbox on every pass (`pull.every`, 10 seconds by default) and queues a
-letter for each newly blocking decision then. After `hour`, it also queues at
-most one digest per UTC day. A missed day is not replayed as a backlog of
-digests. Alerts and updates are excluded unless `alerts: true` or
-`updates: true` is explicitly requested. Read, muted and archived threads do not
-cross this door.
-
-The door reads `@yaks/inbox`'s candidates, discussion, requirements and
-dependents; `./door` exports `inboxAt`, `planned`, `rendered` and `queue` for
-hosts supplying their own clocks and writes. It has no transport of its own.
-`mail_notice{activity, comment, thread, letter}` keeps the activity as rendered:
-on a thread letter it points to the shown comment, on a digest entry to its
-thread and digest letter. These snapshots deduplicate queued mail; they are not
-conversation or new inbox activity.
-
-Thread letters use the previous letter's Message-ID as In-Reply-To. A digest
-contains links and a separate reply address for each thread (or shown comment),
-so a reply can select a thread without guessing from a digest's subject. The
-sender's domain must route those id-shaped addresses to this graph's mail edge.
-A reply to the digest itself is kept as mail, not assigned to an arbitrary
-thread. Replies retain their envelope and also carry
-`comment{target, reply_to}`; a verified known recipient's reply to the letter or
-thread address reaches the same conversation as web and TUI. Unverified or
-unknown senders are kept as mail only, never attributed to the recipient.
-
-A [conversation](../inbox/README.md) starts when a letter has no `In-Reply-To`
-or `References`, is addressed to `with.inbox.from`, and has a verified author
-resolving to `with.inbox.person`. Enable `@yaks/inbox` alongside `@yaks/mail` so
-the graph declares `conversation`. The received entity keeps its `mail` envelope
-and Message-ID, gains `conversation{}`, and carries the person's full text in
-`doc.body` with its first line as `doc.title`. Its `created.by` is the sender,
-never the mailbox's operator. Empty text, unverified senders, unknown senders,
-and other people remain mail only. A repeated Message-ID creates nothing.
-Letters addressed to a thread or replying to a conversation remain comments
-rather than starting another conversation. A reply with an unknown parent
-remains mail.
-
-External provenance is checked before the configured-person filter. A known
-session, role, effect, call, output or transcript entry as sender, the
-configured inbox address as sender, or `Auto-Submitted` other than `no` is kept
-as mail only, never converted to a conversation or comment. Ordinary inbound
-mail preserves its sender attribution for anyone in the address book, not just
-the configured person; an unknown sender has no `created.by`. `created.via` is
-unset because an arrival names no originating graph session. The same entity
-retains its original `mail.from`, verification verdict and body, with no
-`deliver`, so a router can inspect the received words rather than treating an
-effect's prose as external input. DKIM authenticates a sending domain, not
-whether a person or an automation typed the words; receiving edges must preserve
-automatic-mail headers. Mail does not guess authorship from the recipient.
-
-Both `POST /mail/inbound` and the pull service use `arrived`; neither starts a
-session itself. Answering belongs to the separately configured harness inbox
-router, which accepts only its configured person's words. For example, this
-records a verified letter without a transport or model:
+A reading is handed the message, what the caller knew beside it (the parsed
+text, a target it named), the letter as mail records it with its `$actor`, the
+letter it answers where this graph has one, its author where the address book
+knows them, and the address canonicalizer. It returns bundles to apply, or
+`undefined` to leave the letter as it is:
 
 ```ts
 import { graph } from '@yaks/graph'
 import { ram } from '@yaks/ram'
 import { loadVocab } from '@yaks/vocab'
-import { kernel, kernelDoc, kernelKeywords } from '@yaks/kernel'
 import { docDoc } from '@yaks/doc'
-import { inboxDoc } from '@yaks/inbox/vocab'
-import { arrived, mailDoc } from '@yaks/mail'
+import { arrived, mailDoc, type Reading } from '@yaks/mail'
 import { equal } from '@yaks/testing'
 
-let vocab = loadVocab([kernelDoc, docDoc, inboxDoc, mailDoc], [kernelKeywords])
-let g = graph({ vocab, storage: ram(vocab), plugins: [kernel()] })
-await g.apply([{
-  entity: { eid: 'ana' },
-  email: { address: 'ana@example.com' },
-}])
-let receive = arrived({
-  graph: g,
-  inbox: { person: 'ana', from: 'inbox@example.com' },
+let vocab = loadVocab([docDoc, mailDoc])
+let g = graph({ storage: ram(vocab), vocab })
+let urgent: Reading = ({ letter, message }) =>
+  message.headers.get('importance') == 'high'
+    ? [{ ...letter, doc: { title: 'URGENT', body: 'Read me first.' } }]
+    : undefined
+let receive = arrived({ graph: g, readings: [urgent] })
+let [letter] = await receive({
+  from: 'ana@books.example',
+  to: 'hello@books.example',
+  headers: new Headers({ Importance: 'high', Subject: 'Thursday' }),
 })
-await g.apply(
-  await receive({
-    from: 'relay@example.com',
-    to: 'inbox@example.com',
-    headers: new Headers({
-      From: 'Ana <ana@example.com>',
-      'Message-ID': '<hello@example.com>',
-    }),
-  }, { text: 'Can we plan dinner?\nTomorrow would work.', verified: true }),
-)
-let [conversation] = await g.read('.conversation *')
-equal(conversation.created?.by, 'ana')
-equal(conversation.doc?.title, 'Can we plan dinner?')
-equal(
-  await receive({
-    from: 'relay@example.com',
-    to: 'inbox@example.com',
-    headers: new Headers({ 'Message-ID': '<hello@example.com>' }),
-  }),
-  [],
-)
+equal(letter.doc, { title: 'URGENT', body: 'Read me first.' })
 ```
 
-Verification is the trusted receiving edge's verdict, supplied as `verified` or
-its `Authentication-Results` header. Keep the arrival endpoint behind a
-perimeter or configure `door.secret`; do not let untrusted callers assert that
-verdict. No existing mail is backfilled into conversations.
-
-Decisions show numbered choices and the recommendation. A reply containing only
-a choice number (before quoted text) selects that choice; other words are a
-custom answer. Out-of-range numbers remain comments. Answers are attributed to
-the sender and complete the decision through the usual task/kernel rules. An
-already answered or cancelled decision keeps further replies as comments without
-changing its answer. No probe needs a real address: use the `stash` transport,
-which stores messages in memory.
+[@yaks/inbox](../inbox/README.md)'s email door is one: with the inbox
+configured, a verified letter from its person to its address starts a
+conversation, and a verified reply to one of its letters answers in that thread.

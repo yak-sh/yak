@@ -35,7 +35,6 @@ import {
   holdQuery,
   homeless,
   hostFrom,
-  inbox,
   jobOf,
   landSub,
   loaded,
@@ -62,7 +61,6 @@ import {
   rowsSub,
   serverEid,
   serverName,
-  setInbox,
   shelfFor,
   shown,
   sieve,
@@ -71,7 +69,6 @@ import {
   subscriptionChecks,
   subscriptionState,
   topZ,
-  unreadFor,
   unsubscribe,
   useOutboxStore,
   useRoute,
@@ -933,24 +930,6 @@ test("myMode: this actor's subscription, off the reverse index", () => {
   }
   assertEquals(myMode('tgt'), undefined)
   config.client = undefined
-})
-
-// The inbox signal is only a test/host seam now. Production membership comes
-// from useInbox's ordinary query subscriptions, never an HTTP side door.
-test('inbox: planted rows retain the shared unread derivation', () => {
-  let item = (eid: string, opened = false) => ({
-    eid,
-    num: 1,
-    kind: 'comment',
-    comps: {
-      comment: { target: 'actor' },
-      ...(opened ? { opened: {} } : {}),
-    },
-  })
-  setInbox('actor', [item('c1'), item('c2', true)])
-  assertEquals(inbox('actor').map((r) => r.eid), ['c1', 'c2'])
-  assertEquals(unreadFor('actor'), 1)
-  setInbox('actor', [])
 })
 
 test('relationship indices wake only their affected targets', () => {

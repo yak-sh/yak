@@ -32,7 +32,6 @@ import Hash from 'lucide/dist/esm/icons/hash.mjs'
 import History from 'lucide/dist/esm/icons/rotate-ccw-clock.mjs'
 import House from 'lucide/dist/esm/icons/house.mjs'
 import Image from 'lucide/dist/esm/icons/image.mjs'
-import Inbox from 'lucide/dist/esm/icons/inbox.mjs'
 import Kanban from 'lucide/dist/esm/icons/kanban.mjs'
 import LayoutDashboard from 'lucide/dist/esm/icons/layout-dashboard.mjs'
 import Lightbulb from 'lucide/dist/esm/icons/lightbulb.mjs'
@@ -57,7 +56,6 @@ let glyphs: Record<string, IconNode> = {
   'circle-x': CircleX,
   lightbulb: Lightbulb,
   stamp: Stamp,
-  inbox: Inbox,
   table: Table,
   map: Map,
   'message-circle': MessageCircle,
@@ -92,6 +90,13 @@ let glyphs: Record<string, IconNode> = {
   folder: Folder,
   house: House,
   star: Star,
+}
+
+/** Learn glyphs a package names for what it offers (its `./views` facet's
+ * `icons`), beside the app's own; a name the app already draws keeps its
+ * glyph. */
+export let learnGlyphs = (more: Record<string, IconNode>): void => {
+  for (let [name, glyph] of Object.entries(more)) glyphs[name] ??= glyph
 }
 
 /** One glyph as Lucide draws it: a 24-unit stroked SVG, sized in pixels. */

@@ -1,0 +1,34 @@
+{
+  "$vocabulary": {
+    "https://yak.sh/vocab/core": true
+  },
+  "title": "inbox front",
+  "description": "The inbox views' own state in their page graph, never synced.",
+  "$defs": {
+    "inboxView": {
+      "component": true,
+      "type": "object",
+      "sync": "none",
+      "durable": "connection",
+      "description": "the inbox's expanded threads and search switches; words remain synced drafts",
+      "properties": {
+        "open": {
+          "type": "boolean",
+          "description": "the thread is expanded"
+        },
+        "direction": {
+          "type": "string",
+          "enum": [
+            "both",
+            "said",
+            "received"
+          ]
+        },
+        "all": {
+          "type": "boolean",
+          "description": "include archived threads"
+        }
+      }
+    }
+  }
+}

@@ -3,17 +3,21 @@ import { ent, sessionDetail } from '../../live.ts'
 import { block } from '@yaks/ui'
 import { Entity } from '../Entity.tsx'
 import { useQueryResult } from '../useQuery.ts'
-import { useInboxCount } from '../useInbox.ts'
+import { applicable } from '../registry.ts'
+import { tabOffers } from '../offers.ts'
+import { Waiting } from '../inspect.tsx'
 import { SubscriptionFailure } from '../SubscriptionFailure.tsx'
 import type { QueryResult } from '../useQuery.ts'
 
 // The Project Cockpit (D-14587): a project's facets in a fixed grid —
-// Boards · Inbox · Roles · Sessions · Lately — the same vocabulary in the
-// same order on every project, so the eye learns one layout. Every cell is
-// a LIVE QUERY rendered through the shared rows at summary density
-// (--density, styles.css): membership is never stored, exactly as a
-// board's isn't, and each row keeps List.Tile's click and menu contract —
-// the cockpit arranges renderers, it adds none.
+// Boards, a cell for each tab a package offers on it, then Roles · Sessions ·
+// Lately — the same vocabulary in the same order on every project, so the eye
+// learns one layout. Every cell is a LIVE QUERY rendered through the shared
+// rows at summary density (--density, styles.css): membership is never
+// stored, exactly as a board's isn't, and each row keeps List.Tile's click
+// and menu contract — the cockpit arranges renderers, it adds none. An
+// offered tab's cell draws the project in that view with `limit` in its
+// context, under the tab's name and what waits there.
 
 let Frame = block('div', 'Dash', {
   Cell: 'section',
@@ -106,17 +110,20 @@ export let Dashboard = ({ e }: { e: Ent }) => {
   let tasks = useQueryResult(
     `.task&.filed.project->${e.eid}&.order=hot&.limit=${CAP}`,
   )
-  let unread = useInboxCount(e.eid)
+  let views = applicable(e)
+  let offered = tabOffers().filter((t) => views.includes(t.view))
   return (
     <Frame>
       <Facet name='boards' ids={boards.eids} reads={[boards]} />
-      <Cell>
-        <Name>
-          inbox
-          {unread != null && unread > 0 && <Badge>{unread}</Badge>}
-        </Name>
-        <Entity eid={e.eid} view='Inbox' limit={CAP} />
-      </Cell>
+      {offered.map((t) => (
+        <Cell key={t.view}>
+          <Name>
+            {t.view.toLowerCase()}
+            <Waiting offer={t} eid={e.eid}>{(n) => <Badge>{n}</Badge>}</Waiting>
+          </Name>
+          <Entity eid={e.eid} view={t.view} limit={CAP} />
+        </Cell>
+      ))}
       <Facet
         name='roles'
         reads={[roles]}

@@ -35,8 +35,8 @@ import {
   vocab,
 } from './types.ts'
 import { moves, typeOf } from './edge.ts'
+import type { Row } from './client.ts'
 import { sessionQueries } from './tray_query.ts'
-import { isUnread, type Row } from './client.ts'
 import {
   distinctValues,
   EDGES,
@@ -949,33 +949,6 @@ export let myMode = (target: string) => {
     ? (g(hit)?.subscription?.mode as 'watch' | 'mute' | undefined)
     : undefined
 }
-
-// Tests and host integrations may plant finished inbox rows without a socket.
-// Production views use components/useInbox.ts: ordinary held subscriptions,
-// screened by client.ts's one inbox predicate.
-let inboxSignals = new Map<string, Signal<Row[]>>()
-
-// A planted inbox result for an entity. Minted once per eid so tests and host
-// integrations can supply one reader without waking another.
-export let inbox = (eid: string): Row[] => {
-  let sig = inboxSignals.get(eid)
-  if (!sig) {
-    inboxSignals.set(eid, sig = signal<Row[]>([]))
-  }
-  return sig.value
-}
-
-// Tests and host integrations plant an entity's inbox rows directly, letting a
-// render assert over a known inbox without a socket.
-export let setInbox = (eid: string, rows: Row[]) => {
-  let sig = inboxSignals.get(eid)
-  if (sig) sig.value = rows
-  else inboxSignals.set(eid, signal<Row[]>(rows))
-}
-
-// How many unread items are in a planted result. Production components derive
-// the same fact from useInbox's ordinary subscriptions.
-export let unreadFor = (eid: string) => inbox(eid).filter(isUnread).length
 
 export type Reference = { eid: string }
 export type References = { out: Reference[]; in: Reference[] }

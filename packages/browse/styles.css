@@ -137,25 +137,6 @@ html {
   flex: 1;
   min-width: 0;
 }
-.List_Row-unread {
-  font-weight: 600;
-}
-.List_Summary,
-.List_Label,
-.List_Empty {
-  color: var(--dim);
-}
-.List_Summary,
-.List_Label {
-  font-size: 11px;
-}
-.List_Empty {
-  padding: var(--gap);
-}
-.List_Label {
-  flex: none;
-  min-width: 4.5em;
-}
 .List_Action {
   flex: none;
   font: inherit;
@@ -2147,7 +2128,7 @@ a[data-ref]:hover {
     max-height: none;
   }
 }
-/* The two-pane inbox (Split view, T-17321). Same responsive shape as the
+/* The two-pane view (Split, T-17321). Same responsive shape as the
    Session console: two panes that snap side-to-side on a narrow host and
    sit side-by-side once the container is wide. The left pane is also the
    board's scroll host (see .Split_Left in the board-snap rule above), so a
@@ -2896,7 +2877,7 @@ a[data-ref]:hover {
    and elisions only, never markup, so one renderer serves every tier (the
    .Row-dense var set, made selectable by a value). Unset = full: each
    rule here is inert outside a container that sets the property, which is
-   what keeps boards, lists and inboxes elsewhere untouched. */
+   what keeps boards and lists elsewhere untouched. */
 @container style(--density: summary) {
   .ListTile,
   .Row {
@@ -2905,9 +2886,6 @@ a[data-ref]:hover {
   }
   .Row {
     --meta-stamp: none; /* provenance is the full tier's luxury */
-  }
-  .List_Label {
-    min-width: 0;
   }
 }
 /* glance: the row folds to its marks — dot, chips, a line that ellipsizes;
@@ -2923,7 +2901,6 @@ a[data-ref]:hover {
   }
   .Row > .Show_Meta,
   .SessionRow_Brief,
-  .List_Label,
   .Stamp {
     display: none;
   }
@@ -2935,7 +2912,7 @@ a[data-ref]:hover {
 }
 
 /* The Project Cockpit (views/Dashboard.tsx): the facet vocabulary in a
-   fixed grid — Boards · Inbox · Roles · Sessions · Lately. Every cell is a
+   fixed grid — Boards, each offered tab, Roles · Sessions · Lately. Every cell is a
    live query rendered through the shared rows at summary density; a long
    facet scrolls inside its cell rather than stretching the grid. */
 .Dash {

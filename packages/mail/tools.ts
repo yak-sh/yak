@@ -1,32 +1,21 @@
-import {
-  attention,
-  type Direction,
-  type Lane,
-  readerAt,
-  type Row as InboxRow,
-  threadOf as inboxThread,
-} from '@yaks/inbox'
-import { readInbox } from '@yaks/inbox/read'
 // What an agent may ask for here: the `@yaks/mail/tools` entry point — the
-// implementations behind the `tool: true` declarations in ./vocab.json. Five
+// implementations behind the `tool: true` declarations in ./vocab.json. Three
 // commands a person runs all day, and one check.
 //
-// Inbox membership, lane ordering and search belong to @yaks/inbox.
-// This door owns graph reads and writes; the shared core sends nothing.
-// Archive is refreshed atomically and holds until qualifying new activity.
-//
-// Reading is the mark, so `mail show` refreshes `opened` on the letter
-// and the shared thread it renders. That is what keeps it from being a duplicate of `graph_show`
-// (@yaks/mcp's generic tier, which shows any entity at all) — this one marks
-// the letter read and gathers its thread, both of which are facts about mail
-// and about nothing else.
+// Reading is the mark, so `mail show` refreshes `opened` on the letter and on
+// the first letter of the thread it renders. That is what keeps it from being
+// a duplicate of `graph_show` (@yaks/mcp's generic tier, which shows any entity
+// at all) — this one marks the letter read and gathers its thread, both of
+// which are facts about mail and about nothing else. Answering a letter that
+// arrived puts its thread away the same way, with `archived`. Each mark is
+// removed and written again in one batch, so a repeated one gets a fresh time.
 //
 // `archived` and `opened` are another package's components — @yaks/kernel's,
 // the marks recording that somebody looked at a thing and that somebody put it
 // away. A tool returns bundles, which are plain data, so naming a component
 // costs no import; a server that composes the kernel stores them, and one that
-// does not has those components dropped on write, leaving an inbox that never
-// shrinks. Nothing here declares a second copy of either (M-17871).
+// does not has those components dropped on write. Nothing here declares a
+// second copy of either (M-17871).
 //
 // The sender is not this file's business. `mail send` and `mail reply` create
 // a letter that asks to be sent (`deliver`), and ./effects.ts — built from the
@@ -64,9 +53,6 @@ import { post } from './effects.ts'
 import { DELIVER, EMAIL, MAIL } from './comp.ts'
 import type { Options } from './options.ts'
 
-/** How many letters an inbox returns when the caller gave no limit. */
-export let PAGE = 50
-
 // The two components this file writes that it does not declare. Both are
 // @yaks/kernel's, and both are written here as plain strings, because a tool's
 // result is data (see the header).
@@ -79,16 +65,6 @@ let comp = (b: Bundle | undefined, name: string): Comp | undefined =>
   b?.[name] as Comp | undefined
 
 let prop = (c: Comp | undefined, k: string): string => str(c?.[k])
-
-let rows = (bundles: Bundle[]): InboxRow[] =>
-  bundles.map((b) => ({
-    eid: b.entity.eid,
-    comps: Object.fromEntries(
-      Object.entries(b).filter(([k, v]) =>
-        k != 'entity' && v && typeof v == 'object'
-      ),
-    ) as InboxRow['comps'],
-  }))
 
 // One entity whole, by eid. Everything here works from the letter as it
 // stands rather than from a patch, the way ./send.ts does.
@@ -107,16 +83,6 @@ let letterIn = async (graph: Graph, said: unknown): Promise<Bundle> => {
   let found = await one(graph, str(said))
   if (!comp(found, MAIL)) throw new Error(`not a letter: ${str(said)}`)
   return found!
-}
-
-/** Whose inbox this is: the entity the arguments named, else whoever is
- * asking. */
-export let reader = (call: Bundle): Eid => {
-  let asked = argsOf(call).who
-  if (asked != null) return str(asked)
-  let me = who(call)?.by
-  if (!me) throw new Error('nobody is asking — say --who')
-  return me
 }
 
 /** `Re:` derivation — shed however many `Re:`/`Fwd:` layers already piled up,
@@ -187,23 +153,29 @@ export let threadOf = async (
   )
 }
 
-// A mail tool is an effect boundary; thread identity remains shared policy.
-let inboxRoot = async (
-  graph: Graph,
-  call: Bundle,
-  letter: Bundle,
-  conversation?: Bundle[],
-): Promise<string> => {
-  let actor = who(call)?.by
-  if (!actor) return letter.entity.eid
-  let person = readerAt(rows(await graph.get([actor])), actor)
-  let all = rows(conversation ?? await threadOf(graph, letter))
-  let byId = new Map(all.map((r) => [r.eid, r]))
-  for (let r of all) {
-    if (r.comps.mail?.message_id) byId.set(str(r.comps.mail.message_id), r)
+// The first letter of a thread: up the `reply_to` chain from this one, as far
+// as the thread in hand goes.
+let rootOf = (thread: Bundle[], letter: Bundle): Eid => {
+  let byId = new Map(thread.map((b) => [b.entity.eid, b]))
+  let seen = new Set<Eid>()
+  let at = letter
+  for (
+    let up = prop(comp(at, MAIL), 'reply_to');
+    up && byId.has(up) && !seen.has(up);
+    up = prop(comp(at, MAIL), 'reply_to')
+  ) {
+    seen.add(up)
+    at = byId.get(up)!
   }
-  return inboxThread(rows([letter])[0], person, byId)
+  return at.entity.eid
 }
+
+// A mark made again: removed and added in one batch, so the server stamps a
+// fresh time even where the mark was already there.
+let mark = (eid: Eid, name: string): Bundle[] => [
+  { entity: { eid }, [name]: null },
+  { entity: { eid }, [name]: {} },
+]
 
 // One letter as a line: who it is from, what it is about, and whether it has
 // been read — `●` unread, `·` read, `×` archived, the way a mail client does.
@@ -250,43 +222,16 @@ let page = (id: (b: Bundle) => string, letter: Bundle, thread: Bundle[]) => {
  * into the same form the canonicalizer stored it in (./plugin.ts). Everything
  * else a handler needs arrives on the call it is handed. */
 export let runs = (_host?: unknown, options: Options = {}): Runs => ({
-  inbox_list: async (call, graph): Promise<Bundle[]> => {
-    let args = argsOf(call)
-    let who = reader(call)
-    let found = await readInbox(graph, graph.vocab, who, {
-      all: !!args.all,
-      text: str(args.search),
-      direction: args.direction as Direction | undefined,
-      lane: args.lane as Lane | undefined,
-    })
-    let n = args.limit == null ? PAGE : Number(args.limit)
-    let page = found.slice(0, n)
-    let entities = new Map((await graph.get(page.map((t) => t.eid), []))
-      .map((b) => [b.entity.eid, b.entity]))
-    return page.map((t) => ({
-      entity: entities.get(t.eid) ?? { eid: t.eid },
-      ...t.row.comps,
-    }))
-  },
-
-  inbox_archive: async (call, graph): Promise<Bundle[]> => {
-    let item = str(argsOf(call).item)
-    let letter = await one(graph, item)
-    return letter?.mail
-      ? attention(await inboxRoot(graph, call, letter), 'archived')
-      : attention(item, 'archived')
-  },
-
   // Reading is the mark, so this writes. The prose is the result; the `opened`
   // patch is what keeps a second call from reporting it as unread.
   mail_show: async (call, graph): Promise<Bundle[]> => {
     let args = argsOf(call)
     let letter = await letterIn(graph, args.letter)
     let thread = await threadOf(graph, letter)
-    let root = await inboxRoot(graph, call, letter, thread)
+    let root = rootOf(thread, letter)
     return [
       ...[...new Set([root, letter.entity.eid])].flatMap((eid) =>
-        attention(eid, 'opened')
+        mark(eid, OPENED)
       ),
       {
         entity: { eid: '$said' },
@@ -328,16 +273,21 @@ export let runs = (_host?: unknown, options: Options = {}): Runs => ({
         },
         // No `target`: on an arrival that property holds whom the letter was
         // routed to (./arrive.ts), which is this side of the thread — carrying
-        // it forward would file our own answer in our own inbox. `reply_to` is
-        // what threads a reply, and it is enough.
+        // it forward would file our own answer as one more letter to us.
+        // `reply_to` is what threads a reply, and it is enough.
         [MAIL]: { ...(from ? { from } : {}), reply_to: letter.entity.eid },
         [DELIVER]: { to: far.to },
       },
-      // Answering an arrival archives it: a thread you have replied to is not
-      // one waiting on you. Only an arrival — following up on your own letter
-      // never put anything in the inbox, so there is nothing to hide.
+      // Answering an arrival puts its thread away: a thread you have replied
+      // to is not one waiting on you. Only an arrival — following up on your
+      // own letter left nothing waiting, so there is nothing to put away.
       ...(arrived
-        ? attention(await inboxRoot(graph, call, letter), 'archived')
+        ? [
+          ...new Set([
+            rootOf(await threadOf(graph, letter), letter),
+            letter.entity.eid,
+          ]),
+        ].flatMap((eid) => mark(eid, ARCHIVED))
         : []),
     ]
   },

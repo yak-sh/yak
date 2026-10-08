@@ -54,7 +54,7 @@ let doc: VocabDoc = {
       },
     },
     // Use the kernel's declared marks so this fixture fills server timestamps
-    // with the same graph rules as every inbox door.
+    // with the same graph rules as every door.
     opened: kernelDoc.$defs!.opened,
     archived: kernelDoc.$defs!.archived,
     // The text of a tool's result, and which call it came from (@yaks/tools) —

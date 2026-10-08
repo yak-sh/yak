@@ -7,13 +7,26 @@
     "./vocab": "./vocab.ts",
     "./tools": "./tools.ts",
     "./graph": "./graph.ts",
-    "./read": "./read.ts"
+    "./read": "./read.ts",
+    "./service": "./service.ts",
+    "./mail": "./mail.ts",
+    "./views": "./views.tsx"
   },
   "license": "Apache-2.0",
   "description": "Exact person and thread attention policy, with server-owned summaries and lazy conversation reads shared by inbox doors.",
+  "imports": {
+    "@preact/signals": "npm:@preact/signals@^2.9.0",
+    "linkedom": "npm:linkedom@^0.18.12",
+    "lucide": "npm:lucide@1.31.0",
+    "preact": "npm:preact@^10.29.1",
+    "preact/hooks": "npm:preact@^10.29.1/hooks",
+    "preact/jsx-runtime": "npm:preact@^10.29.1/jsx-runtime"
+  },
   "publish": {
     "exclude": [
       "**/*_test.ts",
+      "**/*_test.tsx",
+      "./testing.tsx",
       "./browser.json"
     ]
   }

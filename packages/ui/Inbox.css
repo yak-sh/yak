@@ -11,6 +11,7 @@
   padding-block: var(--gap) var(--half-gap);
 }
 .Inbox_Reason,
+.Inbox_Summary,
 .Inbox_Empty {
   color: var(--dim);
   font-weight: normal;
@@ -23,6 +24,10 @@
 }
 .Inbox_Reason {
   font-size: 12px;
+}
+.Inbox_Summary {
+  font-size: 11px;
+  margin: 0;
 }
 .Inbox_Detail {
   grid-column: 1 / -1;

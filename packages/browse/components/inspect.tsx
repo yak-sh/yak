@@ -1,7 +1,7 @@
 // Browse supplies the inspector's views with the same held queries, page
 // graph and navigation as every other app view. The readings stay in inspect;
 // this is only the app's host adapter, not a second inspector or registry.
-import { h } from 'preact'
+import { type ComponentChild, h } from 'preact'
 import { resolve } from '@yaks/render'
 import { signal } from '@preact/signals'
 import { useLayoutEffect, useMemo } from 'preact/hooks'
@@ -29,10 +29,13 @@ import { parseQuery, type Pred, resolveRefs } from '../query.ts'
 import { findEid } from '../live.ts'
 import { idOf, kindOf, vocab } from '../types.ts'
 import { called } from '@yaks/inspect'
-import { bundle, type Entry, registry, renderView } from './registry.ts'
+import { bundle, type Entry, extend, registry, renderView } from './registry.ts'
 import { front } from './fields.tsx'
 import { ago } from './Stamp.tsx'
 import { navigate } from './nav.tsx'
+import { type Home, type Offer, offerPlaces } from './offers.ts'
+import { learnGlyphs } from './icons.tsx'
+import type { IconNode } from 'lucide'
 
 let held = (eid: string): Bundle | undefined =>
   row(eid).value ? bundle(ent(eid)) : undefined
@@ -203,13 +206,17 @@ export let InspectPage = (
 }
 
 /** What a package's `./views` facet offers the app: its renderers, its
- * inspector views, and the pages it lists in the sidebar. */
+ * inspector views, the pages it lists in the sidebar, the owner's home page,
+ * tabs on what its views draw, and the glyphs those wear. */
 export type Facet = {
   views?: import('@yaks/render').Registry<
     Entry | import('@yaks/inspect').View
   >
   inspectViews?: import('@yaks/inspect').View[]
   destinations?: import('../navigation.ts').Destination[]
+  home?: Home
+  tabs?: Offer[]
+  icons?: Record<string, IconNode>
 }
 
 /** Merge configured contributions without registering query-backed views as
@@ -223,3 +230,29 @@ export let contributedViews = (facets: Facet[]): Entry[] =>
       ...(f.views?.renderers ?? []).filter((r): r is Entry => !adapted.has(r)),
     ]
   })
+
+/** Take in what the configured packages offer, before the app paints: their
+ * views, destinations, home page, tabs and glyphs. Every door does this the
+ * same way. */
+export let contribute = (facets: Facet[]): void => {
+  extend(contributedViews(facets))
+  offerPlaces({
+    home: facets.find((f) => f.home)?.home,
+    tabs: facets.flatMap((f) => f.tabs ?? []),
+    destinations: facets.flatMap((f) => f.destinations ?? []),
+  })
+  for (let f of facets) learnGlyphs(f.icons ?? {})
+}
+
+/** What waits at an offered place for an entity, as `children` says it; none
+ * while nothing does or it is still unknown. */
+export let Waiting = (
+  { offer, eid, children }: {
+    offer: Offer
+    eid: string
+    children: (n: number) => ComponentChild
+  },
+) => {
+  let n = offer.waiting?.(bundle(ent(eid)), inspectIo)
+  return n ? <>{children(n)}</> : null
+}

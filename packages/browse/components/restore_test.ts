@@ -1,12 +1,15 @@
 import { bindHistory } from '../history.ts'
 import type { HistoryEntry, HistoryPort } from '@yaks/ui/history'
-// Home is always the inbox, including devices with an old canvas position.
+// Home is always the home page a package offers, including devices with an old
+// canvas position.
 import { test } from '@yaks/testing'
 import { faked, tick, until } from '../testing.ts'
 import { assertEquals } from '@std/assert'
 import { cache, census, owner } from '../live.ts'
 import { navigate, restore, route, screenTarget } from './nav.tsx'
 import { allSessionsPath } from '../tray_query.ts'
+import { offerPlaces } from './offers.ts'
+import { host } from '../host_testing.ts'
 
 let place = { pathname: '/', search: '' }
 let listeners = new Set<(e: HistoryEntry) => void>()
@@ -60,7 +63,11 @@ let context = (
     localStorage: storage,
     sessionStorage: storage,
   })
+  // A server that knows nothing the cache doesn't: a legacy link it must
+  // resolve is answered, and what the test asked closes with it.
+  let wire = host(() => ({ bundles: [] }))
   owner.value = 'person'
+  offerPlaces({ home: { name: 'Desk', icon: 'lamp', view: 'Desk' } })
   cache.value = {
     person: { entity: { eid: 'person', num: 2 }, person: { eid: 'person' } },
     canvas: { entity: { eid: 'canvas', num: 1 }, canvas: { eid: 'canvas' } },
@@ -74,6 +81,8 @@ let context = (
   return {
     [Symbol.dispose]() {
       held[Symbol.dispose]()
+      wire.free()
+      offerPlaces({})
       owner.value = prior
       cache.value = {}
       census.value = []
@@ -81,18 +90,18 @@ let context = (
   }
 }
 
-test('home opens the inbox regardless of previous card, canvas view, listing or dead end', () => {
+test('home opens the home page regardless of previous card, canvas view, listing or dead end', () => {
   using _ = context()
   for (let previous of ['/T-7?v=Md', '/?v=List', allSessionsPath, '/T-404']) {
     launch(previous)
     launch('/')
     assertEquals(route.value, '/')
     assertEquals(entries, ['/'])
-    assertEquals(screenTarget(), { eid: 'person', view: 'Inbox' })
+    assertEquals(screenTarget(), { eid: 'person', view: 'Desk' })
   }
 })
 
-test('deep links keep their entity view and browser back returns to the inbox', () => {
+test('deep links keep their entity view and browser back returns home', () => {
   using _ = context()
   launch('/T-7?v=Md')
   assertEquals(screenTarget(), { eid: 'task', view: 'Md' })
@@ -101,16 +110,16 @@ test('deep links keep their entity view and browser back returns to the inbox', 
   assertEquals(entries, ['/', '/T-7'])
   at('/')
   listeners.forEach((fn) => fn(port.read()))
-  assertEquals(screenTarget(), { eid: 'person', view: 'Inbox' })
+  assertEquals(screenTarget(), { eid: 'person', view: 'Desk' })
 })
 
-test('home opens the inbox on a device that refuses storage', () => {
+test('home opens the home page on a device that refuses storage', () => {
   let no = () => {
     throw new Error('private mode')
   }
   using _ = context({ getItem: no, setItem: no })
   launch('/')
-  assertEquals(screenTarget(), { eid: 'person', view: 'Inbox' })
+  assertEquals(screenTarget(), { eid: 'person', view: 'Desk' })
 })
 
 test('a legacy task link resolves and replaces its address', async () => {
@@ -125,7 +134,7 @@ test('an unresolved legacy link leaves home reachable', () => {
   launch('/?task=gone')
   assertEquals(route.value, '/?task=gone')
   launch('/')
-  assertEquals(screenTarget(), { eid: 'person', view: 'Inbox' })
+  assertEquals(screenTarget(), { eid: 'person', view: 'Desk' })
 })
 
 test('a legacy link never pulls back someone who moved on', async () => {

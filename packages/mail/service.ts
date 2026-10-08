@@ -11,19 +11,22 @@
 // once.
 
 import type { Graph } from '@yaks/graph'
-import { queue } from './door.ts'
+import type { Config } from '@yaks/host'
 import { sleep } from '@yaks/effects'
 import type { Options, Pull } from './options.ts'
 import { type Edge, edge, pull } from './pull.ts'
+import { readings } from './readings.ts'
 
 /** How long a pull waits for the next one, unless the config says. */
 export let EVERY = 10_000
 
+type Host = { graph: Graph; config?: Config }
+
 /** Pull from one edge, then again every `pull.every`, until the signal aborts.
  * An already-aborted signal is one pull. */
 let polling = async (
-  host: { graph: Graph },
-  from: Edge | undefined,
+  host: Host,
+  from: Edge,
   options: Options = {},
   signal: AbortSignal = AbortSignal.abort(),
 ): Promise<void> => {
@@ -31,22 +34,10 @@ let polling = async (
     graph: host.graph,
     ...(options.domain ? { domain: options.domain } : {}),
     ...(options.triage ? { triage: options.triage } : {}),
-    ...(options.inbox ? { inbox: options.inbox } : {}),
+    readings: await readings(host.config?.plugins),
   }
   for (;;) {
-    if (from) await pull(at, from)
-    if (options.inbox) {
-      let now = new Date().toISOString()
-      let hour = options.inbox.hour ?? 9
-      await queue(
-        host.graph,
-        host.graph.vocab,
-        options.inbox,
-        (b) => host.graph.apply(b),
-        now,
-        new Date(now).getUTCHours() >= hour,
-      )
-    }
+    await pull(at, from)
     if (signal.aborted) return
     await sleep(options.pull?.every ?? EVERY, signal)
     if (signal.aborted) return
@@ -59,19 +50,14 @@ let open: Open = (options, stop) => edge(options, fetch, stop)
 
 /** Pull what arrived, then keep polling until the host stops. */
 export let service = (
-  host: { graph: Graph },
+  host: Host,
   options: Options = {},
   signal: AbortSignal = AbortSignal.abort(),
   make: Open = open,
 ): Promise<void> => {
-  if (!options.pull && !options.inbox) return Promise.resolve()
+  if (!options.pull) return Promise.resolve()
   // Already aborted means one pass. A live signal also stops an in-flight
   // edge request, so shutdown and a lost lease do not wait on the network.
   let stop = signal.aborted ? undefined : signal
-  return polling(
-    host,
-    options.pull ? make(options.pull, stop) : undefined,
-    options,
-    signal,
-  )
+  return polling(host, make(options.pull, stop), options, signal)
 }

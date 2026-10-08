@@ -20,37 +20,37 @@ import { searchPath } from '../url.ts'
 import { fields, front } from './fields.tsx'
 import { Icon } from './icons.tsx'
 import { follow, navigate, route } from './nav.tsx'
-import { useInboxCount } from './useInbox.ts'
+import { destinationOffers, homeOffer } from './offers.ts'
+import { Waiting } from './inspect.tsx'
 
 let { Brand, Find, Item, Label, Count } = Shell
 
-// What packages offer from their `./views` facets, set by the door before
-// the app paints.
-let offered: Destination[] = []
-export let offer = (all: Destination[]): void => {
-  offered = all
-}
-
 /** Every destination this host offers, in the sidebar's order. */
 export let allDestinations = (): Destination[] =>
-  destinations(vocab, owner.value, sessionQueries(vocab).all, offered)
+  destinations(
+    vocab,
+    owner.value,
+    sessionQueries(vocab).all,
+    destinationOffers(),
+  )
 
-let inbox = () => !!vocab.comp('subscription')
-
-/** The sidebar's lines. */
-export let allPlaces = (): Place[] =>
-  places(
-    inbox()
-      ? { name: 'Inbox', icon: 'inbox', path: '/' }
+/** The sidebar's lines. Home is the page a package offers the owner, or the
+ * host's own list where none does. */
+export let allPlaces = (): Place[] => {
+  let home = homeOffer()
+  return places(
+    home
+      ? { name: home.name, icon: home.icon, path: '/' }
       : { name: 'Home', icon: 'house', path: '/' },
     allDestinations(),
     !!vocab.comp('_package'),
   )
+}
 
 /** What the page at `at` is called when no entity names it. */
 export let titleAt = (at: string): Place | undefined => {
   let place = placeAt(at, allPlaces())
-  return place?.path == '/' && !inbox()
+  return place?.path == '/' && !homeOffer()
     ? { ...place, name: hosting().home?.title ?? 'Home' }
     : place
 }
@@ -82,11 +82,6 @@ export let SidebarMenu = () => (
   </Shell.Menu>
 )
 
-let InboxCount = ({ actor }: { actor: string }) => {
-  let n = useInboxCount(actor)
-  return n ? <Count aria-label='needs you'>{n > 99 ? '99+' : n}</Count> : null
-}
-
 let FIELD = 'sidebar:query'
 
 // The app's name: the box's, or an app store's slug under its mount.
@@ -99,6 +94,7 @@ export let Navigation = () => {
     if (ev.defaultPrevented) openSidebar(false)
   }
   let actor = owner.value
+  let home = homeOffer()
   return (
     <Shell.Side aria-label='Navigation'>
       <Brand href={pagePath('/')} onClick={go('/')}>
@@ -135,7 +131,11 @@ export let Navigation = () => {
             <Icon name={p.icon} size={16} />
           </Shell.Icon>
           <Label>{p.name}</Label>
-          {p.path == '/' && inbox() && actor && <InboxCount actor={actor} />}
+          {p.path == '/' && home && actor && (
+            <Waiting offer={home} eid={actor}>
+              {(n) => <Count aria-label='waiting'>{n > 99 ? '99+' : n}</Count>}
+            </Waiting>
+          )}
         </Item>
       ))}
     </Shell.Side>

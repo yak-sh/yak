@@ -1,5 +1,5 @@
-// What the mail words DO when somebody types them: the inbox predicate, the
-// mark reading leaves, the far side a reply is aimed at, and the check.
+// What the mail words DO when somebody types them: the marks reading and
+// answering leave, the far side a reply is aimed at, and the check.
 
 import { test } from '@yaks/testing'
 import { assert, assertEquals, assertRejects } from '@std/assert'
@@ -49,8 +49,6 @@ let comp = (b: Bundle | undefined, name: string): Comp =>
 let prose = (answer: Bundle[]): string =>
   answer.map((b) => comp(b, 'content').body).filter(Boolean).join('\n')
 
-let ids = (answer: Bundle[]): string[] => answer.map((b) => b.entity.eid)
-
 // A club with an address book: Ana reads the club's mail at its own desk.
 let club = async () => {
   let rig = clubhouse()
@@ -76,99 +74,6 @@ let arrival = (eid: string, o: Record<string, unknown> = {}) => ({
     target: 'desk',
     ...o,
   },
-})
-
-test('the inbox is what is addressed to you and not archived', async () => {
-  let { g } = await club()
-  await g.apply([
-    arrival('a1'),
-    // Written to Ana here rather than routed to the desk.
-    {
-      entity: { eid: 'a2' },
-      doc: { title: 'You are in' },
-      mail: { from: 'hello@books.example' },
-      deliver: { to: 'ana' },
-    },
-    // Somebody else's letter entirely.
-    {
-      entity: { eid: 'a3' },
-      doc: { title: 'Not yours' },
-      mail: { from: 'x@y.example', to: 'someone@elsewhere.example' },
-    },
-  ])
-  assertEquals(
-    ids(await ask(g, 'inbox_list', { who: 'desk', lane: 'Replies' })),
-    ['a1'],
-  )
-  assertEquals(ids(await ask(g, 'inbox_list', { who: 'ana' })), ['a2'])
-  assertEquals(
-    ids(await ask(g, 'inbox_list', { who: 'desk', lane: 'Recent' })),
-    ['a2'],
-  )
-  let search = { who: 'desk', search: 'you are in' }
-  assertEquals(
-    ids(await ask(g, 'inbox_list', { ...search, direction: 'said' })),
-    ['a2'],
-  )
-  assertEquals(
-    ids(await ask(g, 'inbox_list', { ...search, direction: 'received' })),
-    [],
-  )
-  // Whoever is asking, where the line names nobody.
-  assertEquals(
-    ids(await ask(g, 'inbox_list', { lane: 'Replies' }, { by: 'desk' })),
-    ['a1'],
-  )
-  await assertRejects(() => ask(g, 'inbox_list'), Error, 'nobody is asking')
-})
-
-test('inbox list searches complete received words while default results are summaries', async () => {
-  let { g } = await club()
-  let body = 'ordinary words '.repeat(1024) + 'needle-in-full-body'
-  await g.apply([{
-    ...arrival('long-letter'),
-    doc: { title: 'Long letter', body },
-  }])
-  let [summary] = await ask(g, 'inbox_list', { who: 'desk' })
-  let [letter] = await g.get(['long-letter'], [])
-  assertEquals(summary.entity.num, letter.entity.num)
-  assertEquals(comp(summary, 'doc').title, 'Long letter')
-  assertEquals(comp(summary, 'doc').body, undefined)
-  let search = { who: 'desk', search: 'needle-in-full-body' }
-  assertEquals(ids(await ask(g, 'inbox_list', search)), ['long-letter'])
-  assertEquals(
-    ids(await ask(g, 'inbox_list', { ...search, direction: 'received' })),
-    ['long-letter'],
-  )
-  assertEquals(
-    ids(await ask(g, 'inbox_list', { ...search, direction: 'said' })),
-    [],
-  )
-})
-
-test('an address you wear puts a letter in your inbox', async () => {
-  let { g } = await club()
-  // Ana wears the address the letter was delivered to, and nothing routed it.
-  await g.apply([
-    { entity: { eid: 'ana' }, email: { address: 'ana@books.example' } },
-    {
-      entity: { eid: 'a1' },
-      doc: { title: 'For Ana' },
-      mail: { from: 'x@y.example', to: 'ANA@Books.Example', message_id: 'm1' },
-    },
-  ])
-  assertEquals(ids(await ask(g, 'inbox_list', { who: 'ana' })), ['a1'])
-})
-
-test('archiving is the one act that hides, and --all is the way back', async () => {
-  let { g } = await club()
-  await g.apply([arrival('a1')])
-  await did(g, 'inbox_archive', { item: 'a1' })
-  assertEquals(ids(await ask(g, 'inbox_list', { who: 'desk' })), [])
-  assertEquals(
-    ids(await ask(g, 'inbox_list', { who: 'desk', all: true })),
-    ['a1'],
-  )
 })
 
 test('reading a letter marks it, and shows its thread', async () => {
@@ -204,39 +109,22 @@ test('reading a letter marks it, and shows its thread', async () => {
   )
 })
 
-test('mail reads and archives act on the shared root and refresh after a reply', async () => {
+test('reading and answering mark the letter and the first of its thread, afresh each time', async () => {
   let { g } = await club()
-  let owner = { by: 'desk' }
   let stamp = (minute: number) => `2026-10-02T12:0${minute}:00.000Z`
-  await g.apply([arrival('root')], { now: stamp(0) })
-  await g.apply([arrival('reply', { reply_to: 'root' })], { now: stamp(1) })
-  assertEquals(ids(await ask(g, 'inbox_list', { who: 'desk' })), ['root'])
-  await g.apply(await ask(g, 'mail_show', { letter: 'reply' }, owner), {
-    now: stamp(2),
-  })
-  let [root] = await g.get(['root'])
-  assertEquals(comp(root, 'opened').at, stamp(2))
-  await g.apply(await ask(g, 'inbox_archive', { item: 'reply' }, owner), {
+  await g.apply([arrival('root'), arrival('reply', { reply_to: 'root' })])
+  let marks = async (name: string) =>
+    (await g.get(['root', 'reply'])).map((b) => comp(b, name).at)
+  for (let minute of [1, 2]) {
+    await g.apply(await ask(g, 'mail_show', { letter: 'reply' }), {
+      now: stamp(minute),
+    })
+    assertEquals(await marks('opened'), [stamp(minute), stamp(minute)])
+  }
+  await g.apply(await ask(g, 'mail_reply', { letter: 'reply', body: 'Yes' }), {
     now: stamp(3),
   })
-  assertEquals(ids(await ask(g, 'inbox_list', { who: 'desk' })), [])
-  await g.apply([arrival('fresh', { reply_to: 'reply' })], { now: stamp(4) })
-  assertEquals(ids(await ask(g, 'inbox_list', { who: 'desk' })), ['root'])
-  await g.apply(await ask(g, 'mail_show', { letter: 'fresh' }, owner), {
-    now: stamp(5),
-  })
-  ;[root] = await g.get(['root'])
-  assertEquals(comp(root, 'opened').at, stamp(5))
-  await g.apply(
-    await ask(g, 'mail_reply', {
-      letter: 'fresh',
-      body: 'Thanks',
-    }, owner),
-    { now: stamp(6) },
-  )
-  assertEquals(ids(await ask(g, 'inbox_list', { who: 'desk' })), [])
-  ;[root] = await g.get(['root'])
-  assertEquals(comp(root, 'archived').at, stamp(6))
+  assertEquals(await marks('archived'), [stamp(3), stamp(3)])
 })
 
 test('a reply to an arrival goes to its author, from the desk it came to', async () => {
@@ -255,9 +143,9 @@ test('a reply to an arrival goes to its author, from the desk it came to', async
   // The configured sender carried it, threaded on what arrived.
   assertEquals(post.last()?.to, 'stranger@elsewhere.example')
   assertEquals(post.last()?.replyTo, 'a1@elsewhere.example')
-  // Answering retires the arrival, and the answer is not filed back to us.
+  // Answering puts the arrival away, and the answer is not filed back to us.
   assertEquals(comp(reply, 'mail').target, undefined)
-  assertEquals(ids(await ask(g, 'inbox_list', { who: 'desk' })), [])
+  assert(comp((await g.get(['a1']))[0], 'archived').at, 'answered is away')
 })
 
 test('a reply to your own letter goes to whom you wrote it', async () => {
@@ -275,7 +163,7 @@ test('a reply to your own letter goes to whom you wrote it', async () => {
   let reply = landed.find((b) => comp(b, 'mail').reply_to == 'a1')!
   assertEquals(comp(reply, 'deliver').to, 'ana')
   assertEquals(comp(reply, 'mail').from, 'hello@books.example')
-  // Nothing was hidden: our own letter never rang an inbox.
+  // Nothing was put away: our own letter left nothing waiting.
   assertEquals(landed.find((b) => b.entity.eid == 'a1'), undefined)
 })
 

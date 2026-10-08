@@ -1,4 +1,4 @@
-// The two-pane inbox: a list on the LEFT, the opened entity on the RIGHT
+// The two-pane view: a list on the LEFT, the opened entity on the RIGHT
 // (T-17321). A view of ANY entity with a list face — a project/board shows
 // its Board, a canvas its List — so "the left can be a board, a List, a
 // project, anything" falls out of the registry, not new structure. Clicking

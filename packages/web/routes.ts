@@ -158,9 +158,14 @@ export let routes = (host: Hosting, options: Options = {}): Route[] => {
                 views?: Registry
                 inspectViews?: unknown[]
                 destinations?: unknown[]
+                home?: unknown
+                tabs?: unknown[]
               }
             >(plugin, 'views')
-            if (facet?.views || facet?.inspectViews || facet?.destinations) {
+            if (
+              facet?.views || facet?.inspectViews || facet?.destinations ||
+              facet?.home || facet?.tabs
+            ) {
               specs.push(import.meta.resolve(located(`${plugin}/views`)))
             }
           }

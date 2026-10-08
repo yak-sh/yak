@@ -46,9 +46,8 @@ export let open = async (url: string, opts: {
   await import('./domain-host.tsx')
   let live = await import('./live.ts')
   let { bindHistory } = await import('./history.ts')
-  let { extend, ux } = await import('./components/registry.ts')
-  let { contributedViews } = await import('./components/inspect.tsx')
-  let { offer } = await import('./components/Navigation.tsx')
+  let { ux } = await import('./components/registry.ts')
+  let { contribute } = await import('./components/inspect.tsx')
   let { navigate } = await import('./components/nav.tsx')
   let { Ux } = await import('@yaks/ux')
   let { lone } = await import('@yaks/draft/input')
@@ -76,8 +75,7 @@ export let open = async (url: string, opts: {
     }
   }
   let facets = await opts.facets?.() ?? []
-  extend(contributedViews(facets))
-  offer(facets.flatMap((f) => f.destinations ?? []))
+  contribute(facets)
   onMarkdown((text, repo, inline) =>
     h(Md, { text, repo: repo ?? undefined, inline })
   )

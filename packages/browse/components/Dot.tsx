@@ -3,14 +3,13 @@ import * as ui from '@yaks/ui'
 // How each state wears the pip (@yaks/ui Dot): a shape saying where it is and a
 // tone. Task statuses first — ring open, half-moon wip, a check done, a cross
 // cancelled — then the other lifecycles that borrow the pip: a session's (a
-// ring while starting, the pulse while going, a glyph for how it ended), a
-// wake's and an inbox row's. A state not named here is the plain dim disc.
+// ring while starting, the pulse while going, a glyph for how it ended) and a
+// wake's. A state not named here is the plain dim disc.
 let looks: Record<string, string[]> = {
   open: ['ring', 'info'],
   wip: ['half', 'active'],
   done: ['check', 'positive'],
   cancelled: ['cross'], // settled, but not a success: stays dim
-  unread: ['accent'],
   idle: ['half', 'active'],
   settled: ['half', 'active'],
   pending: ['half', 'active'],

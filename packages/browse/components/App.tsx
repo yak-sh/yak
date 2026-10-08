@@ -4,17 +4,16 @@ import { opened } from '../opened.ts'
 import { hosting } from '../hosting.ts'
 import { left, scrolledTo } from '../history.ts'
 import { destinationAt, schemaAt } from '../navigation.ts'
-import { vocab } from '../types.ts'
 import { entityPath, searchAt } from '../url.ts'
 import { useEffect, useLayoutEffect } from 'preact/hooks'
 import { idOf } from '../types.ts'
 import { ent, mode, routeSub } from '../live.ts'
-import { PersonInbox } from './views/PersonInbox.tsx'
 import { block, Shell, Tabs, Viewport } from '@yaks/ui'
 import { filterable, FilterInput } from './Filter.tsx'
 import { applicable } from './registry.ts'
 import { TabFace } from './Card.tsx'
 import { Icon } from './icons.tsx'
+import { homeOffer } from './offers.ts'
 import {
   follow,
   Menu,
@@ -86,8 +85,9 @@ let Resolving = ({ at }: { at: string }) => {
   )
 }
 
-// The one page the address names, under its bar: `/` is home (the owner's
-// inbox), `/T-123` that entity with `?v=` picking its view, `/?q=` a search,
+// The one page the address names, under its bar: `/` is home (the owner, in
+// the home page a package offers, or the host's own list where none does),
+// `/T-123` that entity with `?v=` picking its view, `/?q=` a search,
 // `/?map` the schema and `/?<key>` a destination's list. The bar says what
 // the page is and holds what it offers: a filter, its views, its menu.
 export let Page = ({ at }: { at: string }) => {
@@ -99,15 +99,14 @@ export let Page = ({ at }: { at: string }) => {
   let place = destinationAt(at, allDestinations())
   let t = screenTarget(at)
   let home = url.pathname == '/' && !url.search
-  let inbox = home && !!vocab.comp('subscription')
-  let rootEid = t?.eid
+  let offered = home ? homeOffer() : undefined
+  // The owner's home page holds what its view asks, never the owner's
+  // neighborhood, and opening it is not opening the owner.
+  let rootEid = offered ? undefined : t?.eid
   useEffect(() => {
-    if (rootEid && !inbox) return effect(() => opened(rootEid))
-  }, [rootEid, inbox])
-  useLayoutEffect(() => rootEid && !inbox ? routeSub(rootEid) : undefined, [
-    rootEid,
-    inbox,
-  ])
+    if (rootEid) return effect(() => opened(rootEid))
+  }, [rootEid])
+  useLayoutEffect(() => rootEid ? routeSub(rootEid) : undefined, [rootEid])
   let e = t ? ent(t.eid) : undefined
   let tabs = e ? applicable(e) : []
   // A coarse pointer with no explicit view defaults a Canvas to List: its
@@ -127,9 +126,10 @@ export let Page = ({ at }: { at: string }) => {
     else url.searchParams.set('v', v)
     navigate(url.pathname + url.search, { replace: true })
   }
-  // Home is the owner's inbox, or the host's own list where nothing composes
-  // an inbox; either way it is named for itself, never for the person.
-  let list = home && !vocab.comp('subscription')
+  // Home is the owner in the home page a package offers, or the host's own
+  // list where none does; either way it is named for itself, never for the
+  // person.
+  let list = home && !offered
   let named = titleAt(at)
   let page = home ? undefined : e
   let filter = place
@@ -230,8 +230,8 @@ export let Page = ({ at }: { at: string }) => {
           ? <SearchPage query={search} />
           : place
           ? <QueryList eid={filter!} query={place.query} />
-          : inbox && e
-          ? <PersonInbox e={e} />
+          : offered && e
+          ? <Entity eid={e.eid} view={offered.view} />
           : e
           ? <Entity eid={e.eid} view={view} />
           : list
@@ -241,10 +241,10 @@ export let Page = ({ at }: { at: string }) => {
               query={hosting().home?.query ?? '.doc'}
             />
           )
-          : home
+          : offered
           ? (
             <LostFrame>
-              <h1>Inbox</h1>
+              <h1>{offered.name}</h1>
               <p>No owner is named for this app.</p>
             </LostFrame>
           )

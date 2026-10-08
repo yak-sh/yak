@@ -18,9 +18,6 @@
     "@yaks/hook": "../hook/mod.ts",
     "@yaks/edge": "../edge/mod.ts",
     "@yaks/archetype": "../archetype/mod.ts",
-    "@yaks/sql": "../sql/mod.ts",
-    "@yaks/task": "../task/mod.ts",
-    "@yaks/inbox": "../inbox/mod.ts",
-    "@yaks/inbox/queries": "../inbox/queries.ts"
+    "@yaks/sql": "../sql/mod.ts"
   }
 }

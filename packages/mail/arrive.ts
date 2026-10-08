@@ -28,7 +28,6 @@ import { type Bundle, type Eid, type Graph, Refused } from '@yaks/graph'
 import { and, type Clause, eq, limit } from '@yaks/query'
 import { canon, local as localOf } from './addr.ts'
 import { EMAIL, MAIL } from './comp.ts'
-import { replied } from './reply.ts'
 import {
   type Arrival,
   author,
@@ -100,6 +99,34 @@ export let routed = async (
   await wearer(graph, address, domain) ??
     (domain ? await named(graph, address, domain) : null)
 
+/** One arrival, as another package reads it: the message whole (its headers
+ * are only here), the letter as mail records it, and the lookups mail
+ * answered. */
+export type Read = {
+  /** the graph to query */
+  graph: Book
+  /** the message as it arrived */
+  message: Received
+  /** what the caller knew beside it: the parsed text, a target it named */
+  arrival: Arrival
+  /** the letter as mail records it, its `$actor` included */
+  letter: Bundle
+  /** the letter it answers, where this graph has it */
+  reply: Eid | null
+  /** who wrote it, where the address book knows them */
+  by: Eid | null
+  /** an address in the form this graph stores addresses in */
+  canonical: (address: string) => string
+}
+
+/** What a package makes of an arrival: the bundles to record in place of the
+ * letter alone (the letter, perhaps with more on it, and whatever else it
+ * means), or nothing to leave it a letter. A package offers one from its
+ * `./mail` facet (./readings.ts). */
+export type Reading = (
+  read: Read,
+) => Bundle[] | undefined | Promise<Bundle[] | undefined>
+
 /** What the receiving half needs, besides the message. */
 export type Arrivals = {
   /** the graph to query */
@@ -110,8 +137,9 @@ export type Arrivals = {
   domain?: string
   /** where a letter addressed to nobody here lands — the triage entity */
   triage?: Eid
-  /** The opted-in person and inbox address; replies also use the person. */
-  inbox?: { person: Eid; from?: string }
+  /** what other packages make of an arrival, asked in order; the first that
+   * answers decides what is recorded */
+  readings?: Reading[]
 }
 
 /**
@@ -129,9 +157,12 @@ export type Arrivals = {
  * empty, so the graph does not sign it as its owner's. An unattributed write
  * is the truth about a stranger's letter, and far better than the mailbox's
  * owner appearing to have written it.
+ *
+ * What else a letter means is not mail's to say: each of `readings` is asked
+ * in turn, and the first that answers says what is recorded instead.
  */
 export let arrived = (
-  { graph, domain, triage, inbox }: Arrivals,
+  { graph, domain, triage, readings = [] }: Arrivals,
 ): (m: Received, arrival?: Arrival) => Promise<Bundle[]> =>
 async (m, arrival = {}) => {
   let id = messageId(m)
@@ -148,44 +179,18 @@ async (m, arrival = {}) => {
     ...(reply ? { reply } : {}),
   })
   let letter: Bundle = { ...bundles[0], $actor: by ? { by } : {} }
-  // Provenance is independent of the current person allowlist. A session or
-  // effect's sender remains that sender, not the inbox recipient, but its
-  // own prose must not gain a conversation/comment mark on re-entry.
-  let writer = by
-    ? (await graph.read(`.entity.eid=${JSON.stringify(by)}`))[0]
-    : undefined
   let canonical = domain ? canon(domain) : (address: string) => address
-  let automatic = m.headers.get('auto-submitted')?.trim().toLowerCase()
-  let external = !(
-    writer?.session || writer?.role || writer?.effect || writer?.call ||
-    writer?.output || writer?.entry ||
-    (automatic && automatic != 'no') ||
-    (inbox?.from && canonical(author(m)) == canonical(inbox.from))
-  )
-  if (!external) return [letter]
-  // A reply whose parent is unknown is still a reply, never a fresh request.
-  // External provenance was checked first; the allowlist and verification
-  // fail closed before adding the mark
-  // that the harness routes. Keep the envelope on the conversation itself so
-  // Message-ID deduplication and subsequent email replies use the same root.
-  let mail = letter.mail as Record<string, unknown>
-  let text = arrival.text ?? ''
-  if (
-    inbox?.from && by == inbox.person && mail.verified == true &&
-    canonical(m.to) == canonical(inbox.from) &&
-    !arrival.target && !reply && !answers && !m.headers.get('references') &&
-    text.trim()
-  ) {
-    let { target: _target, ...envelope } = mail
-    return [{
-      ...letter,
-      mail: envelope,
-      conversation: {},
-      doc: { title: text.split(/\r?\n/, 1)[0], body: text },
-    }]
+  for (let read of readings) {
+    let said = await read({
+      graph,
+      message: m,
+      arrival,
+      letter,
+      reply,
+      by,
+      canonical,
+    })
+    if (said) return said
   }
-  let parent = reply
-    ? (await graph.read(`.entity.eid=${JSON.stringify(reply)}`))[0]
-    : undefined
-  return replied(graph, letter, parent, by, inbox?.person)
+  return [letter]
 }

@@ -12,8 +12,8 @@
 //                         "account": "…",
 //                         "token": { "secret": "CF_EMAIL_TOKEN" } },
 //             "door": { "secret": { "secret": "MAIL_DOOR_SECRET" } },
-//             "pull": { "url": "https://inbox.books.example",
-//                       "token": { "secret": "INBOX_TOKEN" } } } }
+//             "pull": { "url": "https://edge.books.example",
+//                       "token": { "secret": "EDGE_TOKEN" } } } }
 // ```
 //
 // Nothing here holds a secret: `{"secret": "NAME"}` anywhere in the object is
@@ -42,21 +42,6 @@ export type Options = {
   /** the edge this graph pulls arrivals from, where the edge cannot reach the
    * graph to post them; with none, nothing is pulled */
   pull?: Pull
-  /** Opt-in email door. No automatic inbox letters without it. */
-  inbox?: Inbox
-}
-
-/** Whose inbox reaches a mail client, and how its links return here. */
-export type Inbox = {
-  person: Eid
-  /** The inbox address: verified letters from person start conversations here. */
-  from: string
-  base: string
-  /** UTC hour for the single daily digest (default 9). */
-  hour?: number
-  /** Alerts and updates are never emailed unless explicitly requested. */
-  alerts?: boolean
-  updates?: boolean
 }
 
 /** A transport, as a config names one. */

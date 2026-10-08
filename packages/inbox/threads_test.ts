@@ -182,3 +182,24 @@ test('a thread opens with its root, beside a reply said in the same instant', ()
   )
   assertEquals(thread.messages.map((r) => r.eid), ['z-letter', 'a-reply'])
 })
+
+test('a mark on any letter of a thread reads or puts away the whole thread', () => {
+  let letter = (eid: string, n: number, reply_to?: string) =>
+    row(eid, {
+      mail: {
+        from: 'holdco@example.com',
+        to: 'person@example.com',
+        message_id: eid,
+        reply_to,
+      },
+    }, n)
+  let all = [letter('letter', 1), letter('answer', 3, 'letter')]
+  let seen = () => threads(all, who).map((t) => [t.eid, t.unread])
+  assertEquals(seen(), [['letter', true]])
+  all[1].comps.opened = { at: at(4), by: 'person' }
+  assertEquals(seen(), [['letter', false]])
+  all[1].comps.archived = { at: at(4) }
+  assertEquals(seen(), [])
+  all.push(letter('more', 5, 'answer'))
+  assertEquals(seen(), [['letter', true]])
+})

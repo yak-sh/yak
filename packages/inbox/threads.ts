@@ -196,10 +196,13 @@ export let threads = <R extends Row>(
       ? group
       : [root, ...own, ...reply, ...(started || watched ? changes : [])]
     let at = newest(...activity.map(activityAt))
-    let archived = root.comps.archived
-    if (!search.all && archived && (!archived.at || at <= str(archived.at))) {
-      continue
-    }
+    // A mark on the root, or on a message in the thread: mail marks the letter
+    // it shows or answers, and that is the thread read or put away.
+    let marked = [root, ...messages]
+    let away = newest(...marked.map((r) => r.comps.archived?.at))
+    let archived = (!!away && at <= away) ||
+      marked.some((r) => r.comps.archived && !r.comps.archived.at)
+    if (!search.all && archived) continue
     let text = (search.text ?? '').trim().toLocaleLowerCase()
     // A decision's question and answer can have different authors. Treat the
     // answer as its own words rather than attributing the whole root to them.
@@ -235,7 +238,9 @@ export let threads = <R extends Row>(
       activityAt(a).localeCompare(activityAt(b))
     ).at(-1) ?? root
     let attention = newest(
-      root.comps.opened?.at,
+      ...marked.map((r) =>
+        r.comps.opened?.at
+      ),
       root.comps.decided?.at,
       started ? messageAt(root) : '',
       ...own.map(messageAt),

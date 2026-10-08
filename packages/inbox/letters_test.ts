@@ -8,18 +8,23 @@ import { docDoc } from '@yaks/doc'
 import { edgeDoc, edgeKeywords, edges, link } from '@yaks/edge'
 import { projectDoc } from '@yaks/project'
 import { taskDoc, tasks } from '@yaks/task'
-import { type Row, threads } from '@yaks/inbox'
-import { inboxDoc } from '@yaks/inbox/vocab'
 import { sessionDoc } from '@yaks/session/vocab'
-import { mailDoc } from './comp.ts'
-import { arrived } from './arrive.ts'
-import { inboxAt, planned, queue } from './door.ts'
-import { payload } from './cloudflare.ts'
-import { message, sending } from './send.ts'
-import { stash } from './stash.ts'
-import { routes } from './routes.ts'
+import {
+  arrived,
+  type Edge,
+  mailDoc,
+  message,
+  payload,
+  pull,
+  sending,
+  stash,
+} from '@yaks/mail'
+import { routes } from '@yaks/mail/routes'
+import { type Row, threads } from './mod.ts'
+import { inboxDoc } from './vocab.ts'
+import { inboxAt, planned, queue } from './letters.ts'
+import { reading } from './mail.ts'
 import { service } from './service.ts'
-import { type Edge, pull } from './pull.ts'
 
 let at = (n: number) => `2026-10-02T12:00:${String(n).padStart(2, '0')}.000Z`
 let inbox = {
@@ -27,11 +32,12 @@ let inbox = {
   from: 'inbox@books.example',
   base: 'https://box.example',
 }
-let options = {
-  inbox,
-  domain: 'books.example',
-  sender: { via: 'stash' as const },
-}
+// The inbox's door, as both receiving doors of @yaks/mail find it: by the
+// config naming @yaks/inbox with these options.
+let domain = 'books.example'
+let readings = [reading(inbox)!]
+let config = { plugins: [{ use: '@yaks/inbox', with: inbox }] }
+let options = { domain, sender: { via: 'stash' as const } }
 let decision = {
   question: 'Which route?',
   choices: [
@@ -161,7 +167,7 @@ test('mail loads complete root/latest words and choices without digest history',
 
 test('the service queues a blocking decision before the digest hour, once', async () => {
   let g = await world()
-  let early = { ...options, inbox: { ...inbox, hour: 24 } }
+  let early = { ...inbox, hour: 24 }
   await service({ graph: g }, early)
   let [letter, ...more] = await g.read('.mail_notice&.mail&*')
   assertEquals(more, [])
@@ -276,7 +282,7 @@ test('the inbox reader queues a letter, transports via stash, and accepts a veri
         text: '2\n\nOn Friday Agent wrote:\n> Which route?',
       }),
     })
-  let door = routes({ graph: g }, options)[0]
+  let door = routes({ graph: g, config }, options)[0]
   assertEquals((await door.handle(request())).status, 200)
   let [answered] = await g.get(['ask'])
   assertEquals(comp(answered, 'decided').choice, 'Bus')
@@ -304,7 +310,7 @@ for (
     await queue(g, g.vocab, inbox, (b) => g.apply(b), at(10))
     let [letter] = await g.read('.mail_notice&.mail&*')
     await g.apply([{ entity: letter.entity, mail: { message_id: 'sent@box' } }])
-    let bundles = await arrived({ graph: g, ...options })({
+    let bundles = await arrived({ graph: g, domain, readings })({
       from,
       to: inbox.from,
       headers: new Headers({
@@ -321,7 +327,7 @@ for (
 
 test('digest thread addresses route comments and custom answers; the digest itself is not an arbitrary decision', async () => {
   let g = await world()
-  let receive = arrived({ graph: g, ...options })
+  let receive = arrived({ graph: g, domain, readings })
   await g.apply(
     await receive({
       from: 'ana@books.example',
@@ -348,10 +354,10 @@ test('digest thread addresses route comments and custom answers; the digest itse
 test('the service can queue a digest without pulling an edge or sending any real mail', async () => {
   let g = await world()
   await g.apply([{ entity: { eid: 'dep' }, completed: {} }])
-  await service({ graph: g }, { ...options, inbox: { ...inbox, hour: 0 } })
+  await service({ graph: g }, { ...inbox, hour: 0 })
   let [letter] = await g.read('.mail_notice&.mail&*')
   assertEquals(comp(letter, 'mail').target, undefined)
-  await service({ graph: g }, { ...options, inbox: { ...inbox, hour: 0 } })
+  await service({ graph: g }, { ...inbox, hour: 0 })
   assertEquals((await g.read('.mail_notice&.mail&*')).length, 1)
 })
 
@@ -378,7 +384,7 @@ test('replying to a digest keeps the words without choosing its first decision',
   await queue(g, g.vocab, inbox, (b) => g.apply(b), at(10), true)
   let [digest] = await g.read('.mail_notice&.mail&*')
   await g.apply([{ entity: digest.entity, mail: { message_id: 'digest@box' } }])
-  let bundles = await arrived({ graph: g, ...options })({
+  let bundles = await arrived({ graph: g, domain, readings })({
     from: 'ana@books.example',
     to: inbox.from,
     headers: new Headers({
@@ -394,7 +400,7 @@ test('replying to a digest keeps the words without choosing its first decision',
 
 test('invalid choice numbers keep a comment without completing the decision', async () => {
   let g = await world()
-  let bundles = await arrived({ graph: g, ...options })({
+  let bundles = await arrived({ graph: g, domain, readings })({
     from: 'ana@books.example',
     to: 'ask@books.example',
     headers: new Headers({ 'Message-ID': 'invalid@box' }),
@@ -419,7 +425,7 @@ let freshLetter = (extra: Record<string, unknown> = {}) => ({
   ...extra,
 })
 let postFresh = (g: ReturnType<typeof graph>, extra = {}) =>
-  routes({ graph: g }, options)[0].handle(
+  routes({ graph: g, config }, options)[0].handle(
     new Request('http://box/mail/inbound', {
       method: 'POST',
       body: JSON.stringify(freshLetter(extra)),
@@ -476,7 +482,7 @@ test('a verified new inbox letter is a caller-attributed conversation, once, and
       false,
     ]] as const
   ) {
-    let rejected = await arrived({ graph: g, ...options })({
+    let rejected = await arrived({ graph: g, domain, readings })({
       from,
       to: inbox.from,
       headers: new Headers({ 'In-Reply-To': '<conversation@box>' }),
@@ -484,7 +490,7 @@ test('a verified new inbox letter is a caller-attributed conversation, once, and
     assertEquals(rejected[0].conversation, undefined)
     assertEquals(rejected[0].comment, undefined)
   }
-  let idReply = await arrived({ graph: g, ...options })({
+  let idReply = await arrived({ graph: g, domain, readings })({
     from: 'ana@books.example',
     to: `${eid}@books.example`,
     headers: new Headers({ 'Message-ID': 'direct@box' }),
@@ -529,7 +535,7 @@ test('a different known sender and an inactive inbox cannot start conversations'
     entity: { eid: 'other' },
     email: { address: 'other@books.example' },
   }])
-  let receive = arrived({ graph: g, ...options })
+  let receive = arrived({ graph: g, domain, readings })
   let kept = await receive({
     from: 'other@books.example',
     to: inbox.from,
@@ -541,7 +547,7 @@ test('a different known sender and an inactive inbox cannot start conversations'
     comp((await g.get([kept[0].entity.eid]))[0], 'created').by,
     'other',
   )
-  let res = await routes({ graph: g }, { domain: options.domain })[0].handle(
+  let res = await routes({ graph: g }, { domain })[0].handle(
     new Request('http://box/mail/inbound', {
       method: 'POST',
       body: JSON.stringify(freshLetter()),
@@ -578,11 +584,11 @@ test('pull records a verified inbox conversation before acknowledgement and rede
     requests: () => Promise.resolve([]),
     processed: async () => {},
   }
-  assertEquals(await pull({ graph: g, ...options }, edge), {
+  assertEquals(await pull({ graph: g, domain, readings }, edge), {
     messages: 1,
     requests: 0,
   })
-  assertEquals(await pull({ graph: g, ...options }, edge), {
+  assertEquals(await pull({ graph: g, domain, readings }, edge), {
     messages: 1,
     requests: 0,
   })
@@ -609,7 +615,7 @@ test('system-generated inbound echoes cannot become conversations or comments, i
     ]
   ) {
     for (let target of [undefined, 'ask']) {
-      let out = await arrived({ graph: g, ...options })({
+      let out = await arrived({ graph: g, domain, readings })({
         from,
         to: inbox.from,
         headers: new Headers({ 'Auto-Submitted': automatic }),
@@ -635,7 +641,7 @@ test('system-generated inbound echoes cannot become conversations or comments, i
 test('an automatic echo of the configured person fails closed without a system identity', async () => {
   let g = await world()
   for (let target of [undefined, 'ask']) {
-    let out = await arrived({ graph: g, ...options })({
+    let out = await arrived({ graph: g, domain, readings })({
       from: 'ana@books.example',
       to: inbox.from,
       headers: new Headers({ 'Auto-Submitted': 'auto-generated' }),

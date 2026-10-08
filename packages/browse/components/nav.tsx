@@ -20,13 +20,14 @@ import {
 } from '../live.ts'
 import { type Action, actionsFor, resolve } from './registry.ts'
 import { SHORT } from '@yaks/id'
-import { type Change, type Ent, IdError, idOf, vocab } from '../types.ts'
+import { type Change, type Ent, IdError, idOf } from '../types.ts'
 import { dragData } from './drag.ts'
 import { cursorEid } from '../edge.ts'
 
 // The door keeps history: one page at a time, each at its own address.
 export { route } from '../history.ts'
 import { go, route } from '../history.ts'
+import { homeOffer } from './offers.ts'
 import { historyPort } from '@yaks/ui/history'
 
 export let navigate = (to: string, options: { replace?: boolean } = {}) => {
@@ -166,10 +167,12 @@ export let linkProps = (e: Ent) => ({
     capable('canvas') && dragData(ev, e.eid, resolve(e).view),
 })
 
-// Resolve a route to {eid, view}: bare `/` means the owner inbox; an
-// id is T-num / bare num / eid, looked up in the live cache. The argument
-// is how a REMEMBERED route (below) is screened against the same resolver
-// the screen uses — a route naming a dead entity resolves to nothing.
+// Resolve a route to {eid, view}: bare `/` is the owner in the home page a
+// package offers (./offers.ts), and nothing where none does (the host's own
+// list); an id is T-num / bare num / eid, looked up in the live cache. The
+// argument is how a REMEMBERED route (below) is screened against the same
+// resolver the screen uses — a route naming a dead entity resolves to
+// nothing.
 export let screenTarget = (at = route.value) => {
   let url = new URL(at, 'http://x')
   // `/?q=`, `/?map` and `/?<destination>` are pages of their own, not home.
@@ -178,11 +181,12 @@ export let screenTarget = (at = route.value) => {
     [...url.searchParams.keys()].some((k) => k != 'v' && k != 'task')
   ) return null
   let id = addressId(decodeURIComponent(url.pathname.slice(1)))
-  if (!id && !vocab.comp('subscription')) return null
-  let view = url.searchParams.get('v') ?? undefined
-  let eid = id ? routed(id) : owner.value
-  if (!id) view = 'Inbox'
-  return eid ? { eid, view } : null
+  let home = homeOffer()
+  if (id) {
+    let eid = routed(id)
+    return eid ? { eid, view: url.searchParams.get('v') ?? undefined } : null
+  }
+  return home && owner.value ? { eid: owner.value, view: home.view } : null
 }
 
 // A route whose id the finder refuses (a handle written with a letter, an
@@ -197,7 +201,7 @@ let routed = (id: string) => {
   }
 }
 
-// Home always opens the inbox. An explicit entity URL stays put; old ?task=
+// Home always opens home. An explicit entity URL stays put; old ?task=
 // links still resolve through their original door.
 export let restore = () => {
   let legacy = new URL(route.peek(), 'http://x').searchParams.get('task')

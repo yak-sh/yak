@@ -64,7 +64,6 @@ import { SearchTile } from './views/Search.tsx'
 import { Layout } from './views/Layout.tsx'
 import { Dashboard } from './views/Dashboard.tsx'
 import { Persona } from './views/Persona.tsx'
-import { Inbox } from './views/Inbox.tsx'
 import { MemoryTile } from './views/Memory.tsx'
 import { TaskTile } from './views/TaskTile.tsx'
 import { BoardMeta, BoardTile } from './views/BoardTile.tsx'
@@ -114,7 +113,8 @@ export { applicable, extend, has, type Renderer, resolve } from './registry.ts'
 // must never live here where the whole list would ride along). Adding a
 // view = a file under views/,
 // an entry here, and — if it should appear as a card tab — a name in the
-// tabs list plus an icon in Card.tsx.
+// tabs list plus an icon in Card.tsx. A package's views come from its
+// `./views` facet instead (inspect.tsx `contribute`), its tabs ahead of these.
 define([
   ...inspectViews,
   { view: 'Search.Tile', match: and(), Render: SearchTile },
@@ -171,7 +171,7 @@ define([
   { view: 'Full', match: parse('.doc'), Render: Show },
   { view: 'Card.Full', match: parse('.doc'), Render: CardFull },
   { view: 'Board', match: parse('.doc .board'), Render: Board },
-  // The two-pane inbox: list left, opened entity right. A view of anything
+  // The two-pane view: list left, opened entity right. A view of anything
   // with a list face (a board/project, or a canvas), never a default face —
   // it sits after Board/List in the tabs list so it is a chosen tab.
   {
@@ -198,20 +198,6 @@ define([
     Render: (props) => <Dashboard {...props} />,
   },
   { view: 'Persona', match: parse('.doc .persona'), Render: Persona },
-  // An inbox reads FOR an actor, so it offers itself on the two things
-  // that can be one: a venture and a person.
-  // Inbox delegates its rows back through Entity, so defer the binding as
-  // with every other composite view above.
-  {
-    view: 'Inbox',
-    match: parse('.project'),
-    Render: (props) => <Inbox {...props} />,
-  },
-  {
-    view: 'Inbox',
-    match: parse('.person'),
-    Render: (props) => <Inbox {...props} />,
-  },
   // Role's linked-session sections walk back through Entity, so defer the
   // binding like Canvas's cycle above.
   {
@@ -314,11 +300,9 @@ define([
   'Split',
   'Layout',
   'Persona',
-  // After Inbox on purpose: the fullscreen bar opens a bare URL on
-  // tabs[0] (App.tsx), and a project's first tab was Inbox before the
-  // cockpit existed — the cockpit is a chosen tab, never a changed
-  // default.
-  'Inbox',
+  // After every view a package offers as a tab (./offers.ts), which come
+  // first: the fullscreen bar opens a bare URL on tabs[0] (App.tsx), and the
+  // cockpit is a chosen tab, never a changed default.
   'Dashboard',
   'Role',
   'Session',

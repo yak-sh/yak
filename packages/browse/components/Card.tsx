@@ -19,7 +19,8 @@ import { Icon } from './icons.tsx'
 import { cardMenuAt } from './nav.tsx'
 import { overShelf, shelve } from './shelf.ts'
 import { useEntity } from './subscriptions.ts'
-import { useInboxCount } from './useInbox.ts'
+import { tabOffers } from './offers.ts'
+import { Waiting } from './inspect.tsx'
 
 // Each tab view wears an icon; the name moves into an anchored tooltip.
 // Exported: the fullscreen Screen bar (App.tsx) draws the same tabs.
@@ -33,7 +34,6 @@ export let icons: Record<string, string> = {
   Layout: 'columns-3',
   Persona: 'drama',
   Dashboard: 'layout-dashboard',
-  Inbox: 'inbox',
   Role: 'bot',
   Web: 'globe',
   Media: 'image',
@@ -46,22 +46,22 @@ export let icons: Record<string, string> = {
 
 let { Tab, Badge } = ui.Tabs
 
-// A tab's face: its icon, plus what is waiting behind it. Only the Inbox
-// carries a count today, and it is the difference between a tab you check
+// A tab's face: its icon, plus what is waiting behind it when the package
+// offering the tab says (./offers.ts): the difference between a tab you check
 // and one you remember to check. Shared by the card's tab row and the page's
 // bar, so a badge can never appear on one and not the other.
 export let TabFace = ({ view, eid }: { view: string; eid: string }) => {
+  let offer = tabOffers().find((t) => t.view == view)
   return (
     <>
-      <Icon name={icons[view]} />
-      {view == 'Inbox' && <InboxBadge eid={eid} />}
+      <Icon name={offer?.icon ?? icons[view]} />
+      {offer?.waiting && (
+        <Waiting offer={offer} eid={eid}>
+          {(n) => <Badge>{n > 99 ? '99+' : n}</Badge>}
+        </Waiting>
+      )}
     </>
   )
-}
-
-let InboxBadge = ({ eid }: { eid: string }) => {
-  let n = useInboxCount(eid)
-  return n != null && n > 0 ? <Badge>{n > 99 ? '99+' : n}</Badge> : null
 }
 
 let Pin = ui.el('div', 'Pin')

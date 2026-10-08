@@ -6,9 +6,8 @@ import { render } from 'preact'
 import { agreementProbe, boot, clientId, config } from './live.ts'
 import { restore } from './components/nav.tsx'
 import { App } from './components/App.tsx'
-import { extend, ux } from './components/registry.ts'
-import { contributedViews, type Facet } from './components/inspect.tsx'
-import { offer } from './components/Navigation.tsx'
+import { ux } from './components/registry.ts'
+import { contribute, type Facet } from './components/inspect.tsx'
 import type { Hosting } from './hosting.ts'
 import { lone } from '@yaks/draft/input'
 import { Ux } from '@yaks/ux'
@@ -28,8 +27,7 @@ export let mount = async (
       home,
     }
   }
-  extend(contributedViews(facets))
-  offer(facets.flatMap((f) => f.destinations ?? []))
+  contribute(facets)
 
   // Name this tab to the socket before it opens, so its writes journal a
   // resolved actor (T-6669). Fill the cache, open the socket, render.

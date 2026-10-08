@@ -73,6 +73,106 @@
           "description": "exact ordered policy records with root/latest rows and lazy messages"
         }
       }
+    },
+    "inbox_list": {
+      "tool": true,
+      "noun": "inbox",
+      "verb": "list",
+      "title": "List the inbox",
+      "description": "List one row per inbox thread, classified as Needs you, Replies, Updates or Recent. Archive hides a thread until activity after archived.at. Search words you said or received; all includes archived threads. Defaults to the caller and 50 threads, blocking first then newest activity.",
+      "input": {
+        "who": {
+          "type": "string",
+          "ref": "entity",
+          "description": "whose inbox to read (default: the caller); pass its id or registered name"
+        },
+        "all": {
+          "type": "boolean",
+          "description": "include archived messages, which is how to find anything hidden",
+          "short": "a"
+        },
+        "limit": {
+          "type": "integer",
+          "description": "return at most this many threads (default 50)"
+        },
+        "lane": {
+          "type": "string",
+          "enum": [
+            "Needs you",
+            "Replies",
+            "Updates",
+            "Recent"
+          ],
+          "description": "return only this lane"
+        },
+        "search": {
+          "type": "string",
+          "description": "search thread words"
+        },
+        "direction": {
+          "type": "string",
+          "enum": [
+            "said",
+            "received"
+          ],
+          "description": "search words you said or received"
+        }
+      },
+      "readOnly": true,
+      "positional": [
+        "who"
+      ]
+    },
+    "inbox_archive": {
+      "tool": true,
+      "noun": "inbox",
+      "verb": "archive",
+      "title": "Archive an inbox item",
+      "description": "Hide a thread until activity after its archive timestamp. Repeated archive refreshes that timestamp. No history is deleted; inbox list --all includes hidden threads.",
+      "input": {
+        "item": {
+          "type": "string",
+          "ref": "entity",
+          "description": "the item to archive; any entity an inbox can hold; pass its id or registered name"
+        }
+      },
+      "required": [
+        "item"
+      ],
+      "idempotent": true,
+      "positional": [
+        "item"
+      ]
+    },
+    "mail_notice": {
+      "component": true,
+      "type": "object",
+      "description": "An email rendering of inbox activity, not new conversation; its snapshot prevents re-sending the same activity. A digest has no mail.target.",
+      "properties": {
+        "activity": {
+          "type": "string",
+          "format": "date-time",
+          "description": "the inbox activity cutoff represented by this letter, kept as it was when rendered"
+        },
+        "comment": {
+          "type": "string",
+          "ref": "comment",
+          "death": "keep",
+          "description": "the comment presented in the letter, which an email reply answers"
+        },
+        "thread": {
+          "type": "string",
+          "ref": "entity",
+          "death": "keep",
+          "description": "the thread included in a digest snapshot"
+        },
+        "letter": {
+          "type": "string",
+          "ref": "mail",
+          "death": "keep",
+          "description": "the digest that included this thread activity"
+        }
+      }
     }
   }
 }

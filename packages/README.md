@@ -151,8 +151,10 @@ grouped approximately by function, **not** by dependency order.
   assets that run configured applications through @yaks/api. An application
   contributes source assets through its `./web` facet.
 - **[@yaks/browse](./browse)** — The graph browsing app: domain views, editing
-  and navigation painted through @yaks/ui in browsers and terminals. Its browser
-  entry is served by @yaks/web; @yaks/tui paints its terminal.
+  and navigation painted through @yaks/ui in browsers and terminals. Packages
+  offer it their views, sidebar destinations, the owner's home page and entity
+  tabs through their `./views` facets. Its browser entry is served by @yaks/web;
+  @yaks/tui paints its terminal.
 - **[@yaks/markdown](./markdown)** — Parse GitHub Flavored Markdown into
   structural nodes, not an HTML string or terminal control sequence. Its link
   filter permits relative URLs and explicit `http`, `https` and `mailto`
@@ -389,13 +391,15 @@ grouped approximately by function, **not** by dependency order.
 - **[@yaks/mail](./mail)** — Store messages and delivery requests/outcomes. An
   effect on `created(mail)` sends messages that also have `deliver`, through a
   supplied transport. Incoming messages become bundles; subjects and bodies use
-  @yaks/doc. Failed delivery cannot roll back the original graph transaction.
+  @yaks/doc, and a configured package's `./mail` facet says what else one means.
+  Failed delivery cannot roll back the original graph transaction.
 
-- **[@yaks/inbox](./inbox)** — Pure thread and attention policy: group facts
-  into Needs you, Replies, Updates and Recent lanes, with unread state and
-  said/received search. Builds read queries and atomic opened/archive bundles;
-  declares `conversation{}` and `inbox_new` (`yak inbox new <text>`). Performs
-  no I/O and starts no sessions.
+- **[@yaks/inbox](./inbox)** — A person's inbox, as a plugin a config may leave
+  out: the thread and attention policy (Needs you, Replies, Updates and Recent
+  lanes, unread state, said/received search), its `inbox_summary` read, the
+  `inbox new|list|archive` tools, its views, and its email door (blocking
+  decisions and a daily digest by mail, and the replies that answer them).
+  Starts no sessions.
 
 - **[@yaks/memory](./memory)** — what a person said, kept in their own words: a
   `memory` component on a `doc` whose body is what they said plus a few lines of

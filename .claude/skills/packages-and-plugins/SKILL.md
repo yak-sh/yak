@@ -5,7 +5,7 @@ description: >
   and where code belongs. Use it whenever you add a package or plugin, move code
   between packages (or out of workers/yak, packages/web or packages/browse),
   change a subpath export or facet (./vocab, ./graph, ./tools, ./effects,
-  ./routes, ./ui, ./service, ./cli, ./views, ./tui, ./web), add a plugin to
+  ./routes, ./ui, ./service, ./cli, ./views, ./tui, ./web, ./mail), add a plugin to
   ~/.yak/yak.json, hit an import cycle, publish to jsr, or land with `yak land
   --allow-revert`, even if the task says "put this somewhere", "share this
   helper" or "make it reusable". Reading composed anatomy and causal activity
@@ -103,7 +103,9 @@ packages/cli/host.ts):
 Outside `compose`, `./cli` adds `yak` commands, `./views` draws entities in the
 web UI and in `yak`'s answers, `./tui` draws them in the terminal, and `./web`
 is an application's page (entry, mounting module, stylesheet) that @yaks/web,
-the browser door, finds in the config and serves; @yaks/browse has one.
+the browser door, finds in the config and serves; @yaks/browse has one. `./mail`
+is the same move for @yaks/mail: what a package makes of a letter that arrived
+(`reading(options)`), asked at mail's door; @yaks/inbox has one.
 `./graph`'s `plugins(host, options)` returns graph plugins, and
 packages/cli/README.md's table has every facet's other exports.
 

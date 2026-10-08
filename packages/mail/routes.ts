@@ -14,16 +14,19 @@
 // route is as open as the `/apply` beside it, which is right for a server
 // behind a perimeter and wrong for anything else.
 //
-// Nothing here decides what a letter means. It records one, responds with its
-// id, and the effects registered on `mail` do the rest — which is why posting
-// the same letter twice needs no lock: the Message-ID already identifies which
-// letter this is (./arrive.ts).
+// Nothing here decides what a letter means. It records one, as the configured
+// packages read it (./readings.ts), responds with its id, and the effects
+// registered on `mail` do the rest — which is why posting the same letter
+// twice needs no lock: the Message-ID already identifies which letter this is
+// (./arrive.ts).
 
 import { type Graph, Refused } from '@yaks/graph'
+import type { Config } from '@yaks/host'
 import { json, refuse, type Route, Unauthorized } from '@yaks/api'
 import { arrived } from './arrive.ts'
 import type { Head } from './inbound.ts'
 import type { Options } from './options.ts'
+import { readings } from './readings.ts'
 
 /** The path a letter arrives on, unless the config sets another. */
 export let PATH = '/mail/inbound'
@@ -76,10 +79,13 @@ let said = (body: unknown): Posted => {
 
 /** `POST /mail/inbound` — one letter, as it arrived. */
 export let routes = (
-  host: { graph: Graph },
+  host: { graph: Graph; config?: Config },
   options: Options = {},
 ): Route[] => {
   let { path = PATH, secret } = options.door ?? {}
+  // Asked at the first letter, not at start-up: a host serving no letter
+  // imports no other package's reading.
+  let read: ReturnType<typeof readings> | undefined
   return [{
     method: 'POST',
     path,
@@ -93,7 +99,7 @@ export let routes = (
           graph: host.graph,
           domain: options.domain,
           triage: options.triage,
-          inbox: options.inbox,
+          readings: await (read ??= readings(host.config?.plugins)),
         })
         let bundles = await receive({ from, to, headers: head(headers) }, {
           text,

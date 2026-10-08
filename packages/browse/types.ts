@@ -1008,8 +1008,8 @@ export type Commit = {
 
 // A signal: a doc EMITTED about its target, not said (D-13858). Same aim
 // column as comment, and `event` names what happened; the words ride the
-// doc. Delivered by the bus and inbox beside comments, but never a comment
-// — off the mail relay, out of the conversation thread. The word is the
+// doc. Delivered by the bus beside comments, but never a comment — off the
+// mail relay, out of the conversation thread. The word is the
 // fleet's because @yaks/session spells a passive transcript line `notice`.
 export type Signal = {
   eid: string

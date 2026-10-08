@@ -1,17 +1,18 @@
-/** Inbox email policy and rendering. The graph keeps each queued snapshot;
- * transports and clocks are supplied at the boundary. */
+/** The inbox's letters: which threads cross to a mail client, and how each is
+ * rendered. The graph keeps each queued snapshot (`mail_notice`); @yaks/mail
+ * sends the letters, and clocks are supplied at the boundary. */
 import { type Bundle, type Comp, derivedEid, type Graph } from '@yaks/graph'
 import type { Vocab } from '@yaks/vocab'
-import type { Thread } from '@yaks/inbox'
-import { readInbox } from '@yaks/inbox/read'
 import type { Decision } from '@yaks/task'
-import type { Inbox } from './options.ts'
+import type { Door } from './options.ts'
+import { readInbox } from './read.ts'
+import type { Thread } from './threads.ts'
 
 let str = (v: unknown): string => String(v ?? '')
 let comp = (b: Bundle, name: string): Comp => b[name] as Comp ?? {}
-let link = (options: Inbox, eid: string) =>
+let link = (options: Door, eid: string) =>
   `${options.base.replace(/\/$/, '')}/${encodeURIComponent(eid)}`
-let reply = (options: Inbox, eid: string) =>
+let reply = (options: Door, eid: string) =>
   `${eid}@${options.from.split('@')[1]}`
 
 /** Each door reads the same policy, including mute, archive and blockers. */
@@ -48,7 +49,7 @@ export let inboxAt = async (
 }
 
 /** Only outstanding needs and replies cross this door by default. */
-export let eligible = (thread: Thread, options: Inbox): boolean =>
+export let eligible = (thread: Thread, options: Door): boolean =>
   thread.unread &&
   (thread.reason == 'alert'
     ? options.alerts == true
@@ -57,7 +58,7 @@ export let eligible = (thread: Thread, options: Inbox): boolean =>
     : thread.lane == 'Needs you' || thread.lane == 'Replies')
 
 /** A thread's question, numbered choices and latest words, in mail-safe markdown. */
-export let rendered = (thread: Thread, options: Inbox): string => {
+export let rendered = (thread: Thread, options: Door): string => {
   let root = thread.row.comps
   let d = root.decision as Decision | undefined
   let latest = thread.latest.comps
@@ -83,7 +84,7 @@ export let rendered = (thread: Thread, options: Inbox): string => {
 
 let letter = (
   eid: string,
-  options: Inbox,
+  options: Door,
   at: string,
   title: string,
   body: string,
@@ -100,7 +101,7 @@ let letter = (
 export let planned = (
   inbox: Thread[],
   notices: Bundle[],
-  options: Inbox,
+  options: Door,
   now: string,
   daily = false,
 ): Bundle[] => {
@@ -182,7 +183,7 @@ export let planned = (
 export let queue = async (
   tx: Pick<Graph, 'get' | 'read'>,
   vocab: Vocab,
-  options: Inbox,
+  options: Door,
   write: (bundles: Bundle[]) => unknown,
   now: string = new Date().toISOString(),
   daily = false,

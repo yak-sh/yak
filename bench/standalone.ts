@@ -128,9 +128,6 @@ export let standalone: Registration[] = [
   deno('web-client', 'packages/browse/client_bench.ts', [
     'rows: 2k-task snapshot',
     'query: filter 2k rows (a board render)',
-    'contextDigest: 2k-task graph',
-    'contextDigest: 2k graph, actor path',
-    'notices: comms bus over 2k graph',
     'applyLocal: fold a working-set seed into the cache',
     'resetSignals: rebuild every index from the cache',
   ]),

@@ -46,6 +46,7 @@ import { fields, front } from './fields.tsx'
 import { drafts } from '@yaks/draft/input'
 import { rows } from './hits.ts'
 import { wells } from './wells.ts'
+import { type Offer, tabOffers } from './offers.ts'
 
 export type Renderer = ComponentRenderer<Ent> & {
   plugin?: string
@@ -117,8 +118,11 @@ let installed = <T extends { plugin?: string }>(entries: T[]): T[] => {
   return selected
 }
 
+// The tabs: the views packages offer (./offers.ts) ahead of the app's own, so
+// an entity a package's view draws opens on it; each one only where some
+// installed renderer draws it.
 export let define = (rs: Entry[], views: string[]) => {
-  let tabs: string[] = [], selected: Entry[] | undefined
+  let tabs: string[] = [], selected: Entry[] | undefined, ahead: Offer[] = []
   Object.defineProperty(registry, 'renderers', {
     configurable: true,
     set: (entries: Entry[]) => {
@@ -134,9 +138,11 @@ export let define = (rs: Entry[], views: string[]) => {
     },
     get: () => {
       let entries = installed(rs)
-      if (selected != entries) {
+      if (selected != entries || ahead != tabOffers()) {
         selected = entries
-        tabs = views.filter((view) => entries.some((r) => r.view == view))
+        ahead = tabOffers()
+        tabs = [...new Set([...ahead.map((t) => t.view), ...views])]
+          .filter((view) => entries.some((r) => r.view == view))
       }
       return tabs
     },

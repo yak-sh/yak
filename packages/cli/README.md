@@ -225,7 +225,10 @@ The web UI separately imports `./vocab` and `./views`, and `yak` imports
 `./views` to show a tool's answer. Those modules must work in a browser and must
 not import SQL, storage drivers, or server-only APIs. `deno task check:browser`
 verifies this constraint. `compose` does not load `./views`: drawing is the
-rendering role, which needs no graph open.
+rendering role, which needs no graph open. Nor does it load `./web` or `./mail`:
+@yaks/web finds an application's page in its `./web` facet, and @yaks/mail asks
+each configured plugin's `./mail` facet (`reading?: (options) => Reading`) what
+a letter that arrived means.
 
 `@yaks/mail`, as `compose` reads it:
 

@@ -9,7 +9,8 @@ import { config, owner } from '../live.ts'
 import { host } from '../host_testing.ts'
 import { bindHistory, route } from '../history.ts'
 import { fields } from './fields.tsx'
-import { Navigation, offer } from './Navigation.tsx'
+import { Navigation } from './Navigation.tsx'
+import { offerPlaces } from './offers.ts'
 import { mount } from './mount.ts'
 import '../domain-host.tsx'
 
@@ -20,7 +21,9 @@ test('the sidebar lists its places, lights the one you are on, and goes where yo
   config.host = 'browser.test'
   let wire = host(() => ({ bundles: [] }))
   owner.value = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
-  offer([{ key: 'bugs', name: 'Bugs', icon: 'bug', query: '.task' }])
+  offerPlaces({
+    destinations: [{ key: 'bugs', name: 'Bugs', icon: 'bug', query: '.task' }],
+  })
   bindHistory(undefined)
   let { root, free } = mount(<Navigation />)
   let lines = () =>
@@ -44,14 +47,14 @@ test('the sidebar lists its places, lights the one you are on, and goes where yo
     )!
   try {
     assertEquals(lines(), [
-      ['Inbox', '/'],
+      ['Home', '/'],
       ['Favorites', '/?favorites'],
       ['Recent', '/?recent'],
       ['Bugs', '/?bugs'],
       ['Sessions', '/?sessions'],
       ['Schema', '/?map'],
     ])
-    assertEquals(lit(), 'Inbox')
+    assertEquals(lit(), 'Home')
     await send(line('Bugs'), 'click')
     assertEquals([route.value, lit()], ['/?bugs', 'Bugs'])
     await act(() => fields.set('sidebar:query', 'needle'))
@@ -62,7 +65,7 @@ test('the sidebar lists its places, lights the one you are on, and goes where yo
     free()
     wire.free()
     owner.value = undefined
-    offer([])
+    offerPlaces({})
     config.host = prior
     learn(docs)
   }

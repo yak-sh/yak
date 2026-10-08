@@ -1,7 +1,6 @@
 import { test } from '@yaks/testing'
 import { tick, until } from './testing.ts'
 import { assertEquals } from '@std/assert'
-import { h } from 'preact'
 import { learn, vocab } from './types.ts'
 import {
   cache,
@@ -18,8 +17,7 @@ import {
 } from './live.ts'
 import { actionsFor, applicable, resolve } from './components/registry.ts'
 import { screenTarget } from './components/nav.tsx'
-import { Entity } from './components/Entity.tsx'
-import { mount } from './components/mount.ts'
+import { offerPlaces } from './components/offers.ts'
 import { host } from './host_testing.ts'
 
 let docs = vocab.docs
@@ -53,22 +51,17 @@ let fixture = () => {
   owner.value = 'owner'
 }
 
-test('without canvas, home reads the configured owner inbox and entity links still resolve', () => {
+test('without canvas, home reads the owner in the offered home page and entity links still resolve', () => {
   learn(without)
   fixture()
+  offerPlaces({ home: { name: 'Desk', icon: 'lamp', view: 'Desk' } })
   try {
-    assertEquals(screenTarget('/'), { eid: 'owner', view: 'Inbox' })
+    assertEquals(screenTarget('/'), { eid: 'owner', view: 'Desk' })
     assertEquals(myActor(), 'owner')
-    assertEquals(screenTarget('/?v=Canvas'), { eid: 'owner', view: 'Inbox' })
+    assertEquals(screenTarget('/?v=Canvas'), { eid: 'owner', view: 'Desk' })
     assertEquals(screenTarget('/T-123'), { eid: 'task', view: undefined })
-    let mounted = mount(h(Entity, { eid: 'owner', view: 'Inbox' }))
-    try {
-      assertEquals(mounted.root.textContent?.includes('Needs you'), true)
-      assertEquals(mounted.root.textContent?.includes('Loading inbox…'), true)
-    } finally {
-      mounted.free()
-    }
   } finally {
+    offerPlaces({})
     learn(docs)
     owner.value = undefined
     cache.value = {}

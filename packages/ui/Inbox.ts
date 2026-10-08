@@ -14,6 +14,7 @@ export let Inbox:
     | 'Mode'
     | 'Lane'
     | 'Heading'
+    | 'Summary'
     | 'Thread'
     | 'Reason'
     | 'Detail'
@@ -24,6 +25,7 @@ export let Inbox:
       Tools: 'div',
       Lane: 'section',
       Heading: 'h2',
+      Summary: 'p',
       Thread: 'article',
       Reason: 'span',
       Detail: 'div',
@@ -46,12 +48,14 @@ export let description =
 export let sheet = (c: Colors): Sheet => ({
   Inbox_Heading: { fg: c.heading, bold: true, gap: true },
   Inbox_Reason: { fg: c.dim },
+  Inbox_Summary: { fg: c.dim },
   Inbox_Detail: { indent: 2 },
   Inbox_Empty: { fg: c.dim },
   Inbox_Mode: { block: true },
 })
 
-/** Needs, replies, an expanded conversation and an empty lane. */
+/** Needs, replies, an expanded conversation and an empty lane; a flat
+ * list that says what it holds in all. */
 export let specimens = (): Specimen[] => [
   [
     'Inbox, Tools, Mode, Lane, Heading, Thread-unread, Reason, Detail, Empty',
@@ -103,6 +107,25 @@ export let specimens = (): Specimen[] => [
         h(Inbox.Heading, {}, 'Updates · 0'),
         h(Inbox.Empty, {}, 'No threads here.'),
       ),
+    ),
+  ],
+  [
+    'Inbox, Summary, Thread, Reason, Empty',
+    h(
+      Inbox,
+      {},
+      h(Inbox.Summary, {}, '10 items · 2 unread'),
+      h(
+        Inbox.Thread,
+        { mod: 'unread' },
+        h(
+          'div',
+          {},
+          h(Inbox.Reason, {}, 'knock'),
+          ' A shared entity renderer goes here.',
+        ),
+      ),
+      h(Inbox.Empty, {}, '+9 more'),
     ),
   ],
 ]

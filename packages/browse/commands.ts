@@ -635,11 +635,10 @@ export let commands: Record<string, Command> = {
   },
   // :meta leaves a quiet transcript memo — a comment TAGGED `meta`, anchored
   // at the caller session's newest MESSAGE entry, for the dream (T-12800) to
-  // harvest at consolidation. The tag is the whole point: channel.ts excludes
-  // a meta comment from live delivery, so the note never knocks the doer —
-  // read later, never injected live. A fresh session with no message yet anchors
-  // on the session entity, so a memo never fails for want of a transcript
-  // position.
+  // harvest at consolidation. The tag is the whole point: it marks the note
+  // as a memo for the dream, read later, not words to the doer. A fresh
+  // session with no message yet anchors on the session entity, so a memo
+  // never fails for want of a transcript position.
   meta: {
     args: [a('observation', 'the observation to leave for the dream', {
       rest: true,

@@ -161,8 +161,8 @@ let all = () => ({ ...hostCommands(vocab), ...local })
 // `scene` notice on the task (D-13858): the url, the root entity, the camera,
 // and the cards in view — enough for a fix agent to find the pixel the words
 // point at. A capture is machinery, not conversation, so it is a notice, not
-// a comment — it reaches the fix agent's inbox and the bus but stays out of
-// the task's thread and off the mail relay. Each platform attaches its own
+// a comment — it reaches the fix agent and the bus but stays out of the
+// task's thread and off the mail relay. Each platform attaches its own
 // scene (a TUI would say its screen); this is the web's. The instrument is
 // this browser's client entity, whose row carries the full user agent.
 let scene = (task: string): Change[] => {

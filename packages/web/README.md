@@ -65,8 +65,8 @@ to browse.
 
 ## Home query and plugin views
 
-A **home query** is the query the box lists at `/` when it has no inbox root.
-The `@yaks/web` plugin's options name its heading and query:
+A **home query** is the query the box lists at `/` when no configured package
+offers a home page. The `@yaks/web` plugin's options name its heading and query:
 
 ```json
 {
@@ -75,10 +75,11 @@ The `@yaks/web` plugin's options name its heading and query:
 }
 ```
 
-Without `home`, the heading is `Browse` and the query is `.doc`. The browser
+Without `home`, the heading is `Home` and the query is `.doc`. The browser
 bundle imports the configured plugins' `/views` facets; their portable `views`
-and query-backed `inspectViews` enter the browsing app's shared registry, and
-their `destinations` its sidebar. Domain packages own the queries and readings,
+and query-backed `inspectViews` enter the browsing app's shared registry, their
+`destinations` its sidebar, and a `home` page or `tabs` the places
+@yaks/browse's README describes. Domain packages own the queries and readings,
 not the web door.
 
 ## Browser history
