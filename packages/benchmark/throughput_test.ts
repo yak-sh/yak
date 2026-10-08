@@ -30,18 +30,28 @@ test('throughput refuses synthetic 30% timing and statement regressions without 
       baseline: 'bench/throughput.baseline.json',
       host: () => context,
     }
-    let collected = { ...suite, collect: () => values }
-    equal((await run(collected, options)).verdict, 'passed')
-    for (let b of bank.benches) {
-      let original = values[b.name]
-      values[b.name] = original ? original * 1.3 : 1
-      let error = await throws(() => run(collected, options))
+    // A run of the suite whose named benches came in 30% worse.
+    let check = (slower: string[] = []) =>
+      run({
+        ...suite,
+        collect: () =>
+          Object.fromEntries(
+            Object.entries(values).map((
+              [n, v],
+            ) => [n, slower.includes(n) ? v ? v * 1.3 : 1 : v]),
+          ),
+      }, options)
+    let regressed = async (slower: string[]) => {
+      let error = await throws(() => check(slower))
       ok(error instanceof Regressed)
-      equal((error as Regressed).result.regressions.map((r) => r.name), [
-        b.name,
-      ])
-      values[b.name] = original
+      return (error as Regressed).result.regressions.map((r) => r.name).sort()
     }
+    equal((await check()).verdict, 'passed')
+    // Each bench is compared alone: one slower bench is the only one named,
+    // and every bench in the bank, timing or statement count, refuses 30%.
+    let names = Object.keys(values).sort()
+    equal(await regressed([names[0]]), [names[0]])
+    equal(await regressed(names), names)
     equal(bundlesPerOp('apply/file/edit-alone-1000'), 1000)
     equal(bundlesPerOp('relay/store/entities-100'), 1000)
   } finally {
