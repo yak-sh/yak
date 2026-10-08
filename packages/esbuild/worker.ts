@@ -1,8 +1,9 @@
 // The compile itself, over @cloudflare/worker-bundler: npm packages installed
-// at the pinned versions alongside compiler-owned toolkit sources, then esbuild (as WebAssembly) bundling the worker
-// and each page script. It runs only inside workerd, so a host runs it in a
-// Worker of its own and posts it a {@link Ask}; `default` is that Worker's
-// fetch, answering an {@link Answer}.
+// at the pinned versions (./npm.ts) alongside compiler-owned toolkit sources,
+// then esbuild (as WebAssembly) bundling the worker and each page script. It
+// runs only inside workerd, so a host runs it in a Worker of its own and posts
+// it a {@link Ask}; `default` is that Worker's fetch, answering an
+// {@link Answer}.
 //
 // It is handed everything it reads and holds nothing: no binding, no secret,
 // no store. The npm registry is the one thing it reaches.
@@ -11,15 +12,12 @@
 // because @cloudflare/worker-bundler leaves any import it cannot resolve as
 // an import rather than failing: in a worker that is a module the upload
 // refuses, and in a page it is a request the browser makes for nothing.
-import {
-  createWorker,
-  InMemoryFileSystem,
-  installDependencies,
-} from '@cloudflare/worker-bundler'
+import { createWorker } from '@cloudflare/worker-bundler'
 import { parse } from 'es-module-lexer/js'
 import { isBuiltin } from 'node:module'
 import { packageOf, relative, resolved, twins } from './graph.ts'
 import { lockfile, type Pins, pins, reached, split, wanted } from './lock.ts'
+import * as npm from './npm.ts'
 import { type Answer, type Ask, dependencies } from './plan.ts'
 import { said } from './said.ts'
 import { type Catalog, located, type Seed, seed } from './platform.ts'
@@ -42,7 +40,7 @@ let imports = (code: string) =>
   parse(code)[0].map((i) => i.n).filter((n): n is string => !!n)
 
 // A package the lock can be read from: its own package.json's dependencies.
-let needs = (fs: InMemoryFileSystem) => (name: string) => {
+let needs = (fs: npm.Files) => (name: string) => {
   try {
     let pkg = JSON.parse(fs.read(`node_modules/${name}/package.json`) ?? '{}')
     return Object.keys(pkg.dependencies ?? {})
@@ -54,7 +52,7 @@ let needs = (fs: InMemoryFileSystem) => (name: string) => {
 /** Install what package.json asks at what the lock pins, and say the lock
  * that results. Throws what the installer could not do. */
 let install = async (
-  fs: InMemoryFileSystem,
+  fs: npm.Files,
   ask: Ask,
   setup: Seed,
   catalog: Catalog,
@@ -65,29 +63,22 @@ let install = async (
     setup.dependencies,
     pins(ask.files['package-lock.json'] ?? null),
   )
-  fs.write('package.json', JSON.stringify({ dependencies: want }))
-  let { installed, warnings } = Object.keys(want).length
-    ? await installDependencies(fs)
-    : { installed: [], warnings: [] }
+  let { installed, warnings } = await npm.install(fs, want)
   if (warnings.length) {
-    // The installer's hint names an option of its own that an app cannot set.
-    let lines = warnings.map((w) =>
-      `npm: ${w.replace(/ or set the `registry` option[^)]*/, '')}`
-    )
-    throw new Error(lines.join('\n'))
+    throw new Error(warnings.map((w) => `npm: ${w}`).join('\n'))
   }
   let all: Pins = {
     ...Object.fromEntries(installed.map(split)),
     ...setup.platform,
   }
-  let npm = needs(fs)
+  let needed = needs(fs)
   let kept = reached(
     Object.keys(ranges),
     all,
     (name) =>
       name in setup.platform
         ? Object.keys(catalog[name].dependencies)
-        : npm(name),
+        : needed(name),
   )
   let name = pkg == null ? undefined : JSON.parse(pkg).name
   return {
@@ -151,12 +142,12 @@ export let compile = async (
     notes: [],
     errors: [],
   }
-  let fs: InMemoryFileSystem
+  let fs: npm.Files
   let setup: Seed
   try {
     setup = seed(ask.files, catalog)
     answer.assets = setup.assets
-    fs = new InMemoryFileSystem(setup.files)
+    fs = new npm.Files(setup.files)
     Object.assign(answer, await install(fs, ask, setup, catalog))
   } catch (e) {
     return { ...answer, errors: said(e) }

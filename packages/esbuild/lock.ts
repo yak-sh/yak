@@ -1,8 +1,8 @@
 // The lock: which version of each package a build installed, kept so the next
 // build installs the same ones. It is npm's own `package-lock.json` (lockfile
 // version 3), read and written for its top level only: each package at
-// `packages["node_modules/<name>"].version`. @cloudflare/worker-bundler
-// installs one version of each package name, flat, so a nested entry
+// `packages["node_modules/<name>"].version`. A compile installs one version
+// of each package name, flat (./npm.ts), so a nested entry
 // (`node_modules/a/node_modules/b`) that `npm install` wrote is not read.
 //
 // A build installs every locked version exactly, and a declared range only

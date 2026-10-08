@@ -12,9 +12,9 @@ Two halves, because the compiler runs only inside workerd:
 - **`./workerd`** compiles: a Worker's `fetch` that takes an `Ask` and answers
   an `Answer`, over
   [@cloudflare/worker-bundler](https://www.npmjs.com/package/@cloudflare/worker-bundler)
-  (esbuild as WebAssembly, npm installs from the registry). It is handed every
-  file it reads and holds no binding and no secret. A host deploys it as a
-  Worker of its own and posts to it.
+  (esbuild as WebAssembly), installing npm packages from the registry. It is
+  handed every file it reads and holds no binding and no secret. A host deploys
+  it as a Worker of its own and posts to it.
 
 ## The verbs
 
@@ -67,9 +67,9 @@ The pure `seed(files, catalog)` returns
 roots and their package-level dependency closure under `node_modules/`, npm
 roots including every reached toolkit external, and toolkit names mapped to
 exact source digests. Unused catalog entries stay out. External ranges from
-multiple consumers must overlap because this installer is flat. Toolkit
-externals are explicit npm roots because worker-bundler skips preseeded packages
-without installing their dependencies or reporting them as installed.
+multiple consumers must overlap because the installer is flat. Toolkit externals
+are explicit npm roots because the installer keeps a preseeded package as it is,
+without installing its dependencies or reporting it as installed.
 
 `resources` holds runtime text files by package-relative path. The generator
 reads a browser package's `browser.json` resource globs (for example,
@@ -110,6 +110,16 @@ A page script compiles to one minified file with `process.env.NODE_ENV` set to
 esbuild does not load (text, WebAssembly) are named in `carry` for the host to
 upload beside it. An import esbuild could not resolve is an error naming the
 package to add to `package.json`, never a module left missing.
+
+## The installer
+
+The compile installs what `package.json` names and what each package depends on,
+one version of each name, flat under `node_modules/`. A package stays in its
+gzipped tarball, and a file comes out of it the first time a build reads it, so
+a compile holds the files its builds read rather than every file every package
+ships: a page importing `three` reads 2 MB of the 20 MB of sources `three`
+ships. Of a package's files, a build can read its text (scripts, JSON, CSS and
+the like), never an image or a binary.
 
 ## The lock
 
