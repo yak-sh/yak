@@ -149,10 +149,12 @@ let group = () => {
 let KERNEL = ['workers/yak/index.ts', 'workers/yak/wrangler.toml']
 
 // `--bulk [--tag=t]... [--all] path...`: a runtime of the runner for each
-// platform the paths hold, run at once and watched together. A test file runs
-// on its platform; a page's examples run on deno. The workerd platform starts
-// once the run's kernel is up (probe-suite.ts), which this process holds
-// beside the others and stops after its last test.
+// platform the paths hold, watched together. A test file runs on its
+// platform; a page's examples run on deno. The deno, browser and terminal
+// platforms run at once. The workerd platform runs after them, on the run's
+// kernel (probe-suite.ts), which this process starts beside them and stops
+// after its last test: its heaviest tests sit near their time limit, and
+// beside the deno platform they cross it.
 if (import.meta.main && Deno.args[0] === '--bulk') {
   // This coordinator and all its children stay in the outer runner's process
   // group: a signal still settles the complete tree, not just a platform's
@@ -268,22 +270,32 @@ if (import.meta.main && Deno.args[0] === '--bulk') {
       failed.push(`test ${runs[i][0]}: ${status.signal ?? status.code}`)
     }
   }
-  // The workerd platform, once the kernel it shares is up; the kernel stops
-  // after its last test.
-  let kernel = async (i: number, files: readonly string[]) => {
+  // The workerd platform, once the kernel it shares is up and the others have
+  // ended; the kernel stops after its last test. Until it starts, nothing it
+  // has not begun is watched for idling.
+  let kernel = async (
+    i: number,
+    files: readonly string[],
+    others: Promise<unknown>,
+  ) => {
+    progress[i].done = true
+    let started = import('../workers/yak/probe-suite.ts')
+      .then((m) => m.probeSuite())
+    started.catch(() => {})
     let suite
     try {
-      suite = await (await import('../workers/yak/probe-suite.ts'))
-        .probeSuite()
+      await others
+      suite = await started
     } catch (e) {
       console.error(e)
-      progress[i].done = true
       failed.push('test workerd: the kernel did not start')
+      await started.then((s) => s.stop(), () => {})
       return
     }
     try {
       progress[i].name = 'loading tests'
       progress[i].completed = Date.now()
+      progress[i].done = false
       let also = KERNEL.map((k) => `--also=${k}`)
       await run(i, spawn('workerd', files, also, suite.env))
     } finally {
@@ -291,11 +303,13 @@ if (import.meta.main && Deno.args[0] === '--bulk') {
     }
   }
   try {
-    await Promise.all(
+    let others = Promise.all(
       runs.map(([p, files], i) =>
-        p == 'workerd' ? kernel(i, files) : run(i, spawn(p, files))
+        p == 'workerd' ? [] : run(i, spawn(p, files))
       ),
     )
+    let i = runs.findIndex(([p]) => p == 'workerd')
+    await (i < 0 ? others : kernel(i, runs[i][1], others))
   } finally {
     clearInterval(watch)
   }

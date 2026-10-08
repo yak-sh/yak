@@ -109,8 +109,8 @@ stronger.
 ## Platforms
 
 Tests divide by where they run, not by speed, and each platform's environment
-starts once per run (M-39441). The platforms run at once, workerd's as soon as
-its kernel is up:
+starts once per run (M-39441). The deno, browser and terminal platforms run at
+once; workerd's runs after them, on a kernel started beside them:
 
 - **deno**: every `*_test.ts` and every example.
 - **browser**: packages/web and packages/browse; **terminal**:
