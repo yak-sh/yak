@@ -57,6 +57,25 @@ test('a kept statement answers with the columns the schema now has', () => {
   assertEquals(scan(sql, 't'), [{ x: 1, y: 5 }])
 })
 
+test('a kept statement answers with the columns a transaction gave the table', () => {
+  using sql = scratch()
+  let add = (name: string) =>
+    sql.query({ t: 'alter table', table: 't', add: { name, default: lit(5) } })
+  sql.query({ t: 'create table', name: 't', cols: [{ name: 'x' }] })
+  sql.query(insert('t', { x: 1 }))
+  sql.query({ t: 'begin' })
+  assertEquals(scan(sql, 't'), [{ x: 1 }])
+  assertEquals(scan(sql, 't'), [{ x: 1 }])
+  add('y')
+  assertEquals(scan(sql, 't'), [{ x: 1, y: 5 }])
+  sql.query({ t: 'savepoint', name: 'inner' })
+  add('z')
+  assertEquals(scan(sql, 't'), [{ x: 1, y: 5, z: 5 }])
+  sql.query({ t: 'rollback', to: 'inner' })
+  assertEquals(scan(sql, 't'), [{ x: 1, y: 5 }])
+  sql.query({ t: 'commit' })
+})
+
 test('an index cannot name a column the table has not gained', () => {
   using sql = scratch()
   sql.query({ t: 'create table', name: 't', cols: [{ name: 'x' }] })

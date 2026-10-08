@@ -82,6 +82,9 @@ let refs = (e: Expr): string[] => {
  * one statement, so such a string with parameters is refused rather than cut
  * short. A rendered statement is always one.
  */
+// A statement that reads or writes rows, and so moves no schema.
+let ROWS = /^\s*(?:select|insert|update|delete|replace|with)\b/i
+
 export let prepared = (db: Database) => {
   // SQLite integers are 64-bit. The library's default reader truncates them
   // to 32 bits; safe JS integers must round-trip through every driver caller.
@@ -113,15 +116,26 @@ export let prepared = (db: Database) => {
     render({ t: 'pragma', schema: 'main', name: 'schema_version' }).sql,
   )
   let version: unknown
+  // Whether the schema version need not be asked before the next statement:
+  // inside a transaction, after nothing but rows read and written. Another
+  // connection's change is seen only where a snapshot begins, and this one's
+  // own only after a statement of another kind (DDL, a transaction boundary,
+  // a pragma, a script).
+  let settled = false
   let forget = () => {
     for (let statement of cache.values()) statement.finalize()
     cache.clear()
+    settled = false
   }
-  let live = () => {
+  let live = (sql: string) => {
     // @db/sqlite closes and finalizes its native handles without invalidating
     // the JS Statement objects. Calling a cached one after close is a SIGSEGV,
     // not a catchable SQLite error. Refuse at the boundary, before any FFI.
     if (!db.open) throw new Error('the database is closed')
+    let inside = db.inTransaction
+    let asked = !settled || !inside
+    settled = inside && ROWS.test(sql)
+    if (!asked) return
     let now = schema.value()![0]
     if (now === version) return
     forget()
@@ -130,7 +144,7 @@ export let prepared = (db: Database) => {
   // `forget` drops every kept statement, for a database whose whole content
   // was just replaced under them.
   return Object.assign((sql: string, params: Param[] = []): Row[] => {
-    live()
+    live(sql)
     let statement = cache.get(sql)
     if (!statement) {
       statement = prepare(sql)
@@ -139,6 +153,7 @@ export let prepared = (db: Database) => {
         if (params.length) {
           throw new Error(`parameters bind to one statement, not several`)
         }
+        settled = false
         db.exec(sql)
         return []
       }
