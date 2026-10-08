@@ -10,8 +10,8 @@ import {
   type Hook,
   resolve,
 } from '@yaks/graph'
-import { after } from '@yaks/fp'
-import { and, eq, list } from '@yaks/query'
+import { after, each } from '@yaks/fp'
+import { and, eq } from '@yaks/query'
 import type { Vocab } from '@yaks/vocab'
 import { step, steps } from './steps.ts'
 import { reconcile } from './build.ts'
@@ -31,12 +31,20 @@ export let changing = (vocab: Vocab): Hook => (bundles, tx) => {
       ...comps(b).map(([name]) => `component:${name}`),
     ])),
   ]
+  // One question per source: a component's dependents are the same for every
+  // write, so storage answers them from memory, and an entity's are one probe
+  // that finds none for nearly every entity.
   return after(
-    tx.read(and(eq('builder_dep.source', list(...sources)))),
-    (deps) => {
-      if (!deps.length) return bundles
-      return apply(bundles, tx, vocab, deps)
-    },
+    each(
+      sources,
+      [] as Bundle[],
+      (deps, source) =>
+        after(tx.read(and(eq('builder_dep.source', source))), (found) => {
+          deps.push(...found)
+          return deps
+        }),
+    ),
+    (deps) => deps.length ? apply(bundles, tx, vocab, deps) : bundles,
   )
 }
 
