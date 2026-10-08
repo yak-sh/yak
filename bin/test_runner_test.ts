@@ -2,6 +2,7 @@ import { test, until } from '@yaks/testing'
 import { fileURLToPath } from 'node:url'
 import { assert, assertEquals, assertMatch } from '@std/assert'
 import { denoDir, observe, RUN } from './test.ts'
+import { runTestCommands, type TestCommand } from './phases.ts'
 
 // What a test file running under the runner imports, for one written here.
 let TESTING = JSON.stringify(
@@ -476,19 +477,17 @@ for (let phase of ['broad', 'isolated']) {
   }
 }
 
-for (
-  let [phase, code] of [['broad-code', 23], ['isolated-code', 24]] as const
-) {
-  test(`runner runs every phase and preserves ${phase}'s status`, async () => {
+for (let [phase, code] of [['broad', 23], ['isolated', 24]] as const) {
+  test(`runner runs every phase and preserves ${phase}-code's status`, async () => {
     let dir = await Deno.makeTempDir({ prefix: 'test-runner-' })
     try {
-      let status = await new Deno.Command(Deno.execPath(), {
-        args: ['run', '-A', fixture, 'orchestrator', phase, dir, `${code}`],
-        stdout: 'null',
-        stderr: 'inherit',
-      }).output()
-      assertEquals(status.code, code)
-      assertEquals(status.signal, null)
+      let run = (name: string): TestCommand => ({
+        command: 'bash',
+        args: [phaseScript, name, dir, `${name == phase ? code : 0}`],
+      })
+      assertEquals(await runTestCommands([run('broad'), run('isolated')]), {
+        code,
+      })
       // Both phases ran: a failing one is a result to report, never a stop.
       for (let name of ['broad', 'isolated']) {
         await Deno.stat(`${dir}/${name}.ready`)

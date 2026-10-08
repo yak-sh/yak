@@ -4,13 +4,13 @@ import { runTestCommands, type TestCommand } from './phases.ts'
 // A runner for test_runner_test.ts to signal, in a process of its own:
 //
 // - `bulk <dir>` runs bin/test.ts --bulk over the two test files in dir;
-// - `orchestrator [stubborn-]<phase> <dir> [code]` runs two phases
-//   (test_runner_phase.sh), the named one held open with a grandchild, or
-//   ending with the code given, and ends as the runner says. A stubborn run
-//   settles on a clock that holds until the case writes `release`.
+// - `orchestrator [stubborn-]<broad|isolated> <dir>` runs two phases
+//   (test_runner_phase.sh), the named one held open with a grandchild, and
+//   ends with the signal it was sent. A stubborn run settles on a clock that
+//   holds until the case writes `release`.
 
 if (import.meta.main) {
-  let [mode, phase, dir, codeText] = Deno.args
+  let [mode, phase, dir] = Deno.args
   let stubborn = phase.startsWith('stubborn-')
   let phaseName = phase.replace(/^stubborn-/, '')
 
@@ -64,11 +64,7 @@ if (import.meta.main) {
     })
     let commands = phaseName === 'broad'
       ? [child('broad'), child('isolated')]
-      : phaseName === 'isolated'
-      ? [child('broad', 0), child('isolated')]
-      : phaseName === 'broad-code'
-      ? [child('broad', Number(codeText)), child('isolated', 0)]
-      : [child('broad', 0), child('isolated', Number(codeText))]
+      : [child('broad', 0), child('isolated')]
     let result = await runTestCommands(commands, {
       terminateOnSignal: true,
       onSignal: (name) =>
