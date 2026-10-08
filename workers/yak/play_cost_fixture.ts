@@ -237,6 +237,12 @@ export let playMinute = async (
     let level = placeOf(x, z).level
     let givers = GIVERS.filter((g) => g.level == level).map((g) => eidOf(g.id))
       .join(',')
+    // The page opens the world around the middle of the level (net.ts
+    // `world`) before its first frame follows the hero there (play.ts
+    // `net.follow`, net.ts `hold`).
+    let middle = areaOf(SIZE / 2, SIZE / 2, REACH)
+    for (let tile of middle.tiles) await ask(i, tile.query, `tile${tile.key}`)
+    await ask(i, middle.moving, 'middle')
     let queries = [
       `.entity.eid=${q}&?created&*`,
       `.player&.created.by=${person}&?doc&?position`,
@@ -292,7 +298,15 @@ export let playMinute = async (
         j == 15 ? 'moving0' : j == 16 ? 'looks0' : `q${j}`,
       )
     }
-    for (let tile of area.tiles) await ask(i, tile.query, `tile${tile.key}`)
+    let held = new Set(middle.tiles.map((t) => t.key))
+    let reach = new Set(area.tiles.map((t) => t.key))
+    for (let tile of middle.tiles) {
+      if (!reach.has(tile.key)) await drop(i, `tile${tile.key}`)
+    }
+    for (let tile of area.tiles) {
+      if (!held.has(tile.key)) await ask(i, tile.query, `tile${tile.key}`)
+    }
+    await drop(i, 'middle')
   }
   opening = { ...total }
   openingShapes = [...shapes].map(([sql, cost]) => ({ sql, cost })).sort((
