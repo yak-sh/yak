@@ -1,7 +1,7 @@
 // Bubblewrap machines with one aggregate systemd user scope per sandbox.
 // Only workspace is writable and visible to commands; durable control files
 // stay outside that mount. The supervisor outlives the host that requested it.
-import { resolve } from '@std/path'
+import { resolve } from '@std/path/resolve'
 import { decodeBase64, encodeBase64 } from '@std/encoding/base64'
 import { derivedEid } from '@yaks/graph'
 import type {

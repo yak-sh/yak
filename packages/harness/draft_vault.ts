@@ -1,6 +1,7 @@
 /** Host-local client vault. Draft bytes never pass through the backend worker. */
 import type { Saved, Vault } from '@yaks/client'
-import { join, resolve } from '@std/path'
+import { join } from '@std/path/join'
+import { resolve } from '@std/path/resolve'
 import { frontend } from './frontend.ts'
 import { dbOf } from '@yaks/cli/host'
 

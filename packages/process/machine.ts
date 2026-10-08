@@ -3,7 +3,8 @@
 // tracked process entities, and their output stays in the process backend's
 // files so wait and recovery work after the launching host exits.
 
-import { dirname, resolve } from '@std/path'
+import { dirname } from '@std/path/dirname'
+import { resolve } from '@std/path/resolve'
 import { type Bundle, type Comp, derivedEid, type Graph } from '@yaks/graph'
 import {
   EXIT,
