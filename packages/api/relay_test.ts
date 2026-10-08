@@ -457,6 +457,26 @@ test('shared reference watches refresh from one moved peer read', () => {
   }
   assertEquals(reads.filter((r) => r.startsWith('read .book.author=')), [])
 
+  // A commit that writes neither the reference nor a row it reached leaves
+  // the reference's answer standing; one that edits such a row does not.
+  spy.apply([{ entity: { eid: 'p3' }, doc: { title: 'Three' } }])
+  for (let watcher of watchers) watcher.take()
+  reads = []
+  subs.relay(writer.to, [{ entity: { eid: 'p1' }, browsing: { x: 4 } }])
+  assertEquals(reads.filter((r) => r.startsWith('read .book.author=')), [])
+  spy.apply([{ entity: { eid: 'l1' }, doc: { title: 'Edited' } }])
+  for (let watcher of watchers) {
+    assertEquals(watcher.take().at(-1)?.bundles?.[0].doc, { title: 'Edited' })
+  }
+  reads = []
+  subs.relay(writer.to, [{ entity: { eid: 'p1' }, browsing: { x: 3 } }])
+  for (let watcher of watchers) watcher.take()
+  assertEquals(reads.filter((r) => r.startsWith('read .book.author=')), [
+    'read .book.author=p1',
+  ])
+  subs.relay(writer.to, [{ entity: { eid: 'p1' }, browsing: { x: 19 } }])
+  for (let watcher of watchers) watcher.take()
+
   spy.apply([{ entity: { eid: 'l3' }, book: { author: 'p1' } }])
   for (let watcher of watchers) watcher.take()
   reads = []

@@ -434,10 +434,14 @@ export let subscriptions = (graph: Graph, opts: {
   // A missing row is cached too: a peer-only entity must not hit storage on
   // every movement.
   let peerRows = new Map<Eid, Bundle | null>()
-  // A reference's durable answer changes only on a durable commit. Keep its
-  // full rows across peer movements, including empty answers, with a fixed
+  // A reference's durable answer changes only with a commit that writes its
+  // component, or writes an entity among its rows. Keep its full rows across
+  // peer movements and other commits, including empty answers, with a fixed
   // bound for spaces that hold many peer values at once.
-  let backlinks = new Map<string, { peer: Eid; rows: Bundle[] }>()
+  let backlinks = new Map<
+    string,
+    { comp: string; peer: Eid; rows: Bundle[] }
+  >()
   const BACKLINK_LIMIT = 512
   let linkKey = (comp: string, prop: string, peer: Eid) =>
     JSON.stringify([comp, prop, peer])
@@ -473,7 +477,7 @@ export let subscriptions = (graph: Graph, opts: {
             ?.[ref.prop] == peer
         )
         answers.set(peer, matching)
-        backlinks.set(key, { peer, rows: matching })
+        backlinks.set(key, { comp: ref.comp, peer, rows: matching })
       }
       while (backlinks.size > BACKLINK_LIMIT) {
         backlinks.delete(backlinks.keys().next().value!)
@@ -1165,7 +1169,14 @@ export let subscriptions = (graph: Graph, opts: {
 
   let commitNow = (txs: Bundle[][]) => {
     flush()
-    backlinks.clear()
+    let applied = txs.flat()
+    let wrote = new Set(applied.map((b) => b.entity.eid))
+    let named = new Set(applied.flatMap((b) => Object.keys(b)))
+    for (let [key, link] of backlinks) {
+      if (
+        named.has(link.comp) || link.rows.some((b) => wrote.has(b.entity.eid))
+      ) backlinks.delete(key)
+    }
     let subs = all()
     // A raw feed sends each transaction to a client, and this hook is handed
     // what the phases passed to each other — one patch each, with the `$`
@@ -1177,7 +1188,6 @@ export let subscriptions = (graph: Graph, opts: {
       let bundles = composed(tx)
       for (let s of raw) s.send({ id: s.id, bundles })
     }
-    let applied = txs.flat()
     let queries = [...subs.filter((s) => !s.raw), ...kept.values()]
     let invalidated = new Set(
       queries.filter((s) =>
