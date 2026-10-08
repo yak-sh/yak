@@ -984,14 +984,14 @@ export let read = (
   opts: BindOpts = {},
   comps?: string[],
   ask: (query: And) => Row[] = (q) => rows(driver, vocab, q, opts),
+  fetch?: (eids: string[], comps?: string[]) => Bundle[],
 ): Bundle[] => {
   let parsed = ast(query)
-  let selected = ask(parsed)
-  return get(
-    driver,
-    vocab,
-    selected.filter((r) => r.eid != null).map((r) => String(r.eid)),
-    { ...opts, derived: requestedDerived(parsed, opts.derived ?? NONE) },
-    comps,
-  )
+  let eids = ask(parsed).filter((r) => r.eid != null).map((r) => String(r.eid))
+  let derived = opts.derived ?? NONE, asked = requestedDerived(parsed, derived)
+  // A query asking for no derived value a whole read leaves out reads its
+  // entities as the store's own get does, through `fetch` where one is given.
+  return fetch && asked == derived
+    ? fetch(eids, comps)
+    : get(driver, vocab, eids, { ...opts, derived: asked }, comps)
 }

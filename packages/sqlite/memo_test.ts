@@ -424,6 +424,23 @@ test('a query asked again reads nothing until a table it stands on is written', 
   )
 })
 
+test('a read takes its entities from memory', () => {
+  let f = fixture()
+  let read = () => f.s.read('.player.active=true')
+  read()
+  assertEquals(reads(f, read), 0)
+  f.s.tx((tx) => tx.patch([{ entity: { eid: 'hero' }, position: { x: 3 } }]))
+  assertEquals(read()[0].position, { x: 3 })
+  assertEquals(
+    f.s.tx((tx) => tx.read('.player.active=true'))[0].position,
+    { x: 3 },
+  )
+  assertEquals(
+    reads(f, () => f.s.tx((tx) => tx.read('.player.active=true'))),
+    0,
+  )
+})
+
 test('an answer that requires no row takes in every new entity', () => {
   let f = fixture()
   let still = () => f.s.rows('!position').map((r) => r.eid)
@@ -457,4 +474,15 @@ test('what memory cannot follow is read every time', () => {
       '.position.x>today',
     ]
   ) assertEquals(basis(vocab, parse(q)), undefined, q)
+})
+
+test('a scan does not push out what is read again', () => {
+  let f = fixture()
+  f.s.get(['hero'])
+  let many = Array.from({ length: 2100 }, (_, i) => `mob-${i}`)
+  f.s.tx((tx) =>
+    tx.patch(many.map((eid) => ({ entity: { eid }, position: { x: 1 } })))
+  )
+  assertEquals(f.s.get(many).length, 2100)
+  assertEquals(reads(f, () => f.s.get(['hero'])), 0)
 })

@@ -396,6 +396,12 @@ export let storage = (
   // `direct` read takes presence from the component tables, not the archetype
   // pointers a transaction still owes; anywhere else an owed pointer means the
   // catalog can't be trusted yet.
+  // Where a caller's options leave a read's entities as the store's own get
+  // reads them, the get to read them through.
+  let fetched = (o: Opts = {}, get = cached) =>
+    Object.keys(o).every((k) => k != 'now' && UNREAD.has(k)) ? get : undefined
+  let cached = (eids: string[], comps?: string[]) =>
+    memo.get(identity, eids, comps)
   let asked = (query: And, o: Opts = {}, direct = false): Row[] => {
     let catalogued = classified && !direct
     let owing = catalogued &&
@@ -426,6 +432,7 @@ export let storage = (
         { ...opts(), ...o },
         undefined,
         (q) => asked(q, o),
+        fetched(o),
       ),
     get: identity,
     doom: (eids) => doom(driver, vocab, eids),
@@ -464,6 +471,22 @@ export let storage = (
     ledgers.set(driver, open)
     open.push(l)
     let owed = () => [...new Set(open.flatMap((o) => o.owed()))]
+    // An entity whose rows moved in this transaction is read from what it
+    // holds; every other one as its pointer says, or from memory.
+    let getting = (eids: string[], comps?: string[]): Bundle[] => {
+      let pending = owed()
+      let moving = new Set(pending)
+      let moved = eids.filter((eid) => moving.has(eid))
+      if (!moved.length) return cached(eids, comps)
+      let rest = eids.filter((eid) => !moving.has(eid))
+      let at = new Map(
+        [
+          ...get(driver, vocab, moved, opts(), comps, pending),
+          ...rest.length ? cached(rest, comps) : [],
+        ].map((b) => [b.entity.eid, b]),
+      )
+      return eids.flatMap((eid) => at.get(eid) ?? [])
+    }
     let settle = () => {
       let dead = l.buried(), owed = l.owed()
       memo.writes(
@@ -481,22 +504,7 @@ export let storage = (
       close: () => void open.splice(open.lastIndexOf(l), 1),
       tx: {
         ...tx,
-        // An entity whose rows moved in this transaction is read from what
-        // it holds; every other one as its pointer says, or from memory.
-        get: (eids, comps) => {
-          let pending = owed()
-          let moving = new Set(pending)
-          let moved = eids.filter((eid) => moving.has(eid))
-          if (!moved.length) return memo.get(tx.get, eids, comps)
-          let rest = eids.filter((eid) => !moving.has(eid))
-          let at = new Map(
-            [
-              ...get(driver, vocab, moved, opts(), comps, pending),
-              ...rest.length ? memo.get(tx.get, rest, comps) : [],
-            ].map((b) => [b.entity.eid, b]),
-          )
-          return eids.flatMap((eid) => at.get(eid) ?? [])
-        },
+        get: getting,
         // Pending component rows already stand in this transaction. Read them
         // directly rather than persisting an intermediate archetype just to
         // read before the graph's final stamp/tracker flush.
@@ -513,6 +521,7 @@ export let storage = (
             },
             undefined,
             (q) => asked(q, o, direct),
+            fetched(o, getting),
           )
         },
         patch: (bundles) => {
@@ -636,6 +645,7 @@ export let storage = (
             { ...opts(), ...o },
             comps,
             (q) => asked(q, o),
+            fetched(o),
           ),
         'read',
       )

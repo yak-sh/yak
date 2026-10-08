@@ -174,13 +174,15 @@ test('whole reads scale with worn components across one or 100 hits', () => {
   driver.query(insert(last, { entity: 1 }))
 
   queries.length = 0
-  assertEquals(s.read(`.${first}`).length, 100)
-  assertEquals(queries.length, 5) // filter + spine + probe + two facets
-  queries.length = 0
   assertEquals(s.get(['owner-0'])[0][last], {})
   assertEquals(queries.length, 4) // spine + probe + two facets
   queries.length = 0
   assertEquals(s.read(`.${first}`, {}, [first]).length, 100)
-  assertEquals(queries.length, 2) // spine + named facet; the filter's is held
+  assertEquals(queries.length, 3) // filter + spine + named facet
   assert(queries.every((sql) => !sql.includes(last)))
+  queries.length = 0
+  assertEquals(s.read(`.${first}`).length, 100)
+  // spine + probe + the one facet the rest wear: the entity wearing both is
+  // held, and so is the filter's answer
+  assertEquals(queries.length, 3)
 })

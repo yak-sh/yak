@@ -28,7 +28,7 @@
 // A get naming components is cut from a whole entity held. Returned bundles
 // are copies; dynamic components (computed, or derived from anything but this
 // connection's rows) are read again on every hit. Bounded by count and bytes,
-// the longest unread let go first.
+// the longest unread let go first; a scan is read through, not kept.
 import type { Bundle } from '@yaks/graph'
 import type { Vocab } from '@yaks/vocab'
 import { type And, bare, type Clause, drifts, type Pred } from '@yaks/query'
@@ -77,6 +77,9 @@ export type Spines = {
 }
 
 const COUNT = 2048, BYTES = 4 << 20, SPINES = 8192
+// A read of more entities than this is a scan: what it reads is not kept, so
+// it does not push out what is read again and again.
+const SCAN = COUNT / 4
 // Answers are bounded by count, and one too large to keep is read every time.
 const ANSWERS = 256, ANSWER = 16 << 10
 
@@ -432,7 +435,7 @@ export let memoized = (
           b,
         ) => [b.entity.eid, b]),
       )
-      if (!wanted && !c.blind) {
+      if (!wanted && !c.blind && missing.length <= SCAN) {
         for (let eid of missing) {
           if (c.dirty.has(eid)) continue
           let b = fresh.get(eid) ?? null
