@@ -1,6 +1,14 @@
 import { tick, until } from '@yaks/testing'
 import { runTestCommands, type TestCommand } from './phases.ts'
 
+// A runner for test_runner_test.ts to signal, in a process of its own:
+//
+// - `bulk <dir>` runs bin/test.ts --bulk over the two test files in dir;
+// - `orchestrator [stubborn-]<phase> <dir> [code]` runs two phases
+//   (test_runner_phase.sh), the named one held open with a grandchild, or
+//   ending with the code given, and ends as the runner says. A stubborn run
+//   settles on a clock that holds until the case writes `release`.
+
 if (import.meta.main) {
   let [mode, phase, dir, codeText] = Deno.args
   let stubborn = phase.startsWith('stubborn-')
@@ -19,65 +27,6 @@ if (import.meta.main) {
       ],
     }])
     Deno.exit(result.code ?? 1)
-  } else if (mode === 'grandchild') {
-    let signal = ''
-    let exiting = false
-    for (let name of ['SIGINT', 'SIGTERM'] as const) {
-      Deno.addSignalListener(name, () => {
-        signal ||= name
-        Deno.writeTextFileSync(`${dir}/grandchild.signal`, signal)
-        Deno.writeTextFileSync(
-          `${dir}/grandchild.signals`,
-          `${name}\n`,
-          { append: true },
-        )
-        if (stubborn) return
-        if (!exiting) {
-          exiting = true
-          // The parent releases us only after the orchestrator has observed
-          // every signal in this case. No wall-clock padding for overlap.
-          void until(() => {
-            try {
-              Deno.statSync(`${dir}/release`)
-              return true
-            } catch (e) {
-              if (!(e instanceof Deno.errors.NotFound)) throw e
-              return false
-            }
-          }, { timeout: 15_000 }).then(() =>
-            Deno.exit(signal === 'SIGINT' ? 130 : 143)
-          )
-        }
-      })
-    }
-    await Deno.writeTextFile(`${dir}/grandchild.pid`, `${Deno.pid}`)
-    await new Promise(() => {})
-  } else if (mode === 'child') {
-    // The ready marker precedes the exit so a phase that only reports a status
-    // still proves it ran — the runner now runs the phases after a failing one.
-    await Deno.writeTextFile(`${dir}/${phaseName}.ready`, `${Deno.pid}`)
-    if (codeText) Deno.exit(Number(codeText))
-    if (stubborn) {
-      for (let name of ['SIGINT', 'SIGTERM'] as const) {
-        Deno.addSignalListener(name, () => {
-          Deno.writeTextFileSync(
-            `${dir}/${phaseName}.leader.signals`,
-            `${name}\n`,
-            { append: true },
-          )
-        })
-      }
-    }
-    new Deno.Command(Deno.execPath(), {
-      args: ['run', '-A', import.meta.filename!, 'grandchild', phase, dir],
-      stdin: 'null',
-      stdout: 'null',
-      stderr: 'null',
-    }).spawn()
-    // An unresolved promise alone does not keep Deno's event loop alive. Keep
-    // this phase active until the orchestrator forwards its cancellation.
-    setInterval(() => {}, 1_000)
-    await new Promise(() => {})
   } else if (mode === 'orchestrator') {
     let now = 0
     let clock = {
@@ -98,12 +47,9 @@ if (import.meta.main) {
       },
     }
     let child = (name: string, code?: number): TestCommand => ({
-      command: Deno.execPath(),
+      command: 'bash',
       args: [
-        'run',
-        '-A',
-        import.meta.filename!,
-        'child',
+        new URL('./test_runner_phase.sh', import.meta.url).pathname,
         `${stubborn ? 'stubborn-' : ''}${name}`,
         dir,
         ...(code === undefined ? [] : [`${code}`]),

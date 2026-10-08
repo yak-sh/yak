@@ -296,6 +296,10 @@ test('a phase ends with its runner killed outright', async () => {
 let fixture = fileURLToPath(
   new URL('./test_runner_fixture.ts', import.meta.url),
 )
+// What a phase's leader and its grandchild run.
+let phaseScript = fileURLToPath(
+  new URL('./test_runner_phase.sh', import.meta.url),
+)
 
 async function waitFor(path: string): Promise<void> {
   // This module itself runs in the broad parallel pass, where process spawn
@@ -314,7 +318,7 @@ async function waitFor(path: string): Promise<void> {
 async function fixtureExists(pid: number, dir: string): Promise<boolean> {
   try {
     let command = await Deno.readTextFile(`/proc/${pid}/cmdline`)
-    return command.includes(fixture) && command.includes(dir)
+    return command.includes(phaseScript) && command.includes(dir)
   } catch (error) {
     if (error instanceof Deno.errors.NotFound) return false
     // Linux can remove a process after opening cmdline but before reading it.
