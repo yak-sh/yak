@@ -161,6 +161,11 @@ export let time = (
   return op == '!' ? (v) => !hit(v) : hit
 }
 
+// Whether an operand is made of time phrases: what one names moves with the
+// clock, but whether it is one does not.
+let phrased = (op: string, value: string): boolean =>
+  timeEdges(op == '' || op == '!' ? '=' : op, value, 0) != null
+
 /**
  * The whole scalar path in one call: an operator, its operand and the
  * property's type, to a single test. Returns `null` for a question this package
@@ -170,12 +175,13 @@ export let check = (
   op: string,
   value: string,
   tag: Tag,
-  now: number,
+  now: number | (() => number),
 ): Check | null => {
   if (op == EXISTS) return (v) => v != null
-  if ((tag == 'time' || tag == 'number') && op != '~') {
-    let t = time(op, value, now, tag)
-    if (t) return t
+  // Only an operand made of time phrases is resolved against the clock, so a
+  // caller handing the moment lazily learns whether this test depends on it.
+  if ((tag == 'time' || tag == 'number') && op != '~' && phrased(op, value)) {
+    return time(op, value, typeof now == 'function' ? now() : now, tag)
   }
   if (op == '') return eq(value, tag)
   if (op == '!') return ne(value, tag)

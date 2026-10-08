@@ -6,7 +6,7 @@ import { test } from '@yaks/testing'
 import { assert, assertEquals, assertFalse, assertThrows } from '@std/assert'
 import { Unsupported } from '@yaks/sql'
 import { Unknown } from '@yaks/vocab'
-import { absent, and, eq, pred, present } from '@yaks/query'
+import { absent, and, eq, parse, pred, present } from '@yaks/query'
 import { filter, matcher } from './match.ts'
 import { bundles, NOW, shop } from './testing.ts'
 
@@ -181,6 +181,12 @@ test('a time phrase answers for the moment each run is asked at', () => {
   assertEquals(today(NOW), ['b1'])
   assertEquals(today(NOW - 864e5), ['b3'])
   assertEquals(today(NOW), ['b1'])
+})
+
+test('a query compiles once across moments unless a time phrase reads the clock', () => {
+  let price = parse('.book.price>=12'), today = parse('.book.released=today')
+  assert(filter(price, shop, { now: NOW }) === filter(price, shop, { now: 1 }))
+  assert(filter(today, shop, { now: NOW }) !== filter(today, shop, { now: 1 }))
 })
 
 test('a deleted entity is never selected', () => {

@@ -177,7 +177,9 @@ let scalar = (
   }
   let op = opOf(p)
   let value = flat(p.value)
-  let hit = check(op, value, read.tag, ctx.now)
+  // The moment is asked for only by a time phrase: reading it ties the compiled
+  // form to that moment (./match.ts `once`).
+  let hit = check(op, value, read.tag, () => ctx.now)
   if (!hit) {
     throw new Unsupported(
       'this predicate',

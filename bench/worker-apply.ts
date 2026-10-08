@@ -24,6 +24,7 @@
  * pending when the worker starts is drained and reported first.
  *
  * The database the config names is written to; run it on a copy. */
+import process from 'node:process'
 import { compose, facet } from '@yaks/cli/host'
 import { read } from '@yaks/cli'
 import {
@@ -192,9 +193,12 @@ export async function measure(path: string, samples: number, backlog: number) {
       })
       : undefined
     let done = settledAt(owed)
+    let cpu = process.cpuUsage()
     let start = performance.now()
     fx.wake()
     let ms = (await done) - start
+    let used = process.cpuUsage(cpu)
+    let cpuMs = (used.user + used.system) / 1000
     stop?.()
     for (
       let [k, s] of [...sqlTop].sort((a, b) => b[1].ms - a[1].ms).slice(0, 40)
@@ -213,6 +217,8 @@ export async function measure(path: string, samples: number, backlog: number) {
       left: pending(),
       ms: +ms.toFixed(1),
       runs_per_s: +(owed / ms * 1000).toFixed(1),
+      cpu_ms: +cpuMs.toFixed(1),
+      runs_per_cpu_s: +(owed / cpuMs * 1000).toFixed(1),
       claims: writes.filter((w) => w.kind == 'claim').length,
       settles: writes.filter((w) => w.kind == 'settle').length,
     })
