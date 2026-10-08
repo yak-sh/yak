@@ -1,4 +1,4 @@
-import { until } from '@yaks/testing'
+import { until } from '../packages/testing/wait.ts'
 import { runTestCommands, type TestCommand } from './phases.ts'
 
 // A runner for test_runner_test.ts to signal, in a process of its own:
