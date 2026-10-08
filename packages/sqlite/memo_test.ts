@@ -10,7 +10,7 @@ import { Denied, members } from '@yaks/member'
 import { club } from '../member/testing.ts'
 import { grant, ids, setMode } from '../member/testing.ts'
 import { mem } from './testing.ts'
-import { get } from './read.ts'
+import { get, read } from './read.ts'
 import { basis } from './memo.ts'
 import { parse } from '@yaks/query'
 
@@ -589,7 +589,7 @@ let wide = loadVocab([{
   },
 }])
 
-test('what memory says a patched entity holds is what storage reads', () => {
+test('what memory says a patched entity holds, and what it answers, is what storage reads', () => {
   let d = mem(), s = storage(d, wide, { number: true })
   s.install()
   let eids = ['a', 'b', 'c', 'd'], all = eids
@@ -622,10 +622,25 @@ test('what memory says a patched entity holds is what storage reads', () => {
     if (rand(3) == 0) b.tag = rand(2) ? {} : null
     return b
   }
+  // Queries memory keeps answers to across writes that move nothing they
+  // select, and some it keeps only until their tables are written.
+  let queries = [
+    '.kit.name=x',
+    '.kit.n>0',
+    '.kit.on=true|.tag',
+    '!tag',
+    '.kit !kit.tier',
+    '.kit.tier=low .order=-kit.n .limit=2',
+    '.kit.whole=7 .fields=kit.n',
+    '.kit.friend=a',
+    '.kit.friend.kit.on=true',
+  ]
+  let eidsOf = (bs: Bundle[]) => bs.map((b) => b.entity.eid)
   for (let round = 0; round < 120; round++) {
     // Each round may also mint an entity storage has never held.
     all = [...eids, `new${round}`]
     s.get(all)
+    for (let q of queries) s.read(q)
     let batch = Array.from({ length: 1 + rand(3) }, bundle)
     try {
       s.tx((tx) => {
@@ -637,5 +652,32 @@ test('what memory says a patched entity holds is what storage reads', () => {
       if ((e as Error).message != 'rolled back') throw e
     }
     assertEquals(s.get(all), get(d, wide, all), `round ${round}`)
+    for (let q of queries) {
+      assertEquals(
+        eidsOf(s.read(q)),
+        eidsOf(read(d, wide, q)),
+        `round ${round}: ${q}`,
+      )
+    }
   }
+})
+
+test('an answer stands through a write that moves nothing it selects', () => {
+  let f = fixture()
+  let ask = () => f.s.read('.player.active=true').map((b) => b.entity.eid)
+  assertEquals(ask(), ['hero'])
+  let player = (eid: string, active: boolean) =>
+    f.s.tx((tx) => tx.patch([{ entity: { eid }, player: { active } }]))
+  player('mob', false)
+  assertEquals(reads(f, ask), 0)
+  player('mob', true)
+  assertEquals(ask(), ['hero', 'mob'])
+  player('hero', false)
+  assertEquals(ask(), ['mob'])
+  // Another store's writes are its own to account for.
+  let other = storage(f.d, vocab)
+  other.tx((tx) =>
+    tx.patch([{ entity: { eid: 'imp' }, player: { active: true } }])
+  )
+  assertEquals(ask(), ['mob', 'imp'])
 })

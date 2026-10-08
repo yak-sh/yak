@@ -23,7 +23,9 @@
 // asks them again for nothing while nobody has written a place. Every write
 // statement moves its table's count, so nothing a write says has to be
 // trusted; what memory can't follow (text, nearness, edges, computed and
-// derived properties, time phrases) is read every time.
+// derived properties, time phrases) is read every time. An answer about each
+// entity alone stands through a patch whose entities it selects neither before
+// nor after (`local`, `stand`).
 //
 // What a patch leaves an entity holding is worked out from what memory held
 // and what the patch said, the way a read returns it (`patch`), and kept once
@@ -50,6 +52,7 @@ import {
   type Row,
   type Stmt,
 } from '@yaks/sql'
+import { type Filter, filter } from '@yaks/match'
 import { tables } from './ddl.ts'
 import type { Known, Spine } from './write.ts'
 
@@ -74,12 +77,23 @@ export type Memo = {
    * `body` is told what memory says each entity held before it. */
   patch: (bundles: Bundle[], body: (known: Known) => Entity[]) => Entity[]
   /** The rows `run` answers the query `key` names with, from memory while no
-   * table `tables` names has been written since; `tables` left out (a query
-   * memory can't follow, `basis`), from `run` every time. */
-  answer: (key: string, tables: string[] | undefined, run: () => Row[]) => Row[]
+   * table `tables` names has been written since, or while what was written
+   * moved nothing `query` selects; `tables` left out (a query memory can't
+   * follow, `basis`), from `run` every time. */
+  answer: (
+    key: string,
+    tables: string[] | undefined,
+    run: () => Row[],
+    query?: And,
+  ) => Row[]
 }
 
-type Answer = { tables: [string, number][]; rows: Row[] }
+type Answer = {
+  tables: [string, number][]
+  rows: Row[]
+  /** whether an entity is one the query selects, where memory can tell */
+  test?: Filter
+}
 
 /** The spines a connection keeps. */
 export type Spines = {
@@ -178,6 +192,37 @@ export let basis = (
   if (!visit(q) || drifts(q, scalar)) return undefined
   if (!anchored(q)) out.add('entity')
   return [...out]
+}
+
+/**
+ * Whether what a query selects is told by each entity alone: every path ends
+ * on the entity's own components, through no reference, and no `.after`
+ * cursor, whose anchor ranks by values a write may move. A write that leaves
+ * every entity it moved unselected before and after then moves nothing in its
+ * answer. The query is one `basis` follows.
+ */
+export let local = (vocab: Vocab, q: And): boolean => {
+  let own = (segs: string[], facet = false) =>
+    vocab.aim(segs.join('.'), facet).length <= 1
+  let visit = (c: Clause): boolean => {
+    switch (c.kind) {
+      case 'and':
+      case 'or':
+        return c.clauses.every(visit)
+      case 'pred':
+        return own(c.path, bare(c))
+      case 'fields':
+        return c.fields.every((f) => own(f.path))
+      case 'order':
+        return own(c.value.replace(/^-/, '').split('.'))
+      case 'count':
+      case 'limit':
+        return true
+      default:
+        return false
+    }
+  }
+  return visit(q)
 }
 
 // An entity a transaction wrote whose state memory can't work out.
@@ -592,6 +637,33 @@ export let memoized = (
   }
   let seen = -1
   // Another connection's commit, or anything else this one cannot see.
+  // What an answer is kept across writes by, for a query `local` allows.
+  let tested = (q: And): Filter | undefined => {
+    try {
+      return local(vocab, q) ? filter(q, vocab) : undefined
+    } catch {
+      return undefined
+    }
+  }
+  // An answer whose query the entities a patch moved were selected by neither
+  // before nor after it stands where it stood: its tables moved, its rows did
+  // not. `before` is the tables' counts the patch began at.
+  let stand = (
+    was: Map<string, Bundle | null | typeof LOST>,
+    now: Map<string, Bundle | null | typeof LOST>,
+    before: Map<string, number>,
+  ) => {
+    let selects = (test: Filter, b: Bundle | null | typeof LOST | undefined) =>
+      b === LOST || b === undefined || (b != null && test(b))
+    for (let a of k.answers.values()) {
+      if (!a.test) continue
+      if (a.tables.some(([t, n]) => (before.get(t) ?? 0) != n)) continue
+      let moved = [...now.keys()].some((eid) =>
+        selects(a.test!, was.get(eid)) || selects(a.test!, now.get(eid))
+      )
+      if (!moved) a.tables = a.tables.map(([t]) => [t, c.versions.get(t) ?? 0])
+    }
+  }
   let sync = () => {
     let now = revision(driver, 'outside')
     if (now == seen) return
@@ -601,7 +673,7 @@ export let memoized = (
     seen = now
   }
   return {
-    answer: (key, tables, run) => {
+    answer: (key, tables, run, query) => {
       if (!tables) return run()
       sync()
       let current = (table: string) => c.versions.get(table) ?? 0
@@ -620,7 +692,11 @@ export let memoized = (
         (_k, v) => typeof v == 'bigint' ? String(v) : v,
       ).length * 2
       if (size > ANSWER) return rows
-      k.answers.set(key, { tables: at, rows: structuredClone(rows) })
+      k.answers.set(key, {
+        tables: at,
+        rows: structuredClone(rows),
+        test: query && tested(query),
+      })
       if (c.depth) c.answered.push([k.answers, key])
       if (k.answers.size > ANSWERS) {
         k.answers.delete(k.answers.keys().next().value!)
@@ -692,7 +768,7 @@ export let memoized = (
         let b = now.get(eid)
         return b === LOST || c.blind ? undefined : b
       }
-      let shifts = c.shifts
+      let shifts = c.shifts, before = new Map(c.versions)
       let born = writes(
         () => body(known),
         (born) => [...eids, ...born.map((e) => e.eid)],
@@ -704,11 +780,14 @@ export let memoized = (
       let minted = new Map(born.map((e) => [e.eid, e]))
       // An entity the patch minted or first numbered held nothing before it.
       for (let eid of minted.keys()) if (now.has(eid)) now.set(eid, null)
+      let was = new Map(now)
       for (let b of bundles) {
         let eid = b.entity.eid, base = now.get(eid)!
         now.set(eid, base === LOST ? LOST : fold(base, b, minted.get(eid)))
       }
       for (let [eid, b] of now) k.after.set(eid, b)
+      // A spine a reference minted holds what memory can't say.
+      if (born.every((e) => now.has(e.eid))) stand(was, now, before)
       return born
     },
   }

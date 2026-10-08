@@ -417,6 +417,7 @@ export let storage = (
             ...o,
             ...direct ? { archetypes: () => undefined } : {},
           }),
+        query,
       ), 'read')
   }
   let tx: Tx = {
