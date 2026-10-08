@@ -167,6 +167,7 @@ import {
   due as unembedded,
   type Field as Text,
   meaning,
+  queues,
   schema as vectorSchema,
   semantic,
   watch as watchEmbedding,
@@ -1140,12 +1141,16 @@ export class Store {
         },
         // A text the write changed, embedded once it has committed
         // (`#embedding`). Its triggers queued it in the write's own statement,
-        // so finding whether anything is owed is a single-row seek.
+        // so finding whether anything is owed is a single-row seek, asked only
+        // of a write that names what a trigger watches.
         {
           name: 'yak/embed',
           hooks: {
             effect: (bundles) => {
-              if (this.#owes()) this.#embedding()
+              if (
+                this.#texts && queues(this.#texts.fields, bundles) &&
+                this.#owes()
+              ) this.#embedding()
               return bundles
             },
           },

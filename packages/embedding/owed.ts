@@ -41,6 +41,7 @@ import {
   val,
 } from '@yaks/sql'
 import type { Statements } from '@yaks/sql'
+import type { Bundle } from '@yaks/graph'
 import { type Field, wearers } from './fields.ts'
 import { OWED, TABLE } from './ddl.ts'
 
@@ -130,6 +131,34 @@ export let triggers = (fields: Field[]): CreateTrigger[] => {
       ]
       : [],
   ]
+}
+
+let watching = new WeakMap<Field[], Set<string>>()
+
+/**
+ * Whether writing these bundles can have queued an entity: whether one names
+ * a component a trigger watches ({@link triggers}), or deletes or restores
+ * its entity. A host that drains the queue after a write asks the queue only
+ * then.
+ *
+ * ```ts
+ * import { queues } from '@yaks/embedding'
+ *
+ * let fields = [{ comp: 'doc', prop: 'body' }]
+ * queues(fields, [{ entity: { eid: 'a' }, doc: { body: 'hi' } }]) // true
+ * queues(fields, [{ entity: { eid: 'a' }, $delete: true }]) // true
+ * queues(fields, [{ entity: { eid: 'a' }, place: { x: 1 } }]) // false
+ * ```
+ */
+export let queues = (fields: Field[], bundles: Bundle[]): boolean => {
+  let tables = watching.get(fields)
+  if (!tables) {
+    watching.set(fields, tables = new Set(triggers(fields).map((t) => t.on)))
+  }
+  return bundles.some((b) =>
+    (tables.has('tombstone') && b.$delete === true) ||
+    Object.keys(b).some((name) => tables.has(name))
+  )
 }
 
 // A trigger's definition from its name onward. SQLite keeps the statement it
