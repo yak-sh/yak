@@ -38,13 +38,25 @@ let candidates = async (g: Graph): Promise<Eid[]> => {
       )]
       : [],
   ]
+  // A reply is for the session that wrote the letter it answers.
+  let replies = g.vocab.comp('mail')
+    ? await g.read(
+      unsaid(present('mail'), present('mail.reply_to.created.via.session')),
+    )
+    : []
   let items = (await Promise.all(queries.map((q) => g.read(q)))).flat()
+  let answered = await g.get(
+    replies.map((b) => String(comp(b, 'mail').reply_to)),
+  )
   let targets = [
     ...new Set(
-      items.map((b) =>
-        comp(b, 'comment').target ?? comp(b, 'knock').target ??
-          comp(b, 'deliver').to
-      ).filter((id): id is Eid => typeof id == 'string'),
+      [
+        ...items.map((b) =>
+          comp(b, 'comment').target ?? comp(b, 'knock').target ??
+            comp(b, 'deliver').to
+        ),
+        ...answered.map((b) => comp(b, 'created').via),
+      ].filter((id): id is Eid => typeof id == 'string'),
     ),
   ]
   let rows = await g.get(targets)

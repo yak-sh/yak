@@ -467,3 +467,13 @@ A native transcript is recognized by a `using` entry and no `process`. Its
 claimed-work comments stay unmarked by the bus. A listener on an outside
 transcript uses the claimed-work exception; it does not hear comments merely
 addressed to that session.
+
+## Replies to a session's letters
+
+A letter answering one a session wrote (`mail.reply_to` naming a letter whose
+`created.via` is that session) is that session's: a native transcript gets it as
+input, and an outside harness hears it from `yak session listen` or beside its
+next tool reply, once. The reply reaches the session wherever the far side sent
+it, to the session's own address or to its project's. While nobody hears for
+that session (it ended, or nothing listens), the reply waits unmarked; it is
+never dropped, and a session resumed under the same id hears it then.

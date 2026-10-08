@@ -1,8 +1,9 @@
 // What a session hears about its work, one line at a time: a comment on an
 // entity it holds a lock on, a knock at it or at that entity, a letter
-// delivered to it. `yak session listen` is the command a harness runs under a
-// monitor — Claude Code's Monitor tool reads each line a command prints as one
-// event — so a running agent learns about its work while it works.
+// delivered to it, a letter answering one it wrote. `yak session listen` is
+// the command a harness runs under a monitor — Claude Code's Monitor tool reads
+// each line a command prints as one event — so a running agent learns about its
+// work while it works.
 //
 // Each item is marked `notified` as it is said, so it is said once, including
 // one that arrived while nothing was listening: a monitor that expired and was
@@ -65,6 +66,11 @@ export let addressedTo = (vocab: Vocab, session: Eid): And[] => {
       : [],
     ...has('deliver')
       ? [unsaid(present('deliver'), eq('deliver.to', session))]
+      : [],
+    // A letter answering one this session wrote: the reply to its mail comes
+    // back to it, wherever the far side sent it.
+    ...has('mail')
+      ? [unsaid(present('mail'), eq('mail.reply_to.created.via', session))]
       : [],
   ]
 }

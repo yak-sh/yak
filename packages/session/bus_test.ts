@@ -193,3 +193,65 @@ test('a process-backed harness claim still hears comments with a using entry', a
   assertEquals((await g.get(['outside-note']))[0].notified != null, true)
   assertEquals((await g.read('.entry.session=outside')).length, 1)
 })
+
+// A letter a session wrote, and the far side's answer to it: the reply is
+// that session's to hear, once, and waits unsaid while nobody hears it.
+let correspond = async (g: Awaited<ReturnType<typeof fresh>>, by: string) => {
+  await g.apply([{
+    entity: { eid: `sent-${by}` },
+    mail: { from: 'project@example.com', message_id: `sent-${by}@example` },
+    deliver: { to: 'person' },
+    doc: { title: 'A question' },
+    $actor: { by: 'project', via: by },
+  }])
+  await g.apply([{
+    entity: { eid: `answer-${by}` },
+    mail: {
+      from: 'person@example.com',
+      to: 'project@example.com',
+      reply_to: `sent-${by}`,
+    },
+    doc: { title: 'Re: A question', body: 'Yes, go ahead.' },
+    $actor: { by: 'person' },
+  }])
+}
+let said = async (g: Awaited<ReturnType<typeof fresh>>, eid: string) =>
+  (await g.get([eid]))[0].notified != null
+
+for (
+  let [name, store] of [['RAM', () => ram(vocab)], ['SQLite', () => {
+    let s = storage(mem(), vocab)
+    s.install()
+    return s
+  }]] as const
+) {
+  test(`${name}: a reply reaches the session that wrote the letter, once, and waits unheard`, async () => {
+    let g = await fresh(store())
+    await g.apply([
+      { entity: { eid: 'gone' }, session: { id: 'gone' } },
+      { entity: { eid: 'person' }, doc: { title: 'Person' } },
+      { entity: { eid: 'project' }, doc: { title: 'Project' } },
+    ], { trusted: true })
+    for (let by of ['outside', 'native', 'gone']) await correspond(g, by)
+    let call = { entity: { eid: 'call' }, created: { via: 'outside' } }
+    let heard = await reply(g, call)
+    assertEquals(
+      heard.map((b) => (b.content as { body: string }).body)
+        .filter((line) => line.includes('Yes, go ahead.')).length,
+      1,
+    )
+    assertEquals(await said(g, 'answer-outside'), true)
+    assertEquals(await feed(g), 2) // the knock, and the native session's reply
+    let input = await g.read('.entry.session=native&*')
+    assertEquals(
+      input.some((e) =>
+        (e.content as { body: string }).body.includes('Yes, go ahead.')
+      ),
+      true,
+    )
+    assertEquals(await said(g, 'answer-native'), true)
+    // Nobody hears for a session that is not listening: its reply waits.
+    assertEquals(await said(g, 'answer-gone'), false)
+    assertEquals((await reply(g, call)).length, 0)
+  })
+}
