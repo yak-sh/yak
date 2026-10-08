@@ -105,9 +105,11 @@ test('classified gathers select only present tables and only their owners', () =
   ])
   asked = []
   get(driver, vocab, ['a', 'b', 'c'])
-  assertEquals(asked.length, 4) // spine + created + doc + marker; no census
+  // spine + the descriptors this connection has not read yet + created + doc
+  // + marker; no census
+  assertEquals(asked.length, 5)
   assert(!asked.some((s) => /union all|from "product"/.test(s.sql)))
-  for (let q of asked.slice(2)) {
+  for (let q of asked.slice(3)) {
     assertEquals(JSON.parse(String(q.params[0])).length, 2)
   }
   asked = []
@@ -129,4 +131,26 @@ test('classified gathers select only present tables and only their owners', () =
   s.rows('.doc .marker')
   assertEquals(asked.length, 1) // no catalog SQL until the connection mutates
   assert(!asked.some((q) => q.sql.startsWith('select "entity", "tables" from')))
+})
+
+test('a whole read names the archetype of a descriptor minted after a rollback', () => {
+  let driver = mem(), s = storage(driver, vocab)
+  s.install()
+  let g = graph({ storage: s, vocab, plugins: [archetypes()] })
+  g.apply([{ entity: { eid: 'a' }, doc: {} }])
+  assertEquals(get(driver, vocab, ['a']), census(driver, vocab, ['a']))
+  // A descriptor read inside a transaction that rolls back, whose id the next
+  // descriptor minted takes.
+  try {
+    s.tx(() => {
+      g.apply([{ entity: { eid: 'b' }, marker: {} }])
+      assertEquals(get(driver, vocab, ['b']), census(driver, vocab, ['b']))
+      throw new Error('undone')
+    })
+  } catch (e) {
+    if (!(e instanceof Error) || e.message != 'undone') throw e
+  }
+  g.apply([{ entity: { eid: 'c' }, sample: { present: 'later' } }])
+  let ids = ['a', 'b', 'c']
+  assertEquals(get(driver, vocab, ids), census(driver, vocab, ids))
 })

@@ -47,6 +47,7 @@ import {
   type Query as Sub,
   type Raw,
   render,
+  revision,
   type Row,
   screen,
   type Select,
@@ -309,9 +310,11 @@ export let setSql = (
 /**
  * The spine rows of the entities `which` names, as `e`: each one's id, eid,
  * number and grave, and its archetype's eid and table set where the store
- * keeps archetypes. What every whole read starts from.
+ * keeps archetypes. What every whole read starts from. Left `kind`-only, it
+ * carries the archetype as the id the entity points at (`@kind`), for a reader
+ * that knows the descriptors already (`kinded`).
  */
-export let spine = (vocab: Vocab, which: Expr): Select => {
+export let spine = (vocab: Vocab, which: Expr, kind = false): Select => {
   let typed = !!vocab.comp('archetype')
   return select({
     cols: [
@@ -319,16 +322,14 @@ export let spine = (vocab: Vocab, which: Expr): Select => {
       col('eid', 'e'),
       col('num', 'e'),
       as(col('entity', 't'), 'dead'),
-      ...(typed
-        ? [
-          as(col('eid', 'a'), 'archetype'),
-          as(col('tables', 'shape'), '@tables'),
-        ]
-        : []),
+      ...(!typed ? [] : kind ? [as(col('archetype', 'e'), '@kind')] : [
+        as(col('eid', 'a'), 'archetype'),
+        as(col('tables', 'shape'), '@tables'),
+      ]),
     ],
     from: table('entity', 'e'),
     joins: [
-      ...(typed
+      ...(typed && !kind
         ? [
           left(table('entity', 'a'), eq(col('id', 'a'), col('archetype', 'e'))),
           left(
@@ -350,12 +351,52 @@ export let spine = (vocab: Vocab, which: Expr): Select => {
 let ownerSet = (ids: readonly (string | number)[]): Source =>
   call('json_each', [val(JSON.stringify(ids))], '@owners')
 let namedSpine = (vocab: Vocab, eids: string[]): Select => {
-  let base = spine(vocab, eq(col('eid', 'e'), col('value', '@owners')))
+  let base = spine(vocab, eq(col('eid', 'e'), col('value', '@owners')), true)
   return select({
     ...base,
     from: ownerSet(eids),
     joins: [cross(table('entity', 'e')), ...base.joins!],
   })
+}
+
+// An archetype's eid and tables never change once its row stands, and a store
+// holds a few dozen, so a read keeps them per connection rather than joining
+// both into every entity it reads. A new descriptor, a deleted entity or a
+// rollback starts the keeping over (@yaks/sql `revision`).
+let kinds = new WeakMap<Driver, { at: number; held: Map<number, Row> }>()
+let kinded = (driver: Driver, vocab: Vocab, rows: Row[]): Row[] => {
+  if (!vocab.comp('archetype')) return rows
+  let at = revision(driver, 'descriptors')
+  let cache = kinds.get(driver)
+  if (cache?.at != at) kinds.set(driver, cache = { at, held: new Map() })
+  let { held } = cache
+  let missing = [
+    ...new Set(
+      rows.flatMap((r) =>
+        r['@kind'] == null || held.has(Number(r['@kind']))
+          ? []
+          : [Number(r['@kind'])]
+      ),
+    ),
+  ]
+  if (missing.length) {
+    let found = driver.query(select({
+      cols: [col('id', 'e'), col('eid', 'e'), col('tables', 'a')],
+      from: ownerSet(missing),
+      joins: [
+        cross(table('entity', 'e')),
+        left(table('archetype', 'a'), eq(col('entity', 'a'), col('id', 'e'))),
+      ],
+      where: eq(col('id', 'e'), col('value', '@owners')),
+    }))
+    for (let row of found) held.set(Number(row.id), row)
+  }
+  for (let row of rows) {
+    let kind = row['@kind'] == null ? undefined : held.get(Number(row['@kind']))
+    row.archetype = kind?.eid ?? null
+    row['@tables'] = kind?.tables ?? null
+  }
+  return rows
 }
 
 // Which tables hold a row for any owner. VALUES has no compound-SELECT arm
@@ -527,10 +568,14 @@ let joinedGet = (
   // before FROM and the following spine/reference joins bind no parameters.
   let rows: Row[]
   try {
-    rows = driver.query({
-      ...plan.statement,
-      params: [...plan.statement.params.slice(0, -1), JSON.stringify(eids)],
-    })
+    rows = kinded(
+      driver,
+      vocab,
+      driver.query({
+        ...plan.statement,
+        params: [...plan.statement.params.slice(0, -1), JSON.stringify(eids)],
+      }),
+    )
   } catch (err) {
     // A raw schema edit can remove a table from the previous shape. Read the
     // current descriptor before deciding which remaining tables to gather.
@@ -673,7 +718,7 @@ export let get = (
     let groups = new Map<string, number[]>()
     for (
       let row of initial ??
-        driver.query(namedSpine(vocab, ids))
+        kinded(driver, vocab, driver.query(namedSpine(vocab, ids)))
     ) {
       let eid = String(row.eid)
       let entity = {
