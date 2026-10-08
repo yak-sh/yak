@@ -11,7 +11,8 @@
   "description": "SQLite storage for a graph: builds a schema from a vocabulary, reads queries as bundles, and applies transactional patches.",
   "imports": {
     "@std/assert": "jsr:@std/assert@^1.0.0",
-    "@db/sqlite": "jsr:@db/sqlite@0.13.0"
+    "@db/sqlite": "jsr:@db/sqlite@0.13.0",
+    "@std/path": "jsr:@std/path@^1.0.0"
   },
   "publish": {
     "exclude": [

@@ -53,7 +53,6 @@ import {
   type Served,
   words,
 } from './host.ts'
-import { external } from './external.ts'
 import { readThread } from './read_thread.ts'
 import { thread } from '@yaks/threads'
 import { reconcile } from '@yaks/tools'
@@ -135,6 +134,8 @@ let open = async (
   if (roles.includes('web')) {
     let host = await compose(config, roles, facet, { reader })
     try {
+      // Only a web host starts workers for its duties, so only it loads how.
+      let { external } = await import('./external.ts')
       await external(host.graph, path, dutiesOf(host.vocab, config, roles))
     } catch (error) {
       await host.close()

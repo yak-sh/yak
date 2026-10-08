@@ -2396,7 +2396,8 @@
       "packages/sqlite": {
         "dependencies": [
           "jsr:@db/sqlite@0.13.0",
-          "jsr:@std/assert@1"
+          "jsr:@std/assert@1",
+          "jsr:@std/path@1"
         ]
       },
       "packages/sync": {
