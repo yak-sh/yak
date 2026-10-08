@@ -5,7 +5,7 @@
 
 import './sqlitepath.ts'
 import { Database } from '@db/sqlite'
-import { context, during, measure, peek } from '@yaks/trace'
+import { context, leaf, peek } from '@yaks/trace'
 import { excerpt, statement, writing } from '@yaks/sql'
 import {
   call,
@@ -206,54 +206,55 @@ export let driver = (db: Database): Driver => {
     where: eq(col('name'), val('main')),
   }))
   let file = !!run(main.sql, main.params)[0]?.file
-  let execute = (s: Stmt, { sql, params } = render(s)): Row[] => {
-    if (s.t == 'create index') {
-      let cols = new Set(
-        query({ t: 'pragma', name: 'table_info', arg: s.on })
-          .map((r) => String(r.name)),
-      )
-      for (
-        let name of [...s.cols, ...(s.where ? [s.where] : [])].flatMap(refs)
-      ) {
-        if (!cols.has(name)) {
-          throw new Error(
-            `index ${s.name} names missing column ${s.on}.${name}`,
-          )
-        }
+  // An index is checked against its table before it is made: the check is a
+  // statement of its own, run first.
+  let covers = (s: Stmt) => {
+    if (s.t != 'create index') return
+    let cols = new Set(
+      query({ t: 'pragma', name: 'table_info', arg: s.on })
+        .map((r) => String(r.name)),
+    )
+    for (
+      let name of [...s.cols, ...(s.where ? [s.where] : [])].flatMap(refs)
+    ) {
+      if (!cols.has(name)) {
+        throw new Error(`index ${s.name} names missing column ${s.on}.${name}`)
       }
     }
-    return run(sql, params)
   }
   let query = (s: Stmt): Row[] => {
-    let c = peek() ?? peek(d)
-    if (!c) return execute(s)
-    // Rendered once, before the span begins, so the span can say what it ran;
-    // the span times the engine's work on it.
-    let rendered = render(s)
-    return during(
+    covers(s)
+    let rendered = render(s), { sql, params } = rendered
+    let at = context()
+    let c = at?.channel ?? peek(d)
+    if (!c) return run(sql, params)
+    // Rendered before the span begins, so the span can say what it ran; the
+    // span times the engine's work on it. A statement begins nothing of its
+    // own, so it runs as a leaf: no task-local context is made for it.
+    let wrote = writing(s)
+    // Rows come from this execution, never a telemetry query or a stale
+    // changes count on a failed write, and the attempt counts even if SQLite
+    // refuses it.
+    let n = 0
+    return leaf(
       c.begin({
         kind: 'sql',
         name: statement(s),
         package: '@yaks/sqlite',
-        parent: context()?.channel == c ? context()?.parent : undefined,
+        parent: at?.channel == c ? at.parent : undefined,
         sql: excerpt(rendered),
       }),
       () => {
-        // Count the attempted statement even if SQLite refuses it. Rows come
-        // from this execution, never a telemetry query or a stale changes
-        // count on a failed write. measure charges this span and its open
-        // ancestors once, preserving inclusive request/phase totals.
-        measure({ statements: 1, rowsRead: 0, rowsWritten: 0 })
-        let rows = execute(s, rendered)
-        measure(
-          writing(s) ? { rowsWritten: db.changes } : { rowsRead: rows.length },
-        )
+        let rows = run(sql, params)
+        n = wrote ? db.changes : rows.length
         return rows
       },
-      'ok',
-      (rows) => ({
-        rows: writing(s) ? db.changes : rows.length,
+      () => ({
+        statements: 1,
+        rowsRead: wrote ? 0 : n,
+        rowsWritten: wrote ? n : 0,
       }),
+      () => ({ rows: n }),
     )
   }
   let d: Driver = {

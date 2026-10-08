@@ -6,6 +6,7 @@ import {
   during,
   forward,
   installContext,
+  leaf,
   link,
   measure,
   parent,
@@ -307,6 +308,46 @@ test('async carrier keeps interleaved requests and inclusive metrics separate', 
     equal(peek(target), undefined)
   } finally {
     gate.resolve()
+    restore()
+  }
+})
+
+test('a leaf charges itself and its ancestors once, failed or not, outside its scope', async () => {
+  let local = new AsyncLocalStorage<Context | undefined>()
+  let restore = installContext({
+    get: () => local.getStore(),
+    run: (ctx, run) => local.run(ctx, run),
+  })
+  try {
+    let target = {}
+    let captured = await record(target, () => {
+      let c = ok(peek(target))
+      return during(c.begin({ kind: 'request', name: 'request' }), async () => {
+        await Promise.resolve()
+        let outer = context()
+        let statement = (rows: number, fail = false) =>
+          leaf(
+            c.begin({ kind: 'sql', name: 'book select' }),
+            () => {
+              // The work runs in its caller's context, not the leaf's.
+              equal(context(), outer)
+              if (fail) throw new Error('no such table')
+              return rows
+            },
+            (n) => ({ statements: 1, rowsRead: n ?? 0 }),
+            (n) => ({ rows: n }),
+          )
+        equal(statement(4), 4)
+        throws(() => statement(0, true))
+      })
+    })
+    let [request, read, failed] = captured.spans
+    equal(request.counts, { statements: 2, rowsRead: 4 })
+    equal(read.counts, { rows: 4, statements: 1, rowsRead: 4 })
+    equal(read.parent, request.id)
+    equal(failed.outcome, 'error')
+    equal(failed.counts, { statements: 1, rowsRead: 0 })
+  } finally {
     restore()
   }
 })

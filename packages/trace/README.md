@@ -212,6 +212,12 @@ that SQL span and its enclosing request the statement's row counts. Siblings and
 interleaved requests do not charge each other. An accumulated measurement
 replaces a same-named count supplied to `end`; other end counts are preserved.
 
+`leaf(span, run, did, own)` is `during` for work that begins no span of its own,
+such as one statement: it runs outside the span's scope, so no task-local
+context is made for it, and `did` is charged once to the span and its open
+ancestors, as `measure` would charge it from inside, whether the work finished
+or failed.
+
 `shareChannel(target, source)` makes two objects use the same channel. A host
 whose graph is replaced can retain its own channel and give each graph that
 channel; sharing creates no subscriber.

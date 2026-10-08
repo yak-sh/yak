@@ -548,6 +548,38 @@ export function during<T>(
   }
 }
 
+/** A span over work that begins no span of its own, such as one statement.
+ * `run` goes outside the span's scope, so no task-local context is made for
+ * it; `did` says what the work did, charged once to the span and its open
+ * ancestors as {@link measure} would charge it from inside, and charged too
+ * when the work fails; `own` adds counts for the span alone. It ends as
+ * {@link during} ends a span. Called only inside a producer's active branch,
+ * with synchronous work. */
+export let leaf = <T>(
+  span: Span | undefined,
+  run: () => T,
+  did: (value?: T) => Counts,
+  own?: (value: T) => Counts,
+): T => {
+  let charge = (value?: T) => {
+    let at = span && scopes.get(span)
+    if (at && live(at)) meters.get(at.channel)?.(span!.id, did(value))
+  }
+  let value: T
+  try {
+    value = run()
+  } catch (error) {
+    charge()
+    if (span && span.active !== false) span.end({ outcome: outcome(error) })
+    throw error
+  }
+  charge(value)
+  if (span && span.active !== false) {
+    span.end({ outcome: 'ok', counts: own?.(value) })
+  }
+  return value
+}
+
 /** Import a recorded child tree from a worker into its waiting caller. IDs are
  * reminted on the caller's channel, clocks are translated from the worker's
  * performance.timeOrigin, and inclusive root counts charge the caller once.
