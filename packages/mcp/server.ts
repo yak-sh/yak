@@ -394,6 +394,19 @@ export let annotated = (
 let ajv: DefaultJsonSchemaValidator | undefined
 let validator = () => ajv ??= new DefaultJsonSchemaValidator()
 
+// A schema as the SDK takes it, made once per process for each schema said.
+// A server is built per request, over tools whose schemas are fresh objects
+// each time: made per request, every one was compiled again, a quarter of a
+// connector test's time, and kept again by the compiler's own cache, which
+// holds a compiled schema for each object it was ever handed.
+let made = new Map<string, ReturnType<typeof fromJsonSchema>>()
+let standard = (schema: Parameters<typeof fromJsonSchema>[0]) => {
+  let key = JSON.stringify(schema)
+  let held = made.get(key)
+  if (!held) made.set(key, held = fromJsonSchema(schema, validator()))
+  return held
+}
+
 /**
  * Build the MCP server for a graph: the generic tier (`graph_apply`,
  * `graph_query`, `graph_show`, `graph_schema`, and `search` when a
@@ -453,8 +466,8 @@ export let server = (opts: Options): McpServer => {
     let config = {
       ...(t.title ? { title: t.title } : {}),
       description: t.description,
-      inputSchema: fromJsonSchema(inputSchemaOf(t), validator()),
-      outputSchema: fromJsonSchema(t.outputSchema ?? answerSchema, validator()),
+      inputSchema: standard(inputSchemaOf(t)),
+      outputSchema: standard(t.outputSchema ?? answerSchema),
       annotations: annotated(t),
       ...(meta ? { _meta: meta } : {}),
     }
