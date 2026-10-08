@@ -278,44 +278,59 @@ let HINTS = [
  * read once for its components and once for its tools, and neither reading has
  * to know about the other.
  */
-export let toolsSaid = (input: VocabDoc | VocabDoc[]): ToolDefinition[] => {
+export let toolsSaid = (input: VocabDoc | VocabDoc[]): ToolDefinition[] =>
+  entries(input).map(([name, entry]) => said(name, entry))
+
+// Every `$defs` entry marked `tool: true`, by name; a name declared twice is
+// refused.
+let entries = (input: VocabDoc | VocabDoc[]): [string, Entry][] => {
   let docs = Array.isArray(input) ? input : [input]
-  let out: ToolDefinition[] = []
+  let out: [string, Entry][] = []
   let seen = new Set<string>()
   for (let doc of docs) {
     for (let [name, entry] of Object.entries(doc.$defs ?? {})) {
       if (entry?.tool !== true) continue
       if (seen.has(name)) throw new Error(`tool '${name}' is declared twice`)
       seen.add(name)
-      let said: Record<string, unknown> = {
-        name,
-        noun: entry.noun,
-        verb: entry.verb,
-        description: entry.description,
-        inputSchema: inputOf(entry),
-      }
-      for (let k of HINTS) if (entry[k] !== undefined) said[k] = entry[k]
-      out.push(said as unknown as ToolDefinition)
+      out.push([name, entry])
     }
   }
   return out
 }
 
-// A document is checked once however many graphs load it, and its argument
-// schemas stay the same objects, so each one's check compiles once.
-let checked = new WeakMap<object, ToolDefinition[]>()
+type Entry = NonNullable<VocabDoc['$defs']>[string]
+
+let said = (name: string, entry: Entry): ToolDefinition => {
+  let said: Record<string, unknown> = {
+    name,
+    noun: entry.noun,
+    verb: entry.verb,
+    description: entry.description,
+    inputSchema: inputOf(entry),
+  }
+  for (let k of HINTS) if (entry[k] !== undefined) said[k] = entry[k]
+  return said as unknown as ToolDefinition
+}
+
+// A declaration is checked once however many documents and graphs carry it:
+// a host stamps each plugin's documents with the package that brought them, a
+// copy sharing the original's `$defs`, so the copy's tools are the original's.
+// Its argument schemas stay the same objects, so each one's check compiles
+// once.
+let checked = new WeakMap<Entry, { name: string; definition: ToolDefinition }>()
 
 /** The tool declarations one or more vocab documents carry, checked: every
  * entry {@link toolsSaid} read, put through {@link toolDefinition} — the
  * meta-schema, the dialect of each argument schema, and the positional inputs naming
  * properties that exist. The same input answers the same definitions. */
-export let toolsIn = (input: VocabDoc | VocabDoc[]): ToolDefinition[] => {
-  let kept = checked.get(input)
-  if (kept) return kept
-  let defs = toolsSaid(input).map((said) => toolDefinition(said))
-  checked.set(input, defs)
-  return defs
-}
+export let toolsIn = (input: VocabDoc | VocabDoc[]): ToolDefinition[] =>
+  entries(input).map(([name, entry]) => {
+    let kept = checked.get(entry)
+    if (kept?.name == name) return kept.definition
+    let definition = toolDefinition(said(name, entry))
+    checked.set(entry, { name, definition })
+    return definition
+  })
 
 /** The schema a transport publishes, with command-line hints removed. */
 export let publicToolSchema = (
