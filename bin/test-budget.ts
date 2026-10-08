@@ -3,7 +3,7 @@
 // more than 1 ms, but the offenders bench/test-budget.json lists, and that
 // list only ever shrinks.
 //
-//   deno task test:budget [--write] [--from=dir] [path...]
+//   deno task test:budget [--write] [--report] [--from=dir] [path...]
 //
 // It runs `deno task test --all --times=…` (bin/test.ts), streaming the run
 // as usual, reads what every test took, and holds it to the list:
@@ -34,7 +34,8 @@
 // are kept in bench/test-times/, which the gate keeps as an artifact, and
 // `--from=<dir>` judges a kept set instead of running: a gate's, downloaded,
 // shrinks the list by what the gate measured. The exit code is the run's own
-// when it failed, and 1 when anything went over.
+// when it failed, and 1 when anything went over; `--report` says what went
+// over and holds the run to nothing but its own tests.
 
 /** The committed list and its rules. */
 export type Budget = {
@@ -219,6 +220,7 @@ let again = async (runs: Record<string, Times>, slow: Seen[]) => {
 
 if (import.meta.main) {
   let write = Deno.args.includes('--write')
+  let report = Deno.args.includes('--report')
   let from = Deno.args.find((a) => a.startsWith('--from='))?.slice(7)
   let paths = Deno.args.filter((a) => !a.startsWith('--'))
   let b: Budget = JSON.parse(await Deno.readTextFile(LIST))
@@ -292,5 +294,6 @@ if (import.meta.main) {
   }
   console.log(lines.join('\n'))
   if (code) Deno.exit(code)
+  if (report) Deno.exit(0)
   if (j.over.length || j.slower.length || wide.length) Deno.exit(1)
 }
