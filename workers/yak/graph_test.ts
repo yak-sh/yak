@@ -120,7 +120,7 @@ test('each store response reports the SQL it ran for that fetch', async () => {
   let measured = Number(first.headers.get('x-yak-stmts'))
   assert(measured > 0 && measured <= calls)
   let before = calls
-  let second = await get(store, '/vocab')
+  let second = await get(store, '/query?q=.doc%26.count', owner)
   measured = Number(second.headers.get('x-yak-stmts'))
   assert(measured > 0 && measured <= calls - before)
 })
