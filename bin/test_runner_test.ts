@@ -259,23 +259,23 @@ test('a platform run ends when its parent is killed', async () => {
 
 test('a phase ends with its runner killed outright', async () => {
   let dir = await Deno.makeTempDir({ prefix: 'test-phase-orphan-' })
-  let runner: Deno.ChildProcess | undefined
+  let orchestrator: Deno.ChildProcess | undefined
   let leader = 0
   try {
-    runner = new Deno.Command(Deno.execPath(), {
+    orchestrator = new Deno.Command(Deno.execPath(), {
       args: ['run', '-A', fixture, 'broad', dir],
       // The guard's SIGTERM-then-kill grace is seconds in a run; a grandchild
       // that ignores SIGTERM makes the kill the point, so hurry to it.
-      env: { TASKS_PHASE_GUARD_GRACE_MS: '100' },
+      env: { TASKS_PHASE_GUARD_GRACE_MS: '10' },
       stdout: 'null',
       stderr: 'null',
     }).spawn()
     await waitFor(`${dir}/grandchild.pid`)
     let grandchild = Number(await Deno.readTextFile(`${dir}/grandchild.pid`))
     leader = Number(await Deno.readTextFile(`${dir}/broad.ready`))
-    runner.kill('SIGKILL')
-    await runner.status
-    runner = undefined
+    orchestrator.kill('SIGKILL')
+    await orchestrator.status
+    orchestrator = undefined
     await until(async () =>
       !await fixtureExists(leader, dir) &&
       !await fixtureExists(grandchild, dir), {
@@ -283,7 +283,7 @@ test('a phase ends with its runner killed outright', async () => {
       label: 'phase and descendant to exit after runner death',
     })
   } finally {
-    if (runner) killChild(runner)
+    if (orchestrator) killChild(orchestrator)
     if (leader) killGroup(leader)
     await Deno.remove(dir, { recursive: true })
   }
