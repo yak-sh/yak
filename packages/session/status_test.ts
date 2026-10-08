@@ -572,7 +572,9 @@ test("the runner's sweep finds a transcript owed a turn in a Durable Object", ()
 })
 
 // SQLite's statement counters measure engine work, not the number of returned
-// bundles. A transcript lookup returning one row used to visit its history.
+// bundles. A transcript lookup returning one row used to visit its history, so
+// each status is read twice, with more history between, and must cost the same
+// engine steps both times.
 test('session status seeks its own turn without reading unrelated asks', () => {
   let lib = Deno.dlopen(sqlitePath, {
     sqlite3_next_stmt: {
@@ -590,17 +592,10 @@ test('session status seeks its own turn without reading unrelated asks', () => {
     let s = storage(d, vocab, { derived: sessionDerived(vocab) })
     s.install()
     let g = graph({ storage: s, vocab })
-    g.apply([{ entity: { eid: S }, session: { id: 'long' } }])
-    let transcript = Array.from(
-      { length: 3000 },
-      (_, i) =>
-        i % 3 == 0
-          ? input(i + 1)
-          : i % 3 == 1
-          ? entry(i + 1, { ask: { through: `e${i}` }, attempt: {} })
-          : said(i + 1, `e${i}`),
-    )
-    g.apply(transcript, { trusted: true })
+    g.apply([
+      { entity: { eid: S }, session: { id: 'long' } },
+      { entity: { eid: 'legacy' }, session: { id: 'legacy' } },
+    ])
     g.apply([
       { entity: { eid: 'sparse' }, session: { id: 'sparse' } },
       {
@@ -609,22 +604,35 @@ test('session status seeks its own turn without reading unrelated asks', () => {
         content: { body: 'hi' },
       },
     ], { trusted: true })
-    g.apply([{ entity: { eid: 'legacy' }, session: { id: 'legacy' } }])
-    g.apply(
-      Array.from({ length: 3000 }, (_, i) => ({
-        entity: { eid: `legacy-${i}` },
-        entry: { session: 'legacy' },
-        ...i % 2 ? { stop: {} } : { notice: {} },
-      })),
-      { trusted: true },
-    )
-    for (
-      let [eid, expected] of [
-        [S, 'settled'],
-        ['sparse', 'running'],
-        ['legacy', 'stopped'],
-      ]
-    ) {
+    // Whole turns (input, ask, reply) on the long transcript, and stops and
+    // notices on the unsequenced one, which ends stopped.
+    let turns = 0
+    let legacy = 0
+    let grow = (n: number, stops: number) => {
+      g.apply(
+        Array.from({ length: n }, () => {
+          let i = turns++
+          return i % 3 == 0
+            ? input(i + 1)
+            : i % 3 == 1
+            ? entry(i + 1, { ask: { through: `e${i}` }, attempt: {} })
+            : said(i + 1, `e${i}`)
+        }),
+        { trusted: true },
+      )
+      g.apply(
+        Array.from({ length: stops }, () => {
+          let i = legacy++
+          return {
+            entity: { eid: `legacy-${i}` },
+            entry: { session: 'legacy' },
+            ...i % 2 ? { stop: {} } : { notice: {} },
+          }
+        }),
+        { trusted: true },
+      )
+    }
+    let cost = (eid: string, expected: string) => {
       let [owner] = d.query(
         select({
           cols: [col('id')],
@@ -652,10 +660,22 @@ test('session status seeks its own turn without reading unrelated asks', () => {
         let handle = lib.symbols.sqlite3_next_stmt(db.unsafeHandle, null)
         let steps = lib.symbols.sqlite3_stmt_status(handle, 4, 0)
         assert(steps < 2000, `${eid} status executed ${steps} VM steps`)
+        return steps
       } finally {
         statement.finalize()
       }
     }
+    let costs = () => ({
+      [S]: cost(S, 'settled'),
+      sparse: cost('sparse', 'running'),
+      legacy: cost('legacy', 'stopped'),
+    })
+    // Past 64 asks, the status searches a transcript's unsequenced range
+    // rather than every ask, so both reads take the same path.
+    grow(198, 10)
+    let before = costs()
+    grow(30, 10)
+    assertEquals(costs(), before)
   } finally {
     db.close()
     lib.close()
