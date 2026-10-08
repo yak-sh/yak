@@ -157,6 +157,11 @@ let toml = () =>
     Deno.readTextFileSync(new URL('./wrangler.toml', import.meta.url)),
   ) as Toml
 
+// The Worker's generated files and npm tree made current (wrangler.ts
+// `ready`), once a process: every kernel the process boots runs the same
+// checkout, and each readying runs two generators of its own.
+let readied: Promise<unknown> | undefined
+
 /**
  * The kernel in memory, started: kernel.ts's handler over the platform
  * testing.ts stands up, with wrangler.toml's vars and rate limits and the
@@ -170,7 +175,7 @@ let boot = async (
 ) => {
   // Loaded when a test asks: the runner imports this module for its Stripe
   // helpers and has no use for the kernel's whole graph.
-  await (await import('./wrangler.ts')).ready()
+  await (readied ??= import('./wrangler.ts').then((w) => w.ready()))
   let [{ handler }, { emailed, limiter, platform }] = await Promise.all([
     import('./kernel.ts'),
     import('./testing.ts'),
