@@ -69,8 +69,8 @@ test('a command tail keeps a line wider than a read block whole', async () => {
 test('a command that outlives its budget answers with the process, and stop ends it', async () => {
   let g = tracked()
   let { shell, stop } = named(g)
-  let said = await shell.run({ command: 'sleep 30', timeout: 50 })
-  assertMatch(said, /still running \(pid \d+\) after 50ms/)
+  let said = await shell.run({ command: 'sleep 30', timeout: 1 })
+  assertMatch(said, /still running \(pid \d+\) after 1ms/)
   let eid = eidIn(said)
 
   let ended = await stop.run({ process: eid })
@@ -134,8 +134,8 @@ test('wait says still running when its own timeout passes, and names nothing it 
   let { shell, wait, stop } = named(g)
   let eid = eidIn(await shell.run({ command: 'sleep 30', timeout: 1 }))
   assertMatch(
-    await wait.run({ process: eid, timeout: 20 }),
-    /still running \(pid \d+\) after 20ms/,
+    await wait.run({ process: eid, timeout: 1 }),
+    /still running \(pid \d+\) after 1ms/,
   )
   assertEquals(await wait.run({ process: 'nope' }), 'no such process: nope')
   await stop.run({ process: eid })
