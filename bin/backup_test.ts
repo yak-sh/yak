@@ -162,9 +162,11 @@ let seed = async (remote: string, nights: string[], complete = true) => {
 test('a night restores to the data dir it was taken from', async () => {
   let f = await fixture()
   try {
-    let out = await f.backup()
+    // Taken as cron takes it, under the supervisor; a success reports nothing.
+    let out = await f.supervised()
     ok(out.success, decode(out.stderr))
     match(decode(out.stdout), /backup: \S+: 1 entities, done/)
+    equal(await f.spooled(), [])
     let [night] = f.nights()
     equal(ls(`${f.remote}/snapshots/${night}`), [
       'counts',
@@ -316,7 +318,7 @@ test('a failed restore is the reader’s, not a tracker bug', async () => {
   }
 })
 
-test('a failed daily backup becomes a tracker bug; success adds no report', async () => {
+test('a failed daily backup becomes a tracker bug', async () => {
   let f = await fixture()
   let host = await compose(
     { ...read(f.configPath), db: `${f.dir}/tracker.db` },
@@ -329,7 +331,7 @@ test('a failed daily backup becomes a tracker bug; success adds no report', asyn
   try {
     await seed(f.remote, ['2026-01-01T044200Z'])
     // A sparse scratch database forces the capacity gate before any copy.
-    // Restore its size before the later successful backup; never fill a disk.
+    // Its size comes back at once: never fill a disk.
     let size = (await Deno.stat(`${f.data}/yak.db`)).size
     await Deno.truncate(`${f.data}/yak.db`, 2 ** 40)
     let out
@@ -366,12 +368,6 @@ test('a failed daily backup becomes a tracker bug; success adds no report', asyn
     equal(comp(bugs[0], 'bug').hits, 1)
     ok(String(comp(bugs[0], 'doc').title).includes('backup failed'))
     equal(await f.spooled(), [])
-    out = await f.supervised()
-    ok(out.success, decode(out.stderr))
-    equal(await f.spooled(), [])
-    await host.duties(AbortSignal.abort(), ['@yaks/tracker'])
-    equal((await host.graph.read('.error')).length, 1)
-    equal((await host.graph.read('.bug')).length, 1)
   } finally {
     await host.close()
     await f.close()
