@@ -1,5 +1,3 @@
-import { docs as machineDocs } from '@yaks/machine/vocab'
-import { gitDoc } from '@yaks/git/vocab'
 import { resolveSessionHome } from './session_home.ts'
 import { machineCapabilities } from './machines.ts'
 /**
@@ -64,14 +62,12 @@ import {
   type Plugin,
   toolName,
 } from '@yaks/graph'
-import { type Reply, type Runner, runner, toolsDoc } from '@yaks/tools'
-import { description as toolsAbout } from '@yaks/tools/vocab'
+import { type Reply, type Runner, runner } from '@yaks/tools'
 import { loadTools, type Runs, type Search, tier } from '@yaks/graph/tools'
 import { toolsIn } from '@yaks/vocab/tools'
 import {
   effectsIn,
   type Keywords,
-  loadVocab,
   type Vocab,
   type VocabDoc,
 } from '@yaks/vocab'
@@ -103,7 +99,6 @@ import { adopt, fields as searched, find, type Hit, search } from '@yaks/fts'
 import { type Effects, effects, type Handlers, released } from '@yaks/effects'
 import { type Local, peek, warm } from '@yaks/secrets'
 import { reporter, revision } from './report.ts'
-import { derived as callsDerived } from '@yaks/tools/vocab'
 import {
   artifactsAt,
   type Backend,
@@ -112,16 +107,9 @@ import {
   blobSchema,
   sqliteBlobs,
 } from '@yaks/blob'
-import {
-  type Config,
-  given,
-  type Options,
-  subpath,
-  subpaths,
-  used,
-} from './config.ts'
+import { type Config, given, type Options, used } from './config.ts'
+import { facet, type Taken, taking, wordsOf } from './words.ts'
 import { drain } from './drain.ts'
-import { understood } from './keywords.ts'
 import { vaultOf } from './vault.ts'
 import type { Command, Ctx } from './run.ts'
 import { roles as serveRoles, type Thread } from '@yaks/threads'
@@ -143,11 +131,14 @@ installContext({
   run: (ctx, work) => traceLocal.run(ctx, work),
 })
 
+export { type Declared, facet, type Words, words } from './words.ts'
+
 export {
   type Config,
   configPath,
   given,
   type Options,
+  person,
   type Plug,
   read,
   used,
@@ -400,13 +391,6 @@ export type Load = {
   ) => Promise<unknown>
 }
 
-/** The default {@link Load}: {@link subpath}. */
-export let facet: Load = Object.assign(
-  <F extends FacetName>(plugin: string, name: F) =>
-    subpath<Facets[F]>(plugin, name),
-  { together: subpaths },
-)
-
 /** An assembled host: everything a plugin factory was given, plus what only
  * the caller of {@link compose} needs. */
 export type Served = Host & {
@@ -456,36 +440,6 @@ export let dbOf = (
     )
   }
   return db
-}
-
-// The plugins' declarations, plus the components a tool call is recorded in
-// where no plugin declared them. Declaring one component twice is an error
-// (@yaks/vocab), and rightly — two definitions of one component is not
-// something to guess about — so what is added here is only the difference,
-// never a second copy.
-let said = (docs: VocabDoc[]): VocabDoc[] => {
-  let supplied = new Set(docs.flatMap((d) => Object.keys(d.$defs ?? {})))
-  // Hosts lend machines; their durable records and commit references are host words,
-  // even when no plugin separately contributes these vocabulary facets.
-  let intrinsic = [...machineDocs, gitDoc].map((doc) => ({
-    ...doc,
-    $defs: Object.fromEntries(
-      Object.entries(doc.$defs ?? {}).filter(([name]) => !supplied.has(name)),
-    ),
-  }))
-  docs = [...intrinsic.filter((doc) => Object.keys(doc.$defs).length), ...docs]
-  let taken = new Set(docs.flatMap((d) => Object.keys(d.$defs ?? {})))
-  let $defs = Object.fromEntries(
-    Object.entries(toolsDoc.$defs ?? {}).filter(([name]) => !taken.has(name)),
-  )
-  return Object.keys($defs).length
-    ? [{
-      title: 'invocation',
-      package: '@yaks/tools',
-      description: toolsAbout,
-      $defs,
-    }, ...docs]
-    : docs
 }
 
 // The name in `{"secret": "NAME"}`, when the object holds nothing else.
@@ -552,16 +506,6 @@ let revealing = (value: unknown, vault: Local): unknown => {
 export let writer = (vocab: Vocab): Actor | null =>
   vocab.comp(PROCESS) ? { by: selfEid(), via: selfEid() } : null
 
-/** The person who works at this machine, as the entity the config's `person`
- * names (./config.ts), or nobody where it names none: a machine never guesses
- * who is at its keyboard. What they type at it is written by them. */
-export let person = async (
-  host: Pick<Host, 'config' | 'graph'>,
-): Promise<Eid | undefined> => {
-  let said = host.config.person
-  return said ? (await host.graph.address([said])).get(said) ?? said : undefined
-}
-
 // At most one plugin may name the caller; two would mean the answer depends on
 // import order, which is not an answer. Whoever it is, this PROCESS is the
 // fallback: a request no plugin claimed is this machine's own writing, not
@@ -580,107 +524,6 @@ let doorman = (
   return ask ? async (request) => (await ask(request)) ?? self : () => self
 }
 
-// One facet of every plugin a config names, each beside the options it was
-// named with and the package it came from: what a process runs is one plugin's
-// module handed one plugin's config. The package comes third, because a duty's
-// lease is named after the package that owns the work — the lease `@yaks/wake`
-// holds is the one every process reaching for that timer reaches for.
-type Taken<F extends FacetName> = [Facets[F], Options, string][]
-
-let taking = async <F extends FacetName>(
-  plugins: [string, Options][],
-  name: F,
-  load: Load,
-): Promise<Taken<F>> =>
-  (await Promise.all(
-    plugins.map(async ([plugin, options]) =>
-      [await load(plugin, name), options, plugin] as const
-    ),
-  )).filter((t): t is [Facets[F], Options, string] => !!t[0])
-
-/** What a config's plugins declare, read without opening anything: their
- * vocabulary documents (each written with the package that brought it), the
- * vocabulary they load into, and the tools they declare. What a command line
- * lists, and what a graph is then built over. */
-export type Words = {
-  docs: VocabDoc[]
-  vocab: Vocab
-  /** the properties the store computes rather than stores */
-  derived: Derived
-  /** the rows the computed components are read from */
-  backed: Backings
-  /** the tools the graph these words describe offers, declared and not
-   * implemented: the generic tier where the vocabulary gives it one, then every
-   * plugin's */
-  tools: () => Declared[]
-}
-
-/** A tool as declared, without the code behind it. */
-export type Declared = Omit<NamedTool, 'run'>
-
-// The words of these facets, made once while every facet lives. A vocabulary
-// is a value nobody changes once it is loaded, so each graph a process opens
-// over the same plugins shares one, and with it all that is kept per
-// vocabulary: a store's install plan, a read's rendered statements.
-type Worded = { next: WeakMap<VocabFacet, Map<string, Worded>>; words?: Words }
-let worded: Worded = { next: new WeakMap() }
-let wordsOf = (vocabs: Taken<'vocab'>): Words => {
-  let at = vocabs.reduce((node, [v, , plugin]) => {
-    let named = node.next.get(v)
-    if (!named) node.next.set(v, named = new Map())
-    let next = named.get(plugin)
-    if (!next) named.set(plugin, next = { next: new WeakMap() })
-    return next
-  }, worded)
-  return at.words ??= spoken(vocabs)
-}
-
-// The words, from the `./vocab` facets already imported.
-let spoken = (vocabs: Taken<'vocab'>): Words => {
-  // The components a tool call is recorded in belong to the host, not to
-  // whichever plugin happened to declare them: what was asked of this host is
-  // its own record. A plugin that already declares them — a harness, whose
-  // transcripts are calls — keeps its own definitions, so only the components
-  // nobody supplied are added.
-  let docs = said(
-    vocabs.flatMap(([v, , plugin]) =>
-      (v.docs ?? []).map((d) => ({
-        ...d,
-        package: plugin,
-        description: v.description,
-      }))
-    ),
-  )
-  let vocab = loadVocab(
-    docs,
-    understood(vocabs.flatMap(([v]) => v.keywords ?? [])),
-  )
-  return {
-    docs,
-    vocab,
-    derived: Object.assign(
-      {},
-      callsDerived(vocab),
-      ...vocabs.map(([v]) => v.derived?.(vocab)),
-    ),
-    backed: Object.assign({}, ...vocabs.map(([v]) => v.backed?.(vocab))),
-    // The generic tier lists `search` only where a property is indexed, so its
-    // declarations are read off the tier the graph would build. Read on asking,
-    // since checking every declaration costs what a graph opened to answer one
-    // query should not pay twice.
-    tools: () => [
-      ...tier({
-        keywords: vocab.keywords,
-        ...(searched(vocab).length ? { search: () => [] } : {}),
-      }).map(({ run: _, ...decl }) => decl),
-      ...toolsIn(docs).map((decl) => ({
-        ...decl,
-        name: decl.name ?? toolName(decl),
-      })),
-    ],
-  }
-}
-
 // Each plugin a config names, with its options, a secret among them read when
 // accessed.
 let named = (config: Config, vault?: Local): [string, Options][] =>
@@ -688,17 +531,6 @@ let named = (config: Config, vault?: Local): [string, Options][] =>
     used(plug),
     (vault ? revealing(given(plug), vault) : given(plug)) as Options,
   ])
-
-/** The words a config's plugins declare: each one's `./vocab`, and nothing
- * else — no database opened, no rule or tool imported. */
-export let words = async (
-  config: Config,
-  load: Load = facet,
-): Promise<Words> => {
-  let plugins = named(config)
-  await load.together?.(plugins.map(([p]) => [p, 'vocab'] as const))
-  return wordsOf(await taking(plugins, 'vocab', load))
-}
 
 /**
  * Open the graph a config names, for the roles this process serves: import

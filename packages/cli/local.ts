@@ -9,12 +9,13 @@
 // start. `yak serve` is one more of those commands: a tool that stays up
 // answering HTTP over the same file (@yaks/api).
 //
-// Listing the commands opens nothing: the tools a graph offers are declared in
-// its plugins' `./vocab` (host.ts `words`), so the usage page, a help page and
-// a mistyped word cost no database. Running one opens the graph for the roles
-// that command's process serves (host.ts `compose`): the graph, and whatever
-// else its tool declares it needs — `serve` answers HTTP, so its process
-// serves `web`.
+// Listing the commands opens nothing and loads nothing of this module: the
+// tools a graph offers are declared in its plugins' `./vocab` (./words.ts), so
+// the usage page, a help page and a mistyped word cost no database
+// (./subcommands.ts). Running one opens the graph for the roles that
+// command's process serves (host.ts `compose`): the graph, and whatever else
+// its tool declares it needs — `serve` answers HTTP, so its process serves
+// `web`.
 //
 // A command line runs a tool through the tool runner. A read-only command
 // opens SQLite read-only and records nothing; a writing command records its
@@ -26,20 +27,23 @@
 // that stays up explicitly starts them through `host.duties()` (@yaks/threads),
 // so a command passing through never claims work it cannot finish.
 //
-// This module is imported only by a command that named a config, because
-// importing it pulls in the graph and every plugin's words — a cost `yak login`
-// on a machine with no graph should not pay.
+// This module is imported only by a command that runs against a graph,
+// because importing it pulls in everything that opens one — a cost `yak help`
+// should not pay, nor `yak login` on a machine with no graph.
 
-import { type Actor, mint, offered } from '@yaks/graph'
+import { type Actor, mint } from '@yaks/graph'
 import type { AnatomyObservation } from '@yaks/code/anatomy'
 import type { Vocab } from '@yaks/vocab'
 import { EFFECT } from '@yaks/effects'
 import { answerOf, faulted, structured, toolEid } from '@yaks/tools'
 import { registry, show, terminal } from './answer.ts'
 import { type Config, exported, read, used } from './config.ts'
+import { asides, hosts } from './held.ts'
+import type { Listing } from './subcommands.ts'
 import { VIA } from './rpc.ts'
-import type { Command, Ctx } from './run.ts'
+import type { Ctx } from './run.ts'
 import {
+  type CliCommand,
   compose,
   dbOf,
   type Declared,
@@ -51,18 +55,9 @@ import {
 } from './host.ts'
 import { external } from './external.ts'
 import { readThread } from './read_thread.ts'
-import { type Aside, thread } from '@yaks/threads'
+import { thread } from '@yaks/threads'
 import { reconcile } from '@yaks/tools'
 import { during, peek } from '@yaks/trace'
-import { traceCommand } from './trace_control.ts'
-
-// One graph per config path and set of roles, for the life of the process:
-// every call a command makes goes through the same assembled graph, and
-// opening the file twice for the same roles would mean two writers in one
-// process for no reason.
-let hosts = new Map<string, Promise<Served>>()
-// The duty threads those graphs started, for a close that cannot wait on them.
-let asides = new Set<Aside<string>>()
 
 /**
  * The roles a command's own thread serves: the graph, and whatever its tool
@@ -223,39 +218,7 @@ export let work = async (
   }
 }
 
-/** Ask every graph this process opened to wind down (host.ts `stop`): it
- * takes no new request, effect or step, and the command in flight finishes
- * what it started and returns on its own. False when it opened none, and
- * there is nothing to wait for. */
-export let stop = (): boolean => {
-  for (let host of hosts.values()) host.then((h) => h.stop(), () => {})
-  return hosts.size > 0
-}
-
-/** Stop waiting on what is winding down: every duty thread this process
- * started is ended where it stands (@yaks/threads `end`), so a close waiting on
- * one goes on to its last write. What a second interrupt does before it
- * closes (./yak.ts). */
-export let cut = (): void => asides.forEach((a) => a.end())
-
-/** Close every graph this process opened, stamping how the command ended on
- * the `process` row each of them holds. */
-export let close = (code?: number): Promise<void> =>
-  // One close at a time: an interrupt's (./yak.ts) and the command's own
-  // ending can arrive together, and the second waits on the first.
-  closing ??= (async () => {
-    // Awaited, because the last batch is a write: a command that closed the
-    // file without waiting would leave its own row saying it is still running.
-    // A graph that failed to open has nothing to close, and the command said
-    // why.
-    for (let host of hosts.values()) {
-      await (await host.catch(() => undefined))?.close(code)
-    }
-    hosts.clear()
-    asides.clear()
-  })().finally(() => closing = undefined)
-
-let closing: Promise<void> | undefined
+export { close, cut, stop } from './held.ts'
 
 /** Who a command line writes as: the answer the host's door gives a request
  * naming this line's session in `x-via`, exactly as it answers one arriving
@@ -277,139 +240,132 @@ export let signer = async (
   return actor ? { $actor: { ...actor } } : {}
 }
 
-/** The tools of the graph a config names that are offered on a command line,
- * as subcommands a person types — the list `cli` gathers when the command
- * named a config (run.ts `more`). Read off the plugins' words: nothing is
- * opened until one of them runs. */
-export let commands = async (c: Ctx): Promise<Command[]> => {
-  let config = read(c.config!)
-  let said = await words(config)
-  // The views are imported when an answer is first drawn, never to list.
-  let plugins = () => (config.plugins ?? []).map(used)
-  let views: ReturnType<typeof registry> | undefined
-  let loadedViews: AnatomyObservation[] = []
-  let drawn = async (host: Served) => {
-    views ??= registry(plugins(), undefined, (o) => loadedViews.push(o))
-    let made = await views
-    for (let o of loadedViews) host.observe?.(o)
-    return made
+// The views an answer is drawn with, imported when one is first drawn, never
+// to list; one registry per listing.
+let drawing = new WeakMap<
+  Listing,
+  { views: ReturnType<typeof registry>; seen: AnatomyObservation[] }
+>()
+let drawn = (listing: Listing, host: Served) => {
+  let made = drawing.get(listing)
+  if (!made) {
+    let seen: AnatomyObservation[] = []
+    let views = registry(plugins(listing), undefined, (o) => seen.push(o))
+    drawing.set(listing, made = { views, seen })
   }
-  await facet.together?.(plugins().map((p) => [p, 'cli'] as const))
-  let loaded = await Promise.all(
-    plugins().map(async (plugin) => ({
-      plugin,
-      value: await facet(plugin, 'cli'),
-    })),
+  for (let o of made.seen) host.observe?.(o)
+  return made.views
+}
+
+let plugins = (listing: Listing) => (listing.config.plugins ?? []).map(used)
+
+// The graph a listed command runs against, opened for the roles it declares,
+// with the terminal controls the listing loaded written into its anatomy.
+let opening = async (
+  c: Ctx,
+  declared: Pick<Declared, 'roles' | 'readOnly'>,
+  listing: Listing,
+): Promise<Served> => {
+  let host = await opened(
+    c.config!,
+    rolesOf(declared, !!listing.said.vocab.comp(EFFECT)),
+    c.duties,
+    !!declared.readOnly,
   )
-  let observe = (host: Served) => {
-    if (!host.observe) return
-    for (let { plugin, value } of loaded) {
-      host.observe({
-        package: plugin,
-        facet: 'cli',
-        loaded: value !== null,
-        bound: true,
-        value,
-      })
-    }
+  for (let { plugin, value } of listing.loaded) {
+    host.observe?.({
+      package: plugin,
+      facet: 'cli',
+      loaded: value !== null,
+      bound: true,
+      value,
+    })
   }
-  let direct = loaded.flatMap(({ value }) => value?.commands ?? [])
-  let tools = said.tools().filter(offered('cli')).map((declared) => ({
-    ...declared,
-    // A tool arrives declaring its arguments as JSON Schema — the same
-    // document `tools/list` sends — so a command typed against a local graph
-    // and the same command typed against an MCP server are written
-    // identically. Nothing is converted here: a transport that wants them in
-    // another form restates them on its own side (@yaks/mcp `core`).
-    run: async (args: Record<string, unknown>): Promise<number> => {
-      // A tool that declares terminal behavior receives the global display
-      // choice through the same input it declares for every other argument.
-      let props = declared.inputSchema?.properties
-      if (props && typeof props == 'object' && 'tui' in props) {
-        args.tui = c.tui
-      }
-      let host = await opened(
-        c.config!,
-        rolesOf(declared, !!said.vocab.comp(EFFECT)),
-        c.duties,
-        !!declared.readOnly,
-      )
-      observe(host)
-      // Write the `tool` rows a call's `to` points at first: a call naming an
-      // entity nothing created would be a dangling reference. Done once per
-      // process, by whichever caller gets there first (@yaks/tools `ensure`).
-      if (!declared.readOnly) await host.runner.ensure([declared.name])
-      let id = mint()
-      let invoke = declared.readOnly ? host.runner.read : host.runner.call
-      let call = {
-        entity: { eid: id },
-        call: { to: toolEid(declared.name), args: args ?? {} },
-        ...await signer(host, c.via),
-      }
-      // A server's tool lasts for the process lifetime; its HTTP/socket
-      // requests must be independent roots, not children of that command.
-      let span = declared.roles?.includes('web')
-        ? undefined
-        : peek(host.graph)?.begin({
-          kind: 'request',
-          name: `cli ${declared.name}`,
-          package: '@yaks/cli',
-        })
-      let landed = await during(span, () => invoke(call))
-      // `--json` prints the answer as data, the same object an MCP client
-      // reads as `structuredContent` (@yaks/tools `structured`).
-      let answer = answerOf(landed, id)
-      if (c.json) {
-        c.out(JSON.stringify(structured(declared, answer), null, 2))
-      } else {
-        await show(
-          c,
-          await drawn(host),
-          host.vocab,
-          answer,
-          c.tui
-            ? {
-              views: await terminal(
-                plugins(),
-                undefined,
-                undefined,
-                host.observe,
-              ),
-              config: c.config,
-            }
-            : {},
-          {
-            lookup: (eids) => host.graph.get(eids),
-            query: (q) => host.graph.read(q),
-          },
-          !declared.readOnly,
-        )
-      }
-      // A refusal is data, not an exception: the text is printed either way
-      // and the exit code is what reports which it was — taken from the runner,
-      // since a tool that returns fault rows has not itself failed.
-      return faulted(landed, id) ? 1 : 0
-    },
-  }))
-  let controls: Command[] = direct.map(({ run, ...declared }) => ({
-    ...declared,
-    run: async (args, context) => {
-      let host = await opened(
-        context.config!,
-        rolesOf(declared, !!said.vocab.comp(EFFECT)),
-        context.duties,
-        !!declared.readOnly,
-      )
-      observe(host)
-      let span = declared.roles?.includes('web')
-        ? undefined
-        : peek(host.graph)?.begin({
-          kind: 'request',
-          name: `cli ${declared.name}`,
-          package: '@yaks/cli',
-        })
-      return await during(span, () => run(args, host, context))
-    },
-  }))
-  return [traceCommand(config), ...controls, ...tools]
+  return host
+}
+
+// A server's tool lasts for the process lifetime; its HTTP/socket requests
+// must be independent roots, not children of that command.
+let spanOf = (
+  host: Served,
+  declared: { roles?: readonly string[]; name?: string },
+) =>
+  declared.roles?.includes('web') ? undefined : peek(host.graph)?.begin({
+    kind: 'request',
+    name: `cli ${declared.name}`,
+    package: '@yaks/cli',
+  })
+
+/** One of the graph's tools, run as a command line asked: the graph opened
+ * for it, the call made through the tool runner, and the answer printed. */
+export let tool = async (
+  c: Ctx,
+  declared: Declared,
+  args: Record<string, unknown>,
+  listing: Listing,
+): Promise<number> => {
+  // A tool that declares terminal behavior receives the global display
+  // choice through the same input it declares for every other argument.
+  let props = declared.inputSchema?.properties
+  if (props && typeof props == 'object' && 'tui' in props) {
+    args.tui = c.tui
+  }
+  let host = await opening(c, declared, listing)
+  // Write the `tool` rows a call's `to` points at first: a call naming an
+  // entity nothing created would be a dangling reference. Done once per
+  // process, by whichever caller gets there first (@yaks/tools `ensure`).
+  if (!declared.readOnly) await host.runner.ensure([declared.name])
+  let id = mint()
+  let invoke = declared.readOnly ? host.runner.read : host.runner.call
+  let call = {
+    entity: { eid: id },
+    call: { to: toolEid(declared.name), args: args ?? {} },
+    ...await signer(host, c.via),
+  }
+  let landed = await during(spanOf(host, declared), () => invoke(call))
+  // `--json` prints the answer as data, the same object an MCP client
+  // reads as `structuredContent` (@yaks/tools `structured`).
+  let answer = answerOf(landed, id)
+  if (c.json) {
+    c.out(JSON.stringify(structured(declared, answer), null, 2))
+  } else {
+    await show(
+      c,
+      await drawn(listing, host),
+      host.vocab,
+      answer,
+      c.tui
+        ? {
+          views: await terminal(
+            plugins(listing),
+            undefined,
+            undefined,
+            host.observe,
+          ),
+          config: c.config,
+        }
+        : {},
+      {
+        lookup: (eids) => host.graph.get(eids),
+        query: (q) => host.graph.read(q),
+      },
+      !declared.readOnly,
+    )
+  }
+  // A refusal is data, not an exception: the text is printed either way
+  // and the exit code is what reports which it was — taken from the runner,
+  // since a tool that returns fault rows has not itself failed.
+  return faulted(landed, id) ? 1 : 0
+}
+
+/** A plugin's terminal control, run against the graph opened for it. */
+export let control = async (
+  c: Ctx,
+  declared: Omit<CliCommand, 'run'>,
+  run: CliCommand['run'],
+  args: Record<string, unknown>,
+  listing: Listing,
+): Promise<number> => {
+  let host = await opening(c, declared, listing)
+  return await during(spanOf(host, declared), () => run(args, host, c))
 }

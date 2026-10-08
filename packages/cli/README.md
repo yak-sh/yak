@@ -36,8 +36,9 @@ The package has two main responsibilities:
   serves no HTTP of its own: the request handler is built by the listed plugin
   that hosts routes, which is @yaks/api.
 - [`platform.ts`](./platform.ts) lists and calls tools on a remote MCP server.
-  [`local.ts`](./local.ts) exposes the same command interface for a graph opened
-  by the current process.
+  [`subcommands.ts`](./subcommands.ts) lists the same command interface for a
+  graph the current process can open, from its plugins' declarations alone, and
+  [`local.ts`](./local.ts) opens that graph when one of them runs.
 
 ## Roles
 
@@ -387,8 +388,9 @@ It returns a `Served` object: the `Host` fields — which include `roles`,
 `tools`, `routes`, `handler`, `runner`, and `duties` — plus `fx` and `close`.
 Nothing here binds a port. The `serve` tool does that, reading the handler off
 the host it was composed into, reconciling interrupted calls, and taking over
-the duties for as long as it listens. `words(config)` reads the plugins'
-`./vocab` alone: the vocabulary and the tools it declares, with nothing opened.
+the duties for as long as it listens. `words(config)` ([`words.ts`](./words.ts))
+reads the plugins' `./vocab` alone: the vocabulary and the tools it declares,
+with nothing opened and none of the code that opens a graph loaded.
 
 Selected file-backed facets are loaded together as one module graph, so the
 runtime traverses their shared dependencies once rather than once per dynamic

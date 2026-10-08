@@ -43,6 +43,7 @@ import { closeAccounts, personal } from './accounts.ts'
 import { ownConfig } from './config.ts'
 import { starter } from './init.ts'
 import { listen, wind } from '@yaks/process/wind'
+import * as held from './held.ts'
 
 /** The platform this command talks to when it opens no graph of its own. */
 export let HOST = 'yaks.app'
@@ -105,11 +106,13 @@ let applied = async (
   return code
 }
 
-// Imported by the first command that needs it, and by no other: the workspace
-// runs with `lazy-dynamic-imports` (deno.json), because without it Deno walks
-// every module a literal `import('./local.ts')` reaches as the program starts,
-// whichever branch the run then takes.
-let local: typeof import('./local.ts') | undefined
+// The code that lists a graph's subcommands (./subcommands.ts) and the code
+// that opens one (./local.ts) are each imported by the first command that
+// needs them, and by no other: the workspace runs with `lazy-dynamic-imports`
+// (deno.json), because without it Deno walks every module a literal
+// `import('./local.ts')` reaches as the program starts, whichever branch the
+// run then takes.
+let local = () => import('./local.ts')
 
 // Where this command's tools come from: the graph a config names, opened here,
 // or the MCP server the command named.
@@ -117,7 +120,7 @@ let table = async (
   c: Ctx,
   o?: { fresh?: boolean },
 ): Promise<Command[]> =>
-  c.config ? (local ??= await import('./local.ts')).commands(c) : listed(c, o)
+  c.config ? (await import('./subcommands.ts')).commands(c) : listed(c, o)
 
 /** What `yak` itself is, besides the tools it lists. */
 export let YAK: Opts = {
@@ -165,9 +168,9 @@ let init = async (args: Record<string, unknown>, c: Ctx): Promise<number> => {
     return 1
   }
   try {
-    local ??= await import('./local.ts')
-    await local.install(path)
-    let host = await local.opened(path, ['graph'], false)
+    let { install, opened } = await local()
+    await install(path)
+    let host = await opened(path, ['graph'], false)
     await host.graph.apply([
       { entity: { eid: person }, person: {}, doc: { title: name } },
     ])
@@ -193,7 +196,7 @@ export let own: Command[] = [
     run: async (_args, c) => {
       let path = c.config ?? ownConfig()
       if (!path) throw new Usage('yak upgrade needs --config')
-      await (local ??= await import('./local.ts')).install(path)
+      await (await local()).install(path)
       c.out(`installed the graph at ${path}`)
       return 0
     },
@@ -218,7 +221,7 @@ export let own: Command[] = [
       let roles = typeof args.roles == 'string'
         ? args.roles.split(',')
         : undefined
-      await (local ??= await import('./local.ts')).work(path, ready, roles)
+      await (await local()).work(path, ready, roles)
       return 0
     },
   },
@@ -309,7 +312,7 @@ export let main = async (
     }
     return code = await cli([...extra, ...TOOLS], { ...YAK, argv })
   } finally {
-    await local?.close(code)
+    await held.close(code)
     await closeAccounts()
   }
 }
@@ -320,21 +323,21 @@ export let main = async (
 //
 // An interrupt winds the command down rather than cutting it off
 // (@yaks/process/wind). The command holds the process open: the first
-// interrupt stops every graph it opened (local.ts `stop`), so `yak serve`
+// interrupt stops every graph it opened (./held.ts `stop`), so `yak serve`
 // takes no new request, no new effect and no new step, and the command
 // finishes what it started and closes the way it always does, for as long as
 // that takes. A command with nothing open has nothing to finish, and ends at
-// once. A second interrupt ends its duty threads where they stand (local.ts
+// once. A second interrupt ends its duty threads where they stand (./held.ts
 // `cut`), closes with the interrupt's code, and exits.
 if (import.meta.main) {
   listen()
   let ran = main(Deno.args)
   wind.hold({
-    drain: () => local?.stop() ? ran : undefined,
-    force: () => local?.cut(),
+    drain: () => held.stop() ? ran : undefined,
+    force: () => held.cut(),
   })
   wind.done.then(async (code) => {
-    await local?.close(code)
+    await held.close(code)
     await closeAccounts()
     Deno.exit(code)
   })

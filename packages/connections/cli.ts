@@ -1,5 +1,6 @@
 // Private terminal input belongs to connections, not to a model harness.
-import { type CliCommand, person } from '@yaks/cli/host'
+import type { CliCommand } from '@yaks/cli/host'
+import { person } from '@yaks/cli/config'
 import { yaksApp } from './yaks-app.ts'
 import { authorize } from './authorize.ts'
 import { Refused } from '@yaks/graph'

@@ -2,11 +2,8 @@ import { test } from '@yaks/testing'
 import { assert, assertEquals, assertRejects } from '@std/assert'
 import { argsFor, cli, commandFor, unique } from '@yaks/cli'
 import { compose } from '@yaks/cli/host'
-import {
-  close as closeCli,
-  commands as localCommands,
-  opened,
-} from '../cli/local.ts'
+import { close as closeCli, opened } from '../cli/local.ts'
+import { commands as localCommands } from '../cli/subcommands.ts'
 import { argsOf, type Bundle, mint, namedTool, offered } from '@yaks/graph'
 import { answerOf, toolEid, worded } from '@yaks/tools'
 import { connect } from '../mcp/testing.ts'

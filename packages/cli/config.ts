@@ -17,10 +17,21 @@
 import cli from './deno.json' with { type: 'json' }
 
 export type { Config, Options, Plug } from '@yaks/host'
-import type { Config, Options, Plug } from '@yaks/host'
+import type { Config, Host, Options, Plug } from '@yaks/host'
+import type { Eid } from '@yaks/graph'
 
 /** Where a machine keeps the config for its own graph. */
 export let OWN_CONFIG = '.yak/yak.json'
+
+/** The person who works at this machine, as the entity the config's `person`
+ * names, or nobody where it names none: a machine never guesses who is at its
+ * keyboard. What they type at it is written by them. */
+export let person = async (
+  host: Pick<Host, 'config' | 'graph'>,
+): Promise<Eid | undefined> => {
+  let said = host.config.person
+  return said ? (await host.graph.address([said])).get(said) ?? said : undefined
+}
 
 /** Where this machine keeps the config for its own graph, whether or not it
  * has one yet: under `$HOME`, or nowhere for a process that has none. */
