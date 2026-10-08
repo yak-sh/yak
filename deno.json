@@ -269,6 +269,9 @@
     "@sqlite-vector-windows-x86_64": "npm:@sqliteai/sqlite-vector-win32-x86_64@1.1.2"
   },
   "scopes": {
+    "https://jsr.io/@db/sqlite/0.13.0/": {
+      "https://jsr.io/@db/sqlite/0.13.0/deps.ts": "./packages/sqlite/deps.ts"
+    },
     "./workers/yak/node_modules/@cloudflare/workers-oauth-provider/": {
       "cloudflare:workers": "./workers/yak/runtime.ts"
     }
