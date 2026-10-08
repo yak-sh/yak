@@ -21,7 +21,7 @@
 
 import type { Prop, Scalar, Vocab } from '@yaks/vocab'
 import { timeEdges } from '@yaks/query'
-import type { Frag } from './ast.ts'
+import { type Frag, spelled } from './ast.ts'
 import { nest } from './render.ts'
 
 // The type a value is coerced to before comparison — the vocabulary's property
@@ -100,7 +100,8 @@ export type Dialect = {
   refPresent: (colExpr: string, negate: boolean) => Frag
   // Membership in a list of any length. A host caps the parameters one
   // statement binds (a Durable Object's SQLite takes 100), and a list of eids
-  // is as long as its caller made it, so the list is one parameter.
+  // is as long as its caller made it, so a list of more than one value binds
+  // as one parameter, unless its integers are spelled out (`spelled`).
   among: (colExpr: string, vals: (string | number)[]) => Frag
 }
 
@@ -185,10 +186,19 @@ let stampish = (c: string, s: Frag): Frag => ({
   params: [LO, HI, ...s.params],
 })
 
-let among = (c: string, vals: (string | number)[]): Frag => ({
-  sql: `${c} in (select value from json_each(?))`,
-  params: [JSON.stringify(vals)],
-})
+// A list as @yaks/sql's `oneOf` reads it, in the fewest rows: integers spelled
+// out, any other list bound once as JSON. Either is planned as a list
+// subquery, one value or many.
+let among = (c: string, vals: (string | number)[]): Frag =>
+  spelled(vals)
+    ? {
+      sql: `${c} in (values ${vals.map((v) => `(${v})`).join(', ')})`,
+      params: [],
+    }
+    : {
+      sql: `${c} in (select value from json_each(?))`,
+      params: [JSON.stringify(vals)],
+    }
 
 // The expression an equality tests and the one scalar it binds, or null for
 // any other predicate.

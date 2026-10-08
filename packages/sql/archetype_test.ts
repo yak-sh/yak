@@ -33,6 +33,10 @@ let ids = new Map([
   [cache.intern(['task', 'claim']).eid, 13],
 ])
 let archetypes = archetypeSet(cache, ids)
+// The archetype lists a statement tests, spelled out in its text.
+let lists = (sql: string): number[][] =>
+  [...sql.matchAll(/"archetype" in \(values ((?:\(\d+\)(?:, )?)+)\)/g)]
+    .map((m) => [...m[1].matchAll(/\d+/g)].map(Number))
 
 test('archetype plans: positive facets drive their table while boolean kinds keep composition', () => {
   for (
@@ -58,10 +62,11 @@ test('archetype plans: positive facets drive their table while boolean kinds kee
       sql.sql,
     )
     assertEquals(
-      sql.params.map((p) => JSON.parse(String(p))),
+      lists(sql.sql),
       query == '.task' || query == '.doc' ? [] : [[...expected]],
       query,
     )
+    assertEquals(sql.params, [], query)
   }
   let r = bind(parse('.task .doc !claim .doc.title=hello'), v, { archetypes })
   assertEquals(r.joins?.map((j) => isRaw(j.src) && j.src.sql), [
@@ -91,7 +96,7 @@ test('boolean presence trees retain their composition without component joins', 
   assertEquals(r.joins, [])
   let sql = compile(ast, v, { archetypes })
   assert(sql.sql.includes(' or '), sql.sql)
-  assertEquals(sql.params.map((p) => JSON.parse(String(p))), [
+  assertEquals(lists(sql.sql), [
     [11, 12],
     [12, 13],
     [10, 11, 12],
@@ -102,7 +107,8 @@ test('boolean presence trees retain their composition without component joins', 
 // archetypes wearing the value's component, not every other archetype held.
 test('a screen beside a value test lists only the archetypes that can match', () => {
   let sql = compile(parse('.doc.title=hello !claim !task'), v, { archetypes })
-  assertEquals(sql.params, ['[11]', 'hello'])
+  assertEquals(lists(sql.sql), [[11]])
+  assertEquals(sql.params, ['hello'])
 })
 
 // A conjunction of facets is one question, not one per facet. `.kind=K`
@@ -168,7 +174,7 @@ test('a status filter on a ladder binds as a lookup on the archetype index', () 
       q,
     )
     assert(!sql.sql.includes('case'), sql.sql)
-    return sql.params.flatMap((p) => JSON.parse(String(p))).sort()
+    return lists(sql.sql).flat().sort()
   }
   assertEquals(chosen('.task.status=open'), [11, 17])
   assertEquals(chosen('.task.status=done'), [12, 15])

@@ -631,8 +631,9 @@ text are dropped.
 
 An **Identity** is an operand list split into `eids` and entity `nums`.
 `identity` uses [@yaks/id](../id/README.md) to read display ids such as `B-7` as
-entity number 7. Identity lists and scalar equality lists use one JSON parameter
-per set, regardless of length.
+entity number 7. A list of text binds as one JSON parameter however long it is,
+and integers are spelled out in the statement (`spelled`), binding nothing: a
+list SQLite reads from JSON costs a row per member. One eid is an equality.
 
 ```ts
 import { compile, identity } from '@yaks/sql'
@@ -650,7 +651,8 @@ let vocab = loadVocab({
 })
 equal(identity('eid', 'b1,B-7'), { eids: ['b1'], nums: [7] })
 equal(compile(parse('.entity.eid=b1,b2'), vocab).params, ['["b1","b2"]'])
-equal(compile(parse('.entity.num=3,4'), vocab).params, ['[3,4]'])
+equal(compile(parse('.entity.eid=b1'), vocab).params, ['b1'])
+equal(compile(parse('.entity.num=3,4'), vocab).params, [])
 ```
 
 [Reverse associations](../vocab/README.md#routing-and-references) compile to

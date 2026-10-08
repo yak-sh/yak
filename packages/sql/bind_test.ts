@@ -370,8 +370,8 @@ let among = (col: string) =>
 
 test('.entity.eid names entities as one set lookup on the spine', () => {
   let one = compile(parse('.entity.eid=a3f1'), v)
-  assert(one.sql.includes(among('eid')), one.sql)
-  assertEquals(one.params, ['["a3f1"]'])
+  assert(one.sql.includes('"entity"."eid" = ?'), one.sql)
+  assertEquals(one.params, ['a3f1'])
   let many = compile(parse('.entity.eid=a3f1,b7c2'), v)
   assert(many.sql.includes(among('eid')), many.sql)
   assertEquals(many.params, ['["a3f1","b7c2"]'])
@@ -386,21 +386,22 @@ test('.entity.eid names entities as one set lookup on the spine', () => {
 })
 
 test('.entity.num and a human id name entities by their spine number', () => {
+  // numbers are spelled out, binding nothing
   let nums = compile(parse('.entity.num=3,4'), v)
-  assert(nums.sql.includes(among('num')), nums.sql)
-  assertEquals(nums.params, ['[3,4]'])
+  assert(nums.sql.includes('"entity"."num" in (values (3), (4))'), nums.sql)
+  assertEquals(nums.params, [])
   // `T-7` is the entity numbered 7 — the letter is display, the number is
   // identity — so a human id lands on the num arm
   let human = compile(parse('.entity.eid=T-7'), v)
-  assert(human.sql.includes(among('num')), human.sql)
-  assertEquals(human.params, ['[7]'])
+  assert(human.sql.includes('"entity"."num" in (values (7))'), human.sql)
+  assertEquals(human.params, [])
   // a mixed list asks both arms
   let both = compile(parse('.entity.eid=a3f1,T-7'), v)
   assert(
-    both.sql.includes(`(${among('eid')} or ${among('num')})`),
+    both.sql.includes('("entity"."eid" = ? or "entity"."num" in (values (7)))'),
     both.sql,
   )
-  assertEquals(both.params, ['["a3f1"]', '[7]'])
+  assertEquals(both.params, ['a3f1'])
 })
 
 test('an OR compiles independent selections and keeps operand order', () => {

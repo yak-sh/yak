@@ -26,12 +26,12 @@ import {
   as,
   at,
   col,
-  each,
   eq,
   exists,
   join,
   lit,
   not,
+  oneOf,
   type Raw,
   select,
   type Statements,
@@ -84,7 +84,7 @@ let vectors = (
     cols: [as(e('owner'), 'owner'), as(e('vec'), 'vec')],
     from: table(TABLE, 'e'),
     where: and(
-      ...(pool ? [among(e('owner'), each(pool))] : []),
+      ...(pool ? [oneOf(e('owner'), pool)] : []),
       eq(e('model'), val(model)),
       not(exists(select({
         cols: [lit(1)],

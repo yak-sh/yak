@@ -1,13 +1,11 @@
 import { type Bundle, sha256, TOMBSTONE } from '@yaks/graph'
 import { Archetypes, tablesOf } from '@yaks/archetype'
 import {
-  among,
   and,
   as,
   col,
   cross,
   type Driver,
-  each,
   eq,
   type Expr,
   fn,
@@ -18,6 +16,7 @@ import {
   le,
   left,
   lit,
+  oneOf,
   type Row,
   select,
   type Stmt,
@@ -176,7 +175,7 @@ let minter = (
     for (let [owners, id] of targets) {
       let pending = owners.filter((owner) => !made.has(owner))
       for (let i = 0; i < pending.length; i += 2048) {
-        run(point(id, among(col('id'), each(pending.slice(i, i + 2048)))))
+        run(point(id, oneOf(col('id'), pending.slice(i, i + 2048))))
       }
       counts.entities += owners.length
     }
@@ -297,7 +296,7 @@ export function backfill(driver: Driver, number = false): Backfill {
         }
       }
     }
-    if (stale.length) run(point(null, among(col('archetype'), each(stale))))
+    if (stale.length) run(point(null, oneOf(col('archetype'), stale)))
 
     // Snapshot the incomplete owners before minting descriptors. New descriptors
     // are classified directly below; they never need another whole-file pass.
@@ -527,7 +526,7 @@ export function heldBy(
         eq(col('entity', 'a'), col('archetype', 'e')),
       ),
     ],
-    where: among(col('eid', 'e'), each([...new Set(eids)])),
+    where: oneOf(col('eid', 'e'), [...new Set(eids)]),
   }))
   for (let row of pointers) {
     let wrote = ledgers.map((l) => l.wrote(String(row.eid)))
@@ -558,7 +557,7 @@ export function entomb(driver: Driver, eids: string[], number = false): void {
     let tables = () => facets(driver)
     let { mint } = minter(run, driver, cache, tables, new Map(), number, counts)
     let dead = mint(cache.intern([TOMBSTONE]).eid)
-    run(point(dead, among(col('eid'), each([...new Set(eids)]))))
+    run(point(dead, oneOf(col('eid'), [...new Set(eids)])))
   })
 }
 
@@ -579,13 +578,13 @@ export function reclassify(
   return unit(driver, () => {
     let cache = new Archetypes()
     let tables = facets(driver)
-    let rows = run(owned(among(col('eid', 'e'), each([...new Set(eids)]))))
+    let rows = run(owned(oneOf(col('eid', 'e'), [...new Set(eids)])))
     if (!rows.length) return []
     let owners = new Map<number, string[]>(
       rows.map((r) => [Number(r.id), []]),
     )
     let ids = [...owners.keys()]
-    presence(run, tables, owners, (c) => ({ where: among(c, each(ids)) }))
+    presence(run, tables, owners, (c) => ({ where: oneOf(c, ids) }))
     let moved = new Map<number, string>()
     for (let r of rows) {
       let set = cache.intern(owners.get(Number(r.id))!)

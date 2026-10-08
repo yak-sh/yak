@@ -44,6 +44,7 @@ import {
   lit,
   looseSql,
   narrow,
+  oneOf,
   type Query as Sub,
   type Raw,
   render,
@@ -244,9 +245,7 @@ let naming = (driver: Driver, ids: Iterable<unknown>): Map<number, string> => {
   return new Map(
     driver.query(select({
       cols: [col('id', 'e'), col('eid', 'e')],
-      from: ownerSet(asked),
-      joins: [cross(table('entity', 'e'))],
-      where: eq(col('id', 'e'), col('value', '@owners')),
+      ...owning(asked, table('entity', 'e'), col('id', 'e')),
     })).map((r) => [Number(r.id), String(r.eid)]),
   )
 }
@@ -386,19 +385,30 @@ export let spine = (vocab: Vocab, which: Expr, kind = false): Select => {
   })
 }
 
-// Drive identity reads from the requested set. SQLite estimates json_each at
-// a fixed cardinality; an IN subquery can therefore choose a table scan when
-// statistics remember a small component (even after its history grows). CROSS
-// JOIN keeps the requested owners outside the indexed spine/component probes.
-let ownerSet = (ids: readonly (string | number)[]): Source =>
-  call('json_each', [val(JSON.stringify(ids))], '@owners')
+// The rows of `src` whose `key` is one of `ids`, driven from the requested
+// set. SQLite estimates json_each at a fixed cardinality, so an IN subquery
+// can choose a table scan when statistics remember a small component (even
+// after its history grows); CROSS JOIN keeps the owners outside the indexed
+// spine/component probes. One owner is an equality on the key instead, which
+// reads no list.
+let owning = (
+  ids: readonly (string | number)[],
+  src: Source,
+  key: Expr,
+): { from: Source; joins: Join[]; where: Expr } =>
+  ids.length == 1 ? { from: src, joins: [], where: eq(key, val(ids[0])) } : {
+    from: call('json_each', [val(JSON.stringify(ids))], '@owners'),
+    joins: [cross(src)],
+    where: eq(key, col('value', '@owners')),
+  }
 let namedSpine = (vocab: Vocab, eids: string[]): Select => {
-  let base = spine(vocab, eq(col('eid', 'e'), col('value', '@owners')), true)
-  return select({
-    ...base,
-    from: ownerSet(eids),
-    joins: [cross(table('entity', 'e')), ...base.joins!],
-  })
+  let { from, joins, where } = owning(
+    eids,
+    table('entity', 'e'),
+    col('eid', 'e'),
+  )
+  let base = spine(vocab, where, true)
+  return select({ ...base, from, joins: [...joins, ...base.joins!] })
 }
 
 // An archetype's eid and tables never change once its row stands, and a store
@@ -422,14 +432,19 @@ let kinded = (driver: Driver, vocab: Vocab, rows: Row[]): Row[] => {
     ),
   ]
   if (missing.length) {
+    let { from, joins, where } = owning(
+      missing,
+      table('entity', 'e'),
+      col('id', 'e'),
+    )
     let found = driver.query(select({
       cols: [col('id', 'e'), col('eid', 'e'), col('tables', 'a')],
-      from: ownerSet(missing),
+      from,
       joins: [
-        cross(table('entity', 'e')),
+        ...joins,
         left(table('archetype', 'a'), eq(col('entity', 'a'), col('id', 'e'))),
       ],
-      where: eq(col('id', 'e'), col('value', '@owners')),
+      where,
     }))
     for (let row of found) held.set(Number(row.id), row)
   }
@@ -483,7 +498,11 @@ let shapes = new WeakMap<
 >()
 let stored = new WeakMap<Vocab, Set<string>>()
 let readable = (vocab: Vocab) => at(stored, vocab, () => new Set(tables(vocab)))
-type Joined = { statement: Raw; names: string[]; props: string[][] }
+// A joined read rendered for one entity and for many, each with the place of
+// the bind that names them, which holds `ANY` until a read names its own.
+let ANY = '\0'
+type Named = { statement: Raw; at: number }
+type Joined = { one: Named; many: Named; names: string[]; props: string[][] }
 let joined = new WeakMap<
   Vocab,
   WeakMap<object, WeakMap<object, Map<string, Joined | null>>>
@@ -555,11 +574,11 @@ let joinedPlan = (
   )
   let key = JSON.stringify(names)
   if (cache.has(key)) return cache.get(key)!
-  let base = namedSpine(vocab, [])
+  let base = namedSpine(vocab, [ANY, ANY])
   let columns = [...base.cols!]
-  let joins = [...base.joins!]
+  let joins: Join[] = []
   let props: string[][] = []
-  let width = columns.length, breadth = joins.length + 1
+  let width = columns.length, breadth = base.joins!.length + 1
   for (let [i, name] of names.entries()) {
     let alias = `@g${i}`
     let p = scoped(project(vocab, name, opts.derived, opts.backed), name, alias)
@@ -588,11 +607,21 @@ let joinedPlan = (
       columns.push(as(expr.t == 'as' ? expr.e : expr, `@${i}.${prop}`))
     }
   }
-  let statement = render(select({ ...base, cols: columns, joins }))
-  if (statement.sql.length > 90_000 || statement.params.length > 100) {
-    return bounded(cache, key, null, 128)
+  let named = (eids: string[]): Named => {
+    let spine = namedSpine(vocab, eids)
+    let statement = render(
+      select({ ...spine, cols: columns, joins: [...spine.joins!, ...joins] }),
+    )
+    let bind = eids.length == 1 ? eids[0] : JSON.stringify(eids)
+    return { statement, at: statement.params.indexOf(bind) }
   }
-  return bounded(cache, key, { statement, names, props }, 128)
+  let one = named([ANY]), many = named([ANY, ANY])
+  if (
+    [one, many].some(({ statement }) =>
+      statement.sql.length > 90_000 || statement.params.length > 100
+    )
+  ) return bounded(cache, key, null, 128)
+  return bounded(cache, key, { one, many, names, props }, 128)
 }
 
 let joinedGet = (
@@ -606,18 +635,12 @@ let joinedGet = (
 ): Bundle[] | { spine: Row[] } | undefined => {
   let plan = joinedPlan(vocab, names, opts)
   if (!plan) return
-  // The owners' JSON array is the final bind: projection expressions come
-  // before FROM and the following spine/reference joins bind no parameters.
+  let { statement, at } = eids.length == 1 ? plan.one : plan.many
+  let params = [...statement.params]
+  params[at] = eids.length == 1 ? eids[0] : JSON.stringify(eids)
   let rows: Row[]
   try {
-    rows = kinded(
-      driver,
-      vocab,
-      driver.query({
-        ...plan.statement,
-        params: [...plan.statement.params.slice(0, -1), JSON.stringify(eids)],
-      }),
-    )
+    rows = kinded(driver, vocab, driver.query({ ...statement, params }))
   } catch (err) {
     // A raw schema edit can remove a table from the previous shape. Read the
     // current descriptor before deciding which remaining tables to gather.
@@ -828,12 +851,12 @@ export let get = (
         opts.backed,
         true,
       )
+      let owners = owning(ids, table(comp), col('entity', comp))
       for (
         let row of driver.query(select({
           cols: [as(col('entity', comp), '@id'), ...sel],
-          from: ownerSet(ids),
-          joins: [cross(table(comp)), ...joins],
-          where: eq(col('entity', comp), col('value', '@owners')),
+          ...owners,
+          joins: [...owners.joins, ...joins],
         }))
       ) {
         let { '@id': owner, ...value } = row
@@ -881,7 +904,7 @@ let backedGet = (
       cols: [as(col('entity', comp), '@id'), ...sel],
       from: from(b.rows, comp),
       joins,
-      where: among(col('entity', comp), each(ids)),
+      where: oneOf(col('entity', comp), ids),
     })).map(({ '@id': id, ...value }): Bundle => ({
       entity: { eid: eidOf(tag, Number(id)) },
       ...asked ? { [comp]: decoded(vocab, comp, value) as Comp } : {},

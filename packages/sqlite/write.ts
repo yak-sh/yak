@@ -53,7 +53,6 @@ import {
   col,
   type Delete,
   type Driver,
-  each,
   effect,
   eq,
   exists,
@@ -64,6 +63,7 @@ import {
   lit,
   not,
   notNull,
+  oneOf,
   op,
   or,
   type Param,
@@ -154,7 +154,7 @@ let stored = (driver: Driver, eids: string[]): Map<string, Spine> =>
       joins: [
         left(table('tombstone', 't'), eq(col('entity', 't'), col('id', 'e'))),
       ],
-      where: among(col('eid', 'e'), each(eids)),
+      where: oneOf(col('eid', 'e'), eids),
     })).map((r) => [String(r.eid), {
       id: Number(r.id),
       num: r.num == null ? null : Number(r.num),
@@ -403,7 +403,7 @@ export let removeSql = (
   let ids = select({
     cols: [col('id')],
     from: table('entity'),
-    where: among(col('eid'), each(entities.map((e) => e.eid))),
+    where: oneOf(col('eid'), entities.map((e) => e.eid)),
   })
   return [
     ...tables.toReversed()
@@ -453,7 +453,7 @@ let wears = (driver: Driver, tables: string[], eids: string[]): Set<string> => {
       cols: [col('eid', 'e')],
       from: table('entity', 'e'),
       where: and(
-        among(col('eid', 'e'), each(eids)),
+        oneOf(col('eid', 'e'), eids),
         or(...tables.map((comp) =>
           exists(select({
             cols: [lit(1)],

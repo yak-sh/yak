@@ -1,14 +1,13 @@
 import { revision } from '@yaks/sql'
 import {
-  among,
   as,
   by,
   col,
   count,
   type Driver,
-  each,
   eq,
   fn,
+  oneOf,
   type Param,
   type Row,
   select,
@@ -237,7 +236,7 @@ export let shape = (driver: Driver, names: readonly string[]): string => {
       as(fn('total', fn('length', col('sql'))), 'bytes'),
     ],
     from: table('sqlite_schema'),
-    where: among(col('name'), each(names)),
+    where: oneOf(col('name'), names),
   }))
   return `${row.n}/${row.bytes}`
 }

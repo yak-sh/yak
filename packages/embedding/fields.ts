@@ -14,14 +14,12 @@
 // should have to depend on the other in order to search.
 
 import {
-  among,
   and,
   ARMS,
   as,
   col,
   cut,
   type Derived,
-  each,
   eq,
   exists,
   type Expr,
@@ -30,6 +28,7 @@ import {
   lit,
   ne,
   not,
+  oneOf,
   type Query,
   select,
   table,
@@ -169,7 +168,7 @@ export let pieces = (
           where: and(
             some,
             ...allowed(f),
-            ...owners ? [among(col('entity', 'c'), each(owners))] : [],
+            ...owners ? [oneOf(col('entity', 'c'), owners)] : [],
           ),
         })
       }))

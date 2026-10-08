@@ -52,7 +52,6 @@ import { field } from '@yaks/sql'
 import type { Vocab } from '@yaks/vocab'
 import { type Bundle, comps, dead, type Eid } from '@yaks/graph'
 import {
-  among,
   as,
   call,
   col,
@@ -62,6 +61,7 @@ import {
   fn,
   lit,
   not,
+  oneOf,
   type Param,
   type Query,
   select,
@@ -203,7 +203,7 @@ export let overlay = (
     let row of driver.query(select({
       cols: [col('id'), col('eid')],
       from: table('entity'),
-      where: among(col('eid'), each(eids)),
+      where: oneOf(col('eid'), eids),
     }))
   ) ids.set(String(row.eid), Number(row.id))
   let next = 0
@@ -229,7 +229,7 @@ export let overlay = (
     let q: Query = select({
       cols: names.map((c) => col(c)),
       from: table(from),
-      where: out.length ? not(among(col(key), each(out))) : undefined,
+      where: out.length ? not(oneOf(col(key), out)) : undefined,
     })
     if (rows.length) {
       q = unionAll(
@@ -262,7 +262,7 @@ export let overlay = (
         let row of driver.query(select({
           cols: [col('entity'), ...read],
           from: table(comp),
-          where: among(col('entity'), each(owners)),
+          where: oneOf(col('entity'), owners),
         }))
       ) held.set(Number(row.entity), row)
     }

@@ -493,12 +493,52 @@ export let unionAll = (...parts: Query[]): Compound => ({
 /** The members of a JSON array bound as one parameter: `(select value from
  * json_each(?))`, as a set for {@link among}. A host caps how many parameters
  * one statement binds (a Durable Object's SQLite takes 100), so a list of any
- * length rides as one. */
+ * length rides as one. SQLite reads each member as a row, and a Durable Object
+ * bills it as one: {@link oneOf} spells out the lists it can. */
 export let each = (list: readonly Param[]): Query =>
   select({
     cols: [col('value')],
     from: call('json_each', [val(JSON.stringify(list))]),
   })
+
+/** Whether a list is written into the statement rather than bound as JSON:
+ * integers, as few as keep the statement short. Written out as rows of a
+ * `values` clause, its members cost no binds, and testing a row against them
+ * reads none, where testing it against a JSON array reads every member first.
+ * SQLite plans either as a list subquery.
+ *
+ * ```ts
+ * import { spelled } from '@yaks/sql'
+ *
+ * spelled([3, 5]) // true
+ * spelled(['a', 'b']) // false
+ * spelled([]) // false
+ * ```
+ */
+export let spelled = (list: readonly unknown[]): list is number[] =>
+  list.length > 0 && list.length <= 512 &&
+  list.every((v) => Number.isSafeInteger(v))
+
+/** `e` is one of `list`, read the way that costs fewest rows: one value is an
+ * equality, integers are spelled out ({@link spelled}), and any other list is
+ * bound once as JSON ({@link each}).
+ *
+ * ```ts
+ * import { col, oneOf, render, select, table } from '@yaks/sql'
+ *
+ * let ids = (list: (string | number)[]) =>
+ *   render(select({ cols: [col('eid')], from: table('entity'), where: oneOf(col('id'), list) })).sql
+ * ids(['a']) // 'select "eid" from "entity" where "id" = ?'
+ * ids([1, 2]) // 'select "eid" from "entity" where "id" in (values (1), (2))'
+ * ids(['a', 'b']) // 'select "eid" from "entity" where "id" in (select "value" from "json_each"(?))'
+ * ```
+ */
+export let oneOf = (e: Expr, list: readonly Param[]): Expr =>
+  list.length == 1
+    ? eq(e, val(list[0]))
+    : spelled(list)
+    ? among(e, { t: 'values', rows: list.map((v) => [lit(v)]) })
+    : among(e, each(list))
 
 /** Rows written as objects, each value bound: the first row's keys are the
  * columns.

@@ -23,11 +23,10 @@ import type { Bundle, Comp, Eid, Graph } from '@yaks/graph'
 import type { Reply } from '@yaks/tools'
 import { and, every, limit, near, order, present, text } from '@yaks/query'
 import {
-  among,
   as,
   col,
   type Derived,
-  each,
+  oneOf,
   select,
   type Statements,
   statements,
@@ -113,7 +112,7 @@ let owners = (db: Statements, eids: Eid[]): number[] =>
   db.query(select({
     cols: [as(col('id'), 'id')],
     from: table('entity'),
-    where: among(col('eid'), each(eids)),
+    where: oneOf(col('eid'), eids),
   })).map((r) => Number(r.id))
 
 // A promise's value, or undefined once WAIT passes or it fails: an answer

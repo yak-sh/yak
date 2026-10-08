@@ -392,8 +392,13 @@ let inSet = (ctx: Ctx, set: Identity): Frag => {
       ? ctx.d.among(ctx.d.ownerKey('entity'), ids)
       : { sql: '0', params: [] }
   }
-  let arm = (prop: string, vals: Bind[]): Frag =>
-    ctx.d.among(ctx.d.col('entity', prop, ctx.v)!, vals)
+  // One eid is an equality on its unique index, which no plan reads past.
+  let arm = (prop: string, vals: Bind[]): Frag => {
+    let c = ctx.d.col('entity', prop, ctx.v)!
+    return prop == 'eid' && vals.length == 1
+      ? { sql: `${c} = ?`, params: vals }
+      : ctx.d.among(c, vals)
+  }
   let arms = [
     ...set.eids.length ? [arm('eid', set.eids)] : [],
     ...set.nums.length ? [arm('num', set.nums)] : [],
@@ -1457,7 +1462,11 @@ let indexedRelation = (
         let s = rel(from, o)
         return {
           ...s,
-          from: raw('json_each(?) as "__named"', [JSON.stringify(set.eids)]),
+          // One eid is a constant row, read for nothing; more are a JSON
+          // array's members, one bind however many.
+          from: set.eids.length == 1
+            ? raw('(select ? as "value") as "__named"', set.eids)
+            : raw('json_each(?) as "__named"', [JSON.stringify(set.eids)]),
           joins: [
             {
               how: 'cross',
