@@ -7,6 +7,7 @@ import { repositoryEid } from '@yaks/git/host'
 import { syncSkills } from './skill-mirror.ts'
 import { repoSkills, skillFiles, skillLocation } from './skills.ts'
 import { world } from './testing.ts'
+import { template } from '../git/testing.ts'
 
 let text = (name = 'sample', body = 'Instructions\n') =>
   `---\nname: ${name}\ndescription: A useful skill\n---\n${body}`
@@ -15,8 +16,9 @@ let git = async (root: string, ...args: string[]) => {
   assert(r.ok, r.err)
   return r.out.trim()
 }
-let setup = async () => {
-  let dir = await Deno.makeTempDir({ prefix: 'skill-mirror-' })
+// A repository on `main` holding one skill and its companion, built once and
+// copied for each test.
+let seeded = template(async (dir) => {
   let root = `${dir}/main`
   Deno.mkdirSync(`${root}/.claude/skills/sample`, { recursive: true })
   await git(root, 'init', '-b', 'main')
@@ -29,6 +31,10 @@ let setup = async () => {
   )
   await git(root, 'add', '.')
   await git(root, 'commit', '-m', 'Initial skill')
+})
+let setup = async () => {
+  let dir = await seeded()
+  let root = `${dir}/main`
   let repository = repositoryEid(`${root}/.git`)
   let g = world()
   await g.apply([{
