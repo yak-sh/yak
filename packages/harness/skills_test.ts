@@ -5,7 +5,7 @@ import { assert, assertEquals } from '@std/assert'
 import { type Bundle, type Comp, derivedEid } from '@yaks/graph'
 import { processProvider } from '@yaks/process/machine'
 import { skillItems, type SkillMachines, skillTools } from './skills.ts'
-import { harness, scratchRepo } from './testing.ts'
+import { harness, processes, scratchRepo } from './testing.ts'
 
 let write = async (
   root: string,
@@ -35,7 +35,10 @@ let attached = (
   h: Awaited<ReturnType<typeof harness>>,
   roots: Record<string, string>,
 ): SkillMachines => {
-  let provider = processProvider(h.g, { dir: Object.values(roots)[0] })
+  let provider = processProvider(h.g, {
+    dir: Object.values(roots)[0],
+    processes,
+  })
   return {
     machine: async (session) => {
       if (!roots[session]) throw new Error('No machine for ' + session)

@@ -109,6 +109,12 @@ export let working = (h: Harness, deps: Omit<Runner, 'holder'>) => {
   }
 }
 
+/** How a test's process machines watch what they start (@yaks/process
+ * `Opts`): every few milliseconds, so a command's exit reaches the test as it
+ * happens, not on the 100 ms tick an interactive tool call is looked at on.
+ * Finding instruction files or skills waits out a command or two. */
+export let processes = { poll: 5 }
+
 /** Run git in `cwd`, answering its trimmed stdout; a failure throws stderr. */
 export let git = async (cwd: string, ...args: string[]) => {
   let p = await new Deno.Command('git', {

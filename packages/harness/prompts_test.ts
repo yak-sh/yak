@@ -8,7 +8,7 @@ import type { Harness } from './store.ts'
 import { input } from '../openai/responses.ts'
 import { voice, wear } from '@yaks/persona'
 import { begin } from './agent.ts'
-import { harness } from './testing.ts'
+import { harness, processes } from './testing.ts'
 
 test('instruction admission snapshots machine files in stable ancestor order', async () => {
   let h = await harness()
@@ -20,7 +20,7 @@ test('instruction admission snapshots machine files in stable ancestor order', a
     await Deno.writeTextFile(dir + '/repo/AGENTS.md', 'repo')
     await Deno.writeTextFile(dir + '/repo/sub/AGENTS.md', 'nested')
     let files = await instructionFiles(
-      processMachine(h.g),
+      processMachine(h.g, processes),
       dir + '/repo/sub',
       dir + '/home',
     )
@@ -37,11 +37,14 @@ test('instruction admission snapshots machine files in stable ancestor order', a
     assertEquals(snapshot.content, { body: 'repo' })
     assertEquals(files[1].revision.length, 64)
     assertEquals(
-      (await instructionFiles(processMachine(h.g), dir + '/repo/sub')).length,
+      (await instructionFiles(
+        processMachine(h.g, processes),
+        dir + '/repo/sub',
+      )).length,
       2,
     )
     await assertRejects(() =>
-      instructionFiles(processMachine(h.g), dir + '/absent')
+      instructionFiles(processMachine(h.g, processes), dir + '/absent')
     )
   } finally {
     await Deno.remove(dir, { recursive: true })
@@ -59,7 +62,9 @@ let attached = async (h: Harness, dir: string) => {
     machine,
     machines: {
       defaultProvider: 'process',
-      providers: { process: processProvider(h.g, { dir: dir + '/machines' }) },
+      providers: {
+        process: processProvider(h.g, { dir: dir + '/machines', processes }),
+      },
     },
   }
 }

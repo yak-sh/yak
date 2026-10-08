@@ -14,7 +14,7 @@ import {
 } from '@yaks/session'
 import { seed } from './agent.ts'
 import { type Local, local } from './local.ts'
-import { harness, repo } from './testing.ts'
+import { harness, processes, repo } from './testing.ts'
 
 let reply = (text: string): Reply => ({
   id: 'r',
@@ -75,7 +75,10 @@ for (let kind of ['fork', 'spawn']) {
       machines: {
         defaultProvider: 'process',
         providers: {
-          process: processProvider(h.g, { dir: directory + '/machines' }),
+          process: processProvider(h.g, {
+            dir: directory + '/machines',
+            processes,
+          }),
         },
       },
       cwd: directory,

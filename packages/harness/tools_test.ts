@@ -6,7 +6,7 @@ import { graphTools, harnessTools, parametersOf } from './tools.ts'
 import { core } from '@yaks/mcp/tools'
 import { identityEid } from '@yaks/graph'
 import { toolEid } from '@yaks/tools'
-import { harness, repo } from './testing.ts'
+import { harness, processes, repo } from './testing.ts'
 import { local } from './local.ts'
 
 let schemas = async () => {
@@ -97,7 +97,7 @@ test('the merged wait preserves process output and child status alongside task w
     let wait = harnessTools(h.g, {
       machines: machines(h.g, {
         defaultProvider: 'process',
-        providers: { process: processProvider(h.g, { dir }) },
+        providers: { process: processProvider(h.g, { dir, processes }) },
       }),
     }).find((t) => t.name == 'wait')!
     let process = await wait.run({ process: 'command', timeout: 0 }, {
