@@ -44,7 +44,9 @@ test('/ws through this upgrade serves subscriptions', async () => {
       'message',
       JSON.stringify({ subscribe: '.book.price<20', id: 'c' }),
     )
-    assertEquals(socket.taken(), [{ id: 'c', bundles: [], transientReset: [] }])
+    assertEquals(socket.taken(), [
+      { id: 'c', bundles: [], coverage: {}, transientReset: [] },
+    ])
 
     await handler(req('/apply', {
       method: 'POST',

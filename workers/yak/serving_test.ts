@@ -774,7 +774,9 @@ test('a subscription is that query still answering', async () => {
     ws,
     JSON.stringify({ subscribe: '.doc&!person', id: '1:.doc' }),
   )
-  assertEquals(sent, [{ id: '1:.doc', bundles: [], transientReset: [] }])
+  assertEquals(sent, [
+    { id: '1:.doc', bundles: [], coverage: {}, transientReset: [] },
+  ])
 
   await page.apply([{ entity: { eid: CAKE }, doc: { title: 'Lemon drizzle' } }])
   assertEquals(sent.length, 2)

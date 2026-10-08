@@ -360,10 +360,12 @@ w.close()
 
 `land(graph, frame, mine?)` applies incoming bundles as patches, relayed values,
 and transient updates, and strips synchronized components from `gone` entities.
-`strip(graph, eids)` does that removal directly. Identity and local components
-remain, so leaving a result set is not deletion; only an incoming tombstone
-marks deletion. A Sync preserves entities held by overlapping subscriptions.
-Direct `land` callers must provide that protection themselves.
+A frame with `coverage` lands as a `snapshot` within it, so a covered component
+or property the answer no longer carries is cleared. `strip(graph, eids)` does
+that removal directly. Identity and local components remain, so leaving a result
+set is not deletion; only an incoming tombstone marks deletion. A Sync preserves
+entities held by overlapping subscriptions. Direct `land` callers must provide
+that protection themselves.
 
 `hear(graph, frame, mine?)` applies only the frame's relayed peer values. A
 reset clears missing peer values for its members, except components this node is
@@ -423,10 +425,10 @@ components and properties. `Coverage` is re-exported from @yaks/graph.
 
 A **Replica** is the optional policy passed to `sync()` to manage retained
 entities, subscription ownership, and pending-write protection. It supplies
-`subscribe`, `unsubscribe`, `land`, and `protect`. Frames with `coverage`,
-`peerCoverage`, `peers`, or `peerGone` require a Replica; standalone `land`
-rejects them. `peers` carries entities reached by projections, independently of
-query membership; `relay` carries peer-written components.
+`subscribe`, `unsubscribe`, `land`, and `protect`. Frames with `peerCoverage`,
+`peers`, or `peerGone` require a Replica; standalone `land` rejects them.
+`peers` carries entities reached by projections, independently of query
+membership; `relay` carries peer-written components.
 [@yaks/client](../client/README.md) supplies the Replica policy. `SubscribeOpts`
 controls local priming (`prime`) and the answer's semantic identity
 (`answerKey`) for that policy.

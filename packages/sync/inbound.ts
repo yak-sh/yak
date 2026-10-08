@@ -68,7 +68,9 @@ export let strip = (
 /**
  * One frame from the server, applied: the bundles it carries go in whole and
  * trusted, and the entities it lists as gone have their components removed. A
- * refused subscription changes nothing in the graph — it is reported, not
+ * frame with `coverage` is a {@link snapshot} within it, so what the answer
+ * covers and no longer carries is cleared. Riders need a Replica to own them.
+ * A refused subscription changes nothing in the graph — it is reported, not
  * applied. `mine` is what this node is saying itself, as {@link hear} takes it.
  */
 export let land = (
@@ -77,15 +79,19 @@ export let land = (
   mine: Mine = none,
 ): Bundle[] | Promise<Bundle[]> => {
   if (frame.refused) return []
-  if (frame.coverage || frame.peerCoverage || frame.peers || frame.peerGone) {
-    throw new Error('coverage/rider delivery requires a working-set replica')
+  if (frame.peerCoverage || frame.peers || frame.peerGone) {
+    throw new Error('rider delivery requires a working-set replica')
   }
   const live = transient(graph)
-  let bundles = incoming(graph, frame.bundles ?? [], mine)
+  let bundles = frame.bundles ?? [], coverage = frame.coverage
   let gone = frame.gone ?? []
   live.forget([...gone, ...frame.transientReset ?? []])
   return after(
-    bundles.length ? replicate(graph, bundles) : [],
+    !bundles.length
+      ? []
+      : coverage
+      ? snapshot(graph, bundles, { coverage, mine })
+      : replicate(graph, incoming(graph, bundles, mine)),
     (applied) => {
       for (const update of frame.transient ?? []) live.receive(update)
       return after(

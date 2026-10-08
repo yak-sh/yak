@@ -34,7 +34,7 @@ test('low-level snapshots clear covered whole components, not other tiers or sco
   assertEquals((await g.read('.recipe')).length, 0)
 })
 
-test('unowned land/standalone sync reject projected and rider shapes rather than lose payloads', () => {
+test('unowned land/standalone sync reject rider shapes rather than lose payloads', () => {
   let g = boxGraph(true)
   let socket = pair().client
   let errors: unknown[] = []
@@ -44,11 +44,7 @@ test('unowned land/standalone sync reject projected and rider shapes rather than
     report: (t) => errors.push(t.error),
   })
   s.subscribe('.recipe', 'r')
-  for (
-    let shape of [{ coverage: {} }, { peerCoverage: {} }, { peers: [] }, {
-      peerGone: [],
-    }]
-  ) {
+  for (let shape of [{ peerCoverage: {} }, { peers: [] }, { peerGone: [] }]) {
     assertThrows(
       () => land(g, { id: 'r', ...shape }),
       Error,
@@ -57,8 +53,31 @@ test('unowned land/standalone sync reject projected and rider shapes rather than
     socket.emit('message', JSON.stringify({ id: 'r', ...shape }))
     assertEquals(s.ready('r'), false)
   }
-  assertEquals(errors.length, 4)
+  assertEquals(errors.length, 3)
   s.close()
+})
+
+test('land clears what a covered answer no longer carries, and nothing else', async () => {
+  let g = boxGraph(true)
+  await land(g, {
+    id: 'r',
+    bundles: [{
+      entity: { eid: 'a' },
+      recipe: { serves: 2, course: 'dinner' },
+      doc: { title: 'Dal' },
+    }],
+  })
+  let covered = (recipe?: object) =>
+    land(g, {
+      id: 'r',
+      bundles: [{ entity: { eid: 'a' }, ...recipe && { recipe } }],
+      coverage: { a: { recipe: true } },
+    })
+  await covered({ serves: 4 })
+  assertEquals((await g.get(['a']))[0].recipe, { serves: 4, course: null })
+  await covered()
+  let [a] = await g.get(['a'])
+  assertEquals([a.recipe, a.doc], [undefined, { title: 'Dal' }])
 })
 
 test('socket resets replace membership on every ranking reset; peers never become gone hits', () => {

@@ -912,7 +912,9 @@ test('a subscription is answered, and a commit reaches the socket', async () => 
     ws,
     JSON.stringify({ subscribe: '.recipe', id: 'r' }),
   )
-  assertEquals(ws.sent, [{ id: 'r', bundles: [], transientReset: [] }])
+  assertEquals(ws.sent, [
+    { id: 'r', bundles: [], coverage: {}, transientReset: [] },
+  ])
 
   await post(store, '/apply', [{
     entity: { eid: CAKE },
