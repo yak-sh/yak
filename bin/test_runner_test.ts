@@ -8,6 +8,7 @@ import { runTestCommands, type TestCommand } from './phases.ts'
 let TESTING = JSON.stringify(
   new URL('../packages/testing/mod.ts', import.meta.url).href,
 )
+let runner = fileURLToPath(new URL('./test.ts', import.meta.url))
 
 test('denoDir is the cache deno runs on, and a child moving HOME keeps it', async () => {
   let cache = async (env: Record<string, string>) => {
@@ -75,12 +76,7 @@ test('a run started inside a run refuses at once', async () => {
   let out = await new Deno.Command(Deno.execPath(), {
     // A path that names nothing: a runner without the refusal fails on it
     // at once, rather than starting the suite from inside this test.
-    args: [
-      'run',
-      '-A',
-      fileURLToPath(new URL('./test.ts', import.meta.url)),
-      'no/such/path',
-    ],
+    args: ['run', '-A', runner, 'no/such/path'],
     env: { [RUN]: '1' },
   }).output()
   assertEquals(out.code, 2)
@@ -112,8 +108,17 @@ for (let failure of [false, true]) {
         `import { test } from ${TESTING}
         test('b', () => Deno.writeTextFileSync(${pid}, String(Deno.pid)))`,
       )
-      let out = await new Deno.Command(Deno.execPath(), {
-        args: ['run', '-A', fixture, 'bulk', 'broad', dir],
+      // Its own session, as the run starts it.
+      let out = await new Deno.Command('setsid', {
+        args: [
+          Deno.execPath(),
+          'run',
+          '-A',
+          runner,
+          '--bulk',
+          `${dir}/a_test.ts`,
+          `${dir}/packages/web/b_test.ts`,
+        ],
         env: { XDG_CACHE_HOME: `${dir}/.cache` },
       }).output()
       assertEquals(
@@ -190,14 +195,7 @@ test('a test that stops completing is named and its descendants end', async () =
   try {
     let file = await waiting(dir)
     child = new Deno.Command('setsid', {
-      args: [
-        Deno.execPath(),
-        'run',
-        '-A',
-        fileURLToPath(new URL('./test.ts', import.meta.url)),
-        '--bulk',
-        file,
-      ],
+      args: [Deno.execPath(), 'run', '-A', runner, '--bulk', file],
       // A short idle limit and a fast watch: the run's defaults are seconds,
       // and this proves detection, not the wait itself.
       env: { TASKS_TEST_IDLE_MS: '300', TASKS_TEST_WATCH_MS: '20' },
@@ -224,27 +222,24 @@ test('a platform run ends when its parent is killed', async () => {
   let bulk = 0
   try {
     let file = await waiting(dir)
-    let fixture = `${dir}/parent.ts`
-    let runner = JSON.stringify(
-      fileURLToPath(new URL('./test.ts', import.meta.url)),
-    )
-    let pid = JSON.stringify(`${dir}/bulk.pid`)
-    await Deno.writeTextFile(
-      fixture,
-      `let child = new Deno.Command('setsid', {
-        args: [Deno.execPath(), 'run', '-A', ${runner}, '--bulk', ${
-        JSON.stringify(file)
-      }],
-        // A fast watch catches the vanished parent at once; the run's default
-        // is a second, and this proves detection, not the wait.
-        env: { TASKS_TEST_WATCH_MS: '20' },
-        stdout: 'null', stderr: 'null',
-      }).spawn()
-      Deno.writeTextFileSync(${pid}, String(child.pid))
-      setInterval(() => {}, 1000)`,
-    )
-    parent = new Deno.Command(Deno.execPath(), {
-      args: ['run', '-A', fixture],
+    // A parent that starts the run in a session of its own, as bin/test.ts
+    // does, and dies without a word.
+    parent = new Deno.Command('bash', {
+      args: [
+        '-c',
+        'pid=$1; shift; setsid "$@" & echo $! >"$pid"; wait',
+        'parent',
+        `${dir}/bulk.pid`,
+        Deno.execPath(),
+        'run',
+        '-A',
+        runner,
+        '--bulk',
+        file,
+      ],
+      // A fast watch catches the vanished parent at once; the run's default
+      // is a second, and this proves detection, not the wait.
+      env: { TASKS_TEST_WATCH_MS: '20' },
       stdout: 'null',
       stderr: 'null',
     }).spawn()
@@ -268,7 +263,7 @@ test('a phase ends with its runner killed outright', async () => {
   let leader = 0
   try {
     runner = new Deno.Command(Deno.execPath(), {
-      args: ['run', '-A', fixture, 'orchestrator', 'broad', dir],
+      args: ['run', '-A', fixture, 'broad', dir],
       // The guard's SIGTERM-then-kill grace is seconds in a run; a grandchild
       // that ignores SIGTERM makes the kill the point, so hurry to it.
       env: { TASKS_PHASE_GUARD_GRACE_MS: '100' },
@@ -358,7 +353,7 @@ async function cancellationCase(
   let dir = await Deno.makeTempDir({ prefix: 'test-runner-' })
   try {
     let process = new Deno.Command(Deno.execPath(), {
-      args: ['run', '-A', fixture, 'orchestrator', phase, dir],
+      args: ['run', '-A', fixture, phase, dir],
       stdout: 'null',
       stderr: 'inherit',
     }).spawn()
@@ -389,7 +384,6 @@ async function overlappingCancellationCase(
         'run',
         '-A',
         fixture,
-        'orchestrator',
         `${stubborn ? 'stubborn-' : ''}${phase}`,
         dir,
       ],
