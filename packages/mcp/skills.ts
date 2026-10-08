@@ -7,11 +7,11 @@ import {
   ProtocolError,
   ResourceTemplate,
 } from '@modelcontextprotocol/server'
-import { DefaultJsonSchemaValidator } from '@modelcontextprotocol/server/_shims'
 import { type Bundle, type Graph, Refused } from '@yaks/graph'
 import { repoSkills, skillFiles } from '@yaks/persona/skills'
 import { renderSkill } from '@yaks/persona/skill-text'
 import { parse, YamlSyntaxError } from '@std/yaml'
+import { validator } from './validator.ts'
 
 export type SkillOptions = { graph: Graph; repository?: string; cwd?: string }
 type File = { uri: string; bytes: Uint8Array; text?: string; mimeType: string }
@@ -186,7 +186,6 @@ export let attachSkills = async (
   options: SkillOptions,
 ): Promise<void> => {
   let view = await snapshot(options)
-  let validator = new DefaultJsonSchemaValidator()
   let schema = (
     properties: JsonSchemaType['properties'],
     required: string[] = [],

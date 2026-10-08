@@ -19,14 +19,7 @@ import { fromJsonSchema, ProtocolError } from '@modelcontextprotocol/server'
 // something the agent reads and corrects, not a broken connection.
 
 import { McpServer } from '@modelcontextprotocol/server'
-import { DefaultJsonSchemaValidator } from '@modelcontextprotocol/server/_shims'
-import type {
-  CallToolResult,
-  JsonSchemaType,
-  JsonSchemaValidator,
-  jsonSchemaValidator,
-  JsonSchemaValidatorResult,
-} from '@modelcontextprotocol/server'
+import type { CallToolResult } from '@modelcontextprotocol/server'
 import {
   type Actor,
   type Bundle,
@@ -55,6 +48,7 @@ import {
   type Search,
 } from './tools.ts'
 import type { Guide } from '@yaks/graph'
+import { validator } from './validator.ts'
 
 /**
  * How a client signs in to call a tool: `noauth` means anybody may call it,
@@ -394,32 +388,6 @@ export let annotated = (
   idempotentHint: !!t.idempotent,
   openWorldHint: !!t.openWorld,
 })
-
-// Shared schema authorship/elicitation validator. The runner, not the SDK's
-// high-level registerTool wrapper, owns tool argument validation, so a tool's
-// schema is rarely checked here at all. A schema is compiled the first time
-// something is checked against it, once per distinct schema in the process: a
-// server is built per request with every tool's schema made afresh, and Ajv
-// keeps a compiled check per schema object, so compiling at build would
-// compile every tool again on every request and keep each copy for good.
-let ajv: DefaultJsonSchemaValidator | undefined
-let checks = new Map<string, JsonSchemaValidator<unknown>>()
-let compiled = (schema: JsonSchemaType): JsonSchemaValidator<unknown> => {
-  let text = JSON.stringify(schema)
-  let check = checks.get(text)
-  if (!check) {
-    check = (ajv ??= new DefaultJsonSchemaValidator()).getValidator(schema)
-    checks.set(text, check)
-  }
-  return check
-}
-let validator: jsonSchemaValidator = {
-  getValidator: <T>(schema: JsonSchemaType): JsonSchemaValidator<T> => {
-    let check: JsonSchemaValidator<unknown> | undefined
-    return (input) =>
-      (check ??= compiled(schema))(input) as JsonSchemaValidatorResult<T>
-  },
-}
 
 /**
  * Build the MCP server for a graph: the generic tier (`graph_apply`,
