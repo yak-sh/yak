@@ -499,79 +499,69 @@ test('modern header without its envelope is refused by the SDK after authenticat
   assertEquals(body.error.code, -32602)
 })
 
-test('spawned stdio selects modern or legacy using the same attributed tool factory', async () => {
-  let { Client: ModernClient } = await import('@modelcontextprotocol/client')
-  let { StdioClientTransport: ModernTransport } = await import(
-    '@modelcontextprotocol/client/stdio'
+test('stdio selects modern or legacy using the same attributed tool factory', async () => {
+  let { Client: ModernClient, InMemoryTransport: ModernPair } = await import(
+    '@modelcontextprotocol/client'
   )
   let { Client: LegacyClient } = await import(
     '@modelcontextprotocol/sdk/client/index.js'
   )
-  let { StdioClientTransport: LegacyTransport } = await import(
-    '@modelcontextprotocol/sdk/client/stdio.js'
+  let { InMemoryTransport: LegacyPair } = await import(
+    '@modelcontextprotocol/sdk/inMemory.js'
   )
-  let root = new URL('../../', import.meta.url).pathname.replace(/\/$/, '')
-  let dir = await Deno.makeTempDir({ prefix: 'mcp-stdio-' })
-  let script = `${dir}/serve.ts`
-  await Deno.writeTextFile(
-    script,
-    `
-import { stdio } from ${
-      JSON.stringify(new URL('./stdio.ts', import.meta.url).href)
-    }
-import { shopGraph } from ${
-      JSON.stringify(new URL('./testing.ts', import.meta.url).href)
-    }
-await stdio({ graph: shopGraph(), actor: { by: 'm1' }, skills: async (built) => {
-  await Promise.resolve()
-  built.registerResource('shelf', 'shop://shelf', {}, () => ({ contents: [{ uri: 'shop://shelf', text: 'Awaited shelf' }] }))
-} })
-`,
-  )
-  let params = {
-    command: Deno.execPath(),
-    args: ['run', '-A', '--config', `${root}/deno.json`, script],
-    env: {
-      ...Deno.env.toObject(),
-      HARNESS_HOME: `${dir}/harness`,
-      TASKS_HOME: `${dir}/tasks`,
-    },
-    cwd: root,
-    stderr: 'pipe' as const,
-  }
+  let { stdio } = await import('./stdio.ts')
+  // Each connection is a pair of linked ends: the client holds one and the
+  // stdio entry the other, as it would hold the process's own streams.
+  let graph = shopGraph()
+  let serve = (wire: Parameters<typeof stdio>[1]) =>
+    stdio({
+      graph,
+      actor: ada,
+      skills: async (built) => {
+        await Promise.resolve()
+        built.registerResource('shelf', 'shop://shelf', {}, () => ({
+          contents: [{ uri: 'shop://shelf', text: 'Awaited shelf' }],
+        }))
+      },
+    }, wire)
+  let [modernEnd, modernWire] = ModernPair.createLinkedPair()
+  let [legacyEnd, legacyWire] = LegacyPair.createLinkedPair()
+  let served = [serve(modernWire), serve(legacyWire)]
   let modern = new ModernClient({ name: 'modern-stdio', version: '0' }, {
-    versionNegotiation: {
-      mode: { pin: '2026-07-28' },
-      probe: { timeoutMs: 10_000 },
-    },
+    versionNegotiation: { mode: { pin: '2026-07-28' } },
   })
   let legacy = new LegacyClient({ name: 'legacy-stdio', version: '0' })
   try {
-    await modern.connect(new ModernTransport(params))
+    await modern.connect(modernEnd)
     assertEquals(modern.getProtocolEra(), 'modern')
     assertEquals(modern.getNegotiatedProtocolVersion(), '2026-07-28')
     assertEquals(
       (await modern.listResources()).resources[0].uri,
       'shop://shelf',
     )
-    let result = await modern.callTool({
-      name: 'graph_query',
-      arguments: { q: '.book' },
+    let wrote = await modern.callTool({
+      name: 'graph_apply',
+      arguments: { bundles: [{ entity: { eid: 'b1' }, book: { price: 12 } }] },
     })
-    assertEquals(result.structuredContent, { result: [] })
-    await legacy.connect(new LegacyTransport(params))
+    assertEquals(wrote.isError, undefined)
+    await legacy.connect(legacyEnd)
     assertEquals(
       (await legacy.listResources()).resources[0].uri,
       'shop://shelf',
     )
     let old = await legacy.callTool({
       name: 'graph_query',
-      arguments: { q: '.book' },
+      arguments: { q: '.book.price=12' },
     })
-    assertEquals(old.structuredContent, { result: [] })
+    assertEquals(
+      (old.structuredContent as { result: Bundle[] }).result
+        .map((b) => b.entity.eid),
+      ['b1'],
+    )
+    assertEquals(comp((await graph.get(['b1']))[0], 'created').by, 'm1')
   } finally {
     await Promise.all([modern.close(), legacy.close()])
-    await Deno.remove(dir, { recursive: true })
+    await Promise.all(served.map((s) => s.close()))
   }
 })
 

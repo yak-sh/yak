@@ -407,12 +407,14 @@ For an agent that launches the server as a local process:
 import { stdio } from '@yaks/mcp/stdio'
 import { graph } from './shop.ts'
 
-await stdio({ graph, actor: { by: 'm1' } })
+stdio({ graph, actor: { by: 'm1' } })
 ```
 
-The caller supplies the actor because there is no HTTP request to authenticate.
-The module uses process streams and is kept separate from the portable HTTP
-entrypoint.
+It serves until the client closes the stream, or until `close()` on the handle
+it returns. The caller supplies the actor because there is no HTTP request to
+authenticate. A second argument, a transport, serves that connection instead of
+the process's own streams. The module uses process streams and is kept separate
+from the portable HTTP entrypoint.
 
 ## JSON Schema tool declarations
 
