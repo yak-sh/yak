@@ -22,7 +22,10 @@ let SIZES: [Intl.RelativeTimeFormatUnit, number][] = [
   ['hour', 3_600],
   ['minute', 60],
 ]
-let rtf = new Intl.RelativeTimeFormat('en', { numeric: 'auto' })
+// Made the first time a moment is said: building it loads the locale's
+// relative-time data, which costs every program importing @yaks/ui milliseconds
+// whether or not it ever says one.
+let rtf: Intl.RelativeTimeFormat | undefined
 
 /**
  * How long ago (or ahead) `iso` is from `now`, in words.
@@ -42,7 +45,10 @@ export let relative = (
   if (!iso) return ''
   let s = (now - Date.parse(iso)) / 1000
   for (let [unit, size] of SIZES) {
-    if (Math.abs(s) >= size) return rtf.format(Math.round(-s / size), unit)
+    if (Math.abs(s) >= size) {
+      rtf ??= new Intl.RelativeTimeFormat('en', { numeric: 'auto' })
+      return rtf.format(Math.round(-s / size), unit)
+    }
   }
   return 'just now'
 }
