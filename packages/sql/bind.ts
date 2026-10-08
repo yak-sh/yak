@@ -1195,15 +1195,7 @@ let conjuncts = (ctx: Ctx, clauses: Clause[]): Cond[] => {
   // Value tests imply component presence too. Only disjunctions need this
   // explicit sibling: direct predicates already narrow their own selection.
   let scopes = siblings.some((c) => c.kind == 'or')
-    ? siblings.flatMap((c): Clause[] => {
-      if (c.kind != 'pred' || c.not || c.where || c.path.length != 2) return []
-      let [comp, prop] = c.path
-      return comp != 'entity' && ctx.v.prop(comp, prop) &&
-          ctx.derived[`${comp}.${prop}`]?.worn !== false &&
-          needs(opOf(c), flat(c.value))
-        ? [present(comp)]
-        : []
-    })
+    ? siblings.flatMap((c): Clause[] => implied(ctx, c).map(present))
     : []
   let cs = addressed(ctx, [...siblings, ...scopes]).flatMap((c) => {
     let x = rungs(ctx, c)
@@ -1214,11 +1206,28 @@ let conjuncts = (ctx: Ctx, clauses: Clause[]): Cond[] => {
     if (!f) rest.push(c)
     else (f.present ? all : none).push(f.comp)
   }
+  // The archetypes a shape names are only those wearing what a value test
+  // beside it needs. A page's screen of the platform's own components is
+  // otherwise every archetype the store holds, and the list is read whole each
+  // time the statement runs.
+  let wearing = rest.flatMap((c) => implied(ctx, c))
+    .filter((comp) => facetOf(ctx, present(comp)))
   let shape = !ctx.present && all.length + none.length > 1
-    ? byArchetype(ctx, { all, none })
+    ? byArchetype(ctx, { all: [...new Set([...all, ...wearing])], none })
     : null
   if (!shape) return [...narrow, ...cs.map((x) => clause(ctx, x))]
   return [...narrow, shape, ...rest.map((x) => clause(ctx, x))]
+}
+
+// The component whose row a value test needs, if it needs one.
+let implied = (ctx: Ctx, c: Clause): string[] => {
+  if (c.kind != 'pred' || c.not || c.where || c.path.length != 2) return []
+  let [comp, prop] = c.path
+  return comp != 'entity' && ctx.v.prop(comp, prop) &&
+      ctx.derived[`${comp}.${prop}`]?.worn !== false &&
+      needs(opOf(c), flat(c.value))
+    ? [comp]
+    : []
 }
 
 // An OR's indexed arms are selected before the outer WHERE is applied. Carry

@@ -98,6 +98,13 @@ test('boolean presence trees retain their composition without component joins', 
   ])
 })
 
+// A page's screen of absent components beside a value test names only the
+// archetypes wearing the value's component, not every other archetype held.
+test('a screen beside a value test lists only the archetypes that can match', () => {
+  let sql = compile(parse('.doc.title=hello !claim !task'), v, { archetypes })
+  assertEquals(sql.params, ['[11]', 'hello'])
+})
+
 // A conjunction of facets is one question, not one per facet. `.kind=K`
 // expands to K present and every earlier kind absent, and a list per facet
 // bound kinds × archetypes parameters — 20,228 on the fleet graph, past V8's
