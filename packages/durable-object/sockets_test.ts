@@ -7,13 +7,23 @@
 import { assert, assertEquals, assertThrows } from '@std/assert'
 import { test, until } from '@yaks/testing'
 import { map as queryMap } from '@yaks/query'
-import { subscriptions } from '@yaks/api'
+import { subscriptions as subscribed } from '@yaks/api'
 import { type Bundle, type Graph, graph } from '@yaks/graph'
 import { loadVocab, type Vocab } from '@yaks/vocab'
 import type { Frame } from '@yaks/api'
 import { durable, shop, store } from './testing.ts'
 import { type Sockets, sockets, type Wire } from './sockets.ts'
 import { holds } from './holds.ts'
+
+// A relay batch or a save's timer, due as soon as what is running settles: the
+// pause it would wait in a socket's object is no part of what is checked here.
+let soon = (fn: () => void) => {
+  let due = true
+  queueMicrotask(() => due && fn())
+  return () => void (due = false)
+}
+let subscriptions = (g: Parameters<typeof subscribed>[0]) =>
+  subscribed(g, { timer: soon })
 
 // A socket, faked: what it was sent, and the attachment it carries across a
 // hibernation.
