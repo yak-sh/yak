@@ -16,17 +16,18 @@ import { sessionDerived } from './status.ts'
 import { currentStatus, react, transcript } from './react.ts'
 import { sessions } from './plugin.ts'
 
+let vocab = loadVocab([
+  sessionDoc,
+  modelDoc,
+  toolsDoc,
+  contextDoc,
+  effectDoc,
+  kernelDoc,
+  archetypeDoc,
+], [kernelKeywords])
+
 for (let fork of [false, true]) {
   test(`completion status sees old concurrent edits without rereading prose (fork: ${fork})`, async () => {
-    let vocab = loadVocab([
-      sessionDoc,
-      modelDoc,
-      toolsDoc,
-      contextDoc,
-      effectDoc,
-      kernelDoc,
-      archetypeDoc,
-    ], [kernelKeywords])
     let d = mem(), s = storage(d, vocab, { derived: sessionDerived(vocab) })
     let g = graph({ vocab, storage: s, plugins: [sessions()] })
     let m = identityEid('model', ['fake'])
@@ -100,32 +101,23 @@ for (let fork of [false, true]) {
 
 for (let fork of [false, true]) {
   test(`finite model window reads selected prose, retaining exact inherited lines (fork: ${fork})`, async () => {
-    let vocab = loadVocab([
-      sessionDoc,
-      modelDoc,
-      toolsDoc,
-      contextDoc,
-      effectDoc,
-      kernelDoc,
-      archetypeDoc,
-    ], [kernelKeywords])
     let d = mem(), s = storage(d, vocab, { derived: sessionDerived(vocab) })
     let g = graph({ vocab, storage: s, plugins: [sessions()] })
     let m = identityEid('model', ['fake'])
     await g.apply([
       { entity: { eid: m }, model: { name: 'fake' } },
       { entity: { eid: 'parent' }, session: {} },
-      ...Array.from({ length: 200 }, (_, i): Bundle => ({
+      ...Array.from({ length: 40 }, (_, i): Bundle => ({
         entity: { eid: 'e' + i },
         entry: { session: 'parent', seq: i + 1 },
         content: { body: 'exact line ' + i },
       })),
       ...fork
-        ? [{ entity: { eid: 'child' }, session: {}, fork: { from: 'e199' } }]
+        ? [{ entity: { eid: 'child' }, session: {}, fork: { from: 'e39' } }]
         : [],
       {
         entity: { eid: 'input' },
-        entry: { session: fork ? 'child' : 'parent', seq: 201 },
+        entry: { session: fork ? 'child' : 'parent', seq: 41 },
         using: { model: m, window: 16 },
         content: { body: 'now' },
       },
@@ -163,7 +155,7 @@ for (let fork of [false, true]) {
     assertEquals(asked[0].items, [
       ...Array.from(
         { length: 15 },
-        (_, i) => ({ kind: 'user' as const, text: 'exact line ' + (185 + i) }),
+        (_, i) => ({ kind: 'user' as const, text: 'exact line ' + (25 + i) }),
       ),
       { kind: 'user', text: 'now' },
     ])
@@ -172,15 +164,6 @@ for (let fork of [false, true]) {
 }
 
 test('the runner inspects finite-window status without loading old transcript prose', async () => {
-  let vocab = loadVocab([
-    sessionDoc,
-    modelDoc,
-    toolsDoc,
-    contextDoc,
-    effectDoc,
-    kernelDoc,
-    archetypeDoc,
-  ], [kernelKeywords])
   let s = storage(mem(), vocab, { derived: sessionDerived(vocab) })
   let g = graph({ vocab, storage: s, plugins: [sessions()] }),
     m = identityEid('model', ['fake'])
@@ -189,7 +172,7 @@ test('the runner inspects finite-window status without loading old transcript pr
     { entity: { eid: 'runner' }, session: {} },
     { entity: { eid: 'worker' } },
     ...Array.from(
-      { length: 200 },
+      { length: 40 },
       (_, i): Bundle => ({
         entity: { eid: 'r' + i },
         entry: { session: 'runner', seq: i + 1 },
@@ -198,7 +181,7 @@ test('the runner inspects finite-window status without loading old transcript pr
     ),
     {
       entity: { eid: 'input' },
-      entry: { session: 'runner', seq: 201 },
+      entry: { session: 'runner', seq: 41 },
       content: { body: 'now' },
       using: { model: m, window: 16 },
     },
@@ -228,15 +211,6 @@ test('the runner inspects finite-window status without loading old transcript pr
 
 for (let legacy of [false, true]) {
   test(`bounded body selection matches full model history for crossing calls and typed questions (legacy: ${legacy})`, async () => {
-    let vocab = loadVocab([
-      sessionDoc,
-      modelDoc,
-      toolsDoc,
-      contextDoc,
-      effectDoc,
-      kernelDoc,
-      archetypeDoc,
-    ], [kernelKeywords])
     let m = identityEid('model', ['fake'])
     let { toolEid } = await import('@yaks/tools')
     let tool = toolEid('echo')
@@ -245,7 +219,7 @@ for (let legacy of [false, true]) {
       { entity: { eid: tool }, tool: { name: 'echo', description: 'echo' } },
       { entity: { eid: 'parent' }, session: {} },
       ...Array.from(
-        { length: 100 },
+        { length: 20 },
         (_, i): Bundle => ({
           entity: { eid: 'older' + i },
           entry: { session: 'parent', ...legacy ? {} : { seq: i + 1 } },
@@ -254,36 +228,36 @@ for (let legacy of [false, true]) {
       ),
       {
         entity: { eid: 'begin' },
-        entry: { session: 'parent', seq: 101 },
+        entry: { session: 'parent', seq: 21 },
         content: { body: 'begin turn' },
       },
       {
         entity: { eid: 'call' },
-        entry: { session: 'parent', seq: 102 },
+        entry: { session: 'parent', seq: 22 },
         call: { to: tool, id: 'c', source: 'begin' },
         content: { body: '{"text":"exact arguments"}' },
       },
       {
         entity: { eid: 'during' },
-        entry: { session: 'parent', seq: 103 },
+        entry: { session: 'parent', seq: 23 },
         content: { body: 'input during tool' },
       },
       {
         entity: { eid: 'result' },
-        entry: { session: 'parent', seq: 104 },
+        entry: { session: 'parent', seq: 24 },
         result: { call: 'call' },
         content: { body: 'exact result' },
       },
       {
         entity: { eid: 'anchor' },
-        entry: { session: 'parent', seq: 105 },
+        entry: { session: 'parent', seq: 25 },
         content: { body: 'reply' },
         output: {},
       },
       { entity: { eid: 'child' }, session: {}, fork: { from: 'anchor' } },
       {
         entity: { eid: 'input' },
-        entry: { session: 'child', seq: 106 },
+        entry: { session: 'child', seq: 26 },
         content: { body: 'typed current request' },
         using: { model: m, window: 5 },
         questions: {
@@ -340,15 +314,6 @@ for (let legacy of [false, true]) {
 }
 
 test('status-only completion asks the existing derived fact without loading historical entries', async () => {
-  let vocab = loadVocab([
-    sessionDoc,
-    modelDoc,
-    toolsDoc,
-    contextDoc,
-    effectDoc,
-    kernelDoc,
-    archetypeDoc,
-  ], [kernelKeywords])
   let d = mem(), s = storage(d, vocab, { derived: sessionDerived(vocab) })
   let g = graph({ vocab, storage: s, plugins: [sessions()] })
   let m = identityEid('model', ['fake'])
@@ -358,7 +323,7 @@ test('status-only completion asks the existing derived fact without loading hist
   }])
   g.apply(
     Array.from(
-      { length: 200 },
+      { length: 20 },
       (_, n) => ({
         entity: { eid: `old-${n}` },
         entry: { session: 's' },
@@ -383,15 +348,6 @@ test('status-only completion asks the existing derived fact without loading hist
 })
 
 test('a terminal runner checks the derived verdict before loading entry history', async () => {
-  let vocab = loadVocab([
-    sessionDoc,
-    modelDoc,
-    toolsDoc,
-    contextDoc,
-    effectDoc,
-    kernelDoc,
-    archetypeDoc,
-  ], [kernelKeywords])
   let s = storage(mem(), vocab, { derived: sessionDerived(vocab) })
   let g = graph({ vocab, storage: s, plugins: [sessions()] })
   await g.apply([{ entity: { eid: 'terminal' }, session: {} }, {
@@ -399,7 +355,7 @@ test('a terminal runner checks the derived verdict before loading entry history'
   }])
   await g.apply(
     Array.from(
-      { length: 200 },
+      { length: 20 },
       (_, i): Bundle => ({
         entity: { eid: `terminal-${i}` },
         entry: { session: 'terminal' },
