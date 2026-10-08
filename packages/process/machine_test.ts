@@ -57,7 +57,7 @@ test('a short command answers inline, with its output and its code', async () =>
 test('a command tail keeps a line wider than a read block whole', async () => {
   let g = tracked()
   let said = await named(g).shell.run({
-    command: `printf 'x%.0s' {1..70000}; printf '\\n\\nlast'`,
+    command: `head -c 70000 /dev/zero | tr '\\0' x; printf '\\n\\nlast'`,
   })
   let [head, long, blank, last] = said.split('\n')
   assertMatch(head, /^process \S+ exited 0$/)
