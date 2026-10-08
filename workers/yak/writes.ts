@@ -121,6 +121,14 @@ export let raise = (db: Driver) => {
 // at once (door.ts `retryOnce`), so this is room to spare.
 let WINDOW = 10 * 60_000
 
+// What a connection knows of its log without reading it: when it last expired
+// receipts, and that it holds no waiting write, from the last look until
+// something keeps one (`keep`, `retry`, `revived`). Every row in the log is
+// written here, so a look is good until one of those runs.
+let swept = new WeakMap<object, number>()
+let idle = new WeakSet<object>()
+let of = (db: Driver): object => db.connection ?? db
+
 let PENDING = eq(col('state'), lit('pending'))
 let FAILED = eq(col('state'), lit('failed'))
 let APPLIED = eq(col('state'), lit('applied'))
@@ -212,8 +220,9 @@ export let writes = (db: Driver, seq?: number, recent = false) =>
 
 /** Explicitly retry an interrupted or unreviewed write, keeping its body and
  * key, and keeping its final answer beside them when it commits. */
-export let retry = (db: Driver, seq: number): boolean =>
-  db.query({
+export let retry = (db: Driver, seq: number): boolean => {
+  idle.delete(of(db))
+  return db.query({
     t: 'update',
     table: LOG,
     set: {
@@ -227,6 +236,7 @@ export let retry = (db: Driver, seq: number): boolean =>
     where: and(at(seq), or(INTERRUPTED, UNREVIEWED, and(FAILED, AUDIT))),
     returning: [col('seq')],
   }).length > 0
+}
 
 /** One kept write. */
 export type Kept = { seq: number; headers: string; body: string }
@@ -278,11 +288,17 @@ export let keyed = (body: string): boolean => {
   }
 }
 
-let now = () => new Date().toISOString()
+let now = () => new Date(Date.now()).toISOString()
 
-/** Expire only ordinary successful receipts, never held user input. */
+/** Expire only ordinary successful receipts, never held user input: at most
+ * once a tenth of the window, so a receipt outlives its window by that much
+ * at most, and a write in between reads nothing to find there is nothing to
+ * expire. */
 let expire = (db: Driver) => {
-  let gone = new Date(Date.now() - WINDOW).toISOString()
+  let t = Date.now()
+  if (t - (swept.get(of(db)) ?? -Infinity) < WINDOW / 10) return
+  swept.set(of(db), t)
+  let gone = new Date(t - WINDOW).toISOString()
   let rows = db.query({
     t: 'delete',
     from: LOG,
@@ -299,6 +315,7 @@ let expire = (db: Driver) => {
 /** Keep one write that cannot commit now; its place in the replay log. */
 export let keep = (db: Driver, req: Request, body: string): number => {
   expire(db)
+  idle.delete(of(db))
   let [row] = db.query({
     t: 'insert',
     into: LOG,
@@ -370,6 +387,9 @@ export let received = (
   if (!key) return
   expire(db)
   let text = JSON.stringify(composed(answer()))
+  let whole = fits(text)
+  // Its sequence number is asked back only for an answer kept in parts: a
+  // returned row is a row read.
   let [row] = db.query({
     t: 'insert',
     into: LOG,
@@ -390,12 +410,12 @@ export let received = (
       val(key),
       lit(1),
       lit('applied'),
-      val(fits(text) ? text : null),
+      val(whole ? text : null),
       lit(200),
     ]],
-    returning: [col('seq')],
+    returning: whole ? undefined : [col('seq')],
   })
-  if (!fits(text)) chunks(db, Number(row.seq), text)
+  if (!whole) chunks(db, Number(row.seq), text)
 }
 
 let chunks = (db: Driver, seq: number, text: string) => {
@@ -441,6 +461,7 @@ export let landed = (db: Driver, seq: number, answer: () => Bundle[]) => {
 /** The oldest write still waiting after `seq`. A replay walks the log forward
  * from one to the next, so it tries no write twice. */
 export let next = (db: Driver, seq = 0): Kept | null => {
+  if (idle.has(of(db))) return null
   let [row] = db.query(select({
     cols: [col('seq'), col('headers'), col('body')],
     from: table(LOG),
@@ -448,6 +469,7 @@ export let next = (db: Driver, seq = 0): Kept | null => {
     order: [col('seq')],
     limit: lit(1),
   }))
+  if (!row && !seq) idle.add(of(db))
   return row
     ? {
       seq: Number(row.seq),
@@ -479,13 +501,15 @@ export let aside = (db: Driver, seq: number, why: string) =>
   })
 
 /** Every write set aside, waiting again: a new incarnation may be new code. */
-export let revived = (db: Driver) =>
-  void db.query({
+export let revived = (db: Driver) => {
+  idle.delete(of(db))
+  db.query({
     t: 'update',
     table: LOG,
     set: { state: lit('pending') },
     where: and(FAILED, not(AUDIT)),
   })
+}
 
 /** A replay the store refused: kept, with why, and never replayed again. */
 export let dead = (db: Driver, seq: number, why: string) =>

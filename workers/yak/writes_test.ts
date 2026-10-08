@@ -701,3 +701,32 @@ test('ordinary large receipts retain the exact answer across rows', async () => 
   assertEquals(JSON.parse(first(d, 'large-live')!.answer), answer)
   assert(scan(d, 'yak_write_answers').length > 1)
 })
+
+test('an ordinary receipt expires with its parts once its window has passed', async () => {
+  let o = object()
+  await o.query('.doc')
+  let d = db(o.ctx)
+  let receipt = (key: string, answer: Bundle[]) =>
+    received(d, {
+      request: new Request('http://store/apply', {
+        method: 'POST',
+        headers: { [IDEMPOTENCY]: key },
+      }),
+    }, () => answer)
+  let now = Date.now, at = now()
+  Date.now = () => at
+  try {
+    receipt('large', [titled('n', '🦊'.repeat(2_000_000))])
+    receipt('small', [titled('s', 'small')])
+    at += 5 * 60_000
+    receipt('later', [titled('l', 'later')])
+    assert(first(d, 'large') && first(d, 'small'))
+    at += 6 * 60_000
+    receipt('last', [titled('z', 'last')])
+    assertEquals([first(d, 'large'), first(d, 'small')], [null, null])
+    assertEquals(scan(d, 'yak_write_answers'), [])
+    assert(first(d, 'later') && first(d, 'last'))
+  } finally {
+    Date.now = now
+  }
+})
