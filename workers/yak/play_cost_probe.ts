@@ -112,7 +112,7 @@ export class PlayCost {
         this.ctx.storage,
         n,
         history,
-        params.has('join') ? 0 : 5,
+        params.has('join') ? 0 : Number(params.get('minutes') ?? 1),
       ),
     )
   }

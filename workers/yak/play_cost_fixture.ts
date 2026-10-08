@@ -1,5 +1,8 @@
-// A minute of human-paced Vale traffic through the real Store. The workerd
-// probe supplies its SQL cursor counters; setup and subscriptions are separate.
+// A minute of Vale played the way its page plays it, through the real Store:
+// heroes run across Mossvale relaying at the position's pace, open and close
+// the tiles of world rows they reach (apps/vale/net.ts), gather, fight and
+// chat. The workerd probe supplies its SQL cursor counters; setup and the
+// watches a page opens on joining are counted apart.
 import { AsyncLocalStorage } from 'node:async_hooks'
 import { Store } from './graph.ts'
 import type { Bundle } from '@yaks/graph'
@@ -10,6 +13,11 @@ import {
 } from '@yaks/durable-object'
 import words from '../../apps/vale/vocab.json' with { type: 'json' }
 import { seedWorld, settleWorld, worldBindings } from './play_world_fixture.ts'
+import { areaOf, looksOf, placeOf, REACH } from '../../apps/vale/area.ts'
+import { SIZE } from '../../apps/vale/levels.ts'
+import { GIVERS } from '../../apps/vale/quests.ts'
+import { eidOf } from '../../apps/vale/villagers.ts'
+import { seedThemes } from '../../apps/vale/themes_fixture.ts'
 
 export type Cost = { read: number; written: number; calls: number }
 export type Report = {
@@ -26,6 +34,9 @@ export type Report = {
   shapes: { sql: string; cost: Cost }[]
   sourceShapes: Record<string, { sql: string; cost: Cost }[]>
 }
+// A page's relay rate, a hero's running speed (m/s), how far it runs before
+// turning back, the creatures each page moves and Mossvale's stored places.
+const HZ = 10, STRIDE = 5.6, SPAN = 176, CREATURES = 2, PLACES = 1500
 const person = 'aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa'
 const app = 'bbbbbbbb-bbbb-4bbb-bbbb-bbbbbbbbbbbb'
 const eid = (n: number) =>
@@ -154,19 +165,26 @@ export let playMinute = async (
     let text = typeof q == 'string' ? q : JSON.stringify(q)
     let kind = text.includes('position') && text.includes('30s ago')
       ? 'saves'
+      : source == 'walking'
+      ? 'walking'
       : 'live queries'
     return context.run(kind, () => read(q, opts))
   }
   // Linked retained transcripts are part of Vale's shape. They carry the
   // same computed status/cost pressure as the app without copying live rows.
   await seedHistory(g, db, history)
+  seedThemes()
+  await seedPlaces(g, PLACES)
   await post(
     '/apply',
-    Array.from({ length: players }, (_, i) => ({
+    Array.from({ length: players }, (_, i) => [{
       entity: { eid: eid(i + 1) },
       player: {},
       doc: { title: `Player ${i}` },
-    })),
+    }, {
+      entity: { eid: eid(700_000 + i) },
+      look: { player: eid(i + 1), name: `Hero ${i}`, at: 0 },
+    }]).flat(),
   )
   // Finish boot/lens/effect work before the active minute. It belongs to the
   // idle task, not an amortization that hides play's cost.
@@ -191,13 +209,34 @@ export let playMinute = async (
   }
   measured = true
   source = 'live queries'
+  // Where each hero walks: back and forth across Mossvale at a run, so its
+  // page crosses a chunk about every three seconds (apps/vale/play.ts).
+  let spot = (i: number, t: number) => {
+    let run = (STRIDE * t) % (2 * SPAN)
+    return {
+      x: SIZE / 2 - SPAN / 2 + (run < SPAN ? run : 2 * SPAN - run),
+      z: SIZE / 2 + 8 * i,
+    }
+  }
+  let areas: { area: ReturnType<typeof areaOf>; id: number }[] = []
+  let ask = (i: number, subscribe: string, id: string) =>
+    store.webSocketMessage(live[i], JSON.stringify({ subscribe, id }))
+  let drop = (i: number, id: string) =>
+    store.webSocketMessage(live[i], JSON.stringify({ unsubscribe: id }))
   for (let i = 0; i < players; i++) {
     let ws = wire()
     live.push(ws)
     let hero = eid(i + 1)
-    // The actual world/hero/catalog watches from Vale net.ts, including
-    // proximity disjunctions and builder provenance. Empty answers still cost.
+    // The watches Vale's page opens (net.ts, village.ts, deals.ts,
+    // chatbox.ts, party.ts), including proximity disjunctions and builder
+    // provenance. Empty answers still cost.
     let q = JSON.stringify(hero)
+    let { x, z } = spot(i, 0)
+    let area = areaOf(x, z, REACH)
+    areas.push({ area, id: 0 })
+    let level = placeOf(x, z).level
+    let givers = GIVERS.filter((g) => g.level == level).map((g) => eidOf(g.id))
+      .join(',')
     let queries = [
       `.entity.eid=${q}&?created&*`,
       `.player&.created.by=${person}&?doc&?position`,
@@ -216,10 +255,21 @@ export let playMinute = async (
         .map((name) => `.${name}.player=${q}`),
       `.directive.player=${q}&?created&?companion&.order=-created.at&.limit=10`,
       `.teleport_request.player=${q}&?created&?completed&.order=-created.at&.limit=10`,
-      '(.place.level=mossvale&.place.ci=-4..4&.place.ck=-4..4|.position.x=-128...160&.position.z=-128...160)&*',
-      `(.look.player.position.x=-128...160&.look.player.position.z=-128...160|.look.player=${q})&.look&*`,
-      '.fight.level=mossvale&*',
-      '.chat.level=mossvale&?doc&?created&.order=-created.at&.limit=60',
+      area.moving,
+      looksOf(area, hero),
+      `.fight.level=${JSON.stringify(level)}&*`,
+      `.chat.level=${
+        JSON.stringify(level)
+      }&?doc&?created&.order=-created.at&.limit=40`,
+      `.villager.level=${JSON.stringify(level)}&*`,
+      `.entry.session=${givers}&.output&?content&?answer&?created&.order=-created.at&.limit=60`,
+      `.going.villager=${givers}&?created&.order=-created.at&.limit=60`,
+      ...['deal', 'agreed', 'handed', 'declined'].map((name) =>
+        `.${name}.villager=${givers}&?created`
+      ),
+      ...['party_step.player', 'party_invite.to', 'party_reply.to'].map((
+        path,
+      ) => `.${path}=${q}&*`),
       ...[
         'theme_design',
         'building_design',
@@ -236,11 +286,13 @@ export let playMinute = async (
       '.built.current=true&.built.artifact&.built.build.build.variant=main&.fields=built.build.build.for.sfx.name,built.artifact.artifact.address,built.artifact.artifact.media_type',
     ]
     for (let [j, subscribe] of queries.entries()) {
-      await store.webSocketMessage(
-        ws,
-        JSON.stringify({ subscribe, id: `q${j}` }),
+      await ask(
+        i,
+        subscribe,
+        j == 15 ? 'moving0' : j == 16 ? 'looks0' : `q${j}`,
       )
     }
+    for (let tile of area.tiles) await ask(i, tile.query, `tile${tile.key}`)
   }
   opening = { ...total }
   openingShapes = [...shapes].map(([sql, cost]) => ({ sql, cost })).sort((
@@ -291,22 +343,61 @@ export let playMinute = async (
     return value as T
   }
   try {
-    for (let second = 0; second < 60 * minutes; second++) {
+    for (let tick = 0; tick < 60 * minutes * HZ; tick++) {
+      let second = Math.floor(tick / HZ), beat = tick % HZ == 0
       for (let i = 0; i < players; i++) {
         source = 'relays'
         let hero = eid(i + 1)
+        let { x, z } = spot(i, tick / HZ)
+        let here = placeOf(x, z)
+        // A walking page relays its hero, and the creatures it owns, at the
+        // position's 100ms pace; position.at moves once a second (play.ts).
+        let at1 = Math.floor(at / 1000) * 1000
+        let moving = (eid: string, dx: number) => ({
+          entity: { eid },
+          position: { level: here.level, x: x + dx, y: 0, z, at: at1 },
+          motion: { gait: 'run', yaw: 0, vx: STRIDE, vy: 0, vz: 0 },
+        })
         await settle(store.webSocketMessage(
           live[i],
           JSON.stringify({
-            relay: [{
-              entity: { eid: hero },
-              position: { level: 'mossvale', x: second, y: 0, z: i, at },
-              motion: { gait: 'walk', yaw: 0, vx: 1, vy: 0, vz: 0 },
-              fight: { level: 'mossvale', foe: 'wolf-1', swing: second },
-            }],
+            relay: [
+              {
+                ...moving(hero, 0),
+                ...(beat
+                  ? {
+                    fight: { level: here.level, foe: 'wolf-1', swing: second },
+                  }
+                  : {}),
+              },
+              ...Array.from(
+                { length: CREATURES },
+                (_, c) => moving(eid(800_000 + i * 10 + c), 3 + c),
+              ),
+            ],
           }),
         ))
-        if (second % 15 == 5) {
+        // A page that enters another tile watches the tiles it now reaches
+        // and lets go of the rest, then moves its moving watch and looks along
+        // (net.ts follow).
+        let next = areaOf(x, z, REACH), held = areas[i]
+        if (next.key != held.area.key) {
+          source = 'walking'
+          let id = held.id + 1, was = new Set(held.area.tiles.map((t) => t.key))
+          let now = new Set(next.tiles.map((t) => t.key))
+          for (let t of held.area.tiles) {
+            if (!now.has(t.key)) await settle(drop(i, `tile${t.key}`))
+          }
+          for (let t of next.tiles) {
+            if (!was.has(t.key)) await settle(ask(i, t.query, `tile${t.key}`))
+          }
+          await settle(ask(i, next.moving, `moving${id}`))
+          await settle(drop(i, `moving${held.id}`))
+          await settle(drop(i, `looks${held.id}`))
+          await settle(ask(i, looksOf(next, hero), `looks${id}`))
+          areas[i] = { area: next, id }
+        }
+        if (beat && second % 15 == 5) {
           source = 'gathering'
           await settle(post('/apply', [{
             entity: { eid: eid(400_000 + i * 1000 + second) },
@@ -318,20 +409,22 @@ export let playMinute = async (
               at,
               xp: 1,
             },
+            place: here,
           }]))
         }
-        if (second % 20 == 10) {
+        if (beat && second % 20 == 10) {
           source = 'fighting'
           await settle(post('/apply', [{
             entity: { eid: eid(500_000 + i * 1000 + second) },
             slain: { by: hero, creature: 'wolf-1', at, xp: 1, lvl: 1 },
+            place: here,
           }]))
         }
-        if (second % 60 == 25) {
+        if (beat && second % 60 == 25) {
           source = 'chatting'
           await settle(post('/apply', [{
             entity: { eid: eid(600_000 + i * 1000 + second) },
-            chat: { level: 'mossvale', player: hero },
+            chat: { level: here.level, player: hero },
             doc: { body: 'Hello' },
           }]))
         }
@@ -340,7 +433,7 @@ export let playMinute = async (
         }
         live[i].sent.length = 0
       }
-      at += 1000
+      at += 1000 / HZ
       source = 'saves'
       for (let rounds = 0; rounds < 100; rounds++) {
         let due = [...timers].filter(([, t]) => t.at <= at)
@@ -652,6 +745,32 @@ export let seedHistory = async (
                 doc: { body: 'Old chat' },
               }
               : { doc: { title: `History ${n}` } }),
+          }
+        }),
+      )
+    )
+  }
+}
+
+/** Mossvale's stored world rows: gathered nodes, the items they gave and
+ * kills, each where it happened, as Vale's page writes them. */
+let seedPlaces = async (g: Store['door']['graph'], n: number) => {
+  for (let start = 0; start < n; start += 500) {
+    await g.storage.tx((tx) =>
+      tx.patch(
+        Array.from({ length: Math.min(500, n - start) }, (_, j) => {
+          let k = start + j
+          let x = (k * 7919) % SIZE + 0.5, z = (k * 104729 >> 3) % SIZE + 0.5
+          return {
+            entity: { eid: eid(900_000 + k) },
+            created: { at: '2026-01-01T00:00:00Z', by: person },
+            updated: { at: '2026-01-01T00:00:00Z', by: person },
+            place: placeOf(x, z),
+            ...(k % 3 == 0
+              ? { slain: { by: person, creature: `wolf-${k}`, at: k, xp: 1 } }
+              : k % 3 == 1
+              ? { item: { owner: person, kind: 'wood', at: k } }
+              : { gathered: { node: `node-${k}`, life: 0, kind: 'tree' } }),
           }
         }),
       )
