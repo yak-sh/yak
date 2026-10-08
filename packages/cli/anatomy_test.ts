@@ -61,6 +61,20 @@ test('native anatomy isolates loading evidence even when vocabulary is shared', 
   assertEquals(after.observed?.skills, false)
 })
 
+test('native anatomy reads the vocabulary only when it is read', () => {
+  let asked = 0
+  let vocab = new Proxy(loadVocab(docs), {
+    get: (v, key) => (asked++, Reflect.get(v, key)),
+  })
+  let capture = nativeAnatomy(['shop'], ['graph'], roles)
+  capture.declarations(docs, vocab)
+  capture.graphed()
+  assertEquals(asked, 0)
+  let read = capture.read()
+  assertEquals(read.comps.map((c) => [c.name, c.bound]), [['book', true]])
+  assert(asked > 0)
+})
+
 test('native secret observation reads only raw names, not resolved accessors', () => {
   let reads = 0
   let options = {

@@ -45,7 +45,10 @@ let hints = [
   'roles',
 ]
 
-/** Capture only already-made contributions; none of these methods runs code. */
+/** Capture only already-made contributions; none of these methods runs code.
+ * What a composition observes is kept as it arrives and applied when its
+ * anatomy is read: projecting the vocabulary's declarations is tens of
+ * milliseconds of every command, and almost no command reads its anatomy. */
 export let nativeAnatomy = (
   packages: string[],
   roles: readonly string[],
@@ -294,20 +297,29 @@ export let nativeAnatomy = (
       bound: !!tier,
     }
   }
+  // Applied in the order they were observed, the first time anybody reads.
+  let pending: (() => void)[] = []
+  let later =
+    <A extends unknown[]>(step: (...args: A) => void) => (...args: A) => {
+      pending.push(() => step(...args))
+    }
   return {
-    read: (): Anatomy => anatomy({ ...source, facets: [...facets.values()] }),
-    observe,
-    attempted: (owner: string, name: string) => {
-      forFacet(owner, name).attempted = true
+    read: (): Anatomy => {
+      for (let step of pending.splice(0)) step()
+      return anatomy({ ...source, facets: [...facets.values()] })
     },
-    loaded: (owner: string, name: string, present: boolean) => {
+    observe: later(observe),
+    attempted: later((owner: string, name: string) => {
+      forFacet(owner, name).attempted = true
+    }),
+    loaded: later((owner: string, name: string, present: boolean) => {
       let f = forFacet(owner, name)
       f.loaded = f.declared = present
       if (present) ownerOf(owner).loaded = true
-    },
-    binding,
-    declarations,
-    graph: (owner: string, plugins: Plugin[]) => {
+    }),
+    binding: later(binding),
+    declarations: later(declarations),
+    graph: later((owner: string, plugins: Plugin[]) => {
       plugins.forEach((p, i) => {
         let made = anatomyPlugin(owner, p, String(i))
         source.rules = [
@@ -323,31 +335,31 @@ export let nativeAnatomy = (
         registered.add(owner)
         ownerOf(owner).loaded = true
       }
-    },
-    graphed: () => {
+    }),
+    graphed: later(() => {
       for (let r of source.rules ?? []) r.bound = true
       for (let h of source.hooks ?? []) h.bound = true
       for (let c of source.comps ?? []) c.bound = true
       for (let owner of vocabulary) binding(owner, 'vocab')
       for (let owner of registered) binding(owner, 'graph')
-    },
-    tier: (tools: NamedTool[]) => {
+    }),
+    tier: later((tools: NamedTool[]) => {
       ownerOf('@yaks/graph')
       binding('@yaks/graph', 'tools')
       source.tools = [
         ...source.tools ?? [],
         ...tools.map((t) => tool('@yaks/graph', t, 'graph')),
       ]
-    },
-    runs: (owner: string, names: string[], joined: string[]) => {
+    }),
+    runs: later((owner: string, names: string[], joined: string[]) => {
       if (joined.length) binding(owner, 'tools')
       for (let t of source.tools ?? []) {
         if (t.package != owner) continue
         t.loaded = names.includes(t.name)
         t.bound = joined.includes(t.name)
       }
-    },
-    effects: (handlers: Map<string, string>, serving: boolean) => {
+    }),
+    effects: later((handlers: Map<string, string>, serving: boolean) => {
       for (let e of source.effects ?? []) {
         e.handler = handlers.get(e.name)
         e.loaded = !!e.handler
@@ -355,8 +367,8 @@ export let nativeAnatomy = (
         e.noop = serving && !e.handler
         if (e.handler) binding(e.handler, 'effects')
       }
-    },
-    due: (names: string[]) => {
+    }),
+    due: later((names: string[]) => {
       for (let e of source.effects ?? []) {
         if (!names.includes(e.name)) continue
         e.handler = '@yaks/tools'
@@ -364,22 +376,24 @@ export let nativeAnatomy = (
         e.loaded = e.bound = true
       }
       if (names.length) binding('@yaks/tools', 'effects')
-    },
-    routes: (owner: string, routes: { method: string; path: string }[]) => {
-      source.routes = [
-        ...source.routes ?? [],
-        ...routes.map((r, i) => ({
-          name: `${r.method} ${r.path}`,
-          package: owner,
-          facet: 'routes',
-          key: String(i),
-          method: r.method,
-          path: r.path,
-          loaded: true,
-          bound: true,
-        })),
-      ]
-      binding(owner, 'routes')
-    },
+    }),
+    routes: later(
+      (owner: string, routes: { method: string; path: string }[]) => {
+        source.routes = [
+          ...source.routes ?? [],
+          ...routes.map((r, i) => ({
+            name: `${r.method} ${r.path}`,
+            package: owner,
+            facet: 'routes',
+            key: String(i),
+            method: r.method,
+            path: r.path,
+            loaded: true,
+            bound: true,
+          })),
+        ]
+        binding(owner, 'routes')
+      },
+    ),
   }
 }
