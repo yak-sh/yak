@@ -9,11 +9,13 @@
 // - workerd: every `*_workerd_test.ts`, against the one kernel
 //   workers/yak/probe-suite.ts starts for the run.
 //
-// `deno task test [--tag=t]... [--all] [path...]` runs what lies under the
-// paths given, or all of it. A platform's name is a tag every test on it
-// carries, so `--tag=workerd` runs that platform alone. A file whose tests
-// all passed, with nothing it depends on changed since, is left out unless
-// `--all` is given (packages/testing/deps.ts).
+// `deno task test [--tag=t]... [--all] [--times=dir] [path...]` runs what
+// lies under the paths given, or all of it, its platforms at once. A
+// platform's name is a tag every test on it carries, so `--tag=workerd` runs
+// that platform alone. A file whose tests all passed, with nothing it depends
+// on changed since, is left out unless `--all` is given
+// (packages/testing/deps.ts). `--times` has each platform's runner write what
+// it took to `<dir>/<platform>.json`.
 
 import { find, tested } from '@yaks/testing/find'
 import { type Result, runTestCommands, type TestCommand } from './phases.ts'

@@ -1,6 +1,7 @@
 // The runner as a person runs it: a process of its own over a directory of
 // test modules and pages, its record of passes kept in the directory.
 import { equal, match, ok, test } from './mod.ts'
+import type { Times } from './run.ts'
 
 let MAIN = new URL('./main.ts', import.meta.url).pathname
 let TESTING = new URL('./mod.ts', import.meta.url).href
@@ -140,4 +141,29 @@ test('untagged', () => {})`,
   ok(text.includes('did not end within 50ms'))
   // A run that picked by tag ran only some, so nothing is recorded.
   equal(Object.keys((await dir.run('--timeout=50')).said).length, 3)
+})
+
+test('--times says what each test and each load took', async () => {
+  await using dir = await fixture({
+    'a_test.ts': `import { test } from '@yaks/testing'
+test('waits', () => new Promise((go) => setTimeout(go, 20)))
+test('fails', () => { throw new Error('no') })
+test('later', () => {}, { skip: true })`,
+  })
+  let at = await Deno.makeTempDir({ prefix: 'yaks-testing-times-' })
+  try {
+    await dir.run('--platform=p', `--times=${at}`)
+    let times: Times = JSON.parse(await Deno.readTextFile(`${at}/p.json`))
+    match(times.tests, [
+      { name: 'waits', ok: true, file: /a_test\.ts$/ },
+      { name: 'fails', ok: false },
+    ])
+    equal(times.tests.length, 2)
+    ok(times.tests[0].ms >= 20)
+    let [[file, load]] = Object.entries(times.loads)
+    ok(file.endsWith('a_test.ts') && load > 0)
+    ok(times.wall >= times.planned + times.loading)
+  } finally {
+    await Deno.remove(at, { recursive: true })
+  }
 })

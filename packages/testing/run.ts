@@ -123,6 +123,30 @@ export let file = async (
   return out
 }
 
+/** What a run took, in milliseconds: the whole of it, its planning and its
+ * loading, each file's load and each test that ran. */
+export type Times = {
+  wall: number
+  planned: number
+  loading: number
+  loads: Record<string, number>
+  tests: { file: string; name: string; ms: number; ok: boolean }[]
+}
+
+/** A run's times, as `--times` writes them: skipped tests took nothing. */
+export let timed = (
+  outcomes: Outcome[],
+  run: Omit<Times, 'tests'>,
+): Times => ({
+  ...run,
+  tests: outcomes.filter((o) => !o.skipped).map((o) => ({
+    file: o.test.file,
+    name: o.test.name,
+    ms: o.ms,
+    ok: o.ok,
+  })),
+})
+
 let shown = (error: unknown) =>
   error instanceof Error ? error.stack ?? String(error) : Deno.inspect(error)
 

@@ -3,7 +3,7 @@
 // this one runtime a file at a time, each file's tests run as it loads.
 //
 //   main.ts [--tag=t]... [--platform=p] [--all] [--also=path]...
-//     [--timeout=ms] path...
+//     [--timeout=ms] [--times=dir] path...
 //
 // A path is a test module (`*_test.ts`), a page whose examples run (a module
 // or a Markdown page), or a directory holding them. `--tag` keeps the tests
@@ -11,15 +11,16 @@
 // carries. A file whose tests all passed, with nothing it depends on changed
 // since (./deps.ts), is left out unless `--all` is given; `--also` names
 // what every file depends on beside its own graph. A test that has not ended
-// within `--timeout` fails, and the run goes on. The exit code is 1 when a
-// test failed.
+// within `--timeout` fails, and the run goes on. `--times` writes what each
+// test and each file's load took to `<dir>/<platform>.json`. The exit code is
+// 1 when a test failed.
 import { keys, passed, remember } from './deps.ts'
 import { find } from './find.ts'
 import { examples, plan, sweep } from './load.ts'
-import { file, type Outcome, summary } from './run.ts'
+import { file, type Outcome, summary, timed } from './run.ts'
 import { collect, from, type Test, test } from './suite.ts'
 
-let FLAGS = /^--(tag|platform|also|timeout)=(.*)$|^--(all)$/
+let FLAGS = /^--(tag|platform|also|timeout|times)=(.*)$|^--(all)$/
 let odd = Deno.args.find((a) => a.startsWith('--') && !FLAGS.test(a))
 if (odd) {
   console.error(`main.ts: the runner has no flag ${odd}`)
@@ -69,6 +70,7 @@ let left = [...modules, ...pages].filter((p) => !fresh(p)).length
 
 let planned = performance.now() - started
 let loading = 0
+let loads: Record<string, number> = {}
 
 let collected = collect()
 let chosen = (t: Test) => tags.every((tag) => t.tags.includes(tag))
@@ -86,6 +88,7 @@ let run = async (path: string, load: () => Promise<unknown>) => {
   }
   let loaded = performance.now() - begun
   loading += loaded
+  loads[path] = loaded
   let tests = collected.slice(at).filter(chosen)
   outcomes.push(...await file(path, tests, timeout, loaded))
 }
@@ -104,5 +107,14 @@ if (!tags.length) {
       .flatMap((p) => key.get(p) ?? []),
   )
 }
-summary(outcomes, performance.now() - started, { left, planned, loading })
+let wall = performance.now() - started
+summary(outcomes, wall, { left, planned, loading })
+let times = flag('times').at(-1)
+if (times) {
+  await Deno.mkdir(times, { recursive: true })
+  await Deno.writeTextFile(
+    `${times}/${platform || 'tests'}.json`,
+    JSON.stringify(timed(outcomes, { wall, planned, loading, loads })),
+  )
+}
 Deno.exit(outcomes.some((o) => !o.ok) ? 1 : 0)

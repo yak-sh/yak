@@ -226,7 +226,7 @@ try {
 
 ```sh
 deno run -A jsr:@yaks/testing/main [--tag=t]... [--platform=p] [--all] \
-  [--also=path]... [--timeout=ms] path...
+  [--also=path]... [--timeout=ms] [--times=dir] path...
 ```
 
 A path names a test module, a page, or a directory holding them. Files load one
@@ -237,7 +237,10 @@ sets exit code 1; an unknown flag sets exit code 2.
 
 `--tag` selects tests carrying every named tag; comma-separated tags are also
 accepted. `--platform` supplies the runtime's tag, so selecting that tag keeps
-all tests in the runtime.
+all tests in the runtime. `--times` writes what the run took, in milliseconds,
+to `<dir>/<platform>.json` (`tests.json` without a platform): the whole run, its
+planning and loading, each file's load, and each test that ran with its file,
+name and whether it passed.
 
 A file whose tests all passed is skipped while its dependencies are unchanged:
 its module dependencies resolved by `deno info`, files named with a literal
