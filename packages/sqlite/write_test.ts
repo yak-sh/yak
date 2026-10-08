@@ -172,7 +172,8 @@ test('a composite unique refuses only the whole pair', () => {
 // built — while a write's own RETURNING rides back with the batch, which is why
 // the numbers a mint hands out cost nothing here. What is left is one question
 // about identity: which of the named eids are already in the grave. It does not
-// multiply with the batch.
+// multiply with the batch, and an eid the connection holds the spine of is not
+// asked about again.
 test('a patch asks once about identity, whatever the batch is', () => {
   let seen: string[] = []
   let driver = spy(mem(), (sql) => void seen.push(sql))
@@ -195,9 +196,9 @@ test('a patch asks once about identity, whatever the batch is', () => {
   ])
   assertEquals(asked(), 1)
 
-  // A batch that mints nothing asks the same one question.
+  // A batch of entities already asked about asks nothing.
   write(s, [{ entity: { eid: 'p1' }, product: { price: 3 } }])
-  assertEquals(asked(), 1)
+  assertEquals(asked(), 0)
 
   s.tx((tx) => tx.remove([{ eid: 'p1' }]))
   assertEquals(asked(), 0)
@@ -246,7 +247,7 @@ test('numbering exceptions ask once across tables and entities', () => {
     { entity: { eid: 's' }, doc: { title: 'Shelf' } },
     { entity: { eid: 'r' }, doc: { title: 'Review' } },
   ])
-  assertEquals(selects, 2) // Identity and exception presence, for the batch.
+  assertEquals(selects, 1) // Exception presence, for the batch; identity held.
   let rows = s.tx((tx) => tx.get(['p0', 'p149', 's', 'r']))
   assertEquals(rows.map((b) => b.entity.num ?? null), [1, 150, null, null])
 })
@@ -267,9 +268,10 @@ test('a patch asks about numbering exceptions only where they decide a number', 
     write(s, bundles)
     return asked
   }
-  // Only identity is read: the bundle names the exception, or gives nothing.
-  assertEquals(cost([{ entity: { eid: 's' }, shelf: { slot: 2 } }]), 1)
-  assertEquals(cost([{ entity: { eid: 's' }, doc: null }]), 1)
+  // Nothing is read: the bundle names the exception, or gives nothing, and
+  // the identity is held.
+  assertEquals(cost([{ entity: { eid: 's' }, shelf: { slot: 2 } }]), 0)
+  assertEquals(cost([{ entity: { eid: 's' }, doc: null }]), 0)
   // A numbered entity given the exception still loses its number.
   write(s, [{ entity: { eid: 'p' }, shelf: { aisle: 'B', slot: 1 } }])
   assertEquals(

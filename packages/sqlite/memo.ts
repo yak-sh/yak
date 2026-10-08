@@ -12,6 +12,12 @@
 // are the ones this connection says: `begin` and savepoints through `query`,
 // and the driver's own `tx`.
 //
+// Spines (./write.ts `spines`: an eid's integer id, number and grave) are kept
+// for the connection too, so the patches one transaction makes read each
+// entity's spine once. Any statement that may move one lets every spine go,
+// except a plain mint, which this package tells (`spined().learn`); those kept
+// during a transaction go if it rolls back.
+//
 // A get naming components is cut from a whole entity held. Returned bundles
 // are copies; dynamic components (computed, or derived from anything but this
 // connection's rows) are read again on every hit. Bounded by count and bytes,
@@ -20,6 +26,7 @@ import type { Bundle } from '@yaks/graph'
 import type { Vocab } from '@yaks/vocab'
 import { type Derived, type Driver, revision, type Stmt } from '@yaks/sql'
 import { tables } from './ddl.ts'
+import type { Spine } from './write.ts'
 
 type Get = (eids: string[], comps?: string[]) => Bundle[]
 
@@ -38,7 +45,18 @@ export type Memo = {
   ) => R
 }
 
-const COUNT = 2048, BYTES = 4 << 20
+/** The spines a connection keeps. */
+export type Spines = {
+  /** These eids' spines: held ones from memory, the rest through `read`. */
+  get: (
+    eids: string[],
+    read: (eids: string[]) => Map<string, Spine>,
+  ) => Map<string, Spine>
+  /** A spine this connection's own statement just minted. */
+  learn: (eid: string, spine: Spine) => void
+}
+
+const COUNT = 2048, BYTES = 4 << 20, SPINES = 8192
 
 type Kept = {
   /** an entity as read, or `null` for one storage does not hold */
@@ -57,6 +75,11 @@ type Connection = {
   writing: number
   dirty: Set<string>
   blind: boolean
+  spines: Map<string, Spine>
+  /** eids whose spine was kept while a transaction is open */
+  since: Set<string>
+  /** the `outside` revision the spines were kept at */
+  outside: number
 }
 
 let connections = new WeakMap<Driver, Connection>()
@@ -70,13 +93,37 @@ let connect = (driver: Driver): Connection => {
     writing: 0,
     dirty: new Set(),
     blind: false,
+    spines: new Map(),
+    since: new Set(),
+    outside: -1,
   }
   connections.set(driver, c)
-  let ended = () => {
+  // What a rolled-back transaction had kept of spines may be gone with it.
+  let undone = () => {
+    for (let eid of c.since) c.spines.delete(eid)
+    c.since.clear()
+  }
+  let ended = (committed: boolean) => {
     c.depth = 0
     c.dirty.clear()
     c.blind = false
+    if (!committed) undone()
+    c.since.clear()
   }
+  let unspine = () => {
+    c.spines.clear()
+    c.since.clear()
+  }
+  // Whether a write may move an id, a number or a grave: anything but a plain
+  // mint into `entity` and a pointer to its archetype.
+  let moves = (s: Stmt): boolean =>
+    s.t == 'insert'
+      ? s.into == 'tombstone' ||
+        s.into == 'entity' && (!!s.or || !!s.upsert?.some((u) => u.set))
+      : s.t == 'update'
+      ? s.table == 'tombstone' ||
+        s.table == 'entity' && Object.keys(s.set).some((k) => k != 'archetype')
+      : s.t == 'delete' && (s.from == 'entity' || s.from == 'tombstone')
   let forget = (table?: string) => {
     let held = false
     for (let k of c.kept) {
@@ -89,15 +136,20 @@ let connect = (driver: Driver): Connection => {
   let observe = (s: Stmt): void => {
     if (s.t == 'raw') return s.origin && observe(s.origin)
     if (s.t == 'begin' || s.t == 'savepoint') c.depth++
-    else if (s.t == 'commit' || s.t == 'rollback' && !s.to) ended()
-    else if (s.t == 'release' && --c.depth <= 0) ended()
+    else if (s.t == 'commit') ended(true)
+    else if (s.t == 'rollback') s.to ? undone() : ended(false)
+    else if (s.t == 'release' && --c.depth <= 0) ended(true)
     else if (s.t == 'insert' || s.t == 'update' || s.t == 'delete') {
+      if (moves(s)) unspine()
       if (!c.writing) {
         forget(s.t == 'insert' ? s.into : s.t == 'update' ? s.table : s.from)
       }
     } else if (
       s.t.startsWith('create ') || s.t == 'alter table' || s.t == 'drop'
-    ) forget()
+    ) {
+      forget()
+      unspine()
+    }
   }
   let query = driver.query.bind(driver)
   driver.query = (s) => {
@@ -119,14 +171,52 @@ let connect = (driver: Driver): Connection => {
     let tx = driver.tx.bind(driver)
     driver.tx = (body) => {
       c.depth++
+      let committed = false
       try {
-        return tx(body)
+        let out = tx(body)
+        committed = true
+        return out
       } finally {
-        if (--c.depth <= 0) ended()
+        if (--c.depth <= 0) ended(committed)
       }
     }
   }
   return c
+}
+
+/** The spines kept for the connection `driver` is. */
+export let spined = (driver: Driver): Spines => {
+  let c = connect(driver)
+  let keep = (eid: string, spine: Spine) => {
+    c.spines.delete(eid)
+    c.spines.set(eid, spine)
+    if (c.depth) c.since.add(eid)
+    if (c.spines.size > SPINES) c.spines.delete(c.spines.keys().next().value!)
+  }
+  return {
+    get: (eids, read) => {
+      let now = revision(driver, 'outside')
+      if (now != c.outside) {
+        c.spines.clear()
+        c.since.clear()
+        c.outside = now
+      }
+      let out = new Map<string, Spine>()
+      let missing = eids.filter((eid) => {
+        let held = c.spines.get(eid)
+        if (held) out.set(eid, { ...held })
+        return !held
+      })
+      if (missing.length) {
+        for (let [eid, spine] of read(missing)) {
+          out.set(eid, spine)
+          keep(eid, { ...spine })
+        }
+      }
+      return out
+    },
+    learn: (eid, spine) => keep(eid, { ...spine }),
+  }
 }
 
 let sizeOf = (b: Bundle) =>

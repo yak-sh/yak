@@ -76,6 +76,7 @@ import {
   type Write,
 } from '@yaks/sql'
 import { tables } from './ddl.ts'
+import { spined } from './memo.ts'
 import { isJsonb, jsonb, jsonIn } from './jsonb.ts'
 import { get } from './read.ts'
 
@@ -135,9 +136,13 @@ export type Spine = { id: number; num: number | null; dead: boolean }
 export let spines = (
   driver: Driver,
   eids: string[],
-): Map<string, Spine> => {
-  if (!eids.length) return new Map()
-  return new Map(
+): Map<string, Spine> =>
+  eids.length
+    ? spined(driver).get(eids, (eids) => stored(driver, eids))
+    : new Map()
+
+let stored = (driver: Driver, eids: string[]): Map<string, Spine> =>
+  new Map(
     driver.query(select({
       cols: [
         col('id', 'e'),
@@ -156,7 +161,6 @@ export let spines = (
       dead: r.dead != null,
     }]),
   )
-}
 
 /** The entities that are tombstoned, of those named. */
 export let buried = (driver: Driver, eids: string[]): Set<string> =>
@@ -569,7 +573,15 @@ export let patch = (
       returning: [...IDENTITY, col('id')],
     })
     let e = minted(rows)
-    if (rows[0]) ids.set(eid, Number(rows[0].id))
+    if (rows[0]) {
+      let id = Number(rows[0].id)
+      ids.set(eid, id)
+      spined(driver).learn(eid, {
+        id,
+        num: rows[0].num == null ? null : Number(rows[0].num),
+        dead: false,
+      })
+    }
     if (e) born.push(e)
   }
   // A spine an earlier reference minted is numbered now, if it still carries

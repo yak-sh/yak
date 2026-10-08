@@ -318,3 +318,87 @@ test('a get naming components is cut from the whole entity held', () => {
   }])
   assertEquals(f.s.get(['hero'], []), [{ entity: { eid: 'hero' } }])
 })
+
+let selects = (f: ReturnType<typeof fixture>, body: () => unknown) => {
+  let query = f.d.query, n = 0
+  f.d.query = (stmt) => {
+    if (stmt.t == 'select') n++
+    return query(stmt)
+  }
+  try {
+    body()
+  } finally {
+    f.d.query = query
+  }
+  return n
+}
+
+test('a transaction asks about a spine once, however many patches name it', () => {
+  let f = fixture()
+  let write = () =>
+    f.s.tx((tx) => {
+      tx.patch([{ entity: { eid: 'mob' }, player: { active: true } }])
+      tx.patch([{ entity: { eid: 'mob' }, position: { x: 1 } }])
+      tx.patch([{ entity: { eid: 'mob' }, position: { x: 2 } }])
+    })
+  assertEquals(selects(f, write), 1)
+  assertEquals(selects(f, write), 0)
+  assertEquals(f.s.get(['mob'])[0].position, { x: 2 })
+})
+
+// A driver whose transactions are its own (a Durable Object's
+// transactionSync), opened beside the statements the store sees.
+let native = () => {
+  let d = mem(), query = d.query.bind(d)
+  d.tx = (body) => {
+    query({ t: 'savepoint', name: 'native' })
+    try {
+      let out = body()
+      query({ t: 'release', name: 'native' })
+      return out
+    } catch (e) {
+      query({ t: 'rollback', to: 'native' })
+      query({ t: 'release', name: 'native' })
+      throw e
+    }
+  }
+  return d
+}
+
+for (
+  let [name, driver] of [['savepoints', mem], ['its own', native]] as const
+) {
+  test(`spines a rolled-back transaction minted or buried are let go, transactions ${name}`, () => {
+    let f = fixture(driver())
+    let mob = (comps: Omit<Bundle, 'entity'>) => [{
+      entity: { eid: 'mob' },
+      ...comps,
+    }]
+    let fail = (
+      body: (tx: Parameters<Parameters<typeof f.s.tx>[0]>[0]) => void,
+    ) =>
+      assertThrows(() =>
+        f.s.tx((tx) => {
+          body(tx)
+          throw new Error('no')
+        })
+      )
+    fail((tx) => tx.patch(mob({ player: { active: true } })))
+    f.s.tx((tx) => tx.patch(mob({ position: { x: 1 } })))
+    assertEquals(f.s.get(['mob'])[0].position, { x: 1 })
+    fail((tx) => {
+      tx.remove([{ eid: 'mob' }])
+      tx.patch(mob({ position: { x: 2 } }))
+    })
+    f.s.tx((tx) => tx.patch(mob({ position: { x: 3 } })))
+    assertEquals(f.s.get(['mob'])[0].position, { x: 3 })
+    // A buried entity takes no rows until it is brought back.
+    f.s.tx((tx) => tx.remove([{ eid: 'mob' }]))
+    f.s.tx((tx) => tx.patch(mob({ position: { x: 4 } })))
+    f.s.tx((tx) => {
+      tx.revive(['mob'])
+      tx.patch(mob({ player: { active: false } }))
+    })
+    assertEquals(f.s.get(['mob'])[0].position, undefined)
+  })
+}

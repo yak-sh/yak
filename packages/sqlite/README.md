@@ -206,6 +206,11 @@ seen where the driver says them: a `begin` or savepoint through `query`, or the
 driver's own `tx`, so a host that opens one some other way must not read through
 the store inside it.
 
+The spines a patch asks about (an eid's integer id, number and grave) are kept
+the same way, so the patches one transaction makes read each entity's once. Any
+statement that may move a spine lets them all go, and those kept inside a
+transaction that rolls back go with it.
+
 ## API
 
 `storage(driver, vocab, base?)` returns a synchronous `Store`:
