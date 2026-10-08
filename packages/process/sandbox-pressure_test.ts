@@ -5,7 +5,7 @@ import { test } from '@yaks/testing'
 import { sandboxProvider } from '@yaks/process/machine'
 import { until } from './testing.ts'
 
-let limits = { cpuQuota: 50, memoryMax: 128 * 1024 * 1024, tasksMax: 32 }
+let limits = { cpuQuota: 50, memoryMax: 48 * 1024 * 1024, tasksMax: 32 }
 
 test('sandbox controllers throttle CPU, refuse extra tasks and contain memory exhaustion', async () => {
   let dir = await Deno.makeTempDir({ prefix: 'sp-' })
