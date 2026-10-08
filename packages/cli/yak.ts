@@ -105,6 +105,10 @@ let applied = async (
   return code
 }
 
+// Imported by the first command that needs it, and by no other: the workspace
+// runs with `lazy-dynamic-imports` (deno.json), because without it Deno walks
+// every module a literal `import('./local.ts')` reaches as the program starts,
+// whichever branch the run then takes.
 let local: typeof import('./local.ts') | undefined
 
 // Where this command's tools come from: the graph a config names, opened here,

@@ -283,5 +283,5 @@
     "jsx": "react-jsx",
     "jsxImportSource": "preact"
   },
-  "unstable": ["net"]
+  "unstable": ["net", "lazy-dynamic-imports"]
 }
