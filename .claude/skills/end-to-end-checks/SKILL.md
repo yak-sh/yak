@@ -8,9 +8,10 @@ description: >
   Use it whenever checking "in the browser", "in the terminal", "live", on a
   "probe server" or "against real data", taking a screenshot, auditing a screen,
   or verifying UI, query, write path or migration by hand, even if asked only
-  "make sure it works" or "check it". `platform-visualize` is causal observation,
-  not proof; proving its page and CLI also takes this skill. Automated tests
-  are `testing`; a manual probe runs apart from the live graph and its web units.
+  "make sure it works" or "check it", or measuring a Worker's container image
+  under docker. `platform-visualize` is causal observation, not proof; proving
+  its page and CLI also takes this skill. Automated tests are `testing`; a
+  manual probe runs apart from the live graph and its web units.
 ---
 
 # Probing a change
@@ -147,6 +148,30 @@ as one, and `--as` selects that connection per command (listing accounts is
 Tests that need workerd itself are `deno task test --tag=workerd`. After a
 deploy, `yak admin deploys` shows what is live and `yak admin errors` what
 broke; both take `--as`. The platform itself is `yaks-app`.
+
+## A container image
+
+A change to an image a Worker runs (the builder's sandbox, yak-esbuild's
+compiler) is proved by running the image under its instance type's limits
+(`docker run --cpus=0.25 --memory=1g --memory-swap=1g` is `basic`), posting it
+what its Worker would post, and reading the container cgroup's `memory.peak`
+and `cpu.stat`. That gives the time, memory and CPU-seconds a release will
+cost, and whether the answer is the one the old path gave.
+
+This box has the docker CLI and no engine, and it is an unprivileged LXC,
+which decides how you get one. A rootless engine from Docker's static
+binaries needs `uidmap` and `slirp4netns`, and a subuid range inside the
+LXC's own map (`/proc/self/uid_map` covers 0-65535, and the stock 100000 range
+is refused); even then an image holding files of uid 65532 (distroless) won't
+unpack. A root `dockerd` started by hand with `--iptables=false
+--ip6tables=false --ip-forward=false` leaves the firewall alone; its containers
+get no NAT, so build and run them with `--network host`. `wrangler dev` with
+containers doesn't work here under either: workerd's egress sidecar
+(`cloudflare/proxy-everything`, which steers packets with nft TPROXY) never
+completes a TCP handshake inside this LXC, so the Worker-to-container hop is
+proved on Cloudflare, and the report says so. Reaping an engine means stopping
+it, `ip link delete docker0`, unmounting `<exec-root>/netns/default`,
+removing its data, and putting back any package or subuid line you changed.
 
 ## Reaping
 
