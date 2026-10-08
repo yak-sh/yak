@@ -400,6 +400,28 @@ test('an app with nothing to compile never calls the compiler', async () => {
   )
 })
 
+test('a compile too big for the compiler says so, and the last release serves', async () => {
+  let outrun = ''
+  using s = await scenario((ask) => {
+    if (outrun) throw new Error(outrun)
+    return compiles(ask)
+  })
+  await s.write({ 'index.html': PAGE, 'main.ts': 'let n: number = 1' })
+  await s.tool('app_deploy')
+  await s.write({ 'main.ts': 'let n: number = 2' })
+  for (
+    let [error, said] of [
+      ['Worker exceeded memory limit.', "out of the compiler's memory"],
+      ['Worker exceeded CPU time limit.', "past the compiler's CPU time"],
+      ['Network connection lost.', 'could not reach the compiler'],
+    ]
+  ) {
+    outrun = error
+    await assertRejects(() => s.tool('app_deploy'), Error, said)
+  }
+  assertEquals((await s.served('main.ts')).body, '/* main.ts */')
+})
+
 test('with no compiler bound, a deploy that needs one is refused in a sentence', async () => {
   using s = await scenario(compiles, false)
   await s.write({ 'worker.ts': 'export default {}' })

@@ -117,8 +117,28 @@ let fingerprints = async (
   ),
 })
 
+// What an ask names, for the deploy's answer.
+let named = (ask: Ask) =>
+  [
+    ...(ask.worker ? [ask.worker.entry] : []),
+    ...ask.pages,
+  ].join(', ')
+
+// What the runtime throws through the binding when the compiler ran past a
+// limit of its own Worker, and which limit: this is all the call learns.
+let EXCEEDED = /exceeded (?:its )?(memory|CPU time) limit/i
+
+// What running past each limit means, for the sentence refusing the deploy.
+let BEYOND: Record<string, string> = {
+  memory: "ran out of the compiler's memory (one Worker's 128 MB): it " +
+    'bundles more code at once than one compile can hold',
+  'cpu time': "ran past the compiler's CPU time: it bundles more code than " +
+    'one compile has time for',
+}
+
 /** The compiler, over the binding. A failure of the binding itself is ours,
- * reported and refused in a sentence. */
+ * reported and refused in a sentence: a compile too big for the compiler, or
+ * a compiler that could not be reached. */
 let asked = async (env: Env, ask: Ask, app: App): Promise<Answer> => {
   try {
     let r = await env.ESBUILD!.fetch(
@@ -137,6 +157,16 @@ let asked = async (env: Env, ask: Ask, app: App): Promise<Answer> => {
     return answer
   } catch (e) {
     caught(e, { request: 'esbuild', app: app.slug })
+    let limit = EXCEEDED.exec(String((e as Error)?.message ?? e))?.[1]
+    if (limit) {
+      throw refuse(
+        'limit',
+        `compiling ${named(ask)} ${BEYOND[limit.toLowerCase()]}. A compile ` +
+          'fits when its page scripts and worker import less, or fewer ' +
+          'packages. The draft remains private and the last release still ' +
+          'serves.',
+      )
+    }
     throw refuse(
       'unavailable',
       "app_deploy could not reach the compiler for this app's TypeScript " +
@@ -145,13 +175,6 @@ let asked = async (env: Env, ask: Ask, app: App): Promise<Answer> => {
     )
   }
 }
-
-// What an ask names, for the deploy's answer.
-let named = (ask: Ask) =>
-  [
-    ...(ask.worker ? [ask.worker.entry] : []),
-    ...ask.pages,
-  ].join(', ')
 
 /**
  * Compile what this release of the app needs compiled, refusing the release

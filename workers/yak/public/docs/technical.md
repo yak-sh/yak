@@ -71,7 +71,10 @@ files. There is no required framework or build step.
 A page script written in TypeScript, or importing an npm package its
 `package.json` names, is compiled at `app_deploy` with esbuild, in a Worker of
 its own, and served at its own address. `package-lock.json` pins the versions,
-so the next deploy installs the same ones.
+so the next deploy installs the same ones. That Worker has 128 MB, and esbuild
+needs roughly twenty times the source it bundles, so a page script reaching a
+few megabytes of source, its packages included, can run out of it; `app_deploy`
+then says so.
 
 Files are served from R2 through Cloudflare's cache. A cached file can be
 returned from the edge without reading R2. Paths without a file extension
