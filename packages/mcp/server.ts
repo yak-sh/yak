@@ -20,7 +20,13 @@ import { fromJsonSchema, ProtocolError } from '@modelcontextprotocol/server'
 
 import { McpServer } from '@modelcontextprotocol/server'
 import { DefaultJsonSchemaValidator } from '@modelcontextprotocol/server/_shims'
-import type { CallToolResult } from '@modelcontextprotocol/server'
+import type {
+  CallToolResult,
+  JsonSchemaType,
+  JsonSchemaValidator,
+  jsonSchemaValidator,
+  JsonSchemaValidatorResult,
+} from '@modelcontextprotocol/server'
 import {
   type Actor,
   type Bundle,
@@ -390,21 +396,29 @@ export let annotated = (
 })
 
 // Shared schema authorship/elicitation validator. The runner, not the SDK's
-// high-level registerTool wrapper, owns tool argument validation.
+// high-level registerTool wrapper, owns tool argument validation, so a tool's
+// schema is rarely checked here at all. A schema is compiled the first time
+// something is checked against it, once per distinct schema in the process: a
+// server is built per request with every tool's schema made afresh, and Ajv
+// keeps a compiled check per schema object, so compiling at build would
+// compile every tool again on every request and keep each copy for good.
 let ajv: DefaultJsonSchemaValidator | undefined
-let validator = () => ajv ??= new DefaultJsonSchemaValidator()
-
-// A schema as the SDK takes it, made once per process for each schema said.
-// A server is built per request, over tools whose schemas are fresh objects
-// each time: made per request, every one was compiled again, a quarter of a
-// connector test's time, and kept again by the compiler's own cache, which
-// holds a compiled schema for each object it was ever handed.
-let made = new Map<string, ReturnType<typeof fromJsonSchema>>()
-let standard = (schema: Parameters<typeof fromJsonSchema>[0]) => {
-  let key = JSON.stringify(schema)
-  let held = made.get(key)
-  if (!held) made.set(key, held = fromJsonSchema(schema, validator()))
-  return held
+let checks = new Map<string, JsonSchemaValidator<unknown>>()
+let compiled = (schema: JsonSchemaType): JsonSchemaValidator<unknown> => {
+  let text = JSON.stringify(schema)
+  let check = checks.get(text)
+  if (!check) {
+    check = (ajv ??= new DefaultJsonSchemaValidator()).getValidator(schema)
+    checks.set(text, check)
+  }
+  return check
+}
+let validator: jsonSchemaValidator = {
+  getValidator: <T>(schema: JsonSchemaType): JsonSchemaValidator<T> => {
+    let check: JsonSchemaValidator<unknown> | undefined
+    return (input) =>
+      (check ??= compiled(schema))(input) as JsonSchemaValidatorResult<T>
+  },
 }
 
 /**
@@ -439,7 +453,7 @@ export let server = (opts: Options): McpServer => {
     ...(opts.instructions ? { instructions: opts.instructions } : {}),
     // One validator for every server this process builds: the SDK makes an
     // Ajv instance per server otherwise, and a server is built per request.
-    jsonSchemaValidator: validator(),
+    jsonSchemaValidator: validator,
   })
 
   let tools = opts.runner?.tools ?? listing(opts).map(namedTool)
@@ -466,8 +480,8 @@ export let server = (opts: Options): McpServer => {
     let config = {
       ...(t.title ? { title: t.title } : {}),
       description: t.description,
-      inputSchema: standard(inputSchemaOf(t)),
-      outputSchema: standard(t.outputSchema ?? answerSchema),
+      inputSchema: fromJsonSchema(inputSchemaOf(t), validator),
+      outputSchema: fromJsonSchema(t.outputSchema ?? answerSchema, validator),
       annotations: annotated(t),
       ...(meta ? { _meta: meta } : {}),
     }
