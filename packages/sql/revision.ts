@@ -1,9 +1,11 @@
 // Connection-local invalidation for physical schema and archetype snapshots.
 // Single-owner drivers prove nothing by SQL between mutations: every statement
 // already passes through query/run. File drivers additionally observe other
-// connections through SQLite's version pragmas. Rollback invalidates rather
-// than rewinding a counter, since a snapshot may have been taken inside the
-// transaction whose changes just disappeared.
+// connections through SQLite's version pragmas, once per transaction: the
+// pragmas themselves open its snapshot, and no other connection's commit is
+// seen inside one, so asking again before it ends could only answer the same.
+// Rollback invalidates rather than rewinding a counter, since a snapshot may
+// have been taken inside the transaction whose changes just disappeared.
 import type { Driver } from './driver.ts'
 import type { Stmt } from './ast.ts'
 
@@ -19,6 +21,8 @@ type State = Tokens & {
   dataVersion?: unknown
   /** where each open transaction and savepoint began */
   scopes: (Tokens & { name?: string })[]
+  /** which version pragmas the open transaction has read */
+  seen: { schema: boolean; data: boolean }
 }
 
 // By connection (`Driver.connection`), and the drivers already speaking into
@@ -42,6 +46,7 @@ export function revision(driver: Driver, scope: Scope): number {
       descriptors: 0,
       outside: 0,
       scopes: [],
+      seen: { schema: false, data: false },
     }
     held.set(at, state)
   }
@@ -104,6 +109,10 @@ export function revision(driver: Driver, scope: Scope): number {
         s.t == 'update' && (s.table == 'archetype' || s.table == 'entity') ||
         s.t == 'insert' && s.into == 'entity'
       ) current.catalog++
+      // A transaction's snapshot ends with it, and `begin` always opens one.
+      if (!scopes.length || s.t == 'begin') {
+        current.seen.schema = current.seen.data = false
+      }
     }
     let query = driver.query.bind(driver)
     driver.query = (s) => {
@@ -152,17 +161,22 @@ export function revision(driver: Driver, scope: Scope): number {
     }
   }
   if (driver.file) {
-    let schemaVersion = driver.query({ t: 'pragma', name: 'schema_version' })[0]
-      ?.schema_version
-    if (schemaVersion !== state.schemaVersion) {
-      state.schemaVersion = schemaVersion
-      state.schema++
-      state.catalog++
-      state.data++
-      state.descriptors++
-      state.outside++
+    let inside = state.scopes.length > 0
+    if (!(inside && state.seen.schema)) {
+      let schemaVersion = driver.query({ t: 'pragma', name: 'schema_version' })[
+        0
+      ]?.schema_version
+      if (schemaVersion !== state.schemaVersion) {
+        state.schemaVersion = schemaVersion
+        state.schema++
+        state.catalog++
+        state.data++
+        state.descriptors++
+        state.outside++
+      }
+      if (inside) state.seen.schema = true
     }
-    if (scope != 'schema') {
+    if (scope != 'schema' && !(inside && state.seen.data)) {
       let dataVersion = driver.query({ t: 'pragma', name: 'data_version' })[0]
         ?.data_version
       if (dataVersion !== state.dataVersion) {
@@ -172,6 +186,7 @@ export function revision(driver: Driver, scope: Scope): number {
         state.descriptors++
         state.outside++
       }
+      if (inside) state.seen.data = true
     }
   }
   return state[scope]

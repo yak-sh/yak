@@ -75,3 +75,34 @@ test('snapshot revisions observe other file connections without catalog scans', 
     Deno.removeSync(dir, { recursive: true })
   }
 })
+
+test('a file connection reads its versions once a transaction, and again after it', () => {
+  let dir = Deno.makeTempDirSync({ prefix: 'T-95308-revision-' })
+  let a = open(`${dir}/test.db`), b = open(`${dir}/test.db`)
+  try {
+    a.query(table('entity'))
+    let query = a.query, pragmas = 0
+    a.query = (s) => {
+      if (s.t == 'pragma') pragmas++
+      return query(s)
+    }
+    let catalog = revision(a, 'catalog')
+    unit(a, () => {
+      pragmas = 0
+      for (let i = 0; i < 10; i++) revision(a, 'catalog')
+      assertEquals(pragmas, 2)
+      a.query(insert('entity', { entity: 1 }))
+      assert(revision(a, 'catalog') > catalog)
+      catalog = revision(a, 'catalog')
+    })
+    b.query(insert('entity', { entity: 2 }))
+    assert(revision(a, 'catalog') > catalog)
+    let schema = revision(a, 'schema')
+    b.query(table('other'))
+    unit(a, () => assert(revision(a, 'schema') > schema), 'read')
+  } finally {
+    a.close()
+    b.close()
+    Deno.removeSync(dir, { recursive: true })
+  }
+})
