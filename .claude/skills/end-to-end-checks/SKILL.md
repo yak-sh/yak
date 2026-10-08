@@ -70,7 +70,10 @@ a loaded box, where any fixed sleep is either too short or wasted.
   `{"use": "@yaks/session", "with": {"transcripts": "<absolute path under $D>"}}`.
 - Plugins with outside effects (mail, spawn, harness, connections) do from a
   probe exactly what they do anywhere: send the mail, start the agent. Leave
-  them out unless the change is about them.
+  them out unless the change is about them; a mail probe gives @yaks/mail
+  `"sender": {"via": "stash"}` and no `pull`. Over a copy of the box's graph,
+  @yaks/git's service and @yaks/persona's `files` act on the checkouts the
+  graph names, which are the owner's, so leave those out too.
 - Write and read the probe the same way:
   `deno run -A --config $W/deno.json $W/packages/cli/yak.ts --config $D/yak.json task new "…"`.
 - For data shaped like the owner's, read entities from the live graph
@@ -78,6 +81,11 @@ a loaded box, where any fixed sleep is either too short or wasted.
   with `<worktree CLI> --config $D/yak.json graph apply --bundles @file`.
   Reading the live graph costs nothing; a write to it, or a press on a page it
   serves, lands in the owner's day.
+- For the whole of the box's data, copy the bench snapshot
+  (`~/.cache/yak-bench/base.db`, bench/README.md) into `$D` with `cp`: nothing
+  writes it, and sqlite's `.backup` of it rereads the file without end through
+  its read-only `-shm`. The snapshot can predate the schema your code expects,
+  so run `yak upgrade --config $D/yak.json` on the copy before serving it.
 - Harness and process state have their own homes: set `HARNESS_HOME` and
   `TASKS_HOME` to directories under `$D` when the change touches sessions or
   spawned runs (packages/harness/README.md). Keep `HOME`, so Deno's module cache
