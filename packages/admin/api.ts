@@ -17,7 +17,7 @@
 // router, `COOKIE` from the token. A drift on either side is a type error
 // rather than a puzzling 401.
 import type { Bundle, Comp } from '@yaks/graph'
-import { timed } from '@yaks/api'
+import { timed } from '@yaks/api/timing'
 import { type Registered, registration } from '@yaks/connections'
 
 import { CallError, valueIn } from '@yaks/tools'
