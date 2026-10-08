@@ -264,11 +264,16 @@ test('a snapshot directory without enough space is refused', async () => {
 })
 
 // A process blocked on a lock is listed in /proc/locks as `->` against the
-// locked file's inode, which is how flock(1) waits.
-let waiting = (path: string) => {
+// locked file's inode, with its pid: how flock(1) waits.
+let waiter = (path: string) => {
   let ino = Deno.statSync(path).ino
-  return Deno.readTextFileSync('/proc/locks').split('\n')
-    .some((l) => l.includes('->') && l.includes(`:${ino} `))
+  let line = Deno.readTextFileSync('/proc/locks').split('\n')
+    .find((l) => l.includes('->') && l.includes(`:${ino} `))
+  return line ? Number(line.match(/-> \S+\s+\S+\s+\S+\s+(\d+)/)![1]) : 0
+}
+let parent = (pid: number) => {
+  let stat = Deno.readTextFileSync(`/proc/${pid}/stat`)
+  return Number(stat.slice(stat.lastIndexOf(')') + 2).split(' ')[1])
 }
 
 test('a backup stuck behind another is killed at its bound and reported', async () => {
@@ -277,11 +282,15 @@ test('a backup stuck behind another is killed at its bound and reported', async 
   let lock = await Deno.open(path, { create: true, write: true })
   await lock.lock()
   try {
-    // A short bound while the backup waits on the held lock.
-    let backup = f.start({ YAK_BACKUP_TIMEOUT: '0.5' })
-    await until(() => waiting(path), {
+    let backup = f.start()
+    let flock = await until(() => waiter(path), {
       label: 'the backup to wait on the lock',
     })
+    // The bound is timeout(1)'s alarm, and it goes off now: flock(1) runs
+    // under the backup's shell, which runs under timeout.
+    let bound = parent(parent(flock))
+    equal(Deno.readTextFileSync(`/proc/${bound}/comm`).trim(), 'timeout')
+    Deno.kill(bound, 'SIGALRM')
     equal((await backup.status).code, 124)
     let records = await f.spooled()
     equal(records.length, 1)
