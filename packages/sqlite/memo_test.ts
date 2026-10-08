@@ -3,7 +3,7 @@ import { assert, assertEquals, assertThrows } from '@std/assert'
 import { type Bundle, graph, Refused } from '@yaks/graph'
 import { loadVocab } from '@yaks/vocab'
 import { archetypeDoc } from '@yaks/archetype'
-import { fn, val } from '@yaks/sql'
+import { col, eq, fn, val } from '@yaks/sql'
 import { storage } from './mod.ts'
 import { open } from './db.ts'
 import { Denied, members } from '@yaks/member'
@@ -353,6 +353,30 @@ test('a get naming components keeps what it read for one naming no others', () =
   assertEquals(hero(['position']).position, { x: 2 })
   f.s.tx((tx) => tx.remove([{ eid: 'hero' }]))
   assertEquals('tombstone' in hero(['position']), true)
+})
+
+test('text the blob table adds leaves what memory holds standing', () => {
+  let f = fixture()
+  f.d.query({
+    t: 'create table',
+    name: 'blob_text',
+    cols: [
+      { name: 'sha', type: 'text', pk: true },
+      { name: 'value', type: 'text', notNull: true },
+    ],
+  })
+  f.s.get(['hero'])
+  f.d.query({
+    t: 'insert',
+    or: 'ignore',
+    into: 'blob_text',
+    cols: ['sha', 'value'],
+    rows: [[val('a'), val('words')]],
+  })
+  assertEquals(reads(f, () => f.s.get(['hero'])), 0)
+  // Text taken away may be text an entity reads.
+  f.d.query({ t: 'delete', from: 'blob_text', where: eq(col('sha'), val('a')) })
+  assert(reads(f, () => f.s.get(['hero'])) > 0)
 })
 
 let selects = (f: ReturnType<typeof fixture>, body: () => unknown) => {

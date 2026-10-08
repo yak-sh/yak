@@ -226,6 +226,9 @@ export let local = (vocab: Vocab, q: And): boolean => {
   return visit(q)
 }
 
+// The blob table a content-addressed property's text is read from.
+const BLOBS = 'blob_text'
+
 // An entity a transaction wrote whose state memory can't work out.
 const LOST: unique symbol = Symbol('lost')
 
@@ -326,6 +329,10 @@ let tell = (driver: Driver, c: Connection) => {
     c.spines.clear()
     c.since.clear()
   }
+  // The blob table holds text by its address (@yaks/blob): a row added there
+  // is text no entity read before, since an address is written after its
+  // text, so only a write changing or removing one moves what memory holds.
+  let adds = (s: Stmt): boolean => s.t == 'insert' && s.into == BLOBS
   // Whether a write may move an id, a number or a grave: anything but a plain
   // mint into `entity` and a pointer to its archetype.
   let moves = (s: Stmt): boolean =>
@@ -361,7 +368,7 @@ let tell = (driver: Driver, c: Connection) => {
         // paged or compared a reference by.
         if (table == 'entity') { for (let k of c.kept) k.answers.clear() }
       }
-      if (!c.writing) forget(table)
+      if (!c.writing && !adds(s)) forget(table)
     } else if (
       s.t.startsWith('create ') || s.t == 'alter table' || s.t == 'drop'
     ) {
@@ -459,7 +466,7 @@ export let memoized = (
     bytes: 0,
     answers: new Map(),
     after: new Map(),
-    tables: new Set(['entity', 'tombstone', 'blob_text', ...tables(vocab)]),
+    tables: new Set(['entity', 'tombstone', BLOBS, ...tables(vocab)]),
     clear: () => {
       k.held.clear()
       k.part.clear()
