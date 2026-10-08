@@ -90,11 +90,15 @@ function snapshot(driver: Driver): ArchetypeSet | undefined {
 export function catalog(driver: Driver): ArchetypeSet {
   let loaded = false
   let current: ArchetypeSet | undefined
-  return (predicate) => {
+  let cache = cacheFor(driver)
+  return Object.assign((predicate: Parameters<ArchetypeSet>[0]) => {
     if (!loaded) {
       current = snapshot(driver)
       loaded = true
     }
     return current?.(predicate)
-  }
+  }, {
+    held: !!cache.descriptors &&
+      cache.descriptorVersion == revision(driver, 'descriptors'),
+  })
 }

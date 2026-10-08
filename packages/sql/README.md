@@ -568,7 +568,9 @@ equal(compile(parse('!task'), vocab, { archetypes }).params, [])
 
 A mandatory positive presence test drives its stored component table directly,
 so catalog reads do not walk unrelated entity history. Other presence predicates
-retain their archetype composition.
+retain their archetype composition. Beside such a driving table, the other
+presence tests are probes of their own tables per row, unless the resolver says
+it is `held` (in memory, read for nothing): then they are one archetype list.
 
 The resolver must describe a complete, current catalog. `undefined` declines;
 `[]` means nothing matches. Presence can then read `entity.archetype` instead of

@@ -390,3 +390,50 @@ test('an eid scope reaches disjunctions inside nested conjunctions', () => {
     [],
   )
 })
+
+// A page driven from its own component's table screens other components per
+// row while the catalog is cold, and by the archetype pointer once the catalog
+// is in memory (T-65908, T-65275): either way it answers the same.
+test('a screened page answers alike with the catalog cold or held', () => {
+  let ran: string[] = []
+  let base = mem()
+  let watched = () => spy(base, (sql) => void ran.push(sql))
+  let s = storage(watched(), vocab)
+  s.install()
+  let g = graph({ storage: s, vocab, plugins: [archetypes()] })
+  g.apply([
+    { entity: { eid: 'a' }, doc: {} },
+    { entity: { eid: 'b' }, doc: {}, marker: {} },
+    { entity: { eid: 'c' }, doc: {} },
+  ])
+  // A store bound afresh has neither the catalog nor any answer in memory.
+  let cold = () => {
+    let fresh = storage(watched(), vocab)
+    fresh.install()
+    return fresh
+  }
+  // Each query asks a limit of its own, so no answer kept in memory serves it.
+  let limit = 5
+  // A query with no component of its own to drive from asks the catalog,
+  // which then stays in memory until a new archetype is written.
+  let hold = () => s.rows(`!marker .limit=${limit++}`)
+  let page = (on: typeof s, expected: string[], held: boolean) => {
+    ran = []
+    assertEquals(
+      on.rows(`.doc !marker .limit=${limit++}`),
+      expected.map((eid) => ({ eid })),
+    )
+    assertEquals(ran.some((sql) => sql.includes('"archetype" in')), held)
+  }
+  hold()
+  page(cold(), ['c', 'a'], false)
+  page(s, ['c', 'a'], true)
+  g.apply([{ entity: { eid: 'c' }, marker: {} }])
+  hold()
+  page(s, ['a'], true)
+  page(cold(), ['a'], false)
+  g.apply([{ entity: { eid: 'b' }, marker: null }])
+  hold()
+  page(s, ['b', 'a'], true)
+  page(cold(), ['b', 'a'], false)
+})

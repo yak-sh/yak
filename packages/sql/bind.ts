@@ -440,7 +440,10 @@ let single = (ctx: Ctx, hop: Hop, p: Pred): Cond => {
     if (!worn(ctx, hop.comp)) return unworn(op, '', '')
     let present = op == '~' || op == EXISTS
     if (present && hop.comp == ctx.present) return TRUE
-    if (ctx.present && hop.comp != 'entity' && !computed(ctx.v, hop.comp)) {
+    if (
+      ctx.present && !ctx.archetypes?.held && hop.comp != 'entity' &&
+      !computed(ctx.v, hop.comp)
+    ) {
       let hit = cond({
         sql: `exists (select 1 from ${ctx.d.table(hop.comp)} where ${
           ctx.d.ownerKey(hop.comp)
@@ -1217,7 +1220,8 @@ let conjuncts = (ctx: Ctx, clauses: Clause[]): Cond[] => {
   // time the statement runs.
   let wearing = rest.flatMap((c) => implied(ctx, c))
     .filter((comp) => facetOf(ctx, present(comp)))
-  let shape = !ctx.present && all.length + none.length > 1
+  let shape = (!ctx.present || ctx.archetypes?.held) &&
+      all.length + none.length > 1
     ? byArchetype(ctx, { all: [...new Set([...all, ...wearing])], none })
     : null
   if (!shape) return [...narrow, ...cs.map((x) => clause(ctx, x))]

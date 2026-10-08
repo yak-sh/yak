@@ -3,11 +3,15 @@ import type { Presence } from '@yaks/vocab'
 /**
  * A snapshot of this database file's archetypes, mapped to the integer ids
  * their rows in the entity table have. Returning undefined declines, because
- * the catalog is incomplete; returning [] means no archetype matches.
+ * the catalog is incomplete; returning [] means no archetype matches. `held`
+ * says the snapshot is in memory, so asking reads no descriptor rows: a plan
+ * that can do without the catalog asks it only then.
  */
-export type ArchetypeSet = (
-  predicate: Presence,
-) => readonly number[] | undefined
+export type ArchetypeSet =
+  & ((
+    predicate: Presence,
+  ) => readonly number[] | undefined)
+  & { held?: boolean }
 
 /** Anything that can report which archetype eids satisfy a presence test — the
  * one thing this binding needs, so the compiler never has to import the cache's

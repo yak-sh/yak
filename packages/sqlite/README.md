@@ -679,7 +679,9 @@ Load `archetypeDoc` and install the `archetypes()` graph plugin from
 `@yaks/archetype` to maintain each entity's component-set pointer. Storage
 installation classifies existing rows. A **catalog** is a lazy snapshot that
 maps matching archetypes to their integer ids. Presence and kind queries load a
-catalog; value-only queries do not. Applications using `catalog(driver)` to
+catalog; value-only queries do not. A page driven from its own component's table
+screens other components by the catalog only while it is held in memory, and
+probes their tables per row otherwise. Applications using `catalog(driver)` to
 compile their own queries must compile and execute within one read transaction,
 as this package's read path does.
 
