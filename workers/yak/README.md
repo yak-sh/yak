@@ -12,10 +12,13 @@ deno task deploy:yak   # dev:yak for a local wrangler dev
 A deploy of the kernel deploys its sibling Workers first, from the same commit
 and to the same environment: `yak-out` (`outbound/`, the dispatch namespace's
 outbound Worker) and `yak-esbuild` (`esbuild/`, the compiler `app_deploy` asks
-for an app's TypeScript and npm imports, @yaks/esbuild). The siblings do not
-call one another, so their deploys run concurrently. Both must finish
-successfully before the kernel deploy begins; a failure waits for the other
-sibling and refuses the kernel deploy.
+for an app's TypeScript and npm imports, @yaks/esbuild). `yak-esbuild` is a
+Worker in front of a container running native esbuild; its image is
+`esbuild/Dockerfile` over `packages/esbuild`, and its deploy builds and pushes
+the image like the kernel's sandbox. The siblings do not call one another, so
+their deploys run concurrently. Both must finish successfully before the kernel
+deploy begins; a failure waits for the other sibling and refuses the kernel
+deploy.
 
 Never `wrangler deploy` by hand. Both tasks go through `wrangler.ts`, which runs
 `npm ci` when `node_modules` is behind `package-lock.json` — wrangler bundles
@@ -75,14 +78,18 @@ installs Deno (not on the Ubuntu 24.04 image), makes the deploy pre-flight check
 (`superseded`), prepares the sandbox base while checking `yak-out` and
 `yak-esbuild` concurrently, then bundles with esbuild and uploads. Each sibling
 is bundled locally and compared with its fully serving deployment's
-`inputs:<sha256>` annotation. The digest covers every upload module, its
-configuration, Wrangler pin and environment. A matching sibling stays serving
-without another upload; changed inputs, an unreadable deployment or a release
-without the annotation upload normally. The compiler bundle is minified.
-`bin/build-yak` with no argument still runs the check and the workers tests by
-hand. A push's build that fails is started once more through the `BUILD_HOOK`
-deploy hook (builds.ts), since most failures are the network's; the second
-build's failure stands.
+`inputs:<sha256>` annotation. The digest covers every upload module, the inputs
+of each container image the sibling runs (its Dockerfile and every file of its
+build context, `wrangler.ts` `images`), its configuration, Wrangler pin and
+environment. A matching sibling stays serving without another upload; changed
+inputs, an unreadable deployment or a release without the annotation upload
+normally. A changed compiler rebuilds `yak-esbuild`'s image, pushes it to
+Cloudflare's registry and rolls the container out, all inside the sibling's
+`wrangler deploy`: the Workers Builds image has Docker, as the sandbox image
+already needs. `bin/build-yak` with no argument still runs the check and the
+workers tests by hand. A push's build that fails is started once more through
+the `BUILD_HOOK` deploy hook (builds.ts), since most failures are the network's;
+the second build's failure stands.
 
 Builds run on watched-path pushes and finish in any order, so the deploy door
 (`wrangler.ts` `superseded`) deploys a commit only while no later commit changes

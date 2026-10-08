@@ -182,12 +182,11 @@ export let script = (path: string): boolean => SCRIPT.test(path)
 /** Whether a path is TypeScript or JSX, which only a compiler runs. */
 export let typed = (path: string): boolean => TYPED.test(path)
 
-// esbuild's reading of a path with no file behind it, the one
-// @cloudflare/worker-bundler resolves by: the extensions in its order, then
-// an index file. And the TypeScript file a `.js` import names by convention
-// (`./util.js` for util.ts), which worker-bundler does not resolve: finding
-// it here is what lets the compile say so (./worker.ts `unlinked`).
-let TRIES = ['.ts', '.tsx', '.js', '.jsx', '.mts', '.mjs']
+/** The extensions a compile tries, in order, for a path with no file behind
+ * it, before an index file (./bundle.ts). The TypeScript file a `.js` import
+ * names by convention (`./util.js` for util.ts) is not among them: finding it
+ * here is what lets the compile say so (./compile.ts `unlinked`). */
+export let TRIES = ['.ts', '.tsx', '.js', '.jsx', '.mts', '.mjs']
 let TWINS: Record<string, string[]> = {
   '.js': ['.ts', '.tsx'],
   '.jsx': ['.tsx'],

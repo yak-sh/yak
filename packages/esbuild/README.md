@@ -5,16 +5,18 @@ at deploy: the server source (a Worker module) and each
 `<script type="module" src>` a page loads. An app that needs neither plans
 nothing and deploys as it is written.
 
-Two halves, because the compiler runs only inside workerd:
+Two halves, because compiling needs a process of its own (native esbuild) and
+deciding does not:
 
-- **`.`** decides, anywhere: which files an app's code reaches, and what must be
-  compiled. It holds no compiler.
-- **`./workerd`** compiles: a Worker's `fetch` that takes an `Ask` and answers
-  an `Answer`, over
-  [@cloudflare/worker-bundler](https://www.npmjs.com/package/@cloudflare/worker-bundler)
-  (esbuild as WebAssembly), installing npm packages from the registry. It is
-  handed every file it reads and holds no binding and no secret. A host deploys
-  it as a Worker of its own and posts to it.
+- **`.`** decides, anywhere, a Worker included: which files an app's code
+  reaches, and what must be compiled. It holds no compiler.
+- **`./compile`** compiles, wherever a process can be started: it installs npm
+  packages from the registry and builds each entry with native esbuild. It is
+  handed every file it reads and holds no binding and no secret.
+
+An **ask** (`Ask`) is what a compile is handed: the text of every file it reads,
+and the entries to build. An **answer** (`Answer`) is what it returns: one
+module per entry, the lock, and any errors, each a line an agent can act on.
 
 ## The verbs
 
@@ -38,6 +40,44 @@ Two halves, because the compiler runs only inside workerd:
 - `loaded(page, html)` is the module scripts a page loads, and `mapped(html)`
   what its import maps name.
 - `dependencies(text)` reads `package.json`'s `dependencies`.
+- `compile(ask, catalog)`, from `./compile`, builds what an ask names and
+  answers. It never throws for the app's own mistakes, which are the answer's
+  `errors`.
+
+## The compile
+
+```ts
+import { equal } from '@yaks/testing'
+import { compile } from '@yaks/esbuild/compile'
+
+let answer = await compile({
+  files: {
+    'main.ts': "import { twice } from './twice'\n" +
+      'export let n: number = twice(21)',
+    'twice.ts': 'export let twice = (n: number) => n * 2',
+  },
+  pages: ['main.ts'],
+})
+equal(answer.errors, [])
+let page = await import(
+  `data:text/javascript,${encodeURIComponent(answer.pages['main.ts'])}`
+)
+equal(page.n, 42)
+```
+
+esbuild runs as a process beside the compile's own, started by the first build
+and kept for the next. Every build reads from the ask's files and the installed
+packages, never the disk, so the output depends on the ask alone: the same ask
+compiles to the same bytes on any host.
+
+The module's default export is a server's `fetch`, for `deno serve`. A host
+posts it a **job** (`Job`): `{ask, catalog}`, the app's ask and the host's
+toolkit catalog (below). The server responds with the answer as JSON, or with
+507 when esbuild's process ended under the build. That is the compiler running
+out of memory, not a mistake in the app's code, so `compile` throws `Stopped`
+instead of answering, and the next build starts esbuild again. yaks.app runs
+this server in a container of its own, behind a Worker that adds the catalog to
+each ask.
 
 ## Platform toolkit sources
 

@@ -76,6 +76,15 @@ safety lives in recovery, and recovery is quick:
 Staging (yaks.fyi) deploys after production from the same build, so it is a
 sandbox for billing, not a canary.
 
+The same deploy carries two container images: the builder's sandbox and the
+app compiler (`yak-esbuild`, a Worker in front of native esbuild, built from
+packages/esbuild by workers/yak/esbuild/Dockerfile). Workers Builds has Docker,
+so wrangler builds them, pushes them to Cloudflare's registry and rolls the
+containers out; nothing is pushed by hand. A push that changes packages/esbuild
+rolls the compiler out with it, and one that changes neither its Worker nor its
+image skips it (`wrangler.ts` `images`). A dry run that must not need Docker
+passes `--containers-rollout=none`.
+
 ## Inside a Durable Object
 
 A store is SQLite inside a Durable Object, and the room is smaller than the

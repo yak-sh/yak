@@ -1,8 +1,9 @@
 // The deploy's compile step through app_deploy and the door that serves the
 // app (esbuild.ts): what is asked of the compiler, what serves after, and what
-// a refusal leaves standing. The compiler is yak-esbuild behind a binding,
-// which runs only in workerd, so here it is a stand-in answering what the
-// test says it compiled; @yaks/esbuild's own tests hold the plan.
+// a refusal leaves standing. The compiler is yak-esbuild behind a binding, a
+// Worker in front of a container, so here it is a stand-in answering what the
+// test says it compiled; @yaks/esbuild's own tests hold the plan and the
+// compile.
 import { test } from '@yaks/testing'
 import { assert, assertEquals, assertRejects } from '@std/assert'
 import type { Answer, Ask } from '@yaks/esbuild'
@@ -15,10 +16,10 @@ let WORKER = 'export default { fetch: () => new Response("compiled") }'
 
 let PAGE = '<script type="module" src="main.ts"></script>'
 
-// An app of these files deployed, with a compiler that answers `answer` and
-// Cloudflare's API answering every upload.
+// An app of these files deployed, with a compiler that answers `answer`, or
+// the response it gives instead, and Cloudflare's API answering every upload.
 let scenario = async (
-  answer: (ask: Ask) => Partial<Answer> = () => ({}),
+  answer: (ask: Ask) => Partial<Answer> | Response = () => ({}),
   compiler = true,
 ) => {
   let asks: Ask[] = []
@@ -26,13 +27,14 @@ let scenario = async (
     fetch: async (r: Request) => {
       let ask = await r.json() as Ask
       asks.push(ask)
-      return Response.json({
+      let out = answer(ask)
+      return out instanceof Response ? out : Response.json({
         pages: {},
         assets: {},
         installed: [],
         notes: [],
         errors: [],
-        ...answer(ask),
+        ...out,
       })
     },
   }
@@ -401,22 +403,30 @@ test('an app with nothing to compile never calls the compiler', async () => {
 })
 
 test('a compile too big for the compiler says so, and the last release serves', async () => {
-  let outrun = ''
-  using s = await scenario((ask) => {
-    if (outrun) throw new Error(outrun)
-    return compiles(ask)
-  })
+  let fails: (() => Response) | null = null
+  using s = await scenario((ask) => fails ? fails() : compiles(ask))
   await s.write({ 'index.html': PAGE, 'main.ts': 'let n: number = 1' })
   await s.tool('app_deploy')
   await s.write({ 'main.ts': 'let n: number = 2' })
   for (
-    let [error, said] of [
-      ['Worker exceeded memory limit.', "out of the compiler's memory"],
-      ['Worker exceeded CPU time limit.', "past the compiler's CPU time"],
-      ['Network connection lost.', 'could not reach the compiler'],
-    ]
+    let [failure, said] of [
+      [
+        () => new Response('killed', { status: 507 }),
+        "out of the compiler's memory",
+      ],
+      [
+        () => new Response('Failed to start container', { status: 500 }),
+        'could not reach the compiler',
+      ],
+      [
+        () => {
+          throw new Error('Network connection lost.')
+        },
+        'could not reach the compiler',
+      ],
+    ] as const
   ) {
-    outrun = error
+    fails = failure
     await assertRejects(() => s.tool('app_deploy'), Error, said)
   }
   assertEquals((await s.served('main.ts')).body, '/* main.ts */')

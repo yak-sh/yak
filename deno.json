@@ -253,6 +253,7 @@
     "@std/yaml": "jsr:@std/yaml@^1.2.0",
     "ajv": "npm:ajv@^8.17.1",
     "@cfworker/json-schema": "npm:@cfworker/json-schema@4.1.1",
+    "@cloudflare/containers": "npm:@cloudflare/containers@0.3.7",
     "@cloudflare/sandbox": "npm:@cloudflare/sandbox@0.12.9",
     "@cloudflare/workers-oauth-provider": "./workers/yak/oauth-provider.ts",
     "@sentry/cloudflare": "npm:@sentry/cloudflare@10.75.0",

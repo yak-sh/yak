@@ -13,6 +13,7 @@ import { fileURLToPath } from 'node:url'
 import {
   aliased,
   command,
+  images,
   members,
   runWrangler,
   sameSibling,
@@ -42,11 +43,16 @@ test('wrangler: staging keeps deploy annotations with either flag position', () 
 })
 
 test('wrangler: a deploy of the kernel deploys its siblings first, and nothing else does', () => {
-  let each = (argv: string[]) =>
-    SIBLINGS.map((c) => [...argv, '-c', c, '--containers-rollout=none'])
   for (
-    let argv of [['deploy', '--message', 'm'], ['deploy', '--env', 'staging']]
-  ) assertEquals(siblings(argv), each(argv))
+    let argv of [
+      ['deploy', '--message', 'm'],
+      ['deploy', '--env', 'staging'],
+      ['--env', 'staging', 'deploy', '--containers-rollout=none'],
+      ['deploy', '--containers-rollout', 'immediate', '--message', 'm'],
+    ]
+  ) {
+    assertEquals(siblings(argv), SIBLINGS.map((c) => [...argv, '-c', c]))
+  }
   for (
     let args of [
       ['dev'],
@@ -57,39 +63,33 @@ test('wrangler: a deploy of the kernel deploys its siblings first, and nothing e
   ) assertEquals(siblings(args), [])
 })
 
-for (
-  let rollout of [
-    ['--containers-rollout=none'],
-    ['--containers-rollout', 'immediate'],
-  ]
-) {
-  test(`wrangler: siblings override ${rollout.join(' ')} once`, () => {
-    let argv = [
-      '--env',
-      'staging',
-      'deploy',
-      ...rollout,
-      '--message',
-      'build annotation',
-    ]
-    assertEquals(
-      siblings(argv),
-      SIBLINGS.map((c) => [
-        '--env',
-        'staging',
-        'deploy',
-        '--message',
-        'build annotation',
-        '-c',
-        c,
-        '--containers-rollout=none',
-      ]),
-    )
-    for (let config of [['-c', 'other.toml'], ['--config=other.toml']]) {
-      assertEquals(siblings([...argv, ...config]), [])
+test("a sibling's images are its Dockerfiles and their build contexts", () => {
+  let root = Deno.makeTempDirSync()
+  try {
+    let write = (path: string, text = path) => {
+      Deno.mkdirSync(dirname(join(root, path)), { recursive: true })
+      Deno.writeTextFileSync(join(root, path), text)
     }
-  })
-}
+    write(
+      'w/wrangler.toml',
+      '[[containers]]\nimage = "./Dockerfile"\nimage_build_context = "../ctx"\n' +
+        '[[env.staging.containers]]\nimage = "registry.example/x:1"\n' +
+        '[[env.lab.containers]]\nimage = "../box"\n',
+    )
+    for (let path of ['w/Dockerfile', 'ctx/a.ts', 'ctx/lib/b.ts']) write(path)
+    for (let path of ['box/Dockerfile', 'box/run.sh']) write(path)
+    assertEquals(Object.keys(images('w/wrangler.toml', root)).sort(), [
+      'box/Dockerfile',
+      'box/run.sh',
+      'ctx/a.ts',
+      'ctx/lib/b.ts',
+      'w/Dockerfile',
+    ])
+  } finally {
+    Deno.removeSync(root, { recursive: true })
+  }
+  assert('../../packages/esbuild/compile.ts' in images('esbuild/wrangler.toml'))
+})
 
 test('independent sibling deploys overlap and the kernel waits for both successes', async () => {
   let started: { args: string[]; unpinned?: boolean }[] = []

@@ -65,16 +65,17 @@ their own components. See [the documentation](/docs) for the data model.
 An app consists of `index.html` and related CSS, JavaScript, image, and other
 files. There is no required framework or build step.
 
-<!-- @yaks/esbuild plan.ts decides; the yak-esbuild Worker compiles
-     (packages/esbuild/worker.ts); files.ts serves the output under BUILT. -->
+<!-- @yaks/esbuild plan.ts decides; yak-esbuild's container compiles
+     (packages/esbuild/compile.ts, workers/yak/esbuild/); files.ts serves the
+     output under BUILT. -->
 
 A page script written in TypeScript, or importing an npm package its
-`package.json` names, is compiled at `app_deploy` with esbuild, in a Worker of
-its own, and served at its own address. `package-lock.json` pins the versions,
-so the next deploy installs the same ones. That Worker has 128 MB, and esbuild
-needs roughly twenty times the source it bundles, so a page script reaching a
-few megabytes of source, its packages included, can run out of it; `app_deploy`
-then says so.
+`package.json` names, is compiled at `app_deploy` with esbuild, in a container
+of its own, and served at its own address. `package-lock.json` pins the
+versions, so the next deploy installs the same ones. A compile has 1 GiB of
+memory: an app whose six page scripts bundle three.js, Preact and the platform
+toolkit, the largest to 1.5 MB, peaks near 300 MB. A compile that runs out of it
+is refused, and `app_deploy` says so.
 
 Files are served from R2 through Cloudflare's cache. A cached file can be
 returned from the edge without reading R2. Paths without a file extension

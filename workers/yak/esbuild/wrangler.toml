@@ -1,20 +1,23 @@
-# yak-esbuild (@yaks/esbuild/workerd, D-40376): compiles an app's TypeScript
-# and npm imports at app_deploy. It is its own Worker because
-# @cloudflare/worker-bundler runs esbuild as a 13.9 MB WebAssembly module that
-# only workerd loads, and a build of three.js holds tens of megabytes of heap:
-# in the kernel that would be memory every request shares. Here a build that
-# runs out fails that one deploy.
+# yak-esbuild (@yaks/esbuild, D-40376): compiles an app's TypeScript and npm
+# imports at app_deploy, in a container running native esbuild (./Dockerfile,
+# @yaks/esbuild/compile). This Worker is only the door to it (index.ts): the
+# kernel's ESBUILD service binding posts an app's ask here, and the Worker
+# posts it on to the container with the platform's toolkit catalog.
 #
-# No routes, no bindings, no secrets: the kernel's ESBUILD service binding is
-# the one way in, and the npm registry the one way out. The kernel's deploy
-# deploys it first, to the same environment (../wrangler.ts `siblings`).
+# A container rather than a Worker because a Worker's isolate has 128 MB and
+# 30 s of CPU, and esbuild as WebAssembly needed more than both for Vale
+# (T-121435): 115-145 MB of wasm memory, 16-20 s of CPU. Native esbuild in the
+# container compiles Vale in about 3 CPU-seconds and 300 MB, byte for byte
+# what the Worker compiled.
+#
+# No routes and no secrets: the kernel's binding is the one way in, and the
+# npm registry the container's one way out. The kernel's deploy deploys it
+# first, to the same environment (../wrangler.ts `siblings`), and builds and
+# pushes its image when the image's inputs changed.
 name = "yak-esbuild"
 main = "index.ts"
 account_id = "0f9613dfd3f0451df0bd0f12a1372ea3"
 compatibility_date = "2026-06-01"
-# `node:module`'s isBuiltin tells a worker's Node import from a package it
-# forgot to install.
-compatibility_flags = ["nodejs_compat"]
 workers_dev = false
 preview_urls = false
 minify = true
@@ -23,16 +26,32 @@ minify = true
 enabled = true
 invocation_logs = true
 
-# esbuild walks up from packages/esbuild/ and finds no node_modules there, so
-# each npm name the package imports points into the kernel directory's own,
-# which `npm ci` fills (../package.json). What those import resolves from
-# their own directory there.
-[alias]
-"@cloudflare/worker-bundler" = "../node_modules/@cloudflare/worker-bundler/dist/index.js"
-"es-module-lexer/js" = "../node_modules/es-module-lexer/dist/lexer.asm.js"
-"fflate" = "../node_modules/fflate/esm/browser.js"
-"semver" = "../node_modules/semver/index.js"
-"sucrase" = "../node_modules/sucrase/dist/esm/index.js"
+[[durable_objects.bindings]]
+name = "COMPILER"
+class_name = "Compiler"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["Compiler"]
+
+# The image is built from packages/esbuild alone, so it changes only when the
+# compiler does (./Dockerfile).
+#
+# `basic`, 1/4 vCPU and 1 GiB, is the smallest that compiles Vale with room:
+# measured under these limits Vale peaks at about 300 MB and takes 11 s from a
+# cold container, 8 s warm; a small app 100-140 MB and 1-2 s. `lite`'s 256 MiB
+# runs out on Vale. At Cloudflare's rates an awake second costs about
+# $0.0000028 (memory and disk) and a CPU second $0.00002, so a release that
+# wakes the container costs about $0.0004, the two minutes it stays up after
+# (index.ts `sleepAfter`) most of it.
+#
+# One instance serves every compile (index.ts), so one is the most that runs.
+[[containers]]
+class_name = "Compiler"
+image = "./Dockerfile"
+image_build_context = "../../../packages/esbuild"
+instance_type = "basic"
+max_instances = 1
 
 [env.staging]
 name = "yak-esbuild-staging"
@@ -42,3 +61,18 @@ preview_urls = false
 [env.staging.observability.logs]
 enabled = true
 invocation_logs = true
+
+[[env.staging.durable_objects.bindings]]
+name = "COMPILER"
+class_name = "Compiler"
+
+[[env.staging.migrations]]
+tag = "v1"
+new_sqlite_classes = ["Compiler"]
+
+[[env.staging.containers]]
+class_name = "Compiler"
+image = "./Dockerfile"
+image_build_context = "../../../packages/esbuild"
+instance_type = "basic"
+max_instances = 1

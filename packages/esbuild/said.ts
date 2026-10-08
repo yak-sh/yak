@@ -2,7 +2,7 @@
 // messages at the place they point, `file:line:column: message` and the line
 // itself beneath, the way a compiler prints them. esbuild names a file by the
 // namespace it loaded it from (`virtual:worker.ts`); the namespace is
-// @cloudflare/worker-bundler's, not the app's, so it goes.
+// ./bundle.ts's, not the app's, so it goes.
 
 /** One esbuild message, the part of it read here. */
 export type Message = {

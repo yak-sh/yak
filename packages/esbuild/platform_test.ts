@@ -3,7 +3,7 @@ import { assertEquals, assertThrows } from '@std/assert'
 import { type Catalog, located, seed, type Toolkit } from './platform.ts'
 import { lockfile, pins, reached, wanted } from './lock.ts'
 import { satisfies } from 'semver'
-import { compile } from './worker.ts'
+import { compile } from './compile.ts'
 
 let digest = (n = 'a') => `sha256:${n.repeat(64)}`
 let pkg = (dependencies: Record<string, string> = {}, n = 'a'): Toolkit => ({

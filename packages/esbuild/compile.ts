@@ -1,20 +1,20 @@
-// The compile itself, over @cloudflare/worker-bundler: npm packages installed
-// at the pinned versions (./npm.ts) alongside compiler-owned toolkit sources,
-// then esbuild (as WebAssembly) bundling the worker and each page script. It
-// runs only inside workerd, so a host runs it in a Worker of its own and posts
-// it a {@link Ask}; `default` is that Worker's fetch, answering an
-// {@link Answer}.
+// The compile itself: npm packages installed at the pinned versions
+// (./npm.ts) alongside compiler-owned toolkit sources, then esbuild bundling
+// the worker and each page script (./bundle.ts). esbuild is native, a process
+// of its own beside this one, so the compile runs wherever a process can start
+// one: under Deno, and for yaks.app in a container. `default` is that
+// container's server: it takes a {@link Job} and answers an {@link Answer}.
 //
 // It is handed everything it reads and holds nothing: no binding, no secret,
 // no store. The npm registry is the one thing it reaches.
 //
 // What is left of an output's imports once esbuild is done is checked here,
-// because @cloudflare/worker-bundler leaves any import it cannot resolve as
-// an import rather than failing: in a worker that is a module the upload
-// refuses, and in a page it is a request the browser makes for nothing.
-import { createWorker } from '@cloudflare/worker-bundler'
+// because a build leaves any import it cannot resolve as an import rather
+// than failing: in a worker that is a module the upload refuses, and in a
+// page it is a request the browser makes for nothing.
 import { parse } from 'es-module-lexer/js'
 import { isBuiltin } from 'node:module'
+import { bundle, type Options, Stopped } from './bundle.ts'
 import { packageOf, relative, resolved, twins } from './graph.ts'
 import { lockfile, type Pins, pins, reached, split, wanted } from './lock.ts'
 import * as npm from './npm.ts'
@@ -22,6 +22,11 @@ import { type Answer, type Ask, dependencies } from './plan.ts'
 import { said } from './said.ts'
 import { type Catalog, located, type Seed, seed } from './platform.ts'
 export type { Catalog, Toolkit } from './platform.ts'
+export { Stopped } from './bundle.ts'
+
+/** What a host posts to the compiler's server: the app's ask, and beside it
+ * the toolkit catalog, which the host supplies and an app never does. */
+export type Job = { ask: Ask; catalog: Catalog }
 
 /** The module a compiled worker is uploaded as: its source's path, as
  * JavaScript.
@@ -87,9 +92,9 @@ let install = async (
   }
 }
 
-// A `.js` import meaning a TypeScript file that was sent: esbuild reads that
-// convention, and worker-bundler, which resolves the extension it is given,
-// does not.
+// A `.js` import meaning a TypeScript file that was sent: esbuild's own
+// resolver reads that convention, and ./bundle.ts, which resolves the
+// extension it is given, does not.
 let twin = (ask: Ask, at: string, spec: string) => {
   let typed = twins(at).find((t) => t in ask.files)
   return typed
@@ -129,8 +134,9 @@ let checked = (
   )
 
 /** Compile what an ask names. Never throws for the app's own mistakes: those
- * are the answer's `errors`. The host supplies its toolkit catalog separately
- * from the app's ask. */
+ * are the answer's `errors`. Throws {@link Stopped} when esbuild's process
+ * ends under a build, which is the compiler's room and not the app's code.
+ * The host supplies its toolkit catalog separately from the app's ask. */
 export let compile = async (
   ask: Ask,
   catalog: Catalog = {},
@@ -157,49 +163,62 @@ export let compile = async (
       fs.write(path, source)
     }
   }
+  // One entry built, its package URLs located against `at` and its leftover
+  // imports judged by `why`; null when it failed, and the failure is among
+  // the answer's errors.
+  let built = async (
+    entry: string,
+    at: string | URL,
+    options: Options,
+    why: (spec: string) => string | null,
+  ) => {
+    try {
+      locate(at)
+      let { code, warnings } = await bundle(fs, entry, options)
+      answer.errors.push(...checked(entry, code, why))
+      answer.notes.push(...warnings.map((w) => `${entry}: ${w}`))
+      return code
+    } catch (e) {
+      if (e instanceof Stopped) throw e
+      answer.errors.push(...said(e))
+      return null
+    }
+  }
   if (ask.worker) {
     let { entry, flags } = ask.worker
     let main = compiledName(entry)
-    // A workerd module name is not a URL. Its file URL is a logical identity,
-    // not a hosted asset address; page entries retain their browser's URL.
-    locate(new URL(main, 'file:///'))
-    // What worker-bundler reads nodejs_compat from; a page compiles without it.
-    fs.write('wrangler.json', JSON.stringify({ compatibility_flags: flags }))
-    try {
-      let out = await createWorker({ files: fs, entryPoint: entry })
-      let code = String(out.modules[out.mainModule])
-      answer.errors.push(...checked(entry, code, unlinked(ask, main)))
-      answer.worker = { main, code }
-      answer.notes.push(...(out.warnings ?? []).map((w) => `${entry}: ${w}`))
-    } catch (e) {
-      answer.errors.push(...said(e))
-    }
-    fs.delete('wrangler.json')
+    let code = await built(
+      entry,
+      // A workerd module name is not a URL. Its file URL is a logical
+      // identity, not a hosted asset address; a page keeps its browser's URL.
+      new URL(main, 'file:///'),
+      { node: flags.includes('nodejs_compat') },
+      unlinked(ask, main),
+    )
+    if (code != null) answer.worker = { main, code }
   }
   for (let entry of ask.pages) {
-    try {
-      locate(entry)
-      let out = await createWorker({
-        files: fs,
-        entryPoint: entry,
-        minify: true,
-        // What a package written for bundlers asks of its environment.
-        define: { 'process.env.NODE_ENV': '"production"' },
-      })
-      let code = String(out.modules[out.mainModule])
-      answer.errors.push(...checked(entry, code, unfetched(ask, entry)))
-      answer.pages[entry] = code
-      answer.notes.push(...(out.warnings ?? []).map((w) => `${entry}: ${w}`))
-    } catch (e) {
-      answer.errors.push(...said(e))
-    }
+    let code = await built(entry, entry, {
+      minify: true,
+      // What a package written for bundlers asks of its environment.
+      define: { 'process.env.NODE_ENV': '"production"' },
+    }, unfetched(ask, entry))
+    if (code != null) answer.pages[entry] = code
   }
   return answer
 }
 
+/** The compiler's server: a {@link Job} in, its {@link Answer} out, and 507
+ * when esbuild's process ended under the build, almost always for memory. */
 export default {
-  fetch: async (req: Request): Promise<Response> =>
-    req.method == 'POST'
-      ? Response.json(await compile(await req.json() as Ask))
-      : new Response('POST an ask', { status: 405 }),
+  fetch: async (req: Request): Promise<Response> => {
+    if (req.method != 'POST') return new Response('POST a job', { status: 405 })
+    let { ask, catalog } = await req.json() as Job
+    try {
+      return Response.json(await compile(ask, catalog))
+    } catch (e) {
+      if (e instanceof Stopped) return new Response(e.message, { status: 507 })
+      throw e
+    }
+  },
 }

@@ -250,8 +250,8 @@ export type Env = {
   FILES?: Fetcher
   // The apex's public home and gallery, cached behind the uncached gateway.
   SITE?: Fetcher
-  // yak-esbuild, which compiles an app's TypeScript and npm imports at deploy
-  // (esbuild.ts). Absent in a test run and the workerd probes.
+  // yak-esbuild, whose container compiles an app's TypeScript and npm imports
+  // at deploy (esbuild.ts). Absent in a test run and the workerd probes.
   ESBUILD?: Fetcher
   // Voice (rtc.ts): the platform's one Cloudflare Realtime SFU app, its id and
   // its secret, and one TURN key and its token. All four are secrets, kept in

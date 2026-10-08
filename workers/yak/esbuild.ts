@@ -1,8 +1,8 @@
 // The deploy's compile step (D-40376): what an app writes in TypeScript, or
 // with an npm import, becomes code a runtime can load, at app_deploy and
 // nowhere else. @yaks/esbuild says what needs compiling; yak-esbuild, the
-// Worker behind the ESBUILD binding, compiles it; this file is the wiring
-// between the two and the app's files.
+// Worker behind the ESBUILD binding, has its container compile it; this file
+// is the wiring between the two and the app's files.
 //
 // An app with nothing to compile is not compiled and nothing is called, so its
 // deploy is the one it always was. For one that has:
@@ -124,49 +124,31 @@ let named = (ask: Ask) =>
     ...ask.pages,
   ].join(', ')
 
-// What the runtime throws through the binding when the compiler ran past a
-// limit of its own Worker, and which limit: this is all the call learns.
-let EXCEEDED = /exceeded (?:its )?(memory|CPU time) limit/i
+// What yak-esbuild answers when a compile ran out of the compiler's memory
+// (esbuild/index.ts): its container, or esbuild's process in it, was killed.
+let OUTGREW = 507
 
-// What running past each limit means, for the sentence refusing the deploy.
-let BEYOND: Record<string, string> = {
-  memory: "ran out of the compiler's memory (one Worker's 128 MB): it " +
-    'bundles more code at once than one compile can hold',
-  'cpu time': "ran past the compiler's CPU time: it bundles more code than " +
-    'one compile has time for',
-}
-
-/** The compiler, over the binding. A failure of the binding itself is ours,
+/** The compiler, over the binding. A failure of the compiler itself is ours,
  * reported and refused in a sentence: a compile too big for the compiler, or
  * a compiler that could not be reached. */
 let asked = async (env: Env, ask: Ask, app: App): Promise<Answer> => {
+  let r: Response
   try {
-    let r = await env.ESBUILD!.fetch(
+    r = await env.ESBUILD!.fetch(
       new Request('https://esbuild.invalid/', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify(ask),
       }),
     )
-    if (!r.ok) {
+    if (r.ok) return await r.json()
+    if (r.status != OUTGREW) {
       throw new Error(
         `yak-esbuild ${r.status}: ${(await r.text()).slice(0, 400)}`,
       )
     }
-    let answer: Answer = await r.json()
-    return answer
   } catch (e) {
     caught(e, { request: 'esbuild', app: app.slug })
-    let limit = EXCEEDED.exec(String((e as Error)?.message ?? e))?.[1]
-    if (limit) {
-      throw refuse(
-        'limit',
-        `compiling ${named(ask)} ${BEYOND[limit.toLowerCase()]}. A compile ` +
-          'fits when its page scripts and worker import less, or fewer ' +
-          'packages. The draft remains private and the last release still ' +
-          'serves.',
-      )
-    }
     throw refuse(
       'unavailable',
       "app_deploy could not reach the compiler for this app's TypeScript " +
@@ -174,6 +156,17 @@ let asked = async (env: Env, ask: Ask, app: App): Promise<Answer> => {
         'still serves — app_deploy again',
     )
   }
+  caught(new Error(`yak-esbuild ${OUTGREW}: ${await r.text()}`), {
+    request: 'esbuild',
+    app: app.slug,
+  })
+  throw refuse(
+    'limit',
+    `compiling ${named(ask)} ran out of the compiler's memory: it bundles ` +
+      'more code at once than one compile can hold. A compile fits when its ' +
+      'page scripts and worker import less, or fewer packages. The draft ' +
+      'remains private and the last release still serves.',
+  )
 }
 
 /**

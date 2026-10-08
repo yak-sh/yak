@@ -29,6 +29,7 @@
 // Exact pins can reuse npm's restored cache without registry revalidation.
 import { dirname, join, relative } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { parse } from '@std/toml'
 import packages from './package.json' with { type: 'json' }
 import { based } from './sandbox/base.ts'
 
@@ -180,22 +181,69 @@ export let command = (args: string[]) => {
 // yak-out (outbound/) is this Worker's dispatch namespace's outbound Worker,
 // handing every fetch an app makes back to this Worker's `Outbound`
 // entrypoint, and yak-esbuild (esbuild/) is what the ESBUILD binding compiles
-// an app with at deploy (@yaks/esbuild). Both exist before this Worker's
-// bindings name them.
+// an app with at deploy (@yaks/esbuild), in a container of its own. Both
+// exist before this Worker's bindings name them.
 export let SIBLINGS = ['outbound/wrangler.toml', 'esbuild/wrangler.toml']
 
 // Each sibling's deploy arguments, or none when these arguments are not a
-// deploy or already name a config of their own.
-export let siblings = (argv: string[]): string[][] => {
-  if (
-    command(argv) != 'deploy' ||
+// deploy or already name a config of their own. A sibling's container rolls
+// out as this Worker's does, so a `--containers-rollout` passes through.
+export let siblings = (argv: string[]): string[][] =>
+  command(argv) != 'deploy' ||
     argv.some((a) => /^(-c|--config)(=|$)/.test(a))
-  ) return []
-  let args = argv.filter((a, i) =>
+    ? []
+    : SIBLINGS.map((c) => [...argv, '-c', c])
+
+// Arguments without their `--containers-rollout`, in either form.
+let unrolled = (args: string[]) =>
+  args.filter((a, i) =>
     !/^--containers-rollout(=|$)/.test(a) &&
-    argv[i - 1] != '--containers-rollout'
+    args[i - 1] != '--containers-rollout'
   )
-  return SIBLINGS.map((c) => [...args, '-c', c, '--containers-rollout=none'])
+
+type Containers = {
+  containers?: { image?: string; image_build_context?: string }[]
+}
+
+/** What the container images a config builds are made of, by path from
+ * `root`: each `[[containers]]` Dockerfile and every file of its build
+ * context (the Dockerfile's directory unless the config names one). An image
+ * named by registry reference adds nothing; the config itself names it. */
+export let images = (
+  config: string,
+  root = dir,
+): Record<string, Uint8Array> => {
+  let path = join(root, config)
+  let parsed = parse(Deno.readTextFileSync(path)) as Containers & {
+    env?: Record<string, Containers>
+  }
+  let out: Record<string, Uint8Array> = {}
+  let add = (file: string) => {
+    out[relative(root, file)] = Deno.readFileSync(file)
+  }
+  let walk = (at: string) => {
+    for (let entry of Deno.readDirSync(at)) {
+      let file = join(at, entry.name)
+      if (entry.isDirectory) walk(file)
+      else if (entry.isFile) add(file)
+    }
+  }
+  let all = [parsed, ...Object.values(parsed.env ?? {})]
+    .flatMap((c) => c.containers ?? [])
+  for (let { image, image_build_context: context } of all) {
+    if (!image) continue
+    let file = join(dirname(path), image)
+    let stat
+    try {
+      stat = Deno.statSync(file)
+    } catch {
+      continue
+    }
+    if (stat.isDirectory) file = join(file, 'Dockerfile')
+    add(file)
+    walk(context ? join(dirname(path), context) : dirname(file))
+  }
+  return out
 }
 
 /** Deploy independent siblings together, settling every process before the
@@ -290,8 +338,16 @@ let uploadSibling = async (
     return result
   }
   try {
+    // A dry run with no rollout bundles the Worker and builds no image: the
+    // image's inputs are read below instead.
     let [built, live] = await Promise.all([
-      query([...args, '--dry-run', '--outdir', output]),
+      query([
+        ...unrolled(args),
+        '--dry-run',
+        '--outdir',
+        output,
+        '--containers-rollout=none',
+      ]),
       query(['deployments', 'list', '-c', config, ...envs(args), '--json']),
     ])
     if (!built.success) {
@@ -307,6 +363,7 @@ let uploadSibling = async (
         modules[file.name] = Deno.readFileSync(join(output, file.name))
       }
     }
+    Object.assign(modules, images(config))
     console.log(
       `${config}: bundled and read serving deployment in ${
         ((performance.now() - started) / 1000).toFixed(3)

@@ -1,10 +1,9 @@
 // npm packages as a compile installs them: one version of each name, flat,
-// from the registry, as @cloudflare/worker-bundler's own installer does. That
-// installer decodes every text file of every tarball into the file system a
-// build reads: three.js ships 20 MB of sources and a page reads 2 MB of them,
-// in a Worker whose 128 MB esbuild's own memory mostly fills. Here a package
-// stays in its gzipped tarball, and a file comes out of it the first time a
-// build reads it.
+// from the registry, as @cloudflare/worker-bundler's own installer did. That
+// installer decoded every text file of every tarball into the file system a
+// build reads: three.js ships 20 MB of sources and a page reads 2 MB of them.
+// Here a package stays in its gzipped tarball, and a file comes out of it the
+// first time a build reads it, so a compile holds what its builds read.
 import { Gunzip } from 'fflate'
 import { maxSatisfying } from 'semver'
 
@@ -14,7 +13,7 @@ export let REGISTRY = 'https://registry.npmjs.org'
 // How long the registry has to answer, in ms.
 let WAIT = 30_000
 
-// The files of a package kept for a build: its text, as worker-bundler keeps
+// The files of a package kept for a build: its text, as worker-bundler kept
 // it. A build reads nothing else (an image or a binary is never compiled in).
 let TEXT = /\.(?:[cm]?[jt]sx?|json|md|txt|css|html|ya?ml|toml|xml|svg|map|py)$/i
 let NAMED =
@@ -125,7 +124,7 @@ let PACKAGE = /^node_modules\/(?:@[^/]+\/)?[^/]+\//
 /**
  * A compile's files: the ones it was handed, and each installed package's,
  * which come out of its tarball the first time a build reads one. It is the
- * file system @cloudflare/worker-bundler's `createWorker` reads.
+ * file system ./bundle.ts builds from.
  */
 export class Files {
   #files: Map<string, string>
