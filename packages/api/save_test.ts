@@ -458,8 +458,8 @@ test('a failed eligibility read can wake again on a relevant stored change', asy
   await Promise.resolve()
   await Promise.resolve()
   await until(() => f.failures.length == 1)
-  equal(f.read(), undefined)
   broken = false
+  equal(f.read(), undefined)
   f.g.apply([{ entity: { eid: 'a' }, book: { status: 'shelved' } }])
   f.tick(0)
   equal(f.read(), { x: 7 })
