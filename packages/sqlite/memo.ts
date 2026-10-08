@@ -12,9 +12,10 @@
 // are the ones this connection says: `begin` and savepoints through `query`,
 // and the driver's own `tx`.
 //
-// Returned bundles are copies; dynamic components (computed, or derived from
-// anything but this connection's rows) are read again on every hit. Bounded by
-// count and bytes, the longest unread let go first.
+// A get naming components is cut from a whole entity held. Returned bundles
+// are copies; dynamic components (computed, or derived from anything but this
+// connection's rows) are read again on every hit. Bounded by count and bytes,
+// the longest unread let go first.
 import type { Bundle } from '@yaks/graph'
 import type { Vocab } from '@yaks/vocab'
 import { type Derived, type Driver, revision, type Stmt } from '@yaks/sql'
@@ -179,13 +180,16 @@ export let memoized = (
         k.clear()
         seen = now
       }
-      // Projections have coverage of their own; only whole snapshots are kept.
-      if (comps) return get(eids, comps)
+      // A get naming components is answered from a whole entity held, cut
+      // to them; one read for it is not kept, since it is not whole.
+      let wanted = comps && new Set(comps)
       let missing = [...new Set(eids)].filter((eid) => !k.held.has(eid))
       let fresh = new Map(
-        (missing.length ? get(missing) : []).map((b) => [b.entity.eid, b]),
+        (missing.length ? get(missing, comps) : []).map((
+          b,
+        ) => [b.entity.eid, b]),
       )
-      if (!c.blind) {
+      if (!wanted && !c.blind) {
         for (let eid of missing) {
           if (c.dirty.has(eid)) continue
           let b = fresh.get(eid) ?? null
@@ -200,7 +204,9 @@ export let memoized = (
       let names = [
         ...new Set(
           hits.flatMap((eid) =>
-            Object.keys(k.held.get(eid)!).filter((name) => dynamic.has(name))
+            Object.keys(k.held.get(eid)!).filter((name) =>
+              dynamic.has(name) && (!wanted || wanted.has(name))
+            )
           ),
         ),
       ]
@@ -218,7 +224,13 @@ export let memoized = (
         k.held.set(eid, held)
         if (!held) return []
         let b = structuredClone(held)
-        for (let name of names) delete b[name]
+        for (let name of Object.keys(b)) {
+          if (
+            names.includes(name) ||
+            wanted && name != 'entity' && name != 'tombstone' &&
+              !wanted.has(name)
+          ) delete b[name]
+        }
         return [Object.assign(b, current.get(eid) ?? {})]
       })
       while (k.held.size > COUNT || k.bytes > BYTES) {

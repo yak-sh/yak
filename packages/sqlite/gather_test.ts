@@ -111,13 +111,11 @@ test('projected identities read only named facets and preserve projection/rollba
       doc: { title: 'Product' },
     },
   ])
-  let whole = s.tx((tx) => tx.get(['p']))[0]
   queries.length = 0
-  assertEquals(s.tx((tx) => tx.get(['p'], ['product'])), [{
-    entity: whole.entity,
-    product: whole.product,
-  }])
+  let product = s.tx((tx) => tx.get(['p'], ['product']))
   assertEquals(queries.length, 1)
+  let whole = s.tx((tx) => tx.get(['p']))[0]
+  assertEquals(product, [{ entity: whole.entity, product: whole.product }])
   assertEquals(s.tx((tx) => tx.get(['p'], ['doc']))[0].doc, whole.doc)
   assertEquals(s.tx((tx) => tx.get(['p'], ['review']))[0].review, undefined)
   assertEquals(s.tx((tx) => tx.get(['absent'], ['doc'])), [])

@@ -306,3 +306,15 @@ test('a transaction that moved one entity still reads others from memory', () =>
     ])
   })
 })
+
+test('a get naming components is cut from the whole entity held', () => {
+  let f = fixture()
+  f.s.tx((tx) => tx.patch([{ entity: { eid: 'hero' }, position: { x: 1 } }]))
+  f.s.get(['hero', 'nobody'])
+  assertEquals(reads(f, () => f.s.get(['hero', 'nobody'], ['position'])), 0)
+  assertEquals(f.s.get(['hero', 'nobody'], ['position']), [{
+    entity: { eid: 'hero' },
+    position: { x: 1 },
+  }])
+  assertEquals(f.s.get(['hero'], []), [{ entity: { eid: 'hero' } }])
+})
