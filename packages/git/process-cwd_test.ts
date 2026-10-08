@@ -39,27 +39,28 @@ test('the privileged reader reports open files even outside its cwd', async () =
   }
 })
 
-test('the privileged cwd reader refuses paths and extra arguments', async () => {
-  for (
-    let args of [
-      [],
-      ['0'],
-      ['-1'],
-      ['../self'],
-      [`${Deno.pid}/cwd`],
-      [String(Deno.pid), '/etc/passwd'],
-    ]
-  ) {
-    let result = await read(args)
+// Each refusal is a reader process of its own, so they run side by side.
+let refused = async (reads: Promise<Deno.CommandOutput>[]) => {
+  for (let result of await Promise.all(reads)) {
     equal(result.success, false)
     equal(result.stdout.length, 0)
   }
+}
+
+test('the privileged cwd reader refuses paths and extra arguments', async () => {
+  await refused([
+    [],
+    ['0'],
+    ['-1'],
+    ['../self'],
+    [`${Deno.pid}/cwd`],
+    [String(Deno.pid), '/etc/passwd'],
+  ].map((args) => read(args)))
 })
 
 test('the privileged cwd reader requires a numeric UID owning the process', async () => {
-  for (let uid of ['', '-1', 'unknown', String(Deno.uid()! + 1)]) {
-    let result = await read([String(Deno.pid)], uid)
-    equal(result.success, false)
-    equal(result.stdout.length, 0)
-  }
+  await refused(
+    ['', '-1', 'unknown', String(Deno.uid()! + 1)]
+      .map((uid) => read([String(Deno.pid)], uid)),
+  )
 })
