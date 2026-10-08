@@ -360,12 +360,12 @@ w.close()
 
 `land(graph, frame, mine?)` applies incoming bundles as patches, relayed values,
 and transient updates, and strips synchronized components from `gone` entities.
-A frame with `coverage` lands as a `snapshot` within it, so a covered component
-or property the answer no longer carries is cleared. `strip(graph, eids)` does
-that removal directly. Identity and local components remain, so leaving a result
-set is not deletion; only an incoming tombstone marks deletion. A Sync preserves
-entities held by overlapping subscriptions. Direct `land` callers must provide
-that protection themselves.
+`strip(graph, eids)` does that removal directly. Identity and local components
+remain, so leaving a result set is not deletion; only an incoming tombstone
+marks deletion. A Sync preserves entities held by overlapping subscriptions.
+Direct `land` callers must provide that protection themselves. A frame with
+`coverage` lands as a `snapshot` within it, so a covered component or property
+the answer no longer carries is cleared.
 
 `hear(graph, frame, mine?)` applies only the frame's relayed peer values. A
 reset clears missing peer values for its members, except components this node is
