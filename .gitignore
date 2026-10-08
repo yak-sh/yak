@@ -38,5 +38,7 @@ node_modules.lock/
 
 # Fresh throughput measurements are local; only the accepted baseline is versioned.
 /bench/results.json
+# What the last test:budget run measured (bin/test-budget.ts); the gate keeps it.
+/bench/test-times/
 /bench/*.results.json
 /bench/*.json.tmp

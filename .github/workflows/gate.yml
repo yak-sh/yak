@@ -86,7 +86,10 @@ jobs:
           SUITE_STEP: deno task check
         run: deno task check
 
-      # Every platform's tests (bin/test.ts), workerd's included: the money
+      # Every platform's tests (bin/test.ts), workerd's included, held to the
+      # budget (bin/test-budget.ts): a test over 1 ms that
+      # bench/test-budget.json does not list fails the step, and so does a
+      # listed test or a platform slower than its record allows. The money
       # paths reach Stripe's sandbox, so the runner's environment carries
       # STRIPE_KEY. A job its system unit starts is not told where the user
       # manager listens, and the sandboxes' scopes need it: XDG_RUNTIME_DIR.
@@ -95,8 +98,9 @@ jobs:
       - name: tests
         env:
           SUITE_STEP: tests
-        # All of it: this machine keeps no record of what passed before.
-        run: 'XDG_RUNTIME_DIR=/run/user/$(id -u) DB_PATH=:memory: deno task test --all'
+        # All of it (`deno task test --all`): this machine keeps no record of
+        # what passed before.
+        run: 'XDG_RUNTIME_DIR=/run/user/$(id -u) DB_PATH=:memory: deno task test:budget'
 
       # Reads the row `deploy time` wrote; needs no credentials. Until
       # T-35336 rows were only written when someone hand-ran deploy:time, so
@@ -122,3 +126,4 @@ jobs:
           path: |
             bench/*.results.json
             bench/*.baseline.json
+            bench/test-times/*.json

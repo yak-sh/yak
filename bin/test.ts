@@ -188,8 +188,8 @@ if (import.meta.main && Deno.args[0] === '--bulk') {
       args: [...common, RUNNER, `--platform=${p}`, ...flags, ...more, ...files],
       env,
       stdin: 'inherit',
-      // Keep each reporter intact: interleaved half-lines would also fool
-      // test:budget's per-test duration parser. Drain concurrently below.
+      // Keep each reporter intact: platforms running at once would
+      // interleave their half-lines. Drain concurrently below.
       stdout: 'piped',
       stderr: 'piped',
     }).spawn()

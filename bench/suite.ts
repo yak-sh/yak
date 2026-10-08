@@ -147,7 +147,8 @@ export async function timed(command: string, args: string[]): Promise<Sample> {
 /** The suite a run times: its name, and whatever a `deno task` run was
  * handed past its own task. A run narrowed to a path or a platform times less
  * than the whole suite, so it is a suite of its own, and never banks its time
- * as the whole suite's floor nor is judged against it.
+ * as the whole suite's floor nor is judged against it. Where a run writes its
+ * times (`--times`) changes nothing it runs.
  *
  * ```ts
  * import { assertEquals } from '@std/assert'
@@ -157,12 +158,18 @@ export async function timed(command: string, args: string[]): Promise<Sample> {
  *   'test --tag=deno workers',
  * )
  * assertEquals(suiteOf('ci/tests', 'bash', ['-c', 'x']), 'ci/tests')
+ * assertEquals(
+ *   suiteOf('test', 'deno', ['task', 'test:run', '--all', '--times=/tmp/t']),
+ *   'test --all',
+ * )
  * ```
  */
-export let suiteOf = (name: string, command: string, args: string[]) =>
-  command == 'deno' && args[0] == 'task' && args.length > 2
-    ? [name, ...args.slice(2)].join(' ')
+export let suiteOf = (name: string, command: string, args: string[]) => {
+  let rest = args.slice(2).filter((a) => !a.startsWith('--times='))
+  return command == 'deno' && args[0] == 'task' && rest.length
+    ? [name, ...rest].join(' ')
     : name
+}
 
 export let command = async (args: string[]) => {
   let [name, cmd, ...rest] = args

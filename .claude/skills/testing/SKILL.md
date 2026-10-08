@@ -82,8 +82,13 @@ stronger.
   you changed (`deno task test packages/<name>`), and a change inside one yaks
   app at most `deno task test apps/<name>`. The full suite is for a change that
   reaches across packages in a way their own tests can't cover.
-- `deno task test:budget` lists deno tests and file loads over the 1 ms budget,
-  slowest first.
+- `deno task test:budget` runs the whole suite held to its budget, and the gate
+  runs it: a test case over 1 ms fails unless bench/test-budget.json lists it,
+  a listed one fails past its record (times the list's slack), and so does a
+  platform's wall clock on the gate. Nothing joins the list: a new or renamed
+  test is held to 1 ms. `--write` takes off what got fast and lowers the
+  records; `--from=<dir>` does it from a gate's kept times (its `suite-timings`
+  artifact).
 - `deno task test` and `deno task check` are timed against a baseline
   (bench/suites.md); the `benchmark:` line closing a run is that timing,
   report-only, not a test result.
@@ -104,7 +109,8 @@ stronger.
 ## Platforms
 
 Tests divide by where they run, not by speed, and each platform's environment
-starts once per run (M-39441):
+starts once per run (M-39441). The platforms run at once, workerd's as soon as
+its kernel is up:
 
 - **deno**: every `*_test.ts` and every example.
 - **browser**: packages/web and packages/browse; **terminal**:
