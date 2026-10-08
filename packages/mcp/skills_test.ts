@@ -19,6 +19,7 @@ import {
   Refused,
 } from '@yaks/graph'
 import { world } from '../persona/testing.ts'
+import { pinned } from './testing.ts'
 import { attachSkills, type SkillOptions } from './skills.ts'
 
 let values = fromJsonSchema<Record<string, unknown>>({
@@ -75,9 +76,7 @@ let client = async (
     await attachSkills(built, options)
     return built
   }, { legacy: 'reject' })
-  let c = new Client({ name: 'skills-client', version: '1' }, {
-    versionNegotiation: { mode: { pin: '2026-07-28' } },
-  })
+  let c = new Client({ name: 'skills-client', version: '1' }, pinned)
   let transport = new StreamableHTTPClientTransport(
     new URL('http://skills.test/mcp'),
     {

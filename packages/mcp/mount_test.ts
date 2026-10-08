@@ -15,7 +15,7 @@ import { authenticate as sessionAuth } from '@yaks/session/graph'
 import { loadVocab } from '@yaks/vocab'
 import { mcp } from './mount.ts'
 import { routes } from './routes.ts'
-import { comp, shop, shopGraph } from './testing.ts'
+import { comp, pinned, shop, shopGraph } from './testing.ts'
 
 let ada = { by: 'm1' }
 
@@ -407,9 +407,7 @@ test('a pinned modern HTTP client discovers awaited facets and records malformed
       )
     },
   })
-  let client = new Client({ name: 'untrusted-client', version: '0' }, {
-    versionNegotiation: { mode: { pin: '2026-07-28' } },
-  })
+  let client = new Client({ name: 'untrusted-client', version: '0' }, pinned)
   let transport = new StreamableHTTPClientTransport(
     new URL('http://shop.test/mcp'),
     {
@@ -527,9 +525,7 @@ test('stdio selects modern or legacy using the same attributed tool factory', as
   let [modernEnd, modernWire] = ModernPair.createLinkedPair()
   let [legacyEnd, legacyWire] = LegacyPair.createLinkedPair()
   let served = [serve(modernWire), serve(legacyWire)]
-  let modern = new ModernClient({ name: 'modern-stdio', version: '0' }, {
-    versionNegotiation: { mode: { pin: '2026-07-28' } },
-  })
+  let modern = new ModernClient({ name: 'modern-stdio', version: '0' }, pinned)
   let legacy = new LegacyClient({ name: 'legacy-stdio', version: '0' })
   try {
     await modern.connect(modernEnd)
@@ -600,9 +596,7 @@ test('modern resource streaming remains open until result or client cancellation
       })
     },
   })
-  let client = new Client({ name: 'stream-test', version: '0' }, {
-    versionNegotiation: { mode: { pin: '2026-07-28' } },
-  })
+  let client = new Client({ name: 'stream-test', version: '0' }, pinned)
   let streams = 0
   try {
     await client.connect(

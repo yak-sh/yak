@@ -14,7 +14,7 @@ import { AjvJsonSchemaValidator } from '@modelcontextprotocol/sdk/validation/ajv
 import { z } from 'zod'
 import { argsOf } from '@yaks/graph'
 import { CallError } from '@yaks/tools'
-import { connect, shopGraph } from './testing.ts'
+import { connect, pinned, shopGraph } from './testing.ts'
 
 // graph_apply's published input schema — the write door as a client reads it.
 let writing = async () => {
@@ -241,9 +241,7 @@ test('a non-object declared schema is not replaced in the neutral tool listing',
         run: () => [],
       }],
     }), { legacy: 'reject' })
-  let client = new Client({ name: 'schema-test', version: '0' }, {
-    versionNegotiation: { mode: { pin: '2026-07-28' } },
-  })
+  let client = new Client({ name: 'schema-test', version: '0' }, pinned)
   try {
     await client.connect(
       new StreamableHTTPClientTransport(new URL('http://shop.test/mcp'), {
@@ -290,9 +288,7 @@ test('modern custom parameter headers use the exact registered input schema befo
         },
       }],
     }), { legacy: 'reject' })
-  let client = new Client({ name: 'header-test', version: '0' }, {
-    versionNegotiation: { mode: { pin: '2026-07-28' } },
-  })
+  let client = new Client({ name: 'header-test', version: '0' }, pinned)
   let mismatch = false
   try {
     await client.connect(

@@ -104,6 +104,13 @@ let validator: jsonSchemaValidator = {
   },
 }
 
+/** How each modern client these tests connect is made: pinned to the
+ * revision under test, and checking answers with the validator above. */
+export let pinned = {
+  versionNegotiation: { mode: { pin: '2026-07-28' } },
+  jsonSchemaValidator: validator,
+}
+
 /** An MCP client talking to a server over this graph, in one process. */
 export let connect = async (
   opts: Omit<Options, 'graph'> & { graph?: Graph } = {},
