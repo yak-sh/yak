@@ -95,15 +95,20 @@ export type Home = {
   spawned?: boolean
 }
 
-let listed = new Map<string, Home[]>()
+// Each level's homes, with the dens they grew from and the creature index
+// they were last checked against.
+type Listed = { from: typeof BEASTS; dens: string; homes: Home[] }
+let listed = new Map<string, Listed>()
 let from = BEASTS
 let buildings = PLANS
 
-// Both caches are views of the creature index, so a new store answer gives
-// each land fresh homes, including the levels already visited.
+// Both caches are views of the creature index and the buildings, so a new
+// store answer gives each land fresh homes, including the levels already
+// visited: new buildings grow every level's again, and new creatures the
+// levels whose dens they change.
 let refresh = () => {
   if (from == BEASTS && buildings == PLANS) return
-  listed.clear()
+  if (buildings != PLANS) listed.clear()
   near = nearby(homesOf)
   from = BEASTS
   buildings = PLANS
@@ -113,8 +118,13 @@ let refresh = () => {
 export let homesOf = (id: string): Home[] => {
   refresh()
   let got = listed.get(id)
-  if (got) return got
-  let lv = levelOf(id)!, v = vale(), [ox, oz] = originOf(id)
+  if (got?.from == BEASTS) return got.homes
+  let lv = levelOf(id)!, found = dens(lv), key = JSON.stringify(found)
+  if (got?.dens == key) {
+    got.from = BEASTS
+    return got.homes
+  }
+  let v = vale(), [ox, oz] = originOf(id)
   let blocked = (x: number, z: number) =>
     wallsNear(v, x, z).some((w) => Math.hypot(w.x - x, w.z - z) < w.r + 1.5)
   let places = Object.values(lv.places).map((p) => ({
@@ -132,7 +142,7 @@ export let homesOf = (id: string): Home[] => {
   let out: Home[] = []
   let origin = new Map<string, DenAt>()
   let taken = new Map<string, Spot[]>()
-  for (let den of dens(lv)) {
+  for (let den of found) {
     let { beast, name, place } = den
     let mine = taken.get(beast) ?? []
     taken.set(beast, mine)
@@ -207,8 +217,8 @@ export let homesOf = (id: string): Home[] => {
     let at = byEid.get(h.eid)
     return at ? [at] : []
   })
-  if (listed.size >= 64) listed.delete(listed.keys().next().value!)
-  listed.set(id, homes)
+  if (!got && listed.size >= 64) listed.delete(listed.keys().next().value!)
+  listed.set(id, { from: BEASTS, dens: key, homes })
   return homes
 }
 
