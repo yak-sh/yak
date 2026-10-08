@@ -146,16 +146,23 @@ let read1 = (v: Vocab, comp: string, derived: Derived): Prop[] =>
 // A reference to a computed component's entity (the journal's `_change.tx`)
 // reads as that entity's eid, written out from the id it holds: such an
 // entity has no row in the entity table to join (@yaks/sql `Backing`).
-type Projection = { sel: Expr[]; joins: Join[] }
+//
+// Read `named`, a reference reads as the id it holds instead, listed in
+// `refs`: a set read names every id it found in one statement afterwards
+// (`naming`), rather than joining the entity table once per row for an eid
+// that most rows share.
+type Projection = { sel: Expr[]; joins: Join[]; refs?: string[] }
 let projection = (
   v: Vocab,
   comp: string,
   derived: Derived,
   backed: Backings,
+  named = false,
 ): Projection => {
   let own = (prop: string) => col(prop, comp)
   let sel: Expr[] = []
   let joins: Join[] = []
+  let refs: string[] = []
   let deps = new Set<string>()
   for (let c of read1(v, comp, derived)) {
     let over = derived[`${comp}.${c.prop}`]
@@ -165,6 +172,9 @@ let projection = (
       sel.push(as(over.expr(own('entity')), c.prop))
     } else if (tag) {
       sel.push(as(eidAt(tag, own(field(c.prop))), c.prop))
+    } else if (c.category == 'ref' && named) {
+      refs.push(c.prop)
+      sel.push(as(own(field(c.prop)), c.prop))
     } else if (c.category == 'ref') {
       let a = `r_${c.prop.replaceAll(/[^A-Za-z0-9]/g, '_')}`
       joins.push(left(table('entity', a), eq(col('id', a), own(field(c.prop)))))
@@ -179,7 +189,7 @@ let projection = (
     if (d == comp) continue
     joins.push(left(table(d), eq(col('entity', d), own('entity'))))
   }
-  return { sel, joins }
+  return { sel, joins, ...refs.length ? { refs } : {} }
 }
 
 // What `key` holds in `m`, made on first ask.
@@ -209,6 +219,7 @@ let project = (
   comp: string,
   derived: Derived = NONE,
   backed: Backings = NONE,
+  named = false,
 ): Projection => {
   let all = derivedOf(v, derived)
   return at(
@@ -217,9 +228,40 @@ let project = (
       backed,
       () => new Map(),
     ),
-    comp,
-    () => projection(v, comp, all, backed),
+    `${named} ${comp}`,
+    () => projection(v, comp, all, backed, named),
   )
+}
+
+// The eids of the entities these ids are, in one statement: what a set read
+// asks once for every reference its rows hold. An id no entity has stays
+// unnamed, as a reference whose target is gone reads.
+let naming = (driver: Driver, ids: Iterable<unknown>): Map<number, string> => {
+  let asked = [
+    ...new Set([...ids].flatMap((id) => id == null ? [] : [Number(id)])),
+  ]
+  if (!asked.length) return new Map()
+  return new Map(
+    driver.query(select({
+      cols: [col('id', 'e'), col('eid', 'e')],
+      from: ownerSet(asked),
+      joins: [cross(table('entity', 'e'))],
+      where: eq(col('id', 'e'), col('value', '@owners')),
+    })).map((r) => [Number(r.id), String(r.eid)]),
+  )
+}
+// A row's references, named.
+let named = (
+  value: Row,
+  refs: string[] | undefined,
+  names: Map<number, string>,
+): Row => {
+  if (!refs) return value
+  let out = { ...value }
+  for (let prop of refs) {
+    out[prop] = out[prop] == null ? null : names.get(Number(out[prop])) ?? null
+  }
+  return out
 }
 
 // One component's read, whatever names its owners: `lead` is what is selected
@@ -774,11 +816,18 @@ export let get = (
       if (held) held.push(...owners)
       else compOwners.set(comp, owners)
     }
+    // The spine pass already resolved every owner's storage id. Do not join
+    // it again for each component just to recover the eid we already hold;
+    // the references every component's rows hold are named once, together.
+    let read: [Bundle, string, Row, string[] | undefined][] = []
     for (let [comp, ids] of compOwners) {
-      // The spine pass already resolved every owner's storage id. Do not join
-      // it again for each component just to recover the eid we already hold.
-      // References still use project()'s joins; only ownership stays numeric.
-      let { sel, joins } = project(vocab, comp, opts.derived, opts.backed)
+      let { sel, joins, refs } = project(
+        vocab,
+        comp,
+        opts.derived,
+        opts.backed,
+        true,
+      )
       for (
         let row of driver.query(select({
           cols: [as(col('entity', comp), '@id'), ...sel],
@@ -790,8 +839,15 @@ export let get = (
         let { '@id': owner, ...value } = row
         let b = byId.get(Number(owner))!
         if ('tombstone' in b) continue
-        b[comp] = decoded(vocab, comp, value) as Comp
+        read.push([b, comp, value, refs])
       }
+    }
+    let refNames = naming(
+      driver,
+      read.flatMap(([, , value, refs]) => refs?.map((p) => value[p]) ?? []),
+    )
+    for (let [b, comp, value, refs] of read) {
+      b[comp] = decoded(vocab, comp, named(value, refs, refNames)) as Comp
     }
   }
   backedGet(driver, vocab, eids.filter((e) => !found.has(e)), opts, comps)

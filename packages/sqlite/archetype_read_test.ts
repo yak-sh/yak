@@ -32,10 +32,12 @@ test('archetype gather golden: nulls, tags, refs, derived, stubs, graves, order 
     { entity: { eid: 'a' }, doc: {}, marker: {}, sample: { present: 'real' } },
     { entity: { eid: 'b' }, product: { maker: 'a', price: 4 } },
     { entity: { eid: 'c' }, product: { maker: 'stub' } },
+    { entity: { eid: 'd' }, product: { maker: 'a', price: 1 } },
+    { entity: { eid: 'e' }, product: { price: 2 } },
     { entity: { eid: 'dead' }, doc: { title: 'gone' } },
   ])
   g.apply([{ entity: { eid: 'dead' }, $delete: true }])
-  let ids = ['b', 'a', 'missing', 'stub', 'c', 'a', 'dead']
+  let ids = ['b', 'a', 'missing', 'stub', 'c', 'd', 'e', 'a', 'dead']
   let opts = {
     derived: {
       'doc.title': {
