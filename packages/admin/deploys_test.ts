@@ -269,8 +269,8 @@ test('a platform command interrupted directly is not a defect', async () => {
     () =>
       command(
         Deno.cwd(),
-        Deno.execPath(),
-        ['eval', "Deno.kill(Deno.pid, 'SIGTERM')"],
+        'sh',
+        ['-c', 'kill -TERM $$'],
         new AbortController().signal,
       ),
     Interrupted,
