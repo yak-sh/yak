@@ -31,9 +31,10 @@
 // and what the patch said, the way a read returns it (`patch`), and kept once
 // the transaction commits: an entity written is not read back to be known. A
 // value a read could return differently (a number into a text column, a
-// derived property, a default the clock fills) leaves the entity to be read.
-// What memory says an entity held is the patch's to choose its statements by
-// (./write.ts `patch`'s `had`).
+// derived property, a default the clock fills) leaves the entity to be read,
+// though which components it holds is still known. What memory says an entity
+// holds is the patch's to choose its statements by (./write.ts `patch`'s
+// `had`).
 //
 // Every driver naming one connection (@yaks/sql `Driver.connection`) tells one
 // memory what it ran, so a write through any of them is seen by all.
@@ -231,6 +232,13 @@ const BLOBS = 'blob_text'
 
 // An entity a transaction wrote whose state memory can't work out.
 const LOST: unique symbol = Symbol('lost')
+
+// A component a patch gave an entity whose values memory can't work out: the
+// entity holds one, which is what a patch's statements are chosen by, but
+// nothing a read asks is answered from it.
+const HOLE = '\0hole'
+let holed = (b: Bundle): boolean =>
+  comps(b).some(([, c]) => c != null && HOLE in c)
 
 type Kept = {
   /** an entity as read, or `null` for one storage does not hold */
@@ -476,7 +484,9 @@ export let memoized = (
     // What a transaction writing more than a scan reads is not kept either.
     commit: () => {
       if (k.after.size > SCAN) return
-      for (let [eid, b] of k.after) if (b !== LOST) hold(eid, b)
+      for (let [eid, b] of k.after) {
+        if (b !== LOST && !(b && holed(b))) hold(eid, b)
+      }
       trim()
     },
   }
@@ -637,27 +647,30 @@ export let memoized = (
         delete out[name]
         continue
       }
-      let props = shape(name)
-      if (!props) return LOST
-      let had = out[name] as Comp | undefined
-      let next: Comp = had ? { ...had } : {}
-      // A row this patch brings takes each default it does not give.
-      for (let [p, prop] of had ? [] : props) {
-        if (p in comp) continue
-        let d = prop.default
-        let v = !d ? null : 'now' in d ? LOST : cast(prop, d.value)
-        if (v === LOST) return LOST
-        next[p] = v
-      }
-      for (let [p, v] of Object.entries(comp)) {
-        let prop = props.get(p)
-        let value = prop ? cast(prop, v) : LOST
-        if (value === LOST) return LOST
-        next[p] = value
-      }
-      out[name] = next
+      out[name] = put(out[name] as Comp | undefined, name, comp)
     }
     return out
+  }
+  // What a component holds once a patch gives it `comp`, from what it held.
+  let put = (had: Comp | undefined, name: string, comp: Comp): Comp => {
+    let props = shape(name)
+    if (!props) return { [HOLE]: true }
+    let next: Comp = had ? { ...had } : {}
+    // A row this patch brings takes each default it does not give.
+    for (let [p, prop] of had ? [] : props) {
+      if (p in comp) continue
+      let d = prop.default
+      let v = !d ? null : 'now' in d ? LOST : cast(prop, d.value)
+      if (v === LOST) return { [HOLE]: true }
+      next[p] = v
+    }
+    for (let [p, v] of Object.entries(comp)) {
+      let prop = props.get(p)
+      let value = prop ? cast(prop, v) : LOST
+      if (value === LOST) return { [HOLE]: true }
+      next[p] = value
+    }
+    return next
   }
   let seen = -1
   // Another connection's commit, or anything else this one cannot see.
@@ -678,7 +691,7 @@ export let memoized = (
     before: Map<string, number>,
   ) => {
     let selects = (test: Filter, b: Bundle | null | typeof LOST | undefined) =>
-      b === LOST || b === undefined || (b != null && test(b))
+      b === LOST || b === undefined || (b != null && (holed(b) || test(b)))
     for (let a of k.answers.values()) {
       if (!a.test) continue
       if (a.tables.some(([t, n]) => (before.get(t) ?? 0) != n)) continue
@@ -790,9 +803,11 @@ export let memoized = (
       let now = new Map<string, Bundle | null | typeof LOST>(
         eids.map((eid) => [eid, prior(eid)]),
       )
-      let known: Known = (eid) => {
+      let known: Known = (eid, name) => {
         let b = now.get(eid)
-        return b === LOST || c.blind ? undefined : b
+        return b === LOST || b === undefined || c.blind
+          ? undefined
+          : b?.[name] != null
       }
       let shifts = c.shifts, before = new Map(c.versions)
       let born = writes(

@@ -566,29 +566,35 @@ test('an entity a transaction patched is known without reading it back', () => {
   )
 })
 
+// How many statements `body` writes to `table` through `d`.
+let writes = (
+  d: ReturnType<typeof mem>,
+  table: string,
+  body: () => unknown,
+) => {
+  let query = d.query, n = 0
+  d.query = (stmt) => {
+    if (
+      stmt.t == 'insert' && stmt.into == table ||
+      stmt.t == 'update' && stmt.table == table
+    ) n++
+    return query(stmt)
+  }
+  try {
+    body()
+  } finally {
+    d.query = query
+  }
+  return n
+}
+
 test('a component an entity is known to lack is written in one statement', () => {
   let f = fixture()
   f.s.get(['hero'])
-  let writes = (table: string, body: () => unknown) => {
-    let query = f.d.query, n = 0
-    f.d.query = (stmt) => {
-      if (
-        stmt.t == 'insert' && stmt.into == table ||
-        stmt.t == 'update' && stmt.table == table
-      ) n++
-      return query(stmt)
-    }
-    try {
-      body()
-    } finally {
-      f.d.query = query
-    }
-    return n
-  }
   let move = (x: number) =>
     f.s.tx((tx) => tx.patch([{ entity: { eid: 'hero' }, position: { x } }]))
-  assertEquals(writes('position', () => move(1)), 1)
-  assertEquals(writes('position', () => move(2)), 1)
+  assertEquals(writes(f.d, 'position', () => move(1)), 1)
+  assertEquals(writes(f.d, 'position', () => move(2)), 1)
   assertEquals(f.s.get(['hero'])[0].position, { x: 2 })
 })
 
@@ -645,6 +651,19 @@ let wide = loadVocab([{
     tag: { component: true, type: 'object' },
   },
 }])
+
+test('a component whose values memory cannot say is still known to be held', () => {
+  let d = mem(), s = storage(d, vocab)
+  s.install()
+  let moved = s.tx((tx) => {
+    // A number into a boolean column is storage's to say.
+    tx.patch([{ entity: { eid: 'a' }, player: { active: 1 } }])
+    let move = () => tx.patch([{ entity: { eid: 'a' }, position: { x: 1 } }])
+    return writes(d, 'position', move)
+  })
+  assertEquals(moved, 1)
+  assertEquals(s.get(['a']), get(d, vocab, ['a']))
+})
 
 test('what memory says a patched entity holds, and what it answers, is what storage reads', () => {
   let d = mem(), s = storage(d, wide, { number: true })

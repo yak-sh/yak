@@ -640,11 +640,8 @@ export let patch = (
   // row that came. Anywhere else a write's own count says whether a row came
   // or went: the UPDATE hit, or the absent INSERT or the drop did something.
   let fresh = new Set(born.map((e) => e.eid))
-  let lacks = (eid: string, name: string) => {
-    if (fresh.has(eid)) return true
-    let was = had?.(eid)
-    return was !== undefined && was?.[name] == null
-  }
+  let lacks = (eid: string, name: string) =>
+    fresh.has(eid) || had?.(eid, name) === false
   for (let b of alive) {
     let eid = b.entity.eid
     for (let [name, comp] of comps(b)) {
@@ -690,9 +687,9 @@ export let patch = (
 let ran = (driver: Driver, w: Insert | Update | Delete): number =>
   driver.run?.(w) ?? driver.query({ ...w, returning: [col('entity')] }).length
 
-/** What memory says an entity holds, read or written before: `null` for one
- * storage does not hold, `undefined` where memory does not know (./memo.ts). */
-export type Known = (eid: string) => Bundle | null | undefined
+/** Whether memory says an entity holds a row of a component, read or written
+ * before: `undefined` where memory does not know (./memo.ts). */
+export type Known = (eid: string, name: string) => boolean | undefined
 
 /** What hears a component row come (`held`) or go, entity by entity. */
 export type Moved = (eid: string, table: string, held: boolean) => void
