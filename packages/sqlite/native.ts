@@ -89,8 +89,15 @@ export let prepared = (db: Database) => {
   // SQLite integers are 64-bit. The library's default reader truncates them
   // to 32 bits; safe JS integers must round-trip through every driver caller.
   db.int64 = true
+  let commands = new WeakSet<ReturnType<Database['prepare']>>()
   let prepare = (sql: string) => {
     let statement = db.prepare(sql)
+    // DDL, transaction boundaries and writes without RETURNING have no row
+    // shape. Running them needs no decoder or repeated column-name reads.
+    if (!statement.columnNames().length) {
+      commands.add(statement)
+      return statement
+    }
     let original = statement.getRowObject.bind(statement)
     let names: string[] | undefined
     let decode: ReturnType<typeof original> | undefined
@@ -165,6 +172,10 @@ export let prepared = (db: Database) => {
       cache.set(sql, statement)
     }
     try {
+      if (commands.has(statement)) {
+        statement.run(...params)
+        return []
+      }
       return statement.all(...params)
     } catch (error) {
       // @db/sqlite resets all() on success, but an exception while decoding
@@ -212,15 +223,15 @@ let holding = (query: (s: Stmt) => Row[]) => {
  */
 export let driver = (db: Database): Driver => {
   let run = prepared(db)
-  // Whether this is a file other processes may have open, asked of SQLite
-  // itself rather than of the string somebody passed: `main` has a path on
-  // disk, and an in-memory or temporary database has none.
+  // Memory and temporary names have no file. For every other name ask SQLite:
+  // the flags may still have made it a database in memory.
   let main = render(select({
     cols: [col('file')],
     from: call('pragma_database_list', []),
     where: eq(col('name'), val('main')),
   }))
-  let file = !!run(main.sql, main.params)[0]?.file
+  let file = db.path != ':memory:' && db.path != '' &&
+    !!run(main.sql, main.params)[0]?.file
   // An index is checked against its table before it is made: the check is a
   // statement of its own, run first.
   let covers = (s: Stmt) => {
