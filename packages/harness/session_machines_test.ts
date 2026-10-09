@@ -11,8 +11,8 @@ import { gitDoc } from '@yaks/git/vocab'
 import type { Machine, MachineProvider, MachineRef } from '@yaks/machine'
 import { homeAt, machines, sessionCwd } from './session_machines.ts'
 
+let vocab = loadVocab([...docs, machineDoc, ...sessionDocs, gitDoc])
 let fixture = async () => {
-  let vocab = loadVocab([...docs, machineDoc, ...sessionDocs, gitDoc])
   let g = graph({ storage: ram(vocab), vocab })
   let requests: unknown[] = []
   let wakes: MachineRef[] = []

@@ -41,8 +41,8 @@ import {
 // about a seal back through the graph, and reporting where the graph does. `call` is @yaks/tools', a component whose
 // text carries a whole batch as JSON, and so are `error`, `exception` and
 // `content`, the words a failed seal is said in.
+let vocab = loadVocab([secretsDoc, provisionalDoc, toolsDoc, docDoc])
 let setup = <V extends Vault = Local>(vault: V = ramVault() as V) => {
-  let vocab = loadVocab([secretsDoc, provisionalDoc, toolsDoc, docDoc])
   let reported: unknown[] = []
   let g = graph({
     storage: ram(vocab),
