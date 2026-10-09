@@ -168,6 +168,7 @@ import {
   type Field as Text,
   meaning,
   queues,
+  remodel,
   schema as vectorSchema,
   semantic,
   watch as watchEmbedding,
@@ -2155,6 +2156,12 @@ export class Store {
   #deployed = async (): Promise<void> => {
     this.#graph.storage.install()
     watchEmbedding(statements(this.#sql), this.#texts.fields)
+    // A deploy is where the model can change: where a stored vector was made
+    // by another, every text owes its vector again (`#embedding` below).
+    let model = embedder(this.#bind)
+    if (model) {
+      remodel(statements(this.#texts.sql), this.#texts.fields, model.model)
+    }
     // Schema pages are ordinary entities, made by the package that owns
     // their identities. Describe after boot, in bounded writes, with the
     // hash last so an interrupted pass resumes on the next request.

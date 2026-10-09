@@ -169,6 +169,21 @@ let moved = (db: Statements, model: string): boolean => {
   return r.lo != null && (r.lo != model || r.hi != model)
 }
 
+/**
+ * Owe every text its vector again when a stored one was made by another model,
+ * and say whether it did: what a host asks where its model may have changed (a
+ * deploy), since a sweep looks only once nothing else is owed.
+ */
+export let remodel = (
+  db: Statements,
+  fields: Field[],
+  model: string,
+): boolean => {
+  if (!moved(db, model)) return false
+  owe(db, fields)
+  return true
+}
+
 // The vectors for a batch of texts, asked for together; a text the embedder
 // refused is its `Refused`. One refusal fails the request it rode in, so a
 // refused batch is asked again a text at a time to find it. Anything else is
@@ -219,10 +234,7 @@ export let sweep = async (
   let { model } = embedder
   watch(db, fields)
   let owed = due(db, limit)
-  if (!owed.length && moved(db, model)) {
-    owe(db, fields)
-    owed = due(db, limit)
-  }
+  if (!owed.length && remodel(db, fields, model)) owed = due(db, limit)
   let by = new Map(
     sources(db, fields, owed.map((d) => d.owner)).map((s) => [s.owner, s]),
   )
