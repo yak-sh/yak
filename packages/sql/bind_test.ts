@@ -259,6 +259,26 @@ test('a reverse hop with no count and no child filter declines', () => {
   assertThrows(() => compile(parse('.notes.entity.num=3'), v), Unsupported)
 })
 
+// A computed component's rows are its store's to supply; one that supplied
+// none is refused, never read as a component nobody wears.
+test('a computed component with no backing declines', () => {
+  let computed = loadVocab({
+    $defs: {
+      record: {
+        component: true,
+        computed: true,
+        type: 'object',
+        properties: { title: { type: 'string' } },
+      },
+    },
+  })
+  assertThrows(
+    () => compile(parse('.record'), computed),
+    Unsupported,
+    'record has no backing',
+  )
+})
+
 test('an unreachable directive throws Unsupported naming the feature', () => {
   let e = assertThrows(
     () => compile(parse('.near=x&.order=similar'), v),

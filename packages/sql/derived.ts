@@ -150,6 +150,7 @@ export let ladders = (v: Vocab): Derived => {
 
 let merged = new WeakMap<Vocab, WeakMap<Derived, Derived>>()
 let made = new WeakSet<Derived>()
+let empty: Derived = {}
 
 /**
  * The registry a store reads through: every ladder the vocabulary declares
@@ -157,7 +158,7 @@ let made = new WeakSet<Derived>()
  * name a property. The same object for the same two, so a cache keyed on the
  * registry keeps hitting.
  */
-export let derivedOf = (v: Vocab, derived: Derived = {}): Derived => {
+export let derivedOf = (v: Vocab, derived: Derived = empty): Derived => {
   if (made.has(derived)) return derived
   let byVocab = merged.get(v)
   if (!byVocab) merged.set(v, byVocab = new WeakMap())

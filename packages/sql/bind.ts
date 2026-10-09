@@ -1044,12 +1044,7 @@ let facetOf = (
   if (name == 'kind' || name == 'entity' || ctx.v.assoc(name)) return null
   let op = opOf(c)
   if (op == 'want') return null
-  let hop: Hop
-  try {
-    hop = ctx.v.aim(name, bare(c))[0]
-  } catch {
-    return null // a name that does not route: clause() owns the refusal
-  }
+  let hop = ctx.v.aim(name, bare(c))[0]
   if (hop.prop || hop.comp == 'entity' || !ctx.v.comp(hop.comp)) return null
   // A computed component is in no archetype: single() answers it.
   if (computed(ctx.v, hop.comp)) return null
@@ -1116,13 +1111,9 @@ let spineOf = (
 // reads the `case`.
 let rungs = (ctx: Ctx, c: Clause): Clause | null => {
   if (c.kind != 'pred' || c.op != '=' || c.not || c.where) return null
+  if (c.path.length != 2 || c.path[1] != 'status') return null
   if (claims(ctx, 'pred') || ctx.v.assoc(c.path[0])) return null
-  let hops: Hop[]
-  try {
-    hops = ctx.v.aim(c.path.join('.'), bare(c))
-  } catch {
-    return null // a name that does not route: clause() owns the refusal
-  }
+  let hops = ctx.v.aim(c.path.join('.'), bare(c))
   let [hop] = hops
   let l = hops.length == 1 && hop.prop == 'status' &&
     ctx.v.comp(hop.comp)?.ladder
@@ -1159,7 +1150,9 @@ let rungs = (ctx: Ctx, c: Clause): Clause | null => {
 // query in another conjunction, so expose its siblings before carrying an
 // entity address into every disjunction below it.
 let flattened = (clauses: Clause[]): Clause[] =>
-  clauses.flatMap((c) => c.kind == 'and' ? flattened(c.clauses) : [c])
+  clauses.some((c) => c.kind == 'and')
+    ? clauses.flatMap((c) => c.kind == 'and' ? flattened(c.clauses) : [c])
+    : clauses
 
 let conjuncts = (ctx: Ctx, clauses: Clause[]): Cond[] => {
   let all: string[] = []
@@ -1777,16 +1770,17 @@ export let bound = (
   let filters = cs.filter((c) => !directive(c) || claims(ctx, c.kind))
   // A component page (including the platform's negative listing screen)
   // already has a keyed driving table. No catalog is needed to discover it.
-  let facets = flattened(filters).map((c) => facetOf(ctx, c))
-  let required = facets.filter((f) => f?.present)
   if (
-    !spine && !claims(ctx, 'pred') && ctx.d.owned && find<Limit>(cs, 'limit') &&
-    facets.every((f) => f != null) && required.length == 1
+    !spine && !claims(ctx, 'pred') && ctx.d.owned && find<Limit>(cs, 'limit')
   ) {
-    let comp = required[0]!.comp
-    if (
-      source(ctx, comp) == `"${comp}"` && ctx.d.table(comp) == `"${comp}"`
-    ) ctx.present = comp
+    let facets = flattened(filters).map((c) => facetOf(ctx, c))
+    let required = facets.filter((f) => f?.present)
+    if (facets.every((f) => f != null) && required.length == 1) {
+      let comp = required[0]!.comp
+      if (
+        source(ctx, comp) == `"${comp}"` && ctx.d.table(comp) == `"${comp}"`
+      ) ctx.present = comp
+    }
   }
   if (
     !ctx.present && !spine && !claims(ctx, 'pred') && ctx.d.owned &&
