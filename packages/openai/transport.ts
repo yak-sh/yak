@@ -452,16 +452,14 @@ let limits = (headers: Headers): RateLimits => {
 
 /** Decode SSE across arbitrary byte chunks, including CRLF and a final frame
  * without a blank line. The reader is released even if a consumer throws. */
-export let frames = async function* (
+export let frames = (
   body: ReadableStream<Uint8Array>,
-): AsyncGenerator<ResponseEvent> {
-  for await (let value of jsonFrames(body, fault)) {
+): AsyncGenerator<ResponseEvent> =>
+  jsonFrames(body, fault, (value) => {
     if (typeof value.type != 'string') {
       throw fault('malformed_stream', 'responses: stream event has no type')
     }
-    yield value as ResponseEvent
-  }
-}
+  }) as AsyncGenerator<ResponseEvent>
 
 let usage = (value: unknown): ResponseUsage | undefined => {
   if (!record(value)) return undefined

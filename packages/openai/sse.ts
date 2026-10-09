@@ -2,6 +2,7 @@
 export let jsonFrames = async function* (
   body: ReadableStream<Uint8Array>,
   fault: (kind: 'transport' | 'malformed_stream', message: string) => Error,
+  check?: (value: Record<string, unknown>) => void,
 ): AsyncGenerator<Record<string, unknown>> {
   let reader = body.getReader()
   let frame = (block: string) => {
@@ -18,7 +19,9 @@ export let jsonFrames = async function* (
     if (!value || typeof value != 'object' || Array.isArray(value)) {
       throw fault('malformed_stream', 'SSE data is not an object')
     }
-    return value as Record<string, unknown>
+    let parsed = value as Record<string, unknown>
+    check?.(parsed)
+    return parsed
   }
   try {
     let decoder = new TextDecoder()
