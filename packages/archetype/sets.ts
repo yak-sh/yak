@@ -14,8 +14,8 @@ export type Archetype = {
 
 /** UTF-8 bytewise order, independent of locale and JavaScript's UTF-16 sort. */
 export function canonical(tables: Iterable<string>): string[] {
-  let encoder = new TextEncoder()
-  let entries = [...new Set(tables)].map((name) => {
+  let names = [...new Set(tables)]
+  for (let name of names) {
     // The string the id is derived from reserves comma and |; reject an
     // ambiguous name rather than let two different sets share an address.
     // SQLite component names never contain these characters.
@@ -24,8 +24,14 @@ export function canonical(tables: Iterable<string>): string[] {
     ) {
       throw new Error(`Invalid archetype table name: ${JSON.stringify(name)}`)
     }
-    return { name, bytes: encoder.encode(name) }
-  })
+  }
+  // ASCII's UTF-16 and UTF-8 orders agree. Ordinary component names need no
+  // byte arrays, and a set with at most one member needs no comparison.
+  if (names.length < 2 || names.every((name) => /^\p{ASCII}+$/u.test(name))) {
+    return names.sort()
+  }
+  let encoder = new TextEncoder()
+  let entries = names.map((name) => ({ name, bytes: encoder.encode(name) }))
   entries.sort((a, b) => {
     for (let i = 0; i < Math.min(a.bytes.length, b.bytes.length); i++) {
       if (a.bytes[i] != b.bytes[i]) return a.bytes[i] - b.bytes[i]
@@ -37,16 +43,23 @@ export function canonical(tables: Iterable<string>): string[] {
 
 /** Domain-separated UUID of bytewise-sorted, de-duplicated table names. */
 export function eidOf(tables: Iterable<string>): string {
-  return derivedEid('archetype|' + canonical(tables).join(','))
+  return addressed(canonical(tables))
 }
+
+let addressed = (names: readonly string[]) =>
+  derivedEid('archetype|' + names.join(','))
 
 /** Decode the scalar form `archetype.tables` is stored and transmitted in. */
 export function tablesOf(value: unknown): string[] {
+  return canonical(parsed(value))
+}
+
+let parsed = (value: unknown): string[] => {
   let list = typeof value == 'string' ? JSON.parse(value) : value
   if (!Array.isArray(list) || list.some((v) => typeof v != 'string')) {
     throw new Error('archetype.tables must be a JSON array of table names')
   }
-  return canonical(list)
+  return list
 }
 
 /** Whether a table set meets a presence predicate; no column values are read. */
@@ -75,11 +88,11 @@ export class Archetypes {
   /** Decode immutable scalar content. Mutable arrays are read anew, and a
    * cached scalar says nothing about which entity currently carries it. */
   decode(value: unknown): Archetype {
-    if (typeof value != 'string') return this.intern(tablesOf(value))
-    if (value.length > 8192) return this.intern(tablesOf(value))
+    if (typeof value != 'string') return this.intern(parsed(value))
+    if (value.length > 8192) return this.intern(parsed(value))
     let found = this.byText.get(value)
     if (found) return found
-    let set = this.intern(tablesOf(value))
+    let set = this.intern(parsed(value))
     if (this.byText.size >= 256) {
       this.byText.delete(this.byText.keys().next().value!)
     }
@@ -94,7 +107,7 @@ export class Archetypes {
     let found = this.bySet.get(key)
     if (found) return found
     let value = Object.freeze({
-      eid: eidOf(names),
+      eid: addressed(names),
       tables: Object.freeze(names),
     })
     this.bySet.set(key, value)
