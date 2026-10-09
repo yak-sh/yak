@@ -9,6 +9,7 @@ import { writeCost } from './write_cost_fixture.ts'
 import { productionGap } from './production_gap_fixture.ts'
 import { worldTick } from './play_world_fixture.ts'
 import { deployCost } from './deploy_cost_fixture.ts'
+import { gitCost, releaseCost, wakeCost } from './release_cost_fixture.ts'
 import { idleWake, playMinute } from './play_cost_fixture.ts'
 import type { DurableStorage } from '@yaks/durable-object'
 import type { Namespace } from './door.ts'
@@ -74,6 +75,22 @@ export class PlayCost {
         return new Response('bad history', { status: 400 })
       }
       return Response.json(await deployCost(this.ctx.storage, history))
+    }
+    if (new URL(req.url).searchParams.has('release')) {
+      return Response.json(await releaseCost(this.ctx.storage))
+    }
+    if (new URL(req.url).searchParams.has('wake')) {
+      let history = Number(new URL(req.url).searchParams.get('wake'))
+      if (![100, 2000].includes(history)) {
+        return new Response('bad history', { status: 400 })
+      }
+      return Response.json(await wakeCost(this.ctx.storage, history))
+    }
+    if (new URL(req.url).searchParams.has('git')) {
+      let others = Number(new URL(req.url).searchParams.get('others') ?? 0)
+      return Response.json(
+        await gitCost(this.ctx.storage, await req.json(), others),
+      )
     }
     if (new URL(req.url).searchParams.has('writes')) {
       return Response.json(await writeCost(this.ctx.storage))
