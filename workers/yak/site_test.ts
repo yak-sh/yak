@@ -201,7 +201,7 @@ test('the frame is asked for on the body, above what it frames', () => {
 // the standing line both read — so a page quoting a number nothing enforces is
 // exactly the copy this test exists to prevent: it was pulled once for saying
 // "100 emails a month" of a platform that could not send one at all.
-let flat = (html: string) => html.replace(/\s+/g, ' ')
+let flat = (html: string) => html.replace(/\s{2,}|[^\S ]/g, ' ')
 
 test('the plan pages carry the email allowance the code enforces', () => {
   let free = `${LETTERS.free} emails a month`
