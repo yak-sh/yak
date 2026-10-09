@@ -364,10 +364,12 @@ Listing what waits for a reader is [@yaks/inbox](../inbox/README.md)'s.
 
 Replies use the original recipient address as sender for received messages, or
 the original sender address when following up on an outgoing message. The reply
-subject has one `Re:` prefix. Sending defaults `from` to the caller's
-`email.address`. Both tools return bundles for the tool runner to apply; the
-configured sending effect performs delivery. With `sender: { "via": "stash" }`,
-the same flow records outgoing messages in memory.
+subject has one `Re:` prefix. Sending defaults `from` to the `email.address` of
+the entity the letter is `about`, such as a project's own, so the answer is
+routed back to it; where that entity has none, to the caller's. Both tools
+return bundles for the tool runner to apply; the configured sending effect
+performs delivery. With `sender: { "via": "stash" }`, the same flow records
+outgoing messages in memory.
 
 ## Membership invitations
 

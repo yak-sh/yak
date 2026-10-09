@@ -205,7 +205,7 @@
       "noun": "mail",
       "verb": "send",
       "title": "Send a mail message",
-      "description": "Create a mail message and request that it be sent. `to` is an email address or the id of an entity in this graph; an address nobody in the graph has becomes a new `email` entity, so the address book grows as mail is sent. `from` defaults to the caller’s own email address. Without a configured sender, the message is recorded but not sent. A configured sender delivers it asynchronously and writes `delivered` or `bounced` onto the message. Returns the applied bundles: JSON objects with entity ids and the components (named groups of fields) written or removed. Confirm the recipient and message before requesting delivery; a sent email cannot be recalled. The initial result is not a delivery receipt; read the message again to check its outcome.",
+      "description": "Create a mail message and request that it be sent. `to` is an email address or the id of an entity in this graph; an address nobody in the graph has becomes a new `email` entity, so the address book grows as mail is sent. `from` defaults to the email address of the entity it is `about`, such as a project’s own, so the answer comes back to that entity; otherwise to the caller’s own email address. Without a configured sender, the message is recorded but not sent. A configured sender delivers it asynchronously and writes `delivered` or `bounced` onto the message. Returns the applied bundles: JSON objects with entity ids and the components (named groups of fields) written or removed. Confirm the recipient and message before requesting delivery; a sent email cannot be recalled. The initial result is not a delivery receipt; read the message again to check its outcome.",
       "input": {
         "to": {
           "type": "string",
@@ -222,7 +222,7 @@
         },
         "from": {
           "type": "string",
-          "description": "the address it is sent from (default: the caller’s own)"
+          "description": "the address it is sent from (default: the address of what it is about, else the caller’s own)"
         },
         "about": {
           "type": "string",

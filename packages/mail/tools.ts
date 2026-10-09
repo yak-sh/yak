@@ -292,20 +292,25 @@ export let runs = (_host?: unknown, options: Options = {}): Runs => ({
     ]
   },
 
+  // A letter goes out from the address of what it is about, so the answer
+  // comes back to that: a project's letter from the project's address. Where
+  // that has none, from whoever is asking.
   mail_send: async (call, graph): Promise<Bundle[]> => {
     let args = argsOf(call)
     let far = await aimedAt(graph, str(args.to), options.domain)
     if (!far.to) throw new Error('a letter needs somebody to go to — say --to')
+    let target = str(args.about)
+    let address = async (eid: string) =>
+      eid ? prop(comp(await one(graph, eid), EMAIL), 'address') : ''
     let from = args.from != null
       ? str(args.from)
-      : prop(comp(await one(graph, str(who(call)?.by)), EMAIL), 'address')
+      : await address(target) || await address(str(who(call)?.by))
     if (!from) {
       throw new Error(
-        'a letter needs a from address — say --from, or give whoever is ' +
-          'asking an `email.address`',
+        'a letter needs a from address — say --from, or send it about ' +
+          'something with an `email.address`, or give whoever is asking one',
       )
     }
-    let target = str(args.about)
     return [
       ...far.made,
       {

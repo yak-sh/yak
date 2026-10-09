@@ -1,7 +1,7 @@
 // What the mail words DO when somebody types them: the marks reading and
 // answering leave, the far side a reply is aimed at, and the check.
 
-import { test } from '@yaks/testing'
+import { equal, test } from '@yaks/testing'
 import { assert, assertEquals, assertRejects } from '@std/assert'
 import {
   type Actor,
@@ -216,6 +216,34 @@ test('who is asking supplies the from address, and its absence is loud', async (
       }, { by: 'ana' }),
     Error,
     'a letter needs a from address',
+  )
+})
+
+// The club's own desk asks; one project has an address of its own, and one
+// has none.
+let shelf = (await club()).g
+await shelf.apply([
+  { entity: { eid: 'reading' }, email: { address: 'reading@books.example' } },
+  { entity: { eid: 'loose' }, doc: { title: 'No address' } },
+])
+let sentFrom = async (args: Record<string, unknown>) => {
+  let letter = (await ask(shelf, 'mail_send', {
+    to: 'nina@elsewhere.example',
+    subject: 'Hello',
+    body: 'Hi.',
+    ...args,
+  }, { by: 'desk' })).find((b) => b.deliver)
+  return comp(letter, 'mail').from
+}
+
+test('a letter goes out from the address of what it is about, else from whoever asks', async () => {
+  equal(
+    await Promise.all([
+      sentFrom({ about: 'reading' }),
+      sentFrom({ about: 'loose' }),
+      sentFrom({ about: 'reading', from: 'hello@books.example' }),
+    ]),
+    ['reading@books.example', 'hello@books.example', 'hello@books.example'],
   )
 })
 
