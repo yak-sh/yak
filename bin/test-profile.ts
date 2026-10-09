@@ -4,7 +4,7 @@
 // into one runtime each.
 // deno run -A bin/test-profile.ts /tmp/fleet-profile [jobs=4]
 import { find } from '@yaks/testing/find'
-import { ROOTS, workerd } from './test.ts'
+import { ROOTS, RUNTIME, workerd } from './test.ts'
 
 let RUNNER = new URL(import.meta.resolve('@yaks/testing/main')).pathname
 
@@ -27,16 +27,7 @@ if (import.meta.main) {
         let file = files[at++]
         let start = performance.now()
         let out = await new Deno.Command(Deno.execPath(), {
-          args: [
-            'run',
-            '--frozen',
-            '-A',
-            '--unstable-net',
-            '--unstable-worker-options',
-            RUNNER,
-            '--all',
-            file,
-          ],
+          args: [...RUNTIME, RUNNER, '--all', file],
           env: {
             DB_PATH: ':memory:',
             TASKS_SYNC: 'off',

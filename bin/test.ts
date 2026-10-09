@@ -79,7 +79,8 @@ export let GIT = {
 /** The runner every platform's runtime runs. */
 let RUNNER = new URL(import.meta.resolve('@yaks/testing/main')).pathname
 
-let common = [
+/** How a platform's runtime starts, before the runner and its arguments. */
+export let RUNTIME = [
   'run',
   '--frozen',
   // `deno task gate` runs the stricter whole-repo check first, and it types
@@ -88,6 +89,16 @@ let common = [
   '-A',
   '--unstable-net',
   '--unstable-worker-options',
+  // Every function compiled as its module loads. A test runs once, so V8's
+  // lazy compilation charged each test for compiling its own body and all the
+  // code it was the first to call: a third of what a test between 0.5 and
+  // 1 ms took, paid by whichever test came first. Compiled whole, the run
+  // takes as long. Code cached under one V8 flag is refused under another,
+  // so the run keeps out of Deno's code cache, which every other deno process
+  // on the machine reads compiled lazily: each would recompile what the other
+  // last wrote there. Without it, the run takes as long again.
+  '--v8-flags=--no-lazy',
+  '--no-code-cache',
 ]
 
 // Deno prints a test's name before running it, then finishes the same line
@@ -187,7 +198,14 @@ if (import.meta.main && Deno.args[0] === '--bulk') {
     env?: Record<string, string>,
   ) => {
     let child = new Deno.Command(Deno.execPath(), {
-      args: [...common, RUNNER, `--platform=${p}`, ...flags, ...more, ...files],
+      args: [
+        ...RUNTIME,
+        RUNNER,
+        `--platform=${p}`,
+        ...flags,
+        ...more,
+        ...files,
+      ],
       env,
       stdin: 'inherit',
       // Keep each reporter intact: platforms running at once would
