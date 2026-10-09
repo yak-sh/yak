@@ -47,6 +47,9 @@ let rpc = (method: string, params: Record<string, unknown> = {}) =>
 let call = (name: string, args: Record<string, unknown> = {}) =>
   rpc('tools/call', { name, arguments: args })
 
+// Requests refused before serving a tool share an empty host.
+let emptyDoor = mcp({ graph: shopGraph() })
+
 test('the door answers the protocol, and signs what a tool writes', async () => {
   let graph = shopGraph()
   let door = mcp({ graph, authenticate: () => ada })
@@ -158,7 +161,7 @@ test('a door that refuses to name a caller answers 401', async () => {
 })
 
 test('the door refuses what it does not serve', async () => {
-  let door = mcp({ graph: shopGraph() })
+  let door = emptyDoor
   assertEquals((await door(new Request('http://shop.test/mcp'))).status, 405)
   assertEquals(
     (await door(post([{ jsonrpc: '2.0', id: 1, method: 'ping' }]))).status,
@@ -172,8 +175,57 @@ test('the door refuses what it does not serve', async () => {
   assertEquals((await door(broken)).status, 400)
 })
 
+test('the SDK body limit holds on both protocol legs', async () => {
+  let door = emptyDoor
+  for (let modern of [false, true]) {
+    let headers: Record<string, string> = {
+      'content-type': 'application/json',
+      'content-length': '4194305',
+    }
+    if (modern) headers['MCP-Protocol-Version'] = '2026-07-28'
+    let huge = new Request('http://shop.test/mcp', {
+      method: 'POST',
+      headers,
+      body: '{}',
+    })
+    assertEquals((await door(huge)).status, 413)
+  }
+})
+
+// A body that is not JSON is the door's to refuse; one that cannot be read at
+// all is the SDK's when the request claims the modern protocol.
+test('the door refuses a body it cannot parse, and leaves an unreadable modern one to the SDK', async () => {
+  let door = emptyDoor
+  let malformed = await door(
+    new Request('http://shop.test/mcp', {
+      method: 'POST',
+      headers: { 'MCP-Protocol-Version': '2026-07-28' },
+      body: '{',
+    }),
+  )
+  assertEquals(malformed.status, 400)
+  assertEquals((await malformed.json()).message, 'the body is not JSON')
+  let broken = (headers: Record<string, string> = {}) =>
+    new Request('http://shop.test/mcp', {
+      method: 'POST',
+      headers,
+      body: new ReadableStream({
+        start: (stream) => stream.error(new Error('body unavailable')),
+      }),
+    })
+  let refused = await door(broken())
+  assertEquals(refused.status, 400)
+  assertEquals((await refused.json()).message, 'the body is not JSON')
+  let sdk = await door(broken({
+    'content-type': 'application/json',
+    'MCP-Protocol-Version': '2026-07-28',
+  }))
+  assertEquals(sdk.status, 400)
+  assertEquals((await sdk.json()).error.code, -32700)
+})
+
 test('a notification is answered with nothing at all', async () => {
-  let door = mcp({ graph: shopGraph() })
+  let door = emptyDoor
   let r = await door(
     post({ jsonrpc: '2.0', method: 'notifications/initialized' }),
   )

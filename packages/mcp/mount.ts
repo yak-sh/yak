@@ -26,6 +26,7 @@ import {
   createMcpHandler,
   InMemoryTransport,
   isLegacyRequest,
+  readRequestBody,
 } from '@modelcontextprotocol/server'
 import {
   JSONRPCNotificationSchema,
@@ -139,18 +140,20 @@ export let mcp = (opts: MountOptions): Handler => {
   // One runner for the whole handler, not one per HTTP request: the `tool`
   // rows a call references are written once for the process, and a call still
   // running is one run however many requests ask about it.
-  let runs = opts.runner ?? runner(opts.calls ?? opts.graph, {
-    tools: listing(opts).map(namedTool),
-    host: opts.graph,
-    report: opts.report ?? logged,
-    ...opts.reply ? { reply: opts.reply } : {},
-  })
+  let runs = opts.runner
+  let running = () =>
+    runs ??= runner(opts.calls ?? opts.graph, {
+      tools: listing(opts).map(namedTool),
+      host: opts.graph,
+      report: opts.report ?? logged,
+      ...opts.reply ? { reply: opts.reply } : {},
+    })
   let actors = new WeakMap<Request, Actor | null>()
   let modern = createMcpHandler(async (context) => {
     let actor = context.requestInfo
       ? actors.get(context.requestInfo) ?? null
       : null
-    let built = server({ ...opts, actor, runner: runs })
+    let built = server({ ...opts, actor, runner: running() })
     await opts.extend?.(built)
     await opts.skills?.(built)
     return built
@@ -158,6 +161,7 @@ export let mcp = (opts: MountOptions): Handler => {
   let legacy = async (
     request: Request,
     actor: Actor | null,
+    body: unknown,
   ): Promise<Response> => {
     if (request.method != 'POST') {
       return refused(
@@ -166,12 +170,6 @@ export let mcp = (opts: MountOptions): Handler => {
       )
     }
     try {
-      let body: unknown
-      try {
-        body = await request.json()
-      } catch {
-        return refused('the body is not JSON', 400)
-      }
       if (Array.isArray(body)) return refused('one request at a time', 400)
       let rpc = JSONRPCRequestSchema.safeParse(body)
       if (!rpc.success) {
@@ -198,7 +196,7 @@ export let mcp = (opts: MountOptions): Handler => {
       let built = server({
         ...opts,
         actor: caller,
-        runner: runs,
+        runner: running(),
       })
       // Whatever else the calling program serves — resources, prompts — is
       // registered before the request is answered, so `resources/list` sees
@@ -217,18 +215,39 @@ export let mcp = (opts: MountOptions): Handler => {
       // The SDK validates neither tokens nor Host/Origin. The host's existing
       // authentication/security boundary runs before both protocol legs.
       let actor = (await opts.authenticate?.(request)) ?? null
-      if (await isLegacyRequest(request)) return await legacy(request, actor)
+      // Classify and serve from one bounded read. The SDK's predicate and
+      // modern handler accept the same parsed body, keeping the protocol's
+      // size limit without making more streams just to read the bytes again.
+      // A body too large, or one that claims the modern protocol and cannot
+      // be read, is the SDK's to answer.
+      let modernClaim = request.headers.has('MCP-Protocol-Version')
+      let body: unknown
+      if (request.method == 'POST') {
+        let read
+        try {
+          // TODO: DOM/Workers declaration merging leaves clone's Cf parameters
+          // unbound. Remove this annotation when clone preserves Request's
+          // metadata type; the SDK reader uses only its body and headers.
+          read = await readRequestBody(request.clone() as Request)
+        } catch {
+          if (modernClaim) return await modern.fetch(request)
+          return refused('the body is not JSON', 400)
+        }
+        if (read.tooLarge) return await modern.fetch(request)
+        try {
+          body = JSON.parse(read.text)
+        } catch {
+          return refused('the body is not JSON', 400)
+        }
+      }
+      if (await isLegacyRequest(request, body)) {
+        return await legacy(request, actor, body)
+      }
       // Preserve the pre-envelope door's 400 for bodies that cannot be a
       // request at all. An explicit modern header/claim always belongs to SDK.
-      if (!request.headers.has('MCP-Protocol-Version')) {
-        let body: unknown
-        try {
-          body = await request.clone().json()
-        } catch {
-          return await legacy(request, actor)
-        }
+      if (!modernClaim) {
         if (!body || typeof body != 'object' || Array.isArray(body)) {
-          return await legacy(request, actor)
+          return await legacy(request, actor, body)
         }
       }
       // No connection transcript or clientInfo-derived principal in this era.
@@ -236,7 +255,7 @@ export let mcp = (opts: MountOptions): Handler => {
       try {
         // The SDK owns the exchange lifetime, including SSE and cancellation.
         // Closing here would truncate a response whose stream is still active.
-        return await modern.fetch(request)
+        return await modern.fetch(request, { parsedBody: body })
       } finally {
         actors.delete(request)
       }
