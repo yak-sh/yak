@@ -4,7 +4,7 @@
 // text.
 
 import './sqlitepath.ts'
-import { Database } from '@db/sqlite'
+import { Database, Statement } from '@db/sqlite'
 import { context, leaf, peek } from '@yaks/trace'
 import { excerpt, statement, writing } from '@yaks/sql'
 import {
@@ -85,6 +85,20 @@ let refs = (e: Expr): string[] => {
 // A statement that reads or writes rows, and so moves no schema.
 let ROWS = /^\s*(?:select|insert|update|delete|replace|with)\b/i
 
+// The dependency's generated decoder closes over only its column reader. The
+// connection, integer width and JSON options arrive with each row, so a column
+// projection can share its compiled function across statements and databases.
+let decoders = new Map<string, ReturnType<Statement['getRowObject']>>()
+let decoder = (names: string[], compile: Statement['getRowObject']) => {
+  let key = JSON.stringify(names)
+  let kept = decoders.get(key)
+  if (kept) return kept
+  if (decoders.size >= 256) decoders.delete(decoders.keys().next().value!)
+  let made = compile()
+  decoders.set(key, made)
+  return made
+}
+
 export let prepared = (db: Database) => {
   // SQLite integers are 64-bit. The library's default reader truncates them
   // to 32 bits; safe JS integers must round-trip through every driver caller.
@@ -99,6 +113,7 @@ export let prepared = (db: Database) => {
       return statement
     }
     let original = statement.getRowObject.bind(statement)
+    let standard = statement.getRowObject == Statement.prototype.getRowObject
     let names: string[] | undefined
     let decode: ReturnType<typeof original> | undefined
     // Inspect the columns as @db/sqlite does on every read. Only the generated
@@ -112,7 +127,13 @@ export let prepared = (db: Database) => {
         names!.some((name, i) => name !== current[i])
       ) {
         names = current
-        decode = original()
+        // Writes and DDL have no row to decode. The dependency would still
+        // compile a function for their empty projection before stepping them.
+        decode = !standard
+          ? original()
+          : current.length
+          ? decoder(current, original)
+          : () => ({})
       }
       return decode
     }
