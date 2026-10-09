@@ -157,12 +157,17 @@ let parser = (ref: Ref, repo?: string | null) => {
   return found
 }
 
+// Words and spaces cannot carry markdown, HTML or a reference. Keep ordinary
+// prose out of the lexer's full grammar, including its first-use regex cost.
+let PLAIN = /^[A-Za-z0-9][A-Za-z0-9 ]*$/
+let prose = (s: string, ref: Ref, repo?: string | null): string =>
+  PLAIN.test(s) ? `<p>${s}</p>\n` : parser(ref, repo).parse(s) as string
 export let md = (s: string, repo?: string | null): string =>
-  parser(canvasRef, repo).parse(s) as string
+  prose(s, canvasRef, repo)
 export let mdAbs = (s: string, repo?: string | null): string =>
-  parser(awayRef, repo).parse(s) as string
+  prose(s, awayRef, repo)
 export let mdInline = (s: string): string =>
-  parser(titleRef).parseInline(s) as string
+  PLAIN.test(s) ? s : parser(titleRef).parseInline(s) as string
 
 // References are the other reading of markdown: the same lexer that decides
 // what becomes a link also feeds a session's aside. Code stays literal, a

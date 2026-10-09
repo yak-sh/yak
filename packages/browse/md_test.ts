@@ -16,6 +16,12 @@ test('mdInline: title markup has no block wrapper or nested links', () => {
 })
 
 test('md: paragraphs are <p>, not a wall of <br>', () => {
+  let text = 'One 2  three   '
+  assertEquals(md(text), `<p>${text}</p>\n`)
+  assertEquals(mdAbs(text), `<p>${text}</p>\n`)
+  assertEquals(mdInline(text), text)
+  assertEquals(md('one\n'), '<p>one</p>\n')
+  assertEquals(md(''), '')
   assertEquals(md('one\n\ntwo').trim(), '<p>one</p>\n<p>two</p>')
 })
 
