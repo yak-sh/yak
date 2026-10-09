@@ -152,9 +152,14 @@ export let LEVELS: Record<string, Level> = Object.fromEntries(
 
 let themes: Record<string, Theme> = {}
 let frontierThemes: string[] = []
+let installed: Bundle[] | undefined
 
-/** Replace the region themes with the store's current designs. */
+/** Replace the region themes with the store's current designs, and say
+ * whether the frontier's themes changed. The same rows again keep them, and
+ * the lands grown from them. */
 export let useThemes = (rows: Bundle[]) => {
+  if (rows == installed) return false
+  installed = rows
   let previous = frontierThemes.join(',')
   themes = Object.fromEntries(rows.flatMap((row) => {
     let design = comp(row, 'theme_design'), land = str(design.land)

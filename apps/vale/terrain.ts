@@ -1337,6 +1337,7 @@ export let refreshTerrain = (affects: Affects = any, frontier = false) => {
 
 /** Install a watched theme change and name the chunks it can change. */
 export let installThemeDesigns = (rows: Bundle[]): Affects => {
+  if (rows == themeRows) return () => false
   let lands = changed(themeRows ?? [], rows, 'theme_design', 'land')
   if (themeRows && !lands.size) return () => false
   let frontier = useThemes(rows)
@@ -1352,6 +1353,7 @@ export let installBuildingDesigns = (rows: Bundle[]): {
   affects: Affects
   kinds: Set<string>
 } => {
+  if (rows == buildingRows) return { affects: () => false, kinds: new Set() }
   let kinds = changed(buildingRows ?? [], rows, 'building_design', 'kind')
   if (buildingRows && !kinds.size) return { affects: () => false, kinds }
   let sizes = [...buildingRows ?? [], ...rows].flatMap((row) => {

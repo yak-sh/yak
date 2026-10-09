@@ -57,9 +57,13 @@ export type Thing = {
 
 export let ITEMS: Record<string, Thing> = {}
 export let itemVersion = 0
+let installed: Bundle[] | undefined
 
-/** Install the store's current item designs. */
+/** Install the store's current item designs. The same rows again keep the
+ * index, and its version. */
 export let useItems = (rows: Bundle[]) => {
+  if (rows == installed) return
+  installed = rows
   ITEMS = Object.fromEntries(rows.flatMap((row) => {
     let design = comp(row, 'item_design'), kind = str(design.kind)
     // Store reads include absent optional properties as null. A Thing uses

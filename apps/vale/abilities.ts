@@ -301,9 +301,13 @@ export let again = (a: Ability, went: Went): boolean =>
 export let ABILITIES: Record<string, Ability> = {}
 export let GIVES: Record<string, string[]> = {}
 export let OFF: Record<string, string> = {}
+let installed: Bundle[] | undefined
 
-/** Install the store's current ability designs and their equipment grants. */
+/** Install the store's current ability designs and their equipment grants.
+ * The same rows again keep the index. */
 export let useAbilities = (rows: Bundle[]) => {
+  if (rows == installed) return
+  installed = rows
   let next = Object.fromEntries(rows.flatMap((row) => {
     let design = comp(row, 'ability_design'), kind = str(design.kind)
     let ability = Object.fromEntries(
