@@ -55,7 +55,7 @@ let reader = {
   operator: true,
   addrs: new Set(['ana@books.example']),
 }
-let needs = (blocking = true) =>
+let needed = (blocking: boolean) =>
   threads([
     row('ask', {
       task: {},
@@ -73,6 +73,10 @@ let needs = (blocking = true) =>
       ]
       : []),
   ], { ...reader, watching: new Set(['work']) })
+let fixtures = new Map(
+  [true, false].map((blocking) => [blocking, needed(blocking)]),
+)
+let needs = (blocking = true) => structuredClone(fixtures.get(blocking)!)
 let comp = (b: Bundle, name: string) => b[name] as Comp
 
 let vocab = loadVocab([
