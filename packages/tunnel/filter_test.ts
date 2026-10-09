@@ -1,6 +1,6 @@
 import { test } from '@yaks/testing'
-import { assertEquals } from '@std/assert'
-import { filter } from './filter.ts'
+import { assertEquals, assertThrows } from '@std/assert'
+import { Closed, filter } from './filter.ts'
 import { GATEWAY, HEADER } from './gateway.ts'
 
 // What the machine's filter does with a request at `path`: `pass`, or the
@@ -32,6 +32,19 @@ test('a request that did not come through the tunnel is untouched', () => {
   for (let path of ['/apply', '/query', '/mail/inbound']) {
     assertEquals(seen([], path, false), 'pass', path)
   }
+})
+
+test('changing opened routes changes the same filter', () => {
+  let routes = ['/hooks/*']
+  let only = filter(routes)
+  let req = new Request('http://box/hooks/github', {
+    headers: { [HEADER]: '1' },
+  })
+  only(req)
+  routes[0] = '/mail/inbound'
+  assertEquals(assertThrows(() => only(req), Closed).name, 'Denied')
+  routes[0] = '/hooks/*'
+  only(req)
 })
 
 test('the gateway marks every request it passes on, whatever it said', async () => {

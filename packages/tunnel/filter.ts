@@ -6,6 +6,17 @@
 // it still does.
 import { HEADER } from './gateway.ts'
 
+// Patterns depend on their pathname, not the mutable list of opened routes.
+let patterns = new Map<string, URLPattern>()
+let pattern = (pathname: string): URLPattern => {
+  let found = patterns.get(pathname)
+  if (found) return found
+  let compiled = new URLPattern({ pathname })
+  patterns.set(pathname, compiled)
+  if (patterns.size > 256) patterns.delete(patterns.keys().next().value!)
+  return compiled
+}
+
 /** Whether the tunnel answers at `path`: `routes` are URLPattern pathnames
  * (`/mail/inbound`, `/hooks/*`), and none opens nothing.
  *
@@ -16,9 +27,7 @@ import { HEADER } from './gateway.ts'
  * ```
  */
 export let opens = (routes: string[] = [], path: string): boolean =>
-  routes.some((pathname) =>
-    new URLPattern({ pathname }).test({ pathname: path })
-  )
+  routes.some((pathname) => pattern(pathname).test({ pathname: path }))
 
 /** A marked request at a path the machine did not open. Its name is the
  * policy refusal's, so a server answers it 403. */
