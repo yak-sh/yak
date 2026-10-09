@@ -130,42 +130,56 @@ export type StampPolicy = (bundle: Bound) =>
   } & Attribution)
   | null
 
-/** Default provenance is two rules evaluated against one frozen state: a newly
- * created entity gets `created`, a later write gets `updated`. A policy may
- * choose the component or write none at all, but both paths use the same
- * timestamp, attribution and property narrowing. `#Now`, `#Actor` and `#Vocab`
- * are rule resources; no application vocabulary is assumed. */
-export let provenance = (policy?: StampPolicy): Rule[] =>
-  policy
-    ? [{
-      name: 'provenance',
-      phase: 'stamp',
-      // The policy chooses which component to write; the match can carry no
-      // unconditional `+`, because a policy that writes no provenance must
-      // write nothing at all.
-      match: '.entity, #Vocab, #Actor, #Now',
-      run: (b: Bound) => {
-        let choice = policy(b)
-        if (!choice) return
-        return wear(choice.kind, b.Vocab, b.Now.at, writer(b), choice)
-      },
-    }]
-    : [
-      {
-        name: 'created',
-        phase: 'stamp',
-        match: '.entity, +!created, *created, #Vocab, #Actor, #Now',
-        run: (b) => wear('created', b.Vocab, b.Now.at, writer(b)),
-      },
-      {
-        name: 'updated',
-        phase: 'stamp',
-        match: '.entity, .created, +updated, *updated, #Vocab, #Actor, #Now',
-        run: (b) => wear('updated', b.Vocab, b.Now.at, writer(b)),
-      },
-    ]
+/** The default provenance: two rules evaluated against one frozen state. A
+ * newly created entity gets `created`, a later write gets `updated`. `#Now`,
+ * `#Actor` and `#Vocab` are rule resources; no application vocabulary is
+ * assumed. */
+export let stamps: Rule[] = [
+  {
+    name: 'created',
+    phase: 'stamp',
+    match: '.entity, +!created, *created, #Vocab, #Actor, #Now',
+    run: (b) => wear('created', b.Vocab, b.Now.at, writer(b)),
+  },
+  {
+    name: 'updated',
+    phase: 'stamp',
+    match: '.entity, .created, +updated, *updated, #Vocab, #Actor, #Now',
+    run: (b) => wear('updated', b.Vocab, b.Now.at, writer(b)),
+  },
+]
 
-export let stamps: Rule[] = provenance()
+// Each policy's rule, made once: a rule is parsed once and compiled once for
+// each vocabulary while it is the same object (./rules.ts), so the graphs
+// built with one policy, or with none, share what their stamps compiled to.
+let policed = new WeakMap<StampPolicy, Rule[]>()
+
+/** The provenance rules: the default {@link stamps}, or one rule that lets a
+ * policy choose the component or write none at all. Both paths use the same
+ * timestamp, attribution and property narrowing. */
+export let provenance = (policy?: StampPolicy): Rule[] => {
+  if (!policy) return stamps
+  let made = policed.get(policy)
+  if (!made) {
+    policed.set(
+      policy,
+      made = [{
+        name: 'provenance',
+        phase: 'stamp',
+        // The policy chooses which component to write; the match can carry no
+        // unconditional `+`, because a policy that writes no provenance must
+        // write nothing at all.
+        match: '.entity, #Vocab, #Actor, #Now',
+        run: (b: Bound) => {
+          let choice = policy(b)
+          if (!choice) return
+          return wear(choice.kind, b.Vocab, b.Now.at, writer(b), choice)
+        },
+      }],
+    )
+  }
+  return made
+}
 
 /** Whether a component is a mark: one a client writes empty and the server
  * fills in — `completed`, `archived`, `notified` — recognized by its declared
@@ -189,14 +203,39 @@ export let marked = (vocab: Vocab, comp: string): boolean =>
  * names: a graph that declares those three properties server-owned gets the
  * rule, and one that does not gets no rule at all.
  */
-export let marks = (vocab: Vocab): Rule[] =>
-  vocab.all.filter((c) => marked(vocab, c)).map((comp) => ({
-    name: `mark/${comp}`,
-    phase: 'stamp',
-    match: `.${comp}, !${comp}.at, *${comp}, #Vocab, #Actor, #Now`,
-    run: (b: Bound) =>
-      wear(comp, b.Vocab, b.Now.at, writer(b), undefined, b[comp] as Comp),
-  }))
+export let marks = (vocab: Vocab): Rule[] => {
+  let made = marking.get(vocab)
+  if (!made) {
+    marking.set(
+      vocab,
+      made = vocab.all.filter((c) => marked(vocab, c)).map(marker),
+    )
+  }
+  return made
+}
+
+// One mark's rule, the same object for every vocabulary that declares the
+// mark, and each vocabulary's list of them: a rule is parsed once and compiled
+// once for each vocabulary (./rules.ts), and a graph reads the list as it is
+// built.
+let markers = new Map<string, Rule>()
+let marking = new WeakMap<Vocab, Rule[]>()
+let marker = (comp: string): Rule => {
+  let rule = markers.get(comp)
+  if (!rule) {
+    markers.set(
+      comp,
+      rule = {
+        name: `mark/${comp}`,
+        phase: 'stamp',
+        match: `.${comp}, !${comp}.at, *${comp}, #Vocab, #Actor, #Now`,
+        run: (b: Bound) =>
+          wear(comp, b.Vocab, b.Now.at, writer(b), undefined, b[comp] as Comp),
+      },
+    )
+  }
+  return rule
+}
 
 // One rule's patch: the component, narrowed to the properties this vocabulary
 // declares. Nothing to write means no patch — the match's `+` clause has

@@ -275,25 +275,56 @@ let raws = (v: Value | null): string[] =>
 let words = (f: And): string[] =>
   f.clauses.flatMap((c) => c.kind == 'pred' && c.path.length ? [c.path[0]] : [])
 
-// Compiled once per rule, per vocabulary. Keyed by the rule object, so this is
-// a memo rather than a registry — two graphs sharing a plugin share the
-// compilation only while they use the same vocabulary.
-let cache = new WeakMap<
-  Rule,
-  { v: Vocab; match: Rule['match']; key: string; ready: Ready }
->()
+// What a rule's match says in any vocabulary: its declaration, the components
+// it names outright, and the query it selects with. Rules are predicates:
+// ordering and windowing do not decide which entities fire, so those clauses
+// are dropped.
+type Parsed = {
+  match: Rule['match']
+  key: string
+  d: ReturnType<typeof declared>
+  named: string[]
+  query: And
+  // What it compiled to in each vocabulary it has met.
+  in: WeakMap<Vocab, Ready>
+}
 
-let compile = (r: Rule, v: Vocab): Ready => {
+// Parsed once per rule, and compiled once for each vocabulary. Keyed by the
+// rule object, so this is a memo rather than a registry: the graphs sharing a
+// rule share what it compiled to in each vocabulary, however they take turns,
+// and a rule whose match was changed is parsed again.
+let cache = new WeakMap<Rule, Parsed>()
+
+let parsed = (r: Rule): Parsed => {
   let key = typeof r.match == 'string' ? r.match : JSON.stringify(r.match)
   let hit = cache.get(r)
-  if (hit && hit.v == v && hit.match === r.match && hit.key == key) {
-    return hit.ready
-  }
+  if (hit && hit.match === r.match && hit.key == key) return hit
   let ast: Ast = typeof r.match == 'string'
     ? parse(r.match, { text: false })
     : r.match
   let d = declared(ast)
-  let named = [...d.gates, ...d.ensures, ...d.writes]
+  let made: Parsed = {
+    match: r.match,
+    key,
+    d,
+    named: [...d.gates, ...d.ensures, ...d.writes],
+    query: {
+      ...d.filter,
+      clauses: d.filter.clauses.filter((c) =>
+        !['order', 'limit', 'after'].includes(c.kind)
+      ),
+    },
+    in: new WeakMap(),
+  }
+  cache.set(r, made)
+  return made
+}
+
+let compile = (r: Rule, v: Vocab): Ready => {
+  let p = parsed(r)
+  let hit = p.in.get(v)
+  if (hit) return hit
+  let { d, named } = p
   let ready: Ready = {
     query: null,
     ensures: d.ensures,
@@ -315,27 +346,18 @@ let compile = (r: Rule, v: Vocab): Ready => {
   // will not compile is a mistake, and throws.
   if (named.every((c) => !!v.comp(c))) {
     try {
-      // A phase selects from one frozen set of bundles. Building the reference
-      // index once per rule, rather than once per entity, keeps the cost
-      // linear in the size of the batch. Rules are predicates: ordering and
-      // windowing do not decide which entities fire, so those clauses are
-      // dropped.
-      let query = {
-        ...d.filter,
-        clauses: d.filter.clauses.filter((c) =>
-          !['order', 'limit', 'after'].includes(c.kind)
-        ),
-      }
       // Validate once, but retain the tree rather than a predicate whose
-      // relative-time literals would keep the first firing's clock.
-      matcher(query, v)
-      filter(query, v)
-      ready.query = query
+      // relative-time literals would keep the first firing's clock. The
+      // filter refuses whatever the matcher would (@yaks/match), and is what
+      // a phase of one bundle runs; a phase of more compiles the matcher when
+      // it first needs it.
+      filter(p.query, v)
+      ready.query = p.query
     } catch (e) {
       if (words(d.filter).every((c) => !!v.comp(c))) throw e
     }
   }
-  cache.set(r, { v, match: r.match, key, ready })
+  p.in.set(v, ready)
   return ready
 }
 
@@ -471,7 +493,10 @@ export let fire = (
   // Every match is evaluated before any rule acts.
   let hits: [Rule, Ready, number][] = []
   // @yaks/match retains static forms and refreshes time-dependent ones for
-  // this phase's moment. Parsed declarations remain shared across firings.
+  // this phase's moment. Parsed declarations remain shared across firings. A
+  // phase of more than one bundle selects from the frozen set at once:
+  // building the reference index once per rule, rather than once per entity,
+  // keeps the cost linear in the size of the batch.
   let moment = { now: Date.now() }
   for (let [r, ready] of live) {
     let matches = single
