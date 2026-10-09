@@ -49,8 +49,7 @@ export type Signin = {
 // means the spaces they paste.
 export let canon = (email: string) => email.trim().toLowerCase()
 
-let hex = (b: ArrayBuffer) =>
-  [...new Uint8Array(b)].map((n) => n.toString(16).padStart(2, '0')).join('')
+let hex = (b: ArrayBuffer) => new Uint8Array(b).toHex()
 
 let enc = new TextEncoder()
 

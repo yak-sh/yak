@@ -45,14 +45,10 @@ let enc = new TextEncoder()
 let dec = new TextDecoder()
 
 let b64u = (bytes: Uint8Array) =>
-  btoa(String.fromCharCode(...bytes))
-    .replaceAll('+', '-').replaceAll('/', '_').replace(/=+$/, '')
+  bytes.toBase64({ alphabet: 'base64url', omitPadding: true })
 
 let unb64u = (s: string) =>
-  Uint8Array.from(
-    atob(s.replaceAll('-', '+').replaceAll('_', '/')),
-    (c) => c.charCodeAt(0),
-  )
+  Uint8Array.fromBase64(s.replaceAll('-', '+').replaceAll('_', '/'))
 
 /** What a sealed value is for: one word per kind of token the kernel mints.
  * A new kind of token is a new word here, never a reuse of an old one. */
