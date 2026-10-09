@@ -342,6 +342,14 @@ type Run = {
 let failed = (err: unknown, at: { phase: Phase; plugin: string }) =>
   console.error(`${at.plugin} failed at ${at.phase} —`, err)
 
+// Each vocabulary's declared rules, read from its documents once.
+let declaredRules = new WeakMap<Vocab, ReturnType<typeof rulesIn>>()
+let declaredIn = (vocab: Vocab) => {
+  let held = declaredRules.get(vocab)
+  if (!held) declaredRules.set(vocab, held = rulesIn(vocab.docs))
+  return held
+}
+
 /**
  * Build a graph over a storage and a vocabulary. The vocabulary must be the
  * one the storage is bound to (load every plugin's documents, bind the
@@ -463,19 +471,18 @@ export let graph = (opts: Options): Graph => {
   // an app's `vocab.json` ends up — so an app that ships a `rule: true` entry
   // runs it with no wiring at all. A plugin registered after the graph was
   // built carries documents the loaded vocabulary never saw, so those are read
-  // too.
+  // too. The vocabulary's own are read once for every graph over it, since a
+  // vocabulary is fixed; the plugins' are checked at every write.
+  let loaded = new Set(vocab.docs)
   let declaring = () => {
-    let seen = new Set(vocab.docs)
-    let rules = [
-      ...rulesIn(vocab.docs),
-      ...plugins.flatMap((p) => [
-        ...(p.declared ?? []),
-        ...rulesIn((p.vocab ?? []).filter((d) => !seen.has(d))),
-      ]),
-    ]
-    let key = JSON.stringify(rules)
+    let vocabRules = declaredIn(vocab)
+    let theirs = plugins.flatMap((p) => [
+      ...(p.declared ?? []),
+      ...rulesIn((p.vocab ?? []).filter((d) => !loaded.has(d))),
+    ])
+    let key = JSON.stringify(theirs)
     if (key !== declarationKey) {
-      declarations = ready(rules.map((r) => ({
+      declarations = ready([...vocabRules, ...theirs].map((r) => ({
         ...r,
         ...(r.before ? { before: [...r.before] } : {}),
       })))

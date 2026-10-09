@@ -776,11 +776,13 @@ export let loadVocab = (
     mark,
   )
 
-  // Where a path leads and what a component indexes are facts of the
-  // vocabulary, asked of it for every clause a query compiles: each is worked
-  // out once, and handed out frozen, since every caller shares it.
+  // Where a path leads, what a component indexes and what identifies its
+  // entities are facts of the vocabulary, asked of it for every clause a query
+  // compiles and every bundle a write carries: each is worked out once, and
+  // handed out frozen, since every caller shares it.
   let aimed = new Map<string, Hop[]>()
   let indexed = new Map<string, Index[]>()
+  let identifying = new Map<string, Identity>()
   let frozen = <T>(x: T): T => {
     if (x && typeof x == 'object') {
       for (let v of Object.values(x)) frozen(v)
@@ -807,7 +809,11 @@ export let loadVocab = (
       }
       return held
     },
-    identity: (comp) => identityOf(defs[comp]),
+    identity: (comp) => {
+      let held = identifying.get(comp)
+      if (!held) identifying.set(comp, held = frozen(identityOf(defs[comp])))
+      return held
+    },
     // A dotted path → the hops it names, two segments at a time: a component
     // and one of its properties, or a component alone at the end. A name no
     // component declares is refused, teaching the qualified forms where

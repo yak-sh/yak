@@ -113,6 +113,8 @@ let stating = (
  * by name.
  */
 export let identities = (vocab: Vocab): Record<string, Derive> => {
+  let held = derived.get(vocab)
+  if (held) return held
   let out: Record<string, Derive> = {}
   for (let name of vocab.all) {
     let props = vocab.identity(name)
@@ -122,8 +124,12 @@ export let identities = (vocab: Vocab): Record<string, Derive> => {
       return values ? identityEid(name, values) : ''
     }
   }
+  derived.set(vocab, Object.freeze(out))
   return out
 }
+
+// Each vocabulary's, read once: every graph over it asks as it is built.
+let derived = new WeakMap<Vocab, Record<string, Derive>>()
 
 /**
  * The other half: an id and the value it was derived from must agree.

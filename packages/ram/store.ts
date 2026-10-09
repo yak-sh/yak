@@ -198,16 +198,27 @@ export let ram = (vocab: Vocab, base: RamOpts = {}): Store => {
     string,
     [string, string, Map<number, Map<Eid, Bundle>>]
   >()
-  // The same declared uniqueness that SQLite enforces on its indexes. A
+  // The same declared uniqueness that SQLite enforces on its indexes, each
+  // component's taken from the vocabulary when a row first wears it. A
   // transaction's rollback travels through `put`, restoring these as well.
-  let uniques = new Map(vocab.all.map((comp) => [
-    comp,
-    vocab.indexes(comp).filter((i) => i.unique).map((index) => ({
-      comp,
-      index,
-      held: new Map<string, Eid>(),
-    })),
-  ]))
+  type Unique = {
+    comp: string
+    index: ReturnType<Vocab['indexes']>[number]
+    held: Map<string, Eid>
+  }
+  let uniques = new Map<string, Unique[]>()
+  let uniqueOf = (comp: string): Unique[] => {
+    let got = uniques.get(comp)
+    if (!got) {
+      uniques.set(
+        comp,
+        got = !vocab.comp(comp) ? [] : vocab.indexes(comp)
+          .filter((i) => i.unique)
+          .map((index) => ({ comp, index, held: new Map() })),
+      )
+    }
+    return got
+  }
   let uniqueKey = (
     b: Bundle | undefined,
     comp: string,
@@ -244,10 +255,11 @@ export let ram = (vocab: Vocab, base: RamOpts = {}): Store => {
   // disagrees with the rows.
   let put = (eid: Eid, b: Bundle | undefined) => {
     let was = rows.get(eid)
-    let checks = [
-      ...new Set([...Object.keys(was ?? {}), ...Object.keys(b ?? {})]),
-    ]
-      .flatMap((comp) => uniques.get(comp) ?? [])
+    let checks: Unique[] = []
+    for (let comp in was) checks.push(...uniqueOf(comp))
+    for (let comp in b) {
+      if (!was || !(comp in was)) checks.push(...uniqueOf(comp))
+    }
     for (let { comp, index, held } of checks) {
       let key = uniqueKey(b, comp, index.props, index.present)
       if (key !== undefined && held.has(key) && held.get(key) != eid) {
