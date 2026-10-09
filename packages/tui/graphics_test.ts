@@ -1,8 +1,14 @@
 import { test } from '@yaks/testing'
 import { assert, assertEquals } from '@std/assert'
 import { graphics } from './graphics.ts'
-import type { Line } from './paint.ts'
-import type { ImageSource } from './Image.ts'
+import { ansiBackend, type Line } from './paint.ts'
+import { Image, type ImageSource } from './Image.ts'
+import { h, render } from 'preact'
+import { install, onPaint } from './dom.ts'
+import { VirtualList } from './VirtualList.ts'
+import { Textarea } from './Textarea.ts'
+import { feed } from './input.ts'
+import { press } from './screen.ts'
 
 let png = () => {
   let bytes = new Uint8Array(24)
@@ -79,10 +85,6 @@ test('disabled graphics never loads; invalid PNG stays fallback; tmux transport 
 })
 
 test('pure Image layout reserves rows and backend never resends bytes on warm paint', async () => {
-  const { h, render } = await import('preact')
-  const { Image } = await import('./Image.ts')
-  const { install, onPaint } = await import('./dom.ts')
-  const { ansiBackend } = await import('./paint.ts')
   let screen = install(), output: string[] = [], loads = 0
   onPaint(() => {})
   let backend = ansiBackend({
@@ -152,14 +154,6 @@ test('each Kitty upload chunk suppresses replies and errors produce a diagnostic
 })
 
 test('virtual cached image repaints after asynchronous load without re-upload on typing', async () => {
-  let { h, render } = await import('preact')
-  let { VirtualList } = await import('./VirtualList.ts')
-  let { Image } = await import('./Image.ts')
-  let { Textarea } = await import('./Textarea.ts')
-  let { install, onPaint } = await import('./dom.ts')
-  let { ansiBackend } = await import('./paint.ts')
-  let { feed } = await import('./input.ts')
-  let { press } = await import('./screen.ts')
   let resolve!: (bytes: Uint8Array) => void
   let pending = new Promise<Uint8Array>((yes) => resolve = yes)
   let output: string[] = [], loads = 0

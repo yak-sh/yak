@@ -184,9 +184,7 @@ test('clearing a body clears the property, not the store', () => {
   assertEquals(tally(driver, 'blob_text'), 1)
 })
 
-test('a backend may address bodies by integer keys while echoing text', async () => {
-  let { blobs } = await import('./plugin.ts')
-  let { blog } = await import('./testing.ts')
+test('a backend may address bodies by integer keys while echoing text', () => {
   let { g, driver, blobs: store } = fixture()
   g.plugins.splice(
     0,
@@ -228,9 +226,7 @@ test('zero is a reusable backend reference, not a cache miss', () => {
   }])
 })
 
-test('property selection leaves inline body properties alone', async () => {
-  let { blobs } = await import('./plugin.ts')
-  let { blog } = await import('./testing.ts')
+test('property selection leaves inline body properties alone', () => {
   let { g, driver, blobs: store } = fixture()
   g.plugins.splice(0, g.plugins.length, blobs(blog, store, { props: [] }))
   let out = g.apply([{

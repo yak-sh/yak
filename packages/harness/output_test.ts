@@ -2,6 +2,7 @@ import { test } from '@yaks/testing'
 import { assert, assertEquals, assertRejects } from '@std/assert'
 import { outputView } from '@yaks/context'
 import { valueTools } from '@yaks/blob'
+import { transcript } from '@yaks/session'
 import { local } from './local.ts'
 import { harnessTools } from './tools.ts'
 import type { Request } from '@yaks/model'
@@ -158,7 +159,6 @@ test('fork projections reuse snapshots and escaped reads stay bounded', async ()
       },
       { entity: { eid: 'child' }, session: {}, fork: { from: 'result' } },
     ])
-    const { transcript } = await import('@yaks/session')
     const parent = await transcript(h.g, 'parent')
     const child = await transcript(h.g, 'child')
     assertEquals(

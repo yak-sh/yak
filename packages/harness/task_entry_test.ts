@@ -255,7 +255,6 @@ test('taskEntry references the stable prefix without copying later inputs', asyn
       },
     ])
     let result = await taskEntry(h.g, 'p', 'tiny task')
-    let { transcript } = await import('@yaks/session')
     let before = await transcript(h.g, result.child)
     assertEquals(
       before.filter((b) =>
@@ -363,7 +362,6 @@ test('terminal attempts do not pin task forks to an old prefix', async () => {
       let result = await taskEntry(h.g, 'p', 'new task')
       let [child] = await h.g.get([result.child])
       assertEquals((child.fork as Comp).from, 'new-input')
-      let { transcript } = await import('@yaks/session')
       let entries = await transcript(h.g, result.child)
       assertEquals(entries.filter((b) => b.entity.eid == 'new-input').length, 1)
       assertEquals(

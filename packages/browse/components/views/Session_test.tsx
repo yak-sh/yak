@@ -14,6 +14,8 @@ import {
   querySubscription,
   repoUrl,
   resetSignals,
+  routeName,
+  unsubscribe,
   useRoute,
 } from '../../live.ts'
 import { parseQuery, resolveRefs } from '../../query.ts'
@@ -29,6 +31,7 @@ import {
   SessionEntry,
   sessionMentions,
   SessionReferences,
+  SessionRow,
   SessionSummary,
   SessionTime,
   threadMentions,
@@ -441,9 +444,6 @@ test('sessionMentions == resolveMentions(threadMentions)', () => {
 })
 
 test('SessionRow loads its task title when no peer delivered it', async () => {
-  let { SessionRow } = await import('./Session.tsx')
-  let { routeName, unsubscribe } = await import('../../live.ts')
-  let { tick } = await import('../../testing.ts')
   let prior = useRoute(() => {})
   cache.value = {
     'task-row-session': {

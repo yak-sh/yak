@@ -1,7 +1,7 @@
 import { test } from '@yaks/testing'
 import { assert, assertEquals, assertRejects } from '@std/assert'
 import { local } from './local.ts'
-import { images } from './images.ts'
+import { configuredImages, images } from './images.ts'
 import { responses } from '@yaks/openai'
 import { responses as router } from '@yaks/openrouter'
 import { artifactStore, fileBlobs, memoryBlobs } from '@yaks/blob'
@@ -220,8 +220,7 @@ test('image options cross the worker boundary without serializing callbacks', as
   }
 })
 
-test('image configuration defaults to enabled with explicit disable and override', async () => {
-  let { configuredImages } = await import('./images.ts')
+test('image configuration defaults to enabled with explicit disable and override', () => {
   let blobs = memoryBlobs()
   assertEquals(typeof configuredImages(blobs, undefined, '')?.store, 'function')
   assertEquals(

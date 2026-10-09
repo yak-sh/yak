@@ -13,6 +13,9 @@ import { frontend } from './frontend.ts'
 import { Keyboard } from './keyboard.ts'
 import { useKeys } from '../tui/screen.ts'
 import type { Key } from '@yaks/tui'
+import { App } from './app.ts'
+import { setClipboard } from '../tui/visual.ts'
+import { osc52 } from '../tui/paint.ts'
 
 test('controlled NORMAL routing preserves draft, selects sources, and hides help in INSERT', async () => {
   let f = frontend(), sent: string[] = [], actions: string[] = []
@@ -102,7 +105,6 @@ test('controlled NORMAL routing preserves draft, selects sources, and hides help
 })
 
 test('NORMAL sidebar commands use the same session actions and INSERT remains literal', async () => {
-  const { App } = await import('./app.ts')
   let f = frontend(), sent: string[] = []
   let sessions = [
     { entity: { eid: 'root' }, session: { id: 'Root', status: 'pending' } },
@@ -164,8 +166,6 @@ test('NORMAL sidebar commands use the same session actions and INSERT remains li
 })
 
 test('Ctrl+U cuts the complete draft in INSERT and VISUAL, preserving a private recovery yank', async () => {
-  let { setClipboard } = await import('../tui/visual.ts')
-  let { osc52 } = await import('../tui/paint.ts')
   let f = frontend()
   let sent: string[] = [], writes: string[] = []
   let source = 'first line\n雪 and café\nlast line'

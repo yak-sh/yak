@@ -11,12 +11,13 @@ import { test } from '@yaks/testing'
 import './testing.ts'
 import { assert, assertEquals, assertStringIncludes } from '@std/assert'
 import { type Change } from './types.ts'
+import * as live from './live.ts'
 
 let uid = () => crypto.randomUUID()
 
 // A stubbed WebSocket so mutate() can route through deliver without a server —
 // the same door outbox_test uses.
-let stubSockets = async () => {
+let stubSockets = () => {
   let real = (globalThis as { WebSocket: unknown }).WebSocket
   ;(globalThis as { WebSocket: unknown }).WebSocket = class {
     readyState = 0
@@ -29,12 +30,11 @@ let stubSockets = async () => {
   }
   // A fake transport needs a fake address: live.ts refuses to dial a host
   // nobody named, and `.invalid` resolves nowhere if this stub ever slips.
-  let { config } = await import('./live.ts')
-  let host = config.host
-  config.host = 'stub.invalid'
+  let host = live.config.host
+  live.config.host = 'stub.invalid'
   return () => {
     ;(globalThis as { WebSocket: unknown }).WebSocket = real
-    config.host = host
+    live.config.host = host
   }
 }
 
@@ -51,8 +51,7 @@ let fakeOutbox = () => {
 }
 
 test('the indicator mirrors the outbox: a mutate adds, an ack clears', async () => {
-  let restore = await stubSockets()
-  let live = await import('./live.ts')
+  let restore = stubSockets()
   let prev = live.useOutboxStore(fakeOutbox())
   try {
     let before = live.outboxWrites.value.length
@@ -83,8 +82,7 @@ let fakeRefusals = () => {
   }
 }
 
-test('a refused write persists under a stable id and survives a reload', async () => {
-  let live = await import('./live.ts')
+test('a refused write persists under a stable id and survives a reload', () => {
   let store = fakeRefusals()
   let prev = live.useRefusalStore(store)
   try {
@@ -116,8 +114,7 @@ test('a refused write persists under a stable id and survives a reload', async (
   }
 })
 
-test('loading refusals drops entries older than seven days and keeps fresh ones', async () => {
-  let live = await import('./live.ts')
+test('loading refusals drops entries older than seven days and keeps fresh ones', () => {
   let storage = Object.getOwnPropertyDescriptor(globalThis, 'localStorage')
   let before = live.refused.value
   let fresh = { id: uid(), reason: 'moved', at: Date.now(), summary: '' }

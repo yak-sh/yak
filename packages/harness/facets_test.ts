@@ -6,6 +6,8 @@ import { close as closeCli, opened } from '../cli/local.ts'
 import { commands as localCommands } from '../cli/subcommands.ts'
 import { argsOf, type Bundle, mint, namedTool, offered } from '@yaks/graph'
 import { answerOf, toolEid, worded } from '@yaks/tools'
+import { toolDefinition } from '@yaks/vocab/tools'
+import { parametersOf } from './tools.ts'
 import { connect } from '../mcp/testing.ts'
 import { textOf, transcript } from '@yaks/session'
 import { selectedUsing } from './model_selection.ts'
@@ -192,8 +194,6 @@ test('session new accepts a graph persona and snapshots its instructions', async
 })
 
 test('JSON Schema tool uses identical metadata and constraints through MCP and provider adapter', async () => {
-  const { parametersOf } = await import('./tools.ts')
-  const { toolDefinition } = await import('@yaks/vocab/tools')
   const tool = {
     ...toolDefinition({
       noun: 'example',

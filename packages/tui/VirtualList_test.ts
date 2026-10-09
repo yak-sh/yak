@@ -3,6 +3,10 @@ import { assert, assertEquals } from '@std/assert'
 import { VirtualList, VirtualWindow } from './VirtualList.ts'
 import { h } from 'preact'
 import { mount } from './testing.ts'
+import { Textarea } from './Textarea.ts'
+import { useState } from 'preact/hooks'
+import { useKeys } from './screen.ts'
+import { signal } from '@preact/signals'
 
 let items = (n: number) =>
   Array.from({ length: n }, (_, i) => ({ id: String(i), text: String(i) }))
@@ -167,9 +171,6 @@ test('cache eviction is bounded and empty/zero-sized lists keep a valid anchor',
 
 test('input-only paints do not parse history; switching viewport resets follow without stealing editor keys', async () => {
   let rendered = 0
-  let { Textarea } = await import('./Textarea.ts')
-  let { useState } = await import('preact/hooks')
-  let { useKeys } = await import('./screen.ts')
   let data = items(10000)
   let ui = await mount(
     () => {
@@ -303,7 +304,6 @@ test('selection at exact viewport boundary is revealed', () => {
 })
 
 test('mounted generic controlled list reveals offscreen selection lazily', async () => {
-  let { signal } = await import('@preact/signals')
   let selected = signal('9000'), count = 0
   let data = items(10000)
   let ui = await mount(
@@ -388,7 +388,6 @@ test('hidden selection retains logical position without painting highlight', () 
 })
 
 test('partial ranges load neighbors without mistaking a page boundary for the end', async () => {
-  let { signal } = await import('@preact/signals')
   let data = items(200), visible = signal(data.slice(90, 110))
   let value = signal({ anchor: { id: '90', offset: 0 }, follow: false })
   let requests: unknown[] = []
@@ -423,7 +422,6 @@ test('partial ranges load neighbors without mistaking a page boundary for the en
 })
 
 test('an unchanged page answer does not re-request the same anchor', async () => {
-  let { signal } = await import('@preact/signals')
   let data = items(20), visible = signal(data.slice(0, 10))
   let requests: unknown[] = []
   let ui = await mount(
@@ -509,7 +507,6 @@ test('uniform partial pages have stable global scroll positions', () => {
 })
 
 test('pending virtual windows retain their frame and scrollbar without repainting', async () => {
-  const { signal } = await import('@preact/signals')
   const pending = signal(false), identity = signal('one')
   const data = signal(items(100))
   let renders = 0

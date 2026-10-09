@@ -11,10 +11,12 @@ import { terminalHistory } from '@yaks/tui/history'
 import { installViewport } from '@yaks/ui'
 import { App } from '../components/App.tsx'
 import { Ux } from '@yaks/ux'
-import { ux } from '../components/registry.ts'
+import { extend, ux } from '../components/registry.ts'
 import { bindHistory } from '../history.ts'
 import { cache, owner } from '../live.ts'
 import { start } from '../terminal-route.ts'
+import { inspectViews, views } from '@yaks/inspect/views'
+import { contributedViews, InspectPage } from '../components/inspect.tsx'
 
 let eid = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
 test('terminal CLI routes ids, map and queries to Browse pages', () => {
@@ -63,11 +65,6 @@ test('the shared Browse App paints its sidebar and home; its search field goes t
 })
 
 test('configured Inspect facet renders a query through its host adapter, not raw Render', async () => {
-  let { views, inspectViews } = await import('@yaks/inspect/views')
-  let { contributedViews, InspectPage } = await import(
-    '../components/inspect.tsx'
-  )
-  let { extend } = await import('../components/registry.ts')
   let root = new TElement('root')
   let target = root as unknown as Parameters<typeof render>[1]
   extend(contributedViews([{ views, inspectViews }]))

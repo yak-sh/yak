@@ -4,6 +4,7 @@ import { type Directory, directory } from './directory.ts'
 import * as dirPart from './directory.ts'
 import { type Door, type Namespace } from './door.ts'
 import type { Env } from './env.ts'
+import { ran, workerBreak } from './dispatch.ts'
 import { platform } from './testing.ts'
 import { call, type Ctx, releaseNotice } from './tools.ts'
 
@@ -237,7 +238,6 @@ test('worker errors after rollback and an in-flight pointer move name the routed
   await call(f.ctx, 'app_rollback', { ...f.args, version: 1 })
   let space = (await f.dir.space('ada'))!
   let app = (await f.dir.app(space, 'recipes'))!
-  let { ran } = await import('./dispatch.ts')
   let env: Env = {
     ...scenario.env,
     DISPATCH: {
@@ -250,7 +250,6 @@ test('worker errors after rollback and an in-flight pointer move name the routed
     },
   }
   let visitor = new Request('https://ada.yaks.app/recipes/')
-  let { workerBreak } = await import('./dispatch.ts')
   await workerBreak(
     scenario.env,
     space,

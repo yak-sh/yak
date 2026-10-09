@@ -1,6 +1,7 @@
 import { test } from '@yaks/testing'
 import { assertEquals, assertRejects } from '@std/assert'
 import { appendEntry } from './append.ts'
+import { sessionTools } from './children.ts'
 import { locked, seed, store } from './testing.ts'
 import { transcript } from './react.ts'
 import { type Bundle, type Comp, Refused, status } from '@yaks/graph'
@@ -125,7 +126,6 @@ test('batch child-before-parent order still allocates after the new fork anchor'
 test('notice tool admits passive context without callers supplying sequence', async () => {
   let g = locked(store())
   await g.apply([{ entity: { eid: 's' }, session: {} }])
-  let { sessionTools } = await import('./children.ts')
   let tool = sessionTools(g).find((t) => t.name == 'notice')!
   let id = await tool.run({ session: 's', body: 'background', eid: 'note' }, {
     session: 's',

@@ -3,6 +3,10 @@ import { assertEquals, assertRejects } from '@std/assert'
 import { registered } from './artifact_tools.ts'
 import { artifactStore } from '@yaks/blob'
 import { at, harness, worker } from './testing.ts'
+import { remote } from './remote.ts'
+import { install, onPaint } from '../tui/dom.ts'
+import { ansiBackend } from '../tui/paint.ts'
+import { render } from 'preact'
 test('image reads resolve registered artifacts and verify bytes; no arbitrary address access', async () => {
   let h = await harness()
   try {
@@ -22,10 +26,6 @@ test('image reads resolve registered artifacts and verify bytes; no arbitrary ad
 })
 
 test('worker retrieves registered image bytes for the lazy attachment renderer', async () => {
-  const { remote } = await import('./remote.ts')
-  const { install, onPaint } = await import('../tui/dom.ts')
-  const { ansiBackend } = await import('../tui/paint.ts')
-  const { render } = await import('preact')
   let directory = await Deno.makeTempDir()
   let h = await harness(directory + '/db')
   let bytes = new Uint8Array(24)

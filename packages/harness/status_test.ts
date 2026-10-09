@@ -3,6 +3,9 @@ import { assertEquals } from '@std/assert'
 import { resolve } from '@yaks/render'
 import type { Bundle } from '@yaks/graph'
 import { statusBundle, statusViews, statusVocab } from './status.ts'
+import { h } from 'preact'
+import { mount } from '../tui/testing.ts'
+import { panels } from './panels.ts'
 
 test('sidebar indicator queries cover states and owner joins', () => {
   let cases: [Bundle, string, string][] = []
@@ -81,9 +84,6 @@ test('sidebar indicator queries cover states and owner joins', () => {
 })
 
 test('status indicators paint colored single-column glyphs in the sidebar', async () => {
-  let { h } = await import('preact')
-  let { mount } = await import('../tui/testing.ts')
-  let { panels } = await import('./panels.ts')
   let sessions: Bundle[] = [{
     entity: { eid: 's' },
     session: { id: 'worker', status: 'settled' },

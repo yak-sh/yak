@@ -10,13 +10,10 @@ import { compTone } from '../comp.ts'
 import { cache, ent, useRoute } from '../../live.ts'
 import { applicable, ux } from '../registry.ts'
 import { Ux } from '@yaks/ux'
+import '../Entity.tsx'
+import { AddComp, Debug, DebugTabs, ProjectDebug } from './Debug.tsx'
 
-// Each case imports Entity.tsx — the whole component registry — and mounts a
-// Debug view through preact; the first pays that registry import (and hljs to
-// render the Markdown/JSON tabs), the rest the mount.
 test('raw formats are nested under Debug', async () => {
-  await import('../Entity.tsx')
-  let { DebugTabs } = await import('./Debug.tsx')
   let prior = Object.getOwnPropertyDescriptor(globalThis, 'document')
   let { document } = parseHTML('<main></main>')
   Object.defineProperty(globalThis, 'document', {
@@ -76,8 +73,6 @@ test('raw formats are nested under Debug', async () => {
 })
 
 test('addable components keep their component tones', async () => {
-  await import('../Entity.tsx')
-  let { AddComp } = await import('./Debug.tsx')
   let prior = Object.getOwnPropertyDescriptor(globalThis, 'document')
   let { document } = parseHTML('<main></main>')
   Object.defineProperty(globalThis, 'document', {
@@ -111,9 +106,7 @@ test('addable components keep their component tones', async () => {
   }
 })
 
-test('a reference reads as one association row, eid and all', async () => {
-  await import('../Entity.tsx')
-  let { Debug } = await import('./Debug.tsx')
+test('a reference reads as one association row, eid and all', () => {
   let prior = Object.getOwnPropertyDescriptor(globalThis, 'document')
   let { document } = parseHTML('<main></main>')
   Object.defineProperty(globalThis, 'document', {
@@ -159,9 +152,7 @@ test('a reference reads as one association row, eid and all', async () => {
   }
 })
 
-test('project backlinks omit attribution and cap associations', async () => {
-  await import('../Entity.tsx')
-  let { ProjectDebug } = await import('./Debug.tsx')
+test('project backlinks omit attribution and cap associations', () => {
   let prior = Object.getOwnPropertyDescriptor(globalThis, 'document')
   let { document } = parseHTML('<main></main>')
   Object.defineProperty(globalThis, 'document', {

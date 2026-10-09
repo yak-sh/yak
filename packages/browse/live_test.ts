@@ -1507,8 +1507,7 @@ test('catch-up then live batch apply in arrival order', () => {
 
 // boardAll: the board's List face — the query over the WHOLE graph.
 // Kind-agnostic matching, chrome and comments and the board itself out.
-test('boardAll: whole-graph match, chrome/comments/self excluded', async () => {
-  let { boardAll } = await import('./live.ts')
+test('boardAll: whole-graph match, chrome/comments/self excluded', () => {
   let spine = (eid: string, num: number) => ({ eid, num, created_at: '' })
   cache.value = {
     board: {

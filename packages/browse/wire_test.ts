@@ -2,6 +2,11 @@ import { test } from '@yaks/testing'
 import './testing.ts'
 import { assertEquals } from '@std/assert'
 import { bundlesOf, changesOf, yakLine } from './wire.ts'
+import { graph } from '@yaks/graph'
+import { ram } from '@yaks/ram'
+import { loadVocab } from '@yaks/vocab'
+import { kernelDoc } from '@yaks/kernel'
+import { docDoc } from '@yaks/doc'
 
 test('a batch leaves as one bundle per entity, without spine writes', () => {
   assertEquals(
@@ -52,11 +57,6 @@ test('a line asks the host by .entity.eid and preserves projections without ride
 })
 
 test('a removed component is replaced, and repeat attention gets a fresh server stamp', async () => {
-  let { graph } = await import('@yaks/graph')
-  let { ram } = await import('@yaks/ram')
-  let { loadVocab } = await import('@yaks/vocab')
-  let { kernelDoc } = await import('@yaks/kernel')
-  let { docDoc } = await import('@yaks/doc')
   let vocab = loadVocab([kernelDoc, docDoc])
   let g = graph({ vocab, storage: ram(vocab) })
   await g.apply([{

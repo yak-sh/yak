@@ -2,6 +2,7 @@ import { test } from '@yaks/testing'
 import { assert, assertEquals, assertRejects } from '@std/assert'
 import { ModelError, type TextDelta } from '@yaks/model'
 import { responses } from './mod.ts'
+import { generationCost } from './cost.ts'
 import { artifactStore, memoryBlobs } from '@yaks/blob'
 const sse = (events: unknown[]) =>
   new Response(
@@ -405,7 +406,6 @@ test('audio with no inline bill queries its generation without regenerating', as
 })
 
 test('generation metadata lag retries only lookup and obeys cancellation', async () => {
-  let { generationCost } = await import('./cost.ts')
   let reads = 0
   let cost = await generationCost('already-generated', {
     key: () => 'fixture',

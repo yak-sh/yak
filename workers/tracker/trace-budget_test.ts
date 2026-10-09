@@ -1,5 +1,7 @@
 // The platform authority persists reservations before forwarding any trace.
 import { equal, ok, test } from '@yaks/testing'
+import { meta } from '@yaks/sqlite'
+import { driver } from '@yaks/durable-object'
 import { durable } from '../../packages/durable-object/testing.ts'
 import type { Bundle } from '@yaks/graph'
 import { reserveTrace, TRACE_CEILING, traceBatch } from '@yaks/tracker/intake'
@@ -212,8 +214,6 @@ test('budget status is platform-admin only and does not boot a graph', async () 
 test('corrupt durable reservations fail closed without writing or reporting', async () => {
   let db = durable(), authority = new Tracker(state(db, platform))
   await authority.boot()
-  let { meta } = await import('@yaks/sqlite')
-  let { driver } = await import('@yaks/durable-object')
   meta(driver(db)).set('trace-budget', '{"slots":[{"reserved":-1,"until":0}]}')
   equal((await authority.admitTrace(space, rows(space, 200))).accepted, false)
   equal(authority.traceBudget().reserved, TRACE_CEILING)
@@ -261,8 +261,6 @@ test('first admission initializes separate untouched trackers and charges setup'
 test('trace initialization refuses an unmarked standing graph without fitting its data', async () => {
   let target = new Tracker(state(durable(), space))
   await target.boot()
-  let { meta } = await import('@yaks/sqlite')
-  let { driver } = await import('@yaks/durable-object')
   meta(driver(target.ctx.storage)).del('trace-ready')
   let reopened = new Tracker(target.ctx)
   equal(await reopened.ingestTrace(rows()), false)

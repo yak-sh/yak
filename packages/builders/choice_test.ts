@@ -3,6 +3,9 @@ import { assertEquals, assertThrows } from '@std/assert'
 import { type Bundle, graph, Refused } from '@yaks/graph'
 import { ram } from '@yaks/ram'
 import { loadVocab } from '@yaks/vocab'
+import { workshop } from './testing.ts'
+import { storage } from '@yaks/sqlite'
+import { mem } from '../sqlite/testing.ts'
 import { choices } from './choice.ts'
 
 test('choice admission enforces one output per slot without moving the prior choice', () => {
@@ -59,9 +62,6 @@ test('choice admission enforces one output per slot without moving the prior cho
 })
 
 test('peer admission does not reconcile durable builders or write a rolled-back rehearsal', async () => {
-  let { workshop } = await import('./testing.ts')
-  let { storage } = await import('@yaks/sqlite')
-  let { mem } = await import('../sqlite/testing.ts')
   let vocab = workshop([{
     $defs: {
       position: {

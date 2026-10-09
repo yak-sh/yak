@@ -2,7 +2,9 @@
 import { test } from '@yaks/testing'
 import { assert, assertEquals, assertRejects, assertThrows } from '@std/assert'
 import type { Bundle, Graph } from '@yaks/graph'
-import { clients, connect, nameOf } from './mod.ts'
+import { cli } from '@yaks/cli'
+import { validateToolInput } from '@yaks/vocab/tools'
+import { checkToolNames, clients, connect, nameOf } from './mod.ts'
 
 import { edge, fixture } from './testing.ts'
 
@@ -232,7 +234,6 @@ test('a redirect is refused, and the credential goes nowhere else', async () => 
 })
 
 test('graph Tool is usable through the CLI adapter without any session runtime', async () => {
-  const { cli } = await import('@yaks/cli')
   const f = fixture()
   const c = connect({ name: 'site', url: 'https://example.test/mcp' }, {
     fetch: f.fetcher,
@@ -316,7 +317,6 @@ test('about tool accepts declared draft-07 input and output through SDK validati
   })
   try {
     const [tool] = await c.tools()
-    const { validateToolInput } = await import('@yaks/vocab/tools')
     const result = await tool.run(...asking(validateToolInput(tool, {})))
     assert(words(result).includes('about'))
     assertEquals(called, 1)
@@ -330,7 +330,6 @@ test('about tool accepts declared draft-07 input and output through SDK validati
 })
 
 test('opaque separators cannot silently collide across distinct server namespaces', async () => {
-  const { checkToolNames } = await import('./mod.ts')
   const a = await nameOf('a', 'b__c'), b = await nameOf('a__b', 'c')
   assertEquals(a, b)
   const tool = { description: '' }

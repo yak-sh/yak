@@ -1,7 +1,8 @@
 import { test } from '@yaks/testing'
 import { assertEquals, assertRejects } from '@std/assert'
 import { stash } from '@yaks/client'
-import { frontend } from './frontend.ts'
+import { local } from '@yaks/sync'
+import { frontend, frontendVocab } from './frontend.ts'
 import { draftVault } from './draft_vault.ts'
 
 let text = (ui: ReturnType<typeof frontend>) =>
@@ -156,9 +157,7 @@ test('new-session acknowledgement keeps newer text in the created session, not t
   ui.close()
 })
 
-test('draft vocabulary registers local and ephemeral tiers, not default wire tier', async () => {
-  const { local } = await import('@yaks/sync')
-  const { frontendVocab } = await import('./frontend.ts')
+test('draft vocabulary registers local and ephemeral tiers, not default wire tier', () => {
   assertEquals(local(frontendVocab, 'savedDraft'), 'vault')
   assertEquals(local(frontendVocab, 'pendingDraft'), 'vault')
   assertEquals(local(frontendVocab, 'recovery'), 'vault')

@@ -10,6 +10,7 @@ import { docs as sessionDocs } from '@yaks/session/vocab'
 import { gitDoc } from '@yaks/git/vocab'
 import type { Machine, MachineProvider, MachineRef } from '@yaks/machine'
 import { homeAt, machines, sessionCwd } from './session_machines.ts'
+import { machineTools } from './machine.ts'
 
 let vocab = loadVocab([...docs, machineDoc, ...sessionDocs, gitDoc])
 let fixture = async () => {
@@ -341,7 +342,6 @@ test('machine resolver provisions only on a file call and resolves paths from se
     entity: { eid: 'parent' },
     home: { cwd: '/checkout/sub' },
   }])
-  let { machineTools } = await import('./machine.ts')
   let tools = machineTools((ctx) => f.binding.machine(ctx!.session), {
     cwd: (ctx) => f.binding.cwd(ctx!.session),
   })

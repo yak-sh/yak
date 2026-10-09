@@ -1,6 +1,8 @@
 // Catalogue joins and next-song choices remain stable while outputs rebuild.
 import { equal, test } from '@yaks/testing'
-import { catalog, type Row, track } from './music_catalog.ts'
+import { shop } from '../../packages/builders/testing.ts'
+import vale from './vocab.json' with { type: 'json' }
+import { catalog, type Row, SONGS, track } from './music_catalog.ts'
 
 let rows = (): Row[] => [
   { entity: { eid: 'land' }, theme_design: { land: 'mossvale' } },
@@ -69,11 +71,6 @@ test('only current main audio outputs play; pending current data keeps its turn'
 })
 
 test('song subscription projects the current main audio and its qualified riders', async () => {
-  let { shop } = await import('../../packages/builders/testing.ts')
-  let { default: vale } = await import('./vocab.json', {
-    with: { type: 'json' },
-  })
-  let { SONGS } = await import('./music_catalog.ts')
   let { g, failed } = await shop({}, [{
     $defs: {
       song: vale.$defs.song,

@@ -1,6 +1,16 @@
 /// <reference lib="deno.ns" />
 import { equal, ok, test } from '@yaks/testing'
-import { channel, type Event } from '@yaks/trace'
+import { AsyncLocalStorage } from 'node:async_hooks'
+import {
+  channel,
+  during,
+  type Event,
+  installContext,
+  measure,
+  peek,
+} from '@yaks/trace'
+import { served } from './request.ts'
+import { receive } from './socket.ts'
 import { api } from './route.ts'
 import { handler } from './routes.ts'
 import { post, req, shopGraph } from './testing.ts'
@@ -110,8 +120,6 @@ test('subscription activity counts work but never queries, sink IDs or rows', as
 })
 
 let taskContext = async (run: () => Promise<void>) => {
-  let { AsyncLocalStorage } = await import('node:async_hooks')
-  let { installContext } = await import('@yaks/trace')
   let local = new AsyncLocalStorage<import('@yaks/trace').Context | undefined>()
   let restore = installContext({
     get: () => local.getStore(),
@@ -126,8 +134,6 @@ let taskContext = async (run: () => Promise<void>) => {
 
 test('interleaved HTTP handlers retain independent request parents after awaits', async () => {
   await taskContext(async () => {
-    let { during, measure, peek } = await import('@yaks/trace')
-    let { served } = await import('./request.ts')
     let g = shopGraph()
     let events: Event[] = []
     let off = channel(g).subscribe((e) => events.push(e))
@@ -174,8 +180,6 @@ test('interleaved HTTP handlers retain independent request parents after awaits'
 
 test('socket subscribe awaits and subsequent refreshes have separate request trees', async () => {
   await taskContext(async () => {
-    let { during, measure, peek } = await import('@yaks/trace')
-    let { receive } = await import('./socket.ts')
     let g = shopGraph()
     let read = g.read
     g.read = async (...args) => {

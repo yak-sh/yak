@@ -1,6 +1,7 @@
 import { test } from '@yaks/testing'
 import { assert, assertEquals, assertRejects } from '@std/assert'
 import { artifactTools, imageContext } from './artifact_tools.ts'
+import { local } from './local.ts'
 import { input } from '@yaks/openai'
 import type { Bundle } from '@yaks/graph'
 import type { Item } from '@yaks/model'
@@ -94,7 +95,6 @@ test('file import snapshots bytes; attach is user-only; explicit view projects b
 })
 
 test('tool-driven vision reaches the next model request and survives database reopen', async () => {
-  const { local } = await import('./local.ts')
   let dir = await Deno.makeTempDir()
   let h = await harness(dir + '/test.db')
   let record = await artifactStore(h.artifacts)(png, 'image/png')

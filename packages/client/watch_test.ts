@@ -6,6 +6,8 @@
 import { test } from '@yaks/testing'
 import { assertEquals } from '@std/assert'
 import { type Bundle, transient } from '@yaks/graph'
+import { loadVocab } from '@yaks/vocab'
+import { client } from './client.ts'
 import { boxClient, server, titles } from './testing.ts'
 import type { Hold, Make } from './watch.ts'
 
@@ -378,8 +380,6 @@ test('a refused remote subscription is never ready', async () => {
 })
 
 test('closing one watch does not disconnect other transient observers', async () => {
-  const { client } = await import('./client.ts')
-  const { loadVocab } = await import('@yaks/vocab')
   const c = client(
     loadVocab([{
       $defs: {

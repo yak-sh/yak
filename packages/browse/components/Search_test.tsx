@@ -6,8 +6,14 @@ import { until } from '../testing.ts'
 import { assertEquals } from '@std/assert'
 import { h, render } from 'preact'
 import { parseHTML } from 'linkedom'
-import { group, Search, searchOpen } from './Search.tsx'
-import { config } from '../live.ts'
+import { group, Search, searchOpen, SearchPage } from './Search.tsx'
+import { cache, config } from '../live.ts'
+import { mount } from './mount.ts'
+import { fields } from './fields.tsx'
+import { route } from './nav.tsx'
+import { contributedViews } from './inspect.tsx'
+import * as facet from '@yaks/inspect/views'
+import { extend, registry } from './registry.ts'
 
 let hit = (num: number, kind: string, title: string) => ({
   eid: `${num}`,
@@ -103,10 +109,7 @@ test('search sends only the settled query while typing', async () => {
   }
 })
 
-test('query page draws the inspector table through the shared registry', async () => {
-  let { SearchPage } = await import('./Search.tsx')
-  let { cache } = await import('../live.ts')
-  let { mount } = await import('./mount.ts')
+test('query page draws the inspector table through the shared registry', () => {
   cache.value = {
     sample: {
       entity: { eid: 'sample', num: 1 },
@@ -128,9 +131,7 @@ test('query page draws the inspector table through the shared registry', async (
   }
 })
 
-test('search chip is a draggable link, modifiers keep native navigation', async () => {
-  let { fields } = await import('./fields.tsx')
-  let { route } = await import('./nav.tsx')
+test('search chip is a draggable link, modifiers keep native navigation', () => {
   let priorDocument = Object.getOwnPropertyDescriptor(globalThis, 'document')
   let priorLocation = Object.getOwnPropertyDescriptor(globalThis, 'location')
   let priorHistory = Object.getOwnPropertyDescriptor(globalThis, 'history')
@@ -207,13 +208,8 @@ test('search chip is a draggable link, modifiers keep native navigation', async 
 
 // A configured Inspect facet exposes the same query-backed entries through
 // both exports. The host must adapt them once, not overwrite with raw Props.
-test('configured Inspect query renderer receives its host context', async () => {
-  let { contributedViews } = await import('./inspect.tsx')
-  let facet = await import('@yaks/inspect/views')
-  let { extend, registry } = await import('./registry.ts')
+test('configured Inspect query renderer receives its host context', () => {
   let original = registry.renderers
-  let { SearchPage } = await import('./Search.tsx')
-  let { mount } = await import('./mount.ts')
   extend(contributedViews([facet]))
   let seen = mount(h(SearchPage, { query: '.task .count' }))
   try {

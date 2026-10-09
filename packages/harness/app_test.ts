@@ -9,6 +9,7 @@ import { panels, type UIAgent } from './panels.ts'
 import { local } from './local.ts'
 import { harness, mount, repo, scratchRepo } from './testing.ts'
 import { until } from '../process/testing.ts'
+import { ShuttingDown } from './shutdown.ts'
 
 let settle = async () => {
   for (let i = 0; i < 100; i++) await Promise.resolve()
@@ -1065,7 +1066,6 @@ test('mouse clicks preserve mode while selecting sessions and new session', asyn
 })
 
 test('shutdown stops a pending summary from starting sidebar reads', async () => {
-  const { frontend } = await import('./frontend.ts')
   const local = frontend()
   const pending = Promise.withResolvers<Bundle[]>()
   let reads = 0, sidebarReads = 0
@@ -1122,8 +1122,6 @@ test('shutdown stops a pending summary from starting sidebar reads', async () =>
 })
 
 test('shutdown refusal from pending transcript does not overwrite shutdown feedback', async () => {
-  const { frontend } = await import('./frontend.ts')
-  const { ShuttingDown } = await import('./shutdown.ts')
   const local = frontend()
   local.patch({ selected: 'selected' })
   const pending = Promise.withResolvers<Bundle[]>()

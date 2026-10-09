@@ -3,6 +3,7 @@ import { test } from '@yaks/testing'
 import { assert, assertEquals, assertThrows } from '@std/assert'
 import type { Bundle } from '@yaks/graph'
 import { echo } from '@yaks/sync'
+import { loadVocab } from '@yaks/vocab'
 import { client, type ClientOpts } from './client.ts'
 import { box, comp, fakeDb, fakeIdb, pair } from './testing.ts'
 import { wireIdb } from './idb.ts'
@@ -483,8 +484,6 @@ test('a synchronous first frame filters stale shared hits before watch returns',
 })
 
 test('query replica applies transient frames without persisting projections', async () => {
-  const { client } = await import('./client.ts')
-  const { loadVocab } = await import('@yaks/vocab')
   const c = client(
     loadVocab([{
       $defs: {

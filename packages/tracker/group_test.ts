@@ -1,7 +1,7 @@
 import { equal, ok, test } from '@yaks/testing'
 import type { Bundle } from '@yaks/graph'
 import { fixture } from './fixture_test.ts'
-import { group, retained, trim } from './group.ts'
+import { group, grouped, retained, trim } from './group.ts'
 import { capture } from './report.ts'
 import { comp } from './model.ts'
 import { runs } from './tools.ts'
@@ -103,7 +103,6 @@ test('concurrent grouper snapshots cannot lose a hit or count an eid twice', asy
   await g.apply([a, b], { trusted: true })
   let [bug] = await bugs(g)
   let before = await g.read('.error.bug=' + bug.entity.eid + ' *')
-  let { grouped } = await import('./group.ts')
   await g.apply(grouped(a, bug, before), { trusted: true })
   let failed = false
   try {

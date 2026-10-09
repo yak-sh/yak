@@ -9,6 +9,7 @@ import { assert, assertEquals } from '@std/assert'
 import { cli } from './run.ts'
 import { tokenFor } from './store.ts'
 import { own, YAK } from './yak.ts'
+import { close, opened } from './local.ts'
 
 type Call = { name: string; arguments: Record<string, unknown> }
 
@@ -92,7 +93,6 @@ test('init writes a config whose graph knows its person', async () => {
     assertEquals(await line(['init', 'Ada']), 0)
     let first = Deno.readTextFileSync(path)
     let { person } = JSON.parse(first)
-    let { opened, close } = await import('./local.ts')
     let host = await opened(path, ['graph'], false)
     let [me] = await host.graph.read(`.entity.eid=${person}&.person&.doc`)
     assertEquals((me?.doc as { title?: string } | undefined)?.title, 'Ada')

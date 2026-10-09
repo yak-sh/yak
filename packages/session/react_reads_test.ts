@@ -15,6 +15,8 @@ import { sessionDoc } from './comp.ts'
 import { sessionDerived } from './status.ts'
 import { currentStatus, react, transcript } from './react.ts'
 import { sessions } from './plugin.ts'
+import { toolEid } from '@yaks/tools'
+import { settle } from './run.ts'
 
 let vocab = loadVocab([
   sessionDoc,
@@ -195,7 +197,6 @@ test('the runner inspects finite-window status without loading old transcript pr
     ) bodies += rows.filter((b) => b.content).length
     return rows
   }
-  let { settle } = await import('./run.ts')
   await settle(g, 'runner', {
     holder: 'worker',
     tools: [],
@@ -212,7 +213,6 @@ test('the runner inspects finite-window status without loading old transcript pr
 for (let legacy of [false, true]) {
   test(`bounded body selection matches full model history for crossing calls and typed questions (legacy: ${legacy})`, async () => {
     let m = identityEid('model', ['fake'])
-    let { toolEid } = await import('@yaks/tools')
     let tool = toolEid('echo')
     let initial: Bundle[] = [
       { entity: { eid: m }, model: { name: 'fake' } },
@@ -372,7 +372,6 @@ test('a terminal runner checks the derived verdict before loading entry history'
     ) reads++
     return read(q, o)
   }
-  let { settle } = await import('./run.ts')
   await settle(g, 'terminal', {
     holder: 'holder',
     model: () => {

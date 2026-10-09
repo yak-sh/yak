@@ -14,6 +14,12 @@ import { AjvJsonSchemaValidator } from '@modelcontextprotocol/sdk/validation/ajv
 import { z } from 'zod'
 import { argsOf } from '@yaks/graph'
 import { CallError } from '@yaks/tools'
+import {
+  Client,
+  StreamableHTTPClientTransport,
+} from '@modelcontextprotocol/client'
+import { createMcpHandler } from '@modelcontextprotocol/server'
+import { server } from './server.ts'
 import { connect, pinned, shopGraph } from './testing.ts'
 
 // graph_apply's published input schema — the write door as a client reads it.
@@ -224,11 +230,6 @@ test('a JSON Schema input declaration reaches the listing unchanged', async () =
 })
 
 test('a non-object declared schema is not replaced in the neutral tool listing', async () => {
-  let { server } = await import('./server.ts')
-  let { Client, StreamableHTTPClientTransport } = await import(
-    '@modelcontextprotocol/client'
-  )
-  let { createMcpHandler } = await import('@modelcontextprotocol/server')
   let schema = { type: 'array', items: { type: 'string' } }
   let handler = createMcpHandler(() =>
     server({
@@ -262,11 +263,6 @@ test('a non-object declared schema is not replaced in the neutral tool listing',
 })
 
 test('modern custom parameter headers use the exact registered input schema before dispatch', async () => {
-  let { server } = await import('./server.ts')
-  let { Client, StreamableHTTPClientTransport } = await import(
-    '@modelcontextprotocol/client'
-  )
-  let { createMcpHandler } = await import('@modelcontextprotocol/server')
   let ran = 0
   let g = shopGraph()
   let handler = createMcpHandler(() =>

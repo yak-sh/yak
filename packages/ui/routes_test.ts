@@ -1,5 +1,7 @@
 import { test } from '@yaks/testing'
 import { assert, assertEquals } from '@std/assert'
+import { h } from 'preact'
+import { everforest } from './everforest.ts'
 import { stops } from './guide.ts'
 import { kit } from './kit.ts'
 import { routes } from './routes.ts'
@@ -44,8 +46,6 @@ test('/ui switches theme and scheme by link', async () => {
 })
 
 test('/ui keeps the base beside installed kits, skins and UX specimens', async () => {
-  let { h } = await import('preact')
-  let { everforest } = await import('./everforest.ts')
   let [route] = routes({
     ui: {
       kits: {

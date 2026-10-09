@@ -2,8 +2,14 @@ import { test } from '@yaks/testing'
 import { assert, assertEquals } from '@std/assert'
 import { identityEid } from '@yaks/graph'
 import { remote } from './remote.ts'
-import { transcriptWindow } from '@yaks/session'
+import { transcriptUsage, transcriptWindow } from '@yaks/session'
 import { at, harness, worker } from './testing.ts'
+import { h as element } from 'preact'
+import { mount } from '../tui/testing.ts'
+import { pressTo } from '../tui/screen.ts'
+import { App } from './app.ts'
+import { frontend } from './frontend.ts'
+import { until } from '../process/testing.ts'
 
 let M = identityEid('model', ['test'])
 
@@ -95,12 +101,6 @@ test('worker pages retained graph data and keeps initial transfer independent of
 })
 
 test('mounted bounded transcript navigates beyond loaded edges and restores a detached session anchor', async () => {
-  const { h: element } = await import('preact')
-  const { mount } = await import('../tui/testing.ts')
-  const { pressTo } = await import('../tui/screen.ts')
-  const { App } = await import('./app.ts')
-  const { frontend } = await import('./frontend.ts')
-  const { until } = await import('../process/testing.ts')
   let store = await harness()
   await store.g.apply([
     { entity: { eid: 's' }, session: {} },
@@ -196,7 +196,6 @@ test('mounted bounded transcript navigates beyond loaded edges and restores a de
 })
 
 test('usage panel reads latest inherited ask metadata without transcript bodies', async () => {
-  const { transcriptUsage } = await import('@yaks/session')
   let store = await harness()
   try {
     await store.g.apply([
@@ -232,7 +231,6 @@ test('usage panel reads latest inherited ask metadata without transcript bodies'
 })
 
 test('bounded worker subscriptions deliver transient text before final completion', async () => {
-  const { until } = await import('../process/testing.ts')
   let dir = await Deno.makeTempDir()
   let r = await remote({
     worker: worker(),

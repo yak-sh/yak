@@ -1,6 +1,6 @@
 import { test } from '@yaks/testing'
 import { assert, assertEquals } from '@std/assert'
-import { h } from 'preact'
+import { h, render } from 'preact'
 import type { Bundle, Comp } from '@yaks/graph'
 import { setClipboard } from '../tui/visual.ts'
 import { Markdown } from '@yaks/markdown'
@@ -8,6 +8,10 @@ import { mount } from './testing.ts'
 import { frontend } from './frontend.ts'
 import { App } from './app.ts'
 import type { UIAgent } from './panels.ts'
+import { install, TElement } from '../tui/dom.ts'
+import { lay } from '../tui/paint.ts'
+import { base } from '../tui/theme.ts'
+import { copyRendered } from '../tui/RenderedCursor.ts'
 const settle = async () => {
   for (let i = 0; i < 100; i++) await Promise.resolve()
 }
@@ -106,12 +110,7 @@ test('NORMAL and VISUAL operate on rendered Markdown without replacing it; detai
   }
 })
 
-test('rendered Markdown tables, quotes, code and boxes keep layout while selecting', async () => {
-  const { TElement, install } = await import('../tui/dom.ts')
-  const { render } = await import('preact')
-  const { lay } = await import('../tui/paint.ts')
-  const { base } = await import('../tui/theme.ts')
-  const { copyRendered } = await import('../tui/RenderedCursor.ts')
+test('rendered Markdown tables, quotes, code and boxes keep layout while selecting', () => {
   const dom = install()
   const root = new TElement('div')
   try {

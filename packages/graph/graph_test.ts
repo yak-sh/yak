@@ -866,8 +866,7 @@ for (let async of [false, true]) {
   })
 }
 
-test('provenance policy narrows an attribution-only vocabulary, including explicit null', async () => {
-  let { loadVocab } = await import('@yaks/vocab')
+test('provenance policy narrows an attribution-only vocabulary, including explicit null', () => {
   let vocab = loadVocab({
     $defs: {
       doc: {

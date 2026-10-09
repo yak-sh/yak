@@ -10,6 +10,7 @@ import { argsOf, type Bundle, type Comp, detached, mint } from '@yaks/graph'
 import { answerOf, toolEid } from '@yaks/tools'
 import type { VocabDoc } from '@yaks/vocab'
 import { prefixes } from '@yaks/id'
+import { kits, themes } from '@yaks/ui'
 import { ids } from '@yaks/id/graph'
 import { blobKeywords, blobRead } from '@yaks/blob'
 import { plugins as blobPlugins } from '@yaks/blob/graph'
@@ -1485,7 +1486,6 @@ test('a duty held by a process that died on this machine is taken at once', asyn
 })
 
 test('web gathers UI facets before building routes, graph does not import them', async () => {
-  let { kits, themes } = await import('@yaks/ui')
   let seen: string[] = []
   let plugin: Plugged = {
     ...shop,

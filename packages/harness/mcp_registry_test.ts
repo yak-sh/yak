@@ -132,7 +132,6 @@ test('bad MCP definitions and transport failures do not block other servers and 
 })
 
 test('an already-running agent discovers graph additions on its next ask and hides disabled tools', async () => {
-  const { local } = await import('./local.ts')
   const f = fixture()
   const server = Deno.serve(
     { port: 0, hostname: '127.0.0.1', onListen() {} },

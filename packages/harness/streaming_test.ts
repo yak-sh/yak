@@ -1,5 +1,5 @@
 import { test } from '@yaks/testing'
-import { assert, assertEquals } from '@std/assert'
+import { assert, assertEquals, assertRejects } from '@std/assert'
 import { local } from './local.ts'
 import { tally } from '@yaks/sql'
 import { type Comp, transient } from '@yaks/graph'
@@ -9,6 +9,10 @@ import { until } from '../process/testing.ts'
 import { at, harness, repo, worker } from './testing.ts'
 import { seed } from './agent.ts'
 import { identityEid } from '@yaks/graph'
+import { remote } from './remote.ts'
+import { CODEX, responses } from '@yaks/openai'
+import { resolve } from '@yaks/render'
+import { statusViews, statusVocab } from './status.ts'
 
 test('streaming records ask before dispatch, projects text without durable token writes, and finalizes same entry', async () => {
   const h = await harness()
@@ -120,7 +124,6 @@ test('partial failure preserves text and does not automatically retry ambiguous 
 })
 
 test('a real worker transfers transient text before model completion', async () => {
-  const { remote } = await import('./remote.ts')
   const a = await remote({
     worker: worker(),
     config: at(),
@@ -268,7 +271,6 @@ test('restart resumes a dispatched attempt from its partial history', async () =
 })
 
 test('fork admission cannot capture mutable in-flight output', async () => {
-  const { assertRejects } = await import('@std/assert')
   const h = await harness()
   try {
     await h.g.apply([
@@ -493,7 +495,6 @@ test('input admitted during an aborted turn is served once after interruption', 
 })
 
 test('invalid provider history records a healable exception, not an operational interruption', async () => {
-  let { responses } = await import('@yaks/openai')
   let h = await harness()
   let a = local({
     cwd: repo(),
@@ -534,7 +535,6 @@ test('invalid provider history records a healable exception, not an operational 
 })
 
 test('a compaction refusal keeps the provider detail in its refusal entry', async () => {
-  let { CODEX, responses } = await import('@yaks/openai')
   let h = await harness()
   try {
     await h.g.apply([
@@ -601,8 +601,6 @@ test('provider rejection paints crashed and successful recovery clears it', asyn
     },
   })
   try {
-    let { resolve } = await import('@yaks/render')
-    let { statusViews, statusVocab } = await import('./status.ts')
     let id = await a.start('hello')
     await a.idle(id)
     let check = async (status: string, color: string, title: string) => {

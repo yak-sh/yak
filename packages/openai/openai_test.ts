@@ -7,6 +7,7 @@ import { assertEquals, assertRejects, assertThrows } from '@std/assert'
 import { FakeTime } from '@std/testing/time'
 import { ModelError, type Request } from '@yaks/model'
 import { body, CODEX, fromChatGPT, fromEnv, items, responses } from './mod.ts'
+import { tokenUsage } from './responses.ts'
 
 let req: Request = {
   model: 'm',
@@ -336,8 +337,7 @@ test('the Model maps the shared watchdog to ModelError', async () => {
   assertEquals((await error).code, 'stalled')
 })
 
-test('usage keeps missing counts unknown and rejects invalid counts', async () => {
-  let { tokenUsage } = await import('./responses.ts')
+test('usage keeps missing counts unknown and rejects invalid counts', () => {
   assertEquals(tokenUsage(undefined), {})
   assertEquals(tokenUsage({}), {})
   assertEquals(tokenUsage({ input_tokens: 42 }), {

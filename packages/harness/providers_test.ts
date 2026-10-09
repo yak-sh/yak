@@ -6,6 +6,7 @@ import { link } from '@yaks/edge'
 import { toolEid } from '@yaks/tools'
 import { seed } from './agent.ts'
 import { local } from './local.ts'
+import { remote } from './remote.ts'
 import { at, harness, repo, worker } from './testing.ts'
 
 const P = (name: string) => identityEid('provider', [name])
@@ -145,7 +146,6 @@ test('fork and spawn selecting an existing model are served by a provider that s
 })
 
 test('provider sign-ins are not MCP authorization targets', async () => {
-  const { remote } = await import('./remote.ts')
   const dir = await Deno.makeTempDir()
   const path = dir + '/harness.db'
   const h = await harness(path)

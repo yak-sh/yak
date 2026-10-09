@@ -94,8 +94,7 @@ test('2019 schema semantics and independent identical IDs use selected dialect',
   }
 })
 
-test('a vocabulary carries tool declarations beside its components', async () => {
-  let { toolsIn } = await import('./tools.ts')
+test('a vocabulary carries tool declarations beside its components', () => {
   let doc = {
     $defs: {
       session: { component: true, type: 'object', properties: {} },

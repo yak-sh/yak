@@ -10,8 +10,13 @@ import { dispatchStatus } from '@yaks/session/admission'
 import { loadVocab } from '@yaks/vocab'
 import { toolsDoc } from '@yaks/tools/vocab'
 import type { Agent } from './agent.ts'
-import { elapsed } from './RuntimePanel.ts'
+import { elapsed, RuntimePanel } from './RuntimePanel.ts'
 import { at, harness, repo, worker } from './testing.ts'
+import { h as node } from 'preact'
+import { mount } from '../tui/testing.ts'
+import { frontend } from './frontend.ts'
+import { Keyboard } from './keyboard.ts'
+import { remote } from './remote.ts'
 
 test('runtime cancellation preserves partial text, waits for new input, and resumes explicitly', async () => {
   let entered = Promise.withResolvers<void>()
@@ -164,11 +169,6 @@ test('elapsed tolerates unknown clocks and does not display negative durations',
 })
 
 test('runtime panel reads only while visible; navigation and feedback stay local', async () => {
-  const { h: node } = await import('preact')
-  const { mount } = await import('../tui/testing.ts')
-  const { frontend } = await import('./frontend.ts')
-  const { RuntimePanel } = await import('./RuntimePanel.ts')
-  const { Keyboard } = await import('./keyboard.ts')
   let ui = frontend(), reads = 0
   let observer: (() => void) | undefined
   let actions: string[] = []
@@ -239,7 +239,6 @@ test('runtime panel reads only while visible; navigation and feedback stay local
 })
 
 test('worker runtime projection and scoped continuation use explicit commands', async () => {
-  const { remote } = await import('./remote.ts')
   let connection = await remote({
     worker: worker(),
     config: at(':memory:'),

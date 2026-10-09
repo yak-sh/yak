@@ -1,10 +1,16 @@
 import { test } from '@yaks/testing'
-import { assert, assertEquals } from '@std/assert'
+import { assert, assertEquals, assertRejects } from '@std/assert'
 import { FakeTime } from '@std/testing/time'
 import { remote } from './remote.ts'
 import { identityEid } from '@yaks/graph'
 import { edgeEid } from '@yaks/edge'
 import { at, harness, worker } from './testing.ts'
+import { h } from 'preact'
+import { App } from './app.ts'
+import { frontend } from './frontend.ts'
+import { mount } from '../tui/testing.ts'
+import { ShuttingDown } from './shutdown.ts'
+import { seed } from './agent.ts'
 test('worker owns an isolated database; selected entries replicate and commands stay explicit', async () => {
   let dir = await Deno.makeTempDir()
   let r = await remote({
@@ -67,7 +73,6 @@ test("what is typed into the worker is written by the config's person", async ()
 })
 
 test('worker rejects bad paths without creating a fallback database', async () => {
-  const { assertRejects } = await import('@std/assert')
   let dir = await Deno.makeTempDir()
   try {
     await assertRejects(() =>
@@ -96,10 +101,6 @@ test('worker stop waits for admitted commands and model turns', async () => {
 })
 
 test('worker frontend typing stays local after its subscribed view is ready', async () => {
-  const { h } = await import('preact')
-  const { App } = await import('./app.ts')
-  const { frontend } = await import('./frontend.ts')
-  const { mount } = await import('../tui/testing.ts')
   let dir = await Deno.makeTempDir()
   let r = await remote({
     worker: worker(),
@@ -453,8 +454,6 @@ test('explicit force releases unbounded close while a provider is stuck', async 
 })
 
 test('new reads during graceful shutdown are typed expected refusals', async () => {
-  const { assertRejects } = await import('@std/assert')
-  const { ShuttingDown } = await import('./shutdown.ts')
   const dir = await Deno.makeTempDir()
   const r = await remote({
     worker: worker(),
@@ -474,7 +473,6 @@ test('new reads during graceful shutdown are typed expected refusals', async () 
 
 test('worker model selection is database-backed, passive, and forwarded on start', async () => {
   const dir = await Deno.makeTempDir()
-  const { seed } = await import('./agent.ts')
   const path = dir + '/model-picker.db'
   const h = await harness(path)
   await h.g.apply(seed({ provider: 'openrouter', model: 'test/model' }))

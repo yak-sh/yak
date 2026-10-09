@@ -9,6 +9,8 @@ import { input } from '../openai/responses.ts'
 import { voice, wear } from '@yaks/persona'
 import { begin } from './agent.ts'
 import { harness, processes } from './testing.ts'
+import { local } from './local.ts'
+import { inheritedInstructions } from './legacy_instructions.ts'
 
 test('instruction admission snapshots machine files in stable ancestor order', async () => {
   let h = await harness()
@@ -121,7 +123,6 @@ test('instruction items map to ordered developer messages, never user text', () 
 
 test('root admission is snapshotted and explicit later context is an instruction', async () => {
   let dir = await Deno.makeTempDir()
-  let { local } = await import('./local.ts')
   let requests: import('@yaks/model').Request[] = []
   await Deno.writeTextFile(dir + '/AGENTS.md', 'shared rule')
   let h = await harness()
@@ -165,7 +166,6 @@ test('root admission is snapshotted and explicit later context is an instruction
 
 test('a native session carries its chosen graph persona into the model request', async () => {
   let dir = await Deno.makeTempDir()
-  let { local } = await import('./local.ts')
   let h = await harness()
   let requests: import('@yaks/model').Request[] = []
   let persona = crypto.randomUUID()
@@ -210,7 +210,6 @@ test('a native session carries its chosen graph persona into the model request',
 })
 
 test('retired CLI instructions are omitted on future asks without rewriting history', async () => {
-  let { local } = await import('./local.ts')
   let dir = await Deno.makeTempDir()
   let h = await harness()
   let requests: import('@yaks/model').Request[] = []
@@ -288,8 +287,7 @@ test('retired CLI instructions are omitted on future asks without rewriting hist
   }
 })
 
-test('explicit configuration and custom inherited instructions remain supported', async () => {
-  let { inheritedInstructions } = await import('./legacy_instructions.ts')
+test('explicit configuration and custom inherited instructions remain supported', () => {
   assertEquals(inheritedInstructions(undefined, 'configured'), 'configured')
   assertEquals(inheritedInstructions('custom', 'configured'), 'custom')
   assertEquals(inheritedInstructions('', 'configured'), '')

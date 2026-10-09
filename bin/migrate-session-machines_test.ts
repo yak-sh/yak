@@ -1,3 +1,5 @@
+import { compose, facet } from '../packages/cli/host.ts'
+import { docs } from '../packages/harness/vocab.ts'
 import { archetypes } from '@yaks/archetype'
 import { graph } from '@yaks/graph'
 import { ddl, journal, log } from '@yaks/journal'
@@ -203,8 +205,6 @@ test('drain receipt refuses living generation and tolerates exited or reused PID
 })
 
 test('composed CLI host translates a pre-machine home before any provisioning', async () => {
-  let { compose, facet } = await import('../packages/cli/host.ts')
-  let { docs } = await import('../packages/harness/vocab.ts')
   let host = await compose(
     {
       db: ':memory:',
@@ -267,8 +267,6 @@ test('composed CLI host translates a pre-machine home before any provisioning', 
 })
 
 test('ordinary CLI reads remain available before destination expansion', async () => {
-  let { compose, facet } = await import('../packages/cli/host.ts')
-  let { docs } = await import('../packages/harness/vocab.ts')
   let dir = await Deno.makeTempDir()
   let config = {
     db: dir + '/graph.db',

@@ -33,7 +33,7 @@ import type { Wire } from '@yaks/durable-object'
 import { test, until } from '@yaks/testing'
 import * as apps from './apps.ts'
 import * as fileDoor from './files.ts'
-import { directory, stamp, storeName } from './directory.ts'
+import { appStore, directory, stamp, storeName } from './directory.ts'
 import * as dirPart from './directory.ts'
 import { scriptName } from './dispatch.ts'
 import type { Env } from './env.ts'
@@ -41,6 +41,7 @@ import { analytics, dataset } from './testing.ts'
 import { emptied, trash, trashSpace } from './erase.ts'
 import { call, type Ctx, wrote } from './tools.ts'
 import { archive, openIn, serve } from './unseen.ts'
+import { KERNEL, metaOf } from './meta.ts'
 import { PLATFORM_STORE } from './door.ts'
 import { sweep } from './usage.ts'
 import { FREE, monthOf, PLUS, size } from './meter.ts'
@@ -1725,12 +1726,9 @@ test('photo and file uploads enforce space R2 limits from actual bytes', async (
 })
 
 test('an open visitor cannot choose generated media, and the editor browser can', async () => {
-  let { platform, seeded, as, ADA, visit } = await import('./serving-probe.ts')
   let p = platform()
   let { space, app } = await seeded(p.env, 'open')
-  let { appStore } = await import('./directory.ts')
   let store = appStore(p.env.STORE, space, app, p.env)
-  let { KERNEL, metaOf } = await import('./meta.ts')
   let run = crypto.randomUUID(), call = crypto.randomUUID()
   let first = crypto.randomUUID(), second = crypto.randomUUID()
   await metaOf(store).apply([
