@@ -19,6 +19,7 @@ import {
   budgets,
   BUILDS,
   ceilings,
+  count,
   counted,
   countedBuild,
   countedRealtime,
@@ -321,7 +322,7 @@ test('monthly serving quota: both tiers, comped spaces, and UTC reset', async ()
         out.headers.get('retry-after'),
         'Thu, 01 Oct 2026 00:00:00 GMT',
       )
-      assertStringIncludes(await out.text(), limit.toLocaleString('en-US'))
+      assertStringIncludes(await out.text(), count(limit))
       assertEquals(
         refusedVisit({ ...full, slug: 'yourname' }, req, {}, NOW),
         null,
@@ -872,4 +873,17 @@ test('models and voice spend one account budget, each counted apart', async () =
     realtime: half + 0.25,
     models: 0,
   })
+})
+
+test('whole counts read in groups of three, signed', () => {
+  for (
+    let [n, text] of [
+      [0, '0'],
+      [999, '999'],
+      [1000, '1,000'],
+      [12_345_678, '12,345,678'],
+      [-12_345_678, '-12,345,678'],
+      [Number.MAX_SAFE_INTEGER, '9,007,199,254,740,991'],
+    ] as [number, string][]
+  ) assertEquals(count(n), text)
 })

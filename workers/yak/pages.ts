@@ -25,19 +25,12 @@ import {
 } from './route.ts'
 import { CONNECTOR } from './seo.ts'
 import { apex, type Host, spaceHost, url } from './host.ts'
-import { CURRENCY, FREE, PLUS, PRICE, size } from './meter.ts'
+import { count, FREE, PLUS, PRICE, size } from './meter.ts'
 
 let home = (env: Host) => `<a class="Away" href="${url(env, '/')}">yaks.app</a>`
 
-// Formatted when a page asks for it: the first Intl formatter an isolate
-// builds loads its locale data, and at module load that was paid by every
-// cold start, a Store's included (T-37976).
-let plusPrice = () =>
-  new Intl.NumberFormat('en-US', {
-    style: 'currency',
-    currency: CURRENCY,
-    minimumFractionDigits: 0,
-  }).format(PRICE.plus)
+// The meter's prices are whole US dollars, as on the public pricing page.
+let plusPrice = () => `$${count(PRICE.plus)}`
 
 let billButton = (door: string, label: string, target?: string) =>
   `<button type="button" class="Button Bill_Go${
@@ -525,8 +518,6 @@ for (let go of document.querySelectorAll('.Copy_Go')) {
 // one unit per day, the page stretches it to whatever width there is, and a
 // rectangle stretched is still a rectangle. No library, no canvas, no script —
 // and the whole series is in one `aria-label` for anyone who cannot see it.
-let count = (n: number) => n.toLocaleString('en-US')
-
 // Short enough for the ends of an axis: "7 Aug".
 let axisDay = (iso: string) => {
   let at = new Date(`${iso}T00:00:00Z`)
@@ -1690,7 +1681,7 @@ let plan = (
   let limits = y.plan.plus ? PLUS : FREE
   let allowance = `${
     limits.apps == null ? 'Unlimited apps' : `${limits.apps} apps`
-  }, ${limits.requests.toLocaleString('en-US')} request units a month, ${
+  }, ${count(limits.requests)} request units a month, ${
     size(limits.bytes)
   } of app data`
   let head = y.plan.plus

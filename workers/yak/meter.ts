@@ -482,7 +482,11 @@ export let level = (space: Space, apps: number, now = new Date()) => {
   return worst >= 1 ? 'over' : worst >= WARN ? 'near' : 'ok'
 }
 
-let count = (n: number) => n.toLocaleString('en-US')
+// Whole counters need grouping, not locale data on the first request.
+export let count = (n: number) =>
+  Number.isSafeInteger(n) && !Object.is(n, -0)
+    ? String(n).replace(/\B(?=(\d{3})+(?!\d))/g, ',')
+    : n.toLocaleString('en-US')
 
 /** Dollars as a person reads them: cents, and two figures of a cent where a
  * month has spent less than one. */
