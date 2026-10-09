@@ -108,12 +108,11 @@ test('an encrypted entry is refused', () =>
 test('more than the ceiling is refused', () =>
   refuses([{ path: 'big.txt', content: 'x'.repeat(600) }], 'more than', 500))
 
-// The ceiling is counted on the way out of the decompressor: 600 KB of one
-// letter deflates to almost nothing, so a zip that lies about its size is
-// still stopped by what it produces.
+// The ceiling is counted on the way out of the decompressor, so a zip that
+// lies about its size is still stopped by what it produces.
 test('a zip that unpacks past the ceiling is refused', () =>
   refuses(
-    [{ path: 'big.txt', content: 'x'.repeat(600_000), deflate: true }],
+    [{ path: 'big.txt', content: 'x'.repeat(2000), deflate: true, size: 10 }],
     'more than',
     1000,
   ))

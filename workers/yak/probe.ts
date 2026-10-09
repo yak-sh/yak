@@ -1013,9 +1013,10 @@ export type Packed = {
   // Deflate the bytes rather than storing them.
   deflate?: boolean
   // What the header says, for a zip the door must refuse: a method it does not
-  // read, or the encrypted bit.
+  // read, the encrypted bit, or a size the bytes do not keep to.
   method?: number
   flags?: number
+  size?: number
 }
 
 let deflated = async (bytes: Uint8Array<ArrayBuffer>) =>
@@ -1039,6 +1040,7 @@ export let zipped = async (entries: Packed[]) => {
     let packed = one.deflate ? await deflated(raw) : raw
     let method = one.method ?? (one.deflate ? 8 : 0)
     let flags = one.flags ?? 0
+    let size = one.size ?? raw.length
     // Bit 3: the sizes were not known when the header went out, so they are
     // zero there and true in the index at the end.
     let streamed = !!(flags & 8)
@@ -1050,19 +1052,19 @@ export let zipped = async (entries: Packed[]) => {
     h.setUint16(6, flags, true)
     h.setUint16(8, method, true)
     h.setUint32(18, streamed ? 0 : packed.length, true)
-    h.setUint32(22, streamed ? 0 : raw.length, true)
+    h.setUint32(22, streamed ? 0 : size, true)
     h.setUint16(26, name.length, true)
     head.set(name, 30)
     body.push(head, packed)
-    let size = head.length + packed.length
+    let took = head.length + packed.length
     if (streamed) {
       let tail = new Uint8Array(16)
       let t = new DataView(tail.buffer)
       t.setUint32(0, 0x08074b50, true)
       t.setUint32(8, packed.length, true)
-      t.setUint32(12, raw.length, true)
+      t.setUint32(12, size, true)
       body.push(tail)
-      size += tail.length
+      took += tail.length
     }
     let row = new Uint8Array(46 + name.length)
     let c = new DataView(row.buffer)
@@ -1071,12 +1073,12 @@ export let zipped = async (entries: Packed[]) => {
     c.setUint16(8, flags, true)
     c.setUint16(10, method, true)
     c.setUint32(20, packed.length, true)
-    c.setUint32(24, raw.length, true)
+    c.setUint32(24, size, true)
     c.setUint16(28, name.length, true)
     c.setUint32(42, at, true)
     row.set(name, 46)
     index.push(row)
-    at += size
+    at += took
   }
   let end = new Uint8Array(22)
   let e = new DataView(end.buffer)
