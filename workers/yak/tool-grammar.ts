@@ -2,7 +2,7 @@
 // the platform boundary; the packages and callers share the new declaration.
 import { CallError } from '@yaks/tools'
 import { parseTools, type Tools } from '@yaks/tools/declared'
-import { validateToolInput } from '@yaks/vocab/tools'
+import { errorsText, toolCheck } from '@yaks/vocab/tools'
 
 let object = (v: unknown): v is Record<string, unknown> =>
   !!v && typeof v == 'object' && !Array.isArray(v)
@@ -29,10 +29,11 @@ let translated = (entry: unknown, name: string): unknown => {
     if ('positional' in entry) {
       throw new Error('declare positional or the legacy options, never both')
     }
-    let old = validateToolInput(
-      { inputSchema: legacy },
-      options as Record<string, unknown>,
-    ) as {
+    let errors = toolCheck(legacy)(options)
+    if (errors.length) {
+      throw new Error(`Invalid tool arguments: ${errorsText(errors)}`)
+    }
+    let old = options as {
       positional?: string[]
       rest?: string
       short?: Record<string, string>

@@ -64,7 +64,7 @@ Call `storable` separately for the checks a storage adapter needs.
 | ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `@yaks/vocab`             | `loadVocab`, `Vocab`, declaration and loaded metadata types; `storable`, `reserved`; routing errors and messages; `kindOrder`, `pick`, `cast`, `typesOf`, `jsonb`, `composite`; `syncOf`, `durableOf`, `paceOf`, `saveOf`, `expireOf`, `ms`, `lives`, `said`, `kept`, `paced`, `saved`, `SYNC`; `rulesIn`, `effectsIn`; `same`, `changed`; `CORE_URI`, `coreVocabulary`, `metaSchema`, `extendMeta`, `Keywords`, `JsonSchema`; `metaDoc`, `toBundles`, `fromBundles`, `Ids`, `Bundle` |
 | `@yaks/vocab/vocab`       | `docs`, containing `metaDoc`, and the package `description`                                                                                                                                                                                                                                                                                                                                                                                                                           |
-| `@yaks/vocab/tools`       | `ToolDefinition`, `Role`, `toolDefinition`, `toolDefinitionSchema`, `toolsSaid`, `toolsIn`, `validateToolInput`, `validateToolOutput`, `toolCheck`, `Check`, `errorsText`, `publicToolSchema`, `legacyOptions`                                                                                                                                                                                                                                                                        |
+| `@yaks/vocab/tools`       | `ToolDefinition`, `Role`, `toolDefinition`, `toolGrammar`, `toolDefinitionSchema`, `toolsSaid`, `toolsIn`, `validateToolInput`, `validateToolOutput`, `toolCheck`, `Check`, `errorsText`, `publicToolSchema`, `legacyOptions`                                                                                                                                                                                                                                                         |
 | `@yaks/vocab/constraints` | `Factor`, `Term`, `Score`, `NumericConstraint`, `numberOf`, `constraintErrors`                                                                                                                                                                                                                                                                                                                                                                                                        |
 
 ## The format
@@ -668,6 +668,9 @@ may stand alone or both may be supplied. `positional` orders input property
 names; only its last entry may end in `...` for remaining words. `short` is one
 letter on an input property. `forward` names an array-of-strings input for
 unmatched words. `toolDefinition` validates the same metadata authored in code.
+`toolGrammar(properties, positional, forward)` checks just the grammar against
+the input properties and returns the positional inputs; it compiles no argument
+schemas.
 
 ```ts
 import {

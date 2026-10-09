@@ -149,6 +149,18 @@ let ROLES = {
   items: { enum: ['graph', 'web', 'effects'] },
 }
 
+let GRAMMAR = {
+  type: 'object',
+  properties: {
+    positional: {
+      type: 'array',
+      uniqueItems: true,
+      items: { type: 'string', pattern: '^[a-z][a-z0-9_]*(\\.\\.\\.)?$' },
+    },
+    forward: { type: 'string' },
+  },
+}
+
 /** JSON Schema for tool declarations. Their location within vocab.json is not fixed. */
 export const toolDefinitionSchema: Record<string, unknown> = {
   $schema: 'https://json-schema.org/draft/2020-12/schema',
@@ -166,12 +178,7 @@ export const toolDefinitionSchema: Record<string, unknown> = {
     description: { type: 'string' },
     inputSchema: { type: 'object' },
     outputSchema: { type: 'object' },
-    positional: {
-      type: 'array',
-      uniqueItems: true,
-      items: { type: 'string', pattern: '^[a-z][a-z0-9_]*(\\.\\.\\.)?$' },
-    },
-    forward: { type: 'string' },
+    ...GRAMMAR.properties,
     readOnly: { type: 'boolean' },
     destructive: { type: 'boolean' },
     idempotent: { type: 'boolean' },
@@ -188,15 +195,45 @@ export const toolDefinition = (value: unknown): ToolDefinition => {
   ) as unknown as ToolDefinition
   if (candidate.inputSchema) toolCheck(candidate.inputSchema)
   if (candidate.outputSchema) toolCheck(candidate.outputSchema)
-  const props = candidate.inputSchema?.properties as
-    | Record<string, unknown>
-    | undefined
-  const positional = candidate.positional ?? []
+  grammar(
+    candidate.inputSchema?.properties as Record<string, unknown> ?? {},
+    candidate.positional,
+    candidate.forward,
+  )
+  return candidate
+}
+
+/** Positional inputs and flags checked against the argument properties. */
+export let toolGrammar = (
+  props: Record<string, unknown>,
+  positional?: unknown,
+  forward?: unknown,
+): ToolDefinition['positional'] => {
+  if (positional !== undefined || forward !== undefined) {
+    let errors = toolCheck(GRAMMAR)({ positional, forward })
+    if (errors.length) {
+      throw new Error('Invalid tool arguments: ' + errorsText(errors))
+    }
+  }
+  grammar(
+    props,
+    positional as ToolDefinition['positional'],
+    forward as string | undefined,
+  )
+  return positional as ToolDefinition['positional']
+}
+
+let grammar = (
+  props: Record<string, unknown>,
+  positional?: ToolDefinition['positional'],
+  forward?: string,
+): void => {
+  let inputs = positional ?? []
   let named = new Set<string>()
-  for (let [i, value] of positional.entries()) {
+  for (let [i, value] of inputs.entries()) {
     let rest = value.endsWith('...')
     let field = rest ? value.slice(0, -3) : value
-    if (rest && i != positional.length - 1) {
+    if (rest && i != inputs.length - 1) {
       throw new Error('Only the final positional input may receive the rest')
     }
     if (named.has(field)) {
@@ -223,7 +260,6 @@ export const toolDefinition = (value: unknown): ToolDefinition => {
     if (shorts.has(short)) throw new Error(`Duplicate short flag: ${short}`)
     shorts.add(short)
   }
-  let forward = candidate.forward
   if (forward) {
     if (!props || !Object.hasOwn(props, forward)) {
       throw new Error(`Forward references unknown property: ${forward}`)
@@ -233,7 +269,6 @@ export const toolDefinition = (value: unknown): ToolDefinition => {
       throw new Error(`Forward option wants an array of strings: ${forward}`)
     }
   }
-  return candidate
 }
 
 // A tool's arguments as one object schema. A declaration writes them the way a

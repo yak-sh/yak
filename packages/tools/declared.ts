@@ -59,8 +59,9 @@
 import { argsOf, type Bundle, type Graph, type Tool } from '@yaks/graph'
 import {
   publicToolSchema,
+  toolCheck,
   type ToolDefinition,
-  toolDefinition,
+  toolGrammar,
 } from '@yaks/vocab/tools'
 import { CallError } from './args.ts'
 import type { Floor } from './access.ts'
@@ -283,13 +284,8 @@ export let parseTools = (
     }
     let positional: ToolDef['positional']
     try {
-      positional = toolDefinition({
-        description: String(entry.description ?? ''),
-        inputSchema: { type: 'object', properties: input },
-        ...(entry.positional !== undefined
-          ? { positional: entry.positional }
-          : {}),
-      }).positional
+      positional = toolGrammar(input, entry.positional)
+      toolCheck({ type: 'object', properties: input })
     } catch (error) {
       wrong.push(`${name}.grammar: ${(error as Error).message}`)
     }
