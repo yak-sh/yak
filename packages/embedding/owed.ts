@@ -15,10 +15,12 @@
 // for the next pass instead of being settled by a pass that never saw it.
 //
 // The triggers are made from the fields, so they change when the fields do.
-// {@link watch} makes the database's triggers match the fields, and when it
-// changes anything — a new database, a new field, a vector table dropped and
-// made again — it queues every entity there is, since a trigger that was not
-// there cannot have noted what happened without it.
+// {@link watch} makes the database's triggers match the fields. A trigger that
+// was missing or said something else cannot have noted what happened to its
+// table, so the entities in that table are queued — a new field's component,
+// one a field left — and nothing else: a component whose trigger stood saw
+// every write. A new database, or a vector table dropped and made again,
+// moves the triggers on the vectors and the tombstones, and queues everything.
 
 import {
   and,
@@ -35,6 +37,7 @@ import {
   lit,
   not,
   op,
+  or,
   render,
   select,
   table,
@@ -168,10 +171,70 @@ let body = (sql: string, name: string): string =>
 
 let watched = new WeakMap<Statements, { version: number; fields: string }>()
 
+/** A queue trigger as the database holds it: its name, the table it is on,
+ * and the statement it was made by. */
+export type Standing = { name: string; on: string; sql: string }
+
+/** What making the database's triggers the wanted ones takes. */
+export type Moves = {
+  /** the held triggers to drop: gone from the fields, or said otherwise */
+  drop: string[]
+  /** the wanted triggers to make */
+  make: CreateTrigger[]
+  /** whose wearers are owed a look: the tables a moved trigger is on, or
+   * everyone (`true`) when one on the vectors or the tombstones moved */
+  owed: Set<string> | true
+}
+
+// The triggers that are about every vector, not one component's rows.
+let EVERY = new Set([TABLE, 'tombstone'])
+
+/**
+ * What {@link watch} does about the triggers a database holds, given the
+ * ones the fields want. A trigger that stands as wanted owes nothing: it saw
+ * every write to its table. One made, dropped or changed missed or misread
+ * its table's writes, so the entities in that table are owed a look, and no
+ * others.
+ *
+ * ```ts
+ * import { equal } from '@yaks/testing'
+ * import { render } from '@yaks/sql'
+ * let book = { comp: 'book', prop: 'title' }
+ * let want = triggers([book])
+ * let held = want.map((t) => ({ name: t.name, on: t.on, sql: render(t).sql }))
+ * equal(moves(held, want).owed, new Set())
+ * let more = triggers([book, { comp: 'review', prop: 'prose' }])
+ * equal(moves(held, more).owed, new Set(['review']))
+ * equal(moves([], want).owed, true)
+ * ```
+ */
+export let moves = (have: Standing[], want: CreateTrigger[]): Moves => {
+  let wanted = new Map(want.map((t) => [t.name, t]))
+  let drop: string[] = []
+  let owed: Set<string> | true = new Set()
+  let touched = (on: string) => {
+    if (owed === true) return
+    if (EVERY.has(on)) owed = true
+    else owed.add(on)
+  }
+  for (let r of have) {
+    let now = wanted.get(r.name)
+    if (now && body(r.sql, r.name) == body(render(now).sql, r.name)) {
+      wanted.delete(r.name)
+      continue
+    }
+    drop.push(r.name)
+    touched(r.on)
+  }
+  for (let t of wanted.values()) touched(t.on)
+  return { drop, make: [...wanted.values()], owed }
+}
+
 /**
  * Make the database's queue triggers the ones {@link triggers} says, and
- * queue everything when that changed anything. Returns whether it did. A
- * second call with the same fields and schema reads and writes nothing.
+ * queue the entities whose writes a missing or changed trigger may have
+ * missed ({@link moves}). Returns whether it changed anything. A second call
+ * with the same fields and schema reads and writes nothing.
  */
 export let watch = (db: Statements, fields: Field[]): boolean => {
   let version = db.revision('schema')
@@ -179,41 +242,56 @@ export let watch = (db: Statements, fields: Field[]): boolean => {
   let key = JSON.stringify(definitions)
   let kept = watched.get(db)
   if (kept?.version == version && kept.fields == key) return false
-  let want = new Map(definitions.map((t) => [t.name, t]))
   let have = db.query(
     select({
-      cols: [col('name'), col('sql')],
+      cols: [col('name'), as(col('tbl_name'), 'on'), col('sql')],
       from: table('sqlite_master'),
       where: and(
         eq(col('type'), val('trigger')),
         op('glob', col('name'), val(`${OWED}_*`)),
       ),
     }),
-  )
-  let moved = false
-  for (let r of have) {
-    let name = String(r.name)
-    let now = want.get(name)
-    if (now && body(String(r.sql), name) == body(render(now).sql, name)) {
-      want.delete(name)
-      continue
-    }
+  ).map((r) => ({ name: String(r.name), on: String(r.on), sql: String(r.sql) }))
+  let { drop, make, owed } = moves(have, definitions)
+  for (let name of drop) {
     db.query({ t: 'drop', kind: 'trigger', name, ifExists: true })
-    moved = true
   }
-  for (let t of want.values()) db.query(t)
-  if (moved || want.size) owe(db, fields)
+  for (let t of make) db.query(t)
+  if (owed === true) owe(db, fields)
+  else if (owed.size) owe(db, fields, owed)
   watched.set(db, { version: db.revision('schema'), fields: key })
-  return moved || want.size > 0
+  return drop.length + make.length > 0
 }
 
-/** Queue every entity that wears an embedded field or has a vector. */
-export let owe = (db: Statements, fields: Field[]): void => {
-  let vectors = select({ cols: [col('owner')], from: table(TABLE) })
-  for (let worn of [...wearers(fields, db.arms), vectors]) {
+/** Queue every entity that wears an embedded field or has a vector — or,
+ * given `tables`, only those with a row in one of them. */
+export let owe = (
+  db: Statements,
+  fields: Field[],
+  tables?: Set<string>,
+): void => {
+  let held = (e: Expr) =>
+    or(
+      ...[...tables ?? []].map((name) =>
+        exists(select({
+          cols: [lit(1)],
+          from: table(name),
+          where: eq(col('entity', name), e),
+        }))
+      ),
+    )
+  let vectors = select({
+    cols: [col('owner')],
+    from: table(TABLE),
+    where: tables ? held(col('owner', TABLE)) : undefined,
+  })
+  let worn = tables
+    ? fields.filter((f) => tables.has(f.comp) || !!f.on && tables.has(f.on))
+    : fields
+  for (let q of [...wearers(worn, db.arms), vectors]) {
     db.query(
       queue({
-        q: select({ cols: [col('owner'), lit(1)], from: from(worn, 'w') }),
+        q: select({ cols: [col('owner'), lit(1)], from: from(q, 'w') }),
       }),
     )
   }

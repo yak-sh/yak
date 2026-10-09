@@ -245,12 +245,16 @@ batching both share, for any provider that answers many texts at once.
 
 Triggers on each component a field lives on queue the entity a write touched in
 `embedding_owed`, in the same statement as the write, whichever process made it.
-`watch(db, fields)` makes the triggers match the fields; when it changes any, it
-queues every entity wearing a field or holding a vector, which is how a new
-database or a new field is backfilled. With unchanged fields and schema, `watch`
-issues no SQL. Both trigger inspection and native-installation inspection reuse
-the statement capability's `revision('schema')` token; DDL, rollback, and
-file-peer schema changes discard those decisions.
+`watch(db, fields)` makes the triggers match the fields. A trigger it makes,
+drops or changes queues the entities in the table it is on, wearing a field or
+holding a vector, which is how a new field is backfilled; a component whose
+trigger stood is not queued, since its trigger saw every write. A new database,
+or a vector table made again, moves the triggers on the vectors and the
+tombstones and queues every entity (`moves` says which). With unchanged fields
+and schema, `watch` issues no SQL. Both trigger inspection and
+native-installation inspection reuse the statement capability's
+`revision('schema')` token; DDL, rollback, and file-peer schema changes discard
+those decisions.
 
 `sweep(db, fields, embedder, limit?)` calls `watch`, then takes the newest
 `limit` (64) queued entities: it embeds those whose text changed, deletes the
@@ -269,10 +273,10 @@ is a drain and a wait, and a host with nothing standing between requests (a
 Durable Object sleeps) drains once a write commits. An aborted `signal` stops it
 after the pass it is in.
 
-`sources()`, `put()`, `watch()`, `owe()`, `due()` and `paid()` expose the
-individual operations. Embedding can run asynchronously; source reads, vector
-writes and query ranking use the synchronous database driver. A sweep is not one
-graph transaction.
+`sources()`, `put()`, `watch()`, `moves()`, `owe()`, `due()` and `paid()` expose
+the individual operations. Embedding can run asynchronously; source reads,
+vector writes and query ranking use the synchronous database driver. A sweep is
+not one graph transaction.
 
 A newly created entity cannot be compared until its vector exists. The plugin's
 reply (below) makes that vector at once for an entity a tool call created; an
