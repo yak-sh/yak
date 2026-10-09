@@ -38,6 +38,16 @@ import { ANSWER_BYTES, answerCache, type SavedAnswer } from './answers.ts'
  * disk, by default. */
 export const RETENTION_ROWS = 20_000
 
+/** How many rows a client keeps: the bound asked for, or the default, and
+ * refused when it is not a whole number of rows. */
+export let retentionLimit = (value?: number): number => {
+  let limit = value ?? RETENTION_ROWS
+  if (!Number.isSafeInteger(limit) || limit < 0) {
+    throw new Error('invalid retention limit')
+  }
+  return limit
+}
+
 // What an aggregate's frame answers: `.count`, `.tally` or `.distinct`, the
 // same shape `/query` answers with (@yaks/graph `Reduced`).
 let reducedOf = (f: Frame): Reduced | undefined =>
@@ -113,10 +123,7 @@ export let retention = (
     timer?: (fn: () => void, ms: number) => void
   } = {},
 ): Retained => {
-  let limit = opts.limit ?? RETENTION_ROWS
-  if (!Number.isSafeInteger(limit) || limit < 0) {
-    throw new Error('invalid retention limit')
-  }
+  let limit = retentionLimit(opts.limit)
   let answerLimit = opts.answerBytes ?? ANSWER_BYTES
   let answers = answerCache(answerLimit)
   type Sub = {

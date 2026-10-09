@@ -40,7 +40,7 @@ import {
 } from '@yaks/sync'
 import { idb, wireIdb } from './idb.ts'
 import { keep, type Vault } from './vault.ts'
-import { type Retained, retention } from './retention.ts'
+import { type Retained, retention, retentionLimit } from './retention.ts'
 import type { WireVault } from './wire-vault.ts'
 import {
   type Make,
@@ -231,6 +231,8 @@ export let client = (
   plugins: Plugin[] = [],
   opts: ClientOpts = {},
 ): Client => {
+  // A bound the client could never keep is refused before anything is built.
+  retentionLimit(opts.retention)
   // `adopt`: entity numbers come from the server, not from this map.
   let store = ram(vocab, { adopt: true, number: true })
   let g = graph({
