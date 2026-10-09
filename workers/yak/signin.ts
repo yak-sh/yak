@@ -22,6 +22,7 @@
 // an address had been asked for.
 import { type Bundle, Stale, token } from '@yaks/graph'
 import { KERNEL, type Meta, minted } from './meta.ts'
+import { hmac } from './lib/hmac.ts'
 
 // Ten minutes, five guesses: long enough to switch to the mail app, short
 // enough that a six-digit code is never worth grinding.
@@ -51,18 +52,14 @@ export let canon = (email: string) => email.trim().toLowerCase()
 let hex = (b: ArrayBuffer) =>
   [...new Uint8Array(b)].map((n) => n.toString(16).padStart(2, '0')).join('')
 
+let enc = new TextEncoder()
+
 export let mac = async (email: string, code: string, secret: string) =>
   hex(
     await crypto.subtle.sign(
       'HMAC',
-      await crypto.subtle.importKey(
-        'raw',
-        new TextEncoder().encode(secret),
-        { name: 'HMAC', hash: 'SHA-256' },
-        false,
-        ['sign'],
-      ),
-      new TextEncoder().encode(`${canon(email)}:${code}`),
+      await hmac(secret),
+      enc.encode(`${canon(email)}:${code}`),
     ),
   )
 

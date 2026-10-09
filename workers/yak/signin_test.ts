@@ -67,7 +67,12 @@ let tries = (wrote: Bundle[]) =>
     .filter((t) => t != null)
 
 test('the live code opens, and is spent', async () => {
-  let d = door([row(ME, await mac(ME, '123456', SECRET), soon())])
+  let code = await mac(ME, '123456', SECRET)
+  assertEquals(
+    code,
+    '4b16a8c088351316c93cd7b715ff2bb70e1e34901046eab1b9c6d8d19a952e02',
+  )
+  let d = door([row(ME, code, soon())])
   assert(await spend(d.at, SECRET, ME, '123456'))
   assert(forgotten(d.wrote))
 })
@@ -103,16 +108,17 @@ test('an expired code opens nothing, right digits or not', async () => {
 // mac and never the digits: a second ask cannot re-send the first letter's
 // code, so the first letter is left working for whoever it reaches late.
 test('every standing code opens, and one guess costs them all', async () => {
-  let both = async () => [
-    row(ME, await mac(ME, '111111', SECRET), soon()),
-    row(ME, await mac(ME, '222222', SECRET), soon()),
+  let standing = [
+    await mac(ME, '111111', SECRET),
+    await mac(ME, '222222', SECRET),
   ]
+  let both = () => standing.map((code) => row(ME, code, soon()))
   for (let code of ['111111', '222222']) {
-    let d = door(await both())
+    let d = door(both())
     assert(await spend(d.at, SECRET, ME, code), code)
     assert(forgotten(d.wrote))
   }
-  let d = door(await both())
+  let d = door(both())
   assertFalse(await spend(d.at, SECRET, ME, '333333'))
   assertEquals(tries(d.wrote), [1, 1])
 })

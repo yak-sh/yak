@@ -27,6 +27,7 @@
 // cookie, the login page (T-32327) mints one with `sign` and sets it with
 // `cookie`.
 import { oldUse, today } from './token_legacy.ts'
+import { HMAC, hmac, kept } from './hmac.ts'
 
 export type Claims = {
   person: string
@@ -71,43 +72,22 @@ export type Use =
   | 'page' // a sandboxed app's page speaking to its own API (installed.ts)
   | 'connect' // a connection's sign-in, on its way back (connections.ts)
 
-let HMAC = { name: 'HMAC', hash: 'SHA-256' }
-
-// Each key made once in an isolate: a use's key is three WebCrypto calls,
-// and every request with a cookie opens one. The key is kept, not the promise
-// of it, so no request waits on work another request started.
-let keys = new Map<string, CryptoKey>()
-let kept = async (id: string, make: () => Promise<CryptoKey>) => {
-  let got = keys.get(id)
-  if (!got) keys.set(id, got = await make())
-  return got
-}
-
-// The secret's own key, which each use's key is made under, and which the old
-// seal used whole.
-let hmac = (secret: string, usage: KeyUsage) =>
-  kept(
-    JSON.stringify([usage, secret]),
-    () =>
-      crypto.subtle.importKey('raw', enc.encode(secret), HMAC, false, [usage]),
-  )
-
 // The use's own key: HMAC-SHA256 of the use's name under the secret. One
 // secret to hold and rotate, and no two uses that can verify each other.
-let key = (secret: string, use: Use, usage: KeyUsage) =>
+let key = (secret: string, use: Use) =>
   kept(
-    JSON.stringify([usage, use, secret]),
+    JSON.stringify([use, secret]),
     async () =>
       crypto.subtle.importKey(
         'raw',
         await crypto.subtle.sign(
           'HMAC',
-          await hmac(secret, 'sign'),
+          await hmac(secret),
           enc.encode(`yaks.app/${use}`),
         ),
         HMAC,
         false,
-        [usage],
+        ['sign', 'verify'],
       ),
   )
 
@@ -141,16 +121,16 @@ let openWith = async (k: CryptoKey, sealed: string) => {
 // body text under the use's key. What is sealed is the caller's to shape, and
 // its expiry is the caller's to check.
 export let seal = async (use: Use, value: unknown, secret: string) =>
-  sealWith(await key(secret, use, 'sign'), value)
+  sealWith(await key(secret, use), value)
 
 // What was sealed for this use, and whether it was sealed the way tokens were
 // before 2c05d0f6: under the raw secret, accepted only when its claims are
 // this use's old shape and no other's (token_legacy.ts, deleted after
 // 2027-09-22T20:00Z by T-37927).
 let open = async (use: Use, sealed: string, secret: string) => {
-  let value = await openWith(await key(secret, use, 'verify'), sealed)
+  let value = await openWith(await key(secret, use), sealed)
   if (value != null) return { value, legacy: false }
-  let old = await openWith(await hmac(secret, 'verify'), sealed)
+  let old = await openWith(await hmac(secret), sealed)
   return old != null && oldUse(old) == use
     ? { value: today(use, old), legacy: true }
     : null
@@ -158,7 +138,7 @@ let open = async (use: Use, sealed: string, secret: string) => {
 
 /** The seal before 2c05d0f6, for a test to mint an old token with. */
 export let sealedOld = async (value: unknown, secret: string) =>
-  sealWith(await hmac(secret, 'sign'), value)
+  sealWith(await hmac(secret), value)
 
 // What was sealed, or null for anything but a well-formed value sealed for
 // this use under this secret.
