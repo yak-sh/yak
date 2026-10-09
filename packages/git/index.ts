@@ -127,6 +127,15 @@ export let entryEid = (tree: Eid, name: string): Eid =>
 let sha256 = async (bytes: Uint8Array<ArrayBuffer>): Promise<string> =>
   hex(new Uint8Array(await crypto.subtle.digest('SHA-256', bytes)))
 
+let ids = async (
+  type: Kind,
+  body: Uint8Array,
+  body256 = body,
+): Promise<Oids> => {
+  let [one, two] = await Promise.all([oid(type, body), oid256(type, body256)])
+  return { oid: one, oid256: two }
+}
+
 /**
  * An object index over a graph that carries this package's components and a
  * @yaks/blob store that holds the bytes.
@@ -192,10 +201,7 @@ export let index = (g: Writes, store: Blobs): Index => {
           .map(async (sha) => {
             let bytes = await store.get(sha)
             if (!bytes) throw new Error(`git: no bytes stored under ${sha}`)
-            let oids = {
-              oid: await oid('blob', bytes),
-              oid256: await oid256('blob', bytes),
-            }
+            let oids = await ids('blob', bytes)
             return { sha, bytes, oids }
           }),
       )
@@ -219,15 +225,12 @@ export let index = (g: Writes, store: Blobs): Index => {
   let tree = async (children: Child[]): Promise<Oids> => {
     let body = treeBody(children)
     let body256 = treeBody(children.map((c) => ({ ...c, oid: c.oid256 })))
-    let oids = {
-      oid: await oid('tree', body),
-      oid256: await oid256('tree', body256),
-    }
+    let [oids, sha] = await Promise.all([ids('tree', body, body256), put(body)])
     return write(
       oids,
       'tree',
       body.length,
-      await put(body),
+      sha,
       children.map((
         c,
         i,
@@ -251,15 +254,15 @@ export let index = (g: Writes, store: Blobs): Index => {
       tree: mint.tree.oid256,
       parents: parents.map((p) => p.oid256),
     })
-    let oids = {
-      oid: await oid('commit', body),
-      oid256: await oid256('commit', body256),
-    }
+    let [oids, sha] = await Promise.all([
+      ids('commit', body, body256),
+      put(body),
+    ])
     return write(
       oids,
       'commit',
       body.length,
-      await put(body),
+      sha,
       parents.map((p, i) => link(oids.oid, PARENT, p.oid, i)),
     )
   }
