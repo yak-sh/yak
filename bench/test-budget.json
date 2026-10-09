@@ -13,7 +13,7 @@
   },
   "platforms": {
     "browser": 8594.7,
-    "deno": 367788.5,
+    "deno": 270130.8,
     "terminal": 1582.4,
     "workerd": 269080.4
   },
@@ -31,7 +31,7 @@
       "targeted seed update preserves authored effects and refuses a racing edit": 2.5
     },
     "apps/vale/about_test.ts": {
-      "about draws base parts and working actions inside a retained page body": 74
+      "about draws base parts and working actions inside a retained page body": 25.5
     },
     "apps/vale/area_test.ts": {
       "a crowded area keeps its looks as heroes move and restyle": 75,
@@ -151,7 +151,6 @@
       "a scheduled objective resumes, retries once, and credits its hero": 5.1
     },
     "apps/vale/compare.ts": {
-      "apps/vale/compare.ts block 2": 1.2,
       "apps/vale/compare.ts block 3": 3.2
     },
     "apps/vale/compare_test.ts": {
@@ -516,7 +515,6 @@
       "the teleport worker admits owner and refuses editor": 6
     },
     "apps/vale/terrain.ts": {
-      "apps/vale/terrain.ts block 2": 1.4,
       "apps/vale/terrain.ts block 4": 71.4
     },
     "apps/vale/themes_test.ts": {
@@ -650,13 +648,12 @@
       "tidy reaps old headless browsers and unused profiles, and nothing else": 137.6
     },
     "packages/README.md": {
-      "packages/README.md block 1": 19.2
+      "packages/README.md block 1": 1.7
     },
     "packages/admin/api_test.ts": {
       "the code is found by its address among many newer letters": 1.7
     },
     "packages/admin/deploys_test.ts": {
-      "Wrangler JSON joins uploads to named commits and the latest traffic deployment": 1.1,
       "a command failure is still a defect when the host is not stopping": 15.5,
       "a platform command interrupted directly is not a defect": 14.8,
       "stopping a platform command interrupts its whole process group": 23.7
@@ -891,8 +888,7 @@
       "the app bundles into one browser module": 1255.1
     },
     "packages/browse/components/Ansi_test.tsx": {
-      "ANSI output becomes escaped HTML spans": 12.6,
-      "ANSI runs retain SGR presentation and discard terminal commands": 2.6
+      "ANSI output becomes escaped HTML spans": 1.1
     },
     "packages/browse/components/Canvas_test.ts": {
       "a cancelled pan forgets movement and never settles": 3.9
@@ -918,7 +914,7 @@
       "a pending proposal keeps deletion named as deletion": 79.5,
       "a role keeps its face without lifecycle actions": 12.3,
       "boards open on Board with List still available": 14.4,
-      "quarantine is hidden until revealed and can be cleared": 36.8,
+      "quarantine is hidden until revealed and can be cleared": 11.5,
       "query groups preserve chosen tabs and default faces": 69,
       "release names the session by its chip id": 12.6,
       "sessions open on Session with Full still available": 15.7
@@ -1303,11 +1299,10 @@
       "native input shadows preserve main and reach recorded calls and sessions": 7
     },
     "packages/builders/model_test.ts": {
-      "replaying a legacy model builder call keeps its recorded session": 1.4,
       "replaying a model builder call keeps one session and its prompt": 2.1
     },
     "packages/builders/rows_test.ts": {
-      "matching input changes reconcile inside transactionSync": 72.9,
+      "matching input changes reconcile inside transactionSync": 29.9,
       "ordinary player writes with an immediate builder write zero effect rows": 60.2
     },
     "packages/builders/supply_test.ts": {
@@ -1322,8 +1317,7 @@
       "take conversion retains ids, content, attempts and calls and moves once": 20.6
     },
     "packages/cli/README.md": {
-      "packages/cli/README.md block 2": 3.6,
-      "packages/cli/README.md block 3": 2.3
+      "packages/cli/README.md block 2": 3.6
     },
     "packages/cli/accounts_test.ts": {
       "a pasted yaks.app grant works beside an OAuth integration without a registered client": 32,
@@ -1471,7 +1465,6 @@
     "packages/client/README.md": {
       "packages/client/README.md block 1": 3.8,
       "packages/client/README.md block 2": 3,
-      "packages/client/README.md block 3": 1.1,
       "packages/client/README.md block 5": 6.4,
       "packages/client/README.md block 6": 4,
       "packages/client/README.md block 7": 2.4,
@@ -1515,7 +1508,6 @@
       "a watch sees the local tier arrive at boot": 1.3
     },
     "packages/client/watch_test.ts": {
-      "a closed watch drops the server subscription": 1.6,
       "a watch hears a frame the server pushed": 2,
       "cached results do not make a new or disconnected remote watch ready": 1.8
     },
@@ -1884,8 +1876,7 @@
       "a new task answers its nearest tasks, and not itself or a memory": 70.8
     },
     "packages/embedding/options_test.ts": {
-      "a provider row serves the model under its own name, and the space is the model": 3.2,
-      "what is missing is waiting, never a boot failure, and the space is known anyway": 1.2
+      "a provider row serves the model under its own name, and the space is the model": 3.2
     },
     "packages/embedding/remote_test.ts": {
       "a dim keeps the leading coordinates, renormalized": 2.4,
@@ -2147,12 +2138,9 @@
       "verify marks the citation and moves its revision to the commit checked out": 7.6
     },
     "packages/graph/README.md": {
-      "packages/graph/README.md block 12": 1.1,
       "packages/graph/README.md block 14": 2.1,
       "packages/graph/README.md block 16": 2.3,
-      "packages/graph/README.md block 19": 1.4,
       "packages/graph/README.md block 2": 1.3,
-      "packages/graph/README.md block 25": 1.1,
       "packages/graph/README.md block 3": 1.2,
       "packages/graph/README.md block 4": 1.2,
       "packages/graph/README.md block 5": 2.1
@@ -2438,10 +2426,7 @@
     "packages/harness/session_machines_test.ts": {
       "export resolves session paths within provider root and keeps binary bytes": 1.4,
       "machine home is lazy and first need records one stable sandbox": 1.5,
-      "machine resolver provisions only on a file call and resolves paths from session cwd": 1.4,
-      "release failure remains owed and another binding can retry it": 1.1,
-      "releasing a shared machine waits for borrowers and is repeatable": 1.3,
-      "task children request a new machine from the parent graph commit lazily": 1.1
+      "releasing a shared machine waits for borrowers and is repeatable": 1.3
     },
     "packages/harness/skills_test.ts": {
       "command subdirectories load from the machine repository root without changing home": 85.9,
@@ -2594,7 +2579,6 @@
     "packages/inbox/letters_test.ts": {
       "a different known sender and an inactive inbox cannot start conversations": 2.6,
       "a verified new inbox letter is a caller-attributed conversation, once, and replies remain comments": 3.9,
-      "an automatic echo of the configured person fails closed without a system identity": 1.9,
       "digest thread addresses route comments and custom answers; the digest itself is not an arbitrary decision": 3.2,
       "invalid choice numbers keep a comment without completing the decision": 2.2,
       "mail loads complete root/latest words and choices without digest history": 9.5,
@@ -2745,8 +2729,7 @@
       "packages/kernel/plugin.ts block 1": 1.4
     },
     "packages/lens/README.md": {
-      "packages/lens/README.md block 1": 1.4,
-      "packages/lens/README.md block 3": 1.3
+      "packages/lens/README.md block 1": 1.4
     },
     "packages/lens/document_test.ts": {
       "concat splits values and consumes sources, with explicit separators and literals": 1.2
@@ -2755,9 +2738,6 @@
       "migration selection skips contracted sources and finds the remaining old rows": 1.1,
       "old graph writes, filtered reads and get projections pass through rename hooks synchronously": 1.5,
       "retained lenses serve old callers after the source property is undeclared": 3.2
-    },
-    "packages/logic/README.md": {
-      "packages/logic/README.md block 1": 1.4
     },
     "packages/logic/goal.ts": {
       "packages/logic/goal.ts: await Array.fromAsync(race([x, y], and(delay(20, eq(x, 1)), delay(0, eq(y, 2))))) -> [{ x: 1, y: 2 }]": 20.6,
@@ -2953,8 +2933,7 @@
       "permission requires a live stored target and obeys mode and mark floors": 2.9
     },
     "packages/member/policy_test.ts": {
-      "a member with no grant reaches a private thing like a stranger": 3.2,
-      "open: anyone reads and anyone writes, nobody included": 3.7
+      "a member with no grant reaches a private thing like a stranger": 3.2
     },
     "packages/memory/tools_test.ts": {
       "a thread is what it is about, then every comment, oldest first": 1.2,
@@ -2984,9 +2963,6 @@
       "a hub model is fetched on the first embed, then kept": 3.3,
       "a load that fails is tried again on the next embed": 1.5,
       "a text is the mean of its known tokens, at length 1": 1.6
-    },
-    "packages/names/README.md": {
-      "packages/names/README.md block 1": 1.2
     },
     "packages/openai/images_test.ts": {
       "configured image tools are offered on OAuth, unknown models and custom endpoints": 1.8
@@ -3110,7 +3086,6 @@
       "malformed local frontmatter is refused, not replaced with stale graph text": 5.2,
       "skill locations accept identity or bundle and never put file on the skill": 1.2,
       "skillFiles refuses duplicate titles and renamed companion destinations": 1.6,
-      "skillFiles renders documents and only safe text under owned directories": 1.1,
       "unregistered repositories get temporary views rather than borrowing graph names": 5.5,
       "untracked additions, folder renames and deletions replace the graph view": 11.2
     },
@@ -3192,9 +3167,6 @@
     },
     "packages/ram/store_test.ts": {
       "an indexed read answers every query the way a scan does": 3.1
-    },
-    "packages/render/README.md": {
-      "packages/render/README.md block 8": 1.1
     },
     "packages/rtc/door_test.ts": {
       "a change to a session carries the key it was opened with": 1.6,
@@ -3428,7 +3400,6 @@
       "two logs of one session each keep their own entries and their own place": 1.5
     },
     "packages/session/tools_test.ts": {
-      "a transcript owed a turn for hours is a warn": 1.3,
       "session check reconciles a quiet, fully imported harness log": 4.2
     },
     "packages/session/window_test.ts": {
@@ -3975,7 +3946,6 @@
       "two threads race for one owed effect and only one handler writes": 75
     },
     "packages/timing/README.md": {
-      "packages/timing/README.md block 1": 1.2,
       "packages/timing/README.md block 6": 6.5
     },
     "packages/timing/cap_test.ts": {
@@ -4016,7 +3986,6 @@
     },
     "packages/tools/args_test.ts": {
       "a write refuses unresolved word refs with absent identity": 1.4,
-      "a write refuses unresolved word refs with empty identity": 1.2,
       "name resolution ignores deleted word eid before alias": 2.7,
       "name resolution ignores deleted word eid before title": 2.4,
       "name resolution ignores empty word eid before alias": 2.7,
@@ -4169,9 +4138,6 @@
     "packages/tui/mouse_test.ts": {
       "Preact onWheel scrolls only the pointed sibling, not keyboard focus": 2.3,
       "virtual wheel stays lazy over 10000 items and bubbles at bottom": 4.6
-    },
-    "packages/tui/print.ts": {
-      "packages/tui/print.ts block 1": 2.4
     },
     "packages/tui/scrollbar_test.ts": {
       "VirtualList and Scroll reserve a scrollbar column and paint a thumb": 1.4,
@@ -4463,7 +4429,7 @@
       "rollback selects the kept files and worker without uploading or minting a deploy": 496.5
     },
     "workers/yak/app_command_test.ts": {
-      "a page invokes declared commands as its owner; the command door refuses an editor": 452.5
+      "a page invokes declared commands as its owner; the command door refuses an editor": 179.1
     },
     "workers/yak/archetype_test.ts": {
       "hosted app archetypes classify and query writes through the deployed Worker": 568.5
@@ -4481,21 +4447,21 @@
       "settled guest history owes zero registration work on repeated idle boots": 60.4
     },
     "workers/yak/auth_test.ts": {
-      "a bundle that signs itself is signed by the door instead": 318.2,
-      "a private app answers a stranger nothing, and its owner everything": 333.8,
-      "a revoked kernel mirror cannot grant a private read or write": 303.1,
-      "a revoked kernel standing cannot regain its stored grant through a write": 285.1,
-      "a sealed grant is admitted at the level it names": 454.9,
-      "a socket onto a private app passes the same door": 464.3,
-      "admission learns current standing without keeping a person or grant": 284,
-      "admission mirrors new vouch rows for rules in both temporary and fallback transactions": 578.7,
-      "an app acting as itself still may not touch the roster": 299,
-      "an app writing as itself is signed by the app, and is not a person": 301,
-      "an app-local editor grant still admits a writer with no kernel role": 300.7,
-      "an expired grant is nobody, and nobody reads a private app": 306.7,
-      "the agent door refuses what the page door refuses": 284.3,
-      "the agent door signs with the same actor the page door does": 294.4,
-      "the kernel vouched, so the batch is signed by that person": 329.6
+      "a bundle that signs itself is signed by the door instead": 105.5,
+      "a private app answers a stranger nothing, and its owner everything": 120.5,
+      "a revoked kernel mirror cannot grant a private read or write": 73.2,
+      "a revoked kernel standing cannot regain its stored grant through a write": 74.4,
+      "a sealed grant is admitted at the level it names": 81.8,
+      "a socket onto a private app passes the same door": 106.8,
+      "admission learns current standing without keeping a person or grant": 69,
+      "admission mirrors new vouch rows for rules in both temporary and fallback transactions": 164.1,
+      "an app acting as itself still may not touch the roster": 75.4,
+      "an app writing as itself is signed by the app, and is not a person": 77.4,
+      "an app-local editor grant still admits a writer with no kernel role": 81.1,
+      "an expired grant is nobody, and nobody reads a private app": 79.2,
+      "the agent door refuses what the page door refuses": 71.3,
+      "the agent door signs with the same actor the page door does": 71.4,
+      "the kernel vouched, so the batch is signed by that person": 104.7
     },
     "workers/yak/billing_kernel_test.ts": {
       "an unsigned webhook is refused, and so is a foreign Origin": 118.4,
@@ -4503,9 +4469,9 @@
       "the webhook flips a plan, once, whatever order it arrives in": 158.6
     },
     "workers/yak/blob_cache_test.ts": {
-      "a dropped representation write never redirects to an absent file": 539.5,
+      "a dropped representation write never redirects to an absent file": 179.6,
       "an anonymous blob read revives a removed immutable representation": 436.2,
-      "private app blobs keep the cache behind authorization": 387.2
+      "private app blobs keep the cache behind authorization": 158.5
     },
     "workers/yak/blob_test.ts": {
       "a named media upload stays seekable when its metadata changes": 220.5,
@@ -4516,10 +4482,10 @@
       "sign-in fills only missing stamps from that browser in every store it wrote to": 1137.6
     },
     "workers/yak/build_test.ts": {
-      "a form posted with no script is answered the conversation": 540.6,
-      "a page joins, says one line, and watches the build happen": 550.3,
-      "a page that reloads hears the whole conversation again": 576,
-      "a second line during a build is told to wait": 790.9,
+      "a form posted with no script is answered the conversation": 209.5,
+      "a page joins, says one line, and watches the build happen": 222,
+      "a page that reloads hears the whole conversation again": 202.8,
+      "a second line during a build is told to wait": 198.3,
       "a socket with nobody on it never opens": 109.7,
       "the door refuses a stranger before it reaches the object": 97.6
     },
@@ -4553,14 +4519,14 @@
       "a hosted builder cannot spend beyond the account budget": 506.7,
       "a hosted builder writes named outputs and spends the account budget": 601.8,
       "a hosted generated row starts the next immediate builder": 723.3,
-      "an open app cannot let a visitor start a builder at its account expense": 418.2,
+      "an open app cannot let a visitor start a builder at its account expense": 167.8,
       "builder_build tries a staged builder on the rows it names, as the caller": 581.9,
-      "builder_supply in an app store is current without any model spending": 436.9,
-      "hosted choose switches takes without a model turn and preserves earlier artifacts": 470.5,
+      "builder_supply in an app store is current without any model spending": 192.1,
+      "hosted choose switches takes without a model turn and preserves earlier artifacts": 199,
       "shadow outputs do not start downstream immediate builders": 724.4,
       "the hosted creature builder records missing sound sibling as a failed build": 694,
       "the hosted creature builder records unsafe combat as a failed build": 707.5,
-      "the hosted creature builder wires sounds over junk": 827.8,
+      "the hosted creature builder wires sounds over junk": 367.6,
       "the hosted creature builder wires sounds when omitted": 713.5
     },
     "workers/yak/builds_test.ts": {
@@ -4610,7 +4576,7 @@
       "deploy reload marks survive recording, and pointer notices follow the commit": 479.3,
       "legacy source-less rollback keeps deploy rows unchanged and remains undoable": 480.2,
       "rollback selects kept bytes without minting or changing deploys, then deploy allocates above history": 482,
-      "updates carry every crossed required source mark but exclude the installed and later releases": 1280.6,
+      "updates carry every crossed required source mark but exclude the installed and later releases": 480.7,
       "worker errors after rollback and an in-flight pointer move name the routed bytes": 479.3
     },
     "workers/yak/directory_test.ts": {
@@ -4648,7 +4614,7 @@
     },
     "workers/yak/domain_test.ts": {
       "a domain is attached to a space or to an app, and says which": 258.8,
-      "a domain on the space opens the space, apps and all": 857.6,
+      "a domain on the space opens the space, apps and all": 383.2,
       "a hostname finds its app, and only one app": 619,
       "attaching a domain: what it refuses, and what it says": 364.4,
       "plan settings preserves its destination through sign-in": 40.9
@@ -4670,11 +4636,11 @@
       "what the door will not take, it says in a sentence": 532.5
     },
     "workers/yak/embedding_alarm_test.ts": {
-      "an embedding failure honors the store retry interval across reboot": 319.9
+      "an embedding failure honors the store retry interval across reboot": 129.2
     },
     "workers/yak/embedding_test.ts": {
       "a store answers .near from its own vectors, closest first": 49.1,
-      "deployment of vectors in another space re-embeds them all": 584.2,
+      "deployment of vectors in another space re-embeds them all": 123.8,
       "words rank by meaning among what a line selects": 59.5
     },
     "workers/yak/erase_kernel_test.ts": {
@@ -4690,9 +4656,9 @@
       "the trash wake names 04:20 UTC and nothing coarser rounds it off": 3.6
     },
     "workers/yak/esbuild_test.ts": {
-      "TypeScript and npm imports compile at deploy, and serve as JavaScript": 461.9,
+      "TypeScript and npm imports compile at deploy, and serve as JavaScript": 212.8,
       "a changed lock or previously plain script replans a release": 519.2,
-      "a compile that fails refuses the deploy, and the last release serves": 546.6,
+      "a compile that fails refuses the deploy, and the last release serves": 227.7,
       "a compile too big for the compiler says so, and the last release serves": 526.9,
       "a deploy reuses unchanged compiled entries": 600.5,
       "a page that no longer needs compiling serves as written": 447.7,
@@ -4702,7 +4668,7 @@
       "compiler assets cannot replace an app-owned path": 143.8,
       "concurrent first edits share one private draft": 471.8,
       "draft files stay private through a refused deploy and rollback": 543,
-      "package assets serve with their MIME and survive reuse and rollback": 801.5,
+      "package assets serve with their MIME and survive reuse and rollback": 350.3,
       "with no compiler bound, a deploy that needs one is refused in a sentence": 88.9
     },
     "workers/yak/files_blob_test.ts": {
@@ -4728,55 +4694,52 @@
       "the next deploy follows the last one and moves the branch": 116.4,
       "the sweep commits what nothing committed, once": 171.5
     },
-    "workers/yak/grants_test.ts": {
-      "a grant is refused when it is revoked, by id or by prefix": 1.1
-    },
     "workers/yak/graph_test.ts": {
-      "/ws without an upgrade is not a door": 322.1,
+      "/ws without an upgrade is not a door": 83.6,
       "a Store anatomy supplier observes its own conditional composition without reads": 81.5,
       "a Store checks a large delete as one batch": 425,
       "a Store commits a large delete within its operation budget": 470.5,
-      "a Store live query sees only connected peer positions": 371.4,
-      "a Store row profile attributes SQL to the HTTP route": 373.3,
-      "a bundle applies and queries back": 457.4,
-      "a declared rule cannot write a value outside an app constraint": 311,
+      "a Store live query sees only connected peer positions": 123.2,
+      "a Store row profile attributes SQL to the HTTP route": 115.2,
+      "a bundle applies and queries back": 96.8,
+      "a declared rule cannot write a value outside an app constraint": 100,
       "a kernel apply dry run returns the patch without keeping it": 42,
-      "a malformed query is a 400 to the caller, not a failure": 313.5,
-      "a manifest the vocabulary refuses leaves the store as it was": 300.2,
-      "a named row written twice is one entity, and answers to its name": 308.2,
-      "a page's subscription leaves out the platform's rows unless it names one": 473.1,
-      "a plugin's rule reaches the store the host built": 309,
-      "a property says its type": 296.7,
-      "a property that holds nothing may change its type": 470.7,
-      "a rule writing outside its *write set takes the batch with it": 292.2,
-      "a stored component holds its floor and a pace per entity and vouched instrument": 320.5,
+      "a malformed query is a 400 to the caller, not a failure": 83.9,
+      "a manifest the vocabulary refuses leaves the store as it was": 80.3,
+      "a named row written twice is one entity, and answers to its name": 92.3,
+      "a page's subscription leaves out the platform's rows unless it names one": 85.7,
+      "a plugin's rule reaches the store the host built": 86.8,
+      "a property says its type": 82.2,
+      "a property that holds nothing may change its type": 165.7,
+      "a rule writing outside its *write set takes the batch with it": 94.2,
+      "a stored component holds its floor and a pace per entity and vouched instrument": 111.9,
       "a stranger is refused on a private app": 304.4,
       "a stranger is refused on an app made private after it was written": 295.2,
-      "a subscription asking `*` answers what /query answers": 308.2,
-      "a subscription is answered, and a commit reaches the socket": 456.3,
+      "a subscription asking `*` answers what /query answers": 121.1,
+      "a subscription is answered, and a commit reaches the socket": 89.9,
       "a visitor to an open app adds, and touches no price, order or row of the owner’s": 325.2,
-      "a woken object rewrites nothing it already holds": 313.1,
-      "a woken object serves the same app, and the same sockets": 308.1,
-      "an app keeps objects and arrays, and asks only whether one is there": 315,
-      "an app store admits only values matching opted-in nested schemas": 328.7,
-      "an app store bounds a derived value over the final patched row": 315.5,
+      "a woken object rewrites nothing it already holds": 133.7,
+      "a woken object serves the same app, and the same sockets": 139.2,
+      "an app keeps objects and arrays, and asks only whether one is there": 102.9,
+      "an app store admits only values matching opted-in nested schemas": 112.2,
+      "an app store bounds a derived value over the final patched row": 111,
       "an app store refuses a malformed score declaration": 29.5,
-      "an app's store keeps its words apart from the directory's": 292.2,
-      "an app's vocab.json is read back as the document it means": 611.3,
-      "an edge is a sentence, and the relation is a word the store knows": 301.8,
+      "an app's store keeps its words apart from the directory's": 84.6,
+      "an app's vocab.json is read back as the document it means": 177.3,
+      "an edge is a sentence, and the relation is a word the store knows": 91.9,
       "an open app is written by nobody": 299.1,
-      "app archetype descriptors are read-only and vocabulary extension tracks new shapes": 363.9,
-      "app archetypes classify writes and migrate old rows only on schema changes": 354.7,
-      "app schema reads and writes leave old journal tables untouched across boot": 416.6,
-      "closing a Store with unsaveable wildlife settles, while an eligible final save completes": 362.1,
-      "cold reads neither plant nor retry deployment work": 319.2,
+      "app archetype descriptors are read-only and vocabulary extension tracks new shapes": 132.3,
+      "app archetypes classify writes and migrate old rows only on schema changes": 155.8,
+      "app schema reads and writes leave old journal tables untouched across boot": 163.6,
+      "closing a Store with unsaveable wildlife settles, while an eligible final save completes": 139.3,
+      "cold reads neither plant nor retry deployment work": 133.1,
       "each store response reports the SQL it ran for that fetch": 35.2,
-      "erasing a Store closes its subscribers and serves the empty Store": 433.2,
-      "store aggregate query failures log the door and the request id": 300.6,
-      "store listing query failures log the door and the request id": 296.4,
-      "stores holding different words each wake speaking their own": 640.4,
+      "erasing a Store closes its subscribers and serves the empty Store": 131.9,
+      "store aggregate query failures log the door and the request id": 85.4,
+      "store listing query failures log the door and the request id": 86.9,
+      "stores holding different words each wake speaking their own": 207.9,
       "the store dates the trash mark, and signs it": 31.5,
-      "the writer the kernel vouched for is a person here, by name": 424
+      "the writer the kernel vouched for is a person here, by name": 92.6
     },
     "workers/yak/guide_test.ts": {
       "a page teaches the same client import the guide does": 2,
@@ -4824,10 +4787,10 @@
       "the connector page, and the address chosen on it": 112.8
     },
     "workers/yak/idle_alarm_test.ts": {
-      "a comment owes no unhandled effect and leaves its app store asleep": 538.3,
-      "a handled pending effect arms the app alarm for its next attempt": 559.9,
-      "an idle Vale-shaped store sleeps after the initial lens pass": 576.5,
-      "old unhandled pending effects stay stored without waking an app": 757.5
+      "a comment owes no unhandled effect and leaves its app store asleep": 205.9,
+      "a handled pending effect arms the app alarm for its next attempt": 181,
+      "an idle Vale-shaped store sleeps after the initial lens pass": 229.8,
+      "old unhandled pending effects stay stored without waking an app": 222.9
     },
     "workers/yak/idle_query_test.ts": {
       "guest attribution seeks nullable reference keys without scanning stamp indexes": 6.6,
@@ -4841,7 +4804,7 @@
       "an arrival is one letter on the month, over the ceiling too": 256.6
     },
     "workers/yak/installed_test.ts": {
-      "an installed copy runs like its space, or sandboxed": 1964.1
+      "an installed copy runs like its space, or sandboxed": 876
     },
     "workers/yak/instruments_test.ts": {
       "MCP sessions have vouched instruments, while old and forged ids keep their credential instrument": 421.7,
@@ -4854,16 +4817,16 @@
       "kept pages load their vocabulary and compose old reads and writes through a borrowed home": 1531.2
     },
     "workers/yak/lenses_kernel_test.ts": {
-      "kept deploys speak timestamp suffixes through HTTP and code rollback": 1367.1
+      "kept deploys speak timestamp suffixes through HTTP and code rollback": 644.2
     },
     "workers/yak/lenses_test.ts": {
-      "a code rollback retains an empty destination schema and immutable steps": 411,
-      "a conflicting old lens write refuses the whole batch": 308.5,
+      "a code rollback retains an empty destination schema and immutable steps": 151.1,
+      "a conflicting old lens write refuses the whole batch": 78.6,
       "a later rename can restore a name without moving or clearing current rows": 571.6,
-      "a later step gets its own mover stamp after the first step finished": 677.9,
-      "an app lens keeps old writes, reads and subscriptions through reload": 464,
-      "old apply replies and keyed resends speak the caller vocabulary": 308.3,
-      "the app lens mover rehearses, consumes its source, and is idempotent": 581.6
+      "a later step gets its own mover stamp after the first step finished": 220.6,
+      "an app lens keeps old writes, reads and subscriptions through reload": 158.8,
+      "old apply replies and keyed resends speak the caller vocabulary": 79,
+      "the app lens mover rehearses, consumes its source, and is idempotent": 228
     },
     "workers/yak/lib/hops_test.ts": {
       "a request remembers nothing once it has finished": 2.4
@@ -4878,30 +4841,27 @@
     "workers/yak/limits_test.ts": {
       "free allowances hold per person, not per space": 313.6
     },
-    "workers/yak/link_test.ts": {
-      "nothing but a well-formed pass under this secret opens": 3.6
-    },
     "workers/yak/listing_test.ts": {
       "query screening excludes refusals from all alternatives and counts": 5.8
     },
     "workers/yak/mail_test.ts": {
-      "a deploy with no binding bounces rather than swallows": 317,
-      "a letter delivered is one letter on the month": 348,
-      "a letter that bounced costs the space nothing": 337,
-      "a letter with no ask to send is kept, not sent": 296.7,
-      "a member's letter leaves from the app's own address": 392.6,
-      "a page watching the letter is told it left": 490.4,
-      "a provider failure comes to rest on the letter": 308.9,
-      "an anonymous visitor to an open app may not send": 301.5,
-      "an open app still takes an anonymous write that is not a letter": 285.2,
-      "past the month allowance a send bounces naming the ceiling": 382.8,
-      "the from address is the platform's word, never the batch's": 450.4,
-      "the platform's receipt leaves from the app's own address": 312.2,
-      "the same letter written twice is sent once": 343
+      "a deploy with no binding bounces rather than swallows": 82.9,
+      "a letter delivered is one letter on the month": 126.5,
+      "a letter that bounced costs the space nothing": 113.1,
+      "a letter with no ask to send is kept, not sent": 84.6,
+      "a member's letter leaves from the app's own address": 93.7,
+      "a page watching the letter is told it left": 79,
+      "a provider failure comes to rest on the letter": 79.8,
+      "an anonymous visitor to an open app may not send": 74,
+      "an open app still takes an anonymous write that is not a letter": 71,
+      "past the month allowance a send bounces naming the ceiling": 112.8,
+      "the from address is the platform's word, never the batch's": 81.5,
+      "the platform's receipt leaves from the app's own address": 78.6,
+      "the same letter written twice is sent once": 80.4
     },
     "workers/yak/manage_test.ts": {
       "Billing management opens checkout and the customer portal for this space": 1812.2,
-      "the dashboard is at the apex, whatever serves the space": 1270.3
+      "the dashboard is at the apex, whatever serves the space": 542.2
     },
     "workers/yak/mcp_auth_test.ts": {
       "?auth=required answers the challenge a probing host needs": 48.4,
@@ -4915,7 +4875,7 @@
       "a rolled back app keeps serving through app and space renames": 504.1,
       "a trashed app releases its component to another app in the space": 883.8,
       "after a rollback, the list says what is live and what came back": 509.3,
-      "an app names no app, and the copy works at its own address": 1632.3,
+      "an app names no app, and the copy works at its own address": 597.7,
       "app_stats with no analytics token says so, once": 99.7,
       "borrowed declarations switch with their consumer release": 1481.1,
       "the deploy that fixes a break closes it": 497.4
@@ -4926,14 +4886,14 @@
     },
     "workers/yak/mcp_graph_test.ts": {
       "Plus spaces can create and install more than fifty apps": 4097.5,
-      "a $was precondition refuses a batch built on a value that moved": 718.3,
+      "a $was precondition refuses a batch built on a value that moved": 254.9,
       "a page queries a borrowed word at its home": 1391.4,
       "a platform secret alias derives before the reach hands it to the store": 28.9,
       "a read with no app composes every app the caller can reach": 1563.1,
       "a word the space already has is used where it lives": 1384.9,
       "a write with no app routes each component to its own app": 1108.1,
       "an app declares which of its own properties are searched": 1275.8,
-      "an app store answers eids and no numbers, and refuses $num": 478.4,
+      "an app store answers eids and no numbers, and refuses $num": 218.4,
       "app_list answers what the month cost": 139.5,
       "comped spaces can create and install more than fifty apps": 3780,
       "graph_apply translates published bundle arguments at the connector": 178.7,
@@ -4958,9 +4918,9 @@
       "an app's letters, listed and sent through the connector": 326.7
     },
     "workers/yak/mcp_people_test.ts": {
-      "a guest of one app holds that app and nothing else in the space": 1145.1,
+      "a guest of one app holds that app and nothing else in the space": 440.4,
       "a project document is an entity, and search finds it": 532.3,
-      "an invited person gets a space of their own": 1042.3,
+      "an invited person gets a space of their own": 448.2,
       "feedback reaches the platform, in the words it was said in": 526.4,
       "the answers four builders had to guess at": 603.8,
       "what the person said is kept, and read back whole": 236.6
@@ -4968,8 +4928,8 @@
     "workers/yak/mcp_publish_test.ts": {
       "a word two spaces spell differently stays two words": 999.4,
       "an app is published by name, and the name is one app": 1375.9,
-      "an app reaches the gallery only when yaks.app says yes": 1149.8,
-      "an install refused on its manifest leaves nothing": 1019.9,
+      "an app reaches the gallery only when yaks.app says yes": 535.7,
+      "an install refused on its manifest leaves nothing": 443.9,
       "an installed app is the installer own copy, data and all": 1767.4
     },
     "workers/yak/mcp_schema_test.ts": {
@@ -4981,7 +4941,7 @@
     },
     "workers/yak/mcp_spaces_test.ts": {
       "a space goes to the trash, and space_restore brings it back": 619.1,
-      "a space moves, and the subdomain it leaves points at it": 716.4,
+      "a space moves, and the subdomain it leaves points at it": 329.6,
       "an address is forgotten, freed, and taken by another app": 254.8,
       "an address that reads as the platform is refused": 124.1,
       "an app goes to the trash, and app_restore brings it back": 1023,
@@ -4995,7 +4955,7 @@
     "workers/yak/mcp_stream_test.ts": {
       "a break is pushed as notifications/message and still rides the reply": 218.8,
       "a deploy leaves the roster where it was, and about says what is here": 469.2,
-      "a release whose views moved says resources, and never tools": 806.5,
+      "a release whose views moved says resources, and never tools": 315.7,
       "the stream names its session and replays a missed line": 748
     },
     "workers/yak/mcp_test.ts": {
@@ -5007,53 +4967,53 @@
       "a Store retires an old build identity index on its next schema wake": 90.4,
       "a declared index the rows cannot satisfy refuses the boot": 48.1,
       "a doc_value-backed legacy index upgrades to the composed FTS schema": 89.7,
-      "a kind the vocabulary stopped listing is written beside the rows it kept": 396.7,
-      "a nullable unique key is raised over older rows without one": 410.6,
+      "a kind the vocabulary stopped listing is written beside the rows it kept": 160,
+      "a nullable unique key is raised over older rows without one": 155.7,
       "a raw index creation failure still refuses an empty store": 24.8,
       "a raw writer classifies its changed owner rather than owing a schema census": 61.1,
       "a refused boot reaches Sentry, tagged with its store": 48.7,
-      "a schema that moves re-cuts its definitions and refills": 494.4,
+      "a schema that moves re-cuts its definitions and refills": 104.1,
       "a store holding an old shape is rewritten at its next open": 104.2,
-      "a unique index survives dropping another column on its table": 422.4,
-      "a word the platform said after the app did stays the app’s": 552.6,
-      "an app deploy turns stored player eids into queryable look references": 597.8
+      "a unique index survives dropping another column on its table": 164.8,
+      "a word the platform said after the app did stays the app’s": 133,
+      "an app deploy turns stored player eids into queryable look references": 236.3
     },
     "workers/yak/models_test.ts": {
-      "./api/ai/run answers a visitor only where the app opens its models": 1253,
-      "./api/ai/run answers what the model said, and the space pays for it": 455.8,
-      "./api/ai/run carries affinity through its metered binding": 459.5,
+      "./api/ai/run answers a visitor only where the app opens its models": 430.9,
+      "./api/ai/run answers what the model said, and the space pays for it": 183.8,
+      "./api/ai/run carries affinity through its metered binding": 159.9,
       "a connected OpenRouter model puts generated audio in the app store": 587,
       "a model calls only the commands marked for it, as the person who asked": 707.9,
-      "a page asks its store for a turn and the answer lands beside it": 454.7,
-      "a typed question comes back as an answer entry": 693.4,
+      "a page asks its store for a turn and the answer lands beside it": 211.5,
+      "a typed question comes back as an answer entry": 212.5,
       "a visitor asks an app for a turn only where it opens its models": 936.6,
-      "accounted recovery preserves cost and never debits a second time": 353.3,
-      "accounting preserves provider continuation metadata and passes requests whole": 382.4,
+      "accounted recovery preserves cost and never debits a second time": 136.9,
+      "accounting preserves provider continuation metadata and passes requests whole": 139.9,
       "an account past its budget is told so, and the transcript rests": 605.5,
       "an app without the OpenRouter connection cannot ask its model": 420,
       "one app-store write completes seven model turns within its dispatch bound": 775.1,
-      "original media debit is atomic once across concurrent and repeated recovery": 373.9,
-      "raw Workers AI audio debits its tariff once and refuses at the account limit": 397,
-      "raw partner calls carry configured gateway and affinity through the meter": 466,
-      "recovery door accounts an existing attachment without download or generation": 541.7
+      "original media debit is atomic once across concurrent and repeated recovery": 141.5,
+      "raw Workers AI audio debits its tariff once and refuses at the account limit": 151.8,
+      "raw partner calls carry configured gateway and affinity through the meter": 153.6,
+      "recovery door accounts an existing attachment without download or generation": 174.2
     },
     "workers/yak/mover_test.ts": {
-      "a failing batch unwinds, the store serves, and a fix finishes it": 364,
+      "a failing batch unwinds, the store serves, and a fix finishes it": 102,
       "a live rule moves every row from the alarm, and says it is done": 550.5,
-      "a refused contraction unwinds its data batch and retries after wake": 365,
-      "a rehearsal says what a rule would move, and moves nothing": 734,
-      "a rule reading words a store does not speak is done there": 312,
-      "builder take rehearsal preserves a store, then conversion moves with no calls": 464.3,
-      "dead mail cleanup refuses a claim or changed selection after reading": 560.4,
-      "dead mail rehearsal rolls back 141 rows before explicit activation": 479.5,
-      "dispatch conversion creates missing marks without changing empty envelopes": 430.4,
+      "a refused contraction unwinds its data batch and retries after wake": 140.1,
+      "a rehearsal says what a rule would move, and moves nothing": 296.4,
+      "a rule reading words a store does not speak is done there": 83.5,
+      "builder take rehearsal preserves a store, then conversion moves with no calls": 169.3,
+      "dead mail cleanup refuses a claim or changed selection after reading": 130.9,
+      "dead mail rehearsal rolls back 141 rows before explicit activation": 192.4,
+      "dispatch conversion creates missing marks without changing empty envelopes": 138.4,
       "dispatch conversion refuses changes to the old state, envelope or marks": 493.9,
-      "dispatch rehearsal rolls back and an alarm never activates it": 489.3,
-      "dispatch rehearsal rule converts all four states and keeps the envelope": 425.7,
-      "legacy done effect cleanup rehearses without moving human data or failures": 503,
+      "dispatch rehearsal rolls back and an alarm never activates it": 151.4,
+      "dispatch rehearsal rule converts all four states and keeps the envelope": 156.6,
+      "legacy done effect cleanup rehearses without moving human data or failures": 98.8,
       "mover contraction waits for the last value and rehearsal restores the column": 682.5,
-      "source reads do not move or count sources, and rehearsal rolls back": 378.6,
-      "synthetic cleanup removes 141 dead runs only and a second pass moves zero": 482.2
+      "source reads do not move or count sources, and rehearsal rolls back": 157.1,
+      "synthetic cleanup removes 141 dead runs only and a second pass moves zero": 201.5
     },
     "workers/yak/name_test.ts": {
       "nothing served or written here calls the place Yaks": 40.9,
@@ -5113,19 +5073,19 @@
       "a stranger is held to a rate per source at every anonymous door": 1184
     },
     "workers/yak/reach_test.ts": {
-      "a batch refused by one store lands in neither": 758.4,
-      "a candidate seed waits for release and lands once": 567.8,
-      "a changed draft identity leaves serving reads and writes alone": 374.9,
-      "a changed identity replaces its index when the release moves": 467.7,
-      "a declared identity is minted before the door hands it to a store": 746.4,
-      "a first release seeds its candidate words": 360.4,
-      "a name written twice through the door is one entity": 707.6,
-      "a projection answers what it names, and what its paths reach across the stores": 700.3,
-      "a refused draft leaves the serving app store usable": 369.9,
-      "a spanning read merges the two stores into one bundle per eid": 832.2,
-      "an order holds across the merge, and its window cuts after it": 1083.4,
-      "the app version selects its store declarations after preparation": 491.4,
-      "the first release serves the vocabulary it prepared": 325.9,
+      "a batch refused by one store lands in neither": 225.5,
+      "a candidate seed waits for release and lands once": 243.6,
+      "a changed draft identity leaves serving reads and writes alone": 137.3,
+      "a changed identity replaces its index when the release moves": 164.3,
+      "a declared identity is minted before the door hands it to a store": 338.7,
+      "a first release seeds its candidate words": 133.4,
+      "a name written twice through the door is one entity": 258.2,
+      "a projection answers what it names, and what its paths reach across the stores": 324.5,
+      "a refused draft leaves the serving app store usable": 130.3,
+      "a spanning read merges the two stores into one bundle per eid": 221.2,
+      "an order holds across the merge, and its window cuts after it": 306.5,
+      "the app version selects its store declarations after preparation": 185.6,
+      "the first release serves the vocabulary it prepared": 104.6,
       "the space speaks one vocabulary, and a word nobody declares is the platform’s": 684.7
     },
     "workers/yak/recover_test.ts": {
@@ -5137,19 +5097,19 @@
       "escaped refusals keep their JSON and status at machine doors, and pages stay pages": 1.5
     },
     "workers/yak/relay_test.ts": {
-      "a cook who arrives late sees the fingers already on the page": 288.2,
-      "a cook who leaves takes her finger with her": 359.7,
-      "a durable component sent to the relay door is not stored by it": 312.9,
-      "a finger lost to an eviction is still taken away": 357.6,
-      "a finger moves, and only the other cooks hear it": 360.9,
-      "a hibernated editor reconnects for current standing before relaying again": 374.4,
-      "a malformed relay batch never leaves a held value for another subscriber": 307.1,
-      "a paced mover is heard at 10Hz; a flooder is closed": 391.7,
-      "an app-local grant admits a relaying editor with no kernel role": 353.2,
-      "an open-app guest can keep moving a new ephemeral entity without storing it": 377.9,
-      "an open-app visitor cannot take or clear another cook’s relayed value": 353.2,
-      "clearing it is the component set to null, like anywhere else": 366.6,
-      "relay admission uses the vouched socket actor, ignoring a bundle’s claim": 296.5
+      "a cook who arrives late sees the fingers already on the page": 86.3,
+      "a cook who leaves takes her finger with her": 140.2,
+      "a durable component sent to the relay door is not stored by it": 88.4,
+      "a finger lost to an eviction is still taken away": 147.3,
+      "a finger moves, and only the other cooks hear it": 127.4,
+      "a hibernated editor reconnects for current standing before relaying again": 168.7,
+      "a malformed relay batch never leaves a held value for another subscriber": 95.1,
+      "a paced mover is heard at 10Hz; a flooder is closed": 179.6,
+      "an app-local grant admits a relaying editor with no kernel role": 129.1,
+      "an open-app guest can keep moving a new ephemeral entity without storing it": 152.8,
+      "an open-app visitor cannot take or clear another cook’s relayed value": 146,
+      "clearing it is the component set to null, like anywhere else": 161.1,
+      "relay admission uses the vouched socket actor, ignoring a bundle’s claim": 89.6
     },
     "workers/yak/release-status_test.ts": {
       "crossing a required release raises the reload level even with equal vocab and only cosmetic file changes": 109.5,
@@ -5168,10 +5128,10 @@
       "app Tile resolves by component and keeps the library card DOM": 2.3
     },
     "workers/yak/report_test.ts": {
-      "a break names the page version that ran, not the newest release": 437.7,
-      "a break names the version the app is serving": 368.9,
+      "a break names the page version that ran, not the newest release": 202.7,
+      "a break names the version the app is serving": 156.1,
       "a page reports its own breaks, and the agent hears": 575.8,
-      "a page that dies on its first import says so": 433.6,
+      "a page that dies on its first import says so": 185.8,
       "a refusal the door meant is not a break": 120.5,
       "the platform's own break is ours, not the app's": 128.4,
       "the platform's own scripts are never the app's break": 134.6
@@ -5188,7 +5148,7 @@
       "an app's voice door calls for its members, and for visitors where it opens voice": 582.6
     },
     "workers/yak/rule_test.ts": {
-      "an app rule fires on its own alarm inside the deployed Worker": 883.8
+      "an app rule fires on its own alarm inside the deployed Worker": 389.7
     },
     "workers/yak/sandbox/base_test.ts": {
       "sandbox base overlaps registry HEAD with Docker login": 3.5,
@@ -5241,44 +5201,44 @@
       "a connector tool names the tool, space, app, client and account": 3.1,
       "a defect is sent with its tags and the person who hit it": 3.1,
       "a store killed for its limits is reported, though the retry answers": 2.9,
-      "a store's alarm the runtime cut off is reported by its retry": 271.6,
-      "an interrupted store body leaves no rows or queued write and reports no defect": 281.1,
+      "a store's alarm the runtime cut off is reported by its retry": 64.9,
+      "an interrupted store body leaves no rows or queued write and reports no defect": 63.5,
       "signed-in MCP discovery faults before a tool runs reach Sentry with the request id": 653.9
     },
     "workers/yak/serving_test.ts": {
       "/api/stats answers the app's own people, and nobody else": 78.3,
       "/api/stats with no analytics token is a sentence, not a failure": 83.5,
-      "DELETE / empties the app store and bears it again": 726.6,
-      "a break is the platform writing about the app, not in it": 598.7,
+      "DELETE / empties the app store and bears it again": 266.5,
+      "a break is the platform writing about the app, not in it": 164.8,
       "a bulk load is NDJSON in and NDJSON out, refusal and all": 375,
       "a new release serves its files beside the old cached release": 154.3,
-      "a page and an upload are served where the cache hop is refused": 406.1,
+      "a page and an upload are served where the cache hop is refused": 152.3,
       "a page is served with its base and its reporter": 121.6,
       "a page view is one data point, and it names no visitor": 365.5,
       "a refresh after the page changes is sent the page, and one before is not": 89.3,
       "a release's module imports the client by the page's own path": 117.3,
       "a space in the trash serves nothing, and its owner restores it": 106.9,
       "a store tells the directory its size within the storage allowance step": 395.9,
-      "a stranger's reads are held to a rate per source, a member's are not": 407.6,
-      "a subscription is that query still answering": 379.1,
+      "a stranger's reads are held to a rate per source, a member's are not": 161.2,
+      "a subscription is that query still answering": 154.6,
       "a trashed front page is nobody's, and the owner restores it there": 100.4,
       "an app in the trash serves nothing, and says so to its owner": 94.2,
       "an app is installable: the five tags, the icon, the manifest": 82.8,
       "an app serves audio and video with byte ranges": 105.3,
-      "an app worker can send a stored query as one encoded filter": 380.8,
-      "an app worker query can read a connected peer position": 516,
+      "an app worker can send a stored query as one encoded filter": 146.5,
+      "an app worker query can read a connected peer position": 202,
       "an app's own colours, set through app_set, win over the platform's": 82.3,
-      "an open app takes a write from nobody, and a public one does not": 568.1,
-      "an open visitor cannot choose generated media, and the editor browser can": 406.6,
-      "draft edits leave served breaks open until deployment": 439,
-      "env.APP: a private app is written by its own worker, and by nobody else": 406.7,
+      "an open app takes a write from nobody, and a public one does not": 240.5,
+      "an open visitor cannot choose generated media, and the editor browser can": 164.8,
+      "draft edits leave served breaks open until deployment": 166.9,
+      "env.APP: a private app is written by its own worker, and by nobody else": 159.2,
       "monthly visit quota stops all app serving before dispatch or files": 208.5,
-      "photo and file uploads enforce space R2 limits from actual bytes": 477.9,
-      "rung 1: a platform path never reaches an app": 411,
+      "photo and file uploads enforce space R2 limits from actual bytes": 215.9,
+      "rung 1: a platform path never reaches an app": 154.4,
       "rung 1½: a `first` glob hands the path to the home worker": 85.4,
-      "rung 1½: a glob over a store door never takes it": 381.1,
+      "rung 1½: a glob over a store door never takes it": 142,
       "rung 1½: a router that hangs is skipped when its patience runs out": 1481.5,
-      "rung 1½: a router that throws is skipped, and written on the home app": 1127.3,
+      "rung 1½: a router that throws is skipped, and written on the home app": 231.1,
       "rung 1½: the router acts as the caller, not as the app it fronts": 91.6,
       "rung 1½: the router's 404 passes, and the app answers": 92.1,
       "rung 1½: the router's own onward request is not intercepted again": 84.1,
@@ -5326,12 +5286,12 @@
       "the platform’s owner sweeps every store, one at a time": 130
     },
     "workers/yak/testing_test.ts": {
-      "platform disposal waits for store work before releasing storage": 381.5
+      "platform disposal waits for store work before releasing storage": 107.3
     },
     "workers/yak/tools_test.ts": {
       "a deploy says how many round trips it took": 416.1,
       "a fetch takes https, a live answer, and nothing over the ceiling": 13.1,
-      "a listing asks the directory a fixed number of times": 2766.6,
+      "a listing asks the directory a fixed number of times": 786.3,
       "app_list says the caller’s role in each space it lists": 103,
       "free custom domains return plan settings before provisioning": 83.4,
       "one read of the bindings still lands each on its own app": 162.8,
@@ -5351,8 +5311,8 @@
       "only the platform adopts a pair, since its ids name the platform’s resources": 90.2
     },
     "workers/yak/unseen_tool_test.ts": {
-      "app_errors lists a break whose stored stack is null": 362.4,
-      "app_errors shows a session error from its content": 401.8
+      "app_errors lists a break whose stored stack is null": 142,
+      "app_errors shows a session error from its content": 144.6
     },
     "workers/yak/usage-alert_test.ts": {
       "hourly account alert is mailed once and kept on the wake row": 77
@@ -5398,27 +5358,27 @@
       "the loaded app vocabulary plants its component tables": 2.1
     },
     "workers/yak/wake_test.ts": {
-      "a call wearing a wake waits for it, and answers when it fires": 407.3,
-      "a condition naming a word the app does not speak is refused when written": 287.8,
+      "a call wearing a wake waits for it, and answers when it fires": 156.7,
+      "a condition naming a word the app does not speak is refused when written": 79.8,
       "a directory job reads and writes the directory in-process, never through its own stub": 128.8,
       "a recurring call is one invocation per firing, never a re-run": 369.3,
       "a refused wake stays due, says why in the break log, and is tried again": 115.6,
-      "a trashed app fires no wakes, and catches up once restored": 389.2,
-      "a trashed space fires no wakes, and catches up once restored": 400.5,
+      "a trashed app fires no wakes, and catches up once restored": 167.5,
+      "a trashed space fires no wakes, and catches up once restored": 157.7,
       "a wake fires in the store that holds it and its rule receives the tick instant": 115.6,
       "a world with nobody in it stops ticking, and a player arriving wakes it": 385.8,
       "a write arms the object for the wake it just heard, and the alarm fires it": 97.3,
       "an app store keeps its own schedule, with no platform in the middle": 56.1,
-      "an app's rule on `fired` advances the row its wake was about": 383.8,
-      "an idle world advances offline, a missed stretch in one firing": 339.1,
+      "an app's rule on `fired` advances the row its wake was about": 107.6,
+      "an idle world advances offline, a missed stretch in one firing": 147.1,
       "seeded wake rows survive a directory restart without rewinding or resuming": 114.7,
       "the git object store keeps a clock too, with nothing owed": 12.4,
       "the meter wake runs its job at the supplied hour": 113.6
     },
     "workers/yak/web_test.ts": {
-      "app vocab speaks the shared docs+keywords wire; census is a normal query": 385,
+      "app vocab speaks the shared docs+keywords wire; census is a normal query": 154.1,
       "app web is member-only even for open apps; mounts the store and signed-in person": 126.7,
-      "unnumbered app entity links resolve short handles through the store wire": 365
+      "unnumbered app entity links resolve short handles through the store wire": 161.5
     },
     "workers/yak/wrangler_test.ts": {
       "a sibling exit waits for the other sibling and never deploys the kernel": 2.5,
