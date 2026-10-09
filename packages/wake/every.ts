@@ -94,7 +94,11 @@ let cron = (every: string, tz: string): Cron | null => {
   if (fields.length !== count || !/[a-z]/i.test(tz)) return null
   if (count === 1 && !/^@[a-z]+$/i.test(fields[0])) return null
   try {
-    return new Cron(fields.join(' '), { timezone: tz })
+    // UTC has no calendar offset to resolve through Intl.
+    return new Cron(
+      fields.join(' '),
+      tz == 'UTC' ? { utcOffset: 0 } : { timezone: tz },
+    )
   } catch {
     return null
   }
