@@ -1,5 +1,3 @@
-import { clip } from './paint.ts'
-import { clearMouse, routeMouse } from './mouse.ts'
 /**
  * A mounted app for a test: a fake terminal of a fixed size, the ANSI backend
  * writing into an array instead of a tty, and keys delivered the way the real
@@ -13,6 +11,7 @@ import { clearMouse, routeMouse } from './mouse.ts'
 import { type ComponentType, h, render } from 'preact'
 import { install, onPaint } from './dom.ts'
 import { decode } from './input.ts'
+import { clearMouse, routeMouse } from './mouse.ts'
 import { ansiBackend, type Line } from './paint.ts'
 import type { Sheet } from './theme.ts'
 import { clear, measured, press, size } from './screen.ts'
@@ -44,7 +43,7 @@ export let mount = async (
   let draw = () => {
     let r = backend.draw(screen.root)
     wrote += r.written
-    lines = r.lines!
+    lines = r.lines ?? []
     measured(r.metrics)
   }
   onPaint(draw)
@@ -65,10 +64,7 @@ export let mount = async (
       wrote = 0
       for (let key of decode(bytes)) {
         if (key.name == 'mouse') {
-          routeMouse(
-            key,
-            lines.map((line) => clip(line, columns)),
-          )
+          routeMouse(key, lines)
         } else press(key)
       }
       await settle()
