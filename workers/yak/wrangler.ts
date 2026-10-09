@@ -29,6 +29,7 @@
 // Exact pins can reuse npm's restored cache without registry revalidation.
 import { dirname, join, relative } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { createHash } from 'node:crypto'
 import { parse } from '@std/toml'
 import packages from './package.json' with { type: 'json' }
 import { based } from './sandbox/base.ts'
@@ -290,30 +291,21 @@ export let sameSibling = (digest: string, deployments: unknown): boolean => {
 }
 
 /** Wrangler's upload inputs, not source timestamps or the last main commit. */
-export let siblingDigest = async (
+export let siblingDigest = (
   config: string,
   modules: Record<string, Uint8Array>,
 ) => {
-  let chunks: Uint8Array[] = []
+  let hash = createHash('sha256')
   for (
     let [name, body] of [
       ['config', new TextEncoder().encode(config)],
-      ...Object.entries(modules).sort(([a], [b]) => a.localeCompare(b)),
+      ...Object.entries(modules).sort(([a], [b]) => a < b ? -1 : a > b ? 1 : 0),
     ] as [string, Uint8Array][]
   ) {
-    chunks.push(
-      new TextEncoder().encode(`${name.length}:${name}:${body.length}:`),
-      body,
-    )
+    hash.update(`${name.length}:${name}:${body.length}:`)
+    hash.update(body)
   }
-  let bytes = new Uint8Array(chunks.reduce((n, c) => n + c.length, 0))
-  let at = 0
-  for (let chunk of chunks) {
-    bytes.set(chunk, at)
-    at += chunk.length
-  }
-  return [...new Uint8Array(await crypto.subtle.digest('SHA-256', bytes))]
-    .map((n) => n.toString(16).padStart(2, '0')).join('')
+  return hash.digest('hex')
 }
 
 let uploadSibling = async (
@@ -369,7 +361,7 @@ let uploadSibling = async (
         ((performance.now() - started) / 1000).toFixed(3)
       }s`,
     )
-    let digest = await siblingDigest(
+    let digest = siblingDigest(
       JSON.stringify({
         config: Deno.readTextFileSync(join(dir, config)),
         wrangler: WRANGLER,

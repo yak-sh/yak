@@ -274,42 +274,46 @@ test('wrangler: app-only pushes do not supersede a build, but Worker source and 
   }
 })
 
-test('sibling uploads use all bundled modules and configuration, not file order', async () => {
+test('sibling uploads use all bundled modules and configuration, not file order', () => {
   let bytes = (s: string) => new TextEncoder().encode(s)
-  let first = await siblingDigest('prod', {
+  let first = siblingDigest('prod', {
     'index.js': bytes('code'),
     'compiler.wasm': bytes('wasm'),
   })
   assertEquals(
-    await siblingDigest('prod', {
+    first,
+    '78e269c07d9160015f4c535ac9e35fa92a746e16e6ec0b33c75b55597366fed4',
+  )
+  assertEquals(
+    siblingDigest('prod', {
       'compiler.wasm': bytes('wasm'),
       'index.js': bytes('code'),
     }),
     first,
   )
   assert(
-    (await siblingDigest('staging', {
+    siblingDigest('staging', {
       'index.js': bytes('code'),
       'compiler.wasm': bytes('wasm'),
-    })) != first,
+    }) != first,
   )
   assert(
-    (await siblingDigest('prod', {
+    siblingDigest('prod', {
       'index.js': bytes('code'),
       'compiler.wasm': bytes('new wasm'),
-    })) != first,
+    }) != first,
   )
   assert(
-    (await siblingDigest('prod', {
+    siblingDigest('prod', {
       'index.js': bytes('new catalog'),
       'compiler.wasm': bytes('wasm'),
-    })) != first,
+    }) != first,
   )
   assert(
-    (await siblingDigest('prod', {
+    siblingDigest('prod', {
       'renamed.js': bytes('code'),
       'compiler.wasm': bytes('wasm'),
-    })) != first,
+    }) != first,
   )
 })
 
