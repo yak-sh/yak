@@ -408,6 +408,9 @@ export let opOf = (args: Record<string, unknown>, batch: number) =>
 let list = (v: unknown, what: string) =>
   v == null ? [] : (Array.isArray(v) ? v : [v]).map((one) => text(one, what))
 
+let decoder = new TextDecoder()
+let decoded = (bytes?: Uint8Array) => decoder.decode(bytes)
+
 // A file's bytes, from either encoding of them (T-34263): `content` is the
 // text an app is almost always made of, and `base64` is what a file that is
 // not text arrives as — the `.wasm` an app's worker imports, a picture. One
@@ -715,7 +718,7 @@ let releasedDoc = async (
   if (!file) return {}
   let bytes = await pins(blobs, fileKey(space, app, '')).get(at.files[file])
   if (!bytes) throw refuse('missing', `no blob for ${at.files[file]}`)
-  return appDoc(new TextDecoder().decode(bytes), file)
+  return appDoc(decoded(bytes), file)
 }
 
 // The app's data files, as text (seed.ts) — the seed ones for a release, the
@@ -729,7 +732,7 @@ let texts = (
 ): Promise<Text[]> =>
   Promise.all(paths.map(async (path) => ({
     path,
-    text: new TextDecoder().decode(await blobs.get(prefix + path)),
+    text: decoded(await blobs.get(prefix + path)),
   })))
 
 // A data batch through the app's write door, as the caller: the refusal's
@@ -1614,7 +1617,7 @@ let declaring = async (
   let key = await spelled(blobs, space, app, 'vocab')
   let file = key?.split('/').pop() ?? 'vocab.json'
   if (!key) return { file, source: null }
-  return { file, source: new TextDecoder().decode(await blobs.get(key)) }
+  return { file, source: decoded(await blobs.get(key)) }
 }
 
 /**
@@ -1713,7 +1716,7 @@ export let stored = (path: string, bytes: Uint8Array, sha: string) =>
 // bracket, and nothing else in the answer could — and a `.yml` through the
 // YAML door, whose error names the line.
 export let parses = (path: string, bytes: Uint8Array) => {
-  let text = new TextDecoder().decode(bytes)
+  let text = decoded(bytes)
   let json = path.endsWith('.json')
   try {
     if (json) JSON.parse(text)
@@ -2665,7 +2668,7 @@ let OURS: Row[] = [
         if (!(await view.has(key))) {
           throw refuse('missing', `no file ${args.path}`)
         }
-        return { text: new TextDecoder().decode(await view.get(key)), space }
+        return { text: decoded(await view.get(key)), space }
       }
       if (op == 'delete') {
         return modifying(
@@ -2804,7 +2807,7 @@ let OURS: Row[] = [
           )
         }
         let now = new TextEncoder().encode(patched(
-          new TextDecoder().decode(await view.get(key)),
+          decoded(await view.get(key)),
           text(args.find, 'find'),
           args.replace,
           key.slice(prefix.length),
