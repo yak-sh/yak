@@ -60,12 +60,20 @@ test('a composed tracker drains a separate spool, preserving error attribution',
 })
 
 test('a reporter leaves the caller untouched when its spool cannot open', async () => {
-  let dir = await Deno.makeTempDir()
+  let blocked = Deno.makeTempFileSync()
+  let log = console.error
+  let errors: unknown[][] = []
+  console.error = (...args) => {
+    errors.push(args)
+  }
   try {
-    await Deno.writeTextFile(`${dir}/file`, '')
-    await reporter({ tracker: { spool: `${dir}/file/spool` } })(Error('broken'))
+    await reporter({ tracker: { spool: `${blocked}/spool` } })(Error('broken'))
+    // The record the spool refused is written where an operator still sees it.
+    equal(errors.length, 2)
+    equal(String(errors[1][0]).includes('broken'), true)
   } finally {
-    await Deno.remove(dir, { recursive: true })
+    console.error = log
+    Deno.removeSync(blocked)
   }
 })
 
