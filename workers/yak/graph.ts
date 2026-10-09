@@ -125,6 +125,7 @@ import {
   type Derived,
   type Driver,
   eq,
+  erect,
   notNull,
   type Raw,
   render,
@@ -919,10 +920,8 @@ export class Store {
     // search indexes or audit every entity on the request that discovers them.
     requestIds(this.#sql, vocab)
     lifecycleColumns(this.#sql, vocab)
-    for (let stmt of blobSchema()) this.#sql.query(stmt)
-    if (vocab.comp('_tx')) {
-      for (let stmt of journalDdl()) this.#sql.query(stmt)
-    }
+    erect(this.#sql, blobSchema())
+    if (vocab.comp('_tx')) erect(this.#sql, journalDdl())
     let unfit = install(this.#sql, vocab, blobRead(vocab))
     for (let e of unfit) defect(e, { request: 'schema fit', store: name })
     if (!unfit.length) {

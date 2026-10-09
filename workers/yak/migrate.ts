@@ -11,18 +11,17 @@ import { rekey, schema as vectorSchema } from '@yaks/embedding'
 import { reserved } from '@yaks/durable-object'
 import {
   and,
+  catalogue,
   col,
   type Derived,
   type Driver,
-  eq,
-  type Expr,
+  erect,
   isNull,
   lit,
   notNull,
   select,
   table,
   tally,
-  val,
 } from '@yaks/sql'
 import {
   backfill,
@@ -319,14 +318,6 @@ export let BOUNDARIES = [
   'yak/store/vale-figure-prompt/17',
 ]
 
-/** The schema's own catalogue, narrowed to one type of object. */
-let catalogued = (type: string, also?: Expr) =>
-  select({
-    cols: [col('name'), col('sql')],
-    from: table('sqlite_master'),
-    where: and(eq(col('type'), lit(type)), ...(also ? [also] : [])),
-  })
-
 /** A column dropped from a table. */
 let unseat = (name: string, column: string) => ({
   t: 'alter table' as const,
@@ -345,9 +336,9 @@ let unseat = (name: string, column: string) => ({
  * ones, where nothing creates that table (T-34019).
  */
 let named = (d: Driver, type: string): { name: string; sql: string }[] =>
-  d.query(catalogued(type))
-    .map((r) => ({ name: String(r.name), sql: String(r.sql ?? '') }))
-    .filter((t) => !reserved(t.name))
+  catalogue(d)
+    .filter((t) => t.type == type && !reserved(t.name))
+    .map((t) => ({ name: t.name, sql: t.sql ?? '' }))
 
 let columns = (d: Driver, name: string): string[] =>
   d.query({ t: 'pragma', name: 'table_info', arg: name })
@@ -434,10 +425,9 @@ export let shed = (
 ) => {
   if (!columns(d, name).includes(prop)) return
   recut(d)
-  let indexes = d.query(catalogued(
-    'index',
-    and(eq(col('tbl_name'), val(name)), notNull(col('sql'))),
-  ))
+  let indexes = catalogue(d).filter((i) =>
+    i.type == 'index' && i.tbl_name == name && i.sql != null
+  )
   let kept = new Set(
     before.indexes(name)
       .filter((old) =>
@@ -447,8 +437,8 @@ export let shed = (
       .map((i) => `${name}_${i.props.join('_')}`),
   )
   for (let i of indexes) {
-    if (kept.has(String(i.name))) continue
-    d.query({ t: 'drop', kind: 'index', name: String(i.name), ifExists: true })
+    if (kept.has(i.name)) continue
+    d.query({ t: 'drop', kind: 'index', name: i.name, ifExists: true })
   }
   d.query(unseat(name, prop))
 }
@@ -466,7 +456,7 @@ export let install = (
   derived: Derived = {},
 ): Error[] => {
   let stood = new Set(named(d, 'index').map((i) => i.name))
-  for (let stmt of retabled(d, vocab, derived)) d.query(stmt)
+  erect(d, retabled(d, vocab, derived))
   let unfit = fit(d, vocab)
   for (let stmt of retired(d, vocab)) d.query(stmt)
   let held = new Set(named(d, 'index').map((i) => i.name))
@@ -489,14 +479,14 @@ export let install = (
         )
       }),
   }
-  for (let stmt of indexed(ready)) d.query(stmt)
+  erect(d, indexed(ready))
   // Search is app composition, after all indexed columns have been raised:
   // the full-text indexes, and the table the vectors are kept in beside the
   // triggers that note which of them changed (@yaks/embedding). The triggers
   // that queue text to embed are the sweep's own (graph.ts `#embedding`).
   adopt(d, fields(vocab), derived, { heal: false })
   rekey(statements(d))
-  for (let stmt of vectorSchema()) d.query(stmt)
+  erect(d, vectorSchema())
   if (vocab.comp('archetype')) {
     backfill(d, false)
   }

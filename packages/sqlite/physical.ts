@@ -1,13 +1,8 @@
-import { revision } from '@yaks/sql'
+import { catalogue, revision } from '@yaks/sql'
 import {
-  as,
-  by,
   col,
-  count,
   type Driver,
   eq,
-  fn,
-  oneOf,
   type Param,
   type Row,
   select,
@@ -24,9 +19,14 @@ export let defined: Stmt = select({
   order: [col('name')],
 })
 
+// Every table the file's schema lists, with the statement it was made by:
+// what {@link defined} answers, off the catalogue the schema is read into once.
+let listed = (driver: Driver) =>
+  catalogue(driver).filter((o) => o.type == 'table')
+
 /** Every table the file's schema lists, by name. */
 export let tables = (driver: Driver): string[] =>
-  driver.query(defined).map((r) => String(r.name))
+  listed(driver).map((o) => o.name)
 
 /** A table as the file holds it: its columns (`pragma table_info`), the
  * columns it keys to another table, and what each column checks
@@ -63,8 +63,8 @@ export let stood = (
   driver: Driver,
   pick: (name: string) => boolean,
 ): Record<string, Stood> => {
-  let defs = driver.query(defined)
-  let names = defs.map((d) => String(d.name)).filter(pick)
+  let defs = listed(driver)
+  let names = defs.map((d) => d.name).filter(pick)
   return heard(defs, names, asked(names).map((s) => driver.query(s)))
 }
 
@@ -167,12 +167,9 @@ export let objects = (
   driver: Driver,
   fields: Record<string, Param> = {},
 ): Row[] =>
-  driver.query(select({
-    cols: [col('type'), col('name'), col('tbl_name'), col('sql')],
-    from: table('sqlite_schema'),
-    where: by(fields),
-    order: [col('name')],
-  }))
+  catalogue(driver).filter((o) =>
+    Object.entries(fields).every(([k, v]) => o[k as keyof typeof o] == v)
+  )
 
 /** A table's columns, in declaration order. */
 export let columns = (driver: Driver, name: string): string[] =>
@@ -246,21 +243,16 @@ export function componentTables(
 
 /**
  * How many of the named objects the file's schema holds and how long their
- * definitions run together: what moves when one of them is created, dropped
- * or altered, by any connection. Read from `sqlite_schema`, since a Durable
- * Object's SQLite refuses `pragma schema_version`. Only the named objects
- * count, so what is kept beside them (a search index and its triggers, a
- * plugin's own table, the `sqlite_stat1` the first analyze creates) is no
- * change to them.
+ * definitions run together, in characters: what moves when one of them is
+ * created, dropped or altered, by any connection (a file's revision sees
+ * another connection's). Read off `sqlite_schema`, since a Durable Object's
+ * SQLite refuses `pragma schema_version`. Only the named objects count, so
+ * what is kept beside them (a search index and its triggers, a plugin's own
+ * table, the `sqlite_stat1` the first analyze creates) is no change to them.
  */
 export let shape = (driver: Driver, names: readonly string[]): string => {
-  let [row] = driver.query(select({
-    cols: [
-      as(count(), 'n'),
-      as(fn('total', fn('length', col('sql'))), 'bytes'),
-    ],
-    from: table('sqlite_schema'),
-    where: oneOf(col('name'), names),
-  }))
-  return `${row.n}/${row.bytes}`
+  let asked = new Set(names)
+  let found = catalogue(driver).filter((o) => asked.has(o.name))
+  let bytes = found.reduce((n, o) => n + [...o.sql ?? ''].length, 0)
+  return `${found.length}/${bytes}`
 }

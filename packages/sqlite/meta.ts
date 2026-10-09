@@ -12,7 +12,16 @@
 // The table is `server_meta` (ddl.ts {@link META}), created by `schema()` with
 // the rest of the spine, so a store that has installed already has it.
 
-import { col, type Driver, effect, eq, select, table, val } from '@yaks/sql'
+import {
+  catalogue,
+  col,
+  type Driver,
+  effect,
+  eq,
+  select,
+  table,
+  val,
+} from '@yaks/sql'
 import { META } from './ddl.ts'
 
 /** Read, write, clear — the whole interface. Values are text; an application
@@ -61,11 +70,7 @@ export let installed = (driver: Driver): string | undefined =>
 
 // A key's value, read without assuming the table is there yet.
 let kept = (driver: Driver, k: string): string | undefined =>
-  driver.query(select({
-      cols: [col('name')],
-      from: table('sqlite_schema'),
-      where: eq(col('name'), val(META)),
-    })).length
+  catalogue(driver).some((o) => o.name == META)
     ? meta(driver).get(k)
     : undefined
 

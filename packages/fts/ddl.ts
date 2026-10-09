@@ -60,8 +60,8 @@ import {
   textName,
 } from './fields.ts'
 import {
-  and,
   as,
+  catalogue,
   col,
   count,
   type CreateTrigger,
@@ -69,6 +69,7 @@ import {
   type Derived,
   type Driver,
   eq,
+  erect,
   exists,
   type Expr,
   fn,
@@ -79,7 +80,6 @@ import {
   select,
   type Stmt,
   table,
-  val,
 } from '@yaks/sql'
 
 // How one column of `comp` reads as text, given the expression for its stored
@@ -348,13 +348,9 @@ let declared = (db: Driver, fts: string): string[] => {
 
 // The schema objects of one type, with the text each was created by.
 let objects = (db: Driver, type: string, name?: string) =>
-  db.query(select({
-    cols: [col('name'), col('sql')],
-    from: table('sqlite_master'),
-    where: name == null
-      ? eq(col('type'), val(type))
-      : and(eq(col('type'), val(type)), eq(col('name'), val(name))),
-  }))
+  catalogue(db).filter((o) =>
+    o.type == type && (name == null || o.name == name)
+  )
 
 // The text a schema object was created by, or undefined when there is none.
 let stored = (db: Driver, type: string, name: string): string | undefined => {
@@ -460,7 +456,7 @@ export let adopt = (
       if (kind == 'trigger' && had == null) changed = true
     }
     if (!same) gone('table', fts)
-    for (let s of mine) db.query(s)
+    erect(db, mine)
     if (!same || opts.heal === false && changed) {
       db.query(command(fts, 'rebuild'))
       recut.push(fts)

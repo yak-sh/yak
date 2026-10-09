@@ -45,6 +45,7 @@ import {
   type BindOpts,
   type Derived,
   type Driver,
+  erect,
   type Raw,
   render,
   type Row,
@@ -598,12 +599,10 @@ export let storage = (
       let make = () =>
         unit(driver, () => {
           if (matches()) return
-          for (let stmt of retabled(driver, vocab, base.derived)) {
-            driver.query(stmt)
-          }
+          erect(driver, retabled(driver, vocab, base.derived))
           let unfit = fit(driver, vocab)
           for (let stmt of retired(driver, vocab)) driver.query(stmt)
-          for (let stmt of indexed(vocab)) driver.query(stmt)
+          erect(driver, indexed(vocab))
           unfit.forEach(report)
           clean = !unfit.length
           // Memory templates keep schema, never a store's lineage identity.
