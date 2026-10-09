@@ -173,6 +173,7 @@ test('name mismatches, empty descriptions and dangerous folder names are refused
     )
   }
   assertThrows(() => parseSkill('---\nname: review\n---\n', 'review'))
+  let bundle = parseSkill(text(), 'review')
   for (
     let name of [
       '',
@@ -191,7 +192,6 @@ test('name mismatches, empty descriptions and dangerous folder names are refused
     ]
   ) {
     assertThrows(() => parseSkill(text(), name))
-    let bundle = parseSkill(text(), 'review')
     bundle.doc.title = name
     assertThrows(() => renderSkill(bundle))
   }
