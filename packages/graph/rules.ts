@@ -122,11 +122,13 @@ export type Resource = (tick: Tick) => unknown
  * resource means and what both `{at}` and `{by, via}` want; a resource whose
  * first property is not the value it converts to passes that value explicitly.
  */
-export let stands = <T extends Comp>(comp: T, value?: unknown): T =>
-  Object.assign(comp, {
-    [Symbol.toPrimitive]: () =>
-      value === undefined ? Object.values(comp)[0] : value,
-  })
+export let stands = <T extends Comp>(comp: T, value?: unknown): T => {
+  // Set in place: an Object.assign from a literal holding the symbol is
+  // several times slower, and every write stands its #Now and #Actor.
+  ;(comp as Record<symbol, unknown>)[Symbol.toPrimitive] = () =>
+    value === undefined ? Object.values(comp)[0] : value
+  return comp
+}
 
 // What a resource written into a property converts to. Anything else is itself.
 let worth = (v: unknown): unknown =>
