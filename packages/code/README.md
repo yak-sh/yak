@@ -38,6 +38,12 @@ row points at the `_package` that declares it, so
 on its own components and on the ones it extends. A row the served vocabulary
 stops declaring is cleared like a gone export.
 
+A host keeping many graphs on one vocabulary can store none of it: the
+`describing` plugin (`@yaks/code/described`) answers every query that names a
+description component or entity from the rows the served vocabulary describes,
+the same ones `described` would write, read past any an earlier copy left. A
+query naming neither, such as a search, finds only what storage holds.
+
 Each one's text is in `doc`: a package's description, a module's opening comment
 (the `/** */` block or the run of `//` lines it starts with), the whole of a
 markdown file, and an export's doc comment. `doc` is what full-text search and

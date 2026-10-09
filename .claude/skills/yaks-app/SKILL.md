@@ -134,11 +134,13 @@ nothing.
   reconciles no calls, re-owes no guest registration and joins no startup
   pool. Migration work is armed by a deploy or a mover command (`yak admin
   move`), never by a cold read.
-- **A deploy installs.** Deployment POSTs materialize schema and lens
+- **A deploy installs.** Deployment POSTs materialize schema, lens
   descriptions, shipped rows, command identities and embedding queue triggers.
-  Schema pages come from @yaks/code's `described`: `_vocab.hash` skips an
-  unchanged vocabulary, and a changed hash writes only the changed rows. That
-  is separate from the storage schema stamp. `schemaReady` trusts the physical
+  An app store's schema pages are derived from its vocabulary when read
+  (@yaks/code's `describing`), so a deploy writes none; the platform's own two
+  stores write theirs with `described`, where `_vocab.hash` skips an unchanged
+  vocabulary and a changed hash writes only the changed rows. That is separate
+  from the storage schema stamp. `schemaReady` trusts the physical
   `schema` stamp a completed installation leaves, epoch and archetypes
   included; description bookkeeping never invalidates it, and a cold ordinary
   request inspects no SQL schema signatures when it matches. What installing a

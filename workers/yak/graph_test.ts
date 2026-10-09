@@ -1046,10 +1046,12 @@ test('a woken object rewrites nothing it already holds', async () => {
   using _db = ctx.storage
   let store = await cookbook(ctx)
   await get(store, '/query?q=.model', owner)
-  let before = await (await get(store, '/query?q=._vocab&*', owner)).json()
+  let changes = () =>
+    ctx.storage.sql.exec('select total_changes() as n').toArray()[0].n
+  let before = changes()
   let woken = new Store(ctx)
-  let after = await (await get(woken, '/query?q=._vocab&*', owner)).json()
-  assertEquals(after, before)
+  await get(woken, '/query?q=.model', owner)
+  assertEquals(changes(), before)
 })
 
 // A wake whose planting throws (`#sow`), here the runtime's alarm failing,
@@ -1540,6 +1542,11 @@ test('app schema reads and writes leave old journal tables untouched across boot
   assertEquals((schema.doc as Comp).title, 'recipe')
   let props = await query(`._prop.comp=${schema.entity.eid}`)
   assert(props.some((b) => (b._prop as Comp).name == 'serves'))
+  // Its schema pages are the vocabulary's, derived when read: the deploy
+  // wrote none of them into the store.
+  for (let rows of ['_package', '_comp', '_prop', '_vocab']) {
+    assertEquals(drive.query(select({ from: table(rows) })), [])
+  }
   for (let serves of [2, 7]) {
     await post(
       store,
@@ -1563,8 +1570,7 @@ test('app schema reads and writes leave old journal tables untouched across boot
   assertEquals(drive.query(select({ from: table('journal_field') })), [])
   assertEquals((await query('._comp.name=_tx')).length, 0)
   assertEquals((await query('._comp.name=_change')).length, 0)
-  // The stored schema is refreshable at deploy; adding a property serves
-  // its page immediately, and a removed property no longer appears.
+  // A deploy adding a property serves its page immediately.
   await post(
     store,
     '/vocab',

@@ -3,7 +3,8 @@
 import { type State, Store } from './graph.ts'
 import { settleWorld, worldBindings } from './play_world_fixture.ts'
 import { parseTools } from '@yaks/tools/declared'
-import { type Bundle, identityEid } from '@yaks/graph'
+import { type Bundle, graph, identityEid } from '@yaks/graph'
+import { described } from '@yaks/code/described'
 import { edgeEid } from '@yaks/edge'
 import { driver, profile, type Summary } from '@yaks/durable-object'
 import { GIVERS } from '../../apps/vale/quests.ts'
@@ -80,11 +81,11 @@ export let productionGap = async (
     'x-yak-person': person,
     'x-yak-app': app,
   }
-  let post = async (path: string, body: unknown) => {
+  let post = async (path: string, body: unknown, as: HeadersInit = headers) => {
     let r = await store.fetch(
       new Request(`http://store${path}`, {
         method: 'POST',
-        headers,
+        headers: as,
         body: JSON.stringify(body),
       }),
     )
@@ -94,6 +95,16 @@ export let productionGap = async (
   let keptWords = { ...words, $defs: { ...words.$defs, think: oldThink } }
   await post('/vocab', keptWords)
   let g = store.door.graph
+  // Vale still holds the schema pages its deploys wrote before they were
+  // derived when read, and its statistics were taken over them. They are
+  // described through a graph without the store's `describing`, which would
+  // answer that every page stands already, and written as the kernel.
+  let kernel = { 'x-store': headers['x-store'], 'x-yak-kernel': '1' }
+  let plain = graph({ storage: g.storage, vocab: g.vocab })
+  let pages = await described(plain, g.vocab.docs)
+  for (let at = 0; at < pages.length; at += 30) {
+    await post('/apply', pages.slice(at, at + 30), kernel)
+  }
   await g.storage.tx((tx) =>
     tx.patch([{
       entity: { eid: person },

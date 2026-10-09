@@ -6,6 +6,7 @@
     "./vocab": "./vocab.ts",
     "./tools": "./tools.ts",
     "./effects": "./effects.ts",
+    "./described": "./described.ts",
     "./anatomy": "./anatomy.ts",
     "./source": "./source.ts",
     "./frames": "./frames.ts"

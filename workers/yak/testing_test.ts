@@ -25,18 +25,22 @@ test('platform disposal waits for store work before releasing storage', async ()
   })
   try {
     let name = 'ada/lifetime'
-    let response = await p.object(name).fetch(
-      new Request('http://store/vocab', {
-        method: 'POST',
-        headers: {
-          'x-store': name,
-          'x-yak-role': 'owner',
-          'x-yak-person': 'aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa',
-        },
-        body: '{}',
-      }),
-    )
-    assertEquals(response.status, 200)
+    let post = (path: string, body: unknown) =>
+      p.object(name).fetch(
+        new Request(`http://store${path}`, {
+          method: 'POST',
+          headers: {
+            'x-store': name,
+            'x-yak-role': 'owner',
+            'x-yak-person': 'aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa',
+          },
+          body: JSON.stringify(body),
+        }),
+      )
+    assertEquals((await post('/vocab', {})).status, 200)
+    // A text the model is owed: an app's store holds none until it writes one.
+    let note = [{ entity: { eid: 'note' }, doc: { title: 'A note' } }]
+    assertEquals((await post('/apply', note)).status, 200)
     await until(() => asked > 0)
     let { storage } = p.states.get(name)!
     p[Symbol.dispose]()

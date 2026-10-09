@@ -587,10 +587,15 @@ grants are refused in the app's JSON envelope. No option keeps the local
 inspector unchanged.
 
 App stores compose @yaks/vocab's schema entities, without the journal.
-Component/property pages use ordinary queries; the schema description is
-materialized during deployment in bounded writes, with its hash last. A retained
-declaration selects only changed description identities; the first description
-install reads existing description rows. Schema changes retain unchanged FTS
+Component/property pages use ordinary queries, answered from the vocabulary the
+store is served with (@yaks/code `describing`): a deploy writes no description
+row, so a first deploy costs the app's own rows, not a copy of the platform's
+words. A query naming a description component or entity reads past the rows
+stores described before, which stay standing, unread: deleting them would incur
+billed writes. A query naming neither, a census or a search, counts and finds
+only what the store holds. The platform's own two stores still describe theirs
+in rows, in bounded writes with the hash last, since the directory's journal
+names a change's component by its row. Schema changes retain unchanged FTS
 indexes and writers. Classification audits are explicit repairs, not release
 installation work. The inspector omits history when its vocabulary has no
 `_change`. Standing journal tables and their rows are left untouched: removing

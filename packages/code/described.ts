@@ -16,11 +16,16 @@
 // declaring is cleared the way a gone export is (./sync.ts): the entity stays,
 // empty, with any note left on it, and is filled in again if the component
 // comes back. A `_before` edge it stopped saying is unlinked.
+//
+// Or a graph writes none of it and derives it when read (`describing`): the
+// rows are the vocabulary's, the same for every graph served with it, so a
+// host keeping many graphs on one vocabulary copies it into none of them.
 
-import type { Bundle, Comp, Graph } from '@yaks/graph'
+import { map, type Pred, type Query } from '@yaks/query'
+import type { Bundle, Comp, Graph, Plugin } from '@yaks/graph'
 import { derivedEid, identities } from '@yaks/graph'
 import { link, unlink } from '@yaks/edge'
-import { type Ids, toBundles, type VocabDoc } from '@yaks/vocab'
+import { type Ids, toBundles, type Vocab, type VocabDoc } from '@yaks/vocab'
 
 let str = (v: unknown) => v == null ? '' : String(v)
 
@@ -94,8 +99,8 @@ let sha = async (s: string) =>
 
 // Every row `docs` describe, by eid: two documents of one package describe it
 // as one.
-let rows = (g: Graph, docs: VocabDoc[]): Map<string, Bundle> => {
-  let derive = identities(g.vocab)
+let rows = (vocab: Vocab, docs: VocabDoc[]): Map<string, Bundle> => {
+  let derive = identities(vocab)
   let id: Ids = (comp, values) =>
     derive[comp](values as Comp, { entity: { eid: '' }, [comp]: values })
   let fresh = new Map<string, Bundle>()
@@ -123,14 +128,14 @@ export let described = async (
   previous?: VocabDoc[],
 ): Promise<Bundle[]> => {
   if (!g.vocab.comp('_vocab')) return []
-  let fresh = rows(g, docs)
+  let fresh = rows(g.vocab, docs)
   let [was] = await g.get([VOCAB], ['_vocab'])
   let hash = await sha(canon([...fresh.values()]))
   if ((was?._vocab as Comp | undefined)?.hash == hash) return []
   // A single-owner host can retain the last accepted declaration outside the
   // graph. Select only changed identities; the global hash remains the
   // commit marker, so an interrupted pass is diffed again from its old docs.
-  let before = previous && rows(g, previous)
+  let before = previous && rows(g.vocab, previous)
   let changed = before &&
     [...fresh.values()].filter((b) =>
       canon(b) != canon(before.get(b.entity.eid))
@@ -163,4 +168,81 @@ export let described = async (
     ),
     { entity: { eid: VOCAB }, _vocab: { hash } },
   ].toSorted((a, b) => rank(a) - rank(b))
+}
+
+// The components a description is made of. `_vocab` is not one: it says what
+// a graph last wrote. Only a vocabulary says what a component is, so a stored
+// one of those is what an earlier copy left; a package can be a graph's own
+// (@yaks/lens names one for its steps to point at).
+let META = ROWS.slice(0, -1)
+let SAID = META.slice(1)
+
+// `!name`: an entity without it.
+let absent = (c: Pred) =>
+  c.op == '=' && c.value?.kind == 'scalar' && !c.value.raw
+
+// A vocabulary's description, derived once for as long as it is served.
+let derivations = new WeakMap<Vocab, Map<string, Bundle>>()
+let derive = (vocab: Vocab) => {
+  let held = derivations.get(vocab)
+  if (!held) derivations.set(vocab, held = rows(vocab, vocab.docs))
+  return held
+}
+
+// Whether a query can match a description: a clause names one of its
+// components, other than to want it or leave it out, or one of its entities.
+let asks = (query: Query, held: Map<string, Bundle>): boolean => {
+  let named = (path: string[]) => path.some((p) => META.includes(p))
+  let says = (raw?: string) => raw != null && held.has(raw)
+  let hit = false
+  map(query, (c) => {
+    hit ||= c.kind == 'pred'
+      ? named(c.path) && c.op != '?' && !absent(c) ||
+        (c.value?.kind == 'scalar' && says(c.value.raw)) ||
+        (c.value?.kind == 'list' &&
+          c.value.items.some((v) => v.kind == 'scalar' && says(v.raw)))
+      : c.kind == 'order'
+      ? named(c.value.replace(/^-/, '').split('.'))
+      : c.kind == 'fields'
+      ? c.fields.some((f) => named(f.path))
+      : c.kind == 'tally' || c.kind == 'distinct'
+      ? named(c.path)
+      : c.kind == 'refs'
+      ? says(c.value)
+      : false
+    return c
+  })
+  return hit
+}
+
+/**
+ * The description of the vocabulary a graph is served with, derived when
+ * read rather than stored: a plugin that answers every query that can match
+ * one of its rows from what storage holds and the rows the vocabulary
+ * describes, the same rows `described` would write. A stored row on an entity
+ * the vocabulary describes, or one saying what a component is, is what an
+ * earlier copy left, and is not read. A walk from a stored entity into a
+ * description is answered by storage alone.
+ */
+export let describing: Plugin = {
+  name: '@yaks/code describing',
+  view: ({ vocab }, original) => {
+    if (!vocab?.comp('_comp')) return null
+    let held = derive(vocab)
+    if (!asks(original, held)) return null
+    let stale = (b: Bundle) => held.has(b.entity.eid) || SAID.some((r) => b[r])
+    return {
+      original,
+      query: original,
+      vocab,
+      // The derived rows move only with the vocabulary: a write reaches the
+      // answer through what it stores, a component the query names (which a
+      // subscription notices) or a description component itself.
+      dependencies: META,
+      answer: (stored) => [
+        ...stored.filter((b) => !stale(b)),
+        ...held.values(),
+      ],
+    }
+  },
 }

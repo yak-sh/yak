@@ -63,10 +63,21 @@ export let coldMessages = async (
   if (!response.ok) throw new Error(await response.text())
   await response.body?.cancel()
   await seedHistory(warm.door.graph, storage, 79_000)
-  await warm.door.graph.storage.tx((tx) =>
-    tx.patch([{ entity: { eid: hero }, player: {}, doc: { title: 'Hero' } }])
-  )
   await seedRetainedOutputs(warm, outputs)
+  // Through the Store's own door, as a page's write arrives: its commit is
+  // what sets the Store embedding the history seeded behind it.
+  let wrote = await warm.fetch(
+    new Request('http://store/apply', {
+      method: 'POST',
+      headers,
+      body: JSON.stringify([{
+        entity: { eid: hero },
+        player: {},
+        doc: { title: 'Hero' },
+      }]),
+    }),
+  )
+  if (!wrote.ok) throw new Error(await wrote.text())
   await settleWorld(warm, storage)
   live.push(ws)
   for (

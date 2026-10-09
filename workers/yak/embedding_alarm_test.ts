@@ -39,6 +39,9 @@ test('an embedding failure honors the store retry interval across reboot', async
     )
   assertEquals((await post('/vocab', {})).status, 200)
   let began = Date.now()
+  // A text the model is owed: an app's store holds none until it writes one.
+  let note = [{ entity: { eid: 'note' }, doc: { title: 'A note' } }]
+  assertEquals((await post('/apply', note)).status, 200)
   await until(() => failures > 0)
   // The provider rejects before the drain catches it and rearms the alarm.
   // Wait for that durable outcome, not just the attempted provider call.

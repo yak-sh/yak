@@ -5,12 +5,12 @@ import { test } from '@yaks/testing'
 import { assertEquals } from '@std/assert'
 import { docDoc } from '@yaks/doc/vocab'
 import { edgeDoc, edgeKeywords, edges } from '@yaks/edge'
-import { type Comp, graph, identityEid } from '@yaks/graph'
+import { type Comp, type Graph, graph, identityEid } from '@yaks/graph'
 import { gitDoc } from '@yaks/git'
 import { ram } from '@yaks/ram'
 import { loadVocab, metaDoc, type PropSchema, type VocabDoc } from '@yaks/vocab'
 import { codeDoc } from './vocab.ts'
-import { described } from './described.ts'
+import { described, describing } from './described.ts'
 
 let entity = {
   $defs: {
@@ -60,13 +60,37 @@ let store = () => {
   }
 }
 
+// A graph over a store of its own that derives its description when read.
+let deriving = () => {
+  let storage = ram(loadVocab(base, [edgeKeywords]))
+  return (docs: VocabDoc[]) => {
+    let vocab = loadVocab([...base, ...docs], [edgeKeywords])
+    return graph({ storage, vocab, plugins: [edges(vocab), describing] })
+  }
+}
+
 test('a graph describes what it is served with, and stops describing what it is not', async () => {
-  let serve = store()
-  let g = await serve([p({ a: { type: 'string' }, b: { type: 'number' } }), q])
-  let titles = async (q: string) =>
-    (await g.read(`${q} ?doc`)).map((b) => (b.doc as Comp).title).sort()
+  let stored = store(), derived = deriving()
+  let g!: Graph, d!: Graph
+  let serve = async (docs: VocabDoc[]) => {
+    g = await stored(docs)
+    d = derived(docs)
+  }
+  // Each answer the stored description gives, the derived one gives too.
+  let both = async (read: (g: Graph) => Promise<string[]>) => {
+    let said = await read(g)
+    assertEquals((await read(d)).sort(), said.sort())
+    return said
+  }
+  let titles = (q: string) =>
+    both(async (g) =>
+      (await g.read(`${q} ?doc`)).map((b) => (b.doc as Comp).title as string)
+    )
   let note = identityEid('_comp', ['note'])
-  let befores = async () => (await g.read(`._before .edge.from=${note}`)).length
+  let eids = (q: string) =>
+    both(async (g) => (await g.read(q)).map((b) => b.entity.eid))
+  let befores = async () => (await eids(`._before .edge.from=${note}`)).length
+  await serve([p({ a: { type: 'string' }, b: { type: 'number' } }), q])
 
   assertEquals(await titles('._package'), ['@t/p', '@t/q'])
   let [pkg] = await g.read('._package.name=@t/p ?doc')
@@ -79,22 +103,45 @@ test('a graph describes what it is served with, and stops describing what it is 
   ])
   assertEquals(await titles('._prop.package._package.name=@t/q'), ['note.c'])
   assertEquals(await befores(), 1)
+  assertEquals((await eids(`.refs=${note}`)).length, 5)
+  assertEquals(
+    (await d.get([note], ['_comp']))[0]._comp,
+    (await g.get([note], ['_comp']))[0]._comp,
+  )
   // Described already, so a worker starting writes nothing.
   assertEquals(await described(g, g.vocab.docs), [])
 
   // A property and a `before` no longer served are cleared, and so is a
   // package no longer listed, with what it added.
-  g = await serve([p({ a: { type: 'string' } }, [])])
+  await serve([p({ a: { type: 'string' } }, [])])
   assertEquals(await titles('._prop.comp._comp.name=note'), ['note.a'])
   assertEquals(await titles('._package'), ['@t/p'])
   assertEquals(await befores(), 0)
 
   // A component no longer served is cleared; served again, it is back on
   // the same entity.
-  g = await serve([])
+  await serve([])
   assertEquals(await titles('._comp.name=note'), [])
-  g = await serve([p({ a: { type: 'string' } })])
-  assertEquals((await g.read('._comp.name=note'))[0].entity.eid, note)
+  await serve([p({ a: { type: 'string' } })])
+  assertEquals(await eids('._comp.name=note'), [note])
+
+  // A derived description reads past what an earlier copy left, and a
+  // package the graph names itself still stands.
+  let own = identityEid('_package', ['@t/own'])
+  await d.apply([
+    {
+      entity: { eid: identityEid('_comp', ['gone']) },
+      _comp: { name: 'gone' },
+    },
+    { entity: { eid: note }, doc: { title: 'stale' } },
+    { entity: { eid: own }, _package: { name: '@t/own' } },
+  ], { trusted: true })
+  assertEquals(await d.read('._comp.name=gone'), [])
+  assertEquals(
+    await d.read('._comp.name=note ?doc'),
+    await g.read('._comp.name=note ?doc'),
+  )
+  assertEquals((await d.read('._package.name=@t/own')).length, 1)
 })
 
 test('a retained declaration reads only changed description identities and resumes', async () => {

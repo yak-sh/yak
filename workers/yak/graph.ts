@@ -10,7 +10,7 @@ import {
   journal,
   log,
 } from '@yaks/journal'
-import { described } from '@yaks/code/effects'
+import { described, describing } from '@yaks/code/described'
 import {
   compile,
   described as describedLenses,
@@ -371,10 +371,13 @@ type Shape = {
 let shapes = new Map<string, Shape>()
 let SHAPES = 16
 
+// Whether a store is one of the platform's own two rather than an app's.
+let ownStore = (name: string) => name == PLATFORM_STORE || name == GIT_STORE
+
 let shapeOf = (name: string, declared: string | null): Shape => {
   // Neither the directory nor the git object graph is an app: each speaks its
   // own words whatever it holds, so its name is the whole key.
-  let own = name == PLATFORM_STORE || name == GIT_STORE
+  let own = ownStore(name)
   let key = own ? name : declared == null ? 'app' : `app ${declared}`
   let held = shapes.get(key)
   if (held) {
@@ -484,7 +487,10 @@ type Word =
   | 'access'
   | 'mail'
   | 'schema'
+  // The vocabulary the platform's own stores last described in rows.
   | 'descriptions'
+  // That a deployment pass (`#deployed`) has run here.
+  | 'deployed'
   | 'wakes'
   | 'planted'
   | 'effect-migrated'
@@ -1069,6 +1075,11 @@ export class Store {
             ),
           ]
           : []),
+        // An app's store holds its own rows, not a copy of the platform's
+        // words: every schema page in it is derived from the vocabulary when
+        // read. The platform's own two stores describe theirs in rows, which
+        // the directory's journal names a change's component by.
+        ...(own ? [] : [describing]),
         ...(vault ? [secrets(vault, (b) => this.#trust(b, null))] : []),
         ...(vocab.comp('archetype') ? [archetypes()] : []),
         // Before every check, because it is about the shape a value arrived in.
@@ -1393,7 +1404,7 @@ export class Store {
     let effects: (() => void | Promise<void>)[] = []
     this.#atomic(() => {
       if (active == null) {
-        deploymentMoved = release != '0' && !this.#get('descriptions')
+        deploymentMoved = release != '0' && !this.#deployedOnce()
         this.#put('release', release)
         return
       }
@@ -1431,7 +1442,7 @@ export class Store {
         this.#put('seeded', release)
       }
       deploymentMoved = this.#get('tools') != toolsWas ||
-        this.#get('vocab') != was || !this.#get('descriptions')
+        this.#get('vocab') != was || !this.#deployedOnce()
     })
     return this.#refused ? unchanged() : { deploymentMoved, effects }
   }
@@ -2150,6 +2161,10 @@ export class Store {
     })
   }
 
+  // Whether a deployment pass has run here. A store from before `deployed`
+  // was kept says so with the descriptions it wrote.
+  #deployedOnce = () => !!(this.#get('deployed') ?? this.#get('descriptions'))
+
   // Deployment materializes descriptions and shipped rows. Loading an
   // incarnation does not derive work, sweep history or inspect owed targets.
   #deployed = async (): Promise<void> => {
@@ -2161,10 +2176,11 @@ export class Store {
     if (model) {
       remodel(statements(this.#texts.sql), this.#texts.fields, model.model)
     }
-    // Schema pages are ordinary entities, made by the package that owns
-    // their identities. Describe after boot, in bounded writes, with the
-    // hash last so an interrupted pass resumes on the next request.
-    if (this.#vocab.comp('_vocab')) {
+    // The platform's own stores keep their schema pages as ordinary
+    // entities, made by the package that owns their identities (an app's
+    // derives them, `#build`). Describe after boot, in bounded writes, with
+    // the hash last so an interrupted pass resumes on the next request.
+    if (this.#vocab.comp('_vocab') && ownStore(this.#get('name') ?? '')) {
       let previous = this.#get('descriptions')
       let rows = await described(
         this.#graph,
@@ -2218,6 +2234,7 @@ export class Store {
     // Rows a rule still owes here are moved from the alarm, never by the wake
     // that found them owing (mover.ts).
     if (this.#owing().length) await this.#arming(this.#soon(), 'mover')
+    this.#put('deployed', this.#get('release') ?? '0')
   }
 
   // ---- the mover (mover.ts, D-45640) ---------------------------------------
