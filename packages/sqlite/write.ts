@@ -59,7 +59,6 @@ import {
   type Expr,
   type Insert,
   isNull,
-  left,
   lit,
   not,
   notNull,
@@ -79,7 +78,7 @@ import { tables } from './ddl.ts'
 import { required } from './physical.ts'
 import { spined } from './memo.ts'
 import { isJsonb, jsonb, jsonIn } from './jsonb.ts'
-import { described, get } from './read.ts'
+import { described, get, grave } from './read.ts'
 
 // The owner's integer id, as a subquery. Every write keys to it, so an entity
 // minted earlier in the same unit of work resolves without a second question.
@@ -149,12 +148,9 @@ let stored = (driver: Driver, eids: string[]): Map<string, Spine> =>
         col('id', 'e'),
         col('eid', 'e'),
         col('num', 'e'),
-        as(col('entity', 't'), 'dead'),
+        as(grave(col('id', 'e')), 'dead'),
       ],
       from: table('entity', 'e'),
-      joins: [
-        left(table('tombstone', 't'), eq(col('entity', 't'), col('id', 'e'))),
-      ],
       where: oneOf(col('eid', 'e'), eids),
     })).map((r) => [String(r.eid), {
       id: Number(r.id),

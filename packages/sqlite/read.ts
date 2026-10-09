@@ -54,6 +54,7 @@ import {
   type Select,
   select,
   type Source,
+  sub,
   table,
   val,
 } from '@yaks/sql'
@@ -349,6 +350,20 @@ export let setSql = (
   )
 
 /**
+ * An entity's tombstone, or null: the grave of the entity whose id `id` reads.
+ * A subquery on the tombstone's key rather than a join, so it is answered by
+ * that key whatever the planner's statistics remember: told a store's graves
+ * were few, SQLite would rather scan every one of them for each entity it reads
+ * than seek the one it needs.
+ */
+export let grave = (id: Expr): Expr =>
+  sub(select({
+    cols: [col('entity', 't')],
+    from: table('tombstone', 't'),
+    where: eq(col('entity', 't'), id),
+  }))
+
+/**
  * The spine rows of the entities `which` names, as `e`: each one's id, eid,
  * number and grave, and its archetype's eid and table set where the store
  * keeps archetypes. What every whole read starts from. Left `kind`-only, it
@@ -362,7 +377,7 @@ export let spine = (vocab: Vocab, which: Expr, kind = false): Select => {
       col('id', 'e'),
       col('eid', 'e'),
       col('num', 'e'),
-      as(col('entity', 't'), 'dead'),
+      as(grave(col('id', 'e')), 'dead'),
       ...(!typed ? [] : kind ? [as(col('archetype', 'e'), '@kind')] : [
         as(col('eid', 'a'), 'archetype'),
         as(col('tables', 'shape'), '@tables'),
@@ -379,7 +394,6 @@ export let spine = (vocab: Vocab, which: Expr, kind = false): Select => {
           ),
         ]
         : []),
-      left(table('tombstone', 't'), eq(col('entity', 't'), col('id', 'e'))),
     ],
     where: which,
   })

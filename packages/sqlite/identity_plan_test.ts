@@ -1,4 +1,5 @@
-// Identity gathers must seek their owners even when statistics predate history.
+// Identity gathers must seek their owners and their graves even when statistics
+// predate history.
 import { test } from '@yaks/testing'
 import { assert, assertEquals } from '@std/assert'
 import './sqlitepath.ts'
@@ -152,9 +153,20 @@ for (let name of ['session', 'call']) {
         ),
       )
       reclassify(d, ['e1'])
-      // The optimizer learned a small component; history subsequently grows.
+      let bury = (from: number, count: number) =>
+        d.query(insert(
+          'tombstone',
+          ...Array.from({ length: count }, (_, i) => ({
+            entity: from + i,
+            deleted_at: 'then',
+          })),
+        ))
+      bury(100, 1)
+      // The optimizer learned a small component and few graves; history
+      // subsequently grows.
       d.query({ t: 'pragma', name: 'optimize', value: 0x10002 })
       add(20000, 20000, true)
+      for (let at = 30000; at < 40000; at += 500) bury(at, 500)
       let m = measured(db, d)
       let cold = m.read(() => get(m.driver, vocab, ['e1']))
       let warm = m.read(() => get(m.driver, vocab, ['e1']))
