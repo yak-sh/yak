@@ -30,21 +30,22 @@ let R = (view: string, match: Query, tag: string) => ({
 // The app's registry holds these fixtures for one test, and its own renderers
 // again after: the app is one registry, and every other test renders with it.
 // Run alone, nothing has registered the app's views or actions yet: none.
+let renderers = [
+  R('Task', has('doc', 'task'), 'task'),
+  R('Doc', has('doc'), 'doc'),
+  R('Card.Title', has('doc', 'task'), 'task-title'),
+  R('Card.Title', has('doc'), 'doc-title'),
+  R('Card.Title', and(), 'any-title'),
+  R('Tile', has('doc', 'task'), 'task-tile'),
+  R('Tile', has('doc'), 'doc-tile'),
+  R('JSON', and(), 'json'),
+]
 let fixtures = () => {
-  let { renderers, views = [], actions = [] } = registry
-  define([
-    R('Task', has('doc', 'task'), 'task'),
-    R('Doc', has('doc'), 'doc'),
-    R('Card.Title', has('doc', 'task'), 'task-title'),
-    R('Card.Title', has('doc'), 'doc-title'),
-    R('Card.Title', and(), 'any-title'),
-    R('Tile', has('doc', 'task'), 'task-tile'),
-    R('Tile', has('doc'), 'doc-tile'),
-    R('JSON', and(), 'json'),
-  ], ['Task', 'Doc', 'JSON'])
+  let { renderers: prior, views = [], actions = [] } = registry
+  define(renderers, ['Task', 'Doc', 'JSON'])
   return {
     [Symbol.dispose]: () =>
-      Object.assign(registry, { renderers, views, actions }),
+      Object.assign(registry, { renderers: prior, views, actions }),
   }
 }
 

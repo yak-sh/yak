@@ -25,14 +25,14 @@ import {
   ResultSummary,
 } from './Entry.tsx'
 
+let { document } = parseHTML('<main></main>')
+let root = document.querySelector('main') as HTMLElement
 let withDom = (run: (root: HTMLElement) => void) => {
   let prior = Object.getOwnPropertyDescriptor(globalThis, 'document')
-  let { document } = parseHTML('<main></main>')
   Object.defineProperty(globalThis, 'document', {
     value: document,
     configurable: true,
   })
-  let root = document.querySelector('main') as HTMLElement
   try {
     run(root)
   } finally {
