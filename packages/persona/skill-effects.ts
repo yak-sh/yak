@@ -47,10 +47,10 @@ export let skillEffects = (
     : undefined
   let temporary: Promise<string> | undefined
   let saved = new Map<string, string>()
-  let names = new Set<string>()
+  let names = new Map<string, string>()
   let memory = async (root: string): Promise<string> => {
-    let name = `${derivedEid(`skills|${root}`)}.json`
-    names.add(name)
+    let name = names.get(root)
+    if (!name) names.set(root, name = `${derivedEid(`skills|${root}`)}.json`)
     let dir = persistent ?? await (temporary ??= (async () => {
       let dir = await Deno.makeTempDir({ prefix: 'yak-skills-' })
       try {
@@ -69,13 +69,14 @@ export let skillEffects = (
   // bytes, not an idle directory: clean inside the awaited handler and restore
   // on its next pass. A watcher retains its directory until it ends (including
   // failure), then uses the same route. No abort listener detaches I/O errors.
-  let clean = async (): Promise<void> => {
+  let clean = async (trailing = false): Promise<void> => {
     let owned = temporary
     if (!owned) return
+    let retained = false
     try {
       let dir = await owned
       try {
-        for (let name of names) {
+        for (let name of names.values()) {
           try {
             saved.set(name, await Deno.readTextFile(join(dir, name)))
           } catch (error) {
@@ -83,11 +84,14 @@ export let skillEffects = (
             saved.delete(name)
           }
         }
+        // An event during cleanup shares this batch. Keep its memo in place
+        // for the trailing pass; callers cannot observe completion yet.
+        retained = trailing && dirty && !host.stopping?.aborted
       } finally {
-        await Deno.remove(dir, { recursive: true })
+        if (!retained) await Deno.remove(dir, { recursive: true })
       }
     } finally {
-      temporary = undefined
+      if (!retained) temporary = undefined
     }
   }
   // holding reports acquisition/renewal/release failures. Turn that report into
@@ -153,7 +157,7 @@ export let skillEffects = (
           await pass()
           // Cleanup yields to I/O too: events arriving there still owe the
           // trailing pass before this shared batch promise can settle.
-          if (!watcher || stopping.aborted) await clean()
+          if (!watcher || stopping.aborted) await clean(true)
         } while (dirty && !host.stopping?.aborted)
       } finally {
         try {
@@ -190,7 +194,7 @@ export let skillEffects = (
         watcher = false
         // Serialize cleanup with graph-triggered passes too, including a pass
         // still finishing when a poll or lease fails.
-        let cleanup = last.then(clean)
+        let cleanup = last.then(() => clean())
         last = cleanup.then(() => {}, () => {})
         try {
           await cleanup

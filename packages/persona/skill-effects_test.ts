@@ -39,8 +39,9 @@ let exists = async (path: string): Promise<boolean> => {
     throw error
   }
 }
+let graph = world()
 let fixture = (runtime: SkillRuntime = {}, stopping?: AbortSignal) =>
-  skillEffects({ graph: world(), stopping }, { skills: true }, {
+  skillEffects({ graph, stopping }, { skills: true }, {
     roots: () => Promise.resolve(['/repo']),
     sync: () => Promise.resolve(report()),
     ...runtime,
@@ -305,7 +306,7 @@ test('skill effects memory DB never uses the environment DB fallback', async () 
   try {
     for (let config of [undefined, { db: ':memory:' }]) {
       let path = ''
-      let fx = skillEffects({ graph: world(), config }, { skills: true }, {
+      let fx = skillEffects({ graph, config }, { skills: true }, {
         roots: () => Promise.resolve(['/repo']),
         sync: async (_g, _root, memory) => {
           path = memory
