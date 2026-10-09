@@ -75,17 +75,18 @@ let needs = (blocking = true) =>
   ], { ...reader, watching: new Set(['work']) })
 let comp = (b: Bundle, name: string) => b[name] as Comp
 
+let vocab = loadVocab([
+  kernelDoc,
+  docDoc,
+  edgeDoc,
+  taskDoc,
+  projectDoc,
+  mailDoc,
+  inboxDoc,
+  sessionDoc,
+], [kernelKeywords, edgeKeywords])
+
 let world = async () => {
-  let vocab = loadVocab([
-    kernelDoc,
-    docDoc,
-    edgeDoc,
-    taskDoc,
-    projectDoc,
-    mailDoc,
-    inboxDoc,
-    sessionDoc,
-  ], [kernelKeywords, edgeKeywords])
   let g = graph({
     vocab,
     actor: { by: 'agent' },

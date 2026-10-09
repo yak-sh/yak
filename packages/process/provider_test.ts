@@ -10,8 +10,9 @@ import { processDoc, processes } from '@yaks/process'
 import { machineTools } from '@yaks/harness/machine'
 import { processProvider } from './machine.ts'
 
+let vocab = loadVocab([processDoc])
+
 let tracked = () => {
-  let vocab = loadVocab([processDoc])
   return graph({ storage: ram(vocab), vocab, plugins: [processes()] })
 }
 

@@ -20,29 +20,30 @@ import {
   undrained,
 } from './migrate-session-machines.ts'
 
+let vocab = loadVocab([spineDoc, ...archetypeDocs, machineDoc, {
+  $defs: {
+    home: {
+      component: true,
+      properties: {
+        worktree: { type: 'string', ref: 'worktree', death: 'keep' },
+        machine: { type: 'string', ref: 'machine', death: 'keep' },
+        cwd: { type: 'string' },
+      },
+    },
+    worktree: {
+      component: true,
+      properties: { path: { type: 'string' }, head: { type: 'string' } },
+    },
+    session: {
+      component: true,
+      properties: { status: { type: 'string' }, ended: { type: 'boolean' } },
+    },
+    gitobj: { component: true, properties: {} },
+  },
+}], [kernelKeywords])
+
 let fixture = () => {
   let db = open(':memory:')
-  let vocab = loadVocab([spineDoc, ...archetypeDocs, machineDoc, {
-    $defs: {
-      home: {
-        component: true,
-        properties: {
-          worktree: { type: 'string', ref: 'worktree', death: 'keep' },
-          machine: { type: 'string', ref: 'machine', death: 'keep' },
-          cwd: { type: 'string' },
-        },
-      },
-      worktree: {
-        component: true,
-        properties: { path: { type: 'string' }, head: { type: 'string' } },
-      },
-      session: {
-        component: true,
-        properties: { status: { type: 'string' }, ended: { type: 'boolean' } },
-      },
-      gitobj: { component: true, properties: {} },
-    },
-  }], [kernelKeywords])
   let store = storage(db, vocab)
   store.install()
   for (let s of ddl()) db.query(s)

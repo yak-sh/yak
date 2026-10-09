@@ -17,21 +17,22 @@ import { aliasDoc, aliases } from '@yaks/alias'
 import { keyDoc, keyKeywords, keys } from '@yaks/key'
 import { CallError, resolved } from './args.ts'
 
+let vocab = loadVocab([kernelDoc, docDoc, keyDoc, aliasDoc, {
+  $defs: {
+    person: { component: true, properties: {} },
+    filed: {
+      component: true,
+      properties: { assignee: { type: 'string', ref: 'entity' } },
+    },
+  },
+}], [keyKeywords])
+
 let named = async (
   count: number,
   shell = 'absent',
   alias = false,
   kind = 'person',
 ) => {
-  let vocab = loadVocab([kernelDoc, docDoc, keyDoc, aliasDoc, {
-    $defs: {
-      person: { component: true, properties: {} },
-      filed: {
-        component: true,
-        properties: { assignee: { type: 'string', ref: 'entity' } },
-      },
-    },
-  }], [keyKeywords])
   let storage = ram(vocab)
   let g = graph({ vocab, storage, plugins: [keys(vocab), aliases()] })
   await g.apply([

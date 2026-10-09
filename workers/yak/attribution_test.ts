@@ -18,8 +18,9 @@ import type { Stored } from './plugin.ts'
 
 // Each boot gets a new registry over the same durable rows. The namespace
 // answers locally; neither the app nor directory is a live store.
+let registered = loadVocab([spineDoc, docDoc, effectDoc, registrationDoc])
 let registrations = () => {
-  let vocab = loadVocab([spineDoc, docDoc, effectDoc, registrationDoc])
+  let vocab = registered
   let storage = ram(vocab)
   let receipts: Bundle[][] = []
   let STORE: Namespace = {
@@ -217,10 +218,8 @@ test('directory attribution recovery still fills unfinished signed-in receipts',
   assertEquals(calls, 1)
 })
 
-let held = () => {
-  let vocab = loadVocab([spineDoc, docDoc])
-  return graph({ vocab, storage: ram(vocab) })
-}
+let heldVocab = loadVocab([spineDoc, docDoc])
+let held = () => graph({ vocab: heldVocab, storage: ram(heldVocab) })
 
 test('attribution is bounded, repeatable, and leaves timestamps intact', async () => {
   let g = held()

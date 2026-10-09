@@ -11,7 +11,7 @@ import {
   Stale,
   token,
 } from '@yaks/graph'
-import { loadVocab, type VocabDoc } from '@yaks/vocab'
+import { loadVocab, type Vocab, type VocabDoc } from '@yaks/vocab'
 import { ram } from '@yaks/ram'
 import { completing } from '../kernel/completion.ts'
 import { club } from './testing.ts'
@@ -47,7 +47,10 @@ let patch = (comp: string, value: Bundle[string], eid = 'request'): Bundle => ({
   [comp]: value,
 })
 
-let fixture = async (floors = {}, kernelFirst = true, pace?: string) => {
+// The club with the declaration, completions paced by `pace`: one
+// vocabulary for each.
+let vocabs = new Map<string | undefined, Vocab>()
+let paced = (pace?: string) => {
   let doc = {
     ...declaration,
     $defs: {
@@ -55,7 +58,13 @@ let fixture = async (floors = {}, kernelFirst = true, pace?: string) => {
       completed: { ...declaration.$defs!.completed, ...(pace ? { pace } : {}) },
     },
   }
-  let vocab = loadVocab([...club.docs, doc], [memberKeywords])
+  let got = vocabs.get(pace) ?? loadVocab([...club.docs, doc], [memberKeywords])
+  vocabs.set(pace, got)
+  return got
+}
+
+let fixture = async (floors = {}, kernelFirst = true, pace?: string) => {
+  let vocab = paced(pace)
   let storage = ram(vocab)
   let g = graph({ storage, vocab })
   await g.apply([

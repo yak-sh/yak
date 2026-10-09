@@ -93,6 +93,8 @@ export let stocked = async (): Promise<Statements> => {
 /** A graph with no provider or model rows: all an in-process embedder needs. */
 export let none: Rows = { get: () => [] }
 
+let modelled = loadVocab([modelDoc, edgeDoc], [edgeKeywords])
+
 /** A graph holding one provider serving one model, under the name it calls
  * the model by (the model's own, unless `as` says otherwise): what a config's
  * `{provider, model}` is read from. */
@@ -101,8 +103,7 @@ export let serving = async (
   model: string,
   as = model,
 ): Promise<Graph> => {
-  let vocab = loadVocab([modelDoc, edgeDoc], [edgeKeywords])
-  let g = graph({ storage: ram(vocab), vocab })
+  let g = graph({ storage: ram(modelled), vocab: modelled })
   let p = identityEid('provider', [String(provider.name)])
   let m = identityEid('model', [model])
   await g.apply([

@@ -45,13 +45,13 @@ let fixture = (runtime: SkillRuntime = {}, stopping?: AbortSignal) =>
     sync: () => Promise.resolve(report()),
     ...runtime,
   })
-let leasedGraph = (): Graph =>
-  world(loadVocab([{
-    $defs: {
-      entity: { component: true, type: 'object' },
-      lease: effectDoc.$defs!.lease,
-    },
-  }]))
+let leased = loadVocab([{
+  $defs: {
+    entity: { component: true, type: 'object' },
+    lease: effectDoc.$defs!.lease,
+  },
+}])
+let leasedGraph = (): Graph => world(leased)
 
 test('skill effects require their independent explicit opt-in', () => {
   let graph = world()

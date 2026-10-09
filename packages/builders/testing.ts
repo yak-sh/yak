@@ -61,8 +61,11 @@ let doc: VocabDoc = {
   },
 }
 
-export let workshop = (more: VocabDoc[] = []): Vocab =>
-  loadVocab([
+// The builders' vocabulary with the `more` documents: one for each.
+let workshops = new Map<string, Vocab>()
+export let workshop = (more: VocabDoc[] = []): Vocab => {
+  let key = JSON.stringify(more)
+  let got = workshops.get(key) ?? loadVocab([
     docDoc,
     edgeDoc,
     keyDoc,
@@ -76,6 +79,9 @@ export let workshop = (more: VocabDoc[] = []): Vocab =>
     doc,
     ...more,
   ], [edgeKeywords, keyKeywords])
+  workshops.set(key, got)
+  return got
+}
 
 export let noon = (): string => '2026-09-19T12:00:00.000Z'
 export let ids = {

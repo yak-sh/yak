@@ -24,10 +24,10 @@ import { inboxDoc } from './vocab.ts'
 
 let tools = loadTools(inboxDoc, runs())
 let row = (b: Bundle): Row => ({ eid: b.entity.eid, comps: b as Row['comps'] })
+let vocab = loadVocab([kernelDoc, docDoc, callDoc, toolDoc, inboxDoc], [
+  kernelKeywords,
+])
 let world = () => {
-  let vocab = loadVocab([kernelDoc, docDoc, callDoc, toolDoc, inboxDoc], [
-    kernelKeywords,
-  ])
   let g = graph({
     vocab,
     storage: ram(vocab, { computed: executionComputed }),

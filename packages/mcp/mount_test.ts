@@ -19,21 +19,21 @@ import { comp, pinned, shop, shopGraph } from './testing.ts'
 
 let ada = { by: 'm1' }
 
-let sessionGraph = () => {
-  let vocab = loadVocab([...shop.docs, sessionDoc, {
-    $defs: {
-      created: {
-        component: true,
-        extends: true,
-        type: 'object',
-        properties: {
-          via: { type: 'string', ref: 'entity', death: 'keep', stamped: true },
-        },
+let sessionVocab = loadVocab([...shop.docs, sessionDoc, {
+  $defs: {
+    created: {
+      component: true,
+      extends: true,
+      type: 'object',
+      properties: {
+        via: { type: 'string', ref: 'entity', death: 'keep', stamped: true },
       },
     },
-  }])
-  return graph({ storage: ram(vocab, { number: true }), vocab })
-}
+  },
+}])
+
+let sessionGraph = () =>
+  graph({ storage: ram(sessionVocab, { number: true }), vocab: sessionVocab })
 
 let post = (body: unknown) =>
   new Request('http://shop.test/mcp', {

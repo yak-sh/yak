@@ -55,9 +55,10 @@ let cloud = () => {
   return { sent, receiving, realtime }
 }
 
+let vocab = loadVocab([wakeDoc, rtcDoc])
+
 // An app's store, a meter with its allowance, and a door over both.
 let app = (allowance = Infinity) => {
-  let vocab = loadVocab([wakeDoc, rtcDoc])
   let g = graph({ storage: ram(vocab), vocab })
   let store = {
     read: async (q: string) => await g.read(q),

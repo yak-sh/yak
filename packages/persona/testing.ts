@@ -107,11 +107,13 @@ export let thin: Vocab = loadVocab(
   [edgeKeywords, idKeywords],
 )
 
+let pooled = loadVocab([...said.docs, effectDoc], [edgeKeywords, idKeywords])
+
 /** {@link said} keeping the effects pool's rows: a graph that writes down a
  * run for every effect it declares, the runs owed to `handler`, a way to clear
  * every run, and what the pool reported while working. */
 export let owing = (handler: string) => {
-  let vocab = loadVocab([...said.docs, effectDoc], [edgeKeywords, idKeywords])
+  let vocab = pooled
   let errors: unknown[] = []
   let fx = effects(vocab, {
     owes: 'declared',

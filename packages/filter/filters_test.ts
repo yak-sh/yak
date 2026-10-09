@@ -23,16 +23,18 @@ let vocab = loadVocab({
     },
   },
 })
+let draftVocab = loadVocab([draftDoc])
+let pageVocab = loadVocab(docs)
 // A person's drafts, kept in a graph of their own: every page given the same
 // ones is another interface they type in.
 let kept = (): Drafts => {
-  let store = client(loadVocab([draftDoc]), [drafts()], { vault: false })
+  let store = client(draftVocab, [drafts()], { vault: false })
   let by = mint()
   return desk(store, { by: () => by })
 }
 // A field in a page of its own.
 let field = (opts: Partial<Opts> = {}, typed = kept()) =>
-  filters(client(loadVocab(docs), [], { vault: false }), {
+  filters(client(pageVocab, [], { vault: false }), {
     vocab,
     drafts: typed,
     ...opts,

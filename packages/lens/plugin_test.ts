@@ -29,8 +29,9 @@ let kitchen = {
   },
 }
 let pkg = packageEid('kitchen'), speaks = { [pkg]: 0 }
+let kitchenVocab = loadVocab([metaDoc, ...docs, kitchen])
 let setup = (report?: (error: unknown) => void) => {
-  let vocab = loadVocab([metaDoc, ...docs, kitchen])
+  let vocab = kitchenVocab
   let g = graph({ vocab, storage: ram(vocab), plugins: [lenses(report)] })
   let out = g.apply([
     { entity: { eid: pkg }, _package: { name: 'kitchen' } },

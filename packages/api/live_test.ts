@@ -6,28 +6,29 @@ import { ram } from '@yaks/ram'
 import { loadVocab } from '@yaks/vocab'
 import { type Frame, type Sink, subscriptions } from './subs.ts'
 
-let fixture = () => {
-  let vocab = loadVocab({
-    $defs: {
-      hero: { component: true, properties: { name: { type: 'string' } } },
-      position: {
-        component: true,
-        sync: 'peers',
-        durable: 'forever',
-        save: '.hero !position',
-        properties: {
-          x: { type: 'number' },
-          at: { type: 'string', format: 'date-time' },
-        },
-      },
-      cursor: {
-        component: true,
-        sync: 'peers',
-        durable: '1s',
-        properties: { x: { type: 'number' } },
+let vocab = loadVocab({
+  $defs: {
+    hero: { component: true, properties: { name: { type: 'string' } } },
+    position: {
+      component: true,
+      sync: 'peers',
+      durable: 'forever',
+      save: '.hero !position',
+      properties: {
+        x: { type: 'number' },
+        at: { type: 'string', format: 'date-time' },
       },
     },
-  })
+    cursor: {
+      component: true,
+      sync: 'peers',
+      durable: '1s',
+      properties: { x: { type: 'number' } },
+    },
+  },
+})
+
+let fixture = () => {
   let g = graph({ vocab, storage: ram(vocab) })
   g.apply([
     { entity: { eid: 'one' }, hero: { name: 'One' }, position: { x: 1 } },

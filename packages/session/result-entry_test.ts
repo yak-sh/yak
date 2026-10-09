@@ -12,6 +12,7 @@ import { sessionDoc } from './comp.ts'
 import { sessions } from './plugin.ts'
 
 let T = toolEid('echo')
+let vocab = loadVocab([sessionDoc, toolsDoc, modelDoc])
 
 // One tool, answering the words it was told to, at the entity a call names.
 let saying = (g: Graph, say: () => unknown) =>
@@ -28,7 +29,6 @@ let saying = (g: Graph, say: () => unknown) =>
   })
 
 test('result membership is joined before sequence allocation and observers', async () => {
-  const vocab = loadVocab([sessionDoc, toolsDoc, modelDoc])
   const fx = effects(vocab)
   const g = graph({ vocab, storage: ram(vocab), plugins: [sessions(), fx] })
   const observed: unknown[] = []
@@ -54,7 +54,6 @@ test('result membership is joined before sequence allocation and observers', asy
 })
 
 test('same-batch call/result join respects the absence gate and detached calls', async () => {
-  const vocab = loadVocab([sessionDoc, toolsDoc, modelDoc])
   const g = graph({ vocab, storage: ram(vocab), plugins: [sessions()] })
   await g.apply([
     { entity: { eid: 's' }, session: {} },
@@ -82,7 +81,6 @@ test('same-batch call/result join respects the absence gate and detached calls',
 })
 
 test('independent callers can complete out of order without losing transcript association', async () => {
-  const vocab = loadVocab([sessionDoc, toolsDoc, modelDoc])
   const g = graph({ vocab, storage: ram(vocab), plugins: [sessions()] })
   await g.apply([
     { entity: { eid: 's' }, session: {} },
@@ -119,7 +117,6 @@ test('independent callers can complete out of order without losing transcript as
 })
 
 test('refusal diagnostics join their call transcript before sequencing', async () => {
-  let vocab = loadVocab([sessionDoc, toolsDoc, modelDoc])
   let g = graph({ vocab, storage: ram(vocab), plugins: [sessions()] })
   await g.apply([
     { entity: { eid: 's' }, session: {} },

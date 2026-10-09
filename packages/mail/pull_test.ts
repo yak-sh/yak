@@ -2,7 +2,7 @@ import { test } from '@yaks/testing'
 import { assertEquals, assertRejects } from '@std/assert'
 import { type Bundle, type Comp, graph } from '@yaks/graph'
 import { ram } from '@yaks/ram'
-import { loadVocab, type VocabDoc } from '@yaks/vocab'
+import { loadVocab, type Vocab, type VocabDoc } from '@yaks/vocab'
 import { docDoc, docs } from '@yaks/doc'
 import { hookDoc, hookEid } from '@yaks/hook'
 import { edgeDoc, edgeEid, edgeKeywords } from '@yaks/edge'
@@ -40,12 +40,20 @@ let extra: VocabDoc = {
   },
 }
 
-// A graph that knows Ana, with or without the hook vocabulary.
-let club = async (hooks = true) => {
-  let vocab = loadVocab(
+// The club vocabulary, with or without the hook vocabulary: one for each.
+let vocabs = new Map<boolean, Vocab>()
+let clubVocab = (hooks: boolean) => {
+  let got = vocabs.get(hooks) ?? loadVocab(
     [docDoc, mailDoc, edgeDoc, extra, ...(hooks ? [hookDoc] : [])],
     [edgeKeywords],
   )
+  vocabs.set(hooks, got)
+  return got
+}
+
+// A graph that knows Ana, with or without the hook vocabulary.
+let club = async (hooks = true) => {
+  let vocab = clubVocab(hooks)
   let g = graph({
     storage: ram(vocab),
     vocab,

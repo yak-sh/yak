@@ -2,11 +2,13 @@ import { test } from '@yaks/testing'
 import { assertEquals, assertThrows } from '@std/assert'
 import { type Bundle, graph, Refused, type Storage, type Tx } from '@yaks/graph'
 import { ram } from '@yaks/ram'
-import { loadVocab } from '@yaks/vocab'
+import { loadVocab, type Vocab } from '@yaks/vocab'
 import { archetypeDoc, archetypes, eidOf } from './mod.ts'
 
-let fixture = (stamped = false) => {
-  let vocab = loadVocab([archetypeDoc, {
+// The notes vocabulary, with or without the stamped `created`: one for each.
+let vocabs = new Map<boolean, Vocab>()
+let notes = (stamped: boolean) => {
+  let got = vocabs.get(stamped) ?? loadVocab([archetypeDoc, {
     $defs: {
       note: {
         component: true,
@@ -25,6 +27,12 @@ let fixture = (stamped = false) => {
         : {}),
     },
   }])
+  vocabs.set(stamped, got)
+  return got
+}
+
+let fixture = (stamped = false) => {
+  let vocab = notes(stamped)
   let storage = ram(vocab)
   let writes = 0, reads = 0, owners = 0
   let g = graph({

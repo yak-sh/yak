@@ -28,19 +28,18 @@ let repo = repositoryEid('/repo/.git')
 let elsewhere = repositoryEid('/elsewhere/.git')
 let another = repositoryEid('/another/.git')
 
-let world = (): Graph => {
-  let vocab = loadVocab([docDoc, edgeDoc, gitDoc, personaDoc, {
-    $defs: {
-      content: {
-        component: true,
-        type: 'object',
-        properties: { body: { type: 'string' } },
-      },
-      references: { component: true, type: 'object', edge: true },
+let vocab = loadVocab([docDoc, edgeDoc, gitDoc, personaDoc, {
+  $defs: {
+    content: {
+      component: true,
+      type: 'object',
+      properties: { body: { type: 'string' } },
     },
-  }], [edgeKeywords])
-  return graph({ vocab, storage: ram(vocab, { number: true }) })
-}
+    references: { component: true, type: 'object', edge: true },
+  },
+}], [edgeKeywords])
+
+let world = (): Graph => graph({ vocab, storage: ram(vocab, { number: true }) })
 
 let file = (repository: string, path: string): Bundle => ({
   entity: { eid: identityEid('file', [path, repository]) },
