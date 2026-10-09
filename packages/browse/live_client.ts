@@ -15,7 +15,10 @@ export { entire, quiet }
 // status ladder (@yaks/vocab's `status` keyword) is the server's derivation
 // too, so its component keeps the status as a plain column, and the rungs
 // another document adds go with it.
+let projections = new WeakMap<typeof vocab, typeof vocab>()
 let browserVocab = () => {
+  let kept = projections.get(vocab)
+  if (kept) return kept
   let docs = structuredClone(vocab.docs)
   for (let doc of docs) {
     for (let [name, def] of Object.entries(doc.$defs ?? {})) {
@@ -35,7 +38,9 @@ let browserVocab = () => {
       }
     }
   }
-  return loadVocab(docs, keywords)
+  let projected = loadVocab(docs, keywords)
+  projections.set(vocab, projected)
+  return projected
 }
 
 export type LiveClient = ReturnType<typeof liveClient>
