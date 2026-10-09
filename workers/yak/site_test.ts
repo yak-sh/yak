@@ -7,7 +7,16 @@ import { test } from '@yaks/testing'
 import { assert, assertEquals, assertStringIncludes } from '@std/assert'
 import { parseHTML } from 'linkedom'
 import { REPLY_TO } from './mail.ts'
-import { CURRENCY, FILES, FREE, LETTERS, PLUS, PRICE, size } from './meter.ts'
+import {
+  count,
+  CURRENCY,
+  FILES,
+  FREE,
+  LETTERS,
+  PLUS,
+  PRICE,
+  size,
+} from './meter.ts'
 import { quoted, rate } from './sell.ts'
 import { DRAWN, MARKDOWN } from './docs.ts'
 import { page as galleryPage } from './gallery.ts'
@@ -203,9 +212,24 @@ test('the frame is asked for on the body, above what it frames', () => {
 // "100 emails a month" of a platform that could not send one at all.
 let flat = (html: string) => html.replace(/\s{2,}|[^\S ]/g, ' ')
 
+// The copy each tier's allowances should read as, off the meter's own numbers.
+let allowance = (tier: 'free' | 'plus') => {
+  let limits = tier == 'plus' ? PLUS : FREE
+  return {
+    apps: limits.apps == null ? 'Unlimited apps' : `${limits.apps} apps`,
+    requests: `${count(limits.requests)} request units a month`,
+    data: `${size(limits.bytes)} of app data`,
+    emails: `${count(LETTERS[tier])} emails a month`,
+    ...(FILES[tier] == null
+      ? {}
+      : { files: `${size(FILES[tier])} of photos and files` }),
+  }
+}
+let allowances = { free: allowance('free'), plus: allowance('plus') }
+
 test('the plan pages carry the email allowance the code enforces', () => {
-  let free = `${LETTERS.free} emails a month`
-  let plus = `${LETTERS.plus.toLocaleString('en-US')} emails a month`
+  let free = allowances.free.emails
+  let plus = allowances.plus.emails
   // The technical page is markdown and says the same two numbers, which is
   // the point of the rule it is written under: read off the code, never
   // invented (public/docs/technical.md).
@@ -217,25 +241,13 @@ test('the plan pages carry the email allowance the code enforces', () => {
 })
 
 test('the plan cards and Plus offer carry the meter allowances', () => {
-  let allowances = (tier: 'free' | 'plus') => {
-    let limits = tier == 'plus' ? PLUS : FREE
-    return [
-      limits.apps == null ? 'Unlimited apps' : `${limits.apps} apps`,
-      `${limits.requests.toLocaleString('en-US')} request units a month`,
-      `${size(limits.bytes)} of app data`,
-      `${LETTERS[tier].toLocaleString('en-US')} emails a month`,
-      ...(FILES[tier] == null
-        ? []
-        : [`${size(FILES[tier])} of photos and files`]),
-    ]
-  }
   for (let page of ['index.html', 'pricing.html']) {
     let { document } = parseHTML(read(page))
     for (let tier of ['free', 'plus'] as const) {
       let card = document.querySelector(
         tier == 'plus' ? '.Plan-plus' : '.Plan:not(.Plan-plus)',
       )!
-      for (let text of allowances(tier)) {
+      for (let text of Object.values(allowances[tier])) {
         assertStringIncludes(flat(card.textContent!), text, `${page}: ${tier}`)
       }
     }
@@ -245,7 +257,7 @@ test('the plan cards and Plus offer carry the meter allowances', () => {
     n['@type'] == 'SoftwareApplication'
   )
   let offer = app.offers.find((o: { name: string }) => o.name == 'Plus')
-  for (let text of allowances('plus')) {
+  for (let text of Object.values(allowances.plus)) {
     assertStringIncludes(offer.description, text)
   }
 })
@@ -663,7 +675,7 @@ test('the help page answers its own questions in JSON-LD', () => {
 // the fields that app asks for (T-34412, T-34413, T-34415).
 let tabs = ['claude', 'chatgpt', 'claude-code', 'cursor', 'other']
 
-let count = (html: string, s: string) => html.split(s).length - 1
+let occurrences = (html: string, s: string) => html.split(s).length - 1
 
 let panel = (html: string, key: string) => {
   let start = html.indexOf(
@@ -699,7 +711,10 @@ test('the connect page teaches one agent at a time', async () => {
   )
   assertStringIncludes(html, '<fieldset class="Tabs">')
   assertStringIncludes(html, '<legend class="Tabs_Legend">')
-  assertEquals(count(html, '<section class="Card Tabs_Panel'), tabs.length)
+  assertEquals(
+    occurrences(html, '<section class="Card Tabs_Panel'),
+    tabs.length,
+  )
   for (let key of ['claude', 'chatgpt', 'claude-code', 'cursor', 'other']) {
     let one = panel(html, key)
     assertStringIncludes(one, 'https://yaks.app/mcp')
@@ -764,7 +779,7 @@ test('each connector form gets only the fields it asks for', async () => {
 test('ChatGPT gets a downloadable icon within its upload limit', async () => {
   let html = panel(await page(), 'chatgpt')
   let href = `${SITE_URL}/yaks-app.png`
-  assertEquals(count(html, `href="${href}" download="yaks-app.png"`), 2)
+  assertEquals(occurrences(html, `href="${href}" download="yaks-app.png"`), 2)
   assertStringIncludes(
     html,
     `<a href="${href}" download="yaks-app.png" aria-label="Download the yaks.app icon">
@@ -780,7 +795,7 @@ test('ChatGPT gets a downloadable icon within its upload limit', async () => {
 
 test('the signed-in plan copy derives both tiers from the meter', async () => {
   for (let plus of [false, true]) {
-    let limits = plus ? PLUS : FREE
+    let { apps, requests, data } = allowances[plus ? 'plus' : 'free']
     let html = flat(
       await connect({
         slug: 'dana',
@@ -790,9 +805,7 @@ test('the signed-in plan copy derives both tiers from the meter', async () => {
     )
     assertStringIncludes(
       html,
-      `${limits.apps == null ? 'Unlimited apps' : `${limits.apps} apps`}, ${
-        limits.requests.toLocaleString('en-US')
-      } request units a month, ${size(limits.bytes)} of app data`,
+      `${apps}, ${requests}, ${data}`,
     )
   }
 })
