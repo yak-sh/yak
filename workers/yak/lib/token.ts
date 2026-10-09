@@ -73,19 +73,42 @@ export type Use =
 
 let HMAC = { name: 'HMAC', hash: 'SHA-256' }
 
-let hmac = (raw: BufferSource, usage: KeyUsage) =>
-  crypto.subtle.importKey('raw', raw, HMAC, false, [usage])
+// Each key made once in an isolate: a use's key is three WebCrypto calls,
+// and every request with a cookie opens one. The key is kept, not the promise
+// of it, so no request waits on work another request started.
+let keys = new Map<string, CryptoKey>()
+let kept = async (id: string, make: () => Promise<CryptoKey>) => {
+  let got = keys.get(id)
+  if (!got) keys.set(id, got = await make())
+  return got
+}
+
+// The secret's own key, which each use's key is made under, and which the old
+// seal used whole.
+let hmac = (secret: string, usage: KeyUsage) =>
+  kept(
+    JSON.stringify([usage, secret]),
+    () =>
+      crypto.subtle.importKey('raw', enc.encode(secret), HMAC, false, [usage]),
+  )
 
 // The use's own key: HMAC-SHA256 of the use's name under the secret. One
 // secret to hold and rotate, and no two uses that can verify each other.
-let key = async (secret: string, use: Use, usage: KeyUsage) =>
-  hmac(
-    await crypto.subtle.sign(
-      'HMAC',
-      await hmac(enc.encode(secret), 'sign'),
-      enc.encode(`yaks.app/${use}`),
-    ),
-    usage,
+let key = (secret: string, use: Use, usage: KeyUsage) =>
+  kept(
+    JSON.stringify([usage, use, secret]),
+    async () =>
+      crypto.subtle.importKey(
+        'raw',
+        await crypto.subtle.sign(
+          'HMAC',
+          await hmac(secret, 'sign'),
+          enc.encode(`yaks.app/${use}`),
+        ),
+        HMAC,
+        false,
+        [usage],
+      ),
   )
 
 let sealWith = async (k: CryptoKey, value: unknown) => {
@@ -127,7 +150,7 @@ export let seal = async (use: Use, value: unknown, secret: string) =>
 let open = async (use: Use, sealed: string, secret: string) => {
   let value = await openWith(await key(secret, use, 'verify'), sealed)
   if (value != null) return { value, legacy: false }
-  let old = await openWith(await hmac(enc.encode(secret), 'verify'), sealed)
+  let old = await openWith(await hmac(secret, 'verify'), sealed)
   return old != null && oldUse(old) == use
     ? { value: today(use, old), legacy: true }
     : null
@@ -135,7 +158,7 @@ let open = async (use: Use, sealed: string, secret: string) => {
 
 /** The seal before 2c05d0f6, for a test to mint an old token with. */
 export let sealedOld = async (value: unknown, secret: string) =>
-  sealWith(await hmac(enc.encode(secret), 'sign'), value)
+  sealWith(await hmac(secret, 'sign'), value)
 
 // What was sealed, or null for anything but a well-formed value sealed for
 // this use under this secret.
