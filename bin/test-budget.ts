@@ -191,6 +191,8 @@ let run = async (args: string[], task = 'test') => {
   try {
     let { code } = await new Deno.Command('deno', {
       args: ['task', task, '--all', `--times=${dir}`, ...args],
+      stdout: 'inherit',
+      stderr: 'inherit',
     }).output()
     return { code, runs: (await read(dir)).runs }
   } finally {
