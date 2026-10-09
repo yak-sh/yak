@@ -73,7 +73,7 @@ let read = (doc: Value, p: readonly string[]): Value => {
 // Copy only changed ancestors. No operation can mutate a caller's document or
 // an authored default, including a later operation using that default.
 let write = (doc: Value, p: readonly string[], value: Value): Value => {
-  if (!p.length) return value
+  if (!p.length) return same(doc, value) ? doc : value
   let [key, ...rest] = p
   if (doc !== absent && (doc === null || typeof doc != 'object')) {
     fail(`cannot descend into ${key}`)
@@ -83,7 +83,8 @@ let write = (doc: Value, p: readonly string[], value: Value): Value => {
     ? (held as { [key: string]: Json })[key]
     : absent
   let after = write(before, rest, value)
-  if (before === after || same(before, after)) return doc
+  // A leaf keeps its identity when unchanged; ancestors need no second walk.
+  if (before === after) return doc
   if (Array.isArray(held)) {
     let n = Number(key)
     if (!Number.isInteger(n) || n < 0 || n > held.length || String(n) != key) {
