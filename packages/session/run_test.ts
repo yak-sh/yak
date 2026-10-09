@@ -818,6 +818,8 @@ test('a ready replacement continues a drained multi-step turn without a nudge', 
     open()
     await first
     await a.fx.idle()
+    // The replacement's next pass, which its nap would reach within a second.
+    b.fx.wake()
     await until(async () => statusOf(await transcript(b.g, 's1')) == 'settled')
     assertEquals(asks, 2)
     assertEquals(runs, 1)
