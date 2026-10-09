@@ -11,6 +11,7 @@ import { flat, standAt } from './terrain.ts'
 import { seedDesigns } from './designs_fixture.ts'
 
 seedDesigns()
+let oak = modelOf(LODES.oak.look, true, 0)
 
 test('adjacent crowns and a gathering node do not fight the ground or each other', () => {
   let props = [15.25, 16.25].map((x, seed) => ({
@@ -30,9 +31,8 @@ test('adjacent crowns and a gathering node do not fight the ground or each other
     ])
   }
   let at: [number, number, number] = [15.75, 5, 8.25]
-  let node = modelOf(LODES.oak.look, true, 0)
-  let d = off(among(v)(at, [node]))
-  place(o, node, [at[0] + d[0], at[1] + d[1], at[2] + d[2]])
+  let d = off(among(v)(at, [oak]))
+  place(o, oak, [at[0] + d[0], at[1] + d[1], at[2] + d[2]])
   assertEquals(fights(pack(o)), [])
 })
 
@@ -61,14 +61,13 @@ test('a node keeps its spacing from worker-provided prop placements', () => {
   let p = { kind: 'oak', x: 50.25, z: 50.25, seed: 0 }
   let v = flat(5, [], [p])
   let at: [number, number, number] = [51, 5, 50.25]
-  let model = modelOf(LODES.oak.look, true, 0)
-  let expected = among(v)(at, [model])
+  let expected = among(v)(at, [oak])
   let withoutPlant = {
     ...v,
     plant: () => {
       throw new Error('terrain read')
     },
   }
-  let got = among(withoutPlant)(at, [model], [{ prop: p, step: step(v, p) }])
+  let got = among(withoutPlant)(at, [oak], [{ prop: p, step: step(v, p) }])
   assertEquals(got, expected)
 })

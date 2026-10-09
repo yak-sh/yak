@@ -90,7 +90,11 @@ export let profileOf = (o: Out): Profile => {
   for (let q = 0; q < o.pos.length; q += 12) {
     for (let k = 0; k < 3; k++) {
       let m = o.pos[q + k]
-      if ([3, 6, 9].every((d) => Math.abs(o.pos[q + d + k] - m) < 1e-6)) {
+      if (
+        Math.abs(o.pos[q + 3 + k] - m) < 1e-6 &&
+        Math.abs(o.pos[q + 6 + k] - m) < 1e-6 &&
+        Math.abs(o.pos[q + 9 + k] - m) < 1e-6
+      ) {
         planes[k].add(m)
       }
     }
