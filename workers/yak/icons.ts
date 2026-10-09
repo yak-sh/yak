@@ -37,7 +37,7 @@ let escaped = (value: string | number) =>
   String(value).replaceAll('&', '&amp;').replaceAll('"', '&quot;')
     .replaceAll('<', '&lt;').replaceAll('>', '&gt;')
 
-let body = (nodes: IconNode) =>
+let drawn = (nodes: IconNode) =>
   nodes.map(([tag, attrs]) =>
     `<${tag}${
       Object.entries(attrs).filter(([, value]) => value !== undefined).map(
@@ -45,6 +45,14 @@ let body = (nodes: IconNode) =>
       ).join('')
     }></${tag}>`
   ).join('')
+
+// Lucide's nodes are static; inline icons and the sprite reuse their markup.
+let bodies = new WeakMap<IconNode, string>()
+let body = (nodes: IconNode) => {
+  let html = bodies.get(nodes)
+  if (html == undefined) bodies.set(nodes, html = drawn(nodes))
+  return html
+}
 
 let stroke = 'viewBox="0 0 24 24" fill="none" stroke="currentColor" ' +
   'stroke-width="2" stroke-linecap="round" stroke-linejoin="round"'
