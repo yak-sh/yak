@@ -646,8 +646,7 @@ export let transport = (options: ResponseOptions): {
     let waited = 0
     let requestId = id()
     let shaped = options.shape?.(value) ?? request(value, options.store)
-    while (true) {
-      run.signal?.throwIfAborted()
+    let prepare = () => {
       let endpoint = (base ?? auth.base ?? 'https://api.openai.com/v1')
         .replace(/\/$/, '')
       // The Codex endpoint rejects max_output_tokens; the public API accepts it.
@@ -669,6 +668,12 @@ export let transport = (options: ResponseOptions): {
       if (endpoint == CODEX && run.conversation) {
         headers.set('session_id', run.conversation)
       }
+      return { endpoint, payload, headers }
+    }
+    let prepared = prepare()
+    while (true) {
+      run.signal?.throwIfAborted()
+      let { endpoint, payload, headers } = prepared
 
       // One deadline spans this whole exchange — the connect, the wait on the
       // first frame, and every mid-stream gap — each frame pushing it forward.
@@ -715,6 +720,7 @@ export let transport = (options: ResponseOptions): {
             options.redact,
           )
           remember(auth)
+          prepared = prepare()
           refreshed = true
           continue
         }
