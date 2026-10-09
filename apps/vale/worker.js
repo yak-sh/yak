@@ -428,7 +428,6 @@ let spawn = async (req, env, v, themes) => {
   }
   let person = req.headers.get('x-yak-person')
   if (!person) return new Response('Sign in to spawn.', { status: 403 })
-  await themes(env)
   let chosen = await heroOf(req, env, undefined)
   if (chosen instanceof Response) return chosen
   let player = chosen.entity.eid
@@ -436,6 +435,7 @@ let spawn = async (req, env, v, themes) => {
     env,
     `.entity.eid=${JSON.stringify(player)}&.position&?motion`,
   )
+  if (target || hero?.position) await themes(env)
   let at
   try {
     if (target) {
