@@ -2,10 +2,12 @@ import { equal, ok, test, throws } from '@yaks/testing'
 import { document, type Json, type Op } from './document.ts'
 import tools from './tools.fixture.json' with { type: 'json' }
 
+let frozen = new WeakSet<object>()
 let freeze = <T>(value: T): T => {
-  if (value && typeof value == 'object') {
+  if (value && typeof value == 'object' && !frozen.has(value)) {
     for (let child of Object.values(value)) freeze(child)
     Object.freeze(value)
+    frozen.add(value)
   }
   return value
 }
