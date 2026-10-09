@@ -1470,12 +1470,15 @@ export let flat = (
     grow: (ci, ck) => {
       let C = Math.round(CHUNK / voxel), n = C + 2
       let h = new Int16Array(n * n)
-      for (let k = 0; k < n; k++) {
-        for (let i = 0; i < n; i++) {
-          h[i + k * n] = Math.round(
-            rise((ci * C + i - 0.5) * voxel, (ck * C + k - 0.5) * voxel) /
-              voxel,
-          )
+      if (typeof high == 'number') h.fill(Math.round(high / voxel))
+      else {
+        for (let k = 0; k < n; k++) {
+          for (let i = 0; i < n; i++) {
+            h[i + k * n] = Math.round(
+              rise((ci * C + i - 0.5) * voxel, (ck * C + k - 0.5) * voxel) /
+                voxel,
+            )
+          }
         }
       }
       let top = new Uint8Array(C * C)
