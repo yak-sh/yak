@@ -53,7 +53,7 @@ export type Goods = { kind: string; n: number }[]
 
 // Every word a kind goes by: its own (an item's kind, a creature's alias),
 // and its name.
-let words = () =>
+let names = () =>
   new Map<string, string>([
     ...Object.entries(ITEMS).flatMap(([kind, t]): [string, string][] => [
       [kind, kind],
@@ -65,8 +65,8 @@ let words = () =>
     ]),
   ])
 
-let kindOf = (word: string): string | null => {
-  let known = words()
+// All parts of one goods expression share its name lookup.
+let kindOf = (word: string, known: Map<string, string>): string | null => {
   return known.get(word) ?? known.get(word.replace(/s$/, '')) ??
     known.get(word.replace(/es$/, '')) ??
     known.get(word.replace(/ies$/, 'y')) ?? null
@@ -97,12 +97,12 @@ let kindOf = (word: string): string | null => {
  * ```
  */
 export let goods = (text: string): Goods | null => {
-  let out: Goods = []
+  let out: Goods = [], known: Map<string, string> | undefined
   for (let part of text.toLowerCase().split(/,|;|\band\b|\+/)) {
     let words = part.trim().replace(/^(a|an|the|one)\s+/, '1 ')
     if (!words) continue
     let [, count, word] = /^(\d+)?\s*x?\s*(.+?)$/.exec(words) ?? []
-    let kind = word ? kindOf(word.trim()) : null
+    let kind = word ? kindOf(word.trim(), known ??= names()) : null
     let n = count ? Number(count) : 1
     if (!kind || !(n >= 1)) return null
     let had = out.find((g) => g.kind == kind)
