@@ -22,26 +22,29 @@ test('sha256 matches the published vectors', () => {
   )
 })
 
+// The platform hashes on a thread of its own, so its digests are asked for at
+// once and awaited together, not one round trip after another.
 test('sha256 matches the platform digest, including multi-byte text', async () => {
-  for (
-    let s of [
-      '',
-      'a',
-      'the quick brown fox',
-      'æøå — 日本語',
-      'x'.repeat(55),
-      'x'.repeat(56),
-      'x'.repeat(200),
-      'æ'.repeat(300),
-      'y'.repeat(1000),
-      'z',
-    ]
-  ) {
-    let want = hex(
-      await crypto.subtle.digest('SHA-256', new TextEncoder().encode(s)),
-    )
-    assertEquals(sha256(s), want, s.slice(0, 20))
-  }
+  let texts = [
+    '',
+    'a',
+    'the quick brown fox',
+    'æøå — 日本語',
+    'x'.repeat(55),
+    'x'.repeat(56),
+    'x'.repeat(200),
+    'æ'.repeat(300),
+    'y'.repeat(1000),
+    'z',
+  ]
+  let wants = await Promise.all(
+    texts.map((s) =>
+      crypto.subtle.digest('SHA-256', new TextEncoder().encode(s))
+    ),
+  )
+  texts.forEach((s, i) =>
+    assertEquals(sha256(s), hex(wants[i]), s.slice(0, 20))
+  )
 })
 
 test('a guard token hashes the value as text, and absence is null', () => {
