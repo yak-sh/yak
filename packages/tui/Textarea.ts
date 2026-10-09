@@ -177,8 +177,7 @@ export let Textarea = (
     onEdit?.(next)
     if (next.text != was.text) onChange?.(next.text)
   }
-  let metric = useMetric(id)
-  let columns = metric.width || size.value.columns
+  let columns = useMetric(id, 'width') || size.value.columns
   let hint = prompt.slice(0, Math.max(0, columns - 1))
   let width = Math.max(1, columns - hint.length)
   useKeys((k) => {

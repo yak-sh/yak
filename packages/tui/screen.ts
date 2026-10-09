@@ -12,8 +12,8 @@ import { interceptKey } from './keymap.ts'
  */
 
 import { visualKey } from './visual.ts'
-import { type Signal, signal } from '@preact/signals'
-import { useLayoutEffect, useRef } from 'preact/hooks'
+import { computed, type Signal, signal } from '@preact/signals'
+import { useLayoutEffect, useMemo, useRef } from 'preact/hooks'
 import type { Key } from './input.ts'
 import type { Metrics } from './paint.ts'
 
@@ -83,11 +83,28 @@ export let useKeys = (fn: Keys, id?: string): void => {
   }, [id])
 }
 
-/** What the painter measured for an element id on the last paint. */
-export let useMetric = (
+type Metric = Metrics[string]
+let empty: Metric = { total: 0, height: 0, width: 0 }
+
+/** What the painter measured for an element id on the last paint, or one of
+ * its measures. */
+export function useMetric(id: string): Metric
+export function useMetric<K extends keyof Metric>(id: string, key: K): Metric[K]
+export function useMetric<K extends keyof Metric>(
   id: string,
-): { total: number; height: number; width: number; reveal?: number } =>
-  metrics.value[id] ?? { total: 0, height: 0, width: 0 }
+  key?: K,
+): Metric | Metric[K] {
+  // Read through a signal of its own, so a component re-renders only when what
+  // it reads changed, and a fresh one when the id it measures changes.
+  return useMemo(
+    () =>
+      computed(() => {
+        let value = metrics.value[id] ?? empty
+        return key == null ? value : value[key]
+      }),
+    [id, key],
+  ).value
+}
 
 /** Publish a paint's measurements; unchanged measurements re-render nothing. */
 export let measured = (next: Metrics): void => {

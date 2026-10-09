@@ -13,7 +13,7 @@ import { clearMouse, routeMouse } from './mouse.ts'
 import { type ComponentType, h, render } from 'preact'
 import { install, onPaint } from './dom.ts'
 import { decode } from './input.ts'
-import { ansiBackend, screenful } from './paint.ts'
+import { ansiBackend, type Line } from './paint.ts'
 import type { Sheet } from './theme.ts'
 import { clear, measured, press, size } from './screen.ts'
 
@@ -34,17 +34,20 @@ export let mount = async (
   let screen = install()
   let out: string[] = []
   let wrote = 0
+  let lines: Line[] = []
   let backend = ansiBackend({
     sheet,
     size: () => ({ columns, rows }),
     write: (s) => void out.push(s),
   })
   size.value = { columns, rows }
-  onPaint(() => {
+  let draw = () => {
     let r = backend.draw(screen.root)
     wrote += r.written
+    lines = r.lines!
     measured(r.metrics)
-  })
+  }
+  onPaint(draw)
   render(h(App, {}), screen.root as unknown as Parameters<typeof render>[1])
   // Preact renders and the tree repaints on microtasks; a few turns settle the
   // measure/re-render loop a scroll region makes on its first paint.
@@ -55,7 +58,7 @@ export let mount = async (
   return {
     out,
     text: () =>
-      screenful(screen.root, columns, rows, sheet).lines
+      lines
         .map((l) => l.map((s) => s.text).join('').trimEnd())
         .join('\n'),
     send: async (bytes: string) => {
@@ -64,10 +67,7 @@ export let mount = async (
         if (key.name == 'mouse') {
           routeMouse(
             key,
-            screenful(screen.root, columns, rows, sheet).lines.slice(0, rows)
-              .map(
-                (line) => clip(line, columns),
-              ),
+            lines.map((line) => clip(line, columns)),
           )
         } else press(key)
       }
@@ -78,7 +78,7 @@ export let mount = async (
       columns = width
       rows = height
       size.value = { columns, rows }
-      measured(backend.draw(screen.root).metrics)
+      draw()
       await settle()
     },
     free: () => {
