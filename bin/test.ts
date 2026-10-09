@@ -19,6 +19,7 @@
 
 import { find, tested } from '@yaks/testing/find'
 import { type Result, runTestCommands, type TestCommand } from './phases.ts'
+import { SHARED } from './test-runtime.ts'
 
 export let ROOTS = ['packages', 'bin', 'workers', 'apps']
 
@@ -79,27 +80,53 @@ export let GIT = {
 /** The runner every platform's runtime runs. */
 let RUNNER = new URL(import.meta.resolve('@yaks/testing/main')).pathname
 
-/** How a platform's runtime starts, before the runner and its arguments. */
-export let RUNTIME = [
-  'run',
-  '--frozen',
-  // `deno task gate` runs the stricter whole-repo check first, and it types
-  // every example in a doc comment beside the modules (`deno check --doc`).
-  '--no-check',
-  '-A',
-  '--unstable-net',
-  '--unstable-worker-options',
-  // Every function compiled as its module loads. A test runs once, so V8's
-  // lazy compilation charged each test for compiling its own body and all the
-  // code it was the first to call: a third of what a test between 0.5 and
-  // 1 ms took, paid by whichever test came first. Compiled whole, the run
-  // takes as long. Code cached under one V8 flag is refused under another,
-  // so the run keeps out of Deno's code cache, which every other deno process
-  // on the machine reads compiled lazily: each would recompile what the other
-  // last wrote there. Without it, the run takes as long again.
-  '--v8-flags=--no-lazy',
-  '--no-code-cache',
-]
+/**
+ * The module cache a runtime runs on: the run's, every part of it linked but
+ * Deno's code cache. A runtime compiles every function as its module loads
+ * (`runtime`), and code cached under one V8 flag is refused under another, so
+ * sharing a code cache with the `yak` command, the servers and a test's own
+ * deno children would have each recompile what the other last wrote there
+ * (44 ms to 144 ms for the CLI's import). Kept apart, a runtime reads its
+ * code compiled whole, which is most of what loading TypeScript or starting
+ * a worker in a test took: 296 ms to 108 ms for the compiler catalog's.
+ */
+export let wholeDir = (shared: string = denoDir()) => {
+  let dir = `${shared.replace(/\/+$/, '')}-whole`
+  Deno.mkdirSync(dir, { recursive: true })
+  for (let { name } of Deno.readDirSync(shared)) {
+    if (name.startsWith('v8_code_cache')) continue
+    try {
+      Deno.symlinkSync(`${shared}/${name}`, `${dir}/${name}`)
+    } catch (e) {
+      if (!(e instanceof Deno.errors.AlreadyExists)) throw e
+    }
+  }
+  return dir
+}
+
+/** How a platform's runtime starts: its arguments before the runner's, and
+ * what it adds to the environment. */
+export let runtime = (shared: string = denoDir()) => ({
+  args: [
+    'run',
+    '--frozen',
+    // `deno task gate` runs the stricter whole-repo check first, and it types
+    // every example in a doc comment beside the modules (`deno check --doc`).
+    '--no-check',
+    '-A',
+    '--unstable-net',
+    '--unstable-worker-options',
+    // Every function compiled as its module loads. A test runs once, so V8's
+    // lazy compilation charged each test for compiling its own body and all
+    // the code it was the first to call: a third of what a test between 0.5
+    // and 1 ms took, paid by whichever test came first. Compiled whole, the
+    // run takes as long.
+    '--v8-flags=--no-lazy',
+    '--preload',
+    new URL('./test-runtime.ts', import.meta.url).pathname,
+  ],
+  env: { DENO_DIR: wholeDir(shared), [SHARED]: shared },
+})
 
 // Deno prints a test's name before running it, then finishes the same line
 // with its result. Keep that name while the reporter's bytes stay buffered
@@ -191,6 +218,7 @@ if (import.meta.main && Deno.args[0] === '--bulk') {
     ] as const
   ).filter(([, files]) => files.length)
   let children: Deno.ChildProcess[] = []
+  let host = runtime()
   let spawn = (
     p: string,
     files: readonly string[],
@@ -199,14 +227,14 @@ if (import.meta.main && Deno.args[0] === '--bulk') {
   ) => {
     let child = new Deno.Command(Deno.execPath(), {
       args: [
-        ...RUNTIME,
+        ...host.args,
         RUNNER,
         `--platform=${p}`,
         ...flags,
         ...more,
         ...files,
       ],
-      env,
+      env: { ...env, ...host.env },
       stdin: 'inherit',
       // Keep each reporter intact: platforms running at once would
       // interleave their half-lines. Drain concurrently below.
