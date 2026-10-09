@@ -50,7 +50,7 @@ let fakeOutbox = () => {
   }
 }
 
-test('the indicator mirrors the outbox: a mutate adds, an ack clears', async () => {
+test('the indicator mirrors the outbox: a mutate adds, an ack clears', () => {
   let restore = stubSockets()
   let prev = live.useOutboxStore(fakeOutbox())
   try {
