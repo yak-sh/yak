@@ -100,6 +100,7 @@ let atom = (raw: string): Value => {
 // rather than repaired — and a member containing a space was quoted, so the
 // quotes come off here.
 let value = (raw: string): Value => {
+  if (!raw.includes(',')) return atom(raw)
   let items = splitOutside(raw, ',')
   if (items.length == 1) return atom(raw)
   if (items.some((s) => !s)) throw new SyntaxError(LIST)
@@ -213,6 +214,9 @@ export let cursor = (val: string): number | undefined => {
 // write that took it away, and no amount of reading the stored rows tells them
 // apart.
 let sigil = (token: string): Clause[] | null => {
+  let plain = token.match(PLAIN)
+  if (plain) return [PRESENCE[plain[1]] ?? pres(plain[1])]
+  if (token.startsWith('.')) return null
   let dot = token.match(DOTTED)
   if (dot) throw spelled(token, dot[1] + dot[2])
   // An eid fragment is a singleton resource too; unlike a component name it
@@ -220,8 +224,6 @@ let sigil = (token: string): Clause[] | null => {
   if (/^#[0-9a-f]{6,64}$/i.test(token)) {
     return [{ kind: 'resource', comp: token.slice(1) }]
   }
-  let plain = token.match(PLAIN)
-  if (plain) return [PRESENCE[plain[1]] ?? pres(plain[1])]
   let m = token.match(SIGIL)
   if (!m) return null
   let [, mark, word] = m
@@ -587,7 +589,7 @@ let clauseish = (tok: string): boolean => {
 }
 let parts = (tok: string, prev?: string, next?: string): string[] => {
   // A group is one term; its commas belong to the clauses inside it.
-  if (tok.startsWith('(')) return [tok]
+  if (tok.startsWith('(') || !tok.includes(',')) return [tok]
   if (
     tok.startsWith(',') && prev && VALUED.test(prev) && !clauseish(tok)
   ) throw new SyntaxError(LIST)
