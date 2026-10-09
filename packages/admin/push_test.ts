@@ -63,7 +63,8 @@ let platform = (
             unreleased: !live || paths.length != live.size ||
               (await Promise.all(paths.map(async (path) =>
                 live.has(path) &&
-                await hash(files.get(path)!) == await hash(live.get(path)!)
+                (files.get(path) == live.get(path) ||
+                  await hash(files.get(path)!) == await hash(live.get(path)!))
               ))).includes(false),
           }
           : valuesAfter == Infinity
@@ -86,9 +87,23 @@ let platform = (
   return { ask, held, deployed, writes, lists: () => lists }
 }
 
-let file = (path: string): File => ({ path, content: path })
+let examples = new Map<string, File>()
+let file = (path: string): File => {
+  let saved = examples.get(path)
+  if (!saved) examples.set(path, saved = { path, content: path })
+  return saved
+}
 let held = (...paths: string[]) => new Map(paths.map((p) => [p, file(p)]))
-let hash = async (f: File) => {
+// The platform keeps a file's address with its immutable bytes.
+let hashes = new WeakMap<File, Promise<string>>()
+let hash = (f: File): Promise<string> => {
+  let saved = hashes.get(f)
+  if (saved) return saved
+  let result = digest(f)
+  hashes.set(f, result)
+  return result
+}
+let digest = async (f: File) => {
   let bytes = 'content' in f
     ? new TextEncoder().encode(f.content)
     : Uint8Array.from(atob(f.base64), (c) => c.charCodeAt(0))
