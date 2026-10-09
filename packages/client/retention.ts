@@ -435,12 +435,11 @@ export let retention = (
         if (opts.localOnly && !bundles.some(echoed)) return bundles
         for (let eid of eids) {
           loading?.add(eid)
+          let components = comps(held(eid) ?? { entity: { eid } })
           if (
-            comps(held(eid) ?? { entity: { eid } }).some(([name]) =>
-              outbound(graph.vocab, name)
-            )
+            !components.length ||
+            components.some(([name]) => outbound(graph.vocab, name))
           ) known.add(eid)
-          if (!comps(held(eid) ?? { entity: { eid } }).length) known.add(eid)
           retain(eid)
         }
         save(eids)
