@@ -68,8 +68,9 @@ let JSON_TYPES: Record<string, z.ZodTypeAny> = {
   boolean: z.boolean(),
   null: z.null(),
 }
+let unknown = z.unknown()
 let json = (types: string[]): z.ZodTypeAny => {
-  let [one, two, ...rest] = types.map((t) => JSON_TYPES[t] ?? z.unknown())
+  let [one, two, ...rest] = types.map((t) => JSON_TYPES[t] ?? unknown)
   return two ? z.union([one, two, ...rest]) : one
 }
 
@@ -84,10 +85,10 @@ let typed = (prop: Prop): z.ZodTypeAny =>
     : prop.scalar == 'jsonb'
     ? json(prop.types!)
     : prop.scalar == 'bool'
-    ? z.boolean()
+    ? JSON_TYPES.boolean
     : prop.scalar == 'number' || prop.scalar == 'priority'
-    ? z.number()
-    : z.string()
+    ? JSON_TYPES.number
+    : JSON_TYPES.string
 
 // Attach the vocabulary's description of a component or property, when it has
 // one. Only at `full`: a description is the other half of a type, and `names`
@@ -140,9 +141,7 @@ let compSchema = (
       // what the schema costs in the agent's context for nothing.
       return [
         prop,
-        said
-          ? saying(said.nullable().optional(), def.description, o)
-          : z.unknown(),
+        said ? saying(said.nullable().optional(), def.description, o) : unknown,
       ]
     }),
   )
@@ -165,6 +164,27 @@ let sugar = {
       'the value changed.',
   ),
 }
+
+// Bundle metadata has the same shape for every vocabulary.
+let kind = z.string().optional().describe(
+  'the derived display kind — what the components make this entity',
+)
+let alias = z.string().optional().describe(
+  "the '$name' this transaction referred to the entity by, when it used one",
+)
+let num = z.number().nullable().optional()
+let entity = (write: boolean) =>
+  z.object({
+    eid: write
+      ? z.string().describe(
+        "the entity's id: one you generate (a uuid), or '$name' to have " +
+          'the graph generate one and report which id it picked',
+      )
+      : JSON_TYPES.string,
+    num,
+  }).passthrough()
+let reading = entity(false)
+let writing = entity(true)
 
 /**
  * The bundle, derived whole from a vocabulary: `{entity: {eid, num}, <comp>:
@@ -199,31 +219,14 @@ export let bundleSchema = (
     // `entity` is a declared component too, but its `eid` is the row key rather
     // than a property, and a read returns the derived display kind beside it.
     ...(opts.write ? sugar : {
-      kind: z.string().optional().describe(
-        'the derived display kind — what the components make this entity',
-      ),
+      kind,
       // The one `$` key `apply()` returns (@yaks/graph `composed`), and only
       // on the transaction it echoes back: the caller's own placeholder for an
       // entity whose id it could not know. `nulls` marks that case — a read
       // returns neither a null component nor an alias.
-      ...(opts.nulls
-        ? {
-          $alias: z.string().optional().describe(
-            "the '$name' this transaction referred to the entity by, when it " +
-              'used one',
-          ),
-        }
-        : {}),
+      ...(opts.nulls ? { $alias: alias } : {}),
     }),
-    entity: z.object({
-      eid: opts.write
-        ? z.string().describe(
-          "the entity's id: one you generate (a uuid), or '$name' to have " +
-            'the graph generate one and report which id it picked',
-        )
-        : z.string(),
-      num: z.number().nullable().optional(),
-    }).passthrough(),
+    entity: opts.write ? writing : reading,
     // Open at the top level as well as per component: the `$` keys are the
     // calling program's to add — yaks.app puts `$app` on a bundle — and a
     // vocabulary grows mid-connection, so a component declared after this
