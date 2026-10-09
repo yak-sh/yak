@@ -1,7 +1,14 @@
 import { test } from '@yaks/testing'
 import './testing.ts'
 import { assertEquals } from '@std/assert'
-import { adopt, edgeRider, pageRanked, parseQuery, windowOf } from './query.ts'
+import {
+  adopt,
+  edgeRider,
+  pageRanked,
+  parseQuery,
+  resolveRefs,
+  windowOf,
+} from './query.ts'
 
 test('edge selectors accept boolean and named relation declarations', () => {
   for (let type of ['cites', 'imports', 'referenced']) {
@@ -20,6 +27,19 @@ test('a web query pages past an entity without a number', () => {
     ], win).map((row) => row.eid),
     ['last'],
   )
+})
+
+test('a saved reference query resolves against each caller without changing it', () => {
+  let line = '.filed.assignee=person'
+  for (
+    let eid of [
+      '11111111-1111-4111-8111-111111111111',
+      '22222222-2222-4222-8222-222222222222',
+    ]
+  ) {
+    assertEquals(resolveRefs(parseQuery(line), () => eid)[0].value, eid)
+    assertEquals(parseQuery(line)[0].value, 'person')
+  }
 })
 
 test('a drop on a board of everything under a project files it there', () => {

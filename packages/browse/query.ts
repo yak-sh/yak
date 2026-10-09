@@ -71,6 +71,7 @@ import { term as ftsTerm } from '@yaks/fts'
 import { type Check, check } from '@yaks/match'
 import { type Tag, tagOf } from '@yaks/sql'
 import { bare, type Clause, parse, timeSpan, type Value } from '@yaks/query'
+import { frozen } from '@yaks/fp'
 export { ftsTerm }
 export { WALK_DEPTH, WALK_LIMIT } from '@yaks/query'
 
@@ -888,7 +889,17 @@ export let NEVER = 'never'
 // recurses into the alternatives; every reader of directives ignores it.
 export let OR = 'or'
 export let never = (): Pred => ({ comp: '', prop: '', op: NEVER, value: '' })
-export let parseQuery = (q: string): Pred[] => bindClause(parse(q))
+// Like the parser's AST, a bound query is immutable and belongs to its
+// vocabulary. Repainting a board should not bind its projection again.
+let bound = new WeakMap<typeof vocab, WeakMap<Clause, Pred[]>>()
+export let parseQuery = (q: string): Pred[] => {
+  let ast = parse(q)
+  let queries = bound.get(vocab)
+  if (!queries) bound.set(vocab, queries = new WeakMap())
+  let preds = queries.get(ast)
+  if (!preds) queries.set(ast, preds = frozen(bindClause(ast)))
+  return preds
+}
 
 // The column's declared type, as the value rules read it: the tag its binder
 // resolved, or for a pred built by hand, the vocabulary's.

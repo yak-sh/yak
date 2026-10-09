@@ -207,6 +207,17 @@ export let prop: (k: PropertyKey | Fn) => Fn = when(typeOf, {
 export let beget = <T extends object>(x: T, fn: (copy: T) => unknown = id): T =>
   tap(fn)({ ...x })
 
+/// Object.isFrozen(frozen({ a: { b: 1 } }).a) -> true
+/** `v` made immutable all the way down, for a value a cache hands to every
+ * caller. A part already frozen is taken as frozen throughout. */
+export let frozen = <T>(v: T): T => {
+  if (v && typeof v == 'object' && !Object.isFrozen(v)) {
+    for (let x of Object.values(v)) frozen(x)
+    Object.freeze(v)
+  }
+  return v
+}
+
 /// mapObj(inc)({ a: 1, b: 2 }) -> { a: 2, b: 3 }
 /// mapObj((v, k) => k + v)({ a: 1 }) -> { a: 'a1' }
 /// mapObj(inc)([{ a: 1, b: 1 }, { b: 2 }]) -> { a: 2, b: 3 }

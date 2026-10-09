@@ -39,6 +39,7 @@ import {
   Value,
   WALK_DEPTH,
 } from './ast.ts'
+import { frozen } from '@yaks/fp'
 
 // ---- values ----
 
@@ -129,6 +130,7 @@ let DOTTED = /^(\+!|[-!+*#$?])\.([A-Za-z_].*)$/s
 let PLAIN = new RegExp(`^\\.(${WORD})$`)
 // The head of a clause: its path and the bracket it may carry.
 let HEAD = new RegExp(`^\\.?(${WORD})(?:\\[([^\\]]*)\\])?`)
+let BOUND = new RegExp(`^\\$(${SEG})=(.*)$`, 's')
 // The operators, longest first so `<=` is not read as `<`, `<-` not as `<`.
 let OPS = /^(!=|~=|<=|>=|->|<-|<|>|=)/
 
@@ -299,7 +301,7 @@ export let parseDot = (token: string): Clause[] | null => {
   // `$x=5` — a variable and the value bound to it. A query consisting of
   // nothing but these is a set of bindings, which is what the arguments to a
   // template invocation are (`+foo.bar=$x` merged with `$x=5`).
-  let bound = token.match(new RegExp(`^\\$(${SEG})=(.*)$`, 's'))
+  let bound = token.match(BOUND)
   if (bound) {
     return [{ kind: 'var', name: bound[1], value: value(bound[2]) }]
   }
@@ -668,16 +670,6 @@ export let parse = (q: string, opts: ParseOpts = {}): And => {
 // moves; the bound keeps those from piling up.
 let PARSED = 1024
 let parsed = new Map<string, And>()
-
-// A tree made immutable all the way down, since the cache hands the same one
-// to every caller.
-let frozen = <T>(v: T): T => {
-  if (v && typeof v == 'object' && !Object.isFrozen(v)) {
-    for (let x of Object.values(v)) frozen(x)
-    Object.freeze(v)
-  }
-  return v
-}
 
 let fresh = (q: string, opts: ParseOpts): And => {
   // `|` is OR and binds looser than the AND of adjacent terms: `.a=1 .b=2|.c=3`
