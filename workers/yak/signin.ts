@@ -82,7 +82,7 @@ let forget = (store: Meta, eids: string[]) =>
 let sent = async (store: Meta, email: string) =>
   ((await store.query(`.signin.email=${canon(email)}`))
     .filter((r) => r.signin) as unknown as Signin[])
-    .sort((a, b) => b.signin.expires.localeCompare(a.signin.expires))
+    .sort((a, b) => Date.parse(b.signin.expires) - Date.parse(a.signin.expires))
 
 // When the letter went out. `expires` is the code's death and LIFE is fixed,
 // so a row carries its own send time without a second property.
