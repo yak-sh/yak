@@ -62,6 +62,7 @@ test('openDeps follows only the relations it is given', () => {
   // `contains` alone reaches c, which is cancelled and therefore settled
   assertEquals(openDeps(s, 'p', { relations: ['contains'] }), 0)
   assertEquals(openDeps(s, 'p', { relations: ['requires'] }), 2)
+  assertEquals(openDeps(s, 'p', { relations: [] }), 0)
 })
 
 // The team's vocabulary with a rung of its own: a held claim reads `wip`.

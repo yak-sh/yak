@@ -23,9 +23,9 @@
 // which.
 
 import type { Bundle, Eid, Graph, Tx } from '@yaks/graph'
-import { after, each } from '@yaks/fp'
+import { after } from '@yaks/fp'
 import { detached } from '@yaks/graph'
-import { and, eq, present } from '@yaks/query'
+import { and, eq, or, present } from '@yaks/query'
 import { EDGE } from '@yaks/edge'
 import { settled, statusOf } from './words.ts'
 import { BLOCKED, CONTAINS, REQUIRES } from './comp.ts'
@@ -52,26 +52,22 @@ export type DepOpts = {
   relations?: string[]
 }
 
-// The far ends of every edge with one of these relations leading away from
-// `eid`, deduplicated. An edge is a component, so "the links out of t1" is an
-// ordinary query — one per relation, folded so that a synchronous storage stays
-// synchronous.
+// The far ends of every edge with any of these relations leading away from
+// `eid`, deduplicated. Read the matching edges together, so one child linked by
+// two relations costs only one read.
 let kidsOf = (tx: Tx, eid: Eid, rels: string[]): Eid[] | Promise<Eid[]> => {
-  let seen = new Set<Eid>()
+  if (!rels.length) return []
   return after(
-    each(rels, null, (_, rel) =>
-      after(
-        tx.read(and(eq(`${EDGE}.from`, eid), present(rel))),
-        (bundles) => {
-          for (let b of bundles) {
-            let to = (b[EDGE] as Record<string, unknown> | undefined)?.to
-            if (typeof to == 'string') seen.add(to)
-          }
-          return null
-        },
-      )),
-    () => [...seen],
-  ) as Eid[] | Promise<Eid[]>
+    tx.read(and(eq(`${EDGE}.from`, eid), or(...rels.map(present)))),
+    (bundles) => {
+      let seen = new Set<Eid>()
+      for (let b of bundles) {
+        let to = (b[EDGE] as Record<string, unknown> | undefined)?.to
+        if (typeof to == 'string') seen.add(to)
+      }
+      return [...seen]
+    },
+  )
 }
 
 /**
