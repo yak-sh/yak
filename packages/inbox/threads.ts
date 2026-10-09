@@ -22,7 +22,14 @@ export type Thread<R extends Row = Row> = {
 }
 
 let str = (v: unknown): string => String(v ?? '')
-let newest = (...times: unknown[]) => times.map(str).sort().at(-1) ?? ''
+let newest = (...times: unknown[]) => {
+  let latest = ''
+  for (let time of times) {
+    let value = str(time)
+    if (value > latest) latest = value
+  }
+  return latest
+}
 let closed = (r: Row) => !!(r.comps.completed || r.comps.cancelled)
 let states = [
   'completed',
@@ -132,6 +139,7 @@ export let threads = <R extends Row>(
     groups.set(eid, group)
   }
   let to = addressed(who)
+  let text = (search.text ?? '').trim().toLocaleLowerCase()
   let out: Thread<R>[] = []
   for (let [eid, group] of groups) {
     if (who.muting?.has(eid)) continue
@@ -203,24 +211,22 @@ export let threads = <R extends Row>(
     let archived = (!!away && at <= away) ||
       marked.some((r) => r.comps.archived && !r.comps.archived.at)
     if (!search.all && archived) continue
-    let text = (search.text ?? '').trim().toLocaleLowerCase()
     // A decision's question and answer can have different authors. Treat the
     // answer as its own words rather than attributing the whole root to them.
-    let searchable = group.flatMap((r) => {
-      let mine = r == root ? started : saidBy(who, r, byId)
-      let includes = (said: boolean) =>
-        !search.direction || said == (search.direction == 'said')
-      return [
-        ...(includes(mine) ? [words(r)] : []),
-        ...(r.comps.decided && includes(r.comps.decided.by == who.actor)
-          ? [str(r.comps.decided.choice).toLocaleLowerCase()]
-          : []),
-      ]
-    })
-    if (
-      (search.direction || text) &&
-      !searchable.some((words) => !text || words.includes(text))
-    ) continue
+    if (search.direction || text) {
+      let searchable = group.flatMap((r) => {
+        let mine = r == root ? started : saidBy(who, r, byId)
+        let includes = (said: boolean) =>
+          !search.direction || said == (search.direction == 'said')
+        return [
+          ...(includes(mine) ? [words(r)] : []),
+          ...(r.comps.decided && includes(r.comps.decided.by == who.actor)
+            ? [str(r.comps.decided.choice).toLocaleLowerCase()]
+            : []),
+        ]
+      })
+      if (!searchable.some((words) => !text || words.includes(text))) continue
+    }
     let blocking = need &&
       all.some((edge) =>
         edge.comps.requires && edge.comps.edge?.to == eid &&
