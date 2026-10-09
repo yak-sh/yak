@@ -159,9 +159,6 @@
     "apps/vale/damage_test.ts": {
       "damage off revives and protects until damage is turned on": 83.7
     },
-    "apps/vale/danger.ts": {
-      "apps/vale/danger.ts block 1": 1.1
-    },
     "apps/vale/danger_test.ts": {
       "every land has encounters on the level-one-to-sixty path": 10.4,
       "outward roads get riskier, and skipping two lands is fatal": 10.6
@@ -178,9 +175,6 @@
     },
     "apps/vale/equipment_glow_test.ts": {
       "a staff and tome carry their own soft light": 10.2
-    },
-    "apps/vale/fight-update_test.ts": {
-      "fight movement refuses every malformed source before offering a clear": 1.2
     },
     "apps/vale/figure.ts": {
       "apps/vale/figure.ts block 1": 5.1
@@ -415,7 +409,6 @@
     },
     "apps/vale/rules.ts": {
       "apps/vale/rules.ts block 10": 1.6,
-      "apps/vale/rules.ts block 12": 1.6,
       "apps/vale/rules.ts block 14": 5.2,
       "apps/vale/rules.ts block 2": 1.7
     },
@@ -435,9 +428,6 @@
     "apps/vale/slash_test.ts": {
       "slash adapts declared app commands and leaves chat alone": 1.7,
       "slash completion flags and enum/ref values roundtrip in both forms": 1.3
-    },
-    "apps/vale/solid.ts": {
-      "apps/vale/solid.ts block 2": 1.1
     },
     "apps/vale/spawn_test.ts": {
       "/spawn keeps a description at the hero until its current main kind": 1.9,
@@ -470,7 +460,6 @@
       "apps/vale/stock.ts block 1": 2.4,
       "apps/vale/stock.ts block 3": 14.8,
       "apps/vale/stock.ts block 4": 1.7,
-      "apps/vale/stock.ts block 6": 1.1,
       "apps/vale/stock.ts block 8": 1.2
     },
     "apps/vale/stock_test.ts": {
@@ -500,9 +489,6 @@
       "each placed village door opens onto a clear street": 28.1,
       "grown streets climb by walkable steps and match cold ground": 1137.3,
       "village roads join the streets without crossing plots": 85.7
-    },
-    "apps/vale/strike.ts": {
-      "apps/vale/strike.ts block 1": 1.3
     },
     "apps/vale/target_test.ts": {
       "command name queries parse spaces and ampersands in graph": 1.5
@@ -894,11 +880,11 @@
       "a cancelled pan forgets movement and never settles": 3.9
     },
     "packages/browse/components/Card_test.ts": {
-      "card style follows moved coordinates without a z change": 70.7
+      "card style follows moved coordinates without a z change": 23
     },
     "packages/browse/components/Chat_test.ts": {
-      "a held reference list asks for no rows of its own": 26.8,
-      "a new chat reuses the composer input with a terse prompt": 27.9,
+      "a held reference list asks for no rows of its own": 5.4,
+      "a new chat reuses the composer input with a terse prompt": 7.3,
       "chat references mount the entity List.Tile renderer": 45.9,
       "chatPlan picks a graph-native provider": 1.2
     },
@@ -907,15 +893,15 @@
       "byline reads actor and instrument from the created stamp": 12.3,
       "composer names an unnamed session by its chip id": 16,
       "shared comment send line keeps drafts, sends by submit or Enter once and leaves Shift+Enter alone": 29.9,
-      "viaName names a session by its chip id, never its harness uuid": 23.5
+      "viaName names a session by its chip id, never its harness uuid": 4.8
     },
     "packages/browse/components/Entity_test.ts": {
-      "Entity mounts hooks with the original Ent and extra props": 41.2,
-      "a pending proposal keeps deletion named as deletion": 79.5,
+      "Entity mounts hooks with the original Ent and extra props": 1.9,
+      "a pending proposal keeps deletion named as deletion": 10.1,
       "a role keeps its face without lifecycle actions": 12.3,
-      "boards open on Board with List still available": 14.4,
+      "boards open on Board with List still available": 1.2,
       "quarantine is hidden until revealed and can be cleared": 11.5,
-      "query groups preserve chosen tabs and default faces": 69,
+      "query groups preserve chosen tabs and default faces": 11.5,
       "release names the session by its chip id": 12.6,
       "sessions open on Session with Full still available": 15.7
     },
@@ -927,7 +913,7 @@
     },
     "packages/browse/components/Search_test.tsx": {
       "configured Inspect query renderer receives its host context": 11.8,
-      "query page draws the inspector table through the shared registry": 33.2,
+      "query page draws the inspector table through the shared registry": 10,
       "search chip is a draggable link, modifiers keep native navigation": 8.3,
       "search sends only the settled query while typing": 186.2
     },
@@ -1010,7 +996,7 @@
     },
     "packages/browse/components/views/Inline_test.tsx": {
       "Inline renderers say the title without the id": 6.4,
-      "a link draws its entity through the Title a package contributes": 13.5,
+      "a link draws its entity through the Title a package contributes": 1.1,
       "a projected peer paints its settled status": 6.4,
       "an entity with no title and no number is called by its handle": 6.4,
       "shared Id resolves a contributed identity instead of drawing its own chip": 6.6
@@ -1019,11 +1005,11 @@
       "a list grows by appending, and keeps its rows while it loads": 39.6
     },
     "packages/browse/components/views/Media_test.tsx": {
-      "artifact images, audio, and video preview at their blob address": 18.9,
+      "artifact images, audio, and video preview at their blob address": 3.8,
       "other artifacts download, and attachments share the media face": 6.4
     },
     "packages/browse/components/views/ProjectReads_test.ts": {
-      "Dashboard membership follows the newest claim, cached or not": 13.3,
+      "Dashboard membership follows the newest claim, cached or not": 1,
       "project reads open wire subs and retain hits without cached far rows": 7.2
     },
     "packages/browse/components/views/Raw_test.tsx": {
@@ -1036,7 +1022,7 @@
       "SessionRow loads its task title when no peer delivered it": 17.6,
       "session Tile names its work, model, and last activity without IDs": 7.7,
       "session lifecycle shares the task summary lane": 6.5,
-      "session list Tile names its brief without exposing IDs": 16,
+      "session list Tile names its brief without exposing IDs": 2.5,
       "session references dedupe entities and links in mention order": 1.1,
       "session references link commits with actor repository context": 5.8,
       "session references use the usual entity and URL faces": 6.4,
@@ -1067,7 +1053,7 @@
       "the status pip picks a status through its Edit and writes marks": 12.9
     },
     "packages/browse/components/views/Wake_test.tsx": {
-      "wake coordinates pending, delivered, and failed states": 23.7,
+      "wake coordinates pending, delivered, and failed states": 3.4,
       "wake owns the default view and derives its title": 6.6,
       "wake shows its relative and exact time and addressed people": 11.8
     },
@@ -1088,10 +1074,8 @@
       "a frame lands in the box and is reported to every name, first as a reset": 10.7,
       "a refusal is reported, and lands no rows": 9.7,
       "a test server speaks through receive, as changes": 5.1,
-      "authored narrow reads reach the wire without widening to whole rows": 4.6,
       "frames the host batches into one message are each reported": 8.7,
-      "socket refusals reach the page tracker with their reason": 6.7,
-      "two names on one line share one subscription on the wire": 4.5
+      "socket refusals reach the page tracker with their reason": 6.7
     },
     "packages/browse/live_test.ts": {
       "a board cache prime opens no second unwindowed subscription": 5.3,
@@ -1137,11 +1121,11 @@
       "findEid reads an alias off the key that names the entity": 9,
       "foldFor: query membership, live statuses off the row": 9.9,
       "frames that arrive together land in one batch": 16.6,
-      "gated: red keys on the blocked facet, never an open requires": 15,
+      "gated: red keys on the blocked facet, never an open requires": 2,
       "holdLocal answers a per-row query off held rows, opening no server sub": 7.5,
       "loaded: a row no projected sub holds is full": 5.2,
       "local reverse reads never dial, including one read per entry (T-37033)": 15.5,
-      "myMode: this actor's subscription, off the reverse index": 14.9,
+      "myMode: this actor's subscription, off the reverse index": 1.3,
       "narrow signals follow births, subscription eviction, and census": 6.5,
       "pinned sleeps through an unrelated row patch": 5.7,
       "predsToQuery round-trips membership shapes, refuses the rest": 1.4,
@@ -1192,7 +1176,7 @@
       "a read keeps its answer through a lost socket until the next one": 17.4,
       "entity read distinguishes loading, loaded, and confirmed absent": 10.4,
       "fold absence becomes expanded only after the client first frame": 8.9,
-      "repo trace names missing hops and stops cycles": 22.7
+      "repo trace names missing hops and stops cycles": 1.7
     },
     "packages/browse/remote_test.ts": {
       "remote inspector uses saved login on resolution, HTTP and socket handshakes": 171.3
@@ -1227,7 +1211,7 @@
       "terminal markdown highlights specified fenced code": 37
     },
     "packages/browse/tui/session_test.tsx": {
-      "comment replies paint as nested branches in the terminal": 37,
+      "comment replies paint as nested branches in the terminal": 9.7,
       "the shared Session partition paints its bodies in the terminal": 8.1
     },
     "packages/browse/types_test.ts": {
@@ -2932,9 +2916,6 @@
       "only an unbylined hero belongs to its browser": 1.2,
       "permission requires a live stored target and obeys mode and mark floors": 2.9
     },
-    "packages/member/policy_test.ts": {
-      "a member with no grant reaches a private thing like a stranger": 3.2
-    },
     "packages/memory/tools_test.ts": {
       "a thread is what it is about, then every comment, oldest first": 1.2,
       "a topic is its name, and a name said twice is one topic": 1.1,
@@ -3854,9 +3835,6 @@
       "packages/sync/README.md block 8": 2.7,
       "packages/sync/README.md block 9": 1.4
     },
-    "packages/sync/coverage_test.ts": {
-      "land clears what a covered answer no longer carries, and nothing else": 1.4
-    },
     "packages/sync/port_test.ts": {
       "MessagePort request limits and timeout bound abandoned operations": 11.7,
       "MessagePort requests, frames, failures and pending shutdown": 1.6,
@@ -4310,7 +4288,6 @@
       "packages/wake/README.md block 2": 1.3
     },
     "packages/wake/due_test.ts": {
-      "a bare cadence is given its first instant on the way in": 4.2,
       "a recurrence nobody can read fires once and stops": 1.2
     },
     "packages/wake/every_test.ts": {
@@ -4318,8 +4295,7 @@
       "a cron line is read in the zone it is given": 2,
       "a cron line reads the calendar, in UTC, ignoring the anchor": 1.7,
       "an unreadable recurrence is null, never a throw": 2,
-      "five cron fields read ranges, steps, lists and named calendars": 5.8,
-      "the calendar skips invalid dates and is strictly after its input": 1.4
+      "five cron fields read ranges, steps, lists and named calendars": 5.8
     },
     "packages/wake/hosts_test.ts": {
       "the loop promptly visits a wake that became due during an effect": 11.8,
@@ -4588,7 +4564,6 @@
       "upload sends only migrations after the dispatch script tag": 2.7
     },
     "workers/yak/dispatch_test.ts": {
-      "a client cannot send its own grant, or say who it is": 1.1,
       "a command failure is captured once across worker and caller": 10.3,
       "a command worker failure calls its reporter once": 1.7,
       "a vpc_services name is a door to the kernel as the app, never a binding": 12,
@@ -4630,7 +4605,7 @@
     },
     "workers/yak/drop_test.ts": {
       "a bare index.html is an app, once it is named": 118.2,
-      "a dropped zip becomes an app at its own address": 400.7,
+      "a dropped zip becomes an app at its own address": 182.9,
       "a dropped zip carries a worker and the wasm it imports": 113.7,
       "the drop zone is on the owner's New app page": 188,
       "what the door will not take, it says in a sentence": 532.5
@@ -4666,7 +4641,7 @@
       "an app with nothing to compile never calls the compiler": 431,
       "an edit crossing deployment is replayed into the next draft": 500.2,
       "compiler assets cannot replace an app-owned path": 143.8,
-      "concurrent first edits share one private draft": 471.8,
+      "concurrent first edits share one private draft": 213.7,
       "draft files stay private through a refused deploy and rollback": 543,
       "package assets serve with their MIME and survive reuse and rollback": 350.3,
       "with no compiler bound, a deploy that needs one is refused in a sentence": 88.9
@@ -4713,11 +4688,11 @@
       "a property that holds nothing may change its type": 165.7,
       "a rule writing outside its *write set takes the batch with it": 94.2,
       "a stored component holds its floor and a pace per entity and vouched instrument": 111.9,
-      "a stranger is refused on a private app": 304.4,
-      "a stranger is refused on an app made private after it was written": 295.2,
+      "a stranger is refused on a private app": 106.7,
+      "a stranger is refused on an app made private after it was written": 94.8,
       "a subscription asking `*` answers what /query answers": 121.1,
       "a subscription is answered, and a commit reaches the socket": 89.9,
-      "a visitor to an open app adds, and touches no price, order or row of the owner’s": 325.2,
+      "a visitor to an open app adds, and touches no price, order or row of the owner’s": 105.5,
       "a woken object rewrites nothing it already holds": 133.7,
       "a woken object serves the same app, and the same sockets": 139.2,
       "an app keeps objects and arrays, and asks only whether one is there": 102.9,
@@ -4727,7 +4702,7 @@
       "an app's store keeps its words apart from the directory's": 84.6,
       "an app's vocab.json is read back as the document it means": 177.3,
       "an edge is a sentence, and the relation is a word the store knows": 91.9,
-      "an open app is written by nobody": 299.1,
+      "an open app is written by nobody": 92.2,
       "app archetype descriptors are read-only and vocabulary extension tracks new shapes": 132.3,
       "app archetypes classify writes and migrate old rows only on schema changes": 155.8,
       "app schema reads and writes leave old journal tables untouched across boot": 163.6,
@@ -4887,7 +4862,7 @@
     "workers/yak/mcp_graph_test.ts": {
       "Plus spaces can create and install more than fifty apps": 4097.5,
       "a $was precondition refuses a batch built on a value that moved": 254.9,
-      "a page queries a borrowed word at its home": 1391.4,
+      "a page queries a borrowed word at its home": 635,
       "a platform secret alias derives before the reach hands it to the store": 28.9,
       "a read with no app composes every app the caller can reach": 1563.1,
       "a word the space already has is used where it lives": 1384.9,
@@ -4914,7 +4889,7 @@
     },
     "workers/yak/mcp_mail_test.ts": {
       "a deploy seeds the store once, and the seed is not on the web": 1116.8,
-      "a later release seeds a newly declared component": 766.2,
+      "a later release seeds a newly declared component": 306.9,
       "an app's letters, listed and sent through the connector": 326.7
     },
     "workers/yak/mcp_people_test.ts": {
@@ -4983,13 +4958,13 @@
       "./api/ai/run answers what the model said, and the space pays for it": 183.8,
       "./api/ai/run carries affinity through its metered binding": 159.9,
       "a connected OpenRouter model puts generated audio in the app store": 587,
-      "a model calls only the commands marked for it, as the person who asked": 707.9,
+      "a model calls only the commands marked for it, as the person who asked": 285.8,
       "a page asks its store for a turn and the answer lands beside it": 211.5,
       "a typed question comes back as an answer entry": 212.5,
-      "a visitor asks an app for a turn only where it opens its models": 936.6,
+      "a visitor asks an app for a turn only where it opens its models": 413.4,
       "accounted recovery preserves cost and never debits a second time": 136.9,
       "accounting preserves provider continuation metadata and passes requests whole": 139.9,
-      "an account past its budget is told so, and the transcript rests": 605.5,
+      "an account past its budget is told so, and the transcript rests": 263.7,
       "an app without the OpenRouter connection cannot ask its model": 420,
       "one app-store write completes seven model turns within its dispatch bound": 775.1,
       "original media debit is atomic once across concurrent and repeated recovery": 141.5,
@@ -5086,7 +5061,7 @@
       "an order holds across the merge, and its window cuts after it": 306.5,
       "the app version selects its store declarations after preparation": 185.6,
       "the first release serves the vocabulary it prepared": 104.6,
-      "the space speaks one vocabulary, and a word nobody declares is the platform’s": 684.7
+      "the space speaks one vocabulary, and a word nobody declares is the platform’s": 230.1
     },
     "workers/yak/recover_test.ts": {
       "a store outside the window refuses, and a client never asks at all": 33.6,
@@ -5214,11 +5189,11 @@
       "a new release serves its files beside the old cached release": 154.3,
       "a page and an upload are served where the cache hop is refused": 152.3,
       "a page is served with its base and its reporter": 121.6,
-      "a page view is one data point, and it names no visitor": 365.5,
+      "a page view is one data point, and it names no visitor": 149.9,
       "a refresh after the page changes is sent the page, and one before is not": 89.3,
       "a release's module imports the client by the page's own path": 117.3,
       "a space in the trash serves nothing, and its owner restores it": 106.9,
-      "a store tells the directory its size within the storage allowance step": 395.9,
+      "a store tells the directory its size within the storage allowance step": 172.2,
       "a stranger's reads are held to a rate per source, a member's are not": 161.2,
       "a subscription is that query still answering": 154.6,
       "a trashed front page is nobody's, and the owner restores it there": 100.4,
@@ -5246,8 +5221,8 @@
       "rung 3: the home app's files answer the bare hostname": 89.3,
       "rung 4: the space's index is `/`'s last word": 332.4,
       "rung 5: everything else is the home worker, else 404": 256.9,
-      "seen closes a whole deploy at once (T-34338)": 367.6,
-      "the page wire: apply, query and search round-trip": 407.4,
+      "seen closes a whole deploy at once (T-34338)": 156.1,
+      "the page wire: apply, query and search round-trip": 153,
       "worker HTML carries its reporter without changing its page or headers": 312.2,
       "worker non-HTML and bodyless answers are not rewritten": 339.8
     },
@@ -5361,12 +5336,12 @@
       "a call wearing a wake waits for it, and answers when it fires": 156.7,
       "a condition naming a word the app does not speak is refused when written": 79.8,
       "a directory job reads and writes the directory in-process, never through its own stub": 128.8,
-      "a recurring call is one invocation per firing, never a re-run": 369.3,
+      "a recurring call is one invocation per firing, never a re-run": 120.5,
       "a refused wake stays due, says why in the break log, and is tried again": 115.6,
       "a trashed app fires no wakes, and catches up once restored": 167.5,
       "a trashed space fires no wakes, and catches up once restored": 157.7,
       "a wake fires in the store that holds it and its rule receives the tick instant": 115.6,
-      "a world with nobody in it stops ticking, and a player arriving wakes it": 385.8,
+      "a world with nobody in it stops ticking, and a player arriving wakes it": 172,
       "a write arms the object for the wake it just heard, and the alarm fires it": 97.3,
       "an app store keeps its own schedule, with no platform in the middle": 56.1,
       "an app's rule on `fired` advances the row its wake was about": 107.6,
