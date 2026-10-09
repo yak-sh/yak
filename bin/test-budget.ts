@@ -15,10 +15,13 @@
 //   gate (CI), where its records are taken, and in a run of the whole suite.
 //   Elsewhere a run says its walls and holds none of them.
 //
-// A time over the line is measured once more before it counts: the files
-// holding such tests run again together in runtimes of their own, and a test
-// fails only when it is over both times. A collection, or another process on
-// the box, can stretch any one run of a test; a slow test is slow every time.
+// A time over the line is measured again before it counts: the files holding
+// such tests run together in runtimes of their own, twice over in each
+// (`--twice`, packages/testing/main.ts), and a test fails only when it is over
+// every time. A collection, or another process on the box, can stretch any
+// one run of a test; a slow test is slow every time. The second pass is the
+// one that runs as the whole suite does, warm: alone in a fresh runtime, the
+// first test of a file pays for everything its file is the first to load.
 //
 // Workerd's tests are held by their platform's wall alone: each crosses into
 // the run's kernel, and there are few of them.
@@ -200,16 +203,19 @@ let run = async (args: string[], task = 'test') => {
   }
 }
 
-// What a second run of the files holding `slow` tests says: each test held to
-// the faster of its two times.
+// What another run of the files holding `slow` tests says: each test held to
+// the fastest of its times. A test that cannot run twice in one runtime fails
+// its second pass, and keeps the times it passed with.
 let again = async (runs: Record<string, Times>, slow: Seen[]) => {
   let files = [...new Set(slow.map((s) => s.file))]
   console.log(`\n─── measuring ${files.length} file(s) again ───`)
-  let second = await run(files, 'test:run')
+  let second = await run(['--twice', ...files], 'test:run')
   let best = new Map<string, number>()
   for (let r of Object.values(second.runs)) {
     for (let t of r.tests) {
-      if (t.ok) best.set(JSON.stringify([t.file, t.name]), t.ms)
+      let key = JSON.stringify([t.file, t.name])
+      let was = best.get(key)
+      if (t.ok && (was == null || t.ms < was)) best.set(key, t.ms)
     }
   }
   for (let r of Object.values(runs)) {

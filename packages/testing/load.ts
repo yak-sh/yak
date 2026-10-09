@@ -83,11 +83,17 @@ export let plan = async (pages: string[]) =>
   }))
 
 // Loads one compiled example; one that cannot load fails as a test.
-let load = async (page: string, tag: string, code: string, lang?: string) => {
+let load = async (
+  page: string,
+  tag: string,
+  code: string,
+  lang?: string,
+  pass = '',
+) => {
   let path = beside(page, tag, lang)
   await Deno.writeTextFile(path, code)
   try {
-    await import(url(path))
+    await import(url(path) + pass)
   } catch (error) {
     test(`${page}:${tag} loads`, () => {
       throw error
@@ -101,15 +107,29 @@ let load = async (page: string, tag: string, code: string, lang?: string) => {
 let exported = async (page: string): Promise<string[]> =>
   Object.keys(await import(url(page)))
 
-/** Loads a page's examples, each declaring its test. */
-export let examples = async (page: string) => {
+/** Loads a page's examples, each declaring its test. A `pass` (a URL query,
+ * such as `?again`) loads them as modules of their own a further time, beside
+ * the ones already loaded. */
+export let examples = async (page: string, pass = '') => {
   let { fenced, lines } = runs(await Deno.readTextFile(page), page)
   let exports = module(page) ? await exported(page) : []
   for (let f of fenced) {
     let name = `${page}:${f.line}`
-    await load(page, `${f.line}`, compileFence(name, page, f, exports), f.lang)
+    await load(
+      page,
+      `${f.line}`,
+      compileFence(name, page, f, exports),
+      f.lang,
+      pass,
+    )
   }
   if (lines.length) {
-    await load(page, 'doctests', compileDoctests(page, lines, exports))
+    await load(
+      page,
+      'doctests',
+      compileDoctests(page, lines, exports),
+      undefined,
+      pass,
+    )
   }
 }

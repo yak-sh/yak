@@ -145,6 +145,8 @@ test('untagged', () => {})`,
   equal(Object.keys((await dir.run('--timeout=1')).said).length, 3)
 })
 
+// Run `--twice`, so the same run shows each pass timed: each run of the runner
+// is a process, and a test of its own would take as long again.
 test('--times says what each test and each load took', async () => {
   await using dir = await fixture({
     'a_test.ts': `import { test } from '@yaks/testing'
@@ -154,14 +156,16 @@ test('later', () => {}, { skip: true })`,
   })
   let at = await Deno.makeTempDir({ prefix: 'yaks-testing-times-' })
   try {
-    await dir.run('--platform=p', `--times=${at}`)
+    await dir.run('--platform=p', `--times=${at}`, '--twice')
     let times: Times = JSON.parse(await Deno.readTextFile(`${at}/p.json`))
     match(times.tests, [
       { name: 'waits', ok: true, file: /a_test\.ts$/ },
       { name: 'fails', ok: false },
+      { name: 'waits', ok: true, file: /a_test\.ts$/ },
+      { name: 'fails', ok: false },
     ])
-    equal(times.tests.length, 2)
-    ok(times.tests[0].ms >= 20)
+    equal(times.tests.length, 4)
+    ok(times.tests[0].ms >= 20 && times.tests[2].ms >= 20)
     let [[file, load]] = Object.entries(times.loads)
     ok(file.endsWith('a_test.ts') && load > 0)
     ok(times.wall >= times.planned + times.loading)
