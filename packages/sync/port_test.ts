@@ -3,6 +3,27 @@ import { test } from '@yaks/testing'
 import { assertEquals, assertRejects } from '@std/assert'
 import { FakeTime } from '@std/testing/time'
 import { portLink } from './port.ts'
+
+class Conflict extends Error {
+  constructor(public current: unknown) {
+    super('changed since it was read')
+  }
+}
+
+let messages = () => {
+  let a = new EventTarget(), b = new EventTarget()
+  let port = (target: EventTarget, peer: EventTarget) =>
+    Object.assign(target, {
+      postMessage: (value: unknown) => {
+        let data = structuredClone(value)
+        queueMicrotask(() =>
+          peer.dispatchEvent(new MessageEvent('message', { data }))
+        )
+      },
+    })
+  return { port1: port(a, b), port2: port(b, a) }
+}
+
 test('MessagePort requests, frames, failures and pending shutdown', async () => {
   let { port1, port2 } = new MessageChannel()
   let frames: unknown[] = []
@@ -31,13 +52,8 @@ test('MessagePort requests, frames, failures and pending shutdown', async () => 
   }
 })
 
-test('MessagePort codecs restore typed failures and their data', async () => {
-  class Conflict extends Error {
-    constructor(public current: unknown) {
-      super('changed since it was read')
-    }
-  }
-  let { port1, port2 } = new MessageChannel()
+test('port codecs restore typed failures and their data', async () => {
+  let { port1, port2 } = messages()
   let a = portLink(port1, {
     decodeError: (value) => new Conflict(value),
   })
@@ -58,8 +74,6 @@ test('MessagePort codecs restore typed failures and their data', async () => {
   } finally {
     a.close()
     b.close()
-    port1.close()
-    port2.close()
   }
 })
 
