@@ -99,7 +99,7 @@ let decoder = (names: string[], compile: Statement['getRowObject']) => {
   return made
 }
 
-export let prepared = (db: Database) => {
+export let prepared = (db: Database, owned = false) => {
   // SQLite integers are 64-bit. The library's default reader truncates them
   // to 32 bits; safe JS integers must round-trip through every driver caller.
   db.int64 = true
@@ -145,7 +145,8 @@ export let prepared = (db: Database) => {
   )
   let version: unknown
   // Whether the schema version need not be asked before the next statement:
-  // inside a transaction, after nothing but rows read and written. Another
+  // inside a transaction, or on a private connection whose schema can change
+  // only through this runner, after nothing but rows read and written. Another
   // connection's change is seen only where a snapshot begins, and this one's
   // own only after a statement of another kind (DDL, a transaction boundary,
   // a pragma, a script).
@@ -160,9 +161,9 @@ export let prepared = (db: Database) => {
     // the JS Statement objects. Calling a cached one after close is a SIGSEGV,
     // not a catchable SQLite error. Refuse at the boundary, before any FFI.
     if (!db.open) throw new Error('the database is closed')
-    let inside = db.inTransaction
-    let asked = !settled || !inside
-    settled = inside && ROWS.test(sql)
+    let held = owned || db.inTransaction
+    let asked = !settled || !held
+    settled = held && ROWS.test(sql)
     if (!asked) return
     let now = schema.value()![0]
     if (now === version) return

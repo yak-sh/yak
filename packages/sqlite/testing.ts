@@ -74,7 +74,8 @@ let limit = (db: Database, limits: Limits) => {
 export let textual = (limits: Limits = {}) => {
   let db = new Database(':memory:')
   limit(db, limits)
-  let run = prepared(db)
+  // The handle never leaves this stand-in: every schema change uses run.
+  let run = prepared(db, true)
   let keys = render({ t: 'pragma', name: 'foreign_keys', value: 'on' })
   run(keys.sql, keys.params)
   return { run, close: () => db.close() }
