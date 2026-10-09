@@ -387,14 +387,16 @@ export let ram = (vocab: Vocab, base: RamOpts = {}): Store => {
 
   // Reads carry the computed values a server would send, without storing
   // them. Compute against the whole index before cutting requested components.
+  let derived = Object.entries(base.computed ?? {}).map(([path, read]) =>
+    [...path.split('.'), read] as [string, string, Computed[string]]
+  )
   let computed = (b: Bundle): Bundle => {
     let out = b
     for (let [name, value] of comps(b)) {
       if (!value || !vocab.comp(name)?.ladder) continue
       out = { ...out, [name]: { ...value, status: statusOf(vocab, name, b) } }
     }
-    for (let [path, read] of Object.entries(base.computed ?? {})) {
-      let [name, prop] = path.split('.')
+    for (let [name, prop, read] of derived) {
       if (!b[name]) continue
       out = {
         ...out,

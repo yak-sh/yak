@@ -112,9 +112,7 @@ export let reserved = (k: string): boolean =>
  * excluding the identity, the tombstone and the `$` keys. */
 export let comps = (b: Bundle): [string, Comp | null][] => {
   let out: [string, Comp | null][] = []
-  for (let k of Object.keys(b)) {
-    if (!reserved(k)) out.push([k, b[k] as Comp | null])
-  }
+  for (let k in b) if (!reserved(k)) out.push([k, b[k] as Comp | null])
   return out
 }
 

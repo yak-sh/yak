@@ -339,6 +339,15 @@ type Run = {
   timed: Timing
 }
 
+// A moment written out once for each millisecond: formatting a timestamp
+// takes longer than most of a write does, and writes come in bursts that
+// share their millisecond.
+let last = { ms: NaN, iso: '' }
+let iso = (ms: number): string =>
+  ms === last.ms
+    ? last.iso
+    : (last = { ms, iso: new Date(ms).toISOString() }).iso
+
 let failed = (err: unknown, at: { phase: Phase; plugin: string }) =>
   console.error(`${at.plugin} failed at ${at.phase} —`, err)
 
@@ -380,11 +389,9 @@ export let graph = (opts: Options): Graph => {
   // entity's id from the relation component it carries, which a list of
   // properties cannot express.
   let derives = (): Record<string, Derive> =>
-    Object.assign(
-      {},
-      declared,
-      ...plugins.map((p) => p.derive ?? {}),
-    )
+    plugins.some((p) => p.derive)
+      ? Object.assign({}, declared, ...plugins.map((p) => p.derive ?? {}))
+      : declared
 
   // Every read this batch is going to need: the core's own — every entity the
   // batch names or references, which is what the `$was` check, `mutate` and
@@ -462,7 +469,10 @@ export let graph = (opts: Options): Graph => {
   // plugin's, in registration order.
   // The marks come from the vocabulary, so a program that replaces the
   // created/updated pair with a policy of its own still gets them.
-  let stamping = [...provenance(opts.provenance), ...marks(vocab)]
+  let stamping = Map.groupBy(
+    [...provenance(opts.provenance), ...marks(vocab)],
+    (r) => r.phase,
+  )
   // Reuse parsed declarations while their contents agree. Registrations are
   // mutable, including nested hooks, rule arrays and declaration properties;
   // check those inputs afresh, never a writer's choices or stored state.
@@ -507,26 +517,25 @@ export let graph = (opts: Options): Graph => {
       )
       phaseRules.set(phase, found)
     }
-    let stamps = stamp ? stamping.filter((r) => r.phase == phase) : []
-    return stamps.length ? [...stamps, ...found!] : found!
+    let stamps = stamp ? stamping.get(phase) : undefined
+    return stamps ? [...stamps, ...found!] : found!
   }
 
   // The singletons a rule may bind with `#Name`: each plugin's, then this
   // graph's own three, which take precedence — nothing a plugin registers can
   // change the transaction's timestamp or its actor out from under the stamps.
-  let resourced = (now: () => string): Record<string, Resource> =>
-    registry([
-      ...plugins.map((p) => p.resources),
-      {
-        Vocab: () => vocab,
-        Now: () => stands({ at: now() }),
-        // A copy, so a rule cannot mutate the batch's own `$actor`.
-        Actor: (tick) => {
-          let who = actorOf(tick.bundles)
-          return stands({ ...who }, who.by)
-        },
-      },
-    ])
+  let resourced = (now: () => string): Record<string, Resource> => ({
+    ...plugins.some((p) => p.resources)
+      ? registry(plugins.map((p) => p.resources))
+      : {},
+    Vocab: () => vocab,
+    Now: () => stands({ at: now() }),
+    // A copy, so a rule cannot mutate the batch's own `$actor`.
+    Actor: (tick) => {
+      let who = actorOf(tick.bundles)
+      return stands({ ...who }, who.by)
+    },
+  })
 
   // A batch that names no writer is this graph's own — nobody authenticated
   // it because there was no request: a rule's effect, a startup pass, a bulk
@@ -666,14 +675,16 @@ export let graph = (opts: Options): Graph => {
     let current = tracing?.parent
     let checking = false
     let st = state()
-    let now = o.now ?? new Date().toISOString()
+    // When the apply began, written out only once something reads it.
+    let began = Date.now()
     let instant: string | undefined
+    let moment = () => instant ??= o.now ?? opts.clock?.() ?? iso(began)
     let traced = (tx: Tx): Tx =>
       tracing ? tracedTx(tx, () => ({ ...tracing, parent: current })) : tx
     let outside = traced(detached(storage))
     // One registry for the whole apply, so `#Now` is one instant however many
     // phases and rules read it.
-    let resources = resourced(() => instant ??= o.now ?? opts.clock?.() ?? now)
+    let resources = resourced(moment)
     let timed: Timing = (name, run, plugin) => {
       let c = tracing && live(tracing) && peek(g)
       if (!c) return run()
@@ -1066,7 +1077,7 @@ export let graph = (opts: Options): Graph => {
         }
         // Sample the calling program's clock while its transaction-scoped
         // context still exists.
-        instant ??= o.now ?? opts.clock?.() ?? now
+        moment()
         defer(() =>
           after(
             tracing ? timed('effect', () => effects(b)) : effects(b),

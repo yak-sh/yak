@@ -105,15 +105,15 @@ let mark = (
 ): Comp | undefined => {
   let info = vocab.comp(comp)
   if (!info) return undefined
-  let has = new Set(vocab.props(comp))
+  let has = vocab.props(comp)
   // A property something else already filled is left as it was found: a hook
   // that set the mark's author (@yaks/kernel keeps a completion's author across
   // edits) and a graph whose policy supplied the writer both run before this.
   let said = (prop: string) => held?.[prop] != null
   let out: Comp = {}
-  if (has.has('at') && !said('at')) out.at = now
+  if (has.includes('at') && !said('at')) out.at = now
   for (let prop of ['by', 'via'] as const) {
-    if (!has.has(prop) || said(prop)) continue
+    if (!has.includes(prop) || said(prop)) continue
     if (overrides && prop in overrides) out[prop] = overrides[prop]
     else if (actor[prop]) out[prop] = actor[prop]
   }

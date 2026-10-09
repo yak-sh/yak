@@ -301,79 +301,82 @@ export let complete = (tx: Tx, snap: Snap): void | Promise<void> => {
  * and exactly what a phase reading after the write must not have. That is why
  * the cascade does a fresh gather of its own.
  */
-export let holding = (tx: Tx, vocab: Vocab, snap: Snap): Tx => ({
-  ...tx,
-  // Not the storage's own delete cascade: it would answer about the rows the
-  // storage holds, and this transaction is the one place where a hook's
-  // pending write is not among them. A phase reading through the snapshot
-  // walks the references instead (./cascade.ts `doomed`).
-  doom: undefined,
-  patch: (bundles) =>
-    after(
-      bundles.length ? complete(tx, snap) : undefined,
-      () =>
-        after(tx.patch(bundles), (born) => {
-          for (let b of bundles) {
-            let eid = b.entity.eid
-            let held = merged(snap.got.get(eid) ?? null, b)
-            if (snap.got.has(eid)) snap.got.set(eid, held)
-            // Re-index it: what it references now, and what it no longer
-            // references.
-            for (let [c, p, e] of snap.pairs) {
-              let rows = snap.near.get(key(c, p, e))!
-              let was = rows.findIndex((r) => r.entity.eid == eid)
-              let hit = at(held, c, p) === e
-              if (hit && was < 0) rows.push(held)
-              else if (hit) rows[was] = held
-              else if (was >= 0) rows.splice(was, 1)
+export let holding = (tx: Tx, vocab: Vocab, snap: Snap): Tx => {
+  let holds: Tx = {
+    ...tx,
+    // Not the storage's own delete cascade: it would answer about the rows the
+    // storage holds, and this transaction is the one place where a hook's
+    // pending write is not among them. A phase reading through the snapshot
+    // walks the references instead (./cascade.ts `doomed`).
+    doom: undefined,
+    patch: (bundles) =>
+      after(
+        bundles.length ? complete(tx, snap) : undefined,
+        () =>
+          after(tx.patch(bundles), (born) => {
+            for (let b of bundles) {
+              let eid = b.entity.eid
+              let held = merged(snap.got.get(eid) ?? null, b)
+              if (snap.got.has(eid)) snap.got.set(eid, held)
+              // Re-index it: what it references now, and what it no longer
+              // references.
+              for (let [c, p, e] of snap.pairs) {
+                let rows = snap.near.get(key(c, p, e))!
+                let was = rows.findIndex((r) => r.entity.eid == eid)
+                let hit = at(held, c, p) === e
+                if (hit && was < 0) rows.push(held)
+                else if (hit) rows[was] = held
+                else if (was >= 0) rows.splice(was, 1)
+              }
             }
+            return born
+          }),
+      ),
+    remove: (entities) => after(complete(tx, snap), () => tx.remove(entities)),
+    // A revived entity holds nothing until the patch after it: the snapshot
+    // drops its tombstone, so that patch merges onto an identity, not a grave.
+    revive: (eids) =>
+      after(complete(tx, snap), () =>
+        after(tx.revive(eids), () => {
+          for (let eid of eids) {
+            let held = snap.got.get(eid)
+            if (held && dead(held)) snap.got.set(eid, { entity: held.entity })
           }
-          return born
-        }),
-    ),
-  remove: (entities) => after(complete(tx, snap), () => tx.remove(entities)),
-  // A revived entity holds nothing until the patch after it: the snapshot
-  // drops its tombstone, so that patch merges onto an identity, not a grave.
-  revive: (eids) =>
-    after(complete(tx, snap), () =>
-      after(tx.revive(eids), () => {
-        for (let eid of eids) {
-          let held = snap.got.get(eid)
-          if (held && dead(held)) snap.got.set(eid, { entity: held.entity })
-        }
-      })),
-  // What the gather read answers any ask it covers: an entity it read whole,
-  // or one it read the named components of. Anything else is read whole, and
-  // kept.
-  get: (eids, names) => {
-    let mine = () => eids.flatMap((e) => snap.got.get(e) ?? [])
-    let read = (e: Eid) =>
-      snap.got.has(e) &&
-      (!snap.only?.has(e) || !!names?.every((n) => snap.only!.get(e)!.has(n)))
-    if (eids.every(read)) return mine()
-    if (eids.some((e) => snap.only?.has(e))) {
-      return after(complete(tx, snap), () => holding(tx, vocab, snap).get(eids))
-    }
-    let miss = eids.filter((e) => !snap.got.has(e))
-    return after(tx.get(miss), (found) => {
-      for (let e of miss) snap.got.set(e, null)
-      for (let b of found) snap.got.set(b.entity.eid, b)
-      return mine()
-    })
-  },
-  about: (eids, names) => {
-    let asked = want(vocab, eids, names)
-    let mine = () =>
-      once(asked.flatMap(([c, p, e]) => snap.near.get(key(c, p, e)) ?? []))
-    let miss = asked.filter(([c, p, e]) => !snap.near.has(key(c, p, e)))
-    let q = pointing(miss)
-    if (!q) return mine()
-    return after(seek(tx, q), (rows) => {
-      file(snap, miss, rows)
-      return mine()
-    })
-  },
-})
+        })),
+    // What the gather read answers any ask it covers: an entity it read whole,
+    // or one it read the named components of. Anything else is read whole, and
+    // kept.
+    get: (eids, names) => {
+      let mine = () => eids.flatMap((e) => snap.got.get(e) ?? [])
+      let read = (e: Eid) =>
+        snap.got.has(e) &&
+        (!snap.only?.has(e) || !!names?.every((n) => snap.only!.get(e)!.has(n)))
+      if (eids.every(read)) return mine()
+      if (eids.some((e) => snap.only?.has(e))) {
+        return after(complete(tx, snap), () => holds.get(eids))
+      }
+      let miss = eids.filter((e) => !snap.got.has(e))
+      return after(tx.get(miss), (found) => {
+        for (let e of miss) snap.got.set(e, null)
+        for (let b of found) snap.got.set(b.entity.eid, b)
+        return mine()
+      })
+    },
+    about: (eids, names) => {
+      let asked = want(vocab, eids, names)
+      let mine = () =>
+        once(asked.flatMap(([c, p, e]) => snap.near.get(key(c, p, e)) ?? []))
+      let miss = asked.filter(([c, p, e]) => !snap.near.has(key(c, p, e)))
+      let q = pointing(miss)
+      if (!q) return mine()
+      return after(seek(tx, q), (rows) => {
+        file(snap, miss, rows)
+        return mine()
+      })
+    },
+  }
+  return holds
+}
 
 /**
  * The entities whose reference properties point at one of `eids` — from the
