@@ -74,8 +74,9 @@ test('map pixels sample cover at their centres at every grown detail', () => {
   let reference: Uint8ClampedArray | undefined
   for (let voxel of [1, 0.25, 2]) {
     let p = ground(voxel), C = p.n - 2
-    for (let j = 0; j < p.top.length; j++) {
-      if ((j % C + 0.5) * voxel >= 8) p.top[j] = Top.sand
+    let sand = Math.ceil(8 / voxel - 0.5)
+    for (let k = 0; k < C; k++) {
+      p.top.fill(Top.sand, k * C + sand, (k + 1) * C)
     }
     let px = chartPatch(p)
     if (reference) assertEquals(px, reference)

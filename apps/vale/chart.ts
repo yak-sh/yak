@@ -124,14 +124,16 @@ let painting = (
     }
   }
   let finish = (props: Iterable<Prop>) => {
-    // Where a region meets the next, a line.
-    for (let k = 0; k < N; k++) {
-      for (let i = 0; i < N; i++) {
-        let at = i + k * N
-        if (
-          i + 1 < N && regions[at] != regions[at + 1] ||
-          k + 1 < N && regions[at] != regions[at + N]
-        ) put(at, [px[at * 4], px[at * 4 + 1], px[at * 4 + 2]], 0.8)
+    // Where a region meets the next, a line; a chart of one region has none.
+    if (palettes.size > 1) {
+      for (let k = 0; k < N; k++) {
+        for (let i = 0; i < N; i++) {
+          let at = i + k * N
+          if (
+            i + 1 < N && regions[at] != regions[at + 1] ||
+            k + 1 < N && regions[at] != regions[at + N]
+          ) put(at, [px[at * 4], px[at * 4 + 1], px[at * 4 + 2]], 0.8)
+        }
       }
     }
     // Every column in the rectangle `w` by `d` metres from (x, z).
