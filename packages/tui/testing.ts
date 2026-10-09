@@ -12,7 +12,7 @@ import { type ComponentType, h, render } from 'preact'
 import { install, onPaint } from './dom.ts'
 import { decode } from './input.ts'
 import { clearMouse, routeMouse } from './mouse.ts'
-import { ansiBackend, type Line } from './paint.ts'
+import { ansiBackend, type Line, screenful } from './paint.ts'
 import type { Sheet } from './theme.ts'
 import { clear, measured, press, size } from './screen.ts'
 
@@ -56,8 +56,10 @@ export let mount = async (
   await settle()
   return {
     out,
+    // The whole layout, unclipped: a test reads what the tree says even where
+    // the terminal is too narrow to show all of it.
     text: () =>
-      lines
+      screenful(screen.root, columns, rows, sheet).lines
         .map((l) => l.map((s) => s.text).join('').trimEnd())
         .join('\n'),
     send: async (bytes: string) => {
