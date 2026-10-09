@@ -30,10 +30,9 @@ test('removing takes ours out and leaves theirs', () => {
   assertEquals(gone, { SessionStart: [theirs], Stop: [theirs] })
 })
 
-test('a settings file keeps the keys nobody asked about', async () => {
-  let dir = await Deno.makeTempDir()
+test('a settings file keeps the keys nobody asked about', () => {
+  let path = Deno.makeTempFileSync({ suffix: '.json' })
   try {
-    let path = `${dir}/settings.json`
     Deno.writeTextFileSync(path, JSON.stringify({ model: 'opus', hooks: {} }))
     install(path)
     let said = JSON.parse(Deno.readTextFileSync(path))
@@ -46,7 +45,7 @@ test('a settings file keeps the keys nobody asked about', async () => {
     install(path, { remove: true })
     assertEquals(JSON.parse(Deno.readTextFileSync(path)), { model: 'opus' })
   } finally {
-    await Deno.remove(dir, { recursive: true })
+    Deno.removeSync(path)
   }
 })
 

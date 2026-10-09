@@ -362,7 +362,7 @@ test('a settled transcript is never stalled, however old', async () => {
 })
 
 test('session check reconciles a quiet, fully imported harness log', async () => {
-  let path = await Deno.makeTempFile()
+  let path = Deno.makeTempFileSync()
   try {
     Deno.writeTextFileSync(path, '{"type":"user"}\n')
     let at = new Date(ago(9))
@@ -395,12 +395,12 @@ test('session check reconciles a quiet, fully imported harness log', async () =>
     await g.apply(answer.slice(1))
     assertEquals(comp((await g.get([ids.run1]))[0]!, 'session').ended, true)
   } finally {
-    await Deno.remove(path)
+    Deno.removeSync(path)
   }
 })
 
 test('session check leaves an incomplete imported log for inspection', async () => {
-  let path = await Deno.makeTempFile()
+  let path = Deno.makeTempFileSync()
   try {
     Deno.writeTextFileSync(path, '{"type":"user"}\nmore\n')
     let at = new Date(ago(9))
@@ -430,6 +430,6 @@ test('session check leaves an incomplete imported log for inspection', async () 
     assertEquals(answer.length, 1)
     assertEquals(comp(answer[0], 'finding').level, 'warn')
   } finally {
-    await Deno.remove(path)
+    Deno.removeSync(path)
   }
 })
