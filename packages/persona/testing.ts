@@ -163,9 +163,9 @@ export let checkout = (eid: string, path: string, gitdir: string): Bundle => ({
 
 /** A project whose repository r1 has its main worktree at `root` and a linked
  * one at `<root>/agent`, whose common persona n1 carries m1, and a specialist
- * n2 named `coder` that carries m1 and m2. */
-export let fleet = (root: string): Graph => {
-  let g = world()
+ * n2 named `coder` that carries m1 and m2, in `vocab` when given. */
+export let fleet = (root: string, vocab: Vocab = said): Graph => {
+  let g = world(vocab)
   g.apply([
     { entity: { eid: 'p1' }, project: {}, repo: { repository: 'r1' } },
     { entity: { eid: 'r1' }, repository: { common: `${root}/.git` } },

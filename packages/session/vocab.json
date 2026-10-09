@@ -554,7 +554,7 @@
       "noun": "session",
       "verb": "context",
       "title": "Read a session’s context",
-      "description": "At the start of an agent work session, find or create its stored session record. Pass the id assigned by the harness (the program hosting the agent), or a hook containing session_id. Returns the session record changes and text in content.body naming the session and records it holds claims (work reservations) on, for the harness to inject. An explicit session argument takes precedence over the hook. With no session id, including a malformed hook without an explicit id, returns nothing and makes no changes.",
+      "description": "At the start of an agent work session, find or create its stored session record. Pass the id assigned by the harness (the program hosting the agent), or a hook containing session_id. When the hook also gives cwd and the session wears no persona, records the persona of the checkout holding that directory as the one it wears. Returns the session record changes and text in content.body naming the session and records it holds claims (work reservations) on, for the harness to inject. An explicit session argument takes precedence over the hook. With no session id, including a malformed hook without an explicit id, returns nothing and makes no changes.",
       "input": {
         "session": {
           "type": "string",
@@ -562,7 +562,7 @@
         },
         "hook": {
           "type": "string",
-          "description": "lifecycle event encoded as a JSON string containing session_id; the CLI accepts - to read this JSON from stdin, but MCP callers pass the JSON string itself"
+          "description": "lifecycle event encoded as a JSON string containing session_id, and optionally cwd, the directory the session started in; the CLI accepts - to read this JSON from stdin, but MCP callers pass the JSON string itself"
         },
         "actor": {
           "type": "string",
@@ -588,7 +588,7 @@
         },
         "hook": {
           "type": "string",
-          "description": "lifecycle event encoded as a JSON string containing session_id; the CLI accepts - to read this JSON from stdin, but MCP callers pass the JSON string itself"
+          "description": "lifecycle event encoded as a JSON string containing session_id, and optionally cwd, the directory the session started in; the CLI accepts - to read this JSON from stdin, but MCP callers pass the JSON string itself"
         },
         "brief": {
           "type": "string",
@@ -635,7 +635,7 @@
         },
         "hook": {
           "type": "string",
-          "description": "lifecycle event encoded as a JSON string containing session_id; the CLI accepts - to read this JSON from stdin, but MCP callers pass the JSON string itself"
+          "description": "lifecycle event encoded as a JSON string containing session_id, and optionally cwd, the directory the session started in; the CLI accepts - to read this JSON from stdin, but MCP callers pass the JSON string itself"
         },
         "text": {
           "type": "string",

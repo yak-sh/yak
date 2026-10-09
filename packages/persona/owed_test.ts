@@ -22,9 +22,9 @@ let spoken = async (g: Graph, eid: string) =>
 let id = async (g: Graph, eid: string) =>
   human(g.vocab)((await g.get([eid]))[0])
 
-test('an agent in any checkout of the repository is owed its common persona', async () => {
+test('an agent anywhere in any checkout of the repository is owed its common persona', async () => {
   let g = fleet('/r')
-  let owes = await owed(g, '/r/agent', [])
+  let owes = await owed(g, '/r/agent/src/', [])
   assertEquals(owes?.text, await spoken(g, 'n1'))
   assertEquals(owes?.source, await id(g, 'n1'))
 })
@@ -45,7 +45,7 @@ test('a file that is the persona file is not said twice; any other file is', asy
 })
 
 test('a checkout the graph does not know, or a project with no common persona, is owed nothing', async () => {
-  assertEquals(await owed(fleet('/r'), '/elsewhere', []), undefined)
+  assertEquals(await owed(fleet('/r'), '/rx', []), undefined)
   let bare = then(fleet('/r'), {
     entity: { eid: 'n1' },
     persona: { home: null },

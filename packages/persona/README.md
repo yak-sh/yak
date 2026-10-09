@@ -207,18 +207,23 @@ let owes = await owed(graph, checkout, [agentsMdText])
 // owes: { source: 'N-4053', text: '# N-4053 …' } | undefined
 ```
 
-`owed(graph, path, files)` finds the project whose repository has a checkout at
-`path`, and returns its common persona (`source` is its id, `text` is `voice`'s
-rendering), unless one of `files` (the text of each instruction file the agent's
-provider reads there) is exactly that persona's file: the same banner and the
-same text the persona files would write now. A stale file, or another
-repository's, leaves the persona owed. The harness gives it through the
+`owed(graph, path, files)` finds the project whose repository has a checkout
+holding `path` (the nearest directory at or above it the graph knows as a
+worktree), and returns its common persona (`source` is its id, `text` is
+`voice`'s rendering), unless one of `files` (the text of each instruction file
+the agent's provider reads there) is exactly that persona's file: the same
+banner and the same text the persona files would write now. A stale file, or
+another repository's, leaves the persona owed. The harness gives it through the
 provider's own instruction mechanism and the provider still reads its files. A
 fourth argument says who the agent is: `{ persona }`, a persona id or registered
 name, chooses that persona instead of the checkout's common one (an unknown
 persona is refused); `{ work }`, the task or project the agent works on, makes
 it the common persona of the work's lineage, less what a file there already says
 of the checkout's.
+
+`carried(graph, path)` is that common persona alone, as `wear` returns it: the
+persona a session started anywhere in the checkout wears (@yaks/session's
+`session_context`).
 
 ## Sub-projects
 

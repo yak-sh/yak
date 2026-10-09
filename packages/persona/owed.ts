@@ -121,12 +121,35 @@ export type Owed = { source: string; text: string }
  * a project), whose lineage's common persona it hears. */
 export type As = { persona?: string; work?: Eid }
 
-// The common persona of the checkout at `path`: the first project filed with
-// its repository, by eid, that has one along its lineage.
-let carried = async (g: Graph, path: string): Promise<Worn | undefined> => {
+// Every directory from `path` up, nearest first.
+let upward = (path: string): string[] => {
+  let out: string[] = []
+  for (
+    let d = path.replace(/\/+$/, '');
+    d;
+    d = d.slice(0, d.lastIndexOf('/'))
+  ) {
+    out.push(d)
+  }
+  return out
+}
+
+/** The common persona the checkout holding `path` carries: the nearest
+ * directory at or above `path` that the graph knows as a worktree, then the
+ * first project filed with its repository, by eid, that has one along its
+ * lineage. A session started anywhere in a checkout wears this. */
+export let carried = async (
+  g: Graph,
+  path: string,
+): Promise<Worn | undefined> => {
   let needs = ['worktree', 'repo', 'project', PERSONA]
   if (!needs.every((c) => g.vocab.comp(c))) return
-  let repos = (await g.storage.read(and(eq('worktree.path', path))))
+  let dirs = upward(path)
+  if (!dirs.length) return
+  let known = await g.storage.read(and(eq('worktree.path', value(dirs))))
+  let at = (b: Bundle) => str(comp(b, 'worktree').path)
+  let nearest = dirs.find((d) => known.some((b) => at(b) == d))
+  let repos = known.filter((b) => at(b) == nearest)
     .map((b) => str(comp(b, 'worktree').repository)).filter(Boolean)
   if (!repos.length) return
   let projects = (await g.storage.read(
@@ -144,7 +167,7 @@ let carried = async (g: Graph, path: string): Promise<Worn | undefined> => {
  * default that is the common persona the checkout's repository carries;
  * `as.work` makes it the common persona of the work's lineage, less whatever a
  * file there already says of the checkout's. Nothing when a file already says
- * it all, when the graph knows no checkout at `path` and no work, or when
+ * it all, when the graph knows no checkout holding `path` and no work, or when
  * nothing along the way has a common persona. `as.persona` selects a graph
  * persona instead, even when the checkout is not known to the graph.
  *

@@ -8,7 +8,9 @@ import { docDoc } from '@yaks/doc'
 import { taskDoc } from '@yaks/task'
 import { sessionDoc } from './comp.ts'
 import { ids, locked, pages, seed, store } from './testing.ts'
-import { hookSession, type Options, runs } from './tools.ts'
+import { hooked, type Options, runs } from './tools.ts'
+import { fleet, said as personas } from '../persona/testing.ts'
+import { edgeKeywords } from '@yaks/edge'
 
 let vocab = loadVocab([docDoc, taskDoc, sessionDoc], [idKeywords])
 
@@ -118,10 +120,46 @@ test('a release drops the component', async () => {
   assertEquals(said.claim, null)
 })
 
-test('a hook payload names the session; anything else says nothing', () => {
-  assertEquals(hookSession('{"session_id":"abc"}'), 'abc')
-  assertEquals(hookSession('not json at all'), '')
-  assertEquals(hookSession(undefined), '')
+test('a hook payload names the session and where it started; anything else says nothing', () => {
+  assertEquals(hooked('{"session_id":"abc","cwd":"/r"}'), {
+    session: 'abc',
+    cwd: '/r',
+  })
+  assertEquals(hooked('not json at all'), { session: '', cwd: '' })
+  assertEquals(hooked(undefined), { session: '', cwd: '' })
+})
+
+// The fleet @yaks/persona tests with: a checkout at /r whose project's common
+// persona is n1, and a specialist n2, which the session `chose` wears. Context
+// writes nothing itself, so every test reads the one graph.
+let fleetVocab = loadVocab([...personas.docs, sessionDoc], [
+  edgeKeywords,
+  idKeywords,
+])
+let checkouts = fleet('/r', fleetVocab)
+checkouts.apply([{
+  entity: { eid: 's1' },
+  session: { id: 'chose', persona: 'n2' },
+}])
+let wears = async (session_id: string, cwd: string) =>
+  comp(
+    (await tools.session_context!(
+      {
+        entity: { eid: 'c1' },
+        call: { args: { hook: JSON.stringify({ session_id, cwd }) } },
+      },
+      checkouts,
+    ) as Bundle[])[0],
+    'session',
+  ).persona
+
+test('a session wears the persona of the checkout it starts anywhere in', async () => {
+  assertEquals(await wears('abc', '/r/agent/src'), 'n1')
+  assertEquals(await wears('abc', '/elsewhere'), undefined)
+})
+
+test('a session that wears a persona keeps it', async () => {
+  assertEquals(await wears('chose', '/r'), undefined)
 })
 
 test('a session nobody has seen is minted, holding nothing', async () => {

@@ -483,9 +483,12 @@ transcript stopped or failed), a reply sent to a project is held for that
 project: the next session of the project hears it, the same way and once. A
 session's projects are the home of the persona it wears (`session.persona`,
 @yaks/persona's `persona.home`) and every project filed under that home, at any
-depth. A session wearing no persona hears only its own replies. A letter sent
-with `mail send --about <project>` goes out from the project's address, so its
-answer is routed to the project (@yaks/mail).
+depth. A session that chose none wears the persona of the checkout it starts in:
+its start hook says the directory, and `session_context` records the common
+persona of the checkout holding it (@yaks/persona's `carried`), the one its
+instruction files say. A session wearing no persona hears only its own replies.
+A letter sent with `mail send --about <project>` goes out from the project's
+address, so its answer is routed to the project (@yaks/mail).
 
 Nothing starts a session for a held reply; it waits for one. A managed spawn in
 the project's checkout, with the thread as its brief and the project's common

@@ -59,6 +59,7 @@ import type { Runs } from '@yaks/graph/tools'
 import { human } from '@yaks/id'
 import { and, eq, every, present } from '@yaks/query'
 import { checked, type Finding } from '@yaks/tools'
+import { carried } from '@yaks/persona'
 import type { Vocab } from '@yaks/vocab'
 import { CLAIM, SESSION } from './comp.ts'
 import { sessionFor } from './who.ts'
@@ -85,15 +86,15 @@ let ENDED = ['stopped', 'failed']
 
 let str = (v: unknown): string => v == null ? '' : String(v)
 
-/** The session id a hook payload names, where the command line did not give
- * one. A payload that will not parse returns an empty string, and does so
- * quietly. */
-export let hookSession = (hook: unknown): string => {
+/** What a hook payload says, where the command line did not: the session's
+ * own id, and the directory it started in. A payload that will not parse says
+ * nothing, and does so quietly. */
+export let hooked = (hook: unknown): { session: string; cwd: string } => {
   try {
-    let said = JSON.parse(str(hook)) as { session_id?: unknown }
-    return str(said.session_id)
+    let said = JSON.parse(str(hook)) as { session_id?: unknown; cwd?: unknown }
+    return { session: str(said.session_id), cwd: str(said.cwd) }
   } catch {
-    return ''
+    return { session: '', cwd: '' }
   }
 }
 
@@ -102,7 +103,7 @@ export let hookSession = (hook: unknown): string => {
 // job — an eid, a human-readable id, or the harness's own id for the run, which
 // is the only one of the three that may not exist yet.
 let idIn = (args: Record<string, unknown>): string =>
-  str(args.session) || hookSession(args.hook)
+  str(args.session) || hooked(args.hook).session
 
 let comp = (b: Bundle | undefined, name: string): Comp =>
   (b?.[name] ?? {}) as Comp
@@ -272,6 +273,13 @@ export let runs = (
     let found = await sessionFor(graph, id)
     let actor = str(args.actor)
     let eid = found?.entity.eid ?? '$session'
+    // A session wearing no persona wears the one its checkout carries, which
+    // is the one its instruction files say: that is the project it works for
+    // (./listen.ts).
+    let worn = !str(comp(found, SESSION).persona) &&
+      graph.vocab.prop(SESSION, 'persona') &&
+      await carried(graph, hooked(args.hook).cwd)
+    let persona = worn ? worn.persona.entity.eid : undefined
     // A fresh transcript holds nothing: it has no entity yet, so nothing in
     // the graph can name it as a holder.
     let held = minted(eid)
@@ -282,7 +290,12 @@ export let runs = (
       // not this tool's to restate.
       {
         entity: found?.entity ?? { eid },
-        [SESSION]: { id, ended: null, ...(actor ? { actor } : {}) },
+        [SESSION]: {
+          id,
+          ended: null,
+          ...(actor ? { actor } : {}),
+          ...(persona ? { persona } : {}),
+        },
       },
       {
         entity: { eid: '$said' },
