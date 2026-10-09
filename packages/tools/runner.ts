@@ -740,12 +740,13 @@ export let runner = (g: Graph, opts: Opts): Runner => {
       keeps = !tool.readOnly || state == 'failed' || state == 'interrupted',
       code?: string,
     ): Promise<Bundle[]> => {
+      let ended = ending(call, started, state, made)
+      if (transient) return [...made, ...ended]
       let bundles = [
         ...(keeps ? made : []),
-        ...ending(call, started, state, made),
+        ...ended,
         ...code ? [{ entity: call.entity, interrupted: { code } }] : [],
       ]
-      if (transient) return [...made, ...ending(call, started, state, made)]
       let landed = await persist(
         () => g.apply(bundles),
         (e) => opts.report?.(e, call, tool.name),
