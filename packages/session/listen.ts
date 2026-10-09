@@ -5,6 +5,27 @@
 // each line a command prints as one event — so a running agent learns about its
 // work while it works.
 //
+// A reply is the old session's while it may still hear it, and the project's
+// once it cannot. The session that wrote a letter hears the answer, wherever
+// the far side sent it, until that session is over (its harness ended it, or
+// its transcript stopped or failed). From then on the reply is held for the
+// project it reached (the letter went out from the project's address, so the
+// answer is routed to the project, @yaks/mail's `mail.target`), and the next
+// session of that project hears it. A session's project is the home of the
+// persona it wears (@yaks/persona's `persona.home`, "the project it works
+// for"), with every project filed under that home at any depth, since a
+// sub-project's work is done under its parent's persona (@yaks/project). A
+// session wearing no persona has no project and hears only its own replies.
+//
+// Nothing starts a session when none comes: a held reply waits for one. That
+// is where a managed spawn will plug in, once T-95308 lifts the ban on
+// starting sessions (C-121250) and the owner picks its provider, model and
+// spend: an owing (D-121352) on the rows {@link held} reads, a reply whose
+// writer is over and that nobody has heard, starting @yaks/spawn's run in the
+// project's checkout with the thread as its brief and the project's common
+// persona as its own. The session it starts is then a session of the project,
+// and hears the reply through this same rule.
+//
 // Each item is marked `notified` as it is said, so it is said once, including
 // one that arrived while nothing was listening: a monitor that expired and was
 // armed again hears the gap. A session never hears what it wrote itself.
@@ -31,17 +52,23 @@ import {
   type Clause,
   eq,
   every,
+  type Input,
+  list,
   present,
+  walk,
 } from '@yaks/query'
 import { safe } from '@yaks/text'
 import type { Vocab } from '@yaks/vocab'
-import { CLAIM } from './comp.ts'
+import { CLAIM, SESSION } from './comp.ts'
+import { statusOf } from './status.ts'
 
 let NOTIFIED = 'notified'
 
 let str = (v: unknown): string => typeof v == 'string' ? v : ''
-let comp = (b: Bundle, name: string): Comp => (b[name] ?? {}) as Comp
+let comp = (b: Bundle | undefined, name: string): Comp =>
+  (b?.[name] ?? {}) as Comp
 let fold = (text: string): string => text.replace(/\s+/g, ' ').trim()
+let value = (eids: Eid[]): Input => eids.length == 1 ? eids[0] : list(...eids)
 
 /** The queries for what is addressed to one session and not yet said. Each
  * asks about one component the graph declares; a graph without knocks or
@@ -73,6 +100,102 @@ export let addressedTo = (vocab: Vocab, session: Eid): And[] => {
       ? [unsaid(present('mail'), eq('mail.reply_to.created.via', session))]
       : [],
   ]
+}
+
+// A session's newest entries, enough to read whether it is over.
+let newest = (
+  graph: Pick<Graph, 'read'>,
+  session: Eid,
+): Bundle[] | Promise<Bundle[]> =>
+  graph.read(`.entry.session=${session}&.order=-entry.seq&.limit=3&*`)
+
+/** Whether a session is over: its harness ended it, or its transcript
+ * stopped or failed. One between turns is not. */
+export let over = async (
+  graph: Pick<Graph, 'read'>,
+  s: Bundle,
+): Promise<boolean> =>
+  comp(s, SESSION).ended == true ||
+  ['stopped', 'failed'].includes(statusOf(await newest(graph, s.entity.eid)))
+
+// A project and the projects filed under it at any depth (`->`), or above it
+// (`<-`): @yaks/project's sub-projects, read through `filed.project`.
+let family = async (
+  graph: Pick<Graph, 'vocab' | 'read'>,
+  project: Eid,
+  dir: '->' | '<-',
+): Promise<Eid[]> => [
+  project,
+  ...graph.vocab.prop('filed', 'project') && graph.vocab.comp('project')
+    ? (await graph.read(
+      and(present('project'), walk('filed.project', dir, project)),
+    )).map((b) => b.entity.eid)
+    : [],
+]
+
+/** The projects a session works for: the home of the persona it wears, and
+ * every project filed under that home at any depth. None when it wears no
+ * persona. */
+export let worksFor = async (
+  graph: Pick<Graph, 'vocab' | 'read' | 'get'>,
+  s: Bundle | undefined,
+): Promise<Eid[]> => {
+  let persona = str(comp(s, SESSION).persona)
+  if (!persona || !graph.vocab.prop('persona', 'home')) return []
+  let [worn] = await graph.get([persona])
+  let home = str(comp(worn, 'persona').home)
+  return home ? await family(graph, home, '->') : []
+}
+
+/** The sessions that may hear these replies once they are held: each wearing
+ * a persona whose home is a project a reply reached, or a project that one is
+ * filed under. Whether a reply is held yet is {@link held}'s to say. */
+export let heirs = async (
+  graph: Pick<Graph, 'vocab' | 'read'>,
+  replies: Bundle[],
+): Promise<Eid[]> => {
+  if (!graph.vocab.prop('persona', 'home')) return []
+  let reached = [
+    ...new Set(replies.map((b) => str(comp(b, 'mail').target)).filter(Boolean)),
+  ]
+  if (!reached.length) return []
+  let homes = [
+    ...new Set(
+      (await Promise.all(reached.map((p) => family(graph, p, '<-')))).flat(),
+    ),
+  ]
+  return (await graph.read(
+    and(eq(`${SESSION}.persona.persona.home`, value(homes))),
+  )).map((b) => b.entity.eid)
+}
+
+/** The replies held for these projects, unsaid: each answers a letter a
+ * session other than `session` wrote, and that session is over. */
+export let held = async (
+  graph: Pick<Graph, 'vocab' | 'read' | 'get'>,
+  session: Eid,
+  projects: Eid[],
+): Promise<Bundle[]> => {
+  if (!projects.length || !graph.vocab.comp('mail')) return []
+  let replies = await graph.read(and(
+    present('mail'),
+    eq('mail.target', value(projects)),
+    present('mail.reply_to.created.via.session'),
+    absent(NOTIFIED),
+    every(),
+  ))
+  if (!replies.length) return []
+  let to = (b: Bundle) => str(comp(b, 'mail').reply_to)
+  let writer = new Map(
+    (await graph.get([...new Set(replies.map(to))]))
+      .map((b) => [b.entity.eid, str(comp(b, 'created').via)]),
+  )
+  let others = [...new Set(writer.values())].filter((w) => w && w != session)
+  let gone = new Set<Eid>()
+  for (let s of await graph.get(others)) {
+    if (await over(graph, s)) gone.add(s.entity.eid)
+  }
+  return replies.filter((b) => gone.has(writer.get(to(b)) ?? ''))
 }
 
 /** Who wrote an item: the run it came through, else the identity. */
@@ -131,14 +254,18 @@ export let pending = async (
     (await graph.read(`.entry.session=${session}&.using&.limit=1`)).length > 0
   let seen = new Set<string>()
   let items: Bundle[] = []
+  let hears = (b: Bundle) => {
+    if (
+      seen.has(b.entity.eid) || author(b) == session || (native && b.comment)
+    ) return
+    seen.add(b.entity.eid)
+    items.push(b)
+  }
   for (let q of addressedTo(vocab, session)) {
-    for (let b of await graph.read(and(...q.clauses, every()))) {
-      if (
-        seen.has(b.entity.eid) || author(b) == session || (native && b.comment)
-      ) continue
-      seen.add(b.entity.eid)
-      items.push(b)
-    }
+    for (let b of await graph.read(and(...q.clauses, every()))) hears(b)
+  }
+  for (let b of await held(graph, session, await worksFor(graph, owner))) {
+    hears(b)
   }
   if (!items.length) return []
   let pointed = [

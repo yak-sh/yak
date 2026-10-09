@@ -474,6 +474,20 @@ A letter answering one a session wrote (`mail.reply_to` naming a letter whose
 `created.via` is that session) is that session's: a native transcript gets it as
 input, and an outside harness hears it from `yak session listen` or beside its
 next tool reply, once. The reply reaches the session wherever the far side sent
-it, to the session's own address or to its project's. While nobody hears for
-that session (it ended, or nothing listens), the reply waits unmarked; it is
-never dropped, and a session resumed under the same id hears it then.
+it, to the session's own address or to its project's. While that session may
+still hear it, the reply waits for it unmarked, and a session resumed under the
+same id hears it then.
+
+Once the session that wrote the letter is over (its harness ended it, or its
+transcript stopped or failed), a reply sent to a project is held for that
+project: the next session of the project hears it, the same way and once. A
+session's projects are the home of the persona it wears (`session.persona`,
+@yaks/persona's `persona.home`) and every project filed under that home, at any
+depth. A session wearing no persona hears only its own replies. A letter sent
+with `mail send --about <project>` goes out from the project's address, so its
+answer is routed to the project (@yaks/mail).
+
+Nothing starts a session for a held reply; it waits for one. A managed spawn in
+the project's checkout, with the thread as its brief and the project's common
+persona, is where that will plug in (./listen.ts), once sessions may be started
+again (T-95308) and its provider, model and spend are chosen.

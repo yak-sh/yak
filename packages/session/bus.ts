@@ -11,8 +11,7 @@ import {
   who,
 } from '@yaks/graph'
 import { absent, and, type Clause, every, present } from '@yaks/query'
-import { deliver, pending } from './listen.ts'
-import { statusOf } from './status.ts'
+import { deliver, heirs, over, pending } from './listen.ts'
 
 let comp = (b: Bundle, name: string): Comp => (b[name] ?? {}) as Comp
 
@@ -38,7 +37,8 @@ let candidates = async (g: Graph): Promise<Eid[]> => {
       )]
       : [],
   ]
-  // A reply is for the session that wrote the letter it answers.
+  // A reply is for the session that wrote the letter it answers, and once
+  // that session is over, for a session of the project it reached.
   let replies = g.vocab.comp('mail')
     ? await g.read(
       unsaid(present('mail'), present('mail.reply_to.created.via.session')),
@@ -61,12 +61,15 @@ let candidates = async (g: Graph): Promise<Eid[]> => {
   ]
   let rows = await g.get(targets)
   return [
-    ...new Set(rows.flatMap((b) => [
-      ...b.session ? [b.entity.eid] : [],
-      ...typeof comp(b, 'claim').session == 'string'
-        ? [String(comp(b, 'claim').session)]
-        : [],
-    ])),
+    ...new Set([
+      ...rows.flatMap((b) => [
+        ...b.session ? [b.entity.eid] : [],
+        ...typeof comp(b, 'claim').session == 'string'
+          ? [String(comp(b, 'claim').session)]
+          : [],
+      ]),
+      ...await heirs(g, replies),
+    ]),
   ]
 }
 
@@ -75,12 +78,11 @@ let candidates = async (g: Graph): Promise<Eid[]> => {
 let native = async (g: Graph, session: Bundle): Promise<boolean> => {
   if (!session.session || session.process) return false
   let id = session.entity.eid
-  let [using, last] = await Promise.all([
+  let [using, ended] = await Promise.all([
     g.read(`.entry.session=${id}&.using&.limit=1`),
-    g.read(`.entry.session=${id}&.order=-entry.seq&.limit=3&*`),
+    over(g, session),
   ])
-  return using.length > 0 &&
-    !['stopped', 'failed'].includes(statusOf(last))
+  return using.length > 0 && !ended
 }
 
 /** One pass over native sessions. A failed append leaves the item unmarked, so
