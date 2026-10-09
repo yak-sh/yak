@@ -28,7 +28,7 @@ let vocab = loadVocab([sessionDoc, spine], [idKeywords])
 
 // Two runs: one the graph numbered (so a person can say `S-1`), one a harness
 // named and nothing else knows about.
-let store = () => {
+let runs = (() => {
   let s = ram(vocab, { number: true })
   let g = graph({ storage: s, vocab, plugins: [ids(vocab)] })
   g.apply([
@@ -36,11 +36,10 @@ let store = () => {
     { entity: { eid: 's2' }, session: { id: 'def' } },
     { entity: { eid: 'p1' }, person: {} },
   ], { trusted: true })
-  return graph({ storage: s, vocab, plugins: [ids(vocab)] })
-}
+  return g
+})()
 
-let found = async (said: string) =>
-  (await sessionFor(store(), said))?.entity.eid
+let found = async (said: string) => (await sessionFor(runs, said))?.entity.eid
 
 test('a run is reached by its eid, its human id, or its own name', async () => {
   assertEquals(await found('s1'), 's1')
@@ -55,10 +54,9 @@ test('a word no run answers to reaches nothing', async () => {
 })
 
 test('caller identity distinguishes another agent from the transcript itself', async () => {
-  let g = store()
-  assertEquals(await humanCaller(g, { by: 'p1', via: 's1' }), false)
-  assertEquals(await humanCaller(g, { by: 'p1', via: 's1' }, 's1'), true)
-  assertEquals(await humanCaller(g, { by: 's2', via: 's1' }, 's1'), false)
+  assertEquals(await humanCaller(runs, { by: 'p1', via: 's1' }), false)
+  assertEquals(await humanCaller(runs, { by: 'p1', via: 's1' }, 's1'), true)
+  assertEquals(await humanCaller(runs, { by: 's2', via: 's1' }, 's1'), false)
 })
 
 test('an id that names no run is refused, never taken for a name', async () => {
