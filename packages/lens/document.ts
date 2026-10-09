@@ -147,9 +147,11 @@ let operation = (op: Op): Run => {
   }
   if ('add' in op || 'remove' in op) {
     let spec = 'add' in op ? op.add : op.remove
-    let p = path(spec.path), value = structuredClone(spec.default)
+    let p = path(spec.path),
+      value = structuredClone(spec.default),
+      add = 'add' in op
     return (doc, backwards) => {
-      let adding = 'add' in op ? !backwards : backwards
+      let adding = add ? !backwards : backwards
       let held = read(doc, p)
       if (adding) {
         return held === absent ? set(doc, p, structuredClone(value)) : doc
@@ -162,7 +164,10 @@ let operation = (op: Op): Run => {
     }
   }
   if ('concat' in op) {
-    let spec = op.concat, to = path(spec.to), separator = spec.separator ?? ''
+    let spec = op.concat,
+      to = path(spec.to),
+      separator = spec.separator ?? '',
+      append = spec.append
     if (!spec.from.length) fail('concat needs parts')
     let parts = spec.from.map((p) =>
       constant(p) ? { value: p.value } : { path: path(p) }
@@ -199,7 +204,7 @@ let operation = (op: Op): Run => {
         }
         let joined = values.join(separator), out = doc
         for (let p of variables) out = drop(out, p.path!)
-        if (!spec.append) return set(out, to, joined)
+        if (!append) return set(out, to, joined)
         let held = read(out, to)
         if (held !== absent && !Array.isArray(held)) {
           fail('concat append needs an array')
@@ -212,7 +217,7 @@ let operation = (op: Op): Run => {
       let held = read(doc, to)
       if (held === absent) return doc
       let value: Value = held
-      if (spec.append) {
+      if (append) {
         if (!Array.isArray(held)) fail('concat append needs an array')
         if (!held.length) return doc
         value = held.at(-1)!
@@ -220,7 +225,7 @@ let operation = (op: Op): Run => {
       if (typeof value != 'string') fail('concat inverse needs a string')
       let matched = pattern.exec(value)
       // An array may end in an ordinary positional, with no rest argument.
-      if (!matched && spec.append) return doc
+      if (!matched && append) return doc
       if (!matched) fail('concat inverse does not match its literals')
       if (
         variables.length > 1 &&
@@ -228,7 +233,7 @@ let operation = (op: Op): Run => {
       ) {
         fail('concat inverse contains an ambiguous separator')
       }
-      let out = spec.append
+      let out = append
         ? held instanceof Array && held.length > 1
           ? write(doc, to, held.slice(0, -1)) as Json
           : drop(doc, to)
@@ -240,9 +245,13 @@ let operation = (op: Op): Run => {
     }
   }
   if ('scatter' in op) {
-    let spec = op.scatter, from = path(spec.from), to = path(spec.to)
-    if (!spec.keyword) fail('scatter needs a keyword')
-    if (spec.key && spec.key != 'name' && spec.key != 'value') {
+    let spec = op.scatter,
+      from = path(spec.from),
+      to = path(spec.to),
+      keyword = spec.keyword,
+      byValue = spec.key == 'value'
+    if (!keyword) fail('scatter needs a keyword')
+    if (spec.key && spec.key != 'name' && !byValue) {
       fail('unknown scatter key')
     }
     return (doc, backwards) => {
@@ -252,7 +261,7 @@ let operation = (op: Op): Run => {
       let out = doc
       if (!backwards) {
         for (let [name, value] of Object.entries(source)) {
-          let key = spec.key == 'value' ? value : name
+          let key = byValue ? value : name
           if (typeof key != 'string') {
             fail('scatter destination keys must be strings')
           }
@@ -262,24 +271,23 @@ let operation = (op: Op): Run => {
           }
           out = set(
             out,
-            [...target, spec.keyword],
-            spec.key == 'value' ? name : value,
+            [...target, keyword],
+            byValue ? name : value,
           )
         }
         return drop(out, from)
       }
       let gathered: { [key: string]: Json } = {}
       for (let [name, entry] of Object.entries(source)) {
-        if (!object(entry) || !Object.hasOwn(entry, spec.keyword)) continue
-        let value = entry[spec.keyword],
-          key = spec.key == 'value' ? value : name
+        if (!object(entry) || !Object.hasOwn(entry, keyword)) continue
+        let value = entry[keyword], key = byValue ? value : name
         if (typeof key != 'string') fail('gathered keys must be strings')
         if (Object.hasOwn(gathered, key)) fail(`duplicate gathered key ${key}`)
         Object.defineProperty(gathered, key, {
-          value: spec.key == 'value' ? name : value,
+          value: byValue ? name : value,
           enumerable: true,
         })
-        out = drop(out, [...to, name, spec.keyword])
+        out = drop(out, [...to, name, keyword])
       }
       return Object.keys(gathered).length ? set(out, from, gathered) : out
     }
@@ -310,7 +318,7 @@ let operation = (op: Op): Run => {
  * its delimiter, and scatter within the map's unique keys. Empty containers
  * survive moves; defaults and empty maps/lists have a canonical inverse. */
 export let document = (ops: readonly Op[]): DocumentLens => {
-  let runs = structuredClone(ops).map(operation), reverse = runs.toReversed()
+  let runs = ops.map(operation), reverse = runs.toReversed()
   return {
     put: (value) => runs.reduce((out, run) => run(out, false), value as Json),
     get: (value) => reverse.reduce((out, run) => run(out, true), value as Json),

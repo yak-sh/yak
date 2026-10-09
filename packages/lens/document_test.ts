@@ -209,6 +209,43 @@ test('nested array documents transform by index and wildcard without mutating in
   )
 })
 
+test('compiled document changes keep their paths, options and defaults after author edits', () => {
+  let rename = { from: ['old'], to: ['new'] }
+  let suffix = { value: '...' }
+  let concat = { from: ['rest', suffix], to: 'args', append: true }
+  let scatter = {
+    from: 'short',
+    to: 'input',
+    keyword: 'short',
+    key: 'value' as 'name' | 'value',
+  }
+  let add = { path: 'prefs', default: { enabled: false } }
+  let ops: Op[] = [{ rename }, { concat }, { scatter }, { add }]
+  let lens = document(ops)
+  rename.from[0] = 'missing'
+  rename.to[0] = 'elsewhere'
+  concat.append = false
+  suffix.value = '!'
+  scatter.keyword = 'changed'
+  scatter.key = 'name'
+  add.default.enabled = true
+  ops.pop()
+  let before = {
+    old: 1,
+    rest: 'files',
+    short: { n: 'limit' },
+    input: { limit: {} },
+  }
+  let after = {
+    new: 1,
+    args: ['files...'],
+    input: { limit: { short: 'n' } },
+    prefs: { enabled: false },
+  }
+  equal(lens.put(before), after)
+  equal(lens.get(after), before)
+})
+
 test('conflicts, malformed paths and irreversible moves refuse without partial mutation', async () => {
   let lens = document([{ rename: { from: 'a.title', to: 'b.title' } }])
   let before = freeze({ a: { title: 'Cake' }, b: { title: 'Other' } })
