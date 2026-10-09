@@ -24,13 +24,23 @@ let guide = Deno.readTextFileSync(
 // A page as it is written: the row in its frontmatter, and the document under
 // it (M-34605). Everything below reads the document, so a rule about the
 // prose is never fooled by the bundle at the top.
-let pageFile = (slug: string) =>
-  front(
-    Deno.readTextFileSync(
-      new URL(`./public/docs/${slug}.md`, import.meta.url),
-    ),
-    `public/docs/${slug}.md`,
-  )
+// Read and parsed once, however many tests read the page.
+let pages = new Map<string, ReturnType<typeof front>>()
+let pageFile = (slug: string) => {
+  let page = pages.get(slug)
+  if (!page) {
+    pages.set(
+      slug,
+      page = front(
+        Deno.readTextFileSync(
+          new URL(`./public/docs/${slug}.md`, import.meta.url),
+        ),
+        `public/docs/${slug}.md`,
+      ),
+    )
+  }
+  return page
+}
 
 let pageText = (slug: string) => pageFile(slug).body
 
