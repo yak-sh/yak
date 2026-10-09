@@ -42,7 +42,7 @@ import { touch, TText } from './dom.ts'
 import { table } from './table.ts'
 import { type Track, tracks } from './grid.ts'
 import { graphics } from './graphics.ts'
-import { base, type Sheet, type Style } from './theme.ts'
+import { base, compose, type Sheet, type Style } from './theme.ts'
 
 /** A run of text under one style. */
 export type Seg = {
@@ -116,15 +116,18 @@ let semantic = (el: TElement, sheet: Sheet): Style => {
 // a block its sheet makes of it. An href is content too, and it is emitted
 // inside an OSC 8 sequence, where a single BEL byte ends the sequence and lets
 // the rest of the URL be interpreted as terminal input.
-let own = (el: TElement, sheet: Sheet): Style =>
-  Object.assign(
-    semantic(el, sheet),
-    ...el.className.split(/\s+/).filter(Boolean).map((c) => sheet[c] ?? {}),
-    el.attr('data-terminal-focus') != null ? { inverse: true } : {},
-    el.localName == 'a' && el.attr('href')
-      ? { href: safeHref(el.attr('href')!) }
-      : {},
-  )
+let own = (el: TElement, sheet: Sheet): Style => {
+  let out = semantic(el, sheet)
+  if (el.className) {
+    for (let name of el.className.split(/\s+/)) {
+      if (name && sheet[name]) Object.assign(out, sheet[name])
+    }
+  }
+  if (el.attr('data-terminal-focus') != null) out.inverse = true
+  let href = el.localName == 'a' && el.attr('href')
+  if (href) out.href = safeHref(href)
+  return out
+}
 
 // Inherit text style down the tree; glyph/indent/gap act only where set.
 let inherit = (parent: Style, node: Style): Style => ({
@@ -203,11 +206,13 @@ let inline = (n: TNode, st: Style, c: Ctx): Seg[] => {
   // on a line of its own, even where it is painted inline (a `dd`); so does
   // one its sheet spaces, wherever it is painted.
   let spaced = (c.spaced && o.block) || o.spaced
-  return el.childNodes.reduce<Seg[]>((out, k) => {
+  let out: Seg[] = []
+  for (let k of el.childNodes) {
     let segs = inline(k, s, c)
     if (spaced && apart(out, segs)) out.push({ text: ' ', style: s })
-    return out.concat(segs)
-  }, [])
+    out.push(...segs)
+  }
+  return out
 }
 
 // What a checkbox and a radio show, unchecked and checked.
@@ -291,6 +296,7 @@ let flow = (
   w: number,
   h: number | null,
   c: Ctx,
+  o = own(el, c.sheet),
 ): Line[] => {
   let wrapper = kids(el).length == 1 &&
     !el.childNodes.some((n) => runs(n, c.sheet))
@@ -354,7 +360,7 @@ let flow = (
     return lines
   }
   let previousParagraph = false
-  let spaced = (c.spaced || own(el, c.sheet).spaced) &&
+  let spaced = (c.spaced || o.spaced) &&
     !el.className.split(/\s+/).includes('Md_Code')
   for (let n of el.childNodes) {
     if (runs(n, c.sheet)) {
@@ -564,6 +570,7 @@ let layout = (
   w: number,
   h: number | null,
   c: Ctx,
+  o = own(el, c.sheet),
 ): Line[] => {
   if (el.image) {
     let rows = Math.max(1, Math.min(16, Math.floor(el.image.rows) || 8))
@@ -579,7 +586,6 @@ let layout = (
   let selected = visualLines(el.attr('id') ?? '', w, h ?? 6)
   if (selected) return selected
   if (el.viewport) return el.viewport(w, h ?? 0, st, c.sheet)
-  let o = own(el, c.sheet)
   let s = inherit(st, o)
   if (el.localName == 'svg') {
     return o.glyph ? [[{ text: o.glyph, style: s, owner: el }]] : []
@@ -631,6 +637,7 @@ let layout = (
       contentWidth,
       wraps || el.attr('scroll') != null ? null : box,
       c,
+      o,
     )
   if (el.localName == 'li') {
     let marker = safe(el.attr('data-marker') ?? '• ')
@@ -715,8 +722,9 @@ export let lay = (
   let o = own(el, c.sheet)
   if (o.hidden) return []
   let boxed = el.viewport || el.attr('scroll') != null ||
-    wide(el, c.sheet) != null || grows(el, c.sheet)
-  let lines = layout(el, st, w, h, c)
+    num(el, 'width') != null || o.width != null ||
+    el.attr('grow') != null || o.grow
+  let lines = layout(el, st, w, h, c, o)
   return owned(
     el,
     boxed ? lines.map((l) => pad(clip(l, w, o.ellipsis), w, o.align)) : lines,
@@ -727,7 +735,7 @@ export let lay = (
 // claimed it first; a viewport's are all its own.
 let owned = (el: TElement, lines: Line[]): Line[] =>
   lines.map((line) =>
-    line.map((seg) => ({ ...seg, owner: el.viewport ? el : seg.owner ?? el }))
+    line.map((seg) => !el.viewport && seg.owner ? seg : { ...seg, owner: el })
   )
 
 let fit = (lines: Line[], h: number): Line[] =>
@@ -853,7 +861,7 @@ export let screenful = (
   rows: number,
   sheet: Sheet = {},
 ): { lines: Line[]; metrics: Metrics } => {
-  let c: Ctx = { sheet: { ...base, ...sheet }, metrics: {} }
+  let c: Ctx = { sheet: compose(sheet), metrics: {} }
   return { lines: lay(root, {}, columns, rows, c), metrics: c.metrics }
 }
 
@@ -867,7 +875,7 @@ export let printout = (
   sheet: Sheet = {},
 ): string => {
   let lines = lay(root, {}, columns, null, {
-    sheet: { ...base, ...sheet },
+    sheet: compose(sheet),
     metrics: {},
   }).flatMap((line) => wrap(line, columns))
   while (lines.length && !width(lines.at(-1)!)) lines.pop()

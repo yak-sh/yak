@@ -29,6 +29,24 @@ let dress = {
   Composer_Border: { fg: '#7a8478', dim: true },
 }
 
+test('a changed theme or class entry reaches the next paint', () => {
+  let tree = el('root', {}, el('span', { class: 'Mark' }))
+  for (let fixed of [false, true]) {
+    let sheet = { Mark: { glyph: 'one' } }
+    if (fixed) Object.freeze(sheet)
+    let shown = () => words(screenful(tree, 20, 1, sheet).lines)[0]
+    assertEquals(shown(), 'one')
+    sheet.Mark.glyph = 'two'
+    assertEquals(shown(), 'two')
+    if (!fixed) {
+      sheet.Mark = { glyph: 'three' }
+      assertEquals(shown(), 'three')
+    }
+    sheet = { Mark: { glyph: 'four' } }
+    assertEquals(shown(), 'four')
+  }
+})
+
 test('blocks stack and inline children run into one line', () => {
   let tree = el(
     'root',

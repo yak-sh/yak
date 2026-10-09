@@ -126,10 +126,12 @@ export let parts = ({ kits }: Composition): Kit => {
 
 /** Theme colours, each kit's entries, and the skin's replacement entries. */
 export let sheet = (c: Composition): Sheet =>
-  Object.assign(
-    {},
-    ...Object.entries(parts(c)).map(([name, part]) =>
-      (c.skin?.[name]?.sheet ?? part.sheet)(c.theme.colors)
+  Object.freeze(
+    Object.assign(
+      {},
+      ...Object.entries(parts(c)).map(([name, part]) =>
+        (c.skin?.[name]?.sheet ?? part.sheet)(c.theme.colors)
+      ),
     ),
   )
 

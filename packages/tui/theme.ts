@@ -78,7 +78,7 @@ export type Sheet = Record<string, Style>
 /** This package's widgets, without colour: the text entry's painted cursor
  * and hint, a table's rules and header, a panel and its title, a selected
  * list row, a scrollbar resting at the bottom. */
-export let base: Sheet = {
+export let base: Sheet = Object.freeze({
   // The text cursor is a painted cell: the terminal's own cursor is hidden, so
   // an inverted character is the only thing saying where typing lands.
   Cursor: { inverse: true },
@@ -89,4 +89,18 @@ export let base: Sheet = {
   Panel_Title: { bold: true },
   List_Selected: { inverse: true },
   Scrollbar_Snapped: { dim: true },
+})
+
+let sheets = new WeakMap<Sheet, Sheet>()
+/** Extend the widgets' defaults; an immutable sheet keeps its composition. */
+export let compose = (sheet: Sheet): Sheet => {
+  let cached = sheets.get(sheet)
+  if (cached) return cached
+  let out = { ...base, ...sheet }
+  if (Object.isFrozen(sheet)) {
+    Object.freeze(out)
+    sheets.set(sheet, out)
+    sheets.set(out, out)
+  }
+  return out
 }
