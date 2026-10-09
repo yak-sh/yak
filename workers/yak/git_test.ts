@@ -182,15 +182,42 @@ test('the git object store can write down a break of its own', async () => {
 
 test('the next deploy follows the last one and moves the branch', async () => {
   let { env } = platform('a probe secret')
+  // The files the object store is asked to name by their bytes.
+  let named: string[] = []
+  let ns = env.STORE!
+  env.STORE = {
+    ...ns,
+    get: (id) => {
+      let store = ns.get(id)
+      return String(id) != GIT_STORE ? store : {
+        fetch: (r: Request) => {
+          let q = new URL(r.url).searchParams.get('q') ?? ''
+          named.push(...q.match(/blob\.sha=([0-9a-f,]+)/)?.[1].split(',') ?? [])
+          return store.fetch(r)
+        },
+      }
+    },
+  }
   let { app, git } = await standing(env)
-  await deploy(env, app, 1, { 'index.html': 'one\n' })
+  let lib = { 'lib/a.js': 'a\n', 'lib/b.js': 'b\n' }
+  await deploy(env, app, 1, { 'index.html': 'one\n', ...lib })
   let first = await headOf(env, app)
-  await deploy(env, app, 2, { 'index.html': 'two\n' })
+  named.length = 0
+  let manifest = await deploy(env, app, 2, { 'index.html': 'two\n', ...lib })
   let second = await headOf(env, app)
 
   assert(first && second && first != second, 'the branch moved')
   let { body } = await bodyOf(env, git, second)
   assertEquals(body.match(/^parent ([0-9a-f]{40})$/m)?.[1], first)
+  // A release names only what it changed: the directory that stood is the
+  // tree it was, and its files are not looked up again.
+  assertEquals(named, [manifest['index.html']])
+  let lib0 = async (commit: string) => {
+    let tree = (await bodyOf(env, git, commit)).body.match(/^tree (\S+)$/m)![1]
+    let [entry] = await git.query(`.tree_entry.name=lib&.edge.from=${tree}`)
+    return (entry.edge as { to: string }).to
+  }
+  assertEquals(await lib0(second), await lib0(first))
 })
 
 test('the sweep commits what nothing committed, once', async () => {

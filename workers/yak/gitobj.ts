@@ -234,6 +234,14 @@ let landing = async (
     repo,
     app: deploy.app,
     files: deploy.files,
+    // The manifest the branch's last commit was minted from: the deploy its
+    // `commit{target}` row names, so the release reads only what it changed.
+    was: async (commit) => {
+      let [row] = await dir.read(`.commit&.entity.eid=${commit}`)
+      let target = id((row?.commit as Record<string, unknown>)?.target)
+      let [made] = target ? await dir.read(`.entity.eid=${target}`) : []
+      return made ? deployOf(made)?.files ?? null : null
+    },
     author: await author(dir, deploy),
     committer: { ...COMMITTER, at: deploy.at },
     message,

@@ -19,7 +19,12 @@
 // already in the store under their SHA-256 address; a Git blob object is those
 // same bytes with a header hashed over them, so nothing is re-encoded and the
 // row simply points at what is there. Naming a manifest's file twice, or
-// across versions, costs one query and no read of the bytes.
+// across versions, costs an indexed read and no read of the bytes.
+//
+// A release is folded against the commit before it (`Base`): a directory
+// whose files all stand as they did is that commit's tree again, read and
+// written nowhere, and a changed one reads only its own entries. So a
+// release reads and writes what it changed, not the whole manifest.
 //
 // This module writes objects and nothing else: it never reads a packfile,
 // serves HTTP, or touches a branch. Landing a manifest on a branch is
@@ -28,7 +33,7 @@
 
 import type { Blobs } from '@yaks/blob'
 import { EDGE, link } from '@yaks/edge'
-import type { Bundle, Eid, Graph } from '@yaks/graph'
+import type { Bundle, Comp, Eid, Graph } from '@yaks/graph'
 import { derivedEid } from '@yaks/graph'
 import { keyed, valueOf } from '@yaks/key'
 import { type Commit, commitBody } from './commit.ts'
@@ -66,9 +71,45 @@ export type Index = {
   /** a commit over a tree and parents already written */
   commit: (mint: Mint) => Promise<Oids>
   /** a whole deploy manifest, bottom up: every blob, every directory, and the
-   * root tree it returns */
-  files: (manifest: Files) => Promise<Oids>
+   * root tree it returns. Given the commit before it (`base`), only what
+   * moved since is read or written. */
+  files: (manifest: Files, base?: Base) => Promise<Oids>
 }
+
+/** The commit a manifest follows: its tree, and the manifest that tree was
+ * made from. */
+export type Base = { tree: Oids; files: Files }
+
+/**
+ * Each object's SHA-256 id by its SHA-1 id, for those of `oids` the graph
+ * holds: the compat keys off them, a hundred at a time. Asked by the key's
+ * own index on `key.of`, so it reads one row per object named.
+ */
+export let names = async (
+  g: Pick<Writes, 'read'>,
+  oids: string[],
+): Promise<Map<string, string>> => {
+  let out = new Map<string, string>()
+  let unique = [...new Set(oids)]
+  for (let i = 0; i < unique.length; i += 100) {
+    let part = unique.slice(i, i + 100).join(',')
+    for (let b of await g.read(`.key.of=${part}&?${COMPAT}`)) {
+      let name = b[COMPAT] && valueOf(b)
+      if (name) out.set(String((b.key as { of: string }).of), name)
+    }
+  }
+  return out
+}
+
+// Whether two directories hold the same files under the same names, all the
+// way down: such a directory is the tree it was.
+let same = (a: Dir, b: Dir): boolean =>
+  a.files.size == b.files.size && a.dirs.size == b.dirs.size &&
+  [...a.files].every(([name, sha]) => b.files.get(name) == sha) &&
+  [...a.dirs].every(([name, d]) => {
+    let was = b.dirs.get(name)
+    return !!was && same(d, was)
+  })
 
 /**
  * The entity id of a tree's link to one child, derived from the string
@@ -131,34 +172,6 @@ export let index = (g: Writes, store: Blobs): Index => {
     return oids
   }
 
-  // The Git blob object over these bytes, if we have computed its id before.
-  // This is the whole of the caching: a manifest that repeats a file, or a
-  // second version of the same app, reads a row instead of the bytes.
-  let named = async (sha: string): Promise<Oids | undefined> => {
-    let [obj] = await g.read(`.gitobj.type=blob&.blob.sha=${sha}`)
-    if (!obj) return
-    let [key] = await g.read(`.${COMPAT}&.key.of=${obj.entity.eid}`)
-    let name = key && valueOf(key)
-    return name ? { oid: obj.entity.eid, oid256: name } : undefined
-  }
-
-  let blob = async (sha: string): Promise<Oids> => {
-    let had = await named(sha)
-    if (had) return had
-    let bytes = await store.get(sha)
-    if (!bytes) throw new Error(`git: no bytes stored under ${sha}`)
-    // One body, two ids: a blob's bytes are what both digests are taken over.
-    return write(
-      {
-        oid: await oid('blob', bytes),
-        oid256: await oid256('blob', bytes),
-      },
-      'blob',
-      bytes.length,
-      sha,
-    )
-  }
-
   // A manifest's files are independent. Read their existing names in bounded
   // batches and write new names together, so a large deploy does not make two
   // serial graph round trips for every file it already committed before.
@@ -168,14 +181,7 @@ export let index = (g: Writes, store: Blobs): Index => {
     for (let i = 0; i < unique.length; i += 100) {
       let part = unique.slice(i, i + 100)
       let found = await g.read(`.gitobj.type=blob&.blob.sha=${part.join(',')}`)
-      let ids = found.map((b) => b.entity.eid)
-      let keys = ids.length
-        ? await g.read(`.${COMPAT}&.key.of=${ids.join(',')}`)
-        : []
-      let byId = new Map(keys.map((b) => [
-        String((b.key as { of: string }).of),
-        valueOf(b),
-      ]))
+      let byId = await names(g, found.map((b) => b.entity.eid))
       for (let b of found) {
         let sha = String((b[BLOB] as { sha: string }).sha)
         let oid256 = byId.get(b.entity.eid)
@@ -204,6 +210,11 @@ export let index = (g: Writes, store: Blobs): Index => {
     }
     return out
   }
+
+  // The Git blob object over these bytes. A manifest that repeats a file, or
+  // a second version of the same app, reads a row instead of the bytes.
+  let blob = async (sha: string): Promise<Oids> =>
+    (await blobs([sha])).get(sha)!
 
   let tree = async (children: Child[]): Promise<Oids> => {
     let body = treeBody(children)
@@ -253,14 +264,52 @@ export let index = (g: Writes, store: Blobs): Index => {
     )
   }
 
+  // The children a tree holds, by name: its edges, through their index on
+  // `edge.from`. A tree's only edges are its entries.
+  let entries = async (tree: string): Promise<Map<string, string>> =>
+    new Map(
+      (await g.read(`.edge.from=${tree}&?${TREE_ENTRY}`)).flatMap((b) => {
+        let entry = b[TREE_ENTRY] as { name: string } | undefined
+        return entry ? [[entry.name, String((b[EDGE] as Comp).to)]] : []
+      }),
+    )
+
   // Bottom up: a directory has no id until every child under it has one.
-  let fold = async (at: Dir, names: Map<string, Oids>): Promise<Oids> => {
+  // Folded against what it was (`was`), a directory that stands is its old
+  // tree, and a changed one takes each child that stands from its old
+  // entries. The files that moved are named by their bytes (`fresh`).
+  let fold = async (
+    at: Dir,
+    fresh: Map<string, Oids>,
+    was?: { dir: Dir; oids: Oids },
+  ): Promise<Oids> => {
+    if (was && same(at, was.dir)) return was.oids
+    let held = was ? await entries(was.oids.oid) : new Map<string, string>()
+    let stood = (name: string, sha?: string) =>
+      held.has(name) &&
+      (sha == null ? was?.dir.dirs.has(name) : was?.dir.files.get(name) == sha)
+    let known = await names(
+      g,
+      [
+        ...[...at.files].filter(([n, sha]) => stood(n, sha)),
+        ...[...at.dirs].filter(([n]) => stood(n)),
+      ].map(([n]) => held.get(n)!),
+    )
+    let kept = (name: string): Oids | undefined => {
+      let oid = held.get(name)
+      let oid256 = oid && known.get(oid)
+      return oid && oid256 ? { oid, oid256 } : undefined
+    }
     let children: Child[] = []
     for (let [name, sha] of at.files) {
-      children.push({ name, mode: FILE, ...names.get(sha)! })
+      let oids = (stood(name, sha) && kept(name)) || fresh.get(sha) ||
+        await blob(sha)
+      children.push({ name, mode: FILE, ...oids })
     }
-    for (let [name, sub] of at.dirs) {
-      children.push({ name, mode: DIR, ...await fold(sub, names) })
+    for (let [name, dir] of at.dirs) {
+      let oids = stood(name) && kept(name)
+      let before = oids ? { dir: was!.dir.dirs.get(name)!, oids } : undefined
+      children.push({ name, mode: DIR, ...await fold(dir, fresh, before) })
     }
     return tree(children)
   }
@@ -269,6 +318,14 @@ export let index = (g: Writes, store: Blobs): Index => {
     blob,
     tree,
     commit,
-    files: async (m) => fold(nest(m), await blobs(Object.values(m))),
+    files: async (m, base) =>
+      fold(
+        nest(m),
+        await blobs(
+          Object.entries(m).filter(([path, sha]) => base?.files[path] != sha)
+            .map(([, sha]) => sha),
+        ),
+        base && { dir: nest(base.files), oids: base.tree },
+      ),
   }
 }

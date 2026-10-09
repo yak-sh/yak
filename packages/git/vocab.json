@@ -35,7 +35,8 @@
       "properties": {
         "sha": {
           "type": "string",
-          "description": "the SHA-256 of the bytes; for a Git blob this is the file's own address in the store, not a re-encoded copy"
+          "index": true,
+          "description": "the SHA-256 of the bytes; for a Git blob this is the file's own address in the store, not a re-encoded copy. Indexed: a release names each new file's object by it"
         }
       }
     },

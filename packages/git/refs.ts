@@ -22,13 +22,12 @@
 // where the caller writes the rows it has already checked are not there.
 
 import type { Blobs } from '@yaks/blob'
-import type { Bundle, Eid } from '@yaks/graph'
+import type { Bundle, Comp, Eid } from '@yaks/graph'
 import { derivedEid } from '@yaks/graph'
-import { valueOf } from '@yaks/key'
-import type { Who } from './commit.ts'
-import { COMPAT, REF } from './comp.ts'
+import { treeOf, type Who } from './commit.ts'
+import { BLOB, REF } from './comp.ts'
 import { MAIN } from './http.ts'
-import { index, type Writes } from './index.ts'
+import { type Base, index, names, type Writes } from './index.ts'
 import type { Oids } from './oid.ts'
 import type { Files } from './tree.ts'
 
@@ -82,6 +81,13 @@ export type Landing = {
   /** the commit message */
   message: string
   /**
+   * The manifest a commit on this branch was made from, where the caller
+   * knows it. The new manifest is folded against the branch's last commit
+   * (./index.ts `Base`), so a release reads and writes only what it changed;
+   * without it, every file is named again.
+   */
+  was?: (commit: string) => Files | null | Promise<Files | null>
+  /**
    * Rows the caller wants recorded about this commit, written in the same
    * transaction as the moved ref. This package writes no row joining a commit
    * to whatever it was built from: those rows belong to whoever builds it.
@@ -107,9 +113,26 @@ export let refAt = async (
 /** An object already written, with both its ids: its SHA-1 id is the row's own
  * eid, and its SHA-256 id is in the @yaks/key beside it. */
 let named = async (g: Writes, oid: string): Promise<Oids | null> => {
-  let [key] = await g.read(`.${COMPAT}&.key.of=${oid}`)
-  let value = key && valueOf(key)
-  return value ? { oid, oid256: value } : null
+  let name = (await names(g, [oid])).get(oid)
+  return name ? { oid, oid256: name } : null
+}
+
+/** What a commit is folded against: its tree, read off its body, and the
+ * manifest the caller says it was made from. */
+let based = async (
+  repo: Repo,
+  commit: string,
+  was: NonNullable<Landing['was']>,
+): Promise<Base | undefined> => {
+  let files = await was(commit)
+  if (!files) return
+  let [row] = await repo.objects.read(
+    `.gitobj.type=commit&?${BLOB}&.entity.eid=${commit}`,
+  )
+  let body = row && await repo.bytes.get(String((row[BLOB] as Comp)?.sha))
+  let tree = body && treeOf(body)
+  let oids = tree && await named(repo.objects, tree)
+  return oids ? { tree: oids, files } : undefined
 }
 
 /** The row that points a branch at a commit. */
@@ -135,8 +158,9 @@ export let commitOnto = async (
   let git = index(repo.objects, repo.bytes)
   let at = await refAt(repo.refs, l.app, name)
   let parent = at ? await named(repo.objects, at) : null
+  let base = parent && l.was ? await based(repo, parent.oid, l.was) : undefined
   let commit = await git.commit({
-    tree: await git.files(l.files),
+    tree: await git.files(l.files, base),
     parents: parent ? [parent] : [],
     author: l.author,
     committer: l.committer,

@@ -101,7 +101,12 @@ an object is stored once no matter how many versions, apps or runs mention it.
 - **A Git blob is the blob you already have.** The bytes are already in the
   store under their SHA-256 address; the Git object is those same bytes with a
   header hashed over them. Nothing is re-encoded, and naming the same file twice
-  costs one query and no read of the bytes.
+  costs one indexed read (`blob.sha`) and no read of the bytes.
+- **A release reads and writes what it changed.** `files(manifest, base)` folds
+  a manifest against the commit before it: `base` is that commit's tree and the
+  manifest it was made from. A directory whose files all stand is the old tree
+  again, read and written nowhere; a changed one reads its old entries and names
+  only the files that moved. An object already stored is not written again.
 
 ## The components
 
@@ -274,8 +279,11 @@ let head = await commitOnto(repo, {
 await refAt(repo.refs, app) // head.oid
 ```
 
-That writes every object and points the branch at the new commit. A **bundle**
-is one entity's components represented as a JSON object. An optional `beside`
+That writes every object and points the branch at the new commit. An optional
+`was` answers the manifest a commit on the branch was made from,
+`(commit) => Files | null`; given it, the new manifest is folded against the
+branch's last commit, so only what changed is read or written. A **bundle** is
+one entity's components represented as a JSON object. An optional `beside`
 returns bundles about the commit —
 `(oids) => [{ entity: { eid: oids.oid },
 made: { release } }]` — that are
