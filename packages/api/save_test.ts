@@ -2,17 +2,14 @@
 import { equal, test, throws, until } from '@yaks/testing'
 import { type Bundle, type Comp, graph, Refused } from '@yaks/graph'
 import { ram } from '@yaks/ram'
-import { loadVocab, type VocabDoc } from '@yaks/vocab'
+import { loadVocab, type Vocab, type VocabDoc } from '@yaks/vocab'
 import { fake, req, shop } from './testing.ts'
 import { api } from './route.ts'
 import { saving } from './save.ts'
 import { type Frame, subscriptions } from './subs.ts'
 
-let fixture = (
-  query = '!position | .updated.at<="1s ago"',
-  extra: VocabDoc[] = [],
-) => {
-  let vocab = loadVocab([...shop.docs, ...extra, {
+let vocabulary = (query: string, extra: VocabDoc[] = []) =>
+  loadVocab([...shop.docs, ...extra, {
     $defs: {
       position: {
         component: true,
@@ -36,6 +33,21 @@ let fixture = (
       },
     },
   }])
+
+// A vocabulary is fixed once loaded, so the tests asking the same query share
+// one, and what the graph derives from it once.
+let vocabularies = new Map<string, Vocab>()
+let shared = (query: string) => {
+  let held = vocabularies.get(query)
+  if (!held) vocabularies.set(query, held = vocabulary(query))
+  return held
+}
+
+let fixture = (
+  query = '!position | .updated.at<="1s ago"',
+  extra: VocabDoc[] = [],
+) => {
+  let vocab = extra.length ? vocabulary(query, extra) : shared(query)
   let at = Date.now()
   let g = graph({
     vocab,
