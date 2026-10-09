@@ -20,7 +20,7 @@
 // `link` tags that are not `data:`, meta refresh, inline event handlers, and
 // every URL-bearing attribute pointing anywhere but at the document itself.
 
-import { parseHTML } from 'linkedom'
+import { DOMParser } from 'linkedom'
 
 /** An archived document, and the title it gave itself. */
 export type Scrubbed = {
@@ -32,7 +32,7 @@ export type Scrubbed = {
 
 // The attributes that can name something to fetch. `data` and `background` are
 // old, and still honoured by browsers; `xlink:href` is how an SVG points.
-let URLISH = [
+let URLISH = new Set([
   'src',
   'href',
   'srcset',
@@ -43,7 +43,8 @@ let URLISH = [
   'background',
   'data',
   'xlink:href',
-]
+])
+let EMBEDDED = new Set(['SCRIPT', 'BASE', 'IFRAME', 'FRAME', 'EMBED', 'OBJECT'])
 
 // A reference that goes nowhere outside these bytes: the document's own
 // fragments, and content carried inline.
@@ -64,29 +65,32 @@ let cssScrub = (css: string): string =>
  * ```
  */
 export let scrub = (raw: string): Scrubbed => {
-  let { document } = parseHTML(raw)
-  let all = (sel: string) => [...document.querySelectorAll(sel)]
+  let document = new DOMParser().parseFromString(raw, 'text/html')
   // A document this page embeds is a document it cannot vouch for, and a script
   // is the one thing no attribute sweep can make inert.
-  for (let el of all('script, base, iframe, frame, embed, object')) el.remove()
-  for (let el of all('link')) {
-    if (!(el.getAttribute('href') ?? '').startsWith('data:')) el.remove()
-  }
-  for (let el of all('meta[http-equiv]')) {
-    if (/refresh/i.test(el.getAttribute('http-equiv') ?? '')) el.remove()
-  }
-  for (let el of all('*')) {
-    for (let { name } of [...el.attributes]) {
+  for (let el of document.querySelectorAll('*')) {
+    if (
+      EMBEDDED.has(el.tagName) ||
+      (el.tagName == 'LINK' &&
+        !(el.getAttribute('href') ?? '').startsWith('data:')) ||
+      (el.tagName == 'META' &&
+        /refresh/i.test(el.getAttribute('http-equiv') ?? ''))
+    ) {
+      el.remove()
+      continue
+    }
+    for (let name of el.getAttributeNames()) {
       if (name.toLowerCase().startsWith('on')) el.removeAttribute(name)
+      else if (URLISH.has(name)) {
+        let value = el.getAttribute(name)
+        if (value && !INSIDE.test(value)) el.removeAttribute(name)
+      } else if (name == 'style') {
+        let value = el.getAttribute(name)!
+        if (value.includes('url(')) el.setAttribute(name, cssScrub(value))
+      }
     }
-    for (let a of URLISH) {
-      let v = el.getAttribute(a)
-      if (v && !INSIDE.test(v)) el.removeAttribute(a)
-    }
-    let style = el.getAttribute('style')
-    if (style?.includes('url(')) el.setAttribute('style', cssScrub(style))
+    if (el.tagName == 'STYLE') el.textContent = cssScrub(el.textContent ?? '')
   }
-  for (let el of all('style')) el.textContent = cssScrub(el.textContent ?? '')
   return {
     html: document.toString(),
     title: document.querySelector('title')?.textContent?.trim() || undefined,
