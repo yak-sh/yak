@@ -102,8 +102,13 @@ export let processMachine = (
     read: (path) => Deno.readTextFile(cwd ? resolve(cwd, path) : path),
     write: async (path, content) => {
       path = cwd ? resolve(cwd, path) : path
-      await Deno.mkdir(dirname(path), { recursive: true })
-      await Deno.writeTextFile(path, content)
+      try {
+        await Deno.writeTextFile(path, content)
+      } catch (e) {
+        if (!(e instanceof Deno.errors.NotFound)) throw e
+        await Deno.mkdir(dirname(path), { recursive: true })
+        await Deno.writeTextFile(path, content)
+      }
     },
   }
 }
@@ -133,11 +138,11 @@ export let processProvider = (
     }
     return resolve(root, ref.id)
   }
-  let lend = async (cwd: string): Promise<LentMachine> => {
+  let lend = (cwd: string, physical: string): LentMachine => {
     // Git does not examine a ceiling directory. Use the physical parent,
     // not cwd itself: the machine's own .git (including a worktree's gitfile)
     // must remain discoverable from both the root and its subdirectories.
-    let ceiling = dirname(await Deno.realPath(cwd))
+    let ceiling = dirname(physical)
     return {
       cwd,
       machine: processMachine(g, o.processes, (session) => ({
@@ -148,10 +153,14 @@ export let processProvider = (
   }
   let existing = async (ref: MachineRef) => {
     let cwd = directory(ref)
-    if (!(await Deno.stat(cwd)).isDirectory) {
+    let [entry, physical] = await Promise.all([
+      Deno.stat(cwd),
+      Deno.realPath(cwd),
+    ])
+    if (!entry.isDirectory) {
       throw new Error('process machine: address is not a directory')
     }
-    return lend(cwd)
+    return lend(cwd, physical)
   }
   return {
     request: async (request) => {
@@ -166,6 +175,7 @@ export let processProvider = (
       // interrupted preparation is retried, so the supplied function must be
       // idempotent, just like the provider's request.
       await Deno.mkdir(cwd, { recursive: true })
+      let lent = lend(cwd, await Deno.realPath(cwd))
       let ready = `${cwd}/.machine-ready`
       try {
         let prior = await Deno.readTextFile(ready)
@@ -177,11 +187,11 @@ export let processProvider = (
       } catch (e) {
         if (!(e instanceof Deno.errors.NotFound)) throw e
         if (request.from != null) {
-          await o.prepare!(request.from, (await lend(cwd)).machine, cwd)
+          await o.prepare!(request.from, lent.machine, cwd)
         }
         await Deno.writeTextFile(ready, request.from ?? '')
       }
-      return lend(cwd)
+      return lent
     },
     attach: existing,
     wake: existing,
