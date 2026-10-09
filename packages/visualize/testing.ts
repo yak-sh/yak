@@ -123,9 +123,10 @@ export let req = (path: string, opts: RequestInit = {}) =>
   new Request(`http://mri.test${path}`, opts)
 
 export let door = (host: Hosting, path: string, opts: RequestInit = {}) => {
-  let route = http(host).find((r) => r.path == new URL(req(path).url).pathname)
+  let request = req(path, opts)
+  let route = http(host).find((r) => r.path == new URL(request.url).pathname)
   if (!route) throw new Error('fixture requested an unknown door')
-  return Promise.resolve(route.handle(req(path, opts)))
+  return Promise.resolve(route.handle(request))
 }
 
 export type Frame = {
