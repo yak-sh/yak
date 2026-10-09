@@ -4,13 +4,13 @@
 import { test } from '@yaks/testing'
 import { assertEquals } from '@std/assert'
 import { edges, link } from '@yaks/edge'
-import { graph } from '@yaks/graph'
+import { type Bundle, graph } from '@yaks/graph'
 import { kernel } from '@yaks/kernel'
 import { ram } from '@yaks/ram'
 import { loadVocab } from '@yaks/vocab'
 import { done, gated, openDeps } from './deps.ts'
 import { tasks } from './plugin.ts'
-import { team, teamGraph } from './testing.ts'
+import { store, team, teamGraph } from './testing.ts'
 
 test('gated reads the blocked facet, and nothing else', () => {
   assertEquals(gated({ entity: { eid: 't' }, task: {} }), false)
@@ -25,7 +25,7 @@ test('gated reads the blocked facet, and nothing else', () => {
 
 // A parent with four children: one open, one done, one cancelled, one that is
 // not a task at all.
-let seeded = () => {
+let bootstrap = (() => {
   let { g } = teamGraph()
   g.install()
   g.apply([
@@ -39,7 +39,13 @@ let seeded = () => {
     link('p', 'contains', 'c'),
     link('p', 'requires', 'd'),
   ])
-  return g
+  return g.storage.read('*') as Bundle[]
+})()
+
+let seeded = () => {
+  let storage = store()
+  storage.tx((tx) => tx.patch(bootstrap))
+  return teamGraph(storage).g
 }
 
 test('openDeps counts what has not settled, over both relations', () => {

@@ -63,11 +63,13 @@ let paced = (pace?: string) => {
   return got
 }
 
-let fixture = async (floors = {}, kernelFirst = true, pace?: string) => {
-  let vocab = paced(pace)
+// The club's rows, written once. None of them is a completion, so every pace
+// shares them.
+let seed = (() => {
+  let vocab = paced()
   let storage = ram(vocab)
   let g = graph({ storage, vocab })
-  await g.apply([
+  g.apply([
     { entity: { eid: 'club' }, space: { name: 'Tuesday Books' } },
     { entity: { eid: 'owner' }, person: { name: 'Owner' } },
     {
@@ -87,6 +89,14 @@ let fixture = async (floors = {}, kernelFirst = true, pace?: string) => {
       $actor: owner,
     })),
   ], { now: '2026-10-01T00:00:00Z' })
+  return storage.read('*')
+})()
+
+let fixture = (floors = {}, kernelFirst = true, pace?: string) => {
+  let vocab = paced(pace)
+  let storage = ram(vocab)
+  storage.tx((tx) => tx.patch(seed))
+  let g = graph({ storage, vocab })
   let completion = { name: 'completion', hooks: { precondition: completing } }
   let guard = members({ app: 'app', space: 'club', vocab, floors })
   for (let plugin of kernelFirst ? [completion, guard] : [guard, completion]) {

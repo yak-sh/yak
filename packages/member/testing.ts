@@ -102,9 +102,8 @@ export let ids = {
   notes: 'notes', // the committee's notes
 }
 
-/** A storage holding the club, its people, its two apps, and a roster: Dana
- * owns the club, Raj and Mo are members, Kim is on nothing. */
-export let store = (): Storage => {
+// Bootstrap the club once; each test gets its own storage of those rows.
+let bootstrap = (() => {
   let s = ram(club)
   let g = graph({ storage: s, vocab: club })
   let { club: c, dana, raj, mo, kim, list, notes } = ids
@@ -133,6 +132,14 @@ export let store = (): Storage => {
       grant: { app: list, person: mo, access: 'viewer' },
     },
   ])
+  return s.read('*')
+})()
+
+/** A storage holding the club, its people, its two apps, and a roster: Dana
+ * owns the club, Raj and Mo are members, Kim is on nothing. */
+export let store = (): Storage => {
+  let s = ram(club)
+  s.tx((tx) => tx.patch(bootstrap))
   return s
 }
 
