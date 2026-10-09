@@ -160,6 +160,16 @@ let record = (value: unknown): value is Record<string, unknown> =>
 // that self-abort into a diagnosable fault instead of a silent hang. A relayed
 // stop aborts too, but leaves stalled() false so the caller keeps its own path.
 let watchdog = (ms: number, stop?: AbortSignal) => {
+  // With no deadline and nothing to relay, there is nothing to abort. A relayed
+  // stop still goes through a signal of its own, so it arrives as an abort.
+  if (!ms && !stop) {
+    return {
+      signal: undefined,
+      kick: () => {},
+      stalled: () => false,
+      close: () => {},
+    }
+  }
   let control = new AbortController()
   let stalled = false
   let timer: ReturnType<typeof setTimeout> | undefined
@@ -302,8 +312,9 @@ let backoff = (
   ms: number,
   signal?: AbortSignal,
   pause?: ResponseOptions['pause'],
-) =>
-  new Promise<void>((resolve, reject) => {
+) => {
+  if (!signal) return pause ? pause(ms) : sleep(ms)
+  return new Promise<void>((resolve, reject) => {
     signal?.throwIfAborted()
     let timer: ReturnType<typeof setTimeout> | undefined
     let close = () => {
@@ -326,6 +337,7 @@ let backoff = (
       })
     } else timer = setTimeout(done, ms)
   })
+}
 
 let scrub = (value: unknown, secrets: string[]): unknown => {
   if (typeof value == 'string') {
@@ -495,7 +507,8 @@ let terminal = async (
   let completed: Record<string, unknown> | undefined
   let ended: ResponseEvent | undefined
   for await (let parsed of frames(response.body)) {
-    let frame = safe(parsed, secrets) as ResponseEvent
+    let frame =
+      (secrets.length ? safe(parsed, secrets) : parsed) as ResponseEvent
     kick?.()
     notify?.(frame)
     if (!knownEvents.has(frame.type)) unknown.push(frame)
