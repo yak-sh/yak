@@ -62,17 +62,7 @@ import {
   table,
   when,
 } from '@yaks/sql'
-import {
-  ASK,
-  CALL,
-  CONTENT,
-  EXCEPTION,
-  OUTPUT,
-  REFUSAL,
-  RESULT,
-  STOP_ENTRY,
-  USING,
-} from './native.ts'
+import { ASK, RESULT } from './native.ts'
 import { attemptDerived } from './attempt.ts'
 import { executionDerived } from '@yaks/tools'
 import { sessionCost } from './cost.ts'

@@ -84,6 +84,14 @@ let rosterPath = async (host: string, dir: string): Promise<string> => {
     .join('')
   return `${dir}/tools/${key}.json`
 }
+// A file removed, or already gone.
+let gone = (path: string) => {
+  try {
+    Deno.removeSync(path)
+  } catch (e) {
+    if (!(e instanceof Deno.errors.NotFound)) throw e
+  }
+}
 let saved = (dir: string, path: string, roster: unknown, fresh = false) => {
   let temp = `${path}.${crypto.randomUUID()}`
   try {
@@ -97,11 +105,7 @@ let saved = (dir: string, path: string, roster: unknown, fresh = false) => {
       }
     }
   } finally {
-    try {
-      Deno.removeSync(temp)
-    } catch (e) {
-      if (!(e instanceof Deno.errors.NotFound)) throw e
-    }
+    gone(temp)
   }
 }
 // Move every old cache entry once. Existing destinations win after an
