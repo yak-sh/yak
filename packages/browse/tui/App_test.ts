@@ -11,9 +11,13 @@ import { terminalHistory } from '@yaks/tui/history'
 import { installViewport } from '@yaks/ui'
 import { App } from '../components/App.tsx'
 import { Ux } from '@yaks/ux'
-import { extend, registry, renderView, ux } from '../components/registry.ts'
+import { extend, ux } from '../components/registry.ts'
+import { render as portable } from '@yaks/preact'
+import { define } from '@yaks/render'
+import { loadVocab } from '@yaks/vocab'
+import { docDoc } from '@yaks/doc'
 import { bindHistory } from '../history.ts'
-import { cache, ent, owner } from '../live.ts'
+import { cache, owner } from '../live.ts'
 import { start } from '../terminal-route.ts'
 import { views as docViews } from '@yaks/doc/views'
 import { inspectViews, views } from '@yaks/inspect/views'
@@ -82,24 +86,22 @@ test('configured Inspect facet renders a query through its host adapter, not raw
   }
 })
 
-test('the terminal draws a prepared contributed Markdown body', async () => {
+let preparedDocs = define(await contributedViews([{ views: docViews }]), {
+  vocab: loadVocab(docDoc),
+})
+test('the terminal draws a prepared contributed Markdown body', () => {
   let root = new TElement('root')
   let target = root as unknown as Parameters<typeof render>[1]
-  let prior = registry.renderers
-  extend(await contributedViews([{ views: docViews }]))
-  cache.value = {
-    [eid]: {
-      entity: { eid, num: 1 },
-      doc: { eid, title: 'Reading', body: 'Read **carefully**' },
-    },
+  let reading = {
+    entity: { eid, num: 1 },
+    doc: { title: 'Reading', body: 'Read **carefully**' },
   }
   try {
-    await act(() => render(h('div', {}, renderView(ent(eid), 'Body')), target))
+    let drawing = portable(preparedDocs, reading, 'Body', preparedDocs.vocab!)
+    render(drawing, target)
     ok(root.textContent.includes('Read carefully'))
     ok(root.querySelector('strong'))
   } finally {
     render(null, target)
-    registry.renderers = prior
-    cache.value = {}
   }
 })
