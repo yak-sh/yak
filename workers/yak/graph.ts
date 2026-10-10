@@ -1203,7 +1203,7 @@ export class Store {
         : event.entity.eid.endsWith(':preparation-error')
         ? 'model prepare'
         : origin?.ask
-        ? 'model model'
+        ? 'model'
         : row?.entry
         ? 'model compaction'
         : 'exception'

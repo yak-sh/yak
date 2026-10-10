@@ -753,14 +753,15 @@ export let runner = (g: Graph, opts: Opts): Runner => {
         ...ended,
         ...code ? [{ entity: call.entity, interrupted: { code } }] : [],
       ]
-      // A rejected exception write falls back to direct reporting. Retrying
-      // it after that would also report through heal when it finally commits.
-      let landed = state == 'failed' && made.some((b) => b.exception)
-        ? await g.apply(bundles, { trusted: true })
-        : await persist(
-          () => g.apply(bundles),
-          (e) => opts.report?.(e, call, tool.name),
-        )
+      // A retry reports the storage error, never the call's own failure: that
+      // goes through its exception once the write commits, or directly from
+      // the caller below if storage refuses it for good.
+      // The exception's properties are stamped: only its catcher writes them.
+      let trusted = made.some((b) => b.exception)
+      let landed = await persist(
+        () => g.apply(bundles, trusted ? { trusted } : undefined),
+        (e) => opts.report?.(e, call, tool.name),
+      )
       return keeps ? landed : [...made, ...landed]
     }
     let answered: Bundle[]

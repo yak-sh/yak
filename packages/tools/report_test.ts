@@ -8,9 +8,8 @@ import { runner, toolEid } from './runner.ts'
 
 let vocab = loadVocab([toolsDoc, kernelDoc], [kernelKeywords])
 let defect = new TypeError('missing field')
-let full = Object.assign(new Error('database or disk is full'), {
-  retryable: true,
-})
+// Storage that refuses for good; a retryable refusal waits in persist instead.
+let full = new Error('database or disk is full')
 let fixture = (fail = false, error: unknown = defect) => {
   let storage = ram(vocab)
   let g = graph({ vocab, storage })
