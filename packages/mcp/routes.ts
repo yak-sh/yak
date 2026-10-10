@@ -51,8 +51,8 @@ export let routes = (host: Hosting): Route[] => {
     search: host.search,
     reply: host.reply,
     name: host.config.name ?? 'yak',
-    skills: (built) =>
-      attachSkills(built, { graph: host.graph, cwd: Deno.cwd() }),
+    skills: (built, exchange) =>
+      attachSkills(built, { graph: host.graph, cwd: Deno.cwd() }, exchange),
     instructions: [graphDoc, ...host.graph.vocab.docs].map((doc) =>
       doc.instructions?.trim()
     )

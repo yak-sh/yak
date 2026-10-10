@@ -313,8 +313,10 @@ it.
 
 ## When a server offers more than tools
 
-The HTTP and stdio entrypoints await `extend(server)` and then `skills(server)`
-after registering tools. Use it to register SDK resources or prompts:
+The HTTP and stdio entrypoints await `extend(server)` and then
+`skills(server, exchange)` after registering tools. HTTP passes the method of
+that one exchange; stdio leaves it undefined for the connection. Use it to
+register SDK resources or prompts:
 
 ```ts ignore
 mcp({
@@ -360,15 +362,18 @@ import { attachSkills } from '@yaks/mcp/skills'
 let agents = mcp({
   graph,
   authenticate,
-  skills: (built) => attachSkills(built, { graph, cwd: checkout }),
+  skills: (built, exchange) =>
+    attachSkills(built, { graph, cwd: checkout }, exchange),
 })
 ```
 
 Supply an explicit repository id for graph-backed skills, or a `cwd` for a
 read-only checkout view. No scope means no skills: it never exposes every
 repository in a shared graph. The box's `/mcp` facet uses its process checkout.
-Local changes and deletions are reflected on the next request, without graph
-imports. Graph-backed documents are rendered by the shared persona codec.
+Local changes and deletions are reflected on the next consuming request, without
+graph imports. Tool-only HTTP exchanges do not snapshot skills; discovery,
+resources and prompts each retain their fresh immutable snapshot. Graph-backed
+documents are rendered by the shared persona codec.
 
 The Skills extension advertises `resources` and
 `io.modelcontextprotocol/skills`. `skills/list` and `skills/get` return complete

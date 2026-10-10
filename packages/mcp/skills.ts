@@ -12,6 +12,7 @@ import { repoSkills, skillFiles } from '@yaks/persona/skills'
 import { renderSkill } from '@yaks/persona/skill-text'
 import { parse, YamlSyntaxError } from '@std/yaml'
 import { validator } from './validator.ts'
+import type { Exchange } from './server.ts'
 
 export type SkillOptions = { graph: Graph; repository?: string; cwd?: string }
 type File = { uri: string; bytes: Uint8Array; text?: string; mimeType: string }
@@ -180,11 +181,17 @@ let snapshot = async (options: SkillOptions): Promise<Snapshot> => {
 }
 
 /** Attach before discovery/connection. No scope means an empty catalogue,
- * never all repositories. Each factory invocation sees one fresh snapshot. */
+ * never all repositories. Each consuming exchange sees one fresh snapshot.
+ * Tool-only exchanges do not consume skills; connection factories attach the
+ * complete immutable snapshot for their lifetime. */
 export let attachSkills = async (
   built: McpServer,
   options: SkillOptions,
+  exchange?: Exchange,
 ): Promise<void> => {
+  if (exchange?.method == 'tools/list' || exchange?.method == 'tools/call') {
+    return
+  }
   let view = await snapshot(options)
   let schema = (
     properties: JsonSchemaType['properties'],

@@ -19,8 +19,9 @@ import {
   Refused,
 } from '@yaks/graph'
 import { world } from '../persona/testing.ts'
-import { pinned } from './testing.ts'
+import { pinned, shopGraph } from './testing.ts'
 import { attachSkills, type SkillOptions } from './skills.ts'
+import { mcp } from './mount.ts'
 
 let values = fromJsonSchema<Record<string, unknown>>({
   type: 'object',
@@ -304,5 +305,93 @@ test('Skills attachment refuses unsafe, nonconforming and oversized snapshots be
       () => attachSkills(built(), { graph: g, cwd: root }),
       Refused,
     )
+  })
+})
+
+test('HTTP tool exchanges do not read skills, while discovery stays fresh in both eras', async () => {
+  await local(async (g, root) => {
+    let handler = mcp({
+      graph: shopGraph(),
+      skills: (built, exchange) =>
+        attachSkills(built, { graph: g, cwd: root }, exchange),
+      extend: (built) => {
+        built.registerResource(
+          'other',
+          'example://other',
+          {},
+          () => ({ contents: [{ uri: 'example://other', text: 'Other' }] }),
+        )
+        built.registerPrompt('other', {}, () => ({ messages: [] }))
+      },
+    })
+    let legacy = async (method: string, params = {}) => {
+      let response = await handler(
+        new Request('http://skills.test/mcp', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ jsonrpc: '2.0', id: 1, method, params }),
+        }),
+      )
+      return response.json()
+    }
+    let initialized = await legacy('initialize', {
+      protocolVersion: '2025-06-18',
+      capabilities: {},
+      clientInfo: { name: 'old', version: '1' },
+    })
+    assert(initialized.result.capabilities.resources)
+    assert(initialized.result.capabilities.prompts)
+    let c = new Client({ name: 'modern', version: '1' }, pinned)
+    await c.connect(
+      new StreamableHTTPClientTransport(new URL('http://skills.test/mcp'), {
+        fetch: async (url, init) => await handler(new Request(url, init)),
+      }),
+    )
+    try {
+      let path = `${root}/.claude/skills/testing/SKILL.md`
+      await Deno.writeTextFile(
+        path,
+        '---\nname: Invalid\ndescription: Broken\n---\nText\n',
+      )
+      assert((await c.listTools()).tools.some((t) => t.name == 'graph_query'))
+      assert(
+        (await legacy('tools/list')).result.tools.some((t: { name: string }) =>
+          t.name == 'graph_query'
+        ),
+      )
+      let args = { name: 'graph_query', arguments: { q: '.book .limit=1' } }
+      assertEquals((await c.callTool(args)).isError, undefined)
+      assertEquals((await legacy('tools/call', args)).error, undefined)
+      await assertRejects(() => c.listResources())
+      assert((await legacy('resources/list')).error)
+      await Deno.writeTextFile(
+        path,
+        '---\nname: testing\ndescription: Fresh description\n---\nFresh instructions\n',
+      )
+      let prompts = (await c.listPrompts()).prompts
+      assertEquals(
+        prompts.find((p) => p.name == 'skill:testing')?.description,
+        'Fresh description',
+      )
+      assert(prompts.some((p) => p.name == 'other'))
+      assertEquals(
+        (await legacy('prompts/list')).result.prompts.find((
+          p: { name: string },
+        ) => p.name == 'skill:testing').description,
+        'Fresh description',
+      )
+      assert(
+        (await c.listResources()).resources.some((r) =>
+          r.uri == 'example://other'
+        ),
+      )
+      assert(
+        (await legacy('resources/list')).result.resources.some((
+          r: { uri: string },
+        ) => r.uri == 'example://other'),
+      )
+    } finally {
+      await c.close()
+    }
   })
 })

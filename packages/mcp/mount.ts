@@ -37,7 +37,13 @@ import { type Authenticate, type Handler, json, refuse } from '@yaks/api'
 import { type Actor, type Bundle, type Graph, namedTool } from '@yaks/graph'
 import { SESSION, sessionFor, speaking } from '@yaks/session'
 import { runner } from '@yaks/tools'
-import { listing, logged, type Options, server } from './server.ts'
+import {
+  type Exchange,
+  listing,
+  logged,
+  type Options,
+  server,
+} from './server.ts'
 
 /** How the HTTP handler is built: everything {@link Options} takes except the
  * actor, which is decided per HTTP request. */
@@ -148,14 +154,21 @@ export let mcp = (opts: MountOptions): Handler => {
       report: opts.report ?? logged,
       ...opts.reply ? { reply: opts.reply } : {},
     })
-  let actors = new WeakMap<Request, Actor | null>()
+  let callers = new WeakMap<
+    Request,
+    { actor: Actor | null; exchange?: Exchange }
+  >()
   let modern = createMcpHandler(async (context) => {
-    let actor = context.requestInfo
-      ? actors.get(context.requestInfo) ?? null
-      : null
-    let built = server({ ...opts, actor, runner: running() })
+    let caller = context.requestInfo
+      ? callers.get(context.requestInfo)
+      : undefined
+    let built = server({
+      ...opts,
+      actor: caller?.actor ?? null,
+      runner: running(),
+    })
     await opts.extend?.(built)
-    await opts.skills?.(built)
+    await opts.skills?.(built, caller?.exchange)
     return built
   }, { legacy: 'reject' })
   let legacy = async (
@@ -202,7 +215,7 @@ export let mcp = (opts: MountOptions): Handler => {
       // registered before the request is answered, so `resources/list` sees
       // them on the very first call rather than the second.
       await opts.extend?.(built)
-      await opts.skills?.(built)
+      await opts.skills?.(built, { method: rpc.data.method })
       let answer = json(await ask(built, rpc.data, ms))
       if (conn) answer.headers.set(ID, conn.id)
       return answer
@@ -251,13 +264,17 @@ export let mcp = (opts: MountOptions): Handler => {
         }
       }
       // No connection transcript or clientInfo-derived principal in this era.
-      actors.set(request, actor)
+      let exchange = body && typeof body == 'object' && 'method' in body &&
+          typeof body.method == 'string'
+        ? { method: body.method }
+        : undefined
+      callers.set(request, { actor, exchange })
       try {
         // The SDK owns the exchange lifetime, including SSE and cancellation.
         // Closing here would truncate a response whose stream is still active.
         return await modern.fetch(request, { parsedBody: body })
       } finally {
-        actors.delete(request)
+        callers.delete(request)
       }
     } catch (err) {
       return refuse(err, request)

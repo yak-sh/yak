@@ -83,6 +83,7 @@ export {
   annotated,
   answerSchema,
   COMMAND,
+  type Exchange,
   listing,
   type Options,
   roster,

@@ -168,8 +168,11 @@ export type Options = {
    * is awaited. */
   extend?: (server: McpServer) => void | Promise<void>
   /** Skills attach to the same server, awaited before either era discovers it. */
-  skills?: (server: McpServer) => void | Promise<void>
+  skills?: (server: McpServer, exchange?: Exchange) => void | Promise<void>
 }
+
+/** One HTTP exchange; a connection-serving factory leaves this undefined. */
+export type Exchange = { method: string }
 
 /**
  * What a tool on this server answers, as JSON Schema: the bundles it returned,
