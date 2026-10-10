@@ -625,17 +625,23 @@ export let show = async (
       [...answer, ...near.links, ...near.comments].map((b) => b.entity.eid),
     )
     let named: Bundle[] = []
-    let text: string
+    let text = ''
     while (true) {
       let pending = new Set<string>()
-      text = printed(views, vocab, answer, named, near, (eid) => {
-        if (eid && !known.has(eid)) pending.add(eid)
-      })
+      try {
+        text = printed(views, vocab, answer, named, near, (eid) => {
+          if (eid && !known.has(eid)) pending.add(eid)
+        })
+      } catch (error) {
+        // A drawing may require a declared or newly-read dependency before
+        // it can finish. Retry after those reads; failures without new reads
+        // remain drawing errors, including required references that are gone.
+        if (!pending.size) throw error
+      }
       if (!pending.size) break
       let ids = [...pending]
       ids.forEach((id) => known.add(id))
       let found = await from.lookup(ids)
-      if (!found.length) break
       named.push(...found)
       found.forEach((b) => known.add(b.entity.eid))
     }

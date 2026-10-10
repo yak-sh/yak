@@ -1,5 +1,10 @@
 import { test } from '@yaks/testing'
-import { assert, assertEquals, assertStringIncludes } from '@std/assert'
+import {
+  assert,
+  assertEquals,
+  assertRejects,
+  assertStringIncludes,
+} from '@std/assert'
 import { docDoc } from '@yaks/doc'
 import { edgeDoc, edgeKeywords } from '@yaks/edge/vocab'
 import { views as docViews } from '@yaks/doc/views'
@@ -11,6 +16,7 @@ import { toolsDoc } from '@yaks/tools'
 import { views as toolViews } from '@yaks/tools/views'
 import { loadVocab } from '@yaks/vocab'
 import { define, type Renderer, resolve } from '@yaks/render'
+import type { Shown } from '@yaks/render/views'
 import { graph } from '@yaks/graph'
 import { parse } from '@yaks/query'
 import { ram } from '@yaks/ram'
@@ -44,6 +50,51 @@ let t10 = {
   task: {},
   completed: {},
 }
+
+test('a drawing can require a reference, while missing data and drawing errors still fail', async () => {
+  let dependency = '33333333-3333-4333-8333-333333333333'
+  for (let declared of [true, false]) {
+    let views = define([{
+      view: 'Tile',
+      match: parse('.task'),
+      needs: () => declared ? [dependency] : [],
+      render: <Node>(
+        _b: unknown,
+        h: import('@yaks/render').H<Node>,
+        ctx: import('@yaks/render').RenderContext<Node>,
+      ) => {
+        let title =
+          ((ctx as Shown<Node>).get!(dependency)!.doc as { title: string })
+            .title
+        return h('span', {}, title)
+      },
+    }])
+    let reads: string[][] = [], lines: string[] = []
+    let c = { tui: false, out: (s: string) => lines.push(s) }
+    await show(c, views, vocab, [t9, t10], {}, {
+      lookup: (ids) => {
+        reads.push(ids)
+        return [{ entity: { eid: dependency }, doc: { title: 'Required' } }]
+      },
+      query: () => [],
+    })
+    assertEquals(reads, [[dependency]])
+    assertEquals(lines, ['Required\nRequired'])
+    await assertRejects(() => show(c, views, vocab, [t9, t10]), TypeError)
+  }
+  let broken = define([{
+    view: 'Tile',
+    match: parse('.task'),
+    render: () => {
+      throw new Error('drawing failed')
+    },
+  }])
+  await assertRejects(
+    () => show({ tui: false, out: () => {} }, broken, vocab, [t9, t10]),
+    Error,
+    'drawing failed',
+  )
+})
 
 test('a tool’s text prints as written, line for line', () => {
   let text = { entity: { eid: 'c' }, content: { body: 'one\ntwo\x1b[31m' } }
