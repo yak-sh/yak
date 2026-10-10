@@ -383,10 +383,11 @@ read never repairs a schema another process changed.
 A local read-only command opens SQLite with `readOnly: true`, records no
 process, tool, call, claim or result, and invokes no write reply. Failed reads
 return fault bundles without persisting them or writing telemetry to the graph.
-Its connection exposes no native-extension loader; semantic ranking uses the
-exact fallback rather than loading an extension that writes metadata. SQLite
-still coordinates concurrent WAL readers through its shared-memory index; this
-is not a database or WAL row write.
+Its connection can load native extensions to read installed indexes; SQLite
+refuses any metadata writes. Semantic ranking uses the installed vector index
+and scores vectors changed since its build beside its candidates. SQLite still
+coordinates concurrent WAL readers through its shared-memory index; this is not
+a database or WAL row write.
 
 It returns a `Served` object: the `Host` fields — which include `roles`,
 `tools`, `routes`, `handler`, `runner`, and `duties` — plus `fx` and `close`.

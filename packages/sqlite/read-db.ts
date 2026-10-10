@@ -1,6 +1,7 @@
 // The file reader binds only SQLite's connection, statement and value API.
 // It shares the Driver boundary with the writer, without loading callbacks,
-// extensions, database images or the writer's native wrapper.
+// database images or the writer's native wrapper. Extensions can read existing
+// indexes; SQLite's read-only handle refuses any metadata they try to write.
 import { sqlitePath } from './sqlitepath.ts'
 import type { Opened } from './db.ts'
 import type { Param, Row } from '@yaks/sql'
@@ -20,6 +21,10 @@ let bind = () =>
         result: 'i32',
       },
       sqlite3_busy_timeout: { parameters: ['pointer', 'i32'], result: 'i32' },
+      sqlite3_load_extension: {
+        parameters: ['pointer', 'buffer', 'pointer', 'pointer'],
+        result: 'i32',
+      },
       sqlite3_errmsg: { parameters: ['pointer'], result: 'pointer' },
       sqlite3_prepare_v2: {
         parameters: ['pointer', 'buffer', 'i32', 'buffer', 'buffer'],
@@ -219,7 +224,19 @@ export let open = (path: string): Opened => {
     }
     return Object.assign(
       driver(run, { file: path != ':memory:' && path != '' }),
-      { close },
+      {
+        extension: (file: string) => {
+          if (closed) throw new Error('the database is closed')
+          // Enable only the C loading API, never SQL's load_extension().
+          check(c.sqlite3_db_config(db, 1005, 1, null)) // ENABLE_LOAD_EXTENSION
+          try {
+            check(c.sqlite3_load_extension(db, cstring(file), null, null))
+          } finally {
+            check(c.sqlite3_db_config(db, 1005, 0, null))
+          }
+        },
+        close,
+      },
     )
   } catch (error) {
     close()

@@ -87,7 +87,6 @@ test('local read commands leave graph bytes unchanged under a concurrent writer'
     )
     let reader = await compose(config, ['graph'], facet, { readOnly: true })
     try {
-      equal(reader.storage.statements.facilities, undefined)
       equal(
         reader.storage.statements.query(
           select({

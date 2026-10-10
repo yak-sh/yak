@@ -171,8 +171,9 @@ accepts the same derived and backed read bindings. It loads no schema installer
 or mutation pipeline. Open the file with `open(path, {readOnly: true})` from
 `@yaks/sqlite/db` when writes must also be prevented at the database boundary.
 The same read-only driver is available as `open(path)` from
-`@yaks/sqlite/read-db`, which loads only the native reading API. Both readers
-refuse writes and leave the database and WAL untouched when they close.
+`@yaks/sqlite/read-db`, which binds the native reading and extension-loading
+APIs. Extensions can read installed indexes; SQLite refuses metadata writes.
+Both readers leave the database and WAL untouched when they close.
 
 `read` accepts a query string or [query AST](../query/README.md#query-model) and
 returns whole bundles, resolving stored integer references back to public ids.

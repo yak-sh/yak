@@ -25,8 +25,8 @@ export type Opened = Driver & { close: () => void }
  * Open (or create) the database at `path` — a file, whose directory is made
  * when missing, or `:memory:` — as a {@link Driver} to bind `storage()` to.
  * This is the one place a connection's settings are made. `readOnly: true`
- * requires an existing file, changes no journal settings, and exposes no
- * extension loader (loading an extension can write metadata).
+ * requires an existing file and changes no journal settings. Extensions can
+ * read installed indexes; the read-only handle refuses metadata writes.
  *
  * Every connection runs with foreign keys on. A file is one other processes
  * may have open too, so it also runs in WAL mode, with WAL's crash-safe pairing
