@@ -410,7 +410,7 @@ test('wrangler: app-only pushes do not supersede a build, but Worker source and 
       let file = join(work, path)
       Deno.mkdirSync(dirname(file), { recursive: true })
       Deno.writeTextFileSync(file, crypto.randomUUID())
-      await run(work, 'add', path)
+      await run(work, 'add', '.')
       await run(work, 'commit', '-q', '-m', 'c')
       await run(work, 'push', '-q', 'origin', 'HEAD:main')
       return await run(work, 'rev-parse', 'HEAD')
@@ -424,6 +424,7 @@ test('wrangler: app-only pushes do not supersede a build, but Worker source and 
     assertEquals(app.tip, b)
     assertEquals(app.changed, false)
     assertEquals(superseded(app), null)
+    Deno.writeTextFileSync(join(work, 'workers/yak/site.ts'), 'changed Worker')
     let c = await push('packages/graph/mod.ts')
     // The latest build goes live over what is behind it.
     assertEquals(superseded(await seen(work, [a])), null)
@@ -432,22 +433,12 @@ test('wrangler: app-only pushes do not supersede a build, but Worker source and 
     assertEquals(old.changed, true)
     assert(superseded(old))
     await run(work, 'checkout', '-q', a)
-    // With no remote to ask, a live version ahead of it still stops it.
-    await run(work, 'remote', 'remove', 'origin')
-    let blind = await seen(work, [c])
-    assertEquals(blind.tip, null)
-    assert(superseded(blind))
-    // A shallow clone fetches the live commit it lacks before it answers.
-    assertEquals((await seen(thin, [c])).live, [{ sha: c, ahead: true }])
-    await run(work, 'remote', 'add', 'origin', origin)
-    await run(work, 'checkout', '-q', c)
-    let d = await push('workers/yak/site.ts')
     let latest = join(root, 'latest')
     await run(root, 'clone', '-q', '--depth', '1', `file://${origin}`, latest)
     let older = await seen(latest, [a])
     assertEquals(older, {
-      head: d,
-      tip: d,
+      head: c,
+      tip: c,
       changed: false,
       live: [{ sha: a, ahead: false }],
     })
@@ -461,6 +452,13 @@ test('wrangler: app-only pushes do not supersede a build, but Worker source and 
       '--batch-check=%(objectname)',
     )
     assert(!objects.split('\n').includes(oldBlob))
+    // With no remote to ask, a live version ahead of it still stops it.
+    await run(work, 'remote', 'remove', 'origin')
+    let blind = await seen(work, [c])
+    assertEquals(blind.tip, null)
+    assert(superseded(blind))
+    // A shallow clone fetches the live commit it lacks before it answers.
+    assertEquals((await seen(thin, [c])).live, [{ sha: c, ahead: true }])
   } finally {
     Deno.removeSync(root, { recursive: true })
   }

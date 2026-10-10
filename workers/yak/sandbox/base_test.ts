@@ -123,11 +123,12 @@ test('source-addressed images build and push once, and failures refuse the image
   let first = await ensure('compiler:inputs-one')
   await ensure('compiler:inputs-one')
   equal(calls.filter((c) => c[1] == 'build').length, 1)
+  equal(calls.filter((c) => c[1] == 'login').length, 1)
   equal(calls.filter((c) => c[1] == 'push'), [['docker', 'push', first]])
   await ensure('compiler:inputs-two')
   equal(calls.filter((c) => c[1] == 'build').length, 2)
   ok(calls.find((c) => c[1] == 'build')!.includes('/worker/Dockerfile'))
-  for (let failure of ['build', 'push']) {
+  for (let failure of ['login', 'build', 'push']) {
     failing = failure
     await throws(() => ensure('compiler:inputs-' + failure), 'failed')
   }

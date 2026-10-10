@@ -120,11 +120,13 @@ export let based = async (
     go,
     has,
     ref: from,
+    pull: true,
     context: here('base').pathname,
   })
 }
 
-/** Ensure one source-addressed image exists, independently of Worker uploads. */
+/** Ensure one source-addressed image exists, independently of Worker uploads.
+ * `pull` also authenticates Docker for a later build that reads this image. */
 export let imaged = async (
   {
     wrangler,
@@ -133,6 +135,7 @@ export let imaged = async (
     ref,
     name,
     dry = false,
+    pull = false,
     go = run,
     has = held,
   }: {
@@ -142,6 +145,7 @@ export let imaged = async (
     ref?: string
     name?: string
     dry?: boolean
+    pull?: boolean
     go?: Run
     has?: (ref: string, password: string) => Promise<boolean>
   },
@@ -157,20 +161,23 @@ export let imaged = async (
   if (!from.startsWith(`${REGISTRY}/${account_id}/`)) {
     throw new Error(`${from} is not in this account's registry`)
   }
-  // Login prepares Docker to pull a missing base; the registry HEAD needs only
-  // the same credentials, not Docker's login. Settle both independent requests
-  // before deciding, so even a failure leaves no child process behind.
-  let [logged, checked] = await Promise.allSettled([
+  let login = () =>
     must(
       go,
       ['docker', 'login', '--password-stdin', '--username', username, REGISTRY],
       password,
-    ),
+    )
+  // A held sibling image needs no Docker operation. The sandbox base also
+  // authenticates its later pull, overlapping login with the registry read
+  // and settling both even when either fails.
+  let [logged, checked] = await Promise.allSettled([
+    pull ? login() : Promise.resolve(),
     has(from, password),
   ])
   if (logged.status == 'rejected') throw logged.reason
   if (checked.status == 'rejected') throw checked.reason
   if (checked.value) return from
+  if (!pull) await login()
   await must(go, [
     ...BUILD,
     '-t',

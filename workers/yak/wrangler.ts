@@ -922,7 +922,7 @@ if (import.meta.main) {
   let guarded = command(argv) === 'deploy' && !argv.includes('--dry-run')
   let inspect = async () => {
     if (!guarded) return true
-    let saw = await seen(dir, serving(envs(argv), wrangler))
+    let saw = await seen(dir, readied.then(() => serving(envs(argv), wrangler)))
     let live = saw.live.map((l) => short(l.sha) + (l.ahead == null ? '?' : ''))
     console.log(
       `deploy ${short(saw.head)}: main at ${
@@ -995,7 +995,7 @@ if (import.meta.main) {
     // Choose after npm has installed: a cold checkout has this pin now too.
     wrangler = ['env', executable]
   })
-  let inspected = readied.then(inspect)
+  let inspected = inspect()
   let uploads = new Map(
     siblings(argv).map((args) => [
       args[args.indexOf('-c') + 1],
