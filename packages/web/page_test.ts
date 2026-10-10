@@ -24,6 +24,9 @@ test('page code mints uuids outside a secure context', async () => {
   let gated: string[] = []
   let walk = async (dir: URL) => {
     for await (let entry of Deno.readDir(dir)) {
+      // Dotfiles are no page code: the example runner writes and removes its
+      // `.*.example.ts` files here while other platforms run alongside.
+      if (entry.name.startsWith('.')) continue
       let url = new URL(entry.name + (entry.isDirectory ? '/' : ''), dir)
       if (entry.isDirectory) await walk(url)
       else if (/(?<!_test|_bench)\.tsx?$/.test(entry.name)) {
