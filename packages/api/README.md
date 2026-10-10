@@ -331,9 +331,14 @@ await subs.drop(to)
 Query frames contain current matching bundles and `gone` eids for deleted
 entities or entities that stopped matching. A refresh may send the whole answer.
 Queries that can test one entity at a time use
-[@yaks/match](../match/README.md); queries with references, ordering or limits
-use dependency reads or refreshes. Writes return at commit without waiting for
-subscriber reads; commits arriving during a read share the next pass.
+[@yaks/match](../match/README.md); queries with references, ordering, limits or
+walks use dependency reads or refreshes. A refresh runs only after a commit
+writes a component its query reads, on an entity it selects or on one a
+reference or a walk passes through, or deletes an entity the query could have
+read: a member of its answer, or any entity when the query reads past each
+entity alone. A query with a text term or `.near` is read again after every
+commit. Writes return at commit without waiting for subscriber reads; commits
+arriving during a read share the next pass.
 
 A small answer of a query tested one entity at a time is held in memory and kept
 current from what each commit moves. Subscriptions asking the same query with

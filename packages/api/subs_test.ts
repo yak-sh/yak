@@ -12,6 +12,7 @@ import { storage } from '@yaks/sqlite'
 import { open } from '@yaks/sqlite/db'
 import { loadVocab } from '@yaks/vocab'
 import { backed, ddl, journal, log } from '@yaks/journal'
+import { edgeDoc, edgeKeywords, link } from '@yaks/edge'
 import { journalDoc } from '@yaks/journal/vocab'
 import { comp, shop as shopVocab, shopGraph } from './testing.ts'
 import { type Frame, type Sink, subscriptions } from './subs.ts'
@@ -793,6 +794,82 @@ test('a commit that touches nothing a query reads does not run it', () => {
 
   g.apply([{ entity: { eid: 'b1' }, book: { price: 12 } }])
   assertEquals(take().map((f) => f.id), ['newest', 'n'])
+})
+
+// One subscription to `query`, counting the reads its refreshes make: what it
+// hears, and how many reads since last asked.
+let watched = (g: Graph, query: string) => {
+  let n = 0
+  let spy: Graph = { ...g, read: (q, o) => (n++, g.read(q, o)) }
+  let { to, take } = ear()
+  subscriptions(spy).open(to, 'w', query)
+  let first = take()
+  n = 0
+  let reads = () => {
+    let read = n
+    n = 0
+    return read
+  }
+  return { first, take, reads }
+}
+
+test('a walk runs again only after a commit that moves what it steps through', () => {
+  let g = shop()
+  g.apply([
+    { entity: { eid: 'a1' }, doc: { title: 'Ada' } },
+    { entity: { eid: 'b1' }, book: { price: 30, author: 'a1' } },
+    { entity: { eid: 'b2' }, book: { price: 10, author: 'b1' } },
+  ])
+  // b2 reaches Ada through b1, which the answer never selects
+  let w = watched(g, '.book.author->a1&.book.price<20')
+  assertEquals(w.first.map(ids), [['b2']])
+
+  g.apply([{ entity: { eid: 'n1' }, doc: { title: 'a note' } }])
+  assertEquals([w.reads(), w.take()], [0, []])
+  g.apply([{ entity: { eid: 'b1' }, book: { author: 'n1' } }])
+  assertEquals(w.take().map((f) => f.gone), [['b2']])
+})
+
+// Notes that cite one another, as edges (@yaks/edge).
+let citing = loadVocab([edgeDoc, {
+  $defs: {
+    doc: {
+      component: true,
+      type: 'object',
+      properties: { title: { type: 'string' } },
+    },
+    cites: { component: true, type: 'object', edge: true },
+  },
+}], [edgeKeywords])
+
+test('a walk over a relation runs again only after its edges move', () => {
+  let g = graph({ vocab: citing, storage: ram(citing) })
+  g.apply([
+    { entity: { eid: 'n1' }, doc: { title: 'first' } },
+    { entity: { eid: 'n2' }, doc: { title: 'second' } },
+  ])
+  let w = watched(g, '.cites->n1')
+  g.apply([{ entity: { eid: 'n2' }, doc: { title: 'the second' } }])
+  assertEquals([w.reads(), w.take()], [0, []])
+  g.apply([link('n2', 'cites', 'n1')])
+  assertEquals(w.take().map(ids), [['n2']])
+})
+
+test('deleting what an answer each entity decides never held does not run it', () => {
+  let g = shop()
+  g.apply([
+    { entity: { eid: 'b1' }, book: { price: 12 } },
+    { entity: { eid: 'b2' }, book: { price: 15 } },
+    { entity: { eid: 'n1' }, doc: { title: 'a note' } },
+  ])
+  let w = watched(g, '.book&.order=-book.price&.limit=1')
+  assertEquals(w.first.map(ids), [['b2']])
+
+  g.apply([{ entity: { eid: 'b1' }, $delete: true }])
+  g.apply([{ entity: { eid: 'n1' }, $delete: true }])
+  assertEquals([w.reads(), w.take()], [0, []])
+  g.apply([{ entity: { eid: 'b2' }, $delete: true }])
+  assertEquals(w.take().map((f) => f.gone), [['b2']])
 })
 
 test('an unrelated change to a member does not read or repeat its answer', () => {

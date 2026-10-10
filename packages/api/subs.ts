@@ -22,11 +22,11 @@
 //                and out of the ones it left — the query is never run again,
 //                however large the set is, and a commit costs what it
 //                changed, not how many subscriptions are open.
-//   Refresh      the query follows a reference, counts, orders or limits, so
-//                its result can change when an entity the query never named
-//                does. A dependency with a reference back to the answer
-//                refreshes that entity alone. An unlocated dependency or a
-//                window refreshes the whole query (./interest.ts).
+//   Refresh      the query follows a reference, walks, counts, orders or
+//                limits, so its result can change when an entity the query
+//                never named does. A dependency with a reference back to the
+//                answer refreshes that entity alone. An unlocated dependency
+//                or a window refreshes the whole query (./interest.ts).
 //
 // The membership Set is what makes "this entity no longer matches" as cheap
 // as "this entity now matches": a client cannot work out that something left
@@ -291,12 +291,21 @@ type Touch = Map<Eid, {
   born: boolean
 }>
 
+// Whether a subscription holds the members of an answer each entity alone
+// decides (./interest.ts `alone`), so that deleting an entity outside them
+// cannot move it. An aggregate holds only its value, a deferred watch nothing
+// yet, and a peer or view answer is read from more than storage.
+let keeps = (sub: Sub) =>
+  !!sub.reads?.alone && !sub.agg && !sub.deferred && !sub.peer && !sub.view
+
 // A write matters when it changes what the query tests or sends. A whole-row
 // projection also observes every component of an entity already in its set.
+// A deletion matters unless the subscription keeps its members and the entity
+// is not one of them.
 let notices = (sub: Sub, b: Bundle): boolean => {
+  if (b.$delete) return !keeps(sub) || sub.members.has(b.entity.eid)
   if (
-    !sub.reads || sub.reads.unseen || b.$delete ||
-    (sub.deferred && sub.want === null)
+    !sub.reads || sub.reads.unseen || (sub.deferred && sub.want === null)
   ) return true
   if (sub.want === null && sub.members.has(b.entity.eid)) return true
   let i = sub.reads
