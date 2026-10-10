@@ -470,9 +470,11 @@ test(
 
 // Exercise the real shared seam: a deleted cwd rejects at spawn, but land
 // receives a failed run and labels the operation rather than leaking ENOENT.
+let gone = Deno.makeTempDirSync({ prefix: 'yaks-land-gone-' })
+Deno.removeSync(gone)
+
 test('a spawn-level failure is a failed result, never a crash', async () => {
-  let cwd = Deno.makeTempDirSync({ prefix: 'yaks-land-gone-' })
-  Deno.removeSync(cwd)
+  let cwd = gone
   await assertRejects(
     () => land({ ...quiet, cwd }),
     Error,

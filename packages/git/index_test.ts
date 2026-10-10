@@ -77,9 +77,14 @@ test('a tree links to each child under the name it holds it by', async () => {
   assertEquals(rows[0].entity.eid, entryEid(ROOT_OID, 'hello.txt'))
 })
 
+// The blob is input to the tree; ingest it once before measuring its links.
+let duplicate = fixture()
+let duplicateSha = file(duplicate.bytes, HELLO)
+await duplicate.git.blob(duplicateSha)
+
 test('one blob under two names is two entries', async () => {
-  let { g, git, bytes } = fixture()
-  let sha = file(bytes, HELLO)
+  let { g, git } = duplicate
+  let sha = duplicateSha
   let root = await git.files({ 'a.txt': sha, 'b.txt': sha })
   let rows = await g.read(`.tree_entry&.edge.from=${root.oid}`)
   assertEquals(rows.map((r) => comp(r, 'tree_entry').name).sort(), [
