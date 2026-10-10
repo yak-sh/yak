@@ -1,7 +1,7 @@
 // Renderer descriptors are content-addressed, not a global boot working set.
 // Complete local table sets prove their identity by hash; a projection that
 // cannot do so learns just its descriptor through the existing one-shot door.
-import { Archetypes, eidOf, tablesOf } from '@yaks/archetype'
+import { Archetypes, eidOf, tablesOf } from '@yaks/archetype/sets'
 import { config, oneShot, row } from './live.ts'
 
 let sets = new Archetypes()

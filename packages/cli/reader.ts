@@ -1,9 +1,10 @@
 // A file-backed reader, with vocabulary and ID resolution but no writers,
 // processes, graph hooks or services. A preflight that only needs stored rows
 // never composes the imperative host around a graph.
-import { type Graph, graph } from '@yaks/graph'
+import type { Graph } from '@yaks/graph'
+import { reader as graph } from '@yaks/graph/read'
 import { ids } from '@yaks/id/graph'
-import { storage } from '@yaks/sqlite'
+import { reader as storage } from '@yaks/sqlite/reader'
 import { open } from '@yaks/sqlite/db'
 import { loadVocab } from '@yaks/vocab'
 import { type Config, dbOf, subpath } from './config.ts'

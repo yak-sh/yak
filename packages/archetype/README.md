@@ -101,6 +101,9 @@ writer forgot. A later install classifies newly created entities lacking an
 archetype. Arbitrary SQL and component-table drops require reopening/installing
 before graph writes resume.
 
+The `@yaks/archetype/sets` subpath exports the pure table-set helpers and
+`Archetypes` cache, without loading the graph plugin.
+
 ## Compatibility
 
 The package uses only portable TypeScript and web APIs: Deno, Node, browsers and

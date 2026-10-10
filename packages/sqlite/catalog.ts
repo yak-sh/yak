@@ -1,6 +1,6 @@
 // Immutable table sets and a connection-revision snapshot: planning reads no
 // persistent rows until a catalog mutation or rollback invalidates that snapshot.
-import { type Archetype, Archetypes, tablesOf } from '@yaks/archetype'
+import { type Archetype, Archetypes, tablesOf } from '@yaks/archetype/sets'
 import {
   type ArchetypeSet,
   archetypeSet,

@@ -1,4 +1,4 @@
-import { derivedEid } from '@yaks/graph'
+import { derivedEid } from '@yaks/graph/identity'
 import type { Presence, VocabDoc } from '@yaks/vocab'
 import doc from './vocab.json' with { type: 'json' }
 

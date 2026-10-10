@@ -15,7 +15,7 @@
 
 import type { Bundle, Eid } from './bundle.ts'
 import type { Query as Ast } from '@yaks/query'
-import type { ReadOpts, Tx } from './storage.ts'
+import type { ReadOpts, ReadTx, Tx } from './storage.ts'
 import type { Ask } from './gather.ts'
 import type { Resource, Rule } from './rules.ts'
 import type { Declared } from './declared.ts'
@@ -237,7 +237,7 @@ export type Tool<R = Bundle[]> = {
 }
 
 /** A read hook's caller options and committed storage, outside a transaction. */
-export type ReadContext = { opts: ReadOpts; tx: Tx; vocab?: Vocab }
+export type ReadContext = { opts: ReadOpts; tx: ReadTx; vocab?: Vocab }
 
 /** A caller's vocabulary over canonical candidates. The graph addresses
  * `original` before asking for the view, reads whole candidates with `query`,
@@ -360,7 +360,7 @@ export type Plugin = {
    * transcript's own id, @yaks/session) is looked up for it and for nothing
    * else. */
   address?: (
-    tx: Tx,
+    tx: ReadTx,
     ids: string[],
     kind?: string,
   ) => Map<string, Eid | null> | Promise<Map<string, Eid | null>>

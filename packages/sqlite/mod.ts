@@ -77,9 +77,10 @@ import {
   standing,
   tabled,
 } from './ddl.ts'
-import { EPOCH, epoch, installed, meta, SCHEMA } from './meta.ts'
-import { ast, doom, get, read, rows, screened, tagOf } from './read.ts'
+import { epoch, installed, meta, SCHEMA } from './meta.ts'
+import { ast, doom, get, read, rows, screened } from './read.ts'
 import { unit } from './unit.ts'
+import { options } from './reader.ts'
 import {
   backfill,
   classify,
@@ -377,22 +378,7 @@ export let storage = (
   vocab: Vocab,
   base: Opts = {},
 ): Store => {
-  // Every read's options: what the store was bound with, and each computed
-  // component's backing tagged for this store (./read.ts `tagOf`) once the
-  // first install has minted its epoch. Until then its entities have no names.
-  let tagged: Opts | undefined
-  let opts = (): Opts => {
-    if (tagged || !base.backed) return tagged ?? base
-    // Every caller has ensured schema readiness, including server_meta.
-    let e = meta(driver).get(EPOCH)
-    if (!e) return base
-    let backed = Object.fromEntries(
-      Object.entries(base.backed).map((
-        [c, b],
-      ) => [c, { ...b, tag: tagOf(e, c) }]),
-    )
-    return tagged = { ...base, backed }
-  }
+  let opts = options(driver, base)
   let identity = (eids: string[], comps?: string[]) =>
     get(driver, vocab, eids, opts(), comps)
   let report = base.report ?? logged

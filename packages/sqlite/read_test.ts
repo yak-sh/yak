@@ -12,6 +12,7 @@ import type { Bundle, Comp } from './bundle.ts'
 import { mem, seed, shop as vocab, spy, store } from './testing.ts'
 
 import { storage } from './mod.ts'
+import { reader } from './reader.ts'
 
 let c = (b: Bundle, name: string): Comp => b[name] as Comp
 let eids = (bs: Bundle[]): string[] => bs.map((b) => b.entity.eid).sort()
@@ -367,7 +368,7 @@ test('a disjunction longer than SQLite nests expressions reads', () => {
   assertEquals(eids(s.read(and(any))), ['m1'])
 })
 
-test('whole gathers omit an opted-out derived sum but explicit queries read it', () => {
+test('whole gathers omit an opted-out derived sum but explicit queries read it', async () => {
   let v = loadVocab({
     $defs: {
       report: {
@@ -381,26 +382,32 @@ test('whole gathers omit an opted-out derived sum but explicit queries read it',
     },
   })
   let d = mem()
-  let s = storage(d, v, {
+  let options = {
     derived: {
       'report.total': {
-        tag: 'number',
+        tag: 'number' as const,
         whole: false,
         expr: () => lit(7),
       },
     },
-  })
+  }
+  let s = storage(d, v, options)
   s.install()
   seed(s, [{ entity: { eid: 'r' }, report: { name: 'one' } }])
-  assertEquals(s.get(['r'])[0].report, { name: 'one' })
-  assertEquals(s.read('.report')[0].report, { name: 'one' })
-  assertEquals(s.read('.report.total>0')[0].report, { name: 'one', total: 7 })
-  assertEquals(s.read('.report .order=report.total')[0].report, {
-    name: 'one',
-    total: 7,
-  })
-  assertEquals(s.rows('.report .fields=report.total'), [{
-    eid: 'r',
-    'report.total': 7,
-  }])
+  for (let s of [storage(d, v, options), reader(d, v, options)]) {
+    assertEquals((await s.get(['r']))[0].report, { name: 'one' })
+    assertEquals((await s.read('.report'))[0].report, { name: 'one' })
+    assertEquals((await s.read('.report.total>0'))[0].report, {
+      name: 'one',
+      total: 7,
+    })
+    assertEquals((await s.read('.report .order=report.total'))[0].report, {
+      name: 'one',
+      total: 7,
+    })
+    assertEquals(await s.rows('.report .fields=report.total'), [{
+      eid: 'r',
+      'report.total': 7,
+    }])
+  }
 })

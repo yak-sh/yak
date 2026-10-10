@@ -163,6 +163,13 @@ passes the dead by however they were removed.
 
 ## Read
 
+`@yaks/sqlite/reader` exports `reader(driver, vocab, options)`, a read-only
+storage interface for an already-installed database. It exposes `read`, `rows`
+and `get`, uses the same query compiler and snapshot rules as `storage()`, and
+accepts the same derived and backed read bindings. It loads no schema installer
+or mutation pipeline. Open the file with `open(path, {readOnly: true})` from
+`@yaks/sqlite/db` when writes must also be prevented at the database boundary.
+
 `read` accepts a query string or [query AST](../query/README.md#query-model) and
 returns whole bundles, resolving stored integer references back to public ids.
 Use `rows` for aggregate and field-projection results. See

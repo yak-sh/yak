@@ -15,7 +15,8 @@
 // writes over a built integration, or changes where its tokens are sent.
 
 import { after, cmp } from '@yaks/fp'
-import { type Bundle, type Eid, identityEid, type Query } from '@yaks/graph'
+import { type Bundle, type Eid, type Query } from '@yaks/graph'
+import { identityEid } from '@yaks/graph/identity'
 import type { Scheme } from '@yaks/hook'
 import googleCalendar from './google-calendar.json' with { type: 'json' }
 import openrouter from './openrouter.json' with { type: 'json' }

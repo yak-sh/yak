@@ -2,7 +2,7 @@
  * keep list reads bodyless; words are authoritative only in search/detail. */
 import type { Bundle, Comp, Graph } from '@yaks/graph'
 import type { Vocab } from '@yaks/vocab'
-import { tablesOf } from '@yaks/archetype'
+import { tablesOf } from '@yaks/archetype/sets'
 import {
   boundedReads,
   candidates,

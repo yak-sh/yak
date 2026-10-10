@@ -1,5 +1,5 @@
 import { type Bundle, sha256, TOMBSTONE } from '@yaks/graph'
-import { Archetypes, tablesOf } from '@yaks/archetype'
+import { Archetypes, tablesOf } from '@yaks/archetype/sets'
 import {
   and,
   as,

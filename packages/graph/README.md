@@ -1349,6 +1349,14 @@ for transport and subscription requirements.
 
 ## Ownership and composition
 
+`@yaks/graph/read` exports `reader({storage, vocab, plugins})`, the read side of
+a graph: `read`, `rows`, `get`, addressing and caller-view hooks. Its
+`ReadStorage` requires only committed reads. The writable graph uses the same
+pipeline, so projection and name resolution agree at both boundaries. Read hooks
+receive `ReadTx`; writes belong to `apply()`. Pure bundle helpers, content
+hashes and identity derivation are also available through `./bundle`, `./sha256`
+and `./identity` without loading the write pipeline.
+
 `Access` is the data interface (`vocab`, `read`, `rows`, `get`, `apply`,
 `outside`) for consumers whose graph may be owned by another thread. `outside`
 is a `ReadTx` for committed reads and bindings; writes use `apply`. `WriteOpts`
