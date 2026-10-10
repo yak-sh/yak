@@ -11,9 +11,11 @@ import { test } from '@yaks/testing'
 import { workerd } from './probe.ts'
 import type { Report } from './play_cost_fixture.ts'
 
-/** Rows per player-minute: the owner's bar, and what is held until then. */
+/** Rows per player-minute: the owner's bar, and what is held until then. The
+ * same play measures one peer save more on some runs (T-121700), so the held
+ * numbers are the higher of the two. */
 let BAR = 99
-let HELD = { read: 250, written: 187.5 }
+let HELD = { read: 251, written: 188.5 }
 
 test('Vale play costs no more rows per player-minute than it has been cut to', async () => {
   let k = workerd()
