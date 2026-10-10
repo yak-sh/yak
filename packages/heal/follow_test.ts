@@ -465,13 +465,11 @@ await put(reconnected.tracker, [
     doc: { title: 'Another failure' },
   },
 ])
+let reconnectMembers = await reconnected.tracker.read(
+  '.bug.status=open ?doc ?regressed',
+)
 test('the headless tracker reconnect replaces stale query membership', async () => {
-  equal(
-    (await reconnected.tracker.read('.bug.status=open ?doc ?regressed')).map((
-      row,
-    ) => row.entity.eid),
-    [replacement],
-  )
+  equal(reconnectMembers.map((row) => row.entity.eid), [replacement])
   reconnected.reconnect()
   await reconnected.ready()
   equal(
