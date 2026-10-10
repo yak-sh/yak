@@ -148,7 +148,7 @@
       "noun": "effect",
       "verb": "check",
       "title": "Check effect runs",
-      "description": "Check recorded background actions (effects), such as sending mail after a transaction commits. Reports runs marked failed after exhausting their attempts, and runs still pending past their due time by more than the server’s threshold (10 minutes by default). An overdue run can indicate that no process is running them, even while graph writes succeed. Does not retry or mark runs failed itself; with no effect records supported by the schema, reports no findings. Takes no arguments. Returns a report in content.body, with warning or failure findings when present; it does not repair the records or configuration.",
+      "description": "Check recorded background actions (effects), such as sending mail after a transaction commits. Reports runs marked failed after exhausting their attempts, runs waiting for a handler no plugin declares any more, and runs still pending past their due time by more than the server’s threshold (10 minutes by default). An overdue run can indicate that no process is running them, even while graph writes succeed. Does not retry or mark runs failed itself; with no effect records supported by the schema, reports no findings. Takes no arguments. Returns a report in content.body, with warning or failure findings when present; it does not repair the records or configuration.",
       "input": {},
       "readOnly": true
     },
@@ -157,7 +157,7 @@
       "noun": "effect",
       "verb": "retry",
       "title": "Retry failed effect runs",
-      "description": "Put failed effect runs back to pending with a fresh attempt allowance, so the pool works them again through its ordinary path: attempts, backoff and leases as for a new run. If the cause is fixed they finish; if not they fail again and the check reports them again. Takes a handler name or a single run. Touches only failed runs, and says how many.\n\n  yak effect retry send_receipt",
+      "description": "Put failed effect runs back to pending with a fresh attempt allowance, so the pool works them again through its ordinary path: attempts, backoff and leases as for a new run. If the cause is fixed they finish; if not they fail again and the check reports them again. Takes a handler name or a single run. Touches only failed runs of a handler some plugin declares, and says how many.\n\n  yak effect retry send_receipt",
       "input": {
         "of": {
           "type": "string",
@@ -176,7 +176,7 @@
       "noun": "effect",
       "verb": "drop",
       "title": "Drop failed effect runs",
-      "description": "Delete failed effect runs whose work no one owes any more, so the check stops reporting them. Takes a handler name or a single run. Touches only failed runs, and says how many.\n\n  yak effect drop session_run",
+      "description": "Delete effect runs whose work no one owes any more, so the check stops reporting them: failed runs, and pending runs whose handler no plugin declares any more. Takes a handler name or a single run, and says how many.\n\n  yak effect drop session_run",
       "input": {
         "of": {
           "type": "string",

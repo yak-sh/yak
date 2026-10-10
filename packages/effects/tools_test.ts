@@ -44,12 +44,12 @@ test('a run that spent its attempts is a fail', async () => {
 })
 
 test('a run pending past the cutoff is a warn, a fresh one is not', async () => {
-  let g = await pooled({ state: 'pending', at: ago(90) })
+  let g = await pooled({ handler: 'post_note', state: 'pending', at: ago(90) })
   let said = await checkup(g, pooledBlog)
   assertEquals(said.level, 'warn')
   assertEquals(
     (await checkup(
-      await pooled({ state: 'pending', at: ago(1) }),
+      await pooled({ handler: 'post_note', state: 'pending', at: ago(1) }),
       pooledBlog,
     ))
       .level,
@@ -79,9 +79,11 @@ let row = async (g: Graph, eid: string) =>
 
 let mixed = () =>
   pooled(
-    { handler: 'h', state: 'failed', attempts: 3, error: 'x', at: ago(90) },
-    { handler: 'h', state: 'pending', attempts: 0, at: ago(1) },
-    { handler: 'h', state: 'done', attempts: 1, at: ago(90) },
+    { handler: 'post_note', state: 'failed', attempts: 3, at: ago(90) },
+    { handler: 'post_note', state: 'pending', attempts: 0, at: ago(1) },
+    { handler: 'post_note', state: 'done', attempts: 1, at: ago(90) },
+    // Waiting for a handler no plugin declares.
+    { handler: 'gone', state: 'pending', attempts: 0, at: ago(90) },
   )
 
 // A pool holding one failed run, built once: the test is the retry and the
@@ -120,21 +122,29 @@ test('retry puts a failed run back to the pool, which then finishes it', async (
   assertEquals(landed, 1)
 })
 
-test('drop deletes a failed run, and the check stops naming it', async () => {
+test('drop deletes a failed run and an orphan, and the check stops naming them', async () => {
   let g = await mixed()
+  assert((await checkup(g, pooledBlog)).body.includes('no plugin declares'))
   assert((await door(g, 'effect_drop', 'r0')).startsWith('dropped 1'))
+  assert((await door(g, 'effect_drop', 'gone')).startsWith('dropped 1'))
   assertEquals((await checkup(g, pooledBlog)).level, undefined)
 })
 
-test('a door touches only failed runs, and refuses a name matching none', async () => {
+test('a door touches only the runs it settles, and refuses a name matching none', async () => {
   let g = await mixed()
-  for (let id of ['r1', 'r2', 'nope']) {
-    for (let name of ['effect_retry', 'effect_drop'] as const) {
-      await door(g, name, id).then(
-        () => assert(false, `${name} ${id}`),
-        (e) => assert(String(e.message).includes('no failed')),
-      )
-    }
+  let refused = [
+    ...['r1', 'r2', 'nope'].flatMap((id) => [
+      ['effect_retry', id] as const,
+      ['effect_drop', id] as const,
+    ]),
+    // An orphan retried would only wait again.
+    ['effect_retry', 'r3'] as const,
+  ]
+  for (let [name, id] of refused) {
+    await door(g, name, id).then(
+      () => assert(false, `${name} ${id}`),
+      (e) => assert(String(e.message).includes('names no effect run')),
+    )
   }
   assertEquals(
     [(await row(g, 'r1'))?.attempts, (await row(g, 'r2'))?.state],

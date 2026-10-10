@@ -24,7 +24,7 @@
 // configuration (effects run where they were committed, nothing written down)
 // and not a fault — the check reports that and finds nothing.
 
-import { and, eq } from '@yaks/query'
+import { and, eq, list } from '@yaks/query'
 import {
   addressed,
   argsOf,
@@ -38,7 +38,7 @@ import {
 import type { Runs } from '@yaks/graph/tools'
 import { human } from '@yaks/id'
 import { CallError, checked, type Finding, said } from '@yaks/tools'
-import type { Vocab } from '@yaks/vocab'
+import { effectsIn, type Vocab } from '@yaks/vocab'
 import { EFFECT } from './pool.ts'
 
 /** What configuration this package's check accepts. */
@@ -63,97 +63,135 @@ let some = (rows: Bundle[], id: (b: Bundle) => string, sample: number) => {
   return `${shown}${rest > 0 ? `, and ${rest} more` : ''}`
 }
 
-// The failed runs a handler name or a single run's id points at.
-let failedOf = async (graph: Graph, of: string): Promise<Bundle[]> => {
-  let byHandler = await graph.read(and(
-    eq(`${EFFECT}.state`, 'failed'),
+// A run is a person's to settle when it spent its attempts, or when it waits
+// for a handler no plugin declares any more, which no process will ever run.
+// Retrying either kind of run only strands it again unless its handler exists.
+let dead = (vocab: Vocab) => {
+  let declared = new Set(effectsIn(vocab.docs).map((e) => e.name))
+  let state = (b: Bundle) => comp(b)?.state
+  let known = (b: Bundle) => declared.has(String(comp(b)?.handler))
+  let orphan = (b: Bundle) => state(b) == 'pending' && !known(b)
+  return {
+    orphan,
+    retry: (b: Bundle) => state(b) == 'failed' && known(b),
+    drop: (b: Bundle) => state(b) == 'failed' || orphan(b),
+  }
+}
+
+// The runs a handler name or a single run's id points at, among those `owed`.
+let named = async (graph: Graph, of: string, owed: (b: Bundle) => boolean) => {
+  // Done runs are left out by the query: a handler's history can be long.
+  let byHandler = (await graph.read(and(
     eq(`${EFFECT}.handler`, of),
-  ))
+    eq(`${EFFECT}.state`, list('failed', 'pending')),
+  ))).filter(owed)
   if (byHandler.length) return byHandler
   let [eid] = await addressed(graph, [of])
   let [row] = await graph.get([eid])
-  return comp(row ?? {} as Bundle)?.state == 'failed' ? [row] : []
+  return row && owed(row) ? [row] : []
 }
 
-// Change each failed run named by the call, guarded by the state read, and say
-// how many. `patch` null deletes.
-let settle =
-  (verb: string, patch: Comp | null): Runs[string] => async (call, graph) => {
-    let of = String(argsOf(call).of)
-    let rows = await failedOf(graph, of)
-    if (!rows.length) {
-      throw new CallError('refused', `${of} names no failed effect run`)
-    }
-    await graph.apply(
-      signed(
-        rows.map((b) => ({
-          entity: { eid: b.entity.eid },
-          ...(patch ? { [EFFECT]: patch } : { $delete: true }),
-          $was: { [EFFECT]: { state: token('failed') } },
-        })),
-        who(call),
-      ),
-      { trusted: true },
-    )
-    return [said(call, `${verb} ${rows.length} failed run(s) of ${of}`)]
+// Change each run named by the call, guarded by the state read, and say how
+// many. `patch` null deletes.
+let settle = (
+  verb: string,
+  done: string,
+  owed: (b: Bundle) => boolean,
+  patch: Comp | null,
+): Runs[string] =>
+async (call, graph) => {
+  let of = String(argsOf(call).of)
+  let rows = await named(graph, of, owed)
+  if (!rows.length) {
+    throw new CallError('refused', `${of} names no effect run to ${verb}`)
   }
+  await graph.apply(
+    signed(
+      rows.map((b) => ({
+        entity: { eid: b.entity.eid },
+        ...(patch ? { [EFFECT]: patch } : { $delete: true }),
+        $was: { [EFFECT]: { state: token(String(comp(b)?.state)) } },
+      })),
+      who(call),
+    ),
+    { trusted: true },
+  )
+  return [said(call, `${done} ${rows.length} run(s) of ${of}`)]
+}
 
 /** The implementation behind the tool ./vocab.json declares. */
 export let runs = (
   host: { vocab: Vocab },
   options: Options = {},
-): Runs => ({
-  // Pending with a full allowance, as a run no one has started: the pool claims
-  // it, counts attempts and backs off exactly as it does a new one.
-  effect_retry: settle('retried', {
-    state: 'pending',
-    attempts: 0,
-    next: null,
-    error: null,
-    lease_owner: null,
-    lease_token: null,
-    lease_expiry: null,
-  }),
-  effect_drop: settle('dropped', null),
-  effect_check: async (call, graph) => {
-    let about = 'every effect run reached an end somebody would hear about'
-    if (!host.vocab.comp(EFFECT)) {
-      // Not a fault: an application that runs its effects where it commits
-      // them loads no `effect` component, so there is nothing written down to
-      // fall behind on.
-      return checked(call.entity.eid, about, [])
-    }
-    let id = human(host.vocab)
-    let sample = options.sample ?? SAMPLE
-    let cutoff = Date.now() - (options.minutes ?? MINUTES) * 60_000
-    let failed = await graph.read(and(eq(`${EFFECT}.state`, 'failed')))
-    let stuck = (await graph.read(and(eq(`${EFFECT}.state`, 'pending'))))
-      .filter((b) => {
-        // Since when it has been waiting: a failure that reported is owed its
-        // next run at `next`, not at the instant the run was first written
-        // down — a backoff is not a symptom.
-        let row = comp(b)
-        let at = Date.parse(String(row?.next ?? row?.at ?? ''))
-        return !isNaN(at) && at < cutoff
-      })
-    let found: Finding[] = []
-    if (failed.length) {
-      found.push({
-        level: 'fail',
-        text: `${failed.length} effect run(s) spent their attempts and were ` +
-          `left for a person: ${some(failed, id, sample)}; ` +
-          '`yak effect retry <handler>` puts them back to the pool, ' +
-          '`yak effect drop <handler>` deletes what no one owes',
-      })
-    }
-    if (stuck.length) {
-      found.push({
-        level: 'warn',
-        text: `${stuck.length} effect run(s) have been pending since before ` +
-          `${new Date(cutoff).toISOString()} — nothing is working them: ` +
-          `${some(stuck, id, sample)}`,
-      })
-    }
-    return checked(call.entity.eid, about, found)
-  },
-})
+): Runs => {
+  let settles = dead(host.vocab)
+  return {
+    // Pending with a full allowance, as a run no one has started: the pool claims
+    // it, counts attempts and backs off exactly as it does a new one.
+    effect_retry: settle('retry', 'retried', settles.retry, {
+      state: 'pending',
+      attempts: 0,
+      next: null,
+      error: null,
+      lease_owner: null,
+      lease_token: null,
+      lease_expiry: null,
+    }),
+    effect_drop: settle('drop', 'dropped', settles.drop, null),
+    effect_check: async (call, graph) => {
+      let about = 'every effect run reached an end somebody would hear about'
+      if (!host.vocab.comp(EFFECT)) {
+        // Not a fault: an application that runs its effects where it commits
+        // them loads no `effect` component, so there is nothing written down to
+        // fall behind on.
+        return checked(call.entity.eid, about, [])
+      }
+      let id = human(host.vocab)
+      let sample = options.sample ?? SAMPLE
+      let cutoff = Date.now() - (options.minutes ?? MINUTES) * 60_000
+      let failed = await graph.read(and(eq(`${EFFECT}.state`, 'failed')))
+      let pending = await graph.read(and(eq(`${EFFECT}.state`, 'pending')))
+      let orphans = pending.filter(settles.orphan)
+      let stuck = pending.filter((b) => !settles.orphan(b))
+        .filter((b) => {
+          // Since when it has been waiting: a failure that reported is owed its
+          // next run at `next`, not at the instant the run was first written
+          // down — a backoff is not a symptom.
+          let row = comp(b)
+          let at = Date.parse(String(row?.next ?? row?.at ?? ''))
+          return !isNaN(at) && at < cutoff
+        })
+      let found: Finding[] = []
+      if (failed.length) {
+        found.push({
+          level: 'fail',
+          text:
+            `${failed.length} effect run(s) spent their attempts and were ` +
+            `left for a person: ${some(failed, id, sample)}; ` +
+            '`yak effect retry <handler>` puts them back to the pool, ' +
+            '`yak effect drop <handler>` deletes what no one owes',
+        })
+      }
+      if (orphans.length) {
+        found.push({
+          level: 'warn',
+          text:
+            `${orphans.length} effect run(s) wait for a handler no plugin ` +
+            `declares, so nothing will ever work them: ` +
+            `${some(orphans, id, sample)}; \`yak effect drop <handler>\` ` +
+            'deletes them',
+        })
+      }
+      if (stuck.length) {
+        found.push({
+          level: 'warn',
+          text:
+            `${stuck.length} effect run(s) have been pending since before ` +
+            `${new Date(cutoff).toISOString()} — nothing is working them: ` +
+            `${some(stuck, id, sample)}`,
+        })
+      }
+      return checked(call.entity.eid, about, found)
+    },
+  }
+}
