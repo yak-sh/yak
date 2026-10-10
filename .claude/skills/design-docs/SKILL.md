@@ -125,6 +125,12 @@ conversation, record the decision as yourself and put his approval verbatim in
 a comment beside it. Downstream work you decide on your own (the task tree,
 follow-ups) is recorded as yours (M-31958).
 
+A design's verdict and the owner's comments on it outrank its body. A body is
+what was proposed; it reads as settled whether or not he agreed, and his later
+words often reverse parts of it. So before you tell anyone what a design plans,
+or edit it, read `decided` and every comment (`yak graph show D-…` lists both).
+A declined design is a record, not the plan.
+
 ## The task tree
 
 One task per thing (M-4492). A body is the irreducible ask plus pointers, not a
