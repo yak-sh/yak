@@ -191,11 +191,13 @@ test('server-resolve: a cache hit never touches the wire', () => {
   }
 })
 
+let textualQuery = parseQuery('needle')
+
 test('a textual query keeps server membership across a signal reset', () => {
   let prior = config.host
   config.host = 'browser.test'
   let socket = useSocket(quiet)
-  let preds = parseQuery('needle')
+  let preds = textualQuery
   let ids = holdQuery(preds)
   let sub = querySubscription(preds)!.sub
   try {
