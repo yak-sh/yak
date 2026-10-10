@@ -386,11 +386,11 @@ test('compiler Worker changes reuse its image; compiler input changes build a ne
     write('compiler/compile.ts', 'compiler')
     write('esbuild/index.ts', 'catalog v1')
     let names: string[] = []
-    let ensure = async (
+    let ensure = (
       options: Parameters<typeof import('./sandbox/base.ts').imaged>[0],
     ) => {
       names.push(options.name!)
-      return 'registry.cloudflare.com/account/' + options.name
+      return Promise.resolve('registry.cloudflare.com/account/' + options.name)
     }
     let compile = async () => {
       let image = await siblingImages('esbuild/wrangler.toml', ensure, root)
