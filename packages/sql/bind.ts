@@ -1187,11 +1187,13 @@ let conjuncts = (ctx: Ctx, clauses: Clause[]): Cond[] => {
     grouped.set(comp, entries)
   }
   let narrow: Cond[] = []
+  let narrowed: string[] = []
   for (let [comp, entries] of grouped) {
     if (entries.length < 2 || !entries.some((e) => e.required)) continue
     let selected = new Set(entries.map((e) => e.clause))
     siblings = siblings.filter((c) => !selected.has(c as Pred))
     narrow.push(owned(ctx, comp, entries.map((e) => e.sql).join(' and ')))
+    narrowed.push(comp)
   }
   // Value tests imply component presence too. Only disjunctions need this
   // explicit sibling: direct predicates already narrow their own selection.
@@ -1211,13 +1213,26 @@ let conjuncts = (ctx: Ctx, clauses: Clause[]): Cond[] => {
   // beside it needs. A page's screen of the platform's own components is
   // otherwise every archetype the store holds, and the list is read whole each
   // time the statement runs.
-  let wearing = rest.flatMap((c) => implied(ctx, c))
+  let wearing = [...narrowed, ...rest.flatMap((c) => implied(ctx, c))]
     .filter((comp) => facetOf(ctx, present(comp)))
   let shape = (!ctx.present || ctx.archetypes?.held) &&
       all.length + none.length > 1
     ? byArchetype(ctx, { all: [...new Set([...all, ...wearing])], none })
     : null
-  if (!shape) return [...narrow, ...cs.map((x) => clause(ctx, x))]
+  if (!shape) {
+    // A mandatory value predicate already selects owners wearing its
+    // component. Reading that component's whole owning set again can scan
+    // all its history beside an indexed value lookup. Absence tests and
+    // components implied only by one OR arm still need their own condition.
+    let required = new Set(wearing)
+    return [
+      ...narrow,
+      ...cs.filter((c) => {
+        let f = facetOf(ctx, c)
+        return !f?.present || !required.has(f.comp)
+      }).map((c) => clause(ctx, c)),
+    ]
+  }
   return [...narrow, shape, ...rest.map((x) => clause(ctx, x))]
 }
 

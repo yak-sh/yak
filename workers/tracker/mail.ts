@@ -1,6 +1,6 @@
 // An ordinary wake enables mail from its first activation onward. The stored
 // date survives eviction; a trace wake never asks for this setup.
-import type { Bundle, Graph } from '@yaks/graph'
+import type { Bundle, Comp, Graph } from '@yaks/graph'
 import { platform } from './core.ts'
 
 export type Mailbox = {
@@ -41,7 +41,7 @@ type Kept = {
 }
 
 export let activate = async (
-  graph: Pick<Graph, 'apply'>,
+  graph: Pick<Graph, 'apply' | 'get'>,
   scope: string,
   env: Mailbox,
   keeping: () => Kept,
@@ -51,7 +51,12 @@ export let activate = async (
   let kept = enabled ? keeping() : undefined
   let since = kept?.get('mail-since')
   let { recipient, ...config } = activation(scope, env, since, now)
-  if (recipient) await graph.apply([recipient], { trusted: true })
+  if (recipient) {
+    let [held] = await graph.get([scope], ['email'])
+    if ((held?.email as Comp | undefined)?.address != env.MAIL_TO) {
+      await graph.apply([recipient], { trusted: true })
+    }
+  }
   if (config.since && !since) kept!.set('mail-since', config.since)
   return config
 }

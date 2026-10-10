@@ -4,7 +4,7 @@
 import type { TrackerStore } from './core.ts'
 import { capture } from '@yaks/tracker/report'
 import { derivedEid } from '@yaks/graph'
-import { and, eq, every } from '@yaks/query'
+import { and, eq, fields } from '@yaks/query'
 
 export let heartbeat = derivedEid('tracker|box-heartbeat')
 export let monitor = async (
@@ -39,7 +39,11 @@ export let monitor = async (
         at: new Date(now).toISOString(),
       }))
     } else {
-      let bugs = await tracker.graph.read(and(eq('bug.fault', key), every()))
+      let bugs = await tracker.graph.read(and(
+        eq('bug.fault', key),
+        eq('bug.status', 'open'),
+        fields('entity.eid'),
+      ))
       for (let bug of bugs) await tracker.mark(bug.entity.eid, 'resolved')
     }
   }

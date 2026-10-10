@@ -1,7 +1,13 @@
 // Tracker stores compose the portable graph and downstream effect pool. Intake
 // preserves reporter eids; bounded passes leave unfinished effects recoverable.
 
-import { type Bundle, derivedEid, graph, type Storage } from '@yaks/graph'
+import {
+  type Bundle,
+  type Comp,
+  derivedEid,
+  graph,
+  type Storage,
+} from '@yaks/graph'
 import { loadVocab } from '@yaks/vocab'
 import { kernelDoc, kernelKeywords } from '@yaks/kernel'
 import { toolsDoc } from '@yaks/tools/vocab'
@@ -23,7 +29,9 @@ import {
   and,
   eq,
   every,
+  fields,
   limit,
+  list,
   order,
   parse,
   present,
@@ -45,6 +53,7 @@ export let options = { computed, derived: derived(), number: true }
 export type Config = Options & { sink: Sink; sender?: Sender }
 export let store = (storage: Storage, config: Config) => {
   let fx = effects(vocab, {
+    singleOwner: true,
     defer: true,
     max: 4,
     write: (rows) => g.apply(rows, { trusted: true }),
@@ -78,11 +87,36 @@ export let store = (storage: Storage, config: Config) => {
   return {
     graph: g,
     ingest: (rows: Bundle[]) => ingest(g, rows),
-    // One aborted pool pass claims a bounded window. Several passes let
+    // One aborted pool pass handles a bounded window. Several passes let
     // grouping's newly owed notifications finish in this wake too.
-    drain: async () => {
-      await tick(g)
+    drain: async (now = Date.now()) => {
+      await tick(g, now)
       await fx.work(g, AbortSignal.abort(), 4)
+    },
+    // Only composed handlers can make progress. Unknown or disabled errands
+    // must not keep an otherwise idle object awake.
+    next: async (now = Date.now()): Promise<number | null> => {
+      let names = [
+        ...new Set(
+          fx.slots().filter((s) => s.effect && s.run).map((s) => s.id),
+        ),
+      ]
+      let [pending] = await g.read(and(
+        eq('effect.state', 'pending'),
+        eq('effect.handler', list(...names)),
+        order('effect.next'),
+        limit(1),
+        fields('effect.next'),
+      ))
+      let [wake] = await g.read(
+        '.wake.at>=1970-01-01T00:00:00Z .order=wake.at .limit=1 .fields=wake.at',
+      )
+      let at = (value: unknown) => Date.parse(String(value)) || now + 1000
+      let next = Math.min(
+        pending ? at((pending.effect as Comp | undefined)?.next) : Infinity,
+        wake ? at((wake.wake as Comp | undefined)?.at) : Infinity,
+      )
+      return Number.isFinite(next) ? Math.max(now + 1000, next) : null
     },
     // Trace reads are bounded separately from intake; a large capture is read
     // as pages of span entities, preserving each metric component unchanged.

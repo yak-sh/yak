@@ -15,6 +15,7 @@
         },
         "fault": {
           "type": "string",
+          "index": true,
           "stamped": true,
           "description": "The stable grouping key."
         },

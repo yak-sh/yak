@@ -26,9 +26,9 @@ import { door, json } from './door.ts'
 import { authorize } from './auth.ts'
 import { monitor } from './monitor.ts'
 import { activate } from './mail.ts'
-import type { Bundle } from '@yaks/graph'
-import { meta, schema } from '@yaks/sqlite'
-import { col, eq, select, table, val } from '@yaks/sql'
+import { type Bundle, sha256 } from '@yaks/graph'
+import { FIT, meta, schema } from '@yaks/sqlite'
+import { col, eq, render, select, table, val } from '@yaks/sql'
 import {
   reserveTrace,
   TRACE_CEILING,
@@ -74,12 +74,14 @@ export type Settings = {
   MAIL_TO?: string
 }
 let TRACE_READY = 'trace-ceiling-v1'
+let ddl = schema(vocab, options.derived)
+let SCHEMA_READY = sha256([FIT, ...ddl.map((s) => render(s).sql)].join('\n'))
 // Reserve both installations on every capture, including warm/redeliveries.
 // Only empty storage may be installed by tracing; standing data never gets
 // schema fitting, archetype backfill or mail writes under this fixed bound.
 export let TRACE_SETUP_BOUND = 256
 export let TRACE_ADMISSION_SETUP = 2 * TRACE_SETUP_BOUND
-let metaDdl = schema(vocab, options.derived).find((stmt) =>
+let metaDdl = ddl.find((stmt) =>
   stmt.t == 'create table' && stmt.name == 'server_meta'
 )!
 
@@ -148,12 +150,20 @@ export class Tracker {
       if (install) await this.#mail()
       return this.tracker
     }
+    let ready = install &&
+      await this.ctx.storage.get<string>('schema') == SCHEMA_READY
     let saved = install
-      ? storage(this.ctx.storage, vocab, options)
+      ? storage(this.ctx.storage, vocab, {
+        ...options,
+        schemaReady: () => ready,
+      })
       : this.#traceStorage()
     if (install) {
-      saved.install()
-      this.#traceMeta().set('trace-ready', TRACE_READY)
+      if (!ready) {
+        saved.install()
+        this.#traceMeta().set('trace-ready', TRACE_READY)
+        await this.ctx.storage.put('schema', SCHEMA_READY)
+      }
     }
     let tracker = store(saved, this.#config)
     this.live = sockets(subscriptions(tracker.graph), this.ctx)
@@ -176,7 +186,7 @@ export class Tracker {
   recover = async (error: unknown) => {
     await caught(error, { sink: this.sink })
     try {
-      await this.ctx.storage.setAlarm(Date.now() + 1000)
+      await this.ctx.storage.setAlarm(this.now() + 1000)
     } catch { /* next queue delivery retries */ }
   }
   ingest = async (rows: Bundle[]): Promise<void> => {
@@ -190,7 +200,7 @@ export class Tracker {
       let tracker = await this.boot()
       await this.live?.wake()
       await tracker.ingest(rows)
-      await this.ctx.storage.setAlarm(Date.now() + 1000)
+      await this.#arm()
     } catch (error) {
       await this.recover(error)
       throw error
@@ -364,8 +374,13 @@ export class Tracker {
   monitor = async () => {
     try {
       let tracker = await this.boot()
-      await monitor(tracker, await this.ctx.storage.get<number>('heartbeat'))
-      await this.ctx.storage.setAlarm(Date.now() + 1000)
+      await monitor(
+        tracker,
+        await this.ctx.storage.get<number>('heartbeat'),
+        undefined,
+        this.now(),
+      )
+      await this.#arm()
     } catch (error) {
       await this.recover(error)
     }
@@ -374,18 +389,17 @@ export class Tracker {
     try {
       let tracker = await this.boot()
       await this.live?.wake()
-      await tracker.drain()
-      // Wakes and retryable effects must progress even without new reports.
-      let pending = await tracker.graph.read('.effect.state=pending .limit=1')
-      let wakes = await tracker.graph.read(
-        '.wake.at>=1970-01-01T00:00:00Z .limit=1',
-      )
-      if (pending.length || wakes.length) {
-        await this.ctx.storage.setAlarm(Date.now() + 1000)
-      }
+      await tracker.drain(this.now())
+      await this.#arm()
     } catch (error) {
       await this.recover(error)
     }
+  }
+  // Sleep until durable work is due. A healthy monitor and an empty alarm owe
+  // no storage writes; future wakes and retry backoff do not poll each second.
+  #arm = async () => {
+    let next = await this.tracker!.next(this.now())
+    if (next != null) await this.ctx.storage.setAlarm(next)
   }
   webSocketMessage = async (ws: Wire, data: string | ArrayBuffer) => {
     try {
