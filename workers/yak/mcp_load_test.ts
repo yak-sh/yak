@@ -636,6 +636,7 @@ test('space_sell connects an account and hands back one link', async () => {
   let key = stripeKey()
   let price = await plusPrice(key)
   let k = await kernel()
+  let purchasing: Promise<Record<string, unknown>> | undefined
   try {
     let space = `ada39-${crypto.randomUUID().slice(0, 8)}`
     let { cookie, eids } = await seed(k, [{ slug: space, apps: ['shop'] }])
@@ -700,6 +701,15 @@ test('space_sell connects an account and hands back one link', async () => {
         headers: { cookie: session, origin },
         body: new URLSearchParams({ billing: 'checkout' }),
       })
+    // Permission refusals do not depend on the independent checkout.
+    purchasing = (async () => {
+      let checkout = await subscribe()
+      assertEquals(checkout.status, 200)
+      let url = (await checkout.json()).url as string
+      assertStringIncludes(url, 'https://checkout.stripe.com/')
+      return await sessionAt(k, url, '?expand[]=line_items')
+    })()
+    purchasing.catch(() => {})
     for (
       let [origin, session, status] of [
         ['https://other.yaks.app', cookie, 403],
@@ -711,11 +721,7 @@ test('space_sell connects an account and hands back one link', async () => {
       assertEquals(r.status, status)
       await r.body?.cancel()
     }
-    let checkout = await subscribe()
-    assertEquals(checkout.status, 200)
-    let url = (await checkout.json()).url as string
-    assertStringIncludes(url, 'https://checkout.stripe.com/')
-    let purchase = await sessionAt(k, url, '?expand[]=line_items') as {
+    let purchase = await purchasing! as {
       metadata: Record<string, string>
       line_items: { data: { price: { id: string } }[] }
       success_url: string
@@ -842,6 +848,7 @@ test('space_sell connects an account and hands back one link', async () => {
       space,
     )
   } finally {
+    await purchasing?.catch(() => {})
     await k.stop()
   }
 })
