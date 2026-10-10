@@ -117,6 +117,13 @@ owner: numbers, decisions only he can make, follow-ups it filed.
 enough for the owner to look at, with a stated cap, and stops there until he
 has looked. He gets to see what it buys before it buys a lot.
 
+**Switching something on.** Turning on a delivery (mail, a notice, a webhook, a
+scheduled job) also delivers everything already owed: a store that has been
+collecting for a week sends the week, at once, to whoever it names. The agent
+sees a configuration change; the owner sees his inbox fill. So the brief says
+what happens to the backlog (marked as seen, summed into one message, or sent)
+and what the recipient gets in the first minute.
+
 A skeleton for a fresh agent, to fill in your own words:
 
 ```text
