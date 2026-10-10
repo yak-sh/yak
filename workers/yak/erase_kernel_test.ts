@@ -50,28 +50,29 @@ let space = (over: Partial<Space> = {}): Space => ({
 test('a space erased: the letter, the act, and the name back', async () => {
   let k = await kernel()
   try {
+    let slug = `shoplab19-${crypto.randomUUID().slice(0, 8)}`
     // A person with a space, an app with files and data in it, and a second
     // app so the delete has more than one of everything to take.
-    let them = await seed(k, [{ slug: 'shoplab19', apps: ['shop', 'notes'] }])
+    let them = await seed(k, [{ slug, apps: ['shop', 'notes'] }])
     let agent = connector(k, them.cookie)
-    let shop = client(k, 'shoplab19.yaks.app', 'shop', them.cookie)
+    let shop = client(k, `${slug}.yaks.app`, 'shop', them.cookie)
     assertEquals((await shop.put('/index.html', '<h1>hi</h1>')).status, 200)
-    await agent.tool('app_deploy', { space: 'shoplab19', app: 'shop' })
+    await agent.tool('app_deploy', { space: slug, app: 'shop' })
     await shop.applied({
       entities: [{ doc: { title: 'a note only this space has' } }],
     })
     assertEquals((await shop.get('.doc')).length, 1)
-    assertEquals((await k.at('shoplab19.yaks.app', '/shop/')).status, 200)
+    assertEquals((await k.at(`${slug}.yaks.app`, '/shop/')).status, 200)
 
     // The agent asks. It deletes nothing: it mails the owner, and says so.
     let said = await agent.tool('space_delete', {
-      space: 'shoplab19',
+      space: slug,
       forever: true,
     })
     assertStringIncludes(said, 'nothing is deleted')
     assertStringIncludes(said, 'check their email')
-    assertStringIncludes(said, 'https://shoplab19.yaks.app/shop/')
-    assertEquals((await k.at('shoplab19.yaks.app', '/shop/')).status, 200)
+    assertStringIncludes(said, `https://${slug}.yaks.app/shop/`)
+    assertEquals((await k.at(`${slug}.yaks.app`, '/shop/')).status, 200)
 
     // The letter names what would go, and carries the link.
     let mail = await until(
@@ -79,11 +80,12 @@ test('a space erased: the letter, the act, and the name back', async () => {
         letters(k, them.email).findLast((l) => l.subject.includes('Delete')),
       { timeout: 20_000, poll: 100, label: 'the delete letter' },
     )
-    assertStringIncludes(mail!.body, 'https://shoplab19.yaks.app/notes/')
-    let link = /https:\/\/yaks\.app(\/space\/shoplab19\/delete\?t=[^\s]+)/
+    assertStringIncludes(mail!.body, `https://${slug}.yaks.app/notes/`)
+    let link = /https:\/\/yaks\.app(\/space\/[\w-]+\/delete\?t=[^\s]+)/
       .exec(mail!.body)
     assert(link, `no confirmation link in: ${mail!.body}`)
     let at = link[1]
+    assertStringIncludes(at, `/space/${slug}/delete?`)
 
     // An agent cannot follow it. The door reads the session cookie and
     // nothing else, so a bearer token — the only thing an agent has — is sent
@@ -98,7 +100,7 @@ test('a space erased: the letter, the act, and the name back', async () => {
       assertStringIncludes(shut.headers.get('location') ?? '', '/login')
       await shut.body?.cancel()
     }
-    assertEquals((await k.at('shoplab19.yaks.app', '/shop/')).status, 200)
+    assertEquals((await k.at(`${slug}.yaks.app`, '/shop/')).status, 200)
 
     // Somebody else signed in is told what a stranger is told about a space
     // that does not exist.
@@ -116,12 +118,12 @@ test('a space erased: the letter, the act, and the name back', async () => {
       headers: { cookie: them.cookie },
     })).text()
     assertStringIncludes(page, 'What goes, for good')
-    assertStringIncludes(page, 'https://shoplab19.yaks.app/shop/')
-    assertEquals((await k.at('shoplab19.yaks.app', '/shop/')).status, 200)
+    assertStringIncludes(page, `https://${slug}.yaks.app/shop/`)
+    assertEquals((await k.at(`${slug}.yaks.app`, '/shop/')).status, 200)
 
     // And confirms.
     let form = (fields: Record<string, string>) =>
-      k.at('yaks.app', '/space/shoplab19/delete', {
+      k.at('yaks.app', `/space/${slug}/delete`, {
         method: 'POST',
         headers: {
           cookie: them.cookie,
@@ -131,24 +133,24 @@ test('a space erased: the letter, the act, and the name back', async () => {
       })
     let gone = await form({ t: at.split('t=')[1] })
     assertEquals(gone.status, 200)
-    assertStringIncludes(await gone.text(), 'shoplab19.yaks.app is gone')
+    assertStringIncludes(await gone.text(), `${slug}.yaks.app is gone`)
 
     // What is gone. The directory first: the space, its apps, and every
     // membership of it — one tombstone, the store's own cascade.
     let dir = meta(k)
-    assertEquals(await dir.query(`id=${them.eids.shoplab19}`), [])
-    assertEquals(await dir.query(`.app.space=${them.eids.shoplab19}`), [])
-    assertEquals(await dir.query(`.member.space=${them.eids.shoplab19}`), [])
+    assertEquals(await dir.query(`id=${them.eids[slug]}`), [])
+    assertEquals(await dir.query(`.app.space=${them.eids[slug]}`), [])
+    assertEquals(await dir.query(`.member.space=${them.eids[slug]}`), [])
 
     // Then the name, which is back in circulation: somebody else takes it,
     // and what they get is empty — no files under the address, and a store
     // with none of the last space's rows in it. The store is named for the
     // address an app was born at (directory.ts storeName), so this is the
     // proof that matters for releasing a slug at all.
-    let next = await seed(k, [{ slug: 'shoplab19', apps: ['shop'] }])
-    let theirs = client(k, 'shoplab19.yaks.app', 'shop', next.cookie)
+    let next = await seed(k, [{ slug, apps: ['shop'] }])
+    let theirs = client(k, `${slug}.yaks.app`, 'shop', next.cookie)
     assertEquals(await theirs.get('.doc'), [])
-    assertEquals((await k.at('shoplab19.yaks.app', '/shop/')).status, 404)
+    assertEquals((await k.at(`${slug}.yaks.app`, '/shop/')).status, 404)
   } finally {
     await k.stop()
   }
