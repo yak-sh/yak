@@ -245,7 +245,7 @@ export let runs = (
   session_brief: async (call, graph): Promise<Bundle[]> => {
     let args = argsOf(call)
     let id = idIn(args)
-    if (!id) throw new Refused('which session? say --session')
+    if (!id) return [briefed(await asking(call, graph), args.text)]
     let s = await sessionFor(graph, id)
     // A transcript nobody has created yet is created here, carrying its own
     // name, the way `session_context` reifies one. Never on the word the

@@ -627,7 +627,7 @@
       "noun": "session",
       "verb": "brief",
       "title": "Record a session’s brief",
-      "description": "Save an agent work session’s brief: its own account of what it did. Replaces any previous brief; creates a session record if needed. Pass text and either session or a hook containing session_id. Returns the session id and written fields as a JSON bundle. This stores the brief but does not itself inject it into another session.",
+      "description": "Save an agent work session’s brief: its own account of what it did. Replaces any previous brief; creates a session record if a named transcript does not exist. Pass text; session takes precedence over a hook containing session_id, then defaults to the caller’s session. Returns the session id and written fields as a JSON bundle. This stores the brief but does not itself inject it into another session.",
       "input": {
         "session": {
           "type": "string",

@@ -235,6 +235,32 @@ test('a brief lands on the transcript wearing that name', async () => {
   assertEquals(comp(said, 'brief'), { text: 'did the thing' })
 })
 
+test('a brief with no named session lands on the calling session', async () => {
+  let [said] = await tools.session_brief!(
+    ...asked({ text: 'did the thing' }, [], 's1'),
+  ) as Bundle[]
+  assertEquals(said.entity.eid, 's1')
+  assertEquals(comp(said, 'brief'), { text: 'did the thing' })
+})
+
+test('a named transcript takes precedence over the calling session', async () => {
+  for (
+    let args of [
+      { session: 'abc', hook: '{"session_id":"other"}' },
+      { hook: '{"session_id":"abc"}' },
+    ]
+  ) {
+    let rows = [
+      row({ entity: { eid: 's1' }, session: { id: 'abc' } }, 'session.id'),
+    ]
+    let [said] = await tools.session_brief!(
+      ...asked({ ...args, text: 'did the thing' }, rows, 's2'),
+    ) as Bundle[]
+    assertEquals(said.entity.eid, 's1')
+    assertEquals(comp(said, 'brief'), { text: 'did the thing' })
+  }
+})
+
 test('a brief for a transcript nobody reified reifies it, never the word', async () => {
   let [said] = await tools.session_brief!(
     ...asked({ session: 'S-37703', text: 'did the thing' }),
