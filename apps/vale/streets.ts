@@ -223,6 +223,14 @@ export let streets = (
     }
   }
   let close = (x: number, z: number, r: number) => {
+    // A walker on a street usually stands nearest a street cell. Try that
+    // cell before searching the surrounding disk.
+    let u = x - at[0], v = z - at[1]
+    let i = Math.round(u), k = Math.round(v)
+    if (
+      inside(i, k) && held(index(i, k)) != null &&
+      Math.hypot(u - i, v - k) < r
+    ) return true
     let a = Math.ceil(x - at[0] - r), b = Math.floor(x - at[0] + r)
     let c = Math.ceil(z - at[1] - r), d = Math.floor(z - at[1] + r)
     for (let k = Math.max(-EDGE, c); k <= Math.min(EDGE, d); k++) {

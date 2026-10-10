@@ -5,7 +5,7 @@ import { assert, assertEquals } from '@std/assert'
 import { seedBuildings } from './buildings_fixture.ts'
 import { LEVELS } from './levels.ts'
 import { halfOf, KINDS } from './props.ts'
-import { EDGE } from './streets.ts'
+import { EDGE, streets } from './streets.ts'
 import { ROAD, roadsOf } from './ways.ts'
 import {
   buildingOf,
@@ -41,6 +41,29 @@ let gap = (
     Math.max(0, Math.abs(z - p.z) - d),
   )
 }
+
+let square = streets([10, 20], [], [], [[10 + EDGE, 20]], () => 0)
+
+test('street shelter keeps its radius at cells and beyond the grid', () => {
+  for (
+    let [x, z, r, near] of [
+      [10, 20, 0, false],
+      [10, 20, -1, false],
+      [10, 20, 0.1, true],
+      [10.4, 20.3, 0.49, false],
+      [10.4, 20.3, 0.51, true],
+      [10.4, 26.6, 1, true],
+      [10, 27, 1, false],
+      [10, 27, 1.01, true],
+      [10 + EDGE + 0.5, 20, 0.5, false],
+      [10 + EDGE + 0.5, 20, 0.51, true],
+      [10 + EDGE + 1, 20, 1, false],
+      [10 + EDGE + 1, 20, 1.01, true],
+    ] as [number, number, number, boolean][]
+  ) {
+    assertEquals(square.near(x, z, r), near, `${x}, ${z}; radius ${r}`)
+  }
+})
 
 test('village roads join the streets without crossing plots', () => {
   let v = vale(), side = EDGE * 2 + 1

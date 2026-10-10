@@ -25,7 +25,7 @@ import { Ux } from '@yaks/ux'
 import { mount } from '../mount.ts'
 import { Entity } from '../Entity.tsx'
 import { Pip } from './Show.tsx'
-import type { Change } from '../../types.ts'
+import type { Change, Ent } from '../../types.ts'
 
 test('task acceptance is a distinct Markdown section', () => {
   cache.value = {
@@ -73,16 +73,25 @@ test('a doc without accept renders no Acceptance section, not JSON', () => {
   cache.value = {}
 })
 
-test('document meta paints no tally when it has no comments', () => {
-  cache.value = {
-    doc: {
-      entity: { eid: 'doc', num: 1 },
-      doc: { eid: 'doc', title: 'Quiet document', body: '' },
-    },
-  }
+// This case checks Meta's paint, so build its document face and select its
+// renderer once; assembling an Ent from the live replica is a separate seam.
+let quietRow = {
+  entity: { eid: 'doc', num: 1 },
+  doc: { eid: 'doc', title: 'Quiet document', body: '' },
+}
+let quietDoc: Ent = {
+  ...quietRow,
+  eid: 'doc',
+  num: 1,
+  kind: 'doc',
+  refs: [],
+  kids: [],
+}
+let quietMeta = resolve(quietDoc, 'Meta').Render
 
-  let e = ent('doc')
-  let { root, free } = mount(h(resolve(e, 'Meta').Render, { e, id: true }))
+test('document meta paints no tally when it has no comments', () => {
+  cache.value = { doc: quietRow }
+  let { root, free } = mount(h(quietMeta, { e: quietDoc, id: true }))
   assertEquals(root.querySelector('.Show_Comments'), null)
   free()
   cache.value = {}

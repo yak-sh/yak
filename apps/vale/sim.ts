@@ -292,10 +292,10 @@ let ROOM = 3.5
 export let sheltered = (v: Vale, x: number, z: number, r = 0): boolean =>
   // `flat()` has no world roads or villages laid in its ground.
   !!v.world && (
-    !!hearthNear(x, z, SHELTER + r) || nearWay(x, z, ROOM + r) ||
+    !!hearthNear(x, z, SHELTER + r) ||
     villagesNear(x, z, EDGE + ROOM + r).some((s) =>
       streetsOf(v, s).near(x, z, ROOM + 0.9 + r)
-    )
+    ) || nearWay(x, z, ROOM + r)
   )
 
 // The named world and a creature's home do not change between frames. If
