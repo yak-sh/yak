@@ -6,7 +6,7 @@
 // `deno check` reads, and the workspace (wrangler.ts `members`) is what esbuild
 // bundles by. A workers.json entry pointing anywhere else type-checks one file
 // and bundles another.
-import { test, tick } from '@yaks/testing'
+import { test } from '@yaks/testing'
 import { assert, assertEquals } from '@std/assert'
 import { dirname, join, relative } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -195,14 +195,14 @@ test('independent sibling deploys overlap and the kernel waits for both successe
     return unpinned ? waits[started.length - 1].promise : Promise.resolve(0)
   })
   try {
-    await tick()
+    await Promise.resolve()
     assertEquals(
       started.map((call) => call.args),
       siblings(['deploy', '--env', 'staging']),
     )
     assertEquals(started.map((call) => call.unpinned), [true, true])
     waits[0].resolve(0)
-    await tick()
+    await Promise.resolve()
     assertEquals(started.length, 2)
     waits[1].resolve(0)
     assertEquals(await deploy, 0)
@@ -233,7 +233,7 @@ for (let failure of [7, Error('process wait failed')]) {
       ended = true
     })
     try {
-      await tick()
+      await Promise.resolve()
       assertEquals(starts, 2)
       assertEquals(ended, false)
       other.resolve(0)
@@ -278,17 +278,19 @@ test('the prepared Worker activates before its image, preserving rollout and env
     let events: unknown[] = []
     let activation = Promise.withResolvers<number>()
     let image = Promise.withResolvers<void>()
+    let preparing = Promise.withResolvers<void>()
     let deploy = rollout(args, (argv) => {
       events.push(argv)
       return events.length == 1 ? activation.promise : Promise.resolve(0)
     }, () => {
       events.push('image')
+      preparing.resolve()
       return image.promise
     })
     try {
       assertEquals(events, [[...bundle, '--containers-rollout=none']])
       activation.resolve(0)
-      await tick()
+      await preparing.promise
       assertEquals(events.length, 2)
       assertEquals(events[1], 'image')
       image.resolve()
@@ -615,10 +617,10 @@ test('base preparation overlaps sibling uploads and gates the kernel', async () 
     prepared = true
     return base.promise
   })
-  await tick()
+  await Promise.resolve()
   assert(prepared)
   sibling.resolve(0)
-  await tick()
+  await Promise.resolve()
   assertEquals(kernel, false)
   base.resolve(['deploy'])
   assertEquals(await deploy, 0)
