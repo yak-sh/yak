@@ -113,20 +113,19 @@ test('every example vocab.json in the repo loads', () => {
 // A component an app declares is a kind sorting before `doc` without saying
 // so: its own word is the most specific thing said about a row, and that is
 // what earns it its two tools (kinds.ts).
+let recipeKind = appVocab(says({ recipe: { serves: num } }))
+let plainNote = appVocab({
+  $defs: {
+    note: { component: true, type: 'object', kind: false },
+  },
+})
+
 test("an app's own word is a kind before doc", () => {
-  let v = appVocab(says({ recipe: { serves: num } }))
+  let v = recipeKind
   assertEquals(v.kindOf({ doc: 1, recipe: 1 }), 'recipe')
   // Unless the manifest says otherwise.
   assertEquals(
-    appVocab({
-      $defs: {
-        note: {
-          component: true,
-          type: 'object',
-          kind: false,
-        },
-      },
-    }).kinds
+    plainNote.kinds
       .includes('note'),
     false,
   )

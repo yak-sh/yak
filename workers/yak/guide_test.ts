@@ -269,8 +269,8 @@ test('the code page prints the limits an app is held to', async () => {
     },
   }
   let was = globalThis.fetch
-  globalThis.fetch = (async (input: string | Request, init?: RequestInit) => {
-    let form = await new Request(input as string, init).formData()
+  globalThis.fetch = (async (_input: string | Request, init?: RequestInit) => {
+    let form = init!.body as FormData
     meta = JSON.parse(await (form.get('metadata') as File).text())
     return Response.json({ success: true, errors: [], result: {} })
   }) as typeof fetch

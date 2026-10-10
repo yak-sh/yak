@@ -184,24 +184,33 @@ test('bytes say a call is a write, and a bare path says nothing', () => {
   assertEquals(opOf({ path: 'index.html' }, 0), '')
 })
 
-test('a write answers what it stored, and json answers whether it parses', async () => {
-  let page = bytes('<!doctype html><h1>hi</h1>')
+// Hashing supplies the stored answer; its formatting and parsing are the subject.
+let [pageSha, jsSha, jsonSha, brokenSha, yamlSha] = await Promise.all([
+  '<!doctype html><h1>hi</h1>',
+  '{',
+  '{"serves": 4}',
+  '{"a": [1, 2, 3}',
+  'recipe:\n  serves: number\n',
+].map((text) => sha256(bytes(text))))
+let page = bytes('<!doctype html><h1>hi</h1>')
+
+test('a write answers what it stored, and json answers whether it parses', () => {
   assertEquals(
-    stored('index.html', page, await sha256(page)),
-    '26 bytes, sha256 ' + await sha256(page),
+    stored('index.html', page, pageSha),
+    '26 bytes, sha256 ' + pageSha,
   )
   // Only a declaration file is parsed: a .js file full of braces is not JSON
   // and saying so of it would be noise on every write.
   assertEquals(
-    stored('app.js', bytes('{'), await sha256(bytes('{'))),
-    `1 bytes, sha256 ${await sha256(bytes('{'))}`,
+    stored('app.js', bytes('{'), jsSha),
+    `1 bytes, sha256 ${jsSha}`,
   )
   let ok = bytes('{"serves": 4}')
-  assertStringIncludes(stored('vocab.json', ok, await sha256(ok)), ', parsed')
+  assertStringIncludes(stored('vocab.json', ok, jsonSha), ', parsed')
   // The bracket run miscounted in a transcription: the verdict rides the
   // same answer, and it carries the position.
   let broke = bytes(`{"a": [1, 2, 3}`)
-  let said = stored('data.json', broke, await sha256(broke))
+  let said = stored('data.json', broke, brokenSha)
   assertStringIncludes(said, '15 bytes, sha256 ')
   assertStringIncludes(said, 'NOT valid JSON')
   assertStringIncludes(said, 'position 14')
@@ -214,7 +223,7 @@ test('a write answers what it stored, and json answers whether it parses', async
   // And a .yml is read in its own language (@yaks/yaml, M-34605), so the
   // format an app writes its words in is checked where it is written.
   let yml = bytes('recipe:\n  serves: number\n')
-  assertStringIncludes(stored('vocab.yml', yml, await sha256(yml)), ', parsed')
+  assertStringIncludes(stored('vocab.yml', yml, yamlSha), ', parsed')
   assertStringIncludes(
     parses('vocab.yml', bytes('recipe:\n - a\n  b: c\n')),
     'NOT valid YAML',

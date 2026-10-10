@@ -21,6 +21,9 @@ import { refuse } from './tool.ts'
 // not the regex's any-character.
 let literal = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 
+let pattern = (glob: string) =>
+  new RegExp(`^${glob.split('*').map(literal).join('.*')}$`)
+
 /// covers('/recipes/*', '/recipes/lemon') -> true
 /// covers('/recipes/*', '/garden') -> false
 /// covers('/*/print', '/recipes/lemon/print') -> true
@@ -28,7 +31,7 @@ let literal = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 /** Does this glob answer that path? `*` is any run of characters, slashes
  * included — one wildcard, no second syntax to learn. */
 export let covers = (glob: string, path: string): boolean =>
-  new RegExp(`^${glob.split('*').map(literal).join('.*')}$`).test(path)
+  glob.includes('*') ? pattern(glob).test(path) : glob == path
 
 /**
  * The paths the kernel answers itself, which no app routes (D-34197 rung 1).
@@ -55,8 +58,16 @@ export let PLATFORM_PATHS = [
 // alike, and leaves `/recipes/*` alone, since a glob that merely contains a
 // platform path still loses to it at the door.
 let MARK = '\u0000'
-let overlaps = (a: string, b: string) =>
-  covers(a, b.replaceAll('*', MARK)) || covers(b, a.replaceAll('*', MARK))
+let prepared = (glob: string) => ({
+  glob,
+  witness: glob.replaceAll('*', MARK),
+  pattern: pattern(glob),
+})
+let platformPaths = PLATFORM_PATHS.map(prepared)
+let overlaps = (
+  a: ReturnType<typeof prepared>,
+  b: ReturnType<typeof prepared>,
+) => a.pattern.test(b.witness) || b.pattern.test(a.witness)
 
 // A path and nothing else: RFC 3986's path characters, `/`, and the wildcard.
 let PATH = /^\/[A-Za-z0-9\-._~%!$&'()*+,;=:@/]*$/
@@ -82,8 +93,8 @@ export let globs = (first: unknown, kernels: string[]): string[] => {
   if (first == null) return []
   if (!Array.isArray(first)) throw refuse('arguments', `first is ${SHAPE}`)
   let owned = [
-    ...PLATFORM_PATHS,
-    ...kernels.flatMap((k) => [`/${k}`, `/${k}/*`]),
+    ...platformPaths,
+    ...kernels.flatMap((k) => [`/${k}`, `/${k}/*`]).map(prepared),
   ]
   return first.map((glob) => {
     if (typeof glob != 'string' || !glob) {
@@ -104,11 +115,12 @@ export let globs = (first: unknown, kernels: string[]): string[] => {
         `${glob} is not a path — path characters and * only`,
       )
     }
-    let taken = owned.find((p) => overlaps(glob, p))
+    let candidate = prepared(glob)
+    let taken = owned.find((p) => overlaps(candidate, p))
     if (taken) {
       throw refuse(
         'arguments',
-        `${glob} names ${taken}, which the platform answers itself — route ` +
+        `${glob} names ${taken.glob}, which the platform answers itself — route ` +
           "a path of the app's own",
       )
     }
