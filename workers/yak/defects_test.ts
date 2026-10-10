@@ -97,20 +97,30 @@ test('SDK catches collect into the queue without a Sentry DSN and omit refusals'
       },
     },
   }, time)
+  let processed = Promise.withResolvers<void>()
+  let captures = 0
   let client = new ServerRuntimeClient({
     ...configured,
+    beforeSend: async (event, hint) => {
+      let result = await configured.beforeSend(event, hint)
+      if (++captures == 4) processed.resolve()
+      return result
+    },
     integrations: [],
+    normalizeDepth: 0,
     stackParser: () => [],
   })
   setCurrentClient(client)
   client.init()
   for (let i = 0; i < 4; i++) {
-    let error = new TypeError('queue without Sentry')
+    let error = Object.assign(new TypeError('queue without Sentry'), {
+      stack: 'TypeError: queue without Sentry\n    at probe (probe.ts:1:1)',
+    })
     caught(new Refused('no'), {})
     defect(error, { space: 'probe' })
     caught(error, { request: 'outer catch' })
   }
-  await client.flush(1000)
+  await processed.promise
   equal(queued.length, 1)
   await time.flush()
   equal(queued.length, 2)
