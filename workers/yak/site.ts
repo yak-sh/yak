@@ -61,11 +61,18 @@ export let fetch = async (req: Request, env: Env): Promise<Response> => {
   let body = await page.text()
   let headers = new Headers(page.headers)
   headers.delete('content-length')
-  headers.set('etag', `W/"${await checksum(body)}"`)
   headers.set('cache-control', FRESH)
   if (path == '/' && env.CF_VERSION_METADATA) {
     headers.set('x-yak-version', env.CF_VERSION_METADATA.id)
   }
+  // A revalidation must replace deployment metadata even when the page's
+  // rendered bytes are identical across deployments.
+  headers.set(
+    'etag',
+    `W/"${await checksum(
+      JSON.stringify([headers.get('x-yak-version'), body]),
+    )}"`,
+  )
   return matches(req.headers.get('if-none-match'), headers.get('etag') ?? '')
     ? new Response(null, { status: 304, headers })
     : new Response(body, { headers })

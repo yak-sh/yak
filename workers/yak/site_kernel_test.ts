@@ -7,6 +7,8 @@ import { assert, assertEquals, assertStringIncludes } from '@std/assert'
 import { PAGES, uriOf, WHOLE } from './guide.ts'
 import { fresh, kernel } from './probe.ts'
 import { ADDRESSES } from './seo.ts'
+import type { Env } from './env.ts'
+import * as site from './site.ts'
 
 // The generated addresses, through the kernel, at the apex and not on a space's
 // hostname — where robots.txt is the customer's own file (route.ts) and always
@@ -219,6 +221,7 @@ test('the public site subrequest preserves deployment version overrides without 
   let wanted = '12345678-1234-1234-1234-123456789abc'
   let override = `yak="${wanted}"`
   let seen: Headers[] = []
+  let env!: Env
   let k = await fresh({
     SITE: {
       fetch: (request) => {
@@ -233,7 +236,7 @@ test('the public site subrequest preserves deployment version overrides without 
         )
       },
     },
-  })
+  }, (prepared) => env = prepared)
   try {
     seen.length = 0
     for (let path of ['/', '/gallery']) {
@@ -263,6 +266,27 @@ test('the public site subrequest preserves deployment version overrides without 
       assertEquals(headers.get('authorization'), null)
       assertEquals(headers.get('cookie'), null)
     }
+    let firstEnv = { ...env, CF_VERSION_METADATA: { id: 'previous' } }
+    let nextEnv = { ...env, CF_VERSION_METADATA: { id: wanted } }
+    let request = (etag = '') =>
+      new Request(site.at(env, '/'), {
+        headers: { 'if-none-match': etag },
+      })
+    let first = await site.fetch(request(), firstEnv)
+    let body = await first.text()
+    let etag = first.headers.get('etag')!
+    assertEquals(first.headers.get('x-yak-version'), 'previous')
+    let same = await site.fetch(request(etag), firstEnv)
+    assertEquals(same.status, 304)
+    let changed = await site.fetch(request(etag), nextEnv)
+    assertEquals(changed.status, 200)
+    assertEquals(await changed.text(), body)
+    assertEquals(changed.headers.get('x-yak-version'), wanted)
+    let current = changed.headers.get('etag')!
+    assertEquals(current == etag, false)
+    let validated = await site.fetch(request(current), nextEnv)
+    assertEquals(validated.status, 304)
+    assertEquals(validated.headers.get('x-yak-version'), wanted)
   } finally {
     await k.stop()
   }
