@@ -22,7 +22,10 @@ export let paged = (path: string): boolean =>
 /** Every file under the paths, sorted, each once. */
 export let walk = async (paths: string[]): Promise<string[]> => {
   let out = new Set<string>()
+  let visited = new Set<string>()
   let go = async (path: string): Promise<void> => {
+    if (visited.has(path)) return
+    visited.add(path)
     let info = await Deno.stat(path)
     if (info.isFile) return void out.add(path)
     for await (let e of Deno.readDir(path)) {

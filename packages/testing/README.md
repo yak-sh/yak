@@ -111,29 +111,6 @@ Regular expressions check a value's text; classes check instances. Empty objects
 and arrays require empty values. Other values, including class instances and
 arrow functions, compare by deep equality.
 
-## Controlling time
-
-A **virtual clock** runs scheduled callbacks when a test advances time. Inject
-`clock()`'s `now` and `after` into the code's timer boundary.
-`after(ms, callback)` returns a cancellation function. `advance(ms)` awaits
-callbacks in chronological order, including callbacks scheduled by callbacks;
-callbacks at the same time run in registration order. It leaves global timers
-and `Date` unchanged.
-
-```ts
-import { clock, equal } from '@yaks/testing'
-
-let time = clock(100)
-let expired = false
-time.after(20, () => {
-  expired = true
-})
-await time.advance(19)
-equal(expired, false)
-await time.advance(1)
-equal([expired, time.now()], [true, 120])
-```
-
 ## Waiting
 
 `tick` yields one macrotask. `until` polls a function until its return value is
@@ -231,17 +208,17 @@ equal(tested('sum_test.ts'), true)
 equal(paged('README.md'), true)
 let source = `${'`'.repeat(3)}ts\n1 + 1\n${'`'.repeat(3)}`
 equal(examples('README.md', source), true)
-let dir = await Deno.makeTempDir({ prefix: 'testing-find-' })
+let dir = Deno.makeTempDirSync({ prefix: 'testing-find-' })
 try {
-  await Deno.writeTextFile(`${dir}/sum_test.ts`, '')
-  await Deno.writeTextFile(`${dir}/README.md`, source)
+  Deno.writeTextFileSync(`${dir}/sum_test.ts`, '')
+  Deno.writeTextFileSync(`${dir}/README.md`, source)
   equal(await walk([dir, dir]), [`${dir}/README.md`, `${dir}/sum_test.ts`])
   equal(await find([dir]), {
     tests: [`${dir}/sum_test.ts`],
     pages: [`${dir}/README.md`],
   })
 } finally {
-  await Deno.remove(dir, { recursive: true })
+  Deno.removeSync(dir, { recursive: true })
 }
 ```
 
@@ -276,6 +253,29 @@ bypasses it; a run filtered by tag records no passes.
 
 In this repository, `deno task test` starts one runner runtime per platform:
 deno, browser, terminal and workerd.
+
+## Controlling time
+
+A **virtual clock** runs scheduled callbacks when a test advances time. Inject
+`clock()`'s `now` and `after` into the code's timer boundary.
+`after(ms, callback)` returns a cancellation function. `advance(ms)` awaits
+callbacks in chronological order, including callbacks scheduled by callbacks;
+callbacks at the same time run in registration order. It leaves global timers
+and `Date` unchanged.
+
+```ts
+import { clock, equal } from '@yaks/testing'
+
+let time = clock(100)
+let expired = false
+time.after(20, () => {
+  expired = true
+})
+await time.advance(19)
+equal(expired, false)
+await time.advance(1)
+equal([expired, time.now()], [true, 120])
+```
 
 ## Limits
 

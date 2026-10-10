@@ -2,7 +2,7 @@
 // No entity stamps are needed: a component's clock is its own fact.
 
 import { test } from '@yaks/testing'
-import { assertEquals, assertThrows } from '@std/assert'
+import { assert, assertEquals, assertThrows } from '@std/assert'
 import { loadVocab } from '@yaks/vocab'
 import {
   type Actor,
@@ -73,6 +73,22 @@ let fixture = (storage: Storage = ram(vocab)) => {
   }
 }
 
+// Admission cases persist their returned patches in RAM. The graph cases
+// above and below cover applying them through the graph's write pipeline.
+let admission = () => {
+  let storage = ram(vocab)
+  let paces = pacesIn(vocab)
+  return {
+    storage,
+    at: (time: number, actor: Actor | null, ...bundles: Bundle[]) =>
+      storage.tx((tx) => {
+        let admitted = pacing(paces, tx, signed(bundles, actor), time)
+        assert(Array.isArray(admitted))
+        tx.patch(admitted)
+      }),
+  }
+}
+
 let position = (eid: string, x = 0): Bundle => ({
   entity: { eid },
   position: { x },
@@ -85,7 +101,7 @@ let browser = { via: 'browser' }
 let refused = (fn: () => unknown) => assertThrows(fn, Paced) as Paced
 
 test('one instrument writes distinct entities together and apart', () => {
-  let f = fixture()
+  let f = admission()
   f.at(0, browser, position('a'), position('b'))
   f.at(100, browser, position('c'))
   let e = refused(() => f.at(100, browser, position('a', 1)))
@@ -98,7 +114,7 @@ test('one instrument writes distinct entities together and apart', () => {
 })
 
 test('components on the same entity hold independent clocks', () => {
-  let f = fixture()
+  let f = admission()
   f.at(0, browser, position('a'))
   f.at(100, browser, volume('a'))
   f.at(900, browser, { entity: { eid: 'a' }, note: { text: 'unpaced' } })
@@ -108,7 +124,7 @@ test('components on the same entity hold independent clocks', () => {
 })
 
 test('by does not split a via clock, and alternating vias preserve each clock', () => {
-  let f = fixture()
+  let f = admission()
   f.at(0, { by: 'one', via: 'a' }, position('shared'))
   refused(() => f.at(100, { by: 'two', via: 'a' }, position('shared', 1)))
   f.at(100, { by: 'one', via: 'b' }, position('shared', 1))
@@ -126,7 +142,7 @@ test('by does not split a via clock, and alternating vias preserve each clock', 
 })
 
 test('writers with no via share a clock even when their by differs', () => {
-  let f = fixture()
+  let f = admission()
   f.at(0, { by: 'one' }, position('shared'))
   let e = refused(() => f.at(100, { by: 'two' }, position('shared', 1)))
   assertEquals([e.actor, e.wait], [null, 900])
@@ -137,7 +153,7 @@ test('writers with no via share a clock even when their by differs', () => {
 })
 
 test('a retry, including the same JSON value, starts no new clock', () => {
-  let f = fixture()
+  let f = admission()
   let settings = (): Bundle => ({
     entity: { eid: 'json' },
     position: { settings: { smoothing: true } },
@@ -161,25 +177,27 @@ test('one transaction combines patches on one paced component', () => {
 })
 
 test('component removal leaves its pacing clock intact', () => {
-  let f = fixture()
+  let f = admission()
   f.at(0, browser, position('a'))
   f.at(100, browser, { entity: { eid: 'a' }, position: null })
   refused(() => f.at(100, browser, position('a', 1)))
   f.at(1000, browser, position('a', 1))
 })
 
-test('clients cannot clear, forge or replace the server clocks', () => {
-  let f = fixture()
-  f.at(0, browser, position('a'))
-  for (
-    let _pace of [null, { writes: [] }, {
-      writes: [{ comp: 'position', via: 'browser', at: -1000 }],
-    }]
-  ) {
+for (
+  let [attack, _pace] of Object.entries({
+    clear: null,
+    empty: { writes: [] },
+    forged: { writes: [{ comp: 'position', via: 'browser', at: -1000 }] },
+  })
+) {
+  test(`clients cannot replace server clocks with ${attack} clocks`, () => {
+    let f = fixture()
+    f.at(0, browser, position('a'))
     f.at(100, browser, { entity: { eid: 'a' }, _pace })
     refused(() => f.at(100, browser, { ...position('a', 1), _pace }))
-  }
-})
+  })
+}
 
 test('stored clocks survive rebuilding the graph over its storage', () => {
   let f = fixture()
@@ -193,14 +211,15 @@ test('stored clocks survive rebuilding the graph over its storage', () => {
 })
 
 test('legacy stamps initialize recent clocks once, then component clocks stand alone', () => {
-  let f = fixture()
-  let old = graph({ storage: f.storage, vocab })
-  old.apply(signed([position('a'), volume('a')], { via: 'created-via' }), {
-    now: new Date(0).toISOString(),
-  })
-  old.apply(signed([position('a', 1)], { via: 'updated-via' }), {
-    now: new Date(100).toISOString(),
-  })
+  let f = admission()
+  f.storage.tx((tx) =>
+    tx.patch([{
+      ...position('a', 1),
+      volume: { level: 0 },
+      created: { at: new Date(0).toISOString(), via: 'created-via' },
+      updated: { at: new Date(100).toISOString(), via: 'updated-via' },
+    }])
+  )
   assertEquals(
     refused(() => f.at(200, { via: 'created-via' }, position('a', 2))).wait,
     800,
@@ -215,6 +234,12 @@ test('legacy stamps initialize recent clocks once, then component clocks stand a
   refused(() => f.at(200, { via: 'updated-via' }, volume('a', 1)))
   f.at(1000, { via: 'created-via' }, position('a', 3))
   // The updated stamp now names created-via; it cannot extend volume's clock.
+  f.storage.tx((tx) =>
+    tx.patch([{
+      entity: { eid: 'a' },
+      updated: { at: new Date(1000).toISOString(), via: 'created-via' },
+    }])
+  )
   f.at(1100, { via: 'created-via' }, volume('a', 1))
 })
 
@@ -234,8 +259,14 @@ test('a legacy signed writer with no via enters the pooled clock', () => {
 })
 
 test('a delete wins over paced patches, and its clocks die with it', () => {
-  let f = fixture()
-  f.at(0, browser, position('a'))
+  let storage = ram(vocab)
+  storage.tx((tx) =>
+    tx.patch([{
+      ...position('a'),
+      _pace: { writes: [{ comp: 'position', via: browser.via, at: 0 }] },
+    }])
+  )
+  let f = fixture(storage)
   let gone: Bundle = { entity: { eid: 'a' }, $delete: true }
   f.at(100, browser, position('a', 1), gone, position('a', 2))
   assertEquals(f.storage.get(['a']), [{ entity: { eid: 'a' }, tombstone: {} }])
