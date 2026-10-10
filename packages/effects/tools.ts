@@ -15,15 +15,29 @@
 // from every other angle: the writes commit, the graph looks normal, the mail
 // just never goes out.
 //
+// And the person it tells can act: `effect_retry` puts failed runs back to
+// pending for the pool to work again, `effect_drop` deletes the ones whose work
+// no one owes any more. Both write the pool's own way — a trusted batch guarded
+// by the state they read — so a run a worker has since touched is left alone.
+//
 // A graph with no `effect` component keeps no pool, which is a legitimate
 // configuration (effects run where they were committed, nothing written down)
 // and not a fault — the check reports that and finds nothing.
 
 import { and, eq } from '@yaks/query'
-import type { Bundle, Comp } from '@yaks/graph'
+import {
+  addressed,
+  argsOf,
+  type Bundle,
+  type Comp,
+  type Graph,
+  signed,
+  token,
+  who,
+} from '@yaks/graph'
 import type { Runs } from '@yaks/graph/tools'
 import { human } from '@yaks/id'
-import { checked, type Finding } from '@yaks/tools'
+import { CallError, checked, type Finding } from '@yaks/tools'
 import type { Vocab } from '@yaks/vocab'
 import { EFFECT } from './pool.ts'
 
@@ -49,11 +63,64 @@ let some = (rows: Bundle[], id: (b: Bundle) => string, sample: number) => {
   return `${shown}${rest > 0 ? `, and ${rest} more` : ''}`
 }
 
+let say = (call: Bundle, body: string): Bundle[] => [{
+  entity: { eid: crypto.randomUUID() },
+  content: { body },
+  output: { source: call.entity.eid },
+}]
+
+// The failed runs a handler name or a single run's id points at.
+let failedOf = async (graph: Graph, of: string): Promise<Bundle[]> => {
+  let byHandler = await graph.read(and(
+    eq(`${EFFECT}.state`, 'failed'),
+    eq(`${EFFECT}.handler`, of),
+  ))
+  if (byHandler.length) return byHandler
+  let [eid] = await addressed(graph, [of])
+  let [row] = await graph.get([eid])
+  return comp(row ?? {} as Bundle)?.state == 'failed' ? [row] : []
+}
+
+// Change each failed run named by the call, guarded by the state read, and say
+// how many. `patch` null deletes.
+let settle =
+  (verb: string, patch: Comp | null): Runs[string] => async (call, graph) => {
+    let of = String(argsOf(call).of)
+    let rows = await failedOf(graph, of)
+    if (!rows.length) {
+      throw new CallError('refused', `${of} names no failed effect run`)
+    }
+    await graph.apply(
+      signed(
+        rows.map((b) => ({
+          entity: { eid: b.entity.eid },
+          ...(patch ? { [EFFECT]: patch } : { $delete: true }),
+          $was: { [EFFECT]: { state: token('failed') } },
+        })),
+        who(call),
+      ),
+      { trusted: true },
+    )
+    return say(call, `${verb} ${rows.length} failed run(s) of ${of}`)
+  }
+
 /** The implementation behind the tool ./vocab.json declares. */
 export let runs = (
   host: { vocab: Vocab },
   options: Options = {},
 ): Runs => ({
+  // Pending with a full allowance, as a run no one has started: the pool claims
+  // it, counts attempts and backs off exactly as it does a new one.
+  effect_retry: settle('retried', {
+    state: 'pending',
+    attempts: 0,
+    next: null,
+    error: null,
+    lease_owner: null,
+    lease_token: null,
+    lease_expiry: null,
+  }),
+  effect_drop: settle('dropped', null),
   effect_check: async (call, graph) => {
     let about = 'every effect run reached an end somebody would hear about'
     if (!host.vocab.comp(EFFECT)) {
@@ -80,7 +147,9 @@ export let runs = (
       found.push({
         level: 'fail',
         text: `${failed.length} effect run(s) spent their attempts and were ` +
-          `left for a person: ${some(failed, id, sample)}`,
+          `left for a person: ${some(failed, id, sample)}; ` +
+          '`yak effect retry <handler>` puts them back to the pool, ' +
+          '`yak effect drop <handler>` deletes what no one owes',
       })
     }
     if (stuck.length) {

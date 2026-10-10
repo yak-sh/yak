@@ -6,7 +6,12 @@
   "$defs": {
     "effect": {
       "component": true,
-      "index": [["handler", "state"]],
+      "index": [
+        [
+          "handler",
+          "state"
+        ]
+      ],
       "type": "object",
       "journal": false,
       "description": "one run a commit owes, written in the commit's own transaction and claimed by whichever process runs it",
@@ -30,7 +35,9 @@
         },
         "touched": {
           "type": "array",
-          "items": { "type": "string" },
+          "items": {
+            "type": "string"
+          },
           "stamped": true,
           "description": "components moved on the target by the same commit"
         },
@@ -144,6 +151,44 @@
       "description": "Check recorded background actions (effects), such as sending mail after a transaction commits. Reports runs marked failed after exhausting their attempts, and runs still pending past their due time by more than the server’s threshold (10 minutes by default). An overdue run can indicate that no process is running them, even while graph writes succeed. Does not retry or mark runs failed itself; with no effect records supported by the schema, reports no findings. Takes no arguments. Returns a report in content.body, with warning or failure findings when present; it does not repair the records or configuration.",
       "input": {},
       "readOnly": true
+    },
+    "effect_retry": {
+      "tool": true,
+      "noun": "effect",
+      "verb": "retry",
+      "title": "Retry failed effect runs",
+      "description": "Put failed effect runs back to pending with a fresh attempt allowance, so the pool works them again through its ordinary path: attempts, backoff and leases as for a new run. If the cause is fixed they finish; if not they fail again and the check reports them again. Takes a handler name or a single run. Touches only failed runs, and says how many.\n\n  yak effect retry send_receipt",
+      "input": {
+        "of": {
+          "type": "string",
+          "description": "a handler name (all its failed runs) or one run's id"
+        }
+      },
+      "required": [
+        "of"
+      ],
+      "positional": [
+        "of"
+      ]
+    },
+    "effect_drop": {
+      "tool": true,
+      "noun": "effect",
+      "verb": "drop",
+      "title": "Drop failed effect runs",
+      "description": "Delete failed effect runs whose work no one owes any more, so the check stops reporting them. Takes a handler name or a single run. Touches only failed runs, and says how many.\n\n  yak effect drop session_run",
+      "input": {
+        "of": {
+          "type": "string",
+          "description": "a handler name (all its failed runs) or one run's id"
+        }
+      },
+      "required": [
+        "of"
+      ],
+      "positional": [
+        "of"
+      ]
     }
   }
 }

@@ -6,6 +6,7 @@ import type { Bundle, Comp, Graph } from '@yaks/graph'
 import type { Vocab } from '@yaks/vocab'
 import { blog, blogGraph, pooledBlog } from './testing.ts'
 import { type Options, runs } from './tools.ts'
+import { effects } from './registry.ts'
 
 let checkup = async (g: Graph, vocab: Vocab, options: Options = {}) => {
   let [said] = await runs({ vocab }, options).effect_check(
@@ -60,4 +61,84 @@ test('a graph that keeps no pool has nothing to be behind on', async () => {
   let said = await checkup(blogGraph(), blog)
   assertEquals(said.level, undefined)
   assert(said.body.endsWith('— nothing to report'), said.body)
+})
+
+let door = async (
+  g: Graph,
+  name: 'effect_retry' | 'effect_drop',
+  of: string,
+) => {
+  let [said] = await runs({ vocab: pooledBlog })[name](
+    { entity: { eid: 'c1' }, call: { args: { of } } },
+    g,
+  ) as Bundle[]
+  return String((said.content as Comp).body)
+}
+let row = async (g: Graph, eid: string) =>
+  (await g.get([eid]))[0]?.effect as Comp | undefined
+
+let mixed = () =>
+  pooled(
+    { handler: 'h', state: 'failed', attempts: 3, error: 'x', at: ago(90) },
+    { handler: 'h', state: 'pending', attempts: 0, at: ago(1) },
+    { handler: 'h', state: 'done', attempts: 1, at: ago(90) },
+  )
+
+test('retry puts a failed run back to the pool, which then finishes it', async () => {
+  let landed = 0
+  let fx = effects(pooledBlog, {
+    report: () => {},
+    write: (b) => g.apply(b, { trusted: true }),
+  })
+  let g = blogGraph([fx], pooledBlog)
+  await g.apply([
+    { entity: { eid: 'p1' }, post: { title: 'One' } },
+    {
+      entity: { eid: 'r0' },
+      effect: {
+        handler: 'post_note',
+        target: 'p1',
+        comp: 'post',
+        kind: 'created',
+        state: 'failed',
+        attempts: 2,
+        error: 'no',
+        at: ago(90),
+        generation: 0,
+      },
+    },
+  ], { trusted: true })
+  // Registered after the commit, so only the retried run is owed.
+  fx.handle({ post_note: () => void landed++ })
+  assert((await door(g, 'effect_retry', 'post_note')).startsWith('retried 1'))
+  await fx.work(g, undefined, 1)
+  assertEquals(landed, 1)
+  assertEquals(await row(g, 'r0'), undefined)
+})
+
+test('drop deletes a failed run, and the check stops naming it', async () => {
+  let g = await mixed()
+  assert((await door(g, 'effect_drop', 'r0')).startsWith('dropped 1'))
+  assertEquals((await checkup(g, pooledBlog)).level, undefined)
+})
+
+test('a door refuses what names no failed run', async () => {
+  let g = await mixed()
+  for (let  of of['r1', 'r2', 'nope']) {
+    await door(g, 'effect_drop', of).then(
+      () => assert(false, of),
+      (e) => assert(String(e.message).includes('no failed')),
+    )
+  }
+  assertEquals((await row(g, 'r2'))?.state, 'done')
+})
+
+test('retry leaves a pending or done run as it was', async () => {
+  let g = await mixed()
+  await door(g, 'effect_retry', 'r1').catch(() => {})
+  await door(g, 'effect_retry', 'r2').catch(() => {})
+  assertEquals(
+    [(await row(g, 'r1'))?.attempts, (await row(g, 'r2'))?.state],
+    [0, 'done'],
+  )
 })

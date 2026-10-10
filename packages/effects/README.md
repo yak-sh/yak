@@ -760,6 +760,16 @@ runs pending past their due time by more than `minutes` (default ten), showing
 up to `sample` examples (default five). It does not retry runs or repair them.
 Without an `effect` component it reports no findings.
 
+A failed run is left for a person, and two tools act on it, each taking a
+handler name (all its failed runs) or one run's id: `yak effect retry <of>` puts
+failed runs back to `pending` with a fresh attempt allowance, so the pool claims
+them as it does a new run (attempts, backoff, leases); if the cause is fixed
+they finish, if not they fail again and the check names them again.
+`yak effect
+drop <of>` deletes failed runs whose work no one owes any more. Both
+touch only failed runs, refuse a name that matches none, and say how many they
+changed.
+
 ```ts
 import { type Bundle, graph } from '@yaks/graph'
 import { loadVocab } from '@yaks/vocab'
