@@ -5,7 +5,7 @@
 // the replies are the ones a server sends.
 
 import { test } from '@yaks/testing'
-import { assert, assertEquals } from '@std/assert'
+import { assert, assertEquals, assertRejects } from '@std/assert'
 import { docDoc } from '@yaks/doc'
 import { graph } from '@yaks/graph'
 import { idDoc, idKeywords } from '@yaks/id'
@@ -16,10 +16,10 @@ import { taskDoc } from '@yaks/task'
 import { toolsDoc } from '@yaks/tools'
 import { loadVocab } from '@yaks/vocab'
 import { doorUrl, rpc } from './rpc.ts'
-import { printed, rosterOf } from './platform.ts'
+import { listed, printed, rosterOf } from './platform.ts'
 import type { Result } from './roster.ts'
 import type { Ctx } from './run.ts'
-import { cached } from './store.ts'
+import { cached, remember } from './store.ts'
 
 // A server's graph as a host composes one: each document stamped with the
 // package that declared it.
@@ -121,5 +121,45 @@ test('an answer that is not entities prints as the text it came as', async () =>
     let schema = await call('graph_schema')
     assert(schema.includes('task'), schema)
     assert(!schema.startsWith('{'), schema)
+  })
+})
+
+test('prepared views fail only for an entity drawing that needs them', async () => {
+  await asking(async (c) => {
+    let roster = await rosterOf(c.host, c.ask, c.state)
+    let tool = {
+      name: 'probe',
+      outputSchema: { properties: { result: { type: 'array' } } },
+    }
+    // A valid server vocabulary whose contributor fails while loading.
+    let vocab = {
+      $defs: {
+        broken: {
+          type: 'object' as const,
+          component: true as const,
+          package: 'data:text/javascript,throw new Error("broken views"); //',
+          properties: {},
+        },
+      },
+    }
+    await remember(c.host, { ...roster, tools: [tool], vocab }, c.state)
+    let entity = {
+      structuredContent: { result: [{ entity: { eid: 'test' }, broken: {} }] },
+    }
+    let run = async (reply: Result, json = false) => {
+      let ctx = { ...c, json, ask: () => Promise.resolve(reply) }
+      let [command] = await listed(ctx)
+      return command.run!({}, ctx)
+    }
+    assertEquals(await run(entity, true), 0)
+    assertEquals(await run({ content: [{ type: 'text', text: 'plain' }] }), 0)
+    assertEquals(
+      await run({
+        isError: true,
+        content: [{ type: 'text', text: 'tool failed' }],
+      }),
+      1,
+    )
+    await assertRejects(() => run(entity), Error, 'broken views')
   })
 })

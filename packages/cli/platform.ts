@@ -60,8 +60,8 @@ let answered = (said: Result): Bundle[] | null => {
 // each as declared — the letter its ids are printed with, and which kind wins
 // the display. Asked once and kept beside the tool list, so it goes when the
 // list does. A server that lists no `graph_schema` has none to give.
-let vocabOf = async (c: Ctx): Promise<VocabDoc | null> => {
-  let roster = await rosterOf(c.host, c.ask, c.state)
+let vocabOf = async (c: Ctx, held?: Roster): Promise<VocabDoc | null> => {
+  let roster = held ?? await rosterOf(c.host, c.ask, c.state)
   if (roster.vocab) return roster.vocab
   if (!roster.tools.some((t) => t.name == 'graph_schema')) return null
   let schema = async (args: Record<string, unknown>) =>
@@ -74,6 +74,25 @@ let vocabOf = async (c: Ctx): Promise<VocabDoc | null> => {
   if (!whole) return null
   await remember(c.host, { ...roster, vocab: whole }, c.state)
   return whole
+}
+
+type Drawing = {
+  doc: VocabDoc
+  ready: Promise<Awaited<ReturnType<typeof import('./answer.ts').reported>>>
+}
+
+// A cached vocabulary and a declared entity answer let independent, pure
+// drawing preparation run beside the tool call. Its failure is reported only
+// if that answer actually needs drawing; tool errors retain their own output.
+let preparing = (c: Ctx, roster: Roster, t: Listed): Drawing | undefined => {
+  if (
+    c.json || !roster.vocab ||
+    t.outputSchema?.properties?.result?.type != 'array'
+  ) return
+  let doc = roster.vocab
+  let ready = import('./answer.ts').then(({ reported }) => reported(doc))
+  void ready.catch(() => {})
+  return { doc, ready }
 }
 
 /**
@@ -90,8 +109,12 @@ export let printed = async (
   said: Result,
   args: Record<string, unknown> = {},
   wrote = false,
+  drawing?: Drawing,
 ): Promise<number> => {
   let { text, stale } = saidBy(said)
+  let held = stale || !roster
+    ? undefined
+    : rosterAfter(roster, name, said) ?? undefined
   // What this result reported about the tool list this client is holding
   // (roster.ts). A staleness notice alone is enough to drop the cache; a
   // caller holding no list has nothing of its own to keep fresh, and must not
@@ -113,11 +136,12 @@ export let printed = async (
     return 0
   }
   let answer = answered(said)
-  let vocab = answer && await vocabOf(c)
+  let vocab = answer && await vocabOf(c, held)
   if (answer && vocab) {
     // Imported only to draw, so a command that never does pays nothing.
     let { reported, show } = await import('./answer.ts')
-    let { views, vocab: read, components } = await reported(vocab)
+    let { views, vocab: read, components } =
+      await (drawing?.doc == vocab ? drawing.ready : reported(vocab))
     // What the drawing asks for beyond the answer — the entities its
     // references name, a page's links and comments — asked of the same host
     // in the same app the call named. A drawing that cannot get them draws
@@ -157,8 +181,9 @@ let toolOf = (roster: Roster, t: Listed): Command => ({
     ? { title: t.title ?? t.annotations?.title }
     : {}),
   description: t.description ?? '',
-  run: async (args, c) =>
-    printed(
+  run: async (args, c) => {
+    let drawing = preparing(c, roster, t)
+    return await printed(
       c,
       roster,
       t.name,
@@ -168,7 +193,9 @@ let toolOf = (roster: Roster, t: Listed): Command => ({
       }) as Result,
       args,
       !t.annotations?.readOnlyHint,
-    ),
+      drawing,
+    )
+  },
 })
 
 /** Every tool this server lists, as a subcommand. This is the list that costs
