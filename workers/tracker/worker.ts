@@ -22,6 +22,16 @@ export type Env = Omit<Settings, 'TRACKERS'> & {
   TRACKERS: { getByName: (scope: string) => Stub }
 }
 let uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+export let canary = (hash: string) => {
+  let fault = `tracker-canary|${hash}`
+  let rows = capture(Error(`tracker deploy canary ${hash}`), {
+    sink: () => {},
+    fault,
+  })
+  // A deployment exercises grouping without notifying a synthetic bug.
+  rows.push({ entity: { eid: bugEid('', fault) }, archived: {} })
+  return rows
+}
 export let scopeOf = (request: Request) => {
   let url = new URL(request.url)
   let scope = url.searchParams.get('scope')
@@ -80,13 +90,7 @@ export let worker = (env: Env) => ({
           return json({ error: 'canary method denied' }, 405)
         }
         if (!env.ERRORS) return json({ error: 'queue unavailable' }, 503)
-        let fault = `tracker-canary|${hash}`
-        let rows = capture(Error(`tracker deploy canary ${hash}`), {
-          sink: () => {},
-          fault,
-        })
-        // A deployment exercises grouping without notifying a synthetic bug.
-        rows.push({ entity: { eid: bugEid('', fault) }, archived: {} })
+        let rows = canary(hash)
         await env.ERRORS.send(rows)
         return json({ eid: rows[0].entity.eid })
       }

@@ -25,6 +25,7 @@ import { batch } from './queue.ts'
 import { door, json } from './door.ts'
 import { authorize } from './auth.ts'
 import { monitor } from './monitor.ts'
+import { activate } from './mail.ts'
 import type { Bundle } from '@yaks/graph'
 import { meta, schema } from '@yaks/sqlite'
 import { col, eq, select, table, val } from '@yaks/sql'
@@ -162,28 +163,14 @@ export class Tracker {
   }
   #mail = async () => {
     if (this.#mailReady) return
-    if (this.scope == platform && this.env.MAIL_TO) {
-      await this.tracker!.graph.apply([{
-        entity: { eid: platform },
-        email: { address: this.env.MAIL_TO },
-      }], { trusted: true })
-    }
-    if (
-      this.scope == platform && this.env.MAIL && this.env.MAIL_FROM &&
-      this.env.MAIL_TO
-    ) {
-      let kept = this.#traceMeta()
-      let since = kept.get('mail-since')
-      if (!since) {
-        since = new Date(this.now()).toISOString()
-        kept.set('mail-since', since)
-      }
-      Object.assign(this.#config, {
-        to: platform,
-        from: this.env.MAIL_FROM,
-        since,
-      })
-    }
+    let config = await activate(
+      this.tracker!.graph,
+      this.scope,
+      this.env,
+      this.#traceMeta,
+      this.now,
+    )
+    Object.assign(this.#config, config)
     this.#mailReady = true
   }
   recover = async (error: unknown) => {
