@@ -90,8 +90,18 @@ let ENDED: TranscriptStatus[] = ['settled', 'failed', 'stopped']
 let comp = (b: Bundle | undefined, name: string) =>
   b?.[name] as Comp | undefined
 
-let one = async (g: Graph, eid: Eid): Promise<Bundle | undefined> =>
-  (await g.get([eid]))[0]
+let one = async (
+  g: Graph,
+  eid: Eid,
+  names: string[],
+): Promise<Bundle | undefined> =>
+  (await g.get([eid], names.filter((name) => g.vocab.comp(name))))[0]
+
+// Routing needs presence, not a session's computed status and transcript cost.
+let isSession = async (g: Graph, eid: Eid): Promise<boolean> =>
+  Number((await g.rows(`.entity.eid=${eid}&.session&.count`))[0]?.n ?? 0) > 0
+
+let admission = ['spawned', 'dispatch', 'admitted', 'waiting']
 
 // The newest entry's seq: how a run tells, after letting go, whether anything
 // landed since it last looked.
@@ -124,7 +134,7 @@ let ended = async (g: Graph, session: Eid, r: Runner) => {
       )
     }
   }
-  let self = await one(g, session)
+  let self = await one(g, session, admission)
   let d = comp(self, 'dispatch')
   if (self?.spawned) await deliverChild(g, session)
   if (!d || dispatchStatus(self) == 'settled') return
@@ -137,13 +147,21 @@ let ended = async (g: Graph, session: Eid, r: Runner) => {
 // for; a settled one given more to do rejoins the tail. A child's preparation
 // (a checkout of its own, say) is done once, by the run that admits it.
 let admitted = async (g: Graph, session: Eid, r: Runner) => {
-  let self = await one(g, session)
+  let self = await one(g, session, admission)
   let d = comp(self, 'dispatch')
   if (!self?.spawned) return true
   if (!d) {
     // Imports can have spawned{parent,call}. The pool's canonical native input
     // identifies a returning child by convention, not as a security boundary.
-    let input = await one(g, `${session}:input`)
+    let input = await one(g, `${session}:input`, [
+      'entry',
+      'content',
+      'using',
+      'imported',
+      'output',
+      'call',
+      'result',
+    ])
     if (
       comp(input, 'entry')?.session != session || !input?.using ||
       !input.content || input.imported || input.output || input.call ||
@@ -186,7 +204,7 @@ let admitted = async (g: Graph, session: Eid, r: Runner) => {
       if (error instanceof Stale) return false
       throw error
     }
-    self = await one(g, session)
+    self = await one(g, session, admission)
     d = comp(self, 'dispatch')
   }
   if (dispatchStatus(self) == 'settled') {
@@ -199,13 +217,13 @@ let admitted = async (g: Graph, session: Eid, r: Runner) => {
     if (!await swap(g, session, 'settled', { state: 'queued', order })) {
       return false
     }
-    self = await one(g, session)
+    self = await one(g, session, admission)
   }
   // A live wait owns this lease. Recovery has lost its reacquisition closure,
   // so requeue then attempt bounded admission in this same pass (no lost wake).
   if (dispatchStatus(self) == 'waiting') {
     if (!await swap(g, session, 'waiting', { state: 'queued' })) return false
-    self = await one(g, session)
+    self = await one(g, session, admission)
   }
   if (dispatchStatus(self) == 'queued') {
     let free = (r.maxChildren ?? 32) - await active(g)
@@ -439,9 +457,9 @@ export let passing = (g: Graph, session: Eid): Promise<void> | undefined =>
 // transcript itself (admitted, or swept up), or those holding a task that
 // completed or was cancelled, or holding one that contains or requires it.
 let about = async (g: Graph, e: Event): Promise<Eid[]> => {
-  let b = await one(g, e.entity.eid)
+  let b = await one(g, e.entity.eid, ['entry', 'ask', 'task', 'edge'])
   if (b?.entry) return b.ask ? [] : [String(comp(b, 'entry')?.session)]
-  if (b?.session) return [b.entity.eid]
+  if (b && await isSession(g, b.entity.eid)) return [b.entity.eid]
   if (!holds(g)) return []
   let tasks = new Set<Eid>()
   if (b?.task) tasks.add(b.entity.eid)
@@ -451,15 +469,17 @@ let about = async (g: Graph, e: Event): Promise<Eid[]> => {
   // follow, so every task a transcript holds is looked at again.
   let held = b
     ? []
-    : (await g.read('.task&.claim.session&*')).map((t) => t.entity.eid)
+    : (await g.read('.task&.claim.session&.fields=entity.eid')).map((t) =>
+      t.entity.eid
+    )
   for (let t of [...tasks]) {
     for (let rel of ['contains', 'requires']) {
-      for (let x of await g.read(`.${rel}&.edge.to=${t}&*`)) {
+      for (let x of await g.read(`.${rel}&.edge.to=${t}`)) {
         tasks.add(String(comp(x, 'edge')?.from))
       }
     }
   }
-  let rows = await g.get([...tasks, ...held])
+  let rows = await g.get([...tasks, ...held], [CLAIM])
   return [
     ...new Set(
       rows.map((t) => comp(t, 'claim')?.session)
@@ -477,6 +497,21 @@ export let answering = async (
   r: Runner,
 ): Promise<boolean> => {
   let asked = await g.read(`.entry.session=${session}&.using&?ask&?entry`)
+  if (!asked.length) {
+    let [self] = await g.read(
+      `.entity.eid=${session}&.session&.fields=entity.eid` +
+        (g.vocab.comp('fork') ? ',fork.from' : ''),
+    )
+    // An imported transcript can have thousands of asks and no provider
+    // selection. Only a fork can inherit that selection from another session.
+    if (self && !self.fork) {
+      let asks = await g.read(
+        `.entry.session=${session}&.ask&.fields=entity.eid&.limit=1`,
+      )
+      return asks.length > 0 &&
+        (r.answers ? await r.answers(undefined) : true)
+    }
+  }
   let entries = asked.length ? asked : await statusEntries(g, session)
   if (!entries.some((b) => b.using || b.ask)) return false
   return r.answers ? await r.answers(usingBefore(entries)) : true
@@ -502,16 +537,20 @@ export let answer = async (
 // transcript whose locks may be due for release. The guard protects a claim
 // that another writer handed to a different session after this read.
 let release = async (g: Graph, e: Event): Promise<void> => {
-  let b = await one(g, e.entity.eid)
-  let session = b?.session
+  let b = await one(g, e.entity.eid, ['entry', CLAIM])
+  let session = b && await isSession(g, b.entity.eid)
     ? b.entity.eid
     : comp(b, 'entry')?.session ?? comp(b, CLAIM)?.session
   if (typeof session != 'string') return
-  let row = await one(g, session)
+  let row = await one(g, session, ['process', 'exit'])
   if (row?.process && !row.exit) return
   let status = await currentStatus(g, session)
   if (status != 'stopped' && status != 'failed') return
-  for (let held of await g.read(`.${CLAIM}.session=${session}&*`)) {
+  for (
+    let held of await g.read(
+      `.${CLAIM}.session=${session}&.fields=entity.eid`,
+    )
+  ) {
     try {
       await g.apply([{
         entity: held.entity,
