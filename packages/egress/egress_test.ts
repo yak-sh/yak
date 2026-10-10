@@ -57,7 +57,7 @@ let replies: Response[] = []
 let answering = (...r: [number, unknown?][]) => {
   seen = []
   replies = r.map(([status, body]) =>
-    new Response(JSON.stringify(body ?? {}), { status })
+    new Response(body === null ? null : JSON.stringify(body ?? {}), { status })
   )
 }
 let net = (input: RequestInfo | URL, init?: RequestInit) => {
@@ -254,7 +254,7 @@ test(
 )
 
 test('a refreshed token the service refuses too is its answer', async () => {
-  answering([401], [200, { access_token: 'A3' }], [401])
+  answering([401, null], [200, { access_token: 'A3' }], [401, null])
   assertEquals((await events()).status, 401)
   assertEquals(seen.length, 3)
 })
