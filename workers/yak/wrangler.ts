@@ -458,6 +458,50 @@ export let siblingImages = async (
   return { config: relative(root, temp), remove: () => Deno.removeSync(temp) }
 }
 
+type Bundle = { entry: string; output: string }
+
+let bundleEntry = (output: string, meta: string, base: string): Bundle => {
+  let { outputs } = JSON.parse(Deno.readTextFileSync(meta)) as {
+    outputs: Record<string, { entryPoint?: string }>
+  }
+  let entries = Object.entries(outputs).filter(([, output]) =>
+    output.entryPoint
+  )
+  if (entries.length != 1) throw new Error('Bundle has no unique entrypoint')
+  let entry = resolve(base, entries[0][0])
+  if (!entry.startsWith(output + '/')) {
+    throw new Error('Entrypoint is outside its bundle')
+  }
+  Deno.removeSync(meta)
+  return { entry, output }
+}
+
+// Keep relative bindings, assets and image paths beside their original config.
+// These modules already contain the pin's transforms and source maps.
+let unbundled = (from: string, { entry, output }: Bundle, root: string) => {
+  let path = join(root, from)
+  let parsed = parse(Deno.readTextFileSync(path))
+  Object.assign(parsed, {
+    main: entry,
+    base_dir: output,
+    no_bundle: true,
+    minify: false,
+    find_additional_modules: true,
+  })
+  let config = Deno.makeTempFileSync({
+    dir: dirname(path),
+    prefix: '.bundle-',
+    suffix: '.toml',
+  })
+  try {
+    Deno.writeTextFileSync(config, stringify(parsed))
+    return config
+  } catch (error) {
+    Deno.removeSync(config)
+    throw error
+  }
+}
+
 /** Bundle with the pinned Wrangler before uploads finish, then upload those
  * same modules and source maps through the original config's bindings. */
 export let bundled = async (
@@ -494,36 +538,7 @@ export let bundled = async (
       meta,
     ])
     if (code) throw new Error(`Kernel bundle exited ${code}`)
-    let { outputs } = JSON.parse(Deno.readTextFileSync(meta)) as {
-      outputs: Record<string, { entryPoint?: string }>
-    }
-    let entries = Object.entries(outputs).filter(([, output]) =>
-      output.entryPoint
-    )
-    if (entries.length != 1) {
-      throw new Error('Kernel bundle has no unique entrypoint')
-    }
-    let entry = resolve(root, entries[0][0])
-    if (!entry.startsWith(output + '/')) {
-      throw new Error('Kernel entrypoint is outside its bundle')
-    }
-    Deno.removeSync(meta)
-    // Keep relative config paths rooted beside the original. The bundle already
-    // contains node polyfills and minification; no second transform runs.
-    let parsed = parse(Deno.readTextFileSync(join(root, 'wrangler.toml')))
-    Object.assign(parsed, {
-      main: entry,
-      base_dir: output,
-      no_bundle: true,
-      minify: false,
-      find_additional_modules: true,
-    })
-    config = Deno.makeTempFileSync({
-      dir: root,
-      prefix: '.bundle-',
-      suffix: '.toml',
-    })
-    Deno.writeTextFileSync(config, stringify(parsed))
+    config = unbundled('wrangler.toml', bundleEntry(output, meta, root), root)
     return { args: [...args, '-c', config], remove }
   } catch (error) {
     remove()
@@ -537,6 +552,7 @@ export type PreparedSibling = {
   root: string
   started: number
   code?: number
+  bundle?: Bundle
   remove: () => void
 }
 
@@ -564,6 +580,7 @@ export let prepareSibling = async (
     prefix: 'sibling-',
   })
   let remove = () => Deno.removeSync(output, { recursive: true })
+  let meta = join(output, 'metafile.json')
   try {
     // A dry run with no rollout bundles the Worker and builds no image: the
     // image's inputs are read below instead.
@@ -574,6 +591,8 @@ export let prepareSibling = async (
           '--dry-run',
           '--outdir',
           output,
+          '--metafile',
+          meta,
           '--containers-rollout=none',
         ])
       ),
@@ -588,6 +607,7 @@ export let prepareSibling = async (
       console.error(new TextDecoder().decode(built.stderr))
       return { args, config, root, started, code: built.code, remove }
     }
+    let bundle = bundleEntry(output, meta, dirname(join(root, config)))
     let modules: Record<string, Uint8Array> = {}
     for (let file of Deno.readDirSync(output)) {
       // Wrangler emits these beside the actual multipart upload modules.
@@ -652,7 +672,7 @@ export let prepareSibling = async (
       annotated[message + 1] = annotated[message + 1].slice(0, 40) +
         `\ninputs:${digest}`
     } else annotated.push('--message', `inputs:${digest}`)
-    return { args: annotated, config, root, started, remove }
+    return { args: annotated, config, root, started, bundle, remove }
   } catch (error) {
     remove()
     throw error
@@ -662,7 +682,7 @@ export let prepareSibling = async (
 /** Upload only a changed, successfully prepared sibling. Image preparation
  * remains on this side of the deploy guard. */
 export let uploadSibling = async (
-  { args, config, root, started, code }: PreparedSibling,
+  { args, config, root, started, code, bundle }: PreparedSibling,
   run: (args: string[], unpinned?: boolean) => Promise<number>,
   wrangler = WRANGLER,
   ensure = imaged,
@@ -674,10 +694,13 @@ export let uploadSibling = async (
     : await siblingImages(config, ensure, root, wrangler)
   let annotated = [...args]
   let result: number
+  let artifact: string | undefined
   try {
-    annotated[annotated.indexOf('-c') + 1] = image.config
+    if (bundle) artifact = unbundled(image.config, bundle, root)
+    annotated[annotated.indexOf('-c') + 1] = artifact ?? image.config
     result = await run(annotated, true)
   } finally {
+    if (artifact) Deno.removeSync(artifact)
     image.remove()
   }
   console.log(

@@ -93,17 +93,20 @@ once npm is ready; the compiler bundle also waits for its catalog. Uploads wait
 for all generated files and the guard. Sandbox base preparation and each changed
 sibling's upload run as their own preparation allows. The kernel uploads after
 all succeed. Each sibling is bundled locally and compared with its fully serving
-deployment's `inputs:<sha256>` annotation. The digest covers every upload
-module, the inputs of each container image the sibling runs (its Dockerfile and
-every file of its build context, `wrangler.ts` `images`), its configuration,
-Wrangler pin and environment. A matching sibling stays serving without another
-upload; changed inputs, an unreadable deployment or a release without the
-annotation upload normally. The compiler image has its own `inputs:<sha256>`
-registry tag, covering its Dockerfile and build context. A changed Worker or
-toolkit catalog reuses that image; only a missing image tag builds and pushes
-it. The sibling upload uses a temporary config beside the original, naming the
-registry image, so Wrangler rolls it out without rebuilding it. Registry, build
-or push failures refuse the sibling and kernel deploy. Workers Builds has
+deployment's `inputs:<sha256>` annotation. When the deployment summary truncates
+that annotation, the comparison reads the full annotation from its sole serving
+version. The digest covers every upload module, the inputs of each container
+image the sibling runs (its Dockerfile and every file of its build context,
+`wrangler.ts` `images`), its configuration, Wrangler pin and environment. A
+matching sibling stays serving without another upload; changed inputs, an
+unreadable deployment or a release without the annotation upload normally. The
+compiler image has its own `inputs:<sha256>` registry tag, covering its
+Dockerfile and build context. A changed Worker or toolkit catalog reuses that
+image; only a missing image tag builds and pushes it. A changed sibling uploads
+its prepared modules and source maps through a temporary config beside the
+original, preserving its bindings and naming the registry image. Wrangler
+bundles no second time and rolls the image out without rebuilding it. Registry,
+build or push failures refuse the sibling and kernel deploy. Workers Builds has
 Docker, as the sandbox image already needs. `bin/build-yak` with no argument
 still runs the check and the workers tests by hand. A push's build that fails is
 started once more through the `BUILD_HOOK` deploy hook (builds.ts), since most

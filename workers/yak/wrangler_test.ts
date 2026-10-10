@@ -8,8 +8,9 @@
 // and bundles another.
 import { test, tick } from '@yaks/testing'
 import { assert, assertEquals } from '@std/assert'
-import { dirname, join } from 'node:path'
+import { dirname, join, relative } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { parse } from '@std/toml'
 import {
   aliased,
   bundled,
@@ -779,7 +780,7 @@ let checkSiblingPreparation = async () => {
     Deno.mkdirSync(join(root, 'outbound'))
     Deno.writeTextFileSync(
       join(root, 'outbound/wrangler.toml'),
-      'main="worker.ts"\n[[containers]]\nimage="./Dockerfile"',
+      'main="worker.ts"\nupload_source_maps=true\ncompatibility_flags=["nodejs_compat"]\n[[containers]]\nimage="./Dockerfile"\n[env.staging.vars]\nLABEL="stage"',
     )
     Deno.writeTextFileSync(join(root, 'outbound/Dockerfile'), 'FROM deno')
     let args = [
@@ -799,9 +800,21 @@ let checkSiblingPreparation = async () => {
       if (argv.includes('--dry-run')) {
         assert(argv.includes('--containers-rollout=none'))
         let to = argv[argv.indexOf('--outdir') + 1]
-        for (let name of ['worker.js', 'worker.js.map', 'README.md']) {
+        for (
+          let name of ['worker.js', 'worker.js.map', 'extra.wasm', 'README.md']
+        ) {
           Deno.writeTextFileSync(join(to, name), name)
         }
+        Deno.writeTextFileSync(
+          argv[argv.indexOf('--metafile') + 1],
+          JSON.stringify({
+            outputs: {
+              [relative(join(root, 'outbound'), join(to, 'worker.js'))]: {
+                entryPoint: 'worker.ts',
+              },
+            },
+          }),
+        )
         return Promise.resolve(result())
       }
       if (argv[0] == 'versions') {
@@ -839,14 +852,53 @@ let checkSiblingPreparation = async () => {
       let message = prepared.args[prepared.args.indexOf('--message') + 1]
       assert(message.startsWith('a'.repeat(40) + '\ninputs:'))
       digest = message.split('\ninputs:')[1]
+      let finish = Promise.withResolvers<number>()
+      let artifact = ''
+      let sent = uploadSibling(prepared, (argv, unpinned) => {
+        called = true
+        assert(unpinned)
+        artifact = argv[argv.indexOf('-c') + 1]
+        assertEquals(
+          argv.filter((_, i) => i != argv.indexOf('-c') + 1),
+          prepared.args.filter((_, i) => i != prepared.args.indexOf('-c') + 1),
+        )
+        let config = parse(Deno.readTextFileSync(artifact))
+        assertEquals(config.no_bundle, true)
+        assertEquals(config.minify, false)
+        assertEquals(config.find_additional_modules, true)
+        assertEquals(config.upload_source_maps, true)
+        assertEquals(config.compatibility_flags, ['nodejs_compat'])
+        assertEquals(config.env, { staging: { vars: { LABEL: 'stage' } } })
+        assertEquals(Deno.readTextFileSync(config.main as string), 'worker.js')
+        assertEquals(
+          Deno.readTextFileSync(
+            join(config.base_dir as string, 'worker.js.map'),
+          ),
+          'worker.js.map',
+        )
+        assertEquals(
+          Deno.readTextFileSync(join(config.base_dir as string, 'extra.wasm')),
+          'extra.wasm',
+        )
+        return finish.promise
+      }).then((code) => ({ code }), (error) => ({ error }))
+      try {
+        assert(
+          Deno.statSync(artifact).isFile,
+          'upload retains its config while pending',
+        )
+        assert(
+          Deno.statSync(join(prepared.bundle!.output, 'worker.js.map')).isFile,
+          'upload retains its source maps while pending',
+        )
+      } finally {
+        finish.resolve(3)
+      }
+      assertEquals(await sent, { code: 3 })
       assertEquals(
-        await uploadSibling(prepared, (argv, unpinned) => {
-          called = true
-          assert(unpinned)
-          assertEquals(argv, prepared.args)
-          return Promise.resolve(3)
-        }),
-        3,
+        [...Deno.readDirSync(join(root, 'outbound'))].map((file) => file.name)
+          .toSorted(),
+        ['Dockerfile', 'wrangler.toml'],
       )
       assert(called)
       let ensured = false
@@ -859,9 +911,9 @@ let checkSiblingPreparation = async () => {
         },
         (argv) => {
           let config = argv[argv.indexOf('-c') + 1]
-          assert(config.startsWith('outbound/.images-'))
+          assert(config.startsWith(join(root, 'outbound/.bundle-')))
           assert(
-            Deno.readTextFileSync(join(root, config)).includes(
+            Deno.readTextFileSync(config).includes(
               'registry.cloudflare.com/account/compiler:held',
             ),
           )
