@@ -439,6 +439,33 @@ export let fitting = (vocab: Vocab) => (name: string): boolean =>
 export let standing = (driver: Driver, vocab: Vocab): Standing =>
   stood(driver, fitting(vocab))
 
+// SQLite keeps the CREATE declaration without IF NOT EXISTS. An identical
+// declaration already has every column and constraint fitting would check.
+let declarations = new WeakMap<Vocab, Map<string, string>>()
+let declaration = (sql: string) => sql.replace(/^create table /i, '')
+let declared = (vocab: Vocab) => {
+  let held = declarations.get(vocab)
+  if (!held) {
+    held = new Map(
+      tabled(vocab).filter((s): s is CreateTable => s.t == 'create table')
+        .map((s) => [s.name, declaration(render({ ...s, ifNot: false }).sql)]),
+    )
+    declarations.set(vocab, held)
+  }
+  return held
+}
+
+let behind = (driver: Driver, vocab: Vocab): Standing => {
+  let fresh = declared(vocab)
+  let exact = new Set(
+    objects(driver, { type: 'table' }).filter((t) =>
+      declaration(String(t.sql)) == fresh.get(String(t.name))
+    ).map((t) => String(t.name)),
+  )
+  let pick = fitting(vocab)
+  return stood(driver, (name) => pick(name) && !exact.has(name))
+}
+
 // The component tables that stood.
 let comps = (vocab: Vocab, was: Standing): string[] =>
   tables(vocab).filter((name) => name in was)
@@ -647,7 +674,7 @@ export let fit = (
   vocab: Vocab,
 ): Error[] =>
   unit(driver, () => {
-    let was = standing(driver, vocab)
+    let was = behind(driver, vocab)
     for (let stmt of grown(vocab, was)) driver.query(stmt)
     let missing = Object.fromEntries(
       Object.entries(unresolved(vocab, was)).map(([comp, checks]) => [
