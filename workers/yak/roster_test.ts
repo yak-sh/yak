@@ -125,6 +125,7 @@ test(
     let k = local ?? deployed(LIVE)
     // Every space this run made and has not yet erased.
     let spaces: string[] = []
+    let paid: Promise<Record<string, unknown>> | undefined
     try {
       // The credential, as a client holds one: a bearer, never a cookie.
       // In memory the person signs in first and walks the OAuth flow; a
@@ -205,6 +206,54 @@ test(
         await tool('space_set', { space: mine, title: 'Notes and things' }),
         'Notes and things',
       )
+
+      // Checkout and payment do not depend on the app being made below. Let
+      // Stripe take them while the connector's other tools do their work.
+      paid = local
+        ? (async () => {
+          let key = stripeKey()
+          // Checkout is a page, not a call: the door mints the session and a
+          // browser finishes it with the card Stripe documents for exactly this.
+          let door = await k.at('yaks.app', managePath('billing', mine), {
+            method: 'POST',
+            headers: { cookie, origin: 'https://yaks.app' },
+            // The object, not its text: a form body is what the door reads,
+            // and fetch writes the content type for one.
+            body: new URLSearchParams({ billing: 'checkout' }),
+          })
+          assertEquals(door.status, 200, await door.clone().text())
+          let { url } = await door.json() as { url: string }
+          assertStringIncludes(url, 'https://checkout.stripe.com/')
+          // Where a person types the card is Stripe's own page, which no test
+          // can drive, so the card goes in the way the API puts it (probe.ts
+          // `subscribed`) on the very customer this session was opened for.
+          let held = await sessionAt(k, url)
+          let customer = String(held.customer ?? '')
+          assert(customer, 'the session names the customer it is for')
+          let sub = await subscribed(
+            k,
+            key,
+            { space: eids[mine], slug: mine },
+            customer,
+          )
+          assertEquals(sub.status, 'active', 'Stripe took the payment')
+          // The hop Stripe cannot make to a loopback runtime.
+          assertStringIncludes(
+            await delivered(
+              k,
+              '/stripe/webhook',
+              WEBHOOK_SECRET,
+              'customer.subscription.updated',
+              sub,
+            ),
+            'plus',
+          )
+
+          return sub
+        })()
+        : undefined
+      // A failure is observed below, after the independent tool calls finish.
+      paid?.catch(() => {})
 
       // ---- an app, its files, its release --------------------------------
       let app = 'notes'
@@ -543,42 +592,7 @@ test(
         )
       } else {
         let key = stripeKey()
-        // Checkout is a page, not a call: the door mints the session and a
-        // browser finishes it with the card Stripe documents for exactly this.
-        let door = await k.at('yaks.app', managePath('billing', mine), {
-          method: 'POST',
-          headers: { cookie, origin: 'https://yaks.app' },
-          // The object, not its text: a form body is what the door reads,
-          // and fetch writes the content type for one.
-          body: new URLSearchParams({ billing: 'checkout' }),
-        })
-        assertEquals(door.status, 200, await door.clone().text())
-        let { url } = await door.json() as { url: string }
-        assertStringIncludes(url, 'https://checkout.stripe.com/')
-        // Where a person types the card is Stripe's own page, which no test
-        // can drive, so the card goes in the way the API puts it (probe.ts
-        // `subscribed`) on the very customer this session was opened for.
-        let held = await sessionAt(k, url)
-        let customer = String(held.customer ?? '')
-        assert(customer, 'the session names the customer it is for')
-        let sub = await subscribed(
-          k,
-          key,
-          { space: eids[mine], slug: mine },
-          customer,
-        )
-        assertEquals(sub.status, 'active', 'Stripe took the payment')
-        // The hop Stripe cannot make to a loopback runtime.
-        assertStringIncludes(
-          await delivered(
-            k,
-            '/stripe/webhook',
-            WEBHOOK_SECRET,
-            'customer.subscription.updated',
-            sub,
-          ),
-          'plus',
-        )
+        let sub = await paid!
 
         // Selling is the other Stripe account: the tool mints a connected
         // account at Stripe and hands back Stripe's own onboarding link. The
@@ -688,6 +702,8 @@ test(
             .catch(() => {/* already gone */})
         }
       }
+      // Payment may still be in flight if an earlier tool assertion failed.
+      await paid?.catch(() => {})
       await k.stop()
     }
   },
