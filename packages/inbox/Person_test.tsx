@@ -308,15 +308,17 @@ test('roots and newest messages are drawn by the contextual shared renderers, wi
   }
 })
 
+let fallbackHost = host()
+let session = { entity: { eid: 'session', num: 23 }, session: { id: 's' } }
+let decision = {
+  entity: { eid: 'decision', num: 24 },
+  task: {},
+  decision: { question: 'Which route?', choices: [] },
+}
+fallbackHost.hold([session, decision])
+
 test('a session and a decision without a doc fall back to the shared Tile and Full', () => {
-  let h = host()
-  let session = { entity: { eid: 'session', num: 23 }, session: { id: 's' } }
-  let decision = {
-    entity: { eid: 'decision', num: 24 },
-    task: {},
-    decision: { question: 'Which route?', choices: [] },
-  }
-  h.hold([session, decision])
+  let h = fallbackHost
   let seen = mount(
     <div>
       {h.io.show(session, 'Inbox.List.Tile')}
