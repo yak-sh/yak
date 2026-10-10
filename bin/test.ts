@@ -135,7 +135,7 @@ export let runtime = (shared: string = denoDir()) => ({
 let ansi = /\x1b\[[0-9;]*m/g
 
 export let observe = async (
-  stream: ReadableStream<Uint8Array>,
+  stream: AsyncIterable<Uint8Array> | Iterable<Uint8Array>,
   progress: { name: string; completed: number; count: number },
 ) => {
   let decoder = new TextDecoder()

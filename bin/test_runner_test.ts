@@ -34,17 +34,12 @@ test('denoDir is the cache deno runs on, and a child moving HOME keeps it', asyn
   }
 })
 
+let colored = ['one ... \x1b[0m', '\x1b[32mok\x1b[0m (1ms)\n']
+  .map((chunk) => new TextEncoder().encode(chunk))
+
 test('colored test results count as completed', async () => {
   let progress = { name: 'loading tests', completed: 0, count: 0 }
-  let encoder = new TextEncoder()
-  let output = new ReadableStream<Uint8Array>({
-    start(stream) {
-      stream.enqueue(encoder.encode('one ... \x1b[0m'))
-      stream.enqueue(encoder.encode('\x1b[32mok\x1b[0m (1ms)\n'))
-      stream.close()
-    },
-  })
-  await observe(output, progress)
+  await observe(colored, progress)
   assertEquals(progress.name, 'one')
   assert(progress.completed > 0)
   assertEquals(progress.count, 1)
