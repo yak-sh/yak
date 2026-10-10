@@ -9,6 +9,7 @@ import {
   valueOf,
 } from './args.ts'
 import type { Listed as Tool } from './tool.ts'
+import { refused } from '@yaks/tracker/report'
 
 let reads: Reads = {
   file: (path) => `<${path}>`,
@@ -348,4 +349,11 @@ test('rest array words follow the declared item type', async () => {
     values: [1, 3, 2, 4],
   })
   await assertRejects(() => argsFor(grammar, ['1', 'nope']), Usage)
+})
+
+test('a usage mistake is a refusal, never a reported defect', () => {
+  assertEquals(
+    refused(new Usage('No tool or app command named space_list')),
+    true,
+  )
 })

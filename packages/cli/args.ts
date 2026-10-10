@@ -16,6 +16,7 @@
 // an error message here rather than a rejection one round trip away.
 
 import { validateToolInput } from '@yaks/vocab/tools'
+import { CallError } from '@yaks/tools'
 import { commandOf, type Prop, type Schema, typeOf } from './tool.ts'
 
 /** As much of a tool as a command line reads: what it is called, the schema
@@ -52,8 +53,14 @@ export let appGrammar = (
   positional: tool.positional,
 })
 
-/** The command line was wrong — nothing ran, and the exit code is 2. */
-export class Usage extends Error {}
+/** The command line was wrong — nothing ran, and the exit code is 2. The
+ * caller's own mistake, so a refusal (@yaks/tools `CallError`), never a
+ * defect to report. */
+export class Usage extends CallError {
+  constructor(message: string) {
+    super('usage', message)
+  }
+}
 
 /** Where an expanded value is read from. A test passes two functions and
  * touches no disk. */
