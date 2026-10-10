@@ -212,6 +212,7 @@
     "**/.wrangler",
     ".tasks",
     ".claude",
+    ".worktrees",
     "AGENTS.md",
     "CLAUDE.md",
     "workers/yak/.content.gen.ts",
