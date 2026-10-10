@@ -98,6 +98,8 @@ jobs:
       - name: tests
         env:
           SUITE_STEP: tests
+          # An owned base on tmpfs lets scratch sweep cancelled runs' leftovers.
+          TMPDIR: /tmp/yak-gate
         # All of it (`deno task test --all`): this machine keeps no record of
         # what passed before.
         run: 'XDG_RUNTIME_DIR=/run/user/$(id -u) DB_PATH=:memory: deno task test:budget'

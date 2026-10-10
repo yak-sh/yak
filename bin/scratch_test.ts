@@ -120,8 +120,10 @@ test('a default scratch run leaves another dead run directory alone', async () =
 })
 
 test('scratch lends every machine state directory inside its own run', async () => {
-  let dir = Deno.makeTempDirSync()
-  let out = dir + '/env.json'
+  let root = Deno.makeTempDirSync()
+  // A fresh runner's named base may not exist, even its parent.
+  let dir = `${root}/missing/base`
+  let out = root + '/env.json'
   try {
     let code =
       'Deno.writeTextFileSync(Deno.args[0], JSON.stringify(Deno.env.toObject()))'
@@ -136,6 +138,8 @@ test('scratch lends every machine state directory inside its own run', async () 
       0,
     )
     let env = JSON.parse(Deno.readTextFileSync(out))
+    assertEquals(env.TMPDIR.startsWith(`${dir}/tasks-run-`), true)
+    assertEquals([...Deno.readDirSync(dir)], [])
     for (
       let name of [
         'TASKS_HOME',
@@ -148,7 +152,7 @@ test('scratch lends every machine state directory inside its own run', async () 
       assertEquals(env[name].startsWith(env.TMPDIR + '/'), true)
     }
   } finally {
-    Deno.removeSync(dir, { recursive: true })
+    Deno.removeSync(root, { recursive: true })
   }
 })
 

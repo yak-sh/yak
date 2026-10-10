@@ -102,6 +102,7 @@ export let scratch = async (
 ): Promise<number> => {
   let base = tmpBase(env)
   let mine = ours(env)
+  if (mine) Deno.mkdirSync(base, { recursive: true })
   // One read of the base serves both: a shared /tmp holds thousands of entries.
   let before = tasksEntries(base)
   // A dead PID proves no process owns it, not that this run owns its files.
