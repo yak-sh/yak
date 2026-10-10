@@ -27,7 +27,7 @@
 // and drops kernels under parallel load (`Network connection lost`), where
 // 4.111.0 runs them at the old pin's pace. Measure before moving.
 // Exact pins can reuse npm's restored cache without registry revalidation.
-import { dirname, join, relative } from 'node:path'
+import { dirname, join, relative, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { createHash } from 'node:crypto'
 import { parse, stringify } from '@std/toml'
@@ -331,8 +331,6 @@ export let siblingImages = async (
   let parsed = parse(Deno.readTextFileSync(path)) as Containers & {
     env?: Record<string, Containers>
   }
-  let inputs = images(config, root)
-  if (!Object.keys(inputs).length) return { config, remove: () => {} }
   let refs = new Map<string, string>()
   for (let part of [parsed, ...Object.values(parsed.env ?? {})]) {
     for (let container of part.containers ?? []) {
@@ -346,31 +344,32 @@ export let siblingImages = async (
       } catch {
         continue
       }
-      if (!Object.hasOwn(inputs, relative(root, dockerfile))) continue
       let context = container.image_build_context
         ? join(dirname(path), container.image_build_context)
         : dirname(dockerfile)
-      let digest = siblingDigest(
-        JSON.stringify({
-          dockerfile: relative(root, dockerfile),
-          context: relative(root, context),
-        }),
-        imageInputs(path, root, [container]),
-      )
-      let ref = refs.get(digest)
+      let descriptor = JSON.stringify({
+        dockerfile: relative(root, dockerfile),
+        context: relative(root, context),
+      })
+      let ref = refs.get(descriptor)
       if (!ref) {
+        let digest = siblingDigest(
+          descriptor,
+          imageInputs(path, root, [container]),
+        )
         ref = await ensure({
           wrangler,
           name: `yak-${dirname(config).replaceAll('/', '-')}:inputs-${digest}`,
           dockerfile,
           context,
         })
-        refs.set(digest, ref)
+        refs.set(descriptor, ref)
       }
       container.image = ref
       delete container.image_build_context
     }
   }
+  if (!refs.size) return { config, remove: () => {} }
   let temp = Deno.makeTempFileSync({
     dir: dirname(path),
     prefix: '.images-',
@@ -383,6 +382,79 @@ export let siblingImages = async (
     throw error
   }
   return { config: relative(root, temp), remove: () => Deno.removeSync(temp) }
+}
+
+/** Bundle with the pinned Wrangler before uploads finish, then upload those
+ * same modules and source maps through the original config's bindings. */
+export let bundled = async (
+  args: string[],
+  run: (args: string[]) => Promise<number>,
+  root = dir,
+) => {
+  if (
+    !siblings(args).length ||
+    args.some((a) =>
+      /^(--dry-run|--no-bundle|--outdir|--metafile)(=|$)/.test(a)
+    )
+  ) {
+    return { args, remove: () => {} }
+  }
+  let output = Deno.makeTempDirSync({
+    dir: join(root, '.wrangler'),
+    prefix: 'kernel-',
+  })
+  let config: string | undefined
+  let remove = () => {
+    if (config) Deno.removeSync(config)
+    Deno.removeSync(output, { recursive: true })
+  }
+  try {
+    let meta = join(output, 'metafile.json')
+    let code = await run([
+      ...unrolled(args),
+      '--dry-run',
+      '--containers-rollout=none',
+      '--outdir',
+      output,
+      '--metafile',
+      meta,
+    ])
+    if (code) throw new Error(`Kernel bundle exited ${code}`)
+    let { outputs } = JSON.parse(Deno.readTextFileSync(meta)) as {
+      outputs: Record<string, { entryPoint?: string }>
+    }
+    let entries = Object.entries(outputs).filter(([, output]) =>
+      output.entryPoint
+    )
+    if (entries.length != 1) {
+      throw new Error('Kernel bundle has no unique entrypoint')
+    }
+    let entry = resolve(root, entries[0][0])
+    if (!entry.startsWith(output + '/')) {
+      throw new Error('Kernel entrypoint is outside its bundle')
+    }
+    Deno.removeSync(meta)
+    // Keep relative config paths rooted beside the original. The bundle already
+    // contains node polyfills and minification; no second transform runs.
+    let parsed = parse(Deno.readTextFileSync(join(root, 'wrangler.toml')))
+    Object.assign(parsed, {
+      main: entry,
+      base_dir: output,
+      no_bundle: true,
+      minify: false,
+      find_additional_modules: true,
+    })
+    config = Deno.makeTempFileSync({
+      dir: root,
+      prefix: '.bundle-',
+      suffix: '.toml',
+    })
+    Deno.writeTextFileSync(config, stringify(parsed))
+    return { args: [...args, '-c', config], remove }
+  } catch (error) {
+    remove()
+    throw error
+  }
 }
 
 let uploadSibling = async (
@@ -740,19 +812,31 @@ if (import.meta.main) {
       children.delete(child)
     }
   }
+  let bundle: Awaited<ReturnType<typeof bundled>> | undefined
   let prepare = async () => {
-    if (
-      command(argv) === 'deploy' &&
-      !/(^| )--containers-rollout[= ]none( |$)/.test(argv.join(' '))
-    ) await based({ wrangler, dry: argv.includes('--dry-run') })
-    return argv
+    let [compiled, base] = await Promise.allSettled([
+      bundled(argv, run).then((made) => bundle = made),
+      (async () => {
+        if (
+          command(argv) === 'deploy' &&
+          !/(^| )--containers-rollout[= ]none( |$)/.test(argv.join(' '))
+        ) await based({ wrangler, dry: argv.includes('--dry-run') })
+      })(),
+    ])
+    if (base.status == 'rejected') throw base.reason
+    if (compiled.status == 'rejected') throw compiled.reason
+    return compiled.value.args
   }
-  Deno.exit(
-    await runWrangler(
+  let code: number
+  try {
+    code = await runWrangler(
       argv,
       (args, unpinned) =>
         unpinned ? uploadSibling(args, run, wrangler) : run(args),
       prepare,
-    ),
-  )
+    )
+  } finally {
+    bundle?.remove()
+  }
+  Deno.exit(code)
 }

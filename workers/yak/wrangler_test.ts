@@ -12,6 +12,7 @@ import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import {
   aliased,
+  bundled,
   command,
   images,
   members,
@@ -64,7 +65,7 @@ test('wrangler: a deploy of the kernel deploys its siblings first, and nothing e
   ) assertEquals(siblings(args), [])
 })
 
-test("a sibling's images are its Dockerfiles and their build contexts", () => {
+test("a sibling's images are its Dockerfiles and their build contexts", async () => {
   let root = Deno.makeTempDirSync()
   try {
     let write = (path: string, text = path) => {
@@ -90,6 +91,7 @@ test("a sibling's images are its Dockerfiles and their build contexts", () => {
     Deno.removeSync(root, { recursive: true })
   }
   assert('../../packages/esbuild/compile.ts' in images('esbuild/wrangler.toml'))
+  await checkCompilerImages()
 })
 
 test('independent sibling deploys overlap and the kernel waits for both successes', async () => {
@@ -369,9 +371,10 @@ test('base preparation overlaps sibling uploads and gates the kernel', async () 
   base.resolve(['deploy'])
   assertEquals(await deploy, 0)
   assert(kernel)
+  await checkKernelBundle()
 })
 
-test('compiler Worker changes reuse its image; compiler input changes build a new image', async () => {
+let checkCompilerImages = async () => {
   let root = Deno.makeTempDirSync()
   try {
     let write = (path: string, body: string) => {
@@ -432,7 +435,7 @@ test('compiler Worker changes reuse its image; compiler input changes build a ne
   } finally {
     Deno.removeSync(root, { recursive: true })
   }
-})
+}
 
 test('deploy preflight starts Git reads while the serving version is pending', async () => {
   let live = Promise.withResolvers<string[]>()
@@ -442,7 +445,6 @@ test('deploy preflight starts Git reads while the serving version is pending', a
     calls.push(args)
     return Promise.resolve({ code: 0, out: head })
   })
-  await tick()
   assertEquals(calls, [
     ['rev-parse', 'HEAD'],
     ['ls-remote', 'origin', 'refs/heads/main'],
@@ -455,3 +457,71 @@ test('deploy preflight starts Git reads while the serving version is pending', a
     live: [{ sha: head, ahead: false }],
   })
 })
+
+let checkKernelBundle = async () => {
+  let root = Deno.makeTempDirSync()
+  try {
+    Deno.mkdirSync(join(root, '.wrangler'))
+    Deno.writeTextFileSync(
+      join(root, 'wrangler.toml'),
+      'main="index.ts"\ncompatibility_flags=["nodejs_compat"]\nupload_source_maps=true\n[assets]\ndirectory="public"',
+    )
+    let args = ['deploy', '--env', 'staging', '--message', 'commit']
+    let compiled = await bundled(args, (build) => {
+      assert(build.includes('--dry-run'))
+      assert(build.includes('--containers-rollout=none'))
+      let output = build[build.indexOf('--outdir') + 1]
+      Deno.writeTextFileSync(
+        join(output, 'entry.js'),
+        'export default {};\n//# sourceMappingURL=entry.js.map',
+      )
+      Deno.writeTextFileSync(
+        join(output, 'entry.js.map'),
+        '{"sources":["index.ts"]}',
+      )
+      Deno.writeTextFileSync(join(output, 'compiler.wasm'), 'wasm')
+      Deno.writeTextFileSync(
+        build[build.indexOf('--metafile') + 1],
+        JSON.stringify({
+          outputs: { [join(output, 'entry.js')]: { entryPoint: 'index.ts' } },
+        }),
+      )
+      return Promise.resolve(0)
+    }, root)
+    try {
+      let text = Deno.readTextFileSync(compiled.args.at(-1)!)
+      let config = (await import('@std/toml')).parse(text)
+      assertEquals(compiled.args.slice(0, -2), args)
+      assertEquals(config.no_bundle, true)
+      assertEquals(config.find_additional_modules, true)
+      assertEquals(config.compatibility_flags, ['nodejs_compat'])
+      assertEquals(config.upload_source_maps, true)
+      assertEquals(config.assets, { directory: 'public' })
+      assertEquals(
+        Deno.readTextFileSync(config.main as string),
+        'export default {};\n//# sourceMappingURL=entry.js.map',
+      )
+      assertEquals(
+        [...Deno.readDirSync(config.base_dir as string)].map((f) => f.name)
+          .sort(),
+        ['compiler.wasm', 'entry.js', 'entry.js.map'],
+      )
+    } finally {
+      compiled.remove()
+    }
+    let failed = false, uploaded = false
+    try {
+      await runWrangler(args, (_args, sibling) => {
+        if (!sibling) uploaded = true
+        return Promise.resolve(0)
+      }, async () => (await bundled(args, () => Promise.resolve(7), root)).args)
+    } catch {
+      failed = true
+    }
+    assert(failed)
+    assertEquals(uploaded, false)
+    assertEquals([...Deno.readDirSync(join(root, '.wrangler'))], [])
+  } finally {
+    Deno.removeSync(root, { recursive: true })
+  }
+}

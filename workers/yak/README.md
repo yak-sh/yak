@@ -16,9 +16,11 @@ for an app's TypeScript and npm imports, @yaks/esbuild). `yak-esbuild` is a
 Worker in front of a container running native esbuild; its image is
 `esbuild/Dockerfile` over `packages/esbuild`, and its deploy builds and pushes
 the image like the kernel's sandbox. The siblings do not call one another, so
-their deploys run concurrently. Both must finish successfully before the kernel
-deploy begins; a failure waits for the other sibling and refuses the kernel
-deploy.
+their deploys run concurrently with the kernel bundle and sandbox base
+preparation. Both must finish successfully before the kernel upload begins; a
+failure waits for the other work and refuses the kernel upload. The pinned
+Wrangler bundles once, including node compatibility code and source maps; the
+upload reads those generated modules without bundling again.
 
 Never `wrangler deploy` by hand. Both tasks go through `wrangler.ts`, which runs
 `npm ci` when `node_modules` is behind `package-lock.json` — wrangler bundles
@@ -78,7 +80,7 @@ The build command is empty, so a Workers Build runs neither `deno task check`
 nor the tests. It clones, runs `npm ci`, and runs `bin/build-yak deploy`, which
 installs Deno (not on the Ubuntu 24.04 image), makes the deploy pre-flight check
 (`superseded`), prepares the sandbox base while checking `yak-out` and
-`yak-esbuild` concurrently, then bundles with esbuild and uploads. Each sibling
+`yak-esbuild` and bundling the kernel concurrently, then uploads. Each sibling
 is bundled locally and compared with its fully serving deployment's
 `inputs:<sha256>` annotation. The digest covers every upload module, the inputs
 of each container image the sibling runs (its Dockerfile and every file of its
