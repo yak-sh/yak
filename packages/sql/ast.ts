@@ -331,6 +331,9 @@ export type Pragma = {
   arg?: string
 }
 
+/** Rebuild the database, optionally into another file. */
+export type Vacuum = { t: 'vacuum'; into?: string }
+
 /** How SQLite would run a statement, one row per step of its plan. */
 export type Explain = { t: 'explain query plan'; of: Stmt }
 
@@ -355,6 +358,7 @@ export type Stmt =
   | Alter
   | Drop
   | Pragma
+  | Vacuum
   | Explain
   | Tx
 

@@ -394,6 +394,10 @@ let stmt = (s: Stmt, c: Ctx): string => {
               ? literal(s.value)
               : word(s.value, 'pragma value')
           }`)
+    case 'vacuum':
+      return s.into == null
+        ? 'vacuum'
+        : `vacuum into ${expr({ t: 'val', v: s.into }, c)}`
     case 'explain query plan':
       return `explain query plan ${stmt(s.of, c)}`
     case 'begin':

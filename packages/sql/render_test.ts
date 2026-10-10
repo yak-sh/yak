@@ -1,6 +1,14 @@
 import { equal, test } from '@yaks/testing'
 import { as, col, eq, lit, render, select, table, val, when } from './mod.ts'
 
+test('vacuum binds its destination as a value', () => {
+  let into = "/tmp/copy's database.db"
+  let { sql, params } = render({ t: 'vacuum', into })
+  equal({ sql, params }, { sql: 'vacuum into ?', params: [into] })
+  let bare = render({ t: 'vacuum' })
+  equal({ sql: bare.sql, params: bare.params }, { sql: 'vacuum', params: [] })
+})
+
 test('a kept tree renders again around the values bound this time', () => {
   let label = as(
     when([[eq(col('kind'), lit('task')), lit('work')]], lit('other')),

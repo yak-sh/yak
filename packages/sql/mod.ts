@@ -127,6 +127,7 @@ export {
   unionAll,
   type Update,
   type Upsert,
+  type Vacuum,
   val,
   type Values,
   when,
