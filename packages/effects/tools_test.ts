@@ -99,15 +99,12 @@ let retryVocab = loadVocab([effectDoc, owes, {
   },
 }])
 let landed = 0
-let fx = effects(retryVocab, {
-  report: () => {},
-  write: (b) => worked.apply(b, { trusted: true }),
-})
-// Retry needs recorded effect rows, not storage-assigned entity numbers.
+let fx = effects(retryVocab, { report: () => {} })
+// The run is already owed: commit hooks for discovering new effects,
+// provenance stamps and storage-assigned numbers are unrelated to retrying it.
 let worked = graph({
-  storage: ram(pooledBlog),
-  vocab: pooledBlog,
-  plugins: [fx],
+  storage: ram(retryVocab),
+  vocab: retryVocab,
 })
 // The worker is already joined; this test measures retrying and completing.
 await fx.work(worked, undefined, 1)
@@ -128,7 +125,7 @@ await worked.apply([
     },
   },
 ], { trusted: true })
-// Registered after the commit, so only the retried run is owed.
+// Only the retried run is worked.
 fx.handle({ post_note: () => void landed++ })
 
 test('retry puts a failed run back to the pool, which then finishes it', async () => {
