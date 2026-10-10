@@ -4,7 +4,7 @@ import { and, every, map, or, parse, present } from '@yaks/query'
 import { loadVocab, type Vocab } from '@yaks/vocab'
 import { compile, type Lens, type Speaks } from './compile.ts'
 import { docs } from './vocab.ts'
-import type { Tx } from '@yaks/graph'
+import type { ReadTx } from '@yaks/graph'
 
 // The effectful shell supplies facts to the compiled, pure whole-change lens.
 // The transaction repeats translation against current facts. Comparing its
@@ -13,7 +13,7 @@ import type { Tx } from '@yaks/graph'
 let facts = (
   lens: Lens,
   rows: Bundle[],
-  tx: Tx,
+  tx: ReadTx,
 ): Bundle[] | Promise<Bundle[]> => {
   let queries = [
     ...new Set(
@@ -95,7 +95,7 @@ export let lenses = (
   }
   let current = (
     rows: Bundle[],
-    tx: Tx,
+    tx: ReadTx,
   ): Bundle[] | Promise<Bundle[]> => {
     if (!expansion) return rows
     let lens = expansion

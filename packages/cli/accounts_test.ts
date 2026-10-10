@@ -13,6 +13,7 @@ import {
   need,
 } from '@yaks/connections'
 import type { Comp } from '@yaks/graph'
+import type { Config } from './config.ts'
 import { rpc } from './rpc.ts'
 import { cli, globals } from './run.ts'
 
@@ -194,7 +195,7 @@ test('a prefixed owner resolves with its configured kind vocabulary', async () =
   try {
     let path = `${state}/accounts.json`
     let owner = crypto.randomUUID()
-    let config = {
+    let config: Config = {
       db: `${state}/accounts.db`,
       person: owner,
       plugins: [

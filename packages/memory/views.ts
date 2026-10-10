@@ -1,5 +1,7 @@
 // The inspector's belief and topic pages are loaded only by the interface
 // that draws them. A portable printer reads this facet without loading UI.
+import type { View } from '@yaks/inspect'
+
 /** How many turns either side of a cited one a belief's page shows. */
 export let AROUND = { before: 3, after: 2 }
 
@@ -20,5 +22,5 @@ export let statement = (body: string): string =>
   body.split(/\n\s*\n|\n>/)[0].trim()
 
 /** The inspector's domain pages and parts. */
-export let inspectViews = () =>
+export let inspectViews = (): Promise<View[]> =>
   import('./inspect.ts').then((m) => m.inspectViews)

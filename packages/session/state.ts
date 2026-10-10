@@ -14,7 +14,9 @@ import {
 } from './native.ts'
 
 /** A request is in flight while a holder owns its attempt. */
-export let attemptState = (ask: Bundle) =>
+export let attemptState = (
+  ask: Bundle,
+): 'interrupted' | 'inflight' | 'completed' =>
   ask.interrupted
     ? 'interrupted'
     : (ask.attempt as Comp | undefined)?.by != null

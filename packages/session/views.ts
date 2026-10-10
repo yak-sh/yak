@@ -2,7 +2,8 @@
 // are asked for. `views`, the portable lines every interface prints
 // (./lines.ts); and `inspectViews`, the inspector's pages and parts for an
 // entry and a session (./inspect.ts).
+import type { View } from '@yaks/inspect'
 
 export { sessionViews as views } from './lines.ts'
-export let inspectViews = () =>
+export let inspectViews = (): Promise<View[]> =>
   import('./inspect.ts').then((m) => m.inspectViews)

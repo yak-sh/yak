@@ -12,6 +12,7 @@
 // Beside it, as the inspector draws them, a task's page (./inspect.ts).
 
 import { parse } from '@yaks/query/core'
+import type { View } from '@yaks/inspect'
 import { define, type Registry } from '@yaks/render'
 import { loadVocab } from '@yaks/vocab/runtime'
 import { TASK } from './comp.ts'
@@ -34,5 +35,5 @@ export let views: Registry = define([
 ])
 
 // The inspector asks for its domain pages; a portable printer never does.
-export let inspectViews = () =>
+export let inspectViews = (): Promise<View[]> =>
   import('./inspect.ts').then((m) => m.inspectViews)

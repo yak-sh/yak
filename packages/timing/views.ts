@@ -7,6 +7,7 @@
 import { define, type H, type Registry, type RenderContext } from '@yaks/render'
 import { parse } from '@yaks/query/core'
 import type { Bundle } from '@yaks/graph'
+import type { View } from '@yaks/inspect'
 import type { Shown } from '@yaks/render/views'
 import {
   amount,
@@ -232,7 +233,7 @@ export let views: Registry = define([
   })),
 ])
 
-export let inspectViews = () =>
+export let inspectViews = (): Promise<View[]> =>
   import('./inspect.ts').then((m) => m.inspectViews)
 
 /** The page a browsing app's sidebar offers: every trace, newest first. */
