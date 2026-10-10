@@ -207,133 +207,12 @@ export let playMinute = async (
     await seedWorld(store, post)
     await settleWorld(store, db)
   }
-  measured = true
-  source = 'live queries'
-  // Where each hero walks: back and forth across Mossvale at a run, so its
-  // page crosses a chunk about every three seconds (apps/vale/play.ts).
-  let spot = (i: number, t: number) => {
-    let run = (STRIDE * t) % (2 * SPAN)
-    return {
-      x: SIZE / 2 - SPAN / 2 + (run < SPAN ? run : 2 * SPAN - run),
-      z: SIZE / 2 + 8 * i,
-    }
-  }
-  let areas: { area: ReturnType<typeof areaOf>; id: number }[] = []
-  let ask = (i: number, subscribe: string, id: string) =>
-    store.webSocketMessage(live[i], JSON.stringify({ subscribe, id }))
-  let drop = (i: number, id: string) =>
-    store.webSocketMessage(live[i], JSON.stringify({ unsubscribe: id }))
-  for (let i = 0; i < players; i++) {
-    let ws = wire()
-    live.push(ws)
-    let hero = eid(i + 1)
-    // The watches Vale's page opens (net.ts, village.ts, deals.ts,
-    // chatbox.ts, party.ts), including proximity disjunctions and builder
-    // provenance. Empty answers still cost.
-    let q = JSON.stringify(hero)
-    let { x, z } = spot(i, 0)
-    let area = areaOf(x, z, REACH)
-    areas.push({ area, id: 0 })
-    let level = placeOf(x, z).level
-    let givers = GIVERS.filter((g) => g.level == level).map((g) => eidOf(g.id))
-      .join(',')
-    // The page opens the world around the middle of the level (net.ts
-    // `world`) before its first frame follows the hero there (play.ts
-    // `net.follow`, net.ts `hold`).
-    let middle = areaOf(SIZE / 2, SIZE / 2, REACH)
-    for (let tile of middle.tiles) await ask(i, tile.query, `tile${tile.key}`)
-    await ask(i, middle.moving, 'middle')
-    let queries = [
-      `.entity.eid=${q}&?created&*`,
-      `.player&.created.by=${person}&?doc&?position`,
-      `.item.owner=${q}&?gathered&?crafted`,
-      `.slain.by=${q}`,
-      ...['used', 'upgraded'].map((name) => `.${name}.by=${q}`),
-      ...[
-        'journal',
-        'equip',
-        'learned',
-        'respec',
-        'fire',
-        'explored',
-        'visited_region',
-      ]
-        .map((name) => `.${name}.player=${q}`),
-      `.directive.player=${q}&?created&?companion&.order=-created.at&.limit=10`,
-      `.teleport_request.player=${q}&?created&?completed&.order=-created.at&.limit=10`,
-      area.moving,
-      looksOf(area, hero),
-      `.fight.level=${JSON.stringify(level)}&*`,
-      `.chat.level=${
-        JSON.stringify(level)
-      }&?doc&?created&.order=-created.at&.limit=40`,
-      `.villager.level=${JSON.stringify(level)}&*`,
-      `.entry.session=${givers}&.output&?content&?answer&?created&.order=-created.at&.limit=60`,
-      `.going.villager=${givers}&?created&.order=-created.at&.limit=60`,
-      ...['deal', 'agreed', 'handed', 'declined'].map((name) =>
-        `.${name}.villager=${givers}&?created`
-      ),
-      ...['party_step.player', 'party_invite.to', 'party_reply.to'].map((
-        path,
-      ) => `.${path}=${q}&*`),
-      ...[
-        'theme_design',
-        'building_design',
-        'item_design',
-        'ability_design',
-        'den',
-      ]
-        .map((name) => `.${name}`),
-      '.beast_design&?combat&?loot&?sounds',
-      '.alias&.key',
-      '.figure !built | .figure .built.current=true .built.build.build.variant=main *',
-      '.figure .built.current=true .built.build.build.variant=main .fields=built.current,built.build.build.variant',
-      '.built.current=true&.built.slot=kind&.built.build.build.variant=main&.built.build.build.for.spawned.lvl&.fields=built.current,built.slot,built.build.build.variant,built.build.build.for.spawned.lvl',
-      '.built.current=true&.built.artifact&.built.build.build.variant=main&.fields=built.build.build.for.sfx.name,built.artifact.artifact.address,built.artifact.artifact.media_type',
-    ]
-    for (let [j, subscribe] of queries.entries()) {
-      await ask(
-        i,
-        subscribe,
-        j == 15 ? 'moving0' : j == 16 ? 'looks0' : `q${j}`,
-      )
-    }
-    let held = new Set(middle.tiles.map((t) => t.key))
-    let reach = new Set(area.tiles.map((t) => t.key))
-    for (let tile of middle.tiles) {
-      if (!reach.has(tile.key)) await drop(i, `tile${tile.key}`)
-    }
-    for (let tile of area.tiles) {
-      if (!held.has(tile.key)) await ask(i, tile.query, `tile${tile.key}`)
-    }
-    await drop(i, 'middle')
-  }
-  opening = { ...total }
-  sourceShapes.clear()
-  openingShapes = [...shapes].map(([sql, cost]) => ({ sql, cost })).sort((
-    a,
-    b,
-  ) => b.cost.read - a.cost.read).slice(0, 20)
-  profiler.flush(Infinity)
-  shapes.clear()
-  sources = {}
-  components = {}
-  total = empty()
   let now = Date.now,
     set = globalThis.setTimeout,
     clear = globalThis.clearTimeout
-  let at = now(),
+  let at = Math.floor(now() / 1000) * 1000,
     timers = new Map<number, { at: number; fn: () => void }>(),
     next = 1
-  Date.now = () => at
-  globalThis.setTimeout = ((fn: () => void, ms = 0) => {
-    let id = next++
-    timers.set(id, { at: at + ms, fn })
-    return id
-  }) as typeof setTimeout
-  globalThis.clearTimeout = (id) => {
-    timers.delete(Number(id))
-  }
   let settle = async <T>(work: Promise<T> | T): Promise<T> => {
     let done = false, value: T | undefined, error: unknown
     Promise.resolve(work).then((v) => {
@@ -357,7 +236,150 @@ export let playMinute = async (
     if (error) throw error
     return value as T
   }
+  let advance = async (ms: number) => {
+    at += ms
+    for (let rounds = 0; rounds < 100; rounds++) {
+      let due = [...timers].filter(([, t]) => t.at <= at)
+      if (!due.length) break
+      for (let [id, t] of due) {
+        timers.delete(id)
+        t.fn()
+      }
+      for (let k = 0; k < 20; k++) await Promise.resolve()
+      if (rounds == 99) throw new Error('timer loop in play fixture')
+    }
+  }
   try {
+    Date.now = () => at
+    globalThis.setTimeout = ((fn: () => void, ms = 0) => {
+      let id = next++
+      timers.set(id, { at: at + ms, fn })
+      return id
+    }) as typeof setTimeout
+    globalThis.clearTimeout = (id) => {
+      timers.delete(Number(id))
+    }
+    measured = true
+    source = 'live queries'
+    // Where each hero walks: back and forth across Mossvale at a run, so its
+    // page crosses a chunk about every three seconds (apps/vale/play.ts).
+    let spot = (i: number, t: number) => {
+      let run = (STRIDE * t) % (2 * SPAN)
+      return {
+        x: SIZE / 2 - SPAN / 2 + (run < SPAN ? run : 2 * SPAN - run),
+        z: SIZE / 2 + 8 * i,
+      }
+    }
+    let areas: { area: ReturnType<typeof areaOf>; id: number }[] = []
+    let ask = (i: number, subscribe: string, id: string) =>
+      store.webSocketMessage(live[i], JSON.stringify({ subscribe, id }))
+    let drop = (i: number, id: string) =>
+      store.webSocketMessage(live[i], JSON.stringify({ unsubscribe: id }))
+    for (let i = 0; i < players; i++) {
+      let ws = wire()
+      live.push(ws)
+      let hero = eid(i + 1)
+      // The watches Vale's page opens (net.ts, village.ts, deals.ts,
+      // chatbox.ts, party.ts), including proximity disjunctions and builder
+      // provenance. Empty answers still cost.
+      let q = JSON.stringify(hero)
+      let { x, z } = spot(i, 0)
+      let area = areaOf(x, z, REACH)
+      areas.push({ area, id: 0 })
+      let level = placeOf(x, z).level
+      let givers = GIVERS.filter((g) => g.level == level).map((g) =>
+        eidOf(g.id)
+      )
+        .join(',')
+      // The page opens the world around the middle of the level (net.ts
+      // `world`) before its first frame follows the hero there (play.ts
+      // `net.follow`, net.ts `hold`).
+      let middle = areaOf(SIZE / 2, SIZE / 2, REACH)
+      for (let tile of middle.tiles) await ask(i, tile.query, `tile${tile.key}`)
+      await ask(i, middle.moving, 'middle')
+      let queries = [
+        `.entity.eid=${q}&?created&*`,
+        `.player&.created.by=${person}&?doc&?position`,
+        `.item.owner=${q}&?gathered&?crafted`,
+        `.slain.by=${q}`,
+        ...['used', 'upgraded'].map((name) => `.${name}.by=${q}`),
+        ...[
+          'journal',
+          'equip',
+          'learned',
+          'respec',
+          'fire',
+          'explored',
+          'visited_region',
+        ]
+          .map((name) => `.${name}.player=${q}`),
+        `.directive.player=${q}&?created&?companion&.order=-created.at&.limit=10`,
+        `.teleport_request.player=${q}&?created&?completed&.order=-created.at&.limit=10`,
+        area.moving,
+        looksOf(area, hero),
+        `.fight.level=${JSON.stringify(level)}&*`,
+        `.chat.level=${
+          JSON.stringify(level)
+        }&?doc&?created&.order=-created.at&.limit=40`,
+        `.villager.level=${JSON.stringify(level)}&*`,
+        `.entry.session=${givers}&.output&?content&?answer&?created&.order=-created.at&.limit=60`,
+        `.going.villager=${givers}&?created&.order=-created.at&.limit=60`,
+        ...['deal', 'agreed', 'handed', 'declined'].map((name) =>
+          `.${name}.villager=${givers}&?created`
+        ),
+        ...['party_step.player', 'party_invite.to', 'party_reply.to'].map((
+          path,
+        ) => `.${path}=${q}&*`),
+        ...[
+          'theme_design',
+          'building_design',
+          'item_design',
+          'ability_design',
+          'den',
+        ]
+          .map((name) => `.${name}`),
+        '.beast_design&?combat&?loot&?sounds',
+        '.alias&.key',
+        '.figure !built | .figure .built.current=true .built.build.build.variant=main *',
+        '.figure .built.current=true .built.build.build.variant=main .fields=built.current,built.build.build.variant',
+        '.built.current=true&.built.slot=kind&.built.build.build.variant=main&.built.build.build.for.spawned.lvl&.fields=built.current,built.slot,built.build.build.variant,built.build.build.for.spawned.lvl',
+        '.built.current=true&.built.artifact&.built.build.build.variant=main&.fields=built.build.build.for.sfx.name,built.artifact.artifact.address,built.artifact.artifact.media_type',
+      ]
+      for (let [j, subscribe] of queries.entries()) {
+        await ask(
+          i,
+          subscribe,
+          j == 15 ? 'moving0' : j == 16 ? 'looks0' : `q${j}`,
+        )
+      }
+      let held = new Set(middle.tiles.map((t) => t.key))
+      let reach = new Set(area.tiles.map((t) => t.key))
+      for (let tile of middle.tiles) {
+        if (!reach.has(tile.key)) await drop(i, `tile${tile.key}`)
+      }
+      for (let tile of area.tiles) {
+        if (!held.has(tile.key)) await ask(i, tile.query, `tile${tile.key}`)
+      }
+      await drop(i, 'middle')
+    }
+    // Finish joining's deferred subscription writes before counting play.
+    for (let round = 0; timers.size; round++) {
+      if (round == 100) throw new Error('joining timers did not settle')
+      await advance(
+        Math.max(0, Math.min(...[...timers.values()].map((t) => t.at)) - at),
+      )
+    }
+    opening = { ...total }
+    sourceShapes.clear()
+    openingShapes = [...shapes].map(([sql, cost]) => ({ sql, cost })).sort((
+      a,
+      b,
+    ) => b.cost.read - a.cost.read).slice(0, 20)
+    profiler.flush(Infinity)
+    shapes.clear()
+    sources = {}
+    components = {}
+    total = empty()
     for (let tick = 0; tick < 60 * minutes * HZ; tick++) {
       let second = Math.floor(tick / HZ), beat = tick % HZ == 0
       for (let i = 0; i < players; i++) {
@@ -448,18 +470,8 @@ export let playMinute = async (
         }
         live[i].sent.length = 0
       }
-      at += 1000 / HZ
       source = 'saves'
-      for (let rounds = 0; rounds < 100; rounds++) {
-        let due = [...timers].filter(([, t]) => t.at <= at)
-        if (!due.length) break
-        for (let [id, t] of due) {
-          timers.delete(id)
-          t.fn()
-        }
-        for (let k = 0; k < 20; k++) await Promise.resolve()
-        if (rounds == 99) throw new Error('timer loop in play fixture')
-      }
+      await advance(1000 / HZ)
       source = 'effects'
       let alarm = await db.getAlarm?.()
       if (alarm != null && alarm <= at) {
