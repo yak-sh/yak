@@ -115,8 +115,9 @@ test('done requires a task and a settled status, not merely zero children', () =
   assertEquals(done(g, 'missing'), false)
 })
 
-test('done waits for both relations, deduplicates children, and accepts cancellation', () => {
-  let { g } = teamGraph()
+let waitingGraph = teamGraph().g
+let waiting = (() => {
+  let g = waitingGraph
   g.install()
   g.apply([
     { entity: { eid: 'p' }, task: {}, completed: {} },
@@ -126,14 +127,26 @@ test('done waits for both relations, deduplicates children, and accepts cancella
     link('p', 'contains', 'a'),
     link('p', 'contains', 'b'),
   ])
+  return g.storage.read('*') as Bundle[]
+})()
+
+test('done waits for both relations, deduplicates children, and accepts cancellation', () => {
+  let g = waitingGraph
+  g.storage.tx((tx) =>
+    tx.patch([
+      { entity: { eid: 'a' }, completed: null },
+      { entity: { eid: 'b' }, cancelled: null },
+      ...waiting,
+    ])
+  )
   assertEquals(done(g, 'p'), false)
   assertEquals(openDeps(g, 'p'), 2)
-  g.apply([{ entity: { eid: 'a' }, completed: {} }])
+  g.storage.tx((tx) => tx.patch([{ entity: { eid: 'a' }, completed: {} }]))
   assertEquals(done(g, 'p'), false)
   assertEquals(done(g, 'p', { relations: ['requires'] }), true)
-  g.apply([{ entity: { eid: 'b' }, cancelled: {} }])
+  g.storage.tx((tx) => tx.patch([{ entity: { eid: 'b' }, cancelled: {} }]))
   assertEquals(done(g, 'p'), true)
-  g.apply([{ entity: { eid: 'a' }, completed: null }])
+  g.storage.tx((tx) => tx.patch([{ entity: { eid: 'a' }, completed: null }]))
   assertEquals(done(g, 'p'), false)
 })
 

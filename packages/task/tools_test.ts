@@ -2,7 +2,7 @@ import { test } from '@yaks/testing'
 import { assertEquals } from '@std/assert'
 import type { Bundle, Comp, Graph } from '@yaks/graph'
 import { statusOf } from './words.ts'
-import { teamGraph } from './testing.ts'
+import { store, teamGraph } from './testing.ts'
 import { listing, runs } from './tools.ts'
 
 // The runs, built the way a host builds them: a facet is a factory.
@@ -52,15 +52,22 @@ test('a listing of alternatives lists only tasks', async () => {
   assertEquals(found.map((b) => b.entity.eid), ['t'])
 })
 
-test('a status is the marks that mean it', async () => {
+let task = (() => {
   let { g } = teamGraph()
-  await g.apply([{ entity: { eid: 't' }, task: {}, doc: { title: 'a task' } }])
+  g.apply([{ entity: { eid: 't' }, task: {}, doc: { title: 'a task' } }])
+  return g.storage.read('*') as Bundle[]
+})()
+
+test('a status is the marks that mean it', async () => {
+  let storage = store()
+  storage.tx((tx) => tx.patch(task))
+  let { g } = teamGraph(storage)
   let move = async (status: string) => {
     let said = await tools.task_update!(
       ...asked({ task: 't', status }),
     ) as Bundle[]
     await g.apply(said)
-    return statusOf(g.vocab, (await g.read('.entity.eid="t"'))[0])
+    return statusOf(g.vocab, (await g.get(['t']))[0])
   }
   assertEquals(await move('done'), 'done')
   assertEquals(await move('cancelled'), 'cancelled')
