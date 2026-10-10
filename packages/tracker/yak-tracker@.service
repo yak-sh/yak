@@ -8,7 +8,7 @@ Environment=PATH=%h/.deno/bin:%h/.local/bin:%h/bin:/home/linuxbrew/.linuxbrew/bi
 Environment=LANG=C.UTF-8 LC_ALL=C.UTF-8
 Environment=DENO_DIR=%h/.cache/deno
 ExecStartPre=/usr/bin/rm -f %t/yak-tracker-%i.ready
-ExecStart=%h/.deno/bin/yak work --config %h/.yak/tracker.json --roles effects,@yaks/tracker --ready %t/yak-tracker-%i.ready
+ExecStart=%h/.deno/bin/yak work --config %h/.yak/tracker.json --roles effects,@yaks/tracker,@yaks/wake --ready %t/yak-tracker-%i.ready
 ExecStopPost=/usr/bin/rm -f %t/yak-tracker-%i.ready
 Restart=on-failure
 RestartSec=2

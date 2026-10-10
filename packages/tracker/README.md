@@ -119,9 +119,10 @@ Copy `box.json` to `~/.yak/tracker.json` and `yak-tracker@.service` to the user
 systemd unit directory. The tracker uses `~/.yak/tracker.db`, never `yak.db`.
 Its command is
 `yak work --config ~/.yak/tracker.json --roles
-effects,@yaks/tracker`:
-composition opens graph, effects and this service only, with the standard leases
-and process wind-down. It imports no web routes.
+effects,@yaks/tracker,@yaks/wake`:
+composition opens graph, effects, intake and the wake service, with the standard
+leases and process wind-down. The wake service fires notification batches at
+their minute deadline. It imports no web routes.
 
 Add `"tracker": {"spool": "tracker-spool"}` to the watched graph's config.
 `compose()` connects tool, effect, request and duty failures to that spool
