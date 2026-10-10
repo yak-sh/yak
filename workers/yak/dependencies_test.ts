@@ -1,6 +1,7 @@
 import { test } from '@yaks/testing'
+import { createHash } from 'node:crypto'
 import { assertEquals } from '@std/assert'
-import { type Lock, matching, stale } from './dependencies.ts'
+import { type Lock, matching, restored, stale } from './dependencies.ts'
 
 let pkg = { version: '1', integrity: 'sha512-one' }
 let packages = {
@@ -46,6 +47,32 @@ test('npm cache reuse survives a fresh checkout and rejects missing packages', (
     assertEquals(stale(root), false, 'same install before a fresh checkout')
     Deno.removeSync(`${root}/node_modules/dep`)
     assertEquals(stale(root), true, 'stamp outlived a missing package')
+  } finally {
+    Deno.removeSync(root, { recursive: true })
+  }
+})
+
+test('a restored npm cache supplies a fresh checkout without installing', async () => {
+  let root = Deno.makeTempDirSync(), cache = `${root}/cache`
+  let files = [
+    ['package.json', '{"private":true}'],
+    ['package-lock.json', JSON.stringify(lock(packages))],
+  ]
+  let key = createHash('sha256').update(
+    JSON.stringify([Deno.build.os, Deno.build.arch, files]),
+  ).digest('hex')
+  let project = `${cache}/yak-installed/${key}`
+  try {
+    Deno.mkdirSync(`${project}/node_modules/dep`, { recursive: true })
+    Deno.writeTextFileSync(
+      `${project}/node_modules/.package-lock.json`,
+      JSON.stringify(lock({ 'node_modules/dep': pkg })),
+    )
+    for (let [name, contents] of files) {
+      Deno.writeTextFileSync(`${root}/${name}`, contents)
+    }
+    assertEquals(await restored(cache, root), false)
+    assertEquals(stale(root), false)
   } finally {
     Deno.removeSync(root, { recursive: true })
   }

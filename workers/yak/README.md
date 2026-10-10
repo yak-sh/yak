@@ -80,11 +80,13 @@ Catalog transpilation is reused from the restored Deno cache between builds.
 The build command is empty, so a Workers Build runs neither `deno task check`
 nor the tests. `SKIP_DEPENDENCY_INSTALL=1` disables Builds' automatic install
 ([build image variables](https://developers.cloudflare.com/workers/ci-cd/builds/build-image/)).
-`bin/build-yak deploy` installs Deno (not on the Ubuntu 24.04 image), then runs
-`npm ci` only when npm's installed `node_modules/.package-lock.json` differs
-from `package-lock.json` or installed packages are missing. Restored matching
-dependencies are reused regardless of file timestamps. An empty cache installs
-normally; with the variable unset, Builds' automatic install is reused. It
+`bin/build-yak deploy` keeps Deno and the installed npm project under npm's
+restored cache directory, linking the checkout's `node_modules` to that tree.
+Each package manifest, lockfile and platform has its own project. It runs
+`npm ci` only when the installed `node_modules/.package-lock.json` differs from
+`package-lock.json` or installed packages are missing. Restored matching
+packages are reused regardless of file timestamps. An empty cache installs
+normally; with the variable unset, Builds' automatic install seeds the cache. It
 prepares the kernel and sibling bundles while making the deploy pre-flight check
 (`superseded`). After the guard permits deployment, sandbox base preparation and
 each changed sibling's upload run as their own preparation allows. The kernel

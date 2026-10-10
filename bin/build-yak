@@ -58,7 +58,7 @@ cd "$root"
 case "${1:-}" in
   deploy)
     shift
-    deno run --allow-read --allow-write --allow-run=npm workers/yak/dependencies.ts
+    deno run --allow-read --allow-write --allow-run=npm workers/yak/dependencies.ts "$cache"
     deno task deploy:yak "$@"
     # Builds pins these to its connected production Worker. Leaving them set
     # can override staging's name or reject its distinct script tag.

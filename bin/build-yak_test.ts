@@ -64,7 +64,7 @@ esac
       }).output()
       assertEquals(out.code, want)
       assertEquals((await Deno.readTextFile(log)).trim().split('\n'), [
-        'run --allow-read --allow-write --allow-run=npm workers/yak/dependencies.ts',
+        `run --allow-read --allow-write --allow-run=npm workers/yak/dependencies.ts ${dir}`,
         ...(install ? [] : ['task deploy:yak --dry-run']),
         ...(install || production ? [] : ['task deploy:yak-staging --dry-run']),
       ])
