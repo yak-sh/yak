@@ -259,6 +259,7 @@ import {
 } from './door.ts'
 import { type Meta, meta, metaOf } from './meta.ts'
 import { caught, defect } from './sentry.ts'
+import { runtimeExceptions } from './runtime_exceptions.ts'
 import { counts, hop, type Tally, tallying } from './lib/hops.ts'
 import {
   BATCHES,
@@ -1192,6 +1193,21 @@ export class Store {
       doc: 'arm this object for the wake a write just moved',
       created: (e) => this.#arming(e.comp?.at as string),
       changed: { at: (e) => this.#arming(e.comp?.at as string) },
+    })
+    runtimeExceptions(fx, async (error, event, tx) => {
+      let [row] = await tx.get([event.entity.eid])
+      let source = (row?.output as Comp | undefined)?.source
+      let [origin] = source ? await tx.get([String(source)]) : []
+      let request = origin?.call
+        ? 'tool'
+        : event.entity.eid.endsWith(':preparation-error')
+        ? 'model prepare'
+        : origin?.ask
+        ? 'model model'
+        : row?.entry
+        ? 'model compaction'
+        : 'exception'
+      defect(error, { request, store: name })
     })
     wakeRegistered()
     // The app's own commands, run here (T-37605, D-37562). @yaks/tools

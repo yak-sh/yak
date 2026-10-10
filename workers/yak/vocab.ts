@@ -210,6 +210,8 @@ export let exceptionDoc: VocabDoc = {
         version: owned(num),
         message: owned(text),
         stack: owned(text),
+        type: toolsDoc.$defs!.exception.properties!.type,
+        value: toolsDoc.$defs!.exception.properties!.value,
       },
     },
   },

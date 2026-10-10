@@ -224,8 +224,13 @@ test('a tool exception keeps its call session and process', async () => {
   await storage.tx((tx) =>
     tx.patch([{
       entity: { eid: 'call' },
+      call: { to: 'tool' },
+      created: { by: S, via: R },
       entry: { session: S },
       execution: { by: R },
+    }, {
+      entity: { eid: 'tool' },
+      tool: { name: 'broken' },
     }])
   )
   await report({
@@ -234,6 +239,8 @@ test('a tool exception keeps its call session and process', async () => {
     output: { source: 'call' },
   })
   assertEquals(told.length, 1)
+  assertEquals(told[0].context.tags, { tool: 'broken' })
+  assertEquals(told[0].context.actor, { by: S, via: R })
   assertEquals(
     told[0].context.eid,
     identityEid('exception_report', ['tool-failure']),

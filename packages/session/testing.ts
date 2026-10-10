@@ -8,7 +8,9 @@
 // a database.
 
 import { loadVocab, type Vocab, type VocabDoc } from '@yaks/vocab'
-import type { Bundle } from '@yaks/graph'
+import type { Bundle, Comp, Query } from '@yaks/graph'
+import { type And, parse } from '@yaks/query'
+import type { Computed } from '@yaks/match'
 import { type Graph, graph, type Storage } from '@yaks/graph'
 import { ram } from '@yaks/ram'
 import { executionComputed } from '@yaks/tools'
@@ -17,6 +19,7 @@ import { toolsDoc } from '@yaks/tools/vocab'
 import { modelDoc } from '@yaks/model/vocab'
 import { sessionDoc } from './comp.ts'
 import { type SessionOpts, sessions } from './plugin.ts'
+import { statusOf } from './status.ts'
 
 let doc: VocabDoc = {
   $defs: {
@@ -120,3 +123,49 @@ export let lockOn = (
 /** Seed the identities a fixture names without giving them domain components. */
 export let seedIdentities = (g: Graph, ...eids: string[]) =>
   g.apply(eids.map((eid) => ({ entity: { eid } })))
+
+let queries = new Map<string, And>()
+let queryOf = (query: Query): And => {
+  if (typeof query != 'string') return query
+  let known = queries.get(query)
+  if (!known) queries.set(query, known = parse(query))
+  return known
+}
+
+let transcriptComputed: Computed = {
+  'session.status': (b, among) =>
+    statusOf(
+      among.list.filter((entry) =>
+        (entry.entry as Comp | undefined)?.session == b.entity.eid
+      ),
+    ),
+}
+
+/** A transcript's graph door over RAM, with entry sequencing and status.
+ * Model/reporting tests need these facts without the unrelated session hooks. */
+export let transcriptGraph = (vocab: Vocab): Graph => {
+  let storage = ram(vocab, { computed: transcriptComputed })
+  let g = graph({ storage, vocab })
+  g.read = (query, opts) => storage.read(queryOf(query), opts)
+  g.get = storage.get
+  g.rows = (query, opts) => storage.rows(queryOf(query), opts)
+  let sequences = new Map<string, number>()
+  g.apply = (rows) => {
+    let next = new Map(sequences)
+    let saved = storage.tx((tx) => {
+      rows = rows.map((row) => {
+        let entry = row.entry as Comp | undefined
+        if (!entry || tx.get([row.entity.eid])[0]?.entry) return row
+        let owner = String(entry.session)
+        let seq = Number(entry.seq) || (next.get(owner) ?? 0) + 1
+        next.set(owner, Math.max(seq, next.get(owner) ?? 0))
+        return { ...row, entry: { ...entry, seq } }
+      })
+      tx.patch(rows)
+      return rows
+    })
+    sequences = next
+    return saved
+  }
+  return g
+}

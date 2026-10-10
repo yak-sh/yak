@@ -82,6 +82,7 @@ import { toolsDoc } from './vocab.ts'
 import { valueIn } from './value.ts'
 import { executionState, Interrupted } from './state.ts'
 import { persist } from './persist.ts'
+import { actionable, exceptionOf } from './fault.ts'
 
 // What each call is doing right now in this process, keyed per graph, not per
 // runner: a second runner over the same graph that is asked for a call in
@@ -149,9 +150,9 @@ export type Opts = {
   /** the graph the tools read and write, when that is not the graph the calls
    * are recorded in (a server that keeps its call records separately) */
   host?: Graph
-  /** where unexpected defects are reported, with the call and the name of the
-   * tool it asked for; they are not thrown, because the transaction has
-   * already committed. A refusal (a `CallError`, or an error @yaks/graph's
+  /** where failures without a recorded exception are reported, with the call
+   * and the tool it asked for, including a defect whose exception write failed.
+   * A refusal (a `CallError`, or an error @yaks/graph's
    * `status` puts below 500) is never reported. A report that answers a
    * promise is awaited before the call's answer is. */
   report?: (err: unknown, call: Bundle, tool?: string) => unknown
@@ -692,7 +693,7 @@ export let runner = (g: Graph, opts: Opts): Runner => {
     call: Bundle,
     tool: NamedTool,
     direct = false,
-    transient = false,
+    unrecorded = false,
   ): Promise<Bundle[]> => {
     let id = call.entity.eid
     let c = call.call as Comp
@@ -702,7 +703,7 @@ export let runner = (g: Graph, opts: Opts): Runner => {
     // which call it came from. An expected refusal gets `refusal{code}`: a
     // `CallError` with its code, or an error the graph's `status` puts below
     // 500 (a `Refused` write, an `Unknown` name) with its name. Anything else
-    // is a defect, passed to `report` as well as recorded.
+    // is a defect, reported through its exception record.
     let faulted = async (error: unknown): Promise<Bundle[]> => {
       if (error instanceof Interrupted) {
         return [{
@@ -717,14 +718,19 @@ export let runner = (g: Graph, opts: Opts): Runner => {
         : status(error) < 500
         ? (error as Error).name
         : undefined
-      if (code == undefined && !transient) {
+      if (
+        code == undefined && unrecorded &&
+        actionable(String(exceptionOf(error).value))
+      ) {
         await opts.report?.(error, call, tool.name)
       }
       return [{
         entity: { eid: '$fault' },
         content: { body: String(error) },
         output: { source: id },
-        ...code == undefined ? { exception: {} } : { refusal: { code } },
+        ...code == undefined
+          ? { exception: exceptionOf(error) }
+          : { refusal: { code } },
       }]
     }
     // Writing the answer. A read-only tool's answer is not a write — its
@@ -741,16 +747,20 @@ export let runner = (g: Graph, opts: Opts): Runner => {
       code?: string,
     ): Promise<Bundle[]> => {
       let ended = ending(call, started, state, made)
-      if (transient) return [...made, ...ended]
+      if (unrecorded) return [...made, ...ended]
       let bundles = [
         ...(keeps ? made : []),
         ...ended,
         ...code ? [{ entity: call.entity, interrupted: { code } }] : [],
       ]
-      let landed = await persist(
-        () => g.apply(bundles),
-        (e) => opts.report?.(e, call, tool.name),
-      )
+      // A rejected exception write falls back to direct reporting. Retrying
+      // it after that would also report through heal when it finally commits.
+      let landed = state == 'failed' && made.some((b) => b.exception)
+        ? await g.apply(bundles, { trusted: true })
+        : await persist(
+          () => g.apply(bundles),
+          (e) => opts.report?.(e, call, tool.name),
+        )
       return keeps ? landed : [...made, ...landed]
     }
     let answered: Bundle[]
@@ -783,16 +793,27 @@ export let runner = (g: Graph, opts: Opts): Runner => {
       // This catches both the tool's own throw and a rejection of what it
       // returned: a transaction the graph refuses is this call's failure,
       // rather than a call left claimed with nothing recorded about it.
-      answered = await land(
-        await faulted(error),
-        error instanceof Interrupted ? 'interrupted' : 'failed',
-        undefined,
-        error instanceof Interrupted ? error.code : undefined,
-      )
+      let made = await faulted(error)
+      try {
+        answered = await land(
+          made,
+          error instanceof Interrupted ? 'interrupted' : 'failed',
+          undefined,
+          error instanceof Interrupted ? error.code : undefined,
+        )
+      } catch (writeError) {
+        if (
+          made.some((b) => b.exception) &&
+          actionable(String(exceptionOf(error).value))
+        ) {
+          await opts.report?.(error, call, tool.name)
+        }
+        throw writeError
+      }
     } finally {
       held.delete(id)
     }
-    if (transient || !direct || !opts.reply) return answered
+    if (unrecorded || !direct || !opts.reply) return answered
     try {
       return [
         ...answered,

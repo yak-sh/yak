@@ -48,6 +48,7 @@ import {
   token,
 } from '@yaks/graph'
 import { effectsIn } from '@yaks/vocab'
+import { actionable, exceptionOf } from '@yaks/tools'
 import { active, admitNext, dispatchStatus, queue, swap } from './admission.ts'
 import { type ChildLimits, deliverChild } from './children.ts'
 import { CLAIM } from './comp.ts'
@@ -226,20 +227,26 @@ let admitted = async (g: Graph, session: Eid, r: Runner) => {
     }], { trusted: true })
     return true
   } catch (err) {
-    r.report?.(err, session, 'prepare')
-    await g.apply([{
-      entity: { eid: session },
-      dispatch: { args: null },
-    }, {
-      entity: { eid: `${session}:preparation-error` },
-      entry: { session },
-      exception: {},
-      content: { body: String(err) },
-    }, {
-      entity: { eid: `${session}:preparation-stop` },
-      entry: { session },
-      [STOP_ENTRY]: {},
-    }], { trusted: true })
+    try {
+      await g.apply([{
+        entity: { eid: session },
+        dispatch: { args: null },
+      }, {
+        entity: { eid: `${session}:preparation-error` },
+        entry: { session },
+        exception: exceptionOf(err),
+        content: { body: String(err) },
+      }, {
+        entity: { eid: `${session}:preparation-stop` },
+        entry: { session },
+        [STOP_ENTRY]: {},
+      }], { trusted: true })
+    } catch (writeError) {
+      if (actionable(String(exceptionOf(err).value))) {
+        r.report?.(err, session, 'prepare')
+      }
+      throw writeError
+    }
     await ended(g, session, r)
     return false
   }

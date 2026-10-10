@@ -1368,7 +1368,7 @@ test('unexpected model failures reach diagnostics, expected model errors do not'
     ]
   ) {
     let g = world()
-    await react(g, ids.s, {
+    let step = await react(g, ids.s, {
       model: () => Promise.reject(error),
       tools: [],
       mint,
@@ -1378,9 +1378,17 @@ test('unexpected model failures reach diagnostics, expected model errors do not'
         reported.push(e)
       },
     })
+    let exceptions = step.added.filter((b) => b.exception)
+    assertEquals(exceptions.length, error instanceof ModelError ? 0 : 1)
+    if (!(error instanceof ModelError)) {
+      assertEquals(exceptions[0].exception, {
+        type: error.name,
+        value: error.message,
+        stack: error.stack,
+      })
+    }
   }
-  assertEquals(reported.length, 1)
-  assertEquals((reported[0] as Error).message, 'defect')
+  assertEquals(reported.length, 0)
 })
 
 test('provider completion allocates positions after concurrently admitted notices', async () => {

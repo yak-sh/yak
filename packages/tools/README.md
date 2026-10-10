@@ -147,9 +147,12 @@ to a tool that writes: every write phase runs, the write rolls back, and the
 proposed answer is returned. The runner still records completion.
 
 Throw `CallError(code, message)` for an expected refusal. Other thrown values
-produce an `exception` answer and are passed to `report`. Invalid arguments,
-failed schema validation, and refused graph writes also produce failed calls.
-The runner resolves schema-declared
+produce an `exception` answer, reported by `@yaks/heal`. If recording that
+exception fails, `report` receives the original failure directly. The exception
+write is not retried after this fallback, so a later commit cannot report it
+again. Both paths skip known provider transients through `actionable`. Invalid
+arguments, failed schema validation, and refused graph writes also produce
+failed calls. The runner resolves schema-declared
 [references](../vocab/README.md#routing-and-references) through `g.address`
 before invocation. A tool that writes is refused if such an argument names no
 entity of the declared component; a read-only tool can read whatever the id
@@ -430,7 +433,8 @@ the runner accepts. `now` supplies the clock measuring `result.ms`.
 
 The runner uses the caller's identity from `created.by` or `$actor` when
 applying tool answers. It does not invent a caller identity when neither is
-present. `report` receives unexpected errors, including failed persistence and
+present. `report` receives failures without recorded exceptions, including
+unrecorded reads, failed exception writes, completed-answer persistence and
 replies.
 
 A **reply** is extra answer bundles owed to a direct caller (`Reply`).

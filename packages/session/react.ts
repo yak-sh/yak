@@ -1,6 +1,13 @@
 import { Unsupported } from '@yaks/match'
 import { compactAsk } from './compact_ask.ts'
-import { CallError, runner, toolEid, UnfinishedCall } from '@yaks/tools'
+import {
+  actionable,
+  CallError,
+  exceptionOf,
+  runner,
+  toolEid,
+  UnfinishedCall,
+} from '@yaks/tools'
 export { CallError as ToolError } from '@yaks/tools'
 import {
   argsOf,
@@ -715,8 +722,25 @@ export let react = async (
     ...extra,
     $actor: signer,
   })
-  let append = async (added: Bundle[]): Promise<Step> => {
-    added = await g.apply(added, { trusted: true })
+  let append = async (
+    added: Bundle[],
+    failure?: { error: unknown; phase: string },
+  ): Promise<Step> => {
+    try {
+      added = await g.apply(added, { trusted: true })
+    } catch (error) {
+      let superseded = error instanceof Stale && error.comp == 'attempt' &&
+        error.prop == 'by' && added.some((b) =>
+          b.entity.eid == error.eid && b.$was?.attempt?.by != null
+        )
+      if (failure && !superseded) {
+        let exception = exceptionOf(failure.error)
+        if (actionable(String(exception.value))) {
+          deps.report?.(failure.error, session, failure.phase)
+        }
+      }
+      throw error
+    }
     return {
       did: 'asked',
       status: await currentStatus(g, session),
@@ -734,6 +758,7 @@ export let react = async (
     attempt: Bundle,
     patch: Bundle,
     added: Bundle[],
+    failure?: { error: unknown; phase: string },
   ): Promise<Step | undefined> => {
     try {
       return await append([{
@@ -745,7 +770,7 @@ export let react = async (
         $was: {
           attempt: { by: token(comp(attempt, 'attempt')?.by) },
         },
-      }, ...added])
+      }, ...added], failure)
     } catch (e) {
       if (
         e instanceof Stale && e.eid == attempt.entity.eid &&
@@ -1196,21 +1221,23 @@ export let react = async (
       // A summary that may yet come is asked again by the pool, with
       // nothing written; one that stands is the line the bound counts.
       if (passing(e) && deps.attempt && !deps.attempt.last()) throw again(e)
-      if (!(e instanceof ModelError)) deps.report?.(e, session, 'compaction')
-      return append([
-        e instanceof ModelError
-          ? line(
-            passing(e)
-              ? {
-                [ASK]: { to: modelEid, through: newest.entity.eid },
-                attempt: {},
-                interrupted: { code: e.code },
-              }
-              : { ...failing(g, e), [OUTPUT]: { source: newest.entity.eid } },
-            e.message,
-          )
-          : line({ [EXCEPTION]: {} }, String(e)),
-      ])
+      return append(
+        [
+          e instanceof ModelError
+            ? line(
+              passing(e)
+                ? {
+                  [ASK]: { to: modelEid, through: newest.entity.eid },
+                  attempt: {},
+                  interrupted: { code: e.code },
+                }
+                : { ...failing(g, e), [OUTPUT]: { source: newest.entity.eid } },
+              e.message,
+            )
+            : line({ [EXCEPTION]: exceptionOf(e) }, String(e)),
+        ],
+        e instanceof ModelError ? undefined : { error: e, phase: 'compaction' },
+      )
     }
   }
   let ask = line({
@@ -1310,6 +1337,7 @@ export let react = async (
     if (streamFailure) throw streamFailure
   } catch (error) {
     let e = error
+    let phase = 'model'
     accepting = false
     await tail
     let text = e instanceof ModelError
@@ -1386,10 +1414,8 @@ export let react = async (
           } catch (failure) {
             // A refused summary also stands. Do not hide either provider's
             // words or turn a summarizer failure into another model retry.
-            if (!(failure instanceof ModelError)) {
-              deps.report?.(failure, session, 'compaction')
-            }
             e = failure
+            phase = 'compaction'
           }
         }
       }
@@ -1401,7 +1427,6 @@ export let react = async (
       !stream.size && !!deps.attempt && !deps.attempt.last()
     let defect = !(e instanceof ModelError) &&
       !(e instanceof Error && e.name == 'AbortError')
-    if (defect) deps.report?.(e, session, 'model')
     let failed = await finish(
       ask,
       {
@@ -1430,7 +1455,10 @@ export let react = async (
           }, (e as ModelError).message)
           : defect
           ? line(
-            { [EXCEPTION]: {}, [OUTPUT]: { source: ask.entity.eid } },
+            {
+              [EXCEPTION]: exceptionOf(e),
+              [OUTPUT]: { source: ask.entity.eid },
+            },
             String(e),
           )
           : line(
@@ -1444,6 +1472,7 @@ export let react = async (
             'Response interrupted: ' + String(e),
           ),
       ],
+      defect ? { error: e, phase } : undefined,
     )
     // Text streamed before the failure stays, unless recovery took the
     // attempt from this worker.

@@ -63,7 +63,7 @@ test('a direct read validates and answers without any graph write, even on refus
     },
   })
   equal(faulted(await broken.read(call), call.entity.eid), true)
-  equal([writes, reports], [0, 0])
+  equal([writes, reports], [0, 1])
   let writer = runner(g, { tools: [{ ...tool, readOnly: false }] })
   await throws(() => writer.read(call))
   equal(writes, 0)

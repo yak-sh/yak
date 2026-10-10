@@ -8,6 +8,7 @@ import {
   type Comp,
   type Graph,
   identityEid,
+  who,
 } from '@yaks/graph'
 import type { Host as Hosting } from '@yaks/host'
 import type { Handlers } from '@yaks/effects'
@@ -153,6 +154,9 @@ export let effects = (host: Host, options: Options = {}): Handlers => {
     if (!message || !actionable(message)) return
     let source = str(comp(row, 'output')?.source)
     let call = source ? await one(g, source) : undefined
+    let to = str(comp(call, 'call')?.to)
+    let tool = to ? str(comp(await one(g, to), 'tool')?.name) : ''
+    let actor = call && who(call) || who(row)
     let session = str(comp(row, 'entry')?.session) ||
       (row.session ? eid : str(comp(call, 'entry')?.session))
     let process = str(comp(row, 'execution')?.by) ||
@@ -163,6 +167,8 @@ export let effects = (host: Host, options: Options = {}): Handlers => {
     error.stack = str(x.stack) || undefined
     await host.report?.(error, {
       eid: identityEid('exception_report', [eid]),
+      ...(actor ? { actor } : {}),
+      ...(tool ? { tags: { tool } } : {}),
       ...(x.at ? { at: str(x.at) } : {}),
       ...(typeof x.version == 'number' ? { version: x.version } : {}),
       during: {

@@ -46,6 +46,7 @@ export {
   WORDS,
 } from './runner.ts'
 export { valueIn } from './value.ts'
+export { actionable, exceptionOf } from './fault.ts'
 export { display } from './display.ts'
 
 export {

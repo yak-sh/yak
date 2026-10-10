@@ -96,6 +96,8 @@ export let compactAsk = async (
     // Provider failure bodies can still report billed tokens. Keep unknown
     // counts absent rather than recording a made-up zero.
     let usage = failureUsage(e)
+    // The parent records a compaction defect once. This observed exchange
+    // keeps its failure without creating another exception.
     await save([
       {
         entity: { eid: ask },
@@ -110,7 +112,7 @@ export let compactAsk = async (
               ? { response: e.response }
               : {},
           }
-          : { exception: {} },
+          : { failed: { reason: String(e) } },
       },
       {
         entity: { eid: crypto.randomUUID() },
@@ -130,7 +132,9 @@ export let compactAsk = async (
       using,
       attempt: { by: null },
       completed: {},
-      ...empty ? { failed: { reason: empty.message }, exception: {} } : {},
+      ...empty
+        ? { failed: { reason: empty.message }, refusal: { code: empty.code } }
+        : {},
       ...served.model.mark?.(compacted),
       ...compacted.usage ? { usage: compacted.usage } : {},
       ...compacted.cost == null ? {} : {
