@@ -1,7 +1,11 @@
 // The Files entrypoint's blob door caches only tenant-keyed bytes. In a
 // runtime without Workers Caching, the same door streams bounded R2 ranges.
 import { test } from '@yaks/testing'
-import { assertEquals, assertStringIncludes } from '@std/assert'
+import {
+  assertEquals,
+  assertNotEquals,
+  assertStringIncludes,
+} from '@std/assert'
 import { blobAt } from './cache.ts'
 import { blobBytes, fetch } from './files.ts'
 import { platform } from './serving-probe.ts'
@@ -45,6 +49,62 @@ test('the cached blob door streams bytes and bounds uncached seeks', async () =>
   assertEquals(head.headers.get('content-length'), '6')
   assertEquals(files.gets.length, before)
   await head.body?.cancel()
+
+  let key = prefix + sha
+  let tag = (await files.r2.head(key))!.etag
+  let [again, seek, metadata] = await Promise.all([
+    files.r2.get(key),
+    files.r2.get(key, { range: { offset: 2, length: 3 } }),
+    files.r2.head(key),
+  ])
+  assertEquals([again!.etag, seek!.etag, metadata!.etag], [tag, tag, tag])
+  assertEquals(metadata!.size, bytes.length)
+  assertEquals(new Uint8Array(await seek!.arrayBuffer()), bytes.slice(2, 5))
+  assertEquals(
+    new Uint8Array(await new Response(again!.body).arrayBuffer()),
+    bytes,
+  )
+
+  // A held buffer may change while its earlier reads are still hashing.
+  let original = bytes.slice()
+  bytes[0] = 7
+  let snapshot = bytes.slice()
+  let pending = files.r2.get(key)
+  let pendingHead = files.r2.head(key)
+  bytes[0] = 9
+  let changed = await files.r2.get(key)
+  assertNotEquals(changed!.etag, tag)
+  assertEquals(new Uint8Array(await changed!.arrayBuffer()), bytes)
+  let previous = (await pending)!
+  assertNotEquals(previous.etag, tag)
+  assertNotEquals(changed!.etag, previous.etag)
+  assertEquals((await pendingHead)!.etag, previous.etag)
+  assertEquals(new Uint8Array(await previous.arrayBuffer()), snapshot)
+  bytes.set(original)
+  assertEquals((await files.r2.head(key))!.etag, tag)
+
+  // R2 owns writes, including a view into a caller's larger buffer.
+  for (
+    let input of [
+      new Uint8Array([8, 1, 2, 3, 8]).subarray(1, 4),
+      new Uint8Array([4, 5, 6]).buffer,
+    ]
+  ) {
+    let caller = input instanceof Uint8Array ? input : new Uint8Array(input)
+    let written = caller.slice()
+    let putting = files.r2.put(key, input)
+    caller.fill(0)
+    await putting
+    let stored = (await files.r2.get(key))!
+    assertEquals(new Uint8Array(await stored.arrayBuffer()), written)
+    let returned = new Uint8Array(await stored.arrayBuffer())
+    returned.fill(9)
+    assertEquals((await files.r2.head(key))!.etag, stored.etag)
+    assertEquals(
+      new Uint8Array(await (await files.r2.get(key))!.arrayBuffer()),
+      written,
+    )
+  }
 
   files.held.delete(prefix + sha)
   let absent = await get()

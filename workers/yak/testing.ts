@@ -305,6 +305,12 @@ export let ai = (script: Turn[]) => {
   })
 }
 
+let sameBytes = (a: Uint8Array, b: Uint8Array) => {
+  if (a.length != b.length) return false
+  for (let i = 0; i < a.length; i++) if (a[i] != b[i]) return false
+  return true
+}
+
 /**
  * The bucket, as the slice `r2Objects` asks for.
  *
@@ -316,6 +322,20 @@ export let bucket = () => {
   let held = new Map<string, Uint8Array>()
   let at = new Map<string, number>()
   let gets: { key: string; range?: { offset: number; length: number } }[] = []
+  let etags = new WeakMap<Uint8Array, {
+    bytes: Uint8Array<ArrayBuffer>
+    etag: Promise<string>
+  }>()
+  // `held` is public and its bytes can change. Each read keeps one snapshot
+  // for its body and tag, sharing the digest until those bytes change.
+  let tagged = (bytes: Uint8Array) => {
+    let was = etags.get(bytes)
+    if (was && sameBytes(bytes, was.bytes)) return was
+    let snapshot = new Uint8Array(bytes)
+    let next = { bytes: snapshot, etag: sha256(snapshot) }
+    etags.set(bytes, next)
+    return next
+  }
   return {
     held,
     at,
@@ -323,12 +343,9 @@ export let bucket = () => {
     r2: {
       head: async (k: string) => {
         let bytes = held.get(k)
-        return bytes
-          ? {
-            size: bytes.byteLength,
-            etag: await sha256(new Uint8Array(bytes)),
-          }
-          : null
+        if (!bytes) return null
+        let read = tagged(bytes)
+        return { size: read.bytes.byteLength, etag: await read.etag }
       },
       get: async (
         k: string,
@@ -337,11 +354,12 @@ export let bucket = () => {
         gets.push({ key: k, range: options?.range })
         let bytes = held.get(k)
         if (!bytes) return null
+        let read = tagged(bytes)
         let at = options?.range.offset ?? 0
-        let end = at + (options?.range.length ?? bytes.length)
-        let part = bytes.slice(at, end)
+        let end = at + (options?.range.length ?? read.bytes.length)
+        let part = read.bytes.slice(at, end)
         return {
-          etag: await sha256(new Uint8Array(bytes)),
+          etag: await read.etag,
           body: new ReadableStream<Uint8Array>({
             start(controller) {
               controller.enqueue(part)
@@ -352,7 +370,8 @@ export let bucket = () => {
         }
       },
       put: (k: string, v: ArrayBuffer | Uint8Array) => {
-        held.set(k, v instanceof Uint8Array ? v : new Uint8Array(v))
+        let bytes = v instanceof Uint8Array ? v : new Uint8Array(v)
+        held.set(k, new Uint8Array(bytes))
         if (!at.has(k)) at.set(k, Date.now())
         return Promise.resolve()
       },
