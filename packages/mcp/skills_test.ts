@@ -19,9 +19,9 @@ import {
   Refused,
 } from '@yaks/graph'
 import { world } from '../persona/testing.ts'
-import { pinned, shopGraph } from './testing.ts'
+import { pinned } from './testing.ts'
 import { attachSkills, type SkillOptions } from './skills.ts'
-import { mcp } from './mount.ts'
+import { prepared } from './server.ts'
 
 let values = fromJsonSchema<Record<string, unknown>>({
   type: 'object',
@@ -308,90 +308,84 @@ test('Skills attachment refuses unsafe, nonconforming and oversized snapshots be
   })
 })
 
-test('HTTP tool exchanges do not read skills, while discovery stays fresh in both eras', async () => {
-  await local(async (g, root) => {
-    let handler = mcp({
-      graph: shopGraph(),
-      skills: (built, exchange) =>
-        attachSkills(built, { graph: g, cwd: root }, exchange),
-      extend: (built) => {
-        built.registerResource(
-          'other',
-          'example://other',
-          {},
-          () => ({ contents: [{ uri: 'example://other', text: 'Other' }] }),
-        )
-        built.registerPrompt('other', {}, () => ({ messages: [] }))
+// The registration boundary records the same contributed resources/prompts
+// both HTTP factories prepare, without constructing a transport or a graph.
+let catalogue = () => {
+  let resources = new Map<string, unknown>()
+  let prompts = new Map<string, { description?: string }>()
+  let capabilities: Record<string, unknown> = {}
+  let built = {
+    server: {
+      registerCapabilities: (value: Record<string, unknown>) => {
+        Object.assign(capabilities, value)
       },
-    })
-    let legacy = async (method: string, params = {}) => {
-      let response = await handler(
-        new Request('http://skills.test/mcp', {
-          method: 'POST',
-          headers: { 'content-type': 'application/json' },
-          body: JSON.stringify({ jsonrpc: '2.0', id: 1, method, params }),
-        }),
-      )
-      return response.json()
-    }
-    let initialized = await legacy('initialize', {
-      protocolVersion: '2025-06-18',
-      capabilities: {},
-      clientInfo: { name: 'old', version: '1' },
-    })
-    assert(initialized.result.capabilities.resources)
-    assert(initialized.result.capabilities.prompts)
-    let c = new Client({ name: 'modern', version: '1' }, pinned)
-    await c.connect(
-      new StreamableHTTPClientTransport(new URL('http://skills.test/mcp'), {
-        fetch: async (url, init) => await handler(new Request(url, init)),
-      }),
-    )
-    try {
-      let path = `${root}/.claude/skills/testing/SKILL.md`
-      await Deno.writeTextFile(
-        path,
+      setRequestHandler: () => {},
+    },
+    registerResource: (_name: string, uri: string) => resources.set(uri, {}),
+    registerPrompt: (name: string, config: { description?: string }) =>
+      prompts.set(name, config),
+  } as unknown as McpServer
+  return { built, resources, prompts, capabilities }
+}
+
+test('HTTP tool exchanges do not read skills, while discovery stays fresh in both eras', async () => {
+  let path = '.claude/skills/testing/SKILL.md'
+  let encoder = new TextEncoder()
+  let files = new Map<string, Uint8Array>()
+  let reads = 0
+  let source = () => {
+    reads++
+    return { scope: 'repo', files }
+  }
+  let options = {
+    skills: (built: McpServer, exchange?: { method: string }) =>
+      attachSkills(built, source, exchange),
+    extend: (built: McpServer) => {
+      built.registerResource('other', 'example://other', {}, () => ({
+        contents: [{ uri: 'example://other', text: 'Other' }],
+      }))
+      built.registerPrompt('other', {}, () => ({ messages: [] }))
+    },
+  }
+  let request = async (method: string) => {
+    let view = catalogue()
+    await prepared(view.built, options, { method })
+    return view
+  }
+  // Each era uses this preparation boundary before dispatching its request.
+  for (let opening of ['initialize', 'server/discover']) {
+    files.clear()
+    let initial = await request(opening)
+    assert(initial.capabilities.resources)
+    assert(initial.prompts.has('other'))
+    files.set(
+      path,
+      encoder.encode(
         '---\nname: Invalid\ndescription: Broken\n---\nText\n',
-      )
-      assert((await c.listTools()).tools.some((t) => t.name == 'graph_query'))
-      assert(
-        (await legacy('tools/list')).result.tools.some((t: { name: string }) =>
-          t.name == 'graph_query'
-        ),
-      )
-      let args = { name: 'graph_query', arguments: { q: '.book .limit=1' } }
-      assertEquals((await c.callTool(args)).isError, undefined)
-      assertEquals((await legacy('tools/call', args)).error, undefined)
-      await assertRejects(() => c.listResources())
-      assert((await legacy('resources/list')).error)
-      await Deno.writeTextFile(
-        path,
+      ),
+    )
+    let before = reads
+    await request('tools/list')
+    await request('tools/call')
+    assertEquals(reads, before)
+    await assertRejects(() => request('resources/list'), Refused)
+    files.set(
+      path,
+      encoder.encode(
         '---\nname: testing\ndescription: Fresh description\n---\nFresh instructions\n',
-      )
-      let prompts = (await c.listPrompts()).prompts
-      assertEquals(
-        prompts.find((p) => p.name == 'skill:testing')?.description,
-        'Fresh description',
-      )
-      assert(prompts.some((p) => p.name == 'other'))
-      assertEquals(
-        (await legacy('prompts/list')).result.prompts.find((
-          p: { name: string },
-        ) => p.name == 'skill:testing').description,
-        'Fresh description',
-      )
-      assert(
-        (await c.listResources()).resources.some((r) =>
-          r.uri == 'example://other'
-        ),
-      )
-      assert(
-        (await legacy('resources/list')).result.resources.some((
-          r: { uri: string },
-        ) => r.uri == 'example://other'),
-      )
-    } finally {
-      await c.close()
-    }
-  })
+      ),
+    )
+    let fresh = await request(
+      opening == 'initialize' ? 'prompts/list' : 'resources/list',
+    )
+    assertEquals(
+      fresh.prompts.get('skill:testing')?.description,
+      'Fresh description',
+    )
+    assert(fresh.prompts.has('other'))
+    assert(fresh.resources.has('example://other'))
+    assert(fresh.resources.has('skill://skills/repo/testing/SKILL.md'))
+    // New files appear on the next exchange, not in an earlier snapshot.
+    assert(!initial.prompts.has('skill:testing'))
+  }
 })

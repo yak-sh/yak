@@ -375,6 +375,11 @@ graph imports. Tool-only HTTP exchanges do not snapshot skills; discovery,
 resources and prompts each retain their fresh immutable snapshot. Graph-backed
 documents are rendered by the shared persona codec.
 
+A host with another file store can supply a callback instead of graph/checkout
+options. It returns `{ scope, files }`, where `files` maps repository-relative
+paths to byte arrays. Each consuming exchange reads the callback and copies its
+bytes into its snapshot; tool exchanges do not call it.
+
 The Skills extension advertises `resources` and
 `io.modelcontextprotocol/skills`. `skills/list` and `skills/get` return complete
 manifests with the document and supporting files, exact SHA-256 byte digests and

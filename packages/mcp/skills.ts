@@ -14,7 +14,11 @@ import { parse, YamlSyntaxError } from '@std/yaml'
 import { validator } from './validator.ts'
 import type { Exchange } from './server.ts'
 
-export type SkillOptions = { graph: Graph; repository?: string; cwd?: string }
+/** A scoped collection of repository-relative skill file bytes. */
+export type SkillFiles = { scope: string; files: Map<string, Uint8Array> }
+export type SkillOptions =
+  | { graph: Graph; repository?: string; cwd?: string }
+  | (() => SkillFiles | Promise<SkillFiles>)
 type File = { uri: string; bytes: Uint8Array; text?: string; mimeType: string }
 type Manifest = {
   uri: string
@@ -24,6 +28,29 @@ type Manifest = {
 type Snapshot = { skills: Manifest[]; files: Map<string, File> }
 let encoder = new TextEncoder()
 let cache = { ttlMs: 0, cacheScope: 'private' as const }
+let schema = (
+  properties: JsonSchemaType['properties'],
+  required: string[] = [],
+) =>
+  fromJsonSchema<Record<string, unknown>>({
+    type: 'object',
+    properties,
+    required,
+    additionalProperties: true,
+  }, validator)
+let listSchema = {
+  params: schema({ cursor: { type: 'string' }, _meta: { type: 'object' } }),
+  result: schema({
+    skills: { type: 'array' },
+    nextCursor: { type: 'string' },
+  }, ['skills']),
+}
+let getSchema = {
+  params: schema({ uri: { type: 'string' }, _meta: { type: 'object' } }, [
+    'uri',
+  ]),
+  result: schema({ skill: { type: 'object' } }, ['skill']),
+}
 let invalid = (message: string): never => {
   throw new ProtocolError(-32602, message)
 }
@@ -98,7 +125,8 @@ let digest = async (bytes: Uint8Array): Promise<string> => {
 let document = (b: Bundle): string =>
   String((b.doc as { title?: string }).title)
 
-let snapshot = async (options: SkillOptions): Promise<Snapshot> => {
+let source = async (options: SkillOptions): Promise<SkillFiles> => {
+  if (typeof options == 'function') return await options()
   let bytes = new Map<string, Uint8Array>()
   let scope = options.repository ?? ''
   if (options.cwd != undefined) {
@@ -122,6 +150,14 @@ let snapshot = async (options: SkillOptions): Promise<Snapshot> => {
     }
     for (let [path, text] of values) bytes.set(path, encoder.encode(text))
   }
+  return { scope, files: bytes }
+}
+
+let snapshot = async (options: SkillOptions): Promise<Snapshot> => {
+  let { scope, files: supplied } = await source(options)
+  let bytes = new Map(
+    [...supplied].map(([path, raw]) => [path, new Uint8Array(raw)]),
+  )
   let files = new Map<string, File>()
   let skills: Manifest[] = []
   let prefix = `skill://skills/${encodeURIComponent(scope)}/`
@@ -193,27 +229,11 @@ export let attachSkills = async (
     return
   }
   let view = await snapshot(options)
-  let schema = (
-    properties: JsonSchemaType['properties'],
-    required: string[] = [],
-  ) =>
-    fromJsonSchema<Record<string, unknown>>({
-      type: 'object',
-      properties,
-      required,
-      additionalProperties: true,
-    }, validator)
   built.server.registerCapabilities({
     resources: {},
     extensions: { 'io.modelcontextprotocol/skills': {} },
   })
-  built.server.setRequestHandler('skills/list', {
-    params: schema({ cursor: { type: 'string' }, _meta: { type: 'object' } }),
-    result: schema({
-      skills: { type: 'array' },
-      nextCursor: { type: 'string' },
-    }, ['skills']),
-  }, (params) => {
+  built.server.setRequestHandler('skills/list', listSchema, (params) => {
     let cursor = params.cursor
     if (
       cursor != undefined &&
@@ -232,12 +252,7 @@ export let attachSkills = async (
       ...cache,
     }
   })
-  built.server.setRequestHandler('skills/get', {
-    params: schema({ uri: { type: 'string' }, _meta: { type: 'object' } }, [
-      'uri',
-    ]),
-    result: schema({ skill: { type: 'object' } }, ['skill']),
-  }, (params) => {
+  built.server.setRequestHandler('skills/get', getSchema, (params) => {
     let skill = view.skills.find((s) => s.uri == params.uri)
     if (!skill) invalid('Unknown skill URI')
     return { skill, ...cache }

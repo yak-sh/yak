@@ -42,6 +42,7 @@ import {
   listing,
   logged,
   type Options,
+  prepared,
   server,
 } from './server.ts'
 
@@ -167,9 +168,7 @@ export let mcp = (opts: MountOptions): Handler => {
       actor: caller?.actor ?? null,
       runner: running(),
     })
-    await opts.extend?.(built)
-    await opts.skills?.(built, caller?.exchange)
-    return built
+    return await prepared(built, opts, caller?.exchange)
   }, { legacy: 'reject' })
   let legacy = async (
     request: Request,
@@ -214,8 +213,7 @@ export let mcp = (opts: MountOptions): Handler => {
       // Whatever else the calling program serves — resources, prompts — is
       // registered before the request is answered, so `resources/list` sees
       // them on the very first call rather than the second.
-      await opts.extend?.(built)
-      await opts.skills?.(built, { method: rpc.data.method })
+      await prepared(built, opts, { method: rpc.data.method })
       let answer = json(await ask(built, rpc.data, ms))
       if (conn) answer.headers.set(ID, conn.id)
       return answer

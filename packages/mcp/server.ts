@@ -174,6 +174,17 @@ export type Options = {
 /** One HTTP exchange; a connection-serving factory leaves this undefined. */
 export type Exchange = { method: string }
 
+/** Await contributed facets on each server before its exchange is served. */
+export let prepared = async (
+  built: McpServer,
+  opts: Pick<Options, 'extend' | 'skills'>,
+  exchange?: Exchange,
+): Promise<McpServer> => {
+  await opts.extend?.(built)
+  await opts.skills?.(built, exchange)
+  return built
+}
+
 /**
  * What a tool on this server answers, as JSON Schema: the bundles it returned,
  * under `result` — which is what {@link said} sends as `structuredContent`,
