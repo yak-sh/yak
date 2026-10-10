@@ -76,26 +76,27 @@ test('literal line controls disappear while structural breaks survive', () => {
 })
 
 test('text punctuation and entity spellings remain literal Markdown content', () => {
-  for (
-    let text of [
-      '*_[x](y)!',
-      '<b>&amp;',
-      '# title',
-      '1. row',
-      '- row',
-      'a\\b',
-      'yaks.app',
-    ]
-  ) {
-    let node = h('p', null, text)
-    let parsed = html(markdown(node))
-    assertEquals(parsed.querySelector('p')?.textContent, text)
-    assertEquals(parsed.querySelector('p')?.children.length, 0)
-    assertEquals(plain(node), text)
+  let texts = [
+    '*_[x](y)!',
+    '<b>&amp;',
+    '# title',
+    '1. row',
+    '- row',
+    'a\\b',
+    'yaks.app',
+  ]
+  let nodes = texts.map((text) => h('p', null, text))
+  let paragraphs = html(nodes.map(markdown).join('\n\n')).querySelectorAll('p')
+  assertEquals(paragraphs.length, texts.length)
+  for (let [i, text] of texts.entries()) {
+    assertEquals(paragraphs[i].textContent, text)
+    assertEquals(paragraphs[i].children.length, 0)
+    assertEquals(plain(nodes[i]), text)
   }
   let node = h('p', null, '!', h('a', { href: '/page' }, 'page'))
-  assertEquals(html(markdown(node)).querySelectorAll('img').length, 0)
-  assertEquals(html(markdown(node)).querySelectorAll('a').length, 1)
+  let parsed = html(markdown(node))
+  assertEquals(parsed.querySelectorAll('img').length, 0)
+  assertEquals(parsed.querySelectorAll('a').length, 1)
 })
 
 test('nested arrays and inline children preserve exact spaces and zero', () => {
