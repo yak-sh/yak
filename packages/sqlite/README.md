@@ -92,12 +92,13 @@ try {
 
 ## Exports
 
-| Import path          | Purpose                                                                                                                                |
-| -------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
-| `@yaks/sqlite`       | Storage, schema/read/write helpers, [overlays](#querying-pending-changes-with-an-overlay), archetype helpers, metadata, and migrations |
-| `@yaks/sqlite/db`    | `open(path)`: an embedded Deno database as a cached driver                                                                             |
-| `@yaks/sqlite/vocab` | `sqliteDoc` and `docs`, declaring storage and archetype diagnostic tools                                                               |
-| `@yaks/sqlite/tools` | `runs({ storage: storage(sql, vocab) }, options?)`, implementing those checks on the application's connection                          |
+| Import path            | Purpose                                                                                                                                |
+| ---------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
+| `@yaks/sqlite`         | Storage, schema/read/write helpers, [overlays](#querying-pending-changes-with-an-overlay), archetype helpers, metadata, and migrations |
+| `@yaks/sqlite/db`      | `open(path)`: an embedded Deno database as a cached driver                                                                             |
+| `@yaks/sqlite/read-db` | `open(path)`: an existing file as a cached read-only driver, without loading the native writer                                         |
+| `@yaks/sqlite/vocab`   | `sqliteDoc` and `docs`, declaring storage and archetype diagnostic tools                                                               |
+| `@yaks/sqlite/tools`   | `runs({ storage: storage(sql, vocab) }, options?)`, implementing those checks on the application's connection                          |
 
 The vocabulary export declares [tools](../tools/README.md), not graph
 components. The checks inspect foreign-key enforcement/violations, SQLite
@@ -169,6 +170,9 @@ and `get`, uses the same query compiler and snapshot rules as `storage()`, and
 accepts the same derived and backed read bindings. It loads no schema installer
 or mutation pipeline. Open the file with `open(path, {readOnly: true})` from
 `@yaks/sqlite/db` when writes must also be prevented at the database boundary.
+The same read-only driver is available as `open(path)` from
+`@yaks/sqlite/read-db`, which loads only the native reading API. Both readers
+refuse writes and leave the database and WAL untouched when they close.
 
 `read` accepts a query string or [query AST](../query/README.md#query-model) and
 returns whole bundles, resolving stored integer references back to public ids.

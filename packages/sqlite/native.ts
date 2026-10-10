@@ -5,8 +5,7 @@
 
 import { sqlitePath } from './sqlitepath.ts'
 import { Database, Statement } from '@db/sqlite'
-import { context, leaf, peek } from '@yaks/trace'
-import { excerpt, statement, writing } from '@yaks/sql'
+import { driver as connection } from './driver.ts'
 import {
   call,
   col,
@@ -19,7 +18,6 @@ import {
   type Row,
   select,
   type Stmt,
-  STOCK,
   table,
   val,
 } from '@yaks/sql'
@@ -298,45 +296,9 @@ export let driver = (db: Database): Driver => {
       }
     }
   }
-  let query = (s: Stmt): Row[] => {
-    covers(s)
-    let rendered = render(s), { sql, params } = rendered
-    let at = context()
-    let c = at?.channel ?? peek(d)
-    if (!c) return run(sql, params)
-    // Rendered before the span begins, so the span can say what it ran; the
-    // span times the engine's work on it. A statement begins nothing of its
-    // own, so it runs as a leaf: no task-local context is made for it.
-    let wrote = writing(s)
-    // Rows come from this execution, never a telemetry query or a stale
-    // changes count on a failed write, and the attempt counts even if SQLite
-    // refuses it.
-    let n = 0
-    return leaf(
-      c.begin({
-        kind: 'sql',
-        name: statement(s),
-        package: '@yaks/sqlite',
-        parent: at?.channel == c ? at.parent : undefined,
-        sql: excerpt(rendered),
-      }),
-      () => {
-        let rows = run(sql, params)
-        n = wrote ? db.changes : rows.length
-        return rows
-      },
-      () => ({
-        statements: 1,
-        rowsRead: wrote ? 0 : n,
-        rowsWritten: wrote ? n : 0,
-      }),
-      () => ({ rows: n }),
-    )
-  }
-  let d: Driver = {
-    query,
-    file,
-    arms: STOCK,
+  let d = connection(run, { file, before: covers, changes: () => db.changes })
+  let query = d.query
+  return Object.assign(d, {
     // A database in memory is this process's alone, and copying a schema into
     // one is a page copy where making it is hundreds of statements. One on
     // disk is made in place: another process may have it open.
@@ -356,6 +318,5 @@ export let driver = (db: Database): Driver => {
         templates.set(at, copy)
       },
     },
-  }
-  return d
+  })
 }

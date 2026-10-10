@@ -5,7 +5,7 @@ import type { Graph } from '@yaks/graph'
 import { reader as graph } from '@yaks/graph/read'
 import { ids } from '@yaks/id/graph'
 import { reader as storage } from '@yaks/sqlite/reader'
-import { open } from '@yaks/sqlite/db'
+import { open } from '@yaks/sqlite/read-db'
 import { loadVocab } from '@yaks/vocab'
 import { type Config, dbOf, subpath } from './config.ts'
 import { understood } from './keywords.ts'
@@ -30,7 +30,7 @@ export let reader = async (
     facets.flatMap((f) => f?.docs ?? []),
     understood(facets.flatMap((f) => f?.keywords ?? [])),
   )
-  let sql = open(dbOf(config), { readOnly: true })
+  let sql = open(dbOf(config))
   try {
     let store = storage(sql, vocab, {
       derived: Object.assign({}, ...facets.map((f) => f?.derived?.(vocab))),
