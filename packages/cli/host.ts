@@ -752,12 +752,11 @@ let composed = async (
       anatomy: observed.read,
       observe: observed.observe,
       config,
-      report: (request, error) => {
-        void report(error ?? 'HTTP request failed', {
-          request,
-          during: { request: request.entity.eid, process: selfEid() },
-        })
-      },
+      report: (error, context = {}) =>
+        report(error, {
+          ...context,
+          during: { process: selfEid(), ...context.during },
+        }),
       ui: gather(dressed.map(([facet]) => facet)),
       roles,
       vocab,

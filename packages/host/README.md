@@ -74,6 +74,28 @@ Concrete hosts may supply `resolveHome` at their compatibility door to translate
 stored homes into machine homes. Plugins only consume the returned machine
 reference and command directory.
 
+## Failure reporting
+
+`Host.report(error, context)` hands a failure to the concrete host's reporter.
+Context identifies the failing work through `during.entity`, `during.kind`,
+`during.session` and `during.process`; `eid` preserves an occurrence's identity
+across redelivery. The host owns delivery and shutdown, so plugins use its
+reporter without opening a sink.
+
+```ts
+import { equal } from '@yaks/testing'
+import type { Host } from '@yaks/host'
+
+let told: unknown[] = []
+let host: Pick<Host, 'report'> = {
+  report: (error) => {
+    told.push(error)
+  },
+}
+await host.report?.('missing field', { during: { entity: 'work' } })
+equal(told, ['missing field'])
+```
+
 ## Concrete hosts
 
 [@yaks/cli](../cli/README.md) opens the box's database and binds this interface.

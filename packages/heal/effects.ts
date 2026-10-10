@@ -1,53 +1,32 @@
-// The code behind the effects ./vocab.json declares, exported as
-// `@yaks/heal/effects`: what a host does when something it did not expect goes
-// wrong.
-//
-// An `exception` landing on any entity files one task about it, keyed by the
-// fault (./fault.ts). While that task is open, the same fault caught again
-// counts on it rather than filing another, so a runner failing every 300ms
-// leaves one task with a count. `error` is a failure the code expected, and is
-// never a bug.
-//
-// A new bug then starts a fixer: an agent session holding the claim on the
-// task, marked `fixer` so the gates can count it. Four gates stand in front of
-// that, and a gate saying no leaves the task filed and nothing more:
-//
-// - off: no `provider` configured;
-// - muted: `nofix` on the bug's project, or on the home project for all;
-// - at cap: this many fixers running already;
-// - cooling down: a fixer was started for the same fault this recently.
-//
-// A bug a gate held back is tried again when a worker starts (`bug_fix`'s
-// sweep); one bug never gets a second fixer.
-//
-// Config:
-//
-// ```json
-// { "use": "@yaks/heal",
-//   "with": { "provider": "codex", "model": "gpt-5.6-sol", "project": "P-19" } }
-// ```
+// An actionable exception is reported through the host's telemetry. Bug tasks
+// already in this graph start fixers behind the provider, project, cap and
+// cooldown gates; the boot sweep retries bugs those gates held back.
 
-import { addressed, type Bundle, type Comp, type Graph } from '@yaks/graph'
+import {
+  addressed,
+  type Bundle,
+  type Comp,
+  type Graph,
+  identityEid,
+} from '@yaks/graph'
+import type { Host as Hosting } from '@yaks/host'
 import type { Handlers } from '@yaks/effects'
-import { edgeEid, link } from '@yaks/edge'
 import { human } from '@yaks/id'
 import { absent, and, eq, list, present, want } from '@yaks/query'
-import { actionable, faultKey, recurred, severity } from './fault.ts'
+import { actionable } from './fault.ts'
 
 /** What these handlers are given (@yaks/cli `Host`). */
-export type Host = { graph: Graph }
+export type Host = Pick<Hosting, 'graph' | 'report'>
 
 /** What config can set. */
 export type Options = {
-  /** who runs a fixer, by name or id; without one, bugs file and nothing
-   * starts */
+  /** who runs a fixer, by name or id; without one, nothing starts */
   provider?: string
   /** the model a fixer runs on, by name or id */
   model?: string
   /** the effort a fixer asks for */
   effort?: string
-  /** the project a bug files under when nothing names one; `nofix` on it
-   * mutes every fixer */
+  /** the home project; `nofix` on it mutes every fixer */
   project?: string
   /** the most fixers running at once (default 2) */
   cap?: number
@@ -78,9 +57,6 @@ let named = async (g: Graph, id: string | undefined, wears: string) => {
   return (await g.read(and(eq(`${wears}.name`, id))))[0]?.entity.eid
 }
 
-// A bug whose task is not settled yet.
-let open = [present('bug'), absent('completed'), absent('cancelled')]
-
 // Whether `b` was created less than `span` ms before `now`: a span of 0 holds
 // nothing, even an entity created in the same millisecond.
 let young = (b: Bundle, span: number, now: number) =>
@@ -103,25 +79,6 @@ export let effects = (host: Host, options: Options = {}): Handlers => {
   let cooldown = options.cooldown ?? 30 * 60_000
   let serial = serially()
   let home = () => named(g, options.project, 'project')
-
-  // The project a failure belongs to: the broken entity's own, else the one
-  // its session is working for, else the home project.
-  let owner = async (row: Bundle): Promise<string | undefined> => {
-    let filed = str(comp(row, 'filed')?.project)
-    if (filed) return filed
-    let session = row.session
-      ? row.entity.eid
-      : str(comp(row, 'entry')?.session)
-    for (
-      let held of session
-        ? await g.read(and(eq('claim.session', session), want('filed')))
-        : []
-    ) {
-      let p = str(comp(held, 'filed')?.project)
-      if (p) return p
-    }
-    return home()
-  }
 
   // Why no fixer starts for this bug now, or nothing.
   let blocked = async (bug: Bundle): Promise<string | undefined> => {
@@ -188,60 +145,37 @@ export let effects = (host: Host, options: Options = {}): Handlers => {
       ], { trusted: true })
     })
 
-  // File a failure: count it on the open bug for its fault, or open one.
-  let file = async (eid: string) => {
+  let report = async (eid: string) => {
     let row = await one(g, eid)
     let x = comp(row, 'exception')
     if (!row || !x) return // cleared before this ran
-    let message = str(x.message || comp(row, 'content')?.body).trim()
+    let message = str(x.value || x.message || comp(row, 'content')?.body).trim()
     if (!message || !actionable(message)) return
-    let kind = g.vocab.kindOf(row)
-    let fault = faultKey(kind, message, str(x.stack))
-    let at = new Date().toISOString()
-    let [found] = await g.read(
-      and(...open, eq('bug.fault', fault), want('doc')),
-    )
-    if (found) {
-      // Already counted: this handler ran for this failure before.
-      if (comp(await one(g, edgeEid(found.entity.eid, 'about', eid)), 'edge')) {
-        return
-      }
-      let hits = Number(comp(found, 'bug')?.hits ?? 1) + 1
-      let body = str(comp(found, 'doc')?.body)
-      await g.apply([
-        {
-          entity: { eid: found.entity.eid },
-          bug: { hits, last: at },
-          doc: { body: recurred(body, hits, at) },
-        },
-        link(found.entity.eid, 'about', eid),
-      ], { trusted: true })
-      return fix(found.entity.eid)
-    }
-    let who = human(g.vocab)(row)
-    let project = await owner(row)
-    let quoted = message.split('\n').map((l) => `> ${l}`).join('\n')
-    let bug = uuid()
-    await g.apply([
-      {
-        entity: { eid: bug },
-        doc: {
-          title: `${kind} exception: ${message.split('\n')[0]}`.slice(0, 100),
-          body: `Filed by @yaks/heal.\n\n**${who}** (${kind}) raised:\n\n` +
-            `${quoted}\n` +
-            (x.stack ? `\n\`\`\`\n${x.stack}\n\`\`\`\n` : '') +
-            `\nBroken entity: ${who} · caught ${str(x.at) || at}`,
-        },
-        task: {},
-        filed: { priority: severity(message), ...(project ? { project } : {}) },
-        bug: { fault, hits: 1, last: at },
+    let source = str(comp(row, 'output')?.source)
+    let call = source ? await one(g, source) : undefined
+    let session = str(comp(row, 'entry')?.session) ||
+      (row.session ? eid : str(comp(call, 'entry')?.session))
+    let process = str(comp(row, 'execution')?.by) ||
+      (row.process ? eid : str(comp(call, 'execution')?.by))
+    let error = new Error(message)
+    error.name = str(x.type) || 'Error'
+    // An invented reporting frame would group failures by this handler.
+    error.stack = str(x.stack) || undefined
+    await host.report?.(error, {
+      eid: identityEid('exception_report', [eid]),
+      ...(x.at ? { at: str(x.at) } : {}),
+      ...(typeof x.version == 'number' ? { version: x.version } : {}),
+      during: {
+        entity: eid,
+        kind: g.vocab.kindOf(row),
+        ...(session ? { session } : {}),
+        ...(process ? { process } : {}),
       },
-      link(bug, 'about', eid),
-    ], { trusted: true })
+    })
   }
 
   return {
-    exception_file: (e) => file(e.entity.eid),
+    exception_report: (e) => report(e.entity.eid),
     // Idempotent: a bug that has a fixer, or is held, starts nothing.
     bug_fix: (e) => fix(e.entity.eid),
   }

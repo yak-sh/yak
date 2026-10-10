@@ -25,12 +25,12 @@
       "properties": {},
       "description": "on a project: bugs filed under it start no fixer. On the project unowned bugs are filed under, no bug starts one"
     },
-    "exception_file": {
+    "exception_report": {
       "effect": true,
       "created": [
         "exception"
       ],
-      "description": "file an unexpected failure as a task, one per fault"
+      "description": "report an actionable exception through the host reporter"
     },
     "bug_fix": {
       "effect": true,

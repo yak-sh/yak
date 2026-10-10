@@ -12,6 +12,7 @@ import type { Blobs } from '@yaks/blob'
 import type { Effects } from '@yaks/effects'
 import type { Local } from '@yaks/secrets'
 import type { Finding, Reply, Runner } from '@yaks/tools'
+import type { Context } from '@yaks/tracker/report'
 import type { Config } from './config.ts'
 export type { Config, Options, Plug } from './config.ts'
 export type Role = string
@@ -173,7 +174,8 @@ export interface Host {
    * or its callback fires into a closed store and the process is held open by
    * a timer nobody owns. The duties run under it too, so one abort
    * stops everything this process was doing on its own. */
-  /** HTTP failures keep their request bundle outside this graph. */
-  report?: (request: Bundle, error?: unknown) => void
+  /** Report a failure through this host's telemetry, outside the graph.
+   * Context identifies the failing work; the host owns its sinks and lifetime. */
+  report?: (error: unknown, context?: Partial<Context>) => void | Promise<void>
   stopping: AbortSignal
 }

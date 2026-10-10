@@ -90,7 +90,10 @@ test('a request that broke is answered with its id and reported once', async () 
         handle: () => Promise.reject(new Error('boom')),
       },
     ],
-    report: (b, err) => void told.push([b, err]),
+    report: (err, context) => {
+      assertEquals(context?.during?.request, context?.request?.entity.eid)
+      told.push([context!.request!, err])
+    },
   })
   assertEquals((await h(req('/hello'))).headers.get('x-request-id'), null)
   assertEquals(told, [])

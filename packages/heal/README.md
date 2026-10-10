@@ -1,42 +1,43 @@
 # @yaks/heal
 
-When something a host did not expect goes wrong, `@yaks/heal` files a task about
-it and starts an agent to fix it.
+`@yaks/heal` reports actionable exceptions through the host's reporter and
+starts agent sessions for bug tasks already in the graph.
 
 ```sh
 deno add jsr:@yaks/heal
 ```
 
 An `exception` (@yaks/tools) on any entity is the trigger. `refusal` is a
-deliberate no and never files anything. Legacy `error` outcomes also never file
-anything.
+deliberate no and never reports anything. Legacy `error` outcomes also never
+report anything.
 
 ## Stored data
 
-- `bug{fault, hits, last}` ([`@yaks/tracker`](../tracker/README.md)) sits on a
-  task (@yaks/task) filed for a failure. `fault` is the key two failures share
-  when they are the same failure: the broken entity's kind, the message with its
-  ids, paths, timestamps and numbers taken out, and the top frame of the stack.
-  `hits` counts how often it was caught while the task was open, and `last` says
-  when.
+- `bug{fault, hits, last}` ([`@yaks/tracker`](../tracker/README.md)) groups
+  occurrences in the tracker graph. Heal's fixer machinery expects a bug task
+  already filed in its graph.
 - `fixer{bug}` sits on a session started to fix that task.
 - `nofix{}` sits on a project. Bugs filed under it start no fixer; on the home
   project (config `project`), no bug starts one.
 
-All three properties of `bug`, and `fixer.bug`, are written by the host only.
+`fixer.bug` is written by the host only.
 
 ## What happens
 
 The `@yaks/heal/effects` handlers, after each commit:
 
-1. `created(exception)`: read the message (the `exception.message`, or the
-   `content.body` beside it), skip a known transient (a timeout, a reset
-   connection, a provider's 5xx), and compute the fault. An open bug with that
-   fault gets `hits + 1`, a refreshed recurrence line at the end of its body,
-   and an `about` link to the new failure. Otherwise a new task is filed: `doc`,
-   `task`, `filed{priority, project}`, `bug`, and an `about` link to the broken
-   entity. The project is the broken entity's own, else the project of the task
-   its session holds, else the home project.
+1. `created(exception)`: read `exception.value`, `exception.message`, or
+   `content.body`, and skip known transients (timeouts, reset connections and
+   provider 5xx responses). `exception_report` calls `host.report` with the
+   original exception type and stack. Context names the exception entity and its
+   kind, its session or process when present, and its caught time and build
+   version. The occurrence id derives from the exception entity's eid, so effect
+   redelivery reaches tracker intake as the same occurrence.
+
+   The [box host](../cli/README.md) supplies the reporter, which fans out to
+   Sentry and the tracker spool through `@yaks/tracker/report`'s `coalesce`.
+   Heal opens no tracker database or spool and writes no bug task when an
+   exception arrives.
 2. `created(bug)`: start a fixer. This is the @yaks/spawn request (a session,
    and an entry with `using{provider, model, effort}`), plus a `claim` on the
    bug for that session and `fixer{bug}` on the session, in one transaction.
@@ -52,8 +53,10 @@ The `@yaks/heal/effects` handlers, after each commit:
 
 ## Config
 
-Load `@yaks/tracker` beside `@yaks/heal`: tracker declares `bug`; heal declares
-`fixer` and `nofix` and contributes the handlers.
+Exception reporting needs the host's `report` capability and `@yaks/tools`'
+exception vocabulary. The fixer machinery also needs `@yaks/tracker`'s `bug`
+vocabulary wherever bug tasks are filed. Heal declares `fixer` and `nofix` and
+contributes both effect handlers.
 
 ```json
 {
@@ -70,13 +73,14 @@ Load `@yaks/tracker` beside `@yaks/heal`: tracker declares `bug`; heal declares
 ```
 
 `provider` and `model` are ids or names. `cooldown` is in milliseconds. Every
-key is optional; with no `provider`, bugs are filed and no fixer starts.
+key is optional; with no `provider`, exceptions are reported and no fixer
+starts.
 
 ## Exports
 
-The root export is `healDoc` and the pure fault functions: `normalize`,
-`faultKey`, `actionable`, `severity` and `recurred`. `@yaks/heal/vocab` exports
-`docs` for plugin loaders, and `@yaks/heal/effects` exports `effects`.
+The root export is `healDoc` and the pure `actionable` filter.
+`@yaks/heal/vocab` exports `docs` for plugin loaders, and `@yaks/heal/effects`
+exports `effects`.
 
 `@yaks/fts` has a `heal()` that rebuilds a full-text index. That is a different
 act.

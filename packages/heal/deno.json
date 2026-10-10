@@ -7,7 +7,7 @@
     "./effects": "./effects.ts"
   },
   "license": "Apache-2.0",
-  "description": "Files one task per unexpected failure, keyed by its fault, and starts an agent session to fix it.",
+  "description": "Reports actionable exceptions through the host and starts agent sessions for bug tasks.",
   "imports": {
     "@std/assert": "jsr:@std/assert@^1.0.0"
   },

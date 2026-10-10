@@ -22,6 +22,7 @@ export type Context = {
     kind?: string
     app?: string
     space?: string
+    session?: string
     process?: string
     request?: string
   }

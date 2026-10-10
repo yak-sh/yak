@@ -99,6 +99,13 @@
           "stamped": true,
           "description": "The space."
         },
+        "session": {
+          "type": "string",
+          "ref": "entity",
+          "death": "keep",
+          "stamped": true,
+          "description": "The session whose work raised the error."
+        },
         "process": {
           "type": "string",
           "ref": "entity",

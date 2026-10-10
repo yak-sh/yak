@@ -1,10 +1,7 @@
 /**
- * Self-healing: an `exception` on any entity files one task about it, keyed
- * by its fault, and starts an agent session to fix it.
- *
- * The root export is the vocabulary and the fault arithmetic, which reach no
- * storage. The handlers that file and start fixers are
- * `@yaks/heal/effects`.
+ * Reports actionable exceptions through the host and starts fixers for bug
+ * tasks already in the graph. The root exports the vocabulary and pure
+ * actionable filter; handlers live at `@yaks/heal/effects`.
  */
 
 export { healDoc } from './vocab.ts'

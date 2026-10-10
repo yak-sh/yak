@@ -37,9 +37,11 @@ export type Hosting = {
   routes: Route[]
   filters?: Filter[]
   feed?: (each: (applied: Bundle[]) => void | Promise<void>) => () => void
-  /** where a request that broke goes, as its `request` bundle (default: the
-   * console) */
-  report?: Report
+  /** Host telemetry, supplied with the failing request bundle. */
+  report?: (
+    error: unknown,
+    context: { request: Bundle; during: { request: string } },
+  ) => void | Promise<void>
 }
 
 // How closely a route names a path: an exact path over any prefix, and a
@@ -51,7 +53,7 @@ let reach = (r: Route) => exact(r) ? Infinity : r.path.length
  * The host's one request handler: each plugin's route, and this package's
  * three endpoints, behind every plugin's filter. A filter that throws answers
  * the request with that refusal, and nothing past it runs. An answer at 500 or
- * over, from a route, a filter or a door, goes to `host.report` as a `request`
+ * over, from a route, a filter or a door, goes to `host.report` with a `request`
  * bundle named by its route (./request.ts `served`).
  *
  * The route that names the path most closely wins, whichever plugin listed it:
@@ -69,7 +71,14 @@ export let handler = (host: Hosting): Handler => {
   // pool's thread — which that phase never runs for.
   let subs = subscriptions(graph, { activity: host.graph })
   host.feed?.((applied) => subs.commit(applied))
-  let report = host.report
+  let report: Report | undefined = host.report
+    ? (request, error) => {
+      void host.report!(error ?? 'HTTP request failed', {
+        request,
+        during: { request: request.entity.eid },
+      })
+    }
+    : undefined
   let door = api({
     graph,
     activity: host.graph,
