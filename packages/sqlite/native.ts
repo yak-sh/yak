@@ -202,7 +202,9 @@ export let prepared = (db: Database) => {
     // not a catchable SQLite error. Refuse at the boundary, before any FFI.
     if (!db.open) throw new Error('the database is closed')
     let statement = cache.get(sql)
-    if (!statement) {
+    if (statement) {
+      cache.delete(sql)
+    } else {
       statement = prepare(sql)
       if (sql.slice(statement.sql.length).trim()) {
         statement.finalize()
@@ -217,8 +219,8 @@ export let prepared = (db: Database) => {
         cache.get(oldest)!.finalize()
         cache.delete(oldest)
       }
-      cache.set(sql, statement)
     }
+    cache.set(sql, statement)
     try {
       if (commands.has(statement)) {
         statement.run(...params)

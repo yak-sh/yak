@@ -3661,8 +3661,7 @@
       "a store in memory prepares nothing more for the same writes, however many units run them": 4.3,
       "a store in memory that already holds rows keeps them through install": 6.6,
       "cached native row metadata follows external schema edits and rollback": 1.6,
-      "failed row decoding releases a cached write before rollback and the next savepoint": 3.2,
-      "native integer values round-trip beyond 32 bits": 1.3
+      "failed row decoding releases a cached write before rollback and the next savepoint": 3.2
     },
     "packages/sqlite/number_test.ts": {
       "SQLite migration retains historic high-water across clearing and reopen": 2.7,
