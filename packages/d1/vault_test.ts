@@ -102,15 +102,17 @@ test('a lease held by another isolate is waited for', async () => {
   assertEquals(order, ['one in', 'one out', 'two'])
 })
 
+let failureDb = d1()
+let failureKey = await key()
+
 test('what D1 says to retry is flagged retryable, and nothing else is', async () => {
   let failing = (message: string) => {
-    let db = d1()
     return d1Vault({
-      ...db,
+      ...failureDb,
       prepare: () => {
         throw new Error(`D1_ERROR: ${message}`)
       },
-    }, key())
+    }, failureKey)
   }
   let lost = await failing('Network connection lost.').drop('x').catch((e) => e)
   assert(retryable(lost) && transient(lost))
