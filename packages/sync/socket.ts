@@ -179,6 +179,10 @@ export let wire = (opts: WireOpts): Wire => {
   let wait = first
   let retrying = false // the one timer — never a second
   let closed = false
+  // A drop the reconnect outlasts is not a failure: a server restarting is
+  // one. Once the backoff reaches its ceiling the outage is reported, once,
+  // until a connection opens again.
+  let told = false
   let n = 0
   let waiting: Bundle[] = []
   let draining = false
@@ -262,6 +266,7 @@ export let wire = (opts: WireOpts): Wire => {
       if (socket != s || closed) return
       waiting = []
       wait = first // the server is reachable: retry promptly after the next drop
+      told = false
       // Said before anything is asked, so no answer hands back an older copy.
       let said = opts.again?.() ?? []
       if (said.length) s.send(JSON.stringify({ relay: said }))
@@ -327,7 +332,12 @@ export let wire = (opts: WireOpts): Wire => {
         opts.report(err)
       }
     })
-    s.addEventListener('error', (e) => opts.report(e))
+    s.addEventListener('error', (e) => {
+      if (told || wait < most) return
+      told = true
+      let why = (e as ErrorEvent).message || 'the connection failed'
+      opts.report(new Error(`${wsUrl(opts.url)}: ${why}; still reconnecting`))
+    })
     s.addEventListener('close', () => {
       if (socket != s) return
       socket = null

@@ -175,3 +175,44 @@ test('a batched packet is applied in order before its ACK', async () => {
   assertEquals(socket.sent.at(-1), { ack: 'group' })
   w.close()
 })
+
+test('a socket reports an outage once it outlasts the backoff, not a passing drop', () => {
+  let due: (() => void)[] = []
+  let told: string[] = []
+  let sockets: ReturnType<typeof pair>['client'][] = []
+  let w = wire({
+    url: 'http://box.test',
+    connect: () => {
+      let s = pair().client
+      sockets.push(s)
+      return s
+    },
+    timer: (fn) => due.push(fn),
+    wait: 1,
+    most: 4,
+    land: () => {},
+    report: (err) => told.push(String(err)),
+  })
+  let fail = () => {
+    let s = sockets.at(-1)!
+    s.emit('error')
+    s.close()
+    due.shift()!()
+  }
+  w.open()
+  fail() // waits 1, then 2: a restart's drop
+  fail()
+  assertEquals(told, [])
+  fail() // the wait has reached its ceiling: told, once
+  fail()
+  assertEquals(told.length, 1)
+  assertEquals(told[0].includes('box.test'), true)
+  sockets.at(-1)!.emit('open') // reachable again: the next outage is told anew
+  sockets.at(-1)!.close()
+  due.shift()!()
+  fail()
+  fail()
+  fail()
+  assertEquals(told.length, 2)
+  w.close()
+})
