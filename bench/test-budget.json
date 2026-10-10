@@ -102,7 +102,6 @@
     },
     "apps/vale/chart_test.ts": {
       "a chart grows each chunk once even when larger than the terrain cache": 1.9,
-      "the map paints adopted ground without growing it again": 1.8,
       "the same flat cover and water paint alike at finer and coarser voxel edges": 4.6,
       "updated theme colours repaint already-grown ground and water": 1.3
     },
@@ -240,7 +239,6 @@
       "the compass opens the map without a separate fire travel button": 28.6
     },
     "apps/vale/input_test.ts": {
-      "hide cursor preference is stored and restored": 1.3,
       "left touch walks right while right touch orbits": 6.3,
       "steering and orbit use locked deltas or captured drags in either swap": 2.1
     },
@@ -736,7 +734,6 @@
       "peer saving merges latest patches once an interval and settles when quiet": 2,
       "pending peer patches do not recheck unchanged stored eligibility on every relay": 2.5,
       "pending saves stay with the last writer after disconnect": 1.5,
-      "save queries without a clock wake on relevant commits, not periodic reads": 3,
       "the socket saves with its authenticated actor and vocabulary versions": 1.2
     },
     "packages/api/socket_test.ts": {
@@ -1071,7 +1068,6 @@
       "a lost socket reconnects in place; the painted cache survives": 14.4,
       "a replacement frame forgets the prior query set": 1.6,
       "a subscribed board sleeps through an unrelated ordinary patch": 7,
-      "an unspellable query is a miss, and resolves when its rows land": 5.9,
       "applyLocal: an idempotent entity death preserves cache identity": 5.7,
       "applyLocal: entity death sweeps its edges into the report": 5.7,
       "applyLocal: narrow signals wake only touched graph slices": 7.7,
@@ -1087,7 +1083,6 @@
       "client singletons: four tab subs, local reads, isolation (T-21490)": 7.2,
       "comment badges share a target tally, refcount it, and reopen it": 6,
       "comments: reverse-ref set, awake only for its own thread": 8,
-      "domains: the server distinct wins over the working set": 10.1,
       "each aggregate frame replaces the whole tally": 5.2,
       "ent: refs put open work before settled work": 5.5,
       "facet reads wake only their own membership": 8,
@@ -1102,11 +1097,9 @@
       "myMode: this actor's subscription, off the reverse index": 1.3,
       "narrow signals follow births, subscription eviction, and census": 6.5,
       "pinned sleeps through an unrelated row patch": 5.7,
-      "predsToQuery round-trips membership shapes, refuses the rest": 1.4,
       "queryEids indexes any {eid} reference with no bespoke index": 8,
       "queryEids resolves pending wakes off the reverse index, narrowly": 10.1,
       "relationship indices wake only their affected targets": 7.3,
-      "repoUrl follows task, comment, and session ownership": 7.1,
       "reverse subs: held per open card, torn down on close (T-21489)": 5.5,
       "server query projections index member wakes and preserve server membership": 54.7,
       "server-resolve: a 404 is a genuine miss — Lost, and no retry storm": 10.5,
@@ -1418,7 +1411,6 @@
       "packages/client/README.md block 2": 3,
       "packages/client/README.md block 5": 6.4,
       "packages/client/README.md block 6": 4,
-      "packages/client/README.md block 7": 2.4,
       "packages/client/README.md block 8": 2.9
     },
     "packages/client/client_test.ts": {
@@ -1543,7 +1535,7 @@
     },
     "packages/d1/vault_test.ts": {
       "a lease held by another isolate is waited for": 8.5,
-      "a secret sealed through the graph is ciphertext in D1": 32.4,
+      "a secret sealed through the graph is ciphertext in D1": 1.8,
       "the lock holds a read, a change and the write back as one step": 3.1,
       "the salt is made once, and opens only under its key": 1.5
     },
@@ -2472,17 +2464,6 @@
       "window counts exclude fork ancestor entries beyond its boundary": 57.9,
       "worker pages retained graph data and keeps initial transfer independent of transcript length": 686.7
     },
-    "packages/heal/effects_test.ts": {
-      "a failure files one open task about it, under its project": 7.7,
-      "a new bug starts one fixer holding it": 5.3,
-      "a storm counts on one task instead of filing more": 5.2,
-      "a transient, an empty message and an expected error file nothing": 3.8,
-      "at cap: the bug waits": 5.2,
-      "cooling down: a fault fixed a moment ago starts no second fixer": 11.7,
-      "muted: nofix on the project, or on home for all": 10.4,
-      "off: no provider files and starts nothing": 3.7,
-      "the boot sweep finds the open bugs nobody holds": 4.8
-    },
     "packages/hook/README.md": {
       "packages/hook/README.md block 1": 2.3
     },
@@ -2878,7 +2859,6 @@
     },
     "packages/memory/tools_test.ts": {
       "a thread is what it is about, then every comment, oldest first": 1.2,
-      "a topic is its name, and a name said twice is one topic": 1.1,
       "around reads an entry as grep -C reads a line": 1.8,
       "on marks the entity named, only for words it holds": 1.2,
       "session is where it was said, and what that session worked on": 1.9,
@@ -2956,9 +2936,6 @@
     },
     "packages/page/scrub_test.ts": {
       "a frozen page renders from its own bytes": 1.7
-    },
-    "packages/persona/README.md": {
-      "packages/persona/README.md block 1": 1.1
     },
     "packages/persona/files_test.ts": {
       "a sub-project's personas are specialists in its parent's checkout": 1.8,
@@ -3096,8 +3073,7 @@
       "what is under a project is one walk, at any depth": 1.1
     },
     "packages/ram/declared_test.ts": {
-      "a gated rule fires once and writes what it said": 1.1,
-      "a rule makes an entity, named from its firing": 1.1
+      "a gated rule fires once and writes what it said": 1.1
     },
     "packages/ram/parity_test.ts": {
       "a ram graph and a sqlite graph agree, batch for batch": 74.5,
@@ -4003,19 +3979,12 @@
       "different human and legacy titles refuse before clearing either": 1.4,
       "titles move once without changing identity, errors or edited titles": 2.2
     },
-    "packages/tracker/notify_test.ts": {
-      "archived bugs never notify, repeats do not create another letter": 1.7,
-      "minute batching waits on wake, retries one letter, marks only on delivery": 3.9
-    },
     "packages/tracker/reframe_test.ts": {
       "a competing frame result is revalidated rather than overwritten stale": 2.1,
       "frame resolver failures retain grouping and text without self enrichment": 1.6,
       "frames resolved again to the same answer write nothing": 1.9,
       "group moves during catalog await link only its current group": 2.6,
       "source and commit changed during catalog await are re-enriched": 2.1
-    },
-    "packages/tracker/report_test.ts": {
-      "spool intake acknowledges only admitted records and replay counts once": 1.5
     },
     "packages/tracker/role_test.ts": {
       "box role groups and enriches a spool occurrence through its configured catalog": 139.1
@@ -4341,12 +4310,12 @@
       "a missing explicit main refuses before resource creation, upload or deletion": 47.6,
       "a partial resource creation is recorded and reused on retry": 185,
       "a refused provisioning scope keeps draft files private and uploads no worker": 546.9,
-      "a static app may deploy its browser entry.js": 157.6,
-      "a vpc_services door needs a tunnel, and the script never holds it": 171,
+      "a static app may deploy its browser entry.js": 62.6,
+      "a vpc_services door needs a tunnel, and the script never holds it": 75.7,
       "app bindings survive redeploy, removal and trash until permanent deletion": 296.9,
       "explicit worker.js and entry.js are valid server sources": 167.7,
       "invalid main leaves the prior script intact even with no default source": 49,
-      "main deploys the chosen nested source and its imports, never the default worker": 173.1,
+      "main deploys the chosen nested source and its imports, never the default worker": 76,
       "malformed JSONC keeps the prior worker and never falls back to JSON": 212.6,
       "permanent deletion cleans a late resource creation": 204.2,
       "permanent deletion cleans a late worker upload": 194.9,
@@ -4354,7 +4323,7 @@
       "rollback selects the kept files and worker without uploading or minting a deploy": 181.5
     },
     "workers/yak/app_command_test.ts": {
-      "a page invokes declared commands as its owner; the command door refuses an editor": 179.1
+      "a page invokes declared commands as its owner; the command door refuses an editor": 79.7
     },
     "workers/yak/archetype_test.ts": {
       "hosted app archetypes classify and query writes through the deployed Worker": 251.3
@@ -4478,7 +4447,7 @@
     "workers/yak/connections_test.ts": {
       "a built integration reached by OAuth is offered once this deploy holds its client": 29.5,
       "a connection elsewhere is not this page to change": 22.2,
-      "a pasted key is sealed in the vault, and the directory holds its handle": 107.1,
+      "a pasted key is sealed in the vault, and the directory holds its handle": 38.9,
       "a person connects their own account for an app that asks each person, and the space holds only the ask": 97.2,
       "a person signs in for their own connection and comes back to the app": 96.8,
       "a sign-in begun on a page opened with ?enable= comes back to that page": 28,
@@ -4497,7 +4466,7 @@
     },
     "workers/yak/deploy-lifecycle_test.ts": {
       "a network release notice cannot fail a committed deploy": 70.5,
-      "a non-ok release notice cannot fail a committed deploy": 151.7,
+      "a non-ok release notice cannot fail a committed deploy": 65.5,
       "deploy reload marks survive recording, and pointer notices follow the commit": 167.6,
       "legacy source-less rollback keeps deploy rows unchanged and remains undoable": 163,
       "rollback selects kept bytes without minting or changing deploys, then deploy allocates above history": 174.9,
@@ -4518,7 +4487,6 @@
       "a vpc_services name is a door to the kernel as the app, never a binding": 12,
       "a wasm module goes up as a module part of its own type": 1.1,
       "a worker acts as the visitor, and only on its own store": 2.5,
-      "a worker is handed the app itself, and only on its own store": 1.4,
       "a worker that throws is the app's break, and is filed here": 1.4,
       "a worker's own no is not a break; its 5xx is": 1.9,
       "an ai binding is the app asking ./api/ai/run, and a refusal throws its sentence": 12.1,
@@ -4640,7 +4608,7 @@
       "a stranger is refused on an app made private after it was written": 30.6,
       "a subscription asking `*` answers what /query answers": 33,
       "a subscription is answered, and a commit reaches the socket": 29.7,
-      "a visitor to an open app adds, and touches no price, order or row of the owner’s": 105.5,
+      "a visitor to an open app adds, and touches no price, order or row of the owner’s": 44.2,
       "a woken object rewrites nothing it already holds": 57.8,
       "a woken object serves the same app, and the same sockets": 30,
       "an app keeps objects and arrays, and asks only whether one is there": 38.6,
@@ -4652,7 +4620,7 @@
       "an edge is a sentence, and the relation is a word the store knows": 32.6,
       "an open app is written by nobody": 35.7,
       "app archetype descriptors are read-only and vocabulary extension tracks new shapes": 132.3,
-      "app archetypes classify writes and migrate old rows only on schema changes": 155.8,
+      "app archetypes classify writes and migrate old rows only on schema changes": 62.6,
       "app schema reads and writes leave old journal tables untouched across boot": 163.6,
       "closing a Store with unsaveable wildlife settles, while an eligible final save completes": 139.3,
       "cold reads neither plant nor retry deployment work": 57.6,
@@ -4739,12 +4707,12 @@
       "kept deploys speak timestamp suffixes through HTTP and code rollback": 644.2
     },
     "workers/yak/lenses_test.ts": {
-      "a code rollback retains an empty destination schema and immutable steps": 151.1,
+      "a code rollback retains an empty destination schema and immutable steps": 64.8,
       "a conflicting old lens write refuses the whole batch": 29,
       "a later rename can restore a name without moving or clearing current rows": 222.7,
       "a later step gets its own mover stamp after the first step finished": 220.6,
       "an app lens keeps old writes, reads and subscriptions through reload": 158.8,
-      "old apply replies and keyed resends speak the caller vocabulary": 79,
+      "old apply replies and keyed resends speak the caller vocabulary": 28,
       "the app lens mover rehearses, consumes its source, and is idempotent": 228
     },
     "workers/yak/lib/hops_test.ts": {
@@ -4994,17 +4962,17 @@
     "workers/yak/reach_test.ts": {
       "a batch refused by one store lands in neither": 84.1,
       "a candidate seed waits for release and lands once": 243.6,
-      "a changed draft identity leaves serving reads and writes alone": 137.3,
-      "a changed identity replaces its index when the release moves": 164.3,
+      "a changed draft identity leaves serving reads and writes alone": 59.4,
+      "a changed identity replaces its index when the release moves": 67.8,
       "a declared identity is minted before the door hands it to a store": 86,
       "a first release seeds its candidate words": 133.4,
       "a name written twice through the door is one entity": 91.7,
       "a projection answers what it names, and what its paths reach across the stores": 94.3,
-      "a refused draft leaves the serving app store usable": 130.3,
+      "a refused draft leaves the serving app store usable": 54.4,
       "a spanning read merges the two stores into one bundle per eid": 95,
       "an order holds across the merge, and its window cuts after it": 130.2,
       "the app version selects its store declarations after preparation": 185.6,
-      "the first release serves the vocabulary it prepared": 104.6,
+      "the first release serves the vocabulary it prepared": 39.3,
       "the space speaks one vocabulary, and a word nobody declares is the platform’s": 95.1
     },
     "workers/yak/recover_test.ts": {
@@ -5152,7 +5120,7 @@
       "draft edits leave served breaks open until deployment": 57.6,
       "env.APP: a private app is written by its own worker, and by nobody else": 63.3,
       "monthly visit quota stops all app serving before dispatch or files": 84.5,
-      "photo and file uploads enforce space R2 limits from actual bytes": 215.9,
+      "photo and file uploads enforce space R2 limits from actual bytes": 96,
       "rung 1: a platform path never reaches an app": 53.2,
       "rung 1½: a `first` glob hands the path to the home worker": 26,
       "rung 1½: a glob over a store door never takes it": 45.6,
@@ -5167,7 +5135,7 @@
       "rung 5: everything else is the home worker, else 404": 80.2,
       "seen closes a whole deploy at once (T-34338)": 56.9,
       "the page wire: apply, query and search round-trip": 60.7,
-      "worker HTML carries its reporter without changing its page or headers": 312.2,
+      "worker HTML carries its reporter without changing its page or headers": 126,
       "worker non-HTML and bodyless answers are not rewritten": 143.7
     },
     "workers/yak/session_test.ts": {
@@ -5207,7 +5175,7 @@
       "platform disposal waits for store work before releasing storage": 18
     },
     "workers/yak/tools_test.ts": {
-      "a deploy says how many round trips it took": 176.2,
+      "a deploy says how many round trips it took": 72.3,
       "a fetch takes https, a live answer, and nothing over the ceiling": 13.1,
       "a listing asks the directory a fixed number of times": 303.5,
       "app_list says the caller’s role in each space it lists": 103,
@@ -5286,8 +5254,8 @@
       "a wake fires in the store that holds it and its rule receives the tick instant": 28.9,
       "a world with nobody in it stops ticking, and a player arriving wakes it": 172,
       "a write arms the object for the wake it just heard, and the alarm fires it": 22.4,
-      "an app store keeps its own schedule, with no platform in the middle": 56.1,
-      "an app's rule on `fired` advances the row its wake was about": 107.6,
+      "an app store keeps its own schedule, with no platform in the middle": 21.3,
+      "an app's rule on `fired` advances the row its wake was about": 45.6,
       "an idle world advances offline, a missed stretch in one firing": 147.1,
       "seeded wake rows survive a directory restart without rewinding or resuming": 20.2,
       "the git object store keeps a clock too, with nothing owed": 12.4,
