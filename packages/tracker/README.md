@@ -27,11 +27,11 @@ normalize('T-42 failed at /srv/app.ts:10:3 after 300 tries')
 
 ## Host interface
 
-Load `trackerDoc` with @yaks/kernel, @yaks/tools, @yaks/api, @yaks/doc,
-@yaks/mail and @yaks/wake. RAM takes `computed`; SQL storage takes `derived`.
-`bug.status` comes from the resolved/archived marks. `bug.people` is distinct
-actors among retained occurrences. `bug.hits` is historical and does not shrink
-when occurrences are trimmed.
+Load `trackerDoc` with @yaks/kernel, @yaks/tools, @yaks/api, @yaks/doc and
+@yaks/mail. RAM takes `computed`; SQL storage takes `derived`. `bug.status`
+comes from the resolved/archived marks. `bug.people` is distinct actors among
+retained occurrences. `bug.hits` is historical and does not shrink when
+occurrences are trimmed.
 
 `report(error, context)` never throws. Context supplies `sink`, the failing
 work's `actor`, commit/version, global `during` references, and optionally a
@@ -84,9 +84,9 @@ space `notify` stream callback, or a platform/box mail `to`, `from` and global
 tracker `store` eid. Each bug opening and each regression gets its own letter
 immediately. Its identity derives from the store, recipient, bug eid, opening or
 regression mark, and full `created.at` or `regressed.at`, so a replayed effect
-or wake keeps the same letter. The subject names the bug and its headline; the
-body carries the whole message, where it happened, its historical hits, first
-and last seen times, and a bug link. Bugs become notified only after their
+keeps the same letter. The subject names the bug and its headline; the body
+carries the whole message, where it happened, its historical hits, first and
+last seen times, and a bug link. Bugs become notified only after their
 occasion's letter has its `delivered` mark; an earlier occasion's delivery
 cannot mark a later regression notified. Space replies own their own notified
 mark. Archived bugs still count but never notify. Retention keeps the newest
@@ -130,11 +130,9 @@ equal(occurrences('bug'), '.error.bug=bug * .order=-error.at')
 Copy `box.json` to `~/.yak/tracker.json` and `yak-tracker@.service` to the user
 systemd unit directory. The tracker uses `~/.yak/tracker.db`, never `yak.db`.
 Its command is
-`yak work --config ~/.yak/tracker.json --roles
-effects,@yaks/tracker,@yaks/wake`:
-composition opens graph, effects, intake and the wake service, with the standard
-leases and process wind-down. Notifications need no minute deadline; any wake
-left from a prior run is safe to replay. It imports no web routes.
+`yak work --config ~/.yak/tracker.json --roles effects,@yaks/tracker`:
+composition opens graph, effects and intake, with the standard leases and
+process wind-down. It imports no web routes.
 
 Add `"tracker": {"spool": "tracker-spool"}` to the watched graph's config.
 `compose()` connects tool, effect, request and duty failures to that spool

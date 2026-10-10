@@ -54,8 +54,6 @@ let receipt = (row: Bundle): Bundle => ({
     notified: { at: null },
   },
   notified: {},
-  wake: null,
-  fired: null,
 })
 
 /** A bug's opening or regression owns one letter, including across retries. */

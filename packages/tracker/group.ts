@@ -75,8 +75,6 @@ export let grouped = (
         ? {
           resolved: null,
           notified: null,
-          wake: null,
-          fired: null,
           regressed: { at: null, by: null, via: null, error: row.entity.eid },
         }
         : {},

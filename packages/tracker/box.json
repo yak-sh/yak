@@ -13,7 +13,6 @@
     "@yaks/process",
     "@yaks/effects",
     "@yaks/mail",
-    "@yaks/wake",
     {
       "use": "@yaks/tracker",
       "with": {
