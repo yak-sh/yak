@@ -13,9 +13,10 @@
 // burst of writes is one pass. A pass renders every persona (a few hundred
 // milliseconds over the fleet's graph) and writes only the files whose text
 // moved, so a run only has to avoid passes nothing asked for: a doc edit or a
-// new link counts when it touches something the last pass said. A
-// host that has not made a pass yet counts every one, and its first pass
-// learns the set. Passes run one at a time; the timer is dropped when the
+// new link counts when it touches something the last pass said, and archiving
+// or restoring a project with a repository counts because that moves its
+// checkout in or out of the files. A host that has not made a pass yet counts
+// every one, and its first pass learns the set. Passes run one at a time; the timer is dropped when the
 // host shuts down.
 
 import type { Handlers } from '@yaks/effects'
@@ -39,6 +40,35 @@ export let AFTER = 1_000
 /** Injectable boundaries for tests: the skills' (./skill-effects.ts), and how
  * long a burst settles. */
 export type Runtime = SkillRuntime & { after?: number }
+
+type Fired = Parameters<Handlers[string]>
+
+/** Whether a write moves the persona files, given the entities the last pass
+ * said (none until a pass has been made, and then every write counts). A doc or
+ * a new link counts when it touches what the last pass said; a persona moving,
+ * or a link carrying or reading one going — gone before anybody can read which
+ * ends it had — always does. A project with a repository put away or brought
+ * back does too: the last pass never said it while it was archived, and its
+ * checkout is what the files are written into. */
+export let moves = async (
+  e: Fired[0],
+  tx: Fired[1],
+  said: Set<Eid>,
+): Promise<boolean> => {
+  let about = (...eids: unknown[]) =>
+    !said.size || eids.some((x) => said.has(String(x)))
+  if (e.name == 'archived') {
+    let [row] = await tx.get([e.entity.eid], ['project', 'repo'])
+    return !!(row?.project && row.repo)
+  }
+  if (e.name == DOC) return about(e.entity.eid)
+  if (e.kind == 'created' && (e.name == 'contains' || e.name == 'reads')) {
+    let [link] = await tx.get([e.entity.eid], [EDGE])
+    let ends = link?.[EDGE] as Comp | undefined
+    return about(ends?.from, ends?.to)
+  }
+  return true
+}
 
 /** The code that keeps the persona files current, when `files` is on. */
 export let effects = (
@@ -73,21 +103,10 @@ export let effects = (
   host.stopping?.addEventListener('abort', () => clearTimeout(timer), {
     once: true,
   })
-  let about = (...eids: unknown[]) =>
-    (!said.size || eids.some((e) => said.has(String(e)))) && soon()
   return {
     ...skills,
-    // A doc or a new link counts when it touches what the last pass said; a
-    // persona moving, or a link carrying or reading one going — gone before
-    // anybody can read which ends it had — always does.
     persona_files: async (e, tx) => {
-      if (e.name == DOC) return about(e.entity.eid)
-      if (e.kind == 'created' && (e.name == 'contains' || e.name == 'reads')) {
-        let [link] = await tx.get([e.entity.eid], [EDGE])
-        let ends = link?.[EDGE] as Comp | undefined
-        return about(ends?.from, ends?.to)
-      }
-      return soon()
+      if (await moves(e, tx, said)) soon()
     },
   }
 }

@@ -1,8 +1,11 @@
 // Persona link births must owe durable work, not every edge in the graph;
 // the claimed runs still write the checkout's instruction files.
 import { equal, test, until } from '@yaks/testing'
-import { effects } from './effects.ts'
-import { link, owing } from './testing.ts'
+import { effects, moves } from './effects.ts'
+import { personaFiles } from './files.ts'
+import type { Graph } from '@yaks/graph'
+import type { Event } from '@yaks/effects'
+import { link, owing, world } from './testing.ts'
 
 let fixture = () => owing('persona_files')
 
@@ -101,5 +104,71 @@ test('created contains and reads links rewrite persona files through the effects
     stopping.abort()
     await fx.stop()
     await Deno.remove(root, { recursive: true })
+  }
+})
+
+let checkout = [
+  { entity: { eid: 'project' }, project: {}, repo: { repository: 'repo' } },
+  { entity: { eid: 'repo' }, repository: { common: '/code/.git' } },
+  {
+    entity: { eid: 'tree' },
+    worktree: { repository: 'repo', path: '/code', gitdir: '/code/.git' },
+  },
+  {
+    entity: { eid: 'persona' },
+    persona: { home: 'project' },
+    doc: { title: 'Common', body: 'base instructions' },
+  },
+  link('project', 'contains', 'persona'),
+]
+
+// Put `archived` on an entity, or take it off, as the pool would tell the
+// effect, and whether that starts a pass. `said` is what the last pass said:
+// the persona of the project with the checkout.
+let archive = async (g: Graph, said: Set<string>, eid: string, on: boolean) => {
+  await g.apply([{ entity: { eid }, archived: on ? {} : null }])
+  let event = {
+    kind: on ? 'created' : 'removed',
+    name: 'archived',
+    entity: { eid },
+  }
+  return moves(event as Event, g.storage, said)
+}
+
+let paths = async (g: Graph) => (await personaFiles(g)).files.map((f) => f.path)
+
+test('archiving a project takes its persona files away', async () => {
+  let g = world()
+  await g.apply(checkout)
+  equal(await archive(g, new Set(['persona']), 'project', true), true)
+  equal(await paths(g), [])
+})
+
+test('restoring a project brings its persona files back', async () => {
+  let g = world()
+  await g.apply([...checkout, { entity: { eid: 'project' }, archived: {} }])
+  equal(await paths(g), [])
+  equal(await archive(g, new Set(), 'project', false), true)
+  equal(await paths(g), ['/code/.tasks/AGENTS.md'])
+})
+
+test('archiving what holds no checkout starts no pass', async () => {
+  let g = world()
+  await g.apply([
+    ...checkout,
+    { entity: { eid: 'bare' }, project: {} },
+    { entity: { eid: 'note' }, doc: { title: 'Note', body: '' } },
+  ])
+  let said = new Set(['persona'])
+  equal(await archive(g, said, 'bare', true), false)
+  equal(await archive(g, said, 'note', true), false)
+})
+
+test('putting an entity away, or bringing it back, owes persona files', async () => {
+  let { g, queued } = fixture()
+  await g.apply([{ entity: { eid: 'project' }, project: {} }])
+  for (let [archived, owed] of [[{}, 1], [null, 2]] as const) {
+    await g.apply([{ entity: { eid: 'project' }, archived }])
+    equal((await queued()).length, owed)
   }
 })

@@ -111,7 +111,8 @@
       "created": [
         "persona",
         "contains",
-        "reads"
+        "reads",
+        "archived"
       ],
       "changed": [
         "persona.home",
@@ -121,9 +122,10 @@
       "removed": [
         "persona",
         "contains",
-        "reads"
+        "reads",
+        "archived"
       ],
-      "description": "write the persona files again: a persona, its home, a doc a persona says, or a link carrying or reading one moved",
+      "description": "write the persona files again: a persona, its home, a doc a persona says, a link carrying or reading one, or a project with a repository archived or restored moved",
       "option": "files"
     },
     "skill": {
