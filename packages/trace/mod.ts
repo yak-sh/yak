@@ -392,7 +392,12 @@ let tree = (events: Map<string, Event>, root?: string): Event[] => {
   while (pending.length) {
     let e = pending.pop()!
     found.push(e)
-    pending.push(...(children.get(e.id) ?? []).toReversed())
+    let descendants = children.get(e.id)
+    if (descendants) {
+      for (let i = descendants.length - 1; i >= 0; i--) {
+        pending.push(descendants[i])
+      }
+    }
   }
   return found
 }

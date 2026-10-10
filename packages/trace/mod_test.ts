@@ -109,9 +109,10 @@ test('record preserves synchronous results and captures beyond channel history',
     let c = ok(peek(target))
     let root = ok(c.begin({ kind: 'bench', name: 'round' }))
     for (let i = 0; i < 300; i++) {
-      c.begin({ kind: 'sql', name: 'book.select', parent: root.id })?.end({
-        counts: { rows: i },
-      })
+      // The last child proves counts survive the bounded channel history.
+      c.begin({ kind: 'sql', name: 'book.select', parent: root.id })?.end(
+        i == 299 ? { counts: { rows: i } } : undefined,
+      )
     }
     c.instant({ kind: 'phase', name: 'done', parent: root.id })
     root.end()
