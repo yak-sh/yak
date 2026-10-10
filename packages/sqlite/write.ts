@@ -601,8 +601,9 @@ export let patch = (
       // Memory answers for an entity it knows wholly: one it knows wears an
       // exception, or one it knows wears none of them, is not asked about.
       let held = tables.map((name) => had?.(eid, name))
-      if (held.includes(true)) excluded.add(eid)
-      return !held.includes(true) && held.some((h) => h === undefined)
+      let wears = held.some((h) => h != null)
+      if (wears) excluded.add(eid)
+      return !wears && held.some((h) => h === undefined)
     })
     for (let eid of wears(driver, tables, asked)) excluded.add(eid)
     for (let eid of excluded) {
@@ -701,13 +702,32 @@ export let patch = (
   // or went: the UPDATE hit, or the absent INSERT or the drop did something.
   let fresh = new Set(made.map((e) => e.eid))
   let lacks = (eid: string, name: string) =>
-    fresh.has(eid) || had?.(eid, name) === false
+    fresh.has(eid) || had?.(eid, name) === null
+  // What a patch gives a row memory knows, less what the row holds already:
+  // writing a value again rewrites its row and every index over it. Memory
+  // speaks of the row as this patch found it, so a row an earlier bundle of
+  // the patch wrote is written as given.
+  let wrote = new Set<string>()
+  let news = (eid: string, name: string, comp: Comp): Comp => {
+    let held = had?.(eid, name)
+    if (!held || wrote.has(`${eid}\0${name}`)) return comp
+    return Object.fromEntries(
+      Object.entries(comp).filter(([prop, value]) =>
+        !(prop in held) || !same(held[prop], value)
+      ),
+    )
+  }
   for (let b of alive) {
     let eid = b.entity.eid
-    for (let [name, comp] of comps(b)) {
-      if (comp != null && lacks(eid, name) && full(name, comp)) {
-        effect(driver, upsertSql(vocab, eid, name, comp, false, resolve))
+    for (let [name, given] of comps(b)) {
+      let comp = given && news(eid, name, given)
+      wrote.add(`${eid}\0${name}`)
+      if (given != null && lacks(eid, name) && full(name, given)) {
+        effect(driver, upsertSql(vocab, eid, name, given, false, resolve))
         moved?.(eid, name, true)
+        continue
+      }
+      if (comp && Object.keys(given!).length && !Object.keys(comp).length) {
         continue
       }
       let { first, fallback } = patchOne(vocab, eid, name, comp, resolve)
@@ -752,9 +772,16 @@ export let patch = (
 let ran = (driver: Driver, w: Insert | Update | Delete): number =>
   driver.run?.(w) ?? driver.query({ ...w, returning: [col('entity')] }).length
 
-/** Whether memory says an entity holds a row of a component, read or written
- * before: `undefined` where memory does not know (./memo.ts). */
-export type Known = (eid: string, name: string) => boolean | undefined
+/** What memory says an entity holds of a component, read or written before:
+ * its row, with the values memory can vouch for as a read returns them,
+ * `null` for none, and `undefined` where memory does not know (./memo.ts). */
+export type Known = (eid: string, name: string) => Comp | null | undefined
+
+// Whether a value a patch gives is the one a row holds, as a read returns it.
+let same = (held: unknown, given: unknown): boolean =>
+  held === given ||
+  (typeof held == 'object' && typeof given == 'object' && held != null &&
+    given != null && JSON.stringify(held) == JSON.stringify(given))
 
 /** What hears a component row come (`held`) or go, entity by entity. */
 export type Moved = (eid: string, table: string, held: boolean) => void

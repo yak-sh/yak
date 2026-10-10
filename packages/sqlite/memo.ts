@@ -915,9 +915,10 @@ export let memoized = (
       )
       let known: Known = (eid, name) => {
         let b = now.get(eid)
-        return b === LOST || b === undefined || c.blind
-          ? undefined
-          : b?.[name] != null
+        if (b === LOST || b === undefined || c.blind) return undefined
+        let held = b?.[name] as Comp | undefined
+        // A row whose values memory can't work out vouches for none of them.
+        return held == null ? null : HOLE in held ? {} : held
       }
       let shifts = c.shifts, before = new Map(c.versions)
       let born = writes(

@@ -638,6 +638,8 @@ test('a component an entity is known to lack is written in one statement', () =>
     f.s.tx((tx) => tx.patch([{ entity: { eid: 'hero' }, position: { x } }]))
   assertEquals(writes(f.d, 'position', () => move(1)), 1)
   assertEquals(writes(f.d, 'position', () => move(2)), 1)
+  // What it is known to hold already is not written again.
+  assertEquals(writes(f.d, 'position', () => move(2)), 0)
   assertEquals(f.s.get(['hero'])[0].position, { x: 2 })
 })
 
