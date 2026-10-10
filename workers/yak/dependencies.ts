@@ -37,36 +37,75 @@ let remove = (path: string) => {
 }
 
 /** npm may omit optional packages, including binaries for other platforms. */
-export let matching = (wanted: Lock, held: Lock) =>
-  held.lockfileVersion === wanted.lockfileVersion &&
-  Object.entries(wanted.packages).every(([path, pkg]) =>
-    !path || pkg.optional || held.packages[path]
-  ) &&
-  Object.entries(held.packages).every(([path, pkg]) =>
-    wanted.packages[path] &&
-    identity.every((field) => pkg[field] === wanted.packages[path][field])
-  )
+let mismatch = (wanted: Lock, held: Lock) => {
+  if (held.lockfileVersion !== wanted.lockfileVersion) {
+    return 'lockfile mismatch: lockfileVersion'
+  }
+  for (let [path, pkg] of Object.entries(wanted.packages)) {
+    if (path && !pkg.optional && !held.packages[path]) {
+      return `lockfile mismatch: ${JSON.stringify(path)} package missing`
+    }
+  }
+  for (let [path, pkg] of Object.entries(held.packages)) {
+    if (!wanted.packages[path]) {
+      return `lockfile mismatch: ${JSON.stringify(path)} package unexpected`
+    }
+    for (let field of identity) {
+      if (pkg[field] !== wanted.packages[path][field]) {
+        return `lockfile mismatch: ${JSON.stringify(path)} ${field}`
+      }
+    }
+  }
+}
 
-let complete = (root: string) => {
+export let matching = (wanted: Lock, held: Lock) => !mismatch(wanted, held)
+
+let incomplete = (root: string) => {
   let read = (path: string): Lock =>
     JSON.parse(Deno.readTextFileSync(`${root}/${path}`))
-  let wanted = read('package-lock.json')
-  let held = read('node_modules/.package-lock.json')
-  return matching(wanted, held) &&
-    Object.keys(held.packages).every((path) =>
-      Deno.statSync(`${root}/${path}`).isDirectory
-    )
+  let path = 'package-lock.json'
+  try {
+    let wanted = read(path)
+    path = 'node_modules/.package-lock.json'
+    let held = read(path), reason = mismatch(wanted, held)
+    if (reason) return reason
+    for (let path of Object.keys(held.packages)) {
+      try {
+        if (Deno.statSync(`${root}/${path}`).isDirectory) continue
+      } catch { /* A missing or inaccessible package cannot be reused. */ }
+      return `tree incomplete: ${JSON.stringify(`${root}/${path}`)}`
+    }
+  } catch (error) {
+    return `lockfile ${
+      error instanceof Deno.errors.NotFound ? 'missing' : 'unreadable'
+    }: ${JSON.stringify(`${root}/${path}`)}`
+  }
+}
+
+let complete = (root: string) => !incomplete(root)
+
+let changed = (root: string) => {
+  try {
+    let held: string
+    try {
+      held = Deno.readTextFileSync(receipt(root))
+    } catch (error) {
+      return `receipt ${
+        error instanceof Deno.errors.NotFound ? 'missing' : 'unreadable'
+      }: ${JSON.stringify(receipt(root))}`
+    }
+    let wanted = key(files(root))
+    if (held !== wanted) {
+      return `receipt different key: ${JSON.stringify(held)} != ${wanted}`
+    }
+    return incomplete(root)
+  } catch (error) {
+    return `install inputs unreadable: ${JSON.stringify(String(error))}`
+  }
 }
 
 /** Whether the successful install inputs or its package tree changed. */
-export let stale = (root = dir) => {
-  try {
-    return Deno.readTextFileSync(receipt(root)) !== key(files(root)) ||
-      !complete(root)
-  } catch {
-    return true
-  }
-}
+export let stale = (root = dir) => !!changed(root)
 
 let adopted = (root: string, cacheKey: string) => {
   try {
@@ -109,7 +148,16 @@ export let installed = async (root = dir, {
       if (!stale(root)) return false
       // The restored project's content key certifies an older complete tree.
       if (cacheKey && adopted(root, cacheKey)) return false
-      if (seed && key(files(root)) === key(files(seed)) && !stale(seed)) {
+      let seedReason = () => {
+        if (!seed) return 'seed missing'
+        if (key(files(root)) !== key(files(seed))) {
+          return `seed different key: ${JSON.stringify(seed)}`
+        }
+        let reason = changed(seed)
+        if (reason) return `seed stale: ${JSON.stringify(seed)} (${reason})`
+      }
+      let seedIssue = seedReason()
+      if (!seedIssue) {
         let modules = `${root}/node_modules`, copy = `${lock}/node_modules`
         cpSync(Deno.realPathSync(`${seed}/node_modules`), copy, {
           recursive: true,
@@ -120,6 +168,17 @@ export let installed = async (root = dir, {
         return false
       }
       let inputs = key(files(root))
+      let reason = changed(root)
+      let cacheReason = cacheKey
+        ? inputs !== cacheKey
+          ? `cache different key: ${cacheKey} != ${inputs}`
+          : incomplete(root)
+        : undefined
+      console.error(
+        `npm ci in ${JSON.stringify(root)}: ${
+          [reason, cacheReason, seedIssue].filter(Boolean).join('; ')
+        }`,
+      )
       remove(receipt(root))
       try {
         let { code } = await new Deno.Command('npm', {

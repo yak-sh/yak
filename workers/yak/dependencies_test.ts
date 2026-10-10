@@ -158,6 +158,17 @@ try { await first } catch (error) {
 }
 Deno.writeTextFileSync(dir + '/code', '0')
 results.push(['concurrent retry', await second, count(), stale(root)])
+// Exercise mismatch fields and a same-key stale seed after the reuse checks.
+for (let field of ['version', 'resolved', 'integrity', 'link']) {
+  let path = root + '/node_modules/.package-lock.json'
+  let held = JSON.parse(Deno.readTextFileSync(path))
+  held.packages['node_modules/dep'][field] = field === 'link' ? true : 'changed'
+  Deno.writeTextFileSync(path, JSON.stringify(held))
+  await installed(root)
+}
+for (let file of ['package.json', 'package-lock.json']) Deno.copyFileSync(root + '/' + file, seed + '/' + file)
+Deno.removeSync(root + '/node_modules/dep')
+await installed(root, { seed })
 console.log(JSON.stringify(results))
 `,
     )
@@ -168,6 +179,29 @@ console.log(JSON.stringify(results))
       stderr: 'piped',
     }).output()
     assertEquals(out.code, 0, new TextDecoder().decode(out.stderr))
+    let diagnostics = new TextDecoder().decode(out.stderr).trim().split('\n')
+    assertEquals(diagnostics.length, 16, 'one diagnostic per npm invocation')
+    for (
+      let reason of [
+        'receipt missing:',
+        'receipt different key:',
+        'seed missing',
+        'seed different key:',
+        'seed stale:',
+        `tree incomplete: "${dir}/checkout/node_modules/dep"`,
+        'lockfile unreadable:',
+        ...['version', 'resolved', 'integrity', 'link'].map((field) =>
+          `lockfile mismatch: "node_modules/dep" ${field}`
+        ),
+      ]
+    ) {
+      assertEquals(
+        diagnostics.some((line) => line.includes(reason)),
+        true,
+        `diagnostic includes ${reason}`,
+      )
+    }
+
     assertEquals(JSON.parse(new TextDecoder().decode(out.stdout)), [
       ['cold', true, 1, false],
       ['fresh checkout', false, 1, false],
