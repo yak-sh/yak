@@ -4,8 +4,14 @@
     "error": {
       "component": true,
       "type": "object",
-      "description": "One occurrence of a mistake, minted by the reporter so resends land once.",
+      "description": "A sample of a mistake with an occurrence count, minted by the reporter so resends land once.",
       "properties": {
+        "hits": {
+          "type": "integer",
+          "minimum": 1,
+          "stamped": true,
+          "description": "Occurrences represented by this sample; omitted means one."
+        },
         "at": {
           "type": "string",
           "stamped": true,

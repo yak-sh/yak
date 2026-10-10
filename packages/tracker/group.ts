@@ -3,7 +3,7 @@
 
 import { type Bundle, derivedEid, type Graph, Stale, token } from '@yaks/graph'
 import { absent, and, eq, every } from '@yaks/query'
-import { faultKey } from './fault.ts'
+import { faultOf } from './fault.ts'
 import { enrichFrames } from './frames.ts'
 import { comp, type Frame, str, title } from './model.ts'
 
@@ -30,8 +30,7 @@ export let grouped = (
   let e = comp(row, 'error')
   let x = comp(row, 'exception')
   let context = comp(row, 'during')
-  let fault = str(e.fault) ||
-    faultKey(str(context.kind), title(row), str(x.stack))
+  let fault = faultOf(row)
   let app = str(context.app)
   let eid = bug?.entity.eid ?? bugEid(app, fault)
   let old = comp(bug, 'bug')
@@ -70,7 +69,7 @@ export let grouped = (
           : {},
         first: str(old.first) && str(old.first) < at ? old.first : at,
         last: str(old.last) > at ? old.last : at,
-        hits: Number(old.hits ?? 0) + 1,
+        hits: Number(old.hits ?? 0) + Number(e.hits ?? 1),
       },
       ...back
         ? {
@@ -95,11 +94,7 @@ export let group = async (
   let [row] = await g.get([eid])
   if (!row?.error || row.refusal || comp(row, 'error').bug) return
   let full = await (enrich ?? enrichFrames())(row)
-  let fault = str(comp(full, 'error').fault) || faultKey(
-    str(comp(full, 'during').kind),
-    title(full),
-    str(comp(full, 'exception').stack),
-  )
+  let fault = faultOf(full)
   let app = str(comp(full, 'during').app)
   let [bug] = await g.read(
     and(

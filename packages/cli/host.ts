@@ -1232,6 +1232,7 @@ let composed = async (
         let shut = async () => {
           await recorded?.close()
           captureControl?.close()
+          await report.close()
           try {
             sql.close()
           } catch { /* already closed */ }
@@ -1258,6 +1259,7 @@ let composed = async (
     await recorded?.close()
     captureControl?.close()
     await report(error)
+    await report.close()
     sql.close()
     throw error
   }

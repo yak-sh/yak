@@ -1,5 +1,10 @@
 // The box Sentry transport, shared by caught host failures and disk alerts.
 
+import { comp, str } from './model.ts'
+import { faultOf } from './fault.ts'
+import { stackFrames } from './frames.ts'
+import type { Sink } from './report.ts'
+
 type Target = {
   api: string
   org: string
@@ -14,11 +19,60 @@ type Key = {
 type Project = { id: string; slug: string }
 
 export type SentryEvent = {
-  exception: { values: { type: string; value: string }[] }
+  exception: {
+    values: {
+      type: string
+      value: string
+      stacktrace?: {
+        frames: {
+          filename: string
+          lineno?: number
+          colno?: number
+          function?: string
+        }[]
+      }
+    }[]
+  }
   fingerprint?: string[]
   tags: Record<string, unknown>
   extra?: Record<string, unknown>
 }
+
+/** The same captured sample, fault and occurrence count as the durable spool. */
+export let sentry =
+  (send: (event: SentryEvent) => Promise<void>): Sink => async (rows) => {
+    let row = rows[0]
+    if (!row?.error) return
+    let error = comp(row, 'error')
+    let exception = comp(row, 'exception')
+    let frames = stackFrames(str(exception.stack)).reverse().map((frame) => ({
+      filename: frame.file,
+      lineno: frame.line,
+      colno: frame.column,
+      function: frame.function,
+    }))
+    await send({
+      exception: {
+        values: [{
+          type: str(exception.type) || 'Error',
+          value: str(exception.value ?? error.message),
+          ...frames.length ? { stacktrace: { frames } } : {},
+        }],
+      },
+      fingerprint: [str(comp(row, 'during').app), faultOf(row)],
+      tags: {
+        ...error.tags as Record<string, unknown>,
+        ...comp(row, 'during'),
+      },
+      extra: {
+        commit: error.commit,
+        actor: row.$actor,
+        hits: error.hits ?? 1,
+        at: error.at,
+        stack: exception.stack,
+      },
+    })
+  }
 
 /** Send to the same Sentry project admin errors reads. Both discovery doors
  * accept its existing org:read token; the token never reaches ingest.

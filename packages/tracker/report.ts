@@ -2,7 +2,8 @@
 // failed sink can change the caller's result; fallback never calls the reporter.
 
 import { type Actor, type Bundle, status } from '@yaks/graph'
-import { comp, type Crumb, type Level } from './model.ts'
+import { comp, type Crumb, type Level, str } from './model.ts'
+import { faultOf } from './fault.ts'
 
 export type Sink = (rows: Bundle[]) => void | Promise<void>
 export type Context = {
@@ -144,3 +145,130 @@ export let post =
     })
     if (!response.ok) throw new Error(`tracker intake: ${response.status}`)
   }
+
+/** Independent deliveries start together. A refusal is a counter, never a
+ * new error; console keeps the original rows visible if a sink is unavailable. */
+export let fanout = (
+  sinks: Record<string, Sink>,
+): Sink & { failures: Record<string, number> } => {
+  let failures = Object.fromEntries(Object.keys(sinks).map((name) => [name, 0]))
+  return Object.assign(async (rows: Bundle[]) => {
+    await Promise.all(
+      Object.entries(sinks).map(async ([name, sink]) => {
+        try {
+          await sink(rows)
+        } catch (error) {
+          failures[name]++
+          try {
+            console.error(
+              'tracker delivery failed —',
+              name,
+              failures[name],
+              error,
+              JSON.stringify(rows),
+            )
+          } catch { /* telemetry cannot break the caller */ }
+        }
+      }),
+    )
+  }, { failures })
+}
+
+export type WindowClock = {
+  now: () => number
+  after: (ms: number, run: () => Promise<void>) => () => void
+}
+export type Coalesced = Sink & {
+  flush: () => Promise<void>
+  close: () => Promise<void>
+}
+let clock: WindowClock = {
+  now: Date.now,
+  after: (ms, run) => {
+    let timer = setTimeout(() => void run(), ms)
+    // One-shot commands need not live a minute just to forget an empty window.
+    let deno = (globalThis as {
+      Deno?: { unrefTimer: (timer: ReturnType<typeof setTimeout>) => void }
+    }).Deno
+    deno?.unrefTimer(timer)
+    return () => clearTimeout(timer)
+  },
+}
+
+/** First samples leave immediately. Each app/fault window keeps only its latest
+ * repeat sample, whose hits count reaches every sink and downstream grouping. */
+export let coalesce = (
+  sink: Sink,
+  options: { window?: number; clock?: WindowClock } = {},
+): Coalesced => {
+  let time = options.clock ?? clock
+  let span = options.window ?? 60_000
+  let windows = new Map<string, {
+    until: number
+    cancel: () => void
+    rows?: Bundle[]
+    hits: number
+  }>()
+  let pending = new Set<Promise<void>>()
+  let closed = false
+  let send = (rows: Bundle[]): Promise<void> => {
+    let delivery = reportRows(rows, sink)
+    pending.add(delivery)
+    void delivery.then(() => pending.delete(delivery))
+    return delivery
+  }
+  let finish = (key: string): Promise<void> => {
+    let window = windows.get(key)
+    if (!window) return Promise.resolve()
+    windows.delete(key)
+    window.cancel()
+    if (!window.rows) return Promise.resolve()
+    let [row, ...rest] = window.rows
+    return send([{
+      ...row,
+      error: { ...comp(row, 'error'), hits: window.hits },
+    }, ...rest])
+  }
+  let flush = async () => {
+    await Promise.all([...windows.keys()].map(finish))
+    await Promise.all(pending)
+  }
+  return Object.assign((rows: Bundle[]): Promise<void> => {
+    let row = rows[0]
+    if (closed || !row?.error) return send(rows)
+    let key = JSON.stringify([str(comp(row, 'during').app), faultOf(row)])
+    let window = windows.get(key)
+    // A delayed timer must not hold the next window's first occurrence.
+    if (window && time.now() >= window.until) {
+      void finish(key)
+      window = undefined
+    }
+    if (window) {
+      window.rows = rows
+      window.hits += Number(comp(row, 'error').hits ?? 1)
+      return Promise.resolve()
+    }
+    windows.set(key, {
+      until: time.now() + span,
+      cancel: time.after(span, () => finish(key)),
+      hits: 0,
+    })
+    return send(rows)
+  }, {
+    flush,
+    close: () => {
+      closed = true
+      return flush()
+    },
+  })
+}
+
+let reportRows = async (rows: Bundle[], sink: Sink) => {
+  try {
+    await sink(rows)
+  } catch {
+    try {
+      await consoleRows(rows)
+    } catch { /* no recursion */ }
+  }
+}

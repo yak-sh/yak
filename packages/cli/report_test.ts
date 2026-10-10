@@ -70,7 +70,7 @@ test('a reporter leaves the caller untouched when its spool cannot open', async 
     await reporter({ tracker: { spool: `${blocked}/spool` } })(Error('broken'))
     // The record the spool refused is written where an operator still sees it.
     equal(errors.length, 2)
-    equal(String(errors[1][0]).includes('broken'), true)
+    equal(errors[1].some((part) => String(part).includes('broken')), true)
   } finally {
     console.error = log
     Deno.removeSync(blocked)
@@ -140,7 +140,8 @@ test('Sentry failure is isolated and retained without recursively sending it', a
     await report(new Error('mail down'))
     equal(calls, 1)
     let records = await Array.fromAsync(files(`${dir}/spool`).source())
-    equal(records.length, 2)
+    equal(records.length, 1)
+    equal(report.failures.sentry, 1)
   } finally {
     await Deno.remove(dir, { recursive: true })
   }
@@ -174,4 +175,31 @@ test('caught mail failures use the shared real Sentry request builder', async ()
     },
   )
   equal(calls, 1)
+})
+
+test('reporter close waits for context and flushes repeats to Sentry', async () => {
+  let log = console.error
+  console.error = () => {}
+  try {
+    let resolve!: (commit: string) => void
+    let commit = new Promise<string>((done) => resolve = done)
+    let events: import('@yaks/tracker/sentry').SentryEvent[] = []
+    let report = reporter({}, undefined, commit, (event) => {
+      events.push(event)
+      return Promise.resolve()
+    })
+    let first = report('missing row 42')
+    let repeat = report('missing row 99')
+    let closing = report.close()
+    equal(events.length, 0)
+    resolve('sha')
+    await first
+    await repeat
+    await closing
+    equal(events.map((event) => event.extra?.hits), [1, 1])
+    equal(events.map((event) => event.extra?.commit), ['sha', 'sha'])
+    equal(events[0].fingerprint, events[1].fingerprint)
+  } finally {
+    console.error = log
+  }
 })

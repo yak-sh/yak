@@ -1,15 +1,17 @@
 # @yaks/tracker
 
-An **error** is one occurrence of a mistake; a **bug** groups errors with the
-same fault. Intake keeps a reporter's UUID so a queue or spool resend is the
-same occurrence. Grouping runs downstream and atomically links and counts it.
-All references may name entities in other stores.
+An **error** is a sample of a mistake, representing `error.hits` occurrences
+(one when omitted); a **bug** groups errors with the same fault. Intake keeps a
+reporter's UUID so a queue or spool resend is the same sample. Grouping runs
+downstream and atomically links it and adds its hits to `bug.hits`. All
+references may name entities in other stores.
 
 | Export      | Owns                                                        |
 | ----------- | ----------------------------------------------------------- |
 | `.`         | Fault keys, grouping patches, regression and retention      |
 | `./vocab`   | Tracker words, RAM computations and SQL-derived expressions |
-| `./report`  | `report`, `caught`, `capture`, `queue`, `spool`, `post`     |
+| `./report`  | Capture, transport, `fanout` and `coalesce`                 |
+| `./sentry`  | Captured bundle adapter and box Sentry ingest transport     |
 | `./page`    | Classic browser capture script and twenty breadcrumbs       |
 | `./effects` | `error_group`, `bug_notify`, `error_trim`                   |
 | `./views`   | Bug pages, list rows, error frames and the Bugs destination |
@@ -36,6 +38,37 @@ work's `actor`, commit/version, global `during` references, and optionally a
 request bundle. `caught` excludes refusals. Request bodies, headers and query
 strings and console argument arrays are not sent. A failed sink uses the
 fallback, or console, without reporting itself recursively.
+
+`coalesce(sink)` is a sink wrapper with a 60-second window per app and fault,
+using the same `faultKey` and explicit `error.fault` as grouping. The first
+sample reaches the sink immediately with its stack and context. Repeats keep
+only the latest sample and accumulate hits; the timer sends that sample once
+with the repeat count and forgets the window. The next occurrence goes at once.
+One minute bounds a continuous flood to two deliveries per fault per minute
+while keeping first-failure notification immediate. Options accept a `window` in
+milliseconds and a `clock` with `now()` and `after(ms, run)` returning a cancel
+function. `flush()` ends current windows; `close()` also cancels timers and
+waits for deliveries. A forced process exit can lose unflushed repeats.
+
+`fanout({name: sink, …})` starts independent sinks together and counts rejected
+deliveries in its `failures` object by sink name. It writes a console diagnostic
+with the original sample and cumulative failure count; a delivery failure never
+becomes another tracked error.
+
+```ts
+import { equal } from '@yaks/testing'
+import { coalesce, report, spool } from '@yaks/tracker/report'
+
+let records: string[] = []
+let sink = coalesce(spool((line) => {
+  records.push(line)
+}))
+await report('missing row 42', { sink })
+await report('missing row 99', { sink })
+await report('missing row 100', { sink })
+await sink.close()
+equal(records.map((line) => JSON.parse(line)[0].error.hits ?? 1), [1, 2])
+```
 
 The queue sink takes a binding with `send`; the spool sink takes an append
 function; the post sink takes a URL and an optional fetch implementation. The
@@ -156,8 +189,12 @@ discovers one with the existing read token; it holds no credentials in the graph
 or logs. The CLI reporter keeps its durable tracker spool and also sends caught
 failures through this transport, tagged with their handler and target. It
 resolves `SENTRY_DSN` or `sentry` from the host vault when used, so a credential
-arriving after startup is not cached as missing. A reporting failure is retained
-in the spool without recursively reporting to Sentry.
+arriving after startup is not cached as missing. The `sentry(send)` sink adapter
+sends the captured stack and context, uses the tracker's fault as its Sentry
+fingerprint, and carries `error.hits` in `extra.hits`. The CLI composes Sentry
+and spool with `fanout`, wrapped once in `coalesce`; Sentry refusals increment
+`reporter.failures.sentry` without adding spool records. Host shutdown closes
+the reporter after its work drains, flushing pending repeats to both sinks.
 
 ## Bounded trace admission
 

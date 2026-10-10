@@ -1,5 +1,8 @@
 // Fault grouping, independent of storage and the reporter.
 
+import type { Bundle } from '@yaks/graph'
+import { comp, str, title } from './model.ts'
+
 /**
  * A message with its volatile parts replaced by `#`.
  *
@@ -55,3 +58,11 @@ export let faultKey = (
   let top = head(stack)
   return `${kind}:${normalize(message)}${top ? `@${top}` : ''}`
 }
+
+/** Reporting and grouping use the same explicit or derived fault. */
+export let faultOf = (row: Bundle): string =>
+  str(comp(row, 'error').fault) || faultKey(
+    str(comp(row, 'during').kind),
+    title(row),
+    str(comp(row, 'exception').stack),
+  )
