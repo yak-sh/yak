@@ -30,6 +30,7 @@
 import { dirname, join, relative, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { createHash } from 'node:crypto'
+import { Buffer } from 'node:buffer'
 import { parse, stringify } from '@std/toml'
 import packages from './package.json' with { type: 'json' }
 import { based, imaged } from './sandbox/base.ts'
@@ -356,7 +357,13 @@ let annotation = (release: { annotations?: Record<string, string> } | null) => {
   let message = release?.annotations?.['workers/message']
   return typeof message == 'string' ? message : ''
 }
-let INPUTS = /\ninputs:[a-f0-9]{64}$/
+let INPUTS = /(?:\ninputs:[a-f0-9]{64}$|^inputs:[A-Za-z0-9_-]{43}(?:\n|$))/
+
+// All 256 bits fit in Cloudflare's 50-character deployment summary. Keep the
+// full commit on the next line of the version's annotation.
+export let siblingMessage = (digest: string, commit = '') =>
+  `inputs:${Buffer.from(digest, 'hex').toString('base64url')}` +
+  (commit ? `\n${commit}` : '')
 
 /** Skip an upload only when the single serving deployment carries the digest
  * of these exact inputs. A version's full annotation can replace a truncated
@@ -369,11 +376,14 @@ export let sameSibling = (
   let live = singleServing(deployments)
   if (!live) return false
   let message = annotation(live)
-  return message.endsWith(`\ninputs:${digest}`) ||
+  let matches = (message: string) =>
+    message.split('\n')[0] == siblingMessage(digest) ||
+    message.endsWith(`\ninputs:${digest}`)
+  return matches(message) ||
     (!INPUTS.test(message) &&
       typeof live.versions[0].version_id == 'string' &&
       version?.id == live.versions[0].version_id &&
-      annotation(version ?? null).endsWith(`\ninputs:${digest}`))
+      matches(annotation(version ?? null)))
 }
 
 /** Read the full annotation only when the single serving summary lacks it.
@@ -573,6 +583,7 @@ export type PreparedSibling = {
   root: string
   started: number
   code?: number
+  refresh?: string[]
   bundle?: Bundle
   remove: () => void
 }
@@ -684,15 +695,38 @@ export let prepareSibling = async (
           digest.slice(0, 12)
         } — already serving`,
       )
-      return { args, config, root, started, code: 0, remove }
+      let current = singleServing(deployments)!
+      let refresh = annotation(current).split('\n')[0] == siblingMessage(digest)
+        ? undefined
+        : [
+          'versions',
+          'deploy',
+          `${current.versions[0].version_id}@100%`,
+          '--yes',
+          '-c',
+          config,
+          ...envs(args),
+          '--message',
+          siblingMessage(digest),
+        ]
+      return {
+        args,
+        config,
+        root,
+        started,
+        code: refresh ? undefined : 0,
+        refresh,
+        remove,
+      }
     }
     let annotated = [...args]
     let message = annotated.indexOf('--message')
     if (message >= 0) {
-      // Keep the commit identity; subjects can already consume the API's 512-byte message limit.
-      annotated[message + 1] = annotated[message + 1].slice(0, 40) +
-        `\ninputs:${digest}`
-    } else annotated.push('--message', `inputs:${digest}`)
+      annotated[message + 1] = siblingMessage(
+        digest,
+        annotated[message + 1].slice(0, 40),
+      )
+    } else annotated.push('--message', siblingMessage(digest))
     return { args: annotated, config, root, started, bundle, remove }
   } catch (error) {
     remove()
@@ -703,12 +737,13 @@ export let prepareSibling = async (
 /** Upload only a changed, successfully prepared sibling. Image preparation
  * remains on this side of the deploy guard. */
 export let uploadSibling = async (
-  { args, config, root, started, code, bundle }: PreparedSibling,
+  { args, config, root, started, code, refresh, bundle }: PreparedSibling,
   run: (args: string[], unpinned?: boolean) => Promise<number>,
   wrangler = WRANGLER,
   ensure = imaged,
 ) => {
   if (code != null) return code
+  if (refresh) return await run(refresh, true)
   if (args.includes('--dry-run')) return await run(args, true)
   let image = /(^| )--containers-rollout[= ]none( |$)/.test(args.join(' '))
     ? { config, remove: () => {} }

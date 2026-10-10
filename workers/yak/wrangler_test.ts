@@ -10,6 +10,7 @@ import { test, tick } from '@yaks/testing'
 import { assert, assertEquals } from '@std/assert'
 import { dirname, join, relative } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { Buffer } from 'node:buffer'
 import { parse } from '@std/toml'
 import {
   aliased,
@@ -27,6 +28,7 @@ import {
   seen,
   siblingDigest,
   siblingImages,
+  siblingMessage,
   SIBLINGS,
   siblings,
   superseded,
@@ -966,8 +968,9 @@ let checkSiblingPreparation = async () => {
     let prepared = await prepareSibling(args, [], root, query)
     try {
       let message = prepared.args[prepared.args.indexOf('--message') + 1]
-      assert(message.startsWith('a'.repeat(40) + '\ninputs:'))
-      digest = message.split('\ninputs:')[1]
+      assertEquals(message.split('\n')[1], 'a'.repeat(40))
+      digest = Buffer.from(message.split('\n')[0].slice(7), 'base64url')
+        .toString('hex')
       let finish = Promise.withResolvers<number>()
       let artifact = ''
       let sent = uploadSibling(prepared, (argv, unpinned) => {
@@ -1055,7 +1058,9 @@ let checkSiblingPreparation = async () => {
     }
     live = JSON.stringify([{
       created_on: '2026-10-10T16:00:00Z',
-      annotations: { 'workers/message': 'commit\ninputs:' + digest },
+      annotations: {
+        'workers/message': siblingMessage(digest, 'commit').slice(0, 50),
+      },
       versions: [{ version_id: 'v', percentage: 100 }],
     }])
     prepared = await prepareSibling(args, [], root, query)
@@ -1088,14 +1093,28 @@ let checkSiblingPreparation = async () => {
     try {
       let uploads = 0
       assertEquals(
-        await uploadSibling(prepared, () => {
+        await uploadSibling(prepared, (argv, unpinned) => {
           uploads++
+          assert(unpinned)
+          assertEquals(argv, [
+            'versions',
+            'deploy',
+            'v@100%',
+            '--yes',
+            '-c',
+            'outbound/wrangler.toml',
+            '--env',
+            'staging',
+            '--message',
+            siblingMessage(digest),
+          ])
           return Promise.resolve(0)
         }),
         0,
       )
-      assertEquals(uploads, 0)
+      assertEquals(uploads, 1)
       assertEquals(versionReads, 1)
+      assertEquals(await uploadSibling(prepared, () => Promise.resolve(7)), 7)
     } finally {
       prepared.remove()
     }

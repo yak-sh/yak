@@ -110,24 +110,27 @@ the compiler bundle also waits for its catalog. Uploads wait for all generated
 files and the guard. Each changed sibling's upload runs as its own preparation
 allows. The kernel activates after all succeed, then prepares its sandbox base
 and updates its image. Each sibling is bundled locally and compared with its
-fully serving deployment's `inputs:<sha256>` annotation. When the deployment
-summary truncates that annotation, the comparison reads the full annotation from
-its sole serving version. The digest covers every upload module, the inputs of
-each container image the sibling runs (its Dockerfile and every file of its
-build context, `wrangler.ts` `images`), its configuration, Wrangler pin and
-environment. A matching sibling stays serving without another upload; changed
-inputs, an unreadable deployment or a release without the annotation upload
-normally. The compiler image has its own `inputs:<sha256>` registry tag,
-covering its Dockerfile and build context. A changed Worker or toolkit catalog
-reuses that image; only a missing image tag builds and pushes it. A changed
-sibling uploads its prepared modules and source maps through a temporary config
-beside the original, preserving its bindings and naming the registry image.
-Wrangler bundles no second time and rolls the image out without rebuilding it.
-Registry, build or push failures refuse the sibling and kernel deploy. Workers
-Builds has Docker, as the sandbox image already needs. `bin/build-yak` with no
-argument still runs the check and the workers tests by hand. A push's build that
-fails is started once more through the `BUILD_HOOK` deploy hook (builds.ts),
-since most failures are the network's; the second build's failure stands.
+fully serving deployment's `inputs:<sha256>` annotation. The full digest is
+encoded as base64url, fitting Cloudflare's 50-character deployment summary; the
+version annotation also retains the full commit on its next line. A truncated
+hex annotation from an earlier release is read from its sole serving version,
+then that same version's deployment summary is refreshed once with the compact
+digest. The digest covers every upload module, the inputs of each container
+image the sibling runs (its Dockerfile and every file of its build context,
+`wrangler.ts` `images`), its configuration, Wrangler pin and environment. A
+matching sibling stays serving without another upload; changed inputs, an
+unreadable deployment or a release without the annotation upload normally. The
+compiler image has its own `inputs:<sha256>` registry tag, covering its
+Dockerfile and build context. A changed Worker or toolkit catalog reuses that
+image; only a missing image tag builds and pushes it. A changed sibling uploads
+its prepared modules and source maps through a temporary config beside the
+original, preserving its bindings and naming the registry image. Wrangler
+bundles no second time and rolls the image out without rebuilding it. Registry,
+build or push failures refuse the sibling and kernel deploy. Workers Builds has
+Docker, as the sandbox image already needs. `bin/build-yak` with no argument
+still runs the check and the workers tests by hand. A push's build that fails is
+started once more through the `BUILD_HOOK` deploy hook (builds.ts), since most
+failures are the network's; the second build's failure stands.
 
 Builds run on watched-path pushes and finish in any order, so the deploy door
 (`wrangler.ts` `superseded`) deploys a commit only while no later commit changes
