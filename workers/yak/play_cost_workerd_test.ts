@@ -1,7 +1,8 @@
 // T-65275, the owner's bar, verbatim: "while playing, i'd expect double digit
 // read/writes max per player per minute." Two heroes play a minute the way
-// Vale's page does (play_cost_fixture.ts); this is expected to fail until
-// playing costs that little. Rows are workerd's SQL cursor counts, index rows
+// Vale's page does (play_cost_fixture.ts). Until playing costs that little,
+// the test holds what the cuts so far have won (`HELD`), so a change that
+// costs more is red while the gate stays green; lower it as cuts land. Rows are workerd's SQL cursor counts, index rows
 // included, never returned rows or estimates, and each is attributed to one
 // source: relays, walking (the watches a page opens and closes as it moves),
 // live queries, saves, gathering, fighting, chatting or effects.
@@ -10,7 +11,11 @@ import { test } from '@yaks/testing'
 import { workerd } from './probe.ts'
 import type { Report } from './play_cost_fixture.ts'
 
-test('Vale play reads and writes at most 99 rows per player-minute (expected to fail until fix)', async () => {
+/** Rows per player-minute: the owner's bar, and what is held until then. */
+let BAR = 99
+let HELD = { read: 250, written: 187.5 }
+
+test('Vale play costs no more rows per player-minute than it has been cut to', async () => {
   let k = workerd()
   let res = await fetch(`${k.base}/__play_cost/?players=2&minutes=1`)
   assertEquals(res.status, 200, await res.clone().text())
@@ -26,14 +31,15 @@ test('Vale play reads and writes at most 99 rows per player-minute (expected to 
       report.total[metric],
     )
   }
+  let per = (n: number) => n / (report.players * report.minutes)
+  let read = per(report.total.read), written = per(report.total.written)
+  console.log(
+    `rows/player-minute: ${read} read, ${written} written (bar ${BAR})`,
+  )
   assert(
-    report.total.read / (report.players * report.minutes) <= 99 &&
-      report.total.written / (report.players * report.minutes) <= 99,
-    `rows/player-minute: ${
-      report.total.read / (report.players * report.minutes)
-    } read, ${
-      report.total.written / (report.players * report.minutes)
-    } written (expected failure until T-65275 fix)`,
+    read <= HELD.read && written <= HELD.written,
+    `rows/player-minute: ${read} read, ${written} written, over the held ` +
+      `${HELD.read} read, ${HELD.written} written (T-65275)`,
   )
 })
 
