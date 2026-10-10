@@ -7,7 +7,7 @@ import {
   assertStringIncludes,
 } from '@std/assert'
 import type { Wire } from '@yaks/durable-object'
-import { durable } from '../../packages/durable-object/testing.ts'
+import { durable } from './testing.ts'
 import {
   broke,
   BuildFailed,
@@ -126,7 +126,7 @@ test('builds: a failed build of a branch that deploys nothing is not filed', () 
 // The meta store, a Store object at the platform's own address.
 let meta = () => {
   let store = new Store({
-    storage: durable(),
+    storage: durable(PLATFORM_STORE),
     acceptWebSocket: () => {},
     getWebSockets: () => [] as Wire[],
   })

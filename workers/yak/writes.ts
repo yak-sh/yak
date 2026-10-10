@@ -31,6 +31,7 @@ import {
   op,
   or,
   select,
+  type Stmt,
   table,
   val,
 } from '@yaks/sql'
@@ -71,6 +72,46 @@ let PARTS: CreateTable = {
   ],
 }
 
+/** The empty write log and its indexes, shared with prepared test stores. */
+export let schema = (): Stmt[] => [
+  WRITES,
+  PARTS,
+  {
+    t: 'create index',
+    name: `${LOG}_${KEY}`,
+    on: LOG,
+    cols: [col(KEY)],
+    unique: true,
+    ifNot: true,
+  },
+  // Successful keyed writes keep their receipt for ten minutes. Neither
+  // finding pending work nor expiring receipts may scan that retained log.
+  {
+    t: 'create index',
+    name: `${LOG}_pending`,
+    on: LOG,
+    cols: [col('seq')],
+    where: eq(col('state'), lit('pending')),
+    ifNot: true,
+  },
+  {
+    t: 'create index',
+    name: `${LOG}_expiry`,
+    on: LOG,
+    cols: [col('at')],
+    where: and(eq(col('state'), lit('applied')), not(eq(col('audit'), lit(1)))),
+    ifNot: true,
+  },
+  {
+    t: 'create index',
+    name: `${ANSWERS}_seq_part`,
+    on: ANSWERS,
+    cols: [col('seq'), col('part')],
+    unique: true,
+    ifNot: true,
+  },
+]
+
 /** The log, raised, with every column it predates added: an object keeps its
  * log across code versions, and whichever code wakes it next reads it. */
 export let raise = (db: Driver) => {
@@ -81,40 +122,7 @@ export let raise = (db: Driver) => {
   for (let add of WRITES.cols) {
     if (!has.includes(add.name)) db.query({ t: 'alter table', table: LOG, add })
   }
-  db.query({
-    t: 'create index',
-    name: `${LOG}_${KEY}`,
-    on: LOG,
-    cols: [col(KEY)],
-    unique: true,
-    ifNot: true,
-  })
-  // Successful keyed writes keep their receipt for ten minutes. Neither
-  // finding pending work nor expiring receipts may scan that retained log.
-  db.query({
-    t: 'create index',
-    name: `${LOG}_pending`,
-    on: LOG,
-    cols: [col('seq')],
-    where: eq(col('state'), lit('pending')),
-    ifNot: true,
-  })
-  db.query({
-    t: 'create index',
-    name: `${LOG}_expiry`,
-    on: LOG,
-    cols: [col('at')],
-    where: and(eq(col('state'), lit('applied')), not(eq(col('audit'), lit(1)))),
-    ifNot: true,
-  })
-  db.query({
-    t: 'create index',
-    name: `${ANSWERS}_seq_part`,
-    on: ANSWERS,
-    cols: [col('seq'), col('part')],
-    unique: true,
-    ifNot: true,
-  })
+  for (let stmt of schema().slice(2)) db.query(stmt)
 }
 
 // How long an applied write keeps its answer for a resend. The kernel resends

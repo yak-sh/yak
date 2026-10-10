@@ -10,7 +10,7 @@ import { test } from '@yaks/testing'
 import { assert, assertEquals, assertRejects } from '@std/assert'
 import { type Bundle, identityEid } from '@yaks/graph'
 import { CallError } from '@yaks/tools'
-import { durable } from '../../packages/durable-object/testing.ts'
+import { durable } from './testing.ts'
 import { Store } from './graph.ts'
 import {
   type App,
@@ -78,7 +78,7 @@ let namespace = () => {
       let store = held.get(name)
       if (!store) {
         store = new Store({
-          storage: durable(),
+          storage: durable(name),
           acceptWebSocket: () => {},
           getWebSockets: () => [],
         })

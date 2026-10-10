@@ -130,6 +130,7 @@ import {
   type Raw,
   render,
   select,
+  type Stmt,
   table,
   val,
 } from '@yaks/sql'
@@ -363,6 +364,7 @@ type Shape = {
   derived: Derived
   searchable: Field[]
   stamp: string
+  ddl: Stmt[]
 }
 
 // The shapes this isolate has raised, the most recent few. A shape is pure in
@@ -374,7 +376,7 @@ let SHAPES = 16
 // Whether a store is one of the platform's own two rather than an app's.
 let ownStore = (name: string) => name == PLATFORM_STORE || name == GIT_STORE
 
-let shapeOf = (name: string, declared: string | null): Shape => {
+export let shapeOf = (name: string, declared: string | null): Shape => {
   // Neither the directory nor the git object graph is an app: each speaks its
   // own words whatever it holds, so its name is the whole key.
   let own = ownStore(name)
@@ -407,7 +409,7 @@ let shapeOf = (name: string, declared: string | null): Shape => {
   let stamp = sha256(
     [FIT, ...ddl.map((s) => render(s).sql)].join('\n'),
   )
-  let shape = { vocab, own, derived, searchable, stamp }
+  let shape = { vocab, own, derived, searchable, stamp, ddl }
   shapes.set(key, shape)
   if (shapes.size > SHAPES) shapes.delete(shapes.keys().next().value!)
   return shape
@@ -505,7 +507,7 @@ type Word =
 // The most one person keeps in one app's storage, in characters of JSON.
 let STORED = 1024 * 1024
 
-let KV: CreateTable = {
+export let KV: CreateTable = {
   t: 'create table',
   name: 'yak_kv',
   ifNot: true,

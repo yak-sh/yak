@@ -1,14 +1,14 @@
 import { test } from '@yaks/testing'
 import { assert, assertEquals } from '@std/assert'
 import type { Bundle } from '@yaks/graph'
-import { durable } from '../../packages/durable-object/testing.ts'
+import { durable } from './testing.ts'
 import { GIT_STORE, PLATFORM_STORE } from './door.ts'
 import { Store } from './graph.ts'
 import { slot, unclassified } from './testing.ts'
 
 for (const name of [PLATFORM_STORE, GIT_STORE]) {
   test(`${name}: classification, legacy backfill, and immutable metadata`, async () => {
-    const storage = durable()
+    const storage = durable(name)
     const ctx = { storage, getWebSockets: () => [], acceptWebSocket: () => {} }
     let store = new Store(ctx)
     const request = (path: string, body?: unknown) =>

@@ -1,7 +1,7 @@
 // A release is a store-wide notice, not a graph subscription or an ack.
 import { assertEquals } from '@std/assert'
 import { test, until } from '@yaks/testing'
-import { durable } from '../../packages/durable-object/testing.ts'
+import { durable } from './testing.ts'
 import { installPair, made, Pair } from '../../packages/workerd/testing.ts'
 import { Store } from './graph.ts'
 import type { Wire } from '@yaks/durable-object'

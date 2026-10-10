@@ -17,7 +17,7 @@ import { assert, assertEquals } from '@std/assert'
 import type { Frame } from '@yaks/api'
 import type { Bundle } from '@yaks/graph'
 import type { Wire } from '@yaks/durable-object'
-import { durable } from '../../packages/durable-object/testing.ts'
+import { durable } from './testing.ts'
 import { canon } from '@yaks/mail'
 import { type Namespace, PLATFORM_STORE, storeOf } from './door.ts'
 import type { Env } from './env.ts'
@@ -159,10 +159,10 @@ let outbox = (refuse?: string) => {
 // One object's whole state, with the socket list the runtime holds for it —
 // the stand-in cannot do the 101 upgrade, so a socket is driven the way the
 // runtime drives a hibernated one, through `webSocketMessage`.
-let state = () => {
+let state = (name = '') => {
   let live: Wire[] = []
   return {
-    storage: durable(),
+    storage: durable(name),
     live,
     acceptWebSocket: (ws: Wire) => void live.push(ws),
     getWebSockets: () => live,
@@ -224,7 +224,7 @@ let post = (store: Store, path: string, body: unknown, v?: Vouch) =>
 let SPACE = 'e0000000-0000-4000-8000-000000000005'
 
 let platform = async (meter?: Record<string, unknown>) => {
-  let dir = new Store(state(), {})
+  let dir = new Store(state(PLATFORM_STORE), {})
   let ns: Namespace = {
     idFromName: (name: string) => name,
     get: () => ({ fetch: (req: Request) => dir.fetch(req) }),

@@ -31,16 +31,53 @@ import {
 } from '@yaks/sql'
 import { objects } from '@yaks/sqlite'
 import { contentType } from '@std/media-types'
-import { durable } from '../../packages/durable-object/testing.ts'
+import { durable as raw } from '../../packages/durable-object/testing.ts'
+import { type Snapshot, snapshot } from '../../packages/sqlite/testing.ts'
+import { triggers } from '@yaks/embedding'
 import { Builder } from './build.ts'
 import type { Env, Inbound } from './env.ts'
-import { DIM, MODEL as EMBEDDER } from './embedding.ts'
-import { Store } from './graph.ts'
-import { PLATFORM_STORE } from './door.ts'
+import { DIM, MODEL as EMBEDDER, texts } from './embedding.ts'
+import { KV, shapeOf, Store } from './graph.ts'
+import { GIT_STORE, PLATFORM_STORE } from './door.ts'
+import { schema as writeSchema } from './writes.ts'
 import { Wire as Wired } from './stream.ts'
 import type { Limiter } from './rate.ts'
 import { sha256 } from './versions.ts'
 import type { Binding as AiBinding } from '@yaks/workers-ai'
+
+// A new test object's installed schema is the production shape, including the
+// host's private tables and embedding queue triggers. Each durable() restores
+// private bytes. The platform's two fixed names and an app's declaration are
+// schema identity; no app name, actor, entity or lineage is copied.
+let schemas = new Map<string, Snapshot>()
+export let durable = (name = '', declaration: string | null = null) => {
+  let shape = shapeOf(name, declaration)
+  let key = JSON.stringify([shape.stamp, declaration, shape.own ? name : ''])
+  let from = schemas.get(key)
+  if (!from) {
+    let values = {
+      schema: shape.stamp,
+      ...(declaration ? { vocab: declaration } : {}),
+    }
+    if (name == PLATFORM_STORE || name == GIT_STORE) {
+      Object.assign(values, { name })
+    }
+    from = snapshot(shape.vocab, { derived: shape.derived }, [
+      KV,
+      ...shape.ddl,
+      ...writeSchema(),
+      ...triggers(texts(shape.vocab, shape.derived)),
+      ...Object.entries(values).map(([k, v]): Insert => ({
+        t: 'insert',
+        into: KV.name,
+        cols: ['k', 'v'],
+        rows: [[val(k), val(v)]],
+      })),
+    ])
+    schemas.set(key, from)
+  }
+  return raw(from)
+}
 
 // The streaming HTML rewriter, in the one shape apps.ts asks for it
 // (`reported` weaves the reporter into every page): a tag prepended inside the
@@ -114,7 +151,7 @@ export type Pitr = {
 }
 
 /** One Durable Object's state, as the Store constructor takes it. */
-export let state = () => {
+export let state = (name = '', prepared = true) => {
   let live: Wire[] = []
   let pending = new Set<Promise<unknown>>()
   let pitr: Pitr = { restore: '', aborts: 0, marks: [] }
@@ -128,7 +165,7 @@ export let state = () => {
       pending.add(work)
       work.then(() => pending.delete(work), () => pending.delete(work))
     },
-    storage: Object.assign(durable(), kvStorage(), {
+    storage: Object.assign(prepared ? durable(name) : raw(), kvStorage(), {
       getCurrentBookmark: () => bookmark(`at-${pitr.marks.length}`),
       getBookmarkForTime: (at: number | Date) => {
         let t = at instanceof Date ? at.getTime() : at
@@ -655,8 +692,8 @@ export let limiter = (limit: number, period: number): Limiter => {
  */
 export let platform = (secret: string, vars: Partial<Env> = {}) => {
   let stores: ReturnType<typeof state>[] = []
-  let ownedState = () => {
-    let ctx = state()
+  let ownedState = (name?: string) => {
+    let ctx = state(name ?? '', name !== undefined)
     stores.push(ctx)
     return ctx
   }
@@ -674,7 +711,9 @@ export let platform = (secret: string, vars: Partial<Env> = {}) => {
   let object = (name: string) => {
     let held = objects.get(name)
     if (!held) {
-      let ctx = Object.assign(ownedState(), { id: { toString: () => name } })
+      let ctx = Object.assign(ownedState(name), {
+        id: { toString: () => name },
+      })
       sockets.set(name, ctx.live)
       recovery.set(name, ctx.pitr)
       states.set(name, ctx)

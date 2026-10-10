@@ -3,7 +3,7 @@
 // one other caller is ./testing.ts, whose stand-ins imitate engines that take
 // text.
 
-import './sqlitepath.ts'
+import { sqlitePath } from './sqlitepath.ts'
 import { Database, Statement } from '@db/sqlite'
 import { context, leaf, peek } from '@yaks/trace'
 import { excerpt, statement, writing } from '@yaks/sql'
@@ -23,6 +23,62 @@ import {
   table,
   val,
 } from '@yaks/sql'
+
+// Database images belong to the testing facet. The native handle and SQLite's
+// allocator stay here; each restored image gets its own resizeable buffer,
+// which SQLite releases when the database closes.
+let images: ReturnType<typeof bindImages> | undefined
+let bindImages = () =>
+  Deno.dlopen(sqlitePath, {
+    sqlite3_serialize: {
+      parameters: ['pointer', 'buffer', 'buffer', 'u32'],
+      result: 'pointer',
+    },
+    sqlite3_deserialize: {
+      parameters: ['pointer', 'buffer', 'pointer', 'i64', 'i64', 'u32'],
+      result: 'i32',
+    },
+    sqlite3_malloc64: { parameters: ['u64'], result: 'pointer' },
+    sqlite3_free: { parameters: ['pointer'], result: 'void' },
+  })
+let mainImage = new TextEncoder().encode('main\0')
+
+export let serialize = (db: Database): Uint8Array => {
+  let api = (images ??= bindImages()).symbols
+  let size = new BigInt64Array(1)
+  let pointer = api.sqlite3_serialize(db.unsafeHandle, mainImage, size, 0)
+  if (!pointer) throw new Error('SQLite cannot serialize the database')
+  try {
+    let bytes = new Uint8Array(Number(size[0]))
+    new Deno.UnsafePointerView(pointer).copyInto(bytes)
+    return bytes
+  } finally {
+    api.sqlite3_free(pointer)
+  }
+}
+
+export let deserialize = (db: Database, bytes: Uint8Array): void => {
+  let api = (images ??= bindImages()).symbols
+  let size = BigInt(bytes.length)
+  let pointer = api.sqlite3_malloc64(size)
+  if (!pointer) throw new Error('SQLite cannot allocate a database image')
+  new Uint8Array(
+    new Deno.UnsafePointerView(pointer).getArrayBuffer(bytes.length),
+  )
+    .set(bytes)
+  // FREEONCLOSE | RESIZEABLE: writes may grow this private copy.
+  let code = api.sqlite3_deserialize(
+    db.unsafeHandle,
+    mainImage,
+    pointer,
+    size,
+    size,
+    3,
+  )
+  if (code) {
+    throw new Error(`SQLite cannot deserialize the database (${code})`)
+  }
+}
 
 // SQLite can read an unknown double-quoted index column as a string literal.
 // Once a later migration adds that column, the index still holds the literal

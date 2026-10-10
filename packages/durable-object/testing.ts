@@ -32,7 +32,7 @@ import {
   table,
 } from '@yaks/sql'
 import type { Vocab } from '@yaks/vocab'
-import { type Limits, shop, textual } from '../sqlite/testing.ts'
+import { type Limits, shop, type Snapshot, textual } from '../sqlite/testing.ts'
 import { type DurableStorage, prohibited, type SqlValue } from './sql.ts'
 import { storage, type Store } from './store.ts'
 
@@ -109,7 +109,7 @@ let out = (row: Record<string, unknown>) => {
  * `Symbol.dispose` lets the fixture owner release native allocations without
  * waiting for JS GC.
  */
-export let durable = (): DurableStorage & {
+export let durable = (from?: Snapshot): DurableStorage & {
   sql: { databaseSize: number }
   deleteAll(): Promise<void>
   get<T>(key: string): Promise<T | undefined>
@@ -124,7 +124,7 @@ export let durable = (): DurableStorage & {
   // the delivery that fires it.
   let alarm: number | null = null
   let kept = new Map<string, unknown>()
-  let db = textual(LIMITS)
+  let db = textual(LIMITS, from)
   let closed = false
   let depth = 0
   // The runtime takes an ArrayBuffer; the engine underneath takes bytes.

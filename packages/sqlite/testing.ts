@@ -10,23 +10,110 @@
 import { sqlitePath } from './sqlitepath.ts'
 import { Database } from '@db/sqlite'
 import { open } from './db.ts'
-import { prepared } from './native.ts'
+import { deserialize, driver, prepared, serialize } from './native.ts'
 import { loadVocab, type Vocab, type VocabDoc } from '@yaks/vocab'
 import { type Bundle, type Graph, graph } from '@yaks/graph'
 import {
   type Column,
   type CreateTable,
+  type Derived,
   type Driver,
   insert,
   type Param,
   render,
   type Row,
+  type Stmt,
 } from '@yaks/sql'
-import { storage, type Store } from './mod.ts'
+import {
+  EPOCH,
+  FIT,
+  meta,
+  type Opts,
+  schema,
+  storage,
+  type Store,
+} from './mod.ts'
 
 // A Driver over a fresh in-memory database, foreign keys enforced so a dangling
 // reference is rejected the way it would be in production.
 export let mem = (): Driver => open(':memory:')
+
+const image = Symbol('schema snapshot')
+/** An empty installed database, kept as bytes rather than an open connection. */
+export type Snapshot = { [image]: Uint8Array }
+let snapshots = new Map<string, Snapshot>()
+let prints = new WeakMap<Vocab, WeakMap<Derived, string>>()
+let plain: Derived = {}
+let schemaKey = (vocab: Vocab, derived: Derived = plain) => {
+  let by = prints.get(vocab) ?? new WeakMap<Derived, string>()
+  prints.set(vocab, by)
+  let held = by.get(derived)
+  if (held) return held
+  let made = JSON.stringify([FIT, ...schema(vocab, derived).map(render)])
+  by.set(derived, made)
+  return made
+}
+
+/**
+ * Install a vocabulary once per physical schema and keep its empty snapshot.
+ * `extra` installs the host's auxiliary schema and fixed schema metadata too;
+ * its rendered statements and bound values are part of the identity.
+ * The snapshot carries no store epoch: every private copy mints its own.
+ */
+export let snapshot = (
+  vocab: Vocab,
+  base: Opts = {},
+  extra: Stmt[] = [],
+): Snapshot => {
+  let key = JSON.stringify([
+    schemaKey(vocab, base.derived),
+    ...extra.map(render),
+  ])
+  let kept = snapshots.get(key)
+  if (kept) return kept
+  let db = new Database(':memory:')
+  try {
+    let d = driver(db)
+    let s = storage(d, vocab, base)
+    s.install()
+    for (let stmt of extra) d.query(stmt)
+    meta(d).del(EPOCH)
+    let made = { [image]: serialize(db) }
+    snapshots.set(key, made)
+    return made
+  } finally {
+    db.close()
+  }
+}
+
+let copied = (from: Snapshot) => {
+  let db = new Database(':memory:')
+  try {
+    deserialize(db, from[image])
+    let d = driver(db)
+    meta(d).set(EPOCH, crypto.randomUUID())
+    return { db, d }
+  } catch (error) {
+    db.close()
+    throw error
+  }
+}
+
+/** A ready, disposable store with its own copy of the installed schema. */
+export let preparedStore = (
+  vocab: Vocab,
+  base: Opts = {},
+  from: Snapshot = snapshot(vocab, base),
+): Store & Disposable => {
+  let { db, d } = copied(from)
+  d.query({ t: 'pragma', name: 'foreign_keys', value: 'on' })
+  return Object.assign(
+    storage(d, vocab, { ...base, schemaReady: () => true }),
+    {
+      [Symbol.dispose]: () => db.close(),
+    },
+  )
+}
 
 /** SQLite's run-time limits by name, each a `sqlite3_limit` category
  * (https://sqlite.org/c3ref/c_limit_attached.html). */
@@ -71,8 +158,8 @@ let limit = (db: Database, limits: Limits) => {
  * the engine's own `limits` hold, so a statement it would refuse is refused
  * here too.
  */
-export let textual = (limits: Limits = {}) => {
-  let db = new Database(':memory:')
+export let textual = (limits: Limits = {}, from?: Snapshot) => {
+  let db = from ? copied(from).db : new Database(':memory:')
   limit(db, limits)
   let run = prepared(db)
   let keys = render({ t: 'pragma', name: 'foreign_keys', value: 'on' })
@@ -219,9 +306,7 @@ export let PROJECTED_ROW = {
 // so the tests over it see the human-readable numbering an application opts
 // into.
 export let store = (): Store => {
-  let s = storage(mem(), shop, { number: true })
-  s.install()
-  return s
+  return preparedStore(shop, { number: true })
 }
 
 // Bundles written straight in, for a test that just needs data to read back.

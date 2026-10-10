@@ -12,7 +12,7 @@ import { assert, assertEquals } from '@std/assert'
 import type { Frame } from '@yaks/api'
 import type { Actor, Bundle } from '@yaks/graph'
 import type { Wire } from '@yaks/durable-object'
-import { durable } from '../../packages/durable-object/testing.ts'
+import { durable } from './testing.ts'
 import { Store } from './graph.ts'
 import { test, until } from '@yaks/testing'
 

@@ -23,7 +23,7 @@ import { stub } from '@std/testing/mock'
 import type { Frame } from '@yaks/api'
 import { type Bundle, type Comp, type Rule, sha256 } from '@yaks/graph'
 import type { Wire } from '@yaks/durable-object'
-import { durable } from '../../packages/durable-object/testing.ts'
+import { durable } from './testing.ts'
 import { doorOf, PLATFORM_STORE } from './door.ts'
 import { grantEid, Store } from './graph.ts'
 import { metaOf } from './meta.ts'
@@ -61,10 +61,10 @@ let wire = () => {
 
 // One object's whole state: storage that outlives an incarnation, and the
 // socket list the runtime holds for it.
-let state = () => {
+let state = (name = '') => {
   let live: Wire[] = []
   return {
-    storage: durable(),
+    storage: durable(name),
     live,
     acceptWebSocket: (ws: Wire) => void live.push(ws),
     getWebSockets: () => live,
@@ -1367,7 +1367,7 @@ test('a rule writing outside its *write set takes the batch with it', async () =
 // The one rule this Worker ships (trash.ts): the caller asks for the trash and
 // the store dates it and signs it, the way it dates a birth.
 test('the store dates the trash mark, and signs it', async () => {
-  let store = new Store(state())
+  let store = new Store(state(PLATFORM_STORE))
   let at = (body: unknown[]) =>
     store.fetch(
       new Request('http://store/apply', {
@@ -1505,7 +1505,7 @@ test('a Store anatomy supplier observes its own conditional composition without 
   assert(app.rules.some((r) => r.name == 'yak/rules'))
   assert(app.rules.some((r) => r.name == 'yak/weigh'))
   assert(!app.packages.some((p) => p.name == '@yaks/visualize'))
-  let meta = new Store(state())
+  let meta = new Store(state(PLATFORM_STORE))
   await meta.fetch(
     new Request('http://store/query?query=.entity', {
       headers: { 'x-store': PLATFORM_STORE },

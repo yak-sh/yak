@@ -993,6 +993,19 @@ try {
 }
 ```
 
+The repository's unpublished [testing.ts](./testing.ts) offers
+`preparedStore(vocab, options?)`: a disposable store made from a **schema
+snapshot**, the empty database after that vocabulary's schema was installed.
+`snapshot(vocab, options?, extra?)` keeps that snapshot once per fitting
+revision, rendered vocabulary schema, and auxiliary statements; `extra` lets a
+host include its own tables, indexes, triggers, and fixed schema metadata.
+`textual()` gives an engine stand-in the same preparation. Each store restores a
+private SQLite buffer, mints its own epoch, and enforces foreign keys; writes
+and rollbacks stay in that store, and closing it releases its native buffer.
+Kernel fixtures use snapshots of the app, directory, or git vocabulary,
+including their search, embedding, journal, and write-log schema. Production
+opens and installs keep their existing behavior.
+
 The store also offers `checks`, bound diagnostics used by `@yaks/sqlite/tools`,
 and `migrations`, its cooperative migration control. Hosts lend only the
 migration monitor to portable plugins; operators use the adapter's migration
