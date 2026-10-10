@@ -55,11 +55,24 @@ let LINKABLE = /^(?:https?:\/\/|mailto:|tel:|[/#?]|[\w.-]+(?:[/#?]|$))/i
 
 // Known prefixes only (plus D for docs, the fallback most written
 // about) — a boundary-anchored T-123 is a reference, but UTF-8 and
-// SHA-256 stay words because their letters sit mid-word.
-let LETTERS = [...new Set([...Object.values(prefix), 'D'])].join('|')
-let REF = new RegExp(
-  `^(?:(?:${LETTERS})-\\d+|#[0-9a-fA-F]{6,64})\\b`,
-)
+// SHA-256 stay words because their letters sit mid-word. The prefixes arrive
+// with the vocabulary, after this module loads, so the patterns are read
+// through the current ones and rebuilt when a new vocabulary replaces them.
+let patterns = (() => {
+  let seen: typeof prefix | undefined
+  let built: { start: RegExp; ref: RegExp }
+  return () => {
+    if (seen != prefix) {
+      seen = prefix
+      let letters = [...new Set([...Object.values(prefix), 'D'])].join('|')
+      built = {
+        start: new RegExp(`(?<![\\w])(?:(?:${letters})-\\d|#[0-9a-fA-F]{6})`),
+        ref: new RegExp(`^(?:(?:${letters})-\\d+|#[0-9a-fA-F]{6,64})\\b`),
+      }
+    }
+    return built
+  }
+})()
 
 type Ref = (id: string, text: string) => string
 
@@ -84,14 +97,9 @@ let door = (ref: Ref, repo?: string | null, links = true) =>
     extensions: [{
       name: 'ref',
       level: 'inline',
-      start: (src: string) =>
-        src.match(
-          new RegExp(
-            `(?<![\\w])(?:(?:${LETTERS})-\\d|#[0-9a-fA-F]{6})`,
-          ),
-        )?.index,
+      start: (src: string) => src.match(patterns().start)?.index,
       tokenizer(src: string) {
-        let m = REF.exec(src)
+        let m = patterns().ref.exec(src)
         if (m) return { type: 'ref', raw: m[0], id: m[0] }
       },
       renderer: (t: Tokens.Generic) => ref(String(t.id), String(t.id)),

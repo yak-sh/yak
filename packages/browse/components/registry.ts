@@ -254,7 +254,9 @@ let write = ({ entity, ...rest }: Bundle) => {
 
 /** The host this page hands its UX components (@yaks/ux) at the root. */
 export let ux: Host = {
-  vocab,
+  get vocab() {
+    return vocab
+  },
   front,
   drafts,
   write,

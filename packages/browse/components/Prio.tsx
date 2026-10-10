@@ -2,14 +2,13 @@ import { formatProp, propAt } from '../props.ts'
 import { el } from '@yaks/ui'
 
 let Badge = el('span', 'Prio')
-let type = propAt('filed', 'priority')!
 
 // The priority badge: P0 burns, P1 glows, P2 is the quiet default, P3+
 // fades. The label shows the TRUE value (fractional board-order values
 // like 1.5 included); only the colour tier is clamped to 0–3. Like the
 // Dot, the badge is paint — a host that wants a control hangs it on here.
 export let Prio = ({ p, ...rest }: { p: unknown; [x: string]: unknown }) => {
-  let face = formatProp(type, p)
+  let face = formatProp(propAt('filed', 'priority')!, p)
   if (!face) return null
   let n = Number(face.slice(1))
   return (

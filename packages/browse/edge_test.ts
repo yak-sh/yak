@@ -69,14 +69,14 @@ test('edgeEid: the pinned derivation', () => {
 })
 
 test('natureOf: every edge type, present tense but the event, each a comp', () => {
-  assertEquals(Object.keys(natureOf).sort(), [...edges].sort())
-  assertEquals(natureOf.referenced, 'references')
-  assertEquals(natureOf.requires, 'requires')
+  assertEquals(natureOf('referenced'), 'references')
+  assertEquals(natureOf('requires'), 'requires')
   // The one nature that is an event, so the one that stays past tense.
-  assertEquals(natureOf.recalled, 'recalled')
-  for (let n of Object.values(natureOf)) {
+  assertEquals(natureOf('recalled'), 'recalled')
+  for (let type of edges) {
+    let n = natureOf(type)!
     assertEquals(n in comps, true, `${n} is not a comp`)
-    assertEquals(natureOf[typeOf[n]], n)
+    assertEquals(typeOf(n), type)
   }
 })
 

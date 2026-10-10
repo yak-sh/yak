@@ -41,12 +41,31 @@ export let cursorEid = (client: string): string =>
 // EVENT: the edge wears `recalled{at}` — the case D-23820 names, a relation
 // with a time carried by the sentence rather than forced onto either end
 // (T-32471).
-export let natureOf: Record<string, string> = Object.fromEntries(
-  edges.map((t) => [t, t == 'referenced' ? 'references' : t]),
-)
-export let typeOf: Record<string, string> = Object.fromEntries(
-  Object.entries(natureOf).map(([t, n]) => [n, t]),
-)
+// The tables are read off the edge types the vocabulary has taught so far
+// (`edges` is replaced by learn()), and rebuilt when it teaches again.
+let tables = (() => {
+  let seen: string[] | undefined
+  let built: { nature: Record<string, string>; type: Record<string, string> }
+  return () => {
+    if (seen != edges) {
+      seen = edges
+      let nature = Object.fromEntries(
+        edges.map((t) => [t, t == 'referenced' ? 'references' : t]),
+      )
+      built = {
+        nature,
+        type: Object.fromEntries(
+          Object.entries(nature).map(([t, n]) => [n, t]),
+        ),
+      }
+    }
+    return built
+  }
+})()
+export let natureOf = (type: string): string | undefined =>
+  tables().nature[type]
+export let typeOf = (nature: string): string | undefined =>
+  tables().type[nature]
 
 // The eid a BUNDLE derives from what it says. A `$alias` means the door
 // chooses the eid; for a content-addressed entity choosing IS deriving, so an
@@ -66,13 +85,13 @@ export let saidEid = (
 ): string | undefined => {
   let said = comps.edge
   if (!said) return undefined
-  let nature = Object.keys(comps).find((n) => comps[n] && typeOf[n])
+  let nature = Object.keys(comps).find((n) => comps[n] && typeOf(n))
   if (!nature || said.from == null || said.to == null) return undefined
   return edgeEid(ends(said.from), nature, ends(said.to))
 }
 
 let verbOf = (type: string) => {
-  let nature = natureOf[type]
+  let nature = natureOf(type)
   if (!nature) throw new Error(`unknown edge type: ${type}`)
   return nature
 }
@@ -151,7 +170,7 @@ export let moves = (
     return t
   }
   for (let { eid, name, comp } of changes) {
-    let nature = typeOf[name]
+    let nature = typeOf(name)
     if (name == 'edge') {
       let t = at(eid)
       if (comp == null) t.gone = true

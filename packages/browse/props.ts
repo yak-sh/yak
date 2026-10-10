@@ -32,15 +32,27 @@ export type Prop = {
   type: PropType
 }
 
-// comps/stamped are immutable module constants, so a component's merged type
-// map and a prop's owner list are fixed for the process. They sit on the hot
-// path — every query match, index pass and prop render funnels through them —
-// so recomputing the spread (a fresh object per call) and the O(components)
-// owner scan on each call was pure waste (T-17036, the 16ms frame budget).
-// Memoize both; nothing invalidates because nothing mutates the vocabulary.
-let typeCache = new Map<string, Record<string, PropType>>()
+// A component's merged type map and a prop's owner list sit on the hot path
+// (every query match, index pass and prop render funnels through them), so
+// recomputing the spread and the O(components) owner scan on each call was
+// pure waste (T-17036, the 16ms frame budget). They are memoized per
+// vocabulary: learn() replaces the tables, and the memo goes with them.
+let memo = (() => {
+  let seen: typeof comps | undefined
+  let types = new Map<string, Record<string, PropType>>()
+  let owners = new Map<string, string[]>()
+  return () => {
+    if (seen != comps) {
+      seen = comps
+      types = new Map()
+      owners = new Map()
+    }
+    return { types, owners }
+  }
+})()
 let types = (comp: string): Record<string, PropType> => {
-  let hit = typeCache.get(comp)
+  let { types: held } = memo()
+  let hit = held.get(comp)
   if (hit) return hit
   let t = {
     ...comps[comp],
@@ -48,17 +60,17 @@ let types = (comp: string): Record<string, PropType> => {
     ...derivedProps[comp],
     ...spineProps[comp],
   }
-  typeCache.set(comp, t)
+  held.set(comp, t)
   return t
 }
 
-let ownerCache = new Map<string, string[]>()
 export let propOwners = (prop: string): string[] => {
-  let hit = ownerCache.get(prop)
+  let { owners: held } = memo()
+  let hit = held.get(prop)
   if (hit) return hit
   let out = [...new Set([...Object.keys(comps), ...Object.keys(stamped)])]
     .filter((comp) => prop in types(comp))
-  ownerCache.set(prop, out)
+  held.set(prop, out)
   return out
 }
 

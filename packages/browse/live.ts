@@ -977,7 +977,7 @@ let depOf = (row?: Comps): Dep | undefined => {
   let ends = row?.edge as { from?: string; to?: string } | undefined
   if (!ends?.from || !ends.to) return
   for (let name of Object.keys(row!)) {
-    let type = typeOf[name]
+    let type = typeOf(name)
     if (type) {
       return { parent: ends.from, type: type as Dep['type'], child: ends.to }
     }
@@ -3118,11 +3118,23 @@ let whole = (comp: string, volatile: string[] = []): Field[] =>
     prop,
     wake: !volatile.includes(prop),
   }))
-let pinFields: Field[] = [...whole('pin', ['z']), ...whole('card')]
+// Read when asked and kept while the same vocabulary holds: learn() replaces
+// the tables, and a list built before it would project no columns.
+let pinFields = (() => {
+  let seen: typeof comps | undefined
+  let fields: Field[]
+  return () => {
+    if (seen != comps) {
+      seen = comps
+      fields = [...whole('pin', ['z']), ...whole('card')]
+    }
+    return fields
+  }
+})()
 let pinsOn = (canvas: string): Pred[] => [
   eq('pin', 'canvas', canvas),
   has('card'),
-  { comp: '', prop: '', op: PROJECT, value: '', fields: pinFields },
+  { comp: '', prop: '', op: PROJECT, value: '', fields: pinFields() },
 ]
 
 export let pinned = (canvas: string): Pinned[] =>
