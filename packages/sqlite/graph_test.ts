@@ -8,7 +8,15 @@ import { assert, assertEquals, assertThrows } from '@std/assert'
 import { isPromise } from '@yaks/fp'
 import { type Bundle, graph, Refused, Stale, token } from '@yaks/graph'
 import { storage } from './mod.ts'
-import { mem, seedIdentities, shop, shopGraph, spy } from './testing.ts'
+import {
+  mem,
+  preparedStore,
+  seedIdentities,
+  shop,
+  shopGraph,
+  snapshot,
+  spy,
+} from './testing.ts'
 import { ddl, journal, log } from '@yaks/journal'
 
 let sync = (out: Bundle[] | Promise<Bundle[]>): Bundle[] => {
@@ -19,14 +27,17 @@ let sync = (out: Bundle[] | Promise<Bundle[]>): Bundle[] => {
 let one = (g: ReturnType<typeof shopGraph>, q: string) =>
   (g.read(q) as Bundle[])[0]
 
+let journalSchema = snapshot(shop, {}, ddl())
+let journalStore = preparedStore(shop, {}, journalSchema)
+let j = log({ rows: (stmt) => journalStore.statements.query(stmt) })
+let missingGraph = graph({
+  storage: journalStore,
+  vocab: shop,
+  plugins: [journal(j, shop)],
+})
 for (let again of [false, true]) {
   test(`sqlite: deleting a never-existing eid${again ? ' again' : ''} writes and returns nothing`, () => {
-    let db = mem()
-    let s = storage(db, shop)
-    s.install()
-    for (let stmt of ddl()) db.query(stmt)
-    let j = log({ rows: (stmt) => db.query(stmt) })
-    let g = graph({ storage: s, vocab: shop, plugins: [journal(j, shop)] })
+    let g = missingGraph
     let deletion = [{ entity: { eid: 'missing' }, $delete: true }]
     if (again) sync(g.apply(deletion))
     assertEquals(sync(g.apply(deletion)), [])
