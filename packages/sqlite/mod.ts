@@ -82,11 +82,11 @@ import { ast, doom, get, read, rows, screened, tagOf } from './read.ts'
 import { unit } from './unit.ts'
 import {
   backfill,
+  classify,
   entomb,
   heldBy,
   type Ledger,
   ledger,
-  reclassify,
 } from './archetype.ts'
 import { componentTables, shape } from './physical.ts'
 import { births, patch, remove, revive } from './write.ts'
@@ -94,7 +94,21 @@ import { bindings } from './rules.ts'
 import { basis, memoized } from './memo.ts'
 import { revision } from '@yaks/sql'
 
-export * from './archetype.ts'
+export {
+  type Backfill,
+  backfill,
+  componentTables,
+  type Drift,
+  drift,
+  entomb,
+  heldBy,
+  type Ledger,
+  ledger,
+  mend,
+  reclassify,
+  reclassifyAll,
+  type Wrote,
+} from './archetype.ts'
 export { statements } from './statements.ts'
 import { statements } from './statements.ts'
 import { checks as diagnostics } from './check.ts'
@@ -334,7 +348,8 @@ const UNREAD = new Set([
 ])
 
 // The ledgers of the units open on each driver, outermost first (`tracked`).
-let ledgers = new WeakMap<Driver, Ledger[]>()
+type Writing = { ledger: Ledger; complete: boolean }
+let ledgers = new WeakMap<Driver, Writing[]>()
 
 // The value `body` gives, once `last` has run after it settled, either way.
 let lastly = <R>(body: () => R, last: () => void): R => {
@@ -402,7 +417,7 @@ export let storage = (
   let asked = (query: And, o: Opts = {}, direct = false): Row[] => {
     let catalogued = classified && !direct
     let owing = catalogued &&
-      (ledgers.get(driver) ?? []).some((l) => l.owed().length)
+      (ledgers.get(driver) ?? []).some((u) => u.ledger.owed().length)
     // What a caller's options change of the statement: its order of pages; a
     // `now` matters only to time phrases, which are read every time.
     let unread = Object.keys(o).some((k) => !UNREAD.has(k))
@@ -465,7 +480,9 @@ export let storage = (
   // detached transaction, a script patching through `tx`. Its ledger hears
   // each row that came or went and each pointer written (./archetype.ts
   // `ledger`); what it still owes when the body returns is classified from
-  // what those entities hold (`reclassify`), in the same unit. Through the
+  // what those entities hold (`classify`), in the same unit. A birth's complete
+  // ledger supplies its shape without discovering or reading every table;
+  // other entities are classified from their physical rows. Through the
   // graph that is nothing, since its tracker points every entity it moved, so
   // its writes gain no read. Removal clears the tables its entities hold
   // (`heldBy`); the dead no pointer has been written for since are pointed at
@@ -479,11 +496,22 @@ export let storage = (
     let l = ledger()
     // A birth is minted in the class its shape last finished in, and its
     // pointer is written again only where it finishes elsewhere.
-    let born = births(driver)
+    let remembered = births(driver)
+    let born = {
+      ...remembered,
+      born: (eid: string, tables: string[], id?: number) => {
+        remembered.born(eid, tables, id)
+        l.born(eid)
+      },
+    }
     let open = ledgers.get(driver) ?? []
     ledgers.set(driver, open)
-    open.push(l)
-    let owed = () => [...new Set(open.flatMap((o) => o.owed()))]
+    // A nested unit can write rows its ancestors did not hear, even if it
+    // later rolls back. Their ledgers no longer prove a complete birth shape.
+    for (let u of open) u.complete = false
+    let writing = { ledger: l, complete: true }
+    open.push(writing)
+    let owed = () => [...new Set(open.flatMap((u) => u.ledger.owed()))]
     // An entity whose rows moved in this transaction is read from what it
     // holds; every other one as its pointer says, or from memory.
     let getting = (eids: string[], comps?: string[]): Bundle[] => {
@@ -502,10 +530,17 @@ export let storage = (
     }
     let settle = () => {
       let dead = l.buried(), owed = l.owed()
+      let known = new Map<string, string[]>()
+      if (writing.complete) {
+        for (let eid of owed) {
+          let wrote = l.wrote(eid)
+          if (wrote.born) known.set(eid, wrote.tables)
+        }
+      }
       memo.writes(
         () => {
           if (dead.length) entomb(driver, dead, numbered)
-          if (owed.length) reclassify(driver, owed, numbered)
+          if (owed.length) classify(driver, owed, numbered, known)
         },
         () => [...dead, ...owed],
         // A class first worn mints its descriptor (./archetype.ts).
@@ -514,7 +549,7 @@ export let storage = (
       for (let eid of [...dead, ...owed]) l.pointed(eid)
     }
     return {
-      close: () => void open.splice(open.lastIndexOf(l), 1),
+      close: () => void open.splice(open.lastIndexOf(writing), 1),
       tx: {
         ...tx,
         get: getting,
@@ -552,7 +587,6 @@ export let storage = (
                 born,
               ),
           )
-          for (let e of minted) l.born(e.eid)
           for (let b of bundles) {
             if (b.entity.archetype !== undefined) l.pointed(b.entity.eid)
           }
@@ -565,7 +599,13 @@ export let storage = (
             eids,
             at,
             () =>
-              remove(driver, vocab, entities, heldBy(driver, eids, open), at),
+              remove(
+                driver,
+                vocab,
+                entities,
+                heldBy(driver, eids, open.map((u) => u.ledger)),
+                at,
+              ),
           )
           for (let eid of eids) l.removed(eid)
         },

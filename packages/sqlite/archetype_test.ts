@@ -270,7 +270,23 @@ test('archetype: a write past the graph keeps its pointer in step, by every door
     tx.patch([{ entity: { eid: 'b' }, task: {} }])
   })
   assertEquals(get('b').entity.archetype, eidOf(['task']))
-  assertEquals(drift(driver), { checked: 3, drifted: 0, sample: [] })
+  // An inner unit's writes are not in its parent's birth ledger.
+  store.tx((tx) => {
+    tx.patch([{ entity: { eid: 'nested' }, doc: {} }])
+    store.tx((inner) => inner.patch([{ entity: { eid: 'nested' }, task: {} }]))
+  })
+  assertEquals(get('nested').entity.archetype, eidOf(['doc', 'task']))
+  store.tx((tx) => {
+    tx.patch([{ entity: { eid: 'rolled' }, doc: {} }])
+    assertThrows(() =>
+      store.tx((inner) => {
+        inner.patch([{ entity: { eid: 'rolled' }, task: {} }])
+        throw new Error('rollback')
+      })
+    )
+  })
+  assertEquals(get('rolled').entity.archetype, eidOf(['doc']))
+  assertEquals(drift(driver), { checked: 5, drifted: 0, sample: [] })
 })
 
 test('archetype: dry run and late rollback cannot poison cached sets', () => {

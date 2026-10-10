@@ -573,18 +573,32 @@ export function reclassify(
   eids: string[],
   number = false,
 ): Bundle[] {
+  return classify(driver, eids, number)
+}
+
+// Internal settlement may know a birth's complete shape from its unit's
+// ledger. Every other entity, including raw SQL writes, needs physical reads.
+export function classify(
+  driver: Driver,
+  eids: string[],
+  number: boolean,
+  known: ReadonlyMap<string, string[]> = new Map(),
+): Bundle[] {
   if (!eids.length) return []
   let run: Run = (s) => driver.query(s)
   return unit(driver, () => {
     let cache = new Archetypes()
-    let tables = facets(driver)
+    let tables = once(() => facets(driver))
     let rows = run(owned(oneOf(col('eid', 'e'), [...new Set(eids)])))
     if (!rows.length) return []
     let owners = new Map<number, string[]>(
-      rows.map((r) => [Number(r.id), []]),
+      rows.map((r) => [Number(r.id), known.get(String(r.eid)) ?? []]),
     )
-    let ids = [...owners.keys()]
-    presence(run, tables, owners, (c) => ({ where: oneOf(c, ids) }))
+    let ids = rows.filter((r) => !known.has(String(r.eid)))
+      .map((r) => Number(r.id))
+    if (ids.length) {
+      presence(run, tables(), owners, (c) => ({ where: oneOf(c, ids) }))
+    }
     let moved = new Map<number, string>()
     for (let r of rows) {
       let set = cache.intern(owners.get(Number(r.id))!)
@@ -597,7 +611,7 @@ export function reclassify(
       run,
       driver,
       cache,
-      () => tables,
+      tables,
       new Map(),
       number,
       counts,
