@@ -27,7 +27,13 @@
 // tables. `only` keeps the answer true for an adapter that cannot narrow its
 // read.
 
-import { type And, type Clause, type Fields, map, parse } from '@yaks/query/core'
+import {
+  type And,
+  type Clause,
+  type Fields,
+  map,
+  parse,
+} from '@yaks/query/core'
 import type { Hop, Vocab } from '@yaks/vocab'
 import { after } from '@yaks/fp'
 import { type Bundle, type Comp, type Eid, reserved } from './bundle.ts'
