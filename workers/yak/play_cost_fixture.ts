@@ -309,6 +309,7 @@ export let playMinute = async (
     await drop(i, 'middle')
   }
   opening = { ...total }
+  sourceShapes.clear()
   openingShapes = [...shapes].map(([sql, cost]) => ({ sql, cost })).sort((
     a,
     b,
