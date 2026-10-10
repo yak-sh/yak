@@ -631,14 +631,18 @@ test('a space connects Stripe, and the webhook makes it ready', async () => {
 
     // What Stripe holds: the four controller properties that are the
     // charge-merchants-directly model.
-    let made = await charged(key, `/v1/accounts/${account}`) as {
-      controller: {
-        fees: { payer: string }
-        losses: { payments: string }
-        stripe_dashboard: { type: string }
-        requirement_collection: string
-      }
-    }
+    let [made, again, platform] = await Promise.all([
+      charged(key, `/v1/accounts/${account}`) as Promise<{
+        controller: {
+          fees: { payer: string }
+          losses: { payments: string }
+          stripe_dashboard: { type: string }
+          requirement_collection: string
+        }
+      }>,
+      pressed(env, 'start'),
+      charged(key, '/v1/account'),
+    ])
     assertEquals(made.controller.fees.payer, 'account')
     assertEquals(made.controller.losses.payments, 'stripe')
     assertEquals(made.controller.stripe_dashboard.type, 'full')
@@ -647,7 +651,6 @@ test('a space connects Stripe, and the webhook makes it ready', async () => {
     // Pressing it again mints a new link on the same account — an account link
     // is single-use, and a second account would split one merchant's money
     // across books nobody can add up.
-    let again = await pressed(env, 'start')
     assertEquals(again.status, 303)
     assertStringIncludes(again.headers.get('location') ?? '', 'connect.stripe')
     assertEquals((await sold(env))?.account, account, 'one account, ever')
@@ -700,7 +703,6 @@ test('a space connects Stripe, and the webhook makes it ready', async () => {
     // nothing else: a second delivery would find the same nothing, and making
     // Stripe repeat an unanswerable question for three days helps no one. The
     // platform's own account is one such.
-    let platform = await charged(key, '/v1/account')
     assertEquals(
       await hook(env, updated, platform, String(platform.id)),
       'no space sells through that account',
