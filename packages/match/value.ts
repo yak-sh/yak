@@ -21,8 +21,8 @@
 // a comparison against an operand the property's type cannot hold. The caller
 // turns that into an `Unsupported` refusal rather than a wrong answer.
 
-import { timeEdges } from '@yaks/query'
-import { held, type Tag } from '@yaks/sql'
+import { timeEdges } from '@yaks/query/core'
+import { held, type Tag } from '@yaks/sql/core'
 
 /**
  * A test over one property's value. The value is whatever the bundle holds, or

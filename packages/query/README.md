@@ -4,6 +4,9 @@ Parses query strings into a serializable AST, builds the same AST from code, and
 completes query text against a loaded vocabulary. Use it for query input, query
 builders, and interpreters that need one shared format.
 
+`@yaks/query/core` exports the AST builders, parser, traversal, and time values
+without loading completion or grammar teaching. The root export includes both.
+
 ## Query model
 
 A **query** describes which [entities](../graph/README.md#data-model) to select

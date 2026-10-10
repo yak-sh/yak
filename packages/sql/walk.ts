@@ -17,7 +17,7 @@
 //   ->  the candidate reaches the target: seed the target, follow `to` → `from`
 //   <-  the target reaches the candidate: seed the target, follow `from` → `to`
 
-import { type Walk, WALK_LIMIT } from '@yaks/query'
+import { type Walk, WALK_LIMIT } from '@yaks/query/core'
 import { type Expr, type Frag, type Query, raw } from './ast.ts'
 import { render } from './render.ts'
 import { identity } from './ident.ts'

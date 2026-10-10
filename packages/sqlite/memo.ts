@@ -61,7 +61,7 @@ import {
   revision,
   type Row,
   type Stmt,
-} from '@yaks/sql'
+} from '@yaks/sql/core'
 import { type Filter, filter } from '@yaks/match'
 import { tables } from './layout.ts'
 import type { Known, Spine } from './write.ts'

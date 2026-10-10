@@ -19,7 +19,7 @@
 // relations and its comments), drawn through `show` so they go through the
 // same registry as everything else.
 
-import { parse } from '@yaks/query'
+import { parse } from '@yaks/query/core'
 import {
   type Bundle,
   type Child,

@@ -26,7 +26,7 @@
 // answers the queries it is in now and the ones it has left, so a commit costs
 // what it changed, never what is watched.
 
-import { type And, type Clause, parse, type Query as Ast } from '@yaks/query'
+import { type And, type Clause, parse, type Query as Ast } from '@yaks/query/core'
 import type { Vocab } from '@yaks/vocab'
 import { type Arm, compile, type Ctx, type Need, type Test } from './clause.ts'
 import {

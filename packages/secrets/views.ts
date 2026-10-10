@@ -1,6 +1,6 @@
 // A secret's public face is its config key and optional human title, never
 // its value (not even the vault handle). Shared by browser and terminal lists.
-import { parse } from '@yaks/query'
+import { parse } from '@yaks/query/core'
 import { define, type Registry } from '@yaks/render'
 
 export let views: Registry = define([

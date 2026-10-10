@@ -1,7 +1,10 @@
 {
   "name": "@yaks/query",
   "version": "0.2.10",
-  "exports": "./mod.ts",
+  "exports": {
+    ".": "./mod.ts",
+    "./core": "./core.ts"
+  },
   "license": "Apache-2.0",
   "description": "Parses query strings into a serializable AST, builds the same AST from code, and completes query text against a loaded vocabulary.",
   "imports": {

@@ -58,10 +58,10 @@ import type {
   Tally,
   Value,
   Walk,
-} from '@yaks/query'
-import { absent, bare, directive, present } from '@yaks/query'
-import type { Assoc, Hop, Presence, Vocab } from '@yaks/vocab'
-import { Unknown } from '@yaks/vocab'
+} from '@yaks/query/core'
+import { absent, bare, directive, present } from '@yaks/query/core'
+import type { Assoc, Hop, Presence, Vocab } from '@yaks/vocab/runtime'
+import { Unknown } from '@yaks/vocab/runtime'
 import {
   and,
   type Bind,
@@ -81,7 +81,7 @@ import {
 } from './ast.ts'
 import { inline, render } from './render.ts'
 import { type Arm, ARMS, arms, cut } from './compound.ts'
-import { type Dialect, sqlite, type Tag, tagOf } from './sqlite.ts'
+import { type Dialect, sqlite, type Tag, tagOf, tallied } from './sqlite.ts'
 import {
   type Backings,
   type Derived,
@@ -1422,20 +1422,6 @@ let keyed = (ctx: Ctx, leaf: Hop): boolean =>
   !ctx.v.prop(leaf.comp, leaf.prop)!.computed &&
   !ctx.derived[`${leaf.comp}.${leaf.prop}`]
 
-/**
- * How `.distinct` and `.tally` count a property of type `tag`, alike here and
- * in @yaks/match: a number as the number it is, a text, an enum member or an
- * eid as its text, anything else not at all (null). A number cast to text
- * would not read as JavaScript writes it (a real 2 is `2.0`), and a boolean
- * is 0 or 1 here where a bundle holds `false` or `true`.
- */
-export let tallied = (tag: Tag): 'number' | 'text' | null =>
-  tag == 'number' || tag == 'priority'
-    ? 'number'
-    : tag == 'text' || tag == 'enum' || tag == 'eid'
-    ? 'text'
-    : null
-
 // Every arm owns its indexed selection; unrelated alternatives share no joins.
 let indexedRelation = (
   ctx: Ctx,
@@ -2126,3 +2112,5 @@ let backedKeyset = (ctx: Ctx, sort: Sort | null, eid: string): Frag => {
     ? past(sort, atAnchor(sort, owner), exists, tie)
     : spliced('(not ', exists, ' or ', tie, ')')
 }
+
+export { tallied } from './sqlite.ts'

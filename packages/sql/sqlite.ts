@@ -20,7 +20,7 @@
 // query excludes it.
 
 import type { Prop, Scalar, Vocab } from '@yaks/vocab'
-import { timeEdges } from '@yaks/query'
+import { timeEdges } from '@yaks/query/core'
 import { type Frag, spelled } from './ast.ts'
 import { nest } from './render.ts'
 
@@ -384,3 +384,17 @@ export let sqlite: Dialect = {
     params: [],
   }),
 }
+
+/**
+ * How `.distinct` and `.tally` count a property of type `tag`, alike here and
+ * in @yaks/match: a number as the number it is, a text, an enum member or an
+ * eid as its text, anything else not at all (null). A number cast to text
+ * would not read as JavaScript writes it (a real 2 is `2.0`), and a boolean
+ * is 0 or 1 here where a bundle holds `false` or `true`.
+ */
+export let tallied = (tag: Tag): 'number' | 'text' | null =>
+  tag == 'number' || tag == 'priority'
+    ? 'number'
+    : tag == 'text' || tag == 'enum' || tag == 'eid'
+    ? 'text'
+    : null

@@ -51,9 +51,14 @@ declared types, collects joins and returns a `Select`. `render` returns `Raw`;
 `compile` calls both. Send `sql` and `params` together to the engine.
 `BindOpts.now` fixes the moment relative time literals resolve against.
 
+`@yaks/sql/core` provides SQL statements as data, rendering, and the driver
+interface without loading query binding. `@yaks/sql/query` adds query binding
+and compilation. The root export also includes rule matching, death cascades,
+and statement batching.
+
 ## Exports
 
-All exports use the single import path `@yaks/sql`.
+All exports are available from `@yaks/sql`; the table groups them by purpose.
 
 | Part                  | Exports                                                                                                                     |
 | --------------------- | --------------------------------------------------------------------------------------------------------------------------- |

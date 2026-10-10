@@ -7,7 +7,7 @@
  */
 
 import type { Bundle } from '@yaks/match'
-import { loadVocab, type Prop, type Vocab } from '@yaks/vocab'
+import { loadVocab, type Prop, type Vocab } from '@yaks/vocab/runtime'
 import doc from './vocab.json' with { type: 'json' }
 import type { Context } from './types.ts'
 

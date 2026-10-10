@@ -11,8 +11,8 @@ import {
   select,
   table,
   val,
-} from '@yaks/sql'
-import { revision } from '@yaks/sql'
+} from '@yaks/sql/core'
+import { revision } from '@yaks/sql/core'
 
 let caches = new WeakMap<Driver, {
   sets: Archetypes

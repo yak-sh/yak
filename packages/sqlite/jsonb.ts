@@ -20,7 +20,7 @@
 // comes back as one type whichever door asked for it.
 
 import type { Hop, Vocab } from '@yaks/vocab'
-import { type Expr, fn, lit, op, type Param } from '@yaks/sql'
+import { type Expr, fn, lit, op, type Param } from '@yaks/sql/core'
 
 /** Whether `comp.prop` holds a JSON value. */
 export let isJsonb = (v: Vocab, comp: string, prop: string): boolean =>

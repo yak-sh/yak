@@ -36,7 +36,7 @@ import type { ComponentRenderer } from '@yaks/preact'
 import type { ComponentChild } from 'preact'
 import { names, reversed } from '@yaks/edge/vocab'
 import { type Node, plain, safe, tree } from '@yaks/text'
-import { loadVocab, type Vocab, type VocabDoc } from '@yaks/vocab'
+import { loadVocab, type Vocab, type VocabDoc } from '@yaks/vocab/runtime'
 import type { Sheet } from '@yaks/tui/theme'
 import {
   type Related,

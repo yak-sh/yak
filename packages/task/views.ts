@@ -11,9 +11,9 @@
 //
 // Beside it, as the inspector draws them, a task's page (./inspect.ts).
 
-import { parse } from '@yaks/query'
+import { parse } from '@yaks/query/core'
 import { define, type Registry } from '@yaks/render'
-import { loadVocab } from '@yaks/vocab'
+import { loadVocab } from '@yaks/vocab/runtime'
 import { TASK } from './comp.ts'
 import { statusOf } from './words.ts'
 

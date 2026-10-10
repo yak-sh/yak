@@ -6,7 +6,8 @@
     ".": "./mod.ts",
     "./vocab": "./docs.ts",
     "./tools": "./tools.ts",
-    "./constraints": "./constraints.ts"
+    "./constraints": "./constraints.ts",
+    "./runtime": "./runtime.ts"
   },
   "license": "Apache-2.0",
   "imports": {

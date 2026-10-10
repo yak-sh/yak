@@ -1,6 +1,6 @@
 // A connection's public face, shared by browser and terminal: its integration,
 // account and status, followed by the apps whose uses links the host holds.
-import { parse } from '@yaks/query'
+import { parse } from '@yaks/query/core'
 import { define, type H, type Registry, type RenderContext } from '@yaks/render'
 import type { Shown } from '@yaks/render/views'
 import { integrationEid } from './integrations.ts'

@@ -78,7 +78,8 @@ import {
   tabled,
 } from './ddl.ts'
 import { epoch, installed, meta, SCHEMA } from './meta.ts'
-import { ast, doom, get, read, rows, screened } from './read.ts'
+import { ast, get, read, rows, screened } from './read.ts'
+import { doom } from './doom.ts'
 import { unit } from './unit.ts'
 import { options } from './reader.ts'
 import {
@@ -158,7 +159,6 @@ export { EPOCH, epoch, epochAt, type Meta, meta } from './meta.ts'
 export { decoded, isJsonb, jsonIn, jsonOut, projected } from './jsonb.ts'
 export {
   compSql,
-  doom,
   get,
   OWNER,
   type Query,
@@ -739,3 +739,5 @@ export let storage = (
 }
 
 export * from './migration.ts'
+
+export { doom } from './doom.ts'

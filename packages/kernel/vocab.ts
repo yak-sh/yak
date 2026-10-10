@@ -2,7 +2,7 @@
 // `@yaks/kernel/vocab`. It imports no storage, no SQL and no runtime API, so a
 // browser tab loading this vocabulary loads nothing else with it.
 
-import { type Keywords, pick, type VocabDoc } from '@yaks/vocab'
+import { type Keywords, pick, type VocabDoc } from '@yaks/vocab/runtime'
 import { kernelKeywords } from './keywords.ts'
 import doc from './vocab.json' with { type: 'json' }
 import manifest from './deno.json' with { type: 'json' }

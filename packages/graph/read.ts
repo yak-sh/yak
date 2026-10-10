@@ -1,6 +1,6 @@
 // Query projection, name resolution and caller views over committed storage.
 // A read-only graph and the writable graph use the same read pipeline.
-import { and, eq, list, parse, want } from '@yaks/query'
+import { and, eq, list, parse, want } from '@yaks/query/core'
 import { matcher, rows as matchRows } from '@yaks/match'
 import type { Vocab } from '@yaks/vocab'
 import { context, scope } from '@yaks/trace'

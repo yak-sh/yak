@@ -5,7 +5,7 @@
  * @module
  */
 import { define, type H, type Registry, type RenderContext } from '@yaks/render'
-import { parse } from '@yaks/query'
+import { parse } from '@yaks/query/core'
 import type { Bundle } from '@yaks/graph'
 import type { Shown } from '@yaks/render/views'
 import {

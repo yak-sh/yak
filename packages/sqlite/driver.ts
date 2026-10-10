@@ -11,7 +11,7 @@ import {
   type Stmt,
   STOCK,
   writing,
-} from '@yaks/sql'
+} from '@yaks/sql/core'
 
 export let driver = (
   run: (sql: string, params: Param[]) => Row[],

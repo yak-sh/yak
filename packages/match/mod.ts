@@ -93,4 +93,4 @@ export {
   time,
 } from './value.ts'
 export { search, tokens } from './text.ts'
-export { Unsupported } from '@yaks/sql'
+export { Unsupported } from '@yaks/sql/core'

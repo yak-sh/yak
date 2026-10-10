@@ -6,7 +6,7 @@
 // from.
 
 import type { Comp } from '@yaks/graph'
-import { parse } from '@yaks/query'
+import { parse } from '@yaks/query/core'
 import {
   type Bundle,
   define,

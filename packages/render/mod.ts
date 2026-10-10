@@ -1,4 +1,4 @@
-import { Unknown } from '@yaks/vocab'
+import { Unknown } from '@yaks/vocab/runtime'
 /**
  * @yaks/render selects which renderer draws a bundle, and lists the actions a
  * bundle offers. A view name is tried from the right (Board.List.Tile →
@@ -22,7 +22,7 @@ import { Unknown } from '@yaks/vocab'
  * ```ts
  * import { assertEquals } from '@std/assert'
  * import { parse } from '@yaks/query'
- * import { loadVocab } from '@yaks/vocab'
+ * import { loadVocab } from '@yaks/vocab/runtime'
  * import { define, resolve, type H } from '@yaks/render'
  *
  * let vocab = loadVocab([{ $defs: { doc: {
@@ -46,7 +46,7 @@ import { Unknown } from '@yaks/vocab'
 
 import { type Bundle, type Filter, filter } from '@yaks/match'
 import type { Query } from '@yaks/query'
-import type { Vocab } from '@yaks/vocab'
+import type { Vocab } from '@yaks/vocab/runtime'
 import { type ArchetypeLookup, archetypeMatch } from './archetype.ts'
 export type { ArchetypeLookup } from './archetype.ts'
 import { projection, propVocab } from './prop.ts'

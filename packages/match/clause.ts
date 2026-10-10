@@ -18,8 +18,8 @@ import {
   type Value,
   type Walk,
   WALK_LIMIT,
-} from '@yaks/query'
-import { identity, Unsupported } from '@yaks/sql'
+} from '@yaks/query/core'
+import { identity, Unsupported } from '@yaks/sql/core'
 import type { Assoc, Hop, Vocab } from '@yaks/vocab'
 import {
   type Bundle,

@@ -1,6 +1,6 @@
 // Presence-only queries have one answer per immutable table set. Property
 // queries still read their bundle; an unknown descriptor declines the shortcut.
-import { bare, type Clause, type Query } from '@yaks/query'
+import { bare, type Clause, type Query } from '@yaks/query/core'
 import { type Bundle, filter } from '@yaks/match'
 import type { Vocab } from '@yaks/vocab'
 

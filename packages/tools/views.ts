@@ -8,7 +8,7 @@
 // because a text backend drops the control bytes of every literal, newlines
 // included: a break is structure, and structure is what survives.
 
-import { parse } from '@yaks/query'
+import { parse } from '@yaks/query/core'
 import { define, type H, type Registry } from '@yaks/render'
 
 let lines = <Node>(b: Record<string, unknown>, h: H<Node>): Node => {

@@ -2,7 +2,11 @@
   "name": "@yaks/sql",
   "version": "0.2.10",
   "description": "Builds SQL as data and compiles query ASTs against a vocabulary, rendering SQLite text with bound parameters for a driver.",
-  "exports": "./mod.ts",
+  "exports": {
+    ".": "./mod.ts",
+    "./core": "./core.ts",
+    "./query": "./query.ts"
+  },
   "license": "Apache-2.0",
   "imports": {
     "@std/assert": "jsr:@std/assert@^1.0.0"

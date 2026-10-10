@@ -21,7 +21,7 @@ import {
   select,
   table,
   val,
-} from '@yaks/sql'
+} from '@yaks/sql/core'
 import { META } from './layout.ts'
 
 /** Read, write, clear — the whole interface. Values are text; an application

@@ -40,8 +40,8 @@ import {
   parse,
   type Query as Ast,
   type Tally,
-} from '@yaks/query'
-import { type Tag, tallied, Unsupported, whole } from '@yaks/sql'
+} from '@yaks/query/core'
+import { type Tag, tallied, Unsupported, whole } from '@yaks/sql/core'
 import type { Vocab } from '@yaks/vocab'
 import {
   BY,

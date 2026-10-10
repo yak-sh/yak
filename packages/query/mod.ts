@@ -16,12 +16,8 @@
 // loaded vocabulary, `complete` offers what can be typed at the caret. See
 // README.
 
-export * from './ast.ts'
-export * from './parse.ts'
+export * from './core.ts'
 export * from './multi.ts'
 export * from './rule.ts'
-export * from './time.ts'
 export * from './teach.ts'
 export * from './complete.ts'
-
-export * from './map.ts'

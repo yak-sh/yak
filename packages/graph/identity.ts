@@ -32,7 +32,7 @@ import type { Vocab } from '@yaks/vocab'
 import type { Bundle, Comp, Eid } from './bundle.ts'
 import { comps } from './bundle.ts'
 import type { Derive } from './alias.ts'
-import { Refused } from './admit.ts'
+import { Refused } from './errors.ts'
 import { sha256 } from './sha256.ts'
 
 /**

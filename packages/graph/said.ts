@@ -24,7 +24,7 @@ import {
   parse,
   type Query as Ast,
   type Value,
-} from '@yaks/query'
+} from '@yaks/query/core'
 import type { Vocab } from '@yaks/vocab'
 import { after } from '@yaks/fp'
 import type { Eid } from './bundle.ts'

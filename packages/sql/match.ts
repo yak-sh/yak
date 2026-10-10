@@ -34,7 +34,7 @@
 
 import { field } from './sqlite.ts'
 import type { Vocab } from '@yaks/vocab'
-import { type And, present } from '@yaks/query'
+import { type And, present } from '@yaks/query/core'
 import {
   among,
   and,

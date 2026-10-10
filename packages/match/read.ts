@@ -14,7 +14,7 @@
 // see: an entity outside it does not exist, the same way a row outside a table
 // does not.
 
-import { type Tag, tagOf } from '@yaks/sql'
+import { type Tag, tagOf } from '@yaks/sql/core'
 import type { Hop, Vocab } from '@yaks/vocab'
 
 /** An entity's id: a client-minted string (a uuid, or a content hash). */

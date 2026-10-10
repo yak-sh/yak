@@ -40,7 +40,7 @@
 //   }
 //   compile(ast, vocab, { extend: [shelves] })
 
-import type { Clause } from '@yaks/query'
+import type { Clause } from '@yaks/query/core'
 import type { Vocab } from '@yaks/vocab'
 import type { Expr, Raw, Source } from './ast.ts'
 
