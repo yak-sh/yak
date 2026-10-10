@@ -220,6 +220,17 @@ test('a cart is priced at Stripe, paid, refunded and disputed', async () => {
   let seller = await merchantFound
   let on = (path: string, fields?: Record<string, unknown>) =>
     charged(key, path, fields, seller)
+  // The refund already names its charge. Ask Stripe to carry that object
+  // back too, so the event uses Stripe's current charge without another GET.
+  let refund = async (intent: string, charge: string, amount?: number) => {
+    let made = await on('/v1/refunds', {
+      payment_intent: intent,
+      amount,
+      expand: ['charge'],
+    })
+    assertEquals((made.charge as { id: string }).id, charge)
+    return made.charge
+  }
   // The session the door made, read back off Stripe with its line items.
   let held = async (url: string) => {
     let id = /cs_test_[A-Za-z0-9]+/.exec(url)?.[0]
@@ -434,18 +445,16 @@ test('a cart is priced at Stripe, paid, refunded and disputed', async () => {
     // ---- refunded, at Stripe. The charge inherits the PaymentIntent's
     // metadata, which is why the door put it there: a refund knows nothing of
     // a session. Part of the charge first, then the rest (T-37887).
-    let refund = async (amount?: number) => {
-      await on('/v1/refunds', { payment_intent: sale.intent.id, amount })
-      return await hook(
+    let returned = async (amount?: number) =>
+      await hook(
         k.env,
         'charge.refunded',
-        await on(`/v1/charges/${sale.intent.latest_charge}`),
+        await refund(sale.intent.id, sale.intent.latest_charge, amount),
         seller,
       )
-    }
-    assertEquals(await refund(4600), 'shop: partially_refunded')
+    assertEquals(await returned(4600), 'shop: partially_refunded')
     assertEquals(await status(sale.intent.id), 'partially_refunded')
-    assertEquals(await refund(), 'shop: refunded')
+    assertEquals(await returned(), 'shop: refunded')
     assertEquals(await status(sale.intent.id), 'refunded')
   }
 
@@ -461,7 +470,7 @@ test('a cart is priced at Stripe, paid, refunded and disputed', async () => {
         ((await on(`/v1/disputes?payment_intent=${fought.intent.id}`)) as {
           data: Dispute[]
         }).data[0],
-      { timeout: 30_000, poll: 250, label: 'the dispute' },
+      { timeout: 30_000, poll: 50, label: 'the dispute' },
     )
     assertEquals(
       await hook(k.env, 'charge.dispute.created', dispute, seller),
@@ -515,12 +524,11 @@ test('a cart is priced at Stripe, paid, refunded and disputed', async () => {
       payment_method_types: { 0: 'card' },
       confirm: true,
     }) as { id: string; latest_charge: string }
-    await on('/v1/refunds', { payment_intent: intent.id })
     assertEquals(
       await hook(
         k.env,
         'charge.refunded',
-        await on(`/v1/charges/${intent.latest_charge}`),
+        await refund(intent.id, intent.latest_charge),
         seller,
       ),
       'not a sale of ours',
