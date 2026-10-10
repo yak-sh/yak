@@ -13,7 +13,14 @@ import {
 } from '@yaks/durable-object'
 import { subscriptions } from '@yaks/api'
 import { caught, queue, type Sink } from '@yaks/tracker/report'
-import { options, platform, store, type TrackerStore, vocab } from './core.ts'
+import {
+  type Config,
+  options,
+  platform,
+  store,
+  type TrackerStore,
+  vocab,
+} from './core.ts'
 import { batch } from './queue.ts'
 import { door, json } from './door.ts'
 import { authorize } from './auth.ts'
@@ -80,6 +87,7 @@ export class Tracker {
   live?: Sockets
   scope: string
   sink: Sink
+  #config: Config
   #traceTail = Promise.resolve()
   #traceDropped = 0
   #traceMeta = () => meta(driver(this.ctx.storage))
@@ -92,6 +100,21 @@ export class Tracker {
     this.sink = env.ERRORS
       ? queue(env.ERRORS)
       : (rows) => console.error(JSON.stringify(rows))
+    this.#config = {
+      sink: this.sink,
+      store: this.scope,
+      url: 'https://tracker.yak.sh',
+      ...env.MAIL
+        ? {
+          sender: {
+            send: async (m) => {
+              let sent = await env.MAIL!.send(m)
+              return { id: sent.messageId }
+            },
+          },
+        }
+        : {},
+    }
   }
   #mailReady = false
   #traceStorage = () => {
@@ -131,26 +154,7 @@ export class Tracker {
       saved.install()
       this.#traceMeta().set('trace-ready', TRACE_READY)
     }
-    let tracker = store(saved, {
-      sink: this.sink,
-      store: this.scope,
-      ...this.scope == platform && this.env.MAIL_TO
-        ? {
-          to: platform,
-          from: this.env.MAIL_FROM,
-        }
-        : {},
-      ...this.env.MAIL
-        ? {
-          sender: {
-            send: async (m) => {
-              let sent = await this.env.MAIL!.send(m)
-              return { id: sent.messageId }
-            },
-          },
-        }
-        : {},
-    })
+    let tracker = store(saved, this.#config)
     this.live = sockets(subscriptions(tracker.graph), this.ctx)
     this.tracker = tracker
     if (install) await this.#mail()
@@ -163,6 +167,22 @@ export class Tracker {
         entity: { eid: platform },
         email: { address: this.env.MAIL_TO },
       }], { trusted: true })
+    }
+    if (
+      this.scope == platform && this.env.MAIL && this.env.MAIL_FROM &&
+      this.env.MAIL_TO
+    ) {
+      let kept = this.#traceMeta()
+      let since = kept.get('mail-since')
+      if (!since) {
+        since = new Date(this.now()).toISOString()
+        kept.set('mail-since', since)
+      }
+      Object.assign(this.#config, {
+        to: platform,
+        from: this.env.MAIL_FROM,
+        since,
+      })
     }
     this.#mailReady = true
   }

@@ -2,6 +2,7 @@
 // deliveries. It has no directory or yak binding; intake needs no auth lookup.
 
 import type { Bundle } from '@yaks/graph'
+import { bugEid } from '@yaks/tracker'
 import { authorize } from './auth.ts'
 import { capture, caught, queue } from '@yaks/tracker/report'
 import { platform } from './core.ts'
@@ -46,10 +47,13 @@ export let worker = (env: Env) => ({
           return json({ error: 'bundle hash required' }, 400)
         }
         if (!env.ERRORS) return json({ error: 'queue unavailable' }, 503)
+        let fault = `tracker-canary|${hash}`
         let rows = capture(Error(`tracker deploy canary ${hash}`), {
           sink: () => {},
-          fault: `tracker-canary|${hash}`,
+          fault,
         })
+        // A deployment exercises grouping without notifying a synthetic bug.
+        rows.push({ entity: { eid: bugEid('', fault) }, archived: {} })
         await env.ERRORS.send(rows)
         return json({ eid: rows[0].entity.eid })
       }

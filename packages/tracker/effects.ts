@@ -17,6 +17,8 @@ export type Options = {
   /** Platform/box delivery target, resolved by the host to a person's eid. */
   to?: string
   from?: string
+  /** Ignore openings before mail activation, without changing unseen state. */
+  since?: string
   /** Global eid of this tracker store; separates box and platform letters. */
   store?: string
   /** Tracker web address for links in notification letters. */
@@ -76,6 +78,7 @@ export let notify = async (
   if (!open(row)) return
   if (options.notify) return await options.notify([row])
   if (!options.to || !options.store) return
+  if (options.since && openedAt(row) < options.since) return
   let letter = letterEid(options, row)
   let [exists] = await g.get([letter])
   if (exists?.mail) {

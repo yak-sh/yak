@@ -100,10 +100,10 @@ report errors; ordinary tracker work handles notifications independently.
 
 Platform-only `POST /heartbeat` renews the box heartbeat. Cron probes the MCP
 endpoint and tracks an activated box heartbeat older than five minutes. The
-platform graph batches notification mail through its own `MAIL` binding, with
-`MAIL_FROM` and `MAIL_TO` configured at activation. Space bugs stream through
-their store's graph subscription and remain unseen until their caller marks
-notification in the platform integration.
+platform graph sends one letter per bug opening through its own `MAIL` binding,
+with `MAIL_FROM` and `MAIL_TO` configured at activation. Space bugs stream
+through their store's graph subscription and remain unseen until their caller
+marks notification in the platform integration.
 
 ## Activation and deployment
 
@@ -113,6 +113,12 @@ connection for this Worker, its own Email Sending binding, and the dedicated
 `TRACKER_URL` and `TRACKER_SECRET` privately. The build may deploy only this
 Worker and restore its previous version. Source is ready; production queue and
 build activation are separate account operations.
+
+The first ordinary wake with all mail settings persists the activation time and
+refreshes the recipient in an already installed platform tracker. Earlier bug
+openings stay unseen and produce no letter; later openings and regressions each
+own one durable letter. Trace intake does not activate mail. Deployment canary
+bugs are archived at intake and produce no notification.
 
 Workers Builds: repository root, deploy command `sh bin/build-tracker`, with
 build command empty. The wrapper installs Deno and the pinned npm dependencies.
