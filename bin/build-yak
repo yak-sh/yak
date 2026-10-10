@@ -1,33 +1,34 @@
 #!/bin/sh
-# bin/build-yak — the deploy wrapper Cloudflare Workers Builds runs to deploy
+# bin/build-yak — Cloudflare Workers Builds prepares dependencies and deploys
 # the kernel Worker (T-34165), and its sibling Workers ahead of it
 # (workers/yak/wrangler.ts `siblings`). The dashboard's deploy command calls
-# `../../bin/build-yak deploy`; what that line means lives here, in the repo,
-# where it is reviewed and versioned like everything else. The dashboard's
-# build command has been empty since 2026-09-08, so the build mode below (the
-# check and the workers tests) is run by hand, never by Builds.
+# `../../bin/build-yak deploy`; its build command is
+# `../../bin/build-yak install`. Install mode prepares Deno and the kernel's
+# npm tree in npm's cache before Builds saves it, ahead of deploy. With no
+# argument, this runs the check and the workers tests by hand.
 #
 # Workers Builds is the whole deploy: the Cloudflare GitHub App watches
-# yak-sh/yak, and on a push to main it clones, runs this, then runs
+# yak-sh/yak, and on a push to main it clones, runs install mode, then runs
 # this file's deploy mode with a token it mints for itself — nothing is minted by
 # hand and no secret lives in the repo or on the Actions runner. A non-zero
-# exit in build mode would deploy nothing. Deploy mode preserves a successful
+# exit in install mode would deploy nothing. Deploy mode preserves a successful
 # production deploy if staging fails, and exits nonzero so Builds reports it.
 # The dashboard settings are written down in
 # workers/yak/README.md.
 #
-# What a push's Workers Build does: clone, install stale npm deps, pre-flight
-# (wrangler.ts `superseded`), yak-out, esbuild, then upload. No check, no tests.
+# What a push's Workers Build does: clone, install stale npm deps, save cache,
+# pre-flight (wrangler.ts `superseded`), yak-out, esbuild, then upload.
+# No check, no tests.
 #
-# The image is Ubuntu 24.04 with node and npm; Deno is NOT on it, so the first
+# The image is Ubuntu 24.04 with node and npm; Deno is absent, so the first
 # thing this does is fetch one. The build runs with the ROOT DIRECTORY set to
 # workers/yak, so nothing here may assume a working directory — every path is
 # derived from this file's own location.
 #
-# What build mode does not do: the workerd tests (they boot the kernel and reach
-# the Stripe sandbox, and are the Actions runner's job,
-# .github/workflows/gate.yml) and bin/verify-deploy (Builds runs the build BEFORE the deploy, so there is
-# nothing yet to verify — see the README).
+# The no-argument checks omit the workerd tests (they boot the kernel and
+# reach the Stripe sandbox, and are the Actions runner's job,
+# .github/workflows/gate.yml) and bin/verify-deploy (Builds runs the build before
+# the deploy, so there is nothing yet to verify — see the README).
 set -eu
 
 root=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
@@ -56,9 +57,11 @@ deno --version
 cd "$root"
 
 case "${1:-}" in
-  deploy)
+  install|deploy)
+    mode=$1
     shift
     deno run --allow-read --allow-write --allow-run=npm workers/yak/dependencies.ts "$cache"
+    [ "$mode" = install ] && exit 0
     deno task deploy:yak "$@"
     # Builds pins these to its connected production Worker. Leaving them set
     # can override staging's name or reject its distinct script tag.
@@ -66,7 +69,7 @@ case "${1:-}" in
     exec deno task deploy:yak-staging "$@"
     ;;
   '') ;;
-  *) echo "usage: bin/build-yak [deploy]" >&2; exit 2 ;;
+  *) echo "usage: bin/build-yak [install|deploy]" >&2; exit 2 ;;
 esac
 
 echo "--- deno task check"

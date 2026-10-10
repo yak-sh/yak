@@ -55,7 +55,7 @@ The dashboard settings, in full (Workers & Pages → `yak` → Settings → Buil
 | Production branch       | `main`                                   |
 | Root directory          | `workers/yak`                            |
 | Build variable          | `SKIP_DEPENDENCY_INSTALL=1`              |
-| Build command           | (empty)                                  |
+| Build command           | `../../bin/build-yak install`            |
 | Deploy command          | `../../bin/build-yak deploy`             |
 | Build watch paths       | `workers/yak/*`, `packages/*`            |
 | Non-production branches | build only; previews off for now (below) |
@@ -77,26 +77,31 @@ deploy gate judges the rows already recorded (`bench/deploys.md`).
 
 Catalog transpilation is reused from the restored Deno cache between builds.
 
-The build command is empty, so a Workers Build runs neither `deno task check`
-nor the tests. `SKIP_DEPENDENCY_INSTALL=1` disables Builds' automatic install
+The build command installs Deno and the kernel's npm tree only; a Workers Build
+runs neither `deno task check` nor the tests. `SKIP_DEPENDENCY_INSTALL=1`
+disables Builds' automatic install
 ([build image variables](https://developers.cloudflare.com/workers/ci-cd/builds/build-image/)).
-`bin/build-yak deploy` keeps Deno and the installed npm project under npm's
+`bin/build-yak install` keeps Deno and the installed npm project under npm's
 restored cache directory, linking the checkout's `node_modules` to that tree.
-Each package manifest, lockfile and platform has its own project. It runs
-`npm ci` only when the successful install's exact inputs change, package
-identities differ or installed packages are missing. npm's hidden lockfile may
-omit package metadata; `node_modules/.yak-install` records the manifest,
-lockfile and platform digest after success. Existing complete cache projects are
-adopted by their matching content key. Restored matching packages are reused
-regardless of file timestamps. An empty cache installs normally. It generates
-web assets and the compiler catalog together with npm readiness. The kernel and
-outbound bundles and the deploy pre-flight check (`superseded`) start once npm
-is ready; the compiler bundle also waits for its catalog. Uploads wait for all
-generated files and the guard. Sandbox base preparation and each changed
-sibling's upload run as their own preparation allows. The kernel uploads after
-all succeed. Each sibling is bundled locally and compared with its fully serving
-deployment's `inputs:<sha256>` annotation. When the deployment summary truncates
-that annotation, the comparison reads the full annotation from its sole serving
+Builds saves this cache after the build command and before the deploy command
+([build caching](https://developers.cloudflare.com/workers/ci-cd/builds/build-caching/)).
+`bin/build-yak deploy` repeats the dependency check, reusing the ready tree or
+installing it when the build command has not run. Each package manifest,
+lockfile and platform has its own project. It runs `npm ci` only when the
+successful install's exact inputs change, package identities differ or installed
+packages are missing. npm's hidden lockfile may omit package metadata;
+`node_modules/.yak-install` records the manifest, lockfile and platform digest
+after success. Existing complete cache projects are adopted by their matching
+content key. Restored matching packages are reused regardless of file
+timestamps. An empty cache installs normally. Deploy mode generates web assets
+and the compiler catalog together with npm readiness. The kernel and outbound
+bundles and the deploy pre-flight check (`superseded`) start once npm is ready;
+the compiler bundle also waits for its catalog. Uploads wait for all generated
+files and the guard. Sandbox base preparation and each changed sibling's upload
+run as their own preparation allows. The kernel uploads after all succeed. Each
+sibling is bundled locally and compared with its fully serving deployment's
+`inputs:<sha256>` annotation. When the deployment summary truncates that
+annotation, the comparison reads the full annotation from its sole serving
 version. The digest covers every upload module, the inputs of each container
 image the sibling runs (its Dockerfile and every file of its build context,
 `wrangler.ts` `images`), its configuration, Wrangler pin and environment. A

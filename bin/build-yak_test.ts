@@ -30,11 +30,13 @@ esac
       { mode: 0o755 },
     )
     for (
-      let [install, production, staging, want] of [
-        [0, 0, 0, 0],
-        [13, 0, 0, 13],
-        [0, 17, 0, 17],
-        [0, 0, 23, 23],
+      let [mode, install, production, staging, want] of [
+        ['install', 0, 0, 0, 0],
+        ['install', 13, 0, 0, 13],
+        ['deploy', 0, 0, 0, 0],
+        ['deploy', 13, 0, 0, 13],
+        ['deploy', 0, 17, 0, 17],
+        ['deploy', 0, 0, 23, 23],
       ]
     ) {
       let log = `${dir}/calls`
@@ -44,8 +46,8 @@ esac
       let out = await new Deno.Command('sh', {
         args: [
           fileURLToPath(new URL('./build-yak', import.meta.url)),
-          'deploy',
-          '--dry-run',
+          String(mode),
+          ...(mode == 'deploy' ? ['--dry-run'] : []),
         ],
         cwd: new URL('../workers/yak/', import.meta.url),
         env: {
@@ -65,14 +67,16 @@ esac
       assertEquals(out.code, want)
       assertEquals((await Deno.readTextFile(log)).trim().split('\n'), [
         `run --allow-read --allow-write --allow-run=npm workers/yak/dependencies.ts ${dir}`,
-        ...(install ? [] : ['task deploy:yak --dry-run']),
-        ...(install || production ? [] : ['task deploy:yak-staging --dry-run']),
+        ...(mode == 'install' || install ? [] : ['task deploy:yak --dry-run']),
+        ...(mode == 'install' || install || production
+          ? []
+          : ['task deploy:yak-staging --dry-run']),
       ])
       assertEquals(
         (await Deno.readTextFile(guards)).trim().split('\n').filter(Boolean),
         [
-          ...(install ? [] : ['yak|production-tag']),
-          ...(install || production ? [] : ['|']),
+          ...(mode == 'install' || install ? [] : ['yak|production-tag']),
+          ...(mode == 'install' || install || production ? [] : ['|']),
         ],
       )
     }
