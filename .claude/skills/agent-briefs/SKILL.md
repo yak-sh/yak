@@ -121,8 +121,8 @@ has looked. He gets to see what it buys before it buys a lot.
 scheduled job) also delivers everything already owed: a store that has been
 collecting for a week sends the week, at once, to whoever it names. The agent
 sees a configuration change; the owner sees his inbox fill. So the brief says
-what happens to the backlog (marked as seen, summed into one message, or sent)
-and what the recipient gets in the first minute.
+what happens to the backlog (marked as seen, or sent) and what the recipient
+gets in the first minute.
 
 A skeleton for a fresh agent, to fill in your own words:
 
