@@ -54,6 +54,7 @@ The dashboard settings, in full (Workers & Pages → `yak` → Settings → Buil
 | Repository              | `yak-sh/yak` (Cloudflare GitHub App)     |
 | Production branch       | `main`                                   |
 | Root directory          | `workers/yak`                            |
+| Build variable          | `SKIP_DEPENDENCY_INSTALL=1`              |
 | Build command           | (empty)                                  |
 | Deploy command          | `../../bin/build-yak deploy`             |
 | Build watch paths       | `workers/yak/*`, `packages/*`            |
@@ -77,26 +78,31 @@ deploy gate judges the rows already recorded (`bench/deploys.md`).
 Catalog transpilation is reused from the restored Deno cache between builds.
 
 The build command is empty, so a Workers Build runs neither `deno task check`
-nor the tests. It clones, runs `npm ci`, and runs `bin/build-yak deploy`, which
-installs Deno (not on the Ubuntu 24.04 image), makes the deploy pre-flight check
-(`superseded`), prepares the sandbox base while checking `yak-out` and
-`yak-esbuild` and bundling the kernel concurrently, then uploads. Each sibling
-is bundled locally and compared with its fully serving deployment's
-`inputs:<sha256>` annotation. The digest covers every upload module, the inputs
-of each container image the sibling runs (its Dockerfile and every file of its
-build context, `wrangler.ts` `images`), its configuration, Wrangler pin and
-environment. A matching sibling stays serving without another upload; changed
-inputs, an unreadable deployment or a release without the annotation upload
-normally. The compiler image has its own `inputs:<sha256>` registry tag,
-covering its Dockerfile and build context. A changed Worker or toolkit catalog
-reuses that image; only a missing image tag builds and pushes it. The sibling
-upload uses a temporary config beside the original, naming the registry image,
-so Wrangler rolls it out without rebuilding it. Registry, build or push failures
-refuse the sibling and kernel deploy. Workers Builds has Docker, as the sandbox
-image already needs. `bin/build-yak` with no argument still runs the check and
-the workers tests by hand. A push's build that fails is started once more
-through the `BUILD_HOOK` deploy hook (builds.ts), since most failures are the
-network's; the second build's failure stands.
+nor the tests. `SKIP_DEPENDENCY_INSTALL=1` disables Builds' automatic install
+([build image variables](https://developers.cloudflare.com/workers/ci-cd/builds/build-image/)).
+`bin/build-yak deploy` installs Deno (not on the Ubuntu 24.04 image), then runs
+`npm ci` only when npm's installed `node_modules/.package-lock.json` differs
+from `package-lock.json` or installed packages are missing. Restored matching
+dependencies are reused regardless of file timestamps. An empty cache installs
+normally; with the variable unset, Builds' automatic install is reused. It makes
+the deploy pre-flight check (`superseded`), prepares the sandbox base while
+checking `yak-out` and `yak-esbuild` and bundling the kernel concurrently, then
+uploads. Each sibling is bundled locally and compared with its fully serving
+deployment's `inputs:<sha256>` annotation. The digest covers every upload
+module, the inputs of each container image the sibling runs (its Dockerfile and
+every file of its build context, `wrangler.ts` `images`), its configuration,
+Wrangler pin and environment. A matching sibling stays serving without another
+upload; changed inputs, an unreadable deployment or a release without the
+annotation upload normally. The compiler image has its own `inputs:<sha256>`
+registry tag, covering its Dockerfile and build context. A changed Worker or
+toolkit catalog reuses that image; only a missing image tag builds and pushes
+it. The sibling upload uses a temporary config beside the original, naming the
+registry image, so Wrangler rolls it out without rebuilding it. Registry, build
+or push failures refuse the sibling and kernel deploy. Workers Builds has
+Docker, as the sandbox image already needs. `bin/build-yak` with no argument
+still runs the check and the workers tests by hand. A push's build that fails is
+started once more through the `BUILD_HOOK` deploy hook (builds.ts), since most
+failures are the network's; the second build's failure stands.
 
 Builds run on watched-path pushes and finish in any order, so the deploy door
 (`wrangler.ts` `superseded`) deploys a commit only while no later commit changes

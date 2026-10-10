@@ -23,7 +23,6 @@ import {
   siblingImages,
   SIBLINGS,
   siblings,
-  stale,
   superseded,
 } from './wrangler.ts'
 
@@ -197,25 +196,6 @@ test('aliased: every export of a member, relative to the paths file', () => {
     '@yaks/two': ['../../packages/two/mod.ts'],
     '@yaks/two/tools': ['../../packages/two/tools.ts'],
   })
-  Deno.removeSync(root, { recursive: true })
-})
-
-test('stale: no stamp, an older stamp, a newer stamp', () => {
-  let root = Deno.makeTempDirSync({ prefix: 'yak-npm-' })
-  let lock = `${root}/package-lock.json`
-  let stamp = `${root}/node_modules/.package-lock.json`
-  Deno.writeTextFileSync(lock, '{}')
-  assertEquals(stale(root), true, 'no node_modules at all')
-
-  Deno.mkdirSync(`${root}/node_modules`)
-  Deno.writeTextFileSync(stamp, '{}')
-  Deno.utimeSync(stamp, 0, 0)
-  assertEquals(stale(root), true, 'installed before the lock last moved')
-
-  Deno.utimeSync(lock, 0, 0)
-  Deno.utimeSync(stamp, 1, 1)
-  assertEquals(stale(root), false, 'installed since')
-
   Deno.removeSync(root, { recursive: true })
 })
 

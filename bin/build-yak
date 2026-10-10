@@ -16,7 +16,7 @@
 # The dashboard settings are written down in
 # workers/yak/README.md.
 #
-# What a push's Workers Build does: clone, npm ci, the deploy pre-flight check
+# What a push's Workers Build does: clone, install stale npm deps, pre-flight
 # (wrangler.ts `superseded`), yak-out, esbuild, then upload. No check, no tests.
 #
 # The image is Ubuntu 24.04 with node and npm; Deno is NOT on it, so the first
@@ -58,6 +58,7 @@ cd "$root"
 case "${1:-}" in
   deploy)
     shift
+    deno run --allow-read --allow-write --allow-run=npm workers/yak/dependencies.ts
     deno task deploy:yak "$@"
     # Builds pins these to its connected production Worker. Leaving them set
     # can override staging's name or reject its distinct script tag.

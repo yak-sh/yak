@@ -33,6 +33,8 @@ import { createHash } from 'node:crypto'
 import { parse, stringify } from '@std/toml'
 import packages from './package.json' with { type: 'json' }
 import { based, imaged } from './sandbox/base.ts'
+import { installed } from './dependencies.ts'
+export { stale } from './dependencies.ts'
 
 export let WRANGLER = [
   'npx',
@@ -53,15 +55,6 @@ let at = (path: string) => {
     return 0
   }
 }
-
-/**
- * Does `node_modules` need `npm ci`? npm stamps `.package-lock.json` inside
- * the tree it just wrote, so one mtime comparison answers both "never
- * installed" (no stamp, 0) and "installed before the lock last moved".
- */
-export let stale = (root = dir) =>
-  at(`${root}/node_modules/.package-lock.json`) <
-    at(`${root}/package-lock.json`)
 
 // Where a `@yaks/*` name goes when esbuild bundles. The kernel imports the
 // packages by name, which deno resolves through the repo's workspace; esbuild
@@ -108,16 +101,10 @@ export let aliased = (root = repo, to = TSCONFIG) => {
   Deno.renameSync(tmp, to)
 }
 
-/**
- * `npm ci` when it is needed, at most one at a time, and never twice at once:
- * `npm ci` empties node_modules before it fills it, and more than one process
- * may ask at once (a test run beside `dev:yak`), so a second install would
- * delete the tree the first is bundling from. mkdir is the atomic create POSIX
- * gives us — whoever makes the directory installs, everyone else waits for the
- * stamp. Answers whether it installed. The workspace's paths are written first
- * ({@link aliased}), so everything wrangler bundles from is current.
- */
+/** Prepare the workspace paths, generated assets/catalog and npm tree before
+ * Wrangler or a probe reads them. Answers whether npm installed. */
 export let ready = async (root = dir, timeout = 600_000) => {
+  let changed = await installed(root, timeout)
   aliased()
   let [web, generated] = await Promise.all([
     new Deno.Command('deno', {
@@ -138,34 +125,7 @@ export let ready = async (root = dir, timeout = 600_000) => {
   ])
   if (!web.success) throw new Error('Web asset generation failed')
   if (!generated.success) throw new Error('Compiler catalog generation failed')
-  if (!stale(root)) return false
-  let lock = `${root}/node_modules.lock`
-  try {
-    Deno.mkdirSync(lock)
-  } catch {
-    let due = Date.now() + timeout
-    while (stale(root)) {
-      if (Date.now() > due) {
-        throw new Error(
-          `npm ci in ${root} never finished; if nothing is installing, ` +
-            `remove ${lock}`,
-        )
-      }
-      await new Promise((ok) => setTimeout(ok, 200))
-    }
-    return false
-  }
-  try {
-    let { code } = await new Deno.Command('npm', {
-      args: ['ci', '--prefer-offline', '--no-audit', '--no-fund'],
-      cwd: root,
-      stdin: 'null',
-    }).spawn().status
-    if (code) throw new Error(`npm ci in ${root} exited ${code}`)
-    return true
-  } finally {
-    Deno.removeSync(lock)
-  }
+  return changed
 }
 
 // Wrangler accepts --env on either side of the command. Both forms need

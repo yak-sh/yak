@@ -19,6 +19,7 @@ test('build-yak: production precedes staging, and either failure fails Builds', 
       `#!/bin/sh
 if [ "$1" = --version ]; then exit 0; fi
 printf '%s\\n' "$*" >> "$YAK_BUILD_LOG"
+if [ "$1" = run ]; then exit "$YAK_BUILD_INSTALL_CODE"; fi
 printf '%s|%s\\n' "\${WRANGLER_CI_OVERRIDE_NAME:-}" "\${WRANGLER_CI_MATCH_TAG:-}" >> "$YAK_BUILD_GUARDS"
 case "$2" in
   deploy:yak) exit "$YAK_BUILD_PRODUCTION_CODE" ;;
@@ -29,7 +30,12 @@ esac
       { mode: 0o755 },
     )
     for (
-      let [production, staging, want] of [[0, 0, 0], [17, 0, 17], [0, 23, 23]]
+      let [install, production, staging, want] of [
+        [0, 0, 0, 0],
+        [13, 0, 0, 13],
+        [0, 17, 0, 17],
+        [0, 0, 23, 23],
+      ]
     ) {
       let log = `${dir}/calls`
       let guards = `${dir}/guards`
@@ -49,6 +55,7 @@ esac
           YAK_BUILD_GUARDS: guards,
           WRANGLER_CI_OVERRIDE_NAME: 'yak',
           WRANGLER_CI_MATCH_TAG: 'production-tag',
+          YAK_BUILD_INSTALL_CODE: String(install),
           YAK_BUILD_PRODUCTION_CODE: String(production),
           YAK_BUILD_STAGING_CODE: String(staging),
         },
@@ -57,13 +64,17 @@ esac
       }).output()
       assertEquals(out.code, want)
       assertEquals((await Deno.readTextFile(log)).trim().split('\n'), [
-        'task deploy:yak --dry-run',
-        ...(production ? [] : ['task deploy:yak-staging --dry-run']),
+        'run --allow-read --allow-write --allow-run=npm workers/yak/dependencies.ts',
+        ...(install ? [] : ['task deploy:yak --dry-run']),
+        ...(install || production ? [] : ['task deploy:yak-staging --dry-run']),
       ])
-      assertEquals((await Deno.readTextFile(guards)).trim().split('\n'), [
-        'yak|production-tag',
-        ...(production ? [] : ['|']),
-      ])
+      assertEquals(
+        (await Deno.readTextFile(guards)).trim().split('\n').filter(Boolean),
+        [
+          ...(install ? [] : ['yak|production-tag']),
+          ...(install || production ? [] : ['|']),
+        ],
+      )
     }
   } finally {
     await Deno.remove(dir, { recursive: true })
