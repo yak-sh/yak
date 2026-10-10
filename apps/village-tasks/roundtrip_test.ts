@@ -24,13 +24,16 @@ test('a task completed in a sibling app changes Pip for one Vale hero', async ()
     ]
     let content = (path: string) =>
       Deno.readTextFileSync(new URL(`./${path}`, import.meta.url))
+    // The sibling contract uses these two Vale words. Read their definitions
+    // from the app without provisioning its unrelated world and game systems.
+    let { player, villager } = JSON.parse(
+      Deno.readTextFileSync(new URL('../vale/vocab.json', import.meta.url)),
+    ).$defs
     await agent.tool('app_files', {
       ...at('vale'),
       files: [{
         path: 'vocab.json',
-        content: Deno.readTextFileSync(
-          new URL('../vale/vocab.json', import.meta.url),
-        ),
+        content: JSON.stringify({ $defs: { player, villager } }),
       }],
     })
     await agent.tool('app_deploy', at('vale'))
