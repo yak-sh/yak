@@ -203,7 +203,6 @@
       "a natural resource changes shape when spent and shines when rare": 3.2
     },
     "apps/vale/gear.ts": {
-      "apps/vale/gear.ts block 2": 1.3,
       "apps/vale/gear.ts block 4": 6.9
     },
     "apps/vale/gear_level_test.ts": {
@@ -885,14 +884,14 @@
     "packages/browse/components/Chat_test.ts": {
       "a held reference list asks for no rows of its own": 5.4,
       "a new chat reuses the composer input with a terse prompt": 7.3,
-      "chat references mount the entity List.Tile renderer": 45.9,
+      "chat references mount the entity List.Tile renderer": 7.5,
       "chatPlan picks a graph-native provider": 1.2
     },
     "packages/browse/components/Comments_test.ts": {
-      "a thread shows answers under their question, not under unrelated notes": 84.4,
+      "a thread shows answers under their question, not under unrelated notes": 29.7,
       "byline reads actor and instrument from the created stamp": 12.3,
       "composer names an unnamed session by its chip id": 16,
-      "shared comment send line keeps drafts, sends by submit or Enter once and leaves Shift+Enter alone": 29.9,
+      "shared comment send line keeps drafts, sends by submit or Enter once and leaves Shift+Enter alone": 9.1,
       "viaName names a session by its chip id, never its harness uuid": 4.8
     },
     "packages/browse/components/Entity_test.ts": {
@@ -986,7 +985,7 @@
       "configured doc Body wraps while the Markdown source tab remains preformatted": 35.1
     },
     "packages/browse/components/views/Entry_test.tsx": {
-      "command and output summaries show one line and a more control": 14.7,
+      "command and output summaries show one line and a more control": 1.2,
       "entry registry specializes command and result faces": 6,
       "expanded entries offer only specifically rendered faces": 20.9,
       "full and normalized prose identify people and model output": 1.2,
@@ -1202,7 +1201,7 @@
       "the indicator mirrors the outbox: a mutate adds, an ack clears": 8
     },
     "packages/browse/tui/App_test.ts": {
-      "configured Inspect facet renders a query through its host adapter, not raw Render": 20.2,
+      "configured Inspect facet renders a query through its host adapter, not raw Render": 2.3,
       "the shared Browse App paints its sidebar and home; its search field goes to a query page": 138.9
     },
     "packages/browse/tui/md_test.tsx": {
@@ -1305,15 +1304,14 @@
     },
     "packages/cli/accounts_test.ts": {
       "a pasted yaks.app grant works beside an OAuth integration without a registered client": 32,
-      "personal account graph keeps multiple credentials and computes default without a token file": 133.4
+      "personal account graph keeps multiple credentials and computes default without a token file": 42.1
     },
     "packages/cli/anatomy_test.ts": {
       "native anatomy isolates loading evidence even when vocabulary is shared": 3.3,
       "native anatomy keeps actual UI and later command/view loading separate": 1.3
     },
     "packages/cli/answer_test.ts": {
-      "a lone entity’s page asks for its links and comments, and leaves bookkeeping out": 2.1,
-      "a tool’s text prints as written, line for line": 1.1
+      "a lone entity’s page asks for its links and comments, and leaves bookkeeping out": 2.1
     },
     "packages/cli/boot_test.ts": {
       "a composed host answers on every endpoint, and carries the serve verb": 101.6
@@ -3135,9 +3133,6 @@
       "a project is never filed under itself or anything under it": 1.2,
       "what is under a project is one walk, at any depth": 1.1
     },
-    "packages/query/README.md": {
-      "packages/query/README.md block 11": 1.4
-    },
     "packages/ram/declared_test.ts": {
       "a gated rule fires once and writes what it said": 1.1,
       "a rule makes an entity, named from its firing": 1.1
@@ -3943,7 +3938,6 @@
       "two processes pool to one process across minutes and plugins": 1.1
     },
     "packages/timing/views_test.ts": {
-      "a span and a trace read the same in a terminal and a browser": 1.1,
       "a span's page and a place opened on a trace's page say which statements ran": 3.7,
       "a trace page says where its rows went, beside an ordinary trace of its kind": 10.6,
       "ordinary comparisons require matching request and store context and recorded cheap roots": 1.9,
@@ -3955,7 +3949,6 @@
     },
     "packages/tools/README.md": {
       "packages/tools/README.md block 1": 2.8,
-      "packages/tools/README.md block 10": 1.7,
       "packages/tools/README.md block 3": 2.7,
       "packages/tools/README.md block 5": 2.1,
       "packages/tools/README.md block 6": 2.4,
@@ -4293,7 +4286,6 @@
     "packages/wake/every_test.ts": {
       "DST moves a missing local time by the gap and repeats a time once": 2.1,
       "a cron line is read in the zone it is given": 2,
-      "a cron line reads the calendar, in UTC, ignoring the anchor": 1.7,
       "an unreadable recurrence is null, never a throw": 2,
       "five cron fields read ranges, steps, lists and named calendars": 5.8
     },
@@ -4398,7 +4390,7 @@
       "explicit worker.js and entry.js are valid server sources": 455.4,
       "invalid main leaves the prior script intact even with no default source": 124,
       "main deploys the chosen nested source and its imports, never the default worker": 173.1,
-      "malformed JSONC keeps the prior worker and never falls back to JSON": 462.4,
+      "malformed JSONC keeps the prior worker and never falls back to JSON": 212.6,
       "permanent deletion cleans a late resource creation": 204.2,
       "permanent deletion cleans a late worker upload": 194.9,
       "permanent deletion empties R2 and keeps ownership through a failed retry": 238,
@@ -4492,11 +4484,11 @@
       "hosted provider, model and native input override keeps supplied main outputs current": 4.8
     },
     "workers/yak/builders_test.ts": {
-      "a hosted builder cannot spend beyond the account budget": 506.7,
-      "a hosted builder writes named outputs and spends the account budget": 601.8,
-      "a hosted generated row starts the next immediate builder": 723.3,
+      "a hosted builder cannot spend beyond the account budget": 233.2,
+      "a hosted builder writes named outputs and spends the account budget": 276.9,
+      "a hosted generated row starts the next immediate builder": 333.9,
       "an open app cannot let a visitor start a builder at its account expense": 167.8,
-      "builder_build tries a staged builder on the rows it names, as the caller": 581.9,
+      "builder_build tries a staged builder on the rows it names, as the caller": 267,
       "builder_supply in an app store is current without any model spending": 192.1,
       "hosted choose switches takes without a model turn and preserves earlier artifacts": 199,
       "shadow outputs do not start downstream immediate builders": 724.4,
@@ -4601,7 +4593,7 @@
     },
     "workers/yak/draft_test.ts": {
       "a schema-only legacy draft recovers its original files on edit": 714.2,
-      "a source-less app keeps every original byte through a schema draft": 1051
+      "a source-less app keeps every original byte through a schema draft": 489
     },
     "workers/yak/drop_test.ts": {
       "a bare index.html is an app, once it is named": 118.2,
@@ -4634,7 +4626,7 @@
       "TypeScript and npm imports compile at deploy, and serve as JavaScript": 212.8,
       "a changed lock or previously plain script replans a release": 519.2,
       "a compile that fails refuses the deploy, and the last release serves": 227.7,
-      "a compile too big for the compiler says so, and the last release serves": 526.9,
+      "a compile too big for the compiler says so, and the last release serves": 235.3,
       "a deploy reuses unchanged compiled entries": 600.5,
       "a page that no longer needs compiling serves as written": 447.7,
       "a released app stages changed files over its source": 453.5,
@@ -4717,12 +4709,8 @@
       "the writer the kernel vouched for is a person here, by name": 92.6
     },
     "workers/yak/guide_test.ts": {
-      "a page teaches the same client import the guide does": 2,
       "every page offered is a file, and says what it is": 1.9,
-      "no page links a page that is not there": 1.8,
-      "no worker route on a page is under /api/": 2,
-      "the components page prints every property of every component it lists": 1.7,
-      "the pages print every word vocab.json may not use": 2
+      "the components page prints every property of every component it lists": 1.7
     },
     "workers/yak/handoff_test.ts": {
       "opener: a valid token names its person and is spent": 2.4,
@@ -4965,7 +4953,7 @@
       "accounted recovery preserves cost and never debits a second time": 136.9,
       "accounting preserves provider continuation metadata and passes requests whole": 139.9,
       "an account past its budget is told so, and the transcript rests": 263.7,
-      "an app without the OpenRouter connection cannot ask its model": 420,
+      "an app without the OpenRouter connection cannot ask its model": 187.9,
       "one app-store write completes seven model turns within its dispatch bound": 775.1,
       "original media debit is atomic once across concurrent and repeated recovery": 141.5,
       "raw Workers AI audio debits its tariff once and refuses at the account limit": 151.8,
@@ -5185,7 +5173,7 @@
       "/api/stats with no analytics token is a sentence, not a failure": 83.5,
       "DELETE / empties the app store and bears it again": 266.5,
       "a break is the platform writing about the app, not in it": 164.8,
-      "a bulk load is NDJSON in and NDJSON out, refusal and all": 375,
+      "a bulk load is NDJSON in and NDJSON out, refusal and all": 147.6,
       "a new release serves its files beside the old cached release": 154.3,
       "a page and an upload are served where the cache hop is refused": 152.3,
       "a page is served with its base and its reporter": 121.6,
@@ -5264,7 +5252,7 @@
       "platform disposal waits for store work before releasing storage": 107.3
     },
     "workers/yak/tools_test.ts": {
-      "a deploy says how many round trips it took": 416.1,
+      "a deploy says how many round trips it took": 176.2,
       "a fetch takes https, a live answer, and nothing over the ceiling": 13.1,
       "a listing asks the directory a fixed number of times": 786.3,
       "app_list says the caller’s role in each space it lists": 103,
