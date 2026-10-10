@@ -803,8 +803,9 @@ let WATCHED = ['workers/yak', 'packages']
 
 /**
  * What a deploy from `root`'s checkout sees, given the commits live now. A
- * live commit this clone lacks is fetched first: it was pushed after the clone
- * was made, and a shallow clone holds only the commits it was made with.
+ * shallow clone can lack both older and newer live commits. Fetch their
+ * ancestry without trees or blobs; comparing watched source at main's tip
+ * needs trees, but never historical file contents.
  */
 export let seen = async (
   root: string,
@@ -818,14 +819,23 @@ export let seen = async (
   ])
   let head = checked.out
   let tip = asked.code ? null : SHA.exec(asked.out)?.[0] ?? null
-  let include = async (sha: string) => {
+  let include = async (sha: string, filter = 'tree:0') => {
     if ((await read(root, 'cat-file', '-e', `${sha}^{commit}`)).code) {
-      await read(root, 'fetch', '--quiet', 'origin', sha)
+      await timed(`Git ${filter} ${short(sha)}`, () =>
+        read(
+          root,
+          'fetch',
+          '--quiet',
+          '--no-tags',
+          `--filter=${filter}`,
+          'origin',
+          sha,
+        ))
     }
   }
   let changed: boolean | null = false
   if (tip && tip != head) {
-    await include(tip)
+    await include(tip, 'blob:none')
     let { code } = await read(
       root,
       'diff',

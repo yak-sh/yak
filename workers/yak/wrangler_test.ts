@@ -404,6 +404,7 @@ test('wrangler: app-only pushes do not supersede a build, but Worker source and 
     let work = join(root, 'work')
     let thin = join(root, 'thin')
     await run(root, 'init', '-q', '--bare', '-b', 'main', origin)
+    await run(origin, 'config', 'uploadpack.allowFilter', 'true')
     await run(root, 'clone', '-q', origin, work)
     let push = async (path: string) => {
       let file = join(work, path)
@@ -438,6 +439,28 @@ test('wrangler: app-only pushes do not supersede a build, but Worker source and 
     assert(superseded(blind))
     // A shallow clone fetches the live commit it lacks before it answers.
     assertEquals((await seen(thin, [c])).live, [{ sha: c, ahead: true }])
+    await run(work, 'remote', 'add', 'origin', origin)
+    await run(work, 'checkout', '-q', c)
+    let d = await push('workers/yak/site.ts')
+    let latest = join(root, 'latest')
+    await run(root, 'clone', '-q', '--depth', '1', `file://${origin}`, latest)
+    let older = await seen(latest, [a])
+    assertEquals(older, {
+      head: d,
+      tip: d,
+      changed: false,
+      live: [{ sha: a, ahead: false }],
+    })
+    assertEquals(superseded(older), null)
+    // Ancestry reads retain the old commits, without downloading their files.
+    let oldBlob = await run(work, 'rev-parse', `${a}:workers/yak/site.ts`)
+    let objects = await run(
+      latest,
+      'cat-file',
+      '--batch-all-objects',
+      '--batch-check=%(objectname)',
+    )
+    assert(!objects.split('\n').includes(oldBlob))
   } finally {
     Deno.removeSync(root, { recursive: true })
   }
