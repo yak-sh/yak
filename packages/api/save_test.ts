@@ -327,9 +327,21 @@ test('the socket saves with its authenticated actor and vocabulary versions', as
   socket.emit('close')
 })
 
+let selecting = fixture('.book.status=shelved')
+let timed = fixture('.book (!position | .updated.at<="1s ago")')
+let reset = (f: ReturnType<typeof fixture>, book: Comp | null = null) => {
+  f.g.storage.tx((tx) =>
+    tx.patch([
+      { entity: { eid: 'a' }, book, position: null, updated: null },
+      { entity: { eid: 'b' }, book: null },
+    ])
+  )
+  f.commits.length = 0
+  return f
+}
+
 test('save queries select stored entities, never the incoming value', () => {
-  let f = fixture('.book.status=shelved')
-  f.g.apply([{ entity: { eid: 'a' }, book: { status: 'draft' } }])
+  let f = reset(selecting, { status: 'draft' })
   f.saved.write('one', f.write(7))
   f.saved.drop('one')
   f.tick(1000)
@@ -351,7 +363,7 @@ test('a query that never matches never saves, including clears and disconnect', 
 })
 
 test('disconnecting an ineligible timed save settles until storage can change eligibility', () => {
-  let f = fixture('.book (!position | .updated.at<="1s ago")')
+  let f = reset(timed)
   let reads = 0
   let read = f.g.read.bind(f.g)
   f.g.read = (...args) => {
@@ -375,6 +387,7 @@ test('disconnecting an ineligible timed save settles until storage can change el
   f.tick(0)
   equal(f.read(), { x: 7 })
   equal(f.timers.size, 0)
+  f.g.read = read
 })
 
 test('save queries without a clock wake on relevant commits, not periodic reads', () => {

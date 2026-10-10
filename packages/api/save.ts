@@ -42,6 +42,16 @@ export let saving = <C>(
   now: () => number = () => Date.now(),
 ) => {
   let values = new Map<string, Value<C>>()
+  let conditions = new Map<string, ReturnType<typeof parse>>()
+  let fields = new Map<string, string[] | null>()
+  let conditionOf = (comp: string) => {
+    let condition = conditions.get(comp)
+    if (!condition) {
+      condition = parse(saveOf(graph.vocab, comp)!)
+      conditions.set(comp, condition)
+    }
+    return condition
+  }
   let signedRows = (rows: Bundle[], writer: PeerWriter) =>
     signed(
       rows.map((b) => ({
@@ -179,7 +189,7 @@ export let saving = <C>(
     v.reading = true
     v.invalidated = false
     let [comp] = comps(v.row)[0]
-    let condition = parse(saveOf(graph.vocab, comp)!)
+    let condition = conditionOf(comp)
     let scope = eq('entity.eid', v.row.entity.eid)
     let failedRead = (err: unknown): never => {
       v.reading = false
@@ -201,21 +211,29 @@ export let saving = <C>(
     }
     let possibleLocal: Bundle[] | undefined
     try {
-      if (local(condition)) {
-        let names = [
-          ...new Set((function names(c: Clause): string[] {
-            return c.kind == 'and' || c.kind == 'or'
-              ? c.clauses.flatMap(names)
-              : c.kind == 'pred'
-              ? [c.path[0]]
-              : []
-          })(condition)),
-        ]
+      if (!fields.has(comp)) {
+        fields.set(
+          comp,
+          local(condition)
+            ? [
+              ...new Set((function names(c: Clause): string[] {
+                return c.kind == 'and' || c.kind == 'or'
+                  ? c.clauses.flatMap(names)
+                  : c.kind == 'pred'
+                  ? [c.path[0]]
+                  : []
+              })(condition)),
+            ]
+            : null,
+        )
+      }
+      let names = fields.get(comp)
+      if (names) {
         rows = after(
           graph.get([v.row.entity.eid], names, { native: true, durable: true }),
           (stored) => {
             possibleLocal = stored
-            return matcher(and(scope, condition), graph.vocab, { now: now() })(
+            return matcher(condition, graph.vocab, { now: now() })(
               stored,
             )
           },
@@ -246,7 +264,7 @@ export let saving = <C>(
           if (!clock) return
           return after(
             possibleLocal
-              ? matcher(and(scope, clock), graph.vocab, { now: now() })(
+              ? matcher(and(clock), graph.vocab, { now: now() })(
                 possibleLocal,
               )
               : graph.read(and(scope, clock), { now: now(), native: true }),
@@ -275,7 +293,7 @@ export let saving = <C>(
       interests.set(
         comp,
         interest(
-          parse(saveOf(graph.vocab, comp)!),
+          conditionOf(comp),
           graph.vocab,
           () => true,
         ),
