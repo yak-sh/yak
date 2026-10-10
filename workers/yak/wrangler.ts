@@ -445,43 +445,62 @@ export let bundled = async (
   }
 }
 
-let uploadSibling = async (
+export type PreparedSibling = {
+  args: string[]
+  config: string
+  root: string
+  started: number
+  code?: number
+  remove: () => void
+}
+
+/** Bundle a sibling and read its serving deployment, without uploading or
+ * preparing images. The caller owns the returned artifact until upload ends. */
+export let prepareSibling = async (
   args: string[],
-  run: (args: string[], unpinned?: boolean) => Promise<number>,
   wrangler = WRANGLER,
-) => {
-  if (args.includes('--dry-run')) return await run(args, true)
-  let config = args[args.indexOf('-c') + 1]
-  let output = Deno.makeTempDirSync({
-    dir: join(dir, '.wrangler'),
-    prefix: 'sibling-',
-  })
-  let started = performance.now()
-  let query = async (argv: string[]) => {
-    let result = await new Deno.Command('env', {
+  root = dir,
+  query = (argv: string[]) =>
+    new Deno.Command('env', {
       args: [...PINNED.flatMap((v) => ['-u', v]), ...wrangler, ...argv],
-      cwd: dir,
+      cwd: root,
       stdout: 'piped',
       stderr: 'piped',
-    }).output()
-    return result
+    }).output(),
+): Promise<PreparedSibling> => {
+  let config = args[args.indexOf('-c') + 1]
+  let started = performance.now()
+  if (args.includes('--dry-run')) {
+    return { args, config, root, started, remove: () => {} }
   }
+  let output = Deno.makeTempDirSync({
+    dir: join(root, '.wrangler'),
+    prefix: 'sibling-',
+  })
+  let remove = () => Deno.removeSync(output, { recursive: true })
   try {
     // A dry run with no rollout bundles the Worker and builds no image: the
     // image's inputs are read below instead.
-    let [built, live] = await Promise.all([
-      query([
-        ...unrolled(args),
-        '--dry-run',
-        '--outdir',
-        output,
-        '--containers-rollout=none',
-      ]),
-      query(['deployments', 'list', '-c', config, ...envs(args), '--json']),
+    let [bundled, serving] = await Promise.allSettled([
+      Promise.resolve().then(() =>
+        query([
+          ...unrolled(args),
+          '--dry-run',
+          '--outdir',
+          output,
+          '--containers-rollout=none',
+        ])
+      ),
+      Promise.resolve().then(() =>
+        query(['deployments', 'list', '-c', config, ...envs(args), '--json'])
+      ),
     ])
+    if (bundled.status == 'rejected') throw bundled.reason
+    if (serving.status == 'rejected') throw serving.reason
+    let built = bundled.value, live = serving.value
     if (!built.success) {
       console.error(new TextDecoder().decode(built.stderr))
-      return built.code
+      return { args, config, root, started, code: built.code, remove }
     }
     let modules: Record<string, Uint8Array> = {}
     for (let file of Deno.readDirSync(output)) {
@@ -492,7 +511,7 @@ let uploadSibling = async (
         modules[file.name] = Deno.readFileSync(join(output, file.name))
       }
     }
-    Object.assign(modules, images(config))
+    Object.assign(modules, images(config, root))
     console.log(
       `${config}: bundled and read serving deployment in ${
         ((performance.now() - started) / 1000).toFixed(3)
@@ -500,7 +519,7 @@ let uploadSibling = async (
     )
     let digest = siblingDigest(
       JSON.stringify({
-        config: Deno.readTextFileSync(join(dir, config)),
+        config: Deno.readTextFileSync(join(root, config)),
         wrangler: WRANGLER,
         // Flags can override config bindings too; the commit annotation alone
         // changes on every push and is not part of the serving code.
@@ -522,7 +541,7 @@ let uploadSibling = async (
           digest.slice(0, 12)
         } — already serving`,
       )
-      return 0
+      return { args, config, root, started, code: 0, remove }
     }
     let annotated = [...args]
     let message = annotated.indexOf('--message')
@@ -531,25 +550,40 @@ let uploadSibling = async (
       annotated[message + 1] = annotated[message + 1].slice(0, 40) +
         `\ninputs:${digest}`
     } else annotated.push('--message', `inputs:${digest}`)
-    let image = /(^| )--containers-rollout[= ]none( |$)/.test(args.join(' '))
-      ? { config, remove: () => {} }
-      : await siblingImages(config, imaged, dir, wrangler)
-    let result: number
-    try {
-      annotated[annotated.indexOf('-c') + 1] = image.config
-      result = await run(annotated, true)
-    } finally {
-      image.remove()
-    }
-    console.log(
-      `${config}: upload path finished in ${
-        ((performance.now() - started) / 1000).toFixed(3)
-      }s`,
-    )
-    return result
-  } finally {
-    Deno.removeSync(output, { recursive: true })
+    return { args: annotated, config, root, started, remove }
+  } catch (error) {
+    remove()
+    throw error
   }
+}
+
+/** Upload only a changed, successfully prepared sibling. Image preparation
+ * remains on this side of the deploy guard. */
+export let uploadSibling = async (
+  { args, config, root, started, code }: PreparedSibling,
+  run: (args: string[], unpinned?: boolean) => Promise<number>,
+  wrangler = WRANGLER,
+  ensure = imaged,
+) => {
+  if (code != null) return code
+  if (args.includes('--dry-run')) return await run(args, true)
+  let image = /(^| )--containers-rollout[= ]none( |$)/.test(args.join(' '))
+    ? { config, remove: () => {} }
+    : await siblingImages(config, ensure, root, wrangler)
+  let annotated = [...args]
+  let result: number
+  try {
+    annotated[annotated.indexOf('-c') + 1] = image.config
+    result = await run(annotated, true)
+  } finally {
+    image.remove()
+  }
+  console.log(
+    `${config}: upload path finished in ${
+      ((performance.now() - started) / 1000).toFixed(3)
+    }s`,
+  )
+  return result
 }
 
 // What Workers Builds pins to this Worker. Inherited by another Worker's
@@ -810,17 +844,36 @@ if (import.meta.main) {
     if (compiled.status == 'rejected') throw compiled.reason
     return compiled.value.args
   }
-  let code = await preflight(
-    ready,
-    inspect,
+  let readied = Promise.resolve().then(() => ready())
+  let inspected = Promise.resolve().then(inspect)
+  let uploads = new Map(
+    siblings(argv).map((args) => [
+      args[args.indexOf('-c') + 1],
+      preflight(
+        () => readied,
+        () => inspected,
+        () => prepareSibling(args, wrangler),
+        async (prepared) => uploadSibling(await prepared, run, wrangler),
+      ),
+    ]),
+  )
+  let kernel = preflight(
+    () => readied,
+    () => inspected,
     () => bundled(argv, run),
     (bundle) =>
       runWrangler(
         argv,
         (args, unpinned) =>
-          unpinned ? uploadSibling(args, run, wrangler) : run(args),
+          unpinned ? uploads.get(args[args.indexOf('-c') + 1])! : run(args),
         () => prepare(bundle),
       ),
   )
-  Deno.exit(code)
+  // A refused guard never enters runWrangler, so drain its sibling preparations
+  // here too before leaving the door.
+  let completed = await Promise.allSettled([kernel, ...uploads.values()])
+  for (let result of completed) {
+    if (result.status == 'rejected') throw result.reason
+  }
+  Deno.exit((completed[0] as PromiseFulfilledResult<number>).value)
 }

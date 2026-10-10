@@ -17,6 +17,7 @@ import {
   images,
   members,
   preflight,
+  prepareSibling,
   runWrangler,
   sameSibling,
   seen,
@@ -25,6 +26,7 @@ import {
   SIBLINGS,
   siblings,
   superseded,
+  uploadSibling,
 } from './wrangler.ts'
 
 let read = (path: string) =>
@@ -92,6 +94,7 @@ test("a sibling's images are its Dockerfiles and their build contexts", async ()
   }
   assert('../../packages/esbuild/compile.ts' in images('esbuild/wrangler.toml'))
   await checkCompilerImages()
+  await checkSiblingPreparation()
 })
 
 test('independent sibling deploys overlap and the kernel waits for both successes', async () => {
@@ -565,6 +568,202 @@ test('failed readiness settles the guard and starts neither bundle nor upload', 
   assertEquals(prepared, false)
   assertEquals(uploaded, false)
 })
+
+test('each sibling prepares beside the kernel and uploads as soon as its own preparation and guard permit', async () => {
+  let ready = Promise.withResolvers<void>()
+  let allowed = Promise.withResolvers<boolean>()
+  let lanes = ['outbound', 'compiler', 'kernel'].map((name) => ({
+    name,
+    prepared: Promise.withResolvers<{ remove: () => void }>(),
+    uploading: Promise.withResolvers<void>(),
+  }))
+  let preparing: string[] = [], uploaded: string[] = [], removed: string[] = []
+  let deploys = lanes.map((lane) =>
+    preflight(
+      () => ready.promise,
+      () => allowed.promise,
+      () => {
+        preparing.push(lane.name)
+        return lane.prepared.promise
+      },
+      async (prepared) => {
+        await prepared
+        uploaded.push(lane.name)
+        lane.uploading.resolve()
+        return 0
+      },
+    )
+  )
+  try {
+    ready.resolve()
+    for (let i = 0; i < 8; i++) await Promise.resolve()
+    assertEquals(preparing, lanes.map((lane) => lane.name))
+    assertEquals(uploaded, [])
+    allowed.resolve(true)
+    for (let lane of lanes) {
+      lane.prepared.resolve({ remove: () => removed.push(lane.name) })
+      await lane.uploading.promise
+      assertEquals(uploaded.at(-1), lane.name)
+      assertEquals(uploaded.length, lanes.indexOf(lane) + 1)
+    }
+    assertEquals(await Promise.all(deploys), [0, 0, 0])
+    assertEquals(removed.toSorted(), lanes.map((lane) => lane.name).toSorted())
+  } finally {
+    allowed.resolve(true)
+    for (let lane of lanes) lane.prepared.resolve({ remove: () => {} })
+    await Promise.allSettled(deploys)
+  }
+})
+
+let checkSiblingPreparation = async () => {
+  let root = Deno.makeTempDirSync()
+  let encoder = new TextEncoder()
+  let result = (stdout = '', code = 0): Deno.CommandOutput => ({
+    success: code == 0,
+    code,
+    signal: null,
+    stdout: encoder.encode(stdout),
+    stderr: encoder.encode(''),
+  })
+  try {
+    Deno.mkdirSync(join(root, '.wrangler'))
+    Deno.mkdirSync(join(root, 'outbound'))
+    Deno.writeTextFileSync(
+      join(root, 'outbound/wrangler.toml'),
+      'main="worker.ts"\n[[containers]]\nimage="./Dockerfile"',
+    )
+    Deno.writeTextFileSync(join(root, 'outbound/Dockerfile'), 'FROM deno')
+    let args = [
+      'deploy',
+      '--env',
+      'staging',
+      '--message',
+      'a'.repeat(40) + ' subject',
+      '--containers-rollout=none',
+      '-c',
+      'outbound/wrangler.toml',
+    ]
+    let live = '[]', digest = '', called = false
+    let query = (argv: string[]) => {
+      if (argv.includes('--dry-run')) {
+        assert(argv.includes('--containers-rollout=none'))
+        let to = argv[argv.indexOf('--outdir') + 1]
+        for (let name of ['worker.js', 'worker.js.map', 'README.md']) {
+          Deno.writeTextFileSync(join(to, name), name)
+        }
+        return Promise.resolve(result())
+      }
+      assertEquals(argv, [
+        'deployments',
+        'list',
+        '-c',
+        'outbound/wrangler.toml',
+        '--env',
+        'staging',
+        '--json',
+      ])
+      return Promise.resolve(result(live))
+    }
+    let prepared = await prepareSibling(args, [], root, query)
+    try {
+      let message = prepared.args[prepared.args.indexOf('--message') + 1]
+      assert(message.startsWith('a'.repeat(40) + '\ninputs:'))
+      digest = message.split('\ninputs:')[1]
+      assertEquals(
+        await uploadSibling(prepared, (argv, unpinned) => {
+          called = true
+          assert(unpinned)
+          assertEquals(argv, prepared.args)
+          return Promise.resolve(3)
+        }),
+        3,
+      )
+      assert(called)
+      let ensured = false
+      await uploadSibling(
+        {
+          ...prepared,
+          args: prepared.args.filter((arg) =>
+            arg != '--containers-rollout=none'
+          ),
+        },
+        (argv) => {
+          let config = argv[argv.indexOf('-c') + 1]
+          assert(config.startsWith('outbound/.images-'))
+          assert(
+            Deno.readTextFileSync(join(root, config)).includes(
+              'registry.cloudflare.com/account/compiler:held',
+            ),
+          )
+          return Promise.resolve(0)
+        },
+        [],
+        (options) => {
+          ensured = true
+          assertEquals(options.dockerfile, join(root, 'outbound/Dockerfile'))
+          return Promise.resolve(
+            'registry.cloudflare.com/account/compiler:held',
+          )
+        },
+      )
+      assert(ensured)
+      assertEquals(
+        [...Deno.readDirSync(join(root, 'outbound'))].map((file) => file.name)
+          .toSorted(),
+        ['Dockerfile', 'wrangler.toml'],
+      )
+    } finally {
+      prepared.remove()
+    }
+    live = JSON.stringify([{
+      created_on: '2026-10-10T16:00:00Z',
+      annotations: { 'workers/message': 'commit\ninputs:' + digest },
+      versions: [{ version_id: 'v', percentage: 100 }],
+    }])
+    prepared = await prepareSibling(args, [], root, query)
+    try {
+      called = false
+      assertEquals(
+        await uploadSibling(prepared, () => {
+          called = true
+          return Promise.resolve(3)
+        }),
+        0,
+      )
+      assertEquals(called, false)
+    } finally {
+      prepared.remove()
+    }
+    let failure = Error('bundle read failed')
+    let finish = Promise.withResolvers<Deno.CommandOutput>()
+    let reading = Promise.withResolvers<void>()
+    let output = ''
+    let failed = prepareSibling(args, [], root, (argv) => {
+      if (argv.includes('--dry-run')) {
+        output = argv[argv.indexOf('--outdir') + 1]
+        return Promise.reject(failure)
+      }
+      reading.resolve()
+      return finish.promise.then((result) => {
+        assert(Deno.statSync(output).isDirectory, 'reads finish before cleanup')
+        return result
+      })
+    }).then((value) => ({ value }), (error) => ({ error }))
+    try {
+      await reading.promise
+      for (let i = 0; i < 4; i++) await Promise.resolve()
+      assert(Deno.statSync(output).isDirectory, 'pending read retains output')
+      finish.resolve(result())
+      assertEquals(await failed, { error: failure })
+      assertEquals([...Deno.readDirSync(join(root, '.wrangler'))], [])
+    } finally {
+      finish.resolve(result())
+      await failed
+    }
+  } finally {
+    Deno.removeSync(root, { recursive: true })
+  }
+}
 
 let checkKernelBundle = async () => {
   let root = Deno.makeTempDirSync()

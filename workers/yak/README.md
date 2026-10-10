@@ -85,25 +85,26 @@ nor the tests. `SKIP_DEPENDENCY_INSTALL=1` disables Builds' automatic install
 from `package-lock.json` or installed packages are missing. Restored matching
 dependencies are reused regardless of file timestamps. An empty cache installs
 normally; with the variable unset, Builds' automatic install is reused. It
-bundles the kernel while making the deploy pre-flight check (`superseded`).
-After the guard permits deployment, sandbox base preparation and sibling checks
-run while the kernel bundle finishes; the kernel uploads after all succeed. Each
-sibling is bundled locally and compared with its fully serving deployment's
-`inputs:<sha256>` annotation. The digest covers every upload module, the inputs
-of each container image the sibling runs (its Dockerfile and every file of its
-build context, `wrangler.ts` `images`), its configuration, Wrangler pin and
-environment. A matching sibling stays serving without another upload; changed
-inputs, an unreadable deployment or a release without the annotation upload
-normally. The compiler image has its own `inputs:<sha256>` registry tag,
-covering its Dockerfile and build context. A changed Worker or toolkit catalog
-reuses that image; only a missing image tag builds and pushes it. The sibling
-upload uses a temporary config beside the original, naming the registry image,
-so Wrangler rolls it out without rebuilding it. Registry, build or push failures
-refuse the sibling and kernel deploy. Workers Builds has Docker, as the sandbox
-image already needs. `bin/build-yak` with no argument still runs the check and
-the workers tests by hand. A push's build that fails is started once more
-through the `BUILD_HOOK` deploy hook (builds.ts), since most failures are the
-network's; the second build's failure stands.
+prepares the kernel and sibling bundles while making the deploy pre-flight check
+(`superseded`). After the guard permits deployment, sandbox base preparation and
+each changed sibling's upload run as their own preparation allows. The kernel
+uploads after all succeed. Each sibling is bundled locally and compared with its
+fully serving deployment's `inputs:<sha256>` annotation. The digest covers every
+upload module, the inputs of each container image the sibling runs (its
+Dockerfile and every file of its build context, `wrangler.ts` `images`), its
+configuration, Wrangler pin and environment. A matching sibling stays serving
+without another upload; changed inputs, an unreadable deployment or a release
+without the annotation upload normally. The compiler image has its own
+`inputs:<sha256>` registry tag, covering its Dockerfile and build context. A
+changed Worker or toolkit catalog reuses that image; only a missing image tag
+builds and pushes it. The sibling upload uses a temporary config beside the
+original, naming the registry image, so Wrangler rolls it out without rebuilding
+it. Registry, build or push failures refuse the sibling and kernel deploy.
+Workers Builds has Docker, as the sandbox image already needs. `bin/build-yak`
+with no argument still runs the check and the workers tests by hand. A push's
+build that fails is started once more through the `BUILD_HOOK` deploy hook
+(builds.ts), since most failures are the network's; the second build's failure
+stands.
 
 Builds run on watched-path pushes and finish in any order, so the deploy door
 (`wrangler.ts` `superseded`) deploys a commit only while no later commit changes
