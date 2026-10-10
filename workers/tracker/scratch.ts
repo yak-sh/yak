@@ -36,7 +36,7 @@ let server = createTestHarness({
         bindings: [{ name: 'TRACKERS', class_name: 'Tracker' }],
       },
       migrations: [{ tag: 'v1', new_sqlite_classes: ['Tracker'] }],
-      vars: { TRACKER_SECRET: secret },
+      vars: { TRACKER_SECRET: secret, BUNDLE_HASH: 'a'.repeat(64) },
       queues: {
         producers: [{ binding: 'ERRORS', queue: 'tracker-scratch-errors' }],
         consumers: [{
@@ -132,19 +132,15 @@ try {
     `/canary?scope=platform&hash=${'a'.repeat(64)}`,
     {
       method: 'POST',
-      headers: { authorization: `Bearer ${admin}` },
     },
   )
   equal(canary.status, 200)
   let published = await canary.json()
   await until(async () => {
     let response = await server.fetch(
-      `/query?scope=platform&q=.error.bug+.entity.eid=${published.eid}`,
-      {
-        headers: { authorization: `Bearer ${admin}` },
-      },
+      `/canary?scope=platform&hash=${'a'.repeat(64)}&eid=${published.eid}`,
     )
-    return response.ok && (await response.json()).length == 1
+    return response.ok && (await response.json()).arrived === true
   }, { timeout: 10_000 })
   console.log(
     'scratch workerd: SQLite intake, duplicate ack recovery, tenant auth, read-only WebSocket, heartbeat, queue canary passed',

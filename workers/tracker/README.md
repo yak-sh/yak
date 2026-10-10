@@ -109,10 +109,10 @@ marks notification in the platform integration.
 
 Account setup supplies `yak-errors`, `yak-errors-dead`, a Workers Builds
 connection for this Worker, its own Email Sending binding, and the dedicated
-`TRACKER_SECRET`, `MAIL_FROM`, `MAIL_TO` Worker secrets. Configure the build's
-`TRACKER_URL` and `TRACKER_SECRET` privately. The build may deploy only this
-Worker and restore its previous version. Source is ready; production queue and
-build activation are separate account operations.
+`TRACKER_SECRET`, `MAIL_FROM`, `MAIL_TO` Worker secrets. The build needs no
+tracker secret; configure its nonsecret `TRACKER_URL` with the Worker URL. The
+build may deploy only this Worker and restore its previous version. Source is
+ready; production queue and build activation are separate account operations.
 
 The first ordinary wake with all mail settings persists the activation time and
 refreshes the recipient in an already installed platform tracker. Earlier bug
@@ -124,9 +124,17 @@ Workers Builds: repository root, deploy command `sh bin/build-tracker`, with
 build command empty. The wrapper installs Deno and the pinned npm dependencies.
 Watch `workers/tracker`, `packages` and `bin/build-tracker`.
 
-`deploy.ts` hashes the dry-run bundle and skips an unchanged deployment. It
-publishes a server-minted canary through the Worker's queue, checks that intake
-and grouping produced its bug, and restores the prior deployed version if the
-canary is absent after one minute. A first deployment has no prior version; its
-failed canary reports that explicitly. No legacy error store is deleted, and yak
-reporting/read-path changes are outside this Worker.
+`deploy.ts` hashes the dry-run bundle and skips an unchanged deployment. It sets
+the nonsecret `BUNDLE_HASH` binding and publishes a server-minted canary through
+the Worker's queue, checks that intake and grouping produced its bug, and
+restores the prior deployed version if the canary is absent after one minute. A
+first deployment has no prior version; its failed canary reports that
+explicitly. No legacy error store is deleted, and yak reporting/read-path
+changes are outside this Worker.
+
+`POST /canary?scope=platform&hash=<bundle-hash>` needs no ticket and returns
+`{eid}` for a fresh server-minted error. Only the deployed `BUNDLE_HASH` is
+accepted; the request body is ignored. `GET` on the same URL with
+`&eid=<receipt>` returns only `{arrived: boolean}` after that exact canary
+reaches grouping. Graph reads and other tracker operations require scope
+tickets.

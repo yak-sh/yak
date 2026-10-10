@@ -1,9 +1,9 @@
-// The independent Worker only routes authenticated reads/RPC and trusted queue
-// deliveries. It has no directory or yak binding; intake needs no auth lookup.
+// The independent Worker routes authenticated reads/RPC, a public deployment
+// canary, and trusted queue deliveries. It has no directory or yak binding.
 
 import type { Bundle } from '@yaks/graph'
 import { bugEid } from '@yaks/tracker'
-import { authorize } from './auth.ts'
+import { sign } from './auth.ts'
 import { capture, caught, queue } from '@yaks/tracker/report'
 import { platform } from './core.ts'
 import { consume, type Message } from './queue.ts'
@@ -18,6 +18,7 @@ export type Stub = {
   ingestTrace: (rows: Bundle[]) => Promise<boolean>
 }
 export type Env = Omit<Settings, 'TRACKERS'> & {
+  BUNDLE_HASH?: string
   TRACKERS: { getByName: (scope: string) => Stub }
 }
 let uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
@@ -35,16 +36,48 @@ export let worker = (env: Env) => ({
     let scope = scopeOf(request)
     if (!scope) return json({ error: 'tracker global scope required' }, 400)
     try {
-      if (
-        new URL(request.url).pathname == '/canary' && request.method == 'POST'
-      ) {
-        let access = await authorize(request, env.TRACKER_SECRET, scope)
-        if (scope != platform || !access?.admin) {
-          return json({ error: 'platform only' }, 403)
-        }
-        let hash = new URL(request.url).searchParams.get('hash')
+      let url = new URL(request.url)
+      if (url.pathname == '/canary') {
+        if (scope != platform) return json({ error: 'platform only' }, 403)
+        let hash = url.searchParams.get('hash')
         if (!hash || !/^[0-9a-f]{64}$/.test(hash)) {
           return json({ error: 'bundle hash required' }, 400)
+        }
+        if (!env.BUNDLE_HASH) return json({ error: 'bundle unavailable' }, 503)
+        if (hash != env.BUNDLE_HASH) {
+          return json({ error: 'bundle is not deployed' }, 409)
+        }
+        if (request.method == 'GET') {
+          let eid = url.searchParams.get('eid')
+          if (!eid || !uuid.test(eid)) {
+            return json({ error: 'canary receipt required' }, 400)
+          }
+          if (!env.TRACKER_SECRET) {
+            return json({ error: 'tracker unavailable' }, 503)
+          }
+          // Use the stable read door across Worker/DO deployment propagation.
+          // The runtime holds its signing key; the build receives only a boolean.
+          let ticket = await sign({
+            scope: platform,
+            person: platform,
+            admin: true,
+            exp: Date.now() / 1000 + 60,
+          }, env.TRACKER_SECRET)
+          let query = new URL('https://tracker.internal/query')
+          query.searchParams.set(
+            'q',
+            `.entity.eid=${eid} .error.fault="tracker-canary|${hash}" .error.bug .limit=1`,
+          )
+          let response = await env.TRACKERS.getByName(platform).fetch(
+            new Request(query, {
+              headers: { authorization: `Bearer ${ticket}` },
+            }),
+          )
+          if (!response.ok) return json({ error: 'tracker unavailable' }, 503)
+          return json({ arrived: (await response.json()).length == 1 })
+        }
+        if (request.method != 'POST') {
+          return json({ error: 'canary method denied' }, 405)
         }
         if (!env.ERRORS) return json({ error: 'queue unavailable' }, 503)
         let fault = `tracker-canary|${hash}`

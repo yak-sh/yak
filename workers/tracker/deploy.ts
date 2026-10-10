@@ -2,8 +2,6 @@
 // Deploy only a changed bundle, then require its queue canary to become a bug.
 // A missing canary rolls back to the exact version saved before this deploy.
 import { root, run } from './wrangler.ts'
-import { sign } from './auth.ts'
-import { platform } from './core.ts'
 
 export type Hooks = {
   current: () => Promise<{ version?: string; hash?: string }>
@@ -31,6 +29,27 @@ export let deploy = async (hash: string, hooks: Hooks): Promise<boolean> => {
       : 'tracker canary missing; no previous deployment to restore',
   )
 }
+// A fresh receipt proves this publication reached grouping, not an older one.
+export let canary = (url: string, hash: string, send: typeof fetch = fetch) => {
+  let eid: string | undefined
+  return async (): Promise<boolean> => {
+    let probe = new URL('/canary', url)
+    probe.searchParams.set('scope', 'platform')
+    probe.searchParams.set('hash', hash)
+    if (!eid) {
+      let response = await send(probe, {
+        method: 'POST',
+        signal: AbortSignal.timeout(5000),
+      })
+      if (!response.ok) return false
+      eid = (await response.json()).eid
+      if (!eid) return false
+    }
+    probe.searchParams.set('eid', eid)
+    let response = await send(probe, { signal: AbortSignal.timeout(5000) })
+    return response.ok && (await response.json()).arrived === true
+  }
+}
 let command = async (...args: string[]) => {
   let process = new Deno.Command('deno', {
     args: ['run', '-A', `${root}/wrangler.ts`, ...args],
@@ -42,6 +61,8 @@ let command = async (...args: string[]) => {
   return JSON.parse(new TextDecoder().decode(out.stdout))
 }
 if (import.meta.main) {
+  let url = Deno.env.get('TRACKER_URL')
+  if (!url) throw Error('build needs TRACKER_URL')
   let scratch = await Deno.makeTempDir({ prefix: 'tracker-bundle-' })
   try {
     if (await run(['deploy', '--dry-run', '--outdir', scratch])) Deno.exit(1)
@@ -50,23 +71,6 @@ if (import.meta.main) {
       new Uint8Array(await crypto.subtle.digest('SHA-256', bytes)),
       (b) => b.toString(16).padStart(2, '0'),
     ).join('')
-    // Workers Builds supplies a scoped grant. These are never graph secrets
-    // or owner credentials; activation configures the build's own variables.
-    let url = Deno.env.get('TRACKER_URL')
-    let secret = Deno.env.get('TRACKER_SECRET')
-    let ticket = secret
-      ? await sign({
-        scope: platform,
-        person: platform,
-        admin: true,
-        exp: Date.now() / 1000 + 300,
-      }, secret)
-      : undefined
-    if (!url || !ticket) {
-      throw Error('build needs TRACKER_URL and TRACKER_SECRET')
-    }
-    let eid = ''
-    let published = false
     await deploy(hash, {
       current: async () => {
         let all = await command('deployments', 'list', '--json')
@@ -86,38 +90,19 @@ if (import.meta.main) {
         }
       },
       deploy: async (hash) => {
-        if (await run(['deploy', '--message', `tracker-bundle:${hash}`])) {
+        if (
+          await run([
+            'deploy',
+            '--var',
+            `BUNDLE_HASH:${hash}`,
+            '--message',
+            `tracker-bundle:${hash}`,
+          ])
+        ) {
           throw Error('tracker deploy failed')
         }
       },
-      canary: async () => {
-        if (!published) {
-          let canary = new URL('/canary', url)
-          canary.searchParams.set('scope', 'platform')
-          canary.searchParams.set('hash', hash)
-          let response = await fetch(canary, {
-            method: 'POST',
-            signal: AbortSignal.timeout(5000),
-            headers: { authorization: `Bearer ${ticket}` },
-          })
-          if (!response.ok) return false
-          eid = (await response.json()).eid
-          published = true
-        }
-        try {
-          let query = new URL('/query', url)
-          query.searchParams.set('scope', 'platform')
-          query.searchParams.set('q', `.error.bug .entity.eid=${eid}`)
-          let response = await fetch(query, {
-            signal: AbortSignal.timeout(5000),
-            headers: { authorization: `Bearer ${ticket}` },
-          })
-          let rows = response.ok ? await response.json() : []
-          return rows.length == 1
-        } catch {
-          return false
-        }
-      },
+      canary: canary(url, hash),
       rollback: async (version) => {
         if (
           await run([

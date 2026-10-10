@@ -135,14 +135,9 @@ test('mail activation skips existing bugs and sends new openings once across res
   }], { trusted: true, stamp: false })
   await object.alarm()
   equal(sent.length, 2)
-  let ticket = await sign({
-    scope: platform,
-    person: 'scratch',
-    admin: true,
-    exp: Date.now() / 1000 + 60,
-  }, env.TRACKER_SECRET)
   let w = worker({
     ...env,
+    BUNDLE_HASH: 'b'.repeat(64),
     ERRORS: { send: (rows) => object.ingest(rows) },
     TRACKERS: { getByName: () => object },
   })
@@ -150,7 +145,7 @@ test('mail activation skips existing bugs and sends new openings once across res
     (await w.fetch(
       new Request(
         `https://tracker.test/canary?scope=platform&hash=${'b'.repeat(64)}`,
-        { method: 'POST', headers: { authorization: `Bearer ${ticket}` } },
+        { method: 'POST' },
       ),
     )).status,
     200,
