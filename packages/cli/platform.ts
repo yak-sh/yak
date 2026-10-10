@@ -34,7 +34,7 @@ export let rosterOf = async (
   state?: string,
   fresh = false,
 ): Promise<Roster> => {
-  let kept = fresh ? null : cached(host, state)
+  let kept = fresh ? null : await cached(host, state)
   if (kept) return kept
   let hello = await initialize(ask)
   let listed = await ask('tools/list')
@@ -42,7 +42,7 @@ export let rosterOf = async (
     protocol: String(hello.protocolVersion ?? ''),
     tools: (listed.tools ?? []) as Listed[],
   }
-  remember(host, roster, state)
+  await remember(host, roster, state)
   return roster
 }
 
@@ -72,7 +72,7 @@ let vocabOf = async (c: Ctx): Promise<VocabDoc | null> => {
   let index = await schema({})
   let whole = await schema({ component: Object.keys(index?.$defs ?? {}) })
   if (!whole) return null
-  remember(c.host, { ...roster, vocab: whole }, c.state)
+  await remember(c.host, { ...roster, vocab: whole }, c.state)
   return whole
 }
 
@@ -97,12 +97,12 @@ export let printed = async (
   // caller holding no list has nothing of its own to keep fresh, and must not
   // throw away somebody else's.
   if (stale) {
-    forget(c.host, c.state)
+    await forget(c.host, c.state)
     c.note(stale)
   } else if (roster) {
     let next = rosterAfter(roster, name, said)
-    if (!next) forget(c.host, c.state)
-    else if (next != roster) remember(c.host, next, c.state)
+    if (!next) await forget(c.host, c.state)
+    else if (next != roster) await remember(c.host, next, c.state)
   }
   if (said.isError) {
     c.note(text || 'the tool erred and said nothing')

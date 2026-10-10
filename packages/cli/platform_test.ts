@@ -90,7 +90,7 @@ test('a server’s answer is drawn through its packages’ views', async () => {
     assert(/^T-\d+ Ship it done$/.test(lines[1]), lines.join('\n'))
     // The vocabulary is asked once and kept beside the tool list.
     assertEquals(
-      cached(c.host, c.state)?.vocab?.$defs?.task?.package,
+      (await cached(c.host, c.state))?.vocab?.$defs?.task?.package,
       '@yaks/task',
     )
   })
