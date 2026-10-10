@@ -31,6 +31,7 @@ import {
   type Context,
   type Registry,
   type RenderContext,
+  rendering,
   resolve,
 } from '@yaks/render'
 import type { Vocab } from '@yaks/vocab'
@@ -65,11 +66,9 @@ export let tree = (
   }
   let selected = resolve(registry, bundle, view, vocab, context)
   context.needed?.(selected?.needs?.(bundle) ?? [])
-  return selected?.render(
-    bundle,
-    h,
-    context,
-  ) ?? null
+  return selected
+    ? rendering(selected, context)?.(bundle, h, context) ?? null
+    : null
 }
 
 /** Resolve and serialize a portable renderer; a missing view yields empty text. */

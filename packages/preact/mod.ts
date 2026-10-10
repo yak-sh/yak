@@ -40,6 +40,7 @@ import {
   type Registration,
   type RenderContext,
   type Renderer,
+  rendering,
   resolve,
   type Selection,
 } from '@yaks/render'
@@ -192,10 +193,10 @@ export function render<E>(
       },
     )
   }
-  return renderer.render(bundle, hyperscript(bundle, ctx), {
+  return rendering(renderer, context)?.(bundle, hyperscript(bundle, ctx), {
     ...context,
     vocab,
-  })
+  }) ?? null
 }
 
 /**

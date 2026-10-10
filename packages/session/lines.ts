@@ -7,7 +7,12 @@
 
 import type { Comp } from '@yaks/graph'
 import { parse } from '@yaks/query'
-import { type Bundle, define, type Registry, type Renderer } from '@yaks/render'
+import {
+  type Bundle,
+  define,
+  type Registry,
+  type Rendering,
+} from '@yaks/render'
 import { SESSION } from './comp.ts'
 import { ASK, CALL, ENTRY } from './native.ts'
 import { kindOf, statusOf, textOf } from './state.ts'
@@ -32,7 +37,7 @@ let reached = (
 
 /** Shared prose tree; renderers keep metadata structural rather than stripping
  * text. */
-export let entryBody: Renderer['render'] = (b, h, ctx) => {
+export let entryBody: Rendering = (b, h, ctx) => {
   let body = textOf(b)
   let max = Number(ctx.maxChars)
   let first = ctx.full
@@ -58,7 +63,7 @@ export let entryBody: Renderer['render'] = (b, h, ctx) => {
   )
 }
 
-let line: Renderer['render'] = (b, h, ctx) =>
+let line: Rendering = (b, h, ctx) =>
   h(
     'p',
     null,
@@ -74,7 +79,7 @@ let line: Renderer['render'] = (b, h, ctx) =>
 // one (`S-12`), else its runner's own id — and its status where the bundle
 // carries one. A patch fresh from a write carries none, and a line that said
 // "unknown" there would be wrong about a transcript that is fine.
-let tile: Renderer['render'] = (b, h, ctx) => {
+let tile: Rendering = (b, h, ctx) => {
   let id = ctx.id as ((b: Bundle) => string) | undefined
   let status = comp(b, SESSION)?.status
   return h(

@@ -7,9 +7,9 @@ A **view** is a name requested by a caller, such as `Tile` or `Board.List.Tile`.
 A **registration** associates a view with a
 [query](../query/README.md#query-model) or `true`:
 `{ view: 'Tile', match: parse('.doc') }` (`Registration`). A **renderer** is a
-registration with a `render(bundle, h, ctx)` function (`Renderer`). A
-**registry** holds ordered registrations and the options used for selection and
-actions (`Registry`).
+registration with a `render(bundle, h, ctx)` function, or a `load()` function
+that prepares it (`Renderer`). A **registry** holds ordered registrations and
+the options used for selection and actions (`Registry`).
 
 A **context** holds extra values supplied by the caller (`Context`). A rendering
 host supplies `h(tag, props, ...children)` (`H`), which builds its output nodes.
@@ -17,6 +17,35 @@ It may also supply `ctx.render(view, context?)` for nested views and `ctx.vocab`
 for the [vocabulary](../vocab/README.md#vocabulary) (`RenderContext`).
 [@yaks/preact](../preact/README.md) supplies Preact rendering;
 [@yaks/text](../text/README.md) supplies Markdown and plain text rendering.
+
+## Preparation
+
+A deferred renderer keeps its selection metadata available while its `load()`
+function imports or prepares the rendering implementation. Selection never calls
+`load`. A host calls `prepared(registry)` before drawing, or supplies the
+selected registrations as its second argument. The returned registry preserves
+all entries, options, and their order; the input registry remains unchanged.
+
+```ts
+import { define, prepared } from '@yaks/render'
+import { equal } from '@yaks/testing'
+import { loadVocab } from '@yaks/vocab'
+import { render } from '@yaks/text'
+
+const views = define([{
+  view: 'Tile',
+  match: true,
+  load: async () => (_bundle, h) => h('span', null, 'Ready'),
+}])
+const ready = await prepared(views)
+equal(render(ready, { entity: { eid: 'one' } }, 'Tile', loadVocab([])), 'Ready')
+```
+
+Browser and terminal hosts prepare the full registry before painting. A portable
+host may supply `ctx.deferred(renderer)` to collect selected and nested deferred
+renderers, prepare those registrations, and draw again. A selected unprepared
+renderer without this boundary throws; it does not silently draw empty content.
+Preparation failures propagate when the host prepares the required renderer.
 
 ## Use
 

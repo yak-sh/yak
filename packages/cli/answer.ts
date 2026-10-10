@@ -25,6 +25,7 @@ import { human, idOf, short } from '@yaks/id'
 import {
   define,
   type H,
+  prepared,
   type Registry,
   type RenderContext,
   type Renderer,
@@ -202,11 +203,12 @@ export async function registry(
     bound: true,
     value: { views: generic },
   })
-  return define([
+  let all = define([
     ...found.flatMap((m) => m.renderers),
     search,
     ...generic.renderers,
   ])
+  return components ? prepared(all) : all
 }
 
 /** What a terminal draws with: portable views, and components of its own. */
@@ -234,10 +236,10 @@ export let terminal = async (
     })
     return m
   }))
-  return define([
+  return prepared(define([
     ...own.flatMap((m) => m?.views?.renderers ?? []),
     ...(await registry(plugins, load, observe, true)).renderers,
-  ])
+  ]))
 }
 
 // What a view cannot know from one bundle, for a terminal: an entity another
@@ -463,13 +465,14 @@ export let printed = (
   named: Bundle[] = [],
   near: Near = nothing,
   demand?: (eid: string) => void,
+  deferred?: (renderer: Renderer) => void,
 ): string => {
   let groups = drawn<Node>(
     vocab,
     answer,
     named,
     near,
-    (b, v, c) => tree(views, b, v, vocab, c),
+    (b, v, c) => tree(views, b, v, vocab, { ...c, deferred }),
     demand,
   )
   return joined(groups.map((g) => g.map((n) => plain(n))))
@@ -628,20 +631,25 @@ export let show = async (
     let text = ''
     while (true) {
       let pending = new Set<string>()
+      let loading = new Set<Renderer>()
       try {
         text = printed(views, vocab, answer, named, near, (eid) => {
           if (eid && !known.has(eid)) pending.add(eid)
-        })
+        }, (r) => loading.add(r))
       } catch (error) {
         // A drawing may require a declared or newly-read dependency before
         // it can finish. Retry after those reads; failures without new reads
         // remain drawing errors, including required references that are gone.
-        if (!pending.size) throw error
+        if (!pending.size && !loading.size) throw error
       }
-      if (!pending.size) break
+      if (!pending.size && !loading.size) break
       let ids = [...pending]
       ids.forEach((id) => known.add(id))
-      let found = await from.lookup(ids)
+      let [ready, found] = await Promise.all([
+        loading.size ? prepared(views, [...loading]) : views,
+        ids.length ? from.lookup(ids) : [],
+      ])
+      views = ready
       named.push(...found)
       found.forEach((b) => known.add(b.entity.eid))
     }

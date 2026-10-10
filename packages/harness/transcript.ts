@@ -2,11 +2,10 @@
 import type { Comp } from '@yaks/graph'
 import { toolEid } from '@yaks/tools'
 import { parse } from '@yaks/query'
-import { define, type Renderer } from '@yaks/render'
-import { sessionViews } from '@yaks/session'
+import { define, type Renderer, type Rendering } from '@yaks/render'
+import { entryBody } from '@yaks/session'
 import { parse as markdown, render as renderMarkdown } from '@yaks/markdown'
 
-let body = sessionViews.renderers.find((r) => r.view == 'Body')!
 let row = (
   query: string,
   label: string,
@@ -14,8 +13,8 @@ let row = (
   dim = false,
   prose = false,
   boxed = false,
-  content?: Renderer['render'],
-): Renderer => ({
+  content?: Rendering,
+): Renderer & { render: Rendering } => ({
   view: 'Transcript',
   match: parse(query),
   render: (b, h, ctx) =>
@@ -39,14 +38,14 @@ let row = (
         : h(
           'span',
           { class: dim ? 'Dim' : undefined },
-          body.render(b, h, { ...ctx, full: true }),
+          entryBody(b, h, { ...ctx, full: true }),
         ),
     ),
 })
 
 // Previews affect presentation only. Inspection and model context use the
 // original content. Bound characters as well as lines for minified tool output.
-const resultPreview: Renderer['render'] = (b, h) => {
+const resultPreview: Rendering = (b, h) => {
   const text = String((b.content as Comp | undefined)?.body ?? '')
   const lines = text.split('\n', 6)
   const head = lines.slice(0, 5).join('\n')
@@ -81,12 +80,12 @@ const resultPreview: Renderer['render'] = (b, h) => {
   )
 }
 
-const shellCommand: Renderer['render'] = (b, h, ctx) => {
+const shellCommand: Rendering = (b, h, ctx) => {
   const command = ((b.call as Comp)?.args as Comp | undefined)?.command
   // A call with no command to show, or arguments the model spelled as no
   // object, gets the ordinary view.
   if (typeof command != 'string') {
-    return body.render(b, h, { ...ctx, full: true })
+    return entryBody(b, h, { ...ctx, full: true })
   }
   return h(
     'div',

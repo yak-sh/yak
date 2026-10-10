@@ -2,7 +2,7 @@
  * is. */
 import type { Bundle, Comp } from '@yaks/graph'
 import { parse } from '@yaks/query'
-import { define, type Renderer } from '@yaks/render'
+import { define, type Renderer, type Rendering } from '@yaks/render'
 import { render } from '@yaks/preact'
 import { loadVocab } from '@yaks/vocab'
 
@@ -35,7 +35,7 @@ let dot = (
   glyph: string,
   color: string,
   label: string,
-): Renderer => ({
+): Renderer & { render: Rendering } => ({
   view: 'Indicator',
   match: parse(query),
   render: (_b, h) =>

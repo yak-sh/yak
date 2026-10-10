@@ -5,6 +5,7 @@ import '../../testing.ts'
 import { assertEquals } from '@std/assert'
 import { h } from 'preact'
 import { views } from '@yaks/doc/views'
+import { contributedViews } from '../inspect.tsx'
 import { cache, ent } from '../../live.ts'
 import { extend, registry, renderView } from '../registry.ts'
 import { mount } from '../mount.ts'
@@ -13,10 +14,10 @@ import { Md } from './Md.tsx'
 
 let css = await Deno.readTextFile(new URL('../../styles.css', import.meta.url))
 
-test('configured doc Body wraps while the Markdown source tab remains preformatted', () => {
+test('configured doc Body wraps while the Markdown source tab remains preformatted', async () => {
   let eid = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
   let prior = registry.renderers
-  extend([...views.renderers])
+  extend(await contributedViews([{ views }]))
   cache.value = {
     [eid]: {
       entity: { eid, num: 1 },

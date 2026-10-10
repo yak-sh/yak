@@ -6,7 +6,7 @@ import { assertEquals } from '@std/assert'
 import { views as docViews } from '@yaks/doc/views'
 import { docDoc } from '@yaks/doc'
 import { kernelDoc, kernelKeywords } from '@yaks/kernel/vocab'
-import { define } from './mod.ts'
+import { define, prepared } from './mod.ts'
 import { taskDoc } from '@yaks/task'
 import { views as taskViews } from '@yaks/task/views'
 import { type Node, plain, tree } from '@yaks/text'
@@ -14,11 +14,11 @@ import { loadVocab } from '@yaks/vocab'
 import { type Shown, views } from './views.ts'
 
 let vocab = loadVocab([kernelDoc, docDoc, taskDoc], [kernelKeywords])
-let registry = define([
+let registry = await prepared(define([
   ...docViews.renderers,
   ...taskViews.renderers,
   ...views.renderers,
-])
+]))
 
 let WEB = '00000000-0000-4000-8000-000000000001'
 let JEFF = '00000000-0000-4000-8000-000000000002'

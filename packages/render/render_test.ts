@@ -10,7 +10,9 @@ import {
   applicable,
   define,
   extend,
+  prepared,
   type Renderer,
+  rendering,
   resolve,
 } from './mod.ts'
 
@@ -305,4 +307,41 @@ test('dynamic typed actions receive their source and refresh without running', (
     }],
   })
   assertEquals(actions(portable, bundle)[0].name, bundle.entity.eid)
+})
+
+test('preparation preserves selection, order, options, and the input registry', async () => {
+  let loads: string[] = []
+  let first: Renderer = {
+    view: 'Tile',
+    match: true,
+    load: () => {
+      loads.push('first')
+      return Promise.resolve((_b, h) => h('span', null, 'first'))
+    },
+  }
+  let second: Renderer = {
+    ...first,
+    load: () => {
+      loads.push('second')
+      return Promise.resolve((_b, h) => h('span', null, 'second'))
+    },
+  }
+  let options = { views: ['Tile'], vocab, actions: {} }
+  let source = define([first, second], options)
+  let selected = resolve(source, bundle, 'Tile', vocab)!
+  let ready = await prepared(source, [selected])
+  assertEquals(loads, ['first'])
+  assertStrictEquals(ready.actions, source.actions)
+  assertStrictEquals(ready.views, source.views)
+  assertStrictEquals(ready.renderers[1], second)
+  assertStrictEquals(source.renderers[0], first)
+  assertEquals(
+    rendering(resolve(ready, bundle, 'Tile', vocab)!, {})!(
+      bundle,
+      (_tag, _props, ...children) => children.join(''),
+      {},
+    ),
+    'first',
+  )
+  assertThrows(() => rendering(first, {}), Error, 'requires preparation')
 })

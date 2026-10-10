@@ -77,6 +77,7 @@ export type {
   Registry,
   RenderContext,
   Renderer,
+  Rendering,
   Selection,
 } from './types.ts'
 
@@ -294,3 +295,5 @@ export function actions<R extends Registration, A, E>(
   }
   return offered.filter((action) => !action.when || test(action.when))
 }
+
+export { type Prepared, prepared, rendering } from './prepare.ts'

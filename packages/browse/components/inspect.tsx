@@ -2,7 +2,7 @@
 // graph and navigation as every other app view. The readings stay in inspect;
 // this is only the app's host adapter, not a second inspector or registry.
 import { type ComponentChild, h } from 'preact'
-import { resolve } from '@yaks/render'
+import { define, prepared, resolve } from '@yaks/render'
 import { signal } from '@preact/signals'
 import { useLayoutEffect, useMemo } from 'preact/hooks'
 import { parse } from '@yaks/query'
@@ -240,12 +240,12 @@ export let contributedViews = async (facets: Facet[]): Promise<Entry[]> =>
       ? await f.componentViews()
       : f.componentViews
     let adapted = new Set<unknown>(views)
-    return [
+    return (await prepared(define([
       ...adaptViews(views),
       ...[...f.views?.renderers ?? [], ...components?.renderers ?? []].filter((
         r,
       ): r is Entry => !adapted.has(r)),
-    ]
+    ]))).renderers
   }))).flat()
 
 /** Take in what the configured packages offer, before the app paints: their

@@ -44,6 +44,8 @@ export type RenderContext<Node> = Context & {
   vocab?: Vocab
   /** A lowering reports the selected renderer's declared reference needs. */
   needed?: (eids: readonly string[]) => void
+  /** Report a selected renderer whose implementation the host must prepare. */
+  deferred?: (renderer: Renderer) => void
 }
 
 /** The fields selection needs, shared by portable renderers and by ones a
@@ -56,9 +58,19 @@ export type Registration = {
 }
 
 /** A pure view of a bundle, independent of any backend's node type. */
-export type Renderer = Registration & {
-  render: <Node>(bundle: Bundle, h: H<Node>, ctx: RenderContext<Node>) => Node
-}
+export type Rendering = <Node>(
+  bundle: Bundle,
+  h: H<Node>,
+  ctx: RenderContext<Node>,
+) => Node
+
+/** Selection reads the same metadata before and after preparation. */
+export type Renderer =
+  & Registration
+  & (
+    | { render: Rendering; load?: never }
+    | { load: () => Promise<Rendering>; render?: never }
+  )
 
 /** Component changes for the caller to apply to the action's entity. */
 export type Patch = Record<string, Record<string, unknown> | null>

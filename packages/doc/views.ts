@@ -7,7 +7,6 @@
 // a view that answered with an empty string would hide the fallback a more
 // general `Title` gives (the entity's id).
 
-import { parse as markdown, render as tree } from '@yaks/markdown/structural'
 import { parse } from '@yaks/query'
 import { define, type Registry } from '@yaks/render'
 import { BODY, DOC, TITLE } from './comp.ts'
@@ -27,11 +26,6 @@ export let views: Registry = define([
   {
     view: 'Body',
     match: parse(`.${DOC}.${BODY}`),
-    render: (b, h) =>
-      h(
-        'div',
-        { class: 'Md' },
-        tree(markdown(text(b, BODY), { breaks: false }), h),
-      ),
+    load: () => import('./body.ts').then((m) => m.body),
   },
 ])

@@ -3,7 +3,7 @@ import { h } from 'preact'
 import { useLayoutEffect, useMemo } from 'preact/hooks'
 import { signal } from '@preact/signals'
 import { type Bundle, type Comp } from '@yaks/graph'
-import { define, type Renderer } from '@yaks/render'
+import { define, type Renderer, type Rendering } from '@yaks/render'
 import { parse } from '@yaks/query'
 import { render } from '@yaks/preact'
 import { loadVocab, pick } from '@yaks/vocab'
@@ -24,7 +24,11 @@ export let runtimeVocab = loadVocab([
   pick(sessionDoc, ['dispatch']),
   pick(kernelDoc, ['admitted', 'waiting', 'interrupted', 'failed']),
 ])
-let label = (match: string, text: string, color: string): Renderer => ({
+let label = (
+  match: string,
+  text: string,
+  color: string,
+): Renderer & { render: Rendering } => ({
   view: 'Runtime',
   match: parse(match),
   render: (_b, host) => host('span', { class: color }, text),

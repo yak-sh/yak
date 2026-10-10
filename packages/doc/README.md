@@ -81,27 +81,29 @@ non-null title and a `Body` view for a non-null body. The body is parsed by
 output: [@yaks/text](../text/README.md) produces Markdown or plain text, and
 [@yaks/preact](../preact/README.md) produces browser nodes. A missing title
 leaves selection to other registered views, such as a fallback title using the
-eid. An empty string still selects the corresponding view and renders empty
-text.
+eid. `Body` prepares its Markdown implementation through
+[`prepared`](../render/README.md#preparation) before drawing. An empty string
+still selects the corresponding view and renders empty text.
 
 ```ts
 import { docDoc } from '@yaks/doc'
 import { views } from '@yaks/doc/views'
-import { resolve } from '@yaks/render'
+import { prepared, resolve } from '@yaks/render'
 import { equal } from '@yaks/testing'
 import { render } from '@yaks/text'
 import { loadVocab } from '@yaks/vocab'
 
+const ready = await prepared(views)
 const vocab = loadVocab([docDoc])
 const bundle = {
   entity: { eid: 'meeting-1' },
   doc: { title: 'Meeting notes', body: 'Read **carefully**' },
 }
-equal(render(views, bundle, 'Title', vocab), 'Meeting notes')
-equal(render(views, bundle, 'Body', vocab), 'Read **carefully**')
+equal(render(ready, bundle, 'Title', vocab), 'Meeting notes')
+equal(render(ready, bundle, 'Body', vocab), 'Read **carefully**')
 equal(
   render(
-    views,
+    ready,
     { entity: { eid: 'empty' }, doc: { title: '' } },
     'Title',
     vocab,
@@ -110,7 +112,7 @@ equal(
 )
 equal(
   resolve(
-    views,
+    ready,
     { entity: { eid: 'empty' }, doc: { body: 'No title' } },
     'Title',
     vocab,

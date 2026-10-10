@@ -15,7 +15,7 @@ import { views as taskViews } from '@yaks/task/views'
 import { toolsDoc } from '@yaks/tools'
 import { views as toolViews } from '@yaks/tools/views'
 import { loadVocab } from '@yaks/vocab'
-import { define, type Renderer, resolve } from '@yaks/render'
+import { define, prepared, type Renderer, resolve } from '@yaks/render'
 import type { Shown } from '@yaks/render/views'
 import { graph } from '@yaks/graph'
 import { parse } from '@yaks/query'
@@ -32,9 +32,11 @@ let modules: Record<string, unknown> = {
   '@yaks/task': { views: taskViews },
   '@yaks/tools': { views: toolViews },
 }
-let views = await registry(
-  ['@yaks/doc', '@yaks/task'],
-  (p) => Promise.resolve(modules[p] ?? null),
+let views = await prepared(
+  await registry(
+    ['@yaks/doc', '@yaks/task'],
+    (p) => Promise.resolve(modules[p] ?? null),
+  ),
 )
 let said = (...answer: Record<string, unknown>[]) =>
   printed(views, vocab, answer as never)
@@ -414,34 +416,36 @@ test('a contributed drawing batches its used and declared references, including 
   }
   let remote = await registry(
     ['another-package'],
-    async (p) =>
-      p == 'another-package'
-        ? {
-          views: define([{
-            view: 'Tile',
-            match: parse('.task'),
-            needs: () => [missing],
-            render: (_e, h, ctx) => {
-              let s = ctx as import('@yaks/render/views').Shown<
-                ReturnType<typeof h>
-              >
-              let row = s.get?.(a)
-              let peer = row?.peer as { target?: string } | undefined
-              let next = peer?.target ? s.get?.(peer.target) : undefined
-              let back = next?.peer as { target?: string } | undefined
-              return h(
-                'span',
-                {},
-                s.name(a),
-                ' ',
-                String((row?.doc as { title?: string })?.title ?? 'absent'),
-                peer?.target ? ` → ${s.name(peer.target)}` : '',
-                back?.target ? ` → ${s.name(back.target)}` : '',
-              )
-            },
-          }]),
-        }
-        : null,
+    (p) =>
+      Promise.resolve(
+        p == 'another-package'
+          ? {
+            views: define([{
+              view: 'Tile',
+              match: parse('.task'),
+              needs: () => [missing],
+              render: (_e, h, ctx) => {
+                let s = ctx as import('@yaks/render/views').Shown<
+                  ReturnType<typeof h>
+                >
+                let row = s.get?.(a)
+                let peer = row?.peer as { target?: string } | undefined
+                let next = peer?.target ? s.get?.(peer.target) : undefined
+                let back = next?.peer as { target?: string } | undefined
+                return h(
+                  'span',
+                  {},
+                  s.name(a),
+                  ' ',
+                  String((row?.doc as { title?: string })?.title ?? 'absent'),
+                  peer?.target ? ` → ${s.name(peer.target)}` : '',
+                  back?.target ? ` → ${s.name(back.target)}` : '',
+                )
+              },
+            }]),
+          }
+          : null,
+      ),
   )
   let reads: string[][] = [], lines: string[] = []
   await show(
@@ -460,4 +464,89 @@ test('a contributed drawing batches its used and declared references, including 
   )
   assertEquals(reads, [[missing, a], [b]])
   assertEquals(lines, ['D-20 Alpha → D-21 → D-20\nD-20 Alpha → D-21 → D-20'])
+})
+
+test('portable preparation follows selected and nested views, preserving required references and failures', async () => {
+  let loads = 0, lines: string[] = [], reads: string[][] = []
+  let dependency = '33333333-3333-4333-8333-333333333333'
+  let body: Renderer = {
+    view: 'Body',
+    match: true,
+    needs: () => [dependency],
+    load: async () => {
+      loads++
+      await Promise.resolve()
+      return (_b, h, ctx) =>
+        h(
+          'span',
+          {},
+          ((ctx as Shown<unknown>).get!(dependency)!.doc as { title: string })
+            .title,
+        )
+    },
+  }
+  let unused: Renderer = {
+    view: 'Unused',
+    match: true,
+    load: () => Promise.reject(new Error('unavailable view')),
+  }
+  let tile: Renderer = {
+    view: 'Tile',
+    match: true,
+    render: (_b, h) => h('span', {}, 'Title'),
+  }
+  let base = define([tile, body, unused])
+  let c = { tui: false, out: (s: string) => lines.push(s) }
+  await show(c, base, vocab, [t9, t10])
+  assertEquals(loads, 0)
+  assertEquals(lines.splice(0), ['Title\nTitle'])
+  let nested = define([
+    { ...tile, render: (_b, _h, ctx) => ctx.render!('Body')! },
+    ...base.renderers,
+  ])
+  await show(c, nested, vocab, [t9, t10], {}, {
+    query: () => [],
+    lookup: (ids) => {
+      reads.push(ids)
+      return [{ entity: { eid: dependency }, doc: { title: 'Prepared body' } }]
+    },
+  })
+  assertEquals(loads, 1)
+  assertEquals(reads, [[dependency]])
+  assertEquals(lines.splice(0), ['Prepared body\nPrepared body'])
+  assertEquals(resolve(base, t9, 'Body', vocab), body)
+  await assertRejects(
+    () =>
+      show(
+        c,
+        define([
+          { ...tile, render: (_b, _h, ctx) => ctx.render!('Unused')! },
+          unused,
+        ]),
+        vocab,
+        [t9, t10],
+      ),
+    Error,
+    'unavailable view',
+  )
+  await assertRejects(
+    () =>
+      show(
+        c,
+        define([
+          {
+            ...tile,
+            load: () =>
+              Promise.resolve(() => {
+                throw new Error('drawing failed')
+              }),
+            render: undefined,
+          },
+        ]),
+        vocab,
+        [t9, t10],
+      ),
+    Error,
+    'drawing failed',
+  )
 })
