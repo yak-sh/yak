@@ -60,7 +60,14 @@ export let personal = async (state: string = stateDir()): Promise<string> => {
 type AccountHost = Pick<Served, 'config' | 'vault' | 'close'> & {
   graph: Pick<Served['graph'], 'read' | 'address' | 'apply'>
 }
-type Credential = typeof import('@yaks/connections').accountCredential
+// @yaks/connections' accountCredential, loaded by name: the CLI states the
+// door it uses, since importing the type would make the packages a cycle.
+type Credential = (
+  ctx: Pick<AccountHost, 'graph' | 'vault'>,
+  owner: string,
+  integration: string,
+  as?: string,
+) => Promise<{ bearer: string } | undefined>
 
 /** The doors account selection needs: configuration, a read-only graph,
  * and a writable host opened only for a matching connection. */
@@ -73,7 +80,20 @@ export type AccountDoors<H extends AccountHost = AccountHost> = {
 
 /** One command's account handles. Only handles are kept; each lookup reads
  * current connections and credentials, including ones added after a miss. */
-export let accounts = <H extends AccountHost>(doors: AccountDoors<H>) => {
+/** What one command holds: its account graphs and their tokens. */
+export type Accounts<H> = {
+  host: (path: string) => Promise<H>
+  close: () => Promise<void>
+  token: (
+    hostName: string,
+    state?: string,
+    opts?: AccountOptions,
+  ) => Promise<string | null>
+}
+
+export let accounts = <H extends AccountHost>(
+  doors: AccountDoors<H>,
+): Accounts<H> => {
   let opened = new Map<string, Promise<H>>()
   let readers = new Map<string, Promise<Reader>>()
   let accountReader = (config: Config, plugins: string[]) => {
@@ -152,7 +172,7 @@ export let accounts = <H extends AccountHost>(doors: AccountDoors<H>) => {
   return { host, close, token }
 }
 
-let command = accounts({
+let command: Accounts<Served> = accounts({
   config: async (path) => {
     try {
       await Deno.stat(path)

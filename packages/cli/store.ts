@@ -72,7 +72,14 @@ export type RosterFiles = {
 
 /** A roster cache over a filesystem. Destinations survive a retried migration,
  * and a forgotten host cannot return from the legacy combined file. */
-export let rosters = (files: RosterFiles = Deno) => {
+/** Where each host's roster is kept between commands. */
+export type Rosters = {
+  cached: (host: string, dir?: string) => Promise<Roster | null>
+  remember: (host: string, roster: Roster, dir?: string) => Promise<void>
+  forget: (host: string, dir?: string) => Promise<void>
+}
+
+export let rosters = (files: RosterFiles = Deno): Rosters => {
   let read = (path: string): Record<string, unknown> => {
     try {
       return JSON.parse(files.readTextFileSync(path))
@@ -178,4 +185,7 @@ export let rosters = (files: RosterFiles = Deno) => {
 }
 
 export { accountToken as tokenFor } from './accounts.ts'
-export let { cached, remember, forget } = rosters()
+let roster: Rosters = rosters()
+export let cached: Rosters['cached'] = roster.cached
+export let remember: Rosters['remember'] = roster.remember
+export let forget: Rosters['forget'] = roster.forget
