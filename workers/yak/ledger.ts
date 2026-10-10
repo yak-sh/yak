@@ -76,15 +76,17 @@ let told = (props: Record<string, PropSchema>): PropSchema => ({
   properties: props,
 })
 
-// The diagnostic fields returned by an app stay intact in the ledger.
+// The diagnostic fields returned by an app stay intact in the ledger: every
+// property @yaks/tools gives `exception`, taken plainly.
+let plain = ({ stamped: _, ...prop }: PropSchema): PropSchema => prop
 let both: Record<string, PropSchema> = {
-  exception: told({
-    at: { type: 'string', format: 'date-time' },
-    message: { type: 'string' },
-    stack: { type: 'string' },
-    request: { type: 'string' },
-    version: { type: 'number' },
-  }),
+  exception: told(
+    Object.fromEntries(
+      Object.entries(toolsDoc.$defs!.exception.properties!).map((
+        [name, prop],
+      ) => [name, plain(prop)]),
+    ),
+  ),
 }
 
 // The ledger's whole vocabulary: @yaks/tools' own words and rules, with the
