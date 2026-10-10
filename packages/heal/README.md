@@ -1,7 +1,8 @@
 # @yaks/heal
 
 `@yaks/heal` reports actionable exceptions through the host's reporter and
-follows tracker bugs to file work and request fixer sessions.
+follows tracker bugs to file work, request fixer sessions and mark finished
+bugs.
 
 ```sh
 deno add jsr:@yaks/heal
@@ -40,13 +41,13 @@ The [box host](../cli/README.md) supplies the reporter, which fans out to Sentry
 and the tracker spool through `@yaks/tracker/report`'s `coalesce`. Heal opens no
 tracker database or spool and writes no task when an exception arrives.
 
-The `@yaks/heal/service` **follower** follows open bugs in the configured
-tracker graphs through a headless [client](../client/README.md) subscription on
-`/ws`. The tracker web role serves that query independently of intake. One
-process holds the `@yaks/heal` service lease: the subscription and the serial
-fixer decisions are a continuing duty, rather than work owed by a box commit to
-the effects pool. Serve that role beside the box's other worker roles, for
-example `yak work --roles effects,@yaks/heal`.
+The `@yaks/heal/service` **follower** follows bugs in the configured tracker
+graphs through a headless [client](../client/README.md) subscription on `/ws`.
+The tracker web role serves that query independently of intake. One process
+holds the `@yaks/heal` service lease: the subscription and the serial fixer
+decisions are a continuing duty, rather than work owed by a box commit to the
+effects pool. Serve that role beside the box's other worker roles, for example
+`yak work --roles effects,@yaks/heal`.
 
 For a bug without a task, one apply writes the task, its `about` edge and, when
 the gates allow it, the fixer request. An existing task linked by an `about`
@@ -71,6 +72,22 @@ a gate refuses the request, completion stays until a later pass can start the
 fixer. Ordinary occurrences and old regression marks do not reopen completed
 work. Cancelled tasks remain cancelled.
 
+A completed task resolves its bug; a cancelled task archives it. The follower
+keeps resolved bugs in its answer and leaves archived bugs out, so cancelling
+work after completion still archives its bug. Only open bugs file tasks or
+request fixers. [Tracker](../tracker/README.md) owns these marks: resolution
+allows a later regression to reopen the bug; archival stops its notifications. A
+regression newer than completion stays open even while a fixer gate holds the
+task completed.
+
+The follower writes each mark through the same client's `/apply` door, with
+`optimistic: false` to await tracker admission. Its task and `about` edge are
+the durable receipt: every pass, including the first after a restart, retries a
+missing mark without a retry limit or a separate checkpoint. An existing mark
+writes nothing. Preconditions on the marks and regression reject a stale answer
+if the tracker changes before admission. Each configured tracker receives only
+marks for bugs in its own answer. No tracker database is opened.
+
 The subscription reconnects with [sync](../sync/README.md)'s backoff and asks
 for a fresh answer; while disconnected, its cached answer is not ready and files
 nothing. An opening or query refusal is reported and retried. A failed box apply
@@ -80,8 +97,7 @@ and stops the pause between passes.
 
 The legacy `bug_fix` effect and its boot sweep still handle box bug tasks when
 that graph declares tracker `bug` vocabulary. They share the follower's gates
-and fixer request; they never give a legacy bug task a second fixer. Resolving a
-tracker bug on task completion is separate work and is not done by the follower.
+and fixer request; they never give a legacy bug task a second fixer.
 
 ## Config
 
@@ -111,9 +127,9 @@ contributes the exception and legacy bug effects plus its follower service.
 paths. With none, the follower has nothing to do. `provider`, `model` and
 `project` are ids or names. `cap` defaults to 2; `cooldown` defaults to 1800000
 ms; a changed tracker answer starts a pass within a second, and `every` (default
-60000 ms) re-checks the gates when nothing changed. Every key is optional.
-Without `provider`, bugs still get tasks and exceptions are reported, but no
-fixer is requested. A host running without duties runs no follower.
+60000 ms) re-checks the gates and task marks when nothing changed. Every key is
+optional. Without `provider`, bugs still get tasks and exceptions are reported,
+but no fixer is requested. A host running without duties runs no follower.
 
 ## Exports
 
@@ -121,8 +137,12 @@ The root export is `healDoc` and the pure `actionable` filter.
 `@yaks/heal/vocab` exports `docs` for plugin loaders, and `@yaks/heal/effects`
 exports `effects`. `@yaks/heal/service` exports `service`, `track` (a headless
 tracker watch), `follow` (one bug's reconciliation), and `taskEid`. `service`
-accepts `open(url)` returning a client `Watch` and an abortable
-`wait(ms, signal)` for hosts with their own graph transport or clock.
+accepts `open(url)` returning a `Tracker` (a client `Watch` with `mutate`) and
+an abortable `wait(ms, signal)` for hosts with their own graph transport or
+clock.
+
+`follow(graph, options)(bug, url, tracker.mutate)` reconciles one bug through
+the same acknowledged write door.
 
 `@yaks/fts` has a `heal()` that rebuilds a full-text index. That is a different
 act.

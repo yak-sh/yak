@@ -2,7 +2,14 @@
 // derived task and about edge; task completion and fixer history decide what
 // a replay owes without a private follower checkpoint.
 
-import { type Bundle, type Comp, type Graph, identityEid } from '@yaks/graph'
+import {
+  type Bundle,
+  type Comp,
+  type Graph,
+  identityEid,
+  token,
+} from '@yaks/graph'
+import type { Client } from '@yaks/client'
 import { link } from '@yaks/edge'
 import { and, eq, present } from '@yaks/query'
 import { fixing, type Options } from './fix.ts'
@@ -15,28 +22,51 @@ let comp = (row: Bundle | undefined, name: string) =>
 let str = (value: unknown) => value == null ? '' : String(value)
 let moment = (value: unknown) => Date.parse(str(value))
 
-/** Reconcile a tracker answer. The caller retries after a failed box write. */
+/** Reconcile a tracker answer. The caller retries either store's failed writes. */
 export let follow = (
   g: Graph,
   options: Options = {},
-): (bug: Bundle, url: string) => Promise<void> => {
+): (bug: Bundle, url: string, mutate: Client['mutate']) => Promise<void> => {
   let { fix, home } = fixing(g, options)
-  return (bug: Bundle, url: string) =>
+  return (bug: Bundle, url: string, mutate: Client['mutate']) =>
     fix(async () => {
-      if (!bug.bug || bug.resolved || bug.archived) return
+      if (!bug.bug || bug.archived) return
       let evidence = bug.entity.eid
+      let eid = taskEid(evidence)
       let edges = await g.read(and(present('about'), eq('edge.to', evidence)))
       let linked = edges.map((edge) => str(comp(edge, 'edge')?.from))
-      let task = (await g.get([...linked, taskEid(evidence)]))
+      let task = (await g.get([...new Set([...linked, eid])]))
         .find((row) => row.task)
       if (task) {
         let reopen = !!task.completed &&
           moment(comp(bug, 'regressed')?.at) >
             moment(comp(task, 'completed')?.at)
+        let mark = task.cancelled
+          ? 'archived'
+          : task.completed && !reopen
+          ? 'resolved'
+          : undefined
+        if (mark && !bug[mark]) {
+          await mutate([{
+            entity: bug.entity,
+            [mark]: {},
+            // A new regression or someone else's mark invalidates this answer.
+            $was: {
+              bug: { fault: token(comp(bug, 'bug')?.fault) },
+              resolved: { at: token(comp(bug, 'resolved')?.at) },
+              archived: { at: token(comp(bug, 'archived')?.at) },
+              regressed: {
+                at: token(comp(bug, 'regressed')?.at),
+                error: token(comp(bug, 'regressed')?.error),
+              },
+            },
+          }], { optimistic: false })
+        }
+        if (task.cancelled || bug.resolved) return
         if (task.completed && !reopen) return
         return { task, bug: evidence, reopen }
       }
-      let eid = taskEid(evidence)
+      if (bug.resolved) return
       let project = await home()
       let pointer =
         new URL(encodeURIComponent(evidence), `${url.replace(/\/$/, '')}/`).href

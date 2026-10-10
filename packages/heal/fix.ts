@@ -82,7 +82,7 @@ export let fixing = (g: Graph, options: Options = {}) => {
   let home = () => named(g, options.project, 'project')
   let blocked = async ({ task, bug, same = [bug] }: Work) => {
     let project = str(comp(task, 'filed')?.project)
-    for (let p of [await home(), project]) {
+    for (let p of new Set([await home(), project])) {
       if (p && comp(await one(g, p), 'nofix')) return true
     }
     let now = Date.now()

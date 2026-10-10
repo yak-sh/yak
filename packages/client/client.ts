@@ -141,8 +141,12 @@ export type Client = {
   /** one entity, whole, by id — `undefined` if this client has never held
    * it. A deleted entity comes back with a `tombstone` component. */
   ent: (eid: Eid) => Bundle | undefined
-  /** apply bundles: to the local graph at once, then POSTed to the server */
-  mutate: (bundles: Bundle[]) => Bundle[] | Promise<Bundle[]>
+  /** Apply bundles locally at once, then POST them. With `optimistic: false`,
+   * wait for server admission and reject on refusal or transport failure. */
+  mutate: (
+    bundles: Bundle[],
+    opts?: { optimistic?: boolean },
+  ) => Bundle[] | Promise<Bundle[]>
   /** close the WebSocket and every watch */
   close: () => void
 }
@@ -165,11 +169,11 @@ export type ClientWatchOpts = WatchOpts & {
 // this costs nothing in a page that stores nothing.
 let ordinary = (): Vault | null => globalThis.indexedDB ? idb() : null
 
-// A name may already belong to a row the page has never seen. The store must
-// resolve it before the page can put the write in its own graph. Browser-owned
-// components wait for that answer and then follow the resolved eid.
-let named = (vocab: Vocab, bundles: Bundle[]) => {
-  if (!vocab.comp('alias') || !bundles.some(nameOf)) return null
+// An acknowledged write waits for admission; a name also needs its identity
+// resolved by the store. Browser-owned components wait for that answer and
+// then follow the resolved eid.
+let submission = (vocab: Vocab, bundles: Bundle[], held: boolean) => {
+  if (!held && (!vocab.comp('alias') || !bundles.some(nameOf))) return null
   // The shorthand is consumed by the store's normalize hook. Admission still
   // checks every other field before anything leaves this page.
   admit(bundles.map((b) => nameOf(b) ? { ...b, alias: {} } : b), vocab)
@@ -486,8 +490,8 @@ export let client = (
       cache.touch([eid])
       return store.tx((tx) => tx.get([eid]))[0]
     },
-    mutate: (bundles) => {
-      let claim = wire && named(vocab, bundles)
+    mutate: (bundles, opts = {}) => {
+      let claim = wire && submission(vocab, bundles, opts.optimistic === false)
       if (!wire || !claim) return g.apply(bundles)
       return wire.submit(claim.sent).then(async (applied) => {
         let at = new Map(

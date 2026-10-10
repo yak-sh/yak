@@ -1,39 +1,49 @@
 // One leased heal service follows tracker query answers. Sync owns reconnects;
-// each pass reads the present answer again, so a failed box write loses no bug.
+// each pass reads the present answer again, so neither a failed box write nor
+// a failed tracker mark loses work.
 
-import { client, type ClientOpts, type Watch } from '@yaks/client'
+import { type Client, client, type ClientOpts, type Watch } from '@yaks/client'
 import { sleep } from '@yaks/effects'
 import type { Graph } from '@yaks/graph'
 import type { Host } from '@yaks/host'
 import { kernelDoc, kernelKeywords } from '@yaks/kernel'
 import { docDoc } from '@yaks/doc'
 import { trackerDoc } from '@yaks/tracker/vocab'
-import { toolsDoc } from '@yaks/tools/vocab'
-import { loadVocab } from '@yaks/vocab'
+import { loadVocab, type VocabDoc } from '@yaks/vocab'
 import { follow } from './follow.ts'
 import type { Options as FixOptions } from './fix.ts'
 
 export { follow, taskEid } from './follow.ts'
+
+/** A tracker answer and its acknowledged write door, on the same client. */
+export type Tracker = Watch & { mutate: Client['mutate'] }
 
 /** The service's config and injectable graph and clock doors. */
 export type Options = FixOptions & {
   /** Base URLs of tracker graphs; no tracker is followed unless named. */
   trackers?: string[]
   /** Time between passes when no tracker answer changed, in ms (default
-   * 60000): how soon a gate that opens with time (cap, cooldown) is seen. */
+   * 60000): re-check task marks and gates that open with time (cap, cooldown). */
   every?: number
-  /** Open a live tracker query; defaults to the headless graph client. */
-  open?: (url: string) => Watch
+  /** Open a live tracker query and write door; defaults to the headless client. */
+  open?: (url: string) => Tracker
   /** Pause between passes; defaults to an abortable sleep. */
   wait?: typeof sleep
 }
 
-let vocab = loadVocab([kernelDoc, docDoc, toolsDoc, trackerDoc], [
-  kernelKeywords,
-])
+// The replica holds the follower's answer and marks, never tracker intake,
+// tools, mail or effects. Their declarations belong to the tracker host.
+let pick = (doc: VocabDoc, ...names: string[]): VocabDoc => ({
+  $defs: Object.fromEntries(names.map((name) => [name, doc.$defs![name]])),
+})
+let vocab = loadVocab([
+  pick(kernelDoc, 'entity', 'created', 'updated', 'resolved', 'archived'),
+  pick(docDoc, 'doc'),
+  pick(trackerDoc, 'bug', 'regressed'),
+], [kernelKeywords])
 
 /** A headless tracker subscription. Closing it releases the whole client. */
-export let track = (url: string, options: ClientOpts = {}): Watch => {
+export let track = (url: string, options: ClientOpts = {}): Tracker => {
   let remote = client(vocab, [], {
     ...options,
     url,
@@ -41,7 +51,8 @@ export let track = (url: string, options: ClientOpts = {}): Watch => {
     wireVault: false,
   })
   try {
-    let watch = remote.watch('.bug.status=open ?doc ?regressed', {
+    // Resolved bugs remain visible so cancelling their work can archive them.
+    let watch = remote.watch('.bug !archived ?doc ?regressed ?resolved', {
       evaluate: 'server',
     })
     return {
@@ -58,6 +69,7 @@ export let track = (url: string, options: ClientOpts = {}): Watch => {
         return watch.refused
       },
       subscribe: watch.subscribe,
+      mutate: remote.mutate,
       close: () => remote.close(),
     }
   } catch (error) {
@@ -75,9 +87,9 @@ export let service = async (
   let urls = [...new Set(options.trackers ?? [])]
   if (!urls.length) return
   let once = signal.aborted
-  let watches = new Map<string, Watch>()
+  let watches = new Map<string, Tracker>()
   let reconcile = follow(host.graph, options)
-  // A changed answer ends the wait at once; the timer only re-checks gates.
+  // A changed answer ends the wait at once; the timer re-checks tasks and gates.
   let nudge = () => {}
   let changed = () => new Promise<void>((wake) => nudge = wake)
   let report = async (error: unknown) => {
@@ -113,7 +125,7 @@ export let service = async (
           for (let bug of watch.value) {
             if (!once && signal.aborted) return
             try {
-              await reconcile(bug, url)
+              await reconcile(bug, url, watch.mutate)
             } catch (error) {
               await report(error)
             }

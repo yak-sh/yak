@@ -128,6 +128,12 @@ Components declared `sync: none` stay local; `sync: peers` components are
 relayed through the WebSocket. See [@yaks/sync](../sync/README.md) for transport
 and failure behavior.
 
+`mutate(bundles, {optimistic: false})` waits for server admission before
+changing the local graph. Its promise rejects on a refusal or transport failure.
+Use it when a successful local edit must mean the server accepted it, such as
+marking work delivered. Browser-owned components in the batch land after that
+answer. Without a server, the mutation applies to the local graph.
+
 With a server connection, `mutate()` also accepts `alias: {name}` when the
 vocabulary declares `alias`. A name may belong to an entity absent from the
 page's cache, so this write waits for the server's resolved eid and then lands

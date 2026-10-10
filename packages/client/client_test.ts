@@ -16,6 +16,58 @@ import { client } from './client.ts'
 import { stash } from './vault.ts'
 import { wireStash } from './wire-vault.ts'
 
+let heldVocab = loadVocab({
+  $defs: {
+    doc: {
+      component: true,
+      type: 'object',
+      properties: { title: { type: 'string' } },
+    },
+    draft: {
+      component: true,
+      type: 'object',
+      sync: 'none',
+      properties: { text: { type: 'string' } },
+    },
+  },
+})
+let heldServer = graph({ vocab: heldVocab, storage: ram(heldVocab) })
+let heldOffline = true
+let heldClient = client(heldVocab, [], {
+  url: 'http://box.test',
+  vault: false,
+  wireVault: false,
+  fetch: async (request) => {
+    if (heldOffline) throw new Error('offline')
+    return Response.json(await heldServer.apply(await request.json()))
+  },
+  report: () => {},
+})
+let heldWrite: Bundle[] = [{
+  entity: { eid: 'r1' },
+  doc: { title: 'Dal' },
+  draft: { text: 'less salt' },
+}]
+test('an acknowledged mutation waits for admission and rejects an offline server', async () => {
+  await assertRejects(
+    () => Promise.resolve(heldClient.mutate(heldWrite, { optimistic: false })),
+    Error,
+    'offline',
+  )
+  assertEquals(heldClient.ent('r1'), undefined)
+  assertEquals(await heldServer.get(['r1']), [])
+  heldOffline = false
+  await heldClient.mutate(heldWrite, { optimistic: false })
+  assertEquals(comp(heldClient.ent('r1'), 'doc').title, 'Dal')
+  assertEquals(
+    comp((await heldServer.get(['r1']))[0], 'doc').title,
+    'Dal',
+  )
+  assertEquals(comp(heldClient.ent('r1'), 'draft').text, 'less salt')
+  assertEquals(comp((await heldServer.get(['r1']))[0], 'draft'), {})
+  heldClient.close()
+})
+
 let dal = (eid = 'r1'): Bundle => ({
   entity: { eid },
   doc: { title: 'Dal' },
