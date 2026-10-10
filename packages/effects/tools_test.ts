@@ -84,34 +84,39 @@ let mixed = () =>
     { handler: 'h', state: 'done', attempts: 1, at: ago(90) },
   )
 
-test('retry puts a failed run back to the pool, which then finishes it', async () => {
-  let landed = 0
-  let fx = effects(pooledBlog, {
-    report: () => {},
-    write: (b) => g.apply(b, { trusted: true }),
-  })
-  let g = blogGraph([fx], pooledBlog)
-  await g.apply([
-    { entity: { eid: 'p1' }, post: { title: 'One' } },
-    {
-      entity: { eid: 'r0' },
-      effect: {
-        handler: 'post_note',
-        target: 'p1',
-        comp: 'post',
-        kind: 'created',
-        state: 'failed',
-        attempts: 2,
-        error: 'no',
-        at: ago(90),
-        generation: 0,
-      },
+// A pool holding one failed run, built once: the test is the retry and the
+// pass, not the graph.
+let landed = 0
+let fx = effects(pooledBlog, {
+  report: () => {},
+  write: (b) => worked.apply(b, { trusted: true }),
+})
+let worked = blogGraph([fx], pooledBlog)
+await worked.apply([
+  { entity: { eid: 'p1' }, post: { title: 'One' } },
+  {
+    entity: { eid: 'r0' },
+    effect: {
+      handler: 'post_note',
+      target: 'p1',
+      comp: 'post',
+      kind: 'created',
+      state: 'failed',
+      attempts: 2,
+      error: 'no',
+      at: ago(90),
+      generation: 0,
     },
-  ], { trusted: true })
-  // Registered after the commit, so only the retried run is owed.
-  fx.handle({ post_note: () => void landed++ })
-  assert((await door(g, 'effect_retry', 'post_note')).startsWith('retried 1'))
-  await fx.work(g, undefined, 1)
+  },
+], { trusted: true })
+// Registered after the commit, so only the retried run is owed.
+fx.handle({ post_note: () => void landed++ })
+
+test('retry puts a failed run back to the pool, which then finishes it', async () => {
+  assert(
+    (await door(worked, 'effect_retry', 'post_note')).startsWith('retried 1'),
+  )
+  await fx.work(worked, undefined, 1)
   assertEquals(landed, 1)
 })
 
