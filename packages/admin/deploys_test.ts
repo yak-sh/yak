@@ -168,6 +168,54 @@ test('a gradual deploy can roll back to its prior version while that version sti
   )
 })
 
+test('a two-phase deploy rolls back one commit through either activation', () => {
+  let versions = [
+    version(1, commit(1).sha),
+    version(2, commit(1).sha),
+    version(3, commit(2).sha),
+    version(4, commit(2).sha),
+  ]
+  let history = [
+    deployment(5, 'v1'),
+    deployment(6, 'v2'),
+    deployment(7, 'v3'),
+    deployment(8, 'v4'),
+  ]
+  for (let count of [3, 4]) {
+    let rows = boundaries(
+      deploysIn(versions, history.slice(0, count), [commit(1), commit(2)])
+        .map((r) => ({ ...r, marks: ['one'] })),
+    )
+    assertEquals(rollbackTarget(rows).id, 'v2')
+    assertEquals(rollbackTarget(rows, 'v3').id, 'v3')
+    assertEquals(
+      rollbackTarget(rows.map((r) => ({ ...r, prior: undefined }))).id,
+      'v2',
+    )
+  }
+})
+
+test('sibling versions in a prior gradual deployment are one rollback commit', () => {
+  let rows = boundaries([
+    deploy(4, ['one'], { live: 100 }),
+    deploy(3, ['one'], { commit: commit(2), prior: 50 }),
+    deploy(2, ['one'], { prior: 50 }),
+    deploy(1, ['one']),
+  ])
+  assertEquals(rollbackTarget(rows).id, 'v3')
+})
+
+test('a sibling activation cannot hide a migration boundary or missing prior commit', () => {
+  let rows = boundaries([
+    deploy(3, ['one', 'two'], { commit: commit(2), live: 100 }),
+    deploy(2, ['one', 'two'], { prior: 100 }),
+    deploy(1, ['one']),
+  ])
+  assertThrows(() => rollbackTarget(rows), Refused, 'data moved')
+  assertThrows(() => rollbackTarget(rows.slice(0, 2)), Refused, 'names 0')
+  assertEquals(rollbackTarget(rows, 'v2').id, 'v2')
+})
+
 test('boundaries survive rollback and unserved uploads do not move data', () => {
   let rows = boundaries([
     deploy(4, ['one', 'two', 'three'], { first: undefined, last: undefined }),

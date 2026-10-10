@@ -20,6 +20,7 @@ import {
   preflight,
   prepareSibling,
   readiness,
+  rollout,
   runWrangler,
   sameServing,
   sameSibling,
@@ -253,6 +254,100 @@ test('a wrangler command with no sibling deploy runs once with its own pinned id
   })
   assertEquals(code, 3)
   assertEquals(called, [{ args: ['tail'], unpinned: undefined }])
+})
+
+test('the prepared Worker activates before its image, preserving rollout and environment', async () => {
+  let bundle = [
+    'deploy',
+    '--env',
+    'staging',
+    '-c',
+    'bundle.toml',
+    '--message',
+    'commit',
+  ]
+  for (
+    let mode of [[], ['--containers-rollout=immediate'], [
+      '--containers-rollout',
+      'gradual',
+    ]]
+  ) {
+    let args = [...bundle, ...mode]
+    let events: unknown[] = []
+    let activation = Promise.withResolvers<number>()
+    let image = Promise.withResolvers<void>()
+    let deploy = rollout(args, (argv) => {
+      events.push(argv)
+      return events.length == 1 ? activation.promise : Promise.resolve(0)
+    }, () => {
+      events.push('image')
+      return image.promise
+    })
+    try {
+      assertEquals(events, [[...bundle, '--containers-rollout=none']])
+      activation.resolve(0)
+      await tick()
+      assertEquals(events.length, 2)
+      assertEquals(events[1], 'image')
+      image.resolve()
+      assertEquals(await deploy, 0)
+      assertEquals(events[2], args)
+    } finally {
+      activation.resolve(0)
+      image.resolve()
+      await deploy
+    }
+  }
+})
+
+test('failed activation prepares no image, and failed image rollout fails after activation', async () => {
+  for (let failure of ['activation', 'image', 'update']) {
+    let events: string[] = []
+    let error = Error('image failed')
+    let outcome = await rollout(['deploy'], (args) => {
+      let phase = args.includes('--containers-rollout=none')
+        ? 'activation'
+        : 'update'
+      events.push(phase)
+      return Promise.resolve(phase == failure ? 7 : 0)
+    }, () => {
+      events.push('image')
+      return failure == 'image' ? Promise.reject(error) : Promise.resolve()
+    }).then((code) => code, (error) => error)
+    assertEquals(outcome, failure == 'image' ? error : 7)
+    assertEquals(
+      events,
+      failure == 'activation'
+        ? ['activation']
+        : failure == 'image'
+        ? ['activation', 'image']
+        : ['activation', 'image', 'update'],
+    )
+  }
+})
+
+test('Worker-only deploys, dry runs and other commands run once', async () => {
+  for (
+    let args of [
+      ['deploy', '--containers-rollout=none'],
+      ['deploy', '--containers-rollout', 'none'],
+      ['deploy', '--dry-run'],
+      ['tail'],
+    ]
+  ) {
+    let events: unknown[] = []
+    assertEquals(
+      await rollout(args, (argv) => {
+        events.push(argv)
+        return Promise.resolve(0)
+      }, () => {
+        events.push('image')
+        return Promise.resolve()
+      }),
+      0,
+    )
+    assertEquals(events, [...args.includes('--dry-run') ? ['image'] : [], args])
+  }
 })
 
 test('every @yaks/* the checker knows is the file the bundler gets', () => {

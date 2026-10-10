@@ -195,6 +195,27 @@ let unrolled = (args: string[]) =>
     args[i - 1] != '--containers-rollout'
   )
 
+/** Activate the prepared Worker before preparing or rebuilding its image.
+ * Both uploads read the same bundle and commit annotation. A failed image
+ * update fails the deploy while the first activation keeps serving. Explicit
+ * Worker-only deploys and dry runs remain single invocations. */
+export let rollout = async (
+  args: string[],
+  run: (args: string[]) => Promise<number>,
+  image: () => Promise<unknown>,
+) => {
+  if (command(args) != 'deploy') return await run(args)
+  if (/(^| )--containers-rollout[= ]none( |$)/.test(args.join(' '))) {
+    return await run(args)
+  }
+  if (!args.includes('--dry-run')) {
+    let code = await run([...unrolled(args), '--containers-rollout=none'])
+    if (code) return code
+  }
+  await image()
+  return await run(args)
+}
+
 type Containers = {
   containers?: { image?: string; image_build_context?: string }[]
 }
@@ -959,22 +980,6 @@ if (import.meta.main) {
       children.delete(child)
     }
   }
-  let prepare = async (
-    bundle: Promise<Awaited<ReturnType<typeof bundled>>>,
-  ) => {
-    let [compiled, base] = await Promise.allSettled([
-      bundle,
-      (async () => {
-        if (
-          command(argv) === 'deploy' &&
-          !/(^| )--containers-rollout[= ]none( |$)/.test(argv.join(' '))
-        ) await based({ wrangler, dry: argv.includes('--dry-run') })
-      })(),
-    ])
-    if (base.status == 'rejected') throw base.reason
-    if (compiled.status == 'rejected') throw compiled.reason
-    return compiled.value.args
-  }
   let made = preparing()
   let readied = made.dependencies.then(() => {
     // Choose after npm has installed: a cold checkout has this pin now too.
@@ -1004,8 +1009,12 @@ if (import.meta.main) {
       runWrangler(
         argv,
         (args, unpinned) =>
-          unpinned ? uploads.get(args[args.indexOf('-c') + 1])! : run(args),
-        () => prepare(bundle),
+          unpinned ? uploads.get(args[args.indexOf('-c') + 1])! : rollout(
+            args,
+            run,
+            () => based({ wrangler, dry: argv.includes('--dry-run') }),
+          ),
+        async () => (await bundle).args,
       ),
     () => made.all,
   )

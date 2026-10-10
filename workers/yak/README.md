@@ -16,11 +16,21 @@ for an app's TypeScript and npm imports, @yaks/esbuild). `yak-esbuild` is a
 Worker in front of a container running native esbuild; its image is
 `esbuild/Dockerfile` over `packages/esbuild`, and its deploy builds and pushes
 the image like the kernel's sandbox. The siblings do not call one another, so
-their deploys run concurrently with the kernel bundle and sandbox base
-preparation. Both must finish successfully before the kernel upload begins; a
-failure waits for the other work and refuses the kernel upload. The pinned
-Wrangler bundles once, including node compatibility code and source maps; the
-upload reads those generated modules without bundling again.
+their deploys run concurrently with the kernel bundle. Both must finish
+successfully before the kernel upload begins; a failure waits for the other work
+and refuses the kernel upload. The pinned Wrangler bundles once, including node
+compatibility code and source maps; the upload reads those generated modules
+without bundling again.
+
+The kernel activates that bundle with `--containers-rollout=none` before any
+sandbox image work. It then prepares the sandbox base and deploys the same
+bundle with the configured container rollout, building and pushing the CLI image
+into the live container application. An image failure fails the build while the
+first Worker activation keeps serving. An explicit `--containers-rollout=none`
+deploy performs only the first activation. Production finishes both activations
+before staging begins. Both versions carry the same commit: default rollback
+selects the previous distinct commit, and deploy timing measures the first
+activation even when the second is serving.
 
 Never `wrangler deploy` by hand. Both tasks go through `wrangler.ts`, which runs
 `npm ci` when `node_modules` is behind `package-lock.json` — wrangler bundles
@@ -97,27 +107,27 @@ timestamps. An empty cache installs normally. Deploy mode generates web assets
 and the compiler catalog together with npm readiness. The kernel and outbound
 bundles and the deploy pre-flight check (`superseded`) start once npm is ready;
 the compiler bundle also waits for its catalog. Uploads wait for all generated
-files and the guard. Sandbox base preparation and each changed sibling's upload
-run as their own preparation allows. The kernel uploads after all succeed. Each
-sibling is bundled locally and compared with its fully serving deployment's
-`inputs:<sha256>` annotation. When the deployment summary truncates that
-annotation, the comparison reads the full annotation from its sole serving
-version. The digest covers every upload module, the inputs of each container
-image the sibling runs (its Dockerfile and every file of its build context,
-`wrangler.ts` `images`), its configuration, Wrangler pin and environment. A
-matching sibling stays serving without another upload; changed inputs, an
-unreadable deployment or a release without the annotation upload normally. The
-compiler image has its own `inputs:<sha256>` registry tag, covering its
-Dockerfile and build context. A changed Worker or toolkit catalog reuses that
-image; only a missing image tag builds and pushes it. A changed sibling uploads
-its prepared modules and source maps through a temporary config beside the
-original, preserving its bindings and naming the registry image. Wrangler
-bundles no second time and rolls the image out without rebuilding it. Registry,
-build or push failures refuse the sibling and kernel deploy. Workers Builds has
-Docker, as the sandbox image already needs. `bin/build-yak` with no argument
-still runs the check and the workers tests by hand. A push's build that fails is
-started once more through the `BUILD_HOOK` deploy hook (builds.ts), since most
-failures are the network's; the second build's failure stands.
+files and the guard. Each changed sibling's upload runs as its own preparation
+allows. The kernel activates after all succeed, then prepares its sandbox base
+and updates its image. Each sibling is bundled locally and compared with its
+fully serving deployment's `inputs:<sha256>` annotation. When the deployment
+summary truncates that annotation, the comparison reads the full annotation from
+its sole serving version. The digest covers every upload module, the inputs of
+each container image the sibling runs (its Dockerfile and every file of its
+build context, `wrangler.ts` `images`), its configuration, Wrangler pin and
+environment. A matching sibling stays serving without another upload; changed
+inputs, an unreadable deployment or a release without the annotation upload
+normally. The compiler image has its own `inputs:<sha256>` registry tag,
+covering its Dockerfile and build context. A changed Worker or toolkit catalog
+reuses that image; only a missing image tag builds and pushes it. A changed
+sibling uploads its prepared modules and source maps through a temporary config
+beside the original, preserving its bindings and naming the registry image.
+Wrangler bundles no second time and rolls the image out without rebuilding it.
+Registry, build or push failures refuse the sibling and kernel deploy. Workers
+Builds has Docker, as the sandbox image already needs. `bin/build-yak` with no
+argument still runs the check and the workers tests by hand. A push's build that
+fails is started once more through the `BUILD_HOOK` deploy hook (builds.ts),
+since most failures are the network's; the second build's failure stands.
 
 Builds run on watched-path pushes and finish in any order, so the deploy door
 (`wrangler.ts` `superseded`) deploys a commit only while no later commit changes

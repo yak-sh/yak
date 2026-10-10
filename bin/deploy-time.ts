@@ -37,6 +37,15 @@ type Run = {
 }
 type Push = { pushed: string; pushSource: string }
 
+let commit = (v: Version) =>
+  v.annotations?.['workers/message']?.match(
+    /^([a-f\d]{7,40})(?:\s|$)/i,
+  )?.[1].toLowerCase()
+let names = (v: Version, sha: string) => {
+  let named = commit(v)
+  return named != null && sha.toLowerCase().startsWith(named)
+}
+
 export let pushTime = (
   sha: string,
   events: Event[],
@@ -75,12 +84,7 @@ export let versionFor = (sha: string, pushed: string, versions: Version[]) => {
     .sort((a, b) =>
       Date.parse(a.metadata.created_on) - Date.parse(b.metadata.created_on)
     )
-  let named = later.find((v) => {
-    let name = v.annotations?.['workers/message']?.match(
-      /^([a-f\d]{7,40})(?:\s|$)/i,
-    )?.[1]
-    return name && sha.startsWith(name)
-  })
+  let named = later.find((v) => names(v, sha))
   if (named) return { version: named, estimated: false }
   // A version naming another commit is evidence against a time-based match.
   let nearest = later.find((v) => !v.annotations?.['workers/message'])
@@ -150,6 +154,8 @@ export let observe = async (
   backfill = false,
   {
     check = probe,
+    sha = commit(version),
+    related = (): Promise<Version[]> => Promise.resolve([]),
     history = () =>
       command(
         WRANGLER[0],
@@ -160,9 +166,21 @@ export let observe = async (
     wait = pause,
   } = {},
 ) => {
-  let problem = await check(version.id)
-  if (!problem) {
-    // A late recorder verifies serving, but history owns the activation time.
+  let serving = async () => {
+    let problem = await check(version.id)
+    if (!problem) return { problem, sibling: false }
+    if (sha && names(version, sha)) {
+      for (let v of await related()) {
+        if (v.id != version.id && names(v, sha) && !await check(v.id)) {
+          return { problem: null, sibling: true }
+        }
+      }
+    }
+    return { problem, sibling: false }
+  }
+  let activation = async () => {
+    // A late recorder or a serving sibling verifies the commit, but only
+    // retained history proves when its earliest version first became active.
     let first = deploymentsFor(
       version.id,
       rowsIn<Deployment>(await history(), 'deployments'),
@@ -170,18 +188,26 @@ export let observe = async (
     if (!first || !Number.isFinite(Date.parse(first))) {
       throw new Error(`no deployment time for serving version ${version.id}`)
     }
-    let live = new Date(Math.max(
+    return new Date(Math.max(
       Date.parse(version.metadata.created_on),
       Date.parse(first),
     )).toISOString()
-    return { live, problem }
   }
+  let result = await serving()
+  if (!result.problem) return { live: await activation(), problem: null }
   let due = now() + 120_000
-  while (!backfill && problem && now() < due) {
+  while (!backfill && result.problem && now() < due) {
     await wait()
-    problem = await check(version.id)
+    result = await serving()
   }
-  return { live: problem ? null : new Date(now()).toISOString(), problem }
+  return {
+    live: result.problem
+      ? null
+      : result.sibling
+      ? await activation()
+      : new Date(now()).toISOString(),
+    problem: result.problem,
+  }
 }
 
 // In the gate the recorder measures the commit under test, and the row lives
@@ -327,7 +353,10 @@ export let main = async (args = Deno.args) => {
       )
       continue
     }
-    let { live, problem } = await observe(match.version, backfill)
+    let { live, problem } = await observe(match.version, backfill, {
+      sha,
+      related: versions,
+    })
     let row: Deploy = {
       sha,
       ...push,

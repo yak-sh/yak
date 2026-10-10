@@ -373,15 +373,28 @@ export let deploys = async (
   return boundaries(rows, floor)
 }
 
-export let rollbackTarget = (rows: Deploy[], want?: string): Deploy => {
+// Both activations of a two-phase deploy carry the same source commit. Keep
+// versions addressable, but default rollback must leave that commit entirely.
+let previous = (rows: Deploy[]): Deploy[] => {
+  let source = (r: Deploy) => r.commit?.sha ?? r.id
+  let latest = (a: Deploy, b: Deploy) =>
+    Date.parse(b.created) - Date.parse(a.created)
+  let current = rows.filter((r) => r.live).sort(latest)[0]
   let prior = rows.filter((r) => (r.prior ?? 0) > 0)
-  let found = want
-    ? rows.filter((r) => r.id.startsWith(want))
-    : prior.length
-    ? prior
-    : rows.filter((r) => r.first && !r.live).sort((a, b) =>
-      Date.parse(b.last!) - Date.parse(a.last!)
-    ).slice(0, 1)
+  // A prior gradual deployment across distinct commits still needs the owner
+  // to choose which source to restore.
+  if (new Set(prior.map(source)).size > 1) return prior
+  if (prior.length && (!current || source(prior[0]) != source(current))) {
+    return prior.sort(latest).slice(0, 1)
+  }
+  return rows.filter((r) =>
+    r.first && !r.live && (!current || source(r) != source(current))
+  ).sort((a, b) => Date.parse(b.last!) - Date.parse(a.last!) || latest(a, b))
+    .slice(0, 1)
+}
+
+export let rollbackTarget = (rows: Deploy[], want?: string): Deploy => {
+  let found = want ? rows.filter((r) => r.id.startsWith(want)) : previous(rows)
   if (found.length != 1) {
     throw new Refused(
       `rollback target ${

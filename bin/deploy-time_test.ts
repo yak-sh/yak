@@ -1,5 +1,5 @@
 import { test } from '@yaks/testing'
-import { assertEquals, assertThrows } from '@std/assert'
+import { assertEquals, assertRejects, assertThrows } from '@std/assert'
 import {
   append,
   built,
@@ -47,6 +47,10 @@ test('deploy time: an annotation outranks nearest time; unannotated fallback is 
   assertEquals(versionFor(SHA, PUSHED, [version(-1)]), null)
   let short = version(25, `${SHA.slice(0, 8)} subject`)
   assertEquals(versionFor(SHA, PUSHED, [short])?.estimated, false)
+  assertEquals(
+    versionFor(SHA, PUSHED, [version(90, `${SHA} images`), named])?.version,
+    named,
+  )
 })
 
 test('deploy time: use push event, then check-suite, then original gate creation', () => {
@@ -196,6 +200,98 @@ test('deploy time: a later successful probe stamps its own clock', async () => {
   })
   assertEquals(attempts, 2)
   assertEquals(result, { live: version(31).metadata.created_on, problem: null })
+})
+
+test('deploy time: a serving same-commit sibling verifies the earliest activation', async () => {
+  let uploaded = { ...version(20, `${SHA} worker`), id: ID }
+  let sibling = version(80, `${SHA.slice(0, 8)} images`)
+  let checked: string[] = []
+  let result = await observe(uploaded, false, {
+    sha: SHA,
+    check: (id) => {
+      checked.push(id)
+      return Promise.resolve(id == sibling.id ? null : 'inactive version')
+    },
+    related: () => Promise.resolve([sibling]),
+    now: () => Date.parse(PUSHED) + 100_000,
+    wait: () => {
+      throw new Error('already serving commit must not wait')
+    },
+    history: () =>
+      Promise.resolve([
+        {
+          id: 'images',
+          created_on: version(85).metadata.created_on,
+          versions: [{ version_id: sibling.id, percentage: 100 }],
+        },
+        {
+          id: 'worker',
+          created_on: version(25).metadata.created_on,
+          versions: [{ version_id: ID, percentage: 100 }],
+        },
+      ]),
+  })
+  assertEquals(checked, [ID, sibling.id])
+  assertEquals(result, { live: version(25).metadata.created_on, problem: null })
+})
+
+test('deploy time: sibling serving cannot invent a missing earliest activation', async () => {
+  let uploaded = { ...version(20, `${SHA} worker`), id: ID }
+  let sibling = version(80, `${SHA} images`)
+  await assertRejects(
+    () =>
+      observe(uploaded, true, {
+        check: (id) =>
+          Promise.resolve(id == sibling.id ? null : 'inactive version'),
+        related: () => Promise.resolve([sibling]),
+        history: () =>
+          Promise.resolve([
+            {
+              id: 'images',
+              created_on: version(85).metadata.created_on,
+              versions: [{ version_id: sibling.id, percentage: 100 }],
+            },
+          ]),
+      }),
+    Error,
+    `no deployment time for serving version ${ID}`,
+  )
+})
+
+test('deploy time: an unrelated or unnamed serving version cannot verify the commit', async () => {
+  let uploaded = { ...version(20, `${SHA} worker`), id: ID }
+  let checked: string[] = []
+  let result = await observe(uploaded, true, {
+    check: (id) => {
+      checked.push(id)
+      return Promise.resolve(id == ID ? 'inactive version' : null)
+    },
+    related: () =>
+      Promise.resolve([
+        version(80, `${'b'.repeat(40)} different`),
+        version(90),
+      ]),
+    history: () => {
+      throw new Error('unverified serving must not use history')
+    },
+  })
+  assertEquals(checked, [ID])
+  assertEquals(result, { live: null, problem: 'inactive version' })
+})
+
+test('deploy time: a commit annotation cannot verify an inferred earliest version', async () => {
+  let uploaded = { ...version(20), id: ID }
+  let checked: string[] = []
+  let result = await observe(uploaded, true, {
+    sha: SHA,
+    check: (id) => {
+      checked.push(id)
+      return Promise.resolve(id == ID ? 'inactive version' : null)
+    },
+    related: () => Promise.resolve([version(80, `${SHA} images`)]),
+  })
+  assertEquals(checked, [ID])
+  assertEquals(result, { live: null, problem: 'inactive version' })
 })
 
 let deploy = (n: number, seconds: number): Deploy => {
