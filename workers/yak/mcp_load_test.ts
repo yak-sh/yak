@@ -604,10 +604,11 @@ test('an app says what it holds, and keeps notes about itself', async () => {
 
     // Until she installs it. The notes are one of the app's files, so a copy
     // carries them — the publisher's notes, in her own copy, hers to rewrite.
-    await agent.tool('app_publish', { space, app: 'recipes', name: 'grams' })
+    let offer = `grams-${crypto.randomUUID().slice(0, 8)}`
+    await agent.tool('app_publish', { space, app: 'recipes', name: offer })
     assertStringIncludes(
-      await maya.tool('app_install', { name: 'grams' }),
-      'installed grams v1 as',
+      await maya.tool('app_install', { name: offer }),
+      `installed ${offer} v1 as`,
     )
     assertStringIncludes(
       await maya.tool('app_files', {
@@ -636,11 +637,12 @@ test('space_sell connects an account and hands back one link', async () => {
   let price = await plusPrice(key)
   let k = await kernel()
   try {
-    let { cookie, eids } = await seed(k, [{ slug: 'ada39', apps: ['shop'] }])
+    let space = `ada39-${crypto.randomUUID().slice(0, 8)}`
+    let { cookie, eids } = await seed(k, [{ slug: space, apps: ['shop'] }])
     let agent = connector(k, cookie)
     // Selling has its own account page; the library links to it. The form's
     // action and next step must follow the account through all three states.
-    let path = managePath('selling', 'ada39')
+    let path = managePath('selling', space)
     let page = async (button: string, value = 'start') => {
       let r = await k.at('yaks.app', path, { headers: { cookie } })
       assertEquals(r.status, 200)
@@ -657,7 +659,7 @@ test('space_sell connects an account and hands back one link', async () => {
         button,
       )
     }
-    let library = await k.at('yaks.app', managePath('apps', 'ada39'), {
+    let library = await k.at('yaks.app', managePath('apps', space), {
       headers: { cookie },
     })
     assertStringIncludes(await library.text(), `href="${path}"`)
@@ -674,7 +676,7 @@ test('space_sell connects an account and hands back one link', async () => {
     }
     await freePage()
     await assertRejects(
-      () => agent.tool('space_sell', { space: 'ada39' }),
+      () => agent.tool('space_sell', { space: space }),
       Error,
       'Plus',
     )
@@ -719,22 +721,22 @@ test('space_sell connects an account and hands back one link', async () => {
       success_url: string
       cancel_url: string
     }
-    assertEquals(purchase.metadata.space, eids.ada39)
+    assertEquals(purchase.metadata.space, eids[space])
     assertEquals(purchase.line_items.data[0].price.id, price)
     // Checkout started from a space's page hands the person back to that
     // space's plan settings, not to the apex connector (billing.ts `checkout`).
     assertEquals(
       purchase.success_url,
-      `https://yaks.app${managePath('billing', 'ada39')}&paid=1`,
+      `https://yaks.app${managePath('billing', space)}&paid=1`,
     )
     assertEquals(
       purchase.cancel_url,
-      `https://yaks.app${managePath('billing', 'ada39')}&paid=0`,
+      `https://yaks.app${managePath('billing', space)}&paid=0`,
     )
     // Plus is what selling asks for, not this test's subject, so the space is
     // moved onto it by the webhook the way onPlus does — carrying a fabricated
     // subscription the door reads whole — and cancelled the same way below.
-    let sub = fakeSub(eids.ada39)
+    let sub = fakeSub(eids[space])
     await delivered(
       k,
       '/stripe/webhook',
@@ -750,14 +752,14 @@ test('space_sell connects an account and hands back one link', async () => {
     // The tool hands back one link and says to stop there — an assistant that
     // kept going would be an assistant clicking through somebody's identity
     // form.
-    let said = await agent.tool('space_sell', { space: 'ada39' })
+    let said = await agent.tool('space_sell', { space: space })
     assertStringIncludes(said, 'https://connect.stripe.com/')
     assertStringIncludes(said, 'They are the merchant')
 
     // The account Stripe now holds is the charge-merchants-directly model, and
     // it names the space so an account read back at Stripe says whose it is.
     let seller = async () =>
-      ((await meta(k).query(`id=${eids.ada39}`))[0] as {
+      ((await meta(k).query(`id=${eids[space]}`))[0] as {
         stripe?: { account: string }
       }).stripe?.account
     let acct = await seller()
@@ -778,7 +780,7 @@ test('space_sell connects an account and hands back one link', async () => {
     assertEquals(made.controller.losses.payments, 'stripe')
     assertEquals(made.controller.stripe_dashboard.type, 'full')
     assertEquals(made.controller.requirement_collection, 'stripe')
-    assertEquals(made.metadata.slug, 'ada39')
+    assertEquals(made.metadata.slug, space)
 
     // The page now reads mid-setup, and does not offer the first step again.
     await page('Continue setup')
@@ -794,12 +796,12 @@ test('space_sell connects an account and hands back one link', async () => {
       { ...made, charges_enabled: true, details_submitted: true },
       acct,
     )
-    assertEquals(JSON.parse(ready).did, 'ada39 can sell')
+    assertEquals(JSON.parse(ready).did, `${space} can sell`)
 
     // The page says so, and the tool stops offering a link nobody needs.
     await page('Disconnect Stripe', 'stop')
     assertStringIncludes(
-      await agent.tool('space_sell', { space: 'ada39' }),
+      await agent.tool('space_sell', { space: space }),
       'already selling',
     )
     assertEquals(await seller(), acct, 'one account, ever')
@@ -819,7 +821,7 @@ test('space_sell connects an account and hands back one link', async () => {
     await freePage()
     await page('Disconnect Stripe', 'stop')
     await assertRejects(
-      () => agent.tool('space_sell', { space: 'ada39' }),
+      () => agent.tool('space_sell', { space: space }),
       Error,
       'Plus',
     )
@@ -827,7 +829,7 @@ test('space_sell connects an account and hands back one link', async () => {
     // Stopping is the platform forgetting, never Stripe deleting: the account
     // is the merchant's own.
     assertStringIncludes(
-      await agent.tool('space_sell', { space: 'ada39', disconnect: true }),
+      await agent.tool('space_sell', { space: space, disconnect: true }),
       'Their Stripe account is untouched',
     )
     await freePage()
@@ -835,9 +837,9 @@ test('space_sell connects an account and hands back one link', async () => {
     // And nobody but the owner may connect a space to a bank account.
     let stranger = connector(k, (await signIn(k)).cookie)
     await assertRejects(
-      () => stranger.tool('space_sell', { space: 'ada39' }),
+      () => stranger.tool('space_sell', { space: space }),
       Error,
-      'ada39',
+      space,
     )
   } finally {
     await k.stop()
