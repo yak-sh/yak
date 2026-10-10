@@ -25,8 +25,14 @@ let bug = (eid = crypto.randomUUID()): Bundle => ({
 // intake and the generic mark rules; these cases exercise the handler's writes.
 let put = (g: Graph, rows: Bundle[]) =>
   g.apply(rows, { trusted: true, stamp: false })
+let handlers = new WeakMap<Graph, ReturnType<typeof effects>>()
+let handler = (g: Graph) => {
+  let found = handlers.get(g)
+  if (!found) handlers.set(g, found = effects({ graph: g }, options))
+  return found
+}
 let replay = (g: Graph, row: Bundle, name = 'bug') =>
-  effects({ graph: g }, options).bug_notify(
+  handler(g).bug_notify(
     {
       entity: row.entity,
       name,
@@ -42,11 +48,15 @@ let check = (name: string, run: (g: Graph) => Promise<void>) => {
   test(name, () => run(g))
 }
 
-check(
+let opening = fixture()
+let first = bug(), second = bug()
+await put(opening, [first, second])
+handler(opening)
+
+test(
   'two bugs opening in one minute each get an immediate letter',
-  async (g) => {
-    let a = bug(), b = bug()
-    await put(g, [a, b])
+  async () => {
+    let g = opening, a = first, b = second
     await Promise.all([replay(g, a), replay(g, b)])
     let mail = await g.read('.mail')
     equal(mail.length, 2)
