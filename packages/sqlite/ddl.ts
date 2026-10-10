@@ -68,6 +68,7 @@ import {
 import { checks, objects, type Stood, stood } from './physical.ts'
 import { unit } from './unit.ts'
 import { busy } from './error.ts'
+import { versioned } from './versions.ts'
 
 import { META, tables } from './layout.ts'
 export { META, tables } from './layout.ts'
@@ -307,6 +308,7 @@ export let tabled = (vocab: Vocab, derived: Derived = {}): Stmt[] => [
 let spine = (vocab: Vocab): Stmt[] => [
   ...SPINE,
   ...tables(vocab).map((name) => tableDdl(vocab, name)),
+  ...vocab.comp('archetype') ? versioned('archetype') : [],
 ]
 
 // Whether the file's view already says what `make` says. SQLite keeps a

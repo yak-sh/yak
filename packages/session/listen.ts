@@ -52,6 +52,7 @@ import {
   type Clause,
   eq,
   every,
+  fields,
   type Input,
   list,
   present,
@@ -142,7 +143,9 @@ export let worksFor = async (
 ): Promise<Eid[]> => {
   let persona = str(comp(s, SESSION).persona)
   if (!persona || !graph.vocab.prop('persona', 'home')) return []
-  let [worn] = await graph.get([persona])
+  let [worn] = await graph.read(
+    and(eq('entity.eid', persona), fields('persona.home')),
+  )
   let home = str(comp(worn, 'persona').home)
   return home ? await family(graph, home, '->') : []
 }
@@ -187,12 +190,17 @@ export let held = async (
   if (!replies.length) return []
   let to = (b: Bundle) => str(comp(b, 'mail').reply_to)
   let writer = new Map(
-    (await graph.get([...new Set(replies.map(to))]))
+    (await graph.get([...new Set(replies.map(to))], ['created']))
       .map((b) => [b.entity.eid, str(comp(b, 'created').via)]),
   )
   let others = [...new Set(writer.values())].filter((w) => w && w != session)
   let gone = new Set<Eid>()
-  for (let s of await graph.get(others)) {
+  let sessions = others.length
+    ? await graph.read(
+      and(eq('entity.eid', value(others)), fields('session.ended')),
+    )
+    : []
+  for (let s of sessions) {
     if (await over(graph, s)) gone.add(s.entity.eid)
   }
   return replies.filter((b) => gone.has(writer.get(to(b)) ?? ''))
@@ -249,8 +257,13 @@ export let pending = async (
   let vocab = graph.vocab
   // A comment stays a thread message: the bus never feeds one to a native
   // transcript. An outside harness claiming work retains its listener exception.
-  let [owner] = await graph.get([session])
-  let native = !owner?.process &&
+  let [owner] = await graph.read(
+    and(eq('entity.eid', session), fields('session.persona')),
+  )
+  let [process] = vocab.comp('process')
+    ? await graph.get([session], ['process'])
+    : []
+  let native = !process?.process &&
     (await graph.read(`.entry.session=${session}&.using&.limit=1`)).length > 0
   let seen = new Set<string>()
   let items: Bundle[] = []

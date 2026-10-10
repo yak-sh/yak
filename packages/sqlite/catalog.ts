@@ -13,12 +13,15 @@ import {
   val,
 } from '@yaks/sql/core'
 import { revision } from '@yaks/sql/core'
+import { tableVersion } from './versions.ts'
 
 let caches = new WeakMap<Driver, {
   sets: Archetypes
   text: Map<string, Archetype>
   // The last snapshot and the catalog version it was read at (below).
   descriptorVersion?: number
+  tableVersion?: string
+  schemaVersion?: number
   descriptors?: ArchetypeSet
   ids?: Map<string, number>
   version?: number
@@ -64,17 +67,30 @@ function snapshot(driver: Driver): ArchetypeSet | undefined {
   }
   let version = revision(driver, 'descriptors')
   if (cache.descriptorVersion != version || !cache.descriptors) {
-    let ids = new Map<string, number>()
-    let all = select({
-      cols: [col('entity'), col('tables')],
-      from: table('archetype'),
-    })
-    for (let row of driver.query(all)) {
-      let a = descriptor(driver, String(row.tables))
-      ids.set(a.eid, Number(row.entity))
+    // SQLite's data_version hears every peer commit. The table's own clock
+    // distinguishes a changed descriptor from an unrelated graph write,
+    // without rereading the entire catalog. Schema changes still invalidate
+    // it, even when a table or its triggers were replaced outside the graph.
+    let clock = tableVersion(driver, 'archetype')
+    let schema = revision(driver, 'schema')
+    if (
+      !cache.descriptors || clock === undefined ||
+      cache.tableVersion != clock || cache.schemaVersion != schema
+    ) {
+      let ids = new Map<string, number>()
+      let all = select({
+        cols: [col('entity'), col('tables')],
+        from: table('archetype'),
+      })
+      for (let row of driver.query(all)) {
+        let a = descriptor(driver, String(row.tables))
+        ids.set(a.eid, Number(row.entity))
+      }
+      cache.descriptors = archetypeSet(cache.sets, ids)
+      cache.ids = ids
     }
-    cache.descriptors = archetypeSet(cache.sets, ids)
-    cache.ids = ids
+    cache.tableVersion = clock
+    cache.schemaVersion = schema
     cache.descriptorVersion = version
   }
 
@@ -101,6 +117,7 @@ export function described(
   }
   cache.descriptors = archetypeSet(cache.sets, cache.ids)
   cache.descriptorVersion = revision(driver, 'descriptors')
+  cache.tableVersion = tableVersion(driver, 'archetype')
   if (cache.set == was) cache.set = cache.descriptors
 }
 
