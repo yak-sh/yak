@@ -89,7 +89,7 @@ import {
   reclassify,
 } from './archetype.ts'
 import { componentTables, shape } from './physical.ts'
-import { patch, remove, revive } from './write.ts'
+import { births, patch, remove, revive } from './write.ts'
 import { bindings } from './rules.ts'
 import { basis, memoized } from './memo.ts'
 import { revision } from '@yaks/sql'
@@ -477,6 +477,9 @@ export let storage = (
   // entity holds rather than what its pointer said before they began.
   let tracked = (): { tx: Tx; settle: () => void; close: () => void } => {
     let l = ledger()
+    // A birth is minted in the class its shape last finished in, and its
+    // pointer is written again only where it finishes elsewhere.
+    let born = births(driver)
     let open = ledgers.get(driver) ?? []
     ledgers.set(driver, open)
     open.push(l)
@@ -535,7 +538,7 @@ export let storage = (
           )
         },
         patch: (bundles) => {
-          let born = memo.patch(
+          let minted = memo.patch(
             bundles,
             (known) =>
               patch(
@@ -546,13 +549,14 @@ export let storage = (
                 base.adopt,
                 l.moved,
                 known,
+                born,
               ),
           )
-          for (let e of born) l.born(e.eid)
+          for (let e of minted) l.born(e.eid)
           for (let b of bundles) {
             if (b.entity.archetype !== undefined) l.pointed(b.entity.eid)
           }
-          return born
+          return minted
         },
         remove: (entities) => {
           let eids = entities.map((e) => e.eid)

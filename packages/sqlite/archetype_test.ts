@@ -496,6 +496,22 @@ test('archetype: stamps join the final set and value-only writes do not assign a
   assertEquals(updates(), 2)
   g.apply([{ entity: { eid: 'a' }, task: null, link: { to: 'b' } }])
   assertEquals(updates(), 3)
+  // A birth in a shape seen finishing is minted in the class it finished in,
+  // and one finishing elsewhere is pointed where it did.
+  let born = (eid: string, opts = {}) => {
+    let was = pointed.length
+    g.apply([{ entity: { eid }, doc: { title: eid }, task: {} }], opts)
+    return [
+      s.tx((tx) => tx.get([eid]))[0].entity.archetype,
+      pointed.length - was,
+    ]
+  }
+  let stamped = eidOf(['doc', 'task', 'created'])
+  assertEquals(born('c'), [stamped, 0])
+  let unstamped = born('d', { stamp: false, trusted: true })
+  assertEquals(unstamped, [eidOf(['doc', 'task']), 1])
+  assertEquals(born('e'), [stamped, 1])
+  assertEquals(born('f'), [stamped, 0])
 })
 
 test('archetype: backfill classifies a future descriptor stub in either order', () => {

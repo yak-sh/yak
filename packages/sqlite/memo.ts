@@ -19,6 +19,12 @@
 // write that names its entities (`writes`), which lets just theirs go; those
 // kept during a transaction go if it rolls back.
 //
+// So are the classes births finish in (`classed`): the archetype an entity
+// first written holding some tables was pointed at by the end of its
+// transaction, so the next birth of that shape is minted in it (./write.ts
+// `Births`). A class learned while a transaction is open goes if it rolls
+// back, since the descriptor it names may go with it.
+//
 // A query's rows are kept too, once it is asked again, while no table its
 // answer stands on has been written (`answer`, `basis`): a page walking back
 // over tiles it has watched asks them again for nothing while nobody has
@@ -114,7 +120,7 @@ export type Spines = {
   learn: (eid: string, spine: Spine) => void
 }
 
-const COUNT = 2048, BYTES = 4 << 20, SPINES = 8192
+const COUNT = 2048, BYTES = 4 << 20, SPINES = 8192, CLASSES = 256
 // A read of more entities than this is a scan: what it reads is not kept, so
 // it does not push out what is read again and again.
 const SCAN = COUNT / 4
@@ -286,6 +292,12 @@ type Connection = {
   answered: [Map<string, Answer>, string][]
   /** the `outside` revision the spines were kept at */
   outside: number
+  /** the class a birth's opening shape last finished in, by shape */
+  classes: Map<string, number>
+  /** shapes whose class was learned while a transaction is open */
+  learned: Set<string>
+  /** the `outside` revision the classes were learned at */
+  classedAt: number
 }
 
 // By connection (@yaks/sql `Driver.connection`): every driver speaking
@@ -313,6 +325,9 @@ let opened = (): Connection => ({
   spines: new Map(),
   since: new Set(),
   outside: -1,
+  classes: new Map(),
+  learned: new Set(),
+  classedAt: -1,
   versions: new Map(),
   shifts: 0,
   answered: [],
@@ -325,6 +340,8 @@ let tell = (driver: Driver, c: Connection) => {
   let undone = () => {
     for (let eid of c.since) c.spines.delete(eid)
     c.since.clear()
+    for (let shape of c.learned) c.classes.delete(shape)
+    c.learned.clear()
     for (let [answers, key] of c.answered) answers.delete(key)
     c.answered = []
     for (let k of c.kept) for (let eid of k.after.keys()) k.after.set(eid, LOST)
@@ -339,6 +356,7 @@ let tell = (driver: Driver, c: Connection) => {
     c.dirty.clear()
     c.blind = false
     c.since.clear()
+    c.learned.clear()
     c.answered = []
   }
   let bump = (table: string) =>
@@ -394,6 +412,8 @@ let tell = (driver: Driver, c: Connection) => {
     ) {
       forget()
       unspine()
+      c.classes.clear()
+      c.learned.clear()
       for (let k of c.kept) k.answers.clear()
     }
   }
@@ -463,6 +483,43 @@ export let spined = (driver: Driver): Spines => {
       return out
     },
     learn: (eid, spine) => keep(eid, { ...spine }),
+  }
+}
+
+/** The classes births finish in, kept for a connection (./write.ts `Births`). */
+export type Classes = {
+  /** The archetype's integer id a birth opening in `shape` last finished in. */
+  get: (shape: string) => number | undefined
+  /** A birth opening in `shape` finished in the archetype `id`. */
+  learn: (shape: string, id: number) => void
+}
+
+/** The classes kept for the connection `driver` is. */
+export let classed = (driver: Driver): Classes => {
+  let c = connect(driver)
+  // Another connection's commit or a schema change may have moved the file
+  // under what was learned.
+  let current = () => {
+    let now = revision(driver, 'outside')
+    if (now == c.classedAt) return
+    c.classes.clear()
+    c.learned.clear()
+    c.classedAt = now
+  }
+  return {
+    get: (shape) => {
+      current()
+      return c.classes.get(shape)
+    },
+    learn: (shape, id) => {
+      current()
+      c.classes.delete(shape)
+      c.classes.set(shape, id)
+      if (c.depth) c.learned.add(shape)
+      if (c.classes.size > CLASSES) {
+        c.classes.delete(c.classes.keys().next().value!)
+      }
+    },
   }
 }
 

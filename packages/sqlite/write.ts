@@ -76,7 +76,7 @@ import {
 } from '@yaks/sql'
 import { tables } from './ddl.ts'
 import { required } from './physical.ts'
-import { spined } from './memo.ts'
+import { classed, spined } from './memo.ts'
 import { isJsonb, jsonb, jsonIn } from './jsonb.ts'
 import { described, get, grave } from './read.ts'
 
@@ -190,13 +190,15 @@ let IDENTITY = [col('eid'), col('num')]
 export let mintSql = (
   eid: string,
   number: boolean | number = false,
+  archetype?: number,
 ): Insert => ({
   t: 'insert',
   into: 'entity',
-  cols: ['eid', 'num'],
+  cols: ['eid', 'num', ...archetype == null ? [] : ['archetype']],
   rows: [[
     val(eid),
     typeof number == 'number' ? val(number) : number ? next : lit(null),
+    ...archetype == null ? [] : [val(archetype)],
   ]],
   upsert: [{ on: [col('eid')] }],
   returning: IDENTITY,
@@ -472,6 +474,43 @@ let wears = (driver: Driver, tables: string[], eids: string[]): Set<string> => {
 }
 
 /**
+ * The classes a unit's births are minted in. An entity is first written in a
+ * shape (the tables its first patch gives it) and its unit points it at the
+ * class it finished in (@yaks/archetype's flush, after the stamps). Minted in
+ * that class from the start, its last pointer restates what its mint said and
+ * is not written: pointing an entity rewrites every index of its spine row,
+ * since the pointer is a key into the spine's own table. A birth of a shape
+ * not seen finishing yet, or one that finishes elsewhere, is pointed as before.
+ */
+export type Births = {
+  /** The archetype's integer id a birth opening holding `tables` is minted
+   * in, where one is known. */
+  class: (tables: string[]) => number | undefined
+  /** `eid` was minted holding `tables`, in the archetype `id` if it says one. */
+  born: (eid: string, tables: string[], id?: number) => void
+  /** `eid` is pointed at the archetype `id`: whether its mint said so. */
+  pointed: (eid: string, id: number) => boolean
+}
+
+/** One unit's {@link Births}, minted in what the connection learned. */
+export let births = (driver: Driver): Births => {
+  let classes = classed(driver)
+  let shape = (tables: string[]) => JSON.stringify([...new Set(tables)].sort())
+  let open = new Map<string, { shape: string; id?: number }>()
+  return {
+    class: (tables) => classes.get(shape(tables)),
+    born: (eid, tables, id) => void open.set(eid, { shape: shape(tables), id }),
+    pointed: (eid, id) => {
+      let birth = open.get(eid)
+      if (!birth) return false
+      open.delete(eid)
+      classes.learn(birth.shape, id)
+      return birth.id == id
+    },
+  }
+}
+
+/**
  * Patch a batch of bundles in, in order, and return the spines this patch
  * minted or numbered — each with the `num` it was given, as the statement
  * itself reported it. A bundle for a tombstoned entity is skipped: bringing
@@ -489,6 +528,10 @@ let wears = (driver: Driver, tables: string[], eids: string[]): Set<string> => {
  *
  * `had` is what memory says an entity held before this patch: a component
  * it does not hold is written in one statement, as a new entity's are.
+ *
+ * An entity minted here takes its pointer in its mint where one is known: the
+ * one its own bundle names, or the class `born` says its shape finishes in
+ * ({@link Births}). A pointer its mint already wrote is not written again.
  */
 export let patch = (
   driver: Driver,
@@ -498,6 +541,7 @@ export let patch = (
   adopt = false,
   moved?: Moved,
   had?: Known,
+  born?: Births,
 ): Entity[] => {
   // A computed component's rows are another package's (@yaks/sql `Backing`):
   // there is no table here to write one to.
@@ -580,13 +624,33 @@ export let patch = (
       : !stated.has(eid)
       ? true
       : stated.get(eid) ?? false
-  let born: Entity[] = []
+  // What the live bundles give each entity, and the pointer they name for
+  // it: what a mint is told it opens holding, and the class it may take.
+  let opening = new Map<string, string[]>()
+  let named = new Map<string, string>()
+  for (let b of alive) {
+    let eid = b.entity.eid
+    let held = opening.get(eid) ?? []
+    opening.set(eid, held)
+    for (let [name, comp] of comps(b)) if (comp != null) held.push(name)
+    if (b.entity.archetype) named.set(eid, b.entity.archetype)
+  }
+  // The pointer each mint wrote, so the bundle naming it writes it once.
+  let pointers = new Map<string, number>()
+  let made: Entity[] = []
   let seen = new Set(known.keys())
   for (let eid of touched(vocab, alive)) {
     if (seen.has(eid)) continue
     seen.add(eid)
+    let tables = opening.get(eid) ?? []
+    let to = named.get(eid)
+    let pointer = to == null
+      ? born?.class(tables)
+      : to == eid
+      ? undefined
+      : ids.get(to)
     let rows = driver.query({
-      ...mintSql(eid, own.has(eid) && take(eid)),
+      ...mintSql(eid, own.has(eid) && take(eid), pointer),
       returning: [...IDENTITY, col('id')],
     })
     let e = minted(rows)
@@ -598,8 +662,10 @@ export let patch = (
         num: rows[0].num == null ? null : Number(rows[0].num),
         dead: false,
       })
+      if (pointer != null) pointers.set(eid, pointer)
+      born?.born(eid, tables, pointer)
     }
-    if (e) born.push(e)
+    if (e) made.push(e)
   }
   // A spine an earlier reference minted is numbered now, if it still carries
   // nothing: an unnumbered entity that carries something was left unnumbered
@@ -613,7 +679,7 @@ export let patch = (
       let n = take(b.entity.eid)
       if (n === false || comps(b).length) continue
       let e = minted(driver.query(numberSql(b.entity.eid, n)))
-      if (e) born.push(e)
+      if (e) made.push(e)
     }
   }
 
@@ -633,7 +699,7 @@ export let patch = (
   // an entity lacks, so a whole one is one INSERT…ON CONFLICT and certainly a
   // row that came. Anywhere else a write's own count says whether a row came
   // or went: the UPDATE hit, or the absent INSERT or the drop did something.
-  let fresh = new Set(born.map((e) => e.eid))
+  let fresh = new Set(made.map((e) => e.eid))
   let lacks = (eid: string, name: string) =>
     fresh.has(eid) || had?.(eid, name) === false
   for (let b of alive) {
@@ -655,7 +721,12 @@ export let patch = (
   }
 
   // Metadata can classify a tombstone too; on its own it brings nothing back.
+  // A pointer this entity's mint already wrote is not written again.
   for (let b of bundles) {
+    let { eid, archetype } = b.entity
+    let to = archetype == null ? undefined : ids.get(archetype)
+    let said = to != null && born?.pointed(eid, to)
+    if (to != null && (said || pointers.get(eid) == to)) continue
     for (let s of archetypeSql(b, ids)) effect(driver, s)
   }
   // The descriptors written here are all that moved one, unless one went.
@@ -673,7 +744,7 @@ export let patch = (
       })),
     )
   }
-  return born
+  return made
 }
 
 // How many rows a write changed: the driver's own count where it keeps one,
