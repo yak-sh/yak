@@ -308,24 +308,71 @@ export let preflight = async <T extends { remove: () => void }>(
   }
 }
 
-/** Skip an upload only when the currently serving deployment carries the
- * digest of exactly these bundled modules and configuration. Old releases
- * without a digest, failed reads and split deployments always upload. */
-export let sameSibling = (digest: string, deployments: unknown): boolean => {
+type Deployment = {
+  created_on: string
+  versions: { version_id: string; percentage: number }[]
+  annotations?: Record<string, string>
+}
+
+let singleServing = (deployments: unknown): Deployment | undefined => {
   if (
     !Array.isArray(deployments) ||
     deployments.some((d) =>
       !d || typeof d != 'object' || !Number.isFinite(Date.parse(d.created_on))
     )
-  ) return false
+  ) return
   let latest =
     deployments.toSorted((a, b) =>
       Date.parse(b.created_on) - Date.parse(a.created_on)
     )[0]
-  return latest?.versions?.length == 1 &&
-    latest.versions[0].percentage == 100 &&
-    latest.annotations?.['workers/message']?.endsWith(`\ninputs:${digest}`) ===
-      true
+  return Array.isArray(latest?.versions) && latest.versions.length == 1 &&
+      latest.versions[0]?.percentage == 100
+    ? latest
+    : undefined
+}
+
+let annotation = (release: { annotations?: Record<string, string> } | null) => {
+  let message = release?.annotations?.['workers/message']
+  return typeof message == 'string' ? message : ''
+}
+let INPUTS = /\ninputs:[a-f0-9]{64}$/
+
+/** Skip an upload only when the single serving deployment carries the digest
+ * of these exact inputs. A version's full annotation can replace a truncated
+ * deployment summary only when it names that deployment's sole live version. */
+export let sameSibling = (
+  digest: string,
+  deployments: unknown,
+  version?: { id?: string; annotations?: Record<string, string> } | null,
+): boolean => {
+  let live = singleServing(deployments)
+  if (!live) return false
+  let message = annotation(live)
+  return message.endsWith(`\ninputs:${digest}`) ||
+    (!INPUTS.test(message) &&
+      typeof live.versions[0].version_id == 'string' &&
+      version?.id == live.versions[0].version_id &&
+      annotation(version ?? null).endsWith(`\ninputs:${digest}`))
+}
+
+/** Read the full annotation only when the single serving summary lacks it.
+ * An unavailable identity means upload, just as a changed identity does. */
+export let sameServing = async (
+  digest: string,
+  deployments: unknown,
+  read: (id: string) => Promise<Parameters<typeof sameSibling>[2]>,
+) => {
+  let version: Parameters<typeof sameSibling>[2]
+  let current = singleServing(deployments)
+  if (
+    current && typeof current.versions[0].version_id == 'string' &&
+    !INPUTS.test(annotation(current))
+  ) {
+    try {
+      version = await read(current.versions[0].version_id)
+    } catch { /* unread means upload */ }
+  }
+  return sameSibling(digest, deployments, version)
 }
 
 /** Wrangler's upload inputs, not source timestamps or the last main commit. */
@@ -535,8 +582,8 @@ export let prepareSibling = async (
       ),
     ])
     if (bundled.status == 'rejected') throw bundled.reason
-    if (serving.status == 'rejected') throw serving.reason
-    let built = bundled.value, live = serving.value
+    let built = bundled.value
+    let live = serving.status == 'fulfilled' ? serving.value : undefined
     if (!built.success) {
       console.error(new TextDecoder().decode(built.stderr))
       return { args, config, root, started, code: built.code, remove }
@@ -551,11 +598,6 @@ export let prepareSibling = async (
       }
     }
     Object.assign(modules, images(config, root))
-    console.log(
-      `${config}: bundled and read serving deployment in ${
-        ((performance.now() - started) / 1000).toFixed(3)
-      }s`,
-    )
     let digest = siblingDigest(
       JSON.stringify({
         config: Deno.readTextFileSync(join(root, config)),
@@ -570,11 +612,32 @@ export let prepareSibling = async (
     )
     let deployments: unknown
     try {
-      if (live.success) {
+      if (live?.success) {
         deployments = JSON.parse(new TextDecoder().decode(live.stdout))
       }
     } catch { /* unread means upload */ }
-    if (sameSibling(digest, deployments)) {
+    // Cloudflare may cut deployment messages to 50 characters; the full
+    // annotation remains on the sole serving version.
+    let same = await sameServing(digest, deployments, async (id) => {
+      let read = await query([
+        'versions',
+        'view',
+        id,
+        '-c',
+        config,
+        ...envs(args),
+        '--json',
+      ])
+      return read.success
+        ? JSON.parse(new TextDecoder().decode(read.stdout))
+        : null
+    })
+    console.log(
+      `${config}: bundled and read serving deployment in ${
+        ((performance.now() - started) / 1000).toFixed(3)
+      }s`,
+    )
+    if (same) {
       console.log(
         `${config}: unchanged bundled upload ${
           digest.slice(0, 12)

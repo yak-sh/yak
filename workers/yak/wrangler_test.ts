@@ -20,6 +20,7 @@ import {
   prepareSibling,
   readiness,
   runWrangler,
+  sameServing,
   sameSibling,
   seen,
   siblingDigest,
@@ -420,6 +421,69 @@ test('only the fully serving sibling with matching upload inputs is reusable', (
   )
 })
 
+test('sibling identity reads are optional and an unreadable version means upload', async () => {
+  let digest = 'a'.repeat(64)
+  let message = 'commit\ninputs:' + digest
+  let live = {
+    created_on: '2026-10-10T16:00:00Z',
+    versions: [{ version_id: 'v', percentage: 100 }],
+    annotations: { 'workers/message': message.slice(0, 20) },
+  }
+  for (
+    let version of [
+      { id: 'v', annotations: { 'workers/message': message } },
+      {
+        id: 'v',
+        annotations: { 'workers/message': 'commit\ninputs:' + 'b'.repeat(64) },
+      },
+      { id: 'other', annotations: { 'workers/message': message } },
+      { id: 'v' },
+      null,
+      Error('read failed'),
+    ]
+  ) {
+    let reads = 0
+    assertEquals(
+      await sameServing(digest, [live], (id) => {
+        reads++
+        assertEquals(id, 'v')
+        return version instanceof Error
+          ? Promise.reject(version)
+          : Promise.resolve(version)
+      }),
+      !(version instanceof Error) &&
+        version?.annotations?.['workers/message'] == message &&
+        version?.id == 'v',
+    )
+    assertEquals(reads, 1)
+  }
+  for (
+    let [deployments, expected] of [
+      [[{ ...live, annotations: { 'workers/message': message } }], true],
+      [[{
+        ...live,
+        annotations: { 'workers/message': 'commit\ninputs:' + 'b'.repeat(64) },
+      }], false],
+      [[{
+        ...live,
+        versions: [{ version_id: 'v', percentage: 50 }, {
+          version_id: 'v2',
+          percentage: 50,
+        }],
+      }], false],
+      [null, false],
+      [[], false],
+    ] as const
+  ) {
+    assertEquals(
+      await sameServing(digest, deployments, () => {
+        throw Error('complete or unavailable deployments need no version read')
+      }),
+      expected,
+    )
+  }
+})
+
 test('base preparation overlaps sibling uploads and gates the kernel', async () => {
   let base = Promise.withResolvers<string[]>(),
     sibling = Promise.withResolvers<number>()
@@ -729,6 +793,8 @@ let checkSiblingPreparation = async () => {
       'outbound/wrangler.toml',
     ]
     let live = '[]', digest = '', called = false
+    let version: Deno.CommandOutput | Error | undefined
+    let versionReads = 0
     let query = (argv: string[]) => {
       if (argv.includes('--dry-run')) {
         assert(argv.includes('--containers-rollout=none'))
@@ -737,6 +803,25 @@ let checkSiblingPreparation = async () => {
           Deno.writeTextFileSync(join(to, name), name)
         }
         return Promise.resolve(result())
+      }
+      if (argv[0] == 'versions') {
+        assertEquals(argv, [
+          'versions',
+          'view',
+          'v',
+          '-c',
+          'outbound/wrangler.toml',
+          '--env',
+          'staging',
+          '--json',
+        ])
+        versionReads++
+        if (version instanceof Error) return Promise.reject(version)
+        assert(
+          version,
+          'full deployment annotations need no extra version read',
+        )
+        return Promise.resolve(version)
       }
       assertEquals(argv, [
         'deployments',
@@ -816,6 +901,33 @@ let checkSiblingPreparation = async () => {
         0,
       )
       assertEquals(called, false)
+    } finally {
+      prepared.remove()
+    }
+    assertEquals(versionReads, 0)
+    live = JSON.stringify([{
+      created_on: '2026-10-10T16:00:00Z',
+      annotations: {
+        'workers/message': ('a'.repeat(40) + '\ninputs:' + digest).slice(0, 50),
+      },
+      versions: [{ version_id: 'v', percentage: 100 }],
+    }])
+    version = result(JSON.stringify({
+      id: 'v',
+      annotations: { 'workers/message': 'commit\ninputs:' + digest },
+    }))
+    prepared = await prepareSibling(args, [], root, query)
+    try {
+      let uploads = 0
+      assertEquals(
+        await uploadSibling(prepared, () => {
+          uploads++
+          return Promise.resolve(0)
+        }),
+        0,
+      )
+      assertEquals(uploads, 0)
+      assertEquals(versionReads, 1)
     } finally {
       prepared.remove()
     }
