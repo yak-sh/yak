@@ -19,7 +19,7 @@ import { toolsDoc } from '@yaks/tools/vocab'
 import { modelDoc } from '@yaks/model/vocab'
 import { sessionDoc } from './comp.ts'
 import { type SessionOpts, sessions } from './plugin.ts'
-import { statusOf } from './status.ts'
+import { statusOf } from './state.ts'
 
 let doc: VocabDoc = {
   $defs: {

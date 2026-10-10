@@ -34,7 +34,7 @@ import {
 } from '@yaks/inspect'
 import { SESSION } from './comp.ts'
 import { CALL, ENTRY, OUTPUT, RESULT } from './native.ts'
-import { kindOf, textOf } from './status.ts'
+import { kindOf, textOf } from './state.ts'
 
 /** Where an entry sits: its transcript, and its place in it. */
 export type At = { session: string; seq: number }

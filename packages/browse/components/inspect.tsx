@@ -172,9 +172,9 @@ export let adaptViews = (views: import('@yaks/inspect').View[]): Entry[] =>
     }))
 
 export let inspectViews: Entry[] = adaptViews([
-  ...memoryViews,
-  ...sessionViews,
-  ...taskViews,
+  ...await memoryViews(),
+  ...await sessionViews(),
+  ...await taskViews(),
   ...all,
 ].filter((r) =>
   (r.view != 'Inspect.Page' || schemaPages.includes(r)) &&
@@ -212,7 +212,11 @@ export type Facet = {
   views?: import('@yaks/render').Registry<
     Entry | import('@yaks/inspect').View
   >
-  inspectViews?: import('@yaks/inspect').View[]
+  inspectViews?:
+    | import('@yaks/inspect').View[]
+    | (() =>
+      | import('@yaks/inspect').View[]
+      | Promise<import('@yaks/inspect').View[]>)
   destinations?: import('../navigation.ts').Destination[]
   home?: Home
   tabs?: Offer[]
@@ -222,20 +226,23 @@ export type Facet = {
 /** Merge configured contributions without registering query-backed views as
  * native components. The same entry may be offered under both facet exports;
  * it is mounted once, through the query adapter. */
-export let contributedViews = (facets: Facet[]): Entry[] =>
-  facets.flatMap((f) => {
-    let adapted = new Set<unknown>(f.inspectViews)
+export let contributedViews = async (facets: Facet[]): Promise<Entry[]> =>
+  (await Promise.all(facets.map(async (f) => {
+    let views = typeof f.inspectViews == 'function'
+      ? await f.inspectViews()
+      : f.inspectViews ?? []
+    let adapted = new Set<unknown>(views)
     return [
-      ...adaptViews(f.inspectViews ?? []),
+      ...adaptViews(views),
       ...(f.views?.renderers ?? []).filter((r): r is Entry => !adapted.has(r)),
     ]
-  })
+  }))).flat()
 
 /** Take in what the configured packages offer, before the app paints: their
  * views, destinations, home page, tabs and glyphs. Every door does this the
  * same way. */
-export let contribute = (facets: Facet[]): void => {
-  extend(contributedViews(facets))
+export let contribute = async (facets: Facet[]): Promise<void> => {
+  extend(await contributedViews(facets))
   offerPlaces({
     home: facets.find((f) => f.home)?.home,
     tabs: facets.flatMap((f) => f.tabs ?? []),

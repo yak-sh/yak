@@ -60,7 +60,7 @@ import {
   statusEntries,
   type Step,
 } from './react.ts'
-import { seqOf, type TranscriptStatus, usingBefore } from './status.ts'
+import { seqOf, type TranscriptStatus, usingBefore } from './state.ts'
 
 /** What a host lends the runner: how a step is taken (./react.ts `Deps`), the
  * bound on children, and who is running it. */

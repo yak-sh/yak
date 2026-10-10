@@ -32,7 +32,7 @@ let runs = (() => {
   let s = ram(vocab, { number: true })
   let g = graph({ storage: s, vocab, plugins: [ids(vocab)] })
   g.apply([
-    { entity: { eid: 's1' }, session: { id: 'abc', actor: 'p1' } },
+    { entity: { eid: 's1' }, session: { id: 'abc', actor: 'p1', ended: true } },
     { entity: { eid: 's2' }, session: { id: 'def' } },
     { entity: { eid: 'p1' }, person: {} },
   ], { trusted: true })

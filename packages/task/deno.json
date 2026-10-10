@@ -6,6 +6,7 @@
     "./vocab": "./vocab.ts",
     "./graph": "./graph.ts",
     "./tools": "./tools.ts",
+    "./form": "./DecisionForm.ts",
     "./views": "./views.ts"
   },
   "license": "Apache-2.0",

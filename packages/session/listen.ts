@@ -60,7 +60,7 @@ import {
 import { safe } from '@yaks/text'
 import type { Vocab } from '@yaks/vocab'
 import { CLAIM, SESSION } from './comp.ts'
-import { statusOf } from './status.ts'
+import { statusOf } from './state.ts'
 
 let NOTIFIED = 'notified'
 

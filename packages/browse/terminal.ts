@@ -75,7 +75,7 @@ export let open = async (url: string, opts: {
     }
   }
   let facets = await opts.facets?.() ?? []
-  contribute(facets)
+  await contribute(facets)
   onMarkdown((text, repo, inline) =>
     h(Md, { text, repo: repo ?? undefined, inline })
   )

@@ -49,7 +49,7 @@ let facet: Facet = {
   icons: { lamp: [['circle', { cx: '12', cy: '12', r: '4' }]] },
 }
 
-let world = (offered: boolean) => {
+let world = async (offered: boolean) => {
   let prior = { renderers: registry.renderers, host: config.host }
   config.host = 'browser.test'
   let wire = host(() => ({ bundles: [] }))
@@ -68,7 +68,7 @@ let world = (offered: boolean) => {
   owner.value = OWNER
   waits = {}
   bindHistory(undefined)
-  if (offered) contribute([facet])
+  if (offered) await contribute([facet])
   return {
     wire,
     [Symbol.dispose]() {
@@ -86,7 +86,7 @@ let text = (root: Element, selector: string) =>
   [...root.querySelectorAll(selector)].map((n) => n.textContent)
 
 test('without an offered home page, / lists the host query and calls itself Home', async () => {
-  using w = world(false)
+  using w = await world(false)
   // A package declaring `subscription` is no home page.
   assertEquals(!!vocab.comp('subscription'), true)
   let seen = mount(h('div', {}, h(Navigation, {}), h(Page, { at: '/' })))
@@ -113,7 +113,7 @@ test('without an offered home page, / lists the host query and calls itself Home
 })
 
 test('an offered home page draws the owner at /, names the first place and wears what waits', async () => {
-  using w = world(true)
+  using w = await world(true)
   waits[OWNER] = 120
   let seen = mount(h('div', {}, h(Navigation, {}), h(Page, { at: '/' })))
   try {
@@ -147,7 +147,7 @@ test('an offered home page draws the owner at /, names the first place and wears
 })
 
 test('offered tabs come first on what they draw, wear what waits, and fill a cockpit cell', async () => {
-  using _ = world(true)
+  using _ = await world(true)
   waits[PROJECT] = 3
   assertEquals(applicable(ent(OWNER))[0], 'Desk')
   let tabs = applicable(ent(PROJECT))
@@ -179,8 +179,8 @@ test('offered tabs come first on what they draw, wear what waits, and fill a coc
   }
 })
 
-test('without the offering package, nothing is offered on what it would draw', () => {
-  using _ = world(false)
+test('without the offering package, nothing is offered on what it would draw', async () => {
+  using _ = await world(false)
   assertEquals(applicable(ent(PROJECT)).includes('Desk'), false)
   let cockpit = mount(h(Dashboard, { e: ent(PROJECT) }))
   try {

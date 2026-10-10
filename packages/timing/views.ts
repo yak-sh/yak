@@ -232,7 +232,8 @@ export let views: Registry = define([
   })),
 ])
 
-export { inspectViews } from './inspect.ts'
+export let inspectViews = () =>
+  import('./inspect.ts').then((m) => m.inspectViews)
 
 /** The page a browsing app's sidebar offers: every trace, newest first. */
 export let destinations = [

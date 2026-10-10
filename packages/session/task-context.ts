@@ -3,7 +3,7 @@
 
 import type { Bundle, Comp } from '@yaks/graph'
 import type { Item } from '@yaks/model'
-import { seqOf } from './status.ts'
+import { seqOf } from './state.ts'
 
 export type Tasks = Record<string, { title?: string; body?: string }>
 

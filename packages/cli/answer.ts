@@ -505,8 +505,12 @@ export let reported = async (
 ): Promise<{ views: Registry; vocab: Vocab }> => {
   let vocab = loadVocab([doc], understood())
   let plugins = vocab.all.flatMap((n) => vocab.comp(n)?.package ?? [])
+  let named = [...new Set(plugins)]
+  await subpaths(named.map((p) => [p, 'views'] as const)).catch((error) =>
+    elsewhere(error) ? null : Promise.reject(error)
+  )
   let views = await registry(
-    [...new Set(plugins)],
+    named,
     (plugin) =>
       subpath<{ views?: Registry }>(plugin, 'views').catch((error) =>
         elsewhere(error) ? null : Promise.reject(error)

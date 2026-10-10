@@ -4,4 +4,5 @@
 // entry and a session (./inspect.ts).
 
 export { sessionViews as views } from './lines.ts'
-export { inspectViews } from './inspect.ts'
+export let inspectViews = () =>
+  import('./inspect.ts').then((m) => m.inspectViews)

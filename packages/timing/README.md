@@ -305,7 +305,7 @@ import { inspectViews } from '@yaks/timing/views'
 import { equal, ok } from '@yaks/testing'
 
 let page = ok(
-  inspectViews.find((v) => v.view === 'Full' && v.asks),
+  (await inspectViews()).find((v) => v.view === 'Full' && v.asks),
 )
 let trace = {
   entity: { eid: 'example-trace' },

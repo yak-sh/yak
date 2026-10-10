@@ -27,7 +27,7 @@ export let mount = async (
       home,
     }
   }
-  contribute(facets)
+  await contribute(facets)
 
   // Name this tab to the socket before it opens, so its writes journal a
   // resolved actor (T-6669). Fill the cache, open the socket, render.

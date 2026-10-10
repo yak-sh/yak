@@ -229,4 +229,5 @@ export let views = define([
   ]),
 ])
 
-export { inspectViews } from './inspect.ts'
+export let inspectViews = () =>
+  import('./inspect.ts').then((m) => m.inspectViews)

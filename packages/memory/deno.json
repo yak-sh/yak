@@ -5,6 +5,7 @@
     ".": "./mod.ts",
     "./vocab": "./vocab.ts",
     "./tools": "./tools.ts",
+    "./inspect": "./inspect.ts",
     "./views": "./views.ts"
   },
   "license": "Apache-2.0",

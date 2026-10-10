@@ -67,7 +67,7 @@ test('the shared Browse App paints its sidebar and home; its search field goes t
 test('configured Inspect facet renders a query through its host adapter, not raw Render', async () => {
   let root = new TElement('root')
   let target = root as unknown as Parameters<typeof render>[1]
-  extend(contributedViews([{ views, inspectViews }]))
+  extend(await contributedViews([{ views, inspectViews }]))
   try {
     await act(() =>
       render(

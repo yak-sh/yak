@@ -1,7 +1,6 @@
 // A provider request is held while in flight, completed when released, or
 // interrupted explicitly. No diagnostic code decides its lifecycle.
 
-import type { Bundle, Comp } from '@yaks/graph'
 import type { Computed } from '@yaks/match'
 import type { Vocab } from '@yaks/vocab'
 import {
@@ -18,12 +17,8 @@ import {
   when,
 } from '@yaks/sql'
 
-export let attemptState = (ask: Bundle) =>
-  ask.interrupted
-    ? 'interrupted'
-    : (ask.attempt as Comp | undefined)?.by != null
-    ? 'inflight'
-    : 'completed'
+import { attemptState } from './state.ts'
+export { attemptState } from './state.ts'
 
 export let attemptDerived = (vocab: Vocab): Derived => ({
   'attempt.state': {

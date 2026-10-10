@@ -215,7 +215,7 @@ export let nativeAnatomy = (
         : readValue(readValue(o.value, 'views'), 'renderers')
       // A module without inspectViews is not evidence about its page's own
       // curated registry; an exported empty list is evidence of no additions.
-      if (raw === undefined) continue
+      if (raw === undefined || typeof raw == 'function') continue
       source.observed![group] = true
       source[group] = [
         ...source[group]?.filter((p) => p.package != o.package) ?? [],

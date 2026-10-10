@@ -4,7 +4,7 @@
 // protocol-complete suffix.
 
 import type { Bundle, Comp } from '@yaks/graph'
-import { seqOf } from './status.ts'
+import { seqOf } from './state.ts'
 
 let callOf = (b: Bundle): string | undefined => {
   let call = (b.result as Comp | undefined)?.call

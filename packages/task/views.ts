@@ -33,6 +33,6 @@ export let views: Registry = define([
   },
 ])
 
-export { inspectViews } from './inspect.ts'
-
-export { answerPlace, DecisionForm } from './DecisionForm.ts'
+// The inspector asks for its domain pages; a portable printer never does.
+export let inspectViews = () =>
+  import('./inspect.ts').then((m) => m.inspectViews)

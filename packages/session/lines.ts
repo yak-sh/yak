@@ -10,7 +10,7 @@ import { parse } from '@yaks/query'
 import { type Bundle, define, type Registry, type Renderer } from '@yaks/render'
 import { SESSION } from './comp.ts'
 import { ASK, CALL, ENTRY } from './native.ts'
-import { kindOf, statusOf, textOf } from './status.ts'
+import { kindOf, statusOf, textOf } from './state.ts'
 
 let comp = (b: Bundle, name: string) => b[name] as Comp | undefined
 

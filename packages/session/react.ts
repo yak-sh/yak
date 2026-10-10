@@ -89,7 +89,7 @@ import {
   textOf,
   type TranscriptStatus,
   usingBefore,
-} from './status.ts'
+} from './state.ts'
 import {
   ceiling,
   CONTEXT,

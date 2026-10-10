@@ -23,7 +23,7 @@ import {
   statusOf,
   textOf,
   usingBefore,
-} from './status.ts'
+} from './state.ts'
 
 export type ChildLimits = {
   /** Defaults for user-created tasks, resolved before durable queue admission. */

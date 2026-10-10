@@ -208,9 +208,14 @@ test('search chip is a draggable link, modifiers keep native navigation', () => 
 
 // A configured Inspect facet exposes the same query-backed entries through
 // both exports. The host must adapt them once, not overwrite with raw Props.
-test('configured Inspect query renderer receives its host context', () => {
+test('configured Inspect query renderer receives its host context', async () => {
   let original = registry.renderers
-  extend(contributedViews([facet]))
+  extend(
+    await contributedViews([{
+      ...facet,
+      inspectViews: () => Promise.resolve(facet.inspectViews),
+    }]),
+  )
   let seen = mount(h(SearchPage, { query: '.task .count' }))
   try {
     assertEquals(

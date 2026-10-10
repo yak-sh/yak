@@ -1,4 +1,4 @@
-import { DecisionForm } from '@yaks/task/views'
+import { DecisionForm } from '@yaks/task/form'
 import type { Bundle } from '@yaks/graph'
 import { type Ent, vocab } from '../types.ts'
 import { apply } from '../live.ts'
