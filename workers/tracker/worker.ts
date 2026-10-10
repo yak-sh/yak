@@ -41,7 +41,7 @@ export let scopeOf = (request: Request) => {
     ? scope
     : null
 }
-export let worker = (env: Env) => ({
+export let worker = (env: Env, ticket: typeof sign = sign) => ({
   fetch: async (request: Request): Promise<Response> => {
     let scope = scopeOf(request)
     if (!scope) return json({ error: 'tracker global scope required' }, 400)
@@ -67,7 +67,7 @@ export let worker = (env: Env) => ({
           }
           // Use the stable read door across Worker/DO deployment propagation.
           // The runtime holds its signing key; the build receives only a boolean.
-          let ticket = await sign({
+          let signed = await ticket({
             scope: platform,
             person: platform,
             admin: true,
@@ -80,7 +80,7 @@ export let worker = (env: Env) => ({
           )
           let response = await env.TRACKERS.getByName(platform).fetch(
             new Request(query, {
-              headers: { authorization: `Bearer ${ticket}` },
+              headers: { authorization: `Bearer ${signed}` },
             }),
           )
           if (!response.ok) return json({ error: 'tracker unavailable' }, 503)

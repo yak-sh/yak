@@ -1,25 +1,13 @@
 // The platform's scoped SDK events enter the shared reporter and durable intake.
-import { equal, ok, test } from '@yaks/testing'
+import { clock, equal, ok, test } from '@yaks/testing'
 import { ServerRuntimeClient, withScope } from '@sentry/core'
 import type { Bundle } from '@yaks/graph'
 import { Refused } from '@yaks/graph'
-import type { WindowClock } from '@yaks/tracker/report'
 import type { SentryEvent } from '@yaks/tracker/sentry'
 import { batch } from '../tracker/queue.ts'
 import { platform } from '../tracker/core.ts'
 import { caught, defect, delivery, options, sample } from './sentry.ts'
 
-let clock = () => {
-  let run: (() => Promise<void>) | undefined
-  return {
-    now: () => 0,
-    after: (_ms, next) => {
-      run = next
-      return () => {}
-    },
-    flush: () => run?.(),
-  } satisfies WindowClock & { flush: () => Promise<void> | undefined }
-}
 let event = (message = 'storm') =>
   sample({
     type: undefined,
@@ -45,7 +33,7 @@ test('platform storms use the same samples and hits for Sentry and tracker', asy
   }, time)
   for (let i = 0; i < 7; i++) await sink(event())
   equal(queued.length, 1)
-  await time.flush()
+  await time.advance(10_000)
   equal(queued.length, 2)
   equal(sent.map((e) => e.extra?.hits), [1, 6])
   equal(
@@ -86,7 +74,7 @@ test('Sentry quota failure leaves tracker samples and repeat hits intact', async
   equal(batch(queued[1]).scope, platform)
 })
 
-test('SDK catches collect into the queue without a Sentry DSN and omit refusals', async () => {
+let sdk = (() => {
   let queued: Bundle[][] = []
   let time = clock()
   let configured = options({
@@ -110,22 +98,31 @@ test('SDK catches collect into the queue without a Sentry DSN and omit refusals'
     normalizeDepth: 0,
     stackParser: () => [],
   })
+  client.init()
+  let refusal = new Refused('no')
+  let errors = Array.from(
+    { length: 4 },
+    () =>
+      Object.assign(new TypeError('queue without Sentry'), {
+        stack: 'TypeError: queue without Sentry\n    at probe (probe.ts:1:1)',
+      }),
+  )
+  return { queued, time, processed, client, refusal, errors }
+})()
+
+test('SDK catches collect into the queue without a Sentry DSN and omit refusals', async () => {
+  let { queued, time, processed, client, refusal, errors } = sdk
   await withScope(async (scope) => {
     scope.setClient(client)
     try {
-      client.init()
-      let refusal = new Refused('no')
-      for (let i = 0; i < 4; i++) {
-        let error = Object.assign(new TypeError('queue without Sentry'), {
-          stack: 'TypeError: queue without Sentry\n    at probe (probe.ts:1:1)',
-        })
+      for (let error of errors) {
         caught(refusal, {})
         defect(error, { space: 'probe' })
         caught(error, { request: 'outer catch' })
       }
       await processed.promise
       equal(queued.length, 1)
-      await time.flush()
+      await time.advance(10_000)
       equal(queued.length, 2)
       equal((queued[1][0].error as { hits: number }).hits, 3)
       ok(queued.every((rows) => batch(rows).scope == platform))

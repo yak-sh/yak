@@ -31,6 +31,7 @@
  * @module
  */
 export { equal, match, ok, throws } from './assert.ts'
+export { type Clock, clock } from './clock.ts'
 export {
   type It,
   type Options,

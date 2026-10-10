@@ -67,11 +67,11 @@ try {
 
 ## Exports
 
-| Export               | Provides                                                                                                          |
-| -------------------- | ----------------------------------------------------------------------------------------------------------------- |
-| `@yaks/testing`      | `test`, `suite`, `equal`, `ok`, `match`, `throws`, `tick`, `until`; types `Test`, `Options`, `It`, `Spec`, `Wait` |
-| `@yaks/testing/find` | `tested`, `paged`, `walk`, `examples`, `find`                                                                     |
-| `@yaks/testing/main` | The Deno runner entry point                                                                                       |
+| Export               | Provides                                                                                                                            |
+| -------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| `@yaks/testing`      | `test`, `suite`, `equal`, `ok`, `match`, `throws`, `tick`, `until`, `clock`; types `Test`, `Options`, `It`, `Spec`, `Wait`, `Clock` |
+| `@yaks/testing/find` | `tested`, `paged`, `walk`, `examples`, `find`                                                                                       |
+| `@yaks/testing/main` | The Deno runner entry point                                                                                                         |
 
 ## Declaring tests
 
@@ -110,6 +110,29 @@ A `match` pattern checks the keys it names and array items at their indices.
 Regular expressions check a value's text; classes check instances. Empty objects
 and arrays require empty values. Other values, including class instances and
 arrow functions, compare by deep equality.
+
+## Controlling time
+
+A **virtual clock** runs scheduled callbacks when a test advances time. Inject
+`clock()`'s `now` and `after` into the code's timer boundary.
+`after(ms, callback)` returns a cancellation function. `advance(ms)` awaits
+callbacks in chronological order, including callbacks scheduled by callbacks;
+callbacks at the same time run in registration order. It leaves global timers
+and `Date` unchanged.
+
+```ts
+import { clock, equal } from '@yaks/testing'
+
+let time = clock(100)
+let expired = false
+time.after(20, () => {
+  expired = true
+})
+await time.advance(19)
+equal(expired, false)
+await time.advance(1)
+equal([expired, time.now()], [true, 120])
+```
 
 ## Waiting
 

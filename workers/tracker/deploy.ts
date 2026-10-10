@@ -30,7 +30,12 @@ export let deploy = async (hash: string, hooks: Hooks): Promise<boolean> => {
   )
 }
 // A fresh receipt proves this publication reached grouping, not an older one.
-export let canary = (url: string, hash: string, send: typeof fetch = fetch) => {
+export let canary = (
+  url: string,
+  hash: string,
+  send: typeof fetch = fetch,
+  timeout: (ms: number) => AbortSignal = AbortSignal.timeout,
+) => {
   let eid: string | undefined
   return async (): Promise<boolean> => {
     let probe = new URL('/canary', url)
@@ -39,14 +44,14 @@ export let canary = (url: string, hash: string, send: typeof fetch = fetch) => {
     if (!eid) {
       let response = await send(probe, {
         method: 'POST',
-        signal: AbortSignal.timeout(5000),
+        signal: timeout(5000),
       })
       if (!response.ok) return false
       eid = (await response.json()).eid
       if (!eid) return false
     }
     probe.searchParams.set('eid', eid)
-    let response = await send(probe, { signal: AbortSignal.timeout(5000) })
+    let response = await send(probe, { signal: timeout(5000) })
     return response.ok && (await response.json()).arrived === true
   }
 }

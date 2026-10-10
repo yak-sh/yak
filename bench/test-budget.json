@@ -571,7 +571,7 @@
       "deploy record: concurrent append is idempotent, and a failed probe can complete": 2.6
     },
     "bin/migrate-session-machines_test.ts": {
-      "composed CLI host translates a pre-machine home before any provisioning": 54.1,
+      "composed CLI host translates a pre-machine home before any provisioning": 15,
       "host boundary attaches legacy checkout without consuming old worker source": 9.1,
       "ordinary CLI reads remain available before destination expansion": 50.6,
       "retired checkout uses explicit absolute cwd, not an unrelated host directory": 17.7,
@@ -881,11 +881,7 @@
     "packages/browse/components/Entity_test.ts": {
       "Entity mounts hooks with the original Ent and extra props": 1.9,
       "a pending proposal keeps deletion named as deletion": 10.1,
-      "a role keeps its face without lifecycle actions": 0.7,
-      "quarantine is hidden until revealed and can be cleared": 0.6,
-      "query groups preserve chosen tabs and default faces": 11.5,
-      "release names the session by its chip id": 1,
-      "sessions open on Session with Full still available": 0.7
+      "query groups preserve chosen tabs and default faces": 11.5
     },
     "packages/browse/components/Markdown_test.tsx": {
       "markdown fills the chosen face and forwards its props": 6.6
@@ -1045,7 +1041,6 @@
       "socket refusals reach the page tracker with their reason": 6.7
     },
     "packages/browse/live_test.ts": {
-      "a board naming the lazy partition lists its entries": 6.3,
       "a board renders from the subscription and tracks joins and leaves": 6.3,
       "a frame wakes only the readers of its own sub and rows": 2.8,
       "a graph that answers it has no canvas gets its first": 24.8,
@@ -1098,7 +1093,6 @@
       "md: fenced code follows its language or detects one": 5.6,
       "md: fenced code with blank lines survives whole": 6.6,
       "md: ids in code stay literal; mid-word letters stay words": 2.7,
-      "md: intra-word underscores stay literal": 1.6,
       "mdAbs: everything else renders as the canvas does": 1.8
     },
     "packages/browse/near_test.ts": {
@@ -1244,12 +1238,8 @@
       "missing call evidence fails before changing any rows": 7.4,
       "take conversion retains ids, content, attempts and calls and moves once": 20.6
     },
-    "packages/cli/README.md": {
-      "packages/cli/README.md block 2": 3.6
-    },
     "packages/cli/accounts_test.ts": {
-      "a pasted yaks.app grant works beside an OAuth integration without a registered client": 32,
-      "personal account graph keeps multiple credentials and computes default without a token file": 42.1
+      "personal account graph keeps multiple credentials and computes default without a token file": 1.5
     },
     "packages/cli/anatomy_test.ts": {
       "native anatomy isolates loading evidence even when vocabulary is shared": 3.3,
@@ -2344,7 +2334,6 @@
       "worker runtime projection and scoped continuation use explicit commands": 112.9
     },
     "packages/harness/session_machines_test.ts": {
-      "export resolves session paths within provider root and keeps binary bytes": 1.4,
       "machine home is lazy and first need records one stable sandbox": 1.5,
       "releasing a shared machine waits for borrowers and is repeatable": 1.3
     },
@@ -3610,8 +3599,7 @@
       "a store in memory made from a template has the whole schema and only its own rows": 5.4,
       "a store in memory prepares nothing more for the same writes, however many units run them": 4.3,
       "a store in memory that already holds rows keeps them through install": 6.6,
-      "cached native row metadata follows external schema edits and rollback": 1.6,
-      "failed row decoding releases a cached write before rollback and the next savepoint": 3.2
+      "cached native row metadata follows external schema edits and rollback": 1.6
     },
     "packages/sqlite/number_test.ts": {
       "SQLite migration retains historic high-water across clearing and reopen": 2.7,
@@ -4234,9 +4222,6 @@
       "queue isolates platform and each space; mixed or slug scopes never commit": 3,
       "same batch duplicate eids do not multiply occurrence counts": 8.3
     },
-    "workers/tracker/deploy_test.ts": {
-      "canary publishes only a server-minted platform error through the queue": 1.5
-    },
     "workers/tracker/door_test.ts": {
       "scoped RPC reads, resolves, archives and never exposes trusted intake": 10.9,
       "tracker doors fail closed for other spaces, expired tickets and nonadmins": 3,
@@ -4299,7 +4284,7 @@
       "a page in another space forges no signed-in form (T-37874)": 28.6,
       "a token minted for anything but a session is no cookie (T-37873)": 20.6,
       "a token sealed before 2c05d0f6 is a cookie only if it was one (T-37924)": 24.7,
-      "forty guesses at a sign-in code at once still get five (T-37875)": 43.7,
+      "forty guesses at a sign-in code at once still get five (T-37875)": 0.7,
       "the consent card says where the authorization goes (T-37877)": 20.4
     },
     "workers/yak/attribution_test.ts": {
@@ -4507,7 +4492,7 @@
       "an erased space gives its domain back": 175.1
     },
     "workers/yak/erase_test.ts": {
-      "a deleted space takes its conversation and its workbench": 106,
+      "a deleted space takes its conversation and its workbench": 42.6,
       "a ticket opens one space for one person, for an hour": 1.8,
       "the sweep erases a space out of days, and leaves one in them": 277.5,
       "the sweep erases the trash that is out of days, and only that": 128.3,
@@ -4827,7 +4812,7 @@
       "a raw writer classifies its changed owner rather than owing a schema census": 61.1,
       "a refused boot reaches Sentry, tagged with its store": 48.7,
       "a schema that moves re-cuts its definitions and refills": 104.1,
-      "a store holding an old shape is rewritten at its next open": 104.2,
+      "a store holding an old shape is rewritten at its next open": 39.7,
       "a unique index survives dropping another column on its table": 164.8,
       "a word the platform said after the app did stays the app’s": 133,
       "an app deploy turns stored player eids into queryable look references": 236.3
@@ -4968,7 +4953,7 @@
     "workers/yak/release-status_test.ts": {
       "crossing a required release raises the reload level even with equal vocab and only cosmetic file changes": 36.6,
       "release door gates readers and validates the page version": 32.1,
-      "release door reads immutable JSON/YAML vocab, caches pairs, and follows the fresh app version": 107.1
+      "release door reads immutable JSON/YAML vocab, caches pairs, and follows the fresh app version": 43.2
     },
     "workers/yak/release_test.ts": {
       "a release serves unchanged, changed, and compiled files": 1.5
@@ -5078,7 +5063,7 @@
       "a trashed front page is nobody's, and the owner restores it there": 37.5,
       "an app in the trash serves nothing, and says so to its owner": 38.6,
       "an app is installable: the five tags, the icon, the manifest": 30.3,
-      "an app serves audio and video with byte ranges": 105.3,
+      "an app serves audio and video with byte ranges": 44.8,
       "an app worker can send a stored query as one encoded filter": 54.5,
       "an app worker query can read a connected peer position": 89.6,
       "an app's own colours, set through app_set, win over the platform's": 30.3,
@@ -5233,12 +5218,9 @@
       "unnumbered app entity links resolve short handles through the store wire": 55.8
     },
     "workers/yak/wrangler_test.ts": {
-      "a sibling exit waits for the other sibling and never deploys the kernel": 2.5,
-      "a sibling rejection waits for the other sibling and never deploys the kernel": 2.3,
       "a sibling's images are its Dockerfiles and their build contexts": 2.2,
       "base preparation overlaps sibling uploads and gates the kernel": 4.5,
       "every @yaks/* the checker knows is the file the bundler gets": 4.2,
-      "independent sibling deploys overlap and the kernel waits for both successes": 4.9,
       "wrangler: app-only pushes do not supersede a build, but Worker source and newer live versions do": 137.8
     },
     "workers/yak/writes_test.ts": {

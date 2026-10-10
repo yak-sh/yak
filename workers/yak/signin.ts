@@ -29,6 +29,14 @@ import { hmac } from './lib/hmac.ts'
 export let LIFE = 10 * 60_000
 export let TRIES = 5
 
+// Every guess guards one of these five counts, so prepare their wire tokens
+// once rather than hashing the same small counts throughout a concurrent race.
+let counts = Array.from({ length: TRIES }, (_, n) => token(n))
+let counted = (tries: number | null | undefined) =>
+  tries != null && Number.isInteger(tries) && tries >= 0 && tries < TRIES
+    ? counts[tries]
+    : token(tries)
+
 // Three letters an hour to any one address. Signing in clears every row for
 // the address, so the count only ever reaches three for someone who asked and
 // never arrived — whose mail is broken, which a fourth code does not fix —
@@ -89,8 +97,8 @@ let sent = async (store: Meta, email: string) =>
 let at = (r: Signin) => Date.parse(r.signin.expires) - LIFE
 
 // A code still worth typing: not expired, and not already out of guesses.
-let open = (r: Signin) =>
-  Date.parse(r.signin.expires) > Date.now() && (r.signin.tries ?? 0) < TRIES
+let open = (r: Signin, now: number) =>
+  Date.parse(r.signin.expires) > now && (r.signin.tries ?? 0) < TRIES
 
 // Mint a code for an address and return it for the mail seam to carry, or null
 // when this address has had its letters for the hour — nothing minted, nothing
@@ -142,10 +150,19 @@ export let spend = async (
   email: string,
   code: string,
 ) => {
-  let want = await mac(email, code, secret)
+  return guess(store, email, await mac(email, code, secret))
+}
+
+/** Spend a prepared code digest, keeping concurrent guesses on guarded counts. */
+export let guess = async (
+  store: Meta,
+  email: string,
+  want: string,
+  now: () => number = Date.now,
+) => {
   for (;;) {
     let rows = await sent(store, email)
-    let live = rows.filter(open)
+    let live = rows.filter((r) => open(r, now()))
     if (!live.length) return false
     try {
       await apply(
@@ -153,7 +170,7 @@ export let spend = async (
         live.map((r) => ({
           entity: { eid: r.entity.eid },
           signin: { tries: (r.signin.tries ?? 0) + 1 },
-          $was: { signin: { tries: token(r.signin.tries) } },
+          $was: { signin: { tries: counted(r.signin.tries) } },
         })),
       )
     } catch (e) {

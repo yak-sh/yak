@@ -41,7 +41,7 @@ assertion.
 
 - @yaks/testing declares and checks: `test(name, fn, {tags})`, or
   `suite(name, ({it, equal}) => …)`; `equal`, `ok`, `match` (partial),
-  `throws`; `tick` and `until` for waiting (packages/testing/README.md). A
+  `throws`; `clock` for controlling time (packages/testing/README.md). A
   `*_test.ts` file sits beside its subject.
 - A small example beside the code is often the whole test: a `///` doctest
   line in the module, or a fenced `ts` block in a README or doc comment. Both
@@ -49,9 +49,12 @@ assertion.
 - A graph over `:memory:` or @yaks/ram is a value, not a boot, so most tests
   run at a pure seam, in memory. When RAM lacks something a test needs,
   @yaks/ram gets it (M-39498).
-- Time is a fact to wait on, not a span to sleep. `await tick()` yields once;
-  `await until(fact, {timeout, label})` waits for the fact, so a loaded box
-  makes a test slower, not red. Inside workerd the clock doesn't move while
+- Time is an input a test controls. Inject @yaks/testing's `clock()` at the
+  subject's timer boundary and `await time.advance(ms)` to run due callbacks;
+  no timer delay or polling is needed to check expiry, retries or windows.
+  Await asynchronous work's completion directly. `tick` and `until` belong
+  where an integration depends on the runtime itself progressing, rather
+  than to tests of time behavior. Inside workerd the clock doesn't move while
   code runs, so bound work there by count.
 - A helper that stands in for a door behaves like the door. One that skips a
   header or a check the door sends lets the test pass where production fails:

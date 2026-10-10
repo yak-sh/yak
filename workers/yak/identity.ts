@@ -126,7 +126,7 @@ export let NO_SEND = 'We could not send your code just now. Try again in a ' +
 // the address, so saying it tells nobody anything about an inbox.
 export let TOO_MANY = 'Too many codes have been asked for from here just ' +
   'now. Try again in a minute.'
-import { KERNEL, meta } from './meta.ts'
+import { KERNEL, type Meta, meta } from './meta.ts'
 import {
   askAllow,
   askCode,
@@ -147,7 +147,7 @@ import {
   says,
   SLUG,
 } from './route.ts'
-import { canon, mint, nameOf, personOf, spend } from './signin.ts'
+import { canon, guess, mac, mint, nameOf, personOf, spend } from './signin.ts'
 import { RETRY, source, within } from './rate.ts'
 import { type Caller, minted, type Who } from './session.ts'
 import { caught } from './sentry.ts'
@@ -662,6 +662,25 @@ let landed = async (
   return redirect(hand ?? backTo(back, env), set, 303)
 }
 
+/** A code attempt either opens or returns the same closed sign-in card. */
+export let codeCheck = async (
+  store: Meta,
+  email: string,
+  digest: string,
+  q = '',
+  back = '',
+  env: Host = {},
+  now: () => number = Date.now,
+): Promise<Response | null> =>
+  await guess(store, email, digest, now) ? null : askCode(
+    email,
+    q || null,
+    back || null,
+    'That code has expired or was mistyped. Ask for a fresh one?',
+    400,
+    env,
+  )
+
 // A letter's one click, spent: the very code the form would have spent
 // (signin.ts), so following the link is single use, dies with the code, and
 // costs a try on every code standing for the address exactly as a mistyped one
@@ -919,16 +938,15 @@ let ours = async (req: Request, env: Env): Promise<Response> => {
     let email = canon(field('email'))
     let q = field('q')
     let back = field('return')
-    if (!await spend(meta(env), secret(env), email, field('code'))) {
-      return askCode(
-        email,
-        q || null,
-        back || null,
-        'That code has expired or was mistyped. Ask for a fresh one?',
-        400,
-        env,
-      )
-    }
+    let refused = await codeCheck(
+      meta(env),
+      email,
+      await mac(email, field('code'), secret(env)),
+      q,
+      back,
+      env,
+    )
+    if (refused) return refused
     // Nothing here asks what to call them (T-34236), so the front of their
     // address does — written, not merely derived, because a member row names a
     // person by their title and a titleless one reads back as a bare eid
