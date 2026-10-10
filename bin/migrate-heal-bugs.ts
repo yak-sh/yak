@@ -270,16 +270,13 @@ let run = async () => {
     let before = counts()
     let moved = await moveBugs(g, tracker, check)
     let after = counts()
+    // The live box writes tasks, effects and its journal meanwhile; only the
+    // rows this script touches are compared.
+    assert(before.fixer == after.fixer, 'Fixer count changed')
     assert(
-      before.task == after.task && before.fixer == after.fixer,
-      'Task or fixer count changed',
+      check ? before.bug == after.bug : after.bug == 0,
+      check ? 'Check changed bug rows' : 'Bug rows remain',
     )
-    if (check) {
-      assert(
-        JSON.stringify(before) == JSON.stringify(after),
-        'Check changed row counts',
-      )
-    }
     console.log(
       JSON.stringify(
         {
