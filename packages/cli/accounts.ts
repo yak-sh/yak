@@ -85,16 +85,42 @@ export let accountToken = async (
     if (e instanceof Deno.errors.NotFound) return null
     throw e
   }
-  let h = await accountHost(path)
-  let { person } = await import('./host.ts')
-  let owner = await person(h)
-  if (!owner) return null
-  let { accountCredential } = await import(located('@yaks/connections'))
+  let { read, used, person } = await import('./config.ts')
+  let config = read(path)
+  if (!config.person) return null
+  let plugins = (config.plugins ?? []).map(used)
+  if (!plugins.includes('@yaks/connections')) return null
   let name = new URL((await import('./rpc.ts')).doorUrl(host)).hostname
   // Integrations for other MCP servers are named by resource URL.
   let integration = name == 'yaks.app'
     ? 'yaks.app'
     : (await import('./rpc.ts')).doorUrl(host)
+  let direct = /^[0-9a-f]{8}-[0-9a-f-]{27}$/i.test(config.person) ||
+    /^(?:[a-z]+-)?[0-9]+$/i.test(config.person)
+  if (!opts.as && direct) {
+    let { reader } = await import('./reader.ts')
+    let r = await reader(
+      config,
+      plugins.filter((p) =>
+        ['@yaks/kernel', '@yaks/id', '@yaks/connections'].includes(p)
+      ),
+    )
+    try {
+      let owner = await person({ config, graph: r.graph })
+      let found = await r.graph.read(
+        `.connection.owner=${owner} .connection.integration=${
+          JSON.stringify(integration)
+        } .fields=entity.eid .limit=1`,
+      )
+      if (!found.length) return null
+    } finally {
+      r.close()
+    }
+  }
+  let h = await accountHost(path)
+  let owner = await person(h)
+  if (!owner) return null
+  let { accountCredential } = await import(located('@yaks/connections'))
   return (await accountCredential(
     { graph: h.graph, vault: h.vault },
     owner,

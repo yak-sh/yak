@@ -107,7 +107,7 @@ import {
   blobSchema,
   sqliteBlobs,
 } from '@yaks/blob'
-import { type Config, given, type Options, used } from './config.ts'
+import { type Config, dbOf, given, type Options, used } from './config.ts'
 import { facet, type Taken, taking, wordsOf } from './words.ts'
 import { drain } from './drain.ts'
 import { vaultOf } from './vault.ts'
@@ -424,23 +424,7 @@ export type ComposeOpts = {
   process?: boolean
 }
 
-/** The database a config names. `DB_PATH` is the other way to give it, for a
- * service file that would rather set it in the environment. Neither has a
- * default, because the path anybody would pick as one is somebody's live
- * graph. */
-export let dbOf = (
-  config: Config,
-  env: (name: string) => string | undefined = (n) => Deno.env.get(n),
-): string => {
-  let db = config.db ?? env('DB_PATH')
-  if (!db) {
-    throw new Error(
-      'a host needs a database: `db` in the config, or DB_PATH in the ' +
-        'environment — there is no default',
-    )
-  }
-  return db
-}
+export { dbOf } from './config.ts'
 
 // The name in `{"secret": "NAME"}`, when the object holds nothing else.
 let secretIn = (value: unknown): string | undefined => {
@@ -1263,3 +1247,5 @@ let composed = async (
     throw error
   }
 }
+
+export { type Reader, reader } from './reader.ts'

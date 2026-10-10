@@ -17,8 +17,8 @@
 import cli from './deno.json' with { type: 'json' }
 
 export type { Config, Options, Plug } from '@yaks/host'
-import type { Config, Host, Options, Plug } from '@yaks/host'
-import type { Eid } from '@yaks/graph'
+import type { Config, Options, Plug } from '@yaks/host'
+import type { Eid, Graph } from '@yaks/graph'
 
 /** Where a machine keeps the config for its own graph. */
 export let OWN_CONFIG = '.yak/yak.json'
@@ -27,7 +27,7 @@ export let OWN_CONFIG = '.yak/yak.json'
  * names, or nobody where it names none: a machine never guesses who is at its
  * keyboard. What they type at it is written by them. */
 export let person = async (
-  host: Pick<Host, 'config' | 'graph'>,
+  host: { config: Pick<Config, 'person'>; graph: Pick<Graph, 'address'> },
 ): Promise<Eid | undefined> => {
   let said = host.config.person
   return said ? (await host.graph.address([said])).get(said) ?? said : undefined
@@ -242,4 +242,22 @@ export let read = (path: string): Config => {
       : config.db,
     plugins: (config.plugins ?? []).map((plug) => resolved(plug, base)),
   }
+}
+
+/** The database a config names. `DB_PATH` is the other way to give it, for a
+ * service file that would rather set it in the environment. Neither has a
+ * default, because the path anybody would pick as one is somebody's live
+ * graph. */
+export let dbOf = (
+  config: Config,
+  env: (name: string) => string | undefined = (n) => Deno.env.get(n),
+): string => {
+  let db = config.db ?? env('DB_PATH')
+  if (!db) {
+    throw new Error(
+      'a host needs a database: `db` in the config, or DB_PATH in the ' +
+        'environment — there is no default',
+    )
+  }
+  return db
 }

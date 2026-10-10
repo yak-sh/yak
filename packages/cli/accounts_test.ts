@@ -140,3 +140,31 @@ test('a pasted yaks.app grant works beside an OAuth integration without a regist
     await Deno.remove(state, { recursive: true })
   }
 })
+
+test('an unmatched door reads accounts without executing configured graph plugins', async () => {
+  let state = await Deno.makeTempDir()
+  try {
+    let { path } = await named(state, 'probe@example.test', 'grant')
+    await closeAccounts()
+    let plugin = `${state}/unrelated`
+    await Deno.mkdir(plugin)
+    await Deno.writeTextFile(`${plugin}/vocab`, 'export let docs = []\n')
+    await Deno.writeTextFile(
+      `${plugin}/graph`,
+      "throw new Error('unrelated graph facet executed')\n",
+    )
+    let config = JSON.parse(await Deno.readTextFile(path))
+    config.plugins.push(plugin)
+    await Deno.writeTextFile(path, JSON.stringify(config))
+    equal(
+      await accountToken('https://public.example.test', state, {
+        config: path,
+        env: () => undefined,
+      }),
+      null,
+    )
+  } finally {
+    await closeAccounts()
+    await Deno.remove(state, { recursive: true })
+  }
+})
