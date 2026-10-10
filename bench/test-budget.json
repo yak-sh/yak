@@ -15,7 +15,7 @@
     "browser": 8594.7,
     "deno": 270130.8,
     "terminal": 1582.4,
-    "workerd": 269080.4
+    "workerd": 180558
   },
   "tests": {
     "apps/vale/abilities.ts": {
@@ -1103,7 +1103,6 @@
       "narrow signals follow births, subscription eviction, and census": 6.5,
       "pinned sleeps through an unrelated row patch": 5.7,
       "predsToQuery round-trips membership shapes, refuses the rest": 1.4,
-      "projects: project rows only, oldest first, named by doc": 7.2,
       "queryEids indexes any {eid} reference with no bespoke index": 8,
       "queryEids resolves pending wakes off the reverse index, narrowly": 10.1,
       "relationship indices wake only their affected targets": 7.3,
@@ -1582,7 +1581,7 @@
     "packages/durable-object/sockets_test.ts": {
       "a batch stops where the socket attachment cannot remember more snapshots": 15.6,
       "a batched socket wakes without replaying snapshots already on the wire": 4.9,
-      "a burst of watch changes stores its map once": 23.2,
+      "a burst of watch changes stores its map once": 5,
       "a caller view survives socket acceptance and hibernation": 6.5,
       "a closed socket drops its subscriptions": 8.8,
       "a deferred cold reset waits for its inherited snapshot ACK without losing the durable edit": 6.5,
@@ -2138,7 +2137,7 @@
       "P chooses a graph persona for a new session without changing the draft": 17.9
     },
     "packages/harness/README.md": {
-      "packages/harness/README.md block 1": 342.6
+      "packages/harness/README.md block 1": 156.8
     },
     "packages/harness/agent_test.ts": {
       "a new session opens with what its host found for it": 154,
@@ -2197,8 +2196,7 @@
       "a database failure cannot recurse: the original is printed instead": 3.8,
       "a defect is an exception entity, stack and cause kept, secrets redacted, and never an entry": 24.9,
       "a fatal unhandled rejection really exits the subprocess, saying what it was": 30.4,
-      "a graph shutdown drain is bounded": 3.4,
-      "global error hooks preserve fatal default, clean up, deduplicate, and uninstall": 1.3
+      "a graph shutdown drain is bounded": 3.4
     },
     "packages/harness/draft_host_test.ts": {
       "host profiles isolate frontends, lock concurrent writers and recover across reopen": 5.4
@@ -2678,9 +2676,6 @@
     "packages/kernel/plugin.ts": {
       "packages/kernel/plugin.ts block 1": 1.4
     },
-    "packages/lens/README.md": {
-      "packages/lens/README.md block 1": 1.4
-    },
     "packages/lens/document_test.ts": {
       "concat splits values and consumes sources, with explicit separators and literals": 1.2
     },
@@ -2734,8 +2729,7 @@
       "pull: a letter handed back after a crash is recorded once": 1.3,
       "pull: each tray fails alone, and a graph without hook leaves requests": 2,
       "pull: letters are recorded, routed and acknowledged": 1.5,
-      "service: a timed-out pull is tried again": 6,
-      "service: an already-ended signal is one complete pull": 1.2
+      "service: a timed-out pull is tried again": 6
     },
     "packages/mail/routes_test.ts": {
       "a secret is what the door asks for, when one is named": 1.1,
@@ -3553,7 +3547,7 @@
     },
     "packages/sqlite/gather_test.ts": {
       "projected identities read only named facets and preserve projection/rollback truth": 5.4,
-      "singleton gather reads a wide sparse vocabulary in one probe": 134.9,
+      "singleton gather reads a wide sparse vocabulary in one probe": 50.6,
       "transaction gather observes writes and rollback": 7,
       "whole reads scale with worn components across one or 100 hits": 23.5
     },
@@ -3564,7 +3558,6 @@
       "a projected read fetches only the components it returns": 5.4,
       "a refused batch leaves the database as it was": 3.7,
       "a release reference drops its row, its owner lives": 5.3,
-      "admission refuses an unknown property through the whole stack": 1.8,
       "an optional component keeps its name beside a property with that name": 4.9,
       "an unresolved word reference refuses the whole write": 4.2,
       "apply lands a batch and stamps it, synchronously": 3.2
@@ -3698,7 +3691,6 @@
       "a sqlite graph selects what each query means": 7.7
     },
     "packages/sqlite/read_test.ts": {
-      "a bare-word query requires an explicitly registered extension": 1.3,
       "a disjunction longer than SQLite nests expressions reads": 51,
       "a gathered bundle carries the entity number storage minted": 1.7,
       "a reference reads back as the target eid": 2,
@@ -4276,7 +4268,6 @@
       "page code mints uuids outside a secure context": 10
     },
     "packages/web/routes_test.ts": {
-      "a kindless entity opens at the id the page displays": 1.3,
       "a name opens the page, and a path naming nothing is the 404 page": 6.7,
       "the doors and the other plugins keep their paths": 1.2,
       "web and terminal writes are attributed to the configured owner through API admission": 2.9
@@ -4355,7 +4346,7 @@
       "a vpc_services door needs a tunnel, and the script never holds it": 171,
       "app bindings survive redeploy, removal and trash until permanent deletion": 296.9,
       "explicit worker.js and entry.js are valid server sources": 167.7,
-      "invalid main leaves the prior script intact even with no default source": 124,
+      "invalid main leaves the prior script intact even with no default source": 49,
       "main deploys the chosen nested source and its imports, never the default worker": 173.1,
       "malformed JSONC keeps the prior worker and never falls back to JSON": 212.6,
       "permanent deletion cleans a late resource creation": 204.2,
@@ -4406,7 +4397,7 @@
     "workers/yak/blob_cache_test.ts": {
       "a dropped representation write never redirects to an absent file": 55.3,
       "an anonymous blob read revives a removed immutable representation": 165.7,
-      "private app blobs keep the cache behind authorization": 158.5
+      "private app blobs keep the cache behind authorization": 68.9
     },
     "workers/yak/blob_test.ts": {
       "a named media upload stays seekable when its metadata changes": 220.5,
@@ -4486,21 +4477,21 @@
       "compact agents render launch links and refresh without replacing drafts or stable links": 3
     },
     "workers/yak/connections_test.ts": {
-      "a built integration reached by OAuth is offered once this deploy holds its client": 83.8,
+      "a built integration reached by OAuth is offered once this deploy holds its client": 29.5,
       "a connection elsewhere is not this page to change": 22.2,
       "a pasted key is sealed in the vault, and the directory holds its handle": 107.1,
       "a person connects their own account for an app that asks each person, and the space holds only the ask": 97.2,
       "a person signs in for their own connection and comes back to the app": 96.8,
       "a sign-in begun on a page opened with ?enable= comes back to that page": 28,
       "a testing integration is asked for only on a page opened with ?enable=": 26.5,
-      "a webhook lands in the app that uses the connection, when it is signed": 139.6,
+      "a webhook lands in the app that uses the connection, when it is signed": 54.7,
       "an app calls out with the key in its sentinel’s place, for whom its link allows, and its worker is bound to it": 99.9,
       "attaching a space connection is an owner tool, not an editor tool": 90.8,
       "the directory holds the built integrations, and a space cannot change where their tokens go": 19.2,
       "the owner can attach a connected space key to a live app from the page": 106.7,
       "the page tells a key being saved from one that could not be": 23.6,
       "the secret tools the directory listed keep a key the worker reads as itself, name it, and forget it": 104.7,
-      "without a vault no key is taken, and the page says so": 70.6
+      "without a vault no key is taken, and the page says so": 24.5
     },
     "workers/yak/content_test.ts": {
       "no content file names an entity — the identity property does": 1.9
@@ -4555,7 +4546,7 @@
     "workers/yak/dormant_test.ts": {
       "an app store wake makes zero directory calls and directory SQL statements": 42.6,
       "directory recovery delivers trash before the dormant store boots": 27.2,
-      "trash makes a store dormant across every wake and restore keeps its data": 145.9
+      "trash makes a store dormant across every wake and restore keeps its data": 64.7
     },
     "workers/yak/draft_test.ts": {
       "a schema-only legacy draft recovers its original files on edit": 714.2,
@@ -4775,18 +4766,18 @@
     },
     "workers/yak/mail_test.ts": {
       "a deploy with no binding bounces rather than swallows": 29.1,
-      "a letter delivered is one letter on the month": 126.5,
+      "a letter delivered is one letter on the month": 51.7,
       "a letter that bounced costs the space nothing": 40.8,
       "a letter with no ask to send is kept, not sent": 32,
       "a member's letter leaves from the app's own address": 30.1,
-      "a page watching the letter is told it left": 79,
+      "a page watching the letter is told it left": 24.8,
       "a provider failure comes to rest on the letter": 31.1,
       "an anonymous visitor to an open app may not send": 23.7,
       "an open app still takes an anonymous write that is not a letter": 25.9,
       "past the month allowance a send bounces naming the ceiling": 41.2,
       "the from address is the platform's word, never the batch's": 30,
       "the platform's receipt leaves from the app's own address": 30.9,
-      "the same letter written twice is sent once": 80.4
+      "the same letter written twice is sent once": 31.6
     },
     "workers/yak/manage_test.ts": {
       "Billing management opens checkout and the customer portal for this space": 1812.2,
@@ -4915,7 +4906,7 @@
       "a model calls only the commands marked for it, as the person who asked": 285.8,
       "a page asks its store for a turn and the answer lands beside it": 211.5,
       "a typed question comes back as an answer entry": 212.5,
-      "a visitor asks an app for a turn only where it opens its models": 413.4,
+      "a visitor asks an app for a turn only where it opens its models": 172.9,
       "accounted recovery preserves cost and never debits a second time": 46,
       "accounting preserves provider continuation metadata and passes requests whole": 46.5,
       "an account past its budget is told so, and the transcript rests": 263.7,
@@ -4927,7 +4918,7 @@
       "recovery door accounts an existing attachment without download or generation": 174.2
     },
     "workers/yak/mover_test.ts": {
-      "a failing batch unwinds, the store serves, and a fix finishes it": 102,
+      "a failing batch unwinds, the store serves, and a fix finishes it": 41.2,
       "a live rule moves every row from the alarm, and says it is done": 239.2,
       "a refused contraction unwinds its data batch and retries after wake": 140.1,
       "a rehearsal says what a rule would move, and moves nothing": 296.4,
@@ -5002,7 +4993,7 @@
       "a stranger is held to a rate per source at every anonymous door": 1184
     },
     "workers/yak/reach_test.ts": {
-      "a batch refused by one store lands in neither": 225.5,
+      "a batch refused by one store lands in neither": 84.1,
       "a candidate seed waits for release and lands once": 243.6,
       "a changed draft identity leaves serving reads and writes alone": 137.3,
       "a changed identity replaces its index when the release moves": 164.3,
@@ -5011,7 +5002,7 @@
       "a name written twice through the door is one entity": 91.7,
       "a projection answers what it names, and what its paths reach across the stores": 94.3,
       "a refused draft leaves the serving app store usable": 130.3,
-      "a spanning read merges the two stores into one bundle per eid": 221.2,
+      "a spanning read merges the two stores into one bundle per eid": 95,
       "an order holds across the merge, and its window cuts after it": 130.2,
       "the app version selects its store declarations after preparation": 185.6,
       "the first release serves the vocabulary it prepared": 104.6,
@@ -5032,7 +5023,7 @@
       "a finger lost to an eviction is still taken away": 147.3,
       "a finger moves, and only the other cooks hear it": 127.4,
       "a hibernated editor reconnects for current standing before relaying again": 168.7,
-      "a malformed relay batch never leaves a held value for another subscriber": 95.1,
+      "a malformed relay batch never leaves a held value for another subscriber": 35.5,
       "a paced mover is heard at 10Hz; a flooder is closed": 179.6,
       "an app-local grant admits a relaying editor with no kernel role": 129.1,
       "an open-app guest can keep moving a new ephemeral entity without storing it": 152.8,
@@ -5096,12 +5087,12 @@
       "destroying the container revokes what it was wearing": 36.3,
       "every command is signed in as the caller, with one grant": 34.2,
       "no container bound is a sentence, not a stack trace": 22.4,
-      "one person holds one sandbox awake on the free tier": 95.6,
+      "one person holds one sandbox awake on the free tier": 40.3,
       "sandbox_exec, as the directory listed it, runs its cmd and answers as sandbox_shell does": 28.4,
       "the budget refuses in a sentence, and only after it is spent": 18.5,
       "the deploy names the container, and the image is the SDK version": 3.7,
       "the machine tools write, run and read, and a ship copies out": 77.7,
-      "the month of sandbox time is the account's, and it refuses": 80.9,
+      "the month of sandbox time is the account's, and it refuses": 31.6,
       "the token is in the environment and never in the transcript": 30.5
     },
     "workers/yak/schema_cost_test.ts": {
@@ -5137,7 +5128,7 @@
     "workers/yak/serving_test.ts": {
       "/api/stats answers the app's own people, and nobody else": 25.6,
       "/api/stats with no analytics token is a sentence, not a failure": 22,
-      "DELETE / empties the app store and bears it again": 266.5,
+      "DELETE / empties the app store and bears it again": 117.3,
       "a break is the platform writing about the app, not in it": 49.3,
       "a bulk load is NDJSON in and NDJSON out, refusal and all": 57.8,
       "a new release serves its files beside the old cached release": 48.6,
