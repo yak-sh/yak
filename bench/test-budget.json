@@ -102,8 +102,7 @@
     },
     "apps/vale/chart_test.ts": {
       "a chart grows each chunk once even when larger than the terrain cache": 1.9,
-      "the same flat cover and water paint alike at finer and coarser voxel edges": 4.6,
-      "updated theme colours repaint already-grown ground and water": 1.3
+      "the same flat cover and water paint alike at finer and coarser voxel edges": 4.6
     },
     "apps/vale/chartbook_test.ts": {
       "grown charts survive pan, zoom and reopening without loading terrain": 11.2
@@ -239,7 +238,6 @@
       "the compass opens the map without a separate fire travel button": 28.6
     },
     "apps/vale/input_test.ts": {
-      "left touch walks right while right touch orbits": 6.3,
       "steering and orbit use locked deltas or captured drags in either swap": 2.1
     },
     "apps/vale/inspect_worker_test.ts": {
@@ -1052,11 +1050,9 @@
       "a frame wakes only the readers of its own sub and rows": 2.8,
       "a graph that answers it has no canvas gets its first": 24.8,
       "a hot board sleeps through card births and deaths": 11.3,
-      "a list of rows is held in one sub and freed by its last holder": 4.6,
       "a lost socket reconnects in place; the painted cache survives": 14.4,
       "a replacement frame forgets the prior query set": 1.6,
       "a subscribed board sleeps through an unrelated ordinary patch": 7,
-      "applyLocal: an idempotent entity death preserves cache identity": 5.7,
       "applyLocal: entity death sweeps its edges into the report": 5.7,
       "applyLocal: narrow signals wake only touched graph slices": 7.7,
       "applyLocal: reports touched eids and edges": 9.8,
@@ -1151,7 +1147,7 @@
     },
     "packages/browse/tui/App_test.ts": {
       "configured Inspect facet renders a query through its host adapter, not raw Render": 2.3,
-      "the shared Browse App paints its sidebar and home; its search field goes to a query page": 138.9
+      "the shared Browse App paints its sidebar and home; its search field goes to a query page": 18
     },
     "packages/browse/tui/md_test.tsx": {
       "terminal markdown detects indented code blocks": 22.1,
@@ -1420,9 +1416,6 @@
     },
     "packages/client/rules_test.ts": {
       "a write shows its optimistic rule at once, and the server adds its own": 1.7
-    },
-    "packages/client/saved_peer_test.ts": {
-      "a new page reads its saved peer position from the initial subscription snapshot": 1.2
     },
     "packages/client/server-watch_test.ts": {
       "a rider is answered and held, never a member; each role releases independently": 4,
@@ -2794,7 +2787,7 @@
       "stdio selects modern or legacy using the same attributed tool factory": 26.8,
       "the door answers the protocol, and signs what a tool writes": 3.9,
       "the door hands over the face it was given": 7,
-      "what the host owes a direct call rides after the answer, which is unchanged": 16.1,
+      "what the host owes a direct call rides after the answer, which is unchanged": 1.4,
       "x-via keeps its session, and a one-shot CLI call gets one": 11.3
     },
     "packages/mcp/schema_test.ts": {
@@ -3528,8 +3521,7 @@
       "numberless archetype stores keep one candidate index across repeated installs": 3.9
     },
     "packages/sqlite/inspect_test.ts": {
-      "identity inspection sees graves and live component presence without values": 1.4,
-      "inspection counts stored rows and indexes without reading values": 1.2
+      "identity inspection sees graves and live component presence without values": 1.4
     },
     "packages/sqlite/joined_get_test.ts": {
       "a selected identity reads backed rows that have no stored spine": 3.1,
@@ -3876,7 +3868,6 @@
       "name resolution ignores deleted word eid before title": 2.4,
       "name resolution ignores empty word eid before alias": 2.7,
       "name resolution ignores empty word eid before title": 2.7,
-      "tool name resolution: none": 1.2,
       "tool name resolution: one match": 1.8
     },
     "packages/tools/declared_test.ts": {
@@ -3961,7 +3952,6 @@
     },
     "packages/tracker/reframe_test.ts": {
       "a competing frame result is revalidated rather than overwritten stale": 2.1,
-      "frame resolver failures retain grouping and text without self enrichment": 1.6,
       "frames resolved again to the same answer write nothing": 1.9,
       "group moves during catalog await link only its current group": 2.6,
       "source and commit changed during catalog await are re-enriched": 2.1
@@ -3975,7 +3965,6 @@
     "packages/tracker/views_test.ts": {
       "a bug page says how often and since when, where it ran in brief, and its newest stack": 5.6,
       "a bug reads as its headline wherever it is named, its whole message on its page": 1.5,
-      "an occurrence page says where it ran and what happened before it, and lists traces when the store has them": 2.1,
       "occurrence traces use request identity or bounded shared context, never arbitrary neighbours": 2.4,
       "open list and tools take worst first, and bug errors newest first": 2
     },
@@ -4229,7 +4218,6 @@
       "elevenlabs/music-v2 preserves music direction and stores audio at its tariff": 16.6,
       "minimax/music-2.6 preserves music direction and stores audio at its tariff": 12.4,
       "music decodes a successful raw binding envelope and prices its bytes": 10,
-      "music needs storage before asking; invalid output is never persisted": 1.3,
       "music refuses every redirect without following its location": 1.7
     },
     "packages/workers-ai/recovery_test.ts": {
@@ -4311,7 +4299,7 @@
       "a page in another space forges no signed-in form (T-37874)": 28.6,
       "a token minted for anything but a session is no cookie (T-37873)": 20.6,
       "a token sealed before 2c05d0f6 is a cookie only if it was one (T-37924)": 24.7,
-      "forty guesses at a sign-in code at once still get five (T-37875)": 129.3,
+      "forty guesses at a sign-in code at once still get five (T-37875)": 43.7,
       "the consent card says where the authorization goes (T-37877)": 20.4
     },
     "workers/yak/attribution_test.ts": {
@@ -4347,8 +4335,8 @@
       "private app blobs keep the cache behind authorization": 68.9
     },
     "workers/yak/blob_test.ts": {
-      "a named media upload stays seekable when its metadata changes": 220.5,
-      "the file door: a page uploads bytes and gets an address": 384.4
+      "a named media upload stays seekable when its metadata changes": 96.4,
+      "the file door: a page uploads bytes and gets an address": 172.2
     },
     "workers/yak/browser_test.ts": {
       "guest writes and commands belong only to the sealed browser, never a claimed actor": 260.6,
@@ -4357,7 +4345,7 @@
     "workers/yak/build_test.ts": {
       "a form posted with no script is answered the conversation": 88.1,
       "a page joins, says one line, and watches the build happen": 222,
-      "a page that reloads hears the whole conversation again": 202.8,
+      "a page that reloads hears the whole conversation again": 91.3,
       "a second line during a build is told to wait": 198.3,
       "a socket with nobody on it never opens": 22.8,
       "the door refuses a stranger before it reaches the object": 24
@@ -4591,7 +4579,7 @@
       "a woken object rewrites nothing it already holds": 57.8,
       "a woken object serves the same app, and the same sockets": 30,
       "an app keeps objects and arrays, and asks only whether one is there": 38.6,
-      "an app store admits only values matching opted-in nested schemas": 112.2,
+      "an app store admits only values matching opted-in nested schemas": 46.5,
       "an app store bounds a derived value over the final patched row": 46.2,
       "an app store refuses a malformed score declaration": 4.3,
       "an app's store keeps its words apart from the directory's": 30,
@@ -4674,7 +4662,7 @@
     },
     "workers/yak/instruments_test.ts": {
       "MCP sessions have vouched instruments, while old and forged ids keep their credential instrument": 421.7,
-      "a forged worker grant cannot make an unsigned guest write, and valid callbacks never replace a browser cookie": 192.8
+      "a forged worker grant cannot make an unsigned guest write, and valid callbacks never replace a browser cookie": 81.3
     },
     "workers/yak/invite_kernel_test.ts": {
       "an invitation reaches nobody until its person accepts it": 576.3
@@ -4913,11 +4901,11 @@
       "a write the admin makes is the admin’s": 34.4,
       "erasing a space buries everything that named it": 53.2,
       "first-member admission sees a seat written around the directory cache": 35.8,
-      "the admin’s seat does not make the meta space somebody’s": 38.5,
+      "the admin’s seat does not make the meta space somebody’s": 13.3,
       "the directory plants the platform, and not one app word": 3.4,
       "the meter and the plan are the platform's word, not a person's": 15.4,
       "the platform seeds an admin person, and completes a half-seeded store": 35.6,
-      "the slug a space is taken by is taken once": 35
+      "the slug a space is taken by is taken once": 11.2
     },
     "workers/yak/preauth_test.ts": {
       "public MCP words and resources use the configured apex": 1.5
@@ -4933,24 +4921,24 @@
       "a domain with nothing ready gets the branded page, not the apex": 6.6
     },
     "workers/yak/query_refs_test.ts": {
-      "typed and untyped eid filters return the same rows and counts at each door": 1212.1
+      "typed and untyped eid filters return the same rows and counts at each door": 551.8
     },
     "workers/yak/rate_test.ts": {
       "a stranger is held to a rate per source at every anonymous door": 1184
     },
     "workers/yak/reach_test.ts": {
       "a batch refused by one store lands in neither": 84.1,
-      "a candidate seed waits for release and lands once": 243.6,
+      "a candidate seed waits for release and lands once": 111.3,
       "a changed draft identity leaves serving reads and writes alone": 59.4,
       "a changed identity replaces its index when the release moves": 67.8,
       "a declared identity is minted before the door hands it to a store": 86,
-      "a first release seeds its candidate words": 133.4,
+      "a first release seeds its candidate words": 54.1,
       "a name written twice through the door is one entity": 91.7,
       "a projection answers what it names, and what its paths reach across the stores": 94.3,
       "a refused draft leaves the serving app store usable": 54.4,
       "a spanning read merges the two stores into one bundle per eid": 95,
       "an order holds across the merge, and its window cuts after it": 130.2,
-      "the app version selects its store declarations after preparation": 185.6,
+      "the app version selects its store declarations after preparation": 80.6,
       "the first release serves the vocabulary it prepared": 39.3,
       "the space speaks one vocabulary, and a word nobody declares is the platform’s": 95.1
     },
@@ -5119,7 +5107,6 @@
     },
     "workers/yak/session_test.ts": {
       "a browser keeps its instrument when it signs in, without claiming a person before it does": 2.8,
-      "a page and worker visit preserve a browser instrument without turning it into a person": 1.7,
       "a session past half its life is renewed; one still young is not": 1.9,
       "a token minted for anything else is no session, and renews into none": 2,
       "an existing session gains a browser instrument and keeps its person and standing": 4.5,
