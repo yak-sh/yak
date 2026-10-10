@@ -2,9 +2,11 @@
 
 import { test } from '@yaks/testing'
 import { assert, assertEquals } from '@std/assert'
-import type { Bundle, Comp, Graph } from '@yaks/graph'
-import type { Vocab } from '@yaks/vocab'
-import { blog, blogGraph, pooledBlog } from './testing.ts'
+import { type Bundle, type Comp, type Graph, graph } from '@yaks/graph'
+import { ram } from '@yaks/ram'
+import { loadVocab, type Vocab } from '@yaks/vocab'
+import { blog, blogGraph, owes, pooledBlog } from './testing.ts'
+import { effectDoc } from './pool.ts'
 import { type Options, runs } from './tools.ts'
 import { effects } from './registry.ts'
 
@@ -63,12 +65,13 @@ test('a graph that keeps no pool has nothing to be behind on', async () => {
   assert(said.body.endsWith('— nothing to report'), said.body)
 })
 
+let poolTools = runs({ vocab: pooledBlog })
 let door = async (
   g: Graph,
   name: 'effect_retry' | 'effect_drop',
   of: string,
 ) => {
-  let [said] = await runs({ vocab: pooledBlog })[name](
+  let [said] = await poolTools[name](
     { entity: { eid: 'c1' }, call: { args: { of } } },
     g,
   ) as Bundle[]
@@ -88,12 +91,26 @@ let mixed = () =>
 
 // A pool holding one failed run, built once: the test is the retry and the
 // pass, not the graph.
+// Pool transitions need their ordinary vocabulary; blog provenance stamps
+// and storage-assigned numbers are unrelated to retrying a run.
+let retryVocab = loadVocab([effectDoc, owes, {
+  $defs: {
+    post: { component: true, properties: { title: { type: 'string' } } },
+  },
+}])
 let landed = 0
-let fx = effects(pooledBlog, {
+let fx = effects(retryVocab, {
   report: () => {},
   write: (b) => worked.apply(b, { trusted: true }),
 })
-let worked = blogGraph([fx], pooledBlog)
+// Retry needs recorded effect rows, not storage-assigned entity numbers.
+let worked = graph({
+  storage: ram(pooledBlog),
+  vocab: pooledBlog,
+  plugins: [fx],
+})
+// The worker is already joined; this test measures retrying and completing.
+await fx.work(worked, undefined, 1)
 await worked.apply([
   { entity: { eid: 'p1' }, post: { title: 'One' } },
   {

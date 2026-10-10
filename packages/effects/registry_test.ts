@@ -411,18 +411,22 @@ test('a declared effect is owed only while its active query matches', async () =
   assertEquals((await g.read('.effect')).length, 1)
 })
 
+// The commit has already owed a run; only writes to that run are measured.
+let bookkeeping = declaring({
+  done: { component: true, type: 'object' },
+  noticed: {
+    effect: true,
+    created: ['done'],
+    changed: ['updated'],
+    removed: ['done'],
+  },
+})
+await bookkeeping.apply([{ ...post('p1'), done: {} }])
+let [owed] = await bookkeeping.read('.effect')
+
 test('a write to an effect row owes no run, whatever it moves', async () => {
-  let g = declaring({
-    done: { component: true, type: 'object' },
-    noticed: {
-      effect: true,
-      created: ['done'],
-      changed: ['updated'],
-      removed: ['done'],
-    },
-  })
-  await g.apply([{ ...post('p1'), done: {} }])
-  let [row] = await g.read('.effect')
+  let g = bookkeeping
+  let row = owed
   await g.apply([{ entity: row.entity, effect: { state: 'done' }, done: {} }], {
     trusted: true,
   })

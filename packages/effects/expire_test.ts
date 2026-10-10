@@ -167,20 +167,22 @@ test('a worker that stays up runs generic expiration without a registered compon
   ok((await g.get(['old']))[0].tombstone)
 })
 
+// Both declarations already hold rows: rejection and cancellation must keep them.
+let invalidVocab = loadVocab({
+  $defs: { item: { component: true, expire: '.item .count' } },
+})
+let invalid = graph({ vocab: invalidVocab, storage: ram(invalidVocab) })
+await invalid.apply([{ entity: { eid: 'one' }, item: {} }])
+let cancelled = make()
+await cancelled.apply([run('one')], { trusted: true })
+
 test('expiration rejects nonfilter declarations and aborts before removing rows', async () => {
-  let v = loadVocab({
-    $defs: { item: { component: true, expire: '.item .count' } },
-  })
-  let g = graph({ vocab: v, storage: ram(v) })
-  await g.apply([{ entity: { eid: 'one' }, item: {} }])
   try {
-    await expire(g)
+    await expire(invalid)
     throw Error('expected rejection')
   } catch (e) {
     equal((e as Error).message, 'item expire must be a filter query')
   }
-  let good = make()
-  await good.apply([run('one')], { trusted: true })
-  equal(await expire(good, { signal: AbortSignal.abort(), now }), 0)
-  ok((await good.get(['one']))[0].effect)
+  equal(await expire(cancelled, { signal: AbortSignal.abort(), now }), 0)
+  ok((await cancelled.get(['one']))[0].effect)
 })

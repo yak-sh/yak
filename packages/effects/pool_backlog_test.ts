@@ -255,18 +255,21 @@ for (let sqlite of [false, true]) {
     }
   })
 
+  // Imported rows are the pagination fixture, not the operation being timed.
+  let physical = fixture(sqlite, {}, true)
+  await physical.g.apply([{
+    entity: { eid: 'target' },
+    post: { title: 'Target' },
+  }])
+  await physical.g.apply([
+    { ...run('z'), entity: { eid: 'z', num: 99 } },
+    { ...run('a'), entity: { eid: 'a', num: 2 } },
+    { ...run('m'), entity: { eid: 'm', num: 57 } },
+  ], { trusted: true })
+
   test(`${backend}: physical pages ignore imported entity numbers and equal timestamps`, async () => {
-    let f = fixture(sqlite, {}, true)
+    let f = physical
     try {
-      await f.g.apply([{
-        entity: { eid: 'target' },
-        post: { title: 'Target' },
-      }])
-      await f.g.apply([
-        { ...run('z'), entity: { eid: 'z', num: 99 } },
-        { ...run('a'), entity: { eid: 'a', num: 2 } },
-        { ...run('m'), entity: { eid: 'm', num: 57 } },
-      ], { trusted: true })
       assertEquals((await f.g.get(['z', 'a', 'm'])).map((b) => b.entity.num), [
         99,
         2,

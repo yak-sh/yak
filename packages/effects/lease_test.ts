@@ -34,9 +34,14 @@ test('the first process to ask gets it, and the second is told no', async () => 
   assertEquals(row?.name, 'sweep')
 })
 
+// Each duty starts held; these tests exercise renewal and release.
+let renewing = g()
+await take(renewing, 'sweep', { holder: 'p1', hold: 100, now: at(0) })
+let releasing = g()
+await take(releasing, 'sweep', { holder: 'p1', hold: 1000, now: at(0) })
+
 test('the holder renews its own, and a rival has to wait out the lapse', async () => {
-  let graph = g()
-  await take(graph, 'sweep', { holder: 'p1', hold: 100, now: at(0) })
+  let graph = renewing
   // Its own again is a renewal, whatever the clock says.
   assertEquals(
     await take(graph, 'sweep', { holder: 'p1', hold: 100, now: at(50) }),
@@ -56,8 +61,7 @@ test('the holder renews its own, and a rival has to wait out the lapse', async (
 })
 
 test('letting go hands it over without waiting, and only the holder may', async () => {
-  let graph = g()
-  await take(graph, 'sweep', { holder: 'p1', hold: 1000, now: at(0) })
+  let graph = releasing
   // Not ours to give up: the row is untouched.
   await drop(graph, 'sweep', { holder: 'p2' })
   assertEquals((await held(graph, 'sweep'))?.holder, 'p1')

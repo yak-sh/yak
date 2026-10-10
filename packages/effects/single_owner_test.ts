@@ -75,9 +75,12 @@ test('single owner recorded success writes only attempt and outcome, without lea
   equal(a.errors, [])
 })
 
+// Joining the empty pool is fixture setup; the write must start its own runs.
+let writer = proc(store(), { defer: false })
+await writer.fx.work(writer.g)
+
 test('single owner writer-started runs contain no distributed claim', async () => {
-  let a = proc(store(), { defer: false })
-  await a.fx.work(a.g)
+  let a = writer
   await a.g.apply([post('p1')])
   await a.fx.idle()
   equal(a.ran.sort(), ['p1', 'sweep'])
