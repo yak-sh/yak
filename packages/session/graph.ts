@@ -44,6 +44,6 @@ export let authenticate =
   async (request: Request): Promise<Actor | null> => {
     let said = request.headers.get(VIA)
     if (!said) return null
-    let s = await sessionFor(host.graph, said)
+    let s = await sessionFor(host.graph, said, ['session.id', 'session.actor'])
     return s ? speaking(s) : null
   }

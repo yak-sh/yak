@@ -69,7 +69,7 @@ let connected = async (
 ): Promise<{ session: Bundle; id: string } | undefined> => {
   if (id != null) {
     if (!id) return undefined
-    let session = await sessionFor(graph, id)
+    let session = await sessionFor(graph, id, ['session.id', 'session.actor'])
     let named = session?.[SESSION]
     if (
       !session || !named || typeof named != 'object' || !('id' in named) ||

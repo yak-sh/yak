@@ -86,3 +86,11 @@ test("a run's own name addresses it when a session is meant, and only then", asy
   )
   assertEquals(await g.address(['abc']), new Map())
 })
+
+test('session resolution can project identity without reading transcript history', async () => {
+  for (let said of ['s1', 'abc']) {
+    let row = await sessionFor(runs, said, ['session.id', 'session.actor'])
+    assertEquals(row?.session, { id: 'abc', actor: 'p1' })
+    assertEquals(speaking(row!), { by: 'p1', via: 's1' })
+  }
+})

@@ -111,7 +111,7 @@ export let runners = (
     (at, id) =>
       after(at, (found) =>
         after(
-          tx.read(`.${SESSION}.id=${JSON.stringify(id)}`),
+          tx.read(`.${SESSION}.id=${JSON.stringify(id)} .fields=entity.eid`),
           ([b]) => b ? new Map([...found, [id, b.entity.eid]]) : found,
         )),
     new Map(),
@@ -120,18 +120,28 @@ export let runners = (
 /**
  * The transcript an id names: the entity it addresses, else the one carrying it
  * as its runner's own id. Nothing is minted here — resolution only reads, and a
- * tool that wants a transcript created does that itself.
+ * tool that wants a transcript created does that itself. `fields` selects only
+ * the properties the caller reads, avoiding derived transcript history.
  */
 export let sessionFor = async (
   g: Pick<Graph, 'address' | 'get' | 'read'>,
   said: string,
+  fields?: string[],
 ): Promise<Bundle | undefined> => {
   if (!said) return undefined
   let [eid] = await addressed(g, [said])
-  let [row] = await g.get([eid])
+  let get = async (id: Eid): Promise<Bundle | undefined> =>
+    (fields
+      ? await g.read(
+        `.entity.eid=${JSON.stringify(id)} .${SESSION} .fields=${
+          fields.join(',')
+        }`,
+      )
+      : await g.get([id]))[0]
+  let row = await get(eid)
   if (row?.[SESSION] && row[TOMBSTONE] == null) return row
   let run = (await runners(g, [said])).get(said)
-  return run ? (await g.get([run]))[0] : undefined
+  return run ? await get(run) : undefined
 }
 
 /**
