@@ -8,7 +8,7 @@
 import { test } from '@yaks/testing'
 import { assert, assertEquals } from '@std/assert'
 import { type Bundle, dead, Refused } from '@yaks/graph'
-import { at, client, comp, COOK, server } from './testing.ts'
+import { at, boxGraph, client, comp, COOK, server } from './testing.ts'
 
 let dal = (eid = 'r1'): Bundle => ({
   entity: { eid },
@@ -219,11 +219,17 @@ test('a delete waits for the server, and a refused one leaves the entity', async
   c.wire.close()
 })
 
+let stored = (() => {
+  let g = boxGraph()
+  g.apply([dal()])
+  return g.storage.read('*') as Bundle[]
+})()
+
 test("an accepted delete lands from the server's answer", async () => {
   let srv = server()
+  srv.graph.storage.tx((tx) => tx.patch(stored))
   let c = client(srv)
-  c.graph.apply([dal()])
-  await c.idle()
+  c.graph.storage.tx((tx) => tx.patch(stored))
 
   c.graph.apply([{ entity: { eid: 'r1' }, $delete: true }])
   assertEquals(comp(at(c.graph, 'r1'), 'recipe').serves, 4) // one round trip
