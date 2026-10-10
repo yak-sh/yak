@@ -101,22 +101,28 @@ test('reopen before first frame pins retained hits; empty frame reconciles stale
   c.close()
 })
 
+let snapshotVault = stash()
+let snapshot = fixture({ vault: snapshotVault, retention: 0 })
+
+await snapshot.c.ready
+let snapshotWatch = snapshot.c.watch('.doc')
+snapshot.frame('s1', [{
+  ...row('a'),
+  doc: { title: 'a', body: 'obsolete' },
+  recipe: { serves: 2 },
+}])
+
+await snapshot.c.mutate([{
+  entity: { eid: 'a' },
+  draft: { text: 'mine' },
+  sieve: { text: 'tab' },
+}])
+await snapshot.c.wire!.idle()
+
 test('snapshots replace absent wire fields and preserve local/none on gone', async () => {
-  let vault = stash()
-  let { c, frame } = fixture({ vault, retention: 0 })
-  await c.ready
-  let w = c.watch('.doc')
-  frame('s1', [{
-    ...row('a'),
-    doc: { title: 'a', body: 'obsolete' },
-    recipe: { serves: 2 },
-  }])
-  await c.mutate([{
-    entity: { eid: 'a' },
-    draft: { text: 'mine' },
-    sieve: { text: 'tab' },
-  }])
-  await c.wire!.idle()
+  let vault = snapshotVault
+  let { c, frame } = snapshot
+  let w = snapshotWatch
   frame('s1', [row('a')])
   assertEquals(comp(c.ent('a'), 'doc').body, null)
   assertEquals(comp(c.ent('a'), 'recipe'), {})

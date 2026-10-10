@@ -298,18 +298,21 @@ test('server evaluated synchronous first answers are visible before watch return
   c.close()
 })
 
+let projection = fixture({ retention: 0 })
+
+let whole = projection.c.watch('whole', server)
+projection.frame({
+  id: 's1',
+  bundles: [{
+    ...row('a'),
+    doc: { title: 'a', body: 'body' },
+    recipe: { serves: 4 },
+  }],
+})
+let projected = projection.c.watch('projection', server)
+
 test('projected/full owners share fields, and departures unload only the released scope', () => {
-  let { c, frame, trouble } = fixture({ retention: 0 })
-  let whole = c.watch('whole', server)
-  frame({
-    id: 's1',
-    bundles: [{
-      ...row('a'),
-      doc: { title: 'a', body: 'body' },
-      recipe: { serves: 4 },
-    }],
-  })
-  let projected = c.watch('projection', server)
+  let { c, frame, trouble } = projection
   frame({ id: 's2', bundles: [row('a')], coverage: { a: { doc: ['title'] } } })
   assertEquals(comp(c.ent('a'), 'doc').body, 'body')
   assertEquals(c.cache.loaded('a', 'doc', 'body'), true)
@@ -440,16 +443,20 @@ test('a rider is answered and held, never a member; each role releases independe
   c.close()
 })
 
+let peers = fixture({ retention: 0 })
+
+peers.c.watch('riders', server)
+peers.frame({ id: 's1', peers: [row('a'), row('b')] })
+peers.c.watch('member', server)
+peers.frame({
+  id: 's2',
+  bundles: [{ ...row('a'), doc: { title: 'a', body: 'full' } }],
+})
+let releasePeers = peers.c.cache.protect(['b'])
+
 test('peer reset, full member overlap and pending pins survive independent releases', () => {
-  let { c, frame } = fixture({ retention: 0 })
-  c.watch('riders', server)
-  frame({ id: 's1', peers: [row('a'), row('b')] })
-  c.watch('member', server)
-  frame({
-    id: 's2',
-    bundles: [{ ...row('a'), doc: { title: 'a', body: 'full' } }],
-  })
-  let release = c.cache.protect(['b'])
+  let { c, frame } = peers
+  let release = releasePeers
   frame({ id: 's1', reset: true, peers: [row('a')] })
   assert(c.ent('b'))
   assertEquals(comp(c.ent('a'), 'doc').body, 'full')

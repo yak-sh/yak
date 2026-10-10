@@ -12,7 +12,7 @@ import { loadVocab } from '@yaks/vocab'
 import { client } from './client.ts'
 
 let text = { type: 'string' }
-let vocab = loadVocab({
+let schema = {
   $defs: {
     doc: { component: true, type: 'object', properties: { title: text } },
     shelf: { component: true, type: 'object', properties: { aisle: text } },
@@ -46,15 +46,16 @@ let vocab = loadVocab({
     // The page's own.
     pick: { rule: true, match: '.doc, +!Pick, +Pick.seen=true' },
   },
-})
+}
+let vocab = loadVocab(schema)
 
 // A page over a server graph in this process: every POST lands in `sent`, and
 // the server refuses while `refuse` is set.
-let page = () => {
-  let server = graph({ storage: ram(vocab), vocab })
+let page = (words = vocab) => {
+  let server = graph({ storage: ram(words), vocab: words })
   let sent: Bundle[][] = []
   let state = { refuse: false }
-  let c = client(vocab, [], {
+  let c = client(words, [], {
     url: 'http://page.test',
     vault: false,
     wireVault: false,
@@ -100,15 +101,26 @@ test('a refused write takes back what its rules added', async () => {
   c.close()
 })
 
+let guess = page(loadVocab({
+  $defs: {
+    doc: schema.$defs.doc,
+    shelf: schema.$defs.shelf,
+    shelve: schema.$defs.shelve,
+  },
+}))
+// The server holds a shelf the page was never sent.
+await guess.server.apply([{
+  entity: { eid: 'd1' },
+  doc: { title: 'Dune' },
+  shelf: { aisle: 'Q' },
+}])
+await replicate(guess.c.graph, [{
+  entity: { eid: 'd1' },
+  doc: { title: 'Dune' },
+}])
+
 test("the server's answer replaces what the page's rule guessed", async () => {
-  let { c, at, idle, server } = page()
-  // The server holds a shelf the page was never sent.
-  await server.apply([{
-    entity: { eid: 'd1' },
-    doc: { title: 'Dune' },
-    shelf: { aisle: 'Q' },
-  }])
-  await replicate(c.graph, [{ entity: { eid: 'd1' }, doc: { title: 'Dune' } }])
+  let { c, at, idle } = guess
   c.mutate([{ entity: { eid: 'd1' }, doc: { title: 'Dune II' } }])
   assertEquals(at('d1', 'shelf'), { aisle: 'Z' })
   await idle()

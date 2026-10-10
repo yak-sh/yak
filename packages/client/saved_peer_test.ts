@@ -59,14 +59,18 @@ test('a new page reads its saved peer position from the initial subscription sna
   }
 })
 
+let moving = page()
+
+await moving.c.ready
+moving.frame([row(1)], { reset: true })
+await moving.c.wire!.idle()
+
+await moving.c.mutate([{ entity: { eid: 'a' }, position: { x: 2 } }])
+await moving.c.mutate([{ entity: { eid: 'a' }, position: { x: 3 } }])
+
 test('incoming saved rows preserve newer local movement still waiting for its relay pace', async () => {
-  let { c, watch, socket, frame } = page()
+  let { c, watch, socket, frame } = moving
   try {
-    await c.ready
-    frame([row(1)], { reset: true })
-    await c.wire!.idle()
-    await c.mutate([{ entity: { eid: 'a' }, position: { x: 2 } }])
-    await c.mutate([{ entity: { eid: 'a' }, position: { x: 3 } }])
     let relays = socket.sent.filter((m) => (m as Frame).relay) as Frame[]
     assertEquals(relays.map((f) => f.relay?.[0].position), [{ x: 2 }])
     for (let reset of [false, true]) {
