@@ -870,7 +870,7 @@
       "the words are indexed on every write path, not just the plugin": 2
     },
     "packages/browse/bundle_test.ts": {
-      "the app bundles into one browser module": 1255.1
+      "the app bundles into one browser module": 379.8
     },
     "packages/browse/components/Ansi_test.tsx": {
       "ANSI output becomes escaped HTML spans": 1.1
@@ -884,49 +884,48 @@
     "packages/browse/components/Chat_test.ts": {
       "a held reference list asks for no rows of its own": 5.4,
       "a new chat reuses the composer input with a terse prompt": 7.3,
-      "chat references mount the entity List.Tile renderer": 7.5,
-      "chatPlan picks a graph-native provider": 1.2
+      "chat references mount the entity List.Tile renderer": 7.5
     },
     "packages/browse/components/Comments_test.ts": {
       "a thread shows answers under their question, not under unrelated notes": 29.7,
       "byline reads actor and instrument from the created stamp": 12.3,
-      "composer names an unnamed session by its chip id": 16,
+      "composer names an unnamed session by its chip id": 0.6,
       "shared comment send line keeps drafts, sends by submit or Enter once and leaves Shift+Enter alone": 9.1,
       "viaName names a session by its chip id, never its harness uuid": 4.8
     },
     "packages/browse/components/Entity_test.ts": {
       "Entity mounts hooks with the original Ent and extra props": 1.9,
       "a pending proposal keeps deletion named as deletion": 10.1,
-      "a role keeps its face without lifecycle actions": 12.3,
+      "a role keeps its face without lifecycle actions": 0.7,
       "boards open on Board with List still available": 1.2,
-      "quarantine is hidden until revealed and can be cleared": 11.5,
+      "quarantine is hidden until revealed and can be cleared": 0.6,
       "query groups preserve chosen tabs and default faces": 11.5,
-      "release names the session by its chip id": 12.6,
-      "sessions open on Session with Full still available": 15.7
+      "release names the session by its chip id": 1,
+      "sessions open on Session with Full still available": 0.7
     },
     "packages/browse/components/Markdown_test.tsx": {
       "markdown fills the chosen face and forwards its props": 6.6
     },
     "packages/browse/components/Navigation_test.tsx": {
-      "the sidebar lists its places, lights the one you are on, and goes where you ask": 48.8
+      "the sidebar lists its places, lights the one you are on, and goes where you ask": 13.5
     },
     "packages/browse/components/Search_test.tsx": {
-      "configured Inspect query renderer receives its host context": 11.8,
+      "configured Inspect query renderer receives its host context": 0.8,
       "query page draws the inspector table through the shared registry": 10,
       "search chip is a draggable link, modifiers keep native navigation": 8.3,
       "search sends only the settled query while typing": 186.2
     },
     "packages/browse/components/Sessions_test.tsx": {
-      "All sessions reuses the paged list and accepts words and query filters, newest first": 143.9,
-      "a session exposes its spawned children through SessionRelated": 28.5,
+      "All sessions reuses the paged list and accepts words and query filters, newest first": 43.8,
+      "a session exposes its spawned children through SessionRelated": 7.2,
       "personal lists prioritize live roots and drop expired leases without graph writes": 204.8,
-      "the sidebar and the tray both lead to every session, even with none of your own": 20.9
+      "the sidebar and the tray both lead to every session, even with none of your own": 3
     },
     "packages/browse/components/Status_test.tsx": {
-      "fix status links minted ids and follows the session lifecycle": 21
+      "fix status links minted ids and follows the session lifecycle": 1.7
     },
     "packages/browse/components/Tray_test.ts": {
-      "the tray shows live and recent sessions in separate sections": 22.4
+      "the tray shows live and recent sessions in separate sections": 4.5
     },
     "packages/browse/components/archetype_test.ts": {
       "432 archetypes preserve every registry pick": 1479.9
@@ -938,13 +937,9 @@
     },
     "packages/browse/components/inspect_test.tsx": {
       "a view's own page state, set through the inspector's io, redraws it": 7.6,
-      "an entity an inspector view links to opens on its own page, not Debug": 14.9
-    },
-    "packages/browse/components/memo_test.ts": {
-      "memo sleeps on equal props and wakes for an owned signal": 1.1
+      "an entity an inspector view links to opens on its own page, not Debug": 2.2
     },
     "packages/browse/components/nav_test.ts": {
-      "following an entity opens its page on either pointer kind": 8,
       "numeric routes resolve confirmed retained rows before a reopen frame": 7.8,
       "short id chip and browser route round trip; a lettered handle is lost": 16.4
     },
@@ -972,7 +967,6 @@
     },
     "packages/browse/components/views/Board_test.tsx": {
       "a column grows by appending, and keeps its rows while it loads": 81,
-      "a quick-add box types on from its draft, and filing spends it": 1.2,
       "quick-add previews empty facets and ordinary properties": 4.6
     },
     "packages/browse/components/views/Debug_test.tsx": {
@@ -988,17 +982,14 @@
       "command and output summaries show one line and a more control": 1.2,
       "entry registry specializes command and result faces": 6,
       "expanded entries offer only specifically rendered faces": 20.9,
-      "full and normalized prose identify people and model output": 1.2,
       "open summaries grow their own content in place, no second card": 6.5,
-      "refused and legacy failed results settle and render as failures": 15.2,
+      "refused and legacy failed results settle and render as failures": 2,
       "tool results settle their call row instead of adding a row": 7.1
     },
     "packages/browse/components/views/Inline_test.tsx": {
       "Inline renderers say the title without the id": 6.4,
-      "a link draws its entity through the Title a package contributes": 1.1,
       "a projected peer paints its settled status": 6.4,
-      "an entity with no title and no number is called by its handle": 6.4,
-      "shared Id resolves a contributed identity instead of drawing its own chip": 6.6
+      "an entity with no title and no number is called by its handle": 6.4
     },
     "packages/browse/components/views/List_test.tsx": {
       "a list grows by appending, and keeps its rows while it loads": 39.6
@@ -1008,7 +999,6 @@
       "other artifacts download, and attachments share the media face": 6.4
     },
     "packages/browse/components/views/ProjectReads_test.ts": {
-      "Dashboard membership follows the newest claim, cached or not": 1,
       "project reads open wire subs and retain hits without cached far rows": 7.2
     },
     "packages/browse/components/views/Raw_test.tsx": {
@@ -1016,9 +1006,9 @@
       "Markdown renders highlighted code inside pre": 6.5
     },
     "packages/browse/components/views/Session_test.tsx": {
-      "Session explains loading, ready-empty, rows, and read failure": 43.8,
+      "Session explains loading, ready-empty, rows, and read failure": 11.3,
       "Session paints the newest page and loads earlier entries on demand": 169.9,
-      "SessionRow loads its task title when no peer delivered it": 17.6,
+      "SessionRow loads its task title when no peer delivered it": 3.3,
       "session Tile names its work, model, and last activity without IDs": 7.7,
       "session lifecycle shares the task summary lane": 6.5,
       "session list Tile names its brief without exposing IDs": 2.5,
@@ -1027,24 +1017,20 @@
       "session references use the usual entity and URL faces": 6.4,
       "session row names the first ask and keeps the brief beneath it": 12.2,
       "session timestamps link to graph entries": 5.9,
-      "session title names model and effort": 6.8,
-      "uncached graph entries keep their normalized session face": 5.5
+      "session title names model and effort": 6.8
     },
     "packages/browse/components/views/Show_test.tsx": {
       "Runs and Tasks ask only their typed memberships, not every reverse ref": 9.1,
       "a board whose saved query cannot be read shows why": 6.3,
-      "a doc without accept renders no Acceptance section, not JSON": 8.3,
       "a hook-using renderer mounts through the helper": 5.9,
       "a superseded entity is marked on its face with what replaced it": 8.2,
       "a view that throws fails in its own slot, and the page paints": 20.7,
       "claim chip loads its referenced session instead of painting a blank": 15.1,
       "comment dependencies lead with the entity commented on": 6.1,
       "document meta names its creator and editor after their ages": 6.1,
-      "document meta paints no tally when it has no comments": 6.5,
-      "empty document meta remains a first-class null": 10.1,
       "mail Full section shows its envelope and delivery receipt": 11.6,
       "meta names a creator it has not loaded by its handle": 11,
-      "proposal meta distinguishes pending, cancelled, and approved": 19.7,
+      "proposal meta distinguishes pending, cancelled, and approved": 2.1,
       "task acceptance is a distinct Markdown section": 10.1,
       "task meta carries both full facts and compact edge tallies": 16.1,
       "the full face paints the body for a viewer with no actor": 10.4,
@@ -1062,22 +1048,19 @@
     },
     "packages/browse/live_archetypes_failure_test.ts": {
       "failed descriptor reads release and can retry on the next render": 19.2,
-      "malformed or misaddressed descriptors are never trusted": 12.6
+      "malformed or misaddressed descriptors are never trusted": 1
     },
     "packages/browse/live_archetypes_test.ts": {
-      "local table names prove the spine without reading component bodies": 5.4,
       "projected descriptors batch, wake renderers, release, and survive eviction": 25.1
     },
     "packages/browse/live_client_test.ts": {
-      "a derived value wider than its enum still lands": 15.3,
+      "a derived value wider than its enum still lands": 2.5,
       "a frame lands in the box and is reported to every name, first as a reset": 10.7,
       "a refusal is reported, and lands no rows": 9.7,
-      "a test server speaks through receive, as changes": 5.1,
       "frames the host batches into one message are each reported": 8.7,
       "socket refusals reach the page tracker with their reason": 6.7
     },
     "packages/browse/live_test.ts": {
-      "a board cache prime opens no second unwindowed subscription": 5.3,
       "a board naming the lazy partition lists its entries": 6.3,
       "a board renders from the subscription and tracks joins and leaves": 6.3,
       "a frame wakes only the readers of its own sub and rows": 2.8,
@@ -1088,16 +1071,12 @@
       "a lost socket reconnects in place; the painted cache survives": 14.4,
       "a replacement frame forgets the prior query set": 1.6,
       "a subscribed board sleeps through an unrelated ordinary patch": 7,
-      "agreement diagnostics are inert until explicitly enabled": 7.8,
-      "an empty sieve does not subscribe to the graph": 5.2,
       "an unspellable query is a miss, and resolves when its rows land": 5.9,
-      "applyLocal: a camera birth still publishes the cache": 4.9,
       "applyLocal: an idempotent entity death preserves cache identity": 5.7,
-      "applyLocal: an idempotent replay preserves cache identity": 5.2,
       "applyLocal: entity death sweeps its edges into the report": 5.7,
       "applyLocal: narrow signals wake only touched graph slices": 7.7,
       "applyLocal: reports touched eids and edges": 9.8,
-      "backlinks: reverse-union set + via, awake only for its own target": 14.8,
+      "backlinks: reverse-union set + via, awake only for its own target": 1.2,
       "board membership sleeps through an unrelated row patch": 5.7,
       "boardAll: whole-graph match, chrome/comments/self excluded": 5.9,
       "boardPost excludes chrome and self from the subscription members": 5.7,
@@ -1106,23 +1085,19 @@
       "camera motion and card stacking stay off the graph signal": 8.1,
       "catch-up then live batch apply in arrival order": 5.6,
       "client singletons: four tab subs, local reads, isolation (T-21490)": 7.2,
-      "closing a shadow subscription evicts nothing": 6,
       "comment badges share a target tally, refcount it, and reopen it": 6,
-      "commentCount shares one aggregate sub across targets (T-21283)": 5.1,
       "comments: reverse-ref set, awake only for its own thread": 8,
       "domains: the server distinct wins over the working set": 10.1,
       "each aggregate frame replaces the whole tally": 5.2,
       "ent: refs put open work before settled work": 5.5,
       "facet reads wake only their own membership": 8,
       "facets: byComp derivation matches the whole-cache scan": 10.3,
-      "findEid does not scan or subscribe after indexing": 7.5,
       "findEid indexes human ids and short handles": 8,
       "findEid reads an alias off the key that names the entity": 9,
       "foldFor: query membership, live statuses off the row": 9.9,
       "frames that arrive together land in one batch": 16.6,
       "gated: red keys on the blocked facet, never an open requires": 2,
       "holdLocal answers a per-row query off held rows, opening no server sub": 7.5,
-      "loaded: a row no projected sub holds is full": 5.2,
       "local reverse reads never dial, including one read per entry (T-37033)": 15.5,
       "myMode: this actor's subscription, off the reverse index": 1.3,
       "narrow signals follow births, subscription eviction, and census": 6.5,
@@ -1132,8 +1107,6 @@
       "queryEids indexes any {eid} reference with no bespoke index": 8,
       "queryEids resolves pending wakes off the reverse index, narrowly": 10.1,
       "relationship indices wake only their affected targets": 7.3,
-      "repoUrl follows a session actor": 9.9,
-      "repoUrl follows an entry through its session": 7.6,
       "repoUrl follows task, comment, and session ownership": 7.1,
       "reverse subs: held per open card, torn down on close (T-21489)": 5.5,
       "server query projections index member wakes and preserve server membership": 54.7,
@@ -1180,21 +1153,18 @@
     "packages/browse/remote_test.ts": {
       "remote inspector uses saved login on resolution, HTTP and socket handshakes": 171.3
     },
-    "packages/browse/resolver_test.ts": {
-      "memoryResolver resolves and subscribes an {eid}-ref query, narrowly": 1.1
-    },
     "packages/browse/retention_live_test.ts": {
-      "bounded confirmation does not invalidate retained rows outside its page": 20.8,
-      "full confirmation drops removed components without blanking retained rows": 24.8,
-      "ownership-only retention does not expand a confirmed bounded query": 26.9,
-      "reopen paints retained rows before sending; confirmation removes stale hits": 47.4,
+      "bounded confirmation does not invalidate retained rows outside its page": 1.2,
+      "full confirmation drops removed components without blanking retained rows": 1.4,
+      "ownership-only retention does not expand a confirmed bounded query": 1.6,
+      "reopen paints retained rows before sending; confirmation removes stale hits": 2.5,
       "retained tombstones never resurrect through reads": 11.3
     },
     "packages/browse/rfc2047_test.ts": {
       "unmime: the RFC 2047 display table": 1.5
     },
     "packages/browse/sessions_test.ts": {
-      "session selection is capped after putting current runners ahead of newest history": 46.3,
+      "session selection is capped after putting current runners ahead of newest history": 1.6,
       "standing session queries exclude automation and bound every arm": 1.5
     },
     "packages/browse/sync_test.ts": {
@@ -1207,7 +1177,7 @@
     "packages/browse/tui/md_test.tsx": {
       "terminal markdown detects indented code blocks": 22.1,
       "terminal markdown detects unlabelled tilde fences": 242,
-      "terminal markdown highlights specified fenced code": 37
+      "terminal markdown highlights specified fenced code": 12
     },
     "packages/browse/tui/session_test.tsx": {
       "comment replies paint as nested branches in the terminal": 9.7,

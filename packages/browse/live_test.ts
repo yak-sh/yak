@@ -1,7 +1,6 @@
 // The cache derivations: what the field pickers read out of the live
 // world. Pure functions of the cache signal — no DOM, no socket.
-import { test } from '@yaks/testing'
-import { tick, until } from './testing.ts'
+import { test, tick, until } from './testing.ts'
 import {
   agreementProbe,
   applyLocal,
@@ -72,7 +71,9 @@ import {
   unsubscribe,
   useOutboxStore,
   useRoute,
+  useSocket,
 } from './live.ts'
+import { quiet } from './live_client.ts'
 import { edgeEid, link } from './edge.ts'
 import { type Ask, host } from './host_testing.ts'
 import { EXISTS, parseQuery, PROJECT, resolveRefs } from './query.ts'
@@ -187,6 +188,37 @@ test('server-resolve: a cache hit never touches the wire', () => {
     assertEquals(f.calls.length, 0)
   } finally {
     f.restore()
+  }
+})
+
+test('a textual query keeps server membership across a signal reset', () => {
+  let prior = config.host
+  config.host = 'browser.test'
+  let socket = useSocket(quiet)
+  let preds = parseQuery('needle')
+  let ids = holdQuery(preds)
+  let sub = querySubscription(preds)!.sub
+  try {
+    landSub({
+      sub,
+      replace: true,
+      changes: [
+        { eid: 'ranked', name: 'entity', comp: { eid: 'ranked', num: 1 } },
+        { eid: 'ranked', name: 'doc', comp: { title: 'Server ranking' } },
+      ],
+    })
+    // A local text hit is not a member until the server says it is.
+    applyLocal([
+      { eid: 'local', name: 'entity', comp: { eid: 'local', num: 2 } },
+      { eid: 'local', name: 'doc', comp: { title: 'needle' } },
+    ])
+    resetSignals()
+    assertEquals(ids.value, ['ranked'])
+    assertStrictEquals(queryEids(preds), ids)
+  } finally {
+    dropQuery(preds)
+    useSocket(socket)
+    config.host = prior
   }
 })
 
@@ -3013,6 +3045,7 @@ test('a graph that answers it has no canvas gets its first', async () => {
     wire.free()
     useRoute(restore)
     config.host = prior
+    dropQuery(resolveRefs(parseQuery('.canvas'), findEid))
     cache.value = {}
     resetSignals()
   }

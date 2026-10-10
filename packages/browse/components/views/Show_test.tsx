@@ -2,8 +2,7 @@
 // where an absent field must paint nothing. A renderer is a component: every
 // case mounts it through Preact (mount.ts) and asserts on the resulting DOM,
 // never on a bare call's vnode tree.
-import { test } from '@yaks/testing'
-import { tick } from '../../testing.ts'
+import { test, tick } from '../../testing.ts'
 import { h, render } from 'preact'
 import { parseHTML } from 'linkedom'
 import { assert, assertEquals, assertExists } from '@std/assert'

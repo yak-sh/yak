@@ -1,7 +1,6 @@
 // Local inference must prove a complete physical set. Unknown projected sets
 // use batched, addressed one-shots, never the graph-wide descriptor catalogue.
-import { test } from '@yaks/testing'
-import './testing.ts'
+import { test } from './testing.ts'
 import { assertEquals, assertStrictEquals } from '@std/assert'
 import { eidOf } from '@yaks/archetype'
 import { archetypeTables, rememberArchetype } from './live_archetypes.ts'

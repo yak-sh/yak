@@ -1,6 +1,5 @@
 // A session row names the work and shows its latest activity and model.
-import { test } from '@yaks/testing'
-import { tick } from '../../testing.ts'
+import { test, tick } from '../../testing.ts'
 import { identityEid } from '@yaks/graph'
 import { h, render } from 'preact'
 import { assert, assertEquals } from '@std/assert'

@@ -1,7 +1,6 @@
 // A descriptor that does not hash to its id is never trusted, and a read the
 // host refused is asked again on the next render.
-import { test } from '@yaks/testing'
-import './testing.ts'
+import { test } from './testing.ts'
 import { assertEquals, assertThrows } from '@std/assert'
 import { eidOf } from '@yaks/archetype'
 import { archetypeTables } from './live_archetypes.ts'

@@ -9,11 +9,25 @@ let checked = new WeakSet<object>()
 let asked = new Set<string>()
 let queued = new Set<string>()
 let serial = 0
+let pending: ReturnType<typeof setTimeout> | undefined
+
+// A fresh test fixture has learned no descriptors. Production keeps immutable
+// content across eviction and reconnect, so it never calls this reset.
+export let resetArchetypesForTest = () => {
+  clearTimeout(pending)
+  pending = undefined
+  sets = new Archetypes()
+  checked = new WeakSet()
+  asked.clear()
+  queued.clear()
+}
+
 let request = (eid: string) => {
   if (asked.has(eid)) return
   asked.add(eid)
   if (!queued.size) {
-    setTimeout(() => {
+    pending = setTimeout(() => {
+      pending = undefined
       let ids = [...queued]
       queued.clear()
       oneShot(

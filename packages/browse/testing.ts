@@ -7,6 +7,7 @@
 // sleeps a fixed span: it yields with `tick` and waits on a fact with `until`.
 
 import { learn } from './types.ts'
+import { test as declareTest } from '@yaks/testing'
 import { docs as kernel } from '@yaks/kernel/vocab'
 import { docs as id } from '@yaks/id/vocab'
 import { docs as secrets } from '@yaks/secrets/vocab'
@@ -141,8 +142,22 @@ export let faked = (globals: Record<string, unknown>) => {
 // through live.ts's transport seam, and the cache is only what the test seeds.
 // `wire` is the page's own route, for a test that follows a write out to
 // /apply. live.ts reads the tables as it loads, so it is imported after them.
-let { useRoute } = await import('./live.ts')
+let { resetForTest, useRoute } = await import('./live.ts')
+let { resetArchetypesForTest } = await import('./live_archetypes.ts')
 export let wire = useRoute(() => {})
+
+/** A live fixture starts with a new tab's state, even in a warm runtime. */
+export let test: typeof declareTest = (name, body, options) =>
+  declareTest(name, async () => {
+    resetForTest()
+    resetArchetypesForTest()
+    try {
+      await body()
+    } finally {
+      resetForTest()
+      resetArchetypesForTest()
+    }
+  }, options)
 
 /** One macrotask yield. */
 export let tick = () => new Promise<void>((go) => setTimeout(go, 0))

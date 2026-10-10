@@ -1,6 +1,5 @@
 // A card's reactive style follows graph moves and its narrow stacking signal.
-import { test } from '@yaks/testing'
-import '../testing.ts'
+import { test } from '../testing.ts'
 import { computed, signal } from '@preact/signals'
 import { assertEquals } from '@std/assert'
 import { applyLocal, cache } from '../live.ts'

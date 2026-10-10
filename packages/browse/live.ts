@@ -294,19 +294,21 @@ let kidsVia =
 // never wakes a subscriber. Never `Object.values(paint.value).filter` in a
 // render: that scans the whole graph AND subscribes to every patch (T-17036,
 // the 16ms frame budget).
-let mem: MemoryResolver = memoryResolver({
-  read: (eid) => paint.peek()[eid],
-  keys: () => Object.keys(paint.peek()),
-  // Heal the derived index before narrowing — the same guard querySet held.
-  anchor: (preds) => {
-    syncIx()
-    return anchor(ix, preds)
-  },
-  // A reverse hop's children, read off the same derived index the anchor uses —
-  // the reverse map IS the EXISTS engine (index.ts). Healed first, then each
-  // child eid resolved to its cache bag for the sub-filter.
-  kids: (eid, comp, prop) => kidsVia((k) => paint.peek()[k])(eid, comp, prop),
-})
+let makeResolver = (): MemoryResolver =>
+  memoryResolver({
+    read: (eid) => paint.peek()[eid],
+    keys: () => Object.keys(paint.peek()),
+    // Heal the derived index before narrowing — the same guard querySet held.
+    anchor: (preds) => {
+      syncIx()
+      return anchor(ix, preds)
+    },
+    // A reverse hop's children, read off the same derived index the anchor uses —
+    // the reverse map IS the EXISTS engine (index.ts). Healed first, then each
+    // child eid resolved to its cache bag for the sub-filter.
+    kids: (eid, comp, prop) => kidsVia((k) => paint.peek()[k])(eid, comp, prop),
+  })
+let mem = makeResolver()
 
 let seeding = false
 let refreshQueries = (eids: Set<string>) => mem.refresh(eids)
@@ -810,6 +812,56 @@ export let resetSignals = () =>
     resetQueries()
     clearResolved() // a reseed may now hold what the server-resolve sidecar named
   })
+
+// Tests start a new tab in the same runtime. Dispose the prior fixture's
+// replica and forget its readers before planting another graph; a production
+// seed keeps those readers and uses resetSignals instead.
+export let resetForTest = () => {
+  replacing = true
+  try {
+    replica?.box.close()
+  } finally {
+    replacing = false
+  }
+  queryUses.clear()
+  querySignals.clear()
+  aggSets.clear()
+  commentTargets.clear()
+  clientSubs = new WeakMap()
+  pinZs.clear()
+  rowSignals.clear()
+  relationSignals.clear()
+  childSignals.clear()
+  subQueries.clear()
+  shadowSubs.clear()
+  subFailures.clear()
+  subFields.clear()
+  subWindows.clear()
+  routeWindows.clear()
+  subTicks.clear()
+  heldTicks.clear()
+  edgeHolders.clear()
+  subEdges.clear()
+  boardUses.clear()
+  boardEntrySubs.clear()
+  entryUses.clear()
+  edgeUses.clear()
+  resultUses.clear()
+  resultSignals.clear()
+  routeUses.clear()
+  rowsUses.clear()
+  oneShots.clear()
+  mem = makeResolver()
+  agreement = undefined
+  homeMade = false
+  asked.clear()
+  queue.clear()
+  cache.value = {}
+  deps.value = heldDeps = []
+  replica = makeClient()
+  liveGraph = cache.peek()
+  resetSignals()
+}
 
 // A z-only pin patch binds straight to its one DOM attribute. The fallback
 // seeds cards mounted after the patch without making this signal map a cache.

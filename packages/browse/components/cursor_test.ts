@@ -65,8 +65,9 @@ class FakeSocket {
   close() {}
 }
 
-let context = () =>
-  faked({
+let context = () => {
+  let prior = installHistory(port)
+  let globals = faked({
     location: place,
     history: {
       pushState: (_s: unknown, _t: string, url: string) => {
@@ -83,6 +84,14 @@ let context = () =>
     WebSocket: FakeSocket,
     navigator: { userAgent: 'test' },
   })
+  return {
+    [Symbol.dispose]: () => {
+      installHistory(prior)
+      globals[Symbol.dispose]()
+      bindHistory(prior)
+    },
+  }
+}
 
 // The graph the app opens on, a root canvas and a task to walk into, in a
 // browsing context of this test's own until it ends.
@@ -107,7 +116,6 @@ let graph = () => {
 let go = (url: string) => {
   entries = [url]
   at(url)
-  installHistory(port)
   bindHistory(port)
 }
 
