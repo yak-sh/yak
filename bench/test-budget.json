@@ -13,7 +13,7 @@
   },
   "platforms": {
     "browser": 8594.7,
-    "deno": 270130.8,
+    "deno": 223212.7,
     "terminal": 1582.4,
     "workerd": 180558
   },
@@ -244,10 +244,7 @@
     },
     "apps/vale/inspect_worker_test.ts": {
       "inspect worker checks owner and reads live hero state": 1.7,
-      "inspect worker resolves land and villager names": 88.5
-    },
-    "apps/vale/instances_test.ts": {
-      "building template is shared between chunks and disposed after both leave": 1.6
+      "inspect worker resolves land and villager names": 35.2
     },
     "apps/vale/items_test.ts": {
       "item designs in the store feed gear, recipes and stock": 9,
@@ -286,9 +283,6 @@
     },
     "apps/vale/music_catalog_test.ts": {
       "song subscription projects the current main audio and its qualified riders": 45.4
-    },
-    "apps/vale/music_takes_test.ts": {
-      "recordings list every take while the game plays the chosen earlier take": 1.3
     },
     "apps/vale/music_test.ts": {
       "region music finishes one source before starting another": 3.7,
@@ -456,8 +450,7 @@
     "apps/vale/stock.ts": {
       "apps/vale/stock.ts block 1": 2.4,
       "apps/vale/stock.ts block 3": 14.8,
-      "apps/vale/stock.ts block 4": 1.7,
-      "apps/vale/stock.ts block 8": 1.2
+      "apps/vale/stock.ts block 4": 1.7
     },
     "apps/vale/stock_test.ts": {
       "a deal asks only for what the land has": 2,
@@ -648,7 +641,6 @@
     "packages/admin/push_test.ts": {
       "a directory reads as text, bytes that are not UTF-8 as base64, and no dotfiles": 1.4,
       "a large directory fits bounded calls before deletion and deploy": 5.8,
-      "a push leaves the app holding exactly the directory, released once": 1.6,
       "a push waits for a deploying server to answer file hashes": 2.9,
       "an interrupted push can be run again before deletion or deploy": 1.8,
       "large files are split by request size": 3.1
@@ -667,7 +659,6 @@
     },
     "packages/api/README.md": {
       "packages/api/README.md block 1": 9.1,
-      "packages/api/README.md block 11": 1.3,
       "packages/api/README.md block 2": 5.9,
       "packages/api/README.md block 4": 6.2,
       "packages/api/README.md block 6": 4.4,
@@ -754,7 +745,6 @@
       "a subscription to an entity’s history hears each change": 6.1,
       "a watch asked again after closing answers from memory, as it stands now": 6.5,
       "a windowed query ignores writes outside its fixed owner": 1.3,
-      "an aggregate is answered with its value, and again when it moves": 1.4,
       "an unrelated change to a member does not read or repeat its answer": 1.2,
       "backlinks change only when a referrer changes": 1.7,
       "commits made while a pass reads are one pass after it": 1.1,
@@ -894,7 +884,6 @@
       "Entity mounts hooks with the original Ent and extra props": 1.9,
       "a pending proposal keeps deletion named as deletion": 10.1,
       "a role keeps its face without lifecycle actions": 0.7,
-      "boards open on Board with List still available": 1.2,
       "quarantine is hidden until revealed and can be cleared": 0.6,
       "query groups preserve chosen tabs and default faces": 11.5,
       "release names the session by its chip id": 1,
@@ -1062,7 +1051,6 @@
       "a board renders from the subscription and tracks joins and leaves": 6.3,
       "a frame wakes only the readers of its own sub and rows": 2.8,
       "a graph that answers it has no canvas gets its first": 24.8,
-      "a hand-built query and its parsed spelling are one server set": 9.6,
       "a hot board sleeps through card births and deaths": 11.3,
       "a list of rows is held in one sub and freed by its last holder": 4.6,
       "a lost socket reconnects in place; the painted cache survives": 14.4,
@@ -1081,7 +1069,6 @@
       "camera motion and card stacking stay off the graph signal": 8.1,
       "catch-up then live batch apply in arrival order": 5.6,
       "client singletons: four tab subs, local reads, isolation (T-21490)": 7.2,
-      "comment badges share a target tally, refcount it, and reopen it": 6,
       "comments: reverse-ref set, awake only for its own thread": 8,
       "each aggregate frame replaces the whole tally": 5.2,
       "ent: refs put open work before settled work": 5.5,
@@ -2361,7 +2348,7 @@
       "runtime queued cancellation commits terminal entry and dispatch removal together": 1.9,
       "runtime queued cancellation commits terminal entry and legacy settlement together": 11.1,
       "runtime queued cancellation is scoped, and inspection does not schedule execution": 92.9,
-      "worker runtime projection and scoped continuation use explicit commands": 258.5
+      "worker runtime projection and scoped continuation use explicit commands": 112.9
     },
     "packages/harness/session_machines_test.ts": {
       "export resolves session paths within provider root and keeps binary bytes": 1.4,
@@ -2463,9 +2450,6 @@
       "usage panel reads latest inherited ask metadata without transcript bodies": 51.9,
       "window counts exclude fork ancestor entries beyond its boundary": 57.9,
       "worker pages retained graph data and keeps initial transfer independent of transcript length": 686.7
-    },
-    "packages/hook/README.md": {
-      "packages/hook/README.md block 1": 2.3
     },
     "packages/hook/signed_test.ts": {
       "stripe: the exact bytes verify; a moved byte or another secret does not": 3.6
@@ -2841,7 +2825,6 @@
       "a signed-in visitor changes and deletes what they wrote": 7.7,
       "a visitor adds to an open thing and changes nobody else’s row": 7,
       "a writer paces each entity separately, including an owner": 2.5,
-      "an anonymous row is nobody’s, and saying it again is no change": 1.1,
       "an owner writes": 1.2,
       "vouched standing governs both writes and admission without reviving old grants": 1.1
     },
@@ -2853,7 +2836,6 @@
       "a permitted mark retains conditional write checks and pacing": 1.7,
       "a referenced hero owner completes once, in either hook order": 2.5,
       "a referenced owner may remove a mark without editing the request": 2.3,
-      "companion permission follows the target current ownership": 1.1,
       "only an unbylined hero belongs to its browser": 1.2,
       "permission requires a live stored target and obeys mode and mark floors": 2.9
     },
@@ -3768,7 +3750,7 @@
       "MessagePort request limits and timeout bound abandoned operations": 11.7,
       "MessagePort requests, frames, failures and pending shutdown": 1.6,
       "real worker crash rejects pending requests": 17.7,
-      "request deadline override can wait indefinitely but disconnect still rejects": 16.1
+      "request deadline override can wait indefinitely but disconnect still rejects": 1.9
     },
     "packages/sync/ready_test.ts": {
       "ready waits for apply, and an old completion cannot confirm a new ask": 6
@@ -3890,14 +3872,12 @@
       "packages/tools/README.md block 8": 1.2
     },
     "packages/tools/args_test.ts": {
-      "a write refuses unresolved word refs with absent identity": 1.4,
       "name resolution ignores deleted word eid before alias": 2.7,
       "name resolution ignores deleted word eid before title": 2.4,
       "name resolution ignores empty word eid before alias": 2.7,
       "name resolution ignores empty word eid before title": 2.7,
       "tool name resolution: none": 1.2,
-      "tool name resolution: one match": 1.8,
-      "tool name resolution: several": 1.2
+      "tool name resolution: one match": 1.8
     },
     "packages/tools/declared_test.ts": {
       "a command keeps its declared grammar and never derives one": 1.4,
@@ -4237,7 +4217,6 @@
     },
     "packages/web/routes_test.ts": {
       "a name opens the page, and a path naming nothing is the 404 page": 6.7,
-      "the doors and the other plugins keep their paths": 1.2,
       "web and terminal writes are attributed to the configured owner through API admission": 2.9
     },
     "packages/workerd/upgrade_test.ts": {
@@ -4308,16 +4287,16 @@
     "workers/yak/app_bindings_test.ts": {
       "JSONC takes precedence over JSON and neither config is served publicly": 182.2,
       "a missing explicit main refuses before resource creation, upload or deletion": 47.6,
-      "a partial resource creation is recorded and reused on retry": 185,
-      "a refused provisioning scope keeps draft files private and uploads no worker": 546.9,
+      "a partial resource creation is recorded and reused on retry": 78.4,
+      "a refused provisioning scope keeps draft files private and uploads no worker": 234.9,
       "a static app may deploy its browser entry.js": 62.6,
       "a vpc_services door needs a tunnel, and the script never holds it": 75.7,
       "app bindings survive redeploy, removal and trash until permanent deletion": 296.9,
       "explicit worker.js and entry.js are valid server sources": 167.7,
       "invalid main leaves the prior script intact even with no default source": 49,
       "main deploys the chosen nested source and its imports, never the default worker": 76,
-      "malformed JSONC keeps the prior worker and never falls back to JSON": 212.6,
-      "permanent deletion cleans a late resource creation": 204.2,
+      "malformed JSONC keeps the prior worker and never falls back to JSON": 93,
+      "permanent deletion cleans a late resource creation": 84.4,
       "permanent deletion cleans a late worker upload": 194.9,
       "permanent deletion empties R2 and keeps ownership through a failed retry": 238,
       "rollback selects the kept files and worker without uploading or minting a deploy": 181.5
@@ -4376,7 +4355,7 @@
       "sign-in fills only missing stamps from that browser in every store it wrote to": 454.9
     },
     "workers/yak/build_test.ts": {
-      "a form posted with no script is answered the conversation": 209.5,
+      "a form posted with no script is answered the conversation": 88.1,
       "a page joins, says one line, and watches the build happen": 222,
       "a page that reloads hears the whole conversation again": 202.8,
       "a second line during a build is told to wait": 198.3,
@@ -4506,7 +4485,7 @@
     "workers/yak/domain_test.ts": {
       "a domain is attached to a space or to an app, and says which": 258.8,
       "a domain on the space opens the space, apps and all": 383.2,
-      "a hostname finds its app, and only one app": 619,
+      "a hostname finds its app, and only one app": 258,
       "attaching a domain: what it refuses, and what it says": 364.4,
       "plan settings preserves its destination through sign-in": 40.9
     },
@@ -4516,7 +4495,7 @@
       "trash makes a store dormant across every wake and restore keeps its data": 64.7
     },
     "workers/yak/draft_test.ts": {
-      "a schema-only legacy draft recovers its original files on edit": 714.2,
+      "a schema-only legacy draft recovers its original files on edit": 296.8,
       "a source-less app keeps every original byte through a schema draft": 489
     },
     "workers/yak/drop_test.ts": {
@@ -4530,7 +4509,7 @@
       "an embedding failure honors the store retry interval across reboot": 32.9
     },
     "workers/yak/embedding_test.ts": {
-      "a store answers .near from its own vectors, closest first": 49.1,
+      "a store answers .near from its own vectors, closest first": 16.7,
       "deployment of vectors in another space re-embeds them all": 33.3,
       "words rank by meaning among what a line selects": 23.4
     },
@@ -4587,7 +4566,7 @@
     },
     "workers/yak/graph_test.ts": {
       "/ws without an upgrade is not a door": 24.7,
-      "a Store anatomy supplier observes its own conditional composition without reads": 81.5,
+      "a Store anatomy supplier observes its own conditional composition without reads": 33.2,
       "a Store checks a large delete as one batch": 188.2,
       "a Store commits a large delete within its operation budget": 182.2,
       "a Store live query sees only connected peer positions": 123.2,
@@ -5044,7 +5023,7 @@
     "workers/yak/sandbox_test.ts": {
       "a build pays for its workbench and leaves none running": 33.4,
       "a build that ships pays for both in one write": 95.5,
-      "a command that outlives its call is a process wait and stop reach": 92.4,
+      "a command that outlives its call is a process wait and stop reach": 37.6,
       "a deploy builds and pushes the base only when it is missing": 1.3,
       "a lone connector call pays for itself and leaves the container": 25.5,
       "a member who cannot write is not given the workbench": 21.7,
@@ -5298,7 +5277,7 @@
       "writes a refusing store was sent apply in order, once, when it is mended": 24.9
     },
     "workers/yak/yak_test.ts": {
-      "an app says who may read it and who may write it": 1139.9,
+      "an app says who may read it and who may write it": 507.7,
       "the kernel routes, vouches, serves, and surfaces": 278.6
     }
   }
