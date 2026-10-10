@@ -4,10 +4,11 @@
   "exports": {
     ".": "./mod.ts",
     "./vocab": "./vocab.ts",
-    "./effects": "./effects.ts"
+    "./effects": "./effects.ts",
+    "./service": "./service.ts"
   },
   "license": "Apache-2.0",
-  "description": "Reports actionable exceptions through the host and starts agent sessions for bug tasks.",
+  "description": "Reports actionable exceptions and follows tracker bugs to file tasks and request fixers.",
   "imports": {
     "@std/assert": "jsr:@std/assert@^1.0.0"
   },

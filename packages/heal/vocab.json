@@ -12,10 +12,10 @@
       "properties": {
         "bug": {
           "type": "string",
-          "ref": "bug",
+          "ref": "entity",
           "death": "keep",
           "stamped": true,
-          "description": "the task it was started for \u2014 kept when that task is deleted, so the cooldown still counts the run"
+          "description": "the tracker bug's global eid (or a legacy bug task) \u2014 kept as fixer history across stores and deletion"
         }
       }
     },

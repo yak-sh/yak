@@ -128,6 +128,13 @@ export let interest = (
     hops.forEach((h, i) => {
       if (v.comp(h.comp)?.computed) unseen = true
       ;(i || assoc ? far : into).add(h.comp)
+      // A status ladder reads marks on this same entity. They can change
+      // membership without a patch to the component whose status is queried.
+      if (h.prop == 'status') {
+        for (let rung of v.comp(h.comp)?.ladder?.rungs ?? []) {
+          ;(i || assoc ? far : into).add(rung.comp)
+        }
+      }
       let d = v.prop(h.comp, h.prop)
       if (!d?.computed) return
       if (!d.reads) throw new Opaque()

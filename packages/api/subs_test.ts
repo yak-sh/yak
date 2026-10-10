@@ -30,6 +30,41 @@ let ids = (f: Frame) => (f.bundles ?? []).map((b) => b.entity.eid)
 
 let shop = (): Graph => shopGraph()
 
+let jobs = loadVocab({
+  $defs: {
+    job: {
+      component: true,
+      properties: {},
+      status: { cancelled: 'cancelled', completed: 'done', default: 'open' },
+    },
+    completed: { component: true, properties: {} },
+    cancelled: { component: true, properties: {} },
+  },
+})
+
+let marked = (() => {
+  let g = graph({ vocab: jobs, storage: ram(jobs) })
+  g.apply([{ entity: { eid: 'job' }, job: {} }])
+  let subs = subscriptions(g)
+  let first = ear()
+  subs.open(first.to, 'open', '.job.status=open')
+  return { g, subs, first }
+})()
+
+test('status subscriptions follow marks while live and while retained', () => {
+  let { g, subs, first } = marked
+  assertEquals(first.take().map(ids), [['job']])
+  subs.drop(first.to)
+  g.apply([{ entity: { eid: 'job' }, completed: {} }])
+  let next = ear()
+  subs.open(next.to, 'open', '.job.status=open')
+  assertEquals(next.take().map(ids), [[]])
+  g.apply([{ entity: { eid: 'job' }, completed: null }])
+  assertEquals(next.take().map(ids), [['job']])
+  g.apply([{ entity: { eid: 'job' }, cancelled: {} }])
+  assertEquals(next.take().map((frame) => frame.gone), [['job']])
+})
+
 test('a subscription opens on the set it already selects', () => {
   let graph = shop()
   graph.apply([
