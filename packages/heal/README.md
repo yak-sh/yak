@@ -110,9 +110,10 @@ contributes the exception and legacy bug effects plus its follower service.
 `trackers` names base URLs of tracker graphs, not database files or config
 paths. With none, the follower has nothing to do. `provider`, `model` and
 `project` are ids or names. `cap` defaults to 2; `cooldown` defaults to 1800000
-ms; `every` is the reconciliation interval and defaults to 1000 ms. Every key is
-optional. Without `provider`, bugs still get tasks and exceptions are reported,
-but no fixer is requested. A host running without duties runs no follower.
+ms; a changed tracker answer starts a pass within a second, and `every` (default
+60000 ms) re-checks the gates when nothing changed. Every key is optional.
+Without `provider`, bugs still get tasks and exceptions are reported, but no
+fixer is requested. A host running without duties runs no follower.
 
 ## Exports
 

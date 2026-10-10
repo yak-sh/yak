@@ -19,7 +19,8 @@ export { follow, taskEid } from './follow.ts'
 export type Options = FixOptions & {
   /** Base URLs of tracker graphs; no tracker is followed unless named. */
   trackers?: string[]
-  /** Time between reconciliation passes, in ms (default 1000). */
+  /** Time between passes when no tracker answer changed, in ms (default
+   * 60000): how soon a gate that opens with time (cap, cooldown) is seen. */
   every?: number
   /** Open a live tracker query; defaults to the headless graph client. */
   open?: (url: string) => Watch
@@ -76,6 +77,9 @@ export let service = async (
   let once = signal.aborted
   let watches = new Map<string, Watch>()
   let reconcile = follow(host.graph, options)
+  // A changed answer ends the wait at once; the timer only re-checks gates.
+  let nudge = () => {}
+  let changed = () => new Promise<void>((wake) => nudge = wake)
   let report = async (error: unknown) => {
     try {
       if (host.report) await host.report(error)
@@ -90,12 +94,14 @@ export let service = async (
     }))
   try {
     do {
+      let moved = changed()
       for (let url of urls) {
         if (!once && signal.aborted) return
         try {
           let watch = watches.get(url)
           if (!watch) {
             watch = open(url)
+            watch.subscribe(() => nudge())
             watches.set(url, watch)
           }
           if (watch.refused) {
@@ -117,7 +123,12 @@ export let service = async (
         }
       }
       if (signal.aborted) return
-      await (options.wait ?? sleep)(options.every ?? 1000, signal)
+      // A flood of hits changes the answer constantly: a second's floor.
+      let wait = options.wait ?? sleep
+      await Promise.race([
+        wait(options.every ?? 60_000, signal),
+        moved.then(() => wait(1000, signal)),
+      ])
     } while (!signal.aborted)
   } finally {
     for (let watch of watches.values()) watch.close()
