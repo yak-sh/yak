@@ -539,9 +539,10 @@ test('a write with no app routes each component to its own app', async () => {
 // that the word landed in the directory's store and that the answer says it.
 test('app_list answers what the month cost', async () => {
   let k = await kernel()
+  let suffix = crypto.randomUUID().slice(0, 8)
   try {
     let { cookie, eids } = await seed(k, [
-      { slug: 'metered35', apps: ['recipes'] },
+      { slug: `metered35-${suffix}`, apps: ['recipes'] },
     ])
     let agent = connector(k, cookie)
     let month = monthOf(new Date())
@@ -556,11 +557,11 @@ test('app_list answers what the month cost', async () => {
     }
     await meta(k).apply([
       {
-        entity: { eid: eids['metered35/recipes'] },
+        entity: { eid: eids[`metered35-${suffix}/recipes`] },
         meter: spent,
       },
       {
-        entity: { eid: eids.metered35 },
+        entity: { eid: eids[`metered35-${suffix}`] },
         plan: { tier: 'free' },
         meter: spent,
       },
@@ -570,29 +571,36 @@ test('app_list answers what the month cost', async () => {
     // which is not that door. The sweep itself writes through `stamp`, which
     // clears it; a test standing in for the sweep says so here instead of
     // waiting out a TTL.
-    await agent.tool('space_new', { slug: 'metered-too35', title: 'Too' })
-    let said = await agent.tool('app_list', { space: 'metered35' })
+    await agent.tool('space_new', {
+      slug: `metered-too35-${suffix}`,
+      title: 'Too',
+    })
+    let said = await agent.tool('app_list', { space: `metered35-${suffix}` })
     assertStringIncludes(said, '1200 estimated request units')
     assertStringIncludes(said, '241 MB')
 
     // The one number analytics cannot answer: what a store weighs. It comes
     // off the store itself (graph.ts `/graph`), which is where the sweep
     // reads it, so a planted store already weighs something.
-    let graph = await k.at('metered35.yaks.app', '/recipes/api/graph', {
-      headers: { cookie },
-    })
+    let graph = await k.at(
+      `metered35-${suffix}.yaks.app`,
+      '/recipes/api/graph',
+      {
+        headers: { cookie },
+      },
+    )
     assert((await graph.json()).bytes > 0, 'the store says what it weighs')
 
     // Where the space stands against what it is allowed (T-32758), in the
     // same answer: nothing here is near a ceiling, so it is only the numbers.
-    assertStringIncludes(said, 'metered35 (free tier')
+    assertStringIncludes(said, `metered35-${suffix} (free tier`)
     assertStringIncludes(said, '1 of 5 apps')
 
     // And the other address every app has (T-34149), in the words: nobody
     // should have to derive a mailbox from a slug. An app is a directory row
     // rather than an entity in the caller's graph, so the listing says it in
     // the sentence and there is nowhere else for it to be.
-    assertStringIncludes(said, 'metered35.recipes@yaks.app')
+    assertStringIncludes(said, `metered35-${suffix}.recipes@yaks.app`)
   } finally {
     await k.stop()
   }
@@ -602,10 +610,11 @@ test('app_list answers what the month cost', async () => {
 // sixth app refused and the fifth not; data past 1 GB refused at the door.
 test('the free tier: a warning once, then the refusals', async () => {
   let k = await kernel()
+  let suffix = crypto.randomUUID().slice(0, 8)
   try {
     let { cookie, eids } = await seed(k, [
-      { slug: 'brim36', apps: ['one'] },
-      { slug: 'heavy36', apps: ['big'] },
+      { slug: `brim36-${suffix}`, apps: ['one'] },
+      { slug: `heavy36-${suffix}`, apps: ['big'] },
     ])
     let agent = connector(k, cookie)
     let month = monthOf(new Date())
@@ -619,34 +628,37 @@ test('the free tier: a warning once, then the refusals', async () => {
     await meta(k).apply([
       // 81% of the request ceiling, and nothing else near one.
       {
-        entity: { eid: eids.brim36 },
+        entity: { eid: eids[`brim36-${suffix}`] },
         plan: { tier: 'free' },
         meter: { ...row, requests: 40_500, bytes: 0 },
       },
       // A gigabyte held: the byte ceiling, exactly at it. The space's reading
       // says so, and so does the size its one app's store reported.
       {
-        entity: { eid: eids.heavy36 },
+        entity: { eid: eids[`heavy36-${suffix}`] },
         plan: { tier: 'free' },
         meter: { ...row, requests: 0, bytes: 1024 ** 3 },
       },
       {
-        entity: { eid: eids['heavy36/big'] },
+        entity: { eid: eids[`heavy36-${suffix}/big`] },
         meter: { ...row, requests: 0, bytes: 1024 ** 3 },
       },
     ])
     // The seeding went in through the graph tier, which is not the door that
     // empties the directory's read cache; a directory write is.
-    await agent.tool('space_new', { slug: 'brim-too36', title: 'Too' })
+    await agent.tool('space_new', {
+      slug: `brim-too36-${suffix}`,
+      title: 'Too',
+    })
 
     // The line rides the unseen channel, once — the reply after is quiet. A
     // look-up leaves it unsaid: only a tool that writes carries the channel.
     assert(
-      !(await agent.tool('app_list', { space: 'brim36' })).includes(
+      !(await agent.tool('app_list', { space: `brim36-${suffix}` })).includes(
         '## ceiling',
       ),
     )
-    let files = { space: 'brim36', app: 'one', op: 'list' }
+    let files = { space: `brim36-${suffix}`, app: 'one', op: 'list' }
     let said = await agent.tool('app_files', files)
     assertStringIncludes(said, '## ceiling')
     assertStringIncludes(said, '40,500 of 50,000 estimated request units')
@@ -657,28 +669,38 @@ test('the free tier: a warning once, then the refusals', async () => {
     // Four more apps make five, which is the tier. The fifth is fine.
     for (let n of [2, 3, 4, 5]) {
       await agent.tool('app_new', {
-        space: 'brim36',
+        space: `brim36-${suffix}`,
         slug: `a${n}`,
         title: `A${n}`,
       })
     }
     await assertRejects(
-      () => agent.tool('app_new', { space: 'brim36', slug: 'a6', title: 'A6' }),
+      () =>
+        agent.tool('app_new', {
+          space: `brim36-${suffix}`,
+          slug: 'a6',
+          title: 'A6',
+        }),
       Error,
       'which is 5 apps',
     )
     // And where the ceiling lifts: the pricing page, never a checkout link
     // (usage.ts `atCeiling`).
     await assertRejects(
-      () => agent.tool('app_new', { space: 'brim36', slug: 'a6', title: 'A6' }),
+      () =>
+        agent.tool('app_new', {
+          space: `brim36-${suffix}`,
+          slug: 'a6',
+          title: 'A6',
+        }),
       Error,
-      'Compare paid plans in settings: https://yaks.app/manage/billing?space=brim36',
+      `Compare paid plans in settings: https://yaks.app/manage/billing?space=brim36-${suffix}`,
     )
 
     // Data past the ceiling is refused at the app's own door, in the
     // platform's sentence, the way every other refusal is (unseen.ts
     // `refusal`: a no is not a break).
-    let heavy36 = client(k, 'heavy36.yaks.app', 'big', cookie)
+    let heavy36 = client(k, `heavy36-${suffix}.yaks.app`, 'big', cookie)
     let stopped = await heavy36.post([{
       entity: { eid: crypto.randomUUID() },
       doc: { title: 'one more' },
@@ -689,25 +711,28 @@ test('the free tier: a warning once, then the refusals', async () => {
     assertStringIncludes(why.message, 'of app data')
 
     await meta(k).apply([{
-      entity: { eid: eids.brim36 },
+      entity: { eid: eids[`brim36-${suffix}`] },
       meter: { ...row, requests: FREE.requests },
     }])
-    await agent.tool('space_new', { slug: 'quota-cache36', title: 'Quota' })
-    let over = await k.at('brim36.yaks.app', '/one/')
+    await agent.tool('space_new', {
+      slug: `quota-cache36-${suffix}`,
+      title: 'Quota',
+    })
+    let over = await k.at(`brim36-${suffix}.yaks.app`, '/one/')
     assertEquals(over.status, 429)
     assertStringIncludes(await over.text(), '50,000 monthly request units')
-    let manage = await k.at('yaks.app', '/manage?space=brim36', {
+    let manage = await k.at('yaks.app', `/manage?space=brim36-${suffix}`, {
       headers: { cookie },
     })
     assertEquals(manage.status, 200)
     await manage.body?.cancel()
     // MCP management still works, and raising the allowance reopens serving.
     assertStringIncludes(
-      await agent.tool('app_list', { space: 'brim36' }),
+      await agent.tool('app_list', { space: `brim36-${suffix}` }),
       'one',
     )
-    await onPlus(k, eids.brim36)
-    let reopened = await k.at('brim36.yaks.app', '/one/api/graph')
+    await onPlus(k, eids[`brim36-${suffix}`])
+    let reopened = await k.at(`brim36-${suffix}.yaks.app`, '/one/api/graph')
     assertEquals(reopened.status, 200)
     await reopened.body?.cancel()
   } finally {
@@ -923,18 +948,22 @@ test('a word the space already has is used where it lives', async () => {
 
 test('a page queries a borrowed word at its home', async () => {
   let k = await kernel()
+  let suffix = crypto.randomUUID().slice(0, 8)
   try {
-    let them = await seed(k, [{ slug: 'flame74', apps: ['probe', 'vale'] }])
+    let them = await seed(k, [{
+      slug: `flame74-${suffix}`,
+      apps: ['probe', 'vale'],
+    }])
     let agent = connector(k, them.cookie)
     let deploy = async (app: string) => {
       await agent.tool('app_files', {
-        space: 'flame74',
+        space: `flame74-${suffix}`,
         app,
         op: 'write',
         path: 'vocab.json',
         content: vocabFile({ fire: { village: txt } }),
       })
-      return await agent.tool('app_deploy', { space: 'flame74', app })
+      return await agent.tool('app_deploy', { space: `flame74-${suffix}`, app })
     }
     await deploy('probe')
     assertStringIncludes(
@@ -943,7 +972,7 @@ test('a page queries a borrowed word at its home', async () => {
     )
 
     let saved = await agent.tool('graph_apply', {
-      space: 'flame74',
+      space: `flame74-${suffix}`,
       app: 'vale',
       entities: [{
         entity: { eid: '$fire' },
@@ -953,13 +982,13 @@ test('a page queries a borrowed word at its home', async () => {
     })
     let eid = minted(saved, '$fire')
     await agent.tool('graph_apply', {
-      space: 'flame74',
+      space: `flame74-${suffix}`,
       app: 'probe',
       entities: [{ entity: { eid: '$other' }, doc: { title: 'Probe' } }],
     })
 
     let page = (path: string) =>
-      k.at('flame74.yaks.app', `/vale/api/${path}`, {
+      k.at(`flame74-${suffix}.yaks.app`, `/vale/api/${path}`, {
         headers: { cookie: them.cookie },
       })
     let speaks = async () => {
@@ -986,9 +1015,12 @@ test('a page queries a borrowed word at its home', async () => {
       ['Campfire'],
     )
 
-    await agent.tool('app_delete', { space: 'flame74', app: 'probe' })
+    await agent.tool('app_delete', { space: `flame74-${suffix}`, app: 'probe' })
     assertStringIncludes(
-      await agent.tool('app_deploy', { space: 'flame74', app: 'vale' }),
+      await agent.tool('app_deploy', {
+        space: `flame74-${suffix}`,
+        app: 'vale',
+      }),
       'components: fire',
     )
     assertEquals(await speaks(), true)
@@ -997,7 +1029,7 @@ test('a page queries a borrowed word at its home', async () => {
     assertEquals(await after.json(), [])
 
     let newFire = await agent.tool('graph_apply', {
-      space: 'flame74',
+      space: `flame74-${suffix}`,
       app: 'vale',
       entities: [{ entity: { eid: '$new' }, fire: { village: 'New' } }],
     })
@@ -1009,10 +1041,17 @@ test('a page queries a borrowed word at its home', async () => {
       [newEid],
     )
 
-    await agent.tool('app_restore', { space: 'flame74', app: 'probe' })
-    let kept = await k.at('flame74.yaks.app', '/probe/api/query?.fire', {
-      headers: { cookie: them.cookie },
+    await agent.tool('app_restore', {
+      space: `flame74-${suffix}`,
+      app: 'probe',
     })
+    let kept = await k.at(
+      `flame74-${suffix}.yaks.app`,
+      '/probe/api/query?.fire',
+      {
+        headers: { cookie: them.cookie },
+      },
+    )
     assertEquals(kept.status, 200)
     assertEquals((await kept.json())[0].entity.eid, eid)
   } finally {
