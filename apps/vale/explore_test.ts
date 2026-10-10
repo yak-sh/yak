@@ -98,6 +98,7 @@ test('saved cell circles become the regions they touched', () => {
   assertEquals(ids.has(regionOf((x + 0.5) * 20 + 26, (z + 0.5) * 20)), true)
 })
 
+let oldRegions = [...regionsFromCells([[2, 2]])]
 test('transition map reads old cells while new visits arrive', () => {
   let hero = 'old-hero'
   let old: Bundle[] = [{
@@ -113,7 +114,7 @@ test('transition map reads old cells while new visits arrive', () => {
     settled: () => true,
   }
   let map = exploration(net)
-  assertEquals([...map.known()], [...regionsFromCells([[2, 2]])])
+  assertEquals([...map.known()], oldRegions)
   old = []
   visits = [{
     entity: { eid: 'new-visit' },
