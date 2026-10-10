@@ -1,6 +1,5 @@
-// An actionable exception is reported through the host's telemetry. Bug tasks
-// already in this graph start fixers behind the provider, project, cap and
-// cooldown gates; the boot sweep retries bugs those gates held back.
+// An actionable exception is reported through the host's telemetry. Bugs are
+// the tracker's; the follower (service.ts) files their tasks and fixers.
 
 import {
   type Bundle,
@@ -11,8 +10,6 @@ import {
 } from '@yaks/graph'
 import type { Host as Hosting } from '@yaks/host'
 import type { Handlers } from '@yaks/effects'
-import { fixing, type Options } from './fix.ts'
-import { and, eq } from '@yaks/query'
 import { actionable } from './fault.ts'
 
 /** What these handlers are given (@yaks/cli `Host`). */
@@ -27,19 +24,8 @@ let str = (v: unknown) => v == null ? '' : String(v)
 let one = async (g: Graph, eid: string): Promise<Bundle | undefined> =>
   (await g.get([eid]))[0]
 
-export let effects = (host: Host, options: Options = {}): Handlers => {
+export let effects = (host: Host): Handlers => {
   let g = host.graph
-  let { fix } = fixing(g, options)
-  let legacy = (eid: string) =>
-    fix(async () => {
-      let task = await one(g, eid)
-      if (!task?.bug) return
-      let same = await g.read(
-        and(eq('bug.fault', str(comp(task, 'bug')?.fault))),
-      )
-      return { task, bug: eid, same: same.map((b) => b.entity.eid) }
-    })
-
   let report = async (eid: string) => {
     let row = await one(g, eid)
     let x = comp(row, 'exception')
@@ -76,7 +62,5 @@ export let effects = (host: Host, options: Options = {}): Handlers => {
 
   return {
     exception_report: (e) => report(e.entity.eid),
-    // Idempotent: a bug that has a fixer, or is held, starts nothing.
-    bug_fix: (e) => legacy(e.entity.eid),
   }
 }

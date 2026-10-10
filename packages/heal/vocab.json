@@ -15,7 +15,7 @@
           "ref": "entity",
           "death": "keep",
           "stamped": true,
-          "description": "the tracker bug's global eid (or a legacy bug task) \u2014 kept as fixer history across stores and deletion"
+          "description": "the tracker bug's global eid (or a legacy bug task) — kept as fixer history across stores and deletion"
         }
       }
     },
@@ -31,14 +31,6 @@
         "exception"
       ],
       "description": "report an actionable exception through the host reporter"
-    },
-    "bug_fix": {
-      "effect": true,
-      "created": [
-        "bug"
-      ],
-      "sweep": ".bug !completed !cancelled !claim",
-      "description": "start a fixer on a new bug, behind the gates"
     }
   }
 }

@@ -188,10 +188,6 @@ Tools still declares legacy exception fields until T-59080 migrates them. Its
 new `type` and `value` coexist with those fields; tracker extends only `frames`
 and `mechanism` for now. No legacy exception rows are cleared.
 
-Heal temporarily projects tracker-owned `bug` declarations and reexports fault
-grouping until T-59079 turns it into a tracker subscriber. Do not load that
-transitional heal vocabulary in a tracker store.
-
 ## Sentry on the box
 
 `@yaks/tracker/sentry` is the shared Sentry ingest transport for box host

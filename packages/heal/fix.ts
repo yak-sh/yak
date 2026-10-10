@@ -10,7 +10,7 @@ import {
   token,
 } from '@yaks/graph'
 import { human } from '@yaks/id'
-import { absent, and, eq, list, present, want } from '@yaks/query'
+import { absent, and, eq, present, want } from '@yaks/query'
 
 /** What config can set. */
 export type Options = {
@@ -71,7 +71,6 @@ let serially = () => {
 export type Work = {
   task: Bundle
   bug: string
-  same?: string[]
   writes?: Bundle[]
   reopen?: boolean
 }
@@ -80,7 +79,7 @@ export type Work = {
 export let fixing = (g: Graph, options: Options = {}) => {
   let serial = serially()
   let home = () => named(g, options.project, 'project')
-  let blocked = async ({ task, bug, same = [bug] }: Work) => {
+  let blocked = async ({ task, bug }: Work) => {
     let project = str(comp(task, 'filed')?.project)
     for (let p of new Set([await home(), project])) {
       if (p && comp(await one(g, p), 'nofix')) return true
@@ -91,7 +90,7 @@ export let fixing = (g: Graph, options: Options = {}) => {
     )).filter((f) => f.process || young(f, STARTING, now))
     if (running.length >= (options.cap ?? 2)) return true
     let history = await g.read(
-      and(eq('fixer.bug', list(...same)), want('created')),
+      and(eq('fixer.bug', bug), want('created')),
     )
     return history.some((f) => young(f, options.cooldown ?? 30 * 60_000, now))
   }

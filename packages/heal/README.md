@@ -95,10 +95,6 @@ rolls back and is reported; the next pass retries the bug from the current
 tracker answer, without advancing a checkpoint. Shutdown closes subscriptions
 and stops the pause between passes.
 
-The legacy `bug_fix` effect and its boot sweep still handle box bug tasks when
-that graph declares tracker `bug` vocabulary. They share the follower's gates
-and fixer request; they never give a legacy bug task a second fixer.
-
 ## Config
 
 Exception reporting needs the host's `report` capability and `@yaks/tools`'
@@ -106,7 +102,7 @@ exception vocabulary. Task filing needs the box's task, project, doc and edge
 vocabulary; fixer requests also need its session, model and process vocabulary.
 The follower keeps tracker vocabulary in its separate RAM client, so the box
 graph needs no `bug` component. Heal declares `fixer` and `nofix` and
-contributes the exception and legacy bug effects plus its follower service.
+contributes the exception effect and its follower service.
 
 ```json
 {
