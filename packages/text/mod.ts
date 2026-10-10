@@ -63,7 +63,9 @@ export let tree = (
     render: (view, overrides) =>
       tree(registry, bundle, view, vocab, { ...ctx, ...overrides }),
   }
-  return resolve(registry, bundle, view, vocab, context)?.render(
+  let selected = resolve(registry, bundle, view, vocab, context)
+  context.needed?.(selected?.needs?.(bundle) ?? [])
+  return selected?.render(
     bundle,
     h,
     context,

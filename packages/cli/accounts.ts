@@ -115,9 +115,13 @@ export let accountToken = async (
   if (!opts.as && direct) {
     let r = await accountReader(
       config,
-      plugins.filter((p) =>
-        ['@yaks/kernel', '@yaks/id', '@yaks/connections'].includes(p)
-      ),
+      // A prefixed ID is checked against every kind its owner carries. Its
+      // defining vocabulary may belong to any configured plugin.
+      /^[a-z]+-[0-9]+$/i.test(config.person)
+        ? plugins
+        : plugins.filter((p) =>
+          ['@yaks/kernel', '@yaks/id', '@yaks/connections'].includes(p)
+        ),
     )
     let owner = await person({ config, graph: r.graph })
     let found = await r.graph.read(

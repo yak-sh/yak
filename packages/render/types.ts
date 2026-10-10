@@ -42,6 +42,8 @@ export type Context = {
 export type RenderContext<Node> = Context & {
   render?: (view: string, ctx?: Context) => Node | null
   vocab?: Vocab
+  /** A lowering reports the selected renderer's declared reference needs. */
+  needed?: (eids: readonly string[]) => void
 }
 
 /** The fields selection needs, shared by portable renderers and by ones a

@@ -188,3 +188,47 @@ test('an account connected after a miss is visible before accounts close', async
     await Deno.remove(state, { recursive: true })
   }
 })
+
+test('a prefixed owner resolves with its configured kind vocabulary', async () => {
+  let state = await Deno.makeTempDir()
+  try {
+    let path = `${state}/accounts.json`
+    let owner = crypto.randomUUID()
+    let config = {
+      db: `${state}/accounts.db`,
+      person: owner,
+      plugins: [
+        '@yaks/kernel',
+        '@yaks/id',
+        '@yaks/edge',
+        '@yaks/doc',
+        '@yaks/effects',
+        '@yaks/secrets',
+        '@yaks/connections',
+        '@yaks/persona',
+      ],
+    }
+    await Deno.writeTextFile(path, JSON.stringify(config))
+    let { compose } = await import('./host.ts')
+    let installed = await compose(config, ['graph'], undefined, {
+      install: true,
+      process: false,
+    })
+    await installed.graph.apply([{ entity: { eid: owner }, person: {} }])
+    let num = (await installed.graph.get([owner]))[0].entity.num
+    await installed.close()
+    // persona declares the U prefix; a connections-only reader cannot infer it.
+    config.person = `U-${num}`
+    await Deno.writeTextFile(path, JSON.stringify(config))
+    equal(
+      await accountToken('https://public.example.test', state, {
+        config: path,
+        env: () => undefined,
+      }),
+      null,
+    )
+  } finally {
+    await closeAccounts()
+    await Deno.remove(state, { recursive: true })
+  }
+})

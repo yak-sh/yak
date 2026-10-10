@@ -249,24 +249,35 @@ let shown = <Node>(
   draw: (b: Bundle, view: string, ctx: Shown<Node>) => Node | null,
   named: Bundle[] = [],
   links: Bundle[] = [],
+  demand?: (eid: string) => void,
 ): Shown<Node> => {
   let id = human(vocab)
   let idAs = idOf(vocab)
-  let held = new Map([...named, ...answer].map((b) => [b.entity.eid, b]))
-  let ctx: Shown<Node> = {
+  let held = new Map(
+    [...links, ...named, ...answer].map((b) => [b.entity.eid, b]),
+  )
+  let ctx: Shown<Node> & Pick<RenderContext<Node>, 'needed'> = {
+    needed: demand ? (eids) => eids.forEach(demand) : undefined,
     id: (b) => {
       let hit = hitOf(b)
       return hit ? idAs({ ...b.entity, kind: hit.kind }) : id(b)
     },
     kind: (b) => hitOf(b)?.kind ?? (vocab.kindOf(b) || 'entity'),
     name: (eid) => {
+      demand?.(eid)
       let b = held.get(eid)
       return b ? id(b) : short(eid)
     },
     when: (at) => at,
-    show: (b, view) => draw(b, view, ctx),
+    show: (b, view) => {
+      demand?.(b.entity.eid)
+      return draw(b, view, ctx)
+    },
     relation: (b) => relationOf(vocab, b),
-    get: (eid) => held.get(eid),
+    get: (eid) => {
+      demand?.(eid)
+      return held.get(eid)
+    },
     related: (eid, relation) =>
       links.flatMap((b) => {
         let edge = b.edge as { from?: string; to?: string } | undefined
@@ -415,8 +426,16 @@ let drawn = <Node>(
   named: Bundle[],
   near: Near,
   draw: (b: Bundle, view: string, ctx: Shown<Node>) => Node | null,
+  demand?: (eid: string) => void,
 ): (Node | null)[][] => {
-  let ctx = shown(vocab, answer, draw, named, [...answer, ...near.links])
+  let ctx = shown(
+    vocab,
+    answer,
+    draw,
+    named,
+    [...answer, ...near.links, ...near.comments],
+    demand,
+  )
   let { them, hits } = parted(answer)
   let found = hits.map((b) => draw(b, 'Search.Tile', ctx))
   let [lone] = them
@@ -443,6 +462,7 @@ export let printed = (
   answer: Bundle[],
   named: Bundle[] = [],
   near: Near = nothing,
+  demand?: (eid: string) => void,
 ): string => {
   let groups = drawn<Node>(
     vocab,
@@ -450,6 +470,7 @@ export let printed = (
     named,
     near,
     (b, v, c) => tree(views, b, v, vocab, c),
+    demand,
   )
   return joined(groups.map((g) => g.map((n) => plain(n))))
 }
@@ -596,6 +617,31 @@ export let show = async (
   let [lone, ...more] = parted(answer).them
   let asked = lone && !more.length ? nearQuery(vocab, lone.entity.eid) : null
   let near = asked ? nearOf(lone.entity.eid, await from.query(asked)) : nothing
+  if (!c.tui && !c.tty) {
+    // Portable renderers are pure. Discover the references the actual drawing
+    // reads, including nested views and declared needs, rather than fetching
+    // every reference carried by a bundle that a tile never shows.
+    let known = new Set(
+      [...answer, ...near.links, ...near.comments].map((b) => b.entity.eid),
+    )
+    let named: Bundle[] = []
+    let text: string
+    while (true) {
+      let pending = new Set<string>()
+      text = printed(views, vocab, answer, named, near, (eid) => {
+        if (eid && !known.has(eid)) pending.add(eid)
+      })
+      if (!pending.size) break
+      let ids = [...pending]
+      ids.forEach((id) => known.add(id))
+      let found = await from.lookup(ids)
+      if (!found.length) break
+      named.push(...found)
+      found.forEach((b) => known.add(b.entity.eid))
+    }
+    if (text) c.out(text)
+    return
+  }
   let refs = referenced(
     vocab,
     [...answer, ...near.links, ...near.comments],
@@ -624,6 +670,4 @@ export let show = async (
     if (text) c.tty.write(text)
     return
   }
-  let text = printed(views, vocab, answer, named, near)
-  if (text) c.out(text)
 }

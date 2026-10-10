@@ -12,6 +12,7 @@ import { views as toolViews } from '@yaks/tools/views'
 import { loadVocab } from '@yaks/vocab'
 import { define, type Renderer, resolve } from '@yaks/render'
 import { graph } from '@yaks/graph'
+import { parse } from '@yaks/query'
 import { ram } from '@yaks/ram'
 import { printed, referenced, registry, show, terminal } from './answer.ts'
 
@@ -322,4 +323,90 @@ test('answer registries report loaded metadata without drawing a renderer', asyn
   assert(views.renderers.includes(part))
   assert(views.renderers.includes(held))
   assertEquals(resolve(views, t9, 'Thread.Note', vocab), face)
+})
+
+test('printed tiles leave undisplayed provenance references unread', async () => {
+  let lines: string[] = []
+  let answer = [t9, t10].map((b) => ({
+    ...b,
+    created: { by: 'unseen', via: 'also-unseen' },
+  }))
+  await show(
+    { tui: false, out: (s) => lines.push(s) },
+    views,
+    vocab,
+    answer,
+    {},
+    {
+      lookup: () => {
+        throw new Error('tiles never read provenance')
+      },
+      query: () => [],
+    },
+  )
+  assertEquals(lines, [said(t9, t10)])
+})
+
+test('a contributed drawing batches its used and declared references, including missing and cyclic ones', async () => {
+  let a = '33333333-3333-4333-8333-333333333333'
+  let b = '44444444-4444-4444-8444-444444444444'
+  let missing = '55555555-5555-4555-8555-555555555555'
+  let first = {
+    entity: { eid: a, num: 20 },
+    doc: { title: 'Alpha' },
+    peer: { target: b },
+  }
+  let second = {
+    entity: { eid: b, num: 21 },
+    doc: { title: 'Beta' },
+    peer: { target: a },
+  }
+  let remote = await registry(
+    ['another-package'],
+    async (p) =>
+      p == 'another-package'
+        ? {
+          views: define([{
+            view: 'Tile',
+            match: parse('.task'),
+            needs: () => [missing],
+            render: (_e, h, ctx) => {
+              let s = ctx as import('@yaks/render/views').Shown<
+                ReturnType<typeof h>
+              >
+              let row = s.get?.(a)
+              let peer = row?.peer as { target?: string } | undefined
+              let next = peer?.target ? s.get?.(peer.target) : undefined
+              let back = next?.peer as { target?: string } | undefined
+              return h(
+                'span',
+                {},
+                s.name(a),
+                ' ',
+                String((row?.doc as { title?: string })?.title ?? 'absent'),
+                peer?.target ? ` → ${s.name(peer.target)}` : '',
+                back?.target ? ` → ${s.name(back.target)}` : '',
+              )
+            },
+          }]),
+        }
+        : null,
+  )
+  let reads: string[][] = [], lines: string[] = []
+  await show(
+    { tui: false, out: (s) => lines.push(s) },
+    remote,
+    vocab,
+    [t9, t10],
+    {},
+    {
+      lookup: (ids) => {
+        reads.push(ids)
+        return [first, second].filter((e) => ids.includes(e.entity.eid))
+      },
+      query: () => [],
+    },
+  )
+  assertEquals(reads, [[missing, a], [b]])
+  assertEquals(lines, ['D-20 Alpha → D-21 → D-20\nD-20 Alpha → D-21 → D-20'])
 })
