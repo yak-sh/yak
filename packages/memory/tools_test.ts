@@ -379,7 +379,7 @@ test('a recall answers whole memories, each wearing its token', async () => {
   assertEquals(feedback.map((b) => heard(b).said), ['use grams, never cups'])
 })
 
-test('a recall stays in its space, and words never speak its grammar', async () => {
+let spaces = await (async () => {
   let g = fresh()
   let ada = crypto.randomUUID()
   let bo = crypto.randomUUID()
@@ -392,6 +392,11 @@ test('a recall stays in its space, and words never speak its grammar', async () 
   let [b] = eids(
     await write(g, saved({ eid: '$b', said: 'how they like it', space: bo })),
   )
+  return { g, ada, a, b }
+})()
+
+test('a recall stays in its space, and words never speak its grammar', async () => {
+  let { g, ada, a, b } = spaces
   let recall = async (asked: Partial<Asked>) =>
     eids(await g.read(line({ limit: 8, space: ada, ...asked })))
   // `.doc` is two words here, and the text has no "doc" in it.
