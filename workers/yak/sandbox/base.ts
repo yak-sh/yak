@@ -87,12 +87,6 @@ let BUILD = [
   ...['docker', 'build', '--load', '--platform', 'linux/amd64'],
   '--provenance=false',
 ]
-let context = () => [
-  ...Deno.env.get('WRANGLER_CI_OVERRIDE_NETWORK_MODE_HOST')
-    ? ['--network', 'host']
-    : [],
-  here('base').pathname,
-]
 
 let must = async (go: Run, cmd: string[], input?: string) => {
   let r = await go(cmd, input)
@@ -120,6 +114,38 @@ export let based = async (
       `sandbox/Dockerfile builds FROM ${from}, but base/Dockerfile is ${want}`,
     )
   }
+  return await imaged({
+    wrangler,
+    dry,
+    go,
+    has,
+    ref: from,
+    context: here('base').pathname,
+  })
+}
+
+/** Ensure one source-addressed image exists, independently of Worker uploads. */
+export let imaged = async (
+  {
+    wrangler,
+    context,
+    dockerfile,
+    ref,
+    name,
+    dry = false,
+    go = run,
+    has = held,
+  }: {
+    wrangler: string[]
+    context: string
+    dockerfile?: string
+    ref?: string
+    name?: string
+    dry?: boolean
+    go?: Run
+    has?: (ref: string, password: string) => Promise<boolean>
+  },
+) => {
   let { username, password, account_id } = JSON.parse(
     await must(go, [
       ...wrangler,
@@ -127,6 +153,7 @@ export let based = async (
       ...['--pull', '--push', '--expiration-minutes', '60', '--json'],
     ]),
   )
+  let from = ref ?? `${REGISTRY}/${account_id}/${name}`
   if (!from.startsWith(`${REGISTRY}/${account_id}/`)) {
     throw new Error(`${from} is not in this account's registry`)
   }
@@ -144,7 +171,16 @@ export let based = async (
   if (logged.status == 'rejected') throw logged.reason
   if (checked.status == 'rejected') throw checked.reason
   if (checked.value) return from
-  await must(go, [...BUILD, '-t', from, ...context()])
+  await must(go, [
+    ...BUILD,
+    '-t',
+    from,
+    ...dockerfile ? ['-f', dockerfile] : [],
+    ...Deno.env.get('WRANGLER_CI_OVERRIDE_NETWORK_MODE_HOST')
+      ? ['--network', 'host']
+      : [],
+    context,
+  ])
   if (dry) return from
   // The push is what timed out; a second or third try resumes it, since the
   // layers that made it already exist.

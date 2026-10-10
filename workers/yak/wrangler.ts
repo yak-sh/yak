@@ -30,9 +30,9 @@
 import { dirname, join, relative } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { createHash } from 'node:crypto'
-import { parse } from '@std/toml'
+import { parse, stringify } from '@std/toml'
 import packages from './package.json' with { type: 'json' }
-import { based } from './sandbox/base.ts'
+import { based, imaged } from './sandbox/base.ts'
 
 export let WRANGLER = [
   'npx',
@@ -218,6 +218,19 @@ export let images = (
   let parsed = parse(Deno.readTextFileSync(path)) as Containers & {
     env?: Record<string, Containers>
   }
+  return imageInputs(
+    path,
+    root,
+    [parsed, ...Object.values(parsed.env ?? {})]
+      .flatMap((c) => c.containers ?? []),
+  )
+}
+
+let imageInputs = (
+  path: string,
+  root: string,
+  all: NonNullable<Containers['containers']>,
+) => {
   let out: Record<string, Uint8Array> = {}
   let add = (file: string) => {
     out[relative(root, file)] = Deno.readFileSync(file)
@@ -229,8 +242,6 @@ export let images = (
       else if (entry.isFile) add(file)
     }
   }
-  let all = [parsed, ...Object.values(parsed.env ?? {})]
-    .flatMap((c) => c.containers ?? [])
   for (let { image, image_build_context: context } of all) {
     if (!image) continue
     let file = join(dirname(path), image)
@@ -306,6 +317,72 @@ export let siblingDigest = (
     hash.update(body)
   }
   return hash.digest('hex')
+}
+
+/** Replace local image builds with source-addressed registry images. The temporary
+ * config stays beside its original so Wrangler resolves every other path alike. */
+export let siblingImages = async (
+  config: string,
+  ensure: typeof imaged = imaged,
+  root = dir,
+  wrangler = WRANGLER,
+) => {
+  let path = join(root, config)
+  let parsed = parse(Deno.readTextFileSync(path)) as Containers & {
+    env?: Record<string, Containers>
+  }
+  let inputs = images(config, root)
+  if (!Object.keys(inputs).length) return { config, remove: () => {} }
+  let refs = new Map<string, string>()
+  for (let part of [parsed, ...Object.values(parsed.env ?? {})]) {
+    for (let container of part.containers ?? []) {
+      let image = container.image
+      if (!image) continue
+      let dockerfile = join(dirname(path), image)
+      try {
+        if (Deno.statSync(dockerfile).isDirectory) {
+          dockerfile = join(dockerfile, 'Dockerfile')
+        }
+      } catch {
+        continue
+      }
+      if (!Object.hasOwn(inputs, relative(root, dockerfile))) continue
+      let context = container.image_build_context
+        ? join(dirname(path), container.image_build_context)
+        : dirname(dockerfile)
+      let digest = siblingDigest(
+        JSON.stringify({
+          dockerfile: relative(root, dockerfile),
+          context: relative(root, context),
+        }),
+        imageInputs(path, root, [container]),
+      )
+      let ref = refs.get(digest)
+      if (!ref) {
+        ref = await ensure({
+          wrangler,
+          name: `yak-${dirname(config).replaceAll('/', '-')}:inputs-${digest}`,
+          dockerfile,
+          context,
+        })
+        refs.set(digest, ref)
+      }
+      container.image = ref
+      delete container.image_build_context
+    }
+  }
+  let temp = Deno.makeTempFileSync({
+    dir: dirname(path),
+    prefix: '.images-',
+    suffix: '.toml',
+  })
+  try {
+    Deno.writeTextFileSync(temp, stringify(parsed))
+  } catch (error) {
+    Deno.removeSync(temp)
+    throw error
+  }
+  return { config: relative(root, temp), remove: () => Deno.removeSync(temp) }
 }
 
 let uploadSibling = async (
@@ -394,7 +471,16 @@ let uploadSibling = async (
       annotated[message + 1] = annotated[message + 1].slice(0, 40) +
         `\ninputs:${digest}`
     } else annotated.push('--message', `inputs:${digest}`)
-    let result = await run(annotated, true)
+    let image = /(^| )--containers-rollout[= ]none( |$)/.test(args.join(' '))
+      ? { config, remove: () => {} }
+      : await siblingImages(config, imaged, dir, wrangler)
+    let result: number
+    try {
+      annotated[annotated.indexOf('-c') + 1] = image.config
+      result = await run(annotated, true)
+    } finally {
+      image.remove()
+    }
     console.log(
       `${config}: upload path finished in ${
         ((performance.now() - started) / 1000).toFixed(3)

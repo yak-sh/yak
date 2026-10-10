@@ -19,6 +19,7 @@ import {
   sameSibling,
   seen,
   siblingDigest,
+  siblingImages,
   SIBLINGS,
   siblings,
   stale,
@@ -368,4 +369,67 @@ test('base preparation overlaps sibling uploads and gates the kernel', async () 
   base.resolve(['deploy'])
   assertEquals(await deploy, 0)
   assert(kernel)
+})
+
+test('compiler Worker changes reuse its image; compiler input changes build a new image', async () => {
+  let root = Deno.makeTempDirSync()
+  try {
+    let write = (path: string, body: string) => {
+      Deno.mkdirSync(dirname(join(root, path)), { recursive: true })
+      Deno.writeTextFileSync(join(root, path), body)
+    }
+    write(
+      'esbuild/wrangler.toml',
+      'main = "index.ts"\n[[containers]]\nimage = "./Dockerfile"\nimage_build_context = "../compiler"\n[[env.staging.containers]]\nimage = "./Dockerfile"\nimage_build_context = "../compiler"\n',
+    )
+    write('esbuild/Dockerfile', 'FROM deno\nCOPY . .')
+    write('compiler/compile.ts', 'compiler')
+    write('esbuild/index.ts', 'catalog v1')
+    let names: string[] = []
+    let ensure = async (
+      options: Parameters<typeof import('./sandbox/base.ts').imaged>[0],
+    ) => {
+      names.push(options.name!)
+      return 'registry.cloudflare.com/account/' + options.name
+    }
+    let compile = async () => {
+      let image = await siblingImages('esbuild/wrangler.toml', ensure, root)
+      try {
+        let text = Deno.readTextFileSync(join(root, image.config))
+        assert(text.includes('registry.cloudflare.com/account/'))
+        assert(!text.includes('image_build_context'))
+        assert(text.includes('index.ts'))
+        assertEquals(dirname(image.config), 'esbuild')
+      } finally {
+        image.remove()
+      }
+    }
+    await compile()
+    write('esbuild/index.ts', 'catalog v2')
+    await compile()
+    assertEquals(names[0], names[1])
+    write('compiler/compile.ts', 'compiler v2')
+    await compile()
+    assert(names[2] != names[1])
+    write('esbuild/Dockerfile', 'FROM new-deno\nCOPY . .')
+    await compile()
+    assert(names[3] != names[2])
+    let config = join(root, 'esbuild/wrangler.toml')
+    Deno.writeTextFileSync(
+      config,
+      Deno.readTextFileSync(config).replace(
+        '[[env.staging.containers]]\nimage = "./Dockerfile"\nimage_build_context = "../compiler"',
+        '[[env.staging.containers]]\nimage = "./Dockerfile"\nimage_build_context = "../other"',
+      ),
+    )
+    write('other/compile.ts', 'other compiler')
+    await compile()
+    assertEquals(names.length, 6)
+    assert(
+      names[4] != names[5],
+      'each Dockerfile/context pair has its own image',
+    )
+  } finally {
+    Deno.removeSync(root, { recursive: true })
+  }
 })

@@ -2,7 +2,7 @@
 // on the other. A deploy overlaps their I/O and settles both before proceeding
 // or failing so the wrapper never exits while its Docker child is running.
 import { equal, ok, test, throws, tick } from '@yaks/testing'
-import { based, pinned } from './base.ts'
+import { based, imaged, pinned } from './base.ts'
 
 let credentials = JSON.stringify({
   username: 'v1',
@@ -97,4 +97,38 @@ test('sandbox base waits for Docker login when registry HEAD fails', async () =>
   login.resolve({ ok: true, out: '' })
   await checked.promise
   await checkedFailure
+})
+
+test('source-addressed images build and push once, and failures refuse the image', async () => {
+  let held = new Set<string>(), calls: string[][] = []
+  let failing = ''
+  let ensure = (name: string) =>
+    imaged({
+      wrangler: ['wrangler'],
+      name,
+      context: '/compiler',
+      dockerfile: '/worker/Dockerfile',
+      has: (ref) => Promise.resolve(held.has(ref)),
+      go: (cmd) => {
+        calls.push(cmd)
+        if (cmd[0] == 'wrangler') {
+          return Promise.resolve({ ok: true, out: credentials })
+        }
+        if (cmd[1] == 'push' && !failing) {
+          held.add(cmd[2])
+        }
+        return Promise.resolve({ ok: cmd[1] != failing, out: '' })
+      },
+    })
+  let first = await ensure('compiler:inputs-one')
+  await ensure('compiler:inputs-one')
+  equal(calls.filter((c) => c[1] == 'build').length, 1)
+  equal(calls.filter((c) => c[1] == 'push'), [['docker', 'push', first]])
+  await ensure('compiler:inputs-two')
+  equal(calls.filter((c) => c[1] == 'build').length, 2)
+  ok(calls.find((c) => c[1] == 'build')!.includes('/worker/Dockerfile'))
+  for (let failure of ['build', 'push']) {
+    failing = failure
+    await throws(() => ensure('compiler:inputs-' + failure), 'failed')
+  }
 })

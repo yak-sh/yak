@@ -83,13 +83,16 @@ of each container image the sibling runs (its Dockerfile and every file of its
 build context, `wrangler.ts` `images`), its configuration, Wrangler pin and
 environment. A matching sibling stays serving without another upload; changed
 inputs, an unreadable deployment or a release without the annotation upload
-normally. A changed compiler rebuilds `yak-esbuild`'s image, pushes it to
-Cloudflare's registry and rolls the container out, all inside the sibling's
-`wrangler deploy`: the Workers Builds image has Docker, as the sandbox image
-already needs. `bin/build-yak` with no argument still runs the check and the
-workers tests by hand. A push's build that fails is started once more through
-the `BUILD_HOOK` deploy hook (builds.ts), since most failures are the network's;
-the second build's failure stands.
+normally. The compiler image has its own `inputs:<sha256>` registry tag,
+covering its Dockerfile and build context. A changed Worker or toolkit catalog
+reuses that image; only a missing image tag builds and pushes it. The sibling
+upload uses a temporary config beside the original, naming the registry image,
+so Wrangler rolls it out without rebuilding it. Registry, build or push failures
+refuse the sibling and kernel deploy. Workers Builds has Docker, as the sandbox
+image already needs. `bin/build-yak` with no argument still runs the check and
+the workers tests by hand. A push's build that fails is started once more
+through the `BUILD_HOOK` deploy hook (builds.ts), since most failures are the
+network's; the second build's failure stands.
 
 Builds run on watched-path pushes and finish in any order, so the deploy door
 (`wrangler.ts` `superseded`) deploys a commit only while no later commit changes
