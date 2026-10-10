@@ -81,16 +81,25 @@ type Drawing = {
   ready: Promise<Awaited<ReturnType<typeof import('./answer.ts').reported>>>
 }
 
+type Prepare = (doc: VocabDoc) => Drawing['ready']
+let prepare: Prepare = (doc) =>
+  import('./answer.ts').then(({ reported }) => reported(doc))
+
 // A cached vocabulary and a declared entity answer let independent, pure
 // drawing preparation run beside the tool call. Its failure is reported only
 // if that answer actually needs drawing; tool errors retain their own output.
-let preparing = (c: Ctx, roster: Roster, t: Listed): Drawing | undefined => {
+let preparing = (
+  c: Ctx,
+  roster: Roster,
+  t: Listed,
+  load: Prepare,
+): Drawing | undefined => {
   if (
     c.json || !roster.vocab ||
     t.outputSchema?.properties?.result?.type != 'array'
   ) return
   let doc = roster.vocab
-  let ready = import('./answer.ts').then(({ reported }) => reported(doc))
+  let ready = load(doc)
   void ready.catch(() => {})
   return { doc, ready }
 }
@@ -174,7 +183,7 @@ export let printed = async (
 // declared them (tool.ts `spelling`), so `yak task new 'ship it'` is typed the
 // way the tool declared, and a server that declares neither still lists the
 // tool under one flat name.
-let toolOf = (roster: Roster, t: Listed): Command => ({
+let toolOf = (roster: Roster, t: Listed, load: Prepare): Command => ({
   name: t.name,
   ...spelling(t),
   ...(t.title ?? t.annotations?.title
@@ -182,7 +191,7 @@ let toolOf = (roster: Roster, t: Listed): Command => ({
     : {}),
   description: t.description ?? '',
   run: async (args, c) => {
-    let drawing = preparing(c, roster, t)
+    let drawing = preparing(c, roster, t, load)
     return await printed(
       c,
       roster,
@@ -198,6 +207,11 @@ let toolOf = (roster: Roster, t: Listed): Command => ({
   },
 })
 
+/** A held roster as commands. Drawing preparation is a separate boundary
+ * so a tool error or plain reply can be answered even if its views fail. */
+export let commands = (roster: Roster, load: Prepare = prepare): Command[] =>
+  roster.tools.map((t) => toolOf(roster, t, load))
+
 /** Every tool this server lists, as a subcommand. This is the list that costs
  * a round trip (run.ts `more`), so a command that never needs it pays
  * nothing, and `fresh` asks the server past the cache. */
@@ -206,5 +220,5 @@ export let listed = async (
   o: { fresh?: boolean } = {},
 ): Promise<Command[]> => {
   let roster = await rosterOf(c.host, c.ask, c.state, o.fresh)
-  return roster.tools.map((t) => toolOf(roster, t))
+  return commands(roster)
 }

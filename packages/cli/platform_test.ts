@@ -16,10 +16,10 @@ import { taskDoc } from '@yaks/task'
 import { toolsDoc } from '@yaks/tools'
 import { loadVocab } from '@yaks/vocab'
 import { doorUrl, rpc } from './rpc.ts'
-import { listed, printed, rosterOf } from './platform.ts'
+import { commands, printed, rosterOf } from './platform.ts'
 import type { Result } from './roster.ts'
 import type { Ctx } from './run.ts'
-import { cached, remember } from './store.ts'
+import { cached } from './store.ts'
 
 // A server's graph as a host composes one: each document stamped with the
 // package that declared it.
@@ -125,41 +125,52 @@ test('an answer that is not entities prints as the text it came as', async () =>
 })
 
 test('prepared views fail only for an entity drawing that needs them', async () => {
-  await asking(async (c) => {
-    let roster = await rosterOf(c.host, c.ask, c.state)
-    let tool = {
+  let vocab = { $defs: {} }
+  let preparations = 0
+  let [command] = commands({
+    tools: [{
       name: 'probe',
       outputSchema: { properties: { result: { type: 'array' } } },
-    }
-    // A valid server vocabulary whose contributor fails while loading.
-    let vocab = {
-      $defs: {
-        broken: {
-          type: 'object' as const,
-          component: true as const,
-          package: 'data:text/javascript,throw new Error("broken views"); //',
-          properties: {},
-        },
-      },
-    }
-    await remember(c.host, { ...roster, tools: [tool], vocab }, c.state)
-    let entity = {
-      structuredContent: { result: [{ entity: { eid: 'test' }, broken: {} }] },
-    }
-    let run = async (reply: Result, json = false) => {
-      let ctx = { ...c, json, ask: () => Promise.resolve(reply) }
-      let [command] = await listed(ctx)
-      return command.run!({}, ctx)
-    }
-    assertEquals(await run(entity, true), 0)
-    assertEquals(await run({ content: [{ type: 'text', text: 'plain' }] }), 0)
-    assertEquals(
-      await run({
-        isError: true,
-        content: [{ type: 'text', text: 'tool failed' }],
-      }),
-      1,
-    )
-    await assertRejects(() => run(entity), Error, 'broken views')
+    }],
+    vocab,
+  }, () => {
+    preparations++
+    return Promise.reject(new Error('broken views'))
   })
+  let said: string[] = []
+  let entity = {
+    structuredContent: { result: [{ entity: { eid: 'test' } }] },
+  }
+  let run = async (reply: Result, json = false) => {
+    let c: Ctx = {
+      host: 'tasks.test',
+      duties: false,
+      json,
+      tui: false,
+      help: false,
+      ask: () => Promise.resolve(reply),
+      reads: { file: () => '', stdin: () => '' },
+      out: (line) => said.push(line),
+      note: (line) => said.push(line),
+      all: () => Promise.resolve([]),
+      page: () => Promise.resolve(''),
+    }
+    said.length = 0
+    return await command.run!({}, c)
+  }
+  assertEquals(await run(entity, true), 0)
+  assertEquals(preparations, 0)
+  assertEquals(JSON.parse(said[0]), entity.structuredContent)
+  assertEquals(await run({ content: [{ type: 'text', text: 'plain' }] }), 0)
+  assertEquals(said, ['plain'])
+  assertEquals(
+    await run({
+      isError: true,
+      content: [{ type: 'text', text: 'tool failed' }],
+    }),
+    1,
+  )
+  assertEquals(said, ['tool failed'])
+  await assertRejects(() => run(entity), Error, 'broken views')
+  assertEquals(preparations, 3)
 })
