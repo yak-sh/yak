@@ -16,7 +16,12 @@ import {
   split,
 } from '../bench/deploy.ts'
 import { WRANGLER } from '../workers/yak/wrangler.ts'
-import type { Version } from '../packages/admin/deploys.ts'
+import {
+  type Deployment,
+  deploymentsFor,
+  rowsIn,
+  type Version,
+} from '../packages/admin/deploys.ts'
 
 type Event = {
   type: string
@@ -139,6 +144,45 @@ let versions = (): Promise<Version[]> =>
     new URL('../workers/yak/', import.meta.url),
   )
 let pause = () => new Promise((ok) => setTimeout(ok, 1000))
+
+export let observe = async (
+  version: Version,
+  backfill = false,
+  {
+    check = probe,
+    history = () =>
+      command(
+        WRANGLER[0],
+        [...WRANGLER.slice(1), 'deployments', 'list', '--json'],
+        new URL('../workers/yak/', import.meta.url),
+      ),
+    now = Date.now,
+    wait = pause,
+  } = {},
+) => {
+  let problem = await check(version.id)
+  if (!problem) {
+    // A late recorder verifies serving, but history owns the activation time.
+    let first = deploymentsFor(
+      version.id,
+      rowsIn<Deployment>(await history(), 'deployments'),
+    )[0]?.created_on
+    if (!first || !Number.isFinite(Date.parse(first))) {
+      throw new Error(`no deployment time for serving version ${version.id}`)
+    }
+    let live = new Date(Math.max(
+      Date.parse(version.metadata.created_on),
+      Date.parse(first),
+    )).toISOString()
+    return { live, problem }
+  }
+  let due = now() + 120_000
+  while (!backfill && problem && now() < due) {
+    await wait()
+    problem = await check(version.id)
+  }
+  return { live: problem ? null : new Date(now()).toISOString(), problem }
+}
 
 // In the gate the recorder measures the commit under test, and the row lives
 // only in that run's checkout: no workflow here pushes, and a bench-row commit
@@ -283,13 +327,7 @@ export let main = async (args = Deno.args) => {
       )
       continue
     }
-    let problem = await probe(match.version.id)
-    let due = Date.now() + 120_000
-    while (!backfill && problem && Date.now() < due) {
-      await pause()
-      problem = await probe(match.version.id)
-    }
-    let live = problem ? null : new Date().toISOString()
+    let { live, problem } = await observe(match.version, backfill)
     let row: Deploy = {
       sha,
       ...push,

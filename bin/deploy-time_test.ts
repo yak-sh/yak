@@ -3,6 +3,7 @@ import { assertEquals, assertThrows } from '@std/assert'
 import {
   append,
   built,
+  observe,
   probe,
   pushTime,
   summary,
@@ -130,6 +131,71 @@ test('deploy probe: transport and body errors remain failures', async () => {
       ),
     )) as typeof fetch
   assertEquals(await probe(ID, truncated), 'body truncated')
+})
+
+test('deploy time: already serving uses its first active deployment, bounded by upload', async () => {
+  let uploaded = version(20)
+  uploaded.id = ID
+  for (let seconds of [10, 25]) {
+    let activation = version(seconds).metadata.created_on
+    let result = await observe(uploaded, false, {
+      check: (id) => probe(id, fake(200, ID)),
+      now: () => Date.parse(PUSHED) + 90_000,
+      history: () =>
+        Promise.resolve({
+          result: {
+            deployments: [
+              {
+                id: 'later',
+                created_on: version(50).metadata.created_on,
+                versions: [{ version_id: ID, percentage: 100 }],
+              },
+              {
+                id: 'inactive',
+                created_on: PUSHED,
+                versions: [{ version_id: ID, percentage: 0 }],
+              },
+              {
+                id: 'first',
+                created_on: activation,
+                versions: [{ version_id: ID, percentage: 10 }],
+              },
+            ],
+          },
+        }),
+    })
+    assertEquals(result, {
+      live: version(Math.max(20, seconds)).metadata.created_on,
+      problem: null,
+    })
+    let row = {
+      sha: SHA,
+      pushed: PUSHED,
+      uploaded: uploaded.metadata.created_on,
+      live: result.live,
+      seconds: Math.max(20, seconds),
+    }
+    assertEquals(records(JSON.stringify(row)), [row])
+  }
+})
+
+test('deploy time: a later successful probe stamps its own clock', async () => {
+  let uploaded = { ...version(20), id: ID }
+  let clock = Date.parse(PUSHED) + 30_000
+  let attempts = 0
+  let result = await observe(uploaded, false, {
+    check: (id) => probe(id, fake(200, attempts++ ? ID : 'old')),
+    now: () => clock,
+    wait: () => {
+      clock += 1000
+      return Promise.resolve()
+    },
+    history: () => {
+      throw new Error('a later probe must use its own clock')
+    },
+  })
+  assertEquals(attempts, 2)
+  assertEquals(result, { live: version(31).metadata.created_on, problem: null })
 })
 
 let deploy = (n: number, seconds: number): Deploy => {

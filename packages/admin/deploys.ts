@@ -108,6 +108,11 @@ export let marksIn = (source: string): string[] | null => {
   return marks.every((m) => m != null) ? marks : null
 }
 
+export let deploymentsFor = (id: string, deployments: Deployment[]) =>
+  deployments.filter((d) =>
+    d.versions.some((v) => v.version_id == id && v.percentage > 0)
+  ).sort((a, b) => Date.parse(a.created_on) - Date.parse(b.created_on))
+
 export let deploysIn = (
   versions: Version[],
   deployments: Deployment[],
@@ -131,9 +136,7 @@ export let deploysIn = (
         subject: named[2] ?? '',
       }
       : log.find((c) => Date.parse(c.at) <= Date.parse(v.metadata.created_on))
-    let served = history.filter((d) =>
-      d.versions.some((s) => s.version_id == v.id && s.percentage > 0)
-    )
+    let served = deploymentsFor(v.id, history)
     return {
       id: v.id,
       created: v.metadata.created_on,
