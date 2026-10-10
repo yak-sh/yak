@@ -5,9 +5,10 @@
 // space the sign-in happened at (null for the platform-wide door), and a unix
 // second the token dies at — and the mac is HMAC-SHA256 over the claims text
 // under the session's own key. An edited or forged token fails the mac, an old
-// one fails `exp`; the check runs through WebCrypto's verify, so it is
-// constant-time without a compare of our own. The role a person holds is
-// membership, read from the directory, never a claim: a token cannot promote.
+// one fails `exp`. WebCrypto's constant-time verify checks a seal; repeat
+// opens can reuse that result for the exact seal and key. The role a person
+// holds is membership, read from the directory, never a claim: a token
+// cannot promote.
 //
 // The seal under it — `seal`/`opened`, a signed JSON value — is the general
 // half, because the session token is not the only thing the kernel has to be
@@ -93,20 +94,41 @@ let sealWith = async (k: CryptoKey, value: unknown) => {
   return `${body}.${b64u(new Uint8Array(mac))}`
 }
 
-// The value under a mac this key made, or null. The check runs through
-// WebCrypto's verify, so it is constant-time without a compare of our own.
+// Only successful WebCrypto verifications, kept by the immutable key and
+// exact seal. Count and length bound the memory per key; the WeakMap lets it
+// go with the key. Values and expiry decisions are never kept.
+let verified = new WeakMap<CryptoKey, Set<string>>()
+let verificationLimit = 256
+let sealLimit = 4096
+
+// The value under a mac this key made, or null. A miss uses WebCrypto's
+// constant-time verify; a hit reuses its result and parses the value afresh.
 let openWith = async (k: CryptoKey, sealed: string) => {
   let dot = sealed.lastIndexOf('.')
   if (dot < 0) return null
   let body = sealed.slice(0, dot)
   try {
-    let ok = await crypto.subtle.verify(
-      'HMAC',
-      k,
-      unb64u(sealed.slice(dot + 1)),
-      enc.encode(body),
-    )
-    return ok ? JSON.parse(dec.decode(unb64u(body))) : null
+    let seen = verified.get(k)
+    if (seen?.delete(sealed)) seen.add(sealed)
+    else {
+      let ok = await crypto.subtle.verify(
+        'HMAC',
+        k,
+        unb64u(sealed.slice(dot + 1)),
+        enc.encode(body),
+      )
+      if (!ok) return null
+      if (sealed.length <= sealLimit) {
+        seen = verified.get(k)
+        if (!seen) verified.set(k, seen = new Set())
+        seen.delete(sealed)
+        seen.add(sealed)
+        if (seen.size > verificationLimit) {
+          seen.delete(seen.values().next().value!)
+        }
+      }
+    }
+    return JSON.parse(dec.decode(unb64u(body)))
   } catch {
     return null
   }

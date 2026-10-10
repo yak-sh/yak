@@ -29,6 +29,7 @@ test('a signed token verifies to its claims', async () => {
 
 test('a forged, edited, foreign, or expired token is null', async () => {
   let t = await sign(claims, secret)
+  assertEquals(await verify(t, secret, 0), claims)
   let [body, mac] = t.split('.')
   assertEquals(await verify(t, 'another-secret'), null)
   assertEquals(await verify(`${body}x.${mac}`, secret), null)
@@ -45,12 +46,19 @@ test('a value sealed for one use opens as no other, a session least', async () =
   // are: sealed for another use, it still fails the session's mac.
   for (let use of ['visit', 'grant', 'link', 'handoff', 'erase'] as const) {
     let t = await seal(use, claims, secret)
-    assertEquals(await verify(t, secret), null)
     assertEquals(await opened(use, t, secret), claims)
+    assertEquals(await verify(t, secret), null)
+    assertEquals(await opened(use, t, 'another-secret'), null)
   }
   let session = await sign(claims, secret)
-  assertEquals(await opened('grant', session, secret), null)
   assertEquals(await opened('session', session, secret), claims)
+  assertEquals(await opened('grant', session, secret), null)
+  let value = { once: { email: 'a@b.c', code: '123456' } }
+  let link = await seal('link', value, secret)
+  let got = await opened<typeof value>('link', link, secret)
+  assertEquals(got, value)
+  got!.once.code = 'edited'
+  assertEquals(await opened('link', link, secret), value)
 })
 
 // Every kind's claims as the code before 2c05d0f6 sealed them (token_legacy.ts).
@@ -80,6 +88,8 @@ let USES: Use[] = [
 test('a token sealed before 2c05d0f6 opens for its own use and no other', async () => {
   for (let [use, v] of OLD) {
     let t = await sealedOld(v, secret)
+    let want = use == 'erase' ? { ...v, exp: s } : v
+    assertEquals(await opened(use, t, secret), want)
     for (let u of USES) {
       let want = u != use ? null : u == 'erase' ? { ...v, exp: s } : v
       assertEquals(await opened(u, t, secret), want, `${use} as ${u}`)
@@ -96,6 +106,7 @@ test('an old session verifies, marked for re-minting; other old kinds do not', a
     exp: was.exp as number,
     legacy: true,
   })
+  assertEquals(await verify(old, secret, (was.exp as number) * 1000), null)
   // The two the audit set as a cookie: a visitor's token, and a grant with
   // its prefix taken off. An erase ticket has a session's keys; its exp is ms.
   for (let [use, v] of OLD) {
