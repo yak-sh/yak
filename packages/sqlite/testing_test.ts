@@ -18,20 +18,23 @@ let vocab = loadVocab({
 })
 let names = schema(vocab).flatMap((s) => 'name' in s ? [s.name] : []).sort()
 let empty = snapshot(vocab)
+let one = preparedStore(vocab, {}, empty)
 let entities = select({ cols: [col('eid')], from: table('entity') })
+let objects = select({
+  cols: [col('name')],
+  from: table('sqlite_schema'),
+  order: [col('name')],
+})
 
 test('prepared stores keep writes private and retain their complete schema', () => {
-  using one = preparedStore(vocab, {}, empty)
   one.statements.query(insert('entity', { eid: 'a' }))
   equal(one.statements.query(entities), [{ eid: 'a' }])
   using two = preparedStore(vocab, {}, empty)
   equal(two.statements.query(entities), [])
   equal(
-    two.statements.query(select({
-      cols: [col('name')],
-      from: table('sqlite_schema'),
-      order: [col('name')],
-    })).map((r) => r.name).filter((name) => names.includes(String(name))),
+    two.statements.query(objects).map((r) => r.name).filter((name) =>
+      names.includes(String(name))
+    ),
     names,
   )
 })

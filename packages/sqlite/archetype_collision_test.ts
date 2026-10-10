@@ -1,6 +1,12 @@
 import { test } from '@yaks/testing'
 import { assertEquals, assertNotEquals, assertThrows } from '@std/assert'
-import { archetypeDoc, archetypes, eidOf, tablesOf } from '@yaks/archetype'
+import {
+  archetypeDoc,
+  Archetypes,
+  archetypes,
+  eidOf,
+  tablesOf,
+} from '@yaks/archetype'
 import { type Bundle, graph, sha256 } from '@yaks/graph'
 import { ram } from '@yaks/ram'
 import { loadVocab } from '@yaks/vocab'
@@ -83,32 +89,48 @@ let owners: Bundle[] = [
   { entity: { eid: 'document' }, doc: {} },
 ]
 
+let blobs = texts.map(blob)
+let addresses = new Map(texts.map((text) => [text, sha256(text)]))
+let sets = new Archetypes()
+let tableSets = [[], ['archetype'], ['doc'], ['blob', 'blob_text'], [
+  'tombstone',
+]]
+for (let tables of tableSets) {
+  sets.intern(tables)
+}
+let emptyId = eidOf([]), docId = eidOf(['doc'])
+let blobId = eidOf(['blob', 'blob_text'])
+let ownerDeletes = owners.map((b) => ({ entity: b.entity, $delete: true }))
+let protectedSets = [[], ['doc']].map((tables) => ({
+  eid: eidOf(tables),
+  shape: { tables: JSON.stringify(tables) },
+}))
+
 for (let backend of ['ram', 'sqlite']) {
   for (let first of [true, false]) {
+    let s = backend == 'ram' ? ram(vocab) : storage(mem(), vocab)
+    if ('install' in s) s.install()
+    let g = graph({ storage: s, vocab, plugins: [archetypes(sets)] })
+    let get = (eid: string) => s.get([eid])[0]
     test(`archetype/blob: ${backend}, blobs first=${first}`, () => {
-      let s = backend == 'ram' ? ram(vocab) : storage(mem(), vocab)
-      if ('install' in s) s.install()
-      let g = graph({ storage: s, vocab, plugins: [archetypes()] })
-      let get = (eid: string) => s.tx((tx) => tx.get([eid]))[0]
-      let batches = [texts.map(blob), owners]
+      let batches = [blobs, owners]
       for (let bundles of first ? batches : batches.reverse()) g.apply(bundles)
-      assertNotEquals(eidOf([]), sha256(''))
-      assertEquals(get('empty').entity.archetype, eidOf([]))
-      assertEquals(get('document').entity.archetype, eidOf(['doc']))
+      assertNotEquals(emptyId, addresses.get(''))
+      assertEquals(get('empty').entity.archetype, emptyId)
+      assertEquals(get('document').entity.archetype, docId)
       for (let text of texts) {
-        let b = get(sha256(text))
+        let b = get(addresses.get(text)!)
         assertEquals(b.blob_text, { text })
-        assertEquals(b.entity.archetype, eidOf(['blob', 'blob_text']))
+        assertEquals(b.entity.archetype, blobId)
         assertEquals(b.archetype, undefined)
       }
-      g.apply(owners.map((b) => ({ entity: b.entity, $delete: true })))
-      for (let tables of [[], ['doc']]) {
-        let eid = eidOf(tables)
-        assertEquals(get(eid).archetype, { tables: JSON.stringify(tables) })
+      g.apply(ownerDeletes)
+      for (let { eid, shape } of protectedSets) {
+        assertEquals(get(eid).archetype, shape)
         assertThrows(() => g.apply([{ entity: { eid }, $delete: true }]))
         assertThrows(() => g.apply([{ entity: { eid }, archetype: null }]))
       }
-      assertEquals(get(sha256('')).blob_text, { text: '' })
+      assertEquals(get(addresses.get('')!).blob_text, { text: '' })
     })
   }
 }
@@ -136,7 +158,7 @@ test('archetype/blob: file backfill and reopen preserve text in both insertion o
         archetypes: 0,
         retired: 0,
       })
-      let get = (eid: string) => s.tx((tx) => tx.get([eid]))[0]
+      let get = (eid: string) => s.get([eid])[0]
       assertEquals(get('empty').entity.archetype, eidOf([]))
       for (let text of texts) {
         assertEquals(get(sha256(text)).blob_text, { text })

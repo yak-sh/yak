@@ -206,8 +206,8 @@ let changers: Record<string, () => [Database, Database, string]> = {
 }
 
 for (let [where, make] of Object.entries(changers)) {
+  let [db, changer, table] = make()
   test(`a kept select answers at once with a column added ${where}`, () => {
-    let [db, changer, table] = make()
     try {
       let run = prepared(db), all = `select * from ${table}`
       changer.exec(`create table ${table} (x); insert into ${table} values (1)`)
