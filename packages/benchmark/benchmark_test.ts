@@ -131,30 +131,32 @@ test('baseline acceptance is explicit and check fails closed before collecting',
       return 100
     },
   }])
+  // Acceptance and validation need one sample; round aggregation is proved above.
+  let options = { ...f.options, rounds: 1 }
   await throws(
-    () => run(f.suite, { ...f.options, mode: 'check' }),
+    () => run(f.suite, { ...options, mode: 'check' }),
     'Missing baseline',
   )
   for (let bad of ['null', '{}', '{', '{"version":2}']) {
     f.saved.set('baseline', bad)
-    await throws(() => run(f.suite, { ...f.options, mode: 'check' }))
+    await throws(() => run(f.suite, { ...options, mode: 'check' }))
   }
   equal(calls, 0)
   await throws(
-    () => run(f.suite, { ...f.options, mode: 'accept' }),
+    () => run(f.suite, { ...options, mode: 'accept' }),
     'Tolerance',
   )
   equal(calls, 0)
-  await run(f.suite, { ...f.options, mode: 'accept', tolerance: .2 })
+  await run(f.suite, { ...options, mode: 'accept', tolerance: .2 })
   let accepted = f.saved.get('baseline')
   f.suite.benches[0].sample = () => 120
-  equal((await run(f.suite, { ...f.options, mode: 'check' })).verdict, 'passed')
-  await run(f.suite, f.options)
+  equal((await run(f.suite, { ...options, mode: 'check' })).verdict, 'passed')
+  await run(f.suite, options)
   equal(f.saved.get('baseline'), accepted)
   for (let bad of [NaN, Infinity, -1]) {
     f.suite.benches[0].sample = () => bad
     await throws(
-      () => run(f.suite, { ...f.options, mode: 'accept', tolerance: .2 }),
+      () => run(f.suite, { ...options, mode: 'accept', tolerance: .2 }),
       'sample',
     )
     equal(f.saved.get('baseline'), accepted)

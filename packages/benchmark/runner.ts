@@ -234,21 +234,23 @@ let execute = async (
       accepted!,
     )
   }
-  // Reporting owns an immutable snapshot, never the ratchet's mutable result.
-  let snapshot = freeze(JSON.parse(JSON.stringify(current)) as Run)
   let report: Awaited<ReturnType<Reporters>> = []
   try {
     report = await (options.reporters ?? reporters)(context)
   } catch (error) {
     console.error('Benchmark reporter factory failed', error)
   }
-  // One broken provider cannot keep another from receiving the durable run.
-  let deliveries = await Promise.allSettled(
-    report.map((send) => Promise.resolve().then(() => send(snapshot))),
-  )
-  for (let delivery of deliveries) {
-    if (delivery.status == 'rejected') {
-      console.error('Benchmark reporter failed', delivery.reason)
+  if (report.length) {
+    // Reporting owns an immutable snapshot, never the ratchet's mutable result.
+    let snapshot = freeze(JSON.parse(JSON.stringify(current)) as Run)
+    // One broken provider cannot keep another from receiving the durable run.
+    let deliveries = await Promise.allSettled(
+      report.map((send) => Promise.resolve().then(() => send(snapshot))),
+    )
+    for (let delivery of deliveries) {
+      if (delivery.status == 'rejected') {
+        console.error('Benchmark reporter failed', delivery.reason)
+      }
     }
   }
   if (current.verdict == 'regressed') throw new Regressed(current)
