@@ -414,3 +414,30 @@ test('a noun alone is a page of its verbs, by either door', async () => {
   // And a word nobody holds is still a usage error.
   assertEquals(await ran(tiered, ['nonsense']), 2)
 })
+
+test('a known noun answers an unknown word before any app stray', async () => {
+  let noun: Command = {
+    noun: 'admin',
+    verb: 'errors',
+    description: 'Errors',
+    run: () => 0,
+  }
+  for (let source of ['built-in', 'graph', 'host']) {
+    let tools = source == 'built-in' ? [noun, ...appTools] : appTools
+    let opts: Opts = {
+      stray: appStray,
+      more: (c) =>
+        source == 'built-in' || source == 'host' && c.config ? [] : [noun],
+      env: (name) =>
+        source == 'host' && name == 'YAK_CONFIG' ? 'home.json' : undefined,
+    }
+    assertEquals(await ran(tools, ['admin'], opts), 0)
+    let page = printed.join('\n')
+    assert(page.includes('errors'), page)
+    assertEquals(await ran(tools, ['admin', 'about', '--as', 'admin'], opts), 2)
+    let error = printed.join('\n')
+    assert(error.includes('about'), error)
+    assert(error.includes(page), error)
+    assertEquals(asked, [])
+  }
+})

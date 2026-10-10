@@ -120,8 +120,8 @@ export let appTools: Command[] = [{
   run: (args, c) => called(c, args),
 }]
 
-/** `yak <app> <command>`: only reached when no subcommand matched the first
- * word, so a tool of the same name always wins. */
+/** `yak <app> <command>`: only reached when no command or command noun claims
+ * the first word, so a tool or noun of the same name always wins. */
 export let appStray = (app: string, args: string[]): Command | undefined => {
   let name = args[0]
   if (!name || name.startsWith('-')) return undefined

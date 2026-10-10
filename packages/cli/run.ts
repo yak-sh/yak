@@ -466,19 +466,18 @@ export let cli = async (
     let at = c
     let found = commandFor(tools, rest) ??
       commandFor(await fetched(), rest) ??
-      commandFor(await fetched(true), rest) ??
-      await (async () => {
-        // A host whose list never came is the answer: past this point a line
-        // it would have understood reads as an app's stray, and its words as
-        // that app's arguments.
-        if (why) throw new Error(why)
-        let hit = config
-          ? undefined
-          : await opts.stray?.(rest[0], rest.slice(1), c)
-        return hit ? { verb: hit, args: rest.slice(1) } : undefined
-      })() ??
-      await (async () => {
-        if (!onward || !opts.more) return undefined
+      commandFor(await fetched(true), rest)
+    let page = !found ? nounUsage(await c.all(), rest[0]) : undefined
+    if (!found && !page) {
+      // A host whose list never came is the answer: past this point a line
+      // it would have understood reads as an app's stray, and its words as
+      // that app's arguments.
+      if (why) throw new Error(why)
+      let stray = config
+        ? undefined
+        : await opts.stray?.(rest[0], rest.slice(1), c)
+      if (stray) found = { verb: stray, args: rest.slice(1) }
+      else if (onward && opts.more) {
         let theirs: Command[]
         try {
           theirs = [...await opts.more(far, {})]
@@ -488,19 +487,23 @@ export let cli = async (
               `not be asked: ${(e as Error).message}`,
           )
         }
-        let hit = commandFor(theirs, rest) ?? await (async () => {
+        found = commandFor(theirs, rest)
+        page = !found ? nounUsage([...tools, ...theirs], rest[0]) : undefined
+        if (!found && !page) {
           let stray = await opts.stray?.(rest[0], rest.slice(1), far)
-          return stray ? { verb: stray, args: rest.slice(1) } : undefined
-        })()
-        if (hit) at = far
-        return hit
-      })()
+          if (stray) found = { verb: stray, args: rest.slice(1) }
+        }
+        if (found) at = far
+      }
+    }
     if (!found) {
       // A noun on its own is a question, not a mistake: `yak graph` (and
       // `yak graph --help`, which is the same command line with the flag
       // lifted off) asks what that word can do, and the answer is its verbs.
-      let page = nounUsage(await c.all(), rest[0])
       if (page) {
+        if (rest.length > 1) {
+          throw new Usage(`Unknown command: ${rest[1]}\n\n${page}`)
+        }
         out(page)
         return 0
       }

@@ -178,7 +178,7 @@ the same door is the connector's `builder_build` tool. It takes what the CLI doe
 `outdated`, `template`, `provider`, `model`, `input`) and reaches the store's
 `/build` as the caller, after checking they may edit the app; `builder_choose`
 and `builder_supply` sit beside it. From the box:
-`yak admin builder_build --space <space> --app <app> --builder <id> …`.
+`yak command builder_build --as <account> --space <space> --app <app> --builder <id> …`.
 
 ## Chaining
 
