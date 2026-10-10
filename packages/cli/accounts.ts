@@ -1,7 +1,7 @@
 // Remote account credentials come from the configured graph, or a small
 // personal graph beside the CLI's other state. Nothing reads a token file.
 import type { Served } from './host.ts'
-import { configPath, located } from './config.ts'
+import { type Config, configPath, dbOf, located } from './config.ts'
 import { type Env, stateDir } from './store.ts'
 
 export let personalPath = (state: string): string => `${state}/accounts.json`
@@ -49,6 +49,17 @@ export let personal = async (state: string = stateDir()): Promise<string> => {
   return path
 }
 let opened = new Map<string, Promise<Served>>()
+let readers = new Map<string, Promise<import('./reader.ts').Reader>>()
+let accountReader = (config: Config, plugins: string[]) => {
+  let key = JSON.stringify([dbOf(config), plugins])
+  let held = readers.get(key)
+  if (!held) {
+    held = import('./reader.ts').then(({ reader }) => reader(config, plugins))
+    readers.set(key, held)
+    held.catch(() => readers.delete(key))
+  }
+  return held
+}
 /** Account graphs are opened once per command and closed by the CLI's final
  * boundary. Dynamic imports keep an environment-only sandbox off the graph. */
 export let accountHost = (path: string): Promise<Served> => {
@@ -65,7 +76,10 @@ export let accountHost = (path: string): Promise<Served> => {
 }
 export let closeAccounts = async (): Promise<void> => {
   let held = [...opened.values()]
+  let read = [...readers.values()]
   opened.clear()
+  readers.clear()
+  for (let r of read) (await r).close()
   for (let host of held) await (await host).close()
 }
 export type AccountOptions = { config?: string; as?: string; env?: Env }
@@ -95,27 +109,23 @@ export let accountToken = async (
   let integration = name == 'yaks.app'
     ? 'yaks.app'
     : (await import('./rpc.ts')).doorUrl(host)
-  let direct = /^[0-9a-f]{8}-[0-9a-f-]{27}$/i.test(config.person) ||
+  let direct =
+    /^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(config.person) ||
     /^(?:[a-z]+-)?[0-9]+$/i.test(config.person)
   if (!opts.as && direct) {
-    let { reader } = await import('./reader.ts')
-    let r = await reader(
+    let r = await accountReader(
       config,
       plugins.filter((p) =>
         ['@yaks/kernel', '@yaks/id', '@yaks/connections'].includes(p)
       ),
     )
-    try {
-      let owner = await person({ config, graph: r.graph })
-      let found = await r.graph.read(
-        `.connection.owner=${owner} .connection.integration=${
-          JSON.stringify(integration)
-        } .fields=entity.eid .limit=1`,
-      )
-      if (!found.length) return null
-    } finally {
-      r.close()
-    }
+    let owner = await person({ config, graph: r.graph })
+    let found = await r.graph.read(
+      `.connection.owner=${owner} .connection.integration=${
+        JSON.stringify(integration)
+      } .fields=entity.eid .limit=1`,
+    )
+    if (!found.length) return null
   }
   let h = await accountHost(path)
   let owner = await person(h)

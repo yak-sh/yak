@@ -35,7 +35,7 @@ export let continuing = <A, B>(
 
 /** Read through the graph's projection and addressing rules. An owning host
  * can supply its traced committed transaction; otherwise only reads are
- * exposed to plugins. No admission, rules, writes or effects are loaded. */
+ * exposed to plugins. Admission, rules, writes and effects never run here. */
 export let reader = (opts: {
   storage: ReadStorage
   vocab: Vocab

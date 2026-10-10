@@ -168,3 +168,23 @@ test('an unmatched door reads accounts without executing configured graph plugin
     await Deno.remove(state, { recursive: true })
   }
 })
+
+// Readers share a handle for the command, never a cached absence or bearer.
+test('an account connected after a miss is visible before accounts close', async () => {
+  let state = await Deno.makeTempDir()
+  try {
+    let path = await personal(state)
+    let token = () =>
+      accountToken('yaks.app', state, { config: path, env: () => undefined })
+    equal(await token(), null)
+    let { h, b } = await named(state, 'probe@example.test', 'first')
+    equal(await token(), 'first')
+    await connect({ graph: h.graph, vault: h.vault }, b.entity.eid, {
+      key: 'second',
+    }, 'probe@example.test')
+    equal(await token(), 'second')
+  } finally {
+    await closeAccounts()
+    await Deno.remove(state, { recursive: true })
+  }
+})

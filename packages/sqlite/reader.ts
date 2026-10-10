@@ -1,6 +1,6 @@
 // The SELECT half of an installed store. It shares the compiler, component
 // gathers and snapshot rules with storage(), without importing its writers,
-// schema installer, migrations or diagnostics.
+// mutation pipeline, migrations or diagnostics.
 import type { BindOpts, Driver } from '@yaks/sql'
 import type { Vocab } from '@yaks/vocab'
 import type { ReadStorage } from '@yaks/graph/read'
