@@ -174,9 +174,9 @@ deno task bench box -- --config ~/.cache/yak-bench/yak.json \
 ```
 
 Copying a 10 GB snapshot takes minutes; without `--base` the copy keeps what
-earlier runs wrote. Every child runs this checkout's code without network
-permission and with no session, token or other graph in its environment; the CLI
-serves no effects, and the in-process pool runs a no-op for every declared
+earlier runs wrote. Local children run this checkout's code without network
+permission and with no session, token or other graph in their environment; the
+CLI serves no effects, and the in-process pool runs a no-op for every declared
 effect. The suite's sections, each one selectable with `--only`:
 
 | Section   | Benches                                                                                                                                                                                                                                                                                               |
@@ -186,6 +186,7 @@ effect. The suite's sections, each one selectable with `--only`:
 | `rows`    | The entity, journal change and effect rows one read and one write add.                                                                                                                                                                                                                                |
 | `graph`   | `box-graph.ts`: `apply()` of 1 to 1,000 comments with its time split by plugin, phase and SQL; the run a comment edit owes, owed, claimed, run and settled; an unbounded pass draining the runs 25 edits owe; and one pass over 0, 1k and 100k pending rows, made in a transaction rolled back after. |
 | `db`      | Not run unless named: size by table (it reads every page), entities by archetype, effect rows, journal changes a day.                                                                                                                                                                                 |
+| `door`    | An explicit HTTP door: read/write command wall and CPU time, the server's observed tools/call handler and span tree, cached roster reads, and client startup phases. Requires `--door-port`.                                                                                                          |
 
 A round runs every section; `--rounds` (3) and `--runs` (7 per command a round)
 set the sample counts. The table it prints gives each bench's p50 and p95.
@@ -193,6 +194,47 @@ Results go to `bench/box.results.json`, and `bench:ratchet box` banks
 `bench/box.baseline.json` for `bench:check box`. Wall times on a loaded box
 follow its page cache: compare CPU time and load averages before trusting a
 change in wall time.
+
+To measure the explicit HTTP door alone, give it an unused scratch port:
+
+```sh
+deno task bench box -- --config ~/.cache/yak-bench/yak.json \
+  --only door --door-port 5198 --rounds 3 --runs 7
+```
+
+`--door-port` also adds `door` to the default sections. The harness refuses port
+5173 and occupied ports. It serves the supplied scratch graph through this
+checkout's composed API handler with duties disabled, using a temporary server
+config and client cache. Door children have network permission only for that
+loopback port. The harness stops its server and removes its temporary state in
+`finally`; the supplied scratch graph retains its benchmark rows as local
+sections do.
+
+The read is `yak --host 127.0.0.1:<port> task list --limit 5`; the write is
+`comment new` on a dedicated target, with a unique body per sample. Setup seeds
+five tasks and a person/session pair, checks that the read returns five tasks,
+and verifies each saved comment's `created.by` and `created.via` outside timing.
+Each round warms both commands once before `--runs` measured invocations. Their
+normal text output is included in spawn-to-exit wall time.
+
+`door-startup` runs a separate observed command per workload per round. `boot`
+uses absolute clocks from the parent and child; `import` times loading the CLI,
+`setup` reaches its command-list request, `list` includes the warm roster lookup
+and command construction, and `dispatch` reaches the selected command. `request`
+includes credentials, transport and response decoding for every RPC during the
+command; `render` is the command interval less those requests. `preparation` is
+the measured time from entering an RPC to entering fetch, a subset of `request`
+that includes credential lookup and RPC setup. It is not a separate additive
+phase or a credential-only measurement. `close` and `exit` finish the command.
+`door/cache` separately times `cached()` on the warm roster in the benchmark
+process; it is not subtracted from client startup.
+
+Server samples measure the selected tools/call from entering the composed API
+handler to its response, excluding body inspection and writing the observer's
+records. Those observer costs remain in command wall time. Span collection runs
+only on this scratch server. Client phases and server samples use separate
+invocations and overlapping clock ranges; they are diagnostic measurements, not
+an additive breakdown of the command wall sample.
 
 ## Effect worker writes
 

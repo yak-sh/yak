@@ -8,14 +8,16 @@
  * spawn to exit), the phases of one command timed from inside
  * (./box-probe.ts), the rows a read and a write add, and in a child process
  * `apply()` and the effect pool (./box-graph.ts); and once, after the rounds,
- * what the database holds. Every child runs this checkout's code without
+ * what the database holds. `--door-port <unused port>` adds the explicit HTTP
+ * door, served only on its own loopback port. Other children run without
  * network permission. The copy's database is written to: `--base` copies a
  * snapshot over it first, so every run starts from the same bytes.
  *
  * Flags: `--config` (required), `--base`, `--rounds` (3), `--runs` (7 timed
  * runs of each command a round), `--show` (the entity `graph show` reads,
  * T-65275), `--only` (comma-separated sections: cli, startup, rows, graph,
- * and db, which is left out unless named: it reads every page of the file).
+ * db, which is left out unless named: it reads every page of the file, and
+ * door, which needs --door-port and is otherwise left out).
  * Results go to bench/box.results.json (and box-db.results.json); a baseline,
  * once accepted with `bench:ratchet box`, to bench/box.baseline.json. */
 import {
@@ -52,8 +54,10 @@ type Flags = {
   runs: number
   show: string
   only: string[]
+  doorPort?: number
 }
-let SECTIONS = ['cli', 'startup', 'rows', 'graph', 'db']
+let SECTIONS = ['cli', 'startup', 'rows', 'graph', 'db', 'door']
+let DEFAULT = ['cli', 'startup', 'rows', 'graph']
 
 /** The commands timed end to end, by name: what an agent types. */
 let commands = (f: Flags): [string, string[]][] => [
@@ -102,9 +106,24 @@ export let main = async (action: string, args: string[]): Promise<number> => {
   let config = read(f.config)
   let db = config.db!
   await refuse(db)
+  if (f.only.includes('door')) {
+    let socket = Deno.listen({ hostname: '127.0.0.1', port: f.doorPort! })
+    socket.close()
+  }
   if (f.base) await reset(f.base, db)
   let scratch = await Deno.makeTempDir({ prefix: 'box-bench-' })
+  let door:
+    | Awaited<ReturnType<typeof import('./box-door.ts')['door']>>
+    | undefined
   try {
+    if (f.only.includes('door')) {
+      door = await (await import('./box-door.ts')).door(
+        f.config,
+        scratch,
+        f.doorPort!,
+        timed,
+      )
+    }
     let bundles = async (n: number) => {
       let path = `${scratch}/bundles-${n}.json`
       await Deno.writeTextFile(
@@ -141,15 +160,25 @@ export let main = async (action: string, args: string[]): Promise<number> => {
       }]),
     ])
     let sections = f.only.filter((s) => s != 'db')
-    let wanted = sections.flatMap((s) => names(f)[s] ?? [])
+    let wanted = sections.flatMap((s) =>
+      s == 'door' ? door!.names : names(f)[s] ?? []
+    )
     let suite: CollectedSuite = {
       name: 'box',
       metric: 'median-of-round-medians',
-      workload: JSON.stringify([1, f.base ?? 'unpinned', f.show]),
+      workload: JSON.stringify([
+        1,
+        f.base ?? 'unpinned',
+        f.show,
+        ...(door ? ['door-v1'] : []),
+      ]),
       benches: wanted.map((name) => ({ name, unit: unit(name) })),
       collect: async (round) => {
         let got: Record<string, Sample[]> = {}
         let add = (name: string, s: Sample) => (got[name] ??= []).push(s)
+        if (sections.includes('door')) {
+          Object.assign(got, await door!.collect(f.runs))
+        }
         if (sections.includes('cli')) {
           let list: [string, string[] | null][] = [
             ['deno', null],
@@ -234,7 +263,9 @@ export let main = async (action: string, args: string[]): Promise<number> => {
         output: `${ROOT}bench/box.results.json`,
         baseline: `${ROOT}bench/box.baseline.json`,
         tolerance: mode == 'accept' ? .25 : undefined,
-        coverage: sections.length == SECTIONS.length - 1 ? 'exact' : 'subset',
+        coverage: sections.length == DEFAULT.length && !door
+          ? 'exact'
+          : 'subset',
         lock: '/tmp/yaks-throughput-bench.lock',
       })
     }
@@ -248,6 +279,7 @@ export let main = async (action: string, args: string[]): Promise<number> => {
     console.log(table(db, result, held))
     return 0
   } finally {
+    await door?.close()
     await Deno.remove(scratch, { recursive: true })
   }
 }
@@ -260,9 +292,21 @@ let flags = (args: string[]): Flags => {
     said[key.slice(2)] = value ?? args[++i]
   }
   if (!said.config) throw new Error('box: --config <path> is required')
-  let only = said.only ? said.only.split(',') : SECTIONS.slice(0, -1)
+  let only = said.only
+    ? said.only.split(',')
+    : [...DEFAULT, ...(said['door-port'] ? ['door'] : [])]
   for (let s of only) {
     if (!SECTIONS.includes(s)) throw new Error(`box: no section ${s}`)
+  }
+  let doorPort = Number(said['door-port'])
+  if (
+    only.includes('door') &&
+    (!Number.isInteger(doorPort) || doorPort < 1024 || doorPort > 65535 ||
+      doorPort == 5173)
+  ) {
+    throw new Error(
+      'box: door needs --door-port <unused scratch port>, excluding 5173',
+    )
   }
   return {
     config: absolute(said.config),
@@ -271,6 +315,7 @@ let flags = (args: string[]): Flags => {
     runs: Number(said.runs ?? 7),
     show: said.show ?? 'T-65275',
     only,
+    doorPort,
   }
 }
 let absolute = (path: string) =>
@@ -302,7 +347,14 @@ let reset = async (base: string, db: string) => {
   )
 }
 
-type Timed = { ms: number; cpu: number; inputs: number; stdout: string }
+export type Timed = {
+  ms: number
+  cpu: number
+  inputs: number
+  stdout: string
+  start: number
+  end: number
+}
 let TIME = '/usr/bin/time'
 
 /** One child, from spawn to exit: its wall time, and the CPU and file-system
@@ -310,6 +362,7 @@ let TIME = '/usr/bin/time'
 let timed = async (
   argv: string[],
   env: Record<string, string> = {},
+  perms: string[] = PERMS,
 ): Promise<Timed & { start: number; end: number }> => {
   let usage = await Deno.makeTempFile()
   try {
@@ -322,7 +375,7 @@ let timed = async (
         usage,
         Deno.execPath(),
         'run',
-        ...PERMS,
+        ...perms,
         '--config',
         DENO,
         ...argv,
