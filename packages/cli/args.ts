@@ -16,7 +16,7 @@
 // an error message here rather than a rejection one round trip away.
 
 import { validateToolInput } from '@yaks/vocab/tools'
-import { CallError } from '@yaks/tools'
+import { CallError } from '@yaks/tools/errors'
 import { commandOf, type Prop, type Schema, typeOf } from './tool.ts'
 
 /** As much of a tool as a command line reads: what it is called, the schema

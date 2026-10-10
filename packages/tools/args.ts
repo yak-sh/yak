@@ -13,14 +13,8 @@ import {
   TOMBSTONE,
 } from '@yaks/graph'
 import { validateToolInput } from '@yaks/vocab/tools'
-
-/** Expected invocation failures, not programming defects. */
-export class CallError extends Error {
-  constructor(public code: string, message: string) {
-    super(message)
-    this.name = 'CallError'
-  }
-}
+import { CallError } from './errors.ts'
+export { CallError } from './errors.ts'
 
 type Args = Record<string, unknown>
 

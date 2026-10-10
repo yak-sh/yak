@@ -5,6 +5,7 @@
     ".": "./mod.ts",
     "./access": "./access.ts",
     "./declared": "./declared.ts",
+    "./errors": "./errors.ts",
     "./routes": "./routes.ts",
     "./vocab": "./vocab.ts",
     "./value": "./value.ts",
