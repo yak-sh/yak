@@ -168,3 +168,29 @@ test('browser catalog captures declared resource globs and their digests', async
     assertEquals(b['@yaks/b'].version, a['@yaks/b'].version)
   })
 })
+
+test('compiler catalog reuses a durable memo across checkout outputs and refreshes changed source', async () => {
+  await scratch(workspace(), async (root) => {
+    let memo = `${root}/cache/transpiled.json`
+    let first = await write(root, `${root}/clone-one/packages.json`, memo)
+    let stored = JSON.parse(await Deno.readTextFile(memo))
+    // Poison one cached transpilation with a visible marker, proving a later
+    // output reads this memo instead of silently transpiling everything again.
+    let key = Object.keys(stored).find((k) => stored[k].includes('extra = 3'))!
+    stored[key] = 'export let extra = 3; /* reused */'
+    await Deno.writeTextFile(memo, JSON.stringify(stored))
+    let second = await write(root, `${root}/clone-two/packages.json`, memo)
+    assertMatch(second['@yaks/a'].files['extra.ts'], /reused/)
+    assertEquals(second['@yaks/b'], first['@yaks/b'])
+    await Deno.writeTextFile(
+      `${root}/packages/a/extra.ts`,
+      'export let extra = 4',
+    )
+    let changed = await write(root, `${root}/clone-three/packages.json`, memo)
+    assertEquals(changed, await catalog(root))
+    assertEquals(
+      Object.hasOwn(JSON.parse(await Deno.readTextFile(memo)), key),
+      false,
+    )
+  })
+})

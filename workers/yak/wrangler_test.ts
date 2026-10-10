@@ -433,3 +433,25 @@ test('compiler Worker changes reuse its image; compiler input changes build a ne
     Deno.removeSync(root, { recursive: true })
   }
 })
+
+test('deploy preflight starts Git reads while the serving version is pending', async () => {
+  let live = Promise.withResolvers<string[]>()
+  let calls: string[][] = []
+  let head = 'a'.repeat(40)
+  let inspection = seen('/checkout', live.promise, (_root, ...args) => {
+    calls.push(args)
+    return Promise.resolve({ code: 0, out: head })
+  })
+  await tick()
+  assertEquals(calls, [
+    ['rev-parse', 'HEAD'],
+    ['ls-remote', 'origin', 'refs/heads/main'],
+  ])
+  live.resolve([head])
+  assertEquals(await inspection, {
+    head,
+    tip: head,
+    changed: false,
+    live: [{ sha: head, ahead: false }],
+  })
+})

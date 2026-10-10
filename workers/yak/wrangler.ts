@@ -566,19 +566,27 @@ let WATCHED = ['workers/yak', 'packages']
  * live commit this clone lacks is fetched first: it was pushed after the clone
  * was made, and a shallow clone holds only the commits it was made with.
  */
-export let seen = async (root: string, live: string[]): Promise<Seen> => {
-  let head = (await git(root, 'rev-parse', 'HEAD')).out
-  let asked = await git(root, 'ls-remote', 'origin', 'refs/heads/main')
+export let seen = async (
+  root: string,
+  live: string[] | Promise<string[]>,
+  read = git,
+): Promise<Seen> => {
+  let [checked, asked, named] = await Promise.all([
+    read(root, 'rev-parse', 'HEAD'),
+    read(root, 'ls-remote', 'origin', 'refs/heads/main'),
+    live,
+  ])
+  let head = checked.out
   let tip = asked.code ? null : SHA.exec(asked.out)?.[0] ?? null
   let include = async (sha: string) => {
-    if ((await git(root, 'cat-file', '-e', `${sha}^{commit}`)).code) {
-      await git(root, 'fetch', '--quiet', 'origin', sha)
+    if ((await read(root, 'cat-file', '-e', `${sha}^{commit}`)).code) {
+      await read(root, 'fetch', '--quiet', 'origin', sha)
     }
   }
   let changed: boolean | null = false
   if (tip && tip != head) {
     await include(tip)
-    let { code } = await git(
+    let { code } = await read(
       root,
       'diff',
       '--quiet',
@@ -592,7 +600,7 @@ export let seen = async (root: string, live: string[]): Promise<Seen> => {
   let ahead = async (sha: string) => {
     if (sha == head) return false
     await include(sha)
-    let { code } = await git(root, 'merge-base', '--is-ancestor', head, sha)
+    let { code } = await read(root, 'merge-base', '--is-ancestor', head, sha)
     return code == 0 ? true : code == 1 ? false : null
   }
   return {
@@ -600,7 +608,7 @@ export let seen = async (root: string, live: string[]): Promise<Seen> => {
     tip,
     changed,
     live: await Promise.all(
-      live.map(async (sha) => ({ sha, ahead: await ahead(sha) })),
+      named.map(async (sha) => ({ sha, ahead: await ahead(sha) })),
     ),
   }
 }
@@ -665,9 +673,7 @@ if (import.meta.main) {
   let guarded = command(argv) === 'deploy' && !argv.includes('--dry-run')
   let [prepared, inspected] = await Promise.allSettled([
     ready(),
-    guarded
-      ? serving(envs(argv)).then((live) => seen(dir, live))
-      : Promise.resolve(null),
+    guarded ? seen(dir, serving(envs(argv), wrangler)) : Promise.resolve(null),
   ])
   if (prepared.status == 'rejected') throw prepared.reason
   if (inspected.status == 'rejected') throw inspected.reason

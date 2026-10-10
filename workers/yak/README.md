@@ -72,6 +72,8 @@ A push outside the watch paths deploys nothing: no build check, no version, and
 so nothing for the gate's `deploy time` step to measure — it says so and the
 deploy gate judges the rows already recorded (`bench/deploys.md`).
 
+Catalog transpilation is reused from the restored Deno cache between builds.
+
 The build command is empty, so a Workers Build runs neither `deno task check`
 nor the tests. It clones, runs `npm ci`, and runs `bin/build-yak deploy`, which
 installs Deno (not on the Ubuntu 24.04 image), makes the deploy pre-flight check

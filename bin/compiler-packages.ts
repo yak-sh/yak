@@ -374,9 +374,12 @@ let kept = (path: string): Record<string, string> => {
 }
 
 /** Materialize atomically before wrangler reads the compiler wrapper, with
- * what was transpiled for it beside it (`transpiled.json`) for the next. */
-export let write = async (root = repo, to = CATALOG) => {
-  let memo = join(dirname(to), 'transpiled.json')
+ * reusable transpilation at `memo`, which can outlive the checkout. */
+export let write = async (
+  root = repo,
+  to = CATALOG,
+  memo = join(dirname(to), 'transpiled.json'),
+) => {
   let made: Record<string, string> = {}
   let packages = await catalog(root, { kept: kept(memo), made })
   materialize(to, packages)
@@ -384,4 +387,15 @@ export let write = async (root = repo, to = CATALOG) => {
   return packages
 }
 
-if (import.meta.main) await write(Deno.args[0] ?? repo, Deno.args[1] ?? CATALOG)
+if (import.meta.main) {
+  let to = Deno.args[1] ?? CATALOG
+  let cache = Deno.env.get('DENO_DIR')
+  await write(
+    Deno.args[0] ?? repo,
+    to,
+    Deno.args[2] ??
+      (cache
+        ? join(cache, 'yak', 'compiler-transpiled.json')
+        : join(dirname(to), 'transpiled.json')),
+  )
+}
