@@ -1,6 +1,6 @@
-// The installed tracker worker must run the clock that releases notification
-// batches, as well as intake and effects. Exercise its declared roles together.
-import { match, test, until } from '@yaks/testing'
+// Exercise the installed tracker worker's declared roles together; any pending
+// notification wake is safe alongside immediate opening and regression letters.
+import { match, ok, test, until } from '@yaks/testing'
 import { compose } from '../cli/host.ts'
 import { type Config } from '../cli/config.ts'
 
@@ -17,6 +17,8 @@ test('box worker fires notification wakes and delivers new and regressed bugs', 
   let bug = crypto.randomUUID()
   let host = await compose({
     db: ':memory:',
+    port: box.port,
+    numbers: box.numbers,
     plugins: [
       ...box.plugins!.filter((p) =>
         typeof p == 'string' && [
@@ -67,7 +69,10 @@ test('box worker fires notification wakes and delivers new and regressed bugs', 
       to: 'owner@example.test',
       message_id: 'stash-1',
     })
-    // Regression removes the earlier notification, and opens a new minute.
+    let doc = letter.doc as { title: string; body: string }
+    ok(doc.title.startsWith('B-'), doc.title)
+    ok(doc.body.includes('http://127.0.0.1:5175/B-'), doc.body)
+    // Regression removes the earlier notification and owns a separate letter.
     await g.apply([{
       entity: { eid: bug },
       notified: null,

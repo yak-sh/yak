@@ -81,11 +81,16 @@ so concurrent processes never share an append offset.
 `effects({graph}, options)` accepts `code: {cwd, url, origins}` for box frame
 resolution through the fleet catalog, an `enrich` function for another host, a
 space `notify` stream callback, or a platform/box mail `to`, `from` and global
-tracker `store` eid. New bugs and regressions share a letter per minute,
-scheduled by a graph wake; bugs become notified only after its `delivered` mark.
-Space replies own their own notified mark. Archived bugs still count but never
-notify. Retention keeps the newest hundred plus the first occurrence of each
-commit (or version without a commit).
+tracker `store` eid. Each bug opening and each regression gets its own letter
+immediately. Its identity derives from the store, recipient, bug eid, opening or
+regression mark, and full `created.at` or `regressed.at`, so a replayed effect
+or wake keeps the same letter. The subject names the bug and its headline; the
+body carries the whole message, where it happened, its historical hits, first
+and last seen times, and a bug link. Bugs become notified only after their
+occasion's letter has its `delivered` mark; an earlier occasion's delivery
+cannot mark a later regression notified. Space replies own their own notified
+mark. Archived bugs still count but never notify. Retention keeps the newest
+hundred plus the first occurrence of each commit (or version without a commit).
 
 ## Browsing
 
@@ -105,6 +110,13 @@ addressable but leave that list. The box config enables human ids, so each bug
 has an address such as `/B-7`. The same list is available through
 `yak --config ~/.yak/tracker.json bug list`.
 
+Notification links use the tracker's `url` option when supplied, for example
+`"url": "https://bugs.example.com"` beside `to` and `store`. A box host
+otherwise uses its configured web port (`http://127.0.0.1:5175` in `box.json`);
+a host without a web address uses the bug's relative path. `code.url` and
+`code.origins` name the separate code catalog and its served source origins, not
+the tracker web.
+
 ```ts
 import { equal } from '@yaks/testing'
 import { occurrences, openBugs } from '@yaks/tracker/views'
@@ -121,8 +133,8 @@ Its command is
 `yak work --config ~/.yak/tracker.json --roles
 effects,@yaks/tracker,@yaks/wake`:
 composition opens graph, effects, intake and the wake service, with the standard
-leases and process wind-down. The wake service fires notification batches at
-their minute deadline. It imports no web routes.
+leases and process wind-down. Notifications need no minute deadline; any wake
+left from a prior run is safe to replay. It imports no web routes.
 
 Add `"tracker": {"spool": "tracker-spool"}` to the watched graph's config.
 `compose()` connects tool, effect, request and duty failures to that spool

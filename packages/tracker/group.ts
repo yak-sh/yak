@@ -77,7 +77,7 @@ export let grouped = (
           notified: null,
           wake: null,
           fired: null,
-          regressed: { error: row.entity.eid },
+          regressed: { at: null, by: null, via: null, error: row.entity.eid },
         }
         : {},
     },

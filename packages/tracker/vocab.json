@@ -255,6 +255,9 @@
         "fired",
         "delivered"
       ],
+      "changed": [
+        "regressed.at"
+      ],
       "active": ".bug !archived !resolved !notified|.mail .delivered",
       "sweep": ".bug !archived !resolved !notified"
     },
