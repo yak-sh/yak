@@ -363,6 +363,10 @@ export let sandboxProvider = (o: SandboxProviderOpts): MachineProvider => {
               '/usr/bin/bwrap',
               '--unshare-all',
               '--new-session',
+              // Namespace init ignores TERM and can fork after scope stop's
+              // signal pass. Tie its lifetime to the supervisor, including
+              // while bubblewrap is still setting up the namespace.
+              '--die-with-parent',
               '--cap-drop',
               'ALL',
             ]

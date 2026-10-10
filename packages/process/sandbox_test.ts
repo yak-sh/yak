@@ -228,12 +228,20 @@ test('release kills descendants, preserves other sandboxes, and wakes a stopped 
     let first = await provider.request!(ref)
     let second = await provider.request!({ id: 'two' })
     await first.machine.write('kept', 'yes')
-    let one = await first.machine.start('sleep 30 & wait')
+    let one = await first.machine.start(
+      'trap "" TERM; echo ready; sleep 30 & wait',
+    )
     let two = await second.machine.start('sleep 30')
     let pid = (await first.machine.look(one))?.pid
     assert(pid)
     let path = (await Deno.readTextFile(`/proc/${pid}/cgroup`)).trim().slice(3)
     let unit = path.split('/').at(-1)!
+    // A scope stop must end the namespace even if its command ignores TERM.
+    // Wait for the trap so this also covers shutdown after namespace setup.
+    await until(
+      async () => (await first.machine.tail(one, 1))[0] == 'ready',
+      'command ignores TERM',
+    )
     let result = await new Deno.Command('/usr/bin/systemctl', {
       args: ['--user', 'stop', unit],
     }).output()
