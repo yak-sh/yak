@@ -80,6 +80,8 @@ export let sentry =
  * https://docs.sentry.io/api/organizations/list-an-organizations-client-keys/ */
 export let sentryReporter = (opts: {
   target?: Target
+  /** The machine reporting, which also splits a fault's issue per host. */
+  host: string
   token: () => Promise<string | undefined>
   dsn?: () => Promise<string | undefined>
   fetch?: typeof globalThis.fetch
@@ -171,10 +173,10 @@ export let sentryReporter = (opts: {
         platform: 'other',
         level: 'error',
         environment: target.environment,
-        server_name: Deno.hostname(),
+        server_name: opts.host,
         tags: { ...event.tags, service: 'yak' },
         ...(event.fingerprint
-          ? { fingerprint: [...event.fingerprint, Deno.hostname()] }
+          ? { fingerprint: [...event.fingerprint, opts.host] }
           : {}),
       }),
     })

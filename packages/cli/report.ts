@@ -51,6 +51,7 @@ export let reporter = (
   let vault = config.tracker && config.db ? vaultOf(config.db) : undefined
   let transport = send ?? (vault
     ? sentryReporter({
+      host: Deno.hostname(),
       token: () => Promise.resolve(reveal(vault, 'sentry')),
       dsn: () => Promise.resolve(reveal(vault, 'SENTRY_DSN')),
     })

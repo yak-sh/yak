@@ -151,6 +151,7 @@ test('caught mail failures use the shared real Sentry request builder', async ()
   let { sentryReporter } = await import('@yaks/tracker/sentry')
   let calls = 0
   let send = sentryReporter({
+    host: 'box',
     token: () => Promise.resolve(undefined),
     dsn: () => Promise.resolve('https://ingest-key@sentry.test/42'),
     fetch: (input, init) =>
