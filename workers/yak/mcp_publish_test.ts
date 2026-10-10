@@ -14,6 +14,7 @@ import {
   num,
   signIn,
   txt,
+  unique,
   vocabFile,
 } from './probe.ts'
 
@@ -105,6 +106,10 @@ test('a word two spaces spell differently stays two words', async () => {
 // leaves the app, and everyone who took it, exactly as they were.
 test('an app is published by name, and the name is one app', async () => {
   let k = await kernel()
+  let recipes44 = unique('recipes44')
+  let kitchen44 = unique('kitchen44')
+  let box44 = unique('recipe-box44')
+  let cards44 = unique('recipe-cards44')
   try {
     let jeff = await signIn(k)
     let mine = jeff.email.split('@')[0]
@@ -123,50 +128,51 @@ test('an app is published by name, and the name is one app', async () => {
     // own offers.
     let offered = async () =>
       (await agent.tool('app_published')).split('\n')
-        .filter((l) => /^- recipe[a-z-]*44 /.test(l))
+        .filter((l) =>
+          [recipes44, box44, cards44].some((name) => l.startsWith(`- ${name} `))
+        )
     assertEquals(await offered(), [])
 
     // An app that has never deployed serves nothing an installer could copy.
-    await made(mine, 'recipes44')
+    await made(mine, recipes44)
     assertStringIncludes(
       (await assertRejects(
-        () => agent.tool('app_publish', { space: mine, app: 'recipes44' }),
+        () => agent.tool('app_publish', { space: mine, app: recipes44 }),
         Error,
       )).message,
       'has never been deployed',
     )
-    await agent.tool('app_deploy', { space: mine, app: 'recipes44' })
+    await agent.tool('app_deploy', { space: mine, app: recipes44 })
 
     // Published under its own slug, at the version that is serving.
     let said = await agent.tool('app_publish', {
       space: mine,
-      app: 'recipes44',
+      app: recipes44,
       about: 'Somewhere to keep recipes',
     })
-    assertStringIncludes(said, 'published recipes44 v1')
+    assertStringIncludes(said, `published ${recipes44} v1`)
     assertStringIncludes(said, 'Somewhere to keep recipes')
-    assertStringIncludes(said, "app_install(name: 'recipes44')")
+    assertStringIncludes(said, `app_install(name: '${recipes44}')`)
     let listed = (await offered()).join('\n')
-    assertStringIncludes(listed, '- recipes44 v1')
+    assertStringIncludes(listed, `- ${recipes44} v1`)
     assertStringIncludes(listed, 'Somewhere to keep recipes')
 
     // A second space claiming the same name is refused, named with the app
     // that has it — and its own slug is free, so it offers under another.
-    await agent.tool('space_new', { slug: 'kitchen44', title: 'kitchen44' })
-    await made('kitchen44', 'recipes44')
-    await agent.tool('app_deploy', { space: 'kitchen44', app: 'recipes44' })
+    await agent.tool('space_new', { slug: kitchen44, title: kitchen44 })
+    await made(kitchen44, recipes44)
+    await agent.tool('app_deploy', { space: kitchen44, app: recipes44 })
     assertStringIncludes(
       (await assertRejects(
-        () =>
-          agent.tool('app_publish', { space: 'kitchen44', app: 'recipes44' }),
+        () => agent.tool('app_publish', { space: kitchen44, app: recipes44 }),
         Error,
       )).message,
-      'recipes44 is published by',
+      `${recipes44} is published by`,
     )
     await agent.tool('app_publish', {
-      space: 'kitchen44',
-      app: 'recipes44',
-      name: 'recipe-box44',
+      space: kitchen44,
+      app: recipes44,
+      name: box44,
     })
     assertEquals((await offered()).length, 2)
 
@@ -176,15 +182,15 @@ test('an app is published by name, and the name is one app', async () => {
     // leaves the offer trailing says so at the door.
     let bumped = await agent.tool('app_deploy', {
       space: mine,
-      app: 'recipes44',
+      app: recipes44,
     })
-    assertStringIncludes(bumped, 'offered as recipes44 is still v1')
+    assertStringIncludes(bumped, `offered as ${recipes44} is still v1`)
     assertStringIncludes(bumped, 'app_publish again to offer this one')
-    assertStringIncludes((await offered()).join('\n'), '- recipes44 v1')
+    assertStringIncludes((await offered()).join('\n'), `- ${recipes44} v1`)
     // And app_versions marks which one is on offer beside which is live.
     let marks = await agent.tool('app_versions', {
       space: mine,
-      app: 'recipes44',
+      app: recipes44,
     })
     assertStringIncludes(marks, '- v2 (live)')
     assertStringIncludes(marks, '- v1 (offered)')
@@ -192,15 +198,15 @@ test('an app is published by name, and the name is one app', async () => {
     // Publishing the same app again is not a second offer: it moves the
     // version on the one that stands, and keeps the line already said.
     assertStringIncludes(
-      await agent.tool('app_publish', { space: mine, app: 'recipes44' }),
-      'published recipes44 v2',
+      await agent.tool('app_publish', { space: mine, app: recipes44 }),
+      `published ${recipes44} v2`,
     )
     assertStringIncludes(
-      await agent.tool('app_versions', { space: mine, app: 'recipes44' }),
+      await agent.tool('app_versions', { space: mine, app: recipes44 }),
       '- v2 (live) (offered)',
     )
     let again = await offered()
-    assertStringIncludes(again.join('\n'), '- recipes44 v2')
+    assertStringIncludes(again.join('\n'), `- ${recipes44} v2`)
     assertStringIncludes(again.join('\n'), 'Somewhere to keep recipes')
     assertEquals(again.length, 2)
 
@@ -209,34 +215,34 @@ test('an app is published by name, and the name is one app', async () => {
     // name keeps that name and says so. Before this it silently renamed the
     // offer to the app's slug, and everyone told to install `recipe-box`
     // found nothing.
-    await agent.tool('app_deploy', { space: 'kitchen44', app: 'recipes44' })
+    await agent.tool('app_deploy', { space: kitchen44, app: recipes44 })
     assertStringIncludes(
-      await agent.tool('app_publish', { space: 'kitchen44', app: 'recipes44' }),
-      'published recipe-box44 v2',
+      await agent.tool('app_publish', { space: kitchen44, app: recipes44 }),
+      `published ${box44} v2`,
     )
     let kept = await offered()
-    assertStringIncludes(kept.join('\n'), '- recipe-box44 v2')
+    assertStringIncludes(kept.join('\n'), `- ${box44} v2`)
     assertEquals(kept.length, 2)
 
     // Moving it takes an explicit name, and the answer says what the old one
     // is worth now.
     let renamed = await agent.tool('app_publish', {
-      space: 'kitchen44',
-      app: 'recipes44',
-      name: 'recipe-cards44',
+      space: kitchen44,
+      app: recipes44,
+      name: cards44,
     })
-    assertStringIncludes(renamed, 'published recipe-cards44 v2')
-    assertStringIncludes(renamed, 'it was offered as recipe-box44')
+    assertStringIncludes(renamed, `published ${cards44} v2`)
+    assertStringIncludes(renamed, `it was offered as ${box44}`)
     assertStringIncludes(renamed, 'no longer resolves')
     let moved = (await offered()).join('\n')
-    assertStringIncludes(moved, '- recipe-cards44 v2')
-    assertEquals(moved.includes('recipe-box44'), false)
+    assertStringIncludes(moved, `- ${cards44} v2`)
+    assertEquals(moved.includes(box44), false)
     assertStringIncludes(
       (await assertRejects(
-        () => agent.tool('app_install', { space: mine, name: 'recipe-box44' }),
+        () => agent.tool('app_install', { space: mine, name: box44 }),
         Error,
       )).message,
-      'nothing is published as recipe-box44',
+      `nothing is published as ${box44}`,
     )
 
     // Only an owner may: an editor writes the app's files and does not hand
@@ -253,7 +259,7 @@ test('an app is published by name, and the name is one app', async () => {
         () =>
           connector(k, ann.cookie).tool('app_publish', {
             space: mine,
-            app: 'recipes44',
+            app: recipes44,
           }),
         Error,
       )).message,
@@ -262,15 +268,15 @@ test('an app is published by name, and the name is one app', async () => {
 
     // Withdrawn: the app stands, the name is free again, the offer is gone.
     assertStringIncludes(
-      await agent.tool('app_unpublish', { space: mine, app: 'recipes44' }),
+      await agent.tool('app_unpublish', { space: mine, app: recipes44 }),
       'no longer offered',
     )
     let left = await offered()
     assertEquals(left.length, 1)
-    assertStringIncludes(left[0], 'recipe-cards44')
+    assertStringIncludes(left[0], cards44)
     assertStringIncludes(
       (await assertRejects(
-        () => agent.tool('app_unpublish', { space: mine, app: 'recipes44' }),
+        () => agent.tool('app_unpublish', { space: mine, app: recipes44 }),
         Error,
       )).message,
       'is not published',
@@ -279,11 +285,11 @@ test('an app is published by name, and the name is one app', async () => {
     assertStringIncludes(
       await agent.tool('app_files', {
         space: mine,
-        app: 'recipes44',
+        app: recipes44,
         op: 'read',
         path: 'index.html',
       }),
-      '<h1>recipes44</h1>',
+      `<h1>${recipes44}</h1>`,
     )
   } finally {
     await k.stop()
@@ -297,6 +303,8 @@ test('an app is published by name, and the name is one app', async () => {
 // which writes nothing and gives the listing back on a restore.
 test('an app reaches the gallery only when yaks.app says yes', async () => {
   let k = await kernel()
+  let published = unique('recipes')
+  let draft = unique('draft')
   try {
     let jeff = await signIn(k)
     let agent = connector(k, jeff.cookie)
@@ -317,10 +325,11 @@ test('an app reaches the gallery only when yaks.app says yes', async () => {
     let said = await agent.tool('app_publish', {
       space: mine,
       app: 'recipes',
+      name: published,
       about: 'Somewhere to keep recipes',
       gallery: true,
     })
-    assertStringIncludes(said, 'published recipes v1')
+    assertStringIncludes(said, `published ${published} v1`)
     let empty = await k.at('yaks.app', '/gallery')
     assert(!(await empty.text()).includes('class="Make_Card"'))
 
@@ -402,7 +411,7 @@ test('an app reaches the gallery only when yaks.app says yes', async () => {
     // install line on it.
     let found = await connector(k).tool('gallery_search', { words: 'recipes' })
     assertStringIncludes(found, 'Recipe box — Somewhere to keep recipes')
-    assertStringIncludes(found, "app_install(name: 'recipes')")
+    assertStringIncludes(found, `app_install(name: '${published}')`)
     // Words in neither the name nor the line find nothing.
     assertStringIncludes(
       await connector(k).tool('gallery_search', { words: 'spreadsheet' }),
@@ -449,7 +458,11 @@ test('an app reaches the gallery only when yaks.app says yes', async () => {
 
     // Asked again, and declined this time: the ask is cleared and nothing is
     // shown.
-    await agent.tool('app_publish', { space: mine, app: 'recipes' })
+    await agent.tool('app_publish', {
+      space: mine,
+      app: 'recipes',
+      name: published,
+    })
     await agent.tool('app_set', {
       space: mine,
       app: 'recipes',
@@ -497,6 +510,7 @@ test('an app reaches the gallery only when yaks.app says yes', async () => {
           agent.tool('app_publish', {
             space: mine,
             app: 'draft',
+            name: draft,
             gallery: true,
           }),
         Error,
@@ -516,6 +530,7 @@ test('an app reaches the gallery only when yaks.app says yes', async () => {
 // the deploy's own sentence (T-32728) and nothing moves.
 test('an installed app is the installer own copy, data and all', async () => {
   let k = await kernel()
+  let published = unique('tally')
   try {
     let jeff = await signIn(k)
     let his = connector(k, jeff.cookie)
@@ -528,7 +543,11 @@ test('an installed app is the installer own copy, data and all', async () => {
     await mine('index.html', '<h1>Tally v1</h1>')
     await mine('vocab.json', vocabFile({ vote: { who: txt, pick: txt } }))
     await his.tool('app_deploy', { app: 'tally' })
-    await his.tool('app_publish', { app: 'tally', about: 'Count the votes' })
+    await his.tool('app_publish', {
+      app: 'tally',
+      name: published,
+      about: 'Count the votes',
+    })
     let votes = (agent: ReturnType<typeof connector>) => async () =>
       (JSON.parse(
         await agent.tool('graph_query', { app: 'tally', filter: '.vote' }),
@@ -545,9 +564,12 @@ test('an installed app is the installer own copy, data and all', async () => {
     let ann = await signIn(k, `ann-${crypto.randomUUID().slice(0, 8)}@yaks.app`)
     let hers = connector(k, ann.cookie)
     let space = ann.email.split('@')[0]
-    assertStringIncludes(await hers.tool('app_published'), '- tally v1')
-    let took = await hers.tool('app_install', { name: 'tally' })
-    assertStringIncludes(took, 'installed tally v1 as ' + space + '/tally')
+    assertStringIncludes(await hers.tool('app_published'), `- ${published} v1`)
+    let took = await hers.tool('app_install', { name: published })
+    assertStringIncludes(
+      took,
+      `installed ${published} v1 as ` + space + '/tally',
+    )
     assertStringIncludes(took, `https://${space}.yaks.app/tally/`)
     assertStringIncludes(took, '2 files')
     assertStringIncludes(took, 'components: vote')
@@ -672,6 +694,7 @@ test(
   'an install refused on its manifest leaves nothing',
   async () => {
     let k = await kernel()
+    let manifest = unique('recipe-manifest')
     try {
       let jeff = await signIn(k)
       let his = connector(k, jeff.cookie)
@@ -695,7 +718,7 @@ test(
       await his.tool('app_publish', {
         space: mine,
         app: 'recipes',
-        name: 'recipe-manifest',
+        name: manifest,
         about: 'A recipe box',
       })
       let pantry = `pantry-${crypto.randomUUID().slice(0, 8)}`
@@ -717,8 +740,7 @@ test(
       // with a word homed in the space taking it. Refuse before making a copy.
       assertStringIncludes(
         (await assertRejects(
-          () =>
-            his.tool('app_install', { space: pantry, name: 'recipe-manifest' }),
+          () => his.tool('app_install', { space: pantry, name: manifest }),
           Error,
         )).message,
         'recipe.serves is number here and text in shelf',

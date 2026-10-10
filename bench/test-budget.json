@@ -4826,18 +4826,18 @@
       "?auth=required answers the challenge a probing host needs": 48.4,
       "mixed auth: a stranger reads the menu, then signs in for it": 59.5,
       "signed out: the gallery, the guide, and one public app": 411.8,
-      "the door before anyone signs in": 491.6
+      "the door before anyone signs in": 190.2
     },
     "workers/yak/mcp_deploy_test.ts": {
       "a deploy is a version, and one word puts it back": 710,
       "a failed rollback leaves the served files and deploy unchanged": 215.9,
-      "a rolled back app keeps serving through app and space renames": 504.1,
+      "a rolled back app keeps serving through app and space renames": 233,
       "a trashed app releases its component to another app in the space": 367.6,
       "after a rollback, the list says what is live and what came back": 215.4,
       "an app names no app, and the copy works at its own address": 597.7,
       "app_stats with no analytics token says so, once": 99.7,
       "borrowed declarations switch with their consumer release": 664.6,
-      "the deploy that fixes a break closes it": 497.4
+      "the deploy that fixes a break closes it": 216.6
     },
     "workers/yak/mcp_fanout_test.ts": {
       "MCP discovers accepted retypes and retained words from legacy releases without waking Stores": 561.1,
@@ -4899,7 +4899,7 @@
       "the roster is one list for everybody, and apps carry commands": 480.9
     },
     "workers/yak/mcp_spaces_test.ts": {
-      "a space goes to the trash, and space_restore brings it back": 619.1,
+      "a space goes to the trash, and space_restore brings it back": 286.4,
       "a space moves, and the subdomain it leaves points at it": 329.6,
       "an address is forgotten, freed, and taken by another app": 254.8,
       "an address that reads as the platform is refused": 124.1,
@@ -4979,7 +4979,7 @@
       "nothing the connector says calls the place Yaks": 1.4
     },
     "workers/yak/origin_test.ts": {
-      "a page at another address reaches no door here": 315,
+      "a page at another address reaches no door here": 142.2,
       "a public app reads to any page, and only ever as a stranger": 255.6
     },
     "workers/yak/pace_via_test.ts": {

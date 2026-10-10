@@ -18,6 +18,7 @@ import {
   seed,
   signIn,
   txt,
+  unique,
   vocabFile,
   when,
 } from './probe.ts'
@@ -34,8 +35,9 @@ import { HELLO, minted } from './mcp-probe.ts'
 // in, so the proof is a second connection reading them without asking.
 test('what the person said is kept, and read back whole', async () => {
   let k = await kernel()
+  let kitchen42 = unique('kitchen42')
   try {
-    let them = await seed(k, [{ slug: 'kitchen42', apps: ['recipes'] }])
+    let them = await seed(k, [{ slug: kitchen42, apps: ['recipes'] }])
     let agent = connector(k, them.cookie)
     let words = 'use grams, never cups'
     let kept = await agent.tool('memory_save', {
@@ -44,15 +46,15 @@ test('what the person said is kept, and read back whole', async () => {
       // the handle and never the summary.
       context: 'setting up the recipe app\nwe were on ingredients\nand this',
       about: 'recipes',
-      space: 'kitchen42',
+      space: kitchen42,
     })
     assertStringIncludes(kept, `"${words}"`)
-    assertStringIncludes(kept, 'kitchen42')
+    assertStringIncludes(kept, kitchen42)
 
     // The row, in the space's own store: the words verbatim in doc.body,
     // where the store's search index reads them, and the byline nobody typed.
     let rows = await meta(k).query(
-      `.memory.space=${them.eids.kitchen42}&?doc&?created`,
+      `.memory.space=${them.eids[kitchen42]}&?doc&?created`,
     )
     assertEquals(rows.length, 1)
     let one = rows[0] as unknown as {
@@ -66,7 +68,7 @@ test('what the person said is kept, and read back whole', async () => {
       'setting up the recipe app\nwe were on ingredients',
     )
     assertEquals(one.memory.about, 'recipes')
-    assertStringIncludes(JSON.stringify(one.memory.space), them.eids.kitchen42)
+    assertStringIncludes(JSON.stringify(one.memory.space), them.eids[kitchen42])
     assertEquals(one.created.by.name, them.name)
 
     // Recall by words: whole, with the context under it. Ranked by meaning
@@ -74,7 +76,7 @@ test('what the person said is kept, and read back whole', async () => {
     // themselves here, where it has none.
     let found = await agent.tool('memory_recall', {
       words: 'grams',
-      space: 'kitchen42',
+      space: kitchen42,
     })
     assertStringIncludes(found, `"${words}"`)
     assertStringIncludes(found, 'setting up the recipe app')
@@ -85,7 +87,7 @@ test('what the person said is kept, and read back whole', async () => {
     assertStringIncludes(
       await agent.tool('memory_recall', {
         words: 'how should it look',
-        space: 'kitchen42',
+        space: kitchen42,
       }),
       words,
     )
@@ -93,7 +95,7 @@ test('what the person said is kept, and read back whole', async () => {
     // A memory with no sentence in it is an agent's note about a
     // conversation, which is the one thing this is not.
     let no = await assertRejects(
-      () => agent.tool('memory_save', { said: '   ', space: 'kitchen42' }),
+      () => agent.tool('memory_save', { said: '   ', space: kitchen42 }),
       Error,
     )
     assertStringIncludes(no.message, 'never your summary')
@@ -116,10 +118,10 @@ test('what the person said is kept, and read back whole', async () => {
     let ana = connector(k, (await signIn(k)).cookie)
     assertEquals((await ana.tool('about')).includes(words), false)
     let shut = await assertRejects(
-      () => ana.tool('memory_recall', { space: 'kitchen42' }),
+      () => ana.tool('memory_recall', { space: kitchen42 }),
       Error,
     )
-    assertStringIncludes(shut.message, 'not a member of kitchen42')
+    assertStringIncludes(shut.message, `not a member of ${kitchen42}`)
     assertStringIncludes(
       await ana.tool('memory_recall', {}),
       'Nothing has been kept',
@@ -131,10 +133,11 @@ test('what the person said is kept, and read back whole', async () => {
 
 test('feedback reaches the platform, in the words it was said in', async () => {
   let k = await kernel()
+  let kitchen43 = unique('kitchen43')
   try {
-    let them = await seed(k, [{ slug: 'kitchen43', apps: ['recipes'] }])
+    let them = await seed(k, [{ slug: kitchen43, apps: ['recipes'] }])
     let agent = connector(k, them.cookie)
-    let app = { space: 'kitchen43', app: 'recipes' }
+    let app = { space: kitchen43, app: 'recipes' }
     await agent.tool('app_files', {
       ...app,
       files: [{ path: 'index.html', content: '<h1>Recipes</h1>' }],
@@ -146,7 +149,7 @@ test('feedback reaches the platform, in the words it was said in', async () => {
     let said = await agent.tool('feedback', { app: 'recipes', text: words })
     // One sentence the agent can repeat: it arrived, and they can answer.
     assertStringIncludes(said, 'people who run yaks.app')
-    assertStringIncludes(said, 'kitchen43/recipes v1')
+    assertStringIncludes(said, `${kitchen43}/recipes v1`)
     assertStringIncludes(said, them.email)
 
     // The letter: the words first, the context under a rule beneath them.
@@ -154,8 +157,8 @@ test('feedback reaches the platform, in the words it was said in', async () => {
     assertStringIncludes(sent.subject, 'feedback: She said renaming')
     assert(sent.body.startsWith(words), sent.body)
     assertStringIncludes(sent.body, `${them.name} <${them.email}>`)
-    assertStringIncludes(sent.body, 'kitchen43/recipes v1')
-    assertStringIncludes(sent.body, 'https://kitchen43.yaks.app/recipes/')
+    assertStringIncludes(sent.body, `${kitchen43}/recipes v1`)
+    assertStringIncludes(sent.body, `https://${kitchen43}.yaks.app/recipes/`)
     assertStringIncludes(sent.body, `yaks.app ${VERSION}`)
     // The same letter is addressed to the fleet's graph inbox as well, so it
     // lands in `task inbox` instead of waiting on a person to relay it. One
@@ -188,9 +191,9 @@ test('feedback reaches the platform, in the words it was said in', async () => {
     assertEquals(one.report.release, VERSION)
     assertStringIncludes(
       JSON.stringify(one.report.app),
-      them.eids['kitchen43/recipes'],
+      them.eids[`${kitchen43}/recipes`],
     )
-    assertStringIncludes(JSON.stringify(one.report.space), them.eids.kitchen43)
+    assertStringIncludes(JSON.stringify(one.report.space), them.eids[kitchen43])
 
     // And with no app: the space still rides along, and the letter carries no
     // link to a page nobody named.
@@ -232,6 +235,7 @@ test('feedback reaches the platform, in the words it was said in', async () => {
 // publisher's space and was refused there by the publisher's own app ceiling.
 test('an invited person gets a space of their own', async () => {
   let k = await kernel()
+  let published = unique('recipe-box')
   try {
     let jeff = await signIn(k)
     let his = connector(k, jeff.cookie)
@@ -244,7 +248,7 @@ test('an invited person gets a space of their own', async () => {
       content: '<h1>Recipes</h1>',
     })
     await his.tool('app_deploy', { app: 'recipes' })
-    await his.tool('app_publish', { app: 'recipes', name: 'recipe-box' })
+    await his.tool('app_publish', { app: 'recipes', name: published })
 
     // Invited first, signed in after: the order a new person arrives in.
     let ana = `ana-${crypto.randomUUID().slice(0, 8)}@yaks.app`
@@ -268,7 +272,7 @@ test('an invited person gets a space of their own', async () => {
 
     // And what she makes lands in hers.
     assertStringIncludes(
-      await agent.tool('app_install', { name: 'recipe-box', as: 'cooking' }),
+      await agent.tool('app_install', { name: published, as: 'cooking' }),
       `as ${hers}/cooking`,
     )
     assertStringIncludes(

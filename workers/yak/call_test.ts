@@ -5,14 +5,23 @@
 import { test } from '@yaks/testing'
 import { assertEquals } from '@std/assert'
 import { toolEid } from '@yaks/tools'
-import { client, connector, kernel, seed, txt, vocabFile } from './probe.ts'
+import {
+  client,
+  connector,
+  kernel,
+  seed,
+  txt,
+  unique,
+  vocabFile,
+} from './probe.ts'
 
 test('a command that takes an argument runs in its store', async () => {
   let k = await kernel()
+  let ada6 = unique('ada6')
   try {
-    let them = await seed(k, [{ slug: 'ada6', apps: [] }])
+    let them = await seed(k, [{ slug: ada6, apps: [] }])
     let agent = connector(k, them.cookie)
-    let at = { space: 'ada6', app: 'notes' }
+    let at = { space: ada6, app: 'notes' }
     await agent.tool('app_new', { ...at, slug: 'notes', title: 'Notes' })
     await agent.tool('app_files', {
       ...at,
@@ -32,7 +41,7 @@ test('a command that takes an argument runs in its store', async () => {
       ],
     })
     await agent.tool('app_deploy', at)
-    let app = client(k, 'ada6.yaks.app', 'notes', them.cookie)
+    let app = client(k, `${ada6}.yaks.app`, 'notes', them.cookie)
     let call = crypto.randomUUID()
     await app.applied([{
       entity: { eid: call },

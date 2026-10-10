@@ -21,7 +21,7 @@
 import { test } from '@yaks/testing'
 import { assert, assertEquals, assertStringIncludes } from '@std/assert'
 import { managePath } from './route.ts'
-import { client, connector, kernel, seed, signIn } from './probe.ts'
+import { client, connector, kernel, seed, signIn, unique } from './probe.ts'
 
 // What the browser would ask for, given a page and a URL written in it: the
 // page's `<base href>` resolved against the address it was served at.
@@ -34,19 +34,21 @@ let resolves = (page: string, at: string, href: string) => {
 
 test('a space with no front page lists what you may open', async () => {
   let k = await kernel()
+  let jeff21 = unique('jeff21')
+  let bare21Space = unique('bare21')
   try {
     let them = await seed(k, [
-      { slug: 'jeff21', apps: ['recipes', 'garden'] },
-      { slug: 'bare21', apps: [] },
+      { slug: jeff21, apps: ['recipes', 'garden'] },
+      { slug: bare21Space, apps: [] },
     ])
     let agent = connector(k, them.cookie)
     await agent.tool('app_set', {
-      space: 'jeff21',
+      space: jeff21,
       app: 'garden',
       access: 'private',
     })
     let at = (cookie?: string) =>
-      k.at('jeff21.yaks.app', '/', {
+      k.at(`${jeff21}.yaks.app`, '/', {
         redirect: 'manual',
         headers: cookie ? { cookie } : {},
       })
@@ -72,7 +74,7 @@ test('a space with no front page lists what you may open', async () => {
     let mine = await (await at(them.cookie)).text()
     assertStringIncludes(mine, 'href="/recipes/"')
     assertStringIncludes(mine, 'href="/garden/"')
-    assertStringIncludes(mine, 'href="https://yaks.app/manage?space=jeff21"')
+    assertStringIncludes(mine, `href="https://yaks.app/manage?space=${jeff21}"`)
     assert(!mine.includes('name="name"'), mine)
     assert(!mine.includes('What is yaks.app?'), mine)
     assert(!mine.includes('login?return='), mine)
@@ -90,15 +92,15 @@ test('a space with no front page lists what you may open', async () => {
 
     // A space with nothing in it is still a space, and still a 200: the
     // owner is told they can build here, a stranger is told nothing is open.
-    let empty = await k.at('bare21.yaks.app', '/')
+    let empty = await k.at(`${bare21Space}.yaks.app`, '/')
     assertEquals(empty.status, 200)
     assertStringIncludes(await empty.text(), 'Nothing here is open')
-    let ready = await k.at('bare21.yaks.app', '/', {
+    let ready = await k.at(`${bare21Space}.yaks.app`, '/', {
       headers: { cookie: them.cookie },
     })
     assertStringIncludes(
       await ready.text(),
-      'href="https://yaks.app/manage?space=bare21"',
+      `href="https://yaks.app/manage?space=${bare21Space}"`,
     )
 
     // An API address is still a machine door when no app answers there: a
@@ -108,8 +110,8 @@ test('a space with no front page lists what you may open', async () => {
     for (
       let [host, path] of [
         ['nowhere21.yaks.app', '/api/query'],
-        ['bare21.yaks.app', '/api/query'],
-        ['jeff21.yaks.app', '/missing/api/query'],
+        [`${bare21Space}.yaks.app`, '/api/query'],
+        [`${jeff21}.yaks.app`, '/missing/api/query'],
       ]
     ) {
       let missing = await k.at(host, path)
@@ -125,7 +127,7 @@ test('a space with no front page lists what you may open', async () => {
 
     // Only the bare address lists. A path under a space with no front page
     // names nothing, and says so.
-    let deep = await k.at('jeff21.yaks.app', '/nothing/at/all')
+    let deep = await k.at(`${jeff21}.yaks.app`, '/nothing/at/all')
     assertEquals(deep.status, 404)
     assertStringIncludes(await deep.text(), 'Nothing here yet')
     // A hostname nobody made is still nobody's.
@@ -139,21 +141,31 @@ test('a space with no front page lists what you may open', async () => {
 // on the same origin as the optional builder.
 test('management separates app creation from agent setup', async () => {
   let k = await kernel()
+  let bare22Space = unique('bare22')
   try {
-    let { cookie } = await seed(k, [{ slug: 'bare22', apps: [] }])
+    let { cookie } = await seed(k, [{ slug: bare22Space, apps: [] }])
     let at = (view: Parameters<typeof managePath>[0]) =>
-      k.at('yaks.app', managePath(view, 'bare22'), { headers: { cookie } })
+      k.at('yaks.app', managePath(view, bare22Space), { headers: { cookie } })
     let library = await (await at('apps')).text()
     assert(!library.includes('<textarea'), library)
     assert(!library.includes('type="file"'), library)
     // The page is the apex's, and its forms aim at the space's own doors.
     let fresh = await (await at('new')).text()
-    assertStringIncludes(fresh, 'action="https://bare22.yaks.app/api/build"')
-    assertStringIncludes(fresh, 'action="https://bare22.yaks.app/deploy"')
+    assertStringIncludes(
+      fresh,
+      `action="https://${bare22Space}.yaks.app/api/build"`,
+    )
+    assertStringIncludes(
+      fresh,
+      `action="https://${bare22Space}.yaks.app/deploy"`,
+    )
     assertStringIncludes(fresh, 'src="/build.js"')
     assert(!fresh.includes('name="agent"'), fresh)
     assertEquals((await k.at('yaks.app', '/build.js')).status, 200)
-    assertEquals((await k.at('bare22.yaks.app', '/api/build.js')).status, 200)
+    assertEquals(
+      (await k.at(`${bare22Space}.yaks.app`, '/api/build.js')).status,
+      200,
+    )
     let setup = await (await at('connect')).text()
     assertStringIncludes(setup, 'Your agents')
     assertStringIncludes(setup, 'Connect another agent')
@@ -166,14 +178,15 @@ test('management separates app creation from agent setup', async () => {
 
 test('the front page is served at the space root', async () => {
   let k = await kernel()
+  let jeff23 = unique('jeff23')
   try {
     let { cookie } = await seed(k, [{
-      slug: 'jeff23',
+      slug: jeff23,
       apps: ['site', 'garden'],
     }])
     let agent = connector(k, cookie)
-    await agent.tool('app_set', { space: 'jeff23', app: 'site', home: true })
-    let owner = client(k, 'jeff23.yaks.app', 'site', cookie)
+    await agent.tool('app_set', { space: jeff23, app: 'site', home: true })
+    let owner = client(k, `${jeff23}.yaks.app`, 'site', cookie)
     // A page written the way a site is: a relative image and stylesheet, and
     // a relative link to a place that is no file.
     let page = '<!doctype html><html><head>' +
@@ -184,10 +197,10 @@ test('the front page is served at the space root', async () => {
     await owner.put('/photo.png', 'not really a png')
     await owner.put('/style.css', 'h1 { color: peru }')
     await owner.put('/deep/note.txt', 'down a directory')
-    await agent.tool('app_deploy', { space: 'jeff23', app: 'site' })
+    await agent.tool('app_deploy', { space: jeff23, app: 'site' })
 
     // The root is the app: 200 with its page, not a 302 into `/site/`.
-    let root = await k.at('jeff23.yaks.app', '/', { redirect: 'manual' })
+    let root = await k.at(`${jeff23}.yaks.app`, '/', { redirect: 'manual' })
     assertEquals(root.status, 200)
     let served = await root.text()
     assertStringIncludes(served, '<h1>Her business</h1>')
@@ -197,13 +210,16 @@ test('the front page is served at the space root', async () => {
       served,
       '<script src="/api/report.js" data-version="1">',
     )
-    assertEquals((await k.at('jeff23.yaks.app', '/api/report.js')).status, 200)
+    assertEquals(
+      (await k.at(`${jeff23}.yaks.app`, '/api/report.js')).status,
+      200,
+    )
 
     // The page's own relative URLs, resolved as a browser would and then
     // fetched — from the root, and from a pretty path under it, where a
     // relative URL would otherwise resolve against the page's depth.
     for (let at of ['/', '/about', '/deep/anything']) {
-      let served = await k.at('jeff23.yaks.app', at)
+      let served = await k.at(`${jeff23}.yaks.app`, at)
       assertEquals(served.status, 200, at)
       let drawn = await served.text()
       assertStringIncludes(drawn, '<h1>Her business</h1>')
@@ -214,7 +230,7 @@ test('the front page is served at the space root', async () => {
         ]
       ) {
         let to = resolves(drawn, at, href)
-        let got = await k.at('jeff23.yaks.app', to)
+        let got = await k.at(`${jeff23}.yaks.app`, to)
         assertEquals(got.status, 200, `${at} -> ${to}`)
         assertEquals(await got.text(), want, to)
       }
@@ -222,7 +238,7 @@ test('the front page is served at the space root', async () => {
     // A file down a directory, and a root-absolute address a page might
     // carry: the front page answers for every path no app claims.
     for (let path of ['/style.css', '/deep/note.txt']) {
-      assertEquals((await k.at('jeff23.yaks.app', path)).status, 200, path)
+      assertEquals((await k.at(`${jeff23}.yaks.app`, path)).status, 200, path)
     }
     // Every path no app claims — except `/.well-known/`, which is the
     // platform's on a hostname of ours (route.ts `platform`). That is where a
@@ -245,7 +261,7 @@ test('the front page is served at the space root', async () => {
     ]
     for (let path of claims) await owner.put(path, 'the app said so')
     for (let path of claims) {
-      let r = await k.at('jeff23.yaks.app', path)
+      let r = await k.at(`${jeff23}.yaks.app`, path)
       assertEquals(r.status, 404, `${path} reached the app`)
       assertEquals((await r.text()).includes('the app said so'), false, path)
     }
@@ -254,22 +270,22 @@ test('the front page is served at the space root', async () => {
     // anything, and the site's face is the home app. It is the obvious thing
     // to sweep in beside the others, so it is held here on purpose.
     await owner.put('/robots.txt', 'User-agent: *\nDisallow:')
-    await agent.tool('app_deploy', { space: 'jeff23', app: 'site' })
-    let robots = await k.at('jeff23.yaks.app', '/robots.txt')
+    await agent.tool('app_deploy', { space: jeff23, app: 'site' })
+    let robots = await k.at(`${jeff23}.yaks.app`, '/robots.txt')
     assertEquals(robots.status, 200)
     assertEquals(await robots.text(), 'User-agent: *\nDisallow:')
     // Under the app's own prefix it is a file like any other: a grant is read
     // at the root, and this is not the root.
-    let own = await k.at('jeff23.yaks.app', '/site/.well-known/security.txt')
+    let own = await k.at(`${jeff23}.yaks.app`, '/site/.well-known/security.txt')
     assertEquals(own.status, 200)
     assertEquals(await own.text(), 'the app said so')
     // Its store's doors answer at the root too — named by the hostname and
     // nothing else, the way they are on a custom domain (domain_test.ts).
-    let rows = await k.at('jeff23.yaks.app', '/api/graph')
-    assertStringIncludes((await rows.json()).db, 'do:jeff23/site.')
+    let rows = await k.at(`${jeff23}.yaks.app`, '/api/graph')
+    assertStringIncludes((await rows.json()).db, `do:${jeff23}/site.`)
     // But `/<x>/api/…` named an app that is not here: a page asking a store
     // at a wrong address hears a 404, never HTML it cannot parse.
-    let missing = await k.at('jeff23.yaks.app', '/gone/api/query')
+    let missing = await k.at(`${jeff23}.yaks.app`, '/gone/api/query')
     assertEquals(missing.status, 404)
     assertEquals(await missing.json(), {
       error: { code: 'not_found', message: 'no app at that address' },
@@ -278,7 +294,7 @@ test('the front page is served at the space root', async () => {
     // Its own `/<app>/` forwards here rather than serving the same page at a
     // second address, and takes the query string with it.
     for (let at of ['/site', '/site/', '/site/?a=1']) {
-      let sent = await k.at('jeff23.yaks.app', at, { redirect: 'manual' })
+      let sent = await k.at(`${jeff23}.yaks.app`, at, { redirect: 'manual' })
       assertEquals(sent.status, 302, at)
       assertEquals(
         sent.headers.get('location'),
@@ -289,7 +305,7 @@ test('the front page is served at the space root', async () => {
     }
     // Deeper under that prefix is no forward: a link someone holds to a file
     // lands on the file.
-    let deep = await k.at('jeff23.yaks.app', '/site/deep/note.txt', {
+    let deep = await k.at(`${jeff23}.yaks.app`, '/site/deep/note.txt', {
       redirect: 'manual',
     })
     assertEquals(deep.status, 200)
@@ -298,23 +314,25 @@ test('the front page is served at the space root', async () => {
     // Precedence, stated: the space's apps own the first path segment, and
     // the front page answers what is left. `/garden` is the garden app even
     // though the front page answers for any other path.
-    let sibling = await k.at('jeff23.yaks.app', '/garden', {
+    let sibling = await k.at(`${jeff23}.yaks.app`, '/garden', {
       redirect: 'manual',
     })
     assertEquals(sibling.status, 302)
     assertEquals(sibling.headers.get('location'), '/garden/')
-    assertEquals((await k.at('jeff23.yaks.app', '/garden/')).status, 404)
+    assertEquals((await k.at(`${jeff23}.yaks.app`, '/garden/')).status, 404)
 
     // The front page moves, and the addresses move with it: the app that was
     // it serves at its own prefix again — no stale forward — and the root is
     // the new one's.
-    await agent.tool('app_set', { space: 'jeff23', app: 'garden', home: true })
-    let back = await k.at('jeff23.yaks.app', '/site/', { redirect: 'manual' })
+    await agent.tool('app_set', { space: jeff23, app: 'garden', home: true })
+    let back = await k.at(`${jeff23}.yaks.app`, '/site/', {
+      redirect: 'manual',
+    })
     assertEquals(back.status, 200)
     assertStringIncludes(await back.text(), '<h1>Her business</h1>')
     assertStringIncludes(
-      (await (await k.at('jeff23.yaks.app', '/api/graph')).json()).db,
-      'do:jeff23/garden.',
+      (await (await k.at(`${jeff23}.yaks.app`, '/api/graph')).json()).db,
+      `do:${jeff23}/garden.`,
     )
   } finally {
     await k.stop()

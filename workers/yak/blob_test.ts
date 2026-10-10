@@ -8,7 +8,7 @@
 // in.
 import { test } from '@yaks/testing'
 import { assert, assertEquals, assertMatch } from '@std/assert'
-import { browser, connector, kernel, seed } from './probe.ts'
+import { browser, connector, kernel, seed, unique } from './probe.ts'
 
 // The client module the kernel serves, loaded the way a page loads it.
 let served = async (
@@ -66,8 +66,9 @@ let hex = async (bytes: Uint8Array<ArrayBuffer>) =>
 
 test('a named media upload stays seekable when its metadata changes', async () => {
   let k = await kernel()
-  let them = await seed(k, [{ slug: 'mediabox', apps: ['player'] }])
-  let host = 'mediabox.yaks.app'
+  let mediabox = unique('mediabox')
+  let them = await seed(k, [{ slug: mediabox, apps: ['player'] }])
+  let host = `${mediabox}.yaks.app`
   let path = '/player/api/blob'
   let media = bytes(be32(24), 'ftyp', 'isom', be32(0), 'isom', 'mp41')
   let upload = async (mime: string, name: string) => {
@@ -132,7 +133,7 @@ test('a named media upload stays seekable when its metadata changes', async () =
   assertEquals(new URL(alias.headers.get('location')!).pathname, again.url)
   let agent = connector(k, them.cookie)
   await agent.tool('app_set', {
-    space: 'mediabox',
+    space: mediabox,
     app: 'player',
     access: 'private',
   })
@@ -161,12 +162,13 @@ type Row = {
 
 test('the file door: a page uploads bytes and gets an address', async () => {
   let k = await kernel()
+  let jeff5 = unique('jeff5')
   let dir = Deno.makeTempDirSync({ prefix: 'tasks-blob-' })
-  let them = await seed(k, [{ slug: 'jeff5', apps: ['photos'] }])
-  let mine = browser(k, 'jeff5.yaks.app', them.cookie)
-  let anyone = browser(k, 'jeff5.yaks.app')
+  let them = await seed(k, [{ slug: jeff5, apps: ['photos'] }])
+  let mine = browser(k, `${jeff5}.yaks.app`, them.cookie)
+  let anyone = browser(k, `${jeff5}.yaks.app`)
   try {
-    let mod = await served(k, dir, 'jeff5.yaks.app')
+    let mod = await served(k, dir, `${jeff5}.yaks.app`)
     let store = mod.store(`${mine.origin}/photos/api/`)
 
     // The guide's own two lines: a file in, its address back.
@@ -257,7 +259,7 @@ test('the file door: a page uploads bytes and gets an address', async () => {
 
     // Over the ceiling, refused with a sentence a person can act on. Sent at
     // the wire: a page would never build this, and the door must not read it.
-    let over = await k.at('jeff5.yaks.app', '/photos/api/blob', {
+    let over = await k.at(`${jeff5}.yaks.app`, '/photos/api/blob', {
       method: 'POST',
       headers: { cookie: them.cookie, 'content-type': 'image/png' },
       body: new Uint8Array(21 * 1024 * 1024),
@@ -290,7 +292,7 @@ test('the file door: a page uploads bytes and gets an address', async () => {
     // anyone with the link save a row lets them put a photo beside it.
     let agent = connector(k, them.cookie)
     await agent.tool('app_set', {
-      space: 'jeff5',
+      space: jeff5,
       app: 'photos',
       access: 'open',
     })

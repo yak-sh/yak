@@ -38,7 +38,9 @@ test('gameplay charts survive terrain eviction and reload asks the worker once',
   }
   try {
     // Each test gets its own pool, apart from the app's module singleton.
-    let page = await import('./grown.ts?chart-test')
+    let url = new URL('./grown.ts', import.meta.url)
+    url.searchParams.set('test', import.meta.url)
+    let page = await import(url.href)
     await page.meshed(0.25, 0, 0, true)
     let first = await page.groundCharts([0, 0])
     assertEquals(first, chartPatch(grown))

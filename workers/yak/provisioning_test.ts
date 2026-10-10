@@ -8,7 +8,10 @@
 // one state that never used to have an answer of its own.
 import { test } from '@yaks/testing'
 import { assert, assertEquals, assertStringIncludes } from '@std/assert'
-import { client, connector, kernel, meta, seed } from './probe.ts'
+import { client, connector, kernel, meta, seed, unique } from './probe.ts'
+
+let jeff57 = unique('jeff57')
+let herbusiness108 = unique('herbusiness108')
 
 test(
   'a domain with nothing ready gets the branded page, not the apex',
@@ -40,13 +43,13 @@ test('a domain marked active still routes to its app', async () => {
   let k = await kernel()
   try {
     let { cookie, eids } = await seed(k, [{
-      slug: 'jeff57',
+      slug: jeff57,
       apps: ['recipes'],
     }])
-    let owner = client(k, 'jeff57.yaks.app', 'recipes', cookie)
+    let owner = client(k, `${jeff57}.yaks.app`, 'recipes', cookie)
     await owner.put('/index.html', '<!doctype html><h1>Our recipe box</h1>')
     await connector(k, cookie).tool('app_deploy', {
-      space: 'jeff57',
+      space: jeff57,
       app: 'recipes',
     })
     // Stamped the way domain_attach leaves it once Cloudflare says so
@@ -54,12 +57,12 @@ test('a domain marked active still routes to its app', async () => {
     // and never asks Cloudflare at all once it says `active`.
     await meta(k).apply([{
       hostname: {
-        name: 'herbusiness108.com',
-        serves: eids['jeff57/recipes'],
+        name: `${herbusiness108}.com`,
+        serves: eids[`${jeff57}/recipes`],
         stage: 'active',
       },
     }])
-    let live = await k.at('herbusiness108.com', '/')
+    let live = await k.at(`${herbusiness108}.com`, '/')
     assertEquals(live.status, 200)
     assertStringIncludes(await live.text(), 'Our recipe box')
   } finally {

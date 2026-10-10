@@ -16,7 +16,7 @@ import {
 import { client as keeper } from '@yaks/client'
 import { loadVocab } from '@yaks/vocab'
 import { test, until } from '@yaks/testing'
-import { browser, client, connector, kernel, seed } from './probe.ts'
+import { browser, client, connector, kernel, seed, unique } from './probe.ts'
 
 // A row as a page reads one: the kind that names it, the spine, and a
 // component per name — what `query()` answers with, and what `subscribe()`
@@ -33,14 +33,15 @@ type Row = {
 
 test('the served client: a page saves, lists and watches', async () => {
   let k = await kernel()
+  let jeff7 = unique('jeff7')
   let dir = Deno.makeTempDirSync({ prefix: 'tasks-client-' })
-  let them = await seed(k, [{ slug: 'jeff7', apps: ['recipes'] }])
+  let them = await seed(k, [{ slug: jeff7, apps: ['recipes'] }])
   let cookie = them.cookie
-  let mine = browser(k, 'jeff7.yaks.app', cookie)
-  let anyone = browser(k, 'jeff7.yaks.app')
+  let mine = browser(k, `${jeff7}.yaks.app`, cookie)
+  let anyone = browser(k, `${jeff7}.yaks.app`)
   try {
     // The kernel serves one client for every app, beside the doors it wraps.
-    let served = await k.at('jeff7.yaks.app', '/recipes/api/client.js')
+    let served = await k.at(`${jeff7}.yaks.app`, '/recipes/api/client.js')
     assertEquals(served.status, 200)
     assertMatch(served.headers.get('content-type') ?? '', /javascript/)
     let source = await served.text()
@@ -59,15 +60,15 @@ test('the served client: a page saves, lists and watches', async () => {
       '<script type="module">import { apply, query } from ' +
       '"./api/client.js"' +
       '</script>'
-    await client(k, 'jeff7.yaks.app', 'recipes', cookie).put(
+    await client(k, `${jeff7}.yaks.app`, 'recipes', cookie).put(
       '/index.html',
       page,
     )
     await connector(k, cookie).tool('app_deploy', {
-      space: 'jeff7',
+      space: jeff7,
       app: 'recipes',
     })
-    let html = await (await k.at('jeff7.yaks.app', '/recipes/')).text()
+    let html = await (await k.at(`${jeff7}.yaks.app`, '/recipes/')).text()
     assertStringIncludes(html, '"./api/client.js"')
     assertStringIncludes(html, '<base href="/recipes/">')
 
@@ -269,38 +270,40 @@ test('the served client: a page saves, lists and watches', async () => {
 // hostname.
 test('the client at a pretty path, and a sibling app by path', async () => {
   let k = await kernel()
+  let nora8 = unique('nora8')
   let dir = Deno.makeTempDirSync({ prefix: 'tasks-client-' })
-  let them = await seed(k, [{ slug: 'nora8', apps: ['reading', 'lending'] }])
-  let mine = browser(k, 'nora8.yaks.app', them.cookie)
+  let them = await seed(k, [{ slug: nora8, apps: ['reading', 'lending'] }])
+  let mine = browser(k, `${nora8}.yaks.app`, them.cookie)
   try {
     // The page imports the client absolutely, by the app's own slug, and is
     // opened at an address that names no file — served the app's index.html
     // (T-32769). A relative import would have resolved against that address.
     let page = '<!doctype html><h1>Books</h1><script type="module">' +
       "import { query, store } from '/reading/api/client.js'</script>"
-    await client(k, 'nora8.yaks.app', 'reading', them.cookie)
+    await client(k, `${nora8}.yaks.app`, 'reading', them.cookie)
       .put('/index.html', page)
     await connector(k, them.cookie).tool('app_deploy', {
-      space: 'nora8',
+      space: nora8,
       app: 'reading',
     })
-    let deep = await k.at('nora8.yaks.app', '/reading/loans/1')
+    let deep = await k.at(`${nora8}.yaks.app`, '/reading/loans/1')
     assertEquals(deep.status, 200)
     assertStringIncludes(await deep.text(), '/reading/api/client.js')
     // What the page asks for is there; what a relative path would have asked
     // for from that address is not.
     assertEquals(
-      (await k.at('nora8.yaks.app', '/reading/api/client.js')).status,
+      (await k.at(`${nora8}.yaks.app`, '/reading/api/client.js')).status,
       200,
     )
-    let missed = await k.at('nora8.yaks.app', '/reading/loans/api/client.js')
+    let missed = await k.at(`${nora8}.yaks.app`, '/reading/loans/api/client.js')
     assertEquals(missed.status, 404)
     await missed.body?.cancel()
 
     // The module as that page holds it: a page has an origin, which is what
     // an address that is a path resolves against.
-    let source = await (await k.at('nora8.yaks.app', '/reading/api/client.js'))
-      .text()
+    let source =
+      await (await k.at(`${nora8}.yaks.app`, '/reading/api/client.js'))
+        .text()
     Deno.writeTextFileSync(`${dir}/client.js`, source)
     let mod = await import(`file://${dir}/client.js`)
     Object.defineProperty(globalThis, 'location', {
@@ -337,9 +340,10 @@ test('the client at a pretty path, and a sibling app by path', async () => {
 // store stamped on it names who made it, on the page that made it.
 test('a page keeping a copy of its store learns who made its own write', async () => {
   let k = await kernel()
-  let them = await seed(k, [{ slug: 'ivo3', apps: ['recipes'] }])
-  let mine = browser(k, 'ivo3.yaks.app', them.cookie)
-  let words = await (await k.at('ivo3.yaks.app', '/recipes/api/vocab.json'))
+  let ivo3 = unique('ivo3')
+  let them = await seed(k, [{ slug: ivo3, apps: ['recipes'] }])
+  let mine = browser(k, `${ivo3}.yaks.app`, them.cookie)
+  let words = await (await k.at(`${ivo3}.yaks.app`, '/recipes/api/vocab.json'))
     .json()
   let copy = keeper(loadVocab(words), [], {
     url: `${mine.origin}/recipes/api`,

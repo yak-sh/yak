@@ -14,6 +14,7 @@ import {
   seed,
   signIn,
   txt,
+  unique,
   vocabFile,
 } from './probe.ts'
 import { hearing, HELLO } from './mcp-probe.ts'
@@ -23,6 +24,8 @@ import { hearing, HELLO } from './mcp-probe.ts'
 // different request opened — which is what makes the notification arrive at
 // all outside one isolate — and a client whose connection dropped picks up
 // what it missed from its `Last-Event-ID`.
+let jeff53 = unique('jeff53')
+
 test('the stream names its session and replays a missed line', async () => {
   let k = await kernel()
   let ear: ReturnType<typeof hearing> | undefined
@@ -290,7 +293,7 @@ test(
     let k = await kernel()
     let ear: ReturnType<typeof hearing> | undefined
     try {
-      let { cookie } = await seed(k, [{ slug: 'jeff53', apps: ['recipes'] }])
+      let { cookie } = await seed(k, [{ slug: jeff53, apps: ['recipes'] }])
       let agent = connector(k, cookie)
       let stream = await k.at('yaks.app', '/mcp', {
         headers: { cookie, accept: 'text/event-stream' },
@@ -303,13 +306,13 @@ test(
       })
       // What a page's injected reporter posts (report_test.ts).
       assertEquals(
-        (await k.at('jeff53.yaks.app', '/recipes/api/report', {
+        (await k.at(`${jeff53}.yaks.app`, '/recipes/api/report', {
           method: 'POST',
           headers: { 'content-type': 'application/json' },
           body: JSON.stringify({
             message: 'boom is not a function',
             stack: 'at /recipes/:1',
-            url: 'https://jeff53.yaks.app/recipes/',
+            url: `https://${jeff53}.yaks.app/recipes/`,
           }),
         })).status,
         204,
@@ -320,11 +323,11 @@ test(
         label: 'the break to reach the stream',
       })
       assertStringIncludes(ear.said(), '"level":"error"')
-      assertStringIncludes(ear.said(), '"logger":"jeff53/recipes"')
+      assertStringIncludes(ear.said(), `"logger":"${jeff53}/recipes"`)
       assertStringIncludes(ear.said(), 'boom is not a function')
       // Unmarked by the push: served-in-a-reply stays the only mark.
       let told = await agent.tool('app_files', {
-        space: 'jeff53',
+        space: jeff53,
         app: 'recipes',
         op: 'list',
       })

@@ -624,6 +624,10 @@ export let rfc822 = (head: Record<string, string>, body: string) =>
     ...head,
   }).map(([k, v]) => `${k}: ${v}`).join('\r\n') + `\r\n\r\n${body}`
 
+// A fixture name stays separate across invocations on the shared kernel.
+export let unique = (name: string) =>
+  `${name}-${crypto.randomUUID().slice(0, 8)}`
+
 // A person signs in the way a browser does — an address, the code off the
 // log, the cookie back — and the kernel mints their person row and their own
 // space. The first sign-in on a fresh kernel owns the meta space, which is
@@ -633,7 +637,7 @@ export let rfc822 = (head: Record<string, string>, body: string) =>
 // their address is what the platform ends up calling them.
 export let signIn = async (
   k: Pick<Kernel, 'at' | 'host' | 'log' | 'secret'>,
-  email = `probe-${crypto.randomUUID().slice(0, 8)}@${k.host}`,
+  email = `${unique('probe')}@${k.host}`,
 ): Promise<Person> => {
   let form = (path: string, fields: Record<string, string>) =>
     k.at(k.host, path, {

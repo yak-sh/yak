@@ -14,6 +14,7 @@ import {
   seed,
   signIn,
   txt,
+  unique,
   vocabFile,
 } from './probe.ts'
 import { sha256 } from './versions.ts'
@@ -21,9 +22,9 @@ import { sha256 } from './versions.ts'
 test('a trashed app releases its component to another app in the space', async () => {
   let k = await kernel()
   try {
-    let { cookie } = await seed(k, [{ slug: 'handoff32', apps: ['first'] }])
+    let space = unique('handoff32')
+    let { cookie } = await seed(k, [{ slug: space, apps: ['first'] }])
     let agent = connector(k, cookie)
-    let space = 'handoff32'
     let files = (app: string) =>
       agent.tool('app_files', {
         space,
@@ -76,6 +77,7 @@ test('a trashed app releases its component to another app in the space', async (
 test('an app names no app, and the copy works at its own address', async () => {
   let k = await kernel()
   try {
+    let published = unique('chore-chart')
     let jeff = await signIn(k)
     let his = connector(k, jeff.cookie)
     let write = (path: string, content: string) =>
@@ -99,16 +101,16 @@ test('an app names no app, and the copy works at its own address', async () => {
     await his.tool('app_deploy', { app: 'chores' })
     // Published under a name that is not its slug, which is what renamed the
     // copy out from under its own code.
-    await his.tool('app_publish', { app: 'chores', name: 'chore-chart' })
+    await his.tool('app_publish', { app: 'chores', name: published })
     // The offer says what it will be called.
     assertStringIncludes(await his.tool('app_published'), 'installs as chores')
 
-    let ann = await signIn(k, `ann-${crypto.randomUUID().slice(0, 8)}@yaks.app`)
+    let ann = await signIn(k, `${unique('ann')}@yaks.app`)
     let hers = connector(k, ann.cookie)
     let space = ann.email.split('@')[0]
     let host = `${space}.yaks.app`
     assertStringIncludes(
-      await hers.tool('app_install', { name: 'chore-chart', as: 'sisters' }),
+      await hers.tool('app_install', { name: published, as: 'sisters' }),
       `as ${space}/sisters`,
     )
 
@@ -145,12 +147,12 @@ test('an app names no app, and the copy works at its own address', async () => {
     // its code was written at — and falls back to the published name when
     // that address is already spoken for here.
     assertStringIncludes(
-      await hers.tool('app_install', { name: 'chore-chart' }),
+      await hers.tool('app_install', { name: published }),
       `as ${space}/chores`,
     )
     assertStringIncludes(
-      await hers.tool('app_install', { name: 'chore-chart' }),
-      `as ${space}/chore-chart`,
+      await hers.tool('app_install', { name: published }),
+      `as ${space}/${published}`,
     )
   } finally {
     await k.stop()
@@ -164,11 +166,12 @@ test('an app names no app, and the copy works at its own address', async () => {
 test('a deploy is a version, and one word puts it back', async () => {
   let k = await kernel()
   try {
-    let { cookie } = await seed(k, [{ slug: 'undo31', apps: ['recipes'] }])
+    let space = unique('undo31')
+    let { cookie } = await seed(k, [{ slug: space, apps: ['recipes'] }])
     let agent = connector(k, cookie)
-    let app = { space: 'undo31', app: 'recipes' }
+    let app = { space, app: 'recipes' }
     let served = async (path: string) => {
-      let r = await k.at('undo31.yaks.app', `/recipes/${path}`)
+      let r = await k.at(`${space}.yaks.app`, `/recipes/${path}`)
       return { status: r.status, text: await r.text() }
     }
 
@@ -194,15 +197,15 @@ test('a deploy is a version, and one word puts it back', async () => {
 
     // What it has to pick from: newest first, with what each deploy changed.
     let list = await agent.tool('app_versions', app)
-    assertStringIncludes(list, 'undo31/recipes: 2 versions')
+    assertStringIncludes(list, `${space}/recipes: 2 versions`)
     // When it went out, off the row's own created stamp.
     assertMatch(list, /- v2 \(live\) 20\d\d-\d\d-\d\dT/)
     assertStringIncludes(list, 'added broken.js, changed index.html')
 
     // One word moves the pointer and names the kept version now live.
     let back = await agent.tool('app_rollback', app)
-    assertStringIncludes(back, 'put undo31/recipes back to v1, live now')
-    assertStringIncludes(back, 'https://undo31.yaks.app/recipes/')
+    assertStringIncludes(back, `put ${space}/recipes back to v1, live now`)
+    assertStringIncludes(back, `https://${space}.yaks.app/recipes/`)
     assertStringIncludes(back, 'changed index.html, removed broken.js')
 
     // The page is v1's own bytes again — the kernel adds its reporter to
@@ -218,11 +221,11 @@ test('a deploy is a version, and one word puts it back', async () => {
     // History is not rewritten: two versions, and v2 is still there to go
     // forward to by name.
     let after = await agent.tool('app_versions', app)
-    assertStringIncludes(after, 'undo31/recipes: 2 versions')
+    assertStringIncludes(after, `${space}/recipes: 2 versions`)
     assertStringIncludes(after, 'v1 (live)')
     assertMatch(
       await agent.tool('app_rollback', { ...app, version: 2 }),
-      /put undo31\/recipes back to v2, live now/,
+      new RegExp(`put ${space}/recipes back to v2, live now`),
     )
     assertStringIncludes((await served('')).text, 'OOPS')
     assertEquals((await served('broken.js')).status, 200)
@@ -235,7 +238,7 @@ test('a deploy is a version, and one word puts it back', async () => {
         () => agent.tool('app_rollback', { ...app, version: 9 }),
         Error,
       )).message,
-      'no v9 of undo31/recipes — it keeps v2, v1',
+      `no v9 of ${space}/recipes — it keeps v2, v1`,
     )
     let listing = await agent.answer('app_files', { ...app, op: 'list' })
     assertEquals(listing.text.split('\n').sort(), ['broken.js', 'index.html'])
@@ -256,7 +259,7 @@ test('a deploy is a version, and one word puts it back', async () => {
       op: 'history',
       path: 'index.html',
     })
-    assertStringIncludes(past, 'index.html in undo31/recipes:')
+    assertStringIncludes(past, `index.html in ${space}/recipes:`)
     assertMatch(past, /now — 13 B, sha256 [0-9a-f]{64}/)
     assertMatch(past, /- until 20\d\d-\d\d-\d\dT[\d:.]+Z — 19 B, sha256 /)
     // Undo the last write, with nothing to remember: the newest entry.
@@ -317,7 +320,7 @@ test('a deploy is a version, and one word puts it back', async () => {
     // which is all this can be held to here, because no runtime this runs on
     // moves SQLite backwards (testing.ts `Pitr`).
     let window = await agent.tool('store_restore', app)
-    assertStringIncludes(window, "undo31/recipes's store can be put back")
+    assertStringIncludes(window, `${space}/recipes's store can be put back`)
     assertMatch(window, /any moment since 20\d\d-\d\d-\d\dT/)
     assertStringIncludes(window, "store_restore(app: 'recipes', at:")
     // A moment outside the thirty days is refused before the store is asked
@@ -338,12 +341,13 @@ test('a deploy is a version, and one word puts it back', async () => {
 test('a failed rollback leaves the served files and deploy unchanged', async () => {
   let k = await kernel()
   try {
+    let space = unique('partialrollback')
     let { cookie, eids } = await seed(k, [{
-      slug: 'partialrollback',
+      slug: space,
       apps: ['page'],
     }])
     let agent = connector(k, cookie)
-    let app = { space: 'partialrollback', app: 'page' }
+    let app = { space, app: 'page' }
     let put = (text: string) =>
       agent.tool('app_files', {
         ...app,
@@ -359,7 +363,7 @@ test('a failed rollback leaves the served files and deploy unchanged', async () 
 
     let dir = meta(k)
     let [first] = await dir.query(
-      `.deploy.app=${eids['partialrollback/page']}&.deploy.version=1`,
+      `.deploy.app=${eids[`${space}/page`]}&.deploy.version=1`,
     )
     let deploy = first.deploy
     if (
@@ -379,7 +383,7 @@ test('a failed rollback leaves the served files and deploy unchanged', async () 
       await agent.tool('app_files', { ...app, op: 'read', path: 'index.html' }),
       'second',
     )
-    let page = await k.at('partialrollback.yaks.app', '/page/')
+    let page = await k.at(`${space}.yaks.app`, '/page/')
     assertStringIncludes(await page.text(), 'second')
   } finally {
     await k.stop()
@@ -389,12 +393,12 @@ test('a failed rollback leaves the served files and deploy unchanged', async () 
 test('borrowed declarations switch with their consumer release', async () => {
   let k = await kernel()
   try {
+    let space = unique('borrowed-release')
     let { cookie } = await seed(k, [{
-      slug: 'borrowed-release',
+      slug: space,
       apps: ['home', 'borrower'],
     }])
     let agent = connector(k, cookie)
-    let space = 'borrowed-release'
     let put = (app: string, content: string) =>
       agent.tool('app_files', {
         space,
@@ -450,9 +454,10 @@ test('borrowed declarations switch with their consumer release', async () => {
 test('a rolled back app keeps serving through app and space renames', async () => {
   let k = await kernel()
   try {
-    let { cookie } = await seed(k, [{ slug: 'backrename', apps: ['page'] }])
+    let space = unique('backrename')
+    let { cookie } = await seed(k, [{ slug: space, apps: ['page'] }])
     let agent = connector(k, cookie)
-    let app = { space: 'backrename', app: 'page' }
+    let app = { space, app: 'page' }
     for (let content of ['first', 'second']) {
       await agent.tool('app_files', {
         ...app,
@@ -463,10 +468,10 @@ test('a rolled back app keeps serving through app and space renames', async () =
     await agent.tool('app_rollback', app)
     await agent.tool('app_set', { ...app, slug: 'renamed' })
     await agent.tool('space_set', {
-      space: 'backrename',
-      slug: 'backrename-new',
+      space,
+      slug: `${space}-new`,
     })
-    let moved = { space: 'backrename-new', app: 'renamed' }
+    let moved = { space: `${space}-new`, app: 'renamed' }
     assertEquals(
       await agent.tool('app_files', {
         ...moved,
@@ -475,7 +480,7 @@ test('a rolled back app keeps serving through app and space renames', async () =
       }),
       'first',
     )
-    let page = await k.at('backrename-new.yaks.app', '/renamed/')
+    let page = await k.at(`${space}-new.yaks.app`, '/renamed/')
     assertStringIncludes(await page.text(), 'first')
   } finally {
     await k.stop()
@@ -492,12 +497,13 @@ test(
   async () => {
     let k = await kernel()
     try {
+      let space = unique('back32')
       let { cookie, eids } = await seed(k, [{
-        slug: 'back32',
+        slug: space,
         apps: ['recipes'],
       }])
       let agent = connector(k, cookie)
-      let app = { space: 'back32', app: 'recipes' }
+      let app = { space, app: 'recipes' }
       let file = (content: string) =>
         agent.tool('app_files', {
           ...app,
@@ -528,13 +534,13 @@ test(
       // tier is NOT the door that empties it, so the kernel is now holding a
       // version the app has moved past — exactly as it is in the seconds after
       // somebody else's deploy.
-      await (await k.at('back32.yaks.app', '/recipes/')).body?.cancel()
+      await (await k.at(`${space}.yaks.app`, '/recipes/')).body?.cancel()
       await meta(k).apply([
-        { entity: { eid: eids['back32/recipes'] }, app: { version: 4 } },
+        { entity: { eid: eids[`${space}/recipes`] }, app: { version: 4 } },
         {
           entity: { eid: '$deploy' },
           deploy: {
-            app: eids['back32/recipes'],
+            app: eids[`${space}/recipes`],
             version: 4,
             files: '{"index.html":"beef"}',
             worker: '',
@@ -556,9 +562,10 @@ test(
 test('app_stats with no analytics token says so, once', async () => {
   let k = await kernel()
   try {
-    let { cookie } = await seed(k, [{ slug: 'quiet33', apps: ['weather'] }])
+    let space = unique('quiet33')
+    let { cookie } = await seed(k, [{ slug: space, apps: ['weather'] }])
     let said = await connector(k, cookie).tool('app_stats', {
-      space: 'quiet33',
+      space,
       app: 'weather',
     })
     assertStringIncludes(said, 'not switched on')
@@ -573,16 +580,17 @@ test('app_stats with no analytics token says so, once', async () => {
 test('the deploy that fixes a break closes it', async () => {
   let k = await kernel()
   try {
-    let { cookie } = await seed(k, [{ slug: 'mend34', apps: ['weather'] }])
+    let space = unique('mend34')
+    let { cookie } = await seed(k, [{ slug: space, apps: ['weather'] }])
     let agent = connector(k, cookie)
-    let app = { space: 'mend34', app: 'weather' }
+    let app = { space, app: 'weather' }
     let report = (message: string) =>
-      k.at('mend34.yaks.app', '/weather/api/report', {
+      k.at(`${space}.yaks.app`, '/weather/api/report', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({
           message,
-          url: 'https://mend34.yaks.app/weather/',
+          url: `https://${space}.yaks.app/weather/`,
         }),
       })
 
@@ -600,7 +608,7 @@ test('the deploy that fixes a break closes it', async () => {
     let open = await agent.tool('app_errors', app)
     assertStringIncludes(open, 'weather v1: page /weather/ — failed to load')
     assertStringIncludes(
-      await agent.tool('app_list', { space: 'mend34' }),
+      await agent.tool('app_list', { space }),
       '1 open',
     )
 
@@ -614,7 +622,7 @@ test('the deploy that fixes a break closes it', async () => {
     assertStringIncludes(out, 'closed 1 break from other versions')
     assertEquals(await agent.tool('app_errors', app), 'no open errors')
     assert(
-      !(await agent.tool('app_list', { space: 'mend34' })).includes('open'),
+      !(await agent.tool('app_list', { space })).includes('open'),
       'the count follows',
     )
 

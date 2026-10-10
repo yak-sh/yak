@@ -50,7 +50,7 @@ let expand = (root: Element) =>
   press(root.querySelector('button[aria-expanded]'))
 
 test('a person’s inbox lanes policy threads, shows the newest words and answers in place', async () => {
-  let ask = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
+  let ask = crypto.randomUUID()
   let { h, node } = drawn([
     {
       entity: { eid: ask, num: 2 },
@@ -146,7 +146,7 @@ test('the search switches say their choice and the lanes show while loading', as
 })
 
 test('an opened ask shows its whole body, and stays open with its unsent words after a remount', async () => {
-  let eid = 'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee'
+  let eid = crypto.randomUUID()
   let body = 'Please provide the key. '.repeat(20) +
     'Use the scratch account only.'
   let { node } = drawn([{
@@ -184,7 +184,7 @@ test('an opened ask shows its whole body, and stays open with its unsent words a
 
 test('the direction and archive switches come back after a remount', async () => {
   let h = host({ answering: false })
-  let owner = { entity: { eid: 'ffffffff-ffff-4fff-8fff-ffffffffffff' } }
+  let owner = { entity: { eid: crypto.randomUUID() } }
   let node = () => <h.Door e={{ ...owner, person: {} }} view='Inbox' />
   let seen = mount(node())
   try {
@@ -203,7 +203,7 @@ test('the direction and archive switches come back after a remount', async () =>
 })
 
 test('a new conversation keeps its exact words across a remount, refuses blank ones and calls inbox_new once', async () => {
-  let actor = 'new-conversation-person'
+  let actor = crypto.randomUUID()
   let words = '  Keep my spacing  \nSecond line\n'
   let seen = mount(<NewConversation actor={actor} />)
   let box = () => seen.root.querySelector('textarea') as HTMLTextAreaElement
@@ -258,8 +258,8 @@ test('a new conversation keeps its exact words across a remount, refuses blank o
 })
 
 test('roots and newest messages are drawn by the contextual shared renderers, without nesting controls', async () => {
-  let eid = 'cccccccc-1111-4111-8111-cccccccccccc'
-  let reply = 'cccccccc-2222-4222-8222-cccccccccccc'
+  let eid = crypto.randomUUID()
+  let reply = crypto.randomUUID()
   let { node } = drawn([
     {
       entity: { eid, num: 21 },

@@ -27,6 +27,7 @@ import {
   mailed,
   meta,
   signIn,
+  unique,
 } from './probe.ts'
 import { COOKIE, sign } from './lib/token.ts'
 import { SENDS } from './signin.ts'
@@ -395,18 +396,19 @@ test('a person signs in by mail, and an agent by OAuth', async () => {
     })
 
     // The cookie is that person everywhere: an app route vouches for them.
+    let space = unique('probe')
     await dir.apply([
       {
         entity: { eid: '$s' },
         doc: { title: 'probe' },
         space: {
-          slug: 'probe',
+          slug: space,
         },
       },
       { doc: { title: 'box' }, app: { slug: 'box', space: '$s' } },
       { member: { space: '$s', person: me, role: 'owner' } },
     ])
-    let who = await (await k.at('probe.yaks.app', '/box/api/graph', {
+    let who = await (await k.at(`${space}.yaks.app`, '/box/api/graph', {
       headers: { cookie },
     })).json()
     assertEquals([who.person, who.role], [me, 'owner'])

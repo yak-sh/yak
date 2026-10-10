@@ -6,9 +6,14 @@
 // then another address that is still let in.
 import { assertEquals, assertStringIncludes } from '@std/assert'
 import { test } from '@yaks/testing'
-import { connector, kernel, seed } from './probe.ts'
+import { connector, kernel, seed, unique } from './probe.ts'
 
-let from = (ip: string) => ({ 'cf-connecting-ip': ip })
+let source = unique('rate').slice(-8)
+let from = (ip: string) => ({
+  'cf-connecting-ip': `2001:db8:${source.slice(0, 4)}:${
+    source.slice(4)
+  }::${ip}`,
+})
 
 let seen = async (r: Response) => ({
   status: r.status,
@@ -27,14 +32,16 @@ let one = <T>(answers: T[], away: (a: T) => boolean) => {
   return out[0]
 }
 
+let rated58 = unique('rated58')
+
 test(
   'a stranger is held to a rate per source at every anonymous door',
   async () => {
     let k = await kernel()
     try {
-      let them = await seed(k, [{ slug: 'rated58', apps: ['board'] }])
+      let them = await seed(k, [{ slug: rated58, apps: ['board'] }])
       await connector(k, them.cookie).tool('app_set', {
-        space: 'rated58',
+        space: rated58,
         app: 'board',
         access: 'public',
       })
@@ -48,7 +55,7 @@ test(
             'content-type': 'application/x-www-form-urlencoded',
           },
           body: new URLSearchParams({
-            email: `rate-${crypto.randomUUID().slice(0, 8)}@${k.host}`,
+            email: `${unique('rate')}@${k.host}`,
           }).toString(),
         }).then(seen)
       let codes = await burst(6, () => login('198.51.100.1'))
@@ -104,7 +111,7 @@ test(
       // A public app's data: three hundred requests a minute from a stranger,
       // and its own people are not counted at all.
       let read = (ip: string, cookie?: string) =>
-        k.at('rated58.yaks.app', '/board/api/query?.doc', {
+        k.at(`${rated58}.yaks.app`, '/board/api/query?.doc', {
           headers: { ...from(ip), ...(cookie ? { cookie } : {}) },
         }).then(seen)
       let reads = await burst(301, () => read('198.51.100.6'))

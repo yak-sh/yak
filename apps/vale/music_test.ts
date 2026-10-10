@@ -4,7 +4,7 @@ import { test } from '@yaks/testing'
 import { assertEquals } from '@std/assert'
 import { FakeTime } from '@std/testing/time'
 import { pass } from './clock_fixture.ts'
-import { accept, heard, music } from './music.ts'
+import { heard } from './music.ts'
 import { catalog, type Row } from './music_catalog.ts'
 
 let hashes = {
@@ -36,6 +36,12 @@ let rows = (): Row[] =>
   ])
 import { seedThemes } from './themes_fixture.ts'
 
+let page = (name: string) => {
+  let url = new URL('./music.ts', import.meta.url)
+  url.searchParams.set('test', `${import.meta.url}#${name}`)
+  return import(url.href) as Promise<typeof import('./music.ts')>
+}
+
 test('a border holds the playing region until its neighbor leads', () => {
   let songs = catalog(rows())
   let edge = { a: 'birchmere', b: 'mossvale', t: 0.55 }
@@ -47,6 +53,7 @@ test('a border holds the playing region until its neighbor leads', () => {
 test('region music finishes one source before starting another', async () => {
   using time = new FakeTime()
   seedThemes()
+  let { accept, music } = await page('region')
   let doc = Object.getOwnPropertyDescriptor(globalThis, 'document')
   let sourceWas = Object.getOwnPropertyDescriptor(
     globalThis,
@@ -198,7 +205,7 @@ test('unavailable songs are skipped and reported once for the page', async () =>
   using time = new FakeTime()
   seedThemes()
   // A fresh page owns its own music singleton and unavailable-song set.
-  let { accept, music } = await import('./music.ts?unavailable')
+  let { accept, music } = await page('unavailable')
   let doc = Object.getOwnPropertyDescriptor(globalThis, 'document')
   let sourceWas = Object.getOwnPropertyDescriptor(
     globalThis,

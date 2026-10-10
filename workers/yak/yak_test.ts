@@ -25,6 +25,7 @@ import {
   seed,
   signedIn,
   signIn,
+  unique,
 } from './probe.ts'
 
 // What the apex says about itself, read from the page the apex serves rather
@@ -39,6 +40,12 @@ let hello = flat(
     Deno.readTextFileSync(new URL('./public/index.html', import.meta.url)),
   )![1],
 ).trim()
+
+let jeff69 = unique('jeff69')
+let club70 = unique('club70')
+let mayaEmail = `${unique('maya')}@example.com`
+let samEmail = `${unique('sam')}@example.com`
+let leeEmail = `${unique('lee')}@example.com`
 
 test('the kernel routes, vouches, serves, and surfaces', async () => {
   let k = await kernel()
@@ -78,24 +85,24 @@ test('the kernel routes, vouches, serves, and surfaces', async () => {
     let nowhere = await k.at('nowhere.yaks.app', '/')
     assertEquals(nowhere.status, 404)
     assertMatch(await nowhere.text(), /Nothing here yet/)
-    let { person: jeff69, cookie, eids, name: called } = await seed(k, [{
-      slug: 'jeff69',
+    let { person, cookie, eids, name: called } = await seed(k, [{
+      slug: jeff69,
       apps: ['recipes', 'garden'],
     }])
     // No app claims the bare hostname by being first (T-33040), so it lists
     // what is here — a page, not a 404. home_test.ts holds that page.
-    let bare = await k.at('jeff69.yaks.app', '/', { redirect: 'manual' })
+    let bare = await k.at(`${jeff69}.yaks.app`, '/', { redirect: 'manual' })
     assertEquals(bare.status, 200)
     assertStringIncludes(await bare.text(), 'href="/recipes/"')
-    let slash = await k.at('jeff69.yaks.app', '/recipes', {
+    let slash = await k.at(`${jeff69}.yaks.app`, '/recipes', {
       redirect: 'manual',
     })
     assertEquals(slash.status, 302)
     assertEquals(slash.headers.get('location'), '/recipes/')
-    let empty = await k.at('jeff69.yaks.app', '/recipes/')
+    let empty = await k.at(`${jeff69}.yaks.app`, '/recipes/')
     assertEquals(empty.status, 404)
     assertMatch(await empty.text(), /Nothing here yet/)
-    assertEquals((await k.at('jeff69.yaks.app', '/nope/')).status, 404)
+    assertEquals((await k.at(`${jeff69}.yaks.app`, '/nope/')).status, 404)
 
     // The file door: nobody and a forgery are refused, the owner is not; the
     // planted file then serves at its path with its type.
@@ -104,9 +111,9 @@ test('the kernel routes, vouches, serves, and surfaces', async () => {
     // flipping it decodes to the same 32 bytes and verifies, which made this
     // check pass or fail with the secret of the run.
     let forged = cookie.replace(/\.(.)/, (_, c) => `.${c == 'A' ? 'B' : 'A'}`)
-    let owner = client(k, 'jeff69.yaks.app', 'recipes', cookie)
-    let nobody = client(k, 'jeff69.yaks.app', 'recipes')
-    let forger = client(k, 'jeff69.yaks.app', 'recipes', forged)
+    let owner = client(k, `${jeff69}.yaks.app`, 'recipes', cookie)
+    let nobody = client(k, `${jeff69}.yaks.app`, 'recipes')
+    let forger = client(k, `${jeff69}.yaks.app`, 'recipes', forged)
     let page = '<!doctype html><h1>Our recipe box</h1>'
     assertEquals((await nobody.put('/index.html', page)).status, 401)
     assertEquals((await forger.put('/index.html', page)).status, 401)
@@ -116,10 +123,10 @@ test('the kernel routes, vouches, serves, and surfaces', async () => {
       200,
     )
     await connector(k, cookie).tool('app_deploy', {
-      space: 'jeff69',
+      space: jeff69,
       app: 'recipes',
     })
-    let served = await k.at('jeff69.yaks.app', '/recipes/')
+    let served = await k.at(`${jeff69}.yaks.app`, '/recipes/')
     assertEquals(served.status, 200)
     assertMatch(served.headers.get('content-type') ?? '', /text\/html/)
     // The page as written, plus the reporter and the app's own address the
@@ -127,13 +134,13 @@ test('the kernel routes, vouches, serves, and surfaces', async () => {
     let html = await served.text()
     assertStringIncludes(html, '<h1>Our recipe box</h1>')
     assertStringIncludes(html, '<base href="/recipes/">')
-    let style = await k.at('jeff69.yaks.app', '/recipes/style.css')
+    let style = await k.at(`${jeff69}.yaks.app`, '/recipes/style.css')
     assertMatch(style.headers.get('content-type') ?? '', /text\/css/)
     assertEquals(await style.text(), 'h1 { color: peru }')
     // A place inside the app, named by a path with no file behind it: the
     // page itself answers, reporter and all, and routes on the pathname
     // (T-32769). A missing file — it has an extension — is still nothing.
-    let deep = await k.at('jeff69.yaks.app', '/recipes/recipes/42')
+    let deep = await k.at(`${jeff69}.yaks.app`, '/recipes/recipes/42')
     assertEquals(deep.status, 200)
     assertMatch(deep.headers.get('content-type') ?? '', /text\/html/)
     let inside = await deep.text()
@@ -143,7 +150,7 @@ test('the kernel routes, vouches, serves, and surfaces', async () => {
     // page pointing at the app rather than at its depth (T-32907).
     assertStringIncludes(inside, '<base href="/recipes/">')
     assertEquals(
-      (await k.at('jeff69.yaks.app', '/recipes/missing.css')).status,
+      (await k.at(`${jeff69}.yaks.app`, '/recipes/missing.css')).status,
       404,
     )
     // An app's platform manifest is not one of its pages (C-32869 item 3):
@@ -152,7 +159,7 @@ test('the kernel routes, vouches, serves, and surfaces', async () => {
     // still reads them back through `app_files`.
     let files = connector(k, cookie)
     let inRecipes = (args: Record<string, unknown>) =>
-      files.tool('app_files', { space: 'jeff69', app: 'recipes', ...args })
+      files.tool('app_files', { space: jeff69, app: 'recipes', ...args })
     await inRecipes({
       files: [
         { path: 'worker.js', content: 'export default { fetch: () => 0 }' },
@@ -163,7 +170,7 @@ test('the kernel routes, vouches, serves, and surfaces', async () => {
       let path of ['worker.js', 'vocab.json', '%77orker.js']
     ) {
       assertEquals(
-        (await k.at('jeff69.yaks.app', `/recipes/${path}`)).status,
+        (await k.at(`${jeff69}.yaks.app`, `/recipes/${path}`)).status,
         404,
         path,
       )
@@ -173,34 +180,34 @@ test('the kernel routes, vouches, serves, and surfaces', async () => {
       'export default',
     )
     // Another app in the space has its own files and its own store.
-    assertEquals((await k.at('jeff69.yaks.app', '/garden/')).status, 404)
+    assertEquals((await k.at(`${jeff69}.yaks.app`, '/garden/')).status, 404)
 
     // The graph API: the route reaches the app's stored handle, the session
     // is vouched for, and a batch round-trips. A viewer may read and not write.
-    let who = await (await k.at('jeff69.yaks.app', '/recipes/api/graph', {
+    let who = await (await k.at(`${jeff69}.yaks.app`, '/recipes/api/graph', {
       headers: { cookie },
     })).json()
     let [app] = await meta(k).query(
-      `.entity.eid=${eids['jeff69/recipes']}&?app`,
+      `.entity.eid=${eids[`${jeff69}/recipes`]}&?app`,
     )
     let store = (app.app as { store: string }).store
     assert(store, 'the app has a store handle')
     assertEquals(who.db, `do:${store}`)
-    assertEquals(who.person, jeff69)
+    assertEquals(who.person, person)
     assertEquals(who.role, 'owner')
-    let anon = await (await k.at('jeff69.yaks.app', '/recipes/api/graph'))
+    let anon = await (await k.at(`${jeff69}.yaks.app`, '/recipes/api/graph'))
       .json()
     assertEquals([anon.person, anon.role], [null, null])
     // And the door a page asks before it asks a person for anything
     // (T-32679): who they are, what this app lets them do, and where signing
     // in happens if it lets them do nothing. It answers everyone.
     let asMe = (cookie?: string) =>
-      k.at('jeff69.yaks.app', '/recipes/api/me', {
+      k.at(`${jeff69}.yaks.app`, '/recipes/api/me', {
         headers: cookie ? { cookie } : {},
       }).then((r) => r.json())
     let me = await asMe(cookie)
     assertObjectMatch(me, {
-      person: jeff69,
+      person,
       name: called,
       role: 'owner',
       reads: true,
@@ -259,7 +266,7 @@ test('the kernel routes, vouches, serves, and surfaces', async () => {
     // there is nothing here to leave out of a listing in the first place.
     assertEquals(await owner.get('.blob'), [])
     assertEquals(
-      await client(k, 'jeff69.yaks.app', 'garden').get(`id=${cake}`),
+      await client(k, `${jeff69}.yaks.app`, 'garden').get(`id=${cake}`),
       [],
     )
     let maya = crypto.randomUUID()
@@ -270,11 +277,11 @@ test('the kernel routes, vouches, serves, and surfaces', async () => {
     // — the only door into the meta store there is.
     await meta(k).apply([
       { entity: { eid: maya }, person: {} },
-      { member: { space: eids.jeff69, person: maya, role: 'viewer' } },
+      { member: { space: eids[jeff69], person: maya, role: 'viewer' } },
     ])
     let viewer = client(
       k,
-      'jeff69.yaks.app',
+      `${jeff69}.yaks.app`,
       'recipes',
       await signedIn(k, maya),
     )
@@ -326,7 +333,7 @@ test('the kernel routes, vouches, serves, and surfaces', async () => {
     // the soft page. Our own decoder fell over, not the app's code, so
     // nothing about it is written into the app's store (T-33234; where it IS
     // written is report_test.ts).
-    let broke = await k.at('jeff69.yaks.app', '/recipes/%E0%A4%A')
+    let broke = await k.at(`${jeff69}.yaks.app`, '/recipes/%E0%A4%A')
     assertEquals(broke.status, 500)
     assertMatch(await broke.text(), /Something went wrong/)
     assertEquals(await owner.get('.exception'), [])
@@ -334,14 +341,14 @@ test('the kernel routes, vouches, serves, and surfaces', async () => {
     // What the app's own page threw, at the app's own door: an exception
     // entity naming the request and carrying the message and stack; nothing
     // wears `error`, the facet for a failure the platform expected.
-    let filed = await k.at('jeff69.yaks.app', '/recipes/api/report', {
+    let filed = await k.at(`${jeff69}.yaks.app`, '/recipes/api/report', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({
         message: 'whisk is not a function',
         stack: 'TypeError: whisk is not a function\n' +
-          '    at https://jeff69.yaks.app/recipes/index.html:42:9',
-        url: 'https://jeff69.yaks.app/recipes/',
+          `    at https://${jeff69}.yaks.app/recipes/index.html:42:9`,
+        url: `https://${jeff69}.yaks.app/recipes/`,
       }),
     })
     assertEquals(filed.status, 204)
@@ -368,17 +375,17 @@ test('the kernel routes, vouches, serves, and surfaces', async () => {
     let [mine] = await owner.get('.doc&.created')
     // A reference to a person answers `{eid, name}` (T-32733), so the byline
     // is on the row and the eid is still what a write takes.
-    assertEquals((mine.created as { by: { eid: string } }).by.eid, jeff69)
+    assertEquals((mine.created as { by: { eid: string } }).by.eid, person)
     assertEquals((await owner.get('.doc'))[0].created, undefined)
     assertEquals(
       ((await owner.get('.person'))[0].entity as { eid: string }).eid,
-      jeff69,
+      person,
     )
     assertEquals((broken.created as { by: string | null }).by, null)
 
     // The kernel flag is the kernel's: a client sending it is still a client,
     // and its server-owned batch is dropped, not written.
-    let forgedFlag = await k.at('jeff69.yaks.app', '/recipes/api/apply', {
+    let forgedFlag = await k.at(`${jeff69}.yaks.app`, '/recipes/api/apply', {
       method: 'POST',
       headers: { cookie, 'x-yak-kernel': '1' },
       body: JSON.stringify([{
@@ -402,10 +409,10 @@ test('an app says who may read it and who may write it', async () => {
     // He signs in for real: the address is his.
     let { cookie, email, name } = await signIn(k)
     let agent = connector(k, cookie)
-    await agent.tool('space_new', { slug: 'club70', title: 'Book club70' })
+    await agent.tool('space_new', { slug: club70, title: `Book ${club70}` })
     let born = (slug: string, access?: string) =>
       agent.tool('app_new', {
-        space: 'club70',
+        space: club70,
         slug,
         title: slug,
         ...(access ? { access } : {}),
@@ -427,8 +434,8 @@ test('an app says who may read it and who may write it', async () => {
       'access: one of public, open, private',
     )
 
-    let owner = (app: string) => client(k, 'club70.yaks.app', app, cookie)
-    let anyone = (app: string) => client(k, 'club70.yaks.app', app)
+    let owner = (app: string) => client(k, `${club70}.yaks.app`, app, cookie)
+    let anyone = (app: string) => client(k, `${club70}.yaks.app`, app)
     let line = (title: string) => [{
       entity: { eid: crypto.randomUUID() },
       doc: { title },
@@ -450,7 +457,7 @@ test('an app says who may read it and who may write it', async () => {
     // Which the page can know on load (T-32679): `/api/me` says a stranger
     // writes here, and that their write will carry no `created.by` — so a
     // page wanting a byline asks them their name itself (C-32675 item 5).
-    let voter = await (await k.at('club70.yaks.app', '/vote/api/me')).json()
+    let voter = await (await k.at(`${club70}.yaks.app`, '/vote/api/me')).json()
     assertEquals([voter.person, voter.writes], [null, true])
     // Signing in is still offered — an open app may want named guests — it is
     // simply not the way through here.
@@ -460,14 +467,14 @@ test('an app says who may read it and who may write it', async () => {
     // (C-32607 item 5). A stranger is sent to sign in, holding the page as
     // the address to come back to; its owner reads it.
     await agent.tool('app_files', {
-      space: 'club70',
+      space: club70,
       app: 'diary',
       op: 'write',
       path: 'index.html',
       content: '<!doctype html><h1>the diary</h1>',
     })
-    await agent.tool('app_deploy', { space: 'club70', app: 'diary' })
-    let stranger = await k.at('club70.yaks.app', '/diary/', {
+    await agent.tool('app_deploy', { space: club70, app: 'diary' })
+    let stranger = await k.at(`${club70}.yaks.app`, '/diary/', {
       redirect: 'manual',
     })
     assertEquals(stranger.status, 303)
@@ -476,13 +483,13 @@ test('an app says who may read it and who may write it', async () => {
       /^https:\/\/yaks\.app\/login\?return=.*%2Fdiary%2F$/,
     )
     assertEquals(
-      (await k.at('club70.yaks.app', '/diary/', { headers: { cookie } }))
+      (await k.at(`${club70}.yaks.app`, '/diary/', { headers: { cookie } }))
         .status,
       200,
     )
     // A pretty path inside it is the same page, so it is hidden the same way:
     // the fallback is served behind the access rule, never around it.
-    let deeper = await k.at('club70.yaks.app', '/diary/entries/7', {
+    let deeper = await k.at(`${club70}.yaks.app`, '/diary/entries/7', {
       redirect: 'manual',
     })
     assertEquals(deeper.status, 303)
@@ -491,7 +498,7 @@ test('an app says who may read it and who may write it', async () => {
       /^https:\/\/yaks\.app\/login\?return=/,
     )
     assertEquals(
-      (await k.at('club70.yaks.app', '/diary/entries/7', {
+      (await k.at(`${club70}.yaks.app`, '/diary/entries/7', {
         headers: { cookie },
       })).status,
       200,
@@ -504,24 +511,26 @@ test('an app says who may read it and who may write it', async () => {
     // an ETag makes the return visit a 304 with no bytes rather than a copy
     // nobody checked.
     await agent.tool('app_files', {
-      space: 'club70',
+      space: club70,
       app: 'list',
       op: 'write',
       path: 'index.html',
       content: '<!doctype html><h1>the list</h1>',
     })
-    await agent.tool('app_deploy', { space: 'club70', app: 'list' })
-    let open_ = await k.at('club70.yaks.app', '/list/')
+    await agent.tool('app_deploy', { space: club70, app: 'list' })
+    let open_ = await k.at(`${club70}.yaks.app`, '/list/')
     assertEquals(open_.headers.get('cache-control'), 'public, no-cache')
     let tag = open_.headers.get('etag') ?? ''
     assertMatch(tag, /^W\/"[0-9a-f]{32}"$/)
     await open_.body?.cancel()
-    let again = await k.at('club70.yaks.app', '/list/', {
+    let again = await k.at(`${club70}.yaks.app`, '/list/', {
       headers: { 'if-none-match': tag },
     })
     assertEquals(again.status, 304)
     assertEquals(await again.text(), '')
-    let mine = await k.at('club70.yaks.app', '/diary/', { headers: { cookie } })
+    let mine = await k.at(`${club70}.yaks.app`, '/diary/', {
+      headers: { cookie },
+    })
     assertEquals(mine.headers.get('cache-control'), 'private, no-cache')
     // The inner Files entrypoint may hold release bytes for a year, while the
     // gateway's private response must be revalidated for this viewer.
@@ -529,24 +538,24 @@ test('an app says who may read it and who may write it', async () => {
     await mine.body?.cancel()
     // The same holds for a public app: the browser is told `no-cache`, never
     // the year the shared cache holds the bytes for.
-    let seen = await k.at('club70.yaks.app', '/list/')
+    let seen = await k.at(`${club70}.yaks.app`, '/list/')
     assertEquals(seen.headers.get('x-yak-sha'), null)
     assertEquals(seen.headers.get('cache-control'), 'public, no-cache')
     await seen.body?.cancel()
 
-    let shut = await k.at('club70.yaks.app', '/diary/api/query?.doc')
+    let shut = await k.at(`${club70}.yaks.app`, '/diary/api/query?.doc')
     assertEquals(shut.status, 401)
     assertEquals((await shut.json()).error.code, 'not_a_reader')
     // A page loads the words its store speaks, the byline the store stamps as
     // much as its own, and asks them as the store does; a stranger is told
     // none of them.
-    let spoken = await k.at('club70.yaks.app', '/diary/api/vocab.json', {
+    let spoken = await k.at(`${club70}.yaks.app`, '/diary/api/vocab.json', {
       headers: { cookie },
     })
     assertEquals(loadVocab(await spoken.json()).aim('created.by'), [
       { comp: 'created', prop: 'by' },
     ])
-    let unspoken = await k.at('club70.yaks.app', '/diary/api/vocab.json')
+    let unspoken = await k.at(`${club70}.yaks.app`, '/diary/api/vocab.json')
     assertEquals(unspoken.status, 401)
     await unspoken.body?.cancel()
     assertEquals((await anyone('diary').post(line('no'))).status, 401)
@@ -555,14 +564,14 @@ test('an app says who may read it and who may write it', async () => {
     // The guest list: an invitation is an address, and the person behind it is
     // minted here so their sign-in later finds this same row.
     let said = await agent.tool('member_add', {
-      space: 'club70',
-      email: ' Maya@Example.COM ',
+      space: club70,
+      email: ` ${mayaEmail.toUpperCase()} `,
       app: 'diary',
       name: 'Maya',
     })
     assertStringIncludes(
       said,
-      'maya@example.com is invited as an editor of club70',
+      `${mayaEmail} is invited as an editor of ${club70}`,
     )
     // The answer says the letter went, and never carries the accept link:
     // that is the invited address's alone (invite.ts, T-37880).
@@ -570,7 +579,7 @@ test('an app says who may read it and who may write it', async () => {
     assertEquals(said.includes('/invite?t='), false)
     // The letter carries it, from the platform's own sender, under fixed
     // words, saying who invited them and what signing in takes.
-    let invite = await letter(k, 'maya@example.com', 'invited you')
+    let invite = await letter(k, mayaEmail, 'invited you')
     assertEquals(invite.subject, SUBJECT)
     // Both people in the body by name: the one who invited, and the one
     // invited — the address is the envelope, never what anyone is called
@@ -578,12 +587,12 @@ test('an app says who may read it and who may write it', async () => {
     assertStringIncludes(invite.body, `${name} invited you`)
     assertStringIncludes(invite.body, 'Hi Maya,')
     assertStringIncludes(invite.body, '/invite?t=')
-    assertStringIncludes(invite.body, 'maya@example.com')
+    assertStringIncludes(invite.body, mayaEmail)
     assertStringIncludes(invite.body, 'no account to make first')
     // And the name the invitation gave is hers until she says otherwise, so
     // an app she writes in names her (T-32654).
     let [named] = await meta(k).query(
-      '.person&.email.address=maya@example.com&?doc',
+      `.person&.email.address=${mayaEmail}&?doc`,
     )
     assertEquals((named.doc as { title: string }).title, 'Maya')
     // An invitation with nothing added is the letter above, unchanged; with a
@@ -591,14 +600,14 @@ test('an app says who may read it and who may write it', async () => {
     // quoted, so nobody reads them as the platform's (T-32963).
     let hello = 'Come add what you are bringing — potluck is Saturday at 6.'
     let withNote = await agent.tool('member_add', {
-      space: 'club70',
-      email: 'sam@example.com',
+      space: club70,
+      email: samEmail,
       app: 'list',
       name: 'Sam',
       note: hello,
     })
     assertStringIncludes(withNote, 'your note are on its way')
-    let noted = await letter(k, 'sam@example.com', hello)
+    let noted = await letter(k, samEmail, hello)
     assertStringIncludes(noted.body, `Hi Sam,\n\n${name} wrote:\n\n> ${hello}`)
     assert(
       noted.body.indexOf(hello) < noted.body.indexOf('invited you to'),
@@ -611,15 +620,15 @@ test('an app says who may read it and who may write it', async () => {
     await assertRejects(
       () =>
         agent.tool('member_add', {
-          space: 'club70',
-          email: 'lee@example.com',
+          space: club70,
+          email: leeEmail,
           note: 'x'.repeat(501),
         }),
       Error,
       'a note is at most 500',
     )
     assertEquals(
-      (await meta(k).query('.email.address=lee@example.com'))
+      (await meta(k).query(`.email.address=${leeEmail}`))
         .length,
       0,
     )
@@ -627,25 +636,25 @@ test('an app says who may read it and who may write it', async () => {
     await assertRejects(
       () =>
         agent.tool('member_add', {
-          space: 'club70',
-          email: 'maya@example.com',
+          space: club70,
+          email: mayaEmail,
           app: 'nope',
         }),
       Error,
-      'no app nope in club70',
+      `no app nope in ${club70}`,
     )
     let [row] = await meta(k).query(
-      '.email.address=maya@example.com',
+      `.email.address=${mayaEmail}`,
     )
     let maya = row.entity.eid
     let mayaIn = await signedIn(k, maya)
     // Hers once she accepts, and it lands her on the app she was invited to,
     // never the space root, which answers nothing here (C-32624 item 4).
     assertEquals(
-      await accepted(k, 'maya@example.com', mayaIn),
-      'https://club70.yaks.app/diary/',
+      await accepted(k, mayaEmail, mayaIn),
+      `https://${club70}.yaks.app/diary/`,
     )
-    let editor = (app: string) => client(k, 'club70.yaks.app', app, mayaIn)
+    let editor = (app: string) => client(k, `${club70}.yaks.app`, app, mayaIn)
     // She was invited to one app (T-37615), so the app beside it is somebody
     // else's: a signed-in stranger at a public list, who reads it and does
     // not write it.
@@ -656,7 +665,7 @@ test('an app says who may read it and who may write it', async () => {
     await editor('diary').applied(line('her secret'))
     assertEquals((await editor('diary').get('.doc')).length, 2)
     assertEquals(
-      (await k.at('club70.yaks.app', '/diary/', {
+      (await k.at(`${club70}.yaks.app`, '/diary/', {
         headers: { cookie: mayaIn },
       }))
         .status,
@@ -667,30 +676,30 @@ test('an app says who may read it and who may write it', async () => {
     await assertRejects(
       () =>
         connector(k, mayaIn).tool('member_add', {
-          space: 'club70',
+          space: club70,
           email: 'someone@example.com',
         }),
       Error,
-      'not a member of club70',
+      `not a member of ${club70}`,
     )
 
     // Taken back out, she is a signed-in stranger: 403, not 401.
     assertStringIncludes(
       await agent.tool('member_remove', {
-        space: 'club70',
-        email: 'maya@example.com',
+        space: club70,
+        email: mayaEmail,
         app: 'diary',
       }),
-      'maya@example.com no longer holds club70/diary',
+      `${mayaEmail} no longer holds ${club70}/diary`,
     )
     assertEquals((await editor('list').post(line('again'))).status, 403)
-    let out = await k.at('club70.yaks.app', '/diary/api/query?.doc', {
+    let out = await k.at(`${club70}.yaks.app`, '/diary/api/query?.doc', {
       headers: { cookie: mayaIn },
     })
     assertEquals(out.status, 403)
     // Signed in and nobody here: the page is the nothing-here a wrong address
     // gets, never a redirect to a sign-in she has already done.
-    let gone = await k.at('club70.yaks.app', '/diary/', {
+    let gone = await k.at(`${club70}.yaks.app`, '/diary/', {
       headers: { cookie: mayaIn },
       redirect: 'manual',
     })
@@ -699,26 +708,26 @@ test('an app says who may read it and who may write it', async () => {
     await assertRejects(
       () =>
         agent.tool('member_remove', {
-          space: 'club70',
-          email: 'maya@example.com',
+          space: club70,
+          email: mayaEmail,
         }),
       Error,
-      'not a member of club70',
+      `not a member of ${club70}`,
     )
 
     // A space is never left with nobody to say who belongs. He is found by
     // the address he signed in with — the row his sign-in wrote.
     await assertRejects(
-      () => agent.tool('member_remove', { space: 'club70', email }),
+      () => agent.tool('member_remove', { space: club70, email }),
       Error,
-      'the only owner of club70',
+      `the only owner of ${club70}`,
     )
 
     // The word is not fixed at birth: a list the whole club may add to, and
     // then a list shut to everyone but them.
     assertStringIncludes(
       await agent.tool('app_set', {
-        space: 'club70',
+        space: club70,
         app: 'list',
         access: 'open',
       }),
@@ -727,12 +736,12 @@ test('an app says who may read it and who may write it', async () => {
     await anyone('list').applied(line('everyone can now'))
     assertEquals((await anyone('list').get('.doc')).length, 2)
     await agent.tool('app_set', {
-      space: 'club70',
+      space: club70,
       app: 'list',
       access: 'private',
     })
     assertEquals(
-      (await k.at('club70.yaks.app', '/list/api/query?.doc')).status,
+      (await k.at(`${club70}.yaks.app`, '/list/api/query?.doc')).status,
       401,
     )
   } finally {

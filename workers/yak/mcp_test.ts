@@ -15,6 +15,7 @@ import {
   num,
   signedIn,
   txt,
+  unique,
   vocabFile,
   when,
 } from './probe.ts'
@@ -23,13 +24,17 @@ import { PROMPTS } from './prompts.ts'
 import { sha256 } from './versions.ts'
 import { facing, GUIDE, minted } from './mcp-probe.ts'
 
+let jeff54 = unique('jeff54')
+let jeff_work54 = unique('jeff-work54')
+let maya54 = unique('maya54')
+
 test(
   'the connector: tools, a space made, an app served, errors seen',
   async () => {
     let k = await kernel()
     try {
-      let jeff54 = crypto.randomUUID()
-      let agent = connector(k, await signedIn(k, jeff54))
+      let person = crypto.randomUUID()
+      let agent = connector(k, await signedIn(k, person))
       // Nobody is answered anything of the person's — and the refusal says
       // so in a sentence, with where signing in happens, like every other
       // door (C-32607 item 1), and carries the challenge a host reads to
@@ -376,11 +381,11 @@ test(
 
       // A space, then an app in it; the slugs are one per namespace.
       assertMatch(
-        await agent.tool('space_new', { slug: 'jeff54', title: 'Jeff' }),
-        /jeff54\.yaks\.app/,
+        await agent.tool('space_new', { slug: jeff54, title: 'Jeff' }),
+        new RegExp(`${jeff54}\\.yaks\\.app`),
       )
       await assertRejects(
-        () => agent.tool('space_new', { slug: 'jeff54', title: 'Again' }),
+        () => agent.tool('space_new', { slug: jeff54, title: 'Again' }),
         Error,
         'taken',
       )
@@ -391,27 +396,27 @@ test(
       )
       assertMatch(
         await agent.tool('app_new', {
-          space: 'jeff54',
+          space: jeff54,
           slug: 'recipes',
           title: 'Recipe box',
         }),
-        /jeff54\.yaks\.app\/recipes\//,
+        new RegExp(`${jeff54}\\.yaks\\.app\\/recipes\\/`),
       )
       // A space needs no naming: the caller's own is the default, and with
       // more than one the tools say which names there are (T-32482).
       assertMatch(
         await agent.tool('app_new', { slug: 'garden', title: 'Garden' }),
-        /jeff54\.yaks\.app\/garden\//,
+        new RegExp(`${jeff54}\\.yaks\\.app\\/garden\\/`),
       )
       assertEquals(
         await agent.tool('app_files', { app: 'garden', op: 'list' }),
         '(no files)',
       )
-      await agent.tool('space_new', { slug: 'jeff-work54', title: 'Work' })
+      await agent.tool('space_new', { slug: jeff_work54, title: 'Work' })
       await assertRejects(
         () => agent.tool('app_new', { slug: 'x', title: 'X' }),
         Error,
-        'name one of jeff54, jeff-work54',
+        `name one of ${jeff54}, ${jeff_work54}`,
       )
       // But naming the app is naming the space: someone in two spaces is not
       // asked which of them their own app sits in, the way the app's own
@@ -430,16 +435,16 @@ test(
       // Two spaces holding the slug is the one question worth asking, and
       // the refusal says which two and why.
       await agent.tool('app_new', {
-        space: 'jeff-work54',
+        space: jeff_work54,
         slug: 'garden',
         title: 'Work garden',
       })
       await assertRejects(
         () => agent.tool('app_files', { app: 'garden', op: 'list' }),
         Error,
-        'name one of jeff54, jeff-work54 — each has an app garden',
+        `name one of ${jeff54}, ${jeff_work54} — each has an app garden`,
       )
-      await agent.tool('app_delete', { space: 'jeff-work54', app: 'garden' })
+      await agent.tool('app_delete', { space: jeff_work54, app: 'garden' })
       assertEquals(
         await agent.tool('app_files', { app: 'garden', op: 'list' }),
         '(no files)',
@@ -447,11 +452,11 @@ test(
 
       // Schema descriptions are installed by deployment, not a first read.
       await agent.tool('app_files', {
-        space: 'jeff54',
+        space: jeff54,
         app: 'garden',
         files: [{ path: 'vocab.json', content: JSON.stringify({ $defs: {} }) }],
       })
-      await agent.tool('app_deploy', { space: 'jeff54', app: 'garden' })
+      await agent.tool('app_deploy', { space: jeff54, app: 'garden' })
       // Naming schema rows still reads them through this same door.
       let catalog = JSON.parse(
         await agent.tool('graph_query', {
@@ -468,7 +473,7 @@ test(
       // stored — bytes and sha256 — so a transcription is checked in the
       // call that made it (T-34337).
       let page = '<!doctype html><h1>Our recipe box</h1>'
-      let app = { space: 'jeff54', app: 'recipes' }
+      let app = { space: jeff54, app: 'recipes' }
       assertEquals(
         await agent.tool('app_files', {
           ...app,
@@ -476,7 +481,7 @@ test(
           path: 'index.html',
           content: page,
         }),
-        'wrote index.html → https://jeff54.yaks.app/recipes/index.html — ' +
+        `wrote index.html → https://${jeff54}.yaks.app/recipes/index.html — ` +
           `${page.length} bytes, sha256 ${await sha256(
             new TextEncoder().encode(page),
           )}; staged for app_deploy`,
@@ -498,14 +503,14 @@ test(
       // teaches it, since a `files` batch is the write (C-32730 item 1).
       assertEquals(
         await agent.tool('app_files', {
-          space: 'jeff54',
+          space: jeff54,
           app: 'recipes',
           files: [
             { path: 'app.js', content: 'export let go = () => {}' },
             { path: '/img/logo.svg', content: '<svg/>' },
           ],
         }),
-        'wrote 2 files → https://jeff54.yaks.app/recipes/:\n' +
+        `wrote 2 files → https://${jeff54}.yaks.app/recipes/:\n` +
           `app.js — 24 bytes, sha256 ${await sha256(
             new TextEncoder().encode('export let go = () => {}'),
           )}\nimg/logo.svg — 6 bytes, sha256 ${await sha256(
@@ -576,7 +581,7 @@ test(
         'no file draft.html',
       )
       assertEquals(
-        (await k.at('jeff54.yaks.app', '/recipes/draft.html')).status,
+        (await k.at(`${jeff54}.yaks.app`, '/recipes/draft.html')).status,
         404,
       )
       // A .json write is parsed in the same breath, so a miscounted bracket
@@ -613,7 +618,7 @@ test(
           find: 'Our recipe box',
           replace: 'The recipe box',
         }),
-        'patched index.html → https://jeff54.yaks.app/recipes/index.html — ',
+        `patched index.html → https://${jeff54}.yaks.app/recipes/index.html — `,
       )
       assertEquals(
         await agent.tool('app_files', {
@@ -655,7 +660,7 @@ test(
         path: 'add.wasm',
         base64: btoa(String.fromCharCode(...wasm)),
       })
-      let pending = await k.at('jeff54.yaks.app', '/recipes/add.wasm')
+      let pending = await k.at(`${jeff54}.yaks.app`, '/recipes/add.wasm')
       assertEquals(pending.status, 404)
       await pending.body?.cancel()
       await assertRejects(
@@ -670,12 +675,12 @@ test(
         'base64: not base64',
       )
       assertMatch(await agent.tool('app_deploy', app), /v1/)
-      let back = await k.at('jeff54.yaks.app', '/recipes/add.wasm')
+      let back = await k.at(`${jeff54}.yaks.app`, '/recipes/add.wasm')
       assertEquals(back.headers.get('content-type'), 'application/wasm')
       assertEquals(new Uint8Array(await back.arrayBuffer()), wasm)
       await agent.tool('app_files', { ...app, op: 'delete', path: 'add.wasm' })
       assertMatch(await agent.tool('app_deploy', app), /v2/)
-      let served = await k.at('jeff54.yaks.app', '/recipes/')
+      let served = await k.at(`${jeff54}.yaks.app`, '/recipes/')
       assertEquals(served.status, 200)
       // The page as written, given the app's own address to resolve its
       // relative URLs against (apps.ts `based`, T-32907).
@@ -684,7 +689,7 @@ test(
       assertStringIncludes(html, '<base href="/recipes/">')
       // No app is the space's front page unless somebody says so, so the
       // bare hostname lists what is here (T-33040, home_test.ts).
-      let bare = await k.at('jeff54.yaks.app', '/', { redirect: 'manual' })
+      let bare = await k.at(`${jeff54}.yaks.app`, '/', { redirect: 'manual' })
       assertEquals(bare.status, 200)
       assertStringIncludes(await bare.text(), 'href="/recipes/"')
 
@@ -1029,12 +1034,12 @@ test(
       // own failures are the platform's, whatever app the URL named
       // (T-33234, report_test.ts).
       let dies = (said: string) =>
-        k.at('jeff54.yaks.app', '/recipes/api/report', {
+        k.at(`${jeff54}.yaks.app`, '/recipes/api/report', {
           method: 'POST',
           headers: { 'content-type': 'application/json' },
           body: JSON.stringify({
             message: said,
-            url: 'https://jeff54.yaks.app/recipes/',
+            url: `https://${jeff54}.yaks.app/recipes/`,
           }),
         })
       assertEquals((await dies('sift is not a function')).status, 204)
@@ -1098,13 +1103,13 @@ test(
         ]
       ) {
         assertEquals(
-          (await k.at('jeff54.yaks.app', '/recipes/api/report', {
+          (await k.at(`${jeff54}.yaks.app`, '/recipes/api/report', {
             method: 'POST',
             body: JSON.stringify({
               message: broke.said,
-              stack: `TypeError: ${broke.said}\n    at https://jeff54.yaks` +
+              stack: `TypeError: ${broke.said}\n    at https://${jeff54}.yaks` +
                 `.app/recipes/${broke.at}`,
-              url: 'https://jeff54.yaks.app/recipes/',
+              url: `https://${jeff54}.yaks.app/recipes/`,
             }),
           })).status,
           204,
@@ -1172,10 +1177,12 @@ test(
           slug: 'cookbook',
           title: 'The cookbook',
         }),
-        /jeff54\.yaks\.app\/cookbook\/.*moved from \/recipes\//,
+        new RegExp(
+          `${jeff54}\\.yaks\\.app\\/cookbook\\/.*moved from \\/recipes\\/`,
+        ),
       )
-      let moved = { space: 'jeff54', app: 'cookbook' }
-      let atNew = await k.at('jeff54.yaks.app', '/cookbook/')
+      let moved = { space: jeff54, app: 'cookbook' }
+      let atNew = await k.at(`${jeff54}.yaks.app`, '/cookbook/')
       assertEquals(atNew.status, 200)
       // Renamed, so the base a page is given moves with it.
       let atNewHtml = await atNew.text()
@@ -1186,7 +1193,7 @@ test(
       // open on the old address still writes to it (C-32574 item 4, where a
       // rename broke every open phone in silence).
       let asked = (path: string, init?: RequestInit) =>
-        k.at('jeff54.yaks.app', path, { ...init, redirect: 'manual' })
+        k.at(`${jeff54}.yaks.app`, path, { ...init, redirect: 'manual' })
       let gone = await asked('/recipes/')
       assertEquals(gone.status, 301)
       assertEquals(gone.headers.get('location'), '/cookbook/')
@@ -1212,7 +1219,7 @@ test(
       await assertRejects(
         () =>
           agent.tool('app_new', {
-            space: 'jeff54',
+            space: jeff54,
             slug: 'recipes',
             title: 'Recipes again',
           }),
@@ -1222,7 +1229,7 @@ test(
       // …and back, so the rest of this reads of the cookbook. An address the
       // app returns to is its own again, never a redirect to itself.
       await agent.tool('app_set', {
-        space: 'jeff54',
+        space: jeff54,
         app: 'kitchen',
         slug: 'cookbook',
       })
@@ -1244,12 +1251,12 @@ test(
       // an empty ask are both refused.
       assertMatch(
         await agent.tool('app_set', { ...moved, title: 'Recipes' }),
-        /jeff54\.yaks\.app\/cookbook\/$/,
+        new RegExp(`${jeff54}\\.yaks\\.app\\/cookbook\\/$`),
       )
       await assertRejects(
         () => agent.tool('app_set', { ...moved, slug: 'garden' }),
         Error,
-        'app garden exists in jeff54',
+        `app garden exists in ${jeff54}`,
       )
       await assertRejects(
         () => agent.tool('app_set', moved),
@@ -1264,17 +1271,22 @@ test(
         name: 'app_list',
         arguments: {},
       })
-      assertStringIncludes(listing.content[0].text, 'jeff54 — https://jeff54')
+      assertStringIncludes(
+        listing.content[0].text,
+        `${jeff54} — https://${jeff54}`,
+      )
       assertMatch(
         listing.content[0].text,
-        /Recipes \(cookbook\) v\d+, 2 open: https:\/\/jeff54\.yaks\.app\/cookbook\//,
+        new RegExp(
+          `Recipes \\(cookbook\\) v\\d+, 2 open: https:\\/\\/${jeff54}\\.yaks\\.app\\/cookbook\\/`,
+        ),
       )
       // Both spaces, oldest first, each app under the one it lives in — and
       // the count of what is open and the address are on the app's own line,
       // which the match above reads.
       let all = String(listing.content[0].text)
       assert(
-        all.indexOf('jeff54 — ') < all.indexOf('jeff-work54 — '),
+        all.indexOf(`${jeff54} — `) < all.indexOf(`${jeff_work54} — `),
         'the space it started with comes first',
       )
       assertStringIncludes(all, '(garden)')
@@ -1282,9 +1294,9 @@ test(
       // and one thing in the trash — with the days it has to change its mind
       // (erase.ts, T-34430).
       assertEquals(
-        (await agent.tool('app_list', { space: 'jeff-work54' })).split('\n'),
+        (await agent.tool('app_list', { space: jeff_work54 })).split('\n'),
         [
-          'jeff-work54 — https://jeff-work54.yaks.app/ — you are the owner',
+          `${jeff_work54} — https://${jeff_work54}.yaks.app/ — you are the owner`,
           '- no apps yet',
           'Trash — app_restore brings one back; erased for good when its ' +
           'days run out',
@@ -1298,9 +1310,9 @@ test(
       // the store it was born naming was emptied with it (T-32562). `forever`
       // is what skips the trash; the trash itself is its own test below
       // (T-34430).
-      let scratch = { space: 'jeff54', app: 'scratch' }
+      let scratch = { space: jeff54, app: 'scratch' }
       await agent.tool('app_new', {
-        space: 'jeff54',
+        space: jeff54,
         slug: 'scratch',
         title: 'Sc',
       })
@@ -1315,23 +1327,25 @@ test(
         entities: [{ entity: { eid: '$note' }, doc: { title: 'a secret' } }],
       })
       await agent.tool('app_deploy', scratch)
-      assertEquals((await k.at('jeff54.yaks.app', '/scratch/')).status, 200)
+      assertEquals((await k.at(`${jeff54}.yaks.app`, '/scratch/')).status, 200)
       assertMatch(
         await agent.tool('app_delete', { ...scratch, forever: true }),
-        /deleted jeff54\/scratch: 1 file, everything it saved.*all gone/,
+        new RegExp(
+          `deleted ${jeff54}\\/scratch: 1 file, everything it saved.*all gone`,
+        ),
       )
-      assertEquals((await k.at('jeff54.yaks.app', '/scratch/')).status, 404)
+      assertEquals((await k.at(`${jeff54}.yaks.app`, '/scratch/')).status, 404)
       await assertRejects(
         () => agent.tool('app_delete', scratch),
         Error,
-        'no app scratch in jeff54',
+        `no app scratch in ${jeff54}`,
       )
       assertEquals(
-        (await agent.tool('app_list', { space: 'jeff54' })).includes('scratch'),
+        (await agent.tool('app_list', { space: jeff54 })).includes('scratch'),
         false,
       )
       await agent.tool('app_new', {
-        space: 'jeff54',
+        space: jeff54,
         slug: 'scratch',
         title: 'Sc',
       })
@@ -1361,7 +1375,7 @@ test(
       await assertRejects(
         () => stranger.tool('app_files', { ...app, op: 'list' }),
         Error,
-        'not a member of jeff54',
+        `not a member of ${jeff54}`,
       )
       // And the generic tier is his reach and nobody else's: jeff's rows are
       // not in it, whatever he asks for.
@@ -1370,8 +1384,8 @@ test(
         [],
       )
       assertMatch(
-        await stranger.tool('space_new', { slug: 'maya54', title: 'Maya' }),
-        /maya54\.yaks\.app/,
+        await stranger.tool('space_new', { slug: maya54, title: 'Maya' }),
+        new RegExp(`${maya54}\\.yaks\\.app`),
       )
     } finally {
       await k.stop()

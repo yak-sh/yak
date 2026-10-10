@@ -28,6 +28,7 @@ import {
   meta,
   rfc822,
   seed,
+  unique,
 } from './probe.ts'
 
 type Row = {
@@ -50,16 +51,17 @@ let signed = (dkim: 'pass' | 'fail') =>
 
 test('a letter lands in the app its address named', async () => {
   let k = await kernel()
-  let them = await seed(k, [{ slug: 'jeff24', apps: ['recipes', 'garden'] }])
+  let jeff24 = unique('jeff24')
+  let them = await seed(k, [{ slug: jeff24, apps: ['recipes', 'garden'] }])
   try {
     // One letter, to the app's own address. The envelope sender is a relay's
     // bounce address, as it is in life; the author is the From header.
     let landed = await arrives(k, {
       from: 'bounces@relay.example',
-      to: 'jeff24.recipes@yaks.app',
+      to: `${jeff24}.recipes@yaks.app`,
       raw: rfc822({
         From: 'Ana <ana@books.example>',
-        To: 'jeff24.recipes@yaks.app',
+        To: `${jeff24}.recipes@yaks.app`,
         Subject: 'Bring a dish',
         Date: 'Tue, 27 Aug 2024 08:49:44 -0700',
         'Authentication-Results': signed('pass'),
@@ -68,30 +70,30 @@ test('a letter lands in the app its address named', async () => {
     })
     assertEquals(landed.status, 200)
 
-    let [letter] = await client(k, 'jeff24.yaks.app', 'recipes', them.cookie)
+    let [letter] = await client(k, `${jeff24}.yaks.app`, 'recipes', them.cookie)
       .get('.mail&?doc') as unknown as Row[]
     assertEquals(letter.kind, 'mail')
     assertEquals(letter.doc.title, 'Bring a dish')
     assertEquals(letter.doc.body, 'Potluck Friday. Bring a dish.')
     assertEquals(letter.mail.from, 'ana@books.example')
-    assertEquals(letter.mail.to, 'jeff24.recipes@yaks.app')
+    assertEquals(letter.mail.to, `${jeff24}.recipes@yaks.app`)
     assertEquals(letter.mail.at, '2024-08-27T15:49:44.000Z')
     assertEquals(letter.mail.verified, true)
 
     // Nobody wrote it: the sender is a property and never an actor, so a letter
     // cannot put words in a member's mouth.
-    let [byline] = await client(k, 'jeff24.yaks.app', 'recipes', them.cookie)
+    let [byline] = await client(k, `${jeff24}.yaks.app`, 'recipes', them.cookie)
       .get('.mail&.created') as unknown as { created: { by: unknown } }[]
     assertEquals(byline.created.by, null)
 
     // The other app in the space has its own address and its own store: the
     // letter above is nowhere in it.
-    let garden = client(k, 'jeff24.yaks.app', 'garden', them.cookie)
+    let garden = client(k, `${jeff24}.yaks.app`, 'garden', them.cookie)
     assertEquals(await garden.get('.mail'), [])
     assertEquals(
       (await arrives(k, {
         from: 'ana@books.example',
-        to: 'jeff24.garden@yaks.app',
+        to: `${jeff24}.garden@yaks.app`,
         raw: rfc822({ Subject: 'Tomatoes are in' }, 'Come and take some.'),
       })).status,
       200,
@@ -106,17 +108,17 @@ test('a letter lands in the app its address named', async () => {
     // The space's own name is its front page's address — the app it made its
     // front page, since being the first app claims nothing (apps.ts).
     await connector(k, them.cookie)
-      .tool('app_set', { space: 'jeff24', app: 'recipes', home: true })
+      .tool('app_set', { space: jeff24, app: 'recipes', home: true })
     assertEquals(
       (await arrives(k, {
         from: 'ana@books.example',
-        to: 'jeff24@yaks.app',
+        to: `${jeff24}@yaks.app`,
         raw: rfc822({ Subject: 'To the front page' }, 'Hello in there.'),
       })).status,
       200,
     )
     let titles = (rows: Row[]) => rows.map((r) => r.doc.title).sort()
-    let recipes = client(k, 'jeff24.yaks.app', 'recipes', them.cookie)
+    let recipes = client(k, `${jeff24}.yaks.app`, 'recipes', them.cookie)
     await until(
       async () =>
         titles(await recipes.get('.mail&?doc') as unknown as Row[]).includes(
@@ -130,7 +132,7 @@ test('a letter lands in the app its address named', async () => {
     assertEquals(
       (await arrives(k, {
         from: 'spoof@relay.example',
-        to: 'jeff24.recipes@yaks.app',
+        to: `${jeff24}.recipes@yaks.app`,
         raw: rfc822({
           From: 'Ana <ana@books.example>',
           Subject: 'Nobody signed for this',
@@ -146,14 +148,14 @@ test('a letter lands in the app its address named', async () => {
     // An attachment is filed where a page's upload is (apps.ts `filed`) and
     // hung off the letter, so a reader finds it from the letter.
     await connector(k, them.cookie).tool('app_set', {
-      space: 'jeff24',
+      space: jeff24,
       app: 'recipes',
       access: 'private',
     })
     assertEquals(
       (await arrives(k, {
         from: 'ana@books.example',
-        to: 'jeff24.recipes@yaks.app',
+        to: `${jeff24}.recipes@yaks.app`,
         raw: rfc822(
           {
             Subject: 'The list',
@@ -193,7 +195,7 @@ test('a letter lands in the app its address named', async () => {
     assertEquals(
       (await arrives(k, {
         from: 'ana@books.example',
-        to: 'jeff24.recipes@yaks.app',
+        to: `${jeff24}.recipes@yaks.app`,
         raw: rfc822(
           {
             Subject: 'Unnamed attachment',
@@ -220,28 +222,34 @@ test('a letter lands in the app its address named', async () => {
 
 test("a letter to an app's former address follows the rename", async () => {
   let k = await kernel()
+  let jeff25 = unique('jeff25')
   try {
-    let them = await seed(k, [{ slug: 'jeff25', apps: ['recipes'] }])
+    let them = await seed(k, [{ slug: jeff25, apps: ['recipes'] }])
     await connector(k, them.cookie)
-      .tool('app_set', { space: 'jeff25', app: 'recipes', slug: 'cookbook' })
+      .tool('app_set', { space: jeff25, app: 'recipes', slug: 'cookbook' })
     assertEquals(
       (await arrives(k, {
         from: 'ana@books.example',
-        to: 'jeff25.recipes@yaks.app',
+        to: `${jeff25}.recipes@yaks.app`,
         raw: rfc822({ Subject: 'Still find you' }, 'Bring a dish.'),
       })).status,
       200,
     )
     // The store is named at birth, so the letter is in the app it named — now
     // answering at its new address, with the envelope it arrived under.
-    let [letter] = await client(k, 'jeff25.yaks.app', 'cookbook', them.cookie)
+    let [letter] = await client(
+      k,
+      `${jeff25}.yaks.app`,
+      'cookbook',
+      them.cookie,
+    )
       .get('.mail&?doc') as unknown as Row[]
     assertEquals(letter.doc.title, 'Still find you')
-    assertEquals(letter.mail.to, 'jeff25.recipes@yaks.app')
+    assertEquals(letter.mail.to, `${jeff25}.recipes@yaks.app`)
     // A slug nobody here has ever had is no move to follow: still refused.
     let no = await arrives(k, {
       from: 'ana@books.example',
-      to: 'jeff25.nothere@yaks.app',
+      to: `${jeff25}.nothere@yaks.app`,
       raw: rfc822({ Subject: 'Anyone there?' }, 'Hello?'),
     })
     assertEquals(no.status, 400)
@@ -253,16 +261,18 @@ test("a letter to an app's former address follows the rename", async () => {
 
 test("a letter to a space's former subdomain follows the rename", async () => {
   let k = await kernel()
+  let jeff26 = unique('jeff26')
+  let jeffskitchen26 = unique('jeffs-kitchen26')
   try {
-    let them = await seed(k, [{ slug: 'jeff26', apps: ['recipes'] }])
+    let them = await seed(k, [{ slug: jeff26, apps: ['recipes'] }])
     await connector(k, them.cookie).tool('space_set', {
-      space: 'jeff26',
-      slug: 'jeffs-kitchen26',
+      space: jeff26,
+      slug: jeffskitchen26,
     })
     assertEquals(
       (await arrives(k, {
         from: 'ana@books.example',
-        to: 'jeff26.recipes@yaks.app',
+        to: `${jeff26}.recipes@yaks.app`,
         raw: rfc822({ Subject: 'Still find you' }, 'Bring a dish.'),
       })).status,
       200,
@@ -271,13 +281,13 @@ test("a letter to a space's former subdomain follows the rename", async () => {
     // have been — read back at the space's new address.
     let [letter] = await client(
       k,
-      'jeffs-kitchen26.yaks.app',
+      `${jeffskitchen26}.yaks.app`,
       'recipes',
       them.cookie,
     )
       .get('.mail&?doc') as unknown as Row[]
     assertEquals(letter.doc.title, 'Still find you')
-    assertEquals(letter.mail.to, 'jeff26.recipes@yaks.app')
+    assertEquals(letter.mail.to, `${jeff26}.recipes@yaks.app`)
   } finally {
     await k.stop()
   }
@@ -287,9 +297,11 @@ test(
   'an address nobody answers at is refused, and nothing is written',
   async () => {
     let k = await kernel()
+    let jeff27 = unique('jeff27')
+    let bare27Space = unique('bare27')
     try {
-      let them = await seed(k, [{ slug: 'jeff27', apps: ['recipes'] }, {
-        slug: 'bare27',
+      let them = await seed(k, [{ slug: jeff27, apps: ['recipes'] }, {
+        slug: bare27Space,
         apps: [],
       }])
       let no = async (to: string) => {
@@ -304,31 +316,31 @@ test(
       // A space nobody has taken, an app that space does not have, and a local
       // part that is no address of ours at all.
       assertStringIncludes(await no('nobody@yaks.app'), 'no mailbox')
-      assertStringIncludes(await no('jeff27.nothere@yaks.app'), 'no mailbox')
+      assertStringIncludes(await no(`${jeff27}.nothere@yaks.app`), 'no mailbox')
       assertStringIncludes(
-        await no('jeff27.recipes.old@yaks.app'),
+        await no(`${jeff27}.recipes.old@yaks.app`),
         'no mailbox',
       )
       // A space whose address is spelled right and has nothing behind it is told
       // apart from a typo: the sender is told where to write instead.
-      let bare27 = await no('bare27@yaks.app')
+      let bare27 = await no(`${bare27Space}@yaks.app`)
       assertStringIncludes(bare27, 'no front page')
-      assertStringIncludes(bare27, 'bare27.<app>@yaks.app')
+      assertStringIncludes(bare27, `${bare27Space}.<app>@yaks.app`)
       // Nothing landed anywhere: a refusal writes no row.
-      let rows = await client(k, 'jeff27.yaks.app', 'recipes').get('.mail')
+      let rows = await client(k, `${jeff27}.yaks.app`, 'recipes').get('.mail')
       assertEquals(rows, [])
       // An app in the trash has no mailbox either (erase.ts, T-34430), and it
       // bounces as the same nothing: the sender is not told that an app was
       // deleted here. Its letters land again when it is restored.
       await connector(k, them.cookie)
-        .tool('app_delete', { space: 'jeff27', app: 'recipes' })
-      assertStringIncludes(await no('jeff27.recipes@yaks.app'), 'no mailbox')
+        .tool('app_delete', { space: jeff27, app: 'recipes' })
+      assertStringIncludes(await no(`${jeff27}.recipes@yaks.app`), 'no mailbox')
       await connector(k, them.cookie)
-        .tool('app_restore', { space: 'jeff27', app: 'recipes' })
+        .tool('app_restore', { space: jeff27, app: 'recipes' })
       assertEquals(
         (await arrives(k, {
           from: 'ana@books.example',
-          to: 'jeff27.recipes@yaks.app',
+          to: `${jeff27}.recipes@yaks.app`,
           raw: rfc822({ Subject: 'Back in the box' }, 'Hello again.'),
         })).status,
         200,
@@ -346,16 +358,16 @@ test(
           body: new URLSearchParams(fields).toString(),
         })
       assertEquals(
-        (await door('/space/jeff27/delete', { confirm: 'jeff27' })).status,
+        (await door(`/space/${jeff27}/delete`, { confirm: jeff27 })).status,
         200,
       )
-      assertStringIncludes(await no('jeff27.recipes@yaks.app'), 'no mailbox')
-      assertStringIncludes(await no('jeff27@yaks.app'), 'no mailbox')
-      await connector(k, them.cookie).tool('space_restore', { space: 'jeff27' })
+      assertStringIncludes(await no(`${jeff27}.recipes@yaks.app`), 'no mailbox')
+      assertStringIncludes(await no(`${jeff27}@yaks.app`), 'no mailbox')
+      await connector(k, them.cookie).tool('space_restore', { space: jeff27 })
       assertEquals(
         (await arrives(k, {
           from: 'ana@books.example',
-          to: 'jeff27.recipes@yaks.app',
+          to: `${jeff27}.recipes@yaks.app`,
           raw: rfc822({ Subject: 'Back again' }, 'Hello once more.'),
         })).status,
         200,
@@ -375,19 +387,21 @@ test(
   'an arrival is one letter on the month, over the ceiling too',
   async () => {
     let k = await kernel()
+    let jeff28 = unique('jeff28')
+    let elsewhere28 = unique('elsewhere28')
     try {
-      let them = await seed(k, [{ slug: 'jeff28', apps: ['recipes'] }])
+      let them = await seed(k, [{ slug: jeff28, apps: ['recipes'] }])
       let agent = connector(k, them.cookie)
       let dir = meta(k)
       let spent = async () => {
-        let [row] = await dir.query(`.entity.eid=${them.eids.jeff28}&?meter`)
+        let [row] = await dir.query(`.entity.eid=${them.eids[jeff28]}&?meter`)
         return ((row?.meter ?? {}) as { emails?: number }).emails ?? 0
       }
       let write = async (subject: string) =>
         assertEquals(
           (await arrives(k, {
             from: 'ana@books.example',
-            to: 'jeff28.recipes@yaks.app',
+            to: `${jeff28}.recipes@yaks.app`,
             raw: rfc822({ Subject: subject }, 'Hello in there.'),
           })).status,
           200,
@@ -402,7 +416,7 @@ test(
       // over (meter.ts `metering`) — one Durable Object asking another. The
       // letter comes to rest either way, and the answer is why it bounced or
       // `''` where it left.
-      let page = client(k, 'jeff28.yaks.app', 'recipes', them.cookie)
+      let page = client(k, `${jeff28}.yaks.app`, 'recipes', them.cookie)
       let outbound = async (eid: string) => {
         await page.applied([
           { entity: { eid: ANA }, email: { address: 'ana@books.example' } },
@@ -432,10 +446,10 @@ test(
       // not the directory's own write door, so the kernel's 30-second read cache
       // is emptied by a write that is (mcp_test.ts says the same).
       await dir.apply([{
-        entity: { eid: them.eids.jeff28 },
+        entity: { eid: them.eids[jeff28] },
         meter: { month: monthOf(new Date()), emails: 100 },
       }])
-      await agent.tool('space_new', { slug: 'elsewhere28', title: 'Elsewhere' })
+      await agent.tool('space_new', { slug: elsewhere28, title: 'Elsewhere' })
       await write('The hundred and first')
       assertEquals(await spent(), 101)
       assertEquals(

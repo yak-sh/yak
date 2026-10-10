@@ -17,6 +17,7 @@ import {
   seed,
   signIn,
   txt,
+  unique,
   vocabFile,
 } from './probe.ts'
 
@@ -91,15 +92,16 @@ test('only a space owner can inspect and retry held store writes', async () => {
 // refused.
 test('the front page moves, and only the owner moves it', async () => {
   let k = await kernel()
+  let frontSpace = unique('front45')
   try {
-    let them = await seed(k, [{ slug: 'front45', apps: ['first', 'second'] }])
+    let them = await seed(k, [{ slug: frontSpace, apps: ['first', 'second'] }])
     let agent = connector(k, them.cookie)
-    let bare = () => k.at('front45.yaks.app', '/', { redirect: 'manual' })
+    let bare = () => k.at(`${frontSpace}.yaks.app`, '/', { redirect: 'manual' })
     // Which app the bare hostname IS, read off the store answering there —
     // the front page is served at that address, not redirected to. Nothing
     // is, yet: the list is.
     let front45 = async () => {
-      let r = await k.at('front45.yaks.app', '/api/graph')
+      let r = await k.at(`${frontSpace}.yaks.app`, '/api/graph')
       // The handle carries a key minted off the app's eid (directory.ts
       // `handle`), so what is asked here is which app answers, not the key.
       return r.status == 200
@@ -112,39 +114,39 @@ test('the front page moves, and only the owner moves it', async () => {
     assertEquals(await front45(), 404)
 
     let said = await agent.tool('app_set', {
-      space: 'front45',
+      space: frontSpace,
       app: 'second',
       home: true,
     })
     assertStringIncludes(said, 'the front page now')
-    assertStringIncludes(said, 'https://front45.yaks.app/')
-    assertEquals(await front45(), 'do:front45/second')
+    assertStringIncludes(said, `https://${frontSpace}.yaks.app/`)
+    assertEquals(await front45(), `do:${frontSpace}/second`)
 
     // Said where the person reads what they have: in the sentence, and in the
     // data the view beside it draws.
     let listing = await agent.call('tools/call', {
       name: 'app_list',
-      arguments: { space: 'front45' },
+      arguments: { space: frontSpace },
     })
     // Its address in the listing is the bare hostname: that is where it is —
     // and so is its mailbox, the bare space name for the same reason.
     assertStringIncludes(
       listing.content[0].text,
-      'second (second) v0: https://front45.yaks.app/ · front45@yaks.app — ' +
+      `second (second) v0: https://${frontSpace}.yaks.app/ · ${frontSpace}@yaks.app — ` +
         'the front page',
     )
     // And the other one still stands at a path of its own: being the front
     // page is where an app is, so the listing says it by saying the address.
     assertStringIncludes(
       listing.content[0].text,
-      'first (first) v0: https://front45.yaks.app/first/',
+      `first (first) v0: https://${frontSpace}.yaks.app/first/`,
     )
 
     // Cleared: both apps stand at their own addresses, and the space's own
     // address opens nothing.
     assertStringIncludes(
       await agent.tool('app_set', {
-        space: 'front45',
+        space: frontSpace,
         app: 'second',
         home: false,
       }),
@@ -155,7 +157,7 @@ test('the front page moves, and only the owner moves it', async () => {
     assertStringIncludes(await none.text(), 'href="/first/"')
     assertEquals(await front45(), 404)
     assertEquals(
-      (await agent.tool('app_list', { space: 'front45' })).includes(
+      (await agent.tool('app_list', { space: frontSpace })).includes(
         'front page',
       ),
       false,
@@ -163,7 +165,7 @@ test('the front page moves, and only the owner moves it', async () => {
 
     let ann = await signIn(k, `ann-${crypto.randomUUID().slice(0, 8)}@yaks.app`)
     await agent.tool('member_add', {
-      space: 'front45',
+      space: frontSpace,
       email: ann.email,
       role: 'editor',
     })
@@ -172,13 +174,13 @@ test('the front page moves, and only the owner moves it', async () => {
       (await assertRejects(
         () =>
           connector(k, ann.cookie).tool('app_set', {
-            space: 'front45',
+            space: frontSpace,
             app: 'first',
             home: true,
           }),
         Error,
       )).message,
-      'not the owner of front45',
+      `not the owner of ${frontSpace}`,
     )
     let still = await bare()
     assertEquals(still.status, 200)
@@ -196,61 +198,64 @@ test('the front page moves, and only the owner moves it', async () => {
 // held the slug and so never moves.
 test('a space moves, and the subdomain it leaves points at it', async () => {
   let k = await kernel()
+  let ada46 = unique('ada46')
+  let adacooks46 = unique('ada-cooks46')
+  let ourbookclub106com = unique('ourbookclub106') + '.com'
   try {
-    let them = await seed(k, [{ slug: 'ada46', apps: ['cookbook', 'garden'] }])
+    let them = await seed(k, [{ slug: ada46, apps: ['cookbook', 'garden'] }])
     let agent = connector(k, them.cookie)
-    let box = client(k, 'ada46.yaks.app', 'cookbook', them.cookie)
+    let box = client(k, `${ada46}.yaks.app`, 'cookbook', them.cookie)
     await box.put('/index.html', '<!doctype html><h1>Our recipe box</h1>')
-    await agent.tool('app_deploy', { space: 'ada46', app: 'cookbook' })
+    await agent.tool('app_deploy', { space: ada46, app: 'cookbook' })
     let cake = crypto.randomUUID()
     await box.applied([{ entity: { eid: cake }, doc: { title: 'Lemon cake' } }])
     // A domain somebody else owns, aimed at the space by its eid.
     await meta(k).apply([{
       hostname: {
-        name: 'ourbookclub106.com',
-        serves: them.eids['ada46'],
+        name: ourbookclub106com,
+        serves: them.eids[ada46],
         stage: 'active',
       },
     }])
     let handle = async (host: string, app: string) =>
       String((await (await k.at(host, `/${app}/api/graph`)).json()).db)
-    let was = await handle('ada46.yaks.app', 'cookbook')
+    let was = await handle(`${ada46}.yaks.app`, 'cookbook')
 
     let said = await agent.tool('space_set', {
-      space: 'ada46',
-      slug: 'ada-cooks46',
+      space: ada46,
+      slug: adacooks46,
     })
-    assertStringIncludes(said, 'https://ada-cooks46.yaks.app/')
+    assertStringIncludes(said, `https://${adacooks46}.yaks.app/`)
     assertStringIncludes(said, 'redirects here and stays reserved')
     assertStringIncludes(said, 'cookbook, garden')
 
     // Served at the new address, files and rows and all.
-    let now = await k.at('ada-cooks46.yaks.app', '/cookbook/')
+    let now = await k.at(`${adacooks46}.yaks.app`, '/cookbook/')
     assertEquals(now.status, 200)
     assertStringIncludes(await now.text(), '<h1>Our recipe box</h1>')
     let [kept] = await client(
       k,
-      'ada-cooks46.yaks.app',
+      `${adacooks46}.yaks.app`,
       'cookbook',
       them.cookie,
     )
       .get(`id=${cake}`) as unknown as { doc: { title: string } }[]
     assertEquals(kept.doc.title, 'Lemon cake')
     // The store handle did not move: it is the app's own, not the address's.
-    assertEquals(await handle('ada-cooks46.yaks.app', 'cookbook'), was)
+    assertEquals(await handle(`${adacooks46}.yaks.app`, 'cookbook'), was)
 
     // The subdomain it left keeps answering, as the permanent move it was,
     // with the path and the query kept.
-    let gone = await k.at('ada46.yaks.app', '/cookbook/?page=2', {
+    let gone = await k.at(`${ada46}.yaks.app`, '/cookbook/?page=2', {
       redirect: 'manual',
     })
     assertEquals(gone.status, 301)
     assertEquals(
       gone.headers.get('location'),
-      'https://ada-cooks46.yaks.app/cookbook/?page=2',
+      `https://${adacooks46}.yaks.app/cookbook/?page=2`,
     )
     // A write keeps its method, the way a renamed app's does.
-    let write = await k.at('ada46.yaks.app', '/cookbook/api/apply', {
+    let write = await k.at(`${ada46}.yaks.app`, '/cookbook/api/apply', {
       method: 'POST',
       body: '[]',
       redirect: 'manual',
@@ -258,54 +263,58 @@ test('a space moves, and the subdomain it leaves points at it', async () => {
     assertEquals(write.status, 308)
     assertEquals(
       write.headers.get('location'),
-      'https://ada-cooks46.yaks.app/cookbook/api/apply',
+      `https://${adacooks46}.yaks.app/cookbook/api/apply`,
     )
     // A dashboard link naming the space by the old name follows it.
-    let desk = await k.at('yaks.app', '/manage/settings?space=ada46&saved=1', {
-      redirect: 'manual',
-      headers: { cookie: them.cookie },
-    })
+    let desk = await k.at(
+      'yaks.app',
+      `/manage/settings?space=${ada46}&saved=1`,
+      {
+        redirect: 'manual',
+        headers: { cookie: them.cookie },
+      },
+    )
     assertEquals(desk.status, 301)
     assertEquals(
       desk.headers.get('location'),
-      'https://yaks.app/manage/settings?space=ada-cooks46&saved=1',
+      `https://yaks.app/manage/settings?space=${adacooks46}&saved=1`,
     )
     // And the address is not free just because the space left it.
     await assertRejects(
-      () => agent.tool('space_new', { slug: 'ada46', title: 'Ada again' }),
+      () => agent.tool('space_new', { slug: ada46, title: 'Ada again' }),
       Error,
       'used to be',
     )
 
     // The domain names an eid, so it opens the space wherever the space
     // lives — nothing about it was touched.
-    let their = await k.at('ourbookclub106.com', '/cookbook/')
+    let their = await k.at(ourbookclub106com, '/cookbook/')
     assertEquals(their.status, 200)
     assertStringIncludes(await their.text(), '<h1>Our recipe box</h1>')
     // And the roster is the space's own: its owner is still its owner, which
     // is what lets them move it a second time.
     assertStringIncludes(
       await agent.tool('space_set', {
-        space: 'ada-cooks46',
+        space: adacooks46,
         title: "Ada's kitchen",
       }),
-      'ada-cooks46 "Ada\'s kitchen"',
+      `${adacooks46} "Ada\'s kitchen"`,
     )
 
     // Forgotten (T-34659): the subdomain stops redirecting and goes back into
     // circulation — a config change, and the answer names what it costs.
     assertStringIncludes(
-      await agent.tool('space_set', { space: 'ada-cooks46', forget: 'ada46' }),
-      'ada46.yaks.app stops redirecting and is free for anyone to take',
+      await agent.tool('space_set', { space: adacooks46, forget: ada46 }),
+      `${ada46}.yaks.app stops redirecting and is free for anyone to take`,
     )
     assertEquals(
-      (await k.at('ada46.yaks.app', '/cookbook/', { redirect: 'manual' }))
+      (await k.at(`${ada46}.yaks.app`, '/cookbook/', { redirect: 'manual' }))
         .status,
       404,
     )
     assertStringIncludes(
-      await agent.tool('space_new', { slug: 'ada46', title: 'Ada again' }),
-      'https://ada46.yaks.app/',
+      await agent.tool('space_new', { slug: ada46, title: 'Ada again' }),
+      `https://${ada46}.yaks.app/`,
     )
   } finally {
     await k.stop()
@@ -320,21 +329,23 @@ test('a space moves, and the subdomain it leaves points at it', async () => {
 // objects with two sets of data.
 test('an address is forgotten, freed, and taken by another app', async () => {
   let k = await kernel()
+  let ada47 = unique('ada47')
   try {
-    let them = await seed(k, [{ slug: 'ada47', apps: ['recipes'] }])
+    let them = await seed(k, [{ slug: ada47, apps: ['recipes'] }])
     let agent = connector(k, them.cookie)
     let handle = async (app: string) =>
       String(
-        (await (await k.at('ada47.yaks.app', `/${app}/api/graph`)).json()).db,
+        (await (await k.at(`${ada47}.yaks.app`, `/${app}/api/graph`)).json())
+          .db,
       )
     let was = await handle('recipes')
     await agent.tool('app_set', {
-      space: 'ada47',
+      space: ada47,
       app: 'recipes',
       slug: 'cookbook',
     })
     let asked = (path: string) =>
-      k.at('ada47.yaks.app', path, { redirect: 'manual' })
+      k.at(`${ada47}.yaks.app`, path, { redirect: 'manual' })
     assertEquals(
       (await asked('/recipes/')).headers.get('location'),
       '/cookbook/',
@@ -345,7 +356,7 @@ test('an address is forgotten, freed, and taken by another app', async () => {
     await assertRejects(
       () =>
         agent.tool('app_set', {
-          space: 'ada47',
+          space: ada47,
           app: 'cookbook',
           forget: 'garden',
         }),
@@ -355,7 +366,7 @@ test('an address is forgotten, freed, and taken by another app', async () => {
     await assertRejects(
       () =>
         agent.tool('app_set', {
-          space: 'ada47',
+          space: ada47,
           app: 'cookbook',
           forget: 'cookbook',
         }),
@@ -366,7 +377,7 @@ test('an address is forgotten, freed, and taken by another app', async () => {
     // Forgotten: the redirect stops, and the answer says what that costs.
     assertStringIncludes(
       await agent.tool('app_set', {
-        space: 'ada47',
+        space: ada47,
         app: 'cookbook',
         forget: 'recipes',
       }),
@@ -377,7 +388,7 @@ test('an address is forgotten, freed, and taken by another app', async () => {
     // And the address is free: a new app is born there, with its own handle
     // and its own store — the old app's rows are not in it.
     await agent.tool('app_new', {
-      space: 'ada47',
+      space: ada47,
       slug: 'recipes',
       title: 'Recipes again',
     })
@@ -398,12 +409,13 @@ test('an address is forgotten, freed, and taken by another app', async () => {
 // restore has to put the space back exactly as it was (T-34430).
 test('deleting the front page puts the space back to the default', async () => {
   let k = await kernel()
+  let reset48 = unique('reset48')
   try {
-    let them = await seed(k, [{ slug: 'reset48', apps: ['site', 'garden'] }])
+    let them = await seed(k, [{ slug: reset48, apps: ['site', 'garden'] }])
     let agent = connector(k, them.cookie)
-    let bare = () => k.at('reset48.yaks.app', '/', { redirect: 'manual' })
+    let bare = () => k.at(`${reset48}.yaks.app`, '/', { redirect: 'manual' })
     let front = async () => {
-      let r = await k.at('reset48.yaks.app', '/api/graph')
+      let r = await k.at(`${reset48}.yaks.app`, '/api/graph')
       // The handle carries a key minted off the app's eid (directory.ts
       // `handle`), so what is asked here is which app answers, not the key.
       return r.status == 200
@@ -411,16 +423,16 @@ test('deleting the front page puts the space back to the default', async () => {
         : r.status
     }
     await agent.tool('app_set', {
-      space: 'reset48',
+      space: reset48,
       app: 'site',
       home: true,
       first: ['/garden/*'],
     })
-    assertEquals(await front(), 'do:reset48/site')
+    assertEquals(await front(), `do:${reset48}/site`)
 
     // Thrown away, and the space is a space with no front page again — the
     // ordinary state, and the state it was in before anybody said otherwise.
-    await agent.tool('app_delete', { space: 'reset48', app: 'site' })
+    await agent.tool('app_delete', { space: reset48, app: 'site' })
     let back = await bare()
     assertEquals(back.status, 200)
     assertStringIncludes(await back.text(), 'href="/garden/"')
@@ -430,25 +442,25 @@ test('deleting the front page puts the space back to the default', async () => {
     // still wears it — that is what a restore puts back — and no listing of
     // the space's apps says anything is the front page.
     assertEquals(
-      (await agent.tool('app_list', { space: 'reset48' })).includes(
+      (await agent.tool('app_list', { space: reset48 })).includes(
         'front page',
       ),
       false,
     )
     assertEquals(
-      (await meta(k).query(`.app.space=${them.eids.reset48}&.home&!trashed`))
+      (await meta(k).query(`.app.space=${them.eids[reset48]}&.home&!trashed`))
         .length,
       0,
     )
     // Its own address is nobody's now — not a redirect to a former slug, and
     // not the front page's fall-through, because there is no front page.
-    assertEquals((await k.at('reset48.yaks.app', '/site/')).status, 404)
+    assertEquals((await k.at(`${reset48}.yaks.app`, '/site/')).status, 404)
     // And `<space>@yaks.app` is a space with no front page again, which the
     // mail door already refuses by name and tells the sender where to write
     // instead (inbox.ts `opened`, inbox_test.ts).
     // And the space takes another one whenever it is ready to.
-    await agent.tool('app_set', { space: 'reset48', app: 'garden', home: true })
-    assertEquals(await front(), 'do:reset48/garden')
+    await agent.tool('app_set', { space: reset48, app: 'garden', home: true })
+    assertEquals(await front(), `do:${reset48}/garden`)
   } finally {
     await k.stop()
   }
@@ -568,14 +580,15 @@ test('the platform admin trashes and restores an app without a seat', async () =
 
 test('an app goes to the trash, and app_restore brings it back', async () => {
   let k = await kernel()
+  let binlab49 = unique('binlab49')
   try {
-    let them = await seed(k, [{ slug: 'binlab49', apps: ['garden'] }])
+    let them = await seed(k, [{ slug: binlab49, apps: ['garden'] }])
     let agent = connector(k, them.cookie)
-    let at = { space: 'binlab49', app: 'notes' }
+    let at = { space: binlab49, app: 'notes' }
     // What the app can be asked to do — its commands leave every list the day
     // it goes in the trash and come back with it (T-34430, T-34541).
     let listed = async () => (await commandsOf(agent)).map((c) => c.name)
-    let page = () => k.at('binlab49.yaks.app', '/notes/')
+    let page = () => k.at(`${binlab49}.yaks.app`, '/notes/')
 
     await agent.tool('app_new', { ...at, slug: 'notes', title: 'Notes' })
     await agent.tool('app_files', {
@@ -597,14 +610,14 @@ test('an app goes to the trash, and app_restore brings it back', async () => {
     // list, and the listing — where it is under Trash instead, with its days.
     assertStringIncludes(
       await agent.tool('app_delete', at),
-      'binlab49/notes is in the trash',
+      `${binlab49}/notes is in the trash`,
     )
     assertEquals((await page()).status, 404)
     assertEquals((await listed()).includes('log_note'), false)
-    let saying = await agent.tool('app_list', { space: 'binlab49' })
+    let saying = await agent.tool('app_list', { space: binlab49 })
     assertStringIncludes(saying, 'Trash — app_restore brings one back')
     assertStringIncludes(saying, '- Notes (notes), 30 days left')
-    assertEquals(saying.includes('https://binlab49.yaks.app/notes/'), false)
+    assertEquals(saying.includes(`https://${binlab49}.yaks.app/notes/`), false)
     // And the slug is held for it: a second app here is the one thing a
     // restore could not undo, so `app_new` refuses and says which two words
     // resolve it.
@@ -612,13 +625,13 @@ test('an app goes to the trash, and app_restore brings it back', async () => {
       (await assertRejects(
         () =>
           agent.tool('app_new', {
-            space: 'binlab49',
+            space: binlab49,
             slug: 'notes',
             title: 'Notes again',
           }),
         Error,
       )).message,
-      'notes is in the trash in binlab49, 30 days left — app_restore',
+      `notes is in the trash in ${binlab49}, 30 days left — app_restore`,
     )
     // Deleting it again is not a second delete; it says where the app is.
     assertStringIncludes(
@@ -630,13 +643,13 @@ test('an app goes to the trash, and app_restore brings it back', async () => {
     // the row nothing touched while it sat there.
     assertStringIncludes(
       await agent.tool('app_restore', at),
-      'binlab49/notes is back',
+      `${binlab49}/notes is back`,
     )
     assertEquals((await page()).status, 200)
     assert((await listed()).includes('log_note'))
     assertStringIncludes(
-      await agent.tool('app_list', { space: 'binlab49' }),
-      'https://binlab49.yaks.app/notes/',
+      await agent.tool('app_list', { space: binlab49 }),
+      `https://${binlab49}.yaks.app/notes/`,
     )
     assertEquals(
       JSON.parse(await agent.tool('graph_query', { q: '.doc.title~=kept' }))
@@ -654,7 +667,7 @@ test('an app goes to the trash, and app_restore brings it back', async () => {
     await agent.tool('app_delete', { ...at, forever: true })
     assertEquals((await page()).status, 404)
     await agent.tool('app_new', {
-      space: 'binlab49',
+      space: binlab49,
       slug: 'notes',
       title: 'Notes again',
     })
@@ -676,12 +689,13 @@ test(
   'a space goes to the trash, and space_restore brings it back',
   async () => {
     let k = await kernel()
+    let binspace50 = unique('binspace50')
     try {
-      let them = await seed(k, [{ slug: 'binspace50', apps: [] }])
+      let them = await seed(k, [{ slug: binspace50, apps: [] }])
       let agent = connector(k, them.cookie)
-      let at = { space: 'binspace50', app: 'notes' }
+      let at = { space: binspace50, app: 'notes' }
       let listed = async () => (await commandsOf(agent)).map((c) => c.name)
-      let page = (path = '/notes/') => k.at('binspace50.yaks.app', path)
+      let page = (path = '/notes/') => k.at(`${binspace50}.yaks.app`, path)
 
       await agent.tool('app_new', { ...at, slug: 'notes', title: 'Notes' })
       await agent.tool('app_files', {
@@ -698,12 +712,12 @@ test(
       })
       assertEquals((await page()).status, 200)
       assert((await listed()).includes('log_note'))
-      assertStringIncludes(await agent.tool('about'), 'binspace50/notes')
+      assertStringIncludes(await agent.tool('about'), `${binspace50}/notes`)
 
       // The agent deletes nothing, as ever: it mails the owner. What the letter
       // and the answer say is what the trash does — every line something that
       // stops, and the address held rather than released.
-      let said = await agent.tool('space_delete', { space: 'binspace50' })
+      let said = await agent.tool('space_delete', { space: binspace50 })
       assertStringIncludes(said, 'nothing is deleted')
       assertStringIncludes(said, 'stops answering')
       let mail = await until(
@@ -715,7 +729,9 @@ test(
         mail!.body,
         'puts the space in the trash for 30 days',
       )
-      let link = /https:\/\/yaks\.app(\/space\/binspace50\/delete\?t=[^\s]+)/
+      let link = new RegExp(
+        `https://yaks\\.app(/space/${binspace50}/delete\\?t=[^\\s]+)`,
+      )
         .exec(mail!.body)
       assert(link, `no confirmation link in: ${mail!.body}`)
 
@@ -724,8 +740,8 @@ test(
         headers: { cookie: them.cookie },
       })).text()
       assertStringIncludes(asking, 'What stops until you restore it')
-      assertStringIncludes(asking, 'Put binspace50.yaks.app in the trash')
-      let gone = await k.at('yaks.app', '/space/binspace50/delete', {
+      assertStringIncludes(asking, `Put ${binspace50}.yaks.app in the trash`)
+      let gone = await k.at('yaks.app', `/space/${binspace50}/delete`, {
         method: 'POST',
         headers: {
           cookie: them.cookie,
@@ -736,7 +752,7 @@ test(
       assertEquals(gone.status, 200)
       assertStringIncludes(
         await gone.text(),
-        'binspace50.yaks.app is in the trash',
+        `${binspace50}.yaks.app is in the trash`,
       )
 
       // Every address of it answers what a wrong address answers: the front
@@ -747,34 +763,34 @@ test(
         assertStringIncludes(await out.text(), 'Nothing here yet')
       }
       // Except for its owner, who is told where it went and given it back.
-      let mine = await k.at('binspace50.yaks.app', '/', {
+      let mine = await k.at(`${binspace50}.yaks.app`, '/', {
         headers: { cookie: them.cookie },
       })
       assertEquals(mine.status, 404)
       let says = await mine.text()
-      assertStringIncludes(says, 'binspace50 is in the trash')
-      assertStringIncludes(says, 'name="restore-space" value="binspace50"')
+      assertStringIncludes(says, `${binspace50} is in the trash`)
+      assertStringIncludes(says, `name="restore-space" value="${binspace50}"`)
       // Its apps left every roster the moment the space did — the tool list,
       // and the passage `about` and `initialize` both put at the top of an
       // agent's context (standing.ts), which is one `reachable` behind both.
       assertEquals((await listed()).includes('log_note'), false)
       assertEquals(
-        (await agent.tool('about')).includes('binspace50/notes'),
+        (await agent.tool('about')).includes(`${binspace50}/notes`),
         false,
       )
       // And the slug is held for it: a second space here is the one thing a
       // restore could not put back.
       assertStringIncludes(
         (await assertRejects(
-          () => agent.tool('space_new', { slug: 'binspace50', title: 'again' }),
+          () => agent.tool('space_new', { slug: binspace50, title: 'again' }),
           Error,
         )).message,
-        'binspace50 is in the trash',
+        `${binspace50} is in the trash`,
       )
       // Asking again is not a second delete; it says where the space is.
       assertStringIncludes(
         (await assertRejects(
-          () => agent.tool('space_delete', { space: 'binspace50' }),
+          () => agent.tool('space_delete', { space: binspace50 }),
           Error,
         )).message,
         'is already in the trash',
@@ -783,12 +799,12 @@ test(
       // Out, and every one of those answers is the old answer again — the rows
       // in its apps' stores included, since nothing ever touched them.
       assertStringIncludes(
-        await agent.tool('space_restore', { space: 'binspace50' }),
-        'binspace50 is back',
+        await agent.tool('space_restore', { space: binspace50 }),
+        `${binspace50} is back`,
       )
       assertEquals((await page()).status, 200)
       assert((await listed()).includes('log_note'))
-      assertStringIncludes(await agent.tool('about'), 'binspace50/notes')
+      assertStringIncludes(await agent.tool('about'), `${binspace50}/notes`)
       assertEquals(
         JSON.parse(
           await agent.tool('graph_query', { ...at, q: '.doc.title~=kept' }),
@@ -798,7 +814,7 @@ test(
       )
       assertStringIncludes(
         (await assertRejects(
-          () => agent.tool('space_restore', { space: 'binspace50' }),
+          () => agent.tool('space_restore', { space: binspace50 }),
           Error,
         )).message,
         'is not in the trash',
@@ -817,14 +833,15 @@ test(
 // platform's own paths are refused, whole, before anything is written.
 test('the front page says which paths it answers first', async () => {
   let k = await kernel()
+  let route51 = unique('route51')
   try {
-    let them = await seed(k, [{ slug: 'route51', apps: ['site', 'recipes'] }])
+    let them = await seed(k, [{ slug: route51, apps: ['site', 'recipes'] }])
     let agent = connector(k, them.cookie)
     let graph = meta(k)
-    let at = { space: 'route51', app: 'site' }
+    let at = { space: route51, app: 'site' }
     // The rows in this space carrying the component.
     let stored = async () =>
-      (await graph.query(`.app.space=${them.eids.route51}&.home`))
+      (await graph.query(`.app.space=${them.eids[route51]}&.home`))
         .map((r) => (r.home as { first: string | null }).first)
 
     // The globs are properties of the word that says which app is home, so an
@@ -834,7 +851,7 @@ test('the front page says which paths it answers first', async () => {
         () => agent.tool('app_set', { ...at, first: ['/recipes/*'] }),
         Error,
       )).message,
-      'route51/site is not the front page',
+      `${route51}/site is not the front page`,
     )
     assertEquals(await stored(), [])
 
@@ -888,13 +905,13 @@ test('the front page says which paths it answers first', async () => {
     await agent.tool('app_set', { ...at, first: ['/recipes/*'] })
     assertEquals(await stored(), ['["/recipes/*"]'])
     await agent.tool('app_set', {
-      space: 'route51',
+      space: route51,
       app: 'recipes',
       home: true,
     })
     assertEquals(await stored(), [null])
     assertEquals(
-      (await graph.query(`.app.space=${them.eids.route51}&.home`))
+      (await graph.query(`.app.space=${them.eids[route51]}&.home`))
         .map((r) => (r.app as { slug: string }).slug),
       ['recipes'],
     )
@@ -909,6 +926,7 @@ test('the front page says which paths it answers first', async () => {
 // taken one, by number.
 test('an address that reads as the platform is refused', async () => {
   let k = await kernel()
+  let app = unique('recipes')
   try {
     let them = await signIn(k, `security@${k.host}`)
     let agent = connector(k, them.cookie)
@@ -920,10 +938,10 @@ test('an address that reads as the platform is refused', async () => {
     await kept('space_new', { slug: 'login', title: 'Login' })
     await kept('space_new', { slug: 'sha', title: 'Sha' })
     await kept('app_new', { slug: 'admin', title: 'Admin' })
-    let made = await agent.tool('app_new', { slug: 'recipes', title: 'R' })
+    let made = await agent.tool('app_new', { slug: app, title: 'R' })
     assertStringIncludes(made, 'security2.yaks.app')
     await kept('space_set', { space: 'security2', slug: 'support' })
-    await kept('app_set', { space: 'security2', app: 'recipes', slug: 'www' })
+    await kept('app_set', { space: 'security2', app, slug: 'www' })
   } finally {
     await k.stop()
   }

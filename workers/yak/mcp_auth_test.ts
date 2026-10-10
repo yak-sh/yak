@@ -18,6 +18,7 @@ import {
   seed,
   signIn,
   txt,
+  unique,
   vocabFile,
 } from './probe.ts'
 import { PAGES, uriOf } from './guide.ts'
@@ -421,8 +422,10 @@ test('the door before anyone signs in', async () => {
 // read, named on the call. Nothing else, and no write.
 test('signed out: the gallery, the guide, and one public app', async () => {
   let k = await kernel()
+  let ada30 = unique('ada30')
+  let published = unique('run-club')
   try {
-    let them = await seed(k, [{ slug: 'ada30', apps: [] }])
+    let them = await seed(k, [{ slug: ada30, apps: [] }])
     let agent = connector(k, them.cookie)
     let anon = connector(k)
     let made = async (
@@ -432,27 +435,27 @@ test('signed out: the gallery, the guide, and one public app', async () => {
       access?: string,
     ) => {
       await agent.tool('app_new', {
-        space: 'ada30',
+        space: ada30,
         slug,
         title: slug,
         ...(access ? { access } : {}),
       })
       await agent.tool('app_files', {
-        space: 'ada30',
+        space: ada30,
         app: slug,
         files: [{
           path: 'vocab.json',
           content: vocabFile({ [comp]: props }),
         }],
       })
-      await agent.tool('app_deploy', { space: 'ada30', app: slug })
+      await agent.tool('app_deploy', { space: ada30, app: slug })
     }
     // One app anyone with the link reads, one only its members do.
     await made('runs', 'jog', { miles: num })
     await made('diary', 'confession', { mood: txt }, 'private')
     let run = crypto.randomUUID()
     await agent.tool('graph_apply', {
-      space: 'ada30',
+      space: ada30,
       app: 'runs',
       entities: [{
         entity: { eid: run },
@@ -461,7 +464,7 @@ test('signed out: the gallery, the guide, and one public app', async () => {
       }],
     })
     await agent.tool('graph_apply', {
-      space: 'ada30',
+      space: ada30,
       app: 'diary',
       entities: [{
         entity: { eid: crypto.randomUUID() },
@@ -470,9 +473,9 @@ test('signed out: the gallery, the guide, and one public app', async () => {
       }],
     })
     await agent.tool('app_publish', {
-      space: 'ada30',
+      space: ada30,
       app: 'runs',
-      name: 'run-club',
+      name: published,
       about: 'A log of everybody runs',
     })
 
@@ -532,10 +535,10 @@ test('signed out: the gallery, the guide, and one public app', async () => {
 
     // The gallery, and the same list searched — an offer is made to everybody,
     // so browsing it needs nobody.
-    assertStringIncludes(await anon.tool('app_published'), 'run-club')
+    assertStringIncludes(await anon.tool('app_published'), published)
     assertStringIncludes(
       await anon.tool('app_published', { words: 'log runs' }),
-      'run-club',
+      published,
     )
     assertStringIncludes(
       await anon.tool('app_published', { words: 'kayak' }),
@@ -546,7 +549,7 @@ test('signed out: the gallery, the guide, and one public app', async () => {
     // gets at that address, through the tool an agent already has.
     let rows = JSON.parse(
       await anon.tool('graph_query', {
-        space: 'ada30',
+        space: ada30,
         app: 'runs',
         q: '.jog&?doc',
       }),
@@ -554,12 +557,12 @@ test('signed out: the gallery, the guide, and one public app', async () => {
     assertEquals(rows.length, 1)
     assertEquals(rows[0].entity.eid, run)
     assertEquals(rows[0].doc.title, 'Morning loop')
-    let page = await client(k, 'ada30.yaks.app', 'runs').get('.jog')
+    let page = await client(k, `${ada30}.yaks.app`, 'runs').get('.jog')
     assertEquals(page.map((r) => r.entity.eid), [run])
     // Whole, by id, and by its words.
     let shown = JSON.parse(
       await anon.tool('graph_show', {
-        space: 'ada30',
+        space: ada30,
         app: 'runs',
         ids: [run],
       }),
@@ -567,7 +570,7 @@ test('signed out: the gallery, the guide, and one public app', async () => {
     assertEquals(shown[0].entity.eid, run)
     let found = JSON.parse(
       await anon.tool('search', {
-        space: 'ada30',
+        space: ada30,
         app: 'runs',
         words: 'Morning',
       }),
@@ -575,7 +578,7 @@ test('signed out: the gallery, the guide, and one public app', async () => {
     assertEquals(found[0].entity.eid, run)
     // And the app's own word is in the schema it answers — the vocabulary of
     // that app, because it is the only one this caller is reading.
-    let words = await anon.tool('graph_schema', { space: 'ada30', app: 'runs' })
+    let words = await anon.tool('graph_schema', { space: ada30, app: 'runs' })
     assertStringIncludes(words, 'jog')
     assertEquals(words.includes('confession'), false)
 
@@ -585,13 +588,13 @@ test('signed out: the gallery, the guide, and one public app', async () => {
     let hidden = await assertRejects(
       () =>
         anon.tool('graph_query', {
-          space: 'ada30',
+          space: ada30,
           app: 'diary',
           q: '.confession',
         }),
       Error,
     )
-    assertStringIncludes(hidden.message, 'ada30/diary is private')
+    assertStringIncludes(hidden.message, `${ada30}/diary is private`)
     // A read that names no app says the app is what is missing, and where the
     // apps to read are listed.
     let bare = await assertRejects(
@@ -603,7 +606,7 @@ test('signed out: the gallery, the guide, and one public app', async () => {
     // Naming an app on the query line is not a way around it either: `.in=`
     // asks about a membership, and a stranger holds none.
     let inLine = await assertRejects(
-      () => anon.tool('graph_query', { q: '.in=ada30/diary&.confession' }),
+      () => anon.tool('graph_query', { q: `.in=${ada30}/diary&.confession` }),
       Error,
     )
     assertStringIncludes(inLine.message, 'signed out')

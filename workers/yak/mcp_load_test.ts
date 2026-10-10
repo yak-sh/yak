@@ -21,6 +21,7 @@ import {
   signIn,
   stripeKey,
   txt,
+  unique,
   vocabFile,
   WEBHOOK_SECRET,
 } from './probe.ts'
@@ -198,8 +199,8 @@ test(
     let k = await kernel()
     try {
       let them = await seed(k, [
-        { slug: `one-${crypto.randomUUID().slice(0, 6)}`, apps: ['notes'] },
-        { slug: `two-${crypto.randomUUID().slice(0, 6)}`, apps: ['lists'] },
+        { slug: unique('one'), apps: ['notes'] },
+        { slug: unique('two'), apps: ['lists'] },
       ])
       let [one, two] = Object.keys(them.eids).filter((s) => !s.includes('/'))
       let agent = connector(k, them.cookie)
@@ -604,7 +605,7 @@ test('an app says what it holds, and keeps notes about itself', async () => {
 
     // Until she installs it. The notes are one of the app's files, so a copy
     // carries them — the publisher's notes, in her own copy, hers to rewrite.
-    let offer = `grams-${crypto.randomUUID().slice(0, 8)}`
+    let offer = unique('grams')
     await agent.tool('app_publish', { space, app: 'recipes', name: offer })
     assertStringIncludes(
       await maya.tool('app_install', { name: offer }),
@@ -638,7 +639,7 @@ test('space_sell connects an account and hands back one link', async () => {
   let k = await kernel()
   let purchasing: Promise<Record<string, unknown>> | undefined
   try {
-    let space = `ada39-${crypto.randomUUID().slice(0, 8)}`
+    let space = unique('ada39')
     let { cookie, eids } = await seed(k, [{ slug: space, apps: ['shop'] }])
     let agent = connector(k, cookie)
     // Selling has its own account page; the library links to it. The form's

@@ -23,6 +23,7 @@ import {
   meta,
   seed,
   signed,
+  unique,
   WEBHOOK_SECRET,
 } from './probe.ts'
 
@@ -30,12 +31,13 @@ test(
   'the webhook flips a plan, once, whatever order it arrives in',
   async () => {
     let k = await kernel()
+    let jeff2 = unique('jeff2')
     try {
       let { eids } = await seed(k, [{
-        slug: 'jeff2',
+        slug: jeff2,
         apps: ['recipes'],
       }])
-      let space = eids['jeff2']
+      let space = eids[jeff2]
       let graph = meta(k)
       // The plan as the graph holds it. `id=` answers the whole bundle, so this
       // is the row the webhook wrote and nothing else.
@@ -63,7 +65,7 @@ test(
       let sub = fakeSub(space)
       let now = Math.floor(Date.now() / 1000)
       let updated = 'customer.subscription.updated'
-      assertEquals(await post(updated, sub, now), 'jeff2 is plus')
+      assertEquals(await post(updated, sub, now), `${jeff2} is plus`)
       let paid = await plan()
       assertEquals(paid?.tier, 'plus')
       assertEquals(paid?.customer, sub.customer)
@@ -87,7 +89,7 @@ test(
       let endedAt = now + 30
       let ended = { ...sub, status: 'canceled', ended_at: endedAt }
       let deleted = 'customer.subscription.deleted'
-      assertEquals(await post(deleted, ended, now + 60), 'jeff2 is free')
+      assertEquals(await post(deleted, ended, now + 60), `${jeff2} is free`)
       let dead = await plan()
       assertEquals(dead?.tier, 'free')
       assertEquals(dead?.status, 'canceled')
@@ -106,8 +108,9 @@ test(
 // no Origin is the test above.
 test('an unsigned webhook is refused, and so is a foreign Origin', async () => {
   let k = await kernel()
+  let jeff3 = unique('jeff3')
   try {
-    await seed(k, [{ slug: 'jeff3', apps: ['recipes'] }])
+    await seed(k, [{ slug: jeff3, apps: ['recipes'] }])
     let raw = '{"type":"customer.subscription.updated"}'
     let at = Math.floor(Date.now() / 1000)
 
@@ -171,6 +174,7 @@ test('an unsigned webhook is refused, and so is a foreign Origin', async () => {
 
 test('the billing doors say no before they say anything else', async () => {
   let k = await kernel()
+  let jeff4 = unique('jeff4')
   try {
     // Signed out, at both doors: the same refusal, and never a 500.
     for (let door of ['checkout', 'portal']) {
@@ -190,7 +194,7 @@ test('the billing doors say no before they say anything else', async () => {
     assertEquals(nowhere.status, 404)
     await nowhere.body?.cancel()
 
-    let { cookie } = await seed(k, [{ slug: 'jeff4', apps: [] }])
+    let { cookie } = await seed(k, [{ slug: jeff4, apps: [] }])
 
     // The signed-in page is where a purchase starts, and the only place: the
     // card names the plan they are on and carries the button that asks the

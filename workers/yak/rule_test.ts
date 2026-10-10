@@ -18,7 +18,7 @@
 import type { Bundle } from '@yaks/graph'
 import { assert, assertEquals } from '@std/assert'
 import { test, until } from '@yaks/testing'
-import { client, connector, kernel, seed, txt, when } from './probe.ts'
+import { client, connector, kernel, seed, txt, unique, when } from './probe.ts'
 
 // An app vocabulary with a rule in it. `vocabFile` in probe.ts only writes
 // components; a rule is an entry of its own shape, so this one is written out.
@@ -36,17 +36,19 @@ let withRule = JSON.stringify({
   },
 })
 
+let jeff65 = unique('jeff65')
+
 test(
   'an app rule fires on its own alarm inside the deployed Worker',
   async () => {
     let k = await kernel()
     try {
-      let { cookie } = await seed(k, [{ slug: 'jeff65', apps: ['garden'] }])
-      let app = client(k, 'jeff65.yaks.app', 'garden', cookie)
+      let { cookie } = await seed(k, [{ slug: jeff65, apps: ['garden'] }])
+      let app = client(k, `${jeff65}.yaks.app`, 'garden', cookie)
       assertEquals((await app.put('/vocab.json', withRule)).status, 200)
       await app.put('/index.html', '<!doctype html><h1>Garden</h1>')
       await connector(k, cookie).tool('app_deploy', {
-        space: 'jeff65',
+        space: jeff65,
         app: 'garden',
       })
 

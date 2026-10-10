@@ -15,14 +15,16 @@ import {
   rfc822,
   seed,
   signIn,
+  unique,
   vocabFile,
 } from './probe.ts'
 import { type Letter } from './mcp-probe.ts'
 
 test("an app's letters, listed and sent through the connector", async () => {
   let k = await kernel()
+  let jeff41 = unique('jeff41')
   try {
-    let them = await seed(k, [{ slug: 'jeff41', apps: ['recipes'] }])
+    let them = await seed(k, [{ slug: jeff41, apps: ['recipes'] }])
     let agent = connector(k, them.cookie)
     // Two letters arrive at the app's address, the way a stranger's does.
     for (
@@ -34,10 +36,10 @@ test("an app's letters, listed and sent through the connector", async () => {
       assertEquals(
         (await arrives(k, {
           from: 'ana@books.example',
-          to: 'jeff41.recipes@yaks.app',
+          to: `${jeff41}.recipes@yaks.app`,
           raw: rfc822({
             From: 'Ana <ana@books.example>',
-            To: 'jeff41.recipes@yaks.app',
+            To: `${jeff41}.recipes@yaks.app`,
             Subject: subject,
             'Content-Type': 'text/plain; charset="utf-8"',
           }, body),
@@ -57,7 +59,7 @@ test("an app's letters, listed and sent through the connector", async () => {
         body: 'It went in **one** sitting.',
       }),
     ) as Letter[]
-    assertEquals(sent.mail.from, 'jeff41.recipes@yaks.app')
+    assertEquals(sent.mail.from, `${jeff41}.recipes@yaks.app`)
     assertEquals(sent.doc.title, 'Thanks for the pudding')
     assert(sent.deliver!.to, 'the letter names a recipient entity')
 
@@ -83,7 +85,7 @@ test("an app's letters, listed and sent through the connector", async () => {
       await agent.tool('mail_list', { app: 'recipes', direction: 'received' }),
     ) as Letter[]
     assertEquals(inbox[0].mail.from, 'ana@books.example')
-    assertEquals(inbox[0].mail.to, 'jeff41.recipes@yaks.app')
+    assertEquals(inbox[0].mail.to, `${jeff41}.recipes@yaks.app`)
     assert(!inbox[0].deliver, 'an arrival asked nobody to send it')
 
     // What became of the one that went is a row on that same letter, written
@@ -137,15 +139,15 @@ test("an app's letters, listed and sent through the connector", async () => {
       () =>
         stranger.tool('mail_send', {
           app: 'recipes',
-          space: 'jeff41',
+          space: jeff41,
           to: 'ana@books.example',
           title: 'Not mine to send',
           body: 'From nobody here.',
         }),
       Error,
-      'not a member of jeff41',
+      `not a member of ${jeff41}`,
     )
-    let anybody = client(k, 'jeff41.yaks.app', 'recipes')
+    let anybody = client(k, `${jeff41}.yaks.app`, 'recipes')
     let relay = await anybody.post({
       entities: [
         { entity: { eid: '$them' }, email: { address: 'ana@books.example' } },
@@ -188,6 +190,7 @@ test(
           await agent.tool('app_new', { slug: 'cookbook', title: 'Cookbook' }),
         )![1]
       let app = { space, app: 'cookbook' }
+      let published = unique('cookbook')
       await agent.tool('app_files', {
         ...app,
         files: [
@@ -275,6 +278,7 @@ test(
       // installed, and what he renamed to `Dal` is his and travels with neither.
       await agent.tool('app_publish', {
         ...app,
+        name: published,
         about: 'Recipes to start from',
       })
       let ann = await signIn(
@@ -283,7 +287,7 @@ test(
       )
       let hers = connector(k, ann.cookie)
       assertStringIncludes(
-        await hers.tool('app_install', { name: 'cookbook' }),
+        await hers.tool('app_install', { name: published }),
         'seeded 2 entities',
       )
       let theirs = JSON.parse(
