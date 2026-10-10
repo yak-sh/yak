@@ -46,7 +46,7 @@ import {
 import { BODY, DOC, TITLE } from '@yaks/doc'
 import { human } from '@yaks/id'
 import { absent, and, eq, every, list, present } from '@yaks/query'
-import { checked, type Finding } from '@yaks/tools'
+import { checked, type Finding, said } from '@yaks/tools'
 import type { Runs } from '@yaks/graph/tools'
 import { wearer } from './arrive.ts'
 import { post } from './effects.ts'
@@ -233,11 +233,7 @@ export let runs = (_host?: unknown, options: Options = {}): Runs => ({
       ...[...new Set([root, letter.entity.eid])].flatMap((eid) =>
         mark(eid, OPENED)
       ),
-      {
-        entity: { eid: '$said' },
-        content: { body: page(human(graph.vocab), letter, thread) },
-        output: { source: call.entity.eid },
-      },
+      said(call, page(human(graph.vocab), letter, thread)),
     ]
   },
 

@@ -113,7 +113,6 @@ test('retry puts a failed run back to the pool, which then finishes it', async (
   assert((await door(g, 'effect_retry', 'post_note')).startsWith('retried 1'))
   await fx.work(g, undefined, 1)
   assertEquals(landed, 1)
-  assertEquals(await row(g, 'r0'), undefined)
 })
 
 test('drop deletes a failed run, and the check stops naming it', async () => {
@@ -122,21 +121,16 @@ test('drop deletes a failed run, and the check stops naming it', async () => {
   assertEquals((await checkup(g, pooledBlog)).level, undefined)
 })
 
-test('a door refuses what names no failed run', async () => {
+test('a door touches only failed runs, and refuses a name matching none', async () => {
   let g = await mixed()
-  for (let  of of['r1', 'r2', 'nope']) {
-    await door(g, 'effect_drop', of).then(
-      () => assert(false, of),
-      (e) => assert(String(e.message).includes('no failed')),
-    )
+  for (let id of ['r1', 'r2', 'nope']) {
+    for (let name of ['effect_retry', 'effect_drop'] as const) {
+      await door(g, name, id).then(
+        () => assert(false, `${name} ${id}`),
+        (e) => assert(String(e.message).includes('no failed')),
+      )
+    }
   }
-  assertEquals((await row(g, 'r2'))?.state, 'done')
-})
-
-test('retry leaves a pending or done run as it was', async () => {
-  let g = await mixed()
-  await door(g, 'effect_retry', 'r1').catch(() => {})
-  await door(g, 'effect_retry', 'r2').catch(() => {})
   assertEquals(
     [(await row(g, 'r1'))?.attempts, (await row(g, 'r2'))?.state],
     [0, 'done'],

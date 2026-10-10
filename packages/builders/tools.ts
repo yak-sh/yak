@@ -16,7 +16,7 @@ import {
 } from '@yaks/graph'
 import type { Runs } from '@yaks/graph/tools'
 import { human } from '@yaks/id'
-import { CallError } from '@yaks/tools'
+import { CallError, said } from '@yaks/tools'
 import type { Vocab } from '@yaks/vocab'
 import { held } from '@yaks/key'
 import { BUILD_OF, buildOf, clock, type Options, reconcile } from './build.ts'
@@ -26,11 +26,6 @@ import { choose } from './choice.ts'
 import { preserve } from './preserve.ts'
 
 let str = (v: unknown): string => v == null ? '' : String(v)
-let said = (call: Bundle, body: string): Bundle => ({
-  entity: { eid: crypto.randomUUID() },
-  content: { body },
-  output: { source: call.entity.eid },
-})
 
 /** What `builder build` asks: the builder, and what to build it with. Ids may
  * be any form the graph resolves. */

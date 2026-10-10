@@ -25,6 +25,7 @@ export {
   type Level,
 } from './check.ts'
 export { CallError, parsed } from './args.ts'
+export { said } from './said.ts'
 export {
   answerOf,
   faulted,

@@ -37,7 +37,7 @@ import {
 } from '@yaks/graph'
 import type { Runs } from '@yaks/graph/tools'
 import { human } from '@yaks/id'
-import { CallError, checked, type Finding } from '@yaks/tools'
+import { CallError, checked, type Finding, said } from '@yaks/tools'
 import type { Vocab } from '@yaks/vocab'
 import { EFFECT } from './pool.ts'
 
@@ -62,12 +62,6 @@ let some = (rows: Bundle[], id: (b: Bundle) => string, sample: number) => {
   let rest = rows.length - Math.min(rows.length, sample)
   return `${shown}${rest > 0 ? `, and ${rest} more` : ''}`
 }
-
-let say = (call: Bundle, body: string): Bundle[] => [{
-  entity: { eid: crypto.randomUUID() },
-  content: { body },
-  output: { source: call.entity.eid },
-}]
 
 // The failed runs a handler name or a single run's id points at.
 let failedOf = async (graph: Graph, of: string): Promise<Bundle[]> => {
@@ -101,7 +95,7 @@ let settle =
       ),
       { trusted: true },
     )
-    return say(call, `${verb} ${rows.length} failed run(s) of ${of}`)
+    return [said(call, `${verb} ${rows.length} failed run(s) of ${of}`)]
   }
 
 /** The implementation behind the tool ./vocab.json declares. */

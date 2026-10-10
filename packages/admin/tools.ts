@@ -12,7 +12,7 @@ import {
   reveal,
   sealed,
 } from '@yaks/secrets'
-import { CallError, Interrupted } from '@yaks/tools'
+import { CallError, Interrupted, said } from '@yaks/tools'
 import type { Host } from '@yaks/host'
 import { person } from '@yaks/cli/host'
 import { accountCredential, AccountError, authorize } from '@yaks/connections'
@@ -92,13 +92,6 @@ let pushNote = (p: PushProgress) => {
     note(p.state == 'start' ? 'deploying app…' : 'deployed app')
   }
 }
-
-// What a verb says, as the call's answer.
-let said = (call: Bundle, lines: string | string[]): Bundle => ({
-  entity: { eid: '$said' },
-  content: { body: typeof lines == 'string' ? lines : lines.join('\n') },
-  output: { source: call.entity.eid },
-})
 
 type Account = { address: string; bearer: string; session?: string }
 

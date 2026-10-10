@@ -912,7 +912,8 @@ export let pool = (ctx: Ctx, opts: Partial<PoolOpts> = {}): Pool => {
             if (opts.singleOwner) await settled
             else while (await still(settled, beat)) await renew(g)
           }
-          await sleep(0)
+          // A turn for timers and I/O between passes, never after the last.
+          if (n + 1 < passes) await sleep(0)
         }
         return
       }
