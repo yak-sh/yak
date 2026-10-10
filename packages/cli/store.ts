@@ -15,6 +15,7 @@
 // result naming a different version.
 
 import type { VocabDoc } from '@yaks/vocab'
+import { sha256 } from '@yaks/graph/sha256'
 import type { Listed } from './tool.ts'
 
 /** The tools a host served, and the version stamp of that list — and the
@@ -53,119 +54,128 @@ export let configDir = (vars: Env = env): string => {
 export let stateDir = (vars: Env = env): string =>
   vars('YAKS_HOME') ?? `${configDir(vars)}/yaks`
 
-let read = (path: string): Record<string, unknown> => {
-  try {
-    return JSON.parse(Deno.readTextFileSync(path))
-  } catch {
-    return {}
-  }
+/** The filesystem operations roster persistence needs. The migration and
+ * per-host cache use the same operations on a disk or an in-memory filesystem. */
+export type RosterFiles = {
+  readTextFileSync: (path: string) => string
+  mkdirSync: (path: string, options: Deno.MkdirOptions) => void
+  writeTextFileSync: (
+    path: string,
+    body: string,
+    options: Deno.WriteFileOptions,
+  ) => void
+  renameSync: (from: string, to: string) => void
+  linkSync: (from: string, to: string) => void
+  removeSync: (path: string) => void
+  statSync: (path: string) => unknown
 }
 
-let write = (dir: string, path: string, body: unknown, secret = false) => {
-  Deno.mkdirSync(dir, { recursive: true, mode: 0o700 })
-  Deno.writeTextFileSync(path, JSON.stringify(body, null, 2) + '\n', {
-    mode: secret ? 0o600 : 0o644,
-  })
-  // The mode above only applies to a file this call created; an existing file
-  // keeps whatever mode it had until it is changed explicitly.
-  if (secret && Deno.build.os != 'windows') Deno.chmodSync(path, 0o600)
-}
-
-// Each host has its own file: reading one roster never parses every other
-// server's tools and vocabulary. The filename holds no host text or secret.
-let rosterPath = async (host: string, dir: string): Promise<string> => {
-  let bytes = await crypto.subtle.digest(
-    'SHA-256',
-    new TextEncoder().encode(host),
-  )
-  let key = [...new Uint8Array(bytes)].map((b) =>
-    b.toString(16).padStart(2, '0')
-  )
-    .join('')
-  return `${dir}/tools/${key}.json`
-}
-// A file removed, or already gone.
-let gone = (path: string) => {
-  try {
-    Deno.removeSync(path)
-  } catch (e) {
-    if (!(e instanceof Deno.errors.NotFound)) throw e
-  }
-}
-let saved = (dir: string, path: string, roster: unknown, fresh = false) => {
-  let temp = `${path}.${crypto.randomUUID()}`
-  try {
-    write(`${dir}/tools`, temp, roster)
-    if (!fresh) Deno.renameSync(temp, path)
-    else {
-      try {
-        Deno.linkSync(temp, path)
-      } catch (e) {
-        if (!(e instanceof Deno.errors.AlreadyExists)) throw e
-      }
-    }
-  } finally {
-    gone(temp)
-  }
-}
-// Move every old cache entry once. Existing destinations win after an
-// interrupted move; only a completed move removes the source.
-let migrated = async (dir: string): Promise<void> => {
-  let legacy = `${dir}/tools.json`
-  try {
-    Deno.statSync(legacy)
-  } catch (e) {
-    if (e instanceof Deno.errors.NotFound) return
-    throw e
-  }
-  for (let [host, roster] of Object.entries(read(legacy))) {
-    let path = await rosterPath(host, dir)
+/** A roster cache over a filesystem. Destinations survive a retried migration,
+ * and a forgotten host cannot return from the legacy combined file. */
+export let rosters = (files: RosterFiles = Deno) => {
+  let read = (path: string): Record<string, unknown> => {
     try {
-      Deno.statSync(path)
+      return JSON.parse(files.readTextFileSync(path))
+    } catch {
+      return {}
+    }
+  }
+  let write = (dir: string, path: string, body: unknown) => {
+    files.mkdirSync(dir, { recursive: true, mode: 0o700 })
+    files.writeTextFileSync(path, JSON.stringify(body, null, 2) + '\n', {
+      mode: 0o644,
+    })
+  }
+
+  // Each host has its own file: reading one roster never parses every other
+  // server's tools and vocabulary. The filename holds no host text or secret.
+  let rosterPath = (host: string, dir: string): string =>
+    `${dir}/tools/${sha256(host)}.json`
+  // A file removed, or already gone.
+  let gone = (path: string) => {
+    try {
+      files.removeSync(path)
     } catch (e) {
       if (!(e instanceof Deno.errors.NotFound)) throw e
-      saved(dir, path, roster, true)
     }
   }
-  try {
-    Deno.removeSync(legacy)
-  } catch (e) {
-    if (!(e instanceof Deno.errors.NotFound)) throw e
+  let saved = (dir: string, path: string, roster: unknown, fresh = false) => {
+    let temp = `${path}.${crypto.randomUUID()}`
+    try {
+      write(`${dir}/tools`, temp, roster)
+      if (!fresh) files.renameSync(temp, path)
+      else {
+        try {
+          files.linkSync(temp, path)
+        } catch (e) {
+          if (!(e instanceof Deno.errors.AlreadyExists)) throw e
+        }
+      }
+    } finally {
+      gone(temp)
+    }
   }
+  // Move every old cache entry once. Existing destinations win after an
+  // interrupted move; only a completed move removes the source.
+  let migrated = (dir: string): void => {
+    let legacy = `${dir}/tools.json`
+    try {
+      files.statSync(legacy)
+    } catch (e) {
+      if (e instanceof Deno.errors.NotFound) return
+      throw e
+    }
+    for (let [host, roster] of Object.entries(read(legacy))) {
+      let path = rosterPath(host, dir)
+      try {
+        files.statSync(path)
+      } catch (e) {
+        if (!(e instanceof Deno.errors.NotFound)) throw e
+        saved(dir, path, roster, true)
+      }
+    }
+    try {
+      files.removeSync(legacy)
+    } catch (e) {
+      if (!(e instanceof Deno.errors.NotFound)) throw e
+    }
+  }
+
+  /** The cached tool list for a host, if there is one. */
+  let cached = async (
+    host: string,
+    dir: string = stateDir(),
+  ): Promise<Roster | null> => {
+    await migrated(dir)
+    let kept = read(rosterPath(host, dir))
+    return Array.isArray(kept.tools) ? kept as Roster : null
+  }
+
+  /** Cache one. */
+  let remember = async (
+    host: string,
+    roster: Roster,
+    dir: string = stateDir(),
+  ): Promise<void> => {
+    await migrated(dir)
+    saved(dir, rosterPath(host, dir), roster)
+  }
+
+  /** Drop one — the tool list changed, so the next command calls `tools/list`
+   * again. */
+  let forget = async (
+    host: string,
+    dir: string = stateDir(),
+  ): Promise<void> => {
+    await migrated(dir)
+    try {
+      files.removeSync(rosterPath(host, dir))
+    } catch (e) {
+      if (!(e instanceof Deno.errors.NotFound)) throw e
+    }
+  }
+  return { cached, remember, forget }
 }
 
 export { accountToken as tokenFor } from './accounts.ts'
-
-/** The cached tool list for a host, if there is one. */
-export let cached = async (
-  host: string,
-  dir: string = stateDir(),
-): Promise<Roster | null> => {
-  await migrated(dir)
-  let kept = read(await rosterPath(host, dir))
-  return Array.isArray(kept.tools) ? kept as Roster : null
-}
-
-/** Cache one. */
-export let remember = async (
-  host: string,
-  roster: Roster,
-  dir: string = stateDir(),
-): Promise<void> => {
-  await migrated(dir)
-  saved(dir, await rosterPath(host, dir), roster)
-}
-
-/** Drop one — the tool list changed, so the next command calls `tools/list`
- * again. */
-export let forget = async (
-  host: string,
-  dir: string = stateDir(),
-): Promise<void> => {
-  await migrated(dir)
-  try {
-    Deno.removeSync(await rosterPath(host, dir))
-  } catch (e) {
-    if (!(e instanceof Deno.errors.NotFound)) throw e
-  }
-}
+export let { cached, remember, forget } = rosters()
