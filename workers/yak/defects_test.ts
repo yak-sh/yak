@@ -1,6 +1,6 @@
 // The platform's scoped SDK events enter the shared reporter and durable intake.
 import { equal, ok, test } from '@yaks/testing'
-import { ServerRuntimeClient, setCurrentClient } from '@sentry/core'
+import { ServerRuntimeClient, withScope } from '@sentry/core'
 import type { Bundle } from '@yaks/graph'
 import { Refused } from '@yaks/graph'
 import type { WindowClock } from '@yaks/tracker/report'
@@ -110,20 +110,27 @@ test('SDK catches collect into the queue without a Sentry DSN and omit refusals'
     normalizeDepth: 0,
     stackParser: () => [],
   })
-  setCurrentClient(client)
-  client.init()
-  for (let i = 0; i < 4; i++) {
-    let error = Object.assign(new TypeError('queue without Sentry'), {
-      stack: 'TypeError: queue without Sentry\n    at probe (probe.ts:1:1)',
-    })
-    caught(new Refused('no'), {})
-    defect(error, { space: 'probe' })
-    caught(error, { request: 'outer catch' })
-  }
-  await processed.promise
-  equal(queued.length, 1)
-  await time.flush()
-  equal(queued.length, 2)
-  equal((queued[1][0].error as { hits: number }).hits, 3)
-  ok(queued.every((rows) => batch(rows).scope == platform))
+  await withScope(async (scope) => {
+    scope.setClient(client)
+    try {
+      client.init()
+      let refusal = new Refused('no')
+      for (let i = 0; i < 4; i++) {
+        let error = Object.assign(new TypeError('queue without Sentry'), {
+          stack: 'TypeError: queue without Sentry\n    at probe (probe.ts:1:1)',
+        })
+        caught(refusal, {})
+        defect(error, { space: 'probe' })
+        caught(error, { request: 'outer catch' })
+      }
+      await processed.promise
+      equal(queued.length, 1)
+      await time.flush()
+      equal(queued.length, 2)
+      equal((queued[1][0].error as { hits: number }).hits, 3)
+      ok(queued.every((rows) => batch(rows).scope == platform))
+    } finally {
+      client.dispose()
+    }
+  })
 })

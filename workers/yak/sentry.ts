@@ -232,9 +232,9 @@ export let defect = (
   error: unknown,
   tags: Record<string, string | null | undefined>,
   hit?: Hit,
-) =>
-  withScope((scope) => {
-    if (seen(error)) return
+) => {
+  if (seen(error)) return
+  return withScope((scope) => {
     for (let [k, v] of Object.entries(tags)) if (v) scope.setTag(k, v)
     if (hit) {
       scope.setUser({ id: hit.id })
@@ -250,6 +250,7 @@ export let defect = (
         : { message: String(error) },
     }, { data: { defect: error } })
   })
+}
 
 // The space and app a call's arguments named, and nothing else it said.
 let aimedAt = (args: unknown): { space?: string; app?: string } => {
