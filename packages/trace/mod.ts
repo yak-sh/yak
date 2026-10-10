@@ -148,7 +148,7 @@ let create = (): Channel => {
   let sequence = 0
   let open = new Map<
     string,
-    { parent?: string; counts: Record<string, number> }
+    { parent?: string; counts?: Record<string, number> }
   >()
   let epoch = 0
   let historians = 0
@@ -233,7 +233,7 @@ let create = (): Channel => {
       let ended = false
       let accumulated = {
         parent: a.parent,
-        counts: {} as Record<string, number>,
+        counts: undefined as Record<string, number> | undefined,
       }
       open.set(id, accumulated)
       let begun = event(a, id, 'start', start)
@@ -264,7 +264,7 @@ let create = (): Channel => {
           finished.start = start
           finished.outcome = o?.outcome ?? 'ok'
           finished.counts = counts(
-            Object.keys(accumulated.counts).length
+            accumulated.counts
               ? { ...o?.counts, ...accumulated.counts }
               : o?.counts,
           )
@@ -329,7 +329,10 @@ let create = (): Channel => {
       let at = open.get(id)
       if (!at) break
       for (let [name, n] of Object.entries(input)) {
-        if (Number.isFinite(n)) at.counts[name] = (at.counts[name] ?? 0) + n
+        if (Number.isFinite(n)) {
+          let values = at.counts ??= {}
+          values[name] = (values[name] ?? 0) + n
+        }
       }
       id = at.parent
     }
