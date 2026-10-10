@@ -106,6 +106,15 @@ let png = new Uint8Array([
   ...new Array(21).fill(0),
 ])
 
+let pngAddress = await addressOf(png)
+let suppliedBlobs = memoryBlobs()
+let suppliedGraph = graph({
+  storage: ram(vocab),
+  vocab,
+  plugins: [representations()],
+})
+let suppliedDoor = door({ blobs: suppliedBlobs, graph: suppliedGraph })
+
 test('a PUT to an address stores the bytes and mints the artifact', async () => {
   let h = host(), ask = door(h)
   let sha = await addressOf(text)
@@ -148,10 +157,8 @@ test('a PUT to an address stores the bytes and mints the artifact', async () => 
 })
 
 test('the default backend uses supplied blobs without a SQL host', async () => {
-  let blobs = memoryBlobs()
-  let g = graph({ storage: ram(vocab), vocab, plugins: [representations()] })
-  let ask = door({ blobs, graph: g })
-  let sha = await addressOf(png)
+  let blobs = suppliedBlobs, ask = suppliedDoor
+  let sha = pngAddress
   let made = await ask(put(sha, png, 'image/png'))
   assertEquals(made.status, 200)
   assertEquals(await blobs.get(sha), png)
@@ -260,7 +267,7 @@ test('an upload past the limit is refused', async () => {
 
 test('a text store that cannot keep the bytes says so at the write', async () => {
   let h = host(), ask = door(h)
-  let sha = await addressOf(png)
+  let sha = pngAddress
   let res = await ask(put(sha, png, 'image/png'))
   assertEquals(res.status, 500)
   // and the store kept nothing: an address that answered mangled bytes is the
@@ -307,7 +314,7 @@ test('the store a host names is where the bytes land', async () => {
   }
   let h = host()
   let ask = door(h, { store: { via: 'object', bucket, prefix: 'art/' } })
-  let sha = await addressOf(png)
+  let sha = pngAddress
   let made = await ask(put(sha, png, 'image/png'))
   assertEquals(made.status, 200)
   assertEquals([...cells.keys()], [`art/${sha}`])
