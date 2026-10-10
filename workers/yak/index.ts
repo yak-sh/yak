@@ -16,7 +16,7 @@ import {
 } from '@sentry/cloudflare'
 import { Builder as Built } from './build.ts'
 import { Store as Stored } from './graph.ts'
-import { options } from './sentry.ts'
+import { options } from './sentry-runtime.ts'
 import { Wire as Wired } from './stream.ts'
 import * as filePart from './files.ts'
 import { builds } from './builds.ts'

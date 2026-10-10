@@ -157,9 +157,10 @@ automatic over-the-line capture is admitted at most once per operation and name
 per rolling hour in each Store incarnation. Suppressed repeats are counted in
 memory and carried as `repeats{n}` on the next delivered root span. Requested
 and sampled captures retain their independent N and rate bounds. The quota
-resets on eviction and is never stored in app rows. Errors remain on Sentry. The
-independent [tracker](../tracker/README.md) stores the trace and its separately
-addressed spans and metric components.
+resets on eviction and is never stored in app rows. Defects have independent
+intake and do not consume the trace allowance. The independent
+[tracker](../tracker/README.md) stores the trace and its separately addressed
+spans and metric components.
 
 A platform admin can arm a capture without generating app traffic:
 
@@ -176,26 +177,33 @@ space's global eid from explicit kernel setup/control so alarms can route to
 that tracker without polling the directory. A pre-existing Store without that
 scope needs explicit setup/control before an alarm capture can be delivered.
 
-The locus provisions `yak-errors` and deploys the tracker; the producer binding
-is prepared as a commented stanza in `wrangler.toml`; activation uncomments it
-after the queue and tracker exist. Without the binding, records are discarded
-rather than writing into the app Store. Each delivered chunk carries
-`during.space` on every entity, and immutable ids make queue redelivery safe.
-The request's span counts close before delivery and do not include delivery.
+The account holds `yak-errors` and the independent tracker Worker; the producer
+binding in `wrangler.toml` sends defects and traces to that queue. Without the
+binding, trace samples are discarded rather than writing into the app Store.
+Each delivered trace chunk carries `during.space` on every entity, and immutable
+ids make queue redelivery safe. The request's span counts close before delivery
+and do not include delivery.
 
-Defects go to Sentry (org `yaks`, project `yaks-app`; sentry.ts): an exception
+Defects go to Sentry (org `yaks`, project `yaks-app`) and the platform graph of
+[the independent tracker](../tracker/README.md). This includes an exception
 nothing caught, a break the router or a job files, a Store's own, a connector
 tool's, any `console.error`, and a Workers Build that failed (builds.ts, fed by
-the `yak-builds` queue's event subscription). Each carries its tags (`tool`,
-`space`, `app`, `client`, `store`, `request`) and the person's eid as the user
-with `account` set to `person` or `test` (a test account, lib/bots.ts). The
-release is the Workers version id and the environment is `SENTRY_ENVIRONMENT`
-(`production`, `staging`). A refusal is never sent. With no `SENTRY_DSN` secret
-nothing is sent, which is what keeps the tests and `wrangler dev` silent. Source
-maps are not uploaded; the bundle is not minified, so a stack names our
-functions. To prove a deploy's defects arrive, a test account POSTs
-`/api/defect` at the apex: that is a defect tagged `tool:canary`, `account:test`
-(mcp.ts `canary`).
+the `yak-builds` queue's event subscription). The shared
+[`@yaks/tracker` reporter](../../packages/tracker/README.md) sends the first
+sample immediately, then one repeat sample with its hit count per ten-second
+window. `waitUntil` retains the window after the response; each destination
+receives the same captured exception, fault and hit count independently.
+
+Each defect carries its tags (`tool`, `space`, `app`, `client`, `store`,
+`request`) and the person's eid as the Sentry user, with `account` set to
+`person` or `test` (lib/bots.ts). Space and app slugs are tags; platform defects
+stay in the platform tracker. The release is the Workers version id and the
+environment is `SENTRY_ENVIRONMENT` (`production`, `staging`). A refusal is
+never sent. Without `SENTRY_DSN`, the queue still records defects. Tests and
+`wrangler dev` without either binding send nothing. Source maps are not
+uploaded; the bundle is not minified, so a stack names our functions. To prove a
+deploy's defects arrive, a test account POSTs `/api/defect` at the apex: that is
+a defect tagged `tool:canary`, `account:test` (mcp.ts `canary`).
 
 Sentry's one active uptime monitor (https://yaks.sentry.io/monitors/10414356/)
 GETs https://yourname.yaks.app/recipes/api/query?.recipe&.limit=1 every minute

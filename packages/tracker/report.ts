@@ -151,6 +151,14 @@ export let post =
  * new error; console keeps the original rows visible if a sink is unavailable. */
 export let fanout = (
   sinks: Record<string, Sink>,
+  fallback = (name: string, hits: number, error: unknown, rows: Bundle[]) =>
+    console.error(
+      'tracker delivery failed —',
+      name,
+      hits,
+      error,
+      JSON.stringify(rows),
+    ),
 ): Sink & { failures: Record<string, number> } => {
   let failures = Object.fromEntries(Object.keys(sinks).map((name) => [name, 0]))
   return Object.assign(async (rows: Bundle[]) => {
@@ -161,13 +169,7 @@ export let fanout = (
         } catch (error) {
           failures[name]++
           try {
-            console.error(
-              'tracker delivery failed —',
-              name,
-              failures[name],
-              error,
-              JSON.stringify(rows),
-            )
+            fallback(name, failures[name], error, rows)
           } catch { /* telemetry cannot break the caller */ }
         }
       }),

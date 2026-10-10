@@ -55,6 +55,38 @@ test('a caught Durable Object failure reaches Sentry', async () => {
   assertEquals(event.exception.values[0].value, 'durable object sentry probe')
 })
 
+test('a repeat window flushes its hits after the originating invocation responds', async () => {
+  let k = workerd()
+  let id = crypto.randomUUID()
+  let response = await fetch(`${k.base}/__sentry/repeats/${id}`)
+  assertEquals(response.status, 500)
+  await response.body?.cancel()
+  let samples = await until(async () => {
+    let found = (await events(k.log)).filter((event) =>
+      event.tags?.request_id == id
+    )
+    return found.length == 2 ? found : undefined
+  }, { label: 'coalesced repeat envelope', timeout: SENT })
+  assertEquals(samples.map((event) => event.extra.hits), [1, 4])
+})
+
+test('one thrown object counts once per invocation when later requests reuse it', async () => {
+  let k = workerd()
+  let id = crypto.randomUUID()
+  for (let i = 0; i < 3; i++) {
+    let response = await fetch(`${k.base}/__sentry/reused/${id}`)
+    assertEquals(response.status, 500)
+    await response.body?.cancel()
+  }
+  let samples = await until(async () => {
+    let found = (await events(k.log)).filter((event) =>
+      event.tags?.request_id == id
+    )
+    return found.length == 2 ? found : undefined
+  }, { label: 'reused error occurrences', timeout: SENT })
+  assertEquals(samples.map((event) => event.extra.hits), [1, 2])
+})
+
 test('the kernel sends a caught failure through its deployed wrapper', async () => {
   let k = workerd()
   let host = `sentry-probe-${crypto.randomUUID()}.example`

@@ -1,43 +1,49 @@
-// The platform's defects, sent to Sentry (T-37865): org `yaks`, project
-// `yaks-app`. The kernel's default export and its Durable Objects are wrapped
-// (index.ts), so an exception nothing caught arrives on its own; the seams
-// that catch a defect on purpose — the router's catch and the jobs
-// (unseen.ts `fault`), a Store's own (graph.ts `#broke`), a connector tool
-// (mcp.ts) — hand it to `defect` with who and where it happened as tags. Every
-// other catch that answers a failure rather than throwing it — a fallback, a
-// sentence, an error response — hands it to `caught`, which keeps refusals
-// back.
+// Platform defects use @yaks/tracker/report's capture, coalesce and fanout:
+// the same samples and hit counts reach Sentry and yak-errors independently.
+// The SDK supplies invocation scope, wrapper exceptions and console errors;
+// beforeSend hands them to the shared reporter. Platform faults go to the
+// platform tracker; space/app slugs remain tags rather than tenant addresses.
 //
-// The DSN is the `SENTRY_DSN` secret, and without it the SDK sends nothing:
-// the tests and a local `wrangler dev` stay silent. The release is the
-// deployed Workers version (the SDK reads `CF_VERSION_METADATA`), and the
-// environment is `SENTRY_ENVIRONMENT` from wrangler.toml's vars, so a new
-// issue names the deploy that brought it.
+// A configured ERRORS queue collects even without SENTRY_DSN. Tests without
+// either binding keep their own SDK transport. The release is the deployed
+// CF_VERSION_METADATA and the environment is SENTRY_ENVIRONMENT.
 //
-// Only defects. A refusal is the platform answering, never sent: the runner
-// keeps a `CallError`, and any error @yaks/graph's `status` puts below 500,
-// from `report`, and the router returns before it reports one (unseen.ts
-// `refusal`).
+// caught keeps refusals and accepted Pending writes back. Only scrubbed
+// exceptions and tags leave: no headers, query, body or console arguments.
+// sentry-runtime.ts retains repeat windows through the runtime's waitUntil.
 //
-// What leaves is the error and its tags, nothing a person said: no request
-// headers (a cookie, a bearer), no query string (an OAuth code), no body, and
-// none of the arguments a console line carried (`scrub`).
 // It speaks @sentry/core, never @sentry/cloudflare, whose types declare the
 // Workers runtime as globals and would redefine `Response` for every file the
 // repo-wide check reads (conform.ts says the same of workers-types). One copy
 // of @sentry/core is bundled, so the client index.ts's wrappers start is the
 // one these calls reach.
 import {
+  type BaseTransportOptions,
   captureConsoleIntegration,
-  captureException,
+  consoleSandbox,
+  createEnvelope,
+  createTransport,
   type ErrorEvent,
+  type EventHint,
   getAsyncContextStrategy,
+  getIsolationScope,
   getMainCarrier,
   setAsyncContextStrategy,
+  type Transport,
   withScope,
 } from '@sentry/core'
 import { type Bundle, type Comp } from '@yaks/graph'
-import { refused as refusal } from '@yaks/tracker/report'
+import {
+  capture,
+  coalesce,
+  type Coalesced,
+  fanout,
+  queue,
+  refused as refusal,
+  type WindowClock,
+} from '@yaks/tracker/report'
+import { sentry, type SentryEvent } from '@yaks/tracker/sentry'
+import type { Env } from './env.ts'
 import { isTestAddress } from './lib/bots.ts'
 import { Pending } from './writes.ts'
 import type { Ctx } from './tools.ts'
@@ -66,19 +72,139 @@ export let scrub = (event: ErrorEvent): ErrorEvent => {
 // original carrier so the caller's scope and reporting client remain reachable.
 let context: ReturnType<typeof getAsyncContextStrategy> | undefined
 
-/** The SDK's options for every wrapped handler and object. `dsn`, `release`
- * and `environment` come from the env the SDK is handed. */
-export let options = () => {
+type Bindings = Pick<
+  Partial<Env>,
+  'ERRORS' | 'SENTRY_DSN' | 'SENTRY_ENVIRONMENT' | 'CF_VERSION_METADATA'
+>
+let reporters = new WeakMap<object, Coalesced>()
+let occurrences = new WeakMap<object, WeakSet<object>>()
+// One thrown object can pass through several catches in one invocation. A
+// later invocation reusing it is another occurrence, unlike SDK lifetime dedup.
+let seen = (error: unknown) => {
+  if (!error || typeof error != 'object') return false
+  let scope = getIsolationScope()
+  let errors = occurrences.get(scope)
+  if (!errors) occurrences.set(scope, errors = new WeakSet())
+  if (errors.has(error)) return true
+  errors.add(error)
+  return false
+}
+
+/** The SDK supplies scope and wrapper errors; both destinations receive the
+ * shared reporter's samples. Platform faults always belong to the platform
+ * tracker: space/app slugs stay tags, never queue tenant addresses. */
+export let delivery = (
+  env: Bindings,
+  send: (event: SentryEvent) => Promise<void>,
+  clock?: WindowClock,
+) =>
+  coalesce(
+    fanout({
+      ...env.ERRORS ? { tracker: queue(env.ERRORS) } : {},
+      ...env.SENTRY_DSN ? { sentry: sentry(send) } : {},
+    }, (...args) =>
+      consoleSandbox(() =>
+        console.error('tracker delivery failed —', ...args)
+      )),
+    {
+      // waitUntil retains a window within Workers' post-response lifetime.
+      window: 10_000,
+      clock,
+    },
+  )
+
+export let sample = (event: ErrorEvent, hint: EventHint = {}) => {
+  let value = event.exception?.values?.at(-1)
+  let original = hint.data?.defect ?? hint.originalException
+  let error = original instanceof Error ? original : Object.assign(
+    new Error(value?.value ?? event.message ?? 'Unknown defect'),
+    {
+      name: value?.type ?? 'Error',
+      stack:
+        value?.stacktrace?.frames?.toReversed().map((frame) =>
+          `    at ${
+            frame.function ?? '?'
+          } (${frame.filename}:${frame.lineno}:${frame.colno})`
+        ).join('\n') ?? '',
+    },
+  )
+  return capture(error, {
+    sink: () => {},
+    commit: event.release,
+    environment: event.environment == 'staging' ? 'staging' : 'production',
+    tags: {
+      ...event.tags,
+      ...event.user?.id ? { user_id: event.user.id } : {},
+    },
+    mechanism: event.logger == 'console' ? 'console' : 'catch',
+  })
+}
+
+/** SDK scope collection and shared defect delivery for each runtime handler. */
+export let options = (env: Bindings = {}, clock?: WindowClock) => {
   context ??= getAsyncContextStrategy(getMainCarrier())
   setAsyncContextStrategy(context)
+  let transport: Transport | undefined
+  let enabled = !!(env.ERRORS || env.SENTRY_DSN)
+  let send = async (event: SentryEvent) => {
+    let { user_id, ...tags } = event.tags
+    let result = await transport?.send(createEnvelope({}, [[{ type: 'event' }, {
+      ...event,
+      event_id: crypto.randomUUID().replaceAll('-', ''),
+      timestamp: Date.now() / 1000,
+      platform: 'javascript',
+      level: 'error',
+      release: env.CF_VERSION_METADATA?.id,
+      environment: env.SENTRY_ENVIRONMENT ?? 'production',
+      tags: Object.fromEntries(
+        Object.entries(tags).map(([k, v]) => [k, String(v)]),
+      ),
+      ...user_id ? { user: { id: String(user_id) } } : {},
+    }]]))
+    if (result?.statusCode && result.statusCode >= 400) {
+      throw Error(`Sentry intake answered ${result.statusCode}`)
+    }
+  }
   return {
+    // The SDK must collect scope/wrapper errors even without a Sentry key.
+    ...env.ERRORS && !env.SENTRY_DSN
+      ? { dsn: 'https://queue@tracker.invalid/1' }
+      : {},
+    enableDedupe: false,
     // Errors are the point; a few traces are enough to see a slow door.
     tracesSampleRate: 0.05,
     sendDefaultPii: false,
     // A `console.error` anywhere in the kernel is a defect someone wrote down
     // (a Store answering 500), which is what the old tail worker paged on.
     integrations: [captureConsoleIntegration({ levels: ['error'] })],
-    beforeSend: scrub,
+    // Immediate transport also works after the originating SDK client has
+    // been disposed: a later window flush retains only this transport.
+    transport: (opts: BaseTransportOptions) =>
+      transport = createTransport(opts, async (request) => {
+        if (!env.SENTRY_DSN) return { statusCode: 200 }
+        let response = await fetch(opts.url, {
+          method: 'POST',
+          body: typeof request.body == 'string'
+            ? request.body
+            : new Uint8Array(request.body),
+          headers: opts.headers,
+          signal: AbortSignal.timeout(15_000),
+        })
+        await response.body?.cancel()
+        return { statusCode: response.status }
+      }),
+    beforeSend: async (event: ErrorEvent, hint: EventHint) => {
+      if (!enabled) return scrub(event)
+      if (!hint.data?.defect && seen(hint.originalException)) return null
+      let key = env.ERRORS ?? env
+      let sink = reporters.get(key)
+      if (!sink) {
+        sink = delivery(env, send, clock)
+        reporters.set(key, sink)
+      }
+      await sink(sample(scrub(event), hint))
+      return null
+    },
   }
 }
 
@@ -108,12 +234,21 @@ export let defect = (
   hit?: Hit,
 ) =>
   withScope((scope) => {
+    if (seen(error)) return
     for (let [k, v] of Object.entries(tags)) if (v) scope.setTag(k, v)
     if (hit) {
       scope.setUser({ id: hit.id })
       scope.setTag('account', hit.account)
     }
-    captureException(error)
+    // captureException suppresses an Error instance forever. Explicit reports
+    // count every occurrence; the SDK still supplies scope and wrapper capture.
+    scope.captureEvent({
+      ...error instanceof Error
+        ? {
+          exception: { values: [{ type: error.name, value: error.message }] },
+        }
+        : { message: String(error) },
+    }, { data: { defect: error } })
   })
 
 // The space and app a call's arguments named, and nothing else it said.

@@ -40,8 +40,10 @@ export type Inbound = {
 }
 
 export type Env = {
-  // Triggered Store traces only; errors continue through Sentry.
+  // Platform defects and triggered Store traces, through independent intake.
   ERRORS?: { send(rows: import('@yaks/graph').Bundle[]): Promise<void> }
+  SENTRY_DSN?: string
+  SENTRY_ENVIRONMENT?: string
   // Explicitly disable recording, primarily for isolated cost comparisons.
   STORE_TRACING?: string
   MODEL_FETCH?: typeof fetch
