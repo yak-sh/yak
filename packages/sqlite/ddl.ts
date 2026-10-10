@@ -59,6 +59,7 @@ import {
   notNull,
   NOW,
   render,
+  type Row,
   select,
   type Stmt,
   sub,
@@ -384,29 +385,33 @@ let predicate = (sql: string): string =>
     .toLowerCase().replace(/\s+/g, ' ').trim()
 
 let fitsIndex = (
-  driver: Driver,
-  table: string,
-  name: string,
+  held: Row | undefined,
   sql: string,
   now: CreateIndex,
-): boolean => {
-  let held = driver.query({ t: 'pragma', name: 'index_list', arg: table })
-    .find((row) => row.name == name)
-  return !!held && Number(held.unique) == Number(!!now.unique) &&
-    Number(held.partial) == Number(!!now.where) &&
-    (!now.where || predicate(sql) == predicate(render(now).sql))
-}
+): boolean =>
+  !!held && Number(held.unique) == Number(!!now.unique) &&
+  Number(held.partial) == Number(!!now.where) &&
+  (!now.where || predicate(sql) == predicate(render(now).sql))
 
 /** Retire vocabulary indexes whose declaration disappeared or changed. */
 export let retired = (driver: Driver, vocab: Vocab): Stmt[] => {
   let wanted = new Map(indexed(vocab).map((i) => [i.name, i]))
+  let listed = new Map<string, Map<string, Row>>()
   return objects(driver, { type: 'index' }).flatMap((row) => {
     let table = String(row.tbl_name), name = String(row.name)
     if (!(table == 'entity' || vocab.comp(table))) return []
     if (!managed(driver, table, name)) return []
     let now = wanted.get(name)
-    if (now && fitsIndex(driver, table, name, String(row.sql), now)) {
-      return []
+    if (now) {
+      let held = listed.get(table)
+      if (!held) {
+        held = new Map(
+          driver.query({ t: 'pragma', name: 'index_list', arg: table })
+            .map((r) => [String(r.name), r]),
+        )
+        listed.set(table, held)
+      }
+      if (fitsIndex(held.get(name), String(row.sql), now)) return []
     }
     return [{ t: 'drop' as const, kind: 'index' as const, name }]
   })

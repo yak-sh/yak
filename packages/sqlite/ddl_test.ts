@@ -152,6 +152,7 @@ test('a changed constraint replaces the index with the same name', () => {
               type: 'string',
               ...unique ? { unique: true } : { index: true },
             },
+            alias: { type: 'string', index: true },
           },
         },
       },
@@ -161,7 +162,7 @@ test('a changed constraint replaces the index with the same name', () => {
   before.install()
   graph({ storage: before, vocab: old }).apply([{
     entity: { eid: 'one' },
-    label: { name: 'north' },
+    label: { name: 'north', alias: 'compass' },
   }])
   let next = words(true), after = storage(d, next)
   after.install()
@@ -174,6 +175,17 @@ test('a changed constraint replaces the index with the same name', () => {
       label: { name: 'north' },
     }])
   )
+  graph({ storage: after, vocab: next }).apply([{
+    entity: { eid: 'south' },
+    label: { name: 'south', alias: 'compass' },
+  }])
+  let rolled = storage(d, old)
+  rolled.install()
+  graph({ storage: rolled, vocab: old }).apply([{
+    entity: { eid: 'two' },
+    label: { name: 'north', alias: 'compass' },
+  }])
+  assertEquals(rolled.read('.label.name=north').length, 2)
 })
 
 test('an orphan scalar eid refuses conversion and keeps its bytes', () => {
