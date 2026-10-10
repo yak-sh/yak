@@ -48,14 +48,6 @@ export let dir = fileURLToPath(new URL('./', import.meta.url)).replace(
   '',
 )
 
-let at = (path: string) => {
-  try {
-    return Deno.statSync(path).mtime?.getTime() ?? 0
-  } catch {
-    return 0
-  }
-}
-
 // Where a `@yaks/*` name goes when esbuild bundles. The kernel imports the
 // packages by name, which deno resolves through the repo's workspace; esbuild
 // knows nothing of the workspace. So the workspace itself is handed to it:
@@ -101,31 +93,72 @@ export let aliased = (root = repo, to = TSCONFIG) => {
   Deno.renameSync(tmp, to)
 }
 
-/** Prepare the workspace paths, generated assets/catalog and npm tree before
- * Wrangler or a probe reads them. Answers whether npm installed. */
+let timed = async <T>(name: string, make: () => Promise<T>) => {
+  let started = performance.now()
+  let value = await make()
+  console.log(
+    `${name}: ready in ${((performance.now() - started) / 1000).toFixed(3)}s`,
+  )
+  return value
+}
+
+let generated = async (name: string, args: string[]) => {
+  let result = await new Deno.Command('deno', {
+    args: ['run', '--no-lock', '-A', ...args],
+    stdin: 'null',
+  }).spawn().status
+  if (!result.success) throw new Error(`${name} generation failed`)
+}
+
+/** Independent prerequisites start together. A bundle waits for the files it
+ * reads; writes wait for all of them. Every lane settles even when one fails. */
+export let readiness = (
+  make: {
+    dependencies: () => Promise<boolean>
+    web: () => Promise<void>
+    catalog: () => Promise<void>
+  },
+) => {
+  let dependencies = Promise.resolve().then(make.dependencies)
+  let web = Promise.resolve().then(make.web)
+  let catalog = Promise.resolve().then(make.catalog)
+  let all = Promise.allSettled([dependencies, web, catalog]).then(
+    (completed) => {
+      for (let result of completed) {
+        if (result.status == 'rejected') throw result.reason
+      }
+    },
+  )
+  return { dependencies, web, catalog, all }
+}
+
+let preparing = (root = dir, timeout = 600_000) =>
+  readiness({
+    dependencies: () =>
+      timed('npm dependencies', async () => {
+        let changed = await installed(root, timeout)
+        aliased()
+        return changed
+      }),
+    web: () =>
+      timed('Web assets', () =>
+        generated('Web asset', [
+          join(repo, 'packages/web/assets.ts'),
+          join(root, 'public/_web'),
+          '@yaks/browse/web',
+        ])),
+    catalog: () =>
+      timed('Compiler catalog', () =>
+        generated('Compiler catalog', [
+          join(repo, 'bin/compiler-packages.ts'),
+        ])),
+  })
+
+/** Prepare every prerequisite before a probe reads it. Answers whether npm installed. */
 export let ready = async (root = dir, timeout = 600_000) => {
-  let changed = await installed(root, timeout)
-  aliased()
-  let [web, generated] = await Promise.all([
-    new Deno.Command('deno', {
-      args: [
-        'run',
-        '--no-lock',
-        '-A',
-        join(repo, 'packages/web/assets.ts'),
-        join(root, 'public/_web'),
-        '@yaks/browse/web',
-      ],
-      stdin: 'null',
-    }).spawn().status,
-    new Deno.Command('deno', {
-      args: ['run', '--no-lock', '-A', join(repo, 'bin/compiler-packages.ts')],
-      stdin: 'null',
-    }).spawn().status,
-  ])
-  if (!web.success) throw new Error('Web asset generation failed')
-  if (!generated.success) throw new Error('Compiler catalog generation failed')
-  return changed
+  let made = preparing(root, timeout)
+  await made.all
+  return await made.dependencies
 }
 
 // Wrangler accepts --env on either side of the command. Both forms need
@@ -250,13 +283,19 @@ export let preflight = async <T extends { remove: () => void }>(
   inspect: () => Promise<boolean>,
   prepare: () => Promise<T>,
   upload: (prepared: Promise<T>) => Promise<number>,
+  writable: () => Promise<unknown> = () => Promise.resolve(),
 ): Promise<number> => {
   let readied = Promise.resolve().then(ready)
   let prepared = readied.then(prepare)
-  let uploaded = Promise.allSettled([readied, Promise.resolve().then(inspect)])
-    .then(([ready, allowed]) => {
+  let uploaded = Promise.allSettled([
+    readied,
+    Promise.resolve().then(inspect),
+    Promise.resolve().then(writable),
+  ])
+    .then(([ready, allowed, writable]) => {
       if (ready.status == 'rejected') throw ready.reason
       if (allowed.status == 'rejected') throw allowed.reason
+      if (writable.status == 'rejected') throw writable.reason
       return allowed.value ? upload(prepared) : 0
     })
   let [made, sent] = await Promise.allSettled([prepared, uploaded])
@@ -757,11 +796,12 @@ let serving = async (env: string[], wrangler = WRANGLER): Promise<string[]> => {
 }
 
 if (import.meta.main) {
+  let started = performance.now()
   let argv = [...Deno.args]
   // npm ci pins this executable already. npx adds an npm process and package
   // resolution to every read/upload even when the exact package is installed.
-  let installed = join(dir, 'node_modules/.bin/wrangler')
-  let wrangler = at(installed) ? ['env', installed] : WRANGLER
+  let executable = join(dir, 'node_modules/.bin/wrangler')
+  let wrangler = WRANGLER
   let guarded = command(argv) === 'deploy' && !argv.includes('--dry-run')
   let inspect = async () => {
     if (!guarded) return true
@@ -816,6 +856,11 @@ if (import.meta.main) {
   // env(1) execs wrangler in its own place, so the pid signalled is the same.
   let run = async (argv: string[], unpinned = false) => {
     if (interrupted) return 130
+    console.log(
+      `Wrangler ${command(argv)} ${
+        argv.includes('-c') ? argv[argv.indexOf('-c') + 1] : 'wrangler.toml'
+      }: starting at ${((performance.now() - started) / 1000).toFixed(3)}s`,
+    )
     let [cmd, ...args] = unpinned
       ? ['env', ...PINNED.flatMap((v) => ['-u', v]), ...wrangler]
       : wrangler
@@ -844,16 +889,24 @@ if (import.meta.main) {
     if (compiled.status == 'rejected') throw compiled.reason
     return compiled.value.args
   }
-  let readied = Promise.resolve().then(() => ready())
-  let inspected = Promise.resolve().then(inspect)
+  let made = preparing()
+  let readied = made.dependencies.then(() => {
+    // Choose after npm has installed: a cold checkout has this pin now too.
+    wrangler = ['env', executable]
+  })
+  let inspected = readied.then(inspect)
   let uploads = new Map(
     siblings(argv).map((args) => [
       args[args.indexOf('-c') + 1],
       preflight(
-        () => readied,
+        () =>
+          args.includes('esbuild/wrangler.toml')
+            ? Promise.all([readied, made.catalog])
+            : readied,
         () => inspected,
         () => prepareSibling(args, wrangler),
         async (prepared) => uploadSibling(await prepared, run, wrangler),
+        () => made.all,
       ),
     ]),
   )
@@ -868,6 +921,7 @@ if (import.meta.main) {
           unpinned ? uploads.get(args[args.indexOf('-c') + 1])! : run(args),
         () => prepare(bundle),
       ),
+    () => made.all,
   )
   // A refused guard never enters runWrangler, so drain its sibling preparations
   // here too before leaving the door.

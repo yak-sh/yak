@@ -18,6 +18,7 @@ import {
   members,
   preflight,
   prepareSibling,
+  readiness,
   runWrangler,
   sameSibling,
   seen,
@@ -31,6 +32,90 @@ import {
 
 let read = (path: string) =>
   Deno.readTextFileSync(new URL(path, import.meta.url))
+
+test('deploy prerequisites generate while npm is pending and settle before writes', async () => {
+  let dependencies = Promise.withResolvers<boolean>()
+  let web = Promise.withResolvers<void>()
+  let catalog = Promise.withResolvers<void>()
+  let started: string[] = [], settled = false
+  let made = readiness({
+    dependencies: () => {
+      started.push('npm')
+      return dependencies.promise
+    },
+    web: () => {
+      started.push('web')
+      return web.promise
+    },
+    catalog: () => {
+      started.push('catalog')
+      return catalog.promise
+    },
+  })
+  let failure = Error('catalog failed')
+  let outcome = made.all.then(() => null, (error) => error).then((error) => {
+    settled = true
+    return error
+  })
+  try {
+    await Promise.resolve()
+    assertEquals(started, ['npm', 'web', 'catalog'])
+    dependencies.resolve(false)
+    assertEquals(await made.dependencies, false)
+    catalog.reject(failure)
+    await Promise.resolve()
+    assertEquals(settled, false)
+    web.resolve()
+    assertEquals(await outcome, failure)
+  } finally {
+    dependencies.resolve(false)
+    web.resolve()
+    catalog.resolve()
+    await outcome
+  }
+})
+
+for (let failed of ['web', 'catalog'] as const) {
+  test(`failed ${failed} generation settles prepared Workers without uploading`, async () => {
+    let web = Promise.withResolvers<void>()
+    let catalog = Promise.withResolvers<void>()
+    let lanes = { web, catalog }
+    let failure = Error(`${failed} failed`)
+    let made = readiness({
+      dependencies: () => Promise.resolve(false),
+      web: () => web.promise,
+      catalog: () => catalog.promise,
+    })
+    let prepared = Promise.withResolvers<void>()
+    let removed = false, uploaded = false
+    let deploy = preflight(
+      () => made.dependencies,
+      () => Promise.resolve(true),
+      () => {
+        prepared.resolve()
+        return Promise.resolve({ remove: () => removed = true })
+      },
+      () => {
+        uploaded = true
+        return Promise.resolve(0)
+      },
+      () => made.all,
+    ).then((code) => ({ code }), (error) => ({ error }))
+    try {
+      await prepared.promise
+      assertEquals(uploaded, false)
+      lanes[failed].reject(failure)
+      lanes[failed == 'web' ? 'catalog' : 'web'].resolve()
+      assertEquals(await deploy, { error: failure })
+      assertEquals(uploaded, false)
+      assert(removed)
+    } finally {
+      web.resolve()
+      catalog.resolve()
+      await deploy
+    }
+  })
+}
 
 test('wrangler: staging keeps deploy annotations with either flag position', () => {
   for (
