@@ -1,6 +1,7 @@
-// The native driver's statement cache: what a store repeats stays prepared, and
-// a fault only the handle itself can produce is recovered from. A store in
-// memory is made from the template the first one like it left.
+// The native driver's statement cache: what a store repeats stays prepared, a
+// kept statement answers with the columns its table has now, and a fault only
+// the handle itself can produce is recovered from. A store in memory is made
+// from the template the first one like it left.
 
 import { test } from '@yaks/testing'
 import './sqlitepath.ts'
@@ -177,39 +178,45 @@ test('cached native row metadata follows external schema edits and rollback', ()
   }
 })
 
-test('native decoders follow temp and attached schema metadata on every read', () => {
-  for (let schema of ['temp', 'attached']) {
+// SQLite's flags for a database named by a URI, read-write and made when
+// missing (SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE | SQLITE_OPEN_URI).
+let URI = 0x2 | 0x4 | 0x40
+
+// Where a kept statement's table gains a column: in its own connection's temp
+// or attached schema, or by another connection to the same database, which
+// keeps a schema of its own. The memdb VFS shares one database in memory by
+// name; a shared cache would share the schema too. These forms are inputs to
+// the native text boundary: @yaks/sql's graph AST does not express temp
+// tables, ATTACH or a URI.
+let changers: Record<string, () => [Database, Database, string]> = {
+  'in its own temp schema': () => {
     let db = new Database(':memory:')
+    return [db, db, 'temp.sample']
+  },
+  'in its own attached schema': () => {
+    let db = new Database(':memory:')
+    db.exec("attach ':memory:' as attached")
+    return [db, db, 'attached.sample']
+  },
+  'by another connection': () => {
+    let path = 'file:/native_test?vfs=memdb'
+    let open = () => new Database(path, { flags: URI })
+    return [open(), open(), 'sample']
+  },
+}
+
+for (let [where, make] of Object.entries(changers)) {
+  test(`a kept select answers at once with a column added ${where}`, () => {
+    let [db, changer, table] = make()
     try {
-      // These SQLite schema forms are inputs to the native text boundary;
-      // @yaks/sql's graph AST does not express temp tables or ATTACH.
-      if (schema == 'attached') db.exec("attach ':memory:' as attached")
-      db.exec(
-        `create table ${schema}.sample (x); insert into ${schema}.sample values (1)`,
-      )
-      let text = `select * from ${schema}.sample`
-      let plain = db.prepare(text)
-      let run = prepared(db)
-      let same = () => {
-        let expected = plain.all()
-        assertEquals(run(text), expected)
-        return expected
-      }
-      same()
-      same()
-      db.exec(`alter table ${schema}.sample add column y default 2`)
-      // The dependency reads metadata before stepping a statement. A schema
-      // recompile updates that metadata during the step; preserve its answer
-      // on that first read, then use the refreshed columns on the next one.
-      same()
-      assertEquals(same(), [{ x: 1, y: 2 }])
-      db.exec(
-        `drop table ${schema}.sample; create table ${schema}.sample (z); insert into ${schema}.sample values (3)`,
-      )
-      same()
-      assertEquals(same(), [{ z: 3 }])
+      let run = prepared(db), all = `select * from ${table}`
+      changer.exec(`create table ${table} (x); insert into ${table} values (1)`)
+      assertEquals(run(all), [{ x: 1 }])
+      changer.exec(`alter table ${table} add column y default 2`)
+      assertEquals(run(all), [{ x: 1, y: 2 }])
     } finally {
       db.close()
+      changer.close()
     }
-  }
-})
+  })
+}

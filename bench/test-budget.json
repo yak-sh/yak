@@ -3701,7 +3701,6 @@
       "a store in memory that already holds rows keeps them through install": 6.6,
       "cached native row metadata follows external schema edits and rollback": 1.6,
       "failed row decoding releases a cached write before rollback and the next savepoint": 3.2,
-      "native decoders follow temp and attached schema metadata on every read": 3.7,
       "native integer values round-trip beyond 32 bits": 1.3
     },
     "packages/sqlite/number_test.ts": {

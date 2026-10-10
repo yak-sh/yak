@@ -71,24 +71,22 @@ let refs = (e: Expr): string[] => {
  * It keeps the statements it prepares. The adapter asks the same
  * parameterized gathers and writes thousands of times a session, and
  * preparing each one afresh costs a compile for nothing; the cache is bounded
- * and `Database.close()` finalizes what it holds. A kept statement outlives no
- * schema change: SQLite recompiles one after DDL on its first step, but
- * @db/sqlite reads the columns before that step, so a kept `select *` would
- * answer with the columns it was prepared under. The cache empties whenever
- * the schema version moves, a rolled-back change included.
+ * and `Database.close()` finalizes what it holds. A kept statement lives
+ * through a schema change, whoever made it: SQLite recompiles the statement at
+ * its next step, against the schema as it is then. Its columns are read once
+ * that step has made a row, since a `select *` can answer with more, fewer or
+ * other columns than it was prepared with.
  *
  * Text a stand-in was handed can hold several statements, as a Durable
  * Object's `exec` takes; they all run, and answer no rows. Parameters bind to
  * one statement, so such a string with parameters is refused rather than cut
  * short. A rendered statement is always one.
  */
-// A statement that reads or writes rows, and so moves no schema.
-let ROWS = /^\s*(?:select|insert|update|delete|replace|with)\b/i
-
 // The dependency's generated decoder closes over only its column reader. The
 // connection, integer width and JSON options arrive with each row, so a column
 // projection can share its compiled function across statements and databases.
-let decoders = new Map<string, ReturnType<Statement['getRowObject']>>()
+type Decoder = ReturnType<Statement['getRowObject']>
+let decoders = new Map<string, Decoder>()
 let decoder = (names: string[], compile: Statement['getRowObject']) => {
   let key = JSON.stringify(names)
   let kept = decoders.get(key)
@@ -99,7 +97,7 @@ let decoder = (names: string[], compile: Statement['getRowObject']) => {
   return made
 }
 
-export let prepared = (db: Database, owned = false) => {
+export let prepared = (db: Database) => {
   // SQLite integers are 64-bit. The library's default reader truncates them
   // to 32 bits; safe JS integers must round-trip through every driver caller.
   db.int64 = true
@@ -114,66 +112,39 @@ export let prepared = (db: Database, owned = false) => {
     }
     let original = statement.getRowObject.bind(statement)
     let standard = statement.getRowObject == Statement.prototype.getRowObject
-    let names: string[] | undefined
-    let decode: ReturnType<typeof original> | undefined
-    // Inspect the columns as @db/sqlite does on every read. Only the generated
-    // decoder is reusable: it reads each value's live type and receives the
-    // integer/JSON options for this call. Temp and attached schemas can change
-    // independently of main's version, so metadata itself never stays cached.
-    statement.getRowObject = () => {
-      let current = statement.columnNames()
+    let names: string[] = []
+    let decode: Decoder | undefined
+    // The columns the statement answers with now. Only the generated decoder
+    // is reusable: it reads each value's live type and receives the
+    // integer/JSON options for this call.
+    let current = () => {
+      let now = statement.columnNames()
       if (
-        !decode || names!.length != current.length ||
-        names!.some((name, i) => name !== current[i])
+        !decode || names.length != now.length ||
+        names.some((name, i) => name !== now[i])
       ) {
-        names = current
-        // Writes and DDL have no row to decode. The dependency would still
-        // compile a function for their empty projection before stepping them.
-        decode = !standard
-          ? original()
-          : current.length
-          ? decoder(current, original)
-          : () => ({})
+        names = now
+        decode = standard ? decoder(now, original) : original()
       }
       return decode
+    }
+    // @db/sqlite asks for the decoder before its first step, while a
+    // statement the schema has moved under still describes its old plan; the
+    // step recompiles it. So the decoder it is handed reads the columns at
+    // the first row, after that step, and decodes every row of the read
+    // with what it found.
+    statement.getRowObject = () => {
+      let row: Decoder | undefined
+      return (h, int64, json) => (row ??= current())(h, int64, json)
     }
     return statement
   }
   let cache = new Map<string, ReturnType<Database['prepare']>>()
-  let schema = db.prepare(
-    render({ t: 'pragma', schema: 'main', name: 'schema_version' }).sql,
-  )
-  let version: unknown
-  // Whether the schema version need not be asked before the next statement:
-  // inside a transaction, or on a private connection whose schema can change
-  // only through this runner, after nothing but rows read and written. Another
-  // connection's change is seen only where a snapshot begins, and this one's
-  // own only after a statement of another kind (DDL, a transaction boundary,
-  // a pragma, a script).
-  let settled = false
-  let forget = () => {
-    for (let statement of cache.values()) statement.finalize()
-    cache.clear()
-    settled = false
-  }
-  let live = (sql: string) => {
+  return (sql: string, params: Param[] = []): Row[] => {
     // @db/sqlite closes and finalizes its native handles without invalidating
     // the JS Statement objects. Calling a cached one after close is a SIGSEGV,
     // not a catchable SQLite error. Refuse at the boundary, before any FFI.
     if (!db.open) throw new Error('the database is closed')
-    let held = owned || db.inTransaction
-    let asked = !settled || !held
-    settled = held && ROWS.test(sql)
-    if (!asked) return
-    let now = schema.value()![0]
-    if (now === version) return
-    forget()
-    version = now
-  }
-  // `forget` drops every kept statement, for a database whose whole content
-  // was just replaced under them.
-  return Object.assign((sql: string, params: Param[] = []): Row[] => {
-    live(sql)
     let statement = cache.get(sql)
     if (!statement) {
       statement = prepare(sql)
@@ -182,7 +153,6 @@ export let prepared = (db: Database, owned = false) => {
         if (params.length) {
           throw new Error(`parameters bind to one statement, not several`)
         }
-        settled = false
         db.exec(sql)
         return []
       }
@@ -212,7 +182,7 @@ export let prepared = (db: Database, owned = false) => {
       } catch { /* the step's error, repeated */ }
       throw error
     }
-  }, { forget })
+  }
 }
 
 // The schemas this process's databases in memory were made with, each kept as
@@ -320,7 +290,6 @@ export let driver = (db: Database): Driver => {
         let kept = templates.get(at)
         if (kept) {
           kept.backup(db)
-          run.forget()
           return
         }
         make()
