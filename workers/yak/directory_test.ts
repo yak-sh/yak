@@ -116,55 +116,35 @@ let stub = () => {
 // space answers the space with no app, which is how `aimed` knows to leave the
 // path alone. A hostname nobody attached answers null, which is what keeps
 // every address that exists today routing as it always has.
-let hosts = () => {
-  let env = {
-    STORE: {
-      idFromName: (n: string) => n,
-      get: () => ({
-        fetch: (r: Request) => {
-          let q = decodeURIComponent(new URL(r.url).search)
-          if (q.includes('space.slug')) {
-            return Response.json([
-              { entity: { eid: 'm1', num: 1 }, space: { slug: 'yak' } },
-            ])
-          }
-          if (q.includes('hostname.name=herbusiness.com')) {
-            return Response.json([{
-              entity: { eid: 'd1', num: 3 },
-              hostname: { name: 'herbusiness.com', serves: 'a1' },
-            }])
-          }
-          if (q.includes('hostname.name=ourbookclub.com')) {
-            return Response.json([{
-              entity: { eid: 'd2', num: 4 },
-              hostname: { name: 'ourbookclub.com', serves: 's1' },
-            }])
-          }
-          if (q.includes('.app.space=s1')) {
-            return Response.json([{
-              entity: { eid: 'a1', num: 2 },
-              app: { slug: 'recipes', space: 's1', version: 1 },
-            }])
-          }
-          if (q.includes('id=a1')) {
-            return Response.json([{
-              entity: { eid: 'a1', num: 2 },
-              app: { slug: 'recipes', space: 's1', version: 1 },
-            }])
-          }
-          if (q.includes('id=s1')) {
-            return Response.json([{
-              entity: { eid: 's1', num: 1 },
-              space: { slug: 'jeff', home: null },
-            }])
-          }
-          return Response.json([])
-        },
-      }),
+let hosts = () =>
+  directory(dirPart.part({
+    query: (q) => {
+      let rows = q.includes('hostname.name=herbusiness.com')
+        ? [{
+          entity: { eid: 'd1', num: 3 },
+          hostname: { name: 'herbusiness.com', serves: 'a1' },
+        }]
+        : q.includes('hostname.name=ourbookclub.com')
+        ? [{
+          entity: { eid: 'd2', num: 4 },
+          hostname: { name: 'ourbookclub.com', serves: 's1' },
+        }]
+        : q.includes('.app.space=s1') || q.includes('.entity.eid=a1')
+        ? [{
+          entity: { eid: 'a1', num: 2 },
+          app: { slug: 'recipes', space: 's1', version: 1 },
+        }]
+        : q.includes('.entity.eid=s1')
+        ? [{
+          entity: { eid: 's1', num: 1 },
+          space: { slug: 'jeff', home: null },
+        }]
+        : []
+      return Promise.resolve(rows)
     },
-  } as unknown as Env
-  return directory({ fetch: (r: Request) => dirPart.fetch(r, env) })
-}
+    apply: () => Promise.resolve([]),
+    meaning: () => Promise.resolve([]),
+  }))
 
 test('a hostname resolves to its space and app, or to nobody', async () => {
   let dir = hosts()
@@ -212,7 +192,7 @@ test('a release reaches consumer and home through stale isolate caches', async (
       },
       apply: () => Promise.resolve([]),
     }
-    let via = { fetch: dirPart.over(store) }
+    let via = dirPart.part(store)
     return { dir: directory(via), another: () => directory(via) }
   }
   let first = isolate(0)
@@ -471,4 +451,57 @@ test('pointer history lowers expanded actor and session references', async () =>
   let [row] = await dir.switches(an)
   assertEquals(row.switched?.by, 'person')
   assertEquals(row.switched?.via, 'session')
+})
+
+test('the directory part shares its cache, refreshes and clears it after a write', async () => {
+  let version = 1, reads = 0
+  let headers: Record<string, string> | undefined
+  let store: Meta = {
+    query: (q) => {
+      if (q == 'app') reads++
+      return Promise.resolve([{ entity: { eid: 'row' }, app: { version } }])
+    },
+    apply: (_rows, sent) => {
+      headers = sent
+      version = 3
+      return Promise.resolve([])
+    },
+    meaning: () => Promise.resolve([]),
+  }
+  let first = dirPart.part(store), second = dirPart.part(store)
+  let before = await first.query('app')
+  version = 2
+  assertEquals(await second.query('app'), before)
+  assertEquals(reads, 1)
+  assertEquals(JSON.parse(await second.query('app', true))[0].app.version, 2)
+  await first.apply([], { 'x-yak-person': 'person', extra: 'private' })
+  assertEquals(headers, { 'x-yak-person': 'person' })
+  assertEquals(JSON.parse(await second.query('app'))[0].app.version, 3)
+  assertEquals(reads, 3)
+})
+
+test('the directory HTTP door carries only admitted write headers to its part', async () => {
+  let headers: Record<string, string> | undefined
+  let store: Meta = {
+    query: () => Promise.resolve([{ entity: { eid: 'seed' } }]),
+    apply: (rows, sent) => {
+      headers = sent
+      return Promise.resolve(rows)
+    },
+    meaning: () => Promise.resolve([]),
+  }
+  let rows = [{ entity: { eid: 'written' }, doc: { title: 'A title' } }]
+  let result = await dirPart.over(store)(
+    new Request('http://directory/apply', {
+      method: 'POST',
+      body: JSON.stringify({ entities: rows }),
+      headers: {
+        'x-yak-person': 'person',
+        'x-yak-kernel': '1',
+        cookie: 'private',
+      },
+    }),
+  )
+  assertEquals(await result.json(), rows)
+  assertEquals(headers, { 'x-yak-person': 'person', 'x-yak-kernel': '1' })
 })

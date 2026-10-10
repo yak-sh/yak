@@ -564,56 +564,74 @@ let forwarded = (req: Request) =>
     VOUCH.map((h) => [h, req.headers.get(h)]).filter(([, v]) => v),
   ) as Record<string, string>
 
-// This part's own door is the fleet's mutation envelope — a bundle list under
-// `entities`, which is what its typed client and every tool writes — and the
-// store below it is a graph, so the envelope is opened here, the bundles go on
-// as they are, and the batch as applied comes back (meta.ts). `over` names the
-// store the door speaks to, which is the seam a test drives a whole directory
-// against.
-export let over = (store: Meta) => async (req: Request): Promise<Response> => {
-  let cache = cached(store)
-  let url = new URL(req.url)
-  if (url.pathname == '/apply' && req.method == 'POST') {
+/** The directory's cached read and seeded write boundary over its meta store.
+ * In-process callers hold this interface; {@link over} carries it over HTTP. */
+export let part = (store: Meta) => ({
+  query: async (line: string, fresh = false): Promise<string> => {
+    let cache = cached(store)
+    let hit = fresh ? null : cache.get(line)
+    if (hit && hit.at > Date.now() - TTL) return hit.body
+    let body = JSON.stringify(await store.query(line))
+    if (body != '[]') cache.set(line, { at: Date.now(), body })
+    return body
+  },
+  apply: async (bundles: Bundle[], headers: Record<string, string> = {}) => {
     let first = seeded.get(store)
     if (!first) seeded.set(store, first = seed(store))
     await first
-    try {
-      let sent = await req.json() as { entities?: Bundle[] }
-      let headers = forwarded(req)
-      if (req.headers.get('x-yak-kernel') == '1') {
-        headers['x-yak-kernel'] = '1'
+    let admitted = Object.fromEntries(
+      [...VOUCH, 'x-yak-kernel']
+        .filter((name) =>
+          headers[name] &&
+          (name != 'x-yak-kernel' || headers[name] == '1')
+        )
+        .map((name) => [name, headers[name]]),
+    )
+    let applied = await store.apply(bundles, admitted)
+    cached(store).clear()
+    return applied
+  },
+})
+
+export type Part = ReturnType<typeof part>
+
+// The fleet's mutation envelope holds bundles under `entities`; the store
+// speaks bundles directly. HTTP carries only the headers this door admits.
+export let over = (store: Meta) => {
+  let door = part(store)
+  return async (req: Request): Promise<Response> => {
+    let url = new URL(req.url)
+    if (url.pathname == '/apply' && req.method == 'POST') {
+      try {
+        let sent = await req.json() as { entities?: Bundle[] }
+        let headers = forwarded(req)
+        if (req.headers.get('x-yak-kernel') == '1') {
+          headers['x-yak-kernel'] = '1'
+        }
+        return Response.json(await door.apply(sent.entities ?? [], headers))
+      } catch (e) {
+        caught(e, { request: 'directory /apply' })
+        return new Response(e instanceof Error ? e.message : String(e), {
+          status: 400,
+        })
       }
-      let applied = await store.apply(sent.entities ?? [], headers)
-      // The directory just moved; nothing read before it is still true.
-      cache.clear()
-      return Response.json(applied)
+    }
+    if (url.pathname != '/query' || req.method != 'GET') return notFound()
+    try {
+      let body = await door.query(
+        url.searchParams.get('q') ?? '',
+        !!req.headers.get(FRESH),
+      )
+      return new Response(body, {
+        headers: { 'content-type': 'application/json' },
+      })
     } catch (e) {
-      caught(e, { request: 'directory /apply' })
+      caught(e, { request: 'directory /query' })
       return new Response(e instanceof Error ? e.message : String(e), {
         status: 400,
       })
     }
   }
-  if (url.pathname != '/query' || req.method != 'GET') return notFound()
-  let line = url.searchParams.get('q') ?? ''
-  let hit = req.headers.get(FRESH) ? null : cache.get(line)
-  if (hit && hit.at > Date.now() - TTL) {
-    return Response.json(JSON.parse(hit.body))
-  }
-  let rows: Bundle[]
-  try {
-    rows = await store.query(line)
-  } catch (e) {
-    caught(e, { request: 'directory /query' })
-    return new Response(e instanceof Error ? e.message : String(e), {
-      status: 400,
-    })
-  }
-  let body = JSON.stringify(rows)
-  if (body != '[]') cache.set(line, { at: Date.now(), body })
-  return new Response(body, {
-    headers: { 'content-type': 'application/json' },
-  })
 }
 
 /** The part, over the directory's own store. The env it asks for is the one
@@ -975,6 +993,30 @@ export let addresses = (had: string[]) => ({
 // The typed client over the handler, in-process or across a binding.
 export type Directory = ReturnType<typeof directory>
 
+let remote = (via: Fetcher): Part => ({
+  query: async (q, fresh) => {
+    let r = await via.fetch(
+      new Request(
+        `http://directory/query?q=${encodeURIComponent(q)}`,
+        fresh ? { headers: { [FRESH]: '1' } } : {},
+      ),
+    )
+    if (!r.ok) throw await answered(r)
+    return r.text()
+  },
+  apply: async (entities, headers) => {
+    let r = await via.fetch(
+      new Request('http://directory/apply', {
+        method: 'POST',
+        body: JSON.stringify({ entities }),
+        headers,
+      }),
+    )
+    if (!r.ok) throw await answered(r)
+    return r.json()
+  },
+})
+
 // `now` makes every read of this client fresh (FRESH above). App rows are
 // always fresh: the app and the homes it borrows from must select declarations
 // written by one directory commit, even when two isolates hold old caches.
@@ -986,38 +1028,16 @@ export type Directory = ReturnType<typeof directory>
 // until the request writes to the directory, by this client or any other door
 // (hops.ts `recall`). What is kept is the text: every caller parses rows of
 // its own.
-export let directory = (via: Fetcher, now = false) => {
-  // The whole filter line as one parameter, values written raw: the door
-  // hands it to the graph as the query it is (meta.ts), rather than each
-  // caller escaping the pieces of a search string.
-  let ask = async (q: string, fresh: boolean): Promise<string> => {
-    let r = await via.fetch(
-      new Request(
-        `http://directory/query?q=${encodeURIComponent(q)}`,
-        fresh ? { headers: { [FRESH]: '1' } } : {},
-      ),
-    )
-    if (!r.ok) throw await answered(r)
-    return r.text()
-  }
+export let directory = (via: Fetcher | Part, now = false) => {
+  let door = 'fetch' in via ? remote(via) : via
   let query = async (q: string, fresh = now): Promise<Row[]> =>
-    JSON.parse(await recall(META_STORE, q, () => ask(q, fresh), fresh))
+    JSON.parse(await recall(META_STORE, q, () => door.query(q, fresh), fresh))
   let one = async (q: string, fresh = now) => (await query(q, fresh))[0]
-  let write = async (
+  let write = (
     mutation: { entities: Bundle[] },
     headers: Record<string, string> = {},
-  ): Promise<Bundle[]> => {
-    let r = await writing(META_STORE, () =>
-      via.fetch(
-        new Request('http://directory/apply', {
-          method: 'POST',
-          body: JSON.stringify(mutation),
-          headers,
-        }),
-      ))
-    if (!r.ok) throw await answered(r)
-    return r.json()
-  }
+  ): Promise<Bundle[]> =>
+    writing(META_STORE, () => door.apply(mutation.entities, headers))
   // Named, because two of the questions below are asked in terms of the
   // others: a person's own space is read, minted, and read back.
   let self = {
@@ -1439,7 +1459,7 @@ export let directoryOf = (ns: Namespace): Directory => {
   if (!held) {
     reached.set(
       ns,
-      held = directory({ fetch: (req) => fetch(req, { STORE: ns }) }, true),
+      held = directory(part(metaStore({ STORE: ns })), true),
     )
   }
   return held
