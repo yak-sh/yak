@@ -409,22 +409,25 @@ export let statRange = (
 ): Partial<Record<Stat | 'dmg', [number, number]>> => {
   let t = ITEMS[kind]
   if (!t?.slot || !t.tier) return {}
-  let [lo, hi] = tierRange(t.tier)
-  let low = levelled(roll('preview', kind, 'common'), lo)
-  let slot = t.slot
-  let pool = STATS.filter((s) => BONUSES[s].on.includes(slot))
-  let high = (stat: Stat | 'dmg') => {
-    let calls = 0
-    let r = () => {
-      calls++
-      return calls == 2 && stat != 'dmg' && pool.includes(stat)
-        ? (pool.indexOf(stat) + 0.5) / pool.length
-        : 1 - Number.EPSILON
-    }
-    return levelled(roll('preview', kind, 'legendary', r), hi)
-  }
+  let slot = t.slot, tier = t.tier
+  let g = GRADES.legendary, r = 1 - Number.EPSILON
+  let fine = g.fine * (0.96 + 0.08 * r)
+  let scale = (s: Stat | 'dmg', n: number, k: number) =>
+    s == 'hp' ? Math.round(n * k) : two(n * k)
   return Object.fromEntries(GEAR_STATS.flatMap((s) => {
-    let a = low[s] ?? 0, b = high(s)[s] ?? 0
+    let n = t[s] ?? 0, a = scale(s, n, 1), b = n
+    // Keep the roll's rounding before adding a bonus, then the level's
+    // rounding after it. No names, legends or unrelated bonuses are needed.
+    if (n) {
+      if (s == 'dmg') b = two(n * fine)
+      else if (s == 'armour' || s == 'hp') b = Math.round(n * fine)
+    }
+    if (s != 'dmg' && g.rolls && BONUSES[s].on.includes(slot)) {
+      let bonus = BONUSES[s]
+      let most = bonus.most(tier) * g.big * (0.5 + 0.5 * r)
+      b = two(b + (bonus.whole ? Math.max(1, Math.round(most)) : two(most)))
+    }
+    b = scale(s, b, 1.2)
     return a || b ? [[s, [a, b]]] : []
   }))
 }

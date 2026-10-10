@@ -2,9 +2,10 @@
 // contain the pieces those rolls can make.
 import { test } from '@yaks/testing'
 import { assert, assertEquals } from '@std/assert'
+import { type ComponentChildren, Fragment, h } from 'preact'
+import { renderToString } from 'preact-render-to-string'
 import { tierRange } from './arms.ts'
 import { itemStats, numbers, statValue, stepRange, versus } from './compare.ts'
-import { drawn } from './dom_fixture.ts'
 import { ITEMS } from './items.ts'
 import { seedItems } from './items_fixture.ts'
 import {
@@ -20,6 +21,9 @@ import {
 import { MOST, upgradesOf } from './upgrade.ts'
 
 seedItems()
+
+let read = (nodes: ComponentChildren) =>
+  renderToString(h(Fragment, null, nodes))
 
 test('upgrade rows preserve old steps and replay new rolls', () => {
   let row = upgradeGain('upgrade-one')
@@ -53,8 +57,8 @@ test('upgrade rows preserve old steps and replay new rolls', () => {
   assertEquals(upgradesOf(ordered), upgradesOf(ordered.reverse()))
 })
 
-test('each upgrade roll stays within a visible range', () => {
-  for (let kind of Object.keys(ITEMS).filter((k) => ITEMS[k].slot)) {
+for (let kind of Object.keys(ITEMS).filter((k) => ITEMS[k].slot)) {
+  test(`each upgrade roll stays within a visible range: ${kind}`, () => {
     let h = { eid: 'x', kind, lvl: tierRange(ITEMS[kind].tier!)[0] }
     let [lo, hi] = upgradeRange(h), [a, b] = [piece(lo), piece(hi)]
     assert(GEAR_STATS.some((s) => a[s] != b[s]), kind)
@@ -63,11 +67,9 @@ test('each upgrade roll stays within a visible range', () => {
       let n = got[s] ?? 0
       assert(n >= (a[s] ?? 0) && n <= (b[s] ?? 0), `${kind} ${s}`)
     }
-  }
-})
+  })
 
-test('craft preview bounds contain the gear that can roll', () => {
-  for (let kind of Object.keys(ITEMS).filter((k) => ITEMS[k].slot)) {
+  test(`craft preview bounds contain the gear that can roll: ${kind}`, () => {
     let [lo, hi] = tierRange(ITEMS[kind].tier!)
     let bounds = statRange(kind)
     for (let rarity of RARITIES) {
@@ -81,7 +83,10 @@ test('craft preview bounds contain the gear that can roll', () => {
         }
       }
     }
-  }
+  })
+}
+
+test('non-gear has no craft stat range', () => {
   assertEquals(statRange('tonic'), {})
 })
 
@@ -93,12 +98,12 @@ test('upgrade preview shows current values and possible next values', () => {
     p: piece(x),
     worn: { main: x },
   })
-  let html = drawn(stepRange(
+  let html = read(stepRange(
     { lvl: 13, learned: [] },
     side(h),
     side({ ...h, ...lo }),
     side({ ...h, ...hi }),
-  )).textContent!
+  ))
   assert(html.includes('now → at +1'))
   assert(html.includes('Weapon power '))
   assert(html.includes('Attack '))
@@ -110,21 +115,23 @@ test('item stats and equipped hero changes read separately', () => {
   let h = { eid: 's', kind: 'sword2', n: 1, lvl: 13 }
   let hero = { lvl: 13, learned: [] }
   let p = piece(h)
-  let card = drawn(versus(
+  let card = read(versus(
     hero,
     { label: 'In your bag', p, worn: { main: h } },
     { label: 'Worn', worn: {} },
   ))
-  let own = [...drawn(itemStats(p)).querySelectorAll('.ValeStats_Stat')]
-    .map((line) => line.textContent!)
+  let own = itemStats(p).map(read)
   let attack = numbers(hero, { main: h }).blow
-  let text = card.textContent!
-  assert(own.includes(`${statValue('dmg', p.dmg!)} Weapon power`))
-  assert(!own.some((line) => line.endsWith(' Attack')))
-  assert(text.indexOf('Weapon power') < text.indexOf('If equipped'))
   assert(
-    [...card.querySelectorAll('em')].some((e) => e.textContent == `${attack}`),
+    own.some((line) =>
+      line.includes(`${statValue('dmg', p.dmg!)} Weapon power`)
+    ),
   )
-  assert(text.includes('Attack '))
-  assert(!text.includes('a blow'))
+  assert(!own.some((line) => / Attack<\/span>/.test(line)))
+  assert(card.indexOf('Weapon power') < card.indexOf('If equipped'))
+  assert(
+    new RegExp(`<em[^>]*>${attack}</em>`).test(card),
+  )
+  assert(card.includes('Attack '))
+  assert(!card.includes('a blow'))
 })

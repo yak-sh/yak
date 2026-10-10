@@ -206,11 +206,6 @@
     "apps/vale/gear_level_test.ts": {
       "item levels stay with their piece and refine its power": 2
     },
-    "apps/vale/gear_rolls_test.ts": {
-      "craft preview bounds contain the gear that can roll": 21.6,
-      "each upgrade roll stays within a visible range": 1.9,
-      "item stats and equipped hero changes read separately": 1.1
-    },
     "apps/vale/ground_test.ts": {
       "mountain steps above a cave retain their exposed sides and open space": 21.3
     },
