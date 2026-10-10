@@ -136,7 +136,7 @@ let preparing = (root = dir, timeout = 600_000) =>
   readiness({
     dependencies: () =>
       timed('npm dependencies', async () => {
-        let changed = await installed(root, timeout)
+        let changed = await installed(root, { timeout })
         aliased()
         return changed
       }),

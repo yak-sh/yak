@@ -83,14 +83,16 @@ nor the tests. `SKIP_DEPENDENCY_INSTALL=1` disables Builds' automatic install
 `bin/build-yak deploy` keeps Deno and the installed npm project under npm's
 restored cache directory, linking the checkout's `node_modules` to that tree.
 Each package manifest, lockfile and platform has its own project. It runs
-`npm ci` only when the installed `node_modules/.package-lock.json` differs from
-`package-lock.json` or installed packages are missing. Restored matching
-packages are reused regardless of file timestamps. An empty cache installs
-normally; with the variable unset, Builds' automatic install seeds the cache. It
-generates web assets and the compiler catalog together with npm readiness. The
-kernel and outbound bundles and the deploy pre-flight check (`superseded`) start
-once npm is ready; the compiler bundle also waits for its catalog. Uploads wait
-for all generated files and the guard. Sandbox base preparation and each changed
+`npm ci` only when the successful install's exact inputs change, package
+identities differ or installed packages are missing. npm's hidden lockfile may
+omit package metadata; `node_modules/.yak-install` records the manifest,
+lockfile and platform digest after success. Existing complete cache projects are
+adopted by their matching content key. Restored matching packages are reused
+regardless of file timestamps. An empty cache installs normally. It generates
+web assets and the compiler catalog together with npm readiness. The kernel and
+outbound bundles and the deploy pre-flight check (`superseded`) start once npm
+is ready; the compiler bundle also waits for its catalog. Uploads wait for all
+generated files and the guard. Sandbox base preparation and each changed
 sibling's upload run as their own preparation allows. The kernel uploads after
 all succeed. Each sibling is bundled locally and compared with its fully serving
 deployment's `inputs:<sha256>` annotation. When the deployment summary truncates
