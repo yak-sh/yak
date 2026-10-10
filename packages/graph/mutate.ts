@@ -83,6 +83,7 @@ export let mutate = (
   let events = eventsOf(vocab)
   let eids = [...new Set(bundles.map((b) => b.entity.eid))]
   return after(tx.get(eids), (found) => {
+    let present = new Set(found.map((b) => b.entity.eid))
     // Deleted before this batch began: a write may bring one back.
     let buried = new Set(
       found.filter((b) => dead(b)).map((b) => b.entity.eid),
@@ -103,6 +104,7 @@ export let mutate = (
         back.push(eid)
       }
       if (dead(b)) {
+        if (!present.has(eid)) return []
         gone.add(eid)
         if (!st.killed.includes(eid)) st.killed.push(eid)
         return [b]
@@ -113,6 +115,7 @@ export let mutate = (
         if (!comps(w).length) return []
       }
       live.push(w)
+      present.add(eid)
       if (comps(w).length) st.touched.add(eid)
       return [w]
     })

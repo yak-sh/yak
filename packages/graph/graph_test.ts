@@ -31,6 +31,55 @@ let sync = (out: Bundle[] | Promise<Bundle[]>): Bundle[] => {
 let at = (out: Bundle[], eid: string, name: string) =>
   comp(out.find((b) => b.entity.eid == eid && b[name] !== undefined), name)
 
+for (let async of [false, true]) {
+  for (let again of [false, true]) {
+    test(`deleting a never-existing eid${again ? ' again' : ''} writes and returns nothing (${async ? 'async' : 'sync'})`, async () => {
+      let journaled: Bundle[] = []
+      let storage = ram(books)
+      let one = graph({
+        vocab: books,
+        storage: async ? slow(storage) : storage,
+        plugins: [{
+          name: 'journal',
+          hooks: {
+            journal: (bs) => (journaled.push(...bs), bs),
+          },
+        }],
+      })
+      let deletion = [{ entity: { eid: 'missing' }, $delete: true }]
+      if (again) await one.apply(deletion)
+      assertEquals(await one.apply(deletion), [])
+      assertEquals(await one.get(['missing']), [])
+      assertEquals(journaled, [])
+    })
+  }
+  for (let ordered of [false, true]) {
+    test(`missing deletes preserve writes in the same batch (${async ? 'async' : 'sync'}, ${ordered ? 'ordered' : 'bulk'})`, async () => {
+      let storage = ram(books)
+      let one = graph({
+        vocab: books,
+        storage: async ? slow(storage) : storage,
+        plugins: ordered
+          ? [{ name: 'ordered', beforeWrite: () => (bs) => bs }]
+          : [],
+      })
+      let out = await one.apply([
+        { entity: { eid: 'first' }, book: { pages: 1 } },
+        { entity: { eid: 'first' }, $delete: true },
+        { entity: { eid: 'later' }, $delete: true },
+        { entity: { eid: 'later' }, book: { pages: 2 } },
+        { entity: { eid: 'missing' }, $delete: true },
+        { entity: { eid: 'other' }, book: { pages: 3 } },
+      ])
+      assertEquals(out.map((b) => b.entity.eid), ['first', 'later', 'other'])
+      assertEquals((await one.get(['first']))[0].tombstone, {})
+      assertEquals((await one.get(['later']))[0].book, { pages: 2 })
+      assertEquals((await one.get(['other']))[0].book, { pages: 3 })
+      assertEquals(await one.get(['missing']), [])
+    })
+  }
+}
+
 test('outside reads whole committed state and evaluates bindings after each write', async () => {
   let one = graph({ storage: ram(books), vocab: books })
   let tx = one.outside
