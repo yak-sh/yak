@@ -10,7 +10,7 @@
 // caller that read a bundle back and sent it again is doing a normal thing.
 
 import type { Bundle } from './bundle.ts'
-import { Refused } from './admit.ts'
+import { Refused } from './errors.ts'
 
 /** The requests `apply()` answers itself. */
 export let REQUESTS: string[] = [

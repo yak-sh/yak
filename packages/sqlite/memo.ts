@@ -63,7 +63,7 @@ import {
   type Stmt,
 } from '@yaks/sql'
 import { type Filter, filter } from '@yaks/match'
-import { tables } from './ddl.ts'
+import { tables } from './layout.ts'
 import type { Known, Spine } from './write.ts'
 
 type Get = (eids: string[], comps?: string[]) => Bundle[]

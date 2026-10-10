@@ -9,7 +9,7 @@
     "./Comments": "./Comments.tsx",
     "./comment-host": "./comment-host.ts",
     "./comments": "./comments.ts",
-    "./views": "./views.tsx",
+    "./views": "./views.ts",
     "./component-views": "./component-views.tsx"
   },
   "license": "Apache-2.0",

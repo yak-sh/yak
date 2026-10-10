@@ -22,7 +22,7 @@ import {
   table,
   val,
 } from '@yaks/sql'
-import { META } from './ddl.ts'
+import { META } from './layout.ts'
 
 /** Read, write, clear — the whole interface. Values are text; an application
  * that wants a number or a timestamp formats it itself, the way it will parse

@@ -31,16 +31,8 @@ import { cast, unknownComps, unknownProps, type Vocab } from '@yaks/vocab'
 import type { Bundle, Comp } from './bundle.ts'
 import { comps, dead, reserved } from './bundle.ts'
 
-/** A batch refused at admission: the message names the component and the
- * property, so the caller can see exactly what was wrong. */
-export class Refused extends Error {
-  /** @param message what was wrong, naming the component and property the
-   * caller sent */
-  constructor(message: string) {
-    super(message)
-    this.name = 'Refused'
-  }
-}
+import { Refused } from './errors.ts'
+export { Refused } from './errors.ts'
 
 /**
  * The bundles, refused unless they form a batch: an array whose every

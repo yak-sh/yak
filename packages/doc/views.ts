@@ -7,7 +7,7 @@
 // a view that answered with an empty string would hide the fallback a more
 // general `Title` gives (the entity's id).
 
-import { parse as markdown, render as tree } from '@yaks/markdown'
+import { parse as markdown, render as tree } from '@yaks/markdown/structural'
 import { parse } from '@yaks/query'
 import { define, type Registry } from '@yaks/render'
 import { BODY, DOC, TITLE } from './comp.ts'

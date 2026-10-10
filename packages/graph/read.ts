@@ -9,7 +9,7 @@ import type { Bundle, Eid } from './bundle.ts'
 import type { Query, ReadOpts, ReadTx, Row, Storage } from './storage.ts'
 import type { Plugin, ReadView } from './plugin.ts'
 import type { Graph } from './graph.ts'
-import { Refused } from './admit.ts'
+import { Refused } from './errors.ts'
 import { addressing } from './said.ts'
 import { flat, named, only, projection } from './projection.ts'
 

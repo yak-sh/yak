@@ -38,7 +38,8 @@ import type { Graph } from './graph.ts'
 import type { Tool } from './plugin.ts'
 import { argsOf, type NamedTool, toolName } from './tool.ts'
 import { graphDoc } from './vocab.ts'
-import { formed, Refused } from './admit.ts'
+import { formed } from './admit.ts'
+import { Refused } from './errors.ts'
 import { type Guide, proseOf, schemaOf } from './schema.ts'
 
 /** The implementations a set of declarations needs. Keyed by the declaration's

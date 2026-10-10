@@ -81,7 +81,8 @@ import type {
 import { type Derive, isAlias, resolve, substitute } from './alias.ts'
 import { identified, identities } from './identity.ts'
 import { mint as fresh } from './mint.ts'
-import { admit, formed, known, Refused } from './admit.ts'
+import { admit, formed, known } from './admit.ts'
+import { Refused } from './errors.ts'
 import { requested } from './request.ts'
 import { composed } from './compose.ts'
 import {

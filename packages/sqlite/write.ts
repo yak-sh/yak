@@ -74,7 +74,7 @@ import {
   val,
   type Write,
 } from '@yaks/sql'
-import { tables } from './ddl.ts'
+import { tables } from './layout.ts'
 import { required } from './physical.ts'
 import { classed, spined } from './memo.ts'
 import { isJsonb, jsonb, jsonIn } from './jsonb.ts'

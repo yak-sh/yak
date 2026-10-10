@@ -27,7 +27,7 @@
 import type { Vocab } from '@yaks/vocab'
 import type { Bundle, Comp, Eid } from './bundle.ts'
 import { comps } from './bundle.ts'
-import { Refused } from './admit.ts'
+import { Refused } from './errors.ts'
 
 /** Whether an id is an alias — a name for an entity whose id the graph picks. */
 export let isAlias = (eid: Eid): boolean => eid.startsWith('$')

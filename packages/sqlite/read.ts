@@ -65,7 +65,7 @@ import { tombstoned } from '@yaks/graph/bundle'
 import { catalog, described as learn, descriptor } from './catalog.ts'
 import { unit } from './unit.ts'
 import { decoded, jsonOut, projected } from './jsonb.ts'
-import { tables } from './ddl.ts'
+import { tables } from './layout.ts'
 
 // A query, as text or as an already-built AST. Text is parsed; an AST passes
 // through, so a caller may hand-build one with @yaks/query's builders.

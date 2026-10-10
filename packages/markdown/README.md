@@ -12,6 +12,10 @@ h(Markdown, { source: '# Hello\n\n**Shared** rendering.' })
 h(Heading, { level: 2 }, h(Bold, null, 'Hello'))
 ```
 
+`@yaks/markdown/structural` exports `parse`, `render`, `slugs`, `headings`,
+`safeHref`, and the `Token` type without importing Preact. These exports are
+also available from `@yaks/markdown`.
+
 `parse(source, { breaks = true } = {})` returns the Markdown tokens. The default
 turns single newlines into line breaks, suitable for chat messages. Use
 `parse(source, { breaks: false })` for documents whose prose wraps across source
