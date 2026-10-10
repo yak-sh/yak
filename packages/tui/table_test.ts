@@ -33,7 +33,8 @@ test('semantic tables align columns and distinguish header and subtle rules', ()
       el('tr', cell('é'), cell('9', 'center')),
     ),
   )
-  assertEquals(read(node), [
+  let lines = screenful(node, 30, 20).lines
+  assertEquals(words(lines).filter(Boolean), [
     '┌─────────────┬──────────────┐',
     '│ Name        │ Count        │',
     '├─────────────┼──────────────┤',
@@ -42,7 +43,6 @@ test('semantic tables align columns and distinguish header and subtle rules', ()
     '│ é           │      9       │',
     '└─────────────┴──────────────┘',
   ])
-  let lines = screenful(node, 30, 20).lines
   assert(lines[0][0].style.dim)
   assert(lines[1].some((s) => s.text == 'Name' && s.style.bold))
 })
