@@ -179,13 +179,18 @@ test('a session shell speaks as its transcript, not its launcher', async () => {
   }
 })
 
+let writeDir = Deno.makeTempDirSync({ prefix: 'yaks-machine-' })
+let fileTools = named(tracked(), writeDir)
+addEventListener('unload', () => {
+  Deno.removeSync(writeDir, { recursive: true })
+})
+
 test('write makes the directory it needs, and read gives the text back', async () => {
-  let dir = Deno.makeTempDirSync({ prefix: 'yaks-machine-' })
-  let { read, write } = named(tracked(), dir)
+  let dir = writeDir
+  let { read, write } = fileTools
   assertEquals(
     await write.run({ path: 'src/lib.rs', content: 'fn main() {}' }),
     'wrote src/lib.rs',
   )
   assertEquals(await read.run({ path: `${dir}/src/lib.rs` }), 'fn main() {}')
-  await Deno.remove(dir, { recursive: true })
 })

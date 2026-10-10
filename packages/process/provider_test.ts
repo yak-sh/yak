@@ -75,28 +75,28 @@ test('attached directories are explicit and are never destroyed by release', asy
   }
 })
 
+// Export reads an existing sandbox; provisioning and its binary input are
+// fixtures, shared because neither assertion changes them.
+let exportDir = await Deno.makeTempDir()
+let exportProvider = processProvider(tracked(), { dir: exportDir })
+let exportRef = { id: 'export', address: exportDir }
+let exportBytes = new Uint8Array([0, 255, 127, 0])
+await Deno.writeFile(`${exportDir}/file.bin`, exportBytes)
+addEventListener('unload', () => {
+  Deno.removeSync(exportDir, { recursive: true })
+})
+
 test('export ships binary files and refuses paths outside the sandbox', async () => {
-  let dir = await Deno.makeTempDir()
-  let provider = processProvider(tracked(), { dir })
-  let ref = { id: crypto.randomUUID() }
-  try {
-    let { cwd } = await provider.request!(ref)
-    let bytes = new Uint8Array([0, 255, 127, 0])
-    await Deno.writeFile(`${cwd}/file.bin`, bytes)
-    let exported = []
-    for await (let file of provider.export(ref, ['file.bin'])) {
-      exported.push(file)
-    }
-    assertEquals(exported, [{ path: 'file.bin', bytes }])
-    await assertRejects(async () => {
-      for await (
-        let _file of provider.export(ref, ['../elsewhere'])
-      ) { /* must refuse */ }
-    })
-  } finally {
-    await provider.release(ref)
-    await Deno.remove(dir, { recursive: true })
+  let exported = []
+  for await (let file of exportProvider.export(exportRef, ['file.bin'])) {
+    exported.push(file)
   }
+  assertEquals(exported, [{ path: 'file.bin', bytes: exportBytes }])
+  await assertRejects(async () => {
+    for await (
+      let _file of exportProvider.export(exportRef, ['../elsewhere'])
+    ) { /* must refuse */ }
+  })
 })
 
 test('commit preparation is explicit, reused on retry and must finish before request answers', async () => {
