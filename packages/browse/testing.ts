@@ -142,7 +142,7 @@ export let faked = (globals: Record<string, unknown>) => {
 // through live.ts's transport seam, and the cache is only what the test seeds.
 // `wire` is the page's own route, for a test that follows a write out to
 // /apply. live.ts reads the tables as it loads, so it is imported after them.
-let { resetForTest, useRoute } = await import('./live.ts')
+let { clearForTest, resetForTest, useRoute } = await import('./live.ts')
 let { resetArchetypesForTest } = await import('./live_archetypes.ts')
 export let wire = useRoute(() => {})
 
@@ -154,7 +154,7 @@ export let test: typeof declareTest = (name, body, options) =>
     try {
       await body()
     } finally {
-      resetForTest()
+      clearForTest()
       resetArchetypesForTest()
     }
   }, options)

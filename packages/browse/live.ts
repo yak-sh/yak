@@ -107,8 +107,7 @@ let setCache = (next: Record<string, Comps>) => {
 }
 let paint = computed(() => cache.value)
 let cached = (eid: string) => {
-  ensureClient()
-  replica.box.cache.touch([eid])
+  ensureClient().box.cache.touch([eid])
   return cache.peek()[eid]
 }
 let componentViews = new WeakMap<object, Record<string, unknown>>()
@@ -125,7 +124,7 @@ let componentView = (comp: Record<string, unknown>) => {
   }
   return view
 }
-let replica: LiveClient
+let replica: LiveClient | undefined
 let replacing = false
 let makeClient = () =>
   liveClient({
@@ -152,29 +151,31 @@ let makeClient = () =>
       })
     },
     ready: (sub) => {
-      if (replacing) return
-      let ids = replica.members(sub)
+      let client = replica
+      if (replacing || !client) return
+      let ids = client.members(sub)
       let s = [...queryUses.values()].find((s) => s.sub === sub)
-      if (s && (config.host || replica.ready(sub) || ids.length)) {
+      if (s && (config.host || client.ready(sub) || ids.length)) {
         let old = s.ids.peek()
         if (ids.length !== old.length || ids.some((e, i) => e !== old[i])) {
           s.ids.value = ids
         }
-        s.live = replica.ready(sub)
+        s.live = client.ready(sub)
       }
       let agg = aggSets.get(sub)
-      if (agg) agg.live.value = replica.ready(sub)
+      if (agg) agg.live.value = client.ready(sub)
       // A line another name already holds answers with no frame of its own.
-      if (replica.ready(sub)) answered(sub)
+      if (client.ready(sub)) answered(sub)
       ticked(sub)
     },
     changed: (eids) => {
-      if (replacing) return
+      let client = replica
+      if (replacing || !client) return
       let changes: Change[] = []
       let deaths = new Set<string>()
       for (let eid of eids) {
         let before = cache.peek()[eid]
-        let after = replica.box.ent(eid)
+        let after = client.box.ent(eid)
         if (!after || dead(after)) {
           changes.push({ eid, name: 'entity', comp: null })
           if (after && dead(after)) deaths.add(eid)
@@ -206,33 +207,34 @@ let makeClient = () =>
   })
 // Tests/hosts may replace cache wholesale. Import that explicitly rather than
 // leaving a second writable store beside RAM. Production never takes this arm.
-let ensureClient = () => {
-  if (replica && cache.peek() === liveGraph) return
+let ensureClient = (): LiveClient => {
+  if (replica && cache.peek() === liveGraph) return replica
   let rows = cache.peek()
   replacing = true
   replica?.box.close()
-  replica = makeClient()
+  let client = makeClient()
+  replica = client
   liveGraph = rows
-  replica.patch(
-    Object.entries(rows).flatMap(([eid, row]) =>
-      Object.entries(row).map(([name, comp]) => ({
-        eid,
-        name,
-        comp: comp
-          ? Object.fromEntries(
-            Object.entries(comp).filter(([p]) =>
-              p === 'eid' || replica.box.vocab.props(name).includes(p)
-            ),
-          )
-          : null,
-      }))
-    ),
+  let changes = Object.entries(rows).flatMap(([eid, row]) =>
+    Object.entries(row).map(([name, comp]) => ({
+      eid,
+      name,
+      comp: comp
+        ? Object.fromEntries(
+          Object.entries(comp).filter(([p]) =>
+            p === 'eid' || client.box.vocab.props(name).includes(p)
+          ),
+        )
+        : null,
+    }))
   )
+  if (changes.length) client.patch(changes)
   replacing = false
   for (let s of queryUses.values()) {
     s.live = false
     s.ids.value = config.host ? [] : mem.resolve(s.preds)
   }
+  return client
 }
 export let deps = signal<Dep[]>([])
 export let problem = signal('')
@@ -554,7 +556,7 @@ let refreshServerSets = (eids: Set<string>) => {
 // useBacklinks — T-21489): the card's sub opens on mount, the last drop tears
 // it down, and an imperative read meanwhile reuses the held set.
 let serverSet = (preds: Pred[], line: string): ServerSet => {
-  ensureClient()
+  let client = ensureClient()
   let key = qkey(preds)
   let found = queryUses.get(key)
   if (!found) {
@@ -574,12 +576,15 @@ let serverSet = (preds: Pred[], line: string): ServerSet => {
     queryUses.set(key, found)
     querySignals.set(sub, found.ids)
     seedWake(found, found.ids.peek())
-    if (config.host || replica.ready(sub) || replica.members(sub).length) {
-      found.ids.value = replica.members(sub)
+    if (
+      config.host || client.ready(sub) ||
+      client.members(sub).length
+    ) {
+      found.ids.value = client.members(sub)
     }
   }
   // A replaced replica must own a retained query before it can answer it.
-  if (!replica.has(found.sub)) ownBoard(found.sub, found.line)
+  if (!client.has(found.sub)) ownBoard(found.sub, found.line)
   return found
 }
 
@@ -816,10 +821,12 @@ export let resetSignals = () =>
 // Tests start a new tab in the same runtime. Dispose the prior fixture's
 // replica and forget its readers before planting another graph; a production
 // seed keeps those readers and uses resetSignals instead.
-export let resetForTest = () => {
+export let clearForTest = () => {
   replacing = true
   try {
-    replica?.box.close()
+    let client = replica
+    replica = undefined
+    client?.box.close()
   } finally {
     replacing = false
   }
@@ -858,9 +865,14 @@ export let resetForTest = () => {
   queue.clear()
   cache.value = {}
   deps.value = heldDeps = []
-  replica = makeClient()
   liveGraph = cache.peek()
   resetSignals()
+}
+
+/** Start a fresh test tab after disposing the preceding one. */
+export let resetForTest = () => {
+  clearForTest()
+  ensureClient()
 }
 
 // A z-only pin patch binds straight to its one DOM attribute. The fallback
@@ -1054,7 +1066,7 @@ export let crewed = (e: Ent) => {
 // Package row observation publishes the compatibility signals; persistence
 // and retention belong to that same replica, never to this facade.
 export let applyLocal = (changes: Change[]) => {
-  ensureClient()
+  let client = ensureClient()
   let edges = moves(changes, (e) => depOf(cache.peek()[e])).map((m) => m.dep)
   for (let c of changes) {
     if (c.name === 'entity' && c.comp === null) {
@@ -1063,7 +1075,7 @@ export let applyLocal = (changes: Change[]) => {
       )
     }
   }
-  batch(() => replica.patch(changes))
+  batch(() => client.patch(changes))
   return { eids: [...new Set(changes.map((c) => c.eid))], edges }
 }
 let publishLocal = (
@@ -1480,8 +1492,11 @@ let deliver = (changes: Change[], wait?: Waiter) => {
   if (wait) waiting.set(id, wait)
   let o = { changes, at: Date.now() }
   outbox.set(id, o)
-  ensureClient()
-  pendingPins.set(id, replica.box.cache.protect(changes.map((c) => c.eid)))
+  let client = ensureClient()
+  pendingPins.set(
+    id,
+    client.box.cache.protect(changes.map((c) => c.eid)),
+  )
   outboxStore.park(id, o) // durable: outlive a crash/reload before the ack
   syncOutbox() // the standing indicator now shows this write as unsent
   armRedeliver()
@@ -1523,8 +1538,11 @@ export let replayOutbox = async () => {
     if (o.changes.some((c) => !vocab.comp(c.name))) continue
     if (outbox.has(id)) continue
     outbox.set(id, o)
-    ensureClient()
-    pendingPins.set(id, replica.box.cache.protect(o.changes.map((c) => c.eid)))
+    let client = ensureClient()
+    pendingPins.set(
+      id,
+      client.box.cache.protect(o.changes.map((c) => c.eid)),
+    )
     woke = true
   }
   ackedEarly.clear()
@@ -1697,9 +1715,9 @@ export let send = (...changes: unknown[]) => deliver(changes as Change[])
 let subQueries = new Map<string, string>()
 let shadowSubs = new Set<string>()
 let primeSub = (sub: string, q: string) => {
-  ensureClient()
+  let client = ensureClient()
   subQueries.set(sub, q)
-  replica.open(sub, yakLine(q))
+  client.open(sub, yakLine(q))
 }
 // One version signal PER SUB (T-37445): a frame for sub A wakes only the
 // readers of A. One global version woke every subscription-holding view on
@@ -1773,11 +1791,12 @@ let subFields = new Map<string, Field[]>()
 export let loaded = (eid: string, comp: string, prop: string): boolean => {
   holders(eid).value
   row(eid).value
-  if (replica.box.cache.loaded(eid, comp, prop)) return true
+  let client = ensureClient()
+  if (client.box.cache.loaded(eid, comp, prop)) return true
   // The location-less whole-graph host has no remote readiness contract. A
   // projected subscription still must not promote its omissions to known.
   if (!config.host && cached(eid)) {
-    return ![...subFields].some(([sub]) => replica.members(sub).includes(eid))
+    return ![...subFields].some(([sub]) => client.members(sub).includes(eid))
   }
   return false
 }
@@ -1921,15 +1940,15 @@ let implicitQuery = (sub: string) => {
 }
 export let landSub = (f: Sub) =>
   batch(() => {
-    ensureClient()
+    let client = ensureClient()
     // A frame may land for a sub this side never opened (a test's server).
-    if (!replica.has(f.sub)) {
+    if (!client.has(f.sub)) {
       let q = subQueries.get(f.sub)
       // An in-flight frame after final release must not create a new owner.
       if (!q && config.host) return
-      replica.open(f.sub, yakLine(q ?? implicitQuery(f.sub)))
+      client.open(f.sub, yakLine(q ?? implicitQuery(f.sub)))
     }
-    replica.receive(f)
+    client.receive(f)
   })
 let landSubFrame = (f: Sub & { changes: Change[] }) => {
   if (f.error) {
@@ -1999,8 +2018,9 @@ let landSubFrame = (f: Sub & { changes: Change[] }) => {
   settleEdges(rode.gained, [...dropped, ...rode.lost])
   let set = [...queryUses.values()].find((s) => s.sub === f.sub)
   if (set) {
-    set.live = replica.ready(f.sub)
-    seedWake(set, replica.members(f.sub))
+    let client = ensureClient()
+    set.live = client.ready(f.sub)
+    seedWake(set, client.members(f.sub))
   }
   ticked(f.sub)
   heldMoved([...f.changes.map((c) => c.eid), ...f.drop ?? []])
@@ -2522,7 +2542,7 @@ probe.__probe = {
   // How many rows the partial cache holds — the T-21491 bound: working-set
   // floor + sub-held + demand-fetched, far below the server's row count.
   cacheN: () => Object.keys(cache.peek()).length,
-  retainedN: () => replica.box.cache.size(),
+  retainedN: () => replica?.box.cache.size() ?? 0,
 }
 
 // The whole entity, assembled for a renderer: spine, components present,
@@ -2891,9 +2911,9 @@ export let clientSubscription = (
 let clientSubs = new WeakMap<object, Set<string>>()
 export let ensureClientRows = (client: string) => {
   if (!capable('canvas') || !client) return
-  ensureClient()
-  let held = clientSubs.get(replica)
-  if (!held) clientSubs.set(replica, held = new Set())
+  let owner = ensureClient()
+  let held = clientSubs.get(owner)
+  if (!held) clientSubs.set(owner, held = new Set())
   if (held.has(client)) return
   held.add(client)
   for (let comp of SCREEN) holdQuery(screenOf(comp, client))
