@@ -242,19 +242,20 @@ test('boxed user Markdown preserves explicit newlines and paragraph separation',
   }
   let ui = await mount(
     () => render(transcriptViews, entry, 'Transcript', vocab),
-    60,
+    12,
     12,
   )
   try {
-    let rows = ui.text().split('\n')
+    let text = ui.text()
+    let rows = text.split('\n')
     let first = rows.findIndex((line) => line.includes('first'))
     let second = rows.findIndex((line) => line.includes('second'))
     let third = rows.findIndex((line) => line.includes('third'))
     let fourth = rows.findIndex((line) => line.includes('fourth'))
-    assert(first >= 0, ui.text())
-    assertEquals(second, first + 1, ui.text())
-    assertEquals(third, second + 2, ui.text())
-    assertEquals(fourth, third + 1, ui.text())
+    assert(first >= 0, text)
+    assertEquals(second, first + 1, text)
+    assertEquals(third, second + 2, text)
+    assertEquals(fourth, third + 1, text)
     assertEquals(entry.content, { body: source })
   } finally {
     ui.free()

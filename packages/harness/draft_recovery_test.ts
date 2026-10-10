@@ -77,11 +77,14 @@ test('disk vault restores private text and clear removes saved records', async (
   }
 })
 
+// Recovery startup is input to the failure test, not the write that fails.
+const failingVault = stash()
+const failingFrontend = frontend(failingVault)
+await failingFrontend.ready
+
 test('failed vault write is visible and shutdown flush rejects', async () => {
-  const vault = stash()
-  vault.save = () => Promise.reject(new Error('disk full'))
-  const ui = frontend(vault)
-  await ui.ready
+  failingVault.save = () => Promise.reject(new Error('disk full'))
+  const ui = failingFrontend
   ui.edit({ text: 'keep me', at: 7 })
   await assertRejects(() => ui.flush(), Error, 'disk full')
   assertEquals(text(ui).text, 'keep me')

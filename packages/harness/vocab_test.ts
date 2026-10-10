@@ -13,6 +13,8 @@ import { words } from '@yaks/cli/host'
 import { at } from './testing.ts'
 
 let { vocab } = await words(at())
+let projectionVocab = loadVocab([projection])
+let runtimeVocab = loadVocab([pick(toolsDoc, ['refusal']), runtime])
 
 test('package JSON declarations preserve artifact references and compose with the rest', () => {
   assertEquals(artifactDoc, artifact)
@@ -34,7 +36,7 @@ test('frontend and projection vocabularies stay separate from stored backend fie
   assertEquals(frontendVocab.comp('draft')?.durable, 'connection')
   assertEquals(frontendVocab.comp('savedDraft')?.sync, 'none')
   assertEquals(vocab.comp('savedDraft'), undefined)
-  assertEquals(loadVocab([projection]).prop('prop', 'ref')?.scalar, 'text')
+  assertEquals(projectionVocab.prop('prop', 'ref')?.scalar, 'text')
   // The projection extends the tools declaration; it cannot declare a second
   // refusal of its own or silently omit the component.
   assertThrows(
@@ -42,7 +44,6 @@ test('frontend and projection vocabularies stay separate from stored backend fie
     Error,
     "'refusal' extends a component no document declares",
   )
-  let runtimeVocab = loadVocab([pick(toolsDoc, ['refusal']), runtime])
   assertEquals(runtimeVocab.prop('session', 'status')?.scalar, 'text')
   assertEquals(runtimeVocab.prop('refusal', 'code')?.scalar, 'text')
 })
