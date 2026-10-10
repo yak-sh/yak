@@ -241,6 +241,34 @@ export let runWrangler = async (
   return await run((completed.at(-1) as PromiseFulfilledResult<string[]>).value)
 }
 
+/** Prepare a disposable artifact while the read-only guard runs. Uploads may
+ * begin once readiness and the guard permit them; their preparation can await
+ * the artifact. Settle every lane before removing it, including refused or
+ * failed guards, so no bundle process or temporary output outlives this door. */
+export let preflight = async <T extends { remove: () => void }>(
+  ready: () => Promise<unknown>,
+  inspect: () => Promise<boolean>,
+  prepare: () => Promise<T>,
+  upload: (prepared: Promise<T>) => Promise<number>,
+): Promise<number> => {
+  let readied = Promise.resolve().then(ready)
+  let prepared = readied.then(prepare)
+  let uploaded = Promise.allSettled([readied, Promise.resolve().then(inspect)])
+    .then(([ready, allowed]) => {
+      if (ready.status == 'rejected') throw ready.reason
+      if (allowed.status == 'rejected') throw allowed.reason
+      return allowed.value ? upload(prepared) : 0
+    })
+  let [made, sent] = await Promise.allSettled([prepared, uploaded])
+  try {
+    if (made.status == 'rejected') throw made.reason
+    if (sent.status == 'rejected') throw sent.reason
+    return sent.value
+  } finally {
+    if (made.status == 'fulfilled') made.value.remove()
+  }
+}
+
 /** Skip an upload only when the currently serving deployment carries the
  * digest of exactly these bundled modules and configuration. Old releases
  * without a digest, failed reads and split deployments always upload. */
@@ -700,17 +728,10 @@ if (import.meta.main) {
   // resolution to every read/upload even when the exact package is installed.
   let installed = join(dir, 'node_modules/.bin/wrangler')
   let wrangler = at(installed) ? ['env', installed] : WRANGLER
-  // Generated assets/catalog and the read-only supersession guard are
-  // independent. Both settle before any upload; neither delays the other.
   let guarded = command(argv) === 'deploy' && !argv.includes('--dry-run')
-  let [prepared, inspected] = await Promise.allSettled([
-    ready(),
-    guarded ? seen(dir, serving(envs(argv), wrangler)) : Promise.resolve(null),
-  ])
-  if (prepared.status == 'rejected') throw prepared.reason
-  if (inspected.status == 'rejected') throw inspected.reason
-  if (inspected.value) {
-    let saw = inspected.value
+  let inspect = async () => {
+    if (!guarded) return true
+    let saw = await seen(dir, serving(envs(argv), wrangler))
     let live = saw.live.map((l) => short(l.sha) + (l.ahead == null ? '?' : ''))
     console.log(
       `deploy ${short(saw.head)}: main at ${
@@ -720,8 +741,9 @@ if (import.meta.main) {
     let why = superseded(saw)
     if (why) {
       console.log(`not deploying: ${why}`)
-      Deno.exit(0)
+      return false
     }
+    return true
   }
   if (command(argv) === 'deploy') {
     // Versions carry their commit so `yak admin deploys` need not infer it by time.
@@ -772,10 +794,11 @@ if (import.meta.main) {
       children.delete(child)
     }
   }
-  let bundle: Awaited<ReturnType<typeof bundled>> | undefined
-  let prepare = async () => {
+  let prepare = async (
+    bundle: Promise<Awaited<ReturnType<typeof bundled>>>,
+  ) => {
     let [compiled, base] = await Promise.allSettled([
-      bundled(argv, run).then((made) => bundle = made),
+      bundle,
       (async () => {
         if (
           command(argv) === 'deploy' &&
@@ -787,16 +810,17 @@ if (import.meta.main) {
     if (compiled.status == 'rejected') throw compiled.reason
     return compiled.value.args
   }
-  let code: number
-  try {
-    code = await runWrangler(
-      argv,
-      (args, unpinned) =>
-        unpinned ? uploadSibling(args, run, wrangler) : run(args),
-      prepare,
-    )
-  } finally {
-    bundle?.remove()
-  }
+  let code = await preflight(
+    ready,
+    inspect,
+    () => bundled(argv, run),
+    (bundle) =>
+      runWrangler(
+        argv,
+        (args, unpinned) =>
+          unpinned ? uploadSibling(args, run, wrangler) : run(args),
+        () => prepare(bundle),
+      ),
+  )
   Deno.exit(code)
 }

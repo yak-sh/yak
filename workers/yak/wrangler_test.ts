@@ -16,6 +16,7 @@ import {
   command,
   images,
   members,
+  preflight,
   runWrangler,
   sameSibling,
   seen,
@@ -436,6 +437,133 @@ test('deploy preflight starts Git reads while the serving version is pending', a
     changed: false,
     live: [{ sha: head, ahead: false }],
   })
+})
+
+test('kernel bundling overlaps the guard and uploads overlap the pending bundle', async () => {
+  let ready = Promise.withResolvers<void>()
+  let allowed = Promise.withResolvers<boolean>()
+  let bundled = Promise.withResolvers<{ remove: () => void }>()
+  let preparing = Promise.withResolvers<void>()
+  let uploading = Promise.withResolvers<void>()
+  let finish = Promise.withResolvers<number>()
+  let started = false, removed = false
+  let deploy = preflight(
+    () => ready.promise,
+    () => allowed.promise,
+    () => {
+      preparing.resolve()
+      return bundled.promise
+    },
+    async (bundle) => {
+      started = true
+      uploading.resolve()
+      await bundle
+      return await finish.promise
+    },
+  )
+  ready.resolve()
+  await preparing.promise
+  assertEquals(started, false)
+  allowed.resolve(true)
+  await uploading.promise
+  bundled.resolve({ remove: () => removed = true })
+  assertEquals(removed, false)
+  finish.resolve(3)
+  assertEquals(await deploy, 3)
+  assert(removed)
+})
+
+for (let refusal of [false, Error('guard failed')]) {
+  test(`a ${typeof refusal == 'boolean' ? 'refused' : 'failed'} guard settles the bundle and removes its artifact without uploading`, async () => {
+    let allowed = Promise.withResolvers<boolean>()
+    let bundle = Promise.withResolvers<{ remove: () => void }>()
+    let preparing = Promise.withResolvers<void>()
+    let removed = false, uploaded = false
+    let deploy = preflight(
+      () => Promise.resolve(),
+      () => allowed.promise,
+      () => {
+        preparing.resolve()
+        return bundle.promise
+      },
+      () => {
+        uploaded = true
+        return Promise.resolve(0)
+      },
+    ).then((code) => ({ code }), (error) => ({ error }))
+    await preparing.promise
+    if (refusal === false) allowed.resolve(false)
+    else allowed.reject(refusal)
+    bundle.resolve({ remove: () => removed = true })
+    assertEquals(
+      await deploy,
+      refusal === false ? { code: 0 } : { error: refusal },
+    )
+    assertEquals(uploaded, false)
+    assert(removed)
+  })
+}
+
+test('a failed bundle settles uploads and a failed upload removes the bundle', async () => {
+  for (let stage of ['bundle', 'upload']) {
+    let failure = Error(stage)
+    let other = Promise.withResolvers<void>()
+    let started = Promise.withResolvers<void>()
+    let removed = false, finished = false
+    let deploy = preflight(
+      () => Promise.resolve(),
+      () => Promise.resolve(true),
+      () =>
+        stage == 'bundle'
+          ? Promise.reject(failure)
+          : Promise.resolve({ remove: () => removed = true }),
+      async (bundle) => {
+        // A sibling may still be uploading after the kernel bundle fails.
+        let settled = Promise.allSettled([bundle, other.promise])
+        started.resolve()
+        await settled
+        finished = true
+        if (stage == 'upload') throw failure
+        return 0
+      },
+    ).then((code) => ({ code }), (error) => ({ error }))
+    await started.promise
+    assertEquals(removed, false)
+    other.resolve()
+    assertEquals(await deploy, { error: failure })
+    assert(finished)
+    assertEquals(removed, stage == 'upload')
+  }
+})
+
+test('failed readiness settles the guard and starts neither bundle nor upload', async () => {
+  let allowed = Promise.withResolvers<boolean>()
+  let inspecting = Promise.withResolvers<void>()
+  let failure = Error('ready failed')
+  let prepared = false, uploaded = false, inspected = false
+  let deploy = preflight(
+    () => Promise.reject(failure),
+    async () => {
+      inspecting.resolve()
+      await allowed.promise
+      inspected = true
+      return true
+    },
+    () => {
+      prepared = true
+      return Promise.resolve({ remove: () => {} })
+    },
+    () => {
+      uploaded = true
+      return Promise.resolve(0)
+    },
+  ).then((code) => ({ code }), (error) => ({ error }))
+  await inspecting.promise
+  allowed.resolve(true)
+  assertEquals(await deploy, { error: failure })
+  assert(inspected)
+  assertEquals(prepared, false)
+  assertEquals(uploaded, false)
 })
 
 let checkKernelBundle = async () => {
