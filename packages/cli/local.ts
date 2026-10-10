@@ -335,7 +335,7 @@ export let tool = async (
       await drawn(listing, host),
       host.vocab,
       answer,
-      c.tui
+      c.tui || c.tty
         ? {
           views: await terminal(
             plugins(listing),

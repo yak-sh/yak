@@ -1,5 +1,5 @@
 import '../domain-host.tsx'
-import { views as commentViews } from '@yaks/kernel/views'
+import { views as commentViews } from '@yaks/kernel/component-views'
 import { domainBundle } from '../domain-host.tsx'
 import { inspectViews } from './inspect.tsx'
 import { views as secretViews } from '@yaks/secrets/views'

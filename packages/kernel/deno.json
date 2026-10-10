@@ -9,7 +9,8 @@
     "./Comments": "./Comments.tsx",
     "./comment-host": "./comment-host.ts",
     "./comments": "./comments.ts",
-    "./views": "./views.tsx"
+    "./views": "./views.tsx",
+    "./component-views": "./component-views.tsx"
   },
   "license": "Apache-2.0",
   "description": "Shared identity, marks and relationship components for graphs of work, with vocabulary documents, a completion plugin, citation helpers and a comment tool.",

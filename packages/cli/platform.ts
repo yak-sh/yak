@@ -117,7 +117,7 @@ export let printed = async (
   if (answer && vocab) {
     // Imported only to draw, so a command that never does pays nothing.
     let { reported, show } = await import('./answer.ts')
-    let { views, vocab: read } = await reported(vocab)
+    let { views, vocab: read, components } = await reported(vocab)
     // What the drawing asks for beyond the answer — the entities its
     // references name, a page's links and comments — asked of the same host
     // in the same app the call named. A drawing that cannot get them draws
@@ -128,10 +128,18 @@ export let printed = async (
     let asked = (tool: string, more: Record<string, unknown>) =>
       c.ask('tools/call', { name: tool, arguments: { ...scope, ...more } })
         .then((r) => answered(r as Result) ?? [], () => [])
-    await show(c, views, read, answer, {}, {
-      lookup: (ids) => asked('graph_show', { ids }),
-      query: (q) => asked('graph_query', { q }),
-    }, wrote)
+    await show(
+      c,
+      views,
+      read,
+      answer,
+      c.tty || c.tui ? { views: await components() } : {},
+      {
+        lookup: (ids) => asked('graph_show', { ids }),
+        query: (q) => asked('graph_query', { q }),
+      },
+      wrote,
+    )
   } else if (text) c.out(text)
   return 0
 }

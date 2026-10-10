@@ -212,6 +212,11 @@ export type Facet = {
   views?: import('@yaks/render').Registry<
     Entry | import('@yaks/inspect').View
   >
+  componentViews?:
+    | import('@yaks/render').Registry<Entry>
+    | (() =>
+      | import('@yaks/render').Registry<Entry>
+      | Promise<import('@yaks/render').Registry<Entry>>)
   inspectViews?:
     | import('@yaks/inspect').View[]
     | (() =>
@@ -231,10 +236,15 @@ export let contributedViews = async (facets: Facet[]): Promise<Entry[]> =>
     let views = typeof f.inspectViews == 'function'
       ? await f.inspectViews()
       : f.inspectViews ?? []
+    let components = typeof f.componentViews == 'function'
+      ? await f.componentViews()
+      : f.componentViews
     let adapted = new Set<unknown>(views)
     return [
       ...adaptViews(views),
-      ...(f.views?.renderers ?? []).filter((r): r is Entry => !adapted.has(r)),
+      ...[...f.views?.renderers ?? [], ...components?.renderers ?? []].filter((
+        r,
+      ): r is Entry => !adapted.has(r)),
     ]
   }))).flat()
 

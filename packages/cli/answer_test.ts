@@ -293,12 +293,19 @@ test('answer registries report loaded metadata without drawing a renderer', asyn
       return null
     },
   }
+  let face = { ...held, view: 'Thread.Note' }
   let views = await terminal(
     ['shop'],
     (name) => {
       loads++
       return Promise.resolve(
-        name == 'shop' ? { views: define([part]), inspectViews: [] } : null,
+        name == 'shop'
+          ? {
+            views: define([part]),
+            inspectViews: [],
+            componentViews: () => Promise.resolve(define([face])),
+          }
+          : null,
       )
     },
     (name) =>
@@ -314,4 +321,5 @@ test('answer registries report loaded metadata without drawing a renderer', asyn
   assertEquals(seen.find((o) => o.package == '@yaks/tools')?.loaded, false)
   assert(views.renderers.includes(part))
   assert(views.renderers.includes(held))
+  assertEquals(resolve(views, t9, 'Thread.Note', vocab), face)
 })

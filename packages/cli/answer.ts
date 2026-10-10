@@ -58,9 +58,16 @@ let dressed = async (): Promise<Sheet> => {
 
 /** How one plugin's `./views` becomes a module: {@link subpath} unless a test
  * hands its modules over inline. */
-export type Views = (
-  plugin: string,
-) => Promise<{ views?: Registry; inspectViews?: unknown } | null>
+export type ViewFacet = {
+  views?: Registry
+  inspectViews?: unknown
+  componentViews?:
+    | Selection<ComponentRenderer>
+    | (() =>
+      | Selection<ComponentRenderer>
+      | Promise<Selection<ComponentRenderer>>)
+}
+export type Views = (plugin: string) => Promise<ViewFacet | null>
 
 type Hit = {
   kind: string
@@ -142,23 +149,44 @@ let search: Renderer = { view: 'Search.Tile', match: true, render: hit }
 let portable: Views = (plugin) => subpath(plugin, 'views')
 
 /** Every view the `yak` command draws with, most knowing first. */
-export let registry = async (
+export function registry(
+  plugins: string[],
+  load: Views | undefined,
+  observe: AnatomyObserver | undefined,
+  components: true,
+): Promise<Registry<Renderer | ComponentRenderer>>
+export function registry(
+  plugins: string[],
+  load?: Views,
+  observe?: AnatomyObserver,
+): Promise<Registry>
+export async function registry(
   plugins: string[],
   load: Views = portable,
   observe?: AnatomyObserver,
-): Promise<Registry> => {
+  components = false,
+): Promise<Registry<Renderer | ComponentRenderer>> {
   let named = [...new Set([...plugins, '@yaks/tools'])]
   if (load == portable) await subpaths(named.map((p) => [p, 'views'] as const))
   let found = await Promise.all(named.map(async (plugin) => {
     let m = await load(plugin)
+    let faces = components
+      ? typeof m?.componentViews == 'function'
+        ? await m.componentViews()
+        : m?.componentViews
+      : undefined
+    let views = define([
+      ...m?.views?.renderers ?? [],
+      ...faces?.renderers ?? [],
+    ])
     observe?.({
       package: plugin,
       facet: 'views',
       loaded: m !== null,
       bound: true,
-      value: m,
+      value: faces ? { ...m, views } : m,
     })
-    return m
+    return views
   }))
   observe?.({
     package: '@yaks/cli',
@@ -175,7 +203,7 @@ export let registry = async (
     value: { views: generic },
   })
   return define([
-    ...found.flatMap((m) => m?.views?.renderers ?? []),
+    ...found.flatMap((m) => m.renderers),
     search,
     ...generic.renderers,
   ])
@@ -208,7 +236,7 @@ export let terminal = async (
   }))
   return define([
     ...own.flatMap((m) => m?.views?.renderers ?? []),
-    ...(await registry(plugins, load, observe)).renderers,
+    ...(await registry(plugins, load, observe, true)).renderers,
   ])
 }
 
@@ -275,7 +303,7 @@ let refsOf = (vocab: Vocab, b: Bundle): [string, string, string][] =>
 export let referenced = (
   vocab: Vocab,
   answer: Bundle[],
-  views?: Registry,
+  views?: Held,
 ): string[] => {
   let held = new Set(answer.map((b) => b.entity.eid))
   let out = new Set<string>()
@@ -431,7 +459,7 @@ export let printed = (
  * painter, once. Loaded only for a terminal, so a printed answer never pays
  * for the painter. */
 export let painted = async (
-  views: Registry,
+  views: Held,
   vocab: Vocab,
   answer: Bundle[],
   named: Bundle[],
@@ -502,21 +530,25 @@ let elsewhere = (error: unknown): boolean =>
  * packages it says declared its components, where this machine has them. */
 export let reported = async (
   doc: VocabDoc,
-): Promise<{ views: Registry; vocab: Vocab }> => {
+): Promise<
+  { views: Registry; vocab: Vocab; components: () => Promise<Held> }
+> => {
   let vocab = loadVocab([doc], understood())
   let plugins = vocab.all.flatMap((n) => vocab.comp(n)?.package ?? [])
   let named = [...new Set(plugins)]
   await subpaths(named.map((p) => [p, 'views'] as const)).catch((error) =>
     elsewhere(error) ? null : Promise.reject(error)
   )
-  let views = await registry(
-    named,
-    (plugin) =>
-      subpath<{ views?: Registry }>(plugin, 'views').catch((error) =>
-        elsewhere(error) ? null : Promise.reject(error)
-      ),
-  )
-  return { views, vocab }
+  let load: Views = (plugin) =>
+    subpath<ViewFacet>(plugin, 'views').catch((error) =>
+      elsewhere(error) ? null : Promise.reject(error)
+    )
+  let views = await registry(named, load)
+  return {
+    views,
+    vocab,
+    components: () => registry(named, load, undefined, true),
+  }
 }
 
 /** Where a drawing asks for what it draws beyond the answer, from wherever
@@ -567,7 +599,7 @@ export let show = async (
   let refs = referenced(
     vocab,
     [...answer, ...near.links, ...near.comments],
-    views,
+    held.views ?? views,
   )
   let named = refs.length ? await from.lookup(refs) : []
   if (c.tui) {
@@ -581,7 +613,14 @@ export let show = async (
     )
   }
   if (c.tty) {
-    let text = await painted(views, vocab, answer, named, c.tty.columns, near)
+    let text = await painted(
+      held.views ?? views,
+      vocab,
+      answer,
+      named,
+      c.tty.columns,
+      near,
+    )
     if (text) c.tty.write(text)
     return
   }

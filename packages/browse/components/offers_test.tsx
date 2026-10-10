@@ -38,7 +38,20 @@ let desk: View = {
     ),
 }
 let facet: Facet = {
-  inspectViews: [desk, { ...desk, match: parse('.project') }],
+  componentViews: () =>
+    Promise.resolve({
+      renderers: [{
+        view: 'Desk',
+        match: parse('.person'),
+        Render: ({ e, limit }) =>
+          h(
+            'p',
+            { class: 'Desk' },
+            `desk of ${e.doc?.title} · ${limit ?? 'all'}`,
+          ),
+      }],
+    }),
+  inspectViews: [{ ...desk, match: parse('.project') }],
   home: {
     name: 'Desk',
     icon: 'lamp',

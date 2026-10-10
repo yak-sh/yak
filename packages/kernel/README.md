@@ -306,11 +306,13 @@ archetype maintenance to @yaks/archetype, and text to @yaks/doc.
 
 ## Comment views
 
-`./views` contributes `Thread.Note` renderers for comments and commits.
-`./Comments` supplies `Comments`, `Branches`, `Composer` and `Reply`; every
-branch asks the registry to draw its note. The composer uses the kit's `Say`,
-`Field`, `Button` and `Choices`, and keeps words through
-[drafts](../draft/README.md).
+`./views` contributes `componentViews()`, an asynchronous accessor for
+`Thread.Note` renderers for comments and commits. Browsers and terminal painters
+load these components; portable text printers leave them deferred.
+`./component-views` exports the component registry directly. `./Comments`
+supplies `Comments`, `Branches`, `Composer` and `Reply`; every branch asks the
+registry to draw its note. The composer uses the kit's `Say`, `Field`, `Button`
+and `Choices`, and keeps words through [drafts](../draft/README.md).
 
 An interface binds `configureComments` from `./comment-host` before mounting
 these components. Its **comment host** supplies subscriptions, the page graph,

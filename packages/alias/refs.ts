@@ -20,7 +20,7 @@
 // like an id these packages generate — a UUID, a content hash — is not looked
 // up at all, so ordinary eid references cost nothing.
 
-import type { Eid, Tx } from '@yaks/graph'
+import type { Eid, ReadTx } from '@yaks/graph'
 import { after } from '@yaks/fp'
 import { alive, minted } from '@yaks/graph'
 import { ofOf } from '@yaks/key'
@@ -41,7 +41,7 @@ export let wordish = (id: string): boolean =>
  * names one, and every id a write names.
  */
 export let addressed = (
-  tx: Tx,
+  tx: ReadTx,
   ids: string[],
 ): Map<string, Eid> | Promise<Map<string, Eid>> => {
   let ask = [...new Set(ids.filter(wordish))]
