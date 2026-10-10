@@ -46,6 +46,10 @@ Authenticated endpoints: `/bugs`, `/unseen`, `/traces`, `/trace`, `/query`,
 `POST /deployed` with `{app}`. `/ws?scope=…&ticket=…` accepts subscriptions,
 unsubscribe and ACK only, never relay writes. `/query` returns graph bundles.
 General `/apply` and HTTP intake are absent.
+`GET /bugs?query=<bug-query>&limit=50&app=<global-eid>` returns bug bundles,
+filtered and ordered before its 1–100 limit. Without `query` it includes all bug
+statuses. `GET /bugs?bug=<global-bug-eid>` returns that bug followed by its
+retained occurrences, or 404 when absent. Both forms are read-only.
 `GET /traces?app=<global-eid>&limit=50&after=<trace-eid>` returns
 `{rows, next?}` ordered by descending `trace.at`.
 `GET /trace?eid=<trace-eid>&limit=100&after=<span-eid>` returns

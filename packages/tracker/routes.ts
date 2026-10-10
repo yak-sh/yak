@@ -9,13 +9,13 @@ export type Options = { remote?: { url?: string; secret?: string } }
 let uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 let platform = derivedEid('tracker|platform')
 
-/** Only the two bounded trace read endpoints leave the box. */
+/** Only bug and bounded trace reads leave the box. */
 export let routes = (
   _host: unknown,
   options: Options = {},
   go: typeof fetch = fetch,
 ): Route[] =>
-  ['traces', 'trace'].map((path) => ({
+  ['traces', 'trace', 'bugs'].map((path) => ({
     method: 'GET',
     path: `/tracker/${path}`,
     handle: async (request) => {
@@ -43,14 +43,24 @@ export let routes = (
         return Response.json({ error: 'limit must be 1..100' }, { status: 400 })
       }
       let params = new URLSearchParams({ scope, limit: String(n) })
-      for (let key of path == 'trace' ? ['eid', 'after'] : ['app', 'after']) {
+      for (
+        let key of path == 'trace'
+          ? ['eid', 'after']
+          : path == 'bugs'
+          ? ['app', 'bug']
+          : ['app', 'after']
+      ) {
         let value = query.get(key)
+        if (path == 'bugs' && key == 'app' && value == '') value = null
         if (value != null && !uuid.test(value) || key == 'eid' && !value) {
           return Response.json({ error: `${key} must be a global eid` }, {
             status: 400,
           })
         }
         if (value) params.set(key, value)
+      }
+      if (path == 'bugs' && query.has('query')) {
+        params.set('query', query.get('query')!)
       }
       try {
         let url = new URL(remote.url)

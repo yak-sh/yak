@@ -4,6 +4,8 @@
 import type { TrackerStore } from './core.ts'
 import { authorize } from './auth.ts'
 import { api } from '@yaks/api'
+import { CallError } from '@yaks/tools'
+import { status } from '@yaks/graph'
 
 export let json = (value: unknown, status = 200) =>
   Response.json(value, { status })
@@ -49,8 +51,36 @@ async (request: Request): Promise<Response> => {
     let found = await tracker.trace(eid, n, cursor)
     return found ? json(found) : json({ error: 'trace not found' }, 404)
   }
-  if (path == '/bugs') {
-    return json(await tracker.bugs(url.searchParams.get('app') ?? undefined))
+  if (request.method == 'GET' && path == '/bugs') {
+    let params = url.searchParams
+    if (params.get('app') == '') params.delete('app')
+    let n = Number(params.get('limit') ?? 50)
+    let uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+    if (!Number.isSafeInteger(n) || n < 1 || n > 100) {
+      return json({ error: 'limit must be 1..100' }, 400)
+    }
+    for (let key of ['app', 'bug']) {
+      if (params.has(key) && !uuid.test(params.get(key)!)) {
+        return json({ error: `${key} must be a global eid` }, 400)
+      }
+    }
+    try {
+      return json(
+        params.has('bug')
+          ? await tracker.bug(params.get('bug')!)
+          : await tracker.bugs(
+            params.get('app') ?? undefined,
+            params.get('query') ?? '.bug',
+            n,
+          ),
+      )
+    } catch (error) {
+      if (error instanceof CallError && error.code == 'bug') {
+        return json({ error: 'bug not found' }, 404)
+      }
+      if (status(error) < 500) return json({ error: String(error) }, 400)
+      throw error
+    }
   }
   if (path == '/unseen') {
     return json(await tracker.unseen(url.searchParams.get('app') ?? undefined))

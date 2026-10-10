@@ -27,6 +27,7 @@ import {
   absent,
   after,
   and,
+  conjoin,
   eq,
   every,
   fields,
@@ -152,7 +153,21 @@ export let store = (storage: Storage, config: Config) => {
         ...spans.length > n ? { next: spans[n - 1].entity.eid } : {},
       }
     },
-    bugs: (app?: string) => read(app),
+    bugs: (app?: string, query = '.bug', count = 50) =>
+      runs().bug_list({
+        entity: { eid: '$read' },
+        call: {
+          args: {
+            query: conjoin(query, app ? `.bug.app=${app}` : ''),
+            limit: count,
+          },
+        },
+      }, g),
+    bug: (eid: string) =>
+      runs().bug_show({
+        entity: { eid: '$read' },
+        call: { args: { bug: eid } },
+      }, g),
     unseen: (app?: string) => read(app, '.bug.status=open !notified'),
     mark,
     deployed: async (app: string, version?: number) => {

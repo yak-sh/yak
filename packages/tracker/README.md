@@ -250,14 +250,14 @@ application and use this home query:
 The trace list is at `/?q=.trace`. Missing affected context or missing traces
 are stated; they are not inferred from a stack's text.
 
-## Reading remote traces on the box
+## Reading remote bugs and traces on the box
 
 The `./routes` facet owns read-through access to the independent
 [tracker Worker](../../workers/tracker/README.md). It signs a one-minute
-platform-admin ticket on the server and forwards only `/traces` and `/trace`.
-The box keeps no remote bundles. The timing views use the returned bundles for
-both sides, label them `box` or `yaks.app`, and keep comparisons within the
-selected remote scope and matching request/store context.
+platform-admin ticket on the server and forwards only `/bugs`, `/traces` and
+`/trace`. The box keeps no remote bundles. The timing views use the returned
+bundles for both sides, label them `box` or `yaks.app`, and keep comparisons
+within the selected remote scope and matching request/store context.
 
 Set the Worker's URL and signing secret in this plugin's `with`:
 
@@ -287,3 +287,16 @@ latest hundred traces in that scope. Missing configuration, unavailable
 credentials and refused reads show as errors, not empty lists. Tickets never
 reach the browser, redirects are refused, and HTTP remote URLs are allowed only
 on loopback for local probes.
+
+Bug tools select the platform tracker with `--source yaks.app`; `box` is the
+default. Remote answers carry `{source: "yaks.app", rows: [...]}` as text and
+`output.value`, without applying those rows to the box graph. Queries, ordering
+and limits run in the Worker before selecting the returned bugs. Remote show
+takes a global bug eid, since numbered ids belong to their own store. Resolve
+and archive operate on box bugs.
+
+```sh
+yak bug list --source yaks.app --limit 20
+yak bug list '.bug.status=resolved' --source yaks.app
+yak bug show <global-bug-eid> --source yaks.app
+```
