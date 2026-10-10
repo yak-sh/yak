@@ -21,13 +21,16 @@ let item = (...cols: CreateTable['cols']): CreateTable => ({
   cols,
 })
 
+let reused = durable()
+let reusedSql = driver(reused)
+reusedSql.query(item({ name: 'id', type: 'integer', pk: true }, {
+  name: 'value',
+  type: 'text',
+}))
+
 test('statement reuse resets rows and bindings, including after a failed step', () => {
-  using d = durable()
-  let sql = driver(d)
-  sql.query(item({ name: 'id', type: 'integer', pk: true }, {
-    name: 'value',
-    type: 'text',
-  }))
+  using d = reused
+  let sql = reusedSql
   sql.query(insert('item', { id: 1, value: 'one' }))
   assertThrows(() => sql.query(insert('item', { id: 1, value: 'duplicate' })))
   sql.query(insert('item', { id: 2, value: 'two' }))
