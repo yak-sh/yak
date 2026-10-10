@@ -13,7 +13,7 @@ import { App } from '../components/App.tsx'
 import { Ux } from '@yaks/ux'
 import { extend, ux } from '../components/registry.ts'
 import { render as portable } from '@yaks/preact'
-import { define } from '@yaks/render'
+import { define, type Renderer } from '@yaks/render'
 import { loadVocab } from '@yaks/vocab'
 import { docDoc } from '@yaks/doc'
 import { bindHistory } from '../history.ts'
@@ -86,7 +86,9 @@ test('configured Inspect facet renders a query through its host adapter, not raw
   }
 })
 
-let preparedDocs = define(await contributedViews([{ views: docViews }]), {
+let docRenderers = (await contributedViews([{ views: docViews }]))
+  .filter((r): r is Renderer => !('Render' in r))
+let preparedDocs = define(docRenderers, {
   vocab: loadVocab(docDoc),
 })
 test('the terminal draws a prepared contributed Markdown body', () => {
