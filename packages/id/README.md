@@ -110,33 +110,56 @@ refused. Eids and other strings are left to the graph's other addressing.
 ```ts
 import { graph } from '@yaks/graph'
 import { human, idDoc, idKeywords } from '@yaks/id'
-import { ids, numbers } from '@yaks/id/graph'
-import { spineDoc } from '@yaks/kernel/vocab'
+import { numbers } from '@yaks/id/graph'
 import { ram } from '@yaks/ram'
 import { loadVocab } from '@yaks/vocab'
 import { equal } from '@yaks/testing'
 
-const vocab = loadVocab([spineDoc, idDoc, {
+const vocab = loadVocab([idDoc, {
   $defs: {
+    entity: { component: true, properties: {} },
     book: { component: true, kind: true, prefix: 'B', properties: {} },
   },
 }], [idKeywords])
 // This store numbers on write; the allocator returns the number it keeps.
 const storage = ram(vocab, { number: true })
 const allocate = (eid: string) => storage.get([eid])[0].entity
-const g = graph({
-  storage,
-  vocab,
-  plugins: [numbers(allocate), ids(vocab)],
-})
-await g.install()
+const allocator = numbers(allocate)
+const g = graph({ storage, vocab, plugins: [allocator] })
 const eid = 'a3f19c02-4b00-4000-8000-000000000001'
-await g.apply([{ entity: { eid }, $num: true, book: {} }])
-await g.apply([{ entity: { eid }, $num: true }])
-const [book] = await g.get([eid])
+g.apply([{ entity: { eid }, $num: true, book: {} }])
+// The plugin answers a later numbering request with the same number.
+const repeated = await allocator.hooks!.cascade!([{
+  entity: { eid },
+  $num: true,
+}], storage)
+equal(repeated.at(-1)!.entity.num, 1)
+const [book] = storage.get([eid])
 equal(book.entity.num, 1)
 equal(human(vocab)(book), 'B-1')
-equal(Object.fromEntries(await g.address(['B-1', '1', '#a3f19c024b'])), {
+```
+
+The resolver's `address` accepts a read transaction and the ids to resolve:
+
+```ts
+import { idDoc, idKeywords } from '@yaks/id'
+import { ids } from '@yaks/id/graph'
+import { ram } from '@yaks/ram'
+import { loadVocab } from '@yaks/vocab'
+import { equal } from '@yaks/testing'
+
+const vocab = loadVocab([idDoc, {
+  $defs: {
+    entity: { component: true, properties: {} },
+    book: { component: true, kind: true, prefix: 'B', properties: {} },
+  },
+}], [idKeywords])
+const eid = 'a3f19c02-4b00-4000-8000-000000000001'
+const storage = ram(vocab, { number: true })
+storage.tx((tx) => tx.patch([{ entity: { eid }, book: {} }]))
+const resolver = ids(vocab)
+const resolved = await resolver.address!(storage, ['B-1', '1', '#a3f19c024b'])
+equal(Object.fromEntries(resolved), {
   'B-1': eid,
   '1': eid,
   '#a3f19c024b': eid,
