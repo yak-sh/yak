@@ -28,6 +28,7 @@
 // in is reachable on the web and not here, because a call names an app by slug
 // and has no space to resolve it against — the door would have to remember
 // which apps this session has opened, and it remembers nothing (mcp.ts).
+import { workerBreak } from './dispatch.ts'
 import { type App, type Directory, type Space } from './directory.ts'
 import type { Env } from './env.ts'
 import { type Host, spaceHost } from './host.ts'
@@ -171,6 +172,7 @@ export let runCommand = async (
       tool,
       args,
       acting(ctx.env, space, app, who),
+      { report: (req, error) => workerBreak(ctx.env, space, app, req, error) },
     ),
     space,
   }

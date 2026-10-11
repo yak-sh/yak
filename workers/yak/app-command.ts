@@ -68,7 +68,7 @@ export let commandsIn = async (
   )
 
 export let commandAt = async (
-  env: Env,
+  env: Pick<Env, 'DISPATCH' | 'SESSION_SECRET' | 'APEX'>,
   space: Space,
   app: App,
   who: Who,
@@ -76,6 +76,7 @@ export let commandAt = async (
   tool: ToolDef,
   args: Record<string, unknown>,
   door: Acts,
+  execution: NonNullable<Parameters<typeof commandWorker>[6]> = {},
 ): Promise<{ text: string; value: Record<string, unknown> }> => {
   if (!mayCall(tool.floor, who.person, who.role)) {
     throw new CallError('access', `${name} requires the app ${tool.floor}`)
@@ -86,9 +87,15 @@ export let commandAt = async (
     args,
     {
       worker: async (path, args) => {
-        let res = await commandWorker(env, space, app, who, path, args, {
-          report: (req, said) => workerBreak(env, space, app, req, said),
-        })
+        let res = await commandWorker(
+          env,
+          space,
+          app,
+          who,
+          path,
+          args,
+          execution,
+        )
         return workerReply(res, name, at)
       },
       query: async (line) => {
@@ -134,5 +141,7 @@ export let commandIn = async (
       `no command ${name} in ${space.slug}/${app.slug}`,
     )
   }
-  return commandAt(env, space, app, who, name, tool, args, door)
+  return commandAt(env, space, app, who, name, tool, args, door, {
+    report: (req, error) => workerBreak(env, space, app, req, error),
+  })
 }

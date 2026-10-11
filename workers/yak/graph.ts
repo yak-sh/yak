@@ -180,6 +180,7 @@ import {
   type Actor,
   type AdmitOpts,
   type ApplyOpts,
+  argsOf,
   type Bundle,
   type Comp,
   comps,
@@ -188,6 +189,7 @@ import {
   type Plugin,
   Refused,
   sha256,
+  who,
 } from '@yaks/graph'
 import { DELIVER, MAIL } from '@yaks/mail'
 import {
@@ -244,7 +246,7 @@ import {
   type Namespace,
   PLATFORM_STORE,
 } from './door.ts'
-import { type Meta, meta, metaOf } from './meta.ts'
+import { type Meta, meta, metaOf, minted } from './meta.ts'
 import { caught, defect } from './defects.ts'
 import { runtimeExceptions } from './runtime_exceptions.ts'
 import { counts, hop, type Tally, tallying } from './lib/hops.ts'
@@ -265,7 +267,7 @@ import {
 import { weighed } from './meter.ts'
 import { embedder, SPACE, texts } from './embedding.ts'
 import { directoryOf } from './directory.ts'
-import { commandWorker } from './dispatch.ts'
+import { commandAt } from './app-command.ts'
 import { vaultOf } from './vault.ts'
 import {
   aside,
@@ -1962,35 +1964,79 @@ export class Store {
           {
             host: g,
             tools: [
-              ...commands(declared, async (path, args, call) => {
-                let ns = this.#bind.STORE, appId = this.#get('app')
-                if (!ns || !appId) throw new Error('app store is unavailable')
-                let held = await directoryOf(ns).appAt(appId)
-                if (!held || held.app.trashed || held.space.trashed) {
-                  throw new Error('app is unavailable')
-                }
-                let res = await commandWorker(
-                  this.#bind,
-                  held.space,
-                  held.app,
-                  { person: appId, role: 'editor' },
-                  path,
-                  args,
-                  {
-                    call: call.entity.eid,
-                    at: typeof call.created == 'object' &&
-                        call.created != null && 'at' in call.created
-                      ? String(call.created.at ?? '')
-                      : '',
-                    source: typeof call.call == 'object' && call.call != null &&
-                        'source' in call.call
-                      ? String(call.call.source ?? call.entity.eid)
-                      : call.entity.eid,
-                  },
-                )
-                await res.body?.cancel()
-                return []
-              }),
+              ...commands(declared).map((tool) => ({
+                ...tool,
+                applied: true,
+                run: async (call: Bundle) => {
+                  let ns = this.#bind.STORE, appId = this.#get('app')
+                  if (!ns || !appId) throw new Error('app store is unavailable')
+                  let dir = directoryOf(ns)
+                  let held = await dir.appAt(appId)
+                  if (!held || held.app.trashed || held.space.trashed) {
+                    throw new Error('app is unavailable')
+                  }
+                  let actor = who(call)
+                  // Unattributed recorded work is the app's automation. A
+                  // browser's vouched instrument alone never supplies a person.
+                  let person = actor?.by ?? (actor?.via ? null : appId)
+                  let role = person == appId
+                    ? 'editor'
+                    : person
+                    ? await dir.role(held.space, person) ??
+                      (await dir.grant(held.app, person))?.access ?? null
+                    : null
+                  if (!reads(mode(held.app.access), role)) {
+                    throw new Denied(person, appId, 'viewer', 'read')
+                  }
+                  if (person) {
+                    this.#vouched.set(person, {
+                      person,
+                      via: actor?.via ?? null,
+                      level: role,
+                      title: null,
+                    })
+                  }
+                  let caller = {
+                    person,
+                    role,
+                    ...(actor?.via ? { via: actor.via } : {}),
+                  }
+                  let answered = await commandAt(
+                    this.#bind,
+                    held.space,
+                    held.app,
+                    caller,
+                    tool.name!,
+                    declared[tool.name!],
+                    argsOf(call),
+                    {
+                      query: (line) => Promise.resolve(g.read(line)),
+                      apply: async ({ entities }) => {
+                        let made = await g.apply(signed(entities, {
+                          ...(person ? { by: person } : {}),
+                          ...(actor?.via ? { via: actor.via } : {}),
+                        }))
+                        return {
+                          entities: [...new Set(made.map((b) => b.entity.eid))],
+                          aliases: minted(made),
+                        }
+                      },
+                    },
+                    {
+                      call: call.entity.eid,
+                      at: String((call.created as Comp | undefined)?.at ?? ''),
+                      source: String(
+                        (call.call as Comp | undefined)?.source ??
+                          call.entity.eid,
+                      ),
+                    },
+                  )
+                  return [{
+                    entity: { eid: '$answer' },
+                    content: { body: answered.text },
+                  }]
+                },
+              })),
               ...storedTools(
                 this.#host,
                 storeKind(this.#get('name') ?? ''),
