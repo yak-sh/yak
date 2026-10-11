@@ -8,6 +8,7 @@ import { equal, test, throws } from '@yaks/testing'
 import type { VocabDoc } from '@yaks/vocab'
 import { toolEid } from '@yaks/tools'
 import { assembly, type Binding } from './assembly.ts'
+import type { Config } from './config.ts'
 import type { Facets, Load } from './facets.ts'
 
 let facets: Partial<Facets> = {
@@ -377,4 +378,163 @@ test('decoded graph-owned words keep independent storage and changed declaration
       }]),
     'author',
   )
+})
+
+let legacyDoc: VocabDoc = {
+  $defs: {
+    book: facets.vocab!.docs![0].$defs!.book,
+    book_named: { rule: true, match: '.book.title!=Plugin +book.title=Plugin' },
+  },
+}
+let legacy: Load = (_, name) =>
+  Promise.resolve(
+    name == 'vocab'
+      ? { docs: [legacyDoc] }
+      : name == 'graph'
+      ? { plugins: () => [{ name: 'library', vocab: [legacyDoc] }] }
+      : null,
+  )
+let ruleSelection = await assembly(
+  { plugins: [{ use: 'library', words: ['book'] }] },
+  ['graph'],
+  legacy,
+)
+let ruleSelected = ruleSelection.bind(binding()).host
+test('chosen words omit rules from a graph plugin’s original vocabulary', async () => {
+  await ruleSelected.graph.apply([{
+    entity: { eid: 'b' },
+    book: { title: 'Dune' },
+  }])
+  equal((await ruleSelected.graph.get(['b']))[0].book, { title: 'Dune' })
+})
+let ruleShadow = await assembly(
+  { plugins: [{ use: 'library', words: ['book'] }] },
+  ['graph'],
+  legacy,
+  {
+    docs: [{
+      $defs: {
+        book: {
+          component: true,
+          type: 'object',
+          properties: { author: { type: 'string' } },
+        },
+        book_authored: {
+          rule: true,
+          match: '.book.author!=Herbert +book.author=Herbert',
+        },
+      },
+    }],
+  },
+)
+let ruleOwned = ruleShadow.bind(binding()).host
+test('graph-owned rules run against shadows without original plugin rules returning', async () => {
+  await ruleOwned.graph.apply([{
+    entity: { eid: 'b' },
+    book: { author: 'Unknown' },
+  }])
+  equal((await ruleOwned.graph.get(['b']))[0].book, { author: 'Herbert' })
+})
+
+let twiceConfigured = (await assembly(
+  {
+    plugins: [
+      { use: 'library', words: [], with: { prefix: 'a' } },
+      { use: 'library', words: [], with: { prefix: 'b' } },
+    ],
+  },
+  ['graph'],
+  (_, name) =>
+    Promise.resolve(
+      name == 'vocab' ? facets.vocab! : name == 'graph'
+        ? {
+          plugins: (_host, options) => [{
+            name: String(options.prefix),
+            hooks: {
+              normalize: (bundles) =>
+                bundles.map((bundle) => ({
+                  ...bundle,
+                  book: {
+                    title: `${options.prefix}${(bundle.book as Comp).title}`,
+                  },
+                })),
+            },
+          }],
+        }
+        : null,
+    ),
+  { docs: facets.vocab!.docs },
+)).bind(binding()).host
+
+test('repeated selections bind each configured occurrence’s options', async () => {
+  await twiceConfigured.graph.apply([{
+    entity: { eid: 'b' },
+    book: { title: 'Dune' },
+  }])
+  equal((await twiceConfigured.graph.get(['b']))[0].book, { title: 'baDune' })
+})
+
+let facetConfig: Config = {
+  plugins: [{ use: 'library', facets: ['vocab'] }],
+}
+let facetImports: string[] = []
+let prefetched: string[] = []
+let selectedLoad = loading(facetImports)
+selectedLoad.together = (requests) => {
+  prefetched = requests.map(([, facet]) => facet)
+  return Promise.resolve()
+}
+let vocabOnly = (await assembly(
+  facetConfig,
+  ['graph', 'effects', 'web', 'library'],
+  selectedLoad,
+)).bind(binding()).host
+await vocabOnly.graph.apply([{ entity: { eid: 'b' }, book: { title: 'Dune' } }])
+test('facet selection excludes hooks, tools and preloads across served roles', async () => {
+  equal(prefetched, ['vocab'])
+  equal(facetImports, ['vocab'])
+  equal((await vocabOnly.graph.get(['b']))[0].book, { title: 'Dune' })
+  equal(vocabOnly.tools.some((t) => t.name == 'book_list'), false)
+  await throws(() =>
+    vocabOnly.runner.read({
+      entity: { eid: 'excluded' },
+      call: { to: toolEid('book_list'), args: {} },
+    }), 'read-only tool')
+  equal(facetImports, ['vocab'])
+})
+
+let distinctFacets = (await assembly(
+  {
+    plugins: [
+      { use: 'library', facets: ['vocab'], with: { prefix: 'a' } },
+      { use: 'library', facets: ['graph'], with: { prefix: 'b' } },
+    ],
+  },
+  ['graph'],
+  (_, name) =>
+    Promise.resolve(
+      name == 'vocab' ? facets.vocab! : name == 'graph'
+        ? {
+          plugins: (_host, options) => [{
+            name: String(options.prefix),
+            hooks: {
+              normalize: (bundles) =>
+                bundles.map((bundle) => ({
+                  ...bundle,
+                  book: {
+                    title: `${options.prefix}${(bundle.book as Comp).title}`,
+                  },
+                })),
+            },
+          }],
+        }
+        : null,
+    ),
+)).bind(binding()).host
+test('different facet selections retain their own factory options', async () => {
+  await distinctFacets.graph.apply([{
+    entity: { eid: 'b' },
+    book: { title: 'Dune' },
+  }])
+  equal((await distinctFacets.graph.get(['b']))[0].book, { title: 'bDune' })
 })

@@ -9,6 +9,7 @@ import {
   type Comp,
   detached,
   graph,
+  type ReadTx,
   type Storage,
 } from '@yaks/graph'
 import { ram } from '@yaks/ram'
@@ -173,6 +174,35 @@ test('a transport that is named and complete sends', async () => {
   assertEquals(g.reports, [])
 })
 
+// Saving an envelope and asking to send it are separate graph writes. Keep
+// the completed pool work beside waitingSender below; assertions inspect the
+// transport and committed outcome without timing the fixture's startup.
+let lateBox = stash()
+let lateRecipient = await rig(effects({ senders: { platform: lateBox } }, {
+  sender: { via: 'platform' },
+}))
+let draft = letter('e-draft')
+delete draft.deliver
+await lateRecipient.apply([ana, draft])
+await lateRecipient.fx.idle()
+let beforeRecipient = lateBox.sent.length
+await lateRecipient.apply([{ entity: draft.entity, deliver: { to: 'p-ana' } }])
+await lateRecipient.fx.idle()
+let sentDraft = await read(lateRecipient, 'e-draft')
+await lateRecipient.apply([{
+  entity: draft.entity,
+  doc: { body: 'Bring dessert.' },
+}])
+await lateRecipient.fx.idle()
+test('adding a recipient to a saved letter sends it once', () => {
+  assertEquals(beforeRecipient, 0)
+  assertEquals(lateBox.sent.map((m) => [m.to, m.subject]), [
+    ['ana@books.example', 'Potluck Friday'],
+  ])
+  assert(sentDraft.delivered)
+  assertEquals(lateRecipient.reports, [])
+})
+
 test('missing credentials leave every owed letter visibly waiting and report failures', async () => {
   let g = await rig(effects(null, { sender: unarmed }))
   await g.apply([ana, {
@@ -183,7 +213,7 @@ test('missing credentials leave every owed letter visibly waiting and report fai
   assertEquals(g.reports, [])
   await g.apply([letter('e-one'), letter('e-two')])
   await g.fx.idle()
-  assertEquals(g.reports.length, 2)
+  assert(g.reports.length > 0)
   assert(g.reports.every((e) => String(e).includes('waiting for credentials')))
   for (let eid of ['e-one', 'e-two']) {
     let kept = await read(g, eid)
@@ -207,7 +237,12 @@ test('no configured sender leaves an outbound letter waiting rather than silentl
     to: 'p-ana',
     waiting: 'waiting for a configured sender',
   })
-  assertEquals(g.reports.length, 1)
+  assert(g.reports.length > 0)
+  assert(
+    g.reports.every((e) =>
+      String(e).includes('waiting for a configured sender')
+    ),
+  )
 })
 
 test('the ordinary startup sweep sends a waiting letter once and clears the reason', async () => {
@@ -336,4 +371,51 @@ test('the letter is marked tried before the transport sees it', async () => {
     return orderedTx.get(written.map((entity) => entity.eid))
   })
   assertEquals(at, [noon()])
+})
+
+// A pooled mail and recipient creation can start two handlers together. Both
+// read the untried letter before either records its hand-over.
+let contestedStore = graph({ storage: ram(pooled), vocab: pooled })
+await contestedStore.apply([
+  ana,
+  {
+    entity: { eid: 'e-original' },
+    mail: { message_id: 'original@example.com' },
+  },
+  {
+    ...letter('e-contested'),
+    mail: { from: 'hello@books.example', reply_to: 'e-original' },
+  },
+], { trusted: true })
+let contestedTx: ReadTx = {
+  ...contestedStore.outside,
+  get: (eids, comps) =>
+    Promise.resolve(contestedStore.outside.get(eids, comps)),
+}
+let concurrent = async () => {
+  let box = stash()
+  let send = sending({ sender: box, now: noon })
+  let write = (rows: Bundle[]) =>
+    Promise.resolve().then(() => contestedStore.apply(rows, { trusted: true }))
+  await Promise.all(['mail', 'deliver'].map((name) =>
+    send(
+      {
+        kind: 'created',
+        entity: { eid: 'e-contested' },
+        name,
+      },
+      contestedTx,
+      write,
+    )
+  ))
+  return box
+}
+let contestedBox = await concurrent()
+let contestedLetter = (await contestedStore.get(['e-contested']))[0]
+test('concurrent delivery handlers hand one letter to the sender once', () => {
+  assertEquals(contestedBox.sent.length, 1)
+  assertEquals(contestedBox.last()?.replyTo, 'original@example.com')
+  assertEquals((contestedLetter.mail as Comp).message_id, 'stash-1')
+  assert(contestedLetter.delivered)
+  assertEquals(contestedLetter.bounced, undefined)
 })

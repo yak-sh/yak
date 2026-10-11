@@ -23,7 +23,14 @@
 // reads are @yaks/doc's `doc{title, body}`. So the composition works from the
 // whole entity, which is what the effect reads anyway.
 
-import type { Bundle, Comp, Entity, ReadTx } from '@yaks/graph'
+import {
+  type Bundle,
+  type Comp,
+  type Entity,
+  type ReadTx,
+  Stale,
+  token,
+} from '@yaks/graph'
 import { after } from '@yaks/fp'
 import type { Handler } from '@yaks/effects'
 import { BODY, DOC, TITLE } from '@yaks/doc'
@@ -180,19 +187,35 @@ export let sending =
           }])
         }
         let answered = mail.reply_to == null ? '' : String(mail.reply_to)
-        let tried = () =>
-          write([{
-            entity: event.entity,
-            [DELIVER]: { tried: now(), waiting: null },
-          }])
+        // Two committed triggers can read the same untried letter. Claim the
+        // hand-over atomically before either reaches the sender.
+        let tried = async () => {
+          try {
+            await write([{
+              entity: event.entity,
+              [DELIVER]: { tried: now(), waiting: null },
+              $was: { [DELIVER]: { tried: token(deliver.tried) } },
+            }])
+            return true
+          } catch (error) {
+            if (
+              error instanceof Stale && error.eid == event.entity.eid &&
+              error.comp == DELIVER && error.prop == 'tried'
+            ) return false
+            throw error
+          }
+        }
         return after(
           answered ? threadOf(tx, answered) : '',
           (replyTo) =>
-            after(
-              tried(),
-              () => sender.send(message(letter!, to, replyTo || undefined)),
+            tried().then(
+              (claimed) =>
+                claimed
+                  ? sender.send(message(letter!, to, replyTo || undefined))
+                  : undefined,
             ).then(
               (receipt) =>
+                receipt &&
                 write([{
                   entity: event.entity,
                   // The envelope, denormalized onto the letter as data: an

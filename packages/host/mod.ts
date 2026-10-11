@@ -10,7 +10,7 @@ import type { Anatomy, AnatomyObserver } from '@yaks/code/anatomy'
 import type { Contributions } from '@yaks/ui'
 import type { Blobs } from '@yaks/blob'
 import type { Effects } from '@yaks/effects'
-import type { Local } from '@yaks/secrets'
+import type { Vault } from '@yaks/secrets'
 import type { Finding, Reply, Runner } from '@yaks/tools'
 import type { Context } from '@yaks/tracker/report'
 import type { Config } from './config.ts'
@@ -60,10 +60,10 @@ export interface Host {
       archetypes: (sample: number) => Finding[]
     }
   }
-  /** where this graph's secrets are kept (./vault.ts): private files beside
-   * its database, or memory for a graph in memory — what @yaks/secrets seals
-   * into and a config's `{"secret": "NAME"}` is read from */
-  vault: Local
+  /** where this graph's secrets are kept: the concrete host supplies private
+   * files, memory or an encrypted store. @yaks/secrets seals into it and a
+   * config's `{"secret": "NAME"}` is read from it. */
+  vault: Vault
   /** where this graph keeps content-addressed text (@yaks/blob): a
    * table in its own database — what a `store: blob` property is written to,
    * and where @yaks/page keeps an archived page unless it names a directory */
@@ -200,10 +200,13 @@ export type {
   VocabFacet,
 } from './facets.ts'
 export {
+  assemble,
   type Assembly,
   assembly,
   type AssemblyOpts,
   type Binding,
   type Meaning,
+  prepare,
+  type Prepared,
 } from './assembly.ts'
 export { every, ROLES } from './roles.ts'

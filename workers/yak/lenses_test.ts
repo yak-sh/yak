@@ -75,7 +75,7 @@ test('an app lens keeps old writes, reads and subscriptions through reload', asy
 
   let ws = wire()
   ctx.live.push(ws)
-  store.webSocketMessage(
+  await store.webSocketMessage(
     ws,
     JSON.stringify({
       subscribe: '.recipe.title~=Cake',

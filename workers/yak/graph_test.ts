@@ -27,8 +27,9 @@ import { durable } from './testing.ts'
 import { doorOf, PLATFORM_STORE } from './door.ts'
 import { grantEid, Store } from './graph.ts'
 import { metaOf } from './meta.ts'
-import type { Plugin } from './plugin.ts'
-import { PLUGINS } from './plugins.ts'
+import type { Load } from '@yaks/host'
+import { appConfig } from './config.ts'
+import { load } from './load.ts'
 import { named as spoken, type Names } from './listing.ts'
 import { col, isNull, lit, select, table, tally } from '@yaks/sql'
 import { ddl as journalDdl } from '@yaks/journal'
@@ -202,11 +203,84 @@ let owner: Vouch = { app: APP, person: ADA, role: 'owner', title: 'Ada' }
 let by = (b: Bundle) => (b.created as { by?: string } | undefined)?.by ?? null
 
 // A store with the app deployed into it, which is where every test starts.
+let fixtureLoad: Load | undefined
 let cookbook = async (ctx = state(), manifest = SCHEMA, v = owner) => {
-  let store = new Store(ctx)
+  let store = new Store(ctx, {}, undefined, undefined, fixtureLoad)
   assertEquals((await post(store, '/vocab', manifest, v)).status, 200)
   return store
 }
+
+let appOwned = await (async () => {
+  let ctx = state()
+  using _db = ctx.storage
+  let manifest = JSON.stringify({
+    $defs: Object.fromEntries([
+      ['decision', 'question'],
+      ['decided', 'choice'],
+      ['board', 'query'],
+    ].map(([name, prop]) => [name, {
+      component: true,
+      properties: { [prop]: { type: 'string' } },
+    }])),
+  })
+  let store = await cookbook(ctx, manifest)
+  let wrote = await post(store, '/apply', [{
+    entity: { eid: CAKE },
+    task: {},
+    decision: { question: 'Dinner?' },
+    decided: { choice: 'Cake' },
+    board: { query: '.unfamiliar.word' },
+  }], owner)
+  let rows = await (await get(store, '/query?q=.decision%26*', owner)).json()
+  return { status: wrote.status, rows }
+})()
+test('app-owned decision and board words keep their own write behavior', () => {
+  assertEquals(appOwned.status, 200)
+  assertEquals(appOwned.rows[0].decision, { question: 'Dinner?' })
+  assertEquals(appOwned.rows[0].decided, { choice: 'Cake' })
+  assertEquals(appOwned.rows[0].board, { query: '.unfamiliar.word' })
+})
+
+let completion = await (async () => {
+  let ctx = state()
+  using _db = ctx.storage
+  let store = await cookbook(ctx)
+  await post(store, '/apply', [{
+    entity: { eid: CAKE },
+    recipe: { serves: 2 },
+    completed: {},
+  }], owner)
+  let wrote = await post(store, '/apply', [{
+    entity: { eid: CAKE },
+    completed: { by: APP },
+  }], { ...owner, kernel: true })
+  let rows = await (await get(store, '/query?q=.recipe%26*', owner)).json()
+  return { status: wrote.status, by: rows[0]?.completed?.by }
+})()
+test('a kernel completion patch keeps the writer the Store was given', () => {
+  assertEquals(completion.status, 200)
+  assertEquals(completion.by, APP)
+})
+
+let coldDirectory = await (async () => {
+  let ctx = state()
+  using _db = ctx.storage
+  let directoryLoad: Load = async (plugin, facet) => {
+    if (plugin == '@yaks/session' && facet != 'vocab') {
+      throw new Error('a directory cannot import session runtime facets')
+    }
+    return await load(plugin, facet)
+  }
+  let store = new Store(ctx, {}, undefined, undefined, directoryLoad)
+  return await store.fetch(
+    new Request('http://store/query?q=.entity', {
+      headers: { 'x-store': PLATFORM_STORE, 'x-yak-kernel': '1' },
+    }),
+  )
+})()
+test('a newborn directory reads without importing an app’s runtime facets', () => {
+  assertEquals(coldDirectory.status, 200)
+})
 
 test('erasing a Store closes its subscribers and serves the empty Store', async () => {
   let ctx = state()
@@ -214,7 +288,10 @@ test('erasing a Store closes its subscribers and serves the empty Store', async 
   let store = await cookbook(ctx)
   let ws = wire()
   ctx.live.push(ws)
-  store.webSocketMessage(ws, JSON.stringify({ subscribe: '.recipe', id: 'r' }))
+  await store.webSocketMessage(
+    ws,
+    JSON.stringify({ subscribe: '.recipe', id: 'r' }),
+  )
   assertEquals(ws.sent.length, 1)
 
   let erased = await store.fetch(
@@ -525,9 +602,13 @@ for (let aggregate of [false, true]) {
   test(`store ${aggregate ? 'aggregate' : 'listing'} query failures log the door and the request id`, async () => {
     let store = await cookbook()
     let error = new Error('query storage failed')
-    using _broken = stub(store.door.graph, aggregate ? 'rows' : 'read', () => {
-      throw error
-    })
+    using _broken = stub(
+      (await store.door).graph,
+      aggregate ? 'rows' : 'read',
+      () => {
+        throw error
+      },
+    )
     using logged = stub(console, 'error')
     let response = await get(
       store,
@@ -874,7 +955,7 @@ test('a Store live query sees only connected peer positions', async () => {
     recipe: { serves: 8 },
   }], owner)
   let ws = wire()
-  let actor = await store.door.authenticate(
+  let actor = await (await store.door).authenticate(
     new Request('http://store/ws', { headers: headers(owner) }),
   )
   ws.serializeAttachment({ writer: { actor } })
@@ -908,7 +989,7 @@ test('a subscription is answered, and a commit reaches the socket', async () => 
   let ws = wire()
   ctx.live.push(ws)
 
-  store.webSocketMessage(
+  await store.webSocketMessage(
     ws,
     JSON.stringify({ subscribe: '.recipe', id: 'r' }),
   )
@@ -939,16 +1020,19 @@ test("a page's subscription leaves out the platform's rows unless it names one",
   }], owner)
   let ws = wire()
   ctx.live.push(ws)
-  let eids = (line: string) => {
+  let eids = async (line: string) => {
     ws.sent.length = 0
-    store.webSocketMessage(ws, JSON.stringify({ subscribe: line, id: line }))
+    await store.webSocketMessage(
+      ws,
+      JSON.stringify({ subscribe: line, id: line }),
+    )
     return (ws.sent[0] as { bundles: Bundle[] }).bundles.map((b) =>
       b.entity.eid
     )
   }
   // The store minted Ada a person row wearing her name as a `doc` title.
-  assertEquals(eids('.doc'), [CAKE])
-  assertEquals(eids('.person&?doc'), [ADA])
+  assertEquals(await eids('.doc'), [CAKE])
+  assertEquals(await eids('.person&?doc'), [ADA])
 })
 
 // `*` is the grammar's widest projection, so one reading of the line serves
@@ -962,7 +1046,7 @@ test('a subscription asking `*` answers what /query answers', async () => {
   ctx.live.push(ws)
   let line = '.recipe&*'
 
-  store.webSocketMessage(ws, JSON.stringify({ subscribe: line, id: 'r' }))
+  await store.webSocketMessage(ws, JSON.stringify({ subscribe: line, id: 'r' }))
   assertEquals(ws.sent, [{ id: 'r', bundles: [], transientReset: [] }])
 
   await post(store, '/apply', [{
@@ -1027,7 +1111,10 @@ test('a woken object serves the same app, and the same sockets', async () => {
   }], owner)
   let ws = wire()
   ctx.live.push(ws)
-  store.webSocketMessage(ws, JSON.stringify({ subscribe: '.recipe', id: 'r' }))
+  await store.webSocketMessage(
+    ws,
+    JSON.stringify({ subscribe: '.recipe', id: 'r' }),
+  )
 
   // The object is evicted; its storage and its sockets are not.
   let woken = new Store(ctx)
@@ -1302,21 +1389,23 @@ test('a grant id is the sha of app and person joined by a NUL', () => {
   )
 })
 
-// ---- the rules slot (T-34619) ----
-//
-// A plugin says what it does about a write as data, and the host hands every
-// plugin's rules to the store it builds (plugin.ts `rulesOf`, graph.ts
-// `#boot`). What these pin is the arrival — a fixture plugin on the list, a
-// store built after it, and the rule firing on a batch that store applied —
-// because the seam is the wiring and the rule engine itself is @yaks/graph's
-// (rules_test.ts). The list is a module value, so it is put back afterwards.
+// A graph facet’s rules reach the Store through its configured loader.
 let ruling = async (rules: Rule[], body: () => Promise<void>) => {
-  let plugin: Plugin = { name: 'fixture', rules }
-  PLUGINS.push(plugin)
+  let configured = { use: 'fixture', words: [] }
+  appConfig.plugins!.push(configured)
+  fixtureLoad = (async (plugin, facet) => {
+    if (plugin == 'fixture') {
+      return facet == 'graph'
+        ? { plugins: () => [{ name: 'fixture', rules }] }
+        : null
+    }
+    return await load(plugin, facet)
+  }) as Load
   try {
     await body()
   } finally {
-    PLUGINS.splice(PLUGINS.indexOf(plugin), 1)
+    appConfig.plugins!.splice(appConfig.plugins!.indexOf(configured), 1)
+    fixtureLoad = undefined
   }
 }
 
@@ -1502,7 +1591,7 @@ test('a Store anatomy supplier observes its own conditional composition without 
   assertEquals(app.skills, [])
   assertEquals(app.views, [])
   assertEquals(app.routes, [])
-  assert(app.rules.some((r) => r.name == 'yak/rules'))
+  assert(app.rules.some((r) => r.name == 'yak/trash' || r.name == 'yak/meter'))
   assert(app.rules.some((r) => r.name == 'yak/weigh'))
   assert(!app.packages.some((p) => p.name == '@yaks/visualize'))
   let meta = new Store(state(PLATFORM_STORE))
@@ -1513,7 +1602,9 @@ test('a Store anatomy supplier observes its own conditional composition without 
   )
   let directory = meta.anatomy()
   assert(!directory.rules.some((r) => r.name == 'yak/weigh'))
-  assert(directory.rules.some((r) => r.name == 'yak/rules'))
+  assert(
+    directory.rules.some((r) => r.name == 'yak/trash' || r.name == 'yak/meter'),
+  )
   assertEquals(app.comps.length, store.anatomy().comps.length)
 })
 
@@ -1638,7 +1729,7 @@ test(
       recipe: { serves: 8 },
     }], owner)
     let ws = wire()
-    let actor = await store.door.authenticate(
+    let actor = await (await store.door).authenticate(
       new Request('http://store/ws', { headers: headers(owner) }),
     )
     ws.serializeAttachment({ writer: { actor } })

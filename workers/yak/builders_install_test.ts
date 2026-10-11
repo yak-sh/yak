@@ -7,22 +7,28 @@ import { edges } from '@yaks/edge'
 import { toolEid, toolRow } from '@yaks/tools'
 import { test } from '@yaks/testing'
 import { workshop } from '../../packages/builders/testing.ts'
-import { builderModelTool, buildersPlugin } from './builders.ts'
+import { builderModelTool } from './builders.ts'
+import { effects as appEffects } from './facets/app-effects.ts'
 import type { Stored } from './plugin.ts'
 import { platformVocab } from './vocab.ts'
 
-let install = (g: Graph, meta: boolean, app: string | null) =>
-  buildersPlugin.installs![0](
-    (query) => g.read(query),
-    { graph: g, meta, app } as Stored,
+let install = async (g: Graph, meta: boolean, app: string | null) => {
+  let handler = appEffects({}, { store: { graph: g, meta, app } as Stored })
+    .builder_install
+  await handler(
+    { entity: { eid: 'startup' }, name: 'builder_install', kind: 'created' },
+    g,
+    (bundles) => g.apply(bundles, { trusted: true }),
   )
+}
 
 test('builders install succeeds in stores without builder vocabulary', async () => {
   let vocab = platformVocab()
   let g = graph({ storage: ram(vocab), vocab })
   assertEquals(vocab.comp('builder'), undefined)
   for (let meta of [true, false]) {
-    assertEquals(await install(g, meta, null), [])
+    await install(g, meta, null)
+    assertEquals(await g.read('.entity'), [])
   }
 })
 
@@ -69,7 +75,7 @@ test('builders install preserves legacy provenance in a store declaring builders
   let before = await g.get([output, 'builder'])
   let calls = await g.read('.call&*')
   // Provenance must run even before a store has an app assigned.
-  await g.apply(await install(g, false, null), { trusted: true })
+  await install(g, false, null)
   let [run, builder] = await g.get([build, 'builder'])
   assertEquals((run.build as Comp).key, 'legacy')
   assert(typeof (run.build as Comp).inputs == 'string')
@@ -81,5 +87,7 @@ test('builders install preserves legacy provenance in a store declaring builders
     true,
   )
   assertEquals(await g.read('.call&*'), calls)
-  assertEquals(await install(g, false, null), [])
+  let after = await g.get([build, 'builder', output])
+  await install(g, false, null)
+  assertEquals(await g.get([build, 'builder', output]), after)
 })

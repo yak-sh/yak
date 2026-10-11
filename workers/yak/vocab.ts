@@ -1,60 +1,12 @@
-import { registrationDoc } from './attribution.ts'
-import { archetypeDoc } from '@yaks/archetype'
+// The vocabulary a configured Worker store speaks, plus an app's own declarations.
+// Store facets own the words; the generated loader resolves those facets once.
 import type { Derived } from '@yaks/sql'
 import { refuse } from './tool.ts'
-// The vocabulary one app speaks (T-33811): the core documents every store on
-// the platform shares, plus the words that app declared for itself, loaded
-// through @yaks/vocab into one `Vocab` — the thing a Store reads its DDL, its
-// routing and its admission out of. One app, one vocabulary; the fleet's own
-// 83 tables are the fleet's (V-33553).
-//
-// A word has one home (M-17871): a word a package declares is loaded from
-// that package, picked out of its document where a store wants some of its
-// words and not the rest (@yaks/vocab `pick`), and never declared again here.
-// What this file declares is only what no package does.
-//
-// What is core here, and why each piece is:
-//   spineDoc    @yaks/kernel: the spine and its two server-owned stamps,
-//               `entity`, `created` and `updated`. @yaks/sqlite raises
-//               `entity` and `tombstone` as the layout's fixed spine, and
-//               @yaks/graph's stamp phase is the stamps' only writer. An app's
-//               entities carry no number: @yaks/id is a plugin a graph opts
-//               into, and an app has not (T-37831), so an app's ids are the
-//               eid and the short handle built from it.
-//   person      @yaks/persona: the writer a store mints the first time it
-//               meets one (graph.ts `#vouching`) — what `created.by` points at.
-//   docDoc      @yaks/doc: title and body, the words a person reads and the
-//               only thing search searches. `body` says `store: "blob"`, which
-//               is @yaks/blob's keyword — the text is swapped for its address
-//               on the way in and back on the way out, and neither `doc` nor
-//               the app is told.
-//   memberDoc   @yaks/member: who belongs to a space, what they may touch.
-//   edgeDoc     @yaks/edge: the link itself, `edge{from, to, ord}`.
-//   relations   the twelve verbs an edge may wear. @yaks/edge ships the link
-//               and not one relation, because which relations exist is the
-//               application's word — so the platform picks its twelve from the
-//               packages that declare them. They are core and not an app's
-//               own: the guide teaches this list to every app, every store
-//               already holds rows under these names, and a word means the
-//               same thing in every store — so they are reserved like the rest
-//               of the core (T-33810).
-// @yaks/id is loaded by the platform's own two stores and by no app's
-// ({@link platformDocs}, {@link metaKeywords}): the directory orders its
-// memories by the number it minted, and an app has nothing to number.
-//
-// And the app's own `vocab.json` — or `vocab.yml`, read through the same door
-// (@yaks/yaml, M-34605). It is a JSON Schema 2020-12 document with `$defs`
-// (D-33490 gate 3), the same shape every `packages/*/vocab.json` is written in,
-// and it is the one form: a keyword belongs to the property — `search`,
-// `stamped`, a reference's `death` — and a manifest flattened to bare type
-// words could not carry one (T-37546).
 import { type Host, url } from './host.ts'
 import {
   changed,
-  CORE_URI,
   type Keywords,
-  loadVocab,
-  pick,
+  metaDoc,
   type PropSchema,
   same,
   storable,
@@ -62,1109 +14,104 @@ import {
   type Vocab,
   type VocabDoc,
 } from '@yaks/vocab'
-import { aliasDoc } from '@yaks/alias'
 import { blobKeywords } from '@yaks/blob'
-import { builderDoc, derived as builds } from '@yaks/builders/vocab'
-import { docDoc } from '@yaks/doc'
-import { dreamingDoc } from '@yaks/dreaming/vocab'
-import { EDGE_URI, edgeDoc, edgeKeywords } from '@yaks/edge'
-import { effectDoc } from '@yaks/effects'
-import { gitDoc } from '@yaks/git'
-import { goalDoc } from '@yaks/goal/vocab'
-import { hookDoc } from '@yaks/hook'
-import { idDoc, idKeywords } from '@yaks/id'
-import { keyDoc, keyKeywords } from '@yaks/key'
-import {
-  kernelDoc as kernelWords,
-  marksDoc,
-  spineDoc,
-} from '@yaks/kernel/vocab'
-import { mailDoc } from '@yaks/mail'
-import { floored, memberDoc, memberKeywords, permitted } from '@yaks/member'
-import { modelDoc } from '@yaks/model/vocab'
-import { personaDoc } from '@yaks/persona/vocab'
-import { platformDoc as platformWords } from '@yaks/platform/vocab'
-import { projectDoc } from '@yaks/project/vocab'
-import { rtcDoc } from '@yaks/rtc/vocab'
-import { sessionDoc } from '@yaks/session/vocab'
-import { openrouterDoc } from '@yaks/openrouter/vocab'
-import { artifactDoc } from '@yaks/blob/vocab'
+import { edgeKeywords } from '@yaks/edge'
+import { keyKeywords } from '@yaks/key'
+import { floored, memberKeywords, permitted } from '@yaks/member'
+import { idKeywords } from '@yaks/id'
+import { derived as builds } from '@yaks/builders/vocab'
 import { sessionDerived } from '@yaks/session/status'
-import { taskDoc } from '@yaks/task/vocab'
-import { toolsDoc } from '@yaks/tools'
-import { tunnelDoc } from '@yaks/tunnel'
-import { wakeDoc } from '@yaks/wake'
 import { read } from '@yaks/yaml'
-import { vocabOf } from './plugin.ts'
-import { PLUGINS } from './plugins.ts'
-import { sweepDoc } from './wake.ts'
 import { docs as lensDocs } from '@yaks/lens/vocab'
-import { metaDoc } from '@yaks/vocab'
 import { declaredLenses, lensPaths, retainedLenses } from './lenses.ts'
-
-// The property shapes these documents are written out of. A `ref` names another
-// entity and says what happens to this row when that one dies; `owned` is
-// `stamped` — readable, never wire-writable, the kernel's own door the only
-// writer.
-let ref = (death: string): PropSchema => ({
-  type: 'string',
-  ref: 'entity',
-  death,
-})
-let text: PropSchema = { type: 'string' }
-let num: PropSchema = { type: 'number' }
-let bool: PropSchema = { type: 'boolean' }
-let time: PropSchema = { type: 'string', format: 'date-time' }
-let owned = (s: PropSchema): PropSchema => ({ ...s, stamped: true })
-// No two rows of the component may share this value — the uniqueness a race is
-// decided by, said on the property when it is one property (a composite is said
-// on the component, `unique: [['space', 'slug']]`).
-let unique = (s: PropSchema): PropSchema => ({ ...s, unique: true })
-
-/** The writer a store mints the first time it meets one (graph.ts
- * `#vouching`), from the package that says what a person is. */
-let personDoc: VocabDoc = pick(personaDoc, ['person'])
-
-/** The one verb no package declares under this name: `referenced`, which
- * @yaks/kernel stores as `references` and queries as `referenced`. A link's eid
- * is derived from the component it wears, so the name an app's store holds its
- * rows under is the name it keeps until they move. */
-let referencedDoc: VocabDoc = {
-  $vocabulary: { [CORE_URI]: true, [EDGE_URI]: true },
-  title: 'relations',
-  $defs: {
-    referenced: {
-      component: true,
-      type: 'object',
-      edge: true,
-      properties: {},
-    },
-  },
-}
-
-/** The verbs an edge may wear, each picked from the package that declares it:
- * a tag component saying `edge` about itself, so @yaks/edge reads it off the
- * loaded vocabulary. */
-let relationDocs: VocabDoc[] = [
-  pick(kernelWords, [
-    'about',
-    'cites',
-    'delegates',
-    'reads',
-    'supersedes',
-    'supervises',
-    'wants',
-    'worked',
-  ]),
-  pick(taskDoc, ['contains', 'requires']),
-  pick(goalDoc, ['satisfies']),
-  pick(dreamingDoc, ['recalled']),
-  referencedDoc,
-]
-
-/**
- * The verbs an edge may wear, under the wire's own names — the list the guide
- * teaches, and the only types a store makes an edge for. Note `referenced`,
- * never `references`.
- */
-export let RELATIONS: string[] = relationDocs.flatMap((d) =>
-  Object.keys(d.$defs ?? {})
-)
-
-/** The marks any row may wear, in every store the platform keeps: somebody
- * opened, archived, quarantined or verified it — and an image's size. */
-let markDocs: VocabDoc[] = [
-  marksDoc,
-  pick(kernelWords, [
-    'image',
-    'quarantined',
-    'verified',
-    'pending',
-    'interrupted',
-    'failed',
-  ]),
-]
-
-/**
- * A break the platform noted: in an app's store about the app's own code
- * (index.ts), and in any store about the store itself (graph.ts `#broke`).
- * Every property is server-owned, and the kernel's door (`x-yak-kernel`,
- * graph.ts) is its only writer.
- *
- * @yaks/tools declares `exception` too, with these same properties; the
- * platform's is also a kind that sorts before `doc`.
- */
-export let exceptionDoc: VocabDoc = {
-  $vocabulary: { [CORE_URI]: true },
-  title: 'exception',
-  $defs: {
-    exception: {
-      component: true,
-      type: 'object',
-      kind: true,
-      before: ['doc'],
-      properties: {
-        at: owned(time),
-        request: owned(text),
-        request_id: owned(text),
-        version: owned(num),
-        message: owned(text),
-        stack: owned(text),
-        type: toolsDoc.$defs!.exception.properties!.type,
-        value: toolsDoc.$defs!.exception.properties!.value,
-      },
-    },
-  },
-}
-
-/**
- * What the platform says in every store that the app never asked for: a
- * failure it reports on purpose, and the two rows an upload makes. They are
- * core rather than an app's own for the same reason the relations are — every
- * store already holds rows under these names, `app_errors` reads them by these
- * names in every app, and a word means the same thing everywhere.
- *
- * All three names are declared by a package too, at another meaning: `error`
- * by @yaks/tools (what a refused call says about itself), `blob` by @yaks/git
- * (where an object's bytes are) and `attachment` by @yaks/blob (a file a model
- * or a person handed over). Until each meaning has a name of its own, the
- * platform keeps these here.
- */
-export let kernelDoc: VocabDoc = {
-  $vocabulary: { [CORE_URI]: true },
-  title: 'kernel',
-  $defs: {
-    // A known failure state the platform reports deliberately, as against a
-    // break nobody chose. `app_errors` reads both facets in every store, so
-    // both are declared in every store.
-    error: {
-      component: true,
-      type: 'object',
-      kind: true,
-      before: ['doc'],
-      // `code` is @yaks/tools' half of this word: what a refused call says
-      // about itself, written by the runner rather than stamped by the
-      // platform. One word, both meanings, so a store never has to choose.
-      properties: { at: owned(time), message: owned(text), code: text },
-    },
-    // The two rows a page's upload makes (apps.ts `took`): the content,
-    // addressed by its sha, and the use of it, addressed off that. They stay
-    // apart because they are two things, and because a component may not point
-    // at its own entity.
-    blob: {
-      component: true,
-      type: 'object',
-      properties: { bytes: num },
-    },
-    attachment: {
-      component: true,
-      type: 'object',
-      kind: true,
-      before: ['doc'],
-      properties: {
-        blob: ref('cascade'),
-        mime: text,
-        name: text,
-        artifact: ref('keep'),
-        call: text,
-        revised_prompt: text,
-      },
-    },
-  },
-}
-
-/** `notified{at, by, via}`, the mark the unseen block reads in every store, as
- * @yaks/mail declares it: an app's store loads the whole of that package,
- * because an app has a mailbox, and the directory, which has none, loads this
- * one word of it. */
-let notifiedDoc: VocabDoc = pick(mailDoc, ['notified'])
-
-/** What a `vocab.json` looks like, for a refusal that teaches. */
-export let EXAMPLE =
-  '{"$defs": {"recipe": {"properties": {"serves": {"type": "number"}}}}}'
-
-/** Where the whole of it is written, and what an app's store says when it is
- * asked for a word nobody declared — the same sentence at the write door
- * (@yaks/graph's `teach`) and the read door (graph.ts `#taught`), because it is
- * the same missing act. */
-export let GUIDE = url({}, '/docs.md')
-export let teach = (env: Host = {}) =>
-  ' — a component of your own is declared in vocab.json ' +
-  'and planted by app_deploy: ' +
-  `${EXAMPLE} · call guide with page ` +
-  `components, or ${url(env, '/docs.md')}`
-
-/**
- * The words the platform gives every app to reach for rather than invent
- * (public/docs/components.md §The platform's vocabulary), picked from the
- * packages that declare them: a task and the two marks that end one
- * (@yaks/task's `task` and `cancelled`, @yaks/kernel's `completed`), what work
- * is filed under and the thing it belongs to (@yaks/project), a note aimed at
- * anything and a star (@yaks/kernel). They
- * mean the same thing in every store on the platform, which is the whole reason
- * they are the platform's and not each app's own — a `task` in one app is the
- * same word as a `task` in the next, so one filter reads both.
- *
- * A task's `status` is read, never written: what the entity wears says its
- * state, so a task is done because it wears `completed`. The ladder that reads
- * it is declared on `task` itself (@yaks/vocab's `status` keyword).
- */
-let givenDocs: VocabDoc[] = [
-  pick(taskDoc, ['cancelled', 'task']),
-  pick(projectDoc, ['filed', 'project']),
-  pick(kernelWords, ['comment', 'completed', 'favorite']),
-]
-
-/**
- * The words the platform gives every app that are its own: something for
- * sale, something sold, and an address out on the web.
- *
- * `web` is declared by @yaks/page too, at a narrower meaning: a page frozen
- * from the web, whose entity is named by its address (`url` is its identity).
- * The platform's is any row's link out, which two rows may share, so it stays
- * here until the two meanings have a name each.
- */
-export let appsDoc: VocabDoc = {
-  $vocabulary: { [CORE_URI]: true },
-  title: 'apps',
-  $defs: {
-    // Something for sale (sell.ts, T-34525). Platform's rather than each app's
-    // for the reason every other word here is platform's — a `product` in one
-    // shop is the same word as a `product` in the next, so one filter reads
-    // both — and for one more: the checkout door reads `price_cents` off this
-    // row, and a door that took the price off the wire would take a price a
-    // buyer can edit. A word the platform charges money against is a word the
-    // platform declares.
-    //
-    // `sizes` is the variants the seller offers, comma-separated, and what a
-    // page turns into the `options` on a cart line. `stock` is the seller's own
-    // count — nothing here decrements it, because a shop that oversells by one
-    // is a conversation and a shop that loses an order to a race is a bug.
-    product: {
-      component: true,
-      type: 'object',
-      kind: true,
-      before: ['doc'],
-      properties: {
-        price_cents: num,
-        sizes: text,
-        stock: num,
-        image: { type: 'string', format: 'uri' },
-      },
-    },
-    // Something sold (sell.ts, T-34526): one row per completed Stripe
-    // checkout, written into the app's own store by the Connect webhook, as
-    // the app. Platform's rather than each app's for the reason `product` is:
-    // the platform writes it, and a word the platform writes is a word the
-    // platform declares — an app that declared its own `order` would have the
-    // platform writing into a shape it does not know.
-    //
-    // It is the whole record of a sale on this side. The money itself is
-    // Stripe's: `session` and `intent` are how a seller finds it there, and
-    // `account` says whose books it landed on. Nothing here is authoritative
-    // about the payment — Stripe is — and the row exists so the seller knows
-    // what to put in the box and who to post it to.
-    //
-    // `items` is the cart as JSON in one text property, the way `home.first`
-    // is; a property is a scalar, and this is a list.
-    //
-    // Every property is server-owned: the webhook writes it through the
-    // kernel's door (sell.ts `asApp`), and no page, member or visitor can say
-    // an order was paid (T-37881). Who may remove one is graph.ts `FLOORS`.
-    order: {
-      component: true,
-      type: 'object',
-      kind: true,
-      before: ['doc'],
-      properties: {
-        session: owned(text),
-        intent: owned(text),
-        account: owned(text),
-        items: owned(text),
-        total_cents: owned(num),
-        fee_cents: owned(num),
-        email: owned(text),
-        status: owned({
-          type: 'string',
-          enum: ['paid', 'partially_refunded', 'refunded', 'disputed', 'lost'],
-        }),
-      },
-    },
-    web: {
-      component: true,
-      type: 'object',
-      properties: {
-        url: { type: 'string', format: 'uri' },
-        frozen_at: owned(time),
-      },
-    },
-  },
-}
-
-/** A document whose `names` clients read and never write (`wire: false`):
- * the rows only the platform writes. */
-let sealed = (doc: VocabDoc, names: string[]): VocabDoc => ({
-  ...doc,
-  $defs: Object.fromEntries(
-    Object.entries(doc.$defs ?? {}).map(([name, definition]) => [
-      name,
-      names.includes(name) ? { ...definition, wire: false } : definition,
-    ]),
-  ),
-})
-
-/**
- * The words a transcript is made of (@yaks/session, D-40545): a `session`, its
- * entries and the kinds of entry a store's own runner reads and writes, and
- * `session_run`, the effect that runs one when an entry asks for a turn. What
- * a runner on a machine keeps beside them (a claim, a log, a spawned child) is
- * left out: nothing here runs a process.
- */
-let transcriptDoc: VocabDoc = pick(sessionDoc, [
-  'session',
-  'entry',
-  'imported',
-  'ask',
-  'using',
-  'notice',
-  'stop',
-  'attempt',
-  'cancel',
-  'dispatch',
-  'session_run',
-])
-
-/**
- * What a transcript asks, and what comes back (@yaks/model): the provider and
- * the models it serves at their prices, which the platform plants from its
- * catalogue (models.ts) and nobody else writes, and the usage, the cost, the
- * typed questions and the answers an entry carries.
- */
-let askingDoc: VocabDoc = sealed(
-  pick(modelDoc, [
-    'provider',
-    'model',
-    'serves',
-    'price',
-    'usage',
-    'cost',
-    'questions',
-    'answer',
-  ]),
-  ['provider', 'serves', 'price'],
-)
-
-// A hosted builder uses this store's session runner. Its `builder build` is
-// not an app command but the connector's `builder_build` (builders.ts); the
-// app keeps the components and effect declarations.
-let hostedBuilderDoc = pick(builderDoc, [
-  'builder',
-  'staged',
-  'builder_dep',
-  'build',
-  'build_of',
-  'built',
-  'chosen',
-  'output_of',
-  'builder_open',
-  'builder_edit',
-  'builder_ring',
-  'builder_answer',
-  'builder_model_answer',
-])
-
-/**
- * The properties an app's store reads rather than stores, as the SQL that
- * reads them (@yaks/sql `Derived`), from the packages that declare them: a
- * transcript's status and cost, which @yaks/session reads off its entries, and
- * a build's cost, which @yaks/builders sums over its calls. A task's `status`
- * needs none: its ladder is declared in @yaks/task's vocabulary, and every
- * store reads it from there.
- */
-export let appDerived = (vocab: Vocab): Derived => ({
-  ...sessionDerived(vocab),
-  ...builds(vocab),
-})
-
-/** Derived classification metadata is readable but never client-authored. */
-export const classificationDoc: VocabDoc = sealed(
-  archetypeDoc,
-  Object.keys(archetypeDoc.$defs ?? {}),
-)
-
-/**
- * The words an invocation is made of (@yaks/tools): what was asked, what came
- * back, the claim in between, and the tool a call names. Every store speaks
- * them, because asking is a row here — and a row is the only thing that can
- * wait: a `call` wearing a `wake` is work asked for later (D-37562), and the
- * store that will run it is the store that has to hold it.
- *
- * `exception` is left out: the platform's is the one a break page reads.
- * The tracked `error{at, message, code}` remains in the kernel vocabulary.
- */
-let invocationDoc: VocabDoc = {
-  title: 'invocation',
-  $defs: Object.fromEntries(
-    Object.entries(toolsDoc.$defs ?? {}).filter(
-      ([name]) => name != 'exception',
-    ),
-  ),
-}
-
-/**
- * The words the Store itself writes and reads in whichever store it runs
- * (graph.ts): the spine, its stamps and the writer it mints (`spineDoc`,
- * `personDoc`),
- * the archetype index, the link and the name every row can be addressed by
- * (`edgeDoc`, `keyDoc`, `aliasDoc`, T-34390), its clock (`wakeDoc`, D-37562)
- * and the break it notes about itself ({@link exceptionDoc}). Every store's
- * vocabulary is built on them by {@link storeDocs}, so no store can be missing
- * one: a store without `wake` broke its clock on every alarm, and one without
- * `exception` could not write down that it had.
- */
-let machineDocs: VocabDoc[] = [
-  spineDoc,
-  personDoc,
-  classificationDoc,
-  edgeDoc,
-  keyDoc,
-  aliasDoc,
-  wakeDoc,
-  exceptionDoc,
-]
-
-/** A store's whole list of documents: the Store's own words, then the store's.
- * A vocabulary sorts its components by name, so where a document sits changes
- * no table and no schema stamp. */
-let storeDocs = (own: VocabDoc[]): VocabDoc[] => [...machineDocs, ...own]
-
-/** The documents an app's vocabulary is built on.
- *
- * `mailDoc` is among them because every app has a mailbox (T-33686): a letter
- * is an entity here like anywhere else, and the same six words say the one it
- * sends and the one that arrives. It brings `notified` with it, which the
- * directory picks out of it alone ({@link notifiedDoc}).
- *
- * An app writes `wake{at}` on anything it means to come back to, and what the
- * firing means is left to the app's own rules on `fired` (D-37562).
- *
- * `rtcDoc` is voice (@yaks/rtc, D-40615): `rtc`, relayed on whatever entity a
- * page speaks as, and `sfu`, the kernel's row for each Realtime session the
- * app's door opened (rtc.ts). */
-export let coreDocs: VocabDoc[] = storeDocs([
-  registrationDoc,
-  docDoc,
-  memberDoc,
-  ...relationDocs,
-  ...markDocs,
-  kernelDoc,
-  ...givenDocs,
-  pick(effectDoc, ['provisional']),
+import { configs } from './config.ts'
+import { chosen, facetsOf, given, used } from '@yaks/host/config'
+import {
+  type Taken,
+  type Words,
+  wordsOf as composed,
+  type WordsOpts,
+} from '@yaks/host/words'
+import { vocabFacets } from './load.ts'
+import { platformDoc } from './facets/directory-vocab.ts'
+export {
   appsDoc,
-  mailDoc,
-  invocationDoc,
-  hookDoc,
-  transcriptDoc,
-  askingDoc,
-  pick(artifactDoc, ['artifact', 'representation']),
-  openrouterDoc,
-  hostedBuilderDoc,
-  pick(effectDoc, ['effect', 'lease']),
-  rtcDoc,
-])
-
-// ---- the platform's own store (T-33814) -------------------------------------
-//
-// One object on this platform is not an app: the directory, the meta space's
-// store, named `yak/platform` and holding every space, app, member, hostname,
-// deploy, sign-in and meter there is. It runs the same Store class over the
-// same packages; what differs is the vocabulary it wakes with — these words
-// instead of an app's `vocab.json`.
-//
-// It does not load @yaks/member's document. That package's `member.role` is
-// `owner|member` — belonging, with access expressed as a grant or the app's
-// mode — and the platform's roster is its access ladder, three seats
-// (`owner|editor|viewer`) read space-wide by apps.ts, so the word is declared
-// here at the platform's own meaning. A door that can address both stores
-// therefore types that property nowhere ({@link PLATFORM_APART}). Nothing
-// installs @yaks/member's guard on this store either: the kernel decides who
-// may read and write the directory before the request reaches the object
-// (directory.ts), and there is no app to be a member of.
-
-/**
- * What @yaks/platform declares and the directory keeps: a `hostname` pointed
- * at a space or an app (T-34596), each `deploy`, and the `plan` a space pays for, a mirror of
- * one Stripe subscription (billing.ts). The rest of the directory's words are
- * still {@link platformDoc}'s own.
- */
-let hostingDoc: VocabDoc = pick(platformWords, [
-  'hostname',
-  'plan',
-  'deploy',
-  'switched',
-])
-
-/**
- * The platform's own components — what the directory IS, as one JSON Schema
- * document. Every word here is the fleet contract's own (src/types.ts) read
- * back in the format @yaks/vocab loads: the same properties, the same closed
- * sets, the same death behaviour, so a row written through the old store means
- * exactly what a row written through this one means.
- *
- * The server-owned ones are `stamped`: a `plan` nobody may lift for themselves,
- * a `signin` no client may author, a `meter` the hourly sweep reads off
- * Cloudflare, an `exception` the platform noted about itself. They stay
- * readable, and the kernel's own door (`x-yak-kernel`, graph.ts) is the only
- * writer.
- *
- * The `unique` words are the directory's races, decided in the engine: two
- * isolates minting the space `ada` at once must not both win, one hostname
- * points at one app, and an offer's name is the platform-wide handle it is
- * installed by. @yaks/sqlite raises the index from the declaration; the losing
- * write bounces, re-reads, and finds the winner (directory.ts `own`).
- */
-export let platformDoc: VocabDoc = {
-  $vocabulary: { [CORE_URI]: true },
-  title: 'platform',
-  $defs: {
-    space: {
-      component: true,
-      type: 'object',
-      kind: true,
-      before: ['doc'],
-      properties: { slug: unique(text) },
-    },
-    app: {
-      component: true,
-      type: 'object',
-      kind: true,
-      before: ['doc'],
-      unique: [['space', 'slug']],
-      properties: {
-        slug: text,
-        space: ref('cascade'),
-        version: num,
-        lenses: platformWords.$defs!.app.properties!.lenses,
-        declaration: owned(text),
-        source: owned(text),
-        draft: owned(text),
-        fence: owned(text),
-        script: owned(text),
-        access: { type: 'string', enum: ['public', 'open', 'private'] },
-        // The app's handle: what its Durable Object, its dispatch script and
-        // its analytics rows are named by (directory.ts
-        // `storeName`). Written once at birth and never read as an address —
-        // `<space>/<app>.<6 hex of the eid>`, so the Cloudflare dashboard still
-        // sorts it under its space and reads as the app it is, and so two apps
-        // that hold one address a year apart are still two objects. Unique
-        // by construction, and the index is what makes that true rather than
-        // hoped for (T-34657).
-        store: unique(text),
-      },
-    },
-    // Storage survives config edits and renames. Only the kernel may record
-    // account resource ids, so an app cannot claim another tenant's data.
-    binding: {
-      component: true,
-      type: 'object',
-      unique: [['app', 'name', 'type'], ['type', 'resource']],
-      properties: {
-        app: owned(ref('cascade')),
-        name: owned(text),
-        type: owned({ type: 'string', enum: ['d1', 'r2_bucket', 'vectorize'] }),
-        id: owned(text),
-        resource: owned(text),
-      },
-    },
-    // Every address an app has answered at, oldest first: `slug` the one it was
-    // born at, `slugs` each one a rename left behind. Address history and
-    // nothing else — the handle it is stored under is `app.store` above, which
-    // is why a rename moves an address and never a byte (T-34657). Bare slugs,
-    // in the space's own namespace, so a space rename leaves every app's
-    // history standing.
-    //
-    // It was named `alias` until T-34390, when that word became the
-    // platform's own (@yaks/alias, in {@link coreDocs}): a name any entity may
-    // wear in any store. Two things cannot share one word, and the one every
-    // store speaks wins — so the app's addresses are `former`, which is what
-    // the record is about.
-    //
-    // A space wears it too, for the same reason and in the same shape
-    // (T-34658): its birth subdomain and every one a rename left behind, each
-    // still redirecting. Not unique here — uniqueness is over an address within
-    // a space for an app, and over the whole platform for a space, and neither
-    // is one property's own race; the tools decide both (tools.ts `taken`).
-    former: {
-      component: true,
-      type: 'object',
-      properties: { slug: text, slugs: text },
-    },
-    // Which app is the space's front page, and the paths its worker sees first
-    // before the app whose slug owns them (D-34197, T-34227). One fact, one
-    // place: the app wearing `home` is the home app, and its globs are
-    // properties of the same word — a `space.home` beside it would be a second
-    // place to say the same thing, and two copies of one fact drift.
-    //
-    // At most one app per space wears it. The vocabulary cannot say so —
-    // `unique` covers one component's own properties and `home` has no space of
-    // its own — so it is the directory's rule instead (directory.ts `homing`,
-    // where moving it is one batch that drops the old and adds the new).
-    //
-    // A property is a scalar (@yaks/vocab `storable`), so the list is JSON in
-    // one text property — ordered, and read back by router.ts `firstOf`. The
-    // `former.slugs` above splits on whitespace instead, which is the older
-    // form of a list here; JSON is the one that round-trips exactly what an
-    // agent passed.
-    home: {
-      component: true,
-      type: 'object',
-      properties: { first: text },
-    },
-    member: {
-      component: true,
-      type: 'object',
-      kind: true,
-      before: ['doc'],
-      unique: [['space', 'person']],
-      properties: {
-        space: ref('cascade'),
-        person: ref('cascade'),
-        role: { type: 'string', enum: ['owner', 'editor', 'viewer'] },
-      },
-    },
-    // A seat reaches every app in its space; this reaches one (T-37615). It is
-    // the word @yaks/member already uses for that — the same three levels,
-    // the same meaning — said here because the ladder a page is read by is the
-    // platform's roster and this is its other rung: somebody invited to one
-    // app holds that app's data and its page as a member does, and holds no
-    // other app in the space at all. Never its files: writing an app's bytes
-    // stays a member's act (apps.ts, public/docs/sharing.md).
-    grant: {
-      component: true,
-      type: 'object',
-      kind: true,
-      before: ['doc'],
-      unique: [['app', 'person']],
-      properties: {
-        app: ref('cascade'),
-        person: ref('cascade'),
-        access: { type: 'string', enum: ['owner', 'editor', 'viewer'] },
-      },
-    },
-    // A seat or a grant offered and not yet taken (invite.ts, T-37880). `to`
-    // is the space (a seat) or the app (a grant), one property the way
-    // `hostname.serves` is, and accepting is one batch that writes the
-    // `member` or `grant` row and drops this one. A word of its own rather
-    // than a pending mark on the seat, so everything that reads `member` and
-    // `grant` (reach, the roster, a bare app slug) reads accepted rows and
-    // nothing else, with no filter for a new reader to forget.
-    invite: {
-      component: true,
-      type: 'object',
-      kind: true,
-      before: ['doc'],
-      unique: [['to', 'person']],
-      properties: {
-        to: ref('cascade'),
-        person: ref('cascade'),
-        role: { type: 'string', enum: ['owner', 'editor', 'viewer'] },
-      },
-    },
-    // How many invitations this person has sent in the hour it names
-    // (invite.ts `CAP`). On the inviter's own row, because the cap is theirs
-    // and an invitation row dies when it is accepted or withdrawn, which would
-    // hand a sender back the letter it had counted.
-    inviting: {
-      component: true,
-      type: 'object',
-      properties: { hour: owned(text), sent: owned(num) },
-    },
-    email: {
-      component: true,
-      type: 'object',
-      properties: { address: text },
-    },
-    // One time this app's store was put back to a moment (recover.ts,
-    // T-34507): when it was asked for, the moment asked for, who asked, and
-    // the bookmark the store stood at before it moved.
-    //
-    // An entity of its own per restore, like `deploy`, and not a word on the
-    // app row — because the record exists so that a restore can itself be
-    // undone, and a second restore overwriting the first would take away the
-    // way back from it. It lives in the directory, which is a different object
-    // from the store it describes, so the trail survives the very recovery it
-    // is about: what the store held is wound back, and what happened to it is
-    // still written down here.
-    restored: {
-      component: true,
-      type: 'object',
-      kind: true,
-      before: ['doc'],
-      properties: {
-        app: ref('cascade'),
-        at: owned(time),
-        to: owned(time),
-        by: owned(ref('keep')),
-        from_bookmark: owned(text),
-      },
-    },
-    published: {
-      component: true,
-      type: 'object',
-      properties: { name: unique(text), version: num, at: time, about: text },
-    },
-    // A copy of somebody else's app (tools.ts app_install), which runs like
-    // the space's own apps unless the space's owner sandboxed it in an opaque
-    // origin of its own (installed.ts): `sandboxed` is when they did.
-    //
-    // `trusted` is how the build before this one said the reverse. It is
-    // written in step (installed.ts `sandboxing`) so that build reads every
-    // copy the way this one does, and goes in a later release (D-37972,
-    // expand then contract).
-    installed: {
-      component: true,
-      type: 'object',
-      properties: {
-        of: ref('detach'),
-        version: num,
-        sandboxed: time,
-        trusted: time,
-      },
-    },
-    // That this app — or this space — is in the trash, and since when
-    // (erase.ts, T-34430, T-34431). A delete marks it and keeps everything:
-    // the bytes, the store, the slug. While it is worn the app answers
-    // nothing on the web, leaves everyone's tool and view lists, is not the
-    // front page whatever else it wears, and its mail bounces; a space wearing
-    // it does all of that for every app in it at once. `app_restore` and
-    // `space_restore` take the word off and give all of that back, and thirty
-    // days on the daily sweep erases it for good.
-    //
-    // One word on the row rather than a state property beside it, for the
-    // reason `home` is one: what is in the trash is what wears this, and a
-    // second copy of the same fact drifts from it. That is also why an
-    // app and a space share the word — it says one thing, thrown away and
-    // since when, and every reader asks the row in front of it.
-    trashed: {
-      component: true,
-      type: 'object',
-      properties: { at: time, by: ref('keep') },
-    },
-    // That this app's offer has been put forward for the gallery, and whether
-    // we said yes (gallery.ts, T-34476). Two stamps rather than a state word:
-    // `asked_at` is the owner of the app asking, `listed_at` is the platform
-    // answering, and a row wearing both is on https://yaks.app/gallery. The
-    // pair reads as one sentence in either direction — nothing is listed that
-    // was never asked for, and clearing the word un-asks and de-lists at once.
-    //
-    // Server-owned, both of them, and the only word on an app that is: the
-    // listing is on our site under our name (M-4522), so it may never be
-    // something a write can lift for itself. The tools stamp them through the
-    // kernel's own door (directory.ts `stamp`).
-    gallery: {
-      component: true,
-      type: 'object',
-      properties: { asked_at: owned(time), listed_at: owned(time) },
-    },
-    // An uploaded image the owner chose to represent this app. Its bytes and
-    // attachment live in the app's store; only the content address lives here.
-    screenshot: {
-      component: true,
-      type: 'object',
-      properties: { blob: text },
-    },
-    // The colours an app's owner set for its installed chrome (apps.ts
-    // `manifesting`/`pinned`, T-33055) — settable by the app, through
-    // `app_set`, never guessed off its page: an app that names neither gets
-    // the platform's own palette instead of a browser's default grey.
-    theme: {
-      component: true,
-      type: 'object',
-      properties: { theme_color: text, background_color: text },
-    },
-    // That this app's store has been seeded, and by which release (seed.ts,
-    // T-34327). The mark is what makes the seed a once — a redeploy finds it
-    // and writes nothing, so the data an app comes with never lands on top of
-    // what the person has changed since. It lives on the app rather than in
-    // the store because an install mints a new app row and a new store
-    // together, and the copy is meant to be seeded again.
-    seeded: {
-      component: true,
-      type: 'object',
-      properties: { at: time, version: num },
-    },
-    // The Stripe account this space sells through (sell.ts, T-34524). Direct
-    // charges: the connected account is the merchant, so this is the whole of
-    // what the platform keeps about it — the id every call carries in its
-    // `Stripe-Account` header, and the two words Stripe answers with about
-    // whether it is ready. Everything else about the merchant — their bank,
-    // their business details, their disputes — is Stripe's and stays there.
-    //
-    // Server-owned, all three, for the reason `plan` is: `charges_enabled` is
-    // what the checkout door reads before it takes anybody's money, and a
-    // property a space could write for itself is a space selling before Stripe
-    // ever said it may. Only the Connect webhook and `space_sell` write them,
-    // through the kernel's own door (directory.ts `stamp`).
-    stripe: {
-      component: true,
-      type: 'object',
-      properties: {
-        account: owned(text),
-        charges_enabled: owned(bool),
-        details_submitted: owned(bool),
-      },
-    },
-    // What the platform takes from one sale, in basis points (sell.ts `fee`),
-    // on the platform's own space row — `yak`, the one row in this directory
-    // that is the platform rather than a customer. Unset reads as 0, which is
-    // every sale until somebody sets a rate.
-    //
-    // Stamped, and the only writer is the owner's own door (sell.ts `fees`).
-    // A fee a space could write for itself is a seller choosing what they pay
-    // us; a fee written around that door is one the read cache would go on
-    // answering for a TTL, and the rate a sale is charged has to be the rate
-    // the owner set a moment ago.
-    fee: {
-      component: true,
-      type: 'object',
-      properties: { bps: owned(num) },
-    },
-    // What the hourly sweep read off Cloudflare (usage.ts), beside what the
-    // space spent (`spend`). Written through the kernel's door — and not
-    // stamped, because the fleet contract does not stamp it (src/types.ts
-    // `comps`) and the meta space's own graph tier is how a reading is planted
-    // or corrected by hand. Nobody but an owner of `yak` reaches that door at
-    // all (directory.ts), which is what keeps a customer from writing their
-    // own bill.
-    meter: {
-      component: true,
-      type: 'object',
-      properties: {
-        month: text,
-        requests: num,
-        ws_messages: num,
-        ws_hibernated: num,
-        rows_read: num,
-        rows_written: num,
-        bytes: num,
-        files: num,
-        emails: num,
-        builds: num,
-        models: num,
-        realtime: num,
-        seconds: num,
-        built: num,
-        at: time,
-      },
-    },
-    // What a space just spent on its month: a letter, a build, a model call, a
-    // voice's lease, container seconds. The directory adds it to the `meter`
-    // inside the write's own transaction (meter.ts `spend`), so two spends at
-    // once both count, and takes it off again: it is never kept.
-    spend: {
-      component: true,
-      type: 'object',
-      properties: {
-        month: text,
-        emails: num,
-        builds: num,
-        models: num,
-        realtime: num,
-        seconds: num,
-      },
-    },
-    signin: {
-      component: true,
-      type: 'object',
-      kind: true,
-      before: ['doc'],
-      properties: {
-        email: owned(text),
-        code: owned(text),
-        expires: owned(time),
-        tries: owned(num),
-      },
-    },
-    // When this person last got in, and how (identity.ts `landed`, T-34351).
-    // One row, so it holds the last way in rather than a trail — which is the
-    // question a standing sign-in link raises: has anybody used it at all. Not
-    // `kind`: it is a mark a person wears, never a thing of its own.
-    signed_in: {
-      component: true,
-      type: 'object',
-      properties: {
-        at: owned(time),
-        via: owned({ type: 'string', enum: ['code', 'link'] }),
-      },
-    },
-    report: {
-      component: true,
-      type: 'object',
-      kind: true,
-      before: ['doc'],
-      properties: {
-        app: ref('keep'),
-        space: ref('keep'),
-        version: num,
-        release: text,
-        at: time,
-      },
-    },
-  },
-}
-
-/** The documents the directory's vocabulary is built on, in load order.
- *
- * The marks, `kernelDoc` and `notified` are among them for the same reason
- * they are among an app's: `app_errors` and the unseen block read every store
- * the caller can reach by the same words, and a mark an app's store speaks and
- * the directory does not would make it the one store those doors cannot answer
- * for.
- *
- * `tunnelDoc` is the `tunnel` a space wears when it has a tunnel to a machine
- * (tunnel.ts): the directory is the only store that holds one.
- *
- * A plugin's words land between the core documents and the platform's own
- * (plugin.ts `vocab`): after the words they are written in, and before the
- * platform's, which is what the directory is and answers last. `memory` is
- * one of them, and is among the directory's words and not an app's (T-34473):
- * a memory is a thing the person said about how they want things built, and it
- * holds whether they are looking at one app or another — so it belongs to the
- * space, and the directory is the one store a space has. The words themselves
- * are its `doc.body`, which is why @yaks/doc is loaded above every plugin. */
-export let platformDocs: VocabDoc[] = storeDocs([
-  idDoc,
-  docDoc,
-  ...relationDocs,
-  ...markDocs,
+  classificationDoc,
+  exceptionDoc,
   kernelDoc,
-  notifiedDoc,
-  sweepDoc,
-  tunnelDoc,
-  ...vocabOf(PLUGINS),
-  hostingDoc,
-  platformDoc,
-  pick(modelDoc, ['cost']),
-])
+} from './facets/app-vocab.ts'
+export { platformDoc } from './facets/directory-vocab.ts'
 
-/**
- * The directory's whole vocabulary: the core documents plus the platform's own
- * words. The Store loads it instead of {@link appVocab} when the object it woke
- * in is the meta store (graph.ts).
- *
- * A vocabulary never changes once loaded, and the platform's is one fixed list,
- * so it is loaded once and shared by every meta store in this isolate.
- */
-let metaLoaded: Vocab | undefined
-export let platformVocab = (): Vocab =>
-  metaLoaded ??= loadVocab(platformDocs, metaKeywords)
-
-// ---- the git object graph's store (D-34943) ---------------------------------
-
-/** What the git object store speaks: the Store's own words ({@link storeDocs}),
- * which carry the two links @yaks/git's words ride (an `entry` and a `parent`
- * are @yaks/edge links, a `compat` oid is a @yaks/key value), and @yaks/git's.
- *
- * It is NOT built on {@link coreDocs}, and the reason is one word: `blob`. The
- * platform means a page's upload by it ({@link kernelDoc}) and @yaks/git means
- * where an object's bytes are — one name, two meanings, so the two vocabularies
- * cannot be loaded together and this store loads only the one it needs. Nothing
- * is lost: this object holds git objects, and a git object has no title, no
- * mailbox and no members.
- *
- * `gitDoc` carries the package's `ref` word too, and this store keeps no refs:
- * a branch belongs to one app, so its row is the directory's (git.ts loads
- * @yaks/git's `refDoc` there). A word a store holds no rows under costs it
- * nothing. */
-export let gitDocs: VocabDoc[] = storeDocs([idDoc, gitDoc])
-
-/** The git object store's whole vocabulary (graph.ts, {@link gitDocs}). One
- * fixed list, loaded once and shared like {@link platformVocab}. */
-let gitLoaded: Vocab | undefined
-export let gitVocab = (): Vocab =>
-  gitLoaded ??= loadVocab(gitDocs, metaKeywords)
-
-// What a property admits, as a comparison makes it: the closed set, or the
-// type. The same rule reach.ts `propsOf` holds two spaces to.
-let shapeOf = (s: PropSchema): string =>
-  s.enum ? s.enum.join('|') : String(s.type ?? '?')
-
-/**
- * The properties the directory declares at the platform's own meaning while
- * every app store declares them at a package's — today `member.role` alone:
- * three seats here ({@link platformDoc}) against @yaks/member's two, because
- * the platform's roster is its access ladder and the package keeps belonging
- * and access apart.
- *
- * One name meaning two things is two words. A door whose reach holds the
- * directory and an app therefore types these nowhere and leaves the answer to
- * the store the bundle lands in (agent.ts `spoken`, `reading`) — the same rule
- * a word two spaces spell differently already gets (reach.ts `apartIn`).
- *
- * Derived rather than listed, so a platform property that starts disagreeing
- * cannot quietly be typed as the package's.
- */
-export let PLATFORM_APART: string[] = (() => {
-  let core: Record<string, PropSchema> = {}
-  for (let d of coreDocs) Object.assign(core, d.$defs ?? {})
-  let out: string[] = []
-  for (let [name, mine] of Object.entries(platformDoc.$defs ?? {})) {
-    let theirs = core[name]?.properties
-    if (!theirs) continue
-    for (let [prop, s] of Object.entries(mine.properties ?? {})) {
-      if (theirs[prop] && shapeOf(theirs[prop]) != shapeOf(s)) {
-        out.push(`${name}.${prop}`)
-      }
-    }
-  }
-  return out
-})()
-
-/** The keyword vocabularies those documents and an app's own may use. Each is
- * owned by the package that reads it — @yaks/blob `store`, @yaks/edge
- * `edge`, @yaks/member `floor` — and registered so the loader carries it. @yaks/id's `prefix` is
- * not among them: it says which letter an entity's NUMBER wears, and an app's
- * entities have no number, so a `prefix` declared in an app's vocab.json is
- * dropped on load like any word nothing here reads. */
+/** The keyword vocabularies the stores have always understood. */
 export let appKeywords: Keywords[] = [
   blobKeywords,
   edgeKeywords,
   keyKeywords,
   memberKeywords,
 ]
-
-/** The same list for the platform's own two stores, which do have numbers:
- * @yaks/id's keyword beside the rest, so a component of theirs can say the
- * letter its ids wear. */
 export let metaKeywords: Keywords[] = [idKeywords, ...appKeywords]
+let appOptions: WordsOpts = { implicit: false, keywords: appKeywords }
+let metaOptions: WordsOpts = { implicit: false, keywords: metaKeywords }
+export type StoreKind = keyof typeof configs
+let configured = Object.fromEntries(
+  Object.entries(configs).map((
+    [kind, config],
+  ) => [
+    kind,
+    (config.plugins ?? []).flatMap((plug): Taken<'vocab'> => {
+      let plugin = used(plug), facet = vocabFacets[plugin]
+      if (!facet) throw new Error(`no vocabulary facet for ${plugin}`)
+      return [[facet, given(plug), plugin, chosen(plug), facetsOf(plug)]]
+    }),
+  ]),
+) as Record<StoreKind, Taken<'vocab'>>
+/** The configured declarations, with an optional graph-owned vocabulary. */
+export let storeWords = (kind: StoreKind, own?: VocabDoc[]): Words =>
+  composed(configured[kind], own, kind == 'app' ? appOptions : metaOptions)
 
-/** The components a set of documents declares. A document carries its
- * components and its tools in one `$defs` map; a `tool: true` entry is a verb
- * somebody calls, not a word a row wears. */
+// Existing readers ask for a store's documents; these are projections of its
+// configuration, shared with the assembly rather than maintained lists.
+export let coreDocs = storeWords('app').docs
+export let platformDocs = storeWords('directory').docs
+export let gitDocs = storeWords('git').docs
+export let platformVocab = (): Vocab => storeWords('directory').vocab
+export let gitVocab = (): Vocab => storeWords('git').vocab
+export let appDerived = (vocab: Vocab): Derived => ({
+  ...sessionDerived(vocab),
+  ...builds(vocab),
+})
+
+/** The edge verbs the platform's stores understand. */
+export let RELATIONS: string[] = coreDocs.flatMap((d) =>
+  Object.entries(d.$defs ?? {}).filter(([, s]) => s.edge === true).map((
+    [name],
+  ) => name)
+)
+let shapeOf = (s: PropSchema): string =>
+  s.enum ? s.enum.join('|') : String(s.type ?? '?')
+export let PLATFORM_APART: string[] = Object.entries(platformDoc.$defs ?? {})
+  .flatMap(([name, mine]) => {
+    let theirs = storeWords('app').vocab.def(name)?.properties
+    return Object.entries(mine.properties ?? {}).filter(([prop, s]) =>
+      theirs?.[prop] && shapeOf(theirs[prop]) != shapeOf(s)
+    ).map(([prop]) => `${name}.${prop}`)
+  })
 export let componentsOf = (docs: VocabDoc[]): string[] =>
-  docs.flatMap((d) =>
+  docs.filter((d) => d.reserved !== false).flatMap((d) =>
     Object.entries(d.$defs ?? {}).filter(([, e]) =>
       e?.tool !== true && e?.lens !== true
-    )
-      .map(([name]) => name)
+    ).map(([name]) => name)
   )
-
-/**
- * Every word the platform already says, sorted. A `vocab.json` naming one is
- * refused: a word means the same thing everywhere.
- *
- * All three of the platform's vocabularies count, not only the one an app's
- * store plants: a word the directory or the git store means something by is a
- * word an app reusing it would mean something else by. This is the list the
- * guide publishes under "Components of your own".
- *
- * A tool is not one of them ({@link componentsOf}): `mail_send` never collides
- * with a property called `mail_send`, and reserving tools made every tool a
- * package declares cost an app a word it was never going to want.
- */
 export let RESERVED: string[] = [
   ...new Set(componentsOf([...coreDocs, ...platformDocs, ...gitDocs])),
 ].sort()
+export let EXAMPLE =
+  '{"$defs": {"recipe": {"properties": {"serves": {"type": "number"}}}}}'
+export let GUIDE = url({}, '/docs.md')
+export let teach = (env: Host = {}) =>
+  ' — a component of your own is declared in vocab.json ' +
+  'and planted by app_deploy: ' + `${EXAMPLE} · call guide with page ` +
+  `components, or ${url(env, '/docs.md')}`
 
 // The words that name a property's type, and the JSON Schema each is. A
 // manifest writes the schema; these are for reading one back in a sentence — a
@@ -1516,7 +463,7 @@ export let appDoc = (source: unknown, file = 'vocab.json'): VocabDoc => {
   // A companion can be supplied by the platform, so resolve permission names
   // in the same composed vocabulary the store will hold.
   if (Object.values(doc.$defs ?? {}).some((s) => s.permit !== undefined)) {
-    let errors = permitted(loadVocab([...beneath(doc), doc], appKeywords))
+    let errors = permitted(storeWords('app', [doc]).vocab)
     if (errors.length) {
       throw refuse('arguments', `${file}: ${errors.join('; ')}`)
     }
@@ -1586,16 +533,6 @@ export let meant = (said: unknown): VocabDoc => {
  * reader of it asks the vocabulary for what it reads (`cost.dollars`), never
  * for the name alone.
  */
-let beneath = (doc: VocabDoc): VocabDoc[] => {
-  let mine = new Set(Object.keys(doc.$defs ?? {}))
-  let kept = ([name, s]: [string, PropSchema]) =>
-    !mine.has(name) || s?.component !== true
-  return coreDocs.map((d) => ({
-    ...d,
-    $defs: Object.fromEntries(Object.entries(d.$defs ?? {}).filter(kept)),
-  }))
-}
-
 /**
  * One app's whole vocabulary: the core documents plus its own `vocab.json`,
  * loaded into the `Vocab` a Store reads its DDL, routing and admission out of.
@@ -1610,8 +547,8 @@ let beneath = (doc: VocabDoc): VocabDoc[] => {
  * read one loaded vocabulary. Keyed by the validated declaration, so a bad one
  * still refuses ({@link appDoc}) and is never kept.
  */
-let appVocabs = new Map<string, Vocab>()
-export let appVocab = (source: unknown = {}): Vocab => {
+let appVocabs = new Map<string, Words>()
+export let appWords = (source: unknown = {}): Words => {
   let doc = appDoc(source)
   let key = JSON.stringify(doc)
   let held = appVocabs.get(key)
@@ -1620,16 +557,16 @@ export let appVocab = (source: unknown = {}): Vocab => {
     appVocabs.set(key, held)
     return held
   }
-  let v = loadVocab([
-    ...beneath(doc),
+  let v = storeWords('app', [
     metaDoc,
     ...(declaredLenses(doc) ? lensDocs : []),
     doc,
-  ], appKeywords)
+  ])
   appVocabs.set(key, v)
   if (appVocabs.size > 64) appVocabs.delete(appVocabs.keys().next().value!)
   return v
 }
+export let appVocab = (source: unknown = {}): Vocab => appWords(source).vocab
 
 /**
  * Whether this store numbers its entities, read off the vocabulary it woke

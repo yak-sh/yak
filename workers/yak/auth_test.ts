@@ -363,7 +363,7 @@ let call = (
 
 test('the agent door signs with the same actor the page door does', async () => {
   let { store, head } = await cookbook()
-  let door = mcp(store.door)
+  let door = mcp(await store.door)
 
   let out = await call(door, 'graph_apply', {
     bundles: [{ entity: { eid: CAKE }, doc: { title: 'Lemon drizzle' } }],
@@ -382,7 +382,7 @@ test('the agent door signs with the same actor the page door does', async () => 
 test('the agent door refuses what the page door refuses', async () => {
   let { store } = await cookbook('private')
   let out = await call(
-    mcp(store.door),
+    mcp(await store.door),
     'graph_query',
     { q: '.doc' },
     vouch({ person: null, role: null }),
@@ -393,17 +393,17 @@ test('the agent door refuses what the page door refuses', async () => {
 
 test('admission learns current standing without keeping a person or grant', async () => {
   let { store, head } = await cookbook()
-  let actor = await store.door.authenticate(
+  let actor = await (await store.door).authenticate(
     new Request('http://store/ws', { headers: head }),
   )
   let patch = [{ entity: { eid: CAKE }, doc: { title: 'Checked cake' } }]
-  let checked = await store.door.graph.admit(signed(patch, actor))
+  let checked = await (await store.door).graph.admit(signed(patch, actor))
   assertEquals(checked.find((b) => b.entity.eid == CAKE)?.doc, patch[0].doc)
-  assertEquals(await store.door.graph.get([CAKE, ADA]), [])
+  assertEquals(await (await store.door).graph.get([CAKE, ADA]), [])
   assertEquals(await (await get(store, '/query?q=.grant', head)).json(), [])
   // The rehearsal must not leave the vouch cache believing it kept these rows.
   assertEquals((await post(store, '/apply', patch, head)).status, 200)
-  assertEquals((await store.door.graph.get([ADA]))[0].person, {})
+  assertEquals((await (await store.door).graph.get([ADA]))[0].person, {})
   assertEquals(
     (await (await get(store, '/query?q=.grant', head)).json()).length,
     1,
@@ -427,7 +427,7 @@ test(
       doc: { title: 'After revocation' },
     }], revoked)
     assertEquals(out.status, 403)
-    let cake = (await store.door.graph.get([CAKE]))[0]
+    let cake = (await (await store.door).graph.get([CAKE]))[0]
     assertEquals((cake.doc as { title: string }).title, 'Before revocation')
     assertEquals(
       (await (await get(store, '/query?q=.grant', head)).json())[0].grant
@@ -444,11 +444,11 @@ test(
     for (let query of [false, true]) {
       let { store } = await cookbook('private')
       let head = vouch({ person: MALLORY, role: 'editor' }, 'private')
-      let actor = await store.door.authenticate(
+      let actor = await (await store.door).authenticate(
         new Request('http://store/ws', { headers: head }),
       )
       let grant = grantEid(APP, MALLORY)
-      let graph = store.door.graph
+      let graph = (await store.door).graph
       graph.use({
         name: 'fixture/vouched-rule',
         admission: () => true,
@@ -519,7 +519,8 @@ test('an app-local editor grant still admits a writer with no kernel role', asyn
     200,
   )
   assertEquals(
-    ((await store.door.graph.get([CAKE]))[0].doc as { title: string }).title,
+    ((await (await store.door).graph.get([CAKE]))[0].doc as { title: string })
+      .title,
     'Edited cake',
   )
 })

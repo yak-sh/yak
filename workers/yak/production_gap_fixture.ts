@@ -94,7 +94,7 @@ export let productionGap = async (
   }
   let keptWords = { ...words, $defs: { ...words.$defs, think: oldThink } }
   await post('/vocab', keptWords)
-  let g = store.door.graph
+  let g = (await store.door).graph
   // Vale still holds the schema pages its deploys wrote before they were
   // derived when read, and its statistics were taken over them. They are
   // described through a graph without the store's `describing`, which would
@@ -240,7 +240,7 @@ export let productionGap = async (
     }
   }
   store = new Store(context, binds)
-  g = store.door.graph
+  g = (await store.door).graph
   await store.alarm()
   await settleWorld(store, storage)
   await storage.deleteAlarm?.()
@@ -327,7 +327,7 @@ export let productionGap = async (
     })
     p.flush(Infinity)
     storage.sql.exec = exec
-    let actual = store.door.graph
+    let actual = (await store.door).graph
     let answers = (await actual.read('.answer&?entry')).length
     let failures = await actual.read('.exception|.refusal|.error *')
     return {

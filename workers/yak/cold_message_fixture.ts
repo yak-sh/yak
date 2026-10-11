@@ -62,7 +62,7 @@ export let coldMessages = async (
   )
   if (!response.ok) throw new Error(await response.text())
   await response.body?.cancel()
-  await seedHistory(warm.door.graph, storage, 79_000)
+  await seedHistory((await warm.door).graph, storage, 79_000)
   await seedRetainedOutputs(warm, outputs)
   // Through the Store's own door, as a page's write arrives: its commit is
   // what sets the Store embedding the history seeded behind it.
@@ -159,7 +159,7 @@ export let coldMessages = async (
 
 export let seedRetainedOutputs = async (store: Store, outputs: number) => {
   let builder = crypto.randomUUID()
-  await store.door.graph.storage.tx((tx) =>
+  await (await store.door).graph.storage.tx((tx) =>
     tx.patch([{ entity: { eid: builder }, builder: { query: '.sfx' } }])
   )
   for (let n = 0; n < outputs; n++) {
@@ -167,7 +167,7 @@ export let seedRetainedOutputs = async (store: Store, outputs: number) => {
       build = crypto.randomUUID(),
       output = crypto.randomUUID(),
       artifact = crypto.randomUUID()
-    await store.door.graph.storage.tx((tx) =>
+    await (await store.door).graph.storage.tx((tx) =>
       tx.patch([
         { entity: { eid: source }, sfx: { name: `retained-${n}` } },
         {

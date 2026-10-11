@@ -17,7 +17,14 @@ import type { Extension } from '@yaks/sql'
 import { gather } from '@yaks/ui/contributions'
 import type { Authenticate, Filter, Handler, Route } from '@yaks/api'
 import type { Host, Role } from './mod.ts'
-import { chosen, type Config, type Configured, given, used } from './config.ts'
+import {
+  chosen,
+  type Config,
+  type Configured,
+  facetsOf,
+  given,
+  used,
+} from './config.ts'
 import type { Duty, FacetName, Load, MeaningHit } from './facets.ts'
 import { type Composition, compositionAnatomy } from './anatomy.ts'
 import { common, ROLES } from './roles.ts'
@@ -77,6 +84,8 @@ export type Assembly = {
 export type AssemblyOpts = {
   /** Resolved plugin options, when the concrete host has a vault. */
   plugins?: Configured[]
+  /** Already-loaded vocabulary, shared with the concrete host's schema plan. */
+  words?: Words
   /** The graph's own vocabulary. Its component declarations shadow plugins. */
   docs?: VocabDoc[]
   observed?: Composition
@@ -109,56 +118,60 @@ let undeclared = (plugin: string, name: string) =>
 let twice = (name: string, plugins: string[]) =>
   new Error(`${name} is handled by both ${plugins.join(' and ')}`)
 
-/** Load only the roles served, then assemble once the host can lend storage. */
-export let assembly = async (
+/** The role-selected modules, loaded before a host opens its transaction. */
+export type Prepared = {
+  vocab: Taken<'vocab'>
+  graph: Taken<'graph'>
+  effects: Taken<'effects'>
+  routes: Taken<'routes'>
+  ui: Taken<'ui'>
+  service: Taken<'service'>
+}
+
+let configured = (config: Config): Configured[] =>
+  (config.plugins ?? []).map((p) => [used(p), given(p), chosen(p), facetsOf(p)])
+
+/** Import only the facets a host serves; binding the result performs no imports. */
+export let prepare = async (
   config: Config,
   roles: readonly Role[],
   load: Load,
   opts: AssemblyOpts = {},
-): Promise<Assembly> => {
+): Promise<Prepared> => {
   if (!roles.includes('graph')) {
     throw new Error('a host opens a graph — its roles include graph')
   }
-  let plugins = opts.plugins ??
-    (config.plugins ?? []).map((
-      p,
-    ): Configured => [used(p), given(p), chosen(p)])
-  let observed = opts.observed ??
-    compositionAnatomy(plugins.map(([p]) => p), roles, ROLES)
-  let part = opts.part
-  let observedLoad: Load = async (plugin, name) => {
-    observed.attempted(plugin, name)
-    let loaded = await load(plugin, name)
-    observed.loaded(plugin, name, loaded !== null)
-    return loaded
-  }
-  // A service role names a plugin, so it has to be one the config lists.
+  let plugins = opts.plugins ?? configured(config)
   let services = roles.filter((r) => !common(r))
   for (let r of services) {
     if (!plugins.some(([p]) => p == r)) {
       throw new Error(`no plugin ${r} in this config serves that role`)
     }
   }
-  // Only the facets of the roles served. A role not served is a facet never
-  // imported, so an empty list stands for it. The graph's `./tools` is not
-  // among them: a plugin's tools are declared by its vocabulary, and its code
-  // is imported by the first call of one of them — a command runs one tool,
-  // and most of the plugins' code is for tools it will not run.
+  let observed = opts.observed
+  let observedLoad: Load = async (plugin, name) => {
+    observed?.attempted(plugin, name)
+    let loaded = await load(plugin, name)
+    observed?.loaded(plugin, name, loaded !== null)
+    return loaded
+  }
   let take = <F extends FacetName>(role: Role, name: F): Promise<Taken<F>> =>
     roles.includes(role)
       ? taking(plugins, name, observedLoad)
       : Promise.resolve([])
-  part?.('facets')
-  await load.together?.(plugins.flatMap(([plugin]) =>
+  opts.part?.('facets')
+  await load.together?.(plugins.flatMap(([plugin, , , facets]) =>
     [
       'vocab' as const,
       'graph' as const,
       ...roles.includes('effects') ? ['effects'] as const : [],
       ...roles.includes('web') ? ['routes', 'ui'] as const : [],
       ...services.includes(plugin) ? ['service'] as const : [],
-    ].map((name) => [plugin, name] as const)
+    ].filter((name) => facets === undefined || facets.includes(name)).map((
+      name,
+    ) => [plugin, name] as const)
   ))
-  let [vocabs, graphs, watched, served, dressed, running] = await Promise.all([
+  let [vocab, graph, effects, routes, ui, service] = await Promise.all([
     take('graph', 'vocab'),
     take('graph', 'graph'),
     take('effects', 'effects'),
@@ -170,13 +183,65 @@ export let assembly = async (
       observedLoad,
     ),
   ])
+  return { vocab, graph, effects, routes, ui, service }
+}
+
+/** Pure assembly of imported facets; its binding runs inside the host's transaction. */
+export let assemble = (
+  config: Config,
+  roles: readonly Role[],
+  load: Load,
+  prepared: Prepared,
+  opts: AssemblyOpts = {},
+): Assembly => {
+  let plugins = opts.plugins ?? configured(config)
+  let observed = opts.observed ??
+    compositionAnatomy(plugins.map(([p]) => p), roles, ROLES)
+  let part = opts.part
+  let observedLoad: Load = async (plugin, name) => {
+    observed.attempted(plugin, name)
+    let loaded = await load(plugin, name)
+    observed.loaded(plugin, name, loaded !== null)
+    return loaded
+  }
+  let modules = <F extends FacetName>(name: F): Taken<F> => {
+    let loaded = prepared[name as keyof Prepared] as Taken<F>
+    for (let [plugin, , , facets] of plugins) {
+      if (facets !== undefined && !facets.includes(name)) continue
+      observed.attempted(plugin, name)
+      observed.loaded(plugin, name, loaded.some(([, , p]) => p == plugin))
+    }
+    // Each configured occurrence keeps its own options, including repeated
+    // selections of one package. Facets may be absent, so module positions
+    // alone cannot identify their configured entries.
+    let key = (plugin: string, names?: string[], facets?: FacetName[]) =>
+      JSON.stringify([
+        plugin,
+        names && [...new Set(names)].sort(),
+        facets && [...new Set(facets)].sort(),
+      ])
+    let options = Map.groupBy(
+      plugins,
+      ([plugin, , names, facets]) => key(plugin, names, facets),
+    )
+    return loaded.map(([mod, original, plugin, names, facets]) => {
+      let entry = options.get(key(plugin, names, facets))?.shift()
+      return [mod, entry?.[1] ?? original, plugin, names, facets]
+    })
+  }
+  let vocabs = modules('vocab'), graphs = modules('graph')
+  let watched = roles.includes('effects') ? modules('effects') : []
+  let served = roles.includes('web') ? modules('routes') : []
+  let dressed = roles.includes('web') ? modules('ui') : []
+  let running = modules('service')
   part?.('vocabulary')
-  let words = wordsOf(vocabs, opts.docs)
+  let words = opts.words ?? wordsOf(vocabs, opts.docs)
   let { docs, vocab, derived } = words
-  let contributions = vocabs.map(([v, options, plugin, names]) => ({
+  let contributions = vocabs.map(([v, options, plugin, names, facets]) => ({
     docs: selected(v.docs ?? [], names, plugin),
     options,
     plugin,
+    facets,
   }))
   part?.('anatomy')
   observed.declarations(docs, vocab)
@@ -280,7 +345,13 @@ export let assembly = async (
       )
       part?.('plugins')
       let contributed = graphs.flatMap(([r, options, plugin]) => {
-        let made = r.plugins?.(host, options) ?? []
+        // Vocabulary facets and graph-owned documents are the declarations.
+        // A graph plugin's legacy document must not reintroduce words or rules
+        // that selection omitted, or that the graph's own declarations shadow.
+        let made = (r.plugins?.(host, options) ?? []).map((p) => ({
+          ...p,
+          vocab: [],
+        }))
         observed.graph(plugin, made)
         return made
       })
@@ -371,7 +442,9 @@ export let assembly = async (
       observed.tier(generic)
       let tools = made = [
         ...generic,
-        ...contributions.flatMap(({ docs, options, plugin }) =>
+        ...contributions.filter(({ facets }) =>
+          facets === undefined || facets.includes('tools')
+        ).flatMap(({ docs, options, plugin }) =>
           loadTools(docs, async () => {
             let code = await observedLoad(plugin, 'tools')
             let runs = code?.runs?.(host, options) ?? {}
@@ -430,8 +503,15 @@ export let assembly = async (
         ...replying ? { reply: replying } : {},
       })
       if (effecting) {
+        let declared = new Set(effectsIn(docs).map((e) => e.name))
         let due: Handlers[string] = (e) => run.due(e.entity.eid)
-        fx.handle(Object.fromEntries(run.rules.map((r) => [r.rule.name, due])))
+        fx.handle(
+          Object.fromEntries(
+            run.rules.filter((r) => declared.has(r.rule.name)).map((
+              r,
+            ) => [r.rule.name, due]),
+          ),
+        )
         observed.due(run.rules.map((r) => r.rule.name))
       }
       // Which listed plugin hosts the routes — turns them into the one handler
@@ -468,3 +548,12 @@ export let assembly = async (
     },
   }
 }
+
+/** Load only the roles served, then assemble once the host can lend storage. */
+export let assembly = async (
+  config: Config,
+  roles: readonly Role[],
+  load: Load,
+  opts: AssemblyOpts = {},
+): Promise<Assembly> =>
+  assemble(config, roles, load, await prepare(config, roles, load, opts), opts)

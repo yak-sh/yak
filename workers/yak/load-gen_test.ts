@@ -27,13 +27,47 @@ test('store import generation resolves options and deduplicates configs', async 
   )
 })
 
-test('store loader generation emits literal dynamic imports', () => {
-  let source = loader(['a/vocab', 'b/graph'])
+test('store loader generation imports vocabulary eagerly and code lazily', () => {
+  let source = loader([
+    'a/vocab',
+    'b/graph',
+    'yak/domain/vocab',
+    'yak/domain/effects',
+  ], {
+    'yak/domain/vocab': './domain-vocab.ts',
+    'yak/domain/effects': './domain-effects.ts',
+  })
   equal(
     [...source.matchAll(/import\(([^)]+)\)/g)].map((m) => JSON.parse(m[1])),
-    [
-      'a/vocab',
-      'b/graph',
-    ],
+    ['b/graph', './domain-effects.ts'],
+  )
+  equal(
+    [...source.matchAll(/import \* as vocab\d+ from ("[^"\n]+")/g)].map((m) =>
+      JSON.parse(m[1])
+    ),
+    ['a/vocab', './domain-vocab.ts'],
+  )
+})
+
+test('store import generation takes the union of explicitly selected facets', () => {
+  equal(
+    imports(
+      [
+        {
+          plugins: [{ use: 'a', facets: ['vocab'] }, { use: 'b', facets: [] }],
+        },
+        { plugins: [{ use: 'a', facets: ['effects'] }] },
+      ],
+      ['a', 'b'].map((name) => ({
+        name,
+        exports: {
+          './vocab': './vocab.ts',
+          './graph': './graph.ts',
+          './effects': './effects.ts',
+          './tools': './tools.ts',
+        },
+      })),
+    ),
+    ['a/vocab', 'a/effects'],
   )
 })

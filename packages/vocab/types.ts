@@ -200,6 +200,10 @@ export type VocabDoc = {
   /** what that package is: the host writes its deno.json's description here
    * beside `package`, since a package says it once, in its manifest */
   description?: string
+  /** Whether a host reserves this document's names for its own declarations.
+   * False lets graph-owned components share names with internal controls;
+   * it does not remove those controls from composition. Omitted reserves. */
+  reserved?: boolean
   $defs?: Record<string, PropSchema>
   [k: string]: unknown
 }

@@ -1,7 +1,16 @@
-// The packages each kind of store composes. Worker-owned words and facets
-// join these lists when the Store moves onto the portable assembly (D-121573,
-// item 7); the package selections here follow vocab.ts's store documents.
+// The packages and Worker domains each kind of store composes. Chosen words
+// preserve the vocabulary each store already holds.
 import type { Config, Plug } from '@yaks/host/config'
+import type { FacetName } from '@yaks/host'
+
+// Package tools remain at the connector's own boundary until it composes them.
+let storeFacets: FacetName[] = ['vocab', 'graph', 'effects']
+let storePlugins = (plugins: Plug[]): Plug[] =>
+  plugins.map((plug) =>
+    typeof plug == 'string'
+      ? { use: plug, facets: storeFacets }
+      : { ...plug, facets: plug.facets ?? storeFacets }
+  )
 
 let spine = ['entity', 'created', 'updated']
 let relations = [
@@ -25,22 +34,22 @@ let marks = [
   'failed',
 ]
 let machine: Plug[] = [
-  { use: '@yaks/persona', words: ['person'] },
-  '@yaks/archetype',
+  { use: '@yaks/persona', facets: ['vocab'], words: ['person'] },
+  { use: '@yaks/archetype', words: [] },
   '@yaks/edge',
   '@yaks/key',
-  '@yaks/alias',
-  '@yaks/wake',
 ]
+let addressed: Plug[] = ['@yaks/alias', '@yaks/wake']
 let links: Plug[] = [
   { use: '@yaks/goal', words: ['satisfies'] },
-  { use: '@yaks/dreaming', words: ['recalled'] },
+  { use: '@yaks/dreaming', facets: ['vocab'], words: ['recalled'] },
 ]
 
 export let appConfig: Config = {
-  plugins: [
+  plugins: storePlugins([
     {
       use: '@yaks/kernel',
+      facets: ['vocab'],
       words: [
         ...spine,
         ...relations,
@@ -53,12 +62,17 @@ export let appConfig: Config = {
     ...machine,
     // Apps have no numbers, but every store accepts human ids on input.
     { use: '@yaks/id', words: [] },
+    ...addressed,
     '@yaks/doc',
     '@yaks/member',
-    { use: '@yaks/task', words: ['contains', 'requires', 'cancelled', 'task'] },
-    { use: '@yaks/project', words: ['filed', 'project'] },
+    {
+      use: '@yaks/task',
+      facets: ['vocab'],
+      words: ['contains', 'requires', 'cancelled', 'task'],
+    },
+    { use: '@yaks/project', facets: ['vocab'], words: ['filed', 'project'] },
     ...links,
-    '@yaks/mail',
+    { use: '@yaks/mail', with: { sender: { via: 'worker' } } },
     {
       use: '@yaks/tools',
       words: [
@@ -94,10 +108,7 @@ export let appConfig: Config = {
     {
       use: '@yaks/model',
       words: [
-        'provider',
         'model',
-        'serves',
-        'price',
         'usage',
         'cost',
         'questions',
@@ -126,22 +137,29 @@ export let appConfig: Config = {
     },
     { use: '@yaks/effects', words: ['provisional', 'effect', 'lease'] },
     '@yaks/rtc',
-  ],
+    'yak/app',
+    { use: 'yak/trash', words: [] },
+    { use: 'yak/meter', words: [] },
+    { use: 'yak/models', with: {} },
+    { use: 'yak/attribution', words: ['register_writes'] },
+  ]),
 }
 
 export let directoryConfig: Config = {
   numbers: true,
-  plugins: [
+  plugins: storePlugins([
     {
       use: '@yaks/kernel',
+      facets: ['vocab'],
       words: [...spine, ...relations, ...marks, 'completed'],
     },
     ...machine,
     '@yaks/id',
+    ...addressed,
     '@yaks/doc',
     // doc.body uses the blob keyword and graph hooks without artifact words.
     { use: '@yaks/blob', words: [] },
-    { use: '@yaks/task', words: ['contains', 'requires'] },
+    { use: '@yaks/task', facets: ['vocab'], words: ['contains', 'requires'] },
     ...links,
     { use: '@yaks/mail', words: ['notified'] },
     '@yaks/tunnel',
@@ -155,24 +173,77 @@ export let directoryConfig: Config = {
       use: '@yaks/platform',
       words: ['hostname', 'plan', 'deploy', 'switched'],
     },
-    { use: '@yaks/model', words: ['cost'] },
-  ],
+    { use: '@yaks/model', facets: ['vocab'], words: ['cost'] },
+    {
+      use: 'yak/app',
+      words: [
+        'archetype',
+        'retired',
+        'exception',
+        'referenced',
+        'error',
+        'blob',
+        'attachment',
+      ],
+    },
+    'yak/directory',
+    'yak/trash',
+    'yak/meter',
+    { use: 'yak/attribution', words: ['browser', 'attribute_writes'] },
+    'yak/git',
+  ]),
 }
 
 export let gitConfig: Config = {
   numbers: true,
-  plugins: [
-    { use: '@yaks/kernel', words: spine },
+  plugins: storePlugins([
+    { use: '@yaks/kernel', facets: ['vocab'], words: spine },
     ...machine,
     '@yaks/id',
+    ...addressed,
     { use: '@yaks/blob', words: [] },
     // This store's blob is a Git object's bytes, not an app upload.
     '@yaks/git',
-  ],
+    { use: 'yak/app', words: ['archetype', 'retired', 'exception'] },
+    { use: 'yak/trash', words: [] },
+    { use: 'yak/meter', words: [] },
+  ]),
 }
 
 export let configs = {
   app: appConfig,
   directory: directoryConfig,
   git: gitConfig,
+}
+
+/** Worker domains export the same store facets as packages, at local paths. */
+export let domains = {
+  'yak/app': {
+    vocab: './facets/app-vocab.ts',
+    effects: './facets/app-effects.ts',
+  },
+  'yak/directory': { vocab: './facets/directory-vocab.ts' },
+  'yak/trash': {
+    vocab: './facets/trash-vocab.ts',
+    graph: './facets/trash-graph.ts',
+    effects: './facets/trash-effects.ts',
+  },
+  'yak/meter': {
+    vocab: './facets/meter-vocab.ts',
+    graph: './facets/meter-graph.ts',
+    effects: './facets/meter-effects.ts',
+  },
+  'yak/attribution': {
+    vocab: './facets/attribution-vocab.ts',
+    effects: './facets/attribution-effects.ts',
+  },
+  'yak/models': {
+    vocab: './facets/models-vocab.ts',
+    effects: './facets/models-effects.ts',
+  },
+  'yak/git': {
+    vocab: './facets/git-vocab.ts',
+    graph: './facets/git-graph.ts',
+    effects: './facets/git-effects.ts',
+  },
 }

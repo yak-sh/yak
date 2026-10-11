@@ -1,6 +1,7 @@
 // Command declarations are data. The memo keeps neither a vocabulary runtime
 // nor any closures; the chosen command loads its implementation by role.
 import { type Config, used } from './config.ts'
+import { facetsOf } from '@yaks/host/config'
 import type { Declared } from './words.ts'
 import type { CliCommand } from './host.ts'
 import type { VocabFacet } from '@yaks/host'
@@ -30,10 +31,11 @@ export let declarations = (
   let known = held.get(key) ??
     (!controls && held.get(JSON.stringify([inputs, true])))
   if (known) return known
-  let plugins = inputs.map(used)
-  let requests = plugins.flatMap((
-    p,
-  ) => [[p, 'vocab'] as const, ...controls ? [[p, 'cli'] as const] : []])
+  let requests = inputs.flatMap((input) =>
+    ['vocab', ...controls ? ['cli'] : []].filter((name) =>
+      facetsOf(input)?.some((facet) => facet == name) ?? true
+    ).map((name) => [used(input), name] as const)
+  )
   let made = remember(
     [inputs, controls],
     [

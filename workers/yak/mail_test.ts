@@ -12,7 +12,7 @@
 // in these tests is the directory — the same class, woken on the platform's own
 // vocabulary because of the name it is given — so a letter counted against a
 // space is counted through the wire that counts it in life.
-import { test } from '@yaks/testing'
+import { test, until } from '@yaks/testing'
 import { assert, assertEquals } from '@std/assert'
 import type { Frame } from '@yaks/api'
 import type { Bundle } from '@yaks/graph'
@@ -170,13 +170,17 @@ let state = (name = '') => {
 }
 
 // A hibernatable socket, faked: what it was sent, in order.
-let wire = () => {
+let wire = (received = (_frame: Frame) => {}) => {
   let sent: Frame[] = []
   let held: unknown = null
   return {
     sent,
     readyState: 1,
-    send: (data: string) => void sent.push(JSON.parse(data)),
+    send: (data: string) => {
+      let frame = JSON.parse(data) as Frame
+      sent.push(frame)
+      received(frame)
+    },
     serializeAttachment: (v: unknown) => {
       held = JSON.parse(JSON.stringify(v))
     },
@@ -280,18 +284,28 @@ let read = async (store: Store, eid: string, v = owner): Promise<Bundle> => {
   return (await r.json() as Bundle[])[0]
 }
 
+// Delivery is a recorded effect outcome, separate from the write accepting
+// the letter. Read through the same page door that observes that outcome.
+let settled = (store: Store, eid = NOTE) =>
+  until(async () => {
+    let row = await read(store, eid)
+    return row?.delivered || row?.bounced
+  })
+
 // The receipt beside a sale is written by the platform through the kernel's
 // door (sell.ts `asApp`), and it leaves from the app like any other letter.
 test("the platform's receipt leaves from the app's own address", async () => {
   let { store, mail } = await cookbook()
   let platform: Vouch = { person: APP, role: 'editor', kernel: true }
   assertEquals((await post(store, '/apply', letter(), platform)).status, 200)
+  await settled(store)
   assertEquals(mail.sent[0]?.from, 'ada.cookbook@yaks.app')
 })
 
 test("a member's letter leaves from the app's own address", async () => {
   let { store, mail } = await cookbook()
   assertEquals((await post(store, '/apply', letter(), owner)).status, 200)
+  await settled(store)
   assertEquals(mail.sent.length, 1)
   let [sent] = mail.sent
   assertEquals(sent.from, 'ada.cookbook@yaks.app')
@@ -315,13 +329,24 @@ test("a member's letter leaves from the app's own address", async () => {
 test('a page watching the letter is told it left', async () => {
   let ctx = state()
   let { store, mail } = await cookbook(outbox(), owner, ctx)
-  let ws = wire()
+  let bundles = (f: Frame) => (f.bundles ?? []) as Bundle[]
+  let heard = new Set<string>()
+  let left = Promise.withResolvers<void>()
+  let ws = wire((frame) => {
+    if (bundles(frame).some((b) => b.entity.eid == NOTE && b.delivered)) {
+      heard.add(frame.id)
+      if (heard.has('all') && heard.has('note')) left.resolve()
+    }
+  })
   ctx.live.push(ws)
   // The raw feed carries batches exactly as applied, so a `delivered` bundle in
   // one can only have come from the effect's own apply().
-  store.webSocketMessage(ws, JSON.stringify({ subscribe: true, id: 'all' }))
+  await store.webSocketMessage(
+    ws,
+    JSON.stringify({ subscribe: true, id: 'all' }),
+  )
   // And the page-shaped ask: the letters that have left.
-  store.webSocketMessage(
+  await store.webSocketMessage(
     ws,
     JSON.stringify({ subscribe: '.delivered', id: 'note' }),
   )
@@ -329,9 +354,9 @@ test('a page watching the letter is told it left', async () => {
   assertEquals((ws.sent[0] as { id: string }).id, 'note')
 
   assertEquals((await post(store, '/apply', letter(), owner)).status, 200)
+  await left.promise
   assertEquals(mail.sent.length, 1)
 
-  let bundles = (f: Frame) => (f.bundles ?? []) as Bundle[]
   let cast = ws.sent.filter((f) =>
     bundles(f).some((b) => b.entity.eid == NOTE && b.delivered)
   )
@@ -350,6 +375,7 @@ test("the from address is the platform's word, never the batch's", async () => {
   let forged = letter()
   forged[1].mail = { from: 'billing@stripe.com' }
   assertEquals((await post(store, '/apply', forged, owner)).status, 200)
+  await settled(store)
   assertEquals(mail.sent[0].from, 'ada.cookbook@yaks.app')
 })
 
@@ -377,6 +403,7 @@ test('an open app still takes an anonymous write that is not a letter', async ()
 test('a provider failure comes to rest on the letter', async () => {
   let { store } = await cookbook(outbox('550 mailbox unavailable'))
   assertEquals((await post(store, '/apply', letter(), owner)).status, 200)
+  await settled(store)
   let row = await read(store, NOTE)
   assertEquals(
     (row.bounced as { reason?: string }).reason,
@@ -389,6 +416,7 @@ test('a deploy with no binding bounces rather than swallows', async () => {
   let store = new Store(state(), {})
   assertEquals((await post(store, '/vocab', {}, owner)).status, 200)
   assertEquals((await post(store, '/apply', letter(), owner)).status, 200)
+  await settled(store)
   let row = await read(store, NOTE)
   assertEquals(
     (row.bounced as { reason?: string }).reason,
@@ -399,10 +427,12 @@ test('a deploy with no binding bounces rather than swallows', async () => {
 test('the same letter written twice is sent once', async () => {
   let { store, mail } = await cookbook()
   assertEquals((await post(store, '/apply', letter(), owner)).status, 200)
+  await settled(store)
   // The replay: the same bundles, the same eids. `mail` and `deliver` are
   // already there, so nothing is created and no handler wakes; a handler that
   // did wake would find the `delivered` and leave the letter alone.
   assertEquals((await post(store, '/apply', letter(), owner)).status, 200)
+  await settled(store)
   assertEquals(mail.sent.length, 1)
 })
 
@@ -423,6 +453,7 @@ test('a letter with no ask to send is kept, not sent', async () => {
     ], owner)).status,
     200,
   )
+  await settled(store)
   assertEquals(mail.sent.length, 1)
 })
 
@@ -432,6 +463,7 @@ test('a letter delivered is one letter on the month', async () => {
   let { ns, spent } = await platform()
   let { store, mail } = await cookbook(outbox(), owner, state(), ns)
   assertEquals((await post(store, '/apply', letter(), owner)).status, 200)
+  await settled(store)
   assertEquals(mail.sent.length, 1)
   assertEquals((await spent()).emails, 1)
   // And the count is per letter, not per batch or per boot.
@@ -447,6 +479,7 @@ test('a letter delivered is one letter on the month', async () => {
     ], owner)).status,
     200,
   )
+  await settled(store, 'd0000000-0000-4000-8000-000000000009')
   assertEquals((await spent()).emails, 2)
 })
 
@@ -459,6 +492,7 @@ test('a letter that bounced costs the space nothing', async () => {
     ns,
   )
   assertEquals((await post(store, '/apply', letter(), owner)).status, 200)
+  await settled(store)
   assertEquals(
     ((await read(store, NOTE)).bounced as { reason?: string }).reason,
     '550 mailbox unavailable',
@@ -471,6 +505,7 @@ test('past the month allowance a send bounces naming the ceiling', async () => {
   let { ns, spent } = await platform({ emails: 100 })
   let { store, mail } = await cookbook(outbox(), owner, state(), ns)
   assertEquals((await post(store, '/apply', letter(), owner)).status, 200)
+  await settled(store)
   // The transport is never reached, and the refusal is data on the letter.
   assertEquals(mail.sent.length, 0)
   let why = String(

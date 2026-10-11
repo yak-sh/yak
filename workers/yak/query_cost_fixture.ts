@@ -65,13 +65,13 @@ export let queryCost = async (db: Storage, screened = false, stale = false) => {
   )
   if (!res.ok) throw new Error(await res.text())
   await res.body?.cancel()
-  await store.door.graph.storage.tx((tx) =>
+  await (await store.door).graph.storage.tx((tx) =>
     tx.patch(Array.from({ length: 1000 }, (_, i) => ({
       entity: { eid: `00000000-0000-4000-8000-${String(i).padStart(12, '0')}` },
       recipe: { title: `Recipe ${i}` },
     })))
   )
-  await store.door.graph.storage.tx((tx) =>
+  await (await store.door).graph.storage.tx((tx) =>
     tx.patch(Array.from({ length: 512 }, (_, i) => ({
       entity: { eid: `10000000-0000-4000-8000-${String(i).padStart(12, '0')}` },
       ...Object.fromEntries(

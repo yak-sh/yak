@@ -1,9 +1,6 @@
 import { statements } from '@yaks/sqlite'
-import { ids } from '@yaks/id/graph'
-import { choices } from '@yaks/builders'
 import { recovering } from './models.ts'
 import { attributed } from './attribution.ts'
-import { archetypes } from '@yaks/archetype'
 import {
   backed as journalBacked,
   ddl as journalDdl,
@@ -32,16 +29,15 @@ import {
 //                               the app's own vocab.json          (vocab.ts)
 //   storage(ctx.storage, vocab) the object's SQLite as @yaks/graph's Storage
 //                               (@yaks/durable-object → @yaks/sqlite)
-//   graph(storage, plugins)     the phased apply(): edges, members, blobs,
-//                               effects, the mailbox        (@yaks/graph)
+//   prepare(config, roles)      import this kind's graph and effect facets
+//   assemble(...).bind(...)     graph plugins over the Store's capabilities
 //   subscriptions(graph)        a saved query that keeps answering (@yaks/api)
 //   api({graph, subs})          POST /apply, GET /query            (@yaks/api)
 //   sockets(subs, ctx)          /ws, over hibernatable sockets
 //                               (@yaks/durable-object)
 //
-// — and the five lines above are the whole of what this object does. Bundles
-// in and bundles out: no fleet schema is planted, there is no `snapshot()`,
-// and no SQL is written here.
+// The Store owns the Durable Object boundary; plugins own the graph's words
+// and behavior. Each kind's config selects its vocabulary and facets.
 //
 // It serves two roles, told apart by the name the kernel gives the object. An
 // app's store wakes with the core plus its own `vocab.json`; the directory —
@@ -110,13 +106,7 @@ import {
   subscriptions,
   Unauthorized,
 } from '@yaks/api'
-import {
-  blobRead,
-  blobs,
-  blobSchema,
-  representations,
-  sqliteBlobs,
-} from '@yaks/blob'
+import { blobRead, blobSchema, sqliteBlobs } from '@yaks/blob'
 import {
   as,
   col,
@@ -152,10 +142,6 @@ import {
   type Wire,
 } from '@yaks/durable-object'
 import { type Effects, effects } from '@yaks/effects'
-import { secrets } from '@yaks/secrets'
-import { edges } from '@yaks/edge'
-import { keys } from '@yaks/key'
-import { aliases } from '@yaks/alias'
 import {
   type Field,
   fields,
@@ -203,9 +189,7 @@ import {
   Refused,
   sha256,
 } from '@yaks/graph'
-import { DELIVER, MAIL, mailbox } from '@yaks/mail'
-import { models } from '@yaks/model'
-import { sessions } from '@yaks/session'
+import { DELIVER, MAIL } from '@yaks/mail'
 import {
   actorOf,
   Denied,
@@ -226,7 +210,7 @@ import { workerAnatomy } from './anatomy.ts'
 import { type Runner, runner } from '@yaks/tools'
 import { commands } from '@yaks/tools/declared'
 import { readTools } from './tool-grammar.ts'
-import { soonest, tick, type Ticked, wakes } from '@yaks/wake'
+import { soonest, tick, type Ticked } from '@yaks/wake'
 import { type Alarm, arm } from '@yaks/wake/cloudflare'
 import {
   asking,
@@ -236,17 +220,17 @@ import {
   PLATFORM,
   type Row,
 } from './listing.ts'
-import {
-  effected,
-  installsOf,
-  rulesOf,
-  type Stored,
-  wakesOf,
-} from './plugin.ts'
-import { PLUGINS } from './plugins.ts'
+import type { Stored } from './plugin.ts'
+import { assemble, prepare, type Prepared } from '@yaks/host/assembly'
+import { type Host as PluginHost, type Load } from '@yaks/host'
+import { chosen, facetsOf, given, used } from '@yaks/host/config'
+import { configs } from './config.ts'
+import { load } from './load.ts'
+import { metering } from './meter.ts'
+import { posting } from './post.ts'
+import { realtimeOf } from './rtc.ts'
 import { builderModelTool, building, choosing, supplying } from './builders.ts'
 import type { Env } from './env.ts'
-import { seeded } from './wake.ts'
 import { conditionalWakes } from './conditional-wakes.ts'
 import type { Binding } from './post.ts'
 import { ledger } from './ledger.ts'
@@ -328,11 +312,13 @@ import {
   appDerived,
   appDoc,
   appVocab,
+  appWords,
   gitVocab,
   grew,
   meant,
   numbered,
   platformVocab,
+  storeWords,
   teach,
   unsaid,
 } from './vocab.ts'
@@ -355,11 +341,26 @@ export let vocabOfStore = (name: string, declared: unknown = {}): Vocab =>
     ? gitVocab()
     : appVocab(declared)
 
+let storeKind = (name: string): keyof typeof configs =>
+  name == PLATFORM_STORE ? 'directory' : name == GIT_STORE ? 'git' : 'app'
+let prepared = new Map<string, Promise<Prepared>>()
+let preparing = (kind: keyof typeof configs): Promise<Prepared> => {
+  let held = prepared.get(kind)
+  if (!held) {
+    prepared.set(
+      kind,
+      held = prepare(configs[kind], ['graph', 'effects'], load),
+    )
+  }
+  return held
+}
+
 /** What a store raises out of its words (`#build`): the words, whether it is
  * one of the platform's own two stores rather than an app, what its storage
  * reads a stored value through, which properties are searched, and the schema
  * as one word. */
 type Shape = {
+  words: ReturnType<typeof storeWords>
   vocab: Vocab
   own: boolean
   derived: Derived
@@ -391,7 +392,8 @@ export let shapeOf = (name: string, declared: string | null): Shape => {
     shapes.set(key, held)
     return held
   }
-  let vocab = vocabOfStore(name, declared ?? {})
+  let words = own ? storeWords(storeKind(name)) : appWords(declared ?? {})
+  let { vocab } = words
   let read = blobRead(vocab)
   let derived = { ...read, ...(own ? {} : appDerived(vocab)) }
   let searchable = fields(vocab)
@@ -410,7 +412,7 @@ export let shapeOf = (name: string, declared: string | null): Shape => {
   let stamp = sha256(
     [FIT, ...ddl.map((s) => render(s).sql)].join('\n'),
   )
-  let shape = { vocab, own, derived, searchable, stamp, ddl }
+  let shape = { words, vocab, own, derived, searchable, stamp, ddl }
   shapes.set(key, shape)
   if (shapes.size > SHAPES) shapes.delete(shapes.keys().next().value!)
   return shape
@@ -708,6 +710,7 @@ installContext({
 })
 
 export class Store {
+  #load: Load
   #ctx: State
   #vocab!: Vocab
   #graph!: Graph
@@ -791,7 +794,9 @@ export class Store {
     bind: Bindings = {},
     rules: Rule[] = RULES,
     traceNow: () => number = Date.now,
+    facetLoad: Load = load,
   ) {
+    this.#load = facetLoad
     this.#traceNow = traceNow
     this.#ctx = ctx
     this.#bind = bind
@@ -803,24 +808,33 @@ export class Store {
         setAlarm: (at) => setAlarm.call(ctx.storage, at),
       }
     }
-    // Stand-ins without persistent object metadata keep their synchronous door.
-    if (!ctx.storage.get && !bind.STORE) this.#ensureStarted()
   }
 
-  #started = false
+  #started: Promise<void> | null = null
+  #facets = new Map<string, Prepared>()
   #dormant: boolean | null = null
   #checking: Promise<boolean> | null = null
 
-  #ensureStarted() {
-    if (this.#started) return
-    this.#started = true
-    tallying(this.#pending, () => {
+  #ensureStarted(name?: string): Promise<void> {
+    return this.#started ??= tallying(this.#pending, async () => {
       try {
-        this.#start()
+        await this.#start(name)
       } catch (e) {
         this.#failed(e)
       }
     })
+  }
+
+  async #prepare(name: string) {
+    let kind = storeKind(name)
+    if (!this.#facets.has(kind)) {
+      this.#facets.set(
+        kind,
+        await (this.#load == load
+          ? preparing(kind)
+          : prepare(configs[kind], ['graph', 'effects'], this.#load)),
+      )
+    }
   }
 
   // Object metadata, not graph rows: a dormant incarnation never opens SQL.
@@ -853,7 +867,7 @@ export class Store {
     return json({ error: 'NotFound', message: 'app is in the trash' }, 404)
   }
 
-  #start() {
+  async #start(name?: string) {
     let ctx = this.#ctx
     this.#sql = driver(ctx.storage, undefined, this.#measure)
     this.#sql.query(KV)
@@ -864,7 +878,11 @@ export class Store {
     interrupted(this.#sql)
     revived(this.#sql)
     this.#reshaping()
-    this.#boot()
+    let remembered = this.#get('name')
+    await this.#prepare(remembered ?? name ?? '')
+    this.#boot(() => {
+      if (!remembered && name) this.#put('name', name)
+    })
   }
 
   // What an object keeps is in the one shape a deploy takes now. A store that
@@ -964,7 +982,7 @@ export class Store {
     // app-shaped extras below are for: `task.status` is an expression over
     // words a git object graph does not have, and `vocab.json` is not a
     // sentence to say to a caller of either one.
-    let { vocab, own, derived, searchable, stamp } = shapeOf(
+    let { words, vocab, own, derived, searchable, stamp } = shapeOf(
       name,
       this.#get('vocab'),
     )
@@ -974,32 +992,7 @@ export class Store {
     })
     let drive = this.#sql = driver(ctx.storage, observe, this.#measure)
     let bytes = sqliteBlobs(drive)
-    let store = sqliteStorage(
-      drive,
-      vocab,
-      {
-        // A number is @yaks/id's, and only the platform's own stores loaded it
-        // (vocab.ts): the directory's memories are ordered by the number it
-        // minted, while an app's entities are pointed at by the eid its client
-        // minted and never by a number, so nothing mints one for them.
-        number: numbered(vocab),
-        schemaReady: () => this.#get('schema') == stamp,
-        // The vocabulary says which prose is searched — @yaks/doc declares its
-        // title and body, and an app's own vocab.json declares `"search": true`
-        // on whatever of its words it wants found. sqlite owns no index. The
-        // same text has a vector each (`#embedding`), which `.near` ranks.
-        extend: [
-          search(searchable),
-          semantic(statements(drive), { model: SPACE }),
-        ],
-        // A body is stored as its address (@yaks/blob `store: "blob"`), so the
-        // reads and the `doc_value` view resolve it as prose. The FTS schema
-        // receives the same resolution, keeping hashes out of the index
-        // (T-33978).
-        derived,
-        ...(vocab.comp('_tx') ? { backed: journalBacked(vocab) } : {}),
-      },
-    )
+    let store!: ReturnType<typeof sqliteStorage>
     this.#texts = {
       sql: drive,
       fields: texts(vocab, derived),
@@ -1011,17 +1004,12 @@ export class Store {
     // vocabulary declares is in it — the directory's uniques included, since
     // they are words of `platformDoc`.
     //
-    // A brand-new object raises nothing yet: it does not know which store it
-    // is until its first request says so, and planting an app's core into what
-    // turns out to be the directory would leave tables no word of its
-    // vocabulary names. `#learn` reboots the moment the name arrives, and every
-    // door runs after it.
+    // An unnamed object raises nothing yet. Its first named request selects
+    // the store kind before boot, so an app's tables never land in a newborn
+    // directory or Git store. `#learn` rebuilds when later metadata changes.
     this.#schema(vocab, stamp, name)
     let app = this.#get('app')
-    // The registry an app's own effects register on (T-33816), and the one
-    // every plugin of this Worker registers on below. It is fresh on every
-    // boot, so those registrations happen once per incarnation however often
-    // a store is rebuilt.
+    // Each incarnation binds declared effects to its host capabilities.
     // An effect writes back through the kernel's own door — a new batch
     // through this graph's `apply()`, trusted and unsigned — so what a letter
     // came to is journaled, cast to every open socket, and seen by whatever
@@ -1037,6 +1025,7 @@ export class Store {
       write: (b) => this.#trust(b, null),
       defer: true,
       singleOwner: true,
+      startup: 'manual',
       // A builder output (2) starts a downstream builder call (3). The
       // registered tool then opens its ordinary session through the runner.
       // Keep the chain bounded, but let that owed call run.
@@ -1049,138 +1038,187 @@ export class Store {
     // Where the directory keeps a connection's credential (vault.ts). A key
     // comes out of a write before anything else reads it, and is sealed once
     // the write commits, by the same plugin; an app's store keeps none.
-    let vault = meta ? vaultOf(this.#bind) : null
     let observed = workerAnatomy(vocab)
-    let g = graph({
-      storage: store,
-      vocab,
-      report: (error, { phase, plugin }) =>
-        defect(error, { request: `${plugin} ${phase}`, store: name }),
-      // An app's own words are its `vocab.json`, so a word nobody declared is
-      // refused with where one comes from — the sentence the read door says
-      // too (`#taught`). The directory says nothing of the kind: its words
-      // are the platform's own and its callers are the kernel's own.
-      ...(own ? {} : { teach: teach(this.#bind) }),
-      // The guard is added last and only when this object knows which app it
-      // holds: @yaks/member refuses a write by an actor with no level, so a
-      // store that cannot name its app has no access question to ask and the
-      // kernel's own gate in front of it is the whole rule.
-      plugins: [
-        ...(vocab.comp('_tx')
-          ? [journal(log({ rows: (s) => drive.query(s), derived }), vocab)]
-          : []),
-        ...(declaredLenses(declaration)
-          ? [
-            lenses(
-              (error) =>
-                defect(error, { request: 'lens normalize', store: name }),
-              { vocab, rows: lensesIn([lensDocAt(name, declaration)]) },
-            ),
-          ]
-          : []),
-        // An app's store holds its own rows, not a copy of the platform's
-        // words: every schema page in it is derived from the vocabulary when
-        // read. The platform's own two stores describe theirs in rows, which
-        // the directory's journal names a change's component by.
-        ...(own ? [] : [describing]),
-        ...(vault ? [secrets(vault, (b) => this.#trust(b, null))] : []),
-        ...(vocab.comp('archetype') ? [archetypes()] : []),
-        // Before every check, because it is about the shape a value arrived in.
-        this.#lowering,
-        edges(vocab),
-        // The carrier and the one kind of it every store speaks: a name, which
-        // is how anything addresses a row it wrote last week without having
-        // kept the eid. The carrier goes first — the name rides it (T-34390).
-        ids(vocab),
-        keys(vocab),
-        choices(),
-        aliases(),
-        blobs(vocab, bytes),
-        representations(),
-        wakes(),
-        // A transcript's rules, in an app's store (D-40545): a model named by
-        // its name, an entry's place in its transcript allocated as it lands.
-        ...(own ? [] : [models(), sessions()]),
-        fx,
-        // Before the guard, because it is what the guard reads.
-        this.#vouching,
-        ...(app ? [this.#guarding(app, vocab, meant(this.#get('vocab')))] : []),
-        // The post room. `mailbox()` is @yaks/mail's own plugin: the address
-        // canonicalizer, so a mailbox is stored in one spelling and only one.
-        // @yaks/doc is composed beside it rather than inside it, and here a
-        // step further out still — `doc` is one of the words every store on
-        // this platform already speaks (vocab.ts `coreDocs`), so there is
-        // nothing left for a `docs()` to declare.
-        ...(!meta && app
-          ? [this.#posting(), mailbox({ domain: apex(this.#bind) })]
-          : []),
-        // What every domain of this Worker declares about a write, as data
-        // (plugin.ts `rules`, plugins.ts): a query over one bundle in the batch
-        // plus what comes out, run by the phase it names. Every store gets
-        // every rule — one about a component this store does not speak is inert
-        // (@yaks/graph rules.ts) — and a phase runs its rules before its hooks
-        // wherever the list sits, so the place decides nothing but the order
-        // two rules on one phase fire in.
-        // The directory's jobs read and write the directory — which is this
-        // object. They get it as a method call (`META`), never as a fetch to
-        // this object's own stub: a Durable Object shares one I/O context
-        // across every request in flight on it, so each self-request deepens
-        // the chain instead of starting one, and the hourly meter asking once
-        // per space hit the runtime's depth limit (T-34844).
-        {
-          name: 'yak/rules',
-          // The only skipped rule is the trash's stamp: it adds a valid
-          // clock and byline and cannot refuse. The rules phase still runs.
-          admission: () => true,
-          rules: rulesOf(PLUGINS),
-          resources: {
-            Env: () => meta ? { ...this.#bind, META: this.#meta } : undefined,
-          },
+    let kind = storeKind(name), config = configs[kind]
+    let host!: PluginHost
+    let env = () => meta ? { ...this.#bind, META: this.#meta } : this.#bind
+    let kernelGraph: Graph | undefined
+    let kernel = () => kernelGraph ??= this.#kernelGraph(host.graph)
+    let at: Stored = {
+      ...this.#stored(this.#graph),
+      get env() {
+        return env()
+      },
+      get graph() {
+        return kernel()
+      },
+    }
+    let plan = assemble(
+      config,
+      ['graph', 'effects'],
+      this.#load,
+      this.#facets.get(kind)!,
+      {
+        plugins: (config.plugins ?? []).map((entry) => {
+          let plugin = used(entry), options = given(entry)
+          if (plugin.startsWith('yak/')) options = { ...options, store: at }
+          if (plugin == '@yaks/mail') {
+            options = { ...options, domain: apex(this.#bind) }
+          }
+          if (plugin == '@yaks/rtc') {
+            options = { ...options, realtime: realtimeOf(this.#bind) }
+          }
+          return [plugin, options, chosen(entry), facetsOf(entry)]
+        }),
+        words: { ...words, derived },
+      },
+    )
+    let composed = plan.bind({
+      host: {
+        me: app ?? name,
+        vault: vaultOf(this.#bind),
+        blobs: bytes,
+        artifacts: bytes,
+        senders: {
+          worker: metering(
+            this.#bind,
+            () => this.#get('mail'),
+            posting(this.#bind.MAIL, this.#bind),
+          ),
         },
-        // What an app holds, told to the directory once a write has committed
-        // (`#tell`). The platform's own two stores are not apps and are not
-        // metered.
-        ...(own ? [] : [{ name: 'yak/weigh', hooks: { effect: this.#weigh } }]),
-        // A sleeping wake armed by the write that makes its `while` hold
-        // (`#rouse`), in every store.
-        { name: 'yak/rouse', hooks: { effect: this.#rouse } },
-        {
-          name: 'yak/names',
-          hooks: {
-            effect: (bundles) => {
-              for (let b of bundles) this.#people.delete(b.entity.eid)
-              return bundles
-            },
-          },
+        stopping: new AbortController().signal,
+        duties: async () => {
+          await this.#effects.work(this.#stored(this.#graph).graph)
         },
-        // A text the write changed, embedded once it has committed
-        // (`#embedding`). Its triggers queued it in the write's own statement,
-        // so finding whether anything is owed is a single-row seek, asked only
-        // of a write that names what a trigger watches.
-        {
-          name: 'yak/embed',
-          hooks: {
-            effect: (bundles) => {
-              if (
-                this.#texts && queues(this.#texts.fields, bundles) &&
-                this.#owes()
-              ) this.#embedding()
-              return bundles
-            },
-          },
+        end: () => {
+          throw new Error('a store does not host processes')
         },
-        // Last, so the answer a keyed write keeps is the batch as every other
-        // commit hook left it (`#logging`).
-        this.#logging,
-        ...(own ? [] : [admitSchema(vocab)]),
+        bury: () => Promise.resolve([]),
+        gone: () => Promise.resolve(false),
+        report: (error) => defect(error, { request: 'plugin', store: name }),
+      },
+      storage: (_host, extend) => {
+        store = sqliteStorage(
+          drive,
+          vocab,
+          {
+            // A number is @yaks/id's, and only the platform's own stores loaded it
+            // (vocab.ts): the directory's memories are ordered by the number it
+            // minted, while an app's entities are pointed at by the eid its client
+            // minted and never by a number, so nothing mints one for them.
+            number: numbered(vocab),
+            schemaReady: () => this.#get('schema') == stamp,
+            extend,
+            // A body is stored as its address (@yaks/blob `store: "blob"`), so the
+            // reads and the `doc_value` view resolve it as prose. The FTS schema
+            // receives the same resolution, keeping hashes out of the index
+            // (T-33978).
+            derived,
+            ...(vocab.comp('_tx') ? { backed: journalBacked(vocab) } : {}),
+          },
+        )
+        return store
+      },
+      extend: () => [
+        search(searchable),
+        semantic(statements(drive), { model: SPACE }),
       ],
+      effects: () => fx,
+      graph: (options) => {
+        let g = graph({
+          ...options,
+          report: (error, { phase, plugin }) =>
+            defect(error, { request: `${plugin} ${phase}`, store: name }),
+          ...(own ? {} : { teach: teach(this.#bind) }),
+          plugins: [
+            ...(vocab.comp('_tx')
+              ? [journal(log({ rows: (s) => drive.query(s), derived }), vocab)]
+              : []),
+            ...(declaredLenses(declaration)
+              ? [
+                lenses(
+                  (error) =>
+                    defect(error, { request: 'lens normalize', store: name }),
+                  { vocab, rows: lensesIn([lensDocAt(name, declaration)]) },
+                ),
+              ]
+              : []),
+            // An app's store holds its own rows, not a copy of the platform's
+            // words: every schema page in it is derived from the vocabulary when
+            // read. The platform's own two stores describe theirs in rows, which
+            // the directory's journal names a change's component by.
+            ...(own ? [] : [describing]),
+
+            // The Store lowers incoming bundles and lends the caller's standing.
+            this.#lowering,
+            ...options.plugins ?? [],
+            this.#vouching,
+            ...(app
+              ? [this.#guarding(app, vocab, meant(this.#get('vocab')))]
+              : []),
+            ...(!meta && app ? [this.#posting()] : []),
+            // What an app holds, told to the directory once a write has committed
+            // (`#tell`). The platform's own two stores are not apps and are not
+            // metered.
+            ...(own
+              ? []
+              : [{ name: 'yak/weigh', hooks: { effect: this.#weigh } }]),
+            // A sleeping wake armed by the write that makes its `while` hold
+            // (`#rouse`), in every store.
+            { name: 'yak/rouse', hooks: { effect: this.#rouse } },
+            {
+              name: 'yak/names',
+              hooks: {
+                effect: (bundles) => {
+                  for (let b of bundles) this.#people.delete(b.entity.eid)
+                  return bundles
+                },
+              },
+            },
+            // A text the write changed, embedded once it has committed
+            // (`#embedding`). Its triggers queued it in the write's own statement,
+            // so finding whether anything is owed is a single-row seek, asked only
+            // of a write that names what a trigger watches.
+            {
+              name: 'yak/embed',
+              hooks: {
+                effect: (bundles) => {
+                  if (
+                    this.#texts && queues(this.#texts.fields, bundles) &&
+                    this.#owes()
+                  ) this.#embedding()
+                  return bundles
+                },
+              },
+            },
+            // Last, so the answer a keyed write keeps is the batch as every other
+            // commit hook left it (`#logging`).
+            this.#logging,
+            ...(own ? [] : [admitSchema(vocab)]),
+          ],
+        })
+        // Trusted plugin writes use the same kernel boundary as store bookkeeping.
+        let trusted = <T>(opts: ApplyOpts | undefined, body: () => T): T => {
+          let was = this.#kernelling
+          if (opts?.trusted) this.#kernelling = true
+          try {
+            return body()
+          } finally {
+            this.#kernelling = was
+          }
+        }
+        let apply = g.apply, admit = g.admit
+        g.apply = (bundles, opts) => trusted(opts, () => apply(bundles, opts))
+        g.admit = (bundles, opts) => trusted(opts, () => admit(bundles, opts))
+        return g
+      },
+      ready: (made) => {
+        host = made
+      },
     })
-    observed.graph(g.plugins, PLUGINS)
-    // What every domain of this Worker does about data this store committed
-    // (plugin.ts `effects`, plugins.ts): a letter that asks to go is the one
-    // there is today (outbox.ts). The store hands over what only it knows —
-    // its bindings, whether it is the platform's own, the app it holds and the
-    // address it writes from — and knows nothing of what is registered.
+    host = composed.host
+    let g = host.graph
+    observed.graph(g.plugins, [])
     // The object's own clock (D-37562). A `wake` row says when something is
     // owed; the runtime's one alarm is how this object comes back for it. A
     // write that moves a wake arms the alarm, `alarm()` fires what is due, and
@@ -1228,13 +1266,6 @@ export class Store {
         .map((r) => [r.rule.name, due]),
     ))
     coreRegistered()
-    let at = this.#stored(g)
-    for (let p of PLUGINS) {
-      if (!p.effects?.length) continue
-      let done = observed.registration(p.name, fx)
-      effected([p], fx, at)
-      done()
-    }
     observed.effects(fx.slots())
     this.#effectsReady = true
     this.#effects = fx
@@ -1311,19 +1342,18 @@ export class Store {
    * words — not `call`, `result` or `tool` — so the record lives in a graph of
    * its own for the life of this door rather than as three tables in
    * everybody's app. */
-  get door(): {
+  get door(): Promise<{
     graph: Graph
     authenticate: Authenticate
     calls: Graph
     anatomy: () => Anatomy
-  } {
-    this.#ensureStarted()
-    return {
+  }> {
+    return this.#ensureStarted().then(() => ({
       graph: this.#graph,
       authenticate: this.#auth,
       calls: ledger(this.#graph),
       anatomy: this.anatomy,
-    }
+    }))
   }
 
   /** Value-free metadata captured by this incarnation, never a graph read. */
@@ -1804,6 +1834,7 @@ export class Store {
   // bookkeeping, and a tool's answer is the caller's own write, already signed
   // as them.
   #asIs(bundles: Bundle[], opts: AdmitOpts = {}, admission = false) {
+    let was = this.#kernelling
     this.#kernelling = true
     try {
       return this.#graph[admission ? 'admit' : 'apply'](bundles, {
@@ -1811,7 +1842,7 @@ export class Store {
         trusted: true,
       })
     } finally {
-      this.#kernelling = false
+      this.#kernelling = was
     }
   }
 
@@ -2103,7 +2134,7 @@ export class Store {
    */
   async tick(now = Date.now()): Promise<Ticked> {
     if (!await this.#awake()) return { fired: [], refused: [] }
-    this.#ensureStarted()
+    await this.#ensureStarted()
     let run = async () => {
       let leave = await this.#enter(false)
       try {
@@ -2140,7 +2171,7 @@ export class Store {
     info?: { isRetry?: boolean; retryCount?: number },
   ): Promise<void> {
     if (!await this.#awake()) return
-    this.#ensureStarted()
+    await this.#ensureStarted()
     if (info?.isRetry && !this.#threw) {
       defect(new Error("a store's alarm was cut off before it finished"), {
         request: 'alarm',
@@ -2223,25 +2254,11 @@ export class Store {
         ], null)
       }
     }
-    // First, the rows the platform ships (the directory's built
-    // integrations, an app's model catalogue), brought up to date before this
-    // object answers anything: written as the kernel, their one writer, and
-    // only where they moved. Each install says which stores it is for.
-    let at = this.#stored(this.#graph)
-    for (let install of installsOf(PLUGINS)) {
-      try {
-        let bundles = await install((q) => this.#graph.read(q), at)
-        if (bundles.length) await this.#trust(bundles, null)
-      } catch (e) {
-        await this.#broke('install', e)
-      }
-    }
-    let rows = this.#get('name') == PLATFORM_STORE ? wakesOf(PLUGINS) : []
-    let stamp = sha256(rows.map((r) => r.entity.eid).join('\n'))
-    if (rows.length && this.#get('wakes') != stamp) {
-      await seeded(this.#graph, rows, Date.now())
-      this.#put('wakes', stamp)
-    }
+    // A release reaching this store owes its declared start-up effects once.
+    // Cold reads and pool drains never owe them again.
+    await this.#effects.startup(this.#stored(this.#graph).graph)
+    await this.#effects.work(this.#stored(this.#graph).graph, undefined, 1)
+    await this.#effects.idle()
     // A deployment stands up command identities. Recovery drains recorded
     // call_ready/call_woken effects, not a second derivation over all calls.
     if ((this.#get('tools') ?? '{}') != '{}') {
@@ -2582,7 +2599,7 @@ export class Store {
     if (kernel && path == '/revive' && request.method == 'POST') {
       await this.#ctx.storage.put?.('dormant', false)
       this.#dormant = false
-      this.#ensureStarted()
+      await this.#ensureStarted()
       if (this.#refused) return this.#stalled()
       await this.#arming(new Date().toISOString())
       return json({ ok: true })
@@ -2594,7 +2611,7 @@ export class Store {
       }
       return this.#missing()
     }
-    this.#ensureStarted()
+    await this.#ensureStarted(request.headers.get('x-store') ?? undefined)
     let tally = this.#pending
     this.#pending = new Map()
     let run = () =>
@@ -2671,6 +2688,9 @@ export class Store {
    * it is. A refusal to start is the answer, when there is one. */
   async #ready(request: Request): Promise<Response | null> {
     if (this.#refused) return this.#stalled()
+    await this.#prepare(
+      request.headers.get('x-store') ?? this.#get('name') ?? '',
+    )
     this.#learn(request)
     if (this.#refused) return this.#stalled()
     let selected = this.#select(request)
@@ -3904,8 +3924,8 @@ export class Store {
     ws: Wire,
     data: string | ArrayBuffer,
   ): void | Promise<void> {
-    let run = (): void | Promise<void> => {
-      this.#ensureStarted()
+    let run = async (): Promise<void> => {
+      await this.#ensureStarted()
       if (this.#draft) {
         return this.#draft.then(() => this.#socketMessage(ws, data))
       }
@@ -3928,8 +3948,8 @@ export class Store {
 
   /** That client went away. */
   webSocketClose(ws: Wire): void | Promise<void> {
-    let run = (): void | Promise<void> => {
-      this.#ensureStarted()
+    let run = async (): Promise<void> => {
+      await this.#ensureStarted()
       if (this.#draft) return this.#draft.then(() => this.webSocketClose(ws))
       if (!this.#unbuilt) return this.#live.close(ws)
     }

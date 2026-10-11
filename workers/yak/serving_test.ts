@@ -243,7 +243,7 @@ test('an app worker query can read a connected peer position', async () => {
     }),
   )
   assertEquals(deployed.status, 200)
-  let actor = await store.door.authenticate(
+  let actor = await (await store.door).authenticate(
     new Request('http://store/ws', { headers }),
   )
   let attachment: unknown = { writer: { actor } }
@@ -771,7 +771,7 @@ test('a subscription is that query still answering', async () => {
   let page = client(env, await as(ADA))
   assertEquals(await page.query('.doc'), [])
   sockets.get(name)!.push(ws)
-  object(name).webSocketMessage(
+  await object(name).webSocketMessage(
     ws,
     JSON.stringify({ subscribe: '.doc&!person', id: '1:.doc' }),
   )

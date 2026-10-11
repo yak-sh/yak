@@ -16,19 +16,13 @@
 // kbit/s. The owner pays from the account budget shared with models
 // (meter.ts `realtime`).
 import { edits, mode, writes } from '@yaks/member'
-import {
-  answer,
-  lapse,
-  type Rates,
-  type Realtime,
-  type Store,
-} from '@yaks/rtc/door'
+import { answer, type Rates, type Realtime, type Store } from '@yaks/rtc/door'
 import { appStore, directoryOf } from './directory.ts'
 import type { Door } from './door.ts'
 import type { Env } from './env.ts'
 import { KERNEL, metaOf } from './meta.ts'
 import { countedRealtime, refusedSpend } from './meter.ts'
-import { type Answer, type Effect, page, type Plugin } from './plugin.ts'
+import { type Answer, page, type Plugin } from './plugin.ts'
 import { source, within } from './rate.ts'
 import { defect } from './defects.ts'
 
@@ -119,34 +113,10 @@ export let voice: Answer = async (asked) => {
   })
 }
 
-/**
- * A session whose lease lapsed: its wake fired, so its tracks are closed at
- * Realtime and its row dropped (@yaks/rtc `lapse`). Not waited for, since it
- * speaks to Cloudflare; a failure is reported and leaves the row, which the
- * page's next renewal finds and pays for again.
- */
-let lapsing: Effect = (on, at) => {
-  if (at.meta || !at.app) return
-  let app = at.app
-  let store: Store = {
-    read: async (q) => await at.graph.read(q),
-    write: async (bundles) => await at.graph.apply(bundles),
-  }
-  on.on('.sfu, .fired', (e) => {
-    let realtime = realtimeOf(at.env)
-    if (!realtime) return
-    void (async () => {
-      let [row] = await store.read(`.entity.eid=${e.entity.eid}`)
-      if (row?.sfu) await lapse(realtime, store, row)
-    })().catch((error) => defect(error, { request: 'rtc lapse', app }))
-  })
-}
-
 /** Voice, as a plugin of this Worker: the door at every app's address, the
  * lapse in every app's store, and the guide page. */
 export let rtcPlugin: Plugin = {
   name: 'rtc',
   pages: [page('voice')],
   answers: [voice],
-  effects: [lapsing],
 }

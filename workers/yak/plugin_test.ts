@@ -1,5 +1,6 @@
 /// <reference lib="deno.ns" />
-// The seam itself (plugin.ts): a fixture plugin composed the way a real one
+// The remaining Worker door, page and connector contributions (plugin.ts):
+// a fixture plugin composed the way a domain
 // is, and every slot's contribution seen arriving. Nothing here knows a
 // domain — the domains have their own tests that go through the host list
 // (memory_test.ts, views_test.ts) — so this is the contract on its own, and
@@ -7,26 +8,19 @@
 // slot nobody filled contributes nothing.
 import { test } from '@yaks/testing'
 import { assert, assertEquals } from '@std/assert'
-import type { Effects as Registry } from '@yaks/effects'
-import { graph, type Rule } from '@yaks/graph'
-import { ram } from '@yaks/ram'
-import { loadVocab, type VocabDoc } from '@yaks/vocab'
+import type { VocabDoc } from '@yaks/vocab'
 import type { App, Space } from './directory.ts'
 import type { Env } from './env.ts'
 import {
   answered,
   type Arrived,
   type Asked,
-  effected,
   pagesOf,
   type Plugin,
   routed,
-  rulesOf,
-  type Stored,
   toolsOf,
   type Visit,
   vocabOf,
-  wakesOf,
   watched,
 } from './plugin.ts'
 
@@ -38,14 +32,6 @@ let row = (name: string) => ({
   description: 'what a fixture does',
   input: { type: 'object' as const, properties: {} },
   run: async () => await Promise.resolve({ text: name }),
-})
-
-// A rule, as a plugin declares one. What it means is @yaks/graph's (its own
-// rules_test.ts); what is pinned here is that the list carries it.
-let rule = (name: string): Rule => ({
-  name,
-  phase: 'stamp',
-  match: '.entity, +!fixture, *fixture',
 })
 
 let asked = (path: string) =>
@@ -79,62 +65,21 @@ let fixture: Plugin = {
         : null,
   ],
   watch: (v) => seen.push(v),
-  rules: [rule('fixture/one')],
-  effects: [(on, at) => {
-    // The gate a real one has (outbox.ts): an app's store, never the
-    // platform's own.
-    if (at.meta || !at.app) return
-    registered.push(`${at.app} ${at.mail() ?? ''}`)
-    on.created('fixture', () => {})
-  }],
-  wakes: [{ entity: { eid: 'fixture' }, wake: { every: '@daily' } }],
 }
 
 let seen: Visit[] = []
-let registered: string[] = []
-
-// A registry, as much of one as a registration can tell (@yaks/effects owns
-// what a handler means — its own registry_test.ts): what was registered, on
-// what component.
-let registry = () => {
-  let on: string[] = []
-  let fx = {
-    created: (comp: string) => (on.push(comp), fx),
-    changed: (comp: string) => (on.push(comp), fx),
-    removed: (comp: string) => (on.push(comp), fx),
-  } as unknown as Registry
-  return { fx, on }
-}
-
-let none = loadVocab([])
-let stored = (at: Partial<Stored> = {}): Stored => ({
-  env: {},
-  meta: false,
-  app: 'an-app',
-  mail: () => 'one.app@yaks.app',
-  graph: graph({ storage: ram(none), vocab: none }),
-  as: (_, bundles) => Promise.resolve(bundles),
-  commands: () => ({}),
-  broke: () => {},
-  ...at,
-})
-
 // A plugin that fills nothing: the host must be able to hold it.
 let quiet: Plugin = { name: 'quiet' }
 
-test('a plugin contributes its words, its rows, its pages and its rules', () => {
+test('a plugin contributes its words, its rows and its pages', () => {
   let list = [fixture, quiet]
   assertEquals(vocabOf(list), [doc])
   assertEquals(toolsOf(list).map((t) => t.name), ['fixture_one'])
   assertEquals(pagesOf(list).map((p) => p.slug), ['fixture'])
-  assertEquals(rulesOf(list).map((r) => r.name), ['fixture/one'])
-  assertEquals(wakesOf(list), fixture.wakes)
   // Nothing at all is the empty contribution, not a failure.
   assertEquals(vocabOf([quiet]).length, 0)
   assertEquals(toolsOf([quiet]).length, 0)
   assertEquals(pagesOf([quiet]).length, 0)
-  assertEquals(rulesOf([quiet]).length, 0)
-  assertEquals(wakesOf([quiet]).length, 0)
 })
 
 test('a plugin answers its own door and passes on every other', async () => {
@@ -167,22 +112,6 @@ test('a plugin answers a root door, and knows which root it is', async () => {
   // A path no plugin claims falls through to the kernel's own table.
   assertEquals(await routed(list, arrived('/fixture')), null)
   assertEquals(await routed([quiet], arrived('/fixture.git/info/refs')), null)
-})
-
-test('a plugin registers its effects on the store it is handed', () => {
-  registered = []
-  let { fx, on } = registry()
-  effected([fixture, quiet], fx, stored())
-  assertEquals(on, ['fixture'])
-  assertEquals(registered, ['an-app one.app@yaks.app'])
-  // The store says what it is, and a plugin decides for itself: the
-  // platform's own store and one that holds no app yet register nothing.
-  registered = []
-  let bare = registry()
-  effected([fixture], bare.fx, stored({ meta: true }))
-  effected([fixture], bare.fx, stored({ app: null }))
-  assertEquals(bare.on, [])
-  assertEquals(registered, [])
 })
 
 test('order is the list order', async () => {

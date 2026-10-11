@@ -1,58 +1,14 @@
-// What a domain of this Worker contributes to the host, as data. The Worker is
-// well split into files by domain already; what it lacked was a way for a
-// domain to say what it brings without every host module naming it back. So
-// this is the shape @yaks/graph's own `Plugin` has (packages/graph/plugin.ts) —
-// a plain object of optional slots, plus a combinator per slot — said in the
-// terms a Worker has rather than the terms `apply()` has.
-//
-// The slots are extracted, not invented: each one is a thing a domain file in
-// here was already doing by being named from a host module.
-//
-//   vocab    a JSON Schema document folded into the directory's words
-//            (vocab.ts `platformDocs`)
-//   tools    rows of the connector's one roster (tools.ts `TOOLS`). Rows are
-//            config-time and identical for every caller: the roster is fixed
-//            and public (T-34541), so a plugin may add a row and may never
-//            decide one per person.
-//   pages    guide pages, offered by the `guide` tool and served as MCP
-//            resources (guide.ts `PAGES`)
-//   answers  a door at an app's own address (apps.ts `api`)
-//   routes   a door at the apex or on a space's hostname, answered before any
-//            app is (index.ts `serve`)
-//   watch    what a plugin does about a page an app served (apps.ts `viewed`)
-//   rules    what it does inside a store, as data: a query over one bundle in
-//            a batch plus what comes out (@yaks/graph `Rule`), run by the phase
-//            it names in every store this Worker builds (graph.ts `#boot`)
-//   effects  what it does after a store commits: registrations on that store's
-//            own post-commit registry (@yaks/effects, graph.ts `#boot`)
-//   wakes    rows seeded once in the directory: when to write `fired`, with
-//            the tags the plugin's effect rules match beside it
-//   installs rows a store holds as the plugin ships them, written as the
-//            kernel during deployment (graph.ts `#deployed`): the directory's
-//            built integrations, every app store's model catalogue
-//   pins     the pinned bytes it still names, so the retention sweep keeps
-//            them (versions.ts `pruned`)
-//
-// `rules` is the one slot that is not an extraction: it is @yaks/graph's own
-// phase seam, offered here so a domain says what it does about a write in the
-// same object it says its words and its rows in. A rule about a component a
-// store does not speak is inert there (@yaks/graph rules.ts), which is what
-// lets one list serve the directory and every app store alike.
-//
-// A plugin holds no state and is composed once, at module load — `PLUGINS`
-// (plugins.ts) is the one list, and the host modules read that list instead of
-// naming a domain each.
-import type { Effects as Registry } from '@yaks/effects'
-import type { Bundle, Graph, Query, Rule } from '@yaks/graph'
+// The Worker's application contributions: connector tools, pages, doors and
+// page watches. Store vocabulary, graph hooks and effect handlers compose from
+// config.ts through @yaks/host's facets.
+import type { Bundle, Graph } from '@yaks/graph'
 import type { VocabDoc } from '@yaks/vocab'
 import type { Wake as Schedule } from '@yaks/wake'
 import type { Objects } from '@yaks/blob'
 import { PAGES } from './content.ts'
 import type { App, Directory, Space } from './directory.ts'
 import type { Env } from './env.ts'
-// The store's own bindings type. Type-only, so nothing here loads graph.ts:
-// graph.ts reads this list (`rulesOf`, `effected`) and the shape it hands an
-// effect is its own to say.
+// Type-only: application contributions do not load a Store.
 import type { Bindings } from './graph.ts'
 import type { Page } from './guide.ts'
 import type { Who } from './session.ts'
@@ -130,14 +86,6 @@ export type Watch = (v: Visit) => void
 /** A directory row a plugin seeds once, wearing the tags its rules match. */
 export type Wake = Bundle & { wake: Schedule }
 
-/** The bundles that bring the rows a plugin ships up to date in a store,
- * given a read of it and which store it is: nothing where they already match
- * (@yaks/connections `install`), and nothing in a store they are not for. */
-export type Install = (
-  read: (query: Query) => Bundle[] | Promise<Bundle[]>,
-  at: Stored,
-) => Bundle[] | Promise<Bundle[]>
-
 /**
  * The store an effect is being registered in, said as what a plugin may know
  * about it (graph.ts `#boot`): the Worker's bindings, whether this is the
@@ -174,14 +122,6 @@ export type Stored = {
   /** a failure noted in the app's break log and reported, never thrown */
   broke: (what: string, error: unknown) => void
 }
-
-/**
- * What a plugin does about data a store committed: registrations on that
- * store's own registry, made once per incarnation. It runs at boot, so it must
- * not throw — an effect a store cannot register is a store that will not
- * build.
- */
-export type Effect = (on: Registry, at: Stored) => void
 
 /**
  * One app's pinned bytes, as the retention sweep holds them (versions.ts
@@ -225,15 +165,6 @@ export type Plugin = {
   routes?: Door[]
   /** what it does about a page an app served */
   watch?: Watch
-  /** the rules it declares, run inside every store this Worker builds */
-  rules?: Rule[]
-  /** what it registers on a store's post-commit registry, once per boot */
-  effects?: Effect[]
-  /** schedules seeded once in the directory; existing rows keep their state */
-  wakes?: Wake[]
-  /** rows the directory holds as the plugin ships them, installed as the
-   * kernel during deployment */
-  installs?: Install[]
   /** the pinned bytes it still names, which the sweep must keep */
   pins?: Pins[]
 }
@@ -263,11 +194,6 @@ export let vocabOf = (plugins: Plugin[]): VocabDoc[] =>
 export let toolsOf = (plugins: Plugin[]): Tool[] =>
   plugins.flatMap((p) => p.tools ?? [])
 
-/** Every rule, in plugin order — what a store's graph is built with, beside
- * @yaks/graph's own (graph.ts `#boot`). */
-export let rulesOf = (plugins: Plugin[]): Rule[] =>
-  plugins.flatMap((p) => p.rules ?? [])
-
 /**
  * Every sha any plugin still names for one app, as one set (versions.ts
  * `pruned`). Asked in plugin order and awaited one at a time: a sweep is a
@@ -283,24 +209,6 @@ export let pinsOf = async (
     for (let pins of p.pins ?? []) for (let sha of await pins(at)) keep.add(sha)
   }
   return keep
-}
-
-/** Every schedule row, in plugin order, for the directory's first tick. */
-export let wakesOf = (plugins: Plugin[]): Wake[] =>
-  plugins.flatMap((p) => p.wakes ?? [])
-
-/** Every install, in plugin order, for a store's first request. */
-export let installsOf = (plugins: Plugin[]): Install[] =>
-  plugins.flatMap((p) => p.installs ?? [])
-
-/**
- * Register every plugin's effects on one store's registry, in plugin order
- * (graph.ts `#boot`). A store gets every plugin's — one about a component this
- * store does not speak never fires, the way an inert rule never matches — so
- * the list decides nothing but the order two handlers on one component run in.
- */
-export let effected = (plugins: Plugin[], on: Registry, at: Stored) => {
-  for (let p of plugins) for (let fx of p.effects ?? []) fx(on, at)
 }
 
 /** Every guide page, in plugin order. */

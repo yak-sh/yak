@@ -24,7 +24,7 @@ equal(stopped(), true)
 | Export                                        | Provides                                                                                                                                                             |
 | --------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `@yaks/host`                                  | `assembly`, facet contracts, `Host`, `Config`, `Configured`, `Options`, `Plug`, `Role`, `Feed`, `MigrationMonitor`, `Message`, `Receipt`, `Sender`, `ROLES`, `every` |
-| `@yaks/host/assembly`                         | `assembly`, `Assembly`, `AssemblyOpts`, `Binding`, `Meaning`                                                                                                         |
+| `@yaks/host/assembly`                         | `assembly`, `prepare`, `assemble`, `Prepared`, `Assembly`, `AssemblyOpts`, `Binding`, `Meaning`                                                                      |
 | `@yaks/host/roles`                            | Role and facet selection data without loading the assembly runtime                                                                                                   |
 | `@yaks/host/words`                            | Vocabulary assembly, `wordsOf`, `taking`, `Words`, `Declared`, `Taken`                                                                                               |
 | `@yaks/host/config`                           | Configuration types, `used`, `given`, `chosen`                                                                                                                       |
@@ -45,6 +45,19 @@ vocabulary. Its `words` lets the concrete host prepare storage before
 `bind(binding)` builds the graph, effect bindings, tools, runner and routes. The
 returned services are handed to the host's scheduler. No assembly starts a
 service or owns shutdown.
+
+A host with synchronous transactions can call `prepare(config, roles, load)`
+before opening storage, then `assemble(config, roles, load, prepared, opts)`
+inside its transaction. `opts.words` supplies an already-loaded `Words` value
+when the host shares its vocabulary with a schema plan. `wordsOf` accepts
+`{ implicit: false, keywords }` to hold a graph to its explicit declarations and
+keyword vocabularies. Graph facets supply hooks and rules; vocabulary facets and
+graph-owned documents supply their declarations.
+
+A config entry's `facets` restricts which subpaths its host imports, within the
+roles it serves. `{ use: '@yaks/task', facets: ['vocab'] }` loads declarations
+without graph hooks, effects or tool implementations. Omitted `facets` allows
+every exported facet; `[]` imports none.
 
 A config entry's `words` selects names from its plugin's vocabulary `$defs`,
 including components, tools, rules and effects:

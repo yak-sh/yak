@@ -4,7 +4,7 @@ import { effectDoc, effects } from '@yaks/effects'
 import { ram } from '@yaks/ram'
 import { loadVocab, pick } from '@yaks/vocab'
 import { platformVocab } from './vocab.ts'
-import { trashPlugin } from './trash.ts'
+import { effects as trashEffects } from './facets/trash-effects.ts'
 import type { Namespace } from './door.ts'
 import type { Stored } from './plugin.ts'
 
@@ -44,9 +44,11 @@ let fixture = () => {
       write: (rows) => g.apply(rows, { trusted: true }),
     })
     let g = graph({ vocab, storage: held, plugins: [fx] })
-    for (let register of trashPlugin.effects!) {
-      register(fx, { meta: true, env: { STORE }, graph: g } as Stored)
-    }
+    fx.handle(
+      trashEffects({}, {
+        store: { meta: true, env: { STORE }, graph: g } as Stored,
+      }),
+    )
     return {
       g,
       fx,

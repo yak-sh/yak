@@ -78,7 +78,7 @@ export let seedWorld = async (
   store: Store,
   post: (path: string, body: unknown) => Promise<unknown>,
 ) => {
-  await store.door.graph.storage.tx((tx) =>
+  await (await store.door).graph.storage.tx((tx) =>
     tx.patch([{
       entity: { eid: identityEid('model', ['typesafe/jev']) },
       model: { name: 'typesafe/jev', offered: true },
@@ -127,7 +127,7 @@ export let seedWorld = async (
 export let settleWorld = async (store: Store, storage?: State['storage']) => {
   for (let round = 0; round < 1000; round++) {
     for (let i = 0; i < 100; i++) await Promise.resolve()
-    let pending = await store.door.graph.read(
+    let pending = await (await store.door).graph.read(
       '.effect.state=pending,running&.fields=entity.eid',
     )
     if (
@@ -171,7 +171,7 @@ export let worldTick = async (storage: State['storage'], history = 79_000) => {
     await res.body?.cancel()
   }
   await post('/vocab', words)
-  let g = store.door.graph
+  let g = (await store.door).graph
   // Link the history that the transcript/identity joins actually encounter.
   let oldSession = crypto.randomUUID()
   await g.storage.tx((tx) =>

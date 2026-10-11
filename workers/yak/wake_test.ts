@@ -11,9 +11,10 @@ import { within } from './defects.ts'
 import { Store } from './graph.ts'
 import { platform, state } from './testing.ts'
 import { meta } from './meta.ts'
-import type { Plugin, Wake } from './plugin.ts'
-import { wakesOf } from './plugin.ts'
-import { PLUGINS } from './plugins.ts'
+import type { Wake } from './plugin.ts'
+import type { Load } from '@yaks/host'
+import { directoryConfig } from './config.ts'
+import { load } from './load.ts'
 import { GRAPHQL } from './usage.ts'
 import { GIT_STORE, PLATFORM_STORE, storeOf } from './door.ts'
 import { KERNEL, metaOf } from './meta.ts'
@@ -49,29 +50,50 @@ let ring = async (p: ReturnType<typeof platform>, name = PLATFORM_STORE) => {
 
 test('a wake fires in the store that holds it and its rule receives the tick instant', async () => {
   let seen: Bound[] = []
-  let fixture: Plugin = {
-    name: 'wake-fixture',
-    wakes: [{
+  let configured = { use: 'fixture', words: [] }
+  let fixture: Load = (async (plugin, facet) => {
+    if (plugin != 'fixture') return await load(plugin, facet)
+    return facet == 'graph'
+      ? {
+        plugins: () => [{
+          name: 'fixture',
+          rules: [{
+            phase: 'effect',
+            match: '.wake, *fired, .doc, doc.title=fixture, #Now',
+            run: (row) => {
+              seen.push(row)
+              return undefined
+            },
+          }],
+        }],
+      }
+      : null
+  }) as Load
+  directoryConfig.plugins!.push(configured)
+  try {
+    let p = platform('wake fixture')
+    let ctx = state(PLATFORM_STORE)
+    p.states.set(PLATFORM_STORE, ctx)
+    let store = new Store(ctx, p.env, undefined, undefined, fixture)
+    p.env.STORE = {
+      idFromName: (name) => name,
+      get: () => ({ fetch: (req: Request) => store.fetch(req) }),
+    } as typeof p.env.STORE
+    await store.fetch(
+      new Request('http://store/vocab', {
+        method: 'POST',
+        headers: { 'x-store': PLATFORM_STORE, 'x-yak-kernel': '1' },
+        body: '{}',
+      }),
+    )
+    await meta(p.env).apply([{
       entity: { eid: 'fixture-wake' },
       wake: { at: iso('09:00'), every: '30m' },
       doc: { title: 'fixture' },
     }, {
       entity: { eid: 'fixture-paused' },
       wake: { at: null, every: '30m' },
-    }],
-    rules: [{
-      phase: 'effect',
-      match: '.wake, *fired, .doc, doc.title=fixture, #Now',
-      run: (row) => {
-        seen.push(row)
-        return undefined
-      },
-    }],
-  }
-  PLUGINS.push(fixture)
-  try {
-    let p = platform('wake fixture')
-    let store = await directory(p)
+    }])
     assertEquals(seen.length, 0)
     await store.tick(at('09:05'))
     assertEquals(seen.length, 1)
@@ -97,7 +119,10 @@ test('a wake fires in the store that holds it and its rule receives the tick ins
     assertEquals(seen.length, 2)
     assertEquals(seen[1].fired, { at: iso('09:35') })
   } finally {
-    PLUGINS.splice(PLUGINS.indexOf(fixture), 1)
+    directoryConfig.plugins!.splice(
+      directoryConfig.plugins!.indexOf(configured),
+      1,
+    )
   }
 })
 
@@ -105,7 +130,10 @@ test('seeded wake rows survive a directory restart without rewinding or resuming
   let p = platform('wake restart')
   let store = await directory(p)
   let planted = await meta(p.env).query('.wake')
-  assertEquals(planted.length, wakesOf(PLUGINS).length)
+  let ids = planted.map((row) => row.entity.eid).sort()
+  assert(ids.includes('yak-meter'))
+  assert(ids.includes('yak-trash'))
+  assert(ids.includes('yak-git'))
   // A recurring seed with no first instant is owed one, and it is ahead.
   let meter = await wake(p.env, 'yak-meter')
   assert(Date.parse(meter.wake.at!) > Date.now())
@@ -126,8 +154,8 @@ test('seeded wake rows survive a directory restart without rewinding or resuming
     'paused by the owner',
   )
   assertEquals(
-    (await meta(p.env).query('.wake')).length,
-    wakesOf(PLUGINS).length,
+    (await meta(p.env).query('.wake')).map((row) => row.entity.eid).sort(),
+    ids,
   )
 })
 
@@ -244,7 +272,8 @@ test('a refused wake stays due, says why in the break log, and is tried again', 
     entity: { eid: 'yak-meter' },
     wake: { at: iso('05:00'), every: '@hourly' },
   }])
-  store.door.graph.use({
+  let { graph } = await store.door
+  graph.use({
     name: 'refuse-meter',
     hooks: {
       precondition: (rows) => {

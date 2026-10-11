@@ -551,7 +551,9 @@ with `singleOwner: true`. `startup: 'join'` chooses joining explicitly. Each
 without joining, sweeping, or executing handlers. A persistence failure rejects
 the call; after it succeeds, `work` executes those runs with ordinary attempts
 and retries. The host keeps track of which deployments owe the call. Without the
-`effect` component, `startup` does nothing.
+`effect` component, `startup` awaits the handled start-up effects inline. A
+handler failure is reported and rejects the call, so the host can retry the
+start-up work.
 
 Commit-triggered runs can be gated with `active`, a query that must match an
 entity; sweeps use their own query. A `target` query limits triggers to subjects

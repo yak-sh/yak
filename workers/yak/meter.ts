@@ -1,16 +1,6 @@
-// What a space is allowed, and the letters it spends (T-32758, T-33688): the
-// numbers the free and paid plans are sold on (public/pricing.html), the line
-// the agent reads before it runs into one, and the sentence every door says no
-// with. usage.ts is the other half — the hourly sweep that reads three of these
-// figures off Cloudflare's analytics. Its wake and effect rule live here
-// beside the meter's other contributions to the host.
-//
-// They are two files because the LETTERS are counted where they happen rather
-// than swept, and one of those two doors is inside the Store Durable Object
-// itself (`metering` below, wired in graph.ts). That object is checked against
-// the runtime's own types with nothing of Deno in its graph (conform.ts), so
-// the sweep is loaded only when its directory wake fires, after the plugin
-// list has been composed.
+// A space's allowances, counted spends and metered model/mail providers.
+// facets/meter-graph.ts owns the transactional spend rule and hourly sweep;
+// facets/meter-effects.ts seeds the directory's recurring usage schedule.
 import type { Host } from './host.ts'
 import { planSettings } from './route.ts'
 import type { Sender } from '@yaks/mail'
@@ -27,7 +17,6 @@ import type { Namespace } from './door.ts'
 import type { Env } from './env.ts'
 import type { Plugin } from './plugin.ts'
 import { mailedTo } from './post.ts'
-import { reporting } from './wake.ts'
 import { refuse } from './tool.ts'
 import {
   billed,
@@ -52,73 +41,9 @@ import { modelInfo } from '@yaks/workers-ai'
 import { defect } from './defects.ts'
 import { derivedEid, Stale } from '@yaks/graph'
 
-/** The hourly reading: `fired` on this tagged wake runs the existing meter. */
 export let meterPlugin: Plugin = {
   name: 'yak/meter',
-  vocab: [{
-    $defs: {
-      account_usage: {
-        component: true,
-        wire: false,
-        type: 'object',
-        properties: {
-          month: { type: 'string' },
-          at: { type: 'string', format: 'date-time' },
-          requests: { type: 'number' },
-          rows_read: { type: 'number' },
-          duration: { type: 'number' },
-        },
-      },
-      account_alert: {
-        component: true,
-        wire: false,
-        type: 'object',
-        properties: {
-          month: { type: 'string' },
-          requests: { type: 'string' },
-          rows_read: { type: 'string' },
-          duration: { type: 'string' },
-          rate: { type: 'string' },
-        },
-      },
-    },
-  }],
-  wakes: [{
-    entity: { eid: 'yak-meter' },
-    wake: { every: '@hourly', note: 'Read yaks.app usage for this month' },
-    sweep: { kind: 'meter' },
-  }],
-  rules: [{
-    name: 'meter',
-    phase: 'effect',
-    match: '.wake, *fired, .sweep, sweep.kind=meter, #Env, #Now',
-    run: async (row) => {
-      let { Env: env, Now } = row
-      // Every store composes the rules; only the directory gets the bindings
-      // that authorize a platform job, even if an app declares the same tags.
-      if (!env) return
-      return await reporting(env as unknown as Env, row, async () => {
-        let { metered } = await import('./usage.ts')
-        await metered(env as unknown as Env, new Date(Now.at))
-      })
-    },
-  }, {
-    // A spend, added to the month's meter inside the write's own transaction
-    // and taken off again (vocab.ts `spend`): the sum is the directory's, never
-    // a caller's, so two spends at once both count.
-    name: 'spend',
-    phase: 'rules',
-    match: '+meter, *spend',
-    run: ({ meter, spend }) => ({
-      meter: added(props(meter), props(spend)),
-      spend: null,
-    }),
-  }],
 }
-
-// A component as the rule is handed it, read as its properties.
-let props = (c: unknown): Record<string, unknown> =>
-  c && typeof c == 'object' ? Object.fromEntries(Object.entries(c)) : {}
 
 // What one store did, as the analytics answer them (usage.ts `read`). Bytes
 // come from the store itself, and the month and the letters from the row being

@@ -21,6 +21,7 @@ import { COOKIE, sign, verify } from './lib/token.ts'
 import type { Custom } from './domains.ts'
 import type { Command } from './declared.ts'
 import type { Bundle } from '@yaks/graph'
+import type { Load } from '@yaks/host'
 import type { Env } from './env.ts'
 import { valueIn } from '@yaks/tools/value'
 import { parse } from '@std/toml'
@@ -176,6 +177,7 @@ let readied: Promise<unknown> | undefined
 let boot = async (
   bindings: Partial<Env> = {},
   prepare?: (env: Env) => void,
+  load?: Load,
 ) => {
   // Loaded when a test asks: the runner imports this module for its Stripe
   // helpers and has no use for the kernel's whole graph.
@@ -199,7 +201,7 @@ let boot = async (
       ratelimits.map((r) => [r.name, limiter(r.simple.limit, r.simple.period)]),
     ),
     ...bindings,
-  })
+  }, load)
   prepare?.(p.env)
   let reported: Bundle[] = []
   let reportClock = clock()
@@ -283,8 +285,9 @@ export let kernel = async (): Promise<Kernel> => {
 export let fresh = async (
   bindings: Partial<Env> = {},
   prepare?: (env: Env) => void,
+  load?: Load,
 ): Promise<Kernel> => {
-  let { close, ...k } = await boot(bindings, prepare)
+  let { close, ...k } = await boot(bindings, prepare, load)
   return owning(k, close)
 }
 

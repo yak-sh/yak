@@ -1,4 +1,5 @@
 // Providers lent to each app store; model offerings come from successful answers.
+import type { Handlers } from '@yaks/effects'
 import type { Bundle, Comp } from '@yaks/graph'
 import { derivedEid, identityEid } from '@yaks/graph'
 import {
@@ -36,14 +37,7 @@ import { filled, schemaOf } from '@yaks/tools/declared'
 import { accounted, countedMedia, metered } from './meter.ts'
 import { outbound } from './outbound.ts'
 import { caught } from './defects.ts'
-import {
-  type Answer,
-  type Effect,
-  type Install,
-  page,
-  type Plugin,
-  type Stored,
-} from './plugin.ts'
+import { type Answer, page, type Plugin, type Stored } from './plugin.ts'
 
 export let guess = (sent: unknown) =>
   Math.ceil(JSON.stringify(sent ?? '').length / 4)
@@ -53,7 +47,10 @@ let OPENROUTER = 'openrouter'
 
 // Only providers are installed. Model rows stay as history and are never retired
 // because a newer release or a code list stopped naming them.
-export let planting: Install = async (read, at) => {
+export let planting = async (
+  read: Stored['graph']['read'],
+  at: Pick<Stored, 'meta' | 'app'>,
+): Promise<Bundle[]> => {
   if (at.meta || !at.app) return []
   let held = await read('.provider&*')
   return [PROVIDER, OPENROUTER, 'openai'].flatMap((name): Bundle[] =>
@@ -273,8 +270,8 @@ let connected = (at: Stored) =>
  * commands. The store's effect pool keeps each run while the write that asked
  * for it answers immediately; the result arrives through the subscription.
  */
-let asking: Effect = (on, at) => {
-  if (at.meta || !at.app) return
+export let asking = (at: Stored): Handlers => {
+  if (at.meta || !at.app) return {}
   let text = workersAi(
     metered(at.env, payer(at.app), {
       price: async (name) => {
@@ -329,9 +326,9 @@ let asking: Effect = (on, at) => {
     toolSnapshot: () => Promise.resolve(tooled(at)),
     report: (error, _, phase) => at.broke(`model ${phase}`, error),
   })
-  on.handle({
+  return {
     session_run: (e, tx, write) => run.session_run(e, tx, write),
-  })
+  }
 }
 
 // How each way a model call fails is answered at the door: the allowance
@@ -439,7 +436,5 @@ let run: Answer = async (
 export let modelsPlugin: Plugin = {
   name: 'models',
   pages: [page('models')],
-  installs: [planting],
-  effects: [asking],
   answers: [run, recovery],
 }

@@ -6,11 +6,11 @@ import { argsOf, type Bundle, type Comp, type Graph } from '@yaks/graph'
 import type { Runs } from '@yaks/graph/tools'
 import {
   isOpRef,
-  type Local,
   opRead,
   records,
   reveal,
   sealed,
+  type Vault,
 } from '@yaks/secrets'
 import { CallError, Interrupted, said } from '@yaks/tools'
 import type { Host } from '@yaks/host'
@@ -126,7 +126,7 @@ export let ended = (verb: string, code: number): Bundle[] => {
 // it has to keep. The graph comes last: only a sign-in reads it.
 type Verb = (
   call: Bundle,
-  vault: Local,
+  vault: Vault,
   keep: Bundle[],
   graph: Graph,
 ) => Promise<Bundle[]> | Bundle[]
@@ -135,7 +135,7 @@ type Verb = (
 // the same config as bug_list, without opening the independent tracker graph.
 export let tracker = async (
   config: Host['config'],
-  vault: Local,
+  vault: Vault,
 ): Promise<TrackerOptions> => {
   let find = (config: Host['config']) =>
     config.plugins?.find((p) => used(p) == '@yaks/tracker')

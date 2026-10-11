@@ -5,11 +5,8 @@ import { ram } from '@yaks/ram'
 import { loadVocab, pick } from '@yaks/vocab'
 import { spineDoc } from '@yaks/kernel/vocab'
 import { docDoc } from '@yaks/doc'
-import {
-  attributed,
-  attributionPlugin,
-  registrationDoc,
-} from './attribution.ts'
+import { attributed, registrationDoc } from './attribution.ts'
+import { effects as attributionEffects } from './facets/attribution-effects.ts'
 import { effectDoc, effects } from '@yaks/effects'
 import { link } from '@yaks/edge'
 import type { Namespace } from './door.ts'
@@ -51,14 +48,10 @@ let boot = (
     report: (error) => void errors.push(error),
   })
   let g = graph({ vocab, storage, plugins: [fx] })
-  for (let register of attributionPlugin.effects!) {
-    register(fx, {
-      graph: g,
-      env: { STORE },
-      app: 'app',
-      meta,
-    } as Stored)
-  }
+  fx.handle(attributionEffects({}, {
+    store: { graph: g, env: { STORE }, app: 'app', meta } as Stored,
+  }))
+
   let access = {
     ...g,
     apply: (...args: Parameters<typeof g.apply>) => {

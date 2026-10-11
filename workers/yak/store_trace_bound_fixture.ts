@@ -68,7 +68,7 @@ export let traceSourceBound = async (db: TraceStorage) => {
     await ask('/vocab', {
       $defs: { recipe: { properties: { title: { type: 'string' } } } },
     })
-    await store.door.graph.storage.tx((tx) =>
+    await (await store.door).graph.storage.tx((tx) =>
       tx.patch(Array.from({ length: 2601 }, (_, i) => ({
         entity: {
           eid: `10000000-0000-4000-8000-${String(i).padStart(12, '0')}`,

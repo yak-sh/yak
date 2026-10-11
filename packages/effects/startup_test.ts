@@ -12,21 +12,23 @@ import { after } from '@yaks/fp'
 import { matcher } from '@yaks/match'
 import { memory } from '../graph/testing.ts'
 import { equal, match, test, throws } from '@yaks/testing'
-import { loadVocab, pick } from '@yaks/vocab'
+import { loadVocab, pick, type Vocab } from '@yaks/vocab'
 import { effectDoc } from './pool.ts'
 import { effects, type Opts } from './registry.ts'
 
-let vocab = loadVocab([pick(effectDoc, ['effect']), {
+let declared = {
   $defs: {
     store: { component: true },
     boot: { effect: true, start: true, tries: 2 },
     unhandled: { effect: true, start: true },
     disabled: { effect: true, start: true },
   },
-}])
-let proc = (opts: Opts, storage: Storage) => {
+}
+let vocab = loadVocab([pick(effectDoc, ['effect']), declared])
+let inline = loadVocab(declared)
+let proc = (opts: Opts, storage: Storage, words: Vocab = vocab) => {
   let seen: string[] = []
-  let fx = effects(vocab, {
+  let fx = effects(words, {
     owner: 'store',
     defer: true,
     report: () => {},
@@ -37,7 +39,7 @@ let proc = (opts: Opts, storage: Storage) => {
   // Pool scheduling needs committed reads and guarded persistence; the
   // README exercises this same API through the graph's complete write path.
   let g: Access = {
-    vocab,
+    vocab: words,
     outside,
     get: outside.get,
     read: outside.read,
@@ -45,7 +47,7 @@ let proc = (opts: Opts, storage: Storage) => {
     apply: (bundles) =>
       storage.tx((tx) =>
         after(
-          guard(bundles, tx, vocab),
+          guard(bundles, tx, words),
           (ready) =>
             after(
               tx.remove(ready.filter(dead).map((b) => b.entity)),
@@ -186,5 +188,69 @@ check(
     await p.fx.startup(p.g)
     await work(p)
     equal(p.seen, ['started:store'])
+  },
+)
+
+check(
+  'manual startup runs handled effects without pooled rows',
+  async (storage) => {
+    let p: ReturnType<typeof proc>
+    p = proc(
+      {
+        startup: 'manual',
+        write: (bundles) => p.g.apply(bundles),
+      },
+      storage,
+      inline,
+    )
+    p.fx.handle({
+      boot: async (e, tx, write) => {
+        equal(e.kind, 'started')
+        equal((await tx.get([e.entity.eid]))[0].store, {})
+        await write([{ entity: { eid: 'seeded' }, store: {} }])
+        p.seen.push(e.entity.eid)
+      },
+    })
+    await p.fx.work(p.g)
+    equal(p.seen, [])
+    await p.fx.startup(p.g)
+    equal(p.seen, ['store'])
+    equal((await p.g.get(['seeded']))[0].store, {})
+    await p.fx.startup(p.g)
+    equal(p.seen, ['store', 'store'])
+    equal(await rows(p.g), [])
+  },
+)
+
+check(
+  'inline startup reports failure and rejects so the host can retry',
+  async (storage) => {
+    for (let asynchronous of [false, true]) {
+      let reports: string[] = []
+      let p = proc(
+        {
+          report: (error, job) => reports.push(`${job.handler}: ${error}`),
+        },
+        storage,
+        inline,
+      )
+      let fail = true
+      p.fx.handle({
+        boot: () => {
+          if (fail) {
+            let error = Error('installation failed')
+            if (asynchronous) return Promise.reject(error)
+            throw error
+          }
+          p.seen.push('ready')
+        },
+      })
+      await throws(() => p.fx.startup(p.g), 'installation failed')
+      equal(reports, ['boot: Error: installation failed'])
+      fail = false
+      await p.fx.startup(p.g)
+      equal(p.seen, ['ready'])
+      equal(await rows(p.g), [])
+    }
   },
 )

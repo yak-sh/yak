@@ -151,7 +151,7 @@ export let traceCost = async (db: TraceStorage) => {
       // A broad query really reads more than the retention threshold; this is
       // not a fake counter or a replay of an earlier span tree.
       await ask('/trace', { next: 0, rate: 0 }, true)
-      await store.door.graph.storage.tx((tx) =>
+      await (await store.door).graph.storage.tx((tx) =>
         tx.patch(Array.from({ length: 2600 }, (_, i) => ({
           entity: {
             eid: `10000000-0000-4000-8000-${String(i).padStart(12, '0')}`,

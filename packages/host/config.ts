@@ -1,4 +1,5 @@
 // Composition configuration. A concrete host interprets its storage locator.
+import type { FacetName } from './facets.ts'
 /** The options a config passes to one plugin, given to each of that plugin's
  * exported factories as the second argument, after the host. A value written
  * `{"secret": "NAME"}` is that secret's value, read every time it is accessed
@@ -8,10 +9,16 @@
 export type Options = Record<string, unknown>
 
 /** A plugin a config names: a bare specifier, or one with options and chosen words. */
-export type Plug = string | { use: string; with?: Options; words?: string[] }
+export type Plug = string | {
+  use: string
+  with?: Options
+  words?: string[]
+  /** The facets this host composes; omitted takes all exported facets. */
+  facets?: FacetName[]
+}
 
-/** A resolved plugin, its options and optional vocabulary selection. */
-export type Configured = [string, Options, string[]?]
+/** A resolved plugin, its options and optional word and facet selections. */
+export type Configured = [string, Options, string[]?, FacetName[]?]
 
 /** A config file: where the graph lives, and what reads and writes it. */
 export type Config = {
@@ -26,9 +33,10 @@ export type Config = {
   /** Report to this durable spool without opening the tracker graph. */
   tracker?: { spool: string; commit?: string }
   /** the plugin packages, by import specifier. A relative specifier is
-   * resolved against the config file itself; `{use, with, words}` names one
+   * resolved against the config file itself; `{use, with, words, facets}` names one
    * with options and an optional list of its vocabulary definitions. Omitted
-   * `words` takes its whole vocabulary; `[]` takes none of its definitions. */
+   * `words` takes its whole vocabulary; `[]` takes none of its definitions.
+   * `facets` restricts which subpaths are imported; omitted takes all. */
   plugins?: Plug[]
   /** what `yak serve` listens on (default @yaks/api's `PORT`) */
   port?: number
@@ -81,3 +89,7 @@ export let given = (plug: Plug): Options =>
 /** The definitions selected from its vocabulary, or all when omitted. */
 export let chosen = (plug: Plug): string[] | undefined =>
   typeof plug == 'string' ? undefined : plug.words
+
+/** The facets selected for this host, or all when omitted. */
+export let facetsOf = (plug: Plug): FacetName[] | undefined =>
+  typeof plug == 'string' ? undefined : plug.facets

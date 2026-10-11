@@ -212,10 +212,11 @@ export type Effects = Plugin & {
   settle: (g: Access, handler: string) => Promise<number>
   /** Documentation derived from the registered slots. */
   docs: () => Description[]
-  /** Persist a fresh run for each handled start-up effect, targeting owner,
-   * without joining or draining the pool. The host calls this when its
-   * start-up work is owed; persistence failures reject. Does nothing where
-   * the vocabulary keeps no `effect` rows. */
+  /** Owe each handled start-up effect, targeting owner, without joining the
+   * pool. Where the vocabulary keeps `effect` rows, persist fresh runs;
+   * otherwise run the handlers inline. Persistence or inline handler failures
+   * reject; inline failures are also reported. The host calls this when its
+   * start-up work is owed. */
   startup: (g: Access) => Promise<void>
   /** Work the pool: claim what is owed and run it (./pool.ts). A live signal
    * keeps working until it aborts; an aborted one is one pass, taken only
@@ -670,9 +671,12 @@ export let effects = (vocab: Vocab, opts: Opts = {}): Effects => {
     write: Write,
     gen: number,
     context?: HookContext,
+    propagate = false,
   ): unknown => {
-    let failed = (err: unknown) =>
+    let failed = (err: unknown) => {
       report(err, { handler: s.id, event, slot: s })
+      if (propagate) throw err
+    }
     try {
       let c = context && peek(context.graph)
       let out: unknown
@@ -796,6 +800,27 @@ export let effects = (vocab: Vocab, opts: Opts = {}): Effects => {
     )
   }
 
+  // A host without pool rows still owes its declared starts. Their writes
+  // use the same generation boundary as effects after a commit; a failed
+  // start rejects so the host cannot record its deployment as complete.
+  let starter = opts.owner
+  let startup = async (g: Access) => {
+    if (pooled) return pooled.startup(g)
+    let entity = { eid: starter ??= crypto.randomUUID() }
+    for (let s of slots) {
+      if (s.kind != 'started' || !s.run) continue
+      await fire(
+        s,
+        { kind: 'started', entity, name: '' },
+        g.outside,
+        writer(0),
+        0,
+        undefined,
+        true,
+      )
+    }
+  }
+
   let fx: Effects = {
     name: opts.name ?? '@yaks/effects',
     admission: () => true,
@@ -872,7 +897,7 @@ export let effects = (vocab: Vocab, opts: Opts = {}): Effects => {
       })
     },
     docs: () => describe(slots),
-    startup: (g) => pooled?.startup(g) ?? Promise.resolve(),
+    startup,
     work: (g, signal, passes) =>
       pooled?.work(g, signal, passes) ?? Promise.resolve(),
     wake: () => pooled?.wake(),

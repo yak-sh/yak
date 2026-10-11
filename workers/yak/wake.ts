@@ -22,38 +22,13 @@
 // undo a schedule someone deliberately paused. A new recurring seed starts
 // at its first calendar instant at or after the moment it was discovered.
 import { type Graph, Stale } from '@yaks/graph'
-import type { VocabDoc } from '@yaks/vocab'
 import { next, span } from '@yaks/wake'
 import type { Env } from './env.ts'
 import { KERNEL, meta } from './meta.ts'
 import type { Wake } from './plugin.ts'
 
 /** The job a directory wake asks its plugin to do when `fired` is written. */
-export let sweepDoc: VocabDoc = {
-  $defs: {
-    sweep: {
-      component: true,
-      type: 'object',
-      properties: {
-        kind: { type: 'string', enum: ['git', 'meter', 'trash'] },
-        began: {
-          type: 'string',
-          format: 'date-time',
-          stamped: true,
-          description: 'when the run under way began; null once it ends',
-        },
-        since: {
-          type: 'string',
-          format: 'date-time',
-          stamped: true,
-          description:
-            'when the first of the runs that died unfinished in a row began; ' +
-            'null once one ends',
-        },
-      },
-    },
-  },
-}
+export { sweepDoc } from './facets/sweep-vocab.ts'
 
 /** Seed missing schedule rows without resetting a wake already held. */
 export let seeded = async (

@@ -40,7 +40,6 @@ import {
   type Ctx,
   disconnect,
   envOf,
-  install,
   installed,
   INTEGRATION,
   type Integration,
@@ -957,7 +956,6 @@ export let connectionsPlugin: Plugin = {
     { title: 'content', $defs: { content: toolsDoc.$defs!.content } },
   ],
   // The built integrations are the directory's rows, and no app's.
-  installs: [(read, at) => at.meta ? install(read) : []],
   tools: CONNECTIONS.map(worded),
   routes: [callback, hook],
   answers: [own],

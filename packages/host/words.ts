@@ -3,7 +3,12 @@ import { type NamedTool, toolName } from '@yaks/graph'
 import { tier } from '@yaks/graph/tools'
 import { derived as callsDerived } from '@yaks/tools/vocab'
 import { toolsIn } from '@yaks/vocab/tools'
-import { loadVocab, type Vocab, type VocabDoc } from '@yaks/vocab/runtime'
+import {
+  type Keywords,
+  loadVocab,
+  type Vocab,
+  type VocabDoc,
+} from '@yaks/vocab/runtime'
 import { fields as searched } from '@yaks/fts/fields'
 import type { Backings, Derived } from '@yaks/sql'
 import type { Configured, Options } from './config.ts'
@@ -20,6 +25,7 @@ export type Taken<F extends FacetName> = [
   Options,
   string,
   string[]?,
+  FacetName[]?,
 ][]
 
 export let taking = async <F extends FacetName>(
@@ -28,14 +34,22 @@ export let taking = async <F extends FacetName>(
   load: Load,
 ): Promise<Taken<F>> =>
   (await Promise.all(
-    plugins.map(async ([plugin, options, words]) => {
+    plugins.filter(([, , , facets]) =>
+      facets === undefined || facets.includes(name)
+    ).map(async ([plugin, options, words, facets]) => {
       let mod = await load(plugin, name)
       if (!mod && name == 'vocab') selected([], words, plugin)
-      return [mod, options, plugin, words] as const
+      return [mod, options, plugin, words, facets] as const
     }),
-  )).filter((t): t is [Facets[F], Options, string, string[] | undefined] =>
-    !!t[0]
-  )
+  )).filter((
+    t,
+  ): t is [
+    Facets[F],
+    Options,
+    string,
+    string[] | undefined,
+    FacetName[] | undefined,
+  ] => !!t[0])
 
 /** What a config's plugins declare, read without opening anything: their
  * vocabulary documents (each written with the package that brought it), the
@@ -63,12 +77,25 @@ export type Declared = Omit<NamedTool, 'run'>
 // vocabulary: a store's install plan, a read's rendered statements.
 type Worded = {
   next: WeakMap<VocabFacet, Map<string, Worded>>
-  words?: Words
-  own?: WeakMap<VocabDoc[], Words>
-  recent?: { source: string; words: Words }
+  choices?: WeakMap<
+    WordsOpts,
+    {
+      words?: Words
+      own?: WeakMap<VocabDoc[], Words>
+      recent?: { source: string; words: Words }
+    }
+  >
 }
+/** A concrete host may compose only the words it explicitly configured.
+ * Keywords supplied here likewise replace the plugins' keyword registrations. */
+export type WordsOpts = { implicit?: boolean; keywords?: Keywords[] }
+let defaults: WordsOpts = {}
 let worded: Worded = { next: new WeakMap() }
-export let wordsOf = (vocabs: Taken<'vocab'>, own?: VocabDoc[]): Words => {
+export let wordsOf = (
+  vocabs: Taken<'vocab'>,
+  own?: VocabDoc[],
+  opts: WordsOpts = defaults,
+): Words => {
   let at = vocabs.reduce((node, [v, , plugin, names]) => {
     let named = node.next.get(v)
     if (!named) node.next.set(v, named = new Map())
@@ -77,38 +104,49 @@ export let wordsOf = (vocabs: Taken<'vocab'>, own?: VocabDoc[]): Words => {
     if (!next) named.set(key, next = { next: new WeakMap() })
     return next
   }, worded)
-  if (!own?.length) return at.words ??= spoken(vocabs)
-  let held = at.own ??= new WeakMap()
+  let choices = at.choices ??= new WeakMap()
+  let choice = choices.get(opts)
+  if (!choice) choices.set(opts, choice = {})
+  if (!own?.length) return choice.words ??= spoken(vocabs, [], opts)
+  let held = choice.own ??= new WeakMap()
   let words = held.get(own)
   if (!words) {
     // Graph-owned documents are JSON data, often decoded afresh by a host.
     // Keep one equivalent compilation beside the identity cache, so repeated
     // loads share the vocabulary without retaining every document ever seen.
     let source = JSON.stringify(own)
-    words = at.recent?.source == source ? at.recent.words : spoken(vocabs, own)
-    at.recent = { source, words }
+    words = choice.recent?.source == source
+      ? choice.recent.words
+      : spoken(vocabs, own, opts)
+    choice.recent = { source, words }
     held.set(own, words)
   }
   return words
 }
 
 // The words, from the `./vocab` facets already imported.
-let spoken = (vocabs: Taken<'vocab'>, own: VocabDoc[] = []): Words => {
+let spoken = (
+  vocabs: Taken<'vocab'>,
+  own: VocabDoc[],
+  opts: WordsOpts,
+): Words => {
   // The components a tool call is recorded in belong to the host, not to
   // whichever plugin happened to declare them: what was asked of this host is
   // its own record. A plugin that already declares them — a harness, whose
   // transcripts are calls — keeps its own definitions, so only the components
   // nobody supplied are added.
-  let docs = docsOf(
-    vocabs.flatMap(([v, , plugin, names]) =>
-      selected(v.docs ?? [], names, plugin).map((d) => ({
-        ...d,
-        package: plugin,
-        description: v.description,
-      }))
-    ),
+  let docs: VocabDoc[] = vocabs.flatMap(([v, , plugin, names]) =>
+    selected(v.docs ?? [], names, plugin).map((d) => ({
+      ...d,
+      package: plugin,
+      description: v.description,
+    }))
   )
-  let keywords = understood(vocabs.flatMap(([v]) => v.keywords ?? []))
+  if (opts.implicit !== false) docs = docsOf(docs)
+  let keywords = opts.keywords ??
+    (opts.implicit === false
+      ? vocabs.flatMap(([v]) => v.keywords ?? [])
+      : understood(vocabs.flatMap(([v]) => v.keywords ?? [])))
   if (own.length) {
     docs = [...beneath(docs, own), ...own]
   }

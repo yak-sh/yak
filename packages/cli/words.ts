@@ -7,7 +7,7 @@
 // the plugins' declarations and nothing more.
 
 import { type Config, given, subpath, subpaths, used } from './config.ts'
-import { chosen, type Configured } from '@yaks/host/config'
+import { chosen, type Configured, facetsOf } from '@yaks/host/config'
 import type { Facets, Load } from '@yaks/host'
 import { taking, type Words, wordsOf } from '@yaks/host/words'
 import type { CliFacet } from './host.ts'
@@ -30,7 +30,12 @@ export let words = async (
     used(plug),
     given(plug),
     chosen(plug),
+    facetsOf(plug),
   ])
-  await load.together?.(plugins.map(([p]) => [p, 'vocab'] as const))
+  await load.together?.(
+    plugins.filter(([, , , facets]) =>
+      facets === undefined || facets.includes('vocab')
+    ).map(([p]) => [p, 'vocab'] as const),
+  )
   return wordsOf(await taking(plugins, 'vocab', load))
 }

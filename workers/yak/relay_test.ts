@@ -107,10 +107,10 @@ let watching = async (ctx = state(), access = 'private', schema = SCHEMA) => {
     doc: { title: 'Lemon drizzle' },
     recipe: { serves: 8 },
   }])
-  let watch = (actor: Actor | null = { by: ADA }, opening = false) => {
+  let watch = async (actor: Actor | null = { by: ADA }, opening = false) => {
     let ws = wire(actor)
     ctx.live.push(ws)
-    store.webSocketMessage(
+    await store.webSocketMessage(
       ws,
       JSON.stringify({ subscribe: '.recipe', id: 'r' }),
     )
@@ -128,9 +128,9 @@ let says = (eid: string, comp: Bundle[string]) => [{
 
 test('a finger moves, and only the other cooks hear it', async () => {
   let { store, watch } = await watching()
-  let ada = watch(), bert = watch()
+  let ada = await watch(), bert = await watch()
 
-  store.webSocketMessage(
+  await store.webSocketMessage(
     ada,
     JSON.stringify({ relay: says(CAKE, { x: 3, y: 9, name: 'Ada' }) }),
   )
@@ -149,14 +149,14 @@ test('a paced mover is heard at 10Hz; a flooder is closed', async () => {
   Date.now = () => date() + offset
   try {
     let { store, watch } = await watching()
-    let ada = watch(), bert = watch()
+    let ada = await watch(), bert = await watch()
     let move = (ws: ReturnType<typeof wire>, x: number) =>
       store.webSocketMessage(
         ws,
         JSON.stringify({ relay: says(CAKE, { x }) }),
       )
 
-    for (let x = 0; x < 10; x++, offset += 100) move(ada, x)
+    for (let x = 0; x < 10; x++, offset += 100) await move(ada, x)
     await until(() =>
       relay(bert).at(-1)?.presence &&
       (relay(bert).at(-1)?.presence as { x: number }).x == 9
@@ -164,30 +164,30 @@ test('a paced mover is heard at 10Hz; a flooder is closed', async () => {
     assertEquals(relay(bert).at(-1)?.presence, { x: 9 })
     bert.sent.length = 0
 
-    let flood = watch()
+    let flood = await watch()
     let at = date() + offset
     Date.now = () => at
-    move(flood, 10)
-    move(flood, 11)
-    for (let x = 12; x < 19; x++) move(flood, x)
+    await move(flood, 10)
+    await move(flood, 11)
+    for (let x = 12; x < 19; x++) await move(flood, x)
     let late = wire()
-    store.webSocketMessage(
+    await store.webSocketMessage(
       late,
       JSON.stringify({ subscribe: '.recipe', id: 'r' }),
     )
     assertEquals(late.sent[0].relay, says(CAKE, { x: 11 }))
     assertEquals(flood.closed, [])
 
-    move(flood, 19) // the eighth rejected relay closes only the flooder
+    await move(flood, 19) // the eighth rejected relay closes only the flooder
     Date.now = () => date() + offset
     assertEquals(flood.closed, [1008])
     assertEquals(ada.closed, [])
     await until(() => relay(bert).at(-1)?.presence === null)
     assertEquals(relay(bert).at(-1), says(CAKE, null)[0])
     assertEquals(late.closed, [])
-    move(flood, 20)
+    await move(flood, 20)
     assertEquals(relay(bert).at(-1), says(CAKE, null)[0])
-    move(ada, 21)
+    await move(ada, 21)
     await until(() =>
       (relay(late).at(-1)?.presence as { x?: number } | null)?.x == 21
     )
@@ -199,8 +199,8 @@ test('a paced mover is heard at 10Hz; a flooder is closed', async () => {
 
 test('a cook who arrives late sees the fingers already on the page', async () => {
   let { store, watch } = await watching()
-  let ada = watch()
-  store.webSocketMessage(
+  let ada = await watch()
+  await store.webSocketMessage(
     ada,
     JSON.stringify({ relay: says(CAKE, { x: 3, y: 9, name: 'Ada' }) }),
   )
@@ -208,7 +208,7 @@ test('a cook who arrives late sees the fingers already on the page', async () =>
   // A cook who subscribes after the move is told it in her opening frame,
   // beside the set — she never saw the write that put it there.
   let cleo = wire()
-  store.webSocketMessage(
+  await store.webSocketMessage(
     cleo,
     JSON.stringify({ subscribe: '.recipe', id: 'r' }),
   )
@@ -218,37 +218,37 @@ test('a cook who arrives late sees the fingers already on the page', async () =>
 
 test('a cook who leaves takes her finger with her', async () => {
   let { store, watch } = await watching()
-  let ada = watch(), bert = watch()
-  store.webSocketMessage(
+  let ada = await watch(), bert = await watch()
+  await store.webSocketMessage(
     ada,
     JSON.stringify({ relay: says(CAKE, { x: 3, y: 9, name: 'Ada' }) }),
   )
   await until(() => relay(bert).length)
   bert.sent.length = 0
 
-  store.webSocketClose(ada)
+  await store.webSocketClose(ada)
   await until(() => relay(bert).length)
   assertEquals(relay(bert), says(CAKE, null))
 })
 
 test('clearing it is the component set to null, like anywhere else', async () => {
   let { store, watch } = await watching()
-  let ada = watch(), bert = watch()
-  store.webSocketMessage(
+  let ada = await watch(), bert = await watch()
+  await store.webSocketMessage(
     ada,
     JSON.stringify({ relay: says(CAKE, { x: 3, y: 9, name: 'Ada' }) }),
   )
   await until(() => relay(bert).length)
   bert.sent.length = 0
-  store.webSocketMessage(ada, JSON.stringify({ relay: says(CAKE, null) }))
+  await store.webSocketMessage(ada, JSON.stringify({ relay: says(CAKE, null) }))
   await until(() => relay(bert).length)
   assertEquals(relay(bert), says(CAKE, null))
 })
 
 test('a finger lost to an eviction is still taken away', async () => {
   let { ctx, store, watch } = await watching()
-  let ada = watch(), bert = watch()
-  store.webSocketMessage(
+  let ada = await watch(), bert = await watch()
+  await store.webSocketMessage(
     ada,
     JSON.stringify({ relay: says(CAKE, { x: 3, y: 9, name: 'Ada' }) }),
   )
@@ -267,7 +267,7 @@ test('a finger lost to an eviction is still taken away', async () => {
   // … but the keys rode the attachment, so Ada leaving still un-says it.
   bert.sent.length = 0
   late.sent.length = 0
-  woken.webSocketClose(ada)
+  await woken.webSocketClose(ada)
   await until(() => relay(bert).length && relay(late).length)
   assertEquals(relay(bert), says(CAKE, null))
   assertEquals(relay(late), says(CAKE, null))
@@ -275,8 +275,8 @@ test('a finger lost to an eviction is still taken away', async () => {
 
 test('a durable component sent to the relay door is not stored by it', async () => {
   let { store, watch } = await watching()
-  let ada = watch(), bert = watch()
-  store.webSocketMessage(
+  let ada = await watch(), bert = await watch()
+  await store.webSocketMessage(
     ada,
     JSON.stringify({
       relay: [{ entity: { eid: CAKE }, recipe: { serves: 1 } }],
@@ -289,25 +289,30 @@ test('a durable component sent to the relay door is not stored by it', async () 
 
 test('an open-app visitor cannot take or clear another cook’s relayed value', async () => {
   let { store, watch } = await watching(state(), 'open')
-  let ada = watch(), guest = watch({ via: 'guest-browser' }), bert = watch()
-  store.webSocketMessage(ada, JSON.stringify({ relay: says(CAKE, { x: 3 }) }))
+  let ada = await watch(),
+    guest = await watch({ via: 'guest-browser' }),
+    bert = await watch()
+  await store.webSocketMessage(
+    ada,
+    JSON.stringify({ relay: says(CAKE, { x: 3 }) }),
+  )
   await until(() => relay(bert).length)
   bert.sent.length = 0
   for (let comp of [{ x: 9 }, null]) {
-    let attacker = watch({ via: 'other-browser' })
-    store.webSocketMessage(
+    let attacker = await watch({ via: 'other-browser' })
+    await store.webSocketMessage(
       attacker,
       JSON.stringify({ relay: says(CAKE, comp) }),
     )
     await until(() => attacker.sent.some((f) => f.refused))
     assertEquals(attacker.sent.find((f) => f.refused)?.refused?.error, 'Denied')
     assertEquals(relay(bert), [])
-    assertEquals(relay(watch({ by: ADA }, true)), says(CAKE, { x: 3 }))
-    store.webSocketClose(attacker)
+    assertEquals(relay(await watch({ by: ADA }, true)), says(CAKE, { x: 3 }))
+    await store.webSocketClose(attacker)
     assertEquals(relay(bert), [])
   }
   // The rightful sender still owns the lifetime after the refused takeover.
-  store.webSocketClose(ada)
+  await store.webSocketClose(ada)
   await until(() => relay(bert).length)
   assertEquals(relay(bert), says(CAKE, null))
   assertEquals(guest.closed, [])
@@ -315,8 +320,8 @@ test('an open-app visitor cannot take or clear another cook’s relayed value', 
 
 test('relay admission uses the vouched socket actor, ignoring a bundle’s claim', async () => {
   let { store, watch } = await watching(state(), 'open')
-  let guest = watch({ via: 'guest-browser' }), bert = watch()
-  store.webSocketMessage(
+  let guest = await watch({ via: 'guest-browser' }), bert = await watch()
+  await store.webSocketMessage(
     guest,
     JSON.stringify({
       relay: [{ ...says(CAKE, { x: 9 })[0], $actor: { by: ADA } }],
@@ -325,7 +330,7 @@ test('relay admission uses the vouched socket actor, ignoring a bundle’s claim
   await until(() => guest.sent.some((f) => f.refused))
   assertEquals(guest.sent.find((f) => f.refused)?.refused?.error, 'Denied')
   assertEquals(relay(bert), [])
-  assertEquals(relay(watch({ by: ADA }, true)), [])
+  assertEquals(relay(await watch({ by: ADA }, true)), [])
 })
 
 test('a malformed relay batch never leaves a held value for another subscriber', async () => {
@@ -341,13 +346,16 @@ test('a malformed relay batch never leaves a held value for another subscriber',
       ],
     ]
   ) {
-    let ada = watch(), bert = watch()
-    store.webSocketMessage(ada, JSON.stringify({ relay: bad }))
+    let ada = await watch(), bert = await watch()
+    await store.webSocketMessage(ada, JSON.stringify({ relay: bad }))
     await until(() => ada.sent.some((f) => f.refused))
     assertEquals(ada.sent.find((f) => f.refused)?.refused?.error, error)
     assertEquals(relay(bert), [])
-    assertEquals(relay(watch({ by: ADA }, true)), [])
-    assertEquals((await store.door.graph.get([CAKE]))[0].presence, undefined)
+    assertEquals(relay(await watch({ by: ADA }, true)), [])
+    assertEquals(
+      (await (await store.door).graph.get([CAKE]))[0].presence,
+      undefined,
+    )
   }
 })
 
@@ -355,18 +363,21 @@ test('a hibernated editor reconnects for current standing before relaying again'
   let { ctx, store, watch } = await watching()
   let EVE = 'd0000000-0000-4000-8000-000000000004'
   let head = { ...headers(), 'x-yak-person': EVE, 'x-yak-role': 'editor' }
-  await store.door.authenticate(
+  await (await store.door).authenticate(
     new Request('http://store/ws', { headers: head }),
   )
-  let eve = watch({ by: EVE }), bert = watch()
-  store.webSocketMessage(eve, JSON.stringify({ relay: says(CAKE, { x: 3 }) }))
+  let eve = await watch({ by: EVE }), bert = await watch()
+  await store.webSocketMessage(
+    eve,
+    JSON.stringify({ relay: says(CAKE, { x: 3 }) }),
+  )
   await until(() => relay(bert).length)
-  assertEquals(await store.door.graph.get([EVE]), [])
+  assertEquals(await (await store.door).graph.get([EVE]), [])
 
   let woken = new Store(ctx)
   let late = wire()
   ctx.live.push(late)
-  woken.webSocketMessage(
+  await woken.webSocketMessage(
     late,
     JSON.stringify({ subscribe: '.recipe', id: 'r' }),
   )
@@ -379,39 +390,45 @@ test('a hibernated editor reconnects for current standing before relaying again'
   assertEquals(relay(late), [])
 
   // A replacement connection goes through the ordinary handshake's auth seam.
-  await woken.door.authenticate(
+  await (await woken.door).authenticate(
     new Request('http://store/ws', { headers: head }),
   )
   let back = wire({ by: EVE })
   ctx.live.push(back)
-  woken.webSocketMessage(
+  await woken.webSocketMessage(
     back,
     JSON.stringify({ subscribe: '.recipe', id: 'r' }),
   )
-  woken.webSocketMessage(back, JSON.stringify({ relay: says(CAKE, { x: 5 }) }))
+  await woken.webSocketMessage(
+    back,
+    JSON.stringify({ relay: says(CAKE, { x: 5 }) }),
+  )
   await until(() =>
     relay(late).some((b) => (b.presence as { x?: number })?.x == 5)
   )
   assertEquals(back.closed, [])
-  assertEquals(await woken.door.graph.get([EVE]), [])
+  assertEquals(await (await woken.door).graph.get([EVE]), [])
 })
 
 test('an open-app guest can keep moving a new ephemeral entity without storing it', async () => {
   let { ctx, store, watch } = await watching(state(), 'open')
-  let guest = watch({ via: 'guest-browser' }), observer = wire()
+  let guest = await watch({ via: 'guest-browser' }), observer = wire()
   ctx.live.push(observer)
-  store.webSocketMessage(
+  await store.webSocketMessage(
     observer,
     JSON.stringify({ subscribe: '.presence', id: 'p' }),
   )
   let eid = 'e0000000-0000-4000-8000-000000000005'
   for (let x of [1, 2]) {
-    store.webSocketMessage(guest, JSON.stringify({ relay: says(eid, { x }) }))
+    await store.webSocketMessage(
+      guest,
+      JSON.stringify({ relay: says(eid, { x }) }),
+    )
     await until(() =>
       relay(observer).some((b) => (b.presence as { x?: number })?.x == x)
     )
     assertEquals(guest.sent.filter((f) => f.refused), [])
-    assertEquals(await store.door.graph.get([eid]), [])
+    assertEquals(await (await store.door).graph.get([eid]), [])
   }
 })
 
@@ -428,11 +445,14 @@ test('an app-local grant admits a relaying editor with no kernel role', async ()
   let head = headers()
   head['x-yak-person'] = EVE
   delete head['x-yak-role']
-  await store.door.authenticate(
+  await (await store.door).authenticate(
     new Request('http://store/ws', { headers: head }),
   )
-  let eve = watch({ by: EVE }), observer = watch()
-  store.webSocketMessage(eve, JSON.stringify({ relay: says(CAKE, { x: 4 }) }))
+  let eve = await watch({ by: EVE }), observer = await watch()
+  await store.webSocketMessage(
+    eve,
+    JSON.stringify({ relay: says(CAKE, { x: 4 }) }),
+  )
   await until(() => relay(observer).length)
   assertEquals(relay(observer), says(CAKE, { x: 4 }))
   assertEquals(eve.sent.filter((f) => f.refused), [])

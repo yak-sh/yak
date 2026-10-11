@@ -15,6 +15,7 @@ import { PAGES } from './guide.ts'
 import {
   appDoc,
   appVocab,
+  appWords,
   EXAMPLE,
   gitVocab,
   grew,
@@ -27,7 +28,7 @@ import {
   RESERVED,
   unsaid,
 } from './vocab.ts'
-import type { PropSchema, VocabDoc } from '@yaks/vocab'
+import { effectsIn, type PropSchema, type VocabDoc } from '@yaks/vocab'
 import { parseTools } from '@yaks/tools/declared'
 
 // A manifest in the one form, without every test saying `$defs` and
@@ -233,6 +234,22 @@ test('a manifest is refused in the words that fix it', () => {
   for (let word of ['member', 'edge', 'space', 'commit']) {
     assertEquals(RESERVED.includes(word), true, word)
   }
+})
+
+let controlNames = appDoc(says({
+  builder_install: { value: txt },
+  git_mint: { value: txt },
+}))
+let controlWords = appWords(controlNames)
+test('internal controls leave app component names available and keep their declarations', () => {
+  assertEquals(unsaid(controlNames), controlNames)
+  assertEquals(controlWords.vocab.props('builder_install'), ['value'])
+  assertEquals(controlWords.vocab.props('git_mint'), ['value'])
+  assertEquals(
+    effectsIn(controlWords.docs).find((e) => e.name == 'builder_install')
+      ?.start,
+    true,
+  )
 })
 
 let tablesOf = (stmts: Stmt[]) =>

@@ -38,6 +38,7 @@ import { EFFECT } from '@yaks/effects'
 import { answerOf, faulted, structured, toolEid } from '@yaks/tools'
 import { registry, show, terminal } from './answer.ts'
 import { type Config, exported, read, used } from './config.ts'
+import { facetsOf } from '@yaks/host/config'
 import { asides, hosts } from './held.ts'
 import type { Listing } from './subcommands.ts'
 import { VIA } from './rpc.ts'
@@ -72,7 +73,9 @@ export let dutiesOf = (
 ): Role[] =>
   [
     ...vocab.comp(EFFECT) ? ['effects'] : [],
-    ...(config.plugins ?? []).map(used).filter((p) => has(p, 'service')),
+    ...(config.plugins ?? []).filter((p) =>
+      facetsOf(p)?.includes('service') ?? true
+    ).map(used).filter((p) => has(p, 'service')),
   ].filter((r) => !mine.includes(r))
 
 // The graph a command opens: composed for its own roles, with its duty roles

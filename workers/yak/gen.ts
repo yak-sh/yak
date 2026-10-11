@@ -26,7 +26,7 @@
 // literal facet imports that esbuild can bundle without runtime discovery.
 import { front, read } from '@yaks/yaml'
 import { fileURLToPath } from 'node:url'
-import { configs } from './config.ts'
+import { configs, domains } from './config.ts'
 import { imports, loader, type Manifest } from './load-gen.ts'
 
 let HERE = new URL('.', import.meta.url)
@@ -315,7 +315,22 @@ let workspace: { workspace: string[] } = JSON.parse(
 let manifests: Manifest[] = workspace.workspace.map((path) =>
   JSON.parse(Deno.readTextFileSync(new URL(`${path}/deno.json`, root)))
 )
-let loaded = await formatted(loader(imports(Object.values(configs), manifests)))
+let local = Object.fromEntries(
+  Object.entries(domains).flatMap(([plugin, facets]) =>
+    Object.entries(facets).map(([facet, path]) => [`${plugin}/${facet}`, path])
+  ),
+)
+manifests.push(
+  ...Object.entries(domains).map(([name, facets]) => ({
+    name,
+    exports: Object.fromEntries(
+      Object.entries(facets).map(([facet, path]) => [`./${facet}`, path]),
+    ),
+  })),
+)
+let loaded = await formatted(
+  loader(imports(Object.values(configs), manifests), local),
+)
 let files = await packaged()
 if (Deno.args.includes('--check')) {
   let held = await Deno.readTextFile(TARGET).catch(() => '')

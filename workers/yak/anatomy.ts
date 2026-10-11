@@ -13,10 +13,9 @@ import {
   type AnatomyTool,
 } from '@yaks/code/anatomy'
 import type { Effects, Slot } from '@yaks/effects'
-import type { NamedTool, Plugin as GraphPlugin } from '@yaks/graph'
+import type { NamedTool, Plugin as GraphPlugin, Rule } from '@yaks/graph'
 import type { Vocab } from '@yaks/vocab'
 import type { Tools } from '@yaks/tools/declared'
-import type { Plugin } from './plugin.ts'
 
 let value = (input: unknown, key: string): unknown => {
   if (!input || typeof input != 'object') return undefined
@@ -159,9 +158,14 @@ export let workerAnatomy = (vocab: Vocab) => {
         true
     loaded.add('vocab')
   }
-  let graph = (plugins: GraphPlugin[], domains: Plugin[]) =>
-    void owed.push(() => graphed(plugins, domains))
-  let graphed = (plugins: GraphPlugin[], domains: Plugin[]) => {
+  let graph = (
+    plugins: GraphPlugin[],
+    domains: { name: string; rules?: Rule[] }[],
+  ) => void owed.push(() => graphed(plugins, domains))
+  let graphed = (
+    plugins: GraphPlugin[],
+    domains: { name: string; rules?: Rule[] }[],
+  ) => {
     documents()
     source.observed!.roles =
       source.observed!.rules =

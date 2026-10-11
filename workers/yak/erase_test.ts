@@ -36,7 +36,6 @@ import type { Env } from './env.ts'
 import { ai, platform, sandboxes } from './testing.ts'
 import { spending, workbench } from './sandbox.ts'
 import type { Who } from './session.ts'
-import { trashPlugin } from './trash.ts'
 
 let space = (over: Partial<Space> = {}): Space => ({
   eid: 'space-eid',
@@ -221,7 +220,6 @@ test('the trash wake names 04:20 UTC and nothing coarser rounds it off', async (
   ) as { triggers?: unknown }
   // Empty, not absent: a deploy leaves a Worker's crons alone when absent.
   assertEquals(conf.triggers, { crons: [] })
-  assertEquals(trashPlugin.wakes?.[0].wake.every, DAILY)
   let before = Date.parse('2026-09-07T04:19:00Z')
   assertEquals(next(DAILY, before), '2026-09-07T04:20:00.000Z')
 })

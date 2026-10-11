@@ -12,6 +12,7 @@ import {
   connector,
   delivered,
   fakeSub,
+  fresh,
   kernel,
   meta,
   num,
@@ -25,8 +26,9 @@ import {
   vocabFile,
   WEBHOOK_SECRET,
 } from './probe.ts'
-import type { Plugin } from './plugin.ts'
-import { PLUGINS } from './plugins.ts'
+import type { Load } from '@yaks/host'
+import { appConfig } from './config.ts'
+import { load } from './load.ts'
 import { HAS_NOTES } from './standing.ts'
 import { ROOM } from './writes.ts'
 import { managePath } from './route.ts'
@@ -421,18 +423,29 @@ test('store_load writes a load too big for one batch a part at a time', async ()
 // a load that says it did sends the person looking for rows that are not
 // there. A rule that breaks is such a failure, the platform's and not theirs.
 test('a load the store keeps for later is pending, not loaded', async () => {
-  let k = await kernel()
-  let plugin: Plugin = {
-    name: 'fixture',
-    rules: [{
-      name: 'fixture/stray',
-      phase: 'stamp',
-      match: '*shelf',
-      run: () => ({ doc: { title: 'stray' } }),
-    }],
-  }
-  PLUGINS.push(plugin)
+  let configured = { use: 'fixture', words: [] }
+  appConfig.plugins!.push(configured)
+  let fixtureLoad = (async (plugin, facet) => {
+    if (plugin == 'fixture') {
+      return facet == 'graph'
+        ? {
+          plugins: () => [{
+            name: 'fixture',
+            rules: [{
+              name: 'fixture/stray',
+              phase: 'stamp',
+              match: '*shelf',
+              run: () => ({ doc: { title: 'stray' } }),
+            }],
+          }],
+        }
+        : null
+    }
+    return await load(plugin, facet)
+  }) as Load
+  let k: Awaited<ReturnType<typeof fresh>> | undefined
   try {
+    k = await fresh({}, undefined, fixtureLoad)
     let jeff = await signIn(k)
     let agent = connector(k, jeff.cookie)
     await agent.tool('app_new', { slug: 'pantry', title: 'Pantry' })
@@ -459,8 +472,8 @@ test('a load the store keeps for later is pending, not loaded', async () => {
       '[]',
     )
   } finally {
-    PLUGINS.splice(PLUGINS.indexOf(plugin), 1)
-    await k.stop()
+    appConfig.plugins!.splice(appConfig.plugins!.indexOf(configured), 1)
+    await k?.stop()
   }
 })
 

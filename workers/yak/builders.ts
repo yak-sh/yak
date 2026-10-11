@@ -7,12 +7,11 @@
 // reconciles the builder as them, so what it asks a model spends the space's
 // budget like the builder's other calls. It is how a staged builder is tried
 // on a few rows before its mark comes off.
-import { choose, preserve, type Supply, supply } from '@yaks/builders'
-import { watches } from '@yaks/builders/effects'
+import { choose, type Supply, supply } from '@yaks/builders'
 import { modelTool } from '@yaks/builders/model'
 import { type Ask, build } from '@yaks/builders/tools'
 import type { Graph } from '@yaks/graph'
-import { CallError, toolRow } from '@yaks/tools'
+import { CallError } from '@yaks/tools'
 import { KERNEL } from './meta.ts'
 import type { Plugin } from './plugin.ts'
 import {
@@ -242,31 +241,4 @@ let BUILDERS: Row[] = [{
 export let buildersPlugin: Plugin = {
   name: 'builders',
   tools: BUILDERS.map(worded),
-  installs: [async (read, at) => {
-    // A post-boot, no-call provenance pass. It keeps opaque attempt keys,
-    // current outputs and staged builders intact while the store serves.
-    let writes = []
-    if (at.graph.vocab.comp('builder')) {
-      for (let builder of await read('.builder&*')) {
-        writes.push(
-          ...await at.graph.storage.tx((tx) =>
-            preserve(tx, builder, at.graph.vocab)
-          ),
-        )
-      }
-    }
-    if (at.meta || !at.app) return writes
-    let row = toolRow(builderModelTool)
-    let [have] = await read(`.entity.eid=${row.entity.eid}&*`)
-    return JSON.stringify(have?.tool ?? null) == JSON.stringify(row.tool)
-      ? writes
-      : [...writes, row]
-  }],
-  // Handled wherever the vocabulary declares builders, app or not: an effect
-  // row owed to a handler this store never registers stays pending for good,
-  // and keeps the store's alarm coming back for it.
-  effects: [(on, at) => {
-    let { vocab } = at.graph
-    if (vocab.comp('builder')) on.handle(watches({ vocab }))
-  }],
 }

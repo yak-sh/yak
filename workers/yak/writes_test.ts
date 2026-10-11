@@ -70,10 +70,10 @@ let resetting = (o: ReturnType<typeof object>): Namespace => {
 
 // What breaking a deploy looks like from inside: the vocabulary the object
 // boots from no longer loads, so it refuses to start.
-let broken = (o: ReturnType<typeof object>) => {
+let broken = async (o: ReturnType<typeof object>) => {
   // Boot the isolated fixture explicitly before installing a broken deploy.
   // Runtime entry points now defer SQL until their dormancy gate has passed.
-  o.boot()
+  await o.boot()
   keep(o.ctx, 'vocab', 'not json')
   o.wake()
 }
@@ -102,7 +102,7 @@ let titled = (eid: string, title: string, was?: string | null) => ({
 
 test('inspection dry-runs a held write without changing it or the graph', async () => {
   let o = object()
-  broken(o)
+  await broken(o)
   await assertRejects(() => o.apply([titled('n1', 'once')]), Pending)
   db(o.ctx).query({
     t: 'update',
@@ -203,7 +203,7 @@ test('inspection refuses a streaming write without applying it', async () => {
 test('writes a refusing store was sent apply in order, once, when it is mended', async () => {
   let o = object()
   await o.apply([titled('n1', 'zero')])
-  broken(o)
+  await broken(o)
   let kept = [
     titled('n1', 'one', sha256('zero')),
     titled('n1', 'two', sha256('one')),
@@ -268,7 +268,7 @@ test('a batch sent again after a reset lost its answer is applied once', async (
 
 test('an interrupted write keeps its body while reads recover and explicit retry applies once', async () => {
   let o = object()
-  broken(o)
+  await broken(o)
   await assertRejects(() => o.apply([titled('n1', 'once')]), Pending)
   // The earlier attempt marker survives the graph transaction's reset.
   db(o.ctx).query({
@@ -331,7 +331,7 @@ test('an interrupted write keeps its body while reads recover and explicit retry
 
 test('a failed reviewed attempt stays held until another explicit retry', async () => {
   let o = object()
-  broken(o)
+  await broken(o)
   await assertRejects(() => o.apply([titled('n1', 'poison')]), Pending)
   db(o.ctx).query({
     t: 'update',
@@ -441,7 +441,7 @@ test('a reviewed write keeps the composed caller answer', async () => {
 
 test('a legacy pending write waits for review before any replay', async () => {
   let o = object()
-  broken(o)
+  await broken(o)
   let batch = [titled('n0', 'one')]
   await assertRejects(() => o.apply(batch), Pending)
   db(o.ctx).query({
@@ -494,7 +494,7 @@ test('a legacy pending write waits for review before any replay', async () => {
 
 test('a write from an older log shape can be inspected and retried', async () => {
   let o = object()
-  broken(o)
+  await broken(o)
   await assertRejects(() => o.apply([titled('n1', 'kept')]), Pending)
   // The log as that code raised it: no key and no answer, nor their index.
   let d = db(o.ctx)
@@ -528,7 +528,7 @@ test('a write refused on its own input is answered and not kept', async () => {
 
 test('a replay that no longer applies is kept as refused, and the rest go on', async () => {
   let o = object()
-  broken(o)
+  await broken(o)
   await assertRejects(
     () => o.apply([titled('n1', 'one', sha256('nope'))]),
     Pending,

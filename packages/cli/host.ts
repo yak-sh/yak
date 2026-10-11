@@ -85,7 +85,7 @@ import {
   sqliteBlobs,
 } from '@yaks/blob'
 import { type Config, dbOf, given, type Options, used } from './config.ts'
-import { chosen, type Configured } from '@yaks/host/config'
+import { chosen, type Configured, facetsOf } from '@yaks/host/config'
 import { facet } from './words.ts'
 import { assembly, type Facets, type Load, type MeaningHit } from '@yaks/host'
 export { every } from '@yaks/host/roles'
@@ -294,6 +294,7 @@ let named = (config: Config, vault?: Local): Configured[] =>
     used(plug),
     (vault ? revealing(given(plug), vault) : given(plug)) as Options,
     chosen(plug),
+    facetsOf(plug),
   ])
 
 /**
@@ -376,7 +377,9 @@ let composed = async (
   )
   let plugins = named(config, vault)
   let declared = load === facet ? await declarations(config) : undefined
-  let stored = new Map(declared?.vocabs.map((v) => [v.plugin, v]))
+  let stored = new Map(
+    declared?.vocabs.filter((v) => v.value !== null).map((v) => [v.plugin, v]),
+  )
   part?.('roles')
   let observed = compositionAnatomy(
     plugins.map(([p]) => p),

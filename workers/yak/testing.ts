@@ -36,6 +36,7 @@ import { type Snapshot, snapshot } from '../../packages/sqlite/testing.ts'
 import { triggers } from '@yaks/embedding'
 import { Builder } from './build.ts'
 import { ram } from '@yaks/ram'
+import type { Load } from '@yaks/host'
 import { group } from '@yaks/tracker'
 import {
   options as trackerOptions,
@@ -719,7 +720,11 @@ export let limiter = (limit: number, period: number): Limiter => {
  * in, and the platform's own assets off disk (the client an app imports, the
  * guide the builder reads).
  */
-export let platform = (secret: string, vars: Partial<Env> = {}) => {
+export let platform = (
+  secret: string,
+  vars: Partial<Env> = {},
+  load?: Load,
+) => {
   let stores: ReturnType<typeof state>[] = []
   let ownedState = (name?: string) => {
     let ctx = state(name ?? '', name !== undefined)
@@ -746,7 +751,7 @@ export let platform = (secret: string, vars: Partial<Env> = {}) => {
       sockets.set(name, ctx.live)
       recovery.set(name, ctx.pitr)
       states.set(name, ctx)
-      objects.set(name, held = new Store(ctx, env))
+      objects.set(name, held = new Store(ctx, env, undefined, undefined, load))
     }
     return held
   }

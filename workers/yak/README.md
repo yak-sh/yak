@@ -577,6 +577,22 @@ projection, and writes and descriptor storage have a cost. One large app still
 pays a synchronous first-wake backfill; large-data Cloudflare CPU limits need
 monitoring.
 
+## Store composition
+
+`config.ts` selects the directory, app and git stores' plugins, facets and
+words. `gen.ts` writes `load.ts` from those configs and package exports, using
+literal imports for bundled graph and effects facets. Package tools remain at
+the connector's boundary. The Worker's own store facets live under `facets/`.
+
+A Store imports its graph and effects facets before opening its boot
+transaction, then binds them with `@yaks/host` over its storage, vault, blobs
+and named mail sender. Cold reads owe no start-up work. A deployment calls the
+registry's start-up door to install providers and integrations and seed the
+directory's schedules. The configs retain each store kind's existing words; an
+app's own vocabulary shadows the configured words in its store. New internal
+control documents carry `reserved: false`: their effects compose without taking
+names away from app components.
+
 ## Store archetypes
 
 User apps, the platform directory, and the Git object store compose the same

@@ -5,7 +5,7 @@
 // watches a page opens on joining are counted apart.
 import { AsyncLocalStorage } from 'node:async_hooks'
 import { Store } from './graph.ts'
-import type { Bundle } from '@yaks/graph'
+import type { Bundle, Graph } from '@yaks/graph'
 import {
   type DurableStorage,
   profile,
@@ -159,7 +159,7 @@ export let playMinute = async (
     await res.body?.cancel()
   }
   await post('/vocab', words)
-  let g = store.door.graph
+  let g = (await store.door).graph
   let read = g.read.bind(g)
   g.read = (q, opts) => {
     let text = typeof q == 'string' ? q : JSON.stringify(q)
@@ -579,7 +579,7 @@ export let idleWake = async (
       inputSchema: { type: 'object' },
     },
   })
-  let g = store.door.graph
+  let g = (await store.door).graph
   await seedHistory(g, db, 79_000)
   for (let i = 0; i < 100; i++) {
     await store.alarm()
@@ -649,9 +649,9 @@ export let idleWake = async (
     ) {
       current = loads[name] = empty()
       // Cold and warm paths both use the linked production-shaped identities.
-      let rows = await store.door.graph.get([id])
+      let rows = await (await store.door).graph.get([id])
       if (!rows[0]?.[name]) throw new Error(`missing ${name} fixture`)
-      await store.door.graph.get([id])
+      await (await store.door).graph.get([id])
     }
     return {
       total,
@@ -670,7 +670,7 @@ export let idleWake = async (
 // Seed-only storage doors, outside every measured window. Small-table stats
 // precede unrelated retained rows: the test must survive stale production plans.
 export let seedHistory = async (
-  g: Store['door']['graph'],
+  g: Graph,
   db: Parameters<typeof playMinute>[0],
   history: number,
 ) => {
@@ -781,7 +781,7 @@ export let seedHistory = async (
 
 /** Mossvale's stored world rows: gathered nodes, the items they gave and
  * kills, each where it happened, as Vale's page writes them. */
-let seedPlaces = async (g: Store['door']['graph'], n: number) => {
+let seedPlaces = async (g: Graph, n: number) => {
   for (let start = 0; start < n; start += 500) {
     await g.storage.tx((tx) =>
       tx.patch(
