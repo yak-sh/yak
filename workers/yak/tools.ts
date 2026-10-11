@@ -64,7 +64,9 @@ import {
 import { withKinds } from './kinds.ts'
 import type { PropSchema, VocabDoc } from '@yaks/vocab'
 import type { Props, Sheet } from './csv.ts'
-import { mimeOf, prefixOf } from './files.ts'
+import { MAX, mimeOf, prefixOf } from './files.ts'
+import { failedScript } from './asset_url.ts'
+import { told as notify } from './stream.ts'
 import {
   type Access,
   addresses,
@@ -256,9 +258,6 @@ import {
   working,
 } from './versions.ts'
 import { within } from './rate.ts'
-// The one ceiling on bytes going into an app's store, wherever they arrive
-// from: an upload, a drop, or `app_files` fetch.
-import { MAX } from './apps.ts'
 import {
   admin,
   APP,
@@ -1332,15 +1331,20 @@ let released = async (
   app: App,
   who: Who,
   store: Door,
-  { target, reload, preserve = false, base, confirm = false }: {
-    target?: Version
-    reload?: Reload
-    preserve?: boolean
-    base?: number
-    confirm?: boolean
-  } = {},
+  { target, reload, preserve = false, base, confirm = false, expectedVersion }:
+    {
+      target?: Version
+      reload?: Reload
+      preserve?: boolean
+      base?: number
+      confirm?: boolean
+      expectedVersion?: number
+    } = {},
 ): Promise<{ version: number; said: string; review?: DeployReview }> => {
   let standing = await waiting(ctx.dir, space, app, who)
+  if (expectedVersion != null && standing.version != expectedVersion) {
+    throw refuse('stale', `v${expectedVersion} is no longer live`)
+  }
   if (base != null && base > (standing.version ?? 0)) {
     throw refuse(
       'invalid',
@@ -1422,6 +1426,64 @@ let released = async (
     )
   } finally {
     await unfenced(ctx.dir, standing, fence, who)
+  }
+}
+
+/** Recover from the browser failure just accepted by the app_errors intake.
+ * Intake is queued, so rereading the tracker here could miss that occurrence. */
+export let recoverRelease = async (
+  ctx: Ctx,
+  space: Space,
+  app: App,
+  report: { version: number | null; message: string },
+  request: string,
+  mount: string,
+) => {
+  if (
+    report.version == null ||
+    !report.message.startsWith('failed to load script ')
+  ) return
+  let current = await ctx.dir.app(space, app.slug)
+  if (
+    !current || current.eid != app.eid || current.version != report.version ||
+    current.fence
+  ) return
+  let all = await versions(ctx.dir, current)
+  let live = all[0]
+  if (!live || live.version != report.version) return
+  let path = failedScript(report, live, request, mount)
+  if (!path) return
+  // A release after a manual rollback can follow a much older live version.
+  // The deployment's own pointer move records which version it replaced.
+  let moves = await ctx.dir.switches(current)
+  let move =
+    moves.filter((row) =>
+      row.switched?.to == live.eid && row.switched?.source == live.source
+    ).sort((a, b) =>
+      String(a.switched?.at).localeCompare(String(b.switched?.at))
+    )[0]
+  let target = all.find((version) => version.eid == move?.switched?.from)
+  if (!target) return
+  let who: Who = { person: null, role: 'owner', administrative: true }
+  await released(
+    ctx,
+    space,
+    current,
+    who,
+    appStore(ctx.env.STORE, space, current, ctx.env),
+    {
+      target,
+      expectedVersion: live.version,
+    },
+  )
+  for (let person of await ctx.dir.owners(space)) {
+    let data =
+      `${space.slug}/${app.slug} automatically rolled back v${live.version} to v${target.version}: failed to load its own script ${path}`
+    await notify(ctx.env, person, 'notifications/message', {
+      level: 'warning',
+      logger: `${space.slug}/${app.slug}`,
+      data,
+    }, data)
   }
 }
 
@@ -1841,7 +1903,7 @@ export let patched = (
  * library is one call and not a transcription of minified code (T-34337).
  *
  * https only: an app is made of bytes somebody can vouch for. The ceiling is
- * the platform's own (apps.ts MAX), refused on the `content-length` before
+ * the platform's own (files.ts MAX), refused on the `content-length` before
  * the body is read and again on the body itself, since a header is a claim.
  */
 export let fetched = async (said: string) => {

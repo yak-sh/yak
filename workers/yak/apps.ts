@@ -124,6 +124,8 @@ import { edits, mode, reads, writes } from '@yaks/member'
 import type { Door } from './door.ts'
 import { type Clock, clock, timed } from './timing.ts'
 import { fault, noted, refusal, serving } from './unseen.ts'
+import { recoverRelease } from './tools.ts'
+import { ADDRESS } from './route.ts'
 import { caught } from './defects.ts'
 import { full, fullFiles } from './usage.ts'
 import { refusedVisit } from './meter.ts'
@@ -913,7 +915,8 @@ let broken = (body: string) => {
 // else is not what someone meant to put in an app's graph. Exported because
 // `app_files` fetch pulls a file off the web into the same store and must
 // stop in the same place (tools.ts, T-34337).
-export let MAX = 20 * 1024 * 1024
+export { MAX } from './files.ts'
+import { MAX } from './files.ts'
 
 // The bytes' own name (versions.ts `sha256`, the content address a version's
 // manifest is made of) is the object's key and the entity's eid here, so the
@@ -1316,6 +1319,7 @@ let api = async (
   path: string,
   who: Who,
   c: Clock,
+  mount: string,
 ) => {
   // The store client an app's pages import (public/client.js), served beside
   // the doors it wraps so a page needs no address but its own. One file for
@@ -1346,6 +1350,22 @@ let api = async (
         { ...broke, version: broke.version ?? version },
         { env, space, app, request: req },
       )
+      try {
+        await recoverRelease(
+          { env, dir, person: '' },
+          space,
+          app,
+          broke,
+          req.headers.get(ADDRESS) ?? req.url,
+          mount,
+        )
+      } catch (e) {
+        caught(e, {
+          request: 'recover release',
+          space: space.slug,
+          app: app.slug,
+        })
+      }
     }
     return new Response(null, { status: 204 })
   }
@@ -2510,7 +2530,7 @@ let served = async (req: Request, env: Env, c: Clock): Promise<Response> => {
     return wall(reporting(
       await c.time(
         'api',
-        () => api(req, env, dir, space!, app!, path.slice(4), who, c),
+        () => api(req, env, dir, space!, app!, path.slice(4), who, c, at),
       ),
       req,
       at,

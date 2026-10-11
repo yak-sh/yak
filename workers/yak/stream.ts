@@ -63,7 +63,7 @@ let BEAT = 30_000
 
 type Line = { id: number; frame: string }
 type News = { seq: number; lines: Line[] }
-type Told = { method: string; params?: unknown }
+type Told = { method: string; params?: unknown; reply?: string }
 
 // The tool list one session connected against (T-34277): its version and the
 // names themselves, so what a later call compares against is not "it moved"
@@ -234,6 +234,16 @@ export class Wire {
   // listed, or it is a client that sends no session id at all, and those
   // cannot be told apart from each other.
   async roster(said: Asked): Promise<{ line?: string }> {
+    // Important owner notices also wait for a tool reply. An owner who was
+    // offline may reconnect without the event cursor needed to replay news.
+    let pending = said.init
+      ? []
+      : await this.state.storage.get<string[]>('pending') ?? []
+    if (pending.length) await this.state.storage.put('pending', [])
+    let answer = (line?: string) => {
+      let text = [...pending, ...line ? [line] : []].join('\n')
+      return text ? { line: text } : {}
+    }
     let all = await this.state.storage.get<Record<string, Roster>>('listed') ??
       {}
     let was = all[said.session]
@@ -245,12 +255,12 @@ export class Wire {
     }
     if (said.init || !was) {
       await keep()
-      return {}
+      return answer()
     }
-    if (was.version == said.version) return {}
+    if (was.version == said.version) return answer()
     let line = stale(was, said)
     await keep()
-    return line ? { line } : {}
+    return answer(line)
   }
 
   // A client attaching its stream: what it missed, then the line stays open.
@@ -303,6 +313,10 @@ export class Wire {
   // notification has no id and takes no reply, so nothing waits on delivery —
   // the log is what makes it arrive anyway.
   async tell(told: Told): Promise<Response> {
+    if (told.reply) {
+      let pending = await this.state.storage.get<string[]>('pending') ?? []
+      await this.state.storage.put('pending', [...pending, told.reply])
+    }
     let news = await this.log()
     let id = ++news.seq
     news.lines.push({ id, frame: framed(id, told) })
@@ -430,12 +444,13 @@ export let told = async (
   person: string,
   method: string,
   params?: unknown,
+  reply?: string,
 ) => {
   let r = await wireOf(env.WIRE, person)(
     () =>
       new Request('http://wire/tell', {
         method: 'POST',
-        body: JSON.stringify({ method, params }),
+        body: JSON.stringify({ method, params, reply }),
       }),
   )
   await r.body?.cancel()

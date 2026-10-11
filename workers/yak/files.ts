@@ -24,6 +24,9 @@ import { BUILT } from './versions.ts'
 import { parse, WORKER } from './wrangler_app.ts'
 import * as shared from './shared.ts'
 
+/** The ceiling on bytes entering an app, through upload or app_files fetch. */
+export let MAX = 20 * 1024 * 1024
+
 // What the gateway tells this part, in headers rather than the path, because
 // the path is the cache key and these two are not part of what distinguishes
 // one answer from another. The prefix moves when an app's slug moves

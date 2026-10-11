@@ -7,6 +7,7 @@ import type { Env } from './env.ts'
 import { ran, workerBreak } from './dispatch.ts'
 import { platform } from './testing.ts'
 import { call, type Ctx, releaseNotice } from './tools.ts'
+import * as apps from './apps.ts'
 
 let ADA = 'a0000000-0000-4000-8000-0000000000ad'
 let fixture = async (env: Env) => {
@@ -208,11 +209,78 @@ test('rollback selects kept bytes without minting or changing deploys, then depl
   await f.write('one')
   await call(f.ctx, 'app_deploy', f.args)
   await f.write('two')
+  await call(f.ctx, 'app_files', {
+    ...f.args,
+    path: 'main.js',
+    content: "import './missing.js'",
+  })
   await call(f.ctx, 'app_deploy', f.args)
   let before = await f.history()
+  let notices: unknown[] = []
+  let wire = scenario.env.WIRE as unknown as Namespace
+  let env = {
+    ...scenario.env,
+    WIRE: {
+      idFromName: (name: string) => wire.idFromName(name),
+      get: (id: Parameters<Namespace['get']>[0]) => ({
+        fetch: async (req: Request) => {
+          if (new URL(req.url).pathname == '/tell') {
+            notices.push(await req.clone().json())
+          }
+          return wire.get(id).fetch(req)
+        },
+      }),
+    },
+  } as Env
+  let report = async (
+    version: number | null,
+    src: string,
+    message = `failed to load script ${src}`,
+  ) => {
+    let res = await apps.fetch(
+      new Request('https://ada.yaks.app/recipes/api/report', {
+        method: 'POST',
+        body: JSON.stringify({ version, url: src, message }),
+      }),
+      env,
+    )
+    assertEquals(res.status, 204)
+    await res.body?.cancel()
+  }
+  let src = 'https://ada.yaks.app/recipes/main.js'
+  for (
+    let [version, address, message] of [
+      [1, src],
+      [null, src],
+      [2, 'https://elsewhere.test/recipes/main.js'],
+      [2, 'https://ada.yaks.app/another/main.js'],
+      [2, 'https://ada.yaks.app/recipes/api/client.js'],
+      [2, src, 'x is not a function'],
+    ] as [number | null, string, string?][]
+  ) {
+    await report(version, address, message)
+  }
+  let space = (await f.dir.space('ada'))!
+  assertEquals((await f.dir.app(space, 'recipes'))!.version, 2)
+  let releaseId = before[0].source!.split('/').at(-1)
+  await report(
+    2,
+    `https://ada.yaks.app/recipes/api/assets/${releaseId}/main.js`,
+  )
+  assertEquals((await f.dir.app(space, 'recipes'))!.version, 1)
+  assertEquals(await f.history(), before)
+  assertEquals(
+    notices.some((n) =>
+      JSON.stringify(n).includes('automatically rolled back v2 to v1')
+    ),
+    true,
+  )
+  // Repeated reports from the old page do not move the pointer again.
+  await report(2, src)
+  assertEquals((await f.dir.app(space, 'recipes'))!.version, 1)
+  await call(f.ctx, 'app_rollback', { ...f.args, version: 2 })
   await call(f.ctx, 'app_rollback', f.args)
   assertEquals(await f.history(), before)
-  let space = (await f.dir.space('ada'))!
   assertEquals((await f.dir.app(space, 'recipes'))!.version, 1)
   let list = (await call(f.ctx, 'app_versions', f.args)).text
   assertEquals(list.includes('v1 (live)'), true)
@@ -223,9 +291,17 @@ test('rollback selects kept bytes without minting or changing deploys, then depl
   assertEquals(await f.history(), before)
   await call(f.ctx, 'app_rollback', { ...f.args, version: 1 })
   await f.write('three')
+  await call(f.ctx, 'app_files', {
+    ...f.args,
+    path: 'main.js',
+    content: "import './missing.js'",
+  })
   await call(f.ctx, 'app_deploy', f.args)
   assertEquals((await f.history()).map((v) => v.version), [3, 2, 1])
   assertEquals((await f.history()).slice(1), before)
+  // The preceding live version was v1, even though v2 is the prior deploy.
+  await report(3, src)
+  assertEquals((await f.dir.app(space, 'recipes'))!.version, 1)
 })
 
 test('worker errors after rollback and an in-flight pointer move name the routed bytes', async () => {

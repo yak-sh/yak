@@ -7,8 +7,58 @@ import {
   assetMaps,
   assetPath,
   assetUrl,
+  failedScript,
   releaseId,
 } from './asset_url.ts'
+
+test('script failures belong to the reported release and its own file paths', () => {
+  let id = '3c92f71b-848e-4492-95e7-c73402b90ffc'
+  let release = {
+    version: 2,
+    source: `ada/.releases/app/${id}`,
+    files: { 'main.js': 'sha' },
+  }
+  let request = 'https://ada.yaks.app/cookbook/api/report'
+  let check = (src: string, version: number | null = 2, mount = '/cookbook/') =>
+    failedScript(
+      { version, message: `failed to load script ${src}` },
+      release,
+      request,
+      mount,
+    )
+  assertEquals(check('https://ada.yaks.app/cookbook/main.js'), 'main.js')
+  assertEquals(check(`/cookbook/api/assets/${id}/main.js?v=1`), 'main.js')
+  assertEquals(check(`/api/assets/${id}/main.js`, 2, '/'), 'main.js')
+  assertEquals(
+    check(
+      `/cookbook/~ticket/api/assets/${id}/main.js`,
+      2,
+      '/cookbook/~ticket/',
+    ),
+    'main.js',
+  )
+  for (
+    let src of [
+      'https://elsewhere.test/cookbook/main.js',
+      '/another/main.js',
+      '/cookbook/api/client.js',
+      '/cookbook/missing.js',
+      '/cookbook/api/assets/00000000-0000-4000-8000-000000000000/main.js',
+      '/cookbook/%ZZ.js',
+    ]
+  ) assertEquals(check(src), null)
+  assertEquals(check('/cookbook/main.js', 1), null)
+  assertEquals(check('/cookbook/main.js', null), null)
+  assertEquals(
+    failedScript(
+      { version: 2, message: 'x is not a function' },
+      release,
+      request,
+      '/cookbook/',
+    ),
+    null,
+  )
+})
 
 test('release URLs keep local assets under their mount', () => {
   let id = '3c92f71b-848e-4492-95e7-c73402b90ffc'

@@ -15,6 +15,40 @@ export let assetPath = (path: string) => {
   return found ? { release: found[1], path: `/${found[2]}` } : null
 }
 
+/** A browser resource failure naming a file of this release. The entry
+ * script is reported even when a dependency, rather than the entry, is absent. */
+export let failedScript = (
+  report: { version?: number | null; message: string },
+  release: {
+    version: number
+    source?: string | null
+    files: Record<string, string>
+  },
+  request: string,
+  mount: string,
+) => {
+  if (report.version != release.version) return null
+  let match = /^failed to load script (\S+)$/.exec(report.message)
+  if (!match) return null
+  try {
+    let base = new URL(mount, request)
+    let url = new URL(match[1], base)
+    if (url.origin != base.origin || !url.pathname.startsWith(base.pathname)) {
+      return null
+    }
+    let path = url.pathname.slice(base.pathname.length)
+    if (path.startsWith('api/')) {
+      let asset = assetPath('/' + path.slice(4))
+      if (!asset || asset.release != releaseId(release.source)) return null
+      path = asset.path.slice(1)
+    }
+    path = decodeURIComponent(path)
+    return Object.hasOwn(release.files, path) ? path : null
+  } catch {
+    return null
+  }
+}
+
 /** Where a release asset's reference to the app's API belongs. A release
  * holds the app's files and never its API, but a module's `./api/client.js`
  * resolves against the module's own address, below the release. The answer

@@ -99,6 +99,7 @@ import { lost, oops, provisioning } from './pages.ts'
 import { callback, hook } from './connections.ts'
 import { answer as seo } from './seo.ts'
 import {
+  ADDRESS,
   aimedAt,
   foreign,
   guarded,
@@ -368,11 +369,16 @@ let aimed = async (req: Request, env: Env, host: string) => {
     .serves(host)
   if (!at) return null
   let url = new URL(req.url)
+  let address = new URL(req.url)
+  address.host = host
+  address.port = ''
+  address.protocol = 'https:'
   let to = aimedAt(at.space.slug, at.app?.slug ?? null, url.pathname, env)
   url.protocol = 'https:'
   url.host = to.host
   url.pathname = to.pathname
   let headers = new Headers(req.headers)
+  headers.set(ADDRESS, address.href)
   if (to.mount) headers.set(MOUNT, to.mount)
   return new Request(url, new Request(req, { headers }))
 }
@@ -457,9 +463,10 @@ let preflight = (req: Request) =>
 // A header only the router writes: whatever a client sent under that name is
 // gone before anything reads it.
 let unmounted = (req: Request) => {
-  if (!req.headers.has(MOUNT)) return req
+  if (!req.headers.has(MOUNT) && !req.headers.has(ADDRESS)) return req
   let headers = new Headers(req.headers)
   headers.delete(MOUNT)
+  headers.delete(ADDRESS)
   return new Request(req, { headers })
 }
 

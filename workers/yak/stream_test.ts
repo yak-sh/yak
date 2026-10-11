@@ -32,6 +32,27 @@ let drained = (wire: Wire) => {
   for (let held of [...wire.open]) wire.drop(held)
 }
 
+test('a retained owner notice survives eviction and rides one reply after reconnecting', async () => {
+  let storage = kvStorage()
+  let wire = new Wire({ storage }, {})
+  await wire.fetch(
+    new Request('http://wire/tell', {
+      method: 'POST',
+      body: JSON.stringify({
+        method: 'notifications/message',
+        params: { data: 'rolled back' },
+        reply: 'rolled back',
+      }),
+    }),
+  )
+  wire = new Wire({ storage }, {})
+  let ask = (init = false) =>
+    wire.roster({ session: 'fresh', version: 'same', names: [], init })
+  assertEquals(await ask(true), {})
+  assertEquals(await ask(), { line: 'rolled back' })
+  assertEquals(await ask(), {})
+})
+
 test('a stream resuming across a release hears the lists moved', async () => {
   let storage = kvStorage()
   let wire = new Wire({ storage }, {})

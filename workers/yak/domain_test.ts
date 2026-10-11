@@ -181,6 +181,31 @@ test('a hostname finds its app, and only one app', async () => {
     )
     let still = await k.at(herbusiness101, '/')
     assertStringIncludes(await still.text(), 'Our recipe box')
+    await owner.put('/main.js', "import './missing.js'")
+    await owner.put(
+      '/index.html',
+      '<script type="module" src="./main.js"></script>',
+    )
+    let agent = connector(k, cookie)
+    await agent.tool('app_deploy', { space: jeff9, app: 'recipes' })
+    let failed = await k.at(herbusiness101, '/api/report', {
+      method: 'POST',
+      body: JSON.stringify({
+        version: 3,
+        url: `https://${herbusiness101}/main.js`,
+        message: `failed to load script https://${herbusiness101}/main.js`,
+      }),
+    })
+    assertEquals(failed.status, 204)
+    await failed.body?.cancel()
+    assertStringIncludes(
+      await agent.tool('app_versions', { space: jeff9, app: 'recipes' }),
+      'v2 (live)',
+    )
+    assertStringIncludes(
+      await (await k.at(herbusiness101, '/')).text(),
+      'Our recipe box',
+    )
   } finally {
     await k.stop()
   }

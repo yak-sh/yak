@@ -182,6 +182,9 @@ export let ORIGIN = `origin.saas.${PLATFORM}`
 // move an app's address from outside.
 export let MOUNT = 'x-yak-mount'
 
+/** The browser-facing URL retained when the router aims a custom domain. */
+export let ADDRESS = 'x-yak-address'
+
 export type Route = {
   // null at the apex
   space: string | null
