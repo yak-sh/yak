@@ -674,7 +674,23 @@ export let handler = {
     within(
       env,
       {},
-      async () => slid(req, env, await router.fetch(req, env)),
+      async () => {
+        let res = await slid(req, env, await router.fetch(req, env))
+        // Every gateway answer, including refusals and failures, carries the
+        // transport policy. Rebuilding also handles immutable asset headers;
+        // an upgrade keeps the runtime's socket, just as dispatch.ts does.
+        let headers = new Headers(res.headers)
+        headers.set(
+          'strict-transport-security',
+          'max-age=31536000; includeSubDomains',
+        )
+        return new Response(res.body, {
+          status: res.status,
+          statusText: res.statusText,
+          headers,
+          webSocket: (res as { webSocket?: unknown }).webSocket,
+        } as ResponseInit)
+      },
       undefined,
       {
         origin: origin(
