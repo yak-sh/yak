@@ -11,6 +11,9 @@ export type Statements = {
   ownership: 'exclusive' | 'shared'
   /** Compound-select limit of the adapter's statement engine. */
   arms?: number
+  /** Entity rows point at the standard archetype table. A null pointer still
+   * needs component-table presence checks until it is classified. */
+  archetypes?: boolean
   /** Invalidation tokens include writes, DDL and rollback, and other hosts. */
   revision: (scope: 'schema' | 'catalog' | 'data') => number
   /** A synchronous unit on the adapter's transaction, nested where needed. */

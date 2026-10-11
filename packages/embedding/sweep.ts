@@ -13,6 +13,7 @@
 
 import type { Eid } from '@yaks/graph'
 import {
+  and,
   as,
   at,
   col,
@@ -20,9 +21,11 @@ import {
   exists,
   fn,
   from,
+  isNull,
   join,
   lit,
   not,
+  or,
   select,
   type Statements,
   sub,
@@ -30,7 +33,7 @@ import {
   val,
 } from '@yaks/sql'
 import { type Embedder, hash, Refused } from './embedder.ts'
-import { type Field, pieces } from './fields.ts'
+import { allowed, type Field, pieces } from './fields.ts'
 import { TABLE } from './ddl.ts'
 import { due, left, owe, paid, watch } from './owed.ts'
 import { pack, unit } from './vector.ts'
@@ -80,7 +83,30 @@ export let sources = (
   owners?: number[],
 ): Source[] => {
   let s = at('s'), o = at('o'), e = at('e')
-  let rows = pieces(fields, owners, db.arms).flatMap((text) =>
+  // Shared exclusions are one property of the owner. Its descriptor answers
+  // all of them in one seek, rather than seeking every excluded table for
+  // every text field. Partial and older stores keep the physical-table check.
+  let excluded = fields[0]?.not ?? []
+  let classified = db.archetypes && excluded.length > 0 &&
+    fields.every((f) => JSON.stringify(f.not ?? []) == JSON.stringify(excluded))
+  let a = at('a')
+  let eligibility = classified
+    ? or(
+      and(
+        not(isNull(a('entity'))),
+        ...excluded.map((name) =>
+          eq(fn('instr', a('tables'), val(JSON.stringify(name))), lit(0))
+        ),
+      ),
+      and(isNull(a('entity')), ...allowed(fields[0], s('owner'))),
+    )
+    : undefined
+  let rows = pieces(
+    fields,
+    owners,
+    db.arms,
+    classified ? () => [] : allowed,
+  ).flatMap((text) =>
     db.query(select({
       cols: [
         as(o('id'), 'owner'),
@@ -92,17 +118,27 @@ export let sources = (
       from: from(text, 's'),
       joins: [
         join(table('entity', 'o'), eq(o('id'), s('owner'))),
+        ...classified
+          ? [{
+            how: 'left' as const,
+            src: table('archetype', 'a'),
+            on: eq(a('entity'), o('archetype')),
+          }]
+          : [],
         {
           how: 'left',
           src: table(TABLE, 'e'),
           on: eq(e('owner'), s('owner')),
         },
       ],
-      where: not(exists(select({
-        cols: [lit(1)],
-        from: table('tombstone', 't'),
-        where: eq(col('entity', 't'), s('owner')),
-      }))),
+      where: and(
+        ...eligibility ? [eligibility] : [],
+        not(exists(select({
+          cols: [lit(1)],
+          from: table('tombstone', 't'),
+          where: eq(col('entity', 't'), s('owner')),
+        }))),
+      ),
     }))
   )
   return assemble(

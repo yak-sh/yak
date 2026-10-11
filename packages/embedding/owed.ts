@@ -94,9 +94,9 @@ let trigger = (
  * The triggers that keep the queue: for each component a field lives on, its
  * rows arriving, changing and leaving; for text an entity is found by through
  * another component (`on`), that component arriving and leaving too, and the
- * text counting only while it does; an entity with a vector being deleted or
- * restored; and a vector deleted by anything but the sweep, which is owed
- * back.
+ * text counting only while it does; exclusions arriving and leaving; an entity
+ * with a vector being deleted or restored; and a vector deleted by anything
+ * but the sweep, which is owed back.
  */
 export let triggers = (fields: Field[]): CreateTrigger[] => {
   let groups = new Map<string, Field[]>()
@@ -120,6 +120,20 @@ export let triggers = (fields: Field[]): CreateTrigger[] => {
           : [],
       ]
     }),
+    ...[...new Set(fields.flatMap((f) => f.not ?? []))].flatMap((name) => [
+      trigger(`exclude:${name}_insert`, 'insert', name, NEW, wears(TABLE, NEW)),
+      trigger(
+        `exclude:${name}_delete`,
+        'delete',
+        name,
+        OLD,
+        or(
+          ...fields.filter((f) => f.not?.includes(name)).map((f) =>
+            and(wears(f.comp, OLD), ...f.on ? [wears(f.on, OLD)] : [])
+          ),
+        ),
+      ),
+    ]),
     ...fields.length
       ? [
         trigger(
@@ -286,7 +300,10 @@ export let owe = (
     where: tables ? held(col('owner', TABLE)) : undefined,
   })
   let worn = tables
-    ? fields.filter((f) => tables.has(f.comp) || !!f.on && tables.has(f.on))
+    ? fields.filter((f) =>
+      tables.has(f.comp) || !!f.on && tables.has(f.on) ||
+      f.not?.some((name) => tables.has(name))
+    )
     : fields
   for (let q of [...wearers(worn, db.arms), vectors]) {
     db.query(

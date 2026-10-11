@@ -671,7 +671,9 @@ export let storage = (
     else install()
   }
   return {
-    statements: statements(driver),
+    statements: classified
+      ? { ...statements(driver), archetypes: true }
+      : statements(driver),
     checks: diagnostics(driver),
     migrations: migrations(driver),
     revision: () => revision(driver, 'data'),

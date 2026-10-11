@@ -120,6 +120,7 @@ import {
   type Raw,
   render,
   select,
+  type Statements,
   type Stmt,
   table,
   val,
@@ -820,7 +821,7 @@ export class Store {
   // store narrows a search by a filter line, and the drain of its queue in
   // progress (`#embedding`).
   #texts!: {
-    sql: Driver
+    statements: Statements
     fields: Text[]
     screen: (line: string) => Raw | null
   }
@@ -1070,7 +1071,9 @@ export class Store {
     let bytes = sqliteBlobs(drive)
     let store!: ReturnType<typeof sqliteStorage>
     this.#texts = {
-      sql: drive,
+      get statements() {
+        return store.statements
+      },
       fields: texts(vocab, derived),
       screen: (line) => store.screen(line),
     }
@@ -2363,7 +2366,7 @@ export class Store {
     // by another, every text owes its vector again (`#embedding` below).
     let model = embedder(this.#bind)
     if (model) {
-      remodel(statements(this.#texts.sql), this.#texts.fields, model.model)
+      remodel(this.#texts.statements, this.#texts.fields, model.model)
     }
     // The platform's own stores keep their schema pages as ordinary
     // entities, made by the package that owns their identities (an app's
@@ -2614,7 +2617,7 @@ export class Store {
   // schema is not standing yet owes nothing: it has no table to owe it in.
   #owes = () =>
     !!this.#texts && !!this.#get('schema') &&
-    unembedded(statements(this.#texts.sql), 1).length > 0
+    unembedded(this.#texts.statements, 1).length > 0
 
   #embedding = () => {
     if (this.#dormant) return
@@ -2629,8 +2632,8 @@ export class Store {
     this.#vectorWork = (async () => {
       do {
         this.#vectorAgain = false
-        let { sql, fields } = this.#texts
-        let done = await drain(statements(sql), fields, model, {
+        let { statements: db, fields } = this.#texts
+        let done = await drain(db, fields, model, {
           signal: AbortSignal.timeout(Store.EMBED),
         })
         if (this.#dormant) return
@@ -3299,9 +3302,9 @@ export class Store {
       if (!model) return Response.json([])
       try {
         let within = at.get('within')
-        let { sql, fields, screen } = this.#texts
+        let { statements: db, fields, screen } = this.#texts
         return Response.json(
-          await meaning(statements(sql), fields, model, at.get('q') ?? '', {
+          await meaning(db, fields, model, at.get('q') ?? '', {
             limit: Number(at.get('limit') ?? 20),
             screen: within ? () => screen(within) : undefined,
           }),

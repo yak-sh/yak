@@ -117,12 +117,12 @@ let WS = ' \t\n\r\v\f'
 
 // The condition that leaves out entities wearing a component marked
 // `embed: false`.
-let allowed = (f: Field): Expr[] =>
+export let allowed = (f: Field, owner: Expr = col('entity', 'c')): Expr[] =>
   (f.not ?? []).map((comp) =>
     not(exists(select({
       cols: [lit(1)],
       from: table(comp, 'x'),
-      where: eq(col('entity', 'x'), col('entity', 'c')),
+      where: eq(col('entity', 'x'), owner),
     })))
   )
 
@@ -140,12 +140,14 @@ let scope = (f: Field) =>
  * which is how the sweep reads only what it owes. One compound statement per
  * `arms` fields, since an engine bounds the terms one may carry (@yaks/sql
  * `ARMS`: a Durable Object's SQLite takes five); none for a vocabulary with no
- * text properties at all.
+ * text properties at all. A caller that checks the owner after joining it can
+ * supply `eligible` to replace the component-table checks in each piece.
  */
 export let pieces = (
   fields: Field[],
   owners?: number[],
   arms = ARMS,
+  eligible: (field: Field) => Expr[] = allowed,
 ): Query[] =>
   cut(fields.map((f, i) => [f, i] as const), arms)
     .filter((group) => group.length)
@@ -167,7 +169,7 @@ export let pieces = (
           joins: scope(f),
           where: and(
             some,
-            ...allowed(f),
+            ...eligible(f),
             ...owners ? [oneOf(col('entity', 'c'), owners)] : [],
           ),
         })
