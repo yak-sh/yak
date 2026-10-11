@@ -3140,6 +3140,10 @@ export class Store {
         throw new Refused('/apply takes a JSON array of bundles')
       }
       let kernel = request.headers.get('x-yak-kernel') == '1'
+      // Only trusted bookkeeping may preserve the last write's provenance.
+      if (kernel && new URL(request.url).searchParams.get('stamp') == '0') {
+        opts = { ...opts, stamp: false }
+      }
       let who = kernel ? null : await this.#auth(request)
       body = this.#spokenWrites(request, body)
       let apply = async () => {

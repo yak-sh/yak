@@ -666,7 +666,8 @@ equal(compile(parse('.entity.num=3,4'), vocab).params, [])
 [Reverse associations](../vocab/README.md#routing-and-references) compile to
 correlated EXISTS or count subqueries, which preserve one outer row per entity.
 `.refs=<eid>` finds backlinks across reference properties, grouping columns by
-table and cutting compound selects to fit the engine limit.
+table and cutting compound selects to fit the engine limit. Each backlink
+predicate binds its target once, regardless of the number of reference columns.
 [Walks](../query/README.md#walks-and-qualifiers) compile reference chains to a
 recursive common table expression. The exported `walk` accepts a one-step query
 projecting `from` and `to` integer ids; edge packages supply their own step.
@@ -696,7 +697,7 @@ let vocab = loadVocab({
 equal(compile(parse('.reviews>=5'), vocab).params, [5])
 equal(compile(parse('.reviews.review.stars=5'), vocab).params, [5])
 equal(compile(parse('.review.book.book'), vocab).sql.includes('"__pl"'), true)
-equal(compile(parse('.refs=b1'), vocab).params, ['b1', 'b1'])
+equal(compile(parse('.refs=b1'), vocab).params, ['b1'])
 equal(compile(parse('.fork.from[<=3]->b1'), vocab).params, ['b1', 3])
 ```
 

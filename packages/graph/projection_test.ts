@@ -36,6 +36,7 @@ test('a read answers the components its query names', () => {
       ['.file&?module', ['file', 'module']],
       ['.module&.symbol.module=m1', ['module', 'symbol']],
       ['.file&!doc', ['file']],
+      ['(.file|.module)&?doc', ['doc', 'file', 'module']],
       ['id=f1', ['*']],
       // a projection carries the components its paths start from
       ['.file&.fields=doc.title', ['doc']],

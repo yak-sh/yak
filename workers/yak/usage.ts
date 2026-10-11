@@ -311,8 +311,10 @@ export let sweep = async (env: Env, now = new Date()) => {
       ...(space.tier ? {} : { plan: { tier: 'free' } }),
     })
   }
-  if (turned.length) await stamp(env, { entities: turned })
-  if (entities.length) await stamp(env, { entities })
+  // A reading is maintenance, not use. Keep the existing last-write stamps;
+  // spends and app byte reports still refresh them at their own doors.
+  if (turned.length) await stamp(env, { entities: turned }, { stamp: false })
+  if (entities.length) await stamp(env, { entities }, { stamp: false })
   let account = answer && accountOf(answer, now)
   if (account) await accountAlert(env, account)
   return entities.length + (account ? 1 : 0)

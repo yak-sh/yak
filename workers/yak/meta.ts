@@ -30,6 +30,7 @@ export type Meta = {
   apply: (
     bundles: Bundle[],
     headers?: Record<string, string>,
+    opts?: { stamp?: boolean },
   ) => Promise<Bundle[]>
   /** words → the entities a filter line selects, nearest them in meaning
    * first, where the store keeps vectors (graph.ts `/meaning`) */
@@ -91,24 +92,29 @@ export let metaOf = (
       base,
     )
   },
-  apply: (bundles, headers = {}) => {
-    return store.consume('/apply', async (r) => {
-      // A precondition that no longer holds (409, @yaks/api refuse.ts) comes
-      // back as the graph's own `Stale`, so a caller that wrote on `$was` can
-      // tell "read again" from a failure.
-      if (r.status == 409) {
-        let s = await r.json() as Stale
-        throw new Stale(s.eid, s.comp, s.prop, s.current)
-      }
-      // Kept by the store's write log and applied later (writes.ts): the
-      // batch as applied does not exist yet, so there is nothing to return.
-      if (r.status == 202) throw new Pending(await said(r))
-      if (!r.ok) throw await answered(r)
-      return await r.json() as Bundle[]
-    }, {
-      method: 'POST',
-      body: JSON.stringify(bundles),
-    }, { ...base, ...headers })
+  apply: (bundles, headers = {}, opts = {}) => {
+    return store.consume(
+      opts.stamp === false ? '/apply?stamp=0' : '/apply',
+      async (r) => {
+        // A precondition that no longer holds (409, @yaks/api refuse.ts) comes
+        // back as the graph's own `Stale`, so a caller that wrote on `$was` can
+        // tell "read again" from a failure.
+        if (r.status == 409) {
+          let s = await r.json() as Stale
+          throw new Stale(s.eid, s.comp, s.prop, s.current)
+        }
+        // Kept by the store's write log and applied later (writes.ts): the
+        // batch as applied does not exist yet, so there is nothing to return.
+        if (r.status == 202) throw new Pending(await said(r))
+        if (!r.ok) throw await answered(r)
+        return await r.json() as Bundle[]
+      },
+      {
+        method: 'POST',
+        body: JSON.stringify(bundles),
+      },
+      { ...base, ...headers },
+    )
   },
   meaning: (words, opts = {}) => {
     let at = new URLSearchParams({ q: words })

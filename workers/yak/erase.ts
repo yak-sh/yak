@@ -63,6 +63,15 @@ import { type Bundle, token } from '@yaks/graph'
 import { declarationOf, keepDeclaration } from './declaration.ts'
 import { sandboxed } from './installed.ts'
 import { isTestAddress } from './lib/bots.ts'
+import {
+  CENSUS,
+  IDLE,
+  idleSpaces,
+  inactive,
+  PROTECTED,
+  type Row,
+} from './idle-spaces.ts'
+import { meta } from './meta.ts'
 import { opened, seal } from './lib/token.ts'
 import { wiped } from './build.ts'
 import { reachChanged, toolsOf, viewsMoved } from './declared.ts'
@@ -723,7 +732,8 @@ let retitled = async (
 }
 
 export let collected = async (env: Env, now = new Date()) => {
-  let dir = directory(bound(env.DIRECTORY, dirPart.fetch, env))
+  let dir = directory(bound(env.DIRECTORY, dirPart.fetch, env), true)
+  let idle = new Set(await abandoned(env, now))
   let gone = 0
   // Every app left standing when the erasures are done, which is exactly the
   // set of things that can name a pinned blob. It is collected rather than
@@ -738,7 +748,23 @@ export let collected = async (env: Env, now = new Date()) => {
     // Never the directory itself, whatever its row says: the app that holds
     // every space on the platform is not one a sweep may erase (`refused`
     // above and tools.ts app_delete hold the same line at the doors).
-    let sweepable = space.slug != META.space
+    let sweepable = !PROTECTED.has(space.slug)
+    // Other requests can write while an external read yields. Read the
+    // present again before starting the same irreversible erase as the tool.
+    if (
+      sweepable && idle.has(space.eid) &&
+      (await abandoned(env, now, space.eid)).includes(space.eid)
+    ) {
+      let d = await doomed(dir, space)
+      if (
+        !refused(space, env) && await nobodys(dir, d) &&
+        !d.apps.some((a) => a.published)
+      ) {
+        await erase(env, dir, d, { person: d.members[0].person, role: 'owner' })
+        gone++
+        continue
+      }
+    }
     if (sweepable && space.trashed && due(space.trashed, now.getTime())) {
       await erase(env, dir, await doomed(dir, space), {
         person: space.trashed.by,
@@ -788,4 +814,44 @@ export let collected = async (env: Env, now = new Date()) => {
   if (notes) console.log(`yak-trash: ${notes} AGENTS.md renamed to ${NOTES}`)
   if (unpinned) console.log(`yak-trash: ${unpinned} pinned blobs let go`)
   return gone
+}
+
+// No app store is woken by the preview. R2's own upload times also keep recent
+// file edits alive, even when nobody deployed them or wrote app data.
+export let abandoned = async (env: Env, now = new Date(), only?: string) => {
+  let rows = await meta(env).query(CENSUS) as unknown as Row[]
+  let eligible = new Set(idleSpaces(rows, now.getTime()))
+  let dir = directory(bound(env.DIRECTORY, dirPart.fetch, env), true)
+  let result: string[] = []
+  for (let space of await dir.all()) {
+    if (only && space.eid != only) continue
+    if (!eligible.has(space.eid) || refused(space, env)) continue
+    // All existing directory references carry their last-write stamps: memory,
+    // connections, deploys, space or app hostnames, invitations and reports.
+    // Ask generically so a new space-owned record needs no cleanup whitelist.
+    let apps = await dir.apps(space)
+    let refs = [space.eid, ...apps.map((app) => app.eid)]
+    let used = false
+    // Plus spaces have no app ceiling; each read must stay under the
+    // directory's parameter and SQL statement-size limits.
+    for (let i = 0; i < refs.length && !used; i += 5) {
+      let writes = await meta(env).query(
+        `(${
+          refs.slice(i, i + 5).map((eid) => `.refs=${eid}`).join(' | ')
+        }) ?created ?updated`,
+      ) as unknown as Row[]
+      used = !inactive(writes, now.getTime())
+    }
+    if (used) continue
+    let cursor: string | undefined
+    do {
+      let page = await env.BLOBS.list({ prefix: `${space.slug}/`, cursor })
+      used ||= page.objects.some((o) =>
+        !(o.uploaded.getTime() <= now.getTime() - IDLE)
+      )
+      cursor = page.truncated ? page.cursor : undefined
+    } while (cursor && !used)
+    if (!used) result.push(space.eid)
+  }
+  return result
 }

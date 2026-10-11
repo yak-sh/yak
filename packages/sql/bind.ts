@@ -817,20 +817,31 @@ let refsUnion = (ctx: Ctx, r: Refs): Cond => {
 // `refs` selects nothing.
 let inRefs = (ctx: Ctx, refs: [string, string][], value: string): Cond => {
   if (!refs.length) return FALSE
-  let at = `(select id from ${source(ctx, 'entity')} where eid = ?)`
+  // Bind the target once, not once per reference column:
+  // a wide vocabulary must still fit the runtime's 100-parameter limit.
+  let name = '__refs_target'
+  while (ctx.v.comp(name)) name += '_'
+  let target = `with "${name}" as (select id from ${
+    source(ctx, 'entity')
+  } where eid = ?)`
+  let at = `(select id from "${name}")`
   let sub = ([c, props]: Arm) =>
     `select ${ctx.d.ownerKey(c)} from ${ctx.d.table(c)} where ` +
     props.map((p) => `${refKey(ctx, c, p)} = ${at}`).join(' or ')
-  return or(
-    ...cut(arms(refs), ARMS).map((group) =>
-      cond({
-        sql: `${ctx.d.ownerKey('entity')} in (${
-          group.map(sub).join(' union ')
-        })`,
-        params: group.flatMap(([, props]) => props.map(() => value)),
-      })
-    ),
+  let alias = '__refs_entity'
+  let groups = cut(arms(refs), ARMS).map((group) =>
+    cond({
+      sql: `"${alias}".id in (${group.map(sub).join(' union ')})`,
+      params: [],
+    })
   )
+  let where = render(or(...groups)).sql
+  return cond({
+    sql: `${ctx.d.ownerKey('entity')} in (${target} select "${alias}".id from ${
+      source(ctx, 'entity')
+    } "${alias}" where ${where})`,
+    params: [value],
+  })
 }
 
 // An OR compiles to a UNION of selections, never to a disjunction in the WHERE

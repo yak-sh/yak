@@ -493,18 +493,18 @@ test('.refs= groups its arms and cuts them to what a compound may carry', () => 
     } as VocabDoc['$defs'],
   })
   let { sql, params } = compile(parse('.refs=a1'), wide)
-  // Eight columns, one bound param each; seven arms, because a table's two
-  // columns are one term, OR'd.
-  assertEquals(params, Array(8).fill('a1'))
+  // A target is bound once, independently of column count or union count.
+  assertEquals(params, ['a1'])
+  assertEquals(compile(parse('.refs=a1|.refs=a2'), wide).params, ['a1', 'a2'])
   assert(
     sql.includes(
-      '"pair"."left" = (select id from "entity" where eid = ?) or ' +
-        '"pair"."right" = (select id from "entity" where eid = ?)',
+      '"pair"."left" = (select id from "__refs_target") or ' +
+        '"pair"."right" = (select id from "__refs_target")',
     ),
     sql,
   )
   // Two groups of at most four arms, and nothing else in the statement unions.
-  let compounds = sql.split('"entity"."id" in (').slice(1)
+  let compounds = sql.split('"__refs_entity".id in (').slice(1)
     .map((piece) => piece.split(/\bunion\b/i).length)
   assertEquals(compounds, [4, 3])
   for (let terms of compounds) assert(terms <= ARMS, `${terms} terms: ${sql}`)

@@ -653,8 +653,9 @@ export let fetch = (
 export let stamp = async (
   env: { STORE: Namespace },
   mutation: { entities: Bundle[] },
+  opts?: { stamp?: boolean },
 ) => {
-  await metaStore(env).apply(mutation.entities, KERNEL)
+  await metaStore(env).apply(mutation.entities, KERNEL, opts)
   cached(metaStore(env)).clear()
 }
 

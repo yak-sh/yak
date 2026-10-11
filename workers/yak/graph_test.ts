@@ -996,6 +996,18 @@ test('a property that holds nothing may change its type', async () => {
     assert(applied.every((b) => b.entity.num == null))
     assert(applied.some((b) => by(b) == ADA))
 
+    // A caller cannot turn off provenance with the trusted bookkeeping option.
+    let changed = await post(store, '/apply?stamp=0', [{
+      entity: { eid: CAKE },
+      recipe: { serves: 8 },
+    }], owner)
+    assertEquals(changed.status, 200)
+    let edited = await changed.json() as Bundle[]
+    assert(
+      edited.map((b) => b.updated as Comp | undefined)
+        .some((stamp) => stamp?.by == ADA && stamp?.at),
+    )
+
     // An answer carries the components the line names and no more, so the doc
     // is asked for beside the recipe (@yaks/graph `wanted`).
     let read = await (await get(

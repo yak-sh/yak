@@ -12,6 +12,7 @@ import { accountOf, filesOf, full, fullFiles, read, sweep } from './usage.ts'
 import { directory } from './directory.ts'
 import * as dirPart from './directory.ts'
 import { platform } from './testing.ts'
+import { meta } from './meta.ts'
 import type { Env } from './env.ts'
 import {
   atCeiling,
@@ -166,7 +167,16 @@ test('meter queries distinguish the same handle in two deployments', async () =>
   }) as typeof fetch
   try {
     asked.length = 0
+    let writes = async () =>
+      (await meta(env).query('(.space | .app) ?created ?updated'))
+        .map(({ entity, created, updated }) => ({
+          eid: entity.eid,
+          created,
+          updated,
+        }))
+    let before = await writes()
     await sweep(env, new Date('2026-09-07T00:00:00Z'))
+    assertEquals(await writes(), before)
     let space = (await dir.space('ada'))!
     let app = (await dir.app(space, 'recipes'))!
     assertEquals(app.meter?.requests, 27)
@@ -710,7 +720,12 @@ test('R2 accounting sweeps without analytics, follows deletion and survives the 
   files.held.set('jeff/trash/photo', new Uint8Array(30))
   files.held.set('jeffrey/a/photo', new Uint8Array(100))
   files.held.set('sha/shared', new Uint8Array(100))
+  let writes = async () =>
+    (await meta(env).query('.space.slug=jeff ?created ?updated'))
+      .map(({ created, updated }) => ({ created, updated }))
+  let before = await writes()
   assert((await sweep(env, NOW)) >= 1)
+  assertEquals(await writes(), before)
   let got = (await dir.space('jeff'))!
   assertEquals(got.meter?.files, 50)
   assertEquals(got.meter?.month, '2026-08')

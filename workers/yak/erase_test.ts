@@ -11,6 +11,7 @@ import { r2Objects } from './lib/objects.ts'
 import type { Wire } from '@yaks/durable-object'
 import type { Held } from './build.ts'
 import {
+  abandoned,
   collected,
   DAILY,
   daysLeft,
@@ -36,6 +37,7 @@ import type { Env } from './env.ts'
 import { ai, platform, sandboxes } from './testing.ts'
 import { spending, workbench } from './sandbox.ts'
 import type { Who } from './session.ts'
+import { KERNEL, meta } from './meta.ts'
 
 let space = (over: Partial<Space> = {}): Space => ({
   eid: 'space-eid',
@@ -473,5 +475,65 @@ test(
     assertEquals(await collected(env, new Date(Date.now() + 2 * day)), 1)
     assertEquals(await dir.space('fresh'), null)
     assert(await dir.space('ada'))
+    // An idle test space goes through the same permanent erase, including
+    // its app files. Today's writes keep it until seven full days pass.
+    await dir.apply({
+      entities: [{
+        entity: { eid: ADA },
+        email: { address: 'probe@bot.yak.sh' },
+      }],
+    }, by)
+    let probe = await makes(dir, 'idle-probe')
+    await app(probe, 'notes')
+    let after = new Date(Date.now() + 8 * day)
+    // Plus spaces have no app limit. The activity read must fit the
+    // directory's 100-parameter ceiling, including the last app's writes.
+    let many = Array.from({ length: 100 }, (_, i) => ({
+      entity: { eid: `probe-app-${i}` },
+      app: { space: probe.eid, slug: `app-${i}`, access: 'private' },
+    }))
+    await meta(env).apply(many, KERNEL)
+    await meta(env).apply(
+      [{
+        entity: { eid: 'last-app-write' },
+        grant: { app: 'probe-app-99', person: ADA, access: 'viewer' },
+        created: { at: new Date(after.getTime() - day).toISOString() },
+      }],
+      KERNEL,
+      { stamp: false },
+    )
+    assertEquals(await abandoned(env, after, probe.eid), [])
+    await meta(env).apply(
+      [{ entity: { eid: 'last-app-write' }, $delete: true }],
+      KERNEL,
+    )
+    assertEquals(await abandoned(env, after, probe.eid), [probe.eid])
+    await meta(env).apply(
+      many.map(({ entity }) => ({ entity, $delete: true })),
+      KERNEL,
+    )
+    // A recent memory write is use too, without touching the space row.
+    await meta(env).apply(
+      [{
+        entity: { eid: 'recent-memory' },
+        memory: { space: probe.eid },
+        doc: { title: 'Still in use' },
+        created: { at: new Date(after.getTime() - day).toISOString() },
+      }],
+      KERNEL,
+      { stamp: false },
+    )
+    await collected(env, after)
+    assert(await dir.space('idle-probe'))
+    await meta(env).apply(
+      [{ entity: { eid: 'recent-memory' }, $delete: true }],
+      KERNEL,
+    )
+    await collected(env, after)
+    assertEquals(await dir.space('idle-probe'), null)
+    assertEquals(
+      (await r2Objects(env.BLOBS).list('idle-probe/')).length,
+      0,
+    )
   },
 )

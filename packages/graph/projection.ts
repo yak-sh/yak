@@ -245,10 +245,17 @@ export let named = (
   }
   if (clauses.some((c) => c.kind == 'every')) return null
   let want = new Set<string>()
-  let candidates: Clause[] = clauses
+  let candidates: Clause[] = []
   if (nested) {
-    candidates = []
     map(ast, (c) => (candidates.push(c), c))
+  } else {
+    let visit = (clauses: Clause[]) => {
+      for (let c of clauses) {
+        if (c.kind == 'and' || c.kind == 'or') visit(c.clauses)
+        else candidates.push(c)
+      }
+    }
+    visit(clauses)
   }
   for (let c of candidates) {
     if (c.kind != 'pred' || !c.path.length) continue
