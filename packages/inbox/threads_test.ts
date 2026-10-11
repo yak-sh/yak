@@ -32,14 +32,15 @@ let comment = (
 let lanes = (all: Row[]) =>
   threads(all, who).map((t) => [t.eid, t.lane, t.blocking])
 
+let assigned = [
+  row('decision', { task: {}, decision: {}, filed: { assignee: 'person' } }),
+  row('ask', { task: {}, filed: { assignee: 'person' } }, 8),
+  row('bug', { bug: { last: at(2) } }),
+  row('worker', { task: {} }),
+  row('edge', { requires: {}, edge: { from: 'worker', to: 'decision' } }),
+]
 test('threads rank outstanding assigned decisions and alerts ahead of eventual work', () => {
-  let all = [
-    row('decision', { task: {}, decision: {}, filed: { assignee: 'person' } }),
-    row('ask', { task: {}, filed: { assignee: 'person' } }, 8),
-    row('bug', { bug: { last: at(2) } }),
-    row('worker', { task: {} }),
-    row('edge', { requires: {}, edge: { from: 'worker', to: 'decision' } }),
-  ]
+  let all = assigned
   assertEquals(lanes(all), [['decision', 'Needs you', true], [
     'ask',
     'Needs you',

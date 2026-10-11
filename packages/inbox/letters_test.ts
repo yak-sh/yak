@@ -534,14 +534,25 @@ for (
   })
 }
 
+// Prepare the address book once; only receipt and attribution belong to the case.
+let otherSender = await world()
+await otherSender.apply([{
+  entity: { eid: 'other' },
+  email: { address: 'other@books.example' },
+}])
+let otherReceipt = arrived({ graph: otherSender, domain, readings })
+let inactiveDoor = routes({ graph: otherSender }, { domain })[0]
+let inactiveLetter = new Request('http://box/mail/inbound', {
+  method: 'POST',
+  body: JSON.stringify(freshLetter()),
+})
+let inactiveResponse = await inactiveDoor.handle(inactiveLetter)
+let [inactiveKept] = await otherSender.get([
+  (await inactiveResponse.json()).eid,
+])
 test('a different known sender and an inactive inbox cannot start conversations', async () => {
-  let g = await world()
-  await g.apply([{
-    entity: { eid: 'other' },
-    email: { address: 'other@books.example' },
-  }])
-  let receive = arrived({ graph: g, domain, readings })
-  let kept = await receive({
+  let g = otherSender
+  let kept = await otherReceipt({
     from: 'other@books.example',
     to: inbox.from,
     headers: new Headers(),
@@ -552,17 +563,8 @@ test('a different known sender and an inactive inbox cannot start conversations'
     comp((await g.get([kept[0].entity.eid]))[0], 'created').by,
     'other',
   )
-  let res = await routes({ graph: g }, { domain })[0].handle(
-    new Request('http://box/mail/inbound', {
-      method: 'POST',
-      body: JSON.stringify(freshLetter()),
-    }),
-  )
-  assertEquals(res.status, 200)
-  assertEquals(
-    (await g.get([(await res.json()).eid]))[0].conversation,
-    undefined,
-  )
+  assertEquals(inactiveResponse.status, 200)
+  assertEquals(inactiveKept.conversation, undefined)
 })
 
 test('pull records a verified inbox conversation before acknowledgement and redelivery adds nothing', async () => {
