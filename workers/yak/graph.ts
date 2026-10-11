@@ -204,6 +204,8 @@ import {
   members,
   type Mode,
   mode,
+  type Personal,
+  personalsIn,
   type Policy,
   policy,
   reads,
@@ -779,6 +781,7 @@ export class Store {
   #load: Load
   #ctx: State
   #vocab!: Vocab
+  #personal: Personal = {}
   #graph!: Graph
   #subs?: Subs
   #anatomy: ReturnType<typeof workerAnatomy> | null = null
@@ -1346,6 +1349,7 @@ export class Store {
     this.#effects = fx
     this.#conditionalWakes = undefined
     this.#vocab = vocab
+    this.#personal = personalsIn(vocab)
     shareChannel(g, this)
     this.#graph = g
     this.#anatomy = observed
@@ -3589,6 +3593,15 @@ export class Store {
   #asked = served(async (request) => {
     let url = new URL(request.url)
     let line = url.searchParams.get('q') ?? ''
+    if (url.searchParams.get('listing') == '1') {
+      let own = ownStore(this.#get('name') ?? '')
+      let words = PLATFORM.filter((name) =>
+        this.#vocab.comp(name) && (!own || name.startsWith('_'))
+      )
+      line = asking(line, words, this.#personal)
+      url.searchParams.set('q', line)
+      request = new Request(url, request)
+    }
     let live = url.searchParams.get('live') == '1'
     let no = unserved(line)
     if (no) throw new Refused(no)
@@ -3780,14 +3793,16 @@ export class Store {
       resume: subs.resume,
       snapshot: (query, opts) =>
         subs.snapshot(
-          typeof query == 'string' ? asking(query, words) : query,
+          typeof query == 'string'
+            ? asking(query, words, this.#personal)
+            : query,
           opts,
         ),
       open: (sink, id, query, opts) =>
         subs.open(
           by(sink),
           id,
-          query === true ? query : asking(query, words),
+          query === true ? query : asking(query, words, this.#personal),
           opts,
         ),
       restore: (openings, deferStatic) =>
@@ -3795,7 +3810,9 @@ export class Store {
           openings.map(({ sink, id, query, opts }) => ({
             sink: by(sink),
             id,
-            query: query === true ? query : asking(query, words),
+            query: query === true
+              ? query
+              : asking(query, words, this.#personal),
             opts,
           })),
           deferStatic,

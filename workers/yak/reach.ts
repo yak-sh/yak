@@ -26,15 +26,7 @@
 // about each other. And the space's vocabulary is the union of what its apps
 // declare — the language a merged bundle is written in, and the one @yaks/match
 // reads an order out of.
-import {
-  asking,
-  listed,
-  names,
-  PLATFORM,
-  projects,
-  type Row,
-  STAMPS,
-} from './listing.ts'
+import { listed, names, projects, type Row, STAMPS } from './listing.ts'
 import { bare } from './wire.ts'
 import { archetypes } from '@yaks/archetype'
 import { edges } from '@yaks/edge'
@@ -64,7 +56,7 @@ import { edits, mode } from '@yaks/member'
 import { declarationOf } from './declaration.ts'
 import { compile, lensesIn } from '@yaks/lens'
 import { lensDocAt, spoken as lensSpoken } from './lenses.ts'
-import { appKeywords, appVocab, platformDocs, platformVocab } from './vocab.ts'
+import { appKeywords, appVocab, platformDocs } from './vocab.ts'
 import { matcher, rows } from '@yaks/match'
 import { parse, tokens } from '@yaks/query'
 import {
@@ -95,17 +87,6 @@ let PLATFORM_WORDS: VocabDoc = {
       .filter(([name]) => !CORE.all.includes(name)),
   ),
 }
-
-// The platform's own rows, screened out of the question (listing.ts `asking`)
-// — but only the ones a store actually plants. A store refuses a filter naming
-// a component it has no table for, so screening for a word the platform does
-// not declare would refuse the whole read instead of narrowing it.
-let SCREEN = PLATFORM.filter((k) => CORE.all.includes(k))
-// The directory's people and apps are its data. Its vocabulary's rows are
-// still bookkeeping, so a doc listing there screens only the schema words.
-let META_SCREEN = SCREEN.filter((k) =>
-  k.startsWith('_') && platformVocab().all.includes(k)
-)
 
 // One store in reach: the app, the space it is in, and who the caller is
 // there. `at` is what a bundle names as the component's home.
@@ -147,10 +128,9 @@ let doorOf = (
 ) =>
 async (line: string) => {
   let asked = bare(line)
-  let mine = asking(asked, at(r) == META_STORE ? META_SCREEN : SCREEN)
   let door = appStore(env.STORE, r.space, r.app, env)
   let bundles = await door.consume(
-    `/query?q=${encodeURIComponent(mine)}${live ? '&live=1' : ''}`,
+    `/query?q=${encodeURIComponent(asked)}${live ? '&live=1' : ''}&listing=1`,
     async (res) => {
       if (!res.ok) throw rejected(res.status, await told(res))
       return await res.json()

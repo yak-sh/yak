@@ -1,7 +1,7 @@
 // The graph one app page can use: its own store and the homes of components
 // it declares as uses. A filter naming one of those components reads through
 // the same composition as the agent door; other filters stay app-local.
-import { asking, listed, type Row } from './listing.ts'
+import { listed, type Row } from './listing.ts'
 import { type App, appStore, directory, type Space } from './directory.ts'
 import * as dirPart from './directory.ts'
 import { bound, type Env } from './env.ts'
@@ -57,7 +57,6 @@ export let reading = async (
   live = false,
   headers: Record<string, string> = {},
 ): Promise<unknown> => {
-  let asked = asking(line)
   let names = [...split(line).parts.keys()]
   if (names.some((name) => uses[name])) {
     return read(
@@ -65,16 +64,17 @@ export let reading = async (
       reach.map((r, i) =>
         i == 0 ? { ...r, headers: { ...r.headers, ...headers } } : r
       ),
-      asked,
+      line,
       live,
     )
   }
   let { space, app, who } = reach[0]
   let store = appStore(env.STORE, space, app, env)
-  let rows = await metaOf(store, { ...vouched(who), ...headers }).query(asked, {
+  let rows = await metaOf(store, { ...vouched(who), ...headers }).query(line, {
     live,
+    listing: true,
   })
-  return Array.isArray(rows) ? listed(rows as Row[], asked) : rows
+  return Array.isArray(rows) ? listed(rows as Row[], line) : rows
 }
 
 export let queried = async (

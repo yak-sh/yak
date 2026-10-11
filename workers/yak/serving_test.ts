@@ -72,8 +72,8 @@ let client = (env: Env, cookie?: string) => {
         aliases: Record<string, string>
         bundles: Record<string, unknown>[]
       }>,
-    query: (filter = '') =>
-      door(`query?${filter}`) as Promise<Record<string, unknown>[]>,
+    query: <T = Record<string, unknown>[]>(filter = '') =>
+      door(`query?${filter}`) as Promise<T>,
     search: (text: string, filter = '') =>
       door(
         `query?${encodeURIComponent(text)}${filter ? `&${filter}` : ''}`,
@@ -708,8 +708,29 @@ test('the page wire: apply, query and search round-trip', async () => {
   // and comes back when one does.
   assertEquals((await page.query('.created')).length, 1)
   assertEquals((await page.query('.person')).length, 1)
+  assertEquals((await page.query('.local_setting&*')).length, 1)
+  assertEquals((await page.query('.local_setting.text&*')).length, 1)
+  assertEquals(await page.query<{ count: number }>('.local_setting&.count'), {
+    count: 1,
+  })
+  assertEquals(
+    (await page.query('.local_setting&.fields=local_setting.text')).length,
+    1,
+  )
 
   for (let visitor of [client(env), client(env, await as(eli))]) {
+    assertEquals(await visitor.query('.local_setting&*'), [])
+    assertEquals(await visitor.query('.local_setting.text&*'), [])
+    assertEquals(
+      await visitor.query<{ count: number }>('.local_setting&.count'),
+      {
+        count: 0,
+      },
+    )
+    assertEquals(
+      await visitor.query('.local_setting&.fields=local_setting.text'),
+      [],
+    )
     let [publicPerson] = await visitor.search(
       'lemons',
       `.person&.entity.eid=${ADA}`,

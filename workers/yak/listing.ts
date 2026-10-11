@@ -15,6 +15,7 @@
 // count) passes through as it came.
 
 import { conjoin } from '@yaks/query'
+import type { Personal } from '@yaks/member'
 
 // The platform's bookkeeping about a row — who wrote it and when, whether it
 // has been served. `archived` is not here: an app's agent reads and writes it
@@ -84,11 +85,22 @@ export let names = (line: string, word: string) =>
 // every platform word.
 // The screen narrows the whole ask, so `.a|.b` leaves the platform's rows out
 // of both alternatives (@yaks/query `conjoin`).
-export let asking = (line: string, words: string[] = PLATFORM) => {
+// An explicitly requested person-owned aspect is app data on that person's
+// row. The store supplies its composed Personal declarations so this screen
+// retains the row; the graph's ownership policy still governs the aspect.
+export let asking = (
+  line: string,
+  words: string[] = PLATFORM,
+  personal: Personal = {},
+) => {
   let ask = line.replace(/^[?&]+/, '')
   if (!ask || line.includes('id=')) return line
+  let aspect = Object.entries(personal).some(([name, owner]) =>
+    owner == 'entity' && names(line, name)
+  )
   let screen = words.filter((k) =>
     !names(line, k) &&
+    !(k == 'person' && aspect) &&
     !(k == 'refusal' && names(line, 'entry'))
   ).map((k) => `!${k}`)
   return line.slice(0, line.length - ask.length) + conjoin(ask, ...screen)

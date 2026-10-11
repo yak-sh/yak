@@ -9,8 +9,69 @@ import { storage } from '@yaks/sqlite'
 import { mem } from '../../packages/sqlite/testing.ts'
 import { loadVocab } from '@yaks/vocab'
 import { toolsDoc } from '@yaks/tools'
+import { personal } from '@yaks/member'
+import { ram } from '@yaks/ram'
 
 let rows = (body: string) => JSON.parse(body) as Record<string, unknown>[]
+
+let privateVocab = loadVocab({
+  $defs: {
+    person: { component: true },
+    doc: { component: true, properties: { title: { type: 'string' } } },
+    preference: { component: true, properties: { color: { type: 'string' } } },
+  },
+})
+let privateRows = graph({ vocab: privateVocab, storage: ram(privateVocab) })
+let policies = { preference: 'entity' }
+privateRows.use(personal(privateVocab, policies))
+privateRows.apply([
+  {
+    entity: { eid: 'owner' },
+    person: {},
+    doc: { title: 'Owner' },
+    preference: { color: 'secret' },
+  },
+  { entity: { eid: 'saved' }, doc: { title: 'Saved' } },
+], { trusted: true })
+for (
+  let q of [
+    '.preference',
+    '.preference.color=secret',
+    '.preference&.count',
+    '.preference&.fields=preference.color',
+  ]
+) {
+  test(`a listing selects a person's own aspect through ${q}`, () => {
+    let line = asking(q, ['person'], policies)
+    let read = q.includes('.count') ? privateRows.rows : privateRows.read
+    let own = read(line, { person: 'owner' }) as unknown[]
+    assertEquals(
+      q.includes('.count') ? own[0] : own.length,
+      q.includes('.count') ? { value: '', n: 1 } : 1,
+    )
+    for (let person of ['other', null]) {
+      let foreign = read(line, { person }) as unknown[]
+      assertEquals(
+        q.includes('.count') ? foreign[0] : foreign.length,
+        q.includes('.count') ? { value: '', n: 0 } : 0,
+      )
+    }
+  })
+}
+test('ordinary document listings and counts still omit platform people with personal aspects', () => {
+  assertEquals(
+    (privateRows.read(asking('.doc', ['person'], policies), {
+      person: 'owner',
+    }) as { entity: { eid: string } }[]).map((b) => b.entity.eid),
+    ['saved'],
+  )
+  assertEquals(
+    privateRows.rows(asking('.doc&.count', ['person'], policies), {
+      person: 'owner',
+    }),
+    [{ value: '', n: 1 }],
+  )
+})
 
 test('a listing carries what a person saved, not the stamps', () => {
   let body = JSON.stringify([

@@ -24,8 +24,12 @@ import { Pending, said } from './writes.ts'
 
 /** The meta store, in the graph's own wire. */
 export type Meta = {
-  /** a filter line → the entities it selects, whole */
-  query: (line: string, opts?: { live?: boolean }) => Promise<Bundle[]>
+  /** A filter line → the entities it selects, whole. A listing asks the Store
+   * to screen platform bookkeeping using its authoritative vocabulary. */
+  query: (
+    line: string,
+    opts?: { live?: boolean; listing?: boolean },
+  ) => Promise<Bundle[]>
   /** a batch of bundles → the batch as applied, aliases resolved */
   apply: (
     bundles: Bundle[],
@@ -83,7 +87,9 @@ export let metaOf = (
 ): Meta => ({
   query: (line, opts) => {
     return store.consume(
-      `/query?q=${encodeURIComponent(line)}${opts?.live ? '&live=1' : ''}`,
+      `/query?q=${encodeURIComponent(line)}${opts?.live ? '&live=1' : ''}${
+        opts?.listing ? '&listing=1' : ''
+      }`,
       async (r) => {
         if (!r.ok) throw await answered(r)
         return await r.json() as Bundle[]
