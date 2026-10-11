@@ -297,34 +297,23 @@ test('no container bound is a sentence, not a stack trace', async () => {
   assertEquals(seconds(ctx.spend!), 0)
 })
 
-test('a lend finishes warming the CLI before returning the machine', async () => {
-  let box = sandboxes(() => ({ stdout: 'ready' }))
+test('a lend returns a usable machine while the CLI warms', async () => {
+  let box = sandboxes((cmd) =>
+    cmd == 'yak --help >/dev/null' ? { running: true } : { stdout: 'ready' }
+  )
   let space = { eid: 'warm', slug: 'warm' } as dirPart.Space
-  let warmed = false
-  let env = {
-    SANDBOX: {
-      ...box.SANDBOX,
-      get: (id: unknown) => {
-        let raw = box.SANDBOX.get(id)
-        return {
-          ...raw,
-          exec: async (...args: Parameters<typeof raw.exec>) => {
-            let result = await raw.exec(...args)
-            if (args[0] == 'yak --help >/dev/null') warmed = true
-            return result
-          },
-        }
-      },
-    },
-  }
+  let env = { SANDBOX: box.SANDBOX }
   let spend = spending()
   let lent = await workbench(env, space, ADA, spend)
-  assert(warmed)
+  let warm = await lent.machine.look('proc-1')
+  assert(warm)
+  assertEquals(warm.exit, undefined)
   assert(box.files.has('/usr/local/bin/yak'))
   assertEquals(
     (await lent.provider.exec(lent.ref, 'echo ready')).stdout,
     'ready',
   )
+  assertEquals((await lent.machine.look('proc-1'))?.exit, undefined)
   await workbench(env, space, ADA, spend)
   assertEquals(
     box.ran.filter((cmd) => cmd == 'yak --help >/dev/null').length,

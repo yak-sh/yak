@@ -6,6 +6,32 @@
 
 type Release = { hash: string; url: string }
 
+// Never unlink this file: all callers must lock the same inode. The kernel
+// releases a killed installer's lock, so no stale PID or timeout can block a
+// later command (or mistake a slow, live installation for a dead one).
+let locked = async <T>(root: string, work: () => Promise<T>) => {
+  await Deno.mkdir(root, { recursive: true })
+  using file = await Deno.open(`${root}/.lock`, {
+    create: true,
+    write: true,
+  })
+  await file.lock(true)
+  try {
+    return await work()
+  } finally {
+    await file.unlock()
+  }
+}
+
+let exists = async (path: string) => {
+  try {
+    return (await Deno.stat(path)).isFile
+  } catch (error) {
+    if (!(error instanceof Deno.errors.NotFound)) throw error
+    return false
+  }
+}
+
 let release = async (host: string): Promise<Release> => {
   let response = await fetch(`${host}/_cli/current.json`)
   if (!response.ok) throw new Error(`yak workspace: HTTP ${response.status}`)
@@ -20,19 +46,23 @@ let release = async (host: string): Promise<Release> => {
 // Keep older workspaces until the container is destroyed: another command may
 // still need their dynamic imports after this call installs a newer release.
 /** Download once per source identity, publishing only a complete workspace. */
-export let installed = async (host: string, root: string) => {
-  await Deno.mkdir(root, { recursive: true })
+export let installed = (host: string, root: string) =>
+  locked(root, () => workspace(host, root))
+
+let workspace = async (host: string, root: string) => {
+  // Only the lock holder can own staging here. A killed downloader can leave
+  // a partial directory, which must not accumulate across retries.
+  for await (let entry of Deno.readDir(root)) {
+    if (entry.isDirectory && entry.name.startsWith('.install-')) {
+      await Deno.remove(`${root}/${entry.name}`, { recursive: true })
+    }
+  }
   // A deploy between the manifest and source requests can retire that asset.
   // Read the live manifest again rather than running a stale fallback.
   for (let attempt = 0; attempt < 2; attempt++) {
     let current = await release(host)
     let path = `${root}/${current.hash}`
-    try {
-      await Deno.stat(`${path}/deno.json`)
-      return path
-    } catch (error) {
-      if (!(error instanceof Deno.errors.NotFound)) throw error
-    }
+    if (await exists(`${path}/deno.json`)) return path
     let response = await fetch(`${host}${current.url}`)
     if (response.status == 404 && attempt == 0) continue
     if (!response.ok || !response.body) {
@@ -61,12 +91,7 @@ export let installed = async (host: string, root: string) => {
         })
         await Deno.writeTextFile(file, content)
       }
-      try {
-        await Deno.rename(temp, path)
-      } catch (error) {
-        // Another command may have installed this exact workspace meanwhile.
-        if (!(await Deno.stat(`${path}/deno.json`)).isFile) throw error
-      }
+      await Deno.rename(temp, path)
       return path
     } finally {
       // Cleanup must not hide a failed download or publication.
@@ -80,25 +105,80 @@ export let installed = async (host: string, root: string) => {
   throw new Error('yak workspace changed during download; retry the command')
 }
 
+let args = (path: string) => [
+  'run',
+  '--quiet',
+  // Keep the lockfile without prefetching unrelated workspace packages.
+  '--unstable-npm-lazy-caching',
+  '--allow-net',
+  '--allow-env',
+  '--allow-read',
+  '--allow-write',
+  '--config',
+  `${path}/deno.json`,
+]
+
+type Cache = {
+  lock: typeof locked
+  has: typeof exists
+  fill: (path: string) => Promise<void>
+  mark: (path: string) => Promise<void>
+}
+
+/** Fill the CLI's runtime cache once per workspace, publishing only success.
+ * This runs in the configured child itself: killing its parent cannot drop
+ * the lock while that child's module downloads are still running. */
+export let warmed = (
+  path: string,
+  root: string,
+  cache: Cache = {
+    lock: locked,
+    has: exists,
+    fill: async (path) => {
+      let { main } = await import(`file://${path}/packages/cli/yak.ts`)
+      if (await main(['--help'])) {
+        throw new Error('yak workspace: warm-up failed')
+      }
+    },
+    mark: (path) => Deno.writeTextFile(path, ''),
+  },
+) =>
+  cache.lock(root, async () => {
+    let marker = `${path}.ready`
+    if (await cache.has(marker)) return
+    await cache.fill(path)
+    await cache.mark(marker)
+  })
+
 if (import.meta.main) {
   try {
+    if (Deno.args[0] == '--warm-workspace') {
+      await warmed(Deno.args[1], Deno.args[2])
+      Deno.exit(0)
+    }
     let host = Deno.env.get('YAKS_HOST')?.replace(/\/$/, '')
     if (!host || new URL(host).protocol != 'https:') {
       throw new Error('yak needs the platform origin in YAKS_HOST')
     }
     let path = await installed(host, '/opt/yaks-cli')
+    if (!await exists(`${path}.ready`)) {
+      let warm = await new Deno.Command('deno', {
+        args: [
+          ...args(path),
+          import.meta.url,
+          '--warm-workspace',
+          path,
+          '/opt/yaks-cli',
+        ],
+        stdin: 'null',
+        stdout: 'null',
+        stderr: 'inherit',
+      }).spawn().status
+      if (!warm.success) Deno.exit(warm.code)
+    }
     let code = await new Deno.Command('deno', {
       args: [
-        'run',
-        '--quiet',
-        // Keep the lockfile without prefetching unrelated workspace packages.
-        '--unstable-npm-lazy-caching',
-        '--allow-net',
-        '--allow-env',
-        '--allow-read',
-        '--allow-write',
-        '--config',
-        `${path}/deno.json`,
+        ...args(path),
         `${path}/packages/cli/yak.ts`,
         ...Deno.args,
       ],
