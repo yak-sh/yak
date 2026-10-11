@@ -15,18 +15,15 @@
 // schema derived from the vocabulary the caller's apps declare (@yaks/mcp
 // `bundleSchema`), so a letter reads back the way every other row does.
 //
-// And the write is the generic tier's write. `mail_send` composes the same
-// bundles a person would type and hands them to `written()` — the door
-// `graph_apply` uses — so the platform's `from` stamp, the member guard, the
-// open-relay rule and the month's ceiling all hold here without this file
-// knowing any of them exist (graph.ts `#posting`, meter.ts).
+// The published `mail_send` translates its title argument to the package's
+// subject and calls the app store's declared tool. The store owns the write,
+// including the sender stamp, member guard, relay rule and month's ceiling.
 import { z } from 'zod'
 import { argsOf, type Bundle, type Tool } from '@yaks/graph'
-import { canon, parts } from '@yaks/mail'
 import { mailbox } from './directory.ts'
-import { type Reach, read, written } from './reach.ts'
+import { read } from './reach.ts'
 import { apex, type Host } from './host.ts'
-import { titling } from './session.ts'
+import { invokePackage } from './package-tools.ts'
 import { type Ctx, inApp } from './tools.ts'
 import { refuse } from './tool.ts'
 
@@ -55,7 +52,7 @@ let LETTER = '.mail&?doc&?deliver&?delivered&?bounced'
 // `sending`). Received is neither that nor written here: the `from` on a
 // letter of the app's own is stamped with its address whether or not it ever
 // asked to go (graph.ts `#posting`), so a letter from anywhere else is one
-// that arrived — and a draft, which is both kept and unsent, is honestly in
+// that arrived — and a draft, which is both kept and unsent, is in
 // neither side.
 let side = (said: string, mine: string): string | null =>
   said == 'all'
@@ -90,23 +87,6 @@ let address = (env: Host) =>
 let SPACE = 'the space slug in <space>.yaks.app; omit to infer it from the ' +
   'app slug, or fall back to the only space the person owns. If more than ' +
   'one matches, the error asks you to choose'
-
-// The recipient an address already names in this app, if any. A letter is
-// addressed to an entity here, so writing a second row for a person the app
-// already has would scatter their correspondence across two of them.
-let known = async (
-  ctx: Ctx,
-  mine: Reach,
-  address: string,
-): Promise<string | null> => {
-  let rows = await read(
-    ctx.env,
-    [mine],
-    `.email.address=${address}&.limit=1`,
-  )
-  let [one] = Array.isArray(rows) ? rows as Bundle[] : []
-  return one?.entity?.eid ?? null
-}
 
 let listing = (ctx: Ctx): Tool => ({
   name: 'mail_list',
@@ -147,6 +127,7 @@ let listing = (ctx: Ctx): Tool => ({
 
 let sending = (ctx: Ctx): Tool => ({
   name: 'mail_send',
+  applied: true,
   title: "Send email from an app's address",
   // An email to a stranger's inbox: it leaves the platform, and no second
   // call takes it back.
@@ -177,44 +158,17 @@ let sending = (ctx: Ctx): Tool => ({
   },
   run: async (call) => {
     let args = argsOf(call)
-    let { space, app, who } = await inApp(ctx, args, true)
-    let mine: Reach = { space, app, who }
-    let to = str(args.to, 'to')
-    let title = str(args.title, 'title')
-    let body = str(args.body, 'body')
-    // An address or an eid, told apart by the one `@` an address has. An
-    // address is canonicalized the way the store's own normalize hook would
-    // (@yaks/mail `mailbox`), so the lookup asks in the spelling the row was
-    // written in.
-    let address = parts(to) ? canon(apex(ctx.env))(to) : null
-    let held = address ? await known(ctx, mine, address) : to
-    let bundles: Bundle[] = [
-      ...(held ? [] : [{
-        entity: { eid: '$to' },
-        email: { address },
-      } as Bundle]),
-      {
-        entity: { eid: '$letter' },
-        doc: { title, body },
-        // Empty on purpose: the `from` is the platform's word, stamped over
-        // whatever a batch says (graph.ts `#posting`).
-        mail: {},
-        deliver: { to: held ?? '$to' },
-      } as Bundle,
-    ]
-    let out = await written(
-      ctx.env,
-      [mine],
-      mine,
-      bundles,
-      await titling(ctx.dir, ctx.person),
-    )
-    let eid = out.aliases['$letter']
-    let letter = out.bundles.find((b) => b.entity?.eid == eid)
+    // TODO: delete this title-to-subject translation in the listing release
+    // that drops the former mail_send contract.
+    let { title, ...input } = args
+    let answer = await invokePackage(ctx, 'mail_send', {
+      ...input,
+      to: str(args.to, 'to'),
+      subject: str(title, 'title'),
+      body: str(args.body, 'body'),
+    })
+    let letter = answer.find((b) => b.mail)
     if (!letter) throw new Error('the letter was not written')
-    // The letter went through the app's own door, vouched as the caller, so
-    // what comes back is the answer — there is nothing left for the host to
-    // land on the platform's own graph.
     return [letter]
   },
 })

@@ -27,14 +27,14 @@ import { directory, type Space } from './directory.ts'
 import * as dirPart from './directory.ts'
 import type { Env } from './env.ts'
 import { platform } from './testing.ts'
-import { remember } from './memory.ts'
+import { invokePackage } from './package-tools.ts'
 import { BUDGET, BUILDS, monthOf } from './meter.ts'
 import type { Who } from './session.ts'
 
 let SECRET = 'a probe secret'
 let ADA = 'a0000000-0000-4000-8000-0000000000ad'
 
-let owner: Who = { person: ADA, role: 'owner' }
+let owner = { person: ADA, role: 'owner' } satisfies Who
 let nobody: Who = { person: null, role: null }
 
 // A space with Ada in it, written the way `space_new` writes one — and no app,
@@ -144,11 +144,16 @@ test('the fake model builds an app end to end, and it serves', async () => {
 // page, so a preference kept through the connector is followed here.
 test('the builder is handed what the person has said', async () => {
   let { env, space } = await seeded()
-  await remember(env, dirOf(env), space, owner, {
-    said: 'use grams, never cups',
-    context: 'setting up the recipe app',
-    about: 'recipes',
-  })
+  await invokePackage(
+    { env, dir: dirOf(env), person: owner.person },
+    'memory_save',
+    {
+      space: space.slug,
+      said: 'use grams, never cups',
+      context: 'setting up the recipe app',
+      about: 'recipes',
+    },
+  )
   let model = fake([{ text: 'noted' }])
   await build(env, owner, space, asked('a recipe box please'), { model })
 

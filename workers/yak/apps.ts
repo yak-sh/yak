@@ -119,6 +119,7 @@ import { releaseStatus } from './release-status.ts'
 import { pageSpeaks } from './lenses.ts'
 import { appDoc } from './vocab.ts'
 import { type Bundle, Stale, token } from '@yaks/graph'
+import { callStored } from './package-tools.ts'
 import { edits, mode, reads, writes } from '@yaks/member'
 import type { Door } from './door.ts'
 import { type Clock, clock, timed } from './timing.ts'
@@ -1563,13 +1564,20 @@ let api = async (
     }
     let body = await req.json() as { output?: unknown }
     if (typeof body.output != 'string') return json(400, 'output_required')
-    return store('/choose', {
-      method: 'POST',
-      body: JSON.stringify({
-        output: body.output,
-        by: who.person,
-      }),
-    }, KERNEL)
+    try {
+      let [answer] = await callStored(
+        store,
+        'builder_choose',
+        { output: body.output },
+        who,
+        { title: await named(env, who) },
+      )
+      return Response.json({
+        output: (answer.content as { body: string }).body,
+      })
+    } catch (e) {
+      return rejection(e)
+    }
   }
   if (path == '/apply') {
     if (req.method != 'POST') return json(405, 'method_not_allowed')

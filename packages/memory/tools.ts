@@ -73,8 +73,14 @@ let flat = (s: string) => s.replace(/\s+/g, ' ').trim()
 
 // A memory as it stands right now, for a patch to be judged against: the
 // entity the caller named, or nothing where it names no memory of this graph.
-let held = async (graph: Graph, eid: string): Promise<Bundle | undefined> =>
-  (await graph.read(`.entity.eid=${eid}&.${MEMORY}&*`))[0]
+let held = async (
+  graph: Graph,
+  eid: string,
+  space?: string,
+): Promise<Bundle | undefined> =>
+  (await graph.read(
+    `.entity.eid=${eid}&.${MEMORY}${space ? `.space=${space}` : ''}&*`,
+  ))[0]
 
 // Where the graph already holds what `by` said: the earliest entity they
 // wrote whose text holds the words verbatim. Only the speaker's own: the same
@@ -86,11 +92,14 @@ let holding = async (
   graph: Pick<Graph, 'read'>,
   said: string,
   by: string,
+  space?: string,
 ): Promise<Bundle | undefined> => {
   let phrase = terms(said)
   if (!phrase) return undefined
   let found = await graph.read(
-    `"${phrase}"&.created.by=${by}&*&.order=created.at&.limit=${LOOK}`,
+    `"${phrase}"&.created.by=${by}` +
+      (space ? `&.${MEMORY}.space=${space}` : '') +
+      `&*&.order=created.at&.limit=${LOOK}`,
   )
   let want = flat(said)
   return found.find((b) => flat(words(b)).includes(want))
@@ -105,10 +114,12 @@ export let witnessed = (b: Bundle): Bundle => ({
 })
 
 /** The implementations of the tools ./vocab.json declares. A factory, like
- * every other entry point in these packages, though this one needs nothing
- * from the server: everything a handler reads arrives on the call it is
- * handed. */
-export let runs = (): Runs => ({
+ * every other entry point in these packages. A host sharing a graph between
+ * spaces binds saves and recalls to one space through its options. */
+export let runs = (
+  _host?: unknown,
+  { space }: { space?: string } = {},
+): Runs => ({
   memory_save: async (call, graph): Promise<Bundle[]> => {
     let args = argsOf(call)
     let named = str(args.id)
@@ -116,6 +127,7 @@ export let runs = (): Runs => ({
     let feedback = args.feedback
     let by = str(feedback)
     let where: Omit<Marking, 'eid'> = {
+      ...(space ? { space } : {}),
       ...(scope ? { scope } : {}),
       context: str(args.context),
       about: str(args.about),
@@ -125,11 +137,13 @@ export let runs = (): Runs => ({
       let said = str(args.said).trim()
       let on = str(args.on)
       let at = on
-        ? (await graph.get([on]))[0]
+        ? space ? await held(graph, on, space) : (await graph.get([on]))[0]
         : said && by
-        ? await holding(graph, said, by)
+        ? await holding(graph, said, by, space)
         : undefined
-      if (on && !at) throw new Refused(`nothing is ${on}`)
+      if (on && !at) {
+        throw new Refused(space ? `no memory: ${on}` : `nothing is ${on}`)
+      }
       if (on && !words(at!)) throw new Refused(`${on} holds no words`)
       if (on && said && !flat(words(at!)).includes(flat(said))) {
         throw new Refused(`${on} does not hold those words: ${said}`)
@@ -138,7 +152,7 @@ export let runs = (): Runs => ({
       if (!said) throw new Refused(EMPTY)
       return saved({ eid: '$memory', said, title: str(args.title), ...where })
     }
-    let was = await held(graph, named)
+    let was = await held(graph, named, space)
     if (!was) throw new Refused(`no memory: ${named}`)
     // The words, and the one precondition that matters. A patch that leaves
     // them alone needs no token; one that replaces words the memory actually
@@ -178,6 +192,7 @@ export let runs = (): Runs => ({
     let scope = str(args.scope)
     let asked: Asked = {
       limit: Number(args.limit ?? LIMIT),
+      ...(space ? { space } : {}),
       said: str(args.said),
       ...(near ? { near } : {}),
       ...(scope ? { scope } : {}),
@@ -191,7 +206,7 @@ export let runs = (): Runs => ({
     let args = argsOf(call)
     let said = str(args.said)
     let by = str(args.by)
-    let found = await holding(graph, said, by)
+    let found = await holding(graph, said, by, space)
     if (!found) {
       throw new Refused(`nothing ${by} wrote holds those words: ${said}`)
     }

@@ -1,14 +1,18 @@
 // The connector reaches the same build door without running any model.
 import { assert, assertEquals } from '@std/assert'
 import { test } from '@yaks/testing'
-import { type Comp, graph, identityEid } from '@yaks/graph'
+import { type Comp, graph, identityEid, mint, signed } from '@yaks/graph'
+import { loadTools } from '@yaks/graph/tools'
 import { ram } from '@yaks/ram'
 import { keys } from '@yaks/key'
 import { edges } from '@yaks/edge'
-import { toolEid, toolRow } from '@yaks/tools'
+import { answerOf, runner, toolEid, toolRow } from '@yaks/tools'
 import { current, supply } from '@yaks/builders'
 import { workshop } from '../../packages/builders/testing.ts'
-import { builderModelTool, buildersPlugin, building } from './builders.ts'
+import { modelTool } from '@yaks/builders/model'
+import { runs } from '@yaks/builders/tools'
+import { builderDoc } from '@yaks/builders/vocab'
+import { invokePackage } from './package-tools.ts'
 import type { Ctx } from './tool.ts'
 
 test('hosted provider, model and native input override keeps supplied main outputs current', async () => {
@@ -18,6 +22,9 @@ test('hosted provider, model and native input override keeps supplied main outpu
     vocab,
     plugins: [keys(vocab), edges(vocab)],
   })
+  let builderModelTool = modelTool()
+  let run = runner(g, { tools: loadTools(builderDoc, runs({ vocab })) })
+  await run.ensure()
   let source = crypto.randomUUID(), builder = crypto.randomUUID()
   let artifact = crypto.randomUUID(), person = crypto.randomUUID()
   let using = { provider: 'openrouter', model: 'google/lyria-3-pro-preview' }
@@ -58,9 +65,11 @@ test('hosted provider, model and native input override keeps supplied main outpu
   let sent: Record<string, unknown> = {}
   let ctx = {
     person,
+    source,
     dir: {
       space: () => Promise.resolve({ eid: 'space', slug: 'fixture' }),
       role: () => Promise.resolve('owner'),
+      nameAt: () => Promise.resolve('Ada'),
       app: () =>
         Promise.resolve({ eid: 'app', slug: 'music', access: 'private' }),
     },
@@ -69,17 +78,29 @@ test('hosted provider, model and native input override keeps supplied main outpu
         idFromName: (name: string) => name,
         get: () => ({
           fetch: async (req: Request) => {
-            assertEquals(new URL(req.url).pathname, '/build')
-            sent = await req.json()
-            return building(g, sent as Parameters<typeof building>[1])
+            assertEquals(new URL(req.url).pathname, '/call')
+            assertEquals(req.headers.get('x-yak-person'), person)
+            let body = await req.json()
+            sent = body.args
+            let id = mint()
+            let answer = await run.call(
+              signed([{
+                entity: { eid: id },
+                call: {
+                  to: toolEid(body.name),
+                  args: body.args,
+                  source: body.source,
+                },
+              }], { by: person })[0],
+            )
+            return Response.json(answerOf(answer, id))
           },
         }),
       },
     },
   } as unknown as Ctx
   let input = { lyrics: '[Verse]\nAh oh mm\n[Chorus]\nOo ah' }
-  let tool = buildersPlugin.tools!.find((t) => t.name == 'builder_build')!
-  let result = await tool.run(ctx, {
+  let result = await invokePackage(ctx, 'builder_build', {
     space: 'fixture',
     app: 'music',
     builder,
@@ -90,15 +111,14 @@ test('hosted provider, model and native input override keeps supplied main outpu
   })
   assertEquals(sent.provider, 'workers-ai')
   assertEquals(sent.model, 'minimax/music-2.6')
-  assertEquals(sent.by, person)
   assertEquals(sent.input, input)
-  let [shadowId] = result.value!.builds as string[]
+  let shadowId = String((result[0].content as Comp).body)
   let [shadow] = await g.get([shadowId])
   assert(String((shadow.build as Comp).variant).startsWith('shadow:'))
   let [call] = await g.get([String((shadow.build as Comp).call)])
   assertEquals(((call.call as Comp).args as Comp).using, {
-    provider: 'workers-ai',
-    model: 'minimax/music-2.6',
+    provider: identityEid('provider', ['workers-ai']),
+    model: identityEid('model', ['minimax/music-2.6']),
     input,
   })
   await g.apply(await builderModelTool.run(call, g), { trusted: true })

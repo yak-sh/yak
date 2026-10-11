@@ -27,6 +27,8 @@ export type Ctx = {
   env: Env
   dir: Directory
   person: string
+  /** The invocation whose work a forwarded store call records as its source. */
+  call?: string
   // How this caller got in, when a door knows (mcp.ts sets it from
   // identity.ts `asking`): the session, a connector's token, or a CLI grant,
   // with what that credential says about itself. `about` reads it to answer

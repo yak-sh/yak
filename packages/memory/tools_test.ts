@@ -407,6 +407,83 @@ test('a recall stays in its space, and words never speak its grammar', async () 
   assertEquals(await recall({ eids: [a, b] }), [a])
 })
 
+let bounded = await (async () => {
+  let g = fresh()
+  await writers(g)
+  let ada = crypto.randomUUID()
+  let bo = crypto.randomUUID()
+  let inSpace = (space: string) => {
+    let tools = runs(undefined, { space })
+    let ask = async (name: string, args: Record<string, unknown>) =>
+      await tools[name]!(call(args), g) as Bundle[]
+    let save = async (args: Record<string, unknown>) =>
+      await write(g, await ask('memory_save', args), agent)
+    return { ask, save }
+  }
+  let local = inSpace(ada)
+  let other = inSpace(bo)
+  let [a] = eids(
+    await write(
+      g,
+      await local.ask('memory_save', { said: 'use grams' }),
+      jeff,
+    ),
+  )
+  let [b] = eids(
+    await write(
+      g,
+      await other.ask('memory_save', { said: 'never use cups' }),
+      jeff,
+    ),
+  )
+  await write(g, [said('s1', 1, 'never use cups')], jeff)
+  return { g, ada, bo, a, b, ...local }
+})()
+
+test('a host bounds recalls, including named memories, to its space', async () => {
+  let { a, b, bo, ask } = bounded
+  let recall = async (args: Record<string, unknown>) =>
+    eids(await ask('memory_recall', args))
+  assertEquals(await recall({}), [a])
+  assertEquals(await recall({ ids: [a, b], space: bo }), [a])
+  assertEquals(await recall({ said: 'cups' }), [])
+})
+
+test('a host refuses edits and marks outside its memory space', async () => {
+  let { g, a, b, ask, save } = bounded
+  for (let args of [{ id: b }, { on: b }, { on: 's1.1' }]) {
+    await assertRejects(
+      () => ask('memory_save', { ...args, context: 'changed' }),
+      Refused,
+      'no memory:',
+    )
+  }
+  await save({ id: a, context: 'the recipe app' })
+  assertEquals(part(await read(g, a), 'memory').context, 'the recipe app')
+  assertEquals(part(await read(g, b), 'memory').context, undefined)
+  assertEquals(part(await read(g, 's1.1'), 'memory'), undefined)
+})
+
+test('a host places speaker marks only on memories in its space', async () => {
+  let { g, ada, a, b, save } = bounded
+  let [marked] = await save({ said: 'use grams', feedback: 'jeff' })
+  assertEquals(marked.entity.eid, a)
+  let memory = part(await read(g, a), 'memory')
+  assertEquals([memory.space, memory.by], [ada, 'jeff'])
+  assertEquals(part(await read(g, a), 'created').by, 'jeff')
+  // The other space and the unscoped transcript both hold these words;
+  // neither is a place this host may mark them.
+  let [kept] = await save({ said: 'never use cups', feedback: 'jeff' })
+  assert(![a, b, 's1.1'].includes(kept.entity.eid))
+  let made = await read(g, kept.entity.eid)
+  assertEquals(
+    [part(made, 'memory').space, part(made, 'memory').by],
+    [ada, 'agent'],
+  )
+  assertEquals(part(made, 'feedback').by, 'jeff')
+  assertEquals(part(made, 'created').by, 'agent')
+})
+
 // A transcript with a gap in its numbering, and the second session beside it.
 let transcript = async (g: G) => {
   await write(g, [

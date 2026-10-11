@@ -207,7 +207,7 @@ import { and, eq as equals, fields as project, list, parse } from '@yaks/query'
 import { effectsIn, type Vocab, type VocabDoc } from '@yaks/vocab'
 import { type Anatomy, anatomy } from '@yaks/code/anatomy'
 import { workerAnatomy } from './anatomy.ts'
-import { type Runner, runner } from '@yaks/tools'
+import { answerOf, type Runner, runner, toolEid } from '@yaks/tools'
 import { commands } from '@yaks/tools/declared'
 import { readTools } from './tool-grammar.ts'
 import { soonest, tick, type Ticked } from '@yaks/wake'
@@ -229,7 +229,7 @@ import { load } from './load.ts'
 import { metering } from './meter.ts'
 import { posting } from './post.ts'
 import { realtimeOf } from './rtc.ts'
-import { builderModelTool, building, choosing, supplying } from './builders.ts'
+import { storedTools } from './package-tools.ts'
 import type { Env } from './env.ts'
 import { conditionalWakes } from './conditional-wakes.ts'
 import type { Binding } from './post.ts'
@@ -687,9 +687,7 @@ let routes = new Set([
   '/writes',
   '/alarm',
   '/move',
-  '/build',
-  '/supply',
-  '/choose',
+  '/call',
   '/recover',
   '/ws',
   '/apply',
@@ -768,6 +766,7 @@ export class Store {
   // manifest they were built from. A deploy is the only thing that moves that
   // manifest, and a new one is a new runner.
   #runs: { said: string; run: Runner } | null = null
+  #host!: PluginHost
   // The write log's replay (writes.ts). `#landing` names a held write or
   // live receipt; the `yak/writes` hook completes it in the graph transaction; `#draining` is the replay in
   // progress, one at a time; `#stuck` says the last one stopped because the
@@ -1216,7 +1215,7 @@ export class Store {
         host = made
       },
     })
-    host = composed.host
+    host = this.#host = composed.host
     let g = host.graph
     observed.graph(g.plugins, [])
     // The object's own clock (D-37562). A `wake` row says when something is
@@ -1926,7 +1925,7 @@ export class Store {
                 await res.body?.cancel()
                 return []
               }),
-              builderModelTool,
+              ...storedTools(this.#host, storeKind(this.#get('name') ?? '')),
             ],
             // A call in a transcript is the transcript runner's, run in the
             // order its model asked (@yaks/session, models.ts).
@@ -2261,7 +2260,7 @@ export class Store {
     await this.#effects.idle()
     // A deployment stands up command identities. Recovery drains recorded
     // call_ready/call_woken effects, not a second derivation over all calls.
-    if ((this.#get('tools') ?? '{}') != '{}') {
+    if (storeKind(this.#get('name') ?? '') == 'app') {
       await this.#planting()
     }
     this.#effectsReady = true
@@ -3314,15 +3313,55 @@ export class Store {
       let alarm = held == null ? null : new Date(held).toISOString()
       return Response.json({ store, rules, alarm })
     }
-    // `builder build` for this app's builders (builders.ts), asked by the
-    // kernel for a person the connector found may write the app.
-    if (path == '/build' && request.method == 'POST') {
+    // Only the connector's checked store boundary reaches this runner. The
+    // request is recorded here as the caller, just like an app command.
+    if (path == '/call' && request.method == 'POST') {
       if (!kernel) return json({ error: 'NotFound', message: 'no route' }, 404)
       try {
-        return await building(
-          this.#stored(this.#graph).graph,
-          JSON.parse(await readBody(request)),
-        )
+        let { name, args, id = crypto.randomUUID(), source, space } = JSON
+          .parse(await readBody(request)) as {
+            name: string
+            args: Comp
+            id?: string
+            source?: string
+            space?: string
+          }
+        let kind = storeKind(this.#get('name') ?? '')
+        if (kind == 'directory' && !space) {
+          throw new Refused('a directory call needs space')
+        }
+        let tools = storedTools(this.#host, kind, space)
+        if (!tools.some((t) => t.name == name)) {
+          throw new Refused(`no store tool ${name}`)
+        }
+        let run = kind == 'directory'
+          ? runner(this.#kernelGraph(this.#graph), {
+            host: this.#graph,
+            tools,
+            report: (e) => void this.#broke('tool', e),
+          })
+          : this.#runner()
+        await run.ensure([name])
+        let call = signed([{
+          entity: { eid: id },
+          call: { to: toolEid(name), args, id, source },
+        }], {
+          ...(request.headers.get('x-yak-person')
+            ? { by: request.headers.get('x-yak-person')! }
+            : {}),
+          ...(request.headers.get('x-yak-via')
+            ? { via: request.headers.get('x-yak-via')! }
+            : {}),
+        })[0]
+        let answer = answerOf(await run.call(call), id)
+        let failure = answer.find((b) => b.refusal || b.exception)
+        if (failure) {
+          return json({
+            error: 'Refused',
+            message: (failure.content as Comp)?.body,
+          }, failure.exception ? 500 : 400)
+        }
+        return Response.json(await this.#speak(answer))
       } catch (e) {
         return refuse(e, request)
       }
@@ -3333,28 +3372,6 @@ export class Store {
         let { call } = JSON.parse(await readBody(request)) as { call?: unknown }
         if (typeof call != 'string') return json({ error: 'BadRequest' }, 400)
         return Response.json(await recovering(this.#stored(this.#graph), call))
-      } catch (e) {
-        return refuse(e, request)
-      }
-    }
-    if (path == '/supply' && request.method == 'POST') {
-      if (!kernel) return json({ error: 'NotFound', message: 'no route' }, 404)
-      try {
-        return await supplying(
-          this.#stored(this.#graph).graph,
-          JSON.parse(await readBody(request)),
-        )
-      } catch (e) {
-        return refuse(e, request)
-      }
-    }
-    if (path == '/choose' && request.method == 'POST') {
-      if (!kernel) return json({ error: 'NotFound', message: 'no route' }, 404)
-      try {
-        return await choosing(
-          this.#stored(this.#graph).graph,
-          JSON.parse(await readBody(request)),
-        )
       } catch (e) {
         return refuse(e, request)
       }

@@ -170,8 +170,8 @@ export type Surface = 'cli' | 'mcp'
  * A tool returns the bundles that are the result — entities it found,
  * entities it wants created, text as `content{body}` — and the runner applies
  * them, signed as the caller, beside the `result{call}` entity in one
- * transaction. There is no write in a tool's hands, so the calling program can
- * refuse, combine or replay what it was asked for.
+ * transaction. A host boundary that commits the answer itself declares
+ * `applied`, so the runner records the call without applying the answer again.
  */
 export type Tool<R = Bundle[]> = {
   /** The older flat tool name. A tool declaring `noun`/`verb` derives it from
@@ -201,6 +201,12 @@ export type Tool<R = Bundle[]> = {
   /** this tool only reads — a client may call it without asking the user
    * first */
   readOnly?: boolean
+  /** A host boundary returns bundles already applied by the tool or its host.
+   * The runner records the call and result, but neither signs nor applies its
+   * successful answer. This is independent of `readOnly`: an applied writer
+   * still writes. Its host also handles `check: true`, and the runner leaves
+   * that rehearsal's answer unapplied. */
+  applied?: boolean
   /** this tool can delete or otherwise irreversibly change what it touches, so
    * a client should ask before every call. Creating is not destructive: it
    * only adds, and undoing a create is a delete, which is. Left undeclared, a

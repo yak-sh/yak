@@ -111,6 +111,8 @@ export type ToolDefinition = {
   noun?: string
   verb?: string
   description: string
+  /** Implementation revision included in a builder definition fingerprint. */
+  revision?: string
   name?: string
   title?: string
   inputSchema?: Record<string, unknown>
@@ -177,6 +179,7 @@ export const toolDefinitionSchema: Record<string, unknown> = {
     name: { type: 'string', minLength: 1 },
     title: { type: 'string' },
     description: { type: 'string' },
+    revision: { type: 'string' },
     inputSchema: { type: 'object' },
     outputSchema: { type: 'object' },
     ...GRAMMAR.properties,
@@ -286,6 +289,7 @@ let inputOf = (entry: PropSchema): Record<string, unknown> => ({
 
 // The keywords in a declaration that belong to the tool, not to the schema.
 let HINTS = [
+  'revision',
   'title',
   'positional',
   'forward',

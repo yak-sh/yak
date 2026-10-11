@@ -247,6 +247,7 @@
     },
     "builder_model": {
       "tool": true,
+      "revision": "3",
       "noun": "builder",
       "verb": "model",
       "title": "Model builder adapter",
@@ -264,6 +265,18 @@
         },
         "using": {
           "type": "object"
+        },
+        "inputs": {
+          "type": "string",
+          "description": "the frozen binding input fingerprint"
+        },
+        "definition": {
+          "type": "string",
+          "description": "the frozen builder definition fingerprint"
+        },
+        "wiring": {
+          "type": "object",
+          "description": "the frozen output recipe"
         }
       },
       "required": [

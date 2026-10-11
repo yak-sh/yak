@@ -173,10 +173,11 @@ template between runs, then remove the mark (`staged: null`): the builder
 reconciles once, and a sampled binding whose inputs are unchanged isn't asked
 again.
 
-In an app's store (workers/yak/builders.ts; the store itself is `yaks-app`)
-the same door is the connector's `builder_build` tool. It takes what the CLI does (`only`, `limit`, `rebuild`,
+In an app's store (`workers/yak/package-tools.ts`; the store itself is `yaks-app`)
+the package's contract is the connector's `store_builder_build` tool.
+The published `builder_build` contract is translated in `published.ts`. It takes what the CLI does (`only`, `limit`, `rebuild`,
 `outdated`, `template`, `provider`, `model`, `input`) and reaches the store's
-`/build` as the caller, after checking they may edit the app; `builder_choose`
+`/call` runner as the caller, after checking they may edit the app; `builder_choose`
 and `builder_supply` sit beside it. From the box:
 `yak command builder_build --as <account> --space <space> --app <app> --builder <id> …`.
 

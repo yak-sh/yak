@@ -21,13 +21,14 @@ import {
   USES,
 } from '@yaks/connections'
 import type { Bundle, Comp } from '@yaks/graph'
-import { ctxOf, rebind } from './connections.ts'
+import { ctxOf, pageOf, rebind } from './connections.ts'
 import { storeName } from './directory.ts'
 import { CWD, TIMEOUT } from './sandbox.ts'
 import { vaulted } from './vault.ts'
 import {
   APP,
   inApp,
+  inSpace,
   refuse,
   type Row,
   SPACE,
@@ -37,6 +38,14 @@ import {
   worded,
 } from './tool.ts'
 import { call } from './tools.ts'
+import type { Supply } from '@yaks/builders'
+import type { Ask } from '@yaks/builders/tools'
+import { edgeEid } from '@yaks/edge'
+import { CONNECTION } from '@yaks/connections'
+import { heard, LAST, ordered } from '@yaks/memory'
+import { ranker } from './memory.ts'
+import { invokePackage } from './package-tools.ts'
+import { apex } from './host.ts'
 
 /** The Claude connector directory's listing: what `tools/list` answered when
  * it was submitted on 2026-09-22, with main at aa4e26e6. */
@@ -254,5 +263,412 @@ let ROWS: Row[] = [
   },
 ]
 
+// Package builder tools answer their ids in content.body.
+let answer = (bundles: Bundle[]) =>
+  bundles.map((b) => comp(b, 'content').body)
+    .filter((body): body is string => typeof body == 'string').join('\n')
+
+let integrationOf = (b: Bundle | undefined) =>
+  String(comp(b, CONNECTION).integration)
+
+let said = (u: Comp, title: string) =>
+  `${title} reads it as env.${u.binding}${
+    u.direct ? ' (the key itself)' : ' (a sentinel)'
+  }${u.anyone ? ', open to anyone using it' : ''}`
+
+// TODO: delete these translations in the release that drops their published
+// names and argument contracts from the connector directories' next listing.
+let MEMORY: Row[] = [
+  // What the person said, kept as they said it (memory.ts, T-34473). Owner,
+  // 2026-09-06: "any user instruction about *how* they like their apps built
+  // (etc) could be saved. And we could incorporate our 'grapevine' problem
+  // learnings by prompting the agent to save what the user said verbatim
+  // along with only the required context to understand it." An app's NOTES.md
+  // is the rules for one app, written by an agent; these are the person's own
+  // sentences, space-wide, and every agent who can reach the space is handed
+  // the newest few at connect (standing.ts).
+  {
+    name: 'memory_save',
+    destructive: false,
+    input: {
+      type: 'object',
+      properties: {
+        said: str(
+          "the words to keep: a person's sentence as they said it, or a " +
+            'note of your own',
+        ),
+        context: str(
+          'a line or two saying what was being talked about, where the ' +
+            'words do not stand on their own',
+        ),
+        about: str(
+          'the app they were talking about, by slug, if there was one',
+        ),
+        space: SPACE,
+      },
+      required: ['said'],
+    },
+    run: async (ctx, args) => {
+      let { space } = await inSpace(ctx, args, true)
+      let made = await invokePackage(ctx, 'memory_save', {
+        space: space.slug,
+        said: text(args.said, 'said'),
+        context: args.context == null ? '' : String(args.context),
+        about: args.about == null ? '' : String(args.about),
+      })
+      let kept = heard(made.find((b) => b.memory)!)
+      return {
+        space,
+        text: `Kept, in their words, for everyone in ${space.slug}:\n\n` +
+          `"${kept.said}"${kept.context ? `\n${kept.context}` : ''}\n\n` +
+          'Every agent that connects here is handed it; memory_recall ' +
+          'finds it by what it is about.',
+      }
+    },
+  },
+  {
+    name: 'memory_recall',
+    readOnly: true,
+    input: {
+      type: 'object',
+      properties: {
+        words: str(
+          'what the memory is about, in a few words: "how the pages look", ' +
+            '"measurements in a recipe". Leave it out for the newest',
+        ),
+        limit: {
+          type: 'number',
+          description: 'how many at most (default 8)',
+        },
+        space: SPACE,
+      },
+    },
+    run: async (ctx, args) => {
+      let { space } = await inSpace(ctx, args)
+      let said = args.words == null ? '' : String(args.words)
+      let limit = args.limit == null ? LAST : Number(args.limit)
+      let recall = (ask: Record<string, unknown>) =>
+        invokePackage(ctx, 'memory_recall', {
+          space: space.slug,
+          limit,
+          ...ask,
+        })
+      let ids = said
+        ? await ranker(ctx.env)(said, { space: space.eid, limit })
+        : []
+      let held = ids.length
+        ? ordered(ids, (await recall({ ids })).map(heard))
+        : []
+      if (!held.length && said) held = (await recall({ said })).map(heard)
+      if (!held.length) held = (await recall({})).map(heard)
+      if (!held.length) {
+        return {
+          space,
+          text: `Nothing has been kept in ${space.slug} yet. When they say ` +
+            'how they want something built or handled, memory_save keeps ' +
+            'their words.',
+        }
+      }
+      return {
+        space,
+        text: held.map((m) =>
+          `"${m.said}"${m.context ? `\n  ${m.context}` : ''}` +
+          `${m.about ? `\n  about the ${m.about} app` : ''}` +
+          `${
+            m.by ? `\n  — ${m.by}${m.at ? `, ${m.at.slice(0, 10)}` : ''}` : ''
+          }`
+        ).join('\n\n'),
+      }
+    },
+  },
+]
+
+let CONNECTIONS: Row[] = [
+  {
+    name: 'connection_need',
+    destructive: false,
+    idempotent: true,
+    input: {
+      type: 'object',
+      properties: {
+        space: SPACE,
+        app: APP,
+        integration: str(
+          'the outside service: a built integration by name, or a name of ' +
+            'your own for any other key (then give hosts)',
+        ),
+        hosts: {
+          type: 'array',
+          items: { type: 'string' },
+          description: 'for a key of your own naming: the API hosts it may ' +
+            'be sent to, e.g. ["api.weatherapi.com"]',
+        },
+        scopes: {
+          type: 'array',
+          items: { type: 'string' },
+          description: 'what the app asks for, for a service signed in to; ' +
+            "omit for the integration's own",
+        },
+        binding: str(
+          "the name worker.js reads it as, env.NAME; omit for the service's " +
+            'name in capitals',
+        ),
+        direct: {
+          type: 'boolean',
+          description: 'hand worker.js the key itself rather than a ' +
+            'sentinel, only for a key it must sign with before sending',
+        },
+        each: {
+          type: 'boolean',
+          description: 'each person who uses the app connects their own ' +
+            'account (their calendar, their inbox), rather than the owner ' +
+            'connecting one for everyone; only they call out through it',
+        },
+      },
+      required: ['app', 'integration'],
+    },
+    run: async (ctx, args) => {
+      let { space, app } = await inApp(ctx, args, true)
+      let made = await invokePackage(ctx, 'connection_need', {
+        ...args,
+        space: space.slug,
+        app: app.slug,
+        owner: space.eid,
+      })
+      let read = ctxOf(ctx.env).graph.read
+      // The connection: made now, or the one the app already used.
+      let eid = made.find((b) => !b.edge && !b[INTEGRATION])!.entity.eid
+      let [b] = await read(`.entity.eid=${eid}&.${CONNECTION}&*`)
+      let [l] = await read(
+        `.entity.eid=${edgeEid(app.eid, USES, eid)}&.${USES}&*`,
+      )
+      let status = comp(b, CONNECTION).status
+      let u = comp(l, USES)
+      if (u.each) {
+        let at = `https://${space.slug}.${apex(ctx.env)}/${app.slug}`
+        return {
+          space,
+          text: `${space.slug}/${app.slug} asks each person to connect their ` +
+            `own ${integrationOf(b)}: link them to ${at}/api/connections/` +
+            `${encodeURIComponent(integrationOf(b))}, where the platform ` +
+            `draws the Connect button. The page reads their sentinel as ` +
+            `${u.binding} from ./api/env and sends the call through ` +
+            './api/fetch?url=…; only they call out through it.',
+        }
+      }
+      if (status == 'connected') {
+        await rebind(ctx.env, storeName(space, app), app.eid)
+      }
+      return {
+        space,
+        text: `${space.slug}/${app.slug} ${said(u, 'worker.js')}. ` +
+          (status == 'connected'
+            ? `It is connected, and env.${u.binding} answers now.`
+            : `It is not connected yet: the person pastes the key or signs ` +
+              `in at ${
+                pageOf(ctx.env, space.slug)
+              } — never in this chat — and ` +
+              `env.${u.binding} answers from then on.`) +
+          (u.direct ? '' : ` Send env.${u.binding} wherever the service ` +
+            'wants its key (a header, the query, the body); it is swapped for ' +
+            'the key on the way out, only to the hosts the connection names.') +
+          (u.anyone ? '' : ' Only a member of the app may call out ' +
+            'through it until the person opens it to anyone on that page.'),
+      }
+    },
+  },
+  {
+    name: 'connection_list',
+    readOnly: true,
+    input: {
+      type: 'object',
+      properties: { space: SPACE },
+    },
+    run: async (ctx, args) => {
+      let { space } = await inSpace(ctx, args)
+      let all = await invokePackage(ctx, 'connection_list', {
+        space: space.slug,
+        owner: space.eid,
+      })
+      let titles = new Map(
+        (await ctx.dir.apps(space)).map((a) => [a.eid, a.slug]),
+      )
+      let rows = all.filter((b) => b[CONNECTION]).map((b) => {
+        let c = comp(b, CONNECTION)
+        let uses = all.filter((l) => comp(l, 'edge').to == b.entity.eid)
+          .map((l) =>
+            said(
+              comp(l, USES),
+              titles.get(String(comp(l, 'edge').from)) ?? 'another app',
+            )
+          )
+        return `${c.integration} (${b.entity.eid}): ${c.status}${
+          c.account ? ` as ${c.account}` : ''
+        }${uses.length ? `; ${uses.join('; ')}` : ''}`
+      })
+      return {
+        space,
+        text: rows.length
+          ? `${rows.join('\n')}\n\nThe person connects each at ` +
+            `${pageOf(ctx.env, space.slug)}. No key is ever shown.`
+          : `${space.slug} has no connections. connection_need says what ` +
+            'an app needs.',
+      }
+    },
+  },
+]
+
+let BUILDERS: Row[] = [{
+  name: 'builder_choose',
+  destructive: true,
+  input: {
+    type: 'object',
+    properties: {
+      space: SPACE,
+      app: APP,
+      output: str('the output take to use'),
+    },
+    required: ['app', 'output'],
+  },
+  run: async (ctx, args) => {
+    let { space, app } = await inApp(ctx, args, true)
+    let made = await invokePackage(ctx, 'builder_choose', {
+      space: space.slug,
+      app: app.slug,
+      output: text(args.output, 'output'),
+    })
+    let output = answer(made)
+    return {
+      space,
+      text: `chosen ${output} in ${space.slug}/${app.slug}`,
+      value: { output },
+    }
+  },
+}, {
+  name: 'builder_build',
+  destructive: true,
+  openWorld: true,
+  input: {
+    type: 'object',
+    properties: {
+      space: SPACE,
+      app: APP,
+      builder: str("the builder's id or alias"),
+      only: {
+        type: 'array',
+        items: { type: 'string' },
+        description: 'build only the bindings whose outer entities these ' +
+          'name (ids or aliases), and leave the other builds as they are',
+      },
+      limit: {
+        type: 'integer',
+        minimum: 1,
+        description: 'build only the first n bindings, and leave the other ' +
+          'builds as they are',
+      },
+      rebuild: { type: 'boolean', description: 'redo every selected binding' },
+      outdated: {
+        type: 'boolean',
+        description: 'redo selected bindings built under an older definition',
+      },
+      template: str(
+        "a content.body template to try instead of the builder's own, as a " +
+          'shadow variant',
+      ),
+      provider: str(
+        "a provider to try instead of the builder's own, as a shadow variant",
+      ),
+      input: {
+        type: 'object',
+        description: 'native request fields merged into using.input for a ' +
+          'shadow variant',
+      },
+      model: str(
+        "a model to try instead of the builder's own, as a shadow variant",
+      ),
+    },
+    required: ['app', 'builder'],
+  },
+  run: async (ctx, args) => {
+    let { space, app } = await inApp(ctx, args, true)
+    let ask: Ask = {
+      builder: text(args.builder, 'builder'),
+      rebuild: args.rebuild == true,
+      outdated: args.outdated == true,
+      ...args.only == null
+        ? {}
+        : { only: (args.only as unknown[]).map(String) },
+      ...args.limit == null ? {} : { limit: Number(args.limit) },
+      ...args.template == null ? {} : { template: String(args.template) },
+      ...args.provider == null ? {} : { provider: String(args.provider) },
+      ...args.model == null ? {} : { model: String(args.model) },
+      ...args.input == null ? {} : { input: args.input as Ask['input'] },
+    }
+    let made = await invokePackage(ctx, 'builder_build', {
+      space: space.slug,
+      app: app.slug,
+      ...ask,
+    })
+    let result = answer(made)
+    let builds = result.endsWith(' has no matching bindings')
+      ? []
+      : result.split('\n').filter(Boolean)
+    return {
+      space,
+      text: builds.length
+        ? `reconciled ${builds.length} build${builds.length == 1 ? '' : 's'} ` +
+          `of ${ask.builder} in ${space.slug}/${app.slug}; each asks its ` +
+          `tool only for changed inputs or explicitly requested redos:\n${
+            builds.join('\n')
+          }`
+        : `${ask.builder} has no matching bindings in ${space.slug}/${app.slug}`,
+      value: { builds },
+    }
+  },
+}, {
+  name: 'builder_supply',
+  destructive: true,
+  input: {
+    type: 'object',
+    properties: {
+      space: SPACE,
+      app: APP,
+      builder: str("the builder's id or alias"),
+      for: str('the first entity of exactly one outer binding, as id or alias'),
+      slot: { type: 'string', minLength: 1 },
+      artifact: str('an existing artifact in this app store, as id or alias'),
+      args: {
+        type: 'object',
+        description: 'recorded prompt, model, loudness audit or other ' +
+          'provenance kept on the supplied call',
+      },
+    },
+    required: ['app', 'builder', 'for', 'slot', 'artifact'],
+  },
+  run: async (ctx, args) => {
+    let { space, app } = await inApp(ctx, args, true)
+    let ask: Supply = {
+      builder: text(args.builder, 'builder'),
+      for: text(args.for, 'for'),
+      slot: text(args.slot, 'slot'),
+      artifact: text(args.artifact, 'artifact'),
+      ...args.args == null ? {} : { args: args.args as Supply['args'] },
+    }
+    let made = await invokePackage(ctx, 'builder_supply', {
+      space: space.slug,
+      app: app.slug,
+      ...ask,
+    })
+    let output = answer(made)
+    return {
+      space,
+      text: `supplied ${ask.slot} of ${ask.builder} in ` +
+        `${space.slug}/${app.slug}, spending nothing: ${output}`,
+      value: { output },
+    }
+  },
+}]
+
 /** The translations, worded: listed on the connector door beside `TOOLS`. */
-export let PUBLISHED: Tool[] = ROWS.map(worded)
+export let PUBLISHED: Tool[] = [...ROWS, ...MEMORY, ...CONNECTIONS, ...BUILDERS]
+  .map(worded)

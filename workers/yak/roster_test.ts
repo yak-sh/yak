@@ -154,8 +154,16 @@ test(
       assertEquals(init.serverInfo.name, 'yaks.app')
       let listed = (await agent.call('tools/list')).tools as {
         name: string
+        outputSchema: { type: string; properties: Record<string, unknown> }
       }[]
       assert(listed.length > 40, `a roster of ${listed.length}`)
+      for (let t of listed) {
+        assertEquals(t.outputSchema.type, 'object', t.name)
+        assert(
+          t.name == 'graph_schema' || 'result' in t.outputSchema.properties,
+          t.name,
+        )
+      }
       // What a directory published is what a client installed from it calls
       // (published.ts), so every name it listed is listed here still.
       let names = listed.map((t) => t.name)
@@ -348,7 +356,7 @@ test(
           app,
           builder: '00000000-0000-4000-8000-000000000000',
         }),
-        'is no builder',
+        'names no builder',
       )
       assertStringIncludes(
         await refused(tool, 'builder_supply', {
@@ -359,7 +367,7 @@ test(
           slot: 'main',
           artifact: '00000000-0000-4000-8000-000000000002',
         }),
-        'is no builder',
+        'names no builder',
       )
       assertStringIncludes(
         await refused(tool, 'builder_choose', {
@@ -367,9 +375,48 @@ test(
           app,
           output: '00000000-0000-4000-8000-000000000000',
         }),
-        'is no output take',
+        'names no built',
       )
 
+      // The package contracts share the same store runner as their published
+      // translations. Missing entities are refusals through that runner too.
+      for (
+        let [name, input, reason] of [
+          [
+            'builder_build',
+            { builder: '00000000-0000-4000-8000-000000000000' },
+            'names no builder',
+          ],
+          ['builder_supply', {
+            builder: '00000000-0000-4000-8000-000000000000',
+            for: '00000000-0000-4000-8000-000000000001',
+            slot: 'main',
+            artifact: '00000000-0000-4000-8000-000000000002',
+          }, 'names no builder'],
+          [
+            'builder_choose',
+            { output: '00000000-0000-4000-8000-000000000000' },
+            'names no built',
+          ],
+        ] as const
+      ) {
+        assertStringIncludes(
+          await refused(tool, `store_${name}`, { space: mine, app, ...input }),
+          reason,
+        )
+      }
+      assertStringIncludes(
+        await tool('mail_check', { space: mine, app }),
+        'letter',
+      )
+      for (let name of ['mail_show', 'mail_reply']) {
+        await refused(tool, name, {
+          space: mine,
+          app,
+          letter: '00000000-0000-4000-8000-000000000000',
+          ...(name == 'mail_reply' ? { body: 'Reply' } : {}),
+        })
+      }
       // ---- a second release, and the first one put back -------------------
       await tool('app_files', {
         space: mine,
@@ -406,6 +453,18 @@ test(
       assertStringIncludes(
         await tool('connection_list', { space: mine }),
         'roster (',
+      )
+      let owner = eids[mine]
+      await tool('store_connection_need', {
+        space: mine,
+        app,
+        owner,
+        integration: 'roster',
+        hosts: ['api.roster.example'],
+      })
+      assertStringIncludes(
+        await tool('store_connection_list', { space: mine, owner }),
+        'roster',
       )
       await refused(tool, 'connection_attach', {
         space: mine,
@@ -496,6 +555,26 @@ test(
       )
 
       // ---- what the person said -------------------------------------------
+      let packageMail = await answer('store_mail_send', {
+        space: mine,
+        app,
+        to: 'package-mail@probe.invalid',
+        subject: 'Package letter',
+        body: 'A letter through the store runner.',
+      })
+      assertStringIncludes(packageMail.text, 'Package letter')
+      await tool('store_memory_save', {
+        space: mine,
+        said: 'the store runner keeps these words',
+        title: 'Runner memory',
+      })
+      assertStringIncludes(
+        await tool('store_memory_recall', {
+          space: mine,
+          said: 'runner keeps',
+        }),
+        'the store runner keeps these words',
+      )
       let said = `the roster suite ran at ${new Date().toISOString()}`
       assertStringIncludes(
         await tool('memory_save', { said, space: mine }),

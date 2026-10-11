@@ -37,6 +37,10 @@
       "description": "A tool's operation word, one lowercase word \u2014 what it does. Declared beside a `noun` it is the other half of the two-word command; declared alone it is the whole command name, both on the command line and in an MCP request (`land`).",
       "type": "string"
     },
+    "revision": {
+      "description": "A tool implementation revision, recorded on its tool row and included in a builder definition fingerprint.",
+      "type": "string"
+    },
     "input": {
       "description": "A tool's arguments: one JSON Schema per named argument, the same shape a component's `properties` takes. The entry's `required` list names the arguments a call must supply.",
       "type": "object"

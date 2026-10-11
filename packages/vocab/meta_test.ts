@@ -44,6 +44,8 @@ test('a marked component is a component, an unmarked entry is nobody’s', () =>
 
 test('a tool declaration is checked as a tool', () => {
   assertEquals(ok(TOOL), [])
+  assertEquals(ok({ ...TOOL, revision: '2' }), [])
+  assert(ok({ ...TOOL, revision: 2 } as unknown as PropSchema).length)
   assertEquals(
     ok({ ...TOOL, input: { scope: { type: 'string', short: 's' } } }),
     [],

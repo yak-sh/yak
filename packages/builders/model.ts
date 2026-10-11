@@ -14,9 +14,12 @@ import {
 import { link } from '@yaks/edge'
 import { kindOf, textOf } from '@yaks/session'
 import { toolEid } from '@yaks/tools'
+import { toolsSaid } from '@yaks/vocab/tools'
+import doc from './vocab.json' with { type: 'json' }
 import { ids } from './build.ts'
 
 export let MODEL = 'builder_model'
+let definition = toolsSaid(doc).find((tool) => tool.name == MODEL)!
 export let modelToolEid = (): Eid => toolEid(MODEL)
 
 export type Desk = {
@@ -120,20 +123,7 @@ let request = (template: string, binding: Binding): string =>
 
 /** Run the adapter through @yaks/tools; no model execution lives here. */
 export let modelTool = (desk: Desk = {}): Tool => ({
-  name: MODEL,
-  description: 'Build one query binding through an ordinary model session',
-  revision: '3',
-  inputSchema: {
-    type: 'object',
-    properties: {
-      binding: { type: 'object' },
-      key: { type: 'string' },
-      template: { type: 'string' },
-      using: { type: 'object' },
-      wiring: { type: 'object' },
-    },
-    required: ['binding', 'key'],
-  },
+  ...definition,
   run: async (call: Bundle, graph: Graph): Promise<Bundle[]> => {
     let args = comp(call, 'call')?.args as {
       binding: Binding

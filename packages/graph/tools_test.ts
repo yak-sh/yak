@@ -5,6 +5,7 @@ import { test } from '@yaks/testing'
 import { assertEquals, assertThrows } from '@std/assert'
 import { loadTools, tier } from './tools.ts'
 import { declared } from './vocab.ts'
+import { toolRow } from '@yaks/tools'
 
 let doc = {
   $defs: {
@@ -14,6 +15,7 @@ let doc = {
       noun: 'book',
       verb: 'shelve',
       description: 'Put a book on a shelf.',
+      revision: '2',
       input: { title: { type: 'string' } },
       required: ['title'],
     },
@@ -22,12 +24,17 @@ let doc = {
 
 test('a declaration wears the run the module gives it', () => {
   let [t] = loadTools(doc, {
-    book_shelve: (args) => ({ bundles: [{ book: args }] }),
+    book_shelve: () => [],
   })
   assertEquals(t.name, 'book_shelve')
   assertEquals(t.noun, 'book')
   assertEquals(t.description, 'Put a book on a shelf.')
   assertEquals(t.inputSchema?.required, ['title'])
+  assertEquals(toolRow(t).tool, {
+    name: 'book_shelve',
+    description: 'Put a book on a shelf.',
+    revision: '2',
+  })
   // The entry's name is the tool's; a module that names its run by the two
   // words instead is the same tool.
   let named = { $defs: { shelve: { ...doc.$defs.book_shelve } } }

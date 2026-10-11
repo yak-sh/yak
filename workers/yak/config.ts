@@ -2,9 +2,10 @@
 // preserve the vocabulary each store already holds.
 import type { Config, Plug } from '@yaks/host/config'
 import type { FacetName } from '@yaks/host'
+import { memoryDoc } from '@yaks/memory/vocab'
 
-// Package tools remain at the connector's own boundary until it composes them.
 let storeFacets: FacetName[] = ['vocab', 'graph', 'effects']
+let toolFacets: FacetName[] = [...storeFacets, 'tools']
 let storePlugins = (plugins: Plug[]): Plug[] =>
   plugins.map((plug) =>
     typeof plug == 'string'
@@ -72,7 +73,11 @@ export let appConfig: Config = {
     },
     { use: '@yaks/project', facets: ['vocab'], words: ['filed', 'project'] },
     ...links,
-    { use: '@yaks/mail', with: { sender: { via: 'worker' } } },
+    {
+      use: '@yaks/mail',
+      facets: toolFacets,
+      with: { sender: { via: 'worker' } },
+    },
     {
       use: '@yaks/tools',
       words: [
@@ -119,6 +124,7 @@ export let appConfig: Config = {
     '@yaks/openrouter',
     {
       use: '@yaks/builders',
+      facets: toolFacets,
       words: [
         'builder',
         'staged',
@@ -133,6 +139,10 @@ export let appConfig: Config = {
         'builder_ring',
         'builder_answer',
         'builder_model_answer',
+        'builder_build',
+        'builder_supply',
+        'builder_choose',
+        'builder_model',
       ],
     },
     { use: '@yaks/effects', words: ['provisional', 'effect', 'lease'] },
@@ -163,11 +173,32 @@ export let directoryConfig: Config = {
     ...links,
     { use: '@yaks/mail', words: ['notified'] },
     '@yaks/tunnel',
-    '@yaks/memory',
-    '@yaks/connections',
+    {
+      use: '@yaks/memory',
+      facets: toolFacets,
+      // The directory shares spaces. Only the space-bound memory loop belongs
+      // here; transcript walks and globally identified topics need an app store.
+      words: Object.entries(memoryDoc.$defs ?? {}).filter(([name, entry]) =>
+        entry.tool !== true || ['memory_save', 'memory_recall'].includes(name)
+      ).map(([name]) => name),
+    },
+    { use: '@yaks/connections', facets: toolFacets },
     '@yaks/secrets',
     { use: '@yaks/effects', words: ['provisional'] },
-    { use: '@yaks/tools', words: ['content'] },
+    {
+      use: '@yaks/tools',
+      words: [
+        'content',
+        'call',
+        'result',
+        'output',
+        'refusal',
+        'execution',
+        'tool',
+        'call_ready',
+        'call_woken',
+      ],
+    },
     { use: '@yaks/git', words: ['ref', 'repository', 'commit'] },
     {
       use: '@yaks/platform',

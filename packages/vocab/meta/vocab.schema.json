@@ -428,6 +428,10 @@
         "description": {
           "type": "string"
         },
+        "revision": {
+          "description": "Implementation revision included in a builder definition fingerprint.",
+          "type": "string"
+        },
         "input": {
           "type": "object",
           "propertyNames": {

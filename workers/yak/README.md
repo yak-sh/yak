@@ -581,8 +581,14 @@ monitoring.
 
 `config.ts` selects the directory, app and git stores' plugins, facets and
 words. `gen.ts` writes `load.ts` from those configs and package exports, using
-literal imports for bundled graph and effects facets. Package tools remain at
-the connector's boundary. The Worker's own store facets live under `facets/`.
+literal imports for bundled graph, effects and tool facets. The connector lists
+the configured package tools with `space` and, for app stores, `app`;
+`package-tools.ts` forwards their calls to the selected Store's `/call` ledger
+and runner as the caller. Published names whose contracts differ remain
+translations in `published.ts`; their package contracts use a `store_` prefix.
+The shared directory selects the space-bound memory save/recall loop, with space
+supplied by its host, and connections validate the selected owner and app. The
+Worker's own store facets live under `facets/`.
 
 A Store imports its graph and effects facets before opening its boot
 transaction, then binds them with `@yaks/host` over its storage, vault, blobs

@@ -7,7 +7,7 @@ import { edges } from '@yaks/edge'
 import { toolEid, toolRow } from '@yaks/tools'
 import { test } from '@yaks/testing'
 import { workshop } from '../../packages/builders/testing.ts'
-import { builderModelTool } from './builders.ts'
+import { modelTool } from '@yaks/builders/model'
 import { effects as appEffects } from './facets/app-effects.ts'
 import type { Stored } from './plugin.ts'
 import { platformVocab } from './vocab.ts'
@@ -39,7 +39,7 @@ test('builders install preserves legacy provenance in a store declaring builders
     vocab,
     plugins: [keys(vocab), edges(vocab)],
   })
-  await g.apply([toolRow(builderModelTool), {
+  await g.apply([toolRow(modelTool()), {
     entity: { eid: 'source' },
     doc: { title: 'Source', body: 'Before' },
   }, {

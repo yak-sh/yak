@@ -134,7 +134,7 @@ let app = async (
     store.fetch(
       new Request(`http://store${path}`, {
         method: 'POST',
-        headers: { ...headers, 'x-yak-kernel': '1' },
+        headers: { ...as(ADA), 'x-yak-kernel': '1' },
         body: JSON.stringify(body),
       }),
     )
@@ -144,8 +144,14 @@ let app = async (
     send,
     read,
     kernel,
+    call: (name: string, args: Comp) => kernel('/call', { name, args }),
     [Symbol.dispose]: () => p[Symbol.dispose](),
   }
+}
+
+let answerId = async (response: Response): Promise<string> => {
+  let [answer]: Bundle[] = await response.json()
+  return String((answer.content as Comp).body)
 }
 
 let creature = async (sounds?: Comp, hp = 36, step = true) => {
@@ -271,9 +277,8 @@ for (
     }, { label: 'settled output refusal' })
     let before = await v.read('.call.source.build&*')
     assertEquals(
-      (await v.kernel('/build', {
+      (await v.call('builder_build', {
         builder: creatures[0].entity.eid,
-        by: ADA,
       })).status,
       200,
     )
@@ -349,16 +354,26 @@ test('builder_build tries a staged builder on the rows it names, as the caller',
     ])).status,
     200,
   )
-  assertEquals((await v.send('/build', { builder: BUILDER })).status, 404)
-  let refused = await v.kernel('/build', { builder: BUILDER, only: [BUILDER] })
+  assertEquals(
+    (await v.send('/call', {
+      name: 'builder_build',
+      args: { builder: BUILDER },
+    })).status,
+    404,
+  )
+  let refused = await v.call('builder_build', {
+    builder: BUILDER,
+    only: [BUILDER],
+  })
   assertEquals(refused.status, 400)
-  let asked = await v.kernel('/build', {
+  let asked = await v.call('builder_build', {
     builder: BUILDER,
     only: [SOURCE],
-    by: ADA,
   })
   assertEquals(asked.status, 200)
-  assertEquals((await asked.json()).builds.length, 1)
+  let answer: Bundle[] = await asked.json()
+  let id = String((answer[0].content as Comp).body)
+  assertEquals((await v.read(`.entity.eid=${id}&.build`)).length, 1)
   await until(async () => (await v.read('.built&*')).length, {
     label: 'builder output',
   })
@@ -457,7 +472,7 @@ test('shadow outputs do not start downstream immediate builders', async () => {
   assertEquals((await start(v)).status, 200)
   await until(() => v.asked.length == 2, { label: 'main downstream turn' })
   assertEquals(
-    (await v.kernel('/build', {
+    (await v.call('builder_build', {
       builder: BUILDER,
       only: [SOURCE],
       template: 'A review-only variant.',
@@ -519,16 +534,19 @@ test('builder_supply in an app store is current without any model spending', asy
     for: SOURCE,
     slot: 'song',
     artifact,
-    by: ADA,
     args: { prompt: 'Original prompt', model: 'Original model', loudness: -16 },
   }
-  assertEquals((await v.send('/supply', ask)).status, 404)
-  let r = await v.kernel('/supply', ask)
+  assertEquals(
+    (await v.send('/call', { name: 'builder_supply', args: ask })).status,
+    404,
+  )
+  let r = await v.call('builder_supply', ask)
   assertEquals(r.status, 200)
-  let { output } = await r.json()
+  let output = await answerId(r)
   let [made] = await v.read(`.entity.eid=${output}&*`)
   assertEquals((made.built as Comp).artifact, artifact)
   assertEquals((made.built as Comp).current, true)
+  assertEquals((made.created as Comp).by, ADA)
   let [call] = await v.read(`.entity.eid=${(made.built as Comp).call}&*`)
   let args = (call.call as Comp).args as Comp
   assertEquals(args.prompt, ask.args.prompt)
@@ -537,10 +555,10 @@ test('builder_supply in an app store is current without any model spending', asy
   assertEquals((call.cost as Comp).dollars, 0)
   assertEquals(v.asked, [])
   assertEquals(
-    (await v.kernel('/build', { builder: BUILDER, by: ADA })).status,
+    (await v.call('builder_build', { builder: BUILDER })).status,
     200,
   )
-  assertEquals((await v.read('.call')).length, 1)
+  assertEquals((await v.read('.call.source.build')).length, 1)
   assertEquals(v.asked, [])
 })
 
@@ -564,22 +582,20 @@ test('hosted choose switches takes without a model turn and preserves earlier ar
       builder: { query: '.doc.title=Source', to: toolEid('builder_model') },
     },
   ])
-  let one = await v.kernel('/supply', {
+  let one = await v.call('builder_supply', {
     builder: BUILDER,
     for: SOURCE,
     artifact,
     slot: 'song',
-    by: ADA,
   })
-  let first = (await one.json()).output
-  let two = await v.kernel('/supply', {
+  let first = await answerId(one)
+  let two = await v.call('builder_supply', {
     builder: BUILDER,
     for: SOURCE,
     artifact: replacement,
     slot: 'song',
-    by: ADA,
   })
-  let second = (await two.json()).output
+  let second = await answerId(two)
   assert(first != second)
   assertEquals((await v.read('.built.current=true'))[0].entity.eid, second)
   assertEquals(
@@ -587,9 +603,11 @@ test('hosted choose switches takes without a model turn and preserves earlier ar
     replacement,
   )
   let calls = await v.read('.call.source.build&*')
-  let choice = await v.kernel('/choose', { output: first, by: ADA })
+  let choice = await v.call('builder_choose', { output: first })
   assertEquals(choice.status, 200)
-  assertEquals((await v.read('.built.current=true'))[0].entity.eid, first)
+  let [chosen] = await v.read('.built.current=true&*')
+  assertEquals(chosen.entity.eid, first)
+  assertEquals((chosen.chosen as Comp).by, ADA)
   assertEquals((await v.read('.built')).length, 2)
   assertEquals((await v.read('.call.source.build')).length, calls.length)
   assertEquals(v.asked.length, 0)

@@ -41,7 +41,6 @@ import {
   disconnect,
   envOf,
   installed,
-  INTEGRATION,
   type Integration,
   keyed,
   known,
@@ -79,7 +78,6 @@ import { domainOf, vouched, type Who, whoIs } from './session.ts'
 import {
   APP,
   inApp,
-  inSpace,
   refuse,
   type Row,
   SPACE,
@@ -382,7 +380,8 @@ type Held = {
 }
 
 // The connections page of a space, where a sign-in begun there comes back to.
-let pageOf = (env: Env, space: string) => manageAt(space, 'connections', env)
+export let pageOf = (env: Env, space: string) =>
+  manageAt(space, 'connections', env)
 
 // A page, told how a sign-in went.
 let told = (page: string, how: 'connected' | 'refused') => {
@@ -742,22 +741,12 @@ let hook: Door = async ({ env, req, path, space: slug }) => {
 
 // ---- the tools (T-38030) ---------------------------------------------------
 
-// Where the person connects what an app needs.
-let page = (env: Env, space: Space) => pageOf(env, space.slug)
-
-// One app's use of a connection, as an agent reads it.
+// One app's use of a connection.
 let integrationOf = (b: Bundle | undefined) =>
   String(comp(b, CONNECTION).integration)
 
-let said = (u: Comp, title: string) =>
-  `${title} reads it as env.${u.binding}${
-    u.direct ? ' (the key itself)' : ' (a sentinel)'
-  }${u.anyone ? ', open to anyone using it' : ''}`
-
-// @yaks/connections' two tools, as rows of this roster: the space and app are
-// named the way every platform tool names them, and the directory is where a
-// connection lives. What a key is and where it goes are the person's, on the
-// connections page; no row here ever carries one.
+// Attaching a connected credential remains a platform verb. The package owns
+// need and list; published.ts translates their former connector arguments.
 let CONNECTIONS: Row[] = [
   {
     name: 'connection_attach',
@@ -800,143 +789,6 @@ let CONNECTIONS: Row[] = [
       }
     },
   },
-  {
-    name: 'connection_need',
-    destructive: false,
-    idempotent: true,
-    input: {
-      type: 'object',
-      properties: {
-        space: SPACE,
-        app: APP,
-        integration: str(
-          'the outside service: a built integration by name, or a name of ' +
-            'your own for any other key (then give hosts)',
-        ),
-        hosts: {
-          type: 'array',
-          items: { type: 'string' },
-          description: 'for a key of your own naming: the API hosts it may ' +
-            'be sent to, e.g. ["api.weatherapi.com"]',
-        },
-        scopes: {
-          type: 'array',
-          items: { type: 'string' },
-          description: 'what the app asks for, for a service signed in to; ' +
-            "omit for the integration's own",
-        },
-        binding: str(
-          "the name worker.js reads it as, env.NAME; omit for the service's " +
-            'name in capitals',
-        ),
-        direct: {
-          type: 'boolean',
-          description: 'hand worker.js the key itself rather than a ' +
-            'sentinel, only for a key it must sign with before sending',
-        },
-        each: {
-          type: 'boolean',
-          description: 'each person who uses the app connects their own ' +
-            'account (their calendar, their inbox), rather than the owner ' +
-            'connecting one for everyone; only they call out through it',
-        },
-      },
-      required: ['app', 'integration'],
-    },
-    run: async (ctx, args) => {
-      let { space, app, who } = await inApp(ctx, args, true)
-      let c = ctxOf(ctx.env, who)
-      let strs = (v: unknown) => Array.isArray(v) ? v.map(String) : []
-      let made = await c.graph.apply(
-        await need(c.graph.read, {
-          owner: space.eid,
-          app: app.eid,
-          integration: text(args.integration, 'integration'),
-          hosts: strs(args.hosts),
-          scopes: strs(args.scopes),
-          binding: args.binding == null ? undefined : String(args.binding),
-          direct: args.direct == null ? undefined : args.direct == true,
-          each: args.each == true,
-        }).catch((e) => {
-          throw refuse('arguments', e instanceof Error ? e.message : String(e))
-        }),
-      )
-      // The connection: made now, or the one the app already used.
-      let eid = made.find((b) => !b.edge && !b[INTEGRATION])!.entity.eid
-      let [b] = await c.graph.read(`.entity.eid=${eid}&.${CONNECTION}&*`)
-      let [l] = await c.graph.read(
-        `.entity.eid=${edgeEid(app.eid, USES, eid)}&.${USES}&*`,
-      )
-      let status = comp(b, CONNECTION).status
-      let u = comp(l, USES)
-      if (u.each) {
-        let at = `https://${space.slug}.${apex(ctx.env)}/${app.slug}`
-        return {
-          space,
-          text: `${space.slug}/${app.slug} asks each person to connect their ` +
-            `own ${integrationOf(b)}: link them to ${at}/api/connections/` +
-            `${encodeURIComponent(integrationOf(b))}, where the platform ` +
-            `draws the Connect button. The page reads their sentinel as ` +
-            `${u.binding} from ./api/env and sends the call through ` +
-            './api/fetch?url=…; only they call out through it.',
-        }
-      }
-      if (status == 'connected') {
-        await rebind(ctx.env, storeName(space, app), app.eid)
-      }
-      return {
-        space,
-        text: `${space.slug}/${app.slug} ${said(u, 'worker.js')}. ` +
-          (status == 'connected'
-            ? `It is connected, and env.${u.binding} answers now.`
-            : `It is not connected yet: the person pastes the key or signs ` +
-              `in at ${page(ctx.env, space)} — never in this chat — and ` +
-              `env.${u.binding} answers from then on.`) +
-          (u.direct ? '' : ` Send env.${u.binding} wherever the service ` +
-            'wants its key (a header, the query, the body); it is swapped for ' +
-            'the key on the way out, only to the hosts the connection names.') +
-          (u.anyone ? '' : ' Only a member of the app may call out ' +
-            'through it until the person opens it to anyone on that page.'),
-      }
-    },
-  },
-  {
-    name: 'connection_list',
-    readOnly: true,
-    input: {
-      type: 'object',
-      properties: { space: SPACE },
-    },
-    run: async (ctx, args) => {
-      let { space } = await inSpace(ctx, args)
-      let read = readOf(ctx.env)
-      let all = await list(read, space.eid)
-      let titles = new Map(
-        (await ctx.dir.apps(space)).map((a) => [a.eid, a.slug]),
-      )
-      let rows = all.filter((b) => b[CONNECTION]).map((b) => {
-        let c = comp(b, CONNECTION)
-        let uses = all.filter((l) => comp(l, 'edge').to == b.entity.eid)
-          .map((l) =>
-            said(
-              comp(l, USES),
-              titles.get(String(comp(l, 'edge').from)) ?? 'another app',
-            )
-          )
-        return `${c.integration} (${b.entity.eid}): ${c.status}${
-          c.account ? ` as ${c.account}` : ''
-        }${uses.length ? `; ${uses.join('; ')}` : ''}`
-      })
-      return {
-        space,
-        text: rows.length
-          ? `${rows.join('\n')}\n\nThe person connects each at ` +
-            `${page(ctx.env, space)}. No key is ever shown.`
-          : `${space.slug} has no connections. connection_need says what ` +
-            'an app needs.',
-      }
-    },
-  },
 ]
 
 /**
@@ -944,7 +796,7 @@ let CONNECTIONS: Row[] = [
  * keeps them in — the connection and its integration, the secret its
  * credential is, the mark it wears while that is saved, and the text a
  * failure is said in beside `exception` — the built integrations it installs
- * there, the two tools, the two doors, and the Connect button at an app's
+ * there, the attach tool, the two doors, and the Connect button at an app's
  * address.
  */
 export let connectionsPlugin: Plugin = {

@@ -2,7 +2,7 @@
 // model settings make a shadow variant; `only` and `limit` build some
 // bindings and leave the rest as they are. The underlying work still goes
 // through a tool call. `build` is that reconciliation for any host's door:
-// the box's `builder build` tool below, and a yaks.app store's `/build`.
+// the box's `builder build` tool below, and a yaks.app store's declared tool.
 
 import {
   type Actor,

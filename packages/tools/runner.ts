@@ -737,13 +737,16 @@ export let runner = (g: Graph, opts: Opts): Runner => {
     // bundles are entities that already exist, and applying them would patch
     // every row the query found and move its `updated` stamp — so a read
     // writes only the runner's bookkeeping and returns the answer as the tool
-    // built it. A failure is written either way: an error is worth recording
+    // built it. An applied tool's host has already handled the answer, so it
+    // also writes only bookkeeping here. A failure is written either way:
+    // an error is worth recording
     // whatever the tool was. A rehearsal's answer is what a write would have
     // been, and is not written either.
     let land = async (
       made: Bundle[],
       state: string,
-      keeps = !tool.readOnly || state == 'failed' || state == 'interrupted',
+      keeps = (!tool.readOnly && !tool.applied) || state == 'failed' ||
+        state == 'interrupted',
       code?: string,
     ): Promise<Bundle[]> => {
       let ended = ending(call, started, state, made)
@@ -775,12 +778,13 @@ export let runner = (g: Graph, opts: Opts): Runner => {
         ...actor ? { created: { ...call.created as Comp, ...actor } } : {},
         ...opts.process ? { process: opts.process } : {},
       }
-      let made = signed(await tool.run(asking, host), actor)
+      let made = await tool.run(asking, host)
+      if (!tool.applied) made = signed(made, actor)
       measured(made, opts.most ?? MOST)
       // A rehearsal: `check: true` to a tool that writes runs the write's
       // every phase and rolls it back, so the answer is the batch as a kept
       // write would have returned it, or the refusal it would have met.
-      if (!tool.readOnly && args.check === true) {
+      if (!tool.readOnly && !tool.applied && args.check === true) {
         answered = await land(
           await g.apply(made, { check: true }),
           'done',
@@ -788,7 +792,7 @@ export let runner = (g: Graph, opts: Opts): Runner => {
         )
       } else {
         answered = await land(made, 'done')
-        if (!tool.readOnly) wrote = answerOf(answered, id)
+        if (!tool.readOnly && !tool.applied) wrote = answerOf(answered, id)
       }
     } catch (error) {
       // This catches both the tool's own throw and a rejection of what it

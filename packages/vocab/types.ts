@@ -234,6 +234,7 @@ export type PropSchema = {
   // A tool declaration's own keywords: what it is called, and its arguments.
   noun?: string
   verb?: string
+  revision?: string
   input?: Record<string, PropSchema>
   positional?: readonly string[]
   forward?: string

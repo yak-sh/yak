@@ -11,7 +11,7 @@ import { memoryPlugin } from './memory.ts'
 import { pagesOf, toolsOf, vocabOf } from './plugin.ts'
 import { PLUGINS } from './plugins.ts'
 import { PAGES } from './guide.ts'
-import { TOOLS } from './tools.ts'
+import { PUBLISHED } from './published.ts'
 import { platformVocab } from './vocab.ts'
 
 test('the host composes the memory plugin', () => {
@@ -29,13 +29,13 @@ test('its words reach the directory vocabulary', () => {
 })
 
 test('its two tools reach the roster', () => {
-  let named = TOOLS.map((t) => t.name)
+  let named = PUBLISHED.map((t) => t.name)
   for (let name of ['memory_save', 'memory_recall']) {
     assert(named.includes(name), `${name} is not on the roster`)
   }
   assertEquals(
     toolsOf([memoryPlugin]).map((t) => t.name),
-    ['memory_save', 'memory_recall'],
+    [],
   )
 })
 

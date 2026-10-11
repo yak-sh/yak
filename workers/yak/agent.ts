@@ -50,6 +50,7 @@ import type { Search } from '@yaks/mcp'
 import type { Prop, PropSchema, Vocab } from '@yaks/vocab'
 import { META } from './directory.ts'
 import { letters } from './letters.ts'
+import { packageTools } from './package-tools.ts'
 import { PUBLISHED } from './published.ts'
 import { composed, type Reach, read, vocabAt, written } from './reach.ts'
 import { titling } from './session.ts'
@@ -174,7 +175,9 @@ export let answered = async (
  */
 export let running =
   (ctx: Ctx, t: Sugar) => (args: Record<string, unknown>, call?: Eid) =>
-    t.run(ctx, args).then((out) => answered(ctx, out, call, t.readOnly))
+    t.run({ ...ctx, ...(call ? { call } : {}) }, args).then((out) =>
+      answered(ctx, out, call, t.readOnly)
+    )
 
 // What the transport says about a tool beside its schemas: what it declares
 // about signing in where that is not the door's own (preauth.ts NOAUTH — every
@@ -243,9 +246,14 @@ export let sugared = (ctx: Ctx, t: Sugar): Tool => ({
  */
 export let platform = (ctx: Ctx): Plugin => ({
   name: 'yak/platform',
-  tools: [...TOOLS, ...PUBLISHED].map((t) =>
-    ctx.person || openly(t) ? sugared(ctx, t) : barred(sugared(ctx, t), ctx.env)
-  ),
+  tools: [
+    ...[...TOOLS, ...PUBLISHED].map((t) =>
+      ctx.person || openly(t)
+        ? sugared(ctx, t)
+        : barred(sugared(ctx, t), ctx.env)
+    ),
+    ...packageTools(ctx).map((t) => ctx.person ? t : barred(t, ctx.env)),
+  ],
 })
 
 /**
