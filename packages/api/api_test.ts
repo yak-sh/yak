@@ -322,25 +322,36 @@ test('a door that refuses to name a writer answers 401', async () => {
   })
 })
 
-test('/query answers an aggregate with its value, not a row set', async () => {
-  let handler = shop()
-  await handler(post('/apply', [
-    { entity: { eid: 'b1' }, book: { price: 12, status: 'shelved' } },
-    { entity: { eid: 'b2' }, book: { price: 30, status: 'shelved' } },
-    { entity: { eid: 'b3' }, book: { price: 9, status: 'sold' } },
-  ]))
-  assertEquals(await body(await handler(ask('.book&.count'))), { count: 3 })
-  assertEquals(await body(await handler(ask('.book&.book.price<20&.count'))), {
-    count: 2,
-  })
-  assertEquals(await body(await handler(ask('.distinct=book.status'))), {
-    distinct: ['shelved', 'sold'],
-  })
-  assertEquals(await body(await handler(ask('.tally=book.status'))), {
-    tally: { shelved: 2, sold: 1 },
-  })
-  // A line naming no aggregate still answers its members.
-  let found: Bundle[] = await body(await handler(ask('.book&.book.price<20')))
+// The route answers a prepared shop; graph writes have their own tests above.
+let aggregateGraph = shopGraph()
+aggregateGraph.apply([
+  { entity: { eid: 'b1' }, book: { price: 12, status: 'shelved' } },
+  { entity: { eid: 'b2' }, book: { price: 30, status: 'shelved' } },
+  { entity: { eid: 'b3' }, book: { price: 9, status: 'sold' } },
+])
+let aggregateHandler = api({ graph: aggregateGraph, authenticate: () => hers })
+for (
+  let [query, expected] of [
+    ['.book&.count', { count: 3 }],
+    ['.book&.book.price<20&.count', { count: 2 }],
+    ['.distinct=book.status', { distinct: ['shelved', 'sold'] }],
+    ['.tally=book.status', { tally: { shelved: 2, sold: 1 } }],
+  ] as const
+) {
+  test(
+    query == '.book&.count'
+      ? '/query answers an aggregate with its value, not a row set'
+      : `/query answers ${query} with its value, not a row set`,
+    async () => {
+      assertEquals(await body(await aggregateHandler(ask(query))), expected)
+    },
+  )
+}
+
+test('/query without an aggregate still answers its members', async () => {
+  let found: Bundle[] = await body(
+    await aggregateHandler(ask('.book&.book.price<20')),
+  )
   assertEquals(found.map((b) => b.entity.eid).sort(), ['b1', 'b3'])
 })
 

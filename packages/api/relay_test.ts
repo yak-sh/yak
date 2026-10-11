@@ -5,7 +5,7 @@
 // that only ever says "here it is" leaves a cursor on the screen forever.
 
 import { test } from '@yaks/testing'
-import { assert, assertEquals, assertThrows } from '@std/assert'
+import { assert, assertEquals, assertIsError, assertThrows } from '@std/assert'
 import { type Bundle, type Graph, graph } from '@yaks/graph'
 import { admitSchema } from '@yaks/graph/schema'
 import { ram } from '@yaks/ram'
@@ -955,7 +955,7 @@ test('pending peer values appear in initial and restored watches', async () => {
   assertEquals(watcher.take().at(-1)?.bundles, [])
 })
 
-test('a durable reference edit orders after pending peer membership', async () => {
+let durableReference = await (async () => {
   let clock = stopped(), graph = shop()
   graph.apply([
     { entity: { eid: 'p' }, doc: { title: 'Author' } },
@@ -971,6 +971,11 @@ test('a durable reference edit orders after pending peer membership', async () =
   graph.apply([{ entity: { eid: 'look' }, book: { price: 2 } }])
   await done
   clock.tick(16)
+  return { clock, graph, subs, writer, watcher }
+})()
+
+test('a durable reference edit orders after pending peer membership', async () => {
+  let { clock, graph, subs, writer, watcher } = durableReference
   let rows = watcher.take().flatMap((f) => f.bundles ?? [])
   assertEquals(rows.at(-1)?.book, { author: 'p', price: 2 })
   graph.apply([{ entity: { eid: 'look' }, book: { author: null } }])
@@ -1028,7 +1033,9 @@ for (let method of ['relay', 'enqueue'] as const) {
     await subs.drop(writer.to)
   })
 
-  test(`${method} refuses unsaved input before changing its held value`, async () => {
+  // Admission failures are fixed outcomes; prepare them once and check both
+  // their errors and the value a later subscriber still receives.
+  let refusedInput = await (async () => {
     let g = shop(), clock = stopped(), watcher = ear(), writer = ear()
     g.apply([{ entity: { eid: 'b1' }, book: { price: 10 } }])
     let identities: unknown[] = []
@@ -1058,18 +1065,32 @@ for (let method of ['relay', 'enqueue'] as const) {
     let first = write({ ...row, $actor: { by: 'thief' } })
     clock.tick(16)
     await first
+    watcher.take()
+    let failures: unknown[] = []
+    let refuse = (fn: () => unknown) => {
+      try {
+        fn()
+        failures.push(undefined)
+      } catch (error) {
+        failures.push(error)
+      }
+    }
+    for (let browsing of [{ x: 9 }, null]) {
+      refuse(() => write({ ...row, browsing }, 'Bea'))
+    }
+    refuse(() => write({ ...row, $was: { book: { price: null } } }))
+    refuse(() => write({ ...row, $mystery: true }))
+    refuse(() => write({ ...row, browsing: { x: 'bad' } }))
+    return { watcher, writer, identities, subs, row, failures }
+  })()
+
+  test(`${method} refuses unsaved input before changing its held value`, async () => {
+    let { watcher, writer, identities, subs, row, failures } = refusedInput
     assertEquals(identities[0], { by: 'Ada', via: 'tab' })
     assertEquals(subs.relaying(writer.to), ['b1 browsing'])
-    watcher.take()
-    for (
-      let b of [
-        { ...row, browsing: { x: 9 } },
-        { ...row, browsing: null },
-      ]
-    ) assertThrows(() => write(b, 'Bea'), Error, 'denied')
-    assertThrows(() => write({ ...row, $was: { book: { price: null } } }))
-    assertThrows(() => write({ ...row, $mystery: true }))
-    assertThrows(() => write({ ...row, browsing: { x: 'bad' } }))
+    for (let [i, error] of failures.entries()) {
+      assertIsError(error, Error, i < 2 ? 'denied' : undefined)
+    }
     assertEquals(watcher.take(), [])
     let late = ear()
     subs.open(late.to, 'late', '.book&*')

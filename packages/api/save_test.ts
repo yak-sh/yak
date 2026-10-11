@@ -125,26 +125,27 @@ test('peer saving merges latest patches once an interval and settles when quiet'
   equal(f.commits.length, 2)
 })
 
+let lastWriter = fixture()
+lastWriter.saved.write('one', lastWriter.write(1))
+lastWriter.saved.write('one', lastWriter.write(2))
+lastWriter.saved.write('two', [{ entity: { eid: 'a' }, position: { y: 3 } }], {
+  actor: { by: 'Bea' },
+})
+lastWriter.saved.write('one', lastWriter.write(4, 'b'))
+// Preserve the value observed before disconnect while preparing the held state.
+let lastWriterB = lastWriter.read('b')
+lastWriter.saved.drop('one')
+
 test('pending saves stay with the last writer after disconnect', () => {
-  let f = fixture()
-  f.saved.write('one', f.write(1))
-  f.saved.write('one', f.write(2))
-  f.saved.write('two', [{ entity: { eid: 'a' }, position: { y: 3 } }], {
-    actor: { by: 'Bea' },
-  })
-  f.saved.write('one', f.write(4, 'b'))
-  equal(f.read('b'), { x: 4 })
-  f.saved.drop('one')
+  let f = lastWriter
+  equal(lastWriterB, { x: 4 })
   equal(f.read(), { x: 1 })
   f.saved.drop('two')
   equal(f.read(), { x: 1 })
   f.tick(1000)
   equal(f.read(), { x: 2, y: 3 })
-  equal(
-    (f.g.get(['a']) as Bundle[])[0].updated &&
-      ((f.g.get(['a']) as Bundle[])[0].updated as Comp).by,
-    'Bea',
-  )
+  let updated = (f.g.get(['a']) as Bundle[])[0].updated as Comp
+  equal(updated?.by, 'Bea')
   equal(f.timers.size, 0)
 })
 
@@ -439,7 +440,7 @@ test('a negated association time condition can become eligible without a commit'
   equal(f.timers.size, 0)
 })
 
-test('computed eligibility wakes on its referenced dependency', () => {
+let computedEligibility = (() => {
   let f = fixture('.book.ready=1', [{
     $defs: {
       book: {
@@ -464,6 +465,11 @@ test('computed eligibility wakes on its referenced dependency', () => {
   f.g.apply([{ entity: { eid: 'a' }, book: { status: 'draft' } }])
   f.saved.write('one', f.write(7))
   f.saved.drop('one')
+  return f
+})()
+
+test('computed eligibility wakes on its referenced dependency', () => {
+  let f = computedEligibility
   equal(f.timers.size, 0)
   f.g.apply([{ entity: { eid: 'review' }, review: { book: 'a' } }])
   f.tick(0)
@@ -508,10 +514,15 @@ test('pending peer patches do not recheck unchanged stored eligibility on every 
   equal(f.read(), { x: 19 })
 })
 
-test('a known local save deadline owns one timer rather than polling SQLite each second', () => {
+let localDeadline = (() => {
   let f = fixture('.book (!position | .updated.at<="30s ago")')
   f.g.apply([{ entity: { eid: 'a' }, book: { status: 'draft' } }])
   f.saved.write('one', f.write(1))
+  return f
+})()
+
+test('a known local save deadline owns one timer rather than polling SQLite each second', () => {
+  let f = localDeadline
   f.saved.write('one', f.write(2))
   let read = f.g.get.bind(f.g), reads = 0
   f.g.get = (...args) => {

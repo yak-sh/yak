@@ -121,9 +121,12 @@ test('whole-entity subscription snapshots keep default whole coverage', () => {
   }
 })
 
-test('restoring shared watches reads each answer once and keeps each live', () => {
+// Restore a prepared set of shared watches once, then check every recipient
+// and keep exercising its live updates below.
+let restoring = () => {
   let g = shop()
   g.apply([{ entity: { eid: 'b1' }, book: { price: 12 } }])
+
   let reads = 0, counts = 0
   let spy: Graph = {
     ...g,
@@ -132,11 +135,20 @@ test('restoring shared watches reads each answer once and keeps each live', () =
   }
   let subs = subscriptions(spy)
   let ears = Array.from({ length: 4 }, ear)
-  subs.restore(ears.flatMap(({ to }, i) => [
+  let openings = ears.flatMap(({ to }, i) => [
     { sink: to, id: `books${i}`, query: '.book.price<20' },
     { sink: to, id: `count${i}`, query: '.book&.count' },
-  ]))
-  assertEquals([reads, counts], [1, 1])
+  ])
+  subs.restore(openings)
+  return { g, subs, ears, reads: () => reads, counts: () => counts }
+}
+let restoredWatches = restoring()
+let liveWatches = restoring()
+for (let e of liveWatches.ears) e.take()
+
+test('restoring shared watches reads each answer once and keeps each live', () => {
+  let { ears } = restoredWatches
+  assertEquals([restoredWatches.reads(), restoredWatches.counts()], [1, 1])
   for (let [i, e] of ears.entries()) {
     assertEquals(
       e.take().map((f) => [
@@ -150,7 +162,10 @@ test('restoring shared watches reads each answer once and keeps each live', () =
       ],
     )
   }
+})
 
+test('restored shared watches keep each answer live', () => {
+  let { g, subs, ears } = liveWatches
   g.apply([{ entity: { eid: 'b2' }, book: { price: 9 } }])
   for (let [i, e] of ears.entries()) {
     assertEquals(
@@ -170,7 +185,7 @@ test('restoring shared watches reads each answer once and keeps each live', () =
   let later = ear()
   subs.open(later.to, 'later', '.book.price<20')
   assertEquals(ids(later.take()[0]), ['b1', 'b2'])
-  assertEquals(reads, 1)
+  assertEquals(liveWatches.reads(), 1)
 })
 
 test('a commit pushes what the query selects, and nothing else', () => {
@@ -418,7 +433,7 @@ test('a windowed query re-reads its whole answer', () => {
   assertEquals(moved.gone, ['b1'])
 })
 
-test('a windowed query ignores writes outside its fixed owner', () => {
+let ownerWindow = () => {
   let g = shop()
   g.apply([
     { entity: { eid: 'b1' }, book: { price: 12 } },
@@ -435,16 +450,31 @@ test('a windowed query ignores writes outside its fixed owner', () => {
   let { to, take } = ear()
   let query = '.review.book=b1&.order=-review.stars&.limit=1'
   subs.open(to, 'reviews', query)
-  assertEquals(ids(take()[0]), ['r1'])
+  let first = take()[0]
   reads.length = 0
+  return { g, reads, take, first }
+}
+let fixedOwner = ownerWindow()
+let departingOwner = ownerWindow()
+departingOwner.g.apply([{
+  entity: { eid: 'r2' },
+  review: { stars: 5, book: 'b1' },
+}])
+departingOwner.take()
 
+test('a windowed query ignores writes outside its fixed owner', () => {
+  let { g, reads, take, first } = fixedOwner
+  assertEquals(ids(first), ['r1'])
   g.apply([{ entity: { eid: 'r2' }, review: { stars: 5 } }])
   assertEquals(reads, [])
   assertEquals(take(), [])
 
   g.apply([{ entity: { eid: 'r2' }, review: { book: 'b1' } }])
   assertEquals(ids(take()[0]), ['r2'])
+})
 
+test('a windowed query refills when a member leaves its fixed owner', () => {
+  let { g, take } = departingOwner
   g.apply([{ entity: { eid: 'r2' }, review: { book: 'b2' } }])
   let [left] = take()
   assertEquals(ids(left), ['r1'])
@@ -907,7 +937,27 @@ test('deleting what an answer each entity decides never held does not run it', (
   assertEquals(w.take().map((f) => f.gone), [['b2']])
 })
 
-test('an unrelated change to a member does not read or repeat its answer', () => {
+let selectedMember = (() => {
+  let g = shop()
+  g.apply([{
+    entity: { eid: 'b1' },
+    book: { price: 13 },
+    doc: { title: 'A title' },
+  }])
+  let reads: string[] = []
+  let spy: Graph = {
+    ...g,
+    read: (q, opts) => (reads.push(`read ${q}`), g.read(q, opts)),
+  }
+  let subs = subscriptions(spy), e = ear()
+  subs.open(e.to, 'doc', '.book&?doc&.limit=1')
+  subs.open(e.to, 'whole', '.book&*&.limit=1')
+  e.take()
+  reads.length = 0
+  return { g, e, reads }
+})()
+
+let unrelatedMember = (() => {
   let g = shop()
   g.apply([{ entity: { eid: 'b1' }, book: { price: 12 } }])
   let reads: string[] = []
@@ -925,26 +975,27 @@ test('an unrelated change to a member does not read or repeat its answer', () =>
   subs.open(e.to, 'routed', '.book&.book.price<20')
   subs.open(e.to, 'window', '.book&.book.price<20&.limit=1')
   e.take()
-  reads = []
+  reads.length = 0
+  return { g, e, reads }
+})()
 
+test('an unrelated change to a member does not read or repeat its answer', () => {
+  let { g, e } = unrelatedMember
   g.apply([{ entity: { eid: 'b1' }, doc: { title: 'A title' } }])
-  assertEquals(reads, [])
+  assertEquals(unrelatedMember.reads, [])
   assertEquals(e.take(), [])
 
   g.apply([{ entity: { eid: 'b1' }, book: { price: 13 } }])
-  assertEquals(reads, [
+  assertEquals(unrelatedMember.reads, [
     'get b1 book',
     'read .book&.book.price<20&.limit=1',
   ])
   assertEquals(e.take().map((f) => f.id), ['routed', 'window'])
 
-  subs.open(e.to, 'doc', '.book&?doc&.limit=1')
-  subs.open(e.to, 'whole', '.book&*&.limit=1')
-  e.take()
-  reads = []
-  g.apply([{ entity: { eid: 'b1' }, doc: { title: 'A new title' } }])
-  assertEquals(e.take().map((f) => f.id), ['doc', 'whole'])
-  assertEquals(reads.filter((r) => r.startsWith('read ')).length, 2)
+  let selected = selectedMember
+  selected.g.apply([{ entity: { eid: 'b1' }, doc: { title: 'A new title' } }])
+  assertEquals(selected.e.take().map((f) => f.id), ['doc', 'whole'])
+  assertEquals(selected.reads.filter((r) => r.startsWith('read ')).length, 2)
 })
 
 test('a component a query holds out is not one its members wear', () => {
