@@ -77,7 +77,12 @@ export class Files extends WorkerEntrypoint {
   declare env: Env
 
   fetch(req: Request): Promise<Response> {
-    return entry(this.env, 'Files fetch', () => filePart.fetch(req, this.env))
+    return entry(
+      this.env,
+      'Files fetch',
+      () => filePart.fetch(req, this.env),
+      req,
+    )
   }
 }
 
@@ -88,7 +93,12 @@ export class Site extends WorkerEntrypoint {
   declare env: Env
 
   fetch(req: Request): Promise<Response> {
-    return entry(this.env, 'Site fetch', () => sitePart.fetch(req, this.env))
+    return entry(
+      this.env,
+      'Site fetch',
+      () => sitePart.fetch(req, this.env),
+      req,
+    )
   }
 }
 
@@ -105,6 +115,7 @@ export class Outbound extends WorkerEntrypoint {
       this.env,
       'Outbound send',
       () => outbound(req, this.env, caller),
+      req,
     )
   }
 }
@@ -115,7 +126,7 @@ export class Outbound extends WorkerEntrypoint {
 // build of this Worker failed (builds.ts).
 export default {
   fetch: (req: Request, env: Env) =>
-    entry(env, 'gateway fetch', () => handler.fetch(req, env)),
+    entry(env, 'gateway fetch', () => handler.fetch(req, env), req),
   email: (message: Inbound, env: Env, ctx?: Lent) =>
     entry(
       env,

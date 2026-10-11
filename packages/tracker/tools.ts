@@ -16,7 +16,7 @@ import {
   type Query,
 } from '@yaks/query'
 import { CallError } from '@yaks/tools'
-import { str } from './model.ts'
+import { comp, str } from './model.ts'
 import { type Options, read } from './routes.ts'
 import { mark as upstream } from './remote.ts'
 
@@ -44,7 +44,18 @@ export let bug = (g: Graph, input: string): Bundle[] | Promise<Bundle[]> =>
       after(one(g, eid), (row) =>
         after(
           g.read(and(eq('error.bug', eid), every(), order('-error.at'))),
-          (occurrences) => [row, ...occurrences],
+          (occurrences) => {
+            let requests = [
+              ...new Set(
+                occurrences.map((e) => str(comp(e, 'during').request))
+                  .filter(Boolean),
+              ),
+            ]
+            return after(
+              requests.length ? g.get(requests, ['request']) : [],
+              (companions) => [row, ...occurrences, ...companions],
+            )
+          },
         )),
   )
 let answer = (call: Bundle, data: Record<string, unknown>): Bundle[] => {

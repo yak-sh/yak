@@ -157,7 +157,7 @@ test('an unsigned webhook is refused, and so is a foreign Origin', async () => {
     // Authentication failures reach the platform tracker even though the
     // webhook answers them. A foreign Origin stays the caller's refusal.
     await k.flushReports!()
-    let reports = k.reported!.slice(before)
+    let reports = k.reported!.slice(before).filter((row) => row.error)
     assert(
       reports.some((row) =>
         (row.exception as { value: string }).value.includes(

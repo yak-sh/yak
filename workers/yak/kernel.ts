@@ -78,6 +78,7 @@
 //     anything else           the front page's own file, page or api door at
 //                             that path: the space's apps own the first path
 //                             segment, the front page answers what is left
+import { origin } from '@yaks/tracker/report'
 import { caught, within } from './defects.ts'
 import { CallError } from '@yaks/tools'
 import { refused as toolRefusal } from '@yaks/tools/routes'
@@ -670,5 +671,18 @@ let router = {
 export let handler = {
   ...router,
   fetch: (req: Request, env: Env): Promise<Response> =>
-    within(env, {}, async () => slid(req, env, await router.fetch(req, env))),
+    within(
+      env,
+      {},
+      async () => slid(req, env, await router.fetch(req, env)),
+      undefined,
+      {
+        origin: origin(
+          env.WORKER_NAME ?? 'yak',
+          env.CF_VERSION_METADATA?.id,
+          'gateway fetch',
+          req,
+        ),
+      },
+    ),
 }

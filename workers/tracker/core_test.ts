@@ -2,7 +2,7 @@
 // and effect handlers used by Durable Objects, without a platform kernel.
 
 import { equal, ok, test } from '@yaks/testing'
-import type { Comp } from '@yaks/graph'
+import { type Comp, graph } from '@yaks/graph'
 import { ram } from '@yaks/ram'
 import { capture } from '@yaks/tracker/report'
 import { options, platform, store, vocab } from './core.ts'
@@ -18,6 +18,36 @@ let records = (scope?: string, id = occurrence) =>
     during: scope ? { space: scope } : {},
   })
 let fixture = () => store(ram(vocab, options), { sink: () => {} })
+
+let failedStorage = ram(vocab, options)
+await graph({ vocab, storage: failedStorage }).apply([
+  { entity: { eid: 'failed-bug' }, bug: { fault: 'failed-notification' } },
+  {
+    entity: { eid: 'failed-notify' },
+    effect: {
+      handler: 'bug_notify',
+      target: 'failed-bug',
+      comp: 'bug',
+      kind: 'created',
+      state: 'pending',
+      attempts: 1,
+    },
+  },
+], { trusted: true })
+let reported: unknown[] = [], fallback: unknown[] = []
+let notificationFailure = Error('notification unavailable')
+await store(failedStorage, {
+  sink: (rows) => void fallback.push(rows),
+  report: (error) => void reported.push(error),
+  notify: () => {
+    throw notificationFailure
+  },
+}).drain()
+
+test('tracker effects report through their host without a second capture', () => {
+  equal(reported, [notificationFailure])
+  equal(fallback, [])
+})
 
 test('queue commits full bundles then acks, duplicates preserve grouping and hits', async () => {
   let g = fixture()

@@ -2,7 +2,7 @@
 // heartbeat and the upstream probe resolve on recovery through tracker marks.
 
 import type { TrackerStore } from './core.ts'
-import { capture } from '@yaks/tracker/report'
+import { capture, type Context, origin } from '@yaks/tracker/report'
 import { derivedEid } from '@yaks/graph'
 import { and, eq, fields } from '@yaks/query'
 
@@ -12,6 +12,11 @@ export let monitor = async (
   last: number | undefined,
   send: typeof fetch = fetch,
   now = Date.now(),
+  context: Pick<Context, 'tags' | 'commit' | 'during' | 'request'> = origin(
+    'yak-tracker',
+    undefined,
+    'Tracker.monitor',
+  ),
 ) => {
   let fault = 'tracker|platform-uptime'
   let broken = ''
@@ -34,6 +39,7 @@ export let monitor = async (
     if (reason) {
       await tracker.ingest(capture(Error(reason), {
         sink: () => {},
+        ...context,
         level: 'fatal',
         fault: key,
         at: new Date(now).toISOString(),

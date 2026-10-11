@@ -25,7 +25,7 @@ import { KERNEL, meta, metaOf } from './meta.ts'
 import { told } from './stream.ts'
 import { level, standing } from './meter.ts'
 import { caught, defect } from './defects.ts'
-import { capture, queue } from '@yaks/tracker/report'
+import { capture, origin, queue } from '@yaks/tracker/report'
 import { errorsAt } from './app-errors.ts'
 import { refuse } from './tool.ts'
 
@@ -140,18 +140,42 @@ export let exceptionOf = (broke: {
 export let noted = async (
   breaks: Breaks,
   broke: Parameters<typeof exceptionOf>[0],
-  at?: { env: Env; space: Space; app: App },
+  at?: {
+    env: Env
+    space: Space
+    app: App
+    request?: Request
+    script?: string
+    entrypoint?: string
+  },
 ) => {
   if (at) {
     if (!at.env.ERRORS) throw Error('tracker intake is unavailable')
     let error = Object.assign(Error(broke.message), {
       stack: broke.stack || '',
     })
+    let place = origin(
+      at.script ?? `${at.space.slug}/${at.app.slug}`,
+      broke.version == null ? undefined : String(broke.version),
+      at.entrypoint ?? 'browser report',
+      at.request,
+    )
     await queue(at.env.ERRORS)(capture(error, {
+      ...place,
+      commit: undefined,
       sink: () => {},
       version: broke.version ?? undefined,
-      during: { space: at.space.eid, app: at.app.eid, kind: 'exception' },
-      tags: { request: broke.request, request_id: broke.requestId },
+      during: {
+        ...place.during,
+        space: at.space.eid,
+        app: at.app.eid,
+        kind: 'exception',
+      },
+      tags: {
+        ...place.tags,
+        request: broke.request,
+        request_id: broke.requestId,
+      },
     }))
   } else {
     await breaks([{ entity: { eid: '$broke' }, exception: exceptionOf(broke) }])

@@ -6,7 +6,7 @@ import { canary as receipt, worker } from './worker.ts'
 import { grouped } from '@yaks/tracker'
 import { json } from './door.ts'
 import { matcher } from '@yaks/match'
-import type { Bundle } from '@yaks/graph'
+import type { Bundle, Comp } from '@yaks/graph'
 import { platform, vocab } from './core.ts'
 
 let fixture = () => {
@@ -88,6 +88,7 @@ let setup = () => {
   }
   let w = worker({
     BUNDLE_HASH: hash,
+    CF_VERSION_METADATA: { id: '00000000-0000-4000-8000-000000000010' },
     TRACKER_SECRET: secret,
     ERRORS: {
       send: (rows) => {
@@ -125,12 +126,22 @@ let read = async (w: ReturnType<typeof worker>, url: string) =>
   (await w.fetch(new Request(url))).json()
 let unsigned = setup()
 let unsignedPublication = publication(unsigned.url)
+await publish(unsigned.w, unsigned.url, unsignedPublication)
 
-test('unsigned canary ignores caller data', async () => {
-  let { sent, w, url } = unsigned
-  await publish(w, url, unsignedPublication)
+test('unsigned canary ignores caller data', () => {
+  let { sent } = unsigned
   equal(sent.length, 1)
-  equal(sent[0][0].during, undefined)
+  let [failure, request] = sent[0]
+  equal(failure.during, { request: request.entity.eid })
+  equal((failure.error as Comp).tags, {
+    script: 'yak-tracker',
+    version: '00000000-0000-4000-8000-000000000010',
+    entrypoint: 'fetch.canary',
+  })
+  equal(
+    (request.request as Comp).url,
+    'https://tracker.test/canary',
+  )
 })
 test('unsigned canary waits for delivery', async () => {
   let { w, url } = setup()

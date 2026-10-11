@@ -12,7 +12,7 @@ import {
   type Wire,
 } from '@yaks/durable-object'
 import { subscriptions } from '@yaks/api'
-import { caught, queue, type Sink } from '@yaks/tracker/report'
+import { caught, origin, queue, type Sink } from '@yaks/tracker/report'
 import {
   type Config,
   options,
@@ -52,6 +52,7 @@ export type TraceAdmission = {
   reason?: string
 }
 export type Settings = {
+  CF_VERSION_METADATA?: { id: string }
   TRACKERS?: {
     getByName: (
       scope: string,
@@ -105,6 +106,7 @@ export class Tracker {
       : (rows) => console.error(JSON.stringify(rows))
     this.#config = {
       sink: this.sink,
+      report: (error) => this.#report(error, 'Tracker.effect'),
       store: this.scope,
       url: 'https://tracker.yak.sh',
       ...env.MAIL
@@ -182,8 +184,12 @@ export class Tracker {
     Object.assign(this.#config, config)
     this.#mailReady = true
   }
-  recover = async (error: unknown) => {
-    await caught(error, { sink: this.sink })
+  #origin = (entrypoint: string, request?: Request) =>
+    origin('yak-tracker', this.env.CF_VERSION_METADATA?.id, entrypoint, request)
+  #report = (error: unknown, entrypoint: string, request?: Request) =>
+    caught(error, { sink: this.sink, ...this.#origin(entrypoint, request) })
+  recover = async (error: unknown, entrypoint: string, request?: Request) => {
+    await this.#report(error, entrypoint, request)
     try {
       await this.ctx.storage.setAlarm(this.now() + 1000)
     } catch { /* next queue delivery retries */ }
@@ -201,7 +207,7 @@ export class Tracker {
       await tracker.ingest(rows)
       await this.#arm()
     } catch (error) {
-      await this.recover(error)
+      await this.recover(error, 'Tracker.ingest')
       throw error
     }
   }
@@ -347,7 +353,7 @@ export class Tracker {
         this.ingest,
       )(request)
     } catch (error) {
-      await this.recover(error)
+      await this.recover(error, 'Tracker.fetch', request)
       return json({ error: 'tracker temporarily unavailable' }, 503)
     }
   }
@@ -379,10 +385,11 @@ export class Tracker {
         await this.ctx.storage.get<number>('heartbeat'),
         undefined,
         this.now(),
+        this.#origin('Tracker.monitor'),
       )
       await this.#arm()
     } catch (error) {
-      await this.recover(error)
+      await this.recover(error, 'Tracker.monitor')
     }
   }
   alarm = async () => {
@@ -392,7 +399,7 @@ export class Tracker {
       await tracker.drain(this.now())
       await this.#arm()
     } catch (error) {
-      await this.recover(error)
+      await this.recover(error, 'Tracker.alarm')
     }
   }
   // Sleep until durable work is due. A healthy monitor and an empty alarm owe
@@ -424,7 +431,7 @@ export class Tracker {
       }
       await this.live?.message(ws, data)
     } catch (error) {
-      await this.recover(error)
+      await this.recover(error, 'Tracker.webSocketMessage')
     }
   }
   webSocketClose = (ws: Wire) => this.live?.close(ws)

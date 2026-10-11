@@ -674,7 +674,7 @@ test("the platform's own break is ours, not the app's", async () => {
     )
     assertEquals(ours.length, 1)
     assertEquals(((ours[0].error as Comp).tags as Comp).request_id, requestId)
-    assertEquals(ours[0].during, undefined)
+    assertEquals(typeof (ours[0].during as Comp).request, 'string')
 
     // Discovery can fail before a named connector tool begins. The wrapped
     // initialize, listing and call catches all retain that request's tags.
@@ -695,7 +695,7 @@ test("the platform's own break is ours, not the app's", async () => {
       assertEquals(response.status, 500)
       let requestId = response.headers.get('x-request-id')
       await response.body?.cancel()
-      let latest = captured.at(-1)!
+      let latest = captured.filter((row) => row.error).at(-1)!
       assertEquals(
         (latest.exception as Comp).value,
         `Release discovery failed: ${

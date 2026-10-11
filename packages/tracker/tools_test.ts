@@ -17,7 +17,7 @@ import { runs } from './tools.ts'
 import { routes } from './routes.ts'
 import { sign } from './ticket.ts'
 
-let ids = [1, 2, 3, 4, 5].map((n) =>
+let ids = [1, 2, 3, 4, 5, 6].map((n) =>
   `00000000-0000-4000-8000-${String(n).padStart(12, '0')}`
 )
 let remote = store(ram(vocab, options), { sink: () => {} })
@@ -37,6 +37,11 @@ await remote.graph.apply([
   {
     entity: { eid: ids[3] },
     error: { bug: ids[1], at: '2026-10-01T00:00:00Z' },
+    during: { request: ids[5] },
+  },
+  {
+    entity: { eid: ids[5] },
+    request: { method: 'GET', url: 'https://app.test/failure' },
   },
 ], { trusted: true })
 await box.apply([{
@@ -89,7 +94,7 @@ test('platform bug show reads retained occurrences without local ids or writes',
   equal(
     rows(await ask('bug_show', { source: 'yaks.app', bug: ids[1] }))
       .map((b) => b.entity.eid),
-    [ids[1], ids[3]],
+    [ids[1], ids[3], ids[5]],
   )
   equal(await box.read('.entity *'), before)
 })

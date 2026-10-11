@@ -1,6 +1,7 @@
 // Runtime retention for tracker delivery and its bounded repeat windows.
 import { waitUntil } from 'cloudflare:workers'
 import { within } from './defects.ts'
+import { origin } from '@yaks/tracker/report'
 import type { Env } from './env.ts'
 
 let clock = {
@@ -25,7 +26,23 @@ export let entry = <T>(
   env: Partial<Env>,
   request: string,
   run: () => T,
-): T => within(env, { request }, run, clock, waitUntil)
+  http?: Request,
+): T =>
+  within(
+    env,
+    { request },
+    run,
+    clock,
+    {
+      retain: waitUntil,
+      origin: origin(
+        env.WORKER_NAME ?? 'yak',
+        env.CF_VERSION_METADATA?.id,
+        request,
+        http,
+      ),
+    },
+  )
 
 /** Construction, lifecycle callbacks and RPC methods share the same reporting
  * boundary. A callback installed by construction retains its invocation scope. */
@@ -43,6 +60,7 @@ export let instrument = <C>(Original: C): C => {
           bindings.get(this) ?? {},
           `${Base.name} ${method}`,
           () => Reflect.apply(run, this, args),
+          args.find((arg): arg is Request => arg instanceof Request),
         )
       },
     })

@@ -8,6 +8,7 @@ let samples = (log: string): Bundle[] =>
   Deno.readTextFileSync(log).split('\n')
     .filter((line) => line.startsWith('yak-tracker '))
     .flatMap((line) => JSON.parse(line.slice('yak-tracker '.length)))
+    .filter((row) => row.error)
 
 test('runtime gateway, construction, lifecycle and RPC failures reach tracker', async () => {
   let k = await workerd()
@@ -56,6 +57,13 @@ test('a store alarm cut off by the runtime is reported once by its retry', async
     samples(k.log).slice(before).map((row) =>
       (row.error as { tags: unknown }).tags
     ),
-    [{ request: 'alarm', store: 'ada/notes', retry: '1' }],
+    [{
+      request: 'alarm',
+      store: 'ada/notes',
+      retry: '1',
+      script: 'yak',
+      version: 'unknown',
+      entrypoint: 'store probe',
+    }],
   )
 })

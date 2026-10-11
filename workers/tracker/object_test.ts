@@ -7,7 +7,7 @@ import { capture } from '@yaks/tracker/report'
 import { type State, Tracker } from './object.ts'
 import { options, store, vocab } from './core.ts'
 import { sign } from './auth.ts'
-import { type Comp, graph } from '@yaks/graph'
+import { type Bundle, type Comp, graph } from '@yaks/graph'
 import { notify } from '@yaks/tracker/effects'
 import { activate, activation } from './mail.ts'
 import { sending } from '@yaks/mail'
@@ -39,10 +39,15 @@ test('postboot failure does not poison the object and reporting never throws', a
     },
   }
   let secret = 'scratch'
+  let sent: Bundle[][] = []
   let object = new Tracker(state, {
     TRACKER_SECRET: secret,
+    CF_VERSION_METADATA: { id: '00000000-0000-4000-8000-000000000011' },
     ERRORS: {
-      send: () => Promise.reject(Error('reporting unavailable')),
+      send: (rows) => {
+        sent.push(rows)
+        return Promise.reject(Error('reporting unavailable'))
+      },
     },
   })
   let ticket = await sign({
@@ -63,6 +68,16 @@ test('postboot failure does not poison the object and reporting never throws', a
     console.error = report
   }
   equal(object.tracker, undefined)
+  let [failure, companion] = sent[0]
+  equal((failure.error as Comp).tags, {
+    script: 'yak-tracker',
+    version: '00000000-0000-4000-8000-000000000011',
+    entrypoint: 'Tracker.fetch',
+  })
+  equal((failure.error as Comp).commit, '00000000-0000-4000-8000-000000000011')
+  equal(failure.during, { request: companion.entity.eid })
+  equal((companion.request as Comp).method, 'GET')
+  equal((companion.request as Comp).url, 'https://tracker.test/bugs')
   equal(alarms.length, 1)
   object.tracker = store(ram(vocab, options), { sink: () => {} })
   equal((await object.fetch(request())).status, 200)

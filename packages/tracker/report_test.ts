@@ -1,7 +1,15 @@
 import { equal, ok, test, throws } from '@yaks/testing'
 import { CallError } from '@yaks/tools'
 import { Refused } from '@yaks/graph'
-import { capture, caught, post, queue, report, spool } from './report.ts'
+import {
+  capture,
+  caught,
+  origin,
+  post,
+  queue,
+  report,
+  spool,
+} from './report.ts'
 import { comp } from './model.ts'
 import { fixture } from './fixture_test.ts'
 import { intake } from './service.ts'
@@ -114,4 +122,35 @@ test('spool intake acknowledges only admitted records and replay counts once', a
   await intake(g, source)
   equal(acks, 2)
   equal((await g.read('.error')).length, 1)
+})
+
+let request = new Request('https://app.test/api/query?token=secret', {
+  method: 'POST',
+  headers: { authorization: 'secret' },
+  body: 'secret',
+})
+let failure = Error('internal error; reference = opaque')
+void failure.stack
+test('runtime reports retain script, release, entrypoint and a scrubbed request', () => {
+  for (let http of [request, undefined]) {
+    let rows = capture(failure, {
+      ...origin('yak', 'release-id', 'Store.fetch', http),
+      sink: () => {},
+    })
+    equal(comp(rows[0], 'error').tags, {
+      script: 'yak',
+      version: 'release-id',
+      entrypoint: 'Store.fetch',
+    })
+    equal(comp(rows[0], 'error').commit, 'release-id')
+    equal(comp(rows[0], 'during').request, rows[1].entity.eid)
+    equal(comp(rows[1], 'request'), {
+      route: 'Store.fetch',
+      method: http ? 'POST' : undefined,
+      url: http ? 'https://app.test/api/query' : undefined,
+      status: undefined,
+      ms: undefined,
+      agent: undefined,
+    })
+  }
 })

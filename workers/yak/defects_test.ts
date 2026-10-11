@@ -2,7 +2,7 @@
 // tracker's queue interface, with invocation context kept apart.
 import { clock, equal, ok, test } from '@yaks/testing'
 import { type Bundle, Refused } from '@yaks/graph'
-import { capture } from '@yaks/tracker/report'
+import { capture, origin } from '@yaks/tracker/report'
 import { batch } from '../tracker/queue.ts'
 import { platform } from '../tracker/core.ts'
 import { caught, defect, delivery, within } from './defects.ts'
@@ -53,6 +53,43 @@ test('platform repeats reach tracker with hit counts and catch tags', async () =
 let reused = Error('reused error')
 // Stack capture belongs to the input fixture, rather than the repeat counter.
 void reused.stack
+
+let request = new Request('https://yaks.app/mcp?token=secret', {
+  method: 'POST',
+  headers: { authorization: 'secret' },
+  body: 'secret',
+})
+test('nested catches retain runtime origin and its request companion', async () => {
+  let { rows, time, env } = recorded()
+  await within(
+    env,
+    {},
+    () => {
+      return within(env, { tool: 'inspect' }, () => {
+        caught(reused, { request: 'tool catch' })
+      })
+    },
+    time,
+    { origin: origin('yak', 'deploy', 'gateway fetch', request) },
+  )
+  let [error, http] = rows[0]
+  equal((error.error as { tags: unknown }).tags, {
+    script: 'yak',
+    version: 'deploy',
+    entrypoint: 'gateway fetch',
+    tool: 'inspect',
+    request: 'tool catch',
+  })
+  equal(error.during, { request: http.entity.eid })
+  equal(http.request, {
+    method: 'POST',
+    url: 'https://yaks.app/mcp',
+    route: 'gateway fetch',
+    status: undefined,
+    ms: undefined,
+    agent: undefined,
+  })
+})
 
 test('a caught failure counts once per invocation and refusals stay back', async () => {
   let { rows, time, env } = recorded()

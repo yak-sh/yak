@@ -4,7 +4,7 @@
 import type { Bundle } from '@yaks/graph'
 import { bugEid } from '@yaks/tracker'
 import { sign } from './auth.ts'
-import { capture, caught, queue } from '@yaks/tracker/report'
+import { capture, caught, origin, queue } from '@yaks/tracker/report'
 import { platform } from './core.ts'
 import { consume, type Message } from './queue.ts'
 import { json } from './door.ts'
@@ -22,10 +22,11 @@ export type Env = Omit<Settings, 'TRACKERS'> & {
   TRACKERS: { getByName: (scope: string) => Stub }
 }
 let uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
-export let canary = (hash: string) => {
+export let canary = (hash: string, version?: string, request?: Request) => {
   let fault = `tracker-canary|${hash}`
   let rows = capture(Error(`tracker deploy canary ${hash}`), {
     sink: () => {},
+    ...origin('yak-tracker', version, 'fetch.canary', request),
     fault,
   })
   // A deployment exercises grouping without notifying a synthetic bug.
@@ -41,72 +42,93 @@ export let scopeOf = (request: Request) => {
     ? scope
     : null
 }
-export let worker = (env: Env, ticket: typeof sign = sign) => ({
-  fetch: async (request: Request): Promise<Response> => {
-    let scope = scopeOf(request)
-    if (!scope) return json({ error: 'tracker global scope required' }, 400)
-    try {
-      let url = new URL(request.url)
-      if (url.pathname == '/canary') {
-        if (scope != platform) return json({ error: 'platform only' }, 403)
-        let hash = url.searchParams.get('hash')
-        if (!hash || !/^[0-9a-f]{64}$/.test(hash)) {
-          return json({ error: 'bundle hash required' }, 400)
-        }
-        if (!env.BUNDLE_HASH) return json({ error: 'bundle unavailable' }, 503)
-        if (hash != env.BUNDLE_HASH) {
-          return json({ error: 'bundle is not deployed' }, 409)
-        }
-        if (request.method == 'GET') {
-          let eid = url.searchParams.get('eid')
-          if (!eid || !uuid.test(eid)) {
-            return json({ error: 'canary receipt required' }, 400)
+export let worker = (env: Env, ticket: typeof sign = sign) => {
+  let report = (error: unknown, entrypoint: string, request?: Request) =>
+    caught(error, {
+      sink: env.ERRORS ? queue(env.ERRORS) : () => {},
+      ...origin(
+        'yak-tracker',
+        env.CF_VERSION_METADATA?.id,
+        entrypoint,
+        request,
+      ),
+    })
+  return {
+    fetch: async (request: Request): Promise<Response> => {
+      let scope = scopeOf(request)
+      if (!scope) return json({ error: 'tracker global scope required' }, 400)
+      try {
+        let url = new URL(request.url)
+        if (url.pathname == '/canary') {
+          if (scope != platform) return json({ error: 'platform only' }, 403)
+          let hash = url.searchParams.get('hash')
+          if (!hash || !/^[0-9a-f]{64}$/.test(hash)) {
+            return json({ error: 'bundle hash required' }, 400)
           }
-          if (!env.TRACKER_SECRET) {
-            return json({ error: 'tracker unavailable' }, 503)
+          if (!env.BUNDLE_HASH) {
+            return json({ error: 'bundle unavailable' }, 503)
           }
-          // Use the stable read door across Worker/DO deployment propagation.
-          // The runtime holds its signing key; the build receives only a boolean.
-          let signed = await ticket({
-            scope: platform,
-            person: platform,
-            admin: true,
-            exp: Date.now() / 1000 + 60,
-          }, env.TRACKER_SECRET)
-          let query = new URL('https://tracker.internal/query')
-          query.searchParams.set(
-            'q',
-            `.entity.eid=${eid} .error.fault="tracker-canary|${hash}" .error.bug .limit=1`,
-          )
-          let response = await env.TRACKERS.getByName(platform).fetch(
-            new Request(query, {
-              headers: { authorization: `Bearer ${signed}` },
-            }),
-          )
-          if (!response.ok) return json({ error: 'tracker unavailable' }, 503)
-          return json({ arrived: (await response.json()).length == 1 })
+          if (hash != env.BUNDLE_HASH) {
+            return json({ error: 'bundle is not deployed' }, 409)
+          }
+          if (request.method == 'GET') {
+            let eid = url.searchParams.get('eid')
+            if (!eid || !uuid.test(eid)) {
+              return json({ error: 'canary receipt required' }, 400)
+            }
+            if (!env.TRACKER_SECRET) {
+              return json({ error: 'tracker unavailable' }, 503)
+            }
+            // Use the stable read door across Worker/DO deployment propagation.
+            // The runtime holds its signing key; the build receives only a boolean.
+            let signed = await ticket({
+              scope: platform,
+              person: platform,
+              admin: true,
+              exp: Date.now() / 1000 + 60,
+            }, env.TRACKER_SECRET)
+            let query = new URL('https://tracker.internal/query')
+            query.searchParams.set(
+              'q',
+              `.entity.eid=${eid} .error.fault="tracker-canary|${hash}" .error.bug .limit=1`,
+            )
+            let response = await env.TRACKERS.getByName(platform).fetch(
+              new Request(query, {
+                headers: { authorization: `Bearer ${signed}` },
+              }),
+            )
+            if (!response.ok) return json({ error: 'tracker unavailable' }, 503)
+            return json({ arrived: (await response.json()).length == 1 })
+          }
+          if (request.method != 'POST') {
+            return json({ error: 'canary method denied' }, 405)
+          }
+          if (!env.ERRORS) return json({ error: 'queue unavailable' }, 503)
+          let rows = canary(hash, env.CF_VERSION_METADATA?.id, request)
+          await env.ERRORS.send(rows)
+          return json({ eid: rows[0].entity.eid })
         }
-        if (request.method != 'POST') {
-          return json({ error: 'canary method denied' }, 405)
-        }
-        if (!env.ERRORS) return json({ error: 'queue unavailable' }, 503)
-        let rows = canary(hash)
-        await env.ERRORS.send(rows)
-        return json({ eid: rows[0].entity.eid })
+        return await env.TRACKERS.getByName(scope).fetch(request)
+      } catch (error) {
+        await report(error, 'fetch', request)
+        return json({ error: 'tracker temporarily unavailable' }, 503)
       }
-      return await env.TRACKERS.getByName(scope).fetch(request)
-    } catch (error) {
-      await caught(error, { sink: env.ERRORS ? queue(env.ERRORS) : () => {} })
-      return json({ error: 'tracker temporarily unavailable' }, 503)
-    }
-  },
-  queue: (messages: Message[]) =>
-    consume(
-      messages,
-      (scope) => env.TRACKERS.getByName(scope),
-      (error) =>
-        caught(error, { sink: env.ERRORS ? queue(env.ERRORS) : () => {} }),
-      (scope, rows) => env.TRACKERS.getByName(platform).admitTrace(scope, rows),
-    ),
-  scheduled: () => env.TRACKERS.getByName(platform).monitor(),
-})
+    },
+    queue: (messages: Message[]) =>
+      consume(
+        messages,
+        (scope) => env.TRACKERS.getByName(scope),
+        (error) => report(error, 'queue'),
+        (scope, rows) =>
+          env.TRACKERS.getByName(platform).admitTrace(scope, rows),
+      ),
+    scheduled: async () => {
+      try {
+        await env.TRACKERS.getByName(platform).monitor()
+      } catch (error) {
+        await report(error, 'scheduled')
+        throw error
+      }
+    },
+  }
+}

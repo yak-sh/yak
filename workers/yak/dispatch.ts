@@ -371,7 +371,14 @@ export let workerBreak = async (
     version,
     message: error.message,
     stack: error.stack ?? '',
-  }, { env, space, app })
+  }, {
+    env,
+    space,
+    app,
+    request: req,
+    script: scriptName(app.script ?? storeName(space, app)),
+    entrypoint: 'fetch',
+  })
     .then(() => reported(error))
     .catch((why) =>
       caught(why, {

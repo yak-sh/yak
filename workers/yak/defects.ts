@@ -7,6 +7,7 @@ import {
   capture,
   coalesce,
   type Coalesced,
+  type origin,
   queue,
   refused as refusal,
   type WindowClock,
@@ -20,7 +21,7 @@ export type Hit = { id: string; account: 'person' | 'test' }
 type Tags = Record<string, string | null | undefined>
 type Bindings = Pick<
   Partial<Env>,
-  'ERRORS' | 'ENVIRONMENT' | 'CF_VERSION_METADATA'
+  'ERRORS' | 'ENVIRONMENT' | 'CF_VERSION_METADATA' | 'WORKER_NAME'
 >
 type Invocation = {
   env: Bindings
@@ -29,6 +30,7 @@ type Invocation = {
   pending: Set<Promise<void>>
   clock?: WindowClock
   retain?: (pending: Promise<void>) => void
+  origin?: ReturnType<typeof origin>
 }
 let context = new AsyncLocalStorage<Invocation>()
 let reporters = new WeakMap<object, Coalesced>()
@@ -46,7 +48,10 @@ export let within = <T>(
   tags: Tags,
   run: () => T,
   clock?: WindowClock,
-  retain?: (pending: Promise<void>) => void,
+  options: {
+    retain?: (pending: Promise<void>) => void
+    origin?: ReturnType<typeof origin>
+  } = {},
 ): T => {
   let parent = context.getStore()
   let invocation: Invocation = {
@@ -55,7 +60,8 @@ export let within = <T>(
     seen: parent?.seen ?? new WeakSet(),
     pending: new Set(),
     clock: clock ?? parent?.clock,
-    retain: retain ?? parent?.retain,
+    retain: options.retain ?? parent?.retain,
+    origin: options.origin ?? parent?.origin,
   }
   return context.run(invocation, () => {
     let failed = (error: unknown): never => {
@@ -111,12 +117,14 @@ export let defect = (
     reporters.set(env.ERRORS!, sink)
   }
   let rows = capture(error, {
+    ...invocation.origin,
     sink,
     commit: env.CF_VERSION_METADATA?.id,
     fault: details.fault,
     environment: env.ENVIRONMENT == 'staging' ? 'staging' : 'production',
     tags: Object.fromEntries(
       Object.entries({
+        ...invocation.origin?.tags,
         ...invocation.tags,
         ...tags,
         ...details.hit

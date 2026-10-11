@@ -37,6 +37,29 @@ export type Context = {
   fallback?: Sink
 }
 
+/** Runtime provenance uses the same request association on every reporting path.
+ * Non-HTTP entries name their operation without inventing an HTTP request. */
+export let origin = (
+  script: string,
+  version: string | undefined,
+  entrypoint: string,
+  request?: Request,
+): Pick<Context, 'tags' | 'commit' | 'during' | 'request'> => {
+  let eid = crypto.randomUUID()
+  return {
+    tags: { script, version: version ?? 'unknown', entrypoint },
+    commit: version,
+    during: { request: eid },
+    request: {
+      entity: { eid },
+      request: {
+        route: entrypoint,
+        ...request ? { method: request.method, url: request.url } : {},
+      },
+    },
+  }
+}
+
 /** Refusals are control flow, not tracked mistakes. Hosts can exclude their
  * own accepted/deferred operation before calling caught. */
 export let refused = (error: unknown): boolean => {

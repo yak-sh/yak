@@ -1344,7 +1344,7 @@ let api = async (
       await noted(
         (bundles) => metaOf(store).apply(bundles, KERNEL),
         { ...broke, version: broke.version ?? version },
-        { env, space, app },
+        { env, space, app, request: req },
       )
     }
     return new Response(null, { status: 204 })

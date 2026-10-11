@@ -308,9 +308,12 @@ test('a command failure is captured once across worker and caller', () =>
       caught(e, { request: 'outer command reporter' })
     }
     assert(failure instanceof Error)
-    assertEquals(wrote.length, 1)
+    assertEquals(wrote.filter((row) => row.error).length, 1)
     assertEquals(seen.length, 0)
     assertEquals((wrote[0].error as { tags: unknown }).tags, {
+      script: scriptName(app.script ?? `${space.slug}/${app.slug}`),
+      version: '7',
+      entrypoint: 'fetch',
       request: 'worker POST /recipes/inspect',
       request_id: undefined,
     })
@@ -318,6 +321,7 @@ test('a command failure is captured once across worker and caller', () =>
       space: space.eid,
       app: app.eid,
       kind: 'exception',
+      request: wrote[1].entity.eid,
     })
   }))
 
@@ -515,6 +519,7 @@ test("a worker's own no is not a break; its 5xx is", async () => {
     space: space.eid,
     app: app.eid,
     kind: 'exception',
+    request: wrote[1].entity.eid,
   })
   let broke = wrote[0].exception as { value: string; stack: string }
   assertEquals((wrote[0].error as { version: number }).version, 7)
@@ -529,10 +534,17 @@ test('an answered worker 5xx reaches the tracker with its app', () =>
   tracked(async (seen) => {
     await ran(envOf(mirror(503).get), space, app, visit(), who)
     assertEquals(seen.length, 0)
-    assertEquals((wrote.at(-1)!.error as { tags: unknown }).tags, {
-      request: 'worker GET /recipes/hello',
-      request_id: undefined,
-    })
+    assertEquals(
+      (wrote.filter((row) => row.error).at(-1)!.error as { tags: unknown })
+        .tags,
+      {
+        script: scriptName(app.script ?? `${space.slug}/${app.slug}`),
+        version: '7',
+        entrypoint: 'fetch',
+        request: 'worker GET /recipes/hello',
+        request_id: undefined,
+      },
+    )
   }))
 
 // The seam (T-33234). `worker.fetch` is the one line in the kernel where the
@@ -550,11 +562,16 @@ test("a worker that throws is the app's break, and is filed here", async () => {
   })
   let out = await ran(envOf(boom), space, app, visit(), who)
   assertEquals(out!.status, 500, 'the visitor gets the soft page')
-  assertEquals(wrote.length, 1, 'one break, and only one')
+  assertEquals(
+    wrote.filter((row) => row.error).length,
+    1,
+    'one break, and only one',
+  )
   assertEquals(wrote[0].during, {
     space: space.eid,
     app: app.eid,
     kind: 'exception',
+    request: wrote[1].entity.eid,
   }, "the app's own store")
   let broke = wrote[0].exception as { value: string; stack: string }
   assertEquals((wrote[0].error as { version: number }).version, 7)

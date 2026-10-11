@@ -21,7 +21,7 @@ import { computed, derived, trackerDoc } from '@yaks/tracker/vocab'
 import { effects as handlers, type Options } from '@yaks/tracker/effects'
 import { ingest } from '@yaks/tracker/intake'
 import { timingDoc } from '@yaks/timing/vocab'
-import { caught, type Sink } from '@yaks/tracker/report'
+import { caught, origin, type Sink } from '@yaks/tracker/report'
 import { bug, bugs, runs } from '@yaks/tracker/tools'
 import {
   absent,
@@ -51,7 +51,11 @@ export let vocab = loadVocab([
   timingDoc,
 ], [kernelKeywords])
 export let options = { computed, derived: derived(), number: true }
-export type Config = Options & { sink: Sink; sender?: Sender }
+export type Config = Options & {
+  sink: Sink
+  sender?: Sender
+  report?: (error: unknown) => void | Promise<void>
+}
 export let store = (storage: Storage, config: Config) => {
   let fx = effects(vocab, {
     singleOwner: true,
@@ -59,7 +63,13 @@ export let store = (storage: Storage, config: Config) => {
     max: 4,
     write: (rows) => g.apply(rows, { trusted: true }),
     report: (error) => {
-      void caught(error, { sink: config.sink })
+      if (config.report) void config.report(error)
+      else {
+        void caught(error, {
+          sink: config.sink,
+          ...origin('yak-tracker', undefined, 'Tracker.effect'),
+        })
+      }
     },
   })
   let g = graph({ vocab, storage, plugins: [fx] })
