@@ -129,8 +129,10 @@ test('external frontend writes drive controlled input and selection', async () =
   }
 })
 
+// Independent frontend hosts are ready before exercising their local selection.
+let visualA = frontend(), visualB = frontend()
 test('VISUAL state and local yank belong only to their frontend graph', async () => {
-  let a = frontend(), b = frontend()
+  let a = visualA, b = visualB
   try {
     a.select({ surface: 'input', text: 'draft', anchor: 0, at: 2, yank: 'dra' })
     assertEquals(

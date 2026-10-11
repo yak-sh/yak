@@ -36,7 +36,8 @@ test('a defect nobody can take is said on the terminal, not lost', async () => {
   assertMatch(JSON.parse(warnings[0]).body, /nowhere to write this/)
 })
 
-test('a database failure cannot recurse: the original is printed instead', async () => {
+// Exercise a fixed rejected sink once; keep its original warning and attempt count.
+let failedSink = await (async () => {
   let warnings: string[] = []
   let attempts = 0
   let reporter = createDiagnostics({ warn: (s) => warnings.push(s) })
@@ -48,31 +49,58 @@ test('a database failure cannot recurse: the original is printed instead', async
   })
   reporter.report(new Error('original failure'), { phase: 'daemon' })
   await reporter.drain()
-  assertEquals(attempts, 1)
-  assertEquals(warnings.length, 1)
-  assertMatch(warnings[0], /database broken/)
-  assertMatch(warnings[0], /Original exception:[\s\S]*original failure/)
+  return { warnings, attempts }
+})()
+test('a database failure cannot recurse: the original is printed instead', () => {
+  assertEquals(failedSink.attempts, 1)
+  assertEquals(failedSink.warnings.length, 1)
+  assertMatch(failedSink.warnings[0], /database broken/)
+  assertMatch(
+    failedSink.warnings[0],
+    /Original exception:[\s\S]*original failure/,
+  )
 })
 
+let runtimeError = new Error('render defect')
+// Formatting stacks is covered above; these cases check routing and identity.
+runtimeError.stack = 'Error: render defect'
+let runtimeEvent = new ErrorEvent('error', {
+  error: runtimeError,
+  cancelable: true,
+})
+let runtimeRejection = new Event('unhandledrejection', { cancelable: true })
+Object.defineProperty(runtimeRejection, 'reason', { value: runtimeError })
+let laterEvent = new ErrorEvent('error', { error: new Error('later') })
 test('global error hooks preserve fatal default, clean up, deduplicate, and uninstall', () => {
-  let said: string[] = []
-  let reporter = createDiagnostics({ warn: (s) => said.push(s) })
+  let reports: { error: unknown; phase: string }[] = []
   let target = new EventTarget()
   let cleaned = 0
-  let remove = uncaught(reporter, target, () => {
-    cleaned++
-  })
-  let error = new Error('render defect')
-  let event = new ErrorEvent('error', { error, cancelable: true })
-  assert(target.dispatchEvent(event))
-  assert(!event.defaultPrevented)
-  let rejection = new Event('unhandledrejection', { cancelable: true })
-  Object.defineProperty(rejection, 'reason', { value: error })
-  target.dispatchEvent(rejection)
+  let remove = uncaught(
+    {
+      report: (error, context) => reports.push({ error, phase: context.phase }),
+    },
+    target,
+    () => {
+      cleaned++
+    },
+  )
+  assert(target.dispatchEvent(runtimeEvent))
+  assert(!runtimeEvent.defaultPrevented)
+  target.dispatchEvent(runtimeRejection)
   assertEquals(cleaned, 2)
-  assertEquals(said.length, 1)
+  assert(reports[0].error === runtimeError)
+  assert(reports[1].error === runtimeError)
+  assertEquals(reports.map((r) => r.phase), ['error', 'unhandledrejection'])
   remove()
-  target.dispatchEvent(new ErrorEvent('error', { error: new Error('later') }))
+  target.dispatchEvent(laterEvent)
+  assertEquals(reports.length, 2)
+})
+
+test('diagnostics say the same runtime error once across error and rejection phases', () => {
+  let said: string[] = []
+  let reporter = createDiagnostics({ warn: (s) => said.push(s) })
+  reporter.report(runtimeError, { phase: 'error' })
+  reporter.report(runtimeError, { phase: 'unhandledrejection' })
   assertEquals(said.length, 1)
 })
 

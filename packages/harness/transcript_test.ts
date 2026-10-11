@@ -1,5 +1,8 @@
 import { test } from '@yaks/testing'
-import { h } from 'preact'
+import { h, render as mountTree } from 'preact'
+import { install, TElement } from '../tui/dom.ts'
+import { screenful } from '../tui/paint.ts'
+import { dress } from './sheet.ts'
 import { define, resolve } from '@yaks/render'
 import { assert, assertEquals } from '@std/assert'
 import { render } from '@yaks/preact'
@@ -375,35 +378,34 @@ test('shell call shows command arguments, and a call without them the ordinary v
   }
 })
 
-test('result previews cap source and wrapped rows without changing stored text', async () => {
-  for (
-    const source of [
-      Array.from({ length: 100 }, (_, i) => 'row ' + i).join('\n'),
-      'x'.repeat(1000),
-    ]
-  ) {
-    const entry: Bundle = {
-      entity: { eid: 'result' },
-      entry: { session: 's', seq: 3 },
-      result: { call: 'c' },
-      content: { body: source },
-    }
-    const ui = await mount(
-      () => render(transcriptViews, entry, 'Transcript', vocab),
-      70,
-      15,
-    )
-    try {
-      assert(ui.text().includes('output preview'), ui.text())
-      assert(!ui.text().includes('row 6'))
-      assert(
-        ui.text().split('\n').filter((line) => line.trim()).length <= 7,
-        ui.text(),
-      )
-      assertEquals((entry.content as Comp).body, source)
-    } finally {
-      ui.free()
-    }
+// Prepare renderer trees once; the preview contract is visible in terminal layout.
+let previewScreen = install()
+let previews = [
+  Array.from({ length: 100 }, (_, i) => 'row ' + i).join('\n'),
+  'x'.repeat(1000),
+].map((source) => {
+  let entry: Bundle = {
+    entity: { eid: 'result' },
+    entry: { session: 's', seq: 3 },
+    result: { call: 'c' },
+    content: { body: source },
+  }
+  let root = new TElement('root')
+  mountTree(
+    render(transcriptViews, entry, 'Transcript', vocab),
+    root as unknown as Parameters<typeof mountTree>[1],
+  )
+  return { source, entry, root }
+})
+previewScreen.free()
+test('result previews cap source and wrapped rows without changing stored text', () => {
+  for (let { source, entry, root } of previews) {
+    let text = screenful(root, 70, 15, dress).lines
+      .map((line) => line.map((seg) => seg.text).join('').trimEnd()).join('\n')
+    assert(text.includes('output preview'), text)
+    assert(!text.includes('row 6'))
+    assert(text.split('\n').filter((line) => line.trim()).length <= 7, text)
+    assertEquals((entry.content as Comp).body, source)
   }
 })
 
