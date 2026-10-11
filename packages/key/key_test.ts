@@ -18,10 +18,14 @@ let sync = (out: Bundle[] | Promise<Bundle[]>): Bundle[] => {
 }
 
 let books = (g: ReturnType<typeof libraryGraph>) => {
-  sync(g.apply([
-    { entity: { eid: 'b1' }, book: { title: 'Dune' } },
-    { entity: { eid: 'b2' }, book: { title: 'Emma' } },
-  ]))
+  // These books are the existing holders, not the writes under test. Seed the
+  // adapter once without rehearsing the key pipeline for unrelated rows.
+  g.storage.tx((tx) =>
+    tx.patch([
+      { entity: { eid: 'b1' }, book: { title: 'Dune' } },
+      { entity: { eid: 'b2' }, book: { title: 'Emma' } },
+    ])
+  )
   return g
 }
 

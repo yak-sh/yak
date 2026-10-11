@@ -44,6 +44,7 @@ let stale = await fixture()
 await stale.db.put('schema', 'older vocabulary')
 await stale.object().boot()
 let repaired = await stale.db.get<string>('schema')
+let cold = idle.object()
 let warmed = idle.object()
 await warmed.boot()
 idle.writes.length = 0
@@ -55,7 +56,7 @@ let idleAlarm = await alarm.db.getAlarm()
 
 test('cold and warm tracker boots reuse readiness and mail without writes', async () => {
   idle.writes.length = 0
-  await idle.object().boot()
+  await cold.boot()
   await warmed.boot()
   equal(idle.writes, [])
 })

@@ -5,7 +5,7 @@ import { runTestCommands, type TestCommand } from './phases.ts'
 // `[stubborn-]<broad|isolated> <dir>` runs two phases
 // (test_runner_phase.sh), the named one held open with a grandchild, and ends
 // with the signal it was sent. A stubborn run settles on a clock that holds
-// until the case writes `release`.
+// until the case writes `release` and the phase has handled its signal.
 
 if (import.meta.main) {
   let [phase, dir] = Deno.args
@@ -16,15 +16,17 @@ if (import.meta.main) {
   let released = () => {
     try {
       Deno.statSync(`${dir}/release`)
+      Deno.statSync(`${dir}/${phaseName}.leader.signals`)
       return true
     } catch (e) {
       if (!(e instanceof Deno.errors.NotFound)) throw e
       return false
     }
   }
-  // Held until the case has sent every signal, then straight to the
-  // runner's 2s deadline for SIGKILL; after it, time passes as it does, so
-  // the killed group has the runner's whole 2s bound to be reaped in.
+  // Bash defers its trap until the foreground sleep ends. Wait for that
+  // receipt and every signal before advancing to the runner's 2s SIGKILL
+  // deadline. Afterwards, elapsed time gives the killed group the runner's
+  // whole 2s bound to be reaped in.
   let clock = {
     now: () => now,
     wait: async (ms: number) => {

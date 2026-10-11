@@ -19,6 +19,11 @@ let vocab = loadVocab([
 let model = identityEid('model', ['report-test'])
 let session = 'report-session'
 let original = new TypeError('model defect')
+let exception = {
+  type: original.name,
+  value: original.message,
+  stack: original.stack,
+}
 let storageError = new Error('database is full')
 
 let fixture = async (
@@ -100,11 +105,7 @@ for (let phase of ['model', 'compaction', 'forced'] as const) {
       if (fails) equal(reported[0] === original, true)
       equal(saved.length, fails ? 0 : 1)
       if (!fails) {
-        equal(saved[0].exception as Comp, {
-          type: original.name,
-          value: original.message,
-          stack: original.stack,
-        })
+        equal(saved[0].exception as Comp, exception)
         equal((await g.read('.exception')).length, 1)
       }
     })

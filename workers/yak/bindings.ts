@@ -1,11 +1,10 @@
 // A resource belongs to the app's immutable store handle. The directory keeps
 // the intent before Cloudflare is called, so a lost reply can be found by name
 // on retry and a failed deploy never strands storage without an owner.
-import { token } from '@yaks/graph'
+import { sha256, token } from '@yaks/graph'
 import type { App } from './directory.ts'
 import type { Env } from './env.ts'
 import { KERNEL, meta } from './meta.ts'
-import { sha256 } from './versions.ts'
 import { type Bound, type Config, requests } from './wrangler_app.ts'
 import { NAMESPACE, namespace } from './dispatch.ts'
 import { refuse } from './tool.ts'
@@ -26,7 +25,7 @@ let scopes: Record<Product, string> = {
 
 // The suffix distinguishes names that lowercase or truncate to the same text.
 // The readable part still puts this resource beside its app in the dashboard.
-export let resourceName = async (
+export let resourceName = (
   store: string,
   name: string,
   scope = NAMESPACE,
@@ -34,11 +33,10 @@ export let resourceName = async (
   // Production keeps its existing names; every other deployment has its own
   // scope even if a restored app has the same immutable store handle.
   let scoped = scope == NAMESPACE ? store : `${scope}\0${store}`
-  let key = (await sha256(new TextEncoder().encode(`${scoped}\0${name}`)))
-    .slice(0, 10)
+  let key = sha256(`${scoped}\0${name}`).slice(0, 10)
   let label = `${store}-${name}`.toLowerCase().replace(/[^a-z0-9-]+/g, '-')
     .replace(/^-+|-+$/g, '').slice(0, 52).replace(/-+$/g, '')
-  return `${label || 'app'}-${key}`
+  return Promise.resolve(`${label || 'app'}-${key}`)
 }
 
 // What is bound to an app — or to many apps in one read, which is how a

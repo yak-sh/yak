@@ -63,6 +63,12 @@ test('native anatomy isolates loading evidence even when vocabulary is shared', 
   assertEquals(after.scope, 'native')
   assertEquals(after.skills, [])
   assertEquals(after.observed?.skills, false)
+  // Editing a caller's snapshot cannot change another read of the same capture.
+  let expected = structuredClone(after)
+  after.tools[0].inputSchema = { changed: true }
+  after.effects.length = 0
+  after.facets[0].bound = !after.facets[0].bound
+  assertEquals(first.read(), expected)
 })
 
 test('native anatomy reads the vocabulary only when it is read', () => {

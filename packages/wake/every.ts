@@ -61,6 +61,14 @@ let WORDS: Record<string, string> = {
 // meaning one of them.
 let DURATION = /^(?:every\s+)?(\d+)?\s*([a-z]+)$/
 
+// Parsing belongs to the schedule, rather than to every alarm that reads it.
+// Between a searched instant and its next occurrence, later readers have the
+// same answer. Rewinding the input still asks the calendar afresh.
+let calendars = new Map<
+  string,
+  { cron: Cron | null; from?: number; next?: number | null }
+>()
+
 /**
  * A recurrence parsed as a fixed length of time, in milliseconds — `null` when
  * it is a cron line, or anything this grammar does not accept.
@@ -160,7 +168,21 @@ export let recur = (
     return Number.isNaN(new Date(at).getTime()) ? null : at
   }
   try {
-    return cron(every, tz)?.nextRun(new Date(now))?.getTime() ?? null
+    let key = JSON.stringify([every, tz])
+    let calendar = calendars.get(key)
+    if (!calendar) {
+      calendar = { cron: cron(every, tz) }
+      if (calendars.size == 64) calendars.delete(calendars.keys().next().value!)
+      calendars.set(key, calendar)
+    }
+    if (
+      calendar.from != null && now >= calendar.from &&
+      calendar.next != null && now < calendar.next
+    ) return calendar.next
+    let next = calendar.cron?.nextRun(new Date(now))?.getTime() ?? null
+    calendar.from = now
+    calendar.next = next
+    return next
   } catch {
     return null
   }

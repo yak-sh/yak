@@ -444,21 +444,45 @@ let villageDistance = (x: number, z: number, v: Village) => {
   return dx * dx + dz * dz
 }
 
+// Village sites are fixed world data. Index each site in the surrounding
+// cells so a lookup up to one cell's radius visits only possible neighbours.
+// Designs change buildings and streets, while the sites keep their identity.
+let villageCells = new Map<number, Map<number, Village[]>>()
+for (let village of VILLAGES) {
+  let x = Math.floor(village.at[0] / SIZE), z = Math.floor(village.at[1] / SIZE)
+  for (let i = x - 1; i <= x + 1; i++) {
+    let column = villageCells.get(i)
+    if (!column) villageCells.set(i, column = new Map())
+    for (let k = z - 1; k <= z + 1; k++) {
+      let sites = column.get(k)
+      if (!sites) column.set(k, sites = [])
+      sites.push(village)
+    }
+  }
+}
+let villageCandidates = (x: number, z: number, r: number): Village[] =>
+  r > SIZE ? VILLAGES : villageCells.get(Math.floor(x / SIZE))?.get(
+    Math.floor(z / SIZE),
+  ) ?? []
+
 /** The villages within `r` metres of (x, z), nearest first. */
 export let villagesNear = (x: number, z: number, r: number): Village[] => {
-  let near: { village: Village; distance: number }[] = []
+  let near: Village[] = []
   let radius = r > 0 ? r * r : 0
-  for (let village of VILLAGES) {
+  for (let village of villageCandidates(x, z, r)) {
     let distance = villageDistance(x, z, village)
-    if (distance < radius) near.push({ village, distance })
+    if (distance < radius) near.push(village)
   }
-  return near.sort((a, b) => a.distance - b.distance).map((n) => n.village)
+  if (near.length > 1) {
+    near.sort((a, b) => villageDistance(x, z, a) - villageDistance(x, z, b))
+  }
+  return near
 }
 
 /** The fire of the village nearest (x, z), within `r` metres; or null. */
 export let hearthNear = (x: number, z: number, r = Infinity): Spot | null => {
   let nearest: Village | null = null, best = r > 0 ? r * r : 0
-  for (let village of VILLAGES) {
+  for (let village of villageCandidates(x, z, r)) {
     let distance = villageDistance(x, z, village)
     if (distance < best) {
       nearest = village

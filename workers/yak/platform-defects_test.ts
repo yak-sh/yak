@@ -33,10 +33,23 @@ let test = (name: string, run: (sample: Sample) => Promise<void>) =>
     )
   })
 
+let errors = Array.from({ length: 4 }, () => new TypeError('x is undefined'))
+let status = (n: number) => Object.assign(new Error(`${n}`), { status: n })
+let caughtErrors = [
+  new CallError('arguments', 'no'),
+  new Refused('no'),
+  new Stale('e', 'doc', 'title', null),
+  status(404),
+  status(503),
+  errors[3],
+]
+// Build exception inputs, including V8's lazy stacks, once per fixture.
+for (let error of [...errors, ...caughtErrors]) void error.stack
+
 test('a defect is sent with its tags and the person who hit it', async (s) => {
   let { seen, done } = s
   defect(
-    new TypeError('x is undefined'),
+    errors[0],
     { tool: 'app_new', space: 'jeff', app: null, client: 'claude-ai' },
     { hit: { id: 'p-1', account: 'test' } },
   )
@@ -67,13 +80,12 @@ test('a connector tool names the tool, space, app, client and account', async (s
       args: { space: 'jeff', app: 'recipes', text: 'secret' },
     },
   }
-  let broke = () => new TypeError('x is undefined')
   await reporter(ctx('probe-1@bot.yak.sh'), 'claude-ai')(
-    broke(),
+    errors[1],
     call,
     'app_new',
   )
-  await reporter(ctx('jeff@yak.sh'))(broke(), call, 'app_new')
+  await reporter(ctx('jeff@yak.sh'))(errors[2], call, 'app_new')
   await done()
   assertEquals(seen.map((e) => tagsOf(e)), [
     {
@@ -97,17 +109,9 @@ test('a connector tool names the tool, space, app, client and account', async (s
 
 test('a caught failure is sent, and a refusal is not', async (s) => {
   let { seen, done } = s
-  let status = (n: number) => Object.assign(new Error(`${n}`), { status: n })
-  for (
-    let e of [
-      new CallError('arguments', 'no'),
-      new Refused('no'),
-      new Stale('e', 'doc', 'title', null),
-      status(404),
-      status(503),
-      new TypeError('x is undefined'),
-    ]
-  ) caught(e, { request: 'GET /api/query', space: 'jeff' })
+  for (let e of caughtErrors) {
+    caught(e, { request: 'GET /api/query', space: 'jeff' })
+  }
   await done()
   assertEquals(seen.map((e) => (e.exception as Comp)?.value), [
     '503',

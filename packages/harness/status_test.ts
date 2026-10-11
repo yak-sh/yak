@@ -78,8 +78,8 @@ test('sidebar indicator queries cover states and owner joins', () => {
       (_tag, props, ...children) => ({ props, children }),
       {},
     )
-    assertEquals(node.children, [glyph], JSON.stringify(bundle))
-    assertEquals(node.props?.class, color, JSON.stringify(bundle))
+    assertEquals(node.children, [glyph], bundle.entity.eid)
+    assertEquals(node.props?.class, color, bundle.entity.eid)
   }
 })
 

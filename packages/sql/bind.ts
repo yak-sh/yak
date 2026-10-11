@@ -95,7 +95,7 @@ import type { Extension, Site } from './extend.ts'
 import { type Identity, identity } from './ident.ts'
 import { walk as walked } from './walk.ts'
 import { Unsupported, whole } from './unsupported.ts'
-import { backedDialect, backingOf, computed } from './spine.ts'
+import { backedDialect, backingOf, computed, hasComputed } from './spine.ts'
 import type { ArchetypeSet } from './archetype.ts'
 
 export type BindOpts = {
@@ -1097,7 +1097,10 @@ let spineOf = (
   v: Vocab,
   backed: Backings,
   cs: Clause[],
-): string | undefined => cs.flatMap((c) => wants(v, backed, c))[0]
+): string | undefined =>
+  hasComputed(v) || Object.keys(backed).length
+    ? cs.flatMap((c) => wants(v, backed, c))[0]
+    : undefined
 
 // A filter on a ladder's status (@yaks/vocab's `status` keyword), as the
 // presence tests it means: `.effect.status=pending` is `.effect !failed
@@ -1109,6 +1112,10 @@ let spineOf = (
 // statuses the ladder gives, on the entity's own component and read through
 // the ladder rather than a caller's expression, is rewritten: anything else
 // reads the `case`.
+let ladderFilters = new WeakMap<
+  Vocab,
+  WeakMap<Clause, { comp: string; value: string; clause: Clause }>
+>()
 let rungs = (ctx: Ctx, c: Clause): Clause | null => {
   if (c.kind != 'pred' || c.op != '=' || c.not || c.where) return null
   if (c.path.length != 2 || c.path[1] != 'status') return null
@@ -1120,7 +1127,12 @@ let rungs = (ctx: Ctx, c: Clause): Clause | null => {
   let key = `${hop.comp}.status`
   if (!l || !worn(ctx, hop.comp)) return null
   if (ctx.derived[key] !== ladders(ctx.v)[key]) return null
+  // Only the vocabulary's expansion is kept. Current query values, database
+  // IDs and caller overrides are read anew, including edits to a built AST.
   let raw = flat(c.value)
+  let cached = ladderFilters.get(ctx.v)
+  let held = cached?.get(c)
+  if (held?.comp == hop.comp && held.value == raw) return held.clause
   let said = raw.includes('..') ? [] : raw.split(',')
   let given = [...l.rungs.map((r) => r.status), l.default]
   if (!said.length || said.some((s) => !given.includes(s))) return null
@@ -1136,7 +1148,10 @@ let rungs = (ctx: Ctx, c: Clause): Clause | null => {
     ...l.rungs.flatMap((r, i) => r.status == s ? [arm(i, r.comp)] : []),
     ...s == l.default ? [arm(l.rungs.length)] : [],
   ])
-  return arms.length == 1 ? arms[0] : { kind: 'or', clauses: arms }
+  let out: Clause = arms.length == 1 ? arms[0] : { kind: 'or', clauses: arms }
+  if (!cached) ladderFilters.set(ctx.v, cached = new WeakMap())
+  cached.set(c, { comp: hop.comp, value: raw, clause: out })
+  return out
 }
 
 // A conjunction of presence tests is one lookup on the archetype column.

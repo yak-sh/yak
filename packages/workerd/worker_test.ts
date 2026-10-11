@@ -49,25 +49,26 @@ test('a Worker answers apply and query over its bindings', async () => {
   assertEquals(found.map((b) => b.entity.eid), ['b1'])
 })
 
+let { w: writerWorker } = shop()
+await writerWorker.fetch(
+  post('/apply', [{ entity: { eid: 'b1' }, book: { price: 12 } }]),
+  env,
+)
+await writerWorker.fetch(
+  new Request('https://shop.test/apply', {
+    method: 'POST',
+    headers: ada,
+    body: JSON.stringify([{ entity: { eid: 'b2' }, book: { price: 9 } }]),
+  }),
+  env,
+)
+
 test('the door names the writer of a request', async () => {
-  let { w } = shop()
-  await w.fetch(
-    post('/apply', [{ entity: { eid: 'b1' }, book: { price: 12 } }]),
-    env,
-  )
+  let w = writerWorker
   let anon: Bundle[] = await body(
     await w.fetch(req('/query?q=.book.price=12%26%3Fcreated'), env),
   )
   assert(!(anon[0].created as { by?: string })?.by, 'nobody signed it')
-
-  await w.fetch(
-    new Request('https://shop.test/apply', {
-      method: 'POST',
-      headers: ada,
-      body: JSON.stringify([{ entity: { eid: 'b2' }, book: { price: 9 } }]),
-    }),
-    env,
-  )
   let signed: Bundle[] = await body(
     await w.fetch(req('/query?q=.book.price=9%26%3Fcreated'), env),
   )

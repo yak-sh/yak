@@ -50,9 +50,13 @@ test('platform repeats reach tracker with hit counts and catch tags', async () =
   }
 })
 
+let reused = Error('reused error')
+// Stack capture belongs to the input fixture, rather than the repeat counter.
+void reused.stack
+
 test('a caught failure counts once per invocation and refusals stay back', async () => {
   let { rows, time, env } = recorded()
-  let error = Error('reused error')
+  let error = reused
   for (let i = 0; i < 4; i++) {
     await within(env, { request_id: 'invocation' }, () => {
       caught(new Refused('no'), {})

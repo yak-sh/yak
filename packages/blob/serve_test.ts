@@ -90,16 +90,17 @@ test('no mime means octet-stream, no name means no disposition', () => {
   assertEquals(res.headers.get('content-disposition'), null)
 })
 
-test('cached bytes keep range and condition semantics under the response fence', async () => {
+let cachedBytes = (() => {
   let body = new Uint8Array([0, 1, 2, 3, 4, 5])
   let calls: Request[] = []
+  let cached = new Map<string, Response[]>()
+  let key = (request: Request) =>
+    `${request.method}:${request.headers.get('range') ?? ''}`
   let read = (request: Request) => {
     calls.push(request)
-    return Promise.resolve(ranged(body, request, {
-      'content-type': 'application/octet-stream',
-      'cache-control': 'public, max-age=31536000',
-      etag: '"bytes"',
-    }))
+    return Promise.resolve(
+      cached.get(key(request))?.shift() ?? new Response(null, { status: 404 }),
+    )
   }
   let meta: Served = {
     mime: 'video/mp4',
@@ -108,37 +109,72 @@ test('cached bytes keep range and condition semantics under the response fence',
     cache: 'revalidate',
   }
   let at = 'https://blob.invalid/movie.mp4'
-  let get = (headers: HeadersInit = {}, method = 'GET') =>
-    servedVia(read, meta, new Request(at, { method, headers }))
+  let request = (headers: HeadersInit = {}, method = 'GET') =>
+    new Request(at, { method, headers })
+  let requests = {
+    whole: request(),
+    part: request({ range: 'bytes=2-4', 'if-range': '"representation"' }),
+    stale: request({ range: 'bytes=2-', 'if-range': '"old"' }),
+    fresh: request({ 'if-none-match': '"representation"' }),
+    beyond: request({ range: 'bytes=6-' }),
+    head: request({}, 'HEAD'),
+  }
+  // The cached backend responses already exist when the response fence is
+  // called. Select by what it actually forwards, so a wrong range or method
+  // cannot receive the response the caller expected.
+  for (
+    let req of [
+      request(),
+      request({ range: 'bytes=2-4' }),
+      request(),
+      request({ range: 'bytes=6-' }),
+      request({}, 'HEAD'),
+    ]
+  ) {
+    let response = ranged(body, req, {
+      'content-type': 'application/octet-stream',
+      'cache-control': 'public, max-age=31536000',
+      etag: '"bytes"',
+    })
+    let responses = cached.get(key(req)) ?? []
+    responses.push(response)
+    cached.set(key(req), responses)
+  }
+  let get = (name: keyof typeof requests) =>
+    servedVia(read, meta, requests[name])
+  return { body, calls, get }
+})()
 
-  let whole = await get()
+test('cached bytes keep range and condition semantics under the response fence', async () => {
+  let { body, calls, get } = cachedBytes
+  let whole = await get('whole')
   assertEquals(whole.status, 200)
   assertEquals(whole.headers.get('content-type'), 'video/mp4')
   assertEquals(whole.headers.get('cache-control'), 'private, no-cache')
   assertEquals(whole.headers.get('etag'), '"representation"')
   assertEquals(new Uint8Array(await whole.arrayBuffer()), body)
 
-  let part = await get({ range: 'bytes=2-4', 'if-range': '"representation"' })
+  let part = await get('part')
   assertEquals(part.status, 206)
   assertEquals(part.headers.get('content-range'), 'bytes 2-4/6')
   assertEquals(new Uint8Array(await part.arrayBuffer()), body.slice(2, 5))
   assertEquals(calls.at(-1)?.headers.get('range'), 'bytes=2-4')
 
-  let stale = await get({ range: 'bytes=2-', 'if-range': '"old"' })
+  let stale = await get('stale')
   assertEquals(stale.status, 200)
   assertEquals(calls.at(-1)?.headers.get('range'), null)
   assertEquals(new Uint8Array(await stale.arrayBuffer()), body)
 
   let before = calls.length
-  let fresh = await get({ 'if-none-match': '"representation"' })
+  let fresh = await get('fresh')
   assertEquals(fresh.status, 304)
   assertEquals(calls.length, before)
 
-  let beyond = await get({ range: 'bytes=6-' })
+  let beyond = await get('beyond')
   assertEquals(beyond.status, 416)
   assertEquals(beyond.headers.get('content-range'), 'bytes */6')
 
-  let head = await get({}, 'HEAD')
+  let head = await get('head')
   assertEquals(head.status, 200)
   assertEquals(head.headers.get('content-length'), '6')
   assertEquals(await head.text(), '')

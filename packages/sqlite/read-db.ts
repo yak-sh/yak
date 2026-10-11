@@ -31,6 +31,10 @@ let bind = () =>
         result: 'i32',
       },
       sqlite3_stmt_readonly: { parameters: ['pointer'], result: 'i32' },
+      sqlite3_stmt_status: {
+        parameters: ['pointer', 'i32', 'i32'],
+        result: 'i32',
+      },
       sqlite3_bind_parameter_count: { parameters: ['pointer'], result: 'i32' },
       sqlite3_bind_null: { parameters: ['pointer', 'i32'], result: 'i32' },
       sqlite3_bind_int64: {
@@ -82,6 +86,7 @@ let text = (p: Deno.PointerValue) =>
   p ? new Deno.UnsafePointerView(p).getCString() : ''
 // SQLITE_TRANSIENT makes SQLite own copies of bound strings and blobs.
 let transient = Deno.UnsafePointer.create(0xffffffffffffffffn)
+let empty = new Uint8Array(1)
 
 /** Open an existing SQLite file for reading, without changing journal
  * settings or attempting a checkpoint when its last reader closes. Queries
@@ -101,11 +106,18 @@ export let open = (path: string): Opened => {
   let check = (code: number) => {
     if (code) throw error()
   }
-  let cache = new Map<string, Deno.PointerValue>()
+  let cache = new Map<string, {
+    stmt: Deno.PointerValue
+    count: number
+    names?: string[]
+  }>()
   let closed = false
+  let checkOpen = () => {
+    if (closed) throw new Error('the database is closed')
+  }
   let close = () => {
     if (closed) return
-    for (let stmt of cache.values()) c.sqlite3_finalize(stmt)
+    for (let { stmt } of cache.values()) c.sqlite3_finalize(stmt)
     cache.clear()
     check(c.sqlite3_close(db))
     closed = true
@@ -127,7 +139,7 @@ export let open = (path: string): Opened => {
           'the read-only database requires one read-only statement',
         )
       }
-      return stmt
+      return { stmt, count: c.sqlite3_bind_parameter_count(stmt) }
     }
     let bind = (stmt: Deno.PointerValue, i: number, value: Param) => {
       if (value == null) return c.sqlite3_bind_null(stmt, i)
@@ -143,7 +155,7 @@ export let open = (path: string): Opened => {
         return c.sqlite3_bind_text(
           stmt,
           i,
-          bytes.length ? bytes : new Uint8Array(1),
+          bytes.length ? bytes : empty,
           bytes.length,
           transient,
         )
@@ -151,13 +163,14 @@ export let open = (path: string): Opened => {
       return c.sqlite3_bind_blob(
         stmt,
         i,
-        value.length ? value : new Uint8Array(1),
+        value.length ? value : empty,
         value.length,
         transient,
       )
     }
     let column = (stmt: Deno.PointerValue, i: number): unknown => {
-      switch (c.sqlite3_column_type(stmt, i)) {
+      let type = c.sqlite3_column_type(stmt, i)
+      switch (type) {
         case 1: {
           let value = c.sqlite3_column_int64(stmt, i), number = Number(value)
           return Number.isSafeInteger(number) ? number : BigInt(value)
@@ -166,46 +179,55 @@ export let open = (path: string): Opened => {
           return c.sqlite3_column_double(stmt, i)
         case 3:
         case 4: {
-          let string = c.sqlite3_column_type(stmt, i) == 3
+          let string = type == 3
           let p = string
             ? c.sqlite3_column_text(stmt, i)
             : c.sqlite3_column_blob(stmt, i)
           let n = c.sqlite3_column_bytes(stmt, i)
-          let bytes = n && p
-            ? new Uint8Array(new Deno.UnsafePointerView(p).getArrayBuffer(n))
-              .slice()
-            : new Uint8Array()
-          return string ? decoder.decode(bytes) : bytes
+          if (!n || !p) return string ? '' : new Uint8Array()
+          let bytes = new Uint8Array(
+            new Deno.UnsafePointerView(p).getArrayBuffer(n),
+          )
+          // Decoding consumes the current row synchronously; blobs need a
+          // copy that survives the next step or the connection closing.
+          return string ? decoder.decode(bytes) : bytes.slice()
         }
         default:
           return null
       }
     }
     let run = (sql: string, params: Param[]): Row[] => {
-      if (closed) throw new Error('the database is closed')
-      let stmt = cache.get(sql)
-      if (stmt) cache.delete(sql)
+      let held = cache.get(sql)
+      if (held) cache.delete(sql)
       else {
-        stmt = prepare(sql)
+        held = prepare(sql)
         if (cache.size >= 256) {
           let oldest = cache.keys().next().value!
-          c.sqlite3_finalize(cache.get(oldest)!)
+          c.sqlite3_finalize(cache.get(oldest)!.stmt)
           cache.delete(oldest)
         }
       }
-      cache.set(sql, stmt)
+      cache.set(sql, held)
+      let { stmt, count } = held
       try {
-        if (params.length != c.sqlite3_bind_parameter_count(stmt)) {
+        if (params.length != count) {
           throw new Error('parameters must match the statement')
         }
         params.forEach((value, i) => check(bind(stmt!, i + 1, value)))
         let rows: Row[] = [], names: string[] | undefined, code: number
         while ((code = c.sqlite3_step(stmt)) == 100) { // SQLITE_ROW
-          // SQLite may recompile a cached statement after a schema change.
-          names ??= Array.from(
-            { length: c.sqlite3_column_count(stmt) },
-            (_, i) => text(c.sqlite3_column_name(stmt!, i)),
-          )
+          if (!names) {
+            // The first step may have recompiled the kept statement. Its
+            // column names stay valid until SQLite does so again.
+            let changed = c.sqlite3_stmt_status(stmt, 5, 1) // REPREPARE
+            if (!held.names || changed) {
+              held.names = Array.from(
+                { length: c.sqlite3_column_count(stmt) },
+                (_, i) => text(c.sqlite3_column_name(stmt!, i)),
+              )
+            }
+            names = held.names
+          }
           rows.push(
             Object.fromEntries(
               names.map((name, i) => [name, column(stmt!, i)]),
@@ -223,10 +245,13 @@ export let open = (path: string): Opened => {
       }
     }
     return Object.assign(
-      driver(run, { file: path != ':memory:' && path != '' }),
+      driver(run, {
+        file: path != ':memory:' && path != '',
+        before: checkOpen,
+      }),
       {
         extension: (file: string) => {
-          if (closed) throw new Error('the database is closed')
+          checkOpen()
           // Enable only the C loading API, never SQL's load_extension().
           check(c.sqlite3_db_config(db, 1005, 1, null)) // ENABLE_LOAD_EXTENSION
           try {

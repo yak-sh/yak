@@ -2,8 +2,12 @@
 import { test } from '@yaks/testing'
 import { assertEquals, assertStringIncludes } from '@std/assert'
 import type { Lookup } from '@yaks/cli/grammar'
-import { slashComplete, type SlashCompletion } from './slash-completion.ts'
-import { slash as parse, type Tools } from './slash.ts'
+import {
+  slashComplete,
+  type SlashCompletion,
+  slashCompletion,
+} from './slash-completion.ts'
+import { grammars, slash as parse, type Tools } from './slash.ts'
 import words from './vocab.json' with { type: 'json' }
 
 let all = Object.fromEntries(
@@ -39,8 +43,9 @@ let finish = (text: string, result: SlashCompletion, candidate: string) => {
   assertEquals(result.cands.some((c) => c.text == candidate), true)
   return text.slice(0, result.from) + candidate + text.slice(result.to)
 }
+let commands = grammars(tools)
 let suggestions = (text: string, caret = text.length, given = lookup) =>
-  slashComplete(tools, text, caret, given)
+  slashCompletion(commands, text, caret, given)
 
 test('slash adapts declared app commands and leaves chat alone', async () => {
   assertEquals(await slash('hello /damage true'), null)
@@ -122,6 +127,10 @@ test('help uses declared commands and omits NPC model tools', async () => {
 })
 
 test('slash completion adapts commands, help and exact-word state', async () => {
+  assertEquals(
+    await slashComplete(tools, '/sp', 3, lookup),
+    await suggestions('/sp'),
+  )
   assertEquals(await suggestions('/sp'), {
     from: 1,
     to: 3,

@@ -1,6 +1,7 @@
 // Bug tools speak the same graph queries and mark patches as every other door.
 
 import { argsOf, type Bundle, type Graph, referenced } from '@yaks/graph'
+import { after } from '@yaks/fp'
 import type { Runs } from '@yaks/graph/tools'
 import {
   and,
@@ -12,17 +13,40 @@ import {
   orderOf,
   parse,
   present,
+  type Query,
 } from '@yaks/query'
 import { CallError } from '@yaks/tools'
 import { str } from './model.ts'
-import { type Options, routes } from './routes.ts'
+import { type Options, read } from './routes.ts'
 import { mark as upstream } from './remote.ts'
 
-let one = async (g: Graph, eid: string): Promise<Bundle> => {
-  let [row] = await g.get([eid])
-  if (!row?.bug) throw new CallError('bug', `not a bug: ${eid}`)
-  return row
-}
+let one = (g: Graph, eid: string): Bundle | Promise<Bundle> =>
+  after(g.get([eid]), ([row]) => {
+    if (!row?.bug) throw new CallError('bug', `not a bug: ${eid}`)
+    return row
+  })
+
+/** Bug reads preserve caller ordering, defaulting to worst first. */
+export let bugs = (g: Graph, query: Query, count = 50) =>
+  g.read(and(
+    present('bug'),
+    ...query.clauses,
+    every(),
+    ...orderOf(query) ? [] : [order('-bug.hits')],
+    limit(count),
+  ))
+
+/** A bug and its retained occurrences, with no copies written locally. */
+export let bug = (g: Graph, input: string): Bundle[] | Promise<Bundle[]> =>
+  after(
+    referenced(g, [input], 'bug'),
+    ([eid]) =>
+      after(one(g, eid), (row) =>
+        after(
+          g.read(and(eq('error.bug', eid), every(), order('-error.at'))),
+          (occurrences) => [row, ...occurrences],
+        )),
+  )
 let answer = (call: Bundle, data: Record<string, unknown>): Bundle[] => {
   let value = { source: 'yaks.app', ...data }
   return [{
@@ -32,7 +56,7 @@ let answer = (call: Bundle, data: Record<string, unknown>): Bundle[] => {
   }]
 }
 export let runs = (
-  host: unknown = {},
+  _host: unknown = {},
   options: Options = {},
   go: typeof fetch = fetch,
 ): Runs => {
@@ -65,12 +89,9 @@ export let runs = (
     call: Bundle,
     params: URLSearchParams,
   ): Promise<Bundle[]> => {
-    let response = await routes(host, options, go).find((r) =>
-      r.path == '/tracker/bugs'
-    )!.handle(new Request(`http://box/tracker/bugs?${params}`))
-    let body = await response.json()
-    if (!response.ok) throw new CallError('remote', body.error)
-    return answer(call, { rows: body })
+    let result = await read(options, 'bugs', params, undefined, go)
+    if (!result.ok) throw new CallError('remote', result.error)
+    return answer(call, { rows: result.value })
   }
   return {
     bug_list: (call, g) => {
@@ -84,30 +105,18 @@ export let runs = (
           }),
         )
       }
-      let query = parse(str(args.query) || '.bug.status=open')
-      return g.read(
-        and(
-          present('bug'),
-          ...query.clauses,
-          every(),
-          ...orderOf(query) ? [] : [order('-bug.hits')],
-          limit(Number(args.limit ?? 50)),
-        ),
+      return bugs(
+        g,
+        parse(str(args.query) || '.bug.status=open'),
+        Number(args.limit ?? 50),
       )
     },
-    bug_show: async (call, g) => {
+    bug_show: (call, g) => {
       let args = argsOf(call)
       if (args.source == 'yaks.app') {
         return remote(call, new URLSearchParams({ bug: str(args.bug) }))
       }
-      let [eid] = await referenced(g, [str(args.bug)], 'bug')
-      let bug = await one(g, eid)
-      return [
-        bug,
-        ...await g.read(
-          and(eq('error.bug', bug.entity.eid), every(), order('-error.at')),
-        ),
-      ]
+      return bug(g, str(args.bug))
     },
     bug_resolve: mark('resolved'),
     bug_archive: mark('archived'),

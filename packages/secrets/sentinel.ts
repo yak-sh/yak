@@ -36,24 +36,55 @@ let b64url = (bytes: Uint8Array): string =>
 export let handle = (): string =>
   PREFIX + b64url(crypto.getRandomValues(new Uint8Array(32)))
 
+// A vault keeps its salt, so importing its HMAC key is setup shared by every
+// handle under it. Copy the bytes used for the import: callers can change a
+// salt buffer, and that must select a new key even while an import is pending.
+type Signing = {
+  bytes: Uint8Array
+  key: Promise<CryptoKey>
+  sentinels: Map<string, Promise<string>>
+}
+let keys = new WeakMap<Uint8Array, Signing>()
+let signing = (salt: Uint8Array): Signing => {
+  let kept = keys.get(salt)
+  if (
+    kept && kept.bytes.length == salt.length &&
+    kept.bytes.every((b, i) => b == salt[i])
+  ) return kept
+  let bytes = salt.slice()
+  let key = crypto.subtle.importKey(
+    'raw',
+    bytes as BufferSource,
+    { name: 'HMAC', hash: 'SHA-256' },
+    false,
+    ['sign'],
+  )
+  let next = { bytes, key, sentinels: new Map<string, Promise<string>>() }
+  keys.set(salt, next)
+  return next
+}
+
 /** The sentinel for a handle, under a vault's salt. */
 export let sentinel = async (
   salt: Uint8Array,
   handle: string,
 ): Promise<string> => {
-  let key = await crypto.subtle.importKey(
-    'raw',
-    salt as BufferSource,
-    { name: 'HMAC', hash: 'SHA-256' },
-    false,
-    ['sign'],
-  )
-  let mac = await crypto.subtle.sign(
-    'HMAC',
-    key,
-    new TextEncoder().encode(handle),
-  )
-  return SENTINEL + b64url(new Uint8Array(mac))
+  let state = signing(salt)
+  let found = state.sentinels.get(handle)
+  if (found) return await found
+  // Only deterministic public stand-ins are remembered. The vault remains
+  // authoritative for which handle exists and what credential it holds.
+  let made = state.key.then((key) =>
+    crypto.subtle.sign('HMAC', key, new TextEncoder().encode(handle))
+  ).then((mac) => SENTINEL + b64url(new Uint8Array(mac)))
+  if (state.sentinels.size >= 128) {
+    state.sentinels.delete(state.sentinels.keys().next().value!)
+  }
+  state.sentinels.set(handle, made)
+  made.catch(() => {
+    if (state.sentinels.get(handle) == made) state.sentinels.delete(handle)
+  })
+  return await made
 }
 
 // A sentinel as it appears in text: the prefix and a SHA-256 in base64url.

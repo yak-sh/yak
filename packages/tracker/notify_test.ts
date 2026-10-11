@@ -1,7 +1,8 @@
 // Notification occasions run through effect handlers in an in-memory graph.
 import { equal, ok, test } from '@yaks/testing'
-import type { Bundle, Graph } from '@yaks/graph'
-import { fixture } from './fixture_test.ts'
+import { type Bundle, type Graph, graph } from '@yaks/graph'
+import { ram } from '@yaks/ram'
+import { fixture, vocab } from './fixture_test.ts'
 import { effects } from './effects.ts'
 import { comp } from './model.ts'
 
@@ -48,7 +49,9 @@ let check = (name: string, run: (g: Graph) => Promise<void>) => {
   test(name, () => run(g))
 }
 
-let opening = fixture()
+// These openings are already stamped; notification writes need no additional
+// provenance setup. The generic mark rules are checked through intake elsewhere.
+let opening = graph({ vocab, storage: ram(vocab), provenance: false })
 let first = bug(), second = bug()
 await put(opening, [first, second])
 handler(opening)

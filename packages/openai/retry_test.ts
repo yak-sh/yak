@@ -104,44 +104,48 @@ test('three body-read failures become one ModelError, or a retry succeeds quietl
   }
 })
 
-test('a capacity code is transient however it arrives, whatever the status', async () => {
-  for (
-    let [failure, wait] of [
-      [overloaded, 1000],
-      [
-        () => sse({ type: 'error', code: 'overloaded_error', message: 'busy' }),
-        1000,
-      ],
-      // A body naming its class in `type` with a null `code`, over a 4xx.
-      [() =>
-        new Response(JSON.stringify({ error: { type: 'server_error' } }), {
+let capacityCases = [
+  [overloaded, 1000],
+  [
+    () => sse({ type: 'error', code: 'overloaded_error', message: 'busy' }),
+    1000,
+  ],
+  // A body naming its class in `type` with a null `code`, over a 4xx.
+  [() =>
+    new Response(JSON.stringify({ error: { type: 'server_error' } }), {
+      status: 400,
+    }), 1000],
+  [
+    () =>
+      new Response(
+        JSON.stringify({ error: { code: 'rate_limit_exceeded' } }),
+        {
           status: 400,
-        }), 1000],
-      [
-        () =>
-          new Response(
-            JSON.stringify({ error: { code: 'rate_limit_exceeded' } }),
-            {
-              status: 400,
-              headers: { 'retry-after': '3' },
-            },
-          ),
-        3000,
-      ],
-    ] as const
-  ) {
-    let calls = 0
-    let pauses: number[] = []
-    let client = transport({
-      credentials,
-      pause: (ms) => {
-        pauses.push(ms)
-        return Promise.resolve()
-      },
-      fetch: () => Promise.resolve(++calls == 1 ? failure() : complete()),
-    })
+          headers: { 'retry-after': '3' },
+        },
+      ),
+    3000,
+  ],
+] as const
+let capacity = capacityCases.map(([make, wait]) => {
+  let failure = make(), success = complete()
+  let calls = 0
+  let pauses: number[] = []
+  let client = transport({
+    credentials,
+    pause: (ms) => {
+      pauses.push(ms)
+      return Promise.resolve()
+    },
+    fetch: () => Promise.resolve(++calls == 1 ? failure : success),
+  })
+  return { client, wait, pauses, calls: () => calls }
+})
+
+test('a capacity code is transient however it arrives, whatever the status', async () => {
+  for (let { client, wait, pauses, calls } of capacity) {
     assertEquals((await client.run(req)).items, [item('done').item])
-    assertEquals(calls, 2)
+    assertEquals(calls(), 2)
     assertEquals(pauses, [wait])
   }
 })

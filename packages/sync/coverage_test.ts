@@ -34,8 +34,9 @@ test('low-level snapshots clear covered whole components, not other tiers or sco
   assertEquals((await g.read('.recipe')).length, 0)
 })
 
+let unowned = boxGraph(true)
 test('unowned land/standalone sync reject rider shapes rather than lose payloads', () => {
-  let g = boxGraph(true)
+  let g = unowned
   let socket = pair().client
   let errors: unknown[] = []
   let s = sync(g, {

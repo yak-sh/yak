@@ -328,7 +328,7 @@ let catalogue = () => {
   return { built, resources, prompts, capabilities }
 }
 
-test('HTTP tool exchanges do not read skills, while discovery stays fresh in both eras', async () => {
+let httpSkills = (() => {
   let path = '.claude/skills/testing/SKILL.md'
   let encoder = new TextEncoder()
   let files = new Map<string, Uint8Array>()
@@ -347,11 +347,17 @@ test('HTTP tool exchanges do not read skills, while discovery stays fresh in bot
       built.registerPrompt('other', {}, () => ({ messages: [] }))
     },
   }
+  let views = Array.from({ length: 10 }, catalogue)
   let request = async (method: string) => {
-    let view = catalogue()
+    let view = views.shift()!
     await prepared(view.built, options, { method })
     return view
   }
+  return { files, request, reads: () => reads, path, encoder }
+})()
+
+test('HTTP tool exchanges do not read skills, while discovery stays fresh in both eras', async () => {
+  let { files, request, reads, path, encoder } = httpSkills
   // Each era uses this preparation boundary before dispatching its request.
   for (let opening of ['initialize', 'server/discover']) {
     files.clear()
@@ -364,10 +370,10 @@ test('HTTP tool exchanges do not read skills, while discovery stays fresh in bot
         '---\nname: Invalid\ndescription: Broken\n---\nText\n',
       ),
     )
-    let before = reads
+    let before = reads()
     await request('tools/list')
     await request('tools/call')
-    assertEquals(reads, before)
+    assertEquals(reads(), before)
     await assertRejects(() => request('resources/list'), Refused)
     files.set(
       path,

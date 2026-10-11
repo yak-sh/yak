@@ -42,3 +42,15 @@ test('the archive says what the page called itself', () => {
   assertEquals(scrub('<p>no title</p>').title, undefined)
   assertEquals(scrub('<title>  </title>').title, undefined)
 })
+
+test('an archived fragment scrubs every top-level sibling and nested element', () => {
+  let { html, title } = scrub(
+    '<title>Fragment</title><p>rain</p>' +
+      '<script>fetch("https://elsewhere")</script>' +
+      '<section><img src="https://cdn.example/a.png"></section>' +
+      '<a href="https://example.com/">link</a>',
+  )
+  assertEquals(title, 'Fragment')
+  assert(!/https?:\/\/|<script/i.test(html), html)
+  assert(html.includes('rain') && html.includes('link'), html)
+})

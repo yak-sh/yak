@@ -75,39 +75,45 @@ test('an HTTP route answers while the graph reader is busy', async () => {
   assertEquals(await (await waiting).json(), [])
 })
 
-test('a request that broke is answered with its id and reported once', async () => {
+let brokenRequest = (() => {
   let graph = shopGraph()
-  let told: [Bundle, unknown][] = []
+  let disk = new Error('disk gone'), boom = new Error('boom')
+  let reported: { told: [Bundle, unknown][] } = { told: [] }
   let h = handler({
     graph,
-    reader: { ...graph, read: () => Promise.reject(new Error('disk gone')) },
+    reader: { ...graph, read: () => Promise.reject(disk) },
     who: () => null,
     routes: [
       { method: 'GET', path: '/hello', handle: () => new Response('hi') },
       {
         method: 'GET',
         path: '/boom/*',
-        handle: () => Promise.reject(new Error('boom')),
+        handle: () => Promise.reject(boom),
       },
     ],
     report: (err, context) => {
       assertEquals(context?.during?.request, context?.request?.entity.eid)
-      told.push([context!.request!, err])
+      reported.told.push([context!.request!, err])
     },
   })
+  return { h, reported }
+})()
+
+test('a request that broke is answered with its id and reported once', async () => {
+  let { h, reported } = brokenRequest
   assertEquals((await h(req('/hello'))).headers.get('x-request-id'), null)
-  assertEquals(told, [])
+  assertEquals(reported.told, [])
   for (
     let [path, route, message] of [
       ['/boom/x?secret=1', '/boom/*', 'boom'],
       ['/query?q=.book', '/query', 'disk gone'],
     ]
   ) {
-    told = []
+    reported.told = []
     let res = await h(req(path, { headers: { 'user-agent': 'curl/8.5.0' } }))
     assertEquals(res.status, 500)
-    assertEquals(told.length, 1)
-    let [[b, err]] = told
+    assertEquals(reported.told.length, 1)
+    let [[b, err]] = reported.told
     assertEquals(b.entity.eid, res.headers.get('x-request-id'))
     assertEquals((err as Error).message, message)
     let { ms: _, ...rest } = b.request as Record<string, unknown>

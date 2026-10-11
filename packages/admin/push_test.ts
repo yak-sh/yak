@@ -1,7 +1,7 @@
 // A push through a platform that keeps apps in memory: after it, the app holds
 // exactly the directory's files and has been released once.
 import { test } from '@yaks/testing'
-import { assertEquals, assertRejects } from '@std/assert'
+import { assert, assertEquals, assertRejects } from '@std/assert'
 import {
   type Ask,
   type File,
@@ -150,15 +150,24 @@ test('a released app with the same bytes causes no write or deploy', async () =>
   assertEquals(p.deployed, [])
 })
 
+let retryPlatform = platform({ mail: held('index.html') })
+let retryFiles = [file('index.html'), file('new.js')]
+let lostDeploy: Ask = (method, params) => {
+  let { name } = params as { name: string }
+  if (name == 'app_deploy') throw new Error('transport lost before deploy')
+  return retryPlatform.ask(method, params)
+}
+let failedDeploy: unknown
+try {
+  await push(lostDeploy, retryFiles, { app: 'mail' })
+} catch (error) {
+  failedDeploy = error
+}
+
 test('a retry releases files written before the deploy failed', async () => {
-  let p = platform({ mail: held('index.html') })
-  let files = [file('index.html'), file('new.js')]
-  let ask: Ask = (method, params) => {
-    let { name } = params as { name: string }
-    if (name == 'app_deploy') throw new Error('transport lost before deploy')
-    return p.ask(method, params)
-  }
-  await assertRejects(() => push(ask, files, { app: 'mail' }))
+  let p = retryPlatform
+  let files = retryFiles
+  assert(failedDeploy instanceof Error)
   assertEquals(p.writes, [['new.js']])
   assertEquals(p.deployed, [])
   assertEquals(await push(p.ask, files, { app: 'mail' }), [

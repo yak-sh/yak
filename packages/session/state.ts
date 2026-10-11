@@ -90,12 +90,9 @@ export let ordered = (entries: Bundle[]): Bundle[] =>
 
 /** The newest `ask` of a transcript: the model turn in force. */
 export let newestAsk = (entries: Bundle[]): Bundle | undefined =>
-  ordered(entries).filter((b) => kindOf(b) == 'ask').at(-1)
+  ordered(entries).findLast((b) => kindOf(b) == 'ask')
 
-/** The calls that no result answers — what the runner runs next, and what
- * keeps a transcript running past the prose the model returned beside them. */
-export let openCalls = (entries: Bundle[]): Bundle[] => {
-  let all = ordered(entries)
+let callsIn = (all: Bundle[]): Bundle[] => {
   let answered = new Set(
     all.filter((b) => kindOf(b) == 'result')
       .map((b) => String((b[RESULT] as Comp)?.call)),
@@ -103,10 +100,15 @@ export let openCalls = (entries: Bundle[]): Bundle[] => {
   return all.filter((b) => kindOf(b) == 'call' && !answered.has(b.entity.eid))
 }
 
+/** The calls that no result answers — what the runner runs next, and what
+ * keeps a transcript running past the prose the model returned beside them. */
+export let openCalls = (entries: Bundle[]): Bundle[] =>
+  callsIn(ordered(entries))
+
 // An anonymous claim belongs to the process that made it. If that process
 // vanished before answering, the session runner recovers it without replay.
-let abandoned = (entries: Bundle[]): boolean =>
-  openCalls(entries).some((b) => {
+let abandoned = (calls: Bundle[]): boolean =>
+  calls.some((b) => {
     let execution = b.execution as Comp | undefined
     return !!execution && execution.by == null && !b.interrupted
   })
@@ -133,9 +135,10 @@ export let statusOf = (entries: Bundle[], ended = false): TranscriptStatus => {
   if (!newest) return 'empty'
   let kind = kindOf(newest)
   if (kind == 'stop') return 'stopped'
-  let asked = newestAsk(all)
+  let asked = all.findLast((b) => kindOf(b) == 'ask')
   let turn = all.filter((b) => !asked || seqOf(b) >= seqOf(asked))
-  if (abandoned(turn)) return 'running'
+  let calls = callsIn(turn)
+  if (abandoned(calls)) return 'running'
   if (kind == 'exception') return 'failed'
   if (kind == 'interrupted' && newest.failed && !newest.ask && !newest.call) {
     return 'failed'
@@ -143,7 +146,7 @@ export let statusOf = (entries: Bundle[], ended = false): TranscriptStatus => {
   if (turn.some((b) => attemptState(b) == 'inflight')) {
     return 'running'
   }
-  let afterAsk = (ask = newestAsk(all)) => {
+  let afterAsk = (ask = asked) => {
     return ask && all.some((b) => seqOf(b) > seqOf(ask) && kindOf(b) == 'input')
       ? 'pending'
       : 'failed'
@@ -153,7 +156,7 @@ export let statusOf = (entries: Bundle[], ended = false): TranscriptStatus => {
     let ask = all.find((b) => b.entity.eid == source && kindOf(b) == 'ask')
     return ask ? afterAsk(ask) : 'failed'
   }
-  let interrupted = newestAsk(all)
+  let interrupted = asked
   if (interrupted?.interrupted) {
     if (
       interrupted.failed &&
@@ -170,7 +173,7 @@ export let statusOf = (entries: Bundle[], ended = false): TranscriptStatus => {
       ? 'failed'
       : 'pending'
   }
-  if (openCalls(turn).length) return 'running'
+  if (calls.length) return 'running'
   if (
     kind == 'ask' && attemptState(newest) == 'completed'
   ) return 'settled'
@@ -178,7 +181,7 @@ export let statusOf = (entries: Bundle[], ended = false): TranscriptStatus => {
   // Inputs can be admitted while a provider request is in flight. Its reply
   // does not acknowledge messages after that request's recorded boundary.
   if (kind == 'output') {
-    let ask = newestAsk(all)
+    let ask = asked
     let through = all.find((b) => b.entity.eid == (ask?.ask as Comp)?.through)
     if (
       through && all.some((b) =>

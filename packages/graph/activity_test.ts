@@ -8,6 +8,14 @@ import { loadVocab } from '@yaks/vocab'
 import { ram } from '@yaks/ram'
 import { books, memory, slow } from './testing.ts'
 
+let heftyBooks = loadVocab([{
+  $defs: {
+    book: { component: true, properties: { pages: { type: 'number' } } },
+    hefty: { component: true },
+    mark_hefty: { rule: true, match: '$b .book.pages>5, +!hefty' },
+  },
+}])
+
 test('record excludes an interleaved apply and all its phases', async () => {
   let gates = [Promise.withResolvers<void>(), Promise.withResolvers<void>()]
   let g = graph({
@@ -130,13 +138,7 @@ test('query, rows and get expose counts without query text or row contents', asy
 })
 
 test('only fired declared rules emit activity; refused batches cannot commit', async () => {
-  let vocab = loadVocab([{
-    $defs: {
-      book: { component: true, properties: { pages: { type: 'number' } } },
-      hefty: { component: true },
-      mark_hefty: { rule: true, match: '$b .book.pages>5, +!hefty' },
-    },
-  }])
+  let vocab = heftyBooks
   let g = graph({ vocab, storage: ram(vocab) })
   let c = channel(g)
   let off = c.subscribe(() => {})

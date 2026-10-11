@@ -26,6 +26,7 @@ export let jsonFrames = async function* (
   try {
     let decoder = new TextDecoder()
     let pending = ''
+    let boundary = /\r?\n\r?\n/
     while (true) {
       let part: ReadableStreamReadResult<Uint8Array>
       try {
@@ -35,9 +36,10 @@ export let jsonFrames = async function* (
         throw fault('transport', 'error reading a body from connection')
       }
       pending += decoder.decode(part.value, { stream: !part.done })
-      let blocks = pending.split(/\r?\n\r?\n/)
-      pending = blocks.pop() ?? ''
-      for (let block of blocks) {
+      let end: RegExpExecArray | null
+      while ((end = boundary.exec(pending))) {
+        let block = pending.slice(0, end.index)
+        pending = pending.slice(end.index + end[0].length)
         let value = frame(block)
         if (value) yield value
       }

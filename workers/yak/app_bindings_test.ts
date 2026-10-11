@@ -328,13 +328,25 @@ for (let phase of ['beforeCreate', 'beforeUploadReply'] as const) {
   })
 }
 
-test('resource names fit every product and distinguish normalized binding names', async () => {
-  let store = `app.${'a'.repeat(64)}`
-  let names = await Promise.all(
-    ['DB', 'db', 'D_B', 'D-B', 'B'.repeat(64)].map((name) =>
-      resourceName(store, name)
-    ),
+let namingStore = `app.${'a'.repeat(64)}`
+let bindingNames = ['DB', 'db', 'D_B', 'D-B', 'B'.repeat(64)]
+// Resource suffixes are durable handles. Preserve the original WebCrypto
+// UTF-8 digest when computing them synchronously in the worker.
+let namingSuffixes = await Promise.all(bindingNames.map(async (name) => {
+  let hash = await crypto.subtle.digest(
+    'SHA-256',
+    new TextEncoder().encode(`${namingStore}\0${name}`),
   )
+  return [...new Uint8Array(hash)]
+    .map((b) => b.toString(16).padStart(2, '0')).join('').slice(0, 10)
+}))
+
+test('resource names fit every product and distinguish normalized binding names', async () => {
+  let store = namingStore
+  let names = await Promise.all(
+    bindingNames.map((name) => resourceName(store, name)),
+  )
+  assertEquals(names.map((name) => name.slice(-10)), namingSuffixes)
   assertEquals(new Set(names).size, names.length)
   for (let name of names) assert(/^[a-z0-9][a-z0-9-]{1,61}[a-z0-9]$/.test(name))
   assertEquals(await resourceName(store, 'DB'), names[0])

@@ -80,32 +80,35 @@ let insert = (value: number): Insert => ({
   returning: [col('value')],
 })
 
-test('failed row decoding releases a cached write before rollback and the next savepoint', () => {
-  let db = new Database(':memory:')
-  try {
-    let sql = driver(db)
-    sql.query({
-      t: 'create table',
-      name: 'sample',
-      cols: [{ name: 'value', type: 'integer', unique: true }],
-    })
-    let tx = (...steps: Tx[]) => steps.forEach((s) => sql.query(s))
-    let prepare = db.prepare.bind(db)
-    let attempts = 0
-    let original = new Error('row conversion failed')
-    db.prepare = (text: string) => {
-      let statement = prepare(text)
-      if (text == render(insert(0)).sql && ++attempts == 1) {
-        // Fault exactly after sqlite3_step returned SQLITE_ROW, before all()
-        // resets it. No fake SQLite error: without eviction the next SAVEPOINT
-        // actually throws "cannot open savepoint - SQL statements in progress".
-        statement.getRowObject = () => () => {
-          throw original
-        }
-      }
-      return statement
+let failed = new Database(':memory:')
+let sql = driver(failed)
+sql.query({
+  t: 'create table',
+  name: 'sample',
+  cols: [{ name: 'value', type: 'integer', unique: true }],
+})
+let tx = (...steps: Tx[]) => steps.forEach((s) => sql.query(s))
+let prepare = failed.prepare.bind(failed)
+let attempts = 0
+let fault = render(insert(0)).sql
+let original = new Error('row conversion failed')
+failed.prepare = (text: string) => {
+  let statement = prepare(text)
+  if (text == fault && ++attempts == 1) {
+    // Fault exactly after sqlite3_step returned SQLITE_ROW, before all()
+    // resets it. No fake SQLite error: without eviction the next SAVEPOINT
+    // actually throws "cannot open savepoint - SQL statements in progress".
+    statement.getRowObject = () => () => {
+      throw original
     }
-    tx({ t: 'savepoint', name: 'outer' })
+  }
+  return statement
+}
+
+tx({ t: 'savepoint', name: 'outer' })
+
+test('failed row decoding releases a cached write before rollback and the next savepoint', () => {
+  try {
     let error = assertThrows(() => sql.query(insert(1)))
     assertEquals(error, original)
     tx(
@@ -121,7 +124,7 @@ test('failed row decoding releases a cached write before rollback and the next s
     assertEquals(attempts, 2, 'failed statement was re-prepared, not retried')
     tx({ t: 'release', name: 'nested' }, { t: 'release', name: 'next' })
   } finally {
-    db.close()
+    failed.close()
   }
 })
 

@@ -42,6 +42,8 @@ let b = (comps: Omit<Bundle, 'entity'>): Bundle => ({
   ...comps,
 })
 
+let authored = loadVocab([...docs, doc])
+
 test('a rename consumes only the property written, keeps its aspect, and translates a guard', () => {
   let before = b({
     recipe: { title: 'Cake', yield: 4 },
@@ -209,7 +211,7 @@ test('inside-component renames remove only the replaced name in both directions'
 })
 
 test('authored steps pass vocabulary loading and derive the declared identities', async () => {
-  let vocab = loadVocab([...docs, doc])
+  let vocab = authored
   ok(vocab.comp('_lens'))
   equal(rows[0].entity.eid, derivedEid(`_lens|${pkg}|0`))
   equal(versions([doc]), { [pkg]: 1 })

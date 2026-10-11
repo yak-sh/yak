@@ -55,24 +55,24 @@ let deploy = (
   ...over,
 })
 
+let uploadedVersions = rowsIn<Version>(
+  JSON.parse(JSON.stringify([
+    version(1, `${commit(1).sha} change 1`),
+    version(2),
+    version(3, 'abcdef12 commit absent locally'),
+  ])),
+  'versions',
+)
+let uploadedHistory = rowsIn<Deployment>({
+  result: { deployments: [deployment(8, 'v1', 'v2'), deployment(4, 'v1')] },
+}, 'deployments')
+let uploadLog = commitsIn(
+  [commit(2), commit(1)].map((c) => `${c.sha}\t${c.at}\t${c.subject}`).join(
+    '\n',
+  ),
+)
 test('Wrangler JSON joins uploads to named commits and the latest traffic deployment', () => {
-  let versions = rowsIn<Version>(
-    JSON.parse(JSON.stringify([
-      version(1, `${commit(1).sha} change 1`),
-      version(2),
-      version(3, 'abcdef12 commit absent locally'),
-    ])),
-    'versions',
-  )
-  let history = rowsIn<Deployment>({
-    result: { deployments: [deployment(8, 'v1', 'v2'), deployment(4, 'v1')] },
-  }, 'deployments')
-  let log = commitsIn(
-    [commit(2), commit(1)].map((c) => `${c.sha}\t${c.at}\t${c.subject}`).join(
-      '\n',
-    ),
-  )
-  let rows = deploysIn(versions, history, log)
+  let rows = deploysIn(uploadedVersions, uploadedHistory, uploadLog)
   assertEquals(
     rows.map((r) => [r.id, r.commit?.sha, r.estimated, r.first, r.live]),
     [
@@ -82,7 +82,10 @@ test('Wrangler JSON joins uploads to named commits and the latest traffic deploy
     ],
   )
   assertEquals(rows[2].last, at(8))
-  assertEquals(rowsIn({ result: { items: versions } }, 'versions'), versions)
+  assertEquals(
+    rowsIn({ result: { items: uploadedVersions } }, 'versions'),
+    uploadedVersions,
+  )
   assertThrows(() => rowsIn({ success: false }, 'versions'), Error, 'JSON')
   let shown = table(rows)
   assert(shown.includes('22222222~'))
@@ -148,11 +151,14 @@ test('explicit rollback boundaries exclude status markers and fail closed', () =
 
 // A rollback is refused wherever the history cannot be read, so the file as it
 // stands has to parse.
-test('the migrations as they stand are a history deploys can read', async () => {
-  let source = await Deno.readTextFile(
-    new URL('../../workers/yak/migrate.ts', import.meta.url),
+let migrationSource = await Deno.readTextFile(
+  new URL('../../workers/yak/migrate.ts', import.meta.url),
+)
+test('the migrations as they stand are a history deploys can read', () => {
+  assert(
+    marksIn(migrationSource)?.length,
+    'migrate.ts declares no readable history',
   )
-  assert(marksIn(source)?.length, 'migrate.ts declares no readable history')
 })
 
 test('a gradual deploy can roll back to its prior version while that version still serves traffic', () => {

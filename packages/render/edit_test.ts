@@ -34,8 +34,11 @@ let vocab = loadVocab({
   },
 })
 let bundle = { entity: { eid: 'a' }, doc: { title: 'Before', count: 2 } }
+let actions = new Map(
+  vocab.props('doc').map((prop) => [prop, edit(vocab, { comp: 'doc', prop })]),
+)
 let set = (prop: string, input: unknown) =>
-  edit(vocab, { comp: 'doc', prop }).run(bundle, input)
+  actions.get(prop)!.run(bundle, input)
 
 test('property actions parse typed values and patch only their property', () => {
   let cases: [string, unknown, unknown][] = [

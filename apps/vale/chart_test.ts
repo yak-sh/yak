@@ -71,6 +71,39 @@ test('updated theme colours repaint already-grown ground and water', () => {
   assertEquals(chartPatch(water), before[1])
 })
 
+let mutableLook = {
+  ground: { grass: 0x123456 },
+  water: [0x102030, 0x102030, 0x102030] as [number, number, number],
+}
+let mutableRows = rows.map((row) =>
+  row.theme_design.land == 'mossvale'
+    ? { ...row, theme_design: { ...row.theme_design, look: mutableLook } }
+    : row
+)
+let pixels = (hex: number) =>
+  Uint8ClampedArray.from(
+    { length: CHUNK * CHUNK * 4 },
+    (_, i) => i % 4 == 3 ? 255 : hex >> (16 - 8 * (i % 4)) & 255,
+  )
+let originalColours = [pixels(0x123456), pixels(0x102030)]
+let editedColours = [pixels(0x654321), pixels(0x302010)]
+
+test('editing reused theme looks repaints every ground and water pixel', () => {
+  try {
+    useThemes(mutableRows)
+    assertEquals(chartPatch(land), originalColours[0])
+    assertEquals(chartPatch(water), originalColours[1])
+    mutableLook.ground.grass = 0x654321
+    mutableLook.water.fill(0x302010)
+    assertEquals(chartPatch(land), editedColours[0])
+    assertEquals(chartPatch(water), editedColours[1])
+  } finally {
+    mutableLook.ground.grass = 0x123456
+    mutableLook.water.fill(0x102030)
+    seedThemes()
+  }
+})
+
 test('map pixels sample cover at their centres at every grown detail', () => {
   let reference: Uint8ClampedArray | undefined
   for (let voxel of [1, 0.25, 2]) {

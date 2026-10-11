@@ -11,9 +11,11 @@ import { parse } from '@yaks/query'
 import { loadVocab } from '@yaks/vocab'
 import { h, markdown, plain, render, safe, safeHref } from './mod.ts'
 
+let { document } = parseHTML('<main></main>')
 let html = (text: string) => {
-  let { document } = parseHTML(`<main>${marked.parse(text)}</main>`)
-  return document.querySelector('main')!
+  let main = document.createElement('main')
+  main.innerHTML = String(marked.parse(text))
+  return main
 }
 let controls = Array.from({ length: 160 }, (_, n) => n)
   .filter((n) => n < 32 || n >= 127)
@@ -179,38 +181,34 @@ test('link destinations cannot close Markdown syntax and plain mode keeps destin
 })
 
 test('inline code and fences outgrow embedded backtick runs', () => {
-  for (let text of ['a`b', '`edge`', ' a ', ' ', '**literal**']) {
-    let node = h('code', null, text)
-    assertEquals(html(markdown(node)).querySelector('code')?.textContent, text)
-    assertEquals(plain(node), text)
-  }
+  let texts = ['a`b', '`edge`', ' a ', ' ', '**literal**']
+  let codes = texts.map((text) => h('code', null, text))
   let node = h('pre', null, h('code', null, '```', h('br', null), '<b>*x*'))
+  let adjacent = h('p', null, h('code', null, 'one'), h('code', null, 'two'))
+  let parsed = html([...codes, node, adjacent].map(markdown).join('\n\n'))
+  let inline = [...parsed.querySelectorAll('p > code')].map((el) =>
+    el.textContent
+  )
+  assertEquals(inline, [...texts, 'one', 'two'])
+  for (let [i, code] of codes.entries()) assertEquals(plain(code), texts[i])
   assertEquals(markdown(node), '````\n```\n<b>*x*\n````')
   assertEquals(plain(node), '```\n<b>*x*')
-  assertEquals(
-    html(markdown(node)).querySelector('pre code')?.textContent,
-    '```\n<b>*x*\n',
-  )
+  assertEquals(parsed.querySelector('pre code')?.textContent, '```\n<b>*x*\n')
   assertEquals(markdown(h('pre', null, 'one', h('br', null))), '```\none\n```')
-  let adjacent = h('p', null, h('code', null, 'one'), h('code', null, 'two'))
-  assertEquals(
-    [...html(markdown(adjacent)).querySelectorAll('code')].map((el) =>
-      el.textContent
-    ),
-    ['one', 'two'],
-  )
   assertEquals(plain(adjacent), 'onetwo')
 })
 
 test('href entity spellings remain literal, including encoded control references', () => {
-  for (let suffix of ['&copy;', '&#x1b;', '&#27;', '&#x9b;', '&amp;#x1b;']) {
-    let href = `https://yaks.app/?a=${suffix}&b=two`
-    let node = h('a', { href }, 'link')
-    assertEquals(
-      html(markdown(node)).querySelector('a')?.getAttribute('href'),
-      href,
-    )
-    assertEquals(plain(node), `link (${href})`)
+  let hrefs = ['&copy;', '&#x1b;', '&#27;', '&#x9b;', '&amp;#x1b;']
+    .map((suffix) => `https://yaks.app/?a=${suffix}&b=two`)
+  let links = hrefs.map((href) => h('a', { href }, 'link'))
+  let parsed = html(links.map(markdown).join('\n\n'))
+  assertEquals(
+    [...parsed.querySelectorAll('a')].map((link) => link.getAttribute('href')),
+    hrefs,
+  )
+  for (let [i, link] of links.entries()) {
+    assertEquals(plain(link), `link (${hrefs[i]})`)
   }
 })
 

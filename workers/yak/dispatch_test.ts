@@ -800,7 +800,11 @@ let recorded = async (
       method: r.method,
       url: r.url,
       auth: r.headers.get('authorization') ?? '',
-      body: type.startsWith('multipart/') ? await r.formData() : await r.text(),
+      // Fetch receives the FormData itself; decoding a synthetic wire copy
+      // adds a second multipart implementation to this account API fixture.
+      body: type.startsWith('multipart/') && init?.body instanceof FormData
+        ? init.body
+        : await r.text(),
     })
     return reply(r)
   }) as typeof fetch

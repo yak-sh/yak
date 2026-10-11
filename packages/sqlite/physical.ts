@@ -218,18 +218,22 @@ export function componentTables(
   let current = revision(driver, 'schema')
   let held = components.get(driver)
   if (!held || held.revision != current) {
-    let ordinary = new Set(
-      driver.query({ t: 'pragma', name: 'table_list' })
-        .filter((r) => r.schema == 'main' && r.type == 'table')
-        .map((r) => String(r.name)),
-    )
-    let found = tables(driver)
+    // Direct metadata pragmas are unbilled on metered SQLite engines; their
+    // table-valued forms count every visited metadata row as a stored read.
+    let found = driver.query({ t: 'pragma', name: 'table_list' })
+      .filter((r) => r.schema == 'main' && r.type == 'table')
+      .map((r) => String(r.name))
       .filter((name) =>
-        ordinary.has(name) && name != 'entity' &&
-        !name.startsWith('sqlite_') && !/^_+cf_/i.test(name)
+        name != 'entity' && !name.startsWith('sqlite_') && !/^_+cf_/i.test(name)
       )
+      .sort()
       .filter((name) =>
-        driver.query({ t: 'pragma', name: 'table_info', arg: name })
+        driver.query({
+          t: 'pragma',
+          name: 'table_info',
+          schema: 'main',
+          arg: name,
+        })
           .some((r) =>
             r.name == 'entity' && Number(r.pk) == 1 &&
             String(r.type).toLowerCase() == 'integer'

@@ -329,14 +329,21 @@ export let compositionAnatomy = (
   }
   // Applied in the order they were observed, the first time anybody reads.
   let pending: (() => void)[] = []
+  let snapshot: Anatomy | undefined
   let later =
     <A extends unknown[]>(step: (...args: A) => void) => (...args: A) => {
       pending.push(() => step(...args))
     }
   return {
     read: (): Anatomy => {
-      for (let step of pending.splice(0)) step()
-      return anatomy({ ...source, facets: [...facets.values()] })
+      if (!snapshot || pending.length) {
+        snapshot = undefined
+        for (let step of pending.splice(0)) step()
+        snapshot = anatomy({ ...source, facets: [...facets.values()] })
+      }
+      // A composition changes only when evidence arrives. Each reader receives
+      // an independent value, even while the projection remains current.
+      return structuredClone(snapshot)
     },
     observe: later(observe),
     attempted: later((owner: string, name: string) => {

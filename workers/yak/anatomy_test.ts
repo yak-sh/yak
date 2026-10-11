@@ -107,11 +107,17 @@ test('worker anatomy is per-store composition, not a native or connector roster'
   assert(app.read().tools.length > 0)
 })
 
+let effectRegistry = effects(effectWords)
+let effectCapture = workerAnatomy({})
+effectCapture.composition.declarations(effectWords.docs, effectWords)
+effectCapture.graph([])
+// Initial composition is fixture setup; registration and its snapshots remain
+// inside the behavior check.
+effectCapture.read()
+
 test('worker effect ownership observes registration once, never replays callbacks', () => {
-  let registry = effects(effectWords)
-  let capture = workerAnatomy({})
-  capture.composition.declarations(effectWords.docs, effectWords)
-  capture.graph([])
+  let registry = effectRegistry
+  let capture = effectCapture
   let calls = 0, runs = 0
   let made = () => {
     calls++
@@ -149,14 +155,19 @@ test('worker effect ownership observes registration once, never replays callback
   assert(!JSON.stringify(first).includes('"run":'))
 })
 
+let commandCapture = workerAnatomy({})
+commandCapture.composition.declarations(words.docs, words)
+commandCapture.graph([])
+commandCapture.commands({
+  note_list: { description: 'List notes', input: {}, query: '.note' },
+}, [tool])
+let originalTool = commandCapture.read().tools.find((t) =>
+  t.name == 'note_list'
+)!
+
 test('worker command replacement updates loading evidence without invoking a run', () => {
-  let capture = workerAnatomy({})
-  capture.composition.declarations(words.docs, words)
-  capture.graph([])
-  capture.commands({
-    note_list: { description: 'List notes', input: {}, query: '.note' },
-  }, [tool])
-  let before = capture.read().tools.find((t) => t.name == 'note_list')!
+  let capture = commandCapture
+  let before = originalTool
   capture.commands({}, [])
   let snapshot = capture.read()
   let after = snapshot.tools.find((t) => t.name == 'note_list')!

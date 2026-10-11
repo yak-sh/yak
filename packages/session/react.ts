@@ -700,9 +700,9 @@ export let react = async (
   let status = statusOf(entries)
   let nothing: Step = { did: 'nothing', status, added: [] }
   let newest = entries.at(-1)
-  let older = openCalls(entries).some((b) =>
-    (b.call as Comp)?.source != newestAsk(entries)?.entity.eid
-  )
+  let asked = newestAsk(entries)
+  let open = openCalls(entries)
+  let older = open.some((b) => (b.call as Comp)?.source != asked?.entity.eid)
   if (!newest || status == 'stopped' || status == 'settled' && !older) {
     return nothing
   }
@@ -825,15 +825,16 @@ export let react = async (
     )
     return recovered ?? await current()
   }
+  let using = usingBefore(entries)
   const tools = offered(
     deps.toolSnapshot
       ? await deps.toolSnapshot(
-        openCalls(entries).length ? 'call' : 'ask',
+        open.length ? 'call' : 'ask',
         session,
       )
       : deps.tools,
     deps.named ?? (() => []),
-    usingBefore(entries)?.tools,
+    using?.tools,
   )
   // Open tool calls: perform every one the current ask asked for that has no
   // result yet, in one batch, so the model is never asked with a call it made
@@ -841,8 +842,6 @@ export let react = async (
   // exception and a result saying so, so the model hears what happened and
   // the session goes on. This is the same set statusOf reads as `running`, so
   // a transcript is never called settled with work left here (T-35230).
-  let asked = newestAsk(entries)
-  let open = openCalls(entries)
   // Resolve the finite offered/called identities, not every tool in the
   // store. Canonical tools are named by their declaration; retained calls
   // may name an older stored identity and still resolve from that row.
@@ -856,7 +855,7 @@ export let react = async (
       }),
     ]),
   ]
-  for (let b of await g.get(targets, [TOOL])) {
+  for (let b of targets.length ? await g.get(targets, [TOOL]) : []) {
     let t = tools.find((t) => t.name == comp(b, TOOL)?.name)
     if (t) toolEntities.set(b.entity.eid, t)
   }
@@ -1010,7 +1009,6 @@ export let react = async (
 
   // Pending, or an error under the bound: ask the model. The anchor is the
   // newest ask the model can continue from; only what followed it travels.
-  let using = usingBefore(entries)
   let modelEid = using?.model == null ? undefined : String(using.model)
   if (modelEid) signer = { by: modelEid, via: session }
   let [modelEntity] = modelEid ? await g.get([modelEid]) : []
@@ -1100,9 +1098,12 @@ export let react = async (
   let media: Map<Eid, Item[]> | undefined
   let dynamic: Item[]
   try {
-    media = await deps.contextItems?.(window, entries)
-    dynamic = await deps.requestItems?.(window, entries, { session, tools }) ??
-      []
+    media = deps.contextItems
+      ? await deps.contextItems(window, entries)
+      : undefined
+    dynamic = deps.requestItems
+      ? await deps.requestItems(window, entries, { session, tools }) ?? []
+      : []
   } catch (error) {
     // A host refusing to prepare context cannot be fixed by asking again.
     // Record it before returning, so the pool and restart sweep see an ended

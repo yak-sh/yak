@@ -243,6 +243,7 @@ type Ready = {
   gates: string[]
   resources: string[]
   writes: string[]
+  requires: string[]
   cites: string[]
   allowed: Set<string>
   checked: boolean
@@ -348,6 +349,9 @@ let compile = (r: Rule, v: Vocab): Ready => {
     gates: d.gates,
     resources: d.resources,
     writes: d.writes,
+    requires: d.writes.filter((c) =>
+      !d.ensures.includes(c) && !d.gates.includes(c)
+    ),
     cites: cited(d.filter),
     allowed: new Set(named),
     checked: d.writes.length > 0,
@@ -518,6 +522,28 @@ export let fire = (
   // keeps the cost linear in the size of the batch.
   let moment = { now: Date.now() }
   for (let [r, ready] of live) {
+    // A mutable component not added by this rule must already be present.
+    // These are unconditional clauses of the rule's filter (declared()), so
+    // no frozen view wearing them means no match, including across references.
+    // Resources and literal citations were validated before narrowing here.
+    if (ready.requires.length) {
+      let possible = false
+      for (let view of views) {
+        let complete = true
+        for (let name of ready.requires) {
+          let c = view[name]
+          if (name != 'entity' && (c == null || typeof c != 'object')) {
+            complete = false
+            break
+          }
+        }
+        if (complete) {
+          possible = true
+          break
+        }
+      }
+      if (!possible) continue
+    }
     let matches = single
       ? filter(ready.query!, tick.vocab, moment)(views[0], among) ? views : []
       : matcher(ready.query!, tick.vocab, moment)(among)

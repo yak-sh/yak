@@ -123,6 +123,81 @@ test('a produce-only rule writes its template into what it matched', () => {
   assertEquals(held(one, 'p1').book, undefined)
 })
 
+test('required components belong to the same frozen entity, including stored state', () => {
+  let rule: Rule = {
+    phase: 'precondition',
+    match: '*book, *review',
+    produce: { book: { pages: 99 } },
+  }
+  let stored: Bundle = {
+    entity: { eid: 'b1' },
+    book: { pages: 10 },
+    review: { stars: 4 },
+  }
+  let run = (bundles: Bundle[], of?: (eid: string) => Bundle | undefined) =>
+    sync(
+      memory().tx((tx) =>
+        fire([rule], {
+          vocab: books,
+          tx,
+          phase: 'precondition',
+          bundles,
+          resources: {},
+          of,
+        })
+      ),
+    )
+  let missing: Bundle[] = [{ entity: { eid: 'b1' }, doc: { title: 'Dune' } }]
+  assertEquals(run(missing), missing)
+  let split: Bundle[] = [
+    { entity: { eid: 'b1' }, book: {} },
+    { entity: { eid: 'b2' }, review: {} },
+  ]
+  assertEquals(run(split), split)
+  assertEquals(run(missing, () => stored), [...missing, {
+    entity: stored.entity,
+    book: { pages: 99 },
+  }])
+  let removed: Bundle[] = [{ entity: stored.entity, book: null }]
+  assertEquals(run(removed, () => stored), removed)
+  rule.match = '*book, #Missing'
+  assertThrows(() => run(missing), Error, 'nothing provides')
+})
+
+test('ensures and gates can supply the component a mutable rule writes', () => {
+  let run = (match: string, bundle: Bundle) =>
+    sync(
+      memory().tx((tx) =>
+        fire([{
+          phase: 'precondition',
+          match,
+          run: (b) => ({
+            book: { pages: (b.book as { pages?: number }).pages ?? 99 },
+          }),
+        }], {
+          vocab: books,
+          tx,
+          phase: 'precondition',
+          bundles: [bundle],
+          resources: {},
+        })
+      ),
+    )
+  let absent: Bundle = { entity: { eid: 'b1' }, doc: { title: 'Dune' } }
+  let present: Bundle = { entity: absent.entity, book: { pages: 10 } }
+  for (let match of ['+book, *book', '+!book, *book']) {
+    assertEquals(run(match, absent), [absent, {
+      entity: absent.entity,
+      book: { pages: 99 },
+    }])
+  }
+  assertEquals(run('+book, *book', present), [present, {
+    entity: present.entity,
+    book: { pages: 10 },
+  }])
+  assertEquals(run('+!book, *book', present), [present])
+})
+
 test('a gate makes a rule fire once, across applies', () => {
   let fired: string[] = []
   let one = g([{

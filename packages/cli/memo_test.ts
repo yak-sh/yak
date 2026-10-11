@@ -58,16 +58,18 @@ let fixture = (
   return { files, io, get, memo, opts, runs: () => runs }
 }
 
+let reusable = fixture()
+reusable.files.set(
+  '/source/words.ts',
+  reusable.files.get('/source/words.ts')! +
+    '\nimport {type Shape} from "./erased.ts"; export type {Other} from "./erased.ts"',
+)
+let initialMemo = await reusable.get()
+
 test('a command reuses a memo when its inputs agree', async () => {
-  let f = fixture()
-  f.files.set(
-    '/source/words.ts',
-    f.files.get('/source/words.ts')! +
-      '\nimport {type Shape} from "./erased.ts"; export type {Other} from "./erased.ts"',
-  )
-  equal(await f.get(), { title: 'one', run: 1 })
-  f.files.set('/source/erased.ts', 'export type Shape = string')
-  equal(await f.get(), { title: 'one', run: 1 })
+  equal(initialMemo, { title: 'one', run: 1 })
+  reusable.files.set('/source/erased.ts', 'export type Shape = string')
+  equal(await reusable.get(), { title: 'one', run: 1 })
 })
 
 let changed = async (source?: string) => {

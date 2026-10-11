@@ -105,8 +105,10 @@ test('touch look and mouse look keep their own gesture', () => {
   assertEquals(lookDrag(2, 'mouse', true), false)
 })
 
+let touchDocument = parseHTML('<html><body></body></html>')
+let touchGround = flat(5)
 test('left touch walks right while right touch orbits', () => {
-  let { document, window } = parseHTML('<html><body></body></html>')
+  let { document, window } = touchDocument
   let before = Object.fromEntries(
     ['document', 'innerWidth', 'addEventListener'].map((
       key,
@@ -156,7 +158,7 @@ test('left touch walks right while right touch orbits', () => {
       gait: 'idle',
     }
     let stepped = stride(
-      flat(5),
+      touchGround,
       body,
       i.move,
       i.orbit[0],

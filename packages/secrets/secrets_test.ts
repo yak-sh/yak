@@ -121,11 +121,28 @@ test('one value under two names is two handles', async () => {
   assertNotEquals((await row(g, 'A'))!.value, (await row(g, 'B'))!.value)
 })
 
+let platformSentinel = async (salt: Uint8Array, handle: string) => {
+  let key = await crypto.subtle.importKey(
+    'raw',
+    salt as BufferSource,
+    { name: 'HMAC', hash: 'SHA-256' },
+    false,
+    ['sign'],
+  )
+  let digest = await crypto.subtle.sign(
+    'HMAC',
+    key,
+    new TextEncoder().encode(handle),
+  )
+  return SENTINEL + btoa(String.fromCharCode(...new Uint8Array(digest)))
+    .replaceAll('+', '-').replaceAll('/', '_').replace(/=+$/, '')
+}
+
 let sentinelFixture = setup()
 let missingSentinel = await sentinelOf(sentinelFixture.vault, 'A')
 await sentinelFixture.g.apply([sealed('A', 'one')])
 let sentinelHandle = (await row(sentinelFixture.g, 'A'))!.value
-let expectedSentinel = await sentinel(
+let expectedSentinel = await platformSentinel(
   await sentinelFixture.vault.salt(),
   sentinelHandle,
 )
@@ -141,6 +158,20 @@ test('the sentinel is the handle hashed under the vault salt, and survives a rot
   assertEquals(rotatedSentinel, firstSentinel)
 })
 
+let changingSalt = new Uint8Array(32)
+let changingHandle = 'yak_secret_mutable_salt'
+let beforeSaltChange = await sentinel(changingSalt, changingHandle)
+let expectedBefore = await platformSentinel(changingSalt, changingHandle)
+let nextSalt = changingSalt.slice()
+nextSalt[0] = 1
+let expectedAfter = await platformSentinel(nextSalt, changingHandle)
+test('a sentinel follows changed salt bytes and matches the platform HMAC', async () => {
+  assertEquals(beforeSaltChange, expectedBefore)
+  changingSalt[0] = 1
+  assertEquals(await sentinel(changingSalt, changingHandle), expectedAfter)
+  assertEquals(await sentinel(changingSalt, changingHandle), expectedAfter)
+})
+
 test('a swap replaces the sentinels it has values for, and nothing else', async () => {
   let a = await sentinel(new Uint8Array(32), 'yak_secret_a')
   let b = await sentinel(new Uint8Array(32), 'yak_secret_b')
@@ -152,12 +183,21 @@ test('a swap replaces the sentinels it has values for, and nothing else', async 
   )
 })
 
-test('deleting a secret, or its component, drops it from the vault', async () => {
+let deletingSecrets = await (async () => {
   let { g, vault } = setup()
   await g.apply([sealed('A', 'one'), sealed('B', 'two')])
+  let a = await sentinelOf(vault, 'A'), b = await sentinelOf(vault, 'B')
+  return { g, vault, a, b }
+})()
+test('deleting a secret, or its component, drops it from the vault', async () => {
+  let { g, vault, a, b } = deletingSecrets
+  assert(a)
+  assert(b)
   await g.apply([unsealed('A')])
   await g.apply([{ entity: { eid: secretEid('B') }, secret: null }])
   assertEquals(vault.all(), [])
+  assertEquals(await sentinelOf(vault, 'A'), undefined)
+  assertEquals(await sentinelOf(vault, 'B'), undefined)
   assertEquals(await reveal(vault, 'A', none), undefined)
 })
 

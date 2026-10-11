@@ -22,9 +22,11 @@ test('a closed database refuses cached and new statements', () => {
   ) assertThrows(operation, Error, 'the database is closed')
 })
 
+let dir = Deno.makeTempDirSync()
+let file = open(`${dir}/nested/graph.db`)
+
 test('a file opens in WAL with NORMAL sync and a bounded journal', () => {
-  let dir = Deno.makeTempDirSync()
-  let sql = open(`${dir}/nested/graph.db`)
+  let sql = file
   try {
     let pragma = (name: string) => sql.query({ t: 'pragma', name })[0]
     assertEquals(pragma('journal_mode'), { journal_mode: 'wal' })
@@ -57,12 +59,16 @@ test('a kept statement answers with the columns the schema now has', () => {
   assertEquals(scan(sql, 't'), [{ x: 1, y: 5 }])
 })
 
+let transaction = open(':memory:')
+transaction.query({ t: 'create table', name: 't', cols: [{ name: 'x' }] })
+transaction.query(insert('t', { x: 1 }))
+
 test('a kept statement answers with the columns a transaction gave the table', () => {
-  using sql = scratch()
+  using sql = Object.assign(transaction, {
+    [Symbol.dispose]: transaction.close,
+  })
   let add = (name: string) =>
     sql.query({ t: 'alter table', table: 't', add: { name, default: lit(5) } })
-  sql.query({ t: 'create table', name: 't', cols: [{ name: 'x' }] })
-  sql.query(insert('t', { x: 1 }))
   sql.query({ t: 'begin' })
   assertEquals(scan(sql, 't'), [{ x: 1 }])
   assertEquals(scan(sql, 't'), [{ x: 1 }])

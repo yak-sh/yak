@@ -1,4 +1,5 @@
 import { test } from '@yaks/testing'
+import { Buffer } from 'node:buffer'
 import { assertEquals, assertThrows } from '@std/assert'
 import { as, fn, insert, lit, type Param, scan, select, val } from '@yaks/sql'
 import { open as writer } from './db.ts'
@@ -35,31 +36,34 @@ for (
     ['db.readOnly', (path: string) => writer(path, { readOnly: true })],
   ] as const
 ) {
+  let value = (value: Param) => select({ cols: [as(val(value), 'value')] })
+  let values: Param[] = [
+    null,
+    true,
+    false,
+    0,
+    -1,
+    2 ** 40,
+    Number.MAX_SAFE_INTEGER,
+    9007199254740993n,
+    -9223372036854775808n,
+    1.25,
+    '',
+    'λ\0雪',
+    new Uint8Array(),
+    new Uint8Array([0, 1, 255]),
+  ]
+  let queries = values.map(value)
+  let expected = values.map((
+    v,
+  ) => [{ value: typeof v == 'boolean' ? Number(v) : v }])
+  let bound = read(':memory:')
   test(`${name} preserves bound values, statement errors and closed reads`, () => {
-    let db = read(':memory:')
+    let db = bound
     try {
-      let value = (value: Param) => select({ cols: [as(val(value), 'value')] })
-      let values: Param[] = [
-        null,
-        true,
-        false,
-        0,
-        -1,
-        2 ** 40,
-        Number.MAX_SAFE_INTEGER,
-        9007199254740993n,
-        -9223372036854775808n,
-        1.25,
-        '',
-        'λ\0雪',
-        new Uint8Array(),
-        new Uint8Array([0, 1, 255]),
-      ]
       assertEquals(
-        values.map((v) => db.query(value(v))),
-        values.map((v) => [{
-          value: typeof v == 'boolean' ? Number(v) : v,
-        }]),
+        queries.map((q) => db.query(q)),
+        expected,
       )
       assertThrows(
         () =>
@@ -88,8 +92,9 @@ for (
 
   let table = `t_${name}`
   seed(table)
+  let snapshot = read(f.path)
   test(`${name} sees committed schema changes and holds a read snapshot`, () => {
-    let db = read(f.path)
+    let db = snapshot
     try {
       assertEquals(scan(db, table), [{ x: 1 }])
       f.db.query({
@@ -117,10 +122,12 @@ test('the last read-only connection leaves its database and WAL untouched', () =
   assertEquals(scan(db, 't'), [{ x: 1 }])
   f.db.close()
   let contents = () =>
-    [f.path, `${f.path}-wal`].map((p) => Deno.readFileSync(p))
+    [f.path, `${f.path}-wal`].map((p) =>
+      Buffer.from(Deno.readFileSync(p).buffer)
+    )
   let before = contents()
   db.close()
-  assertEquals(contents(), before)
+  contents().forEach((bytes, i) => assertEquals(bytes.equals(before[i]), true))
 })
 
 test('a read-only opener never creates a missing file', () => {

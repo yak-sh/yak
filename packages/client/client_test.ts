@@ -33,12 +33,13 @@ let heldVocab = loadVocab({
 })
 let heldServer = graph({ vocab: heldVocab, storage: ram(heldVocab) })
 let heldOffline = true
+let offline = new Error('offline')
 let heldClient = client(heldVocab, [], {
   url: 'http://box.test',
   vault: false,
   wireVault: false,
   fetch: async (request) => {
-    if (heldOffline) throw new Error('offline')
+    if (heldOffline) throw offline
     return Response.json(await heldServer.apply(await request.json()))
   },
   report: () => {},
@@ -208,9 +209,11 @@ test('a page writes a name already held outside its cache', async () => {
 
 let note = { entity: { eid: 'n1' }, note: { stars: 5, recipe: 'r1' } }
 
+let readClient = boxClient()
+readClient.mutate([dal(), note])
+
 test('a read answers the rows a watch on the same query holds', () => {
-  let c = boxClient()
-  c.mutate([dal(), note])
+  let c = readClient
   for (
     let q of [
       '.recipe.course=dinner',
@@ -297,29 +300,30 @@ test('a write lands locally first, then on the server', async () => {
 })
 
 for (let transport of ['watch', 'write answer'] as const) {
+  let srv = server()
+  let row = {
+    entity: { eid: 'r1' },
+    doc: { title: 'Dal' },
+    recipe: { cook: 'forgotten-cook' },
+  }
+  // Historical data in a probe store, admitted before word refs were strict.
+  await srv.graph.storage.tx((tx) => tx.patch([row]))
+  let trouble: unknown[] = []
+  let watched = transport == 'watch' ? boxClient(srv) : undefined
+  let c = watched ?? client(box, [], {
+    vault: false,
+    wireVault: false,
+    url: 'http://box.test',
+    report: (t) => trouble.push(t),
+    fetch: async (request) => {
+      let response = await srv.handler(request)
+      if (!response.ok) return response
+      // An accepted response can repeat stored components beside the patch.
+      return Response.json(await srv.graph.get(['r1']))
+    },
+  })
+
   test(`a client holds an accepted word ref from its store: ${transport}`, async () => {
-    let srv = server()
-    let row = {
-      entity: { eid: 'r1' },
-      doc: { title: 'Dal' },
-      recipe: { cook: 'forgotten-cook' },
-    }
-    // Historical data in a probe store, admitted before word refs were strict.
-    await srv.graph.storage.tx((tx) => tx.patch([row]))
-    let trouble: unknown[] = []
-    let watched = transport == 'watch' ? boxClient(srv) : undefined
-    let c = watched ?? client(box, [], {
-      vault: false,
-      wireVault: false,
-      url: 'http://box.test',
-      report: (t) => trouble.push(t),
-      fetch: async (request) => {
-        let response = await srv.handler(request)
-        if (!response.ok) return response
-        // An accepted response can repeat stored components beside the patch.
-        return Response.json(await srv.graph.get(['r1']))
-      },
-    })
     try {
       if (transport == 'watch') {
         let w = c.watch('.recipe&?doc')

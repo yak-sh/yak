@@ -13,9 +13,15 @@ import type { Plugin, WriteHook } from './plugin.ts'
 
 type Check = ReturnType<typeof toolCheck>
 
+// A loaded vocabulary is fixed for its lifetime. Every graph over it uses the
+// same schema validators; only the transaction's proposed rows differ.
+let compiled = new WeakMap<Vocab, Map<string, Map<string, Check>>>()
+
 // A property's nested $ref resolves in the document that declared it. An
 // extension's property belongs to the extension document, not the base one.
 let checks = (vocab: Vocab): Map<string, Map<string, Check>> => {
+  let held = compiled.get(vocab)
+  if (held) return held
   let out = new Map<string, Map<string, Check>>()
   for (let doc of vocab.docs) {
     for (let [comp, def] of Object.entries(doc.$defs ?? {})) {
@@ -34,6 +40,7 @@ let checks = (vocab: Vocab): Map<string, Map<string, Check>> => {
       }
     }
   }
+  compiled.set(vocab, out)
   return out
 }
 

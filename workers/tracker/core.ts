@@ -22,7 +22,7 @@ import { effects as handlers, type Options } from '@yaks/tracker/effects'
 import { ingest } from '@yaks/tracker/intake'
 import { timingDoc } from '@yaks/timing/vocab'
 import { caught, type Sink } from '@yaks/tracker/report'
-import { runs } from '@yaks/tracker/tools'
+import { bug, bugs, runs } from '@yaks/tracker/tools'
 import {
   absent,
   after,
@@ -176,20 +176,8 @@ export let store = (storage: Storage, config: Config) => {
       }
     },
     bugs: (app?: string, query = '.bug', count = 50) =>
-      runs().bug_list({
-        entity: { eid: '$read' },
-        call: {
-          args: {
-            query: conjoin(query, app ? `.bug.app=${app}` : ''),
-            limit: count,
-          },
-        },
-      }, g),
-    bug: (eid: string) =>
-      runs().bug_show({
-        entity: { eid: '$read' },
-        call: { args: { bug: eid } },
-      }, g),
+      bugs(g, parse(conjoin(query, app ? `.bug.app=${app}` : '')), count),
+    bug: (eid: string) => bug(g, eid),
     unseen: (app?: string) => read(app, '.bug.status=open !notified'),
     mark,
     deployed: async (app: string, version?: number) => {

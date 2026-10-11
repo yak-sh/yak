@@ -31,7 +31,7 @@ export let computed = (v: Vocab, comp: string): boolean =>
 // reads through its dialect unchanged. Asked on every bind, so kept per
 // vocabulary.
 let any = new WeakMap<Vocab, boolean>()
-let hasComputed = (v: Vocab): boolean => {
+export let hasComputed = (v: Vocab): boolean => {
   let got = any.get(v)
   if (got == null) any.set(v, got = v.all.some((c) => computed(v, c)))
   return got

@@ -76,60 +76,56 @@ test('the member meta-schema validates the permit map shape', () => {
   }
 })
 
-test('permit requires a declared stamp-only mark and a stored reference', () => {
-  for (
-    let permit of [
-      null,
-      [],
-      { missing: 'target' },
-      { completed: 'missing' },
-      {
-        completed: 'text',
+let invalidPermits = [
+  null,
+  [],
+  { missing: 'target' },
+  { completed: 'missing' },
+  {
+    completed: 'text',
+  },
+  { request: 'target' },
+  { created: 'target' },
+].map((permit) => load(changing(permit)))
+
+let invalidMarks = [
+  {
+    ...declaration.$defs!.completed,
+    properties: {
+      ...declaration.$defs!.completed.properties,
+      note: { type: 'string' },
+    },
+  },
+  { ...declaration.$defs!.completed, wire: false },
+].map((altered) =>
+  load({
+    ...declaration,
+    $defs: { ...declaration.$defs, completed: altered },
+  })
+)
+
+let invalidTargets = [
+  { type: 'string', ref: 'missing', death: 'keep' },
+  { type: 'string', ref: 'entity', death: 'keep', computed: true },
+].map((target) =>
+  load({
+    ...declaration,
+    $defs: {
+      ...declaration.$defs,
+      request: {
+        ...declaration.$defs!.request,
+        properties: { target },
       },
-      { request: 'target' },
-      { created: 'target' },
-    ]
-  ) {
-    let v = load(changing(permit))
+    },
+  })
+)
+
+test('permit requires a declared stamp-only mark and a stored reference', () => {
+  for (let v of invalidPermits) {
     assert(permitted(v).length)
     assertThrows(() => permitsIn(v))
   }
-  for (
-    let altered of [
-      {
-        ...declaration.$defs!.completed,
-        properties: {
-          ...declaration.$defs!.completed.properties,
-          note: { type: 'string' },
-        },
-      },
-      { ...declaration.$defs!.completed, wire: false },
-    ]
-  ) {
-    assert(
-      permitted(load({
-        ...declaration,
-        $defs: { ...declaration.$defs, completed: altered },
-      })).length,
-    )
-  }
-  for (
-    let target of [
-      { type: 'string', ref: 'missing', death: 'keep' },
-      { type: 'string', ref: 'entity', death: 'keep', computed: true },
-    ]
-  ) {
-    assert(
-      permitted(load({
-        ...declaration,
-        $defs: {
-          ...declaration.$defs,
-          request: {
-            ...declaration.$defs!.request,
-            properties: { target },
-          },
-        },
-      })).length,
-    )
+  for (let v of [...invalidMarks, ...invalidTargets]) {
+    assert(permitted(v).length)
   }
 })

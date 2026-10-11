@@ -10,7 +10,7 @@ import { type Bundle, type Graph, graph } from '@yaks/graph'
 import { admitSchema } from '@yaks/graph/schema'
 import { ram } from '@yaks/ram'
 import { loadVocab } from '@yaks/vocab'
-import { shopGraph } from './testing.ts'
+import { shop as shopVocab, shopGraph } from './testing.ts'
 import { api } from './route.ts'
 import { relay as relaying } from './relay.ts'
 import { type Frame, type Sink, subscriptions } from './subs.ts'
@@ -706,8 +706,15 @@ test('peer-only rows keep a missing durable candidate until expiry', () => {
   assertEquals(reads, 2)
 })
 
-test('commits replace a cached missing row while its peer value lives', () => {
-  let graph = shop(), subs = subscriptions(graph)
+let missingPeer = (() => {
+  // Stored presence beside peer values does not require numbered labels or
+  // provenance marks.
+  let g = graph({
+    vocab: shopVocab,
+    storage: ram(shopVocab),
+    provenance: false,
+  })
+  let subs = subscriptions(g)
   let writer = ear(), watcher = ear()
   subs.open(watcher.to, 'near', '.book&.browsing.x<10')
   watcher.take()
@@ -715,6 +722,11 @@ test('commits replace a cached missing row while its peer value lives', () => {
     entity: { eid: 'b1' },
     browsing: { x: 2 },
   }])
+  return { graph: g, subs, writer, watcher }
+})()
+
+test('commits replace a cached missing row while its peer value lives', () => {
+  let { graph, subs, writer, watcher } = missingPeer
   assertEquals(watcher.take(), [])
 
   graph.apply([{ entity: { eid: 'b1' }, book: { price: 12 } }])

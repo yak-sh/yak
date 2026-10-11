@@ -3,7 +3,7 @@ import { assert, assertEquals } from '@std/assert'
 import { Archetypes } from '@yaks/archetype'
 import { absent, and, or, parse, present } from '@yaks/query'
 import { loadVocab } from '@yaks/vocab'
-import { archetypeSet, bind, compile, isRaw } from './mod.ts'
+import { archetypeSet, bind, compile, isRaw, lit } from './mod.ts'
 
 let v = loadVocab({
   $defs: {
@@ -37,6 +37,31 @@ let archetypes = archetypeSet(cache, ids)
 let lists = (sql: string): number[][] =>
   [...sql.matchAll(/"archetype" in \(values ((?:\(\d+\)(?:, )?)+)\)/g)]
     .map((m) => [...m[1].matchAll(/\d+/g)].map(Number))
+
+let ladder = loadVocab([
+  {
+    $defs: {
+      task: {
+        component: true,
+        type: 'object',
+        status: {
+          cancelled: 'cancelled',
+          completed: 'done',
+          default: 'open',
+        },
+      },
+      cancelled: { component: true, type: 'object' },
+      completed: { component: true, type: 'object' },
+      claim: { component: true, type: 'object' },
+      doc: { component: true, type: 'object' },
+    },
+  },
+  {
+    $defs: {
+      task: { component: true, extends: true, status: { claim: 'wip' } },
+    },
+  },
+])
 
 test('archetype plans: positive facets drive their table while boolean kinds keep composition', () => {
   for (
@@ -130,42 +155,44 @@ test('an AND of facets binds one archetype list, not one per facet', () => {
 
 // A status ladder's filter is the presence tests it means, so it is answered
 // by the archetype index rather than by a `case` evaluated for every row.
+let ladderCache = new Archetypes()
+let ladderIds = new Map([
+  [ladderCache.intern(['task']).eid, 11],
+  [ladderCache.intern(['task', 'completed']).eid, 12],
+  [ladderCache.intern(['task', 'claim']).eid, 13],
+  [ladderCache.intern(['task', 'cancelled', 'completed']).eid, 14],
+  [ladderCache.intern(['task', 'claim', 'completed']).eid, 15],
+  [ladderCache.intern(['doc', 'completed']).eid, 16],
+  [ladderCache.intern(['doc', 'task']).eid, 17],
+])
+let ladderArchetypes = archetypeSet(ladderCache, ladderIds)
+
+test('a ladder filter uses each snapshot, caller override and edited query', () => {
+  let query = parse('.task.status=done')
+  let done = ladderCache.intern(['task', 'completed']).eid
+  let first = archetypeSet(ladderCache, new Map([[done, 301]]))
+  let next = archetypeSet(ladderCache, new Map([[done, 909]]))
+  assertEquals(lists(compile(query, ladder, { archetypes: first }).sql), [[
+    301,
+  ]])
+  assertEquals(lists(compile(query, ladder, { archetypes: next }).sql), [[909]])
+  let overridden = compile(query, ladder, {
+    archetypes: next,
+    derived: { 'task.status': { tag: 'text', expr: () => lit('wip') } },
+  })
+  assertEquals(overridden.params, ['done'])
+  assert(overridden.sql.includes("'wip'"), overridden.sql)
+  let edited = structuredClone(query)
+  assertEquals(lists(compile(edited, ladder, { archetypes: next }).sql), [[
+    909,
+  ]])
+  Object.assign(edited.clauses[0], parse('.task.status=open').clauses[0])
+  assertEquals(lists(compile(edited, ladder, { archetypes: next }).sql), [])
+})
+
 test('a status filter on a ladder binds as a lookup on the archetype index', () => {
-  let v = loadVocab([
-    {
-      $defs: {
-        task: {
-          component: true,
-          type: 'object',
-          status: {
-            cancelled: 'cancelled',
-            completed: 'done',
-            default: 'open',
-          },
-        },
-        cancelled: { component: true, type: 'object' },
-        completed: { component: true, type: 'object' },
-        claim: { component: true, type: 'object' },
-        doc: { component: true, type: 'object' },
-      },
-    },
-    {
-      $defs: {
-        task: { component: true, extends: true, status: { claim: 'wip' } },
-      },
-    },
-  ])
-  let cache = new Archetypes()
-  let ids = new Map([
-    [cache.intern(['task']).eid, 11],
-    [cache.intern(['task', 'completed']).eid, 12],
-    [cache.intern(['task', 'claim']).eid, 13],
-    [cache.intern(['task', 'cancelled', 'completed']).eid, 14],
-    [cache.intern(['task', 'claim', 'completed']).eid, 15],
-    [cache.intern(['doc', 'completed']).eid, 16],
-    [cache.intern(['doc', 'task']).eid, 17],
-  ])
-  let archetypes = archetypeSet(cache, ids)
+  let v = ladder
+  let archetypes = ladderArchetypes
   let chosen = (q: string) => {
     let sql = compile(parse(q), v, { archetypes })
     assertEquals(

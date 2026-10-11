@@ -36,6 +36,9 @@ let rows: Row[] = [
     },
   },
 ]
+let dates = rows.flatMap((row) =>
+  row.created?.at ? [new Date(row.created.at).toLocaleString()] : []
+)
 
 test('recordings list every take while the game plays the chosen earlier take', () => {
   let all = songs(rows)
@@ -57,4 +60,5 @@ test('recordings list every take while the game plays the chosen earlier take', 
   assertStringIncludes(html, 'api/blob/new')
   assertStringIncludes(html, 'In use')
   assertStringIncludes(html, 'Use this take')
+  for (let date of dates) assertStringIncludes(html, date)
 })

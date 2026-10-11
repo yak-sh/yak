@@ -110,7 +110,7 @@ export let portLink = (port: Port, opts: {
       }
     } else pending.resolve(packet.value)
   }
-  let close = (reason = new Error('Message link closed'), notify = true) => {
+  let close = (reason?: Error, notify = true) => {
     if (closed) return
     if (notify) {
       try {
@@ -122,9 +122,10 @@ export let portLink = (port: Port, opts: {
     port.removeEventListener('messageerror', disconnected)
     port.removeEventListener('error', disconnected)
     port.removeEventListener('close', disconnected)
+    if (held.size) reason ??= new Error('Message link closed')
     for (let pending of held.values()) {
       clearTimeout(pending.timer)
-      pending.reject(reason)
+      pending.reject(reason!)
     }
     held.clear()
   }

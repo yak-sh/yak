@@ -214,17 +214,19 @@ test('directory attribution recovery still fills unfinished signed-in receipts',
 let heldVocab = loadVocab([spineDoc, docDoc])
 let held = () => graph({ vocab: heldVocab, storage: ram(heldVocab) })
 
+let bounded = held()
+let boundedAt = '2026-10-03T00:00:00.000Z'
+await bounded.apply(
+  ['a', 'b', 'c'].map((eid) => ({
+    entity: { eid },
+    doc: { title: eid },
+    $actor: { via: 'browser' },
+  })),
+  { now: boundedAt },
+)
+
 test('attribution is bounded, repeatable, and leaves timestamps intact', async () => {
-  let g = held()
-  let now = '2026-10-03T00:00:00.000Z'
-  g.apply(
-    ['a', 'b', 'c'].map((eid) => ({
-      entity: { eid },
-      doc: { title: eid },
-      $actor: { via: 'browser' },
-    })),
-    { now },
-  )
+  let g = bounded, now = boundedAt
   assertEquals(
     await attributed(g, 'browser', 'aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa', 2),
     {

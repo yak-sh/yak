@@ -97,21 +97,26 @@ test('a reader overlay cannot steal composed graph activity or fanout parent', a
   off()
 })
 
-test('subscription activity counts work but never queries, sink IDs or rows', async () => {
+let subscriptionActivity = await (async () => {
   let g = shopGraph()
   let subs = subscriptions(g)
-  let frames = 0
+  let count = { frames: 0 }
   await subs.open(
     () => {
-      frames++
+      count.frames++
     },
     'subscriber-private',
     '.book',
   )
   let c = channel(g)
   let off = c.subscribe(() => {})
+  return { g, c, off, count }
+})()
+
+test('subscription activity counts work but never queries, sink IDs or rows', async () => {
+  let { g, c, off, count } = subscriptionActivity
   await g.apply([{ entity: { eid: 'book-private' }, book: { price: 3 } }])
-  ok(frames >= 2)
+  ok(count.frames >= 2)
   let fan = ok(c.history().find((e) => e.kind == 'fanout' && e.stage == 'end'))
   equal(fan.counts?.transactions, 1)
   equal(fan.counts?.subscriptions, 1)

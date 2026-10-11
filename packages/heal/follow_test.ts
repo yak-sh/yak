@@ -23,6 +23,7 @@ import { modelDoc } from '@yaks/model'
 import { processDoc } from '@yaks/process'
 import { watches } from '@yaks/client'
 import { api, subscriptions } from '@yaks/api'
+import { and, every, present } from '@yaks/query'
 import { type Fake, pair } from '../sync/testing.ts'
 import { group } from '@yaks/tracker'
 import { computed, trackerDoc } from '@yaks/tracker/vocab'
@@ -168,9 +169,15 @@ let fixture = async (options: Options = {}) => {
     close: () => seen.close(),
   }
 }
-let rows = (g: Graph, component: string) => g.read(`.${component} *`)
+let selected = Object.fromEntries(
+  vocab.all.map((name) => [name, and(present(name))]),
+)
+let whole = Object.fromEntries(
+  vocab.all.map((name) => [name, and(present(name), every())]),
+)
+let rows = (g: Graph, component: string) => g.read(whole[component])
 let count = async (g: Graph, component: string) =>
-  (await g.read(`.${component}`)).length
+  (await g.read(selected[component])).length
 let put = (g: Graph, bundles: Bundle[]) => g.apply(bundles, { trusted: true })
 
 let fresh = await fixture()
@@ -225,7 +232,9 @@ for (let gate of ['provider', 'nofix', 'cap', 'cooldown']) {
       ? { cap: 0 }
       : {},
   )
-  if (gate == 'nofix') await put(f.g, [{ entity: { eid: project }, nofix: {} }])
+  if (gate == 'nofix') {
+    await put(f.g, [{ entity: { eid: project }, nofix: {} }])
+  }
   if (gate == 'cooldown') {
     await put(f.g, [{
       entity: { eid: identityEid('old_fixer', [bug]) },
@@ -379,6 +388,11 @@ let remote = async () => {
   let due: (() => void)[] = []
   let pending: Fake[] = []
   let socket: Fake
+  let next = pair()
+  let request = new Request(`${url}/ws`, {
+    headers: { upgrade: 'websocket' },
+  })
+  let response = new Response(null, { status: 101 })
   let opened = Promise.resolve()
   let frames: (() => void)[] = []
   let handler = api({
@@ -386,7 +400,7 @@ let remote = async () => {
     subs: subscriptions(f.tracker),
     upgrade: () => ({
       socket: pending.shift()!,
-      response: new Response(null, { status: 101 }),
+      response,
     }),
     socketTimer: () => {},
   })
@@ -399,18 +413,14 @@ let remote = async () => {
       return answer
     },
     connect: () => {
-      let halves = pair()
+      let halves = next
       // A socket delivers in a later turn, independently of the HTTP response.
       // Queue frames so an /apply test does not also time its socket echo.
       let send = halves.server.send
       halves.server.send = (data) => frames.push(() => send(data))
       socket = halves.client
       pending.push(halves.server)
-      opened = Promise.resolve(handler(
-        new Request(`${url}/ws`, {
-          headers: { upgrade: 'websocket' },
-        }),
-      )).then(() => {
+      opened = Promise.resolve(handler(request)).then(() => {
         halves.server.emit('open')
         halves.client.emit('open')
       })
@@ -438,7 +448,10 @@ let remote = async () => {
     posts: () => posts,
     down: (value: boolean) => unavailable = value,
     lose: () => lose = true,
-    drop: () => socket.close(),
+    drop: () => {
+      socket.close()
+      next = pair()
+    },
     reconnect: () => due.shift()?.(),
   }
 }

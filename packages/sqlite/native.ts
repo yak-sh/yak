@@ -141,6 +141,14 @@ let refs = (e: Expr): string[] => {
 // projection can share its compiled function across statements and databases.
 type Decoder = ReturnType<Statement['getRowObject']>
 let decoders = new Map<string, Decoder>()
+let status: ReturnType<typeof bindStatus> | undefined
+let bindStatus = () =>
+  Deno.dlopen(sqlitePath, {
+    sqlite3_stmt_status: {
+      parameters: ['pointer', 'i32', 'i32'],
+      result: 'i32',
+    },
+  })
 let decoder = (names: string[], compile: Statement['getRowObject']) => {
   let key = JSON.stringify(names)
   let kept = decoders.get(key)
@@ -155,30 +163,31 @@ export let prepared = (db: Database) => {
   // SQLite integers are 64-bit. The library's default reader truncates them
   // to 32 bits; safe JS integers must round-trip through every driver caller.
   db.int64 = true
+  let recompiled = (status ??= bindStatus()).symbols.sqlite3_stmt_status
   let commands = new WeakSet<ReturnType<Database['prepare']>>()
   let prepare = (sql: string) => {
     let statement = db.prepare(sql)
     // DDL, transaction boundaries and writes without RETURNING have no row
     // shape. Running them needs no decoder or repeated column-name reads.
-    if (!statement.columnNames().length) {
+    let names = statement.columnNames()
+    if (!names.length) {
       commands.add(statement)
       return statement
     }
     let original = statement.getRowObject.bind(statement)
     let standard = statement.getRowObject == Statement.prototype.getRowObject
-    let names: string[] = []
     let decode: Decoder | undefined
     // The columns the statement answers with now. Only the generated decoder
     // is reusable: it reads each value's live type and receives the
     // integer/JSON options for this call.
     let current = () => {
-      let now = statement.columnNames()
-      if (
-        !decode || names.length != now.length ||
-        names.some((name, i) => name !== now[i])
-      ) {
-        names = now
-        decode = standard ? decoder(now, original) : original()
+      // SQLite also recompiles for schema edits from another connection,
+      // including temp/attached schemas and rollback. It alone knows when
+      // the kept statement's metadata needs reading again.
+      let changed = recompiled(statement.unsafeHandle, 5, 1) // REPREPARE
+      if (!decode || changed) {
+        if (changed) names = statement.columnNames()
+        decode = standard ? decoder(names, original) : original()
       }
       return decode
     }

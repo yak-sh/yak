@@ -192,13 +192,35 @@ export const toolDefinitionSchema: Record<string, unknown> = {
   },
 }
 
+// Authors can edit a declaration between reads. Only equivalent copies reuse
+// a validator; a changed source schema receives a new one.
+const copies = new WeakMap<object, { shape: string; check: Check }>()
+const copiedCheck = (
+  source: Record<string, unknown>,
+  copy: Record<string, unknown>,
+): void => {
+  const shape = JSON.stringify(copy)
+  let kept = copies.get(source)
+  if (!kept || kept.shape !== shape) {
+    kept = { shape, check: toolCheck(copy) }
+    copies.set(source, kept)
+  }
+  checks.set(copy, kept.check)
+}
+
 export const toolDefinition = (value: unknown): ToolDefinition => {
   const candidate = validateToolInput(
     { inputSchema: toolDefinitionSchema },
     value as Record<string, unknown>,
   ) as unknown as ToolDefinition
-  if (candidate.inputSchema) toolCheck(candidate.inputSchema)
-  if (candidate.outputSchema) toolCheck(candidate.outputSchema)
+  // Metadata is returned detached, but copying a schema must not compile its
+  // validator again. The source and its unchanged copy share the same check.
+  const source = value as ToolDefinition
+  for (const field of ['inputSchema', 'outputSchema'] as const) {
+    if (candidate[field]) {
+      copiedCheck(source[field]!, candidate[field])
+    }
+  }
   grammar(
     candidate.inputSchema?.properties as Record<string, unknown> ?? {},
     candidate.positional,

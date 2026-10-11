@@ -7,6 +7,11 @@ import { routes } from './routes.ts'
 import { sign } from './ticket.ts'
 let secret = 'test-only-tracker-secret'
 let id = '00000000-0000-4000-8000-000000000001'
+let nonAdmin = await sign({
+  scope: derivedEid('tracker|platform'),
+  person: 'box',
+  exp: Date.now() / 1000 + 60,
+}, secret)
 test('remote trace doors preserve pages and use a platform-admin ticket the Worker accepts', async () => {
   let calls: string[] = []
   let options = { remote: { url: 'http://127.0.0.1:18081', secret } }
@@ -58,15 +63,10 @@ test('remote failures are explicit and contain no upstream body, URL, ticket or 
   let r = await door.handle(req)
   equal(r.status, 502)
   ok(!(await r.text()).includes(secret))
-  let ticket = await sign({
-    scope: derivedEid('tracker|platform'),
-    person: 'box',
-    exp: Date.now() / 1000 + 60,
-  }, secret)
   equal(
     await authorize(
       new Request('http://worker', {
-        headers: { authorization: `Bearer ${ticket}` },
+        headers: { authorization: `Bearer ${nonAdmin}` },
       }),
       secret,
       derivedEid('tracker|platform'),

@@ -7,76 +7,90 @@ import { type Remote, request as upstream } from './remote.ts'
 export type Options = { remote?: Remote }
 let uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
+type Read =
+  | { ok: true; value: unknown }
+  | { ok: false; error: string; status: number }
+let refused = (error: string, status: number): Read => ({
+  ok: false,
+  error,
+  status,
+})
+
+/** One bounded remote read, shared by the HTTP door and graph tools. */
+export let read = async (
+  options: Options,
+  path: 'bugs' | 'trace' | 'traces',
+  query: URLSearchParams,
+  signal?: AbortSignal,
+  go: typeof fetch = fetch,
+): Promise<Read> => {
+  let remote = options.remote
+  if (!remote?.url) return refused('Remote tracker is not configured', 503)
+  if (!remote.secret) {
+    return refused('Remote tracker secret is unavailable', 503)
+  }
+  let scope = query.get('scope') ?? 'platform'
+  if (scope != 'platform' && !uuid.test(scope)) {
+    return refused('scope must be platform or a global space eid', 400)
+  }
+  let n = Number(query.get('limit') ?? 100)
+  if (!Number.isSafeInteger(n) || n < 1 || n > 100) {
+    return refused('limit must be 1..100', 400)
+  }
+  let params = new URLSearchParams({ scope, limit: String(n) })
+  for (
+    let key of path == 'trace'
+      ? ['eid', 'after']
+      : path == 'bugs'
+      ? ['app', 'bug']
+      : ['app', 'after']
+  ) {
+    let value = query.get(key)
+    if (path == 'bugs' && key == 'app' && value == '') value = null
+    if (value != null && !uuid.test(value) || key == 'eid' && !value) {
+      return refused(`${key} must be a global eid`, 400)
+    }
+    if (value) params.set(key, value)
+  }
+  if (path == 'bugs' && query.has('query')) {
+    params.set('query', query.get('query')!)
+  }
+  try {
+    let response = await upstream(remote, path, params, { signal }, go)
+    if (!response.ok) {
+      return refused(
+        `Remote tracker refused the read (${response.status})`,
+        response.status == 404 ? 404 : 502,
+      )
+    }
+    return { ok: true, value: await response.json() }
+  } catch {
+    // Neither a credential, ticket, configured URL nor upstream body is an error report.
+    return refused('Remote tracker is unavailable', 502)
+  }
+}
+
 /** Only bug and bounded trace reads leave the box. */
 export let routes = (
   _host: unknown,
   options: Options = {},
   go: typeof fetch = fetch,
 ): Route[] =>
-  ['traces', 'trace', 'bugs'].map((path) => ({
+  (['traces', 'trace', 'bugs'] as const).map((path) => ({
     method: 'GET',
     path: `/tracker/${path}`,
     handle: async (request) => {
-      let remote = options.remote
-      if (!remote?.url) {
-        return Response.json({ error: 'Remote tracker is not configured' }, {
-          status: 503,
-        })
-      }
-      if (!remote.secret) {
-        return Response.json(
-          { error: 'Remote tracker secret is unavailable' },
-          { status: 503 },
-        )
-      }
-      let query = new URL(request.url).searchParams
-      let scope = query.get('scope') ?? 'platform'
-      if (scope != 'platform' && !uuid.test(scope)) {
-        return Response.json({
-          error: 'scope must be platform or a global space eid',
-        }, { status: 400 })
-      }
-      let n = Number(query.get('limit') ?? 100)
-      if (!Number.isSafeInteger(n) || n < 1 || n > 100) {
-        return Response.json({ error: 'limit must be 1..100' }, { status: 400 })
-      }
-      let params = new URLSearchParams({ scope, limit: String(n) })
-      for (
-        let key of path == 'trace'
-          ? ['eid', 'after']
-          : path == 'bugs'
-          ? ['app', 'bug']
-          : ['app', 'after']
-      ) {
-        let value = query.get(key)
-        if (path == 'bugs' && key == 'app' && value == '') value = null
-        if (value != null && !uuid.test(value) || key == 'eid' && !value) {
-          return Response.json({ error: `${key} must be a global eid` }, {
-            status: 400,
-          })
-        }
-        if (value) params.set(key, value)
-      }
-      if (path == 'bugs' && query.has('query')) {
-        params.set('query', query.get('query')!)
-      }
-      try {
-        let response = await upstream(remote, path, params, {
-          signal: request.signal,
-        }, go)
-        if (!response.ok) {
-          return Response.json({
-            error: `Remote tracker refused the read (${response.status})`,
-          }, { status: response.status == 404 ? 404 : 502 })
-        }
-        return Response.json(await response.json(), {
+      let result = await read(
+        options,
+        path,
+        new URL(request.url).searchParams,
+        request.signal,
+        go,
+      )
+      return result.ok
+        ? Response.json(result.value, {
           headers: { 'cache-control': 'no-store' },
         })
-      } catch {
-        // Neither a credential, ticket, configured URL nor upstream body is an error report.
-        return Response.json({ error: 'Remote tracker is unavailable' }, {
-          status: 502,
-        })
-      }
+        : Response.json({ error: result.error }, { status: result.status })
     },
   }))

@@ -196,11 +196,16 @@ test('/query sends a selection larger than one piece of its stream, whole', asyn
   )
 })
 
-test('POST /query reads the same line', async () => {
+let postedQuery = await (async () => {
   let handler = shop()
   await handler(
     post('/apply', [{ entity: { eid: 'b1' }, book: { price: 12 } }]),
   )
+  return { handler }
+})()
+
+test('POST /query reads the same line', async () => {
+  let { handler } = postedQuery
   let found: Bundle[] = await body(
     await handler(post('/query', { q: '.book.price<20' })),
   )
@@ -250,11 +255,16 @@ test('a refused property answers 400 in the shape apply threw', async () => {
   assert(said.message.includes('book.colour'))
 })
 
-test('a moved precondition answers 409, naming what it holds now', async () => {
+let staleWrite = await (async () => {
   let handler = shop()
   await handler(
     post('/apply', [{ entity: { eid: 'b1' }, book: { price: 12 } }]),
   )
+  return { handler }
+})()
+
+test('a moved precondition answers 409, naming what it holds now', async () => {
+  let { handler } = staleWrite
   let r = await handler(post('/apply', [{
     entity: { eid: 'b1' },
     book: { price: 20 },
@@ -271,8 +281,10 @@ test('a moved precondition answers 409, naming what it holds now', async () => {
   })
 })
 
+let checkedWrite = shop()
+
 test('/apply?check=1 answers the batch it would take, and keeps none of it', async () => {
-  let handler = shop()
+  let handler = checkedWrite
   let asked = await handler(post('/apply?check=1', [
     { entity: { eid: 'b1' }, doc: { title: 'Spring' }, book: { price: 12 } },
   ]))
@@ -355,12 +367,17 @@ test('/query without an aggregate still answers its members', async () => {
   assertEquals(found.map((b) => b.entity.eid).sort(), ['b1', 'b3'])
 })
 
-test('/query answers a projection as bundles, with what its paths reach', async () => {
+let projectedQuery = await (async () => {
   let handler = shop()
   await handler(post('/apply', [
     { entity: { eid: 'b1' }, doc: { title: 'Dune' }, book: { price: 12 } },
     { entity: { eid: 'r1' }, review: { stars: 5, book: 'b1' } },
   ]))
+  return { handler }
+})()
+
+test('/query answers a projection as bundles, with what its paths reach', async () => {
+  let { handler } = projectedQuery
   assertEquals(
     await body(await handler(ask('.review&.fields=review.book.doc.title'))),
     [

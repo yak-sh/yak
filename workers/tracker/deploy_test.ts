@@ -106,22 +106,29 @@ let setup = () => {
   let url = `https://tracker.test/canary?scope=platform&hash=${hash}`
   return { sent, object, w, url }
 }
-let publish = async (w: ReturnType<typeof worker>, url: string) => {
-  let response = await w.fetch(
-    new Request(url, {
-      method: 'POST',
-      body: '{"during":{"space":"poison"}}',
-    }),
-  )
+let publication = (url: string) =>
+  new Request(url, {
+    method: 'POST',
+    body: '{"during":{"space":"poison"}}',
+  })
+let publish = async (
+  w: ReturnType<typeof worker>,
+  url: string,
+  request = publication(url),
+) => {
+  let response = await w.fetch(request)
   equal(response.status, 200)
   let { eid } = await response.json()
   return `${url}&eid=${eid}`
 }
 let read = async (w: ReturnType<typeof worker>, url: string) =>
   (await w.fetch(new Request(url))).json()
+let unsigned = setup()
+let unsignedPublication = publication(unsigned.url)
+
 test('unsigned canary ignores caller data', async () => {
-  let { sent, w, url } = setup()
-  await publish(w, url)
+  let { sent, w, url } = unsigned
+  await publish(w, url, unsignedPublication)
   equal(sent.length, 1)
   equal(sent[0][0].during, undefined)
 })

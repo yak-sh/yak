@@ -38,8 +38,16 @@ import {
   sitemap,
 } from './seo.ts'
 
-let read = (name: string) =>
-  Deno.readTextFileSync(new URL(`./public/${name}`, import.meta.url))
+// Immutable public fixtures are loaded once, before any contract runs.
+let texts = new Map<string, string>()
+let read = (name: string) => {
+  let text = texts.get(name)
+  if (text === undefined) {
+    text = Deno.readTextFileSync(new URL(`./public/${name}`, import.meta.url))
+    texts.set(name, text)
+  }
+  return text
+}
 
 // The technical page is markdown under the documentation now (docs.ts,
 // T-37793), drawn at /docs/technical like every page of it, so what is left
@@ -55,6 +63,23 @@ let pages = [
 ]
 
 let branded = [...pages, 'style-guide.html']
+for (
+  let name of [...branded, 'style.css', 'connector.svg', 'docs/technical.md']
+) {
+  read(name)
+}
+let images = new Map([
+  'og.png',
+  'yak.png',
+  'favicon-32.png',
+  'apple-touch-icon.png',
+  'icon-192.png',
+  'icon-512.png',
+  'connector-512.png',
+  'yaks-app.png',
+].map((
+  name,
+) => [name, Deno.readFileSync(new URL(`./public/${name}`, import.meta.url))]))
 
 test('every page wears the raster yak', () => {
   for (let page of branded) {
@@ -77,7 +102,7 @@ test('every page wears the raster yak', () => {
 // Color type 6 is RGBA and 2 is opaque truecolor: an icon meant to sit on a
 // page carries its own ground, and one meant for a home screen carries none.
 let png = (name: string, width: number, height: number, kind = 6) => {
-  let bytes = Deno.readFileSync(new URL(`./public/${name}`, import.meta.url))
+  let bytes = images.get(name)!
   assertEquals([...bytes.slice(0, 8)], [137, 80, 78, 71, 13, 10, 26, 10])
   let view = new DataView(bytes.buffer, bytes.byteOffset)
   assertEquals([view.getUint32(16), view.getUint32(20)], [width, height], name)

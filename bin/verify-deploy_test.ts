@@ -6,6 +6,7 @@ import { test } from '@yaks/testing'
 import { assertEquals } from '@std/assert'
 import {
   connector,
+  door,
   DOORS,
   events,
   fault,
@@ -101,11 +102,12 @@ test('verify: connect requires its precise anonymous sign-in redirect', async ()
   ) {
     let table = healthy()
     table['/connect'] = [status, '', location]
-    assertEquals(await verify(fake(table), SITE), [
+    assertEquals(
+      await door(fake(table), SITE, '/connect'),
       `/connect: ${status} ${
         location ?? '(no location)'
       }, want 303 /login?return=%2Fconnect`,
-    ])
+    )
   }
 })
 

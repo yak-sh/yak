@@ -3,7 +3,8 @@ import { assertEquals, assertRejects } from '@std/assert'
 import { plan, Unplanned } from './plan.ts'
 import { modules, sources } from './graph.ts'
 
-let bytes = (text: string) => new TextEncoder().encode(text)
+let encoder = new TextEncoder()
+let bytes = (text: string) => encoder.encode(text)
 
 // An app of these files, its worker at `main` when it has one.
 let app = (files: Record<string, string>, main?: string) => ({
@@ -191,30 +192,43 @@ test('a module worker a page script starts compiles as an entry of its own', asy
   assertEquals(nested?.pages, ['main.ts', 'w.ts'])
 })
 
+let IMPORT_MAP = `<script type=importmap>{"imports": {"@yaks/client": ` +
+  `"https://esm.sh/jsr/@yaks/client", "lit/": "https://esm.sh/lit/"}}` +
+  '</script>'
+let pageImports = "/** ```ts\n * import { assert } from '@std/assert'\n" +
+  " * ``` */\nimport type { T } from 'types'\n" +
+  `import { c } from '@yaks/client'\nimport 'lit/decorators.js'\n` +
+  `import * as THREE from 'three'`
+let unresolved = [
+  { 'index.html': IMPORT_MAP + PAGE('main.ts'), 'main.ts': pageImports },
+  {
+    'index.html': IMPORT_MAP + PAGE('main.ts'),
+    'b.html': PAGE('main.ts'),
+    'main.ts': pageImports,
+  },
+].map((files) => {
+  let encoded = new Map(
+    Object.entries(files).map(([path, text]) => [path, bytes(text!)]),
+  )
+  return {
+    paths: [...encoded.keys()],
+    read: (path: string) => Promise.resolve(encoded.get(path) ?? null),
+    flags: ['nodejs_compat'],
+  }
+})
+
+let noted = async (input: typeof unresolved[number]) =>
+  (await plan(input))?.notes.map((n) => n.split(/[ ,]/)[2])
+
 test('a compiled page notes each package no import map on its pages resolves', async () => {
-  let MAP = `<script type=importmap>{"imports": {"@yaks/client": ` +
-    `"https://esm.sh/jsr/@yaks/client", "lit/": "https://esm.sh/lit/"}}` +
-    '</script>'
-  let noted = async (pages: Record<string, string>) =>
-    (await planned({
-      ...pages,
-      'main.ts': "/** ```ts\n * import { assert } from '@std/assert'\n" +
-        " * ``` */\nimport type { T } from 'types'\n" +
-        `import { c } from '@yaks/client'\nimport 'lit/decorators.js'\n` +
-        `import * as THREE from 'three'`,
-    }))?.notes.map((n) => n.split(/[ ,]/)[2])
-  assertEquals(await noted({ 'index.html': MAP + PAGE('main.ts') }), [
-    'three',
-  ])
+  assertEquals(await noted(unresolved[0]), ['three'])
   // A page without the map loads the same script, and the browser cannot
   // resolve it there.
-  assertEquals(
-    await noted({
-      'index.html': MAP + PAGE('main.ts'),
-      'b.html': PAGE('main.ts'),
-    }),
-    ['@yaks/client', 'lit/decorators.js', 'three'],
-  )
+  assertEquals(await noted(unresolved[1]), [
+    '@yaks/client',
+    'lit/decorators.js',
+    'three',
+  ])
 })
 
 test('a package package.json does not name is left to an import map', async () => {

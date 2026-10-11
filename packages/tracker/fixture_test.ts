@@ -14,7 +14,7 @@ import { computed, trackerDoc } from './vocab.ts'
 import { effects as registry } from '@yaks/effects'
 import { effects, type Options } from './effects.ts'
 
-let vocab = loadVocab([
+export let vocab = loadVocab([
   kernelDoc,
   toolsDoc,
   apiDoc,

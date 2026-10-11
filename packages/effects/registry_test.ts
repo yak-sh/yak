@@ -124,7 +124,7 @@ test('removed fires for every component a dead entity carried', () => {
   assertEquals(seen.sort(), ['created', 'post'])
 })
 
-test('removed fires for every casualty of a cascade', () => {
+let cascade = (() => {
   let { fx, seen, apply } = fixture()
   fx.removed('comment', (e) => seen.push(e.entity.eid))
   apply([
@@ -132,6 +132,11 @@ test('removed fires for every casualty of a cascade', () => {
     { entity: { eid: 'c1' }, comment: { text: 'nice', post: 'p1' } },
     { entity: { eid: 'c2' }, comment: { text: 'also', post: 'p1' } },
   ])
+  return { seen, apply }
+})()
+
+test('removed fires for every casualty of a cascade', () => {
+  let { seen, apply } = cascade
   assertEquals(seen, [])
   apply([{ entity: { eid: 'p1' }, $delete: true }])
   assertEquals(seen.sort(), ['c1', 'c2'])

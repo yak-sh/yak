@@ -68,7 +68,20 @@ export let scrub = (raw: string): Scrubbed => {
   let document = new DOMParser().parseFromString(raw, 'text/html')
   // A document this page embeds is a document it cannot vouch for, and a script
   // is the one thing no attribute sweep can make inert.
-  for (let el of document.querySelectorAll('*')) {
+  let elements: NonNullable<typeof document.firstElementChild>[] = []
+  for (let el = document.firstElementChild; el; el = el.nextElementSibling) {
+    elements.push(el)
+  }
+  for (let el of elements) {
+    for (
+      let child = el.firstElementChild;
+      child;
+      child = child.nextElementSibling
+    ) {
+      elements.push(child)
+    }
+  }
+  for (let el of elements) {
     if (
       EMBEDDED.has(el.tagName) ||
       (el.tagName == 'LINK' &&
@@ -93,6 +106,7 @@ export let scrub = (raw: string): Scrubbed => {
   }
   return {
     html: document.toString(),
-    title: document.querySelector('title')?.textContent?.trim() || undefined,
+    title: document.getElementsByTagName('title')[0]?.textContent?.trim() ||
+      undefined,
   }
 }

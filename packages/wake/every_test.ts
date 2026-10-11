@@ -76,6 +76,22 @@ test('the calendar skips invalid dates and is strictly after its input', () => {
   assertEquals(at('@daily', midnight, midnight - 1), '2026-01-01T00:00:00.000Z')
 })
 
+test('a reused calendar follows advancing, rewound and differently zoned inputs', () => {
+  let midnight = Date.parse('2026-01-01T00:00:00Z')
+  let day = 86_400_000
+  for (let now of [midnight, midnight + 1, midnight + day, midnight - 1]) {
+    assertEquals(
+      recur('@daily', now, now),
+      midnight + (Math.floor((now - midnight) / day) + 1) * day,
+    )
+  }
+  assertEquals(
+    recur('@daily', midnight, midnight, 'Asia/Tokyo'),
+    midnight + 15 * 3_600_000,
+  )
+  assertEquals(recur('@daily', midnight, midnight), midnight + day)
+})
+
 test('a cron line is read in the zone it is given', () => {
   assertEquals(
     iso(recur('0 9 * * *', T, T, 'America/New_York')),

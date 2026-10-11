@@ -176,15 +176,17 @@ let declaration: Op[] = [
   { remove: { path: 'options', default: {} } },
 ]
 
+let declarationLens = document([{ in: { path: '$defs.*', ops: declaration } }])
+let declarationBefore = freeze(structuredClone(tools))
+
 test('T-64134 declarations from graph, builders and spawn translate both ways as a document', () => {
-  let lens = document([{ in: { path: '$defs.*', ops: declaration } }])
-  let before = freeze(structuredClone(tools)),
-    current = lens.put(before) as {
-      $defs: Record<
-        string,
-        { positional?: string[]; input: Record<string, { short?: string }> }
-      >
-    }
+  let lens = declarationLens, before = declarationBefore
+  let current = lens.put(before) as {
+    $defs: Record<
+      string,
+      { positional?: string[]; input: Record<string, { short?: string }> }
+    >
+  }
   equal(current.$defs.graph_query.positional, ['q'])
   equal(current.$defs.graph_query.input.limit.short, 'n')
   equal(current.$defs.graph_show.positional, ['ids...'])

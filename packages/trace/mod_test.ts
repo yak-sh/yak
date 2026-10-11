@@ -108,10 +108,11 @@ test('record preserves synchronous results and captures beyond channel history',
   let captured = record(target, () => {
     let c = ok(peek(target))
     let root = ok(c.begin({ kind: 'bench', name: 'round' }))
-    for (let i = 0; i < 300; i++) {
+    // Starts and ends emit 263 events, overflowing the 256-event history.
+    for (let i = 0; i < 130; i++) {
       // The last child proves counts survive the bounded channel history.
       c.begin({ kind: 'sql', name: 'book.select', parent: root.id })?.end(
-        i == 299 ? { counts: { rows: i } } : undefined,
+        i == 129 ? { counts: { rows: i } } : undefined,
       )
     }
     c.instant({ kind: 'phase', name: 'done', parent: root.id })
@@ -119,10 +120,10 @@ test('record preserves synchronous results and captures beyond channel history',
     return 7
   })
   equal(captured.result, 7)
-  equal(captured.spans.length, 302)
+  equal(captured.spans.length, 132)
   equal(captured.spans[0].name, 'round')
-  equal(captured.spans[300].counts, { rows: 299 })
-  equal(captured.spans[301].stage, 'instant')
+  equal(captured.spans[130].counts, { rows: 129 })
+  equal(captured.spans[131].stage, 'instant')
   ok(captured.spans.slice(0, -1).every((e) => e.duration! >= 0))
   equal(peek(target), undefined)
   equal(record(target, () => 0), { result: 0, spans: [] })

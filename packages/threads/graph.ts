@@ -84,7 +84,7 @@ export type Remote = Access & { close: () => void }
 export let remote = (port: Port, vocab: Vocab): Remote => {
   let link = portLink(port, { decodeError })
   let ask = <T>(method: string, args: unknown[]): Promise<T> =>
-    link.request(method, args).then((value) => value as T)
+    link.request(method, args) as Promise<T>
   return {
     vocab,
     read: (...args) => ask('read', args),

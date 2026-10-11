@@ -1,36 +1,38 @@
 // Cursor metrics are charged once to the statement and its enclosing spans.
-import { equal, ok, test, throws } from '@yaks/testing'
+import { equal, ok, test } from '@yaks/testing'
+import { assertThrows } from '@std/assert'
 import { during, peek, record } from '@yaks/trace'
 import { select, table } from '@yaks/sql'
 import { driver, type DurableStorage } from './sql.ts'
 
-test('SQL spans report billed cursor rows, including failures, without extra SQL', () => {
-  let calls = 0
-  let fail = false
-  let held: DurableStorage = {
-    sql: {
-      exec: () => {
-        calls++
-        return {
-          rowsRead: 17,
-          rowsWritten: 4,
-          toArray: () => {
-            if (fail) throw new Error('engine failure')
-            return [{ value: 1 }]
-          },
-          *[Symbol.iterator]() {},
-        }
-      },
+let calls = 0
+let fail = false
+let held: DurableStorage = {
+  sql: {
+    exec: () => {
+      calls++
+      return {
+        rowsRead: 17,
+        rowsWritten: 4,
+        toArray: () => {
+          if (fail) throw new Error('engine failure')
+          return [{ value: 1 }]
+        },
+        *[Symbol.iterator]() {},
+      }
     },
-    transactionSync: (run) => run(),
-  }
-  let measured: [number | undefined, number | undefined][] = []
-  let d = driver(
-    held,
-    undefined,
-    (read, written) => measured.push([read, written]),
-  )
-  let stmt = select({ from: table('book') })
+  },
+  transactionSync: (run) => run(),
+}
+let measured: [number | undefined, number | undefined][] = []
+let d = driver(
+  held,
+  undefined,
+  (read, written) => measured.push([read, written]),
+)
+let stmt = select({ from: table('book') })
+
+test('SQL spans report billed cursor rows, including failures, without extra SQL', () => {
   equal(d.query(stmt), [{ value: 1 }])
   equal(calls, 2) // constructor pragma and the unobserved query
   let target = {}
@@ -39,7 +41,7 @@ test('SQL spans report billed cursor rows, including failures, without extra SQL
     return during(c.begin({ kind: 'request', name: 'request' }), () => {
       d.query(stmt)
       fail = true
-      throws(() => d.query(stmt))
+      assertThrows(() => d.query(stmt), Error, 'engine failure')
     })
   })
   equal(calls, 4)

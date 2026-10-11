@@ -27,6 +27,11 @@ type Manifest = {
 }
 type Snapshot = { skills: Manifest[]; files: Map<string, File> }
 let encoder = new TextEncoder()
+let decoder = new TextDecoder('utf-8', { fatal: true })
+let unknownResource = new ResourceTemplate(
+  'skill://skills/{+path}',
+  { list: undefined },
+)
 let cache = { ttlMs: 0, cacheScope: 'private' as const }
 let schema = (
   properties: JsonSchemaType['properties'],
@@ -90,7 +95,7 @@ let metadata = (text: string, folder: string): Record<string, unknown> => {
 }
 let decoded = (bytes: Uint8Array): string | undefined => {
   try {
-    let text = new TextDecoder('utf-8', { fatal: true }).decode(bytes)
+    let text = decoder.decode(bytes)
     // Preserve BOM bytes as text too, so UTF8(text) equals the digest input.
     return bytes[0] == 0xef && bytes[1] == 0xbb && bytes[2] == 0xbf
       ? `\ufeff${text}`
@@ -115,9 +120,9 @@ let base64 = (bytes: Uint8Array): string => {
   }
   return btoa(parts.join(''))
 }
-let digest = async (bytes: Uint8Array): Promise<string> => {
+let digest = async (bytes: Uint8Array<ArrayBuffer>): Promise<string> => {
   let hash = new Uint8Array(
-    await crypto.subtle.digest('SHA-256', new Uint8Array(bytes)),
+    await crypto.subtle.digest('SHA-256', bytes),
   )
   return 'sha256:' +
     [...hash].map((b) => b.toString(16).padStart(2, '0')).join('')
@@ -165,7 +170,9 @@ let snapshot = async (options: SkillOptions): Promise<Snapshot> => {
     prefix +
     path.slice('.claude/skills/'.length).split('/').map(encodeURIComponent)
       .join('/')
-  for (let [path, raw] of [...bytes].sort(([a], [b]) => a.localeCompare(b))) {
+  let entries = [...bytes]
+  let sorted = entries.toSorted(([a], [b]) => a.localeCompare(b))
+  for (let [path, raw] of sorted) {
     if (!safe(path) || !path.startsWith('.claude/skills/')) {
       throw new Refused(`Skill snapshot refuses unsafe path ${path}`)
     }
@@ -178,7 +185,7 @@ let snapshot = async (options: SkillOptions): Promise<Snapshot> => {
       mimeType: type,
     })
   }
-  for (let [path, raw] of [...bytes].sort(([a], [b]) => a.localeCompare(b))) {
+  for (let [path, raw] of sorted) {
     if (!path.endsWith('/SKILL.md')) continue
     let text = decoded(raw)
     if (text == undefined) {
@@ -187,7 +194,7 @@ let snapshot = async (options: SkillOptions): Promise<Snapshot> => {
     let parts = path.split('/')
     let frontmatter = metadata(text, parts.at(-2)!)
     let directory = path.slice(0, -'SKILL.md'.length)
-    let members = [...bytes].filter(([path]) => path.startsWith(directory))
+    let members = entries.filter(([path]) => path.startsWith(directory))
     if (
       members.length > 512 ||
       members.reduce((size, [, bytes]) => size + bytes.length, 0) >
@@ -276,10 +283,7 @@ export let attachSkills = async (
   // an extension already registered under another scheme/namespace.
   built.registerResource(
     'unknown-skill-resource',
-    new ResourceTemplate(
-      'skill://skills/{+path}',
-      { list: undefined },
-    ),
+    unknownResource,
     {},
     () => invalid('Unknown skill resource URI'),
   )

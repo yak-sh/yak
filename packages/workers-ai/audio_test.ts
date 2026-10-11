@@ -6,13 +6,13 @@ import { ModelError } from '@yaks/model'
 import { audioPrice, audioSeconds, music, workersAi } from './mod.ts'
 import { musicInput, pricedAudio } from './audio.ts'
 
-let mp3 = () => {
+let mp3 = (() => {
   let frame = new Uint8Array(576)
   frame.set([255, 251, 180, 0]) // MPEG1, 192kbps, 48kHz, 1152 samples
   let bytes = new Uint8Array(frame.length * 1250)
   for (let p = 0; p < bytes.length; p += frame.length) bytes.set(frame, p)
   return bytes
-}
+})()
 
 let ask = (model: string) => ({
   model,
@@ -49,7 +49,7 @@ for (let name of ['elevenlabs/music-v2', 'minimax/music-2.6']) {
         assertEquals(init?.redirect, 'manual')
         assertEquals(init?.headers, undefined)
         downloads++
-        return Promise.resolve(new Response(mp3()))
+        return Promise.resolve(new Response(mp3))
       },
     })
     let reply = await model({ ...ask(name), conversation: 'pilot' })
@@ -84,9 +84,9 @@ for (let name of ['elevenlabs/music-v2', 'minimax/music-2.6']) {
     )
     let [artifact] = reply.artifacts!
     assertEquals(artifact.media_type, 'audio/mpeg')
-    assertEquals(artifact.size, mp3().length)
+    assertEquals(artifact.size, mp3.length)
     assertEquals(artifact.call, reply.id + ':audio')
-    assertEquals(await blobs.get(artifact.address), mp3())
+    assertEquals(await blobs.get(artifact.address), mp3)
   })
 }
 
@@ -119,7 +119,7 @@ test('duration and voice words remain prompt directions, not parsed flags', () =
 })
 
 test('duration and request tariffs do not use JSON token estimates', () => {
-  assertAlmostEquals(audioSeconds(mp3()), 30)
+  assertAlmostEquals(audioSeconds(mp3), 30)
   assertAlmostEquals(audioPrice('elevenlabs/music-v2', {}, 30), 0.075)
   assertEquals(
     audioPrice('minimax/music-2.6', { lyrics_optimizer: true }, 0),
@@ -141,7 +141,7 @@ test('music needs storage before asking; invalid output is never persisted', asy
     ModelError,
   )
   assertEquals(calls, 0)
-  for (let bytes of [new Uint8Array([1]), mp3().subarray(0, 600)]) {
+  for (let bytes of [new Uint8Array([1]), mp3.subarray(0, 600)]) {
     let model = workersAi(binding, {
       media: {
         store: () => {
@@ -157,36 +157,40 @@ test('music needs storage before asking; invalid output is never persisted', asy
 })
 
 // This is the body workerd otherwise reduces to "7003: User Input Error".
-test('music keeps raw gateway errors and never downloads or stores on refusal', async () => {
-  let body = JSON.stringify({
-    name: 'AiGatewayError',
-    internalCode: 7003,
-    description: 'User Input Error',
-    errors: [{ message: 'lyrics required when is_instrumental is false' }],
-  })
-  let downloads = 0, stores = 0
-  let model = workersAi({
-    run: (_, __, options) => {
-      assertEquals(options?.returnRawResponse, true)
-      return Promise.resolve(new Response(body, { status: 400 }))
-    },
-  }, {
-    media: {
-      store: () => {
-        stores++
-        throw new Error('not reached')
-      },
-    },
-    fetch: () => {
-      downloads++
+let refusedMusicBody = JSON.stringify({
+  name: 'AiGatewayError',
+  internalCode: 7003,
+  description: 'User Input Error',
+  errors: [{ message: 'lyrics required when is_instrumental is false' }],
+})
+let refusedMusicResponse = new Response(refusedMusicBody, { status: 400 })
+let refusedMusicDownloads = 0, refusedMusicStores = 0
+let refusedMusic = workersAi({
+  run: (_, __, options) => {
+    assertEquals(options?.returnRawResponse, true)
+    return Promise.resolve(refusedMusicResponse)
+  },
+}, {
+  media: {
+    store: () => {
+      refusedMusicStores++
       throw new Error('not reached')
     },
-  })
-  let error = await assertRejects(() => model(ask('minimax/music-2.6')), Error)
+  },
+  fetch: () => {
+    refusedMusicDownloads++
+    throw new Error('not reached')
+  },
+})
+test('music keeps raw gateway errors and never downloads or stores on refusal', async () => {
+  let error = await assertRejects(
+    () => refusedMusic(ask('minimax/music-2.6')),
+    Error,
+  )
   assertEquals(error.name, 'AiGatewayError')
-  assertEquals(error.message, `Workers AI HTTP 400: ${body}`)
-  assertEquals(error.stack?.includes(body), true)
-  assertEquals([downloads, stores], [0, 0])
+  assertEquals(error.message, `Workers AI HTTP 400: ${refusedMusicBody}`)
+  assertEquals(error.stack?.includes(refusedMusicBody), true)
+  assertEquals([refusedMusicDownloads, refusedMusicStores], [0, 0])
 })
 
 test('music decodes a successful raw binding envelope and prices its bytes', async () => {
@@ -198,7 +202,7 @@ test('music decodes a successful raw binding envelope and prices its bytes', asy
       })),
   }, {
     media: { store: artifactStore(memoryBlobs()) },
-    fetch: () => Promise.resolve(new Response(mp3())),
+    fetch: () => Promise.resolve(new Response(mp3)),
   })
   let reply = await model(ask('elevenlabs/music-v2'))
   assertAlmostEquals(reply.cost!, 0.075)

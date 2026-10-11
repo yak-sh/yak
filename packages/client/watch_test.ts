@@ -8,7 +8,7 @@ import { assertEquals } from '@std/assert'
 import { type Bundle, transient } from '@yaks/graph'
 import { loadVocab } from '@yaks/vocab'
 import { client } from './client.ts'
-import { boxClient, server, titles } from './testing.ts'
+import { box, boxClient, pair, server, titles } from './testing.ts'
 import type { Hold, Make } from './watch.ts'
 
 let subscribes = (sent: unknown[] | undefined): unknown[] | undefined =>
@@ -312,8 +312,26 @@ test('remote watches share one sub until the last independent close', async () =
   assertEquals(c.socket()?.sent.at(-1), { unsubscribe: 's2' })
 })
 
+// The registry contract observes the client and its sent subscribe frames.
+let differentSocket = pair().client
+let differentWatches = Object.assign(
+  client(box, [], {
+    url: 'http://box.test',
+    vault: false,
+    wireVault: false,
+    connect: () => differentSocket,
+  }),
+  {
+    socket: () => differentSocket,
+    idle: (): Promise<void> => differentWatches.wire!.idle(),
+  },
+)
+differentWatches.wire!.open()
+differentSocket.emit('open')
+await differentWatches.ready
+
 test('different options and query text never collapse into one watch', async () => {
-  let c = boxClient(server())
+  let c = differentWatches
   c.watch('.recipe')
   c.watch('.recipe', { remote: false })
   c.watch('.recipe', { now: 1 })

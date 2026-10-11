@@ -136,16 +136,20 @@ test('retry puts a failed run back to the pool, which then finishes it', async (
   assertEquals(landed, 1)
 })
 
+let droppedRuns = await mixed()
+
 test('drop deletes a failed run and an orphan, and the check stops naming them', async () => {
-  let g = await mixed()
+  let g = droppedRuns
   assert((await checkup(g, pooledBlog)).body.includes('no plugin declares'))
   assert((await door(g, 'effect_drop', 'r0')).startsWith('dropped 1'))
   assert((await door(g, 'effect_drop', 'gone')).startsWith('dropped 1'))
   assertEquals((await checkup(g, pooledBlog)).level, undefined)
 })
 
+let refusedRuns = await mixed()
+
 test('a door touches only the runs it settles, and refuses a name matching none', async () => {
-  let g = await mixed()
+  let g = refusedRuns
   let refused = [
     ...['r1', 'r2', 'nope'].flatMap((id) => [
       ['effect_retry', id] as const,

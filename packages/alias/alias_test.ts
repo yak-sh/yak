@@ -26,8 +26,10 @@ let seed = (title: string): Bundle[] => [{
   recipe: { serves: 8 },
 }]
 
+let namedRecipe = cookbookGraph()
+
 test('the sugar becomes a key entity of its own', () => {
-  let g = cookbookGraph()
+  let g = namedRecipe
   let out = sync(g.apply(seed('Lemon cakes')))
   let r = out.find((b) => b.$alias == '$r')!.entity.eid
   assertEquals(read(g, '.alias'), [aliasEid(CAKE)])

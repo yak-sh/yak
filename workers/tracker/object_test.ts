@@ -235,8 +235,10 @@ test('delayed openings still owe mail after eviction', async () => {
   equal((letters[0].mail as Comp).target, 'late')
 })
 
+let archivedCanary = fixture()
+
 test('deployment canaries remain archived after grouping and owe no mail', async () => {
-  let { g } = fixture(), config = setup()
+  let { g } = archivedCanary, config = setup()
   let rows = canary('b'.repeat(64))
   let [occurrence, opening] = grouped(rows[0], undefined, [])
   await g.apply([...rows, occurrence, opening], { trusted: true })

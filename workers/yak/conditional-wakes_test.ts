@@ -6,12 +6,14 @@ import { store, T0, woken } from '../../packages/wake/testing.ts'
 
 let iso = (at: number) => new Date(at).toISOString()
 
+let catalogGraph = woken(store())
+await catalogGraph.apply([{
+  entity: { eid: 'world' },
+  wake: { while: [{ match: '.plant', every: '1h' }] },
+}])
+
 test('conditional wake catalog is read once while conditions stay authoritative', async () => {
-  let g = woken(store()), catalogs = 0, conditions = 0
-  await g.apply([{
-    entity: { eid: 'world' },
-    wake: { while: [{ match: '.plant', every: '1h' }] },
-  }])
+  let g = catalogGraph, catalogs = 0, conditions = 0
   let driver = {
     read: (
       q: Parameters<typeof g.read>[0],

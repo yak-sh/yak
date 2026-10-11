@@ -1,6 +1,7 @@
 // A read-only connection can rank through a previously built native index,
 // including writes its build has not seen, without writing metadata on close.
 import { equal, ok, test } from '@yaks/testing'
+import { Buffer } from 'node:buffer'
 import { insert } from '@yaks/sql'
 import { open } from '@yaks/sqlite/db'
 import { statements } from '@yaks/sqlite'
@@ -38,7 +39,8 @@ let search = () => nearest(read, query, { model, limit: 2, without: 'v-300' })
 // Loading a connection's codes is setup; measure its normal read.
 equal(search().map((n) => n.entity), ['fresh', 'v-299'])
 writer.close()
-let contents = () => [path, `${path}-wal`].map((p) => Deno.readFileSync(p))
+let contents = () =>
+  [path, `${path}-wal`].map((p) => Buffer.from(Deno.readFileSync(p).buffer))
 let before = contents()
 
 test('a read-only search uses its index and includes dirty vectors', () => {
@@ -48,7 +50,11 @@ test('a read-only search uses its index and includes dirty vectors', () => {
 })
 
 test('an indexed reader closes without changing database or WAL bytes', () => {
-  reader.close()
-  equal(contents(), before)
-  Deno.removeSync(dir, { recursive: true })
+  try {
+    reader.close()
+    // Compare every byte in native code rather than walking typed-array keys.
+    contents().forEach((bytes, i) => ok(bytes.equals(before[i])))
+  } finally {
+    Deno.removeSync(dir, { recursive: true })
+  }
 })

@@ -2,17 +2,18 @@ import { test } from '@yaks/testing'
 import { assertEquals, assertRejects } from '@std/assert'
 import { frames, ResponseError, type ResponseEvent } from './mod.ts'
 
+let bytes = new TextEncoder().encode(
+  ': comment\r\nevent: ignored\r\ndata: {"type":"delta",\r\ndata: "delta":"hé🙂"}\r\n\r\n' +
+    'data: [DONE]\n\ndata: {"type":"last"}',
+)
+let stream = new ReadableStream<Uint8Array>({
+  start(control) {
+    for (let byte of bytes) control.enqueue(new Uint8Array([byte]))
+    control.close()
+  },
+})
+
 test('SSE handles byte splits, UTF-8, CRLF, multiline data, DONE and trailing data', async () => {
-  let bytes = new TextEncoder().encode(
-    ': comment\r\nevent: ignored\r\ndata: {"type":"delta",\r\ndata: "delta":"hé🙂"}\r\n\r\n' +
-      'data: [DONE]\n\ndata: {"type":"last"}',
-  )
-  let stream = new ReadableStream<Uint8Array>({
-    start(control) {
-      for (let byte of bytes) control.enqueue(new Uint8Array([byte]))
-      control.close()
-    },
-  })
   let out: ResponseEvent[] = []
   for await (let event of frames(stream)) out.push(event)
   assertEquals(out, [{ type: 'delta', delta: 'hé🙂' }, { type: 'last' }])

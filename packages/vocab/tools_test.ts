@@ -10,19 +10,46 @@ import {
 import { meta } from './testing.ts'
 
 const draft7 = 'http://json-schema.org/draft-07/schema#'
-test('tool schemas preserve draft-07 tuple semantics beside 2020 schemas', () => {
-  const inputSchema = {
-    $schema: draft7,
-    type: 'object',
-    properties: {
-      pair: {
-        type: 'array',
-        items: [{ type: 'string' }, { type: 'integer' }],
-        additionalItems: false,
-      },
+test('copied tool declarations keep their schema when the author edits the next version', () => {
+  const authored = {
+    description: 'Say a value.',
+    outputSchema: {
+      type: 'object',
+      properties: { value: { type: 'string' } },
     },
-    required: ['pair'],
   }
+  const first = toolDefinition(authored)
+  const again = toolDefinition(authored)
+  authored.outputSchema.properties.value.type = 'number'
+  const next = toolDefinition(authored)
+  for (const tool of [first, again]) {
+    validateToolOutput(tool, { value: 'one' })
+    assertThrows(() => validateToolOutput(tool, { value: 1 }))
+  }
+  validateToolOutput(next, { value: 1 })
+  assertThrows(() => validateToolOutput(next, { value: 'one' }))
+})
+
+const inputSchema = {
+  $schema: draft7,
+  type: 'object',
+  properties: {
+    pair: {
+      type: 'array',
+      items: [{ type: 'string' }, { type: 'integer' }],
+      additionalItems: false,
+    },
+  },
+  required: ['pair'],
+}
+const outputSchema = {
+  $schema: 'https://json-schema.org/draft/2020-12/schema',
+  type: 'object',
+  properties: {
+    pair: { type: 'array', prefixItems: [{ type: 'string' }], items: false },
+  },
+}
+test('tool schemas preserve draft-07 tuple semantics beside 2020 schemas', () => {
   assertEquals(validateToolInput({ inputSchema }, { pair: ['x', 1] }), {
     pair: ['x', 1],
   })
@@ -33,13 +60,7 @@ test('tool schemas preserve draft-07 tuple semantics beside 2020 schemas', () =>
     description: 'Example',
     inputSchema,
   })
-  const outputSchema = {
-    $schema: 'https://json-schema.org/draft/2020-12/schema',
-    type: 'object',
-    properties: {
-      pair: { type: 'array', prefixItems: [{ type: 'string' }], items: false },
-    },
-  }
+
   validateToolOutput({ outputSchema }, { pair: ['x'] })
   assertThrows(() => validateToolOutput({ outputSchema }, { pair: ['x', 'y'] }))
 })

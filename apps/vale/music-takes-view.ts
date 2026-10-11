@@ -5,6 +5,15 @@ import { Button, Head, Panes, Rows, Tile } from '@yaks/ui'
 import { ValeRecording } from './ui-kit.ts'
 import type { Song } from './music_takes.ts'
 
+let dates = new Intl.DateTimeFormat(undefined, {
+  year: 'numeric',
+  month: 'numeric',
+  day: 'numeric',
+  hour: 'numeric',
+  minute: 'numeric',
+  second: 'numeric',
+})
+
 export let Takes = ({ songs, editor, busy, message, choose }: {
   songs: Song[]
   editor: boolean
@@ -63,7 +72,7 @@ export let Takes = ({ songs, editor, busy, message, choose }: {
                     h(
                       Tile.Note,
                       {},
-                      take.at ? new Date(take.at).toLocaleString() : '',
+                      take.at ? dates.format(new Date(take.at)) : '',
                     ),
                   ),
                   h(ValeRecording, {

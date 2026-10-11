@@ -92,8 +92,14 @@ let shade = (hex: number, k: number) => {
   return (r << 16) | (g << 8) | b
 }
 export let paletteOf = (lv: Level): Palette => {
-  let got = painted.get(lv)
-  if (got) return got
+  let look = lv.look ?? plain
+  let stamp = JSON.stringify(
+    [look.ground, look.water],
+    (_key, value) =>
+      typeof value == 'number' || value === undefined ? String(value) : value,
+  )
+  let previous = painted.get(look)
+  if (previous?.stamp == stamp) return previous.palette
   let tops = { ...TOPS }, band = { ...BAND }
   for (let [name, hex] of Object.entries(lv.look?.ground ?? {})) {
     let t = Top[name as keyof typeof Top]
@@ -103,16 +109,20 @@ export let paletteOf = (lv: Level): Palette => {
   let stone = lv.look?.ground?.stone
   let under = stone == null ? STONE : shade(stone, 0.88)
   let [deep, shallow, sheen] = lv.look?.water ?? []
-  got = {
+  let got: Palette = {
     tops,
     band,
     rock: (t) => ROCK[t] ?? under,
     water: [deep ?? 0x2f7fa6, shallow ?? 0x5fb8cf, sheen ?? 0xd9edff],
   }
-  painted.set(lv, got)
+  painted.set(look, { stamp, palette: got })
   return got
 }
-let painted = new WeakMap<Level, Palette>()
+let plain: NonNullable<Level['look']> = {}
+let painted = new WeakMap<
+  NonNullable<Level['look']>,
+  { stamp: string; palette: Palette }
+>()
 
 // A colour, drifted by the column's hue: lusher or drier by a little.
 let drift = ([r, g, b]: Vec, hue: number): Vec => {

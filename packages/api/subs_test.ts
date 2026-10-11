@@ -522,7 +522,7 @@ test('windowed property filters skip births without their components', () => {
   assertEquals(e.take().map((f) => [f.id, f.gone]), [['books', ['b1']]])
 })
 
-test('a created edit on a member refreshes its window', () => {
+let createdWindow = (() => {
   let g = graph({
     storage: ram(shopVocab),
     vocab: shopVocab,
@@ -543,6 +543,11 @@ test('a created edit on a member refreshes its window', () => {
   e.take()
   reads = []
 
+  return { g, reads, e, query }
+})()
+
+test('a created edit on a member refreshes its window', () => {
+  let { g, reads, e, query } = createdWindow
   g.apply([{ entity: { eid: 'r1' }, doc: { title: 'Edited' } }], {
     now: '2026-01-02T00:00:00.000Z',
   })
@@ -839,23 +844,28 @@ test('a refresh follows its query onto the entities it reads', () => {
   assertEquals(take().map(ids), [['b2']])
 })
 
-test('a commit that touches nothing a query reads does not run it', () => {
+let irrelevantCommit = (() => {
   let g = shop()
-  let runs = 0
+  let count = { runs: 0 }
   let spy: Graph = {
     ...g,
-    read: (q, o) => (runs++, g.read(q, o)),
-    rows: (q, o) => (runs++, g.rows(q, o)),
+    read: (q, o) => (count.runs++, g.read(q, o)),
+    rows: (q, o) => (count.runs++, g.rows(q, o)),
   }
   let subs = subscriptions(spy)
   let { to, take } = ear()
   subs.open(to, 'newest', '.book&.book.price<20&.limit=1')
   subs.open(to, 'n', '.book&.count')
   take()
-  let before = runs
+  let before = count.runs
 
+  return { g, count, take, before }
+})()
+
+test('a commit that touches nothing a query reads does not run it', () => {
+  let { g, count, take, before } = irrelevantCommit
   g.apply([{ entity: { eid: 'n1' }, doc: { title: 'a note' } }])
-  assertEquals([runs - before, take()], [0, []])
+  assertEquals([count.runs - before, take()], [0, []])
 
   g.apply([{ entity: { eid: 'b1' }, book: { price: 12 } }])
   assertEquals(take().map((f) => f.id), ['newest', 'n'])
@@ -878,7 +888,7 @@ let watched = (g: Graph, query: string) => {
   return { first, take, reads }
 }
 
-test('a walk runs again only after a commit that moves what it steps through', () => {
+let walking = (() => {
   let g = shop()
   g.apply([
     { entity: { eid: 'a1' }, doc: { title: 'Ada' } },
@@ -887,6 +897,11 @@ test('a walk runs again only after a commit that moves what it steps through', (
   ])
   // b2 reaches Ada through b1, which the answer never selects
   let w = watched(g, '.book.author->a1&.book.price<20')
+  return { g, w }
+})()
+
+test('a walk runs again only after a commit that moves what it steps through', () => {
+  let { g, w } = walking
   assertEquals(w.first.map(ids), [['b2']])
 
   g.apply([{ entity: { eid: 'n1' }, doc: { title: 'a note' } }])
@@ -920,7 +935,7 @@ test('a walk over a relation runs again only after its edges move', () => {
   assertEquals(w.take().map(ids), [['n2']])
 })
 
-test('deleting what an answer each entity decides never held does not run it', () => {
+let deletingNonmembers = (() => {
   let g = shop()
   g.apply([
     { entity: { eid: 'b1' }, book: { price: 12 } },
@@ -928,6 +943,11 @@ test('deleting what an answer each entity decides never held does not run it', (
     { entity: { eid: 'n1' }, doc: { title: 'a note' } },
   ])
   let w = watched(g, '.book&.order=-book.price&.limit=1')
+  return { g, w }
+})()
+
+test('deleting what an answer each entity decides never held does not run it', () => {
+  let { g, w } = deletingNonmembers
   assertEquals(w.first.map(ids), [['b2']])
 
   g.apply([{ entity: { eid: 'b1' }, $delete: true }])

@@ -111,9 +111,11 @@ let suppliedBlobs = memoryBlobs()
 let suppliedGraph = graph({
   storage: ram(vocab),
   vocab,
+  provenance: false,
   plugins: [representations()],
 })
 let suppliedDoor = door({ blobs: suppliedBlobs, graph: suppliedGraph })
+let suppliedUpload = put(pngAddress, png, 'image/png')
 
 test('a PUT to an address stores the bytes and mints the artifact', async () => {
   let h = host(), ask = door(h)
@@ -159,7 +161,7 @@ test('a PUT to an address stores the bytes and mints the artifact', async () => 
 test('the default backend uses supplied blobs without a SQL host', async () => {
   let blobs = suppliedBlobs, ask = suppliedDoor
   let sha = pngAddress
-  let made = await ask(put(sha, png, 'image/png'))
+  let made = await ask(suppliedUpload)
   assertEquals(made.status, 200)
   assertEquals(await blobs.get(sha), png)
   let got = await ask(

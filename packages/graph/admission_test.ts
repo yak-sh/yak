@@ -13,22 +13,24 @@ import { after } from '@yaks/fp'
 import { ram } from '@yaks/ram'
 import { Stale, token } from './guard.ts'
 
+let positions = loadVocab({
+  $defs: {
+    position: {
+      component: true,
+      sync: 'peers',
+      type: 'object',
+      properties: {
+        x: { type: 'number', maximum: 100, validate: true },
+        label: { type: 'string' },
+      },
+    },
+  },
+})
+
 for (let certified of [false, true]) {
   for (let rewrite of [false, true]) {
     test(`admission returns checked peer values from ${rewrite ? 'hooks' : 'rules'} (${certified})`, async () => {
-      let vocab = loadVocab({
-        $defs: {
-          position: {
-            component: true,
-            sync: 'peers',
-            type: 'object',
-            properties: {
-              x: { type: 'number', maximum: 100, validate: true },
-              label: { type: 'string' },
-            },
-          },
-        },
-      })
+      let vocab = positions
       let value = { x: 100, label: 'bounded' }
       let policy: Plugin = {
         name: 'bound',

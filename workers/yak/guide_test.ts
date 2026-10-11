@@ -25,22 +25,14 @@ let guide = Deno.readTextFileSync(
 // it (M-34605). Everything below reads the document, so a rule about the
 // prose is never fooled by the bundle at the top.
 // Read and parsed once, however many tests read the page.
-let pages = new Map<string, ReturnType<typeof front>>()
-let pageFile = (slug: string) => {
-  let page = pages.get(slug)
-  if (!page) {
-    pages.set(
-      slug,
-      page = front(
-        Deno.readTextFileSync(
-          new URL(`./public/docs/${slug}.md`, import.meta.url),
-        ),
-        `public/docs/${slug}.md`,
-      ),
-    )
-  }
-  return page
-}
+let pages = new Map(PAGES.map(({ slug }) => [
+  slug,
+  front(
+    Deno.readTextFileSync(new URL(`./public/docs/${slug}.md`, import.meta.url)),
+    `public/docs/${slug}.md`,
+  ),
+]))
+let pageFile = (slug: string) => pages.get(slug)!
 
 let pageText = (slug: string) => pageFile(slug).body
 
@@ -434,8 +426,10 @@ let PAGE = [
   }),
 ]
 
+let clipping = helpers()
+
 test("the clipping page's own reader handles a schema.org page", () => {
-  let h = helpers()
+  let h = clipping
   // The broken block is skipped rather than fatal, and @graph is flattened.
   assertEquals(h.things(PAGE).length, 3)
   let dish = h.cooking(PAGE)!
@@ -456,9 +450,11 @@ test("the clipping page's own reader handles a schema.org page", () => {
   assertEquals(h.src(['https://x.test/a.png']), 'https://x.test/a.png')
 })
 
+let codeInstructions = [INSTRUCTIONS, pageText('code')]
+  .map((text) => text.replaceAll('`', '').replace(/\s+/g, ' '))
+
 test('the code page describes main as server source, not the upload wrapper', () => {
-  for (let text of [INSTRUCTIONS, pageText('code')]) {
-    let plain = text.replaceAll('`', '').replace(/\s+/g, ' ')
+  for (let plain of codeInstructions) {
     assert(plain.includes('server source path'))
     assert(plain.includes('worker.js'))
     assert(plain.includes('dist/server.'))

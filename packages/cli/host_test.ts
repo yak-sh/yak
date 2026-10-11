@@ -1338,16 +1338,18 @@ test('a facet hangs its timer off the host ending, and closing cancels it', asyn
   assertEquals(late, 0, 'a timer fired after the database was let go')
 })
 
+// Two independently composed hosts share a file-backed journal. Composition
+// installs their fixture; the case observes commits through their feed.
+let journalFile = `${Deno.makeTempDirSync()}/graph.db`
+let journalConfig: Config = {
+  db: journalFile,
+  plugins: ['shop', { use: '@yaks/journal', with: { every: 5 } }],
+}
+let journalHere = await compose(journalConfig, only({ shop }))
+let journalThere = await compose(journalConfig, only({ shop }))
+
 test('a host hears what another host commits to the same store, and not what it commits itself', async () => {
-  // Two processes over one file — `yak serve` and a `yak` command beside it —
-  // each a host of its own, with the journal listed.
-  let db = `${Deno.makeTempDirSync()}/graph.db`
-  let config: Config = {
-    db,
-    plugins: ['shop', { use: '@yaks/journal', with: { every: 5 } }],
-  }
-  let here = await compose(config, only({ shop }))
-  let there = await compose(config, only({ shop }))
+  let db = journalFile, here = journalHere, there = journalThere
   try {
     let heard: Bundle[] = []
     let stop = here.feed((applied) => void heard.push(...applied))

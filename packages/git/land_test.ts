@@ -472,11 +472,12 @@ test(
 // receives a failed run and labels the operation rather than leaking ENOENT.
 let gone = Deno.makeTempDirSync({ prefix: 'yaks-land-gone-' })
 Deno.removeSync(gone)
+let spawnFailure = await run(['rev-parse', '--show-toplevel'], gone)
 
 test('a spawn-level failure is a failed result, never a crash', async () => {
   let cwd = gone
   await assertRejects(
-    () => land({ ...quiet, cwd }),
+    () => land({ ...quiet, cwd, run: () => Promise.resolve(spawnFailure) }),
     Error,
     'find worktree failed with exit -1: git rev-parse --show-toplevel in ' +
       cwd,

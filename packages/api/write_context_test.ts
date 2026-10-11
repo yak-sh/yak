@@ -1,11 +1,12 @@
 /// <reference lib="deno.ns" />
 
 import { assertEquals } from '@std/assert'
-import { type Bundle } from '@yaks/graph'
+import { type Bundle, graph } from '@yaks/graph'
+import { ram } from '@yaks/ram'
 import { test } from '@yaks/testing'
 import { CHUNK } from './doors.ts'
 import { api } from './route.ts'
-import { comp, post, req, shopGraph } from './testing.ts'
+import { comp, post, req, shop as shopVocab } from './testing.ts'
 
 let row = (i: number, cost: unknown = i): Bundle => ({
   entity: { eid: `b${i}` },
@@ -23,7 +24,14 @@ for (let stream of [false, true]) {
         ? req(path, {
           method: 'POST',
           headers: { 'content-type': 'application/x-ndjson' },
-          body: bundles.map((b) => JSON.stringify(b)).join('\n'),
+          body: new ReadableStream<Uint8Array>({
+            start: (c) => {
+              c.enqueue(new TextEncoder().encode(
+                bundles.map((b) => JSON.stringify(b)).join('\n'),
+              ))
+              c.close()
+            },
+          }),
         })
         : post(path, bundles)
     }
@@ -32,8 +40,9 @@ for (let stream of [false, true]) {
         ? (await response.text()).trim().split('\n').map((s) => JSON.parse(s))
         : await response.json()
     let shop = () => {
-      let graph = shopGraph()
-      graph.use({
+      // Assigning display numbers is independent of aliases and signing.
+      let g = graph({ vocab: shopVocab, storage: ram(shopVocab) })
+      g.use({
         name: 'shop-version',
         reads: (opts) => opts.speaks?.shop == 1,
         answer: (_, bundles) =>
@@ -47,7 +56,7 @@ for (let stream of [false, true]) {
           }),
       })
       let handler = api({
-        graph,
+        graph: g,
         authenticate: () => ({ by: 'ada' }),
         read: (request) =>
           Promise.resolve(
@@ -69,7 +78,7 @@ for (let stream of [false, true]) {
           })
         },
       })
-      return { graph, handler }
+      return { graph: g, handler }
     }
 
     test(`${mode} applies request write context before authenticated signing`, async () => {
@@ -94,15 +103,19 @@ for (let stream of [false, true]) {
       assertEquals(applied.some((b) => b.book !== undefined), false)
     })
 
+    let aliases = shop()
+    let oldAlias = send([{ ...row(1), entity: { eid: '$book' } }])
+    let currentWrite = send([{
+      entity: { eid: 'current' },
+      book: { price: 2 },
+    }], false)
     test(`${mode} answers old aliases and current writes in their caller's vocabulary`, async () => {
-      let { graph, handler } = shop()
-      let old = { ...row(1), entity: { eid: '$book' } }
-      let [minted] = await decode(await handler(send([old])))
+      let { graph, handler } = aliases
+      let [minted] = await decode(await handler(oldAlias))
       assertEquals(minted.$alias, '$book')
       assertEquals(minted.entity.eid.startsWith('$'), false)
       assertEquals(comp(minted, 'oldbook'), { cost: 1 })
-      let current = { entity: { eid: 'current' }, book: { price: 2 } }
-      let [applied] = await decode(await handler(send([current], false)))
+      let [applied] = await decode(await handler(currentWrite))
       assertEquals(comp(applied, 'book'), { price: 2 })
       assertEquals(applied.oldbook, undefined)
       assertEquals((await graph.read('.book')).length, check ? 0 : 2)

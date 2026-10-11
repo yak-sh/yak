@@ -93,12 +93,14 @@ test('a tree links to each child under the name it holds it by', async () => {
 let duplicate = fixture()
 let duplicateSha = file(duplicate.bytes, HELLO)
 await duplicate.git.blob(duplicateSha)
+let duplicateTree = await duplicate.git.files({
+  'a.txt': duplicateSha,
+  'b.txt': duplicateSha,
+})
 
 test('one blob under two names is two entries', async () => {
-  let { g, git, bytes } = duplicate
-  let sha = duplicateSha
-  let root = await git.files({ 'a.txt': sha, 'b.txt': sha })
-  let rows = await children(g, bytes, root.oid)
+  let { g, bytes } = duplicate
+  let rows = await children(g, bytes, duplicateTree.oid)
   assertEquals(rows.map((r) => r.name).sort(), ['a.txt', 'b.txt'])
   assertEquals(new Set(rows.map((r) => r.oid)), new Set([HELLO_OID]))
 })

@@ -52,9 +52,10 @@ let same = (a: Value, b: Value): boolean => {
   if (Array.isArray(a) && Array.isArray(b)) {
     return a.length == b.length && a.every((v, i) => same(v, b[i]))
   }
-  return object(a) && object(b) &&
-    Object.keys(a).length == Object.keys(b).length &&
-    Object.keys(a).every((k) => Object.hasOwn(b, k) && same(a[k], b[k]))
+  if (!object(a) || !object(b)) return false
+  let keys = Object.keys(a)
+  return keys.length == Object.keys(b).length &&
+    keys.every((k) => Object.hasOwn(b, k) && same(a[k], b[k]))
 }
 let path = (p: Path): string[] => {
   let parts = typeof p == 'string' ? p.split('.') : [...p].map(String)
@@ -72,9 +73,14 @@ let read = (doc: Value, p: readonly string[]): Value => {
 }
 // Copy only changed ancestors. No operation can mutate a caller's document or
 // an authored default, including a later operation using that default.
-let write = (doc: Value, p: readonly string[], value: Value): Value => {
-  if (!p.length) return same(doc, value) ? doc : value
-  let [key, ...rest] = p
+let write = (
+  doc: Value,
+  p: readonly string[],
+  value: Value,
+  at = 0,
+): Value => {
+  if (at == p.length) return same(doc, value) ? doc : value
+  let key = p[at]
   if (doc !== absent && (doc === null || typeof doc != 'object')) {
     fail(`cannot descend into ${key}`)
   }
@@ -82,7 +88,7 @@ let write = (doc: Value, p: readonly string[], value: Value): Value => {
   let before = Object.hasOwn(held, key)
     ? (held as { [key: string]: Json })[key]
     : absent
-  let after = write(before, rest, value)
+  let after = write(before, p, value, at + 1)
   // A leaf keeps its identity when unchanged; ancestors need no second walk.
   if (before === after) return doc
   if (Array.isArray(held)) {
@@ -95,14 +101,9 @@ let write = (doc: Value, p: readonly string[], value: Value): Value => {
     else out[n] = after
     return out
   }
+  if (after !== absent) return { ...held, [key]: after }
   let out = { ...held }
-  if (after === absent) delete out[key]
-  else {Object.defineProperty(out, key, {
-      value: after,
-      enumerable: true,
-      writable: true,
-      configurable: true,
-    })}
+  delete out[key]
   return out
 }
 let set = (doc: Json, p: string[], value: Json): Json => {

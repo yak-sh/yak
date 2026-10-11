@@ -61,7 +61,11 @@ let answering = (...r: [number, unknown?][]) => {
   )
 }
 let net = (input: RequestInfo | URL, init?: RequestInit) => {
-  seen.push(new Request(input, init))
+  seen.push(
+    input instanceof Request && init === undefined
+      ? input
+      : new Request(input, init),
+  )
   return Promise.resolve(replies.shift() ?? new Response('{}'))
 }
 
@@ -74,6 +78,7 @@ let vault = ramVault()
 let g = graph({
   storage: ram(vocab),
   vocab,
+  provenance: false,
   plugins: [
     secrets(vault, (b) => g.apply(b, { trusted: true })),
     edges(vocab),
@@ -232,14 +237,10 @@ test('a request carrying no sentinel goes out as it came', async () => {
 })
 
 // A call for the calendar, whose grant's access token the warm-up left at A1.
-let events = () =>
-  forward(
-    c,
-    viewer,
-    new Request('https://api.example/events', {
-      headers: { authorization: `Bearer ${GRANT}` },
-    }),
-  )
+let calendarRequest = new Request('https://api.example/events', {
+  headers: { authorization: `Bearer ${GRANT}` },
+})
+let events = () => forward(c, viewer, calendarRequest)
 
 test(
   'an access token the service refuses is refreshed, and the call made once more',
@@ -253,8 +254,14 @@ test(
   },
 )
 
+let refusedRefresh = [
+  new Response(null, { status: 401 }),
+  Response.json({ access_token: 'A3' }),
+  new Response(null, { status: 401 }),
+]
 test('a refreshed token the service refuses too is its answer', async () => {
-  answering([401, null], [200, { access_token: 'A3' }], [401, null])
+  seen = []
+  replies = refusedRefresh
   assertEquals((await events()).status, 401)
   assertEquals(seen.length, 3)
 })

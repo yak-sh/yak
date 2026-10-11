@@ -61,7 +61,7 @@ let anchor = (tag: string, href?: string, outer?: string) =>
     : { tag: 'a', href }
 
 let classes = (base: string, mod: Props['mod'], extra?: string) =>
-  [
+  !mod && !extra ? base : [
     base,
     ...[mod].flat().filter(Boolean).map((m) => `${base}-${m}`),
     extra,

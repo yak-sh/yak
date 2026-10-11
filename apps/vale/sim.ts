@@ -60,9 +60,8 @@ let HEAD = 1.75
  *
  * ```ts
  * import { assertEquals } from '@std/assert'
- * import { flat } from './terrain.ts'
+ * import { trunkGround as v } from './terrain_fixture.ts'
  * // Flat ground 5 m up, and a trunk at (10, 10).
- * let v = flat(5, [{ x: 10, z: 10, r: 0.5, top: 9 }])
  * assertEquals(fits(v, 20, 20, 5), true)
  * assertEquals(fits(v, 10.3, 10, 5), false) // in the trunk
  * assertEquals(fits(v, 20, 20, 4), false) // ground over a step above its feet
@@ -124,8 +123,8 @@ export let turn = (a: number, b: number, k: number) => {
  *
  * ```ts
  * import { assertEquals } from '@std/assert'
- * import { flat } from './terrain.ts'
- * let v = flat(5, [{ x: 21, z: 20, r: 0.5, top: 9 }])
+ * import { type Vale } from './terrain.ts'
+ * import { slidingGround as v, rockGround, ledgeGround } from './terrain_fixture.ts'
  * let b = { x: 20, y: 5, z: 20, vy: 0, yaw: 0, speed: 0, gait: 'idle' }
  * // A trunk ahead: pushed into it at a slant, the walker slides along it.
  * let slid = walk(v, b, { x: 0.7, z: 0.7, jump: false }, 0.1, 5)
@@ -134,16 +133,15 @@ export let turn = (a: number, b: number, k: number) => {
  * assertEquals(walk(v, b, { x: 0, z: 0, jump: true }, 0.1, 5).gait, 'jump')
  * // Run at a rock a metre tall and jump: up onto it. A ledge of ground as
  * // tall is the same.
- * let run = (at: ReturnType<typeof flat>) => {
+ * let run = (at: Vale) => {
  *   let c = b
  *   for (let f = 0; f < 32; f++) {
  *     c = walk(at, c, { x: 1, z: 0, jump: f == 2 }, 1 / 60, 5)
  *   }
  *   return [c.x > 22, c.y]
  * }
- * assertEquals(run(flat(5, [{ x: 22.5, z: 20, r: 0.8, top: 6 }])), [true, 6])
- * let ledge = flat((x, z) => x > 21.5 && z > 20 && z < 20.25 ? 6 : 5)
- * assertEquals(run(ledge), [true, 6])
+ * assertEquals(run(rockGround), [true, 6])
+ * assertEquals(run(ledgeGround), [true, 6])
  * ```
  */
 export let walk = (
@@ -289,14 +287,15 @@ let SHELTER = 16
 let ROOM = 3.5
 /** Whether a point, or a disk of radius `r` around it, meets shelter from
  * creatures: the village square, a street, a road or a lane. */
-export let sheltered = (v: Vale, x: number, z: number, r = 0): boolean =>
+export let sheltered = (v: Vale, x: number, z: number, r = 0): boolean => {
   // `flat()` has no world roads or villages laid in its ground.
-  !!v.world && (
-    !!hearthNear(x, z, SHELTER + r) ||
-    villagesNear(x, z, EDGE + ROOM + r).some((s) =>
-      streetsOf(v, s).near(x, z, ROOM + 0.9 + r)
-    ) || nearWay(x, z, ROOM + r)
-  )
+  if (!v.world) return false
+  if (hearthNear(x, z, SHELTER + r)) return true
+  for (let s of villagesNear(x, z, EDGE + ROOM + r)) {
+    if (streetsOf(v, s).near(x, z, ROOM + 0.9 + r)) return true
+  }
+  return nearWay(x, z, ROOM + r)
+}
 
 // The named world and a creature's home do not change between frames. If
 // its whole roam clears every shelter, its wandering needs no path checks.

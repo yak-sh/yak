@@ -39,27 +39,27 @@ let external = (vocab = words) =>
     },
   })
 
+let disk = stash()
+let sent = 0
+let c = client(loadVocab(kitDocs({ brought: external() })), [], {
+  url: 'https://example.invalid',
+  connect: () => {
+    sent++
+    throw new Error('page state opened a socket')
+  },
+  vault: disk,
+  wireVault: false,
+  fetch: () => {
+    sent++
+    throw new Error('page state crossed the wire')
+  },
+})
+await c.ready
 test('an external kit carries its component, specimens and own page words', async () => {
   let brought = external()
   assertEquals(brought.components.Toggle.Component, Toggle)
   assertEquals(kitDocs({ brought, again: brought }), [words])
-  let disk = stash()
-  let sent = 0
-  let c = client(loadVocab(kitDocs({ brought })), [], {
-    url: 'https://example.invalid',
-    connect: () => {
-      sent++
-      throw new Error('page state opened a socket')
-    },
-    vault: disk,
-    wireVault: false,
-    fetch: () => {
-      sent++
-      throw new Error('page state crossed the wire')
-    },
-  })
   try {
-    await c.ready
     await c.mutate([{ entity: { eid: 'toggle' }, Toggle: { open: true } }])
     assertEquals(c.ent('toggle')?.Toggle, { open: true })
     let watch = c.watch('.Toggle', { remote: false })

@@ -17,29 +17,33 @@ seedThemes()
 
 seedBuildings()
 
+let shelterGround = vale(), hearth = hearthOf('mossvale')!
+let village = villageOf('mossvale')!
+let street = streetsOf(shelterGround, village), side = EDGE * 2 + 1
+let streetPoints = [...street.cells.keys()].map((j) => [
+  hearth[0] + j % side - EDGE,
+  hearth[1] + Math.floor(j / side) - EDGE,
+])
+let road = roadsOf('mossvale').find((r) => r.to == 'reedmarsh')!.c
+let middle = Math.floor(road.xs.length / 2)
+let dx = road.xs[middle + 1] - road.xs[middle - 1]
+let dz = road.zs[middle + 1] - road.zs[middle - 1]
+let len = Math.hypot(dx, dz)
+let crossing = [road.xs[middle], road.zs[middle]]
+let lane = lanesIn(0, 0, 256, 256, 0)[0]
+
 test('the fire and traveled paths shelter a traveler', () => {
-  let v = vale(), hearth = hearthOf('mossvale')!
+  let v = shelterGround
   assert(inVillage(...hearth))
   assertEquals(inVillage(hearth[0] + 20, hearth[1]), false)
   assert(sheltered(v, hearth[0] + 20, hearth[1]))
 
-  let village = villageOf('mossvale')!
-  let street = streetsOf(v, village), side = EDGE * 2 + 1
-  for (let [j] of street.cells) {
-    let x = hearth[0] + j % side - EDGE
-    let z = hearth[1] + Math.floor(j / side) - EDGE
-    assert(sheltered(v, x, z), `street at ${x}, ${z}`)
-  }
+  let exposed = streetPoints.find(([x, z]) => !sheltered(v, x, z))
+  assertEquals(exposed, undefined, `exposed street at ${exposed}`)
 
-  let c = roadsOf('mossvale').find((r) => r.to == 'reedmarsh')!.c
-  let i = Math.floor(c.xs.length / 2)
-  let dx = c.xs[i + 1] - c.xs[i - 1]
-  let dz = c.zs[i + 1] - c.zs[i - 1]
-  let len = Math.hypot(dx, dz)
-  let [x, z] = [c.xs[i], c.zs[i]]
+  let [x, z] = crossing
   assert(sheltered(v, x, z))
   assertEquals(nearWay(x - dz / len * 8, z + dx / len * 8, 3.5), false)
-  let lane = lanesIn(0, 0, 256, 256, 0)[0]
   assert(sheltered(v, lane.xs[0], lane.zs[0]))
 })
 
@@ -52,7 +56,10 @@ test('creatures live and wander off traveled paths', () => {
       assert(!sheltered(v, ...h.home), `${id}: ${BEASTS[h.beast].name} home`)
       for (let t of [0, 22_500, 45_000, 90_000]) {
         let b = rest(v, h.home, h.roam, h.seed, t)
-        assert(!sheltered(v, b.x, b.z), `${id}: ${BEASTS[h.beast].name} wander`)
+        assert(
+          !sheltered(v, b.x, b.z),
+          `${id}: ${BEASTS[h.beast].name} wander`,
+        )
         for (let i = 1; i < 10; i++) {
           let x = h.home[0] + (b.x - h.home[0]) * i / 10
           let z = h.home[1] + (b.z - h.home[1]) * i / 10
