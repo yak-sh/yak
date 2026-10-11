@@ -15,7 +15,7 @@ import {
   useNamed,
   type View,
 } from '@yaks/inspect'
-import { inspectViews as baseViews } from '@yaks/inspect/views'
+import { all as baseViews } from '@yaks/inspect'
 import { Head, Section, Tabs, Tile } from '@yaks/ui'
 import { Disclosure, disclosureAt, isOpen } from '@yaks/ux'
 import {

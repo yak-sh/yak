@@ -13,6 +13,7 @@ import { fields } from './fields.tsx'
 import { route } from './nav.tsx'
 import { contributedViews } from './inspect.tsx'
 import * as facet from '@yaks/inspect/views'
+import { views } from '@yaks/inspect'
 import { extend, registry } from './registry.ts'
 
 let hit = (num: number, kind: string, title: string) => ({
@@ -213,7 +214,7 @@ test('configured Inspect query renderer receives its host context', async () => 
   extend(
     await contributedViews([{
       ...facet,
-      inspectViews: () => Promise.resolve(facet.inspectViews),
+      views,
     }]),
   )
   let seen = mount(h(SearchPage, { query: '.task .count' }))

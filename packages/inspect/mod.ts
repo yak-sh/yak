@@ -25,7 +25,7 @@ export type {
   View,
 } from './host.ts'
 export { edited, editing, INSPECT } from './state.ts'
-export { all, composed, views } from './views.ts'
+export { all, composed, schemaPages, views } from './registry.ts'
 
 export { called } from './read.ts'
 

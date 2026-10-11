@@ -21,11 +21,13 @@ sidebar and history stack.
 | `Inspect.Note`                                  | a note under a heading, selected through the registry            |
 | `Tile`, `Inline`                                | vocabulary entities in any screen that asks for them             |
 
-The `/views` facet contributes `all`. Hosts adapt `View.Render` to their query
-and edit interfaces; `asks` declares which answers the renderer needs.
+The `/views` facet contributes `inspectViews()`, which loads `all` when a host
+asks for inspector views. Hosts adapt `View.Render` to their query and edit
+interfaces; `asks` declares which answers the renderer needs.
 
 ```ts
-import { all } from '@yaks/inspect/views'
+import { inspectViews } from '@yaks/inspect/views'
+let all = await inspectViews()
 import { equal } from '@yaks/testing'
 equal(all.some((v) => v.view === 'Inspect.Query'), true)
 equal(all.some((v) => v.view === 'Inspect.Map'), true)
@@ -38,11 +40,11 @@ and refusal state use the `/front` vocabulary.
 
 ## Exports
 
-| export    | provides                                                         |
-| --------- | ---------------------------------------------------------------- |
-| `.`       | host/view contracts, value helpers, notes and a registry adapter |
-| `./views` | registrations and schema-page registrations                      |
-| `./front` | page-only state vocabulary                                       |
+| export    | provides                                                        |
+| --------- | --------------------------------------------------------------- |
+| `.`       | host/view contracts, helpers, notes and inspector registrations |
+| `./views` | `inspectViews()` loads query-backed registrations               |
+| `./front` | page-only state vocabulary                                      |
 
 The `inspector(registry, host)` adapter mounts registrations supplied by a host.
 Browse uses its own shared registry instead; it never creates a second registry

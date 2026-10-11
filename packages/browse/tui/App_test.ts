@@ -20,7 +20,7 @@ import { bindHistory } from '../history.ts'
 import { cache, owner } from '../live.ts'
 import { start } from '../terminal-route.ts'
 import { views as docViews } from '@yaks/doc/views'
-import { inspectViews, views } from '@yaks/inspect/views'
+import { inspectViews } from '@yaks/inspect/views'
 import { contributedViews, InspectPage } from '../components/inspect.tsx'
 
 let eid = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
@@ -70,7 +70,7 @@ test('the shared Browse App paints its sidebar and home; its search field goes t
 })
 
 // Mount the configured host once, as the app does before reading a query.
-extend(await contributedViews([{ views, inspectViews }]))
+extend(await contributedViews([{ inspectViews }]))
 let inspectRoot = new TElement('root')
 let inspectTarget = inspectRoot as unknown as Parameters<typeof render>[1]
 await act(() =>
