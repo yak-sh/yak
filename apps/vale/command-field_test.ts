@@ -26,8 +26,9 @@ let storage = (): Stash => {
     removeItem: (key) => void held.delete(key),
   }
 }
+let vocab = loadVocab([draftDoc, uxDoc])
 let remote = () => ({
-  client: client(loadVocab([draftDoc, uxDoc]), [drafts()], { vault: false }),
+  client: client(vocab, [drafts()], { vault: false }),
 })
 let empty = (_text: string, caret: number): Result => ({
   from: caret,
@@ -376,5 +377,97 @@ test('command draft emergency stashes do not cross app installations', async () 
     second.close()
     a.client.close()
     b.client.close()
+  }
+})
+
+test('migration keeps hosted recovery and independent legacy source text', async () => {
+  let net = remote(), by = mint(), stash = storage()
+  net.client.mutate([{
+    entity: { eid: draftEid(by, 'chat') },
+    draft: { by, place: 'chat', text: 'hosted' },
+    typed: { over: '' },
+  }])
+  stash.setItem(
+    `vale:commands:vale:${by}:draft:chat`,
+    JSON.stringify({ text: 'hosted local', over: 'hosted', rev: 1 }),
+  )
+  let host = commandField(net, () => by, empty, {
+    vault: vaultStash([saved(by, 'legacy')]),
+    stash,
+    pace: 0,
+  })
+  try {
+    await host.ready
+    equal(host.drafts.text('chat'), 'legacyhosted local')
+    await tick()
+    equal(
+      comp(net.client.ent(draftEid(by, 'chat')), 'draft').text,
+      'legacyhosted local',
+    )
+  } finally {
+    host.close()
+    net.client.close()
+  }
+})
+
+test('legacy emergency changes use their imported vault ancestor and preserve hosted text', async () => {
+  let net = remote(), by = mint(), stash = storage()
+  net.client.mutate([{
+    entity: { eid: draftEid(by, 'chat') },
+    draft: { by, place: 'chat', text: 'hosted' },
+    typed: { over: '' },
+  }])
+  stash.setItem(
+    `vale:commands:${by}:draft:chat`,
+    JSON.stringify({ text: 'new source', over: 'old source', rev: 1 }),
+  )
+  let host = commandField(net, () => by, empty, {
+    vault: vaultStash([saved(by, 'old source tail')]),
+    stash,
+    pace: 0,
+  })
+  try {
+    await host.ready
+    equal(host.drafts.text('chat'), 'new source tailhosted')
+    await tick()
+    equal(
+      comp(net.client.ent(draftEid(by, 'chat')), 'draft').text,
+      'new source tailhosted',
+    )
+    equal(stash.length, 0)
+  } finally {
+    host.close()
+    net.client.close()
+  }
+})
+
+test('a legacy emergency copy without its vault source cannot cancel hosted text', async () => {
+  let net = remote(), by = mint(), stash = storage()
+  net.client.mutate([{
+    entity: { eid: draftEid(by, 'chat') },
+    draft: { by, place: 'chat', text: 'hosted' },
+    typed: { over: '' },
+  }])
+  stash.setItem(
+    `vale:commands:${by}:draft:chat`,
+    JSON.stringify({ text: 'private typed', over: 'hosted', rev: 1 }),
+  )
+  let host = commandField(net, () => by, empty, {
+    vault: false,
+    stash,
+    pace: 0,
+  })
+  try {
+    await host.ready
+    equal(host.drafts.text('chat'), 'private typedhosted')
+    await tick()
+    equal(
+      comp(net.client.ent(draftEid(by, 'chat')), 'draft').text,
+      'private typedhosted',
+    )
+    equal(stash.length, 0)
+  } finally {
+    host.close()
+    net.client.close()
   }
 })

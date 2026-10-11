@@ -196,10 +196,10 @@ export let commandField = (
             draft?.by != account || typeof draft.place != 'string' ||
             !draft.text
           ) continue
-          let kept = stash.getItem(`draft:${draft.place}`)
-          let over = kept ? String(JSON.parse(kept).over ?? '') : ''
           represented.set(row.eid, row)
-          d.restore(draft.place, String(draft.text), over)
+          // This source was held by the old isolated vault. A hosted stash's
+          // base says nothing about it, so import it as independent typing.
+          d.restore(draft.place, String(draft.text))
         }
         for (let i = 0; i < store!.length; i++) {
           let key = store!.key(i)
@@ -208,8 +208,13 @@ export let commandField = (
           try {
             let kept = JSON.parse(value)
             let place = key.slice(oldPrefix.length + 'draft:'.length)
-            emergency.set(draftEid(account, place), { key, value })
-            d.restore(place, String(kept.text ?? ''), String(kept.over ?? ''))
+            let eid = draftEid(account, place)
+            emergency.set(eid, { key, value })
+            // The old emergency copy knows the old vault's base, which may
+            // precede its imported snapshot. Without that source, this is
+            // independent input rather than an edit over hosted text.
+            let over = represented.has(eid) ? String(kept.over ?? '') : ''
+            d.restore(place, String(kept.text ?? ''), over)
           } catch (err) {
             report(err)
           }
