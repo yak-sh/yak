@@ -7,8 +7,11 @@
  * started. */
 export type Options = Record<string, unknown>
 
-/** A plugin a config names: a bare specifier, or one with options. */
-export type Plug = string | { use: string; with?: Options }
+/** A plugin a config names: a bare specifier, or one with options and chosen words. */
+export type Plug = string | { use: string; with?: Options; words?: string[] }
+
+/** A resolved plugin, its options and optional vocabulary selection. */
+export type Configured = [string, Options, string[]?]
 
 /** A config file: where the graph lives, and what reads and writes it. */
 export type Config = {
@@ -23,8 +26,9 @@ export type Config = {
   /** Report to this durable spool without opening the tracker graph. */
   tracker?: { spool: string; commit?: string }
   /** the plugin packages, by import specifier. A relative specifier is
-   * resolved against the config file itself; `{use, with}` names one with
-   * options. */
+   * resolved against the config file itself; `{use, with, words}` names one
+   * with options and an optional list of its vocabulary definitions. Omitted
+   * `words` takes its whole vocabulary; `[]` takes none of its definitions. */
   plugins?: Plug[]
   /** what `yak serve` listens on (default @yaks/api's `PORT`) */
   port?: number
@@ -74,3 +78,6 @@ export let used = (plug: Plug): string =>
 /** The options passed to its factories. */
 export let given = (plug: Plug): Options =>
   typeof plug == 'string' ? {} : plug.with ?? {}
+/** The definitions selected from its vocabulary, or all when omitted. */
+export let chosen = (plug: Plug): string[] | undefined =>
+  typeof plug == 'string' ? undefined : plug.words

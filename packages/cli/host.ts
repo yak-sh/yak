@@ -85,6 +85,7 @@ import {
   sqliteBlobs,
 } from '@yaks/blob'
 import { type Config, dbOf, given, type Options, used } from './config.ts'
+import { chosen, type Configured } from '@yaks/host/config'
 import { facet } from './words.ts'
 import { assembly, type Facets, type Load, type MeaningHit } from '@yaks/host'
 export { every } from '@yaks/host/roles'
@@ -288,10 +289,11 @@ export let writer = (vocab: Vocab): Actor | null =>
 
 // Each plugin a config names, with its options, a secret among them read when
 // accessed.
-let named = (config: Config, vault?: Local): [string, Options][] =>
+let named = (config: Config, vault?: Local): Configured[] =>
   (config.plugins ?? []).map((plug) => [
     used(plug),
     (vault ? revealing(given(plug), vault) : given(plug)) as Options,
+    chosen(plug),
   ])
 
 /**

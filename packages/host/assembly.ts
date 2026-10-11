@@ -11,16 +11,18 @@ import { loadTools, type Search, tier } from '@yaks/graph/tools'
 import { type Reply, type Runner, runner } from '@yaks/tools'
 import { toolsIn } from '@yaks/vocab/tools'
 import { effectsIn } from '@yaks/vocab'
+import type { VocabDoc } from '@yaks/vocab'
 import type { Effects, Handlers } from '@yaks/effects'
 import type { Extension } from '@yaks/sql'
 import { gather } from '@yaks/ui/contributions'
 import type { Authenticate, Filter, Handler, Route } from '@yaks/api'
 import type { Host, Role } from './mod.ts'
-import { type Config, given, type Options, used } from './config.ts'
-import type { Duty, FacetName, GraphFacet, Load, MeaningHit } from './facets.ts'
+import { chosen, type Config, type Configured, given, used } from './config.ts'
+import type { Duty, FacetName, Load, MeaningHit } from './facets.ts'
 import { type Composition, compositionAnatomy } from './anatomy.ts'
 import { common, ROLES } from './roles.ts'
 import { type Taken, taking, type Words, wordsOf } from './words.ts'
+import { selected } from './documents.ts'
 
 /** The parts built from facets, rather than lent by a concrete host. */
 type Built =
@@ -74,7 +76,9 @@ export type Assembly = {
 }
 export type AssemblyOpts = {
   /** Resolved plugin options, when the concrete host has a vault. */
-  plugins?: [string, Options][]
+  plugins?: Configured[]
+  /** The graph's own vocabulary. Its component declarations shadow plugins. */
+  docs?: VocabDoc[]
   observed?: Composition
   part?: (name: string) => void
 }
@@ -83,7 +87,7 @@ export type AssemblyOpts = {
 // fallback: a request no plugin claimed is this machine's own writing, not
 // nobody's.
 let doorman = (
-  graphs: [GraphFacet, Options, string][],
+  graphs: Taken<'graph'>,
   host: Host,
   self: Actor | null,
 ): Authenticate => {
@@ -116,7 +120,9 @@ export let assembly = async (
     throw new Error('a host opens a graph — its roles include graph')
   }
   let plugins = opts.plugins ??
-    (config.plugins ?? []).map((p): [string, Options] => [used(p), given(p)])
+    (config.plugins ?? []).map((
+      p,
+    ): Configured => [used(p), given(p), chosen(p)])
   let observed = opts.observed ??
     compositionAnatomy(plugins.map(([p]) => p), roles, ROLES)
   let part = opts.part
@@ -165,8 +171,13 @@ export let assembly = async (
     ),
   ])
   part?.('vocabulary')
-  let words = wordsOf(vocabs)
+  let words = wordsOf(vocabs, opts.docs)
   let { docs, vocab, derived } = words
+  let contributions = vocabs.map(([v, options, plugin, names]) => ({
+    docs: selected(v.docs ?? [], names, plugin),
+    options,
+    plugin,
+  }))
   part?.('anatomy')
   observed.declarations(docs, vocab)
 
@@ -262,10 +273,9 @@ export let assembly = async (
       part?.('effects')
       let fx = watching = binding.effects(
         host,
-        vocabs.flatMap(([v, options]) =>
-          effectsIn(v.docs ?? []).filter((e) =>
-            e.option && options[e.option] !== true
-          ).map((e) => e.name)
+        contributions.flatMap(({ docs, options }) =>
+          effectsIn(docs).filter((e) => e.option && options[e.option] !== true)
+            .map((e) => e.name)
         ),
       )
       part?.('plugins')
@@ -302,17 +312,32 @@ export let assembly = async (
       let effecting = roles.includes('effects')
       observed.effects(new Map(), effecting)
       if (effecting) {
-        let declared = new Set(
+        let declared = new Set(effectsIn(docs).map((e) => e.name))
+        let original = new Set(
           vocabs.flatMap(([v]) => effectsIn(v.docs ?? []).map((e) => e.name)),
         )
         let code: Handlers = {}
         let by = new Map<string, string>()
-        for (let [mod, options, plugin] of watched) {
+        for (let [mod, options, plugin, names] of watched) {
+          let vocabulary = vocabs.find(([, o, p, n]) =>
+            p == plugin && o === options && n === names
+          )
+          let omitted = new Set(
+            names === undefined ? [] : effectsIn(vocabulary?.[0].docs ?? [])
+              .filter((e) => !names.includes(e.name)).map((e) => e.name),
+          )
           for (
             let [name, run] of Object.entries(
               mod.effects?.(host, options) ?? {},
             )
           ) {
+            // A selected-out declaration is intentionally absent, even where
+            // another plugin lends its handler. An unknown name is still a typo.
+            if (
+              omitted.has(name) || !declared.has(name) && original.has(name)
+            ) {
+              continue
+            }
             if (!declared.has(name)) throw undeclared(plugin, name)
             if (by.has(name)) throw twice(name, [by.get(name)!, plugin])
             by.set(name, plugin)
@@ -346,11 +371,11 @@ export let assembly = async (
       observed.tier(generic)
       let tools = made = [
         ...generic,
-        ...vocabs.flatMap(([v, options, plugin]) =>
-          loadTools(v.docs ?? [], async () => {
+        ...contributions.flatMap(({ docs, options, plugin }) =>
+          loadTools(docs, async () => {
             let code = await observedLoad(plugin, 'tools')
             let runs = code?.runs?.(host, options) ?? {}
-            let declarations = toolsIn(v.docs ?? [])
+            let declarations = toolsIn(docs)
             let names = declarations.map((d) => d.name ?? toolName(d))
             let joined = declarations.filter((d) =>
               typeof (runs[d.name ?? toolName(d)] ??

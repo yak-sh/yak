@@ -27,7 +27,7 @@ equal(stopped(), true)
 | `@yaks/host/assembly`                         | `assembly`, `Assembly`, `AssemblyOpts`, `Binding`, `Meaning`                                                           |
 | `@yaks/host/roles`                            | Role and facet selection data without loading the assembly runtime                                                     |
 | `@yaks/host/words`                            | Vocabulary assembly, `wordsOf`, `taking`, `Words`, `Declared`, `Taken`                                                 |
-| `@yaks/host/config`                           | Configuration types, `used`, `given`                                                                                   |
+| `@yaks/host/config`                           | Configuration types, `used`, `given`, `chosen`                                                                         |
 | `@yaks/host/documents`, `@yaks/host/keywords` | Shared intrinsic declarations and vocabulary keywords                                                                  |
 | `@yaks/host/anatomy`                          | Composition evidence, projected when read                                                                              |
 
@@ -40,10 +40,25 @@ plugin's own role loads its service. Tool implementations load on their first
 call. `Load` supplies modules or `null` for a subpath a plugin does not export;
 an import failure is an error.
 
-`assembly(config, roles, load)` loads those facets and builds their vocabulary.
-Its `words` lets the concrete host prepare storage before `bind(binding)` builds
-the graph, effect bindings, tools, runner and routes. The returned services are
-handed to the host's scheduler. No assembly starts a service or owns shutdown.
+`assembly(config, roles, load, opts)` loads those facets and builds their
+vocabulary. Its `words` lets the concrete host prepare storage before
+`bind(binding)` builds the graph, effect bindings, tools, runner and routes. The
+returned services are handed to the host's scheduler. No assembly starts a
+service or owns shutdown.
+
+A config entry's `words` selects names from its plugin's vocabulary `$defs`,
+including components, tools, rules and effects:
+`{ use: '@yaks/task', words:
+['task', 'cancelled'] }`. Omitted `words` takes
+every definition; `[]` takes none. An unknown name is an error. Selection
+retains the plugin's keywords and computed-property factories. The host's
+intrinsic machine, git and invocation definitions remain available where no
+plugin supplies them.
+
+`opts.docs` supplies the graph's own vocabulary documents. Its component
+declarations replace plugin declarations and extensions of the same name;
+extensions in `opts.docs` still add to plugin components. Duplicate plugin
+declarations are errors even when the graph shadows that name.
 
 ```ts
 import { assembly, type Load } from '@yaks/host'
@@ -54,7 +69,13 @@ import { ramVault } from '@yaks/secrets'
 import { equal } from '@yaks/testing'
 
 let load: Load = () => Promise.resolve(null)
-let plan = await assembly({ plugins: [] }, ['graph'], load)
+let plan = await assembly({ plugins: [] }, ['graph'], load, {
+  docs: [{
+    $defs: {
+      book: { component: true, properties: { title: { type: 'string' } } },
+    },
+  }],
+})
 let blobs = memoryBlobs()
 let { host } = plan.bind({
   host: {
@@ -76,7 +97,8 @@ let { host } = plan.bind({
       write: (bundles) => host.graph.apply(bundles),
     }),
 })
-equal(await host.graph.get(['absent']), [])
+await host.graph.apply([{ entity: { eid: 'b' }, book: { title: 'Dune' } }])
+equal((await host.graph.get(['b']))[0].book, { title: 'Dune' })
 ```
 
 `Binding.storage` receives the host and a shared query-extension list. After

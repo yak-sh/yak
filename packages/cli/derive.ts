@@ -8,14 +8,16 @@ import { toolsIn } from '@yaks/vocab/tools'
 import { loadVocab } from '@yaks/vocab/runtime'
 import { declared, offered, toolName } from '@yaks/graph/vocab'
 import { fields } from '@yaks/fts/fields'
-import { docsOf } from '@yaks/host/documents'
+import { docsOf, selected } from '@yaks/host/documents'
+import { chosen } from '@yaks/host/config'
 import { understood } from '@yaks/host/keywords'
 
 export let derive = async (
   config: Config,
   includeControls = false,
 ): Promise<Declarations> => {
-  let plugins = (config.plugins ?? []).map(used)
+  let inputs = config.plugins ?? []
+  let plugins = inputs.map(used)
   let requests = plugins.flatMap((
     p,
   ) => [[p, 'vocab'] as const, ...includeControls ? [[p, 'cli'] as const] : []])
@@ -34,9 +36,11 @@ export let derive = async (
         : null,
     }
   })
+  let documents = (value: VocabFacet | null, i: number) =>
+    selected(value?.docs ?? [], chosen(inputs[i]), plugins[i])
   let docs = docsOf(
-    vocabs.flatMap(({ plugin, value }) =>
-      (value?.docs ?? []).map((d) => ({
+    vocabs.flatMap(({ plugin, value }, i) =>
+      documents(value, i).map((d) => ({
         ...d,
         package: plugin,
         description: value?.description,
@@ -83,8 +87,8 @@ export let derive = async (
       ...toolsIn(docs).map((d) => ({ ...d, name: d.name ?? toolName(d) })),
     ].filter(offered('cli')),
     owners: Object.fromEntries(
-      vocabs.flatMap(({ plugin, value }) =>
-        toolsIn(value?.docs ?? []).map((d) => [d.name ?? toolName(d), plugin])
+      vocabs.flatMap(({ plugin, value }, i) =>
+        toolsIn(documents(value, i)).map((d) => [d.name ?? toolName(d), plugin])
       ),
     ),
     pooled: !!vocab.comp('effect'),

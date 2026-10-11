@@ -4,7 +4,8 @@ import { effects } from '@yaks/effects'
 import { type Bundle, type Comp, graph } from '@yaks/graph'
 import { ram } from '@yaks/ram'
 import { ramVault } from '@yaks/secrets'
-import { equal, test } from '@yaks/testing'
+import { equal, test, throws } from '@yaks/testing'
+import type { VocabDoc } from '@yaks/vocab'
 import { toolEid } from '@yaks/tools'
 import { assembly, type Binding } from './assembly.ts'
 import type { Facets, Load } from './facets.ts'
@@ -120,4 +121,222 @@ test('portable assembly lets its host surround contributed graph hooks', async (
   })
   await host.graph.apply([{ entity: { eid: 'b' }, book: { title: 'Dune' } }])
   equal((await host.graph.get(['b']))[0].book, { title: 'DUNE!' })
+})
+
+let selectedConfig = { plugins: [{ use: 'library', words: ['book'] }] }
+let selectedPlan = await assembly(selectedConfig, ['graph'], loading([]))
+let selectedHost = selectedPlan.bind(binding()).host
+test('chosen words admit writes and omit unselected tools from declarations and bindings', async () => {
+  let host = selectedHost
+  await host.graph.apply([{ entity: { eid: 'b' }, book: { title: 'Dune' } }])
+  equal((await host.graph.get(['b']))[0].book, { title: 'Dune!' })
+  equal(selectedPlan.words.tools().some((t) => t.name == 'book_list'), false)
+  equal(host.tools.some((t) => t.name == 'book_list'), false)
+  // The same imported facet may be used again with a different selection.
+  equal(
+    (await assembly(config, ['graph'], loading([]))).words.tools().some((t) =>
+      t.name == 'book_list'
+    ),
+    true,
+  )
+})
+
+let own: VocabDoc[] = [{
+  package: 'catalogue',
+  $defs: {
+    book: {
+      component: true,
+      properties: { author: { type: 'string' } },
+    },
+    shelf: { component: true, properties: { number: { type: 'integer' } } },
+  },
+}]
+let plain: Load = (_, name) =>
+  Promise.resolve(name == 'vocab' ? facets.vocab! : null)
+let owned = await assembly(config, ['graph'], plain, { docs: own })
+let ownedHost = owned.bind(binding()).host
+let otherHost = (await assembly(config, ['graph'], plain)).bind(binding()).host
+test('graph-owned words replace plugin components and admit their own properties', async () => {
+  let host = ownedHost
+  await host.graph.apply([{
+    entity: { eid: 'b' },
+    book: { author: 'Herbert' },
+    shelf: { number: 2 },
+  }])
+  equal((await host.graph.get(['b']))[0].book, { author: 'Herbert' })
+  await throws(() =>
+    host.graph.apply([{
+      entity: { eid: 'b' },
+      book: { title: 'Dune' },
+    }]), 'title')
+  // Sharing facets must not leak a graph's own definition into another graph.
+  let other = otherHost
+  await other.graph.apply([{ entity: { eid: 'b' }, book: { title: 'Dune' } }])
+  equal((await other.graph.get(['b']))[0].book, { title: 'Dune' })
+})
+
+test('a graph-owned shadow cannot conceal duplicate plugin declarations', async () => {
+  await throws(() =>
+    assembly({ plugins: ['one', 'two'] }, ['graph'], plain, {
+      docs: own,
+    }), "component 'book' is declared twice")
+})
+
+test('a chosen word must be declared by that plugin', async () => {
+  await throws(() =>
+    assembly(
+      {
+        plugins: [{ use: 'library', words: ['bok'] }],
+      },
+      ['graph'],
+      plain,
+    ), "library declares no word 'bok'")
+})
+
+let seen: string[] = []
+let watched: Partial<Facets> = {
+  vocab: {
+    docs: [{
+      $defs: {
+        book: facets.vocab!.docs![0].$defs!.book,
+        book_seen: { effect: true, created: ['book'] },
+        book_sent: { effect: true, created: ['book'] },
+      },
+    }],
+  },
+  effects: {
+    effects: () => ({
+      book_seen: () => void seen.push('seen'),
+      book_sent: () => void seen.push('sent'),
+    }),
+  },
+}
+let watch: Load = (_, name) => Promise.resolve(watched[name] ?? null)
+let watchPlan = await assembly(
+  {
+    plugins: [{ use: 'library', words: ['book', 'book_seen'] }],
+  },
+  ['graph', 'effects'],
+  watch,
+)
+let watchingHost = watchPlan.bind(binding()).host
+test('effect word selection runs only the selected handler after a write', async () => {
+  await watchingHost.graph.apply([{
+    entity: { eid: 'b' },
+    book: { title: 'Dune' },
+  }])
+  equal(seen, ['seen'])
+  seen.length = 0
+})
+
+let bad: Load = (_, name) =>
+  Promise.resolve(
+    name == 'effects'
+      ? { effects: () => ({ book_sene: () => {} }) }
+      : watched[name] ?? null,
+  )
+let badPlan = await assembly(
+  {
+    plugins: [{ use: 'library', words: ['book', 'book_seen'] }],
+  },
+  ['graph', 'effects'],
+  bad,
+)
+test('word selection still refuses an undeclared effect handler', async () => {
+  await throws(() => badPlan.bind(binding()), 'library handles book_sene')
+})
+
+let repeatedPlan = await assembly(
+  {
+    plugins: [
+      { use: 'library', words: ['book'] },
+      { use: 'library', words: ['book_list'] },
+    ],
+  },
+  ['graph'],
+  loading([]),
+)
+let repeatedHost = repeatedPlan.bind(binding()).host
+test('separate selections of one package bind each tool once', () => {
+  equal(repeatedHost.tools.filter((t) => t.name == 'book_list').length, 1)
+})
+
+let sender: Partial<Facets> = { effects: watched.effects }
+let omittedPlan = await assembly(
+  {
+    plugins: [{ use: 'library', words: ['book'] }, 'sender'],
+  },
+  ['graph', 'effects'],
+  (plugin, name) =>
+    Promise.resolve((plugin == 'library' ? watched : sender)[name] ?? null),
+)
+let omittedHost = omittedPlan.bind(binding()).host
+test('a handler lent by another plugin is omitted with its declaration', async () => {
+  await omittedHost.graph.apply([{
+    entity: { eid: 'b' },
+    book: { title: 'Dune' },
+  }])
+  equal(seen, [])
+})
+
+let optional: Partial<Facets> = {
+  ...watched,
+  vocab: {
+    docs: [{
+      $defs: {
+        ...watched.vocab!.docs![0].$defs!,
+        book_seen: { effect: true, created: ['book'], option: 'notes' },
+      },
+    }],
+  },
+}
+let repeatedEffects = (await assembly(
+  {
+    plugins: [
+      { use: 'library', words: ['book', 'book_seen'], with: { notes: true } },
+      { use: 'library', words: ['book_sent'] },
+    ],
+  },
+  ['graph', 'effects'],
+  (_, name) => Promise.resolve(optional[name] ?? null),
+))
+  .bind(binding()).host
+test('separate selections retain their own effect options and handlers', async () => {
+  await repeatedEffects.graph.apply([{
+    entity: { eid: 'b' },
+    book: { title: 'Dune' },
+  }])
+  equal(seen, ['seen', 'sent'])
+  seen.length = 0
+})
+
+let extended: Partial<Facets> = {
+  vocab: {
+    docs: [{
+      $defs: {
+        book: {
+          component: true,
+          extends: true,
+          properties: { isbn: { type: 'string' } },
+        },
+      },
+    }],
+  },
+}
+let ownedBase = (await assembly(
+  config,
+  ['graph'],
+  (_, name) => Promise.resolve(extended[name] ?? null),
+  { docs: own },
+)).bind(binding()).host
+test('graph-owned declarations supply a base and replace plugin extensions', async () => {
+  await ownedBase.graph.apply([{
+    entity: { eid: 'b' },
+    book: { author: 'Herbert' },
+  }])
+  await throws(() =>
+    ownedBase.graph.apply([{
+      entity: { eid: 'b' },
+      book: { isbn: '123' },
+    }]), 'isbn')
 })

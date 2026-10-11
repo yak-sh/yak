@@ -14,7 +14,7 @@ import type { Local } from '@yaks/secrets'
 import type { Finding, Reply, Runner } from '@yaks/tools'
 import type { Context } from '@yaks/tracker/report'
 import type { Config } from './config.ts'
-export type { Config, Options, Plug } from './config.ts'
+export type { Config, Configured, Options, Plug } from './config.ts'
 export type Role = string
 export type Feed = (
   each: (applied: Bundle[]) => void | Promise<void>,
