@@ -356,10 +356,11 @@ export let workbench = async (
     await lent.machine.write('/usr/local/bin/yak', LAUNCHER)
     let result = await provider.exec(ref, 'chmod +x /usr/local/bin/yak')
     if (result.exitCode) throw new Error(`yak launcher: ${result.stderr}`)
-    // The container owns the warm-up after this RPC returns. Lending waits
-    // for its start, never for the CLI's download or module cache to fill.
+    // Finish the workspace and module cache before handing the machine back:
+    // an immediate first command must not race a background installation.
     try {
-      await lent.machine.start('yak --help >/dev/null')
+      let warm = await provider.exec(ref, 'yak --help >/dev/null')
+      if (warm.exitCode) throw new Error(`yak warm-up: ${warm.stderr}`)
     } catch (e) {
       caught(e, { request: 'sandbox warm', space: space.slug })
     }

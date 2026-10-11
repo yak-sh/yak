@@ -297,17 +297,30 @@ test('no container bound is a sentence, not a stack trace', async () => {
   assertEquals(seconds(ctx.spend!), 0)
 })
 
-test('a lend warms the CLI without holding commands for its completion', async () => {
-  let box = sandboxes((cmd) =>
-    cmd == 'yak --help >/dev/null' ? { running: true } : { stdout: 'ready' }
-  )
+test('a lend finishes warming the CLI before returning the machine', async () => {
+  let box = sandboxes(() => ({ stdout: 'ready' }))
   let space = { eid: 'warm', slug: 'warm' } as dirPart.Space
-  let env = { SANDBOX: box.SANDBOX }
+  let warmed = false
+  let env = {
+    SANDBOX: {
+      ...box.SANDBOX,
+      get: (id: unknown) => {
+        let raw = box.SANDBOX.get(id)
+        return {
+          ...raw,
+          exec: async (...args: Parameters<typeof raw.exec>) => {
+            let result = await raw.exec(...args)
+            if (args[0] == 'yak --help >/dev/null') warmed = true
+            return result
+          },
+        }
+      },
+    },
+  }
   let spend = spending()
   let lent = await workbench(env, space, ADA, spend)
+  assert(warmed)
   assert(box.files.has('/usr/local/bin/yak'))
-  assertEquals(box.ran.at(-1), 'yak --help >/dev/null')
-  assertEquals(await lent.machine.look('proc-1'), { pid: 100 })
   assertEquals(
     (await lent.provider.exec(lent.ref, 'echo ready')).stdout,
     'ready',
@@ -321,26 +334,26 @@ test('a lend warms the CLI without holding commands for its completion', async (
   assertEquals([...box.alive], [])
 })
 
-test('a failed warm-up launch still lends a usable machine', async () => {
-  let box = sandboxes(() => ({ stdout: 'ready' }))
-  let space = { eid: 'warm-failed', slug: 'warm-failed' } as dirPart.Space
-  let env = {
-    SANDBOX: {
-      ...box.SANDBOX,
-      get: (id: unknown) => ({
-        ...box.SANDBOX.get(id),
-        startProcess: () => Promise.reject(new Error('cannot start warm-up')),
-      }),
-    },
-  }
-  let lent = await workbench(env, space, ADA, spending())
-  assertEquals(
-    (await lent.provider.exec(lent.ref, 'echo ready')).stdout,
-    'ready',
-  )
-  await lent.provider.release(lent.ref)
-  assertEquals([...box.alive], [])
-})
+for (let failure of ['rpc', 'exit']) {
+  test(`a warm-up ${failure} failure still lends a usable machine`, async () => {
+    let box = sandboxes((cmd) => {
+      if (cmd == 'yak --help >/dev/null') {
+        if (failure == 'rpc') throw new Error('cannot warm the CLI')
+        return { exitCode: 1, stderr: 'download failed' }
+      }
+      return { stdout: 'ready' }
+    })
+    let space = { eid: 'warm-failed', slug: 'warm-failed' } as dirPart.Space
+    let env = { SANDBOX: box.SANDBOX }
+    let lent = await workbench(env, space, ADA, spending())
+    assertEquals(
+      (await lent.provider.exec(lent.ref, 'echo ready')).stdout,
+      'ready',
+    )
+    await lent.provider.release(lent.ref)
+    assertEquals([...box.alive], [])
+  })
+}
 
 test('the budget refuses in a sentence, and only after it is spent', async () => {
   let box = sandboxes()
