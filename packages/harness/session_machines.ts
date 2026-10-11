@@ -4,7 +4,7 @@
 import { CallError } from '@yaks/tools/errors'
 import { type Bundle, type Comp, derivedEid, type Graph } from '@yaks/graph'
 import type { Machine, MachineFile, MachineRef } from '@yaks/machine'
-import type { ChildLimits } from '@yaks/session'
+import { type ChildLimits, runningAt } from '@yaks/session'
 import { type Snapshot, snapshot } from '@yaks/context'
 import { owed } from '@yaks/persona'
 import { isAbsolute, relative, resolve } from '@std/path/posix'
@@ -320,6 +320,7 @@ export let machineDone = async (
 ): Promise<boolean> => {
   let record = comp(session, 'session')
   if (!record || (session.process && !session.exit)) return false
+  if (await runningAt(g, session.entity.eid)) return false
   if (session.completed || record.ended || record.status == 'stopped') {
     return true
   }

@@ -322,6 +322,42 @@ let shapes: [string, Bundle[], TranscriptStatus][] = [
     entry(5, { result: { call: 'e4' }, content: { body: 'echo' } }),
   ], 'pending'],
   ['a stop', [input(1), entry(2, { stop: {} })], 'stopped'],
+  ['a late reply cannot resume a stopped ask', [
+    request(1),
+    entry(2, { ask: { through: 'e1' }, attempt: {} }),
+    entry(3, { stop: {} }),
+    said(4, 'e2'),
+  ], 'stopped'],
+  ['a late tool result cannot resume a stopped turn', [
+    request(1),
+    entry(2, { ask: { through: 'e1' }, attempt: {} }),
+    entry(3, { call: { to: T, source: 'e2' } }),
+    entry(4, { stop: {} }),
+    entry(5, { result: { call: 'e3' }, content: { body: 'done' } }),
+  ], 'stopped'],
+  ['a stop during preparation survives the admitted ask', [
+    request(1),
+    entry(2, { stop: {} }),
+    entry(3, { ask: { through: 'e1' }, attempt: {} }),
+    said(4, 'e3'),
+  ], 'stopped'],
+  ['a stop survives an ask without an input reference', [
+    request(1),
+    entry(2, { stop: {} }),
+    entry(3, { ask: {}, attempt: {} }),
+    said(4, 'e3'),
+  ], 'stopped'],
+  ['a stop used as an ask boundary still stops the transcript', [
+    request(1),
+    entry(2, { stop: {} }),
+    entry(3, { ask: { through: 'e2' }, attempt: {} }),
+    said(4, 'e3'),
+  ], 'stopped'],
+  ['fresh input resumes a stopped transcript', [
+    request(1),
+    entry(2, { stop: {} }),
+    input(3),
+  ], 'pending'],
   ['an exception', [input(1), entry(2, { exception: {} })], 'failed'],
   ['an abandoned call can recover after an exception', [
     input(1),

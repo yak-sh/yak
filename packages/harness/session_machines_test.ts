@@ -11,10 +11,26 @@ import { gitDoc } from '@yaks/git/vocab'
 import type { Machine, MachineProvider, MachineRef } from '@yaks/machine'
 import { homeAt, machines, sessionCwd } from './session_machines.ts'
 import { machineTools } from './machine.ts'
+import { drop, effectDoc, take } from '@yaks/effects'
+import { RUN } from '@yaks/session'
 
 let vocab = loadVocab([...docs, machineDoc, ...sessionDocs, gitDoc])
-let fixture = async () => {
-  let g = graph({ storage: ram(vocab), vocab })
+let leasing = loadVocab([
+  ...docs,
+  machineDoc,
+  ...sessionDocs,
+  gitDoc,
+  effectDoc,
+])
+let initial = ram(vocab)
+await graph({ storage: initial, vocab }).apply([
+  { entity: { eid: 'parent' }, session: {} },
+])
+let seeded = initial.read('*')
+let fixture = (v = vocab) => {
+  let storage = ram(v)
+  storage.tx((tx) => tx.patch(seeded))
+  let g = graph({ storage, vocab: v })
   let requests: unknown[] = []
   let wakes: MachineRef[] = []
   let releases: MachineRef[] = []
@@ -51,7 +67,6 @@ let fixture = async () => {
       Promise.resolve(name == 'fake' ? provider : undefined),
     defaultProvider: 'fake',
   }
-  await g.apply([{ entity: { eid: 'parent' }, session: {} }])
   return {
     g,
     m,
@@ -191,7 +206,7 @@ test('task children request a new machine from the parent graph commit lazily', 
 })
 
 test('releasing a shared machine waits for borrowers and is repeatable', async () => {
-  let f = await fixture()
+  let f = await fixture(leasing)
   await f.binding.machine('parent')
   let parent = (await f.g.get(['parent']))[0]
   await f.g.apply([{
@@ -202,6 +217,11 @@ test('releasing a shared machine waits for borrowers and is repeatable', async (
   await f.binding.release('parent')
   equal(f.releases, [])
   await f.g.apply([{ entity: { eid: 'borrower' }, session: { ended: true } }])
+  // A stopped borrower can still be finishing a step on another worker.
+  await take(f.g, `${RUN}/borrower`, { holder: 'borrower' })
+  await f.binding.release('parent')
+  equal(f.releases, [])
+  await drop(f.g, `${RUN}/borrower`, { holder: 'borrower' })
   await f.binding.release('parent')
   await f.binding.release('parent')
   equal(f.releases, [{ id: derivedEid('session-machine|parent') }])

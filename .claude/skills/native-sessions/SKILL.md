@@ -180,9 +180,11 @@ bodies or name their files. What it can't find anywhere is two things:
   until yak graph query '(.entity.eid=T-<n> .task.status=done,cancelled) | (.entity.eid=S-<n> .session.status=failed,stopped) .count' | grep -q '"count":1'; do sleep 60; done
   ```
 
-- **Stopping**: there is no CLI stop for a native session yet. `yak session
-  stop` stops managed spawns and refuses a native one as "not a managed
-  session" (T-42246).
+- **Stopping**: `yak session stop S-<n>` stops native sessions as well as
+  managed spawns. A native session reads `stopped` and admits no more model
+  turns or tool calls; a step already in flight can finish recording its
+  answer without reopening the transcript. Its machine is released after
+  that step finishes. New input (`yak session send`) resumes it.
 - **Restarting**: `yak restart` is the agent's restart door. It waits for a new
   independent `yak-work@` worker and a new `yak-web@` web to be ready, then
   queues the old units' stops; it doesn't sit in a shell waiting for shutdown.

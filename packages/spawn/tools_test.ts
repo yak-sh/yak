@@ -20,7 +20,7 @@ import { docDoc } from '@yaks/doc'
 import { taskDoc } from '@yaks/task'
 import { modelDoc } from '@yaks/model'
 import { personaDoc } from '@yaks/persona'
-import { sessionDoc, sessions } from '@yaks/session'
+import { sessionDoc, sessions, statusOf } from '@yaks/session'
 import { toolsDoc } from '@yaks/tools/vocab'
 import {
   answerOf,
@@ -434,12 +434,29 @@ test('session stop ends a managed run', async () => {
   }
 })
 
-test('session stop refuses a session without a managed process', async () => {
-  let { g } = host()
-  await g.apply([{ entity: { eid: 's' }, session: {} }])
-  await assertRejects(
-    () => through(g, 'session_stop', { session: 's' }),
-    Error,
-    'not a managed session',
-  )
+// The stop door needs no process behind a native transcript.
+let nativeVocab = loadVocab([spineDoc, sessionDoc, toolsDoc, modelDoc])
+let native = graph({
+  storage: ram(nativeVocab),
+  vocab: nativeVocab,
+  plugins: [sessions()],
+})
+await native.apply([
+  { entity: { eid: 's' }, session: {} },
+  {
+    entity: { eid: 'input' },
+    entry: { session: 's' },
+    using: { provider: P, model: M },
+    content: { body: 'go' },
+  },
+  { entity: { eid: P }, provider: { name: 'fake', transport: 'http' } },
+  { entity: { eid: M }, model: { name: 'fake-1' } },
+])
+test('session stop ends a native transcript', async () => {
+  await tools.session_stop!(...asked(native, { session: 's' }))
+  let entries = await native.read('.entry.session=s .stop')
+  assertEquals(statusOf(entries), 'stopped')
+  for (let entry of entries.filter((b) => b.stop)) {
+    await native.apply([{ entity: entry.entity, stop: null }])
+  }
 })

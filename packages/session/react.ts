@@ -963,6 +963,7 @@ export let react = async (
     // Leave it for inspection rather than replaying it.
     if (older.length) return inspect(older[0])
     for (const pending of open) {
+      if (await currentStatus(g, session) == 'stopped') break
       try {
         added.push(...await run.run(pending.entity.eid))
       } catch (error) {
@@ -1270,6 +1271,7 @@ export let react = async (
   }
   // Graceful stop closes admission, not a request already admitted below.
   if (deps.stopping?.aborted) return nothing
+  if (await currentStatus(g, session) == 'stopped') return current()
   let pending = entries.filter((b) => b.provisional && b.ask).map((b) => ({
     entity: b.entity,
     provisional: null,

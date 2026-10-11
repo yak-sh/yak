@@ -109,9 +109,9 @@ process before `--wait` can monitor it. `wait` polls the graph. A session with a
 `process` ends when that process exits, even if its transcript already has a
 `stop`; a session without a process ends when its transcript reaches `stopped`
 or `failed`. It reports the brief and exit code, and reaching its timeout leaves
-the run active. `stop` writes the stop request on the session entity; the
-process receives SIGTERM, then SIGKILL if it stays up. `peek` renders recent
-entries from the graph.
+the run active. `stop` writes a stop entry for a native transcript, or a stop
+request on a managed session entity; the process receives SIGTERM, then SIGKILL
+if it stays up. `peek` renders recent entries from the graph.
 
 ## Configuration
 

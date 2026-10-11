@@ -134,7 +134,10 @@ export let statusOf = (entries: Bundle[], ended = false): TranscriptStatus => {
   let newest = all.at(-1)
   if (!newest) return 'empty'
   let kind = kindOf(newest)
-  if (kind == 'stop') return 'stopped'
+  // Finishing a step already admitted before a stop does not resume work.
+  // Only fresh input can reopen the transcript.
+  let control = all.findLast((b) => ['input', 'stop'].includes(kindOf(b) ?? ''))
+  if (kindOf(control ?? newest) == 'stop') return 'stopped'
   let asked = all.findLast((b) => kindOf(b) == 'ask')
   let turn = all.filter((b) => !asked || seqOf(b) >= seqOf(asked))
   let calls = callsIn(turn)

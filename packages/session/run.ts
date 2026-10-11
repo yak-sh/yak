@@ -73,6 +73,8 @@ export type Runner = Deps & ChildLimits & {
   answers?: (using: Comp | undefined) => boolean | Promise<boolean>
   /** each step, as it lands */
   each?: (step: Step) => void
+  /** reconcile borrowed resources after this pass releases its lease */
+  idle?: (session: Eid) => Promise<void>
   /** how long a transcript's lease stands between renewals (ms) */
   hold?: number
   /** whether a holder of a transcript's lease is known to have ended without
@@ -439,6 +441,7 @@ export let settle = (g: Graph, session: Eid, r: Runner): Promise<void> => {
           }], { trusted: true })
         }
       }
+      await r.idle?.(session)
     }
   })()
   return p.done
@@ -447,6 +450,13 @@ export let settle = (g: Graph, session: Eid, r: Runner): Promise<void> => {
 /** Whether a transcript is being run by this process right now. */
 export let runningHere = (g: Graph, session: Eid): boolean =>
   going(g).has(session)
+
+/** Whether a native pass still owns work, here or in another process. */
+export let runningAt = async (g: Graph, session: Eid): Promise<boolean> => {
+  if (runningHere(g, session)) return true
+  let held = await lease(g, `${RUN}/${session}`)
+  return !!held?.holder && Date.parse(String(held.until)) > Date.now()
+}
 
 /** The pass this process is running over a transcript, to wait on, if any. */
 export let passing = (g: Graph, session: Eid): Promise<void> | undefined =>

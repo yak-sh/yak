@@ -42,6 +42,7 @@ import {
   sessionViews,
   statusOf,
   textOf,
+  usingBefore,
 } from '@yaks/session'
 import { render } from '@yaks/text'
 import { CallError } from '@yaks/tools'
@@ -270,16 +271,18 @@ export let runs = (host: Host, options: Options = {}): Runs => {
       let row = await sessionAt(call, graph)
       let name = human(graph.vocab)(row)
       if (row.stop) return [said(call, `${name} already asked to stop`)]
-      if (!row[PROCESS]) {
+      let managed = !!row[PROCESS]
+      if (!managed) {
         let entries = await entriesOf(graph, row.entity.eid)
-        let using = entries.find((b) => b.using)
-        let provider = await one(graph, str(comp(using, 'using')?.provider))
-        if (comp(provider, 'provider')?.transport != 'process') {
-          throw new CallError('session', `not a managed session: ${name}`)
+        if (statusOf(entries) == 'stopped') {
+          return [said(call, `${name} already stopped`)]
         }
+        let provider = await one(graph, str(usingBefore(entries)?.provider))
+        managed = comp(provider, 'provider')?.transport == 'process'
       }
       await graph.apply(signed([{
-        entity: row.entity,
+        entity: managed ? row.entity : { eid: uuid() },
+        ...managed ? {} : { entry: { session: row.entity.eid } },
         stop: {},
       }], who(call)))
       return [said(call, `${name} asked to stop`)]

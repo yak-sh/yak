@@ -36,8 +36,18 @@ export let effects = (
     once: true,
   })
   let binding = machines(host.graph, host.machines)
+  let release = async (id: string) => {
+    let [session] = await host.graph.get([id])
+    if (session && await machineDone(host.graph, session)) {
+      await binding.release(id)
+    }
+  }
   return {
-    ...running(host.graph, { ...lend(lent), stopping: host.stopping }),
+    ...running(host.graph, {
+      ...lend(lent),
+      stopping: host.stopping,
+      idle: release,
+    }),
     session_machine_release: async (event: import('@yaks/graph').Bundle) => {
       let [subject] = await host.graph.get([event.entity.eid])
       let candidates = subject?.session ? [subject] : []
@@ -50,9 +60,7 @@ export let effects = (
         candidates.push(...await host.graph.get([String(claim.session)]))
       }
       for (let session of candidates) {
-        if (await machineDone(host.graph, session)) {
-          await binding.release(session.entity.eid)
-        }
+        await release(session.entity.eid)
       }
     },
   }

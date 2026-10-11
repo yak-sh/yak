@@ -127,7 +127,7 @@ export let sessionStatus = {
     // ask and its unacknowledged suffix, not a predicate per question over the transcript.
     // Every fact in the decision is reduced from those rows in one pass.
     let typed = declared('archetype')
-    let joins: Join[] = typed
+    let shapeJoins: Join[] = typed
       ? [
         join(
           table('entity', 'owner'),
@@ -139,6 +139,7 @@ export let sessionStatus = {
         ),
       ]
       : []
+    let joins = [...shapeJoins]
     let wears = (comp: string) =>
       gt(fn('instr', col('tables', 'shape'), lit(JSON.stringify(comp))), lit(0))
     let fields: Expr[] = [
@@ -244,6 +245,40 @@ export let sessionStatus = {
           }),
         )
         : lit(false)
+    let inputKinds = [
+      'output',
+      'notice',
+      'result',
+      'refusal',
+      'exception',
+      'ask',
+      'call',
+      'stop',
+      'interrupted',
+    ]
+    // Imported asks may have no input boundary. Seek the last input/stop in
+    // this transcript so a late ask cannot hide the stop it followed.
+    let marked = (comp: string) =>
+      !declared(comp) ? lit(false) : typed ? wears(comp) : exists(select({
+        cols: [lit(1)],
+        from: table(comp, 'm'),
+        where: eq(col('entity', 'm'), col('entity', 'e')),
+      }))
+    let control = select({
+      cols: [col('seq', 'e')],
+      from: table('entry', 'e'),
+      joins: shapeJoins,
+      where: and(
+        mine('e'),
+        notNull(col('seq', 'e')),
+        or(
+          and(marked('stop'), not(marked('notice'))),
+          and(marked('content'), ...inputKinds.map((c) => not(marked(c)))),
+        ),
+      ),
+      order: [desc(col('seq', 'e'))],
+      limit: lit(1),
+    })
     let latest = select({
       cols: [
         col('entity', 'e'),
@@ -398,6 +433,28 @@ export let sessionStatus = {
         as(col('entity', 'a'), 'asked'),
         as(col('seq', 'a'), 'asked_seq'),
         as(col('seq', 'boundary'), 'boundary_seq'),
+        as(
+          fn(
+            'coalesce',
+            op(
+              '+',
+              col('seq', 'boundary'),
+              iff(
+                declared('stop')
+                  ? exists(select({
+                    cols: [lit(1)],
+                    from: table('stop', 'z'),
+                    where: eq(col('entity', 'z'), col('through', 'a')),
+                  }))
+                  : lit(false),
+                lit(0),
+                lit(1),
+              ),
+            ),
+            sub(control),
+          ),
+          'control_seq',
+        ),
         as(col('refused_seq', 'l'), 'refused_seq'),
         as(col('refused_source', 'l'), 'refused_source'),
       ],
@@ -416,7 +473,8 @@ export let sessionStatus = {
       fn('coalesce', anchor('asked_seq'), lit(0)),
       fn(
         'coalesce',
-        op('+', anchor('boundary_seq'), lit(1)),
+        anchor('control_seq'),
+        anchor('asked_seq'),
         anchor('newest_seq'),
       ),
       fn(
@@ -454,17 +512,7 @@ export let sessionStatus = {
     let turn = turnRows
     let input = and(
       has('content'),
-      ...[
-        'output',
-        'notice',
-        'result',
-        'refusal',
-        'exception',
-        'ask',
-        'call',
-        'stop',
-        'interrupted',
-      ].map((c) => lacks(c)),
+      ...inputKinds.map((c) => lacks(c)),
     )
     let current = col('current', 't')
     let open = and(current, has('call'), lacks('answered'))
@@ -514,6 +562,7 @@ export let sessionStatus = {
         ),
         flag('inflight', inflight),
         as(fn('max', iff(input, col('seq', 't'), lit(null))), 'input_seq'),
+        as(fn('max', iff(has('stop'), col('seq', 't'), lit(null))), 'stop_seq'),
         flag('served', or(has('using'), has('ask'))),
         ...names.map((name) =>
           as(fn('max', iff(newest, col(name, 't'), lit(null))), 'n_' + name)
@@ -582,7 +631,10 @@ export let sessionStatus = {
       lit('running'),
     )
     let verdict = when([
-      [n('stop'), lit('stopped')],
+      [
+        or(n('stop'), and(notNull(f('stop_seq')), not(after(f('stop_seq'))))),
+        lit('stopped'),
+      ],
       [f('abandoned'), lit('running')],
       [n('exception'), lit('failed')],
       [

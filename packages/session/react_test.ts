@@ -33,7 +33,7 @@ import { kindOf, statusOf, textOf } from './state.ts'
 import { appendEntry } from './append.ts'
 import { sessions } from './plugin.ts'
 import { type Deps, react, recent, transcript } from './react.ts'
-import { running, settle } from './run.ts'
+import { running, runningAt, settle } from './run.ts'
 import { took } from './timing.ts'
 import { GAP } from './compact.ts'
 
@@ -351,18 +351,50 @@ test('a legacy unfinished-call exception recovers without replay', async () => {
 })
 
 test('a stop is obeyed: nothing is asked or run after it', async () => {
-  let g = world()
-  let { model, asked } = scripted([calls(['c1', 'hi'])])
-  let deps = { model, tools: [echo], mint }
-  await react(g, ids.s, deps) // asked: the tool call is now open
-  g.apply([{
-    entity: { eid: 'stop1' },
-    entry: { session: ids.s, seq: 99 },
-    stop: {},
-  }])
-  let step = await react(g, ids.s, deps)
-  assertEquals([step.did, step.status], ['nothing', 'stopped'])
-  assertEquals(asked.length, 1)
+  for (let during of ['model', 'tool']) {
+    let g = world(), asked = 0, called = 0
+    let idle = 0
+    let stop = async () => {
+      await g.apply([{
+        entity: { eid: 'stop1' },
+        entry: { session: ids.s },
+        stop: {},
+      }])
+      assertEquals(await runningAt(g, ids.s), true)
+    }
+    let model: Model = async () => {
+      asked++
+      if (during == 'model') await stop()
+      return asked == 1
+        ? calls(['c1', 'hi'], ['c2', 'bye'])
+        : says('r2', 'done')
+    }
+    let deps = {
+      model,
+      tools: [{
+        ...echo,
+        run: async () => {
+          called++
+          await stop()
+          return 'done'
+        },
+      }],
+      mint,
+    }
+    await settle(g, ids.s, {
+      ...deps,
+      holder: 'runner',
+      idle: async () => {
+        idle++
+        assertEquals(await runningAt(g, ids.s), false)
+      },
+    })
+    let step = await react(g, ids.s, deps)
+    assertEquals([step.did, step.status], ['nothing', 'stopped'])
+    assertEquals(asked, 1)
+    assertEquals(called, during == 'tool' ? 1 : 0)
+    assertEquals(idle, 1)
+  }
 })
 
 test('a fork continues from its anchor with only what followed', async () => {
