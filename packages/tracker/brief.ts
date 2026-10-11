@@ -28,7 +28,7 @@ export let link = (url: string): string =>
 
 /// headline('TypeError: error sending request for url (http://127.0.0.1:5173/query?q=a%2Cb): refused') -> 'TypeError: error sending request for url (http://127.0.0.1:5173/query?…): refused'
 /// headline('Error: /mcp said 500 (request 8340c228-dc11-464e-a9fe-1655ef354a15)') -> 'Error: /mcp said 500 (request 8340c228…)'
-/// headline("Error: Unknown export './sentry'.\n  Package exports:\n * .") -> "Error: Unknown export './sentry'."
+/// headline("Error: Unknown export './unknown'.\n  Package exports:\n * .") -> "Error: Unknown export './unknown'."
 /// headline('\u001b[31mError\u001b[0m: red') -> 'Error: red'
 /// headline('') -> ''
 /** A message as one line a person reads: its first line, terminal colours

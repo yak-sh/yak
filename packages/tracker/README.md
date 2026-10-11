@@ -10,13 +10,13 @@ references may name entities in other stores.
 | ----------- | ----------------------------------------------------------- |
 | `.`         | Fault keys, grouping patches, regression and retention      |
 | `./vocab`   | Tracker words, RAM computations and SQL-derived expressions |
-| `./report`  | Capture, transport, `fanout` and `coalesce`                 |
-| `./sentry`  | Captured bundle adapter and box Sentry ingest transport     |
+| `./report`  | Capture, transport and `coalesce`                           |
 | `./page`    | Classic browser capture script and twenty breadcrumbs       |
 | `./effects` | `error_group`, `bug_notify`, `error_trim`                   |
 | `./views`   | Bug pages, list rows, error frames and the Bugs destination |
 | `./tools`   | `bug_list`, `bug_show`, `bug_resolve`, `bug_archive`        |
 | `./service` | Spool record admission and acknowledgement                  |
+| `./remote`  | Signed remote reads and durable error delivery              |
 
 ```ts
 import { normalize } from '@yaks/tracker'
@@ -49,11 +49,6 @@ while keeping first-failure notification immediate. Options accept a `window` in
 milliseconds and a `clock` with `now()` and `after(ms, run)` returning a cancel
 function. `flush()` ends current windows; `close()` also cancels timers and
 waits for deliveries. A forced process exit can lose unflushed repeats.
-
-`fanout({name: sink, …})` starts independent sinks together and counts rejected
-deliveries in its `failures` object by sink name. It writes a console diagnostic
-with the original sample and cumulative failure count; a delivery failure never
-becomes another tracked error.
 
 ```ts
 import { equal } from '@yaks/testing'
@@ -180,28 +175,28 @@ and hosted app files remain text: v1 supplies no source-map guesses.
 
 ## Transition boundaries
 
-The browser script has moved here; the existing platform asset is a symlink and
-still speaks its existing intake payload. Switching that door onto the tracker
-is later work. Production Sentry remains enabled.
+The browser capture script is served through the platform asset and uses the
+platform intake payload. The platform admits captured failures into the tracker.
 
 Tools still declares legacy exception fields until T-59080 migrates them. Its
 new `type` and `value` coexist with those fields; tracker extends only `frames`
 and `mechanism` for now. No legacy exception rows are cleared.
 
-## Sentry on the box
+## Box delivery
 
-`@yaks/tracker/sentry` is the shared Sentry ingest transport for box host
-failures and harness disk alerts. It accepts the existing ingest DSN, or
-discovers one with the existing read token; it holds no credentials in the graph
-or logs. The CLI reporter keeps its durable tracker spool and also sends caught
-failures through this transport, tagged with their handler and target. It
-resolves `SENTRY_DSN` or `sentry` from the host vault when used, so a credential
-arriving after startup is not cached as missing. The `sentry(send)` sink adapter
-sends the captured stack and context, uses the tracker's fault as its Sentry
-fingerprint, and carries `error.hits` in `extra.hits`. The CLI composes Sentry
-and spool with `fanout`, wrapped once in `coalesce`; Sentry refusals increment
-`reporter.failures.sentry` without adding spool records. Host shutdown closes
-the reporter after its work drains, flushing pending repeats to both sinks.
+The CLI reporter writes each caught failure to the durable spool, with its
+handler and target. The tracker service admits those records into the box
+tracker. When `remote` is configured, the service first delivers each record
+through the Worker's signed platform intake; acknowledgement follows both remote
+and local admission. A failed delivery leaves its original record for retry and
+never adds a delivery error to the same outbox. Immutable global eids make
+interrupted and repeated delivery safe.
+
+`./remote` shares the signed transport with the read-through routes. Intake
+tickets carry a separate capability, so a reader's ticket cannot submit errors.
+The Worker keeps its existing notification delivery for new platform bugs; box
+captures carry `error.tags.source=box`. Reports retain their capture time across
+retries. Host shutdown waits for every report's durable spool write.
 
 ## Bounded trace admission
 

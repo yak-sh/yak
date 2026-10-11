@@ -14,8 +14,7 @@
     "./views": "./views.ts",
     "./routes": "./routes.ts",
     "./ticket": "./ticket.ts",
-    "./remote": "./remote.ts",
-    "./sentry": "./sentry.ts"
+    "./remote": "./remote.ts"
   },
   "license": "Apache-2.0",
   "description": "Groups tracked errors into bugs, reports without interrupting callers, and retains and notifies their occurrences.",

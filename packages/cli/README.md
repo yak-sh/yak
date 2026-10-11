@@ -631,14 +631,13 @@ yak app_errors --space yourname --app vale
 ### Reporting outside the watched graph
 
 `tracker: {spool: "tracker-spool"}` names the file spool relative to the config
-file. Hosts report unexpected tool, effect, request and duty failures there and
-to Sentry through `@yaks/tracker/sentry`, resolving the existing `SENTRY_DSN` or
-`sentry` credential in the host vault at use time. Sentry failure is retained in
-the spool without recursion. The Sentry event carries the handler and target,
-not the letter or tool arguments. Reports go to the spool without opening a
-tracker database. The separate @yaks/tracker role imports it using its own
-config and database; the task graph keeps no tracker error rows. Console
-telemetry remains enabled.
+file. Hosts report unexpected tool, effect, request and duty failures there,
+tagged with their handler and target. Reports contain no letter or tool
+arguments and open no tracker database. The separate @yaks/tracker role imports
+the spool using its own config and database. Its configured remote tracker
+receives failures through signed intake before the spool is acknowledged, so an
+outage leaves failures ready for retry. The task graph keeps no tracker error
+rows. Console telemetry remains enabled.
 
 The daily `bin/backup` uses this same reporter for nonzero exits, including its
 hard timeout. Its supervisor stays outside the bounded backup child, forwards

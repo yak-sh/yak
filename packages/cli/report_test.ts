@@ -7,6 +7,12 @@ import { files } from '@yaks/tracker/file'
 import { compose } from './host.ts'
 import { read } from './config.ts'
 import { mint } from '@yaks/graph'
+import { service } from '../tracker/service.ts'
+import { comp } from '../tracker/model.ts'
+import { delivery } from '@yaks/tracker/remote'
+import { ram } from '@yaks/ram'
+import { door } from '../../workers/tracker/door.ts'
+import { options, platform, store, vocab } from '../../workers/tracker/core.ts'
 
 export let trackerConfig = (dir: string) => ({
   db: `${dir}/tracker.db`,
@@ -26,30 +32,61 @@ export let trackerConfig = (dir: string) => ({
 
 test('a composed tracker drains a separate spool, preserving error attribution', async () => {
   let dir = await Deno.makeTempDir()
-  let config = trackerConfig(dir)
+  let config = { ...trackerConfig(dir), db: ':memory:' }
   let host = await compose(config, ['graph', '@yaks/tracker'], undefined, {
     install: true,
   })
   try {
     let actor = { by: mint(), via: mint() }
     let entity = mint(), process = mint()
-    let report = reporter(
-      config,
-      actor,
-      'a'.repeat(40),
-      () => Promise.resolve(),
-    )
-    await report(new Error('failure'), {
+    let resolve!: (commit: string) => void
+    let commit = new Promise<string>((done) => resolve = done)
+    let report = reporter(config, actor, commit)
+    let pending = report(new Error('failure'), {
       during: { entity, process },
+      tags: { handler: 'mail_post' },
     })
-    await host.duties(AbortSignal.abort())
+    let closing = report.close()
+    equal(await Array.fromAsync(files(config.tracker.spool).source()), [])
+    resolve('a'.repeat(40))
+    await pending
+    await closing
+    let remote = { url: 'https://tracker.test', secret: 'test-only' }
+    let tracker = store(ram(vocab, options), { sink: () => {} })
+    let route = door(tracker, platform, remote.secret)
+    let go = ((input, init) => route(new Request(input, init))) as typeof fetch
+    let failed = (() =>
+      Promise.resolve(new Response(null, { status: 503 }))) as typeof fetch
+    let refused = false
+    try {
+      await service(host, { remote, fetch: failed })
+    } catch {
+      refused = true
+    }
+    equal(refused, true)
+    let [record] = await Array.fromAsync(files(config.tracker.spool).source())
+    equal(record.rows.length, 1)
+    await delivery(remote, go)(record.rows)
+    await service(host, { remote, fetch: go })
+    let remoteRows = await tracker.graph.read('.error ?created ?during *')
+    equal(remoteRows.length, 1)
+    equal(comp(remoteRows[0], 'error').tags, {
+      source: 'box',
+      handler: 'mail_post',
+    })
+    equal(comp(remoteRows[0], 'created').by, actor.by)
+    equal(comp(remoteRows[0], 'during').entity, entity)
     let rows = await host.graph.read('.error ?created ?during *')
     equal(rows.length, 1)
     let row = rows[0]
-    if (!row.created || typeof row.created != 'object') throw Error('no stamp')
+    if (!row.created || typeof row.created != 'object') {
+      throw Error('no stamp')
+    }
     equal('by' in row.created && row.created.by, actor.by)
     equal('via' in row.created && row.created.via, actor.via)
-    if (!row.during || typeof row.during != 'object') throw Error('no context')
+    if (!row.during || typeof row.during != 'object') {
+      throw Error('no context')
+    }
     equal('entity' in row.during && row.during.entity, entity)
     let again = await Array.fromAsync(files(config.tracker.spool).source())
     equal(again, [])
@@ -90,117 +127,5 @@ test('relative reporter spool resolves with its config, not process cwd', async 
     equal(read(`${dir}/yak.json`).tracker?.spool, `${dir}/spool`)
   } finally {
     await Deno.remove(dir, { recursive: true })
-  }
-})
-
-test('a caught mail failure reaches Sentry with its handler and letter, alongside the durable spool', async () => {
-  let dir = await Deno.makeTempDir()
-  try {
-    let events: import('@yaks/tracker/sentry').SentryEvent[] = []
-    let report = reporter(
-      { tracker: { spool: `${dir}/spool` } },
-      undefined,
-      'sha',
-      (event) => {
-        events.push(event)
-        return Promise.resolve()
-      },
-    )
-    await report(new Error('waiting for mail credentials'), {
-      tags: { handler: 'mail_post' },
-      during: { entity: 'letter', process: 'worker' },
-    })
-    equal(events.length, 1)
-    equal(events[0].tags, {
-      handler: 'mail_post',
-      entity: 'letter',
-      process: 'worker',
-    })
-    equal(events[0].exception.values[0].value, 'waiting for mail credentials')
-    let rows = await Array.fromAsync(files(`${dir}/spool`).source())
-    equal(rows.length, 1)
-  } finally {
-    await Deno.remove(dir, { recursive: true })
-  }
-})
-
-test('Sentry failure is isolated and retained without recursively sending it', async () => {
-  let dir = await Deno.makeTempDir()
-  try {
-    let calls = 0
-    let report = reporter(
-      { tracker: { spool: `${dir}/spool` } },
-      undefined,
-      undefined,
-      () => {
-        calls++
-        return Promise.reject(new Error('ingest down'))
-      },
-    )
-    await report(new Error('mail down'))
-    equal(calls, 1)
-    let records = await Array.fromAsync(files(`${dir}/spool`).source())
-    equal(records.length, 1)
-    equal(report.failures.sentry, 1)
-  } finally {
-    await Deno.remove(dir, { recursive: true })
-  }
-})
-
-test('caught mail failures use the shared real Sentry request builder', async () => {
-  let { sentryReporter } = await import('@yaks/tracker/sentry')
-  let calls = 0
-  let send = sentryReporter({
-    host: 'box',
-    token: () => Promise.resolve(undefined),
-    dsn: () => Promise.resolve('https://ingest-key@sentry.test/42'),
-    fetch: (input, init) =>
-      new Request(input, init).json().then((event) => {
-        calls++
-        equal(String(input), 'https://sentry.test/api/42/store/')
-        equal(
-          new Headers(init?.headers).get('x-sentry-auth'),
-          'Sentry sentry_version=7, sentry_key=ingest-key',
-        )
-        equal(event.tags.handler, 'mail_post')
-        equal(event.tags.entity, 'letter')
-        equal(event.exception.values[0].value, 'waiting for credentials')
-        return Response.json({ id: event.event_id })
-      }),
-  })
-  await reporter({}, undefined, undefined, send)(
-    new Error('waiting for credentials'),
-    {
-      tags: { handler: 'mail_post' },
-      during: { entity: 'letter' },
-    },
-  )
-  equal(calls, 1)
-})
-
-test('reporter close waits for context and flushes repeats to Sentry', async () => {
-  let log = console.error
-  console.error = () => {}
-  try {
-    let resolve!: (commit: string) => void
-    let commit = new Promise<string>((done) => resolve = done)
-    let events: import('@yaks/tracker/sentry').SentryEvent[] = []
-    let report = reporter({}, undefined, commit, (event) => {
-      events.push(event)
-      return Promise.resolve()
-    })
-    let first = report('missing row 42')
-    let repeat = report('missing row 99')
-    let closing = report.close()
-    equal(events.length, 0)
-    resolve('sha')
-    await first
-    await repeat
-    await closing
-    equal(events.map((event) => event.extra?.hits), [1, 1])
-    equal(events.map((event) => event.extra?.commit), ['sha', 'sha'])
-    equal(events[0].fingerprint, events[1].fingerprint)
-  } finally {
-    console.error = log
   }
 })

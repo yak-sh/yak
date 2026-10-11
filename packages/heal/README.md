@@ -37,9 +37,9 @@ kind, its session or process when present, and its caught time and build
 version. The occurrence id derives from the exception entity's eid, so effect
 redelivery reaches tracker intake as the same occurrence.
 
-The [box host](../cli/README.md) supplies the reporter, which fans out to Sentry
-and the tracker spool through `@yaks/tracker/report`'s `coalesce`. Heal opens no
-tracker database or spool and writes no task when an exception arrives.
+The [box host](../cli/README.md) supplies the reporter, which writes to the
+tracker spool through `@yaks/tracker/report`. Heal opens no tracker database or
+spool and writes no task when an exception arrives.
 
 The `@yaks/heal/service` **follower** follows bugs in the configured tracker
 graphs through a headless [client](../client/README.md) subscription on `/ws`.

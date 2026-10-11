@@ -1141,7 +1141,7 @@ let composed = async (
       return ending ??= host.end(
         opts.thread!.me,
         'interrupted: its thread ended before it closed',
-      ).catch((e) => console.error('ending the duty thread failed —', e))
+      ).catch((e) => report(e, { tags: { step: 'end duty thread' } }))
     }
     let dutiesHost = serveRoles(g, {
       me: selfEid(),
@@ -1229,19 +1229,21 @@ let composed = async (
             `interrupted: this process ended${
               code == null ? '' : ` with code ${code}`
             } before the tool returned`,
-          ).catch((e) => console.error('interrupting its calls failed —', e))
+          ).catch((e) => report(e, { tags: { step: 'interrupt calls' } }))
         }
         if (!self || opts.process === false || opts.readOnly) return shut()
         try {
           await g!.apply([...await released(g!, selfEid()), ended(code)])
-        } catch { /* the file is going either way */ }
+        } catch (e) {
+          await report(e, { tags: { step: 'close host' } })
+        }
         await shut()
       },
     }
   } catch (error) {
     await recorded?.close()
     captureControl?.close()
-    await report(error)
+    await report(error, { tags: { step: 'compose host' } })
     await report.close()
     sql.close()
     throw error

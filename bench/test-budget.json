@@ -1333,8 +1333,6 @@
       "local read commands leave graph bytes unchanged under a concurrent writer": 77.4
     },
     "packages/cli/report_test.ts": {
-      "Sentry failure is isolated and retained without recursively sending it": 1.7,
-      "a caught mail failure reaches Sentry with its handler and letter, alongside the durable spool": 1.1,
       "a composed tracker drains a separate spool, preserving error attribution": 36.2
     },
     "packages/cli/restart_handover_test.ts": {

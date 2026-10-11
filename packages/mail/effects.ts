@@ -38,7 +38,7 @@ export let post = (said: Transport): { sender?: Sender; waiting?: string } => {
 }
 
 /** Leave unsent letters recoverable, but make the failure visible to both the
- * owner and the host's effect reporter (the box forwards reports to Sentry). */
+ * owner and the host's effect reporter, which forwards reports to the tracker. */
 export let waiting = (reason: string): Handler => (event, tx, write) =>
   after(letterOf(tx, event.entity), async (letter) => {
     if (!owed(letter)) return

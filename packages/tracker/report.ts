@@ -147,36 +147,6 @@ export let post =
     if (!response.ok) throw new Error(`tracker intake: ${response.status}`)
   }
 
-/** Independent deliveries start together. A refusal is a counter, never a
- * new error; console keeps the original rows visible if a sink is unavailable. */
-export let fanout = (
-  sinks: Record<string, Sink>,
-  fallback = (name: string, hits: number, error: unknown, rows: Bundle[]) =>
-    console.error(
-      'tracker delivery failed —',
-      name,
-      hits,
-      error,
-      JSON.stringify(rows),
-    ),
-): Sink & { failures: Record<string, number> } => {
-  let failures = Object.fromEntries(Object.keys(sinks).map((name) => [name, 0]))
-  return Object.assign(async (rows: Bundle[]) => {
-    await Promise.all(
-      Object.entries(sinks).map(async ([name, sink]) => {
-        try {
-          await sink(rows)
-        } catch (error) {
-          failures[name]++
-          try {
-            fallback(name, failures[name], error, rows)
-          } catch { /* telemetry cannot break the caller */ }
-        }
-      }),
-    )
-  }, { failures })
-}
-
 export type WindowClock = {
   now: () => number
   after: (ms: number, run: () => Promise<void>) => () => void

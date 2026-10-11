@@ -1,19 +1,10 @@
-// Box hosts report to a file spool, without depending on the tracker graph's
-// health. Existing console telemetry stays alongside it during the transition.
+// Box hosts report to a durable spool without opening the tracker graph. The
+// tracker service owns admission, remote delivery and retry.
 
 import type { Actor } from '@yaks/graph'
-import {
-  caught,
-  coalesce,
-  type Context,
-  fanout,
-  spool,
-} from '@yaks/tracker/report'
+import { caught, type Context, spool } from '@yaks/tracker/report'
 import { files } from '@yaks/tracker/file'
 import type { Config } from './config.ts'
-import { sentry, type SentryEvent, sentryReporter } from '@yaks/tracker/sentry'
-import { reveal } from '@yaks/secrets'
-import { vaultOf } from './vault.ts'
 
 export let revision = async (): Promise<string | undefined> => {
   if (!import.meta.url.startsWith('file:')) return undefined
@@ -36,44 +27,27 @@ export let reporter = (
   config: Config,
   actor?: Actor,
   commit?: string | Promise<string | undefined>,
-  send?: (event: SentryEvent) => Promise<void>,
 ): {
   (error: unknown, context?: Partial<Context>): Promise<void>
   close: () => Promise<void>
-  failures: Record<string, number>
 } => {
   let file = config.tracker
     ? spool(files(config.tracker.spool).append)
     : undefined
-  // Probe/in-memory hosts without a tracker never call production telemetry.
-  // The configured box already has SENTRY_DSN in its vault. Read at use time,
-  // rather than caching an absent credential at startup.
-  let vault = config.tracker && config.db ? vaultOf(config.db) : undefined
-  let transport = send ?? (vault
-    ? sentryReporter({
-      host: Deno.hostname(),
-      token: () => Promise.resolve(reveal(vault, 'sentry')),
-      dsn: () => Promise.resolve(reveal(vault, 'SENTRY_DSN')),
-    })
-    : undefined)
-  let sinks = fanout({
-    ...file ? { spool: file } : {},
-    ...transport ? { sentry: sentry(transport) } : {},
-  })
-  let sink = coalesce(sinks)
   let pending = new Set<Promise<void>>()
   let report = async (error: unknown, context: Partial<Context> = {}) => {
     try {
       console.error('box failed —', error)
     } catch { /* telemetry cannot break the caller */ }
-    if (!file && !transport) return
+    if (!file) return
     let at = await commit
     await caught(error, {
       actor,
       commit: config.tracker?.commit ?? at,
       environment: 'production',
       ...context,
-      sink,
+      tags: { source: 'box', ...context.tags },
+      sink: file,
     })
   }
   return Object.assign((error: unknown, context?: Partial<Context>) => {
@@ -82,10 +56,8 @@ export let reporter = (
     void delivery.then(() => pending.delete(delivery))
     return delivery
   }, {
-    failures: sinks.failures,
     close: async () => {
       await Promise.all(pending)
-      await sink.close()
     },
   })
 }

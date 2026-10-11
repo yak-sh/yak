@@ -290,13 +290,13 @@ The CLI host resolves `{ "secret": "NAME" }` through
 [@yaks/secrets](../secrets); direct TypeScript calls receive strings. No sender
 configuration leaves outbound requests waiting too. Missing Cloudflare
 credentials or an unsupported transport writes `deliver.waiting` on every owed
-letter and throws through the host's effect reporter (on the box, the tracker
-forwards it to Sentry), never marking the letter tried. The sender is read on
-each attempt, so credentials that arrive after startup can be used without
-rebuilding the handler. The ordinary startup sweep recovers unsent letters;
-successful delivery clears the waiting reason. A transport rejection records
-`bounced.reason` and is also reported, without ever sending that letter twice.
-`mail check` reports the configuration problem too.
+letter and throws through the host's effect reporter into the tracker, never
+marking the letter tried. The sender is read on each attempt, so credentials
+that arrive after startup can be used without rebuilding the handler. The
+ordinary startup sweep recovers unsent letters; successful delivery clears the
+waiting reason. A transport rejection records `bounced.reason` and is also
+reported, without ever sending that letter twice. `mail check` reports the
+configuration problem too.
 
 ## Pulling from an edge
 
