@@ -246,7 +246,9 @@ Object.keys(runs({}, options)) // the tools it runs, by name
 
 ### Machine providers
 
-The CLI lends providers through `Host.machines`. A config can choose providers
+The CLI lends providers through `Host.machines.provider(name)`. The first
+acquisition loads that provider; concurrent and later acquisitions share it.
+Opening a graph loads no machine implementation. A config can choose providers
 without making plugins know where commands run:
 
 ```json

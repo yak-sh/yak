@@ -97,7 +97,12 @@ test('the merged wait preserves process output and child status alongside task w
     let wait = harnessTools(h.g, {
       machines: machines(h.g, {
         defaultProvider: 'process',
-        providers: { process: processProvider(h.g, { dir, processes }) },
+        provider: (name) =>
+          Promise.resolve(
+            name == 'process'
+              ? (processProvider(h.g, { dir, processes }))
+              : undefined,
+          ),
       }),
     }).find((t) => t.name == 'wait')!
     let process = await wait.run({ process: 'command', timeout: 0 }, {

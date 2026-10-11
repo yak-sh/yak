@@ -11,16 +11,19 @@ test('declared lifecycle releases stopped machines without destroying settled-tu
   let releases: unknown[] = []
   host.machines = {
     defaultProvider: 'fixture',
-    providers: {
-      fixture: {
-        wake: () => Promise.reject(new Error('release never wakes')),
-        release: (ref) => {
-          releases.push(ref)
-          return Promise.resolve()
-        },
-        export: async function* () {},
-      },
-    },
+    provider: (name) =>
+      Promise.resolve(
+        name == 'fixture'
+          ? ({
+            wake: () => Promise.reject(new Error('release never wakes')),
+            release: (ref) => {
+              releases.push(ref)
+              return Promise.resolve()
+            },
+            export: async function* () {},
+          })
+          : undefined,
+      ),
   }
   let handlers = effects(host)
   try {

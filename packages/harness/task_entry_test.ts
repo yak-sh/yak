@@ -90,14 +90,17 @@ test('Agent.taskEntry honors agent limits', async () => {
     cwd: r.repo,
     machines: {
       defaultProvider: 'process',
-      providers: {
-        process: {
-          request: () => Promise.reject(new Error('test never provisions')),
-          wake: () => Promise.reject(new Error('test never wakes')),
-          release: async () => {},
-          export: async function* () {},
-        },
-      },
+      provider: (name) =>
+        Promise.resolve(
+          name == 'process'
+            ? ({
+              request: () => Promise.reject(new Error('test never provisions')),
+              wake: () => Promise.reject(new Error('test never wakes')),
+              release: async () => {},
+              export: async function* () {},
+            })
+            : undefined,
+        ),
     },
     tools: [],
     maxChildren: 0,
@@ -136,14 +139,17 @@ test('auto-task notice is lazy, reaches next ask, and contextual completion is i
     cwd: r.repo,
     machines: {
       defaultProvider: 'process',
-      providers: {
-        process: {
-          request: () => Promise.reject(new Error('test never provisions')),
-          wake: () => Promise.reject(new Error('test never wakes')),
-          release: async () => {},
-          export: async function* () {},
-        },
-      },
+      provider: (name) =>
+        Promise.resolve(
+          name == 'process'
+            ? ({
+              request: () => Promise.reject(new Error('test never provisions')),
+              wake: () => Promise.reject(new Error('test never wakes')),
+              release: async () => {},
+              export: async function* () {},
+            })
+            : undefined,
+        ),
     },
     tools: [],
     model: async (req) => {

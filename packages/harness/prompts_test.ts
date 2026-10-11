@@ -64,9 +64,12 @@ let attached = async (h: Harness, dir: string) => {
     machine,
     machines: {
       defaultProvider: 'process',
-      providers: {
-        process: processProvider(h.g, { dir: dir + '/machines', processes }),
-      },
+      provider: (name: string) =>
+        Promise.resolve(
+          name == 'process'
+            ? (processProvider(h.g, { dir: dir + '/machines', processes }))
+            : undefined,
+        ),
     },
   }
 }

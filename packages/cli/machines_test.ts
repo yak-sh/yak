@@ -5,8 +5,52 @@ import { equal, test } from '@yaks/testing'
 import { compose } from './host.ts'
 import { machineCapabilities } from './machines.ts'
 import { index } from '@yaks/git'
+import type { Host } from '@yaks/host'
+
+let checkLoading = async () => {
+  let loaded: unknown[] = []
+  let host = {
+    report: (event: unknown) => {
+      loaded.push(event)
+    },
+  } as Host
+  let use = 'data:text/javascript,' + encodeURIComponent(`
+    export let provider = (host, options) => {
+      host.report(options.name)
+      return {
+        ...(options.sandbox ? { request: async () => ({}) } : {}),
+        wake: async () => ({}),
+        release: async () => {},
+        export: async function* () {},
+      }
+    }
+  `)
+  let machines = machineCapabilities(host, {
+    machines: {
+      defaultProvider: 'sandbox',
+      providers: {
+        sandbox: { use, with: { name: 'sandbox', sandbox: true } },
+        attached: { use, with: { name: 'attached' } },
+        unused: {
+          use: 'data:text/javascript,throw new Error("not requested")',
+        },
+      },
+    },
+  }, ':memory:')
+  equal(loaded, [])
+  let first = machines.provider('sandbox')
+  equal(machines.provider('sandbox') === first, true)
+  let source = await first
+  equal(await machines.provider('sandbox') === source, true)
+  equal(loaded, ['sandbox'])
+  equal((await machines.provider('attached'))?.request, undefined)
+  equal(await machines.provider('missing'), undefined)
+  equal(await machines.provider('constructor'), undefined)
+  equal(loaded, ['sandbox', 'attached'])
+}
 
 test('CLI lends lazy process machines, prepares graph commits, and detaches existing machines', async () => {
+  await checkLoading()
   let dir = await Deno.makeTempDir()
   let host = await compose({
     db: ':memory:',
@@ -38,7 +82,7 @@ test('CLI lends lazy process machines, prepares graph commits, and detaches exis
       committer: { name: 'A', email: 'a@example.com', at: 0 },
       message: 'seed',
     })
-    let capabilities = await machineCapabilities(host, {
+    let capabilities = machineCapabilities(host, {
       machines: {
         defaultProvider: 'process',
         providers: {
@@ -51,7 +95,7 @@ test('CLI lends lazy process machines, prepares graph commits, and detaches exis
         },
       },
     }, ':memory:')
-    let source = capabilities.providers.process
+    let source = (await capabilities.provider('process'))!
     let loan = await source.request!({ id: 'test-machine', from: from.oid })
     equal(await loan.machine.read('hello.txt'), 'from the graph\n')
     let repeat = await source.wake({ id: 'test-machine' })

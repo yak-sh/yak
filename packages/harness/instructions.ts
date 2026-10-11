@@ -74,7 +74,7 @@ export let instructionsFor = async (
   let [row] = await g.get([id])
   let record = row?.machine as Comp | undefined
   if (!record) throw new Error('not a machine entity: ' + id)
-  let provider = configured?.providers[String(record.provider)]
+  let provider = await configured?.provider(String(record.provider))
   if (!provider) {
     throw new Error('Machine provider is not configured: ' + record.provider)
   }

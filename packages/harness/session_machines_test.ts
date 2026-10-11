@@ -46,12 +46,17 @@ let fixture = async () => {
       for (let path of paths) yield { path, bytes: new Uint8Array([0, 255]) }
     },
   }
-  let configured = { providers: { fake: provider }, defaultProvider: 'fake' }
+  let configured = {
+    provider: (name: string) =>
+      Promise.resolve(name == 'fake' ? provider : undefined),
+    defaultProvider: 'fake',
+  }
   await g.apply([{ entity: { eid: 'parent' }, session: {} }])
   return {
     g,
     m,
     configured,
+    provider,
     binding: machines(g, configured),
     requests,
     wakes,
@@ -88,9 +93,9 @@ test('machine home is lazy and first need records one stable sandbox', async () 
 
 test('interrupted machine request repeats the same durable provider id', async () => {
   let f = await fixture()
-  let request = f.configured.providers.fake.request!
+  let request = f.provider.request!
   let failed = false
-  f.configured.providers.fake.request = (r) => {
+  f.provider.request = (r) => {
     if (!failed) {
       failed = true
       return Promise.reject(new Error('interrupted'))
@@ -240,9 +245,9 @@ test('export resolves session paths within provider root and keeps binary bytes'
 test('release failure remains owed and another binding can retry it', async () => {
   let f = await fixture()
   await f.binding.machine('parent')
-  let release = f.configured.providers.fake.release
+  let release = f.provider.release
   let once = false
-  f.configured.providers.fake.release = (ref) => {
+  f.provider.release = (ref) => {
     if (!once) {
       once = true
       return Promise.reject(new Error('temporary provider failure'))

@@ -43,10 +43,12 @@ returns.
 
 `Host.machines` is an optional capability: configured
 [machine providers](../machine/README.md#providers), keyed by the durable
-`machine.provider`, and a `defaultProvider` that requests sandboxes. A plugin
-can ask for commands and files without learning where its host lives. An
-existing machine is explicitly attached by its provider's address; no host
-filesystem belongs to plugins by right.
+`machine.provider`, and a `defaultProvider` that requests sandboxes.
+`provider(name)` loads one configured provider on first acquisition and shares
+it across later calls; unknown names return `undefined`. A plugin can ask for
+commands and files without learning where its host lives. An existing machine is
+explicitly attached by its provider's address; no host filesystem belongs to
+plugins by right.
 
 ```ts
 import { equal } from '@yaks/testing'
@@ -55,18 +57,21 @@ import type { Host } from '@yaks/host'
 let releases: string[] = []
 let machines: NonNullable<Host['machines']> = {
   defaultProvider: 'remote',
-  providers: {
-    remote: {
-      wake: () => Promise.reject(new Error('not provisioned')),
-      release: (ref) => {
-        releases.push(ref.id)
-        return Promise.resolve()
-      },
-      export: async function* () {},
-    },
-  },
+  provider: (name) =>
+    Promise.resolve(
+      name == 'remote'
+        ? {
+          wake: () => Promise.reject(new Error('not provisioned')),
+          release: (ref) => {
+            releases.push(ref.id)
+            return Promise.resolve()
+          },
+          export: async function* () {},
+        }
+        : undefined,
+    ),
 }
-await machines.providers.remote.release({ id: 'job' })
+await (await machines.provider('remote'))!.release({ id: 'job' })
 equal(releases, ['job'])
 ```
 

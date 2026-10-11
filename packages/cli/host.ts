@@ -926,7 +926,7 @@ let composed = async (
     // `effects` (their facets were never imported anywhere else). Each
     // declared effect has one handler, from whichever plugin gives it code.
     // An effect this config gives no code owes no run.
-    host.machines = await machineCapabilities(host, config, path)
+    host.machines = machineCapabilities(host, config, path)
     host.machines.resolveHome = resolveSessionHome(sql, () => host.graph)
     part?.('bindings')
     observed.graphed()

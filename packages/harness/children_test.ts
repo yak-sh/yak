@@ -74,12 +74,15 @@ for (let kind of ['fork', 'spawn']) {
       machine,
       machines: {
         defaultProvider: 'process',
-        providers: {
-          process: processProvider(h.g, {
-            dir: directory + '/machines',
-            processes,
-          }),
-        },
+        provider: (name) =>
+          Promise.resolve(
+            name == 'process'
+              ? (processProvider(h.g, {
+                dir: directory + '/machines',
+                processes,
+              }))
+              : undefined,
+          ),
       },
       cwd: directory,
       tools: sessionTools(h.g),

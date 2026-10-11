@@ -70,7 +70,8 @@ export interface Host {
   artifacts: Blobs
   /** Providers this host explicitly lends; the default supplies sandboxes. */
   machines?: {
-    providers: Record<string, MachineProvider>
+    /** Load one configured provider when commands or files need it. */
+    provider: (name: string) => Promise<MachineProvider | undefined>
     defaultProvider: string
     resolveHome?: (
       session: string,

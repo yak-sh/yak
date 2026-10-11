@@ -2,9 +2,6 @@
 // process environments, and how a graph commit reaches a process sandbox.
 import type { Config, Host } from '@yaks/host'
 import type { Machine, MachineProvider } from '@yaks/machine'
-import { processProvider } from '@yaks/process/machine'
-import { sessionEnv } from '@yaks/session'
-import { objects } from '@yaks/git'
 
 let quoted = (word: string) => "'" + word.replaceAll("'", "'\\''") + "'"
 let command = async (machine: Machine, text: string, cwd: string) => {
@@ -27,23 +24,34 @@ let command = async (machine: Machine, text: string, cwd: string) => {
 /** Configured provider factories are loaded by the host, never by plugins.
  * The process provider is the box's default and does not claim security or
  * resource isolation; an alternative can supply both. */
-export let machineCapabilities = async (
+export let machineCapabilities = (
   host: Host,
   config: Config,
   db: string,
-): Promise<NonNullable<Host['machines']>> => {
-  let providers: Record<string, MachineProvider> = {}
+): NonNullable<Host['machines']> => {
+  let providers = new Map<string, Promise<MachineProvider>>()
   let configured = config.machines ?? {
     defaultProvider: 'process',
     providers: { process: { use: '@yaks/process', with: {} } },
   }
-  for (let [name, source] of Object.entries(configured.providers)) {
+  if (!Object.hasOwn(configured.providers, configured.defaultProvider)) {
+    throw new Error('Default machine provider cannot request a sandbox')
+  }
+  let load = async (name: string): Promise<MachineProvider> => {
+    let source = configured.providers[name]
+    let provider: MachineProvider
     if (source.use == '@yaks/process') {
+      let [{ processProvider }, { sessionEnv }, { objects }] = await Promise
+        .all([
+          import('@yaks/process/machine'),
+          import('@yaks/session'),
+          import('@yaks/git'),
+        ])
       let base = db == ':memory:'
         ? Deno.env.get('TMPDIR') ?? '/tmp'
         : db.slice(0, db.lastIndexOf('/')) || '.'
       let options = source.with ?? {}
-      providers[name] = processProvider(host.graph, {
+      provider = processProvider(host.graph, {
         dir: typeof options.dir == 'string' ? options.dir : base + '/machines',
         // How often a command it runs is looked at (ms, the machine's own
         // default unless the config says).
@@ -79,11 +87,22 @@ export let machineCapabilities = async (
           'Machine provider exports no provider factory: ' + source.use,
         )
       }
-      providers[name] = await factory.provider(host, source.with ?? {})
+      provider = await factory.provider(host, source.with ?? {})
     }
+    if (name == configured.defaultProvider && !provider?.request) {
+      throw new Error('Default machine provider cannot request a sandbox')
+    }
+    return provider
   }
-  if (!providers[configured.defaultProvider]?.request) {
-    throw new Error('Default machine provider cannot request a sandbox')
+  return {
+    defaultProvider: configured.defaultProvider,
+    provider: (name) => {
+      if (!Object.hasOwn(configured.providers, name)) {
+        return Promise.resolve(undefined)
+      }
+      let loading = providers.get(name)
+      if (!loading) providers.set(name, loading = load(name))
+      return loading
+    },
   }
-  return { providers, defaultProvider: configured.defaultProvider }
 }

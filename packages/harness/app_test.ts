@@ -400,14 +400,17 @@ test('task mode paints claimed work and subagent, then its delivered result with
     cwd: r.repo,
     machines: {
       defaultProvider: 'process',
-      providers: {
-        process: {
-          request: () => Promise.reject(new Error('test never provisions')),
-          wake: () => Promise.reject(new Error('test never wakes')),
-          release: async () => {},
-          export: async function* () {},
-        },
-      },
+      provider: (name) =>
+        Promise.resolve(
+          name == 'process'
+            ? ({
+              request: () => Promise.reject(new Error('test never provisions')),
+              wake: () => Promise.reject(new Error('test never wakes')),
+              release: async () => {},
+              export: async function* () {},
+            })
+            : undefined,
+        ),
     },
     tools: [],
     model: (req) => {

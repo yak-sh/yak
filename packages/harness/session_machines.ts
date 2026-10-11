@@ -3,24 +3,13 @@
 // interrupted request without inventing a second sandbox.
 import { CallError } from '@yaks/tools/errors'
 import { type Bundle, type Comp, derivedEid, type Graph } from '@yaks/graph'
-import type {
-  Machine,
-  MachineFile,
-  MachineProvider,
-  MachineRef,
-} from '@yaks/machine'
+import type { Machine, MachineFile, MachineRef } from '@yaks/machine'
 import type { ChildLimits } from '@yaks/session'
 import { type Snapshot, snapshot } from '@yaks/context'
 import { owed } from '@yaks/persona'
 import { isAbsolute, relative, resolve } from '@std/path/posix'
 
-export type Machines = {
-  providers: Record<string, MachineProvider>
-  defaultProvider: string
-  /** Host-boundary translation for sessions written by a previous host.
-   * The harness never reads that host's stored representation. */
-  resolveHome?: (session: string) => Promise<Comp | undefined>
-}
+export type Machines = NonNullable<import('@yaks/host').Host['machines']>
 let row = async (g: Graph, eid: string) => (await g.get([eid]))[0]
 let comp = (b: Bundle | undefined, name: string) =>
   b?.[name] as Comp | undefined
@@ -82,8 +71,8 @@ let string = (value: unknown, name: string): string | undefined => {
 /** Bind a graph to its host's configured providers. Nothing is provisioned
  * until a caller asks for `machine` or `cwd`; children only record intentions. */
 export let machines = (g: Graph, configured?: Machines): SessionMachines => {
-  let provider = (name: string, supplied = false): MachineProvider => {
-    let found = configured?.providers[name]
+  let provider = async (name: string, supplied = false) => {
+    let found = await configured?.provider(name)
     if (!found) {
       let message = 'Machine provider is not configured: ' + name
       if (supplied) throw new CallError('provider', message)
@@ -91,18 +80,18 @@ export let machines = (g: Graph, configured?: Machines): SessionMachines => {
     }
     return found
   }
-  let defaults = () => {
+  let defaults = async () => {
     let name = configured?.defaultProvider
     if (!name) throw new Error('This host lends no default machine provider')
-    provider(name)
+    await provider(name)
     return name
   }
   let requested = async (
     session: string,
     request: Record<string, unknown> = {},
   ): Promise<string> => {
-    let name = string(request.provider, 'machine.provider') ?? defaults()
-    if (!provider(name, request.provider != null).request) {
+    let name = string(request.provider, 'machine.provider') ?? await defaults()
+    if (!(await provider(name, request.provider != null)).request) {
       let message = 'Machine provider cannot request a sandbox: ' + name
       if (request.provider != null) throw new CallError('provider', message)
       throw new Error(message)
@@ -146,7 +135,7 @@ export let machines = (g: Graph, configured?: Machines): SessionMachines => {
     return serial(g, id, async () => {
       let record = comp(await row(g, id), 'machine')
       if (!record) throw new Error('not a machine entity: ' + id)
-      let source = provider(String(record.provider))
+      let source = await provider(String(record.provider))
       let ref = refOf(id, record)
       let loan = record.state == 'requested' || record.state == 'released'
         ? ref.address != null
@@ -183,7 +172,8 @@ export let machines = (g: Graph, configured?: Machines): SessionMachines => {
       }
       let record = comp(await row(g, id), 'machine')
       if (!record || record.state == 'released') return
-      await provider(String(record.provider)).release(refOf(id, record))
+      let source = await provider(String(record.provider))
+      await source.release(refOf(id, record))
       await g.apply([{ entity: { eid: id }, machine: { state: 'released' } }])
     })
   }
@@ -195,7 +185,7 @@ export let machines = (g: Graph, configured?: Machines): SessionMachines => {
         : undefined
       return {
         machine: {
-          provider: defaults(),
+          provider: await defaults(),
           ...record?.from != null ? { from: record.from } : {},
         },
       }
@@ -304,7 +294,8 @@ export let machines = (g: Graph, configured?: Machines): SessionMachines => {
       let at = comp(await row(g, session), 'home')!
       let id = String(at.machine)
       let record = comp(await row(g, id), 'machine')!
-      yield* provider(String(record.provider)).export(
+      let source = await provider(String(record.provider))
+      yield* source.export(
         refOf(id, record),
         selected,
       )
