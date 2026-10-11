@@ -97,22 +97,23 @@ test('rotate answers the new token', async () => {
   assertEquals(atob(body.tunnel_secret).length, 32)
 })
 
+let gatewayAt = '/workers/dispatch/namespaces/ns/scripts/tunnel-1'
+let gatewayAccount = account({
+  [`PUT ${gatewayAt}`]: [200, {}],
+  [`DELETE ${gatewayAt}`]: [404, 'This Worker does not exist'],
+})
+let gateway = gateways(gatewayAccount.api, 'ns')
+// Prepare the uploaded Worker once, retaining its multipart binding metadata.
+await gateway.put('tunnel-1', 's-1')
+let gatewayForm = gatewayAccount.seen[0].body as FormData
+let gatewayMeta = JSON.parse(await (gatewayForm.get('metadata') as File).text())
 test('a gateway is bound to the tunnel’s service and nothing else', async () => {
-  let at = '/workers/dispatch/namespaces/ns/scripts/tunnel-1'
-  let { api, seen } = account({
-    [`PUT ${at}`]: [200, {}],
-    [`DELETE ${at}`]: [404, 'This Worker does not exist'],
-  })
-  let g = gateways(api, 'ns')
-  await g.put('tunnel-1', 's-1')
-  let form = seen[0].body as FormData
-  let meta = JSON.parse(await (form.get('metadata') as File).text())
-  assertEquals(meta.bindings, [
+  assertEquals(gatewayMeta.bindings, [
     { type: 'vpc_service', name: 'BOX', service_id: 's-1' },
   ])
-  await g.remove('tunnel-1')
-  assertEquals(seen.map((s) => `${s.method} ${s.path}`), [
-    `PUT ${at}`,
-    `DELETE ${at}`,
+  await gateway.remove('tunnel-1')
+  assertEquals(gatewayAccount.seen.map((s) => `${s.method} ${s.path}`), [
+    `PUT ${gatewayAt}`,
+    `DELETE ${gatewayAt}`,
   ])
 })
