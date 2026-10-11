@@ -129,22 +129,26 @@ test('creature suggestions follow renames and alias changes', async () => {
   }
 })
 
-// Removal starts from the same ambiguous alias state, on its own watched page.
+// Authoritative removals arrive through the page’s replica, without a local write.
 let removing = page()
 let removingRefs = commandLookup({ client: removing })
-await removing.mutate([
-  beast('b1', 'Pip'),
-  beast('b2', 'Wren'),
-  alias('k1', 'b1', 'beast:wren'),
-])
+removing.cache.subscribe('suggestions', true)
+await removing.cache.land({
+  id: 'suggestions',
+  bundles: [
+    beast('b1', 'Pip'),
+    beast('b2', 'Wren'),
+    alias('k1', 'b1', 'beast:wren'),
+  ],
+})
 
 test('creature suggestions follow removals and release watches idempotently', async () => {
   let c = removing, refs = removingRefs
   try {
     ok(!refs.lookup.ids('beast_design').includes('Wren'))
-    await c.mutate([{ entity: { eid: 'b1' }, $delete: true }])
+    await c.cache.land({ id: 'suggestions', gone: ['b1'] })
     equal(refs.lookup.ids('beast_design'), ['b2', 'Wren'])
-    await c.mutate([{ entity: { eid: 'k1' }, $delete: true }])
+    await c.cache.land({ id: 'suggestions', gone: ['k1'] })
     equal(refs.lookup.ids('beast_design'), ['b2', 'Wren'])
     equal(c.watches.size(), 3)
     refs.close()
