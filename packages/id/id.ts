@@ -48,14 +48,22 @@ export let prefixes = (v: Vocab): Record<string, string> => {
   return out
 }
 
+// A loaded vocabulary is immutable; every display can reuse its compiled
+// letters without sharing the caller-owned table returned by prefixes().
+let letters = new WeakMap<Vocab, (kind: string) => string>()
+
 /**
  * The letter a component's ids use: the one it declared, otherwise its own
  * initial. Config-first — call `let letter = prefixOf(v)` once, then call the
  * result per component.
  */
 export let prefixOf = (v: Vocab): (kind: string) => string => {
-  let table = prefixes(v)
-  return (kind) => table[kind] ?? initial(kind)
+  let letter = letters.get(v)
+  if (!letter) {
+    let table = prefixes(v)
+    letters.set(v, letter = (kind) => table[kind] ?? initial(kind))
+  }
+  return letter
 }
 
 /** A letter and a number, joined into one id: `format('B', 7)` → `'B-7'`. */

@@ -34,6 +34,19 @@ let catalog: VocabDoc = {
 }
 
 let v = loadVocab([catalog], [idKeywords])
+let library = loadVocab([{
+  ...catalog,
+  $defs: {
+    ...catalog.$defs,
+    book: {
+      component: true,
+      type: 'object',
+      kind: true,
+      prefix: 'L',
+      properties: { title: { type: 'string' } },
+    },
+  },
+}], [idKeywords])
 let id = idOf(v)
 let eid = '9f1c8d2a-0b44-4e51-9f77-6a0c1e2d3b45'
 
@@ -41,6 +54,15 @@ test('the prefix table comes from the vocabulary', () => {
   assertEquals(prefixes(v), { book: 'B', author: 'A' })
   // a component declaring none borrows its initial, so every entity has an id
   assertEquals(prefixOf(v)('review'), 'R')
+})
+
+test('id prefixes stay with their vocabulary and ignore edits to copied tables', () => {
+  let copied = prefixes(v)
+  copied.book = 'X'
+  let book = { eid, kind: 'book', num: 7 }
+  assertEquals(idOf(library)(book), 'L-7')
+  assertEquals(idOf(v)(book), 'B-7')
+  assertEquals(prefixOf(library)('author'), 'A')
 })
 
 test('a numbered entity wears its human id', () => {
