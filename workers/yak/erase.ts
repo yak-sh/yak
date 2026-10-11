@@ -573,7 +573,10 @@ let rehomed = async (
     await slot('/uses', uses)
     await keepDeclaration(env, space, one, release, {
       ...declaration,
-      vocab: await draft.consume('/vocab', (r) => r.json()),
+      vocab: await draft.consume('/vocab', async (r) => {
+        if (!r.ok) throw await answered(r)
+        return await r.json()
+      }),
     })
     patches.push({
       entity: { eid: one.eid },
