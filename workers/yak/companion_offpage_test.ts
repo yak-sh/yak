@@ -92,6 +92,7 @@ test('a companion works off-page across pause, restart and retry', async () => {
   }]))
   let limits: unknown[] = []
   let asks = 0
+  let expectedCaller = [ADA, 'owner']
   p.env.DISPATCH = {
     get(_script, _args, options) {
       limits.push(options.limits)
@@ -99,10 +100,9 @@ test('a companion works off-page across pause, restart and retry', async () => {
         fetch: async (req) => {
           let caller = await granted(req, p.env.SESSION_SECRET, name)
           assert(caller)
-          let ordering = new URL(req.url).pathname.endsWith('/gather')
           assertEquals(
             [caller.person, caller.role],
-            ordering ? [ADA, 'owner'] : [k.app.eid, 'editor'],
+            expectedCaller,
           )
           assert(caller.via)
           let binding = (who: Parameters<typeof vouched>[0]) => ({
@@ -125,8 +125,8 @@ test('a companion works off-page across pause, restart and retry', async () => {
             },
           })
           // The dispatcher's two doors (dispatch.ts): `STORE` as the caller,
-          // `APP` as the app. An initial order keeps its person's actor;
-          // subsequent firings run as the app.
+          // `APP` as the app. The order and its subsequent firings keep the
+          // person's actor; the app door is available for app-owned work.
           return worker.fetch(req, {
             APP: binding({ person: k.app.eid, role: 'editor', via: k.app.eid }),
             STORE: binding(caller),
@@ -221,6 +221,9 @@ test('a companion works off-page across pause, restart and retry', async () => {
 
   let calls = await read(door, `.call.source=${eid}&?created`)
   let old = calls[0]
+  // App automation can retry an already completed call without earning its
+  // item twice, independently of the person's scheduled firings above.
+  expectedCaller = [k.app.eid, 'editor']
   let res = await commandWorker(
     p.env,
     k.space,
