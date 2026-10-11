@@ -77,7 +77,7 @@ test('a trashed app releases its component to another app in the space', async (
 test('an app names no app, and the copy works at its own address', async () => {
   let k = await kernel()
   try {
-    let published = unique('chore-chart')
+    let published = unique('chore-chart').padEnd(63, 'x')
     let jeff = await signIn(k)
     let his = connector(k, jeff.cookie)
     let write = (path: string, content: string) =>
@@ -154,6 +154,20 @@ test('an app names no app, and the copy works at its own address', async () => {
       await hers.tool('app_install', { name: published }),
       `as ${space}/${published}`,
     )
+    await hers.tool('app_set', { app: published, slug: 'renamed' })
+    let numbered = `${published.slice(0, 61)}-2`
+    assertStringIncludes(
+      await hers.tool('app_install', { name: published }),
+      `as ${space}/${numbered}`,
+    )
+    await assertRejects(
+      () => hers.tool('app_install', { name: published, as: published }),
+      Error,
+      'still points there',
+    )
+    let copy = await k.at(host, `/${numbered}/`)
+    assertEquals(copy.status, 200)
+    assertStringIncludes(await copy.text(), '<h1>Chores</h1>')
   } finally {
     await k.stop()
   }

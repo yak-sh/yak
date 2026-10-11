@@ -201,13 +201,14 @@ Read it before you build something somebody may already have made.
 - `name` is the published name from `app_published`.
 - The address the copy lands at is, in order: `as` if you passed it; else the
   source app's own slug, if nothing in the space holds that address; else the
-  published name. The source's slug goes first on purpose — an app is written at
-  its own address, and a copy that reads like the app is easier to reason about.
-  (A page written relatively works either way; the platform gives every page a
-  `<base href>` pointing at the app's own address.)
-- An address already taken in the space — by an app, or by an address an app has
-  moved away from and still redirects from — is refused, telling you to pass
-  `as`.
+  published name, adding `-2`, `-3`, and so on until free. The source's slug
+  goes first on purpose — an app is written at its own address, and a copy that
+  reads like the app is easier to reason about. (A page written relatively works
+  either way; the platform gives every page a `<base href>` pointing at the
+  app's own address.)
+- An explicit `as` already taken in the space — by an app, or by an address an
+  app has moved away from and still redirects from — is refused. The default
+  skips those addresses.
 - An installed app counts against the space's app ceiling like any other (the
   free tier allows five, the Plus plan has no limit, and trashed apps do not
   count).

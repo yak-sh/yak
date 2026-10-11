@@ -4728,7 +4728,8 @@ let OURS: Row[] = [
         name: str('the published name, from app_published'),
         as: str(
           "the new app slug; defaults to the source app's slug if free, " +
-            'otherwise its published name. app_published lists both',
+            'otherwise its published name, adding -2, -3, etc. if taken. ' +
+            'app_published lists both',
         ),
       },
       required: ['name'],
@@ -4759,18 +4760,22 @@ let OURS: Row[] = [
       // is what makes a page written relatively survive either way; this is
       // so the address reads like the app, and so an app written the old
       // absolute way still works. The published name is the fallback when
-      // that address is spoken for here, and `as` is still the last word.
+      // that address is spoken for here, numbered if both are taken, and
+      // `as` is still the last word. Redirects keep their addresses too.
       let vacant = async (at: string) =>
         !RESERVED.has(at) && !(await ctx.dir.app(space, at)) &&
         !(await ctx.dir.former(space, at))
-      let s = unreserved(
-        args.as != null
-          ? slug(args.as, 'as')
-          : (await vacant(offer.app.slug))
-          ? offer.app.slug
-          : name,
-        args.as != null ? 'as' : 'name',
-      )
+      let s = args.as != null
+        ? fresh(args.as, 'as')
+        : (await vacant(offer.app.slug))
+        ? offer.app.slug
+        : name
+      if (args.as == null) {
+        for (let n = 2; !(await vacant(s)); n++) {
+          let suffix = `-${n}`
+          s = name.slice(0, 63 - suffix.length) + suffix
+        }
+      }
       if (await ctx.dir.app(space, s)) {
         throw refuse(
           'conflict',
