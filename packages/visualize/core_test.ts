@@ -310,25 +310,39 @@ test('capture counts omitted records, not gap episodes, and releases its own lea
   assertEquals(peek(graph), undefined)
 })
 
-test('capture wait is bounded and overflow during the observation is counted', async () => {
+// The capture fixture observes a full overflow once, using the production
+// channel and manual timer; assertions inspect its bounded result and cleanup.
+let overflow = await (async () => {
   let timers = manualTimers()
   let graph = {}
   try {
     let waiting = capture(graph, { wait: 10000 })
-    assert(peek(graph))
-    assertEquals(timers.scheduled.map((t) => t.ms), [2000])
+    let observing = !!peek(graph)
+    let scheduled = timers.scheduled.map((t) => t.ms)
     emit(graph, 400)
     timers.fire(timers.scheduled[0].id)
     let value = await waiting
-    assertEquals(value.events.length, 256)
-    assertEquals(value.events[0].seq, 145)
-    assertEquals(value.gap, 144)
-    assertEquals(timers.pending.size, 0)
-    assertEquals(peek(graph), undefined)
-    assertEquals((await capture({}, { wait: NaN })).events, [])
+    return {
+      observing,
+      scheduled,
+      value,
+      pending: timers.pending.size,
+      closed: peek(graph),
+      invalid: (await capture({}, { wait: NaN })).events,
+    }
   } finally {
     timers.restore()
   }
+})()
+test('capture wait is bounded and overflow during the observation is counted', () => {
+  assert(overflow.observing)
+  assertEquals(overflow.scheduled, [2000])
+  assertEquals(overflow.value.events.length, 256)
+  assertEquals(overflow.value.events[0].seq, 145)
+  assertEquals(overflow.value.gap, 144)
+  assertEquals(overflow.pending, 0)
+  assertEquals(overflow.closed, undefined)
+  assertEquals(overflow.invalid, [])
 })
 
 test('capture cancellation before and during waiting preserves the reason and cleans up', async () => {

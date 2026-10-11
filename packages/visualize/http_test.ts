@@ -37,34 +37,50 @@ test('all native pages, assets and data fail closed without authenticating or bu
   assertEquals(peek(graph), undefined)
 })
 
-test('sync and async null policies are intentional and auth settles before work', async () => {
-  for (let who of [() => null, () => Promise.resolve(null)]) {
-    let host = { ...allowed(), who }
-    assertEquals((await door(host, '/visualize/anatomy')).status, 200)
-    assertEquals((await door(host, '/visualize/activity')).status, 200)
-    let page = routes(host).find((r) => r.path == '/visualize')!
-    let response = await page.handle(req('/visualize'))
-    assertEquals(response.status, 200)
-    assert(response.headers.get('content-type')?.startsWith('text/html'))
-  }
-  let permitted = Promise.withResolvers<null>()
-  let entered = 0
-  let answer = guarded({ graph: {}, who: () => permitted.promise }, () => {
-    entered++
-    return new Response('ready')
-  })(req('/visualize'))
-  assertEquals(entered, 0)
-  permitted.resolve(null)
-  assertEquals((await answer).status, 200)
-  assertEquals(entered, 1)
-})
+// Each policy uses the routes a configured host prepares once.
+for (
+  let [kind, who] of [
+    ['sync', () => null],
+    ['async', () => Promise.resolve(null)],
+  ] as const
+) {
+  let host = { ...allowed(), who }
+  let page = routes(host).find((r) => r.path == '/visualize')!
+  test(
+    kind == 'sync'
+      ? 'sync and async null policies are intentional and auth settles before work'
+      : 'an async null policy permits native anatomy, activity and page reads',
+    async () => {
+      assertEquals((await door(host, '/visualize/anatomy')).status, 200)
+      assertEquals((await door(host, '/visualize/activity')).status, 200)
+      let response = await page.handle(req('/visualize'))
+      assertEquals(response.status, 200)
+      assert(response.headers.get('content-type')?.startsWith('text/html'))
+      if (kind == 'sync') {
+        let permitted = Promise.withResolvers<null>()
+        let entered = 0
+        let answer = guarded(
+          { graph: {}, who: () => permitted.promise },
+          () => {
+            entered++
+            return new Response('ready')
+          },
+        )(req('/visualize'))
+        assertEquals(entered, 0)
+        permitted.resolve(null)
+        assertEquals((await answer).status, 200)
+        assertEquals(entered, 1)
+      }
+    },
+  )
+}
 
 test('host refusal fields and unknown query keys never disclose a credential', async () => {
   let secret = 'fixture-do-not-disclose'
   let read = 0
   for (let status of [401, 403, 400, 500, 999]) {
     let reported = 0
-    let response = await door({
+    let handle = guarded({
       graph: {},
       who: () => {
         throw Object.assign(new Error(secret), {
@@ -73,15 +89,15 @@ test('host refusal fields and unknown query keys never disclose a credential', a
           credential: secret,
         })
       },
-      anatomy: () => {
-        read++
-        return anatomy()
-      },
       report: () => {
         reported++
         throw new Error('report failed')
       },
-    }, '/visualize/anatomy')
+    }, () => {
+      read++
+      return Response.json(anatomy())
+    })
+    let response = await handle(req('/visualize/anatomy'))
     assertEquals(response.status, status == 999 ? 500 : status)
     assertEquals((await response.text()).includes(secret), false)
     assertEquals(reported, status >= 500 ? 1 : 0)
