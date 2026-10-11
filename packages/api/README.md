@@ -345,6 +345,14 @@ current from what each commit moves. Subscriptions asking the same query with
 the same options share it, and it outlives the last of them for a while: a
 client that closes a subscription and opens it again is answered without a read.
 
+For stores other graph instances can write, pass `revision` to
+`subscriptions(graph, { revision })`: a function returning the store's change
+token. `check()` compares it with the last observed token; a change discards
+retained answers and sends active query subscriptions complete answers with
+`reset: true`, so removed members leave the client too. Opening and restoring
+subscriptions also check before reusing retained answers. A host can call
+`check()` periodically; the routes handler does so automatically.
+
 A `.fields` [projection](../graph/README.md#projections) carries `coverage` for
 selected bundles. A covered property omitted from its bundle is absent; an
 uncovered property was not read. Entities reached through references travel in
@@ -622,6 +630,10 @@ filters with the four endpoints. Exact paths beat prefixes; longer prefixes beat
 shorter ones; plugin order breaks ties. A plugin's exact route can override an
 endpoint. A catch-all route only answers paths no endpoint claims. Host commits
 from `host.feed` reach the subscription registry as well as local graph commits.
+When `host.storage.revision` is available, the handler checks it every second
+and resets query answers after a store change, including writes from another
+process without a commit feed. Opening a query checks the revision before
+reusing a retained answer. The checks and commit feed stop with `host.stopping`.
 
 ```ts
 import { routed } from '@yaks/api'

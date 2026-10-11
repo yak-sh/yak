@@ -12,7 +12,7 @@
 // It is handed the host once the graph is open and the routes are gathered,
 // unlike `authenticate` beside it, which is asked for before anything is open.
 
-import type { Bundle, Graph } from '@yaks/graph'
+import type { Bundle, Graph, Storage } from '@yaks/graph'
 import type { Authenticate } from './actor.ts'
 import {
   api,
@@ -24,6 +24,8 @@ import {
 } from './route.ts'
 import { type Report, served } from './request.ts'
 import { subscriptions } from './subs.ts'
+import type { Timer } from './relay.ts'
+import { fault } from './refuse.ts'
 
 /** What this facet reads off the host it is composing into: the graph its
  * endpoints answer over, who that host says is calling, every route the
@@ -32,6 +34,8 @@ import { subscriptions } from './subs.ts'
  * well as this graph's own. */
 export type Hosting = {
   graph: Graph
+  storage?: Pick<Storage, 'revision'>
+  stopping?: AbortSignal
   reader?: Pick<Graph, 'read' | 'rows' | 'get'>
   who: Authenticate
   routes: Route[]
@@ -62,15 +66,45 @@ let reach = (r: Route) => exact(r) ? Infinity : r.path.length
  * catch-all (`/*`) answers only what nothing else claims. A request no route
  * claimed goes to the doors, which refuse anything they do not serve.
  */
-export let handler = (host: Hosting): Handler => {
+export let handler = (host: Hosting, options: {
+  /** Time between store revision checks, in ms (default 1000). */
+  every?: number
+  /** Schedule a revision check and return its cancellation function. */
+  timer?: Timer
+} = {}): Handler => {
   let routes = host.routes
   let graph = host.reader ? { ...host.graph, ...host.reader } : host.graph
   // One registry, fed twice: its own graph's `effect` phase for what this host
   // commits, and the host's feed for what every other process or thread
   // commits to the same store — a `yak` command beside `yak serve`, the effect
   // pool's thread — which that phase never runs for.
-  let subs = subscriptions(graph, { activity: host.graph })
-  host.feed?.((applied) => subs.commit(applied))
+  let revision = host.storage?.revision
+  let subs = subscriptions(graph, { activity: host.graph, revision })
+  let stopFeed = host.feed?.((applied) => subs.commit(applied))
+  let cancel = () => {}
+  let stopped = host.stopping?.aborted ?? false
+  let stop = () => {
+    stopped = true
+    cancel()
+    stopFeed?.()
+  }
+  if (stopped) stop()
+  else host.stopping?.addEventListener('abort', stop, { once: true })
+  if (revision && !host.stopping?.aborted) {
+    let timer = options.timer ?? ((fn, ms) => {
+      let id = setTimeout(fn, ms)
+      return () => clearTimeout(id)
+    })
+    let look = async () => {
+      try {
+        await subs.check()
+      } catch (error) {
+        fault(error, 'store revision')
+      }
+      if (!stopped) cancel = timer(look, options.every ?? 1000)
+    }
+    cancel = timer(look, options.every ?? 1000)
+  }
   let report: Report | undefined = host.report
     ? (request, error) => {
       void host.report!(error ?? 'HTTP request failed', {

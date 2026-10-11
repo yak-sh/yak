@@ -3763,6 +3763,7 @@ export class Store {
       close: (sink, id) => subs.close(by(sink), id),
       drop: (sink) => subs.drop(by(sink)),
       commit: subs.commit,
+      check: subs.check,
       // A relay carries no membership news and no stored rows, so there is
       // nothing here to rename — only the sink to translate.
       relay: (sink, bundles, writer) => subs.relay(by(sink), bundles, writer),

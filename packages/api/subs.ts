@@ -158,6 +158,10 @@ export type Subs = {
   drop: (sink: Sink) => void | Promise<void>
   /** a transaction committed: push what changed to whoever is watching */
   commit: (applied: Bundle[]) => void | Promise<void>
+  /** Reconcile query answers when the store's revision changed outside this
+   * registry. The host decides when to check; opening also checks before
+   * reusing a retained answer. */
+  check: () => void | Promise<void>
   /**
    * `sync: peers` components from one sink: forwarded to everyone else
    * watching those entities, and held under this sink until it closes
@@ -418,6 +422,8 @@ let affected = (
 export let subscriptions = (graph: Graph, opts: {
   /** The composed graph when `graph` is only its read overlay. */
   activity?: object
+  /** A store token that changes for commits through other graph instances. */
+  revision?: () => unknown
   /** A query may depend on entities outside its result (for example a computed
    * session status depends on transcript entries). Returning true refreshes
    * that subscription after this commit. It does not subscribe to those rows. */
@@ -428,6 +434,7 @@ export let subscriptions = (graph: Graph, opts: {
   /** Clock used by pending save queries. */
   now?: () => number
 } = {}): Subs => {
+  let revision = opts.revision?.()
   let held = new Map<Sink, Map<string, Sub>>()
   let all = () => [...held.values()].flatMap((m) => [...m.values()])
   let durableNet = net<Sub>(graph.vocab)
@@ -858,6 +865,7 @@ export let subscriptions = (graph: Graph, opts: {
     rows?: Map<string, Answer>,
     answers?: Map<string, Reduced | Promise<Reduced>>,
     deferStatic = false,
+    reset = false,
   ) => {
     flush()
     let mine = held.get(sink) ?? new Map<string, Sub>()
@@ -907,7 +915,11 @@ export let subscriptions = (graph: Graph, opts: {
           return after(loaded, (answer) => {
             for (let b of answer.found) sub.members.add(b.entity.eid)
             rememberFields(sub, answer.found)
-            return sub.send({ id, ...framed(sub, answer.found, answer, true) })
+            return sub.send({
+              id,
+              ...framed(sub, answer.found, answer, true),
+              ...reset ? { reset: true } : {},
+            })
           })
         }
         return after(
@@ -972,6 +984,7 @@ export let subscriptions = (graph: Graph, opts: {
               return sub.send({
                 id,
                 ...framed(sub, bundles, answer, true),
+                ...reset ? { reset: true } : {},
                 transientReset: bundles.map((b) => b.entity.eid),
                 ...snapshots.length ? { transient: snapshots } : {},
                 ...now.length ? { relay: now } : {},
@@ -1909,6 +1922,29 @@ export let subscriptions = (graph: Graph, opts: {
     })
   }
 
+  // A commit feed gives precise patches; a revision proves whether anything
+  // changed even when no feed is installed. Such a change has no write set,
+  // so every query gets an authoritative reset and retained answers let go.
+  let check = (): void | Promise<void> => {
+    if (!opts.revision) return
+    let next = opts.revision()
+    if (Object.is(next, revision)) return
+    for (let share of shared.values()) unshare(share)
+    peerRows.clear()
+    backlinks.clear()
+    let rows = new Map<string, Answer>()
+    let answers = new Map<string, Reduced | Promise<Reduced>>()
+    return after(
+      over(
+        all().filter((s) => !s.raw),
+        (s) => open(s.sink, s.id, s.query, s.opts, rows, answers, false, true),
+      ),
+      () => {
+        revision = next
+      },
+    )
+  }
+
   return {
     activity: opts.activity ?? graph,
     // A host can read while its own graph apply is saving a relay. This read
@@ -1923,30 +1959,38 @@ export let subscriptions = (graph: Graph, opts: {
       flushPeers()
       return ordered(() =>
         after(
-          answering(query, readOpts),
-          (out) => Array.isArray(out) ? published(graph.vocab, out) : out,
+          check(),
+          () =>
+            after(
+              answering(query, readOpts),
+              (out) => Array.isArray(out) ? published(graph.vocab, out) : out,
+            ),
         )
       )
     },
     enqueue,
     open: (sink, id, query, readOpts) => {
       flushPeers()
-      return ordered(() => open(sink, id, query, readOpts))
+      return ordered(() =>
+        after(check(), () => open(sink, id, query, readOpts))
+      )
     },
     restore: (openings, deferStatic = false) => {
       flushPeers()
-      return ordered(() => {
-        let rows = new Map<string, Answer>()
-        let answers = new Map<string, Reduced | Promise<Reduced>>()
-        return after(
-          over(
-            openings,
-            ({ sink, id, query, opts }) =>
-              open(sink, id, query, opts, rows, answers, deferStatic),
-          ),
-          () => {},
-        )
-      })
+      return ordered(() =>
+        after(check(), () => {
+          let rows = new Map<string, Answer>()
+          let answers = new Map<string, Reduced | Promise<Reduced>>()
+          return after(
+            over(
+              openings,
+              ({ sink, id, query, opts }) =>
+                open(sink, id, query, opts, rows, answers, deferStatic),
+            ),
+            () => {},
+          )
+        })
+      )
     },
     resume: () =>
       after(
@@ -1981,6 +2025,10 @@ export let subscriptions = (graph: Graph, opts: {
       })
     },
     commit,
+    check: () => {
+      flushPeers()
+      return ordered(check)
+    },
     relay: (sink, bundles, writer) => {
       bundles = formed(bundles)
       flushPeers()
