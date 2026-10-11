@@ -336,11 +336,8 @@ import { equal } from '@yaks/testing'
 
 const c = { ...composition, skin: ledger }
 equal(stopsOf(c).includes('Button'), true)
-equal(
-  renderToString(h(Specimens, { name: 'Button', composition: c }))
-    .includes('data-skin="skin"'),
-  true,
-)
+const specimen = Specimens({ name: 'Button', composition: c })
+equal(specimen.props['data-skin'], 'skin')
 equal(
   renderToString(h(Page, { stop: 'Button', composition: c }))
     .includes('skin rendering'),
@@ -353,6 +350,9 @@ equal(
   true,
 )
 ```
+
+A specimen's `data-skin` attribute describes its skin coverage. `Page` renders
+the entry; `Contents` turns guide stops into caller-supplied links.
 
 `routes(host?)` serves `/ui` as static HTML with inline CSS, contents and theme,
 skin and scheme links. A host supplies gathered contributions as `host.ui`; the
