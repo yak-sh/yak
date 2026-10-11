@@ -1,14 +1,15 @@
 import { test } from '@yaks/testing'
+import { signal } from '@preact/signals'
 import { assert, assertEquals } from '@std/assert'
 import { client } from '@yaks/client'
 import { desk, draftDoc, type Drafts, drafts } from '@yaks/draft'
-import { mint } from '@yaks/graph'
+import { type Bundle, type Comp, mint } from '@yaks/graph'
 import { type Cand, type Source } from '@yaks/query'
 import { print } from '@yaks/tui/print'
 import { loadVocab } from '@yaks/vocab'
 import { parseHTML } from 'linkedom'
 import { h, render } from 'preact'
-import { filters, type Opts } from './mod.ts'
+import { filters, type Front, type Opts } from './mod.ts'
 import { docs } from './vocab.ts'
 
 // A query language of one component, and a page graph holding its fields.
@@ -78,8 +79,44 @@ test('what is typed is the draft: another page shows it, and not its list', () =
   assertEquals(next.row('q')?.cands, [])
 })
 
+// Key and paint behavior uses the controller's reactive host contracts.
+let local = () => {
+  let text = signal<Record<string, string>>({})
+  let rows = signal<Bundle[]>([])
+  let front: Front = {
+    ent: (id) => rows.value.find((b) => b.entity.eid == id),
+    watch: (query) => {
+      assertEquals(query, '.filter')
+      return {
+        get value() {
+          return rows.value
+        },
+        subscribe: (fn) => rows.subscribe(fn),
+      }
+    },
+    mutate: (bundles) => {
+      let next = new Map(rows.value.map((b) => [b.entity.eid, b]))
+      for (let patch of bundles) {
+        let prior = next.get(patch.entity.eid)
+        next.set(patch.entity.eid, {
+          entity: patch.entity,
+          filter: { ...prior?.filter as Comp, ...patch.filter as Comp },
+        })
+      }
+      rows.value = [...next.values()]
+    },
+  }
+  return filters(front, {
+    vocab,
+    drafts: {
+      text: (id) => text.value[id] ?? '',
+      type: (id, value) => text.value = { ...text.value, [id]: value },
+    },
+  })
+}
+let entering = local()
 test('Enter takes a word to where it reads whole, then keeps it', () => {
-  let f = field()
+  let f = entering
   f.type('q', '.tas')
   assertEquals(f.press('q', 'Enter'), true)
   assertEquals(f.text('q'), '.task')
@@ -189,10 +226,12 @@ test('in a page, the element types, the list paints, and a taken word lands at t
   }
 })
 
+let terminal = local()
+terminal.type('q', '.st')
+// Paint the fixed terminal field once, then read its caret and complete list.
+let painted = print(h(terminal.Filter, { id: 'q', active: true }), 40)
+terminal.dispose()
 test('in a terminal, the field paints its caret and its list under it', () => {
-  let f = field()
-  f.type('q', '.st')
-  let painted = print(h(f.Filter, { id: 'q', active: true }), 40)
   assert(painted.includes('.st\x1b[7m \x1b[0m'), 'the caret is a cell')
   assertEquals(painted.replace(STYLE, '').split('\n'), [
     '.st ',
