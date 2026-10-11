@@ -9,6 +9,27 @@ import { link, owing, world } from './testing.ts'
 
 let fixture = () => owing('persona_files')
 
+for (let name of ['doc', 'content']) {
+  for (let kind of ['created', 'changed', 'removed'] as const) {
+    let { g, queued, clear } = fixture()
+    await g.apply([{
+      entity: { eid: 'words' },
+      ...(kind == 'created' ? {} : { [name]: { body: 'before' } }),
+    }])
+    await clear()
+    test(`${name} ${kind} owes persona files only for words they say`, async () => {
+      await g.apply([{
+        entity: { eid: 'words' },
+        [name]: kind == 'removed' ? null : { body: 'after' },
+      }])
+      equal((await queued()).length, 1)
+      let event = { kind, name, entity: { eid: 'words' } } as Event
+      equal(await moves(event, g.storage, new Set(['words'])), true)
+      equal(await moves(event, g.storage, new Set(['elsewhere'])), false)
+    })
+  }
+}
+
 test('only persona relations owe persona files, including a tag added to an existing edge', async () => {
   let { g, queued, clear } = fixture()
   await g.apply([

@@ -4,9 +4,9 @@
 //
 // The persona's `doc` body is the instruction text (./vocab.json declares it
 // that way), so it comes first and everything after it is a document the
-// persona links to. What it links to is a `doc` and nothing more specific: a
-// memory is @yaks/memory's component and a goal is @yaks/goal's, and a persona
-// linking to either renders it the same way. That is why there is no
+// persona links to. Its words live in `doc.body` or `content.body`: a memory
+// may mark a document, a comment or a transcript entry, and a persona linking
+// to any of them renders the words where they already live. That is why there is no
 // memory-shaped index line here and no section only memories may enter —
 // restating another package's components is exactly what would stop this
 // document carrying the next kind of thing somebody writes.
@@ -61,6 +61,7 @@ let doc = (b: Bundle): Comp => (b[DOC] ?? {}) as Comp
 
 let prop = (b: Bundle, name: string): string => {
   let value = doc(b)[name]
+  if (name == BODY && !value) value = (b.content as Comp | undefined)?.body
   return value == null ? '' : String(value)
 }
 

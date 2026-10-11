@@ -110,6 +110,8 @@
       "effect": true,
       "created": [
         "persona",
+        "doc",
+        "content",
         "contains",
         "reads",
         "archived"
@@ -117,15 +119,18 @@
       "changed": [
         "persona.home",
         "doc.title",
-        "doc.body"
+        "doc.body",
+        "content.body"
       ],
       "removed": [
         "persona",
+        "doc",
+        "content",
         "contains",
         "reads",
         "archived"
       ],
-      "description": "write the persona files again: a persona, its home, a doc a persona says, a link carrying or reading one, or a project with a repository archived or restored moved",
+      "description": "write the persona files again: a persona, its home, text a persona says in doc or content, a link carrying or reading it, or a project with a repository archived or restored moved",
       "option": "files"
     },
     "skill": {

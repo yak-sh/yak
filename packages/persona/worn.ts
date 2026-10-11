@@ -128,7 +128,10 @@ export let wear = (
                     // `seen` holds the persona itself, so a cycle of
                     // personas never includes the text it started from
                     // twice.
-                    if (!b?.[DOC] || seen.has(id) || undecided(b)) {
+                    if (
+                      !b || !(b[DOC] || b.content) || seen.has(id) ||
+                      undecided(b)
+                    ) {
                       continue
                     }
                     seen.add(id)
@@ -142,7 +145,10 @@ export let wear = (
                   }
                   for (let id of said) {
                     let b = by.get(id)
-                    if (b?.[DOC] && !names.has(id) && !undecided(b)) {
+                    if (
+                      b && (b[DOC] || b.content) && !names.has(id) &&
+                      !undecided(b)
+                    ) {
                       names.set(id, b)
                     }
                   }

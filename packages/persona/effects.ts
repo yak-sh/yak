@@ -12,7 +12,7 @@
 // A write starts a timer and returns, so the commit is never held open, and a
 // burst of writes is one pass. A pass renders every persona (a few hundred
 // milliseconds over the fleet's graph) and writes only the files whose text
-// moved, so a run only has to avoid passes nothing asked for: a doc edit or a
+// moved, so a run only has to avoid passes nothing asked for: a text edit or a
 // new link counts when it touches something the last pass said, and archiving
 // or restoring a project with a repository counts because that moves its
 // checkout in or out of the files. A host that has not made a pass yet counts
@@ -44,7 +44,7 @@ export type Runtime = SkillRuntime & { after?: number }
 type Fired = Parameters<Handlers[string]>
 
 /** Whether a write moves the persona files, given the entities the last pass
- * said (none until a pass has been made, and then every write counts). A doc or
+ * said (none until a pass has been made, and then every write counts). Text or
  * a new link counts when it touches what the last pass said; a persona moving,
  * or a link carrying or reading one going — gone before anybody can read which
  * ends it had — always does. A project with a repository put away or brought
@@ -61,7 +61,7 @@ export let moves = async (
     let [row] = await tx.get([e.entity.eid], ['project', 'repo'])
     return !!(row?.project && row.repo)
   }
-  if (e.name == DOC) return about(e.entity.eid)
+  if (e.name == DOC || e.name == 'content') return about(e.entity.eid)
   if (e.kind == 'created' && (e.name == 'contains' || e.name == 'reads')) {
     let [link] = await tx.get([e.entity.eid], [EDGE])
     let ends = link?.[EDGE] as Comp | undefined

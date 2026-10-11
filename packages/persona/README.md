@@ -78,11 +78,11 @@ Four things this shape decides:
   `proposed` is left out, by either edge, until a `decided` approves it; a
   declined one stays out. Linking a proposal to a persona files it where it
   belongs without making the persona say it.
-- **What a persona links to is a `doc`, nothing more specific.** A memory is
-  [@yaks/memory](../memory)'s component and a goal is [@yaks/goal](../goal)'s; a
-  persona that links to either renders it the same way, because the only thing
-  this package requires of a linked entity is that it has a `doc`. Nothing here
-  restates another package's components.
+- **A linked entity's words stay where they are.** Its title is `doc.title` and
+  its text is `doc.body`, falling back to `content.body` when the doc body is
+  empty or absent. A [memory](../memory) marked on a comment or transcript entry
+  renders those words in full, just as a memory on a doc does. A linked entity
+  needs `doc` or `content`; its kind does not decide whether it is included.
 - **An included persona's documents are included recursively.** Its instruction
   text is included like any other document, and the documents it links to are
   added to the ones this persona links to, so a base persona reaches every
