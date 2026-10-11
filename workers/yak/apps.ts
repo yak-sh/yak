@@ -118,7 +118,7 @@ import { webAsset, webPage, webPath } from './web.ts'
 import { releaseStatus } from './release-status.ts'
 import { pageSpeaks } from './lenses.ts'
 import { appDoc } from './vocab.ts'
-import { type Bundle, Stale, token } from '@yaks/graph'
+import { type Bundle, Stale, status, token } from '@yaks/graph'
 import { callStored } from './package-tools.ts'
 import { edits, mode, reads, writes } from '@yaks/member'
 import type { Door } from './door.ts'
@@ -126,7 +126,7 @@ import { type Clock, clock, timed } from './timing.ts'
 import { fault, noted, refusal, serving } from './unseen.ts'
 import { recoverRelease } from './tools.ts'
 import { ADDRESS } from './route.ts'
-import { caught, reported as tracked } from './defects.ts'
+import { caught } from './defects.ts'
 import { full, fullFiles } from './usage.ts'
 import { refusedVisit } from './meter.ts'
 import { modifying, sha256 } from './versions.ts'
@@ -1573,10 +1573,9 @@ let api = async (
       // A page's query is app code, even when the store answers its invalid
       // grammar or unknown word with 400. Record it here: the page may catch
       // the error, and the browser reporter deliberately ignores 4xx answers.
-      // Access denials remain expected refusals.
-      let denied = e instanceof Error && 'status' in e &&
-        (e.status == 401 || e.status == 403)
-      if (!denied) {
+      // Other refusals stay quiet; platform failures keep their own reporting.
+      let code = e instanceof Error && 'status' in e ? e.status : status(e)
+      if (code == 400) {
         try {
           let raw = req.headers.get('x-yak-version')
           let version = raw != null && /^[0-9]+$/.test(raw) &&
@@ -1593,7 +1592,6 @@ let api = async (
             },
             { env, space, app, request: req, entrypoint: 'query' },
           )
-          tracked(e)
         } catch (why) {
           caught(why, {
             request: 'report query failure',

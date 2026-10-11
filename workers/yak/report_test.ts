@@ -638,9 +638,23 @@ let platformBreak = await (async () => {
       },
     },
   }, (env) => {
+    let store = env.STORE.get.bind(env.STORE)
+    env.STORE.get = (id) => {
+      let stub = store(id)
+      return {
+        fetch: (req: Request) =>
+          failing == 'query' && String(id) != 'yak/platform' &&
+            new URL(req.url).pathname == '/query'
+            ? Promise.resolve(Response.json({
+              error: 'Error',
+              message: 'query store unavailable',
+            }, { status: 503 }))
+            : stub.fetch(req),
+      }
+    }
     let get = env.BLOBS.get.bind(env.BLOBS)
     env.BLOBS.get = (...args) => {
-      if (failing) {
+      if (failing && failing != 'query') {
         throw new CallError(
           'arguments',
           `${failing}: vocab.json: fight.dealt is already text`,
@@ -706,6 +720,20 @@ test("the platform's own break is ours, not the app's", async () => {
     assertEquals(ours.length, 1)
     assertEquals(((ours[0].error as Comp).tags as Comp).request_id, requestId)
     assertEquals(typeof (ours[0].during as Comp).request, 'string')
+
+    // A platform failure while answering a page's query still belongs to
+    // the platform, rather than being attributed to the app's release.
+    fail('query')
+    let query = await k.at(`${acme64}.yaks.app`, '/shop/api/query?.note')
+    fail('')
+    assertEquals(query.status, 503)
+    assertStringIncludes(await query.text(), 'query store unavailable')
+    assertEquals(await agent.tool('app_errors', app), 'no open errors')
+    assert(
+      captured.some((row) =>
+        (row.exception as Comp | undefined)?.value == 'query store unavailable'
+      ),
+    )
 
     // Discovery can fail before a named connector tool begins. The wrapped
     // initialize, listing and call catches all retain that request's tags.
