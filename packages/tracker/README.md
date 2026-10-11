@@ -285,17 +285,19 @@ reach the browser, redirects are refused, and HTTP remote URLs are allowed only
 on loopback for local probes.
 
 Bug tools select the platform tracker with `--source yaks.app`; `box` is the
-default. Remote answers carry `{source: "yaks.app", rows: [...]}` as text and
-`output.value`, without applying those rows to the box graph. Queries, ordering
-and limits run in the Worker before selecting the returned bugs. Remote show
-takes a global bug eid, since numbered ids belong to their own store. Resolve
-and archive accept the same source selection. A box mark reaches the configured
-Worker under the bug's global eid before returning the local patch. Missing
-credentials, unavailable transport or a refused remote mark refuse the command
-without marking the box copy. Without a remote configuration, box marks remain
-local. A `yaks.app` mark requires remote configuration and marks only the
-Worker; its acknowledgement does not import the bug into the box graph. Retrying
-a mark is safe, including when the box copy is already marked.
+default. Both reads answer `{source: "box" | "yaks.app", rows: [...]}` as text
+and `output.value`, including an empty `rows` array when no bugs match. Read
+these rows with `valueIn(answer).rows` from `@yaks/tools/value`. Neither read
+applies those rows to the box graph. Remote queries, ordering and limits run in
+the Worker before selecting the returned bugs. Remote show takes a global bug
+eid, since numbered ids belong to their own store. Resolve and archive accept
+the same source selection. A box mark reaches the configured Worker under the
+bug's global eid before returning the local patch. Missing credentials,
+unavailable transport or a refused remote mark refuse the command without
+marking the box copy. Without a remote configuration, box marks remain local. A
+`yaks.app` mark requires remote configuration and marks only the Worker; its
+acknowledgement does not import the bug into the box graph. Retrying a mark is
+safe, including when the box copy is already marked.
 
 ```sh
 yak bug list --source yaks.app --limit 20

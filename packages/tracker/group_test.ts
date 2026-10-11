@@ -5,6 +5,7 @@ import { group, grouped, retained, trim } from './group.ts'
 import { capture } from './report.ts'
 import { comp } from './model.ts'
 import { runs } from './tools.ts'
+import { valueIn } from '@yaks/tools/value'
 
 let app = crypto.randomUUID(), second = crypto.randomUUID()
 let person = crypto.randomUUID(), other = crypto.randomUUID()
@@ -88,9 +89,9 @@ test('bug tools mark resolve/archive and show retained occurrences', async () =>
     call: { args: { bug: bug.entity.eid } },
   }
   let tools = runs()
-  equal((await tools.bug_show(call, g)).length, 2)
+  equal((valueIn(await tools.bug_show(call, g))?.rows as Bundle[]).length, 2)
   await g.apply(await tools.bug_resolve(call, g), { trusted: true })
-  equal((await tools.bug_list({ entity: { eid: 'list' } }, g)).length, 0)
+  equal(valueIn(await tools.bug_list({ entity: { eid: 'list' } }, g))?.rows, [])
   await g.apply(await tools.bug_archive(call, g), { trusted: true })
   equal(comp((await bugs(g))[0], 'bug').status, 'archived')
 })

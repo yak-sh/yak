@@ -273,7 +273,7 @@
       "noun": "bug",
       "verb": "list",
       "title": "List bugs",
-      "description": "List bugs, open by default. Returns box entity bundles or source-labelled yaks.app rows.",
+      "description": "List bugs, open by default. Answers source-labelled rows as text and output.value for either store.",
       "input": {
         "query": {
           "type": "string"
@@ -287,7 +287,7 @@
             "box",
             "yaks.app"
           ],
-          "description": "Read box bugs (default) or the platform tracker on yaks.app. Remote reads return source-labelled data without importing bundles."
+          "description": "Read box bugs (default) or the platform tracker on yaks.app. Reads return source-labelled data without importing bundles."
         }
       },
       "readOnly": true,
@@ -300,7 +300,7 @@
       "noun": "bug",
       "verb": "show",
       "title": "Show bugs",
-      "description": "Read a bug and its retained occurrences. Returns box entity bundles or source-labelled yaks.app rows.",
+      "description": "Read a bug and its retained occurrences. Answers source-labelled rows as text and output.value for either store.",
       "input": {
         "bug": {
           "type": "string",
@@ -312,7 +312,7 @@
             "box",
             "yaks.app"
           ],
-          "description": "Read box bugs (default) or the platform tracker on yaks.app. Remote reads return source-labelled data without importing bundles."
+          "description": "Read box bugs (default) or the platform tracker on yaks.app. Reads return source-labelled data without importing bundles."
         }
       },
       "readOnly": true,

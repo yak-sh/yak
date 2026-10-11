@@ -9,8 +9,9 @@ import type { Answer, Io } from '@yaks/inspect'
 import { disclosureAt } from '@yaks/ux'
 import { occurrences, openBugs, relatedTraces, views } from './views.ts'
 import { inspectViews } from './inspect.ts'
-import { fixture } from './fixture_test.ts'
+import { fixture, vocab as trackerVocab } from './fixture_test.ts'
 import { runs } from './tools.ts'
+import { valueIn } from '@yaks/tools/value'
 import { graph } from '@yaks/graph'
 import { loadVocab } from '@yaks/vocab'
 import { kernelDoc, kernelKeywords } from '@yaks/kernel'
@@ -192,7 +193,7 @@ test('an occurrence page says where it ran and what happened before it, and list
   let asks = (vocab: unknown) =>
     inspectViews[1].asks!(e, { vocab } as never, {}).traces
   ok(asks(vocab))
-  equal(asks(fixture().vocab), undefined)
+  equal(asks(trackerVocab), undefined)
 })
 
 test('open list and tools take worst first, and bug errors newest first', async () => {
@@ -211,16 +212,18 @@ test('open list and tools take worst first, and bug errors newest first', async 
     'old',
   ])
   equal(
-    (await runs().bug_list({ entity: { eid: 'call' } }, g)).map((b) =>
-      b.entity.eid
-    ),
+    (valueIn(await runs().bug_list({ entity: { eid: 'call' } }, g))
+      ?.rows as Bundle[])
+      .map((b) => b.entity.eid),
     ['worst', 'small'],
   )
   equal(
-    (await runs().bug_show({
-      entity: { eid: 'call' },
-      call: { args: { bug: 'worst' } },
-    }, g)).map((b) => b.entity.eid),
+    (valueIn(
+      await runs().bug_show({
+        entity: { eid: 'call' },
+        call: { args: { bug: 'worst' } },
+      }, g),
+    )?.rows as Bundle[]).map((b) => b.entity.eid),
     ['worst', 'new', 'old'],
   )
 })

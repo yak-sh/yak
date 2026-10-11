@@ -59,7 +59,7 @@ export let bug = (g: Graph, input: string): Bundle[] | Promise<Bundle[]> =>
         )),
   )
 let answer = (call: Bundle, data: Record<string, unknown>): Bundle[] => {
-  let value = { source: 'yaks.app', ...data }
+  let value = { source: argsOf(call).source ?? 'box', ...data }
   return [{
     entity: { eid: '$said' },
     content: { body: JSON.stringify(value, null, 2) },
@@ -116,10 +116,13 @@ export let runs = (
           }),
         )
       }
-      return bugs(
-        g,
-        parse(str(args.query) || '.bug.status=open'),
-        Number(args.limit ?? 50),
+      return after(
+        bugs(
+          g,
+          parse(str(args.query) || '.bug.status=open'),
+          Number(args.limit ?? 50),
+        ),
+        (rows) => answer(call, { rows }),
       )
     },
     bug_show: (call, g) => {
@@ -127,7 +130,7 @@ export let runs = (
       if (args.source == 'yaks.app') {
         return remote(call, new URLSearchParams({ bug: str(args.bug) }))
       }
-      return bug(g, str(args.bug))
+      return after(bug(g, str(args.bug)), (rows) => answer(call, { rows }))
     },
     bug_resolve: mark('resolved'),
     bug_archive: mark('archived'),

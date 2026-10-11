@@ -98,12 +98,34 @@ test('platform bug show reads retained occurrences without local ids or writes',
   )
   equal(await box.read('.entity *'), before)
 })
+let boxList = await ask('bug_list')
+let [boxBug] = rows(boxList)
+let boxShows = await Promise.all([
+  `B-${boxBug.entity.num}`,
+  'box problem',
+].map((bug) => ask('bug_show', { bug })))
 test('box bug reads still resolve numbered ids and titles locally', async () => {
-  let [bug] = await ask('bug_list')
-  equal(bug.entity.eid, ids[4])
-  equal((await ask('bug_show', { bug: `B-${bug.entity.num}` }))[0], bug)
-  equal((await ask('bug_show', { bug: 'box problem' }))[0], bug)
+  equal(valueIn(boxList)?.source, 'box')
+  equal(boxBug.entity.eid, ids[4])
+  for (let answer of boxShows) {
+    equal(valueIn(answer), { source: 'box', rows: [boxBug] })
+    equal(
+      JSON.parse((answer[0].content as { body: string }).body),
+      valueIn(answer),
+    )
+  }
+  equal(await box.read('.entity *'), before)
 })
+for (let source of ['box', 'yaks.app']) {
+  let empty = await ask('bug_list', { source, query: '.bug.hits=999' })
+  test(`${source} bug list answers an empty result as text and data`, () => {
+    equal(valueIn(empty), { source, rows: [] })
+    equal(JSON.parse((empty[0].content as { body: string }).body), {
+      source,
+      rows: [],
+    })
+  })
+}
 test('remote reads refuse box numbers and invalid limits explicitly', async () => {
   ok(
     (await ask('bug_show', { source: 'yaks.app', bug: 'B-1' })).some((b) =>
