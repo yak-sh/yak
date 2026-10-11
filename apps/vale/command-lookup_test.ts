@@ -115,7 +115,7 @@ await changing.mutate([
 let ambiguous = changingRefs.lookup.ids('beast_design')
 await changing.mutate([beast('b2', 'Wren')])
 
-test('creature suggestions follow renames, alias changes and removals', async () => {
+test('creature suggestions follow renames and alias changes', async () => {
   let c = changing, refs = changingRefs
   try {
     ok(!ambiguous.includes('Pip'))
@@ -123,6 +123,25 @@ test('creature suggestions follow renames, alias changes and removals', async ()
     await c.mutate([alias('k1', 'b1', 'beast:wren')])
     ok(!refs.lookup.ids('beast_design').includes('Wren'))
     ok(!refs.lookup.ids('beast_design').includes('beast:pip'))
+  } finally {
+    refs.close()
+    c.close()
+  }
+})
+
+// Removal starts from the same ambiguous alias state, on its own watched page.
+let removing = page()
+let removingRefs = commandLookup({ client: removing })
+await removing.mutate([
+  beast('b1', 'Pip'),
+  beast('b2', 'Wren'),
+  alias('k1', 'b1', 'beast:wren'),
+])
+
+test('creature suggestions follow removals and release watches idempotently', async () => {
+  let c = removing, refs = removingRefs
+  try {
+    ok(!refs.lookup.ids('beast_design').includes('Wren'))
     await c.mutate([{ entity: { eid: 'b1' }, $delete: true }])
     equal(refs.lookup.ids('beast_design'), ['b2', 'Wren'])
     await c.mutate([{ entity: { eid: 'k1' }, $delete: true }])
