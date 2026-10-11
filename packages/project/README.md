@@ -111,10 +111,9 @@ import { docDoc } from '@yaks/doc'
 import { graph } from '@yaks/graph'
 import { projectDoc, projects } from '@yaks/project'
 import { ram } from '@yaks/ram'
-import { taskDoc } from '@yaks/task'
 import { loadVocab } from '@yaks/vocab'
 
-let vocab = loadVocab([docDoc, taskDoc, projectDoc])
+let vocab = loadVocab([docDoc, projectDoc])
 let g = graph({ storage: ram(vocab), vocab, plugins: [projects(vocab)] })
 await g.apply([
   { entity: { eid: 'website' }, project: {}, doc: { title: 'Website' } },
