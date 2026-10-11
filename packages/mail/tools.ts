@@ -52,6 +52,7 @@ import { wearer } from './arrive.ts'
 import { post } from './effects.ts'
 import { DELIVER, EMAIL, MAIL } from './comp.ts'
 import type { Options } from './options.ts'
+import type { Host } from '@yaks/host'
 
 // The two components this file writes that it does not declare. Both are
 // @yaks/kernel's, and both are written here as plain strings, because a tool's
@@ -223,7 +224,10 @@ let page = (id: (b: Bundle) => string, letter: Bundle, thread: Bundle[]) => {
  * person typed is canonicalized against before the address book is queried,
  * into the same form the canonicalizer stored it in (./plugin.ts). Everything
  * else a handler needs arrives on the call it is handed. */
-export let runs = (_host?: unknown, options: Options = {}): Runs => ({
+export let runs = (
+  host?: Pick<Host, 'senders'> | null,
+  options: Options = {},
+): Runs => ({
   // Reading is the mark, so this writes. The prose is the result; the `opened`
   // patch is what keeps a second call from reporting it as unread.
   mail_show: async (call, graph): Promise<Bundle[]> => {
@@ -347,7 +351,7 @@ export let runs = (_host?: unknown, options: Options = {}): Runs => ({
     // outbound letters sitting in the graph. Missing config never stops the
     // server from starting (./effects.ts), so this is where it is reported.
     let { waiting } = options.sender
-      ? post(options.sender)
+      ? post(options.sender, host)
       : { waiting: undefined }
     if (waiting) {
       found.push({

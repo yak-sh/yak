@@ -13,6 +13,7 @@ import {
 import { clubhouse } from './testing.ts'
 import type { Options } from './options.ts'
 import { reSubject, runs } from './tools.ts'
+import type { Host } from '@yaks/host'
 
 let call = mint()
 
@@ -22,9 +23,10 @@ let ask = (
   args: Record<string, unknown> = {},
   actor: Actor | null = null,
   options: Options = {},
+  host?: Pick<Host, 'senders'>,
 ): Promise<Bundle[]> =>
   Promise.resolve(
-    runs(undefined, { domain: 'books.example', ...options })[tool](
+    runs(host, { domain: 'books.example', ...options })[tool](
       {
         entity: { eid: call },
         call: { args },
@@ -250,15 +252,16 @@ test('a letter goes out from the address of what it is about, else from whoever 
   )
 })
 
+let reusedAddress = await club()
 test('a letter to somebody already in the book reuses their row', async () => {
-  let { g } = await club()
-  await did(g, 'mail_send', {
+  let written = await did(reusedAddress.g, 'mail_send', {
     to: 'hello@books.example',
     subject: 'Note to self',
     body: '.',
     from: 'hello@books.example',
   })
-  let [letter] = await g.read('.deliver.to=desk&*')
+  let letter = written.find((b) => b.deliver)
+  assertEquals(comp(letter, 'deliver').to, 'desk')
   assertEquals(comp(letter, 'doc').title, 'Note to self')
 })
 
@@ -269,8 +272,12 @@ test('Re: piles no higher than one', () => {
 
 // ---- the check ----
 
-let checkup = async (g: Graph, options: Options = {}) => {
-  let [said] = await ask(g, 'mail_check', {}, null, options)
+let checkup = async (
+  g: Graph,
+  options: Options = {},
+  host?: Pick<Host, 'senders'>,
+) => {
+  let [said] = await ask(g, 'mail_check', {}, null, options, host)
   return {
     body: String(comp(said, 'content').body),
     level: comp(said, 'finding').level,
@@ -318,4 +325,26 @@ test('a sender this host cannot build is what the check says out loud', async ()
     sender: { via: 'stash' },
   })
   assertEquals(fine.level, undefined)
+})
+
+let namedCheck = await posted({
+  from: 'ana@books.example',
+  message_id: '<a@x>',
+})
+test('mail check recognizes senders lent by the host', async () => {
+  let sends = 0
+  let host = {
+    senders: {
+      platform: {
+        send: () => {
+          sends++
+          return Promise.resolve({})
+        },
+      },
+    },
+  }
+  let options = { sender: { via: 'platform' } }
+  assertEquals((await checkup(namedCheck, options)).level, 'warn')
+  assertEquals((await checkup(namedCheck, options, host)).level, undefined)
+  assertEquals(sends, 0)
 })

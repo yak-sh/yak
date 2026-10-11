@@ -3,7 +3,7 @@
 // process that can send sends them, once.
 
 import { test } from '@yaks/testing'
-import { assert, assertEquals } from '@std/assert'
+import { assert, assertEquals, assertRejects } from '@std/assert'
 import {
   type Bundle,
   type Comp,
@@ -21,6 +21,7 @@ import { mailbox } from './plugin.ts'
 import { club, noon } from './testing.ts'
 import { type Sender, sending } from './send.ts'
 import { stash } from './stash.ts'
+import type { Host } from '@yaks/host'
 
 let unarmed = { via: 'cloudflare', account: 'a' } as Transport
 
@@ -72,6 +73,96 @@ let letter = (eid: string, extra: Bundle = { entity: { eid } }): Bundle => ({
 
 let read = async (g: { read: (q: string) => unknown }, eid: string) =>
   ((await g.read(`.entity.eid=${eid}`)) as Bundle[])[0]
+
+// Committed letters at the handler boundary keep sender checks independent
+// of the pool's scheduling and startup work.
+let lentTx = detached(ram(pooled))
+lentTx.patch([ana])
+let handOver = async (code: Handlers, eid: string) => {
+  lentTx.patch([letter(eid)])
+  let write = async (rows: Bundle[]) => {
+    let written = await lentTx.patch(rows)
+    return lentTx.get(written.map((entity) => entity.eid))
+  }
+  await code.mail_post(
+    {
+      kind: 'created',
+      name: 'deliver',
+      entity: { eid },
+    },
+    lentTx,
+    write,
+  )
+  return (await lentTx.get([eid]))[0]
+}
+
+test('a host sender delivers once and records its receipt', async () => {
+  let box = stash()
+  let code = effects({ senders: { platform: box } }, {
+    sender: { via: 'platform' },
+  })
+  let sent = await handOver(code, 'lent-once')
+  assertEquals(box.sent.map((m) => [m.to, m.subject]), [
+    ['ana@books.example', 'Potluck Friday'],
+  ])
+  assertEquals((sent.mail as Comp).message_id, 'stash-1')
+  assert(sent.delivered)
+  await handOver(code, 'lent-once')
+  assertEquals(box.sent.length, 1)
+})
+
+test('host sender names take precedence over built-in senders', async () => {
+  for (let via of ['cloudflare', 'stash']) {
+    let box = stash()
+    let sent = await handOver(
+      effects({ senders: { [via]: box } }, { sender: { via } }),
+      `lent-${via}`,
+    )
+    assert(sent.delivered)
+    assertEquals(box.sent.length, 1)
+  }
+})
+
+test('the built-in stash retains receipts across delivery attempts', async () => {
+  let code = effects(null, { sender: { via: 'stash' } })
+  let first = await handOver(code, 'stash-first')
+  let second = await handOver(code, 'stash-second')
+  assertEquals((first.mail as Comp).message_id, 'stash-1')
+  assertEquals((second.mail as Comp).message_id, 'stash-2')
+})
+
+test('an unavailable host sender waits and can arrive on the next attempt', async () => {
+  let host: Pick<Host, 'senders'> = { senders: {} }
+  let code = effects(host, { sender: { via: 'platform' } })
+  await assertRejects(
+    () => handOver(code, 'lent-late'),
+    Error,
+    'no sender called',
+  )
+  let [waiting] = await lentTx.get(['lent-late'])
+  assertEquals(waiting.deliver, {
+    to: 'p-ana',
+    waiting: 'no sender called "platform"',
+  })
+  let box = stash()
+  host.senders = { platform: box }
+  let sent = await handOver(code, 'lent-late')
+  assert(sent.delivered)
+  assert((sent.deliver as Comp).waiting == null)
+  assertEquals(box.sent.length, 1)
+})
+
+test('inherited object names cannot select a host sender', async () => {
+  let code = effects({ senders: {} }, { sender: { via: 'constructor' } })
+  await assertRejects(
+    () => handOver(code, 'lent-unknown'),
+    Error,
+    'no sender called "constructor"',
+  )
+  let [kept] = await lentTx.get(['lent-unknown'])
+  assertEquals((kept.deliver as Comp).tried, undefined)
+  assertEquals(kept.bounced, undefined)
+})
 
 test('a transport that is named and complete sends', async () => {
   let code = effects(null, { sender: { via: 'stash' } })
@@ -200,19 +291,22 @@ test('a transport rejection records a bounce and reaches the effect reporter wit
   assertEquals(calls, 1)
 })
 
-test('a letter handed over and never settled is not handed over again', async () => {
-  let g = await rig({})
-  await g.apply([ana])
-  await g.apply([letter('e-lost', {
+let handedOver = await rig({})
+await handedOver.apply([
+  ana,
+  letter('e-lost', {
     entity: { eid: 'e-lost' },
     deliver: { tried: noon() },
-  })], { trusted: true })
-  await g.apply([letter('e-sent'), {
+  }),
+  letter('e-sent'),
+  {
     entity: { eid: 'e-sent' },
     delivered: { at: noon() },
-  }], { trusted: true })
+  },
+], { trusted: true })
+test('a letter handed over and never settled is not handed over again', async () => {
   let box = stash()
-  await sweep(g, box)
+  await sweep(handedOver, box)
   assertEquals(box.sent, [])
 })
 

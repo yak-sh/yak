@@ -30,39 +30,8 @@ import { BODY, DOC, TITLE } from '@yaks/doc'
 import { at } from './addr.ts'
 import { html, text } from './md.ts'
 import { BOUNCED, DELIVER, DELIVERED, EMAIL, MAIL } from './comp.ts'
-
-/** One message, composed and ready to leave. */
-export type Message = {
-  /** the address it is from */
-  from: string
-  /** the address it is going to */
-  to: string
-  /** the subject line */
-  subject: string
-  /** the body as plain text */
-  text: string
-  /** the same body as HTML */
-  html: string
-  /** the Message-ID it answers, unbracketed, when it answers one */
-  replyTo?: string
-}
-
-/** What a transport reports about a message it accepted. */
-export type Receipt = {
-  /** the Message-ID the transport gave the letter, unbracketed, if any —
-   * stored as `mail.message_id`, which is what a reply to it threads on */
-  id?: string
-}
-
-/**
- * A transport: the one thing this package does not implement. `send` resolves
- * when the message is away and rejects when it is not — the rejection's message
- * is what lands in `bounced.reason`, so make it worth reading.
- */
-export type Sender = {
-  /** hand one message over */
-  send: (message: Message) => Promise<Receipt>
-}
+import type { Message, Sender } from '@yaks/host'
+export type { Message, Receipt, Sender } from '@yaks/host'
 
 /** How the effect is built. */
 export type Post = {

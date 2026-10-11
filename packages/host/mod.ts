@@ -14,6 +14,8 @@ import type { Local } from '@yaks/secrets'
 import type { Finding, Reply, Runner } from '@yaks/tools'
 import type { Context } from '@yaks/tracker/report'
 import type { Config } from './config.ts'
+import type { Sender } from './senders.ts'
+export type { Message, Receipt, Sender } from './senders.ts'
 export type { Config, Configured, Options, Plug } from './config.ts'
 export type Role = string
 export type Feed = (
@@ -68,6 +70,9 @@ export interface Host {
   blobs: Blobs
   /** binary artifacts shared by the harness and the HTTP blob door */
   artifacts: Blobs
+  /** Named mail senders this host lends, selected by @yaks/mail's
+   * `sender: {via}`. The host owns credentials, metering and lifetime. */
+  senders?: Readonly<Record<string, Sender>>
   /** Providers this host explicitly lends; the default supplies sandboxes. */
   machines?: {
     /** Load one configured provider when commands or files need it. */

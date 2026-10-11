@@ -287,7 +287,10 @@ A plugin entry in a `yak serve` configuration can be:
 ```
 
 The CLI host resolves `{ "secret": "NAME" }` through
-[@yaks/secrets](../secrets); direct TypeScript calls receive strings. No sender
+[@yaks/secrets](../secrets); direct TypeScript calls receive strings.
+`sender: { "via": "platform" }` selects a sender named `platform` in
+[`Host.senders`](../host/README.md#mail-senders). A host's named sender takes
+precedence over the built-in Cloudflare and stash senders. No sender
 configuration leaves outbound requests waiting too. Missing Cloudflare
 credentials or an unsupported transport writes `deliver.waiting` on every owed
 letter and throws through the host's effect reporter into the tracker, never

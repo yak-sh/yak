@@ -44,22 +44,17 @@ export type Options = {
   pull?: Pull
 }
 
-/** A transport, as a config names one. */
-export type Transport =
-  | {
-    /** Cloudflare Email Sending */
-    via: 'cloudflare'
-    /** the Cloudflare account id */
-    account: string
-    /** an API token that may send mail — `{"secret": "…"}` in the config */
-    token: string
-    /** the API root, to point a test at a stub */
-    base?: string
-  }
-  | {
-    /** the sender that keeps letters in memory: a development server */
-    via: 'stash'
-  }
+/** A sender selected by name: a host capability, Cloudflare or stash. */
+export type Transport = {
+  /** a name in Host.senders, or a built-in sender */
+  via: string
+  /** the Cloudflare account id, for the built-in cloudflare sender */
+  account?: string
+  /** an API token that may send mail — `{"secret": "…"}` in the config */
+  token?: string
+  /** the Cloudflare API root, to point a test at a stub */
+  base?: string
+}
 
 /** The arrival endpoint: where a mail edge posts a letter, and what it must
  * present. */

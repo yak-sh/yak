@@ -14,26 +14,39 @@
 
 import type { Handler, Handlers } from '@yaks/effects'
 import { after } from '@yaks/fp'
+import type { Host } from '@yaks/host'
 import type { Options, Transport } from './options.ts'
 import type { Sender } from './send.ts'
 import { letterOf, owed, sending } from './send.ts'
 import { cloudflare } from './cloudflare.ts'
 import { stash } from './stash.ts'
 
-/** A named transport, built — or the reason there is none. A `via` nothing
- * here implements will never become a sender, and one whose credentials have
- * not arrived may yet: both are reported rather than thrown, and neither stops
- * the server from starting. */
-export let post = (said: Transport): { sender?: Sender; waiting?: string } => {
+/** A named sender, lent by the host or built here — or the reason there is
+ * none. An unavailable sender leaves letters waiting without stopping boot. */
+export let post = (
+  said: Transport,
+  host?: Pick<Host, 'senders'> | null,
+): { sender?: Sender; waiting?: string } => {
+  if (host?.senders && Object.hasOwn(host.senders, said.via)) {
+    return { sender: host.senders[said.via] }
+  }
   if (said.via == 'stash') return { sender: stash() }
   if (said.via == 'cloudflare') {
-    return said.account && said.token ? { sender: cloudflare(said) } : {
-      waiting:
-        'waiting for credentials: a cloudflare sender needs `account` and `token`',
-    }
+    return said.account && said.token
+      ? {
+        sender: cloudflare({
+          ...said,
+          account: said.account,
+          token: said.token,
+        }),
+      }
+      : {
+        waiting:
+          'waiting for credentials: a cloudflare sender needs `account` and `token`',
+      }
   }
   return {
-    waiting: `no sender called ${JSON.stringify((said as Transport).via)}`,
+    waiting: `no sender called ${JSON.stringify(said.via)}`,
   }
 }
 
@@ -50,18 +63,22 @@ export let waiting = (reason: string): Handler => (event, tx, write) =>
  * sender cannot be built, nothing is sent and the letters wait in the graph
  * rather than the server refusing to start. */
 export let effects = (
-  _host: unknown,
+  host?: Pick<Host, 'senders'> | null,
   options: Options = {},
 ): Handlers => {
   let kept: Sender | undefined
   return {
     mail_post: (event, tx, write, attempt) => {
       let said = options.sender
-      let { sender, waiting: reason } = said?.via == 'stash'
-        ? { sender: kept ??= stash() }
-        : said
-        ? post(said)
+      let { sender, waiting: reason } = said
+        ? post(said, host)
         : { waiting: 'waiting for a configured sender' }
+      // A built-in stash keeps its receipts across attempts. A host's sender
+      // is already constructed and owns its own lifetime.
+      if (
+        sender && said?.via == 'stash' &&
+        !Object.hasOwn(host?.senders ?? {}, said.via)
+      ) sender = kept ??= sender
       let run = sender
         ? sending({
           sender,

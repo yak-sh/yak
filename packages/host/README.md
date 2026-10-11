@@ -21,15 +21,15 @@ stop.abort()
 equal(stopped(), true)
 ```
 
-| Export                                        | Provides                                                                                                               |
-| --------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
-| `@yaks/host`                                  | `assembly`, facet contracts, `Host`, `Config`, `Options`, `Plug`, `Role`, `Feed`, `MigrationMonitor`, `ROLES`, `every` |
-| `@yaks/host/assembly`                         | `assembly`, `Assembly`, `AssemblyOpts`, `Binding`, `Meaning`                                                           |
-| `@yaks/host/roles`                            | Role and facet selection data without loading the assembly runtime                                                     |
-| `@yaks/host/words`                            | Vocabulary assembly, `wordsOf`, `taking`, `Words`, `Declared`, `Taken`                                                 |
-| `@yaks/host/config`                           | Configuration types, `used`, `given`, `chosen`                                                                         |
-| `@yaks/host/documents`, `@yaks/host/keywords` | Shared intrinsic declarations and vocabulary keywords                                                                  |
-| `@yaks/host/anatomy`                          | Composition evidence, projected when read                                                                              |
+| Export                                        | Provides                                                                                                                                                             |
+| --------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `@yaks/host`                                  | `assembly`, facet contracts, `Host`, `Config`, `Configured`, `Options`, `Plug`, `Role`, `Feed`, `MigrationMonitor`, `Message`, `Receipt`, `Sender`, `ROLES`, `every` |
+| `@yaks/host/assembly`                         | `assembly`, `Assembly`, `AssemblyOpts`, `Binding`, `Meaning`                                                                                                         |
+| `@yaks/host/roles`                            | Role and facet selection data without loading the assembly runtime                                                                                                   |
+| `@yaks/host/words`                            | Vocabulary assembly, `wordsOf`, `taking`, `Words`, `Declared`, `Taken`                                                                                               |
+| `@yaks/host/config`                           | Configuration types, `used`, `given`, `chosen`                                                                                                                       |
+| `@yaks/host/documents`, `@yaks/host/keywords` | Shared intrinsic declarations and vocabulary keywords                                                                                                                |
+| `@yaks/host/anatomy`                          | Composition evidence, projected when read                                                                                                                            |
 
 ## Assembly
 
@@ -162,6 +162,44 @@ equal(releases, ['job'])
 Concrete hosts may supply `resolveHome` at their compatibility door to translate
 stored homes into machine homes. Plugins only consume the returned machine
 reference and command directory.
+
+## Mail senders
+
+`Host.senders` lends named
+[senders](../mail/README.md#the-transport-is-supplied-by-the-caller).
+`@yaks/mail` selects one with `sender: {via: name}` in its plugin options. The
+host constructs the sender and owns its credentials, metering and lifetime. A
+lent name takes precedence over mail's built-in Cloudflare and stash senders.
+The assembly passes this capability to plugin factories through `Binding.host`
+or `Binding.ready`.
+
+```ts
+import type { Host, Message } from '@yaks/host'
+import { post } from '@yaks/mail/effects'
+import { equal } from '@yaks/testing'
+
+let sent: Message[] = []
+let host: Pick<Host, 'senders'> = {
+  senders: {
+    platform: {
+      send: (message) => {
+        sent.push(message)
+        return Promise.resolve({ id: 'letter-1' })
+      },
+    },
+  },
+}
+let { sender } = post({ via: 'platform' }, host)
+let receipt = await sender!.send({
+  from: 'hello@books.example',
+  to: 'ana@example.com',
+  subject: 'Friday',
+  text: 'Bring a dish.',
+  html: '<p>Bring a dish.</p>',
+})
+equal(receipt, { id: 'letter-1' })
+equal(sent.map((message) => message.subject), ['Friday'])
+```
 
 ## Failure reporting
 
