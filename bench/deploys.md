@@ -318,3 +318,22 @@ called the platform and exited 0 in 0.535 seconds, and warm help exited 0 in
 0.269 seconds. The cold call adds 5.889 seconds over the warm call in this
 observation, including source transfer, verification, disk writes and cold
 module downloads. Container startup precedes these command timings.
+
+| SHA         | Gate run                                                              | Push → live | Observation                                           |
+| ----------- | --------------------------------------------------------------------- | ----------: | ----------------------------------------------------- |
+| `d058ad04e` | [38127723976](https://github.com/yak-sh/yak/actions/runs/38127723976) |     75.655s | first registry-pin and CLI-assets rollout             |
+| `0d87cecd1` | [38128661732](https://github.com/yak-sh/yak/actions/runs/38128661732) |     28.962s | first consecutive source push                         |
+| `a85cd9d6b` | [38128761348](https://github.com/yak-sh/yak/actions/runs/38128761348) |     26.666s | next source push inside the former image-build window |
+
+The consecutive pushes were 101 seconds apart. The second arrived 72.038 seconds
+after the first went live, while the old image build would still have held the
+Build slot. The first Build had completed at 09:32:07 UTC, 48 seconds before the
+next push at 09:32:55; no sandbox image work remained to queue behind. The
+second Build completed at 09:33:44. Both verified rows have zero recorded
+propagation delay and are retained in `deploys.jsonl`, without an estimated SHA
+match or a backfill. The Markdown-only `91febea3a` started no Workers Build and
+is excluded from this pair. The measured pushes change launcher source comments
+while keeping runtime behavior fixed. Builds queue stamps remain unavailable
+with the current credential; the removed Docker path and the preceding Build's
+completion establish that the second push cannot wait behind its sandbox image
+build.
