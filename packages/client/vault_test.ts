@@ -55,12 +55,13 @@ test('a rebuild keeps the number the entity had', async () => {
   next.close()
 })
 
-test('a watch sees the local tier arrive at boot', async () => {
-  let db = fakeDb()
-  let done = await reload(fakeIdb(db))
-  done.close()
+// Keep the previous page's durable state once; this test covers its arrival.
+let bootDb = fakeDb()
+let bootPage = await reload(fakeIdb(bootDb))
+bootPage.close()
 
-  let c = boxClient(undefined, { vault: fakeIdb(db) })
+test('a watch sees the local tier arrive at boot', async () => {
+  let c = boxClient(undefined, { vault: fakeIdb(bootDb) })
   let drafts = c.watch('.draft.text~=cumin')
   assertEquals(drafts.value, []) // nothing yet: a vault is asynchronous
   await c.ready

@@ -208,12 +208,19 @@ test('disconnect/refusal keep server paint but readiness awaits a successful res
   c.close()
 })
 
+// Prepare a persisted server answer once; reopening must only restore its IDs.
+let reopenDisk = wireStash()
+let reopening = fixture({ wireVault: reopenDisk, epoch: 'boot' })
+await reopening.c.ready
+let reopeningWatch = reopening.c.watch('café', server)
+reopening.frame({ id: 's1', bundles: [row('hit')] })
+await reopening.c.cache.idle()
+let coldClient = fixture({ wireVault: reopenDisk, epoch: 'boot' }).c
+let coldWatch = coldClient.watch('café', server)
+
 test('server-only reopens restore bounded semantic membership without local matching', async () => {
-  let disk = wireStash()
-  let { c, frame } = fixture({ wireVault: disk, epoch: 'boot' })
-  await c.ready
-  let w = c.watch('café', server)
-  frame({ id: 's1', bundles: [row('hit')] })
+  let { c } = reopening
+  let w = reopeningWatch
   w.close()
   await c.cache.idle()
   let again = c.watch('café', server)
@@ -221,8 +228,8 @@ test('server-only reopens restore bounded semantic membership without local matc
   assertEquals(again.ready, false)
   assert(c.ent('hit')) // payload retention still works
   c.close()
-  let next = fixture({ wireVault: disk, epoch: 'boot' }).c
-  let cold = next.watch('café', server)
+  let next = coldClient
+  let cold = coldWatch
   await next.ready
   assertEquals(ids(cold.value), ['hit'])
   assertEquals(cold.ready, false)
@@ -417,28 +424,43 @@ test('body omission is unloaded while covered omission is a known absence', () =
   c.close()
 })
 
+let riders = fixture({ retention: 0 })
+let riderWatch = riders.c.watch('riders', server)
+riders.frame({
+  id: 's1',
+  peers: [{ ...row('peer'), doc: { title: 'peer', body: 'rider' } }],
+})
+riders.c.watch('also rider', server)
+riders.frame({ id: 's2', peers: [row('peer')] })
+
 test('a rider is answered and held, never a member; each role releases independently', () => {
-  let { c, frame } = fixture({ retention: 0 })
-  let w = c.watch('riders', server)
-  frame({
-    id: 's1',
-    peers: [{ ...row('peer'), doc: { title: 'peer', body: 'rider' } }],
-  })
+  let { c } = riders
+  // Readiness came from the socket; role releases use the replica door.
+  let frame = c.cache.land
+  let w = riderWatch
   assertEquals(ids(w.value), ['peer'])
   assertEquals(w.ready, true)
   assert(c.ent('peer'))
   assertEquals(c.cache.includes('s1', 'peer'), true)
   assertEquals(c.cache.loaded('peer', 'recipe', 'serves'), false)
-  let other = c.watch('also rider', server)
-  frame({ id: 's2', peers: [row('peer')] })
   frame({ id: 's1', peerGone: ['peer'] })
   assert(c.ent('peer'))
   assertEquals(comp(c.ent('peer'), 'doc').body, undefined)
-  frame({ id: 's2', bundles: [row('peer')] })
-  frame({ id: 's2', gone: ['peer'] })
-  assertEquals(ids(other.value), ['peer']) // it still rides
+  c.close()
+})
+
+let roles = fixture({ retention: 0 })
+let roleWatch = roles.c.watch('member and rider', server)
+roles.frame({ id: 's1', peers: [row('peer')] })
+
+test('a member departure leaves its rider until the authoritative reset', () => {
+  let { c } = roles
+  let frame = c.cache.land
+  frame({ id: 's1', bundles: [row('peer')] })
+  frame({ id: 's1', gone: ['peer'] })
+  assertEquals(ids(roleWatch.value), ['peer']) // it still rides
   assert(c.ent('peer'))
-  frame({ id: 's2', reset: true, bundles: [] })
+  frame({ id: 's1', reset: true, bundles: [] })
   assertEquals(c.ent('peer'), undefined)
   c.close()
 })
@@ -689,29 +711,37 @@ test('one frame may give an eid two different projected role scopes', () => {
   c.close()
 })
 
-test('content deltas do not rewrite unchanged semantic answer checkpoints', async () => {
-  let writes = 0
-  let disk = wireStash()
-  let { c, frame } = fixture({
-    epoch: 'boot',
-    wireVault: {
-      ...disk,
-      saveAnswers: (...args) => {
-        writes++
-        return disk.saveAnswers!(...args)
-      },
+// Prepare the answer whose content edits must leave its checkpoint alone.
+let checkpointWrites = 0
+let checkpointDisk = wireStash()
+let checkpoints = fixture({
+  epoch: 'boot',
+  wireVault: {
+    ...checkpointDisk,
+    saveAnswers: (...args) => {
+      checkpointWrites++
+      return checkpointDisk.saveAnswers!(...args)
     },
-  })
-  await c.ready
-  c.watch('opaque', server)
-  frame({ id: 's1', bundles: [row('a'), row('b')] })
-  await c.cache.idle()
-  assertEquals(writes, 1)
+  },
+})
+await checkpoints.c.ready
+checkpoints.c.watch('opaque', server)
+checkpoints.frame({ id: 's1', bundles: [row('a'), row('b')] })
+await checkpoints.c.cache.idle()
+
+test('content deltas do not rewrite unchanged semantic answer checkpoints', async () => {
+  let { c } = checkpoints
+  let frame = c.cache.land
+  assertEquals(checkpointWrites, 1)
   frame({ id: 's1', bundles: [{ ...row('a'), doc: { title: 'edit' } }] })
   await c.cache.idle()
-  assertEquals(writes, 1)
-  frame({ id: 's1', bundles: [row('b'), row('a')], reset: true })
+  assertEquals(checkpointWrites, 1)
+  frame({
+    id: 's1',
+    bundles: [row('b'), { ...row('a'), doc: { title: 'edit' } }],
+    reset: true,
+  })
   await c.cache.idle()
-  assertEquals(writes, 2)
+  assertEquals(checkpointWrites, 2)
   c.close()
 })

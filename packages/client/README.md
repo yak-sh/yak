@@ -28,7 +28,8 @@ deno add jsr:@yaks/client
 ## Use
 
 This local client creates a recipe and watches matching entities. `mutate()`
-applies a [batch](../graph/README.md#data-model) through the graph.
+applies a [batch](../graph/README.md#data-model) through the graph. See also
+[reading entities](#reading-entities) and [observing edits](#observing-edits).
 
 ```ts
 import { client } from '@yaks/client'
@@ -37,35 +38,25 @@ import { equal } from '@yaks/testing'
 
 let vocab = loadVocab({
   $defs: {
-    doc: {
-      component: true,
-      type: 'object',
-      properties: { title: { type: 'string' } },
-    },
     recipe: {
       component: true,
-      type: 'object',
-      properties: { serves: { type: 'number' }, course: { type: 'string' } },
+      properties: { course: { type: 'string' } },
     },
   },
 })
-let box = client(vocab, [], { vault: false })
-let eid = crypto.randomUUID()
+let box = client(vocab, [], {
+  vault: false,
+  wireVault: false,
+  provenance: false,
+})
+let eid = 'dal'
 await box.mutate([{
   entity: { eid },
-  doc: { title: 'Dal' },
-  recipe: { serves: 4, course: 'dinner' },
+  recipe: { course: 'dinner' },
 }])
 let dinners = box.watch('.recipe.course=dinner')
 equal(dinners.value.length, 1)
 equal(dinners.ready, true)
-equal(box.ent(eid)?.doc, { title: 'Dal' })
-equal(box.read('.recipe').length, 1)
-let changes = 0
-let stop = dinners.subscribe(() => changes++)
-await box.mutate([{ entity: { eid }, recipe: { serves: 6 } }])
-equal(changes, 1)
-stop()
 dinners.close()
 box.close()
 ```
@@ -758,3 +749,66 @@ equal(replica.active(), 0)
 
 Application patch formats are adapted to bundles by the application; `patch` and
 `receive` accept the graph and sync interfaces, not an app's data shape.
+
+## Observing edits
+
+A watch notifies each subscribed listener after a matching entity changes.
+Unsubscribe when the listener no longer needs updates, and close the watch when
+its caller is finished.
+
+```ts
+import { client } from '@yaks/client'
+import { loadVocab } from '@yaks/vocab'
+import { equal } from '@yaks/testing'
+
+let vocab = loadVocab({
+  $defs: {
+    recipe: {
+      component: true,
+      properties: { serves: { type: 'number' }, course: { type: 'string' } },
+    },
+  },
+})
+let box = client(vocab, [], {
+  vault: false,
+  wireVault: false,
+  provenance: false,
+})
+let eid = 'dal'
+await box.mutate([{ entity: { eid }, recipe: { serves: 4, course: 'dinner' } }])
+let dinners = box.watch('.recipe.course=dinner')
+let changes = 0
+let stop = dinners.subscribe(() => changes++)
+await box.mutate([{ entity: { eid }, recipe: { serves: 6 } }])
+equal(changes, 1)
+stop()
+dinners.close()
+box.close()
+```
+
+## Reading entities
+
+`ent()` reads one cached entity by ID; `read()` answers a query once.
+
+```ts
+import { client } from '@yaks/client'
+import { loadVocab } from '@yaks/vocab'
+import { equal } from '@yaks/testing'
+
+let vocab = loadVocab({
+  $defs: {
+    doc: { component: true, properties: { title: { type: 'string' } } },
+    recipe: { component: true, properties: {} },
+  },
+})
+let box = client(vocab, [], {
+  vault: false,
+  wireVault: false,
+  provenance: false,
+})
+let eid = 'dal'
+await box.mutate([{ entity: { eid }, doc: { title: 'Dal' }, recipe: {} }])
+equal(box.ent(eid)?.doc, { title: 'Dal' })
+equal(box.read('.recipe').length, 1)
+box.close()
+```
