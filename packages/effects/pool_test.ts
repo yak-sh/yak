@@ -6,6 +6,8 @@
 import { assert, assertEquals } from '@std/assert'
 import { type Bundle, type Comp, graph, type Storage } from '@yaks/graph'
 import { ram } from '@yaks/ram'
+import { after } from '@yaks/fp'
+import { loadVocab, pick } from '@yaks/vocab'
 import { test, tick, until } from '@yaks/testing'
 import { effects, type Handler, type Opts } from './registry.ts'
 import { leaseEid } from './lease.ts'
@@ -73,16 +75,48 @@ test('a batch that never commits owes nothing', async () => {
   assertEquals(await owed(a.g), [])
 })
 
+// Exercise the registry's commit hooks over RAM transactions: the behavior
+// here is scheduling committed events, rather than graph write admission.
+let committingWords = loadVocab([
+  pick(pooledBlog.docs[0], ['entity', 'post']),
+  pooledBlog.docs[1],
+  pick(pooledBlog.docs[2], ['post_note']),
+])
+let committingStore = ram(committingWords, { number: true })
+let committedRuns: string[] = []
+let committingFx = effects(committingWords, {
+  write: (bundles) => {
+    committingStore.tx((tx) => tx.patch(bundles))
+    return bundles
+  },
+})
+let committingGraph = graph({
+  storage: committingStore,
+  vocab: committingWords,
+})
+committingFx.handle({
+  post_note: (e) => void committedRuns.push(`${e.kind} ${e.entity.eid}`),
+})
+await committingFx.work(committingGraph)
+let commitPost = (bundle: Bundle) =>
+  after(
+    committingStore.tx((tx) =>
+      after(committingFx.hooks!.precondition!([bundle], tx), (ready) => {
+        tx.patch(ready)
+        return committingFx.hooks!.commit!(ready, tx)
+      })
+    ),
+    (committed) =>
+      committingFx.hooks!.effect!(committed, committingGraph.outside),
+  )
+
 test('a process working the pool runs what it writes, once committed', async () => {
-  let a = proc(store())
-  a.fx.handle({ post_note: a.note })
-  await a.fx.work(a.g)
-  await a.g.apply([post('p1')])
-  await a.g.apply([post('p1', { published: true })])
-  await a.g.apply([post('p1', { title: 'Two' })])
-  await a.fx.idle()
-  assertEquals(a.ran, ['created p1', 'changed p1'])
-  assertEquals((await owed(a.g)).filter((r) => r.startsWith('post_note')), [])
+  await commitPost(post('p1'))
+  await commitPost(post('p1', { published: true }))
+  await commitPost(post('p1', { title: 'Two' }))
+  await committingFx.idle()
+  assertEquals(committedRuns, ['created p1', 'changed p1'])
+  assertEquals(await committingStore.rows('.effect.handler=post_note'), [])
 })
 
 test('a pooled event retains all components moved on its target', async () => {
