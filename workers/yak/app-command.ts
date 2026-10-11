@@ -15,6 +15,10 @@ type Acts = {
     mutation: { entities: Bundle[] },
   ) => Promise<{ entities: string[]; aliases: Record<string, string> }>
   query: (line: string) => Promise<unknown>
+  worker?: (
+    path: string,
+    args: Record<string, unknown>,
+  ) => Promise<{ text: string; value: Record<string, unknown> }>
 }
 
 /** Keep the worker's bytes for clients and show JSON as readable fields. */
@@ -67,36 +71,26 @@ export let commandsIn = async (
       }),
   )
 
-export let commandAt = async (
-  env: Pick<Env, 'DISPATCH' | 'SESSION_SECRET' | 'APEX'>,
-  space: Space,
-  app: App,
+/** Invoke a command through its caller's acts, with one authorization and
+ * answer shape whether its graph is local or hosted. */
+export let commandReply = async (
+  at: string,
   who: Who,
   name: string,
   tool: ToolDef,
   args: Record<string, unknown>,
   door: Acts,
-  execution: NonNullable<Parameters<typeof commandWorker>[6]> = {},
 ): Promise<{ text: string; value: Record<string, unknown> }> => {
   if (!mayCall(tool.floor, who.person, who.role)) {
     throw new CallError('access', `${name} requires the app ${tool.floor}`)
   }
-  let at = `${space.slug}/${app.slug}`
   return await invoke<{ text: string; value: Record<string, unknown> }>(
     tool,
     args,
     {
-      worker: async (path, args) => {
-        let res = await commandWorker(
-          env,
-          space,
-          app,
-          who,
-          path,
-          args,
-          execution,
-        )
-        return workerReply(res, name, at)
+      worker: (path, args) => {
+        if (!door.worker) throw new Error('app worker is unavailable')
+        return door.worker(path, args)
       },
       query: async (line) => {
         let rows = await door.query(line)
@@ -122,6 +116,31 @@ export let commandAt = async (
       },
     },
   )
+}
+
+/** A hosted command's dispatch boundary, preserving the recorded invocation
+ * beside its scoped caller. */
+export let commandAt = async (
+  env: Pick<Env, 'DISPATCH' | 'SESSION_SECRET' | 'APEX'>,
+  space: Space,
+  app: App,
+  who: Who,
+  name: string,
+  tool: ToolDef,
+  args: Record<string, unknown>,
+  door: Acts,
+  execution: NonNullable<Parameters<typeof commandWorker>[6]> = {},
+): Promise<{ text: string; value: Record<string, unknown> }> => {
+  let at = `${space.slug}/${app.slug}`
+  return await commandReply(at, who, name, tool, args, {
+    ...door,
+    worker: async (path, args) =>
+      workerReply(
+        await commandWorker(env, space, app, who, path, args, execution),
+        name,
+        at,
+      ),
+  })
 }
 
 /** Invoke a named command in this app with the page caller's store acts. */

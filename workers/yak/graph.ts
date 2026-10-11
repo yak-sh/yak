@@ -267,7 +267,7 @@ import {
 import { weighed } from './meter.ts'
 import { embedder, SPACE, texts } from './embedding.ts'
 import { directoryOf } from './directory.ts'
-import { commandAt } from './app-command.ts'
+import { commandAt, commandReply } from './app-command.ts'
 import { vaultOf } from './vault.ts'
 import {
   aside,
@@ -1969,23 +1969,31 @@ export class Store {
                 applied: true,
                 run: async (call: Bundle) => {
                   let ns = this.#bind.STORE, appId = this.#get('app')
-                  if (!ns || !appId) throw new Error('app store is unavailable')
-                  let dir = directoryOf(ns)
-                  let held = await dir.appAt(appId)
-                  if (!held || held.app.trashed || held.space.trashed) {
+                  if (!appId) throw new Error('app store is unavailable')
+                  let dir = ns ? directoryOf(ns) : null
+                  let held = dir ? await dir.appAt(appId) : null
+                  if (
+                    dir && (!held || held.app.trashed || held.space.trashed)
+                  ) {
                     throw new Error('app is unavailable')
                   }
                   let actor = who(call)
                   // Unattributed recorded work is the app's automation. A
                   // browser's vouched instrument alone never supplies a person.
                   let person = actor?.by ?? (actor?.via ? null : appId)
+                  let local = policy(g.storage, { ignore: this.#staleGrant })
                   let role = person == appId
                     ? 'editor'
                     : person
-                    ? await dir.role(held.space, person) ??
-                      (await dir.grant(held.app, person))?.access ?? null
+                    ? held && dir
+                      ? await dir.role(held.space, person) ??
+                        (await dir.grant(held.app, person))?.access ?? null
+                      : await local.levelOf(person, appId)
                     : null
-                  if (!reads(mode(held.app.access), role)) {
+                  let access = held
+                    ? mode(held.app.access)
+                    : await local.modeOf(appId)
+                  if (!reads(access, role)) {
                     throw new Denied(person, appId, 'viewer', 'read')
                   }
                   if (person) {
@@ -2001,36 +2009,48 @@ export class Store {
                     role,
                     ...(actor?.via ? { via: actor.via } : {}),
                   }
-                  let answered = await commandAt(
-                    this.#bind,
-                    held.space,
-                    held.app,
-                    caller,
-                    tool.name!,
-                    declared[tool.name!],
-                    argsOf(call),
-                    {
-                      query: (line) => Promise.resolve(g.read(line)),
-                      apply: async ({ entities }) => {
-                        let made = await g.apply(signed(entities, {
-                          ...(person ? { by: person } : {}),
-                          ...(actor?.via ? { via: actor.via } : {}),
-                        }))
-                        return {
-                          entities: [...new Set(made.map((b) => b.entity.eid))],
-                          aliases: minted(made),
-                        }
+                  let acts = {
+                    query: (line: string) => Promise.resolve(g.read(line)),
+                    apply: async ({ entities }: { entities: Bundle[] }) => {
+                      let made = await g.apply(signed(entities, {
+                        ...(person ? { by: person } : {}),
+                        ...(actor?.via ? { via: actor.via } : {}),
+                      }))
+                      return {
+                        entities: [...new Set(made.map((b) => b.entity.eid))],
+                        aliases: minted(made),
+                      }
+                    },
+                  }
+                  let answered = held
+                    ? await commandAt(
+                      this.#bind,
+                      held.space,
+                      held.app,
+                      caller,
+                      tool.name!,
+                      declared[tool.name!],
+                      argsOf(call),
+                      acts,
+                      {
+                        call: call.entity.eid,
+                        at: String(
+                          (call.created as Comp | undefined)?.at ?? '',
+                        ),
+                        source: String(
+                          (call.call as Comp | undefined)?.source ??
+                            call.entity.eid,
+                        ),
                       },
-                    },
-                    {
-                      call: call.entity.eid,
-                      at: String((call.created as Comp | undefined)?.at ?? ''),
-                      source: String(
-                        (call.call as Comp | undefined)?.source ??
-                          call.entity.eid,
-                      ),
-                    },
-                  )
+                    )
+                    : await commandReply(
+                      this.#get('name') ?? '',
+                      caller,
+                      tool.name!,
+                      declared[tool.name!],
+                      argsOf(call),
+                      acts,
+                    )
                   return [{
                     entity: { eid: '$answer' },
                     content: { body: answered.text },
