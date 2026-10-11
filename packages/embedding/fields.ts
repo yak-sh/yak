@@ -24,6 +24,7 @@ import {
   exists,
   type Expr,
   fn,
+  from,
   join,
   lit,
   ne,
@@ -179,16 +180,26 @@ export let pieces = (
 /**
  * Every entity that wears an embedded field, text or no text: what is owed a
  * look when the fields themselves change. It reads no text, so it costs an
- * index scan per field rather than the corpus. One statement per `arms`
- * fields, as {@link pieces}.
+ * index scan per field rather than the corpus. `owners` drives those seeks
+ * from a smaller set of candidates. One statement per `arms` fields, as
+ * {@link pieces}.
  */
-export let wearers = (fields: Field[], arms = ARMS): Query[] =>
+export let wearers = (fields: Field[], arms = ARMS, owners?: Query): Query[] =>
   cut(fields, arms).filter((group) => group.length).map((group) =>
     union(...group.map((f) =>
       select({
         cols: [as(col('entity', 'c'), 'owner')],
-        from: table(f.comp, 'c'),
-        joins: scope(f),
+        from: owners ? from(owners, 'o') : table(f.comp, 'c'),
+        joins: [
+          ...owners
+            ? [{
+              how: 'cross' as const,
+              src: table(f.comp, 'c'),
+              on: eq(col('entity', 'c'), col('owner', 'o')),
+            }]
+            : [],
+          ...scope(f),
+        ],
         where: and(...allowed(f)),
       })
     ))

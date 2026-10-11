@@ -24,10 +24,12 @@
 
 import {
   and,
+  ARMS,
   as,
   col,
   count,
   type CreateTrigger,
+  cut,
   desc,
   eq,
   exists,
@@ -41,6 +43,7 @@ import {
   render,
   select,
   table,
+  union,
   val,
 } from '@yaks/sql'
 import type { Statements } from '@yaks/sql'
@@ -284,33 +287,36 @@ export let owe = (
   fields: Field[],
   tables?: Set<string>,
 ): void => {
-  let held = (e: Expr) =>
-    or(
-      ...[...tables ?? []].map((name) =>
-        exists(select({
-          cols: [lit(1)],
-          from: table(name),
-          where: eq(col('entity', name), e),
-        }))
-      ),
+  // Start at the moved tables: a new exclusion can be empty, and removing one
+  // can reveal text without a vector. All fields are checked for those owners.
+  let candidates = tables
+    ? cut([...tables], db.arms ?? ARMS).map((group) =>
+      union(
+        ...group.map((name) =>
+          select({ cols: [as(col('entity'), 'owner')], from: table(name) })
+        ),
+      )
     )
-  let vectors = select({
-    cols: [col('owner')],
-    from: table(TABLE),
-    where: tables ? held(col('owner', TABLE)) : undefined,
-  })
-  let worn = tables
-    ? fields.filter((f) =>
-      tables.has(f.comp) || !!f.on && tables.has(f.on) ||
-      f.not?.some((name) => tables.has(name))
-    )
-    : fields
-  for (let q of [...wearers(worn, db.arms), vectors]) {
-    db.query(
-      queue({
-        q: select({ cols: [col('owner'), lit(1)], from: from(q, 'w') }),
-      }),
-    )
+    : [undefined]
+  for (let owners of candidates) {
+    let vectors = select({
+      cols: [col('owner', 'v')],
+      from: owners ? from(owners, 'o') : table(TABLE, 'v'),
+      joins: owners
+        ? [{
+          how: 'cross',
+          src: table(TABLE, 'v'),
+          on: eq(col('owner', 'v'), col('owner', 'o')),
+        }]
+        : [],
+    })
+    for (let q of [...wearers(fields, db.arms, owners), vectors]) {
+      db.query(
+        queue({
+          q: select({ cols: [col('owner'), lit(1)], from: from(q, 'w') }),
+        }),
+      )
+    }
   }
 }
 

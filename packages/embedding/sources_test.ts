@@ -12,7 +12,7 @@ import { loadVocab, type VocabDoc } from '@yaks/vocab'
 import { schema } from './ddl.ts'
 import { fields, searched } from './fields.ts'
 import { vectorOf } from './near.ts'
-import { queues } from './owed.ts'
+import { due, queues, watch } from './owed.ts'
 import { sources, sweep } from './sweep.ts'
 import { embedder } from './testing.ts'
 
@@ -180,4 +180,51 @@ test('a queued tombstone spends its old vector', async () => {
   assertEquals(deleted.has('plain'), true)
   await sweep(deleted.db, deleted.text, embedder)
   assertEquals(deleted.has('plain'), false)
+})
+
+// Reconcile triggers as a deploy would, after the old vocabulary's queue was
+// drained. The corpus and its vectors predate the changed exclusion.
+let empty = await fixture(false)
+empty.db.query({ t: 'delete', from: 'draft' })
+let beforeDraft = empty.text.map((f) => ({ ...f, not: ['result'] }))
+await sweep(empty.db, beforeDraft, embedder)
+let addedEmpty = watch(empty.db, empty.text)
+
+test('installing an empty exclusion queues none of the existing corpus', () => {
+  assertEquals(addedEmpty, true)
+  assertEquals(due(empty.db, 64), [])
+  assertEquals(empty.has('plain'), true)
+})
+
+let introduced = await fixture(false)
+await sweep(introduced.db, beforeDraft, embedder)
+watch(introduced.db, introduced.text)
+
+test('installing an exclusion queues only its preexisting vector owners', () => {
+  assertEquals(due(introduced.db, 64).map((d) => d.owner), [
+    introduced.owner('draft'),
+  ])
+})
+
+test('a newly installed exclusion prunes its preexisting vector', async () => {
+  assertEquals(introduced.has('draft'), true)
+  await sweep(introduced.db, introduced.text, embedder)
+  assertEquals(introduced.has('draft'), false)
+  assertEquals(introduced.has('plain'), true)
+})
+
+let unblocked = await fixture(false)
+await sweep(unblocked.db, unblocked.text, embedder)
+watch(unblocked.db, beforeDraft)
+
+test('removing an exclusion queues its newly eligible nonvector owners', () => {
+  assertEquals(due(unblocked.db, 64).map((d) => d.owner), [
+    unblocked.owner('draft'),
+  ])
+})
+
+test('a removed exclusion restores its formerly blocked vector', async () => {
+  assertEquals(unblocked.has('draft'), false)
+  await sweep(unblocked.db, beforeDraft, embedder)
+  assertEquals(unblocked.has('draft'), true)
 })
