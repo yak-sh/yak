@@ -368,19 +368,21 @@ test('an empty directory pushes nothing', async () => {
   assertEquals(p.deployed, [])
 })
 
-test('a directory reads as text, bytes that are not UTF-8 as base64, and no dotfiles', async () => {
-  let dir = await Deno.makeTempDir()
-  await Deno.mkdir(`${dir}/js`)
-  await Deno.writeTextFile(`${dir}/index.html`, '<p>hi')
-  await Deno.writeTextFile(`${dir}/js/app.js`, 'let a = 1')
-  await Deno.writeFile(`${dir}/icon.png`, new Uint8Array([0x89, 0x50, 0xff]))
-  await Deno.writeTextFile(`${dir}/.DS_Store`, 'x')
-  assertEquals(await read(dir), [
+// The directory is input to the reader, built once before reading it.
+let dir = await Deno.makeTempDir()
+await Deno.mkdir(`${dir}/js`)
+await Deno.writeTextFile(`${dir}/index.html`, '<p>hi')
+await Deno.writeTextFile(`${dir}/js/app.js`, 'let a = 1')
+await Deno.writeFile(`${dir}/icon.png`, new Uint8Array([0x89, 0x50, 0xff]))
+await Deno.writeTextFile(`${dir}/.DS_Store`, 'x')
+let directoryFiles = await read(dir)
+await Deno.remove(dir, { recursive: true })
+test('a directory reads as text, bytes that are not UTF-8 as base64, and no dotfiles', () => {
+  assertEquals(directoryFiles, [
     { path: 'icon.png', base64: 'iVD/' },
     { path: 'index.html', content: '<p>hi' },
     { path: 'js/app.js', content: 'let a = 1' },
   ])
-  await Deno.remove(dir, { recursive: true })
 })
 
 test('fileOf keeps UTF-8 as text', () => {
