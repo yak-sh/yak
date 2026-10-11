@@ -281,15 +281,18 @@ The sandbox deploy names the existing toolchain image by registry reference.
 Worker assets carry a compressed, content-addressed CLI workspace and its
 launcher. Each `yak` call reads the live descriptor; a changed workspace is
 checksum-verified and installed into an immutable directory before running
-`packages/cli/yak.ts`. Concurrent calls converge on the same complete directory.
-The launcher retries a workspace retired between requests rather than using an
-old fallback. The original lockfile is retained, with Deno's npm lazy caching so
-unused workspace dependencies are not downloaded on startup. CLI RPC uses
-`initialize`, `tools/list` and `tools/call`; the connector supplies command
-schemas and grammar. Package views are loaded dynamically from that workspace.
-This keeps one CLI implementation and removes sandbox Docker work from all
-Worker deploys. Toolchain changes are provisioned separately before their pin is
-landed.
+`packages/cli/yak.ts`. An OS file lock serializes workspace installation and
+module-cache filling across processes. A readiness marker is published only
+after a successful fill; a second caller waits for the remaining work and reuses
+it. The kernel releases a killed installer's lock, and the next caller removes
+abandoned staging. The launcher retries a workspace retired between requests
+rather than using an old fallback. The original lockfile is retained, with
+Deno's npm lazy caching so unused workspace dependencies are not downloaded on
+startup. CLI RPC uses `initialize`, `tools/list` and `tools/call`; the connector
+supplies command schemas and grammar. Package views are loaded dynamically from
+that workspace. This keeps one CLI implementation and removes sandbox Docker
+work from all Worker deploys. Toolchain changes are provisioned separately
+before their pin is landed.
 
 Local measurements: 1,511 runtime/config files compress to 2,330,514 bytes;
 generation takes 0.45–0.54 seconds. Concurrent verified installation takes 0.373
@@ -319,24 +322,30 @@ called the platform and exited 0 in 0.535 seconds, and warm help exited 0 in
 observation, including source transfer, verification, disk writes and cold
 module downloads. Container startup precedes these command timings.
 
-T-122065 measures the first call immediately after `sandbox_write` lends a fresh
-sandbox, with no delay inserted before the timed command. Preparation finishes
-`yak --help` before lending returns: background installation alone races an
-immediate first call. The CLI workspace and module cache are ready when the
-agent receives the machine. Warm-up failures are reported and ordinary sandbox
-commands remain available.
+T-122065 returns to warming `yak --help` in the background when lending a
+sandbox. Ordinary commands can run immediately. A yak call during warm-up waits
+for the existing workspace install and cache fill rather than repeating them.
+The configured cache-filling child owns the lock, so killing its parent cannot
+release it while downloads continue. Commands run outside the lock once ready.
 
-| SHA         | Gate run                                                              | First help before | First help after | Warm help after |
-| ----------- | --------------------------------------------------------------------- | ----------------: | ---------------: | --------------: |
-| `1578f73c8` | [38130517587](https://github.com/yak-sh/yak/actions/runs/38130517587) |            5.889s |           0.266s |          0.269s |
+| SHA         | Gate run                                                              | First ls | Immediate first help | First help after 8 s |
+| ----------- | --------------------------------------------------------------------- | -------: | -------------------: | -------------------: |
+| `934670c2c` | [38131865418](https://github.com/yak-sh/yak/actions/runs/38131865418) |   0.006s |               7.749s |               0.284s |
 
-Both observations use fresh throwaway accounts and time `yak --help` inside the
-container. The after probe verified live version
-`1c158fc5-724e-4351-ac37-383705aeea36`. Its fresh lending call took 12.25
-seconds end to end, including container startup, CLI preparation and RPC: the
-cold setup cost moves into lending rather than disappearing. Both help calls
-exited 0. The probe spaces and their containers were permanently erased
-afterwards.
+Each observation uses a fresh sandbox in its own `yak admin throwaway` account
+and times the command inside the container, excluding startup and RPC. The live
+version was `c4934ab3-317c-4e47-aca9-f0ae709e4a78`; the served launcher matched
+the landed source. All three commands exited 0. The first `ls` finished before
+the cache readiness marker appeared; its full lending/tool call took 6.100
+seconds. Immediate help began before readiness and finished with the marker
+present. The delayed help's eight-second pause is excluded from its command
+timing. The probe spaces and containers were permanently erased.
+
+Local multi-process probes confirmed one workspace download and one cache fill
+for concurrent callers. Killing a downloader allowed retry and removed its
+staging; killing a launcher parent retained its active child's lock. A killed or
+failed cache fill left no readiness marker and retried using the installed
+workspace. The lend test also proves ordinary commands run while warming.
 
 | SHA         | Gate run                                                              | Push → live | Observation                                           |
 | ----------- | --------------------------------------------------------------------- | ----------: | ----------------------------------------------------- |
