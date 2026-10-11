@@ -1,11 +1,17 @@
 import { equal, test } from '@yaks/testing'
 import type { Env } from './env.ts'
+import { HANDOFF } from './handoff.ts'
 import { handler } from './kernel.ts'
 
 let policy = 'max-age=31536000; includeSubDomains'
 let env = (answer: () => Response) => {
   let door = { fetch: () => Promise.resolve(answer()) }
-  return { SITE: door, APPS: door, ASSETS: door } as unknown as Env
+  return {
+    SITE: door,
+    APPS: door,
+    ASSETS: door,
+    IDENTITY: door,
+  } as unknown as Env
 }
 
 for (let host of ['yaks.app', 'hsts.yaks.app']) {
@@ -79,4 +85,16 @@ test('HSTS covers a preflight response', async () => {
   equal(res.status, 204)
   equal(res.headers.get('strict-transport-security'), policy)
   equal(res.headers.get('access-control-allow-origin'), '*')
+})
+
+test('a custom domain keeps its own transport policy', async () => {
+  let res = await handler.fetch(
+    new Request(`https://customer.example${HANDOFF}`),
+    env(() =>
+      new Response('handoff', {
+        headers: { 'strict-transport-security': 'max-age=60' },
+      })
+    ),
+  )
+  equal(res.headers.get('strict-transport-security'), 'max-age=60')
 })

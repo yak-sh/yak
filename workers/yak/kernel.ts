@@ -676,9 +676,12 @@ export let handler = {
       {},
       async () => {
         let res = await slid(req, env, await router.fetch(req, env))
-        // Every gateway answer, including refusals and failures, carries the
-        // transport policy. Rebuilding also handles immutable asset headers;
-        // an upgrade keeps the runtime's socket, just as dispatch.ts does.
+        let host = hostOf(req)
+        if (host != apex(env) && !host.endsWith(`.${apex(env)}`)) return res
+        // Every answer on our zone, including refusals and failures, carries
+        // the transport policy. A customer's domain keeps its own policy.
+        // Rebuilding handles immutable asset headers; an upgrade keeps the
+        // runtime's socket, just as dispatch.ts does.
         let headers = new Headers(res.headers)
         headers.set(
           'strict-transport-security',
