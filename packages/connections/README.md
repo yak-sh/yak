@@ -192,9 +192,10 @@ derives each `uses` link's id.
 
 ## Terminal sign-in
 
-The `./cli` facet provides `yak auth`. It lists integrations, or signs in to one
-named by its name or title. The sign-in link may be opened on another machine;
-paste the complete return URL into the masked terminal input.
+The `./cli` facet declares `yak auth` and loads its implementation when the
+command runs. It lists integrations, or signs in to one named by its name or
+title. The sign-in link may be opened on another machine; paste the complete
+return URL into the masked terminal input.
 
 ```sh
 yak auth
@@ -209,11 +210,13 @@ through `pick`. Native sessions use the person's default provider account.
 integration before sign-in, or return a callback without terminal input. A
 callback may include a website session, kept only in the connection's vault
 record as `website_session`; it is not the OAuth bearer.
+`@yaks/connections/authorize-cli` exports `authorizeCLI`, `authIO`, `readHidden`
+and their types for hosts that supply terminal sign-in.
 
 ```ts ignore
 // A host supplies its graph and vault and may discover integrations in prepare.
 import { authorize } from '@yaks/connections'
-import { authorizeCLI } from '@yaks/connections/cli'
+import { authorizeCLI } from '@yaks/connections/authorize-cli'
 let auth = authorize({ graph, vault, owner })
 console.log(await authorizeCLI(auth, 'openai'))
 ```

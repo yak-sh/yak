@@ -4,7 +4,7 @@ import { type Comp, mint } from '@yaks/graph'
 import { reveal } from '@yaks/secrets'
 import { equal, ok, test } from '@yaks/testing'
 import { authorize, integrationEid, pick, signins } from './mod.ts'
-import { authorizeCLI } from './cli.ts'
+import { authorizeCLI } from '@yaks/connections/authorize-cli'
 
 let open = () =>
   compose({

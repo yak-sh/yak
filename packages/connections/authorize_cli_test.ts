@@ -8,7 +8,7 @@ import {
   type Authorization,
   authorizeCLI,
   readHidden,
-} from '@yaks/connections/cli'
+} from '@yaks/connections/authorize-cli'
 
 test('connection authorize lists targets without starting a sign-in', async () => {
   let calls: string[] = []

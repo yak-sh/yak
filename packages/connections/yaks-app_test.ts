@@ -6,7 +6,7 @@ import { type Comp, mint } from '@yaks/graph'
 import { reveal } from '@yaks/secrets'
 import { authorize, pick } from './mod.ts'
 import { botCallback, yaksApp } from './yaks-app.ts'
-import { authorizeCLI } from './cli.ts'
+import { authorizeCLI } from '@yaks/connections/authorize-cli'
 
 let origin = 'https://example.test'
 let target =

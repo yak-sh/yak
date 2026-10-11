@@ -18,7 +18,7 @@ import { person } from '@yaks/cli/host'
 import { given, read as configAt, used } from '@yaks/cli/config'
 import type { Options as TrackerOptions } from '@yaks/tracker/routes'
 import { accountCredential, AccountError, authorize } from '@yaks/connections'
-import { authorizeCLI } from '@yaks/connections/cli'
+import { authorizeCLI } from '@yaks/connections/authorize-cli'
 import { yaksApp } from '@yaks/connections/yaks-app'
 import { ADMIN, BOT } from '../../workers/yak/lib/bots.ts'
 
