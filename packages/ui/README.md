@@ -328,31 +328,31 @@ uses the skin or the kit. `Contents` links to each entry. A **stop** is the id
 of the whole guide, a group or an entry (`stopsOf`); `Page` renders one stop.
 
 ```ts
-import { h } from 'preact'
-import { renderToString } from 'preact-render-to-string'
-import { composition, ledger, Specimens } from '@yaks/ui'
+import { h, toChildArray, type VNode } from 'preact'
+import { renderToString as html } from 'preact-render-to-string'
+import { composition, Gallery, ledger, Specimens } from '@yaks/ui'
 import { Contents, Page, stopsOf } from '@yaks/ui/guide'
 import { equal } from '@yaks/testing'
 
 const c = { ...composition, skin: ledger }
 equal(stopsOf(c).includes('Button'), true)
-const specimen = Specimens({ name: 'Button', composition: c })
+const page = Page({ stop: 'Button', composition: c })
+const selected = page.props.children as VNode<Parameters<typeof Specimens>[0]>
+const specimen = (selected.type as typeof Specimens)(selected.props)
 equal(specimen.props['data-skin'], 'skin')
+const metadata = toChildArray(specimen.props.children)
+  .filter((node) => (node as VNode).type !== Gallery)
+equal(html(h('div', {}, metadata)).includes('skin rendering'), true)
+
+const entry = (stop: string) => ({ href: `#${stop}` })
 equal(
-  renderToString(h(Page, { stop: 'Button', composition: c }))
-    .includes('skin rendering'),
-  true,
-)
-equal(
-  renderToString(
-    h(Contents, { composition: c, entry: (stop) => ({ href: `#${stop}` }) }),
-  ).includes('href="#Button"'),
+  html(h(Contents, { composition: c, entry })).includes('href="#Button"'),
   true,
 )
 ```
 
-A specimen's `data-skin` attribute describes its skin coverage. `Page` renders
-the entry; `Contents` turns guide stops into caller-supplied links.
+The selected page's specimen carries its skin coverage in `data-skin` and
+metadata. Its `Gallery` holds the examples; the caller supplies contents links.
 
 `routes(host?)` serves `/ui` as static HTML with inline CSS, contents and theme,
 skin and scheme links. A host supplies gathered contributions as `host.ui`; the
