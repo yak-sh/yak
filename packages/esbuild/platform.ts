@@ -45,13 +45,18 @@ let urlProp =
 /** Preserve a package module's URL when its source is bundled into an entry.
  * Page paths resolve against the browser's entry URL. A server entry supplies
  * its absolute logical module URL, since workerd names modules without an origin. */
-export let located = (files: Record<string, string>, entry: string | URL) => {
+export let located = (
+  files: Record<string, string>,
+  entry: string | URL,
+  baseFor?: (path: string) => string,
+) => {
   let out: Record<string, string> = {}
   let path = typeof entry == 'string' ? entry : entry.pathname.slice(1)
   let up = '../'.repeat(path.split('/').length - 1)
   for (let [path, source] of Object.entries(files)) {
     if (!path.startsWith('node_modules/@yaks/') || !script(path)) continue
-    let base = up + ASSETS + path.slice('node_modules/'.length)
+    let base = baseFor?.(path) ??
+      up + ASSETS + path.slice('node_modules/'.length)
     for (let imp of parse(source)[0].toReversed()) {
       if (imp.d != -2) continue
       let tail = urlProp.exec(source.slice(imp.e))
@@ -92,6 +97,13 @@ let together = (name: string, a: string, b: string) => {
 /** Seed declared platform packages and their dependency closure without I/O.
  * @yaks packages must use "platform"; none is fetched from a registry. */
 export let seed = (files: Record<string, string>, catalog: Catalog): Seed => {
+  for (let path of Object.keys(files)) {
+    if (/^(?:\.\/)*node_modules(?:\/|$)/.test(path)) {
+      throw new Error(
+        `${path}: node_modules is the compiler's reserved package namespace`,
+      )
+    }
+  }
   let out: Seed = {
     files: { ...files },
     assets: {},

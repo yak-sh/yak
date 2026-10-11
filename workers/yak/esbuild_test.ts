@@ -12,6 +12,7 @@ import * as apps from './apps.ts'
 import type { Env } from './env.ts'
 import { ADA, platform, seeded, visit } from './serving-probe.ts'
 import { call, type Ctx } from './tools.ts'
+import { handler } from './kernel.ts'
 
 let WORKER = 'export default { fetch: () => new Response("compiled") }'
 
@@ -26,8 +27,15 @@ let scenario = async (
   let asks: Ask[] = []
   let ESBUILD = {
     fetch: async (r: Request) => {
-      let job = await r.json() as { ask: Ask; catalog: typeof catalog }
+      let job = await r.json() as {
+        ask: Ask
+        catalog: typeof catalog
+        shared: boolean
+        origin: string
+      }
       assertEquals(job.catalog, catalog)
+      assertEquals(job.shared, true)
+      assertEquals(job.origin, 'https://yaks.app')
       let ask = job.ask
       asks.push(ask)
       let out = answer(ask)
@@ -82,6 +90,10 @@ let scenario = async (
     write,
     served,
     response,
+    release: async () => {
+      let space = (await dir.space('ada'))!
+      return (await dir.app(space, 'cookbook'))!.source!.split('/').pop()!
+    },
     seconds,
     [Symbol.dispose]: () => {
       globalThis.fetch = was
@@ -447,20 +459,61 @@ test('with no compiler bound, a deploy that needs one is refused in a sentence',
 
 test('package assets serve with their MIME and survive reuse and rollback', async () => {
   let css = '.Button { color: red }'
+  let shared = (version: string) => `__packages/${version.repeat(64)}/kit.js`
+  let first = shared('a')
+  let second = shared('b')
+  let pageCode = (path: string) =>
+    `export { n } from 'https://yaks.app/${path}'`
   using s = await scenario((ask) => ({
     ...compiles(ask),
+    pages: Object.fromEntries(ask.pages.map((entry) => [
+      entry,
+      pageCode(ask.files['main.ts'].includes('= 2') ? second : first),
+    ])),
     assets: {
       '__packages/@yaks/kit/Button.css': ask.files['main.ts'].includes('= 2')
         ? '.Button { color: green }'
         : '.Button { color: red }',
     },
+    shared: {
+      [ask.files['main.ts'].includes('= 2') ? second : first]:
+        ask.files['main.ts'].includes('= 2')
+          ? 'export let n = 2'
+          : 'export let n = 1',
+    },
   }))
+  let publicAsset = (path: string, init: RequestInit = {}) =>
+    handler.fetch(new Request(`https://yaks.app/${path}`, init), s.env)
+  let absent = await publicAsset(first)
+  assertEquals(absent.status, 404)
+  assertEquals(absent.headers.get('cache-control'), 'private, no-store')
   await s.write({
     'index.html': PAGE,
     'main.ts': 'let n: number = 1',
     'Button.css': '.App {}',
   })
   await s.tool('app_deploy')
+  let oldPage = `api/assets/${await s.release()}/main.ts`
+  await s.tool('app_publish', { name: 'shared-package-cookbook' })
+  let module = await publicAsset(first)
+  assertEquals(await module.text(), 'export let n = 1')
+  assertEquals(module.headers.get('access-control-allow-origin'), '*')
+  assertEquals(
+    module.headers.get('cache-control'),
+    'public, max-age=31536000, immutable',
+  )
+  assertEquals(
+    module.headers.get('content-type'),
+    'text/javascript; charset=utf-8',
+  )
+  let sharedHead = await publicAsset(first, { method: 'HEAD' })
+  assertEquals(sharedHead.headers.get('content-length'), '16')
+  assertEquals(await sharedHead.text(), '')
+  let sharedPart = await publicAsset(first, { headers: { range: 'bytes=0-5' } })
+  assertEquals(sharedPart.status, 206)
+  assertEquals(await sharedPart.text(), 'export')
+  assertEquals((await publicAsset(first, { method: 'POST' })).status, 405)
+  assertEquals((await publicAsset('sha/' + 'a'.repeat(64))).status, 404)
   let path = '__packages/@yaks/kit/Button.css'
   assertEquals(await s.served(path), {
     type: 'text/css; charset=utf-8',
@@ -479,15 +532,36 @@ test('package assets serve with their MIME and survive reuse and rollback', asyn
   await s.tool('app_deploy')
   assertEquals(s.asks.length, 1)
   assertEquals((await s.served(path)).body, css)
+  assertEquals((await s.served('main.ts')).body, pageCode(first))
   css = '.Button { color: green }'
+  s.env.CF_VERSION_METADATA = { id: 'new-compiler' }
   await s.write({ 'main.ts': 'let n: number = 2' })
   await s.tool('app_deploy')
+  assertEquals((await s.served('main.ts')).body, pageCode(second))
   assertEquals((await s.served(path)).body, css)
+  assertEquals(await (await publicAsset(first)).text(), 'export let n = 1')
+  assertEquals(await (await publicAsset(second)).text(), 'export let n = 2')
+  assertEquals(
+    await (await s.response(oldPage)).text(),
+    pageCode(first),
+  )
+  await s.tool('app_install', { name: 'shared-package-cookbook', as: 'copy' })
+  let published = await apps.fetch(visit('/copy/main.ts'), s.env)
+  assertEquals(await published.text(), pageCode(first))
+  assertEquals(s.asks.length, 2)
+  await s.tool('app_publish', { name: 'shared-package-cookbook' })
+  s.env.CF_VERSION_METADATA = { id: 'next-compiler' }
+  await s.tool('app_update', { app: 'copy' })
+  let updated = await apps.fetch(visit('/copy/main.ts'), s.env)
+  assertEquals(await updated.text(), pageCode(second))
+  assertEquals(s.asks.length, 2)
   await s.tool('app_rollback', { version: 2 })
   assertEquals((await s.served(path)).body, '.Button { color: red }')
   await s.write({ 'index.html': '<h1>no modules</h1>' })
   await s.tool('app_deploy')
   assertEquals((await s.response(path)).status, 404)
+  assertEquals(await (await publicAsset(first)).text(), 'export let n = 1')
+  assertEquals(await (await publicAsset(second)).text(), 'export let n = 2')
 })
 
 test('compiler assets cannot replace an app-owned path', async () => {

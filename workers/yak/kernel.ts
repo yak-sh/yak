@@ -130,6 +130,16 @@ let mcp: Handler = async (req, env) =>
 
 let serve = async (req: Request, env: Env, r: Route) => {
   let asked = new URL(req.url).pathname
+  if (r.space == null && asked.startsWith('/__packages/')) {
+    // The canonical origin is common to every app. Files caches compiler
+    // assets by content, without a tenant or release discriminator.
+    return (await import('./files.ts')).door(env).fetch(
+      new Request(
+        `https://files.invalid${asked}`,
+        { method: req.method, headers: req.headers },
+      ),
+    )
+  }
   if (r.space != null) {
     // The one path on a space's hostname the kernel answers itself (drop.ts,
     // T-34230): a file dropped on the space's own page, which becomes an app.

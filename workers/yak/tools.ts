@@ -229,6 +229,7 @@ import {
 } from './meter.ts'
 import { acceptLink, paced, SUBJECT } from './invite.ts'
 import {
+  BUILT,
   draftFiles,
   draftManifest,
   editing,
@@ -872,6 +873,7 @@ let published = async (
   files: Awaited<ReturnType<typeof staged>>,
   target?: Version,
   reload?: Reload,
+  preserve = false,
 ) => {
   let c = ctx.clock ?? clock()
   let blobs = files.files
@@ -896,6 +898,7 @@ let published = async (
         keys,
         blobs,
         files.manifest,
+        preserve,
       ),
   )
   // What this release will be called. Its seed is staged under this version
@@ -1322,8 +1325,11 @@ let released = async (
   app: App,
   who: Who,
   store: Door,
-  target?: Version,
-  reload?: Reload,
+  { target, reload, preserve = false }: {
+    target?: Version
+    reload?: Reload
+    preserve?: boolean
+  } = {},
 ) => {
   let standing = await waiting(ctx.dir, space, app, who)
   let blobs = r2RawObjects(ctx.env.BLOBS)
@@ -1375,29 +1381,60 @@ let released = async (
       files,
       target,
       reload,
+      preserve,
     )
   } finally {
     await unfenced(ctx.dir, standing, fence, who)
   }
 }
 
-// One app's code copied onto another's, which is what an install is and what
-// an update is again: every file of the source written under the target's own
-// prefix, and every file the target has that the source does not, gone — so
-// what serves after is what the publisher wrote, and nothing of a version
-// before it lingers. What the platform keeps beside an app's files travels
-// with neither (versions.ts `own`): `blobs/` is where a page's own bytes land
-// (apps.ts `blobKey`) — a photo somebody picked, the app's data — and
-// `versions/` is one app's own deploy history, which the copy earns for
-// itself on the release that follows.
+// Select the publication, rather than whatever its publisher currently serves.
+// Older versions without a release source still have their pinned file bytes.
+let transferable = (path: string) =>
+  !!own([path]).length || path.startsWith(BUILT)
+
+let offered = async (ctx: Ctx, from: { space: Space; app: App }) => {
+  let number = from.app.published!.version
+  let version = (await ctx.dir.deploys(from.app)).find((v) =>
+    v.version == number
+  )
+  if (!version) {
+    throw refuse(
+      'missing',
+      `published version ${number} has no retained release`,
+    )
+  }
+  let blobs = r2Objects(ctx.env.BLOBS)
+  let root = `${version.source ?? `${from.space.slug}/${from.app.slug}`}/`
+  let store = pins(blobs, `${from.space.slug}/${from.app.slug}/`)
+  let paths = version.source
+    ? (await blobs.list(root)).map((key) => key.slice(root.length))
+    : Object.keys(version.files)
+  paths = paths.filter(transferable)
+  let read = async (path: string) => {
+    let bytes = version.source
+      ? await blobs.read(root + path)
+      : await store.get(version.files[path])
+    if (!bytes) {
+      throw refuse(
+        'missing',
+        `published version ${number} has no bytes for ${path}`,
+      )
+    }
+    return bytes
+  }
+  return { paths, read }
+}
+
+// A publication's source and completed build travel together. The copy earns
+// its own history, and its uploaded blobs and store data stay its own.
 let copied = (
   ctx: Ctx,
-  from: { space: Space; app: App },
+  from: Awaited<ReturnType<typeof offered>>,
   onto: { space: Space; app: App },
   who: Who,
 ) => {
   let blobs = r2Objects(ctx.env.BLOBS)
-  let there = fileKey(from.space, from.app, '')
   return modifying(
     blobs,
     ctx.dir,
@@ -1407,18 +1444,17 @@ let copied = (
     (app) => prefixOf(onto.space, app),
     async (draft, _app, _attempt, editFiles) => {
       let here = `${draft}/`
-      let paths = (keys: string[], prefix: string) =>
-        own(keys.map((k) => k.slice(prefix.length)))
-      let code = paths(await blobs.list(there), there)
-      let had = paths(await editFiles.list(here), here)
+      let code = from.paths
+      let had = (await editFiles.list(here)).map((k) => k.slice(here.length))
+        .filter(transferable)
       await Promise.all(
         code.map(async (path) =>
-          editFiles.put(here + path, await blobs.get(there + path))
+          editFiles.put(here + path, await from.read(path))
         ),
       )
       let gone = had.filter((p) => !code.includes(p))
       await Promise.all(gone.map((path) => editFiles.delete(here + path)))
-      return { wrote: code, gone }
+      return { wrote: own(code), gone: own(gone) }
     },
   )
 }
@@ -1618,6 +1654,16 @@ let declaring = async (
   let file = key?.split('/').pop() ?? 'vocab.json'
   if (!key) return { file, source: null }
   return { file, source: decoded(await blobs.get(key)) }
+}
+
+let offeredWords = async (files: Awaited<ReturnType<typeof offered>>) => {
+  let file = ['vocab.yml', 'vocab.json'].find((path) =>
+    files.paths.includes(path)
+  )
+  return {
+    file: file ?? 'vocab.json',
+    source: file ? decoded(await files.read(file)) : null,
+  }
 }
 
 /**
@@ -2971,8 +3017,7 @@ let OURS: Row[] = [
         app,
         who,
         store,
-        undefined,
-        reload,
+        { reload },
       )
       return {
         text:
@@ -3195,7 +3240,7 @@ let OURS: Row[] = [
         app,
         who,
         store,
-        want,
+        { target: want },
       )
       return {
         text: `put ${space.slug}/${app.slug} back to v${version}, live ` +
@@ -4586,17 +4631,14 @@ let OURS: Row[] = [
         )
       }
       let version = offer.app.published.version
+      let source = await offered(ctx, offer)
       // The words the copy will declare, read off the app it is copied from,
       // before anything is written. A release refuses a manifest it cannot
       // read (vocab.ts `appDoc`) — and that refusal used to arrive after the
       // app row was minted and its files copied, leaving a v0 app nobody asked
       // for in the space, counted against its ceiling (T-37809). Nothing has
       // happened yet here, so a refusal costs the installer nothing.
-      let said = await declaring(
-        r2Objects(ctx.env.BLOBS),
-        offer.space,
-        offer.app,
-      )
+      let said = await offeredWords(source)
       if (said.source != null) {
         let { homes } = await homesIn(ctx, space, s)
         homed(unsaid(appDoc(said.source, said.file), {}, said.file), homes)
@@ -4616,7 +4658,7 @@ let OURS: Row[] = [
       await ctx.dir.apply({ entities }, vouched(who))
       let app = (await ctx.dir.app(space, s))!
       let onto = { space, app }
-      let { wrote } = await copied(ctx, offer, onto, who)
+      let { wrote } = await copied(ctx, source, onto, who)
       // A release of the copy, in the installer's own space: the components
       // its vocab.json declares planted in its store, its tools listed under
       // its slug, its worker.js uploaded as its own script.
@@ -4626,6 +4668,7 @@ let OURS: Row[] = [
         app,
         who,
         appStore(ctx.env.STORE, space, app),
+        { preserve: true },
       )
       return {
         text:
@@ -4682,11 +4725,8 @@ let OURS: Row[] = [
       // moves: a vocabulary that only grew lands through the store's own
       // additive graft, and one that conflicts is refused here with the
       // sentence a deploy gives (T-32728), leaving the copy as it was.
-      let said = await declaring(
-        r2Objects(ctx.env.BLOBS),
-        from.space,
-        from.app,
-      )
+      let source = await offered(ctx, from)
+      let said = await offeredWords(source)
       if (said.source != null) {
         await fits(ctx, space, app, store, said.source, said.file)
       }
@@ -4697,15 +4737,14 @@ let OURS: Row[] = [
           )
         ? 'required'
         : undefined
-      let { wrote, gone } = await copied(ctx, from, { space, app }, who)
+      let { wrote, gone } = await copied(ctx, source, { space, app }, who)
       let out = await released(
         ctx,
         space,
         app,
         who,
         store,
-        undefined,
-        reload,
+        { reload, preserve: true },
       )
       await ctx.dir.apply({
         entities: [{ entity: { eid: app.eid }, installed: { version: to } }],

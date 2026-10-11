@@ -40,9 +40,9 @@ module per entry, the lock, and any errors, each a line an agent can act on.
 - `loaded(page, html)` is the module scripts a page loads, and `mapped(html)`
   what its import maps name.
 - `dependencies(text)` reads `package.json`'s `dependencies`.
-- `compile(ask, catalog)`, from `./compile`, builds what an ask names and
-  answers. It never throws for the app's own mistakes, which are the answer's
-  `errors`.
+- `compile(ask, catalog, origin)`, from `./compile`, builds what an ask names
+  and answers. It never throws for the app's own mistakes, which are the
+  answer's `errors`.
 
 ## The compile
 
@@ -67,17 +67,23 @@ equal(page.n, 42)
 
 esbuild runs as a process beside the compile's own, started by the first build
 and kept for the next. Every build reads from the ask's files and the installed
-packages, never the disk, so the output depends on the ask alone: the same ask
-compiles to the same bytes on any host.
+packages, never the disk. The same ask, catalog, npm pins and shared-module
+origin compile to the same bytes on any host.
 
 The module's default export is a server's `fetch`, for `deno serve`. A host
-posts it a **job** (`Job`): `{ask, catalog}`, the app's ask and the host's
-toolkit catalog (below). The server responds with the answer as JSON, or with
-507 when esbuild's process ended under the build. That is the compiler running
-out of memory, not a mistake in the app's code, so `compile` throws `Stopped`
-instead of answering, and the next build starts esbuild again. yaks.app runs
-this server in a container of its own, behind a Worker that adds the catalog to
-each ask.
+posts it a **job** (`Job`): `{ask, catalog, origin?, shared?}`, the app's ask
+and the host's toolkit catalog (below). The server responds with the answer as
+JSON, or with 507 when esbuild's process ended under the build. That is the
+compiler running out of memory, not a mistake in the app's code, so `compile`
+throws `Stopped` instead of answering, and the next build starts esbuild again.
+yaks.app runs this server in a container of its own, behind a Worker that adds
+the catalog to each ask.
+
+A host opts into shared browser modules with `shared: true` once it can store
+and serve `Answer.shared`. Jobs omitting this flag return fully bundled pages
+and app-local resources, so a compiler rollout keeps answering older hosts.
+Direct `compile` calls enable sharing by default; the fourth argument
+`{shared: false}` selects fully bundled pages.
 
 ## Platform toolkit sources
 
@@ -88,11 +94,12 @@ version, not a registry version:
 { "dependencies": { "@yaks/client": "platform", "preact": "^10" } }
 ```
 
-`compile(ask, catalog = {})` accepts the catalog from its host wrapper. The app
-sends only its `Ask`; it cannot supply a catalog. Existing npm-only callers need
-no second argument. A toolkit dependency requires that its compiler has the
-package and rejects any version other than `"platform"`, never fetching a stale
-`@yaks/*` registry release.
+`compile(ask, catalog = {}, origin = 'https://yaks.app')` accepts the catalog
+and shared-module origin from its host wrapper. The app sends only its `Ask`; it
+cannot supply a catalog. Existing npm-only callers need no second argument. A
+toolkit dependency requires that its compiler has the package and rejects any
+version other than `"platform"`, never fetching a stale `@yaks/*` registry
+release.
 
 `platform.ts` exports `Catalog`, a map from package name to
 `{files, resources, dependencies, version}`. `files` are npm-shaped paths
@@ -114,22 +121,44 @@ without installing its dependencies or reporting it as installed.
 `resources` holds runtime text files by package-relative path. The generator
 reads a browser package's `browser.json` resource globs (for example,
 `"resources": ["**/*.css"]`); their bytes contribute to the catalog digest.
-`seed` and `Answer.assets` place them under `__packages/<package>/<path>`.
-Before bundling each entry, the compiler rewrites parsed package
-`import.meta.url` references to the package module's original location in that
-namespace, relative to the entry. Dynamic `new URL` paths and CSS imports keep
-resolving beside their source module, including nested entries and snapshots.
-Server entries use an absolute logical module URL such as `file:///worker.js`,
-because workerd supplies a module name without a URL origin. Their package URLs
-are logical file identities, not fetchable hosted asset addresses. Page entries
-resolve package URLs against the browser's entry URL. Comments, strings and the
-app's own module URLs are unchanged. Hosts retain these assets beside compiled
-output and serve them with their own MIME type; a conflicting app path refuses
-the deploy rather than overwriting user files.
+`seed` and `Answer.assets` place them under `__packages/<package>/<path>` for
+server builds. The compiler rewrites parsed server package `import.meta.url`
+references to the original package module's absolute logical location, such as
+`file:///__packages/@yaks/ui/Button.tsx`. Hosts retain these assets beside
+compiled output. Comments, strings and the app's own module URLs are unchanged.
 
-The wrapper's catalog is part of the compiler deployment. A host reusing build
-output includes its compiler deployment version in the reuse fingerprint; an
-app's old lock never selects an old toolkit source.
+A page imports toolkit packages, Preact and Preact Signals as **shared
+modules**: browser modules compiled separately from the app's entry. Each
+package's concrete browser exports are entries of one splitting build,
+preserving module identity across subpaths. Packages with cyclic dependencies
+share one build. Other npm packages stay bundled into their consumer. Toolkit
+dependency groups import one another through absolute URLs on `origin`, so two
+apps using the same sources and npm pins reuse the same modules. Preact's main,
+hooks, compat and JSX exports share one instance; Signals and its core import
+that same Preact instance. Preact server-rendering adapters need an optional
+renderer peer and are refused as shared browser imports.
+
+`Answer.shared` maps `__packages/<sha256>/<path>` to emitted modules and runtime
+resources. Each group's `modules.json` records its exported specifiers, keeping
+distinct packages' module state distinct even when their JavaScript is
+identical. The SHA256 names the complete group's emitted bytes and resource
+bytes, including its dependency URLs. Hosts store these files once, serve them
+with `Cache-Control: public, max-age=31536000, immutable`, and keep them
+available for retained versions and published releases. A package source's
+`import.meta.url` resolves inside its group's
+`resources/<package>/<original-path>` namespace, so
+`new URL('./Button.css', import.meta.url)` keeps loading beside that source.
+
+The compiler retains completed shared groups under a 16 MiB cache budget across
+jobs. A cache key includes the actual catalog sources and resources, dependency
+URLs and npm pins, and cache hits validate every source file the group read; a
+claimed digest or unchanged npm manifest cannot conceal changed source bytes.
+The catalog travels with every job. Hosts need no compiler redeploy when toolkit
+packages change, and include their catalog identity in compile reuse
+fingerprints. An absent toolkit package or browser export refuses compilation
+with the missing specifier in its error. App files cannot use the reserved
+`node_modules/` namespace, and shared builds read only compiler-owned package
+files, so an app's private source cannot enter public shared output.
 
 ## What is compiled
 
@@ -145,11 +174,12 @@ app's old lock never selects an old toolkit source.
   address. esbuild leaves `import.meta.url` as written, so in a compiled script
   the worker's path resolves against the entry, not the file that names it.
 
-A page script compiles to one minified file with `process.env.NODE_ENV` set to
-`"production"`. The server source compiles to one module; files it reaches that
-esbuild does not load (text, WebAssembly) are named in `carry` for the host to
-upload beside it. An import esbuild could not resolve is an error naming the
-package to add to `package.json`, never a module left missing.
+A page script compiles to one minified file importing its shared modules with
+`process.env.NODE_ENV` set to `"production"`. The server source compiles to one
+module; files it reaches that esbuild does not load (text, WebAssembly) are
+named in `carry` for the host to upload beside it. An import esbuild could not
+resolve is an error naming the package to add to `package.json`, never a module
+left missing.
 
 ## The installer
 

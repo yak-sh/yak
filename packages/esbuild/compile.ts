@@ -5,8 +5,9 @@
 // one: under Deno, and for yaks.app in a container. `default` is that
 // container's server: it takes a {@link Job} and answers an {@link Answer}.
 //
-// It is handed everything it reads and holds nothing: no binding, no secret,
-// no store. The npm registry is the one thing it reaches.
+// It is handed app files and the toolkit catalog, and caches shared browser
+// modules across jobs. It holds no binding, secret or store; the npm registry
+// is the one thing it reaches.
 //
 // What is left of an output's imports once esbuild is done is checked here,
 // because a build leaves any import it cannot resolve as an import rather
@@ -20,13 +21,20 @@ import { lockfile, type Pins, pins, reached, split, wanted } from './lock.ts'
 import * as npm from './npm.ts'
 import { type Answer, type Ask, dependencies } from './plan.ts'
 import { said } from './said.ts'
+import { external, shared } from './shared.ts'
 import { type Catalog, located, type Seed, seed } from './platform.ts'
 export type { Catalog, Toolkit } from './platform.ts'
 export { Stopped } from './bundle.ts'
 
 /** What a host posts to the compiler's server: the app's ask, and beside it
  * the toolkit catalog, which the host supplies and an app never does. */
-export type Job = { ask: Ask; catalog: Catalog }
+export type Job = {
+  ask: Ask
+  catalog: Catalog
+  origin?: string
+  /** The host can store and serve content-addressed browser modules. */
+  shared?: boolean
+}
 
 /** The module a compiled worker is uploaded as: its source's path, as
  * JavaScript.
@@ -140,6 +148,8 @@ let checked = (
 export let compile = async (
   ask: Ask,
   catalog: Catalog = {},
+  origin = 'https://yaks.app',
+  options: { shared?: boolean } = {},
 ): Promise<Answer> => {
   let answer: Answer = {
     pages: {},
@@ -152,7 +162,9 @@ export let compile = async (
   let setup: Seed
   try {
     setup = seed(ask.files, catalog)
-    answer.assets = setup.assets
+    answer.assets = options.shared === false || ask.worker || !ask.pages.length
+      ? setup.assets
+      : {}
     fs = new npm.Files(setup.files)
     Object.assign(answer, await install(fs, ask, setup, catalog))
   } catch (e) {
@@ -197,9 +209,21 @@ export let compile = async (
     )
     if (code != null) answer.worker = { main, code }
   }
+  let urls: Record<string, string> = {}
+  if (ask.pages.length && options.shared !== false) {
+    try {
+      let modules = await shared(fs, setup, catalog, origin.replace(/\/$/, ''))
+      answer.shared = modules.files
+      urls = modules.urls
+    } catch (e) {
+      if (e instanceof Stopped) throw e
+      return { ...answer, errors: [...answer.errors, ...said(e)] }
+    }
+  }
   for (let entry of ask.pages) {
     let code = await built(entry, entry, {
       minify: true,
+      ...options.shared !== false ? { external: external(urls) } : {},
       // What a package written for bundlers asks of its environment.
       define: { 'process.env.NODE_ENV': '"production"' },
     }, unfetched(ask, entry))
@@ -213,9 +237,11 @@ export let compile = async (
 export default {
   fetch: async (req: Request): Promise<Response> => {
     if (req.method != 'POST') return new Response('POST a job', { status: 405 })
-    let { ask, catalog } = await req.json() as Job
+    let { ask, catalog, origin, shared } = await req.json() as Job
     try {
-      return Response.json(await compile(ask, catalog))
+      return Response.json(
+        await compile(ask, catalog, origin, { shared: shared === true }),
+      )
     } catch (e) {
       if (e instanceof Stopped) return new Response(e.message, { status: 507 })
       throw e

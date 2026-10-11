@@ -33,6 +33,8 @@ import type { Who } from './session.ts'
 import { type Ctx, refuse } from './tool.ts'
 import { BUILT, type Files, own, replaced, sha256 } from './versions.ts'
 import { type Config, sourceOf } from './wrangler_app.ts'
+import { url } from './host.ts'
+import { valid as sharedPath } from './shared.ts'
 
 export let LOCK = 'package-lock.json'
 let CACHE = `${BUILT}.compile.json`
@@ -145,7 +147,11 @@ let asked = async (env: Env, ask: Ask, app: App): Promise<Answer> => {
           'content-type': 'application/json',
           'x-yak-compiler-job': '1',
         },
-        body: `{"ask":${JSON.stringify(ask)},"catalog":${CATALOG}}`,
+        body: `{"ask":${
+          JSON.stringify(ask)
+        },"catalog":${CATALOG},"shared":true,"origin":${
+          JSON.stringify(url(env))
+        }}`,
       }),
     )
     if (r.ok) return await r.json()
@@ -190,6 +196,7 @@ export let compiled = async (
   keys: string[],
   files = r2Objects(ctx.env.BLOBS),
   manifest: () => Files | null = () => null,
+  retained = false,
 ): Promise<Compiled> => {
   let blobs = files
   let prefix = `${prefixOf(space, app)}/`
@@ -209,6 +216,10 @@ export let compiled = async (
       caught(e, { request: 'compile cache', app: app.slug })
     }
   }
+  // Installing a published release carries its completed build, including
+  // the compiler identity used to fingerprint it. It is never rebuilt with
+  // a newer toolkit merely because another app is taking that release.
+  if (retained && old) compiler = old.compiler
   let planned
   try {
     planned = samePlan(
@@ -251,6 +262,15 @@ export let compiled = async (
       old?.compiler != compiler || old.pages?.[entry] != hashes.pages[entry] ||
       !held.includes(BUILT + entry)
     ),
+  }
+  if (retained && (pending.worker || pending.pages.length)) {
+    throw refuse(
+      'missing',
+      `the published release has no matching compiled output for ${
+        named(pending)
+      }; ` +
+        'publish a complete release before installing it',
+    )
   }
   let took = 0
   let answer: Answer = {
@@ -300,6 +320,14 @@ export let compiled = async (
   let assets = pending.worker || pending.pages.length
     ? Object.keys(answer.assets ?? {})
     : old?.assets ?? []
+  // Shared modules are platform assets, never owned or swept by an app.
+  // Upload them before selecting this release; older releases keep referring
+  // to their own immutable URLs when a later catalog produces different ones.
+  for (let path of Object.keys(answer.shared ?? {})) {
+    if (!sharedPath(path)) {
+      throw refuse('arguments', `invalid compiler shared resource: ${path}`)
+    }
+  }
   for (let path of assets) {
     if (
       !path.startsWith('__packages/') ||
@@ -321,6 +349,11 @@ export let compiled = async (
   await Promise.all(
     Object.entries({ ...answer.pages, ...answer.assets }).map(([path, code]) =>
       blobs.put(prefix + BUILT + path, encode(code))
+    ),
+  )
+  await Promise.all(
+    Object.entries(answer.shared ?? {}).map(([path, code]) =>
+      blobs.put(path, encode(code))
     ),
   )
   if (answer.worker) {

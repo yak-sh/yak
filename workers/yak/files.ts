@@ -22,6 +22,7 @@ import { releaseFiles } from './release.ts'
 import type { Env, Fetcher } from './env.ts'
 import { BUILT } from './versions.ts'
 import { parse, WORKER } from './wrangler_app.ts'
+import * as shared from './shared.ts'
 
 // What the gateway tells this part, in headers rather than the path, because
 // the path is the cache key and these two are not part of what distinguishes
@@ -124,6 +125,9 @@ export let blobBytes = (
 //
 export let fetch = async (req: Request, env: Env): Promise<Response> => {
   let url = new URL(req.url)
+  if (url.pathname.startsWith('/' + shared.PREFIX)) {
+    return shared.fetch(req, env)
+  }
   if (url.pathname.startsWith('/blob/')) return blob(req, env, url.pathname)
   // `/<app eid>/<the app's own path>` (cache.ts `at`): the eid is the cache
   // key's tenant discriminator and is not part of the file's name.

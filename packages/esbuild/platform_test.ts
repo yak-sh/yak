@@ -59,6 +59,15 @@ test('seed closes toolkit dependencies and exposes npm transitives as roots', ()
 })
 
 test('seed refuses absent toolkit roots and transitives before npm installation', () => {
+  for (
+    let path of ['node_modules/preact/mod.js', './node_modules/preact/mod.js']
+  ) {
+    assertThrows(
+      () => seed({ [path]: 'private source' }, catalog),
+      Error,
+      'reserved package namespace',
+    )
+  }
   assertThrows(
     () => seed(files({ '@yaks/missing': 'platform' }), catalog),
     Error,
@@ -193,6 +202,38 @@ test('package resources retain module-relative addresses for nested entries', as
   kit.resources = {
     'Button.css': '.Button { color: red }',
     'nested/other.css': '.Other {}',
+  }
+  let built = await compile({
+    files: {
+      ...files({ '@yaks/kit': 'platform' }),
+      'main.ts': "export { sheet, other, untouched } from '@yaks/kit'",
+    },
+    pages: ['main.ts'],
+  }, { '@yaks/kit': kit })
+  assertEquals(built.errors, [])
+  let shared = built.shared!
+  let root = await Deno.makeTempDir()
+  try {
+    for (let [path, text] of Object.entries(shared)) {
+      let url = new URL(path, `file://${root}/`)
+      await Deno.mkdir(new URL('.', url), { recursive: true })
+      await Deno.writeTextFile(url, text)
+    }
+    let page = built.pages['main.ts'].replaceAll(
+      'https://yaks.app/',
+      `file://${root}/`,
+    )
+    let mod = await import(`data:text/javascript,${encodeURIComponent(page)}`)
+    let sheet = new URL(mod.sheet('Button'))
+    assertEquals(await Deno.readTextFile(sheet), kit.resources['Button.css'])
+    assertEquals(
+      await Deno.readTextFile(new URL(mod.other)),
+      kit.resources['nested/other.css'],
+    )
+    assertEquals(mod.untouched, ['import.meta.url', 'import.meta.url'])
+    assertEquals(sheet.pathname.includes('/resources/@yaks/kit/'), true)
+  } finally {
+    await Deno.remove(root, { recursive: true })
   }
   let setup = seed(files({ '@yaks/kit': 'platform' }), {
     '@yaks/kit': kit,

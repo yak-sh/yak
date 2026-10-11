@@ -26,6 +26,8 @@ export type Options = {
   node?: boolean
   minify?: boolean
   define?: Record<string, string>
+  /** A package import replaced by a hosted module URL. */
+  external?: (specifier: string, importer: string) => string | undefined
 }
 
 /** esbuild's process ended under a build. That is the compiler's room, not
@@ -34,8 +36,12 @@ export class Stopped extends Error {
   override name = 'Stopped'
 }
 
-/** One entry built: a single ES module, and what esbuild warned. */
-export type Built = { code: string; warnings: string[] }
+/** Built entries: the first module, every emitted file, and warnings. */
+export type Built = {
+  code: string
+  files: Record<string, string>
+  warnings: string[]
+}
 
 let PACKAGE_TRIES = [...TRIES, '.json']
 
@@ -64,7 +70,7 @@ let inside = (name: string, path: string) =>
 
 /** The file a package import names, or undefined when the package is not
  * installed or names no file. Throws for a package.json that is not JSON. */
-let packaged = (files: Source, spec: string) => {
+export let packaged = (files: Source, spec: string) => {
   let name = packageOf(spec)
   if (!name) return
   let manifest = files.read(`node_modules/${name}/package.json`)
@@ -77,9 +83,10 @@ let packaged = (files: Source, spec: string) => {
     }) ?? []
     if (hit && files.read(inside(name, hit)) != null) return inside(name, hit)
   } catch {
-    // No export matches: the legacy fields may still name it.
+    // An exports map hides paths it does not declare.
   }
-  let main = legacy(pkg, { fields: ['module', 'main'] })
+  if (pkg.exports != null) return
+  let main = subpath ? undefined : legacy(pkg, { fields: ['module', 'main'] })
   if (typeof main == 'string' && files.read(inside(name, main)) != null) {
     return inside(name, main)
   }
@@ -103,35 +110,43 @@ let loader = (path: string): esbuild.Loader =>
     ? 'css'
     : 'js'
 
-let virtual = (files: Source): esbuild.Plugin => ({
+let virtual = (
+  files: Source,
+  external: Options['external'],
+): esbuild.Plugin => ({
   name: 'virtual-fs',
   setup(build) {
     let found = (path: string) => ({ path, namespace: 'virtual' })
     let left = (path: string) => ({ path, external: true })
-    build.onResolve({ filter: /.*/ }, ({ kind, path, resolveDir }) => {
-      if (kind == 'entry-point') return found(path)
-      if (path.startsWith('.')) {
-        let hit = tried(
-          files,
-          joined(resolveDir.replace(/^\//, ''), path),
-          TRIES,
-        )
-        return hit ? found(hit) : left(path)
-      }
-      if (path.startsWith('/')) {
-        return files.read(path.slice(1)) != null
-          ? found(path.slice(1))
-          : left(path)
-      }
-      if (path.startsWith('cloudflare:')) return left(path)
-      try {
-        let hit = packaged(files, path)
-        if (hit) return found(hit)
-      } catch {
-        // A package.json that is not JSON resolves nothing.
-      }
-      return left(path)
-    })
+    build.onResolve(
+      { filter: /.*/ },
+      ({ kind, path, resolveDir, importer }) => {
+        if (kind == 'entry-point') return found(path)
+        let url = external?.(path, importer)
+        if (url) return left(url)
+        if (path.startsWith('.')) {
+          let hit = tried(
+            files,
+            joined(resolveDir.replace(/^\//, ''), path),
+            TRIES,
+          )
+          return hit ? found(hit) : left(path)
+        }
+        if (path.startsWith('/')) {
+          return files.read(path.slice(1)) != null
+            ? found(path.slice(1))
+            : left(path)
+        }
+        if (path.startsWith('cloudflare:')) return left(path)
+        try {
+          let hit = packaged(files, path)
+          if (hit) return found(hit)
+        } catch {
+          // A package.json that is not JSON resolves nothing.
+        }
+        return left(path)
+      },
+    )
     build.onLoad({ filter: /.*/, namespace: 'virtual' }, ({ path }) => {
       let contents = files.read(path)
       if (contents == null) {
@@ -150,15 +165,18 @@ let virtual = (files: Source): esbuild.Plugin => ({
 // for the builds it was running, "is no longer running" for any after.
 let GONE = /^The service (?:was stopped|is no longer running)/
 
-/** Build one entry of `files` into a single ES module. Throws esbuild's
+/** Build one entry into an ES module, or named entries with shared chunks.
+ * Throws esbuild's
  * failure, whose `errors` ./said.ts reads, or {@link Stopped}, after which
  * the next build starts esbuild afresh. */
 export let bundle = async (
   files: Source,
-  entry: string,
+  entry: string | Record<string, string>,
   options: Options = {},
 ): Promise<Built> => {
-  if (files.read(entry) == null) throw new Error(`${entry}: no such file`)
+  for (let path of typeof entry == 'string' ? [entry] : Object.values(entry)) {
+    if (files.read(path) == null) throw new Error(`${path}: no such file`)
+  }
   try {
     return await built(files, entry, options)
   } catch (e) {
@@ -170,19 +188,21 @@ export let bundle = async (
 
 let built = async (
   files: Source,
-  entry: string,
-  { node = false, minify = false, define }: Options,
+  entry: string | Record<string, string>,
+  { node = false, minify = false, define, external }: Options,
 ): Promise<Built> => {
   let out = await esbuild.build({
-    entryPoints: [entry],
+    entryPoints: typeof entry == 'string' ? [entry] : entry,
     bundle: true,
     write: false,
     format: 'esm',
     platform: node ? 'node' : 'browser',
     target: 'es2022',
     minify,
-    plugins: [virtual(files)],
-    outfile: 'bundle.js',
+    plugins: [virtual(files, external)],
+    ...typeof entry == 'string'
+      ? { outfile: 'bundle.js' }
+      : { outdir: '/output', splitting: true, chunkNames: 'chunk-[hash]' },
     // A plugin's relative resolveDir is taken from here, as esbuild-wasm took
     // it from its own root: `node_modules/x/dist` is `/node_modules/x/dist`.
     absWorkingDir: '/',
@@ -192,6 +212,10 @@ let built = async (
   })
   return {
     code: out.outputFiles[0].text,
+    files: Object.fromEntries(out.outputFiles.map((file) => [
+      file.path.slice(file.path.lastIndexOf('/') + 1),
+      file.text,
+    ])),
     warnings: out.warnings.map((w) => w.text),
   }
 }
