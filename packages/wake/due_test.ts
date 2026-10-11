@@ -24,8 +24,9 @@ let seeded = () => {
   return { s, g }
 }
 
+let dueStore = seeded().s
 test('due answers the wakes whose hour has come, oldest first', () => {
-  let { s } = seeded()
+  let s = dueStore
   assertEquals(eids(due(s, T0) as Bundle[]), ['past', 'now'])
   assertEquals(eids(due(s, T0 - 2 * HOUR) as Bundle[]), [])
   assertEquals(eids(due(s, T0 + HOUR) as Bundle[]), ['past', 'now', 'soon'])

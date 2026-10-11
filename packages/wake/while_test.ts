@@ -140,17 +140,20 @@ test('a failed shared match can be read for the next wake', async () => {
   assertEquals(reads, 2)
 })
 
-test('a wake write changes matches on the next pass', async () => {
-  let g = woken(store())
-  let plant = { entity: { eid: 'basil' }, plant: { name: 'basil' } }
-  let wakes = ['one', 'two'].map((eid) => ({
-    entity: { eid },
-    wake: {
-      at: iso(T0),
-      while: [{ match: '.plant', every: '1h' }],
-    },
-  }))
-  g.apply([plant, ...wakes])
+let changingGraph = woken(store())
+let changingPlant = { entity: { eid: 'basil' }, plant: { name: 'basil' } }
+let changingWakes = ['one', 'two'].map((eid) => ({
+  entity: { eid },
+  wake: {
+    at: iso(T0),
+    while: [{ match: '.plant', every: '1h' }],
+  },
+}))
+changingGraph.apply([changingPlant, ...changingWakes])
+let changedPasses = await (async () => {
+  let g = changingGraph
+  let plant = changingPlant
+  let wakes = changingWakes
   let reads = 0
   let driver: Driver = {
     read: (query, opts) => {
@@ -168,23 +171,44 @@ test('a wake write changes matches on the next pass', async () => {
   let times = async () =>
     (await g.read('.wake')).map((b) => wakeOf(b)?.at).sort()
 
-  assertEquals((await tick(driver, T0)).fired.length, 2)
-  assertEquals(reads, 1)
-  assertEquals(await times(), [iso(T0 + HOUR), iso(T0 + HOUR)])
+  let first = {
+    fired: (await tick(driver, T0)).fired.length,
+    reads,
+    times: await times(),
+  }
 
   g.apply([
     plant,
     ...wakes.map(({ entity }) => ({ entity, wake: { at: null } })),
   ])
   reads = 0
-  assertEquals((await rouse(driver, T0)).roused.length, 2)
-  assertEquals(reads, 1)
-  assertEquals(await times(), [iso(T0 + HOUR), iso(T0 + HOUR)])
+  let second = {
+    roused: (await rouse(driver, T0)).roused.length,
+    reads,
+    times: await times(),
+  }
 
   reads = 0
-  assertEquals((await tick(driver, T0 + HOUR)).fired.length, 2)
-  assertEquals(reads, 1)
-  assertEquals((await g.read('.wake')).every((b) => !wakeOf(b)?.at), true)
+  let last = {
+    fired: (await tick(driver, T0 + HOUR)).fired.length,
+    reads,
+    asleep: (await g.read('.wake')).every((b) => !wakeOf(b)?.at),
+  }
+  return { first, second, last }
+})()
+test('a wake write changes matches on the next pass', () => {
+  let { first, second, last } = changedPasses
+  assertEquals(first, {
+    fired: 2,
+    reads: 1,
+    times: [iso(T0 + HOUR), iso(T0 + HOUR)],
+  })
+  assertEquals(second, {
+    roused: 2,
+    reads: 1,
+    times: [iso(T0 + HOUR), iso(T0 + HOUR)],
+  })
+  assertEquals(last, { fired: 2, reads: 1, asleep: true })
 })
 
 test('a condition is refused when it is written, not when it fires', () => {

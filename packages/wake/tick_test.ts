@@ -11,35 +11,38 @@ import { tick } from './tick.ts'
 let iso = (t: number) => new Date(t).toISOString()
 let ids = (bs: Bundle[]) => bs.map((b) => b.entity.eid)
 
-test('tick commits one wake per batch and leaves a refusal due', async () => {
-  let s = store()
-  let g = woken(s)
-  g.apply(['no', 'once', 'again'].map((eid, i) => ({
-    entity: { eid },
-    plant: { name: eid },
-    wake: { at: iso(T0 - 2 + i), ...(eid == 'again' ? { every: '2h' } : {}) },
-  })))
-  let batches: string[][] = []
-  let ran: string[] = []
-  g.use({
-    name: 'plants',
-    hooks: {
-      precondition: (bs) => {
-        batches.push(ids(bs))
-        if (bs.some((b) => b.entity.eid == 'no')) throw new Error('held')
-        return bs
-      },
+// Prepare one graph with its admission guard and effect, as a host does before
+// ticking. Read the transaction outcome and every resulting wake below.
+let guardedStore = store()
+let guardedGraph = woken(guardedStore)
+guardedGraph.apply(['no', 'once', 'again'].map((eid, i) => ({
+  entity: { eid },
+  plant: { name: eid },
+  wake: { at: iso(T0 - 2 + i), ...(eid == 'again' ? { every: '2h' } : {}) },
+})))
+let batches: string[][] = []
+let ran: string[] = []
+guardedGraph.use({
+  name: 'plants',
+  hooks: {
+    precondition: (bs) => {
+      batches.push(ids(bs))
+      if (bs.some((b) => b.entity.eid == 'no')) throw new Error('held')
+      return bs
     },
-    rules: [{
-      phase: 'effect',
-      match: '.wake, *fired, .plant, #Now',
-      run: ({ entity, Now, fired }) => {
-        assertEquals((fired as Comp).at, Now.at)
-        ran.push(entity.eid)
-      },
-    }],
-  })
-  let result = await tick(g, T0 + 6 * HOUR)
+  },
+  rules: [{
+    phase: 'effect',
+    match: '.wake, *fired, .plant, #Now',
+    run: ({ entity, Now, fired }) => {
+      assertEquals((fired as Comp).at, Now.at)
+      ran.push(entity.eid)
+    },
+  }],
+})
+let result = await tick(guardedGraph, T0 + 6 * HOUR)
+test('tick commits one wake per batch and leaves a refusal due', async () => {
+  let s = guardedStore
   assertEquals(ids(result.fired), ['once', 'again'])
   assertEquals(result.refused.map(({ wake }) => wake.entity.eid), ['no'])
   assertEquals(batches, [['no'], ['once'], ['again']])
