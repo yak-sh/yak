@@ -297,6 +297,7 @@ test('a backup stuck behind another is killed at its bound and reported', async 
     let records = await f.spooled()
     equal(records.length, 1)
     equal(comp(records[0].rows[0], 'error').tags, {
+      source: 'box',
       job: 'backup',
       exit_code: 124,
     })
@@ -348,7 +349,11 @@ test('a failed daily backup becomes a tracker bug', async () => {
     equal(records.length, 1)
     let row = records[0].rows[0]
     equal(comp(row, 'error').level, 'error')
-    equal(comp(row, 'error').tags, { job: 'backup', exit_code: 1 })
+    equal(comp(row, 'error').tags, {
+      source: 'box',
+      job: 'backup',
+      exit_code: 1,
+    })
     equal(comp(row, 'during').kind, 'backup')
     ok(
       String(comp(row, 'exception').value).includes('snapshot directory needs'),
