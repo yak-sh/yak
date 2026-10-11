@@ -637,21 +637,32 @@ test('a builder can preserve a terminal component facet across name collisions',
 // A bare prop several reference properties share routes to comp '' — one read
 // concept with no one table behind it. Lowered, its path leaf named the table
 // `""` and SQLite refused the statement; the contract is to decline (S-37088).
+let shared = loadVocab({
+  $defs: {
+    cursor: {
+      component: true,
+      type: 'object',
+      properties: { client: { type: 'string', ref: 'entity' } },
+    },
+    camera: {
+      component: true,
+      type: 'object',
+      properties: { client: { type: 'string', ref: 'entity' } },
+    },
+  } as VocabDoc['$defs'],
+})
+let named = loadVocab({
+  $defs: {
+    name: { component: true, type: 'object', properties: {} },
+    recipe: {
+      component: true,
+      type: 'object',
+      properties: { name: { type: 'string' } },
+    },
+  },
+})
+
 test('a property named alone is refused with the forms that name it', () => {
-  let shared = loadVocab({
-    $defs: {
-      cursor: {
-        component: true,
-        type: 'object',
-        properties: { client: { type: 'string', ref: 'entity' } },
-      },
-      camera: {
-        component: true,
-        type: 'object',
-        properties: { client: { type: 'string', ref: 'entity' } },
-      },
-    } as VocabDoc['$defs'],
-  })
   for (let line of ['.client=c1', '.client', '!client', '.order=client']) {
     assertThrows(
       () => compile(parse(line), shared),
@@ -662,16 +673,6 @@ test('a property named alone is refused with the forms that name it', () => {
   }
   assertThrows(() => compile(parse('.eid=c1'), v), Unknown, '.entity.eid')
   // a name alone is the component, even where a property shares it
-  let named = loadVocab({
-    $defs: {
-      name: { component: true, type: 'object', properties: {} },
-      recipe: {
-        component: true,
-        type: 'object',
-        properties: { name: { type: 'string' } },
-      },
-    },
-  })
   let { sql } = compile(parse('.name'), named)
   assert(sql.includes('"name"'), sql)
   assert(!sql.includes('"recipe"'), sql)
