@@ -14,8 +14,8 @@ import { wakeDoc } from '@yaks/wake'
 import { sessionDerived, sessionDoc, sessions } from '@yaks/session'
 import { toolsDoc } from '@yaks/tools/vocab'
 import { type Runner, runner } from '@yaks/tools'
-import { storage } from '@yaks/sqlite'
-import { mem } from '../sqlite/testing.ts'
+import type { Opts } from '@yaks/sqlite'
+import { preparedStore, type Snapshot, snapshot } from '../sqlite/testing.ts'
 import { builderDoc, derived } from './vocab.ts'
 import { type Options } from './build.ts'
 import { plugins } from './graph.ts'
@@ -99,6 +99,17 @@ export type Workshop = {
   failed: unknown[]
 }
 
+let schemas = new WeakMap<Vocab, { base: Opts; from: Snapshot }>()
+let store = (vocab: Vocab) => {
+  let held = schemas.get(vocab)
+  if (!held) {
+    let base = { derived: { ...sessionDerived(vocab), ...derived(vocab) } }
+    held = { base, from: snapshot(vocab, base) }
+    schemas.set(vocab, held)
+  }
+  return preparedStore(vocab, held.base, held.from)
+}
+
 export let shop = async (
   o: Omit<Options, 'vocab'> = {},
   more: VocabDoc[] = [],
@@ -110,10 +121,7 @@ export let shop = async (
     write: (b) => g.apply(b, { trusted: true }),
     report: (err) => void failed.push(err),
   })
-  let db = storage(mem(), vocab, {
-    derived: { ...sessionDerived(vocab), ...derived(vocab) },
-  })
-  db.install()
+  let db = store(vocab)
   let g = graph({
     storage: db,
     vocab,

@@ -8,10 +8,10 @@
 // page's text is kept by its address (@yaks/blob), as a body is on the box, so
 // the tests also watch the log read it back as text.
 //
-// The log is tables beside the store's own, so a fixture is a database: one
-// `mem()`, the wiki's tables installed on it, the journal's `ddl()` run against
-// it, and a graph over both. The clock is fixed, so a test can assert on the
-// timestamp a transaction was stamped with.
+// The log is tables beside the store's own, so a fixture is a private copy of
+// the wiki's installed schema, blob and journal tables, and fixed actors, with
+// a graph over it. The clock is fixed, so a test can assert on the timestamp a
+// transaction was stamped with.
 
 import {
   blobKeywords,
@@ -24,7 +24,7 @@ import { edgeDoc, edgeKeywords, edges } from '@yaks/edge'
 import { isPromise } from '@yaks/fp'
 import { type Graph, graph, type Options } from '@yaks/graph'
 import { loadVocab, type Vocab, type VocabDoc } from '@yaks/vocab'
-import { mem } from '../sqlite/testing.ts'
+import { preparedDriver, snapshot } from '../sqlite/testing.ts'
 import { statements, storage } from '@yaks/sqlite'
 import { lit, type Statements } from '@yaks/sql'
 import { ddl, journal, type Log } from './log.ts'
@@ -119,6 +119,17 @@ export let NOW = '2026-01-01T00:00:00.000Z'
 // can be attributed to them — inserted straight into that table, so seeding
 // them is not itself a transaction the tests then have to count past.
 let ACTORS = ['ada', 'bob', 'cli']
+let base = { derived, schemaReady: () => true }
+let empty = snapshot(wiki, base, [
+  ...blobSchema(),
+  ...ddl(),
+  {
+    t: 'insert',
+    into: 'entity',
+    cols: ['eid'],
+    rows: ACTORS.map((a) => [lit(a)]),
+  },
+])
 
 /** An embedded database with the wiki's tables and the journal's, and a log
  * bound to it — what a graph and a test both read through. The statement
@@ -131,17 +142,9 @@ export let wikiLog = (): {
    * own, the way a second process or thread opening the file would */
   other: () => { g: Graph; j: Log }
 } => {
-  let db = mem()
-  let store = storage(db, wiki, { derived })
-  store.install()
-  for (let s of [...blobSchema(), ...ddl()]) db.query(s)
+  let db = preparedDriver(empty)
+  let store = storage(db, wiki, base)
   let texts = blobs(wiki, sqliteBlobs(db))
-  db.query({
-    t: 'insert',
-    into: 'entity',
-    cols: ['eid'],
-    rows: ACTORS.map((a) => [lit(a)]),
-  })
   let as = (j: Log, plugins: Options['plugins'] = []) =>
     graph({
       storage: store,

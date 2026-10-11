@@ -39,9 +39,10 @@ import {
 export let mem = (): Driver => open(':memory:')
 
 const image = Symbol('schema snapshot')
-/** An empty installed database, kept as bytes rather than an open connection. */
+/** An installed schema and fixed fixture rows, kept as bytes. */
 export type Snapshot = { [image]: Uint8Array }
 let snapshots = new Map<string, Snapshot>()
+let emptySnapshots = new WeakMap<Vocab, WeakMap<Derived, Snapshot>>()
 let prints = new WeakMap<Vocab, WeakMap<Derived, string>>()
 let plain: Derived = {}
 let schemaKey = (vocab: Vocab, derived: Derived = plain) => {
@@ -55,8 +56,8 @@ let schemaKey = (vocab: Vocab, derived: Derived = plain) => {
 }
 
 /**
- * Install a vocabulary once per physical schema and keep its empty snapshot.
- * `extra` installs the host's auxiliary schema and fixed schema metadata too;
+ * Install a vocabulary once per physical schema and keep its snapshot.
+ * `extra` installs the host's auxiliary schema and fixed fixture rows too;
  * its rendered statements and bound values are part of the identity.
  * The snapshot carries no store epoch: every private copy mints its own.
  */
@@ -65,25 +66,35 @@ export let snapshot = (
   base: Opts = {},
   extra: Stmt[] = [],
 ): Snapshot => {
+  let derived = base.derived ?? plain
+  let local = extra.length ? undefined : emptySnapshots.get(vocab)
+  let held = local?.get(derived)
+  if (held) return held
   let key = JSON.stringify([
-    schemaKey(vocab, base.derived),
+    schemaKey(vocab, derived),
     ...extra.map(render),
   ])
   let kept = snapshots.get(key)
-  if (kept) return kept
-  let db = new Database(':memory:')
-  try {
-    let d = driver(db)
-    let s = storage(d, vocab, base)
-    s.install()
-    for (let stmt of extra) d.query(stmt)
-    meta(d).del(EPOCH)
-    let made = { [image]: serialize(db) }
-    snapshots.set(key, made)
-    return made
-  } finally {
-    db.close()
+  if (!kept) {
+    let db = new Database(':memory:')
+    try {
+      let d = driver(db)
+      let s = storage(d, vocab, base)
+      s.install()
+      for (let stmt of extra) d.query(stmt)
+      meta(d).del(EPOCH)
+      kept = { [image]: serialize(db) }
+      snapshots.set(key, kept)
+    } finally {
+      db.close()
+    }
   }
+  if (!extra.length) {
+    local ??= new WeakMap<Derived, Snapshot>()
+    local.set(derived, kept)
+    emptySnapshots.set(vocab, local)
+  }
+  return kept
 }
 
 let copied = (from: Snapshot) => {
@@ -99,20 +110,34 @@ let copied = (from: Snapshot) => {
   }
 }
 
+/** A disposable connection holding its own copy of a fixture snapshot. */
+export let preparedDriver = (from: Snapshot): Driver & Disposable => {
+  let { db, d } = copied(from)
+  try {
+    d.query({ t: 'pragma', name: 'foreign_keys', value: 'on' })
+    return Object.assign(d, { [Symbol.dispose]: () => db.close() })
+  } catch (error) {
+    db.close()
+    throw error
+  }
+}
+
 /** A ready, disposable store with its own copy of the installed schema. */
 export let preparedStore = (
   vocab: Vocab,
   base: Opts = {},
   from: Snapshot = snapshot(vocab, base),
 ): Store & Disposable => {
-  let { db, d } = copied(from)
-  d.query({ t: 'pragma', name: 'foreign_keys', value: 'on' })
-  return Object.assign(
-    storage(d, vocab, { ...base, schemaReady: () => true }),
-    {
-      [Symbol.dispose]: () => db.close(),
-    },
-  )
+  let d = preparedDriver(from)
+  try {
+    return Object.assign(
+      storage(d, vocab, { ...base, schemaReady: () => true }),
+      { [Symbol.dispose]: () => d[Symbol.dispose]() },
+    )
+  } catch (error) {
+    d[Symbol.dispose]()
+    throw error
+  }
 }
 
 /** SQLite's run-time limits by name, each a `sqlite3_limit` category

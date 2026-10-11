@@ -12,7 +12,7 @@
 import { open } from '@yaks/sqlite/db'
 import { loadVocab, type Vocab, type VocabDoc } from '@yaks/vocab'
 import { type Graph, graph, type Storage } from '@yaks/graph'
-import { storage } from '@yaks/sqlite'
+import { preparedStore, snapshot } from '../sqlite/testing.ts'
 import type { Driver } from '@yaks/sql'
 import { edgeDoc } from './comp.ts'
 import { edgeKeywords } from './keywords.ts'
@@ -61,12 +61,11 @@ let doc: VocabDoc = {
 /** The blog vocabulary: posts, two relations, and the edge itself. */
 export let blog: Vocab = loadVocab([edgeDoc, doc], [edgeKeywords])
 
+let base = { extend: [traverse(blog)] }
+let empty = snapshot(blog, base)
+
 /** A store over a fresh in-memory database with the schema installed. */
-export let store = (): Storage => {
-  let s = storage(mem(), blog, { extend: [traverse(blog)] })
-  s.install()
-  return s
-}
+export let store = (): Storage => preparedStore(blog, base, empty)
 
 /** The whole stack: a graph over that store, with the edge plugin registered. */
 export let blogGraph = (s: Storage = store()): Graph =>
