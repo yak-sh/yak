@@ -44,6 +44,7 @@ import { comps, dead, only, TOMBSTONE, tombstoned } from '@yaks/graph'
 import {
   type Computed,
   type Index,
+  index,
   keyOf,
   matcher,
   type Query,
@@ -390,7 +391,7 @@ export let ram = (vocab: Vocab, base: RamOpts = {}): Store => {
   let derived = Object.entries(base.computed ?? {}).map(([path, read]) =>
     [...path.split('.'), read] as [string, string, Computed[string]]
   )
-  let computed = (b: Bundle): Bundle => {
+  let computed = (b: Bundle, among: Index): Bundle => {
     let out = b
     for (let [name, value] of comps(b)) {
       if (!value || !vocab.comp(name)?.ladder) continue
@@ -400,7 +401,7 @@ export let ram = (vocab: Vocab, base: RamOpts = {}): Store => {
       if (!b[name]) continue
       out = {
         ...out,
-        [name]: { ...out[name] as Comp, [prop]: read(b, view()) },
+        [name]: { ...out[name] as Comp, [prop]: read(b, among) },
       }
     }
     return out
@@ -413,20 +414,23 @@ export let ram = (vocab: Vocab, base: RamOpts = {}): Store => {
     if (!scope) return view()
     let source = view()
     let allowed = scope.entity
-      ? matcher(scope.entity, vocab, { now: opts.now ?? base.now })(source)
+      ? matcher(scope.entity, vocab, {
+        now: opts.now ?? base.now,
+        exactIds: true,
+      })(source)
       : source.list
     let components = Object.entries(scope.components ?? {}).map(([name, q]) =>
       [
         name,
         new Set(
-          matcher(q, vocab, { now: opts.now ?? base.now })(source).map((b) =>
-            b.entity.eid
-          ),
+          matcher(q, vocab, { now: opts.now ?? base.now, exactIds: true })(
+            source,
+          ).map((b) => b.entity.eid),
         ),
       ] as const
     )
     let present = new Set(allowed.map((b) => b.entity.eid))
-    return allowed.map((b) => {
+    return index(allowed.map((b) => {
       let out = { ...b }
       for (let [name, owners] of components) {
         if (!owners.has(b.entity.eid)) delete out[name]
@@ -448,7 +452,7 @@ export let ram = (vocab: Vocab, base: RamOpts = {}): Store => {
         ...b.entity.num === undefined ? {} : { num: b.entity.num },
       }
       return out
-    })
+    }))
   }
 
   let read = (
@@ -456,14 +460,14 @@ export let ram = (vocab: Vocab, base: RamOpts = {}): Store => {
     opts: ReadOpts = {},
     comps?: string[],
   ): Bundle[] => {
+    let among = visible(opts) as Index
     let found = matcher(query, vocab, {
       now: opts.now ?? base.now,
       storageOrder: opts.storageOrder,
       computed: base.computed,
-    })(visible(opts))
-    return comps
-      ? found.map(computed).map(only(new Set(comps)))
-      : found.map(computed)
+    })(among)
+    let gathered = found.map((b) => computed(b, among))
+    return comps ? gathered.map(only(new Set(comps))) : gathered
   }
 
   // The raw-rows path: one `{ eid }` per match, or an aggregate's rows in the
@@ -611,12 +615,13 @@ export let ram = (vocab: Vocab, base: RamOpts = {}): Store => {
   let get = (eids: Eid[], names?: string[], opts: ReadOpts = {}): Bundle[] => {
     let cut = only(names ? new Set(names) : null)
     let out: Bundle[] = []
+    let among = visible(opts) as Index
     let scoped = opts.visibility
-      ? new Map((visible(opts) as Bundle[]).map((b) => [b.entity.eid, b]))
+      ? new Map(among.list.map((b) => [b.entity.eid, b as Bundle]))
       : rows
     for (let eid of eids) {
       let rec = scoped.get(eid)
-      if (rec) out.push(cut(computed(rec)))
+      if (rec) out.push(cut(computed(rec, among)))
     }
     return out
   }

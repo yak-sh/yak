@@ -1,4 +1,4 @@
-import { graph, signed } from '@yaks/graph'
+import { type Comp, graph, signed, type Tx } from '@yaks/graph'
 import { ram } from '@yaks/ram'
 import { loadVocab } from '@yaks/vocab'
 import { equal, test } from '@yaks/testing'
@@ -15,13 +15,17 @@ let vocab = loadVocab({
     person: {
       component: true,
       type: 'object',
-      properties: { name: { type: 'string' } },
+      properties: {
+        name: { type: 'string' },
+        friend: { type: 'string', ref: 'entity', death: 'keep' },
+      },
     },
     draft: {
       component: true,
       type: 'object',
       properties: {
         by: { type: 'string', ref: 'entity', death: 'keep' },
+        parent: { type: 'string', ref: 'entity', death: 'cascade' },
         text: { type: 'string' },
       },
     },
@@ -72,6 +76,39 @@ test('private aspects preserve public person names', () =>
     entity: { eid: 'alice' },
     person: { name: 'Alice' },
   }]))
+test('native answers hide metadata describing another person private aspects', () =>
+  equal(
+    read.answer([{
+      entity: { eid: 'alice', archetype: 'private-setting-shape' },
+      person: { name: 'Alice' },
+    }], { person: 'bob', native: true }),
+    [{
+      entity: { eid: 'alice' },
+      person: { name: 'Alice' },
+    }],
+  ))
+test('native answers mask references to foreign private entities', () =>
+  equal(
+    read.answer([{
+      entity: { eid: 'bob' },
+      person: { name: 'Bob', friend: 'private' },
+    }], { person: 'bob', native: true }),
+    [{
+      entity: { eid: 'bob' },
+      person: { name: 'Bob', friend: null },
+    }],
+  ))
+test('native answers preserve references to public people', () =>
+  equal(
+    read.answer([{
+      entity: { eid: 'bob' },
+      person: { name: 'Bob', friend: 'alice' },
+    }], { person: 'bob', native: true }),
+    [{
+      entity: { eid: 'bob' },
+      person: { name: 'Bob', friend: 'alice' },
+    }],
+  ))
 test('private aspects do not match foreign predicates', () =>
   equal(read.rows('.preference.color=secret .count', { person: 'bob' }), [{
     value: '',
@@ -121,12 +158,76 @@ test('administrative reads are explicit and ordinary ownership still applies', (
   equal(read.read('.draft', { person: 'bob' }), [])
 })
 let guardedCas = fixture()
+let enclosing = fixture()
+test('another person cannot enclose a private setting in their own private entity', () => {
+  assertThrows(() =>
+    enclosing.apply(signed([{
+      entity: { eid: 'alice' },
+      draft: { by: 'bob', text: 'take over' },
+    }], { by: 'bob' }))
+  )
+})
+for (let eid of ['bob', 'game']) {
+  for (let by of ['bob', undefined]) {
+    let enclosing = fixture()
+    enclosing.apply([{ entity: { eid: 'game' } }], { trusted: true })
+    test(`public ${eid} cannot become private with ${by ?? 'bound'} ownership`, () => {
+      assertThrows(() =>
+        enclosing.apply(signed([{
+          entity: { eid },
+          draft: { ...by ? { by } : {}, text: 'take over' },
+        }], { by: 'bob' }))
+      )
+    })
+  }
+}
+let generated = fixture()
+generated.use({
+  name: 'generated-edit',
+  hooks: {
+    rules: (bundles) => [...bundles, {
+      entity: { eid: 'private' },
+      draft: { text: 'generated theft' },
+    }],
+  },
+})
+test('generated writes obey the initiating person ownership', () => {
+  assertThrows(() =>
+    generated.apply(signed([{
+      entity: { eid: 'bob' },
+      person: { name: 'Robert' },
+    }], { by: 'bob' }))
+  )
+  equal((sync(generated.get(['private']))[0].draft as Comp).text, 'unsent')
+})
+let cascading = fixture()
+cascading.apply(signed([{
+  entity: { eid: 'private' },
+  draft: { parent: 'bob' },
+}], { by: 'alice' }))
+test('reference cascades cannot delete another person private rows', () => {
+  assertThrows(() =>
+    cascading.apply(signed([{
+      entity: { eid: 'bob' },
+      $delete: true,
+    }], { by: 'bob' }))
+  )
+  equal((sync(cascading.get(['private']))[0].draft as Comp).text, 'unsent')
+})
 let trusted = fixture()
 let unowned = graph({ vocab, storage: ram(vocab) })
 unowned.apply([{ entity: { eid: 'legacy' }, draft: { text: 'unowned' } }])
 unowned.use(personal(vocab, { draft: 'by' }))
 test('guests cannot read legacy private rows missing their owner', () =>
   equal(unowned.read('.draft *', { person: null }), []))
+test('native answers keep ownerless private rows hidden from guests', () =>
+  equal(
+    unowned.answer([{
+      entity: { eid: 'legacy' },
+      draft: { text: 'unowned' },
+    }], { person: null, native: true }),
+    [],
+  ))
 test('trusted server writes retain their explicit authority', () => {
   trusted.apply([{ entity: { eid: 'private' }, draft: { text: 'server' } }], {
     trusted: true,
@@ -145,4 +246,83 @@ test('foreign conditional writes refuse before disclosing current private values
     }], { by: 'bob' }))
   )
   equal(error instanceof Error ? error.name : undefined, 'Denied')
+})
+
+let pending = ram(vocab)
+test('transaction ownership remembers pending rows and still refuses owner changes', () => {
+  let gets = 0
+  pending.tx((tx) => {
+    let tracked = personal(vocab, { draft: 'by' }).track!(
+      {
+        ...tx,
+        get: (...args) => {
+          gets++
+          return tx.get(...args)
+        },
+      } as Tx,
+      () => undefined,
+      {
+        graph: {},
+        bundles: signed([{ entity: { eid: 'pending' } }], { by: 'alice' }),
+      },
+    ).tx
+    tracked.patch([{ entity: { eid: 'pending' }, person: { name: 'Alice' } }])
+    tracked.patch([{ entity: { eid: 'pending' }, person: { name: 'Alicia' } }])
+    tracked.patch([{
+      entity: { eid: 'pending' },
+      draft: { by: 'alice', text: 'unsent' },
+    }])
+    tracked.patch([{ entity: { eid: 'pending' }, draft: { text: 'updated' } }])
+    assertThrows(() =>
+      tracked.patch([{
+        entity: { eid: 'pending' },
+        draft: { by: 'bob' },
+      }])
+    )
+    assertThrows(() =>
+      tracked.patch([{
+        entity: { eid: 'pending' },
+        draft: null,
+      }])
+    )
+    equal(gets, 1)
+  })
+  equal(sync(pending.get(['pending']))[0].draft, {
+    by: 'alice',
+    text: 'updated',
+  })
+})
+
+let gathered = ram(vocab)
+test('transaction ownership uses gathered absence before pending writes', () => {
+  gathered.tx((tx) => {
+    let tracked = personal(vocab, { draft: 'by' }).track!(
+      {
+        ...tx,
+        get: () => {
+          throw Error('ownership already gathered')
+        },
+      } as Tx,
+      () => null,
+      {
+        graph: {},
+        bundles: signed([{ entity: { eid: 'gathered' } }], { by: 'alice' }),
+      },
+    ).tx
+    tracked.patch([{ entity: { eid: 'gathered' }, person: { name: 'Alice' } }])
+    tracked.patch([{
+      entity: { eid: 'gathered' },
+      draft: { by: 'alice', text: 'mine' },
+    }])
+    assertThrows(() =>
+      tracked.patch([{
+        entity: { eid: 'gathered' },
+        draft: { by: 'bob' },
+      }])
+    )
+  })
+  equal(sync(gathered.get(['gathered']))[0].draft, {
+    by: 'alice',
+    text: 'mine',
+  })
 })

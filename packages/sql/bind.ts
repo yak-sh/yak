@@ -64,6 +64,7 @@ import type { Assoc, Hop, Presence, Vocab } from '@yaks/vocab/runtime'
 import { Unknown } from '@yaks/vocab/runtime'
 import {
   and,
+  as,
   type Bind,
   col,
   cond,
@@ -73,15 +74,22 @@ import {
   type Expr as Cond,
   FALSE,
   type Frag,
+  from,
   type Join,
+  lit,
   not,
   or,
   type Raw,
   raw,
   type Select,
   select,
+  type Source,
+  sources,
+  star,
+  table,
   TRUE,
   val,
+  when,
 } from './ast.ts'
 import { inline, render } from './render.ts'
 import { type Arm, ARMS, arms, cut } from './compound.ts'
@@ -111,6 +119,10 @@ import { backedDialect, backingOf, computed, hasComputed } from './spine.ts'
 import type { ArchetypeSet } from './archetype.ts'
 
 export type BindOpts = {
+  /** Permission gates compare canonical eids without human-id addressing. */
+  exactIds?: boolean
+  /** Reference operands resolved and admitted against this read's snapshot. */
+  references?: Record<string, number | null>
   /** Owner selections for the visible entity and component relations. */
   visibility?: {
     entity?: string | And
@@ -142,11 +154,14 @@ type Ctx = {
   storageOrder?: boolean
   tables: Set<string>
   /** the first disjunction's entity ids, and the condition that tests them */
-  candidates?: Frag & { test: Cond }
+  candidates?: Frag & { test: Cond; whole?: boolean }
   present?: string
   owner?: string
   /** An owner probe needs a predicate, not global candidate selections. */
   correlated?: boolean
+  exactIds?: boolean
+  references?: BindOpts['references']
+  visibility?: BindOpts['visibility']
   archetypes?: ArchetypeSet
   /** the computed component whose rows this query reads as its spine, when it
    * reads a backing's rather than the entity table */
@@ -223,6 +238,7 @@ let claims = (ctx: Ctx, kind: Clause['kind']): boolean =>
 // is a pure function of the owner, so paging into one needs no second API.
 let site = (ctx: Ctx, owner = ctx.owner ?? ctx.d.ownerKey('entity')): Site => ({
   vocab: ctx.v,
+  visibility: ctx.visibility,
   now: ctx.now,
   owner: raw(owner),
   join: (comp) => {
@@ -455,6 +471,16 @@ let inSet = (ctx: Ctx, set: Identity): Frag => {
 let refEq = (ctx: Ctx, comp: string, prop: string, eids: string[]): Frag => {
   let key = ctx.d.refCol!(comp, prop)
   let target = ctx.v.prop(comp, prop)?.ref
+  if (
+    (!target || !computed(ctx.v, target)) &&
+    eids.every((eid) => Object.hasOwn(ctx.references ?? {}, eid))
+  ) {
+    if (eids.length == 1) {
+      return { sql: `${key} = ?`, params: [ctx.references![eids[0]]] }
+    }
+    let ids = eids.map((eid) => ctx.references![eid]).filter((id) => id != null)
+    return ids.length ? ctx.d.among(key, ids) : { sql: '0', params: [] }
+  }
   if (!target || !computed(ctx.v, target)) return ctx.d.refEq(key, eids, false)
   let { tag } = backingOf(ctx.backed, target)
   let ids = eids.map((e) => idOf(tag, e)).filter((id) => id != null)
@@ -509,6 +535,7 @@ let single = (ctx: Ctx, hop: Hop, p: Pred): Cond => {
   let stored = ctx.v.prop(hop.comp, hop.prop)
   if (
     op == EXISTS && hop.comp != 'entity' && stored && !stored.computed &&
+    !(stored.category == 'ref' && ctx.visibility?.entity) &&
     !computed(ctx.v, hop.comp) && !ctx.derived[`${hop.comp}.${hop.prop}`]
   ) {
     let value = stored.category == 'ref' && ctx.d.refCol
@@ -519,7 +546,7 @@ let single = (ctx: Ctx, hop: Hop, p: Pred): Cond => {
   if (hop.comp != 'entity') ctx.tables.add(hop.comp)
   // On the entity table, `=` names entities instead of comparing a column.
   if (hop.comp == 'entity' && op == '') {
-    let set = identity(hop.prop, flat(p.value))
+    let set = identity(hop.prop, flat(p.value), ctx.exactIds)
     if (set) return cond(inSet(ctx, set))
   }
   let read = readProp(ctx, hop.comp, hop.prop, ctx.d.ownerKey(hop.comp))
@@ -875,7 +902,9 @@ let union = (ctx: Ctx, alts: Clause[]): Cond => {
   }
   let picks = branches.map(({ branch, where, joins, x }) =>
     render(indexedRelation(branch, [x], ctx.d.spine, {
-      cols: [`${ctx.d.ownerKey('entity')} as id`],
+      cols: ctx.d.admitted
+        ? ['"entity".*']
+        : [`${ctx.d.ownerKey('entity')} as id`],
       joins,
       where,
     }))
@@ -899,10 +928,12 @@ let union = (ctx: Ctx, alts: Clause[]): Cond => {
     params: groups.flatMap((g) => g.params),
   }
   let test = cond({
-    sql: `${ctx.d.ownerKey('entity')} in (${candidates.sql})`,
+    sql: `${ctx.d.ownerKey('entity')} in (${
+      ctx.d.admitted ? `select id from (${candidates.sql})` : candidates.sql
+    })`,
     params: candidates.params,
   })
-  ctx.candidates ??= { ...candidates, test }
+  ctx.candidates ??= { ...candidates, test, whole: !!ctx.d.admitted }
   return test
 }
 
@@ -921,10 +952,15 @@ let holding = (where: Cond, known: Cond): Cond =>
 // reverse hop's subquery (which is the from there, so it is never joined to
 // itself). Each is the dialect's joined source and its on condition.
 type Link = { source: string; on: string }
+let joining = (ctx: Ctx, comp: string): string =>
+  !ctx.spine ? ctx.d.joined?.(comp) ?? ctx.d.table(comp) : ctx.d.table(comp)
 let joinsOf = (ctx: Ctx, base = 'entity'): Link[] =>
   [...ctx.tables]
     .filter((t) => t != 'entity' && t != base && t != ctx.spine)
-    .map((t) => ({ source: ctx.d.table(t), on: ctx.d.joinOn(t, base) }))
+    .map((t) => ({
+      source: base == 'entity' ? joining(ctx, t) : ctx.d.table(t),
+      on: ctx.d.joinOn(t, base),
+    }))
 
 // The joins written out as they appear after the from.
 let joined = (links: Link[]): string =>
@@ -1245,6 +1281,7 @@ let conjuncts = (ctx: Ctx, clauses: Clause[]): Cond[] => {
     let p = ctx.v.prop(comp, prop)
     if (
       comp == 'entity' || p?.category != 'ref' || p.computed ||
+      ctx.visibility?.entity ||
       ctx.derived[`${comp}.${prop}`] || !ctx.d.refCol ||
       !(op == EXISTS || op == '' && c.value == null)
     ) continue
@@ -1518,14 +1555,14 @@ let indexedRelation = (
   // Driving from the component's session/owner index re-sorts its entire
   // history before applying these ids, even when only three can be returned.
   if (
-    !ctx.spine && !claims(ctx, 'pred') && ctx.d.indexed && from == '"entity"'
+    !ctx.spine && !claims(ctx, 'pred') && ctx.d.indexed && from == ctx.d.spine
   ) {
     let named = flattened(clauses).find((c) =>
       c.kind == 'pred' &&
       !c.not && !c.where && c.path.join('.') == 'entity.eid' && opOf(c) == ''
     )
     if (named?.kind == 'pred') {
-      let set = identity('eid', flat(named.value))
+      let set = identity('eid', flat(named.value), ctx.exactIds)
       if (set && !set.nums.length && o.joins.length) {
         let s = rel(from, o)
         return {
@@ -1545,7 +1582,7 @@ let indexedRelation = (
               let must = flattened(clauses).some((c) =>
                 c.kind == 'pred' &&
                 !c.not && !c.where && c.path.length <= 2 &&
-                ctx.d.table(c.path[0]) == j.source &&
+                joining(ctx, c.path[0]) == j.source &&
                 (c.path.length == 1
                   ? opOf(c) == EXISTS
                   : needs(opOf(c), flat(c.value)))
@@ -1583,8 +1620,9 @@ let indexedRelation = (
         let comp = c.path[0]
         if (
           comp == 'entity' || !ctx.v.comp(comp) || ctx.v.props(comp).length ||
-          computed(ctx.v, comp) || source(ctx, comp) != `"${comp}"` ||
-          ctx.d.table(comp) != `"${comp}"`
+          computed(ctx.v, comp) || !ctx.d.scoped &&
+            (source(ctx, comp) != `"${comp}"` ||
+              ctx.d.table(comp) != `"${comp}"`)
         ) continue
         root = { comp }
         break
@@ -1614,23 +1652,25 @@ let indexedRelation = (
   // A presence table is the fallback, after a bounded indexed predicate.
   // Otherwise `.using .entry.session=X` walks every request in the graph
   // instead of seeking X's entries and checking their using component.
-  root ??= ctx.present ? { comp: ctx.present } : undefined
+  root ??= ctx.present && !ctx.candidates ? { comp: ctx.present } : undefined
   let s = rel(from, o)
   if (!root) {
-    if (!ctx.candidates || ctx.spine || from != '"entity"') return s
+    if (!ctx.candidates || ctx.spine || from != ctx.d.spine) return s
     return {
       ...s,
       where: s.where && holding(s.where, ctx.candidates.test),
       from: raw(
-        `(${ctx.candidates.sql}) as "__candidates"`,
+        `(${ctx.candidates.sql}) as "${
+          ctx.candidates.whole ? 'entity' : '__candidates'
+        }"`,
         ctx.candidates.params,
       ),
       joins: [
-        {
+        ...ctx.candidates.whole ? [] : [{
           how: 'cross',
-          src: raw(from, [], 'entity'),
+          src: raw(ctx.d.admitted ?? from, [], 'entity'),
           on: raw(`"__candidates"."id" = ${ctx.d.ownerKey('entity')}`),
-        },
+        } as Join],
         ...s.joins ?? [],
       ],
     }
@@ -1687,13 +1727,13 @@ let indexedRelation = (
         ),
         on: raw(ctx.d.joinOn(root.comp, 'entity')),
       },
-      ...o.joins.filter((j) => j.source != ctx.d.table(root!.comp)).map((
+      ...o.joins.filter((j) => j.source != joining(ctx, root!.comp)).map((
         j,
       ): Join => ({
         how: !root!.index &&
             flattened(clauses).some((c) =>
               c.kind == 'pred' && !c.not && !c.where && c.path.length == 2 &&
-              ctx.d.table(c.path[0]) == j.source &&
+              joining(ctx, c.path[0]) == j.source &&
               needs(opOf(c), flat(c.value))
             )
           ? 'cross'
@@ -1730,12 +1770,12 @@ let indexedRelation = (
           src: raw(from + ' not indexed', [], 'entity'),
           on: raw(ctx.d.joinOn(present, 'entity')),
         },
-        ...o.joins.filter((j) => j.source != ctx.d.table(present)).map((
+        ...o.joins.filter((j) => j.source != joining(ctx, present)).map((
           j,
         ): Join => ({
           how: flattened(clauses).some((c) =>
               c.kind == 'pred' && !c.not && !c.where &&
-              c.path.length == 2 && ctx.d.table(c.path[0]) == j.source &&
+              c.path.length == 2 && joining(ctx, c.path[0]) == j.source &&
               needs(opOf(c), flat(c.value))
             )
             ? 'cross'
@@ -1827,6 +1867,9 @@ export let bound = (
     archetypes: spine ? undefined : opts.archetypes,
     spine,
     correlated: scope?.correlated,
+    exactIds: opts.exactIds,
+    references: opts.references,
+    visibility: scope?.visibility ?? opts.visibility,
   }
   // A required indexed scalar selects component owners before the entity
   // spine. CROSS JOIN fixes that driving order even when statistics still
@@ -1889,7 +1932,8 @@ export let bound = (
       let comp = c.path[0]
       if (
         comp == 'entity' || !vocab.comp(comp) || computed(vocab, comp) ||
-        source(ctx, comp) != `"${comp}"` || ctx.d.table(comp) != `"${comp}"`
+        !ctx.d.scoped &&
+          (source(ctx, comp) != `"${comp}"` || ctx.d.table(comp) != `"${comp}"`)
       ) continue
       ctx.present = comp
       break
@@ -2072,6 +2116,70 @@ export let bound = (
 // Visibility is a relation, not a predicate appended to the outer selection:
 // every dereference, association, backlink and walk reads the same scoped
 // tables. CTE values remain bound parameters, including owner identities.
+export let sourceScreen = (
+  vocab: Vocab,
+  opts: BindOpts,
+  components: string[] = [],
+): Raw | null => {
+  let scopes = [
+    opts.visibility?.entity,
+    ...components.map((comp) => opts.visibility?.components?.[comp]),
+  ].filter((q): q is string | And => !!q)
+  if (!scopes.length) return null
+  let clauses = scopes.flatMap((q) =>
+    (typeof q == 'string' ? parse(q) : q).clauses
+  )
+  let out = bound(
+    { kind: 'and', clauses },
+    vocab,
+    {
+      ...opts,
+      exactIds: true,
+      visibility: undefined,
+      archetypes: undefined,
+      extend: [],
+    },
+    { ...sqlite, indexed: undefined, owned: undefined, archetype: undefined },
+    [],
+    { correlated: true },
+  )
+  return render({ ...out, cols: [raw('"entity"."id" as "id"')], order: [] })
+}
+
+/** Derived expressions read relations of their own. Scope those sources even
+ * when a storage gather runs outside a query's scoped CTEs. */
+export let visibleDerived = (vocab: Vocab, opts: BindOpts): Derived => {
+  let screens = new Map<string, Raw | null>()
+  let source = (name: string, alias = name): Source => {
+    if (!vocab.comp(name)) return table(name, alias)
+    if (!screens.has(name)) screens.set(name, sourceScreen(vocab, opts, [name]))
+    let screen = screens.get(name)
+    return screen
+      ? from(
+        select({
+          cols: [star(alias)],
+          from: table(name, alias),
+          where: exists(select({
+            cols: [lit(1)],
+            from: from(raw(inline(screen)), '__allowed'),
+            where: eq(
+              col('id', '__allowed'),
+              col(name == 'entity' ? 'id' : 'entity', alias),
+            ),
+          })),
+        }),
+        alias,
+      )
+      : table(name, alias)
+  }
+  return Object.fromEntries(
+    Object.entries(derivedOf(vocab, opts.derived)).map(([path, prop]) => [
+      path,
+      { ...prop, expr: (owner: Cond) => sources(prop.expr(owner), source) },
+    ]),
+  )
+}
+
 let visible = (
   ast: And,
   vocab: Vocab,
@@ -2083,11 +2191,76 @@ let visible = (
   let plain = { ...opts, visibility: undefined }
   let ctes = new Map<string, Cte>()
   let quoted = (name: string) => `"${name.replaceAll('"', '""')}"`
+  let aspects = Object.entries(visibility.components ?? {})
+  let masked = !!vocab.prop('entity', 'archetype') && aspects.length > 0
+  let permits = (scope: string | And, owner: Cond): Cond => {
+    let query = typeof scope == 'string' ? parse(scope) : scope
+    let keyed = (c: Clause): boolean => {
+      if (c.kind == 'and' || c.kind == 'or') return c.clauses.every(keyed)
+      if (c.kind != 'pred' || c.where || c.path[0] == 'kind') return false
+      let hops = vocab.aim(c.path.join('.'), bare(c)), h = hops[0]
+      return hops.length == 1 && h.comp != 'entity' &&
+        !vocab.comp(h.comp)?.computed &&
+        (!h.prop || !vocab.prop(h.comp, h.prop)?.computed &&
+            !plain.derived?.[`${h.comp}.${h.prop}`])
+    }
+    let key = inline(owner)
+    let read = (comp: string, expr: string) =>
+      `(select ${expr} from ${base.table(comp)} where ${
+        base.ownerKey(comp)
+      } = ${key})`
+    let direct = keyed(query)
+    let dialect: Dialect = {
+      ...base,
+      indexed: undefined,
+      owned: undefined,
+      archetype: undefined,
+      ...direct
+        ? {
+          live: () => base.live(key),
+          ownerKey: (comp: string) =>
+            comp == 'entity' ? key : read(comp, base.ownerKey(comp)),
+          col: (comp: string, prop: string, v: Vocab) => {
+            let expr = base.col(comp, prop, v)
+            return expr == null ? null : read(comp, expr)
+          },
+          refCol: (comp: string, prop: string) =>
+            read(comp, base.refCol!(comp, prop)),
+        }
+        : {},
+    }
+    let owners = bound(
+      query,
+      vocab,
+      {
+        ...plain,
+        exactIds: true,
+        references: undefined,
+        archetypes: undefined,
+        extend: [],
+      },
+      dialect,
+      [],
+      { correlated: true },
+    )
+    return exists({
+      ...owners,
+      ...direct ? { from: undefined, joins: [] } : {},
+      cols: [val(1)],
+      where: direct
+        ? owners.where
+        : and(owners.where ?? TRUE, eq(raw(base.ownerKey('entity')), owner)),
+      order: [],
+    })
+  }
   let source = (comp: string): string => {
     let scope = comp == 'entity'
       ? visibility.entity
       : visibility.components?.[comp]
-    if (!scope && !(comp != 'entity' && visibility.entity)) {
+    if (
+      !scope && !(comp != 'entity' && visibility.entity) &&
+      !(comp == 'entity' && masked)
+    ) {
       return base.source?.(comp) ?? quoted(comp)
     }
     let name = `__visible_${comp}`
@@ -2101,36 +2274,37 @@ let visible = (
         })))
       }
       if (scope) {
-        let owners = bound(
-          typeof scope == 'string' ? parse(scope) : scope,
-          vocab,
-          { ...plain, archetypes: undefined },
-          {
-            ...base,
-            indexed: undefined,
-            owned: undefined,
-            archetype: undefined,
-          },
-          [],
-          { correlated: true },
+        where.push(permits(
+          scope,
+          raw(`"__visible"."${comp == 'entity' ? 'id' : 'entity'}"`),
+        ))
+      }
+      let cols: Cond[] | undefined
+      if (comp == 'entity' && masked) {
+        let hidden = aspects.map(([name, policy]) =>
+          and(
+            exists(select({
+              cols: [val(1)],
+              from: raw(`${base.source?.(name) ?? quoted(name)} as "__aspect"`),
+              where: eq(raw('"__aspect"."entity"'), raw('"__visible"."id"')),
+            })),
+            not(permits(policy, raw('"__visible"."id"'))),
+          )
         )
-        where.push(exists({
-          ...owners,
-          cols: [val(1)],
-          where: and(
-            owners.where ?? TRUE,
-            eq(
-              raw(base.ownerKey('entity')),
-              raw(`"__visible"."${comp == 'entity' ? 'id' : 'entity'}"`),
-            ),
+        cols = [
+          ...['id', 'eid', 'num'].map((p) => raw(`"__visible".${quoted(p)}`)),
+          raw('"__visible"."archetype" as "__stored_archetype"'),
+          as(
+            when([[or(...hidden), lit(null)]], raw('"__visible"."archetype"')),
+            'archetype',
           ),
-          order: [],
-        }))
+        ]
       }
       ctes.set(name, {
         name,
         materialized: false,
         q: select({
+          cols,
           from: raw(`${base.source?.(comp) ?? quoted(comp)} as "__visible"`),
           where: and(...where),
         }),
@@ -2142,8 +2316,16 @@ let visible = (
   let scoped: Dialect = {
     ...base,
     spine: `${entity} as "entity"`,
+    admitted: !masked ? base.spine : undefined,
+    joined: (comp) =>
+      visibility.components?.[comp]
+        ? `${source(comp)} as ${quoted(comp)}`
+        : base.table(comp),
     source,
     scoped: true,
+    // The scoped entity relation already excludes graves, including every
+    // referenced target. Its outer selector need not probe them again.
+    live: visibility.entity ? () => ({ sql: '1', params: [] }) : base.live,
     table: (comp) => `${source(comp)} as ${quoted(comp)}`,
     // A driving component's owner joins the scoped entity spine, so its
     // whole-entity restriction is already enforced there. Other component
@@ -2156,11 +2338,14 @@ let visible = (
       visibility.components?.[comp]
         ? `${source(comp)} as ${quoted(comp)}`
         : base.owned?.(comp) ?? base.table(comp),
-    archetype: base.archetype,
+    archetype: masked
+      ? (owner) =>
+        owner == null
+          ? '"entity"."__stored_archetype"'
+          : `(select "__a"."__stored_archetype" from ${entity} as "__a" where "__a"."id" = ${owner})`
+      : base.archetype,
     col: (comp, prop, v) =>
-      comp == 'entity' && prop == 'archetype'
-        ? 'null'
-        : v.prop(comp, prop)?.category == 'ref'
+      v.prop(comp, prop)?.category == 'ref'
         ? `(select "__re"."eid" from ${entity} as "__re" where "__re"."id" = ${
           quoted(comp)
         }.${quoted(field(prop))})`
@@ -2182,7 +2367,26 @@ let visible = (
   let out = bound(
     ast,
     vocab,
-    { ...plain, archetypes },
+    {
+      ...plain,
+      archetypes,
+      derived: Object.fromEntries(
+        Object.entries(derivedOf(vocab, opts.derived)).map(([path, prop]) => [
+          path,
+          {
+            ...prop,
+            expr: (owner: Cond) =>
+              sources(
+                prop.expr(owner),
+                (name, alias) =>
+                  vocab.comp(name)
+                    ? raw(`${source(name)} as ${quoted(alias ?? name)}`)
+                    : table(name, alias),
+              ),
+          },
+        ]),
+      ),
+    },
     scoped,
     reads,
     { visibility, dialect: base },

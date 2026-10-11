@@ -105,12 +105,17 @@ export let vectorOf = (
   db: Statements,
   entity: Eid,
   model: string,
+  within?: Screen,
 ): Float32Array | null => {
   let row = db.query(select({
     cols: [as(e('vec'), 'vec')],
     from: table(TABLE, 'e'),
     joins: [join(table('entity', 'o'), eq(o('id'), e('owner')))],
-    where: and(eq(o('eid'), val(entity)), eq(e('model'), val(model))),
+    where: and(
+      eq(o('eid'), val(entity)),
+      eq(e('model'), val(model)),
+      ...within ? [among(e('owner'), within)] : [],
+    ),
   }))[0]
   return row ? unpack(row.vec as Uint8Array) : null
 }

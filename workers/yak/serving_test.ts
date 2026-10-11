@@ -619,10 +619,45 @@ test('/api/stats with no analytics token is a sentence, not a failure', async ()
   assertStringIncludes(said.say, 'not switched on')
 })
 
-test('the page wire: apply, query and search round-trip', async () => {
-  using scenario = platform()
+let wireFixture = async () => {
+  let scenario = platform()
   let { env } = scenario
-  await seeded(env)
+  let { dir, space, app } = await seeded(env)
+  let store = appStore(env.STORE, space, app)
+  let declaration = await store('/vocab', {
+    method: 'POST',
+    body: JSON.stringify({
+      $vocabulary: { 'https://yak.sh/vocab/member': true },
+      $defs: {
+        local_setting: {
+          component: true,
+          personal: 'entity',
+          properties: { text: { type: 'string', search: true } },
+        },
+      },
+    }),
+  }, KERNEL)
+  assertEquals(declaration.status, 200, await declaration.text())
+  await store('/apply', {
+    method: 'POST',
+    body: JSON.stringify([{
+      entity: { eid: ADA },
+      doc: { title: `lemons ${'public '.repeat(200)}` },
+      local_setting: { text: 'lemons unsharedsetting' },
+    }]),
+  }, ADA_OWNS)
+  let eli = 'e0000000-0000-4000-8000-000000000001'
+  await dir.apply(
+    { entities: [{ entity: { eid: eli }, person: {} }] },
+    ADA_OWNS,
+  )
+  return { scenario, env, eli }
+}
+let wireScene = await wireFixture()
+
+test('the page wire: apply, query and search round-trip', async () => {
+  using _scenario = wireScene.scenario
+  let { env, eli } = wireScene
   let page = client(env, await as(ADA))
 
   // The page's own envelope in, the page's own answer out — the shape the
@@ -673,6 +708,16 @@ test('the page wire: apply, query and search round-trip', async () => {
   // and comes back when one does.
   assertEquals((await page.query('.created')).length, 1)
   assertEquals((await page.query('.person')).length, 1)
+
+  for (let visitor of [client(env), client(env, await as(eli))]) {
+    let [publicPerson] = await visitor.search(
+      'lemons',
+      `.person&.entity.eid=${ADA}`,
+    )
+    assertEquals((publicPerson.entity as { eid: string }).eid, ADA)
+    assertEquals(publicPerson.local_setting, undefined)
+    assert(!JSON.stringify(publicPerson.rank).includes('unsharedsetting'))
+  }
 })
 
 test('a store tells the directory its size within the storage allowance step', async () => {

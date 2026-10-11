@@ -213,6 +213,9 @@ type Sub = {
   /** true when the registry's network decides membership, false when this
    * subscription runs its query again instead */
   routed: boolean
+  network?: ReturnType<typeof net<Sub>>
+  policy?: Interest | null
+  policyRefs?: boolean
   /** the query reads a component held by peers rather than storage */
   peer: boolean
   /** the durable rows that may match a query reading peers */
@@ -496,8 +499,55 @@ export let subscriptions = (graph: Graph, opts: {
       return [...targets.flatMap((peer) => answers.get(peer) ?? []), ...held]
     })
   }
-  let network = (sub: Sub) => sub.peer ? peerNet : durableNet
+  let scopedNets = new Map<string, ReturnType<typeof net<Sub>>>()
+  let network = (sub: Sub) => {
+    if (sub.network) return sub.network
+    if (
+      sub.opts?.person === undefined &&
+      !graph.scope(sub.opts).visibility
+    ) return sub.network = sub.peer ? peerNet : durableNet
+    let key = JSON.stringify([sub.peer, sub.opts ?? null])
+    let found = scopedNets.get(key)
+    if (!found) scopedNets.set(key, found = net<Sub>(graph.vocab))
+    return sub.network = found
+  }
+  let dropNetwork = (sub: Sub) => {
+    let routing = network(sub)
+    routing.drop(sub)
+    sub.routed = false
+    if (
+      [...all(), ...kept.values()].some((s) =>
+        s.routed && s.network === routing
+      )
+    ) return
+    for (let [key, found] of scopedNets) {
+      if (found === routing) scopedNets.delete(key)
+    }
+  }
+  let routable = (sub: Sub) =>
+    !!sub.reads?.alone && !sub.reads.unseen && !sub.reads.far.size &&
+    !sub.reads.via.size && !sub.plan?.reaches.length && sub.opts?.now == null
   let peerComp = (name: string) => syncOf(graph.vocab, name) == 'peers'
+  let references = (sub: Sub) => {
+    let vocab = sub.view?.vocab ?? graph.vocab
+    return [...sub.want ?? vocab.all].some((name) =>
+      vocab.props(name).some((prop) =>
+        vocab.prop(name, prop)?.category == 'ref'
+      )
+    )
+  }
+  // Reference values depend on their targets' visibility, even when the
+  // unchanged referring entity remains in a routed or retained answer.
+  let policyMoved = (sub: Sub, applied: Bundle[]) =>
+    sub.policyRefs && sub.policy !== undefined &&
+    (!sub.policy ||
+      applied.some((b) =>
+        dead(b) ||
+        comps(b).some(([name]) =>
+          sub.policy!.near.has(name) || sub.policy!.far.has(name) ||
+          sub.policy!.via.has(name)
+        )
+      ))
   // Policies read dependencies without changing what the caller selected or
   // requiring their private components on otherwise public members.
   let dependencies = (reads: Interest | null, readOpts?: ReadOpts) => {
@@ -598,7 +648,7 @@ export let subscriptions = (graph: Graph, opts: {
       s.shared = undefined
       if (!s.kept) continue
       kept.delete(share.key)
-      network(s).drop(s)
+      dropNetwork(s)
     }
     share.users.clear()
   }
@@ -624,7 +674,7 @@ export let subscriptions = (graph: Graph, opts: {
       if (!k.kept) continue
       share.users.delete(k)
       kept.delete(share.key)
-      network(k).drop(k)
+      dropNetwork(k)
     }
     share.users.add(sub)
     sub.shared = share
@@ -648,7 +698,7 @@ export let subscriptions = (graph: Graph, opts: {
       }
       return
     }
-    network(sub).drop(sub)
+    dropNetwork(sub)
   }
 
   // A subscription whose query is refused is closed, not kept: a query the
@@ -964,7 +1014,15 @@ export let subscriptions = (graph: Graph, opts: {
     let mine = held.get(sink) ?? new Map<string, Sub>()
     held.set(sink, mine)
     let line = query === true ? '' : query
+    let visibility = graph.scope(readOpts).visibility
     let sub: Sub = {
+      policy: visibility?.entity === undefined ? undefined : interest(
+        typeof visibility.entity == 'string'
+          ? parse(visibility.entity)
+          : visibility.entity,
+        graph.vocab,
+        graph.worn,
+      ),
       id,
       sink,
       raw: query === true,
@@ -999,6 +1057,7 @@ export let subscriptions = (graph: Graph, opts: {
           sub.want = named(view.vocab, view.original)
           sub.plan = projection(view.vocab, view.original)
           sub.cut = sub.plan?.cut ?? only(sub.want)
+          sub.policyRefs = references(sub)
           // The view already speaks the caller's words.
           sub.send = delivery(sink, id, { ...readOpts, native: true })
           if (sub.agg) return tell(sub, true, answers)
@@ -1035,6 +1094,7 @@ export let subscriptions = (graph: Graph, opts: {
             sub.want = named(graph.vocab, ast, q !== line)
             sub.plan = projection(graph.vocab, ast)
             sub.cut = sub.plan?.cut ?? only(sub.want)
+            sub.policyRefs = references(sub)
             if (
               deferStatic && !sub.peer && sub.reads && !sub.reads.unseen &&
               sub.opts?.now == null && !sub.agg &&
@@ -1068,9 +1128,7 @@ export let subscriptions = (graph: Graph, opts: {
               // is a projection that reaches: what it reaches moves without the
               // entities it selects moving.
               if (
-                held.get(sink)?.get(id) === sub && !sub.reads?.unseen &&
-                !sub.plan?.reaches.length && sub.opts?.now == null &&
-                sub.opts?.person === undefined
+                held.get(sink)?.get(id) === sub && routable(sub)
               ) {
                 sub.routed = network(sub).add(sub, ast, sub.members)
                 if (sub.routed) join(sub, ast, bundles)
@@ -1285,6 +1343,7 @@ export let subscriptions = (graph: Graph, opts: {
     let invalidated = new Set(
       queries.filter((s) =>
         s.deferred && applied.some((b) => notices(s, b)) ||
+        policyMoved(s, applied) ||
         opts.invalidate?.(s.query, applied) ||
         s.view && applied.some((b) =>
             b.$delete ||
@@ -1331,121 +1390,126 @@ export let subscriptions = (graph: Graph, opts: {
       }
       if (!queries.length) return
       let touch = touches(applied, now)
-      let routing = new Map([
-        ...route(now, touched, durableNet),
-        ...route(
-          overlay(now.map(stored), peers.values(touched)),
-          touched,
-          peerNet,
-        ),
-      ])
-      return after(
-        over(queries, (s) =>
-          attempt(s, () => {
-            if (!relevant.has(s)) return
-            if (invalidated.has(s)) {
-              // An answer asked again whole is no longer one kept current.
-              if (s.shared) unshare(s.shared)
-              if (s.kept) return
-              let reset = s.deferred
-              if (s.agg) return tell(s)
-              let loaded = s.view
-                ? viewed(s.view, s.opts)
-                : s.peer
-                ? after(read(s), answered)
-                : load(s, s.query)
-              return after(loaded, (answer) => {
-                s.deferred = false
-                let set = answer.found
-                let ids = new Set(set.map((b) => b.entity.eid))
-                let gone = [...s.members].filter((id) => !ids.has(id))
-                let joined = [...ids].filter((id) => !s.members.has(id))
-                s.members = ids
-                if (
-                  reset && !s.reads?.unseen && !s.plan?.reaches.length &&
-                  s.opts?.now == null && s.opts?.person === undefined
-                ) s.routed = network(s).add(s, queryOf(s), ids)
-                else if (s.routed) network(s).add(s, queryOf(s), ids)
-                rememberFields(s, set)
-                return s.send({
-                  id: s.id,
-                  ...framed(s, set, answer),
-                  ...reset ? { reset: true } : {},
-                  gone,
-                  ...hail(s, joined),
-                })
-              })
-            }
-            if (s.routed && !s.reads?.via.size) {
-              let moved = routing.get(s)
-              if (moved) {
-                let joined = new Set(moved.joined)
-                moved.bundles = moved.bundles.filter((b) =>
-                  joined.has(b.entity.eid) ||
-                  noticedBy.get(s)!.has(b.entity.eid)
-                )
-              }
-              return send(s, moved)
-            }
-            // An ordered window can change only at the named local rows.
-            // Re-select its existing members plus those rows, not every old
-            // entry. A missing replacement (delete/filter exit) falls back to
-            // the full query, since an unseen row may fill the window then.
-            let ast = s.ast ?? parse(s.query)
-            let limit = ast.clauses.find((c) => c.kind == 'limit')
-            if (
-              limit?.kind == 'limit' && !s.peer && !s.view && !s.agg &&
-              s.reads && !s.reads.unseen && !s.reads.far.size &&
-              !s.reads.via.size && s.reads.own.length &&
-              !ast.clauses.some((c) => c.kind == 'after') &&
-              (s.members.size < limit.n ||
-                ![...noticedBy.get(s)!].some((id) => s.members.has(id)))
-            ) {
-              let local = affected(
-                { ...s, reads: { ...s.reads, whole: false } },
-                touch,
-                noticedBy.get(s)!,
-              )
-              if (local === undefined) return
-              if (local) {
-                if (
-                  s.members.size < limit.n &&
-                  [...s.members].filter((id) => !local.has(id)).length +
-                        local.size <= limit.n &&
-                  [...local].every((id) => /^[a-zA-Z0-9_-]+$/.test(id))
-                ) {
-                  let query = s.query + '&.entity.eid=' + [...local].join(',')
-                  return after(load(s, query), (answer) => {
-                    let unaffected = [...s.members].filter((id) =>
-                      !local.has(id)
-                    ).length
-                    return unaffected + answer.found.length <= limit.n
-                      ? push(s, local, () => answer)
-                      : push(s, undefined, load)
-                  })
-                }
-                let candidates = [...new Set([...s.members, ...local])]
-                if (
-                  candidates.some((id) => !/^[a-zA-Z0-9_-]+$/.test(id))
-                ) return push(s, undefined, load)
-                let q = s.query + '&.entity.eid=' + candidates.join(',')
-                let loaded = load(s, q)
-                return after(loaded, (answer) => {
-                  return push(s, undefined, () =>
-                    s.members.size >= limit.n && answer.found.length < limit.n
-                      ? load(s, s.query)
-                      : answer)
-                })
-              }
-            }
-            let scope = affected(s, touch, noticedBy.get(s)!)
-            if (scope === undefined) {
-              return
-            }
-            return push(s, scope ?? undefined, load)
-          })),
-        () => undefined,
-      )
+      return after(routeAll(now, touched, false), (durable) =>
+        after(
+          routeAll(
+            overlay(now.map(stored), peers.values(touched)),
+            touched,
+            true,
+          ),
+          (peer) => {
+            let routing = new Map([...durable, ...peer])
+            return after(
+              over(queries, (s) =>
+                attempt(s, () => {
+                  if (!relevant.has(s)) return
+                  if (invalidated.has(s)) {
+                    // An answer asked again whole is no longer one kept current.
+                    if (s.shared) unshare(s.shared)
+                    if (s.kept) return
+                    let reset = s.deferred
+                    if (s.agg) return tell(s)
+                    let loaded = s.view
+                      ? viewed(s.view, s.opts)
+                      : s.peer
+                      ? after(read(s), answered)
+                      : load(s, s.query)
+                    return after(loaded, (answer) => {
+                      s.deferred = false
+                      let set = answer.found
+                      let ids = new Set(set.map((b) => b.entity.eid))
+                      let gone = [...s.members].filter((id) => !ids.has(id))
+                      let joined = [...ids].filter((id) => !s.members.has(id))
+                      s.members = ids
+                      if (
+                        reset && routable(s)
+                      ) s.routed = network(s).add(s, queryOf(s), ids)
+                      else if (s.routed) network(s).add(s, queryOf(s), ids)
+                      if (s.routed) join(s, s.ast ?? parse(s.query), set)
+                      rememberFields(s, set)
+                      return s.send({
+                        id: s.id,
+                        ...framed(s, set, answer),
+                        ...reset ? { reset: true } : {},
+                        gone,
+                        ...hail(s, joined),
+                      })
+                    })
+                  }
+                  if (s.routed && !s.reads?.via.size) {
+                    let moved = routing.get(s)
+                    if (moved) {
+                      let joined = new Set(moved.joined)
+                      moved.bundles = moved.bundles.filter((b) =>
+                        joined.has(b.entity.eid) ||
+                        noticedBy.get(s)!.has(b.entity.eid)
+                      )
+                    }
+                    return send(s, moved)
+                  }
+                  // An ordered window can change only at the named local rows.
+                  // Re-select its existing members plus those rows, not every old
+                  // entry. A missing replacement (delete/filter exit) falls back to
+                  // the full query, since an unseen row may fill the window then.
+                  let ast = s.ast ?? parse(s.query)
+                  let limit = ast.clauses.find((c) => c.kind == 'limit')
+                  if (
+                    limit?.kind == 'limit' && !s.peer && !s.view && !s.agg &&
+                    s.reads && !s.reads.unseen && !s.reads.far.size &&
+                    !s.reads.via.size && s.reads.own.length &&
+                    !ast.clauses.some((c) => c.kind == 'after') &&
+                    (s.members.size < limit.n ||
+                      ![...noticedBy.get(s)!].some((id) => s.members.has(id)))
+                  ) {
+                    let local = affected(
+                      { ...s, reads: { ...s.reads, whole: false } },
+                      touch,
+                      noticedBy.get(s)!,
+                    )
+                    if (local === undefined) return
+                    if (local) {
+                      if (
+                        s.members.size < limit.n &&
+                        [...s.members].filter((id) => !local.has(id)).length +
+                              local.size <= limit.n &&
+                        [...local].every((id) => /^[a-zA-Z0-9_-]+$/.test(id))
+                      ) {
+                        let query = s.query + '&.entity.eid=' +
+                          [...local].join(',')
+                        return after(load(s, query), (answer) => {
+                          let unaffected = [...s.members].filter((id) =>
+                            !local.has(id)
+                          ).length
+                          return unaffected + answer.found.length <= limit.n
+                            ? push(s, local, () => answer)
+                            : push(s, undefined, load)
+                        })
+                      }
+                      let candidates = [...new Set([...s.members, ...local])]
+                      if (
+                        candidates.some((id) => !/^[a-zA-Z0-9_-]+$/.test(id))
+                      ) return push(s, undefined, load)
+                      let q = s.query + '&.entity.eid=' + candidates.join(',')
+                      let loaded = load(s, q)
+                      return after(loaded, (answer) => {
+                        return push(s, undefined, () =>
+                          s.members.size >= limit.n &&
+                            answer.found.length < limit.n
+                            ? load(s, s.query)
+                            : answer)
+                      })
+                    }
+                  }
+                  let scope = affected(s, touch, noticedBy.get(s)!)
+                  if (scope === undefined) {
+                    return
+                  }
+                  return push(s, scope ?? undefined, load)
+                })),
+              () => undefined,
+            )
+          },
+        ))
     })
   }
   // A commit that finds earlier work still running waits for it, beside every
@@ -1465,6 +1529,35 @@ export let subscriptions = (graph: Graph, opts: {
       return fanout(next.txs)
     }) as Promise<void>
     return next.done
+  }
+
+  // Each caller context routes only mandatory-policy-filtered canonical rows.
+  // Its network and shared answers never contain another person's aspects.
+  let routeAll = (
+    rows: Bundle[],
+    touched: Eid[],
+    peer: boolean,
+    joinsOnly = false,
+  ): Map<Sub, Moved> | Promise<Map<Sub, Moved>> => {
+    let groups = new Map<ReturnType<typeof net<Sub>>, ReadOpts | undefined>()
+    for (let sub of [...all(), ...kept.values()]) {
+      if (sub.routed && sub.peer === peer) groups.set(network(sub), sub.opts)
+    }
+    let out = new Map<Sub, Moved>()
+    return after(
+      over([...groups], ([routing, readOpts]) =>
+        after(
+          graph.answer(rows, { ...readOpts, native: true }),
+          (visible) => {
+            for (
+              let [sub, moved] of route(visible, touched, routing, joinsOnly)
+            ) {
+              out.set(sub, moved)
+            }
+          },
+        )),
+      () => out,
+    )
   }
 
   // The entities a transaction changed, read whole, each moved through the
@@ -1797,55 +1890,59 @@ export let subscriptions = (graph: Graph, opts: {
     let batchLinks = new Map<string, Bundle[] | Promise<Bundle[]>>()
     let batchSources = new Map<string, Bundle[] | Promise<Bundle[]>>()
     return after(durableRows(touched), (rows) => {
-      let routing = route(overlay(rows, values), touched, peerNet, true)
-      release()
       return after(
-        over(
-          all().filter((s) => s.peer),
-          (s) =>
-            attempt(
-              s,
-              () => {
-                if (s.view) return push(s)
-                if (s.routed) return send(s, routing.get(s))
-                if (!s.ref) return push(s)
-                let roots = new Set(
-                  bundles.filter((b) => s.ref!.comp in b)
-                    .map((b) => b.entity.eid),
-                )
-                let moved = bundles.filter((b) =>
-                  Object.keys(b).some((c) => s.ref!.far.has(c))
-                )
-                if (!moved.length && !roots.size) return
-                let ids = [...new Set(moved.map((b) => b.entity.eid))]
-                let key = JSON.stringify([s.ref.comp, s.ref.prop, ids])
-                let found = batchLinks.get(key)
-                if (!found) {
-                  found = ids.length ? linked(s.ref, ids) : []
-                  batchLinks.set(key, found)
-                }
-                return after(
-                  found,
-                  (refs) => {
-                    let scope = new Set([
-                      ...roots,
-                      ...refs.map((b) => b.entity.eid),
-                    ])
-                    if (!scope.size) return
-                    let own = rows.filter((b) => roots.has(b.entity.eid))
-                    let sourceKey = JSON.stringify([key, [...roots]])
-                    let prepared = batchSources.get(sourceKey)
-                    if (!prepared) {
-                      prepared = source(s, scope, [...refs, ...own])
-                      batchSources.set(sourceKey, prepared)
+        routeAll(overlay(rows, values), touched, true, true),
+        (routing) => {
+          release()
+          return after(
+            over(
+              all().filter((s) => s.peer),
+              (s) =>
+                attempt(
+                  s,
+                  () => {
+                    if (s.view) return push(s)
+                    if (s.routed) return send(s, routing.get(s))
+                    if (!s.ref) return push(s)
+                    let roots = new Set(
+                      bundles.filter((b) => s.ref!.comp in b)
+                        .map((b) => b.entity.eid),
+                    )
+                    let moved = bundles.filter((b) =>
+                      Object.keys(b).some((c) => s.ref!.far.has(c))
+                    )
+                    if (!moved.length && !roots.size) return
+                    let ids = [...new Set(moved.map((b) => b.entity.eid))]
+                    let key = JSON.stringify([s.ref.comp, s.ref.prop, ids])
+                    let found = batchLinks.get(key)
+                    if (!found) {
+                      found = ids.length ? linked(s.ref, ids) : []
+                      batchLinks.set(key, found)
                     }
-                    return push(s, scope, undefined, prepared, true)
+                    return after(
+                      found,
+                      (refs) => {
+                        let scope = new Set([
+                          ...roots,
+                          ...refs.map((b) => b.entity.eid),
+                        ])
+                        if (!scope.size) return
+                        let own = rows.filter((b) => roots.has(b.entity.eid))
+                        let sourceKey = JSON.stringify([key, [...roots]])
+                        let prepared = batchSources.get(sourceKey)
+                        if (!prepared) {
+                          prepared = source(s, scope, [...refs, ...own])
+                          batchSources.set(sourceKey, prepared)
+                        }
+                        return push(s, scope, undefined, prepared, true)
+                      },
+                    )
                   },
-                )
-              },
+                ),
             ),
-        ),
-        () => undefined,
+            () => undefined,
+          )
+        },
       )
     })
   }

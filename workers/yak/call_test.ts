@@ -38,11 +38,19 @@ let words = {
       readOnly: true,
       worker: '/caller',
     },
+    read_draft: {
+      tool: true,
+      description: 'Read a draft',
+      floor: 'person',
+      query: '.entity.eid=$at&*',
+      input: { at: { type: 'string' } },
+      required: ['at'],
+    },
   },
 }
 
-test('a command that takes an argument runs in its store', async () => {
-  using p = platform()
+let commandFixture = async () => {
+  let p = platform()
   let { env } = p
   let { dir, space, app } = await seeded(env, 'private')
   await dir.apply({
@@ -76,10 +84,44 @@ test('a command that takes an argument runs in its store', async () => {
     body: JSON.stringify(parseTools(words, ['doc'])),
   }, ADA_OWNS)
   assertEquals(declared.status, 200, await declared.text())
+  let privateDraft = crypto.randomUUID(), otherDraft = crypto.randomUUID()
+  await store('/apply', {
+    method: 'POST',
+    body: JSON.stringify([privateDraft, otherDraft].map((eid) => ({
+      entity: { eid },
+      draft: { by: ADA, place: `command:${eid}`, text: 'unshared input' },
+    }))),
+  }, ADA_OWNS)
+  return {
+    p,
+    env,
+    dir,
+    space,
+    app,
+    dispatched,
+    store,
+    privateDraft,
+    otherDraft,
+  }
+}
+let commandScene = await commandFixture()
+
+test('a command that takes an argument runs in its store', async () => {
+  using p = commandScene.p
+  let {
+    env,
+    dir,
+    space,
+    app,
+    dispatched,
+    store,
+    privateDraft,
+    otherDraft,
+  } = commandScene
+  let cookies = new Map([[ADA, await as(ADA)], [ELI, await as(ELI)]])
   let rows = async (q: string): Promise<Bundle[]> =>
     await (await store(`/query?q=${encodeURIComponent(q)}`, {}, ADA_OWNS))
       .json()
-  let cookies = new Map([[ADA, await as(ADA)], [ELI, await as(ELI)]])
   let write = async (person: string, entities: Bundle[]) => {
     let res = await apps.fetch(
       visit('/cookbook/api/apply', {
@@ -115,6 +157,11 @@ test('a command that takes an argument runs in its store', async () => {
   let failureOf = async (id: string) =>
     (await rows(`.output.source=${id}&?refusal&?content`))[0]
 
+  let ownedRead = await record(ADA, 'read_draft', {}, { at: privateDraft })
+  assertStringIncludes(String((await answer(ownedRead)).body), 'unshared input')
+  let foreignRead = await record(ELI, 'read_draft', {}, { at: privateDraft })
+  assertStringIncludes(String((await answer(foreignRead)).body), '0 rows')
+
   let noted = await record(ADA, 'log_note', {}, { at: 'monday' })
   assertEquals(
     (await rows('.doc.title=monday')).map((r) => (r.doc as Comp).title),
@@ -140,6 +187,13 @@ test('a command that takes an argument runs in its store', async () => {
 
   let future = Date.now() + 60_000
   let sleeping = { wake: { at: new Date(future).toISOString() } }
+  let editedRead = await record(ADA, 'read_draft', sleeping, {
+    at: privateDraft,
+  })
+  await write(ELI, [{
+    entity: { eid: editedRead },
+    call: { args: { at: otherDraft } },
+  }])
   let [altered, mine, unchanged, recurring] = Array.from(
     { length: 4 },
     () => crypto.randomUUID(),
@@ -175,6 +229,7 @@ test('a command that takes an argument runs in its store', async () => {
   count = dispatched.length
   await p.object(storeName(space, app)).tick(future)
   await Promise.all([...p.states.get(storeName(space, app))!.pending])
+  assertStringIncludes(String((await answer(editedRead)).body), '0 rows')
   assertEquals((await failureOf(altered)).refusal, { code: 'access' })
   assertStringIncludes(String((await answer(mine)).body), 'welcome')
   assertStringIncludes(String((await answer(unchanged)).body), 'welcome')

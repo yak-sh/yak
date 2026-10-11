@@ -12,15 +12,7 @@
 // `screened()` is the statement alone, for a search beside the graph to run.
 
 import { field } from '@yaks/sql/query'
-import {
-  type And,
-  and as all,
-  eq as queryEq,
-  list,
-  map,
-  parse,
-  want,
-} from '@yaks/query/core'
+import { type And, map, parse } from '@yaks/query/core'
 import type { Prop, Vocab } from '@yaks/vocab'
 import {
   among,
@@ -57,9 +49,12 @@ import {
   type Select,
   select,
   type Source,
+  sourceScreen,
+  storedOnly,
   sub,
   table,
   val,
+  visibleDerived,
 } from '@yaks/sql/query'
 import type { Bundle, Comp } from './bundle.ts'
 import { sha256 } from '@yaks/graph/sha256'
@@ -734,6 +729,11 @@ let joinedGet = (
  * inside the transaction before their archetype pointer was assigned; these
  * are gathered from their physical rows rather than the stored descriptor.
  */
+export type ReadCache = {
+  fetch: (eids: string[], comps?: string[]) => Bundle[]
+  permit: (eids: string[], components: string[], run: () => Row[]) => Row[]
+}
+
 export let get = (
   driver: Driver,
   vocab: Vocab,
@@ -741,35 +741,93 @@ export let get = (
   opts: BindOpts = {},
   comps?: string[],
   unclassified: string[] = [],
+  cache?: ReadCache,
 ): Bundle[] => {
+  if (!eids.length) return []
   if (opts.visibility) {
     let { visibility, ...plain } = opts
-    let wanted = all(queryEq('entity.eid', list(...eids)))
-    let allowed = new Set(
-      rows(driver, vocab, wanted, opts).map((r) => String(r.eid)),
-    )
-    let found = get(
+    // A getter's eids are physical identities. Query addressing may interpret
+    // a human id such as history-1 as number 1, which cannot decide ownership.
+    let permitted = (ids: string[], components: string[] = []): Set<string> => {
+      if (!ids.length) return new Set()
+      let screen = sourceScreen(vocab, opts, components)
+      let run = () =>
+        driver.query(select({
+          cols: [col('eid', '__requested')],
+          from: table('entity', '__requested'),
+          where: and(
+            oneOf(col('eid', '__requested'), ids),
+            screen
+              ? exists(select({
+                cols: [lit(1)],
+                from: from(screen, '__allowed'),
+                where: eq(col('id', '__allowed'), col('id', '__requested')),
+              }))
+              : lit(true),
+          ),
+        }))
+      return new Set(
+        (cache ? cache.permit(ids, components, run) : run()).map((r) =>
+          String(r.eid)
+        ),
+      )
+    }
+    let allowed = permitted(eids)
+    let ids = eids.filter((eid) => allowed.has(eid))
+    let scoped = { ...plain, derived: visibleDerived(vocab, opts) }
+    let found = cache ? cache.fetch(ids, comps) : get(
       driver,
       vocab,
-      eids.filter((eid) => allowed.has(eid)),
-      plain,
+      ids,
+      scoped,
       comps,
       unclassified,
     )
-    let aspects = Object.entries(visibility.components ?? {}).map(([name, q]) =>
-      [
-        name,
-        new Set(
-          rows(driver, vocab, all(wanted, ast(q)), plain).map((r) =>
-            String(r.eid)
-          ),
-        ),
-      ] as const
+    if (cache) {
+      // The payload cache holds authoritative rows. Every derived component
+      // is read again through scoped sources before the payload is exposed.
+      let names = new Set(
+        Object.entries(derivedOf(vocab, opts.derived)).filter(([, d]) =>
+          !storedOnly(d, vocab)
+        ).map(([p]) => p.split('.')[0]),
+      )
+      let dynamic = [...names].filter((name) => found.some((b) => b[name]))
+      if (dynamic.length) {
+        let current = new Map(
+          get(driver, vocab, ids, scoped, dynamic, unclassified).map((
+            b,
+          ) => [b.entity.eid, b]),
+        )
+        found = found.map((b) => {
+          let out = { ...b }
+          for (let name of dynamic) delete out[name]
+          return { ...out, ...current.get(b.entity.eid) }
+        })
+      }
+    }
+    let aspects = Object.keys(visibility.components ?? {}).map((name) =>
+      [name, permitted(eids, [name])] as const
     )
     let hidden = new Set<string>()
-    for (let [name, owners] of aspects) {
-      for (let r of rows(driver, vocab, all(wanted, want(name)), plain)) {
-        if (!owners.has(String(r.eid))) hidden.add(String(r.eid))
+    if (found.some((b) => b.entity.archetype)) {
+      for (let [name, owners] of aspects) {
+        let wearing = comps && !comps.includes(name)
+          ? driver.query(select({
+            cols: [col('eid', '__requested')],
+            from: table('entity', '__requested'),
+            joins: [
+              join(
+                table(name, '__aspect'),
+                eq(col('entity', '__aspect'), col('id', '__requested')),
+              ),
+            ],
+            where: oneOf(col('eid', '__requested'), eids),
+          }))
+            .map((r) => String(r.eid))
+          : found.filter((b) => !!b[name]).map((b) => b.entity.eid)
+        for (let eid of wearing) {
+          if (!owners.has(eid)) hidden.add(eid)
+        }
       }
     }
     let targets = new Set<string>()
@@ -786,8 +844,7 @@ export let get = (
     }
     let references = visibility.entity && targets.size
       ? new Set(
-        rows(driver, vocab, all(queryEq('entity.eid', list(...targets))), opts)
-          .map((r) => String(r.eid)),
+        permitted([...targets]),
       )
       : targets
     return found.map((b) => {

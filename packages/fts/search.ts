@@ -18,11 +18,14 @@ import {
   and,
   as,
   at,
+  type BindOpts,
   col,
   type Driver,
   eq,
   exists,
+  type Expr,
   fn,
+  from,
   join,
   lit,
   not,
@@ -31,12 +34,14 @@ import {
   render,
   type Select,
   select,
+  sourceScreen,
   sub,
   table,
   unionAll,
   val,
   when,
 } from '@yaks/sql'
+import type { Vocab } from '@yaks/vocab'
 import { type Field, indexes, indexName } from './fields.ts'
 import { CLOSE, excerpt, match, OPEN } from './term.ts'
 
@@ -57,8 +62,39 @@ export type SearchOpts = {
   // @yaks/sql's `screen` of the rest of the query, and only rows the filters
   // already allow are ranked
   screen?: Raw
+  // the owner ids permitted to contribute matching text, per index
+  screens?: Record<string, Raw>
   // how many words of context a snippet carries (default 10)
   context?: number
+}
+
+// Each index has one text source and may be gated by another component.
+// Restrict both before matching, so a public owner cannot reveal private text.
+export let screens = (
+  fields: Field[],
+  vocab: Vocab,
+  opts: BindOpts,
+): Record<string, Raw> =>
+  Object.fromEntries(
+    indexes(fields).flatMap(({ name, comp, on }) => {
+      let screen = sourceScreen(vocab, opts, [comp, ...on ? [on] : []])
+      return screen ? [[name, screen]] : []
+    }),
+  )
+
+export let permitted = (
+  name: string,
+  owner: ReturnType<typeof col>,
+  screens?: Record<string, Raw>,
+): Expr => {
+  let screen = screens?.[name]
+  return screen
+    ? exists(select({
+      cols: [lit(1)],
+      from: from(screen, '__allowed'),
+      where: eq(col('id', '__allowed'), owner),
+    }))
+    : lit(true)
 }
 
 // The ranked statement for a search, or null when the text contains no word.
@@ -156,7 +192,10 @@ let chosen = (
         as(lit(i), 'arm'),
       ],
       from: table(fts),
-      where: op('match', col(fts), val(t)),
+      where: and(
+        op('match', col(fts), val(t)),
+        permitted(name, col('rowid', fts), opts.screens),
+      ),
     })
   }))
   let alive = not(exists(select({

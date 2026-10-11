@@ -130,6 +130,7 @@ let kept =
 let expr: (e: Expr, c: Ctx) => string = kept((e: Expr, c: Ctx): string => {
   switch (e.t) {
     case 'raw':
+      if (c.inline && e.params.length) return literals(e)
       c.params.push(...e.params)
       return e.sql
     case 'col':
@@ -484,6 +485,25 @@ let quoted = (sql: string, i: number, q: number): number => {
     else break
   }
   return i
+}
+
+// A compiled fragment is still a value when it is embedded in an inline
+// expression. Substitute its parameters outside quoted strings and names.
+let literals = ({ sql, params }: Raw): string => {
+  let out = '', start = 0, value = 0
+  for (let i = 0; i < sql.length;) {
+    let c = sql.charCodeAt(i)
+    if (c == QUOTE || c == NAME) i = quoted(sql, i, c)
+    else if (c == 63) {
+      let end = i + 1
+      while (end < sql.length && digit(sql.charCodeAt(end))) end++
+      let position = end == i + 1 ? value++ : Number(sql.slice(i + 1, end)) - 1
+      value = Math.max(value, position + 1)
+      out += sql.slice(start, i) + literal(params[position])
+      start = i = end
+    } else i++
+  }
+  return out + sql.slice(start)
 }
 
 /** A statement as a trace keeps it: its shape, and when that runs past `max`

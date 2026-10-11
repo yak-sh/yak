@@ -40,16 +40,24 @@
 // handle for a server — so nothing here names a concrete SQLite library.
 
 import type { Vocab } from '@yaks/vocab'
-import type { And } from '@yaks/query'
+import { type And, bare, type Clause } from '@yaks/query'
+import { type Filter, filter } from '@yaks/match'
 import {
+  among,
+  and,
   type BindOpts,
+  col,
   type Derived,
   type Driver,
   erect,
+  oneOf,
   type Raw,
   render,
   type Row,
+  select,
+  sourceScreen,
   type Stmt,
+  table,
   worn,
 } from '@yaks/sql'
 import type {
@@ -78,7 +86,7 @@ import {
   tabled,
 } from './ddl.ts'
 import { epoch, installed, meta, SCHEMA } from './meta.ts'
-import { ast, get, read, rows, screened } from './read.ts'
+import { ast, get, read, type ReadCache, rows, screened } from './read.ts'
 import { doom } from './doom.ts'
 import { unit } from './unit.ts'
 import { options } from './reader.ts'
@@ -91,9 +99,9 @@ import {
   ledger,
 } from './archetype.ts'
 import { componentTables, shape } from './physical.ts'
-import { births, patch, remove, revive } from './write.ts'
+import { births, patch, remove, revive, spines } from './write.ts'
 import { bindings } from './rules.ts'
-import { basis, memoized } from './memo.ts'
+import { basis, local, memoized } from './memo.ts'
 import { revision } from '@yaks/sql'
 
 export {
@@ -255,16 +263,16 @@ export type Store = {
   /** a query → its entities, with `comps` only where named: which entities
    * match and what they carry read as one snapshot, in a unit that takes no
    * write lock, so another process's commit is seen whole or not at all */
-  read: (query: Query, opts?: BindOpts, comps?: string[]) => Bundle[]
+  read: (query: Query, opts?: BindOpts & ReadOpts, comps?: string[]) => Bundle[]
   /** a query → the compiled statement's raw rows (counts, tallies) */
-  rows: (query: Query, opts?: BindOpts) => Row[]
+  rows: (query: Query, opts?: BindOpts & ReadOpts) => Row[]
   /** a query → a statement selecting the ids of the entities it admits, as
    * this store compiles its reads (./read.ts `screened`); null for a query
    * with nothing to narrow by */
-  screen: (query: Query, opts?: BindOpts) => Raw | null
+  screen: (query: Query, opts?: BindOpts & ReadOpts) => Raw | null
   /** these entities as they stand, carrying the components `comps` names or
    * every one, read in a unit that takes no write lock */
-  get: (eids: Eid[], comps?: string[], opts?: BindOpts) => Bundle[]
+  get: (eids: Eid[], comps?: string[], opts?: BindOpts & ReadOpts) => Bundle[]
   /** run `body` in a transaction: commit on return, roll back on throw */
   tx: <R>(body: (tx: Tx) => R, opts?: { admission?: boolean }) => R
 }
@@ -343,6 +351,8 @@ let plan = (vocab: Vocab, derived: Derived = NONE, file = false): Plan => {
 
 // The read options a statement is the same under (@yaks/graph `ReadOpts`).
 const UNREAD = new Set([
+  'person',
+  'administrative',
   'native',
   'durable',
   'parent',
@@ -400,30 +410,205 @@ export let storage = (
   // catalog can't be trusted yet.
   // Where a caller's options leave a read's entities as the store's own get
   // reads them, the get to read them through.
-  let fetched = (o: Opts = {}, get = cached) =>
-    Object.keys(o).every((k) => k != 'now' && UNREAD.has(k)) ? get : undefined
+  let policies = (o: Opts, within = false): string[] | undefined => {
+    let tables = new Set(within ? ['tombstone'] : ['entity', 'tombstone'])
+    let scope = o.visibility
+    for (
+      let query of [scope?.entity, ...Object.values(scope?.components ?? {})]
+    ) {
+      if (!query) continue
+      let names = basis(vocab, ast(query), base.derived, false, within)
+      if (!names) return undefined
+      for (let name of names) tables.add(name)
+    }
+    for (let name of Object.keys(scope?.components ?? {})) tables.add(name)
+    return [...tables]
+  }
+  let reading = (o: Opts, fetch = cached): ReadCache => ({
+    fetch,
+    permit: (eids, components, run) => {
+      let selected = new Set(eids)
+      let queries = [
+        o.visibility?.entity,
+        ...components.map((c) => o.visibility?.components?.[c]),
+      ].filter((q) => !!q)
+      let compiled = queries.map((q) => tested(ast(q!), true))
+      let tests = compiled.every((t) => !!t) ? compiled as Filter[] : undefined
+      let test: Filter | undefined = tests &&
+        ((b) => selected.has(b.entity.eid) && tests.every((t) => t(b)))
+      let names = queries.flatMap((q) =>
+        basis(vocab, ast(q!), base.derived) ?? []
+      )
+      if (tests && policies(o)) {
+        return fetch(eids, [...new Set(names)]).filter((b) => test!(b)).map((
+          b,
+        ) => ({ eid: b.entity.eid }))
+      }
+      return memo.answer(
+        JSON.stringify(['permit', eids, components, o.visibility]),
+        policies(o),
+        run,
+        test,
+        true,
+      )
+    },
+  })
+  let fetched = (o: Opts = {}, fetch = cached) =>
+    Object.keys(o).every((k) =>
+        k != 'now' && (UNREAD.has(k) || k == 'visibility')
+      )
+      ? o.visibility
+        ? (eids: string[], comps?: string[]) =>
+          get(
+            driver,
+            vocab,
+            eids,
+            { ...opts(), ...o },
+            comps,
+            [],
+            reading(o, fetch),
+          )
+        : fetch
+      : undefined
   let cached = (eids: string[], comps?: string[]) =>
     memo.get(identity, eids, comps)
+  let tested = (query: And, exactIds = false): Filter | undefined => {
+    if (!basis(vocab, query, base.derived) || !local(vocab, query)) {
+      return undefined
+    }
+    try {
+      return filter(query, vocab, { exactIds })
+    } catch {
+      return undefined
+    }
+  }
+  let resolved = (query: And, o: Opts): BindOpts['references'] => {
+    if (!o.visibility?.entity) return undefined
+    let operands = new Set<string>()
+    let visit = (c: Clause): void => {
+      if (c.kind == 'and' || c.kind == 'or') return c.clauses.forEach(visit)
+      if (
+        c.kind != 'pred' || c.where || c.op != '=' ||
+        c.value?.kind != 'scalar' || !c.value.raw
+      ) return
+      let hops = vocab.aim(c.path.join('.'), bare(c)), h = hops[0]
+      let prop = h && vocab.prop(h.comp, h.prop)
+      if (
+        hops.length != 1 || !prop?.ref || prop.computed ||
+        base.derived?.[`${h.comp}.${h.prop}`] || vocab.comp(prop.ref)?.computed
+      ) return
+      for (let eid of c.value.raw.split(',')) operands.add(eid)
+    }
+    visit(query)
+    if (!operands.size) return undefined
+    let eids = [...operands]
+    let allowed = reading(o).permit(eids, [], () => {
+      let screen = sourceScreen(vocab, { ...opts(), ...o })!
+      return driver.query(select({
+        cols: [col('eid', '__target')],
+        from: table('entity', '__target'),
+        where: and(
+          oneOf(col('eid', '__target'), eids),
+          among(col('id', '__target'), screen),
+        ),
+      }))
+    })
+    let ids = spines(driver, allowed.map((r) => String(r.eid)))
+    return Object.fromEntries(
+      eids.map((eid) => [eid, ids.get(eid)?.id ?? null]),
+    )
+  }
   let asked = (query: And, o: Opts = {}, direct = false): Row[] => {
     let catalogued = classified && !direct
     let owing = catalogued &&
       (ledgers.get(driver) ?? []).some((u) => u.ledger.owed().length)
+    // A local identity selection can share its authoritative membership
+    // cache. With no window or reference predicate, applying the entity
+    // policy afterwards is the same relational intersection.
+    let simple = (c: Clause): boolean =>
+      c.kind == 'and' || c.kind == 'or'
+        ? c.clauses.every(simple)
+        : c.kind == 'every' || c.kind == 'pred' && !c.where && (() => {
+              let hops = vocab.aim(c.path.join('.'), bare(c))
+              let h = hops[0]
+              return hops.length == 1 &&
+                (!h.prop || vocab.prop(h.comp, h.prop)?.category != 'ref')
+            })()
+    if (
+      o.visibility && !owing &&
+      !Object.keys(o.visibility.components ?? {}).length &&
+      (!o.visibility.entity || local(vocab, ast(o.visibility.entity))) &&
+      policies(o) && basis(vocab, query, base.derived, catalogued) &&
+      simple(query)
+    ) {
+      let { visibility: _visibility, ...plain } = o
+      let raw = asked(query, plain, direct)
+      let permitted = new Set(
+        reading(o).permit(raw.map((r) => String(r.eid)), [], () => []).map((
+          r,
+        ) => String(r.eid)),
+      )
+      return raw.filter((r) => permitted.has(String(r.eid)))
+    }
     // What a caller's options change of the statement: its order of pages; a
     // `now` matters only to time phrases, which are read every time.
-    let unread = Object.keys(o).some((k) => !UNREAD.has(k))
+    let unread = Object.keys(o).some((k) => !UNREAD.has(k) && k != 'visibility')
+    let tables = basis(vocab, query, base.derived, catalogued)
+    if (o.visibility) {
+      let scoped = policies(o, !!tables && !tables.includes('entity'))
+      tables = tables && scoped
+        ? [...new Set([...tables, ...scoped])]
+        : undefined
+    }
+    let standing: And | Filter | undefined = query
+    let strict: string[] | undefined
+    let identities = (c: Clause): boolean =>
+      c.kind == 'and' || c.kind == 'or'
+        ? c.clauses.every(identities)
+        : c.kind == 'pred' && !c.where || c.kind == 'every'
+    let fixed = (c: Clause): boolean => {
+      if (c.kind == 'and' || c.kind == 'or') return c.clauses.every(fixed)
+      if (c.kind != 'pred') return true
+      let leaf = vocab.aim(c.path.join('.'), bare(c)).at(-1)
+      return !leaf || vocab.prop(leaf.comp, leaf.prop)?.category != 'ref' ||
+        !c.not && c.op == '=' && c.value?.kind == 'scalar' &&
+          !!c.value.raw && !c.value.raw.includes('..')
+    }
+    if (o.visibility) {
+      let policy = o.visibility.entity
+      // Aspect policies can change what a predicate reads. A whole-entity
+      // policy instead composes with an ordinary local membership test.
+      if (
+        !Object.keys(o.visibility.components ?? {}).length &&
+        local(vocab, query) && (!policy || local(vocab, ast(policy)))
+      ) {
+        let ordinary = tested(query)
+        if (ordinary && !fixed(query)) ordinary = undefined
+        let allowed = policy && tested(ast(policy), true)
+        standing = ordinary && (!policy || allowed)
+          ? (b) => ordinary(b) && (!allowed || allowed(b))
+          : undefined
+        // A reference's target can become hidden without its source changing.
+        // Local source predicates cannot prove that policy change irrelevant.
+        if (!simple(query)) {
+          strict = policies(o, !!tables && !tables.includes('entity'))
+        }
+      } else standing = undefined
+    }
     return unit(driver, () =>
       memo.answer(
-        JSON.stringify([query, !!o.storageOrder, direct]),
-        owing || unread
-          ? undefined
-          : basis(vocab, query, base.derived, catalogued),
+        JSON.stringify([query, !!o.storageOrder, direct, o.visibility]),
+        owing || unread ? undefined : tables,
         () =>
           rows(driver, vocab, query, {
             ...opts(),
             ...o,
+            references: resolved(query, o) ?? o.references,
             ...direct ? { archetypes: () => undefined } : {},
           }),
-        query,
+        standing,
+        identities(query),
+        strict,
       ), 'read')
   }
   let tx: Tx = {
@@ -720,7 +905,17 @@ export let storage = (
         driver,
         () =>
           o?.visibility
-            ? get(driver, vocab, eids, { ...opts(), ...o }, comps)
+            ? get(
+              driver,
+              vocab,
+              eids,
+              { ...opts(), ...o },
+              comps,
+              [],
+              Object.keys(o).every((k) => UNREAD.has(k) || k == 'visibility')
+                ? reading(o)
+                : undefined,
+            )
             : memo.get(identity, eids, comps),
         'read',
       )

@@ -56,12 +56,14 @@ import { type Bundle, type Comp, comps, dead, type Entity } from '@yaks/graph'
 import type { Prop, Vocab } from '@yaks/vocab'
 import { type And, bare, type Clause, drifts, type Pred } from '@yaks/query'
 import {
+  col,
   type Derived,
   type Driver,
   revision,
   type Row,
   type Stmt,
 } from '@yaks/sql/core'
+import { tablesOf } from '@yaks/sql/query'
 import { type Filter, filter } from '@yaks/match'
 import { tables } from './layout.ts'
 import type { Known, Spine } from './write.ts'
@@ -98,7 +100,9 @@ export type Memo = {
     key: string,
     tables: string[] | undefined,
     run: () => Row[],
-    query?: And,
+    query?: And | Filter,
+    membership?: boolean,
+    strict?: string[],
   ) => Row[]
 }
 
@@ -107,6 +111,10 @@ type Answer = {
   rows: Row[]
   /** whether an entity is one the query selects, where memory can tell */
   test?: Filter
+  /** An identity set depends on predicate truth, not selected values. */
+  membership?: boolean
+  /** Sources whose changes cannot be decided by this row's predicate. */
+  strict?: string[]
 }
 
 /** The spines a connection keeps. */
@@ -143,6 +151,7 @@ export let basis = (
   q: And,
   derived: Derived = {},
   catalogued = false,
+  within = false,
 ): string[] | undefined => {
   let out = new Set(['tombstone'])
   if (catalogued) out.add('archetype')
@@ -206,7 +215,7 @@ export let basis = (
           : ['=', '~=', '<', '<=', '>', '>='].includes(c.op) &&
             !(c.value?.kind == 'scalar' && c.value.raw == ''))
   if (!visit(q) || drifts(q, scalar)) return undefined
-  if (!anchored(q)) out.add('entity')
+  if (!within && !anchored(q)) out.add('entity')
   return [...out]
 }
 
@@ -262,6 +271,8 @@ type Kept = {
   part: Map<string, Set<string>>
   /** what the open transaction's patches leave each entity holding */
   after: Map<string, Bundle | null | typeof LOST>
+  /** components known in an after-state held only in part */
+  afterPart: Map<string, Set<string>>
   /** keep what the transaction that just committed left */
   commit: () => void
   sizes: Map<string, number>
@@ -351,6 +362,7 @@ let tell = (driver: Driver, c: Connection) => {
     for (let k of c.kept) {
       if (committed && !c.blind) k.commit()
       k.after.clear()
+      k.afterPart.clear()
     }
     c.depth = 0
     c.dirty.clear()
@@ -544,7 +556,16 @@ export let memoized = (
     answers: new Map(),
     asked: new Set(),
     after: new Map(),
-    tables: new Set(['entity', 'tombstone', BLOBS, ...tables(vocab)]),
+    afterPart: new Map(),
+    tables: new Set([
+      'entity',
+      'tombstone',
+      BLOBS,
+      ...tables(vocab),
+      ...Object.values(derived).flatMap((d) =>
+        d.stable ? tablesOf(d.expr(col('__owner'))) ?? [] : []
+      ),
+    ]),
     clear: () => {
       k.held.clear()
       k.part.clear()
@@ -555,7 +576,7 @@ export let memoized = (
     commit: () => {
       if (k.after.size > SCAN) return
       for (let [eid, b] of k.after) {
-        if (b !== LOST && !(b && holed(b))) hold(eid, b)
+        if (b !== LOST && !(b && holed(b))) hold(eid, b, k.afterPart.get(eid))
       }
       trim()
     },
@@ -630,6 +651,7 @@ export let memoized = (
       other.sizes.delete(eid)
       other.held.delete(eid)
       other.part.delete(eid)
+      other.afterPart.delete(eid)
       if (c.depth) other.after.set(eid, LOST)
     }
     for (let eid of eids(out)) {
@@ -655,7 +677,9 @@ export let memoized = (
   // What an entity held before this transaction's next patch: what its
   // patches so far left it, or what memory held while nothing wrote it.
   let prior = (eid: string): Bundle | null | typeof LOST =>
-    k.after.has(eid)
+    k.afterPart.has(eid)
+      ? LOST
+      : k.after.has(eid)
       ? k.after.get(eid)!
       : c.dirty.has(eid) || !holds(eid)
       ? LOST
@@ -777,9 +801,23 @@ export let memoized = (
     for (let a of k.answers.values()) {
       if (!a.test) continue
       if (a.tables.some(([t, n]) => (before.get(t) ?? 0) != n)) continue
-      let moved = [...now.keys()].some((eid) =>
-        selects(a.test!, was.get(eid)) || selects(a.test!, now.get(eid))
-      )
+      if (
+        a.strict?.some((t) => (before.get(t) ?? 0) != (c.versions.get(t) ?? 0))
+      ) {
+        continue
+      }
+      let moved = [...now.keys()].some((eid) => {
+        let before = was.get(eid), after = now.get(eid)
+        if (a.membership) {
+          if (
+            [before, after].some((b) =>
+              b === LOST || b === undefined || b && holed(b as Bundle)
+            )
+          ) return true
+          return selects(a.test!, before) != selects(a.test!, after)
+        }
+        return selects(a.test!, before) || selects(a.test!, after)
+      })
       if (!moved) a.tables = a.tables.map(([t]) => [t, c.versions.get(t) ?? 0])
     }
   }
@@ -792,7 +830,7 @@ export let memoized = (
     seen = now
   }
   return {
-    answer: (key, tables, run, query) => {
+    answer: (key, tables, run, query, membership, strict) => {
       if (!tables) return run()
       sync()
       let current = (table: string) => c.versions.get(table) ?? 0
@@ -825,7 +863,9 @@ export let memoized = (
       k.answers.set(key, {
         tables: at,
         rows: structuredClone(rows),
-        test: query && tested(query),
+        test: typeof query == 'function' ? query : query && tested(query),
+        membership,
+        strict,
       })
       if (c.depth) c.answered.push([k.answers, key])
       if (k.answers.size > ANSWERS) {
@@ -909,6 +949,14 @@ export let memoized = (
     patch: (bundles, body) => {
       sync()
       let eids = [...new Set(bundles.map((b) => b.entity.eid))]
+      let partial = new Map(eids.flatMap((eid) => {
+        let names = k.afterPart.get(eid) ??
+          (!c.dirty.has(eid) ? k.part.get(eid) : undefined)
+        let b = k.afterPart.has(eid) ? k.after.get(eid) : k.held.get(eid)
+        return names && b && b !== LOST
+          ? [[eid, { names: new Set(names), b: structuredClone(b) }] as const]
+          : []
+      }))
       // What each held before, taken before the write lets it go.
       let now = new Map<string, Bundle | null | typeof LOST>(
         eids.map((eid) => [eid, prior(eid)]),
@@ -935,7 +983,24 @@ export let memoized = (
       let was = new Map(now)
       for (let b of bundles) {
         let eid = b.entity.eid, base = now.get(eid)!
-        now.set(eid, base === LOST ? LOST : fold(base, b, minted.get(eid)))
+        let part = partial.get(eid)
+        if (part) {
+          // Unknown aspects stay unknown. Only values whose entire aspect
+          // was read can be folded through a patch without another lookup.
+          let patch = Object.fromEntries(
+            Object.entries(b).filter(([name]) =>
+              name == 'entity' || part.names.has(name)
+            ),
+          ) as Bundle
+          let next = fold(part.b, patch)
+          now.set(eid, next)
+          if (next && next !== LOST) {
+            partial.set(eid, { names: part.names, b: next })
+          }
+          k.afterPart.set(eid, part.names)
+        } else {
+          now.set(eid, base === LOST ? LOST : fold(base, b, minted.get(eid)))
+        }
       }
       for (let [eid, b] of now) k.after.set(eid, b)
       // A spine a reference minted holds what memory can't say.

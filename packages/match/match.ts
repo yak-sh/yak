@@ -68,6 +68,8 @@ export type Query = string | Ast
 /** Options for one run: the moment a relative time phrase resolves against, and
  * the rules that read the vocabulary's computed properties. */
 export type MatchOpts = {
+  /** Permission gates compare canonical eids without human-id addressing. */
+  exactIds?: boolean
   /** the reference moment for time phrases (default: now) */
   now?: number
   /** Unordered windows use insertion order rather than entity numbers. */
@@ -131,7 +133,7 @@ let compare = (a: unknown, b: unknown): number => {
 // the reference moment while compiling keeps that moment beside it and is
 // reused only for the same one.
 type Kind = 'select' | 'filter' | 'rows'
-type Kept = { at?: number; physical?: boolean; made: unknown }
+type Kept = { at?: number; physical?: boolean; exact?: boolean; made: unknown }
 let NONE: Computed = {}
 let kept = new WeakMap<
   Vocab,
@@ -157,7 +159,7 @@ let once = <T>(
   if (!forms) byTree.set(q, forms = {})
   let hit = forms[kind]
   if (
-    hit && hit.physical === opts.storageOrder &&
+    hit && hit.physical === opts.storageOrder && hit.exact === opts.exactIds &&
     (hit.at === undefined || hit.at === opts.now)
   ) {
     return hit.made as T
@@ -171,12 +173,14 @@ let once = <T>(
       return now
     },
     computed: opts.computed ?? {},
+    exactIds: opts.exactIds,
     storageOrder: opts.storageOrder,
   }
   let made = make(ctx)
   forms[kind] = {
     at: timed ? opts.now ?? NaN : undefined,
     physical: opts.storageOrder,
+    exact: opts.exactIds,
     made,
   }
   return made

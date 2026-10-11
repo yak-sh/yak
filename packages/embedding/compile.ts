@@ -39,12 +39,15 @@ import {
   FALSE,
   lit,
   type Screen,
+  type Site,
   Unsupported,
   val,
   when,
 } from '@yaks/sql'
 import type { Statements } from '@yaks/sql'
 import { type Near, nearest, type Rank, vectorOf } from './near.ts'
+import { type Field, fields, searched } from './fields.ts'
+import { screened, visibleVectors } from './visibility.ts'
 
 /** The `.order=` value that means "nearest first". */
 export let SIMILAR = 'similar'
@@ -54,6 +57,8 @@ export let RANK = 'rank'
 
 /** How a `.near` neighbourhood is bounded. */
 export type SemanticOpts = {
+  /** The configured text sources that fed the stored vectors. */
+  fields?: Field[]
   /** how many neighbours the directive selects (default 8) */
   limit?: number
   /** the similarity a neighbour must reach to be selected at all (default 0) */
@@ -95,21 +100,28 @@ export let semantic = (
     ((query, limit, within) =>
       nearest(db, query, { model: space.model, limit, within }))
 
-  let near = (anchor: string, owner: Expr): Expr => {
-    let vec = vectorOf(db, anchor, space.model)
+  let near = (anchor: string, site: Site): Expr => {
+    let visible = visibleVectors(
+      site.vocab,
+      opts.fields ?? fields(site.vocab, searched),
+      site.visibility,
+    )
+    let vec = vectorOf(db, anchor, space.model, visible)
+    if (!vec) {
+      held = []
+      return FALSE
+    }
     let limit = opts.limit ?? 8
-    let within = asked?.() ?? undefined
+    let within = screened(asked?.(), visible)
     // An anchor with no vector has no neighbourhood, and compiling that to a
     // constant false selects nothing rather than widening to everything.
     // The ranking is asked for one extra: the anchor scores 1 against itself
     // and would otherwise eat a place, and nothing is its own neighbour.
-    held = vec
-      ? rank(vec, limit + 1, within)
-        .filter((n) => n.entity != anchor && n.similarity >= (opts.floor ?? 0))
-        .slice(0, limit)
-      : []
+    held = rank(vec, limit + 1, within)
+      .filter((n) => n.entity != anchor && n.similarity >= (opts.floor ?? 0))
+      .slice(0, limit)
     if (!held.length) return FALSE
-    return among(owner, held.map((n) => val(n.owner)))
+    return among(site.owner, held.map((n) => val(n.owner)))
   }
 
   return {
@@ -120,7 +132,7 @@ export let semantic = (
     },
     compile: {
       near: (clause, site) =>
-        clause.kind == 'near' ? near(clause.value, site.owner) : null,
+        clause.kind == 'near' ? near(clause.value, site) : null,
     },
     order: (value, site) => {
       if (value != SIMILAR) return null

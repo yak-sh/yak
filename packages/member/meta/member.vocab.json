@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://yak.sh/vocab/member",
   "title": "yaks member keyword vocabulary",
-  "description": "The permission keywords @yaks/member adds to a component vocabulary: floor asks a level of whoever writes it; permit grants a companion mark to the owner of a referenced row.",
+  "description": "The permission keywords @yaks/member adds to a component vocabulary: floor asks a level of whoever writes it; permit grants a companion mark to the owner of a referenced row; personal names the owner of private data.",
   "$comment": "A vocabulary declaration in the JSON Schema sense: a URI naming this keyword set, plus the schema of each keyword. A vocabulary file declares it under $vocabulary; a loader registers it with loadVocab(docs, [memberKeywords]).",
   "$defs": {
     "floor": {

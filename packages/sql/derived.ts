@@ -82,6 +82,30 @@ export type DerivedProp = {
 // passes its own in.
 export type Derived = Record<string, DerivedProp>
 
+/** The physical sources of a structured expression. Opaque SQL declines the
+ * dependency proof. Bound and literal values are data, not expression trees. */
+export let tablesOf = (expr: Expr): string[] | undefined => {
+  let tables = new Set<string>()
+  let visit = (node: unknown): boolean => {
+    if (!node || typeof node != 'object') return true
+    if (Array.isArray(node)) return node.every(visit)
+    let n = node as Record<string, unknown>
+    if (n.t == 'val' || n.t == 'lit') return true
+    if (n.t == 'raw') return false
+    if (n.t == 'table' && !n.args) tables.add(String(n.name))
+    return Object.values(n).every(visit)
+  }
+  return visit(expr) ? [...tables] : undefined
+}
+/** A stable read of its stored value through auxiliary tables only. The
+ * owning component's visibility decides whether that value may be returned;
+ * no other graph relation contributes to it. */
+export let storedOnly = (prop: DerivedProp, vocab: Vocab): boolean => {
+  if (!prop.stable || !prop.text) return false
+  let sources = tablesOf(prop.text(col('__stored')))
+  return !!sources && sources.every((name) => !vocab.comp(name))
+}
+
 // ---- status ladders ----
 //
 // A component whose vocabulary declares a `status` ladder (@yaks/vocab

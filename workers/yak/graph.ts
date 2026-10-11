@@ -148,6 +148,7 @@ import {
   fields,
   find,
   schema as ftsSchema,
+  screens,
   search,
 } from '@yaks/fts'
 import { admitSchema } from '@yaks/graph/schema'
@@ -1193,7 +1194,9 @@ export class Store {
       },
       extend: () => [
         search(searchable),
-        semantic(statements(drive), { model: SPACE }),
+        semantic(statements(drive), { model: SPACE }, {
+          fields: this.#texts.fields,
+        }),
       ],
       effects: () => fx,
       graph: (options) => {
@@ -3594,7 +3597,11 @@ export class Store {
       await this.#auth(request)
       return await this.#counted(line, agg, this.#callerRead(request))
     }
-    return await this.#kinded(await this.#route(request), line)
+    return await this.#kinded(
+      await this.#route(request),
+      line,
+      this.#callerRead(request),
+    )
   }, { route: () => '/query' })
 
   // The word a row is named by. `kind` is not a property and no client can
@@ -3684,16 +3691,24 @@ export class Store {
   //
   // bm25 counts down — a closer match is a smaller number, and they are
   // negative — so what a page reads is its negation, where bigger is better.
-  #ranked(rows: Bundle[], line: string): Bundle[] {
+  #ranked(rows: Bundle[], line: string, readOpts: ReadOpts): Bundle[] {
     let text = parse(line).clauses
       .flatMap((c) => c.kind == 'text' ? [c.value] : []).join(' ')
     if (!text.trim() || !rows.length) return rows
     // The same declared fields the boot schema and membership were cut from.
+    let searchable = fields(this.#vocab)
     let hits = find(
       this.#sql,
-      fields(this.#vocab),
+      searchable,
       text,
-      { limit: Math.max(rows.length, 20) },
+      {
+        limit: Math.max(rows.length, 20),
+        screens: screens(
+          searchable,
+          this.#vocab,
+          this.#graph.scope(readOpts),
+        ),
+      },
     )
     let at = new Map(hits.map((h, i) => [h.entity, { i, h }]))
     return rows
@@ -3709,12 +3724,16 @@ export class Store {
       )
   }
 
-  async #kinded(answer: Response, line: string): Promise<Response> {
+  async #kinded(
+    answer: Response,
+    line: string,
+    readOpts: ReadOpts,
+  ): Promise<Response> {
     if (!answer.ok) return this.#taught(answer)
     let rows = await answer.json()
     if (!Array.isArray(rows)) return Response.json(rows)
     // The rows already carry what the line names (@yaks/graph `wanted`).
-    let ranked = this.#ranked(rows as Bundle[], line)
+    let ranked = this.#ranked(rows as Bundle[], line, readOpts)
     return Response.json(await this.#speak(ranked.map(this.#kind)))
   }
 

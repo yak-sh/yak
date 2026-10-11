@@ -50,18 +50,29 @@ export let personal = (vocab: Vocab, declared: Personal = {}): Plugin => {
   let entries = Object.entries(owners)
   let comps = Object.keys(owners)
   let entityOwned = entries.filter(([, by]) => by != 'entity')
+  let foreign = (row: Bundle, person: string | null | undefined) =>
+    entityOwned.some(([name, by]) => {
+      let c = row[name] as Comp | undefined
+      return c && (!person || c[by] != person)
+    })
   let check = (
     bundles: Bundle[],
     tx: Tx,
     person: string | null,
     bind = false,
-  ) =>
-    after(tx.get(bundles.map((b) => b.entity.eid), comps), (rows) => {
-      let held = new Map(rows.map((b) => [b.entity.eid, b]))
+    born = new Set<string>(),
+    held = new Map<string, Bundle | undefined>(),
+  ) => {
+    let missing = [...new Set(bundles.map((b) => b.entity.eid))]
+      .filter((eid) => !held.has(eid))
+    return after(missing.length ? tx.get(missing, comps) : [], (rows) => {
+      for (let eid of missing) held.set(eid, undefined)
+      for (let row of rows) held.set(row.entity.eid, row)
       return bundles.map((bundle) => {
         let b = bundle
         let eid = b.entity.eid
         let row = held.get(eid)
+        if (!row) born.add(eid)
         for (let [name, by] of entries) {
           let was = row?.[name] as Comp | null | undefined
           let patch = b[name] as Comp | null | undefined
@@ -71,7 +82,9 @@ export let personal = (vocab: Vocab, declared: Personal = {}): Plugin => {
           }
           if (by == 'entity') {
             if (
-              (touched || dead(b) && was) && (!person || eid != person)
+              (touched || was && (dead(b) ||
+                    entityOwned.some(([comp]) => b[comp] != null))) &&
+              (!person || eid != person)
             ) refuse()
             continue
           }
@@ -84,6 +97,11 @@ export let personal = (vocab: Vocab, declared: Personal = {}): Plugin => {
                 Object.hasOwn(patch, by) && patch[by] != was[by])
             ) refuse()
           } else if (patch) {
+            // Private ownership is chosen at birth. An editor cannot hide an
+            // existing public person or game row by claiming its identity.
+            if (
+              row && !born.has(eid) && !entityOwned.some(([comp]) => row[comp])
+            ) refuse()
             if (!person || patch[by] != null && patch[by] != person) refuse()
             if (patch[by] == null) {
               if (!bind) refuse()
@@ -94,6 +112,7 @@ export let personal = (vocab: Vocab, declared: Personal = {}): Plugin => {
         return b
       })
     })
+  }
   return {
     name: '@yaks/member/personal',
     admission: () => true,
@@ -121,19 +140,61 @@ export let personal = (vocab: Vocab, declared: Personal = {}): Plugin => {
       context?.trusted || !entries.length
         ? bundles
         : check(bundles, tx, writerOf(bundles).by ?? null, true),
-    track: (tx, _found, context?: HookContext) => {
+    track: (tx, found, context?: HookContext) => {
       let by = writerOf(context?.bundles ?? []).by ?? null
+      let born = new Set<string>()
+      // All writes cross this tracker. Retain the ownership state it has
+      // checked, including known absence, for later writes in this transaction.
+      let held = new Map<string, Bundle | undefined>()
+      for (let b of context?.bundles ?? []) {
+        let row = found(b.entity.eid)
+        if (row !== undefined) held.set(b.entity.eid, row ?? undefined)
+      }
+      let remember = (bundles: Bundle[]) => {
+        for (let b of bundles) {
+          let eid = b.entity.eid
+          if (dead(b)) {
+            held.delete(eid)
+            born.delete(eid)
+            continue
+          }
+          let row = { ...(held.get(eid) ?? { entity: b.entity }) }
+          for (let name of comps) {
+            if (!Object.hasOwn(b, name)) continue
+            let patch = b[name] as Comp | null
+            if (patch == null) delete row[name]
+            else row[name] = { ...row[name] as Comp | undefined, ...patch }
+          }
+          held.set(eid, row)
+        }
+      }
       let inspect = (b: Bundle[]) =>
-        context?.trusted || !entries.length ? b : check(b, tx, by)
+        context?.trusted || !entries.length
+          ? b
+          : check(b, tx, by, false, born, held)
       return {
         tx: {
           ...tx,
           patch: (bundles) =>
-            after(inspect(bundles), (checked) => tx.patch(checked)),
+            after(
+              inspect(bundles),
+              (checked) =>
+                after(tx.patch(checked), (made) => {
+                  remember(checked)
+                  return made
+                }),
+            ),
           remove: (entities) =>
             after(
               inspect(entities.map((entity) => ({ entity, $delete: true }))),
-              () => tx.remove(entities),
+              () =>
+                after(tx.remove(entities), (removed) => {
+                  for (let { eid } of entities) {
+                    held.delete(eid)
+                    born.delete(eid)
+                  }
+                  return removed
+                }),
             ),
         },
         flush: (b) => b,
@@ -145,19 +206,57 @@ export let personal = (vocab: Vocab, declared: Personal = {}): Plugin => {
       if (!caller(opts) || !bundles.length) return bundles
       return after(tx.get(bundles.map((b) => b.entity.eid), comps), (rows) => {
         let held = new Map(rows.map((b) => [b.entity.eid, b]))
-        return bundles.flatMap((b) => {
+        let visible = bundles.flatMap((b) => {
           let row = held.get(b.entity.eid)
-          if (
-            entityOwned.some(([name, by]) => {
-              let c = (row ? row[name] : b[name]) as Comp | undefined
-              return c && c[by] != opts.person
-            })
-          ) return []
+          if (foreign(row ?? b, opts.person)) return []
           let out = { ...b }
           for (let [name, by] of entries) {
-            if (by == 'entity' && b.entity.eid != opts.person) delete out[name]
+            if (by == 'entity' && b.entity.eid != opts.person) {
+              delete out[name]
+              if (row?.[name] || b[name]) {
+                out.entity = { ...out.entity }
+                delete out.entity.archetype
+              }
+            }
           }
           return [out]
+        })
+        if (!entityOwned.length) return visible
+        let references = (b: Bundle) =>
+          Object.entries(b).flatMap(([name, value]) => {
+            if (
+              name == 'entity' || !value || typeof value != 'object' ||
+              !vocab.comp(name)
+            ) return []
+            let c = value as Comp
+            return vocab.props(name).flatMap((prop) =>
+              vocab.prop(name, prop)?.category == 'ref' &&
+                typeof c[prop] == 'string'
+                ? [[name, prop, c[prop] as string]]
+                : []
+            )
+          })
+        let targets = [
+          ...new Set(
+            visible.flatMap((b) => references(b).map(([, , eid]) => eid)),
+          ),
+        ]
+        if (!targets.length) return visible
+        return after(tx.get(targets, comps), (rows) => {
+          let allowed = new Set(
+            rows.filter((b) => !dead(b) && !foreign(b, opts.person)).map((b) =>
+              b.entity.eid
+            ),
+          )
+          return visible.map((b) => {
+            let out = b
+            for (let [name, prop, eid] of references(b)) {
+              if (!allowed.has(eid)) {
+                out = { ...out, [name]: { ...out[name] as Comp, [prop]: null } }
+              }
+            }
+            return out
+          })
         })
       })
     },

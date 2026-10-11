@@ -1,5 +1,18 @@
 import { equal, test } from '@yaks/testing'
 import { as, col, eq, lit, render, select, table, val, when } from './mod.ts'
+import { inline } from './render.ts'
+
+test('compiled fragments inline values outside quoted text and names', () => {
+  let fragment = render(select({
+    cols: [val("can't?"), lit('already?quoted'), col('why?')],
+    from: table('table?'),
+    where: eq(col('key'), val('value?')),
+  }))
+  equal(
+    inline(fragment),
+    `(select 'can''t?', 'already?quoted', "why?" from "table?" where "key" = 'value?')`,
+  )
+})
 
 test('vacuum binds its destination as a value', () => {
   let into = "/tmp/copy's database.db"

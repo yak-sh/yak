@@ -27,6 +27,7 @@
 
 import {
   among,
+  and,
   col,
   type Driver,
   type Extension,
@@ -41,7 +42,7 @@ import {
   val,
   when,
 } from '@yaks/sql'
-import { ranked } from './search.ts'
+import { permitted, ranked, screens } from './search.ts'
 import { type Field, indexes, indexName } from './fields.ts'
 import { term } from './term.ts'
 
@@ -63,10 +64,12 @@ export let search = (fields: Field[], db?: Driver): Extension => {
   let asked: Screen | null = null
   // The owners in relevance order, resolved once a query.
   let held: number[] | null = null
+  let sources: ReturnType<typeof screens> = {}
   let rank = (): number[] => {
     if (held) return held
     let stmt = ranked(fields, words.join(' '), {
       screen: asked?.() ?? undefined,
+      screens: sources,
       limit: RANKED,
     })
     held = stmt ? db!.query(stmt).map((r) => Number(r.owner)) : []
@@ -78,6 +81,7 @@ export let search = (fields: Field[], db?: Driver): Extension => {
       words = []
       asked = screen
       held = null
+      sources = {}
     },
     compile: {
       text: (clause, site) => {
@@ -89,6 +93,7 @@ export let search = (fields: Field[], db?: Driver): Extension => {
         if (!t) return FALSE
         // A screen compiled for another extension reads this clause again.
         if (!words.includes(t)) words.push(t)
+        sources = screens(fields, site.vocab, { visibility: site.visibility })
         return or(
           ...indexes(fields).map(({ name }) => {
             let fts = indexName(name)
@@ -97,7 +102,10 @@ export let search = (fields: Field[], db?: Driver): Extension => {
               select({
                 cols: [col('rowid')],
                 from: table(fts),
-                where: op('match', col(fts), val(t)),
+                where: and(
+                  op('match', col(fts), val(t)),
+                  permitted(name, col('rowid', fts), sources),
+                ),
               }),
             )
           }),

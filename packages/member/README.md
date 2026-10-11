@@ -2,10 +2,11 @@
 
 Access control for [@yaks/graph](../graph). The package stores space
 memberships, permission grants and access modes as graph components. It checks
-writes inside `apply()` and provides a read check for an HTTP handler or other
-caller to run before returning data.
+writes inside `apply()`, provides app-level admission checks, and scopes
+person-owned data inside graph reads and transactions.
 
-It does not authenticate callers, open storage or automatically protect reads.
+It does not authenticate callers or open storage. The caller supplies verified
+identity at the graph boundary.
 
 ## Install
 
@@ -278,6 +279,39 @@ example. With the guard installed, writing the first owner membership requires
 an owner that does not yet exist. Thereafter an authorized owner can maintain
 memberships and grants through the guarded graph.
 
+## Person-owned data
+
+A component's `personal` declaration names who owns its data. A local reference
+property, such as `"personal": "by"`, makes the entire entity private to the
+person that property names. `"personal": "entity"` makes just the component
+private on the person's entity; its public name and other public components
+remain visible.
+
+Register `memberKeywords` when loading these declarations. `personal(vocab)`
+protects them as a graph plugin; `personalsIn(vocab)` validates and reads them.
+The `@yaks/member/graph` facet composes this plugin through `@yaks/host`. Hosts
+can also supply a component-to-owner map in the facet's `personal` option. The
+shared draft vocabulary declares its own `by` policy.
+
+Every external read supplies `ReadOpts.person`: the verified person eid, or
+`null` for a guest. Reads with no person are internal. Visibility applies before
+filters, projections, references, aggregates and subscription membership, even
+for native reads. Guests cannot read a private entity whose owner is missing.
+Whole-entity ownership also protects every component and the entity's deletion.
+Private entity ownership is chosen at creation; an ordinary write cannot make an
+existing public entity private. Creation binds an omitted owner to the writer,
+and nobody can transfer that owner or remove its ownership component. Removing
+the entity is the owner's act. Private components on a person's entity are
+writable only by that person. Rules and reference cascades pass through the same
+transaction checks.
+
+App editors and space owners gain no authority over another person's private
+data. Explicit `ReadOpts.administrative` grants administrative reads only when
+the host has verified that authority. Ordinary administrative writes still
+respect ownership; trusted server transactions are the explicit repair boundary.
+In yaks.app the kernel vouches administrative reads and strips caller-supplied
+administrative headers.
+
 ## Share links
 
 A grant can identify a link token instead of a person:
@@ -330,13 +364,13 @@ The main export includes:
 | `Guard`, `Floors`, `Viewer`, `Where`, `Policy`                               | Configuration and policy types.                                                |
 | `Denied`                                                                     | Error with `actor`, `app`, `need` and `act` fields.                            |
 | `memberKeywords`, `floorsIn`, `floored`, `permitsIn`, `permitted`; `Permits` | Permission declarations, their validation and loaded forms.                    |
+| `personal`, `personalsIn`; `Personal`                                        | Person-owned policy and its validated component-to-owner declarations.         |
 
 ## What is deliberately not here
 
-Authentication belongs to the caller. Permissions apply to an app as a whole,
-apart from floors, a visitor's own rows and declared companion marks; this
-package supplies no per-grant query filters. It supports exactly the `viewer`,
-`editor` and `owner` levels.
+Authentication belongs to the caller. App permissions, component floors and
+person ownership are separate checks; this package supplies no per-grant query
+filters. It supports exactly the `viewer`, `editor` and `owner` levels.
 
 ## Integration
 

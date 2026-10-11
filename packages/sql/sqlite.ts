@@ -38,7 +38,7 @@ export type Dialect = {
   spine: string
   membership: string
   // The condition excluding deleted entities, ANDed into every query.
-  live: () => Frag
+  live: (owner?: string) => Frag
   // The join source for a component and the on key.
   table: (comp: string) => string
   // The bare table expression for a component, with no alias — what a
@@ -48,6 +48,11 @@ export type Dialect = {
   source?: (comp: string) => string
   /** Scoped relations retain ordinary keyed component selection. */
   scoped?: boolean
+  // A spine lookup for keys already selected by this dialect's scoped
+  // relations. Omitted when the spine also transforms visible values.
+  admitted?: string
+  // Components joined to an owner the spine already admitted.
+  joined?: (comp: string) => string
   // A declared ordinary index, used to drive a required scalar selection.
   indexed?: (comp: string, index: string) => string
   // A component keyed by its owner: disable secondary-index scans while
@@ -340,9 +345,9 @@ export let sqlite: Dialect = {
   name: 'sqlite',
   spine: '"entity"',
   membership: '"entity"."eid" as eid',
-  live: () => ({
+  live: (owner = '"entity"."id"') => ({
     sql:
-      `not exists (select 1 from tombstone "t" where "t"."entity" = "entity"."id")`,
+      `not exists (select 1 from tombstone "t" where "t"."entity" = ${owner})`,
     params: [],
   }),
   table,

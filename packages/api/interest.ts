@@ -101,6 +101,7 @@ let required = (
     c.kind != 'pred' || c.not || c.where || v.assoc(c.path[0]) ||
     c.op == '?' || c.op == '!=' || missing(c)
   ) return new Set()
+  if (c.path.length == 1 && c.path[0] == 'kind') return new Set()
   let hops = v.aim(c.path.join('.'), bare(c))
   return hops.length == 1 && hops[0].comp != 'entity' &&
       (!hops[0].prop || worn(hops[0].comp, hops[0].prop))
@@ -169,6 +170,12 @@ export let interest = (
     for (let c of cs) {
       if (c.kind == 'and' || c.kind == 'or') walk(c.clauses, into)
       else if (c.kind == 'pred') {
+        if (c.path.length == 1 && c.path[0] == 'kind') {
+          // The most specific kind is decided by this entity's components.
+          // Any earlier kind can displace the one the query selects.
+          for (let kind of v.kinds) into.add(kind)
+          continue
+        }
         path(c.path, bare(c), into)
         if (c.where) walk([c.where], far)
       } else if (c.kind == 'order') {

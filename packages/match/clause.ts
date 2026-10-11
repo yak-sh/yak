@@ -53,6 +53,7 @@ export type Ctx = {
   now: number
   computed: Computed
   storageOrder?: boolean
+  exactIds?: boolean
 }
 
 /**
@@ -216,7 +217,7 @@ let single = (ctx: Ctx, hop: Hop, p: Pred): Arm => {
   // property, so it is a set lookup — the same operand list @yaks/sql compiles
   // to `in (?, …)`.
   if (hop.comp == 'entity' && op == '') {
-    let set = identity(hop.prop, flat(p.value))
+    let set = identity(hop.prop, flat(p.value), ctx.exactIds)
     if (set) {
       let eids = new Set(set.eids)
       let nums = new Set(set.nums)

@@ -2,11 +2,13 @@
 // query vector; the stored vectors and their source text stay in this package.
 
 import type { Eid } from '@yaks/graph'
-import type { Screen, Statements } from '@yaks/sql'
+import type { BindOpts, Screen, Statements } from '@yaks/sql'
+import type { Vocab } from '@yaks/vocab'
 import type { Embedder } from './embedder.ts'
 import type { Field } from './fields.ts'
 import { nearest } from './near.ts'
 import { sources } from './sweep.ts'
+import { screened, visibleVectors } from './visibility.ts'
 
 /** One match by meaning. Its excerpt is unmarked: the words need not occur. */
 export type Hit = {
@@ -16,6 +18,9 @@ export type Hit = {
 }
 
 export type MeaningOpts = {
+  /** Vocabulary and visibility of the person asking, when the read is scoped. */
+  vocab?: Vocab
+  visibility?: BindOpts['visibility']
   limit?: number
   floor?: number
   /** the entities a hit must be among, as a statement selecting their ids
@@ -43,12 +48,18 @@ export let meaning = async (
   opts: MeaningOpts = {},
 ): Promise<Hit[]> => {
   if (!words.trim() || !fields.length || (opts.limit ?? 20) <= 0) return []
+  if (opts.visibility && !opts.vocab) {
+    throw new Error('meaning search with visibility requires a vocabulary')
+  }
+  let visible = opts.vocab
+    ? visibleVectors(opts.vocab, fields, opts.visibility)
+    : undefined
   let vector = await embedder.embed(words)
   let found = nearest(db, vector, {
     model: embedder.model,
     limit: opts.limit ?? 20,
     floor: opts.floor,
-    within: opts.screen?.() ?? undefined,
+    within: screened(opts.screen?.(), visible),
   })
   if (!found.length) return []
   let text = new Map(

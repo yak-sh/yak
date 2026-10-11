@@ -43,6 +43,7 @@
 import type { Clause } from '@yaks/query/core'
 import type { Vocab } from '@yaks/vocab'
 import type { Expr, Raw, Source } from './ast.ts'
+import type { BindOpts } from './bind.ts'
 
 // What a contributed compiler is given besides the clause: everything the
 // binder itself works from, plus the one change it is allowed to make to the
@@ -51,6 +52,8 @@ export type Site = {
   // the vocabulary being compiled against, for routing a path or reading a
   // property
   vocab: Vocab
+  // the caller's relation restrictions, retained for standalone rankers
+  visibility?: BindOpts['visibility']
   // the moment a relative time phrase resolves against
   now: number
   // this row's integer id in the entity table

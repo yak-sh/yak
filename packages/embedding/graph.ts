@@ -27,7 +27,7 @@ import { semantic } from './compile.ts'
 import { type Statements, statements } from '@yaks/sql'
 import { rekey, schema } from './ddl.ts'
 import { resolved } from './fields.ts'
-import { type Options, ready, spaceOf } from './options.ts'
+import { chosen, type Options, ready, spaceOf } from './options.ts'
 import { type Hit, meaning as search, type MeaningOpts } from './search.ts'
 import { type Host, neighbours } from './neighbours.ts'
 
@@ -56,13 +56,27 @@ export let plugins = (): Plugin[] => []
  * that one contributes no extension, and `.near` gets the compiler's own
  * refusal. */
 export let extend = (
-  host: { storage: { statements?: Statements } },
+  host: {
+    storage: { statements?: Statements }
+    vocab?: Vocab
+    derived?: Derived
+  },
   options: Options = {},
 ): Extension[] => {
   let db = statements(host.storage)
   let model = spaceOf(options.embedder)
+  let text
+  try {
+    text = host.vocab
+      ? resolved(chosen(host.vocab, options), host.derived)
+      : undefined
+  } catch {
+    // An invalid text configuration waits, like the sweep's ready() result.
+    return []
+  }
   return model
     ? [semantic(db, { model }, {
+      fields: text,
       limit: options.neighbours,
       floor: options.floor,
     })]
@@ -90,7 +104,7 @@ export let meaning = (
         resolved(now.text, host.derived),
         now.embedder,
         words,
-        { ...opts, floor: opts?.floor ?? options.floor },
+        { ...opts, vocab: host.vocab, floor: opts?.floor ?? options.floor },
       )
       : []
   }

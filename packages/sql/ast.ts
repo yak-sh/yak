@@ -480,6 +480,24 @@ export let call = (name: string, args: Expr[], as?: string): Source => ({
   as,
 })
 export let from = (q: Query, as?: string): Source => ({ t: 'from', q, as })
+
+/** Rewrite the named relations inside an expression, including its nested
+ * subqueries. Raw compiler fragments and table-valued functions stay intact. */
+export let sources = <T extends Expr | Query>(
+  node: T,
+  source: (name: string, as?: string) => Source,
+): T => {
+  let walk = (value: unknown): unknown => {
+    if (Array.isArray(value)) return value.map(walk)
+    if (!value || typeof value != 'object' || isRaw(value)) return value
+    let obj = value as Record<string, unknown>
+    if (obj.t == 'table' && !obj.args) {
+      return source(obj.name as string, obj.as as string | undefined)
+    }
+    return Object.fromEntries(Object.entries(obj).map(([k, v]) => [k, walk(v)]))
+  }
+  return walk(node) as T
+}
 export let join = (src: Source, on: Expr): Join => ({ how: 'join', src, on })
 export let left = (src: Source, on: Expr): Join => ({ how: 'left', src, on })
 export let cross = (src: Source): Join => ({ how: 'cross', src })

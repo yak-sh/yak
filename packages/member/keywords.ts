@@ -9,6 +9,7 @@
 // own, so an app that declares a word also declares who may write it.
 // `permit` lets the owner of a stored reference answer with a companion mark,
 // without gaining the declaring row or permission to change its request.
+// `personal` names the owner of a private entity or private person component.
 
 import type { Keywords, Vocab, VocabDoc } from '@yaks/vocab'
 import { marked } from '@yaks/graph'

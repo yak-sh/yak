@@ -98,9 +98,9 @@ let prefixed = (pre: string, at: At): Dialect => {
     name: `sqlite:${pre}`,
     spine: `${from('entity')} ${q(pre + 'entity')}`,
     membership: `${q(pre + 'entity')}."eid" as eid`,
-    live: () => ({
+    live: (owner = `${q(pre + 'entity')}."id"`) => ({
       sql: `not exists (select 1 from tombstone ${q(pre + 'tomb')} where ` +
-        `${q(pre + 'tomb')}."entity" = ${q(pre + 'entity')}."id")`,
+        `${q(pre + 'tomb')}."entity" = ${owner})`,
       params: [],
     }),
     table: (comp) => `${from(comp)} ${q(pre + comp)}`,

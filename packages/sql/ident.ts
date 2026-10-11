@@ -26,11 +26,12 @@ export type Identity = { eids: string[]; nums: number[] }
 export let identity = (
   prop: string,
   value: string,
+  exact = false,
 ): Identity | undefined => {
   if (!value || value.includes('..')) return undefined
   let out: Identity = { eids: [], nums: [] }
   for (let operand of value.split(',')) {
-    let id = parse(operand)
+    let id = exact && prop == 'eid' ? undefined : parse(operand)
     if (id) out.nums.push(id.num)
     else if (prop == 'num') return undefined
     else out.eids.push(operand)
