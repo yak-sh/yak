@@ -540,7 +540,7 @@ These are the names, all of them:
     parent pending person plan price product project provider provisional
     published quarantined questions quote reads recalled ref referenced
     refusal register_writes report repository representation requires
-    restored result retired revision rtc satisfies screenshot secret seeded
+    restored result retired revision rtc rtc_lapse satisfies screenshot secret seeded
     serves session session_run sfu signed_in signin space spend staged stop
     stripe supersedes supervises sweep switched task theme tool topic
     trashed tree_entry tunnel updated usage uses using verified wake wants

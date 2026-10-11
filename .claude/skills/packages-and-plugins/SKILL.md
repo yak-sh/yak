@@ -49,6 +49,10 @@ owner. So the first move is to find the package that owns the idea and grow it.
 A new package is a new wall, and a design says what it owns, what it offers and
 what it depends on before it's built (`design-docs`).
 
+A task's package list identifies its subject. Consumer, documentation and test
+updates that the change requires belong to the same task wherever they live;
+separate task-tree items still remain separate work.
+
 What the walls are made of:
 
 - **One home per idea.** A move deletes the old copy and moves every caller in

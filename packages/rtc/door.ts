@@ -368,7 +368,7 @@ let ice = async (ask: Ask) => {
  */
 export let lapse = async (
   r: Realtime,
-  store: Store,
+  store: Pick<Store, 'write'>,
   row: Bundle,
 ): Promise<void> => {
   let session = String(comp(row, 'sfu').session ?? '')
@@ -382,13 +382,18 @@ export let lapse = async (
         t.mid && t.status != 'inactive'
       ).map((t) => ({ mid: t.mid }))
       if (mids.length) {
-        await realtime(
+        let closed = await realtime(
           r,
           'PUT',
           `/apps/${r.app}/sessions/${session}/tracks/close`,
           { tracks: mids, force: true },
         )
+        if (!closed.ok && closed.status != 404) {
+          throw new Error(`Realtime track close failed (${closed.status})`)
+        }
       }
+    } else if (res.status != 404) {
+      throw new Error(`Realtime session read failed (${res.status})`)
     }
   }
   await store.write([{ entity: { eid: row.entity.eid }, $delete: true }])

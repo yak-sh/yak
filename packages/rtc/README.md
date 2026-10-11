@@ -71,7 +71,7 @@ servers) and `sessions/<id>/renew`. The host hands `answer` each call with
 everything it knows about the caller's world:
 
 ```ts ignore
-import { answer, lapse } from '@yaks/rtc/door'
+import { answer } from '@yaks/rtc/door'
 
 let res = await answer({
   req,
@@ -95,12 +95,17 @@ let res = await answer({
   lease by: Realtime's reading of the session, each active remote track and
   channel at its rate. Realtime reports no bytes per session, so this is an
   estimate.
-- When a lease lapses, its wake fires, and the host runs `lapse`: it closes the
-  session's open tracks at Realtime and drops the row.
+- When a lease lapses, its wake fires, and `rtc_lapse` closes the session's open
+  tracks at Realtime and drops the row. The host composes `@yaks/rtc/effects`
+  with `with: {realtime: {app, token}}`, using the same account as the door. In
+  a JSON config, `token` is a secret reference such as
+  `{"secret": "REALTIME_TOKEN"}`. Provider failures leave the row for the effect
+  pool to retry and report.
 - A refusal is `{error: {code, message}}`: `limit` (429), `not_found` (404),
   `not_yours` (403), `unavailable` (502, reported through `report`).
 
 ## The components
 
 `@yaks/rtc/vocab` declares `rtc` (relayed, gone with its connection, sent at
-most every 200 ms) and `sfu` (`wire: false`: only the door writes it).
+most every 200 ms) and `sfu` (`wire: false`: only the door writes it). It also
+declares `rtc_lapse`, triggered by `fired` while the store has an `sfu`.

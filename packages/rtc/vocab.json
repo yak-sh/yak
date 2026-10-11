@@ -4,6 +4,12 @@
   },
   "title": "rtc",
   "$defs": {
+    "rtc_lapse": {
+      "effect": true,
+      "created": ["fired"],
+      "active": ".sfu",
+      "description": "Close the tracks of a Realtime session whose lease fired, then drop its row."
+    },
     "rtc": {
       "component": true,
       "type": "object",
