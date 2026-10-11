@@ -210,3 +210,49 @@ Two changes: the recorder is now the first step after the checkout, so `live` is
 the deploy's, and every verdict prints `upload` and `propagate` separately, so a
 number that grows says which half grew. The 60s limit and the ratchet are
 unchanged.
+
+## Catalog dependency (T-65018)
+
+The Workers Builds timeline for `1849b73bc` (build `6011a548`) isolates a serial
+compiler upload: the build was created at 00:37:43 UTC, initialized at 00:37:50,
+began cloning at 00:37:51, and restored dependencies at 00:38:10.
+`bin/build-yak deploy` started at 00:38:11; the catalog and web assets were
+ready by 00:38:14. The unchanged outbound Worker was skipped. The compiler
+Worker uploaded from 00:38:18 to 00:38:30, before yak started. Yak reported its
+upload at 00:38:47 and deployed triggers at 00:38:52. The gate's version probe
+recorded 63.190 seconds from push to live.
+
+The kernel captures the catalog and sends `{ask, catalog}` with each compiler
+job. The compiler Worker streams that job to its container and imports no
+catalog. Its dry-run bundle is 24.84 KiB (7.48 KiB gzip), and removing the local
+catalog produces the same bundled module digest. Package changes therefore
+change the kernel's catalog without uploading the compiler Worker. Sibling code
+changes still upload before the kernel activates; a sibling failure prevents
+kernel activation. The protocol was introduced with the old ask protocol still
+accepted, then the fallback was removed after that kernel served in production
+and staging.
+
+| SHA         | gate run                                                              | push to live | observation                                                    |
+| ----------- | --------------------------------------------------------------------- | -----------: | -------------------------------------------------------------- |
+| `1849b73bc` | [38099071806](https://github.com/yak-sh/yak/actions/runs/38099071806) |      63.190s | package catalog caused a compiler upload                       |
+| `e9770723f` | [38100287556](https://github.com/yak-sh/yak/actions/runs/38100287556) |      53.444s | protocol transition; compiler still carried a fallback catalog |
+| `03673a8c9` | [38100519502](https://github.com/yak-sh/yak/actions/runs/38100519502) |      62.797s | removal of fallback; compiler code changed and uploaded        |
+
+These rows are observations, not evidence of a fixed Cloudflare setup time. The
+supplied timelines put clone plus cache restore at 14–19 seconds, and one build
+waited 50 seconds before initialization. Locally the tracked tree is 168.85 MiB,
+including 143.06 MiB of logo concepts, and npm's cache is about 1.2 GiB,
+including 420 MiB of historical npx installs. Those local sizes do not measure
+Cloudflare's restored cache. No clone setting, stored artifact or cache policy
+was changed without a remote measurement.
+
+Dependencies, assets, sibling preparation, the deploy guard and kernel bundling
+already overlap in `wrangler.ts`. Production and staging share generated assets
+and image preparation, so launching their shell commands concurrently would race
+those writes. A complete Build continues with image rollout and staging after
+production is live and keeps its slot occupied. Cloudflare documents
+[six concurrent builds per paid account](https://developers.cloudflare.com/workers/ci-cd/builds/limits-and-pricing/).
+A 50-second queue wait leaves insufficient execution time for the strict
+60-second limit. The baseline and limit remain unchanged; this change removes
+the package catalog's serial upload, while queue and restore latency remain to
+be measured through Workers CI access.

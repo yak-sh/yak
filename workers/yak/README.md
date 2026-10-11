@@ -86,6 +86,8 @@ so nothing for the gate's `deploy time` step to measure — it says so and the
 deploy gate judges the rows already recorded (`bench/deploys.md`).
 
 The kernel captures the toolkit catalog and sends it with each compiler job.
+Jobs carry `x-yak-compiler-job: 1` and a JSON body of `{ask, catalog}`; the
+compiler Worker streams that body to its container and preserves its response.
 Catalog transpilation is reused from the restored Deno cache between builds.
 Package changes update the kernel without changing the compiler Worker's bundle.
 
