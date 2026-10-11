@@ -253,51 +253,61 @@ test('scoped observations compare banked work and retain other workloads on acce
   )
 })
 
-test('sample resolution rounds tolerance boundaries and must match the baseline', async () => {
-  for (let better of ['lower', 'higher'] as const) {
-    let cost = 2106
+// Resolution acceptance is fixed input; comparison needs no collection or JSON.
+let resolved = await Promise.all(
+  (['lower', 'higher'] as const).map(async (better) => {
     let workload: Bench = {
       name: 'work',
       unit: 'ms',
       better,
       resolution: 1,
-      sample: () => cost,
+      sample: () => 2106,
     }
     let f = fixture([workload])
-    await run(f.suite, { ...f.options, mode: 'accept', tolerance: .25 })
-    equal(JSON.parse(f.saved.get('baseline')!).benches[0].resolution, 1)
-    cost = better == 'lower' ? 2633 : 1580
-    equal(
-      (await run(f.suite, { ...f.options, mode: 'check' })).verdict,
-      'passed',
-    )
-    cost += better == 'lower' ? 1 : -1
-    await throws(
-      () => run(f.suite, { ...f.options, mode: 'check' }),
-      'exceeded tolerance',
-    )
+    let options = { ...f.options, rounds: 1 }
+    let current = await run(f.suite, {
+      ...options,
+      mode: 'accept',
+      tolerance: .25,
+    })
+    return {
+      f,
+      workload,
+      options,
+      current,
+      base: JSON.parse(f.saved.get('baseline')!),
+    }
+  }),
+)
+let unresolved = fixture([{ name: 'work', unit: 'ms', sample: () => 2106 }])
+let unresolvedRun = await run(unresolved.suite, {
+  ...unresolved.options,
+  rounds: 1,
+})
+let unresolvedBase = baseline(unresolvedRun, .25)
+
+test('sample resolution rounds tolerance boundaries and must match the baseline', async () => {
+  for (let { f, workload, options, current, base } of resolved) {
+    equal(base.benches[0].resolution, 1)
+    let measured = current.benches[0]
+    measured.median = workload.better == 'lower' ? 2633 : 1580
+    equal(compare(base, current), [])
+    measured.median += workload.better == 'lower' ? 1 : -1
+    equal(compare(base, current).map((r) => r.name), ['work'])
     for (let resolution of [undefined, 2]) {
-      workload.resolution = resolution
-      await throws(
-        () => run(f.suite, { ...f.options, mode: 'check' }),
-        'resolution',
-      )
+      measured.resolution = resolution
+      await throws(() => compare(base, current), 'resolution')
     }
     for (let resolution of [0, -1, Infinity, NaN]) {
       workload.resolution = resolution
       await throws(
-        () => run(f.suite, { ...f.options, mode: 'check' }),
+        () => run(f.suite, { ...options, mode: 'check' }),
         'resolution',
       )
     }
   }
-  let f = fixture([{ name: 'work', unit: 'ms', sample: () => 2106 }])
-  await run(f.suite, { ...f.options, mode: 'accept', tolerance: .25 })
-  f.suite.benches[0].sample = () => 2633
-  await throws(
-    () => run(f.suite, { ...f.options, mode: 'check' }),
-    'exceeded tolerance',
-  )
+  unresolvedRun.benches[0].median = 2633
+  equal(compare(unresolvedBase, unresolvedRun).map((r) => r.name), ['work'])
 })
 
 test('timed benches sample sync and async work with untimed setup and cleanup', async () => {
