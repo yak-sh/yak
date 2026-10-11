@@ -63,196 +63,201 @@ export let playMinute = async (
   minutes = 5,
 ): Promise<Report> => {
   let source = 'setup', measured = false
-  let context = new AsyncLocalStorage<string>()
-  let shapes = new Map<string, Cost>()
-  let sourceShapes = new Map<string, Map<string, Cost>>()
-  let sources: Record<string, Cost> = {}, components: Record<string, Cost> = {}
-  let total = empty(), opening = empty()
-  let summaries: Summary[] = []
-  let profiler = profile((summary) => summaries.push(summary))
-  let openingShapes: Report['openingShapes'] = []
-  let sql = db.sql.exec.bind(db.sql)
-  db.sql.exec = (query, ...bindings) => {
-    let cursor = sql(query, ...bindings)
-    let rows = cursor.toArray()
-    if (measured) {
-      if (cursor.rowsRead == null || cursor.rowsWritten == null) {
-        throw new Error('This measure requires workerd SQL cursor row counters')
-      }
-      let cost = {
-        read: cursor.rowsRead,
-        written: cursor.rowsWritten,
-        calls: 1,
-      }
-      // Exclusive attribution: joined reads belong to their driving SQL table,
-      // not every table mentioned (which would double-count). SQLite reports
-      // table+index writes together; do not pretend those can be separated.
-      let depth = 0, component = 'schema'
-      // Attribute the outer table, not a scalar blob subquery in SELECT.
-      for (
-        let token of query.matchAll(
-          /"(?:[^"]|"")*"|'(?:[^']|'')*'|[()]|\b(?:from|into|update)\b/gi,
-        )
-      ) {
-        let word = token[0]
-        if (word == '(') depth++
-        else if (word == ')') depth--
-        else if (depth == 0 && /^(from|into|update)$/i.test(word)) {
-          component =
-            query.slice(token.index + word.length).match(/^\s+"([^"]+)"/)
-              ?.[1] ?? 'schema'
-          break
-        }
-      }
-      let kind = component == 'effect'
-        ? 'effects'
-        : context.getStore() ?? source
-      plus(
-        shapes.get(query) ?? (shapes.set(query, empty()), shapes.get(query)!),
-        cost,
-      )
-      let own = sourceShapes.get(kind)
-      if (!own) sourceShapes.set(kind, own = new Map())
-      plus(own.get(query) ?? (own.set(query, empty()), own.get(query)!), cost)
-      plus(sources[kind] ??= empty(), cost)
-      plus(components[component] ??= empty(), cost)
-      plus(total, cost)
-      profiler.run(kind, () =>
-        profiler.observe({
-          shape: query,
-          rowsRead: cost.read,
-          rowsWritten: cost.written,
-        }))
-    }
-    return {
-      rowsRead: cursor.rowsRead,
-      rowsWritten: cursor.rowsWritten,
-      toArray: () => rows,
-      [Symbol.iterator]: () => rows.values(),
-    }
-  }
-  let live: ReturnType<typeof wire>[] = []
-  let store = new Store({
-    storage: db,
-    getWebSockets: () => live,
-    acceptWebSocket: () => {},
-  }, worldBindings(app, person))
-  let headers = {
-    'x-store': 'probe/play-cost',
-    'x-yak-access': 'private',
-    'x-yak-role': 'owner',
-    'x-yak-person': person,
-    'x-yak-app': app,
-  }
-  let post = async (path: string, body: unknown) => {
-    let res = await store.fetch(
-      new Request(`http://store${path}`, {
-        method: 'POST',
-        headers: {
-          ...headers,
-          ...(path == '/apply'
-            ? { 'idempotency-key': crypto.randomUUID() }
-            : {}),
-        },
-        body: JSON.stringify(body),
-      }),
-    )
-    if (!res.ok) throw new Error(`${path}: ${await res.text()}`)
-    await res.body?.cancel()
-  }
-  await post('/vocab', words)
-  let g = (await store.door).graph
-  let read = g.read.bind(g)
-  g.read = (q, opts) => {
-    let text = typeof q == 'string' ? q : JSON.stringify(q)
-    let kind = text.includes('position') && text.includes('30s ago')
-      ? 'saves'
-      : source == 'walking'
-      ? 'walking'
-      : 'live queries'
-    return context.run(kind, () => read(q, opts))
-  }
-  // Linked retained transcripts are part of Vale's shape. They carry the
-  // same computed status/cost pressure as the app without copying live rows.
-  await seedHistory(g, db, history)
-  seedThemes()
-  await seedPlaces(g, PLACES)
-  await post(
-    '/apply',
-    Array.from({ length: players }, (_, i) => [{
-      entity: { eid: eid(i + 1) },
-      player: {},
-      doc: { title: `Player ${i}` },
-    }, {
-      entity: { eid: eid(700_000 + i) },
-      look: { player: eid(i + 1), name: `Hero ${i}`, at: 0 },
-    }]).flat(),
-  )
-  // Finish boot/lens/effect work before the active minute. It belongs to the
-  // idle task, not an amortization that hides play's cost.
-  await store.alarm()
-  for (let i = 0; i < 100; i++) {
-    let res = await store.fetch(
-      new Request('http://store/move', {
-        method: 'POST',
-        headers: { ...headers, 'x-yak-kernel': '1' },
-      }),
-    )
-    let held = await res.json() as {
-      rules: { done?: string; live?: boolean }[]
-    }
-    if (held.rules.every((r) => !r.live || r.done)) break
-    if (i == 99) throw new Error('lens fixture did not settle')
-  }
-  await settleWorld(store, db)
-  if (minutes) {
-    await seedWorld(store, post)
-    await settleWorld(store, db)
-  }
   let now = Date.now,
     set = globalThis.setTimeout,
     clear = globalThis.clearTimeout
-  let at = Math.floor(now() / 1000) * 1000,
-    timers = new Map<number, { at: number; fn: () => void }>(),
-    next = 1
-  let settle = async <T>(work: Promise<T> | T): Promise<T> => {
-    let done = false, value: T | undefined, error: unknown
-    Promise.resolve(work).then((v) => {
-      done = true
-      value = v
-    }, (e) => {
-      done = true
-      error = e
-    })
-    for (let round = 0; !done && round < 1000; round++) {
-      for (let k = 0; k < 20; k++) await Promise.resolve()
-      for (let [id, t] of [...timers]) {
-        if (t.at <= at + 16) {
+  let at = Math.floor(now() / 1000) * 1000
+  let sql = db.sql.exec.bind(db.sql)
+  // Setup receipts and play share one clock; wall time cannot move an expiry
+  // across the measured minute while the fixture builds its world.
+  Date.now = () => at
+  try {
+    let context = new AsyncLocalStorage<string>()
+    let shapes = new Map<string, Cost>()
+    let sourceShapes = new Map<string, Map<string, Cost>>()
+    let sources: Record<string, Cost> = {},
+      components: Record<string, Cost> = {}
+    let total = empty(), opening = empty()
+    let summaries: Summary[] = []
+    let profiler = profile((summary) => summaries.push(summary))
+    let openingShapes: Report['openingShapes'] = []
+    db.sql.exec = (query, ...bindings) => {
+      let cursor = sql(query, ...bindings)
+      let rows = cursor.toArray()
+      if (measured) {
+        if (cursor.rowsRead == null || cursor.rowsWritten == null) {
+          throw new Error(
+            'This measure requires workerd SQL cursor row counters',
+          )
+        }
+        let cost = {
+          read: cursor.rowsRead,
+          written: cursor.rowsWritten,
+          calls: 1,
+        }
+        // Exclusive attribution: joined reads belong to their driving SQL table,
+        // not every table mentioned (which would double-count). SQLite reports
+        // table+index writes together; do not pretend those can be separated.
+        let depth = 0, component = 'schema'
+        // Attribute the outer table, not a scalar blob subquery in SELECT.
+        for (
+          let token of query.matchAll(
+            /"(?:[^"]|"")*"|'(?:[^']|'')*'|[()]|\b(?:from|into|update)\b/gi,
+          )
+        ) {
+          let word = token[0]
+          if (word == '(') depth++
+          else if (word == ')') depth--
+          else if (depth == 0 && /^(from|into|update)$/i.test(word)) {
+            component =
+              query.slice(token.index + word.length).match(/^\s+"([^"]+)"/)
+                ?.[1] ?? 'schema'
+            break
+          }
+        }
+        let kind = component == 'effect'
+          ? 'effects'
+          : context.getStore() ?? source
+        plus(
+          shapes.get(query) ?? (shapes.set(query, empty()), shapes.get(query)!),
+          cost,
+        )
+        let own = sourceShapes.get(kind)
+        if (!own) sourceShapes.set(kind, own = new Map())
+        plus(own.get(query) ?? (own.set(query, empty()), own.get(query)!), cost)
+        plus(sources[kind] ??= empty(), cost)
+        plus(components[component] ??= empty(), cost)
+        plus(total, cost)
+        profiler.run(kind, () =>
+          profiler.observe({
+            shape: query,
+            rowsRead: cost.read,
+            rowsWritten: cost.written,
+          }))
+      }
+      return {
+        rowsRead: cursor.rowsRead,
+        rowsWritten: cursor.rowsWritten,
+        toArray: () => rows,
+        [Symbol.iterator]: () => rows.values(),
+      }
+    }
+    let live: ReturnType<typeof wire>[] = []
+    let store = new Store({
+      storage: db,
+      getWebSockets: () => live,
+      acceptWebSocket: () => {},
+    }, worldBindings(app, person))
+    let headers = {
+      'x-store': 'probe/play-cost',
+      'x-yak-access': 'private',
+      'x-yak-role': 'owner',
+      'x-yak-person': person,
+      'x-yak-app': app,
+    }
+    let post = async (path: string, body: unknown) => {
+      let res = await store.fetch(
+        new Request(`http://store${path}`, {
+          method: 'POST',
+          headers: {
+            ...headers,
+            ...(path == '/apply'
+              ? { 'idempotency-key': crypto.randomUUID() }
+              : {}),
+          },
+          body: JSON.stringify(body),
+        }),
+      )
+      if (!res.ok) throw new Error(`${path}: ${await res.text()}`)
+      await res.body?.cancel()
+    }
+    await post('/vocab', words)
+    let g = (await store.door).graph
+    let read = g.read.bind(g)
+    g.read = (q, opts) => {
+      let text = typeof q == 'string' ? q : JSON.stringify(q)
+      let kind = text.includes('position') && text.includes('30s ago')
+        ? 'saves'
+        : source == 'walking'
+        ? 'walking'
+        : 'live queries'
+      return context.run(kind, () => read(q, opts))
+    }
+    // Linked retained transcripts are part of Vale's shape. They carry the
+    // same computed status/cost pressure as the app without copying live rows.
+    await seedHistory(g, db, history)
+    seedThemes()
+    await seedPlaces(g, PLACES)
+    await post(
+      '/apply',
+      Array.from({ length: players }, (_, i) => [{
+        entity: { eid: eid(i + 1) },
+        player: {},
+        doc: { title: `Player ${i}` },
+      }, {
+        entity: { eid: eid(700_000 + i) },
+        look: { player: eid(i + 1), name: `Hero ${i}`, at: 0 },
+      }]).flat(),
+    )
+    // Finish boot/lens/effect work before the active minute. It belongs to the
+    // idle task, not an amortization that hides play's cost.
+    await store.alarm()
+    for (let i = 0; i < 100; i++) {
+      let res = await store.fetch(
+        new Request('http://store/move', {
+          method: 'POST',
+          headers: { ...headers, 'x-yak-kernel': '1' },
+        }),
+      )
+      let held = await res.json() as {
+        rules: { done?: string; live?: boolean }[]
+      }
+      if (held.rules.every((r) => !r.live || r.done)) break
+      if (i == 99) throw new Error('lens fixture did not settle')
+    }
+    await settleWorld(store, db)
+    if (minutes) {
+      await seedWorld(store, post)
+      await settleWorld(store, db)
+    }
+    let timers = new Map<number, { at: number; fn: () => void }>(),
+      next = 1
+    let settle = async <T>(work: Promise<T> | T): Promise<T> => {
+      let done = false, value: T | undefined, error: unknown
+      Promise.resolve(work).then((v) => {
+        done = true
+        value = v
+      }, (e) => {
+        done = true
+        error = e
+      })
+      for (let round = 0; !done && round < 1000; round++) {
+        for (let k = 0; k < 20; k++) await Promise.resolve()
+        for (let [id, t] of [...timers]) {
+          if (t.at <= at + 16) {
+            timers.delete(id)
+            t.fn()
+          }
+        }
+        if (!done) await new Promise<void>((resolve) => set(resolve, 0))
+      }
+      if (!done) throw new Error('play operation did not settle')
+      if (error) throw error
+      return value as T
+    }
+    let advance = async (ms: number) => {
+      at += ms
+      for (let rounds = 0; rounds < 100; rounds++) {
+        let due = [...timers].filter(([, t]) => t.at <= at)
+        if (!due.length) break
+        for (let [id, t] of due) {
           timers.delete(id)
           t.fn()
         }
+        for (let k = 0; k < 20; k++) await Promise.resolve()
+        if (rounds == 99) throw new Error('timer loop in play fixture')
       }
-      if (!done) await new Promise<void>((resolve) => set(resolve, 0))
     }
-    if (!done) throw new Error('play operation did not settle')
-    if (error) throw error
-    return value as T
-  }
-  let advance = async (ms: number) => {
-    at += ms
-    for (let rounds = 0; rounds < 100; rounds++) {
-      let due = [...timers].filter(([, t]) => t.at <= at)
-      if (!due.length) break
-      for (let [id, t] of due) {
-        timers.delete(id)
-        t.fn()
-      }
-      for (let k = 0; k < 20; k++) await Promise.resolve()
-      if (rounds == 99) throw new Error('timer loop in play fixture')
-    }
-  }
-  try {
-    Date.now = () => at
     globalThis.setTimeout = ((fn: () => void, ms = 0) => {
       let id = next++
       timers.set(id, { at: at + ms, fn })
