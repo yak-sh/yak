@@ -215,7 +215,7 @@ import { processDoc } from '@yaks/process'
 import { processProvider } from '@yaks/process/machine'
 
 let vocab = loadVocab(pick(processDoc, ['process', 'exit']))
-let g = graph({ storage: ram(vocab), vocab })
+let g = graph({ storage: ram(vocab), vocab, provenance: false })
 let dir = Deno.makeTempDirSync()
 let provider = processProvider(g, {
   dir,
