@@ -32,6 +32,7 @@ import { refuse } from './tool.ts'
 
 // What a grant token opens with, so identity.ts knows to open it here.
 export let GRANT = 'yaks_'
+export let CLI_GRANT = 'cli-grant'
 
 // The longest life anybody may ask for, and the one they get by asking for
 // nothing.
@@ -83,6 +84,7 @@ export let shelf = <T extends Row>(kv: unknown, what: string) => {
   let ttl = (r: Row, now = Date.now()) =>
     Math.max(60, r.exp - Math.floor(now / 1000) + 60)
   return {
+    key,
     kv: store,
     ttl,
     keep: async (r: T, now = Date.now()) => {
@@ -105,12 +107,43 @@ export let shelf = <T extends Row>(kv: unknown, what: string) => {
 // Where a grant is written down: the shelf above, plus the one row a grant has
 // that a sign-in link does not.
 export let ledger = (kv: unknown) => {
-  let book = shelf<Grant>(kv, 'grant')
+  let book = shelf<Grant>(kv, CLI_GRANT)
   if (!book) return null
+  // TODO: remove legacy reads and revocation markers after 2026-10-12 UTC
+  // (2026-10-11 deploy + 1 day). Never write or delete provider-owned grant: rows.
+  let old = shelf<Grant>(kv, 'grant')!
+  let legacy = async (person: string, id: string) => {
+    let g = await old.held(person, id)
+    return g?.person == person && g.id == id && typeof g.exp == 'number' &&
+        (g.space === null || typeof g.space == 'string')
+      ? g
+      : null
+  }
+  let held = async (person: string, id: string): Promise<Grant | null> => {
+    let row = await book.kv.get(book.key(person, id))
+    return row === null ? await legacy(person, id) : JSON.parse(row)
+  }
   // What a long-lived holder is signed in with, by the holder's own name.
   let worn = (holder: string) => `wearing:${holder}`
   return {
     ...book,
+    held,
+    ids: async (person: string) => {
+      let ids = [
+        ...new Set([...await book.ids(person), ...await old.ids(person)]),
+      ]
+      let rows = await Promise.all(ids.map((id) => held(person, id)))
+      return ids.filter((_, i) => rows[i])
+    },
+    drop: async (person: string, id: string) => {
+      let g = await legacy(person, id)
+      if (g) {
+        // A null row shadows the legacy read until that grant expires.
+        await book.kv.put(book.key(person, id), 'null', {
+          expirationTtl: book.ttl(g),
+        })
+      } else await book.drop(person, id)
+    },
     // Which grant a long-lived holder is wearing — one build container
     // (sandbox.ts). The token is answered once and kept nowhere, so this row
     // is not the token: it is whose grant and which one, which is enough for

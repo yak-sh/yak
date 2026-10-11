@@ -99,7 +99,7 @@ import {
   trashSpace,
   went,
 } from './erase.ts'
-import { GRANT, held, ledger } from './grants.ts'
+import { CLI_GRANT, GRANT, held, ledger } from './grants.ts'
 import {
   links,
   type Once,
@@ -202,7 +202,7 @@ export let asking = async (
             until: g.exp,
             grant: g.id,
             space: g.space,
-            instrument: `grant:${g.person}:${g.id}`,
+            instrument: `${CLI_GRANT}:${g.person}:${g.id}`,
           }
           : null,
         tried,
