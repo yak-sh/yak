@@ -112,6 +112,8 @@ export let extend = <R extends Registration>(
 // are stable objects, so key the compiled predicate on the pair: each compiles
 // once and a registry that is replaced drops its entries with it.
 let cache = new WeakMap<Query, WeakMap<Vocab, Filter>>()
+// A refused word stays unavailable for this query and immutable vocabulary.
+let unavailable = new WeakMap<Query, WeakSet<Vocab>>()
 let predicate = (match: Query, vocab: Vocab): Filter => {
   let byVocab = cache.get(match)
   if (!byVocab) cache.set(match, byVocab = new WeakMap())
@@ -127,6 +129,7 @@ let matches = (
   archetypes?: ArchetypeLookup,
 ): boolean => {
   if (match === true) return true
+  if (unavailable.get(match)?.has(vocab)) return false
   try {
     return archetypeMatch(match, bundle, vocab, archetypes) ??
       predicate(match, vocab)(bundle)
@@ -134,7 +137,12 @@ let matches = (
     // Registrations travel between hosts. A host not speaking a view's words
     // cannot select it; even a bare absent component may be a property name
     // here. Query doors still refuse such a question, but selection skips it.
-    if (error instanceof Unknown) return false
+    if (error instanceof Unknown) {
+      let absent = unavailable.get(match)
+      if (!absent) unavailable.set(match, absent = new WeakSet())
+      absent.add(vocab)
+      return false
+    }
     throw error
   }
 }

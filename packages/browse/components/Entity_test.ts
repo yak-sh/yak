@@ -6,198 +6,188 @@ import { assertEquals } from '@std/assert'
 import { h } from 'preact'
 import { useState } from 'preact/hooks'
 import { parse } from '@yaks/query'
-import { cache, ent, reveal, revealed, shown } from '../live.ts'
-import { actionsFor, applicable, extend, resolve } from './registry.ts'
+import { commentHost, configureComments } from '@yaks/kernel/comment-host'
+import { applyLocal, cache, ent, reveal, revealed, shown } from '../live.ts'
+import { type Ent, kindOf } from '../types.ts'
+import { actionsFor, applicable, extend, resolve, ux } from './registry.ts'
 import { Entity } from './Entity.tsx'
 import { mount } from './mount.ts'
 
+let fixture = (comps: Record<string, object>, eid = 'x', num = 1): Ent =>
+  ({ eid, num, kind: kindOf(comps), refs: [], kids: [], ...comps }) as Ent
+
+// Start the mounted host once; the test checks its hooks and live updates.
+cache.value = {
+  doc: {
+    entity: { eid: 'doc', num: 1 },
+    doc: { eid: 'doc', title: 'Page', body: '' },
+  },
+  task: {
+    entity: { eid: 'task', num: 2 },
+    doc: { eid: 'task', title: 'unsafe', body: 'hidden' },
+    task: { eid: 'task' },
+    filed: { eid: 'task', priority: 0 },
+    quarantined: { eid: 'task', at: 'now' },
+  },
+}
+extend([{
+  view: 'Test.State',
+  match: parse('.doc'),
+  Render: ({ e, suffix }) => {
+    let [count, set] = useState(0)
+    return h(
+      'button',
+      { onClick: () => set(count + 1) },
+      `${e.eid} ${e.doc!.title}${suffix} ${count}`,
+    )
+  },
+}])
+let { root, free } = mount(h(Entity, {
+  eid: 'doc',
+  view: 'Test.State',
+  suffix: '!',
+}))
+let button = root.querySelector('button')!
 test('Entity mounts hooks with the original Ent and extra props', async () => {
-  cache.value = {
-    doc: {
-      entity: { eid: 'doc', num: 1 },
-      doc: { eid: 'doc', title: 'Page', body: '' },
-    },
-  }
-  extend([{
-    view: 'Test.State',
-    match: parse('.doc'),
-    Render: ({ e, suffix }) => {
-      let [count, set] = useState(0)
-      return h(
-        'button',
-        { onClick: () => set(count + 1) },
-        `${e.eid} ${e.doc!.title}${suffix} ${count}`,
-      )
-    },
-  }])
-  let { root, free } = mount(h(Entity, {
-    eid: 'doc',
-    view: 'Test.State',
-    suffix: '!',
-  }))
   try {
     assertEquals(root.textContent, 'doc Page! 0')
-    root.querySelector('button')!.click()
+    button.click()
     await Promise.resolve()
     assertEquals(root.textContent, 'doc Page! 1')
-    cache.value = {
-      doc: {
-        ...cache.value.doc,
-        doc: { eid: 'doc', title: 'Changed', body: '' },
-      },
-    }
+    applyLocal([{ eid: 'doc', name: 'doc', comp: { title: 'Changed' } }])
     await Promise.resolve()
     assertEquals(root.textContent, 'doc Changed! 1')
   } finally {
     free()
-    cache.value = {}
   }
 })
 
 test('query groups preserve chosen tabs and default faces', () => {
-  let fixture = (comps: Record<string, object>) => {
-    cache.value = { x: { entity: { eid: 'x', num: 1 }, ...comps } }
-    return ent('x')
+  let project = fixture({ doc: { title: 'Project' }, project: {} })
+  assertEquals(resolve(project).view, 'Full')
+  assertEquals(applicable(project).includes('Dashboard'), true)
+  assertEquals(
+    applicable(fixture({ project: {} })).includes('Dashboard'),
+    false,
+  )
+  for (let comp of ['board', 'canvas']) {
+    assertEquals(applicable(fixture({ [comp]: {} })).includes('Split'), true)
   }
-  try {
-    let project = fixture({ doc: { title: 'Project' }, project: {} })
-    assertEquals(resolve(project).view, 'Full')
-    assertEquals(applicable(project).includes('Dashboard'), true)
-    assertEquals(
-      applicable(fixture({ project: {} })).includes('Dashboard'),
-      false,
-    )
-    for (let comp of ['board', 'canvas']) {
-      assertEquals(applicable(fixture({ [comp]: {} })).includes('Split'), true)
-    }
-    assertEquals(applicable(fixture({ doc: {} })).includes('Split'), false)
-  } finally {
-    cache.value = {}
-  }
+  assertEquals(applicable(fixture({ doc: {} })).includes('Split'), false)
 })
 
 test('boards open on Board with List still available', () => {
-  cache.value = {
-    board: {
-      entity: { eid: 'board', num: 1 },
-      doc: { eid: 'board', title: 'Board', body: '' },
-      board: { eid: 'board' },
-    },
-  }
-  assertEquals(applicable(ent('board')).slice(0, 2), ['Board', 'List'])
-  cache.value = {}
+  let board = fixture({
+    doc: { eid: 'board', title: 'Board', body: '' },
+    board: { eid: 'board' },
+  }, 'board')
+  assertEquals(applicable(board).slice(0, 2), ['Board', 'List'])
 })
 
 test('sessions open on Session with Full still available', () => {
-  cache.value = {
-    session: {
-      entity: { eid: 'session', num: 31 },
+  let session = fixture(
+    {
       doc: { eid: 'session', title: 'Session', body: '' },
       session: { eid: 'session', id: 'thread' },
     },
-  }
-  let session = ent('session')
+    'session',
+    31,
+  )
   assertEquals(resolve(session).view, 'Session')
   assertEquals(applicable(session).slice(0, 2), ['Session', 'Full'])
-  cache.value = {}
 })
 
 test('release names the session by its chip id', () => {
-  cache.value = {
-    task: {
-      entity: { eid: 'task', num: 1 },
+  let prior = commentHost()
+  configureComments({
+    ...prior,
+    get: (eid) => {
+      assertEquals(eid, 'session')
+      return {
+        entity: { eid, num: 31 },
+        session: { id: 'raw-session-uuid' },
+      }
+    },
+    id: ux.id,
+  })
+  try {
+    let task = fixture({
       task: { eid: 'task' },
       filed: { eid: 'task', priority: 0 },
       claim: { eid: 'task', session: 'session' },
-    },
-    session: {
-      entity: { eid: 'session', num: 31 },
-      session: { eid: 'session', id: 'raw-session-uuid' },
-    },
+    }, 'task')
+    assertEquals(
+      actionsFor(task).find((a) => a.label.startsWith('release'))?.label,
+      'release S-31',
+    )
+  } finally {
+    configureComments(prior)
   }
-  assertEquals(
-    actionsFor(ent('task')).find((a) => a.label.startsWith('release'))?.label,
-    'release S-31',
-  )
-  cache.value = {}
 })
 
 test('quarantine is hidden until revealed and can be cleared', () => {
-  cache.value = {
-    task: {
-      entity: { eid: 'task', num: 1 },
-      doc: { eid: 'task', title: 'unsafe', body: 'hidden' },
-      task: { eid: 'task' },
-      filed: { eid: 'task', priority: 0 },
-      quarantined: { eid: 'task', at: 'now' },
-    },
+  revealed.value = new Set()
+  try {
+    assertEquals(shown('task'), false)
+    reveal('task')
+    assertEquals(shown('task'), true)
+    assertEquals(
+      actionsFor(ent('task')).some((a) => a.label == 'unquarantine'),
+      true,
+    )
+  } finally {
+    cache.value = {}
+    revealed.value = new Set()
   }
-  revealed.value = new Set()
-  assertEquals(shown('task'), false)
-  reveal('task')
-  assertEquals(shown('task'), true)
-  assertEquals(
-    actionsFor(ent('task')).some((a) => a.label == 'unquarantine'),
-    true,
-  )
-  cache.value = {}
-  revealed.value = new Set()
 })
 
 test('a pending proposal keeps deletion named as deletion', () => {
-  cache.value = {
-    design: {
-      entity: { eid: 'design', num: 45 },
+  let design = fixture(
+    {
       doc: { eid: 'design', title: 'A proposal', body: '' },
       design: { eid: 'design' },
       proposed: { eid: 'design', at: '2026-08-07T00:00:00.000Z' },
     },
-  }
-  let labels = () => actionsFor(ent('design')).map((a) => a.label)
+    'design',
+    45,
+  )
+  let labels = () => actionsFor(design).map((a) => a.label)
   assertEquals(labels().includes('approve'), true)
   assertEquals(labels().includes('decline'), true)
   assertEquals(labels().includes('delete'), true)
 
   // An OPEN task's approval arms dispatch, and the label says so.
-  cache.value = {
-    design: {
-      ...cache.value.design,
-      task: { eid: 'design' },
-      filed: { eid: 'design', priority: 1 },
-    },
+  design = {
+    ...design,
+    task: { eid: 'design' },
+    filed: { eid: 'design', priority: 1 },
   }
   assertEquals(labels().includes('approve · dispatches a coder'), true)
   assertEquals(labels().includes('decline'), true)
 
-  cache.value = {
-    design: { ...cache.value.design, cancelled: { eid: 'design' } },
-  }
+  design = { ...design, cancelled: { eid: 'design' } }
   assertEquals(labels().some((l) => l.startsWith('approve')), false)
   assertEquals(labels().includes('decline'), false)
   assertEquals(labels().includes('delete'), true)
 
-  cache.value = {
-    design: {
-      ...cache.value.design,
-      decided: { eid: 'design', at: '2026-08-07T01:00:00.000Z' },
-    },
+  design = {
+    ...design,
+    decided: { eid: 'design', at: '2026-08-07T01:00:00.000Z' },
   }
   assertEquals(labels().some((l) => l.startsWith('approve')), false)
   assertEquals(labels().includes('decline'), false)
   assertEquals(labels().includes('delete'), true)
-  cache.value = {}
 })
 
 test('a role keeps its face without lifecycle actions', () => {
-  cache.value = {
-    role: {
-      entity: { eid: 'role', num: 7 },
+  let role = fixture(
+    {
       doc: { eid: 'role', title: 'Coordinator', body: '' },
       role: { eid: 'role', surface: 'native', scope: null },
     },
-  }
-  let role = ent('role')
+    'role',
+    7,
+  )
   assertEquals(resolve(role).view, 'Role')
   assertEquals(actionsFor(role).some((a) => a.label.includes('role')), false)
-  cache.value = {}
 })
