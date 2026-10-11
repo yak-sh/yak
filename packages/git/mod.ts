@@ -29,10 +29,10 @@
  *   stored as an @yaks/key of kind `compat`. A client that asks for
  *   `object-format=sha256` is answered from that key rather than by converting
  *   the repository.
- * - **Bodies are bytes; rows are the links a walk follows.**
+ * - **Bodies carry tree children; rows carry object addresses.**
  *   {@link treeBody} and {@link commitBody} write Git's own bytes; the graph
- *   keeps `gitobj{type, size}`, `blob{sha}`, and the two edge types a pack
- *   follows — `tree_entry` and `parent`.
+ *   keeps `gitobj{type, size}`, `blob{sha}` and `parent` edges;
+ *   a pack reads tree children from the immutable body.
  * - **A Git blob is the blob you already have.** The bytes an app deployed are
  *   already stored under their SHA-256 address; the Git object is those bytes
  *   with a header hashed over them, and nothing is re-encoded or copied.

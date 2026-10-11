@@ -45,7 +45,7 @@
       "type": "object",
       "edge": true,
       "reversed": "entry in",
-      "description": "a tree holds a child under a name; packing follows these edges to find every reachable object",
+      "description": "a retained tree-to-child link; traversal reads children from the immutable tree body",
       "properties": {
         "name": {
           "type": "string",

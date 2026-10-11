@@ -10,8 +10,8 @@
 // commit — byte for byte, because Git's ids are digests of it — so the body
 // goes to the @yaks/blob store and the row keeps only what a query has to
 // follow: the type and size a packfile entry header needs, the `blob{sha}`
-// the bytes are stored under, `tree_entry` edges (tree → child, with the name
-// on the link) and `parent` edges (commit → commit). Author, message, entry
+// the bytes are stored under, and `parent` edges (commit → commit). Trees keep
+// both Git bodies, so their children need no graph rows. Author, message, entry
 // order and mode are all in the body already; a property for them would be a
 // second copy free to drift.
 //
@@ -23,7 +23,7 @@
 //
 // A release is folded against the commit before it (`Base`): a directory
 // whose files all stand as they did is that commit's tree again, read and
-// written nowhere, and a changed one reads only its own entries. So a
+// written nowhere, and a changed one reads its two immutable bodies. So a
 // release reads and writes what it changed, not the whole manifest.
 //
 // This module writes objects and nothing else: it never reads a packfile,
@@ -32,14 +32,30 @@
 // application's own, written there alongside the moved ref.
 
 import type { Blobs } from '@yaks/blob'
-import { EDGE, link } from '@yaks/edge'
+import { link } from '@yaks/edge'
 import type { Bundle, Comp, Eid, Graph } from '@yaks/graph'
 import { derivedEid } from '@yaks/graph'
 import { keyed, valueOf } from '@yaks/key'
 import { type Commit, commitBody } from './commit.ts'
 import { BLOB, COMPAT, GITOBJ, PARENT, TREE_ENTRY } from './comp.ts'
-import { hex, type Kind, oid, oid256, type Oids } from './oid.ts'
-import { DIR, type Dir, FILE, type Files, nest, treeBody } from './tree.ts'
+import {
+  framed,
+  header,
+  hex,
+  type Kind,
+  oid,
+  oid256,
+  type Oids,
+} from './oid.ts'
+import {
+  DIR,
+  type Dir,
+  FILE,
+  type Files,
+  nest,
+  treeBody,
+  treeEntries,
+} from './tree.ts'
 
 /** One child of a tree, named both ways. */
 export type Child = { name: string; mode: string } & Oids
@@ -112,7 +128,7 @@ let same = (a: Dir, b: Dir): boolean =>
   })
 
 /**
- * The entity id of a tree's link to one child, derived from the string
+ * The entity id of a retained tree link to one child, derived from the string
  * `tree_entry|<tree>|<name>`.
  *
  * Not @yaks/edge's own derivation, for a reason a duplicate file makes
@@ -156,8 +172,7 @@ export let index = (g: Writes, store: Blobs): Index => {
     return sha
   }
 
-  // The row every object gets, plus its SHA-256 object id and whatever edges
-  // it contributes. Writing it again updates what is already there.
+  // The row every object gets, plus its SHA-256 object id and parent edges.
   let rows = (
     oids: Oids,
     type: Kind,
@@ -165,7 +180,11 @@ export let index = (g: Writes, store: Blobs): Index => {
     sha: string,
     walk: Bundle[] = [],
   ): Bundle[] => [
-    { entity: { eid: oids.oid }, [GITOBJ]: { type, size }, [BLOB]: { sha } },
+    {
+      entity: { eid: oids.oid },
+      [GITOBJ]: { type, size },
+      [BLOB]: { sha },
+    },
     keyed(COMPAT, oids.oid, oids.oid256),
     ...walk,
   ]
@@ -173,11 +192,18 @@ export let index = (g: Writes, store: Blobs): Index => {
   let write = async (
     oids: Oids,
     type: Kind,
-    size: number,
-    sha: string,
+    body: Uint8Array<ArrayBuffer>,
     walk: Bundle[] = [],
+    body256?: Uint8Array<ArrayBuffer>,
   ): Promise<Oids> => {
-    await g.apply(rows(oids, type, size, sha, walk))
+    // The object and its links are one atomic graph write. Its digest names
+    // immutable bytes, so finding it also means its keys and links stand.
+    if ((await g.read(`.${GITOBJ}&.entity.eid=${oids.oid}`)).length) return oids
+    let [sha] = await Promise.all([
+      put(body),
+      body256 ? put(framed(type, body256)) : undefined,
+    ])
+    await g.apply(rows(oids, type, body.length, sha, walk))
     return oids
   }
 
@@ -225,21 +251,8 @@ export let index = (g: Writes, store: Blobs): Index => {
   let tree = async (children: Child[]): Promise<Oids> => {
     let body = treeBody(children)
     let body256 = treeBody(children.map((c) => ({ ...c, oid: c.oid256 })))
-    let [oids, sha] = await Promise.all([ids('tree', body, body256), put(body)])
-    return write(
-      oids,
-      'tree',
-      body.length,
-      sha,
-      children.map((
-        c,
-        i,
-      ) => ({
-        entity: { eid: entryEid(oids.oid, c.name) },
-        [EDGE]: { from: oids.oid, to: c.oid, ord: i },
-        [TREE_ENTRY]: { name: c.name, mode: c.mode },
-      })),
-    )
+    let oids = await ids('tree', body, body256)
+    return write(oids, 'tree', body, [], body256)
   }
 
   let commit = async (mint: Mint): Promise<Oids> => {
@@ -254,28 +267,51 @@ export let index = (g: Writes, store: Blobs): Index => {
       tree: mint.tree.oid256,
       parents: parents.map((p) => p.oid256),
     })
-    let [oids, sha] = await Promise.all([
-      ids('commit', body, body256),
-      put(body),
-    ])
+    let oids = await ids('commit', body, body256)
     return write(
       oids,
       'commit',
-      body.length,
-      sha,
+      body,
       parents.map((p, i) => link(oids.oid, PARENT, p.oid, i)),
     )
   }
 
-  // The children a tree holds, by name: its edges, through their index on
-  // `edge.from`. A tree's only edges are its entries.
-  let entries = async (tree: string): Promise<Map<string, string>> =>
-    new Map(
-      (await g.read(`.edge.from=${tree}&?${TREE_ENTRY}`)).flatMap((b) => {
-        let entry = b[TREE_ENTRY] as { name: string } | undefined
-        return entry ? [[entry.name, String((b[EDGE] as Comp).to)]] : []
-      }),
-    )
+  // Both native Git tree bodies carry the same names in the same order, with
+  // child ids in their own format. Read one object row, then bytes, regardless
+  // of how many unchanged entries the directory contains.
+  let entries = async (tree: Oids): Promise<Map<string, Oids>> => {
+    let [row] = await g.read(`.${GITOBJ}&?${BLOB}&.entity.eid=${tree.oid}`)
+    let sha = String((row?.[BLOB] as Comp)?.sha ?? '')
+    let body = sha && await store.get(sha)
+    if (!body) throw new Error(`git: no bytes stored under ${sha}`)
+    let one = treeEntries(body)
+    let known: Map<string, string>
+    // The framed SHA-256 tree's byte address is its Git object id, so no
+    // extra graph pointer is needed to find the other body's children.
+    let bytes = await store.get(tree.oid256)
+    if (bytes) {
+      let start = bytes.indexOf(0) + 1
+      let body256 = bytes.subarray(start)
+      let prefix = header('tree', body256.length)
+      if (start != prefix.length || prefix.some((b, i) => bytes[i] != b)) {
+        throw new Error(`git: malformed tree frame for ${tree.oid256}`)
+      }
+      let two = treeEntries(body256, 32)
+      if (
+        one.length != two.length ||
+        one.some((e, i) => e.name != two[i].name || e.mode != two[i].mode)
+      ) throw new Error(`git: tree formats disagree for ${tree.oid}`)
+      known = new Map(one.map((e, i) => [e.oid, two[i].oid]))
+    } else {
+      // Historical objects have only a SHA-1 body. Their compat keys supply
+      // the other ids; the objects themselves are never rewritten.
+      known = await names(g, one.map((e) => e.oid))
+    }
+    return new Map(one.flatMap((e) => {
+      let oid256 = known.get(e.oid)
+      return oid256 ? [[e.name, { oid: e.oid, oid256 }]] : []
+    }))
+  }
 
   // Bottom up: a directory has no id until every child under it has one.
   // Folded against what it was (`was`), a directory that stands is its old
@@ -287,30 +323,18 @@ export let index = (g: Writes, store: Blobs): Index => {
     was?: { dir: Dir; oids: Oids },
   ): Promise<Oids> => {
     if (was && same(at, was.dir)) return was.oids
-    let held = was ? await entries(was.oids.oid) : new Map<string, string>()
+    let held = was ? await entries(was.oids) : new Map<string, Oids>()
     let stood = (name: string, sha?: string) =>
       held.has(name) &&
       (sha == null ? was?.dir.dirs.has(name) : was?.dir.files.get(name) == sha)
-    let known = await names(
-      g,
-      [
-        ...[...at.files].filter(([n, sha]) => stood(n, sha)),
-        ...[...at.dirs].filter(([n]) => stood(n)),
-      ].map(([n]) => held.get(n)!),
-    )
-    let kept = (name: string): Oids | undefined => {
-      let oid = held.get(name)
-      let oid256 = oid && known.get(oid)
-      return oid && oid256 ? { oid, oid256 } : undefined
-    }
     let children: Child[] = []
     for (let [name, sha] of at.files) {
-      let oids = (stood(name, sha) && kept(name)) || fresh.get(sha) ||
+      let oids = (stood(name, sha) && held.get(name)) || fresh.get(sha) ||
         await blob(sha)
       children.push({ name, mode: FILE, ...oids })
     }
     for (let [name, dir] of at.dirs) {
-      let oids = stood(name) && kept(name)
+      let oids = stood(name) && held.get(name)
       let before = oids ? { dir: was!.dir.dirs.get(name)!, oids } : undefined
       children.push({ name, mode: DIR, ...await fold(dir, fresh, before) })
     }

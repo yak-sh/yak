@@ -336,12 +336,13 @@ export let probeSuite = async () => {
           durable_objects: {
             bindings: [
               { name: 'PLAY', class_name: 'PlayCost' },
+              { name: 'GIT_COST', class_name: 'GitCostStore' },
               { name: 'STORE', class_name: 'Store' },
             ],
           },
           migrations: [{
             tag: 'v1',
-            new_sqlite_classes: ['PlayCost', 'Store'],
+            new_sqlite_classes: ['PlayCost', 'Store', 'GitCostStore'],
           }],
           r2_buckets: [{
             binding: 'BLOBS',

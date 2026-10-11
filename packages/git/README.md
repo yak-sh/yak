@@ -83,7 +83,7 @@ head.oid256 // the same commit's SHA-256 object id
 Writing the same manifest again produces the same ids, which are the same rows:
 an object is stored once no matter how many versions, apps or runs mention it.
 
-## Four consequences
+## Consequences
 
 - **An object's entity id is its Git object id.** There is no `sha` property, no
   uniqueness constraint and nothing to reconcile: a `want` line in a fetch
@@ -95,9 +95,10 @@ an object is stored once no matter how many versions, apps or runs mention it.
   compatibility key is available to storage and application code.
 - **Object bodies and traversal data use separate storage.** A tree or commit
   body is stored unchanged in the byte store because Git hashes those bytes. The
-  graph stores `gitobj{type, size}`, `blob{sha}`, and the relations needed for
-  traversal: `tree_entry` (tree → child, with the name on the relation) and
-  `parent` (commit → commit).
+  graph stores `gitobj{type, size}`, `blob{sha}` and `parent` edges (commit →
+  commit). Tree children are read from the body. The SHA-256-format tree is
+  stored with its Git header under its SHA-256 object id; reading both formats
+  supplies both child ids without looking up each child.
 - **A Git blob is the blob you already have.** The bytes are already in the
   store under their SHA-256 address; the Git object is those same bytes with a
   header hashed over them. Nothing is re-encoded, and naming the same file twice
@@ -108,12 +109,16 @@ an object is stored once no matter how many versions, apps or runs mention it.
   again, read and written nowhere; a changed one reads its old entries and names
   only the files that moved. An object already stored is not written again.
 
+A tree holding only its SHA-1-format body resolves its children's SHA-256 ids
+through their compatibility keys when it is rebuilt. It stays unchanged in
+storage; newly minted trees hold both formats.
+
 ## The components
 
 ```
 gitobj{type, size}       one Git object — entity id = its SHA-1 object id
 blob{sha}                where its bytes are, in the @yaks/blob store
-tree_entry{name, mode}   @yaks/edge relation: a tree holds a child under a name
+tree_entry{name, mode}   retained tree-to-child links
 parent                   @yaks/edge relation: a commit follows a commit
 compat                   @yaks/key kind: the same object's SHA-256 object id
 ref{app, name, commit}   where one branch of one repository points
@@ -232,11 +237,8 @@ let storage = ram(vocab)
 let g = graph({ storage, vocab, plugins: [edges(vocab), keys(vocab)] })
 ```
 
-A `tree_entry` entity id is derived from the string `tree_entry|<tree>|<name>`
-rather than from @yaks/edge's usual `from|relation|to`, because two names in one
-tree may point at the same blob; within a tree, the name is unique. A `ref`
-entity id is derived from `ref|<app>|<name>`, so moving a branch updates the row
-that is already there.
+A `ref` entity id is derived from `ref|<app>|<name>`, so moving a branch updates
+the row that is already there.
 
 Objects are global — an object is the digest of its own bytes, so the same file
 in two repositories is one row — while a branch belongs to exactly one
@@ -323,8 +325,8 @@ registration.
 `pack([head.oid], have)` is the same as a v2 packfile, streaming.
 
 `reach` returns each reachable object once. It follows `parent` edges for
-history and `tree_entry` edges for reachability. A commit's own tree is read
-from the first line of its body, which is the one link no row carries.
+history and reads tree children from their immutable bodies for reachability. A
+commit's own tree is read from the first line of its body.
 
 A `have` line is handled by subtraction, not by negotiation: everything the
 client reports it already holds is walked first, so those objects are simply

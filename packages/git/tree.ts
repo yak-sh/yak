@@ -17,7 +17,7 @@
 // The order is not the caller's to choose: {@link treeBody} sorts whatever it
 // is given, so an object id is a function of the entries alone.
 
-import { bin, concat } from './oid.ts'
+import { bin, concat, hex } from './oid.ts'
 
 /** A regular file's mode, as a tree body writes it. */
 export let FILE = '100644'
@@ -62,6 +62,37 @@ export let treeBody = (entries: Entry[]): Uint8Array<ArrayBuffer> =>
       e,
     ) => [utf8.encode(`${e.mode} ${e.name}\0`), bin(e.oid)]),
   )
+
+/** A tree body's children, in their stored order. `width` is the number of
+ * bytes in each raw object id: 20 for SHA-1, 32 for SHA-256. */
+export let treeEntries = (body: Uint8Array, width = 20): Entry[] => {
+  let bad = () => new Error('git: malformed tree body')
+  if (!Number.isInteger(width) || width <= 0) throw bad()
+  let text = new TextDecoder('utf-8', { fatal: true })
+  let entries: Entry[] = []
+  for (let at = 0; at < body.length;) {
+    let space = body.indexOf(32, at)
+    let end = body.indexOf(0, at)
+    if (space <= at || end <= space + 1 || end + 1 + width > body.length) {
+      throw bad()
+    }
+    let mode: string, name: string
+    try {
+      mode = text.decode(body.subarray(at, space))
+      name = text.decode(body.subarray(space + 1, end))
+    } catch {
+      throw bad()
+    }
+    if (!/^[0-7]+$/.test(mode)) throw bad()
+    entries.push({
+      mode,
+      name,
+      oid: hex(body.subarray(end + 1, end + 1 + width)),
+    })
+    at = end + 1 + width
+  }
+  return entries
+}
 
 let dir = (): Dir => ({ files: new Map(), dirs: new Map() })
 

@@ -3,8 +3,8 @@
 
 import { test } from '@yaks/testing'
 import { assertEquals, assertThrows } from '@std/assert'
-import { oid, oid256 } from './oid.ts'
-import { DIR, FILE, nest, sorted, treeBody } from './tree.ts'
+import { concat, oid, oid256 } from './oid.ts'
+import { DIR, FILE, nest, sorted, treeBody, treeEntries } from './tree.ts'
 import {
   HELLO_OID,
   HELLO_OID256,
@@ -65,6 +65,45 @@ test('the body spells a directory mode without its leading zero', () => {
     new TextDecoder().decode(treeBody([root[1]]).slice(0, 6)),
     '40000 ',
   )
+})
+
+test('tree children are read from both hash formats without decoding raw ids', () => {
+  for (let width of [20, 32]) {
+    let entries = [
+      {
+        name: 'a folder 🐂',
+        mode: DIR,
+        oid: '00ff20'.repeat(width).slice(0, width * 2),
+      },
+      {
+        name: 'héllo.txt',
+        mode: FILE,
+        oid: 'ff0020'.repeat(width).slice(0, width * 2),
+      },
+    ]
+    assertEquals(treeEntries(treeBody(entries), width), sorted(entries))
+  }
+  assertEquals(treeEntries(new Uint8Array()), [])
+})
+
+test('an incomplete or malformed tree entry is refused', () => {
+  let text = new TextEncoder()
+  let body = treeBody(root)
+  for (
+    let broken of [
+      body.subarray(0, body.length - 1),
+      text.encode('100644 missing terminator'),
+      concat([text.encode('100644 \0'), new Uint8Array(20)]),
+      concat([text.encode('blob name\0'), new Uint8Array(20)]),
+      concat([
+        text.encode('100644 '),
+        new Uint8Array([255, 0]),
+        new Uint8Array(20),
+      ]),
+    ]
+  ) {
+    assertThrows(() => treeEntries(broken), Error, 'malformed tree body')
+  }
 })
 
 test('a manifest folds into directories', () => {

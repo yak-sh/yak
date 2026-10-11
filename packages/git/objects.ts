@@ -2,10 +2,10 @@
 // asked for, each one once, and the bytes of each — the other half of a
 // packfile, which ./pack.ts writes without looking anything up.
 //
-// Two walks and A read. Commits are followed along `parent` edges, trees along
-// `tree_entry` edges, and a commit's own tree is read from the first line of
-// its body (`treeOf`, ./commit.ts), because that is where a commit records it.
-// Blobs are whatever the tree entries reach that is not itself a tree. Each
+// Two walks and A read. Commits are followed along `parent` edges; trees and
+// a commit's own tree are read from their immutable bodies (`treeEntries`,
+// ./tree.ts; `treeOf`, ./commit.ts). Each entry's mode says whether its child
+// is a tree or a blob, without another query of the object index. Each
 // object is listed once: the same tree under two commits, or one blob under
 // two names, is one entry in the packfile.
 //
@@ -23,9 +23,10 @@
 import type { Blobs } from '@yaks/blob'
 import type { Bundle, Comp, Graph } from '@yaks/graph'
 import { treeOf } from './commit.ts'
-import { BLOB, GITOBJ, PARENT, TREE_ENTRY } from './comp.ts'
+import { BLOB, GITOBJ, PARENT } from './comp.ts'
 import type { Kind } from './oid.ts'
 import { type Obj, pack } from './pack.ts'
+import { DIR, treeEntries } from './tree.ts'
 
 /**
  * What reading objects needs from a graph: a read, and nothing else — the read
@@ -133,10 +134,16 @@ export let objects = (g: Reads, store: Blobs): Objects => {
     front = fresh(tops)
     while (front.length) {
       found.push(...front)
-      let next = fresh(await out(TREE_ENTRY, front))
-      let under = await kinds(next)
-      front = next.filter((o) => under.get(o) == 'tree')
-      blobs.push(...next.filter((o) => under.get(o) != 'tree'))
+      let next: string[] = []
+      for await (let tree of read(front)) {
+        for (let entry of treeEntries(tree.bytes)) {
+          if (seen.has(entry.oid)) continue
+          seen.add(entry.oid)
+          if (entry.mode == DIR) next.push(entry.oid)
+          else blobs.push(entry.oid)
+        }
+      }
+      front = next
     }
     return [...found, ...blobs]
   }

@@ -9,8 +9,10 @@
 import { test } from '@yaks/testing'
 import { assertEquals, assertRejects } from '@std/assert'
 import { objects } from './objects.ts'
+import { entryEid } from './index.ts'
 import { entry, head, pack } from './pack.ts'
 import { hex } from './oid.ts'
+import { DIR, FILE } from './tree.ts'
 import {
   AUTHOR,
   COMMITTER,
@@ -19,8 +21,10 @@ import {
   HELLO,
   HELLO_OID,
   LIB_OID,
+  LIB_OID256,
   ONE_OID,
   ROOT_OID,
+  ROOT_OID256,
   X,
   X_OID,
 } from './testing.ts'
@@ -69,11 +73,26 @@ let deploy = async () => {
     committer: COMMITTER,
     message: 'deploy 1',
   })
-  return { one, tree, index, bytes, git: objects(g, bytes) }
+  return { one, tree, index, bytes, g, git: objects(g, bytes) }
 }
 
 test('git indexes the pack and walks every object in it', async () => {
-  let { git: from } = await deploy()
+  let { git: from, g, bytes: stored } = await deploy()
+  // Historical trees hold only their SHA-1 body and keep their old graph
+  // links. They still clone alongside trees written by the current index.
+  stored.remove(ROOT_OID256)
+  stored.remove(LIB_OID256)
+  await g.apply([
+    ...[
+      { tree: ROOT_OID, name: 'hello.txt', mode: FILE, oid: HELLO_OID },
+      { tree: ROOT_OID, name: 'lib', mode: DIR, oid: LIB_OID },
+      { tree: LIB_OID, name: 'a.txt', mode: FILE, oid: X_OID },
+    ].map((e, ord) => ({
+      entity: { eid: entryEid(e.tree, e.name) },
+      edge: { from: e.tree, to: e.oid, ord },
+      tree_entry: { name: e.name, mode: e.mode },
+    })),
+  ])
   let bytes = await all(await from.pack([ONE_OID]))
   let dir = await Deno.makeTempDir({ prefix: 'yaks-git-' })
   try {

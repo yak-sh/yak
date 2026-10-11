@@ -1,7 +1,9 @@
 import { coldMessages } from './cold_message_fixture.ts'
 import { directoryLifecycleCost } from './directory_cost_fixture.ts'
+import { gitPushCost } from './git_cost_fixture.ts'
 import type { Env } from './env.ts'
 export { Store } from './graph.ts'
+export { GitCostStore } from './git_cost_fixture.ts'
 import {
   descriptorGatherCost,
   entryPageCost,
@@ -28,7 +30,7 @@ export class PlayCost {
         setAlarm(at: number): Promise<void>
       }
     },
-    private env: Pick<Env, 'STORE' | 'BLOBS'>,
+    private env: Pick<Env, 'STORE' | 'BLOBS'> & { GIT_COST: Namespace },
   ) {}
   alarm(): void {}
   async fetch(req: Request): Promise<Response> {
@@ -42,6 +44,15 @@ export class PlayCost {
     }
   }
   async measure(req: Request): Promise<Response> {
+    if (new URL(req.url).searchParams.has('git-push')) {
+      return Response.json(
+        await gitPushCost(
+          this.ctx.storage,
+          this.env,
+          Number(new URL(req.url).searchParams.get('files') ?? 530),
+        ),
+      )
+    }
     if (new URL(req.url).searchParams.has('directory-lifecycle')) {
       return Response.json(
         await directoryLifecycleCost(

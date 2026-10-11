@@ -448,8 +448,9 @@ test('a deploy says how many round trips it took', async () => {
     { hops: 5, r2: 10 },
   )
   let deploy = await costs('app_deploy', { space: 'ada', app: 'recipes' })
-  assert(deploy.hops <= 25)
-  assert(deploy.r2 <= 32)
+  // Include the tree and commit's reads that prevent immutable object rewrites.
+  assert(deploy.hops <= 27, JSON.stringify(deploy))
+  assert(deploy.r2 <= 32, JSON.stringify(deploy))
   assertEquals(
     (await costs('app_files', {
       space: 'ada',

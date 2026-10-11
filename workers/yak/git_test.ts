@@ -11,6 +11,7 @@
 // for this file to pass.
 import { test } from '@yaks/testing'
 import { assert, assertEquals, assertObjectMatch } from '@std/assert'
+import { treeEntries } from '@yaks/git'
 import { r2Objects } from './lib/objects.ts'
 import { directory } from './directory.ts'
 import * as dirPart from './directory.ts'
@@ -98,7 +99,7 @@ let bodyOf = async (env: Env, git: ReturnType<typeof metaOf>, oid: string) => {
   let sha = (row.blob as { sha: string }).sha
   let bytes = await r2Objects(env.BLOBS).read(BODY + sha)
   assert(bytes, `no bytes for ${oid}`)
-  return { row, body: text.decode(bytes) }
+  return { row, bytes, body: text.decode(bytes) }
 }
 
 // What the app's branch points at right now, read the way the serving half
@@ -148,16 +149,14 @@ test('a deploy mints one commit whose tree is the manifest', async () => {
   // The tree is the manifest: one entry per top-level name, the blob under
   // `index.html` named by the very bytes the deploy pinned.
   let tree = body.match(/^tree ([0-9a-f]{40})$/m)![1]
-  let entries = await git.query(`.tree_entry&.edge.from=${tree}`)
+  let entries = treeEntries((await bodyOf(env, git, tree)).bytes)
   assertEquals(
-    entries.map((e) => (e.tree_entry as { name: string }).name).sort(),
+    entries.map((e) => e.name).sort(),
     ['index.html', 'lib'],
   )
-  let page = entries.find((e) =>
-    (e.tree_entry as { name: string }).name == 'index.html'
-  )!
+  let page = entries.find((e) => e.name == 'index.html')!
   let [blob] = await git.query(
-    `.entity.eid=${(page.edge as { to: string }).to}`,
+    `.entity.eid=${page.oid}`,
   )
   assertEquals((blob.blob as { sha: string }).sha, manifest['index.html'])
 })
@@ -214,8 +213,8 @@ test('the next deploy follows the last one and moves the branch', async () => {
   assertEquals(named, [manifest['index.html']])
   let lib0 = async (commit: string) => {
     let tree = (await bodyOf(env, git, commit)).body.match(/^tree (\S+)$/m)![1]
-    let [entry] = await git.query(`.tree_entry.name=lib&.edge.from=${tree}`)
-    return (entry.edge as { to: string }).to
+    let entries = treeEntries((await bodyOf(env, git, tree)).bytes)
+    return entries.find((e) => e.name == 'lib')!.oid
   }
   assertEquals(await lib0(second), await lib0(first))
 })

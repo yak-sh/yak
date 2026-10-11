@@ -24,11 +24,10 @@
 // trick @yaks/edge and @yaks/key play with a derived id — here the derivation
 // is Git's.
 //
-// `tree_entry` And `parent` are edges, not properties, because they are the two
-// sets of links a pack has to follow: parents for history, entries for
-// reachability. Everything else about a tree or a commit is in the body bytes,
-// which is where the digest that names the object was taken — a property for
-// the author or the message would be a second copy that nothing keeps in step.
+// Tree children are read from the immutable body, in both Git object formats.
+// The framed SHA-256 tree is addressed by its Git object id; `blob{sha}`
+// addresses the SHA-1-format body. `tree_entry` remains declared for links, which
+// need no rewrite. Parent edges still join commits for history traversal.
 //
 // A `ref` IS A row, one per repository and branch name ({@link refEid}), and
 // the only component here that is not about an object. Objects form one global

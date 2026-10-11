@@ -9,8 +9,8 @@ import { keyEid, keys } from '@yaks/key'
 import { storage } from '@yaks/sqlite'
 import { mem, spy } from '../sqlite/testing.ts'
 import { COMPAT } from './comp.ts'
-import { entryEid, index } from './index.ts'
-import { DIR, FILE } from './tree.ts'
+import { index } from './index.ts'
+import { DIR, FILE, treeEntries } from './tree.ts'
 import {
   AUTHOR,
   COMMITTER,
@@ -20,6 +20,7 @@ import {
   HELLO_OID,
   HELLO_OID256,
   LIB_OID,
+  LIB_OID256,
   ONE_OID,
   ROOT_OID,
   ROOT_OID256,
@@ -30,6 +31,15 @@ import {
 } from './testing.ts'
 
 let comp = (b: Bundle, name: string): Comp => (b[name] ?? {}) as Comp
+
+let children = async (
+  g: ReturnType<typeof fixture>['g'],
+  bytes: ReturnType<typeof store>,
+  oid: string,
+) => {
+  let [row] = await g.read(`.gitobj&?blob&.entity.eid=${oid}`)
+  return treeEntries((await bytes.get(String(comp(row, 'blob').sha)))!)
+}
 
 // The two files of every fixture, in a store, as a deploy manifest names them.
 let deployed = (bytes: Parameters<typeof file>[0]) => ({
@@ -72,18 +82,11 @@ test('the SHA-256 name is a key off the SHA-1 one', async () => {
 test('a tree links to each child under the name it holds it by', async () => {
   let { g, git, bytes } = fixture()
   await git.files(deployed(bytes))
-  let rows = await g.read(`.tree_entry&.edge.from=${ROOT_OID}&.order=edge.ord`)
+  let rows = await children(g, bytes, ROOT_OID)
   assertEquals(
-    rows.map((
-      r,
-    ) => [
-      comp(r, 'tree_entry').name,
-      comp(r, 'tree_entry').mode,
-      comp(r, 'edge').to,
-    ]),
+    rows.map((r) => [r.name, r.mode, r.oid]),
     [['hello.txt', FILE, HELLO_OID], ['lib', DIR, LIB_OID]],
   )
-  assertEquals(rows[0].entity.eid, entryEid(ROOT_OID, 'hello.txt'))
 })
 
 // The blob is input to the tree; ingest it once before measuring its links.
@@ -92,18 +95,12 @@ let duplicateSha = file(duplicate.bytes, HELLO)
 await duplicate.git.blob(duplicateSha)
 
 test('one blob under two names is two entries', async () => {
-  let { g, git } = duplicate
+  let { g, git, bytes } = duplicate
   let sha = duplicateSha
   let root = await git.files({ 'a.txt': sha, 'b.txt': sha })
-  let rows = await g.read(`.tree_entry&.edge.from=${root.oid}`)
-  assertEquals(rows.map((r) => comp(r, 'tree_entry').name).sort(), [
-    'a.txt',
-    'b.txt',
-  ])
-  assertEquals(
-    new Set(rows.map((r) => comp(r, 'edge').to)),
-    new Set([HELLO_OID]),
-  )
+  let rows = await children(g, bytes, root.oid)
+  assertEquals(rows.map((r) => r.name).sort(), ['a.txt', 'b.txt'])
+  assertEquals(new Set(rows.map((r) => r.oid)), new Set([HELLO_OID]))
 })
 
 test('a manifest written twice writes one graph and reads no bytes again', async () => {
@@ -112,7 +109,13 @@ test('a manifest written twice writes one graph and reads no bytes again', async
   await git.files(manifest)
   let once = (await g.read('.gitobj')).length
   let reads = bytes.reads()
-  await git.files(manifest)
+  let immutable = index({
+    read: g.read,
+    apply: () => {
+      throw new Error('rewrote an immutable object')
+    },
+  }, bytes)
+  await immutable.files(manifest)
   assertEquals((await g.read('.gitobj')).length, once)
   assertEquals(bytes.reads(), reads)
 })
@@ -180,6 +183,21 @@ test('a commit chain is the ids git takes, and a parent walk', async () => {
     message: 'deploy 1',
   })
   assertEquals(one.oid, ONE_OID)
+  let immutable = index({
+    read: g.read,
+    apply: () => {
+      throw new Error('rewrote an immutable commit')
+    },
+  }, bytes)
+  assertEquals(
+    await immutable.commit({
+      tree,
+      author: AUTHOR,
+      committer: COMMITTER,
+      message: 'deploy 1',
+    }),
+    one,
+  )
   let at = { at: 1757000060000 }
   let two = await git.commit({
     tree,
@@ -206,3 +224,40 @@ test('a commit body is in the store, verbatim', async () => {
     `tree ${ROOT_OID}`,
   )
 })
+
+// Build each answer independently of folding, before timing the checks.
+let folded = await Promise.all([
+  {
+    name: 'root and nested edits',
+    files: { 'hello.txt': X, 'lib/a.txt': HELLO },
+  },
+  { name: 'file and directory deletion', files: { 'hello.txt': HELLO } },
+  { name: 'file replacing a directory', files: { 'hello.txt': HELLO, lib: X } },
+  {
+    name: 'nested addition',
+    files: { 'hello.txt': HELLO, 'lib/a.txt': X, 'lib/deep/b.txt': HELLO },
+  },
+].flatMap((edit) =>
+  [false, true].map(async (legacy) => {
+    let { git, bytes } = fixture()
+    let files = deployed(bytes)
+    let tree = await git.files(files)
+    let next = Object.fromEntries(
+      Object.entries(edit.files).map(([p, text]) => [p, file(bytes, text)]),
+    )
+    let want = await git.files(next)
+    if (legacy) {
+      bytes.remove(ROOT_OID256)
+      bytes.remove(LIB_OID256)
+    }
+    return { name: edit.name, legacy, git, files, tree, next, want }
+  })
+))
+for (let f of folded) {
+  test(`folding ${f.name} preserves both Git formats${f.legacy ? ' from historical trees' : ''}`, async () => {
+    assertEquals(
+      await f.git.files(f.next, { tree: f.tree, files: f.files }),
+      f.want,
+    )
+  })
+}

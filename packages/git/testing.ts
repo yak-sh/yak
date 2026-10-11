@@ -35,7 +35,10 @@ export let vocab: Vocab = loadVocab([entity, edgeDoc, keyDoc, gitDoc], [
 
 /** A byte store over a Map, counting the reads so that a test can prove an
  * object whose id is already known is never read again. */
-export let store = (): Blobs & { reads: () => number } => {
+export let store = (): Blobs & {
+  reads: () => number
+  remove: (sha: string) => void
+} => {
   let bytes = new Map<string, Uint8Array>()
   let reads = 0
   return {
@@ -48,6 +51,9 @@ export let store = (): Blobs & { reads: () => number } => {
       bytes.set(sha, b)
     },
     reads: () => reads,
+    remove: (sha) => {
+      bytes.delete(sha)
+    },
   }
 }
 

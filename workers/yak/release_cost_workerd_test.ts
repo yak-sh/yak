@@ -62,12 +62,12 @@ test('a release changing six files writes their objects into yak/git', async () 
       paths,
     )
     console.log('GIT_COST', JSON.stringify(r))
-    // What is left is the changed root's own entries, a row each.
+    // Unchanged children are read from tree bodies, independent of other apps.
     within(
       `six files beside ${others} objects`,
       r.steps['six files changed'].total,
-      12000,
-      7000,
+      350,
+      260,
     )
   }
 })
