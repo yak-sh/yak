@@ -300,3 +300,25 @@ test('restoring another draft source preserves subsequent typing', async () => {
     s.close()
   }
 })
+
+test('restoring a changed source replaces imported text and keeps other typing', () => {
+  let d = desk({
+    mutate: () => new Promise(() => {}),
+    watch: () => ({
+      value: [{
+        entity: { eid: 'draft' },
+        draft: { place: 'command', text: 'old title tail hosted', rev: 1 },
+      }],
+      subscribe: () => () => {},
+    }),
+  }, { by: () => jo, pace: 0 })
+  try {
+    d.type('command', 'old title tail hosted local')
+    d.restore('command', 'new title tail', 'old title tail')
+    assertEquals(d.text('command'), 'new title tail hosted local')
+    d.restore('command', 'title tail', 'new title tail')
+    assertEquals(d.text('command'), 'title tail hosted local')
+  } finally {
+    d.close()
+  }
+})

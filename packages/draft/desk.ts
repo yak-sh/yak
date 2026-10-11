@@ -373,10 +373,10 @@ export let desk = (
       }
       return send(place, also, h.local)
     },
-    restore: (place, text) =>
+    restore: (place, text, over = '') =>
       step(place, (h) => ({
         ...h,
-        local: merge('', text, h.local),
+        local: merge(over, text, h.local),
         stuck: false,
       })),
     close: () => {
