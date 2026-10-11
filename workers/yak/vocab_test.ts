@@ -229,6 +229,15 @@ test('a manifest is refused in the words that fix it', () => {
   let held = appDoc(says({ gallery: {} }))
   assertEquals(Object.keys(unsaid(held, held).$defs ?? {}), ['gallery'])
   assertThrows(() => unsaid(held), Error, 'gallery is a word')
+  assertEquals(unsaid(held, {}, 'vocab.json', ['gallery']), held)
+  assertThrows(
+    () =>
+      unsaid(appDoc(says({ gallery: {}, cost: {} })), {}, 'vocab.json', [
+        'gallery',
+      ]),
+    Error,
+    'cost is a word',
+  )
   // The list is every platform vocabulary's: an app's store, the directory,
   // and the git object store.
   for (let word of ['member', 'edge', 'space', 'commit']) {

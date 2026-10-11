@@ -242,6 +242,7 @@ import { conditionalWakes } from './conditional-wakes.ts'
 import type { Binding } from './post.ts'
 import { ledger } from './ledger.ts'
 import {
+  ACCEPTED,
   doorOf,
   GIT_STORE,
   IDEMPOTENCY,
@@ -4017,7 +4018,12 @@ export class Store {
     return readBody(request).then(async (body) => {
       try {
         let was = appDoc(this.#get('vocab') ?? '{}')
-        let next = unsaid(appDoc(body), was)
+        let next = unsaid(
+          appDoc(body),
+          was,
+          'vocab.json',
+          JSON.parse(request.headers.get(ACCEPTED) ?? '[]'),
+        )
         let { doc, dropped, added, kept, retyped } = grew(
           was,
           next,

@@ -115,9 +115,12 @@ export type Door = {
 // The idempotency key is among them because the store answers a key it has
 // seen with the answer it gave (writes.ts): only the kernel mints one.
 export let IDEMPOTENCY = 'idempotency-key'
+/** Word names vouched for by a previously accepted immutable release. */
+export let ACCEPTED = 'x-yak-accepted'
 
 let VOUCH = [
   IDEMPOTENCY,
+  ACCEPTED,
   'x-store',
   'x-yak-app',
   'x-yak-space',

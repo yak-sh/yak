@@ -200,7 +200,7 @@ import { titling, vouched, type Who } from './session.ts'
 import { type Clock, clock } from './timing.ts'
 import { mode, reads } from '@yaks/member'
 import { canon, nameOf, personOf } from './signin.ts'
-import type { Door } from './door.ts'
+import { ACCEPTED, type Door } from './door.ts'
 import {
   type Applying,
   asked,
@@ -816,10 +816,11 @@ let fits = async (
   store: Door,
   source: string,
   file: string,
+  accepted: string[] = [],
 ) => {
   let { said, homes } = await homesIn(ctx, space, app.slug, app)
   let split = homed(
-    unsaid(appDoc(source, file), said.get(app.slug), file),
+    unsaid(appDoc(source, file), said.get(app.slug), file, accepted),
     homes,
   )
   let mine = await store.consume(
@@ -873,6 +874,7 @@ let published = async (
   target?: Version,
   reload?: Reload,
   preserve = false,
+  accepted: string[] = [],
 ) => {
   let c = ctx.clock ?? clock()
   let blobs = files.files
@@ -914,6 +916,8 @@ let published = async (
   // The file the app declares its words in — and its name, for every sentence
   // below that tells somebody to go and edit it.
   let { file: vocabFile, source } = await declaring(blobs, space, app)
+  let declaration = appDoc(source ?? {}, vocabFile)
+  if (target) accepted = Object.keys(declaration.$defs ?? {})
   // A command was once declared in a file of its own; it is an entry in the
   // manifest now (T-38021), and a file still saying one that way is refused in
   // the sentence that says where it goes, rather than left unread.
@@ -953,9 +957,10 @@ let published = async (
   // second table, and any property it adds grows the HOME's.
   let { said, homes } = await homesIn(ctx, space, app.slug, app)
   manifest = unsaid(
-    appDoc(source ?? {}, vocabFile),
+    declaration,
     said.get(app.slug),
     vocabFile,
+    accepted,
   )
   let split = homed(manifest, homes)
   uses = split.uses
@@ -1082,7 +1087,7 @@ let published = async (
         method: 'POST',
         body: JSON.stringify(split.mine),
       },
-      vouched(who),
+      { ...vouched(who), [ACCEPTED]: JSON.stringify(accepted) },
     ),
   )
   planted = mine.comps ?? []
@@ -1331,15 +1336,23 @@ let released = async (
   app: App,
   who: Who,
   store: Door,
-  { target, reload, preserve = false, base, confirm = false, expectedVersion }:
-    {
-      target?: Version
-      reload?: Reload
-      preserve?: boolean
-      base?: number
-      confirm?: boolean
-      expectedVersion?: number
-    } = {},
+  {
+    target,
+    reload,
+    preserve = false,
+    accepted = [],
+    base,
+    confirm = false,
+    expectedVersion,
+  }: {
+    target?: Version
+    reload?: Reload
+    preserve?: boolean
+    accepted?: string[]
+    base?: number
+    confirm?: boolean
+    expectedVersion?: number
+  } = {},
 ): Promise<{ version: number; said: string; review?: DeployReview }> => {
   let standing = await waiting(ctx.dir, space, app, who)
   if (expectedVersion != null && standing.version != expectedVersion) {
@@ -1423,6 +1436,7 @@ let released = async (
       target,
       reload,
       preserve,
+      accepted,
     )
   } finally {
     await unfenced(ctx.dir, standing, fence, who)
@@ -4781,9 +4795,12 @@ let OURS: Row[] = [
       // for in the space, counted against its ceiling (T-37809). Nothing has
       // happened yet here, so a refusal costs the installer nothing.
       let said = await offeredWords(source)
+      let accepted = Object.keys(
+        appDoc(said.source ?? {}, said.file).$defs ?? {},
+      )
       if (said.source != null) {
         let { homes } = await homesIn(ctx, space, s)
-        homed(unsaid(appDoc(said.source, said.file), {}, said.file), homes)
+        homed(appDoc(said.source, said.file), homes)
       }
       // The app row, born the way app_new writes one — its own eid, so its own
       // handle and its own store — plus the pin that says where the code came
@@ -4810,7 +4827,7 @@ let OURS: Row[] = [
         app,
         who,
         appStore(ctx.env.STORE, space, app),
-        { preserve: true },
+        { preserve: true, accepted },
       )
       return {
         text:
@@ -4869,8 +4886,11 @@ let OURS: Row[] = [
       // sentence a deploy gives (T-32728), leaving the copy as it was.
       let source = await offered(ctx, from)
       let said = await offeredWords(source)
+      let accepted = Object.keys(
+        appDoc(said.source ?? {}, said.file).$defs ?? {},
+      )
       if (said.source != null) {
-        await fits(ctx, space, app, store, said.source, said.file)
+        await fits(ctx, space, app, store, said.source, said.file, accepted)
       }
       let crossed = await ctx.dir.deploys(from.app)
       let reload: Reload | undefined = to < was ||
@@ -4886,7 +4906,7 @@ let OURS: Row[] = [
         app,
         who,
         store,
-        { reload, preserve: true },
+        { reload, preserve: true, accepted },
       )
       await ctx.dir.apply({
         entities: [{ entity: { eid: app.eid }, installed: { version: to } }],

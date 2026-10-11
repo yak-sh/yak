@@ -1,13 +1,15 @@
 import { assertEquals, assertRejects } from '@std/assert'
 import { test } from '@yaks/testing'
-import { type Directory, directory } from './directory.ts'
+import { appStore, type Directory, directory, storeName } from './directory.ts'
 import * as dirPart from './directory.ts'
 import { type Door, type Namespace } from './door.ts'
 import type { Env } from './env.ts'
 import { ran, workerBreak } from './dispatch.ts'
-import { platform } from './testing.ts'
+import { keep, platform } from './testing.ts'
 import { call, type Ctx, releaseNotice } from './tools.ts'
 import * as apps from './apps.ts'
+import { r2Objects } from './lib/objects.ts'
+import { pins, sha256 } from './versions.ts'
 
 let ADA = 'a0000000-0000-4000-8000-0000000000ad'
 let fixture = async (env: Env) => {
@@ -15,7 +17,6 @@ let fixture = async (env: Env) => {
   let ctx: Ctx = { env, dir, person: ADA }
   await call(ctx, 'space_new', { slug: 'ada', title: 'Ada' })
   await call(ctx, 'app_new', { space: 'ada', slug: 'recipes', title: 'R' })
-  await call(ctx, 'app_list', {})
   let args = { space: 'ada', app: 'recipes' }
   let write = (text: string) =>
     call(ctx, 'app_files', {
@@ -152,6 +153,44 @@ test('even a throwing release-notice reporter cannot fail the release', async ()
 test('updates carry every crossed required source mark but exclude the installed and later releases', async () => {
   using scenario = platform('reload-secret')
   let f = await fixture(scenario.env)
+  // The source accepted this vocabulary before the platform reserved cost.
+  // Seed its stored declaration; every release below keeps its own bytes.
+  let words = JSON.stringify({
+    $defs: { cost: { properties: { euros: { type: 'number' } } } },
+  })
+  let home = (await f.dir.space('ada'))!
+  let original = (await f.dir.app(home, 'recipes'))!
+  let name = storeName(home, original)
+  scenario.object(name)
+  keep(scenario.states.get(name)!, 'vocab', words)
+  let blobs = r2Objects(scenario.env.BLOBS)
+  let files: Record<string, string> = {}
+  for (
+    let [path, text] of Object.entries({
+      'index.html': '<h1>1</h1>',
+      'vocab.json': words,
+    })
+  ) {
+    let bytes = new TextEncoder().encode(text)
+    files[path] = await sha256(bytes)
+    await pins(blobs, 'ada/recipes/').put(files[path], bytes)
+    await blobs.put(`ada/recipes/${path}`, bytes)
+  }
+  await f.dir.apply({
+    entities: [
+      { entity: { eid: original.eid }, app: { version: 1 } },
+      {
+        entity: { eid: crypto.randomUUID() },
+        deploy: {
+          app: original.eid,
+          version: 1,
+          files: JSON.stringify(files),
+          worker: '',
+          reload: 'required',
+        },
+      },
+    ],
+  })
   let deploy = async (n: number, reload?: string) => {
     await f.write(String(n))
     await call(f.ctx, 'app_deploy', { ...f.args, ...reload ? { reload } : {} })
@@ -162,7 +201,6 @@ test('updates carry every crossed required source mark but exclude the installed
       name: 'reload-recipes',
       about: 'Recipes',
     })
-  await deploy(1, 'required')
   await publish()
   await call(f.ctx, 'space_new', { slug: 'bo', title: 'Bo' })
   await call(f.ctx, 'app_install', { space: 'bo', name: 'reload-recipes' })
@@ -199,8 +237,48 @@ test('updates carry every crossed required source mark but exclude the installed
       { entity: { eid: app.eid }, installed: { version: 2 } },
     ],
   }, { 'x-yak-person': ADA, 'x-yak-role': 'owner' })
+  let copy = { space: 'bo', app: 'recipes' }
+  let remove = async () => {
+    await call(f.ctx, 'app_files', {
+      ...copy,
+      path: 'vocab.json',
+      content: '{}',
+    })
+    await call(f.ctx, 'app_deploy', copy)
+  }
+  await remove()
   await update()
   assertEquals((await installed())[0].reload, null)
+  // Removing an empty word and restoring the kept release must admit that
+  // release's declaration again, without changing any version or file.
+  let before = await installed()
+  await remove()
+  await call(f.ctx, 'app_rollback', { ...copy, version: 1 })
+  assertEquals((await installed()).slice(1), before)
+  assertEquals(
+    (await call(f.ctx, 'app_files', {
+      ...copy,
+      op: 'read',
+      path: 'vocab.json',
+    })).text,
+    words,
+  )
+  let store = appStore(
+    scenario.env.STORE,
+    space,
+    (await f.dir.app(space, 'recipes'))!,
+  )
+  let by = { 'x-yak-person': ADA, 'x-yak-role': 'owner' }
+  let wrote = await store('/apply', {
+    method: 'POST',
+    body: JSON.stringify([{
+      entity: { eid: crypto.randomUUID() },
+      cost: { euros: 12 },
+    }]),
+  }, by)
+  assertEquals(wrote.status, 200, await wrote.text())
+  let read = await store('/query?q=.cost.euros=12', {}, by)
+  assertEquals((await read.json())[0].cost, { euros: 12 })
 })
 
 test('rollback selects kept bytes without minting or changing deploys, then deploy allocates above history', async () => {

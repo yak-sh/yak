@@ -486,14 +486,21 @@ export let appDoc = (source: unknown, file = 'vocab.json'): VocabDoc => {
  * that declared a word before the platform said it keeps deploying it. A
  * stored manifest is never held to this, so a store wakes whatever the list
  * has become since.
+ * `accepted` names the words of an immutable release already admitted by the
+ * platform. Installing, updating or restoring it inherits those words even
+ * where this store has never held them.
  */
 export let unsaid = (
   doc: VocabDoc,
   held: VocabDoc = {},
   file = 'vocab.json',
+  accepted: string[] = [],
 ): VocabDoc => {
   let taken = Object.keys(doc.$defs ?? {})
-    .filter((n) => RESERVED.includes(n) && !(n in (held.$defs ?? {})))
+    .filter((n) =>
+      RESERVED.includes(n) && !(n in (held.$defs ?? {})) &&
+      !accepted.includes(n)
+    )
   if (taken.length) {
     throw refuse(
       'arguments',
