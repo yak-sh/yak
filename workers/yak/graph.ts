@@ -220,9 +220,13 @@ import {
   PLATFORM,
   type Row,
 } from './listing.ts'
-import { assemble, prepare, type Prepared } from '@yaks/host/assembly'
+import {
+  assemble,
+  type Assembly,
+  prepare,
+  type Prepared,
+} from '@yaks/host/assembly'
 import { type Host as PluginHost, type Load } from '@yaks/host'
-import { chosen, facetsOf, given, used } from '@yaks/host/config'
 import { configs } from './config.ts'
 import { load } from './load.ts'
 import { metering } from './meter.ts'
@@ -342,6 +346,32 @@ export let vocabOfStore = (name: string, declared: unknown = {}): Vocab =>
 
 let storeKind = (name: string): keyof typeof configs =>
   name == PLATFORM_STORE ? 'directory' : name == GIT_STORE ? 'git' : 'app'
+// Plans retain only declarations and modules. Each Store binds its own options,
+// capabilities and observation state to the plan for this kind and shape.
+let assemblies = new WeakMap<Prepared, WeakMap<Shape, Assembly>>()
+let assemblyOf = (
+  name: string,
+  shape: Shape,
+  facets: Prepared,
+  loading: Load,
+) => {
+  let byShape = assemblies.get(facets)
+  if (!byShape) assemblies.set(facets, byShape = new WeakMap())
+  let plan = byShape.get(shape)
+  if (!plan) {
+    byShape.set(
+      shape,
+      plan = assemble(
+        configs[storeKind(name)],
+        ['graph', 'effects'],
+        loading,
+        facets,
+        { words: { ...shape.words, derived: shape.derived } },
+      ),
+    )
+  }
+  return plan
+}
 let prepared = new Map<string, Promise<Prepared>>()
 let preparing = (kind: keyof typeof configs): Promise<Prepared> => {
   let held = prepared.get(kind)
@@ -368,10 +398,12 @@ type Shape = {
   ddl: Stmt[]
 }
 
-// The shapes this isolate has raised, the most recent few. A shape is pure in
-// which store it is and the `vocab.json` it holds, and one isolate wakes many
-// objects, so a wake under words it has seen loads, renders and hashes nothing.
+// Fixed kinds and the core app shape live for this isolate. App declarations
+// use a bounded cache; a burst of them cannot evict the fixed shapes. A shape
+// is pure in which store it is and the `vocab.json` it holds, so a wake under
+// cached words loads, renders and hashes nothing.
 let shapes = new Map<string, Shape>()
+let fixedShapes = new Map<string, Shape>()
 let SHAPES = 16
 
 // Whether a store is one of the platform's own two rather than an app's.
@@ -381,14 +413,16 @@ export let shapeOf = (name: string, declared: string | null): Shape => {
   // Neither the directory nor the git object graph is an app: each speaks its
   // own words whatever it holds, so its name is the whole key.
   let own = ownStore(name)
-  let key = own ? name : declared == null ? 'app' : `app ${declared}`
-  let held = shapes.get(key)
+  let fixed = own || declared == null || declared == '{}' ||
+    declared == '{"$defs":{}}'
+  let key = own ? name : fixed ? 'app' : `app ${declared}`
+  let cache = fixed ? fixedShapes : shapes
+  let held = cache.get(key)
   if (held) {
-    // Keep the shape the isolate reaches for — the platform's own, and the app
-    // core every store that declares nothing shares — hot: a hit is the most
-    // recently used, so a burst of one-off declarations never evicts it.
-    shapes.delete(key)
-    shapes.set(key, held)
+    if (!fixed) {
+      cache.delete(key)
+      cache.set(key, held)
+    }
     return held
   }
   let words = own ? storeWords(storeKind(name)) : appWords(declared ?? {})
@@ -412,7 +446,7 @@ export let shapeOf = (name: string, declared: string | null): Shape => {
     [FIT, ...ddl.map((s) => render(s).sql)].join('\n'),
   )
   let shape = { words, vocab, own, derived, searchable, stamp, ddl }
-  shapes.set(key, shape)
+  cache.set(key, shape)
   if (shapes.size > SHAPES) shapes.delete(shapes.keys().next().value!)
   return shape
 }
@@ -842,10 +876,10 @@ export class Store {
   #dormant: boolean | null = null
   #checking: Promise<boolean> | null = null
 
-  #ensureStarted(name?: string): Promise<void> {
+  #ensureStarted(request?: Request): Promise<void> {
     return this.#started ??= tallying(this.#pending, async () => {
       try {
-        await this.#start(name)
+        await this.#start(request)
       } catch (e) {
         this.#failed(e)
       }
@@ -894,7 +928,7 @@ export class Store {
     return json({ error: 'NotFound', message: 'app is in the trash' }, 404)
   }
 
-  async #start(name?: string) {
+  async #start(request?: Request) {
     let ctx = this.#ctx
     this.#sql = driver(ctx.storage, undefined, this.#measure)
     this.#sql.query(KV)
@@ -906,10 +940,22 @@ export class Store {
     revived(this.#sql)
     this.#reshaping()
     let remembered = this.#get('name')
-    await this.#prepare(remembered ?? name ?? '')
-    this.#boot(() => {
-      if (!remembered && name) this.#put('name', name)
+    await this.#prepare(request?.headers.get('x-store') ?? remembered ?? '')
+    this.#atomic(() => {
+      // The waking request supplies the capabilities the first binding needs.
+      // Remember them before building, rather than replacing that binding in
+      // #ready when the same request teaches it its app and access mode.
+      let heard = new Map(request ? this.#heard(request) : [])
+      for (let [key, value] of heard) this.#put(key, value)
+      this.#build()
+      let access = heard.get('access')
+      if (access) this.#mode(mode(access))
     })
+    if (!this.#refused) {
+      // Join this incarnation without discovering or starting work. Its own
+      // writes can then persist attempts in the transaction that owes them.
+      await this.#effects.work(this.#stored(this.#graph).graph, undefined, 0)
+    }
   }
 
   // What an object keeps is in the one shape a deploy takes now. A store that
@@ -1009,10 +1055,11 @@ export class Store {
     // app-shaped extras below are for: `task.status` is an expression over
     // words a git object graph does not have, and `vocab.json` is not a
     // sentence to say to a caller of either one.
-    let { words, vocab, own, derived, searchable, stamp } = shapeOf(
+    let shape = shapeOf(
       name,
       this.#get('vocab'),
     )
+    let { vocab, own, derived, searchable, stamp } = shape
     this.#lensMove = lensRule(name, declaration, (path) => {
       let [comp, prop] = path.split('.')
       return prop ? !!vocab.prop(comp, prop) : !!vocab.comp(comp)
@@ -1050,7 +1097,6 @@ export class Store {
     // on every write would answer it with another break, forever.
     let fx = effects(vocab, {
       write: (b) => this.#trust(b, null),
-      defer: true,
       singleOwner: true,
       startup: 'manual',
       // A builder output (2) starts a downstream builder call (3). The
@@ -1080,28 +1126,19 @@ export class Store {
         return kernel()
       },
     }
-    let plan = assemble(
-      config,
-      ['graph', 'effects'],
-      this.#load,
-      this.#facets.get(kind)!,
-      {
-        observed: observed.composition,
-        plugins: (config.plugins ?? []).map((entry) => {
-          let plugin = used(entry), options = given(entry)
-          if (plugin.startsWith('yak/')) options = { ...options, store: at }
-          if (plugin == '@yaks/mail') {
-            options = { ...options, domain: apex(this.#bind) }
-          }
-          if (plugin == '@yaks/rtc') {
-            options = { ...options, realtime: realtimeOf(this.#bind) }
-          }
-          return [plugin, options, chosen(entry), facetsOf(entry)]
-        }),
-        words: { ...words, derived },
-      },
-    )
+    let plan = assemblyOf(name, shape, this.#facets.get(kind)!, this.#load)
     let composed = plan.bind({
+      observed: observed.composition,
+      options: (plugin, options) => {
+        if (plugin.startsWith('yak/')) return { ...options, store: at }
+        if (plugin == '@yaks/mail') {
+          return { ...options, domain: apex(this.#bind) }
+        }
+        if (plugin == '@yaks/rtc') {
+          return { ...options, realtime: realtimeOf(this.#bind) }
+        }
+        return options
+      },
       host: {
         me: app ?? name,
         vault: vaultOf(this.#bind),
@@ -1977,10 +2014,11 @@ export class Store {
   // moves. A call points at a tool entity, so that row has to be standing
   // before anybody can write one — and a deploy is the moment to stand it up.
   #planting = async (): Promise<void> => {
-    await this.#runner().ensure(['builder_model'])
     let said = this.#get('tools') ?? '{}'
+    await this.#runner().ensure(
+      this.#get('planted') == said ? ['builder_model'] : undefined,
+    )
     if (this.#get('planted') == said) return
-    await this.#runner().ensure()
     this.#put('planted', said)
   }
 
@@ -2070,7 +2108,10 @@ export class Store {
     run: () => T | Promise<T>,
     request?: Request,
   ): Promise<T> {
-    if (this.#bind.STORE_TRACING == 'off') return run()
+    if (
+      this.#bind.STORE_TRACING == 'off' ||
+      !this.#bind.ERRORS && !peek(this) && !peek()
+    ) return run()
     let control = request && new URL(request.url).pathname == '/trace'
     let requested = !control && this.#traceNext > 0
     if (requested) this.#traceNext--
@@ -2289,8 +2330,11 @@ export class Store {
     }
     // A release reaching this store owes its declared start-up effects once.
     // Cold reads and pool drains never owe them again.
-    await this.#effects.startup(this.#stored(this.#graph).graph)
-    await this.#effects.work(this.#stored(this.#graph).graph, undefined, 1)
+    await this.#effects.idle()
+    await this.#effects.work(this.#stored(this.#graph).graph, undefined, {
+      passes: 1,
+      startup: true,
+    })
     await this.#effects.idle()
     // A deployment stands up command identities. Recovery drains recorded
     // call_ready/call_woken effects, not a second derivation over all calls.
@@ -2658,7 +2702,7 @@ export class Store {
       }
       return this.#missing()
     }
-    await this.#ensureStarted(request.headers.get('x-store') ?? undefined)
+    await this.#ensureStarted(request)
     let tally = this.#pending
     this.#pending = new Map()
     let run = () =>
@@ -3942,9 +3986,15 @@ export class Store {
           this.#put(`vocab:${candidate}`, JSON.stringify(doc))
         } else {
           // The declaration and its DDL roll back together on boot failure.
-          this.#boot(() => {
-            this.#put('vocab', JSON.stringify(doc))
+          this.#atomic(() => {
+            let declared = JSON.stringify(doc)
+            this.#put('vocab', declared)
             prepare()
+            // A declaration already bound here needs its deployment pass,
+            // while its graph and host capabilities can keep their lifetime.
+            if (shapeOf(this.#name() ?? '', declared).vocab != this.#vocab) {
+              this.#build()
+            }
           })
           if (this.#refused) return this.#stalled()
           await this.#deployed()

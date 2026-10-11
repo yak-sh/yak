@@ -511,15 +511,17 @@ export let runner = (g: Graph, opts: Opts): Runner => {
   let stood = new Map<string, Promise<Bundle[]>>()
   // The rows of these tools that are missing or say something else, written.
   let standing = (some: NamedTool[]): Promise<Bundle[]> =>
-    Promise.resolve(g.get(some.map((t) => toolEid(t.name)))).then((held) => {
-      let said = new Map(held.map((b) => [b.entity.eid, b.tool as Comp]))
-      let stale = some.filter((t) => {
-        let row = said.get(toolEid(t.name))
-        return row?.name != t.name || row?.description != t.description ||
-          row?.revision != t.revision
-      })
-      return stale.length ? g.apply(stale.map(toolRow)) : []
-    })
+    Promise.resolve(g.get(some.map((t) => toolEid(t.name)), ['tool'])).then(
+      (held) => {
+        let said = new Map(held.map((b) => [b.entity.eid, b.tool as Comp]))
+        let stale = some.filter((t) => {
+          let row = said.get(toolEid(t.name))
+          return row?.name != t.name || row?.description != t.description ||
+            row?.revision != t.revision
+        })
+        return stale.length ? g.apply(stale.map(toolRow)) : []
+      },
+    )
 
   // The answer, read back out of the graph: the result entity the rule named,
   // plus every entity recording that it came from this call. This is what a

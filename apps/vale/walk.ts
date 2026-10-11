@@ -66,6 +66,32 @@ export let walk = (v: Vale, from: Vec, to: Vec): Vec[] => {
   let away = (i: number, k: number) =>
     Math.abs(x(i) - to[0]) + Math.abs(z(k) - to[2])
   let first: Step = { i: 0, k: 0, y: from[1], cost: 0, score: away(0, 0) }
+  let close = (i: number, k: number) =>
+    Math.hypot(x(i) - to[0], z(k) - to[2]) < 0.3
+  let arrived = (s: Step) => close(s.i, s.k) && Math.abs(s.y - to[1]) < 0.5
+  let unreachable = () => {
+    cache.set(name, [from])
+    return [from]
+  }
+  // Every arriving step needs support within the goal's height tolerance.
+  // Asking above that interval bounds all its possible floors from above;
+  // higher or blocked floors still go through the ordinary search.
+  let supported = () => {
+    if (arrived(first)) return true
+    let i0 = Math.floor((to[0] - from[0] - 0.3) / unit)
+    let i1 = Math.ceil((to[0] - from[0] + 0.3) / unit)
+    let k0 = Math.floor((to[2] - from[2] - 0.3) / unit)
+    let k1 = Math.ceil((to[2] - from[2] + 0.3) / unit)
+    for (let k = k0; k <= k1; k++) {
+      for (let i = i0; i <= i1; i++) {
+        if (close(i, k) && floorAt(v, x(i), z(k), to[1] + 0.5) > to[1] - 0.5) {
+          return true
+        }
+      }
+    }
+    return false
+  }
+  if (!supported()) return unreachable()
   let heap = [first], best = new Map([[key(first), first]])
   let ground = new Map<string, number | null>()
   let stand = (i: number, k: number, y: number): number | null => {
@@ -82,10 +108,7 @@ export let walk = (v: Vale, from: Vec, to: Vec): Vec[] => {
   for (let seen = 0; heap.length && seen < 60000; seen++) {
     let s = pop(heap)
     if (best.get(key(s)) != s) continue
-    if (
-      Math.hypot(x(s.i) - to[0], z(s.k) - to[2]) < 0.3 &&
-      Math.abs(s.y - to[1]) < 0.5
-    ) {
+    if (arrived(s)) {
       end = s
       break
     }
@@ -104,10 +127,7 @@ export let walk = (v: Vale, from: Vec, to: Vec): Vec[] => {
   }
   // A destination beyond a cliff or water stays unreachable. A villager
   // waits where they stand until they next decide where to go.
-  if (!end) {
-    cache.set(name, [from])
-    return [from]
-  }
+  if (!end) return unreachable()
   let path: Vec[] = [to]
   for (let s: Step | undefined = end; s; s = s.prev) {
     path.push([x(s.i), s.y, z(s.k)])

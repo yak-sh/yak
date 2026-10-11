@@ -23,6 +23,7 @@ import {
   type Configured,
   facetsOf,
   given,
+  type Options,
   used,
 } from './config.ts'
 import type { Duty, FacetName, Load, MeaningHit } from './facets.ts'
@@ -71,6 +72,10 @@ export type Binding = {
   actor?: Actor | null
   process?: Comp
   readOnly?: boolean
+  /** Per-host capabilities added to a configured occurrence's options. */
+  options?: (plugin: string, options: Options) => Options
+  /** Loading and binding evidence belongs to this host, never the shared plan. */
+  observed?: Composition
 }
 export type Meaning = (
   words: string,
@@ -195,26 +200,9 @@ export let assemble = (
   opts: AssemblyOpts = {},
 ): Assembly => {
   let plugins = opts.plugins ?? configured(config)
-  let observed = opts.observed ??
-    compositionAnatomy(
-      plugins.map(([name, , , facets]) => ({ name, facets })),
-      roles,
-      ROLES,
-    )
   let part = opts.part
-  let observedLoad: Load = async (plugin, name) => {
-    observed.attempted(plugin, name)
-    let loaded = await load(plugin, name)
-    observed.loaded(plugin, name, loaded !== null)
-    return loaded
-  }
   let modules = <F extends FacetName>(name: F): Taken<F> => {
     let loaded = prepared[name as keyof Prepared] as Taken<F>
-    for (let [plugin, , , facets] of plugins) {
-      if (facets !== undefined && !facets.includes(name)) continue
-      observed.attempted(plugin, name)
-      observed.loaded(plugin, name, loaded.some(([, , p]) => p == plugin))
-    }
     // Each configured occurrence keeps its own options, including repeated
     // selections of one package. Facets may be absent, so module positions
     // alone cannot identify their configured entries.
@@ -233,26 +221,81 @@ export let assemble = (
       return [mod, entry?.[1] ?? original, plugin, names, facets]
     })
   }
-  let vocabs = modules('vocab'), graphs = modules('graph')
-  let watched = roles.includes('effects') ? modules('effects') : []
-  let served = roles.includes('web') ? modules('routes') : []
-  let dressed = roles.includes('web') ? modules('ui') : []
-  let running = modules('service')
+  let vocabs = modules('vocab')
+  let imported = {
+    graph: modules('graph'),
+    effects: roles.includes('effects') ? modules('effects') : [],
+    routes: roles.includes('web') ? modules('routes') : [],
+    ui: roles.includes('web') ? modules('ui') : [],
+    service: modules('service'),
+  }
   part?.('vocabulary')
   let words = opts.words ?? wordsOf(vocabs, opts.docs)
   let { docs, vocab, derived } = words
-  let contributions = vocabs.map(([v, options, plugin, names, facets]) => ({
-    docs: selected(v.docs ?? [], names, plugin),
-    options,
-    plugin,
-    facets,
-  }))
-  part?.('anatomy')
-  observed.declarations(docs, vocab)
+  let contributions = vocabs.map(([v, options, plugin, names, facets]) => {
+    let docs = selected(v.docs ?? [], names, plugin)
+    return { docs, options, plugin, facets, effects: effectsIn(docs) }
+  })
+  let declared = new Set(effectsIn(docs).map((e) => e.name))
+  let original = new Set(
+    vocabs.flatMap(([v]) => effectsIn(v.docs ?? []).map((e) => e.name)),
+  )
+  let omissions = imported.effects.map(([, options, plugin, names]) => {
+    let vocabulary = vocabs.find(([, o, p, n]) =>
+      p == plugin && o === options && n === names
+    )
+    return new Set(
+      names === undefined ? [] : effectsIn(vocabulary?.[0].docs ?? [])
+        .filter((e) => !names.includes(e.name)).map((e) => e.name),
+    )
+  })
 
   return {
     words,
     bind: (binding) => {
+      let observed = binding.observed ?? opts.observed ?? compositionAnatomy(
+        plugins.map(([name, , , facets]) => ({ name, facets })),
+        roles,
+        ROLES,
+      )
+      let observedLoad: Load = async (plugin, name) => {
+        observed.attempted(plugin, name)
+        let loaded = await load(plugin, name)
+        observed.loaded(plugin, name, loaded !== null)
+        return loaded
+      }
+      let boundOptions = new Map<Options, Map<string, Options>>()
+      let optionsOf = (plugin: string, options: Options): Options => {
+        if (!binding.options) return options
+        let by = boundOptions.get(options)
+        if (!by) boundOptions.set(options, by = new Map())
+        let bound = by.get(plugin)
+        if (!bound) by.set(plugin, bound = binding.options(plugin, options))
+        return bound
+      }
+      let bound = <F extends FacetName>(
+        name: F,
+        loaded: Taken<F>,
+      ): Taken<F> => {
+        for (let [plugin, , , facets] of plugins) {
+          if (facets !== undefined && !facets.includes(name)) continue
+          observed.attempted(plugin, name)
+          observed.loaded(plugin, name, loaded.some(([, , p]) => p == plugin))
+        }
+        return loaded.map((
+          [mod, options, plugin, names, facets],
+        ) => [mod, optionsOf(plugin, options), plugin, names, facets])
+      }
+      let graphs = bound('graph', imported.graph)
+      let watched = roles.includes('effects')
+        ? bound('effects', imported.effects)
+        : []
+      let served = roles.includes('web') ? bound('routes', imported.routes) : []
+      let dressed = roles.includes('web') ? bound('ui', imported.ui) : []
+      let running = bound('service', imported.service)
+      bound('vocab', vocabs)
+      part?.('anatomy')
+      observed.declarations(docs, vocab)
       let { host: lent, actor: self, process, readOnly } = binding
       let g: Graph | undefined
       let store: Host['storage'] | undefined
@@ -342,8 +385,10 @@ export let assemble = (
       part?.('effects')
       let fx = watching = binding.effects(
         host,
-        contributions.flatMap(({ docs, options }) =>
-          effectsIn(docs).filter((e) => e.option && options[e.option] !== true)
+        contributions.flatMap(({ effects, options, plugin }) =>
+          effects.filter((e) =>
+            e.option && optionsOf(plugin, options)[e.option] !== true
+          )
             .map((e) => e.name)
         ),
       )
@@ -387,20 +432,10 @@ export let assemble = (
       let effecting = roles.includes('effects')
       observed.effects(new Map(), effecting)
       if (effecting) {
-        let declared = new Set(effectsIn(docs).map((e) => e.name))
-        let original = new Set(
-          vocabs.flatMap(([v]) => effectsIn(v.docs ?? []).map((e) => e.name)),
-        )
         let code: Handlers = {}
         let by = new Map<string, string>()
-        for (let [mod, options, plugin, names] of watched) {
-          let vocabulary = vocabs.find(([, o, p, n]) =>
-            p == plugin && o === options && n === names
-          )
-          let omitted = new Set(
-            names === undefined ? [] : effectsIn(vocabulary?.[0].docs ?? [])
-              .filter((e) => !names.includes(e.name)).map((e) => e.name),
-          )
+        for (let [i, [mod, options, plugin]] of watched.entries()) {
+          let omitted = omissions[i]
           for (
             let [name, run] of Object.entries(
               mod.effects?.(host, options) ?? {},
@@ -451,7 +486,7 @@ export let assemble = (
         ).flatMap(({ docs, options, plugin }) =>
           loadTools(docs, async () => {
             let code = await observedLoad(plugin, 'tools')
-            let runs = code?.runs?.(host, options) ?? {}
+            let runs = code?.runs?.(host, optionsOf(plugin, options)) ?? {}
             let declarations = toolsIn(docs)
             let names = declarations.map((d) => d.name ?? toolName(d))
             let joined = declarations.filter((d) =>
@@ -507,7 +542,6 @@ export let assemble = (
         ...replying ? { reply: replying } : {},
       })
       if (effecting) {
-        let declared = new Set(effectsIn(docs).map((e) => e.name))
         let due: Handlers[string] = (e) => run.due(e.entity.eid)
         fx.handle(
           Object.fromEntries(

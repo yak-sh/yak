@@ -515,7 +515,6 @@ export function heldBy(
   eids: string[],
   ledgers: readonly Ledger[] = [],
 ): string[] {
-  let all = facets(driver)
   let held = new Set<string>()
   let pointers = driver.query(select({
     cols: [col('eid', 'e'), col('tables', 'a')],
@@ -530,13 +529,13 @@ export function heldBy(
   }))
   for (let row of pointers) {
     let wrote = ledgers.map((l) => l.wrote(String(row.eid)))
-    if (row.tables == null && !wrote.some((w) => w.born)) return all
+    if (row.tables == null && !wrote.some((w) => w.born)) return facets(driver)
     if (row.tables != null) {
       for (let t of descriptor(driver, String(row.tables)).tables) held.add(t)
     }
     for (let w of wrote) for (let t of w.tables) held.add(t)
   }
-  return all.filter((t) => held.has(t))
+  return componentTables(driver, [], [...held])
 }
 
 /**

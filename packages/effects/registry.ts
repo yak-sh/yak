@@ -84,6 +84,7 @@ import {
   pool,
   type PoolOpts,
   type Run,
+  type WorkOpts,
 } from './pool.ts'
 export type { Description, Policy, Registration } from './registration.ts'
 
@@ -155,9 +156,9 @@ export type Opts = Partial<PoolOpts> & {
    * `apply()`, trusted (see {@link Write}). Without it a handler that tries to
    * write is reported rather than quietly writing past the pipeline. */
   write?: Write
-  /** called after a commit that wrote runs down and claimed none of them
-   * here: how a thread working the pool beside this one is told to look now,
-   * rather than at its next pass */
+  /** Called once after a commit owes declared work, including runs claimed
+   * here. The host can keep those runs alive and wake a worker to drain what
+   * remains, rather than waiting for its next pass. */
   nudge?: () => void
   /** which declared effects a commit owes runs for: only those this process
    * handles (`handled`, the default: a process that runs every effect itself,
@@ -220,9 +221,14 @@ export type Effects = Plugin & {
   startup: (g: Access) => Promise<void>
   /** Work the pool: claim what is owed and run it (./pool.ts). A live signal
    * keeps working until it aborts; an aborted one is one pass, taken only
-   * where no process that stays up is working the pool. Does nothing where
-   * the vocabulary keeps no `effect` rows. */
-  work: (g: Access, signal?: AbortSignal, passes?: number) => Promise<void>
+   * where no process that stays up is working the pool. `startup: true` also
+   * owes fresh start-up runs, delivering them inline where the vocabulary
+   * keeps no `effect` rows. Otherwise such a vocabulary has no pool to work. */
+  work: (
+    g: Access,
+    signal?: AbortSignal,
+    options?: number | WorkOpts,
+  ) => Promise<void>
   /** Look at the pool again now, rather than at the next pass. */
   wake: () => void
   /** Settles once every run this process started has, and a worker whose
@@ -774,7 +780,7 @@ export let effects = (vocab: Vocab, opts: Opts = {}): Effects => {
       owed.delete(bundles[0])
       pooled!.start(mine)
     }
-    if (bundles[0] && left.delete(bundles[0])) opts.nudge?.()
+    if (bundles[0] && (left.delete(bundles[0]) || mine?.length)) opts.nudge?.()
     let gen = generation(bundles)
     if (gen > depth || !slots.some(here)) return clean()
     let write = writer(gen)
@@ -898,8 +904,11 @@ export let effects = (vocab: Vocab, opts: Opts = {}): Effects => {
     },
     docs: () => describe(slots),
     startup,
-    work: (g, signal, passes) =>
-      pooled?.work(g, signal, passes) ?? Promise.resolve(),
+    work: (g, signal, options) =>
+      pooled?.work(g, signal, options) ??
+        (typeof options == 'object' && options.startup
+          ? startup(g)
+          : Promise.resolve()),
     wake: () => pooled?.wake(),
     idle: () => pooled?.idle() ?? Promise.resolve(),
     stop: () => pooled?.stop() ?? Promise.resolve(),

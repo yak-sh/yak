@@ -209,11 +209,15 @@ export let required = (driver: Driver, name: string): string[] => {
  * out without being asked about. No other name is reserved: an app may call a
  * component `journal` (@yaks/journal keeps its own rows in `journal_*`).
  */
-let components = new WeakMap<Driver, { revision: number; tables: string[] }>()
+let components = new WeakMap<
+  Driver,
+  { revision: number; tables: string[]; checked: Map<string, boolean> }
+>()
 
 export function componentTables(
   driver: Driver,
   known: readonly string[] = [],
+  candidates?: readonly string[],
 ): string[] {
   let current = revision(driver, 'schema')
   let held = components.get(driver)
@@ -227,22 +231,29 @@ export function componentTables(
         name != 'entity' && !name.startsWith('sqlite_') && !/^_+cf_/i.test(name)
       )
       .sort()
-      .filter((name) =>
-        driver.query({
-          t: 'pragma',
-          name: 'table_info',
-          schema: 'main',
-          arg: name,
-        })
-          .some((r) =>
-            r.name == 'entity' && Number(r.pk) == 1 &&
-            String(r.type).toLowerCase() == 'integer'
-          )
-      )
-    held = { revision: current, tables: found }
+    held = { revision: current, tables: found, checked: new Map() }
     components.set(driver, held)
   }
-  return held.tables.filter((name) => !known.includes(name))
+  let accounted = new Set(known)
+  let wanted = candidates && new Set(candidates)
+  return held.tables.filter((name) => {
+    if (accounted.has(name) || wanted && !wanted.has(name)) return false
+    let component = held.checked.get(name)
+    if (component === undefined) {
+      component = driver.query({
+        t: 'pragma',
+        name: 'table_info',
+        schema: 'main',
+        arg: name,
+      })
+        .some((r) =>
+          r.name == 'entity' && Number(r.pk) == 1 &&
+          String(r.type).toLowerCase() == 'integer'
+        )
+      held.checked.set(name, component)
+    }
+    return component
+  })
 }
 
 /**

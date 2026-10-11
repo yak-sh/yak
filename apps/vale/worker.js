@@ -4,7 +4,7 @@ import { companionTick } from './companion-tick.ts'
 import { writer } from './chat.ts'
 import { LODES } from './gather.ts'
 import { destinationOf } from './teleport.ts'
-import { installBuildingDesigns, refreshTerrain, vale } from './terrain.ts'
+import { installBuildingDesigns, installThemeDesigns, vale } from './terrain.ts'
 import { placeOf, placeText } from './place.ts'
 import { creatureNamed, frontOf, heroLevel, spawnedAt } from './spawn.ts'
 import { useBeasts } from './beasts.ts'
@@ -14,7 +14,6 @@ import { decided, retired, where as villagerWhere } from './villagers.ts'
 import { eidOf } from './villager-id.ts'
 import { inspectOf } from './inspect.ts'
 import { objectiveOf } from './companion.ts'
-import { useThemes } from './levels.ts'
 
 let read = async (door, line, live = false) => {
   let search = live
@@ -507,8 +506,7 @@ export let workerOf = (v) => {
     if (planned != built) installBuildingDesigns(plans)
     built = planned
     if (next == seen) return
-    useThemes(sorted)
-    refreshTerrain()
+    installThemeDesigns(sorted)
     seen = next
   }
   return {

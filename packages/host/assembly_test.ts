@@ -8,6 +8,7 @@ import { equal, test, throws } from '@yaks/testing'
 import type { VocabDoc } from '@yaks/vocab'
 import { toolEid } from '@yaks/tools'
 import { assembly, type Binding } from './assembly.ts'
+import { compositionAnatomy } from './anatomy.ts'
 import type { Config } from './config.ts'
 import type { Facets, Load } from './facets.ts'
 
@@ -550,4 +551,46 @@ test('different facet selections retain their own factory options', async () => 
     book: { title: 'Dune' },
   }])
   equal((await distinctFacets.graph.get(['b']))[0].book, { title: 'bDune' })
+})
+
+// One plan can serve independent stores: a lazy factory binds to its own
+// options and graph, and importing it supplies evidence only to that host.
+let shared = await assembly(
+  config,
+  ['graph'],
+  (_, name) =>
+    Promise.resolve(
+      name == 'tools'
+        ? {
+          runs: (_host: unknown, options: Record<string, unknown>) => ({
+            book_list: () => [{
+              entity: { eid: String(options.reader) },
+              book: { title: options.reader },
+            }],
+          }),
+        }
+        : facets[name] ?? null,
+    ),
+)
+let imports: string[][] = [[], []]
+let readers = ['ada', 'ana'].map((reader, i) =>
+  shared.bind({
+    ...binding(),
+    options: (_plugin, options) => ({ ...options, reader }),
+    observed: {
+      ...compositionAnatomy([{ name: 'library' }], ['graph'], {}),
+      loaded: (plugin, facet, present) => {
+        if (present && facet == 'tools') imports[i].push(plugin)
+      },
+    },
+  }).host
+)
+test('a shared assembly binds lazy tools and their evidence to each host', async () => {
+  let call = {
+    entity: { eid: 'read' },
+    call: { to: toolEid('book_list'), args: {} },
+  }
+  equal((await readers[0].runner.read(call))[0].book, { title: 'ada' })
+  equal(imports, [['library'], []])
+  equal((await readers[1].runner.read(call))[0].book, { title: 'ana' })
 })

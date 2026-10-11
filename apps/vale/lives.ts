@@ -20,17 +20,20 @@ let apart = (p: Vec, used: Vec[]) =>
 
 // Try furnished places first, then a few nearby spots on the same floor.
 let room = (v: Vale, places: Vec[], used: Vec[]): Vec | undefined => {
-  let choices = [...places]
+  let accepts = (p: Vec) => apart(p, used) && fits(v, p[0], p[2], p[1])
+  let furnished = places.find(accepts)
+  if (furnished) return furnished
   for (let [x, y, z] of places) {
     for (let r of [0.5, 1, 1.5, 2.5, 3.5, 5, 7, 9, 11]) {
       for (let n = 0; n < 16; n++) {
         let a = n * Math.PI / 8
         let px = x + r * Math.cos(a), pz = z + r * Math.sin(a)
-        choices.push([px, floorAt(v, px, pz, y), pz])
+        let p: Vec = [px, floorAt(v, px, pz, y), pz]
+        if (accepts(p)) return p
       }
     }
   }
-  return choices.find((p) => apart(p, used) && fits(v, p[0], p[2], p[1]))
+  return undefined
 }
 
 /** The places a villager has in their own village. A person living beyond a

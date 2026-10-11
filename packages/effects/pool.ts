@@ -85,7 +85,13 @@ import {
   unlink,
 } from '@yaks/trace'
 import { derivedEid, Stale, token } from '@yaks/graph'
-import { after as cursorAfter, and, eq, limit as window } from '@yaks/query'
+import {
+  after as cursorAfter,
+  and,
+  eq,
+  fields,
+  limit as window,
+} from '@yaks/query'
 import type { Report, Slot } from './registry.ts'
 import type { Event, Kind } from './trace.ts'
 import type { Write } from './write.ts'
@@ -171,6 +177,9 @@ export type PoolOpts = {
   owner: Eid
   /** Maximum handlers this worker runs together (default: {@link MAX}). */
   max?: number
+  /** Positive integer maximum candidates examined per pass, including fresh
+   * start-up admission (default: 32). */
+  page?: number
   /** Leave committed runs for work() instead of starting them on the writer. */
   defer?: boolean
   /** how long a claim holds, in milliseconds (default: 60_000) */
@@ -208,6 +217,14 @@ export type Ctx = {
   report: Report
 }
 
+/** Work requested by one host invocation. */
+export type WorkOpts = {
+  /** Maximum discovery passes; omitted, drain until nothing is left to start. */
+  passes?: number
+  /** Owe fresh start-up runs and start those fitting the worker's free slots. */
+  startup?: boolean
+}
+
 /** The pool over one registry: what a commit owes, and the worker. */
 export type Pool = {
   /** Write down the runs a batch owes, inside its transaction — claimed by
@@ -228,7 +245,11 @@ export type Pool = {
    * one, pass after pass until nothing is left to start, giving way to the
    * host between them — and none at all where a process that stays up is
    * already working it. */
-  work: (g: Access, signal?: AbortSignal, passes?: number) => Promise<void>
+  work: (
+    g: Access,
+    signal?: AbortSignal,
+    options?: number | WorkOpts,
+  ) => Promise<void>
   /** Look again now, rather than at the next pass: what a thread beside this
    * one says after it wrote runs down (./registry.ts `nudge`). */
   wake: () => void
@@ -317,6 +338,7 @@ export let pool = (ctx: Ctx, opts: Partial<PoolOpts> = {}): Pool => {
   let member = false
   let graph: Access | undefined
   let running = new Map<Eid, Held>()
+  let admitting = 0
   let loop: { done: Promise<void>; signal: AbortSignal } | undefined
 
   let claim = () =>
@@ -334,6 +356,22 @@ export let pool = (ctx: Ctx, opts: Partial<PoolOpts> = {}): Pool => {
   // Compare and set: the patch lands only if the row's claim and attempt count
   // are still the ones read — the graph's own precondition, riding on the
   // write like any other (@yaks/graph `$was`).
+  let changing = (
+    eid: Eid,
+    was: Comp,
+    patch: Comp | null,
+  ): Bundle => ({
+    entity: { eid },
+    ...(patch == null ? { $delete: true } : { [EFFECT]: patch }),
+    $was: {
+      [EFFECT]: {
+        ...(opts.singleOwner ? {} : {
+          lease_token: token(was.lease_token ?? null),
+        }),
+        attempts: token(was.attempts ?? null),
+      },
+    },
+  })
   let swap = async (
     g: Access,
     eid: Eid,
@@ -341,19 +379,10 @@ export let pool = (ctx: Ctx, opts: Partial<PoolOpts> = {}): Pool => {
     patch: Comp | null,
   ): Promise<boolean> => {
     try {
-      await g.apply([{
-        entity: { eid },
-        ...(patch == null ? { $delete: true } : { [EFFECT]: patch }),
-        $was: {
-          [EFFECT]: {
-            ...(opts.singleOwner ? {} : {
-              lease_token: token(was.lease_token ?? null),
-            }),
-            attempts: token(was.attempts ?? null),
-          },
-        },
-      }], { trusted: true })
-      return true
+      let applied = await g.apply([changing(eid, was, patch)], {
+        trusted: true,
+      })
+      return applied.some((b) => b.entity.eid == eid)
     } catch (error) {
       if (error instanceof Stale) return false
       throw error
@@ -426,7 +455,10 @@ export let pool = (ctx: Ctx, opts: Partial<PoolOpts> = {}): Pool => {
       let tx = g.outside
       let kind = String(row.kind) as Kind
       let name = String(row.comp ?? '')
-      let [found] = await tx.get([String(row.target)])
+      let [found] = await tx.get(
+        [String(row.target)],
+        kind == 'started' ? [] : name ? [name] : undefined,
+      )
       let event: Event = {
         kind,
         entity: found?.entity ?? { eid: String(row.target) },
@@ -502,7 +534,10 @@ export let pool = (ctx: Ctx, opts: Partial<PoolOpts> = {}): Pool => {
   // holds and whose backoff is up, claimed and started. Returns the runs.
   // A pass admits at most this many candidates, even when concurrency is
   // unlimited. Separate handler windows keep one backlog from owning the pass.
-  let page = 32
+  let page = opts.page ?? 32
+  if (!Number.isSafeInteger(page) || page < 1) {
+    throw new RangeError('effect page must be a positive integer')
+  }
   let turn = 0
   let cursors = new Map<string, Eid>()
   let exhausted = new Set<string>()
@@ -513,9 +548,11 @@ export let pool = (ctx: Ctx, opts: Partial<PoolOpts> = {}): Pool => {
   // The worker's wait between passes, which a wake cuts short.
   let nap = new AbortController()
   type Pass = { started: Promise<void>[]; more: boolean }
-  let due = async (g: Access): Promise<Pass> => {
+  let due = async (g: Access, budget = page): Promise<Pass> => {
     let now = clock()
     let started: Promise<void>[] = []
+    let claims: { eid: Eid; row: Comp; mine: Comp }[] = []
+    let reserved = 0
     full = false
     // Asked once a pass per owner: a process that ended without letting go
     // holds nothing, whatever its claims' expiry says.
@@ -534,8 +571,22 @@ export let pool = (ctx: Ctx, opts: Partial<PoolOpts> = {}): Pool => {
         ...disabled,
       ]),
     ]
-    if (!member || running.size >= max || !names.length) {
-      full = member && running.size >= max
+    if (!member || running.size + admitting >= max || !names.length) {
+      full = member && running.size + admitting >= max
+      return { started, more: false }
+    }
+    if (!budget) return { started, more: true }
+    // An empty pool needs one bounded identity seek, regardless of how many
+    // handlers this host serves. Pending work still uses its fair windows.
+    if (
+      !(await g.read(
+        and(eq(`${EFFECT}.state`, 'pending'), window(1), fields('entity.eid')),
+        { storageOrder: true },
+      )).length
+    ) {
+      cursors.clear()
+      exhausted.clear()
+      scanStarted = false
       return { started, more: false }
     }
     let examine = async (b: Bundle) => {
@@ -576,44 +627,85 @@ export let pool = (ctx: Ctx, opts: Partial<PoolOpts> = {}): Pool => {
         await swap(g, eid, row, { state: 'failed', error, ...free })
         return
       }
+      // Reads and owner checks can yield to a writer that fills a slot.
+      // Reserve against the current admission count, not the scan's earlier one.
+      if (!member || running.size + admitting >= max) return
       let mine = { attempts: attempts + 1, next: null, ...claim() }
-      if (await swap(g, eid, row, mine)) {
+      claims.push({ eid, row, mine })
+      admitting++
+      reserved++
+    }
+    let drained = new Set<string>()
+    try {
+      while (
+        member && running.size + admitting < max && budget > 0 &&
+        drained.size < names.length
+      ) {
+        let name = names[turn % names.length]
+        turn = (turn + 1) % names.length
+        if (drained.has(name)) continue
+        // One candidate, then the next handler's, not the rest of this backlog.
+        let cursor = cursors.get(name)
+        let [b] = await g.read(
+          and(
+            eq(`${EFFECT}.handler`, name),
+            eq(`${EFFECT}.state`, 'pending'),
+            window(1),
+            ...(cursor ? [cursorAfter(cursor)] : []),
+          ),
+          { storageOrder: true },
+        )
+        // Revisit a drained handler's head next pass: a writer can owe it a
+        // new run while another handler still has thousands left to examine.
+        // Finding it empty spends no budget, so idle handlers cannot crowd a
+        // backlog out of the pass.
+        if (!b) {
+          exhausted.add(name)
+          cursors.delete(name)
+          drained.add(name)
+          continue
+        }
+        budget--
+        exhausted.delete(name)
+        cursors.set(name, b.entity.eid)
+        await examine(b)
+      }
+      if (!member) {
+        cursors.clear()
+        exhausted.clear()
+        return { started, more: false }
+      }
+      let begin = ({ eid, row, mine }: typeof claims[number]) => {
+        admitting--
+        reserved--
         started.push(start(g, eid, { ...row, ...mine }))
       }
-    }
-    let budget = page
-    let drained = new Set<string>()
-    while (
-      member && running.size < max && budget > 0 && drained.size < names.length
-    ) {
-      let name = names[turn % names.length]
-      turn = (turn + 1) % names.length
-      if (drained.has(name)) continue
-      // One candidate, then the next handler's, not the rest of this backlog.
-      let cursor = cursors.get(name)
-      let [b] = await g.read(
-        and(
-          eq(`${EFFECT}.handler`, name),
-          eq(`${EFFECT}.state`, 'pending'),
-          window(1),
-          ...(cursor ? [cursorAfter(cursor)] : []),
-        ),
-        { storageOrder: true },
-      )
-      // Revisit a drained handler's head next pass: a writer can owe it a
-      // new run while another handler still has thousands left to examine.
-      // Finding it empty spends no budget, so idle handlers cannot crowd a
-      // backlog out of the pass.
-      if (!b) {
-        exhausted.add(name)
-        cursors.delete(name)
-        drained.add(name)
-        continue
+      if (claims.length == 1) {
+        let c = claims[0]
+        if (await swap(g, c.eid, c.row, c.mine)) begin(c)
+      } else if (claims.length) {
+        let committed: Set<Eid> | undefined
+        try {
+          let applied = await g.apply(
+            claims.map(({ eid, row, mine }) => changing(eid, row, mine)),
+            { trusted: true },
+          )
+          committed = new Set(applied.map((b) => b.entity.eid))
+        } catch (error) {
+          if (!(error instanceof Stale)) throw error
+        }
+        if (committed) {
+          for (let c of claims) if (committed.has(c.eid)) begin(c)
+        } else {
+          // Another worker may have taken just one row. Its stale guard
+          // rolls back the batch; the remaining claims can still proceed.
+          for (let c of claims) {
+            if (await swap(g, c.eid, c.row, c.mine)) begin(c)
+          }
+        }
       }
-      budget--
-      exhausted.delete(name)
-      cursors.set(name, b.entity.eid)
-      await examine(b)
+    } finally {
+      admitting -= reserved
     }
     full = member && running.size >= max
     scanStarted ||= started.length > 0
@@ -633,8 +725,8 @@ export let pool = (ctx: Ctx, opts: Partial<PoolOpts> = {}): Pool => {
   // through attempt persistence and local admission: another pass must see the
   // running set before reading an attempt just written by this pass.
   let passing: Promise<unknown> = Promise.resolve()
-  let pass = (g: Access): Promise<Pass> => {
-    let next = passing.then(() => due(g))
+  let pass = (g: Access, budget = page): Promise<Pass> => {
+    let next = passing.then(() => due(g, budget))
     passing = next.catch(() => {})
     return next
   }
@@ -728,7 +820,7 @@ export let pool = (ctx: Ctx, opts: Partial<PoolOpts> = {}): Pool => {
 
   // The worker that stays up: present, a pass, the claims renewed, a wait.
   // Its presence lease goes with it, so nobody waits out its expiry.
-  let stay = async (g: Access, signal: AbortSignal) => {
+  let stay = async (g: Access, signal: AbortSignal, budget = page) => {
     let seat = `${POOL}/${me}`
     let present = !opts.singleOwner && !!opts.owner && !!g.vocab.comp(LEASE) &&
       ctx.slots().every((s) => !s.effect || disabled.has(s.id) || !!s.run)
@@ -745,7 +837,8 @@ export let pool = (ctx: Ctx, opts: Partial<PoolOpts> = {}): Pool => {
               until = clock() + HOLD
             }
           }
-          more = (await pass(g)).more
+          more = (await pass(g, budget)).more
+          budget = page
           await renew(g)
           if (!opts.singleOwner && clock() >= expires) {
             await expireDaily(g, { owner: me, now: clock, signal })
@@ -778,34 +871,68 @@ export let pool = (ctx: Ctx, opts: Partial<PoolOpts> = {}): Pool => {
   // Start-up work: a run of each `start` effect this process has the code
   // for, its target this process. The host may owe these explicitly rather
   // than on joining, so a store waking need not be a store starting.
-  let startup = async (g: Access) => {
+  let starting = async (
+    g: Access,
+    immediate = false,
+  ): Promise<Promise<void>[]> => {
     let at = stamp(clock())
+    let mine: Owed[] = []
     let rows: Bundle[] = ctx.slots()
       .filter((s) => s.kind == 'started' && s.run)
-      .map((s) => ({
-        entity: { eid: mint() },
-        [EFFECT]: {
+      .map((s) => {
+        let ours = immediate && member && !disabled.has(s.id) && limit(s) > 0 &&
+          mine.length < page &&
+          running.size + admitting + mine.length < max
+        let eid = mint()
+        let row: Comp = {
           handler: s.id,
           target: me,
           kind: 'started',
           state: 'pending',
-          attempts: 0,
+          attempts: ours ? 1 : 0,
           at,
           generation: 0,
-        },
-      }))
-    if (rows.length) await g.apply(rows, { trusted: true })
+          ...(ours ? claim() : {}),
+        }
+        if (ours) mine.push({ eid, row })
+        return { entity: { eid }, [EFFECT]: row }
+      })
+    let reserved = mine.length
+    admitting += reserved
+    try {
+      if (!rows.length) return []
+      let applied = await g.apply(rows, { trusted: true })
+      let committed = new Set(applied.map((b) => b.entity.eid))
+      return mine.flatMap(({ eid, row }) => {
+        if (!committed.has(eid)) return []
+        admitting--
+        reserved--
+        return [start(g, eid, row)]
+      })
+    } finally {
+      admitting -= reserved
+    }
+  }
+  let startup = async (g: Access): Promise<void> => {
+    await starting(g)
   }
 
   // Joining the pool, once: this process claims what it writes from now on,
   // it owes start-up work where the host chose joining, and what the declared
   // sweeps select is owed a run in a shared store.
   let joined = false
-  let join = async (g: Access) => {
+  let join = async (
+    g: Access,
+    requested = false,
+    immediate = true,
+  ): Promise<Promise<void>[]> => {
     member = true
-    if (joined) return
+    if (joined) return requested ? starting(g, immediate) : []
     joined = true
-    if ((opts.startup ?? (opts.singleOwner ? 'manual' : 'join')) == 'join') {
+    if (
+      !requested &&
+      (opts.startup ?? (opts.singleOwner ? 'manual' : 'join')) == 'join'
+    ) {
       try {
         await startup(g)
       } catch (err) {
@@ -815,8 +942,8 @@ export let pool = (ctx: Ctx, opts: Partial<PoolOpts> = {}): Pool => {
         })
       }
     }
-    if (opts.singleOwner) return
-    await sweep(g)
+    if (!opts.singleOwner) await sweep(g)
+    return requested ? starting(g, immediate) : []
   }
 
   // Waiting on what it started, a worker keeps its claims: renewed as they
@@ -824,7 +951,13 @@ export let pool = (ctx: Ctx, opts: Partial<PoolOpts> = {}): Pool => {
   // its lease is never taken by another worker while it is going.
   let beat = Math.max(1, Math.min(CAP, Math.floor(hold / 4)))
   let idle = async () => {
-    while (running.size || (loop?.signal.aborted && loop.done)) {
+    for (;;) {
+      // Discovery and claim persistence precede running.set. Wait for the
+      // current admission pass before deciding whether anything is running.
+      let pending = passing
+      await pending
+      if (pending !== passing) continue
+      if (!running.size && !(loop?.signal.aborted && loop.done)) return
       let stopping = loop?.signal.aborted ? loop.done : undefined
       if (stopping) loop = undefined
       let settled = Promise.allSettled([
@@ -858,7 +991,7 @@ export let pool = (ctx: Ctx, opts: Partial<PoolOpts> = {}): Pool => {
         if (seen.has(key)) continue
         seen.add(key)
         let ours = member && !opts.defer && !!s.run &&
-          running.size + mine.length < max
+          running.size + admitting + mine.length < max
         let row: Comp = {
           handler: s.id,
           target: e.entity.eid,
@@ -885,7 +1018,9 @@ export let pool = (ctx: Ctx, opts: Partial<PoolOpts> = {}): Pool => {
       }
     },
     startup,
-    work: async (g, signal = AbortSignal.abort(), passes = Infinity) => {
+    work: async (g, signal = AbortSignal.abort(), options = Infinity) => {
+      let requested = typeof options == 'number' ? { passes: options } : options
+      let passes = requested.passes ?? Infinity
       graph = g
       exhausted.clear()
       scanStarted = false
@@ -894,11 +1029,16 @@ export let pool = (ctx: Ctx, opts: Partial<PoolOpts> = {}): Pool => {
           !opts.singleOwner &&
           await working(g, { except: me, now: clock(), gone: opts.gone })
         ) {
+          if (requested.startup) await startup(g)
           return
         }
-        await join(g)
+        let opening = await join(g, requested.startup, passes > 0)
         for (let n = 0; n < passes; n++) {
-          let { started, more } = await pass(g)
+          let { started, more } = await pass(
+            g,
+            n ? page : page - opening.length,
+          )
+          if (!n && opening.length) started = [...opening, ...started]
           if (!started.length && !more && !running.size) break
           // A drain refills a slot as soon as its run ends, even while a
           // slower run still holds another. A finite pass settles its batch
@@ -920,10 +1060,10 @@ export let pool = (ctx: Ctx, opts: Partial<PoolOpts> = {}): Pool => {
       }
       // Leaving is the moment the signal aborts, not the end of the pass in
       // flight: what this process commits from then on is the others'.
-      let joining = join(g)
+      let joining = join(g, requested.startup)
       signal.addEventListener('abort', () => member = false, { once: true })
-      await joining
-      let done = stay(g, signal)
+      let opening = await joining
+      let done = stay(g, signal, page - opening.length)
       loop = { done, signal }
       await done
     },

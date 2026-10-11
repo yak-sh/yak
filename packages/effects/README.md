@@ -361,8 +361,10 @@ commit. `defer: true` leaves those runs for `work`; `max` limits simultaneous
 handlers (`MAX`, 64, unless told), so a backlog such as a start-up sweep's
 thousands starts a slot at a time, and a run ending while every slot is taken
 wakes the worker to fill it. Other processes' runs are picked up on the next
-pass, normally at most a second away. `wake` starts that pass sooner; `nudge`
-can notify another worker after a commit leaves runs unclaimed.
+pass, normally at most a second away. `wake` starts that pass sooner. `nudge`
+notifies the host once after a commit owes declared work, whether claimed here
+or left pending. A host can keep its `work` promise alive through handler
+completion and wake another worker to drain the remaining runs.
 
 Each pass examines at most 32 candidate runs, one candidate per handler at a
 time. Selection rotates between handled and explicitly disabled handlers; one
@@ -403,6 +405,13 @@ non-idempotent interruption handling still apply. `max`, `defer`, and
 `Attempt.progressed` keep their meaning. Overlapping calls to `work` on the same
 registry share its running set.
 
+To record and deliver start-up runs together, call
+`work(g, undefined, {startup: true, passes: 1})`. Free slots receive their
+attempts in the same commit as their new runs, before handlers start; overflow
+remains pending for a later pass. Start-up admission shares the first pass's
+bounded window. `startup(g)` continues to record runs without invoking handlers.
+A numeric third argument to `work` still bounds its discovery passes.
+
 ```ts
 import { graph } from '@yaks/graph'
 import { loadVocab } from '@yaks/vocab'
@@ -438,6 +447,9 @@ await fx.work(g) // An empty alarm owes nothing and writes nothing.
 equal(sent, 1)
 equal(prepared, 1)
 equal(await g.read('.lease'), [])
+await fx.work(g, undefined, { startup: true, passes: 1 })
+equal(prepared, 2)
+equal(sent, 1)
 ```
 
 ### Attempts and retries

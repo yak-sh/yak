@@ -46,7 +46,7 @@ export let doom = (driver: Driver, vocab: Vocab, eids: string[]): Doom => {
         let rung = base + Number(r.depth)
         depth.set(eid, rung)
         gone.push({ eid, depth: rung })
-        fresh.push(eid)
+        if (base || !seed.includes(eid)) fresh.push(eid)
         least = Math.min(least, rung)
       }
     }
