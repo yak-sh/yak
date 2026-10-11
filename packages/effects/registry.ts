@@ -212,6 +212,11 @@ export type Effects = Plugin & {
   settle: (g: Access, handler: string) => Promise<number>
   /** Documentation derived from the registered slots. */
   docs: () => Description[]
+  /** Persist a fresh run for each handled start-up effect, targeting owner,
+   * without joining or draining the pool. The host calls this when its
+   * start-up work is owed; persistence failures reject. Does nothing where
+   * the vocabulary keeps no `effect` rows. */
+  startup: (g: Access) => Promise<void>
   /** Work the pool: claim what is owed and run it (./pool.ts). A live signal
    * keeps working until it aborts; an aborted one is one pass, taken only
    * where no process that stays up is working the pool. Does nothing where
@@ -863,6 +868,7 @@ export let effects = (vocab: Vocab, opts: Opts = {}): Effects => {
       })
     },
     docs: () => describe(slots),
+    startup: (g) => pooled?.startup(g) ?? Promise.resolve(),
     work: (g, signal, passes) =>
       pooled?.work(g, signal, passes) ?? Promise.resolve(),
     wake: () => pooled?.wake(),

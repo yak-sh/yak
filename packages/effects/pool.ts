@@ -164,10 +164,14 @@ export let POOL = '@yaks/effects'
 /** How a pool is worked. */
 export type PoolOpts = {
   /** One process exclusively owns this store (for example a Durable Object).
-   * Drain recorded runs without claims, presence leases, start-up effects,
-   * sweeps, or expiration duties. Persist attempts and outcomes for crash
+   * Drain recorded runs without claims, presence leases, sweeps, or expiration
+   * duties. Persist attempts and outcomes for crash
    * recovery and retries. Never enable this for a shared box store. */
   singleOwner?: boolean
+  /** When start-up runs are owed: on joining the pool (`join`, the default
+   * for shared workers), or only when the host calls startup (`manual`, the
+   * default for single-owner stores). Sweeps keep their joining behavior. */
+  startup?: 'join' | 'manual'
   /** Effects explicitly disabled by this configuration, whose unclaimed runs owe no work. */
   disabled?: string[]
   /** who this process is: what its claims and its presence lease name. A
@@ -225,6 +229,10 @@ export type Pool = {
   /** Start what this process claimed as it wrote it, once the commit is
    * done. */
   start: (owed: Owed[]) => void
+  /** Persist handled start-up runs without joining or draining the pool.
+   * Each call owes a fresh run, targeting owner; the host chooses when.
+   * A failed write rejects so the host can retry its start-up pass. */
+  startup: (g: Access) => Promise<void>
   /** Work the pool: with a live signal, until it aborts; with an aborted
    * one, pass after pass until nothing is left to start, giving way to the
    * host between them — and none at all where a process that stays up is
@@ -777,10 +785,9 @@ export let pool = (ctx: Ctx, opts: Partial<PoolOpts> = {}): Pool => {
   }
 
   // Start-up work: a run of each `start` effect this process has the code
-  // for, its target this process. Owed here, when a process starts working
-  // the effects, and never by a commit, so a command passing through, which
-  // never joins, owes none.
-  let begin = async (g: Access) => {
+  // for, its target this process. The host may owe these explicitly rather
+  // than on joining, so a store waking need not be a store starting.
+  let startup = async (g: Access) => {
     let at = stamp(clock())
     let rows: Bundle[] = ctx.slots()
       .filter((s) => s.kind == 'started' && s.run)
@@ -796,26 +803,28 @@ export let pool = (ctx: Ctx, opts: Partial<PoolOpts> = {}): Pool => {
           generation: 0,
         },
       }))
-    try {
-      if (rows.length) await g.apply(rows, { trusted: true })
-    } catch (err) {
-      ctx.report(err, {
-        handler: POOL,
-        event: { kind: 'started', entity: { eid: me }, name: EFFECT },
-      })
-    }
+    if (rows.length) await g.apply(rows, { trusted: true })
   }
 
   // Joining the pool, once: this process claims what it writes from now on,
-  // it owes its start-up work, and what the declared sweeps select is owed a
-  // run — how a worker coming up finds what nobody wrote down.
+  // it owes start-up work where the host chose joining, and what the declared
+  // sweeps select is owed a run in a shared store.
   let joined = false
   let join = async (g: Access) => {
     member = true
     if (joined) return
     joined = true
+    if ((opts.startup ?? (opts.singleOwner ? 'manual' : 'join')) == 'join') {
+      try {
+        await startup(g)
+      } catch (err) {
+        ctx.report(err, {
+          handler: POOL,
+          event: { kind: 'started', entity: { eid: me }, name: EFFECT },
+        })
+      }
+    }
     if (opts.singleOwner) return
-    await begin(g)
     await sweep(g)
   }
 
@@ -884,6 +893,7 @@ export let pool = (ctx: Ctx, opts: Partial<PoolOpts> = {}): Pool => {
         unlink(graph!, run)
       }
     },
+    startup,
     work: async (g, signal = AbortSignal.abort(), passes = Infinity) => {
       graph = g
       exhausted.clear()

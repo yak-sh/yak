@@ -394,13 +394,14 @@ claims. Abort the live `work` signal to end its loop.
 including its effect execution. Set `singleOwner: true` only for such a store,
 for example a Durable Object. Shared box workers leave this option unset.
 
-`work` drains recorded runs without claims or presence leases. It owes no
-start-up effects or sweeps and runs no expiration duty. A host calls `work` on
-writes and alarms, not on reads; the host supplies any deployment work itself.
-Attempts are persisted before handler invocation and outcomes afterwards, so
-crash recovery, retry backoff, attempt limits and non-idempotent interruption
-handling still apply. `max`, `defer`, and `Attempt.progressed` keep their
-meaning. Overlapping calls to `work` on the same registry share its running set.
+`work` drains recorded runs without claims or presence leases. By default it
+owes no start-up effects or sweeps and runs no expiration duty. A host calls
+`work` on writes and alarms, not on reads; it calls `startup` when a deployment
+owes start-up runs. Attempts are persisted before handler invocation and
+outcomes afterwards, so crash recovery, retry backoff, attempt limits and
+non-idempotent interruption handling still apply. `max`, `defer`, and
+`Attempt.progressed` keep their meaning. Overlapping calls to `work` on the same
+registry share its running set.
 
 ```ts
 import { graph } from '@yaks/graph'
@@ -411,19 +412,31 @@ import { equal } from '@yaks/testing'
 
 let vocab = loadVocab([effectDoc, {
   $defs: {
+    store: { component: true },
     order: { component: true },
     send_receipt: { effect: true, created: ['order'] },
+    prepare: { effect: true, start: true },
   },
 }])
-let fx = effects(vocab, { singleOwner: true, defer: true })
+let fx = effects(vocab, { singleOwner: true, defer: true, owner: 'store-1' })
 let g = graph({ storage: ram(vocab), vocab, plugins: [fx] })
-let sent = 0
-fx.handle({ send_receipt: () => void sent++ })
-await g.apply([{ entity: { eid: 'order-1' }, order: {} }])
+let sent = 0, prepared = 0
+fx.handle({
+  send_receipt: () => void sent++,
+  prepare: () => void prepared++,
+})
+await g.apply([
+  { entity: { eid: 'store-1' }, store: {} },
+  { entity: { eid: 'order-1' }, order: {} },
+])
+await fx.startup(g) // The host's deployment pass owes these runs.
+equal(prepared, 0)
 await fx.work(g)
 equal(sent, 1)
+equal(prepared, 1)
 await fx.work(g) // An empty alarm owes nothing and writes nothing.
 equal(sent, 1)
+equal(prepared, 1)
 equal(await g.read('.lease'), [])
 ```
 
@@ -531,7 +544,15 @@ worker first joins. It requires a `created` trigger. Each effect-target pair
 uses one derived eid, so workers sweeping together owe one run. A sweep can find
 work no commit recorded.
 
-`start: true` owes each joining worker one `started` run, targeting its `owner`.
+`start: true` owes each joining shared worker one `started` run, targeting its
+`owner`. `startup: 'manual'` leaves that timing to the host; it is the default
+with `singleOwner: true`. `startup: 'join'` chooses joining explicitly. Each
+`fx.startup(g)` call persists a fresh run for every handled start-up effect,
+without joining, sweeping, or executing handlers. A persistence failure rejects
+the call; after it succeeds, `work` executes those runs with ordinary attempts
+and retries. The host keeps track of which deployments owe the call. Without the
+`effect` component, `startup` does nothing.
+
 Commit-triggered runs can be gated with `active`, a query that must match an
 entity; sweeps use their own query. A `target` query limits triggers to subjects
 matching before or after the write, including removals and moves out of scope.
