@@ -1,6 +1,7 @@
 /** Workload and runner behavior through their public interfaces. Fixtures keep
  * filesystem and host effects in memory so no throughput work runs as a test. */
 import { equal, match, ok, test, throws } from '@yaks/testing'
+import { assertThrows } from '@std/assert'
 import {
   baseline,
   type Bench,
@@ -270,13 +271,7 @@ let resolved = await Promise.all(
       mode: 'accept',
       tolerance: .25,
     })
-    return {
-      f,
-      workload,
-      options,
-      current,
-      base: JSON.parse(f.saved.get('baseline')!),
-    }
+    return { current, base: JSON.parse(f.saved.get('baseline')!) }
   }),
 )
 let unresolved = fixture([{ name: 'work', unit: 'ms', sample: () => 2106 }])
@@ -286,29 +281,36 @@ let unresolvedRun = await run(unresolved.suite, {
 })
 let unresolvedBase = baseline(unresolvedRun, .25)
 
-test('sample resolution rounds tolerance boundaries and must match the baseline', async () => {
-  for (let { f, workload, options, current, base } of resolved) {
+for (let { current, base } of resolved) {
+  let name =
+    'sample resolution rounds tolerance boundaries and must match the baseline'
+  if (current.benches[0].better == 'higher') name += ' (higher)'
+  test(name, () => {
     equal(base.benches[0].resolution, 1)
     let measured = current.benches[0]
-    measured.median = workload.better == 'lower' ? 2633 : 1580
+    measured.median = measured.better == 'lower' ? 2633 : 1580
     equal(compare(base, current), [])
-    measured.median += workload.better == 'lower' ? 1 : -1
+    measured.median += measured.better == 'lower' ? 1 : -1
     equal(compare(base, current).map((r) => r.name), ['work'])
     for (let resolution of [undefined, 2]) {
       measured.resolution = resolution
-      await throws(() => compare(base, current), 'resolution')
+      assertThrows(() => compare(base, current), Error, 'resolution')
     }
+    // Invalid values must fail validation, before compatibility can mask them.
     for (let resolution of [0, -1, Infinity, NaN]) {
-      workload.resolution = resolution
-      await throws(
-        () => run(f.suite, { ...options, mode: 'check' }),
-        'resolution',
+      measured.resolution = resolution
+      assertThrows(
+        () => compare(base, current),
+        Error,
+        'finite, positive resolution',
       )
     }
-  }
-  unresolvedRun.benches[0].median = 2633
-  equal(compare(unresolvedBase, unresolvedRun).map((r) => r.name), ['work'])
-})
+    if (measured.better == 'lower') {
+      unresolvedRun.benches[0].median = 2633
+      equal(compare(unresolvedBase, unresolvedRun).map((r) => r.name), ['work'])
+    }
+  })
+}
 
 test('timed benches sample sync and async work with untimed setup and cleanup', async () => {
   for (let async of [false, true]) {
