@@ -72,8 +72,13 @@ test('workerd is held by its wall alone', () => {
 test('a doctest is listed by its code, not its line', () => {
   let at = (name: string) => ({ file: 'a.ts', name })
   equal(
-    listed([at('a.ts:12 f(1) -> 2'), at('a.ts:30 f(1) -> 2'), at('x')]),
-    ['a.ts: f(1) -> 2', 'a.ts: f(1) -> 2', 'x'],
+    listed([
+      at('a.ts:12 f(1) -> 2'),
+      at('a.ts:30 f(1) -> 2'),
+      at('a.ts:40 abcdef012345'),
+      at('x'),
+    ]),
+    ['a.ts: f(1) -> 2', 'a.ts: f(1) -> 2', 'a.ts: abcdef012345', 'x'],
   )
 })
 

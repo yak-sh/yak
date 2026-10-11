@@ -34,7 +34,7 @@ export let fenceName = async (page: string, fence: Fence) => {
     new Uint8Array(digest),
     (b) => b.toString(16).padStart(2, '0'),
   ).join('')
-  return `${page}:${fence.line} block sha256:${hash}`
+  return `${page}:${fence.line} ${hash.slice(0, 12)}`
 }
 
 let DOCTEST = /^\s*\/\/( ?)\/ (.*)$/
