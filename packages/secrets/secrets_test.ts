@@ -4,12 +4,7 @@ import { docDoc } from '@yaks/doc'
 // behind.
 
 import { test } from '@yaks/testing'
-import {
-  assert,
-  assertEquals,
-  assertNotEquals,
-  assertRejects,
-} from '@std/assert'
+import { assert, assertEquals, assertNotEquals } from '@std/assert'
 import { FakeTime } from '@std/testing/time'
 import { provisionalDoc } from '@yaks/effects'
 import { type Bundle, type Graph, graph } from '@yaks/graph'
@@ -126,17 +121,24 @@ test('one value under two names is two handles', async () => {
   assertNotEquals((await row(g, 'A'))!.value, (await row(g, 'B'))!.value)
 })
 
-test('the sentinel is the handle hashed under the vault salt, and survives a rotation', async () => {
-  let { g, vault } = setup()
-  assertEquals(await sentinelOf(vault, 'A'), undefined)
-  await g.apply([sealed('A', 'one')])
-  let handle = (await row(g, 'A'))!.value
-  let said = (await sentinelOf(vault, 'A'))!
-  assert(said.startsWith(SENTINEL))
-  assertEquals(said, await sentinel(await vault.salt(), handle))
-  assertNotEquals(await sentinel(await ramVault().salt(), handle), said)
-  await g.apply([sealed('A', 'two')])
-  assertEquals(await sentinelOf(vault, 'A'), said)
+let sentinelFixture = setup()
+let missingSentinel = await sentinelOf(sentinelFixture.vault, 'A')
+await sentinelFixture.g.apply([sealed('A', 'one')])
+let sentinelHandle = (await row(sentinelFixture.g, 'A'))!.value
+let expectedSentinel = await sentinel(
+  await sentinelFixture.vault.salt(),
+  sentinelHandle,
+)
+let otherSentinel = await sentinel(await ramVault().salt(), sentinelHandle)
+let firstSentinel = (await sentinelOf(sentinelFixture.vault, 'A'))!
+await sentinelFixture.g.apply([sealed('A', 'two')])
+let rotatedSentinel = await sentinelOf(sentinelFixture.vault, 'A')
+test('the sentinel is the handle hashed under the vault salt, and survives a rotation', () => {
+  assertEquals(missingSentinel, undefined)
+  assert(firstSentinel.startsWith(SENTINEL))
+  assertEquals(firstSentinel, expectedSentinel)
+  assertNotEquals(otherSentinel, firstSentinel)
+  assertEquals(rotatedSentinel, firstSentinel)
 })
 
 test('a swap replaces the sentinels it has values for, and nothing else', async () => {
@@ -159,21 +161,26 @@ test('deleting a secret, or its component, drops it from the vault', async () =>
   assertEquals(await reveal(vault, 'A', none), undefined)
 })
 
-test('a dry run seals nothing, and neither does a refused batch', async () => {
-  let { g, vault } = setup()
-  await g.apply([sealed('A', 'one')])
-  await g.apply([sealed('A', 'two'), sealed('B', 'three')], { check: true })
-  assertEquals(await reveal(vault, 'A'), 'one')
-  assertEquals(vault.read(secretEid('B')), undefined)
-  await g.apply([unsealed('A')], { check: true })
-  assertEquals(await reveal(vault, 'A'), 'one')
-  await assertRejects(() =>
-    Promise.resolve(g.apply([{
-      ...sealed('A', 'two'),
-      $was: { secret: { value: 'not what it holds' } },
-    }]))
-  )
-  assertEquals(await reveal(vault, 'A'), 'one')
+let rehearsed = setup()
+await rehearsed.g.apply([sealed('A', 'one')])
+await rehearsed.g.apply([sealed('A', 'two'), sealed('B', 'three')], {
+  check: true,
+})
+let checkedValue = await reveal(rehearsed.vault, 'A')
+let checkedNew = rehearsed.vault.read(secretEid('B'))
+await rehearsed.g.apply([unsealed('A')], { check: true })
+let checkedUnseal = await reveal(rehearsed.vault, 'A')
+let refusedSeal = await Promise.resolve(rehearsed.g.apply([{
+  ...sealed('A', 'two'),
+  $was: { secret: { value: 'not what it holds' } },
+}])).then(() => undefined, (error: unknown) => error)
+let refusedValue = await reveal(rehearsed.vault, 'A')
+test('a dry run seals nothing, and neither does a refused batch', () => {
+  assertEquals(checkedValue, 'one')
+  assertEquals(checkedNew, undefined)
+  assertEquals(checkedUnseal, 'one')
+  assert(refusedSeal instanceof Error)
+  assertEquals(refusedValue, 'one')
 })
 
 test('the writer waits for the seal; a reader in between sees the mark', async () => {
@@ -309,15 +316,24 @@ test('records change under the lock and are written back through the graph', asy
   assert(isHandle((await row(g, 'count a'))!.value))
 })
 
+let documented = setup()
+let purpose = { title: 'Service access', body: 'Used by the mail service.' }
+let documentedOut = await documented.g.apply([{
+  ...sealed('DOCUMENTED', 'fixture-token'),
+  doc: purpose,
+}])
 test('a secret can carry optional purpose documentation without changing its identity', async () => {
-  let { g, vault } = setup()
-  let doc = { title: 'Service access', body: 'Used by the mail service.' }
-  let out = await g.apply([{ ...sealed('DOCUMENTED', 'fixture-token'), doc }])
+  let { g, vault } = documented
+  let doc = purpose
+  let out = documentedOut
   assertEquals(out[0].entity.eid, secretEid('DOCUMENTED'))
-  assertEquals((await whole(g, 'DOCUMENTED'))!.doc, doc)
+  assertEquals((await g.get([secretEid('DOCUMENTED')], ['doc']))[0].doc, doc)
   assertEquals(await reveal(vault, 'DOCUMENTED'), 'fixture-token')
   await g.apply([sealed('DOCUMENTED', 'rotated-fixture')])
-  assertEquals((await whole(g, 'DOCUMENTED'))!.doc, doc)
+  assertEquals((await g.get([secretEid('DOCUMENTED')], ['doc']))[0].doc, doc)
   await g.apply([sealed('UNDOCUMENTED', 'fixture-token')])
-  assertEquals((await whole(g, 'UNDOCUMENTED'))!.doc, undefined)
+  assertEquals(
+    (await g.get([secretEid('UNDOCUMENTED')], ['doc']))[0].doc,
+    undefined,
+  )
 })
