@@ -52,9 +52,18 @@ test('an object row is its type, its size and its bytes', async () => {
   assertEquals(comp(row, 'gitobj'), { type: 'blob', size: 6 })
 })
 
+// Index the fixed manifest once; these tests read its stored names and bytes.
+let indexed = fixture()
+let indexedTree = await indexed.git.files(deployed(indexed.bytes))
+let indexedCommit = await indexed.git.commit({
+  tree: indexedTree,
+  author: AUTHOR,
+  committer: COMMITTER,
+  message: 'deploy 1',
+})
+
 test('the SHA-256 name is a key off the SHA-1 one', async () => {
-  let { g, git, bytes } = fixture()
-  await git.files(deployed(bytes))
+  let { g } = indexed
   let [key] = await g.read(`.compat&.key.of=${HELLO_OID}`)
   assertEquals(key.entity.eid, keyEid(COMPAT, HELLO_OID256))
   assertEquals(comp(key, 'key'), { of: HELLO_OID, value: HELLO_OID256 })
@@ -186,14 +195,8 @@ test('a commit chain is the ids git takes, and a parent walk', async () => {
 })
 
 test('a commit body is in the store, verbatim', async () => {
-  let { g, git, bytes } = fixture()
-  let tree = await git.files(deployed(bytes))
-  let one = await git.commit({
-    tree,
-    author: AUTHOR,
-    committer: COMMITTER,
-    message: 'deploy 1',
-  })
+  let { g, bytes } = indexed
+  let one = indexedCommit
   let [row] = await g.read(`.gitobj.type=commit&?blob`)
   let body = await bytes.get(String(comp(row, 'blob').sha))
   assertEquals(row.entity.eid, one.oid)
