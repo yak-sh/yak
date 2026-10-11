@@ -1,9 +1,11 @@
 // Local reproduction of a served Vale release that still owns its old
 // autonomous calls. Platform deployment alone does not replace app declarations.
+import { index, repeatFixture } from './repeat_fixture.ts'
+import { fn, lit, op } from '@yaks/sql'
 import { type State, Store } from './graph.ts'
 import { settleWorld, worldBindings } from './play_world_fixture.ts'
 import { parseTools } from '@yaks/tools/declared'
-import { type Bundle, graph, identityEid } from '@yaks/graph'
+import { graph, identityEid } from '@yaks/graph'
 import { described } from '@yaks/code/described'
 import { edgeEid } from '@yaks/edge'
 import { driver, profile, type Summary } from '@yaks/durable-object'
@@ -138,19 +140,21 @@ export let productionGap = async (
   )
   let d = driver(storage)
   d.query({ t: 'pragma', name: 'optimize', value: 0x10002 })
-  for (let n = 0; n < history; n += 500) {
-    await g.storage.tx((tx) =>
-      tx.patch(
-        Array.from({ length: Math.min(500, history - n) }, (_, j): Bundle => ({
-          entity: { eid: crypto.randomUUID() },
-          entry: { session: retired, seq: n + j + 1 },
-          content: { body: 'Synthetic retained transcript' },
-          cost: { dollars: 0.001 },
-          created: { at: '2026-01-01T00:00:00Z', by: person },
-        })),
-      )
-    )
-  }
+  let retained = crypto.randomUUID()
+  await repeatFixture(
+    g,
+    storage,
+    history,
+    {
+      entity: { eid: retained },
+      entry: { session: retired, seq: 1 },
+      content: { body: 'Synthetic retained transcript' },
+      cost: { dollars: 0.001 },
+      created: { at: '2026-01-01T00:00:00Z', by: person },
+    },
+    fn('printf', lit(`${retained.slice(0, 24)}%012d`), index),
+    { entry: { seq: op('+', index, lit(1)) } },
+  )
   let comps = Object.entries(words.$defs).filter(([, def]) =>
     'component' in def && def.component
   ).map(([name]) => name)
@@ -191,14 +195,25 @@ export let productionGap = async (
     )
     // Retained ended replies in each *active* villager session are absent from
     // the earlier fixture. They exercise latest-turn/window/model joins.
-    await g.storage.tx((tx) =>
-      tx.patch(Array.from({ length: turns }, (_, j): Bundle => ({
-        entity: { eid: crypto.randomUUID() },
-        entry: { session: id, ...unsequenced ? {} : { seq: j + 1 } },
-        content: { body: 'A synthetic past villager turn.' },
-        ...(j % 2 ? { stop: {} } : { notice: {} }),
-      })))
-    )
+    for (let parity of [0, 1]) {
+      let count = Math.ceil((turns - parity) / 2)
+      let retained = crypto.randomUUID()
+      await repeatFixture(
+        g,
+        storage,
+        count,
+        {
+          entity: { eid: retained },
+          entry: { session: id, ...unsequenced ? {} : { seq: parity + 1 } },
+          content: { body: 'A synthetic past villager turn.' },
+          ...(parity ? { stop: {} } : { notice: {} }),
+        },
+        fn('printf', lit(`${retained.slice(0, 24)}%012d`), index),
+        unsequenced ? {} : {
+          entry: { seq: op('+', op('*', index, lit(2)), lit(parity + 1)) },
+        },
+      )
+    }
   }
   if (outputs) {
     let builder = crypto.randomUUID()

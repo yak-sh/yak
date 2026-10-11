@@ -9,6 +9,7 @@
 import { assert, assertEquals } from '@std/assert'
 import { test } from '@yaks/testing'
 import { workerd } from './probe.ts'
+import { playReport } from './play_report_fixture.ts'
 import type { Report } from './play_cost_fixture.ts'
 
 /** Rows per player-minute: the owner's bar, and what is held until then. */
@@ -16,10 +17,7 @@ let BAR = 99
 let HELD = { read: 252.5, written: 187 }
 
 test('Vale play costs no more rows per player-minute than it has been cut to', async () => {
-  let k = workerd()
-  let res = await fetch(`${k.base}/__play_cost/?players=2&minutes=1`)
-  assertEquals(res.status, 200, await res.clone().text())
-  let report = await res.json() as Report
+  let report = await playReport()
   console.log('PLAY_COST', JSON.stringify(report))
   for (let metric of ['read', 'written', 'calls'] as const) {
     assertEquals(

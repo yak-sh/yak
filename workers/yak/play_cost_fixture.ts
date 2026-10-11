@@ -3,6 +3,8 @@
 // the tiles of world rows they reach (apps/vale/net.ts), gather, fight and
 // chat. The workerd probe supplies its SQL cursor counters; setup and the
 // watches a page opens on joining are counted apart.
+import { index, repeatFixture } from './repeat_fixture.ts'
+import { fn, lit, op } from '@yaks/sql'
 import { AsyncLocalStorage } from 'node:async_hooks'
 import { Store } from './graph.ts'
 import type { Bundle, Graph } from '@yaks/graph'
@@ -746,35 +748,52 @@ export let seedHistory = async (
   let driver = (await import('@yaks/durable-object')).driver(db)
   driver.query({ t: 'pragma', name: 'optimize', value: 0x10002 })
   // Synthetic item/slain/chat/document mix, never a copy of an app's data.
-  for (let start = 0; start < history; start += 500) {
-    await g.storage.tx((tx) =>
-      tx.patch(
-        Array.from({ length: Math.min(500, history - start) }, (_, j) => {
-          let n = start + j
-          return {
-            entity: { eid: eid(n + 100) },
-            created: { at: '2026-01-01T00:00:00Z', by: person },
-            updated: { at: '2026-01-01T00:00:00Z', by: person },
-            ...(n < 40_000
-              ? { item: { owner: person, kind: 'wood', at: n } }
-              : n < 60_000
-              ? {
-                slain: {
-                  by: person,
-                  creature: `wolf-${n % 100}`,
-                  at: n,
-                  xp: 1,
-                },
-              }
-              : n < 70_000
-              ? {
-                chat: { level: 'old-land', player: person },
-                doc: { body: 'Old chat' },
-              }
-              : { doc: { title: `History ${n}` } }),
+  for (
+    let [start, end] of [[0, 40_000], [40_000, 60_000], [60_000, 70_000], [
+      70_000,
+      history,
+    ]]
+  ) {
+    let count = Math.min(end, history) - start
+    if (count <= 0) continue
+    let n = op('+', lit(start), index)
+    await repeatFixture(
+      g,
+      db,
+      count,
+      {
+        entity: { eid: eid(start + 100) },
+        created: { at: '2026-01-01T00:00:00Z', by: person },
+        updated: { at: '2026-01-01T00:00:00Z', by: person },
+        ...(start < 40_000
+          ? { item: { owner: person, kind: 'wood', at: start } }
+          : start < 60_000
+          ? {
+            slain: {
+              by: person,
+              creature: `wolf-${start % 100}`,
+              at: start,
+              xp: 1,
+            },
           }
-        }),
-      )
+          : start < 70_000
+          ? {
+            chat: { level: 'old-land', player: person },
+            doc: { body: 'Old chat' },
+          }
+          : { doc: { title: `History ${start}` } }),
+      },
+      fn('printf', lit('00000000-0000-4000-8000-%012d'), op('+', n, lit(100))),
+      {
+        item: { at: n },
+        slain: {
+          at: n,
+          creature: op('||', lit('wolf-'), op('%', n, lit(100))),
+        },
+        ...(start >= 70_000
+          ? { doc: { title: op('||', lit('History '), n) } }
+          : {}),
+      },
     )
   }
 }

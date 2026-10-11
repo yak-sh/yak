@@ -1,6 +1,8 @@
-import { statements } from '@yaks/sqlite'
 // Vale's actual world scheduling path. Human dialogue can use the scripted
 // outside AI; playing nearby owes no periodic transcript/model turn.
+import { index, repeatFixture } from './repeat_fixture.ts'
+import { fn, lit, op } from '@yaks/sql'
+import { statements } from '@yaks/sqlite'
 import { type Bundle, graph, identityEid } from '@yaks/graph'
 import { ram } from '@yaks/ram'
 import { edgeEid } from '@yaks/edge'
@@ -180,16 +182,24 @@ export let worldTick = async (storage: State['storage'], history = 79_000) => {
       session: { ended: true, actor: person, id: 'history' },
     }])
   )
-  for (let n = 0; n < history; n += 500) {
-    await g.storage.tx((tx) =>
-      tx.patch(Array.from({ length: Math.min(500, history - n) }, (_, j) => ({
-        entity: { eid: crypto.randomUUID() },
-        entry: { session: oldSession, seq: n + j + 1 },
+  for (let parity of [0, 1]) {
+    let count = Math.ceil((history - parity) / 2)
+    let seq = op('+', op('*', index, lit(2)), lit(parity + 1))
+    let eid = crypto.randomUUID()
+    await repeatFixture(
+      g,
+      storage,
+      count,
+      {
+        entity: { eid },
+        entry: { session: oldSession, seq: parity + 1 },
         content: { body: 'Retained world history' },
         created: { by: person, at: '2026-01-01T00:00:00Z' },
         updated: { by: person, at: '2026-01-01T00:00:00Z' },
-        ...(j % 2 ? { cost: { dollars: 0.001 } } : { notice: {} }),
-      })))
+        ...(parity ? { cost: { dollars: 0.001 } } : { notice: {} }),
+      },
+      fn('printf', lit(`${eid.slice(0, 24)}%012d`), index),
+      { entry: { seq } },
     )
   }
   await store.alarm()
