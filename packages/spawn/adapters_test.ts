@@ -23,8 +23,16 @@ let setting = (argv: string[], key: string): unknown => {
   }
 }
 
+// Prepare the provider commands and interpret the setting as the consumer does.
+let argv = claude.argv(job)
+let said = codex.argv(job)
+let effort = setting(said, 'model_reasoning_effort')
+let unstated = setting(
+  codex.argv({ ...job, effort: undefined }),
+  'model_reasoning_effort',
+)
+
 test('a provider is its argv: the thread it is told to be, and -- last', () => {
-  let argv = claude.argv(job)
   assertEquals(argv[0], 'claude')
   // The session entity is the provider's thread name, so a resume knows it.
   assertEquals(argv[argv.indexOf('--session-id') + 1], 'S1')
@@ -32,13 +40,11 @@ test('a provider is its argv: the thread it is told to be, and -- last', () => {
   // A dash-leading instruction is content, never an unknown flag.
   assertEquals(argv.slice(-2), ['--', '-x fix it'])
 
-  let said = codex.argv(job)
   assertEquals(said.slice(0, 3), ['codex', 'exec', '--json'])
-  assertEquals(setting(said, 'model_reasoning_effort'), 'high')
+  assertEquals(effort, 'high')
   assertEquals(said.slice(-2), ['--', '-x fix it'])
   // An unstated effort says nothing at all, rather than a flag reading null.
-  let unstated = codex.argv({ ...job, effort: undefined })
-  assertEquals(setting(unstated, 'model_reasoning_effort'), undefined)
+  assertEquals(unstated, undefined)
 })
 
 test('a persona reaches each provider through its own instruction flag', () => {

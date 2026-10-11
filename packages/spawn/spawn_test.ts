@@ -288,16 +288,19 @@ test('a stop on the session reaches the agent', async () => {
   }
 })
 
+// Compose this stopped-request host once, before its commit is exercised.
+let stopped = tracked()
+let stoppedDir = dir()
+watching(stopped, { dir: stoppedDir, poll: 5 })
+await stopped.g.apply([
+  ...asking('S1', 'E1', 'linger here'),
+  { entity: { eid: 'S1' }, stop: {} },
+])
+await stopped.fx.idle()
 test('a stop committed with a request prevents its launch', async () => {
-  let g = tracked()
-  let where = dir()
-  watching(g, { dir: where, poll: 5 })
+  let g = stopped
+  let where = stoppedDir
   try {
-    await g.g.apply([
-      ...asking('S1', 'E1', 'linger here'),
-      { entity: { eid: 'S1' }, stop: {} },
-    ])
-    await g.fx.idle()
     let [row] = await g.g.get(['S1'])
     assertEquals(comp(row, 'process'), undefined)
   } finally {
