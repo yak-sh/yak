@@ -237,6 +237,9 @@ test('the letter is marked tried before the transport sees it', async () => {
         return { id: 'r-1' }
       },
     },
-  })(orderingEvent, orderedTx, (rows) => orderedTx.patch(rows))
+  })(orderingEvent, orderedTx, async (rows) => {
+    let written = await orderedTx.patch(rows)
+    return orderedTx.get(written.map((entity) => entity.eid))
+  })
   assertEquals(at, [noon()])
 })
