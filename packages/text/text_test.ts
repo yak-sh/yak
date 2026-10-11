@@ -19,21 +19,22 @@ let controls = Array.from({ length: 160 }, (_, n) => n)
   .filter((n) => n < 32 || n >= 127)
   .map((n) => String.fromCharCode(n)).join('')
 
+let dirty = `one${controls}two`
+let controlled = ['span', 'custom', 'h1', 'p', 'code', 'pre', 'strong', 'em']
+  .map((tag) => {
+    let node = h(tag, null, dirty)
+    return { node, parsed: html(markdown(node)) }
+  })
+let controlledLink = h('a', { href: `https://yaks.app/${controls}page` }, dirty)
 test('every C0/DEL/C1 byte is stripped from text and hrefs in both modes', () => {
-  let dirty = `one${controls}two`
   assertEquals(safe(dirty), 'onetwo')
   assertEquals(safeHref(dirty), 'onetwo')
-  for (
-    let tag of ['span', 'custom', 'h1', 'p', 'code', 'pre', 'strong', 'em']
-  ) {
-    let node = h(tag, null, dirty)
+  for (let { node, parsed } of controlled) {
     assertEquals(plain(node), 'onetwo')
-    let parsed = html(markdown(node))
     assertEquals(parsed.textContent?.trim(), 'onetwo')
   }
-  let node = h('a', { href: `https://yaks.app/${controls}page` }, dirty)
-  assertEquals(markdown(node), '[onetwo](https://yaks.app/page)')
-  assertEquals(plain(node), 'onetwo (https://yaks.app/page)')
+  assertEquals(markdown(controlledLink), '[onetwo](https://yaks.app/page)')
+  assertEquals(plain(controlledLink), 'onetwo (https://yaks.app/page)')
 })
 
 test('all controls are removed even when leaves and hrefs change after h', () => {
@@ -131,28 +132,30 @@ test('headings and emphasis keep their structure and whitespace', () => {
   assertEquals(markdown(h('strong', null, '  ')), '  ')
 })
 
+let nestedList = h(
+  'ul',
+  null,
+  h('li', null, 'One', h('ul', null, h('li', null, 'Nested'))),
+  h('li', null, 'Two'),
+)
+let orderedList = h(
+  'ol',
+  { start: 9 },
+  h('li', null, 'One', h('br', null), 'continued'),
+  h('li', null, 'Two', h('ul', null, h('li', null, 'Nested'))),
+)
+let nestedHTML = html(markdown(nestedList))
+let orderedHTML = html(markdown(orderedList))
 test('nested and ordered lists keep indentation and start numbering', () => {
-  let node = h(
-    'ul',
-    null,
-    h('li', null, 'One', h('ul', null, h('li', null, 'Nested'))),
-    h('li', null, 'Two'),
-  )
-  assertEquals(markdown(node), '- One\n  - Nested\n- Two')
-  assertEquals(plain(node), '- One\n  - Nested\n- Two')
-  assertEquals(html(markdown(node)).querySelectorAll('ul ul li').length, 1)
-  let ordered = h(
-    'ol',
-    { start: 9 },
-    h('li', null, 'One', h('br', null), 'continued'),
-    h('li', null, 'Two', h('ul', null, h('li', null, 'Nested'))),
-  )
-  assertEquals(plain(ordered), '9. One\n   continued\n10. Two\n    - Nested')
+  assertEquals(markdown(nestedList), '- One\n  - Nested\n- Two')
+  assertEquals(plain(nestedList), '- One\n  - Nested\n- Two')
+  assertEquals(nestedHTML.querySelectorAll('ul ul li').length, 1)
   assertEquals(
-    html(markdown(ordered)).querySelector('ol')?.getAttribute('start'),
-    '9',
+    plain(orderedList),
+    '9. One\n   continued\n10. Two\n    - Nested',
   )
-  assertEquals(html(markdown(ordered)).querySelectorAll('ol > li').length, 2)
+  assertEquals(orderedHTML.querySelector('ol')?.getAttribute('start'), '9')
+  assertEquals(orderedHTML.querySelectorAll('ol > li').length, 2)
   assertEquals(
     markdown(h('ol', { start: 'bad' }, h('li', null, 'One'))),
     '1. One',
@@ -224,26 +227,30 @@ test('transparent wrappers retain block boundaries, including at the root', () =
   assertEquals(html(markdown(node)).querySelectorAll('p').length, 3)
 })
 
+let emphasis = ['strong', 'em'].map((tag) => {
+  let adjacent = h(
+    'span',
+    null,
+    h(tag, null, 'one'),
+    h('span', null, h(tag, null, 'two')),
+  )
+  let nested = h(tag, null, 'a', h(tag, null, 'b'), 'c')
+  return {
+    tag,
+    adjacent,
+    adjacentHTML: html(markdown(adjacent)),
+    nestedHTML: html(markdown(nested)),
+  }
+})
 test('adjacent and nested emphasis preserve elements rather than delimiter text', () => {
-  for (let tag of ['strong', 'em']) {
-    let adjacent = h(
-      'span',
-      null,
-      h(tag, null, 'one'),
-      h('span', null, h(tag, null, 'two')),
-    )
-    let parsed = html(markdown(adjacent))
+  for (let { tag, adjacent, adjacentHTML, nestedHTML } of emphasis) {
     assertEquals(
-      [...parsed.querySelectorAll(tag)].map((el) => el.textContent),
+      [...adjacentHTML.querySelectorAll(tag)].map((el) => el.textContent),
       ['one', 'two'],
     )
     assertEquals(plain(adjacent), 'onetwo')
-    let nested = h(tag, null, 'a', h(tag, null, 'b'), 'c')
-    assertEquals(
-      html(markdown(nested)).querySelector(`${tag} > ${tag}`)?.textContent,
-      'b',
-    )
-    assertEquals(html(markdown(nested)).querySelector('p')?.textContent, 'abc')
+    assertEquals(nestedHTML.querySelector(`${tag} > ${tag}`)?.textContent, 'b')
+    assertEquals(nestedHTML.querySelector('p')?.textContent, 'abc')
   }
 })
 
