@@ -6,6 +6,7 @@ import { loadTools } from '@yaks/graph/tools'
 import { ids as addresses } from '@yaks/id/graph'
 import { idDoc } from '@yaks/id/vocab'
 import { loadVocab } from '@yaks/vocab'
+import { validateToolInput } from '@yaks/vocab/tools'
 import { ram } from '@yaks/ram'
 import { runner, toolEid } from '@yaks/tools'
 import { valueIn } from '@yaks/tools/value'
@@ -148,3 +149,129 @@ test('authenticated bugs reads expose no write route', async () => {
     404,
   )
 })
+
+// Each mark fixture keeps one global bug in the Worker and, optionally, a box
+// copy. Calls validate the declared inputs and apply the returned patches.
+let marking = async (
+  config = { remote: { url: 'https://tracker.test', secret: 'test-only' } },
+  transport?: typeof fetch,
+  local = true,
+  held = true,
+  prior?: string,
+) => {
+  let worker = store(ram(vocab, options), { sink: () => {} })
+  let graphOnBox = graph({
+    vocab: boxVocab,
+    storage: ram(boxVocab, options),
+    plugins: [addresses(boxVocab)],
+  })
+  let bug: Bundle = {
+    entity: { eid: ids[0] },
+    bug: { fault: 'marked', hits: 1 },
+    doc: { title: 'mark me' },
+  }
+  if (held) await worker.graph.apply([bug], { trusted: true })
+  if (local) {
+    await graphOnBox.apply([{
+      ...bug,
+      ...prior ? { [prior]: {} } : {},
+    }], { trusted: true })
+  }
+  let receive = door(worker, platform, 'test-only')
+  let send = transport ??
+    (((url, init) => receive(new Request(url, init))) as typeof fetch)
+  let tools = loadTools(trackerDoc, runs({}, config, send))
+  return {
+    box: graphOnBox,
+    worker: worker.graph,
+    call: async (name: string, args: Record<string, unknown>) => {
+      let tool = tools.find((t) => t.name == name)!
+      let patches = await tool.run({
+        entity: { eid: ids[4] },
+        call: { args: validateToolInput(tool, args) },
+      }, graphOnBox)
+      await graphOnBox.apply(patches, { trusted: true })
+      return patches
+    },
+  }
+}
+for (let [verb, name] of [['resolve', 'resolved'], ['archive', 'archived']]) {
+  let shared = await marking()
+  let [local] = await shared.box.get([ids[0]], ['entity'])
+  test(`box bug ${verb} marks both stores through the signed Worker door`, async () => {
+    let answer = await shared.call(`bug_${verb}`, {
+      bug: verb == 'resolve' ? `B-${local.entity.num}` : 'mark me',
+    })
+    ok(answer.some((b) => b[name]))
+    ok((await shared.box.get([ids[0]], [name]))[0][name])
+    ok((await shared.worker.get([ids[0]], [name]))[0][name])
+    equal((await shared.worker.read('.bug.status=open')).length, 0)
+  })
+  let retry = await marking(undefined, undefined, true, true, name)
+  test(`an already marked box bug still delivers ${verb} to the Worker`, async () => {
+    await retry.call(`bug_${verb}`, { bug: ids[0] })
+    ok((await retry.worker.get([ids[0]], [name]))[0][name])
+  })
+  let platformOnly = await marking(undefined, undefined, false)
+  test(`platform bug ${verb} needs no box copy and imports no bug`, async () => {
+    let answer = await platformOnly.call(`bug_${verb}`, {
+      bug: ids[0],
+      source: 'yaks.app',
+    })
+    equal(valueIn(answer), { source: 'yaks.app', bug: ids[0], mark: name })
+    ok((await platformOnly.worker.get([ids[0]], [name]))[0][name])
+    equal(await platformOnly.box.read('.bug'), [])
+    equal((await platformOnly.worker.read('.bug.status=open')).length, 0)
+  })
+  test(`platform bug ${verb} refuses missing remote configuration`, async () => {
+    await throws(
+      () =>
+        runs()[`bug_${verb}`]({
+          entity: { eid: ids[4] },
+          call: { args: { bug: ids[0], source: 'yaks.app' } },
+        }, box),
+      'Remote tracker',
+    )
+  })
+  for (
+    let [reason, settings, transport, held] of [
+      [
+        'unavailable',
+        config,
+        (() => Promise.reject(Error('offline'))) as typeof fetch,
+        true,
+      ],
+      [
+        'refused',
+        config,
+        ((_url, _init) =>
+          Promise.resolve(
+            Response.json({ error: 'denied' }, { status: 403 }),
+          )) as typeof fetch,
+        true,
+      ],
+      [
+        'missing secret',
+        { remote: { url: config.remote.url, secret: '' } },
+        undefined,
+        true,
+      ],
+      [
+        'missing address',
+        { remote: { url: '', secret: config.remote.secret } },
+        undefined,
+        true,
+      ],
+      ['missing Worker bug', config, undefined, false],
+    ] as const
+  ) {
+    let failed = await marking(settings, transport, true, held)
+    test(`box bug ${verb} refuses ${reason} without a local mark`, async () => {
+      await throws(
+        () => failed.call(`bug_${verb}`, { bug: ids[0] }),
+        'Remote tracker',
+      )
+      ok(!(await failed.box.get([ids[0]], [name]))[0][name])
+    })
+  }
+}

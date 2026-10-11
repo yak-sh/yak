@@ -16,7 +16,7 @@ references may name entities in other stores.
 | `./views`   | Bug pages, list rows, error frames and the Bugs destination |
 | `./tools`   | `bug_list`, `bug_show`, `bug_resolve`, `bug_archive`        |
 | `./service` | Spool record admission and acknowledgement                  |
-| `./remote`  | Signed remote reads and durable error delivery              |
+| `./remote`  | Signed remote reads, bug marks and durable error delivery   |
 
 ```ts
 import { normalize } from '@yaks/tracker'
@@ -192,11 +192,12 @@ and local admission. A failed delivery leaves its original record for retry and
 never adds a delivery error to the same outbox. Immutable global eids make
 interrupted and repeated delivery safe.
 
-`./remote` shares the signed transport with the read-through routes. Intake
-tickets carry a separate capability, so a reader's ticket cannot submit errors.
-The Worker keeps its existing notification delivery for new platform bugs; box
-captures carry `error.tags.source=box`. Reports retain their capture time across
-retries. Host shutdown waits for every report's durable spool write.
+`./remote` shares the signed transport with the read-through routes. Intake and
+bug marks each carry a separate capability, so a reader's ticket cannot submit
+errors or mark bugs. The Worker keeps its existing notification delivery for new
+platform bugs; box captures carry `error.tags.source=box`. Reports retain their
+capture time across retries. Host shutdown waits for every report's durable
+spool write.
 
 ## Bounded trace admission
 
@@ -288,10 +289,18 @@ default. Remote answers carry `{source: "yaks.app", rows: [...]}` as text and
 `output.value`, without applying those rows to the box graph. Queries, ordering
 and limits run in the Worker before selecting the returned bugs. Remote show
 takes a global bug eid, since numbered ids belong to their own store. Resolve
-and archive operate on box bugs.
+and archive accept the same source selection. A box mark reaches the configured
+Worker under the bug's global eid before returning the local patch. Missing
+credentials, unavailable transport or a refused remote mark refuse the command
+without marking the box copy. Without a remote configuration, box marks remain
+local. A `yaks.app` mark requires remote configuration and marks only the
+Worker; its acknowledgement does not import the bug into the box graph. Retrying
+a mark is safe, including when the box copy is already marked.
 
 ```sh
 yak bug list --source yaks.app --limit 20
 yak bug list '.bug.status=resolved' --source yaks.app
 yak bug show <global-bug-eid> --source yaks.app
+yak bug resolve <global-bug-eid> --source yaks.app
+yak bug archive <box-bug-id>
 ```

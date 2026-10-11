@@ -68,14 +68,20 @@ test('scoped RPC reads, resolves, archives and never exposes trusted intake', as
   equal(bugs.length, 1)
   equal((await route(request('/apply', auth, []))).status, 404)
   equal((await route(request('/ingest', auth, []))).status, 404)
+  let marker = await sign({
+    scope: space,
+    person: 'scratch-person',
+    mark: true,
+    exp: Date.now() / 1000 + 60,
+  }, secret)
   equal(
-    (await route(request('/resolve', auth, { bug: bugs[0].entity.eid })))
+    (await route(request('/resolve', marker, { bug: bugs[0].entity.eid })))
       .status,
     200,
   )
   equal((await g.unseen()).length, 0)
   equal(
-    (await route(request('/archive', auth, { bug: bugs[0].entity.eid })))
+    (await route(request('/archive', marker, { bug: bugs[0].entity.eid })))
       .status,
     200,
   )
@@ -176,4 +182,84 @@ test('uptime and heartbeat failures group and resolve without a yak binding', as
     now,
   )
   equal((await g.unseen()).length, 0)
+})
+
+let marked = fixture()
+await marked.graph.apply([{
+  entity: { eid: other },
+  bug: { fault: 'mark-capability', hits: 1, app: space },
+}], { trusted: true })
+let markDoor = door(marked, platform, secret)
+let reader = await ticket(platform, true)
+let intakeOnly = await sign({
+  scope: platform,
+  person: 'scratch-person',
+  admin: true,
+  ingest: true,
+  exp: Date.now() / 1000 + 60,
+}, secret)
+let marker = await sign({
+  scope: platform,
+  person: 'scratch-person',
+  admin: true,
+  mark: true,
+  exp: Date.now() / 1000 + 60,
+}, secret)
+let elsewhere = await sign({
+  scope: space,
+  person: 'scratch-person',
+  mark: true,
+  exp: Date.now() / 1000 + 60,
+}, secret)
+for (let path of ['/resolve', '/archive', '/deployed']) {
+  for (
+    let [kind, token] of [['reader', reader], ['intake', intakeOnly], [
+      'other scope',
+      elsewhere,
+    ]]
+  ) {
+    test(`tracker ${path} refuses ${kind} tickets without marking bugs`, async () => {
+      equal(
+        (await markDoor(request(
+          path,
+          token,
+          path == '/deployed' ? { app: space } : { bug: other },
+        )))
+          .status,
+        403,
+      )
+      let [bug] = await marked.graph.get([other], ['resolved', 'archived'])
+      equal([bug.resolved, bug.archived], [undefined, undefined])
+    })
+  }
+}
+for (let path of ['/resolve', '/archive']) {
+  for (
+    let [kind, body] of [
+      ['null', 'null'],
+      ['invalid JSON', '{'],
+      ['array', '[]'],
+      ['numbered id', JSON.stringify({ bug: 'B-1' })],
+      ['extra fields', JSON.stringify({ bug: other, resolved: {} })],
+    ]
+  ) {
+    test(`tracker ${path} refuses ${kind} mark bodies`, async () => {
+      let response = await markDoor(
+        new Request(`https://tracker.test${path}`, {
+          method: 'POST',
+          headers: { authorization: `Bearer ${marker}` },
+          body,
+        }),
+      )
+      equal(response.status, 400)
+    })
+  }
+  test(`tracker ${path} refuses missing bugs instead of creating marks`, async () => {
+    equal((await markDoor(request(path, marker, { bug: space }))).status, 404)
+    let [row] = await marked.graph.get([space], ['resolved', 'archived'])
+    equal([row?.resolved, row?.archived], [undefined, undefined])
+  })
+}
+test('bug marking tickets cannot submit error captures', async () => {
+  equal((await markDoor(request('/errors', marker, []))).status, 403)
 })

@@ -45,7 +45,11 @@ Authenticated endpoints: `/bugs`, `/unseen`, `/traces`, `/trace`, `/query`,
 `/vocab`, `/ws`, `POST /resolve` and `/archive` with `{bug}`, and
 `POST /deployed` with `{app}`. `/ws?scope=…&ticket=…` accepts subscriptions,
 unsubscribe and ACK only, never relay writes. `/query` returns graph bundles.
-General `/apply` is absent. Platform-only `POST /errors` accepts immutable error
+General `/apply` is absent. `POST /resolve` and `/archive` require a separately
+signed `mark: true` capability and exactly `{bug: <global-bug-eid>}`.
+`POST /deployed` requires the same capability to resolve prior versions. Reader
+and intake tickets cannot mark bugs. Missing bugs are refused with 404;
+malformed marks with 400. Platform-only `POST /errors` accepts immutable error
 captures with a separately signed `ingest: true` capability; ordinary read
 tickets cannot submit captures. Box reporters retain their outbox until this
 intake admits their records. Retrying a capture preserves its global eid and

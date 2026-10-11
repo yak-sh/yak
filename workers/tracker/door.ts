@@ -1,5 +1,5 @@
 // Authenticated tracker RPC is narrow: readers never get a general graph
-// writer. Box intake additionally needs its own signed capability.
+// writer. Intake and bug marks each need their own signed capability.
 
 import type { TrackerStore } from './core.ts'
 import { authorize } from './auth.ts'
@@ -9,6 +9,8 @@ import { status } from '@yaks/graph'
 import type { Bundle } from '@yaks/graph'
 import { platform } from './core.ts'
 import { batch } from './queue.ts'
+
+let uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
 export let json = (value: unknown, status = 200) =>
   Response.json(value, { status })
@@ -68,7 +70,6 @@ async (request: Request): Promise<Response> => {
     } catch {
       return json({ error: 'invalid app error mark' }, 400)
     }
-    let uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
     if (
       !body || typeof body != 'object' || Array.isArray(body) ||
       typeof body.app != 'string' ||
@@ -98,7 +99,6 @@ async (request: Request): Promise<Response> => {
     let count = url.searchParams.get('limit')
     let n = count == null ? (path == '/traces' ? 50 : 100) : Number(count)
     let cursor = url.searchParams.get('after') ?? undefined
-    let uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
     if (
       !Number.isSafeInteger(n) || n < 1 || n > 100 ||
       (cursor != null && !uuid.test(cursor))
@@ -123,7 +123,6 @@ async (request: Request): Promise<Response> => {
     let params = url.searchParams
     if (params.get('app') == '') params.delete('app')
     let n = Number(params.get('limit') ?? 50)
-    let uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
     if (!Number.isSafeInteger(n) || n < 1 || n > 100) {
       return json({ error: 'limit must be 1..100' }, 400)
     }
@@ -154,14 +153,36 @@ async (request: Request): Promise<Response> => {
     return json(await tracker.unseen(url.searchParams.get('app') ?? undefined))
   }
   if (request.method == 'POST' && (path == '/resolve' || path == '/archive')) {
-    let body = await request.json()
-    if (typeof body.bug != 'string') {
-      return json({ error: 'bug eid required' }, 400)
+    if (access.mark !== true) {
+      return json({ error: 'tracker bug marks denied' }, 403)
     }
-    await tracker.mark(body.bug, path == '/resolve' ? 'resolved' : 'archived')
+    let body
+    try {
+      body = await request.json()
+    } catch {
+      return json({ error: 'bug global eid required' }, 400)
+    }
+    if (
+      !body || typeof body != 'object' || Array.isArray(body) ||
+      Object.keys(body).some((key) => key != 'bug') ||
+      typeof body.bug != 'string' || !uuid.test(body.bug)
+    ) {
+      return json({ error: 'bug global eid required' }, 400)
+    }
+    try {
+      await tracker.mark(body.bug, path == '/resolve' ? 'resolved' : 'archived')
+    } catch (error) {
+      if (error instanceof CallError && error.code == 'bug') {
+        return json({ error: 'bug not found' }, 404)
+      }
+      throw error
+    }
     return json({ ok: true })
   }
   if (request.method == 'POST' && path == '/deployed') {
+    if (access.mark !== true) {
+      return json({ error: 'tracker bug marks denied' }, 403)
+    }
     let body = await request.json()
     if (typeof body.app != 'string') {
       return json({ error: 'app eid required' }, 400)

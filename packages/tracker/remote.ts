@@ -1,4 +1,4 @@
-// The box shares one signed tracker transport for reads and durable delivery.
+// The box shares one signed tracker transport for reads, intake and bug marks.
 // Credentials are read at use time and never reach redirects or error text.
 import { derivedEid } from '@yaks/graph'
 import type { Sink } from './report.ts'
@@ -36,6 +36,7 @@ export let request = async (
     person: 'box-tracker',
     admin: true,
     ...path == 'errors' ? { ingest: true } : {},
+    ...['resolve', 'archive', 'deployed'].includes(path) ? { mark: true } : {},
     exp: Math.floor(Date.now() / 1000) + 60,
   }, remote.secret)
   let headers = new Headers(init.headers)
@@ -72,3 +73,27 @@ export let delivery =
       throw Error(`Remote tracker refused intake (${response.status})`)
     }
   }
+
+/** A mark must reach the Worker before the box commits its own copy. */
+export let mark = async (
+  remote: Remote,
+  bug: string,
+  name: 'resolved' | 'archived',
+  go: typeof fetch = fetch,
+): Promise<void> => {
+  let response = await request(
+    remote,
+    name == 'resolved' ? 'resolve' : 'archive',
+    new URLSearchParams({ scope: 'platform' }),
+    {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ bug }),
+    },
+    go,
+  )
+  await response.body?.cancel()
+  if (!response.ok) {
+    throw Error(`Remote tracker refused the mark (${response.status})`)
+  }
+}

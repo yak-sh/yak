@@ -6,6 +6,7 @@ import {
   and,
   eq,
   every,
+  fields,
   limit,
   order,
   orderOf,
@@ -15,22 +16,50 @@ import {
 import { CallError } from '@yaks/tools'
 import { str } from './model.ts'
 import { type Options, routes } from './routes.ts'
+import { mark as upstream } from './remote.ts'
 
 let one = async (g: Graph, eid: string): Promise<Bundle> => {
   let [row] = await g.get([eid])
   if (!row?.bug) throw new CallError('bug', `not a bug: ${eid}`)
   return row
 }
-let mark =
-  (name: string) => async (call: Bundle, g: Graph): Promise<Bundle[]> => {
-    let bug = await one(g, str(argsOf(call).bug))
-    return [{ entity: bug.entity, [name]: {} }]
-  }
+let answer = (call: Bundle, data: Record<string, unknown>): Bundle[] => {
+  let value = { source: 'yaks.app', ...data }
+  return [{
+    entity: { eid: '$said' },
+    content: { body: JSON.stringify(value, null, 2) },
+    output: { source: call.entity.eid, value },
+  }]
+}
 export let runs = (
   host: unknown = {},
   options: Options = {},
   go: typeof fetch = fetch,
 ): Runs => {
+  let mark =
+    (name: 'resolved' | 'archived') =>
+    async (call: Bundle, g: Graph): Promise<Bundle[]> => {
+      let args = argsOf(call)
+      let remote = args.source == 'yaks.app'
+      let [eid] = remote
+        ? [str(args.bug)]
+        : await referenced(g, [str(args.bug)], 'bug')
+      let [bug] = remote ? [] : await g.read(and(
+        eq('entity.eid', eid),
+        present('bug'),
+        fields('entity.eid'),
+      ))
+      if (!remote && !bug) throw new CallError('bug', `not a bug: ${eid}`)
+      if (remote || options.remote) {
+        try {
+          await upstream(options.remote ?? {}, eid, name, go)
+        } catch (error) {
+          throw new CallError('remote', (error as Error).message)
+        }
+      }
+      if (bug) return [{ entity: bug.entity, [name]: {} }]
+      return answer(call, { bug: eid, mark: name })
+    }
   let remote = async (
     call: Bundle,
     params: URLSearchParams,
@@ -40,12 +69,7 @@ export let runs = (
     )!.handle(new Request(`http://box/tracker/bugs?${params}`))
     let body = await response.json()
     if (!response.ok) throw new CallError('remote', body.error)
-    let value = { source: 'yaks.app', rows: body }
-    return [{
-      entity: { eid: '$said' },
-      content: { body: JSON.stringify(value, null, 2) },
-      output: { source: call.entity.eid, value },
-    }]
+    return answer(call, { rows: body })
   }
   return {
     bug_list: (call, g) => {

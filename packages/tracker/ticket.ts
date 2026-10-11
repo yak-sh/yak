@@ -1,12 +1,13 @@
 /** Short-lived tracker tickets issued by a trusted host. The tracker use has
  * its own HMAC key, matching the platform's sealed-value protocol. No ticket
- * or secret is stored; callers issue one at the moment they read remotely. */
+ * or secret is stored; callers issue one at the moment they call remotely. */
 export type Access = {
   scope: string
   person: string
   exp: number
   admin?: boolean
   ingest?: boolean
+  mark?: boolean
 }
 let enc = new TextEncoder()
 let b64 = (bytes: Uint8Array<ArrayBuffer>) =>
