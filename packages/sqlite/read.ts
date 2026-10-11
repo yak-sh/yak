@@ -569,7 +569,9 @@ let scoped = (
     // have its identifiers renamed, so it retains the ordinary gather.
     if (value.t == 'val' || value.t == 'lit') return node
     if (value.t == 'raw') {
-      raw = true
+      // A compiler-proven closed relation has no outer aliases to rename.
+      // Other fragments might refer to this row, even inside FROM subqueries.
+      if (!value.closed) raw = true
       return node
     }
     if (value.t == 'col') {
@@ -750,9 +752,13 @@ export let get = (
     // a human id such as history-1 as number 1, which cannot decide ownership.
     let permitted = (ids: string[], components: string[] = []): Set<string> => {
       if (!ids.length) return new Set()
-      let screen = sourceScreen(vocab, opts, components)
-      let run = () =>
-        driver.query(select({
+      if (
+        !visibility.entity &&
+        !components.some((name) => visibility.components?.[name])
+      ) return new Set(ids)
+      let run = () => {
+        let screen = sourceScreen(vocab, opts, components)
+        return driver.query(select({
           cols: [col('eid', '__requested')],
           from: table('entity', '__requested'),
           where: and(
@@ -766,6 +772,7 @@ export let get = (
               : lit(true),
           ),
         }))
+      }
       return new Set(
         (cache ? cache.permit(ids, components, run) : run()).map((r) =>
           String(r.eid)
@@ -774,12 +781,12 @@ export let get = (
     }
     let allowed = permitted(eids)
     let ids = eids.filter((eid) => allowed.has(eid))
-    let scoped = { ...plain, derived: visibleDerived(vocab, opts) }
+    let scoped = () => ({ ...plain, derived: visibleDerived(vocab, opts) })
     let found = cache ? cache.fetch(ids, comps) : get(
       driver,
       vocab,
       ids,
-      scoped,
+      scoped(),
       comps,
       unclassified,
     )
@@ -794,7 +801,7 @@ export let get = (
       let dynamic = [...names].filter((name) => found.some((b) => b[name]))
       if (dynamic.length) {
         let current = new Map(
-          get(driver, vocab, ids, scoped, dynamic, unclassified).map((
+          get(driver, vocab, ids, scoped(), dynamic, unclassified).map((
             b,
           ) => [b.entity.eid, b]),
         )
@@ -805,11 +812,12 @@ export let get = (
         })
       }
     }
-    let aspects = Object.keys(visibility.components ?? {}).map((name) =>
-      [name, permitted(eids, [name])] as const
-    )
+    let described = found.some((b) => b.entity.archetype)
+    let aspects = Object.keys(visibility.components ?? {})
+      .filter((name) => described || found.some((b) => b[name]))
+      .map((name) => [name, permitted(eids, [name])] as const)
     let hidden = new Set<string>()
-    if (found.some((b) => b.entity.archetype)) {
+    if (described) {
       for (let [name, owners] of aspects) {
         let wearing = comps && !comps.includes(name)
           ? driver.query(select({

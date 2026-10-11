@@ -425,7 +425,7 @@ export let storage = (
     return [...tables]
   }
   let reading = (o: Opts, fetch = cached): ReadCache => ({
-    fetch,
+    fetch: (eids, comps) => fetch(eids, comps, false),
     permit: (eids, components, run) => {
       let selected = new Set(eids)
       let queries = [
@@ -470,8 +470,8 @@ export let storage = (
           )
         : fetch
       : undefined
-  let cached = (eids: string[], comps?: string[]) =>
-    memo.get(identity, eids, comps)
+  let cached = (eids: string[], comps?: string[], refresh = true) =>
+    memo.get(identity, eids, comps, refresh)
   let tested = (query: And, exactIds = false): Filter | undefined => {
     if (!basis(vocab, query, base.derived) || !local(vocab, query)) {
       return undefined
@@ -689,16 +689,20 @@ export let storage = (
     let owed = () => [...new Set(open.flatMap((u) => u.ledger.owed()))]
     // An entity whose rows moved in this transaction is read from what it
     // holds; every other one as its pointer says, or from memory.
-    let getting = (eids: string[], comps?: string[]): Bundle[] => {
+    let getting = (
+      eids: string[],
+      comps?: string[],
+      refresh = true,
+    ): Bundle[] => {
       let pending = owed()
       let moving = new Set(pending)
       let moved = eids.filter((eid) => moving.has(eid))
-      if (!moved.length) return cached(eids, comps)
+      if (!moved.length) return cached(eids, comps, refresh)
       let rest = eids.filter((eid) => !moving.has(eid))
       let at = new Map(
         [
           ...get(driver, vocab, moved, opts(), comps, pending),
-          ...rest.length ? cached(rest, comps) : [],
+          ...rest.length ? cached(rest, comps, refresh) : [],
         ].map((b) => [b.entity.eid, b]),
       )
       return eids.flatMap((eid) => at.get(eid) ?? [])

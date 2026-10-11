@@ -72,8 +72,14 @@ type Get = (eids: string[], comps?: string[]) => Bundle[]
 
 /** A store's memory of whole entities. */
 export type Memo = {
-  /** These entities through `get`: whole ones from memory where held. */
-  get: (get: Get, eids: string[], comps?: string[]) => Bundle[]
+  /** These entities through `get`: whole ones from memory where held. A
+   * reader replacing dynamic components itself can defer their refresh. */
+  get: (
+    get: Get,
+    eids: string[],
+    comps?: string[],
+    refresh?: boolean,
+  ) => Bundle[]
   /** Run a write that changes the entities `eids` names, given what it
    * returned: they are let go, and kept out until its transaction ends. A
    * write that may make entities it does not name (`mints`) lets go of every
@@ -873,7 +879,7 @@ export let memoized = (
       }
       return rows
     },
-    get: (get, eids, comps) => {
+    get: (get, eids, comps, refresh = true) => {
       sync()
       // A get naming components is answered from an entity held whole, or
       // held in part with them, cut to them. What one reads is held in part,
@@ -897,7 +903,7 @@ export let memoized = (
       // A hit's dynamic components are read now, in one statement.
       let names = [
         ...new Set(
-          hits.flatMap((eid) =>
+          (refresh ? hits : []).flatMap((eid) =>
             Object.keys(k.held.get(eid)!).filter((name) =>
               dynamic.has(name) && (!wanted || wanted.has(name))
             )

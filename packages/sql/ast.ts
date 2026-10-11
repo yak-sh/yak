@@ -46,6 +46,8 @@ export type Raw = {
   origin?: Stmt
   /** The logical table of a compiler-lowered source or statement. */
   table?: string
+  /** A complete relation whose identifiers are local to its own query. */
+  closed?: boolean
   [RAW]: true
 }
 

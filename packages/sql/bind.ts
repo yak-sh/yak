@@ -2145,17 +2145,43 @@ export let sourceScreen = (
     [],
     { correlated: true },
   )
-  return render({ ...out, cols: [raw('"entity"."id" as "id"')], order: [] })
+  return {
+    ...render({ ...out, cols: [raw('"entity"."id" as "id"')], order: [] }),
+    closed: true,
+  }
 }
+
+let scopedDerived = new WeakMap<
+  Vocab,
+  WeakMap<Derived, Map<string, Derived>>
+>()
 
 /** Derived expressions read relations of their own. Scope those sources even
  * when a storage gather runs outside a query's scoped CTEs. */
 export let visibleDerived = (vocab: Vocab, opts: BindOpts): Derived => {
-  let screens = new Map<string, Raw | null>()
+  let derived = derivedOf(vocab, opts.derived)
+  if (!Object.keys(derived).length) return derived
+  // Compile permissions with this read's inputs before sharing a gather plan.
+  // The rendered screens include time bounds and resolved references, so a
+  // changed scope or compilation option cannot reuse another caller's plan.
+  let entity = sourceScreen(vocab, opts)
+  let screens = new Map(
+    Object.keys(opts.visibility?.components ?? {}).sort().map((name) =>
+      [name, sourceScreen(vocab, opts, [name])] as const
+    ),
+  )
+  let key = JSON.stringify([
+    entity && inline(entity),
+    ...[...screens].map(([name, screen]) => [name, screen && inline(screen)]),
+  ])
+  let byVocab = scopedDerived.get(vocab)
+  if (!byVocab) scopedDerived.set(vocab, byVocab = new WeakMap())
+  let cache = byVocab.get(derived)
+  let held = cache?.get(key)
+  if (held) return held
   let source = (name: string, alias = name): Source => {
     if (!vocab.comp(name)) return table(name, alias)
-    if (!screens.has(name)) screens.set(name, sourceScreen(vocab, opts, [name]))
-    let screen = screens.get(name)
+    let screen = screens.has(name) ? screens.get(name) : entity
     return screen
       ? from(
         select({
@@ -2163,7 +2189,10 @@ export let visibleDerived = (vocab: Vocab, opts: BindOpts): Derived => {
           from: table(name, alias),
           where: exists(select({
             cols: [lit(1)],
-            from: from(raw(inline(screen)), '__allowed'),
+            from: from(
+              { ...screen, sql: inline(screen), params: [] },
+              '__allowed',
+            ),
             where: eq(
               col('id', '__allowed'),
               col(name == 'entity' ? 'id' : 'entity', alias),
@@ -2174,12 +2203,16 @@ export let visibleDerived = (vocab: Vocab, opts: BindOpts): Derived => {
       )
       : table(name, alias)
   }
-  return Object.fromEntries(
-    Object.entries(derivedOf(vocab, opts.derived)).map(([path, prop]) => [
+  let made = Object.fromEntries(
+    Object.entries(derived).map(([path, prop]) => [
       path,
       { ...prop, expr: (owner: Cond) => sources(prop.expr(owner), source) },
     ]),
   )
+  if (!cache) byVocab.set(derived, cache = new Map())
+  if (cache.size >= 128) cache.delete(cache.keys().next().value!)
+  cache.set(key, made)
+  return made
 }
 
 let visible = (
