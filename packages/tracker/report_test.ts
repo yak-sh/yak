@@ -1,10 +1,31 @@
-import { equal, ok, test } from '@yaks/testing'
+import { equal, ok, test, throws } from '@yaks/testing'
 import { CallError } from '@yaks/tools'
 import { Refused } from '@yaks/graph'
 import { capture, caught, post, queue, report, spool } from './report.ts'
 import { comp } from './model.ts'
 import { fixture } from './fixture_test.ts'
 import { intake } from './service.ts'
+import { runs as mail } from '@yaks/mail/tools'
+
+let g = fixture()
+test('a tool refusing bad input does not report a failure', async () => {
+  let error = await throws(() =>
+    mail().mail_send({
+      entity: { eid: 'send' },
+      call: {
+        args: { to: 'reader@example.org', subject: 'Hello', body: 'Hi' },
+      },
+    }, g)
+  )
+  let failures: unknown[] = []
+  await caught(error, {
+    sink: (rows) => {
+      failures.push(...rows)
+    },
+  })
+  equal(failures, [])
+  ok(error instanceof CallError)
+})
 
 test('caught omits refusals and report survives a failing sink and fallback', async () => {
   let called = 0

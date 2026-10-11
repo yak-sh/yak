@@ -74,6 +74,7 @@ const filled = (schema: unknown, value: unknown): void => {
 export const validateToolInput = (
   tool: { inputSchema?: Record<string, unknown>; input?: object },
   args: Record<string, unknown>,
+  refuse: (message: string) => Error = (message) => new Error(message),
 ): Record<string, unknown> => {
   if (!tool.inputSchema) return args
   if (tool.input) {
@@ -84,7 +85,7 @@ export const validateToolInput = (
   filled(tool.inputSchema, value)
   const errors = check(value)
   if (errors.length) {
-    throw new Error('Invalid tool arguments: ' + errorsText(errors))
+    throw refuse('Invalid tool arguments: ' + errorsText(errors))
   }
   return value
 }

@@ -41,6 +41,7 @@
 // a sentinel among an app's connections, swapping in the credential and
 // refreshing a token), and act on the graph and vault they are given.
 
+import { CallError } from '@yaks/tools/errors'
 import { type Bundle, type Comp, type Eid, token } from '@yaks/graph'
 import { edgeEid, link } from '@yaks/edge'
 import {
@@ -226,36 +227,44 @@ export let need = async (read: Read, a: Need): Promise<Bundle[]> => {
   let name = a.integration
   let i = await known(read, name)
   if (hosts.length && i?.built) {
-    throw new Error(
+    throw new CallError(
+      'hosts',
       `${name} is built, and sends its credential to its own hosts`,
     )
   }
   // A direct key is handed to the app's own code and never sent by anything
   // here, so it has no hosts to name.
   if (!i && !hosts.length && !a.direct) {
-    throw new Error(
+    throw new CallError(
+      'integration',
       `no integration is named ${name}; for a custom key, name the hosts it ` +
         `may be sent to`,
     )
   }
   if (i && hosts.length && !same(i.hosts, hosts)) {
-    throw new Error(`${name} already sends its key to ${i.hosts.join(', ')}`)
+    throw new CallError(
+      'hosts',
+      `${name} already sends its key to ${i.hosts.join(', ')}`,
+    )
   }
   let binding = a.binding ?? bindingOf(name)
   if (!NAME.test(binding)) {
-    throw new Error(
+    throw new CallError(
+      'binding',
       `${binding} is not a name code can read: letters, digits and ` +
         `underscores, not starting with a digit`,
     )
   }
   if (a.direct && i && !keyed(i)) {
-    throw new Error(
+    throw new CallError(
+      'direct',
       `${name} is connected by signing in, and only a pasted key is handed ` +
         `to an app directly`,
     )
   }
   if (a.direct && a.each) {
-    throw new Error(
+    throw new CallError(
+      'direct',
       `a key each person connects is theirs, and is never handed to the app`,
     )
   }

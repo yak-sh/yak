@@ -1,6 +1,7 @@
 // Sessions name machines in the graph; only configured providers know how to
 // reach them. A record precedes provisioning, so another worker can resume an
 // interrupted request without inventing a second sandbox.
+import { CallError } from '@yaks/tools/errors'
 import { type Bundle, type Comp, derivedEid, type Graph } from '@yaks/graph'
 import type {
   Machine,
@@ -73,7 +74,7 @@ let refOf = (id: string, record: Comp): MachineRef => ({
 let string = (value: unknown, name: string): string | undefined => {
   if (value == null) return
   if (typeof value != 'string' || !value) {
-    throw new Error(name + ' must be a nonempty string')
+    throw new CallError('argument', name + ' must be a nonempty string')
   }
   return value
 }
@@ -81,9 +82,13 @@ let string = (value: unknown, name: string): string | undefined => {
 /** Bind a graph to its host's configured providers. Nothing is provisioned
  * until a caller asks for `machine` or `cwd`; children only record intentions. */
 export let machines = (g: Graph, configured?: Machines): SessionMachines => {
-  let provider = (name: string): MachineProvider => {
+  let provider = (name: string, supplied = false): MachineProvider => {
     let found = configured?.providers[name]
-    if (!found) throw new Error('Machine provider is not configured: ' + name)
+    if (!found) {
+      let message = 'Machine provider is not configured: ' + name
+      if (supplied) throw new CallError('provider', message)
+      throw new Error(message)
+    }
     return found
   }
   let defaults = () => {
@@ -97,8 +102,10 @@ export let machines = (g: Graph, configured?: Machines): SessionMachines => {
     request: Record<string, unknown> = {},
   ): Promise<string> => {
     let name = string(request.provider, 'machine.provider') ?? defaults()
-    if (!provider(name).request) {
-      throw new Error('Machine provider cannot request a sandbox: ' + name)
+    if (!provider(name, request.provider != null).request) {
+      let message = 'Machine provider cannot request a sandbox: ' + name
+      if (request.provider != null) throw new CallError('provider', message)
+      throw new Error(message)
     }
     let id = own(session)
     let existing = await row(g, id)
@@ -224,7 +231,10 @@ export let machines = (g: Graph, configured?: Machines): SessionMachines => {
       if (args.machine != null) {
         if (typeof args.machine == 'string') {
           if (!(await row(g, args.machine))?.machine) {
-            throw new Error('not a machine entity: ' + args.machine)
+            throw new CallError(
+              'machine',
+              'not a machine entity: ' + args.machine,
+            )
           }
           at = { machine: args.machine }
         } else if (
@@ -236,7 +246,8 @@ export let machines = (g: Graph, configured?: Machines): SessionMachines => {
               args.machine as Record<string, unknown>,
             ),
           }
-        } else {throw new Error(
+        } else {throw new CallError(
+            'machine',
             'machine must be an entity id or sandbox request',
           )}
       }
@@ -244,7 +255,10 @@ export let machines = (g: Graph, configured?: Machines): SessionMachines => {
         let cwd = string(args.cwd, 'cwd')!
         let base = inherited.cwd == null ? undefined : String(inherited.cwd)
         if (!cwd.startsWith('/') && !base?.startsWith('/')) {
-          throw new Error('Relative cwd requires a parent command directory')
+          throw new CallError(
+            'cwd',
+            'Relative cwd requires a parent command directory',
+          )
         }
         at.cwd = cwd.startsWith('/') ? resolve(cwd) : resolve(base!, cwd)
       }
@@ -271,13 +285,19 @@ export let machines = (g: Graph, configured?: Machines): SessionMachines => {
           : path
         if (!loan.root) {
           if (isAbsolute(target) || target.split('/').includes('..')) {
-            throw new Error('Machine file export needs a provider root')
+            throw new CallError(
+              'path',
+              'Machine file export needs a provider root',
+            )
           }
           return target
         }
         let scoped = relative(loan.root, target)
         if (scoped == '..' || scoped.startsWith('../') || isAbsolute(scoped)) {
-          throw new Error('Machine file is outside its export root: ' + path)
+          throw new CallError(
+            'path',
+            'Machine file is outside its export root: ' + path,
+          )
         }
         return scoped
       })

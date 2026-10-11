@@ -706,10 +706,13 @@ equal(
 ```
 
 `toolDefinitionSchema` describes the metadata. `validateToolInput` clones
-arguments and supplies defaults before checking them. `validateToolOutput`
-checks without applying defaults. `toolCheck(schema)` returns a reusable check
-whose empty error list means valid; `errorsText` formats its errors. Validators
-are cached by schema object, so registered schemas must remain immutable.
+arguments and supplies defaults before checking them. Its optional third
+argument constructs the error for invalid arguments; tool callers supply
+`CallError` and declaration readers use the default `Error`. Invalid schemas
+still throw `Error`. `validateToolOutput` checks without applying defaults.
+`toolCheck(schema)` returns a reusable check whose empty error list means valid;
+`errorsText` formats its errors. Validators are cached by schema object, so
+registered schemas must remain immutable.
 
 Schemas use 2020-12 by default; `$schema` can select draft-07, 2019-09 or
 2020-12. Other dialects are refused. Local references work; remote references

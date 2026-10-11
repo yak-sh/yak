@@ -1,6 +1,7 @@
 // Correct main, then wait for Workers Builds to serve the correction. Land is
 // the same git primitive `yak land` calls; its two outcomes matter here: a
 // rebase needs another gate, and a local landing is not proof of a push.
+import { CallError } from '@yaks/tools/errors'
 import { land } from '@yaks/git/land'
 import { deploys, git, needGit, table } from './deploys.ts'
 import { output } from './subprocess.ts'
@@ -34,13 +35,18 @@ export let revert = async (
     root,
     ['rev-parse', '--verify', `${sha}^{commit}`],
     stopping,
+    'sha',
   )
   let ancestor = await git(
     root,
     ['merge-base', '--is-ancestor', target, base],
     stopping,
   )
-  if (!ancestor.ok) throw new Error(`${sha} is not an ancestor of main`)
+  if (!ancestor.ok) {
+    let message = `${sha} is not an ancestor of main`
+    if (ancestor.code == 1) throw new CallError('sha', message)
+    throw new Error(message)
+  }
 
   let name = `yak-revert-${crypto.randomUUID().slice(0, 8)}`
   let parent = `${root}/.claude/worktrees`

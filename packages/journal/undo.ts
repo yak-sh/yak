@@ -16,6 +16,7 @@
 // Whatever the deletion cascaded is in the same transaction and comes back
 // with it.
 
+import { CallError } from '@yaks/tools/errors'
 import type { Actor, Bundle, Comp, Eid, Graph, Was } from '@yaks/graph'
 import { token, TOMBSTONE } from '@yaks/graph'
 import type { Batch } from './batch.ts'
@@ -180,7 +181,7 @@ export let undo =
   (g: Graph, j: Log) =>
   (seq: number, actor?: Actor): Bundle[] | Promise<Bundle[]> => {
     let batch = j.at(seq)
-    if (!batch) throw new Error(`no journal batch #${seq}`)
+    if (!batch) throw new CallError('batch', `no journal batch #${seq}`)
     let bundles = undone(batch, { guard: true })
     if (!bundles.length) return []
     if (actor) bundles[0] = { ...bundles[0], $actor: actor }

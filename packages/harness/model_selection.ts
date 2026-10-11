@@ -1,6 +1,7 @@
 /** Model choices are graph records: a choice is one provider's offering of a
  * model, its `serves` edge. */
 import { type Bundle, type Comp, type Graph } from '@yaks/graph'
+import { CallError } from '@yaks/tools/errors'
 import { edgeEid } from '@yaks/edge'
 import type { Model } from '@yaks/model'
 import { offerFor, offers } from '@yaks/session'
@@ -89,6 +90,8 @@ export const modelSelection = async (
 export let defaultUsing = async (g: Graph, provider: string): Promise<Comp> => {
   let [row] = await g.read(`.provider.name=${provider}&?using`)
   let using = row?.using as Comp | undefined
-  if (!using?.model) throw new Error(`Choose a model for ${provider}`)
+  if (!using?.model) {
+    throw new CallError('model', `Choose a model for ${provider}`)
+  }
   return { provider: row.entity.eid, ...using }
 }

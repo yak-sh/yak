@@ -327,7 +327,11 @@ export let rpc = (session: string) => {
       let detail = r.headers.get('content-type')?.includes('text/html')
         ? ''
         : `: ${text}`
-      throw new Error(`/mcp said ${r.status}${trace}${detail}`)
+      let message = `/mcp said ${r.status}${trace}${detail}`
+      if (r.status >= 400 && r.status < 500) {
+        throw new CallError(refusalCode[r.status] ?? 'arguments', message)
+      }
+      throw new Error(message)
     }
     let reply = await r.json()
     if (reply.error) {
@@ -553,12 +557,20 @@ export let plain = (s: string) =>
 // What a page answered, or the reason it would not: a refusal is a sentence
 // on the page itself, and 302 and 404 are the two answers that carry none.
 let read = (status: number, html: string) => {
-  if (status == 302) throw new Error('this account is not signed in')
+  if (status == 302) {
+    throw new CallError('access', 'this account is not signed in')
+  }
   if (status == 404) {
-    throw new Error('no such space, or not this account\u2019s')
+    throw new CallError('missing', 'no such space, or not this account\u2019s')
   }
   let { lead } = saidOn(html)
-  if (status != 200) throw new Error(plain(lead) || `the door said ${status}`)
+  if (status != 200) {
+    let message = plain(lead) || `the door said ${status}`
+    if (status >= 400 && status < 500) {
+      throw new CallError(refusalCode[status] ?? 'arguments', message)
+    }
+    throw new Error(message)
+  }
   return plain(lead)
 }
 

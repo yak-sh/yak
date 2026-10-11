@@ -46,7 +46,7 @@ import {
 import { BODY, DOC, TITLE } from '@yaks/doc'
 import { human } from '@yaks/id'
 import { absent, and, eq, every, list, present } from '@yaks/query'
-import { checked, type Finding, said } from '@yaks/tools'
+import { CallError, checked, type Finding, said } from '@yaks/tools'
 import type { Runs } from '@yaks/graph/tools'
 import { wearer } from './arrive.ts'
 import { post } from './effects.ts'
@@ -81,7 +81,9 @@ let at = async (graph: Graph, said: unknown): Promise<Eid> =>
 // The letter an argument names, rejected unless it carries `mail`.
 let letterIn = async (graph: Graph, said: unknown): Promise<Bundle> => {
   let found = await one(graph, str(said))
-  if (!comp(found, MAIL)) throw new Error(`not a letter: ${str(said)}`)
+  if (!comp(found, MAIL)) {
+    throw new CallError('letter', `not a letter: ${str(said)}`)
+  }
   return found!
 }
 
@@ -252,7 +254,8 @@ export let runs = (_host?: unknown, options: Options = {}): Runs => ({
       ? await recipientOf(graph, prop(mail, 'from'), options.domain)
       : { to: prop(comp(letter, DELIVER), 'to'), made: [] as Bundle[] }
     if (!far.to) {
-      throw new Error(
+      throw new CallError(
+        'reply',
         'cannot reply: that letter names nobody to answer — send a fresh mail',
       )
     }
@@ -294,7 +297,9 @@ export let runs = (_host?: unknown, options: Options = {}): Runs => ({
   mail_send: async (call, graph): Promise<Bundle[]> => {
     let args = argsOf(call)
     let far = await aimedAt(graph, str(args.to), options.domain)
-    if (!far.to) throw new Error('a letter needs somebody to go to — say --to')
+    if (!far.to) {
+      throw new CallError('to', 'a letter needs somebody to go to — say --to')
+    }
     let target = str(args.about)
     let address = async (eid: string) =>
       eid ? prop(comp(await one(graph, eid), EMAIL), 'address') : ''
@@ -302,7 +307,8 @@ export let runs = (_host?: unknown, options: Options = {}): Runs => ({
       ? str(args.from)
       : await address(target) || await address(str(who(call)?.by))
     if (!from) {
-      throw new Error(
+      throw new CallError(
+        'from',
         'a letter needs a from address — say --from, or send it about ' +
           'something with an `email.address`, or give whoever is asking one',
       )

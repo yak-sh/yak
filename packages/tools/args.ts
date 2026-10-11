@@ -31,24 +31,33 @@ export let parsed = (args: unknown): Args => {
 /** A tool's arguments, validated against the JSON Schema on its declaration,
  * or against the legacy per-property schemas that parse themselves. */
 export let validated = (tool: NamedTool, args: Args): Args => {
-  try {
-    if (tool.inputSchema && tool.input) {
-      throw new Error('Tool cannot declare both input and inputSchema')
-    }
-    if (tool.inputSchema) return validateToolInput(tool, args)
-    let out = { ...args }
-    for (let [key, schema] of Object.entries(tool.input ?? {})) {
-      let parser = schema as { parse?: (value: unknown) => unknown }
-      if (!parser?.parse) {
-        throw new Error('Legacy schema requires a parse adapter: ' + key)
-      }
-      out[key] = parser.parse(out[key])
-    }
-    return out
-  } catch (error) {
-    if (error instanceof CallError) throw error
-    throw new CallError('arguments', String(error))
+  if (tool.inputSchema && tool.input) {
+    throw new Error('Tool cannot declare both input and inputSchema')
   }
+  if (tool.inputSchema) {
+    return validateToolInput(
+      tool,
+      args,
+      (message) => new CallError('arguments', 'Error: ' + message),
+    )
+  }
+  let out = { ...args }
+  for (let [key, schema] of Object.entries(tool.input ?? {})) {
+    let parser = schema as { parse?: (value: unknown) => unknown }
+    if (!parser?.parse) {
+      throw new Error('Legacy schema requires a parse adapter: ' + key)
+    }
+    try {
+      out[key] = parser.parse(out[key])
+    } catch (error) {
+      if (error instanceof CallError) throw error
+      if (error instanceof Error && error.name == 'ZodError') {
+        throw new CallError('arguments', String(error))
+      }
+      throw error
+    }
+  }
+  return out
 }
 
 type Prop = { ref?: unknown; items?: { ref?: unknown } }

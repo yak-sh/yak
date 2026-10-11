@@ -14,6 +14,7 @@
 // control.
 
 import type { Bundle, Comp } from '@yaks/graph'
+import { CallError } from '@yaks/tools/errors'
 import { address } from './store.ts'
 
 export const VALUE_LIMIT = 8192
@@ -21,7 +22,10 @@ const chars = (s: string) => Array.from(s)
 const integer = (v: unknown, fallback: number, max: number) => {
   const n = v == null ? fallback : v
   if (typeof n != 'number' || !Number.isSafeInteger(n) || n < 0 || n > max) {
-    throw new Error('Invalid range: expected integer from 0 to ' + max)
+    throw new CallError(
+      'range',
+      'Invalid range: expected integer from 0 to ' + max,
+    )
   }
   return n
 }
@@ -55,7 +59,7 @@ export const valueTools = (
       if (
         typeof args[key] != 'string' || !args[key] ||
         (args[key] as string).length > 1024
-      ) throw new Error('Invalid value address')
+      ) throw new CallError('address', 'Invalid value address')
     }
     const row = await read(args.entity as string)
     const component = row && Object.hasOwn(row, args.component as string)
@@ -65,11 +69,11 @@ export const valueTools = (
       ? component[args.property as string]
       : undefined
     if (typeof value != 'string') {
-      throw new Error('Value unavailable or not text')
+      throw new CallError('value', 'Value unavailable or not text')
     }
     const revision = address(value)
     if (args.revision != null && args.revision !== revision) {
-      throw new Error('Value revision changed')
+      throw new CallError('revision', 'Value revision changed')
     }
     return { revision, text: chars(value) }
   }
@@ -89,7 +93,7 @@ export const valueTools = (
       const { text, revision } = await load(args)
       const start = integer(args.start, 0, text.length)
       const count = integer(args.count, 2048, VALUE_LIMIT)
-      if (!count) throw new Error('count must be positive')
+      if (!count) throw new CallError('count', 'count must be positive')
       let end = Math.min(text.length, start + count)
       // JSON escapes control characters, so the serialized response can be much
       // larger than the slice; halve the slice until the response fits too.
@@ -123,10 +127,15 @@ export const valueTools = (
       if (
         typeof args.query != 'string' || !args.query.length ||
         args.query.length > 256
-      ) throw new Error('query must contain 1..256 UTF-16 code units')
+      ) {
+        throw new CallError(
+          'query',
+          'query must contain 1..256 UTF-16 code units',
+        )
+      }
       const start = integer(args.start, 0, points.length)
       const limit = integer(args.limit, 10, 20)
-      if (!limit) throw new Error('limit must be positive')
+      if (!limit) throw new CallError('limit', 'limit must be positive')
       const text = points.slice(start).join('')
       const matches: { offset: number; text: string }[] = []
       let pos = 0, offset = start, consumed = 0

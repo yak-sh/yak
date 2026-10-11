@@ -1,5 +1,5 @@
 // Every tool reference takes an id or a name through the same input boundary.
-import { equal, test } from '@yaks/testing'
+import { equal, test, throws } from '@yaks/testing'
 import { assertRejects } from '@std/assert'
 import {
   type Comp,
@@ -15,7 +15,49 @@ import { docDoc } from '@yaks/doc'
 import { kernelDoc } from '@yaks/kernel'
 import { aliasDoc, aliases } from '@yaks/alias'
 import { keyDoc, keyKeywords, keys } from '@yaks/key'
-import { CallError, resolved } from './args.ts'
+import { CallError, resolved, validated } from './args.ts'
+
+test('argument validation refuses bad input and preserves declaration and parser defects', async () => {
+  let tool: NamedTool = {
+    name: 'count',
+    description: 'Count',
+    inputSchema: {
+      type: 'object',
+      properties: { count: { type: 'integer' } },
+    },
+    run: () => [],
+  }
+  let refusal = await throws(() => validated(tool, { count: 'many' }))
+  equal(refusal instanceof CallError, true)
+  equal((refusal as CallError).code, 'arguments')
+  let broken: NamedTool[] = [
+    { ...tool, input: {} },
+    { ...tool, inputSchema: { $schema: 'unknown' } },
+    { ...tool, inputSchema: undefined, input: { count: {} } },
+  ]
+  for (let candidate of broken) {
+    let error = await throws(() => validated(candidate, {}))
+    equal(error instanceof Error && !(error instanceof CallError), true)
+  }
+  let defect = new TypeError('broken parser')
+  let legacy = (error: Error) => ({
+    ...tool,
+    inputSchema: undefined,
+    input: {
+      count: {
+        parse: () => {
+          throw error
+        },
+      },
+    },
+  })
+  equal(await throws(() => validated(legacy(defect), {})), defect)
+  let bad = new Error('not a number')
+  bad.name = 'ZodError'
+  let error = await throws(() => validated(legacy(bad), {}))
+  equal(error instanceof CallError, true)
+  equal((error as Error).message, String(bad))
+})
 
 let vocab = loadVocab([kernelDoc, docDoc, keyDoc, aliasDoc, {
   $defs: {

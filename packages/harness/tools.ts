@@ -171,18 +171,6 @@ export let harnessTools = (
     ...graphTools(g, { depth: opts.depth, reply: opts.reply }),
     ...valueTools(async (entity) =>
       (await g.read('.entity.eid=' + JSON.stringify(entity)))[0]
-    ).map((tool) => ({
-      ...tool,
-      run: async (args: Record<string, unknown>) => {
-        try {
-          return await tool.run(args)
-        } catch (error) {
-          throw new ToolError(
-            'value',
-            error instanceof Error ? error.message : String(error),
-          )
-        }
-      },
-    })),
+    ),
   ]
 }

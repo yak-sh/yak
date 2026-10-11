@@ -280,9 +280,14 @@ export let needGit = async (
   root: string,
   args: string[],
   stopping: AbortSignal,
+  refusal?: string,
 ) => {
   let r = await git(root, args, stopping)
-  if (!r.ok) throw new Error(`git ${args[0]} exited ${r.code}: ${r.err.trim()}`)
+  if (!r.ok) {
+    let message = `git ${args[0]} exited ${r.code}: ${r.err.trim()}`
+    if (refusal) throw new CallError(refusal, message)
+    throw new Error(message)
+  }
   return r.out.trim()
 }
 

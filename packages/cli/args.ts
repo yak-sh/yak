@@ -222,14 +222,11 @@ export let argsFor = async (
     }
     return out
   }
-  try {
-    return validateToolInput(
-      { inputSchema: tool.inputSchema as Record<string, unknown> },
-      out,
-    )
-  } catch (e) {
-    throw new Usage((e as Error).message)
-  }
+  return validateToolInput(
+    { inputSchema: tool.inputSchema as Record<string, unknown> },
+    out,
+    (message) => new Usage(message),
+  )
 }
 
 export let commandFor = <T extends Grammar>(
@@ -312,13 +309,13 @@ export let scanned = (
       raw != '-'
     ) {
       let value = valueOf(name, raw, props[name])
-      try {
-        validateToolInput({
+      validateToolInput(
+        {
           inputSchema: { type: 'object', properties: { [name]: props[name] } },
-        }, { [name]: value })
-      } catch (e) {
-        throw new Usage((e as Error).message)
-      }
+        },
+        { [name]: value },
+        (message) => new Usage(message),
+      )
     }
     pairs.push([name, raw])
     given.add(name)
@@ -391,13 +388,13 @@ export let scanned = (
       let value = typeOf(prop) == 'array'
         ? words.flatMap((w) => valueOf(rest, w, prop))
         : words.join(' ')
-      try {
-        validateToolInput({
+      validateToolInput(
+        {
           inputSchema: { type: 'object', properties: { [rest]: prop } },
-        }, { [rest]: value })
-      } catch (e) {
-        throw new Usage((e as Error).message)
-      }
+        },
+        { [rest]: value },
+        (message) => new Usage(message),
+      )
     }
   }
   while (at < positional.length && given.has(positional[at])) at++

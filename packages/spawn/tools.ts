@@ -92,7 +92,10 @@ export let every = (said: unknown, dflt: number): number => {
   ] ?? 1
   let n = Number(raw.replace(/[smh]$/, ''))
   if (!Number.isFinite(n) || n < 0) {
-    throw new Error(`not a duration: ${raw} — say 45m, 2h, or seconds`)
+    throw new CallError(
+      'duration',
+      `not a duration: ${raw} — say 45m, 2h, or seconds`,
+    )
   }
   return Math.round(n * scale * 1000)
 }
@@ -205,7 +208,8 @@ export let runs = (host: Host, options: Options = {}): Runs => {
       let persona = str(args.persona)
       let on = (await one(graph, task))!
       if (model && await spelling(graph, provider, model) == null) {
-        throw new Error(
+        throw new CallError(
+          'model',
           `${str(args.provider)} does not serve ${str(args.model)}`,
         )
       }

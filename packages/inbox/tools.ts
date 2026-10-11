@@ -13,6 +13,7 @@ import {
   who,
 } from '@yaks/graph'
 import type { Runs } from '@yaks/graph/tools'
+import { CallError } from '@yaks/tools/errors'
 import { readInbox } from './read.ts'
 import { readerAt, type Row } from './reader.ts'
 import { attention, type Direction, type Lane, threadOf } from './threads.ts'
@@ -38,7 +39,7 @@ export let reader = (call: Bundle): Eid => {
   let asked = argsOf(call).who
   if (asked != null) return str(asked)
   let me = who(call)?.by
-  if (!me) throw new Error('nobody is asking — say --who')
+  if (!me) throw new CallError('who', 'nobody is asking — say --who')
   return me
 }
 
