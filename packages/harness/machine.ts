@@ -26,8 +26,7 @@ export type MachineOpts = {
   grace?: number
   /** how many lines of output an answer carries (default 40) */
   lines?: number
-  /** where a call runs when it names no directory, and what a relative path is
-   * read from */
+  /** where every command starts, and what a relative file path is read from */
   cwd?: (ctx?: ToolContext) => string | undefined | Promise<string | undefined>
 }
 
@@ -75,7 +74,6 @@ export let machineDeclared = (o: MachineOpts = {}): MachineTool[] => [{
     type: 'object',
     properties: {
       command: os('the command line, run by bash'),
-      cwd: os('where to run it'),
       timeout: {
         type: 'number',
         description: `milliseconds to wait for it (default ${
@@ -208,10 +206,9 @@ export let machineTools = (
       // The timeout covers the whole call, the start included; a child that
       // outlived it is reported as running even if it exits a moment later.
       let end = Date.now() + ms
-      let cwd = args.cwd == null ? await here(ctx) : String(args.cwd)
       let id = await m.start(
         String(args.command ?? ''),
-        cwd,
+        await here(ctx),
         ctx?.call.entity.eid,
         ctx?.session,
       )

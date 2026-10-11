@@ -289,14 +289,16 @@ and `write`, over a [Machine](../machine/README.md#machine) the host lends
 sandboxes or explicitly attached local machines; the yaks.app Worker lends its
 sandbox container (workers/yak/sandbox.ts).
 
-`shell` runs `bash -c`. If the command outlives the call's timeout, it keeps
-running and the answer names its process id; `wait` looks for its exit and
-answers recent output, and `stop` sends SIGTERM and then SIGKILL if necessary.
-On a box, a command runs with the host environment, including `PATH` and `HOME`,
-and is a process entity written before the child starts; `wait` and `stop` read
-its persisted exit, so they also work for processes that `watch()` adopted after
-a restart. `read` and `write` take a path from the session's directory unless it
-is rooted.
+`shell` runs `bash -c`, starting each command in the session's home command
+directory. To work in a subdirectory within a command, use `cd sub && …` in its
+`command`; the next shell call starts in the home command directory again. If
+the command outlives the call's timeout, it keeps running and the answer names
+its process id; `wait` looks for its exit and answers recent output, and `stop`
+sends SIGTERM and then SIGKILL if necessary. On a box, a command runs with the
+host environment, including `PATH` and `HOME`, and is a process entity written
+before the child starts; `wait` and `stop` read its persisted exit, so they also
+work for processes that `watch()` adopted after a restart. `read` and `write`
+take a path from the session's directory unless it is rooted.
 
 ## Not here
 

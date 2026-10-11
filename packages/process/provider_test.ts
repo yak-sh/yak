@@ -197,7 +197,8 @@ test('process machines discover their own repositories but never an enclosing re
     command: string,
     cwd?: string,
   ) =>
-    machineTools(machine).find((t) => t.name == 'shell')!.run({ command, cwd })
+    machineTools(machine, { cwd: () => cwd }).find((t) => t.name == 'shell')!
+      .run({ command })
   try {
     await git('init', '-q')
     // The provider itself is inside a real repository: without a ceiling,
