@@ -64,36 +64,41 @@ test('a tool entry: a sentence, its arguments, and one act', () => {
   assertEquals(parseTools('{}'), {})
 })
 
-test('a command keeps its declared grammar and never derives one', () => {
-  let positional = ['who', 'body...']
-  let tool = parsed({
-    log_run: {
-      ...club.log_run,
-      input: {
-        ...club.log_run.input,
-        miles: { ...NUMBER, short: 'm' },
-        body: TEXT,
-      },
-      positional,
+let positional = ['who', 'body...']
+let grammarTool = parsed({
+  log_run: {
+    ...club.log_run,
+    input: {
+      ...club.log_run.input,
+      miles: { ...NUMBER, short: 'm' },
+      body: TEXT,
     },
-  }).log_run
+    positional,
+  },
+}).log_run
+let implicit = parsed(club)
+let badGrammar = [
+  { positional: ['missing'] },
+  { positional: ['who...', 'miles'] },
+  { input: { ...club.log_run.input, miles: { ...NUMBER, short: 'many' } } },
+  { options: { positional: ['who'] } },
+  { forward: 'miles' },
+].map((bad) => {
+  try {
+    parsed({ log_run: { ...club.log_run, ...bad } })
+  } catch (error) {
+    return error
+  }
+})
+test('a command keeps its declared grammar and never derives one', () => {
+  let tool = grammarTool
   assertEquals(tool.positional, positional)
   assertEquals(commands({ log_run: tool })[0].positional, positional)
-  assertEquals(parsed(club).log_run.positional, undefined)
-  assertEquals(commands(parsed(club))[0].positional, undefined)
+  assertEquals(implicit.log_run.positional, undefined)
+  assertEquals(commands(implicit)[0].positional, undefined)
   assertEquals(schemaOf(tool).properties.miles, NUMBER)
   assertEquals(schemaOf(tool, { short: true }).properties.miles.short, 'm')
-  for (
-    let bad of [
-      { positional: ['missing'] },
-      { positional: ['who...', 'miles'] },
-      { input: { ...club.log_run.input, miles: { ...NUMBER, short: 'many' } } },
-      { options: { positional: ['who'] } },
-      { forward: 'miles' },
-    ]
-  ) {
-    assertThrows(() => parsed({ log_run: { ...club.log_run, ...bad } }))
-  }
+  for (let error of badGrammar) assertEquals(error instanceof Error, true)
 })
 
 test('a worker command takes its typed arguments to one local path', () => {

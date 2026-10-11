@@ -142,25 +142,27 @@ for (
 
 for (let shell of ['empty', 'deleted']) {
   for (let alias of [false, true]) {
+    let ask = await named(1, shell, alias)
+    let live = await named(1, 'live', alias)
+    await ask.g.apply([{ entity: { eid: 'other' }, doc: { title: 'Other' } }])
+    let [task] = await ask.g.apply([{
+      entity: { eid: '$task' },
+      filed: { assignee: 'Ada' },
+    }])
+    let eid = mint()
+    await ask.g.apply([{ entity: { eid }, person: {} }])
+    await ask.g.apply([{ entity: { eid }, $delete: true }])
     test(`name resolution ignores ${shell} word eid before ${alias ? 'alias' : 'title'}`, async () => {
-      let ask = await named(1, shell, alias)
       for (let readOnly of [true, false]) {
         equal(await ask('Ada', readOnly), { who: 'person-1' })
       }
       equal(await referenced(ask.g, ['Ada'], 'person'), ['person-1'])
-      await ask.g.apply([{ entity: { eid: 'other' }, doc: { title: 'Other' } }])
-      await ask.g.apply([{
-        entity: { eid: '$task' },
-        filed: { assignee: 'Ada' },
-      }])
-      equal((await ask.g.read('.filed'))[0].filed, { assignee: 'person-1' })
+      equal((await ask.g.get([task.entity.eid]))[0].filed, {
+        assignee: 'person-1',
+      })
       // A live word identity still takes precedence; a deleted minted eid is
       // still readable by identity.
-      let live = await named(1, 'live', alias)
       equal(await live('Ada'), { who: 'Ada' })
-      let eid = mint()
-      await ask.g.apply([{ entity: { eid }, person: {} }])
-      await ask.g.apply([{ entity: { eid }, $delete: true }])
       equal(await ask(eid), { who: eid })
     })
   }
