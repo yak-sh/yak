@@ -27,7 +27,7 @@
 // the run's kernel, and there are few of them.
 //
 // Nothing ever joins the list, and a test renamed is a test not listed; an
-// example is listed by its code or its place, not its line (`listed`).
+// example is listed by its code, not its line or block position (`listed`).
 // `--write` takes from it each test that ran within `leave` or no longer
 // exists, and lowers each record a run beat by more than the slack, and each
 // platform's on the gate: a record follows a test that got faster, not one
@@ -81,20 +81,14 @@ type Seen = {
 
 /** What the list names each test by: its name, but an example's without the
  * line the runner says it at (packages/testing examples.ts): a doctest by its
- * code, a fenced block by its place among its page's blocks. An edit above an
- * example takes it off no list. */
-export let listed = (tests: { file: string; name: string }[]): string[] => {
-  let blocks = new Map<string, number>()
-  return tests.map(({ file, name }) => {
+ * code, a fenced block by its code's SHA-256 digest. Adding or removing blocks
+ * above an example leaves its listing intact; changing its code does not. */
+export let listed = (tests: { file: string; name: string }[]): string[] =>
+  tests.map(({ file, name }) => {
     let at = name.startsWith(`${file}:`) &&
       /^(\d+)(?: (.*))?$/.exec(name.slice(file.length + 1))
-    if (!at) return name
-    if (at[2] != null) return `${file}: ${at[2]}`
-    let n = (blocks.get(file) ?? 0) + 1
-    blocks.set(file, n)
-    return `${file} block ${n}`
+    return at && at[2] != null ? `${file}: ${at[2]}` : name
   })
-}
 
 /** What a run's times say against the list: the tests over the line, the
  * listed ones now within `leave` or faster than their record by more than its

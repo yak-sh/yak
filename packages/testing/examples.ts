@@ -24,6 +24,19 @@ export type Doctest = {
 /** One fenced example: the line its fence opens on, and its code. */
 export type Fence = { line: number; skip: boolean; lang: string; code: string }
 
+/** A fenced test's page and line for failures, and code digest for listings. */
+export let fenceName = async (page: string, fence: Fence) => {
+  let digest = await crypto.subtle.digest(
+    'SHA-256',
+    new TextEncoder().encode(fence.code),
+  )
+  let hash = Array.from(
+    new Uint8Array(digest),
+    (b) => b.toString(16).padStart(2, '0'),
+  ).join('')
+  return `${page}:${fence.line} block sha256:${hash}`
+}
+
 let DOCTEST = /^\s*\/\/( ?)\/ (.*)$/
 
 /// doctests('/// f(1) -> 2')[0] ~> { line: 1, op: '->', code: 'f(1) -> 2' }
@@ -234,7 +247,8 @@ let own = (name: string) => new URL(name, import.meta.url).href
 
 /**
  * One fenced example as a module that declares it as a test named for its
- * page and line. `exports` are the page's, for an example in a module.
+ * page, line and code digest. `exports` are the page's, for an example in a
+ * module.
  */
 export let compileFence = (
   name: string,

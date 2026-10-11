@@ -19,8 +19,8 @@
   },
   "tests": {
     "apps/vale/abilities.ts": {
-      "apps/vale/abilities.ts block 2": 1.2,
-      "apps/vale/abilities.ts block 4": 1.2
+      "apps/vale/abilities.ts: block sha256:dec3c94f95bc0797eb65765a40a875b1d6f996b8a2d4c8087e8d9a2d8e495c7d": 1.2,
+      "apps/vale/abilities.ts: block sha256:c9c738877eb13ba80c9c60b54a9028f10a5bd6bf5aaf341fb59cfc2d1b619ffd": 1.2
     },
     "apps/vale/abilities_test.ts": {
       "Store admits an invented ability only within its effect budget": 27.9,
@@ -44,7 +44,7 @@
       "Store and descriptions share the ground effect authored shape": 23.2
     },
     "apps/vale/beasts.ts": {
-      "apps/vale/beasts.ts block 1": 8.3
+      "apps/vale/beasts.ts: block sha256:196e97f8a18a3a6db5a4d83df983cc134790b5620f2b6b32181e175da3bfa477": 8.3
     },
     "apps/vale/beasts_test.ts": {
       "a creature design added to the store inhabits its chosen land": 102.4,
@@ -59,7 +59,7 @@
       "a boundary chunk agrees with the next chunk at the seam": 22.6
     },
     "apps/vale/boxes.ts": {
-      "apps/vale/boxes.ts block 4": 1.4
+      "apps/vale/boxes.ts: block sha256:8ede808310f3d903cff1c51f5bc8a1cc8e0943cabae0dd1ca1463bcfd0d1f57c": 1.4
     },
     "apps/vale/bridge_span_test.ts": {
       "a bridge has a dry deck over the river in cold and grown ground": 28.1,
@@ -70,7 +70,7 @@
       "an edited building design replaces its visible shape": 45.2
     },
     "apps/vale/buildings/kit.ts": {
-      "apps/vale/buildings/kit.ts block 2": 12.2
+      "apps/vale/buildings/kit.ts: block sha256:c1ea601ae676ecd96c5454b0ab77c7c997abeaa247307d354f103b262ca1ec04": 12.2
     },
     "apps/vale/buildings/plans_test.ts": {
       "homes and farm buildings raise in every dress and seed": 186.5
@@ -87,7 +87,7 @@
       "village crafting stations are inside their workshops": 573.7
     },
     "apps/vale/cam.ts": {
-      "apps/vale/cam.ts block 3": 27.9
+      "apps/vale/cam.ts: block sha256:f21ce273ec133555a2b8991b539e73f69bb2fb9f1a8335c2f06fc18cc8d740d4": 27.9
     },
     "apps/vale/caves_test.ts": {
       "the cave has matching cold and grown layers and a clear camera": 37.6,
@@ -98,7 +98,7 @@
       "character stats have icons and conditional stats follow equipped gear": 25.2
     },
     "apps/vale/chart.ts": {
-      "apps/vale/chart.ts block 1": 540.2
+      "apps/vale/chart.ts: block sha256:a974af762c2c184a03ff1d66c09950ed478275ffdaa3b081dfccbbb63c71880c": 540.2
     },
     "apps/vale/chart_test.ts": {
       "a chart grows each chunk once even when larger than the terrain cache": 1.9,
@@ -125,7 +125,7 @@
       "failed creature builds appear only to their spawner and stop shimmering until retry": 13.7
     },
     "apps/vale/chunks.ts": {
-      "apps/vale/chunks.ts block 1": 150.6
+      "apps/vale/chunks.ts: block sha256:bd86893fbe78a559b4ccebf85fdd19d409869f7b7ce48795c490d186997ddf23": 150.6
     },
     "apps/vale/command-field_test.ts": {
       "acknowledged command drafts survive reload without the emergency stash": 16.3,
@@ -149,7 +149,7 @@
       "a scheduled objective resumes, retries once, and credits its hero": 5.1
     },
     "apps/vale/compare.ts": {
-      "apps/vale/compare.ts block 3": 3.2
+      "apps/vale/compare.ts: block sha256:6dd5765b031c641b42c4f39ba61135240cdbacc05f48b80f51fd28945fb3d492": 3.2
     },
     "apps/vale/compare_test.ts": {
       "upgrade ranges use the compact text and the icons of finished gear": 2.6
@@ -175,7 +175,7 @@
       "a staff and tome carry their own soft light": 10.2
     },
     "apps/vale/figure.ts": {
-      "apps/vale/figure.ts block 1": 5.1
+      "apps/vale/figure.ts: block sha256:52367a7d91be90a9c1a0a2a2756eef6a76d1e81f69692d1d9d4990f38313c48b": 5.1
     },
     "apps/vale/figure_builder_test.ts": {
       "all seeded figures pass store admission unchanged": 56.7,
@@ -194,14 +194,14 @@
       "frontier cells grow named lands with their own terrain and wildlife": 93.3
     },
     "apps/vale/gather.ts": {
-      "apps/vale/gather.ts block 1": 21.3
+      "apps/vale/gather.ts: block sha256:efde296c66e990bf3ce807755545e4bdc76ef018b78d841190660ba9cc01a769": 21.3
     },
     "apps/vale/gather_test.ts": {
       "a natural prop is the same gatherable node on every read": 30.4,
       "a natural resource changes shape when spent and shines when rare": 3.2
     },
     "apps/vale/gear.ts": {
-      "apps/vale/gear.ts block 4": 6.9
+      "apps/vale/gear.ts: block sha256:301088875b0630e11c0a3bca47ee5abcba82222f877d3ee7248fcea2de261704": 6.9
     },
     "apps/vale/gear_level_test.ts": {
       "item levels stay with their piece and refine its power": 2
@@ -224,7 +224,7 @@
       "hero commands refuse ambiguous names with each matching hero and retain authorization": 6.8
     },
     "apps/vale/homes.ts": {
-      "apps/vale/homes.ts block 2": 2.1
+      "apps/vale/homes.ts: block sha256:48612000ae6747d14c0fe7fd09117e630006801ae7b119e2a265d41511b28a73": 2.1
     },
     "apps/vale/hud_test.ts": {
       "Pip reacts to this hero marking the welcome task in Village Tasks": 1.3,
@@ -302,15 +302,15 @@
       "resource light stays bounded on phones": 1.4
     },
     "apps/vale/noises.ts": {
-      "apps/vale/noises.ts block 1": 1.7,
-      "apps/vale/noises.ts block 2": 1.9,
-      "apps/vale/noises.ts block 3": 1.8
+      "apps/vale/noises.ts: block sha256:ec6b270ee9d692aef35abee5b2f063285dae3a265bc8600315d46d74868337b0": 1.7,
+      "apps/vale/noises.ts: block sha256:fcf17672e724bc665c34a1d865774cb62c0910d789f0e9d80184e5fffb9e504a": 1.9,
+      "apps/vale/noises.ts: block sha256:7fcc65298e78388c3ba6a28dfc8ccaad5dc50753c362dacc2083ce02c48fe38a": 1.8
     },
     "apps/vale/noises_test.ts": {
       "village fire is near the square but not beyond surrounding buildings": 32
     },
     "apps/vale/notices.ts": {
-      "apps/vale/notices.ts block 2": 2.1
+      "apps/vale/notices.ts: block sha256:bdc1eca7aeec1c3f795fecf38afc0a577b3b698331ad53ae3f08ed8cdab6590c": 2.1
     },
     "apps/vale/once_test.ts": {
       "a delayed query returns its rows instead of an empty answer": 1.1
@@ -335,10 +335,10 @@
       "panel and tabs keep native nodes, drafts, listeners and scroll across graph edits": 29.7
     },
     "apps/vale/papers.ts": {
-      "apps/vale/papers.ts block 1": 6.3
+      "apps/vale/papers.ts: block sha256:4284b3be152de53fb9cbba0dfc33dabacbc0cf09e00d70a853dcd4d83e31d57b": 6.3
     },
     "apps/vale/parts.ts": {
-      "apps/vale/parts.ts block 1": 1.2
+      "apps/vale/parts.ts: block sha256:0fb563c4c370e55bb5d0a8d48c3fac35f592dd4599a5b437df1afccc40093ec1": 1.2
     },
     "apps/vale/party-flow_test.ts": {
       "two heroes invite and accept through their pages into one party": 78.7
@@ -375,12 +375,12 @@
       "no prop fights itself": 1369.5
     },
     "apps/vale/quests.ts": {
-      "apps/vale/quests.ts block 1": 23.5
+      "apps/vale/quests.ts: block sha256:018655e6176e87e905fba6570f2e835f63f03f968aba230d6f9c17f29f524cc9": 23.5
     },
     "apps/vale/rarity.ts": {
-      "apps/vale/rarity.ts block 4": 11.4,
-      "apps/vale/rarity.ts block 5": 8.8,
-      "apps/vale/rarity.ts block 6": 25.1
+      "apps/vale/rarity.ts: block sha256:c6b23b5c1205bd2ff3071caf5d0e729571890479854f4ffa12be69c72d99350e": 11.4,
+      "apps/vale/rarity.ts: block sha256:da5d556af8ca7af995d2b66dbd193a18e903ce27ed0bb50041e2497f381a8072": 8.8,
+      "apps/vale/rarity.ts: block sha256:407c4d20f63dd3e47e12476fe5984aa6d03f0f44e7ce6b9744cae9eada0d1df0": 25.1
     },
     "apps/vale/regions_test.ts": {
       "a chunk searches fewer sites without changing either blended region or its share": 16.6,
@@ -392,9 +392,9 @@
       "required Vale notice persists across older events and tab dismissal, leaving a draft and its keys intact": 1.3
     },
     "apps/vale/rules.ts": {
-      "apps/vale/rules.ts block 10": 1.6,
-      "apps/vale/rules.ts block 14": 5.2,
-      "apps/vale/rules.ts block 2": 1.7
+      "apps/vale/rules.ts: block sha256:dbc3f6418b3ce8087427c409191f0549c2c6524675a2310f9d345f433104626d": 1.6,
+      "apps/vale/rules.ts: block sha256:08b292176d3181461085e6cabd75ada649063e257f8afdba8da22d3ecc2235f2": 5.2,
+      "apps/vale/rules.ts: block sha256:cfa6eded190bb6c3b645f8a8c3ecd1443cded7987c25fc6e34bcbabffd41b0e1": 1.7
     },
     "apps/vale/safety_test.ts": {
       "a creature pursuing a traveler stops at a road": 2.1,
@@ -428,10 +428,10 @@
       "targetless ranged attacks keep the mouse landing point through windup": 2.5
     },
     "apps/vale/sprite-paint.ts": {
-      "apps/vale/sprite-paint.ts block 1": 1.6
+      "apps/vale/sprite-paint.ts: block sha256:19bf13ee9e14d45615efa47364d808f7133d3edaff9102b2c631062b22b0d019": 1.6
     },
     "apps/vale/stand.ts": {
-      "apps/vale/stand.ts block 3": 2.8
+      "apps/vale/stand.ts: block sha256:43e88da33a248bea61392a293be48fd3077a3062cb63426a2bf9b8e80e681f5b": 2.8
     },
     "apps/vale/stand_test.ts": {
       "adjacent crowns and a gathering node do not fight the ground or each other": 4.8,
@@ -441,9 +441,9 @@
       "new lasting effects are admitted, described and skill-replaced": 20.5
     },
     "apps/vale/stock.ts": {
-      "apps/vale/stock.ts block 1": 2.4,
-      "apps/vale/stock.ts block 3": 14.8,
-      "apps/vale/stock.ts block 4": 1.7
+      "apps/vale/stock.ts: block sha256:357fce59c5dba6c8c8fc9c0d32d7aa2be6d989f0dc8ed26e6386f1cdb136400d": 2.4,
+      "apps/vale/stock.ts: block sha256:ceacbdf336756b2eb9b80df8585c6de6a21643563adda1b9ec9bb544d435413e": 14.8,
+      "apps/vale/stock.ts: block sha256:ff0e89a0e162bad86ed87f75046954d8f6af424f11a80aecfacf9043a96d260a": 1.7
     },
     "apps/vale/stock_test.ts": {
       "a deal asks only for what the land has": 2,
@@ -484,7 +484,7 @@
       "the teleport worker admits owner and refuses editor": 6
     },
     "apps/vale/terrain.ts": {
-      "apps/vale/terrain.ts block 4": 71.4
+      "apps/vale/terrain.ts: block sha256:cf8aa70e03204e2a00426a9cc7c23cf9d4789e86cc1fbb6d4f0cf939075b6084": 71.4
     },
     "apps/vale/themes_test.ts": {
       "a changed ground cover repaints an already-grown chunk": 2.4
@@ -512,15 +512,15 @@
       "selection keeps every list node and scroll; back stays on list during refresh": 1.3
     },
     "apps/vale/upgrade.ts": {
-      "apps/vale/upgrade.ts block 3": 9.1
+      "apps/vale/upgrade.ts: block sha256:987fff1572e9dd85449b6384a7bc8d0715d04dfcbd7d142af6a556dfdfa26be6": 9.1
     },
     "apps/vale/villager-schedule_test.ts": {
       "legacy clock retirement preserves dialogue and a changed human call": 4.2,
       "legacy think worker retires its named clock once without touching dialogue": 3.9
     },
     "apps/vale/villagers.ts": {
-      "apps/vale/villagers.ts block 3": 5.2,
-      "apps/vale/villagers.ts block 9": 167.2
+      "apps/vale/villagers.ts: block sha256:1d4fc4d01b6f8e1e9ca49a8b57d1676a0d9f3b8d207d7f9e4e506308b61a1adb": 5.2,
+      "apps/vale/villagers.ts: block sha256:0eb39d841f00f987fd470e01ee801f30c44613f586a865890cb5b45cb7c006ed": 167.2
     },
     "apps/vale/villagers_character_test.ts": {
       "a villager speaks from graph character details": 1.2,
@@ -617,7 +617,7 @@
       "tidy reaps old headless browsers and unused profiles, and nothing else": 137.6
     },
     "packages/README.md": {
-      "packages/README.md block 1": 1.7
+      "packages/README.md: block sha256:e1d7d17c963c36c25e63e526606e3f3276dab1ec62b04c08ba41175a1deb84fa": 1.7
     },
     "packages/admin/api_test.ts": {
       "the code is found by its address among many newer letters": 1.7
@@ -647,15 +647,15 @@
       "upload accepts the oldest account default without --as and sends bearer bytes": 14.5
     },
     "packages/alias/README.md": {
-      "packages/alias/README.md block 1": 4.2
+      "packages/alias/README.md: block sha256:334e00ada40f7f7773eb12751a89c1ee7b42a4e21b630f21ec7aea92de98576b": 4.2
     },
     "packages/api/README.md": {
-      "packages/api/README.md block 1": 9.1,
-      "packages/api/README.md block 2": 5.9,
-      "packages/api/README.md block 4": 6.2,
-      "packages/api/README.md block 6": 4.4,
-      "packages/api/README.md block 7": 6.1,
-      "packages/api/README.md block 9": 2.9
+      "packages/api/README.md: block sha256:e4ae91b806fff6744e2490b6d0af71759a874714f9b3405576a973920fea286c": 9.1,
+      "packages/api/README.md: block sha256:8f3262b2384d784ef38d6bbe8644d85c6cb5bf0d36bf0e53177c6030c356f699": 5.9,
+      "packages/api/README.md: block sha256:59720761a46b31a473e684dfc0730936ac705235ec3bb9506b0bcfc456658292": 6.2,
+      "packages/api/README.md: block sha256:2279403b5b0000d4f721a8b40b91a49f59c94720e8356b892c6a8fdf04240abd": 4.4,
+      "packages/api/README.md: block sha256:2830b47acfeea0422b9fdd6341ee0e88aea8da27a65457f56688de2d946cc8ff": 6.1,
+      "packages/api/README.md: block sha256:80e7a9e4edadb149073444b0d5eac993185b00c5118c86d3b95dcc3eff4a028e": 2.9
     },
     "packages/api/activity_test.ts": {
       "API reads and writes descend from HTTP requests and streaming imports stay live": 2.2,
@@ -765,14 +765,14 @@
       "NDJSON rolls back a refused contextualized batch whole": 4.4
     },
     "packages/archetype/README.md": {
-      "packages/archetype/README.md block 1": 2.3
+      "packages/archetype/README.md: block sha256:6cd1c6ad46d5ba4d231dbfd97b289c1cbfdf68033a8c647c07d09351d25f3159": 2.3
     },
     "packages/archetype/plugin_test.ts": {
       "archetype admission gathers warmed descriptors with their owners": 1.2
     },
     "packages/benchmark/README.md": {
-      "packages/benchmark/README.md block 1": 8.2,
-      "packages/benchmark/README.md block 4": 35.2
+      "packages/benchmark/README.md: block sha256:c74a43de45213a4ff2e8df8480830a04bdb18110f22329f7f7c29f560f677ada": 8.2,
+      "packages/benchmark/README.md: block sha256:92bceefba6d8eddeacb41099c27e46b56e671365122b6cfbf5bf7d8543544718": 35.2
     },
     "packages/benchmark/benchmark_test.ts": {
       "a symlinked output directory cannot overwrite the baseline": 3.1,
@@ -783,12 +783,12 @@
       "throughput refuses synthetic 30% timing and statement regressions without banking them": 11.2
     },
     "packages/blob/README.md": {
-      "packages/blob/README.md block 1": 23.2,
-      "packages/blob/README.md block 10": 2.5,
-      "packages/blob/README.md block 12": 17.3,
-      "packages/blob/README.md block 6": 7.8,
-      "packages/blob/README.md block 7": 38.3,
-      "packages/blob/README.md block 8": 4.5
+      "packages/blob/README.md: block sha256:c27fdef16e85aee26c9399bfe6faf0e031f5a3da5b807dd62f5b58c2d3986b3f": 23.2,
+      "packages/blob/README.md: block sha256:69dd8cbd1fcdfe052731053d715fee6ff3eecfb6c2b5682afb53ab96ec13288c": 2.5,
+      "packages/blob/README.md: block sha256:9885b1f511b03759dfb1e8a7f42a2a26ff959443aa6b3afad6037bae6e5a7c23": 17.3,
+      "packages/blob/README.md: block sha256:af38a6c3bc1f0d2f36464f9e505d2b621f1a5b8d92381777b6be246c05f6d03c": 7.8,
+      "packages/blob/README.md: block sha256:d4d6d19bab10c9c3e7e52e65adf8a8581a850a53c1e0236fd890b10d57ad9941": 38.3,
+      "packages/blob/README.md: block sha256:c18fda435a278ab2528023514d7bea4c900da02b457dc23078058941f222ec5f": 4.5
     },
     "packages/blob/content_type_test.ts": {
       "artifact types survive when their supported signatures are shorter than file sniffing needs": 1.5
@@ -797,7 +797,7 @@
       "the file backend stores one file per address": 1.1
     },
     "packages/blob/mod.ts": {
-      "packages/blob/mod.ts block 1": 5.7
+      "packages/blob/mod.ts: block sha256:0c5da385a75f969783276cf3eca4be2a744ebadb2317bcc094165aa801d28096": 5.7
     },
     "packages/blob/plugin_test.ts": {
       "a backend may address bodies by integer keys while echoing text": 3.5,
@@ -1372,11 +1372,11 @@
       "init writes a config whose graph knows its person": 82.4
     },
     "packages/client/README.md": {
-      "packages/client/README.md block 1": 3.8,
-      "packages/client/README.md block 2": 3,
-      "packages/client/README.md block 5": 6.4,
-      "packages/client/README.md block 6": 4,
-      "packages/client/README.md block 8": 2.9
+      "packages/client/README.md: block sha256:00228596a040948079dc7bfca31bac0f0c74d52f63193b82f29339a0d9bf6a0f": 3.8,
+      "packages/client/README.md: block sha256:30aa693d51e4869b968e367037e9f3b84172b402e9f430ae3e64fe7ef77d2852": 3,
+      "packages/client/README.md: block sha256:69736c8b94c0764d37981266f8250178017781e2bfbfe5c6f25bd9020bc3d30e": 6.4,
+      "packages/client/README.md: block sha256:d04698e69fabccfa91935517f63a33124c2a207feb413265ee202b850fe8671c": 4,
+      "packages/client/README.md: block sha256:8112e98b138cd0ef3425ffd38c6df1f1cc5ae43b3e5199dc3c02029b928fbf02": 2.9
     },
     "packages/client/client_test.ts": {
       "API component-selected socket snapshots preserve unrelated cached components": 3.3,
@@ -1502,10 +1502,10 @@
       "the salt is made once, and opens only under its key": 1.5
     },
     "packages/doc/README.md": {
-      "packages/doc/README.md block 3": 17
+      "packages/doc/README.md: block sha256:9159004c9a0598e8be52c2b7975320373935c25a7b1da0601ad275eaacac7745": 17
     },
     "packages/draft/desk.ts": {
-      "packages/draft/desk.ts block 2": 3.1
+      "packages/draft/desk.ts: block sha256:b7162c36cc42bfde2715b8523b8f18d71192851341eb6e1faab9d0f71da1be69": 3.1
     },
     "packages/draft/desk_test.ts": {
       "a discard keeps what another interface typed meanwhile": 7.4,
@@ -1516,7 +1516,7 @@
       "what the store never took is back on the next load, and sent": 2.7
     },
     "packages/draft/plugin.ts": {
-      "packages/draft/plugin.ts block 1": 1.4
+      "packages/draft/plugin.ts: block sha256:7f585333ac941e10e33e3bb56a0fe0eb9d4a225b8f53345883efa5c61fbd8e8a": 1.4
     },
     "packages/dreaming/dream_test.ts": {
       "a dream is a scheduled builder and reads as a dream": 35.9
@@ -1577,11 +1577,11 @@
       "eviction, schema changes and deleteAll leave reusable storage": 15
     },
     "packages/edge/README.md": {
-      "packages/edge/README.md block 1": 3.9,
-      "packages/edge/README.md block 3": 2.3,
-      "packages/edge/README.md block 4": 1.5,
-      "packages/edge/README.md block 5": 12.1,
-      "packages/edge/README.md block 6": 8.4
+      "packages/edge/README.md: block sha256:826473a6ea6be097dc8a58deb245a314be7658aa2271a4d9c42ab22a383e0142": 3.9,
+      "packages/edge/README.md: block sha256:a7c8d84e3181865dedf51a4f2c197b9486595f47d259e249e91274a60f4ff2a8": 2.3,
+      "packages/edge/README.md: block sha256:ea9df96387cf0c2454c76b70997154c04b285f88f21d8cae9d6430312dda4ebf": 1.5,
+      "packages/edge/README.md: block sha256:2276f004c13d32a263d12b065039f78fe24a396ac5b1d46f9aa09bb912ec935a": 12.1,
+      "packages/edge/README.md: block sha256:1f8354a09d1b1e31fdd0be0a735bc56195116d3c8b7559b378183a54f6394a02": 8.4
     },
     "packages/edge/plugin_test.ts": {
       "a link dies with either end": 2.9,
@@ -1614,15 +1614,15 @@
       "the walk and the query operator answer the same question": 8.1
     },
     "packages/effects/README.md": {
-      "packages/effects/README.md block 10": 7.1,
-      "packages/effects/README.md block 11": 9.3,
-      "packages/effects/README.md block 12": 1.3,
-      "packages/effects/README.md block 13": 5.4,
-      "packages/effects/README.md block 14": 1.5,
-      "packages/effects/README.md block 2": 1.5,
-      "packages/effects/README.md block 7": 6.9,
-      "packages/effects/README.md block 8": 3.7,
-      "packages/effects/README.md block 9": 6.9
+      "packages/effects/README.md: block sha256:9caf88693bc940facadd49f88d2c8bc9a73b458aa22db31d3be2bcc35cff7760": 7.1,
+      "packages/effects/README.md: block sha256:49410d25c1a988b227110c1ad046c3e4d0f535bb4992de7f017fb47f2bb5f4c4": 9.3,
+      "packages/effects/README.md: block sha256:1b27a39430a9f605020b8a0f93e61ed0e7ef80c7e176369dd1a7721b2a64eddf": 1.3,
+      "packages/effects/README.md: block sha256:5f3514d212ab164d93bb2e31235de9d59538ac5756f36ec7032df8bd09726bde": 5.4,
+      "packages/effects/README.md: block sha256:d7143876b5d85fc8fda497fa64310fc1bcb70d1799596c5ebd39d81fbf73c91c": 1.5,
+      "packages/effects/README.md: block sha256:9cd44cda0613a092228643fe5e049e8420ac28f90ce523ca91171a5ca6eb82cb": 1.5,
+      "packages/effects/README.md: block sha256:789eaac84534fc4af9fa98c5ca0ec2a150307dd7574dacaa86a9bb54375d6866": 6.9,
+      "packages/effects/README.md: block sha256:7e37e7ba8697e5f9bb2b45b1bd6dabbad7c57b4555fd04e339db98863dbd4066": 3.7,
+      "packages/effects/README.md: block sha256:8bf006e02329ed6749ceb4f3e304a96464299a289ddfc0d0e82a701d3dcdca92": 6.9
     },
     "packages/effects/activity_test.ts": {
       "effect reads and SQL stay beneath their run across awaits (false)": 5.2,
@@ -1707,7 +1707,7 @@
       "an access token the service refuses is refreshed, and the call made once more": 1.1
     },
     "packages/embedding/README.md": {
-      "packages/embedding/README.md block 1": 14.1
+      "packages/embedding/README.md: block sha256:62142f82f575075ab354389ddce1fb36a467dd515ed9825d16697ae1dc0e4b74": 14.1
     },
     "packages/embedding/compile_test.ts": {
       ".near selects the neighbourhood and nothing else": 4.8,
@@ -1749,7 +1749,7 @@
       "the copy answers what reading every vector answers": 72.1
     },
     "packages/embedding/mod.ts": {
-      "packages/embedding/mod.ts block 1": 9.1
+      "packages/embedding/mod.ts: block sha256:db434ea2aa3ea0eb4de7a3aa482bba54a867213e8cc452fc8e6d58e726cb3f10": 9.1
     },
     "packages/embedding/native_test.ts": {
       "a build is made once, and again when enough vectors changed": 26.6,
@@ -1845,7 +1845,7 @@
       "texts asked together ride one run, cut to the width asked for": 2.6
     },
     "packages/esbuild/README.md": {
-      "packages/esbuild/README.md block 1": 20.3
+      "packages/esbuild/README.md: block sha256:03dc10dccb99a3cf398d71483b74da1eb3a6868173d72abb585b98ce27f496ee": 20.3
     },
     "packages/esbuild/compile_test.ts": {
       "a build whose esbuild ends throws Stopped, and the next starts esbuild again": 23.9,
@@ -1854,11 +1854,11 @@
       "the server compiles a posted job into one module per page": 18
     },
     "packages/esbuild/graph.ts": {
-      "packages/esbuild/graph.ts block 1": 35.6,
-      "packages/esbuild/graph.ts block 2": 1.2
+      "packages/esbuild/graph.ts: block sha256:8c9ae176b5bb5ec96051a563b77799994988716c3e1c47917145b7d54647258a": 35.6,
+      "packages/esbuild/graph.ts: block sha256:e07af3065de0d3560b76de53a1d65f70c987617a4190bdb2627f14df0e5d54b6": 1.2
     },
     "packages/esbuild/lock.ts": {
-      "packages/esbuild/lock.ts block 2": 3.8
+      "packages/esbuild/lock.ts: block sha256:cf5f06e071f5ad6ca77141fe903decd5714b09a9cca0518bad48c12e97a29025": 3.8
     },
     "packages/esbuild/npm_test.ts": {
       "a package the files already hold is not fetched": 1.1,
@@ -1888,9 +1888,9 @@
       "typing offers what can come next, and the keys walk and take it": 1.9
     },
     "packages/fts/README.md": {
-      "packages/fts/README.md block 1": 6.1,
-      "packages/fts/README.md block 2": 3.3,
-      "packages/fts/README.md block 3": 4.3
+      "packages/fts/README.md: block sha256:0db2cb8e2b641ca4d131d7f8b8b21e9955f77f72b509ac68e5d4aa17d691896b": 6.1,
+      "packages/fts/README.md: block sha256:c04f06ce663ab8b2116b7afc6d29efa2b6d7eefed3692007ac8d73d1ba2e11bc": 3.3,
+      "packages/fts/README.md: block sha256:f5927aadae33545d5fbbad47835201ad91fb113947bb121952685776fa0dbddd": 4.3
     },
     "packages/fts/adopt_test.ts": {
       "a fresh schema is already adopted": 2.7,
@@ -1916,7 +1916,7 @@
       "the triggers keep the index current as rows come and go": 1.9
     },
     "packages/fts/mod.ts": {
-      "packages/fts/mod.ts block 1": 5.1
+      "packages/fts/mod.ts: block sha256:2332f14d1a5c015bae3ccf10d24cec42911b0d9e36f15c9daf1aef8c43c01709": 5.1
     },
     "packages/fts/scope_test.ts": {
       "adopting an existing store indexes its entries once, and again changes nothing": 2.4,
@@ -1942,9 +1942,9 @@
       "storage composes FTS explicitly for document and non-document prose": 6.1
     },
     "packages/git/README.md": {
-      "packages/git/README.md block 1": 6.2,
-      "packages/git/README.md block 2": 1.8,
-      "packages/git/README.md block 3": 3.5
+      "packages/git/README.md: block sha256:b1a5b9850ac28325c755040487b26aeac30d9ca28f547f27097ad0b98787abe5": 6.2,
+      "packages/git/README.md: block sha256:d33f1ceee554b8f90cacabff0b7ca7e2aaea282ca1b28c1d4e4d7b8d03f9c554": 1.8,
+      "packages/git/README.md: block sha256:20cb685fe7d69c87027b82a5304eb31d644942aea3283db407e47a6f9317ceeb": 3.5
     },
     "packages/git/cites_test.ts": {
       "a commit rebased out of the repository reads unknown": 4,
@@ -2041,12 +2041,12 @@
       "verify marks the citation and moves its revision to the commit checked out": 7.6
     },
     "packages/graph/README.md": {
-      "packages/graph/README.md block 14": 2.1,
-      "packages/graph/README.md block 16": 2.3,
-      "packages/graph/README.md block 2": 1.3,
-      "packages/graph/README.md block 3": 1.2,
-      "packages/graph/README.md block 4": 1.2,
-      "packages/graph/README.md block 5": 2.1
+      "packages/graph/README.md: block sha256:c0dde94e8a30026fe77f88a7726dc7ca6291548074e8f1c1a9029eb03a9af47b": 2.1,
+      "packages/graph/README.md: block sha256:c8ec71f62b33ff8d0191f09369d4bd119342271dfce231b88e99a4947186b832": 2.3,
+      "packages/graph/README.md: block sha256:b02e2685daa558a9859570dfdc35c49ca69313fbe205088989a0f7c63055cfd3": 1.3,
+      "packages/graph/README.md: block sha256:3e409b12b4d49fd66a7d049ec15b8a0bb6ee5f2c81fa23a094bfdc2bc9d2b582": 1.2,
+      "packages/graph/README.md: block sha256:5439f2f2dc7fbde03b68daf26757995e9773ec3170156109f5ad6895d07ecd04": 1.2,
+      "packages/graph/README.md: block sha256:853dfae2f809d092a9eb3f90d65d5c4ca509eeb2fb97a4ce759dee23b501fa6f": 2.1
     },
     "packages/graph/activity_test.ts": {
       "another subscriber does not change recorded phases (false)": 1.7,
@@ -2091,7 +2091,7 @@
       "P chooses a graph persona for a new session without changing the draft": 17.9
     },
     "packages/harness/README.md": {
-      "packages/harness/README.md block 1": 156.8
+      "packages/harness/README.md: block sha256:e059f836cddb03661f3cf39ddea60db67c568e0b935c8073e46e93689f422e44": 156.8
     },
     "packages/harness/agent_test.ts": {
       "a new session opens with what its host found for it": 154,
@@ -2432,7 +2432,7 @@
       "HTML escapes content and agrees with the mounted Preact view": 2.6
     },
     "packages/id/README.md": {
-      "packages/id/README.md block 3": 2.2
+      "packages/id/README.md: block sha256:a5e3ffdade228e5b3b4d7fa3024b11fbed293ca2cd8a9569b98a4d9d4cf3e94f": 2.2
     },
     "packages/inbox/Person_test.tsx": {
       "a new conversation keeps its exact words across a remount, refuses blank ones and calls inbox_new once": 2.2,
@@ -2449,8 +2449,8 @@
       "a line is in the policy’s order, and reading or archiving it marks its thread": 9.5
     },
     "packages/inbox/README.md": {
-      "packages/inbox/README.md block 2": 3.7,
-      "packages/inbox/README.md block 4": 4.1
+      "packages/inbox/README.md: block sha256:9154ea0fe9cc17ce5b1887dc96ff997e5d40ef57851e44a9f7c095fecf8d2f8d": 3.7,
+      "packages/inbox/README.md: block sha256:c3f881e69be6bd8790af5753df20c53f646388ff4cd548a12a9bf36dc4b62801": 4.1
     },
     "packages/inbox/asks_test.tsx": {
       "a large inbox asks one summary, holds only root and newest rows, and reads history only for an open thread": 321.2,
@@ -2529,8 +2529,8 @@
       "terminal clicks inside a pickable row follow the link, not the row": 3.6
     },
     "packages/journal/README.md": {
-      "packages/journal/README.md block 1": 10.8,
-      "packages/journal/README.md block 2": 9.3
+      "packages/journal/README.md: block sha256:818e0654e30861bfec106fe2a8ffd2d36d826aa99641d5a4b33bb7d55710a768": 10.8,
+      "packages/journal/README.md: block sha256:19ba7c5c759df393c733095eee41f80b98b6f9263118788b261466240ad065fb": 9.3
     },
     "packages/journal/backed_test.ts": {
       "a batch carrying two writers’ work records each one’s as theirs": 7.8,
@@ -2573,7 +2573,7 @@
       "the reading an effect takes never reaches the caller": 4
     },
     "packages/journal/mod.ts": {
-      "packages/journal/mod.ts block 1": 4.9
+      "packages/journal/mod.ts: block sha256:83bed815b596253a207657e385590fc6ef468713c9457bcc5a20b13eb7de6ea2": 4.9
     },
     "packages/journal/tools_test.ts": {
       "a death answers as the death it was": 5.2,
@@ -2601,10 +2601,10 @@
       "undoing an undone delete deletes it again": 7.6
     },
     "packages/kernel/README.md": {
-      "packages/kernel/README.md block 1": 1.6,
-      "packages/kernel/README.md block 3": 1.5,
-      "packages/kernel/README.md block 4": 1.5,
-      "packages/kernel/README.md block 6": 1.5
+      "packages/kernel/README.md: block sha256:9d16c2865833bedc2c1cc991f428c4777ebc17b8b196339a163be8b19c86d4c3": 1.6,
+      "packages/kernel/README.md: block sha256:12c25e6861e73c05547abca8fcc3c9d6f1e4b9ecd8ce0df245c1c819d8ceb28d": 1.5,
+      "packages/kernel/README.md: block sha256:e04ce873e540b9cb6f3cc5ada2c6ac33d1f742ac0cb3566feda256a08a7c7688": 1.5,
+      "packages/kernel/README.md: block sha256:6d1cb86c5c3fd7b2bf1f9ddaf226b33779c3569f974daf67596157ce98760735": 1.5
     },
     "packages/kernel/completion_test.ts": {
       "completion fills an author gap but preserves a named author and later edits": 1.5
@@ -2613,7 +2613,7 @@
       "interruption records its writer and removal permits a retry": 1.4
     },
     "packages/kernel/plugin.ts": {
-      "packages/kernel/plugin.ts block 1": 1.4
+      "packages/kernel/plugin.ts: block sha256:bdd8870c34aeb27e2cc1737f0e26bd4cfe4b6a566b4ddb4a73d3c041974c98d9": 1.4
     },
     "packages/lens/document_test.ts": {
       "concat splits values and consumes sources, with explicit separators and literals": 1.2
@@ -2635,13 +2635,13 @@
       "packages/logic/relations.ts: await Array.fromAsync(race(x, request(okData, x))).then(([res]) => res.text()) -> 'ok'": 2.1
     },
     "packages/machine/README.md": {
-      "packages/machine/README.md block 1": 2.2
+      "packages/machine/README.md: block sha256:e52d3669942ecdd2a4ed587192a4e2fe32b908ed2aed089842e4d62c64a834b7": 2.2
     },
     "packages/machine/vocab_test.ts": {
       "machine lifecycle patches preserve provider and provenance": 1.1
     },
     "packages/mail/README.md": {
-      "packages/mail/README.md block 2": 2.6
+      "packages/mail/README.md: block sha256:1da6a4c0d3499db344b665538b78af15cf57a05c4595eacdd7c71418779e533f": 2.6
     },
     "packages/mail/arrive_test.ts": {
       "arrived: a letter is written by its sender, never by the graph owner": 1.3,
@@ -2657,7 +2657,7 @@
       "the ordinary startup sweep sends a waiting letter once and clears the reason": 4.6
     },
     "packages/mail/invite.ts": {
-      "packages/mail/invite.ts block 1": 1.5
+      "packages/mail/invite.ts: block sha256:852b624b0546cfd79b5ea9fc2f8f5c88f07981aba22277f462580b4095f5b3bf": 1.5
     },
     "packages/mail/invite_test.ts": {
       "a member with no address gets a bounced invitation, not silence": 1.1,
@@ -2692,8 +2692,8 @@
       "GFM becomes portable semantic elements, not HTML strings": 2.1
     },
     "packages/match/README.md": {
-      "packages/match/README.md block 3": 2.8,
-      "packages/match/README.md block 4": 2.1
+      "packages/match/README.md: block sha256:a7bdeaac131372d5c392737e71421f85556b092ec2b6451e9350725b823b9719": 2.8,
+      "packages/match/README.md: block sha256:cdadfed1d6112113808557d7ac94ddaccafb3ba5eed9b96414c21bf39a394062": 2.1
     },
     "packages/match/net_test.ts": {
       "a network routes each entity to the queries it matches": 7.8
@@ -2787,7 +2787,7 @@
       "no scope is empty; fresh request snapshots see graph edits and preserve extension resources/prompts": 6.4
     },
     "packages/member/README.md": {
-      "packages/member/README.md block 1": 2
+      "packages/member/README.md: block sha256:b1395ea8dc68bed37d7d2489d729e063d047e5c0ab8fde922df566536475b397": 2
     },
     "packages/member/guard_test.ts": {
       "a declared floor of person is anyone signed in": 1.3,
@@ -2822,13 +2822,13 @@
       "words the graph already holds are marked where they are": 1.3
     },
     "packages/mirror/README.md": {
-      "packages/mirror/README.md block 1": 1.4
+      "packages/mirror/README.md: block sha256:303e5eedc22932b02de8f97904a10a1c101781a8bf0061a7e5bb9b10ec142ef1": 1.4
     },
     "packages/mirror/mod_test.ts": {
       "sync: writes, keeps a hand edit the graph also moved, and removes": 1.5
     },
     "packages/model/README.md": {
-      "packages/model/README.md block 5": 2.4
+      "packages/model/README.md: block sha256:57d7ca10e3a17c9007b7dcd63fd94f48570aa8176aa5c5e6dd30bc0a78212c4e": 2.4
     },
     "packages/model/mod_test.ts": {
       "a name a provider and a model both hold is refused": 1.4,
@@ -2873,7 +2873,7 @@
       "implicit-cache upstreams keep append-only input and deterministic tools without directives": 2.2
     },
     "packages/page/README.md": {
-      "packages/page/README.md block 1": 1.2
+      "packages/page/README.md: block sha256:2d97a853348f9ebdfc62669014bee08ab3e0d96956213a3f4c3f3322b3a2298c": 1.2
     },
     "packages/page/host_test.ts": {
       "a capture that did not happen says so": 7.1,
@@ -2888,7 +2888,7 @@
       "witnessing one page twice is one entity": 7.5
     },
     "packages/page/scrub.ts": {
-      "packages/page/scrub.ts block 1": 4.1
+      "packages/page/scrub.ts: block sha256:351d83fe17bd88552d8dc3e92c629be3ca8a7cbae92b2913c233d9d7ca032f15": 4.1
     },
     "packages/page/scrub_test.ts": {
       "a frozen page renders from its own bytes": 1.7
@@ -2964,11 +2964,11 @@
       "untracked additions, folder renames and deletions replace the graph view": 11.2
     },
     "packages/platform/README.md": {
-      "packages/platform/README.md block 1": 1.1
+      "packages/platform/README.md: block sha256:51e79ef0165c8fd87f2da8c21b98d8899df7112fd4b8f2717d3b1404e39c1563": 1.1
     },
     "packages/process/README.md": {
-      "packages/process/README.md block 2": 1.1,
-      "packages/process/README.md block 3": 136.4
+      "packages/process/README.md: block sha256:161accd581510fd0513d07c1be81061b4d026ae635bbba03fe036c1696c73323": 1.1,
+      "packages/process/README.md: block sha256:7a0cf6de65f03e08b35763b21a9ae4963bfa7d1a9cafbbe5c31c60762080f803": 136.4
     },
     "packages/process/machine_test.ts": {
       "a command tail keeps a line wider than a read block whole": 21.5,
@@ -3022,7 +3022,7 @@
       "restart never leaves the ending standing": 13.6
     },
     "packages/project/README.md": {
-      "packages/project/README.md block 1": 1.1
+      "packages/project/README.md: block sha256:60210cdfff895987708b81a0e2bd7beab2e280be2a118762559d1a0fe4bb456a": 1.1
     },
     "packages/project/tree_test.ts": {
       "a project is never filed under itself or anything under it": 1.2,
@@ -3048,7 +3048,7 @@
       "stalled reconnect cannot delay unpublication or leave; cannot resurrect an old session": 12.7
     },
     "packages/secrets/mod.ts": {
-      "packages/secrets/mod.ts block 1": 1.4
+      "packages/secrets/mod.ts: block sha256:4bffe3867b22b8b40446f762aea8bc90c87771d3303fe9e963589f74f7d58ed0": 1.4
     },
     "packages/secrets/secrets_test.ts": {
       "a failure the vault calls retryable is provisional, tried again until it seals": 5.5,
@@ -3057,9 +3057,9 @@
       "the writer waits for the seal; a reader in between sees the mark": 3.9
     },
     "packages/session/README.md": {
-      "packages/session/README.md block 1": 1.9,
-      "packages/session/README.md block 2": 3.5,
-      "packages/session/README.md block 3": 2.7
+      "packages/session/README.md: block sha256:b958372a84f5123d2d416a0cb07088383fb0938767e27ec44f75386966125887": 1.9,
+      "packages/session/README.md: block sha256:8b77a28d7221396eade39c5198c132b2ee1a7792604f17538e1b1961379b47b4": 3.5,
+      "packages/session/README.md: block sha256:5c20f46215a19a9ceb3dccf71fd749b437cabbaf00b959a96044db34d610a188": 2.7
     },
     "packages/session/admission_test.ts": {
       "RAM admission retains legacy queue order and respects occupied places": 1.7,
@@ -3316,18 +3316,18 @@
       "archetype plans: positive facets drive their table while boolean kinds keep composition": 1.5
     },
     "packages/sqlite/README.md": {
-      "packages/sqlite/README.md block 1": 8.7,
-      "packages/sqlite/README.md block 10": 13.3,
-      "packages/sqlite/README.md block 11": 2.2,
-      "packages/sqlite/README.md block 12": 6.6,
-      "packages/sqlite/README.md block 13": 8.2,
-      "packages/sqlite/README.md block 2": 6.6,
-      "packages/sqlite/README.md block 3": 3.4,
-      "packages/sqlite/README.md block 4": 2.9,
-      "packages/sqlite/README.md block 5": 6.6,
-      "packages/sqlite/README.md block 7": 11.5,
-      "packages/sqlite/README.md block 8": 3.9,
-      "packages/sqlite/README.md block 9": 2
+      "packages/sqlite/README.md: block sha256:a317265a9128ea7c48f2bc44ce0659fb5a11f15e97f4286ea61bbd18b9925e41": 8.7,
+      "packages/sqlite/README.md: block sha256:23e947aeea280b3b305571b8d7915e8cd425b9e79c7ee0d8253944ab34b7425f": 13.3,
+      "packages/sqlite/README.md: block sha256:bee42ecc0e2a334d8e1857fb87bfad0f25bd8bccaf21bec177ec57466bb529f6": 2.2,
+      "packages/sqlite/README.md: block sha256:9126aac52780e6744b361250a4a777c09d78ec9dd991827a4162fbc9d94c6096": 6.6,
+      "packages/sqlite/README.md: block sha256:c89665a9ccbe2e57c13ab62b82c67f5771615f7d93c33c094b92ad2eaa42c09b": 8.2,
+      "packages/sqlite/README.md: block sha256:7254874b01238acd0d8873c8388f8177049ad8f67628605b80386f3c7b8f54e1": 6.6,
+      "packages/sqlite/README.md: block sha256:c4d7159966c81ae2c94628fca5593cbcfd204acd8ed0274be939425600cea1c9": 3.4,
+      "packages/sqlite/README.md: block sha256:d87c776048e2c6a6981b8dd4900db2193111aa29b2f09c822d4ea9910733f63f": 2.9,
+      "packages/sqlite/README.md: block sha256:280280d7483a7bec8e1974953bd79d3c78a68f50372837c7bb82e360ea47afc3": 6.6,
+      "packages/sqlite/README.md: block sha256:797d0ddda2674d656a9e60fe920bf0bc0e78a5e668ce116ca43f7335ec2843f9": 11.5,
+      "packages/sqlite/README.md: block sha256:b11104c58d4ae7121b986444f54f42acbe525289055117b4a5262f647a865210": 3.9,
+      "packages/sqlite/README.md: block sha256:fb831850a2e196d5a4e57212dbf65c5590c8f60e36ba84f90c255c96a03b1755": 2
     },
     "packages/sqlite/activity_test.ts": {
       "SQL parents survive interleaved async hooks and tracker flushes": 3.9,
@@ -3712,11 +3712,11 @@
       "remove drops every component row and tombstones the identity": 1.9
     },
     "packages/sync/README.md": {
-      "packages/sync/README.md block 1": 2.5,
-      "packages/sync/README.md block 2": 1.7,
-      "packages/sync/README.md block 4": 1.5,
-      "packages/sync/README.md block 8": 2.7,
-      "packages/sync/README.md block 9": 1.4
+      "packages/sync/README.md: block sha256:93fab85c9ec128cb970c2958b4a229b4a4498eea35b8ab22402bdf463b55876c": 2.5,
+      "packages/sync/README.md: block sha256:f76d849555805d554408c58ffc9d2137a20186bc4390aead0f4b8e8c838f4ea9": 1.7,
+      "packages/sync/README.md: block sha256:da8cded8db3934776afbdf8c84545bf1d097c931bd50c4559f511f95fd60ad9c": 1.5,
+      "packages/sync/README.md: block sha256:3924f99f3a669feb7af2c88ede4fd3bdf383b0d3b52d1a40cb86b9845fdc67a2": 2.7,
+      "packages/sync/README.md: block sha256:3baf8b416d4a8be90be0562fb00edc0346ca4c20f3239f55a5a62c71516923b2": 1.4
     },
     "packages/sync/port_test.ts": {
       "MessagePort request limits and timeout bound abandoned operations": 11.7,
@@ -3752,8 +3752,8 @@
       "the decision form shows recommendations, answers as its reader, and keeps unused drafts": 7.9
     },
     "packages/task/README.md": {
-      "packages/task/README.md block 1": 3.4,
-      "packages/task/README.md block 2": 2.1
+      "packages/task/README.md: block sha256:cd5078e1cf163523d2a9412a96ea9b80590ea0f6237e408286020360650ef577": 3.4,
+      "packages/task/README.md: block sha256:8570b0a0b3fef3963daa8fa20049c5b415d97b2f093a3698c15c1224a8e5c8cf": 2.1
     },
     "packages/task/decision_test.ts": {
       "asking and answering Bus releases requiring work as the answerer": 5.2,
@@ -3765,16 +3765,16 @@
       "a claimed child is open, whether or not its ladder reads it wip": 1.2
     },
     "packages/task/mod.ts": {
-      "packages/task/mod.ts block 1": 2.5
+      "packages/task/mod.ts: block sha256:fe9afc96161b95e28a79786ab408b1754a229f498f2398b5e10b8230343f7590": 2.5
     },
     "packages/task/plan_test.ts": {
       "a dry run of a plan answers its ids and writes none of it": 1.3,
       "what a real run refuses, a dry run refuses the same way": 1.1
     },
     "packages/testing/README.md": {
-      "packages/testing/README.md block 1": 428.9,
-      "packages/testing/README.md block 3": 2.5,
-      "packages/testing/README.md block 4": 91.9
+      "packages/testing/README.md: block sha256:876df0ad4ab444ab72ec03d4defc7bb0393c3fec356082fa78b2e6a181af4f2a": 428.9,
+      "packages/testing/README.md: block sha256:03b476b6fb3ca7bcae174d27dbceb8db5abdff48d87acc85446eec120df63bcc": 2.5,
+      "packages/testing/README.md: block sha256:5a3538d35ef1c07deee14311aa69bad1476352857d5e6be96d3d11eda9e1d659": 91.9
     },
     "packages/testing/main_test.ts": {
       "--times says what each test and each load took": 129,
@@ -3784,10 +3784,10 @@
       "the examples beside the code run: fences, and a module’s doctests": 128.4
     },
     "packages/testing/mod.ts": {
-      "packages/testing/mod.ts block 1": 5.5
+      "packages/testing/mod.ts: block sha256:925adaea3d25a0fb329cec424dfa273507869987e82b71f7ba8afe1914c7382d": 5.5
     },
     "packages/testing/wait.ts": {
-      "packages/testing/wait.ts block 1": 12.5
+      "packages/testing/wait.ts: block sha256:455cf2b31dbe4e1c0d99bcdc65fdb0bcf1bb849bd51acaa0468c0fa610296296": 12.5
     },
     "packages/text/parity_test.ts": {
       "one renderer preserves its document through Preact and markdown": 3
@@ -3807,7 +3807,7 @@
       "two threads race for one owed effect and only one handler writes": 75
     },
     "packages/timing/README.md": {
-      "packages/timing/README.md block 6": 6.5
+      "packages/timing/README.md: block sha256:12365be1a8b4ba3c3573c73390a7bcee15967cd47523009e21eeec3d6555b801": 6.5
     },
     "packages/timing/cap_test.ts": {
       "cap keeps expensive rows before time, with ancestors and stable ties": 32.9,
@@ -3836,12 +3836,12 @@
       "suppressed repeats are a separately removable root span metric": 1.5
     },
     "packages/tools/README.md": {
-      "packages/tools/README.md block 1": 2.8,
-      "packages/tools/README.md block 3": 2.7,
-      "packages/tools/README.md block 5": 2.1,
-      "packages/tools/README.md block 6": 2.4,
-      "packages/tools/README.md block 7": 2.4,
-      "packages/tools/README.md block 8": 1.2
+      "packages/tools/README.md: block sha256:9d4c1d004c7e474fe427f4f4e987ec8eae6458d060bd06450982eb5041fbbdfa": 2.8,
+      "packages/tools/README.md: block sha256:750730c4637868ecdfbaa51634ffc4e1237628cd894ed5f827c7c3d692729e20": 2.7,
+      "packages/tools/README.md: block sha256:bd7cfbbad164ceecddc3dc54b4df11c3d740d233679c9e471bd2127d51940800": 2.1,
+      "packages/tools/README.md: block sha256:7afa9b803b2f64d83120ef7d2aea1d8f27786fb69b78943123e60029551c82ed": 2.4,
+      "packages/tools/README.md: block sha256:f674e29b62c31025d44c6560258db1c0ff4ee2300fc6d6df3168c482157f432f": 2.4,
+      "packages/tools/README.md: block sha256:062bdd68e980a1708a79911c53acd408893c8da47cdcb5250e880ac0a400f442": 1.2
     },
     "packages/tools/args_test.ts": {
       "name resolution ignores deleted word eid before alias": 2.7,
@@ -4003,7 +4003,7 @@
       "a gateway is bound to the tunnel’s service and nothing else": 1.1
     },
     "packages/tunnel/filter.ts": {
-      "packages/tunnel/filter.ts block 1": 1.8
+      "packages/tunnel/filter.ts: block sha256:6a89037fca3df8a376e400207551420de1b5903fd8d4cb08d487445f3964476d": 1.8
     },
     "packages/tunnel/filter_test.ts": {
       "a request through the tunnel passes only at an opened path": 4.3,
@@ -4017,11 +4017,11 @@
       "inbox specimens carry their words and controls in both themes and both doors": 10
     },
     "packages/ui/README.md": {
-      "packages/ui/README.md block 10": 2.4,
-      "packages/ui/README.md block 11": 18.4,
-      "packages/ui/README.md block 5": 6.7,
-      "packages/ui/README.md block 6": 3.2,
-      "packages/ui/README.md block 8": 11.3
+      "packages/ui/README.md: block sha256:b5537ebaa051245e52f5d063c54e8125ce87a3e23c6219def236df4c49c85c70": 2.4,
+      "packages/ui/README.md: block sha256:e3eef007185aaefc091a777d8b77ff24a5702683f6cc59709df412db4c9a10f9": 18.4,
+      "packages/ui/README.md: block sha256:ab886a5558b73ab3a168d99137b40085b9ccb0f3a8b5554e2f3eef78b01443cf": 6.7,
+      "packages/ui/README.md: block sha256:2fcfa234e2e9b0f0d79c9d66da9bba2678aa982a7cd7dedc4e1ffe51a1dc1521": 3.2,
+      "packages/ui/README.md: block sha256:1889c7ee6ec9d2956aa4c7053938144c1a3e8b082a775bf916f5b503826c8707": 11.3
     },
     "packages/ui/composition_test.ts": {
       "UI and UX with the same names retain distinct specimens and navigation": 11.2,
@@ -4074,9 +4074,9 @@
       "what is typed is the draft, and a remount types on from it": 14.7
     },
     "packages/ux/README.md": {
-      "packages/ux/README.md block 1": 4,
-      "packages/ux/README.md block 6": 2.5,
-      "packages/ux/README.md block 7": 2.9
+      "packages/ux/README.md: block sha256:27b36bb7b3f0ba2ea63d3ce3b8f60c611d3b1187c79b8466b5280cdd5f11cd5f": 4,
+      "packages/ux/README.md: block sha256:5f9ab2213a96a63edc43b7aab28d99772078652336a0a8b514af8defcc5bd87a": 2.5,
+      "packages/ux/README.md: block sha256:ceb2d1804a177df8537ac70952eb6ffee942058b4d7d59da5b2654195789cc2f": 2.9
     },
     "packages/ux/completion_test.ts": {
       "a bound input refreshes its reactive list only when the caret moves": 15.4,
@@ -4153,8 +4153,8 @@
       "packages: every vocabulary goes through a graph as bundles and back": 98.2
     },
     "packages/wake/README.md": {
-      "packages/wake/README.md block 1": 3.8,
-      "packages/wake/README.md block 2": 1.3
+      "packages/wake/README.md: block sha256:086e1abfb0f3bd803ee136a8fc24826c7d503fc7de06ff943499b9843a8900c7": 3.8,
+      "packages/wake/README.md: block sha256:5ca3570c820300ec1f5b5a002bbd728ee69650dd0b10c98876ef8b71ad6c2917": 1.3
     },
     "packages/wake/due_test.ts": {
       "a recurrence nobody can read fires once and stops": 1.2
@@ -4205,7 +4205,7 @@
       "private receipt precedes failed delivery and reopened recovery never generates": 2.8
     },
     "packages/yaml/README.md": {
-      "packages/yaml/README.md block 1": 2.5
+      "packages/yaml/README.md: block sha256:1546c9b6fb483646ab2cc26cc41a58c847e320a10b92a23461b6c1f97b6dc274": 2.5
     },
     "workers/tracker/core_test.ts": {
       "deployed resolves prior versions but keeps the serving version open": 11,

@@ -7,6 +7,7 @@ import {
   compileDoctests,
   compileFence,
   doctests,
+  fenceName,
   fences,
   module,
   specifiers,
@@ -114,7 +115,7 @@ export let examples = async (page: string, pass = '') => {
   let { fenced, lines } = runs(await Deno.readTextFile(page), page)
   let exports = module(page) ? await exported(page) : []
   for (let f of fenced) {
-    let name = `${page}:${f.line}`
+    let name = await fenceName(page, f)
     await load(
       page,
       `${f.line}`,

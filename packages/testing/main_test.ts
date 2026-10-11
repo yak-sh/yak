@@ -2,6 +2,7 @@
 // test modules and pages, its record of passes kept in the directory.
 import { equal, match, ok, test } from './mod.ts'
 import type { Times } from './run.ts'
+import { fenceName, fences } from './examples.ts'
 
 let MAIN = new URL('./main.ts', import.meta.url).pathname
 let TESTING = new URL('./mod.ts', import.meta.url).href
@@ -89,8 +90,22 @@ test('the examples beside the code run: fences, and a module’s doctests', asyn
   })
   let { said } = await dir.run()
   equal(said, {
-    'README.md:3': 'ok',
-    'm.ts:2': 'ok',
+    [
+      await fenceName(
+        'README.md',
+        fences(
+          "# m\n\n```ts\nimport { twice } from './m.ts'\nif (twice(2) != 4) throw new Error('no')\n```",
+        )[0],
+      )
+    ]: 'ok',
+    [
+      await fenceName('m.ts', {
+        line: 2,
+        skip: false,
+        lang: 'ts',
+        code: 'if (twice(1) != 2) throw new Error("unimported")',
+      })
+    ]: 'ok',
     'm.ts:8 twice(n) -> 6': 'ok',
     'm.ts:9 ({ a: twice(1), b: 0 }) ~> { a: 2 }': 'ok',
     'm.ts:10 twice(1)': 'FAILED',
@@ -115,17 +130,21 @@ test('b', () => Deno.readTextFile(data))`,
   })
   let ran = async (...args: string[]) =>
     Object.keys((await dir.run(...args)).said).sort()
-  equal(await ran(), ['README.md:1', 'a', 'b'])
+  let example = await fenceName(
+    'README.md',
+    fences("```ts\nimport { one } from './one.ts'\n```")[0],
+  )
+  equal(await ran(), [example, 'a', 'b'])
   let again = await dir.run()
   equal(again.said, {})
   match(again.text, /3 unchanged since they passed/)
   await dir.write('one.ts', 'export let one = 2')
-  equal(await ran(), ['README.md:1', 'a'])
+  equal(await ran(), [example, 'a'])
   // A directory a module names is a place, not what lies in it.
   await dir.write('data.json', '[]')
   await dir.write('other.txt', '')
   equal(await ran(), ['b'])
-  equal(await ran('--all'), ['README.md:1', 'a', 'b'])
+  equal(await ran('--all'), [example, 'a', 'b'])
 })
 
 test('tags pick tests, and a test that never ends fails alone', async () => {

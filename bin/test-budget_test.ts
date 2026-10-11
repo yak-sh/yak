@@ -1,5 +1,6 @@
 import { equal, test } from '@yaks/testing'
 import { type Budget, judge, listed, shrunk } from './test-budget.ts'
+import { fenceName, fences } from '../packages/testing/examples.ts'
 
 // A list holding `a_test.ts` › `slow` at 50ms, and a deno run at 1s whose
 // tests in a_test.ts took what `took` says (a negative time fails the test).
@@ -68,10 +69,38 @@ test('workerd is held by its wall alone', () => {
   equal(j.walls, [{ platform: 'workerd', ms: 5, record: undefined }])
 })
 
-test('an example is listed by its code or its place, not its line', () => {
+test('a doctest is listed by its code, not its line', () => {
   let at = (name: string) => ({ file: 'a.ts', name })
   equal(
-    listed([at('a.ts:12 f(1) -> 2'), at('a.ts:30'), at('a.ts:41'), at('x')]),
-    ['a.ts: f(1) -> 2', 'a.ts block 1', 'a.ts block 2', 'x'],
+    listed([at('a.ts:12 f(1) -> 2'), at('a.ts:30 f(1) -> 2'), at('x')]),
+    ['a.ts: f(1) -> 2', 'a.ts: f(1) -> 2', 'x'],
   )
+})
+
+test('a fenced listing survives blocks inserted or removed above it', async () => {
+  let page = 'a.md'
+  let block = (code: string) => `\`\`\`ts\n${code}\n\`\`\`\n`
+  let keys = async (source: string) =>
+    listed(
+      await Promise.all(
+        fences(source).map(async (f) => ({
+          file: page,
+          name: await fenceName(page, f),
+        })),
+      ),
+    )
+  let original = await keys(block('first()') + block('views()'))
+  let inserted = await keys(
+    block('new()') + block('first()') + block('views()'),
+  )
+  let removed = await keys(block('views()'))
+  equal(inserted.slice(1), original)
+  equal(removed, original.slice(1))
+  equal((await keys(block('changed()')))[0] == removed[0], false)
+  let b = { ...list, tests: { [page]: { [original[1]]: 17 } } }
+  let name = await fenceName(page, fences(block('new()') + block('views()'))[1])
+  let j = judge(b, {
+    deno: { wall: 1, tests: [{ file: page, name, ms: 17, ok: true }] },
+  })
+  equal([j.over, j.slower, j.gone], [[], [], []])
 })
