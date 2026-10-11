@@ -137,7 +137,7 @@ let hosts = () =>
         : q.includes('.entity.eid=s1')
         ? [{
           entity: { eid: 's1', num: 1 },
-          space: { slug: 'jeff', home: null },
+          space: { slug: 'jeff' },
         }]
         : []
       return Promise.resolve(rows)

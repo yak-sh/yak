@@ -51,9 +51,27 @@
             "private"
           ],
           "description": "public: anyone reads. open: anyone writes. private: only members"
+        },
+        "draft": {
+          "type": "string",
+          "stamped": true,
+          "description": "the address of its editable files, kept independently of its served release"
+        },
+        "fence": {
+          "type": "string",
+          "stamped": true,
+          "description": "the token holding edits while a release copies its selected draft"
+        },
+        "store": {
+          "type": "string",
+          "unique": true,
+          "description": "the immutable handle its storage and runtime use, independent of its current address"
         }
       },
-      "description": "one app in a space: its slug, the version currently served, and who may open it"
+      "description": "one app in a space: its slug, the version currently served, and who may open it",
+      "before": [
+        "doc"
+      ]
     },
     "deploy": {
       "component": true,
@@ -152,6 +170,11 @@
           "type": "string",
           "format": "date-time",
           "description": "when the space's owner put the copy in a sandbox, a browser origin of its own; empty while it runs like the space's own apps"
+        },
+        "trusted": {
+          "type": "string",
+          "format": "date-time",
+          "description": "the inverse sandbox mark kept in step for rollback readers"
         }
       },
       "description": "a copy of somebody else\u2019s app, at the version it was copied from"
@@ -195,6 +218,22 @@
         "at": {
           "type": "string",
           "format": "date-time"
+        },
+        "ws_messages": {
+          "type": "number",
+          "description": "WebSocket messages received this month"
+        },
+        "ws_hibernated": {
+          "type": "number",
+          "description": "hibernated WebSocket requests counted this month"
+        },
+        "files": {
+          "type": "number",
+          "description": "bytes held in uploaded files and application files"
+        },
+        "realtime": {
+          "type": "number",
+          "description": "dollars spent on realtime models this month"
         }
       },
       "description": "what a space used in one month"
@@ -251,14 +290,10 @@
     "published": {
       "component": true,
       "type": "object",
-      "unique": [
-        [
-          "name"
-        ]
-      ],
       "properties": {
         "name": {
-          "type": "string"
+          "type": "string",
+          "unique": true
         },
         "version": {
           "type": "number"
@@ -299,7 +334,10 @@
           "format": "date-time"
         }
       },
-      "description": "an error a deployed app reported about itself"
+      "description": "an error a deployed app reported about itself",
+      "before": [
+        "doc"
+      ]
     },
     "signin": {
       "component": true,
@@ -324,28 +362,25 @@
           "stamped": true
         }
       },
-      "description": "a sign-in in progress: the code mailed out, when it expires, and how many tries are left"
+      "description": "a sign-in in progress: the code mailed out, when it expires, and how many tries are left",
+      "before": [
+        "doc"
+      ]
     },
     "space": {
       "component": true,
       "type": "object",
       "kind": true,
-      "unique": [
-        [
-          "slug"
-        ]
-      ],
       "properties": {
         "slug": {
-          "type": "string"
-        },
-        "home": {
           "type": "string",
-          "ref": "app",
-          "death": "detach"
+          "unique": true
         }
       },
-      "description": "one customer\u2019s area of the platform, at its own slug"
+      "description": "one customer\u2019s area of the platform, at its own slug",
+      "before": [
+        "doc"
+      ]
     },
     "switched": {
       "component": true,

@@ -42,7 +42,7 @@ import {
 // It serves two roles, told apart by the name the kernel gives the object. An
 // app's store wakes with the core plus its own `vocab.json`; the directory —
 // the one object named `yak/platform` — wakes with the platform's own
-// vocabulary, uniques and all (vocab.ts `platformDoc`, T-33814). One class,
+// vocabulary, uniques and all (vocab.ts `platformDocs`, T-33814). One class,
 // one composition, two vocabularies.
 //
 // This class carries the DO's own name, `Store`, so wrangler's migration list
@@ -1001,7 +1001,7 @@ export class Store {
     // the same vocabulary runs no DDL at all, and a deploy that added a
     // component raises its table on the next request. Every index the
     // vocabulary declares is in it — the directory's uniques included, since
-    // they are words of `platformDoc`.
+    // they are words of the composed directory vocabulary.
     //
     // An unnamed object raises nothing yet. Its first named request selects
     // the store kind before boot, so an app's tables never land in a newborn
@@ -1521,7 +1521,7 @@ export class Store {
   // Which app this object holds is an app's question. The directory is not
   // one — it speaks the platform's vocabulary, which has no `grant` and no
   // `access`, and the kernel decides who may read and write it before the
-  // request arrives (vocab.ts, `platformDoc`). A caller that names an app on
+  // request arrives (vocab.ts, `platformDocs`). A caller that names an app on
   // its way to the directory is naming an app whose row lives here, not the
   // object it is talking to, so the word is ignored rather than believed:
   // believing it installs @yaks/member's guard on a store with no seats and

@@ -33,14 +33,13 @@ import {
   type WordsOpts,
 } from '@yaks/host/words'
 import { vocabFacets } from './load.ts'
-import { platformDoc } from './facets/directory-vocab.ts'
 export {
   appsDoc,
   classificationDoc,
   exceptionDoc,
   kernelDoc,
 } from './facets/app-vocab.ts'
-export { platformDoc } from './facets/directory-vocab.ts'
+export { directoryDoc } from './facets/directory-vocab.ts'
 
 /** The keyword vocabularies the stores have always understood. */
 export let appKeywords: Keywords[] = [
@@ -89,7 +88,9 @@ export let RELATIONS: string[] = coreDocs.flatMap((d) =>
 )
 let shapeOf = (s: PropSchema): string =>
   s.enum ? s.enum.join('|') : String(s.type ?? '?')
-export let PLATFORM_APART: string[] = Object.entries(platformDoc.$defs ?? {})
+export let PLATFORM_APART: string[] = platformDocs.flatMap((doc) =>
+  Object.entries(doc.$defs ?? {})
+)
   .flatMap(([name, mine]) => {
     let theirs = storeWords('app').vocab.def(name)?.properties
     return Object.entries(mine.properties ?? {}).filter(([prop, s]) =>

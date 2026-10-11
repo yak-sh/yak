@@ -12,8 +12,8 @@ source app and version of a copy; `plan` is what is being paid for, a mirror of
 one Stripe subscription, and `meter` is the usage it is billed on; `signin` is a
 sign-in in progress, and `report` is an error a deployed app reported.
 
-yaks.app's directory (`workers/yak`) loads `deploy`, `hostname` and `plan` from
-here. Its other words are still declared in the Worker.
+yaks.app's directory (`workers/yak`) loads these declarations from this package.
+The Worker declares its own directory words alongside them.
 
 An entity is a record identified by `entity.eid`; each of the names above is a
 component, a named object on that record. `deploy.files` and `deploy.worker` are

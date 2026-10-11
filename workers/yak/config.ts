@@ -200,10 +200,7 @@ export let directoryConfig: Config = {
       ],
     },
     { use: '@yaks/git', words: ['ref', 'repository', 'commit'] },
-    {
-      use: '@yaks/platform',
-      words: ['hostname', 'plan', 'deploy', 'switched'],
-    },
+    '@yaks/platform',
     { use: '@yaks/model', facets: ['vocab'], words: ['cost'] },
     {
       use: 'yak/app',

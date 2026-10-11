@@ -1,47 +1,11 @@
-// The directory’s Worker-owned words, held to their existing row shapes.
+// The directory’s Worker-owned words beside the package platform vocabulary.
 import { CORE_URI, type VocabDoc } from '@yaks/vocab'
-import { platformDoc as platformWords } from '@yaks/platform/vocab'
 import { sweepDoc } from './sweep-vocab.ts'
-import { bool, num, owned, ref, text, time, unique } from './schema.ts'
-export let platformDoc: VocabDoc = {
+import { bool, num, owned, ref, text, time } from './schema.ts'
+export let directoryDoc: VocabDoc = {
   $vocabulary: { [CORE_URI]: true },
-  title: 'platform',
+  title: 'directory',
   $defs: {
-    space: {
-      component: true,
-      type: 'object',
-      kind: true,
-      before: ['doc'],
-      properties: { slug: unique(text) },
-    },
-    app: {
-      component: true,
-      type: 'object',
-      kind: true,
-      before: ['doc'],
-      unique: [['space', 'slug']],
-      properties: {
-        slug: text,
-        space: ref('cascade'),
-        version: num,
-        lenses: platformWords.$defs!.app.properties!.lenses,
-        declaration: owned(text),
-        source: owned(text),
-        draft: owned(text),
-        fence: owned(text),
-        script: owned(text),
-        access: { type: 'string', enum: ['public', 'open', 'private'] },
-        // The app's handle: what its Durable Object, its dispatch script and
-        // its analytics rows are named by (directory.ts
-        // `storeName`). Written once at birth and never read as an address —
-        // `<space>/<app>.<6 hex of the eid>`, so the Cloudflare dashboard still
-        // sorts it under its space and reads as the app it is, and so two apps
-        // that hold one address a year apart are still two objects. Unique
-        // by construction, and the index is what makes that true rather than
-        // hoped for (T-34657).
-        store: unique(text),
-      },
-    },
     // Storage survives config edits and renames. Only the kernel may record
     // account resource ids, so an app cannot claim another tenant's data.
     binding: {
@@ -58,7 +22,7 @@ export let platformDoc: VocabDoc = {
     },
     // Every address an app has answered at, oldest first: `slug` the one it was
     // born at, `slugs` each one a rename left behind. Address history and
-    // nothing else — the handle it is stored under is `app.store` above, which
+    // nothing else — its storage handle is @yaks/platform’s `app.store`, which
     // is why a rename moves an address and never a byte (T-34657). Bare slugs,
     // in the space's own namespace, so a space rename leaves every app's
     // history standing.
@@ -188,29 +152,6 @@ export let platformDoc: VocabDoc = {
         from_bookmark: owned(text),
       },
     },
-    published: {
-      component: true,
-      type: 'object',
-      properties: { name: unique(text), version: num, at: time, about: text },
-    },
-    // A copy of somebody else's app (tools.ts app_install), which runs like
-    // the space's own apps unless the space's owner sandboxed it in an opaque
-    // origin of its own (installed.ts): `sandboxed` is when they did.
-    //
-    // `trusted` is how the build before this one said the reverse. It is
-    // written in step (installed.ts `sandboxing`) so that build reads every
-    // copy the way this one does, and goes in a later release (D-37972,
-    // expand then contract).
-    installed: {
-      component: true,
-      type: 'object',
-      properties: {
-        of: ref('detach'),
-        version: num,
-        sandboxed: time,
-        trusted: time,
-      },
-    },
     // That this app — or this space — is in the trash, and since when
     // (erase.ts, T-34430, T-34431). A delete marks it and keeps everything:
     // the bytes, the store, the slug. While it is worn the app answers
@@ -309,34 +250,6 @@ export let platformDoc: VocabDoc = {
       type: 'object',
       properties: { bps: owned(num) },
     },
-    // What the hourly sweep read off Cloudflare (usage.ts), beside what the
-    // space spent (`spend`). Written through the kernel's door — and not
-    // stamped, because the fleet contract does not stamp it (src/types.ts
-    // `comps`) and the meta space's own graph tier is how a reading is planted
-    // or corrected by hand. Nobody but an owner of `yak` reaches that door at
-    // all (directory.ts), which is what keeps a customer from writing their
-    // own bill.
-    meter: {
-      component: true,
-      type: 'object',
-      properties: {
-        month: text,
-        requests: num,
-        ws_messages: num,
-        ws_hibernated: num,
-        rows_read: num,
-        rows_written: num,
-        bytes: num,
-        files: num,
-        emails: num,
-        builds: num,
-        models: num,
-        realtime: num,
-        seconds: num,
-        built: num,
-        at: time,
-      },
-    },
     // What a space just spent on its month: a letter, a build, a model call, a
     // voice's lease, container seconds. The directory adds it to the `meter`
     // inside the write's own transaction (meter.ts `spend`), so two spends at
@@ -353,18 +266,6 @@ export let platformDoc: VocabDoc = {
         seconds: num,
       },
     },
-    signin: {
-      component: true,
-      type: 'object',
-      kind: true,
-      before: ['doc'],
-      properties: {
-        email: owned(text),
-        code: owned(text),
-        expires: owned(time),
-        tries: owned(num),
-      },
-    },
     // When this person last got in, and how (identity.ts `landed`, T-34351).
     // One row, so it holds the last way in rather than a trail — which is the
     // question a standing sign-in link raises: has anybody used it at all. Not
@@ -377,19 +278,6 @@ export let platformDoc: VocabDoc = {
         via: owned({ type: 'string', enum: ['code', 'link'] }),
       },
     },
-    report: {
-      component: true,
-      type: 'object',
-      kind: true,
-      before: ['doc'],
-      properties: {
-        app: ref('keep'),
-        space: ref('keep'),
-        version: num,
-        release: text,
-        at: time,
-      },
-    },
   },
 }
-export let docs: VocabDoc[] = [platformDoc, sweepDoc]
+export let docs: VocabDoc[] = [directoryDoc, sweepDoc]

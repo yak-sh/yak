@@ -350,7 +350,7 @@ test('a person signs in by mail, and an agent by OAuth', async () => {
     assertMatch(held, /^[0-9a-f]{64}$/)
     assert(!held.includes(live), 'the digits are nowhere in the row')
     // And there is nowhere for it to be written down: the directory's
-    // vocabulary has no `mail` at all (vocab.ts `platformDoc`), so the
+    // vocabulary has no `mail` at all (vocab.ts `platformDocs`), so the
     // question itself has no answer.
     assertStringIncludes(
       await dir.query(`.mail.to_addr=${waiting}`).then(

@@ -405,8 +405,8 @@ let held = (ctx: Ctx, reach: Reach[]): Storage => {
 //
 // The directory is the other side of that same disagreement, and it is not an
 // app: it answers no `/vocab`, and the words it holds are the platform's own
-// (vocab.ts `platformDoc`), loaded into that store instead of the packages'
-// documents. One of them — `member.role` — both sides spell and mean
+// (vocab.ts `platformDocs`), composed from its package and Worker documents.
+// One of them — `member.role` — both sides spell and mean
 // differently: the platform's roster is its access ladder
 // (`owner|editor|viewer`, read space-wide by apps.ts), while @yaks/member
 // keeps belonging (`owner|member`) apart from access, which it expresses as a

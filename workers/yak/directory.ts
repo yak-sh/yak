@@ -1,7 +1,7 @@
 // The directory part (D-32318 §The meta-space): spaces, apps, and members
 // are entities in the meta-space's store — the Store object named
 // yak/platform, a graph on the platform's own vocabulary (vocab.ts
-// `platformDoc`, T-33814) — and this handler is that store's door,
+// `platformDocs`, T-33814) — and this handler is that store's door,
 // `GET /query?q=<filter line>` and `POST /apply`, bundles in and entity JSON
 // out. No shape of its own: a caller in this Worker and a caller across a
 // service binding ask the same question, and `directory(fetcher)` below is the
