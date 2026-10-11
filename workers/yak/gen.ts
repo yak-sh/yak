@@ -22,11 +22,16 @@
 // which `.agents/plugins/marketplace.json` offers — because a plugin is a
 // directory of files on somebody else's disk: the guide has to travel as bytes
 // there too, one skill per page, and the icon with it. Same deal, same refusal.
+// It also projects the three store configs and package exports into load.ts:
+// literal facet imports that esbuild can bundle without runtime discovery.
 import { front, read } from '@yaks/yaml'
 import { fileURLToPath } from 'node:url'
+import { configs } from './config.ts'
+import { imports, loader, type Manifest } from './load-gen.ts'
 
 let HERE = new URL('.', import.meta.url)
 let TARGET = new URL('content.ts', HERE)
+let LOAD = new URL('load.ts', HERE)
 let PLUGIN = new URL('../../plugins/yaks.app/', HERE)
 
 let refuse = (why: string): never => {
@@ -301,12 +306,27 @@ let pack = (files: Record<string, Uint8Array>) => {
 }
 
 let fresh = await formatted(body())
+// Workspace manifests are the export authority. Reading them here keeps the
+// runtime free of filesystem discovery and every generated import literal.
+let root = new URL('../../', HERE)
+let workspace: { workspace: string[] } = JSON.parse(
+  Deno.readTextFileSync(new URL('deno.json', root)),
+)
+let manifests: Manifest[] = workspace.workspace.map((path) =>
+  JSON.parse(Deno.readTextFileSync(new URL(`${path}/deno.json`, root)))
+)
+let loaded = await formatted(loader(imports(Object.values(configs), manifests)))
 let files = await packaged()
 if (Deno.args.includes('--check')) {
   let held = await Deno.readTextFile(TARGET).catch(() => '')
   if (held != fresh) {
     refuse(
       'workers/yak/content.ts is stale — run `deno task content` and commit it',
+    )
+  }
+  if (await Deno.readTextFile(LOAD).catch(() => '') != loaded) {
+    refuse(
+      'workers/yak/load.ts is stale — run `deno task content` and commit it',
     )
   }
   if (stale(files)) {
@@ -316,5 +336,6 @@ if (Deno.args.includes('--check')) {
   }
 } else {
   await Deno.writeTextFile(TARGET, fresh)
+  await Deno.writeTextFile(LOAD, loaded)
   pack(files)
 }
