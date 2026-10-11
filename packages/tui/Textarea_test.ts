@@ -55,7 +55,9 @@ test('the cursor knows its row and column', () => {
   assertEquals(spot({ text: '', at: 0 }), { row: 0, col: 0 })
 })
 
-test('typing shows on screen, and Enter submits and clears', async () => {
+// Prepare an isolated input session once, retaining every visible state and
+// the emitted submission; release its terminal before another fixture starts.
+let typing = await (async () => {
   let sent: string[] = []
   let App = () =>
     h(
@@ -64,14 +66,22 @@ test('typing shows on screen, and Enter submits and clears', async () => {
       h(Textarea, { onSubmit: (t: string) => sent.push(t) }),
     )
   let ui = await mount(App, 30, 4)
-  await ui.send('hi')
-  assertEquals(ui.text().split('\n')[0], '> hi')
-  await ui.send('\x1b[13;2uthere')
-  assertEquals(ui.text().split('\n').slice(0, 2), ['> hi', '  there'])
-  await ui.send('\r')
-  assertEquals(sent, ['hi\nthere'])
-  assertEquals(ui.text().split('\n')[0], '>')
-  ui.free()
+  try {
+    await ui.send('hi')
+    let typed = ui.text()
+    await ui.send('\x1b[13;2uthere')
+    let multiline = ui.text()
+    await ui.send('\r')
+    return { typed, multiline, sent, cleared: ui.text() }
+  } finally {
+    ui.free()
+  }
+})()
+test('typing shows on screen, and Enter submits and clears', () => {
+  assertEquals(typing.typed.split('\n')[0], '> hi')
+  assertEquals(typing.multiline.split('\n').slice(0, 2), ['> hi', '  there'])
+  assertEquals(typing.sent, ['hi\nthere'])
+  assertEquals(typing.cleared.split('\n')[0], '>')
 })
 
 test('a keystroke repaints the line it changed, not the screen', async () => {
@@ -128,9 +138,8 @@ test('soft rows preserve whitespace, hard breaks, long tokens and cursor offsets
   assertEquals(visualEdit(s, { name: 'home', ctrl: true }, 6)?.at, 0)
 })
 
-test('soft input wraps and resizes without changing submitted text', async () => {
-  let sent: string[] = []
-  let changed: string[] = []
+let wrapping = await (async () => {
+  let sent: string[] = [], changed: string[] = []
   let ui = await mount(
     () =>
       h(Textarea, {
@@ -142,22 +151,28 @@ test('soft input wraps and resizes without changing submitted text', async () =>
   )
   try {
     await ui.send('hello world')
-    assertEquals(ui.text().split('\n').slice(0, 2), ['> hello', '  world'])
+    let initial = ui.text()
     await ui.resize(20, 6)
-    assertEquals(ui.text().split('\n')[0], '> hello world')
+    let wide = ui.text()
     await ui.resize(5, 6)
-    assertEquals(ui.text().split('\n').slice(0, 4), [
-      '> hel',
-      '  lo',
-      '  wor',
-      '  ld',
-    ])
-    assertEquals(changed, ['hello world'])
+    let narrow = ui.text(), edits = [...changed]
     await ui.send('\r')
-    assertEquals(sent, ['hello world'])
+    return { initial, wide, narrow, changed: edits, sent }
   } finally {
     ui.free()
   }
+})()
+test('soft input wraps and resizes without changing submitted text', () => {
+  assertEquals(wrapping.initial.split('\n').slice(0, 2), ['> hello', '  world'])
+  assertEquals(wrapping.wide.split('\n')[0], '> hello world')
+  assertEquals(wrapping.narrow.split('\n').slice(0, 4), [
+    '> hel',
+    '  lo',
+    '  wor',
+    '  ld',
+  ])
+  assertEquals(wrapping.changed, ['hello world'])
+  assertEquals(wrapping.sent, ['hello world'])
 })
 
 test('soft rows scroll to the cursor and use allocated width, not terminal width', async () => {

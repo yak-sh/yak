@@ -16,9 +16,12 @@ let App = () =>
     h(Scroll, { id: 'log', grow: '1' }, h('div', null, 'body')),
   )
 
-test('the sidebar sits beside the main column, panel by panel', async () => {
-  let ui = await mount(App, 30, 6)
-  assertEquals(ui.text().split('\n'), [
+// Prepare the terminal frame once; the assertion reads its complete layout.
+let sidebar = await mount(App, 30, 6)
+let sidebarText = sidebar.text()
+sidebar.free()
+test('the sidebar sits beside the main column, panel by panel', () => {
+  assertEquals(sidebarText.split('\n'), [
     'body                One', // no blanket sidebar gutter
     '                    first',
     '',
@@ -26,7 +29,6 @@ test('the sidebar sits beside the main column, panel by panel', async () => {
     '                    second',
     '',
   ])
-  ui.free()
 })
 
 test('a narrow terminal folds the sidebar away', async () => {

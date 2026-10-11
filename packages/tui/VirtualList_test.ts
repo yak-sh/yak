@@ -216,7 +216,7 @@ test('input-only paints do not parse history; switching viewport resets follow w
   }
 })
 
-test('controlled viewport publishes anchors and restores externally owned position', async () => {
+let controlledViewport = await (async () => {
   let position = { follow: false, anchor: { id: '12', offset: 0 } }
   let seen: string[] = []
   let ui = await mount(
@@ -237,15 +237,20 @@ test('controlled viewport publishes anchors and restores externally owned positi
     5,
   )
   try {
-    assert(ui.text().startsWith('12\n'))
+    let initial = ui.text()
     await ui.send('\x1b[6~')
-    assert(seen.includes('16'))
-    assertEquals(position.follow, false)
-    assert(ui.text().startsWith('16\n'))
+    let scrolled = ui.text(), follow = position.follow, published = [...seen]
     await ui.send('\x1b[1;5F')
+    return { initial, scrolled, follow, published }
   } finally {
     ui.free()
   }
+})()
+test('controlled viewport publishes anchors and restores externally owned position', () => {
+  assert(controlledViewport.initial.startsWith('12\n'))
+  assert(controlledViewport.published.includes('16'))
+  assertEquals(controlledViewport.follow, false)
+  assert(controlledViewport.scrolled.startsWith('16\n'))
 })
 
 test('controlled selection jumps lazily and reveals the complete entry', () => {
@@ -506,7 +511,9 @@ test('uniform partial pages have stable global scroll positions', () => {
   assert(v.stats.measured <= 40)
 })
 
-test('pending virtual windows retain their frame and scrollbar without repainting', async () => {
+// Prepare one pending-window session and keep its visible frames, paint and
+// item-render counts. Its terminal is released before the tests run.
+let pendingWindow = await (async () => {
   const pending = signal(false), identity = signal('one')
   const data = signal(items(100))
   let renders = 0
@@ -527,28 +534,34 @@ test('pending virtual windows retain their frame and scrollbar without repaintin
     8,
   )
   try {
-    const before = ui.text(), count = renders
-    const writes = ui.out.length
+    let before = { text: ui.text(), renders, writes: ui.out.length }
     pending.value = true
     data.value = []
     await ui.send('')
-    assertEquals(ui.text(), before)
-    assertEquals(ui.out.length, writes)
-    assertEquals(renders, count)
-    assert(ui.text().includes('█'))
+    let retained = { text: ui.text(), renders, writes: ui.out.length }
     await ui.resize(20, 6)
-    assert(ui.text().includes('█'))
-    assert(ui.text().split('\n').every((line) => line.length <= 20))
+    let resized = ui.text()
     identity.value = 'two'
     await ui.send('')
-    assert(ui.text().includes('Loading…'))
-    assert(ui.text().includes('█'))
-    assert(!ui.text().includes('99'))
+    let loading = ui.text()
     pending.value = false
     await ui.send('')
-    assert(!ui.text().includes('Loading…'))
-    assert(ui.text().includes('█'))
+    return { before, retained, resized, loading, ready: ui.text() }
   } finally {
     ui.free()
   }
+})()
+test('pending virtual windows retain their frame and scrollbar without repainting', () => {
+  let { before, retained, resized, loading, ready } = pendingWindow
+  assertEquals(retained.text, before.text)
+  assertEquals(retained.writes, before.writes)
+  assertEquals(retained.renders, before.renders)
+  assert(retained.text.includes('█'))
+  assert(resized.includes('█'))
+  assert(resized.split('\n').every((line) => line.length <= 20))
+  assert(loading.includes('Loading…'))
+  assert(loading.includes('█'))
+  assert(!loading.includes('99'))
+  assert(!ready.includes('Loading…'))
+  assert(ready.includes('█'))
 })
