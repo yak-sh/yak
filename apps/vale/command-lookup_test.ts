@@ -41,7 +41,8 @@ let alias = (eid: string, of: string, value: string): Bundle => ({
   alias: {},
   key: { of, value },
 })
-let page = () => client(vocab, [], { vault: false, wireVault: false })
+let page = () =>
+  client(vocab, [], { vault: false, wireVault: false, provenance: false })
 
 test('creature suggestions offer only names and aliases execution can resolve', async () => {
   let c = page()
@@ -103,17 +104,21 @@ test('creature suggestions offer only names and aliases execution can resolve', 
   }
 })
 
+// The page's watches are installed before edits arrive.
+let changing = page()
+let changingRefs = commandLookup({ client: changing })
+await changing.mutate([
+  beast('b1', 'Pip'),
+  beast('b2', 'pip'),
+  alias('k1', 'b1', 'beast:pip'),
+])
+let ambiguous = changingRefs.lookup.ids('beast_design')
+await changing.mutate([beast('b2', 'Wren')])
+
 test('creature suggestions follow renames, alias changes and removals', async () => {
-  let c = page()
-  let refs = commandLookup({ client: c })
+  let c = changing, refs = changingRefs
   try {
-    await c.mutate([
-      beast('b1', 'Pip'),
-      beast('b2', 'pip'),
-      alias('k1', 'b1', 'beast:pip'),
-    ])
-    ok(!refs.lookup.ids('beast_design').includes('Pip'))
-    await c.mutate([beast('b2', 'Wren')])
+    ok(!ambiguous.includes('Pip'))
     ok(refs.lookup.ids('beast_design').includes('Pip'))
     await c.mutate([alias('k1', 'b1', 'beast:wren')])
     ok(!refs.lookup.ids('beast_design').includes('Wren'))

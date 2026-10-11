@@ -89,15 +89,18 @@ let levelOf = new Map(GIVERS.map((g) => [g.id, g.level]))
  * the board stands.
  *
  * ```ts
- * import { seedDesigns } from './designs_fixture.ts'
- * seedDesigns()
+ * import { seedBeasts } from './beasts_fixture.ts'
+ * import { seedItems } from './items_fixture.ts'
+ * seedBeasts()
+ * seedItems()
  * import { assertEquals } from '@std/assert'
  * import { GIVERS, QUESTS } from './quests.ts'
  * import { questsOf } from './rules.ts'
  * import { said } from './stock.ts'
  * let q = QUESTS[0]
+ * let elsewhere = QUESTS.find((q) => q.level != 'mossvale' && !q.after)!
  * let on = (journal: { quest: string; step: string; at: number }[]) =>
- *   notices(questsOf(QUESTS, journal, [], []), 'mossvale', { [q.giver]: [0, -20] }, [0, 0])
+ *   notices(questsOf([q, elsewhere], journal, [], []), 'mossvale', { [q.giver]: [0, -20] }, [0, 0])
  * let first = on([]).find((n) => n.id == q.id)!
  * assertEquals([first.title, first.where], [q.title, '20 m north'])
  * // taken, or pinned from the board, it is no longer on it

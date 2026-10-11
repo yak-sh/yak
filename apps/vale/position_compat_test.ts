@@ -287,8 +287,11 @@ test('a request mark updates a kept hero subscription and HTTP replies include i
   await subs.drop(rawSink)
 })
 
+// Compile the app's fixed vocabulary once before exercising migration.
+let mover = compile(lensesIn([app]))
+
 test('the mover preserves newer saved values, historical attribution, contracts membership and retains rollback views', () => {
-  let chain = compile(lensesIn([app]))
+  let chain = mover
   let source: Bundle = {
     entity: { eid: 'hero' },
     player: {},
@@ -599,7 +602,13 @@ test('deploying the Vale view preserves stored eid text when the request becomes
       type: 'string',
       index: true,
     }
-    let oldVocab = loadVocab([metaDoc, archetypeDoc, ...lensDocs, core, before])
+    let oldVocab = loadVocab([
+      metaDoc,
+      archetypeDoc,
+      ...lensDocs,
+      core,
+      before,
+    ])
     let oldGraph = graph({
       vocab: oldVocab,
       storage: storage(driver, oldVocab),

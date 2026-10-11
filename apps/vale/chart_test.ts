@@ -42,23 +42,24 @@ test('the same flat cover and water paint alike at finer and coarser voxel edges
   )
 })
 
-test('updated theme colours repaint already-grown ground and water', () => {
-  let land = ground(1, 8), water = ground(1, 0)
-  let before = [chartPatch(land), chartPatch(water)]
-  let changed = rows.map((row) =>
-    row.theme_design.land == 'mossvale'
-      ? {
-        ...row,
-        theme_design: {
-          ...row.theme_design,
-          look: {
-            ground: { grass: 0x123456 },
-            water: [0x102030, 0x102030, 0x102030],
-          },
+// Grow the fixed patches once; repainting exercises theme replacement.
+let land = ground(1, 8), water = ground(1, 0)
+let before = [chartPatch(land), chartPatch(water)]
+let changed = rows.map((row) =>
+  row.theme_design.land == 'mossvale'
+    ? {
+      ...row,
+      theme_design: {
+        ...row.theme_design,
+        look: {
+          ground: { grass: 0x123456 },
+          water: [0x102030, 0x102030, 0x102030],
         },
-      }
-      : row
-  )
+      },
+    }
+    : row
+)
+test('updated theme colours repaint already-grown ground and water', () => {
   try {
     useThemes(changed)
     assertEquals(pixel(chartPatch(land), 8, 8), [0x12, 0x34, 0x56, 255])

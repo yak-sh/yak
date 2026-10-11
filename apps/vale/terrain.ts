@@ -1674,9 +1674,11 @@ export let propsNear = (v: Vale, x: number, z: number, r: number): Prop[] => {
  * ```ts
  * import { assertEquals } from '@std/assert'
  * let well = { kind: 'well', x: 50.25, z: 50.25, seed: 0 }
- * assertEquals(foundation(flat(5), well), null)
+ * import { levelGround, fallenGround } from './terrain_fixture.ts'
+ * let level = levelGround
+ * assertEquals(foundation(level, well), null)
  * // The ground falls away to 3.5 m on its west side.
- * let v = flat((x) => x < 50 && x > 49.5 ? 3.5 : 5)
+ * let v = fallenGround
  * assertEquals(foundation(v, well)?.[0][1], 3.5)
  * assertEquals(foundation(v, well)?.[1][1], 1.48)
  * ```

@@ -43,9 +43,15 @@ let run = (nodes: Seen[], phone = false) => {
   return { scene, emitted, light }
 }
 
+// Keep each tier’s completed emission sample, as the particle pool receives it.
+let tiers = ['uncommon', 'rare', 'epic', 'legendary'] as const
+let outputs = tiers.map((rarity) => {
+  let output = run([node(rarity)])
+  output.light.dispose()
+  return output
+})
+
 test('finer resources send more visible, distinct moving motes', () => {
-  let tiers = ['uncommon', 'rare', 'epic', 'legendary'] as const
-  let outputs = tiers.map((rarity) => run([node(rarity)]))
   let counts = outputs.map((o) => o.emitted.length)
   assert(counts[0] > 2)
   assert(counts.every((n, i) => i == 0 || n > counts[i - 1]))
@@ -64,7 +70,6 @@ test('finer resources send more visible, distinct moving motes', () => {
   assert(outputs[3].emitted.some((e) => !e.options.flame))
   assert(outputs[0].emitted.every((e) => !e.options.flame))
   assert(new Set(outputs[3].emitted.map((e) => e.at.x)).size > 1)
-  for (let o of outputs) o.light.dispose()
 })
 
 test('phone mote work stays bounded and spent resources go quiet', () => {

@@ -343,7 +343,12 @@ export let wants = (level: string, most = 6) => {
 
 /** One shelf of a villager's stock: a kind, the most of it they keep, how
  * long each one takes to come back, in ms, and whether it is their own. */
-export type Shelf = { kind: string; most: number; every: number; own?: boolean }
+export type Shelf = {
+  kind: string
+  most: number
+  every: number
+  own?: boolean
+}
 
 let FAMILIES = ['sword', 'axe', 'hammer', 'dagger', 'bow', 'staff']
 
@@ -749,8 +754,10 @@ export type Step = { kind: string; n: number; have: number; deed: boolean }
  * How far a hero has come with each step of what a deal asks.
  *
  * ```ts
- * import { seedDesigns } from './designs_fixture.ts'
- * seedDesigns()
+ * import { seedBeasts } from './beasts_fixture.ts'
+ * import { seedItems } from './items_fixture.ts'
+ * seedBeasts()
+ * seedItems()
  * import { assertEquals } from '@std/assert'
  * import { beastId } from './beasts.ts'
  * let thornback = beastId('beast:thornback')!

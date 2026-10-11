@@ -52,19 +52,21 @@ test('Vale composition puts the theme before kit and skin fallback assets', asyn
   )
 })
 
-test('Vale semantic colours in the terminal resolve the current browser tokens', async () => {
-  let mapped = await (await fetch(composition.theme.css)).text()
-  let source = await (await fetch(new URL('./ui/theme.css', import.meta.url)))
-    .text()
-  let tokens = Object.fromEntries(
-    [...source.matchAll(/--([\w-]+):\s*(#[\da-f]+);/g)].map((
-      [, k, v],
-    ) => [k, v]),
-  )
-  let roles = Object.fromEntries(
-    [...mapped.matchAll(/--([\w-]+):\s*var\(--([\w-]+)\);/g)]
-      .map(([, k, v]) => [k, tokens[v]]),
-  )
+// Read the browser assets once; check their semantic colours against the terminal.
+let mapped = await (await fetch(composition.theme.css)).text()
+let source = await (await fetch(new URL('./ui/theme.css', import.meta.url)))
+  .text()
+let tokens = Object.fromEntries(
+  [...source.matchAll(/--([\w-]+):\s*(#[\da-f]+);/g)].map((
+    [, k, v],
+  ) => [k, v]),
+)
+let roles = Object.fromEntries(
+  [...mapped.matchAll(/--([\w-]+):\s*var\(--([\w-]+)\);/g)]
+    .map(([, k, v]) => [k, tokens[v]]),
+)
+
+test('Vale semantic colours in the terminal resolve the current browser tokens', () => {
   let { hues, ...colors } = composition.theme.colors
   // A role is a token's, or a token of the same name.
   for (let [role, value] of Object.entries(colors)) {

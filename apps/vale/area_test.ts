@@ -12,10 +12,11 @@ import { seedThemes } from './themes_fixture.ts'
 import words from './vocab.json' with { type: 'json' }
 
 seedThemes()
+let vocab = loadVocab([words])
 
 test('a page sees nearby world rows and moving heroes', () => {
   let at = areaOf(64, 64, REACH)
-  let select = matcher(at.query, loadVocab([words]))
+  let select = matcher(at.query, vocab)
   let row = (eid: string, x: number, z: number) => ({
     entity: { eid },
     slain: { creature: 'hare-1', by: 'hero-1' },
@@ -42,7 +43,7 @@ test('a page sees nearby world rows and moving heroes', () => {
 
 test('an area query finds stored rows in generated regions', () => {
   let x = 5 * 256 + 128, z = 128
-  let select = matcher(areaOf(x, z, REACH).query, loadVocab([words]))
+  let select = matcher(areaOf(x, z, REACH).query, vocab)
   let row = (eid: string, px: number, pz: number) => ({
     entity: { eid },
     slain: { creature: 'hare-1', by: 'hero-1' },

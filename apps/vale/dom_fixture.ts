@@ -12,9 +12,9 @@ let NAMES = ['document', 'Element', 'HTMLInputElement'] as const
 
 export let withDom = <T>(
   run: (dom: Dom, main: HTMLElement) => T,
-  html = '<html><body><main></main></body></html>',
+  html: string | Dom = '<html><body><main></main></body></html>',
 ): T => {
-  let dom = parseHTML(html)
+  let dom = typeof html == 'string' ? parseHTML(html) : html
   let prior = NAMES.map((n) => Object.getOwnPropertyDescriptor(globalThis, n))
   let values = [dom.document, dom.window.Element, dom.window.HTMLInputElement]
   NAMES.forEach((n, i) =>
