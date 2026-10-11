@@ -718,12 +718,18 @@ test('an ordinary receipt expires with its parts once its window has passed', as
   try {
     receipt('large', [titled('n', '🦊'.repeat(2_000_000))])
     receipt('small', [titled('s', 'small')])
+    let backlog = Array.from({ length: 40 }, (_, i) => `expired-${i}`)
+    for (let key of backlog) receipt(key, [titled(key, 'small')])
     at += 5 * 60_000
     receipt('later', [titled('l', 'later')])
     assert(first(d, 'large') && first(d, 'small'))
     at += 6 * 60_000
     receipt('last', [titled('z', 'last')])
+    // Further writes pay down the backlog without another clock advance.
+    // None of the recent receipts or held input expires with it.
+    for (let i = 0; i < 4; i++) receipt(`drain-${i}`, [])
     assertEquals([first(d, 'large'), first(d, 'small')], [null, null])
+    assert(backlog.every((key) => first(d, key) == null))
     assertEquals(scan(d, 'yak_write_answers'), [])
     assert(first(d, 'later') && first(d, 'last'))
   } finally {

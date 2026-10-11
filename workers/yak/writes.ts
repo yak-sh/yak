@@ -17,6 +17,7 @@
 import { type Bundle, composed, Refused } from '@yaks/graph'
 import { carries } from '@yaks/secrets'
 import {
+  among,
   and,
   col,
   type CreateTable,
@@ -110,6 +111,15 @@ export let schema = (): Stmt[] => [
     unique: true,
     ifNot: true,
   },
+  // Waking repairs only interrupted attempts, never successful history.
+  ...['running', 'failed'].map((state): Stmt => ({
+    t: 'create index',
+    name: `${LOG}_${state}`,
+    on: LOG,
+    cols: [col('seq')],
+    where: eq(col('state'), lit(state)),
+    ifNot: true,
+  })),
 ]
 
 /** The log, raised, with every column it predates added: an object keeps its
@@ -128,6 +138,7 @@ export let raise = (db: Driver) => {
 // How long an applied write keeps its answer for a resend. The kernel resends
 // at once (door.ts `retryOnce`), so this is room to spare.
 let WINDOW = 10 * 60_000
+let BATCH = 16
 
 // What a connection knows of its log without reading it: when it last expired
 // receipts, and that it holds no waiting write, from the last look until
@@ -298,19 +309,27 @@ export let keyed = (body: string): boolean => {
 
 let now = () => new Date(Date.now()).toISOString()
 
-/** Expire only ordinary successful receipts, never held user input: at most
- * once a tenth of the window, so a receipt outlives its window by that much
- * at most, and a write in between reads nothing to find there is nothing to
- * expire. */
+/** Expire a bounded batch of ordinary receipts, never held user input.
+ * A backlog is paid down by subsequent writes; an empty tail is checked at
+ * most once a tenth of the resend window. An app write never owes the whole
+ * directory's idle history. */
 let expire = (db: Driver) => {
   let t = Date.now()
   if (t - (swept.get(of(db)) ?? -Infinity) < WINDOW / 10) return
-  swept.set(of(db), t)
   let gone = new Date(t - WINDOW).toISOString()
   let rows = db.query({
     t: 'delete',
     from: LOG,
-    where: and(APPLIED, not(AUDIT), lt(col('at'), val(gone))),
+    where: among(
+      col('seq'),
+      select({
+        cols: [col('seq')],
+        from: table(LOG),
+        where: and(APPLIED, not(AUDIT), lt(col('at'), val(gone))),
+        order: [col('at')],
+        limit: lit(BATCH),
+      }),
+    ),
     returning: [col('seq'), col('answer')],
   })
   for (let row of rows) {
@@ -318,6 +337,7 @@ let expire = (db: Driver) => {
       db.query({ t: 'delete', from: ANSWERS, where: at(Number(row.seq)) })
     }
   }
+  if (rows.length < BATCH) swept.set(of(db), t)
 }
 
 /** Keep one write that cannot commit now; its place in the replay log. */

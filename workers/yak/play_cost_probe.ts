@@ -1,4 +1,7 @@
 import { coldMessages } from './cold_message_fixture.ts'
+import { directoryLifecycleCost } from './directory_cost_fixture.ts'
+import type { Env } from './env.ts'
+export { Store } from './graph.ts'
 import {
   descriptorGatherCost,
   entryPageCost,
@@ -25,6 +28,7 @@ export class PlayCost {
         setAlarm(at: number): Promise<void>
       }
     },
+    private env: Pick<Env, 'STORE' | 'BLOBS'>,
   ) {}
   alarm(): void {}
   async fetch(req: Request): Promise<Response> {
@@ -38,6 +42,15 @@ export class PlayCost {
     }
   }
   async measure(req: Request): Promise<Response> {
+    if (new URL(req.url).searchParams.has('directory-lifecycle')) {
+      return Response.json(
+        await directoryLifecycleCost(
+          this.ctx.storage,
+          this.env,
+          Number(new URL(req.url).searchParams.get('history') ?? 100),
+        ),
+      )
+    }
     if (new URL(req.url).searchParams.has('descriptorgather')) {
       return Response.json(
         descriptorGatherCost(

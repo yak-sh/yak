@@ -302,9 +302,19 @@ export let probeSuite = async () => {
           tsconfig: kernel.tsconfig,
           alias: kernel.alias,
           durable_objects: {
-            bindings: [{ name: 'PLAY', class_name: 'PlayCost' }],
+            bindings: [
+              { name: 'PLAY', class_name: 'PlayCost' },
+              { name: 'STORE', class_name: 'Store' },
+            ],
           },
-          migrations: [{ tag: 'v1', new_sqlite_classes: ['PlayCost'] }],
+          migrations: [{
+            tag: 'v1',
+            new_sqlite_classes: ['PlayCost', 'Store'],
+          }],
+          r2_buckets: [{
+            binding: 'BLOBS',
+            bucket_name: 'probe-directory-cost',
+          }],
         },
       },
       {
