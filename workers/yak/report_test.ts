@@ -167,7 +167,7 @@ test('a page reports its own breaks, and the agent hears', async () => {
 test('a refusal the door meant is not a break', async () => {
   let k = await kernel()
   try {
-    let { cookie } = await seed(k, [{ slug: club60, apps: ['runs'] }])
+    let { cookie, eids } = await seed(k, [{ slug: club60, apps: ['runs'] }])
     let agent = connector(k, cookie)
     let app = { space: club60, app: 'runs' }
     let report = (body: unknown) =>
@@ -242,16 +242,33 @@ test('a refusal the door meant is not a break', async () => {
       204,
     )
 
+    // A page can catch and show a query error. Its 400 is an app bug, even
+    // though an access denial at the same door is an expected refusal.
+    let query = await k.at(`${club60}.yaks.app`, '/runs/api/query?.book')
+    assertEquals(query.status, 400)
+    assertStringIncludes(await query.text(), 'unknown prop: .book')
+    await meta(k).apply([{
+      entity: { eid: eids[`${club60}/runs`] },
+      app: { access: 'private' },
+    }])
+    let denied = await k.at(`${club60}.yaks.app`, '/runs/api/query?.book')
+    assertEquals(denied.status, 401)
+    await denied.body?.cancel()
+
     let told = await agent.tool('app_errors', app)
     assert(!told.includes('not_a_writer'), 'the refusal filed nothing')
     assert(!told.includes('unhandled rejection'), 'nor its uncaught throw')
     assert(!told.includes('refused our key'), "the app's own no filed nothing")
     assertMatch(told, /boom is not a function/)
     assertMatch(told, /undefined is not an object/)
+    assertStringIncludes(
+      told,
+      'GET /runs/api/query?.book — unknown prop: .book',
+    )
     assertEquals(
       told.split('\n').filter((l) => l.startsWith('- ')).length,
-      2,
-      'two lines, and both are breaks',
+      3,
+      'the query failure and both page breaks',
     )
   } finally {
     await k.stop()
@@ -289,10 +306,17 @@ test('a break names the version the app is serving', async () => {
         url: `https://${jeff61}.yaks.app/recipes/`,
       }),
     })).body?.cancel()
+    await (await k.at(`${jeff61}.yaks.app`, '/recipes/api/query?.book'))
+      .body?.cancel()
 
+    let told = await agent.tool('app_errors', { space: jeff61, app: 'recipes' })
     assertMatch(
-      await agent.tool('app_errors', { space: jeff61, app: 'recipes' }),
+      told,
       /recipes v9: page \/recipes\/ — boom is not a function/,
+    )
+    assertStringIncludes(
+      told,
+      'recipes v9: GET /recipes/api/query?.book — unknown prop: .book',
     )
   } finally {
     await k.stop()
@@ -345,6 +369,9 @@ test('a break names the page version that ran, not the newest release', async ()
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify(reports),
     })).body?.cancel()
+    await (await k.at(`${jeff64}.yaks.app`, '/recipes/api/query?.book', {
+      headers: { 'x-yak-version': String(version) },
+    })).body?.cancel()
     let told = await agent.tool('app_errors', {
       space: jeff64,
       app: 'recipes',
@@ -356,6 +383,10 @@ test('a break names the page version that ran, not the newest release', async ()
     assertStringIncludes(
       told,
       `recipes: page /recipes/first.js — failed to load script ${page}first.js`,
+    )
+    assertStringIncludes(
+      told,
+      `recipes v${version}: GET /recipes/api/query?.book — unknown prop: .book`,
     )
     let afterFirst = await agent.tool('app_errors', {
       space: jeff64,

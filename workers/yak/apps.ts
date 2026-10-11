@@ -126,7 +126,7 @@ import { type Clock, clock, timed } from './timing.ts'
 import { fault, noted, refusal, serving } from './unseen.ts'
 import { recoverRelease } from './tools.ts'
 import { ADDRESS } from './route.ts'
-import { caught } from './defects.ts'
+import { caught, reported as tracked } from './defects.ts'
 import { full, fullFiles } from './usage.ts'
 import { refusedVisit } from './meter.ts'
 import { modifying, sha256 } from './versions.ts'
@@ -1570,6 +1570,38 @@ let api = async (
         await queried(env, space, app, who, line, live, headers),
       )
     } catch (e) {
+      // A page's query is app code, even when the store answers its invalid
+      // grammar or unknown word with 400. Record it here: the page may catch
+      // the error, and the browser reporter deliberately ignores 4xx answers.
+      // Access denials remain expected refusals.
+      let denied = e instanceof Error && 'status' in e &&
+        (e.status == 401 || e.status == 403)
+      if (!denied) {
+        try {
+          let raw = req.headers.get('x-yak-version')
+          let version = raw != null && /^[0-9]+$/.test(raw) &&
+              Number.isSafeInteger(Number(raw))
+            ? Number(raw)
+            : await serving(env, space, app)
+          let url = new URL(req.url)
+          await noted(
+            (bundles) => metaOf(store).apply(bundles, KERNEL),
+            {
+              request: `${req.method} ${url.pathname}${url.search}`,
+              version,
+              message: e instanceof Error ? e.message : String(e),
+            },
+            { env, space, app, request: req, entrypoint: 'query' },
+          )
+          tracked(e)
+        } catch (why) {
+          caught(why, {
+            request: 'report query failure',
+            space: space.slug,
+            app: app.slug,
+          })
+        }
+      }
       caught(e, { request: 'GET /api/query', space: space.slug, app: app.slug })
       return rejection(e)
     }
