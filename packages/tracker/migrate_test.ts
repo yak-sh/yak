@@ -10,12 +10,10 @@ import { ram } from '@yaks/ram'
 import { trackerDoc } from './vocab.ts'
 import { migrateTitles } from './migrate.ts'
 
-let fixture = () => {
-  let legacy = structuredClone(trackerDoc)
-  legacy.$defs!.bug.properties!.title = { type: 'string', stamped: true }
-  let vocab = loadVocab([kernelDoc, docDoc, toolsDoc, legacy], [kernelKeywords])
-  return graph({ vocab, storage: ram(vocab) })
-}
+let legacy = structuredClone(trackerDoc)
+legacy.$defs!.bug.properties!.title = { type: 'string', stamped: true }
+let vocab = loadVocab([kernelDoc, docDoc, toolsDoc, legacy], [kernelKeywords])
+let fixture = () => graph({ vocab, storage: ram(vocab) })
 test('titles move once without changing identity, errors or edited titles', async () => {
   let g = fixture()
   await g.apply([
@@ -43,13 +41,14 @@ test('titles move once without changing identity, errors or edited titles', asyn
   equal(bare.doc, { title: 'first failure' })
   equal((await g.read('.error')).length, 1)
 })
+let conflict = fixture()
+await conflict.apply([{
+  entity: { eid: 'conflict' },
+  bug: { title: 'old' },
+  doc: { title: 'edited' },
+}], { trusted: true })
 test('different human and legacy titles refuse before clearing either', async () => {
-  let g = fixture()
-  await g.apply([{
-    entity: { eid: 'conflict' },
-    bug: { title: 'old' },
-    doc: { title: 'edited' },
-  }], { trusted: true })
+  let g = conflict
   let refused = false
   try {
     await migrateTitles(g)

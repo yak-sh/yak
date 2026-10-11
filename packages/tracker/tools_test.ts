@@ -64,8 +64,10 @@ let ask = (name: string, args: Record<string, unknown> = {}) =>
   })
 let rows = (answer: Bundle[]) => valueIn(answer)?.rows as Bundle[]
 
+// Prepare the signed read once, then check both the remote result and the box.
+let listed = await ask('bug_list', { source: 'yaks.app', limit: 1 })
 test('platform bug list filters and sorts before its limit without importing rows', async () => {
-  let answer = await ask('bug_list', { source: 'yaks.app', limit: 1 })
+  let answer = listed
   equal(valueIn(answer)?.source, 'yaks.app')
   equal(rows(answer).map((b) => b.entity.eid), [ids[1]])
   ok(
@@ -198,26 +200,29 @@ let marking = async (
 for (let [verb, name] of [['resolve', 'resolved'], ['archive', 'archived']]) {
   let shared = await marking()
   let [local] = await shared.box.get([ids[0]], ['entity'])
+  // A configured box sends this mark once through the signed Worker door.
+  let marked = await shared.call(`bug_${verb}`, {
+    bug: verb == 'resolve' ? `B-${local.entity.num}` : 'mark me',
+  })
   test(`box bug ${verb} marks both stores through the signed Worker door`, async () => {
-    let answer = await shared.call(`bug_${verb}`, {
-      bug: verb == 'resolve' ? `B-${local.entity.num}` : 'mark me',
-    })
+    let answer = marked
     ok(answer.some((b) => b[name]))
     ok((await shared.box.get([ids[0]], [name]))[0][name])
     ok((await shared.worker.get([ids[0]], [name]))[0][name])
     equal((await shared.worker.read('.bug.status=open')).length, 0)
   })
   let retry = await marking(undefined, undefined, true, true, name)
+  await retry.call(`bug_${verb}`, { bug: ids[0] })
   test(`an already marked box bug still delivers ${verb} to the Worker`, async () => {
-    await retry.call(`bug_${verb}`, { bug: ids[0] })
     ok((await retry.worker.get([ids[0]], [name]))[0][name])
   })
   let platformOnly = await marking(undefined, undefined, false)
+  let remoteMark = await platformOnly.call(`bug_${verb}`, {
+    bug: ids[0],
+    source: 'yaks.app',
+  })
   test(`platform bug ${verb} needs no box copy and imports no bug`, async () => {
-    let answer = await platformOnly.call(`bug_${verb}`, {
-      bug: ids[0],
-      source: 'yaks.app',
-    })
+    let answer = remoteMark
     equal(valueIn(answer), { source: 'yaks.app', bug: ids[0], mark: name })
     ok((await platformOnly.worker.get([ids[0]], [name]))[0][name])
     equal(await platformOnly.box.read('.bug'), [])

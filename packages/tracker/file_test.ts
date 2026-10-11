@@ -17,20 +17,24 @@ let record = (eid: string) =>
 let left = async (dir: string) =>
   (await Array.fromAsync(Deno.readDir(dir))).map((e) => e.name)
 
-test('a file spool survives reopening, preserves concurrent appends and actors', async () => {
-  let dir = await Deno.makeTempDir()
-  try {
-    await Promise.all(
-      Array.from(
-        { length: 20 },
-        (_, i) =>
-          Promise.resolve().then(() =>
-            spool(files(dir).append)(record(`error-${i}`))
-          ),
+// Reopen and drain the concurrent spool once, then inspect the admitted rows
+// and acknowledgement outcome without repeating durable writes per assertion.
+let concurrent = await Deno.makeTempDir()
+await Promise.all(
+  Array.from(
+    { length: 20 },
+    (_, i) =>
+      Promise.resolve().then(() =>
+        spool(files(concurrent).append)(record(`error-${i}`))
       ),
-    )
-    let g = fixture()
-    await service({ graph: g }, { spool: dir })
+  ),
+)
+let concurrentGraph = fixture()
+await service({ graph: concurrentGraph }, { spool: concurrent })
+test('a file spool survives reopening, preserves concurrent appends and actors', async () => {
+  let dir = concurrent
+  let g = concurrentGraph
+  try {
     let rows = await g.read('.error ?created')
     equal(rows.length, 20)
     ok(
@@ -92,16 +96,19 @@ test('a service told to stop takes no more records, and leaves the rest spooled'
   }
 })
 
+// Prepare the spool's partial and complete segments once, then inspect the
+// intake outcome and the files it retained.
+let partial = await Deno.makeTempDir()
+await Deno.writeTextFile(`${partial}/0-partial.jsonl`, '[{"entity":')
+await spool(files(partial).append)(record('after-partial'))
+let partialGraph = fixture()
+await intake(partialGraph, files(partial).source)
 test('partial unpublished records remain while later complete appends drain', async () => {
-  let dir = await Deno.makeTempDir()
+  let dir = partial
   try {
-    await Deno.writeTextFile(`${dir}/partial.jsonl`, '[{"entity":')
-    await spool(files(dir).append)(record('after-partial'))
-    let g = fixture()
-    await intake(g, files(dir).source)
-    equal((await g.read('.error')).length, 1)
-    equal(await Deno.readTextFile(`${dir}/partial.jsonl`), '[{"entity":')
-    equal(await left(dir), ['partial.jsonl'])
+    equal((await partialGraph.read('.error')).length, 1)
+    equal(await Deno.readTextFile(`${dir}/0-partial.jsonl`), '[{"entity":')
+    equal(await left(dir), ['0-partial.jsonl'])
   } finally {
     await Deno.remove(dir, { recursive: true })
   }
