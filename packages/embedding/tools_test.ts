@@ -6,7 +6,7 @@ import { assert, assertEquals } from '@std/assert'
 import type { Bundle, Comp, Graph } from '@yaks/graph'
 import { col, eq, type Statements, val } from '@yaks/sql'
 import { mem, none, shelf, stocked } from './testing.ts'
-import { TABLE } from './ddl.ts'
+import { schema, TABLE } from './ddl.ts'
 import { build, install } from './native.ts'
 import { type Options, runs } from './tools.ts'
 
@@ -63,8 +63,11 @@ test('a build owed moments ago is the sweep having its turn', async () => {
   assertEquals((await checkup(await installed())).level, undefined)
 })
 
+// The check needs an empty vector table, not books waiting to be embedded.
+let empty = mem()
+for (let stmt of schema()) empty.query(stmt)
 test('an empty table is not a stalled index', async () => {
-  assertEquals((await checkup(shelf())).level, undefined)
+  assertEquals((await checkup(empty)).level, undefined)
 })
 
 // The same database as a file other processes may have open.

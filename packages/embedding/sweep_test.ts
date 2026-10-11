@@ -47,8 +47,12 @@ let stocked = async () => {
   return db
 }
 
+// Read-only source checks share the same untouched corpus.
+let corpus = shelf()
+let emptySweep = shelf()
+
 test('an entity gets one text, joined from every field it wears', () => {
-  let one = sources(shelf(), text).find((s) => s.entity == 'book-1')!
+  let one = sources(corpus, text).find((s) => s.entity == 'book-1')!
   assertEquals(
     one.text,
     'The Hobbit\nA burglar leaves home and meets a dragon.',
@@ -57,7 +61,7 @@ test('an entity gets one text, joined from every field it wears', () => {
 })
 
 test('a review is its own entity, not part of the book it is about', () => {
-  let all = sources(shelf(), text)
+  let all = sources(corpus, text)
   assertEquals(all.length, 4)
   assert(all.find((s) => s.entity == 'review-4')!.text.includes('chapters'))
 })
@@ -66,7 +70,7 @@ test('a field read through an override is read as what it stands for', () => {
   let loud = text.map((f) =>
     f.prop == 'blurb' ? { ...f, text: (s: Expr) => fn('upper', s) } : f
   )
-  let one = sources(shelf(), loud).find((s) => s.entity == 'book-1')!
+  let one = sources(corpus, loud).find((s) => s.entity == 'book-1')!
   assert(one.text.endsWith('MEETS A DRAGON.'), one.text)
 })
 
@@ -181,7 +185,7 @@ test('a text the model refuses is dropped; the batch it rode in is not', async (
 })
 
 test('a vocabulary with nothing to embed sweeps to nothing', async () => {
-  let db = shelf()
+  let db = emptySweep
   assertEquals(await sweep(db, [], embedder), {
     fresh: 0,
     left: 0,
