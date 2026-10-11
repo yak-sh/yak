@@ -305,3 +305,16 @@ The available Wrangler OAuth credential still gets HTTP 403, code 12004 from the
 Workers Builds list API. Queue stamps cannot be read with that credential; live
 proof uses prospective version-confirmed probes and Cloudflare's GitHub Build
 checks. The strict 60-second limit and ratchet remain unchanged.
+
+The first rollout of this shape, `d058ad04e`, was observed at 75.655 seconds:
+51.786 seconds to upload and 23.869 seconds to the version-confirmed response.
+Its Build completed at 09:16:47 UTC, three seconds after the recorded live
+probe, with no sandbox image build remaining behind it. The following pair
+measures the steady state, including a push in the former image-build window.
+
+A fresh throwaway sandbox had no `/opt/yaks-cli` workspace. Against the live
+platform, its first `yak --help` exited 0 in 6.158 seconds, `yak about --json`
+called the platform and exited 0 in 0.535 seconds, and warm help exited 0 in
+0.269 seconds. The cold call adds 5.889 seconds over the warm call in this
+observation, including source transfer, verification, disk writes and cold
+module downloads. Container startup precedes these command timings.

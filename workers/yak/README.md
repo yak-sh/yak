@@ -27,9 +27,11 @@ reference. The live Worker's assets carry the CLI workspace, compressed and
 addressed by its source hash. A sandbox's `yak` fetches the live launcher and
 workspace descriptor; a changed workspace is verified and installed atomically
 before running the existing CLI. Each command uses its own immutable source
-directory. Commands share Deno's module cache across CLI releases. The first
-`yak` call pays for the workspace download and cold dependencies; later calls
-fetch only the launcher and descriptor until the sources change.
+directory. Commands share Deno's module cache across CLI releases. The CLI
+retains its lockfile and uses npm lazy caching, so a cold command downloads only
+the dependencies it imports. The first `yak` call pays for the workspace
+download and cold dependencies; later calls fetch only the launcher and
+descriptor until the sources change.
 
 The toolchain image is provisioned separately when its Dockerfile changes:
 
