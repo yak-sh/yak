@@ -224,27 +224,37 @@ test('graph title renames move companion suffixes before the locator changes', a
   assertEquals((await repoSkills(g, repo))[0].entity.eid, 'held')
 })
 
+let duplicateTitles = world()
+await duplicateTitles.apply([
+  ...skill('one', 'old'),
+  ...skill('two', 'new'),
+  { entity: { eid: 'one' }, doc: { title: 'new' } },
+])
+let companionCollision = world()
+await companionCollision.apply([
+  ...skill('one', 'old'),
+  { entity: { eid: 'one' }, doc: { title: 'new' } },
+  {
+    ...file(repo, '.claude/skills/old/scripts/check.ts'),
+    content: { body: 'old' },
+  },
+  {
+    ...file(repo, '.claude/skills/new/scripts/check.ts'),
+    content: { body: 'new' },
+  },
+])
+
 test('skillFiles refuses duplicate titles and renamed companion destinations', async () => {
-  let g = world()
-  await g.apply([
-    ...skill('one', 'old'),
-    ...skill('two', 'new'),
-    { entity: { eid: 'one' }, doc: { title: 'new' } },
-  ])
-  await assertRejects(() => skillFiles(g, repo), Refused, 'targets')
-  await g.apply([{ entity: { eid: 'two' }, $delete: true }])
-  await g.apply([
-    {
-      ...file(repo, '.claude/skills/old/scripts/check.ts'),
-      content: { body: 'old' },
-    },
-    {
-      ...file(repo, '.claude/skills/new/scripts/check.ts'),
-      content: { body: 'new' },
-    },
-  ])
   await assertRejects(
-    () => skillFiles(g, repo),
+    () => skillFiles(duplicateTitles, repo),
+    Refused,
+    'targets',
+  )
+})
+
+test('skillFiles refuses a renamed companion overwriting its destination', async () => {
+  await assertRejects(
+    () => skillFiles(companionCollision, repo),
     Refused,
     '.claude/skills/new/scripts/check.ts',
   )

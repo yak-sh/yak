@@ -13,8 +13,16 @@ let then = (g: Graph, ...bundles: Bundle[]): Graph => (g.apply(bundles), g)
 let texts = async (g: Graph) =>
   new Map((await personaFiles(g)).files.map((f) => [f.path, f.text]))
 
-test('the common persona is AGENTS.md; a specialist says only what it adds', async () => {
-  let by = await texts(fleet('/r'))
+// Prepare the checkout's fixed projection once before reading its files.
+let commonFiles = await personaFiles(fleet('/r'))
+let commonTexts = new Map(commonFiles.files.map((f) => [f.path, f.text]))
+let unnamedTexts = await texts(then(
+  fleet('/r'),
+  { entity: { eid: 'k1' }, key: null, alias: null },
+))
+
+test('the common persona is AGENTS.md; a specialist says only what it adds', () => {
+  let by = commonTexts
   assertEquals([...by.keys()], [
     '/r/.tasks/AGENTS.md',
     '/r/.tasks/personas/coder.md',
@@ -41,14 +49,13 @@ test("a sub-project's personas are specialists in its parent's checkout", async 
   assert(!sub.includes('first'), sub)
 })
 
-test('what the files say is every persona and document in them', async () => {
-  let { said } = await personaFiles(fleet('/r'))
+test('what the files say is every persona and document in them', () => {
+  let { said } = commonFiles
   assertEquals([...said].sort(), ['m1', 'm2', 'n1', 'n2'])
 })
 
-test('a specialist with no name is named for its id', async () => {
-  let g = then(fleet('/r'), { entity: { eid: 'k1' }, key: null, alias: null })
-  assertMatch([...(await texts(g)).keys()][1], /\/personas\/n-\d+\.md$/)
+test('a specialist with no name is named for its id', () => {
+  assertMatch([...unnamedTexts.keys()][1], /\/personas\/n-\d+\.md$/)
 })
 
 test('an archived project keeps what it last had', async () => {

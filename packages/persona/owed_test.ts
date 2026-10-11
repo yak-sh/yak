@@ -29,43 +29,63 @@ test('an agent anywhere in any checkout of the repository is owed its common per
   assertEquals(owes?.source, await id(g, 'n1'))
 })
 
+let changing = fleet('/r')
+let originalFile = await agentsMd(changing)
+let originalSource = await id(changing, 'n1')
+let revised = fleet('/r')
+let parentOnly = nested('/r')
+let parentFile = await agentsMd(parentOnly)
+let parentVoice = await spoken(parentOnly, 'n1')
+
 test('a file that is the persona file is not said twice; any other file is', async () => {
-  let g = fleet('/r')
-  let file = await agentsMd(g)
+  let g = changing
+  let file = originalFile
   assertEquals(await owed(g, '/r/agent', ['# elsewhere\n', file]), undefined)
   assertEquals(await owed(g, '/r', [file]), undefined)
-  // Another repository's instructions, or this persona's before the graph
-  // moved, leave the persona owed as it stands now.
-  assertEquals(
-    (await owed(g, '/r', ['# elsewhere\n']))?.source,
-    await id(g, 'n1'),
-  )
-  then(g, { entity: { eid: 'm1' }, doc: { body: 'first, revised' } })
-  assertEquals((await owed(g, '/r', [file]))?.text, await spoken(g, 'n1'))
 })
 
+test('another repository’s instruction file leaves this persona owed', async () => {
+  assertEquals(
+    (await owed(changing, '/r', ['# elsewhere\n']))?.source,
+    originalSource,
+  )
+})
+
+test('a persona file from before a graph edit leaves the revised persona owed', async () => {
+  let g = revised
+  then(g, { entity: { eid: 'm1' }, doc: { body: 'first, revised' } })
+  assertEquals(
+    (await owed(g, '/r', [originalFile]))?.text,
+    await spoken(g, 'n1'),
+  )
+})
+
+let unknownCheckout = fleet('/r')
+let withoutCommon = then(fleet('/r'), {
+  entity: { eid: 'n1' },
+  persona: { home: null },
+})
+let chosen = fleet('/r')
+let chosenWorn = (await wear(chosen.storage, chosen.vocab)('n2'))!
+let chosenVoice = await spoken(chosen, 'n2')
+let chosenProjection = projection(chosen.vocab)(chosenWorn)
+
 test('a checkout the graph does not know, or a project with no common persona, is owed nothing', async () => {
-  assertEquals(await owed(fleet('/r'), '/rx', []), undefined)
-  let bare = then(fleet('/r'), {
-    entity: { eid: 'n1' },
-    persona: { home: null },
-  })
-  assertEquals(await owed(bare, '/r/agent', []), undefined)
+  assertEquals(await owed(unknownCheckout, '/rx', []), undefined)
+  assertEquals(await owed(withoutCommon, '/r/agent', []), undefined)
 })
 
 test('a chosen persona is omitted when its file says it', async () => {
-  let g = fleet('/r')
-  let worn = (await wear(g.storage, g.vocab)('n2'))!
   assertEquals(
-    (await owed(g, '/elsewhere', [], { persona: 'n2' }))?.text,
-    await spoken(g, 'n2'),
+    (await owed(chosen, '/elsewhere', [], { persona: 'n2' }))?.text,
+    chosenVoice,
   )
   assertEquals(
-    await owed(g, '/r', [projection(g.vocab)(worn)], { persona: 'n2' }),
+    await owed(chosen, '/r', [chosenProjection], { persona: 'n2' }),
     undefined,
   )
   await assertRejects(
-    () => owed(g, '/r', [], { persona: 'missing' }),
+    () => owed(chosen, '/r', [], { persona: 'missing' }),
     Error,
     'no persona called missing',
   )
@@ -84,13 +104,16 @@ test("a sub-project's agent hears its own common persona and its parent's", asyn
 })
 
 test("a sub-project with no persona of its own hears its parent's", async () => {
-  let g = nested('/r')
+  let g = parentOnly
   assertEquals(
     (await owed(g, '/r/agent', [], { work: 't2' }))?.text,
-    await spoken(g, 'n1'),
+    parentVoice,
   )
+})
+
+test('a parent persona file also satisfies a sub-project with no persona', async () => {
   assertEquals(
-    await owed(g, '/r', [await agentsMd(g)], { work: 't2' }),
+    await owed(parentOnly, '/r', [parentFile], { work: 't2' }),
     undefined,
   )
 })

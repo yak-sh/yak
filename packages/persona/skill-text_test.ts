@@ -44,21 +44,48 @@ test('an omitted name uses the folder and folded descriptions are YAML values', 
   })
 })
 
-test('invocation flags normalize to the three modes without losing restrictions', () => {
-  for (
-    let [flags, invoke] of [
-      ['', 'both'],
-      ['disable-model-invocation: false\nuser-invocable: true\n', 'both'],
-      ['disable-model-invocation: true\n', 'user'],
-      ['user-invocable: false\n', 'model'],
-      ['disable-model-invocation: YES\nuser-invocable: 1\n', 'user'],
-      ['disable-model-invocation: OFF\nuser-invocable: No\n', 'model'],
-    ]
-  ) {
+for (
+  let [name, flags, invoke] of [
+    [
+      'invocation flags normalize to the three modes without losing restrictions',
+      '',
+      'both',
+    ],
+    [
+      'explicit default invocation flags keep both modes',
+      'disable-model-invocation: false\nuser-invocable: true\n',
+      'both',
+    ],
+    [
+      'disabling model invocation keeps user invocation',
+      'disable-model-invocation: true\n',
+      'user',
+    ],
+    [
+      'disabling user invocation keeps model invocation',
+      'user-invocable: false\n',
+      'model',
+    ],
+    [
+      'YES and 1 invocation flags retain user-only restrictions',
+      'disable-model-invocation: YES\nuser-invocable: 1\n',
+      'user',
+    ],
+    [
+      'OFF and No invocation flags retain model-only restrictions',
+      'disable-model-invocation: OFF\nuser-invocable: No\n',
+      'model',
+    ],
+  ]
+) {
+  test(name, () => {
     let bundle = roundtrip(text(flags))
     assertEquals(bundle.skill.invoke, invoke)
     assertEquals(bundle.skill.options, {})
-  }
+  })
+}
+
+test('disabling both skill invocation modes is refused', () => {
   assertThrows(() =>
     parseSkill(
       text('disable-model-invocation: true\nuser-invocable: false\n'),
@@ -84,8 +111,7 @@ test('arguments and path globs accept strings and YAML lists', () => {
   assertEquals(bundle.skill.paths, ['src/{a,b}/**', '!generated/**'])
 })
 
-test('fork maps to skill while other context and unknown fields survive untouched', () => {
-  let fields = `context: fork
+let forkFields = `context: fork
 agent: Explore
 argument-hint: "[issue]"
 allowed-tools: [Read, "Bash(git diff *)"]
@@ -102,7 +128,12 @@ metadata:
 license: Apache-2.0
 future-field: {mode: "not interpreted"}
 `
-  let bundle = roundtrip(text(fields))
+let forkBundle = parseSkill(text(forkFields), 'review')
+let forkRendered = renderSkill(forkBundle)
+
+test('fork maps to skill while other context and unknown fields survive untouched', () => {
+  let bundle = parseSkill(forkRendered, 'review')
+  assertEquals(bundle, forkBundle)
   assertEquals(bundle.skill.fork, true)
   assertEquals(bundle.skill.options, {
     agent: 'Explore',
@@ -120,12 +151,15 @@ future-field: {mode: "not interpreted"}
     'future-field': { mode: 'not interpreted' },
   })
   assertEquals(frontmatter(bundle).context, 'fork')
-  for (let context of ['inline', 'future-mode', '[one, two]', 'null']) {
+})
+
+for (let context of ['inline', 'future-mode', '[one, two]', 'null']) {
+  test(`skill context ${context} survives without enabling fork`, () => {
     let other = roundtrip(text(`context: ${context}\n`))
     assertEquals(other.skill.fork, false)
     assertEquals(frontmatter(other).context, other.skill.options.context)
-  }
-})
+  })
+}
 
 test('the body is exact, including line endings, delimiters and inert expansions', () => {
   for (

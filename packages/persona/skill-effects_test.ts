@@ -1,5 +1,5 @@
 import { test, until } from '@yaks/testing'
-import { assert, assertEquals, assertRejects } from '@std/assert'
+import { assert, assertEquals, assertIsError, assertRejects } from '@std/assert'
 import { derivedEid, type Graph } from '@yaks/graph'
 import { held, take, until as stopped } from '@yaks/effects'
 import { effectDoc } from '@yaks/effects/vocab'
@@ -40,8 +40,12 @@ let exists = async (path: string): Promise<boolean> => {
   }
 }
 let graph = world()
-let fixture = (runtime: SkillRuntime = {}, stopping?: AbortSignal) =>
-  skillEffects({ graph, stopping }, { skills: true }, {
+let fixture = (
+  runtime: SkillRuntime = {},
+  stopping?: AbortSignal,
+  db?: string,
+) =>
+  skillEffects({ graph, stopping, config: { db } }, { skills: true }, {
     roots: () => Promise.resolve(['/repo']),
     sync: () => Promise.resolve(report()),
     ...runtime,
@@ -70,17 +74,21 @@ test('skill effects await failure, share burst rejection, and retry later', asyn
   let release = deferred()
   let attempts = 0
   let problem = new Error('unexpected mirror failure')
-  let fx = fixture({
-    sync: async () => {
-      attempts++
-      if (attempts == 1) {
-        entered.resolve()
-        await release.promise
-        throw problem
-      }
-      return report()
+  let fx = fixture(
+    {
+      sync: async () => {
+        attempts++
+        if (attempts == 1) {
+          entered.resolve()
+          await release.promise
+          throw problem
+        }
+        return report()
+      },
     },
-  })
+    undefined,
+    '/virtual/state.db',
+  )
   let first = invoke(fx)
   await entered.promise
   let burst = Array.from({ length: 100 }, () => invoke(fx))
@@ -126,38 +134,42 @@ test('skill effects serialize and coalesce events into one trailing pass', async
   assertEquals(maximum, 1)
 })
 
+// The persistent mirror's directory and first pass exist before another event.
+let persistentDir = await Deno.makeTempDir({ prefix: 'skill-effects-db-' })
+let persistentSeen: string[] = []
+let persistentRoots = ['/one', '/two']
+let persistentEffects = skillEffects(
+  { graph, config: { db: join(persistentDir, 'state.db') } },
+  { skills: true },
+  {
+    roots: () => Promise.resolve(persistentRoots),
+    sync: (_g, _root, path) => {
+      persistentSeen.push(path)
+      return Promise.resolve(report())
+    },
+  },
+)
+await invoke(persistentEffects)
+await Deno.mkdir(dirname(persistentSeen[0]), { recursive: true })
+await Deno.writeTextFile(persistentSeen[0], '{}')
+
 test('skill effects use stable DB-adjacent per-absolute-root memo paths', async () => {
-  let dir = await Deno.makeTempDir({ prefix: 'skill-effects-db-' })
   try {
-    let seen: string[] = []
-    let roots = ['/one', '/two']
-    let fx = skillEffects(
-      {
-        graph: world(),
-        config: { db: join(dir, 'state.db') },
-      },
-      { skills: true },
-      {
-        roots: () => Promise.resolve(roots),
-        sync: async (_g, _root, path) => {
-          seen.push(path)
-          await Deno.mkdir(dirname(path), { recursive: true })
-          await Deno.writeTextFile(path, '{}')
-          return report()
-        },
-      },
-    )
-    await invoke(fx)
-    await invoke(fx)
+    await invoke(persistentEffects)
     assertEquals(
-      seen,
-      [...roots, ...roots].map((root) =>
-        join(dir, 'mirror', 'skills', `${derivedEid(`skills|${root}`)}.json`)
+      persistentSeen,
+      [...persistentRoots, ...persistentRoots].map((root) =>
+        join(
+          persistentDir,
+          'mirror',
+          'skills',
+          `${derivedEid(`skills|${root}`)}.json`,
+        )
       ),
     )
-    assert(await exists(seen[0]))
+    assert(await exists(persistentSeen[0]))
   } finally {
-    await Deno.remove(dir, { recursive: true })
+    await Deno.remove(persistentDir, { recursive: true })
   }
 })
 
@@ -257,23 +269,28 @@ test('skill effects coalesce an event arriving during temporary cleanup', async 
   }
 })
 
+let removedMemoCalls = 0
+let removedMemoBytes: string | undefined
+let removedMemoAbsent = false
+let removedMemoEffects = fixture({
+  sync: async (_g, _root, memory) => {
+    removedMemoCalls++
+    if (removedMemoCalls == 1) await Deno.writeTextFile(memory, 'agreement')
+    else if (removedMemoCalls == 2) {
+      removedMemoBytes = await Deno.readTextFile(memory)
+      await Deno.remove(memory)
+    } else removedMemoAbsent = !await exists(memory)
+    return report()
+  },
+})
+await invoke(removedMemoEffects)
+await invoke(removedMemoEffects)
+
 test('skill effects do not restore a deliberately removed temporary memo', async () => {
-  let calls = 0
-  let fx = fixture({
-    sync: async (_g, _root, memory) => {
-      calls++
-      if (calls == 1) await Deno.writeTextFile(memory, 'agreement')
-      else if (calls == 2) {
-        assertEquals(await Deno.readTextFile(memory), 'agreement')
-        await Deno.remove(memory)
-      } else assert(!await exists(memory))
-      return report()
-    },
-  })
-  await invoke(fx)
-  await invoke(fx)
-  await invoke(fx)
-  assertEquals(calls, 3)
+  assertEquals(removedMemoBytes, 'agreement')
+  await invoke(removedMemoEffects)
+  assert(removedMemoAbsent)
+  assertEquals(removedMemoCalls, 3)
 })
 
 test('skill effects await cleanup errors, remove their directory, and allow retry', async () => {
@@ -299,32 +316,44 @@ test('skill effects await cleanup errors, remove their directory, and allow retr
   assert(!await exists(dirname(path)))
 })
 
-test('skill effects memory DB never uses the environment DB fallback', async () => {
-  let dir = await Deno.makeTempDir({ prefix: 'skill-effects-env-' })
-  let prior = Deno.env.get('DB_PATH')
-  Deno.env.set('DB_PATH', join(dir, 'forbidden.db'))
-  try {
-    for (let config of [undefined, { db: ':memory:' }]) {
-      let path = ''
-      let fx = skillEffects({ graph, config }, { skills: true }, {
-        roots: () => Promise.resolve(['/repo']),
-        sync: async (_g, _root, memory) => {
-          path = memory
-          await Deno.writeTextFile(memory, '{}')
-          return report()
-        },
-      })
-      await invoke(fx)
-      assert(!path.startsWith(dir))
-      assert(path.endsWith(`${derivedEid('skills|/repo')}.json`))
-      assert(!await exists(dirname(path)))
-    }
-    assert(!await exists(join(dir, 'mirror')))
-  } finally {
-    if (prior == undefined) Deno.env.delete('DB_PATH')
-    else Deno.env.set('DB_PATH', prior)
-    await Deno.remove(dir, { recursive: true })
+// Resolve both memory-host configurations while the environment names a DB,
+// then restore the environment before any other case runs.
+let environmentDir = await Deno.makeTempDir({ prefix: 'skill-effects-env-' })
+let priorDB = Deno.env.get('DB_PATH')
+let environmentPaths: string[] = []
+let environmentCleaned: boolean[] = []
+let environmentMirrorAbsent = false
+Deno.env.set('DB_PATH', join(environmentDir, 'forbidden.db'))
+try {
+  for (let config of [undefined, { db: ':memory:' }]) {
+    let path = ''
+    let fx = skillEffects({ graph, config }, { skills: true }, {
+      roots: () => Promise.resolve(['/repo']),
+      sync: async (_g, _root, memory) => {
+        path = memory
+        await Deno.mkdir(dirname(memory), { recursive: true })
+        await Deno.writeTextFile(memory, '{}')
+        return report()
+      },
+    })
+    await invoke(fx)
+    environmentPaths.push(path)
+    environmentCleaned.push(!await exists(dirname(path)))
   }
+  environmentMirrorAbsent = !await exists(join(environmentDir, 'mirror'))
+} finally {
+  if (priorDB == undefined) Deno.env.delete('DB_PATH')
+  else Deno.env.set('DB_PATH', priorDB)
+  await Deno.remove(environmentDir, { recursive: true })
+}
+
+test('skill effects memory DB never uses the environment DB fallback', () => {
+  for (let [index, path] of environmentPaths.entries()) {
+    assert(!path.startsWith(environmentDir))
+    assert(path.endsWith(`${derivedEid('skills|/repo')}.json`))
+    assert(environmentCleaned[index])
+  }
+  assert(environmentMirrorAbsent)
 })
 
 test('skill watcher reconciles at startup, polls, and cleans on shutdown', async () => {
@@ -363,30 +392,47 @@ test('skill watcher reconciles at startup, polls, and cleans on shutdown', async
   assertEquals(paths.length, 2)
 })
 
-test('skill watcher failure is awaited, cleans, and retains agreement for retry', async () => {
-  let paths: string[] = []
-  let pauses = 0
-  let stop = new AbortController()
-  let fx = fixture({
-    sync: async (_g, _root, memory) => {
-      paths.push(memory)
-      if (paths.length > 1) {
-        assertEquals(await Deno.readTextFile(memory), 'remembered')
-      }
-      await Deno.writeTextFile(memory, 'remembered')
-      return report()
-    },
-    pause: () => {
-      if (++pauses == 1) return Promise.reject(new Error('poll failure'))
-      stop.abort()
-      return Promise.resolve()
-    },
-  }, stop.signal)
-  await assertRejects(() => invoke(fx, 'skill_watch'), Error, 'poll failure')
-  assert(!await exists(dirname(paths[0])))
-  await invoke(fx, 'skill_watch')
-  assertEquals(paths.length, 2)
-  assert(!await exists(dirname(paths[1])))
+// Prepare the completed failed startup and retry; assertions inspect both
+// outcomes and the bytes the production cleanup retained between them.
+let failedWatcherPaths: string[] = []
+let failedWatcherPauses = 0
+let restoredWatcherBytes: string | undefined
+let failedWatcherStop = new AbortController()
+let failedWatcher = fixture({
+  sync: async (_g, _root, memory) => {
+    failedWatcherPaths.push(memory)
+    if (failedWatcherPaths.length > 1) {
+      restoredWatcherBytes = await Deno.readTextFile(memory)
+    }
+    await Deno.writeTextFile(memory, 'remembered')
+    return report()
+  },
+  pause: () => {
+    if (++failedWatcherPauses == 1) {
+      return Promise.reject(new Error('poll failure'))
+    }
+    failedWatcherStop.abort()
+    return Promise.resolve()
+  },
+}, failedWatcherStop.signal)
+let watcherFailure = await invoke(failedWatcher, 'skill_watch').then(
+  () => undefined,
+  (error: unknown) => error,
+)
+let failedWatcherCleaned = !await exists(dirname(failedWatcherPaths[0]))
+let watcherRetry = await invoke(failedWatcher, 'skill_watch').then(
+  () => undefined,
+  (error: unknown) => error,
+)
+let retriedWatcherCleaned = !await exists(dirname(failedWatcherPaths[1]))
+
+test('skill watcher failure is awaited, cleans, and retains agreement for retry', () => {
+  assertIsError(watcherFailure, Error, 'poll failure')
+  assert(failedWatcherCleaned)
+  assertEquals(watcherRetry, undefined)
+  assertEquals(restoredWatcherBytes, 'remembered')
+  assertEquals(failedWatcherPaths.length, 2)
+  assert(retriedWatcherCleaned)
 })
 
 test('skill watcher one-shot host reconciles and cleans before returning', async () => {
