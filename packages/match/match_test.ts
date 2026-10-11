@@ -8,6 +8,7 @@ import { Unsupported } from '@yaks/sql'
 import { Unknown } from '@yaks/vocab'
 import { absent, and, eq, parse, pred, present } from '@yaks/query'
 import { filter, matcher } from './match.ts'
+import { index } from './read.ts'
 import { bundles, NOW, shop } from './testing.ts'
 
 let sel = (q: string): string[] =>
@@ -38,6 +39,23 @@ test('a component is worn or it is not', () => {
   assertEquals(sel('.signed~='), ['b4'])
   assertFalse(sel('!signed').includes('b4'))
   assert(sel('!signed').includes('b1'))
+})
+
+test('an unordered indexed query needs only its candidate rows', () => {
+  let among = index(bundles)
+  let signed = new Map(
+    bundles.filter((b) => b.signed).map((b) => [b.entity.eid, b]),
+  )
+  assertEquals(
+    matcher('.signed', shop)({
+      ...among,
+      get list(): typeof bundles {
+        throw new Error('whole rows unavailable')
+      },
+      wearing: () => signed,
+    }).map((b) => b.entity.eid),
+    ['b4'],
+  )
 })
 
 test('presence reads plugin components without a declared schema', () => {

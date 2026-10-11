@@ -250,6 +250,7 @@ let sorter = (
   among: Index,
 ) => ((a: Bundle, b: Bundle) => number) | null => {
   let order = find<Order>(cs, 'order')
+  if (!order && !windowed) return () => null
   let desc = order?.value.startsWith('-') ?? false
   let read = order && field(ctx, desc ? order.value.slice(1) : order.value).read
   return (among) => {
