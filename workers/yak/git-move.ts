@@ -20,6 +20,7 @@ export let repositoryMove = (row: Bundle): Bundle[] => {
 export let repositoryRule: Rule = {
   mark: 'yak/store/git-repositories/1',
   stores: [PLATFORM_STORE],
+  live: 'all',
   find: '.commit&*',
   move: repositoryMove,
 }
