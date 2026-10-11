@@ -31,7 +31,7 @@
 // because importing it pulls in everything that opens one — a cost `yak help`
 // should not pay, nor `yak login` on a machine with no graph.
 
-import { type Actor, mint } from '@yaks/graph'
+import { type Actor, type Bundle, type Graph, mint, signed } from '@yaks/graph'
 import type { AnatomyObservation } from '@yaks/code/anatomy'
 import type { Vocab } from '@yaks/vocab'
 import { EFFECT } from '@yaks/effects'
@@ -227,6 +227,34 @@ export let signer = async (
   let by = !via && typed ? await person(host) : undefined
   if (by) return { $actor: { ...actor, by } }
   return actor ? { $actor: { ...actor } } : {}
+}
+
+/** Restore supplied server-owned values through normal graph admission,
+ * guards, rules, stamps and journaling. The journal writer is the current
+ * caller; historical component values do not grant their author authority. */
+export let restoreInto = (
+  graph: Graph,
+  bundles: Bundle[],
+  actor: Actor | null,
+  check = false,
+): Bundle[] | Promise<Bundle[]> =>
+  graph.apply(signed(bundles, actor), { trusted: true, check })
+
+/** The filesystem command's restoration door, unavailable to remote calls. */
+export let restore = async (
+  args: Record<string, unknown>,
+  c: Ctx,
+): Promise<number> => {
+  let host = await opened(c.config!, ['graph'], c.duties)
+  let { $actor } = await signer(host, c.via)
+  let bundles = await restoreInto(
+    host.graph,
+    args.bundles as Bundle[],
+    $actor ?? null,
+    args.check === true,
+  )
+  c.out(JSON.stringify(bundles, null, 2))
+  return 0
 }
 
 // The views an answer is drawn with, imported when one is first drawn, never

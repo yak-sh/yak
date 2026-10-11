@@ -13,7 +13,8 @@
 
 import type { Bundle, Io } from '@yaks/inspect'
 import type { Row } from './reader.ts'
-import { attention, type Search, type Thread } from './threads.ts'
+import { type Search, type Thread } from './threads.ts'
+import { toolEid } from '@yaks/tools'
 import { summaryQuery } from './queries.ts'
 
 /** A thread's rows as the summary carries them. */
@@ -76,6 +77,18 @@ export let show = (
 
 /** Mark a thread read or archived; the policy brings an archived one back on
  * its next activity. */
-export let mark = (io: Io, eid: string, how: 'opened' | 'archived'): void =>
-  void Promise.resolve().then(() => io.apply(attention(eid, how)))
-    .catch(() => {})
+export let mark = (
+  io: Io,
+  actor: string,
+  eid: string,
+  how: 'opened' | 'archived',
+): void =>
+  void Promise.resolve().then(() =>
+    io.apply([{
+      entity: { eid: '$attention' },
+      call: {
+        to: toolEid(how == 'opened' ? 'inbox_open' : 'inbox_archive'),
+        args: { who: actor, item: eid },
+      },
+    }])
+  ).catch(() => {})

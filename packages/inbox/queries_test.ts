@@ -5,10 +5,11 @@ import { ram } from '@yaks/ram'
 import { loadVocab } from '@yaks/vocab'
 import { kernel, kernelDoc } from '@yaks/kernel'
 import { docDoc } from '@yaks/doc'
+import { notifyDoc } from '@yaks/notify/vocab'
 import { taskDoc } from '@yaks/task'
 import { projectDoc } from '@yaks/project'
 import { edgeDoc, edgeKeywords } from '@yaks/edge'
-import { attention, type Row, threads } from './mod.ts'
+import { attention, readerAt, type Row, threads } from './mod.ts'
 import {
   boundedReads,
   candidates,
@@ -23,7 +24,14 @@ let at = (n: number) => `2026-10-02T12:00:0${n}.000Z`
 let rows = (bundles: Bundle[]): Row[] =>
   bundles.map((b) => ({ eid: b.entity.eid, comps: b as Row['comps'] }))
 test('candidate reads include replies, archived roots and open dependents; repeated archive stamps anew', async () => {
-  let vocab = loadVocab([kernelDoc, docDoc, taskDoc, projectDoc, edgeDoc], [
+  let vocab = loadVocab([
+    kernelDoc,
+    docDoc,
+    taskDoc,
+    projectDoc,
+    edgeDoc,
+    notifyDoc,
+  ], [
     edgeKeywords,
   ])
   let g = graph({ vocab, storage: ram(vocab), plugins: [kernel()] })
@@ -35,6 +43,10 @@ test('candidate reads include replies, archived roots and open dependents; repea
   await g.apply([
     { entity: { eid: 'person' }, doc: { title: 'Person' } },
     { entity: { eid: 'thread' }, task: {}, doc: { title: 'Thread' } },
+    {
+      entity: { eid: 'attention' },
+      subscription: { actor: 'person', target: 'thread' },
+    },
     {
       entity: { eid: 'decision' },
       task: {},
@@ -68,14 +80,18 @@ test('candidate reads include replies, archived roots and open dependents; repea
     let chat = await read(discussion(first, has))
     let edges = await read(requirements([...first, ...chat], has))
     let tasks = await read(dependents(edges, has))
-    return threads([...first, ...chat, ...edges, ...tasks], who)
+    let subscriptions = await read('.subscription&*')
+    return threads(
+      [...first, ...chat, ...edges, ...tasks],
+      readerAt(subscriptions, 'person'),
+    )
   }
   assertEquals((await inbox()).map((t) => [t.eid, t.lane, t.blocking]), [[
     'decision',
     'Needs you',
     true,
   ], ['thread', 'Recent', false]])
-  await g.apply(attention('thread', 'archived'), { now: at(3) })
+  await g.apply(attention('attention', 'archived'), { now: at(3) })
   assertEquals((await inbox()).map((t) => t.eid), ['decision'])
   await g.apply([{
     entity: { eid: 'reply' },
@@ -83,9 +99,10 @@ test('candidate reads include replies, archived roots and open dependents; repea
     doc: { body: 'Yes' },
   }], { now: at(4) })
   assertEquals((await inbox()).find((t) => t.eid == 'thread')?.lane, 'Replies')
-  await g.apply(attention('thread', 'archived'), { now: at(5) })
+  await g.apply(attention('attention', 'archived'), { now: at(5) })
   assertEquals((await inbox()).map((t) => t.eid), ['decision'])
-  assertEquals((await g.get(['thread']))[0].archived, { at: at(5) })
+  assertEquals((await g.get(['attention']))[0].archived, { at: at(5) })
+  assertEquals((await g.get(['thread']))[0].archived, undefined)
   await g.apply([{ entity: { eid: 'worker' }, completed: {} }], { now: at(6) })
   assertEquals(
     (await inbox()).find((t) => t.eid == 'decision')?.blocking,

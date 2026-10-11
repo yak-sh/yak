@@ -72,7 +72,7 @@
           "description": "watch: notify this actor. mute: do not"
         }
       },
-      "description": "whether one actor watches or mutes one entity"
+      "description": "one actor’s attention to one entity; mode watches or mutes it, and archived/opened marks on this row record putting away or reading its thread"
     }
   }
 }

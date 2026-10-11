@@ -25,6 +25,8 @@ export type Reader = {
   // from both is the default, which is whatever addressed() says.
   watching?: Set<string>
   muting?: Set<string>
+  // Personal archived/opened marks live on the actor/target subscription.
+  attention?: Map<string, Row>
 }
 
 // What an inbox item is ABOUT — a subscription is aimed at the task or
@@ -40,16 +42,21 @@ export let aboutOf = (r: Row): string =>
 export let subsOf = (all: Row[], actor?: string): {
   watching: Set<string>
   muting: Set<string>
+  attention: Map<string, Row>
 } => {
   let watching = new Set<string>(), muting = new Set<string>()
+  let attention = new Map<string, Row>()
   if (actor) {
     for (let r of all) {
       let sub = r.comps.subscription
       if (!sub || String(sub.actor) != actor) continue
-      ;(sub.mode == 'mute' ? muting : watching).add(String(sub.target))
+      let target = String(sub.target)
+      if (sub.mode == 'mute') muting.add(target)
+      if (sub.mode == 'watch') watching.add(target)
+      attention.set(target, r)
     }
   }
-  return { watching, muting }
+  return { watching, muting, attention }
 }
 
 // Addressed to this reader — the four doors an item reaches attention

@@ -4,6 +4,7 @@ import { type Bundle, type Graph, graph } from '@yaks/graph'
 import { loadVocab } from '@yaks/vocab'
 import { kernelDoc } from '@yaks/kernel'
 import { docDoc } from '@yaks/doc'
+import { notifyDoc } from '@yaks/notify/vocab'
 import { taskDoc } from '@yaks/task'
 import { projectDoc } from '@yaks/project'
 import { archetypeDoc } from '@yaks/archetype'
@@ -22,6 +23,7 @@ test('summary reuse is exact, mutation-safe, and invalidated by another SQLite c
     projectDoc,
     archetypeDoc,
     inboxDoc,
+    notifyDoc,
   ])
   let a = open(`${dir}/graph.db`), b = open(`${dir}/graph.db`)
   let sa = storage(a, v), sb = storage(b, v)
@@ -80,7 +82,11 @@ test('summary reuse is exact, mutation-safe, and invalidated by another SQLite c
     let changed = await g.read(line)
     equal(summary(changed).threads.map((t) => t.eid).sort(), ['later', 'work'])
     sb.tx((tx) =>
-      tx.patch([{ entity: { eid: 'work' }, archived: { at: '9999-01-01' } }])
+      tx.patch([{
+        entity: { eid: 'attention' },
+        subscription: { actor: 'person', target: 'work' },
+        archived: { at: '9999-01-01' },
+      }])
     )
     equal(summary(await g.read(line)).threads.map((t) => t.eid), ['later'])
   } finally {

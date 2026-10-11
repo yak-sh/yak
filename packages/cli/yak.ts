@@ -44,6 +44,7 @@ import { ownConfig } from './config.ts'
 import { starter } from './init.ts'
 import { listen, wind } from '@yaks/process/wind'
 import * as held from './held.ts'
+import { restorable } from './restore.ts'
 
 /** The platform this command talks to when it opens no graph of its own. */
 export let HOST = 'yaks.app'
@@ -120,8 +121,16 @@ let local = () => import('./local.ts')
 let table = async (
   c: Ctx,
   o?: { fresh?: boolean },
-): Promise<Command[]> =>
-  c.config ? (await import('./subcommands.ts')).commands(c) : listed(c, o)
+): Promise<Command[]> => {
+  let commands = c.config
+    ? await (await import('./subcommands.ts')).commands(c)
+    : await listed(c, o)
+  return commands.map((command) =>
+    command.name == 'graph_apply'
+      ? restorable(command, async (args, c) => (await local()).restore(args, c))
+      : command
+  )
+}
 
 /** What `yak` itself is, besides the tools it lists. */
 export let YAK: Opts = {

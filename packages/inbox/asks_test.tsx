@@ -263,7 +263,11 @@ test('a new summary brings a thread in and takes an archived one out, asking no 
     assertEquals(found!.threads.find((t) => t.eid == next)?.lane, 'Needs you')
     await wait(() => !!h.io.get(next)?.doc, 'its row is drawn')
     await g.storage.tx((tx) =>
-      tx.patch([{ entity: { eid: first }, archived: { at: at(3) } }])
+      tx.patch([{
+        entity: { eid: id() },
+        subscription: { actor, target: first },
+        archived: { at: at(3) },
+      }])
     )
     await act(() => h.answer(summary))
     await wait(() => page.root.textContent == next, 'the archived one leaves')

@@ -101,6 +101,7 @@ let fixture = (): Bundle[] => [
   row('person', { email: { address: 'person@example.com' } }, 1, 'person'),
   row('watch', {
     subscription: { actor: 'person', target: 'watched', mode: 'watch' },
+    opened: { by: 'person', at: at(3) },
   }),
   row('mute', {
     subscription: { actor: 'person', target: 'muted', mode: 'mute' },
@@ -147,7 +148,6 @@ let fixture = (): Bundle[] => [
   row('watched', {
     task: {},
     blocked: { since: at(2) },
-    opened: { by: 'person', at: at(3) },
   }),
   row(
     'landing',
@@ -155,12 +155,20 @@ let fixture = (): Bundle[] => [
     4,
   ),
   row('muted', { task: {}, filed: { assignee: 'person' } }),
-  row('archived', { conversation: {}, archived: { at: at(8) } }, 1, 'person'),
+  row('archived', { conversation: {} }, 1, 'person'),
+  row('archive-attention', {
+    subscription: { actor: 'person', target: 'archived' },
+    archived: { at: at(8) },
+  }),
   row('archived-answer', {
     comment: { target: 'archived' },
     doc: { body: 'old words' },
   }, 7),
-  row('empty-archive', { task: {}, archived: {} }, 1, 'person'),
+  row('empty-archive', { task: {} }, 1, 'person'),
+  row('empty-attention', {
+    subscription: { actor: 'person', target: 'empty-archive' },
+    archived: {},
+  }),
   row('completed', { task: {}, filed: { assignee: 'person' }, completed: {} }),
   row('bug', { bug: { last: at(6) } }),
   row('session', { session: { actor: 'person' }, doc: {} }),
@@ -436,6 +444,7 @@ test('sparse vocabulary preserves empty doc and archive marks without unknown qu
       ['created', ['by', 'at']],
       ['opened', ['by']],
       ['archived', []],
+      ['subscription', ['actor', 'target', 'mode']],
       ['comment', ['target', 'reply_to']],
     ].map(([name, props]) => [name as string, {
       component: true,
@@ -447,7 +456,11 @@ test('sparse vocabulary preserves empty doc and archive marks without unknown qu
   })
   let store = ram(sparse)
   let all = [
-    row('root', { doc: {}, archived: {} }, 1, 'person'),
+    row('root', { doc: {} }, 1, 'person'),
+    row('attention', {
+      subscription: { actor: 'person', target: 'root' },
+      archived: {},
+    }),
     row('answer', {
       comment: { target: 'root' },
       doc: { body: 'complete words' },
@@ -464,7 +477,7 @@ test('sparse vocabulary preserves empty doc and archive marks without unknown qu
     ),
   )
   assertEquals(found[0].row.comps.doc, {})
-  assertEquals(found[0].row.comps.archived, {})
+  assertEquals(found[0].row.comps.archived, undefined)
 })
 
 test('metadata projection carries classified spines without a duplicate identity read', async () => {

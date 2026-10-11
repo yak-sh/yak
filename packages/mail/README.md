@@ -344,12 +344,12 @@ the edge and is tried again.
 the vocabulary exposes the following CLI commands and corresponding MCP names
 with underscores, such as `mail_send`:
 
-| Tool              | Behavior                                                                                      |
-| ----------------- | --------------------------------------------------------------------------------------------- |
-| `mail show <id>`  | Show a message and its thread; mark the message and the first message of its thread `opened`. |
-| `mail reply <id>` | Create a threaded reply; mark a received original and its thread's first message `archived`.  |
-| `mail send`       | Create a message with `deliver`, creating an email entity for an unknown recipient address.   |
-| `mail check`      | Find received messages with no sender and report unusable sender configuration.               |
+| Tool              | Behavior                                                                                    |
+| ----------------- | ------------------------------------------------------------------------------------------- |
+| `mail show <id>`  | Show a message and its thread; mark the caller's subscription to the thread `opened`.       |
+| `mail reply <id>` | Create a threaded reply; mark the caller's subscription to a received thread `archived`.    |
+| `mail send`       | Create a message with `deliver`, creating an email entity for an unknown recipient address. |
+| `mail check`      | Find received messages with no sender and report unusable sender configuration.             |
 
 ```sh
 yak mail show E-12
@@ -361,9 +361,10 @@ A thread is a message and the messages that answer it, through `reply_to`. `●`
 means unread, `·` read, and `×` archived. Each mark is removed and added again
 in one batch, so a repeated read or answer gets a fresh time. The `opened` and
 `archived` components belong to [@yaks/kernel](../kernel/README.md) and are
-stored on the message, not separately per reader. Load that vocabulary to keep
-these marks: graph admission refuses a component the graph does not declare.
-Listing what waits for a reader is [@yaks/inbox](../inbox/README.md)'s.
+stored on the caller's [subscription](../notify/README.md), keeping each
+reader's attention apart from the message's own state. Compose the kernel and
+notify vocabularies: graph admission refuses a component the graph does not
+declare. Listing what waits for a reader is [@yaks/inbox](../inbox/README.md)'s.
 
 Replies use the original recipient address as sender for received messages, or
 the original sender address when following up on an outgoing message. The reply

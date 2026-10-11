@@ -5,6 +5,7 @@ import { loadVocab } from '@yaks/vocab'
 import { type Frame, subscriptions } from '@yaks/api'
 import { kernelDoc } from '@yaks/kernel'
 import { docDoc } from '@yaks/doc'
+import { notifyDoc } from '@yaks/notify/vocab'
 import { taskDoc } from '@yaks/task'
 import { sessionDoc } from '@yaks/session/vocab'
 import { toolsDoc } from '@yaks/tools/vocab'
@@ -20,6 +21,7 @@ let shop = () => {
     sessionDoc,
     toolsDoc,
     inboxDoc,
+    notifyDoc,
   ])
   let g: Graph
   g = graph({
@@ -75,12 +77,14 @@ test('summary subscription is exact, refreshes on policy dependencies, and keeps
   frames.length = 0
   await g.storage.tx((tx) =>
     tx.patch([{
-      entity: { eid: 'root' },
+      entity: { eid: 'attention' },
+      subscription: { actor: 'person', target: 'root' },
       archived: { at: '2026-10-03', by: 'person' },
     }])
   )
   await subs.commit([{
-    entity: { eid: 'root' },
+    entity: { eid: 'attention' },
+    subscription: { actor: 'person', target: 'root' },
     archived: { at: '2026-10-03', by: 'person' },
   }])
   await until(() => frames.length > 0)

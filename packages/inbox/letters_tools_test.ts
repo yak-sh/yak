@@ -12,6 +12,7 @@ import { mailbox, mailDoc } from '@yaks/mail'
 import { runs as mail } from '@yaks/mail/tools'
 import { runs as inbox } from './tools.ts'
 import { inboxDoc } from './vocab.ts'
+import { notifyDoc } from '@yaks/notify'
 
 let call = mint()
 let tools = { ...mail(undefined, { domain: 'books.example' }), ...inbox() }
@@ -32,7 +33,7 @@ let did = async (
   g: ReturnType<typeof graph>,
   tool: string,
   args: Record<string, unknown> = {},
-): Promise<Bundle[]> => await g.apply(await ask(g, tool, args))
+): Promise<Bundle[]> => await g.apply(await ask(g, tool, args, { by: 'desk' }))
 
 let comp = (b: Bundle | undefined, name: string): Comp =>
   (b?.[name] ?? {}) as Comp
@@ -41,7 +42,7 @@ let ids = (answer: Bundle[]): string[] => answer.map((b) => b.entity.eid)
 
 // A club with an address book: Ana reads the club's mail at its own desk.
 let club = async () => {
-  let vocab = loadVocab([kernelDoc, docDoc, mailDoc, inboxDoc, {
+  let vocab = loadVocab([kernelDoc, docDoc, mailDoc, inboxDoc, notifyDoc, {
     $defs: {
       content: {
         component: true,
@@ -179,37 +180,55 @@ test('archiving is the one act that hides, and --all is the way back', async () 
   )
 })
 
-test('mail reads and archives act on the shared root and refresh after a reply', async () => {
+let attentionChanges = await (async () => {
   let { g } = await club()
   let owner = { by: 'desk' }
   let stamp = (minute: number) => `2026-10-02T12:0${minute}:00.000Z`
+  let marks = async (name: string) => {
+    let [attention] = await g.read(
+      '.subscription.actor=desk&.subscription.target=root&*',
+    )
+    return comp(attention, name).at
+  }
+  let steps: unknown[] = []
+  let list = async () => ids(await ask(g, 'inbox_list', { who: 'desk' }))
   await g.apply([arrival('root')], { now: stamp(0) })
   await g.apply([arrival('reply', { reply_to: 'root' })], { now: stamp(1) })
-  assertEquals(ids(await ask(g, 'inbox_list', { who: 'desk' })), ['root'])
+  steps.push(await list())
   await g.apply(await ask(g, 'mail_show', { letter: 'reply' }, owner), {
     now: stamp(2),
   })
-  let [root] = await g.get(['root'])
-  assertEquals(comp(root, 'opened').at, stamp(2))
+  steps.push(await marks('opened'))
   await g.apply(await ask(g, 'inbox_archive', { item: 'reply' }, owner), {
     now: stamp(3),
   })
-  assertEquals(ids(await ask(g, 'inbox_list', { who: 'desk' })), [])
+  steps.push(await list())
   await g.apply([arrival('fresh', { reply_to: 'reply' })], { now: stamp(4) })
-  assertEquals(ids(await ask(g, 'inbox_list', { who: 'desk' })), ['root'])
+  steps.push(await list())
   await g.apply(await ask(g, 'mail_show', { letter: 'fresh' }, owner), {
     now: stamp(5),
   })
-  ;[root] = await g.get(['root'])
-  assertEquals(comp(root, 'opened').at, stamp(5))
+  steps.push(await marks('opened'))
   await g.apply(
-    await ask(g, 'mail_reply', {
-      letter: 'fresh',
-      body: 'Thanks',
-    }, owner),
+    await ask(g, 'mail_reply', { letter: 'fresh', body: 'Thanks' }, owner),
     { now: stamp(6) },
   )
-  assertEquals(ids(await ask(g, 'inbox_list', { who: 'desk' })), [])
-  ;[root] = await g.get(['root'])
-  assertEquals(comp(root, 'archived').at, stamp(6))
+  steps.push(await list(), await marks('archived'))
+  return { steps, letters: await g.get(['root', 'reply', 'fresh']) }
+})()
+
+test('mail reads and archives refresh per-person attention after a reply', () => {
+  assertEquals(attentionChanges.steps, [
+    ['root'],
+    '2026-10-02T12:02:00.000Z',
+    [],
+    ['root'],
+    '2026-10-02T12:05:00.000Z',
+    [],
+    '2026-10-02T12:06:00.000Z',
+  ])
+  for (let letter of attentionChanges.letters) {
+    assertEquals(letter.opened, undefined)
+    assertEquals(letter.archived, undefined)
+  }
 })

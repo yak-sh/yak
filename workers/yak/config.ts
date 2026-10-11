@@ -74,6 +74,7 @@ export let appConfig: Config = {
     },
     { use: '@yaks/project', facets: ['vocab'], words: ['filed', 'project'] },
     ...links,
+    { use: '@yaks/notify', facets: ['vocab'], words: ['subscription'] },
     {
       use: '@yaks/mail',
       facets: toolFacets,

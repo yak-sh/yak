@@ -6,6 +6,7 @@ import {
   assertStringIncludes,
 } from '@std/assert'
 import { test, until } from '@yaks/testing'
+import type { Bundle } from '@yaks/graph'
 import {
   arrives,
   client,
@@ -167,6 +168,38 @@ test("an app's letters, listed and sent through the connector", async () => {
       'One more thing',
       'Thanks for the pudding',
     ])
+
+    // Reading and replying record this person's attention on the same
+    // subscription, keeping the arrival's own state available to everyone.
+    let letter = inbox[0].entity.eid
+    let attention = async () =>
+      JSON.parse(
+        await agent.tool('graph_query', {
+          app: 'recipes',
+          q: `.subscription.actor=${them.person}&.subscription.target=${letter}&?opened&*`,
+        }),
+      ) as Bundle[]
+    await agent.tool('mail_show', { app: 'recipes', letter })
+    let [opened] = await attention()
+    assert(opened.opened)
+    assertEquals(opened.archived, undefined)
+    await agent.tool('mail_reply', {
+      app: 'recipes',
+      letter,
+      body: 'Thank you for bringing it.',
+    })
+    let [archived] = await attention()
+    assertEquals(archived.entity.eid, opened.entity.eid)
+    assert(archived.archived)
+    assert(archived.opened)
+    let [arrival] = JSON.parse(
+      await agent.tool('graph_query', {
+        app: 'recipes',
+        q: `.entity.eid=${letter}&?opened&*`,
+      }),
+    ) as Bundle[]
+    assertEquals(arrival.archived, undefined)
+    assertEquals(arrival.opened, undefined)
   } finally {
     await k.stop()
   }

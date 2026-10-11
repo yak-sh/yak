@@ -3,7 +3,8 @@
   "version": "0.2.10",
   "exports": {
     ".": "./mod.ts",
-    "./vocab": "./vocab.ts"
+    "./vocab": "./vocab.ts",
+    "./attention": "./attention.ts"
   },
   "license": "Apache-2.0",
   "description": "How somebody is notified: a knock aimed at an entity, what they watch or mute, and an open conversation.",

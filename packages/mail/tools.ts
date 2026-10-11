@@ -2,20 +2,11 @@
 // implementations behind the `tool: true` declarations in ./vocab.json. Three
 // commands a person runs all day, and one check.
 //
-// Reading is the mark, so `mail show` refreshes `opened` on the letter and on
-// the first letter of the thread it renders. That is what keeps it from being
-// a duplicate of `graph_show` (@yaks/mcp's generic tier, which shows any entity
-// at all) — this one marks the letter read and gathers its thread, both of
-// which are facts about mail and about nothing else. Answering a letter that
-// arrived puts its thread away the same way, with `archived`. Each mark is
-// removed and written again in one batch, so a repeated one gets a fresh time.
-//
-// `archived` and `opened` are another package's components — @yaks/kernel's,
-// the marks recording that somebody looked at a thing and that somebody put it
-// away. A tool returns bundles, which are plain data, so naming a component
-// costs no import; a server that composes the kernel stores them, and one that
-// does not has those components dropped on write. Nothing here declares a
-// second copy of either (M-17871).
+// Reading and answering belong to the caller's attention. The shared
+// subscription row keeps the thread's `opened` and `archived` marks apart from
+// the letter's own state, and the inbox uses the same thread identity.
+// Marks are refreshed atomically, so repeated actions receive a fresh time.
+// A graph using these tools composes @yaks/notify and @yaks/kernel vocabulary.
 //
 // The sender is not this file's business. `mail send` and `mail reply` create
 // a letter that asks to be sent (`deliver`), and ./effects.ts — built from the
@@ -45,6 +36,8 @@ import {
 } from '@yaks/graph'
 import { BODY, DOC, TITLE } from '@yaks/doc'
 import { human } from '@yaks/id'
+import { threadOf as attentionTarget } from '@yaks/notify'
+import { ancestry, markAttention } from '@yaks/notify/attention'
 import { absent, and, eq, every, list, present } from '@yaks/query'
 import { CallError, checked, type Finding, said } from '@yaks/tools'
 import type { Runs } from '@yaks/graph/tools'
@@ -53,12 +46,6 @@ import { post } from './effects.ts'
 import { DELIVER, EMAIL, MAIL } from './comp.ts'
 import type { Options } from './options.ts'
 import type { Host } from '@yaks/host'
-
-// The two components this file writes that it does not declare. Both are
-// @yaks/kernel's, and both are written here as plain strings, because a tool's
-// result is data (see the header).
-let ARCHIVED = 'archived'
-let OPENED = 'opened'
 
 let str = (v: unknown): string => v == null ? '' : String(v)
 
@@ -131,22 +118,25 @@ export let threadOf = async (
   graph: Graph,
   letter: Bundle,
 ): Promise<Bundle[]> => {
-  let found = [letter]
-  let seen = new Set([letter.entity.eid])
-  for (let up = prop(comp(letter, MAIL), 'reply_to'); up && !seen.has(up);) {
-    let b = await one(graph, up)
-    if (!b) break
-    seen.add(up)
-    found.push(b)
-    up = prop(comp(b, MAIL), 'reply_to')
-  }
-  for (let front = [...seen]; front.length;) {
+  let found = await ancestry(graph, letter)
+  let seen = new Set(found.map((b) => b.entity.eid))
+  let refs = (rows: Bundle[]) => [
+    ...new Set(
+      rows.flatMap((b) => [
+        b.entity.eid,
+        prop(comp(b, MAIL), 'message_id'),
+        prop(comp(b, 'notified'), 'message_id'),
+      ]).filter(Boolean),
+    ),
+  ]
+  for (let front = refs(found); front.length;) {
     let down = (await graph.read(
       and(eq(`${MAIL}.reply_to`, list(...front)), every()),
+      { native: true },
     ))
       .filter((b) => !seen.has(b.entity.eid))
     for (let b of down) seen.add(b.entity.eid), found.push(b)
-    front = down.map((b) => b.entity.eid)
+    front = refs(down)
   }
   // Chronological where the letters record a time, insertion order where they
   // do not — a sort that is stable either way rather than one that invents a
@@ -156,44 +146,73 @@ export let threadOf = async (
   )
 }
 
-// The first letter of a thread: up the `reply_to` chain from this one, as far
-// as the thread in hand goes.
-let rootOf = (thread: Bundle[], letter: Bundle): Eid => {
-  let byId = new Map(thread.map((b) => [b.entity.eid, b]))
-  let seen = new Set<Eid>()
-  let at = letter
-  for (
-    let up = prop(comp(at, MAIL), 'reply_to');
-    up && byId.has(up) && !seen.has(up);
-    up = prop(comp(at, MAIL), 'reply_to')
-  ) {
-    seen.add(up)
-    at = byId.get(up)!
+// Resolve the caller and thread through the shared policy before touching
+// attention. A mail target aimed at the caller is an address, not a thread.
+let attentionOf = async (
+  graph: Graph,
+  call: Bundle,
+  thread: Bundle[],
+  letter: Bundle,
+) => {
+  let actor = str(who(call)?.by)
+  if (!actor) {
+    throw new CallError(
+      'who',
+      'nobody is asking — mail attention needs a caller',
+    )
   }
-  return at.entity.eid
+  let [person] = await graph.get([actor])
+  let rows = thread.map((b) => ({
+    eid: b.entity.eid,
+    comps: b as Record<string, Comp>,
+  }))
+  let byId = new Map(rows.map((r) => [r.eid, r]))
+  for (let r of rows) {
+    for (let id of [r.comps.mail?.message_id, r.comps.notified?.message_id]) {
+      if (id) byId.set(str(id), r)
+    }
+  }
+  let target = attentionTarget({
+    eid: letter.entity.eid,
+    comps: letter as Record<string, Comp>,
+  }, {
+    actor,
+    scope: person?.project ? actor : undefined,
+    session: person?.session ? actor : undefined,
+  }, byId)
+  let [subscription] = await graph.read(and(
+    eq('subscription.actor', actor),
+    eq('subscription.target', target),
+    every(),
+  ))
+  return { actor, target, subscription }
 }
-
-// A mark made again: removed and added in one batch, so the server stamps a
-// fresh time even where the mark was already there.
-let mark = (eid: Eid, name: string): Bundle[] => [
-  { entity: { eid }, [name]: null },
-  { entity: { eid }, [name]: {} },
-]
 
 // One letter as a line: who it is from, what it is about, and whether it has
 // been read — `●` unread, `·` read, `×` archived, the way a mail client does.
-let line = (id: (b: Bundle) => string) => (b: Bundle): string => {
-  let mail = comp(b, MAIL)
-  let dot = b[ARCHIVED] ? '×' : b[OPENED] ? '·' : '●'
-  let who = prop(mail, 'from')
-  return `${dot} ${id(b)}${who ? ` ${who}` : ''} — ${
-    prop(comp(b, DOC), TITLE) || '(no subject)'
-  }`
-}
+let line =
+  (id: (b: Bundle) => string, attention?: Bundle) => (b: Bundle): string => {
+    let mail = comp(b, MAIL)
+    let at = prop(mail, 'at') || prop(comp(b, 'created'), 'at')
+    let marked = (name: string) => {
+      let mark = comp(attention, name)
+      return !!mark && (!mark.at || str(mark.at) >= at)
+    }
+    let dot = marked('archived') ? '×' : marked('opened') ? '·' : '●'
+    let who = prop(mail, 'from')
+    return `${dot} ${id(b)}${who ? ` ${who}` : ''} — ${
+      prop(comp(b, DOC), TITLE) || '(no subject)'
+    }`
+  }
 
 // One letter whole: the envelope a person reads, then the words, then the rest
 // of the thread with this one marked.
-let page = (id: (b: Bundle) => string, letter: Bundle, thread: Bundle[]) => {
+let page = (
+  id: (b: Bundle) => string,
+  letter: Bundle,
+  thread: Bundle[],
+  attention?: Bundle,
+) => {
   let mail = comp(letter, MAIL)
   let doc = comp(letter, DOC)
   let said = [
@@ -212,7 +231,9 @@ let page = (id: (b: Bundle) => string, letter: Bundle, thread: Bundle[]) => {
       '',
       '## Thread',
       ...thread.map((t) =>
-        `${t.entity.eid == letter.entity.eid ? '▶' : ' '} ${line(id)(t)}`
+        `${t.entity.eid == letter.entity.eid ? '▶' : ' '} ${
+          line(id, attention)(t)
+        }`
       ),
     )
   }
@@ -234,12 +255,18 @@ export let runs = (
     let args = argsOf(call)
     let letter = await letterIn(graph, args.letter)
     let thread = await threadOf(graph, letter)
-    let root = rootOf(thread, letter)
+    let attention = await attentionOf(graph, call, thread, letter)
     return [
-      ...[...new Set([root, letter.entity.eid])].flatMap((eid) =>
-        mark(eid, OPENED)
+      ...await markAttention(
+        graph,
+        attention.actor,
+        attention.target,
+        'opened',
       ),
-      said(call, page(human(graph.vocab), letter, thread)),
+      said(
+        call,
+        page(human(graph.vocab), letter, thread, attention.subscription),
+      ),
     ]
   },
 
@@ -266,6 +293,9 @@ export let runs = (
     // The address it goes from: the one an arrival was delivered to, or the
     // one our own letter went out from. Either way, this side of the thread.
     let from = arrived ? prop(mail, 'to') : prop(mail, 'from')
+    let attention = arrived
+      ? await attentionOf(graph, call, await threadOf(graph, letter), letter)
+      : undefined
     return [
       ...far.made,
       {
@@ -284,13 +314,13 @@ export let runs = (
       // Answering an arrival puts its thread away: a thread you have replied
       // to is not one waiting on you. Only an arrival — following up on your
       // own letter left nothing waiting, so there is nothing to put away.
-      ...(arrived
-        ? [
-          ...new Set([
-            rootOf(await threadOf(graph, letter), letter),
-            letter.entity.eid,
-          ]),
-        ].flatMap((eid) => mark(eid, ARCHIVED))
+      ...(attention
+        ? await markAttention(
+          graph,
+          attention.actor,
+          attention.target,
+          'archived',
+        )
         : []),
     ]
   },

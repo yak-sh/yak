@@ -53,7 +53,7 @@ equal(await argsFor(tool, ['Help', 'me', 'plan']), { text: 'Help me plan' })
 | `./read`    | `readInbox` and `readThread`, the server reads                             |
 | `./vocab`   | `conversation{}`, `inbox_summary`, `mail_notice` and the tool declarations |
 | `./graph`   | The `inbox_summary` view                                                   |
-| `./tools`   | `inbox_new`, `inbox_list` and `inbox_archive`                              |
+| `./tools`   | `inbox_new`, `inbox_list`, `inbox_archive` and `inbox_open`                |
 | `./views`   | The Inbox a browsing app draws, and its home page                          |
 | `./service` | The email door's letters, as a duty                                        |
 | `./mail`    | The email door's reading of letters that arrive (@yaks/mail `Reading`)     |
@@ -90,14 +90,19 @@ contains what the person said, started, opened or decided. Said search includes
 decision choices; received search excludes the person's words. Mute wins over
 direct address.
 
-A root's archive timestamp hides the thread through that instant. Later
-qualifying activity resurfaces it without removing the archive mark. Reading and
-arbitrary edits do not resurface threads. A mark on a message in the thread
-counts as one on its root: @yaks/mail marks the letter it shows `opened`, and
-the letter it answers `archived`, and that is the thread read or put away.
-`attention(eid, 'archived' | 'opened')` returns two bundles for **one atomic
-apply**: remove the old mark, then add it, so the server supplies a fresh
-timestamp on repeated attention. No sweep is involved.
+**Personal attention** lives on the existing `subscription{actor, target, mode}`
+row for that actor and thread. Its `opened{at, by, via}` mark records reading;
+its `archived{at, by, via}` mark hides the thread through that instant. Later
+qualifying activity resurfaces it without removing the archive mark. An absent
+`mode` neither watches nor mutes; clearing watch or mute preserves these marks.
+The entity's own `archived{}` keeps meaning the entity is archived. Archived
+entities create no Needs you obligation; replies about them remain readable.
+
+`inbox_open` and `inbox_archive` find that row and refresh its mark atomically,
+so repeated attention gets a fresh server timestamp. Both accept `who`,
+defaulting to the caller. Mail, web and TUI use the same row and canonical
+thread subject. Reading and arbitrary edits do not resurface threads. No sweep
+is involved.
 
 A **thread summary** is an exact policy record without historical message
 bodies. `readInbox` reads metadata on the server and returns the same lanes,
@@ -168,7 +173,7 @@ page, tab or count, and no page asks for a thread summary.
   line per thread, the whole count above a `limit` from the caller's context).
   Both are @yaks/inspect views written against `io`: every entity in them is
   drawn through the host's shared renderers (`Inbox.List.Tile`, `Inbox.Full`),
-  and marks go out through `io.apply`.
+  and attention tool calls go out through `io.apply`.
 - `home`: the owner's inbox as the app's home page, named Inbox.
 - `tabs`: `Inbox` as a tab on each person and project, ahead of the app's own.
 - `icons`: the glyph both wear.

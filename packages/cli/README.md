@@ -574,6 +574,17 @@ stdin. `yak apply` accepts a JSON array or newline-delimited JSON. For streamed
 input, it groups bundles into batches of 50; `--dry-run` validates and reports
 the result while rolling back the transaction.
 
+`yak graph apply --restore` accepts supplied server-owned values, including
+historical `at`, `by` and `via`, in the local graph a config names. Admission,
+guards, rules, stamps, indexes and journaling still run; the current caller
+writes the journal entry. `--check` rehearses the restoration and rolls it back.
+The flag is refused when the command names a remote MCP server.
+
+```sh
+yak graph apply --config ./yak.json --bundles @history.json --restore --check
+yak graph apply --config ./yak.json --bundles @history.json --restore
+```
+
 Remote authentication uses `$YAKS_TOKEN` when set. Otherwise,
 `yak auth yaks.app` signs in through OAuth. The sign-in is a connection in the
 configured graph. A machine with no graph creates a small personal graph in its

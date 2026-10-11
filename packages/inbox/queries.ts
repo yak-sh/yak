@@ -107,7 +107,7 @@ export let candidates = (who: Reader, has: Words = () => true): string => {
       select('mail.target', [who.scope, who.session, ...who.watching ?? []]),
       select('filed.assignee', [who.actor]),
       authored,
-      select('opened.by', [who.actor]),
+      select('entity.eid', who.attention?.keys() ?? []),
       select('decided.by', [who.actor]),
       select('session.actor', [who.actor]),
       select('entity.eid', who.watching ?? []),

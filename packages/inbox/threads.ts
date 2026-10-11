@@ -1,4 +1,5 @@
-import { aboutOf, addressed, type Reader, type Row } from './reader.ts'
+import { addressed, type Reader, type Row } from './reader.ts'
+import { threadOf } from '@yaks/notify'
 
 export const lanes = ['Needs you', 'Replies', 'Updates', 'Recent'] as const
 export type Lane = typeof lanes[number]
@@ -49,24 +50,7 @@ export let messageAt = (r: Row): string =>
 /** Reading, archiving, delivery and arbitrary edits are not new activity. */
 export let activityAt = (r: Row): string =>
   newest(messageAt(r), stateAt(r), r.comps.bug?.last, r.comps.bug?.first)
-export let threadOf = (
-  r: Row,
-  who?: Reader,
-  byId?: Map<string, Row>,
-  seen: Set<string> = new Set<string>(),
-): string => {
-  let reply = str(r.comps.mail?.reply_to)
-  if (reply && byId?.has(reply) && !seen.has(r.eid)) {
-    seen.add(r.eid)
-    return threadOf(byId.get(reply)!, who, byId, seen)
-  }
-  let target = r.comps.mail && who &&
-      [who.actor, who.session, who.scope].includes(str(r.comps.mail.target))
-    ? ''
-    : aboutOf(r)
-  return target || str(r.comps.entry?.session ?? r.comps.commit?.target) ||
-    r.eid
-}
+export { threadOf } from '@yaks/notify'
 
 export let saidBy = (who: Reader, r: Row, byId?: Map<string, Row>): boolean => {
   if (r.comps.mail) return !!who.addrs?.has(str(r.comps.mail.from))
@@ -178,9 +162,10 @@ export let threads = <R extends Row>(
       (assigned ||
         (!root.comps.filed?.assignee &&
           (!who.scope || root.comps.filed?.project == who.scope || watched)))
-    let need = !!(!closed(root) && !root.comps.decided &&
-      ((assigned && !!root.comps.task) || decision || alert ||
-        (direct && group.some((r) => !!r.comps.knock))))
+    let need =
+      !!(!root.comps.archived && !closed(root) && !root.comps.decided &&
+        ((assigned && !!root.comps.task) || decision || alert ||
+          (direct && group.some((r) => !!r.comps.knock))))
     let changes = group.filter((r) =>
       r.comps.commit ||
       (r.comps.entry && (r.comps.exception || r.comps.refusal || r.comps.stop))
@@ -198,18 +183,16 @@ export let threads = <R extends Row>(
     ].some((name) => !!root.comps[name])
     let recent = (started && visible) || !!own.length ||
       (!!who.actor &&
-        [root.comps.opened?.by, root.comps.decided?.by].includes(who.actor))
+        (!!who.attention?.get(eid)?.comps.opened ||
+          root.comps.decided?.by == who.actor))
     if (!need && !reply.length && !update && !recent && !direct) continue
     let activity = need
       ? group
       : [root, ...own, ...reply, ...(started || watched ? changes : [])]
     let at = newest(...activity.map(activityAt))
-    // A mark on the root, or on a message in the thread: mail marks the letter
-    // it shows or answers, and that is the thread read or put away.
-    let marked = [root, ...messages]
-    let away = newest(...marked.map((r) => r.comps.archived?.at))
-    let archived = (!!away && at <= away) ||
-      marked.some((r) => r.comps.archived && !r.comps.archived.at)
+    let personal = who.attention?.get(eid)?.comps ?? {}
+    let away = str(personal.archived?.at)
+    let archived = !!personal.archived && (!away || at <= away)
     if (!search.all && archived) continue
     // A decision's question and answer can have different authors. Treat the
     // answer as its own words rather than attributing the whole root to them.
@@ -244,9 +227,7 @@ export let threads = <R extends Row>(
       activityAt(a).localeCompare(activityAt(b))
     ).at(-1) ?? root
     let attention = newest(
-      ...marked.map((r) =>
-        r.comps.opened?.at
-      ),
+      personal.opened?.at,
       root.comps.decided?.at,
       started ? messageAt(root) : '',
       ...own.map(messageAt),
@@ -278,8 +259,4 @@ export let threads = <R extends Row>(
   )
 }
 
-/** Atomic replacement gives repeated attention marks a fresh server timestamp. */
-export let attention = (eid: string, mark: 'archived' | 'opened') => [
-  { entity: { eid }, [mark]: null },
-  { entity: { eid }, [mark]: {} },
-]
+export { attention } from '@yaks/notify'

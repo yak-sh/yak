@@ -13,6 +13,7 @@ import { type Effects, effects } from '@yaks/effects'
 import { loadVocab, type Vocab, type VocabDoc } from '@yaks/vocab'
 import { docDoc, docs } from '@yaks/doc'
 import { kernelDoc } from '@yaks/kernel'
+import { notifyDoc } from '@yaks/notify'
 import { mailDoc } from './comp.ts'
 import { mailbox } from './plugin.ts'
 import { type Stash, stash } from './stash.ts'
@@ -91,7 +92,7 @@ let doc: VocabDoc = {
 
 /** The club's vocabulary: its own components, this package's, and the `doc` a
  * letter's subject and body live in. */
-export let club: Vocab = loadVocab([docDoc, mailDoc, doc])
+export let club: Vocab = loadVocab([docDoc, mailDoc, notifyDoc, doc])
 
 /** A clock that does not move, so a test can assert on `delivered.at`. */
 export let noon = (): string => '2026-09-05T12:00:00.000Z'

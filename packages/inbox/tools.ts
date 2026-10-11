@@ -15,8 +15,9 @@ import {
 import type { Runs } from '@yaks/graph/tools'
 import { CallError } from '@yaks/tools/errors'
 import { readInbox } from './read.ts'
+import { ancestry, markAttention } from '@yaks/notify/attention'
 import { readerAt, type Row } from './reader.ts'
-import { attention, type Direction, type Lane, threadOf } from './threads.ts'
+import { type Direction, type Lane, threadOf } from './threads.ts'
 
 /** How many threads a list returns when the caller gave no limit. */
 export let PAGE = 50
@@ -50,27 +51,24 @@ let threadAt = async (
   call: Bundle,
   letter: Bundle,
 ): Promise<Eid> => {
-  let actor = who(call)?.by
-  if (!actor) return letter.entity.eid
+  let actor = reader(call)
   let person = readerAt(rows(await graph.get([actor])), actor)
-  let chain = [letter]
-  let seen = new Set([letter.entity.eid])
-  for (
-    let up = str((letter.mail as Record<string, unknown>)?.reply_to);
-    up && !seen.has(up);
-  ) {
-    seen.add(up)
-    let [parent] = await graph.get([up])
-    if (!parent) break
-    chain.push(parent)
-    up = str((parent.mail as Record<string, unknown>)?.reply_to)
-  }
+  let chain = await ancestry(graph, letter)
   let all = rows(chain)
   let byId = new Map(all.map((r) => [r.eid, r]))
   for (let r of all) {
-    if (r.comps.mail?.message_id) byId.set(str(r.comps.mail.message_id), r)
+    for (let id of [r.comps.mail?.message_id, r.comps.notified?.message_id]) {
+      if (id) byId.set(str(id), r)
+    }
   }
   return threadOf(all[0], person, byId)
+}
+
+let mark = async (call: Bundle, graph: Graph, how: 'opened' | 'archived') => {
+  let item = str(argsOf(call).item)
+  let [found] = await graph.get([item])
+  let target = found ? await threadAt(graph, call, found) : item
+  return markAttention(graph, reader(call), target, how)
 }
 
 /** Implementations of the tools declared in the inbox vocabulary. */
@@ -105,12 +103,6 @@ export let runs = (): Runs => ({
     }))
   },
 
-  inbox_archive: async (call, graph): Promise<Bundle[]> => {
-    let item = str(argsOf(call).item)
-    let [found] = await graph.get([item])
-    return attention(
-      found?.mail ? await threadAt(graph, call, found) : item,
-      'archived',
-    )
-  },
+  inbox_archive: (call, graph) => mark(call, graph, 'archived'),
+  inbox_open: (call, graph) => mark(call, graph, 'opened'),
 })

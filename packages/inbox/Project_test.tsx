@@ -4,25 +4,22 @@
 import { test } from '@yaks/testing'
 import { assertEquals } from '@std/assert'
 import type { Bundle } from '@yaks/graph'
+import { toolEid } from '@yaks/tools'
 import type { Row } from './reader.ts'
 import type { Thread } from './threads.ts'
 import { host, mount, press, shop, texts, wait } from './testing.tsx'
 
 let project = { entity: { eid: 'venture', num: 1 }, project: {} }
 let at = (n: number) => `2026-08-07T12:00:${String(n).padStart(2, '0')}.000Z`
-// Tasks assigned to the venture, the newest last; `more` adds to each.
+// Tasks assigned to the venture, the newest last.
 let work = (i: number) => `work${i}`
-let assigned = (
-  n: number,
-  more: (i: number) => Record<string, unknown> = () => ({}),
-) =>
+let assigned = (n: number) =>
   Array.from({ length: n }, (_, i): Bundle => ({
     entity: { eid: work(i), num: i + 2 },
     task: {},
     doc: { title: `Work ${i}`, body: '' },
     filed: { assignee: 'venture' },
     created: { at: at(i) },
-    ...more(i),
   }))
 let drawn = async (rows: Bundle[], ctx = {}) => {
   let g = await shop([project, ...rows])
@@ -34,7 +31,11 @@ let drawn = async (rows: Bundle[], ctx = {}) => {
 
 test('a line is in the policy’s order, and reading or archiving it marks its thread', async () => {
   let { h, seen } = await drawn(
-    assigned(2, (i) => i == 1 ? { opened: { at: at(9) } } : {}),
+    [...assigned(2), {
+      entity: { eid: 'attention' },
+      subscription: { actor: 'venture', target: work(1) },
+      opened: { at: at(9) },
+    }],
   )
   try {
     assertEquals(texts(seen.root, '.Tile_Title'), ['Work 1', 'Work 0'])
@@ -56,14 +57,24 @@ test('a line is in the policy’s order, and reading or archiving it marks its t
     await press(lines[1])
     await wait(() => h.applied.length == 1, 'one read mark')
     assertEquals(h.applied[0], [
-      { entity: { eid: work(0) }, opened: null },
-      { entity: { eid: work(0) }, opened: {} },
+      {
+        entity: { eid: '$attention' },
+        call: {
+          to: toolEid('inbox_open'),
+          args: { who: 'venture', item: work(0) },
+        },
+      },
     ])
     await press(seen.root.querySelector('button[title=archive]'))
     await wait(() => h.applied.length == 2, 'an archive mark')
     assertEquals(h.applied[1], [
-      { entity: { eid: work(1) }, archived: null },
-      { entity: { eid: work(1) }, archived: {} },
+      {
+        entity: { eid: '$attention' },
+        call: {
+          to: toolEid('inbox_archive'),
+          args: { who: 'venture', item: work(1) },
+        },
+      },
     ])
   } finally {
     seen.free()

@@ -1,6 +1,6 @@
 import { assertEquals } from '@std/assert'
 import { test } from '@yaks/testing'
-import { type Row, threads } from './mod.ts'
+import { type Reader, type Row, threads } from './mod.ts'
 
 let at = (n: number) => `2026-10-02T12:00:${String(n).padStart(2, '0')}.000Z`
 let row = (
@@ -29,8 +29,8 @@ let comment = (
     n,
     by,
   )
-let lanes = (all: Row[]) =>
-  threads(all, who).map((t) => [t.eid, t.lane, t.blocking])
+let lanes = (all: Row[], reader: Reader = who) =>
+  threads(all, reader).map((t) => [t.eid, t.lane, t.blocking])
 
 let assigned = [
   row('decision', { task: {}, decision: {}, filed: { assignee: 'person' } }),
@@ -73,15 +73,16 @@ test('replies follow your branch recursively and fold every message into one thr
     'nested',
     4,
   ])
-  all[0].comps.archived = { at: at(5) }
-  assertEquals(threads(all, who), [])
+  let mark = row('attention', { archived: { at: at(5) } })
+  let reader = { ...who, attention: new Map([['thread', mark]]) }
+  assertEquals(threads(all, reader), [])
   all.push(comment('later', 'thread', 6, 'other', 'nested'))
-  assertEquals(threads(all, who).map((t) => t.eid), ['thread'])
-  all[0].comps.opened = { at: at(7), by: 'person' }
+  assertEquals(threads(all, reader).map((t) => t.eid), ['thread'])
+  mark.comps.opened = { at: at(7), by: 'person' }
   all[0].comps.updated = { at: at(8) }
-  all[0].comps.archived = { at: at(6) }
-  assertEquals(threads(all, who), [])
-  assertEquals(threads(all, who, { all: true })[0].unread, false)
+  mark.comps.archived = { at: at(6) }
+  assertEquals(threads(all, reader), [])
+  assertEquals(threads(all, reader, { all: true })[0].unread, false)
 })
 
 test('watched updates are state changes and landings, not progress chatter or edits', () => {
@@ -90,40 +91,61 @@ test('watched updates are state changes and landings, not progress chatter or ed
   assertEquals(lanes(all), [])
   root.comps.blocked = { since: at(3), on: 'vendor' }
   assertEquals(lanes(all), [['watched', 'Updates', false]])
-  root.comps.archived = { at: at(3) }
-  assertEquals(lanes(all), [])
+  let reader = {
+    ...who,
+    attention: new Map([[
+      'watched',
+      row('attention', { archived: { at: at(3) } }),
+    ]]),
+  }
+  assertEquals(lanes(all, reader), [])
   all.push(
     row('landed', { commit: { target: 'watched', message: 'Ship it' } }, 4),
   )
-  assertEquals(lanes(all), [['watched', 'Updates', false]])
-  assertEquals(threads(all, { ...who, muting: new Set(['watched']) }), [])
+  assertEquals(lanes(all, reader), [['watched', 'Updates', false]])
+  assertEquals(threads(all, { ...reader, muting: new Set(['watched']) }), [])
 })
 
 test('search separates said from received and can find archived conversations', () => {
   let all = [
-    row('thread', { task: {}, archived: { at: at(9) } }),
+    row('thread', { task: {} }),
     comment('mine', 'thread', 2, 'person', undefined, 'Use SQLite'),
     comment('answer', 'thread', 3, 'agent', 'mine', 'Postgres works too'),
   ]
+  let reader = {
+    ...who,
+    attention: new Map([[
+      'thread',
+      row('attention', { archived: { at: at(9) } }),
+    ]]),
+  }
   let find = (text: string, direction: 'said' | 'received') =>
-    threads(all, who, { text, direction, all: true }).map((t) => t.eid)
+    threads(all, reader, { text, direction, all: true }).map((t) => t.eid)
   assertEquals(find('sqlite', 'said'), ['thread'])
   assertEquals(find('sqlite', 'received'), [])
   assertEquals(find('POSTGRES', 'received'), ['thread'])
-  assertEquals(threads(all, who, { text: 'SQLite' }), [])
+  assertEquals(threads(all, reader, { text: 'SQLite' }), [])
 })
 
 test('unread compares received activity with attention, and new alert occurrences resurface', () => {
   let all = [
     row('bug', {
       bug: { last: at(3) },
-      archived: { at: at(2) },
-      opened: { at: at(3), by: 'person' },
     }),
   ]
-  assertEquals(threads(all, who)[0].unread, false)
+  let reader = {
+    ...who,
+    attention: new Map([[
+      'bug',
+      row('attention', {
+        archived: { at: at(2) },
+        opened: { at: at(3), by: 'person' },
+      }),
+    ]]),
+  }
+  assertEquals(threads(all, reader)[0].unread, false)
   all[0].comps.bug.last = at(4)
-  assertEquals(threads(all, who)[0].unread, true)
+  assertEquals(threads(all, reader)[0].unread, true)
 })
 
 test('recent things you started are read, and your decision choice is said', () => {
@@ -184,7 +206,7 @@ test('a thread opens with its root, beside a reply said in the same instant', ()
   assertEquals(thread.messages.map((r) => r.eid), ['z-letter', 'a-reply'])
 })
 
-test('a mark on any letter of a thread reads or puts away the whole thread', () => {
+test('attention on a mail root reads or puts away the whole thread', () => {
   let letter = (eid: string, n: number, reply_to?: string) =>
     row(eid, {
       mail: {
@@ -195,12 +217,37 @@ test('a mark on any letter of a thread reads or puts away the whole thread', () 
       },
     }, n)
   let all = [letter('letter', 1), letter('answer', 3, 'letter')]
-  let seen = () => threads(all, who).map((t) => [t.eid, t.unread])
+  let mark = row('attention')
+  let reader = { ...who, attention: new Map([['letter', mark]]) }
+  let seen = () => threads(all, reader).map((t) => [t.eid, t.unread])
   assertEquals(seen(), [['letter', true]])
-  all[1].comps.opened = { at: at(4), by: 'person' }
+  mark.comps.opened = { at: at(4), by: 'person' }
   assertEquals(seen(), [['letter', false]])
-  all[1].comps.archived = { at: at(4) }
+  mark.comps.archived = { at: at(4) }
   assertEquals(seen(), [])
   all.push(letter('more', 5, 'answer'))
   assertEquals(seen(), [['letter', true]])
+})
+
+test('archived entities do not demand attention as alerts or assigned work', () => {
+  let roots = [
+    row('old-bug', { bug: { last: at(9) }, archived: { at: at(2) } }),
+    row('old-task', { task: {}, filed: { assignee: 'person' }, archived: {} }),
+    row('old-decision', {
+      decision: {},
+      filed: { assignee: 'person' },
+      archived: {},
+    }),
+  ]
+  assertEquals(threads(roots, who), [])
+  assertEquals(
+    threads(roots, who, { all: true }).filter((t) => t.lane == 'Needs you'),
+    [],
+  )
+  roots.push(comment('answer', 'old-task', 10, 'agent'))
+  let addressed = { ...who, claims: new Set(['old-task']) }
+  assertEquals(threads(roots, addressed).map((t) => [t.eid, t.lane]), [[
+    'old-task',
+    'Replies',
+  ]])
 })

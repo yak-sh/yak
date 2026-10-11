@@ -128,12 +128,17 @@
       "noun": "inbox",
       "verb": "archive",
       "title": "Archive an inbox item",
-      "description": "Hide a thread until activity after its archive timestamp. Repeated archive refreshes that timestamp. No history is deleted; inbox list --all includes hidden threads.",
+      "description": "Hide a thread from one person\u2019s inbox until activity after their archive timestamp. Repeated archive refreshes that timestamp on their subscription row. The entity remains unarchived; inbox list --all includes hidden threads.",
       "input": {
         "item": {
           "type": "string",
           "ref": "entity",
           "description": "the item to archive; any entity an inbox can hold; pass its id or registered name"
+        },
+        "who": {
+          "type": "string",
+          "ref": "entity",
+          "description": "whose attention to mark (default: the caller)"
         }
       },
       "required": [
@@ -173,6 +178,32 @@
           "description": "the digest that included this thread activity"
         }
       }
+    },
+    "inbox_open": {
+      "tool": true,
+      "noun": "inbox",
+      "verb": "open",
+      "title": "Read an inbox thread",
+      "description": "Mark a thread read in one person\u2019s inbox, refreshing opened on their subscription row. Leaves the entity\u2019s own state unchanged.",
+      "input": {
+        "item": {
+          "type": "string",
+          "ref": "entity",
+          "description": "the thread or message read; pass its id or registered name"
+        },
+        "who": {
+          "type": "string",
+          "ref": "entity",
+          "description": "whose attention to mark (default: the caller)"
+        }
+      },
+      "required": [
+        "item"
+      ],
+      "idempotent": true,
+      "positional": [
+        "item"
+      ]
     }
   }
 }

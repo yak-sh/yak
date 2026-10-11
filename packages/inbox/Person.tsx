@@ -116,7 +116,7 @@ let ThreadRow = (
           mod='quiet'
           aria-expanded={open}
           onClick={() => {
-            if (!open) mark(io, t.eid, 'opened')
+            if (!open) mark(io, actor, t.eid, 'opened')
             view.set({ open: !open })
           }}
         >
@@ -137,7 +137,7 @@ let ThreadRow = (
         type='button'
         mod='quiet'
         aria-label={`Archive ${io.id(root)}`}
-        onClick={() => mark(io, t.eid, 'archived')}
+        onClick={() => mark(io, actor, t.eid, 'archived')}
       >
         archive
       </Button>

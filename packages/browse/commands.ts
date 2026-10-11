@@ -904,8 +904,7 @@ export let commands: Record<string, Command> = {
   },
   // :reply answers a mail where you stand — or the E-id the line leads
   // with. The words ARE the page (a lone @file is that page — see
-  // `page`); replyChanges aims at the far side and records the thread at
-  // authoring (reply_to), delivery resolves it to a Message-ID.
+  // `page`); the mail tool resolves the far side, threading and attention.
   reply: {
     args: [
       a('id', 'E-9', { kind: id, need: false }),
@@ -922,7 +921,7 @@ export let commands: Record<string, Command> = {
       let made = replyChanges(row, page(body, ctx))
       return {
         changes: made.changes,
-        msg: `${idOf(row)} ← reply → ${made.changes[1].comp?.to}`,
+        msg: `${idOf(row)} ← reply`,
       }
     },
   },

@@ -248,6 +248,8 @@ let reader = async (
     'subscription.actor',
     'subscription.target',
     'subscription.mode',
+    'opened.at',
+    'archived.at',
   ].filter(has).join(',')
   let person = rows(
     await tx.read(
@@ -274,6 +276,20 @@ let reader = async (
       ),
     )
     : []
+  // Timestamp projections omit present marks without a timestamp. Preserve
+  // their presence too: an empty archive still means this person put it away.
+  if (subs.length) {
+    let targets = new Map(subs.map((r) => [r.eid, r]))
+    for (let name of ['opened', 'archived'].filter(has)) {
+      for (
+        let r of rows(
+          await tx.read(
+            `.${name}&${ids(subs)}&.fields=entity.eid`,
+          ),
+        )
+      ) targets.get(r.eid)!.comps[name] ??= {}
+    }
+  }
   return readerAt([...person, ...subs], actor)
 }
 

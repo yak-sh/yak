@@ -16,13 +16,13 @@ import type { Row } from './reader.ts'
 import type { Thread } from './threads.ts'
 import { mark, show, useThreads } from './asks.ts'
 
-let Line = ({ t, io }: { t: Thread<Row>; io: Io }) => {
+let Line = ({ t, io, actor }: { t: Thread<Row>; io: Io; actor: string }) => {
   // A knock is the envelope; its target is what the reader came to see.
   let knock = t.row.comps.knock
   let subject = knock ? String(knock.target) : t.eid
   return (
     <Frame.Thread data-thread={t.eid} mod={t.unread && 'unread'}>
-      <div onClick={() => t.unread && mark(io, t.eid, 'opened')}>
+      <div onClick={() => t.unread && mark(io, actor, t.eid, 'opened')}>
         <Dot
           mod={t.unread ? 'accent' : undefined}
           title={t.unread ? 'unread' : 'read'}
@@ -39,7 +39,7 @@ let Line = ({ t, io }: { t: Thread<Row>; io: Io }) => {
         aria-label={`Archive ${
           io.id(io.get(t.eid) ?? { entity: { eid: t.eid } })
         }`}
-        onClick={() => mark(io, t.eid, 'archived')}
+        onClick={() => mark(io, actor, t.eid, 'archived')}
       >
         ✕
       </Button>
@@ -72,7 +72,7 @@ export let ProjectInbox = ({ e, io, ctx }: Props): JSX.Element => {
         {threads.length} item{threads.length == 1 ? '' : 's'}
         {unread ? ` · ${unread} unread` : ''}
       </Frame.Summary>
-      {shown.map((t) => <Line key={t.eid} t={t} io={io} />)}
+      {shown.map((t) => <Line key={t.eid} t={t} io={io} actor={eid} />)}
       {shown.length < threads.length && (
         <Frame.Empty>+{threads.length - shown.length} more</Frame.Empty>
       )}

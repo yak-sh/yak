@@ -5,6 +5,7 @@
 // `.doc.title=Hello` sets doc.title; a property is always named with its
 // component. Values that look like numbers become numbers.
 import { IdError } from './types.ts'
+import { identityEid } from '@yaks/graph/identity'
 import { ownsSessionBranch } from './session_worktree.ts'
 import {
   byName,
@@ -554,7 +555,9 @@ export let subChanges = (
     String(r.comps.subscription.target) == target
   )
   if (!mode) {
-    return had ? [{ eid: had.eid, name: 'entity', comp: null }] : []
+    return had
+      ? [{ eid: had.eid, name: 'subscription', comp: { mode: null } }]
+      : []
   }
   return [{
     eid: had?.eid ?? uuid(),
@@ -656,47 +659,20 @@ export let mailChanges = (m: {
   return { eid, changes }
 }
 
-// Re: derivation — shed however many Re:/Fwd: layers already piled up.
-export let reSubject = (s: string) =>
-  `Re: ${s.replace(/^(\s*(re|fwd?):\s*)+/i, '').trim()}`
-
-// The reply batch: answer goes to the far side — an inbound row's
-// sender, your own sent row's recipient — subject prefilled Re: …, and
-// reply_to records the thread at authoring (delivery resolves it).
-// Whom a reply is FOR: the sender of a letter that arrived, the same
-// recipient for one we sent. Never a fallback BETWEEN those two — the
-// near miss is our own address (the one the letter was delivered to), so a
-// reply that quietly goes to the wrong desk looks sent and isn't.
-// An unsigned letter earns a refusal instead; mail it directly.
-//
-// Answering an arrival RETIRES it: the reply batch also stamps `archived`
-// on the inbound row, so a thread we have already answered stops showing as
-// unanswered and each session replied again (T-35950). A
-// LATER inbound message on the thread is a distinct row with its own
-// received_at and no archived stamp, so it re-surfaces on its own. Only an
-// arrival is retired (message_id) — following up on our own sent letter
-// never arrived here to begin with, so there is nothing to hide.
+// The mail tool owns addressing, threading and the caller's attention. The
+// command submits its words through that boundary so every door answers the
+// same way, with the runner supplying the caller's identity.
 export let replyChanges = (row: Row, body: string) => {
-  let m = row.comps.mail ?? {}
-  // The far side: an arrival's sender (m.from), our own sent letter's
-  // recipient (the shared deliver.to). Never a fallback between the two.
-  let to = String((m.message_id ? m.from : row.comps.deliver?.to) ?? '')
-  if (!to) {
-    throw new Error(
-      'cannot reply: that letter carries no sender — send a fresh mail',
-    )
-  }
-  let made = mailChanges({
-    to,
-    subject: reSubject(String(row.comps.doc?.title ?? '')),
-    body,
-    replyTo: row.eid,
-  })
-  // Append (never insert): callers read made.changes[1] for the destination.
-  if (m.message_id && !row.comps.archived) {
-    made.changes.push({ eid: row.eid, name: 'archived', comp: {} })
-  }
-  return made
+  let eid = uuid()
+  let changes: Change[] = [{
+    eid,
+    name: 'call',
+    comp: {
+      to: identityEid('tool', ['mail_reply']),
+      args: { letter: row.eid, body },
+    },
+  }]
+  return { eid, changes }
 }
 
 // The dream batch (T-12800): a venture's consolidation cursor plus the first

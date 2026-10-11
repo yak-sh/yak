@@ -21,7 +21,7 @@ let ask = (
   g: Graph,
   tool: string,
   args: Record<string, unknown> = {},
-  actor: Actor | null = null,
+  actor: Actor | null = { by: 'desk' },
   options: Options = {},
   host?: Pick<Host, 'senders'>,
 ): Promise<Bundle[]> =>
@@ -42,7 +42,7 @@ let did = async (
   g: Graph,
   tool: string,
   args: Record<string, unknown> = {},
-  actor: Actor | null = null,
+  actor: Actor | null = { by: 'desk' },
 ): Promise<Bundle[]> => await g.apply(await ask(g, tool, args, actor))
 
 let comp = (b: Bundle | undefined, name: string): Comp =>
@@ -78,9 +78,10 @@ let arrival = (eid: string, o: Record<string, unknown> = {}) => ({
   },
 })
 
-test('reading a letter marks it, and shows its thread', async () => {
+let shown = await (async () => {
   let { g } = await club()
   await g.apply([
+    { entity: { eid: 'ana' }, email: { address: 'ana@books.example' } },
     arrival('a1'),
     {
       entity: { eid: 'a2' },
@@ -91,19 +92,40 @@ test('reading a letter marks it, and shows its thread', async () => {
         reply_to: 'a1',
       },
       deliver: { to: 'ana' },
+      archived: {},
     },
   ])
   let answer = await ask(g, 'mail_show', { letter: 'a1' })
-  let said = prose(answer)
+  await g.apply(answer)
+  let [letter] = await g.get(['a1'])
+  let [attention] = await g.read(
+    '.subscription.actor=desk&.subscription.target=a1&*',
+  )
+  return {
+    g,
+    said: prose(answer),
+    letter,
+    attention,
+    read: prose(await ask(g, 'mail_show', { letter: 'a1' })),
+    other: prose(await ask(g, 'mail_show', { letter: 'a1' }, { by: 'ana' })),
+    sent: (await g.get(['a2']))[0],
+  }
+})()
+
+test('reading a letter marks the caller’s attention, and shows its thread', async () => {
+  let { g, said, letter, attention, read, other, sent } = shown
   assert(said.includes('# Potluck Friday'), said)
   assert(said.includes('from stranger@elsewhere.example'), said)
   assert(said.includes('Bring a dish.'), said)
   assert(said.includes('## Thread'), said)
   assert(said.includes('▶'), said)
-  // The mark is a patch on the letter, not a note on the side.
-  await g.apply(answer)
-  let [letter] = await g.read('.mail.message_id=a1@elsewhere.example&*')
-  assert(letter.opened, 'reading is the mark')
+  assert(read.includes('· #a1'), read)
+  assert(other.includes('● #a1'), other)
+  assert(!other.includes('×'), other)
+  assert(comp(sent, 'archived').at, 'the letter keeps its own archive mark')
+  assert(comp(attention, 'opened').at, 'reading is the caller’s mark')
+  assertEquals(letter.opened, undefined)
+  assertEquals(letter.archived, undefined)
   await assertRejects(
     () => ask(g, 'mail_show', { letter: 'ana' }),
     Error,
@@ -111,22 +133,52 @@ test('reading a letter marks it, and shows its thread', async () => {
   )
 })
 
-test('reading and answering mark the letter and the first of its thread, afresh each time', async () => {
+let stamp = (minute: number) => `2026-10-02T12:0${minute}:00.000Z`
+let refreshed = await (async () => {
   let { g } = await club()
-  let stamp = (minute: number) => `2026-10-02T12:0${minute}:00.000Z`
   await g.apply([arrival('root'), arrival('reply', { reply_to: 'root' })])
-  let marks = async (name: string) =>
-    (await g.get(['root', 'reply'])).map((b) => comp(b, name).at)
+  let marks = async (name: string) => {
+    let [attention] = await g.read(
+      '.subscription.actor=desk&.subscription.target=root&*',
+    )
+    return comp(attention, name).at
+  }
+  let opened = []
   for (let minute of [1, 2]) {
     await g.apply(await ask(g, 'mail_show', { letter: 'reply' }), {
       now: stamp(minute),
     })
-    assertEquals(await marks('opened'), [stamp(minute), stamp(minute)])
+    opened.push(await marks('opened'))
   }
   await g.apply(await ask(g, 'mail_reply', { letter: 'reply', body: 'Yes' }), {
     now: stamp(3),
   })
-  assertEquals(await marks('archived'), [stamp(3), stamp(3)])
+  await g.apply(await ask(g, 'mail_show', { letter: 'reply' }, { by: 'ana' }), {
+    now: stamp(4),
+  })
+  let [others] = await g.read(
+    '.subscription.actor=ana&.subscription.target=desk&*',
+  )
+  return {
+    opened,
+    after: await marks('opened'),
+    archived: await marks('archived'),
+    letters: await g.get(['root', 'reply']),
+    others,
+  }
+})()
+
+test('reading and answering refresh only the caller’s thread attention', () => {
+  let { opened, after, archived, letters, others } = refreshed
+  assertEquals(opened, [stamp(1), stamp(2)])
+  assertEquals(after, stamp(2))
+  assertEquals(archived, stamp(3))
+  for (let letter of letters) {
+    assertEquals(letter.opened, undefined)
+    assertEquals(letter.archived, undefined)
+  }
+  assertEquals(comp(others, 'opened').at, stamp(4))
+  assertEquals(others.archived, undefined)
 })
 
 let incoming = await club()
@@ -149,7 +201,11 @@ test('a reply to an arrival goes to its author, from the desk it came to', async
   assertEquals(post.last()?.replyTo, 'a1@elsewhere.example')
   // Answering puts the arrival away, and the answer is not filed back to us.
   assertEquals(comp(reply, 'mail').target, undefined)
-  assert(comp((await g.get(['a1']))[0], 'archived').at, 'answered is away')
+  let [attention] = await g.read(
+    '.subscription.actor=desk&.subscription.target=a1&*',
+  )
+  assert(comp(attention, 'archived').at, 'answered is away for the caller')
+  assertEquals((await g.get(['a1']))[0].archived, undefined)
 })
 
 let outgoing = await club()

@@ -233,9 +233,14 @@ test('archived or read decisions and muted threads never queue email; requested 
   original[0].unread = false
   assertEquals(planned(original, [], inbox, at(4)).length, 0)
   let root = original[0].row
-  root.comps.archived = { at: at(5) }
-  assertEquals(planned(threads([root], reader), [], inbox, at(6), true), [])
-  delete root.comps.archived
+  let seen = {
+    ...reader,
+    attention: new Map([[
+      'ask',
+      row('attention', { archived: { at: at(5) } }),
+    ]]),
+  }
+  assertEquals(planned(threads([root], seen), [], inbox, at(6), true), [])
   assertEquals(
     planned(
       threads([root], { ...reader, muting: new Set(['ask']) }),
