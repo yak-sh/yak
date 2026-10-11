@@ -494,7 +494,9 @@ const server = portLink(port2, {
   encodeError: (error) => (error as Conflict).current,
 })
 try {
-  const error = await throws(() => client.request('write', { title: 'Dune' }))
+  const error = await throws(() =>
+    client.request('write', { title: 'Dune' }, { timeout: null })
+  )
   equal(error instanceof Conflict, true)
   equal((error as Conflict).current, { title: 'Dune' })
 } finally {
