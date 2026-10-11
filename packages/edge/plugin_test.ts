@@ -3,11 +3,13 @@
 
 import { test } from '@yaks/testing'
 import { assert, assertEquals, assertThrows } from '@std/assert'
-import type { Bundle } from '@yaks/graph'
+import { type Bundle, graph } from '@yaks/graph'
+import { ram } from '@yaks/ram'
+import { edges } from './plugin.ts'
 import { isPromise } from '@yaks/fp'
 import { edgeEid } from './eid.ts'
 import { link, unlink } from './say.ts'
-import { blogGraph } from './testing.ts'
+import { blog, blogGraph } from './testing.ts'
 
 let sync = (out: Bundle[] | Promise<Bundle[]>): Bundle[] => {
   assert(!isPromise(out), 'apply() went async over an embedded database')
@@ -51,8 +53,9 @@ test('an aliased link mints at the sentence it states', () => {
   assertEquals(made.entity.eid, edgeEid('p1', 'cites', 'p2'))
 })
 
+let minting = graph({ storage: ram(blog), vocab: blog, plugins: [edges(blog)] })
 test('a link to an entity the same batch mints resolves first', () => {
-  let g = blogGraph()
+  let g = minting
   let out = sync(g.apply([
     { entity: { eid: 'p1' }, post: { title: 'One' } },
     { entity: { eid: '$new' }, post: { title: 'Fresh' } },
@@ -81,8 +84,9 @@ test('a link dies with either end', () => {
   assertEquals(read(g, '.edge'), [])
 })
 
+let refusing = posts(blogGraph())
 test('an edge with no relation is refused, and says so', () => {
-  let g = posts(blogGraph())
+  let g = refusing
   let e = assertThrows(() =>
     sync(g.apply([{
       entity: { eid: '$l' },
