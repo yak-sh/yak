@@ -8,18 +8,16 @@ import { kernelDoc } from './vocab.ts'
 /**
  * The kernel plugin: every component ./vocab.json declares, and a
  * `precondition` hook that records who completed something.
- *
- * ```ts
- * import { loadVocab } from '@yaks/vocab'
- * import { graph } from '@yaks/graph'
- * import { ram } from '@yaks/ram'
- * import { kernel, kernelDoc, kernelKeywords } from '@yaks/kernel'
- *
- * let vocab = loadVocab([kernelDoc], [kernelKeywords])
- * let g = graph({ storage: ram(vocab), vocab, plugins: [kernel()] })
- * await g.apply([{ entity: { eid: 'w1' }, completed: {} }])
- * ```
  */
+/// let { loadVocab, pick } = await import('@yaks/vocab')
+/// let { graph } = await import('@yaks/graph')
+/// let { ram } = await import('@yaks/ram')
+/// let { kernelDoc } = await import('@yaks/kernel')
+/// let vocab = loadVocab(pick(kernelDoc, ['completed']))
+/// let g = graph({ storage: ram(vocab), vocab, plugins: [kernel()] })
+/// await g.apply([{ entity: { eid: 'w1' }, completed: {} }])
+/// let [work] = await g.get(['w1'])
+/// work ~> { completed: { by: null } }
 export let kernel = (): Plugin => ({
   name: '@yaks/kernel',
   vocab: [kernelDoc],
