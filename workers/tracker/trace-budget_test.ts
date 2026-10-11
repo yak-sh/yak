@@ -191,24 +191,28 @@ test('queue acknowledges dropped traces without retrying or reporting and leaves
   equal(errored, 1)
 })
 
+// Signed tickets and durable storage belong to the module's door fixture.
+let statusObject = new Tracker(state(durable(), platform), {
+  TRACKER_SECRET: 'scratch',
+})
+let budgetRequest = async (scope: string, admin = false) =>
+  new Request('https://tracker.test/trace-budget', {
+    headers: {
+      authorization: 'Bearer ' +
+        await sign({
+          scope,
+          person: space,
+          admin,
+          exp: Date.now() / 1000 + 60,
+        }, 'scratch'),
+    },
+  })
+let deniedBudget = await budgetRequest(platform)
+let admittedBudget = await budgetRequest(platform, true)
 test('budget status is platform-admin only and does not boot a graph', async () => {
-  let db = durable(),
-    object = new Tracker(state(db, platform), { TRACKER_SECRET: 'scratch' })
-  let request = async (scope: string, admin = false) =>
-    new Request('https://tracker.test/trace-budget', {
-      headers: {
-        authorization: 'Bearer ' +
-          await sign({
-            scope,
-            person: space,
-            admin,
-            exp: Date.now() / 1000 + 60,
-          }, 'scratch'),
-      },
-    })
-  equal((await object.fetch(await request(platform))).status, 403)
-  equal((await object.fetch(await request(platform, true))).status, 200)
-  equal(object.tracker, undefined)
+  equal((await statusObject.fetch(deniedBudget)).status, 403)
+  equal((await statusObject.fetch(admittedBudget)).status, 200)
+  equal(statusObject.tracker, undefined)
 })
 
 test('corrupt durable reservations fail closed without writing or reporting', async () => {
