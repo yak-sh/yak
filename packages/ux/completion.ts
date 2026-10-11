@@ -35,6 +35,7 @@ export type Front = {
   watch: (query: string) => {
     value: Bundle[]
     subscribe: (fn: (rows: Bundle[]) => void) => () => void
+    close?: () => void
   }
   ent: (eid: string) => Bundle | undefined
 }
@@ -134,7 +135,11 @@ export let completion = (front: Front, opts: Opts): Controller => {
   // keystroke repaints the field it landed in and whoever reads that one.
   let seen = front.watch(`.${component}`)
   let rows = signal(seen.value)
-  let dispose = seen.subscribe((all) => rows.value = all)
+  let off = seen.subscribe((all) => rows.value = all)
+  let dispose = () => {
+    off()
+    seen.close?.()
+  }
   let held = new Map<string, ReadonlySignal<Row | undefined>>()
   // A field's row: what is typed (its draft) over its state component, and none
   // while it has neither.

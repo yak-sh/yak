@@ -191,7 +191,7 @@ let chat = chatbox(
   net,
   marks,
   folk,
-  (cmd) => net.command(cmd.name, cmd.args),
+  (cmd, submit) => net.command(cmd.name, cmd.args, submit),
 )
 addEventListener('pagehide', (e) => {
   if (!e.persisted) chat.close()

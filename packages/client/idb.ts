@@ -99,6 +99,25 @@ export let idb = (opts: IdbOpts = {}): Vault => {
         for (let eid of eids) s.delete(eid)
       }),
     clear: () => write((s) => s.clear()),
+    take: async (rows) => {
+      let changed: Saved[] = []
+      let tx = (await db()).transaction(store, 'readwrite')
+      let completed = done(tx), table = tx.objectStore(store)
+      // Reads and conditional deletes share a transaction, so an older tab's
+      // newer text can never fall between a comparison and its delete.
+      for (let row of rows) {
+        let req = table.get(row.eid) as IDBRequest<Saved | undefined>
+        req.onsuccess = () => {
+          let current = req.result
+          if (!current) return
+          if (JSON.stringify(current) == JSON.stringify(row)) {
+            table.delete(row.eid)
+          } else changed.push(current)
+        }
+      }
+      await completed
+      return changed
+    },
   }
 }
 

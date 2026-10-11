@@ -37,6 +37,7 @@ export let drafts: Drafts = {
   text: (place) => desked().text(place),
   type: (place, text) => desked().type(place, text),
   spend: (place, also) => desked().spend(place, also),
+  restore: (place, text, over) => desked().restore(place, text, over),
 }
 
 type Box = HTMLInputElement | HTMLTextAreaElement
@@ -49,7 +50,7 @@ export let useDraft = (
 ): {
   text: string
   sync: (el: Box) => void
-  spend: (also?: Bundle[]) => void | false | 0
+  spend: (also?: Bundle[]) => void | false | 0 | Promise<boolean>
 } => {
   let text = key ? drafts.text(key) : ''
   useLayoutEffect(() => {

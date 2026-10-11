@@ -384,6 +384,25 @@ A **saved entity** carries the persistence shape (`Saved`), such as
 this shape; the vault selects local components, and the wire vault selects
 server components.
 
+`idb()` and `stash()` also implement the optional `take(saved)` operation for
+moving saved entities to another store. After the destination acknowledges the
+write, `take` deletes exactly those source snapshots in one transaction and
+returns source rows changed meanwhile. Import those changes before trying again.
+A custom vault without `take` must keep its migration sources.
+
+```ts
+import { stash } from '@yaks/client'
+import { equal } from '@yaks/testing'
+
+const original = { eid: 'draft', comps: { draft: { text: 'first' } } }
+const newer = { eid: 'draft', comps: { draft: { text: 'first, then more' } } }
+const source = stash([original])
+await source.save([newer])
+equal(await source.take!([original]), [newer])
+equal(await source.take!([newer]), [])
+equal(await source.load(), [])
+```
+
 This example uses an IndexedDB implementation in memory so it runs outside a
 browser too. `keep()` attaches a vault to a graph; `client()` normally does that
 for you. `localComps()` selects exactly the components the vault persists.

@@ -4,6 +4,8 @@ import { assert, assertEquals, assertThrows } from '@std/assert'
 import { FakeTime } from '@std/testing/time'
 import { pass } from './clock_fixture.ts'
 import { client } from '@yaks/client'
+import { docs as invocationDocs } from '@yaks/tools/vocab'
+import { toolEid } from '@yaks/tools'
 import { connect, vocabulary } from './net.ts'
 import { seedDesigns } from './designs_fixture.ts'
 import words from './vocab.json' with { type: 'json' }
@@ -229,12 +231,10 @@ import { rows as figureSeeds } from './figures_fixture.ts'
 
 test('spawn command sends no obsolete player input even with a selected hero', async () => {
   seedDesigns()
-  let before = globalThis.fetch
-  let sent: unknown[] = []
   let socket = pair().client
   let page = connect(
     new URL('https://example.test/vale/api/'),
-    loadVocab([words, core, builderDoc]),
+    loadVocab([words, core, builderDoc, ...invocationDocs]),
     {
       connect: () => socket,
       fetch: () => Response.json([]),
@@ -244,17 +244,35 @@ test('spawn command sends no obsolete player input even with a selected hero', a
   try {
     let net = page.world()
     net.choose('hero')
-    globalThis.fetch = (_url, init) => {
-      sent.push(JSON.parse(String(init?.body)))
-      return Promise.resolve(Response.json({ text: 'Done.' }))
-    }
-    await net.command('spawn', { beast: 'a large polar bear' })
-    assertEquals(sent, [{
-      name: 'spawn',
-      args: { beast: 'a large polar bear' },
-    }])
+    socket.emit('open')
+    let text = await net.command(
+      'spawn',
+      { beast: 'a large polar bear' },
+      (bundles) => {
+        let row = bundles[0]
+        assertEquals(row.call, {
+          to: toolEid('spawn'),
+          args: { beast: 'a large polar bear' },
+        })
+        let ask = (socket.sent as { id: string; subscribe?: string }[]).find((
+          frame,
+        ) => frame.subscribe?.includes(`.result.call=${row.entity.eid}`))!
+        socket.emit(
+          'message',
+          JSON.stringify({
+            id: ask.id,
+            bundles: [{
+              entity: { eid: 'answer' },
+              result: { call: row.entity.eid },
+              content: { body: 'Done.' },
+            }],
+          }),
+        )
+        return Promise.resolve(true)
+      },
+    )
+    assertEquals(text, 'Done.')
   } finally {
-    globalThis.fetch = before
     page.close()
   }
 })

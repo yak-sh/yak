@@ -49,6 +49,11 @@ A spend keeps its emptied text in the stash until its write is accepted, even
 while the person types the next draft. A refusal or an unknown transport outcome
 restores those words; a reload recovers them from the stash.
 
+`spend` resolves to `true` on acknowledgement or `false` on refusal or an
+unknown outcome, which is also passed to `report`. `restore(place, text, over)`
+imports preserved text from another source, merging its changes over `over`
+(empty by default) with the current draft.
+
 `client` is anything with a `mutate` answered by the server-applied bundles and
 a `watch`: a @yaks/client `client()` is one. `by` is read reactively; while it
 is unknown, typing is kept and written once it is.

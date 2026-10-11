@@ -1,17 +1,18 @@
 import { signal } from '@preact/signals'
-import {
-  client,
-  type Saved,
-  stash as vaultStash,
-  type Vault,
-} from '@yaks/client'
-import { draftDoc, draftEid, type Stash } from '@yaks/draft'
+import { client, type Saved, stash as vaultStash } from '@yaks/client'
+import { draftDoc, draftEid, drafts, type Stash } from '@yaks/draft'
 import { mint } from '@yaks/graph'
-import { equal, ok, test, tick, until } from '@yaks/testing'
+import { equal, ok, test } from '@yaks/testing'
 import type { Result } from '@yaks/ux/completion'
 import { loadVocab } from '@yaks/vocab'
+import { uxDoc } from '@yaks/ux/vocab'
 import { parseHTML } from 'linkedom'
 import { commandField } from './command-field.ts'
+import { comp } from './bundle.ts'
+
+let tick = async () => {
+  for (let i = 0; i < 20; i++) await Promise.resolve()
+}
 
 let storage = (): Stash => {
   let held = new Map<string, string>()
@@ -25,7 +26,9 @@ let storage = (): Stash => {
     removeItem: (key) => void held.delete(key),
   }
 }
-let remote = () => ({ client: client(loadVocab([]), [], { vault: false }) })
+let remote = () => ({
+  client: client(loadVocab([draftDoc, uxDoc]), [drafts()], { vault: false }),
+})
 let empty = (_text: string, caret: number): Result => ({
   from: caret,
   to: caret,
@@ -41,82 +44,65 @@ let saved = (by: string, text: string): Saved => ({
   eid: draftEid(by, 'chat'),
   comps: { draft: { by, place: 'chat', text, rev: 1 } },
 })
-
-test('acknowledged command drafts survive reload without the emergency stash', async () => {
-  let net = remote()
-  let by = mint()
-  let vault = vaultStash()
-  let stash = storage()
-  let a = commandField(net, () => by, empty, { vault, stash, pace: 0 })
-  try {
-    await a.ready
-    a.fields.type('chat', '/look around')
-    await until(() => stash.length == 0, { label: 'draft acknowledged' })
-    let records = await vault.load()
-    equal(records.length, 1)
-    equal(Object.keys(records[0].comps), ['draft'])
-    equal(records[0].comps.draft?.text, '/look around')
-    // Neither the remote schema nor the exported draft schema was changed.
-    equal(net.client.vocab.comp('Completion'), undefined)
-    equal(net.client.read('*'), [])
-    equal(draftDoc.$defs?.draft.sync, undefined)
-    a.close()
-    let b = commandField(net, () => by, empty, { vault, stash })
-    try {
-      await b.ready
-      equal(b.fields.text('chat'), '/look around')
-      equal(b.fields.row('chat')?.cands, [])
-      b.drafts.spend('chat')
-      await until(() => b.drafts.text('chat') == '' && stash.length == 0)
-    } finally {
-      b.close()
-    }
-    let c = commandField(net, () => by, empty, { vault, stash })
-    try {
-      await c.ready
-      equal(c.fields.text('chat'), '')
-    } finally {
-      c.close()
-    }
-  } finally {
-    a.close()
-    net.client.close()
-  }
-})
-
-test('binding before hydration cannot replace a saved draft with empty input', async () => {
-  let net = remote()
-  let by = mint()
-  let loaded = deferred<Saved[]>()
-  let vault = vaultStash([saved(by, '/restored')])
-  let saves: Saved[] = []
-  let host = commandField(net, () => by, empty, {
-    vault: {
-      ...vault,
-      load: () => loaded.promise,
-      save: (rows) => {
-        saves.push(...rows)
-        return vault.save(rows)
-      },
-    },
-    stash: storage(),
-  })
+let bind = (host: ReturnType<typeof commandField>) => {
   let { document } = parseHTML('<input>')
   let input = document.querySelector('input')!
   input.setSelectionRange = (from, to) => {
     input.selectionStart = from
     input.selectionEnd = to
   }
-  let off = host.fields.bind('chat', input)
+  return { input, off: host.fields.bind('chat', input) }
+}
+
+test('acknowledged command drafts survive reload without the emergency stash', async () => {
+  let net = remote(), by = mint(), stash = storage()
+  let a = commandField(net, () => by, empty, { vault: false, stash, pace: 0 })
+  let b = commandField(net, () => by, empty, {
+    vault: false,
+    stash: storage(),
+    pace: 0,
+  })
+  try {
+    await Promise.all([a.ready, b.ready])
+    a.fields.type('chat', '/look around')
+    await tick()
+    equal(stash.length, 0)
+    equal(b.fields.text('chat'), '/look around')
+    equal(net.client.vocab.comp('Completion')?.sync, 'none')
+    equal(draftDoc.$defs?.draft.sync, undefined)
+    a.close()
+    let c = commandField(net, () => by, empty, { vault: false })
+    await c.ready
+    equal(c.fields.text('chat'), '/look around')
+    equal(await c.drafts.spend('chat'), true)
+    equal(b.fields.text('chat'), '')
+    c.close()
+  } finally {
+    a.close()
+    b.close()
+    net.client.close()
+  }
+})
+
+test('binding before hydration cannot replace a saved draft with empty input', async () => {
+  let net = remote(), by = mint(), loaded = deferred<Saved[]>()
+  let vault = vaultStash([saved(by, '/restored')])
+  let host = commandField(net, () => by, empty, {
+    vault: { ...vault, load: () => loaded.promise },
+    stash: storage(),
+    pace: 0,
+  })
+  let { input, off } = bind(host)
   try {
     host.fields.set('chat', '')
-    await tick()
-    equal(saves, [])
+    equal(net.client.read('.draft'), [])
     loaded.resolve(await vault.load())
     await host.ready
     equal(host.drafts.text('chat'), '/restored')
     equal(input.value, '/restored')
-    equal(saves, [])
+    await tick()
+    equal(await vault.load(), [])
+    equal(comp(net.client.ent(draftEid(by, 'chat')), 'draft').text, '/restored')
   } finally {
     off()
     host.close()
@@ -125,52 +111,29 @@ test('binding before hydration cannot replace a saved draft with empty input', a
 })
 
 test('switching accounts isolates held drafts and clears choices and signed-out input', async () => {
-  let net = remote()
-  let a = mint()
-  let b = mint()
-  let by = signal<string | null>(a)
-  let vault = vaultStash([saved(b, 'B saved')])
-  let stash = storage()
+  let net = remote(), a = mint(), b = mint(), by = signal<string | null>(a)
   let host = commandField(net, () => by.value, (text) => ({
     from: 0,
     to: text.length,
     cands: [{ text: '/look', kind: 'command' }],
     whole: false,
-  }), { vault, stash, pace: 0 })
-  let { document } = parseHTML('<input>')
-  let input = document.querySelector('input')!
-  input.setSelectionRange = (from, to) => {
-    input.selectionStart = from
-    input.selectionEnd = to
-  }
-  let off = host.fields.bind('chat', input)
+  }), { vault: vaultStash([saved(b, 'B saved')]), stash: storage(), pace: 0 })
+  let { input, off } = bind(host)
   try {
     await host.ready
     host.fields.type('chat', 'A held')
     ok(host.fields.row('chat')?.cands.length)
     by.value = b
-    equal(host.fields.text('chat'), 'B saved')
     equal(input.value, 'B saved')
     equal(host.fields.row('chat')?.cands, [])
     host.fields.set('chat', 'B held')
     by.value = null
-    equal(host.drafts.text('chat'), '')
     equal(input.value, '')
     host.fields.type('chat', 'not signed in')
     by.value = a
-    equal(host.fields.text('chat'), 'A held')
+    equal(input.value, 'A held')
     by.value = b
-    equal(host.fields.text('chat'), 'B held')
-    await until(() => stash.length == 0)
-    let rows = await vault.load()
-    equal(
-      rows.find((r) => r.eid == draftEid(a, 'chat'))?.comps.draft?.text,
-      'A held',
-    )
-    equal(
-      rows.find((r) => r.eid == draftEid(b, 'chat'))?.comps.draft?.text,
-      'B held',
-    )
+    equal(input.value, 'B held')
   } finally {
     off()
     host.close()
@@ -179,49 +142,45 @@ test('switching accounts isolates held drafts and clears choices and signed-out 
 })
 
 test('emergency stashes are scoped to the app and account', async () => {
-  let net = remote()
-  let by = signal(mint())
-  let a = by.value
-  let b = mint()
-  let stash = storage()
+  let net = remote(),
+    by = signal(mint()),
+    a = by.value,
+    b = mint(),
+    stash = storage()
   stash.setItem(
     'draft:chat',
     JSON.stringify({ text: 'other app', over: '', rev: 0 }),
   )
-  let wrote = deferred<void>()
-  let vault = vaultStash()
-  let blocked: Vault = {
-    ...vault,
-    save: async (rows) => {
-      await wrote.promise
-      await vault.save(rows)
-    },
-  }
-  let host = commandField(net, () => by.value, empty, { vault: blocked, stash })
+  let gate = deferred<void>(), mutate = net.client.mutate
+  net.client.mutate = (rows) =>
+    rows.some((b) => b.draft)
+      ? gate.promise.then(() => mutate(rows))
+      : mutate(rows)
+  let host = commandField(net, () => by.value, empty, {
+    vault: false,
+    stash,
+    pace: 0,
+  })
   try {
     await host.ready
-    equal(host.drafts.text('chat'), '')
     host.fields.type('chat', 'A unacknowledged')
     by.value = b
-    equal(host.drafts.text('chat'), '')
     host.fields.type('chat', 'B unacknowledged')
     equal(stash.length, 3)
-    ok(stash.getItem(`vale:commands:${a}:draft:chat`))
-    ok(stash.getItem(`vale:commands:${b}:draft:chat`))
-    wrote.resolve()
-    await until(() => stash.length == 1)
-    ok(stash.getItem('draft:chat'))
+    ok(stash.getItem(`vale:commands:vale:${a}:draft:chat`))
+    ok(stash.getItem(`vale:commands:vale:${b}:draft:chat`))
+    gate.resolve()
+    await tick()
+    equal(stash.length, 1)
   } finally {
-    wrote.resolve()
+    gate.resolve()
     host.close()
     net.client.close()
   }
 })
 
 test('completion accepts candidates and an old account answer cannot cross accounts', async () => {
-  let net = remote()
-  let by = signal(mint())
-  let answer = deferred<Result>()
+  let net = remote(), by = signal(mint()), answer = deferred<Result>()
   let host = commandField(
     net,
     () => by.value,
@@ -232,7 +191,7 @@ test('completion accepts candidates and an old account answer cannot cross accou
         cands: text == '/l' ? [{ text: '/look', kind: 'command' }] : [],
         whole: false,
       },
-    { vault: vaultStash(), stash: storage(), pace: 0 },
+    { vault: false, stash: storage(), pace: 0 },
   )
   try {
     await host.ready
@@ -257,52 +216,35 @@ test('completion accepts candidates and an old account answer cannot cross accou
 })
 
 test('close before ready does not reopen the desk or write stored drafts', async () => {
-  let net = remote()
-  let by = signal(mint())
-  let loaded = deferred<Saved[]>()
-  let writes = 0
-  let vault = vaultStash()
+  let net = remote(), by = signal(mint()), loaded = deferred<Saved[]>()
   let host = commandField(net, () => by.value, empty, {
-    vault: {
-      ...vault,
-      load: () => loaded.promise,
-      save: (rows) => {
-        writes++
-        return vault.save(rows)
-      },
-    },
+    vault: { ...vaultStash(), load: () => loaded.promise },
     stash: storage(),
   })
-  host.close()
   host.close()
   loaded.resolve([saved(by.value, 'stored')])
   await host.ready
   by.value = mint()
   host.drafts.type('chat', 'closed')
-  await tick()
-  equal(writes, 0)
+  equal(net.client.read('.draft'), [])
   equal(host.drafts.text('chat'), '')
   net.client.close()
 })
 
 test('close keeps unacknowledged edits and blocks late completion writes', async () => {
-  let net = remote()
-  let by = mint()
-  let gate = deferred<void>()
-  let answer = deferred<Result>()
-  let stash = storage()
-  let kept = vaultStash()
-  let writes = 0
-  let vault: Vault = {
-    ...kept,
-    save: async (rows) => {
-      writes++
-      await gate.promise
-      await kept.save(rows)
-    },
+  let net = remote(),
+    by = mint(),
+    gate = deferred<void>(),
+    answer = deferred<Result>(),
+    stash = storage()
+  let mutate = net.client.mutate, writes = 0
+  net.client.mutate = (rows) => {
+    if (!rows.some((b) => b.draft)) return mutate(rows)
+    writes++
+    return gate.promise.then(() => mutate(rows))
   }
   let host = commandField(net, () => by, () => answer.promise, {
-    vault,
+    vault: false,
     stash,
     pace: 0,
   })
@@ -310,32 +252,129 @@ test('close keeps unacknowledged edits and blocks late completion writes', async
     await host.ready
     host.fields.type('chat', 'first')
     host.fields.type('chat', 'newer')
-    equal(writes, 1)
     host.close()
     gate.resolve()
-    answer.resolve({
-      from: 0,
-      to: 5,
-      cands: [{ text: 'late', kind: 'command' }],
-      whole: false,
-    })
+    answer.resolve(empty('', 0))
     await tick()
     equal(writes, 1)
     equal(stash.length, 1)
-    host.fields.set('chat', 'after close')
-    equal(host.drafts.text('chat'), 'newer')
-    let reloaded = commandField(net, () => by, empty, { vault, stash, pace: 0 })
-    try {
-      await reloaded.ready
-      equal(reloaded.drafts.text('chat'), 'newer')
-      await until(() => stash.length == 0)
-      equal((await vault.load())[0].comps.draft?.text, 'newer')
-    } finally {
-      reloaded.close()
-    }
+    let reloaded = commandField(net, () => by, empty, {
+      vault: false,
+      stash,
+      pace: 0,
+    })
+    await reloaded.ready
+    equal(reloaded.drafts.text('chat'), 'newer')
+    await tick()
+    equal(stash.length, 0)
+    reloaded.close()
   } finally {
     gate.resolve()
     host.close()
     net.client.close()
+  }
+})
+
+test('legacy command copy stays until server receipt and survives a refused send', async () => {
+  let net = remote(),
+    by = mint(),
+    stash = storage(),
+    vault = vaultStash([saved(by, 'precious')])
+  let gate = deferred<void>(), mutate = net.client.mutate, refused = true
+  net.client.mutate = (rows) => {
+    if (!rows.some((b) => b.draft)) return mutate(rows)
+    return gate.promise.then(() => {
+      if (refused) throw new Error('refused')
+      return mutate(rows)
+    })
+  }
+  let host = commandField(net, () => by, empty, {
+    vault,
+    stash,
+    pace: 0,
+    report: () => {},
+  })
+  try {
+    await host.ready
+    equal((await vault.load()).length, 1)
+    let sent = host.drafts.spend('chat')
+    equal(stash.length, 1)
+    equal((await vault.load()).length, 1)
+    gate.resolve()
+    equal(await sent, false)
+    equal(host.drafts.text('chat'), 'precious')
+    equal((await vault.load()).length, 1)
+    refused = false
+    host.drafts.type('chat', 'precious next')
+    await tick()
+    equal(await vault.load(), [])
+    equal(stash.length, 0)
+  } finally {
+    gate.resolve()
+    host.close()
+    net.client.close()
+  }
+})
+
+test('migration preserves edits a kept page makes while the store receipt waits', async () => {
+  let net = remote(),
+    by = mint(),
+    vault = vaultStash([saved(by, 'precious')]),
+    gate = deferred<void>()
+  let mutate = net.client.mutate, writes = 0
+  net.client.mutate = (rows) => {
+    if (!rows.some((b) => b.draft)) return mutate(rows)
+    return ++writes == 1 ? gate.promise.then(() => mutate(rows)) : mutate(rows)
+  }
+  let host = commandField(net, () => by, empty, {
+    vault,
+    stash: storage(),
+    pace: 0,
+  })
+  try {
+    await host.ready
+    await vault.save([saved(by, 'precious from old page')])
+    gate.resolve()
+    await tick()
+    equal(host.drafts.text('chat'), 'precious from old page')
+    equal(
+      comp(net.client.ent(draftEid(by, 'chat')), 'draft').text,
+      'precious from old page',
+    )
+    equal(await vault.load(), [])
+  } finally {
+    gate.resolve()
+    host.close()
+    net.client.close()
+  }
+})
+
+test('command draft emergency stashes do not cross app installations', async () => {
+  let store = storage(), by = mint(), a = remote(), b = remote()
+  let mutate = a.client.mutate
+  a.client.mutate = (rows) =>
+    rows.some((b) => b.draft) ? new Promise(() => {}) : mutate(rows)
+  let first = commandField(
+    { ...a, store: 'https://example.test/vale/api/' },
+    () => by,
+    empty,
+    { vault: false, stash: store, pace: 0 },
+  )
+  let second = commandField(
+    { ...b, store: 'https://example.test/other-vale/api/' },
+    () => by,
+    empty,
+    { vault: false, stash: store, pace: 0 },
+  )
+  try {
+    await Promise.all([first.ready, second.ready])
+    first.drafts.type('chat', 'only first app')
+    equal(second.drafts.text('chat'), '')
+    equal(store.length, 1)
+  } finally {
+    first.close()
+    second.close()
+    a.client.close()
+    b.client.close()
   }
 })

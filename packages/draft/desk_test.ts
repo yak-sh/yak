@@ -284,3 +284,19 @@ test('a discard keeps what another interface typed meanwhile', async () => {
   await b.flush()
   assertEquals([a.text('p'), b.text('p')], ['b', 'b'])
 })
+
+test('restoring another draft source preserves subsequent typing', async () => {
+  let s = store(), d = desk(s, { by: () => jo, pace: 0 })
+  try {
+    d.type('command', 'ship it')
+    await Promise.resolve()
+    assertEquals(await d.spend('command'), true)
+    d.type('command', 'next')
+    d.restore('command', 'ship it')
+    assertEquals(d.text('command').includes('ship it'), true)
+    assertEquals(d.text('command').includes('next'), true)
+  } finally {
+    d.close()
+    s.close()
+  }
+})

@@ -43,6 +43,7 @@ export type Client = {
   watch: (query: string) => {
     value: Bundle[]
     subscribe: (fn: (rows: Bundle[]) => void) => () => void
+    close?: () => void
   }
 }
 
@@ -62,7 +63,10 @@ export type Drafts = {
   type: (place: string, text: string) => void
   /** it was sent, or discarded: empty it at once, in one batch with `also`
    * (the send it went into) */
-  spend: (place: string, also?: Bundle[]) => void
+  spend: (place: string, also?: Bundle[]) => Promise<boolean>
+  /** Restore text from another source, preserving subsequent typing.
+   * `over` is the source text already imported (default: empty). */
+  restore: (place: string, text: string, over?: string) => void
 }
 
 /** What a desk is bound with. */
@@ -213,11 +217,15 @@ export let desk = (
   }
 
   let forward = (bundles: Bundle[]) => {
-    if (!bundles.length) return
+    if (!bundles.length) return Promise.resolve(true)
     try {
-      Promise.resolve(client.mutate(bundles)).catch((err) => opts.report?.(err))
+      return Promise.resolve(client.mutate(bundles)).then(() => true, (err) => {
+        opts.report?.(err)
+        return false
+      })
     } catch (err) {
       opts.report?.(err)
+      return Promise.resolve(false)
     }
   }
 
@@ -240,7 +248,7 @@ export let desk = (
     hold(place, { ...h, flying: n, sent: h.local, left: Date.now() })
     let fail = (err: unknown) => {
       opts.report?.(err)
-      if (closed) return
+      if (closed) return false
       let text = recovery.get(place)?.get(n)
       recovery.get(place)?.delete(n)
       step(place, (h) => ({
@@ -250,9 +258,10 @@ export let desk = (
         base: text == null ? h.base : '',
         local: text == null ? h.local : merge('', text, h.local),
       }))
+      return false
     }
     try {
-      Promise.resolve(client.mutate([
+      return Promise.resolve(client.mutate([
         ...also,
         ...eid
           ? [{
@@ -275,11 +284,11 @@ export let desk = (
           try {
             let copy = stashed.get(place)
             if (copy == null || opts.stash?.getItem(STASH + place) !== copy) {
-              return
+              return true
             }
           } catch (error) {
             opts.report?.(error)
-            return
+            return true
           }
         }
         recovery.get(place)?.delete(n)
@@ -291,9 +300,10 @@ export let desk = (
             : next
         if (closed) keep(place, accept(get(place)))
         else step(place, accept)
+        return true
       }, fail)
     } catch (err) {
-      fail(err)
+      return Promise.resolve(fail(err))
     }
   }
 
@@ -345,7 +355,10 @@ export let desk = (
       hear(watch.value)
       let off = watch.subscribe(hear)
       for (let place of held.keys()) schedule(place)
-      return off
+      return () => {
+        off()
+        watch.close?.()
+      }
     })
   })
 
@@ -358,8 +371,14 @@ export let desk = (
       if (!behind(h) && !h.local) {
         return forward(also)
       }
-      send(place, also, h.local)
+      return send(place, also, h.local)
     },
+    restore: (place, text) =>
+      step(place, (h) => ({
+        ...h,
+        local: merge('', text, h.local),
+        stuck: false,
+      })),
     close: () => {
       closed = true
       stop()

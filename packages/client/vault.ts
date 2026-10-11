@@ -60,6 +60,9 @@ export type Vault = {
   drop: (eids: Eid[]) => Promise<void>
   /** forget everything — a sign-out, or data this build cannot read */
   clear: () => Promise<void>
+  /** Drain exact snapshots atomically; return source rows changed meanwhile.
+   * An older implementation can omit this and must retain migration sources. */
+  take?: (rows: Saved[]) => Promise<Saved[]>
 }
 
 /** This browser's components, connected to a graph: the plugin that does the
@@ -96,6 +99,16 @@ export let stash = (seed: Saved[] = []): Vault => {
     clear: () => {
       held.clear()
       return Promise.resolve()
+    },
+    take: (rows) => {
+      let changed: Saved[] = []
+      for (let row of rows) {
+        let current = held.get(row.eid)
+        if (!current) continue
+        if (JSON.stringify(current) == JSON.stringify(row)) held.delete(row.eid)
+        else changed.push(current)
+      }
+      return Promise.resolve(changed)
     },
   }
 }

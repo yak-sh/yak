@@ -35,6 +35,7 @@ import { type Look, lookOf } from './make.ts'
 import { type Place, placeOf as savedPlace } from './place.ts'
 import { once as read } from './once.ts'
 import { pageDocs } from './page-state.ts'
+import { toolEid } from '@yaks/tools'
 
 export type Bundle = NonNullable<ReturnType<Client['ent']>>
 
@@ -334,20 +335,45 @@ export let connect = (
   let command = async (
     name: string,
     args: Record<string, unknown>,
+    submit?: (bundles: Bundle[]) => Promise<boolean>,
   ): Promise<string> => {
-    let r = await fetch(new URL('command', base), {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({
-        name,
-        args: { ...(hero && name != 'spawn' ? { player: hero } : {}), ...args },
-      }),
-    })
-    let answer = await r.json().catch(() => ({}))
-    if (!r.ok) {
-      throw new Error(answer.error?.message ?? `Command refused (${r.status})`)
+    let eid = crypto.randomUUID()
+    let watch = c.watch(
+      `.result.call=${eid}&?content|.output.source=${eid}&?content&?refusal&?exception`,
+    )
+    try {
+      let bundles: Bundle[] = [{
+        entity: { eid },
+        call: {
+          to: toolEid(name),
+          args: {
+            ...(hero && name != 'spawn' ? { player: hero } : {}),
+            ...args,
+          },
+        },
+      }]
+      if (submit) {
+        if (!await submit(bundles)) {
+          throw new Error('Command was not acknowledged. Your draft is kept.')
+        }
+      } else await c.mutate(bundles)
+      return await new Promise<string>((resolve, reject) => {
+        let off = () => {}
+        let answer = (rows: Bundle[]) => {
+          let row = rows.find((b) => b.result)
+          if (!row) return
+          off()
+          let text = str(comp(row, 'content').body) || `${name} completed.`
+          if (rows.some((b) => b.refusal || b.exception)) {
+            reject(new Error(text))
+          } else resolve(text)
+        }
+        off = watch.subscribe(answer)
+        answer(watch.value)
+      })
+    } finally {
+      watch.close()
     }
-    return answer.text || `${name} completed.`
   }
 
   let glimpsed = new Map<string, Hero | null>()
@@ -379,6 +405,7 @@ export let connect = (
 
   let net = {
     client: c,
+    store: base.href,
     now,
     designs,
     /** Keep the world rows and moving players near this point. */

@@ -102,3 +102,14 @@ test('a wire-only write never touches the vault', async () => {
   assertEquals(touched, 0)
   c.close()
 })
+
+test('draining a vault only deletes the source snapshot the destination took', async () => {
+  let old = { eid: 'draft', comps: { draft: { text: 'old' } } }
+  let newer = { ...old, comps: { draft: { text: 'newer' } } }
+  let vault = stash([old])
+  await vault.save([newer])
+  assertEquals(await vault.take!([old]), [newer])
+  assertEquals(await vault.load(), [newer])
+  assertEquals(await vault.take!([newer]), [])
+  assertEquals(await vault.load(), [])
+})
