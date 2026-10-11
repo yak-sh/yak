@@ -45,7 +45,9 @@ assertion.
   `*_test.ts` file sits beside its subject.
 - A small example beside the code is often the whole test: a `///` doctest
   line in the module, or a fenced `ts` block in a README or doc comment. Both
-  run on the deno platform; a block marked `ts ignore` does not.
+  run on the deno platform; a block marked `ts ignore` does not. An example's
+  setup is timed too: keep it small, put costly fixtures in test files, and run
+  `test:budget` on the package so README examples are measured as well.
 - A graph over `:memory:` or @yaks/ram is a value, not a boot, so most tests
   run at a pure seam, in memory. When RAM lacks something a test needs,
   @yaks/ram gets it (M-39498).

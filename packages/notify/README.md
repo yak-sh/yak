@@ -38,34 +38,24 @@ declares them, so an empty identity created for a Message-ID reference does not
 become the thread root. `@yaks/notify/vocab` also exports `docs: [notifyDoc]`
 for plugin loaders. There are no tools or effect handlers here.
 
-```ts
-import { notifyDoc } from '@yaks/notify'
-import { markAttention } from '@yaks/notify/attention'
-import { kernelDoc } from '@yaks/kernel'
-import { equal } from '@yaks/testing'
-import { loadVocab } from '@yaks/vocab'
-import { graph, mint } from '@yaks/graph'
-import { ram } from '@yaks/ram'
+To refresh the mark on an existing subscription, apply the bundles returned by
+`attention` to that subscription's eid:
 
-const vocab = loadVocab([notifyDoc, kernelDoc])
-const g = graph({ vocab, storage: ram(vocab) })
-const reader = mint()
-const release = mint()
-await g.apply([
-  {
-    entity: { eid: 'release-watch' },
-    subscription: { actor: reader, target: release, mode: 'watch' },
-  },
+```ts
+import { attention } from '@yaks/notify'
+import { equal } from '@yaks/testing'
+
+const patches = attention('release-watch', 'opened')
+equal(patches, [
+  { entity: { eid: 'release-watch' }, opened: null },
+  { entity: { eid: 'release-watch' }, opened: {} },
 ])
-await g.apply(await markAttention(g, reader, release, 'opened'))
-const [attention] = await g.get(['release-watch'])
-equal(attention.subscription?.mode, 'watch')
-equal(!!attention.opened, true)
-equal((await g.get([release]))[0]?.opened, undefined)
 ```
 
-The example stores data only in memory. Use a persistent storage adapter to
-retain subscriptions across restarts.
+The first patch clears the previous mark; the second gets a fresh server stamp.
+When the subscription's eid is unknown, use
+`await graph.apply(await markAttention(graph, reader, release, 'opened'))`. This
+finds or creates the actor/target row while preserving its watch/mute mode.
 
 ## Compatibility
 
