@@ -41,7 +41,7 @@ import type { Env } from './env.ts'
 import { type Answer, page, type Plugin } from './plugin.ts'
 import { APP, inApp, type Row, SPACE as SPACE_ARG, worded } from './tool.ts'
 import { url as appUrl } from './directory.ts'
-import { caught } from './sentry.ts'
+import { caught } from './defects.ts'
 
 /** How long Cloudflare keeps a data point. Said in one place. */
 export let KEPT_DAYS = 90

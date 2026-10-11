@@ -1,133 +1,94 @@
-// The platform's scoped SDK events enter the shared reporter and durable intake.
+// Platform catches deliver failures and bounded repeat counts through the
+// tracker's queue interface, with invocation context kept apart.
 import { clock, equal, ok, test } from '@yaks/testing'
-import { ServerRuntimeClient, withScope } from '@sentry/core'
-import type { Bundle } from '@yaks/graph'
-import { Refused } from '@yaks/graph'
-import type { SentryEvent } from '@yaks/tracker/sentry'
+import { type Bundle, Refused } from '@yaks/graph'
+import { capture } from '@yaks/tracker/report'
 import { batch } from '../tracker/queue.ts'
 import { platform } from '../tracker/core.ts'
-import { caught, defect, delivery, options, sample } from './sentry.ts'
+import { caught, defect, delivery, within } from './defects.ts'
 
-let event = (message = 'storm') =>
-  sample({
-    type: undefined,
-    tags: { space: 'throwaway', app: 'probe', request_id: 'request' },
-    exception: { values: [{ type: 'TypeError', value: message }] },
-  })
-
-test('platform storms use the same samples and hits for Sentry and tracker', async () => {
-  let queued: Bundle[][] = []
-  let sent: SentryEvent[] = []
+let recorded = () => {
+  let rows: Bundle[][] = []
   let time = clock()
-  let sink = delivery({
+  let env = {
     ERRORS: {
-      send: (rows) => {
-        queued.push(rows)
+      send: (sample: Bundle[]) => {
+        rows.push(sample)
         return Promise.resolve()
       },
     },
-    SENTRY_DSN: 'configured',
-  }, (event) => {
-    sent.push(event)
-    return Promise.resolve()
-  }, time)
-  for (let i = 0; i < 7; i++) await sink(event())
-  equal(queued.length, 1)
+    CF_VERSION_METADATA: { id: 'deploy' },
+    ENVIRONMENT: 'staging',
+  }
+  return { rows, time, env }
+}
+
+let storm = Object.assign(new TypeError('storm'), {
+  stack: 'TypeError: storm\n    at failed (app.ts:1:1)',
+})
+
+test('platform repeats reach tracker with hit counts and catch tags', async () => {
+  let { rows, time, env } = recorded()
+  let sink = delivery(env, time)
+  let sample = () =>
+    capture(storm, {
+      sink,
+      tags: { space: 'throwaway', app: 'probe', request_id: 'request' },
+    })
+  for (let i = 0; i < 7; i++) await sink(sample())
+  equal(rows.length, 1)
   await time.advance(10_000)
-  equal(queued.length, 2)
-  equal(sent.map((e) => e.extra?.hits), [1, 6])
-  equal(
-    queued.map((rows) => (rows[0].error as { hits?: number }).hits ?? 1),
-    [1, 6],
-  )
-  for (let rows of queued) {
-    equal(batch(rows).scope, platform)
-    equal(rows[0].during, undefined)
-    equal((rows[0].error as { tags: unknown }).tags, {
+  equal(rows.map((r) => (r[0].error as { hits?: number }).hits ?? 1), [1, 6])
+  for (let sample of rows) {
+    equal(batch(sample).scope, platform)
+    equal(sample[0].during, undefined)
+    equal((sample[0].error as { tags: unknown }).tags, {
       space: 'throwaway',
       app: 'probe',
       request_id: 'request',
     })
   }
-  equal(sent[0].fingerprint, sent[1].fingerprint)
 })
 
-test('Sentry quota failure leaves tracker samples and repeat hits intact', async () => {
-  let queued: Bundle[][] = []
-  let sink = delivery(
-    {
-      ERRORS: {
-        send: (rows) => {
-          queued.push(rows)
-          return Promise.resolve()
-        },
-      },
-      SENTRY_DSN: 'configured',
-    },
-    () => Promise.reject(Error('Sentry quota exhausted')),
-    clock(),
-  )
-  await sink(event())
-  await sink(event())
-  await sink.close()
-  equal(queued.length, 2)
-  equal(batch(queued[1]).scope, platform)
+test('a caught failure counts once per invocation and refusals stay back', async () => {
+  let { rows, time, env } = recorded()
+  let error = Error('reused error')
+  for (let i = 0; i < 4; i++) {
+    await within(env, { request_id: 'invocation' }, () => {
+      caught(new Refused('no'), {})
+      defect(error, { store: 'ada/notes' })
+      caught(error, { request: 'outer catch' })
+    }, time)
+  }
+  equal(rows.length, 1)
+  await time.advance(10_000)
+  equal(rows.length, 2)
+  equal((rows[1][0].error as { hits: number }).hits, 3)
+  equal(rows[0][0].error, {
+    at: (rows[0][0].error as { at: string }).at,
+    level: 'error',
+    commit: 'deploy',
+    environment: 'staging',
+    tags: { request_id: 'invocation', store: 'ada/notes' },
+  })
+  ok(rows.every((r) => batch(r).scope == platform))
 })
 
-let sdk = (() => {
-  let queued: Bundle[][] = []
-  let time = clock()
-  let configured = options({
-    ERRORS: {
-      send: (rows) => {
-        queued.push(rows)
-        return Promise.resolve()
-      },
-    },
+test('parallel invocation tags remain isolated and escaping failures reach tracker', async () => {
+  let { rows, time, env } = recorded()
+  let resume = Promise.withResolvers<void>()
+  let first = within(env, { request_id: 'first' }, async () => {
+    await resume.promise
+    caught(Error('first failure'), { request: 'first catch' })
   }, time)
-  let processed = Promise.withResolvers<void>()
-  let captures = 0
-  let client = new ServerRuntimeClient({
-    ...configured,
-    beforeSend: async (event, hint) => {
-      let result = await configured.beforeSend(event, hint)
-      if (++captures == 4) processed.resolve()
-      return result
-    },
-    integrations: [],
-    normalizeDepth: 0,
-    stackParser: () => [],
-  })
-  client.init()
-  let refusal = new Refused('no')
-  let errors = Array.from(
-    { length: 4 },
-    () =>
-      Object.assign(new TypeError('queue without Sentry'), {
-        stack: 'TypeError: queue without Sentry\n    at probe (probe.ts:1:1)',
-      }),
-  )
-  return { queued, time, processed, client, refusal, errors }
-})()
-
-test('SDK catches collect into the queue without a Sentry DSN and omit refusals', async () => {
-  let { queued, time, processed, client, refusal, errors } = sdk
-  await withScope(async (scope) => {
-    scope.setClient(client)
-    try {
-      for (let error of errors) {
-        caught(refusal, {})
-        defect(error, { space: 'probe' })
-        caught(error, { request: 'outer catch' })
-      }
-      await processed.promise
-      equal(queued.length, 1)
-      await time.advance(10_000)
-      equal(queued.length, 2)
-      equal((queued[1][0].error as { hits: number }).hits, 3)
-      ok(queued.every((rows) => batch(rows).scope == platform))
-    } finally {
-      client.dispose()
-    }
-  })
+  let second = within(env, { request_id: 'second' }, () => {
+    resume.resolve()
+    return Promise.reject(Error('second failure'))
+  }, time)
+  let results = await Promise.allSettled([first, second])
+  equal(results.map((r) => r.status), ['fulfilled', 'rejected'])
+  equal(rows.map((r) => (r[0].error as { tags: unknown }).tags), [
+    { request_id: 'first', request: 'first catch' },
+    { request_id: 'second' },
+  ])
 })

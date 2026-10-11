@@ -42,7 +42,7 @@ import { directory, type Space, stamp, type Tunnel } from './directory.ts'
 import { itsApp, namespace, nowhere, script } from './dispatch.ts'
 import { bound, type Env } from './env.ts'
 import type { Answer } from './plugin.ts'
-import { caught } from './sentry.ts'
+import { caught } from './defects.ts'
 import { adminWho } from './identity.ts'
 import { TUNNELED } from './tunnel_door.ts'
 

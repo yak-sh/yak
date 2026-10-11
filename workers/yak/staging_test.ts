@@ -25,8 +25,7 @@ test('staging repeats the kernel bindings without production resources', () => {
   ) assertEquals(staging[key], config[key], `${key} must exist on staging`)
 
   // The same logs and traces, kept in Cloudflare. Export destinations are
-  // production's alone, like its other resources: staging names none, so its
-  // telemetry never lands in the production Sentry project.
+  // staging names no export destinations.
   let kinds = config.observability as Record<string, Record<string, unknown>>
   let own = staging.observability as Record<string, Record<string, unknown>>
   assertEquals(Object.keys(own), Object.keys(kinds))
@@ -50,6 +49,7 @@ test('staging repeats the kernel bindings without production resources', () => {
     let isolated = staging[key] as Record<string, string>[]
     assertEquals(isolated.map((r) => r.binding), live.map((r) => r.binding))
     for (let row of isolated) {
+      if (key == 'services' && row.binding == 'TRACKER') continue
       assertNotEquals(
         row[resource],
         live.find((r) => r.binding == row.binding)![resource],
@@ -70,7 +70,7 @@ test('staging repeats the kernel bindings without production resources', () => {
   let vars = staging.vars as Record<string, string>
   assertEquals(vars.APEX, 'yaks.fyi')
   assertEquals(vars.WORKER_NAME, staging.name)
-  assertEquals(vars.SENTRY_ENVIRONMENT, 'staging')
+  assertEquals(vars.ENVIRONMENT, 'staging')
   assertEquals(
     vars.DISPATCH_NAMESPACE,
     (staging.dispatch_namespaces as { namespace: string }[])[0].namespace,

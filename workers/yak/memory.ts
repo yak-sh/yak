@@ -40,7 +40,7 @@ import { meta } from './meta.ts'
 import { page, type Plugin } from './plugin.ts'
 import { titling, vouched, type Who } from './session.ts'
 import { inSpace, type Row, SPACE, str, text, worded } from './tool.ts'
-import { caught } from './sentry.ts'
+import { caught } from './defects.ts'
 
 /**
  * Ranking by meaning: the directory's vectors of the space's own memories,

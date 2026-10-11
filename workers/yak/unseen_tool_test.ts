@@ -1,11 +1,16 @@
 // The app_errors command reads an app's exception rows, including fields a
 // stored report left empty.
 import { test } from '@yaks/testing'
-import { assertObjectMatch, assertStringIncludes } from '@std/assert'
+import {
+  assertEquals,
+  assertObjectMatch,
+  assertStringIncludes,
+} from '@std/assert'
 import { appStore } from './directory.ts'
 import { KERNEL, metaOf } from './meta.ts'
 import { ADA, platform, seeded } from './serving-probe.ts'
 import { call } from './tools.ts'
+import { noted } from './unseen.ts'
 
 test('app_errors lists a break whose stored stack is null', async () => {
   using p = platform()
@@ -29,6 +34,33 @@ test('app_errors lists a break whose stored stack is null', async () => {
     { space: 'ada', app: 'cookbook' },
   )
   assertStringIncludes(listed.text, 'page /cookbook/ — failed before a stack')
+  await noted(() => {
+    throw Error('new reports must not write to the app store')
+  }, {
+    request: 'page /cookbook/new',
+    message: 'new tracked break',
+    version: 1,
+  }, { env, space, app })
+  let current = await call({ env, dir, person: ADA }, 'app_errors', {
+    space: 'ada',
+    app: 'cookbook',
+  })
+  assertStringIncludes(current.text, 'new tracked break')
+  // The legacy id and the new tracker id both remain archive arguments.
+  let ids = current.text.split('\n').map((line) => line.split(' ')[1])
+  let archived = await call({ env, dir, person: ADA }, 'app_errors', {
+    space: 'ada',
+    app: 'cookbook',
+    fixed: ids,
+  })
+  assertEquals(archived.text, 'archived 2')
+  assertEquals(
+    (await call({ env, dir, person: ADA }, 'app_errors', {
+      space: 'ada',
+      app: 'cookbook',
+    })).text,
+    'no open errors',
+  )
 })
 
 test('app_errors shows a session error from its content', async () => {

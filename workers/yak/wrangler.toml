@@ -29,7 +29,7 @@ compatibility_flags = [
 
 # Every isolate parses the whole script before it answers, a Store waking for
 # one query included, so the bundle ships minified: 4.1 MB became 1.9 MB
-# (T-37975). Names survive (wrangler's `keep_names` defaults on), so a Sentry
+# (T-37975). Names survive (wrangler's `keep_names` defaults on), so a tracker
 # frame still says which function threw; the source map goes up with the
 # deploy so Workers Logs prints a stack in the files it came from.
 minify = true
@@ -62,28 +62,18 @@ routes = [
 # latency question. Included up to 20M events a month on Workers Paid.
 #
 # This is telemetry ABOUT the platform and is not where an app's failures go:
-# those are `exception` entities in the app's own store, where the person's
-# agent reads them (unseen.ts, V-32361). A log nobody opens is not a report.
+# app failures go through the tracker intake (unseen.ts). A log nobody opens
+# is not a report.
 #
-# Logs and traces both go on to Sentry's OTLP endpoints for `yaks-app`, through
-# the destinations `sentry-logs` and `sentry-traces`. Those are account config,
-# not repo config: Workers & Pages → Observability → Destinations, holding each
-# endpoint and its `x-sentry-auth` header. Staging names neither, so its
-# telemetry stays out of the production project.
 [observability.logs]
 enabled = true
 invocation_logs = true
-destinations = ["sentry-logs"]
 
-# Workers traces: Cloudflare's own spans for every fetch, R2 read and Durable
-# Object call, nested across the Store hop. The Sentry SDK's spans cannot say
-# where a request's time went: the Workers clock stands still until I/O, so a
-# Store's synchronous SQL reads 0 ms and no span covers the hop itself. No
-# head_sampling_rate: 20M events a month are included, and past that Cloudflare
-# samples, which is what we want rather than paying for more.
+# Cloudflare's runtime spans cover fetches, R2 reads and Durable Object hops.
+# No head_sampling_rate: the included monthly events are sampled by Cloudflare
+# after the allowance, rather than expanding the platform's bill.
 [observability.traces]
 enabled = true
-destinations = ["sentry-traces"]
 
 # Under `wrangler dev` a request's URL carries the first route's hostname
 # unless told otherwise; the loopback keeps local dev a dev host (route.ts),
@@ -105,7 +95,7 @@ crons = []
 #     workersBuilds.worker --events build.failed --worker-name yak
 # Production only: staging's builds are the same builds.
 # Platform defects and triggered Store traces go to the independent tracker
-# (workers/tracker). Defects also reach Sentry after shared coalescing.
+# (workers/tracker), with bounded repeat counts.
 [[queues.producers]]
 binding = "ERRORS"
 queue = "yak-errors"
@@ -126,9 +116,8 @@ APEX = "yaks.app"
 WORKER_NAME = "yak"
 DISPATCH_NAMESPACE = "yak-apps"
 VIEWS_DATASET = "yak_views"
-# Which deploy a defect in Sentry came from (sentry.ts). A local .dev.vars that
-# sets SENTRY_DSN should set SENTRY_ENVIRONMENT=development beside it.
-SENTRY_ENVIRONMENT = "production"
+# The tracker records the environment beside each captured failure.
+ENVIRONMENT = "production"
 
 # The zone a customer's own domain is attached to as a Cloudflare for SaaS
 # custom hostname (domains.ts, T-33038) — this zone, the one every route above
@@ -426,6 +415,10 @@ entrypoint = "Site"
 # `wrangler dev` and the workerd probes, where a deploy that needs compiling is
 # refused in a sentence.
 [[services]]
+binding = "TRACKER"
+service = "yak-tracker"
+
+[[services]]
 binding = "ESBUILD"
 service = "yak-esbuild"
 
@@ -472,7 +465,7 @@ database_id = "88b2e161-99bf-4777-ab6d-b18fcf66ca95"
 # keys and point BUILDER_MODEL_PAID at an OpenAI model, and the paid build
 # speaks to OpenAI instead. BUILDER_MODEL_FREE and BUILDER_MODEL_PAID are the
 # model ids, unset meaning builder.ts's own defaults.
-# SENTRY_DSN is where defects are sent (sentry.ts); unset, nothing is sent.
+# TRACKER_SECRET signs tenant-scoped reads at the independent tracker.
 # VAULT_KEY is the key the vault above is encrypted under: 32 random bytes in
 # base64 (`openssl rand -base64 32`). Changing it strands every key already
 # kept, and every OAuth client kept in it (`yak admin client`). Unset, the
@@ -543,6 +536,10 @@ crons = []
 [env.staging.queues]
 consumers = []
 
+[[env.staging.queues.producers]]
+binding = "ERRORS"
+queue = "yak-errors"
+
 [env.staging.vars]
 APEX = "yaks.fyi"
 CF_ACCOUNT = "0f9613dfd3f0451df0bd0f12a1372ea3"
@@ -552,7 +549,7 @@ CF_ZONE = ""
 WORKER_NAME = "yak-staging"
 DISPATCH_NAMESPACE = "yak-apps-staging"
 VIEWS_DATASET = "yak_views_staging"
-SENTRY_ENVIRONMENT = "staging"
+ENVIRONMENT = "staging"
 # The Stripe sandbox's recurring Plus price (acct_1UBa7vRMiIEYfSxg), the one
 # the probes buy.
 STRIPE_PRICE = "price_1UIXRMRMiIEYfSxgOgO7xBdP"
@@ -699,6 +696,10 @@ entrypoint = "Files"
 binding = "SITE"
 service = "yak-staging"
 entrypoint = "Site"
+
+[[env.staging.services]]
+binding = "TRACKER"
+service = "yak-tracker"
 
 [[env.staging.services]]
 binding = "ESBUILD"

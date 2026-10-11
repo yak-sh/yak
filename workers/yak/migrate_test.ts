@@ -2,15 +2,11 @@
 // A Store's storage at each wake (migrate.ts), driven through the Store's own
 // doors: what the object remembers rewritten into the one shape a deploy takes
 // now, a schema that moves re-cut and refilled, and a schema that will not
-// stand refused at every door and heard by Sentry.
+// stand refused at every door and heard by the tracker.
 import { test } from '@yaks/testing'
 import { assert, assertEquals } from '@std/assert'
-import {
-  createTransport,
-  type ErrorEvent,
-  ServerRuntimeClient,
-  setCurrentClient,
-} from '@sentry/core'
+import { clock } from '@yaks/testing'
+import { within } from './defects.ts'
 import type { Bundle } from '@yaks/graph'
 import type { Wire } from '@yaks/durable-object'
 import { durable } from '../../packages/durable-object/testing.ts'
@@ -688,8 +684,28 @@ let unsatisfiable = async () => {
 
 test('a declared index the rows cannot satisfy refuses the boot', async () => {
   let ctx = await unsatisfiable()
-  await refused(newer(ctx, PLATFORM_STORE), 'skipped unique index space_slug')
+  let seen: Bundle[] = []
+  let env = {
+    ERRORS: {
+      send: (rows: Bundle[]) => {
+        seen.push(rows[0])
+        return Promise.resolve()
+      },
+    },
+  }
+  await within(
+    env,
+    {},
+    () =>
+      refused(newer(ctx, PLATFORM_STORE), 'skipped unique index space_slug'),
+    clock(),
+  )
   assertEquals(slot(ctx, 'schema'), 'older schema')
+  assertEquals(seen.length, 1)
+  assertEquals((seen[0].error as { tags: unknown }).tags, {
+    request: 'schema',
+    store: PLATFORM_STORE,
+  })
 })
 
 test('a nullable unique key is raised over older rows without one', async () => {
@@ -794,25 +810,4 @@ test('a raw index creation failure still refuses an empty store', async () => {
   }
   let now = newer(ctx, PLATFORM_STORE)
   await refused(now, 'index creation failed')
-})
-
-test('a refused boot reaches Sentry, tagged with its store', async () => {
-  let seen: ErrorEvent[] = []
-  let client = new ServerRuntimeClient({
-    dsn: 'https://key@example.ingest.sentry.io/1',
-    integrations: [],
-    stackParser: () => [],
-    transport: (o) => createTransport(o, () => Promise.resolve({})),
-    beforeSend: (e) => {
-      seen.push(e)
-      return null
-    },
-  })
-  setCurrentClient(client)
-  client.init()
-  let ctx = await unsatisfiable()
-  await refused(newer(ctx, PLATFORM_STORE), 'skipped unique index')
-  await client.flush(1000)
-  assertEquals(seen.length, 1)
-  assertEquals(seen[0].tags, { request: 'schema', store: PLATFORM_STORE })
 })

@@ -37,7 +37,7 @@ import {
 import { ADMIN } from './lib/bots.ts'
 import { recall, writing } from './lib/hops.ts'
 import { answered, KERNEL, type Meta, meta as metaStore } from './meta.ts'
-import { caught } from './sentry.ts'
+import { caught } from './defects.ts'
 import { mailFrom } from './post.ts'
 import { RESERVED, SLUG } from './route.ts'
 import { firstOf } from './router.ts'

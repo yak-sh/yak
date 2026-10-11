@@ -42,8 +42,9 @@ export type Inbound = {
 export type Env = {
   // Platform defects and triggered Store traces, through independent intake.
   ERRORS?: { send(rows: import('@yaks/graph').Bundle[]): Promise<void> }
-  SENTRY_DSN?: string
-  SENTRY_ENVIRONMENT?: string
+  ENVIRONMENT?: string
+  TRACKER?: Fetcher
+  TRACKER_SECRET?: string
   // Explicitly disable recording, primarily for isolated cost comparisons.
   STORE_TRACING?: string
   MODEL_FETCH?: typeof fetch
@@ -169,7 +170,7 @@ export type Env = {
   // Production's alone, like the queue that uses it.
   BUILD_HOOK?: string
   // User-scoped Workers CI Read token for the failed-build queue consumer.
-  // It reads the build log before reporting a safe summary to Sentry.
+  // It reads the build log before reporting a safe summary to the tracker.
   BUILD_LOG_TOKEN?: string
   // A person's own domain (domains.ts, T-33038): the yaks.app zone the
   // Cloudflare for SaaS custom hostnames are created on — not a secret, it

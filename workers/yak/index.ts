@@ -1,7 +1,7 @@
 // The kernel Worker's entry: the router (kernel.ts) as the runtime loads it.
 // What is here is what only the runtime can load — the Durable Object classes
 // each binding names, the Sandbox container, the Files, Site and Outbound
-// entrypoints, and Sentry around all of them — and nothing that decides where
+// entrypoints, and the tracker around all of them — and nothing that decides where
 // a request goes. The Store Durable Object (graph.ts) is its own module: a DO
 // may live in a different Worker from the one that binds it, and so are the
 // Wire object (stream.ts), which holds a person's open agent stream, and the
@@ -9,14 +9,9 @@
 import { waitUntil, WorkerEntrypoint } from 'cloudflare:workers'
 import { Sandbox as Workbench } from '@cloudflare/sandbox'
 import type { Caller } from '@yaks/egress'
-// @ts-types="./sentry.d.ts"
-import {
-  instrumentDurableObjectWithSentry,
-  withSentry,
-} from '@sentry/cloudflare'
 import { Builder as Built } from './build.ts'
 import { Store as Stored } from './graph.ts'
-import { options } from './sentry-runtime.ts'
+import { entry, instrument } from './defects-runtime.ts'
 import { Wire as Wired } from './stream.ts'
 import * as filePart from './files.ts'
 import { builds } from './builds.ts'
@@ -31,11 +26,11 @@ import * as sitePart from './site.ts'
 // own name, so wrangler's migration list never moves — the name is the one the
 // fleet-shaped object it replaced wore, and that object is gone (T-33807).
 //
-// Each object is wrapped for Sentry (sentry.ts): what one throws past its own
+// Each object is wrapped for tracker reporting (defects.ts): what one throws past its own
 // catch, and what it reports itself, is a defect we hear about.
-export let Store = instrumentDurableObjectWithSentry(options, Stored)
-export let Wire = instrumentDurableObjectWithSentry(options, Wired)
-export let Builder = instrumentDurableObjectWithSentry(options, Built)
+export let Store = instrument(Stored)
+export let Wire = instrument(Wired)
+export let Builder = instrument(Built)
 
 // The builder's workbench (sandbox.ts, T-34264): Cloudflare's own Sandbox
 // Durable Object, whose container the deploy builds from
@@ -72,9 +67,9 @@ export class Sandbox extends Workbench<Env> {
 // in wrangler.toml name the default entrypoint, so nothing from the internet
 // arrives here.
 //
-// Wrapped for Sentry like the objects above: an unexpected failure in this
+// Wrapped for tracker reporting like the objects above: an unexpected failure in this
 // entrypoint reaches the same reporter as one in the gateway.
-class Filed extends WorkerEntrypoint {
+export class Files extends WorkerEntrypoint {
   // The runtime sets this; `declare` names its type without emitting a field
   // that would shadow what the base class already put there. env.ts keeps the
   // Cloudflare types out of this Worker, so the base's own generic is not
@@ -82,55 +77,51 @@ class Filed extends WorkerEntrypoint {
   declare env: Env
 
   fetch(req: Request): Promise<Response> {
-    return filePart.fetch(req, this.env)
+    return entry(this.env, 'Files fetch', () => filePart.fetch(req, this.env))
   }
 }
-export let Files = withSentry(options, Filed)
 
 // Only the gateway reaches this entrypoint, and only with canonical apex
 // paths and no caller credentials. Its cache holds the public listing pages;
 // the review and identity doors remain on the uncached default entrypoint.
-class Sited extends WorkerEntrypoint {
+export class Site extends WorkerEntrypoint {
   declare env: Env
 
   fetch(req: Request): Promise<Response> {
-    return sitePart.fetch(req, this.env)
+    return entry(this.env, 'Site fetch', () => sitePart.fetch(req, this.env))
   }
 }
-export let Site = withSentry(options, Sited)
 
 // An app's worker calling out (outbound.ts): the namespace's outbound Worker,
 // yak-out (outbound/), hands each fetch back here with the CALLER dispatch.ts
 // said. Reached only through that service binding, as `Files` is through its
 // own; the routes name the default entrypoint. It answers RPC and no fetch, so
 // the cache (wrangler.toml `[cache]`) has nothing of it to hold.
-class Sending extends WorkerEntrypoint {
+export class Outbound extends WorkerEntrypoint {
   declare env: Env
 
   send(req: Request, caller: Caller): Promise<Response> {
-    return outbound(req, this.env, caller)
+    return entry(
+      this.env,
+      'Outbound send',
+      () => outbound(req, this.env, caller),
+    )
   }
 }
-export let Outbound = withSentry(options, Sending)
 
-// The Worker itself: the router's handler (kernel.ts), wrapped for Sentry
-// (sentry.ts), so an exception that escapes the router's catch, or the letter
+// The Worker itself: the router's handler (kernel.ts), wrapped for the tracker
+// (defects.ts), so an exception that escapes the router's catch, or the letter
 // door's, is a defect we hear about. The queue is Workers Builds telling us a
 // build of this Worker failed (builds.ts).
-let worker = withSentry(options, {
-  ...handler,
-  queue: builds,
-})
-
-// A letter can arrive with no context: the runtime's own letter door (the one
-// `wrangler dev` and the probe post to) calls `email` over RPC, and an object
-// export called that way is handed the env alone. The platform's email event
-// carries one, so only that door lends the module's own `waitUntil`.
-// TODO(T-37921): @sentry/cloudflare's email wrapper reads `ctx.waitUntil`
-// unguarded (instrumentEmail.js `wrapEmailHandler`); drop the loan once it
-// tolerates an absent context.
 export default {
-  ...worker,
+  fetch: (req: Request, env: Env) =>
+    entry(env, 'gateway fetch', () => handler.fetch(req, env)),
   email: (message: Inbound, env: Env, ctx?: Lent) =>
-    worker.email(message, env, ctx ?? { waitUntil }),
+    entry(
+      env,
+      'email',
+      () => handler.email(message, env, ctx ?? { waitUntil }),
+    ),
+  queue: (batch: Parameters<typeof builds>[0], env: Env) =>
+    entry(env, 'build queue', () => builds(batch, env)),
 }

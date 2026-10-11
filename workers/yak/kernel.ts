@@ -3,8 +3,8 @@
 // `fetch(req, env)` — identity.ts, mcp.ts, directory.ts, apps.ts — and the
 // router composes them by calling those handlers; a part split into its own
 // Worker later is a service binding in env.ts and no change here. Every route
-// runs inside one catch: a throw becomes an exception entity in the META
-// store and in Sentry — our code fell over, whatever app the URL named
+// runs inside one catch: a throw reaches the platform tracker — our code
+// fell over, whatever app the URL named
 // (T-33234, unseen.ts `fault`) — and a soft page, so no failure goes unseen
 // (D-32318 §Errors, V-32361). A door's deliberate no is not a failure and
 // files nothing; it is logged and returned with its 4xx, in JSON at the
@@ -79,7 +79,7 @@
 //     anything else           the front page's own file, page or api door at
 //                             that path: the space's apps own the first path
 //                             segment, the front page answers what is left
-import { caught } from './sentry.ts'
+import { caught, within } from './defects.ts'
 import { CallError } from '@yaks/tools'
 import { refused as toolRefusal } from '@yaks/tools/routes'
 import * as apps from './apps.ts'
@@ -459,8 +459,9 @@ let unmounted = (req: Request) => {
   return new Request(req, { headers })
 }
 
-// What our code threw, as an entity where we read it: the meta store, always
-// (T-33234). Awaited, so the entity exists by the time the soft page lands.
+// What our code threw, recorded where we read it: the platform tracker, always
+// (T-33234). Invocation retention queues the failure before the soft page
+// lands; the independent tracker drains that queue.
 //
 // Nothing that reaches this catch was the app's code running. An app's code
 // runs at exactly one seam — `worker.fetch` in dispatch.ts `ran` — and files
@@ -478,10 +479,9 @@ let unmounted = (req: Request) => {
 // noise; it's a bug".
 //
 // So the line carries the host, which is what names the space and the app the
-// request was on its way to, and no version: the code that broke is ours, and
-// the meta store has no version to name. No space is told: the meta store is
-// the platform's own, and this is nobody's news but ours. Sentry hears it too,
-// tagged with the space and app the route named (unseen.ts `fault`).
+// request was on its way to, and no app version: the code that broke is ours.
+// The platform tracker receives it, tagged with the space and app the route
+// named (unseen.ts `fault`), and no member stream is told about our failure.
 
 // The slice of a handler's context the letter door needs (see the default
 // export below).
@@ -666,6 +666,6 @@ let router = {
 // cookie the browser sent, whatever the router made of the request inside.
 export let handler = {
   ...router,
-  fetch: async (req: Request, env: Env): Promise<Response> =>
-    slid(req, env, await router.fetch(req, env)),
+  fetch: (req: Request, env: Env): Promise<Response> =>
+    within(env, {}, async () => slid(req, env, await router.fetch(req, env))),
 }

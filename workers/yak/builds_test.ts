@@ -1,6 +1,8 @@
 // A failed Workers Build is filed with its commit; nothing else is filed. A
 // commit's first failure is built once more, and nothing else is.
-import { test } from '@yaks/testing'
+import { clock, test } from '@yaks/testing'
+import type { Bundle } from '@yaks/graph'
+import { within } from './defects.ts'
 import {
   assertEquals,
   assertInstanceOf,
@@ -137,14 +139,37 @@ let meta = () => {
 // The builds the deploy hook is asked for, when the queue hands these events
 // over, in these batches, to one Worker.
 let rebuilt = async (...batches: Built[][]) => {
-  let env = { META: meta(), BUILD_HOOK: 'https://hook.test/main' } as Env
+  let samples: Bundle[] = []
+  let env = {
+    META: meta(),
+    BUILD_HOOK: 'https://hook.test/main',
+    ERRORS: {
+      send: (rows: Bundle[]) => {
+        samples.push(...rows)
+        return Promise.resolve()
+      },
+    },
+  } as Env
+  let time = clock()
   let asked = 0
   let fetch = globalThis.fetch
   globalThis.fetch = () => (asked++, Promise.resolve(new Response('{}')))
   try {
-    for (let batch of batches) {
-      await builds({ messages: batch.map((body) => ({ body, ack() {} })) }, env)
-    }
+    await within(env, {}, async () => {
+      for (let batch of batches) {
+        await builds(
+          { messages: batch.map((body) => ({ body, ack() {} })) },
+          env,
+        )
+      }
+    }, time)
+    // Distinct failed builds leave independently, even when their normalized
+    // summaries and stack sites match. Redelivery coalesces repeat samples.
+    assertEquals(
+      samples.length,
+      new Set(batches.flat().map((e) => broke(e)?.build)).size,
+    )
+    await time.advance(10_000)
   } finally {
     globalThis.fetch = fetch
   }
@@ -164,6 +189,9 @@ test('builds: a commit that failed is built again, once', async () => {
   // The queue delivering the same failure again, in one batch or the next.
   assertEquals(await rebuilt([event('failed'), event('failed')]), 1)
   assertEquals(await rebuilt([event('failed')], [event('failed')]), 1)
+  let other = event('failed')
+  other.payload!.buildUuid = 'build-2'
+  assertEquals(await rebuilt([event('failed'), other]), 1)
 })
 
 test('builds: a build with no commit is never built again', async () => {
@@ -178,11 +206,26 @@ test('builds: with no hook there is nothing to start', async () => {
 
 test('builds: a failed hook request does not disclose its credential', async () => {
   let was = globalThis.fetch
+  let sent: Bundle[] = []
+  let env = {
+    BUILD_HOOK: 'https://hook.test/secret',
+    ERRORS: {
+      send: (rows: Bundle[]) => {
+        sent.push(...rows)
+        return Promise.resolve()
+      },
+    },
+  } as Env
   globalThis.fetch = () => Promise.reject(new Error('https://hook.test/secret'))
   try {
     assertEquals(
-      await rebuild({ BUILD_HOOK: 'https://hook.test/secret' } as Env),
+      await within(env, {}, () => rebuild(env), clock()),
       'failed to reach deploy hook',
+    )
+    assertEquals(sent.length, 1)
+    assertEquals(
+      JSON.stringify(sent).includes('https://hook.test/secret'),
+      false,
     )
   } finally {
     globalThis.fetch = was

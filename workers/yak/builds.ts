@@ -1,11 +1,11 @@
 // What Workers Builds says happened to a build of this Worker. Its event
 // subscription writes to the `yak-builds` queue (wrangler.toml
 // `[[queues.consumers]]`), and a failed build is a fault like any other:
-// Sentry hears it, and the meta store keeps it beside every other break of
-// ours (unseen.ts). The version already live keeps serving through a
+// the tracker hears it, and the meta store keeps the retry receipt
+// (unseen.ts). The version already live keeps serving through a
 // failed build, so what breaks is only that the fix in it never arrives, and
-// nothing about the site says so. Each build is its own Sentry issue, so each
-// one is news rather than another event on an issue already seen.
+// nothing about the site says so. Each failed build is its own tracker bug,
+// so each one is news rather than another event on a bug already seen.
 //
 // The subscription asks for failures alone; anything else that arrives is
 // acknowledged unread, and so is a failed build of any branch but the one
@@ -18,15 +18,14 @@
 // and never for a build that names none: the deploy hook's own builds carry
 // an empty commit while their event still says `push_event`, so the trigger
 // source cannot tell a retry from a push, and a retry that retried its own
-// failure would never stop. The meta store holds the once: a failure is noted as the commit's own entity, on the
-// condition (`$was`) that the commit holds no break yet, so the queue
-// delivering one failure twice notes it once, and only the note that lands
-// earns the retry.
+// failure would never stop. The meta store holds the once: a receipt is noted
+// as the commit's own entity, on the condition (`$was`) that the commit holds
+// no receipt yet. Delivering one failure twice therefore notes it once, and
+// only the note that lands earns the retry.
 
-import { withScope } from '@sentry/core'
 import { Stale } from '@yaks/graph'
 import type { Env } from './env.ts'
-import { caught, defect } from './sentry.ts'
+import { caught, defect } from './defects.ts'
 import { type Breaks, exceptionOf, metaBreaks } from './unseen.ts'
 import { accountUrl } from './workers_api.ts'
 
@@ -44,7 +43,7 @@ export type Built = {
   }
 }
 
-/** A build that did not deploy: the error Sentry is handed. */
+/** A build that did not deploy: the error the tracker is handed. */
 export class BuildFailed extends Error {
   override name = 'BuildFailed'
 }
@@ -94,7 +93,7 @@ type Logs = {
 }
 
 // Build output can print credentials. Only fixed labels and numeric status
-// codes leave this function; no log line is sent to Sentry or the meta store.
+// codes leave this function; no log line is sent to the tracker or the meta store.
 export let failure = (
   lines: string[],
   prior = { step: 'Workers Builds setup', reason: 'see build log' },
@@ -178,7 +177,8 @@ export let logsOf = async (env: Env, uuid?: string) => {
       if (cursor) seen.add(cursor)
     } while (cursor)
     return detail
-  } catch {
+  } catch (error) {
+    caught(error, { request: 'read build logs', build: uuid })
     return signal.aborted ? 'build logs timed out' : 'build logs request failed'
   }
 }
@@ -237,6 +237,10 @@ export let rebuild = async (env: Env): Promise<string> => {
     let r = await fetch(env.BUILD_HOOK, { method: 'POST' })
     return r.ok ? 'started' : `refused ${r.status}`
   } catch {
+    // Transport errors can include the deploy hook's credential-bearing URL.
+    caught(new Error('failed to reach deploy hook'), {
+      request: 'rebuild deploy hook',
+    })
     return 'failed to reach deploy hook'
   }
 }
@@ -244,7 +248,7 @@ export let rebuild = async (env: Env): Promise<string> => {
 type Batch = { messages: readonly { body: Built; ack(): void }[] }
 
 /** The queue handler: note each failed build, build a commit's first
- * failure again, send each to Sentry with what the retry came to, and
+ * failure again, send each to the tracker with what the retry came to, and
  * acknowledge every message. A note that fails is telemetry and earns no
  * retry: a retry nobody recorded is how the loop starts. */
 export let builds = async (batch: Batch, env: Env) => {
@@ -258,15 +262,12 @@ export let builds = async (batch: Batch, env: Env) => {
       })
       let retry = once ? await rebuild(env) : undefined
       let b = await detail
-      withScope((scope) => {
-        scope.setFingerprint(['build failed', b.build])
-        defect(b.error, {
-          request: b.request,
-          ...b.tags,
-          build_log: buildUrl(env, b),
-          retry,
-        })
-      })
+      defect(b.error, {
+        request: b.request,
+        ...b.tags,
+        build_log: buildUrl(env, b),
+        retry,
+      }, { fault: `build failed:${b.build}` })
     }
     m.ack()
   }

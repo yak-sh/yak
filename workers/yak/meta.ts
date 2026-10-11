@@ -43,7 +43,7 @@ export type Meta = {
 export let KERNEL: Record<string, string> = { 'x-yak-kernel': '1' }
 
 // A door's no, carrying the status it was answered with: a 4xx is the
-// caller's (sentry.ts `refused`), anything else is the store falling over. A
+// caller's (defects.ts `refused`), anything else is the store falling over. A
 // store says no as `{error, message}` (@yaks/api), and its message is the
 // sentence a caller is owed — a door hands it on as it came, never wrapped in
 // the envelope it travelled in. A body that is not one is the message whole.

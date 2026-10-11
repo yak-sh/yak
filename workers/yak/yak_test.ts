@@ -338,9 +338,9 @@ test('the kernel routes, vouches, serves, and surfaces', async () => {
     assertMatch(await broke.text(), /Something went wrong/)
     assertEquals(await owner.get('.exception'), [])
 
-    // What the app's own page threw, at the app's own door: an exception
-    // entity naming the request and carrying the message and stack; nothing
-    // wears `error`, the facet for a failure the platform expected.
+    // The app's own page failure crosses the tracker queue with its catch
+    // context; it writes no exception or error into the app's graph.
+    let beforeReport = k.reported!.length
     let filed = await k.at(`${jeff69}.yaks.app`, '/recipes/api/report', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
@@ -352,19 +352,16 @@ test('the kernel routes, vouches, serves, and surfaces', async () => {
       }),
     })
     assertEquals(filed.status, 204)
-    let [broken] = await owner.get('.exception&.created')
-    assert(broken, 'an exception entity')
-    let ex = broken.exception as {
-      message: string
-      stack: string
-      request: string
-    }
-    assertEquals(ex.request, 'page /recipes/')
-    // The platform's own row wears no doc, so a person's `.doc` is theirs
-    // alone (T-32533).
-    assertEquals(broken.doc, undefined)
-    assertEquals(ex.message, 'whisk is not a function')
+    let [broken] = k.reported!.slice(beforeReport)
+    assert(broken, 'a tracker occurrence')
+    let ex = broken.exception as { value: string; stack: string }
+    assertEquals(
+      (broken.error as { tags: { request: string } }).tags.request,
+      'page /recipes/',
+    )
+    assertEquals(ex.value, 'whisk is not a function')
     assertMatch(ex.stack, /index\.html:42/)
+    assertEquals(await owner.get('.exception'), [])
     assertEquals(await owner.get('.error'), [])
     // A signed-in page's write says who saved it: the kernel vouches for the
     // person, the store learns them as a row of its own, and `created.by` is
@@ -381,7 +378,7 @@ test('the kernel routes, vouches, serves, and surfaces', async () => {
       ((await owner.get('.person'))[0].entity as { eid: string }).eid,
       person,
     )
-    assertEquals((broken.created as { by: string | null }).by, null)
+    assertEquals(broken.created, undefined)
 
     // The kernel flag is the kernel's: a client sending it is still a client,
     // and its server-owned batch is dropped, not written.
@@ -394,7 +391,7 @@ test('the kernel routes, vouches, serves, and surfaces', async () => {
       }]),
     })
     assertEquals(forgedFlag.status, 200)
-    assertEquals((await owner.get('.exception')).length, 1)
+    assertEquals(await owner.get('.exception'), [])
   } finally {
     await k.stop()
   }

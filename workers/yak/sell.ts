@@ -55,7 +55,7 @@ import { manageAt } from './route.ts'
 import { type Host, url as hostUrl } from './host.ts'
 import { adminWho } from './identity.ts'
 import { refuse } from './tool.ts'
-import { caught } from './sentry.ts'
+import { caught } from './defects.ts'
 
 // ---- the fee ---------------------------------------------------------------
 

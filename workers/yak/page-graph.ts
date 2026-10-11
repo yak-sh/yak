@@ -9,7 +9,7 @@ import { sandboxed } from './installed.ts'
 import { answered, metaOf } from './meta.ts'
 import { type Reach, read, split, vocabAt } from './reach.ts'
 import { vouched, type Who } from './session.ts'
-import { caught } from './sentry.ts'
+import { caught } from './defects.ts'
 import type { VocabDoc } from '@yaks/vocab'
 import { mode, reads } from '@yaks/member'
 

@@ -16,7 +16,6 @@
 import { test } from '@yaks/testing'
 import { assert, assertEquals } from '@std/assert'
 import {
-  connector,
   delivered,
   fakeSub,
   kernel,
@@ -109,6 +108,7 @@ test(
 test('an unsigned webhook is refused, and so is a foreign Origin', async () => {
   let k = await kernel()
   let jeff3 = unique('jeff3')
+  let before = k.reported!.length
   try {
     await seed(k, [{ slug: jeff3, apps: ['recipes'] }])
     let raw = '{"type":"customer.subscription.updated"}'
@@ -154,19 +154,23 @@ test('an unsigned webhook is refused, and so is a foreign Origin', async () => {
     assertEquals(page.status, 403)
     assertEquals((await page.json()).error.code, 'foreign_origin')
 
-    // And none of those refusals was quiet. A webhook we cannot verify means
-    // a secret has rolled or somebody is poking, and either is worth seeing:
-    // it lands as an exception in the meta store, where the platform's own
-    // breaks go, rather than on a log nobody opens.
-    // Read as text, not parsed: the answer arrives with the unseen block
-    // appended, which is these very exceptions being delivered — the channel
-    // working is part of what is being asserted.
-    let broke = await connector(k, k.owner.cookie).tool('graph_query', {
-      space: 'yak',
-      app: 'platform',
-      query: '.exception',
-    })
-    assert(broke.includes('the signature does not match'), broke.slice(0, 400))
+    // Authentication failures reach the platform tracker even though the
+    // webhook answers them. A foreign Origin stays the caller's refusal.
+    await k.flushReports!()
+    let reports = k.reported!.slice(before)
+    assert(
+      reports.some((row) =>
+        (row.exception as { value: string }).value.includes(
+          'the signature does not match',
+        )
+      ),
+    )
+    assertEquals(
+      reports.some((row) =>
+        (row.exception as { value: string }).value.includes('foreign_origin')
+      ),
+      false,
+    )
   } finally {
     await k.stop()
   }

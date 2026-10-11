@@ -15,7 +15,8 @@
 import { apex } from './host.ts'
 import { ask } from './stripe.ts'
 import { b64u } from './mcp-probe.ts'
-import { until } from '@yaks/testing'
+import { clock, until } from '@yaks/testing'
+import { within } from './defects.ts'
 import { COOKIE, sign, verify } from './lib/token.ts'
 import type { Custom } from './domains.ts'
 import type { Command } from './declared.ts'
@@ -84,6 +85,9 @@ export type Kernel = Door & {
   owner: Person
   made: Set<string>
   stop: () => Promise<void>
+  // In-process HTTP probes can inspect what crossed the tracker queue door.
+  reported?: Bundle[]
+  flushReports?: () => Promise<void>
 }
 
 let want = (name: string) => {
@@ -197,12 +201,29 @@ let boot = async (
     ...bindings,
   })
   prepare?.(p.env)
+  let reported: Bundle[] = []
+  let reportClock = clock()
+  let send = p.env.ERRORS?.send.bind(p.env.ERRORS)
+  if (send) {
+    p.env.ERRORS = {
+      send: (rows) => {
+        reported.push(...rows)
+        return send(rows)
+      },
+    }
+  }
   let server = Deno.serve(
     { hostname: '127.0.0.1', port: 0, onListen: () => {} },
     (req) =>
-      new URL(req.url).pathname == '/cdn-cgi/handler/email'
-        ? emailed(req, handler.email, p.env)
-        : handler.fetch(req, p.env),
+      within(
+        p.env,
+        {},
+        () =>
+          new URL(req.url).pathname == '/cdn-cgi/handler/email'
+            ? emailed(req, handler.email, p.env)
+            : handler.fetch(req, p.env),
+        reportClock,
+      ),
   )
   let ticking = setInterval(p.ring, 10)
   let close = async () => {
@@ -220,7 +241,13 @@ let boot = async (
     cf.url,
   )
   try {
-    return { ...door, owner: await signIn(door, `owner@${apex()}`), close }
+    return {
+      ...door,
+      owner: await signIn(door, `owner@${apex()}`),
+      reported,
+      flushReports: () => reportClock.advance(10_000),
+      close,
+    }
   } catch (e) {
     await close()
     throw e
@@ -825,14 +852,10 @@ export let cloudflare = (log: string) => {
   let server = Deno.serve({ port: 0, onListen: () => {} }, async (req) => {
     let url = new URL(req.url)
     let ok = (result: unknown) => Response.json({ success: true, result })
-    if (url.pathname == '/api/1/envelope/' && req.method == 'POST') {
-      Deno.writeTextFileSync(
-        log,
-        `yak-sentry ${JSON.stringify(await req.text())}\n`,
-        {
-          append: true,
-        },
-      )
+    if (url.pathname == '/tracker-probe' && req.method == 'POST') {
+      Deno.writeTextFileSync(log, `yak-tracker ${await req.text()}\n`, {
+        append: true,
+      })
       return new Response(null, { status: 200 })
     }
     if (url.pathname.startsWith('/apps/')) return await sfu(req, url.pathname)
@@ -890,12 +913,6 @@ export let cloudflare = (log: string) => {
       return ok({ id })
     }
     let want = url.searchParams.get('hostname') ?? ''
-    if (want.startsWith('sentry-probe-')) {
-      return Response.json({
-        success: false,
-        errors: [{ message: `sentry probe ${want}` }],
-      }, { status: 500 })
-    }
     let found = held.get(want)
     return ok(found ? [found] : [])
   })

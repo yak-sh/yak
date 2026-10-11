@@ -1,7 +1,7 @@
 // A page's own breaks, through the whole kernel (probe.ts `kernel`): the
 // kernel injects the reporter into every page it serves, says where the
 // browser should send what it notices, and takes both shapes of report at
-// `POST /api/report` — which puts an `exception` in the app's store, where
+// `POST /api/report` — which puts an occurrence in the tracker, where
 // the agent's next reply reads it (D-32318 §Errors are surfaced).
 //
 // The browser is the part a probe cannot boot, so the test posts what a
@@ -14,7 +14,19 @@ import {
   assertStringIncludes,
 } from '@std/assert'
 import { test, tick } from '@yaks/testing'
-import { client, connector, kernel, meta, seed, unique } from './probe.ts'
+import type { Bundle, Comp } from '@yaks/graph'
+import { CallError } from '@yaks/tools'
+import {
+  client,
+  connector,
+  fresh,
+  kernel,
+  meta,
+  seed,
+  txt,
+  unique,
+  vocabFile,
+} from './probe.ts'
 
 let jeff59 = unique('jeff59')
 let club60 = unique('club60')
@@ -345,17 +357,14 @@ test('a break names the page version that ran, not the newest release', async ()
       told,
       `recipes: page /recipes/first.js — failed to load script ${page}first.js`,
     )
-    let rows = JSON.parse(
-      (await agent.tool('graph_query', {
-        space: jeff64,
-        app: 'recipes',
-        query: '.exception',
-      })).split('\n\n## ')[0],
-    ) as { exception: { version: number } }[]
-    assertEquals(rows.map((r) => r.exception.version).sort((a, b) => a - b), [
-      0,
-      version,
-    ])
+    let afterFirst = await agent.tool('app_errors', {
+      space: jeff64,
+      app: 'recipes',
+      seen: ['v0'],
+    })
+    assertStringIncludes(afterFirst, 'archived 1')
+    assertStringIncludes(afterFirst, 'old.js')
+    assert(!afterFirst.includes('first.js'))
     assert(
       !told.includes(`recipes v${version + 1}:`),
       'the newest release did not run in these tabs',
@@ -588,12 +597,58 @@ test("the platform's own scripts are never the app's break", async () => {
 // decoder throws on while serving an app's file (files.ts `keyed`) — and it
 // proves what an eviction would: our code fell over, on the app's address,
 // with no app code anywhere near it.
-test("the platform's own break is ours, not the app's", async () => {
-  let k = await kernel()
+let platformBreak = await (async () => {
+  let captured: Bundle[] = [], failing = ''
+  let k = await fresh({
+    ERRORS: {
+      send: (rows) => {
+        captured.push(...rows)
+        return Promise.resolve()
+      },
+    },
+  }, (env) => {
+    let get = env.BLOBS.get.bind(env.BLOBS)
+    env.BLOBS.get = (...args) => {
+      if (failing) {
+        throw new CallError(
+          'arguments',
+          `${failing}: vocab.json: fight.dealt is already text`,
+        )
+      }
+      return get(...args)
+    }
+  })
   try {
     let { cookie } = await seed(k, [{ slug: acme64, apps: ['shop'] }])
     let agent = connector(k, cookie)
     let app = { space: acme64, app: 'shop' }
+    await agent.tool('app_files', {
+      ...app,
+      files: [{
+        path: 'vocab.json',
+        content: vocabFile({ note: { body: txt } }),
+      }],
+    })
+    await agent.tool('app_deploy', app)
+    return {
+      k,
+      captured,
+      cookie,
+      app,
+      fail: (method: string) => {
+        failing = method.replace('/', ' ')
+      },
+    }
+  } catch (error) {
+    await k.stop()
+    throw error
+  }
+})()
+
+test("the platform's own break is ours, not the app's", async () => {
+  let { k, captured, cookie, app, fail } = platformBreak
+  try {
+    let agent = connector(k, cookie)
 
     let broke = await k.at(`${acme64}.yaks.app`, '/shop/%E0%A4%A')
     let requestId = broke.headers.get('x-request-id')
@@ -609,21 +664,52 @@ test("the platform's own break is ours, not the app's", async () => {
       "the platform's own break was filed as the app's",
     )
 
-    // And it is ours, in the meta store, where we read it and they cannot.
-    // The run's other breaks are in the same store; this one names its space.
-    let ours = (await meta(k).query('.exception'))
-      .filter((r) => JSON.stringify(r.exception).includes(`${acme64}.yaks.app`))
-    let said = ours.map((r) => JSON.stringify(r.exception)).join('\n')
-    assertEquals(ours.length, 1, `one break of ours: ${said}`)
-    assertStringIncludes(said, `GET ${acme64}.yaks.app/shop/%E0%A4%A`)
-    assertEquals(
-      (ours[0].exception as { request_id: string }).request_id,
-      requestId,
+    // The platform catch delivers through the tracker queue, tagged with the
+    // door and request id, without attributing our failure to an app.
+    let ours = captured.filter((row) =>
+      String(
+        (row.error as Comp | undefined)?.tags &&
+          ((row.error as Comp).tags as Comp).request,
+      ).includes(`${acme64}.yaks.app`)
     )
-    // No version: the code that broke is the platform's, and the meta store
-    // has no deploy of its own to name.
-    assertEquals((ours[0].exception as { version: unknown }).version, null)
+    assertEquals(ours.length, 1)
+    assertEquals(((ours[0].error as Comp).tags as Comp).request_id, requestId)
+    assertEquals(ours[0].during, undefined)
+
+    // Discovery can fail before a named connector tool begins. The wrapped
+    // initialize, listing and call catches all retain that request's tags.
+    for (let method of ['initialize', 'tools/list', 'tools/call']) {
+      fail(method)
+      let response = await k.at(k.host, '/mcp', {
+        method: 'POST',
+        headers: { cookie, 'content-type': 'application/json' },
+        body: JSON.stringify({
+          jsonrpc: '2.0',
+          id: 1,
+          method,
+          params: method == 'tools/call'
+            ? { name: 'app_list', arguments: {} }
+            : {},
+        }),
+      })
+      assertEquals(response.status, 500)
+      let requestId = response.headers.get('x-request-id')
+      await response.body?.cancel()
+      let latest = captured.at(-1)!
+      assertEquals(
+        (latest.exception as Comp).value,
+        `Release discovery failed: ${
+          method.replace('/', ' ')
+        }: vocab.json: fight.dealt is already text`,
+      )
+      assertEquals(
+        ((latest.error as Comp).tags as Comp).request,
+        `POST ${k.host}/mcp`,
+      )
+      assertEquals(((latest.error as Comp).tags as Comp).request_id, requestId)
+    }
   } finally {
+    fail('')
     await k.stop()
   }
 })

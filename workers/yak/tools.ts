@@ -282,7 +282,7 @@ import {
 import { read } from '@yaks/yaml'
 import { toolsOf as pluginTools } from './plugin.ts'
 import { PLUGINS } from './plugins.ts'
-import { caught } from './sentry.ts'
+import { caught } from './defects.ts'
 
 // What a tool IS, and the little kit for saying one, live in tool.ts — below
 // this module, so a plugin (plugin.ts) can say a row without importing the
@@ -1257,7 +1257,7 @@ let published = async (
       () => healed(ctx.env, space, app, who, version),
     )
   } catch (e) {
-    // The release is out; an open break is the softer wrong, and Sentry hears.
+    // The release is out; an open break is the softer wrong, and the tracker hears.
     try {
       caught(e, { tool: 'app_deploy', space: space.slug, app: app.slug })
     } catch { /* the release is already live */ }

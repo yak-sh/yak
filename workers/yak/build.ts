@@ -85,7 +85,7 @@ import * as dirPart from './directory.ts'
 import type { Env } from './env.ts'
 import { building } from './pages.ts'
 import type { Who } from './session.ts'
-import { caught } from './sentry.ts'
+import { caught } from './defects.ts'
 
 /**
  * The slice of a `DurableObjectState` this object needs: its SQLite, and its

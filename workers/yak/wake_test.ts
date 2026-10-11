@@ -6,7 +6,8 @@
 import { assert, assertEquals } from '@std/assert'
 import type { Bound, Bundle } from '@yaks/graph'
 import { toolEid } from '@yaks/tools'
-import { test, until } from '@yaks/testing'
+import { clock, test, until } from '@yaks/testing'
+import { within } from './defects.ts'
 import { Store } from './graph.ts'
 import { platform, state } from './testing.ts'
 import { meta } from './meta.ts'
@@ -229,7 +230,15 @@ test('a directory job reads and writes the directory in-process, never through i
 })
 
 test('a refused wake stays due, says why in the break log, and is tried again', async () => {
-  let p = platform('wake refusal')
+  let rows: Bundle[] = []
+  let p = platform('wake refusal', {
+    ERRORS: {
+      send: (sample: Bundle[]) => {
+        rows.push(...sample)
+        return Promise.resolve()
+      },
+    },
+  })
   let store = await directory(p)
   await meta(p.env).apply([{
     entity: { eid: 'yak-meter' },
@@ -249,13 +258,18 @@ test('a refused wake stays due, says why in the break log, and is tried again', 
   // The runtime clears the alarm as it delivers it; the tick is what sets the
   // next one, and a refusal is what it is being asked to set here.
   await p.states.get(PLATFORM_STORE)!.storage.deleteAlarm()
-  await store.tick(at('05:00'))
+  await within(p.env, {}, () => store.tick(at('05:00')), clock())
   assertEquals((await wake(p.env, 'yak-meter')).wake.at, iso('05:00'))
-  let rows = await meta(p.env).query('.exception')
   assertEquals(rows.length, 1)
-  let error = rows[0].exception as { request: string; message: string }
-  assertEquals(error.request, 'wake yak-meter')
-  assertEquals(error.message, 'meter write refused')
+  assertEquals((rows[0].error as { tags: unknown }).tags, {
+    request: 'wake yak-meter',
+    store: PLATFORM_STORE,
+  })
+  assertEquals(
+    (rows[0].exception as { value: string }).value,
+    'meter write refused',
+  )
+  assertEquals(await meta(p.env).query('.exception'), [])
   // A refusal is not a dropped occurrence: the object comes back for it.
   assertEquals(
     await p.states.get(PLATFORM_STORE)!.storage.getAlarm(),

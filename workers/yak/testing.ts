@@ -35,6 +35,16 @@ import { durable as raw } from '../../packages/durable-object/testing.ts'
 import { type Snapshot, snapshot } from '../../packages/sqlite/testing.ts'
 import { triggers } from '@yaks/embedding'
 import { Builder } from './build.ts'
+import { ram } from '@yaks/ram'
+import { group } from '@yaks/tracker'
+import {
+  options as trackerOptions,
+  store as trackerStore,
+  vocab as trackerVocab,
+} from '../tracker/core.ts'
+import { door as trackerDoor } from '../tracker/door.ts'
+import { batch as trackerBatch } from '../tracker/queue.ts'
+import { scopeOf } from '../tracker/worker.ts'
 import type { Env, Inbound } from './env.ts'
 import { DIM, MODEL as EMBEDDER, texts } from './embedding.ts'
 import { KV, shapeOf, Store } from './graph.ts'
@@ -757,9 +767,49 @@ export let platform = (secret: string, vars: Partial<Env> = {}) => {
     if (!held) wires.set(name, held = new Wired({ storage: kvStorage() }, env))
     return held
   }
+  let trackers = new Map<string, ReturnType<typeof trackerStore>>()
+  let tracker = (scope: string) => {
+    let held = trackers.get(scope)
+    if (!held) {
+      trackers.set(
+        scope,
+        held = trackerStore(ram(trackerVocab, trackerOptions), {
+          sink: () => {},
+        }),
+      )
+    }
+    return held
+  }
   let files = bucket()
   let env = {
     SESSION_SECRET: secret,
+    TRACKER_SECRET: secret,
+    TRACKER: {
+      fetch: (request: Request) => {
+        let scope = scopeOf(request)
+        if (!scope) {
+          return Promise.resolve(
+            Response.json({ error: 'tracker scope required' }, {
+              status: 400,
+            }),
+          )
+        }
+        return trackerDoor(tracker(scope), scope, secret)(request)
+      },
+    },
+    ERRORS: {
+      send: async (rows: import('@yaks/graph').Bundle[]) => {
+        let { scope } = trackerBatch(rows)
+        let target = tracker(scope)
+        await target.ingest(rows)
+        for (let row of rows.filter((row) => row.error)) {
+          await group(
+            target.graph,
+            row.entity.eid,
+          )
+        }
+      },
+    },
     BLOBS: files.r2,
     // The grants ledger (grants.ts): what a CLI token and the build sandbox's
     // own sign-in are written down in.

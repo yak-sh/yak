@@ -12,7 +12,7 @@
 // object's graph and failed that check. That class is gone (T-33807).
 import type { Caller } from '@yaks/egress'
 import { hop, writing } from './lib/hops.ts'
-import { defect } from './sentry.ts'
+import { defect } from './defects.ts'
 
 // A store reports the statements it ran for this fetch, including any store
 // it asked in turn. Only the door sees every answer, so it is also where a

@@ -58,7 +58,7 @@ import type { Page } from './guide.ts'
 import type { Who } from './session.ts'
 import type { Tool } from './tool.ts'
 import type { Tools } from '@yaks/tools/declared'
-import { caught } from './sentry.ts'
+import { caught } from './defects.ts'
 
 /**
  * An app's own door, as the request reaches a plugin: everything apps.ts had

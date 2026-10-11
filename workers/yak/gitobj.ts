@@ -45,7 +45,7 @@ import { GIT_STORE, type Namespace, storeOf } from './door.ts'
 import { spaceHost } from './host.ts'
 import { KERNEL, type Meta, metaOf } from './meta.ts'
 import { pins } from './versions.ts'
-import { caught } from './sentry.ts'
+import { caught } from './defects.ts'
 
 export { MAIN, refEid }
 

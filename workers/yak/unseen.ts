@@ -1,6 +1,7 @@
 // What broke that the person's agent has not heard yet (D-32318 §Errors,
 // T-32362): the open `exception` and `error` entities across a space's app
-// stores, one line each, and the mark that they were served. The comms bus
+// tracker, one line each, and the mark that they were served. Published ids
+// from before the tracker still translate through their original app stores. The comms bus
 // in this graph stamps `notified` on each line it delivers (client.ts
 // notices()); this does the same, so an item rides one reply and then only
 // `app_errors` shows it again. Open means not `archived`: a later deploy
@@ -23,7 +24,9 @@ import { vouched, type Who } from './session.ts'
 import { KERNEL, meta, metaOf } from './meta.ts'
 import { told } from './stream.ts'
 import { level, standing } from './meter.ts'
-import { caught, defect } from './sentry.ts'
+import { caught, defect } from './defects.ts'
+import { capture, queue } from '@yaks/tracker/report'
+import { errorsAt } from './app-errors.ts'
 import { refuse } from './tool.ts'
 
 // A refusal is NOT a break (C-32652 item 3, T-32655; C-32869 item 5) — one
@@ -104,44 +107,21 @@ let hushed = (space: Space, app: App) => {
   return ++hit.n > PUSHES
 }
 
-// One break, written where the person's agent reads it: the `exception`
-// facet, and nothing else. It carries what was being served, the deploy it
-// happened on, the message and the stack. Server-owned, so it rides the
-// kernel flag into apply()'s server-writer mode; the shape is the wire's own
-// entity literal.
-//
-// Whose break it is, is the caller's to know, and only three callers can
-// (T-33234). An app's store takes one from the two places the app's own code
-// was running — its worker, which threw or answered a 5xx (dispatch.ts `ran`),
-// and its page, which reported its own (apps.ts `/report`). The META store
-// takes everything the platform hit in its own code ({@link fault}),
-// including on a route that names an app: a DO eviction, our storage, our
-// routing, our dispatch. Nothing here decides that, and nothing should try:
-// the message never says whose code it was.
-//
-// A break in a space's app is also pushed as it lands (T-33006, V-32361):
-// `notifications/message` to each member's stream, for whoever is connected
-// and idle — MCP's logging door, declared in initialize (mcp.ts). The push
-// marks nothing: served-in-a-reply stays the only `notified`, so the unseen
-// block still carries the break for whoever was not listening, and a
-// notification nobody read buries nothing. A push that fails, or one over
-// the app's minute ceiling, is telemetry — the entity is already written.
-//
-// It wore a `doc` until T-32533, and that put the platform's own crashes in
-// `.doc` — the query a person's agent is taught as "everything you saved" —
-// where one showed up in a recipe box as a recipe (C-32531 item 1).
-// Where a break is written: one bundle, under the kernel flag, because an
-// `exception` is wholly server-owned. The platform's own breaks go to the meta
-// store ({@link metaBreaks}); an app's go to that app's store.
+// App failures are immutable tracker occurrences. The queue chooses the
+// independent space store by global eid; a failing app store cannot swallow its
+// own report. Existing app-store rows remain readable by their published ids.
+// Member stream pushes are a prompt notice; the tracked record remains the
+// source for the reply rider and app_errors when no member was listening.
+// Builds uses the same legacy exception shape for its retry receipt, which
+// controls recovery rather than recording a second ordinary failure.
 export type Breaks = (bundles: Bundle[]) => Promise<unknown>
 
-/** The platform's own breaks: the directory's store, in the graph's wire. An
- * app's breaks go to that app's own store the same way — `metaOf(door).apply`
- * at the call site — because it is the same Store class and the same wire. */
+/** Workers Builds keeps its retry receipt in the directory's store. Ordinary
+ * platform and app failures enter the tracker rather than this receipt log. */
 export let metaBreaks = (env: Env): Breaks => (bundles) =>
   meta(env).apply(bundles, KERNEL)
 
-/** What a break is noted as: the `exception` component, stamped now. */
+/** A build retry receipt or pre-tracker failure's legacy exception shape. */
 export let exceptionOf = (broke: {
   request: string
   requestId?: string
@@ -162,7 +142,20 @@ export let noted = async (
   broke: Parameters<typeof exceptionOf>[0],
   at?: { env: Env; space: Space; app: App },
 ) => {
-  await breaks([{ entity: { eid: '$broke' }, exception: exceptionOf(broke) }])
+  if (at) {
+    if (!at.env.ERRORS) throw Error('tracker intake is unavailable')
+    let error = Object.assign(Error(broke.message), {
+      stack: broke.stack || '',
+    })
+    await queue(at.env.ERRORS)(capture(error, {
+      sink: () => {},
+      version: broke.version ?? undefined,
+      during: { space: at.space.eid, app: at.app.eid, kind: 'exception' },
+      tags: { request: broke.request, request_id: broke.requestId },
+    }))
+  } else {
+    await breaks([{ entity: { eid: '$broke' }, exception: exceptionOf(broke) }])
+  }
   if (!at || hushed(at.space, at.app)) return
   try {
     let dir = directory(bound(at.env.DIRECTORY, dirPart.fetch, at.env))
@@ -183,24 +176,17 @@ export let noted = async (
   }
 }
 
-/** A defect in the platform's own code (T-33234): sent to Sentry with its
- * tags, and written to the meta store where the platform's breaks are read.
- * Awaited, so the entity exists by the time the caller answers; failing to
- * write it is telemetry, never a second failure to serve. */
-export let fault = async (
-  env: Env,
+/** A defect in the platform's own code, tagged at its catch. Builds keeps its
+ * retry receipt separately; ordinary failures are records only in the tracker. */
+export let fault = (
+  _env: Env,
   request: string,
   e: unknown,
   tags: Record<string, string | null | undefined> = {},
   requestId?: string,
-) => {
+): Promise<void> => {
   defect(e, { request, ...tags, request_id: requestId })
-  await noted(metaBreaks(env), {
-    request,
-    requestId,
-    message: e instanceof Error ? e.message : String(e),
-    stack: e instanceof Error ? e.stack ?? '' : '',
-  }).catch((why) => caught(why, { request: `file ${request}` }))
+  return Promise.resolve()
 }
 
 type Broke = {
@@ -213,6 +199,7 @@ type Broke = {
 }
 type Hit = {
   kind: string
+  tracked?: boolean
   // No number: an app's store does not load @yaks/id (vocab.ts), so a break
   // noted there is named by its eid, and `idOf` writes the short handle. The
   // directory numbers its own, and the same line reads both.
@@ -227,7 +214,7 @@ type Hit = {
 // where an app's store did not. The letter is the facet's own first one
 // (exception, error).
 let idOf = (h: Hit) =>
-  h.entity.num
+  h.entity.num && !h.tracked
     ? `${h.kind.slice(0, 1).toUpperCase()}-${h.entity.num}`
     : short(h.entity.eid)
 
@@ -292,21 +279,36 @@ let graphAt = (env: Env, space: Space, app: App, who: Who) => {
   let store = appStore(env.STORE, space, app, env)
   return {
     query: (line: string) => metaOf(store, vouched(who)).query(line),
-    mark: (hits: Hit[], mark: 'notified' | 'archived') =>
-      metaOf(store).apply(
-        hits.map((h) => ({ entity: { eid: h.entity.eid }, [mark]: {} })),
-        { ...vouched(who), ...KERNEL },
-      ),
+    mark: async (hits: Hit[], mark: 'notified' | 'archived') => {
+      let legacy = hits.filter((h) => !h.tracked)
+      let tracked = hits.filter((h) => h.tracked)
+      await Promise.all([
+        ...legacy.length
+          ? [
+            metaOf(store).apply(
+              legacy.map((h) => ({
+                entity: { eid: h.entity.eid },
+                [mark]: {},
+              })),
+              { ...vouched(who), ...KERNEL },
+            ),
+          ]
+          : [],
+        ...tracked.length
+          ? [
+            errorsAt(env, space, app, who).mark(
+              tracked as unknown as Bundle[],
+              mark,
+            ),
+          ]
+          : [],
+      ])
+    },
   }
 }
 
-// The open items of one app: both facets, unseen only unless `all`. A hit wears
-// the facet as its `kind`, which is what an id is built from (`line`).
-//
-// Two reads because they are two tables and the filter grammar has no
-// alternation — but one round trip, since the second never needed the first's
-// answer. Asked in turn, a listing over a person's apps paid the app store's
-// latency twice per app (T-35431).
+// Open tracker occurrences, plus the translation for pre-tracker published
+// ids. Unseen only unless `all`; all independent doors are read together.
 export let openIn = async (
   env: Env,
   space: Space,
@@ -319,12 +321,36 @@ export let openIn = async (
   let seen = all ? '' : '&!notified'
   let at = graphAt(env, space, app, who)
   try {
-    let found = await Promise.all(
-      ['exception', 'error'].map(async (facet) =>
+    let found = await Promise.all([
+      // Published ids still name pre-tracker rows in their original app store.
+      // New reports never write there; this translation preserves old handles.
+      ...['exception', 'error'].map(async (facet) =>
         (await at.query(`.${facet}&?doc&?content&!archived${seen}`))
           .map((b) => ({ kind: facet, ...b }) as unknown as Hit)
       ),
-    )
+      errorsAt(env, space, app, who).read(all).then((rows) =>
+        rows.map((row) => {
+          let error = row.error as Record<string, unknown>
+          let exception = row.exception as Record<string, unknown> | undefined
+          let tags = error.tags as Record<string, unknown> | undefined
+          let broke = {
+            at: error.at,
+            version: error.version,
+            request: tags?.request,
+            code: error.code,
+            message: exception?.value || error.message ||
+              (row.content as Record<string, unknown> | undefined)?.body || '',
+            stack: exception?.stack,
+          }
+          return {
+            ...row,
+            tracked: true,
+            kind: exception ? 'exception' : 'error',
+            ...exception ? { exception: broke } : { error: broke },
+          } as unknown as Hit
+        })
+      ),
+    ])
     return found.flat()
   } catch (e) {
     throw new Error(`${app.slug}: ${e instanceof Error ? e.message : e}`)

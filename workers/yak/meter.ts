@@ -49,7 +49,7 @@ import {
 } from '@yaks/workers-ai'
 import { guess } from './models.ts'
 import { modelInfo } from '@yaks/workers-ai'
-import { defect } from './sentry.ts'
+import { defect } from './defects.ts'
 import { derivedEid, Stale } from '@yaks/graph'
 
 /** The hourly reading: `fired` on this tagged wake runs the existing meter. */

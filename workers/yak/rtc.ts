@@ -30,7 +30,7 @@ import { KERNEL, metaOf } from './meta.ts'
 import { countedRealtime, refusedSpend } from './meter.ts'
 import { type Answer, type Effect, page, type Plugin } from './plugin.ts'
 import { source, within } from './rate.ts'
-import { defect } from './sentry.ts'
+import { defect } from './defects.ts'
 
 /** Realtime's egress price, in dollars a byte. */
 let BYTE = 0.05 / 1e9

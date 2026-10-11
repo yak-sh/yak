@@ -6,8 +6,10 @@
 //
 // The test config is wrangler.toml's, less what cannot run on this box: the
 // sandbox's container, and the bindings that only exist on the account (AI,
-// vectorize, the dispatch namespace, outside services). Its own FILES service
-// binding runs in workerd, so file reads cross the deployed service boundary.
+// vectorize, the dispatch namespace, outside services). Its own FILES and
+// TRACKER services run in workerd, so file and error reads cross their deployed
+// service boundaries. Its error queue delivers to the independent tracker
+// Worker, with stores and a signing key of this run's own.
 //
 // Its config is every kernel's (probe.ts `vars`), and what the run's tests
 // share, it is handed in the environment (probe.ts `workerd`):
@@ -29,6 +31,7 @@ type Config = Record<string, unknown> & {
   durable_objects?: { bindings: { name: string }[] }
   dev?: Record<string, unknown>
   vars?: Record<string, string>
+  services?: { binding: string; service: string }[]
 }
 
 // Absent from the harness, as each is absent under `wrangler dev` here: the
@@ -49,7 +52,7 @@ let ACCOUNT_ONLY = [
 /** wrangler.toml as the run's kernel wears it, `vars` laid over its own. */
 export let config = (toml: string, vars: Record<string, string>): Config => {
   let raw = parse(toml) as Config
-  let services = raw.services as { binding: string }[]
+  let services = raw.services!
   for (let key of ACCOUNT_ONLY) delete raw[key]
   raw.services = services.filter((s) => s.binding == 'FILES')
   raw.durable_objects = {
@@ -156,10 +159,10 @@ let door = (server: Harness) =>
             ? 'probe-store-cost'
             : path.startsWith('/__play_cost/')
             ? 'probe-play-cost'
+            : path.startsWith('/__defects/')
+            ? 'probe-defects'
             : path.startsWith('/__script/')
             ? 'probe-scripts'
-            : path.startsWith('/__sentry/')
-            ? 'probe-sentry'
             : undefined,
         )
         .fetch(req.url, {
@@ -192,11 +195,17 @@ export let probeSuite = async () => {
   let { createTestHarness } = createRequire(`${dir}/`)('wrangler')
   let kernel = config(
     Deno.readTextFileSync(`${dir}/wrangler.toml`),
-    {
-      ...vars(secret, cf.url),
-      SENTRY_DSN: cf.url.replace('://', '://key@') + '/1',
-    },
+    vars(secret, cf.url),
   )
+  let trackerSecret = crypto.randomUUID()
+  kernel.vars!.TRACKER_SECRET = trackerSecret
+  kernel.services!.push({
+    binding: 'TRACKER',
+    service: 'probe-tracker',
+  })
+  kernel.queues = {
+    producers: [{ binding: 'ERRORS', queue: 'probe-errors' }],
+  }
   // A test Durable Object implements container RPCs; no image is built or run.
   let objects = kernel.durable_objects as { bindings: Record<string, string>[] }
   objects.bindings.push({
@@ -208,6 +217,29 @@ export let probeSuite = async () => {
     root: dir,
     workers: [
       { config: kernel },
+      {
+        config: {
+          name: 'probe-tracker',
+          main: '../tracker/index.ts',
+          compatibility_date: kernel.compatibility_date,
+          compatibility_flags: kernel.compatibility_flags,
+          tsconfig: kernel.tsconfig,
+          alias: kernel.alias,
+          vars: { TRACKER_SECRET: trackerSecret },
+          durable_objects: {
+            bindings: [{ name: 'TRACKERS', class_name: 'Tracker' }],
+          },
+          migrations: [{ tag: 'v1', new_sqlite_classes: ['Tracker'] }],
+          queues: {
+            producers: [{ binding: 'ERRORS', queue: 'probe-errors' }],
+            consumers: [{
+              queue: 'probe-errors',
+              max_batch_size: 100,
+              max_batch_timeout: 1,
+            }],
+          },
+        },
+      },
       {
         config: {
           name: 'probe-sandbox-provider',
@@ -319,20 +351,24 @@ export let probeSuite = async () => {
       },
       {
         config: {
-          name: 'probe-sentry',
-          main: 'sentry-probe.ts',
+          name: 'probe-defects',
+          main: 'defects_probe.ts',
           compatibility_date: '2025-05-08',
           compatibility_flags: kernel.compatibility_flags,
           tsconfig: kernel.tsconfig,
           alias: kernel.alias,
           durable_objects: {
-            bindings: [{ name: 'PROBE', class_name: 'Probe' }],
+            bindings: [
+              { name: 'PROBE', class_name: 'Probe' },
+              { name: 'STORECASE', class_name: 'StoreCases' },
+            ],
           },
-          migrations: [{ tag: 'v1', new_classes: ['Probe'] }],
-          vars: {
-            SENTRY_DSN: cf.url.replace('://', '://key@') + '/1',
-            SENTRY_ENVIRONMENT: 'test',
-          },
+          migrations: [{
+            tag: 'v1',
+            new_classes: ['Probe'],
+            new_sqlite_classes: ['StoreCases'],
+          }],
+          vars: { CAPTURE_URL: cf.url },
         },
       },
     ],

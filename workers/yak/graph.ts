@@ -258,7 +258,7 @@ import {
   PLATFORM_STORE,
 } from './door.ts'
 import { type Meta, meta, metaOf } from './meta.ts'
-import { caught, defect } from './sentry.ts'
+import { caught, defect } from './defects.ts'
 import { runtimeExceptions } from './runtime_exceptions.ts'
 import { counts, hop, type Tally, tallying } from './lib/hops.ts'
 import {
@@ -1030,7 +1030,7 @@ export class Store {
     // graph it names is whichever one this object last built, which is the
     // only one that could be committing.
     // A handler or hook that fails after its batch committed is sent to
-    // Sentry rather than to the console the packages default to. Not noted in
+    // the tracker rather than to the console the packages default to. Not noted in
     // this store as `#broke` does: the note is a write, and a hook that fails
     // on every write would answer it with another break, forever.
     let fx = effects(vocab, {
@@ -1976,7 +1976,7 @@ export class Store {
   // starts a sleeping world again, with no page asking. Every committed write
   // asks, but an unchanged wake catalog is retained for this incarnation.
   // A condition
-  // it cannot read goes to Sentry, not to the break log — that log is a write,
+  // it cannot read goes to the tracker, not to the break log — that log is a write,
   // and a write asks again.
   #conditionalWakes: ReturnType<typeof conditionalWakes> | undefined
   #rouse = async (bundles: Bundle[]): Promise<Bundle[]> => {
@@ -2432,7 +2432,7 @@ export class Store {
   // back on the alarm for the rest: the first wake after this shipped, every
   // store owes a vector for each text it holds, and it catches up behind its
   // own traffic.
-  // A drain that fails goes to Sentry and comes back a minute later; `.near`
+  // A drain that fails goes to the tracker and comes back a minute later; `.near`
   // ranks whatever is stored meanwhile.
   static EMBED = 10_000
 
@@ -2525,25 +2525,11 @@ export class Store {
     }
   }
 
-  // A break this object noted about itself, written where it notes an app's
-  // (unseen.ts `noted`): server-owned properties, through the kernel's own
-  // door. Sentry hears it too, named by the store it happened in (sentry.ts).
-  #broke = async (request: string, error: unknown) => {
+  // A failure of the Store's own work belongs to the platform tracker,
+  // tagged by its catch and store, rather than written into the app's rows.
+  #broke = (request: string, error: unknown): Promise<void> => {
     defect(error, { request, store: this.#get('name') })
-    try {
-      await this.#trust([{
-        entity: { eid: crypto.randomUUID() },
-        exception: {
-          at: new Date().toISOString(),
-          request,
-          version: null,
-          message: error instanceof Error ? error.message : String(error),
-          stack: error instanceof Error ? error.stack ?? '' : '',
-        },
-      }], null)
-    } catch (why) {
-      caught(why, { request: `note ${request}`, store: this.#get('name') })
-    }
+    return Promise.resolve()
   }
 
   #failed(e: unknown) {
@@ -2553,7 +2539,7 @@ export class Store {
     } catch { /* a thrown value need not be printable */ }
     this.#refused = message
     // A refused store answers nothing, so it is a defect, not an answer:
-    // Sentry hears it named by the store.
+    // the tracker hears it named by the store.
     let store = ''
     try {
       store = this.#get('name') ?? ''
@@ -3722,7 +3708,7 @@ export class Store {
     } catch (e) {
       // A runtime that offers none of this throws its own sentence, which is
       // handed on as a refusal rather than a 500: nothing broke, the back end
-      // simply cannot do it. Where it can, a throw is ours, and Sentry hears.
+      // simply cannot do it. Where it can, a throw is ours, and the tracker hears.
       if (!(e instanceof Refused)) {
         caught(e, { request: 'restore', store: this.#get('name') })
       }

@@ -71,7 +71,7 @@ import { asleep, released, spending } from './sandbox.ts'
 import type { Who } from './session.ts'
 import { type Ctx, TOOLS } from './tools.ts'
 import { standing } from './standing.ts'
-import { caught } from './sentry.ts'
+import { caught } from './defects.ts'
 
 /** What one response used, in tokens; its model's price weighs it in dollars
  * (@yaks/model `weigh`). */

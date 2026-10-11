@@ -143,7 +143,7 @@ test('even a throwing release-notice reporter cannot fail the release', async ()
   }) as Door
   await releaseNotice(store, 7, {}, () => {
     reported++
-    throw new Error('Sentry unavailable')
+    throw new Error('the tracker unavailable')
   })
   assertEquals(reported, 1)
 })

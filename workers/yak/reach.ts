@@ -74,7 +74,7 @@ import {
   type VocabDoc,
 } from '@yaks/vocab'
 import { refuse, rejected } from './tool.ts'
-import { caught } from './sentry.ts'
+import { caught } from './defects.ts'
 import { said as told } from './writes.ts'
 
 // The words the PLATFORM says in every store, including its vocabulary and

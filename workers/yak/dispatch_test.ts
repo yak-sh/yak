@@ -19,12 +19,8 @@
 //     what the runtime must do with it — a wasm compiled, a `.js` linked
 import { test } from '@yaks/testing'
 import { assert, assertEquals, assertRejects } from '@std/assert'
-import {
-  createTransport,
-  type ErrorEvent,
-  ServerRuntimeClient,
-  setCurrentClient,
-} from '@sentry/core'
+import { clock } from '@yaks/testing'
+import type { Bundle } from '@yaks/graph'
 import { COOKIE, seal, sign } from './lib/token.ts'
 import type { App, Space } from './directory.ts'
 import {
@@ -46,7 +42,7 @@ import {
   WORKER,
   workerBreak,
 } from './dispatch.ts'
-import { caught } from './sentry.ts'
+import { caught, within } from './defects.ts'
 import type { Env } from './env.ts'
 import { nobody, type Who } from './session.ts'
 
@@ -87,35 +83,21 @@ let app: App = {
   theme: null,
 }
 
-// Every entity the kernel wrote while a test ran, and which store it went
-// into (door.ts `storeOf` names it on every request) — so a break can be read
-// back the way `app_errors` reads one, and whose store it landed in is part of
-// what a test can say.
-type Wrote = {
-  store: string
-  bundles: { exception: Record<string, unknown> }[]
-}
-let wrote: Wrote[] = []
-
-// The env `ran` asks for: the namespace under test, the secret it seals a
-// grant with, and a store that keeps what it was told. Only a JSON body is
-// kept: `serving` reads the directory through this same stub, and its empty
-// query answer throws out of the parse before anything is recorded.
+// App worker failures enter the tenant tracker through its queue interface.
+let wrote: Bundle[] = []
 let envOf = (get: (name: string) => { fetch(r: Request): Promise<Response> }) =>
   ({
     SESSION_SECRET: SECRET,
     DISPATCH: { get },
+    ERRORS: {
+      send: (rows: Bundle[]) => {
+        wrote.push(...rows)
+        return Promise.resolve()
+      },
+    },
     STORE: {
       idFromName: (n: string) => n,
-      get: () => ({
-        fetch: async (r: Request) => {
-          // The graph's own write door: a bare array of bundles in, the batch
-          // as applied back.
-          let bundles = JSON.parse(await r.text())
-          wrote.push({ store: r.headers.get('x-store') ?? '', bundles })
-          return Response.json(bundles)
-        },
-      }),
+      get: () => ({ fetch: () => Promise.resolve(Response.json([])) }),
     },
   }) as unknown as Env
 
@@ -149,18 +131,17 @@ let mirror = (status = 200) => {
   }
 }
 
-let sentry = () => {
-  let seen: ErrorEvent[] = []
-  let client = new ServerRuntimeClient({
-    dsn: 'https://key@example.ingest.sentry.io/1',
-    integrations: [],
-    stackParser: () => [],
-    transport: (o) => createTransport(o, () => Promise.resolve({})),
-    beforeSend: (event) => (seen.push(event), null),
-  })
-  setCurrentClient(client)
-  client.init()
-  return { seen, done: () => client.flush(1_000) }
+let tracked = async (run: (seen: Bundle[]) => Promise<void>) => {
+  let seen: Bundle[] = []
+  let env = {
+    ERRORS: {
+      send: (rows: Bundle[]) => {
+        seen.push(rows[0])
+        return Promise.resolve()
+      },
+    },
+  }
+  await within(env, {}, () => run(seen), clock())
 }
 
 test('a script is named for the store, which a rename never moves', () => {
@@ -313,29 +294,32 @@ test('a command worker failure calls its reporter once', async () => {
   ])
 })
 
-test('a command failure is captured once across worker and caller', async () => {
-  let { seen, done } = sentry()
-  let env = envOf(mirror(503).get)
-  wrote = []
-  let failure: unknown
-  try {
-    await commandWorker(env, space, app, who, '/inspect', {}, {
-      report: (req, error) => workerBreak(env, space, app, req, error),
+test('a command failure is captured once across worker and caller', () =>
+  tracked(async (seen) => {
+    let env = envOf(mirror(503).get)
+    wrote = []
+    let failure: unknown
+    try {
+      await commandWorker(env, space, app, who, '/inspect', {}, {
+        report: (req, error) => workerBreak(env, space, app, req, error),
+      })
+    } catch (e) {
+      failure = e
+      caught(e, { request: 'outer command reporter' })
+    }
+    assert(failure instanceof Error)
+    assertEquals(wrote.length, 1)
+    assertEquals(seen.length, 0)
+    assertEquals((wrote[0].error as { tags: unknown }).tags, {
+      request: 'worker POST /recipes/inspect',
+      request_id: undefined,
     })
-  } catch (e) {
-    failure = e
-    caught(e, { request: 'outer command reporter' })
-  }
-  assert(failure instanceof Error)
-  await done()
-  assertEquals(wrote.length, 1)
-  assertEquals(seen.length, 1)
-  assertEquals(seen[0].tags, {
-    request: 'worker POST /recipes/inspect',
-    space: 'jeff',
-    app: 'recipes',
-  })
-})
+    assertEquals(wrote[0].during, {
+      space: space.eid,
+      app: app.eid,
+      kind: 'exception',
+    })
+  }))
 
 test('an app sets cookies for its own host, and none for the zone', async () => {
   // Login fixation (T-37876): an app that sets the platform's session, or any
@@ -527,24 +511,29 @@ test("a worker's own no is not a break; its 5xx is", async () => {
   assertEquals(wrote.length, 0, 'a refusal filed something')
   let out = await ran(envOf(mirror(503).get), space, app, visit(), who)
   assertEquals(out!.status, 503)
-  assertEquals(wrote[0].store, 'jeff/recipes')
-  let broke = wrote[0].bundles[0].exception
-  assertEquals(broke.version, 7)
-  assertEquals(broke.request, 'worker GET /recipes/hello')
-  assertEquals(broke.message, "the app's worker answered 503")
+  assertEquals(wrote[0].during, {
+    space: space.eid,
+    app: app.eid,
+    kind: 'exception',
+  })
+  let broke = wrote[0].exception as { value: string; stack: string }
+  assertEquals((wrote[0].error as { version: number }).version, 7)
+  assertEquals(
+    (wrote[0].error as { tags: { request: string } }).tags.request,
+    'worker GET /recipes/hello',
+  )
+  assertEquals(broke.value, "the app's worker answered 503")
 })
 
-test('an answered worker 5xx reaches Sentry with its app', async () => {
-  let { seen, done } = sentry()
-  await ran(envOf(mirror(503).get), space, app, visit(), who)
-  await done()
-  assertEquals(seen.length, 1)
-  assertEquals(seen[0].tags, {
-    request: 'worker GET /recipes/hello',
-    space: 'jeff',
-    app: 'recipes',
-  })
-})
+test('an answered worker 5xx reaches the tracker with its app', () =>
+  tracked(async (seen) => {
+    await ran(envOf(mirror(503).get), space, app, visit(), who)
+    assertEquals(seen.length, 0)
+    assertEquals((wrote.at(-1)!.error as { tags: unknown }).tags, {
+      request: 'worker GET /recipes/hello',
+      request_id: undefined,
+    })
+  }))
 
 // The seam (T-33234). `worker.fetch` is the one line in the kernel where the
 // code running belongs to the app, so it is the one place a throw may be filed
@@ -562,11 +551,18 @@ test("a worker that throws is the app's break, and is filed here", async () => {
   let out = await ran(envOf(boom), space, app, visit(), who)
   assertEquals(out!.status, 500, 'the visitor gets the soft page')
   assertEquals(wrote.length, 1, 'one break, and only one')
-  assertEquals(wrote[0].store, 'jeff/recipes', "the app's own store")
-  let broke = wrote[0].bundles[0].exception
-  assertEquals(broke.version, 7)
-  assertEquals(broke.request, 'worker GET /recipes/hello')
-  assertEquals(broke.message, 'undefined is not an object')
+  assertEquals(wrote[0].during, {
+    space: space.eid,
+    app: app.eid,
+    kind: 'exception',
+  }, "the app's own store")
+  let broke = wrote[0].exception as { value: string; stack: string }
+  assertEquals((wrote[0].error as { version: number }).version, 7)
+  assertEquals(
+    (wrote[0].error as { tags: { request: string } }).tags.request,
+    'worker GET /recipes/hello',
+  )
+  assertEquals(broke.value, 'undefined is not an object')
   assert(String(broke.stack).includes('undefined is not an object'))
 })
 

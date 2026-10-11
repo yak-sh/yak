@@ -8,6 +8,8 @@ import { appStore } from './directory.ts'
 import { keepDeclaration } from './declaration.ts'
 import { releaseOf } from './directory.ts'
 import { listCommands } from './declared.ts'
+import { errorsAt } from './app-errors.ts'
+import type { Comp } from '@yaks/graph'
 import type { Dispatch } from './door.ts'
 import { ADA, ADA_OWNS, as, platform, seeded, visit } from './serving-probe.ts'
 
@@ -170,11 +172,16 @@ test('a page invokes declared commands as its owner; the command door refuses an
     Error,
     '503',
   )
-  let errors = await store('/query?q=.exception', {}, ADA_OWNS)
-  let [failure] = await errors.json()
-  assertEquals(failure.exception.request, 'worker POST /cookbook/owner-fail')
+  let [failure] = await errorsAt(env, space, app, {
+    person: ADA,
+    role: 'owner',
+  }).read(true)
   assertEquals(
-    failure.exception.message,
+    ((failure.error as Comp).tags as Comp).request,
+    'worker POST /cookbook/owner-fail',
+  )
+  assertEquals(
+    (failure.exception as Comp).value,
     'app worker answered 503 (command CPU limit 5000 ms): ',
   )
   let editor = await post(await as(ELI), 'owner_word')

@@ -68,7 +68,7 @@ import {
   WRAPPER,
 } from './wrangler_app.ts'
 import { refuse, rejected } from './tool.ts'
-import { caught, refused } from './sentry.ts'
+import { caught, refused, reported } from './defects.ts'
 import { modules } from '@yaks/esbuild'
 export { WORKER } from './wrangler_app.ts'
 
@@ -363,7 +363,6 @@ export let workerBreak = async (
 ) => {
   if (refused(error) || refusal(error.message)) return
   let request = `worker ${req.method} ${new URL(req.url).pathname}`
-  caught(error, { request, space: space.slug, app: app.slug })
   let version = app.version
   await noted((bundles) =>
     metaOf(appStore(env.STORE, space, app))
@@ -373,6 +372,7 @@ export let workerBreak = async (
     message: error.message,
     stack: error.stack ?? '',
   }, { env, space, app })
+    .then(() => reported(error))
     .catch((why) =>
       caught(why, {
         request: `file ${request}`,

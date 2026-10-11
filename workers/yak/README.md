@@ -191,31 +191,27 @@ Each delivered trace chunk carries `during.space` on every entity, and immutable
 ids make queue redelivery safe. The request's span counts close before delivery
 and do not include delivery.
 
-Defects go to Sentry (org `yaks`, project `yaks-app`) and the platform graph of
+Defects go to the platform graph of
 [the independent tracker](../tracker/README.md). This includes an exception
-nothing caught, a break the router or a job files, a Store's own, a connector
-tool's, any `console.error`, and a Workers Build that failed (builds.ts, fed by
-the `yak-builds` queue's event subscription). The shared
+nothing caught, a break the router or a job catches, a Store's own, a connector
+tool's, and a Workers Build that failed (builds.ts, fed by the `yak-builds`
+queue's event subscription). Every catch reports where it happened through
+`defects.ts`. The runtime wraps the gateway, service entrypoints and Durable
+Object lifecycle methods to report escaping failures. The
 [`@yaks/tracker` reporter](../../packages/tracker/README.md) sends the first
 sample immediately, then one repeat sample with its hit count per ten-second
-window. `waitUntil` retains the window after the response; each destination
-receives the same captured exception, fault and hit count independently.
+window. `waitUntil` retains the window after the response. A new bug sends mail
+through the tracker independently of the kernel.
 
 Each defect carries its tags (`tool`, `space`, `app`, `client`, `store`,
-`request`) and the person's eid as the Sentry user, with `account` set to
-`person` or `test` (lib/bots.ts). Space and app slugs are tags; platform defects
-stay in the platform tracker. The release is the Workers version id and the
-environment is `SENTRY_ENVIRONMENT` (`production`, `staging`). A refusal is
-never sent. Without `SENTRY_DSN`, the queue still records defects. Tests and
-`wrangler dev` without either binding send nothing. Source maps are not
-uploaded; the bundle is not minified, so a stack names our functions. To prove a
-deploy's defects arrive, a test account POSTs `/api/defect` at the apex: that is
-a defect tagged `tool:canary`, `account:test` (mcp.ts `canary`).
-
-Sentry's one active uptime monitor (https://yaks.sentry.io/monitors/10414356/)
-GETs https://yourname.yaks.app/recipes/api/query?.recipe&.limit=1 every minute
-and is the one alarm for an outage: it reaches the kernel, the directory and an
-app's store, so each check also costs that store's rows.
+`request`) and the person's eid as `user_id`, with `account` set to `person` or
+`test` (lib/bots.ts). Space and app slugs are tags; platform defects stay in the
+platform tracker. The commit is the Workers version id and `ENVIRONMENT` records
+`production` or `staging`. A refusal of the caller's input is never sent. Tests
+and `wrangler dev` without an `ERRORS` binding send nothing. Wrangler preserves
+function names in the minified bundle. To prove a deploy's failures arrive, a
+test account POSTs `/api/defect` at the apex: that is a defect tagged
+`tool:canary`, `account:test` (mcp.ts `canary`).
 
 **Update the dashboard Deploy command to `../../bin/build-yak deploy`.** The
 previous `npx wrangler deploy` bypasses the repo's deploy wrapper; changing the
@@ -248,12 +244,10 @@ An account’s credential is a connection in the CLI’s graph, never a token fi
 has carried, even after its deployment ages out of Cloudflare’s history. This
 conservatively includes failed builds. An inferred commit or incomplete
 migration history cannot authorize rollback. `errors` reads the preceding window
-from Sentry, the one record of every failure the platform throws or catches
-(sentry.ts), one line per issue. It reads with a Sentry token that can read the
-org (`org:read`), kept in this box’s vault as `sentry`, an `op://` reference,
-and refuses with the line that keeps one when there is none. `tail` watches live
-traffic, using the box’s GNU `timeout` to stop Wrangler and its launcher
-together.
+of platform bugs through the tracker's signed door, one line per bug. The
+tracker connection in this box's config supplies the URL and signing key. `tail`
+watches live traffic, using the box's GNU `timeout` to stop Wrangler and its
+launcher together.
 
 `revert` requires main to match its remote, gates a fresh worktree, and uses the
 same primitive as `task land` to publish. It re-gates after a rebase, checks the
@@ -279,6 +273,7 @@ it. Values never appear here or in the repo.
 | name                                                                                           | required | value                                                                                                                              | without it                                                                                    |
 | ---------------------------------------------------------------------------------------------- | -------- | ---------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------- |
 | `SESSION_SECRET`                                                                               | yes      | any long random string                                                                                                             | no session verifies, no sign-in code is issued                                                |
+| `TRACKER_SECRET`                                                                               | yes      | the independent tracker's signing key, shared with its scoped service door                                                         | app failure reads and archive/resolve cannot reach the tracker                                |
 | `MAIL_TOKEN`, `MAIL_ACCOUNT`                                                                   | yes      | Cloudflare Email Sending API token and the account tag                                                                             | sign-in code letters do not send                                                              |
 | `CF_ANALYTICS_TOKEN`                                                                           | yes      | API token, **Account · Account Analytics · Read** (see Analytics)                                                                  | the meter and Visits report counts are off                                                    |
 | `CF_WORKERS_TOKEN`                                                                             | yes      | API token, **Workers Scripts, D1, R2, Vectorize · Edit; Connectivity Directory · Bind** (see App bindings)                         | an app's files deploy, its `worker.js` does not; no space gets a tunnel                       |
@@ -291,7 +286,6 @@ it. Values never appear here or in the repo.
 | `STRIPE_WEBHOOK_SECRET`                                                                        | billing  | `whsec_…` of the **Your account** destination (see the billing section)                                                            | events go unread and are filed where the owner sees them                                      |
 | `STRIPE_CONNECT_WEBHOOK_SECRET`                                                                | selling  | `whsec_…` of the **Connected accounts** destination (see the Connect section)                                                      | `POST /stripe/connect` answers 503; selling otherwise works                                   |
 | `VAULT_KEY`                                                                                    | yes      | 32 random bytes in base64 (`openssl rand -base64 32`); never changed                                                               | the connections page says keys cannot be saved here                                           |
-| `SENTRY_DSN`                                                                                   | yes      | the `yaks-app` project's DSN (Sentry → Settings → Client Keys)                                                                     | no defect reaches Sentry                                                                      |
 | `MAIL_SINK`                                                                                    | staging  | the owner's address                                                                                                                | staging letters go to their intended recipients                                               |
 | `OPENAI_APPS_CHALLENGE`                                                                        | optional | the token OpenAI's apps directory issues                                                                                           | `/.well-known/openai-apps-challenge` 404s                                                     |
 | `CIMD`                                                                                         | optional | `on` (default when unset) or `off`                                                                                                 | nothing; `off` stops claiming Client ID Metadata Documents                                    |

@@ -35,7 +35,7 @@ import { blobPrefix } from './blob-key.ts'
 import { filled, schemaOf } from '@yaks/tools/declared'
 import { accounted, countedMedia, metered } from './meter.ts'
 import { outbound } from './outbound.ts'
-import { caught } from './sentry.ts'
+import { caught } from './defects.ts'
 import {
   type Answer,
   type Effect,

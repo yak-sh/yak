@@ -4437,7 +4437,6 @@
       "a worker that throws is the app's break, and is filed here": 1.4,
       "a worker's own no is not a break; its 5xx is": 1.9,
       "an ai binding is the app asking ./api/ai/run, and a refusal throws its sentence": 12.1,
-      "an answered worker 5xx reaches Sentry with its app": 3.5,
       "an upload sends the shim, the app, and one way home": 1.3,
       "declared commands have bounded CPU and only scheduled calls have context": 1.8,
       "the shim gives the app its doors and keeps the grant": 13
@@ -4805,7 +4804,6 @@
       "a nullable unique key is raised over older rows without one": 155.7,
       "a raw index creation failure still refuses an empty store": 24.8,
       "a raw writer classifies its changed owner rather than owing a schema census": 61.1,
-      "a refused boot reaches Sentry, tagged with its store": 48.7,
       "a schema that moves re-cuts its definitions and refills": 104.1,
       "a store holding an old shape is rewritten at its next open": 39.7,
       "a unique index survives dropping another column on its table": 164.8,
@@ -5026,18 +5024,6 @@
       "the fee is whole basis points, and never more than the sale": 34.4,
       "the shop example deploys, seeds itself and serves its front": 115.1,
       "with no connect secret the door says so, and nothing else breaks": 24.2
-    },
-    "workers/yak/sentry_context_test.ts": {
-      "object instrumentation retains the caller scope and its reporting client": 3.8
-    },
-    "workers/yak/sentry_test.ts": {
-      "a caught failure is sent, and a refusal is not": 3,
-      "a connector tool names the tool, space, app, client and account": 3.1,
-      "a defect is sent with its tags and the person who hit it": 3.1,
-      "a store killed for its limits is reported, though the retry answers": 2.9,
-      "a store's alarm the runtime cut off is reported by its retry": 12.8,
-      "an interrupted store body leaves no rows or queued write and reports no defect": 9,
-      "signed-in MCP discovery faults before a tool runs reach Sentry with the request id": 259.6
     },
     "workers/yak/serving_test.ts": {
       "/api/stats answers the app's own people, and nobody else": 25.6,

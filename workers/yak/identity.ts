@@ -150,7 +150,7 @@ import {
 import { canon, guess, mac, mint, nameOf, personOf, spend } from './signin.ts'
 import { RETRY, source, within } from './rate.ts'
 import { type Caller, minted, type Who } from './session.ts'
-import { caught } from './sentry.ts'
+import { caught } from './defects.ts'
 import { sha256 } from '@yaks/graph'
 
 // What a grant carries and a token gives back: the person, nothing else.

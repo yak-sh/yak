@@ -53,7 +53,7 @@ import { esc } from './pages.ts'
 import { GALLERY } from './seo.ts'
 import { foot, head, html, top } from './shell.ts'
 import { type Host, hosted, replyTo, url as siteUrl } from './host.ts'
-import { caught } from './sentry.ts'
+import { caught } from './defects.ts'
 
 // Where the gallery lives, and where a letter's links land. What the page says
 // about itself — its title and its line — is seo.ts's, beside the same two

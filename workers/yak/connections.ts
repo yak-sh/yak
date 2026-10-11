@@ -75,7 +75,7 @@ import { cookieValue, opened, seal } from './lib/token.ts'
 import { KERNEL, meta, metaOf } from './meta.ts'
 import type { Answer, Door, Plugin } from './plugin.ts'
 import { enabling, MANAGE, manageAt, OURS, signInAt } from './route.ts'
-import { caught } from './sentry.ts'
+import { caught } from './defects.ts'
 import { domainOf, vouched, type Who, whoIs } from './session.ts'
 import {
   APP,

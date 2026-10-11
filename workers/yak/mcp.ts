@@ -101,7 +101,7 @@ import { type Entry, prompted, standing } from './standing.ts'
 import { type Ctx, inReach, VIEW_MIME } from './tools.ts'
 import { listen, rostered } from './stream.ts'
 import { type Clock, clock, timed } from './timing.ts'
-import { caught, reporter } from './sentry.ts'
+import { caught, reporter } from './defects.ts'
 import { isTestAddress } from './lib/bots.ts'
 import { refuse } from './tool.ts'
 import { url as hostUrl } from './host.ts'
@@ -568,7 +568,7 @@ let stranger = async (
   )
 }
 
-// The canary (T-37865): a test account's POST here is a defect sent to Sentry
+// The canary (T-37865): a test account's POST here is a defect sent to the tracker
 // as that account's, through the same `reporter` a tool's defect takes, which
 // is how a deploy proves its defects arrive with their tags. Anyone else finds
 // nothing here.

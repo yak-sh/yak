@@ -21,7 +21,7 @@
 // refused with a 403 the app reads like any other answer. Three ways it can
 // end, kept apart: the egress's refusal is an answer; the outside service not
 // answering is the app's fetch failing, as it would have without us; and
-// anything else is ours, and Sentry hears it.
+// anything else is ours, and the tracker hears it.
 import { used, USES } from '@yaks/connections'
 import { type Caller, forward, Refused } from '@yaks/egress'
 import type { Comp } from '@yaks/graph'
@@ -30,7 +30,7 @@ import { sentinels } from '@yaks/secrets'
 import { ctxOf } from './connections.ts'
 import type { Env } from './env.ts'
 import type { Answer, Plugin } from './plugin.ts'
-import { caught } from './sentry.ts'
+import { caught } from './defects.ts'
 
 // The outside service's own failure, carried past the catch below unchanged.
 class Wire extends Error {

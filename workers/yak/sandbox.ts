@@ -65,7 +65,7 @@ import { retryOnce } from './door.ts'
 import { type Grant, type Kv, ledger, mint, tokenOf } from './grants.ts'
 import { type Host, url } from './host.ts'
 import { refuse } from './tool.ts'
-import { caught } from './sentry.ts'
+import { caught } from './defects.ts'
 
 /**
  * The container time one build has spent, and when it started spending it.

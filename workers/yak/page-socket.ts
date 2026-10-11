@@ -7,7 +7,7 @@ import { workerUpgrade } from '@yaks/workerd'
 import { type App, appStore, type Space } from './directory.ts'
 import type { Env } from './env.ts'
 import { reading, sources } from './page-graph.ts'
-import { caught } from './sentry.ts'
+import { caught } from './defects.ts'
 import { vouched, type Who } from './session.ts'
 
 type Socket = {

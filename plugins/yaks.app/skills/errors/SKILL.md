@@ -147,21 +147,15 @@ send.
 
 ## Where a break is filed
 
-An `exception` entity in **the app's own store**, carrying `at`, the `request`
-it happened on, the `version` the app was serving, the `message` and the
-`stack`. Every source of a break writes the same shape: a page reporting itself,
-a route that threw on the way in, and a worker that returned 5xx.
+A failure occurrence in the app’s independent tracker, carrying when it
+happened, the request, the version the app was serving, the message and the
+stack. Page reports and worker failures go through the same intake, so a broken
+app store cannot swallow its own report. Platform failures stay in the platform
+tracker; they do not assert that the person’s app broke.
 
-The version number is read fresh rather than from the cache, on purpose. The
-likeliest moment for a break is right after a deploy, and it must name the
-release it happened on and not the one before.
-
-An exception has no `doc` component, and a listing leaves `exception`, `refusal`
-and `error` rows out unless the filter names that diagnostic. Asking for
-`.entry` also admits transcript `refusal` rows, but not exceptions. `.doc` is
-the person's own rows and never the platform's crashes. Asking for the stamps is
-not asking for these: `.created` alone does not drag them in. To query
-exceptions rather than use `app_errors`, name `.exception`.
+`app_errors` reads these occurrences. Reports from before the tracker keep their
+existing ids and archive arguments; the tool translates those ids through their
+original app store. A new bug also notifies the platform operator by mail.
 
 ## Hearing about it once
 

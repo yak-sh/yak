@@ -187,7 +187,7 @@ export let declarationOf = (
   }).catch((error) => {
     // Accepted release metadata is not a caller's proposed write. A refusal
     // while reconstructing it is our defect, not a 4xx to suppress at the
-    // router; preserve the cause and let the kernel report it to Sentry.
+    // router; preserve the cause and let the kernel report it to the tracker.
     if (error instanceof CallError) {
       throw new Error(`Release discovery failed: ${error.message}`, {
         cause: error,

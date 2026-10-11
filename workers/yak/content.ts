@@ -396,7 +396,7 @@ export let WORDS: Record<string, Words> = {
   'app_errors': {
     'title': 'List open errors',
     'description':
-      "List unarchived error reports for the named app: what a page threw in someone's browser, what a request threw on the server, and what the platform reported. Each is a stored record with its own id in the app's data store. New ones are also appended, once, to the next reply from a tool that changes something; a read-only tool leaves them unseen. `fixed` archives the ids it names, which removes them from this list and from replies; `seen` archives without listing every id: `all`, `v3` for everything up to and including that deploy, or a date. Returns any archive count followed by the remaining reports, or “no open errors”. Archiving a report does not fix the underlying problem. Documentation: https://yaks.app/docs/errors.",
+      "List unarchived error reports for the named app: what a page threw in someone's browser, what a request threw on the server, and what the platform reported. Each is a stored record with its own id in the tracker; ids from older app-store reports keep answering. New ones are also appended, once, to the next reply from a tool that changes something; a read-only tool leaves them unseen. `fixed` archives the ids it names, which removes them from this list and from replies; `seen` archives without listing every id: `all`, `v3` for everything up to and including that deploy, or a date. Returns any archive count followed by the remaining reports, or “no open errors”. Archiving a report does not fix the underlying problem. Documentation: https://yaks.app/docs/errors.",
   },
   'app_list': {
     'title': "List the person's apps",

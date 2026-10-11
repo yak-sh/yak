@@ -586,7 +586,7 @@ export let held = (db: Driver, seq: number): boolean =>
 
 /** A kept write, as the door that sent it hears it (meta.ts): not applied
  * yet, and not lost. The failure that held it back was reported where it
- * happened, so this is not a defect of its own (sentry.ts `refused`). */
+ * happened, so this is not a defect of its own (defects.ts `refused`). */
 export class Pending extends Error {
   constructor(message: string) {
     super(message)

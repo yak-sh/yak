@@ -15,7 +15,7 @@ import { type Config, idReport, parse, type Parsed } from './wrangler_app.ts'
 import type { Compiled } from './esbuild.ts'
 import { meta } from './meta.ts'
 import { refuse } from './tool.ts'
-import { caught } from './sentry.ts'
+import { caught } from './defects.ts'
 import { rebind } from './connections.ts'
 import { scriptName } from './dispatch.ts'
 

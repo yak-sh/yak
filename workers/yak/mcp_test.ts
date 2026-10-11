@@ -1074,9 +1074,11 @@ test(
         !listed.includes('unseen'),
         'app_errors is the listing, not a second section',
       )
-      // A break is the platform's row about the app, not a row the person
-      // saved: asking for the stamps does not drag it in, and naming the
-      // component is how it is asked for (C-32607 item 4).
+      assertStringIncludes(listed, 'sift is not a function')
+      assertStringIncludes(listed, 'knead is not a function')
+      // A break is a tracker occurrence, not a row the person saved. The
+      // published app_errors listing above reads both occurrences; the app
+      // graph's stamp and diagnostic reads contain none of those reports.
       let stamps = JSON.parse(
         await agent.tool('graph_query', { q: '.created' }),
       ) as { exception?: unknown }[]
@@ -1086,7 +1088,7 @@ test(
         JSON.parse(
           await agent.tool('graph_query', { q: '.exception' }),
         ).length,
-        2,
+        0,
       )
       assert(
         !(await agent.tool('app_files', { ...app, op: 'list' }))
