@@ -1,8 +1,8 @@
 # @yaks/host
 
-The portable capabilities a host lends the plugins it composes. A **host**
-composes a graph and supplies its storage, vault, blobs, artifacts, tools,
-effects, caller attribution and shutdown signal. The concrete host owns
+The portable assembly and capabilities a host lends the plugins it composes. A
+**host** composes a graph and supplies its storage, vault, blobs, artifacts,
+tools, effects, caller attribution and shutdown signal. The concrete host owns
 connections, directories and resource lifetime; a plugin never receives a SQL
 driver or a state directory.
 
@@ -21,9 +21,71 @@ stop.abort()
 equal(stopped(), true)
 ```
 
-| Export       | Provides                                                                                |
-| ------------ | --------------------------------------------------------------------------------------- |
-| `@yaks/host` | `Host`, composition `Config`, `Options`, `Plug`, `Role`, `Feed`, and `MigrationMonitor` |
+| Export                                        | Provides                                                                                                               |
+| --------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| `@yaks/host`                                  | `assembly`, facet contracts, `Host`, `Config`, `Options`, `Plug`, `Role`, `Feed`, `MigrationMonitor`, `ROLES`, `every` |
+| `@yaks/host/assembly`                         | `assembly`, `Assembly`, `AssemblyOpts`, `Binding`, `Meaning`                                                           |
+| `@yaks/host/roles`                            | Role and facet selection data without loading the assembly runtime                                                     |
+| `@yaks/host/words`                            | Vocabulary assembly, `wordsOf`, `taking`, `Words`, `Declared`, `Taken`                                                 |
+| `@yaks/host/config`                           | Configuration types, `used`, `given`                                                                                   |
+| `@yaks/host/documents`, `@yaks/host/keywords` | Shared intrinsic declarations and vocabulary keywords                                                                  |
+| `@yaks/host/anatomy`                          | Composition evidence, projected when read                                                                              |
+
+## Assembly
+
+A **facet** is a plugin's subpath, such as `./vocab` or `./graph`. A **role**
+selects the facets its process serves: `graph` loads vocabulary and graph hooks,
+`web` loads routes and UI contributions, `effects` loads effect handlers, and a
+plugin's own role loads its service. Tool implementations load on their first
+call. `Load` supplies modules or `null` for a subpath a plugin does not export;
+an import failure is an error.
+
+`assembly(config, roles, load)` loads those facets and builds their vocabulary.
+Its `words` lets the concrete host prepare storage before `bind(binding)` builds
+the graph, effect bindings, tools, runner and routes. The returned services are
+handed to the host's scheduler. No assembly starts a service or owns shutdown.
+
+```ts
+import { assembly, type Load } from '@yaks/host'
+import { effects } from '@yaks/effects'
+import { memoryBlobs } from '@yaks/blob'
+import { ram } from '@yaks/ram'
+import { ramVault } from '@yaks/secrets'
+import { equal } from '@yaks/testing'
+
+let load: Load = () => Promise.resolve(null)
+let plan = await assembly({ plugins: [] }, ['graph'], load)
+let blobs = memoryBlobs()
+let { host } = plan.bind({
+  host: {
+    me: 'example',
+    vault: ramVault(),
+    blobs,
+    artifacts: blobs,
+    stopping: new AbortController().signal,
+    duties: () => Promise.resolve(),
+    end: () => Promise.resolve(),
+    bury: () => Promise.resolve([]),
+    gone: () => Promise.resolve(false),
+  },
+  storage: (host) => ram(host.vocab),
+  effects: (host, disabled) =>
+    effects(host.vocab, {
+      disabled,
+      owes: 'declared',
+      write: (bundles) => host.graph.apply(bundles),
+    }),
+})
+equal(await host.graph.get(['absent']), [])
+```
+
+`Binding.storage` receives the host and a shared query-extension list. After
+storage binds, the assembly adds plugin extensions, then `Binding.extend` adds
+the host's own compilers. `Binding.install` prepares schema before graph-facet
+installers run. `Binding.graph` can add the host's own hooks and graph options
+around the contributed plugins. `Binding.ready` lends graph-dependent
+capabilities before effect factories run. `Binding.search` combines the host's
+text search with the optional plugin meaning index.
 
 ## Storage capabilities
 
@@ -105,5 +167,5 @@ equal(told, ['missing field'])
 
 [@yaks/cli](../cli/README.md) opens the box's database and binds this interface.
 Its caller owns shutdown and closing. This package imports no CLI, native
-storage implementation or filesystem API. It defines the contract, not the box's
-loader, command line or resource provisioning.
+storage implementation or filesystem API. It owns the shared assembly and
+contract; the box owns its loader, command line and resource provisioning.

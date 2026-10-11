@@ -1,6 +1,7 @@
 // T-65023: move bug.title to doc.title, then number bugs without changing eids.
 // Land only: locus runs this explicit-config transition and yak restart together.
-import { compose, facet, type Load } from '@yaks/cli/host'
+import { compose, facet } from '@yaks/cli/host'
+import { type Load } from '@yaks/host'
 import { read } from '../packages/cli/config.ts'
 import { trackerDoc } from '../packages/tracker/vocab.ts'
 import { migrateTitles } from '../packages/tracker/migrate.ts'

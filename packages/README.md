@@ -123,8 +123,9 @@ grouped approximately by function, **not** by dependency order.
   ordering and unsupported queries differ; see the package's compatibility
   table.
 
-- **[@yaks/host](./host)** — The portable capabilities a host lends its plugins;
-  concrete hosts own connections, directories and resource lifetime.
+- **[@yaks/host](./host)** — The portable plugin assembly and capabilities a
+  host lends its plugins; concrete hosts own connections, directories and
+  resource lifetime.
 - **[@yaks/graph](./graph)** — The entity/component API and phased `apply()`
   operation: filter, normalize, validate and commit changes using a supplied
   `Storage` adapter. Plugins add schema declarations and lifecycle hooks.
@@ -567,10 +568,11 @@ that every package's words load beside every other's, and that a package's
 A program does not import a plugin as a whole. A plugin says what it
 contributes, one subpath per kind of contribution, and never where it runs. A
 process serves roles and imports only the subpaths of the roles it serves
-(`@yaks/cli` `compose`, `packages/cli`): `graph` takes `./vocab`, `./graph` and
-`./tools`; `web` takes `./routes`; `effects` takes `./effects`; a plugin's own
-role, named by its package, takes its `./service`; and rendering, a browser tab
-or the `yak` command, takes `./vocab`, `./views` and `./tui`.
+(`@yaks/host` `assembly`): `graph` takes `./vocab`, `./graph` and `./tools`
+(tool code loads on first call); `web` takes `./routes` and `./ui`; `effects`
+takes `./effects`; a plugin's own role, named by its package, takes its
+`./service`; and rendering, a browser tab or the `yak` command, takes `./vocab`,
+`./views` and `./tui`.
 
 | subpath     | what it exports                                                                                               | may import          |
 | ----------- | ------------------------------------------------------------------------------------------------------------- | ------------------- |

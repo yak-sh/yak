@@ -23,14 +23,14 @@ import {
   dbOf,
   every,
   facet,
-  type Facets,
-  type Load,
   type Options,
   read,
   type Role,
   writer,
 } from './host.ts'
+import { type Facets, type Load } from '@yaks/host'
 import { sealed } from '@yaks/secrets'
+import { lit } from '@yaks/sql'
 import { signer } from './local.ts'
 import { test, until } from '@yaks/testing'
 
@@ -1744,5 +1744,45 @@ test('query extensions receive storage capabilities without a driver or state di
     assertEquals(await host.graph.get(['absent']), [])
   } finally {
     await host.close()
+  }
+})
+
+// A plugin may own a text clause even when this host also lends full-text search.
+let textCompilerHost = await composing({ db: ':memory:', plugins: ['text'] }, [
+  'graph',
+], async (_plugin, part) => {
+  await Promise.resolve()
+  if (part == 'vocab') {
+    return {
+      docs: [{
+        $defs: {
+          book: {
+            component: true,
+            type: 'object',
+            properties: { title: { type: 'string', search: true } },
+          },
+        },
+      }],
+    } as Facets[typeof part]
+  }
+  if (part == 'graph') {
+    return {
+      extend: () => [{ name: 'all-books', compile: { text: () => lit(true) } }],
+    } as Facets[typeof part]
+  }
+  return null
+}, { process: false })
+await textCompilerHost.graph.apply([{
+  entity: { eid: 'book' },
+  book: { title: 'Dune' },
+}])
+test('a plugin text compiler takes precedence over the host full-text index', async () => {
+  try {
+    assertEquals(
+      (await textCompilerHost.graph.read('unindexed')).map((b) => b.entity.eid),
+      ['book'],
+    )
+  } finally {
+    await textCompilerHost.close()
   }
 })

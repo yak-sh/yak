@@ -67,3 +67,10 @@ export type Config = {
    * sets. */
   duties?: boolean
 }
+
+/** The package a plugin entry names. */
+export let used = (plug: Plug): string =>
+  typeof plug == 'string' ? plug : plug.use
+/** The options passed to its factories. */
+export let given = (plug: Plug): Options =>
+  typeof plug == 'string' ? {} : plug.with ?? {}

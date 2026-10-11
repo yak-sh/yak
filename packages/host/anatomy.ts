@@ -16,7 +16,7 @@ import type { Vocab, VocabDoc } from '@yaks/vocab'
 // on resolved options is a vault read, not a secret-name declaration.
 export let secretNames = (
   source: unknown,
-  seen = new Set<object>(),
+  seen: Set<object> = new Set<object>(),
 ): string[] => {
   if (!source || typeof source != 'object' || seen.has(source)) return []
   seen.add(source)
@@ -45,19 +45,39 @@ let hints = [
   'roles',
 ]
 
+/** Evidence gathered during one composition, projected only when read. */
+export type Composition = {
+  read: () => Anatomy
+  observe: (observation: AnatomyObservation) => void
+  attempted: (owner: string, name: string) => void
+  loaded: (owner: string, name: string, present: boolean) => void
+  binding: (owner: string, name: string) => void
+  declarations: (docs: VocabDoc[], vocab: Vocab) => void
+  graph: (owner: string, plugins: Plugin[]) => void
+  graphed: () => void
+  tier: (tools: NamedTool[]) => void
+  runs: (owner: string, names: string[], joined: string[]) => void
+  effects: (handlers: Map<string, string>, serving: boolean) => void
+  due: (names: string[]) => void
+  routes: (owner: string, routes: { method: string; path: string }[]) => void
+}
+
 /** Capture only already-made contributions; none of these methods runs code.
  * What a composition observes is kept as it arrives and applied when its
  * anatomy is read: projecting the vocabulary's declarations is tens of
  * milliseconds of every command, and almost no command reads its anatomy. */
-export let nativeAnatomy = (
+export let compositionAnatomy = (
   packages: string[],
   roles: readonly string[],
   common: Record<string, readonly string[]>,
   secrets: { name: string; package: string }[] = [],
-) => {
-  let source: AnatomySource = {
+  where: Pick<AnatomySource, 'host' | 'scope'> = {
     host: 'native',
     scope: 'native',
+  },
+): Composition => {
+  let source: AnatomySource = {
+    ...where,
     observed: {
       packages: true,
       roles: true,

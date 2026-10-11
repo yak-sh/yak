@@ -2,7 +2,8 @@
 // nor any closures; the chosen command loads its implementation by role.
 import { type Config, used } from './config.ts'
 import type { Declared } from './words.ts'
-import type { CliCommand, VocabFacet } from './host.ts'
+import type { CliCommand } from './host.ts'
+import type { VocabFacet } from '@yaks/host'
 import { remember } from './memo.ts'
 type Control = Omit<CliCommand, 'run'>
 export type Declarations = {

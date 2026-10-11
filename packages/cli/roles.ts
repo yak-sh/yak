@@ -3,11 +3,7 @@
 import type { Declared } from './words.ts'
 import type { Role } from './host.ts'
 
-export let ROLES = {
-  graph: ['vocab', 'graph', 'tools'],
-  web: ['routes', 'ui'],
-  effects: ['effects'],
-} as const
+export { ROLES } from '@yaks/host/roles'
 
 /** The graph and the roles a tool requests. A graph with no effect pool runs
  * its effects where they are committed. */

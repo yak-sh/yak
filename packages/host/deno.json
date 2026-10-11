@@ -2,7 +2,14 @@
   "name": "@yaks/host",
   "version": "0.2.10",
   "exports": {
-    ".": "./mod.ts"
+    ".": "./mod.ts",
+    "./assembly": "./assembly.ts",
+    "./roles": "./roles.ts",
+    "./words": "./words.ts",
+    "./config": "./config.ts",
+    "./documents": "./documents.ts",
+    "./keywords": "./keywords.ts",
+    "./anatomy": "./anatomy.ts"
   },
   "license": "Apache-2.0",
   "description": "The portable capabilities a host lends the plugins it composes.",

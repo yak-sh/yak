@@ -46,7 +46,7 @@ import {
 } from '@yaks/render/views'
 import { subpath, subpaths } from './config.ts'
 import type { AnatomyObserver } from '@yaks/code/anatomy'
-import { understood } from './keywords.ts'
+import { understood } from '@yaks/host/keywords'
 import type { Tty } from './run.ts'
 
 // What an answer wears in a terminal: @yaks/ui's components and these views'

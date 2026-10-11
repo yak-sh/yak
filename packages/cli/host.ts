@@ -32,9 +32,9 @@ import { machineCapabilities } from './machines.ts'
  * a line of HTTP, and a process that serves no `web` never asks a plugin for a
  * route.
  *
- * {@link compose} is the one place a graph is assembled: it imports the facets,
- * opens one SQLite file, builds the graph over the plugins' rules, and wires in
- * what the other roles bring. A subpath a package does not export is skipped;
+ * {@link compose} opens the box's SQLite file, vault and capabilities and calls
+ * {@link assembly} in @yaks/host to load facets and build the graph over the
+ * plugins' rules and the other roles' contributions. A subpath a package does not export is skipped;
  * one that exists and fails to import is an error, never a skip. Nothing here
  * binds a port: `serve`, declared and implemented by
  * {@link https://jsr.io/@yaks/api | @yaks/api}, listens with the
@@ -51,26 +51,8 @@ import { machineCapabilities } from './machines.ts'
  * @module
  */
 
-import { type Contributions, gather } from '@yaks/ui/contributions'
-import {
-  type Actor,
-  type Comp,
-  type Eid,
-  type Graph,
-  graph,
-  type NamedTool,
-  type Plugin,
-  toolName,
-} from '@yaks/graph'
-import { type Reply, type Runner, runner } from '@yaks/tools'
-import { loadTools, type Runs, type Search, tier } from '@yaks/graph/tools'
-import { toolsIn } from '@yaks/vocab/tools'
-import {
-  effectsIn,
-  type Keywords,
-  type Vocab,
-  type VocabDoc,
-} from '@yaks/vocab'
+import type { Actor, Comp, Eid, Graph } from '@yaks/graph'
+import type { Vocab } from '@yaks/vocab'
 import {
   ended,
   EXIT,
@@ -81,7 +63,7 @@ import {
   store as machine,
   vanished,
 } from '@yaks/process'
-import { type Backings, type Derived, type Extension, lit } from '@yaks/sql'
+import { lit } from '@yaks/sql'
 import {
   columns,
   installMigrations,
@@ -90,13 +72,8 @@ import {
   type Store,
 } from '@yaks/sqlite'
 import { open } from '@yaks/sqlite/db'
-// Types only. A route and a request handler are @yaks/api's words, and a host
-// names the shape of what it passes through without importing a line of HTTP:
-// the package that answers requests is a plugin a config lists, never a
-// dependency of this one.
-import type { Authenticate, Filter, Handler, Route } from '@yaks/api'
 import { adopt, fields as searched, find, type Hit, search } from '@yaks/fts'
-import { type Effects, effects, type Handlers, released } from '@yaks/effects'
+import { effects, released } from '@yaks/effects'
 import { type Local, peek, warm } from '@yaks/secrets'
 import { reporter, revision } from './report.ts'
 import {
@@ -108,7 +85,9 @@ import {
   sqliteBlobs,
 } from '@yaks/blob'
 import { type Config, dbOf, given, type Options, used } from './config.ts'
-import { facet, type Taken, taking, wordsOf } from './words.ts'
+import { facet } from './words.ts'
+import { assembly, type Facets, type Load, type MeaningHit } from '@yaks/host'
+export { every } from '@yaks/host/roles'
 import { declarations } from './declarations.ts'
 import { ROLES } from './roles.ts'
 export { ROLES } from './roles.ts'
@@ -118,7 +97,7 @@ import type { Command, Ctx } from './run.ts'
 import { roles as serveRoles, type Thread } from '@yaks/threads'
 export type { Thread } from '@yaks/threads'
 import { during, outcome, peek as tracing, type Span } from '@yaks/trace'
-import { nativeAnatomy, secretNames } from './anatomy.ts'
+import { compositionAnatomy, secretNames } from '@yaks/host/anatomy'
 import { AsyncLocalStorage } from 'node:async_hooks'
 import { type Context as TraceContext, installContext } from '@yaks/trace'
 import { spool } from '@yaks/tracker/report'
@@ -147,85 +126,11 @@ export {
   used,
 } from './config.ts'
 
-import type { Feed, Host } from '@yaks/host'
+import type { Host } from '@yaks/host'
 export type { Feed, Host } from '@yaks/host'
 
 /** A role: one of {@link ROLES}, or a plugin's package, for its service. */
 export type Role = string
-
-/** Every subpath a role imports. */
-export type FacetName =
-  | typeof ROLES[keyof typeof ROLES][number]
-  | 'service'
-  | 'cli'
-
-/** Every role a config's graph has: the three every graph has, and one per
- * plugin for its service (a plugin with none brings nothing to it). */
-export let every = (config: Config): Role[] => [
-  ...Object.keys(ROLES),
-  ...(config.plugins ?? []).map(used),
-]
-
-// Whether a role is one every graph has, rather than a plugin's service.
-let common = (role: Role): role is keyof typeof ROLES =>
-  Object.hasOwn(ROLES, role)
-
-/** `<plugin>/vocab` — what the plugin declares, and nothing that could not
- * run in a browser tab: a page importing this must never reach SQL, a database
- * driver or a server runtime. */
-export type VocabFacet = {
-  /** what the plugin is: its package's own description, from its deno.json,
-   * written on each of its documents beside its name */
-  description?: string
-  /** the components and tools this plugin declares */
-  docs?: VocabDoc[]
-  /** the JSON Schema keywords those documents use (@yaks/vocab `loadVocab`) */
-  keywords?: Keywords[]
-  /** properties the store computes rather than stores, written as SQL */
-  derived?: (vocab: Vocab) => Derived
-  /** the rows each computed component this plugin declares is read from
-   * (@yaks/sql `Backing`) */
-  backed?: (vocab: Vocab) => Backings
-}
-
-/** `<plugin>/graph` — what a write means, what a query may ask for, and who
- * is writing. `install` prepares its tables only during explicit installation;
- * `plugins` binds hooks without changing storage. `extend` contributes the clause
- * compilers every read path consults (@yaks/sql `Extension`), which is how a
- * package holding an index of its own — a text search, a vector, a link table
- * — can answer a clause the compiler would otherwise reject.
- *
- * `authenticate` names the caller behind a request, for every door over this
- * graph: a command line asks it about the session it speaks for exactly as an
- * HTTP request is asked (local.ts `signer`), so it belongs to the graph role
- * rather than to the routes. It is a factory like every other plugin export,
- * because naming a caller is a read: @yaks/session resolves a request to the
- * session it claims to speak for, which it can only do through the host's own
- * graph. It is handed the host with nothing open on it yet — keep the
- * reference, do not call it. At most one plugin may export it. */
-export type GraphFacet = {
-  /** Schema and migrations, run only by the explicit graph installer. */
-  install?: (host: Host, options: Options) => void
-  plugins?: (host: Host, options: Options) => Plugin[]
-  /** Bundles owed to a caller beside the answer to a direct tool call. */
-  reply?: (host: Host, options: Options) => Reply
-  extend?: (host: Host, options: Options) => Extension[]
-  /** Search a phrase by meaning through this plugin's own index. */
-  meaning?: (
-    host: Host,
-    options: Options,
-  ) => (words: string, opts?: { limit?: number }) => Promise<MeaningHit[]>
-  authenticate?: (host: Host, options: Options) => Authenticate
-  /** the commits other hosts make to this store (@yaks/journal's feed) */
-  feed?: (host: Host, options: Options) => Feed
-}
-
-/** A result from a plugin's meaning index, with an excerpt of its source. */
-export type MeaningHit = {
-  entity: Eid
-  similarity: number
-  excerpt: string
-}
 
 // Scores from FTS and a vector space are incomparable. Rank positions give
 // each source a vote; direct word matches get a small lead, and a hit in both
@@ -268,17 +173,6 @@ let merged = (words: Hit[], meaning: MeaningHit[], limit: number) => {
     .slice(0, limit)
 }
 
-/** `<plugin>/tools` — the functions behind its `tool: true` declarations,
- * keyed by tool name.
- *
- * A factory, like every other plugin export, because a tool function needs the
- * same things the others do: a check over a package's own SQL table reaches it
- * through `host.storage` (@yaks/sqlite's storage scan, @yaks/embedding's vector
- * index), and a threshold or a relation name belongs in the config, not the
- * code. What a tool function is handed per call — the graph, the caller, the
- * arguments — still arrives on the tool context. */
-export type ToolsFacet = { runs?: (host: Host, options: Options) => Runs }
-
 /** A plugin's command-line control. It opens the graph but is not a persisted
  * tool call: a password prompt or OAuth attempt cannot be replayed by a
  * server after the terminal process exits. */
@@ -292,96 +186,6 @@ export type CliCommand = Omit<Command, 'run'> & {
 
 /** `<plugin>/cli` — commands for the person at this terminal, not graph tools. */
 export type CliFacet = { commands?: CliCommand[] }
-
-/** `<plugin>/effects` — the code behind effects the composed vocabulary
- * declares (`effect: true`), keyed by the name each is declared under. A mail
- * sender, a process launcher: what an effect acts on is named in this
- * plugin's options. Usually the code is the declaring plugin's own; a plugin
- * may instead handle one another declares, lending what only it has (the
- * machine a transcript's run is given, @yaks/harness). Each effect has one
- * handler, and a declared effect this process gives no code owes no run. */
-export type EffectsFacet = {
-  effects?: (host: Host, options: Options) => Handlers
-}
-
-// A plugin's `./effects` handling a name no vocabulary declares: code that
-// would never run, since nothing owes it.
-let undeclared = (plugin: string, name: string) =>
-  new Error(`${plugin} handles ${name}, which nothing declares`)
-
-// Two plugins' `./effects` handling one name: a run is done once, by one.
-let twice = (name: string, plugins: string[]) =>
-  new Error(`${name} is handled by both ${plugins.join(' and ')}`)
-
-/** `<plugin>/routes` — the HTTP a plugin adds, and, for the one plugin that
- * hosts them, what answers a request at all.
- *
- * `handler` is exported by at most one plugin per host; it is called last,
- * with the graph open and `host.routes` holding every listed plugin's routes,
- * and what it returns is {@link Host.handler}. @yaks/api is that plugin, so a
- * config naming it serves HTTP and a config leaving it out has a host that
- * answers no request and never asks the others for routes. */
-export type RoutesFacet = {
-  routes?: (host: Host, options: Options) => Route[]
-  /** a check every request passes before any route answers it; a plugin's
-   * word on which requests reach this host at all (@yaks/tunnel's link) */
-  filter?: (host: Host, options: Options) => Filter
-  handler?: (host: Host, options: Options) => Handler
-}
-
-/** One duty that exactly one process at a time runs: the lease name
- * to hold it under, and the work. `run` does at least one pass and then keeps
- * going until the signal aborts — a loop on a timer, or a single pass followed
- * by a wait — so the lease stays this process's for as long as it is up. */
-export type Duty = {
-  /** the lease name it is held under: the package that owns the work */
-  name: string
-  run: (signal: AbortSignal) => void | Promise<void>
-}
-
-/** `<plugin>/service` — the work this plugin keeps doing while a process
- * serving that plugin's role is up: a timer, a poll, a sweep. It is neither a
- * request nor what a commit owes, which is why neither `routes` nor `effects`
- * could hold it: a scheduled wake coming due, and a mailbox that has to be
- * polled, are things nobody is calling about.
- *
- * It does at least one pass and then keeps going until the signal aborts, so
- * one function serves a process of either shape: a server holds it open for as
- * long as it is up, and a one-shot command hands it a signal that has already
- * aborted and gets the single pass. Of the processes serving that role over
- * one graph, which one is doing it is settled by a lease
- * ({@link Host.duties}). */
-export type ServiceFacet = {
-  service?: (
-    host: Host,
-    options: Options,
-    signal: AbortSignal,
-  ) => void | Promise<void>
-}
-
-/** What each subpath a role imports is expected to export. Every field is
- * optional: a plugin exports what it has, and the host uses what it finds. */
-export type Facets = {
-  cli: CliFacet
-  vocab: VocabFacet
-  graph: GraphFacet
-  tools: ToolsFacet
-  effects: EffectsFacet
-  ui: Contributions
-  routes: RoutesFacet
-  service: ServiceFacet
-}
-
-/** How one of a plugin's subpaths becomes a module. `null` means the package
- * does not export that subpath. Injectable, so a test can assemble a host from
- * modules it wrote inline rather than files on disk. */
-export type Load = {
-  <F extends FacetName>(plugin: string, facet: F): Promise<Facets[F] | null>
-  /** Import exactly the selected facets in one dependency graph, if supported. */
-  together?: (
-    requests: readonly (readonly [string, FacetName])[],
-  ) => Promise<unknown>
-}
 
 /** An assembled host: everything a plugin factory was given, plus what only
  * the caller of {@link compose} needs. */
@@ -482,24 +286,6 @@ let revealing = (value: unknown, vault: Local): unknown => {
 export let writer = (vocab: Vocab): Actor | null =>
   vocab.comp(PROCESS) ? { by: selfEid(), via: selfEid() } : null
 
-// At most one plugin may name the caller; two would mean the answer depends on
-// import order, which is not an answer. Whoever it is, this PROCESS is the
-// fallback: a request no plugin claimed is this machine's own writing, not
-// nobody's.
-let doorman = (
-  graphs: [GraphFacet, Options, string][],
-  host: Host,
-  self: Actor | null,
-): Authenticate => {
-  let said = graphs.filter(([r]) => r.authenticate)
-  if (said.length > 1) {
-    throw new Error(`${said.length} plugins authenticate — a door has one`)
-  }
-  let [mod, options] = said[0] ?? []
-  let ask = mod?.authenticate?.(host, options ?? {})
-  return ask ? async (request) => (await ask(request)) ?? self : () => self
-}
-
 // Each plugin a config names, with its options, a secret among them read when
 // accessed.
 let named = (config: Config, vault?: Local): [string, Options][] =>
@@ -590,74 +376,42 @@ let composed = async (
   let declared = load === facet ? await declarations(config) : undefined
   let stored = new Map(declared?.vocabs.map((v) => [v.plugin, v]))
   part?.('roles')
-  let observed = nativeAnatomy(
+  let observed = compositionAnatomy(
     plugins.map(([p]) => p),
     roles,
     ROLES,
     secretDeclarations,
   )
-  // Import observation belongs to this composition, not wordsOf's cache.
-  let observedLoad: Load = async (plugin, name) => {
-    observed.attempted(plugin, name)
-    let data = name == 'vocab' ? stored.get(plugin) : undefined
-    let loaded = data && !data.factories
-      ? data.value as Facets[typeof name] | null
-      : declared && !declared.facets[plugin].includes(name)
-      ? null
-      : await load(plugin, name)
-    observed.loaded(plugin, name, loaded !== null)
-    return loaded
-  }
-  // A service role names a plugin, so it has to be one the config lists.
-  let services = roles.filter((r) => !common(r))
-  for (let r of services) {
-    if (!plugins.some(([p]) => p == r)) {
-      throw new Error(`no plugin ${r} in this config serves that role`)
-    }
-  }
-  // Only the facets of the roles served. A role not served is a facet never
-  // imported, so an empty list stands for it. The graph's `./tools` is not
-  // among them: a plugin's tools are declared by its vocabulary, and its code
-  // is imported by the first call of one of them — a command runs one tool,
-  // and most of the plugins' code is for tools it will not run.
-  let take = <F extends FacetName>(role: Role, name: F): Promise<Taken<F>> =>
-    roles.includes(role)
-      ? taking(plugins, name, observedLoad)
-      : Promise.resolve([])
-  part?.('facets')
-  await load.together?.(plugins.flatMap(([plugin]) =>
-    [
-      ...roles.includes('graph')
-        ? [
-          ...declared && !stored.get(plugin)?.factories
-            ? []
-            : ['vocab'] as const,
-          'graph' as const,
-        ]
-        : [],
-      ...roles.includes('effects') ? ['effects'] as const : [],
-      ...roles.includes('web') ? ['routes', 'ui'] as const : [],
-      ...services.includes(plugin) ? ['service'] as const : [],
-    ].filter((name) => !declared || declared.facets[plugin].includes(name)).map(
-      (name) => [plugin, name] as const,
-    )
-  ))
-  let [vocabs, graphs, watched, served, dressed, running] = await Promise.all([
-    take('graph', 'vocab'),
-    take('graph', 'graph'),
-    take('effects', 'effects'),
-    take('web', 'routes'),
-    take('web', 'ui'),
-    taking(
-      plugins.filter(([p]) => services.includes(p)),
-      'service',
-      observedLoad,
-    ),
-  ])
-  part?.('vocabulary')
-  let { docs, vocab, derived, backed } = wordsOf(vocabs)
-  part?.('anatomy')
-  observed.declarations(docs, vocab)
+  // A declaration hit substitutes data only while its sources agree. The
+  // assembly sees the same facets as an ordinary loader, without CLI policy.
+  let preparedLoad: Load = Object.assign(
+    async <F extends keyof Facets>(
+      plugin: string,
+      name: F,
+    ): Promise<Facets[F] | null> => {
+      let data = name == 'vocab' ? stored.get(plugin) : undefined
+      return data && !data.factories
+        ? data.value as Facets[F] | null
+        : declared && !declared.facets[plugin].includes(name)
+        ? null
+        : await load(plugin, name)
+    },
+    {
+      together: (requests: readonly (readonly [string, keyof Facets])[]) =>
+        load.together?.(
+          requests.filter(([plugin, name]) =>
+            (!declared || declared.facets[plugin].includes(name)) &&
+            (name != 'vocab' || !declared || !!stored.get(plugin)?.factories)
+          ),
+        ) ?? Promise.resolve(),
+    },
+  )
+  let plan = await assembly(config, roles, preparedLoad, {
+    plugins,
+    observed,
+    part,
+  })
+  let { vocab, derived, backed } = plan.words
 
   part?.('sqlite')
   let installing = opts.install ?? path == ':memory:'
@@ -703,430 +457,160 @@ let composed = async (
     // lists a ranked `search` tool.
     let text = searched(vocab)
 
+    let host: Host
     let g: Graph | undefined
-    // Built further down, once the plugins have said what they contribute, and
-    // reached through the host by the facets that need them: `@yaks/api`'s
-    // `serve` is a tool, so it is asked for at a moment when the handler it
-    // listens with does not exist yet, and reads it off the host when the call
-    // arrives. The routes and the tools are the same story one step earlier —
-    // a plugin that hosts routes, or mounts one, reads both off the host while
-    // it is being assembled.
-    let answering: Handler | undefined
-    let paths: Route[] = []
-    let filters: Filter[] = []
-    let made: NamedTool[] | undefined
-    let ranked: Search | undefined
-    let replying: Reply | undefined
-    let calls: Runner | undefined
-    let watching: Effects | undefined
-    let doing:
-      | ((signal?: AbortSignal, only?: readonly Role[]) => Promise<void>)
-      | undefined
+    let doing: Host['duties'] | undefined
     let stopping = new AbortController()
-    // Who is calling is settled before anything is built: a plugin's route
-    // needs the same answer @yaks/api's own endpoints get, or what it writes
-    // is attributed to nobody while `/apply` beside it is attributed
-    // correctly. The host process itself is that answer until the plugins are
-    // asked, which happens a moment later — `who` reads the variable rather
-    // than a copy of its value.
-    for (let [ui, , plugin] of dressed) {
-      observed.observe({
-        package: plugin,
-        facet: 'ui',
-        loaded: true,
-        bound: true,
-        value: ui,
-      })
-    }
     let self = writer(vocab)
-    let authenticate: Authenticate = () => self
-    let host: Host = {
-      anatomy: observed.read,
-      observe: observed.observe,
-      config,
-      report: (error, context = {}) =>
-        report(error, {
-          ...context,
-          during: { process: selfEid(), ...context.during },
-        }),
-      ui: gather(dressed.map(([facet]) => facet)),
-      roles,
-      vocab,
-      vault,
-      blobs: sqliteBlobs(sql),
-      artifacts,
-      derived,
-      reader: opts.reader,
-      me: selfEid(),
-      who: (request) => authenticate(request),
-      feed: (each) => {
-        let stops = graphs.flatMap(([r, options]) =>
-          r.feed ? [r.feed(host, options)(each)] : []
-        )
-        return () => stops.forEach((stop) => stop())
+    let bound = plan.bind({
+      host: {
+        vault,
+        blobs: sqliteBlobs(sql),
+        artifacts,
+        reader: opts.reader,
+        me: selfEid(),
+        stopping: stopping.signal,
+        report: (error, context = {}) =>
+          report(error, {
+            ...context,
+            during: { process: selfEid(), ...context.during },
+          }),
+        duties: (signal, only) => {
+          if (!doing) throw new Error('the duties are not built yet')
+          return doing(signal, only)
+        },
+        end: async (holder, why) => {
+          // A thread that failed before it wrote itself in holds nothing.
+          if (!self || !g || !(await g.get([holder])).length) return
+          if (!opts.readOnly) await host.runner.interrupt(why, holder)
+          await g.apply([
+            ...await released(g, holder),
+            { entity: { eid: holder }, [EXIT]: {} },
+          ])
+        },
+        bury: async () => {
+          if (!self || !g) return []
+          let dead = await vanished(machine(g), { me: selfEid() })
+          for (let b of dead) {
+            let pid = (b[PROCESS] as Comp | undefined)?.pid
+            await host.end(
+              b.entity.eid,
+              `interrupted: process ${pid} ended without closing`,
+            )
+          }
+          return dead
+        },
+        gone: async (holder) =>
+          !!self && !!g && await gone(machine(g), holder, { me: selfEid() }),
       },
-      stopping: stopping.signal,
-      get storage(): Store {
-        if (!store) throw new Error('the store is not open yet')
+      actor: self,
+      process: started({ roles: [...roles] })[PROCESS] as Comp,
+      readOnly: opts.readOnly,
+      storage: (built, extend) => {
+        host = built
+        store = storage(sql, vocab, {
+          derived,
+          backed,
+          extend,
+          number: config.numbers ?? false,
+          adopt: config.adopt ?? false,
+        })
         return store
       },
-      get graph(): Graph {
-        if (!g) throw new Error('the graph is not open yet')
-        return g
+      // The text index follows plugin compilers, preserving their precedence.
+      extend: () => text.length ? [search(text, sql)] : [],
+      install: installing ? (built) => built.storage.install() : undefined,
+      effects: (built, disabled) => {
+        return effects(vocab, {
+          owes: roles.includes('effects') ? 'handled' : 'declared',
+          disabled,
+          write: (b) => built.graph.apply(b, { trusted: true }),
+          owner: built.me,
+          lease: config.lease,
+          gone: built.gone,
+          nudge: opts.thread?.nudge,
+          report: (error, job) =>
+            void report(error, {
+              during: { entity: job.event.entity.eid, process: built.me },
+              tags: { handler: job.handler },
+            }),
+        })
       },
-      get handler(): Handler | undefined {
-        return answering
-      },
-      get routes(): Route[] {
-        return paths
-      },
-      get filters(): Filter[] {
-        return filters
-      },
-      get tools(): NamedTool[] {
-        if (!made) throw new Error('the tools are not built yet')
-        return made
-      },
-      get search(): Search | undefined {
-        return ranked
-      },
-      get reply(): Reply | undefined {
-        return replying
-      },
-      get fx(): Effects {
-        if (!watching) throw new Error('the effects are not built yet')
-        return watching
-      },
-      get runner(): Runner {
-        if (!calls) throw new Error('the tool runner is not built yet')
-        return calls
-      },
-      duties: (signal, only) => {
-        if (!doing) throw new Error('the duties are not built yet')
-        return doing(signal, only)
-      },
-      end: async (holder, why) => {
-        // A thread that failed before it wrote itself in holds nothing.
-        if (!self || !g || !(await g.get([holder])).length) return
-        if (!opts.readOnly) await calls?.interrupt(why, holder)
-        await g.apply([
-          ...await released(g, holder),
-          { entity: { eid: holder }, [EXIT]: {} },
-        ])
-      },
-      bury: async () => {
-        if (!self || !g) return []
-        let dead = await vanished(machine(g), { me: selfEid() })
-        for (let b of dead) {
-          let pid = (b[PROCESS] as Comp | undefined)?.pid
-          await host.end(
-            b.entity.eid,
-            `interrupted: process ${pid} ended without closing`,
-          )
+      ready: (built) => {
+        host = built
+        g = built.graph
+        // Read workers return their recorded trees to their caller rather than
+        // duplicating delivery. A passing CLI and every duty/web process observe
+        // their graph, without composing tracker tables into the watched store.
+        if (opts.process !== false) {
+          captureControl = config.tracker ? traceControl(path) : undefined
+          recorded = traces(g, {
+            process: selfEid(),
+            take: captureControl?.take ??
+              (() => Promise.resolve({ requested: false, rate: 0 })),
+            sink: config.tracker
+              ? spool(files(config.tracker.spool).append)
+              : undefined,
+          })
         }
-        return dead
+        built.machines = machineCapabilities(built, config, path)
+        built.machines.resolveHome = resolveSessionHome(sql, () => built.graph)
       },
-      gone: async (holder) =>
-        !!self && !!g && await gone(machine(g), holder, { me: selfEid() }),
-    }
-    // Provider factories may retain the graph capability, but do no IO until a session asks.
-    authenticate = doorman(graphs, host, self)
-    // The clause compilers belong to the store, so they are gathered before it
-    // is built: what a query may ask for is settled once, while the host is
-    // assembled, and every read path — `/query`, `/ws`, a tool, the command
-    // line — goes through them. A factory is handed the host with nothing open
-    // on it yet, the same promise `graph` makes: keep the reference, do not
-    // call it.
-    part?.('storage')
-    // Bind storage before asking extensions: indexes need its statement
-    // capability, not the connection. The shared list fills before any read.
-    let extend: Extension[] = []
-    store = storage(sql, vocab, {
-      derived,
-      backed,
-      extend,
-      number: config.numbers ?? false,
-      adopt: config.adopt ?? false,
+      search: (built, meaning) => {
+        part?.('fts')
+        if (installing && text.length) adopt(sql, text, derived)
+        part?.('search')
+        return text.length
+          ? async (words, opts) => {
+            let limit = Math.max(
+              0,
+              Math.min(100, Math.trunc(opts?.limit ?? 20)),
+            )
+            if (!limit) return []
+            let count = Math.max(20, limit * 2)
+            let [literal, similar] = await Promise.all([
+              Promise.resolve(find(sql, text, words, { limit: count })),
+              meaning?.(words, { limit: count }) ?? Promise.resolve([]),
+            ])
+            let hits = merged(literal, similar, limit)
+            let found = await built.graph.get(hits.map((h) => h.entity))
+            let at = new Map(found.map((b) => [b.entity.eid, b]))
+            return hits.flatMap((h) => {
+              let b = at.get(h.entity)
+              if (!b) return []
+              let title = Object.values(b).flatMap((c) =>
+                c && typeof c == 'object' && 'title' in c &&
+                  typeof c.title == 'string'
+                  ? [c.title]
+                  : []
+              )[0] ?? ''
+              return [{
+                entity: b.entity,
+                hit: {
+                  kind: vocab.kindOf(b) || 'entity',
+                  title,
+                  snippet: h.snippet,
+                  source: h.source,
+                  ...(b.entry && typeof b.entry == 'object' &&
+                      'session' in b.entry && typeof b.entry.session == 'string'
+                    ? {
+                      session: b.entry.session,
+                      speaker: b.output ? 'output' : 'input',
+                    }
+                    : {}),
+                },
+              }]
+            })
+          }
+          : undefined
+      },
     })
-    part?.('extensions')
-    extend.push(
-      ...graphs.flatMap(([r, options]) => r.extend?.(host, options) ?? []),
-    )
-    if (text.length) extend.push(search(text, sql))
-    part?.('install')
-    if (installing) {
-      store.install()
-      for (let [r, options] of graphs) r.install?.(host, options)
-    }
-    part?.('effects')
-
-    // The registry, in every process. A process serving `effects` owes runs
-    // only for the declared effects it has code for; any other process (the
-    // CLI, a server without duties) cannot see that code, so it owes a run for
-    // every enabled declared effect, left for the process that has it. The
-    // declaration's option gate is read here, beside its plugin's options,
-    // so graph writers and effects workers agree without importing effects
-    // code into a graph writer. The runs are
-    // written down with the commit (@yaks/effects), for any process working
-    // the pool. An effect writes through the graph's own `apply()`, trusted:
-    // what it writes comes from the host, never from a client.
-    let fx = watching = effects(vocab, {
-      owes: roles.includes('effects') ? 'handled' : 'declared',
-      disabled: vocabs.flatMap(([v, options]) =>
-        effectsIn(v.docs ?? [])
-          .filter((e) => e.option && options[e.option] !== true)
-          .map((e) => e.name)
-      ),
-      write: (b) => host.graph.apply(b, { trusted: true }),
-      owner: host.me,
-      lease: config.lease,
-      gone: host.gone,
-      nudge: opts.thread?.nudge,
-      report: (error, job) =>
-        void report(error, {
-          during: { entity: job.event.entity.eid, process: host.me },
-          tags: { handler: job.handler },
-        }),
-    })
-    part?.('plugins')
-    let contributed = graphs.flatMap(([r, options, plugin]) => {
-      let made = r.plugins?.(host, options) ?? []
-      observed.graph(plugin, made)
-      return made
-    })
-    observed.graph('@yaks/effects', [fx])
-    // A numbered entity is printed as an id a person types back (`T-7`), and a
-    // graph that reads none back takes `T-7` for an eid and mints an entity of
-    // that name. So a config that numbers entities names a plugin that
-    // resolves them.
-    let graphing = roles.includes('graph')
-    if (config.numbers && graphing && !contributed.some((p) => p.address)) {
-      throw new Error(
-        '`numbers` prints ids like T-7, and no plugin in this config reads ' +
-          'one back — add @yaks/id to plugins',
-      )
-    }
-    part?.('graph')
-    g = graph({
-      storage: host.storage,
-      vocab,
-      // A write no request attributed is the host's own: its rules, its
-      // effects, its start-up passes and the bulk loads it is handed are all
-      // stored attributed to this process.
-      ...(self ? { actor: self } : {}),
-      plugins: [...contributed, fx],
-    })
-    // Read workers return their recorded trees to their caller rather than
-    // duplicating delivery. A passing CLI and every duty/web process observe
-    // their graph, without composing tracker tables into the watched store.
-    if (opts.process !== false) {
-      captureControl = config.tracker ? traceControl(path) : undefined
-      recorded = traces(g, {
-        process: selfEid(),
-        take: captureControl?.take ??
-          (() => Promise.resolve({ requested: false, rate: 0 })),
-        sink: config.tracker
-          ? spool(files(config.tracker.spool).append)
-          : undefined,
-      })
-    }
-    // The code behind the plugins' effects, where this process serves
-    // `effects` (their facets were never imported anywhere else). Each
-    // declared effect has one handler, from whichever plugin gives it code.
-    // An effect this config gives no code owes no run.
-    host.machines = machineCapabilities(host, config, path)
-    host.machines.resolveHome = resolveSessionHome(sql, () => host.graph)
-    part?.('bindings')
-    observed.graphed()
+    host = bound.host
+    g = host.graph
+    let calls = host.runner
+    let fx = host.fx
+    let duties = bound.services
     let effecting = roles.includes('effects')
-    observed.effects(new Map(), effecting)
-    if (effecting) {
-      let declared = new Set(
-        vocabs.flatMap(([v]) => effectsIn(v.docs ?? []).map((e) => e.name)),
-      )
-      let code: Handlers = {}
-      let by = new Map<string, string>()
-      for (let [mod, options, plugin] of watched) {
-        for (
-          let [name, run] of Object.entries(mod.effects?.(host, options) ?? {})
-        ) {
-          if (!declared.has(name)) throw undeclared(plugin, name)
-          if (by.has(name)) throw twice(name, [by.get(name)!, plugin])
-          by.set(name, plugin)
-          code[name] = run
-        }
-      }
-      fx.handle(code)
-      observed.effects(by, true)
-    }
-    // Only the installer adopts FTS, after every table exists: a full-text index is
-    // built over the tables it reads, and a property the graph stores under a
-    // content address is read through the plugin's table — so the index is
-    // created once the plugins have installed theirs. `adopt` brings the indexes
-    // into line with what the vocabulary declares and rebuilds one that
-    // drifted. Its health counts and any rebuild never belong to opening.
-    part?.('fts')
-    if (installing && text.length) adopt(sql, text, derived)
-    // Each index owns its read. The search tool brings their ranked answers
-    // together, then reads only the entities that will be returned.
-    part?.('search')
-    let meanings = graphs.flatMap(([r, options]) =>
-      r.meaning ? [r.meaning(host, options)] : []
-    )
-    if (meanings.length > 1) {
-      throw new Error('more than one meaning index answers search')
-    }
-    ranked = text.length
-      ? async (words, opts) => {
-        let limit = Math.max(0, Math.min(100, Math.trunc(opts?.limit ?? 20)))
-        if (!limit) return []
-        let count = Math.max(20, limit * 2)
-        let [literal, similar] = await Promise.all([
-          Promise.resolve(find(sql, text, words, { limit: count })),
-          meanings[0]?.(words, { limit: count }) ?? Promise.resolve([]),
-        ])
-        let hits = merged(literal, similar, limit)
-        let found = await host.graph.get(hits.map((h) => h.entity))
-        let at = new Map(found.map((b) => [b.entity.eid, b]))
-        return hits.flatMap((h) => {
-          let b = at.get(h.entity)
-          if (!b) return []
-          let title = Object.values(b).flatMap((c) =>
-            c && typeof c == 'object' && 'title' in c &&
-              typeof c.title == 'string'
-              ? [c.title]
-              : []
-          )[0] ?? ''
-          return [{
-            entity: b.entity,
-            hit: {
-              kind: vocab.kindOf(b) || 'entity',
-              title,
-              snippet: h.snippet,
-              source: h.source,
-              ...(b.entry && typeof b.entry == 'object' &&
-                  'session' in b.entry && typeof b.entry.session == 'string'
-                ? {
-                  session: b.entry.session,
-                  speaker: b.output ? 'output' : 'input',
-                }
-                : {}),
-            },
-          }]
-        })
-      }
-      : undefined
-    // The generic tools belong to this graph, not to any transport: they are
-    // declared in @yaks/graph's own vocabulary and implemented there, and a
-    // host has a graph whether or not anything is listening. So the tier is
-    // assembled here beside the plugins' own, in the form the vocabulary
-    // declares, and a transport that needs them in its own form restates them
-    // (@yaks/mcp `core`).
-    //
-    // A plugin's own tools are listed from its vocabulary and run by its
-    // `./tools`, imported the first time one of them is called.
-    let generic = tier({ search: ranked, keywords: vocab.keywords })
-    part?.('tools')
-    observed.tier(generic)
-    let tools = made = [
-      ...generic,
-      ...vocabs.flatMap(([v, options, plugin]) =>
-        loadTools(v.docs ?? [], async () => {
-          let code = await observedLoad(plugin, 'tools')
-          let runs = code?.runs?.(host, options) ?? {}
-          let declarations = toolsIn(v.docs ?? [])
-          let names = declarations.map((d) => d.name ?? toolName(d))
-          let joined = declarations.filter((d) =>
-            typeof (runs[d.name ?? toolName(d)] ??
-              runs[[d.noun, d.verb].filter(Boolean).join('_')]) == 'function'
-          ).map((d) => d.name ?? toolName(d))
-          // loadTools joins the whole module; a missing run rejects that join.
-          observed.runs(
-            plugin,
-            joined,
-            joined.length == names.length ? joined : [],
-          )
-          return runs
-        })
-      ),
-    ]
-    part?.('runner')
-    let replies = graphs.flatMap(([r, options]) =>
-      r.reply ? [r.reply(host, options)] : []
-    )
-    replying = replies.length
-      ? async (call, answer, wrote) =>
-        (await Promise.all(replies.map((r) => r(call, answer, wrote)))).flat()
-      : undefined
-    // The one tool runner over this graph. A caller runs a tool and the runner
-    // records the request and the result as it goes; what the two effects
-    // @yaks/tools declares add, in a process serving `effects`, is the calls
-    // nobody is waiting on — one written through `/apply`, or one whose
-    // scheduled wake has now fired. A call this graph has no tool for is left
-    // alone for whoever does have it. The `tool` rows a call points at are
-    // written on the first call and at start-up, never while assembling: a
-    // one-shot command opens a host to ask one question and should not write
-    // just to say hello.
-    let run = calls = runner(g, {
-      tools,
-      // This host owns the calls it claims, so the start-up pass re-runs its
-      // own interrupted calls and leaves alone another runner's, or those an
-      // imported transcript recorded as already run.
-      ...(self ? { owner: self.by } : {}),
-      // This process, on every call it runs, for a tool that acts on the
-      // machine rather than the graph: `yak land` fast-forwards the checkout
-      // the person typed in, because the tool runs in the same process that
-      // read the command line (local.ts). A host answering HTTP reports its
-      // own, which is the accurate answer — a call arriving over HTTP acts on
-      // the machine that received it.
-      process: started({ roles: [...roles] })[PROCESS] as Comp,
-      report: (error, call, tool) =>
-        opts.readOnly ? console.error(error) : report(error, {
-          actor: call.$actor ?? self ?? undefined,
-          during: { entity: call.entity.eid, kind: 'call', process: host.me },
-          tags: { tool },
-        }),
-      ...replying ? { reply: replying } : {},
-    })
-    if (effecting) {
-      let due: Handlers[string] = (e) => run.due(e.entity.eid)
-      fx.handle(Object.fromEntries(run.rules.map((r) => [r.rule.name, due])))
-      observed.due(run.rules.map((r) => r.rule.name))
-    }
-    // Which listed plugin hosts the routes — turns them into the one handler
-    // this host answers with (@yaks/api). Two would be two answers to one
-    // request, which is not an answer. None means nothing here serves HTTP, so
-    // the other plugins are never asked for routes: a facet whose whole
-    // purpose is a listener that does not exist is a facet this host ignores.
-    // `served` is empty in a process that does not serve `web`.
-    let hosts = served.filter(([r]) => r.handler)
-    if (hosts.length > 1) {
-      throw new Error(`${hosts.length} plugins host routes — a host has one`)
-    }
-    let [mod, options] = hosts[0] ?? []
-    if (mod?.handler) {
-      paths = served.flatMap(([r, o, plugin]) => {
-        let made = r.routes?.(host, o) ?? []
-        observed.routes(plugin, made)
-        return made
-      })
-      filters = served.flatMap(([r, o]) => r.filter ? [r.filter(host, o)] : [])
-      answering = mod.handler(host, options ?? {})
-      observed.binding(hosts[0][2], 'routes')
-    }
-    // The duties: work that is nobody's request and everybody's to do. The
-    // effect pool is the `effects` role's, worked by any number of processes
-    // at once; each plugin's service is the role named by its package
-    // (`running` holds only those served), leased under that name so exactly
-    // one process runs it. One pass, then a wait, is the shape they share: do
-    // what is overdue, then keep at it until this process ends.
-    let duties: Duty[] = running.map(([mod, options, plugin]): Duty => {
-      observed.binding(plugin, 'service')
-      return {
-        name: plugin,
-        run: (signal) => mod.service!(host, options, signal),
-      }
-    })
     // Started together and stopped together, by one signal: a host shutting
     // down is one fact, and a duty that outlived the database it
     // reads would be a crash nobody asked for. One that throws is reported
@@ -1188,7 +672,7 @@ let composed = async (
     }
     return {
       ...host,
-      storage: store,
+      storage: store!,
       graph: g,
       fx,
       // The last transaction, then the file: every lease this process holds

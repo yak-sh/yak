@@ -8,8 +8,8 @@ import { reader as storage } from '@yaks/sqlite/reader'
 import { open } from '@yaks/sqlite/read-db'
 import { loadVocab } from '@yaks/vocab/runtime'
 import { type Config, dbOf, subpath } from './config.ts'
-import { understood } from './keywords.ts'
-import type { VocabFacet } from './host.ts'
+import { understood } from '@yaks/host/keywords'
+import type { VocabFacet } from '@yaks/host'
 
 export type Reader = {
   graph: Pick<Graph, 'read' | 'get' | 'address'>

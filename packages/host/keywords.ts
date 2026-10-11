@@ -7,8 +7,8 @@
 // then render `P-1` for a persona that declared `N`, having fallen back to the
 // component's first letter. Minting the number and printing human-readable ids
 // are both a host's doing, so registering the keywords that shape them is too:
-// a graph this process composed (./host.ts), and a vocabulary a server reported
-// to draw its answers with (./answer.ts). A plugin that supplies its own copy
+// a graph this process composed (@yaks/host), and a vocabulary a server reported
+// to draw its answers with (the caller's renderer). A plugin that supplies its own copy
 // wins; this adds only the difference, never a second registration.
 
 import { edgeKeywords } from '@yaks/edge/vocab'

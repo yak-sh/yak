@@ -17,7 +17,7 @@
 import cli from './deno.json' with { type: 'json' }
 
 export type { Config, Options, Plug } from '@yaks/host'
-import type { Config, Options, Plug } from '@yaks/host'
+import type { Config, Plug } from '@yaks/host'
 import type { Eid, Graph } from '@yaks/graph'
 
 /** Where a machine keeps the config for its own graph. */
@@ -71,14 +71,7 @@ export let configPath = (
 let near = (spec: string, base: URL): string =>
   spec.startsWith('.') || spec.startsWith('/') ? new URL(spec, base).href : spec
 
-/** The package a plugin entry names, either way it is written. */
-export let used = (plug: Plug): string =>
-  typeof plug == 'string' ? plug : plug.use
-
-/** The options it was given, either way it is written. */
-export let given = (plug: Plug): Options =>
-  typeof plug == 'string' ? {} : plug.with ?? {}
-
+export { given, used } from '@yaks/host/config'
 // A subpath a package does not export is a module it does not have. Anything
 // else that goes wrong importing one — a syntax error, a missing dependency, a
 // throw at module scope — is that module failing, and is rethrown: a host that

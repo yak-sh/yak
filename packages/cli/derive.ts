@@ -1,14 +1,15 @@
 // The cold path of command discovery. A memo hit imports none of these
 // vocabulary constructors, validators or declaration modules.
 import { type Config, exported, subpaths, used } from './config.ts'
-import type { CliCommand, VocabFacet } from './host.ts'
+import type { CliCommand } from './host.ts'
+import type { VocabFacet } from '@yaks/host'
 import type { Declarations } from './declarations.ts'
 import { toolsIn } from '@yaks/vocab/tools'
 import { loadVocab } from '@yaks/vocab/runtime'
 import { declared, offered, toolName } from '@yaks/graph/vocab'
 import { fields } from '@yaks/fts/fields'
-import { docsOf } from './documents.ts'
-import { understood } from './keywords.ts'
+import { docsOf } from '@yaks/host/documents'
+import { understood } from '@yaks/host/keywords'
 
 export let derive = async (
   config: Config,

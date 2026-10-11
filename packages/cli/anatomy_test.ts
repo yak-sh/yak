@@ -1,7 +1,7 @@
 import { assert, assertEquals } from '@std/assert'
 import { test } from '@yaks/testing'
 import { loadVocab, type VocabDoc } from '@yaks/vocab'
-import { nativeAnatomy, secretNames } from './anatomy.ts'
+import { compositionAnatomy, secretNames } from '@yaks/host/anatomy'
 
 let roles = {
   graph: ['vocab', 'graph', 'tools'],
@@ -23,8 +23,8 @@ let docs: VocabDoc[] = [{
 
 test('native anatomy isolates loading evidence even when vocabulary is shared', () => {
   let vocab = loadVocab(docs)
-  let first = nativeAnatomy(['shop'], ['graph', 'effects'], roles)
-  let second = nativeAnatomy(['shop'], ['graph'], roles)
+  let first = compositionAnatomy(['shop'], ['graph', 'effects'], roles)
+  let second = compositionAnatomy(['shop'], ['graph'], roles)
   for (let capture of [first, second]) {
     capture.attempted('shop', 'vocab')
     capture.loaded('shop', 'vocab', true)
@@ -66,7 +66,7 @@ test('native anatomy reads the vocabulary only when it is read', () => {
   let vocab = new Proxy(loadVocab(docs), {
     get: (v, key) => (asked++, Reflect.get(v, key)),
   })
-  let capture = nativeAnatomy(['shop'], ['graph'], roles)
+  let capture = compositionAnatomy(['shop'], ['graph'], roles)
   capture.declarations(docs, vocab)
   capture.graphed()
   assertEquals(asked, 0)
@@ -93,7 +93,7 @@ test('native secret observation reads only raw names, not resolved accessors', (
   let names = secretNames(options)
   assertEquals(names, ['service-token', 'another-token'])
   assertEquals(reads, 0)
-  let capture = nativeAnatomy(
+  let capture = compositionAnatomy(
     ['shop'],
     [],
     roles,
@@ -104,8 +104,8 @@ test('native secret observation reads only raw names, not resolved accessors', (
 })
 
 test('native anatomy keeps actual UI and later command/view loading separate', () => {
-  let first = nativeAnatomy(['shop'], ['web'], roles)
-  let second = nativeAnatomy(['shop'], ['web'], roles)
+  let first = compositionAnatomy(['shop'], ['web'], roles)
+  let second = compositionAnatomy(['shop'], ['web'], roles)
   let ran = 0
   let ui = {
     kits: {

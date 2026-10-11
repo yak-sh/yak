@@ -1,6 +1,6 @@
-import type { MachineProvider } from '@yaks/machine'
 // The portable contract a host lends every plugin. Concrete hosts own drivers,
 // directories and resource lifetime; plugins see the graph and capabilities.
+import type { MachineProvider } from '@yaks/machine'
 import type { Bundle, Eid, Graph, NamedTool, Storage } from '@yaks/graph'
 import type { Search } from '@yaks/graph/tools'
 import type { Vocab } from '@yaks/vocab'
@@ -180,3 +180,25 @@ export interface Host {
   report?: (error: unknown, context?: Partial<Context>) => void | Promise<void>
   stopping: AbortSignal
 }
+
+export type {
+  Duty,
+  EffectsFacet,
+  FacetName,
+  Facets,
+  GraphFacet,
+  Load,
+  MeaningHit,
+  RoutesFacet,
+  ServiceFacet,
+  ToolsFacet,
+  VocabFacet,
+} from './facets.ts'
+export {
+  type Assembly,
+  assembly,
+  type AssemblyOpts,
+  type Binding,
+  type Meaning,
+} from './assembly.ts'
+export { every, ROLES } from './roles.ts'

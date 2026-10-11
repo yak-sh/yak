@@ -339,7 +339,8 @@ lease instead.
 
 ## What `compose` does
 
-[`compose(config, roles)`](./host.ts) performs these steps:
+[`compose(config, roles)`](./host.ts) opens the box's resources and calls
+[@yaks/host's assembly](../host/README.md#assembly). It performs these steps:
 
 1. Imports, from each configured plugin, the facets of the roles given. Every
    process serves `graph`.
@@ -609,8 +610,8 @@ The package exports eight entry points:
   names, and the release a plugin named without a version comes from. It imports
   no plugin, for a command that only needs to know where the graph is.
 - `@yaks/cli/host` exports the facet loader, `compose`, and re-exports portable
-  host types from `@yaks/host`, and supporting host functions for programs that
-  assemble a graph.
+  host types from `@yaks/host`, and the box's `CliCommand`, `person`, `read` and
+  `dbOf`. Portable facet contracts and graph assembly belong to `@yaks/host`.
 - `@yaks/cli/install` is the installer: run it and `yak` is on PATH at the
   installer's own release, under a config that lets Deno resolve that release
   the day it publishes.
