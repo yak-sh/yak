@@ -73,13 +73,13 @@ let app = (allowance = Infinity) => {
   }
   let rt = cloud()
   let now = T0
-  let call = async (
+  let send = async (
     method: string,
     path: string,
     body?: unknown,
     key?: string,
   ) => {
-    let res = await answer({
+    return await answer({
       req: new Request(`https://a.test/api/rtc${path}`, {
         method,
         headers: key ? { [KEY]: key } : {},
@@ -92,6 +92,9 @@ let app = (allowance = Infinity) => {
       rates: { track: 1, channel: 0.5 },
       now: () => now,
     })
+  }
+  let call = async (...args: Parameters<typeof send>) => {
+    let res = await send(...args)
     return { status: res.status, body: await res.json() }
   }
   let open = async () => (await call('POST', '/sessions/new')).body
@@ -99,6 +102,7 @@ let app = (allowance = Infinity) => {
     g,
     rt,
     call,
+    send,
     open,
     store,
     get spent() {
@@ -130,22 +134,27 @@ test('a session opens at the ceiling as a refusal, and nothing at Realtime', asy
   assertEquals(a.rt.sent, [])
 })
 
+// Open this client's session once; the test exercises changes through the door.
+let changing = app()
+let changingSession = await changing.open()
+let offer = { sessionDescription: { type: 'offer', sdp: 'v=0' } }
+let tracks = [{ location: 'local', mid: '0', trackName: 'voice' }]
+let noKey = await changing.call('POST', '/sessions/s1/tracks/new', {
+  ...offer,
+  tracks,
+})
+let wrongKey = await changing.send(
+  'POST',
+  '/sessions/s1/tracks/new',
+  { ...offer, tracks },
+  'x',
+)
 test('a change to a session carries the key it was opened with', async () => {
-  let a = app()
-  let s = await a.open()
-  let offer = { sessionDescription: { type: 'offer', sdp: 'v=0' } }
-  let tracks = [{ location: 'local', mid: '0', trackName: 'voice' }]
-  assertEquals(
-    (await a.call('POST', '/sessions/s1/tracks/new', { ...offer, tracks }))
-      .body.error.code,
-    'not_yours',
-  )
-  assertEquals(
-    (await a.call('POST', '/sessions/s1/tracks/new', { ...offer, tracks }, 'x'))
-      .status,
-    403,
-  )
-  let { status } = await a.call(
+  let a = changing
+  let s = changingSession
+  assertEquals(noKey.body.error.code, 'not_yours')
+  assertEquals(wrongKey.status, 403)
+  let { status } = await a.send(
     'POST',
     '/sessions/s1/tracks/new',
     { ...offer, tracks },
