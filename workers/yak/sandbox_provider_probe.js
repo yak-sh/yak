@@ -23,11 +23,16 @@ export class ContainerProbe extends DurableObject {
     ) {
       throw new Error('invocation environment missing')
     }
-    await this.ctx.storage.put('process', { command, opts, status: 'running' })
-    return { id: 'p', pid: 42 }
+    let id = crypto.randomUUID()
+    await this.ctx.storage.put(`process:${id}`, {
+      command,
+      opts,
+      status: 'running',
+    })
+    return { id, pid: 42 }
   }
-  async getProcess() {
-    let p = await this.ctx.storage.get('process')
+  async getProcess(id) {
+    let p = await this.ctx.storage.get(`process:${id}`)
     return p
       ? {
         pid: 42,
@@ -39,9 +44,9 @@ export class ContainerProbe extends DurableObject {
   getProcessLogs() {
     return { stdout: 'one\ntwo\n', stderr: 'warning\n' }
   }
-  async killProcess() {
-    let p = await this.ctx.storage.get('process')
-    await this.ctx.storage.put('process', { ...p, status: 'killed' })
+  async killProcess(id) {
+    let p = await this.ctx.storage.get(`process:${id}`)
+    await this.ctx.storage.put(`process:${id}`, { ...p, status: 'killed' })
   }
   mkdir() {}
   async writeFile(path, content, opts) {

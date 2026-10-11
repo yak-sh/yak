@@ -197,7 +197,11 @@ test('sandbox_exec, as the directory listed it, runs its cmd and answers as sand
     timeout: 30,
   })
   assertStringIncludes(ran.text, 'exited 101\nFinished\nerror: no main')
-  assertEquals(box.ran, ['chmod +x /usr/local/bin/yak', 'cargo build'])
+  assertEquals(box.ran, [
+    'chmod +x /usr/local/bin/yak',
+    'yak --help >/dev/null',
+    'cargo build',
+  ])
 })
 
 test('a ship that matches nothing says what to look at', async () => {
@@ -293,6 +297,51 @@ test('no container bound is a sentence, not a stack trace', async () => {
   assertEquals(seconds(ctx.spend!), 0)
 })
 
+test('a lend warms the CLI without holding commands for its completion', async () => {
+  let box = sandboxes((cmd) =>
+    cmd == 'yak --help >/dev/null' ? { running: true } : { stdout: 'ready' }
+  )
+  let space = { eid: 'warm', slug: 'warm' } as dirPart.Space
+  let env = { SANDBOX: box.SANDBOX }
+  let spend = spending()
+  let lent = await workbench(env, space, ADA, spend)
+  assert(box.files.has('/usr/local/bin/yak'))
+  assertEquals(box.ran.at(-1), 'yak --help >/dev/null')
+  assertEquals(await lent.machine.look('proc-1'), { pid: 100 })
+  assertEquals(
+    (await lent.provider.exec(lent.ref, 'echo ready')).stdout,
+    'ready',
+  )
+  await workbench(env, space, ADA, spend)
+  assertEquals(
+    box.ran.filter((cmd) => cmd == 'yak --help >/dev/null').length,
+    1,
+  )
+  await released(env, space, spend)
+  assertEquals([...box.alive], [])
+})
+
+test('a failed warm-up launch still lends a usable machine', async () => {
+  let box = sandboxes(() => ({ stdout: 'ready' }))
+  let space = { eid: 'warm-failed', slug: 'warm-failed' } as dirPart.Space
+  let env = {
+    SANDBOX: {
+      ...box.SANDBOX,
+      get: (id: unknown) => ({
+        ...box.SANDBOX.get(id),
+        startProcess: () => Promise.reject(new Error('cannot start warm-up')),
+      }),
+    },
+  }
+  let lent = await workbench(env, space, ADA, spending())
+  assertEquals(
+    (await lent.provider.exec(lent.ref, 'echo ready')).stdout,
+    'ready',
+  )
+  await lent.provider.release(lent.ref)
+  assertEquals([...box.alive], [])
+})
+
 test('the budget refuses in a sentence, and only after it is spent', async () => {
   let box = sandboxes()
   let { env, space } = await seeded({ SANDBOX: box.SANDBOX } as Partial<Env>)
@@ -350,7 +399,7 @@ test('every command is signed in as the caller, with one grant', async () => {
   await tool('sandbox_shell').run(lone, { command: 'cargo build' })
 
   let invocations = box.env.filter((_, i) =>
-    box.ran[i] != 'chmod +x /usr/local/bin/yak'
+    ['rustc --version', 'cargo build'].includes(box.ran[i])
   )
   let [first, second] = invocations
   assertEquals(first.YAKS_HOST, HOST)
@@ -438,7 +487,11 @@ test('a build pays for its workbench and leaves none running', async () => {
   }], { model })
 
   assertEquals(out.refused, undefined)
-  assertEquals(box.ran, ['chmod +x /usr/local/bin/yak', 'rustc --version'])
+  assertEquals(box.ran, [
+    'chmod +x /usr/local/bin/yak',
+    'yak --help >/dev/null',
+    'rustc --version',
+  ])
   // The loop destroyed what it woke...
   assertEquals([...box.alive], [])
   // ...and the seconds are on the space's month. This conversation shipped
@@ -668,7 +721,11 @@ test('one person holds one sandbox awake on the free tier', async () => {
     'allows 1 at a time',
   )
   assertEquals((no as { code?: string }).code, 'limit')
-  assertEquals(box.ran, ['chmod +x /usr/local/bin/yak', 'ls'])
+  assertEquals(box.ran, [
+    'chmod +x /usr/local/bin/yak',
+    'yak --help >/dev/null',
+    'ls',
+  ])
   // On the Plus plan, two; and once her first has slept, the second wakes.
   let now = Date.now()
   await awake(env, { ...other, tier: 'plus' }, ADA, now)

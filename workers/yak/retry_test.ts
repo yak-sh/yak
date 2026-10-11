@@ -6,7 +6,7 @@ import { joining, posting, SPACE, wiped } from './build.ts'
 import type { Space } from './directory.ts'
 import type { Namespace } from './door.ts'
 import type { Env } from './env.ts'
-import { platform } from './testing.ts'
+import { platform, sandboxes } from './testing.ts'
 import { destroyed, named, workbench } from './sandbox.ts'
 import {
   type Box,
@@ -276,14 +276,16 @@ for (let { method, args, result } of methods) {
 test('sandbox cleanup and initial sleep also retry evictions', async () => {
   let sleep = 0
   let destroy = 0
+  let box = sandboxes()
   let ns: Sandboxes = {
     idFromName: (name) => name,
     get: () => ({
+      ...box.SANDBOX.get(space.eid),
       setSleepAfter: () =>
         ++sleep == 1 ? Promise.reject(flagged()) : Promise.resolve(),
       destroy: () =>
         ++destroy == 1 ? Promise.reject(flagged()) : Promise.resolve(),
-    } as unknown as Box),
+    }),
   }
   await workbench({ SANDBOX: ns }, space, who.person, { since: null })
   assertEquals(await destroyed({ SANDBOX: ns }, space), true)

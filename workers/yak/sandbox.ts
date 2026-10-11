@@ -352,33 +352,20 @@ export let workbench = async (
   })
   let ref = { id: named(space) }
   let lent = await (first ? provider.request!(ref) : provider.wake(ref))
-  let prepare = () =>
-    spend.preparing ??= (async () => {
-      await lent.machine.write('/usr/local/bin/yak', LAUNCHER)
-      let result = await provider.exec(ref, 'chmod +x /usr/local/bin/yak')
-      if (result.exitCode) throw new Error(`yak launcher: ${result.stderr}`)
-    })()
-  return {
-    ...lent,
-    machine: {
-      ...lent.machine,
-      start: async (command: string, cwd?: string) => {
-        await prepare()
-        return await lent.machine.start(command, cwd)
-      },
-    },
-    provider: {
-      ...provider,
-      exec: async (
-        ref: Parameters<typeof provider.exec>[0],
-        command: string,
-      ) => {
-        await prepare()
-        return await provider.exec(ref, command)
-      },
-    },
-    ref,
-  }
+  spend.preparing ??= (async () => {
+    await lent.machine.write('/usr/local/bin/yak', LAUNCHER)
+    let result = await provider.exec(ref, 'chmod +x /usr/local/bin/yak')
+    if (result.exitCode) throw new Error(`yak launcher: ${result.stderr}`)
+    // The container owns the warm-up after this RPC returns. Lending waits
+    // for its start, never for the CLI's download or module cache to fill.
+    try {
+      await lent.machine.start('yak --help >/dev/null')
+    } catch (e) {
+      caught(e, { request: 'sandbox warm', space: space.slug })
+    }
+  })()
+  await spend.preparing
+  return { ...lent, provider, ref }
 }
 
 /**

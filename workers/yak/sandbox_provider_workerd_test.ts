@@ -40,11 +40,12 @@ test('Cloudflare provider and sandbox tools preserve processes, binary artifacts
     timeout: 0,
   })
   assertStringIncludes(shell.text, 'still running')
-  let stopped = await agent.answer('sandbox_stop', { ...args, process: 'p' })
+  let process = /^process (\S+) /.exec(shell.text)![1]
+  let stopped = await agent.answer('sandbox_stop', { ...args, process })
   assertStringIncludes(stopped.text, 'exited 0')
   let waited = await agent.answer('sandbox_wait', {
     ...args,
-    process: 'p',
+    process,
     timeout: 0,
   })
   assertStringIncludes(waited.text, 'exited 0')
