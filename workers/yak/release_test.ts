@@ -64,42 +64,52 @@ let bytes = (text: string) => new TextEncoder().encode(text)
 let text = (bytes: Uint8Array<ArrayBuffer> | null) =>
   bytes ? new TextDecoder().decode(bytes) : null
 
+let preparedRelease = memory()
+let releaseOld = 'alice/.releases/app/old'
+let releaseNext = 'alice/.releases/app/next'
+let releaseDraft = 'alice/.drafts/app/delta-v2'
+let releaseSources = {
+  'index.html': bytes('old page'),
+  'keep.js': bytes('kept code'),
+  'remove.css': bytes('old style'),
+}
+for (let [path, body] of Object.entries(releaseSources)) {
+  await preparedRelease.files.put(`${releaseOld}/${path}`, body)
+}
+await preparedRelease.files.put(`${releaseDraft}/index.html`, bytes('new page'))
+await preparedRelease.files.put(
+  `${releaseDraft}/.deleted/remove.css`,
+  bytes(''),
+)
+let keptSha = await sha256(releaseSources['keep.js'])
+let newPageSha = await sha256(bytes('new page'))
+let compiledSha = await sha256(bytes('compiled'))
+let releaseStage = await staged(
+  preparedRelease.files,
+  releaseOld,
+  releaseDraft,
+  releaseNext,
+  true,
+)
+await releaseStage.files.put(
+  `${releaseNext}/esbuild/keep.js`,
+  bytes('compiled'),
+)
 test('a release serves unchanged, changed, and compiled files', async () => {
-  let { files, held } = memory()
-  let old = 'alice/.releases/app/old'
-  let next = 'alice/.releases/app/next'
-  let draft = 'alice/.drafts/app/delta-v2'
-  await files.put(`${old}/index.html`, bytes('old page'))
-  await files.put(`${old}/keep.js`, bytes('kept code'))
-  await files.put(`${old}/remove.css`, bytes('old style'))
-  await files.put(`${draft}/index.html`, bytes('new page'))
-  await files.put(`${draft}/.deleted/remove.css`, bytes(''))
-  let prior = Object.fromEntries(
-    await Promise.all(
-      ['index.html', 'keep.js', 'remove.css'].map(async (path) =>
-        [path, await sha256(await files.get(`${old}/${path}`))] as const
-      ),
-    ),
-  )
-  let stage = await staged(
-    files,
-    old,
-    draft,
-    next,
-    true,
-  )
-  await stage.files.put(`${next}/esbuild/keep.js`, bytes('compiled'))
+  let { files, held } = preparedRelease
+  let next = releaseNext, draft = releaseDraft
+  let stage = releaseStage
   let snapshot = await stage.finish()
   assertEquals(snapshot, {
-    'index.html': await sha256(bytes('new page')),
-    'keep.js': prior['keep.js'],
+    'index.html': newPageSha,
+    'keep.js': keptSha,
   })
   assertEquals(held.has(`${next}/keep.js`), false)
   assertEquals(held.has(`${next}/index.html`), false)
   assertEquals(await files.has(addressed(snapshot['index.html'])), true)
   let index = await indexOf(files, `${next}/`)
   let compiled = index!['esbuild/keep.js']
-  assertEquals(compiled.sha, await sha256(bytes('compiled')))
+  assertEquals(compiled.sha, compiledSha)
   assertEquals(compiled.key, addressed(compiled.sha!))
   assertEquals(await files.has(compiled.key), true)
   await files.delete(`${draft}/index.html`)

@@ -2,8 +2,9 @@ import { assertEquals } from '@std/assert'
 import { test } from '@yaks/testing'
 import { browser, tick } from './page-release_fixture.ts'
 
+let socketPage = browser()
 test('page release watches only own sockets, forwards frames untouched, and never reloads without a click', async () => {
-  let b = browser()
+  let b = socketPage
   let other = new b.world.WebSocket('wss://ada.yaks.app/other/api/ws')
   other.fire('message', { data: '{"release":{"version":2}}' })
   await tick()

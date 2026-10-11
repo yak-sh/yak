@@ -625,7 +625,6 @@ test('base preparation overlaps sibling uploads and gates the kernel', async () 
   base.resolve(['deploy'])
   assertEquals(await deploy, 0)
   assert(kernel)
-  await checkKernelBundle()
 })
 
 let checkCompilerImages = async () => {
@@ -1151,70 +1150,82 @@ let checkSiblingPreparation = async () => {
   }
 }
 
-let checkKernelBundle = async () => {
-  let root = Deno.makeTempDirSync()
+// Prepare the disposable kernel artifact once, then check what its upload sees.
+let kernelRoot = Deno.makeTempDirSync()
+Deno.mkdirSync(join(kernelRoot, '.wrangler'))
+Deno.writeTextFileSync(
+  join(kernelRoot, 'wrangler.toml'),
+  'main="index.ts"\ncompatibility_flags=["nodejs_compat"]\nupload_source_maps=true\n[assets]\ndirectory="public"',
+)
+let kernelArgs = ['deploy', '--env', 'staging', '--message', 'commit']
+let kernelBuild: string[] = []
+let kernelBundle = await bundled(kernelArgs, (build) => {
+  kernelBuild = build
+  let output = build[build.indexOf('--outdir') + 1]
+  Deno.writeTextFileSync(
+    join(output, 'entry.js'),
+    'export default {};\n//# sourceMappingURL=entry.js.map',
+  )
+  Deno.writeTextFileSync(
+    join(output, 'entry.js.map'),
+    '{"sources":["index.ts"]}',
+  )
+  Deno.writeTextFileSync(join(output, 'compiler.wasm'), 'wasm')
+  Deno.writeTextFileSync(
+    build[build.indexOf('--metafile') + 1],
+    JSON.stringify({
+      outputs: { [join(output, 'entry.js')]: { entryPoint: 'index.ts' } },
+    }),
+  )
+  return Promise.resolve(0)
+}, kernelRoot)
+
+test('a kernel upload uses its prepared bundle and retains source maps and modules', () => {
   try {
-    Deno.mkdirSync(join(root, '.wrangler'))
-    Deno.writeTextFileSync(
-      join(root, 'wrangler.toml'),
-      'main="index.ts"\ncompatibility_flags=["nodejs_compat"]\nupload_source_maps=true\n[assets]\ndirectory="public"',
+    assert(kernelBuild.includes('--dry-run'))
+    assert(kernelBuild.includes('--containers-rollout=none'))
+    let config = parse(Deno.readTextFileSync(kernelBundle.args.at(-1)!))
+    assertEquals(kernelBundle.args.slice(0, -2), kernelArgs)
+    assertEquals(config.no_bundle, true)
+    assertEquals(config.find_additional_modules, true)
+    assertEquals(config.compatibility_flags, ['nodejs_compat'])
+    assertEquals(config.upload_source_maps, true)
+    assertEquals(config.assets, { directory: 'public' })
+    assertEquals(
+      Deno.readTextFileSync(config.main as string),
+      'export default {};\n//# sourceMappingURL=entry.js.map',
     )
-    let args = ['deploy', '--env', 'staging', '--message', 'commit']
-    let compiled = await bundled(args, (build) => {
-      assert(build.includes('--dry-run'))
-      assert(build.includes('--containers-rollout=none'))
-      let output = build[build.indexOf('--outdir') + 1]
-      Deno.writeTextFileSync(
-        join(output, 'entry.js'),
-        'export default {};\n//# sourceMappingURL=entry.js.map',
-      )
-      Deno.writeTextFileSync(
-        join(output, 'entry.js.map'),
-        '{"sources":["index.ts"]}',
-      )
-      Deno.writeTextFileSync(join(output, 'compiler.wasm'), 'wasm')
-      Deno.writeTextFileSync(
-        build[build.indexOf('--metafile') + 1],
-        JSON.stringify({
-          outputs: { [join(output, 'entry.js')]: { entryPoint: 'index.ts' } },
-        }),
-      )
-      return Promise.resolve(0)
-    }, root)
+    assertEquals(
+      [...Deno.readDirSync(config.base_dir as string)].map((f) => f.name)
+        .sort(),
+      ['compiler.wasm', 'entry.js', 'entry.js.map'],
+    )
+  } finally {
+    kernelBundle.remove()
+  }
+})
+
+test('a failed kernel bundle prevents uploading and removes its output', async () => {
+  let failed = false, uploaded = false
+  try {
     try {
-      let text = Deno.readTextFileSync(compiled.args.at(-1)!)
-      let config = (await import('@std/toml')).parse(text)
-      assertEquals(compiled.args.slice(0, -2), args)
-      assertEquals(config.no_bundle, true)
-      assertEquals(config.find_additional_modules, true)
-      assertEquals(config.compatibility_flags, ['nodejs_compat'])
-      assertEquals(config.upload_source_maps, true)
-      assertEquals(config.assets, { directory: 'public' })
-      assertEquals(
-        Deno.readTextFileSync(config.main as string),
-        'export default {};\n//# sourceMappingURL=entry.js.map',
+      await runWrangler(
+        kernelArgs,
+        (_args, sibling) => {
+          if (!sibling) uploaded = true
+          return Promise.resolve(0)
+        },
+        async () =>
+          (await bundled(kernelArgs, () => Promise.resolve(7), kernelRoot))
+            .args,
       )
-      assertEquals(
-        [...Deno.readDirSync(config.base_dir as string)].map((f) => f.name)
-          .sort(),
-        ['compiler.wasm', 'entry.js', 'entry.js.map'],
-      )
-    } finally {
-      compiled.remove()
-    }
-    let failed = false, uploaded = false
-    try {
-      await runWrangler(args, (_args, sibling) => {
-        if (!sibling) uploaded = true
-        return Promise.resolve(0)
-      }, async () => (await bundled(args, () => Promise.resolve(7), root)).args)
     } catch {
       failed = true
     }
     assert(failed)
     assertEquals(uploaded, false)
-    assertEquals([...Deno.readDirSync(join(root, '.wrangler'))], [])
+    assertEquals([...Deno.readDirSync(join(kernelRoot, '.wrangler'))], [])
   } finally {
-    Deno.removeSync(root, { recursive: true })
+    Deno.removeSync(kernelRoot, { recursive: true })
   }
-}
+})

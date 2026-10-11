@@ -92,14 +92,20 @@ let doomed = (over: Partial<Doomed> = {}): Doomed => ({
   ...over,
 })
 
+let ticketSecret = 'shhh'
+let spaceTicket = await ticket(space(), 'p1', ticketSecret)
 test('a ticket opens one space for one person, for an hour', async () => {
-  let secret = 'shhh'
-  let t = await ticket(space(), 'p1', secret)
+  let secret = ticketSecret
+  let t = spaceTicket
   let open = await ticketed(t, secret)
   assertEquals(open?.space, 'space-eid')
   assertEquals(open?.person, 'p1')
-  // Dead an hour on, and dead under any other secret or any edit.
+  // Dead an hour on.
   assertEquals(await ticketed(t, secret, Date.now() + LIFE + 1000), null)
+})
+
+test('a ticket under another secret or after any edit opens nothing', async () => {
+  let t = spaceTicket, secret = ticketSecret
   assertEquals(await ticketed(t, 'another secret'), null)
   assertEquals(await ticketed(`${t}x`, secret), null)
   assertEquals(await ticketed('not a ticket', secret), null)

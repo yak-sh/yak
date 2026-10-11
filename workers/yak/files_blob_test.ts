@@ -10,24 +10,24 @@ import { blobAt } from './cache.ts'
 import { blobBytes, fetch } from './files.ts'
 import { platform } from './serving-probe.ts'
 
-test('the cached blob door streams bytes and bounds uncached seeks', async () => {
-  using scenario = platform()
-  let { env, files } = scenario
-  let eid = '11111111-1111-4111-8111-111111111111'
-  let sha = 'a'.repeat(64)
-  let prefix = 'ada/cookbook/blobs/'
-  let bytes = new Uint8Array([0, 1, 2, 3, 4, 5])
-  files.held.set(prefix + sha, bytes)
-  let calls: Request[] = []
-  env.FILES = {
-    fetch: (req) => {
-      calls.push(req)
-      return fetch(req, env)
-    },
-  }
-  let get = (method = 'GET', headers: Record<string, string> = {}) =>
-    blobBytes(env, { eid }, prefix, sha, headers.range, method)
+let scenario = platform()
+let { env, files } = scenario
+let eid = '11111111-1111-4111-8111-111111111111'
+let sha = 'a'.repeat(64)
+let prefix = 'ada/cookbook/blobs/'
+let bytes = new Uint8Array([0, 1, 2, 3, 4, 5])
+files.held.set(prefix + sha, bytes)
+let calls: Request[] = []
+env.FILES = {
+  fetch: (req) => {
+    calls.push(req)
+    return fetch(req, env)
+  },
+}
+let get = (method = 'GET', headers: Record<string, string> = {}) =>
+  blobBytes(env, { eid }, prefix, sha, headers.range, method)
 
+test('the cached blob door streams bytes and bounds uncached seeks', async () => {
   let full = await get()
   assertEquals(full.status, 200)
   assertEquals(full.headers.get('content-type'), 'application/octet-stream')
@@ -42,7 +42,9 @@ test('the cached blob door streams bytes and bounds uncached seeks', async () =>
   assertEquals(calls[0].url, blobAt(eid, sha))
   assertEquals(calls[1].url, calls[0].url)
   assertEquals(calls[1].headers.get('range'), 'bytes=2-4')
+})
 
+test('the blob door reads no bytes for HEAD and keeps missing blobs private', async () => {
   let before = files.gets.length
   let head = await get('HEAD')
   assertEquals(head.status, 200)
@@ -50,7 +52,17 @@ test('the cached blob door streams bytes and bounds uncached seeks', async () =>
   assertEquals(files.gets.length, before)
   await head.body?.cancel()
 
-  let key = prefix + sha
+  files.held.delete(prefix + sha)
+  let absent = await get()
+  assertEquals(absent.status, 404)
+  assertEquals(absent.headers.get('cache-control'), 'private, no-store')
+})
+
+let key = prefix + 'metadata'
+let metadataBytes = new Uint8Array([0, 1, 2, 3, 4, 5])
+files.held.set(key, metadataBytes)
+test('R2 metadata and ranged reads keep the same content tag', async () => {
+  let bytes = metadataBytes
   let tag = (await files.r2.head(key))!.etag
   let [again, seek, metadata] = await Promise.all([
     files.r2.get(key),
@@ -64,7 +76,11 @@ test('the cached blob door streams bytes and bounds uncached seeks', async () =>
     new Uint8Array(await new Response(again!.body).arrayBuffer()),
     bytes,
   )
+})
 
+test('R2 reads snapshot a buffer before hashing it', async () => {
+  let bytes = metadataBytes
+  let tag = (await files.r2.head(key))!.etag
   // A held buffer may change while its earlier reads are still hashing.
   let original = bytes.slice()
   bytes[0] = 7
@@ -82,7 +98,10 @@ test('the cached blob door streams bytes and bounds uncached seeks', async () =>
   assertEquals(new Uint8Array(await previous.arrayBuffer()), snapshot)
   bytes.set(original)
   assertEquals((await files.r2.head(key))!.etag, tag)
+})
 
+test('R2 writes own input views and returned buffers', async () => {
+  using _cleanup = scenario
   // R2 owns writes, including a view into a caller's larger buffer.
   for (
     let input of [
@@ -105,9 +124,4 @@ test('the cached blob door streams bytes and bounds uncached seeks', async () =>
       written,
     )
   }
-
-  files.held.delete(prefix + sha)
-  let absent = await get()
-  assertEquals(absent.status, 404)
-  assertEquals(absent.headers.get('cache-control'), 'private, no-store')
 })

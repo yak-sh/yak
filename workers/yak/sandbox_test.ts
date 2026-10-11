@@ -24,7 +24,7 @@ import {
   assertStringIncludes,
 } from '@std/assert'
 import { parse } from '@std/toml'
-import { based, pinned as from, tag } from './sandbox/base.ts'
+import { imaged, pinned as from, tag } from './sandbox/base.ts'
 import { build, fake } from './builder.ts'
 import { directory } from './directory.ts'
 import * as dirPart from './directory.ts'
@@ -560,12 +560,16 @@ test('the sandbox builds FROM the base its Dockerfile hashes to', async () => {
   assertEquals(image?.split('/').at(-1), `yak-sandbox:${want}`)
 })
 
-// What `based()` asks docker to do, for each state the registry can be in.
+// The base's pin is checked above; its image door controls Docker operations.
+let baseImage = from(await at('sandbox/Dockerfile'))!
 test('a deploy builds and pushes the base only when it is missing', async () => {
-  let image = from(await at('sandbox/Dockerfile'))!
+  let image = baseImage
   let calls = async (held: string[], dry = false) => {
     let ran: string[] = []
-    await based({
+    await imaged({
+      ref: image,
+      context: new URL('./sandbox/base', import.meta.url).pathname,
+      pull: true,
       wrangler: ['wrangler'],
       dry,
       has: (ref) => Promise.resolve(held.includes(ref)),
