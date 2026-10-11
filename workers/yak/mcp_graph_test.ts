@@ -957,7 +957,7 @@ test('a page queries a borrowed word at its home', async () => {
   try {
     let them = await seed(k, [{
       slug: flame74,
-      apps: ['probe', 'vale'],
+      apps: ['probe', 'vale', 'hill'],
     }])
     let agent = connector(k, them.cookie)
     let deploy = async (app: string) => {
@@ -975,6 +975,7 @@ test('a page queries a borrowed word at its home', async () => {
       await deploy('vale'),
       'uses: fire from probe',
     )
+    await deploy('hill')
 
     let saved = await agent.tool('graph_apply', {
       space: flame74,
@@ -992,8 +993,8 @@ test('a page queries a borrowed word at its home', async () => {
       entities: [{ entity: { eid: '$other' }, doc: { title: 'Probe' } }],
     })
 
-    let page = (path: string) =>
-      k.at(`${flame74}.yaks.app`, `/vale/api/${path}`, {
+    let page = (path: string, app = 'vale') =>
+      k.at(`${flame74}.yaks.app`, `/${app}/api/${path}`, {
         headers: { cookie: them.cookie },
       })
     let speaks = async () => {
@@ -1020,19 +1021,23 @@ test('a page queries a borrowed word at its home', async () => {
       ['Campfire'],
     )
 
+    let versions = await agent.tool('app_versions', {
+      space: flame74,
+      app: 'vale',
+    })
     await agent.tool('app_delete', { space: flame74, app: 'probe' })
-    assertStringIncludes(
-      await agent.tool('app_deploy', {
-        space: flame74,
-        app: 'vale',
-      }),
-      'components: fire',
+    assertEquals(
+      await agent.tool('app_versions', { space: flame74, app: 'vale' }),
+      versions,
     )
     assertEquals(await speaks(), true)
-    let after = await page('query?.fire')
-    assertEquals(after.status, 200)
-    assertEquals(await after.json(), [])
-
+    let deleted = await page('query?.fire')
+    assertEquals(deleted.status, 200)
+    assertEquals(await deleted.json(), [])
+    assertEquals(
+      await (await page('query?.fire&.count', 'hill')).json(),
+      { count: 0 },
+    )
     let newFire = await agent.tool('graph_apply', {
       space: flame74,
       app: 'vale',
@@ -1044,6 +1049,28 @@ test('a page queries a borrowed word at its home', async () => {
         r: { entity: { eid: string } },
       ) => r.entity.eid),
       [newEid],
+    )
+    assertEquals(
+      (await (await page('query?.fire', 'hill')).json())[0].entity.eid,
+      newEid,
+    )
+
+    await agent.tool('app_delete', {
+      space: flame74,
+      app: 'vale',
+      forever: true,
+    })
+    let remaining = await page('query?.fire', 'hill')
+    assertEquals(remaining.status, 200)
+    assertEquals(await remaining.json(), [])
+    await agent.tool('graph_apply', {
+      space: flame74,
+      app: 'hill',
+      entities: [{ entity: { eid: '$last' }, fire: { village: 'Hill' } }],
+    })
+    assertEquals(
+      (await (await page('query?.fire', 'hill')).json())[0].fire.village,
+      'Hill',
     )
 
     await agent.tool('app_restore', {

@@ -59,15 +59,20 @@
 // other order would leave a billable custom hostname and a bucket full of
 // bytes with nothing left pointing at them.
 import { r2Objects } from './lib/objects.ts'
+import { type Bundle, token } from '@yaks/graph'
+import { declarationOf, keepDeclaration } from './declaration.ts'
+import { sandboxed } from './installed.ts'
 import { isTestAddress } from './lib/bots.ts'
 import { opened, seal } from './lib/token.ts'
 import { wiped } from './build.ts'
 import { reachChanged, toolsOf, viewsMoved } from './declared.ts'
 import {
   type App,
+  appStore,
   clamped,
   type Directory,
   directory,
+  draftStore,
   type Host,
   META,
   type Space,
@@ -84,6 +89,7 @@ import { apex, type Host as HostEnv } from './host.ts'
 import { destroyed } from './sandbox.ts'
 import { vouched, type Who } from './session.ts'
 import { storeOf } from './door.ts'
+import { answered } from './meta.ts'
 import { ending } from './billing.ts'
 import { NOTES } from './standing.ts'
 import {
@@ -492,7 +498,97 @@ let mark = (
   eid: string,
   who: Who,
   trashed: Record<string, never> | null,
-) => dir.apply({ entities: [{ entity: { eid }, trashed }] }, vouched(who))
+  declarations: Bundle[] = [],
+) =>
+  dir.stamp({
+    entities: [{ entity: { eid }, trashed }, ...declarations],
+  }, vouched(who))
+
+// A use must outlive its home. Prepare replacement declarations before the
+// home leaves reach, then select them beside the delete in one directory
+// write. Only declarations move: the deleted app's rows stay in its store for
+// restoration, and its kept files and published versions stay untouched.
+let rehomed = async (
+  env: Env,
+  dir: Directory,
+  space: Space,
+  app: App,
+  who: Who,
+): Promise<Bundle[]> => {
+  if (sandboxed(app)) return []
+  let peers = (await dir.apps(space)).filter((one) =>
+    one.eid != app.eid && !one.trashed && !sandboxed(one) && one.version
+  )
+  let users = await Promise.all(peers.map(async (one) => {
+    let uses = await appStore(env.STORE, space, one).consume(
+      '/uses',
+      async (r) => {
+        if (!r.ok) throw await answered(r)
+        return await r.json() as Record<string, string>
+      },
+    )
+    return { app: one, uses }
+  }))
+  users = users.filter(({ uses }) => Object.values(uses).includes(app.slug))
+  if (!users.length) return []
+  let home = await declarationOf(env, space, app)
+  let homes: Record<string, string> = {}
+  let patches: Bundle[] = [{
+    entity: { eid: app.eid },
+    $was: {
+      app: {
+        declaration: token(app.declaration),
+        source: token(app.source),
+      },
+    },
+  }]
+  for (let { app: one, uses } of users) {
+    let declaration = await declarationOf(env, space, one)
+    let defs = { ...declaration.vocab.$defs }
+    for (let [name, slug] of Object.entries(uses)) {
+      if (slug != app.slug) continue
+      let at = homes[name] ??= one.slug
+      if (at == one.slug) {
+        let schema = home.vocab.$defs?.[name]
+        if (!schema) {
+          throw new Error(`${app.slug} has no declaration for ${name}`)
+        }
+        defs[name] = schema
+        delete uses[name]
+      } else uses[name] = at
+    }
+    let release = crypto.randomUUID()
+    let draft = draftStore(env.STORE, space, one, release)
+    let slot = (path: string, value: unknown) =>
+      draft.consume(
+        path,
+        async (r) => {
+          if (!r.ok) throw await answered(r)
+          return await r.json()
+        },
+        { method: 'POST', body: JSON.stringify(value) },
+        vouched(who),
+      )
+    await slot('/vocab', { ...declaration.vocab, $defs: defs })
+    await slot('/uses', uses)
+    await keepDeclaration(env, space, one, release, {
+      ...declaration,
+      vocab: await draft.consume('/vocab', (r) => r.json()),
+    })
+    patches.push({
+      entity: { eid: one.eid },
+      app: { declaration: release },
+      $was: {
+        app: {
+          declaration: token(one.declaration),
+          source: token(one.source),
+        },
+        trashed: { at: null },
+      },
+    })
+  }
+  return patches
+}
 
 // Into the trash: the mark, then the roster. Nothing else — the bytes, the
 // store, the deploys and the slug are all exactly where they were.
@@ -503,7 +599,7 @@ export let trash = async (
   app: App,
   who: Who,
 ) => {
-  await mark(dir, app.eid, who, {})
+  await mark(dir, app.eid, who, {}, await rehomed(env, dir, space, app, who))
   // A dormant store cannot describe its views. Tell the directory's members
   // directly, without asking the app for the declaration it stopped serving.
   await viewsMoved({ env, dir }, space)
@@ -584,6 +680,10 @@ export let erased = async (
   app: App,
   who: Who,
 ) => {
+  let declarations = await rehomed(env, dir, space, app, who)
+  if (declarations.length) {
+    await dir.stamp({ entities: declarations }, vouched(who))
+  }
   let files = await emptied(env, space, app, who)
   await dir.apply({
     entities: [{ entity: { eid: app.eid }, tombstone: {} }],
