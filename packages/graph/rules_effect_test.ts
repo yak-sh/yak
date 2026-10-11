@@ -6,6 +6,7 @@
 import { test } from '@yaks/testing'
 import { assert, assertEquals, assertThrows } from '@std/assert'
 import { isPromise } from '@yaks/fp'
+import { loadVocab, pick } from '@yaks/vocab'
 import { graph } from './graph.ts'
 import type { Bundle } from './bundle.ts'
 import type { Rule } from './rules.ts'
@@ -14,15 +15,20 @@ import { books, comp, memory } from './testing.ts'
 let held = (one: ReturnType<typeof graph>, eid = 'b1') =>
   (one.get([eid]) as Bundle[])[0]
 
-test('effect rules match stored tags and this batch’s writes', () => {
-  let one = graph({ storage: memory(), vocab: books })
+// Set up the stored inputs once; triggering writes belong inside each case.
+let shelfWords = loadVocab(
+  pick(books.docs[0], ['entity', 'book', 'doc', 'bookmark']),
+)
+let now = '2026-09-07T04:20:00.000Z'
+let tagged = (marked = false) => {
+  let one = graph({ storage: memory(), vocab: shelfWords })
   one.apply([{
     entity: { eid: 'b1' },
     book: { pages: 412 },
     doc: { title: 'Dune' },
+    ...(marked ? { bookmark: { of: 'b1' } } : {}),
   }])
   let seen: unknown[] = []
-  let now = '2026-09-07T04:20:00.000Z'
   one.use({
     name: 'shelf',
     rules: [{
@@ -40,12 +46,21 @@ test('effect rules match stored tags and this batch’s writes', () => {
       bookmark: { of: 'b1' },
       $actor: { by: 'librarian' },
     }], { now })
-  assert(!isPromise(mark()))
-  assertEquals(seen, [['b1', { pages: 412 }, now, 'librarian']])
+  return { one, seen, mark }
+}
+let newlyMarked = tagged(), alreadyMarked = tagged(true)
+
+test('effect rules match stored tags and this batch’s writes', () => {
+  assert(!isPromise(newlyMarked.mark()))
+  assertEquals(newlyMarked.seen, [['b1', { pages: 412 }, now, 'librarian']])
+})
+
+test('a stored trigger ignores unrelated edits and observes another trigger write', () => {
+  let { one, seen, mark } = alreadyMarked
   one.apply([{ entity: { eid: 'b1' }, doc: { title: 'Dune, revised' } }])
-  assertEquals(seen.length, 1)
+  assertEquals(seen, [])
   mark()
-  assertEquals(seen.length, 2)
+  assertEquals(seen, [['b1', { pages: 412 }, now, 'librarian']])
 })
 
 test('effect rules share a frozen view and resources, before hooks', () => {
@@ -92,35 +107,38 @@ test('effect rules share a frozen view and resources, before hooks', () => {
   assertEquals(comp(out[0], 'book'), { pages: 412, status: 'sold' })
 })
 
+let failureSeen: string[] = []
+let failureErrors: unknown[] = []
+let broken = (run: Rule['run']): Rule => ({
+  phase: 'effect',
+  match: '*book',
+  run,
+})
+let syncFailure = new Error('sync'), asyncFailure = new Error('async')
+let failing = graph({
+  storage: memory(),
+  vocab: shelfWords,
+  report: (e, at) => failureErrors.push([String(e), at]),
+  plugins: [{
+    name: 'shelf',
+    rules: [
+      broken(() => {
+        throw syncFailure
+      }),
+      broken(() => Promise.reject(asyncFailure)),
+      broken(() => ({ doc: { title: 'outside the write set' } })),
+      { phase: 'effect', match: '*book, #Missing' },
+      broken(() => void failureSeen.push('rule')),
+    ],
+    hooks: {
+      effect: (b) => (failureSeen.push('hook'), b),
+      audit: (b) => (failureSeen.push('audit'), b),
+    },
+  }],
+})
+
 test('each failing effect rule is reported and later observers still run', async () => {
-  let seen: string[] = []
-  let errors: unknown[] = []
-  let broken = (run: Rule['run']): Rule => ({
-    phase: 'effect',
-    match: '*book',
-    run,
-  })
-  let one = graph({
-    storage: memory(),
-    vocab: books,
-    report: (e, at) => errors.push([String(e), at]),
-    plugins: [{
-      name: 'shelf',
-      rules: [
-        broken(() => {
-          throw new Error('sync')
-        }),
-        broken(() => Promise.reject(new Error('async'))),
-        broken(() => ({ doc: { title: 'outside the write set' } })),
-        { phase: 'effect', match: '*book, #Missing' },
-        broken(() => void seen.push('rule')),
-      ],
-      hooks: {
-        effect: (b) => (seen.push('hook'), b),
-        audit: (b) => (seen.push('audit'), b),
-      },
-    }],
-  })
+  let one = failing, seen = failureSeen, errors = failureErrors
   let out = await one.apply([{ entity: { eid: 'b1' }, book: { pages: 412 } }])
   assertEquals(comp(out[0], 'book'), { pages: 412 })
   assertEquals(comp(held(one), 'book'), { pages: 412 })
