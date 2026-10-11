@@ -711,37 +711,60 @@ test('one frame may give an eid two different projected role scopes', () => {
   c.close()
 })
 
-// Prepare the answer whose content edits must leave its checkpoint alone.
-let checkpointWrites = 0
-let checkpointDisk = wireStash()
-let checkpoints = fixture({
-  epoch: 'boot',
-  wireVault: {
-    ...checkpointDisk,
-    saveAnswers: (...args) => {
-      checkpointWrites++
-      return checkpointDisk.saveAnswers!(...args)
+// Each checkpoint case starts with one persisted answer, prepared once.
+let checkpoint = async (edited = false) => {
+  let writes = 0
+  let disk = wireStash()
+  let { c } = fixture({
+    epoch: 'boot',
+    wireVault: {
+      ...disk,
+      saveAnswers: (...args) => {
+        writes++
+        return disk.saveAnswers!(...args)
+      },
     },
-  },
-})
-await checkpoints.c.ready
-checkpoints.c.watch('opaque', server)
-checkpoints.frame({ id: 's1', bundles: [row('a'), row('b')] })
-await checkpoints.c.cache.idle()
+  })
+  await c.ready
+  c.watch('opaque', server)
+  c.cache.land({ id: 's1', bundles: [row('a'), row('b')] })
+  await c.cache.idle()
+  if (edited) {
+    c.cache.land({
+      id: 's1',
+      bundles: [{ ...row('a'), doc: { title: 'edit' } }],
+    })
+    await c.cache.idle()
+  }
+  return {
+    c,
+    get writes() {
+      return writes
+    },
+  }
+}
+let checkpoints = await checkpoint()
+let reorderedCheckpoint = await checkpoint(true)
 
 test('content deltas do not rewrite unchanged semantic answer checkpoints', async () => {
   let { c } = checkpoints
-  let frame = c.cache.land
-  assertEquals(checkpointWrites, 1)
-  frame({ id: 's1', bundles: [{ ...row('a'), doc: { title: 'edit' } }] })
+  assertEquals(checkpoints.writes, 1)
+  c.cache.land({ id: 's1', bundles: [{ ...row('a'), doc: { title: 'edit' } }] })
   await c.cache.idle()
-  assertEquals(checkpointWrites, 1)
-  frame({
+  assertEquals(comp(c.ent('a'), 'doc').title, 'edit')
+  assertEquals(checkpoints.writes, 1)
+  c.close()
+})
+
+test('a ranking reset rewrites its semantic answer checkpoint', async () => {
+  let { c } = reorderedCheckpoint
+  assertEquals(reorderedCheckpoint.writes, 1)
+  c.cache.land({
     id: 's1',
     bundles: [row('b'), { ...row('a'), doc: { title: 'edit' } }],
     reset: true,
   })
   await c.cache.idle()
-  assertEquals(checkpointWrites, 2)
+  assertEquals(reorderedCheckpoint.writes, 2)
   c.close()
 })
