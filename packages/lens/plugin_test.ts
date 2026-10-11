@@ -93,20 +93,37 @@ test('an unversioned caller needs no metadata read and keeps its exact values', 
   ok(plugin.answer!({ opts: {}, tx }, rows) === rows)
 })
 
+let renamed = setup()
+renamed.apply([
+  { entity: { eid: 'cake' }, recipe: { yield: 2 }, doc: { title: 'Cake' } },
+  { entity: { eid: 'plain' }, doc: { title: 'Cake note' } },
+])
 test('old graph writes, filtered reads and get projections pass through rename hooks synchronously', () => {
-  let g = setup()
+  let g = renamed
   let out = g.apply([{
     entity: { eid: 'cake' },
     recipe: { title: 'Cake', yield: 2 },
     $speaks: speaks,
   }])
   ok(!(out instanceof Promise))
+  equal((out as Bundle[]).map((b) => ({ recipe: b.recipe, doc: b.doc })), [{
+    recipe: { yield: 2 },
+    doc: { title: 'Cake' },
+  }])
   let current = g.get(['cake']) as Bundle[]
   equal(current[0].recipe, { yield: 2 })
   equal(current[0].doc, { title: 'Cake' })
+})
+
+test('old filtered reads invert renamed values and exclude uncontracted rows', () => {
+  let g = renamed
   let old = g.read('.recipe.title~=cake', { speaks }) as Bundle[]
   equal(old.map((b) => b.entity.eid), ['cake'])
   equal(old[0].recipe, { yield: 2, title: 'Cake' })
+})
+
+test('old get projections and aspect reads retain renamed values', () => {
+  let g = renamed
   equal((g.get(['cake'], ['recipe'], { speaks }) as Bundle[])[0].recipe, {
     yield: 2,
     title: 'Cake',
@@ -115,13 +132,6 @@ test('old graph writes, filtered reads and get projections pass through rename h
     yield: 2,
     title: 'Cake',
   })
-  g.apply([{ entity: { eid: 'plain' }, doc: { title: 'Cake note' } }])
-  equal(
-    (g.read('.recipe.title~=cake', { speaks }) as Bundle[]).map((b) =>
-      b.entity.eid
-    ),
-    ['cake'],
-  )
 })
 
 test('a failed translation writes none of the batch and strips no caller input', async () => {

@@ -1,5 +1,5 @@
 import { equal, ok, test, throws } from '@yaks/testing'
-import { document, type Json, type Op } from './document.ts'
+import { document, type DocumentLens, type Json, type Op } from './document.ts'
 import tools from './tools.fixture.json' with { type: 'json' }
 
 let frozen = new WeakSet<object>()
@@ -11,15 +11,18 @@ let freeze = <T>(value: T): T => {
   }
   return value
 }
-let roundtrip = (ops: Op[], before: Json, after: Json) => {
-  let lens = document(ops)
+let roundtripCase = (lens: DocumentLens, before: Json, after: Json) => {
   let old = freeze(structuredClone(before)),
     current = freeze(structuredClone(after))
-  equal(lens.put(old), after)
-  equal(lens.get(current), before)
-  equal(old, before)
-  equal(current, after)
+  return () => {
+    equal(lens.put(old), after)
+    equal(lens.get(current), before)
+    equal(old, before)
+    equal(current, after)
+  }
 }
+let roundtrip = (ops: Op[], before: Json, after: Json) =>
+  roundtripCase(document(ops), before, after)()
 
 test('JSON renames are reversible at any depth and preserve null and omitted data', () => {
   roundtrip(
@@ -71,50 +74,53 @@ test('default operations preserve omission and refuse loss of nondefault data', 
   )
 })
 
-test('concat splits values and consumes sources, with explicit separators and literals', async () => {
-  roundtrip(
-    [{ concat: { from: ['first', 'last'], to: 'full', separator: ' ' } }],
-    { first: 'Ada', last: 'Lovelace', keep: 7 },
-    { full: 'Ada Lovelace', keep: 7 },
-  )
-  roundtrip(
-    [{
-      concat: {
-        from: ['rest', { value: '...' }],
-        to: 'positional',
-        append: true,
-      },
-    }],
-    { rest: 'files', positional: ['app'] },
-    { positional: ['app', 'files...'] },
-  )
-  let lens = document([{
-    concat: {
-      from: ['rest', { value: '...' }],
-      to: 'positional',
-      append: true,
-    },
-  }])
+let names = document([{
+  concat: { from: ['first', 'last'], to: 'full', separator: ' ' },
+}])
+let appended = document([{
+  concat: { from: ['rest', { value: '...' }], to: 'positional', append: true },
+}])
+let separated = document([{
+  concat: { from: ['a', 'b'], to: 'c', separator: '/' },
+}])
+
+// Refused fixed inputs are outcomes of the configured lenses, prepared once.
+let refusal = (run: () => unknown): unknown => {
+  try {
+    run()
+  } catch (error) {
+    return error
+  }
+}
+let concatFailures = [
+  refusal(() =>
+    document([{ concat: { from: ['first', 'last'], to: 'full' } }])
+  ),
+  refusal(() => separated.put({ a: 'one/two', b: 'three' })),
+  refusal(() => appended.put({ rest: null })),
+  refusal(() => separated.get({ c: 'one/two/three' })),
+]
+
+let joined = roundtripCase(
+  names,
+  { first: 'Ada', last: 'Lovelace', keep: 7 },
+  { full: 'Ada Lovelace', keep: 7 },
+)
+let suffixed = roundtripCase(
+  appended,
+  { rest: 'files', positional: ['app'] },
+  { positional: ['app', 'files...'] },
+)
+test('concat splits values and consumes sources, with explicit separators and literals', () => {
+  joined()
+  suffixed()
+  let lens = appended
   equal(lens.get({ positional: ['app'] }), { positional: ['app'] })
   equal(lens.put({ rest: 'files' }), { positional: ['files...'] })
   equal(lens.get({ positional: ['files...'] }), { rest: 'files' })
   let omitted = { keep: 4 }
   ok(lens.put(omitted) === omitted)
-  await throws(() =>
-    document([{ concat: { from: ['first', 'last'], to: 'full' } }])
-  )
-  await throws(() =>
-    document([{ concat: { from: ['a', 'b'], to: 'c', separator: '/' } }]).put({
-      a: 'one/two',
-      b: 'three',
-    })
-  )
-  await throws(() => lens.put({ rest: null }))
-  await throws(() =>
-    document([{ concat: { from: ['a', 'b'], to: 'c', separator: '/' } }]).get({
-      c: 'one/two/three',
-    })
-  )
+  for (let error of concatFailures) ok(error instanceof Error)
 })
 
 test('scatter gathers by property name or inverted map value and preserves input schemas', async () => {
