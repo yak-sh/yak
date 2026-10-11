@@ -1,19 +1,15 @@
 // Exercise chat's DOM boundary with the real local graphs and command grammar.
 import {
-  assert,
   assertEquals,
   assertObjectMatch,
   assertStringIncludes,
 } from '@std/assert'
 import { client, type Saved, stash } from '@yaks/client'
-import { draftDoc, draftEid, drafts, type Stash } from '@yaks/draft'
-import { docs as invocationDocs } from '@yaks/tools/vocab'
+import { draftEid, type Stash } from '@yaks/draft'
 import { test, tick, until } from '@yaks/testing'
 import { loadVocab } from '@yaks/vocab'
-import { uxDoc } from '@yaks/ux/vocab'
 import { parseHTML } from 'linkedom'
 import { chatbox } from './chatbox.ts'
-import { comp } from './bundle.ts'
 import type { CommandFieldOpts } from './command-field.ts'
 import { seedDesigns } from './designs_fixture.ts'
 import type { overlay } from './fx.ts'
@@ -33,7 +29,7 @@ let tools: Tools = Object.fromEntries(
     'tool' in def && def.tool ? [[name, def]] : []
   ),
 )
-let vocab = loadVocab([draftDoc, uxDoc, ...invocationDocs, {
+let vocab = loadVocab([{
   $defs: {
     beast_design: {
       component: true,
@@ -170,18 +166,11 @@ let setup = (
       }, { once: true })
     },
   })
-  let world = client(vocab, [drafts()], { vault: false, wireVault: false })
+  let world = client(vocab, [], { vault: false, wireVault: false })
   let store = memory()
   let vault = stash()
   let calls: Command[] = []
   let writes: unknown[] = []
-  let submitted: unknown[] = []
-  let mutate = world.mutate
-  world.mutate = (rows) => {
-    writes.push(...rows.filter((row) => row.chat))
-    submitted.push(...rows.filter((row) => row.call))
-    return mutate(rows)
-  }
   let plates: unknown[] = []
   let listings = 0
   let glass = document.createElement('div')
@@ -196,7 +185,6 @@ let setup = (
       return listing()
     },
     who: () => null,
-    about: () => Promise.resolve({ hero: null, by: player }),
     spawnFailures: () => world.read(SPAWN_FAILURES),
     keep: (row: unknown) => writes.push(row),
   } as unknown as Net
@@ -215,14 +203,8 @@ let setup = (
     net,
     marks,
     folk,
-    async (cmd, submit) => {
+    (cmd) => {
       calls.push(cmd)
-      if (
-        !await submit([{
-          entity: { eid: crypto.randomUUID() },
-          call: { args: cmd.args },
-        }])
-      ) throw new Error('refused')
       return execute?.(cmd) ?? Promise.resolve('Done.')
     },
     { vault, stash: store, pace: 0, ...opts },
@@ -273,11 +255,12 @@ let setup = (
     folk,
     marks,
     writes,
-    submitted,
     plates,
     store,
-    savedDraft: () =>
-      comp(world.ent(draftEid(player, 'mossvale.chat')), 'draft').text,
+    savedDraft: async () =>
+      (await vault.load()).find((row) =>
+        row.eid == draftEid(player, 'mossvale.chat')
+      )?.comps.draft?.text,
     chat,
     form,
     input,
@@ -566,7 +549,7 @@ test('chat close releases watches and all DOM listeners, including pending readi
   try {
     let form = h.form
     let input = h.input
-    assert(h.world.watches.size() > 0)
+    assertEquals(h.world.watches.size(), 3)
     h.chat.close()
     h.chat.close()
     assertEquals(h.glass.querySelector('.Chat'), null)
@@ -602,7 +585,7 @@ test('chat close drops an in-flight submission and completion result', async () 
     await until(() => h.listings == 1, { label: 'listing before close' })
     // Install the level watch too; close must release it along with refs.
     h.draw()
-    assert(h.world.watches.size() > 0)
+    assertEquals(h.world.watches.size(), 4)
     h.chat.close()
     assertEquals(h.world.watches.size(), 0)
     listed.resolve(tools)
@@ -654,9 +637,6 @@ test('command replies belong only to their caller, while speech goes to the shar
     peer.tick(frame, () => null)
     assertEquals(glass.querySelector('.Chat_Log')!.textContent, '')
     assertEquals(h.writes, [])
-    assertObjectMatch(h.submitted[0] as Record<string, unknown>, {
-      content: { body: '/where' },
-    })
     assertEquals(h.plates, [])
 
     h.chat.me({

@@ -12,8 +12,7 @@ beside it:
   is page-only entities in the same graph (`sync: none`), the way @yaks/ux keeps
   a component's state (M-39550).
 - What a person sets or types (settings, drafts) is theirs, kept in the store
-  and synced to every device they play on (M-59093). A browser recovery copy
-  stays until the store acknowledges its write.
+  and synced to every device they play on (M-59093); never `localStorage`.
 - What a person sees is @yaks/ui parts in Preact, never `innerHTML`.
 
 Moving code's state in means modelling it fresh, not copying its shape: the
@@ -41,12 +40,7 @@ declares its single-letter flag. `/spawn a large polar bear --at mossvale` fills
 command listing into grammar descriptors, `slash-completion.ts` supplies chat
 replacement ranges, and `command-lookup.ts` supplies entity lookup. The
 completion UI uses `@yaks/ux/completion`, the same behavior reused by filter
-fields. Command drafts use the app store's `@yaks/draft` words and merge hook;
-carets and choices are page-only `Completion` rows. Chat writes and recorded
-command calls spend their drafts in the same acknowledged batch. Recorded calls
-keep the submitted command text in `content.body` and return their answer
-through the store's `result` rows. Browser-vault drafts move to the app store
-before their exact source snapshots are removed.
+fields, with drafts kept by the host.
 
 ## Deployment
 

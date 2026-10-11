@@ -16,7 +16,6 @@
 // row asks them to answer, and what they answer floats over their head and
 // joins the log like anybody's line.
 import type { Watch } from '@yaks/client'
-import type { Bundle } from '@yaks/graph'
 import { h, render } from 'preact'
 import { Button, Field, Turns } from '@yaks/ui'
 import { Markdown } from '@yaks/markdown'
@@ -65,11 +64,7 @@ let STAY = 20000
 let FADE = 4000
 
 // A line of mine, and the rest of its row when it is said to a villager.
-type Said = Line & {
-  level: string
-  to: Record<string, unknown> | null
-  send: (bundles: Bundle[]) => Promise<boolean>
-}
+type Said = Line & { level: string; to: Record<string, unknown> | null }
 type Notice = { eid: string; text: string; at: number; markdown: boolean }
 
 let esc = (s: string) => s.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`)
@@ -89,10 +84,7 @@ export let chatbox = (
   net: Net,
   marks: ReturnType<typeof overlay>,
   folk: Village,
-  command?: (
-    cmd: Command,
-    submit: (bundles: Bundle[]) => Promise<boolean>,
-  ) => Promise<string>,
+  command?: (cmd: Command) => Promise<string>,
   fieldOpts?: CommandFieldOpts,
 ) => {
   let listeners = new AbortController()
@@ -157,18 +149,13 @@ export let chatbox = (
   })
   let unbind = fields.bind(place, input)
   render(h(fields.List, { id: place, anchor: { current: input } }), choices)
-  let submit =
-    (text: string, by: string | undefined) => (bundles: Bundle[] = []) => {
-      bundles = bundles.map((b) =>
-        b.call ? { ...b, content: { body: text } } : b
-      )
-      // A slow listing can finish after further typing or an account switch.
-      // Submit its snapshot without spending the person's newer words.
-      if (input.value != text || person.value != by) {
-        return Promise.resolve(net.client.mutate(bundles)).then(() => true)
-      }
-      return drafts.spend(place, bundles)
-    }
+  let spend = (text: string, by: string | undefined) => {
+    // A slow command listing must not spend words typed or an account switched
+    // while it was being read. The submitted snapshot can still run.
+    if (input.value != text || person.value != by) return
+    drafts.spend(place)
+    fields.set(place, '')
+  }
 
   // What the store holds: the lines said in this level, newest first, and
   // who made each hero, which the rule asks.
@@ -215,12 +202,10 @@ export let chatbox = (
     notices = [...notices, n].slice(-ASKED)
     return n
   }
-  let run = async (cmd: Command, text: string, by: string | undefined) => {
+  let run = async (cmd: Command) => {
     let n = notice('Running command…')
     try {
-      n.text = command
-        ? await command(cmd, submit(text, by))
-        : 'Commands are unavailable.'
+      n.text = command ? await command(cmd) : 'Commands are unavailable.'
       n.markdown = !!command
     } catch (e) {
       n.text = clean(e instanceof Error ? e.message : String(e)) ||
@@ -234,16 +219,11 @@ export let chatbox = (
     let l = outbox.shift()!
     went = t
     waiting.push(l)
-    void l.send([{
+    net.keep({
       entity: { eid: l.eid },
       chat: { level: l.level, player: l.player },
       doc: { body: l.text },
       ...l.to,
-    }]).then((accepted) => {
-      if (!accepted) waiting = waiting.filter((row) => row.eid != l.eid)
-    }).catch((e) => {
-      waiting = waiting.filter((row) => row.eid != l.eid)
-      notice(e instanceof Error ? e.message : String(e))
     })
   }
 
@@ -339,13 +319,14 @@ export let chatbox = (
     if (parsed) {
       if ('error' in parsed) notice(parsed.error)
       else if ('help' in parsed) {
-        void submit(before, by)([])
+        spend(before, by)
         let n = notice(parsed.help)
         n.markdown = true
         hide()
       } else {
+        spend(before, by)
         hide()
-        void run(parsed.command, before, by)
+        void run(parsed.command)
       }
       return
     }
@@ -354,6 +335,7 @@ export let chatbox = (
     if (!folk.near()) hide()
     let hero = net.hero
     if (!text || !hero || !level || !speaks()) return
+    spend(before, by)
     outbox.push({
       eid: crypto.randomUUID(),
       player: hero,
@@ -362,7 +344,6 @@ export let chatbox = (
       at: net.now(),
       level,
       to: folk.to(text),
-      send: submit(before, by),
     })
   }, { signal: listeners.signal })
 

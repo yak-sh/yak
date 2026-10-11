@@ -1,9 +1,17 @@
-// Unsent commands belong to the person in the app store. Choices and carets
-// last only as long as this page; the old browser vault is drained on receipt.
+// Commands keep their drafts in the vale's own browser vault, not the world
+// connection. Choices and carets last only as long as this page does.
 import { effect, signal, untracked } from '@preact/signals'
-import { idb, type Saved, type Vault } from '@yaks/client'
-import { desk, draftEid, type Drafts, type Stash } from '@yaks/draft'
+import { client, idb, type Vault } from '@yaks/client'
+import {
+  desk,
+  draftDoc,
+  type Drafts,
+  drafts as draftPlugin,
+  type Stash,
+} from '@yaks/draft'
 import { completion, type Opts } from '@yaks/ux/completion'
+import { uxDoc } from '@yaks/ux/vocab'
+import { loadVocab } from '@yaks/vocab'
 import type { Net } from './net.ts'
 
 export type CommandFieldOpts = {
@@ -13,12 +21,10 @@ export type CommandFieldOpts = {
   report?: (err: unknown) => void
 }
 
-// Only server acknowledgement clears the emergency stash. Namespace its
-// places by app and account, including while the old vault is being drained.
-let scoped = (store: Stash, by: string, app: string): Stash => {
-  let prefix = `vale:commands:${encodeURIComponent(app)}:${
-    encodeURIComponent(by)
-  }:`
+// desk's emergency stash is cleared on acknowledgement. The vault, not this
+// stash, keeps acknowledged drafts. Namespace its places by app and account.
+let scoped = (store: Stash, by: string): Stash => {
+  let prefix = `vale:commands:${encodeURIComponent(by)}:`
   let keys = () =>
     Array.from({ length: store.length }, (_, i) => store.key(i))
       .filter((key): key is string => !!key?.startsWith(prefix))
@@ -34,19 +40,26 @@ let scoped = (store: Stash, by: string, app: string): Stash => {
 }
 
 export let commandField = (
-  net: Pick<Net, 'client'> & { store?: string },
+  _net: Pick<Net, 'client'>,
   by: () => string | null | undefined,
   complete: Opts['complete'],
   opts: CommandFieldOpts = {},
 ) => {
-  let local = net.client
-  // Kept pages still use this vault. Import its rows without rewriting them,
-  // and forget each source only after the app store has taken its text.
-  let vault = opts.vault === false ? undefined : opts.vault ??
-    (typeof indexedDB == 'undefined'
-      ? undefined
-      : idb({ name: 'vale-command-field' }))
-  let legacy = new Map<string, Saved>()
+  let doc = structuredClone(draftDoc)
+  let defs = doc.$defs!
+  defs.draft.sync = 'none'
+  defs.draft.durable = 'forever'
+  defs.typed.sync = 'none'
+  defs.typed.durable = '0s'
+  let plugin = draftPlugin()
+  let local = client(loadVocab([uxDoc, doc]), [{ ...plugin, vocab: [doc] }], {
+    vault: opts.vault ??
+      (typeof indexedDB == 'undefined'
+        ? false
+        : idb({ name: 'vale-command-field' })),
+    wireVault: false,
+    signal,
+  })
   let report = opts.report ?? ((err: unknown) => console.warn(err))
   let store = opts.stash
   if (!store) {
@@ -54,20 +67,6 @@ export let commandField = (
       store = globalThis.localStorage
     } catch (err) {
       report(err)
-    }
-  }
-  // A denied browser stash still permits migration and keeps pending text in
-  // memory; the old vault remains durable until its hosted write is accepted.
-  if (!store) {
-    let rows = new Map<string, string>()
-    store = {
-      get length() {
-        return rows.size
-      },
-      key: (i) => [...rows.keys()][i] ?? null,
-      getItem: (key) => rows.get(key) ?? null,
-      setItem: (key, value) => void rows.set(key, value),
-      removeItem: (key) => void rows.delete(key),
     }
   }
   let enabled = signal(false)
@@ -109,123 +108,25 @@ export let commandField = (
       let d = next ? desks.get(next) : undefined
       if (next && !d) {
         let account = next
-        let stash = scoped(store!, account, net.store ?? 'vale')
-        let represented = new Map<string, Saved>()
-        let oldPrefix = `vale:commands:${encodeURIComponent(account)}:`
-        let emergency = new Map<string, { key: string; value: string }>()
         d = desk({
-          watch: net.client.watch,
+          watch: local.watch,
           // desk may finish an in-flight acknowledgement after close. It
           // must not start another graph write or recreate a closed watch.
-          mutate: async (bundles) => {
-            if (closed) return []
-            let sources = new Map(bundles.flatMap((b) => {
-              let row = represented.get(b.entity.eid)
-              return b.draft && row ? [[b.entity.eid, row] as const] : []
-            }))
-            let copies = new Map(bundles.flatMap((b) => {
-              let copy = emergency.get(b.entity.eid)
-              return b.draft && copy ? [[b.entity.eid, copy] as const] : []
-            }))
-            let applied = await net.client.mutate(bundles)
-            let moved = applied.flatMap((b) => {
-              let row = sources.get(b.entity.eid)
-              return b.draft && row ? [row] : []
-            })
-            if (moved.length) {
-              try {
-                if (!vault?.take) {
-                  throw new Error(
-                    'Legacy draft vault cannot atomically drain snapshots',
-                  )
-                }
-                let changed = await vault.take(moved)
-                for (let row of moved) {
-                  legacy.delete(row.eid)
-                  represented.delete(row.eid)
-                }
-                for (let row of changed) {
-                  let old = moved.find((source) => source.eid == row.eid)!
-                  legacy.set(row.eid, row)
-                  represented.set(row.eid, row)
-                  if (!closed && typeof row.comps.draft?.place == 'string') {
-                    d?.restore(
-                      row.comps.draft.place,
-                      String(row.comps.draft.text ?? ''),
-                      String(old.comps.draft?.text ?? ''),
-                    )
-                  }
-                }
-              } catch (err) {
-                report(err)
-              }
-            }
-            try {
-              for (let b of applied) {
-                let copy = copies.get(b.entity.eid)
-                if (!b.draft || !copy) continue
-                let current = store!.getItem(copy.key)
-                if (current == copy.value) {
-                  store!.removeItem(copy.key)
-                  emergency.delete(b.entity.eid)
-                } else if (current && !closed) {
-                  let old = JSON.parse(copy.value), newer = JSON.parse(current)
-                  emergency.set(b.entity.eid, { key: copy.key, value: current })
-                  d?.restore(
-                    copy.key.slice(oldPrefix.length + 'draft:'.length),
-                    newer.text,
-                    old.text,
-                  )
-                }
-              }
-            } catch (err) {
-              report(err)
-            }
-            return applied
-          },
+          mutate: (bundles) => closed ? [] : local.mutate(bundles),
         }, {
           by: () => closed ? undefined : account,
-          stash,
+          stash: store ? scoped(store, account) : undefined,
           pace: opts.pace,
           report,
         })
         desks.set(next, d)
-        for (let row of legacy.values()) {
-          let draft = row.comps.draft
-          if (
-            draft?.by != account || typeof draft.place != 'string' ||
-            !draft.text
-          ) continue
-          represented.set(row.eid, row)
-          // This source was held by the old isolated vault. A hosted stash's
-          // base says nothing about it, so import it as independent typing.
-          d.restore(draft.place, String(draft.text))
-        }
-        for (let i = 0; i < store!.length; i++) {
-          let key = store!.key(i)
-          if (!key?.startsWith(oldPrefix + 'draft:')) continue
-          let value = store!.getItem(key)!
-          try {
-            let kept = JSON.parse(value)
-            let place = key.slice(oldPrefix.length + 'draft:'.length)
-            let eid = draftEid(account, place)
-            emergency.set(eid, { key, value })
-            // The old emergency copy knows the old vault's base, which may
-            // precede its imported snapshot. Without that source, this is
-            // independent input rather than an edit over hosted text.
-            let over = represented.has(eid) ? String(kept.over ?? '') : ''
-            d.restore(place, String(kept.text ?? ''), over)
-          } catch (err) {
-            report(err)
-          }
-        }
       }
       active.value = d
     })
   })
-  // Binding before import finishes cannot overwrite a precious saved draft.
-  let ready = Promise.all([local.ready, vault?.load()]).then(([, rows]) => {
-    for (let row of rows ?? []) legacy.set(row.eid, row)
+  // Binding before ready can establish transient caret state, but cannot
+  // type an empty draft over the vault's still-loading text.
+  let ready = local.ready.then(() => {
     if (!closed) enabled.value = true
   })
   let close = () => {
@@ -234,6 +135,7 @@ export let commandField = (
     stop()
     for (let d of desks.values()) d.close()
     fields.dispose()
+    local.close()
   }
   return { fields, drafts, ready, close }
 }
