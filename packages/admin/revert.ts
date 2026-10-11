@@ -62,7 +62,7 @@ export let revert = async (
   // Preserve the worktree on failure: conflicts and failed gates are work an
   // owner can finish, not scratch that this command is entitled to erase.
   try {
-    await needGit(tree, ['revert', '--no-edit', target], stopping)
+    await needGit(tree, ['revert', '--no-edit', target], stopping, 'sha')
     for (let attempt = 0; attempt < 3; attempt++) {
       note('gating the revert: deno task check')
       let check = await output(Deno.execPath(), {
