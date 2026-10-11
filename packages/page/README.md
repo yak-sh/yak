@@ -38,7 +38,12 @@ import { docDoc } from '@yaks/doc'
 import { pageDoc, pageEid, pages } from '@yaks/page'
 
 let vocab = loadVocab([docDoc, pageDoc])
-let g = graph({ storage: ram(vocab), vocab, plugins: [pages()] })
+let g = graph({
+  storage: ram(vocab),
+  vocab,
+  provenance: false,
+  plugins: [pages()],
+})
 let url = 'https://example.com/article'
 let eid = pageEid(url)
 
