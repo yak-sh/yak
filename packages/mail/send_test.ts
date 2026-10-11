@@ -25,17 +25,19 @@ let comp = (b: Bundle | undefined, name: string) =>
 let read = async (g: { read: (q: string) => unknown }, eid: string) =>
   ((await g.read(`.entity.eid=${eid}`)) as Bundle[])[0]
 
+// A settled letter, prepared once for readers of its envelope and outcome.
+let sentClub = await seeded()
+await sentClub.g.apply([{
+  entity: { eid: letter },
+  doc: {
+    title: 'Potluck Friday',
+    body: 'Bring a dish. [Sign up](https://books.example/p)',
+  },
+  mail: { from: 'hello@books.example' },
+  deliver: { to: ana },
+}])
 test('a letter that asks to go, goes — and says so', async () => {
-  let { g, post } = await seeded()
-  await g.apply([{
-    entity: { eid: letter },
-    doc: {
-      title: 'Potluck Friday',
-      body: 'Bring a dish. [Sign up](https://books.example/p)',
-    },
-    mail: { from: 'hello@books.example' },
-    deliver: { to: ana },
-  }])
+  let { g, post } = sentClub
   assertEquals(post.sent.length, 1)
   assertEquals(post.last()?.to, 'ana@books.example')
   assertEquals(post.last()?.subject, 'Potluck Friday')
@@ -64,15 +66,19 @@ test('a letter with no ask is kept, not sent', async () => {
   assertEquals(comp(await read(g, letter), 'delivered'), undefined)
 })
 
+let unaddressedClub = await seeded()
+await unaddressedClub.g.apply([{
+  entity: { eid: 'p-bo' },
+  person: { name: 'Bo' },
+}])
+await unaddressedClub.g.apply([{
+  entity: { eid: letter },
+  doc: { title: 'hi', body: 'hi' },
+  mail: { from: 'hello@books.example' },
+  deliver: { to: 'p-bo' },
+}])
 test('a recipient with no address bounces, and says whose fault it is', async () => {
-  let { g, post } = await seeded()
-  await g.apply([{ entity: { eid: 'p-bo' }, person: { name: 'Bo' } }])
-  await g.apply([{
-    entity: { eid: letter },
-    doc: { title: 'hi', body: 'hi' },
-    mail: { from: 'hello@books.example' },
-    deliver: { to: 'p-bo' },
-  }])
+  let { g, post } = unaddressedClub
   assertEquals(post.sent.length, 0)
   assertEquals(comp(await read(g, letter), 'bounced'), {
     at: '2026-09-05T12:00:00.000Z',
@@ -95,14 +101,15 @@ test('a letter with no sender bounces before the transport is troubled', async (
   )
 })
 
+let refusedClub = await seeded('no route to host')
+await refusedClub.g.apply([{
+  entity: { eid: letter },
+  doc: { title: 'hi', body: 'hi' },
+  mail: { from: 'hello@books.example' },
+  deliver: { to: ana },
+}])
 test('a transport that refuses writes the reason it gave', async () => {
-  let { g } = await seeded('no route to host')
-  await g.apply([{
-    entity: { eid: letter },
-    doc: { title: 'hi', body: 'hi' },
-    mail: { from: 'hello@books.example' },
-    deliver: { to: ana },
-  }])
+  let { g } = refusedClub
   assertEquals(
     comp(await read(g, letter), 'bounced')?.reason,
     'no route to host',
@@ -126,14 +133,15 @@ test('a reply threads on what the answered letter went out as', async () => {
   assertEquals(post.last()?.replyTo, 'stash-1')
 })
 
+let threadedClub = await seeded()
+await threadedClub.g.apply([{
+  entity: { eid: letter },
+  doc: { title: 'hi', body: 'hi' },
+  mail: { from: 'hello@books.example' },
+  deliver: { to: ana },
+}])
 test('an answer to a letter we sent threads onto it', async () => {
-  let { g } = await seeded()
-  await g.apply([{
-    entity: { eid: letter },
-    doc: { title: 'hi', body: 'hi' },
-    mail: { from: 'hello@books.example' },
-    deliver: { to: ana },
-  }])
+  let { g } = threadedClub
   let head: Record<string, string> = {
     'message-id': '<a2@x.example>',
     'in-reply-to': '<stash-1>',

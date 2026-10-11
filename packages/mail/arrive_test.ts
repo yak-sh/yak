@@ -127,22 +127,41 @@ test('arrived: a stranger writes to the triage pile', async () => {
   assertEquals(comp(bundles[0], 'mail').verified, undefined)
 })
 
-test('arrived: a letter is written by its sender, never by the graph owner', async () => {
-  // The club's graph is its secretary's: she writes what names no writer.
-  let { g } = await seeded({ owner: { by: 'p-secretary' } })
-  let receive = arrived({
-    graph: knowing(g, { 'S-31': 'sess-31' }),
-    domain,
-    triage: pile,
-  })
-  let writer = async (from: string) => {
-    let landed = await g.apply(await receive(got({ from, subject: from })))
-    return comp(landed.find((b) => b.mail), 'created').by
-  }
-  assertEquals(await writer('Ana <ana@books.example>'), ana)
-  assertEquals(await writer('S-31@books.example'), 'sess-31')
-  assertEquals(await writer('bo@elsewhere.com'), undefined)
+// One owner-backed address book; each case writes a fresh arrival.
+let owned = (await seeded({ owner: { by: 'p-secretary' } })).g
+let receiveOwned = arrived({
+  graph: knowing(owned, { 'S-31': 'sess-31' }),
+  domain,
+  triage: pile,
 })
+for (
+  let [from, by, name] of [
+    [
+      'Ana <ana@books.example>',
+      ana,
+      'arrived: a letter is written by its sender, never by the graph owner',
+    ],
+    [
+      'S-31@books.example',
+      'sess-31',
+      'arrived: an id-addressed sender owns its letter',
+    ],
+    [
+      'bo@elsewhere.com',
+      undefined,
+      'arrived: a stranger’s letter has no writer, despite the graph owner',
+    ],
+  ]
+) {
+  let received = await receiveOwned(got({ from: from!, subject: from! }))
+  test(name!, async () => {
+    let landed = await owned.apply(received.map((b) => ({
+      ...b,
+      entity: { eid: crypto.randomUUID() },
+    })))
+    assertEquals(comp(landed.find((b) => b.mail), 'created').by, by)
+  })
+}
 
 test('arrived: the same Message-ID lands once', async () => {
   let { g } = await seeded()

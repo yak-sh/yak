@@ -127,14 +127,16 @@ test('reading and answering mark the letter and the first of its thread, afresh 
   assertEquals(await marks('archived'), [stamp(3), stamp(3)])
 })
 
+let incoming = await club()
+await incoming.g.apply([arrival('a1')])
+let landed = await did(incoming.g, 'mail_reply', {
+  letter: 'a1',
+  body: 'We will be there.',
+})
+let incomingReply = landed.find((b) => comp(b, 'mail').reply_to == 'a1')!
 test('a reply to an arrival goes to its author, from the desk it came to', async () => {
-  let { g, post } = await club()
-  await g.apply([arrival('a1')])
-  let landed = await did(g, 'mail_reply', {
-    letter: 'a1',
-    body: 'We will be there.',
-  })
-  let reply = landed.find((b) => comp(b, 'mail').reply_to == 'a1')!
+  let { g, post } = incoming
+  let reply = incomingReply
   assertEquals(comp(reply, 'doc').title, 'Re: Potluck Friday')
   assertEquals(comp(reply, 'mail').from, 'hello@books.example')
   // The author had no row here, so the address book grew one.
@@ -148,18 +150,19 @@ test('a reply to an arrival goes to its author, from the desk it came to', async
   assert(comp((await g.get(['a1']))[0], 'archived').at, 'answered is away')
 })
 
+let outgoing = await club()
+await outgoing.g.apply([
+  { entity: { eid: 'ana' }, email: { address: 'ana@books.example' } },
+  {
+    entity: { eid: 'a1' },
+    doc: { title: 'You are in' },
+    mail: { from: 'hello@books.example' },
+    deliver: { to: 'ana' },
+  },
+])
 test('a reply to your own letter goes to whom you wrote it', async () => {
-  let { g } = await club()
-  await g.apply([
-    { entity: { eid: 'ana' }, email: { address: 'ana@books.example' } },
-    {
-      entity: { eid: 'a1' },
-      doc: { title: 'You are in' },
-      mail: { from: 'hello@books.example' },
-      deliver: { to: 'ana' },
-    },
-  ])
-  let landed = await did(g, 'mail_reply', { letter: 'a1', body: 'Thanks!' })
+  let { g } = outgoing
+  let landed = await ask(g, 'mail_reply', { letter: 'a1', body: 'Thanks!' })
   let reply = landed.find((b) => comp(b, 'mail').reply_to == 'a1')!
   assertEquals(comp(reply, 'deliver').to, 'ana')
   assertEquals(comp(reply, 'mail').from, 'hello@books.example')

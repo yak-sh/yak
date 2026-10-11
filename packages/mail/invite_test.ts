@@ -63,13 +63,14 @@ test("the role is the letter's business, not the handler's", async () => {
   assertEquals(post.last()?.subject, 'You run the book club')
 })
 
+let unaddressed = await rig()
+await unaddressed.g.apply([{ entity: { eid: 'p-bo' }, person: { name: 'Bo' } }])
+await unaddressed.g.apply([{
+  entity: { eid: 'm-second' },
+  member: { space: club, person: 'p-bo', role: 'member' },
+}])
 test('a member with no address gets a bounced invitation, not silence', async () => {
-  let { g, post } = await rig()
-  await g.apply([{ entity: { eid: 'p-bo' }, person: { name: 'Bo' } }])
-  await g.apply([{
-    entity: { eid: 'm-second' },
-    member: { space: club, person: 'p-bo', role: 'member' },
-  }])
+  let { g, post } = unaddressed
   assertEquals(post.sent.length, 0)
   let [invite] = (await g.read('.entity.eid=e-invite')) as Bundle[]
   assert(String((invite.bounced as Comp).reason).includes('no address on file'))

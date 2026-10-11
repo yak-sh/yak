@@ -4,7 +4,13 @@
 
 import { test } from '@yaks/testing'
 import { assert, assertEquals } from '@std/assert'
-import { type Bundle, type Comp, graph, type Storage } from '@yaks/graph'
+import {
+  type Bundle,
+  type Comp,
+  detached,
+  graph,
+  type Storage,
+} from '@yaks/graph'
 import { ram } from '@yaks/ram'
 import { effectDoc, effects as registry, type Handlers } from '@yaks/effects'
 import { docs } from '@yaks/doc'
@@ -101,10 +107,11 @@ test('missing credentials leave every owed letter visibly waiting and report fai
   }
 })
 
+let waitingSender = await rig(effects(null))
+await waitingSender.apply([ana, letter('e-one')])
+await waitingSender.fx.idle()
 test('no configured sender leaves an outbound letter waiting rather than silently done', async () => {
-  let g = await rig(effects(null))
-  await g.apply([ana, letter('e-one')])
-  await g.fx.idle()
+  let g = waitingSender
   assertEquals((await read(g, 'e-one')).deliver, {
     to: 'p-ana',
     waiting: 'waiting for a configured sender',
@@ -209,20 +216,27 @@ test('a letter handed over and never settled is not handed over again', async ()
   assertEquals(box.sent, [])
 })
 
+// The sending handler's boundary: committed rows and a durable write callback.
+let orderedStore = ram(pooled)
+let orderedTx = detached(orderedStore)
+orderedTx.patch([ana])
+let orderingEvent = {
+  kind: 'created' as const,
+  entity: { eid: 'e-one' },
+  name: 'mail',
+}
 test('the letter is marked tried before the transport sees it', async () => {
   let at: unknown[] = []
-  let g = await rig({
-    mail_post: sending({
-      now: noon,
-      sender: {
-        send: async () => {
-          at.push(((await read(g, 'e-one')).deliver as Comp).tried)
-          return { id: 'r-1' }
-        },
+  orderedTx.remove([{ eid: 'e-one' }])
+  orderedTx.patch([letter('e-one')])
+  await sending({
+    now: noon,
+    sender: {
+      send: async () => {
+        at.push(((await orderedTx.get(['e-one']))[0].deliver as Comp).tried)
+        return { id: 'r-1' }
       },
-    }),
-  })
-  await g.apply([ana, letter('e-one')])
-  await g.fx.idle()
+    },
+  })(orderingEvent, orderedTx, (rows) => orderedTx.patch(rows))
   assertEquals(at, [noon()])
 })
