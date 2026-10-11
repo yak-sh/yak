@@ -3,6 +3,7 @@
 // case mounts it through Preact (mount.ts) and asserts on the resulting DOM,
 // never on a bare call's vnode tree.
 import { test, tick } from '../../testing.ts'
+import { test as preparedTest } from '@yaks/testing'
 import { h, render } from 'preact'
 import { parseHTML } from 'linkedom'
 import { assert, assertEquals, assertExists } from '@std/assert'
@@ -563,23 +564,26 @@ test('a board whose saved query cannot be read shows why', () => {
   }
 })
 
-test('a hook-using renderer mounts through the helper', () => {
+let hooked: Ent = {
+  eid: 'task',
+  num: 1,
+  kind: 'task',
+  refs: [],
+  kids: [],
+  doc: { eid: 'task', title: 'Hooked', body: '' },
+  task: { eid: 'task', status: 'open' },
+  filed: { eid: 'task', priority: 1 },
+}
+let hookedTitle = resolve(hooked, 'Card.Title').Render
+let hookedMount = mount(h(hookedTitle, { e: hooked }))
+
+preparedTest('a hook-using renderer mounts through the helper', () => {
   // The task title's Pip holds useState — a hook-using renderer only works
   // mounted through Preact. A bare call would throw here; the helper mounts it.
-  cache.value = {
-    task: {
-      entity: { eid: 'task', num: 1 },
-      doc: { eid: 'task', title: 'Hooked', body: '' },
-      task: { eid: 'task', status: 'open' },
-      filed: { eid: 'task', priority: 1 },
-    },
-  }
-  let e = ent('task')
-  let { root, free } = mount(h(resolve(e, 'Card.Title').Render, { e }))
+  let { root, free } = hookedMount
   assertExists(root.querySelector('.CardTitle'))
   assertEquals(root.querySelector('.Id')?.textContent, 'T-1')
   free()
-  cache.value = {}
 })
 
 test('comment dependencies lead with the entity commented on', () => {

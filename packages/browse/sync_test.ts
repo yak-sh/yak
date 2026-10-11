@@ -15,29 +15,6 @@ import * as live from './live.ts'
 
 let uid = () => crypto.randomUUID()
 
-// A stubbed WebSocket so mutate() can route through deliver without a server —
-// the same door outbox_test uses.
-let stubSockets = () => {
-  let real = (globalThis as { WebSocket: unknown }).WebSocket
-  ;(globalThis as { WebSocket: unknown }).WebSocket = class {
-    readyState = 0
-    onopen: unknown = null
-    onmessage: unknown = null
-    onclose: unknown = null
-    send() {}
-    addEventListener() {}
-    close() {}
-  }
-  // A fake transport needs a fake address: live.ts refuses to dial a host
-  // nobody named, and `.invalid` resolves nowhere if this stub ever slips.
-  let host = live.config.host
-  live.config.host = 'stub.invalid'
-  return () => {
-    ;(globalThis as { WebSocket: unknown }).WebSocket = real
-    live.config.host = host
-  }
-}
-
 // An in-memory outbox double (no IndexedDB under Deno), mirroring idb's
 // key = delivery id.
 type Parked = { changes: Change[]; at: number }
@@ -50,12 +27,19 @@ let fakeOutbox = () => {
   }
 }
 
+let indicatorOutbox = fakeOutbox()
+let indicatorChange: Change = {
+  eid: crypto.randomUUID(),
+  name: 'doc',
+  comp: { title: 'held' },
+}
+
 test('the indicator mirrors the outbox: a mutate adds, an ack clears', () => {
-  let restore = stubSockets()
-  let prev = live.useOutboxStore(fakeOutbox())
+  let restore = live.useRoute(() => {})
+  let prev = live.useOutboxStore(indicatorOutbox)
   try {
     let before = live.outboxWrites.value.length
-    live.mutate({ eid: uid(), name: 'doc', comp: { title: 'held' } })
+    live.mutate(indicatorChange)
     assertEquals(live.outboxWrites.value.length, before + 1)
     let w = live.outboxWrites.value.at(-1)!
     assertEquals(w.count, 1) // one change in the write
@@ -65,7 +49,7 @@ test('the indicator mirrors the outbox: a mutate adds, an ack clears', () => {
     assertEquals(live.outboxWrites.value.length, 0)
   } finally {
     live.useOutboxStore(prev)
-    restore()
+    live.useRoute(restore)
   }
 })
 

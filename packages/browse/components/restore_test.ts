@@ -5,11 +5,10 @@ import type { HistoryEntry, HistoryPort } from '@yaks/ui/history'
 import { test } from '@yaks/testing'
 import { faked, tick, until } from '../testing.ts'
 import { assertEquals } from '@std/assert'
-import { cache, census, owner } from '../live.ts'
+import { cache, census, owner, useRoute } from '../live.ts'
 import { navigate, restore, route, screenTarget } from './nav.tsx'
 import { allSessionsPath } from '../tray_query.ts'
 import { offerPlaces } from './offers.ts'
-import { host } from '../host_testing.ts'
 
 let place = { pathname: '/', search: '' }
 let listeners = new Set<(e: HistoryEntry) => void>()
@@ -63,9 +62,8 @@ let context = (
     localStorage: storage,
     sessionStorage: storage,
   })
-  // A server that knows nothing the cache doesn't: a legacy link it must
-  // resolve is answered, and what the test asked closes with it.
-  let wire = host(() => ({ bundles: [] }))
+  // Navigation reads this seeded working set; transport is outside this seam.
+  let wire = useRoute(() => {})
   owner.value = 'person'
   offerPlaces({ home: { name: 'Desk', icon: 'lamp', view: 'Desk' } })
   cache.value = {
@@ -81,7 +79,7 @@ let context = (
   return {
     [Symbol.dispose]() {
       held[Symbol.dispose]()
-      wire.free()
+      useRoute(wire)
       offerPlaces({})
       owner.value = prior
       cache.value = {}
@@ -89,6 +87,19 @@ let context = (
     },
   }
 }
+
+// A launched legacy page is the fixture; the assertion follows it back home.
+let unresolved = context()
+launch('/?task=gone')
+test('an unresolved legacy link leaves home reachable', () => {
+  try {
+    assertEquals(route.value, '/?task=gone')
+    launch('/')
+    assertEquals(screenTarget(), { eid: 'person', view: 'Desk' })
+  } finally {
+    unresolved[Symbol.dispose]()
+  }
+})
 
 test('home opens the home page regardless of previous card, canvas view, listing or dead end', () => {
   using _ = context()
@@ -127,14 +138,6 @@ test('a legacy task link resolves and replaces its address', async () => {
   launch('/?task=T-7')
   await until(() => route.value == '/T-7')
   assertEquals(entries, ['/T-7'])
-})
-
-test('an unresolved legacy link leaves home reachable', () => {
-  using _ = context()
-  launch('/?task=gone')
-  assertEquals(route.value, '/?task=gone')
-  launch('/')
-  assertEquals(screenTarget(), { eid: 'person', view: 'Desk' })
 })
 
 test('a legacy link never pulls back someone who moved on', async () => {

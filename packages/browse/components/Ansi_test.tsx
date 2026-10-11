@@ -2,9 +2,9 @@
 
 import { test } from '@yaks/testing'
 import '../testing.ts'
-import { h, render } from 'preact'
+import { h } from 'preact'
 import { assertEquals } from '@std/assert'
-import { parseHTML } from 'linkedom'
+import { mount } from './mount.ts'
 import { Ansi, ansiRuns } from './Ansi.tsx'
 
 test('ANSI runs retain SGR presentation and discard terminal commands', () => {
@@ -19,16 +19,11 @@ test('ANSI runs retain SGR presentation and discard terminal commands', () => {
   )
 })
 
+let escaped = mount(h(Ansi, { text: '<b>\x1b[38;2;1;2;3mcolor\x1b[0m' }))
+
 test('ANSI output becomes escaped HTML spans', () => {
-  let prior = Object.getOwnPropertyDescriptor(globalThis, 'document')
-  let { document } = parseHTML('<main></main>')
-  Object.defineProperty(globalThis, 'document', {
-    value: document,
-    configurable: true,
-  })
-  let root = document.querySelector('main')!
+  let { root, free } = escaped
   try {
-    render(h(Ansi, { text: '<b>\x1b[38;2;1;2;3mcolor\x1b[0m' }), root)
     assertEquals(root.querySelector('b'), null)
     assertEquals(root.textContent, '<b>color')
     assertEquals(
@@ -36,8 +31,6 @@ test('ANSI output becomes escaped HTML spans', () => {
       'rgb(1, 2, 3)',
     )
   } finally {
-    render(null, root)
-    if (prior) Object.defineProperty(globalThis, 'document', prior)
-    else delete (globalThis as { document?: unknown }).document
+    free()
   }
 })

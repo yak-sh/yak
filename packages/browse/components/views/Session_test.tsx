@@ -1,5 +1,6 @@
 // A session row names the work and shows its latest activity and model.
 import { test, tick } from '../../testing.ts'
+import { test as preparedTest } from '@yaks/testing'
 import { identityEid } from '@yaks/graph'
 import { h, render } from 'preact'
 import { assert, assertEquals } from '@std/assert'
@@ -350,13 +351,9 @@ test('session references read conversation prose only', () => {
   )
 })
 
-test('session references use the usual entity and URL faces', () => {
-  let prior = Object.getOwnPropertyDescriptor(globalThis, 'document')
-  let { document } = parseHTML('<main></main>')
-  Object.defineProperty(globalThis, 'document', {
-    value: document,
-    configurable: true,
-  })
+// Prepare the fixed reference face once, like a session before reading its aside.
+let referenceFace = (() => {
+  let prior = cache.peek()
   cache.value = {
     task: {
       entity: { eid: 'task', num: 2 },
@@ -365,35 +362,34 @@ test('session references use the usual entity and URL faces', () => {
       filed: { eid: 'task', priority: 1 },
     },
   }
-  let root = document.querySelector('main')!
-  try {
-    render(
-      h(SessionReferences, {
-        items: [
-          { kind: 'entity', id: 'T-2', eid: 'task' },
-          { kind: 'entity', id: 'T-17123' },
-          { kind: 'link', href: 'https://x.test' },
-        ],
-      }),
-      root,
-    )
-    assertEquals(root.querySelector('details')?.hasAttribute('open'), true)
-    assertEquals(
-      root.querySelector('.Session_ReferencesGist')?.textContent,
-      'references · 3',
-    )
-    assertEquals(root.querySelector('.Inline_Title')?.textContent, 'The task')
-    let links = root.querySelectorAll('.Session_Reference > a')
-    assertEquals(links[0]?.getAttribute('href'), '/T-2')
-    assertEquals(links[1]?.getAttribute('href'), 'https://tasks.yak.sh/T-17123')
-    assertEquals(links[1]?.getAttribute('data-ref'), 'T-17123')
-    assertEquals(links[2]?.getAttribute('href'), 'https://x.test')
-  } finally {
-    render(null, root)
-    cache.value = {}
-    if (prior) Object.defineProperty(globalThis, 'document', prior)
-    else delete (globalThis as { document?: unknown }).document
-  }
+  let { root, free } = mount(
+    h(SessionReferences, {
+      items: [
+        { kind: 'entity', id: 'T-2', eid: 'task' },
+        { kind: 'entity', id: 'T-17123' },
+        { kind: 'link', href: 'https://x.test' },
+      ],
+    }),
+  )
+  let face = root.cloneNode(true) as HTMLElement
+  free()
+  cache.value = prior
+  return face
+})()
+
+preparedTest('session references use the usual entity and URL faces', () => {
+  let root = referenceFace
+  assertEquals(root.querySelector('details')?.hasAttribute('open'), true)
+  assertEquals(
+    root.querySelector('.Session_ReferencesGist')?.textContent,
+    'references · 3',
+  )
+  assertEquals(root.querySelector('.Inline_Title')?.textContent, 'The task')
+  let links = root.querySelectorAll('.Session_Reference > a')
+  assertEquals(links[0]?.getAttribute('href'), '/T-2')
+  assertEquals(links[1]?.getAttribute('href'), 'https://tasks.yak.sh/T-17123')
+  assertEquals(links[1]?.getAttribute('data-ref'), 'T-17123')
+  assertEquals(links[2]?.getAttribute('href'), 'https://x.test')
 })
 
 // The mention scan is memoized in the view on this signature — it must be STABLE

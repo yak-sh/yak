@@ -1,6 +1,7 @@
 // The cache derivations: what the field pickers read out of the live
 // world. Pure functions of the cache signal — no DOM, no socket.
 import { test, tick, until } from './testing.ts'
+import { test as preparedTest } from '@yaks/testing'
 import {
   agreementProbe,
   applyLocal,
@@ -17,6 +18,7 @@ import {
   cache,
   census,
   chatFor,
+  clearForTest,
   clearResolved,
   commentCount,
   commentsOn,
@@ -86,6 +88,219 @@ import {
   assertThrows,
 } from '@std/assert'
 import { FakeTime } from '@std/testing/time'
+
+// One tab supplies these independent reactive fixtures. Tests keep the live
+// patches and observer assertions; seeding and subscription ownership happen once.
+clearForTest()
+cache.value = {
+  assignee: {
+    entity: { eid: 'assignee', num: 1 },
+    person: { eid: 'assignee' },
+  },
+  assigned: {
+    entity: { eid: 'assigned', num: 2 },
+    task: { eid: 'assigned' },
+    filed: { eid: 'assigned', priority: 1, assignee: 'assignee' },
+  },
+  reassigned: {
+    entity: { eid: 'reassigned', num: 3 },
+    task: { eid: 'reassigned' },
+    filed: { eid: 'reassigned', priority: 1, assignee: 'other' },
+  },
+  sleeping: {
+    entity: { eid: 'sleeping', num: 4 },
+    board: { eid: 'sleeping', query: '.task.status=open' },
+  },
+  member: {
+    entity: { eid: 'member', num: 5 },
+    task: { eid: 'member' },
+    filed: { eid: 'member', priority: 1 },
+  },
+  outsider: {
+    entity: { eid: 'outsider', num: 6 },
+    doc: { eid: 'outsider', title: 'unrelated', body: '' },
+  },
+  p1: { entity: { eid: 'p1', num: 7 }, project: { eid: 'p1' } },
+  s1: {
+    entity: { eid: 's1', num: 8 },
+    session: { eid: 's1', id: 'x', actor: 'p1' },
+  },
+  t1: {
+    entity: { eid: 't1', num: 9 },
+    task: { eid: 't1' },
+    claim: { eid: 't1', session: 's1' },
+  },
+  c2: { entity: { eid: 'c2', num: 10 } },
+  other: {
+    entity: { eid: 'other', num: 11 },
+    doc: { eid: 'other', title: 'o', body: '' },
+  },
+}
+deps.value = []
+resetSignals()
+let q = resolveRefs(parseQuery('.filed.assignee=assignee'), findEid)
+let held = holdQuery(q)
+let change = (eid: string) => [
+  { eid, name: 'entity', comp: { eid } },
+]
+landSub({ sub: 'wake:a', changes: change('wake-a'), replace: true })
+landSub({ sub: 'wake:b', changes: change('wake-b'), replace: true })
+let sleeping = ent('sleeping')
+let dropSleeping = boardSub(sleeping)
+landSub({
+  sub: 'board:sleeping',
+  replace: true,
+  shadow: true,
+  changes: [{ eid: 'member', name: 'entity', comp: { eid: 'member', num: 5 } }],
+})
+
+// Prime both reference query handles against the seeded tab.
+backlinks('p1')
+backlinks('s1')
+
+// The auto-derivation proof: filed.assignee is an {eid} reference with NO
+// hand-written index anywhere — yet it is queryable through the same reverse
+// index, because the reference list flows from the vocabulary. Adding an {eid} field needs no
+// index code (T-17036 done-when).
+preparedTest(
+  'queryEids indexes any {eid} reference with no bespoke index',
+  () => {
+    try {
+      assertEquals(held.value, ['assigned'])
+      // A second assignee joins the reference query immediately.
+      applyLocal([{
+        eid: 'reassigned',
+        name: 'filed',
+        comp: { assignee: 'assignee' },
+      }])
+      assertEquals(held.value.toSorted(), ['assigned', 'reassigned'])
+      // Reassigning the original task drops it.
+      applyLocal([{
+        eid: 'assigned',
+        name: 'filed',
+        comp: { assignee: 'other' },
+      }])
+      assertEquals(held.value, ['reassigned'])
+    } finally {
+      dropQuery(q)
+    }
+  },
+)
+
+let stateRuns = 0, shownRuns = 0, loadedRuns = 0
+let stop = [
+  effect(() => {
+    subscriptionState('wake:a')
+    stateRuns++
+  }),
+  effect(() => {
+    shown('wake-a')
+    shownRuns++
+  }),
+  effect(() => {
+    loaded('wake-a', 'doc', 'title')
+    loadedRuns++
+  }),
+]
+
+preparedTest('a frame wakes only the readers of its own sub and rows', () => {
+  // A frame for the OTHER sub, moving the OTHER row: nothing here re-runs.
+  landSub({
+    sub: 'wake:b',
+    changes: [{ eid: 'wake-b', name: 'doc', comp: { title: 'moved' } }],
+  })
+  assertEquals([stateRuns, shownRuns, loadedRuns], [1, 1, 1])
+  // A frame for this sub carrying this row wakes each reader once.
+  landSub({
+    sub: 'wake:a',
+    changes: [{ eid: 'wake-a', name: 'doc', comp: { title: 'moved' } }],
+  })
+  assertEquals([stateRuns, shownRuns, loadedRuns], [2, 2, 2])
+  for (let s of stop) s()
+})
+
+// The render source is the subscription plus each member's own row signal, never
+// `cache.value` — so an unrelated ordinary patch (no sub frame, not a member)
+// never wakes the board, while a member's own edit does.
+preparedTest(
+  'a subscribed board sleeps through an unrelated ordinary patch',
+  () => {
+    let runs = 0
+    let stop = effect(() => {
+      boardTasks(sleeping)
+      runs++
+    })
+    try {
+      assertEquals(runs, 1)
+      // An unrelated entity changes: not a member, no sub frame — untouched.
+      applyLocal([{ eid: 'outsider', name: 'doc', comp: { title: 'changed' } }])
+      assertEquals(runs, 1)
+      // A member's own edit wakes the board through its row signal.
+      applyLocal([{
+        eid: 'member',
+        name: 'filed',
+        comp: { priority: 5 },
+      }])
+      assertEquals(runs, 2)
+    } finally {
+      stop()
+      dropSleeping()
+      unsubscribe('board:sleeping')
+    }
+  },
+)
+
+preparedTest('backlinks: an unrelated row leaves its readers asleep', () => {
+  let runs = 0
+  let stop = effect(() => {
+    backlinks('p1')
+    runs++
+  })
+  try {
+    applyLocal([{ eid: 'other', name: 'doc', comp: { title: 'changed' } }])
+    assertEquals(runs, 1)
+  } finally {
+    stop()
+  }
+})
+
+let backlinkRuns = 0
+let stopBacklinks = effect(() => {
+  backlinks('p1')
+  backlinkRuns++
+})
+// backlinks read `.refs=target`, the multi-column reverse-union, through the
+// query door (T-18101): every entity referencing this eid across ALL {eid}
+// columns of the schema. Parity: the set equals who points here, each with its
+// via label; the face wakes only when a referrer starts or stops pointing here —
+// never on an unrelated row — and stays correct through a retarget.
+preparedTest(
+  'backlinks: reverse-union set + via, awake only for its own target',
+  () => {
+    assertEquals(backlinks('p1'), [{ from: 's1', via: 'session.actor' }])
+    assertEquals(backlinks('s1'), [{ from: 't1', via: 'claim.session' }])
+
+    let byFrom = <T extends { from: string }>(b: T[]) =>
+      b.toSorted((a, z) => (a.from < z.from ? -1 : 1))
+    try {
+      // a new referrer through ANY {eid} column wakes it and joins the union
+      applyLocal([
+        { eid: 'c2', name: 'comment', comp: { target: 'p1' } },
+      ])
+      assertEquals(backlinkRuns, 2)
+      assertEquals(byFrom(backlinks('p1')), [
+        { from: 'c2', via: 'comment.target' },
+        { from: 's1', via: 'session.actor' },
+      ])
+      // Retargeting wakes the same reader and removes the old reference.
+      applyLocal([{ eid: 's1', name: 'session', comp: { actor: null } }])
+      assertEquals(backlinkRuns, 3)
+      assertEquals(backlinks('p1'), [{ from: 'c2', via: 'comment.target' }])
+    } finally {
+      stopBacklinks()
+    }
+  },
+)
 
 // Status is DERIVED (D-24102): to make a cache Ent read as done/wip/cancelled,
 // give it the mark/claim comp statusOf keys off, not a stored status column.
@@ -221,48 +436,6 @@ test('a textual query keeps server membership across a signal reset', () => {
     dropQuery(preds)
     useSocket(socket)
     config.host = prior
-  }
-})
-
-// The auto-derivation proof: filed.assignee is an {eid} reference with NO
-// hand-written index anywhere — yet it is queryable through the same reverse
-// index, because the reference list flows from the vocabulary. Adding an {eid} field needs no
-// index code (T-17036 done-when).
-test('queryEids indexes any {eid} reference with no bespoke index', () => {
-  cache.value = {
-    person: { entity: { eid: 'person', num: 1 }, person: { eid: 'person' } },
-    t1: {
-      entity: { eid: 't1', num: 2 },
-      task: { eid: 't1' },
-      filed: { eid: 't1', priority: 1, assignee: 'person' },
-    },
-    t2: {
-      entity: { eid: 't2', num: 3 },
-      task: { eid: 't2' },
-      filed: { eid: 't2', priority: 1, assignee: 'other' },
-    },
-  }
-  deps.value = []
-  let q = resolveRefs(parseQuery('.filed.assignee=person'), findEid)
-  let held = holdQuery(q)
-  try {
-    assertEquals(held.value, ['t1'])
-    // Reassigning t2 to person joins it — the reverse index maintains live.
-    applyLocal([{ eid: 't2', name: 'task', comp: {} }, {
-      eid: 't2',
-      name: 'filed',
-      comp: { assignee: 'person' },
-    }])
-    assertEquals(held.value.toSorted(), ['t1', 't2'])
-    // Reassigning t1 away drops it.
-    applyLocal([{ eid: 't1', name: 'task', comp: {} }, {
-      eid: 't1',
-      name: 'filed',
-      comp: { assignee: 'other' },
-    }])
-    assertEquals(held.value, ['t2'])
-  } finally {
-    dropQuery(q)
   }
 })
 
@@ -506,42 +679,6 @@ test('agreement diagnostics opt in through the named browser probe', () => {
   assertEquals(agreementProbe('?v=Board&probe=subscriptions'), true)
   assertEquals(agreementProbe('?probe=other'), false)
   assertEquals(agreementProbe(''), false)
-})
-
-test('a frame wakes only the readers of its own sub and rows', () => {
-  let change = (eid: string) => [
-    { eid, name: 'entity', comp: { eid, num: 1 } },
-  ]
-  landSub({ sub: 'wake:a', changes: change('wake-a'), replace: true })
-  landSub({ sub: 'wake:b', changes: change('wake-b'), replace: true })
-  let stateRuns = 0, shownRuns = 0, loadedRuns = 0
-  let stop = [
-    effect(() => {
-      subscriptionState('wake:a')
-      stateRuns++
-    }),
-    effect(() => {
-      shown('wake-a')
-      shownRuns++
-    }),
-    effect(() => {
-      loaded('wake-a', 'doc', 'title')
-      loadedRuns++
-    }),
-  ]
-  // A frame for the OTHER sub, moving the OTHER row: nothing here re-runs.
-  landSub({
-    sub: 'wake:b',
-    changes: [{ eid: 'wake-b', name: 'doc', comp: { title: 'moved' } }],
-  })
-  assertEquals([stateRuns, shownRuns, loadedRuns], [1, 1, 1])
-  // A frame for this sub carrying this row wakes each reader once.
-  landSub({
-    sub: 'wake:a',
-    changes: [{ eid: 'wake-a', name: 'doc', comp: { title: 'moved' } }],
-  })
-  assertEquals([stateRuns, shownRuns, loadedRuns], [2, 2, 2])
-  for (let s of stop) s()
 })
 
 test('a replacement frame forgets the prior query set', () => {
@@ -1696,57 +1833,6 @@ test('pinned sleeps through an unrelated row patch', () => {
   }
 })
 
-// The render source is the subscription plus each member's own row signal, never
-// `cache.value` — so an unrelated ordinary patch (no sub frame, not a member)
-// never wakes the board, while a member's own edit does.
-test('a subscribed board sleeps through an unrelated ordinary patch', () => {
-  cache.value = {
-    board: {
-      entity: { eid: 'board', num: 1 },
-      board: { eid: 'board', query: '.task.status=open' },
-    },
-    t1: {
-      entity: { eid: 't1', num: 2 },
-      task: { eid: 't1' },
-      filed: { eid: 't1', priority: 1 },
-    },
-    other: {
-      entity: { eid: 'other', num: 3 },
-      doc: { eid: 'other', title: 'unrelated', body: '' },
-    },
-  }
-  deps.value = []
-  let drop = boardSub(ent('board'))
-  landSub({
-    sub: 'board:board',
-    replace: true,
-    shadow: true,
-    changes: [{ eid: 't1', name: 'entity', comp: { eid: 't1', num: 2 } }],
-  })
-  let runs = 0
-  let stop = effect(() => {
-    boardTasks(ent('board'))
-    runs++
-  })
-  try {
-    assertEquals(runs, 1)
-    // An unrelated entity changes: not a member, no sub frame — untouched.
-    applyLocal([{ eid: 'other', name: 'doc', comp: { title: 'changed' } }])
-    assertEquals(runs, 1)
-    // A member's own edit wakes the board (its ent rides t1's row signal).
-    applyLocal([{ eid: 't1', name: 'task', comp: {} }, {
-      eid: 't1',
-      name: 'filed',
-      comp: { priority: 5 },
-    }])
-    assertEquals(runs, 2)
-  } finally {
-    stop()
-    drop()
-    unsubscribe('board:board')
-  }
-})
-
 // T-17126: the self-verifying preds→query serializer that decides whether a
 // queryEids call can open a server subscription. It must round-trip the shapes
 // queryEids actually builds (has/eq/contains/refs) and REFUSE anything else, so a
@@ -2596,65 +2682,6 @@ test('domains: the server distinct wins over the working set', () => {
   // A later answer moves it without a task changing hands.
   landSub({ sub: 'agg:domains', agg: { Fable: 1, Ops: 1 } })
   assertEquals(domains.value, ['Fable', 'Ops'])
-})
-
-// backlinks read `.refs=target`, the multi-column reverse-union, through the
-// query door (T-18101): every entity referencing this eid across ALL {eid}
-// columns of the schema. Parity: the set equals who points here, each with its
-// via label; the face wakes only when a referrer starts or stops pointing here —
-// never on an unrelated row — and stays correct through a retarget.
-test('backlinks: reverse-union set + via, awake only for its own target', () => {
-  cache.value = {
-    p1: { entity: { eid: 'p1', num: 1 }, project: { eid: 'p1' } },
-    s1: {
-      entity: { eid: 's1', num: 2 },
-      session: { eid: 's1', id: 'x', actor: 'p1' },
-    },
-    t1: {
-      entity: { eid: 't1', num: 3 },
-      task: { eid: 't1' },
-      claim: { eid: 't1', session: 's1' },
-    },
-    other: {
-      entity: { eid: 'other', num: 4 },
-      doc: { eid: 'other', title: 'o', body: '' },
-    },
-  }
-  deps.value = []
-  resetSignals()
-  assertEquals(backlinks('p1'), [{ from: 's1', via: 'session.actor' }])
-  assertEquals(backlinks('s1'), [{ from: 't1', via: 'claim.session' }])
-
-  let byFrom = <T extends { from: string }>(b: T[]) =>
-    b.toSorted((a, z) => (a.from < z.from ? -1 : 1))
-  let runs = 0
-  let stop = effect(() => {
-    backlinks('p1')
-    runs++
-  })
-  try {
-    // an unrelated doc edit leaves the target's backlinks asleep
-    applyLocal([{ eid: 'other', name: 'doc', comp: { title: 'changed' } }])
-    assertEquals(runs, 1)
-
-    // a new referrer through ANY {eid} column wakes it and joins the union
-    applyLocal([
-      { eid: 'c2', name: 'entity', comp: { eid: 'c2', num: 5 } },
-      { eid: 'c2', name: 'comment', comp: { target: 'p1' } },
-    ])
-    assertEquals(runs, 2)
-    assertEquals(byFrom(backlinks('p1')), [
-      { from: 'c2', via: 'comment.target' },
-      { from: 's1', via: 'session.actor' },
-    ])
-
-    // retargeting the session away wakes it and drops it — correct through the patch
-    applyLocal([{ eid: 's1', name: 'session', comp: { actor: null } }])
-    assertEquals(runs, 3)
-    assertEquals(backlinks('p1'), [{ from: 'c2', via: 'comment.target' }])
-  } finally {
-    stop()
-  }
 })
 
 // A board now renders from the server's subscription (subEids); the local query
