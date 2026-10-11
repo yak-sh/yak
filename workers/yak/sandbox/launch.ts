@@ -17,6 +17,8 @@ let release = async (host: string): Promise<Release> => {
   return value
 }
 
+// Keep older workspaces until the container is destroyed: another command may
+// still need their dynamic imports after this call installs a newer release.
 /** Download once per source identity, publishing only a complete workspace. */
 export let installed = async (host: string, root: string) => {
   await Deno.mkdir(root, { recursive: true })
