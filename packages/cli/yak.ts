@@ -61,6 +61,7 @@ let TAIL =
                   \`yak connection list <owner>\` (owner id or name), and use
                   a yaks.app entry’s account.
                   Default is your own email, else the oldest connection.
+                  A tool's own as argument is written as=<value>.
   --json          print the structured result instead of the text
   --tui           hold the answer in the terminal, scrollable, until Ctrl-C
   --timing        one line on stderr per response, with its Server-Timing

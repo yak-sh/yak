@@ -3,7 +3,7 @@
 import { type Config, used } from './config.ts'
 import { facetsOf } from '@yaks/host/config'
 import type { Declared } from './words.ts'
-import type { CliCommand } from './host.ts'
+import type { CliCommand, CliFacet } from './host.ts'
 import type { VocabFacet } from '@yaks/host'
 import { remember } from './memo.ts'
 type Control = Omit<CliCommand, 'run'>
@@ -14,7 +14,10 @@ export type Declarations = {
     value: Pick<VocabFacet, 'description' | 'docs' | 'keywords'> | null
     factories: boolean
   }[]
-  controls: { plugin: string; value: { commands: Control[] } | null }[]
+  controls: {
+    plugin: string
+    value: { commands: Control[]; globals?: CliFacet['globals'] } | null
+  }[]
   tools: Declared[]
   owners: Record<string, string>
   pooled: boolean

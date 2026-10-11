@@ -187,7 +187,11 @@ export type CliCommand = Omit<Command, 'run'> & {
 }
 
 /** `<plugin>/cli` — commands for the person at this terminal, not graph tools. */
-export type CliFacet = { commands?: CliCommand[] }
+export type CliFacet = {
+  commands?: CliCommand[]
+  /** Explicit global-input bindings for this plugin's graph tools. */
+  globals?: Record<string, NonNullable<Command['globals']>>
+}
 
 /** An assembled host: everything a plugin factory was given, plus what only
  * the caller of {@link compose} needs. */

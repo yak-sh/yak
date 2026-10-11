@@ -4,6 +4,7 @@
   "exports": {
     ".": "./mod.ts",
     "./vocab": "./vocab.ts",
+    "./cli": "./cli.ts",
     "./tools": "./tools.ts"
   },
   "publish": false,

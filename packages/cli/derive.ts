@@ -1,7 +1,7 @@
 // The cold path of command discovery. A memo hit imports none of these
 // vocabulary constructors, validators or declaration modules.
 import { type Config, exported, subpaths, used } from './config.ts'
-import type { CliCommand } from './host.ts'
+import type { CliFacet } from './host.ts'
 import type { VocabFacet } from '@yaks/host'
 import type { Declarations } from './declarations.ts'
 import { toolsIn } from '@yaks/vocab/tools'
@@ -43,11 +43,14 @@ export let derive = async (
   let controls = (includeControls ? plugins : []).map((plugin, i) => {
     let v = slots[i].cli === undefined
       ? null
-      : modules[slots[i].cli!] as { commands?: CliCommand[] } | null
+      : modules[slots[i].cli!] as CliFacet | null
     return {
       plugin,
       value: v
-        ? { commands: (v.commands ?? []).map(({ run: _, ...data }) => data) }
+        ? {
+          commands: (v.commands ?? []).map(({ run: _, ...data }) => data),
+          ...v.globals ? { globals: v.globals } : {},
+        }
         : null,
     }
   })

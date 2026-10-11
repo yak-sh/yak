@@ -101,11 +101,23 @@ let terminal = (env: Env): Tty | undefined =>
  * platform.ts sends one to the MCP server it named.
  */
 export type Command = Omit<Tool<number>, 'run'> & {
+  /** Global flags explicitly bound to this command's input properties. */
+  globals?: readonly GlobalFlag[]
   run: (
     args: Record<string, unknown>,
     c: Ctx,
   ) => number | Promise<number>
 }
+
+export type GlobalFlag =
+  | 'as'
+  | 'host'
+  | 'config'
+  | 'duties'
+  | 'json'
+  | 'tui'
+  | 'help'
+  | 'timing'
 
 /** What a program brings besides its tools. */
 export type Opts = {
@@ -117,7 +129,7 @@ export type Opts = {
   about?: string
   /** The notes it closes with. */
   notes?: string
-  /** Global flags listed in the notes, omitted from command sketches. */
+  /** Global flags reserved by the program; tool inputs use name=value. */
   globalFlags?: readonly string[]
   /** The MCP server a command talks to where it names neither a config nor a
    * host. */
@@ -217,12 +229,27 @@ export let nouns = <T extends Grammar>(
   return [...by].filter(([, said]) => said.length)
 }
 
-type Listed = Grammar & { title?: string; description?: string }
+type Listed = Grammar & {
+  title?: string
+  description?: string
+  globals?: Command['globals']
+}
 
 // The line to type, with the heading's own word left out: under `graph`, a
 // tool is its verb and its arguments.
 let lineIn = (noun: string, t: Listed, omit: readonly string[]): string =>
-  noun ? `${t.verb} ${sketch(t, omit)}`.trimEnd() : lineOf(t, omit)
+  noun
+    ? `${t.verb} ${sketch(t, t.globals, omit)}`.trimEnd()
+    : lineOf(t, t.globals, omit)
+
+let helpFor = (t: Command, opts: Opts): string =>
+  toolHelp(
+    t,
+    opts.name,
+    (opts.globalFlags ?? []).filter((n) =>
+      !t.globals?.includes(n as GlobalFlag)
+    ),
+  )
 
 let block = (
   noun: string,
@@ -273,10 +300,12 @@ export let usage = (
 export let nounUsage = (
   tools: readonly Listed[],
   word: string,
+  reserved: readonly string[] = [],
 ): string | undefined => {
   let said = nouns(tools).find(([noun]) => noun && noun == word)
   if (!said) return undefined
-  return block(said[0], said[1], column([said])).slice(1).join('\n')
+  return block(said[0], said[1], column([said], reserved), reserved).slice(1)
+    .join('\n')
 }
 
 /** The flags a program keeps for itself, lifted off the command line before a
@@ -467,7 +496,9 @@ export let cli = async (
     let found = commandFor(tools, rest) ??
       commandFor(await fetched(), rest) ??
       commandFor(await fetched(true), rest)
-    let page = !found ? nounUsage(await c.all(), rest[0]) : undefined
+    let page = !found
+      ? nounUsage(await c.all(), rest[0], opts.globalFlags)
+      : undefined
     if (!found && !page) {
       // A host whose list never came is the answer: past this point a line
       // it would have understood reads as an app's stray, and its words as
@@ -488,7 +519,9 @@ export let cli = async (
           )
         }
         found = commandFor(theirs, rest)
-        page = !found ? nounUsage([...tools, ...theirs], rest[0]) : undefined
+        page = !found
+          ? nounUsage([...tools, ...theirs], rest[0], opts.globalFlags)
+          : undefined
         if (!found && !page) {
           let stray = await opts.stray?.(rest[0], rest.slice(1), far)
           if (stray) found = { verb: stray, args: rest.slice(1) }
@@ -515,28 +548,25 @@ export let cli = async (
       )
     }
     if (help) {
-      out(toolHelp(found.verb, opts.name))
+      out(helpFor(found.verb, opts))
       return 0
     }
     try {
       return await found.verb.run(
         {
           ...await argsFor(found.verb, found.args, c.reads),
-          ...as && 'properties' in (found.verb.inputSchema ?? {}) &&
-              (found.verb.inputSchema as {
-                properties?: Record<string, unknown>
-              }).properties?.as
-            ? { as }
-            : {},
+          ...Object.fromEntries(
+            (found.verb.globals ?? []).flatMap((name) =>
+              said[name] === undefined ? [] : [[name, said[name]]]
+            ),
+          ),
         },
         at,
       )
     } catch (e) {
       if (!(e instanceof Usage)) throw e
       note(
-        `${opts.name ?? 'yak'}: ${e.message}\n\n${
-          toolHelp(found.verb, opts.name)
-        }`,
+        `${opts.name ?? 'yak'}: ${e.message}\n\n${helpFor(found.verb, opts)}`,
       )
       return 2
     }
@@ -566,12 +596,12 @@ export let helpTool = (opts: Opts = {}): Command => ({
     }
     let found = commandFor(await c.all(), words)
     if (found) {
-      c.out(toolHelp(found.verb, opts.name))
+      c.out(helpFor(found.verb, opts))
       return 0
     }
     // `yak help graph` is the same question `yak graph` asks: the verbs that
     // word holds.
-    let page = nounUsage(await c.all(), words[0])
+    let page = nounUsage(await c.all(), words[0], opts.globalFlags)
     if (!page) throw new Usage(`nothing here is called ${words[0]}`)
     c.out(page)
     return 0

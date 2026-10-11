@@ -11,6 +11,10 @@ import type { Tool } from '@yaks/graph'
 import { toolDefinition } from '@yaks/vocab/tools'
 import { argsFor, type Reads, Usage } from './args.ts'
 import { appStray, appTools } from './commands.ts'
+import { commands } from './platform.ts'
+import { globals as adminGlobals } from '../admin/cli.ts'
+import { adminDoc } from '../admin/vocab.ts'
+import { toolsIn } from '@yaks/vocab/tools'
 import {
   cli,
   type Command,
@@ -84,6 +88,68 @@ let saying = (name: string): Command[] => [
 
 let one = saying('one')
 let two = saying('two')
+
+test('account selection stays separate from a tool’s as argument', async () => {
+  let install = commands({
+    tools: [{
+      name: 'app_install',
+      inputSchema: {
+        type: 'object',
+        properties: { name: { type: 'string' }, as: { type: 'string' } },
+        required: ['name'],
+      },
+    }],
+  })
+  for (let account of [['--as', 'installer'], ['--as=installer']]) {
+    for (let copy of [undefined, 'my-books']) {
+      let selected: string | undefined
+      assertEquals(
+        await ran([], [
+          'app_install',
+          '--name',
+          'reading-list',
+          ...account,
+          ...copy ? [`as=${copy}`] : [],
+        ], {
+          more: (c) => {
+            selected = c.as
+            return install
+          },
+        }),
+        0,
+      )
+      assertEquals(selected, 'installer')
+      assertEquals(asked, [{
+        name: 'app_install',
+        arguments: { name: 'reading-list', ...copy ? { as: copy } : {} },
+      }])
+    }
+  }
+  assertEquals(
+    await ran(install, ['app_install', '--help'], { globalFlags: ['as'] }),
+    0,
+  )
+  assert(printed[0].includes('[as=<string>]'))
+  assert(!printed[0].includes('--as'))
+  assert(usage(install, { globalFlags: ['as'] }).includes('[as=<string>]'))
+})
+
+test('admin tools explicitly receive the account selector', async () => {
+  let fee = toolsIn(adminDoc).find((t) => t.name == 'admin_fee')!
+  let received: Record<string, unknown> | undefined
+  assertEquals(
+    await ran([{
+      ...fee,
+      globals: adminGlobals?.[fee.name!],
+      run: (args) => {
+        received = args
+        return 0
+      },
+    }], ['admin', 'fee', '--as', 'installer']),
+    0,
+  )
+  assertEquals(received, { as: 'installer' })
+})
 
 test('one list is the registry, and the first to name a word wins', async () => {
   assertEquals(await ran([...one, ...two], ['one']), 0)

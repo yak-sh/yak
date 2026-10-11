@@ -33,6 +33,9 @@ export let commands = async (c: Ctx): Promise<Command[]> => {
   ) => prepare(config, command, selected, !c.json)
   let tools = said.tools.map((declared) => ({
     ...declared,
+    globals: said.controls.find(({ plugin }) =>
+      plugin == said.owners[declared.name]
+    )?.value?.globals?.[declared.name],
     // A tool arrives declaring its arguments as JSON Schema — the same
     // document `tools/list` sends — so a command typed against a local graph
     // and the same command typed against an MCP server are written

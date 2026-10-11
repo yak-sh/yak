@@ -31,9 +31,16 @@ export let toolLines = (
 }
 
 // `--name <type>`, in brackets when the argument is optional.
-let slot = (name: string, p: Prop | undefined, need: boolean): string => {
-  let said = `--${name} ${typeOf(p) == 'boolean' ? '' : `<${typeOf(p)}>`}`
-    .trim()
+let slot = (
+  name: string,
+  p: Prop | undefined,
+  need: boolean,
+  reserved: boolean,
+): string => {
+  let said = reserved
+    ? `${name}=<${typeOf(p)}>`
+    : `--${name} ${typeOf(p) == 'boolean' ? '' : `<${typeOf(p)}>`}`
+      .trim()
   return need ? said : `[${said}]`
 }
 
@@ -43,7 +50,11 @@ let slot = (name: string, p: Prop | undefined, need: boolean): string => {
  * optional. The tool's own schema is the whole grammar, so this is the only
  * place that decides how a tool is written on a command line.
  */
-export let sketch = (t: Grammar, omit: readonly string[] = []): string => {
+export let sketch = (
+  t: Grammar,
+  omit: readonly string[] = [],
+  reserved: readonly string[] = [],
+): string => {
   let schema = (t.inputSchema ?? {}) as Schema
   let props = schema.properties ?? {}
   let need = new Set(schema.required ?? [])
@@ -56,13 +67,16 @@ export let sketch = (t: Grammar, omit: readonly string[] = []): string => {
   return [
     ...positional.map((n, i) => need.has(names[i]) ? `<${n}>` : `[${n}]`),
     ...(forward ? ['[arguments ...]'] : []),
-    ...named.map((n) => slot(n, props[n], need.has(n))),
+    ...named.map((n) => slot(n, props[n], need.has(n), reserved.includes(n))),
   ].join(' ')
 }
 
 /** The whole command line to type, without the program's own name. */
-export let lineOf = (t: Grammar, omit: readonly string[] = []): string =>
-  `${commandOf(t)} ${sketch(t, omit)}`.trimEnd()
+export let lineOf = (
+  t: Grammar,
+  omit: readonly string[] = [],
+  reserved: readonly string[] = [],
+): string => `${commandOf(t)} ${sketch(t, omit, reserved)}`.trimEnd()
 
 /** One tool's help page: the command line to type, what it is for, and a row
  * per argument with its type, whether it is required, and the description the
@@ -70,13 +84,15 @@ export let lineOf = (t: Grammar, omit: readonly string[] = []): string =>
 export let toolHelp = (
   t: Grammar & { description?: string },
   program = 'yak',
+  reserved: readonly string[] = [],
 ): string => {
   let schema = (t.inputSchema ?? {}) as Schema
   let props = schema.properties ?? {}
   let need = new Set(schema.required ?? [])
   let names = Object.keys(props)
-  let head = `${program} ${lineOf(t)}`.trimEnd()
-  let wide = Math.max(0, ...names.map((n) => n.length))
+  let head = `${program} ${lineOf(t, [], reserved)}`.trimEnd()
+  let label = (n: string) => reserved.includes(n) ? `${n}=` : `--${n}`
+  let wide = Math.max(0, ...names.map((n) => label(n).length))
   let kind = Math.max(0, ...names.map((n) => typeOf(props[n]).length))
   let rows = names.map((n) => {
     let p = props[n]
@@ -85,7 +101,7 @@ export let toolHelp = (
       p.enum ? `one of ${p.enum.join(', ')}` : '',
       p.default !== undefined ? `default ${JSON.stringify(p.default)}` : '',
     ].filter(Boolean).join(' — ')
-    return `  --${pad(n, wide)}  ${pad(typeOf(p), kind)}  ${
+    return `  ${pad(label(n), wide)}  ${pad(typeOf(p), kind)}  ${
       pad(need.has(n) ? 'required' : '', 8)
     }  ${about}`.trimEnd()
   })

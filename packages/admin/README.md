@@ -87,4 +87,5 @@ yak admin push apps/mail --space reviewer --as reviewer --confirm
 
 - `./vocab` declares the admin tools, no components.
 - `./tools` implements those tools over the host's graph, config and vault.
+- `./cli` binds the account selector to the admin tools' `as` input.
 - The root exports the platform API helpers, tools and vocabulary.

@@ -584,6 +584,22 @@ connection whose account matches the configured person's own address wins,
 otherwise the oldest connection. The default is computed, never stored.
 `YAKS_TOKEN` still supplies a sandbox bearer without opening a graph.
 
+Global flags stay separate from tool arguments. For a tool property with the
+same name, use `name=value`. This selects the installer's account and names the
+copy `my-books`:
+
+```sh
+yak app_install --name reading-list as=my-books --as installer
+```
+
+Omit `as=my-books` to let `app_install` choose the copy's address.
+
+A local plugin can explicitly bind a global flag to one of its tool inputs by
+exporting `globals` from its `./cli` facet, keyed by tool name. For example,
+`export let globals = { admin_fee: ['as'] }` supplies the selected account to
+`admin_fee`'s `as` input. Commands passed directly to `cli` declare the same
+binding on `Command.globals`.
+
 | File                           | Contents                                                                |
 | ------------------------------ | ----------------------------------------------------------------------- |
 | `accounts.json`, `accounts.db` | The personal account graph on a machine with no configured graph        |

@@ -57,13 +57,14 @@ test('remote transport reads the credential at each call, not when the door is m
   await ask('second')
   equal(seen, ['Bearer one', 'Bearer two'])
 })
-test('global --as is optional and reaches a tool only if its schema names account selection', async () => {
+test('global --as is optional and reaches a tool through an explicit binding', async () => {
   equal(globals(['app_list', '--as', 'bot']).rest, ['app_list'])
   equal(globals(['app_list', '--as=bot']).as, 'bot')
   let seen: unknown
   let code = await cli([{
     name: 'act',
     description: 'select account',
+    globals: ['as'],
     inputSchema: { type: 'object', properties: { as: { type: 'string' } } },
     run: (args) => {
       seen = args
