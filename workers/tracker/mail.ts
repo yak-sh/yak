@@ -10,12 +10,10 @@ export type Mailbox = {
 }
 
 export let activation = (
-  scope: string,
   env: Mailbox,
   since: string | undefined,
   now: () => number,
 ): { recipient?: Bundle; to?: string; from?: string; since?: string } => {
-  if (scope != platform) return {}
   return {
     ...env.MAIL_TO
       ? {
@@ -42,17 +40,16 @@ type Kept = {
 
 export let activate = async (
   graph: Pick<Graph, 'apply' | 'get'>,
-  scope: string,
   env: Mailbox,
   keeping: () => Kept,
   now: () => number,
 ) => {
-  let enabled = scope == platform && env.MAIL && env.MAIL_FROM && env.MAIL_TO
+  let enabled = env.MAIL && env.MAIL_FROM && env.MAIL_TO
   let kept = enabled ? keeping() : undefined
   let since = kept?.get('mail-since')
-  let { recipient, ...config } = activation(scope, env, since, now)
+  let { recipient, ...config } = activation(env, since, now)
   if (recipient) {
-    let [held] = await graph.get([scope], ['email'])
+    let [held] = await graph.get([recipient.entity.eid], ['email'])
     if ((held?.email as Comp | undefined)?.address != env.MAIL_TO) {
       await graph.apply([recipient], { trusted: true })
     }

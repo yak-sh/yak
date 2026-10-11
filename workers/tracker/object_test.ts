@@ -79,9 +79,9 @@ let env = {
   MAIL_TO: 'jeff@yak.sh',
   MAIL: { send: () => Promise.resolve({}) },
 }
-let setup = (since?: string, date = at) => ({
-  ...activation(platform, env, since, () => Date.parse(date)),
-  store: platform,
+let setup = (since?: string, date = at, scope = platform) => ({
+  ...activation(env, since, () => Date.parse(date)),
+  store: scope,
   url: 'https://tracker.yak.sh',
 })
 let bug = (eid: string, at: string) => ({
@@ -111,11 +111,10 @@ test('mail activation persists its first date across restarts', async () => {
       saved.set(key, value)
     },
   })
-  let first = await activate(g, platform, env, keeping, () => Date.parse(at))
+  let first = await activate(g, env, keeping, () => Date.parse(at))
   equal(first.since, at)
   let second = await activate(
     g,
-    platform,
     env,
     keeping,
     () => Date.parse('2027-01-01T00:00:00Z'),
@@ -132,18 +131,16 @@ test('disabled mail never opens activation metadata or reads the clock', async (
     throw Error('disabled mail cannot activate')
   }
   equal(
-    await activate(g, platform, { MAIL_TO: env.MAIL_TO }, unopened, unopened),
+    await activate(g, { MAIL_TO: env.MAIL_TO }, unopened, unopened),
     {},
   )
   equal(((await g.get([platform]))[0].email as Comp).address, env.MAIL_TO)
-  equal(await activate(g, space, env, unopened, unopened), {})
-  equal(activation(space, env, undefined, () => 0), {})
-  equal(activation(platform, {}, undefined, () => 0), {})
+  equal(activation({}, undefined, () => 0), {})
 })
 
 test('a trace wake leaves mail activation for an ordinary wake', async () => {
   let object = new Tracker({
-    id: { name: platform },
+    id: { name: space },
     getWebSockets: () => [],
     acceptWebSocket: () => {},
     storage: {
@@ -169,7 +166,7 @@ await openings.put([
   bug('new', '2026-10-03T00:00:00Z'),
 ])
 test('mail activation skips existing bugs and queues new openings', async () => {
-  let { g } = openings, config = setup()
+  let { g } = openings, config = setup(undefined, at, space)
   await notify(g, 'old', config)
   await notify(g, 'new', config)
   let letters = await g.read('.mail *')
@@ -179,12 +176,15 @@ test('mail activation skips existing bugs and queues new openings', async () => 
 })
 
 let outbound = fixture()
-await outbound.put([setup().recipient!, {
-  entity: { eid: 'letter' },
-  doc: { title: 'new defect', body: '[View](https://tracker.yak.sh/new)' },
-  mail: { from: env.MAIL_FROM },
-  deliver: { to: platform },
-}])
+let tenantMail = setup(undefined, at, space)
+await outbound.put([
+  tenantMail.recipient!,
+  bug('before', '2026-10-01T00:00:00Z'),
+  bug('after', '2026-10-03T00:00:00Z'),
+])
+await notify(outbound.g, 'before', tenantMail)
+await notify(outbound.g, 'after', tenantMail)
+let [outboundLetter] = await outbound.g.read('.mail *')
 test('delivery sends once and preserves its receipt after a restart', async () => {
   let { g, put } = outbound
   let sent: Message[] = []
@@ -195,17 +195,22 @@ test('delivery sends once and preserves its receipt after a restart', async () =
     },
   }
   let event = {
-    entity: { eid: 'letter' },
+    entity: outboundLetter.entity,
     name: 'mail',
     kind: 'created' as const,
   }
   await sending({ sender })(event, g, put)
   await sending({ sender })(event, g, put)
+  equal((await g.read('.mail')).length, 1)
+  equal((outboundLetter.mail as Comp).target, 'after')
   equal(sent.length, 1)
   equal(sent[0].to, env.MAIL_TO)
   equal(sent[0].from, env.MAIL_FROM)
   ok(sent[0].text.includes('https://tracker.yak.sh/'))
-  equal(((await g.get(['letter']))[0].mail as Comp).message_id, 'sent-once')
+  equal(
+    ((await g.get([outboundLetter.entity.eid]))[0].mail as Comp).message_id,
+    'sent-once',
+  )
 })
 
 let replayed = fixture()

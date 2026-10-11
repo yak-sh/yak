@@ -6,6 +6,7 @@ import { options, platform, store, vocab } from './core.ts'
 import { sign } from './auth.ts'
 import { door } from './door.ts'
 import { monitor } from './monitor.ts'
+import { delivery } from '@yaks/tracker/remote'
 
 let space = '00000000-0000-4000-8000-000000000001'
 let other = '00000000-0000-4000-8000-000000000002'
@@ -78,6 +79,83 @@ test('scoped RPC reads, resolves, archives and never exposes trusted intake', as
       .status,
     200,
   )
+  let box = fixture(), tenant = fixture()
+  let receive = door(box, platform, secret)
+  let captureRows = capture(Error('box failed'), {
+    sink: () => {},
+    tags: { handler: 'mail_post', source: 'box' },
+  })
+  let read = await ticket(platform, true)
+  equal((await receive(request('/errors', read, captureRows))).status, 403)
+  let intake = await sign({
+    scope: platform,
+    person: 'box',
+    admin: true,
+    ingest: true,
+    exp: Date.now() / 1000 + 60,
+  }, secret)
+  let send = delivery(
+    { url: 'https://tracker.test', secret },
+    ((url, init) => receive(new Request(url, init))) as typeof fetch,
+  )
+  await send(captureRows)
+  await send(captureRows)
+  await box.drain()
+  equal((await box.bugs()).length, 1)
+  equal((await box.graph.read('.error *')).length, 1)
+  for (
+    let body of [
+      [{ ...captureRows[0], bug: { hits: 999 } }],
+      [{ ...captureRows[0], $delete: true }],
+      [{ ...captureRows[0], during: { space } }],
+      [{ ...captureRows[0], trace: {} }],
+    ]
+  ) equal((await receive(request('/errors', intake, body))).status, 400)
+  let member = await sign({
+    scope: space,
+    person: 'box',
+    admin: true,
+    ingest: true,
+    exp: Date.now() / 1000 + 60,
+  }, secret)
+  equal(
+    (await door(tenant, space, secret)(request('/errors', member, captureRows)))
+      .status,
+    403,
+  )
+  equal((await tenant.graph.read('.error *')).length, 0)
+  let app = '00000000-0000-4000-8000-000000000003'
+  let occurrence = capture(Error('app failed'), {
+    sink: () => {},
+    during: { space, app },
+  })
+  await tenant.ingest(occurrence)
+  let marks = door(tenant, space, secret)
+  let mark = { app, eids: [occurrence[0].entity.eid], mark: 'notified' }
+  equal((await marks(request('/app-errors', auth, mark))).status, 403)
+  equal(
+    await (await marks(request('/app-errors', member, {
+      ...mark,
+      app: other,
+    }))).json(),
+    { marked: 0 },
+  )
+  equal(await (await marks(request('/app-errors', member, mark))).json(), {
+    marked: 1,
+  })
+  equal((await tenant.graph.get(mark.eids))[0].notified != null, true)
+  for (let body of ['null', '{']) {
+    equal(
+      (await marks(
+        new Request('https://tracker.test/app-errors', {
+          method: 'POST',
+          headers: { authorization: `Bearer ${member}` },
+          body,
+        }),
+      )).status,
+      400,
+    )
+  }
 })
 
 test('uptime and heartbeat failures group and resolve without a yak binding', async () => {

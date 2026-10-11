@@ -6,6 +6,7 @@ export type Access = {
   person: string
   exp: number
   admin?: boolean
+  ingest?: boolean
 }
 let enc = new TextEncoder()
 let b64 = (bytes: Uint8Array<ArrayBuffer>) =>

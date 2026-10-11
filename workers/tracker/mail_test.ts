@@ -39,11 +39,19 @@ test('reopening mail with the same recipient and activation writes nothing', asy
   }], { trusted: true })
   writes.length = 0
   metaWrites = 0
-  equal(await activate(g, platform, env, keeping, () => 0), {
-    to: platform,
-    from: env.MAIL_FROM,
-    since,
-  })
+  equal(
+    await activate(
+      g,
+      env,
+      keeping,
+      () => 0,
+    ),
+    {
+      to: platform,
+      from: env.MAIL_FROM,
+      since,
+    },
+  )
   equal(writes, [])
   equal(metaWrites, 0)
 })
@@ -53,7 +61,6 @@ test('changing a mail recipient updates delivery without resetting activation', 
   metaWrites = 0
   await activate(
     g,
-    platform,
     { ...env, MAIL_TO: 'two@example.test' },
     keeping,
     () => 0,

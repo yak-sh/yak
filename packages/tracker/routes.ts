@@ -2,12 +2,10 @@
  * every request so the CLI's vault-backed secret can rotate without a restart.
  * Remote bundles are never applied to the box's graph. */
 import type { Route } from '@yaks/api'
-import { derivedEid } from '@yaks/graph'
-import { sign } from './ticket.ts'
+import { type Remote, request as upstream } from './remote.ts'
 
-export type Options = { remote?: { url?: string; secret?: string } }
+export type Options = { remote?: Remote }
 let uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
-let platform = derivedEid('tracker|platform')
 
 /** Only bug and bounded trace reads leave the box. */
 export let routes = (
@@ -63,33 +61,9 @@ export let routes = (
         params.set('query', query.get('query')!)
       }
       try {
-        let url = new URL(remote.url)
-        if (
-          url.username || url.password ||
-          !['http:', 'https:'].includes(url.protocol)
-        ) throw Error()
-        // HTTP is useful only for the isolated local Worker proof.
-        if (
-          url.protocol == 'http:' &&
-          !['127.0.0.1', 'localhost', '[::1]'].includes(url.hostname)
-        ) throw Error()
-        url.pathname = `${url.pathname.replace(/\/$/, '')}/${path}`
-        url.search = params.toString()
-        url.hash = ''
-        let ticket = await sign({
-          scope: scope == 'platform' ? platform : scope,
-          person: 'box-tracker',
-          admin: true,
-          exp: Math.floor(Date.now() / 1000) + 60,
-        }, remote.secret)
-        let response = await go(url, {
-          headers: { authorization: `Bearer ${ticket}` },
-          redirect: 'error',
-          signal: AbortSignal.any([
-            request.signal,
-            AbortSignal.timeout(15_000),
-          ]),
-        })
+        let response = await upstream(remote, path, params, {
+          signal: request.signal,
+        }, go)
         if (!response.ok) {
           return Response.json({
             error: `Remote tracker refused the read (${response.status})`,

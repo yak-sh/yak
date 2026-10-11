@@ -45,12 +45,15 @@ Authenticated endpoints: `/bugs`, `/unseen`, `/traces`, `/trace`, `/query`,
 `/vocab`, `/ws`, `POST /resolve` and `/archive` with `{bug}`, and
 `POST /deployed` with `{app}`. `/ws?scope=…&ticket=…` accepts subscriptions,
 unsubscribe and ACK only, never relay writes. `/query` returns graph bundles.
-General `/apply` and HTTP intake are absent.
-`GET /bugs?query=<bug-query>&limit=50&app=<global-eid>` returns bug bundles,
-filtered and ordered before its 1–100 limit. Without `query` it includes all bug
-statuses. `GET /bugs?bug=<global-bug-eid>` returns that bug followed by its
-retained occurrences, or 404 when absent. Both forms are read-only.
-`GET /traces?app=<global-eid>&limit=50&after=<trace-eid>` returns
+General `/apply` is absent. Platform-only `POST /errors` accepts immutable error
+captures with a separately signed `ingest: true` capability; ordinary read
+tickets cannot submit captures. Box reporters retain their outbox until this
+intake admits their records. Retrying a capture preserves its global eid and
+counts it once. `GET /bugs?query=<bug-query>&limit=50&app=<global-eid>` returns
+bug bundles, filtered and ordered before its 1–100 limit. Without `query` it
+includes all bug statuses. `GET /bugs?bug=<global-bug-eid>` returns that bug
+followed by its retained occurrences, or 404 when absent. Both forms are
+read-only. `GET /traces?app=<global-eid>&limit=50&after=<trace-eid>` returns
 `{rows, next?}` ordered by descending `trace.at`.
 `GET /trace?eid=<trace-eid>&limit=100&after=<span-eid>` returns
 `{trace, spans, next?}`; span pages are ordered by entity eid, and each span
@@ -103,11 +106,11 @@ eviction. Trace setup does not initialize notification mail, arm alarms or
 report errors; ordinary tracker work handles notifications independently.
 
 Platform-only `POST /heartbeat` renews the box heartbeat. Cron probes the MCP
-endpoint and tracks an activated box heartbeat older than five minutes. The
-platform graph sends one letter per bug opening through its own `MAIL` binding,
-with `MAIL_FROM` and `MAIL_TO` configured at activation. Space bugs stream
-through their store's graph subscription and remain unseen until their caller
-marks notification in the platform integration.
+endpoint and tracks an activated box heartbeat older than five minutes. Each
+tracker graph sends one letter per new bug opening through its own `MAIL`
+binding, with `MAIL_FROM` and `MAIL_TO` configured at activation. Space bugs
+stream through their store's graph subscription and remain unseen until their
+caller marks notification in the platform integration.
 
 ## Activation and deployment
 

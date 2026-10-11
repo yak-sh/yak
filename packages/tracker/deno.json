@@ -6,7 +6,6 @@
     "./vocab": "./vocab.ts",
     "./intake": "./intake.ts",
     "./report": "./report.ts",
-    "./sentry": "./sentry.ts",
     "./page": "./page.js",
     "./effects": "./effects.ts",
     "./tools": "./tools.ts",
@@ -14,7 +13,9 @@
     "./file": "./file.ts",
     "./views": "./views.ts",
     "./routes": "./routes.ts",
-    "./ticket": "./ticket.ts"
+    "./ticket": "./ticket.ts",
+    "./remote": "./remote.ts",
+    "./sentry": "./sentry.ts"
   },
   "license": "Apache-2.0",
   "description": "Groups tracked errors into bugs, reports without interrupting callers, and retains and notifies their occurrences.",

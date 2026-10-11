@@ -94,6 +94,28 @@ export let store = (storage: Storage, config: Config) => {
       await tick(g, now)
       await fx.work(g, AbortSignal.abort(), 4)
     },
+    // Published app_errors archives occurrences and stamps agent delivery,
+    // separately from a bug's mail notification and resolution.
+    markErrors: async (
+      app: string,
+      eids: string[],
+      mark: 'notified' | 'archived',
+    ) => {
+      let found = (await g.get(eids)).filter((row) =>
+        row.error && row.during &&
+        (row.during as Comp).app == app
+      )
+      if (found.length) {
+        await g.apply(
+          found.map((row) => ({
+            entity: row.entity,
+            [mark]: {},
+          })),
+          { trusted: true },
+        )
+      }
+      return found.length
+    },
     // Only composed handlers can make progress. Unknown or disabled errands
     // must not keep an otherwise idle object awake.
     next: async (now = Date.now()): Promise<number | null> => {

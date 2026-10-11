@@ -175,7 +175,6 @@ export class Tracker {
     if (this.#mailReady) return
     let config = await activate(
       this.tracker!.graph,
-      this.scope,
       this.env,
       this.#traceMeta,
       this.now,
@@ -345,6 +344,7 @@ export class Tracker {
         this.scope,
         this.env.TRACKER_SECRET,
         (request) => this.live!.accept(request),
+        this.ingest,
       )(request)
     } catch (error) {
       await this.recover(error)

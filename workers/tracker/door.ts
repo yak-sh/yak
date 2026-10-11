@@ -1,11 +1,14 @@
 // Authenticated tracker RPC is narrow: readers never get a general graph
-// writer or trusted intake. Each HTTP request is bound to one global scope.
+// writer. Box intake additionally needs its own signed capability.
 
 import type { TrackerStore } from './core.ts'
 import { authorize } from './auth.ts'
 import { api } from '@yaks/api'
 import { CallError } from '@yaks/tools'
 import { status } from '@yaks/graph'
+import type { Bundle } from '@yaks/graph'
+import { platform } from './core.ts'
+import { batch } from './queue.ts'
 
 export let json = (value: unknown, status = 200) =>
   Response.json(value, { status })
@@ -14,12 +17,77 @@ export let door = (
   scope: string,
   secret: string | undefined,
   websocket?: (request: Request) => Response,
+  ingest: (rows: Bundle[]) => Promise<void> = tracker.ingest,
 ) =>
 async (request: Request): Promise<Response> => {
   let access = await authorize(request, secret, scope)
   if (!access) return json({ error: 'tracker scope denied' }, 403)
   let url = new URL(request.url)
   let path = url.pathname
+  if (request.method == 'POST' && path == '/errors') {
+    if (scope != platform || !access.admin || access.ingest !== true) {
+      return json({ error: 'tracker intake denied' }, 403)
+    }
+    let rows: Bundle[]
+    try {
+      let capture = batch(await request.json())
+      let names = [
+        'entity',
+        '$actor',
+        'error',
+        'exception',
+        'during',
+        'breadcrumbs',
+        'request',
+      ]
+      if (
+        capture.scope != platform ||
+        capture.rows.some((row) =>
+          Object.keys(row).some((key) => !names.includes(key))
+        )
+      ) throw Error()
+      rows = capture.rows
+    } catch {
+      return json(
+        { error: 'tracker intake expects platform error captures' },
+        400,
+      )
+    }
+    await ingest(rows)
+    return json({ ok: true })
+  }
+  if (request.method == 'POST' && path == '/app-errors') {
+    // Only yak's vouched compatibility adapter can mark occurrences. Reader
+    // tickets remain unable to write, and no arbitrary component is accepted.
+    if (!access.admin || access.ingest !== true) {
+      return json({ error: 'tracker marks denied' }, 403)
+    }
+    let body
+    try {
+      body = await request.json()
+    } catch {
+      return json({ error: 'invalid app error mark' }, 400)
+    }
+    let uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+    if (
+      !body || typeof body != 'object' || Array.isArray(body) ||
+      typeof body.app != 'string' ||
+      !uuid.test(body.app) || !Array.isArray(body.eids) ||
+      body.eids.length > 100 ||
+      body.eids.some((eid: unknown) =>
+        typeof eid != 'string' || !uuid.test(eid)
+      ) ||
+      !['notified', 'archived'].includes(body.mark)
+    ) {
+      return json({
+        error:
+          'app, up to 100 occurrence eids and a delivery/archive mark required',
+      }, 400)
+    }
+    return json({
+      marked: await tracker.markErrors(body.app, body.eids, body.mark),
+    })
+  }
   if (path == '/ws') {
     return websocket?.(request) ?? json({ error: 'websocket unavailable' }, 503)
   }
