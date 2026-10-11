@@ -108,17 +108,28 @@ pid it runs in. The pid lives on after the thread, so its `exit` is what
 with `become(eid)`, and writes that `exit` for it.
 
 ```ts
-import { graph } from '@yaks/graph'
-import { ram } from '@yaks/ram'
-import { loadVocab } from '@yaks/vocab'
-import { ended, processDoc, processes, started } from '@yaks/process'
+import { equal } from '@yaks/testing'
+import { ended, started } from '@yaks/process'
 
-let vocab = loadVocab([processDoc])
-let g = graph({ storage: ram(vocab), vocab, plugins: [processes()] })
+let beginning = started()
+let ending = ended(0)
+equal(ending.entity, beginning.entity)
+equal(beginning.process, {
+  pid: Deno.pid,
+  command: [Deno.execPath().split('/').pop(), ...Deno.args].join(' '),
+  cwd: Deno.cwd(),
+})
+equal(beginning.runtime, {
+  name: 'deno',
+  version: Deno.version.deno,
+  os: `${Deno.build.os} ${Deno.osRelease()}`,
+})
+equal(ending.exit, { code: 0 })
 
-await g.apply([started()])
+// The host records these bundles in its graph:
+// await g.apply([beginning])
 // on shutdown:
-await g.apply([ended(0)])
+// await g.apply([ending])
 ```
 
 ## Supervision
@@ -199,27 +210,25 @@ exercise request, wake, export and attachment.
 import { equal } from '@yaks/testing'
 import { graph } from '@yaks/graph'
 import { ram } from '@yaks/ram'
-import { loadVocab } from '@yaks/vocab'
+import { loadVocab, pick } from '@yaks/vocab'
 import { processDoc } from '@yaks/process'
 import { processProvider } from '@yaks/process/machine'
 
-let vocab = loadVocab([processDoc])
+let vocab = loadVocab(pick(processDoc, ['process', 'exit']))
 let g = graph({ storage: ram(vocab), vocab })
-let dir = await Deno.makeTempDir()
+let dir = Deno.makeTempDirSync()
 let provider = processProvider(g, {
   dir,
-  prepare: async (from, machine) => {
-    // A host reads the commit through its graph tools here.
-    await machine.write('commit.txt', from)
-  },
+  // A host reads the commit through its graph tools here.
+  prepare: (from, machine) => machine.write('commit.txt', from),
 })
-let ref = { id: crypto.randomUUID(), from: 'a-commit-in-the-graph' }
+let ref = { id: 'reading', from: 'a-commit-in-the-graph' }
 try {
   let { machine } = await provider.request!(ref)
   equal(await machine.read('commit.txt'), ref.from)
 } finally {
   await provider.release(ref)
-  await Deno.remove(dir, { recursive: true })
+  Deno.removeSync(dir, { recursive: true })
 }
 ```
 
