@@ -4,11 +4,13 @@ import {
   catalogue,
   col,
   type Driver,
+  eq,
   fn,
   lit,
   render,
   revision,
   type Stmt,
+  val,
 } from '@yaks/sql/core'
 import { META } from './layout.ts'
 import { meta } from './meta.ts'
@@ -43,6 +45,17 @@ export let versioned = (table: string): Stmt[] => [
       }],
     }],
   })),
+]
+
+/** A single-owner connection observes mutations without persistent tokens. */
+export let unversioned = (table: string): Stmt[] => [
+  ...events.map((event): Stmt => ({
+    t: 'drop',
+    kind: 'trigger',
+    name: `${table}_version_${event}`,
+    ifExists: true,
+  })),
+  { t: 'delete', from: META, where: eq(col('k'), val(key(table))) },
 ]
 
 // A counter would reuse a value after rollback and a different mutation. A

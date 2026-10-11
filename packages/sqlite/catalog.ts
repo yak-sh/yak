@@ -71,7 +71,7 @@ function snapshot(driver: Driver): ArchetypeSet | undefined {
     // distinguishes a changed descriptor from an unrelated graph write,
     // without rereading the entire catalog. Schema changes still invalidate
     // it, even when a table or its triggers were replaced outside the graph.
-    let clock = tableVersion(driver, 'archetype')
+    let clock = driver.file ? tableVersion(driver, 'archetype') : undefined
     let schema = revision(driver, 'schema')
     if (
       !cache.descriptors || clock === undefined ||
@@ -117,7 +117,7 @@ export function described(
   }
   cache.descriptors = archetypeSet(cache.sets, cache.ids)
   cache.descriptorVersion = revision(driver, 'descriptors')
-  cache.tableVersion = tableVersion(driver, 'archetype')
+  if (driver.file) cache.tableVersion = tableVersion(driver, 'archetype')
   if (cache.set == was) cache.set = cache.descriptors
 }
 

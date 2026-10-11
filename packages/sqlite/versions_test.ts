@@ -11,11 +11,39 @@ import { tableVersion, versioned } from './versions.ts'
 
 let vocab = loadVocab([...shop.docs, archetypeDoc])
 
+// Rebinding a file schema on a single-owner host retires its peer clock while
+// preserving the rows. Raw local mutations still invalidate the catalog.
+let local = mem()
+let shared = storage({ ...local, file: true }, vocab)
+shared.install()
+graph({ storage: shared, vocab, plugins: [archetypes()] }).apply([
+  { entity: { eid: 'kept' }, doc: { title: 'Kept' } },
+])
+let owned = storage(local, vocab)
+owned.install()
+let kept = owned.get(['kept'], ['doc'])[0].doc
+let localMatch = () => catalog(local)({ all: ['doc'], none: [] })
+let localId = localMatch()![0]
+
+test('a single-owner install keeps rows and removes peer tracking cost', () => {
+  equal(kept, { title: 'Kept', body: null })
+  equal(meta(local).get('table:archetype'), undefined)
+  local.query({
+    t: 'update',
+    table: 'archetype',
+    set: { tables: lit('["product"]') },
+    where: eq(col('entity'), lit(localId)),
+  })
+  equal(localMatch(), [])
+  // A leftover trigger would recreate the token on the mutation above.
+  equal(meta(local).get('table:archetype'), undefined)
+})
+
 // The reader sees a peer's SQLite data_version rather than its AST writes.
 // The fixture keeps its connection and installed schema outside timed cases.
 let peer = () => {
   let db = mem()
-  let store = storage(db, vocab)
+  let store = storage({ ...db, file: true }, vocab)
   store.install()
   let g = graph({ storage: store, vocab, plugins: [archetypes()] })
   g.apply([{ entity: { eid: 'one' }, doc: { title: 'One' } }])

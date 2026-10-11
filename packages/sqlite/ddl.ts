@@ -68,7 +68,7 @@ import {
 import { checks, objects, type Stood, stood } from './physical.ts'
 import { unit } from './unit.ts'
 import { busy } from './error.ts'
-import { versioned } from './versions.ts'
+import { unversioned, versioned } from './versions.ts'
 
 import { META, tables } from './layout.ts'
 export { META, tables } from './layout.ts'
@@ -292,23 +292,31 @@ let docDdl = (v: Vocab, derived: Derived): Stmt[] => {
 // `install()` in ./mod.ts runs them; a caller may also read them to inspect or
 // migrate by hand. `derived` is the store's read overrides: a property whose
 // stored value is not its text reads through its `text` expression.
-export let schema = (vocab: Vocab, derived: Derived = {}): Stmt[] => [
-  ...tabled(vocab, derived),
+export let schema = (
+  vocab: Vocab,
+  derived: Derived = {},
+  file = false,
+): Stmt[] => [
+  ...tabled(vocab, derived, file),
   // After every table: an index names a column the create above just raised.
   ...indexed(vocab),
 ]
 
 // The spine and one table per component, with the doc view. Everything an
 // index may need to already exist.
-export let tabled = (vocab: Vocab, derived: Derived = {}): Stmt[] => [
+export let tabled = (
+  vocab: Vocab,
+  derived: Derived = {},
+  file = false,
+): Stmt[] => [
   ...spine(vocab),
+  ...file && vocab.comp('archetype') ? versioned('archetype') : [],
   ...docDdl(vocab, derived),
 ]
 
 let spine = (vocab: Vocab): Stmt[] => [
   ...SPINE,
   ...tables(vocab).map((name) => tableDdl(vocab, name)),
-  ...vocab.comp('archetype') ? versioned('archetype') : [],
 ]
 
 // Whether the file's view already says what `make` says. SQLite keeps a
@@ -331,7 +339,13 @@ export let retabled = (
 ): Stmt[] => {
   let view = docDdl(vocab, derived)
   let make = view.find((s): s is CreateView => s.t == 'create view')
-  return [...spine(vocab), ...make && stands(driver, make) ? [] : view]
+  return [
+    ...spine(vocab),
+    ...vocab.comp('archetype')
+      ? driver.file ? versioned('archetype') : unversioned('archetype')
+      : [],
+    ...make && stands(driver, make) ? [] : view,
+  ]
 }
 
 // Declared and automatic reference indexes. Created last, after `grown()`: an

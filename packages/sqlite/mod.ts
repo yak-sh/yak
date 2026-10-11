@@ -316,14 +316,18 @@ type Plan = { print: string; raised: Make[]; made: string[] }
 let makes = (s: Stmt): s is Make =>
   s.t == 'create table' || s.t == 'create index' || s.t == 'create view' ||
   s.t == 'create trigger'
-let plans = new WeakMap<Vocab, WeakMap<Derived, Plan>>()
+let plans = [
+  new WeakMap<Vocab, WeakMap<Derived, Plan>>(),
+  new WeakMap<Vocab, WeakMap<Derived, Plan>>(),
+]
 let NONE: Derived = {}
-let plan = (vocab: Vocab, derived: Derived = NONE): Plan => {
-  let by = plans.get(vocab) ?? new WeakMap<Derived, Plan>()
-  plans.set(vocab, by)
+let plan = (vocab: Vocab, derived: Derived = NONE, file = false): Plan => {
+  let held = plans[Number(file)]
+  let by = held.get(vocab) ?? new WeakMap<Derived, Plan>()
+  held.set(vocab, by)
   let known = by.get(derived)
   if (known) return known
-  let stmts = [...tabled(vocab, derived), ...indexed(vocab)]
+  let stmts = [...tabled(vocab, derived, file), ...indexed(vocab)]
   let raised = stmts.filter(makes)
   let fresh = {
     // The fitting's revision rides beside them (ddl.ts `FIT`): what fitting
@@ -605,7 +609,7 @@ export let storage = (
   // In-memory stores are private scratch values and may prepare themselves.
   let ready = false
   let install = () => {
-    let { print, made } = plan(vocab, base.derived)
+    let { print, made } = plan(vocab, base.derived, !!driver.file)
     let mark = (strays: string[]) =>
       [print, shape(driver, [...made, ...strays]), ...strays].join(' ')
     let matches = () => {
@@ -676,7 +680,7 @@ export let storage = (
     // columns before creating their indexes. `schema()` alone describes a
     // fresh file; it cannot see what a standing table still lacks.
     ddl: () => [
-      ...tabled(vocab, base.derived),
+      ...tabled(vocab, base.derived, !!driver.file),
       ...grown(vocab, standing(driver, vocab)),
       ...indexed(vocab),
     ],

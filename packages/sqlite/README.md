@@ -492,9 +492,13 @@ try {
 
 ## Schema installation
 
-`schema(vocab)` builds statements for a fresh database.
+`schema(vocab, reads?, file?)` builds statements for a fresh database. Set
+`file` for a database other connections can write: archetype triggers keep a
+table token so an unrelated peer commit need not reread its descriptors.
+Single-owner stores observe their connection's writes without persistent tokens.
 `retabled(driver, vocab, reads?)` keeps an identical document view and replaces
-only a changed one. `standing(driver,
+only a changed one, and installs or retires those triggers according to
+`driver.file`. `standing(driver,
 vocab)` reads existing tables;
 `grown(vocab, standing)` builds missing-column statements, and
 `refit(vocab, standing)` builds table-rebuild statements. `fit(driver, vocab)`
