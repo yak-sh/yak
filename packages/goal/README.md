@@ -21,18 +21,24 @@ implementation, tools, or duties.
 ```ts
 import { goalDoc } from '@yaks/goal'
 import { docDoc } from '@yaks/doc'
-import { loadVocab } from '@yaks/vocab'
+import { loadVocab, pick } from '@yaks/vocab'
 import { graph } from '@yaks/graph'
 import { ram } from '@yaks/ram'
+import { equal } from '@yaks/testing'
 
-const vocab = loadVocab([docDoc, goalDoc])
-const g = graph({ vocab, storage: ram(vocab) })
-await g.apply([{
+const vocab = loadVocab([docDoc, pick(goalDoc, ['goal'])])
+const storage = ram(vocab)
+const g = graph({ vocab, storage })
+g.apply([{
   entity: { eid: 'response-time' },
   goal: {},
   doc: { title: 'Keep response times low' },
 }])
-console.log(await g.read('.goal'))
+equal(storage.read('.goal'), [{
+  entity: { eid: 'response-time' },
+  goal: {},
+  doc: { title: 'Keep response times low' },
+}])
 ```
 
 An entity is a record identified by `entity.eid`; its components are the named
