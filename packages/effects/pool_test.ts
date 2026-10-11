@@ -5,15 +5,20 @@
 
 import { assert, assertEquals } from '@std/assert'
 import {
+  type Access,
   type Bundle,
   type Comp,
+  dead,
   detached,
   graph,
+  guard,
   type Storage,
 } from '@yaks/graph'
 import { ram } from '@yaks/ram'
 import { after } from '@yaks/fp'
 import { loadVocab, pick } from '@yaks/vocab'
+import { parse } from '@yaks/query'
+import { memory } from '../graph/testing.ts'
 import { test, tick, until } from '@yaks/testing'
 import { effects, type Handler, type Opts } from './registry.ts'
 import { leaseEid } from './lease.ts'
@@ -81,30 +86,47 @@ test('a batch that never commits owes nothing', async () => {
   assertEquals(await owed(a.g), [])
 })
 
-// Exercise the registry's commit hooks over RAM transactions: the behavior
+// Exercise the registry's commit hooks over Map transactions: the behavior
 // here is scheduling committed events, rather than graph write admission.
 let committingWords = loadVocab([
   pick(pooledBlog.docs[0], ['entity', 'post']),
-  pooledBlog.docs[1],
+  pick(pooledBlog.docs[1], ['effect']),
   pick(pooledBlog.docs[2], ['post_note']),
 ])
-let committingStore = ram(committingWords, { number: true })
+let committingStore = memory()
+let committedNotes = parse('.effect.handler=post_note')
 let committedRuns: string[] = []
-let committingFx = effects(committingWords, {
-  write: (bundles) => {
-    committingStore.tx((tx) => tx.patch(bundles))
-    return bundles
-  },
-})
-let committingGraph = graph({
-  storage: committingStore,
+// The scheduling host needs guarded persistence and committed reads. Its
+// private store has no other entities depending on effect rows.
+let commitWrite = (bundles: Bundle[]) =>
+  committingStore.tx((tx) =>
+    after(
+      guard(bundles, tx, committingWords),
+      (ready) =>
+        after(
+          tx.remove(ready.filter(dead).map((b) => b.entity)),
+          () => after(tx.patch(ready.filter((b) => !dead(b))), () => ready),
+        ),
+    )
+  )
+let committingOutside = detached(committingStore)
+let committingGraph: Access = {
   vocab: committingWords,
+  get: committingStore.get,
+  read: committingStore.read,
+  rows: committingStore.rows,
+  outside: committingOutside,
+  apply: commitWrite,
+}
+let committingFx = effects(committingWords, {
+  singleOwner: true,
+  write: commitWrite,
 })
 committingFx.handle({
   post_note: (e) => void committedRuns.push(`${e.kind} ${e.entity.eid}`),
 })
-await committingFx.work(committingGraph)
-let committingOutside = detached(committingStore)
+// This private store starts empty; join the worker without a backlog pass.
+await committingFx.work(committingGraph, undefined, 0)
 let commitPost = (bundle: Bundle) =>
   after(
     committingStore.tx((tx) =>
@@ -122,7 +144,7 @@ test('a process working the pool runs what it writes, once committed', async () 
   await commitPost(post('p1', { title: 'Two' }))
   await committingFx.idle()
   assertEquals(committedRuns, ['created p1', 'changed p1'])
-  assertEquals(await committingStore.rows('.effect.handler=post_note'), [])
+  assertEquals(await committingStore.rows(committedNotes), [])
 })
 
 test('a pooled event retains all components moved on its target', async () => {
