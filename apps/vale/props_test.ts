@@ -14,6 +14,15 @@ seedThemes()
 
 seedBuildings()
 
+let neighbors = [
+  [1, 0, 0],
+  [-1, 0, 0],
+  [0, 1, 0],
+  [0, -1, 0],
+  [0, 0, 1],
+  [0, 0, -1],
+].map(([x, y, z]) => key(x, y, z) - key(0, 0, 0))
+
 test('no prop fights itself', () => {
   let fighting = Object.keys(KINDS)
     .map((kind) => [kind, fights(pack(model(kind, 0))).length])
@@ -50,19 +59,10 @@ test('the well has no pieces hanging apart from its footing', () => {
     let queue = [first], grounded = false
     unseen.delete(first)
     for (let k of queue) {
-      let [x, y, z] = unkey(k)
+      let [, y] = unkey(k)
       if (y == 0) grounded = true
-      for (
-        let [dx, dy, dz] of [
-          [1, 0, 0],
-          [-1, 0, 0],
-          [0, 1, 0],
-          [0, -1, 0],
-          [0, 0, 1],
-          [0, 0, -1],
-        ]
-      ) {
-        let neighbor = key(x + dx, y + dy, z + dz)
+      for (let offset of neighbors) {
+        let neighbor = k + offset
         if (unseen.delete(neighbor)) queue.push(neighbor)
       }
     }

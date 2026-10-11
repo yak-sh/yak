@@ -38,8 +38,8 @@ let sha = async (body: Body) =>
     .map((b) => b.toString(16).padStart(2, '0')).join('').slice(0, 32)
 
 // A body the browser may keep, revalidated on each load by its hash.
-let tagged = async (request: Request, body: Body, type: string) => {
-  let tag = `"${await sha(body)}"`
+type Made = { body: Body; tag: string }
+let tagged = (request: Request, { body, tag }: Made, type: string) => {
   let headers = { 'content-type': type, 'cache-control': 'no-cache', etag: tag }
   return request.headers.get('if-none-match') == tag
     ? new Response(null, { status: 304, headers })
@@ -85,9 +85,12 @@ export let kept = (
     closing?: AbortSignal
   } = {},
 ): (request: Request) => Promise<Response> => {
-  let made: Promise<Body> | undefined
+  let made: Promise<Made> | undefined
   let attempt = () => {
-    let now = within(limit, make, closing)
+    let now = within(limit, make, closing).then(async (value) => {
+      let body = typeof value == 'string' ? value : new Uint8Array(value)
+      return { body, tag: `"${await sha(body)}"` }
+    })
     made = now
     now.catch((e) => {
       if (made == now) made = undefined

@@ -7,9 +7,10 @@ import { parseHTML } from 'linkedom'
 import { assertEquals } from '@std/assert'
 import { memo } from './memo.ts'
 
+let { document } = parseHTML('<main></main>')
+
 test('memo sleeps on equal props and wakes for an owned signal', async () => {
   let prior = Object.getOwnPropertyDescriptor(globalThis, 'document')
-  let { document } = parseHTML('<main></main>')
   Object.defineProperty(globalThis, 'document', {
     value: document,
     configurable: true,

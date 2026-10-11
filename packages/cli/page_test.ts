@@ -58,6 +58,23 @@ test('a body once made is kept, and revalidated by its hash', async () => {
     }),
   )
   assertEquals([again.status, seen.tries], [304, 1])
+
+  let bytes = new TextEncoder().encode('made')
+  let binary = kept('/x', 'text/plain', () => Promise.resolve(bytes))
+  let before = await get(binary)
+  let tag = before.headers.get('etag')!
+  bytes.fill(0)
+  let after = await get(binary)
+  assertEquals(await after.text(), 'made')
+  assertEquals(after.headers.get('etag'), tag)
+  assertEquals(
+    (await binary(
+      new Request('http://x/x', {
+        headers: { 'if-none-match': tag },
+      }),
+    )).status,
+    304,
+  )
 })
 
 test('a stopped bundle stops the bundler', async () => {
