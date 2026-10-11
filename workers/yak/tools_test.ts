@@ -260,10 +260,12 @@ test('a patch replaces exactly one match, or refuses saying how many', () => {
   )
 })
 
-test('an integrity hash is base64 of the same digest, not the hex', async () => {
+let emptyDigest = await sha256(new Uint8Array())
+
+test('an integrity hash is base64 of the same digest, not the hex', () => {
   // The empty string's sha256, in the encoding an <script integrity> wants.
   assertEquals(
-    sri(await sha256(new Uint8Array())),
+    sri(emptyDigest),
     '47DEQpj8HBSa+/TImW+5JCeuQeRkm5NMpJWZG3hSuFU=',
   )
 })
