@@ -76,10 +76,14 @@ export { given, used } from '@yaks/host/config'
 // else that goes wrong importing one — a syntax error, a missing dependency, a
 // throw at module scope — is that module failing, and is rethrown: a host that
 // quietly runs without its rules is worse than one that refuses to start.
-let unexported = (error: unknown, spec: string, facet: string): boolean =>
-  error instanceof TypeError &&
-  (error.message.startsWith(`Unknown export './${facet}' for `) ||
-    error.message == `Module not found "${spec}".`)
+let unexported = (error: unknown, spec: string): boolean => {
+  if (!(error instanceof TypeError)) return false
+  if (error.message == `Module not found "${spec}".`) return true
+  let pkg = /^(?:jsr:)?(@[^/]+\/[^/@]+)(?:@[^/]+)?\/(.+)$/.exec(spec)
+  return !!pkg && error.message.startsWith(
+    `Unknown export './${pkg[2]}' for '${pkg[1]}'.`,
+  )
+}
 
 /** Whether a plugin exports a subpath, asked of the resolver rather than by
  * importing it: what a process checks before it hands a role to a thread
@@ -135,7 +139,7 @@ export let subpath = <M>(plugin: string, name: string): Promise<M | null> => {
   let key = `${plugin}/${name}`
   let known = imported.get(key) as Promise<M | null> | undefined
   if (known) return known
-  let asked = importing<M>(key, name)
+  let asked = importing<M>(key)
   imported.set(key, asked)
   asked.catch(() => imported.delete(key))
   return asked
@@ -151,16 +155,16 @@ export let subpaths = async (
   requests: readonly (readonly [plugin: string, name: string])[],
   modules: readonly string[] = [],
 ): Promise<unknown[]> => {
-  let pending: { key: string; name: string; spec: string; slot: string }[] = []
+  let pending: { key: string; spec: string; slot: string }[] = []
   for (let [plugin, name] of requests) {
     let key = `${plugin}/${name}`
     if (imported.has(key) || pending.some((p) => p.key == key)) continue
     try {
       let spec = import.meta.resolve(key)
       if (!spec.startsWith('file:') || !/\.[cm]?[jt]sx?$/.test(spec)) continue
-      pending.push({ key, name, spec, slot: `m${pending.length}` })
+      pending.push({ key, spec, slot: `m${pending.length}` })
     } catch (error) {
-      if (unexported(error, key, name)) imported.set(key, Promise.resolve(null))
+      if (unexported(error, key)) imported.set(key, Promise.resolve(null))
       // An unmapped package is resolved by located() in subpath(), not here.
     }
   }
@@ -176,13 +180,13 @@ export let subpaths = async (
     let loading: Promise<Record<string, unknown>> = import(
       `data:application/javascript,${encodeURIComponent(source)}`
     )
-    for (let { key, name, slot } of pending) {
+    for (let { key, slot } of pending) {
       // The batch cannot distinguish an absent file facet from a broken one.
       // Let the ordinary loader classify each on failure, preserving its
       // optional-export semantics and leaving unrelated modules usable.
       let asked = loading.then(
         (modules) => modules[slot],
-        () => importing(key, name),
+        () => importing(key),
       )
       imported.set(key, asked)
       asked.catch(() => imported.delete(key))
@@ -200,12 +204,15 @@ export let subpaths = async (
 }
 
 let imported = new Map<string, Promise<unknown>>()
-let importing = async <M>(key: string, name: string): Promise<M | null> => {
+let importing = async <M>(key: string): Promise<M | null> => {
   let spec = located(key)
   try {
+    // Missing-module errors name the resolved URL, including for a plugin
+    // whose declaring package is an absolute path in a remote vocabulary.
+    spec = import.meta.resolve(spec)
     return await import(spec)
   } catch (error) {
-    if (unexported(error, spec, name)) return null
+    if (unexported(error, spec)) return null
     throw error
   }
 }

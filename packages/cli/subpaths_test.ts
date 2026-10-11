@@ -51,10 +51,21 @@ test('a broken selected module fails the load without poisoning another selected
       `${dir}/graph.ts`,
       "throw Error('broken exported facet')\nexport {}\n",
     )
+    Deno.writeTextFileSync(
+      `${dir}/views.ts`,
+      "import './missing.ts'\nexport {}\n",
+    )
+    Deno.writeTextFileSync(
+      `${dir}/views`,
+      "import '@yaks/ram/views'\nexport {}\n",
+    )
     await throws(() => subpaths([[plugin, 'vocab.ts'], [plugin, 'graph.ts']]))
     let good = await subpath<{ docs: unknown[] }>(plugin, 'vocab.ts')
     equal(good?.docs, [])
     await throws(() => subpath(plugin, 'graph.ts'))
+    await throws(() => subpaths([[dir, 'views.ts']]))
+    await throws(() => subpath(dir, 'views.ts'))
+    await throws(() => subpath(dir, 'views'))
   } finally {
     Deno.removeSync(dir, { recursive: true })
   }
@@ -70,6 +81,7 @@ test('an absent file facet does not break another selected module', async () => 
     ]]) as [{ docs: unknown[] }, null]
     equal(good.docs, [])
     equal(absent, null)
+    equal(await subpath(dir, 'views'), null)
     await throws(() =>
       subpaths([[plugin, 'missing.ts']], [`${plugin}/missing.ts`])
     )

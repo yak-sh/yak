@@ -22,13 +22,23 @@ import type { Ctx } from './run.ts'
 import { cached } from './store.ts'
 
 // A server's graph as a host composes one: each document stamped with the
-// package that declared it.
+// package that declared it, including a server-only package with no local views.
 let vocab = loadVocab([
   { ...kernelDoc, package: '@yaks/kernel' },
   { ...idDoc, package: '@yaks/id' },
   { ...docDoc, package: '@yaks/doc' },
   { ...taskDoc, package: '@yaks/task' },
   { ...toolsDoc, package: '@yaks/tools' },
+  {
+    package: new URL('../../workers/yak/app', import.meta.url).pathname,
+    $defs: {
+      space: {
+        component: true,
+        type: 'object',
+        properties: { slug: { type: 'string' } },
+      },
+    },
+  },
 ], [kernelKeywords, idKeywords])
 
 // One command line against a server holding two tasks, one of them done, with
