@@ -252,10 +252,12 @@ test('signing in keeps an existing session instrument and a different session ha
   let req = asked(`${COOKIE}=${oldSession}`), who = sessionWho
   let replacement = await minted(req, ENV, SECRET, 'p-1', 'garden')
   assertEquals((await verify(value(replacement), SECRET))?.via, who.via)
+  // A minute apart from the fixture's expiry: one second could equal it when
+  // the test starts a second after the fixture, minting the same token.
   let other = await sign({
     person: 'p-1',
     space: 'garden',
-    exp: Math.floor(Date.now() / 1000) + SESSION - 1,
+    exp: Math.floor(Date.now() / 1000) + SESSION - 60,
   }, SECRET)
   let another = await browserOf(asked(`${COOKIE}=${other}`), SECRET)
   assert(another && another.via != who.via)
