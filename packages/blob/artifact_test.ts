@@ -15,9 +15,10 @@ let memory = (): Blobs & { map: Map<string, Uint8Array> } => {
   }
 }
 
+// Storing is input to the read; its own write contracts are tested separately.
+let blobs = memory()
+let a = await artifactStore(blobs)(new Uint8Array([1, 2, 3]), 'x/y')
 test('an artifact reads back as the bytes its row names', async () => {
-  let blobs = memory()
-  let a = await artifactStore(blobs)(new Uint8Array([1, 2, 3]), 'x/y')
   assertEquals(await artifactBytes(blobs, a), new Uint8Array([1, 2, 3]))
   assertEquals(
     await artifactBytes(blobs, { ...a, address: '0'.repeat(64) }),
