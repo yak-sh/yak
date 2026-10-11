@@ -2,7 +2,7 @@ import { test } from '@yaks/testing'
 import { assertEquals } from '@std/assert'
 import type { Bundle, Comp, Graph } from '@yaks/graph'
 import { toolEid } from '@yaks/tools'
-import { ids, locked, store } from './testing.ts'
+import { ids, locked, pages, store, transcriptGraph } from './testing.ts'
 import { claude } from './readers.ts'
 import { callOf, pull, tail } from './tail.ts'
 
@@ -32,14 +32,8 @@ let answer = {
   },
 }
 
-// A transcript file of these lines, and a graph to read it into.
-let file = async (
-  body: (
-    g: Graph,
-    log: (...l: unknown[]) => void,
-    path: string,
-  ) => Promise<void>,
-) => {
+// A transcript file and the graph that reads it; callers choose their graph seam.
+let fixture = (g: Graph = locked(store())) => {
   let dir = Deno.makeTempDirSync()
   let path = `${dir}/one.jsonl`
   let log = (...lines: unknown[]) =>
@@ -50,12 +44,48 @@ let file = async (
       ) + '\n',
       { append: true },
     )
+  return { g, log, path, free: () => Deno.removeSync(dir, { recursive: true }) }
+}
+let file = async (
+  body: (
+    g: Graph,
+    log: (...lines: unknown[]) => void,
+    path: string,
+  ) => Promise<void>,
+) => {
+  let f = fixture()
   try {
-    await body(locked(store()), log, path)
+    await body(f.g, f.log, f.path)
   } finally {
-    Deno.removeSync(dir, { recursive: true })
+    f.free()
   }
 }
+
+// Each incremental-reading case keeps its file and configured graph for the module.
+let prepared = async (...lines: unknown[]) => {
+  let f = fixture(transcriptGraph(pages))
+  f.g.apply([{ entity: { eid: ids.run1 }, session: {} }])
+  f.log(...lines)
+  return { ...f, t: await tail(f.g, f.path, { session: ids.run1 }) }
+}
+let advancing = await prepared(typed('one'))
+await pull(advancing.g, advancing.t, claude)
+let unchangedCount = await pull(advancing.g, advancing.t, claude)
+advancing.log(reply({ type: 'text', text: 'two' }))
+let addedCount = await pull(advancing.g, advancing.t, claude)
+let stopping = await prepared(typed('one'), typed('two'), typed('three'))
+let stop = new AbortController()
+let first = (e: Record<string, unknown>) => (stop.abort(), claude(e))
+let stoppedCount = await pull(stopping.g, stopping.t, first, {
+  signal: stop.signal,
+})
+let stoppedLine =
+  (await tail(stopping.g, stopping.path, { session: ids.run1 })).line
+let separate = await prepared(typed('one'), typed('two'))
+await pull(separate.g, separate.t, claude)
+let other = `${separate.path}.other`
+Deno.writeTextFileSync(other, JSON.stringify(typed('elsewhere')) + '\n')
+let otherTail = await tail(separate.g, other, { session: ids.run1 })
 
 // A session's transcript, in entry order, as the kinds each entry wears.
 let told = async (g: Graph, session: string) =>
@@ -130,14 +160,11 @@ test('human text preserves automatic openings across import and resume', async (
   }
 })
 
-test('a tail reads on from where the transcript stands, and never twice', () =>
-  file(async (g, log, path) => {
-    log(typed('one'))
-    let t = await tail(g, path, { session: ids.run1 })
-    await pull(g, t, claude)
-    assertEquals(await pull(g, t, claude), 0)
-    log(reply({ type: 'text', text: 'two' }))
-    assertEquals(await pull(g, t, claude), 1)
+test('a tail reads on from where the transcript stands, and never twice', async () => {
+  let { g, log, path, free } = advancing
+  try {
+    assertEquals(unchangedCount, 0)
+    assertEquals(addedCount, 1)
     // A new tail, as after a restart, starts past what the session holds.
     log(typed('three'))
     let again = await tail(g, path, { session: ids.run1 })
@@ -148,19 +175,22 @@ test('a tail reads on from where the transcript stands, and never twice', () =>
       'content+output',
       'content',
     ])
-  }))
+  } finally {
+    free()
+  }
+})
 
-test('a pull told to stop stops between lines, and the rest is read after', () =>
-  file(async (g, log, path) => {
-    log(typed('one'), typed('two'), typed('three'))
-    let stop = new AbortController()
-    let first = (e: Record<string, unknown>) => (stop.abort(), claude(e))
-    let t = await tail(g, path, { session: ids.run1 })
-    assertEquals(await pull(g, t, first, { signal: stop.signal }), 1)
-    assertEquals((await tail(g, path, { session: ids.run1 })).line, 1)
+test('a pull told to stop stops between lines, and the rest is read after', async () => {
+  let { g, t, free } = stopping
+  try {
+    assertEquals(stoppedCount, 1)
+    assertEquals(stoppedLine, 1)
     assertEquals(await pull(g, t, claude), 2)
     assertEquals(await told(g, ids.run1), ['content', 'content', 'content'])
-  }))
+  } finally {
+    free()
+  }
+})
 
 test('a resume starts where the log was read, whatever became of its entries', () =>
   file(async (g, log, path) => {
@@ -219,13 +249,10 @@ test('a compacted summary survives a prose-only import', () =>
     assertEquals(c(rows[1], 'created')?.by, undefined)
   }))
 
-test('two logs of one session each keep their own entries and their own place', () =>
-  file(async (g, log, path) => {
-    log(typed('one'), typed('two'))
-    let other = `${path}.other`
-    Deno.writeTextFileSync(other, JSON.stringify(typed('elsewhere')) + '\n')
-    await pull(g, await tail(g, path, { session: ids.run1 }), claude)
-    await pull(g, await tail(g, other, { session: ids.run1 }), claude)
+test('two logs of one session each keep their own entries and their own place', async () => {
+  let { g, path, free } = separate
+  try {
+    await pull(g, otherTail, claude)
     let said = await g.read(`.entry.session=${ids.run1}&.order=entry.seq&*`)
     assertEquals(said.map((b) => c(b, 'content')?.body), [
       'one',
@@ -234,4 +261,7 @@ test('two logs of one session each keep their own entries and their own place', 
     ])
     assertEquals((await tail(g, path, { session: ids.run1 })).line, 2)
     assertEquals((await tail(g, other, { session: ids.run1 })).line, 1)
-  }))
+  } finally {
+    free()
+  }
+})

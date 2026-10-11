@@ -44,11 +44,12 @@ let fixture = (fail = false) => {
 }
 
 let recorded = fixture()
+// Prepare the failed child once and inspect the durable exception it produced.
+await settle(recorded.g, 'child', recorded.r)
 let rejected = fixture(true)
 
 test('a preparation defect records its original exception without a direct report', async () => {
-  let { g, r, told } = recorded
-  await settle(g, 'child', r)
+  let { g, told } = recorded
   let [row] = await g.get(['child:preparation-error'])
   equal(row.exception, {
     type: defect.name,

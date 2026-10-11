@@ -80,32 +80,35 @@ test('same-batch call/result join respects the absence gate and detached calls',
   assertEquals(rows.find((b) => b.entity.eid == 'detached-r')?.entry, undefined)
 })
 
+// Keep both tool runners overlapping: caller association must survive their
+// completion order. Prepare this completed transcript once, then read its rows.
+let concurrent = graph({ vocab, storage: ram(vocab), plugins: [sessions()] })
+await concurrent.apply([
+  { entity: { eid: 's' }, session: {} },
+  { entity: { eid: T }, tool: { name: 'echo' } },
+  {
+    entity: { eid: 'a' },
+    entry: { session: 's' },
+    call: { to: T, args: {} },
+  },
+  {
+    entity: { eid: 'b' },
+    entry: { session: 's' },
+    call: { to: T, args: {} },
+  },
+])
+let release!: () => void
+let gate = new Promise<void>((resolve) => release = resolve)
+let slow = saying(concurrent, async () => {
+  await gate
+  return 'a'
+}).run('a')
+await saying(concurrent, () => 'b').run('b')
+release()
+await slow
+
 test('independent callers can complete out of order without losing transcript association', async () => {
-  const g = graph({ vocab, storage: ram(vocab), plugins: [sessions()] })
-  await g.apply([
-    { entity: { eid: 's' }, session: {} },
-    { entity: { eid: T }, tool: { name: 'echo' } },
-    {
-      entity: { eid: 'a' },
-      entry: { session: 's' },
-      call: { to: T, args: {} },
-    },
-    {
-      entity: { eid: 'b' },
-      entry: { session: 's' },
-      call: { to: T, args: {} },
-    },
-  ])
-  let release!: () => void
-  const gate = new Promise<void>((resolve) => release = resolve)
-  const slow = saying(g, async () => {
-    await gate
-    return 'a'
-  }).run('a')
-  await saying(g, () => 'b').run('b')
-  release()
-  await slow
-  const results = await g.read('.result .order=entry.seq&*')
+  const results = await concurrent.read('.result .order=entry.seq&*')
   assertEquals(results.map((b) => b.result), [
     { call: 'b', ms: (results[0].result as { ms: number }).ms },
     { call: 'a', ms: (results[1].result as { ms: number }).ms },
