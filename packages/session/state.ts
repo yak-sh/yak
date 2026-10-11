@@ -1,6 +1,7 @@
 // Transcript state from entry bundles alone. Rendering and in-memory readers
 // share this pure logic without loading SQL derivations or tool execution.
 import type { Bundle, Comp } from '@yaks/graph'
+import { stoppedNotice } from './claude-control.ts'
 import {
   ASK,
   CALL,
@@ -75,7 +76,7 @@ export let sourceOf = (b: Bundle): string | undefined => {
 /** Which kind of entry a bundle is, or `undefined` for one carrying none of
  * the kind components and no prose. */
 export let kindOf = (b: Bundle): Kind | undefined =>
-  KINDS.find(([comp]) => comp in b)?.[1] ??
+  stoppedNotice(b) ? 'stop' : KINDS.find(([comp]) => comp in b)?.[1] ??
     (OUTPUT in b ? 'output' : content(b) ? 'input' : undefined)
 
 /** The seq of an entry bundle. */
@@ -130,7 +131,7 @@ export let live =
 /** The status of a transcript, from its entries in any order. */
 export let statusOf = (entries: Bundle[], ended = false): TranscriptStatus => {
   if (ended) return 'stopped'
-  let all = ordered(entries).filter((b) => !b.notice)
+  let all = ordered(entries).filter((b) => !b.notice || stoppedNotice(b))
   let newest = all.at(-1)
   if (!newest) return 'empty'
   let kind = kindOf(newest)

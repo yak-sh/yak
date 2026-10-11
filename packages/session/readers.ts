@@ -29,6 +29,8 @@
 // The event shapes are copied from live runs of both CLIs and from the files
 // they keep, not from their docs.
 
+import { claudeStops } from './claude-control.ts'
+
 /** One parsed line of a harness's log. */
 export type Event = Record<string, unknown>
 
@@ -184,7 +186,9 @@ let typedAs = (text: string): string => {
 // What the harness says a person typed, and what it put there itself: a task's
 // notification, a message from another session, a note about a command.
 let prompt = (body: string, human: boolean): Comps[] =>
-  human ? said(typedAs(body)) : said(body, { notice: {} })
+  human
+    ? said(typedAs(body))
+    : said(body, claudeStops.includes(body) ? { stop: {} } : { notice: {} })
 
 let human = (e: Event) => obj(e.origin).kind == 'human'
 

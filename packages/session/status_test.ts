@@ -16,11 +16,20 @@ import { mem } from '../sqlite/testing.ts'
 import { durable } from '../durable-object/testing.ts'
 import { effectDoc } from '@yaks/effects'
 import { archetypeDoc } from '@yaks/archetype/vocab'
+import {
+  blobKeywords,
+  blobRead,
+  blobs,
+  blobSchema,
+  sqliteBlobs,
+} from '@yaks/blob'
 import { kernelDoc, kernelKeywords } from '@yaks/kernel'
 import { modelDoc } from '@yaks/model'
 import { toolsDoc } from '@yaks/tools/vocab'
 import { toolEid } from '@yaks/tools'
 import { sessionDoc } from './comp.ts'
+import { subagent } from './readers.ts'
+import { imported } from './tail.ts'
 import {
   kindOf,
   sessionDerived,
@@ -50,6 +59,62 @@ let said = (n: number, source: string) =>
 
 // Every shape, as the entries that make it.
 let shapes: [string, Bundle[], TranscriptStatus][] = [
+  ...[
+    '[Request interrupted by user]',
+    '[Request interrupted by user for tool use]',
+  ].flatMap((body): [string, Bundle[], TranscriptStatus][] => {
+    let history = [
+      input(1),
+      entry(2, { call: { to: T, id: 'c1' } }),
+      entry(3, { result: { call: 'e2' }, content: { body: 'done' } }),
+    ]
+    let cancelled = entry(4, {
+      content: { body },
+      notice: {},
+      imported: { source: 'child.jsonl', line: 4 },
+    })
+    let decoded = imported(
+      subagent({
+        type: 'user',
+        isSidechain: true,
+        message: { content: body },
+      }),
+      { session: S, source: 'child.jsonl', line: 4 },
+    )[0]
+    return [
+      [
+        `imported cancellation stops: ${body}`,
+        [...history, { ...decoded, entry: { session: S, seq: 4 } }],
+        'stopped',
+      ],
+      [
+        `historical cancellation stops: ${body}`,
+        [...history, cancelled],
+        'stopped',
+      ],
+      [`late reply does not hide cancellation: ${body}`, [
+        ...history,
+        cancelled,
+        said(5, S),
+        entry(6, { notice: {}, content: { body: 'context' } }),
+      ], 'stopped'],
+      [`fresh input resumes cancellation: ${body}`, [
+        ...history,
+        cancelled,
+        input(5),
+      ], 'running'],
+      [`cancellation used as an ask boundary still stops: ${body}`, [
+        ...history,
+        cancelled,
+        entry(5, { ask: { through: 'e4' }, attempt: {} }),
+        said(6, 'e5'),
+      ], 'stopped'],
+      [`human cancellation text is input: ${body}`, [
+        ...history,
+        entry(4, { content: { body } }),
+      ], 'running'],
+    ]
+  }),
   ['a deliberate refusal is terminal without an ask', [
     request(1),
     entry(2, { refusal: { code: 'no_model' }, content: { body: 'no model' } }),
@@ -470,11 +535,19 @@ for (let typed of [false, true]) {
         kernelDoc,
         effectDoc,
         archetypeDoc,
-      ], [kernelKeywords])
+      ], [kernelKeywords, blobKeywords])
       : vocab
-    let storage1 = storage(mem(), v, { derived: sessionDerived(v) })
+    let d = mem()
+    let storage1 = storage(d, v, {
+      derived: { ...sessionDerived(v), ...blobRead(v) },
+    })
     storage1.install()
-    let g = graph({ storage: storage1, vocab: v })
+    for (let stmt of blobSchema()) d.query(stmt)
+    let g = graph({
+      storage: storage1,
+      vocab: v,
+      plugins: [blobs(v, sqliteBlobs(d))],
+    })
     g.apply([{ entity: { eid: M }, model: { name: 'fake' } }, {
       entity: { eid: T },
       tool: { name: 'echo' },

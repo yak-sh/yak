@@ -72,6 +72,8 @@ import type { Vocab } from '@yaks/vocab'
 
 export * from './state.ts'
 import { RETRIES } from './state.ts'
+import { claudeStops } from './claude-control.ts'
+import { blobRead } from '@yaks/blob/vocab'
 
 // Old servers still write state during the marks expansion. A non-null state
 // wins until cutover; otherwise waiting precedes admitted in the declared ladder.
@@ -122,6 +124,7 @@ export let sessionStatus = {
     owner: Expr,
     dispatch = dispatchStatus,
     declared: (name: string) => boolean = () => true,
+    text: (stored: Expr) => Expr = (stored) => stored,
   ): Expr => {
     // A turn is read once. The row set below contains the newest
     // ask and its unacknowledged suffix, not a predicate per question over the transcript.
@@ -146,6 +149,47 @@ export let sessionStatus = {
       col('entity', 'e'),
       col('seq', 'e'),
     ]
+    // Older consumed imports classified a cancellation as a passive notice.
+    // Interpret that format here without rewriting the owner's transcripts.
+    let cancelled = (
+      alias: string,
+      notice = exists(select({
+        cols: [lit(1)],
+        from: table('notice', 'cancel'),
+        where: eq(col('entity', 'cancel'), col('entity', alias)),
+      })),
+    ): Expr =>
+      ['notice', 'content', 'imported'].every(declared)
+        ? iff(
+          notice,
+          exists(select({
+            cols: [lit(1)],
+            from: table('content', 'text'),
+            joins: [
+              join(
+                table('imported', 'origin'),
+                eq(col('entity', 'origin'), col('entity', 'text')),
+              ),
+            ],
+            where: and(
+              eq(col('entity', 'text'), col('entity', alias)),
+              or(
+                ...claudeStops.map((body) =>
+                  eq(text(col('body', 'text')), lit(body))
+                ),
+              ),
+            ),
+          })),
+          lit(false),
+        )
+        : lit(false)
+    let cancellation = () => cancelled('e', typed ? wears('notice') : undefined)
+    let controlMark = (comp: string, present: Expr): Expr =>
+      comp == 'stop'
+        ? or(present, cancellation())
+        : comp == 'notice'
+        ? and(present, not(cancellation()))
+        : present
     let read = (comp: string, props: string[] = []) => {
       if (!declared(comp)) {
         fields.push(
@@ -155,7 +199,12 @@ export let sessionStatus = {
         return
       }
       if (typed) {
-        fields.push(as(iff(wears(comp), col('entity', 'e'), lit(null)), comp))
+        fields.push(
+          as(
+            iff(controlMark(comp, wears(comp)), col('entity', 'e'), lit(null)),
+            comp,
+          ),
+        )
         for (let prop of props) {
           fields.push(
             as(
@@ -179,7 +228,16 @@ export let sessionStatus = {
           left(table(comp, comp), eq(col('entity', comp), col('entity', 'e'))),
         )
         fields.push(
-          as(col('entity', comp), comp),
+          as(
+            comp == 'stop' || comp == 'notice'
+              ? iff(
+                controlMark(comp, notNull(col('entity', comp))),
+                col('entity', 'e'),
+                lit(null),
+              )
+              : col('entity', comp),
+            comp,
+          ),
           ...props.map((p) => as(col(p, comp), `${comp}_${p}`)),
         )
       }
@@ -241,7 +299,10 @@ export let sessionStatus = {
           select({
             cols: [lit(1)],
             from: table('notice', 'z'),
-            where: eq(col('entity', 'z'), col('entity', alias)),
+            where: and(
+              eq(col('entity', 'z'), col('entity', alias)),
+              not(cancelled(alias, lit(true))),
+            ),
           }),
         )
         : lit(false)
@@ -259,11 +320,14 @@ export let sessionStatus = {
     // Imported asks may have no input boundary. Seek the last input/stop in
     // this transcript so a late ask cannot hide the stop it followed.
     let marked = (comp: string) =>
-      !declared(comp) ? lit(false) : typed ? wears(comp) : exists(select({
-        cols: [lit(1)],
-        from: table(comp, 'm'),
-        where: eq(col('entity', 'm'), col('entity', 'e')),
-      }))
+      !declared(comp) ? lit(false) : controlMark(
+        comp,
+        typed ? wears(comp) : exists(select({
+          cols: [lit(1)],
+          from: table(comp, 'm'),
+          where: eq(col('entity', 'm'), col('entity', 'e')),
+        })),
+      )
     let control = select({
       cols: [col('seq', 'e')],
       from: table('entry', 'e'),
@@ -351,12 +415,23 @@ export let sessionStatus = {
         ],
       where: and(
         mine('e'),
-        typed
-          ? eq(
-            fn('instr', col('tables', 'ls'), lit(JSON.stringify('notice'))),
-            lit(0),
-          )
-          : not(noticed('e')),
+        or(
+          cancelled(
+            'e',
+            typed
+              ? gt(
+                fn('instr', col('tables', 'ls'), lit(JSON.stringify('notice'))),
+                lit(0),
+              )
+              : undefined,
+          ),
+          typed
+            ? eq(
+              fn('instr', col('tables', 'ls'), lit(JSON.stringify('notice'))),
+              lit(0),
+            )
+            : not(noticed('e')),
+        ),
       ),
       order: [desc(col('seq', 'e'))],
       limit: lit(1),
@@ -441,11 +516,14 @@ export let sessionStatus = {
               col('seq', 'boundary'),
               iff(
                 declared('stop')
-                  ? exists(select({
-                    cols: [lit(1)],
-                    from: table('stop', 'z'),
-                    where: eq(col('entity', 'z'), col('through', 'a')),
-                  }))
+                  ? or(
+                    cancelled('boundary'),
+                    exists(select({
+                      cols: [lit(1)],
+                      from: table('stop', 'z'),
+                      where: eq(col('entity', 'z'), col('through', 'a')),
+                    })),
+                  )
                   : lit(false),
                 lit(0),
                 lit(1),
@@ -755,6 +833,7 @@ export let sessionDerived = (vocab: Vocab): Derived => {
     expr: (owner: Expr) => dispatchStatus.expr(owner, marks),
   }
   let states = { ...attemptDerived(vocab), ...executionDerived(vocab) }
+  let text = blobRead(vocab)['content.body']?.text
   return {
     ...states,
     'session.status': {
@@ -764,6 +843,7 @@ export let sessionDerived = (vocab: Vocab): Derived => {
           owner,
           dispatch,
           (name) => !!vocab.comp(name),
+          text,
         ),
     },
     'dispatch.status': dispatch,

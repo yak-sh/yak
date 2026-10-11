@@ -1,6 +1,6 @@
 import { test } from '@yaks/testing'
 import { assertEquals } from '@std/assert'
-import { claude, codex, type Event } from './readers.ts'
+import { claude, codex, type Event, subagent } from './readers.ts'
 
 let say = (content: unknown, more: Event = {}) => ({
   type: 'user',
@@ -12,6 +12,24 @@ let reply = (...content: Event[]) => ({
   message: { content },
 })
 let entries = (read: typeof claude, e: Event) => read(e).entries
+
+test('Claude cancellation stops a transcript while literal human text stays input', () => {
+  for (
+    let body of [
+      '[Request interrupted by user]',
+      '[Request interrupted by user for tool use]',
+    ]
+  ) {
+    assertEquals(entries(claude, say(body)), [{ content: { body }, stop: {} }])
+    assertEquals(entries(subagent, say(body, { isSidechain: true })), [{
+      content: { body },
+      stop: {},
+    }])
+    assertEquals(entries(claude, say(body, { origin: { kind: 'human' } })), [{
+      content: { body },
+    }])
+  }
+})
 
 test('claude: who said it — a person, the harness, or the model', () => {
   let human = { origin: { kind: 'human' } }

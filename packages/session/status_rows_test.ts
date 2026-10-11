@@ -169,7 +169,9 @@ test(
           status: sample.legacy ? 'running' : 'settled',
         }])
         assert(
-          sample.read <= (sample.legacy ? 100 : 25),
+          // The ask's boundary also checks for an imported cancellation.
+          // That indexed lookup is constant as the transcript grows.
+          sample.read <= (sample.legacy ? 100 : 26),
           `${sample.length} entries read ${sample.read} rows`,
         )
       }
