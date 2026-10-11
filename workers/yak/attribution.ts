@@ -5,7 +5,6 @@ import { link } from '@yaks/edge'
 import { type Bundle, type Comp, type Graph, Stale, token } from '@yaks/graph'
 import { KERNEL, meta } from './meta.ts'
 import type { Env } from './env.ts'
-import type { Plugin } from './plugin.ts'
 import { browserOf } from './session.ts'
 
 /** Register a committed guest write. A durable app effect owes this receipt,
@@ -72,10 +71,6 @@ export let attributed = async (
     await graph.apply(bundles, { trusted: true, stamp: false })
   }
   return { filled: bundles.length, more: bundles.length == size }
-}
-
-export let attributionPlugin: Plugin = {
-  name: 'attribution',
 }
 
 export { attributionDoc, registrationDoc } from './facets/attribution-vocab.ts'

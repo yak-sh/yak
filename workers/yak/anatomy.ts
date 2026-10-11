@@ -1,20 +1,19 @@
-// One Worker's already-built store, never the native host's plugin roster.
-// The caller supplies the arrays it actually composed. No factory, registry
-// callback, tool, graph query or binding is evaluated to answer a snapshot.
+// The store's assembly supplies its composition. This adapter adds only the
+// Worker's host hooks, command runner and effect registrations, without calling
+// a factory, tool, graph query or binding to answer an anatomy read.
 import {
   type Anatomy,
   anatomy,
   anatomyData,
-  anatomyDocuments,
   type AnatomyEffect,
-  anatomyPlugin,
   type AnatomySeed,
   type AnatomySource,
-  type AnatomyTool,
 } from '@yaks/code/anatomy'
 import type { Effects, Slot } from '@yaks/effects'
-import type { NamedTool, Plugin as GraphPlugin, Rule } from '@yaks/graph'
-import type { Vocab } from '@yaks/vocab'
+import type { NamedTool, Plugin as GraphPlugin } from '@yaks/graph'
+import { compositionAnatomy } from '@yaks/host/anatomy'
+import { type Config, facetsOf, used } from '@yaks/host/config'
+import { ROLES } from '@yaks/host/roles'
 import type { Tools } from '@yaks/tools/declared'
 
 let value = (input: unknown, key: string): unknown => {
@@ -28,7 +27,6 @@ let entries = (input: unknown): [string, unknown][] => {
     .filter(([, d]) => d.enumerable && 'value' in d)
     .map(([key, d]) => [key, d.value])
 }
-// What an object holds as values, copied without calling an accessor.
 let held = <T extends object>(input: T): T =>
   Object.defineProperties(
     {},
@@ -50,279 +48,185 @@ let hints = (input: unknown) =>
       }),
   ))
 
-/**
- * Capture exists per incarnation. Shared vocabulary caches hold no loading
- * state. What the store composed is noted as it builds and projected when the
- * anatomy is read: a store builds on every wake, and a snapshot is read only
- * when someone asks for one.
- */
-export let workerAnatomy = (vocab: Vocab) => {
+/** Per-incarnation evidence; shared vocabulary caches hold no loading state. */
+export let workerAnatomy = (config: Config) => {
+  let capture = compositionAnatomy(
+    (config.plugins ?? []).map((p) => ({
+      name: used(p),
+      facets: facetsOf(p),
+    })),
+    ['graph', 'effects'],
+    ROLES,
+    [],
+    { host: 'worker/store', scope: 'worker' },
+  )
+  let contributed = new Set<GraphPlugin>()
+  let handlers = new Map<string, string>()
+  let composition = {
+    ...capture,
+    read: (): Anatomy => read(),
+    graph: (owner: string, plugins: GraphPlugin[]) => {
+      for (let plugin of plugins) contributed.add(plugin)
+      capture.graph(owner, plugins)
+    },
+    effects: (owners: Map<string, string>, serving: boolean) => {
+      handlers = new Map(owners)
+      capture.effects(owners, serving)
+    },
+  }
   let source: AnatomySource = {
     host: 'worker/store',
     scope: 'worker',
-    packages: [],
-    roles: [],
-    facets: [],
-    comps: [],
     tools: [],
     commands: [],
     effects: [],
-    rules: [],
-    hooks: [],
-    // Anonymous Worker doors are not a method/path registry. Nor are the
-    // analytics views plugin, a prompt file, or Env evidence of these groups.
-    observed: {
-      packages: false,
-      roles: false,
-      facets: false,
-      comps: false,
-      tools: false,
-      commands: false,
-      effects: false,
-      rules: false,
-      hooks: false,
-      routes: false,
-      views: false,
-      inspectViews: false,
-      tui: false,
-      kits: false,
-      themes: false,
-      skills: false,
-      secrets: false,
-    },
   }
-  let loaded = new Set<string>()
-  // What was composed, in the order it was, waiting for a read.
-  let owed: (() => void)[] = []
-  let owner = (name: string) => {
-    let row = source.packages!.find((p) => p.name == name)
-    if (!row) {
-      row = {
-        name,
-        configured: false,
-        declared: true,
-        loaded: true,
-        bound: true,
-      }
-      source.packages!.push(row)
+  let graph = (plugins: GraphPlugin[]) => {
+    for (let p of plugins) {
+      if (contributed.has(p)) continue
+      capture.graph(text(p, 'name') ?? 'worker/store', [p])
     }
-    return row
+    capture.graphed()
   }
-  let facet = (name: string, part: string, bound = true) => {
-    owner(name)
-    let row = source.facets!.find((f) => f.package == name && f.name == part)
-    if (!row) {
-      row = {
-        name: part,
-        package: name,
-        selected: true,
-        attempted: true,
-        declared: true,
-        loaded: true,
-        bound,
-      }
-      source.facets!.push(row)
-    } else row.bound ||= bound
-  }
-  let documents = () => {
-    if (loaded.has('vocab')) return
-    let projected = anatomyDocuments(vocab.docs)
-    source.comps = projected.comps.map((c) => ({ ...c, bound: true }))
-    source.tools = projected.tools
-    source.effects = projected.effects
-    source.rules = [
-      ...projected.rules.map((r) => ({ ...r, bound: true })),
-      ...source.rules!,
-    ]
-    for (let c of source.comps) {
-      if (c.extends) continue
-      c.rules = anatomyData(vocab.comp(c.name))
-      c.indexes = vocab.indexes(c.name)
-      c.identity = vocab.identity(c.name)
-      c.assocs = vocab.assocs().filter(([, a]) => a.comp == c.name)
-        .map(([name, a]) => ({ name, prop: a.prop }))
-      for (let p of c.props) p.rules = anatomyData(vocab.prop(c.name, p.name))
-    }
-    for (
-      let rows of [source.comps, source.tools, source.effects, projected.rules]
-    ) {
-      for (let row of rows) {
-        row.package ??= 'worker/store'
-        facet(row.package, 'vocab')
-      }
-    }
-    source.observed!.packages =
-      source.observed!.facets =
-      source.observed!
-        .comps =
-        true
-    loaded.add('vocab')
-  }
-  let graph = (
-    plugins: GraphPlugin[],
-    domains: { name: string; rules?: Rule[] }[],
-  ) => void owed.push(() => graphed(plugins, domains))
-  let graphed = (
-    plugins: GraphPlugin[],
-    domains: { name: string; rules?: Rule[] }[],
-  ) => {
-    documents()
-    source.observed!.roles =
-      source.observed!.rules =
-      source.observed!.hooks =
-        true
-    source.roles!.push({
-      name: 'graph',
-      facets: ['vocab', 'graph'],
-      declared: true,
-      loaded: true,
-      bound: true,
-    })
-    plugins.forEach((p, i) => {
-      let name = text(p, 'name') ?? 'worker/store'
-      let projected = anatomyPlugin(name, p, String(i))
-      source.rules!.push(...projected.rules)
-      source.hooks!.push(...projected.hooks)
-      facet(name, 'graph')
-    })
-    // rulesOf(domains) was passed to the actual yak/rules plugin. Record its
-    // original owning declarations, not the resource values or generated patches.
-    for (let p of domains) {
-      let rules = value(p, 'rules')
-      if (!Array.isArray(rules) || !rules.length) continue
-      let name = text(p, 'name')
-      if (!name) continue
-      let projected = anatomyPlugin(name, { name, rules }, 'domain')
-      source.rules!.push(...projected.rules)
-      facet(name, 'graph')
-    }
-  }
-  let commands = (declared: Tools, tools: NamedTool[]) =>
-    void owed.push(() => commanded(declared, tools))
-  let commanded = (declared: Tools, tools: NamedTool[]) => {
-    documents()
-    source.observed!.tools = source.observed!.commands = true
-    source.commands = entries(declared).map(([name, d]) => ({
-      name,
-      package: 'worker/store',
-      facet: 'commands',
-      declared: true,
-      loaded: true,
-      bound: tools.some((t) => t.name == name),
-      description: text(d, 'description'),
-      schema: {
-        type: 'object',
-        properties: anatomyData(value(d, 'input')),
-        required: anatomyData({ required: value(d, 'required') }).required ??
-          [],
-      },
-    }))
-    source.tools = source.tools!.filter((t) => t.facet != 'commands')
-    for (let t of source.tools) t.loaded = t.bound = false
-    for (let t of tools) {
-      let name = text(t, 'name')
-      if (!name) continue
-      let existing = source.tools!.find((r) => r.name == name)
-      if (existing) {
-        existing.loaded = existing.bound = true
-        existing.inputSchema = anatomyData(value(t, 'inputSchema'))
-        existing.hints = hints(t)
-      } else {
-        let row: AnatomySeed<AnatomyTool> = {
-          name,
-          package: 'worker/store',
-          facet: 'commands',
-          loaded: true,
-          bound: true,
-          inputSchema: anatomyData(value(t, 'inputSchema')),
-          description: text(t, 'description'),
-          hints: hints(t),
-        }
-        source.tools!.push(row)
-      }
-    }
-    facet('worker/store', 'commands')
+  let declared: Tools | undefined
+  let tools: NamedTool[] = []
+  let commandNames = new Set<string>()
+  let commands = (definitions: Tools, bound: NamedTool[]) => {
+    declared = definitions
+    tools = bound
+    capture.binding('worker/store', 'commands')
+    for (let [name] of entries(definitions)) commandNames.add(name)
   }
   let slotOwners = new Map<string, string>()
-  let registration = (name: string, registry: Effects) => {
-    // This is invoked before the real callback; the returned observer after it.
-    // Keep only function identity locally during registration, never in the DTO.
+  let registration = (owner: string, registry: Effects) => {
     let before = new Map(registry.slots().map((s) => [s.id, s.run]))
     return () => {
       for (let s of registry.slots()) {
         if (!before.has(s.id) || before.get(s.id) != s.run) {
-          slotOwners.set(s.id, name)
+          slotOwners.set(s.id, owner)
         }
       }
-      owed.push(() => facet(name, 'effects'))
     }
   }
-  // The slots as they stand now, read later: a slot is the registry's own,
-  // and only what it holds at this moment is evidence of this composition.
-  let effects = (slots: Slot[], host = 'worker/store') => {
-    let now = slots.map(held)
-    let owners = new Map(slotOwners)
-    owed.push(() => effected(now, owners, host))
-  }
-  let effected = (
-    slots: Slot[],
-    slotOwners: Map<string, string>,
-    host: string,
-  ) => {
-    documents()
-    source.observed!.effects = true
-    source.roles!.push({
-      name: 'effects',
-      facets: ['effects'],
-      declared: true,
-      loaded: true,
-      bound: true,
-    })
-    source.effects = source.effects!.filter((e) => !e.registration)
-    let declared = new Map(source.effects!.map((e) => [e.name, e]))
-    for (let [i, s] of slots.entries()) {
-      let name = text(s, 'id')
-      if (!name) continue
-      let handler = slotOwners.get(name) ?? host
-      let run = typeof value(s, 'run') == 'function'
-      let effect = declared.get(name)
-      if (effect && value(s, 'effect')) {
-        effect.loaded = run
-        effect.bound = run
-        if (run) {
-          effect.handler = handler
-          facet(handler, 'effects')
-        } else effect.handler = undefined
-        continue
-      }
-      let row: AnatomySeed<AnatomyEffect> = {
-        name,
-        package: handler,
-        facet: 'effects',
-        key: String(i),
-        registration: true,
-        declared: false,
-        loaded: run,
-        bound: run,
-        noop: false,
-        description: text(s, 'doc'),
-        handler: run ? handler : undefined,
-        triggers: anatomyData({
-          kind: value(s, 'kind'),
-          comp: value(s, 'comp'),
-          props: value(s, 'props'),
-          watch: value(s, 'watch'),
-          gone: value(s, 'gone'),
-        }),
-      }
-      source.effects!.push(row)
-      facet(handler, 'effects')
+  let slots: Slot[] | undefined
+  let effects = (registered: Slot[]) => {
+    slots = registered.map(held)
+    let owners = new Map(handlers)
+    for (let s of slots) {
+      let owner = slotOwners.get(s.id) ?? handlers.get(s.id) ?? 'worker/store'
+      if (typeof value(s, 'run') != 'function') continue
+      capture.binding(owner, 'effects')
+      if (value(s, 'effect')) owners.set(s.id, owner)
     }
+    capture.effects(owners, true)
   }
   let read = (): Anatomy => {
-    for (let step of owed.splice(0)) step()
-    documents()
-    return anatomy(source)
+    let base = capture.read()
+    source.tools = []
+    // Routes and secrets belong to the Worker's router and Env boundary;
+    // neither was composed by this store's graph/effects roles.
+    base.observed!.routes = base.observed!.secrets = false
+    if (declared) {
+      base.observed!.commands = true
+      // Store tools retain the assembly's loading evidence. A runner's lazy
+      // wrapper is not evidence of an imported package run.
+      for (let name of commandNames) {
+        let bound = value(declared, name) &&
+          tools.find((t) => text(t, 'name') == name)
+        let existing = base.tools.find((t) => t.name == name)
+        if (existing) existing.loaded = existing.bound = !!bound
+        if (!bound) continue
+        let metadata = {
+          inputSchema: anatomyData(value(bound, 'inputSchema')),
+          description: text(bound, 'description'),
+          hints: hints(bound),
+        }
+        if (existing) Object.assign(existing, metadata)
+        else {source.tools.push({
+            name,
+            package: 'worker/store',
+            facet: 'commands',
+            loaded: true,
+            bound: true,
+            ...metadata,
+          })}
+      }
+      source.commands = entries(declared).map(([name, d]) => ({
+        name,
+        package: 'worker/store',
+        facet: 'commands',
+        declared: true,
+        loaded: true,
+        bound: tools.some((t) => text(t, 'name') == name),
+        description: text(d, 'description'),
+        schema: {
+          type: 'object',
+          properties: anatomyData(value(d, 'input')),
+          required: anatomyData({ required: value(d, 'required') }).required ??
+            [],
+        },
+      }))
+    }
+    source.effects = []
+    for (let [i, s] of (slots ?? []).entries()) {
+      let name = text(s, 'id')
+      if (!name) continue
+      let run = typeof value(s, 'run') == 'function'
+      let owner = slotOwners.get(name) ?? handlers.get(name) ?? 'worker/store'
+      if (!value(s, 'effect')) {
+        let row: AnatomySeed<AnatomyEffect> = {
+          name,
+          package: owner,
+          facet: 'effects',
+          key: String(i),
+          registration: true,
+          declared: false,
+          loaded: run,
+          bound: run,
+          noop: false,
+          description: text(s, 'doc'),
+          handler: run ? owner : undefined,
+          triggers: anatomyData({
+            kind: value(s, 'kind'),
+            comp: value(s, 'comp'),
+            props: value(s, 'props'),
+            watch: value(s, 'watch'),
+            gone: value(s, 'gone'),
+          }),
+        }
+        source.effects.push(row)
+      }
+    }
+    // Project only the host's additions. The assembly retains all graph
+    // registration ids and supplies the packages and facets these additions join.
+    let owners = new Set([
+      ...source.commands!,
+      ...source.tools!,
+      ...source.effects,
+    ].map((p) => p.package))
+    let extra = anatomy({
+      ...source,
+      packages: base.packages.filter((p) => owners.has(p.name)),
+      facets: base.facets.filter((p) => owners.has(p.package)),
+    })
+    for (
+      let group of [
+        'commands',
+        'tools',
+        'effects',
+      ] as const
+    ) {
+      Object.assign(base, {
+        [group]: [...new Map(
+          [...base[group], ...extra[group]].map((p) => [p.id, p]),
+        ).values()],
+      })
+    }
+    base.edges = [...new Map(
+      [...base.edges, ...extra.edges]
+        .map((e) => [e.id, e]),
+    ).values()]
+    return base
   }
-  return { graph, commands, registration, effects, read }
+  return { composition, graph, commands, registration, effects, read }
 }

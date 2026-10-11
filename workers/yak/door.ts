@@ -64,11 +64,8 @@ export type Dispatch = {
 /** The store the directory lives in, named the way every app's store is. Its
  * slugs are the platform's own and never move, so the name is a constant.
  *
- * A store's name is addressing and not vocabulary, which is why it is here and
- * not beside the platform's words: meta.ts and directory.ts want the name and
- * nothing else from vocab.ts, and that one import was what made the words a
- * dependency of the directory — so vocab.ts could not itself read a list of
- * plugins that reaches the directory (plugin.ts). */
+ * A store's name is addressing rather than vocabulary: consumers can name
+ * the directory without importing its words or its store composition. */
 export let PLATFORM_STORE = 'yak/platform'
 
 /** The store the git object graph lives in (git.ts, D-34943). One object for

@@ -579,6 +579,11 @@ monitoring.
 
 ## Store composition
 
+The Worker's application names its HTTP doors in `kernel.ts` and `apps.ts`, its
+guide pages in `guide.ts`, and its connector rows in `tools.ts`. App pages call
+`views.ts` to record visits. Store anatomy observes the assembly and the
+Worker's host hooks, commands and effect registrations in `anatomy.ts`.
+
 `config.ts` selects the directory, app and git stores' plugins, facets and
 words. `gen.ts` writes `load.ts` from those configs and package exports, using
 literal imports for bundled graph, effects and tool facets. The connector lists

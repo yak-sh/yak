@@ -14,8 +14,7 @@
 //
 // APEX ONLY. A space's hostname is the customer's face and its `robots.txt` is
 // its own (route.ts): what a person publishes there is theirs to say. The door
-// that calls `answer` is a plugin's root door (seo_door.ts, plugin.ts
-// `routes`) and it answers nothing where the hostname names a space.
+// in kernel.ts calls `answer` only at the apex.
 import { DOCS, DRAWN, MARKDOWN, TECH } from './docs.ts'
 import type { Env } from './env.ts'
 import { PAGES, uriOf, whole } from './guide.ts'

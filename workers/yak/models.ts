@@ -37,7 +37,8 @@ import { filled, schemaOf } from '@yaks/tools/declared'
 import { accounted, countedMedia, metered } from './meter.ts'
 import { outbound } from './outbound.ts'
 import { caught } from './defects.ts'
-import { type Answer, page, type Plugin, type Stored } from './plugin.ts'
+import type { Answer } from './apps.ts'
+import type { Stored } from './graph.ts'
 
 export let guess = (sent: unknown) =>
   Math.ceil(JSON.stringify(sent ?? '').length / 4)
@@ -369,7 +370,7 @@ let posted = (
  * turn: its members, or, where its manifest says `"models": "open"`, anyone
  * who may write it, at a visitor's size and pace. Metered like every call.
  */
-let run: Answer = async (
+export let modelRun: Answer = async (
   { env, req, path, space, app, who, refuse, json, visiting },
 ) => {
   if (path != '/ai/run') return null
@@ -429,12 +430,4 @@ let run: Answer = async (
       }`,
     )
   }
-}
-
-/** Models, as a plugin of this Worker: the providers in every app's store,
- * that store's runner, and the door a page or a worker asks one through. */
-export let modelsPlugin: Plugin = {
-  name: 'models',
-  pages: [page('models')],
-  answers: [run, recovery],
 }

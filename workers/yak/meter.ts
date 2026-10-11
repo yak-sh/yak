@@ -15,7 +15,6 @@ import {
 } from './directory.ts'
 import type { Namespace } from './door.ts'
 import type { Env } from './env.ts'
-import type { Plugin } from './plugin.ts'
 import { mailedTo } from './post.ts'
 import { refuse } from './tool.ts'
 import {
@@ -40,10 +39,6 @@ import { guess } from './models.ts'
 import { modelInfo } from '@yaks/workers-ai'
 import { defect } from './defects.ts'
 import { derivedEid, Stale } from '@yaks/graph'
-
-export let meterPlugin: Plugin = {
-  name: 'yak/meter',
-}
 
 // What one store did, as the analytics answer them (usage.ts `read`). Bytes
 // come from the store itself, and the month and the letters from the row being

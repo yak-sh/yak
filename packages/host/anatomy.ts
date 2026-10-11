@@ -65,9 +65,11 @@ export type Composition = {
 /** Capture only already-made contributions; none of these methods runs code.
  * What a composition observes is kept as it arrives and applied when its
  * anatomy is read: projecting the vocabulary's declarations is tens of
- * milliseconds of every command, and almost no command reads its anatomy. */
+ * milliseconds of every command, and almost no command reads its anatomy.
+ * Package descriptors carry names and allowed facets, never resolved options.
+ * Repeated entries select the union of their facets. */
 export let compositionAnatomy = (
-  packages: string[],
+  packages: { name: string; facets?: readonly string[] }[],
   roles: readonly string[],
   common: Record<string, readonly string[]>,
   secrets: { name: string; package: string }[] = [],
@@ -76,6 +78,8 @@ export let compositionAnatomy = (
     scope: 'native',
   },
 ): Composition => {
+  let byPackage = Map.groupBy(packages, (p) => p.name)
+  let names = [...byPackage.keys()]
   let source: AnatomySource = {
     ...where,
     observed: {
@@ -97,12 +101,14 @@ export let compositionAnatomy = (
       themes: false,
       skills: false,
     },
-    packages: packages.map((name) => ({
+    packages: names.map((name) => ({
       name,
       configured: true,
       declared: true,
     })),
-    roles: [...Object.keys(common), ...packages].map((name) => ({
+    roles: [...Object.keys(common), ...names].map((
+      name,
+    ) => ({
       name,
       ...common[name] ? {} : { package: name },
       facets: [...(common[name] ?? ['service'])],
@@ -117,20 +123,24 @@ export let compositionAnatomy = (
     let key = `${owner}/${name}`
     let had = facets.get(key)
     if (had) return had
-    let selected =
+    let configured = packages.filter((p) => p.name == owner)
+    let allowed = !configured.length ||
+      configured.some((p) => p.facets === undefined || p.facets.includes(name))
+    let selected = allowed && (
       Object.entries(common).some(([r, fs]) =>
         roles.includes(r) && fs.includes(name)
       ) ||
       (name == 'service' && roles.includes(owner))
+    )
     let made: Facet = { name, package: owner, selected, attempted: false }
     facets.set(key, made)
     return made
   }
-  for (let owner of packages) {
+  for (let owner of names) {
     for (
       let name of [
         'vocab',
-        'rules',
+        'graph',
         'tools',
         'effects',
         'routes',

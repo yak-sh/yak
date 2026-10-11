@@ -9,7 +9,7 @@ import { test } from '@yaks/testing'
 import { workshop } from '../../packages/builders/testing.ts'
 import { modelTool } from '@yaks/builders/model'
 import { effects as appEffects } from './facets/app-effects.ts'
-import type { Stored } from './plugin.ts'
+import type { Stored } from './graph.ts'
 import { platformVocab } from './vocab.ts'
 
 let install = async (g: Graph, meta: boolean, app: string | null) => {

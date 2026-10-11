@@ -53,10 +53,9 @@
 //     /robots.txt, /sitemap.xml, /llms.txt, /llms-full.txt,
 //     /.well-known/security.txt
 //                             seo.ts: the site said as a list, generated —
-//                             reached through PLUGINS (plugin.ts `routes`),
-//                             which is where every root door of a domain sits
+//                             answered directly by this router
 //     anything else           ./public, else a soft 404
-//   <space>.yaks.app          apps.ts, the plugin root doors ahead of it, and
+//   <space>.yaks.app          apps.ts, Git and connection hooks ahead of it, and
 //                             one door of its own:
 //     /_yaks/hooks/*          connections.ts: a service's webhooks
 //     /_yaks, /_yaks/*        apps.ts: the dashboard's old addresses, moved
@@ -96,8 +95,8 @@ import { HANDOFF } from './handoff.ts'
 import { apex, hosted } from './host.ts'
 import { sprite } from './icons.ts'
 import { lost, oops, provisioning } from './pages.ts'
-import { routed } from './plugin.ts'
-import { PLUGINS } from './plugins.ts'
+import { callback, hook } from './connections.ts'
+import { answer as seo } from './seo.ts'
 import {
   aimedAt,
   foreign,
@@ -148,12 +147,11 @@ let serve = async (req: Request, env: Env, r: Route) => {
     if (req.method == 'POST' && asked == '/deploy') {
       return drop.fetch(req, env)
     }
-    // What a plugin answers on this hostname (plugin.ts `routes`, T-34947).
-    // Ahead of apps.ts and so ahead of the home app, which answers every
-    // address no app claims (T-33040) — the one place a door for a whole
-    // hostname can sit. After the kernel's own line above, so a plugin never
-    // takes a path this file already answers.
-    let mine = await routed(PLUGINS, { env, req, path: asked, space: r.space })
+    // Git and connection hooks belong to the space's hostname, ahead of
+    // its apps and the home app's catch-all worker.
+    let arrived = { env, req, path: asked, space: r.space }
+    let mine = await (await import('./git_door.ts')).answer(arrived) ??
+      await hook(arrived)
     if (mine) return mine
     return bound(env.APPS, apps.fetch, env).fetch(req)
   }
@@ -222,14 +220,9 @@ let serve = async (req: Request, env: Env, r: Route) => {
       { headers: { 'content-type': 'text/plain; charset=utf-8' } },
     )
   }
-  // What a plugin answers at the apex (plugin.ts `routes`), the same list the
-  // space branch above asks. What the apex says about itself to a crawler or a
-  // model is the one door there is today (seo.ts `seoPlugin`): the robots
-  // file, the sitemap, and the two llms.txt addresses, generated rather than
-  // static because each is a list — of the pages, of the guide — and a list
-  // kept by hand goes stale the first time a page is added. Here, below the
-  // kernel's own doors, so a plugin cannot take one of them.
-  let said = await routed(PLUGINS, { env, req, path, space: null })
+  // Crawlers and connection callbacks are the apex's own doors.
+  let said = await seo(req, path, env) ??
+    await callback({ env, req, path, space: null })
   if (said) return said
   // The apex's public pages are cached behind a separate entrypoint; only
   // these two paths reach it, without credentials or unbounded query strings.

@@ -29,7 +29,7 @@ import { callsOut } from '@yaks/member'
 import { sentinels } from '@yaks/secrets'
 import { ctxOf } from './connections.ts'
 import type { Env } from './env.ts'
-import type { Answer, Plugin } from './plugin.ts'
+import type { Answer } from './apps.ts'
 import { caught } from './defects.ts'
 
 // The outside service's own failure, carried past the catch below unchanged.
@@ -86,7 +86,7 @@ let OURS =
 // name its code reads it by, where this visitor may call out through it: a
 // shared one as its link allows, and their own where the app asks each person.
 // A direct link's key is for a worker's code and never a page's.
-let envDoor: Answer = async ({ env, path, app, who }) => {
+export let envDoor: Answer = async ({ env, path, app, who }) => {
   if (path != '/env') return null
   let out: Record<string, string> = {}
   for (let r of await used(ctxOf(env), app.eid, who.person)) {
@@ -101,7 +101,7 @@ let envDoor: Answer = async ({ env, path, app, who }) => {
 
 // `./api/fetch?url=…`: the page's call, sent on to that address as it was
 // made, minus what it says about us.
-let fetchDoor: Answer = async ({ env, req, path, app, who, json }) => {
+export let fetchDoor: Answer = async ({ env, req, path, app, who, json }) => {
   if (path != '/fetch') return null
   let to = new URL(req.url).searchParams.get('url') ?? ''
   if (!URL.canParse(to)) {
@@ -130,10 +130,4 @@ let fetchDoor: Answer = async ({ env, req, path, app, who, json }) => {
   let back = new Headers(res.headers)
   back.delete('set-cookie')
   return new Response(res.body, { status: res.status, headers: back })
-}
-
-/** The two doors a page calls out through (plugin.ts `answers`). */
-export let outboundPlugin: Plugin = {
-  name: 'outbound',
-  answers: [envDoor, fetchDoor],
 }

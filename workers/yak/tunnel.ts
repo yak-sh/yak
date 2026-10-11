@@ -25,7 +25,7 @@
 // for the space, so only this Worker calls it. An app's own worker reaches it
 // as `env.BOX` or whatever its config's `vpc_services` names (dispatch.ts
 // `shim`), which is `/api/tunneled/…` at the app's address acting as the app
-// (`reach` below, through tunnel_door.ts): an app built in the space, never an
+// (`reach` below, through apps.ts): an app built in the space, never an
 // installed copy and never a visitor. The gateway marks every request it
 // passes on as the tunnel's, so an app never holds the binding, and the
 // machine's server answers a marked request only at the paths its owner
@@ -41,10 +41,12 @@ import * as dirPart from './directory.ts'
 import { directory, type Space, stamp, type Tunnel } from './directory.ts'
 import { itsApp, namespace, nowhere, script } from './dispatch.ts'
 import { bound, type Env } from './env.ts'
-import type { Answer } from './plugin.ts'
+import type { Answer } from './apps.ts'
 import { caught } from './defects.ts'
 import { adminWho } from './identity.ts'
-import { TUNNELED } from './tunnel_door.ts'
+
+/** Where an app's worker asks for its space's machine. */
+export let TUNNELED = '/tunneled/'
 
 let dirOf = (env: Env) =>
   directory(bound(env.DIRECTORY, dirPart.fetch, env), true)
@@ -208,6 +210,7 @@ let OURS = /^x-yak-/
 export let reach: Answer = async (
   { env, req, path, space, app, who, json },
 ) => {
+  if (!path.startsWith(TUNNELED)) return null
   if (!itsApp(who, app)) {
     return json(
       403,

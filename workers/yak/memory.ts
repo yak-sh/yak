@@ -23,7 +23,6 @@ import {
   LAST,
   line,
   type Memory,
-  memoryDoc,
   ordered,
   passage,
   type Ranker,
@@ -32,7 +31,6 @@ import type { Bundle } from '@yaks/graph'
 import type { Space } from './directory.ts'
 import type { Env } from './env.ts'
 import { meta } from './meta.ts'
-import { page, type Plugin } from './plugin.ts'
 import { caught } from './defects.ts'
 
 /**
@@ -104,12 +102,4 @@ export let told = async (env: Env, space: Space): Promise<string> => {
   // without counting them.
   let held = await memories(env, space, { limit: LAST + 1 })
   return passage({ name: held[0]?.by ?? '', space: space.slug }, held)
-}
-
-/** The memory guide page and its directory words. Store tools are composed
- * from @yaks/memory; published.ts translates the connector's old arguments. */
-export let memoryPlugin: Plugin = {
-  name: 'memory',
-  vocab: [memoryDoc],
-  pages: [page('memory')],
 }

@@ -281,12 +281,12 @@ import {
   worded,
 } from './tool.ts'
 import { read } from '@yaks/yaml'
-import { toolsOf as pluginTools } from './plugin.ts'
-import { PLUGINS } from './plugins.ts'
+import { viewsTools } from './views.ts'
+import { connectionTools } from './connections.ts'
 import { caught } from './defects.ts'
 
 // What a tool IS, and the little kit for saying one, live in tool.ts — below
-// this module, so a plugin (plugin.ts) can say a row without importing the
+// this module, so a domain can say a row without importing the
 // roster it joins. Said again here because this is still the door every other
 // part of the Worker knows to ask.
 export { type Args, type Ctx, inApp, type Out, type Shape, type Tool }
@@ -5366,16 +5366,9 @@ let OURS: Row[] = [
   },
 ]
 
-/**
- * The roster: the platform's own rows, then every plugin's in PLUGINS order
- * (plugin.ts `tools`).
- *
- * Composed once, at load. The list a caller is offered is fixed and the same
- * for everybody (T-34541) — a plugin adds a row to the table and never decides
- * one per person, which is the whole reason a plugin's tools are data here and
- * not a function of who is asking.
- */
+/** The fixed public roster, named once per release (T-34541). */
 export let TOOLS: Tool[] = [
   ...OURS.map(worded),
-  ...pluginTools(PLUGINS),
+  ...viewsTools,
+  ...connectionTools,
 ]

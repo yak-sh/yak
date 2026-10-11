@@ -3,6 +3,7 @@
 import { argsOf, type Bundle, type NamedTool } from '@yaks/graph'
 import { loadTools } from '@yaks/graph/tools'
 import type { Host } from '@yaks/host'
+import type { Composition } from '@yaks/host/anatomy'
 import { chosen, facetsOf, given, used } from '@yaks/host/config'
 import { selected } from '@yaks/host/documents'
 import { toolsIn } from '@yaks/vocab/tools'
@@ -38,12 +39,26 @@ export let storedTools = (
   host: Host,
   kind: Kind,
   space?: string,
+  observed?: Pick<Composition, 'attempted' | 'loaded' | 'runs'>,
 ): NamedTool[] =>
   contributions(kind).flatMap(({ plugin, docs, options }) =>
     loadTools(docs, async () => {
+      observed?.attempted(plugin, 'tools')
       let facet = await load(plugin, 'tools')
-      return facet?.runs?.(host, { ...options, ...(space ? { space } : {}) }) ??
-        {}
+      observed?.loaded(plugin, 'tools', facet !== null)
+      let runs =
+        facet?.runs?.(host, { ...options, ...(space ? { space } : {}) }) ?? {}
+      let definitions = toolsIn(docs)
+      let joined = definitions.filter((d) =>
+        typeof (runs[d.name!] ??
+          runs[[d.noun, d.verb].filter(Boolean).join('_')]) == 'function'
+      ).map((d) => d.name!)
+      observed?.runs(
+        plugin,
+        joined,
+        joined.length == definitions.length ? joined : [],
+      )
+      return runs
     })
   )
 

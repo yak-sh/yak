@@ -18,19 +18,22 @@ import type { D1Like } from '@yaks/d1'
 import { d1 } from '../../packages/d1/testing.ts'
 import {
   CALLBACK,
+  callback,
   connecting,
   connectionsOf,
-  connectionsPlugin,
+  connectionTools,
   ctxOf,
+  hook as receiveHook,
+  own,
 } from './connections.ts'
 import { directory, over, storeName } from './directory.ts'
 import { PLATFORM_STORE } from './door.ts'
 import { db, named, platform } from './testing.ts'
 import { scan } from '@yaks/sql'
 import { KERNEL, meta } from './meta.ts'
-import { outbound, outboundPlugin } from './outbound.ts'
+import { envDoor, fetchDoor, outbound } from './outbound.ts'
 import { PUBLISHED } from './published.ts'
-import { answered, routed } from './plugin.ts'
+import type { Asked } from './apps.ts'
 import { opened } from './lib/token.ts'
 import { desk } from './pages.ts'
 import { minted, type Who } from './session.ts'
@@ -332,9 +335,7 @@ test('attaching a space connection is an owner tool, not an editor tool', async 
   })
   let app = await liveApp(s)
   let connection = (await s.shown()).list[0].eid
-  let tool = connectionsPlugin.tools!.find((t) =>
-    t.name == 'connection_attach'
-  )!
+  let tool = connectionTools.find((t) => t.name == 'connection_attach')!
   let editor = crypto.randomUUID()
   await s.at.apply([
     { entity: { eid: editor }, person: {} },
@@ -395,8 +396,8 @@ let asks = async (
     init?: RequestInit,
     path = `/connections/${integration}`,
     host = 'ada.yaks.app',
-  ) =>
-    (await answered([connectionsPlugin, outboundPlugin], {
+  ) => {
+    let at: Asked = {
       env: s.p.env,
       req: new Request(`https://${host}/notes/api${path}`, init),
       path: path.split('?')[0],
@@ -406,7 +407,9 @@ let asks = async (
       refuse: () => new Response(null, { status: 403 }),
       json: (status) => new Response(null, { status }),
       visiting: () => Promise.resolve(null),
-    }))!
+    }
+    return (await own(at) ?? await envDoor(at) ?? await fetchDoor(at))!
+  }
   let his = async () =>
     (await connectionsOf(s.p.env, [s.space], bob)).list.filter((c) => c.own)
   return { bob, door, his }
@@ -504,7 +507,7 @@ test(
     globalThis.fetch = () =>
       Promise.resolve(Response.json({ access_token: 'A', refresh_token: 'R' }))
     try {
-      let back = await routed([connectionsPlugin], {
+      let back = await callback({
         env: s.p.env,
         req: new Request(`https://yaks.app${CALLBACK}?code=C&state=${state}`, {
           headers: { cookie: `${attempt}; ${session}` },
@@ -589,8 +592,8 @@ test(
     })
     let call = (to = 'https://api.hub.test/v1') =>
       new Request(`${to}?key=${HUB}`, { headers: { 'x-api-key': HUB } })
-    let page = async (path: string, req: Request, role: 'viewer' | null) =>
-      (await answered([outboundPlugin], {
+    let page = async (path: string, req: Request, role: 'viewer' | null) => {
+      let at: Asked = {
         env: s.p.env,
         req,
         path,
@@ -600,7 +603,9 @@ test(
         refuse: () => new Response(null, { status: 403 }),
         json: (status) => new Response(null, { status }),
         visiting: () => Promise.resolve(null),
-      }))!
+      }
+      return (await envDoor(at) ?? await fetchDoor(at))!
+    }
     await wired((r) => new Response(r.url), async (sent) => {
       let out = (level: 'viewer' | null, to?: string) =>
         outbound(call(to), s.p.env, { app: app.eid, level, person: null })
@@ -694,7 +699,7 @@ test(
     ] as Bundle[], KERNEL)
     let path = `/_yaks/hooks/notes/${one.eid}`
     let hook = async (headers: Record<string, string>) =>
-      (await routed([connectionsPlugin], {
+      (await receiveHook({
         env: s.p.env,
         req: new Request(`https://ada.yaks.app${path}`, {
           method: 'POST',

@@ -208,7 +208,7 @@ import { effectsIn, type Vocab, type VocabDoc } from '@yaks/vocab'
 import { type Anatomy, anatomy } from '@yaks/code/anatomy'
 import { workerAnatomy } from './anatomy.ts'
 import { answerOf, type Runner, runner, toolEid } from '@yaks/tools'
-import { commands } from '@yaks/tools/declared'
+import { commands, type Tools } from '@yaks/tools/declared'
 import { readTools } from './tool-grammar.ts'
 import { soonest, tick, type Ticked } from '@yaks/wake'
 import { type Alarm, arm } from '@yaks/wake/cloudflare'
@@ -220,7 +220,6 @@ import {
   PLATFORM,
   type Row,
 } from './listing.ts'
-import type { Stored } from './plugin.ts'
 import { assemble, prepare, type Prepared } from '@yaks/host/assembly'
 import { type Host as PluginHost, type Load } from '@yaks/host'
 import { chosen, facetsOf, given, used } from '@yaks/host/config'
@@ -461,6 +460,35 @@ export type State = Hibernation & {
   // now rather than at the next wake (`#recovery`). Optional for the same
   // reason: the stand-in has no session to end.
   abort?(reason?: string): void
+}
+
+/** The Worker's store capabilities lent to its own facets. The address and
+ * commands arrive on later requests, so a facet reads them when it runs. */
+export type Stored = {
+  env: Bindings
+  /** the platform's own directory store, rather than an app's */
+  meta: boolean
+  /** the app this store holds, or null while it holds none */
+  app: string | null
+  /** the address a letter leaves this store under, asked at send time */
+  mail: () => string | null
+  /** the store's graph, whose writes are the kernel's own: the platform's
+   * bookkeeping, which no person's level is asked about */
+  graph: Graph
+  /** a write as somebody (null: nobody signed in), held to what they may
+   * write here as if they had sent it themselves; `via` is what it came
+   * through, which its rows' `created.via` names: the transcript whose turn
+   * a model's command ran in */
+  as: (
+    who: string | null,
+    bundles: Bundle[],
+    via?: string,
+  ) => Promise<Bundle[]>
+  /** the app's own commands, as its manifest declares them now
+   * (@yaks/tools/declared) */
+  commands: () => Tools
+  /** a failure noted in the app's break log and reported, never thrown */
+  broke: (what: string, error: unknown) => void
 }
 
 /** The Worker's bindings: outgoing mail for every store, and `#Env` for the
@@ -1037,8 +1065,8 @@ export class Store {
     // Where the directory keeps a connection's credential (vault.ts). A key
     // comes out of a write before anything else reads it, and is sealed once
     // the write commits, by the same plugin; an app's store keeps none.
-    let observed = workerAnatomy(vocab)
     let kind = storeKind(name), config = configs[kind]
+    let observed = workerAnatomy(config)
     let host!: PluginHost
     let env = () => meta ? { ...this.#bind, META: this.#meta } : this.#bind
     let kernelGraph: Graph | undefined
@@ -1058,6 +1086,7 @@ export class Store {
       this.#load,
       this.#facets.get(kind)!,
       {
+        observed: observed.composition,
         plugins: (config.plugins ?? []).map((entry) => {
           let plugin = used(entry), options = given(entry)
           if (plugin.startsWith('yak/')) options = { ...options, store: at }
@@ -1217,7 +1246,7 @@ export class Store {
     })
     host = this.#host = composed.host
     let g = host.graph
-    observed.graph(g.plugins, [])
+    observed.graph(g.plugins)
     // The object's own clock (D-37562). A `wake` row says when something is
     // owed; the runtime's one alarm is how this object comes back for it. A
     // write that moves a wake arms the alarm, `alarm()` fires what is due, and
@@ -1851,7 +1880,7 @@ export class Store {
     admit: (bundles, opts) => this.#asIs(bundles, opts, true),
   })
 
-  // What a plugin may know about this store (plugin.ts `Stored`), over the
+  // What a facet may know about this store (`Stored`), over the
   // graph it is built with. Its kernel door is `#asIs`, as the runner's is,
   // and a write as somebody goes through `apply()` the way their own request
   // would, guard and all.
@@ -1925,7 +1954,12 @@ export class Store {
                 await res.body?.cancel()
                 return []
               }),
-              ...storedTools(this.#host, storeKind(this.#get('name') ?? '')),
+              ...storedTools(
+                this.#host,
+                storeKind(this.#get('name') ?? ''),
+                undefined,
+                capture?.composition,
+              ),
             ],
             // A call in a transcript is the transcript runner's, run in the
             // order its model asked (@yaks/session, models.ts).
@@ -3330,7 +3364,12 @@ export class Store {
         if (kind == 'directory' && !space) {
           throw new Refused('a directory call needs space')
         }
-        let tools = storedTools(this.#host, kind, space)
+        let tools = storedTools(
+          this.#host,
+          kind,
+          space,
+          this.#anatomy?.composition,
+        )
         if (!tools.some((t) => t.name == name)) {
           throw new Refused(`no store tool ${name}`)
         }

@@ -4,10 +4,10 @@
 // there.
 //
 // It is here rather than in tools.ts because tools.ts is the roster, and a
-// plugin (plugin.ts) contributes rows to it. A domain module that said its
+// domain module contributes rows to it. A domain module that said its
 // rows by importing the roster would be a cycle, and a cycle whose first
 // symptom is a row half-built at module load. So the contract sits below both:
-// tools.ts imports it to say the platform's own rows, memory.ts and views.ts
+// tools.ts imports it to say the platform's own rows, connections.ts and views.ts
 // import it to say theirs, and neither knows about the other.
 //
 // Nothing here decides anything a caller could not decide for themselves; it

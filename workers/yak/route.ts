@@ -5,7 +5,19 @@
 // `x-yak-host` stand in for a hostname a test cannot send (fetch refuses a
 // Host header): on the platform's own hostnames the header is ignored, so no
 // client routes itself into a space by header. Pure: only the configured host, no store.
+import type { Env } from './env.ts'
 import { apex, type Host, spaceHost, url } from './host.ts'
+
+/** A request before the router splits the hostname into an app path. */
+export type Arrived = {
+  env: Env
+  req: Request
+  path: string
+  space: string | null
+}
+
+/** A hostname's door, or null when the path belongs elsewhere. */
+export type Door = (at: Arrived) => Promise<Response | null> | Response | null
 
 export let PLATFORM = apex()
 

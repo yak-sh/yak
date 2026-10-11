@@ -4,7 +4,7 @@
 // file is only the mount — which app a URL names, who may read it, and where
 // its refs and its objects are.
 //
-// It is A root door (plugin.ts `routes`, git.ts), not an app's own, because a
+// It is a hostname's door (kernel.ts), because a
 // repository is not a page of the app: `<app>.git` is a sibling address of
 // `<app>/`, and route.ts admits no dot in a slug, so nothing an app can be
 // called reaches here. Answering ahead of apps.ts is what keeps the home
@@ -50,7 +50,7 @@ import { bound, type Env } from './env.ts'
 import { bodies, graphOf, held, MAIN, refAt } from './gitobj.ts'
 import { held as heldGrant, ledger, narrowed } from './grants.ts'
 import { meta } from './meta.ts'
-import type { Arrived } from './plugin.ts'
+import type { Arrived } from './route.ts'
 import { nobody, type Who, whoIs } from './session.ts'
 
 // The two addresses smart HTTP knocks on, under a slug wearing `.git`. The

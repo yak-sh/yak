@@ -1,4 +1,4 @@
-// Voice, as what it contributes (plugin.ts): every app's ./api/rtc/ door onto
+// Voice: every app's ./api/rtc/ door onto
 // Cloudflare Realtime, the one SFU app and TURN key the platform holds, and
 // what happens when a session's lease lapses. The door itself is @yaks/rtc's;
 // this file hands it the app's store, the space's meter and the account, and
@@ -22,7 +22,7 @@ import type { Door } from './door.ts'
 import type { Env } from './env.ts'
 import { KERNEL, metaOf } from './meta.ts'
 import { countedRealtime, refusedSpend } from './meter.ts'
-import { type Answer, page, type Plugin } from './plugin.ts'
+import type { Answer } from './apps.ts'
 import { source, within } from './rate.ts'
 import { defect } from './defects.ts'
 
@@ -111,12 +111,4 @@ export let voice: Answer = async (asked) => {
     report: (e) =>
       defect(e, { request: `rtc ${path}`, space: space.slug, app: app.slug }),
   })
-}
-
-/** Voice, as a plugin of this Worker: the door at every app's address, the
- * lapse in every app's store, and the guide page. */
-export let rtcPlugin: Plugin = {
-  name: 'rtc',
-  pages: [page('voice')],
-  answers: [voice],
 }

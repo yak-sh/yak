@@ -490,9 +490,22 @@ let vocabOnly = (await assembly(
   selectedLoad,
 )).bind(binding()).host
 await vocabOnly.graph.apply([{ entity: { eid: 'b' }, book: { title: 'Dune' } }])
+let vocabOnlyAnatomy = vocabOnly.anatomy()
 test('facet selection excludes hooks, tools and preloads across served roles', async () => {
   equal(prefetched, ['vocab'])
   equal(facetImports, ['vocab'])
+  let anatomy = vocabOnlyAnatomy
+  let state = (name: string) => {
+    let facet = anatomy.facets.find((f) =>
+      f.package == 'library' && f.name == name
+    )!
+    return [facet.selected, facet.attempted, facet.loaded, facet.bound]
+  }
+  equal(state('vocab'), [true, true, true, true])
+  equal(state('graph'), [false, false, false, false])
+  equal(state('tools'), [false, false, false, false])
+  equal(state('effects'), [false, false, false, false])
+  equal(state('service'), [false, false, false, false])
   equal((await vocabOnly.graph.get(['b']))[0].book, { title: 'Dune' })
   equal(vocabOnly.tools.some((t) => t.name == 'book_list'), false)
   await throws(() =>

@@ -382,7 +382,10 @@ let composed = async (
   )
   part?.('roles')
   let observed = compositionAnatomy(
-    plugins.map(([p]) => p),
+    (config.plugins ?? []).map((p) => ({
+      name: used(p),
+      facets: facetsOf(p),
+    })),
     roles,
     ROLES,
     secretDeclarations,

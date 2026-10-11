@@ -4,7 +4,6 @@ import { storeOf } from './door.ts'
 import { KERNEL } from './meta.ts'
 import { appOf, spaceOf, storeName } from './directory.ts'
 import type { Namespace } from './door.ts'
-import type { Plugin } from './plugin.ts'
 
 /** The trash's calendar cadence; Cron Triggers only supply its heartbeat. */
 export let DAILY = '20 4 * * *'
@@ -45,5 +44,3 @@ export let delivered = async (ns: Namespace, tx: ReadTx, eid: string) => {
     if (!now || now.name == state.name && now.asleep == state.asleep) return
   }
 }
-
-export let trashPlugin: Plugin = { name: 'yak/trash' }

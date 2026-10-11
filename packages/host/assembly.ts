@@ -196,7 +196,11 @@ export let assemble = (
 ): Assembly => {
   let plugins = opts.plugins ?? configured(config)
   let observed = opts.observed ??
-    compositionAnatomy(plugins.map(([p]) => p), roles, ROLES)
+    compositionAnatomy(
+      plugins.map(([name, , , facets]) => ({ name, facets })),
+      roles,
+      ROLES,
+    )
   let part = opts.part
   let observedLoad: Load = async (plugin, name) => {
     observed.attempted(plugin, name)

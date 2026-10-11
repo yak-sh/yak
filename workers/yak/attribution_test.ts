@@ -11,7 +11,7 @@ import { effectDoc, effects } from '@yaks/effects'
 import { link } from '@yaks/edge'
 import type { Namespace } from './door.ts'
 import { platformVocab } from './vocab.ts'
-import type { Stored } from './plugin.ts'
+import type { Stored } from './graph.ts'
 
 // Each boot gets a new registry over the same durable rows. The namespace
 // answers locally; neither the app nor directory is a live store.

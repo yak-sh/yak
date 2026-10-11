@@ -14,6 +14,14 @@ let words = loadVocab([{
   },
 }])
 
+let effectWords = loadVocab([{
+  package: 'fixture',
+  $defs: {
+    note: { component: true, properties: {} },
+    note_seen: { effect: true, created: ['note'] },
+  },
+}])
+
 let tool: NamedTool = {
   name: 'note_list',
   description: 'List notes',
@@ -38,8 +46,14 @@ test('worker anatomy is per-store composition, not a native or connector roster'
       },
     },
   }
-  let app = workerAnatomy(words), directory = workerAnatomy(words)
-  app.graph([guarded], [{
+  let app = workerAnatomy({ plugins: ['fixture'] })
+  let directory = workerAnatomy({ plugins: ['directory'] })
+  app.composition.declarations(words.docs, words)
+  directory.composition.declarations(words.docs, words)
+  app.composition.loaded('fixture', 'graph', true)
+  directory.composition.loaded('directory', 'graph', true)
+  app.composition.graph('fixture', [guarded])
+  let domain: GraphPlugin = {
     name: 'domain',
     rules: [{
       name: 'declared_rule',
@@ -47,11 +61,12 @@ test('worker anatomy is per-store composition, not a native or connector roster'
       match: '.note',
       produce: { note: { text: 'not serialized' } },
     }],
-  }])
+  }
+  app.graph([guarded, domain])
   directory.graph([{
     name: 'directory',
     hooks: { commit: (bundles) => bundles },
-  }], [])
+  }])
   app.commands({
     note_list: {
       description: 'List notes',
@@ -62,7 +77,16 @@ test('worker anatomy is per-store composition, not a native or connector roster'
   let first = app.read(), second = directory.read()
   assertEquals(first.scope, 'worker')
   assertEquals(first.host, 'worker/store')
-  assert(first.packages.some((p) => p.name == 'guarded'))
+  assertEquals(
+    first.packages.find((p) => p.name == 'fixture')?.configured,
+    true,
+  )
+  assert(!first.packages.some((p) => p.name == 'guarded'))
+  assertEquals(first.hooks.filter((h) => h.name == 'guarded:admit').length, 1)
+  assertEquals(
+    first.hooks.find((h) => h.name == 'guarded:admit')?.package,
+    'fixture',
+  )
   assert(!second.packages.some((p) => p.name == 'guarded'))
   assert(first.packages.some((p) => p.name == 'domain'))
   assertEquals(first.commands.map((c) => c.name), ['note_list'])
@@ -83,10 +107,11 @@ test('worker anatomy is per-store composition, not a native or connector roster'
   assert(app.read().tools.length > 0)
 })
 
-test('worker effect ownership observes real registration once, never replays callbacks', () => {
-  let registry = effects(words)
-  let capture = workerAnatomy(words)
-  capture.graph([registry], [])
+test('worker effect ownership observes registration once, never replays callbacks', () => {
+  let registry = effects(effectWords)
+  let capture = workerAnatomy({})
+  capture.composition.declarations(effectWords.docs, effectWords)
+  capture.graph([])
   let calls = 0, runs = 0
   let made = () => {
     calls++
@@ -125,15 +150,41 @@ test('worker effect ownership observes real registration once, never replays cal
 })
 
 test('worker command replacement updates loading evidence without invoking a run', () => {
-  let capture = workerAnatomy(words)
-  capture.graph([], [])
+  let capture = workerAnatomy({})
+  capture.composition.declarations(words.docs, words)
+  capture.graph([])
   capture.commands({
     note_list: { description: 'List notes', input: {}, query: '.note' },
   }, [tool])
   let before = capture.read().tools.find((t) => t.name == 'note_list')!
   capture.commands({}, [])
-  let after = capture.read().tools.find((t) => t.name == 'note_list')!
+  let snapshot = capture.read()
+  let after = snapshot.tools.find((t) => t.name == 'note_list')!
   assertEquals(after.id, before.id)
   assertEquals([after.loaded, after.bound], [false, false])
-  assertEquals(capture.read().commands, [])
+  assertEquals(snapshot.commands, [])
+})
+
+test('worker anatomy keeps package tools lazy despite runner wrappers', () => {
+  let capture = workerAnatomy({ plugins: ['fixture'] })
+  capture.composition.declarations(words.docs, words)
+  capture.composition.effects(new Map([['note_seen', 'fixture']]), true)
+  capture.graph([])
+  capture.commands({}, [tool])
+  let before = capture.read()
+  assertEquals(before.tools.find((t) => t.name == 'note_list')?.loaded, false)
+  assertEquals(
+    before.effects.find((e) => e.name == 'note_seen')?.handler,
+    'fixture',
+  )
+  capture.composition.loaded('fixture', 'tools', true)
+  capture.composition.runs('fixture', ['note_list'], ['note_list'])
+  let after = capture.read()
+  assertEquals(after.tools.find((t) => t.name == 'note_list')?.bound, true)
+  assertEquals(
+    after.facets.find((f) => f.package == 'fixture' && f.name == 'tools')
+      ?.bound,
+    true,
+  )
+  assertEquals(before.tools.find((t) => t.name == 'note_list')?.loaded, false)
 })

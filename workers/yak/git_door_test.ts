@@ -11,7 +11,7 @@ import { directory } from './directory.ts'
 import * as dirPart from './directory.ts'
 import type { App, Space } from './directory.ts'
 import type { Env } from './env.ts'
-import { gitPlugin } from './git.ts'
+import { answer } from './git_door.ts'
 import { ledger, mint } from './grants.ts'
 import { platform } from './testing.ts'
 import type { Who } from './session.ts'
@@ -81,13 +81,12 @@ let deploy = async (
   await record(dir, WHO, app, version, manifest, '')
 }
 
-// The door as the router reaches it: through the plugin's own `routes` slot,
-// so a route this file passes is a route the Worker actually mounts.
+// The Git door receives the whole hostname path, without its query.
 let asked = (env: Env, address: string, headers: HeadersInit = {}) => {
   let url = new URL(`https://ada.yaks.app${address}`)
   let req = new Request(url, { headers })
   // What index.ts hands a door: the path, never the query beside it.
-  return gitPlugin.routes![0]({ env, req, path: url.pathname, space: 'ada' })
+  return answer({ env, req, path: url.pathname, space: 'ada' })
 }
 
 // A grant of this person's, as `yak login` writes one down: the token the door
@@ -121,7 +120,7 @@ let serving = (env: Env) =>
   Deno.serve({ port: 0, onListen: () => {} }, async (req) => {
     let path = new URL(req.url).pathname
     let at = { env, req, path, space: 'ada' }
-    return await gitPlugin.routes![0](at) ?? new Response('no', { status: 404 })
+    return await answer(at) ?? new Response('no', { status: 404 })
   })
 
 test('git clones an app at <app>.git, and its history is its deploys', async () => {
@@ -246,7 +245,7 @@ test('an app whose bytes are pinned per-app still serves a pack', async () => {
       },
       body: utf8.encode(body),
     })
-    let res = await gitPlugin.routes![0]({
+    let res = await answer({
       env,
       req,
       path: url.pathname,

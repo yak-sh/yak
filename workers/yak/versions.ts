@@ -26,10 +26,10 @@
 // only how many a list shows at once.
 //
 // Bytes are kept by liveness instead (T-34952): a blob lives while anything
-// names it — a deploy manifest, an entry in a path's history, a plugin's pins
-// — and the sweep recomputes that set from the referrers every time rather
-// than counting references, so a batch that died halfway is healed by the next
-// run instead of drifting forever.
+// names it — a deploy manifest or an entry in a path's history — and the
+// sweep recomputes that set from the referrers every time rather than counting
+// references, so a batch that died halfway is healed by the next run instead
+// of drifting forever.
 //
 // And the same machinery a size down (T-34508): every draft edit pins what it
 // replaced. A deploy is the release a person names; an edit waits privately
@@ -39,17 +39,13 @@
 // read it back. One store, one pin, and therefore one prune (`pruned`): the
 // rule "delete only what nothing names any more" can only be right if the thing
 // applying it can see everything that names — the kept versions and the kept
-// history — which is why both live in this file. What a plugin names is the
-// third (plugin.ts `pins`): the sweep asks the list rather than guessing, since
-// a domain holding its own pinned bytes is the one thing this file cannot see.
+// history — which is why both live in this file.
 // With one key space the sweep is one pass for the whole bucket rather than one
 // per app: an object another app still names is not the first app's to free.
 import type { Blobs as Pins, Objects } from '@yaks/blob'
 import { mint, token } from '@yaks/graph'
 import type { App, Directory, Space } from './directory.ts'
 import type { Reload } from '@yaks/platform'
-import { pinsOf } from './plugin.ts'
-import { PLUGINS } from './plugins.ts'
 import { vouched, type Who } from './session.ts'
 import { refuse } from './tool.ts'
 import { caught } from './defects.ts'
@@ -843,11 +839,8 @@ export let held = (all: Wrote[], at: number): Wrote | null => {
  * from the referrers on every run: a count kept beside each write and delete
  * drifts the first time a batch dies halfway and nothing can tell that it has,
  * while a sweep that reads the referrers heals whatever the last one got
- * wrong. Three things name a blob, and all three are asked here — every deploy
- * manifest, every entry in a path's history, and every sha a plugin still
- * points at (plugin.ts `pins`), which is the one a custom domain could
- * hold and neither of the others could say. A plugin that throws takes the
- * sweep with it: not knowing what is named is never a reason to delete.
+ * wrong. Both things that name a blob are asked here: every deploy manifest
+ * and every entry in a path's history.
  *
  * The GRACE is the other half of "only what nothing names". A deploy pins its
  * bytes and then writes the row that names them, so an object put moments ago
@@ -875,15 +868,12 @@ export let held = (all: Wrote[], at: number): Wrote | null => {
  * still not asked, and still cannot matter: an upload's bytes live under the
  * app's own `blobs/` prefix, which this sweep does not list. The move that
  * carries those into `sha/` is the one that must add it.
- *
- * `plugins` is the list it asks, which a test hands its own.
  */
 export let pruned = async (
   dir: Directory,
   blobs: Objects,
   apps: Pinner[],
   now = Date.now(),
-  plugins = PLUGINS,
 ) => {
   let named = new Set<string>()
   let gone = 0
@@ -947,9 +937,6 @@ export let pruned = async (
     // ever buried: the oldest rollback it offers has to have its bytes.
     for (let v of releases) {
       for (let sha of Object.values(v.files)) named.add(sha)
-    }
-    for (let sha of await pinsOf(plugins, { dir, blobs, prefix, app, now })) {
-      named.add(sha)
     }
   }
   for (let [key, landed] of Object.entries(await blobs.uploaded(SHA))) {

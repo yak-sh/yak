@@ -21,11 +21,14 @@
 // Seeds are insert-once: a restart must not rewind `at`, erase `fired`, or
 // undo a schedule someone deliberately paused. A new recurring seed starts
 // at its first calendar instant at or after the moment it was discovered.
-import { type Graph, Stale } from '@yaks/graph'
+import { type Bundle, type Graph, Stale } from '@yaks/graph'
 import { next, span } from '@yaks/wake'
 import type { Env } from './env.ts'
 import { KERNEL, meta } from './meta.ts'
-import type { Wake } from './plugin.ts'
+import type { Wake as Schedule } from '@yaks/wake'
+
+/** A directory schedule row, with the tags its job matches. */
+export type Wake = Bundle & { wake: Schedule }
 
 /** The job a directory wake asks its plugin to do when `fired` is written. */
 export { sweepDoc } from './facets/sweep-vocab.ts'

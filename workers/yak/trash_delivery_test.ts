@@ -6,7 +6,7 @@ import { loadVocab, pick } from '@yaks/vocab'
 import { platformVocab } from './vocab.ts'
 import { effects as trashEffects } from './facets/trash-effects.ts'
 import type { Namespace } from './door.ts'
-import type { Stored } from './plugin.ts'
+import type { Stored } from './graph.ts'
 
 // Persistent directory rows, fresh effect registry each incarnation, and a
 // controllable delivery door/clock. No production namespace or wall-clock wait.

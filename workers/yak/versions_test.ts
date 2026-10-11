@@ -18,7 +18,6 @@ import type { App, Directory, Space } from './directory.ts'
 import { type Namespace, PLATFORM_STORE } from './door.ts'
 import { carried, upload } from './dispatch.ts'
 import type { Env } from './env.ts'
-import type { Plugin } from './plugin.ts'
 import type { Who } from './session.ts'
 import { platform } from './testing.ts'
 import {
@@ -576,23 +575,19 @@ test('a blob lives while anything names it, and a day besides', async () => {
   }
 
   // Bytes whose referrer is gone — an entry that aged out, a deploy that died
-  // before its row — and bytes a plugin still points at.
+  // before its row.
   let orphan = 'a'.repeat(64)
-  let kept = 'b'.repeat(64)
   await blobs.put(addressed(orphan), bytes('nobody names these'))
-  await blobs.put(addressed(kept), bytes('a plugin does'))
   // And a deploy landing right now: its bytes are in the bucket, its row is
   // not written yet, so nothing names them at all.
   clock.now = Date.now() - 60 * 60_000
   let flight = 'c'.repeat(64)
   await blobs.put(addressed(flight), bytes('a deploy still in flight'))
 
-  let holder: Plugin = { name: 'holder', pins: [() => [kept]] }
   let before = trips()
-  assertEquals(await pruned(dir, blobs, ONE, Date.now(), [holder]), 1)
+  assertEquals(await pruned(dir, blobs, ONE), 1)
   assertEquals(await blobs.has(addressed(orphan)), false)
   assert(await blobs.has(addressed(flight)), 'inside the day')
-  assert(await blobs.has(addressed(kept)), 'a plugin names it')
   assert(
     await blobs.has(addressed(one['index.html'])),
     'v1 is past the page and still restorable',
@@ -603,33 +598,6 @@ test('a blob lives while anything names it, and a day besides', async () => {
   assertEquals(cost.list - before.list, 4)
   assertEquals(cost.read - before.read, 0)
   assertEquals(cost.delete - before.delete, 1)
-})
-
-// The third thing that can name a blob (plugin.ts `pins`): a domain holding
-// its own pinned bytes, which neither a manifest nor a path's history says.
-test('a plugin names bytes, and the sweep keeps them', async () => {
-  let { blobs, clock } = memory()
-  let { dir } = directory()
-  clock.now = Date.now() - 2 * GRACE
-  await blobs.put(PREFIX + 'index.html', bytes('<h1>one</h1>'))
-  // A write far outside the window, then KEEP writes after it, so its entry
-  // ages out of the history and no version names its bytes either.
-  let old = await replaced(blobs, PREFIX, 'index.html', 'p1', ago(40))
-  await blobs.put(PREFIX + 'index.html', bytes('<h1>two</h1>'))
-  for (let i = 0; i < KEEP; i++) {
-    await replaced(blobs, PREFIX, 'index.html', 'p1', ago(1))
-    await blobs.put(PREFIX + 'index.html', bytes(`<h1>${i}</h1>`))
-  }
-  let pinner: Plugin = {
-    name: 'pinner',
-    pins: [(at) => at.app.eid == APP.eid ? [old!.sha] : []],
-  }
-  assertEquals(await pruned(dir, blobs, ONE, Date.now(), [pinner]), 0)
-  assert(await blobs.has(addressed(old!.sha)), 'a plugin names it')
-  // And nothing is kept for its own sake: with nobody naming them, the same
-  // bytes go on the next sweep.
-  assertEquals(await pruned(dir, blobs, ONE, Date.now(), []), 1)
-  assertEquals(await blobs.has(addressed(old!.sha)), false)
 })
 
 test('a history that cannot be read is a history with nothing in it', async () => {

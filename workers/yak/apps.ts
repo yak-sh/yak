@@ -128,13 +128,12 @@ import { caught } from './defects.ts'
 import { full, fullFiles } from './usage.ts'
 import { refusedVisit } from './meter.ts'
 import { modifying, sha256 } from './versions.ts'
-// The space index's own visitor block reads views.ts directly (`visits`
-// below): drawing a page out of another module's data is not a slot, it is one
-// module using another. What does arrive through the host is the `/stats` door
-// and the count of a page served — `answered` and `watched`, both over PLUGINS.
-import { DAYS, NOT_ON, type Stats, statsOf } from './views.ts'
-import { answered, watched } from './plugin.ts'
-import { PLUGINS } from './plugins.ts'
+import { DAYS, NOT_ON, type Stats, stats, statsOf, viewed } from './views.ts'
+import { own as connection } from './connections.ts'
+import { envDoor, fetchDoor } from './outbound.ts'
+import { modelRun, recovery } from './models.ts'
+import { voice } from './rtc.ts'
+import { reach } from './tunnel.ts'
 import { refuse } from './tool.ts'
 import { routes as commandRoutes } from '@yaks/tools/routes'
 import { commandIn, commandsIn } from './app-command.ts'
@@ -170,6 +169,24 @@ type Rewriter = {
   transform(res: Response): Response
 }
 declare let HTMLRewriter: { new (): Rewriter }
+
+/** An app's platform door, within its /api/ prefix. */
+export type Asked = {
+  env: Env
+  req: Request
+  path: string
+  space: Space
+  app: App
+  who: Who
+  refuse: (what?: string) => Response
+  json: (status: number, code: string, says?: string) => Response
+  visiting: (bytes: number) => Promise<Response | null>
+}
+
+/** An app door, or null when the path belongs elsewhere. */
+export type Answer = (
+  asked: Asked,
+) => Promise<Response | null> | Response | null
 
 // A refusal is read — by the page that catches it, and by the person's agent
 // after that — so it answers a sentence beside its code (C-32574 item 2, where
@@ -1446,19 +1463,13 @@ let api = async (
         : signInAt(req.headers.get('referer') || req.url, env),
     })
   }
-  // What a plugin answers at this app's address (plugin.ts `answers`,
-  // T-34601) — the visitor counts (views.ts) is the one there is today. Here,
-  // among the doors that are the app's own rather than its store's, and after
-  // `/me`, so a plugin cannot take a path the kernel already answers. It is
-  // handed the two ways of saying no this door says them, so a plugin's
-  // refusal reads like every other refusal here.
-  // A visitor's write, held to a size and a pace (`visiting`); a member's
-  // passes.
+  // The app's platform doors use the same refusals and visitor limits as
+  // its store doors.
   let visit = async (bytes: number) =>
     !writes(who.role) && bytes > VISIT_BATCH
       ? json(413, 'visit_too_large')
       : await visiting(req, env, app, who)
-  let mine = await answered(PLUGINS, {
+  let asked: Asked = {
     env,
     req,
     path,
@@ -1468,7 +1479,10 @@ let api = async (
     refuse: refused,
     json,
     visiting: visit,
-  })
+  }
+  let mine = await stats(asked) ?? await connection(asked) ??
+    await envDoor(asked) ?? await fetchDoor(asked) ?? await reach(asked) ??
+    await modelRun(asked) ?? await recovery(asked) ?? await voice(asked)
   if (mine) return mine
   // Taking money (sell.ts, T-34525). A read door as far as this app is
   // concerned — it reads the products the cart names and writes nothing — so it
@@ -2433,12 +2447,7 @@ let served = async (req: Request, env: Env, c: Clock): Promise<Response> => {
     // counted as the home app's page view — at the bare hostname, which is
     // where the home app is mounted.
     if (early) {
-      watched(PLUGINS, {
-        env,
-        req,
-        res: early.page,
-        at: seen(space, early.app),
-      })
+      viewed(env, req, early.page, seen(space, early.app))
       let page = early.page
       if (
         page.body &&
@@ -2581,12 +2590,11 @@ let served = async (req: Request, env: Env, c: Clock): Promise<Response> => {
     await page.body?.cancel()
     return await index(req, env, dir, space)
   }
-  // A page was served, so every plugin that is watching is told (plugin.ts
-  // `watch`, T-34601; views.ts counts it, T-34496). Last, once, and only for
+  // Count the page served (views.ts, T-34496). Last, once, and only for
   // what an app answered: the `/api/` doors returned above, a file that is not
   // HTML is not a page, and the platform's own pages — the space index, the
   // trash, a wrong address — never come back through here.
-  watched(PLUGINS, { env, req, res: page, at: seen(space, app) })
+  viewed(env, req, page, seen(space, app))
   return wall(reporting(page, req, at))
 }
 

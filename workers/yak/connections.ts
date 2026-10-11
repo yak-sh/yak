@@ -36,7 +36,6 @@ import {
   connect,
   connectable,
   CONNECTION,
-  connectionsDoc,
   type Ctx,
   disconnect,
   envOf,
@@ -52,12 +51,11 @@ import {
   using,
 } from '@yaks/connections'
 import { edgeEid } from '@yaks/edge'
-import { PROVISIONAL, provisionalDoc } from '@yaks/effects'
+import { PROVISIONAL } from '@yaks/effects'
 import type { Bundle, Comp } from '@yaks/graph'
 import { hooked, refusal } from '@yaks/hook'
 import { mode, reads } from '@yaks/member'
-import { reveal, SECRET, secretsDoc } from '@yaks/secrets'
-import { toolsDoc } from '@yaks/tools'
+import { reveal, SECRET } from '@yaks/secrets'
 import type { Service } from './connected.ts'
 import {
   type App,
@@ -71,7 +69,8 @@ import { bound, type Env } from './env.ts'
 import { apex, url } from './host.ts'
 import { cookieValue, opened, seal } from './lib/token.ts'
 import { KERNEL, meta, metaOf } from './meta.ts'
-import type { Answer, Door, Plugin } from './plugin.ts'
+import type { Answer } from './apps.ts'
+import type { Door } from './route.ts'
 import { enabling, MANAGE, manageAt, OURS, signInAt } from './route.ts'
 import { caught } from './defects.ts'
 import { domainOf, vouched, type Who, whoIs } from './session.ts'
@@ -217,8 +216,6 @@ export let rebind = async (
   gone: string[] = [],
 ) => {
   if (!env.CF_WORKERS_TOKEN || !vaulted(env)) return
-  // Asked for when it is used: dispatch.ts reaches plugins.ts through the
-  // pages it answers with, and plugins.ts is what names this module.
   let { dropSecret, secrets, setSecret } = await import('./dispatch.ts')
   let had = await secrets(env, store)
   if (!had) return
@@ -545,7 +542,7 @@ let dirOf = (env: Env) => directory(bound(env.DIRECTORY, dirPart.fetch, env))
 // The return from a service's sign-in page. The attempt must be this
 // person's, for their own connection or one of a space they still own;
 // anything else is sent back to their account to start again.
-let callback: Door = async ({ env, req, path, space }) => {
+export let callback: Door = async ({ env, req, path, space }) => {
   if (space != null || path != CALLBACK) return null
   let gone = `${ATTEMPT}=; Path=${CALLBACK}; Max-Age=0; Secure; HttpOnly`
   let answer = (to: string) =>
@@ -596,7 +593,9 @@ let OWN = '/connections/'
 // and only they call out through it. A sign-in's cookie must reach the
 // platform's callback, so a request at a space's own domain is sent to the
 // same page at the platform's address first.
-let own: Answer = async ({ env, req, path, space, app, who, refuse }) => {
+export let own: Answer = async (
+  { env, req, path, space, app, who, refuse },
+) => {
   if (!path.startsWith(OWN)) return null
   let integration = decodeURIComponent(path.slice(OWN.length))
   let here = `https://${space.slug}.${apex(env)}/${app.slug}/api${path}${
@@ -613,8 +612,7 @@ let own: Answer = async ({ env, req, path, space, app, who, refuse }) => {
     each: true,
   })
   let i = asked && await known(c.graph.read, integration)
-  // Loaded here, as the doors are (T-37977): pages.ts reaches the plugin list,
-  // which names this file.
+  // Load the page renderer when the Connect door answers.
   let { askConnect, lost } = await import('./pages.ts')
   if (!asked || !i || (i.testing && !enabled(req).includes(integration))) {
     return lost(env)
@@ -687,7 +685,7 @@ let hookable = async (env: Env, space: Space, app: App, eid: string) => {
 }
 
 // A webhook, kept in the app's store as the request it was.
-let hook: Door = async ({ env, req, path, space: slug }) => {
+export let hook: Door = async ({ env, req, path, space: slug }) => {
   if (slug == null || !path.startsWith(HOOKS)) return null
   let lost = () => new Response('not found', { status: 404 })
   if (req.method != 'POST') {
@@ -791,24 +789,5 @@ let CONNECTIONS: Row[] = [
   },
 ]
 
-/**
- * Connections, as what they contribute (plugin.ts): the words the directory
- * keeps them in — the connection and its integration, the secret its
- * credential is, the mark it wears while that is saved, and the text a
- * failure is said in beside `exception` — the built integrations it installs
- * there, the attach tool, the two doors, and the Connect button at an app's
- * address.
- */
-export let connectionsPlugin: Plugin = {
-  name: 'connections',
-  vocab: [
-    secretsDoc,
-    connectionsDoc,
-    provisionalDoc,
-    { title: 'content', $defs: { content: toolsDoc.$defs!.content } },
-  ],
-  // The built integrations are the directory's rows, and no app's.
-  tools: CONNECTIONS.map(worded),
-  routes: [callback, hook],
-  answers: [own],
-}
+/** The connector row for attaching a space's connected credential. */
+export let connectionTools = CONNECTIONS.map(worded)

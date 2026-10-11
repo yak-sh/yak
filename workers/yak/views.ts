@@ -1,12 +1,8 @@
 // Who visited an app (T-34496, T-34495). One data point per HTML page the
 // platform answered, written to Workers Analytics Engine — an aggregate
 // column store, not a log — and read back out of it by the SQL API for the
-// app's own members. At the foot of the file the whole of that is said as a
-// plugin (plugin.ts, T-34603): apps.ts calls no function here to count a page
-// or to answer `/stats` — it folds over plugins, and this module is in the
-// list. (Its space index still reads `statsOf` directly for the owner's
-// visitor block: drawing a page out of this data is one module using another,
-// not a slot.)
+// app's own members. The app door counts served pages with `viewed` and
+// answers `/stats` with `stats`; the connector offers `app_stats`.
 //
 // What a data point carries is the whole privacy rule, and it is short on
 // purpose: the app it was a page of, the space and app it was served under,
@@ -38,7 +34,7 @@
 // that row stands for, so a plain `count()` under-reports a busy app by
 // exactly the factor that made it busy, and nothing would say so.
 import type { Env } from './env.ts'
-import { type Answer, page, type Plugin } from './plugin.ts'
+import type { Answer } from './apps.ts'
 import { APP, inApp, type Row, SPACE as SPACE_ARG, worded } from './tool.ts'
 import { url as appUrl } from './directory.ts'
 import { caught } from './defects.ts'
@@ -377,14 +373,14 @@ export let NOT_ON =
   'Visitor counts are not switched on for this platform yet, so there is ' +
   'nothing to show.'
 
-// ---- the plugin (T-34603) --------------------------------------------------
+// ---- the door and tool ----------------------------------------------------
 
 // Who visited, at the app's own address. The app's people, whatever its access
 // says: a public app's pages are the world's to read and its visitor counts
 // are not, so this asks for a role rather than for read access. Not switched
 // on is a sentence and a 200, never a failure — the page showing it has
 // nothing to do about a secret nobody set.
-let stats: Answer = async (at) => {
+export let stats: Answer = async (at) => {
   if (at.path != '/stats') return null
   if (!at.who.role) return at.refuse('not_a_reader')
   let days = new URL(at.req.url).searchParams.get('days')
@@ -447,21 +443,5 @@ let STATS: Row[] = [
   },
 ]
 
-/**
- * Analytics, as what it contributes (plugin.ts): the count of a page served,
- * the door an app's own page reads its numbers at, the tool an agent asks
- * with, and the guide page that says what is and is not recorded.
- *
- * `watch` is `viewed` above and nothing more — the host calls it on the way
- * out of a request it has already answered, which is why that function returns
- * nothing and swallows its own failures. A platform with no views binding
- * contributes all four and counts nothing, which is what `wrangler dev` and
- * every workerd probe run as.
- */
-export let viewsPlugin: Plugin = {
-  name: 'views',
-  answers: [stats],
-  watch: (v) => viewed(v.env, v.req, v.res, v.at),
-  pages: [page('stats')],
-  tools: STATS.map(worded),
-}
+/** The connector row for reading an app's visitor counts. */
+export let viewsTools = STATS.map(worded)

@@ -27,9 +27,8 @@
 // they don't have to fetch?" The files stay the one source: the tool and the
 // MCP resources both read them from the ASSETS binding, at the very URLs the
 // web serves them from.
-import { page, pagesOf } from './plugin.ts'
+import { PAGES as CONTENT_PAGES } from './content.ts'
 import { apex, type Host, url } from './host.ts'
-import { PLUGINS } from './plugins.ts'
 import { mailFrom } from './post.ts'
 
 export type Page = {
@@ -400,13 +399,16 @@ export let WHOLE = whole()
 export let uriOf = (slug: string, env: Host = {}) =>
   url(env, `/docs/${slug}.md`)
 
-// The platform's own pages, in the order an agent is offered them. A page
-// declares its own title, brief and description in its frontmatter now
-// (M-34605, plugin.ts `page`); what stays here is WHICH pages there are and in
-// what order, because that is a decision, and a file dropped into the
-// directory is not one. The list an agent is offered is these plus every
-// plugin's — `PAGES`, at the foot of this list.
-let OURS: Page[] = [
+// A guide page's words come from its file's frontmatter. The guide names
+// which pages it offers and in what order.
+let page = (slug: string): Page => {
+  let row = CONTENT_PAGES[slug]
+  if (!row) throw new Error(`public/docs/${slug}.md says nothing`)
+  return row
+}
+
+/** Every guide page, in the order an agent is offered them. */
+export let PAGES: Page[] = [
   'store',
   'querying',
   'components',
@@ -423,13 +425,11 @@ let OURS: Page[] = [
   'selling',
   'domains',
   'errors',
+  'memory',
+  'stats',
+  'models',
+  'voice',
 ].map(page)
-
-/** Every guide page: the platform's own, then each plugin's in PLUGINS order
- * (plugin.ts `pages`). The file a page names is still under `public/docs/`
- * whoever registered it — a plugin contributes the Page entry, not the file
- * itself. */
-export let PAGES: Page[] = [...OURS, ...pagesOf(PLUGINS)]
 
 // Which page covers a COMPONENT, for `graph_schema` (@yaks/mcp, T-34156): an
 // agent reading what `mail` is should be told where the whole of sending a

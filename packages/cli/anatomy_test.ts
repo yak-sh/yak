@@ -23,8 +23,12 @@ let docs: VocabDoc[] = [{
 
 test('native anatomy isolates loading evidence even when vocabulary is shared', () => {
   let vocab = loadVocab(docs)
-  let first = compositionAnatomy(['shop'], ['graph', 'effects'], roles)
-  let second = compositionAnatomy(['shop'], ['graph'], roles)
+  let first = compositionAnatomy(
+    [{ name: 'shop' }],
+    ['graph', 'effects'],
+    roles,
+  )
+  let second = compositionAnatomy([{ name: 'shop' }], ['graph'], roles)
   for (let capture of [first, second]) {
     capture.attempted('shop', 'vocab')
     capture.loaded('shop', 'vocab', true)
@@ -66,7 +70,7 @@ test('native anatomy reads the vocabulary only when it is read', () => {
   let vocab = new Proxy(loadVocab(docs), {
     get: (v, key) => (asked++, Reflect.get(v, key)),
   })
-  let capture = compositionAnatomy(['shop'], ['graph'], roles)
+  let capture = compositionAnatomy([{ name: 'shop' }], ['graph'], roles)
   capture.declarations(docs, vocab)
   capture.graphed()
   assertEquals(asked, 0)
@@ -94,7 +98,7 @@ test('native secret observation reads only raw names, not resolved accessors', (
   assertEquals(names, ['service-token', 'another-token'])
   assertEquals(reads, 0)
   let capture = compositionAnatomy(
-    ['shop'],
+    [{ name: 'shop' }],
     [],
     roles,
     names.map((name) => ({ name, package: 'shop' })),
@@ -104,8 +108,8 @@ test('native secret observation reads only raw names, not resolved accessors', (
 })
 
 test('native anatomy keeps actual UI and later command/view loading separate', () => {
-  let first = compositionAnatomy(['shop'], ['web'], roles)
-  let second = compositionAnatomy(['shop'], ['web'], roles)
+  let first = compositionAnatomy([{ name: 'shop' }], ['web'], roles)
+  let second = compositionAnatomy([{ name: 'shop' }], ['web'], roles)
   let ran = 0
   let ui = {
     kits: {
@@ -200,4 +204,22 @@ test('native anatomy keeps actual UI and later command/view loading separate', (
   assertEquals(ran, 0)
   assert(!JSON.stringify(after).includes('Component'))
   assert(!JSON.stringify(after).includes('render'))
+})
+
+test('native anatomy combines repeated configured facet selections', () => {
+  let selected = (facets: string[] | undefined) => {
+    let capture = compositionAnatomy(
+      [
+        { name: 'shop', facets: ['vocab'] },
+        { name: 'shop', facets },
+      ],
+      ['graph'],
+      roles,
+    )
+    let snapshot = capture.read()
+    assertEquals(snapshot.packages.map((p) => p.name), ['shop'])
+    return snapshot.facets.filter((f) => f.selected).map((f) => f.name)
+  }
+  assertEquals(selected(['graph']), ['vocab', 'graph'])
+  assertEquals(selected(undefined), ['vocab', 'graph', 'tools'])
 })
