@@ -65,6 +65,7 @@ type Worded = {
   next: WeakMap<VocabFacet, Map<string, Worded>>
   words?: Words
   own?: WeakMap<VocabDoc[], Words>
+  recent?: { source: string; words: Words }
 }
 let worded: Worded = { next: new WeakMap() }
 export let wordsOf = (vocabs: Taken<'vocab'>, own?: VocabDoc[]): Words => {
@@ -79,7 +80,15 @@ export let wordsOf = (vocabs: Taken<'vocab'>, own?: VocabDoc[]): Words => {
   if (!own?.length) return at.words ??= spoken(vocabs)
   let held = at.own ??= new WeakMap()
   let words = held.get(own)
-  if (!words) held.set(own, words = spoken(vocabs, own))
+  if (!words) {
+    // Graph-owned documents are JSON data, often decoded afresh by a host.
+    // Keep one equivalent compilation beside the identity cache, so repeated
+    // loads share the vocabulary without retaining every document ever seen.
+    let source = JSON.stringify(own)
+    words = at.recent?.source == source ? at.recent.words : spoken(vocabs, own)
+    at.recent = { source, words }
+    held.set(own, words)
+  }
   return words
 }
 

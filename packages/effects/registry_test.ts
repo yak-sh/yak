@@ -36,6 +36,18 @@ let post = (eid: string, comp: Record<string, unknown> = { title: 'One' }) => ({
   post: comp,
 })
 
+test('a handler registered after an unobserved write sees changes and removal', () => {
+  let fx = effects(owingBlog, { owes: 'declared' })
+  let g = blogGraph([fx], owingBlog)
+  let seen: string[] = []
+  sync(g.apply([post('p')]))
+  let note = (e: Event) => seen.push(e.kind)
+  fx.handle({ post_note: note, post_gone: note })
+  sync(g.apply([post('p', { published: true })]))
+  sync(g.apply([{ entity: { eid: 'p' }, post: null }]))
+  assertEquals(seen, ['changed', 'removed'])
+})
+
 test('a created handler fires once per new component', () => {
   let { fx, seen, apply } = fixture()
   fx.created(

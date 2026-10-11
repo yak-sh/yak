@@ -719,6 +719,10 @@ export let effects = (vocab: Vocab, opts: Opts = {}): Effects => {
 
   // Inside the transaction: the runs this batch owes, written down.
   let owesAll = opts.owes == 'declared'
+  // Declarations without a pool or handler cannot observe a commit. Read this
+  // afresh, since a caller can register handlers after building the graph.
+  let watches = () =>
+    slots.some((s) => !!s.run || !!pooled && owesAll && !!s.effect)
   let owe: Hook = (bundles, tx, _err, context) => {
     if (generation(bundles) > depth) return bundles
     return after(
@@ -802,7 +806,7 @@ export let effects = (vocab: Vocab, opts: Opts = {}): Effects => {
     hooks: {
       // Read the state the batch is about to change, while it still stands.
       precondition: (bundles, tx) =>
-        slots.length
+        watches()
           ? after(
             before(vocab)(bundles, tx),
             (prepared) => scoped(prepared, tx),
@@ -813,7 +817,7 @@ export let effects = (vocab: Vocab, opts: Opts = {}): Effects => {
     },
     // Nothing is read while nothing is registered, so nothing is asked for.
     wants: (bundles) => [
-      ...(slots.length ? wanting(vocab)(bundles) : []),
+      ...(watches() ? wanting(vocab)(bundles) : []),
       ...[...new Set(slots.map((s) => s.wants))]
         .flatMap((wants) => wants?.(bundles) ?? []),
     ],

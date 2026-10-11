@@ -172,3 +172,15 @@ test('a match this vocabulary knows every word of is itself', () => {
   let m = match('$call .call, !results')
   assertEquals(asked(m, vocab), m)
 })
+
+let bare = loadVocab({ $defs: {} })
+test('match narrowing keeps intrinsic ids without admitting undeclared paths', () => {
+  let identified = match('.entity.eid=b')
+  assertEquals(asked(identified, bare), identified)
+  assertEquals(asked(identified, bare), identified)
+  assertEquals(asked(match('.entity.other=b'), bare), null)
+  let present = match('.call')
+  assertEquals(asked(present, bare), null)
+  assertEquals(asked(present, vocab), present)
+  assertEquals(asked(present, bare), null)
+})

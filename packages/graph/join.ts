@@ -436,6 +436,10 @@ export let bound = (source: string): Record<string, unknown> =>
     ) => [name, v.kind == 'scalar' || v.kind == 'time' ? v.raw : v]),
   )
 
+// Both inputs are fixed values. Sharing the narrowed plan also lets storage
+// reuse the filters it compiled for another graph with the same vocabulary.
+let askedPlans = new WeakMap<Vocab, WeakMap<Match, Match | null>>()
+
 /**
  * This match as this vocabulary can evaluate it, or `null` when it cannot be
  * evaluated at all.
@@ -449,6 +453,15 @@ export let bound = (source: string): Record<string, unknown> =>
  * does.
  */
 export let asked = (m: Match, v: Vocab): Match | null => {
+  let plans = askedPlans.get(v)
+  if (!plans) askedPlans.set(v, plans = new WeakMap())
+  if (plans.has(m)) return plans.get(m)!
+  let plan = asking(m, v)
+  plans.set(m, plan)
+  return plan
+}
+
+let asking = (m: Match, v: Vocab): Match | null => {
   // Does this vocabulary declare the name at all? Asked of its own tables
   // rather than through `aim`, which deliberately treats a bare name as a
   // possibly-undeclared component — a bundle may carry one before its schema
@@ -456,6 +469,9 @@ export let asked = (m: Match, v: Vocab): Match | null => {
   // inherit.
   let known = (path: string[]): boolean => {
     if (v.assoc(path[0]) || v.comp(path[0])) return true
+    // Only the intrinsic entity.eid path can route without a declaration.
+    // An absent component is ordinary here, not an error to construct and catch.
+    if (path[0] != 'entity' || path[1] != 'eid') return false
     try {
       v.aim(path.join('.'))
       return true

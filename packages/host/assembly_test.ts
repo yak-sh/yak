@@ -340,3 +340,41 @@ test('graph-owned declarations supply a base and replace plugin extensions', asy
       book: { isbn: '123' },
     }]), 'isbn')
 })
+
+let decoded = (await assembly(config, ['graph'], plain, {
+  docs: JSON.parse(JSON.stringify(own)),
+})).bind(binding()).host
+let decodedAgain = (await assembly(config, ['graph'], plain, {
+  docs: JSON.parse(JSON.stringify(own)),
+})).bind(binding()).host
+let revised = (await assembly(config, ['graph'], plain, {
+  docs: [{
+    $defs: {
+      book: { component: true, properties: { pages: { type: 'integer' } } },
+    },
+  }],
+})).bind(binding()).host
+
+test('decoded graph-owned words keep independent storage and changed declarations', async () => {
+  await decoded.graph.apply([{
+    entity: { eid: 'copy' },
+    book: { author: 'Herbert' },
+  }])
+  equal(await decodedAgain.graph.get(['copy']), [])
+  await decodedAgain.graph.apply([{
+    entity: { eid: 'copy' },
+    book: { author: 'Le Guin' },
+  }])
+  equal((await decoded.graph.get(['copy']))[0].book, { author: 'Herbert' })
+  equal((await decodedAgain.graph.get(['copy']))[0].book, { author: 'Le Guin' })
+  await revised.graph.apply([{ entity: { eid: 'copy' }, book: { pages: 412 } }])
+  equal((await revised.graph.get(['copy']))[0].book, { pages: 412 })
+  await throws(
+    () =>
+      revised.graph.apply([{
+        entity: { eid: 'copy' },
+        book: { author: 'Herbert' },
+      }]),
+    'author',
+  )
+})
