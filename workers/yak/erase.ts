@@ -95,7 +95,7 @@ import { deleteBindings } from './bindings.ts'
 import { reachable, release } from './domains.ts'
 import { bound, type Env } from './env.ts'
 import { apex, type Host as HostEnv } from './host.ts'
-import { destroyed } from './sandbox.ts'
+import { asleep, destroyed } from './sandbox.ts'
 import { vouched, type Who } from './session.ts'
 import { storeOf } from './door.ts'
 import { answered } from './meta.ts'
@@ -400,6 +400,9 @@ export let erase = async (
   // transcript nothing points at and nobody can ask about again.
   await wiped(env, d.space.eid)
   await destroyed(env, d.space)
+  // Every member could have used this shared container. Return their awake
+  // allowance before the cascade removes the memberships that name them.
+  for (let m of d.members) await asleep(env, d.space, m.person)
   // The row that says the space exists. Its death cascades in the store to
   // every app, deploy, hostname and membership that named it (the platform
   // contract's `death = "cascade"`), so this one tombstone buries the

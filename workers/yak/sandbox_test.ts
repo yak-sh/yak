@@ -712,7 +712,9 @@ test('a lone connector call pays for itself and leaves the container', async () 
 // of hers is a sandbox of its own, so without this her five spaces were
 // every container the deploy runs.
 test('one person holds one sandbox awake on the free tier', async () => {
-  let { env, ctx, box } = await bench()
+  let box = sandboxes()
+  let { env } = await seeded({ SANDBOX: box.SANDBOX } as Partial<Env>)
+  let ctx = ctxOf(env)
   await tool('space_new').run(ctx, { slug: 'ada2', title: 'Two' })
   let other = (await dirOf(env).space('ada2'))!
   let lone: Ctx = { env, dir: dirOf(env), person: ADA }
@@ -736,6 +738,35 @@ test('one person holds one sandbox awake on the free tier', async () => {
   await awake(env, other, ADA, now)
   await assertRejects(() => awake(env, space, ADA, now), Error, 'free tier')
   await awake(env, space, ADA, now + (HELD + 1) * 1000)
+
+  // Permanent deletion returns every member's place immediately, including
+  // someone who used the shared sandbox but did not ask for the deletion.
+  let bob = 'b0000000-0000-4000-8000-00000000000b'
+  await lone.dir.apply({
+    entities: [
+      { entity: { eid: ADA }, email: { address: 'ada@bot.yak.sh' } },
+      {
+        entity: { eid: bob },
+        person: {},
+        email: { address: 'bob@bot.yak.sh' },
+      },
+      ...[space, other].map((s) => ({
+        entity: { eid: `$bob-${s.slug}` },
+        member: { space: s.eid, person: bob, role: 'owner' },
+      })),
+    ],
+  }, { 'x-yak-person': ADA, 'x-yak-role': 'owner' })
+  let member = { ...lone, person: bob }
+  await tool('sandbox_shell').run(member, { space: 'ada', command: 'ls' })
+  await tool('space_delete').run(lone, { space: 'ada', forever: true })
+  assertEquals(await lone.dir.space('ada'), null)
+  assertEquals([...box.alive], [])
+  let ran = await tool('sandbox_shell').run(lone, {
+    space: 'ada2',
+    command: 'ls',
+  })
+  assertStringIncludes(ran.text, 'exited 0')
+  await awake(env, other, bob)
 })
 
 test("the month of sandbox time is the account's, and it refuses", async () => {
