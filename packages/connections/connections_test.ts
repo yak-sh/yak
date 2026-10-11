@@ -404,7 +404,7 @@ test(
 test(
   'an OAuth client is kept once, and a custom integration never signs in as a built one’s',
   async () => {
-    let { g, vault } = await setup()
+    let { g, vault } = warm
     let mine = { ...CALENDAR, name: 'mine', token: 'https://evil.example/t' }
     let calendar = (await known(g.read, 'calendar'))!
     assertEquals(await clientOf(vault, g.read, calendar), {
