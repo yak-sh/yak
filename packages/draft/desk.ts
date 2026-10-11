@@ -153,22 +153,16 @@ let STASH = 'draft:'
 
 type Kept = { text: string; over: string; rev: number }
 
-/**
- * Bind a person's drafts to the graph that keeps them.
- *
- * ```ts
- * import { assertEquals } from '@std/assert'
- * import { client } from '@yaks/client'
- * import { loadVocab } from '@yaks/vocab'
- * import { desk, draftDoc, drafts } from '@yaks/draft'
- *
- * let g = client(loadVocab([draftDoc]), [drafts()], { vault: false })
- * let d = desk(g, { by: () => 'jo' })
- * d.type('search', '.task')
- * assertEquals(d.text('search'), '.task') // at once
- * d.close()
- * ```
- */
+/** Bind a person's drafts to the graph that keeps them. */
+/// let { client } = await import('@yaks/client')
+/// let { loadVocab } = await import('@yaks/vocab')
+/// let { draftDoc, drafts } = await import('@yaks/draft')
+/// let g = client(loadVocab([draftDoc]), [drafts()], { vault: false })
+/// let d = desk(g, { by: () => 'jo' })
+/// d.type('search', '.task')
+/// let typed = d.text('search') // at once
+/// typed -> '.task'
+/// d.close()
 export let desk = (
   client: Client,
   opts: DeskOpts,
