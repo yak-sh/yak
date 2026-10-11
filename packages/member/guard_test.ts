@@ -184,7 +184,7 @@ let opened = () => {
 }
 
 let titleOf = (s: Storage, eid: string) =>
-  ((s.read(`.entity.eid=${eid}`) as Bundle[])[0]?.pick as { title?: string })
+  ((s.get([eid]) as Bundle[])[0]?.pick as { title?: string })
     ?.title
 
 test('a visitor adds to an open thing and changes nobody else’s row', () => {
@@ -199,13 +199,39 @@ test('a visitor adds to an open thing and changes nobody else’s row', () => {
   assertEquals(titleOf(s, 'theirs'), 'Hi')
 })
 
+let visitorStore = opened()
+let visitorGraph = guarded(visitorStore, ids.list)
+let authored = (actor: Actor | null, b: Bundle) => ({
+  ...b,
+  ...(actor ? { $actor: actor } : {}),
+})
+visitorGraph.apply([authored({ by: ids.kim }, {
+  entity: { eid: 'kims' },
+  pick: { title: 'One' },
+})])
 test('a signed-in visitor changes and deletes what they wrote', () => {
-  let s = opened()
-  as(s, ids.kim, { entity: { eid: 'kims' }, pick: { title: 'One' } })
-  as(s, ids.kim, { entity: { eid: 'kims' }, pick: { title: 'Two' } })
+  let s = visitorStore
+  visitorGraph.apply([
+    authored({ by: ids.kim }, {
+      entity: { eid: 'kims' },
+      pick: { title: 'Two' },
+    }),
+  ])
   assertEquals(titleOf(s, 'kims'), 'Two')
-  denied(() => as(s, null, { entity: { eid: 'kims' }, $delete: true }))
-  as(s, ids.kim, { entity: { eid: 'kims' }, $delete: true })
+  denied(() => visitorGraph.admit([{ entity: { eid: 'kims' }, $delete: true }]))
+})
+
+let deletionStore = opened()
+let deletionGraph = guarded(deletionStore, ids.list)
+deletionGraph.apply([authored({ by: ids.kim }, {
+  entity: { eid: 'kims' },
+  pick: { title: 'Two' },
+})])
+test('a signed-in visitor deletes the row they wrote', () => {
+  let s = deletionStore
+  deletionGraph.apply([
+    authored({ by: ids.kim }, { entity: { eid: 'kims' }, $delete: true }),
+  ])
   assertEquals(titleOf(s, 'kims'), undefined)
 })
 
@@ -259,23 +285,41 @@ test('a guest changes and deletes only rows made through its via', () => {
   )
 })
 
+let signedStore = opened()
+let signedGraph = guarded(signedStore, ids.list)
+signedGraph.apply([authored({ by: ids.kim, via: 'browser' }, {
+  entity: { eid: 'signed' },
+  pick: { title: 'One' },
+})])
 test('a signed-in row belongs to its by even when a guest has its via', () => {
-  let s = opened()
-  as(s, { by: ids.kim, via: 'browser' }, {
-    entity: { eid: 'signed' },
-    pick: { title: 'One' },
-  })
-  for (let other of [{ via: 'browser' }, { by: ids.mo, via: 'browser' }]) {
-    denied(() =>
-      as(s, other, { entity: { eid: 'signed' }, pick: { title: 'x' } })
-    )
-    denied(() => as(s, other, { entity: { eid: 'signed' }, $delete: true }))
-  }
-  as(s, { by: ids.kim, via: 'another-browser' }, {
+  let s = signedStore
+  let other = { via: 'browser' }
+  denied(() =>
+    signedGraph.admit([
+      authored(other, { entity: { eid: 'signed' }, pick: { title: 'x' } }),
+    ])
+  )
+  denied(() =>
+    signedGraph.admit([
+      authored(other, { entity: { eid: 'signed' }, $delete: true }),
+    ])
+  )
+  signedGraph.apply([authored({ by: ids.kim, via: 'another-browser' }, {
     entity: { eid: 'signed' },
     pick: { title: 'Two' },
-  })
+  })])
   assertEquals(titleOf(s, 'signed'), 'Two')
+})
+
+test('another signed-in person gains no ownership from a row’s via', () => {
+  let other = { by: ids.mo, via: 'browser' }
+  for (let change of [{ pick: { title: 'x' } }, { $delete: true }]) {
+    denied(() =>
+      signedGraph.admit([
+        authored(other, { entity: { eid: 'signed' }, ...change }),
+      ])
+    )
+  }
 })
 
 test('a guest via supplies no person identity or permission', () => {

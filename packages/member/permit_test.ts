@@ -2,7 +2,7 @@
 // graph apply boundary as ordinary row ownership and component floors.
 
 import { test } from '@yaks/testing'
-import { assertEquals, assertRejects } from '@std/assert'
+import { assertEquals, assertRejects, assertThrows } from '@std/assert'
 import {
   type Actor,
   type Bundle,
@@ -261,23 +261,27 @@ test('companion permission follows the target current ownership', async () => {
   })
 })
 
+let conditional = fixture()
+await conditional.apply(owner, patch('request', { x: 2 }))
+let pacing = fixture({}, true, '1h')
+await pacing.g.apply(
+  signed([patch('_pace', {
+    writes: [{ comp: 'completed', via: person.via, at: Date.now() }],
+  })], owner),
+  { trusted: true, stamp: false },
+)
 test('a permitted mark retains conditional write checks and pacing', async () => {
-  let f = await fixture()
-  await f.apply(owner, patch('request', { x: 2 }))
-  await assertRejects(async () =>
-    await f.apply(person, {
+  let f = conditional
+  assertThrows(() =>
+    f.apply(person, {
       ...mark(),
       $was: { request: { x: token(1) } },
     }), Stale)
   assertEquals((await f.read()).completed, undefined)
+})
 
-  f = await fixture({}, true, '1h')
-  await f.g.apply(
-    signed([patch('_pace', {
-      writes: [{ comp: 'completed', via: person.via, at: Date.now() }],
-    })], owner),
-    { trusted: true, stamp: false },
-  )
-  await assertRejects(async () => await f.apply(person, mark()), Paced)
+test('a permitted mark retains pacing after companion admission', async () => {
+  let f = pacing
+  assertThrows(() => f.apply(person, mark()), Paced)
   assertEquals((await f.read()).completed, undefined)
 })
