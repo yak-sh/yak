@@ -4,7 +4,13 @@
 // once. Two processes here are two graphs over one store.
 
 import { assert, assertEquals } from '@std/assert'
-import { type Bundle, type Comp, graph, type Storage } from '@yaks/graph'
+import {
+  type Bundle,
+  type Comp,
+  detached,
+  graph,
+  type Storage,
+} from '@yaks/graph'
 import { ram } from '@yaks/ram'
 import { after } from '@yaks/fp'
 import { loadVocab, pick } from '@yaks/vocab'
@@ -98,6 +104,7 @@ committingFx.handle({
   post_note: (e) => void committedRuns.push(`${e.kind} ${e.entity.eid}`),
 })
 await committingFx.work(committingGraph)
+let committingOutside = detached(committingStore)
 let commitPost = (bundle: Bundle) =>
   after(
     committingStore.tx((tx) =>
@@ -106,8 +113,7 @@ let commitPost = (bundle: Bundle) =>
         return committingFx.hooks!.commit!(ready, tx)
       })
     ),
-    (committed) =>
-      committingFx.hooks!.effect!(committed, committingGraph.outside),
+    (committed) => committingFx.hooks!.effect!(committed, committingOutside),
   )
 
 test('a process working the pool runs what it writes, once committed', async () => {
