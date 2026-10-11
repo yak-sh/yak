@@ -21,7 +21,6 @@ import {
   preflight,
   prepareSibling,
   readiness,
-  rollout,
   runWrangler,
   sameServing,
   sameSibling,
@@ -80,16 +79,18 @@ test('deploy prerequisites generate while npm is pending and settle before write
   }
 })
 
-for (let failed of ['web', 'catalog'] as const) {
+for (let failed of ['web', 'catalog', 'cli'] as const) {
   test(`failed ${failed} generation settles prepared Workers without uploading`, async () => {
     let web = Promise.withResolvers<void>()
     let catalog = Promise.withResolvers<void>()
-    let lanes = { web, catalog }
+    let cli = Promise.withResolvers<void>()
+    let lanes = { web, catalog, cli }
     let failure = Error(`${failed} failed`)
     let made = readiness({
       dependencies: () => Promise.resolve(false),
       web: () => web.promise,
       catalog: () => catalog.promise,
+      cli: () => cli.promise,
     })
     let prepared = Promise.withResolvers<void>()
     let removed = false, uploaded = false
@@ -110,13 +111,16 @@ for (let failed of ['web', 'catalog'] as const) {
       await prepared.promise
       assertEquals(uploaded, false)
       lanes[failed].reject(failure)
-      lanes[failed == 'web' ? 'catalog' : 'web'].resolve()
+      for (let [name, lane] of Object.entries(lanes)) {
+        if (name != failed) lane.resolve()
+      }
       assertEquals(await deploy, { error: failure })
       assertEquals(uploaded, false)
       assert(removed)
     } finally {
       web.resolve()
       catalog.resolve()
+      cli.resolve()
       await deploy
     }
   })
@@ -258,102 +262,6 @@ test('a wrangler command with no sibling deploy runs once with its own pinned id
   assertEquals(called, [{ args: ['tail'], unpinned: undefined }])
 })
 
-test('the prepared Worker activates before its image, preserving rollout and environment', async () => {
-  let bundle = [
-    'deploy',
-    '--env',
-    'staging',
-    '-c',
-    'bundle.toml',
-    '--message',
-    'commit',
-  ]
-  for (
-    let mode of [[], ['--containers-rollout=immediate'], [
-      '--containers-rollout',
-      'gradual',
-    ]]
-  ) {
-    let args = [...bundle, ...mode]
-    let events: unknown[] = []
-    let activation = Promise.withResolvers<number>()
-    let image = Promise.withResolvers<void>()
-    let preparing = Promise.withResolvers<void>()
-    let deploy = rollout(args, (argv) => {
-      events.push(argv)
-      return events.length == 1 ? activation.promise : Promise.resolve(0)
-    }, () => {
-      events.push('image')
-      preparing.resolve()
-      return image.promise
-    })
-    try {
-      assertEquals(events, [[...bundle, '--containers-rollout=none']])
-      activation.resolve(0)
-      await preparing.promise
-      assertEquals(events.length, 2)
-      assertEquals(events[1], 'image')
-      image.resolve()
-      assertEquals(await deploy, 0)
-      assertEquals(events[2], args)
-    } finally {
-      activation.resolve(0)
-      image.resolve()
-      await deploy
-    }
-  }
-})
-
-test('failed activation prepares no image, and failed image rollout fails after activation', async () => {
-  for (let failure of ['activation', 'image', 'update']) {
-    let events: string[] = []
-    let error = Error('image failed')
-    let outcome = await rollout(['deploy'], (args) => {
-      let phase = args.includes('--containers-rollout=none')
-        ? 'activation'
-        : 'update'
-      events.push(phase)
-      return Promise.resolve(phase == failure ? 7 : 0)
-    }, () => {
-      events.push('image')
-      return failure == 'image' ? Promise.reject(error) : Promise.resolve()
-    }).then((code) => code, (error) => error)
-    assertEquals(outcome, failure == 'image' ? error : 7)
-    assertEquals(
-      events,
-      failure == 'activation'
-        ? ['activation']
-        : failure == 'image'
-        ? ['activation', 'image']
-        : ['activation', 'image', 'update'],
-    )
-  }
-})
-
-test('Worker-only deploys, dry runs and other commands run once', async () => {
-  for (
-    let args of [
-      ['deploy', '--containers-rollout=none'],
-      ['deploy', '--containers-rollout', 'none'],
-      ['deploy', '--dry-run'],
-      ['tail'],
-    ]
-  ) {
-    let events: unknown[] = []
-    assertEquals(
-      await rollout(args, (argv) => {
-        events.push(argv)
-        return Promise.resolve(0)
-      }, () => {
-        events.push('image')
-        return Promise.resolve()
-      }),
-      0,
-    )
-    assertEquals(events, [...args.includes('--dry-run') ? ['image'] : [], args])
-  }
-})
-
 test('every @yaks/* the checker knows is the file the bundler gets', () => {
   let checked = (JSON.parse(read('./workers.json')) as {
     imports: Record<string, string>
@@ -408,38 +316,91 @@ test('wrangler: app-only pushes do not supersede a build, but Worker source and 
     let work = join(root, 'work')
     let thin = join(root, 'thin')
     await run(root, 'init', '-q', '--bare', '-b', 'main', origin)
-    await run(origin, 'config', 'uploadpack.allowFilter', 'true')
-    await run(root, 'clone', '-q', origin, work)
-    let push = async (path: string) => {
-      let file = join(work, path)
-      Deno.mkdirSync(dirname(file), { recursive: true })
-      Deno.writeTextFileSync(file, crypto.randomUUID())
-      await run(work, 'add', '.')
-      await run(work, 'commit', '-q', '-m', 'c')
-      await run(work, 'push', '-q', 'origin', 'HEAD:main')
-      return await run(work, 'rev-parse', 'HEAD')
+    await Deno.writeTextFile(
+      join(origin, 'config'),
+      '\n[uploadpack]\nallowFilter = true\n',
+      { append: true },
+    )
+    let body = ''
+    for (
+      let [index, paths] of [
+        ['workers/yak/site.ts'],
+        ['apps/vale/main.ts'],
+        ['workers/yak/site.ts', 'packages/graph/mod.ts'],
+      ].entries()
+    ) {
+      body += `commit refs/heads/main\nmark :${
+        index + 1
+      }\ncommitter t <t@t> 1 +0000\ndata 1\nc\n`
+      if (index) body += `from :${index}\n`
+      for (let path of paths) {
+        let content = crypto.randomUUID()
+        body += `M 100644 inline ${path}\ndata ${content.length}\n${content}\n`
+      }
+      body += '\n'
     }
-    let a = await push('workers/yak/site.ts')
+    // Import the history once; moving main still makes each push visible
+    // independently, and shallow clones receive only what main can reach.
+    body += 'reset refs/heads/main\nfrom :1\n\n'
+    let marks = join(root, 'marks')
+    let child = new Deno.Command('git', {
+      args: ['fast-import', '--quiet', `--export-marks=${marks}`],
+      cwd: origin,
+      stdin: 'piped',
+      stdout: 'null',
+      stderr: 'piped',
+    }).spawn()
+    let writer = child.stdin.getWriter()
+    await writer.write(new TextEncoder().encode(body))
+    await writer.close()
+    assertEquals((await child.output()).code, 0)
+    let commits = Object.fromEntries(
+      (await Deno.readTextFile(marks)).trim().split('\n')
+        .map((line) => line.split(' ')),
+    )
+    let [a, b, c] = [':1', ':2', ':3'].map((mark) => commits[mark])
     // Cloned the way a build is, before the next push arrives.
-    await run(root, 'clone', '-q', '--depth', '1', `file://${origin}`, thin)
-    let b = await push('apps/vale/main.ts')
+    await run(
+      root,
+      'clone',
+      '-q',
+      '--no-checkout',
+      '--depth',
+      '1',
+      `file://${origin}`,
+      thin,
+    )
+    await run(origin, 'update-ref', 'refs/heads/main', b)
     // An app-only push starts no replacement build; the last one may land.
     let app = await seen(thin, [a])
     assertEquals(app.tip, b)
     assertEquals(app.changed, false)
     assertEquals(superseded(app), null)
-    Deno.writeTextFileSync(join(work, 'workers/yak/site.ts'), 'changed Worker')
-    let c = await push('packages/graph/mod.ts')
+    await run(origin, 'update-ref', 'refs/heads/main', c)
+    let latest = join(root, 'latest')
+    await Promise.all([
+      run(root, 'clone', '-q', '--no-checkout', origin, work),
+      run(
+        root,
+        'clone',
+        '-q',
+        '--no-checkout',
+        '--depth',
+        '1',
+        `file://${origin}`,
+        latest,
+      ),
+    ])
+    let [current, old] = await Promise.all([seen(work, [a]), seen(thin, [a])])
     // The latest build goes live over what is behind it.
-    assertEquals(superseded(await seen(work, [a])), null)
+    assertEquals(superseded(current), null)
     // An older build that finishes last must leave newer source to its build.
-    let old = await seen(thin, [a])
     assertEquals(old.changed, true)
     assert(superseded(old))
-    await run(work, 'checkout', '-q', a)
-    let latest = join(root, 'latest')
-    await run(root, 'clone', '-q', '--depth', '1', `file://${origin}`, latest)
-    let older = await seen(latest, [a])
+    let [, older] = await Promise.all([
+      run(work, 'checkout', '-q', a),
+      seen(latest, [a]),
+    ])
     assertEquals(older, {
       head: c,
       tip: c,

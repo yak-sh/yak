@@ -118,7 +118,7 @@ let pinned = async () =>
 
 // The whole workbench, wired: a space, an app, and a scripted container.
 let bench = async (answer: (cmd: string) => Ran | void = () => {}) => {
-  let box = sandboxes(answer)
+  let box = sandboxes((cmd) => cmd.startsWith('chmod ') ? {} : answer(cmd))
   let { env, space } = await seeded({ SANDBOX: box.SANDBOX } as Partial<Env>)
   let ctx = ctxOf(env)
   await tool('app_new').run(ctx, { slug: 'chess', title: 'Chess' })
@@ -142,6 +142,11 @@ test('the machine tools write, run and read, and a ship copies out', async () =>
   let ran = await tool('sandbox_shell').run(ctx, {
     command: 'cargo build --release --target wasm32-unknown-unknown',
   })
+  assertStringIncludes(
+    box.files.get('/usr/local/bin/yak')!,
+    '$YAKS_HOST/_cli/launch.ts',
+  )
+  assert(box.ran.includes('chmod +x /usr/local/bin/yak'))
   assertStringIncludes(ran.text, 'exited 0')
   assertStringIncludes(ran.text, 'Finished `release` profile')
   assertStringIncludes(ran.text, 'warning: unused')
@@ -192,7 +197,7 @@ test('sandbox_exec, as the directory listed it, runs its cmd and answers as sand
     timeout: 30,
   })
   assertStringIncludes(ran.text, 'exited 101\nFinished\nerror: no main')
-  assertEquals(box.ran, ['cargo build'])
+  assertEquals(box.ran, ['chmod +x /usr/local/bin/yak', 'cargo build'])
 })
 
 test('a ship that matches nothing says what to look at', async () => {
@@ -344,12 +349,15 @@ test('every command is signed in as the caller, with one grant', async () => {
   await tool('sandbox_shell').run(lone, { command: 'rustc --version' })
   await tool('sandbox_shell').run(lone, { command: 'cargo build' })
 
-  let [first, second] = box.env
+  let invocations = box.env.filter((_, i) =>
+    box.ran[i] != 'chmod +x /usr/local/bin/yak'
+  )
+  let [first, second] = invocations
   assertEquals(first.YAKS_HOST, HOST)
   assert(first.YAKS_TOKEN?.startsWith(GRANT), 'a grant token, said as one')
   assertEquals(second.YAKS_TOKEN, first.YAKS_TOKEN)
   // A writeFile is not a command, and asks for no grant.
-  assertEquals(box.env.length, 2)
+  assertEquals(invocations.length, 2)
 
   // And it opens the door as Ada, narrowed to her space, for about as long as
   // the container can live.
@@ -365,7 +373,7 @@ test('destroying the container revokes what it was wearing', async () => {
   let { box, env, space } = await bench(() => ({ stdout: 'ok' }))
   let lone: Ctx = { env, dir: dirOf(env), person: ADA }
   await tool('sandbox_shell').run(lone, { command: 'ls' })
-  let token = box.env[0].YAKS_TOKEN
+  let token = box.env.at(-1)!.YAKS_TOKEN
   let book = ledger(env.OAUTH_KV)!
   assert(await held(token, SECRET, book), 'live while the container is')
 
@@ -378,8 +386,9 @@ test('destroying the container revokes what it was wearing', async () => {
 
   // The next wake mints a fresh one rather than saying the dead one again.
   await tool('sandbox_shell').run(lone, { command: 'ls' })
-  assert(box.env[1].YAKS_TOKEN != token, 'a new grant for a new container')
-  assert(await held(box.env[1].YAKS_TOKEN, SECRET, book))
+  let next = box.env.at(-1)!.YAKS_TOKEN
+  assert(next != token, 'a new grant for a new container')
+  assert(await held(next, SECRET, book))
 })
 
 test('the token is in the environment and never in the transcript', async () => {
@@ -401,7 +410,7 @@ test('the token is in the environment and never in the transcript', async () => 
     on: (b) => beats.push(JSON.stringify(b)),
   })
 
-  let token = box.env[0].YAKS_TOKEN
+  let token = box.env.at(-1)!.YAKS_TOKEN
   assert(token?.startsWith(GRANT), 'the command was signed in')
   // Not in a frame the person's page draws, not in what the model reads back,
   // and not in the command line the tool was called with.
@@ -429,7 +438,7 @@ test('a build pays for its workbench and leaves none running', async () => {
   }], { model })
 
   assertEquals(out.refused, undefined)
-  assertEquals(box.ran, ['rustc --version'])
+  assertEquals(box.ran, ['chmod +x /usr/local/bin/yak', 'rustc --version'])
   // The loop destroyed what it woke...
   assertEquals([...box.alive], [])
   // ...and the seconds are on the space's month. This conversation shipped
@@ -496,7 +505,7 @@ test('the deploy names the container, and the image is the SDK version', async (
   assertEquals(conf.containers.length, 1)
   let [box] = conf.containers
   assertEquals(box.class_name, 'Sandbox')
-  assertEquals(box.image, './sandbox/Dockerfile')
+  assert(box.image.startsWith('registry.cloudflare.com/'))
   // rustc on a sixteenth of a core would spend the whole budget on one crate,
   // and the image does not fit in `lite`'s disk.
   assertEquals(box.instance_type, 'standard-2')
@@ -520,32 +529,6 @@ test('the deploy names the container, and the image is the SDK version', async (
   let tag = /^FROM docker\.io\/cloudflare\/sandbox:(\S+)$/m.exec(base)
   assert(tag, 'the base is FROM the sandbox image')
   assertEquals(tag[1], pinned.dependencies['@cloudflare/sandbox'])
-  let file = await at('sandbox/Dockerfile')
-
-  // The CLI in the image (T-34387), installed inside the repo's Deno
-  // workspace, since the sibling @yaks/* packages it imports resolve only
-  // there. So the context is the repo root, and the root .dockerignore admits
-  // the workspace: the root config, packages/, and every member outside
-  // packages/, since deno refuses a workspace with a member missing.
-  assertEquals(box.image_build_context, '../..')
-  assertStringIncludes(file, 'COPY . /opt/yaks')
-  assertStringIncludes(file, 'deno install -gf')
-  assertStringIncludes(file, '--config /opt/yaks/deno.json')
-  assertStringIncludes(file, '/opt/yaks/packages/cli/yak.ts')
-  let ignore = (await at('../../.dockerignore')).split('\n')
-  let root = JSON.parse(await at('../../deno.json')) as { workspace: string[] }
-  let admitted = [
-    'deno.json',
-    'deno.lock',
-    'packages',
-    ...root.workspace
-      .map((m) => m.replace(/^\.\//, ''))
-      .filter((m) => !m.startsWith('packages/'))
-      .map((m) => `${m}/deno.json`),
-  ]
-  for (let path of admitted) assert(ignore.includes(`!${path}`), path)
-  assertEquals(ignore.find((l) => l && !l.startsWith('#')), '*')
-  assert(ignore.includes('**/.env*'), 'no .env file reaches the image')
   // Pinned and checksummed like everything else it downloads.
   assert(/^ARG DENO_VERSION=\d+\.\d+\.\d+$/m.test(base), 'deno is pinned')
   assert(/^ARG DENO_SHA256=[0-9a-f]{64}$/m.test(base), 'and checksummed')
@@ -554,14 +537,14 @@ test('the deploy names the container, and the image is the SDK version', async (
 // The image builds FROM the toolchain base (base.ts, T-38057), and the tag it
 // names is the base Dockerfile's own hash: edit the base and this names the
 // FROM line to write.
-test('the sandbox builds FROM the base its Dockerfile hashes to', async () => {
+test('the sandbox names the base its Dockerfile hashes to', async () => {
   let want = await tag(await at('sandbox/base/Dockerfile'))
-  let image = from(await at('sandbox/Dockerfile'))
+  let image = from(await at('wrangler.toml'))
   assertEquals(image?.split('/').at(-1), `yak-sandbox:${want}`)
 })
 
 // The base's pin is checked above; its image door controls Docker operations.
-let baseImage = from(await at('sandbox/Dockerfile'))!
+let baseImage = from(await at('wrangler.toml'))!
 test('a deploy builds and pushes the base only when it is missing', async () => {
   let image = baseImage
   let calls = async (held: string[], dry = false) => {
@@ -685,7 +668,7 @@ test('one person holds one sandbox awake on the free tier', async () => {
     'allows 1 at a time',
   )
   assertEquals((no as { code?: string }).code, 'limit')
-  assertEquals(box.ran, ['ls'])
+  assertEquals(box.ran, ['chmod +x /usr/local/bin/yak', 'ls'])
   // On the Plus plan, two; and once her first has slept, the second wakes.
   let now = Date.now()
   await awake(env, { ...other, tier: 'plus' }, ADA, now)

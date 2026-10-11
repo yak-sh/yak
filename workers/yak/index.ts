@@ -33,8 +33,8 @@ export let Wire = instrument(Wired)
 export let Builder = instrument(Built)
 
 // The builder's workbench (sandbox.ts, T-34264): Cloudflare's own Sandbox
-// Durable Object, whose container the deploy builds from
-// workers/yak/sandbox/Dockerfile. This is the one place the package is named
+// Durable Object, whose container uses the stable toolchain image named in
+// wrangler.toml. The live Worker supplies its CLI. This is the one place the package is named
 // as a value — it imports `cloudflare:workers`, which only the runtime can
 // load, and sandbox.ts types the binding instead so every test can reach the
 // tools that use it.

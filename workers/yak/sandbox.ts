@@ -12,7 +12,7 @@
 // the builder and the same person's own agent over the connector reach one
 // workbench rather than two. It is a Cloudflare Container behind a Durable
 // Object (`@cloudflare/sandbox`), which the deploy provisions from
-// sandbox/Dockerfile and the base under it: Cloudflare's own sandbox image plus pinned
+// the stable sandbox/base/Dockerfile image: Cloudflare's own sandbox image plus pinned
 // Rust, Python, Go and Zig toolchains — `zig cc` is the C and C++ path to
 // wasm — and `wasm-bindgen` and `wasm-opt` beside them. Nothing rarer than
 // those, because an image is disk, disk is money, and every megabyte of it is
@@ -48,7 +48,7 @@
 // And it is signed in as the caller (T-34387). Every command runs with
 // `YAKS_TOKEN` and `YAKS_HOST` in its environment — a grant (grants.ts),
 // narrowed to this space and living about as long as the container can — so
-// the `yaks` CLI the image carries, and plain `curl`, reach the platform's own
+// the `yak` CLI the live platform supplies, and plain `curl`, reach the platform's own
 // door as the person whose build this is. One grant per container rather than
 // one per command ({@link signed}), and it dies with the container
 // ({@link destroyed}). It rides the SDK's per-invocation env and is never
@@ -82,6 +82,7 @@ export type Spend = {
   // every command after ({@link signed}). It sits here rather than in a
   // closure because it belongs to the build, exactly as the seconds do.
   signing?: Promise<Record<string, string>>
+  preparing?: Promise<void>
 }
 
 export let spending = (): Spend => ({ since: null })
@@ -120,8 +121,9 @@ export let REGISTRIES = [
   // Python.
   'pypi.org',
   'files.pythonhosted.org',
-  // JavaScript.
+  // JavaScript and Deno.
   'registry.npmjs.org',
+  'jsr.io',
   // Go's module proxy and checksum database.
   'proxy.golang.org',
   'sum.golang.org',
@@ -322,6 +324,12 @@ let bared = async (env: Keys, space: Space) => {
   }
 }
 
+// Deno reloads this tiny, dependency-free launcher from the live platform.
+// It downloads the immutable CLI workspace only when its content changes.
+export let LAUNCHER = `#!/bin/sh
+exec deno run --quiet --no-config --reload --allow-net --allow-env --allow-read --allow-write --allow-run=deno "$YAKS_HOST/_cli/launch.ts" "$@"
+`
+
 /** The host lends its configured provider after checking the build's budget.
  * Billing starts at first need; grants are supplied only to command invocations. */
 export let workbench = async (
@@ -344,7 +352,33 @@ export let workbench = async (
   })
   let ref = { id: named(space) }
   let lent = await (first ? provider.request!(ref) : provider.wake(ref))
-  return { ...lent, provider, ref }
+  let prepare = () =>
+    spend.preparing ??= (async () => {
+      await lent.machine.write('/usr/local/bin/yak', LAUNCHER)
+      let result = await provider.exec(ref, 'chmod +x /usr/local/bin/yak')
+      if (result.exitCode) throw new Error(`yak launcher: ${result.stderr}`)
+    })()
+  return {
+    ...lent,
+    machine: {
+      ...lent.machine,
+      start: async (command: string, cwd?: string) => {
+        await prepare()
+        return await lent.machine.start(command, cwd)
+      },
+    },
+    provider: {
+      ...provider,
+      exec: async (
+        ref: Parameters<typeof provider.exec>[0],
+        command: string,
+      ) => {
+        await prepare()
+        return await provider.exec(ref, command)
+      },
+    },
+    ref,
+  }
 }
 
 /**

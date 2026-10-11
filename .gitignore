@@ -43,3 +43,6 @@ node_modules.lock/
 /bench/test-times/
 /bench/*.results.json
 /bench/*.json.tmp
+
+# The sandbox CLI workspace and launcher, generated for the Worker asset upload.
+/workers/yak/public/_cli/

@@ -33,7 +33,7 @@ import { createHash } from 'node:crypto'
 import { Buffer } from 'node:buffer'
 import { parse, stringify } from '@std/toml'
 import packages from './package.json' with { type: 'json' }
-import { based, imaged } from './sandbox/base.ts'
+import { imaged } from './sandbox/base.ts'
 import { installed } from './dependencies.ts'
 export { stale } from './dependencies.ts'
 
@@ -118,12 +118,14 @@ export let readiness = (
     dependencies: () => Promise<boolean>
     web: () => Promise<void>
     catalog: () => Promise<void>
+    cli?: () => Promise<void>
   },
 ) => {
   let dependencies = Promise.resolve().then(make.dependencies)
   let web = Promise.resolve().then(make.web)
   let catalog = Promise.resolve().then(make.catalog)
-  let all = Promise.allSettled([dependencies, web, catalog]).then(
+  let cli = Promise.resolve().then(() => make.cli?.())
+  let all = Promise.allSettled([dependencies, web, catalog, cli]).then(
     (completed) => {
       for (let result of completed) {
         if (result.status == 'rejected') throw result.reason
@@ -148,6 +150,9 @@ let preparing = (root = dir, timeout = 600_000) =>
           join(root, 'public/_web'),
           '@yaks/browse/web',
         ])),
+    cli: () =>
+      timed('Sandbox CLI', () =>
+        generated('Sandbox CLI', [join(root, 'sandbox/cli-assets.ts')])),
     catalog: () =>
       timed('Compiler catalog', () =>
         generated('Compiler catalog', [
@@ -195,27 +200,6 @@ let unrolled = (args: string[]) =>
     !/^--containers-rollout(=|$)/.test(a) &&
     args[i - 1] != '--containers-rollout'
   )
-
-/** Activate the prepared Worker before preparing or rebuilding its image.
- * Both uploads read the same bundle and commit annotation. A failed image
- * update fails the deploy while the first activation keeps serving. Explicit
- * Worker-only deploys and dry runs remain single invocations. */
-export let rollout = async (
-  args: string[],
-  run: (args: string[]) => Promise<number>,
-  image: () => Promise<unknown>,
-) => {
-  if (command(args) != 'deploy') return await run(args)
-  if (/(^| )--containers-rollout[= ]none( |$)/.test(args.join(' '))) {
-    return await run(args)
-  }
-  if (!args.includes('--dry-run')) {
-    let code = await run([...unrolled(args), '--containers-rollout=none'])
-    if (code) return code
-  }
-  await image()
-  return await run(args)
-}
 
 type Containers = {
   containers?: { image?: string; image_build_context?: string }[]
@@ -1051,11 +1035,7 @@ if (import.meta.main) {
       runWrangler(
         argv,
         (args, unpinned) =>
-          unpinned ? uploads.get(args[args.indexOf('-c') + 1])! : rollout(
-            args,
-            run,
-            () => based({ wrangler, dry: argv.includes('--dry-run') }),
-          ),
+          unpinned ? uploads.get(args[args.indexOf('-c') + 1])! : run(args),
         async () => (await bundle).args,
       ),
     () => made.all,

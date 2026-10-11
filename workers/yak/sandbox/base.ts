@@ -1,18 +1,6 @@
-// The sandbox image's toolchain half (T-38057): base/Dockerfile, built and
-// pushed once per version of that file instead of on every deploy. Workers
-// Builds keeps no layer cache, so the one-file image downloaded every toolchain
-// again on each push to main and pushed about nine fresh layers of it, and
-// that is where builds failed: a go.dev 404, registry push timeouts.
-//
-// The base's tag is its Dockerfile's own hash, so one tag never names two
-// images and nothing has to be repinned after a push: ./Dockerfile's FROM
-// names `base-<hash>`, sandbox_test.ts holds that pin to the file, and
-// `based()` runs before a deploy builds the image (wrangler.ts). It signs
-// docker in to the registry, since the build pulls the base before wrangler
-// signs in to push, and it builds and pushes the base when its tag is missing.
-// Staging builds FROM the same tag: the registry shares layers across an
-// account's repositories, so staging's push finds every base layer already
-// there.
+// The sandbox toolchain image, built explicitly when its Dockerfile changes.
+// Worker deploys name its immutable registry tag and never build it. The CLI
+// workspace is a Worker asset, downloaded by sandbox/launch.ts on first use.
 
 export let REGISTRY = 'registry.cloudflare.com'
 
@@ -29,9 +17,9 @@ export let tag = async (dockerfile: string) => {
   return 'base-' + hex.slice(0, 16)
 }
 
-/** The image ./Dockerfile builds FROM, as its FROM line names it. */
+/** The stable sandbox image named by the Worker config. */
 export let pinned = (dockerfile: string) =>
-  /^FROM (\S+)$/m.exec(dockerfile)?.[1]
+  /^image = "([^"]+)"$/m.exec(dockerfile)?.[1]
 
 type Run = (cmd: string[], input?: string) => Promise<
   { ok: boolean; out: string }
@@ -95,8 +83,8 @@ let must = async (go: Run, cmd: string[], input?: string) => {
 }
 
 /**
- * Make the base ./Dockerfile names present: sign docker in, and build and push
- * the base if the registry lacks it. A dry run builds it and pushes nothing.
+ * Provision the toolchain before landing a changed image pin. A dry run
+ * builds it and pushes nothing; Worker uploads never call this boundary.
  * `wrangler` is the argv prefix that runs this Worker's pinned wrangler.
  */
 export let based = async (
@@ -108,10 +96,10 @@ export let based = async (
   },
 ) => {
   let want = await tag(await Deno.readTextFile(here('base/Dockerfile')))
-  let from = pinned(await Deno.readTextFile(here('Dockerfile')))
+  let from = pinned(await Deno.readTextFile(here('../wrangler.toml')))
   if (!from?.endsWith(':' + want)) {
     throw new Error(
-      `sandbox/Dockerfile builds FROM ${from}, but base/Dockerfile is ${want}`,
+      `wrangler.toml names ${from}, but base/Dockerfile is ${want}`,
     )
   }
   return await imaged({
@@ -195,4 +183,11 @@ export let imaged = async (
     if ((await go(['docker', 'push', from])).ok) return from
   }
   throw new Error(`docker push ${from} failed three times`)
+}
+
+if (import.meta.main) {
+  let { WRANGLER } = await import('../wrangler.ts')
+  console.log(
+    await based({ wrangler: WRANGLER, dry: Deno.args.includes('--dry-run') }),
+  )
 }

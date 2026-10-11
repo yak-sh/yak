@@ -212,16 +212,9 @@ new_sqlite_classes = ["Builder"]
 tag = "v4"
 new_sqlite_classes = ["Sandbox"]
 
-# The container behind that object. `image` is a path, so the deploy BUILDS
-# it, FROM a toolchain base the deploy door first makes sure the registry
-# holds (sandbox/base.ts), and wrangler needs a container engine to do that —
-# EVEN FOR A DRY RUN.
-# Workers Builds has one and a developer box may not, so the gate here is
-# `deno task deploy:yak --dry-run --containers-rollout=none`: that flag skips
-# the image and the rollout, and the config is still parsed and the Worker
-# still bundles. What holds the block itself is sandbox_test.ts, which reads it
-# and checks that the image tag and the @cloudflare/sandbox pin in package.json
-# are the same release — the one thing here that would rot silently.
+# The container uses a prebuilt registry image. Its tag is the toolchain
+# Dockerfile's hash; sandbox_test.ts checks its SDK against package.json.
+# A Worker deploy builds no sandbox image.
 #
 # `standard-2` — 1 vCPU, 6 GiB, 12 GB of disk — is chosen for rustc: `lite`'s
 # sixteenth of a core would spend the whole ten-minute budget (sandbox.ts
@@ -236,16 +229,11 @@ new_sqlite_classes = ["Sandbox"]
 # here is a fleet yet; raising it is one number. Outbound network is denied
 # but for the package registries (sandbox.ts `REGISTRIES`, index.ts).
 #
-# `image_build_context` is the repo root rather than the Dockerfile's own
-# directory, which is what a build context defaults to: the image installs the
-# `yak` CLI inside the repo's Deno workspace (T-34387), since the sibling
-# @yaks/* packages it imports resolve only there. The root .dockerignore
-# admits the workspace config and packages/ and nothing else, so the context
-# stays small and no secret or .env file reaches the image.
+# The toolchain image is stable. The live Worker's assets supply the CLI
+# workspace on first yak use; a package change builds no sandbox image.
 [[containers]]
 class_name = "Sandbox"
-image = "./sandbox/Dockerfile"
-image_build_context = "../.."
+image = "registry.cloudflare.com/0f9613dfd3f0451df0bd0f12a1372ea3/yak-sandbox:base-ee6d899f43d821b1"
 instance_type = "standard-2"
 max_instances = 5
 
@@ -612,8 +600,7 @@ new_sqlite_classes = ["Sandbox"]
 
 [[env.staging.containers]]
 class_name = "Sandbox"
-image = "./sandbox/Dockerfile"
-image_build_context = "../.."
+image = "registry.cloudflare.com/0f9613dfd3f0451df0bd0f12a1372ea3/yak-sandbox:base-ee6d899f43d821b1"
 instance_type = "standard-2"
 max_instances = 5
 

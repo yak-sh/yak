@@ -22,15 +22,26 @@ and refuses the kernel upload. The pinned Wrangler bundles once, including node
 compatibility code and source maps; the upload reads those generated modules
 without bundling again.
 
-The kernel activates that bundle with `--containers-rollout=none` before any
-sandbox image work. It then prepares the sandbox base and deploys the same
-bundle with the configured container rollout, building and pushing the CLI image
-into the live container application. An image failure fails the build while the
-first Worker activation keeps serving. An explicit `--containers-rollout=none`
-deploy performs only the first activation. Production finishes both activations
-before staging begins. Both versions carry the same commit: default rollback
-selects the previous distinct commit, and deploy timing measures the first
-activation even when the second is serving.
+The kernel deploys once, using a stable sandbox toolchain image by registry
+reference. The live Worker's assets carry the CLI workspace, compressed and
+addressed by its source hash. A sandbox's `yak` fetches the live launcher and
+workspace descriptor; a changed workspace is verified and installed atomically
+before running the existing CLI. Each command uses its own immutable source
+directory. Commands share Deno's module cache across CLI releases. The first
+`yak` call pays for the workspace download and cold dependencies; later calls
+fetch only the launcher and descriptor until the sources change.
+
+The toolchain image is provisioned separately when its Dockerfile changes:
+
+```sh
+deno run -A workers/yak/sandbox/base.ts
+```
+
+Pin the resulting `base-<hash>` registry reference in both container configs
+before landing. Worker deploys resolve that reference without Docker. The CLI
+uses the connector's live `tools/list` schemas, so ordinary platform tool
+changes need no CLI image rollout. Production finishes before staging begins;
+both versions carry the same commit.
 
 Never `wrangler deploy` by hand. Both tasks go through `wrangler.ts`, which runs
 `npm ci` when `node_modules` is behind `package-lock.json` — wrangler bundles
@@ -112,26 +123,25 @@ and the compiler catalog together with npm readiness. Sibling bundles and the
 deploy pre-flight check (`superseded`) start once npm is ready; the kernel
 bundle also waits for its catalog. Uploads wait for all generated files and the
 guard. Each changed sibling's upload runs as its own preparation allows. The
-kernel activates after all succeed, then prepares its sandbox base and updates
-its image. Each sibling is bundled locally and compared with its fully serving
-deployment's `inputs:<sha256>` annotation. The full digest is encoded as
-base64url, fitting Cloudflare's 50-character deployment summary; the version
-annotation also retains the full commit on its next line. A truncated hex
-annotation from an earlier release is read from its sole serving version, then
-that same version's deployment summary is refreshed once with the compact
-digest. The digest covers every upload module, the inputs of each container
-image the sibling runs (its Dockerfile and every file of its build context,
-`wrangler.ts` `images`), its configuration, Wrangler pin and environment. A
-matching sibling stays serving without another upload; changed inputs, an
-unreadable deployment or a release without the annotation upload normally. The
-compiler image has its own `inputs:<sha256>` registry tag, covering its
-Dockerfile and build context. A changed compiler Worker reuses that image; only
-a missing image tag builds and pushes it. A changed sibling uploads its prepared
-modules and source maps through a temporary config beside the original,
-preserving its bindings and naming the registry image. Wrangler bundles no
-second time and rolls the image out without rebuilding it. Registry, build or
-push failures refuse the sibling and kernel deploy. Workers Builds has Docker,
-as the sandbox image already needs. `bin/build-yak` with no argument still runs
+kernel activates after all succeed. Each sibling is bundled locally and compared
+with its fully serving deployment's `inputs:<sha256>` annotation. The full
+digest is encoded as base64url, fitting Cloudflare's 50-character deployment
+summary; the version annotation also retains the full commit on its next line. A
+truncated hex annotation from an earlier release is read from its sole serving
+version, then that same version's deployment summary is refreshed once with the
+compact digest. The digest covers every upload module, the inputs of each
+container image the sibling runs (its Dockerfile and every file of its build
+context, `wrangler.ts` `images`), its configuration, Wrangler pin and
+environment. A matching sibling stays serving without another upload; changed
+inputs, an unreadable deployment or a release without the annotation upload
+normally. The compiler image has its own `inputs:<sha256>` registry tag,
+covering its Dockerfile and build context. A changed compiler Worker reuses that
+image; only a missing image tag builds and pushes it. A changed sibling uploads
+its prepared modules and source maps through a temporary config beside the
+original, preserving its bindings and naming the registry image. Wrangler
+bundles no second time and rolls the image out without rebuilding it. Registry,
+build or push failures refuse the sibling and kernel deploy. Workers Builds has
+Docker for changed compiler images. `bin/build-yak` with no argument still runs
 the check and the workers tests by hand. A push's build that fails is started
 once more through the `BUILD_HOOK` deploy hook (builds.ts), since most failures
 are the network's; the second build's failure stands.
@@ -148,12 +158,11 @@ The sandbox tools use the Cloudflare provider in
 container seconds; the provider owns container RPCs and lifecycle. Grants and
 the meter remain platform concerns.
 
-The sandbox image is two halves (sandbox/base.ts). `sandbox/base/Dockerfile` is
-the toolchain, pushed to the registry once per version of that file as
-`yak-sandbox:base-<its hash>`; `sandbox/Dockerfile` builds FROM that tag and
-adds the `yak` CLI, so a push to main pushes only the CLI's layers. To change a
-toolchain, edit the base file and set the FROM tag `sandbox_test.ts` names; the
-next deploy builds and pushes the base before its own image.
+The sandbox uses `sandbox/base/Dockerfile` as its complete image, pushed to the
+registry once per version of that file as `yak-sandbox:base-<its hash>`.
+`sandbox/base.ts` provisions a changed toolchain explicitly, before its registry
+pin is landed. The CLI sources travel with the live Worker instead of the image,
+so a CLI change adds no Docker work to a deploy.
 
 ## Store traces
 

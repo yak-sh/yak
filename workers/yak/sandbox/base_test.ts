@@ -61,7 +61,9 @@ test('sandbox base overlaps registry HEAD with Docker login', async () => {
   ])
   equal(
     image,
-    pinned(await Deno.readTextFile(new URL('./Dockerfile', import.meta.url))),
+    pinned(
+      await Deno.readTextFile(new URL('../wrangler.toml', import.meta.url)),
+    ),
   )
 })
 

@@ -268,3 +268,40 @@ A 50-second queue wait leaves insufficient execution time for the strict
 60-second limit. The baseline and limit remain unchanged; this change removes
 the package catalog's serial upload, while queue and restore latency remain to
 be measured through Workers CI access.
+
+## Sandbox CLI delivery (T-65018)
+
+The supplied build log for `6011a548` has the Worker live at 00:38:47 UTC and
+the Build stopped at 00:41:41. Its sandbox image pulled the base for 17 seconds,
+then installed the CLI from a 9.35 MB context. A following push, `3201d5d03`,
+waited 51 seconds before starting. The sandbox work therefore occupied a Build
+slot for nearly three minutes after production was live.
+
+The sandbox deploy names the existing toolchain image by registry reference.
+Worker assets carry a compressed, content-addressed CLI workspace and its
+launcher. Each `yak` call reads the live descriptor; a changed workspace is
+checksum-verified and installed into an immutable directory before running
+`packages/cli/yak.ts`. Concurrent calls converge on the same complete directory.
+The launcher retries a workspace retired between requests rather than using an
+old fallback. The original lockfile is retained, with Deno's npm lazy caching so
+unused workspace dependencies are not downloaded on startup. CLI RPC uses
+`initialize`, `tools/list` and `tools/call`; the connector supplies command
+schemas and grammar. Package views are loaded dynamically from that workspace.
+This keeps one CLI implementation and removes sandbox Docker work from all
+Worker deploys. Toolchain changes are provisioned separately before their pin is
+landed.
+
+Local measurements: 1,511 runtime/config files compress to 2,330,514 bytes;
+generation takes 0.45–0.54 seconds. Concurrent verified installation takes 0.373
+seconds; a cached descriptor lookup takes 0.001 seconds. A cold original CLI
+with lazy npm caching takes 0.31 seconds for help, 0.385 seconds for a JSON
+platform tool and 0.468 seconds for a rendered entity answer, with the lockfile
+unchanged. These exclude remote transfer and container startup. Without lazy npm
+caching, the same cold help takes 3.17 seconds and fills 283 MB of unrelated npm
+cache. A separate CLI bundle failed on dynamic local-host dependencies; a source
+workspace also preserves the server-declared package views.
+
+The available Wrangler OAuth credential still gets HTTP 403, code 12004 from the
+Workers Builds list API. Queue stamps cannot be read with that credential; live
+proof uses prospective version-confirmed probes and Cloudflare's GitHub Build
+checks. The strict 60-second limit and ratchet remain unchanged.
