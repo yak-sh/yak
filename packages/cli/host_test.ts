@@ -7,7 +7,7 @@ import {
 } from '@std/assert'
 import type { Handler } from '@yaks/api'
 import { argsOf, type Bundle, type Comp, detached, mint } from '@yaks/graph'
-import { answerOf, toolEid } from '@yaks/tools'
+import { answerOf, CallError, toolEid } from '@yaks/tools'
 import type { VocabDoc } from '@yaks/vocab'
 import { prefixes } from '@yaks/id'
 import { kits, themes } from '@yaks/ui'
@@ -314,7 +314,7 @@ test('a config that numbers entities and reads no number back refuses', async ()
         { db: ':memory:', plugins: ['shop'], numbers: true },
         only({ shop }),
       ),
-    Error,
+    CallError,
     'add @yaks/id',
   )
 })
@@ -472,7 +472,7 @@ test('two plugins may not both say who is calling', async () => {
         { db: ':memory:', plugins: ['a', 'b'] },
         only({ a: who, b: { graph: { ...who.graph } } }),
       ),
-    Error,
+    CallError,
     'a door has one',
   )
 })
@@ -518,7 +518,7 @@ test('two plugins may not both host the routes', async () => {
         { db: ':memory:', plugins: ['a', 'b'] },
         only({ a: hosts, b: { routes: { ...hosts.routes } } }),
       ),
-    Error,
+    CallError,
     'a host has one',
   )
 })
@@ -574,7 +574,7 @@ test('a service role names a plugin the config lists', async () => {
         ['graph', '@yaks/mial'],
         only({ shop }),
       ),
-    Error,
+    CallError,
     'no plugin @yaks/mial',
   )
 })
@@ -1787,4 +1787,12 @@ test('a plugin text compiler takes precedence over the host full-text index', as
   } finally {
     await textCompilerHost.close()
   }
+})
+
+test('compose refuses roles without a graph', async () => {
+  await assertRejects(
+    () => composing({ db: ':memory:' }, ['web']),
+    CallError,
+    'its roles include graph',
+  )
 })

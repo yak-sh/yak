@@ -102,6 +102,7 @@ import { compositionAnatomy, secretNames } from '@yaks/host/anatomy'
 import { AsyncLocalStorage } from 'node:async_hooks'
 import { type Context as TraceContext, installContext } from '@yaks/trace'
 import { spool } from '@yaks/tracker/report'
+import { CallError } from '@yaks/tools/errors'
 import { files } from '@yaks/tracker/file'
 import { type Traces, traces } from './traces.ts'
 import { traceControl } from './trace_control.ts'
@@ -355,7 +356,10 @@ let composed = async (
 ): Promise<Served> => {
   part?.('reporter')
   if (!roles.includes('graph')) {
-    throw new Error('a host opens a graph — its roles include graph')
+    throw new CallError(
+      'config',
+      'a host opens a graph — its roles include graph',
+    )
   }
   let path = dbOf(config)
   let report = reporter(

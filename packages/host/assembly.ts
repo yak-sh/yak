@@ -9,6 +9,7 @@ import {
 } from '@yaks/graph'
 import { loadTools, type Search, tier } from '@yaks/graph/tools'
 import { type Reply, type Runner, runner } from '@yaks/tools'
+import { CallError } from '@yaks/tools/errors'
 import { toolsIn } from '@yaks/vocab/tools'
 import { effectsIn } from '@yaks/vocab'
 import type { VocabDoc } from '@yaks/vocab'
@@ -107,7 +108,10 @@ let doorman = (
 ): Authenticate => {
   let said = graphs.filter(([r]) => r.authenticate)
   if (said.length > 1) {
-    throw new Error(`${said.length} plugins authenticate — a door has one`)
+    throw new CallError(
+      'config',
+      `${said.length} plugins authenticate — a door has one`,
+    )
   }
   let [mod, options] = said[0] ?? []
   let ask = mod?.authenticate?.(host, options ?? {})
@@ -117,11 +121,11 @@ let doorman = (
 // A plugin's `./effects` handling a name no vocabulary declares: code that
 // would never run, since nothing owes it.
 let undeclared = (plugin: string, name: string) =>
-  new Error(`${plugin} handles ${name}, which nothing declares`)
+  new CallError('config', `${plugin} handles ${name}, which nothing declares`)
 
 // Two plugins' `./effects` handling one name: a run is done once, by one.
 let twice = (name: string, plugins: string[]) =>
-  new Error(`${name} is handled by both ${plugins.join(' and ')}`)
+  new CallError('config', `${name} is handled by both ${plugins.join(' and ')}`)
 
 /** The role-selected modules, loaded before a host opens its transaction. */
 export type Prepared = {
@@ -144,13 +148,19 @@ export let prepare = async (
   opts: AssemblyOpts = {},
 ): Promise<Prepared> => {
   if (!roles.includes('graph')) {
-    throw new Error('a host opens a graph — its roles include graph')
+    throw new CallError(
+      'config',
+      'a host opens a graph — its roles include graph',
+    )
   }
   let plugins = opts.plugins ?? configured(config)
   let services = roles.filter((r) => !common(r))
   for (let r of services) {
     if (!plugins.some(([p]) => p == r)) {
-      throw new Error(`no plugin ${r} in this config serves that role`)
+      throw new CallError(
+        'config',
+        `no plugin ${r} in this config serves that role`,
+      )
     }
   }
   let observed = opts.observed
@@ -411,7 +421,8 @@ export let assemble = (
       // resolves them.
       let graphing = roles.includes('graph')
       if (config.numbers && graphing && !contributed.some((p) => p.address)) {
-        throw new Error(
+        throw new CallError(
+          'config',
           '`numbers` prints ids like T-7, and no plugin in this config reads ' +
             'one back — add @yaks/id to plugins',
         )
@@ -462,7 +473,8 @@ export let assemble = (
         r.meaning ? [r.meaning(host, options)] : []
       )
       if (meanings.length > 1) {
-        throw new Error(
+        throw new CallError(
+          'config',
           'more than one meaning index answers search',
         )
       }
@@ -560,7 +572,10 @@ export let assemble = (
       // `served` is empty in a process that does not serve `web`.
       let hosts = served.filter(([r]) => r.handler)
       if (hosts.length > 1) {
-        throw new Error(`${hosts.length} plugins host routes — a host has one`)
+        throw new CallError(
+          'config',
+          `${hosts.length} plugins host routes — a host has one`,
+        )
       }
       let [mod, options] = hosts[0] ?? []
       if (mod?.handler) {
