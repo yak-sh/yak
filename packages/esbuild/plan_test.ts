@@ -72,19 +72,20 @@ test('an app of plain modules compiles nothing', async () => {
   )
 })
 
-test('a TypeScript worker compiles, with the files it reaches', async () => {
+// Build the fixed deployment plan once; inspect every part of the result.
+let typescript = await planned({
+  'worker.ts':
+    `import { route } from './route'\nexport default { fetch: route }`,
+  'route.ts': `import rows from './rows.txt'\nimport add from '../add.wasm'\n` +
+    `import cfg from './cfg.json'\nexport let route = () => rows`,
+  'rows.txt': 'a\nb',
+  'add.wasm': '\0asm',
+  'cfg.json': '{}',
+  'index.html': '<h1>hi</h1>',
+}, 'worker.ts')
+test('a TypeScript worker compiles, with the files it reaches', () => {
   assertEquals(
-    await planned({
-      'worker.ts':
-        `import { route } from './route'\nexport default { fetch: route }`,
-      'route.ts':
-        `import rows from './rows.txt'\nimport add from '../add.wasm'\n` +
-        `import cfg from './cfg.json'\nexport let route = () => rows`,
-      'rows.txt': 'a\nb',
-      'add.wasm': '\0asm',
-      'cfg.json': '{}',
-      'index.html': '<h1>hi</h1>',
-    }, 'worker.ts'),
+    typescript,
     {
       worker: 'worker.ts',
       // What esbuild does not read goes up beside the compiled module.
