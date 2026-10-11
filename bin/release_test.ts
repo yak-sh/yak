@@ -44,29 +44,28 @@ test('bump: a config with no version is left alone', () => {
   assertEquals(bump(json, '0.1.0'), json)
 })
 
-test('unlisted: a package it would publish that jsr.io has no page for', async () => {
-  let root = await Deno.makeTempDir()
-  let member = async (dir: string, config: Record<string, unknown>) => {
-    await Deno.mkdir(`${root}/${dir}`)
-    await Deno.writeTextFile(`${root}/${dir}/deno.json`, JSON.stringify(config))
-  }
-  await Deno.writeTextFile(
-    `${root}/deno.json`,
-    JSON.stringify({ workspace: ['./new', './old', './kept', './npm'] }),
+// Build the workspace once; the assertion still reads which members publish.
+let root = await Deno.makeTempDir()
+let member = async (dir: string, config: Record<string, unknown>) => {
+  await Deno.mkdir(`${root}/${dir}`)
+  await Deno.writeTextFile(`${root}/${dir}/deno.json`, JSON.stringify(config))
+}
+await Deno.writeTextFile(
+  `${root}/deno.json`,
+  JSON.stringify({ workspace: ['./new', './old', './kept', './npm'] }),
+)
+await member('new', { name: '@yaks/new' })
+await member('old', { name: '@yaks/old' })
+await member('kept', { name: '@yaks/kept', publish: false })
+await member('npm', {})
+let pages: typeof fetch = (url) =>
+  Promise.resolve(
+    String(url).endsWith('/packages/old')
+      ? Response.json({ description: '', runtimeCompat: {} })
+      : new Response(null, { status: 404 }),
   )
-  await member('new', { name: '@yaks/new' })
-  await member('old', { name: '@yaks/old' })
-  await member('kept', { name: '@yaks/kept', publish: false })
-  await member('npm', {})
-  let pages: typeof fetch = (url) =>
-    Promise.resolve(
-      String(url).endsWith('/packages/old')
-        ? Response.json({ description: '', runtimeCompat: {} })
-        : new Response(null, { status: 404 }),
-    )
-  try {
-    assertEquals(await unlisted(root, pages), ['@yaks/new'])
-  } finally {
-    await Deno.remove(root, { recursive: true })
-  }
+let missing = await unlisted(root, pages)
+await Deno.remove(root, { recursive: true })
+test('unlisted: a package it would publish that jsr.io has no page for', () => {
+  assertEquals(missing, ['@yaks/new'])
 })
