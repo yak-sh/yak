@@ -27,6 +27,7 @@ export let trackerConfig = (dir: string) => ({
     '@yaks/process',
     '@yaks/effects',
     '@yaks/tracker',
+    '@yaks/timing',
   ],
 })
 
@@ -39,6 +40,24 @@ test('a composed tracker drains a separate spool, preserving error attribution',
   try {
     let actor = { by: mint(), via: mint() }
     let entity = mint(), process = mint()
+    let trace = () => {
+      let eid = mint()
+      return [{
+        entity: { eid },
+        trace: {
+          op: 'request',
+          name: 'box request',
+          at: new Date().toISOString(),
+        },
+      }, {
+        entity: { eid: mint() },
+        span: { trace: eid, op: 'query', name: 'box query' },
+        elapsed: { start: 0, ms: 1 },
+        rows_read: { n: 5 },
+      }]
+    }
+    let traced = trace(), mixed = trace()
+    await files(config.tracker.spool).append(`${JSON.stringify(traced)}\n`)
     let resolve!: (commit: string) => void
     let commit = new Promise<string>((done) => resolve = done)
     let report = reporter(config, actor, commit)
@@ -47,10 +66,21 @@ test('a composed tracker drains a separate spool, preserving error attribution',
       tags: { handler: 'mail_post' },
     })
     let closing = report.close()
-    equal(await Array.fromAsync(files(config.tracker.spool).source()), [])
+    equal(
+      (await Array.fromAsync(files(config.tracker.spool).source())).length,
+      1,
+    )
     resolve('a'.repeat(40))
     await pending
     await closing
+    let records = await Array.fromAsync(files(config.tracker.spool).source())
+    let original = records.find((record) =>
+      record.rows.some((row) => row.error)
+    )!
+    await files(config.tracker.spool).append(
+      `${JSON.stringify([...original.rows, ...mixed])}\n`,
+    )
+    await original.ack()
     let remote = { url: 'https://tracker.test', secret: 'test-only' }
     let tracker = store(ram(vocab, options), { sink: () => {} })
     let route = door(tracker, platform, remote.secret)
@@ -65,8 +95,11 @@ test('a composed tracker drains a separate spool, preserving error attribution',
     }
     equal(refused, true)
     let [record] = await Array.fromAsync(files(config.tracker.spool).source())
-    equal(record.rows.length, 1)
-    await delivery(remote, go)(record.rows)
+    equal(record.rows.length, 3)
+    equal((await host.graph.read('.trace *')).length, 1)
+    await delivery(remote, go)(record.rows.filter((row) =>
+      row.error
+    ))
     await service(host, { remote, fetch: go })
     let remoteRows = await tracker.graph.read('.error ?created ?during *')
     equal(remoteRows.length, 1)
@@ -76,6 +109,9 @@ test('a composed tracker drains a separate spool, preserving error attribution',
     })
     equal(comp(remoteRows[0], 'created').by, actor.by)
     equal(comp(remoteRows[0], 'during').entity, entity)
+    equal(await tracker.graph.read('.trace *'), [])
+    equal((await host.graph.read('.trace *')).length, 2)
+    equal((await host.graph.read('.span *')).length, 2)
     let rows = await host.graph.read('.error ?created ?during *')
     equal(rows.length, 1)
     let row = rows[0]

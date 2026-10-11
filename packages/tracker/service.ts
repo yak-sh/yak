@@ -42,9 +42,12 @@ export let service = async (
       let pending = async function* () {
         for await (let record of source()) {
           if (stop?.aborted) return
-          if (send) {
+          // Traces share the spool with failure captures but belong to local
+          // intake. The remote error door receives errors and request companions.
+          let errors = record.rows.filter((row) => row.error || row.request)
+          if (send && errors.some((row) => row.error)) {
             delivering = true
-            await send(record.rows)
+            await send(errors)
             delivering = false
           }
           yield record
