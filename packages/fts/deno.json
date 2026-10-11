@@ -1,7 +1,10 @@
 {
   "name": "@yaks/fts",
   "version": "0.2.10",
-  "exports": "./mod.ts",
+  "exports": {
+    ".": "./mod.ts",
+    "./fields": "./fields.ts"
+  },
   "license": "Apache-2.0",
   "description": "Indexes a graph's text properties with SQLite FTS5 and adds ranked full-text search to queries.",
   "imports": {

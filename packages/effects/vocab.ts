@@ -3,7 +3,7 @@
 // browser tab that loads this vocabulary loads nothing else.
 
 import type { VocabDoc } from '@yaks/vocab'
-import { effectDoc } from './pool.ts'
+import { effectDoc } from './docs.ts'
 import { provisionalDoc } from './provisional.ts'
 import manifest from './deno.json' with { type: 'json' }
 

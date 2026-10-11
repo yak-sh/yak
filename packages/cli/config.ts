@@ -147,13 +147,16 @@ export let subpath = <M>(plugin: string, name: string): Promise<M | null> => {
   asked.catch(() => imported.delete(key))
   return asked
 }
-/** Load selected subpaths as one module graph where the resolver already
- * knows their exports. Deno otherwise builds a separate dependency graph per
- * concurrent dynamic import, rediscovering shared dependencies for each.
- * Unmapped JSR packages still use the ordinary loader, which alone can say
- * whether their optional export exists. Nothing is written to disk. */
+/** Load selected subpaths and required modules as one module graph where the
+ * resolver already knows their exports. Deno otherwise builds a separate
+ * dependency graph per concurrent dynamic import, rediscovering shared
+ * dependencies for each. Module answers follow the subpath answers; only
+ * subpaths can be absent. Unmapped JSR packages still use the ordinary loader,
+ * which alone can say whether their optional export exists. Nothing is written
+ * to disk. */
 export let subpaths = async (
   requests: readonly (readonly [plugin: string, name: string])[],
+  modules: readonly string[] = [],
 ): Promise<unknown[]> => {
   let pending: { key: string; name: string; spec: string; slot: string }[] = []
   for (let [plugin, name] of requests) {
@@ -168,17 +171,19 @@ export let subpaths = async (
       // An unmapped package is resolved by located() in subpath(), not here.
     }
   }
-  if (pending.length) {
-    let source = pending.map(({ spec, slot }) =>
+  let roots = modules.map((spec, index) => ({
+    spec: import.meta.resolve(located(spec)),
+    slot: `r${index}`,
+  }))
+  let required: Promise<unknown>[] = []
+  if (pending.length || roots.length) {
+    let source = [...pending, ...roots].map(({ spec, slot }) =>
       `export * as ${slot} from ${JSON.stringify(spec)};`
     ).join('\n')
     let loading: Promise<Record<string, unknown>> = import(
       `data:application/javascript,${encodeURIComponent(source)}`
     )
-    for (let { key, slot } of pending) {
-      let name = requests.find(([plugin, name]) =>
-        `${plugin}/${name}` == key
-      )![1]
+    for (let { key, name, slot } of pending) {
       // The batch cannot distinguish an absent file facet from a broken one.
       // Let the ordinary loader classify each on failure, preserving its
       // optional-export semantics and leaving unrelated modules usable.
@@ -189,9 +194,15 @@ export let subpaths = async (
       imported.set(key, asked)
       asked.catch(() => imported.delete(key))
     }
+    required = roots.map(({ spec, slot }) =>
+      loading.then(
+        (modules) => modules[slot],
+        () => import(spec),
+      )
+    )
   }
   return await Promise.all(
-    requests.map(([plugin, name]) => subpath(plugin, name)),
+    [...requests.map(([plugin, name]) => subpath(plugin, name)), ...required],
   )
 }
 

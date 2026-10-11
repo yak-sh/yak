@@ -11,9 +11,16 @@
 
 import type { Bundle, Comp, Hook } from '@yaks/graph'
 import { after } from '@yaks/fp'
-import { COST, PRICE, type Price, USAGE, type Usage, weigh } from '@yaks/model'
+import {
+  COST,
+  PRICE,
+  type Price,
+  USAGE,
+  type Usage,
+  weigh,
+} from '@yaks/model/vocab'
 import type { DerivedProp } from '@yaks/sql'
-import { col, eq, fn, join, select, sub, table } from '@yaks/sql'
+import { col, eq, fn, join, select, sub, table } from '@yaks/sql/core'
 import { ASK, USING } from './native.ts'
 
 // The model an entry asked (`ask.to`), or the one its `using` names.

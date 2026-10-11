@@ -86,8 +86,6 @@ import {
 } from '@yaks/trace'
 import { derivedEid, Stale, token } from '@yaks/graph'
 import { after as cursorAfter, and, eq, limit as window } from '@yaks/query'
-import type { VocabDoc } from '@yaks/vocab'
-import doc from './vocab.json' with { type: 'json' }
 import type { Report, Slot } from './registry.ts'
 import type { Event, Kind } from './trace.ts'
 import type { Write } from './write.ts'
@@ -95,14 +93,7 @@ import { HOLD, LEASE, leaseEid, sleep, take } from './lease.ts'
 import { DAY, expireDaily } from './expire.ts'
 import { finishedRun } from './cleanup.ts'
 
-/**
- * This package's components, to load beside your own when effects should be
- * written down and worked by a pool: `loadVocab([effectDoc, ...mine])`. Three
- * components, one document — `effect`, a run owed, whose every property is
- * server-owned; `lease` (./lease.ts), a duty held by one process at a time;
- * and `provisional` (./provisional.ts), an entity whose step is unfinished.
- */
-export let effectDoc: VocabDoc = doc
+export { effectDoc } from './docs.ts'
 
 /** The pool's component, by the name ./vocab.json declares it. */
 export let EFFECT = 'effect'

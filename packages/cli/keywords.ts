@@ -12,7 +12,7 @@
 // wins; this adds only the difference, never a second registration.
 
 import { edgeKeywords } from '@yaks/edge/vocab'
-import { idKeywords } from '@yaks/id'
+import { idKeywords } from '@yaks/id/vocab'
 import { nameKeywords } from '@yaks/names'
 import type { Keywords } from '@yaks/vocab'
 

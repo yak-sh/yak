@@ -31,13 +31,13 @@
 
 import { conjoin, parse } from '@yaks/query'
 import { toolsIn, toolsSaid } from '@yaks/vocab/tools'
-import { extendMeta, type Keywords, type VocabDoc } from '@yaks/vocab'
+import type { Keywords, VocabDoc } from '@yaks/vocab'
 import { aggregate, reduced } from './aggregate.ts'
 import type { Bundle } from './bundle.ts'
 import type { Graph } from './graph.ts'
 import type { Tool } from './plugin.ts'
 import { argsOf, type NamedTool, toolName } from './tool.ts'
-import { graphDoc } from './vocab.ts'
+import { declared, graphDoc } from './vocab.ts'
 import { formed } from './admit.ts'
 import { Refused } from './errors.ts'
 import { type Guide, proseOf, schemaOf } from './schema.ts'
@@ -210,26 +210,6 @@ export let runs = (seams: Seams = {}): Runs => {
   }
 }
 
-// A schema without its `$schema` line. A tool's schemas are read as JSON
-// Schema 2020-12 already, and a client whose validator defaults to an older
-// draft refuses a schema that names 2020-12 before checking anything.
-let undialected = (
-  { $schema: _, ...rest }: Record<string, unknown>,
-): Record<string, unknown> => rest
-
-// An answer describes a composed vocabulary, including internal and UX
-// components. The authoring meta-schema reserves those names for the host;
-// its name restriction does not constrain what the host reports.
-let reported = (keywords: Keywords[]): Record<string, unknown> => {
-  let meta = extendMeta(keywords)
-  let properties = meta.properties as Record<string, unknown>
-  let { propertyNames: _, ...defs } = properties.$defs as Record<
-    string,
-    unknown
-  >
-  return undialected({ ...meta, properties: { ...properties, $defs: defs } })
-}
-
 /**
  * The generic tier, declared and implemented: ./vocab.json's entries paired
  * with {@link runs}. A graph with no ranked search has no `search` tool at
@@ -244,19 +224,10 @@ let reported = (keywords: Keywords[]): Record<string, unknown> => {
  */
 export let tier = (seams: Seams = {}): NamedTool[] => {
   let doing = runs(seams)
-  return toolsSaid(graphDoc)
-    .filter((decl) => !!doing[decl.name!])
+  return declared({ keywords: seams.keywords, search: !!seams.search })
     .map((decl) => ({
       ...decl,
-      name: decl.name!,
-      run: doing[decl.name!],
-      // What `graph_schema` answers is a vocabulary document, so its shape is
-      // the meta-schema, admitting the names and keywords this graph uses.
-      // No declaration could state it: the keywords come from one graph, and
-      // a declaration is written before there is a graph.
-      ...(decl.name == 'graph_schema'
-        ? { outputSchema: reported(seams.keywords ?? []) }
-        : {}),
+      run: doing[decl.name],
     }))
 }
 

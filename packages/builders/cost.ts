@@ -15,7 +15,7 @@ import {
   sub,
   table,
   unionAll,
-} from '@yaks/sql'
+} from '@yaks/sql/core'
 
 /** `build.cost` as SQL, for @yaks/sqlite's derived-property registry. */
 export let buildCost: DerivedProp = {

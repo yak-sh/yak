@@ -3,7 +3,8 @@
 
 import { test } from '@yaks/testing'
 import { assertEquals, assertThrows } from '@std/assert'
-import { loadTools } from './tools.ts'
+import { loadTools, tier } from './tools.ts'
+import { declared } from './vocab.ts'
 
 let doc = {
   $defs: {
@@ -54,4 +55,30 @@ test('a declaration nobody implements is a load error', () => {
     Error,
     "tool 'book_shelve' is declared and not implemented",
   )
+})
+
+test('generic declarations describe the search capability and reported keywords', () => {
+  let keyword = { enum: ['warm', 'cool'] }
+  let keywords = [{
+    uri: 'https://example.org/shade',
+    prop: ['shade'],
+    doc: { $defs: { shade: keyword } },
+  }]
+  let tools = declared({ keywords, search: true })
+  assertEquals(tools.some((t) => t.name == 'search'), true)
+  assertEquals(declared().some((t) => t.name == 'search'), false)
+  assertEquals(tools.some((t) => 'run' in t), false)
+  assertEquals(
+    tools.map((t) => t.name),
+    tier({ keywords, search: () => [] }).map((t) => t.name),
+  )
+  let schema = tools.find((t) => t.name == 'graph_schema')!.outputSchema!
+  let defs = schema.$defs as Record<
+    string,
+    { properties: Record<string, unknown> }
+  >
+  assertEquals(defs.prop.properties.shade, keyword)
+  assertEquals(schema.$schema, undefined)
+  let properties = schema.properties as Record<string, object>
+  assertEquals('propertyNames' in properties.$defs, false)
 })

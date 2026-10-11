@@ -17,7 +17,7 @@ import {
   select,
   table,
   when,
-} from '@yaks/sql'
+} from '@yaks/sql/core'
 
 let component = (b: Bundle, name: string): Comp | undefined =>
   typeof b[name] == 'object' && b[name] != null ? b[name] as Comp : undefined

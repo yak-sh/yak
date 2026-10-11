@@ -32,7 +32,7 @@ import {
   sub,
   table,
   val,
-} from '@yaks/sql'
+} from '@yaks/sql/core'
 import { bodies } from './props.ts'
 import { type Blobs, encode } from './store.ts'
 

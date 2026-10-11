@@ -21,7 +21,6 @@
 import {
   and,
   as,
-  type Backings,
   col,
   eq,
   fn,
@@ -31,7 +30,8 @@ import {
   sub,
   table,
   when,
-} from '@yaks/sql'
+} from '@yaks/sql/core'
+import type { Backings } from '@yaks/sql'
 import type { Vocab } from '@yaks/vocab'
 
 let jc = (c: string) => col(c, 'jc')

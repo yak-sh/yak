@@ -15,7 +15,7 @@
 // immediately and keeps `apply()` synchronous, while a bucket over the network
 // answers with a promise and makes it asynchronous.
 
-import { sha256 } from '@yaks/graph'
+import { sha256 } from '@yaks/graph/sha256'
 import type { Opened } from './object.ts'
 
 /**

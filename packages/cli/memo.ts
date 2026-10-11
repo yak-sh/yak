@@ -1,0 +1,417 @@
+// Derived command declarations, kept between processes while their inputs and
+// sources agree. A memo is disposable: an unreadable memo or a source whose
+// dependencies cannot be proved leaves the ordinary derivation in charge.
+
+/** A source module, or an optional facet of a configured package. */
+export type MemoRoot = string | readonly [plugin: string, facet: string]
+
+export type MemoFiles = {
+  readTextFileSync: (path: string) => string
+  mkdirSync: (path: string, options: Deno.MkdirOptions) => void
+  writeTextFileSync: (
+    path: string,
+    text: string,
+    options: Deno.WriteFileOptions,
+  ) => void
+  renameSync: (from: string, to: string) => void
+  removeSync: (path: string) => void
+}
+
+export type MemoOptions = {
+  dir?: string
+  files?: MemoFiles
+  resolve?: (specifier: string) => string
+  /** Function-valued fields excluded from each facet's derived data. */
+  callbacks?: { [facet: string]: readonly string[] }
+  /** Literal source dependencies; injected at the filesystem boundary in tests. */
+  imports?: (source: string, name?: string) => Promise<string[]>
+  /** The digest boundary is synchronous in memory tests. */
+  digest?: (text: string) => string | Promise<string>
+}
+
+type Record<T> = {
+  version: number
+  roots: string[]
+  files: string[]
+  source: string
+  hash: string
+  value: T
+}
+
+let VERSION = 5
+let FILES = ['deno.json', 'deno.jsonc']
+let encoder = new TextEncoder()
+let sha256 = async (text: string): Promise<string> =>
+  Array.from(
+    new Uint8Array(await crypto.subtle.digest('SHA-256', encoder.encode(text))),
+    (b) => b.toString(16).padStart(2, '0'),
+  ).join('')
+// Each path and present value carries its UTF-16 length; absence has its own
+// marker. Concatenated entries have exactly one reading, including empty files.
+let framed = (path: string, text: string | null): string =>
+  `${path.length}:${path}${text === null ? 'n' : `s${text.length}:${text}`}`
+let local = (s: string) => s.startsWith('file:')
+let packaged = (s: string) => /^(?:npm|jsr):/.test(s)
+let immutable = (s: string) =>
+  /^(?:npm|jsr):[^\s]+@\d+\.\d+\.\d+(?:[-+][\w.-]+)?(?:\/|$)/.test(s) ||
+  s.startsWith('node:')
+let packageKey = (s: string): string => {
+  let key = /^(?:npm|jsr):(?:@[^/]+\/)?[^/@]+@[^/]+/.exec(s)?.[0] ?? s
+  // Deno records JSR's ^N.0.0 ranges as N; both describe the same releases.
+  return key.startsWith('jsr:')
+    ? key.replace(/@\^([1-9]\d*)\.0\.0$/, '@$1')
+    : key
+}
+let pathOf = (s: string) => decodeURIComponent(new URL(s).pathname)
+
+// No parser in an ordinary memo hit, and no subprocess in either path.
+import type { ImportSpecifier } from 'es-module-lexer/js'
+
+export let sourceImports = (
+  source: string,
+  parsed: readonly ImportSpecifier[],
+): string[] =>
+  parsed.filter((i) => {
+    if (!i.n) return false
+    if (i.d >= 0) return true
+    if (i.d != -1) return false
+    let statement = source.slice(i.ss, i.se)
+      .replace(/\/\*[\s\S]*?\*\/|\/\/[^\n]*/g, ' ')
+    if (/^(?:import|export)\s+type\s+(?!from\b)/.test(statement)) return false
+    let named = /^(?:import|export)\s*\{([^}]*)\}\s*from\b/.exec(statement)
+    let members = named?.[1].split(',').filter((s) => s.trim())
+    return !members?.length ||
+      !members.every((s) => /^\s*type\s+(?!as\b)/.test(s))
+  }).map((i) => i.n!)
+
+let importsOf = async (
+  source: string,
+  name?: string,
+  callbacks: readonly string[] = [],
+): Promise<string[]> => {
+  let { parse } = await import('es-module-lexer/js')
+  try {
+    let parsed = parse(source)[0]
+    if (!callbacks.length || !parsed.some((i) => i.d >= 0)) {
+      return sourceImports(source, parsed)
+    }
+  } catch {
+    /* TSX needs the syntax-aware scanner too. */
+  }
+  return (await import('./parser.ts')).imports(source, name, callbacks)
+}
+
+let directory = (): string | undefined => {
+  try {
+    let root = Deno.env.get('XDG_CACHE_HOME')
+    let home = Deno.env.get('HOME')
+    return root || home ? `${root ?? `${home}/.cache`}/yak/cli` : undefined
+  } catch {
+    return undefined
+  }
+}
+
+/** Reuse JSON data while the configuration and every literal source dependency
+ * are unchanged. Static imports and literal dynamic imports are tracked; a
+ * caller supplies roots for modules chosen by runtime callbacks. Callbacks
+ * projected out of the data keep their imports for invocation. Source contents,
+ * including missing files, are checked rather
+ * than timestamps. Only the digest of `inputs` is kept; callers project away
+ * closures and host capabilities before returning their data. */
+export let remember = async <T>(
+  inputs: unknown,
+  roots: readonly MemoRoot[],
+  make: () => T | Promise<T>,
+  opts: MemoOptions = {},
+): Promise<T> => {
+  let io = opts.files ?? Deno
+  let digest = opts.digest ?? sha256
+  let locate = opts.resolve ?? import.meta.resolve
+  let resolved = new Map<string, string>()
+  let resolve = (specifier: string): string => {
+    let known = resolved.get(specifier)
+    if (known !== undefined) return known
+    let found = locate(specifier)
+    resolved.set(specifier, found)
+    return found
+  }
+  let dir = opts.dir ?? directory()
+  if (!dir) return await make()
+  let file: string
+  let identities: string[] = []
+  let starts: string[] = []
+  let packages: string[] = []
+  let callbacks = new Map<string, readonly string[]>()
+  try {
+    file = `${dir}/${await digest(
+      JSON.stringify([
+        VERSION,
+        Deno.version,
+        inputs,
+        roots,
+        opts.callbacks ?? {},
+      ]),
+    )}.json`
+    for (let root of roots) {
+      if (typeof root == 'string') {
+        let spec = resolve(root)
+        if (!local(spec) && !packaged(spec) && !immutable(spec)) {
+          throw new Error('mutable module')
+        }
+        starts.push(spec)
+        callbacks.set(spec, [])
+        identities.push(spec)
+      } else {
+        let [plugin, facet] = root
+        // Even an absent export depends on its package's export map.
+        let owner = resolve(plugin)
+        if (!local(owner) && !packaged(owner) && !immutable(owner)) {
+          throw new Error('mutable module')
+        }
+        packages.push(owner)
+        let spec: string | undefined
+        try {
+          spec = resolve(`${plugin}/${facet}`)
+        } catch {
+          /* The derivation decides whether an absent facet is allowed. */
+        }
+        if (spec && !local(spec) && !packaged(spec) && !immutable(spec)) {
+          throw new Error('mutable module')
+        }
+        identities.push(owner, spec ?? `absent:${plugin}/${facet}`)
+        if (spec) {
+          starts.push(spec)
+          let excluded = opts.callbacks?.[facet] ?? []
+          let known = callbacks.get(spec)
+          callbacks.set(
+            spec,
+            known ? known.filter((n) => excluded.includes(n)) : excluded,
+          )
+        }
+      }
+    }
+  } catch {
+    return await make()
+  }
+
+  let read = (path: string): string | null => {
+    try {
+      return io.readTextFileSync(path)
+    } catch (e) {
+      if (e instanceof Deno.errors.NotFound) return null
+      throw e
+    }
+  }
+  let fingerprint = (files: Iterable<[string, string | null]>) =>
+    digest(Array.from(files, ([path, text]) => framed(path, text)).join(''))
+  let snapshot = (files: string[]) =>
+    fingerprint(files.map((path) => [path, read(path)]))
+  try {
+    let known: Record<T> = JSON.parse(read(file) ?? 'null')
+    if (
+      known?.version == VERSION && 'value' in known &&
+      JSON.stringify(known.roots) == JSON.stringify(identities) &&
+      Array.isArray(known.files) && known.files.length > 0 &&
+      known.hash ==
+        await digest(
+          JSON.stringify([known.roots, known.files, known.source, known.value]),
+        ) &&
+      known.source == await snapshot(known.files)
+    ) return known.value
+  } catch (error) {
+    if (error instanceof Deno.errors.PermissionDenied) return await make()
+    // A damaged memo is rebuilt.
+  }
+
+  // If a miss cannot be kept, source scanning buys nothing. Check the write
+  // boundary before loading the parser or walking the dependency graph.
+  let probe = `${file}.${crypto.randomUUID()}`
+  let writable = false
+  try {
+    io.mkdirSync(dir, { recursive: true, mode: 0o700 })
+    io.writeTextFileSync(probe, '', { mode: 0o600, createNew: true })
+    writable = true
+  } catch {
+    /* Derivation needs no writable cache. */
+  } finally {
+    try {
+      io.removeSync(probe)
+    } catch { /* An unsuccessful write may have created nothing. */ }
+  }
+  if (!writable) return await make()
+
+  let sources = new Map<string, string | null>()
+  type Imports = { [key: string]: string }
+  type Manifest = {
+    imports?: Imports
+    scopes?: { [scope: string]: Imports }
+    base: URL
+  }
+  let manifests = new Map<string, Manifest>()
+  let locks = new Map<string, { [specifier: string]: string }>()
+  let scanned = new Set<string>()
+  let ancestors = new Set<string>()
+  let watch = (path: string) => {
+    if (!sources.has(path)) sources.set(path, read(path))
+    return sources.get(path)!
+  }
+  let ancestry = (specifier: string) => {
+    if (!local(specifier)) return
+    let dir = new URL('.', specifier)
+    while (true) {
+      if (ancestors.has(dir.href)) break
+      ancestors.add(dir.href)
+      for (let name of FILES) {
+        let path = pathOf(new URL(name, dir).href)
+        let text = watch(path)
+        if (name == 'deno.json' || name == 'deno.jsonc') {
+          if (text !== null && !manifests.has(path)) {
+            // A JSONC form this JSON reader cannot prove derives normally.
+            let doc = JSON.parse(text)
+            let base = new URL(name, dir)
+            if (doc.lock !== false) {
+              let lock = new URL(
+                typeof doc.lock == 'string'
+                  ? doc.lock
+                  : doc.lock?.path ?? 'deno.lock',
+                base,
+              )
+              let path = pathOf(lock.href)
+              if (!locks.has(path)) {
+                let text = watch(path)
+                if (text !== null) {
+                  locks.set(path, JSON.parse(text).specifiers ?? {})
+                }
+              }
+            }
+            if (doc.importMap) {
+              base = new URL(doc.importMap, base)
+              let map = watch(pathOf(base.href))
+              if (map === null) throw new Error('absent import map')
+              manifests.set(path, { ...JSON.parse(map), base })
+            } else manifests.set(path, { ...doc, base })
+          }
+        }
+      }
+      let up = new URL('../', dir)
+      if (up.href == dir.href) break
+      dir = up
+    }
+  }
+  let relative = (specifier: string, from: string): string => {
+    let address = (name: string, base: URL | string): string =>
+      /^(?:\.?\.?\/|[a-z][\w+.-]*:)/i.test(name)
+        ? new URL(name, base).href
+        : name
+    let asked = address(specifier, from)
+    let dir = new URL('.', from)
+    while (true) {
+      for (let name of ['deno.json', 'deno.jsonc']) {
+        let doc = manifests.get(pathOf(new URL(name, dir).href))
+        if (!doc) continue
+        let scopes = Object.keys(doc.scopes ?? {}).filter((s) =>
+          from.startsWith(new URL(s, doc.base).href)
+        ).sort((a, b) =>
+          new URL(b, doc.base).href.length - new URL(a, doc.base).href.length
+        )
+        for (
+          let map of [...scopes.map((s) => doc.scopes![s]), doc.imports ?? {}]
+        ) {
+          let key = Object.keys(map).filter((k) =>
+            address(k, doc.base) == asked ||
+            k.endsWith('/') && asked.startsWith(address(k, doc.base)) ||
+            packaged(map[k]) && asked.startsWith(`${k}/`)
+          ).sort((a, b) =>
+            address(b, doc.base).length - address(a, doc.base).length
+          )[0]
+          if (!key) {
+            continue
+          }
+          let mapped = map[key] + asked.slice(address(key, doc.base).length)
+          return packaged(mapped) || immutable(mapped)
+            ? mapped
+            : mapped.startsWith('.') || mapped.startsWith('/')
+            ? new URL(mapped, doc.base).href
+            : resolve(mapped)
+        }
+      }
+      let up = new URL('../', dir)
+      if (up.href == dir.href) break
+      dir = up
+    }
+    return packaged(asked) || immutable(asked)
+      ? asked
+      : asked == specifier
+      ? resolve(specifier)
+      : asked
+  }
+  let visit = async (specifier: string): Promise<void> => {
+    if (scanned.has(specifier)) return
+    scanned.add(specifier)
+    if (!local(specifier)) {
+      if (
+        !immutable(specifier) &&
+        ![...locks.values()].some((lock) =>
+          /^\d+\.\d+\.\d+(?:[-+][\w.-]+)?(?:_[^\s]+)?$/.test(
+            lock[packageKey(specifier)] ?? '',
+          )
+        )
+      ) throw new Error('mutable module')
+      return
+    }
+    ancestry(specifier)
+    let path = pathOf(specifier)
+    let text = watch(path)
+    if (text === null || !/\.[cm]?[jt]sx?$/.test(specifier)) return
+    let imports = opts.imports ??
+      ((source: string, name?: string) =>
+        importsOf(source, name, callbacks.get(specifier)))
+    for (let dependency of await imports(text, specifier)) {
+      await visit(relative(dependency, specifier))
+    }
+  }
+  let proved = false
+  try {
+    packages.forEach(ancestry)
+    starts.filter(local).forEach(ancestry)
+    for (let source of starts) await visit(source)
+    proved = sources.size > 0
+  } catch { /* A source we cannot prove is derived normally. */ }
+  let sourceHash: string | undefined
+  try {
+    if (proved) sourceHash = await fingerprint(sources)
+  } catch { /* A failed digest still leaves ordinary derivation usable. */ }
+
+  // Derivation errors always reach the caller, regardless of cache failures.
+  let value = await make()
+  if (sourceHash !== undefined) {
+    let draft = `${file}.${crypto.randomUUID()}`
+    try {
+      // A source changed while derivation ran: the next call must derive too.
+      let dependencies = [...sources.keys()]
+      if (sourceHash != await snapshot(dependencies)) {
+        return value
+      }
+      let record: Record<T> = {
+        version: VERSION,
+        roots: identities,
+        files: dependencies,
+        source: sourceHash,
+        hash: await digest(
+          JSON.stringify([identities, dependencies, sourceHash, value]),
+        ),
+        value,
+      }
+      io.mkdirSync(dir, { recursive: true, mode: 0o700 })
+      io.writeTextFileSync(draft, JSON.stringify(record), { mode: 0o600 })
+      io.renameSync(draft, file)
+    } catch {
+      /* Persistence is optional. */
+    } finally {
+      try {
+        io.removeSync(draft)
+      } catch { /* A renamed draft is already gone. */ }
+    }
+  }
+  return value
+}

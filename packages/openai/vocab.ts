@@ -3,10 +3,12 @@
 // runtime, so a browser tab loading this vocabulary loads nothing else.
 
 import type { VocabDoc } from '@yaks/vocab'
-import { openaiDoc } from './responses.ts'
+import doc from './vocab.json' with { type: 'json' }
 import manifest from './deno.json' with { type: 'json' }
 
-export { openaiDoc }
+/** The one comp this provider stamps on an ask it answered:
+ * `openai{response_id}`. Load it beside the conversation's vocabulary. */
+export let openaiDoc: VocabDoc = doc
 
 /** What this package is: its manifest's description, the one place it is
  * written, which a host stamps on each document here. */

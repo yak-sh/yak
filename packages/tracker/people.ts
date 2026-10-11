@@ -12,7 +12,7 @@ import {
   select,
   sub,
   table,
-} from '@yaks/sql'
+} from '@yaks/sql/core'
 
 export let computed: Computed = {
   'bug.people': (bug, index) =>

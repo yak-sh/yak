@@ -14,7 +14,10 @@
 // No component is declared here: the tier describes a store, it does not add
 // anything to one.
 
-import type { VocabDoc } from '@yaks/vocab'
+import { extendMeta, type Keywords, type VocabDoc } from '@yaks/vocab/runtime'
+import { toolsSaid } from '@yaks/vocab/tools'
+import type { NamedTool } from './tool_meta.ts'
+export { offered, type ToolId, toolName } from './tool_meta.ts'
 import doc from './vocab.json' with { type: 'json' }
 import manifest from './deno.json' with { type: 'json' }
 
@@ -27,3 +30,40 @@ export let description: string = manifest.description
 
 /** Every document this package declares. */
 export let docs: VocabDoc[] = [graphDoc]
+
+// An answer describes a composed vocabulary, including internal and UX
+// components. The authoring meta-schema reserves those names for the host;
+// its name restriction does not constrain what the host reports.
+let reported = (keywords: Keywords[]): Record<string, unknown> => {
+  let { $schema: _, ...meta } = extendMeta(keywords)
+  let properties = meta.properties as Record<string, unknown>
+  let { propertyNames: __, ...defs } = properties.$defs as Record<
+    string,
+    unknown
+  >
+  // Tool schemas are already read as 2020-12. Omit the dialect line, which
+  // clients defaulting to an older draft can refuse before checking a value.
+  return { ...meta, properties: { ...properties, $defs: defs } }
+}
+
+/** The generic tools a graph offers, without their implementations. Search
+ * appears only where the host has that capability. The schema answer admits
+ * the extension keywords and internal component names that host reports.
+ * Authored declarations are read without checking them again at startup. */
+export let declared = (
+  { keywords = [], search = false }: {
+    keywords?: Keywords[]
+    search?: boolean
+  } = {},
+): Omit<NamedTool, 'run'>[] =>
+  toolsSaid(graphDoc)
+    .filter((decl) => decl.name != 'search' || search)
+    .map((decl) => ({
+      ...decl,
+      name: decl.name!,
+      // The keywords come from this graph, so no authored tool declaration
+      // could state the complete schema before composition.
+      ...(decl.name == 'graph_schema'
+        ? { outputSchema: reported(keywords) }
+        : {}),
+    }))

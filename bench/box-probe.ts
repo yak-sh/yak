@@ -22,7 +22,8 @@ let subcommands = await import('../packages/cli/subcommands.ts')
 let held = await import('../packages/cli/held.ts')
 let { cli } = await import('../packages/cli/run.ts')
 let { closeAccounts } = await import('../packages/cli/accounts.ts')
-let { words } = await import('../packages/cli/words.ts')
+let { declarations } = await import('../packages/cli/declarations.ts')
+let { prepare } = await import('../packages/cli/prepare.ts')
 let { read } = await import('../packages/cli/config.ts')
 let { channel } = await import('@yaks/trace')
 let { collector } = await import('./box-lib.ts')
@@ -44,14 +45,19 @@ let more: typeof yak.YAK.more = async (c) => {
   let listed = await subcommands.commands(c)
   mark('commands')
   let start = performance.now()
-  let pooled = !!(await words(read(c.config!))).vocab.comp('effect')
+  let pooled = (await declarations(read(c.config!), true)).pooled
   waste += performance.now() - start
   return listed.map((command): Command => ({
     ...command,
     run: async (args, ctx) => {
       // Imported here, where `yak` first imports them: by the command that
       // opens a graph, after the listing.
-      let local = await import('../packages/cli/local.ts')
+      let local = await prepare(
+        read(ctx.config!),
+        command,
+        undefined,
+        !ctx.json,
+      )
       let roles = local.rolesOf(command, pooled)
       let readOnly = !!command.readOnly
       if (mode == 'compose') {

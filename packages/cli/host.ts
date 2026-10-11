@@ -109,6 +109,9 @@ import {
 } from '@yaks/blob'
 import { type Config, dbOf, given, type Options, used } from './config.ts'
 import { facet, type Taken, taking, wordsOf } from './words.ts'
+import { declarations } from './declarations.ts'
+import { ROLES } from './roles.ts'
+export { ROLES } from './roles.ts'
 import { drain } from './drain.ts'
 import { vaultOf } from './vault.ts'
 import type { Command, Ctx } from './run.ts'
@@ -146,17 +149,6 @@ export {
 
 import type { Feed, Host } from '@yaks/host'
 export type { Feed, Host } from '@yaks/host'
-
-/** The roles every graph has, and the facet each one imports from every
- * plugin. A plugin with a `./service` brings one role more, named by its
- * package, which imports that one facet of that one plugin. Rendering is not
- * among them: drawing an entity is the caller's, the web UI's or the `yak`
- * command's (./answer.ts), and needs no graph open. */
-export let ROLES = {
-  graph: ['vocab', 'graph', 'tools'],
-  web: ['routes', 'ui'],
-  effects: ['effects'],
-} as const
 
 /** A role: one of {@link ROLES}, or a plugin's package, for its service. */
 export type Role = string
@@ -595,6 +587,8 @@ let composed = async (
     secretNames(given(p)).map((name) => ({ name, package: used(p) }))
   )
   let plugins = named(config, vault)
+  let declared = load === facet ? await declarations(config) : undefined
+  let stored = new Map(declared?.vocabs.map((v) => [v.plugin, v]))
   part?.('roles')
   let observed = nativeAnatomy(
     plugins.map(([p]) => p),
@@ -605,7 +599,12 @@ let composed = async (
   // Import observation belongs to this composition, not wordsOf's cache.
   let observedLoad: Load = async (plugin, name) => {
     observed.attempted(plugin, name)
-    let loaded = await load(plugin, name)
+    let data = name == 'vocab' ? stored.get(plugin) : undefined
+    let loaded = data && !data.factories
+      ? data.value as Facets[typeof name] | null
+      : declared && !declared.facets[plugin].includes(name)
+      ? null
+      : await load(plugin, name)
     observed.loaded(plugin, name, loaded !== null)
     return loaded
   }
@@ -628,11 +627,20 @@ let composed = async (
   part?.('facets')
   await load.together?.(plugins.flatMap(([plugin]) =>
     [
-      ...roles.includes('graph') ? ['vocab', 'graph'] as const : [],
+      ...roles.includes('graph')
+        ? [
+          ...declared && !stored.get(plugin)?.factories
+            ? []
+            : ['vocab'] as const,
+          'graph' as const,
+        ]
+        : [],
       ...roles.includes('effects') ? ['effects'] as const : [],
       ...roles.includes('web') ? ['routes', 'ui'] as const : [],
       ...services.includes(plugin) ? ['service'] as const : [],
-    ].map((name) => [plugin, name] as const)
+    ].filter((name) => !declared || declared.facets[plugin].includes(name)).map(
+      (name) => [plugin, name] as const,
+    )
   ))
   let [vocabs, graphs, watched, served, dressed, running] = await Promise.all([
     take('graph', 'vocab'),

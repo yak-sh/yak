@@ -15,7 +15,7 @@ import {
   select,
   table,
   when,
-} from '@yaks/sql'
+} from '@yaks/sql/core'
 
 import { attemptState } from './state.ts'
 export { attemptState } from './state.ts'

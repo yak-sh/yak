@@ -25,15 +25,18 @@ test('selected facet modules keep request order, shared exports, and module iden
       `${dir}/effects.ts`,
       "throw Error('unselected role ran')\nexport {}\n",
     )
-    let [graph, vocab, duplicate] = await subpaths([
+    let [graph, vocab, duplicate, root] = await subpaths([
       [plugin, 'graph.ts'],
       [plugin, 'vocab.ts'],
       [plugin, 'graph.ts'],
-    ]) as { value: object }[]
+    ], [`${plugin}/shared.ts`]) as { value: object }[]
     equal(graph.value, vocab.value)
+    ok(root.value === graph.value)
+    ok(root === await import(`${plugin}/shared.ts`))
     ok(graph === duplicate)
     ok(graph === await subpath(plugin, 'graph.ts'))
     equal(await subpaths([]), [])
+    equal(await subpaths([], [`${plugin}/shared.ts`]), [root])
     equal(await subpaths([['@yaks/doc', 'routes']]), [null])
   } finally {
     Deno.removeSync(dir, { recursive: true })
@@ -67,6 +70,9 @@ test('an absent file facet does not break another selected module', async () => 
     ]]) as [{ docs: unknown[] }, null]
     equal(good.docs, [])
     equal(absent, null)
+    await throws(() =>
+      subpaths([[plugin, 'missing.ts']], [`${plugin}/missing.ts`])
+    )
   } finally {
     Deno.removeSync(dir, { recursive: true })
   }

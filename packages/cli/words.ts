@@ -8,13 +8,10 @@
 
 import { type NamedTool, toolName } from '@yaks/graph'
 import { tier } from '@yaks/graph/tools'
-import { description as toolsAbout, toolsDoc } from '@yaks/tools/vocab'
 import { derived as callsDerived } from '@yaks/tools/vocab'
 import { toolsIn } from '@yaks/vocab/tools'
-import { loadVocab, type Vocab, type VocabDoc } from '@yaks/vocab'
-import { docs as machineDocs } from '@yaks/machine/vocab'
-import { gitDoc } from '@yaks/git/vocab'
-import { fields as searched } from '@yaks/fts'
+import { loadVocab, type Vocab, type VocabDoc } from '@yaks/vocab/runtime'
+import { fields as searched } from '@yaks/fts/fields'
 import type { Backings, Derived } from '@yaks/sql'
 import {
   type Config,
@@ -25,6 +22,7 @@ import {
   used,
 } from './config.ts'
 import { understood } from './keywords.ts'
+import { docsOf } from './documents.ts'
 import type { FacetName, Facets, Load, VocabFacet } from './host.ts'
 
 /** The default {@link Load}: {@link subpath}. */
@@ -33,36 +31,6 @@ export let facet: Load = Object.assign(
     subpath<Facets[F]>(plugin, name),
   { together: subpaths },
 )
-
-// The plugins' declarations, plus the components a tool call is recorded in
-// where no plugin declared them. Declaring one component twice is an error
-// (@yaks/vocab), and rightly — two definitions of one component is not
-// something to guess about — so what is added here is only the difference,
-// never a second copy.
-let said = (docs: VocabDoc[]): VocabDoc[] => {
-  let supplied = new Set(docs.flatMap((d) => Object.keys(d.$defs ?? {})))
-  // Hosts lend machines; their durable records and commit references are host words,
-  // even when no plugin separately contributes these vocabulary facets.
-  let intrinsic = [...machineDocs, gitDoc].map((doc) => ({
-    ...doc,
-    $defs: Object.fromEntries(
-      Object.entries(doc.$defs ?? {}).filter(([name]) => !supplied.has(name)),
-    ),
-  }))
-  docs = [...intrinsic.filter((doc) => Object.keys(doc.$defs).length), ...docs]
-  let taken = new Set(docs.flatMap((d) => Object.keys(d.$defs ?? {})))
-  let $defs = Object.fromEntries(
-    Object.entries(toolsDoc.$defs ?? {}).filter(([name]) => !taken.has(name)),
-  )
-  return Object.keys($defs).length
-    ? [{
-      title: 'invocation',
-      package: '@yaks/tools',
-      description: toolsAbout,
-      $defs,
-    }, ...docs]
-    : docs
-}
 
 // One facet of every plugin a config names, each beside the options it was
 // named with and the package it came from: what a process runs is one plugin's
@@ -126,7 +94,7 @@ let spoken = (vocabs: Taken<'vocab'>): Words => {
   // its own record. A plugin that already declares them — a harness, whose
   // transcripts are calls — keeps its own definitions, so only the components
   // nobody supplied are added.
-  let docs = said(
+  let docs = docsOf(
     vocabs.flatMap(([v, , plugin]) =>
       (v.docs ?? []).map((d) => ({
         ...d,

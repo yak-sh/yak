@@ -15,7 +15,7 @@ import {
   or,
   select,
   table,
-} from '@yaks/sql'
+} from '@yaks/sql/core'
 
 /** `built.current` as SQL, for @yaks/sqlite's derived-property registry. */
 export let builtCurrent: DerivedProp = {

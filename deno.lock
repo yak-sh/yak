@@ -2019,7 +2019,9 @@
       "packages/cli": {
         "dependencies": [
           "jsr:@std/assert@1",
-          "npm:preact@^10.29.1"
+          "npm:es-module-lexer@1.7.0",
+          "npm:preact@^10.29.1",
+          "npm:typescript@6.0.3"
         ]
       },
       "packages/client": {

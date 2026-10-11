@@ -57,23 +57,8 @@ import { readThread } from './read_thread.ts'
 import { thread } from '@yaks/threads'
 import { reconcile } from '@yaks/tools'
 import { during, peek } from '@yaks/trace'
-
-/**
- * The roles a command's own thread serves: the graph, and whatever its tool
- * declares it needs — `serve` answers HTTP, so it serves `web`. The effect
- * pool and the plugins' services are not among them ({@link dutiesOf}); the
- * one exception is a graph that keeps no pool (`pooled` false), whose effects
- * can only run where they were committed.
- *
- * TODO(T-39522): a process that stays up takes the roles its config gives it;
- * which config key says so is the owner's to pick.
- */
-export let rolesOf = (
-  tool: Pick<Declared, 'roles'>,
-  pooled: boolean,
-): Role[] => [
-  ...new Set(['graph', ...pooled ? [] : ['effects'], ...tool.roles ?? []]),
-]
+import { rolesOf } from './roles.ts'
+export { rolesOf } from './roles.ts'
 
 /** The duty roles of a config's graph that a process serving `mine` does not
  * cover already: the effect pool, where the graph keeps one, and each plugin's
@@ -269,11 +254,11 @@ let opening = async (
 ): Promise<Served> => {
   let host = await opened(
     c.config!,
-    rolesOf(declared, !!listing.said.vocab.comp(EFFECT)),
+    rolesOf(declared, listing.said.pooled),
     c.duties,
     !!declared.readOnly,
   )
-  for (let { plugin, value } of listing.loaded) {
+  for (let { plugin, value } of listing.said.controls) {
     host.observe?.({
       package: plugin,
       facet: 'cli',

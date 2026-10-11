@@ -59,7 +59,7 @@ import {
 import type { VocabDoc } from '@yaks/vocab'
 import { edgeEid } from '@yaks/edge'
 import type { Artifact } from '@yaks/blob'
-import { modelDoc } from './vocab.ts'
+import { modelDoc, type Price, type Usage, weigh } from './vocab.ts'
 import type { MediaReceipt } from './media.ts'
 export {
   type MediaReceipt,
@@ -69,7 +69,15 @@ export {
   recoveredMedia,
 } from './media.ts'
 
-export { modelDoc }
+export {
+  COST,
+  modelDoc,
+  PRICE,
+  type Price,
+  USAGE,
+  type Usage,
+  weigh,
+} from './vocab.ts'
 export { cachedPrefixExpires, cacheExpiry, prefixCacheMark } from './cache.ts'
 export type { CacheContext } from './cache.ts'
 import type { CacheContext } from './cache.ts'
@@ -79,9 +87,6 @@ export let MODEL = 'model'
 export let TOOL = 'tool'
 export let QUESTIONS = 'questions'
 export let ANSWER = 'answer'
-export let USAGE = 'usage'
-export let PRICE = 'price'
-export let COST = 'cost'
 export let RESPONSE = 'response'
 
 /**
@@ -177,46 +182,6 @@ export type Request = {
    * requests, so a provider that keys its prompt cache by conversation finds
    * the prefix the last one cached */
   conversation?: string
-}
-
-/** Counts for one request. Cached input and reasoning output are subsets,
- * not additional tokens. Missing counts are unknown. */
-export type Usage = {
-  input_tokens?: number
-  output_tokens?: number
-  total_tokens?: number
-  cached_tokens?: number
-  reasoning_tokens?: number
-}
-
-/** What a model costs, in dollars per million tokens: the `price` component
- * on its row. `cached` is the price of an input token the provider read from
- * its cache, where it has one. */
-export type Price = { input: number; output: number; cached?: number }
-
-/**
- * What a request cost, in dollars, weighed at its model's price: its cached
- * input at the cached price, the rest of its input and all of its output at
- * theirs.
- *
- * ```ts
- * import { assertAlmostEquals } from '@std/assert'
- * import { weigh } from '@yaks/model'
- *
- * let flash = { input: 0.15, cached: 0.03, output: 0.5 }
- * let cost = weigh(flash, {
- *   input_tokens: 2_000_000,
- *   cached_tokens: 1_000_000,
- *   output_tokens: 1_000_000,
- * })
- * assertAlmostEquals(cost, 0.15 + 0.03 + 0.5)
- * ```
- */
-export let weigh = (price: Price, n: Usage): number => {
-  let cached = Math.min(n.cached_tokens ?? 0, n.input_tokens ?? 0)
-  let fresh = (n.input_tokens ?? 0) - cached
-  return (fresh * price.input + cached * (price.cached ?? price.input) +
-    (n.output_tokens ?? 0) * price.output) / 1e6
 }
 
 /** One typed question, in Jev's terms: a `noul` is answered with the

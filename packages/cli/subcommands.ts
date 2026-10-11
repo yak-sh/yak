@@ -6,11 +6,11 @@
 // page and a mistyped word cost a command no more than the declarations. The
 // one a command line runs imports that code then (./local.ts).
 
-import { offered } from '@yaks/graph'
-import { type Config, read, used } from './config.ts'
-import { facet, type Words, words } from './words.ts'
-import type { Command, Ctx } from './run.ts'
+import { type Config, read, subpath } from './config.ts'
 import type { CliFacet } from './host.ts'
+import { type Declarations, declarations } from './declarations.ts'
+import { prepare } from './prepare.ts'
+import type { Command, Ctx } from './run.ts'
 import { traceCommand } from './trace_control.ts'
 
 /** What a listing read before any graph was open: the config, its plugins'
@@ -18,26 +18,20 @@ import { traceCommand } from './trace_control.ts'
  * plugin it came from. */
 export type Listing = {
   config: Config
-  said: Words
-  loaded: { plugin: string; value: CliFacet | null }[]
+  said: Declarations
 }
 
 /** The subcommands of the graph `c.config` names: `yak trace`, its plugins'
  * terminal controls, then every tool it offers on a command line. */
 export let commands = async (c: Ctx): Promise<Command[]> => {
   let config = read(c.config!)
-  let said = await words(config)
-  let plugins = (config.plugins ?? []).map(used)
-  await facet.together?.(plugins.map((p) => [p, 'cli'] as const))
-  let loaded = await Promise.all(
-    plugins.map(async (plugin) => ({
-      plugin,
-      value: await facet(plugin, 'cli'),
-    })),
-  )
-  let listing: Listing = { config, said, loaded }
-  let local = () => import('./local.ts')
-  let tools = said.tools().filter(offered('cli')).map((declared) => ({
+  let said = await declarations(config, true)
+  let listing: Listing = { config, said }
+  let local = (
+    command: Pick<Command, 'name' | 'roles'>,
+    selected?: readonly [plugin: string, facet: 'cli' | 'tools'],
+  ) => prepare(config, command, selected, !c.json)
+  let tools = said.tools.map((declared) => ({
     ...declared,
     // A tool arrives declaring its arguments as JSON Schema — the same
     // document `tools/list` sends — so a command typed against a local graph
@@ -45,13 +39,23 @@ export let commands = async (c: Ctx): Promise<Command[]> => {
     // identically. Nothing is converted here: a transport that wants them in
     // another form restates them on its own side (@yaks/mcp `core`).
     run: async (args: Record<string, unknown>): Promise<number> =>
-      (await local()).tool(c, declared, args, listing),
+      (await local(declared)).tool(c, declared, args, listing),
   }))
-  let controls: Command[] = loaded.flatMap(({ value }) => value?.commands ?? [])
-    .map(({ run, ...declared }) => ({
+  let controls: Command[] = said.controls.flatMap(({ plugin, value }) =>
+    (value?.commands ?? []).map((declared, i) => ({
       ...declared,
-      run: async (args, context) =>
-        (await local()).control(context, declared, run, args, listing),
+      run: async (args: Record<string, unknown>, context: Ctx) => {
+        let ready = await local(declared, [plugin, 'cli'])
+        let control = (await subpath<CliFacet>(plugin, 'cli'))!.commands![i]
+        return ready.control(
+          context,
+          declared,
+          control.run,
+          args,
+          listing,
+        )
+      },
     }))
+  )
   return [traceCommand(config), ...controls, ...tools]
 }

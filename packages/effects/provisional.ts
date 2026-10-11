@@ -9,7 +9,7 @@
 // step left for the person looking.
 
 import type { VocabDoc } from '@yaks/vocab'
-import { effectDoc } from './pool.ts'
+import { effectDoc } from './docs.ts'
 
 /** The mark's component, by the name ./vocab.json declares it. */
 export let PROVISIONAL = 'provisional'

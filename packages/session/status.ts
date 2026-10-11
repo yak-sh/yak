@@ -61,13 +61,13 @@ import {
   sub,
   table,
   when,
-} from '@yaks/sql'
+} from '@yaks/sql/core'
 import { ASK, RESULT } from './native.ts'
 import { attemptDerived } from './attempt.ts'
-import { executionDerived } from '@yaks/tools'
+import { derived as executionDerived } from '@yaks/tools/vocab'
 import { sessionCost } from './cost.ts'
-import { COST } from '@yaks/model'
-import type { Derived } from '@yaks/sql'
+import { COST } from '@yaks/model/vocab'
+import type { Derived } from '@yaks/sql/core'
 import type { Vocab } from '@yaks/vocab'
 
 export * from './state.ts'

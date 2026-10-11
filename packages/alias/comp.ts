@@ -29,8 +29,9 @@
 
 import type { Bundle, Comp, Eid } from '@yaks/graph'
 import { keyEid } from '@yaks/key'
-import type { VocabDoc } from '@yaks/vocab'
-import doc from './vocab.json' with { type: 'json' }
+import { aliasDoc } from './vocab.ts'
+
+export { aliasDoc }
 
 /** The component stored beside a key whose value is a name. */
 export let ALIAS = 'alias'
@@ -41,14 +42,6 @@ export let NAME = 'name'
 
 /** The path a query uses to match a name: `.key.value=lemon-cake&.alias`. */
 export let PATH = 'key.value'
-
-/**
- * The alias vocabulary, to load beside @yaks/key's and your own:
- * `loadVocab([keyDoc, aliasDoc, ...mine], [keyKeywords])`. It declares nothing
- * about what the named entity is — that is your own document's job — only that
- * a name is a kind of key.
- */
-export let aliasDoc: VocabDoc = doc
 
 /** The id of the key entity a name lands on, derived from the name and
  * computed here so that every caller computes it the same way. */

@@ -13,9 +13,8 @@ import {
   type Request,
   type Usage,
 } from '@yaks/model'
-import type { VocabDoc } from '@yaks/vocab'
 import type { Credential } from './credential.ts'
-import doc from './vocab.json' with { type: 'json' }
+import { openaiDoc } from './vocab.ts'
 import {
   request,
   ResponseError,
@@ -26,9 +25,7 @@ import {
   type TransportCredential,
 } from './transport.ts'
 
-/** The one comp this provider stamps on an ask it answered:
- * `openai{response_id}`. Load it beside the conversation's vocabulary. */
-export let openaiDoc: VocabDoc = doc
+export { openaiDoc }
 
 export let OPENAI_COMP = 'openai'
 

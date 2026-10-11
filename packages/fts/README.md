@@ -33,11 +33,13 @@ Mark searchable string properties with `search: true` in the vocabulary:
 }
 ```
 
-`fields(vocab)` selects marked, stored scalar text properties. It excludes
-computed properties, references and numbers. Unmarked properties remain readable
-but are not indexed. A vocabulary with no searchable properties produces no
-indexes or results. An optional `pick(prop)` replaces the default selection
-predicate; combine it with `searched(prop)` when narrowing the default.
+`fields(vocab)`, available from `@yaks/fts/fields`, selects marked, stored
+scalar text properties. That subpath reads vocabulary metadata without loading
+the SQL index and query implementations. It excludes computed properties,
+references and numbers. Unmarked properties remain readable but are not indexed.
+A vocabulary with no searchable properties produces no indexes or results. An
+optional `pick(prop)` replaces the default selection predicate; combine it with
+`searched(prop)` when narrowing the default.
 
 There is **one index per component**, containing all its selected properties.
 For example, `book_fts` contains both `title` and `blurb`. Each is an
