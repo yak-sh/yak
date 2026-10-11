@@ -69,20 +69,21 @@ test('the shared Browse App paints its sidebar and home; its search field goes t
   }
 })
 
-test('configured Inspect facet renders a query through its host adapter, not raw Render', async () => {
-  let root = new TElement('root')
-  let target = root as unknown as Parameters<typeof render>[1]
-  extend(await contributedViews([{ views, inspectViews }]))
+// Mount the configured host once, as the app does before reading a query.
+extend(await contributedViews([{ views, inspectViews }]))
+let inspectRoot = new TElement('root')
+let inspectTarget = inspectRoot as unknown as Parameters<typeof render>[1]
+await act(() =>
+  render(
+    h(Ux, { host: ux }, h(InspectPage, { query: '.task .count' })),
+    inspectTarget,
+  )
+)
+test('configured Inspect facet renders a query through its host adapter, not raw Render', () => {
   try {
-    await act(() =>
-      render(
-        h(Ux, { host: ux }, h(InspectPage, { query: '.task .count' })),
-        target,
-      )
-    )
-    ok(root.textContent.includes('.task .count'))
+    ok(inspectRoot.textContent.includes('.task .count'))
   } finally {
-    render(null, target)
+    render(null, inspectTarget)
   }
 })
 
@@ -91,15 +92,20 @@ let docRenderers = (await contributedViews([{ views: docViews }]))
 let preparedDocs = define(docRenderers, {
   vocab: loadVocab(docDoc),
 })
+// Prepare the contributed body once; this test exercises its terminal mount.
+let drawing = portable(
+  preparedDocs,
+  {
+    entity: { eid, num: 1 },
+    doc: { title: 'Reading', body: 'Read **carefully**' },
+  },
+  'Body',
+  preparedDocs.vocab!,
+)
 test('the terminal draws a prepared contributed Markdown body', () => {
   let root = new TElement('root')
   let target = root as unknown as Parameters<typeof render>[1]
-  let reading = {
-    entity: { eid, num: 1 },
-    doc: { title: 'Reading', body: 'Read **carefully**' },
-  }
   try {
-    let drawing = portable(preparedDocs, reading, 'Body', preparedDocs.vocab!)
     render(drawing, target)
     ok(root.textContent.includes('Read carefully'))
     ok(root.querySelector('strong'))
