@@ -81,6 +81,7 @@ for (let repair of [false, true]) {
           sha: expected[path],
         })),
         unreleased: true,
+        version: 1,
       })
       let editing = (await dir.app((await dir.space('ada'))!, 'cookbook'))!
       assertEquals(await blobs.list(`${editing.draft}/`), [
@@ -107,6 +108,7 @@ for (let repair of [false, true]) {
           sha: expected[path],
         })),
         unreleased: false,
+        version: 2,
       })
       let released = (await dir.app((await dir.space('ada'))!, 'cookbook'))!
       assertEquals(

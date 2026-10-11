@@ -66,6 +66,23 @@ lock. Neither the bearer nor the cookie is included in graph text or tool
 answers. `delete` reads the website's list of what would be destroyed before
 submitting the space's name back to its deletion form.
 
+## Push a directory
+
+`push` makes an app hold exactly a directory's files and deploys them. Each
+source directory, account and target remembers its **base version**: the live
+version first read, or the version its last successful push deployed. The record
+lives under `push/` beside the box's graph, separate from the source files. A
+fresh file list leaves that base version intact.
+
+A base version behind the live version returns the live files the deploy would
+remove or replace and leaves the live version alone. After reviewing that
+answer, repeat the command with `--confirm` to deploy the staged files.
+
+```sh
+yak admin push apps/mail --space reviewer --as reviewer
+yak admin push apps/mail --space reviewer --as reviewer --confirm
+```
+
 ## Facets
 
 - `./vocab` declares the admin tools, no components.

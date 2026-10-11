@@ -48,7 +48,7 @@ import {
   type Reply,
   weigh,
 } from '@yaks/model'
-import { worded } from '@yaks/tools'
+import { valueIn, worded } from '@yaks/tools'
 import { workersAi } from '@yaks/workers-ai'
 import { running } from './agent.ts'
 import { directory, type Space } from './directory.ts'
@@ -252,12 +252,16 @@ let words = worded
 let called = async (
   by: Map<string, Run>,
   c: Call,
-): Promise<{ text: string; ok: boolean }> => {
+): Promise<{ text: string; ok: boolean; deployed?: boolean }> => {
   let run = by.get(c.name)
   if (!run) return { text: `no tool ${c.name}`, ok: false }
   try {
     let said = await run(c.args.trim() ? JSON.parse(c.args) : {})
-    return { text: words(said), ok: true }
+    return {
+      text: words(said),
+      ok: true,
+      deployed: valueIn(said)?.deployed === true,
+    }
   } catch (e) {
     // The same line the connector draws (@yaks/tools `faulted`): a refusal
     // is the model's to correct, anything else is ours.
@@ -655,7 +659,7 @@ export let build = async (
       // What makes this conversation a build: an app_deploy that went
       // through. A conversation that ships one app costs one build however
       // many turns it took, and one that ships nothing costs none.
-      if (c.name == 'app_deploy' && said.ok) built = true
+      if (c.name == 'app_deploy' && said.deployed) built = true
       lines.push({ said: 'tool', call: c.id, name: c.name, text: said.text })
     }
   }

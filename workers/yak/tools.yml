@@ -228,7 +228,12 @@ app_deploy:
   description: >-
     Release the app's staged files as a version. The files, vocabulary and
     worker begin serving together when this succeeds. The version is the one
-    an error report will name. Set reload to required for a contract change
+    an error report will name. Send base as the live version the files were
+    made on (app_files reads and lists return version). When base is behind
+    the live version, the answer names files this draft would remove or replace
+    and keeps the draft without releasing. After reviewing those files, repeat
+    with the same base and confirm: true to release it. Leaving base out
+    releases as usual. Set reload to required for a contract change
     that open pages must reload to use; optional (or leaving it out) still
     derives severity from the changed files and vocabulary. Open pages are
     notified after the release is recorded; they never reload automatically. It

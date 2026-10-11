@@ -356,8 +356,12 @@
       "noun": "admin",
       "verb": "push",
       "title": "Push a directory to a yaks.app app",
-      "description": "Make an app hold exactly the files in a directory, through the connector's own tools: app_new when the app does not exist yet, app_files for new or changed files (base64 for any that is not UTF-8), a delete for each file the directory no longer has, then app_deploy when files need releasing. An unchanged, released app is left alone. Git is the app's only source. The app's slug is the directory's name unless --app names another; --space picks one when the account has several.\n\n  yak admin push apps/mail --as admin@bot.yak.sh\n  yak admin push apps/mail --app inbox --space jeff --title Inbox --as admin@bot.yak.sh",
+      "description": "Make an app hold exactly the files in a directory, through the connector's own tools: app_new when the app does not exist yet, app_files for new or changed files (base64 for any that is not UTF-8), a delete for each file the directory no longer has, then app_deploy when files need releasing. An unchanged, released app is left alone. Git is the app's only source. The app's slug is the directory's name unless --app names another; --space picks one when the account has several.\n\n  yak admin push apps/mail --as admin@bot.yak.sh\n  yak admin push apps/mail --app inbox --space jeff --title Inbox --as admin@bot.yak.sh\n\nThe base version is remembered separately for each source directory, account and target. A stale base answers with the live files the deploy would remove or replace; repeat with --confirm to deploy them.",
       "input": {
+        "confirm": {
+          "type": "boolean",
+          "description": "deploy after reviewing the files a stale base would remove or replace"
+        },
         "dir": {
           "type": "string",
           "description": "the directory holding the app's files"

@@ -1319,19 +1319,34 @@ let published = async (
   }
 }
 
+type DeployReview = {
+  base: number
+  version: number
+  removed: string[]
+  replaced: string[]
+}
+
 let released = async (
   ctx: Ctx,
   space: Space,
   app: App,
   who: Who,
   store: Door,
-  { target, reload, preserve = false }: {
+  { target, reload, preserve = false, base, confirm = false }: {
     target?: Version
     reload?: Reload
     preserve?: boolean
+    base?: number
+    confirm?: boolean
   } = {},
-) => {
+): Promise<{ version: number; said: string; review?: DeployReview }> => {
   let standing = await waiting(ctx.dir, space, app, who)
+  if (base != null && base > (standing.version ?? 0)) {
+    throw refuse(
+      'invalid',
+      `base v${base} is ahead of live v${standing.version ?? 0}`,
+    )
+  }
   let blobs = r2RawObjects(ctx.env.BLOBS)
   let kept = target?.source && target.script ? target : undefined
   let work = target
@@ -1370,6 +1385,28 @@ let released = async (
         release,
         !target && work.split('/').pop()?.startsWith('delta-v') == true,
       )
+    // The fence holds both the serving pointer and the candidate's edits.
+    // Inspect losses before compiling, planting a schema or deploying a worker.
+    if (base != null && base < (standing.version ?? 0) && !confirm) {
+      let live = (await versions(ctx.dir, standing))
+        .find((v) => v.version == standing.version)
+      if (!live) throw refuse('missing', `no live v${standing.version}`)
+      let candidate = files.manifest()
+      if (!candidate) throw new Error('release has a file without a pinned sha')
+      let paths = Object.keys(live.files).sort()
+      return {
+        version: standing.version!,
+        said: '',
+        review: {
+          base,
+          version: standing.version!,
+          removed: paths.filter((path) => !(path in candidate)),
+          replaced: paths.filter((path) =>
+            path in candidate && candidate[path] != live.files[path]
+          ),
+        },
+      }
+    }
     return await published(
       ctx,
       space,
@@ -2706,6 +2743,7 @@ let OURS: Row[] = [
           value: {
             files: paths.map((path) => ({ path, sha: files[path] })),
             unreleased: !live || !same(live.files, files),
+            version: app.version ?? 0,
           },
         }
       }
@@ -2714,7 +2752,11 @@ let OURS: Row[] = [
         if (!(await view.has(key))) {
           throw refuse('missing', `no file ${args.path}`)
         }
-        return { text: decoded(await view.get(key)), space }
+        return {
+          text: decoded(await view.get(key)),
+          space,
+          value: { version: app.version ?? 0 },
+        }
       }
       if (op == 'delete') {
         return modifying(
@@ -2998,6 +3040,17 @@ let OURS: Row[] = [
         space: SPACE,
         app: APP,
         reload: { type: 'string', enum: ['optional', 'required'] },
+        base: {
+          type: 'integer',
+          minimum: 0,
+          description:
+            'the live version these files were made on, from app_files; 0 before the first deploy',
+        },
+        confirm: {
+          type: 'boolean',
+          description:
+            'release from a stale base after reviewing what it would remove or replace',
+        },
       },
       required: ['app'],
     },
@@ -3011,14 +3064,40 @@ let OURS: Row[] = [
       if (reload != null && reload != 'optional' && reload != 'required') {
         throw refuse('invalid', 'reload must be optional or required')
       }
-      let { version, said } = await released(
+      let base = args.base
+      if (
+        base != null &&
+        (typeof base != 'number' || !Number.isSafeInteger(base) || base < 0)
+      ) {
+        throw refuse('invalid', 'base must be a nonnegative integer version')
+      }
+      if (args.confirm != null && typeof args.confirm != 'boolean') {
+        throw refuse('invalid', 'confirm must be a boolean')
+      }
+      let { version, said, review } = await released(
         ctx,
         space,
         app,
         who,
         store,
-        { reload },
+        {
+          reload,
+          base: base as number | undefined,
+          confirm: args.confirm as boolean | undefined,
+        },
       )
+      if (review) {
+        return {
+          text:
+            `${space.slug}/${app.slug} is live at v${version}; base v${review.base} is behind. ` +
+            'The draft was kept; no version was deployed.' +
+            `\nWould remove: ${review.removed.join(', ') || '(none)'}` +
+            `\nWould replace: ${review.replaced.join(', ') || '(none)'}` +
+            '\nReview these files, then repeat app_deploy with the same base and confirm: true to release them.',
+          space,
+          value: { deployed: false, ...review },
+        }
+      }
       return {
         text:
           `deployed ${space.slug}/${app.slug} v${version}: ${
@@ -3026,6 +3105,7 @@ let OURS: Row[] = [
           }` +
           said,
         space,
+        value: { deployed: true, version },
       }
     },
   },

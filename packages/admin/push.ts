@@ -29,7 +29,7 @@ export type Ask = (method: string, params?: unknown) => Promise<unknown>
 export type PushProgress =
   | { phase: 'list'; state: 'start' }
   | { phase: 'list'; state: 'done'; count: number }
-  | { phase: 'create' | 'deploy'; state: 'start' | 'done' }
+  | { phase: 'create' | 'deploy'; state: 'start' | 'done'; deployed?: boolean }
   | { phase: 'hash'; state: 'start'; count: number }
   | {
     phase: 'hash'
@@ -53,8 +53,12 @@ export type PushProgress =
     path: string
   }
 
-/** How long a push waits for a newly deployed answer contract to arrive. */
+/** A push's base version, confirmation and progress, and its bounded wait for
+ * the connector's file data contract. */
 export type PushOptions = {
+  base?: number
+  confirm?: boolean
+  remember?: (version: number) => void | Promise<void>
   wait?: number
   poll?: number
   progress?: (event: PushProgress) => void
@@ -160,12 +164,18 @@ let filesIn = (value: Record<string, unknown>) => {
       !/^[0-9a-f]{64}$/.test(String((f as { sha?: unknown }).sha))
     )
   ) throw new Error('app_files answered malformed file data')
+  if (value.version == null) return null
+  if (
+    typeof value.version != 'number' || !Number.isSafeInteger(value.version) ||
+    value.version < 0
+  ) throw new Error('app_files answered malformed version data')
   return {
     held: new Map(files.map((f) => [
       (f as { path: string }).path,
       (f as { sha: string }).sha,
     ])),
     unreleased: value.unreleased,
+    version: value.version,
   }
 }
 
@@ -191,7 +201,9 @@ let listed = async (
     }
     if (Date.now() >= deadline) {
       throw new Error(
-        `app_files answered no file hashes after ${Math.round(wait / 1000)}s`,
+        `app_files answered no file hashes or version after ${
+          Math.round(wait / 1000)
+        }s`,
       )
     }
     await new Promise((go) => setTimeout(go, opts.poll ?? 3_000))
@@ -214,7 +226,7 @@ export let push = async (
   if (!files.length) throw new CallError('dir', 'no files to push')
   let at = { app: to.app, ...to.space ? { space: to.space } : {} }
   let said: string[] = []
-  let held: { held: Map<string, string>; unreleased: boolean }
+  let held: { held: Map<string, string>; unreleased: boolean; version: number }
   let created = false
   opts.progress?.({ phase: 'list', state: 'start' })
   try {
@@ -231,11 +243,13 @@ export let push = async (
       }),
     )
     opts.progress?.({ phase: 'create', state: 'done' })
-    held = { held: new Map(), unreleased: true }
+    held = { held: new Map(), unreleased: true, version: 0 }
   }
   if (!created) {
     opts.progress?.({ phase: 'list', state: 'done', count: held.held.size })
   }
+  let base = opts.base ?? held.version
+  if (opts.base == null) await opts.remember?.(base)
   opts.progress?.({ phase: 'hash', state: 'start', count: files.length })
   let hashes = await Promise.all(files.map(shaOf))
   let changed = files.filter((f, i) => held.held.get(f.path) != hashes[i])
@@ -293,7 +307,56 @@ export let push = async (
       (gone.length ? `, deleted ${gone.join(', ')}` : ''),
   )
   opts.progress?.({ phase: 'deploy', state: 'start' })
-  said.push(await call(ask, 'app_deploy', at))
-  opts.progress?.({ phase: 'deploy', state: 'done' })
+  let deployed = await reply(ask, 'app_deploy', {
+    ...at,
+    base,
+    ...opts.confirm ? { confirm: true } : {},
+  })
+  let value = valueOf(deployed)
+  if (
+    typeof value?.deployed != 'boolean' ||
+    typeof value.version != 'number' || !Number.isSafeInteger(value.version) ||
+    value.version < 0
+  ) throw new Error('app_deploy answered malformed version data')
+  said.push(saidBy(deployed))
+  if (value.deployed) await opts.remember?.(value.version)
+  else said.push('confirm with --confirm to deploy these files')
+  opts.progress?.({ phase: 'deploy', state: 'done', deployed: value.deployed })
   return said
+}
+
+/** A checkout's last read or deployed version for one target. Each target has
+ * its own file beside the box's graph; it stays independent of other checkouts
+ * and survives process restarts. No source file is written or uploaded. */
+export let versions = async (
+  home: string,
+  key: string,
+): Promise<Pick<PushOptions, 'base' | 'remember'>> => {
+  let hash = await shaOf({ path: '', content: key })
+  let dir = `${home}/push`
+  let path = `${dir}/${hash}.json`
+  let base: number | undefined
+  try {
+    let value = JSON.parse(await Deno.readTextFile(path))
+    if (typeof value != 'number' || !Number.isSafeInteger(value) || value < 0) {
+      throw new Error(`invalid push base version in ${path}`)
+    }
+    base = value
+  } catch (e) {
+    if (!(e instanceof Deno.errors.NotFound)) throw e
+  }
+  return {
+    base,
+    remember: async (version) => {
+      await Deno.mkdir(dir, { recursive: true })
+      let temporary = await Deno.makeTempFile({ dir, prefix: hash })
+      try {
+        await Deno.writeTextFile(temporary, JSON.stringify(version))
+        await Deno.rename(temporary, path)
+      } catch (e) {
+        await Deno.remove(temporary)
+        throw e
+      }
+    },
+  }
 }

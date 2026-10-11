@@ -9,6 +9,7 @@ import {
   push,
   type PushProgress,
   read,
+  versions,
 } from './push.ts'
 
 type Args = Record<string, unknown> & { files?: File[] }
@@ -27,6 +28,8 @@ let platform = (
     Object.entries(apps).map(([app, files]) => [app, new Map(files)]),
   )
   let lists = 0
+  let versions = new Map(Object.keys(apps).map((app) => [app, 1]))
+  let bases: unknown[] = []
   let ok = (text: string, value?: Record<string, unknown>) => ({
     content: [{ type: 'text', text: text + more }],
     structuredContent: {
@@ -47,8 +50,21 @@ let platform = (
     }
     if (!files) return no(`no app ${app}`)
     if (name == 'app_deploy') {
+      bases.push(a.base)
+      let version = versions.get(app) ?? 0
+      if (typeof a.base == 'number' && a.base < version && !a.confirm) {
+        return ok('stale base: confirm to deploy', {
+          deployed: false,
+          base: a.base,
+          version,
+          removed: [],
+          replaced: [],
+        })
+      }
       deployed.push(app)
       released.set(app, new Map(files))
+      versions.set(app, ++version)
+      return ok('done', { deployed: true, version })
     } else if (a.op == 'list') {
       let paths = [...files.keys()]
       let live = released.get(app)
@@ -60,6 +76,7 @@ let platform = (
               path,
               sha: await hash(files.get(path)!),
             }))),
+            version: versions.get(app) ?? 0,
             unreleased: !live || paths.length != live.size ||
               (await Promise.all(paths.map(async (path) =>
                 live.has(path) &&
@@ -84,7 +101,7 @@ let platform = (
     return ok('done')
   }
   let held = (app: string) => [...apps[app].keys()].sort()
-  return { ask, held, deployed, writes, lists: () => lists }
+  return { ask, held, deployed, writes, bases, lists: () => lists }
 }
 
 let examples = new Map<string, File>()
@@ -110,6 +127,95 @@ let digest = async (f: File) => {
   return [...new Uint8Array(await crypto.subtle.digest('SHA-256', bytes))]
     .map((b) => b.toString(16).padStart(2, '0')).join('')
 }
+
+test('a push sends the version it read and remembers its deployed version', async () => {
+  let p = platform({ mail: held('index.html') })
+  let seen: number[] = []
+  await push(p.ask, [file('new.js')], { app: 'mail' }, {
+    remember: (version: number) => {
+      seen.push(version)
+    },
+  })
+  assertEquals(p.bases, [1])
+  assertEquals(seen, [1, 2])
+})
+
+test('a stale push keeps its base through a fresh list and explicit confirmation', async () => {
+  let p = platform({ mail: held('index.html') })
+  await push(p.ask, [file('index.html'), file('new.js')], { app: 'mail' })
+  let seen: number[] = []
+  let opts = {
+    base: 1,
+    remember: (version: number) => {
+      seen.push(version)
+    },
+  }
+  let said = await push(
+    p.ask,
+    [file('index.html')],
+    { app: 'mail' },
+    opts,
+  )
+  assertEquals(p.deployed.length, 1)
+  assertEquals(p.bases, [1, 1])
+  assertEquals(seen, [])
+  assert(said.at(-1)?.includes('confirm'))
+  await push(p.ask, [file('index.html')], { app: 'mail' }, {
+    ...opts,
+    confirm: true,
+  })
+  assertEquals(p.bases, [1, 1, 1])
+  assertEquals(p.deployed.length, 2)
+  assertEquals(seen, [3])
+})
+
+// Persistence happens through the same boundary the CLI uses, prepared once
+// so assertions measure the behavior rather than filesystem scheduling.
+let remembered = await (async () => {
+  let dir = await Deno.makeTempDir()
+  try {
+    let p = platform({ mail: held('index.html') })
+    let files = [file('index.html')]
+    let to = { app: 'mail' }
+    await push(p.ask, files, to, await versions(dir, 'checkout-a/account/mail'))
+    await push(p.ask, files, to, await versions(dir, 'checkout-b/account/mail'))
+    await push(
+      p.ask,
+      [...files, file('new.js')],
+      to,
+      await versions(dir, 'checkout-a/account/mail'),
+    )
+    let old = await versions(dir, 'checkout-b/account/mail')
+    let latest = await versions(dir, 'checkout-a/account/mail')
+    await push(p.ask, files, to, old)
+    let declined = (await versions(dir, 'checkout-b/account/mail')).base
+    await push(p.ask, files, to, {
+      ...await versions(dir, 'checkout-b/account/mail'),
+      confirm: true,
+    })
+    return {
+      latest: latest.base,
+      old: old.base,
+      declined,
+      confirmed: (await versions(dir, 'checkout-b/account/mail')).base,
+      other: (await versions(dir, 'checkout-b/other-account/mail')).base,
+      bases: p.bases,
+    }
+  } finally {
+    await Deno.remove(dir, { recursive: true })
+  }
+})()
+
+test('checkout versions survive reopening and stay separate by target', () => {
+  assertEquals(remembered, {
+    latest: 2,
+    old: 1,
+    declined: 1,
+    confirmed: 3,
+    other: undefined,
+    bases: [1, 1, 1],
+  })
+})
 
 test('a push leaves the app holding exactly the directory, released once', async () => {
   let p = platform({ mail: held('index.html', 'old.js') })
@@ -332,7 +438,7 @@ test('a server that keeps answering no list data changes nothing', async () => {
         { wait: 0, poll: 0 },
       ),
     Error,
-    'app_files answered no file hashes after 0s',
+    'app_files answered no file hashes or version after 0s',
   )
   assertEquals(p.lists(), 1)
   assertEquals(p.held('mail'), ['index.html', 'old.js'])

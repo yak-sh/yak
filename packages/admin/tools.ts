@@ -46,7 +46,7 @@ import {
 } from './api.ts'
 import { deploys, rollback, table } from './deploys.ts'
 import { sweep } from './move.ts'
-import { push, type PushProgress, read } from './push.ts'
+import { push, type PushProgress, read, versions } from './push.ts'
 import { errors, tail } from './logs.ts'
 import { revert } from './revert.ts'
 
@@ -91,7 +91,13 @@ let pushNote = (p: PushProgress) => {
         : `deleted ${p.done}/${p.total} files`,
     )
   } else {
-    note(p.state == 'start' ? 'deploying app…' : 'deployed app')
+    note(
+      p.state == 'start'
+        ? 'deploying app…'
+        : p.deployed === false
+        ? 'deploy awaits confirmation'
+        : 'deployed app',
+    )
   }
 }
 
@@ -425,11 +431,26 @@ export let runs = (
       note(`reading ${dir}…`)
       let files = await read(dir)
       note(`read ${files.length} local files`)
-      let lines = await push(rpc(at.bearer), files, {
+      let to = {
         app: word(a, 'app') ?? dir.slice(dir.lastIndexOf('/') + 1),
         space: word(a, 'space'),
         title: word(a, 'title'),
-      }, {
+      }
+      let known = await versions(
+        host.config.db && host.config.db != ':memory:'
+          ? dirname(host.config.db)
+          : `${Deno.env.get('HOME')}/.yak`,
+        JSON.stringify([
+          zone(),
+          at.address,
+          await Deno.realPath(dir),
+          to.space,
+          to.app,
+        ]),
+      )
+      let lines = await push(rpc(at.bearer), files, to, {
+        ...known,
+        confirm: a.confirm === true,
         progress: pushNote,
       })
       return [said(call, lines)]

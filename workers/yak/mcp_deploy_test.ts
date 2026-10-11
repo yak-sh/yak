@@ -249,6 +249,7 @@ test('a deploy is a version, and one word puts it back', async () => {
         { path: 'index.html', sha: await digest('<h1>OOPS</h1>') },
       ],
       unreleased: false,
+      version: 2,
     })
 
     // A size down from a deploy: every write keeps what it replaced
