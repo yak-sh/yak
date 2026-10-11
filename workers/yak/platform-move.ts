@@ -17,6 +17,7 @@ let words = [
 export let platformRule: Rule = {
   mark: 'yak/store/platform-words/1',
   stores: [PLATFORM_STORE],
+  live: 'all',
   find: words.map((word) => `.${word}`).join('|'),
   move: (row) => {
     let comps = Object.fromEntries(

@@ -290,6 +290,7 @@ export let respelled = (text: string): string | null => {
 export let BOUNDARIES = [
   'yak/store/git-repositories/1',
   'yak/store/git-commit/1',
+  'yak/store/platform-words/1',
   'yak/store/dead-mail-inbox/1',
   'yak/store/lens/1',
   'yak/store/lens-contract/1',
