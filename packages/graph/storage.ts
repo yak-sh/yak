@@ -19,9 +19,22 @@ export type Row = Record<string, unknown>
 /** A query, as text (parsed by @yaks/query) or an already-parsed AST. */
 export type Query = string | Ast
 
+/** The owners visible in a read. Component queries hide that component while
+ * preserving the entity's other aspects. Evaluated against committed rows. */
+export type Visibility = {
+  entity?: Query
+  components?: Record<string, Query>
+}
+
 /** Options passed with a read, such as a fixed `now` for relative time
  * expressions. */
 export type ReadOpts = {
+  /** Authenticated person; null is a guest, absent is an internal read. */
+  person?: Eid | null
+  /** Explicit administrative access vouched by the host. */
+  administrative?: boolean
+  /** Relational visibility, applied before predicates, references and shaping. */
+  visibility?: Visibility
   /** Answering applied patches rather than complete read snapshots. */
   patch?: boolean
   /** Vocabulary versions spoken by the caller, keyed by package eid. */
@@ -80,7 +93,11 @@ export type Tx = {
    * storage reads nothing else. The transaction `apply()` hands its hooks
    * answers from what it has already read, which may carry more
    * (./gather.ts `holding`). */
-  get: (eids: Eid[], comps?: string[]) => Bundle[] | Promise<Bundle[]>
+  get: (
+    eids: Eid[],
+    comps?: string[],
+    opts?: ReadOpts,
+  ) => Bundle[] | Promise<Bundle[]>
   /** the reverse direction: the entities whose reference properties point at
    * one of these, narrowed to the components named. Present only on the
    * transaction `apply()` hands its hooks, where the gather has already read
@@ -160,7 +177,11 @@ export type Storage = {
    * every one ({@link Tx.get}), read without a write transaction: a lookup
    * never waits on a writer and never makes one wait, the way `read` does
    * not */
-  get: (eids: Eid[], comps?: string[]) => Bundle[] | Promise<Bundle[]>
+  get: (
+    eids: Eid[],
+    comps?: string[],
+    opts?: ReadOpts,
+  ) => Bundle[] | Promise<Bundle[]>
   /** run `body` in a transaction: commit on return, roll back on throw. Like
    * every other member it is async or sync — an embedded adapter returns
    * whatever the body returned, an adapter over a network returns a promise
@@ -183,7 +204,7 @@ export type Storage = {
  */
 export let detached = (storage: Storage): Tx => ({
   read: (query, opts) => storage.read(query, opts),
-  get: (eids, comps) => storage.get(eids, comps),
+  get: (eids, comps, opts) => storage.get(eids, comps, opts),
   // A match is a question about committed data, which is exactly what there
   // is to ask out here: an effect registered on a pattern (@yaks/effects) asks
   // it after the batch has been applied. A store that cannot evaluate one

@@ -264,7 +264,7 @@ export type Store = {
   screen: (query: Query, opts?: BindOpts) => Raw | null
   /** these entities as they stand, carrying the components `comps` names or
    * every one, read in a unit that takes no write lock */
-  get: (eids: Eid[], comps?: string[]) => Bundle[]
+  get: (eids: Eid[], comps?: string[], opts?: BindOpts) => Bundle[]
   /** run `body` in a transaction: commit on return, roll back on throw */
   tx: <R>(body: (tx: Tx) => R, opts?: { admission?: boolean }) => R
 }
@@ -713,10 +713,17 @@ export let storage = (
       ensure()
       return screened(driver, vocab, query, { ...opts(), ...o })
     },
-    get: (eids, comps) => {
+    get: (eids, comps, o) => {
       if (!eids.length) return []
       ensure()
-      return unit(driver, () => memo.get(identity, eids, comps), 'read')
+      return unit(
+        driver,
+        () =>
+          o?.visibility
+            ? get(driver, vocab, eids, { ...opts(), ...o }, comps)
+            : memo.get(identity, eids, comps),
+        'read',
+      )
     },
     tx: <R>(body: (tx: Tx) => R, _mode?: { admission?: boolean }): R => {
       ensure()

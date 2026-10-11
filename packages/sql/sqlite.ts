@@ -46,6 +46,8 @@ export type Dialect = {
   // somewhere else (the CTEs @yaks/sqlite overlays a pending transaction with)
   // declares that here, and every subquery in the binder follows it.
   source?: (comp: string) => string
+  /** Scoped relations retain ordinary keyed component selection. */
+  scoped?: boolean
   // A declared ordinary index, used to drive a required scalar selection.
   indexed?: (comp: string, index: string) => string
   // A component keyed by its owner: disable secondary-index scans while

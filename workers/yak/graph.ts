@@ -188,6 +188,7 @@ import {
   type Graph,
   graph,
   type Plugin,
+  type ReadOpts,
   Refused,
   sha256,
   who,
@@ -1367,6 +1368,11 @@ export class Store {
         // Restore current standing after hibernation; keep the verified identity.
         // Guest instruments have no standing to lose.
         deferStatic: true,
+        read: (read, writer) => ({
+          ...read,
+          person: writer?.actor?.by ?? null,
+          administrative: false,
+        }),
         writer: ({ actor }) => this.#socketWriter(actor),
       },
     )
@@ -1383,9 +1389,9 @@ export class Store {
       graph: g,
       subs,
       authenticate: this.#auth,
+      read: (request) => this.#callerRead(request),
       ...(declaredLenses(declaration)
         ? {
-          read: spoken,
           write: (request: Request, rows: Bundle[]) =>
             this.#spokenWrites(request, rows),
         }
@@ -2013,7 +2019,8 @@ export class Store {
                     ...(actor?.via ? { via: actor.via } : {}),
                   }
                   let acts = {
-                    query: (line: string) => Promise.resolve(g.read(line)),
+                    query: (line: string) =>
+                      Promise.resolve(g.read(line, { person })),
                     apply: async ({ entities }: { entities: Bundle[] }) => {
                       let made = await g.apply(signed(entities, {
                         ...(person ? { by: person } : {}),
@@ -3058,7 +3065,10 @@ export class Store {
     request: Request,
     response: Response,
   ): Promise<Response> {
-    if (response.status != 200 || !spoken(request).speaks) return response
+    if (
+      response.status != 200 ||
+      response.headers.get('content-type')?.includes('ndjson')
+    ) return response
     let bundles = await response.json() as Bundle[]
     return new Response(
       JSON.stringify(await this.#callerAnswer(request, bundles)),
@@ -3070,14 +3080,20 @@ export class Store {
     request: Request,
     rows: Bundle[],
   ): Promise<Bundle[]> {
-    let opts = spoken(request)
+    let opts = this.#callerRead(request)
     let visible = published(this.#vocab, rows)
     return published(
       this.#vocab,
-      opts.speaks
-        ? await this.#graph.answer(visible, { ...opts, patch: true })
-        : visible,
+      await this.#graph.answer(visible, { ...opts, patch: true }),
     )
+  }
+
+  #callerRead(request: Request): ReadOpts {
+    return {
+      ...spoken(request),
+      person: vouchOf(request).person,
+      administrative: request.headers.get('x-yak-administrative') == '1',
+    }
   }
 
   #spokenWrites(request: Request, rows: Bundle[]): Bundle[] {
@@ -3539,7 +3555,7 @@ export class Store {
       } catch (e) {
         return refuse(e, request)
       }
-      let read = spoken(request)
+      let read = this.#callerRead(request)
       return this.#live.accept(request, read, { actor, speaks: read.speaks })
     }
     // A batch is applied here, whoever sent it; a dry run is @yaks/api's.
@@ -3571,7 +3587,7 @@ export class Store {
     let agg = aggOf(line)
     if (agg && !live) {
       await this.#auth(request)
-      return await this.#counted(line, agg, spoken(request))
+      return await this.#counted(line, agg, this.#callerRead(request))
     }
     return await this.#kinded(await this.#route(request), line)
   }, { route: () => '/query' })

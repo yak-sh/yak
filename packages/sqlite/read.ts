@@ -12,7 +12,15 @@
 // `screened()` is the statement alone, for a search beside the graph to run.
 
 import { field } from '@yaks/sql/query'
-import { type And, map, parse } from '@yaks/query/core'
+import {
+  type And,
+  and as all,
+  eq as queryEq,
+  list,
+  map,
+  parse,
+  want,
+} from '@yaks/query/core'
 import type { Prop, Vocab } from '@yaks/vocab'
 import {
   among,
@@ -734,6 +742,77 @@ export let get = (
   comps?: string[],
   unclassified: string[] = [],
 ): Bundle[] => {
+  if (opts.visibility) {
+    let { visibility, ...plain } = opts
+    let wanted = all(queryEq('entity.eid', list(...eids)))
+    let allowed = new Set(
+      rows(driver, vocab, wanted, opts).map((r) => String(r.eid)),
+    )
+    let found = get(
+      driver,
+      vocab,
+      eids.filter((eid) => allowed.has(eid)),
+      plain,
+      comps,
+      unclassified,
+    )
+    let aspects = Object.entries(visibility.components ?? {}).map(([name, q]) =>
+      [
+        name,
+        new Set(
+          rows(driver, vocab, all(wanted, ast(q)), plain).map((r) =>
+            String(r.eid)
+          ),
+        ),
+      ] as const
+    )
+    let hidden = new Set<string>()
+    for (let [name, owners] of aspects) {
+      for (let r of rows(driver, vocab, all(wanted, want(name)), plain)) {
+        if (!owners.has(String(r.eid))) hidden.add(String(r.eid))
+      }
+    }
+    let targets = new Set<string>()
+    for (let b of found) {
+      for (let [name, value] of Object.entries(b)) {
+        if (name == 'entity' || !value || typeof value != 'object') continue
+        for (let prop of vocab.props(name)) {
+          let v = (value as Comp)[prop]
+          if (
+            vocab.prop(name, prop)?.category == 'ref' && typeof v == 'string'
+          ) targets.add(v)
+        }
+      }
+    }
+    let references = visibility.entity && targets.size
+      ? new Set(
+        rows(driver, vocab, all(queryEq('entity.eid', list(...targets))), opts)
+          .map((r) => String(r.eid)),
+      )
+      : targets
+    return found.map((b) => {
+      let out: Bundle = { ...b, entity: { ...b.entity } }
+      if (hidden.has(b.entity.eid)) delete out.entity.archetype
+      for (let [name, owners] of aspects) {
+        if (!owners.has(b.entity.eid)) delete out[name]
+      }
+      for (let [name, value] of Object.entries(out)) {
+        if (name == 'entity' || !value || typeof value != 'object') continue
+        let component = value as Comp
+        for (let prop of vocab.props(name)) {
+          if (
+            vocab.prop(name, prop)?.category == 'ref' &&
+            typeof component[prop] == 'string' &&
+            !references.has(component[prop] as string)
+          ) {
+            component = { ...component, [prop]: null }
+          }
+        }
+        out[name] = component
+      }
+      return out
+    })
+  }
   let pending = new Set(unclassified)
   // The tables this read may touch: every component's, or the named ones'.
   let names = comps

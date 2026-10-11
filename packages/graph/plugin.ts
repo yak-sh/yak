@@ -15,7 +15,7 @@
 
 import type { Bundle, Eid } from './bundle.ts'
 import type { Query as Ast } from '@yaks/query'
-import type { ReadOpts, ReadTx, Tx } from './storage.ts'
+import type { ReadOpts, ReadTx, Tx, Visibility } from './storage.ts'
 import type { Ask } from './gather.ts'
 import type { Resource, Rule } from './rules.ts'
 import type { Declared } from './declared.ts'
@@ -110,6 +110,10 @@ export let INSIDE: Phase[] = [
  * An observed operation also carries its current activity parent. */
 export type HookContext = {
   graph: object
+  /** An internal server capability, never accepted from incoming bundles. */
+  trusted?: boolean
+  /** The signed batch whose operation the hook observes. */
+  bundles?: Bundle[]
   parent?: string
   /** Checking a value without retaining it; ordinary writes and dry runs are
    * false. A host may supply the same authoritative standing without writing
@@ -274,6 +278,8 @@ export type ReadView = {
  * family gets privileged access; it is all plugins.
  */
 export type Plugin = {
+  /** Constrain storage's visible relations, including native reads. */
+  scope?: (ctx: ReadContext) => Visibility | undefined
   /** Certify that this batch's admission can run without lasting state. Its
    * hooks, rules and tracker through stamping must have no external side
    * effects; journal and commit work must add no admission refusal.
@@ -285,7 +291,8 @@ export type Plugin = {
   /** Whether this caller needs the read hooks; false keeps the ordinary read path. */
   reads?: (opts: ReadOpts) => boolean
   /** Supply a complete caller view; the first non-null view in plugin order
-   * owns this query. Native reads bypass views and ask/answer hooks. */
+   * owns this query. Native reads bypass views and ordinary read hooks;
+   * answer hooks with a scope still enforce their policy. */
   view?: (
     ctx: ReadContext,
     query: Ast,
@@ -301,7 +308,11 @@ export type Plugin = {
    * the journal hooks and again after the commit hooks, inside the same
    * transaction. Use it for derived storage metadata, never for external
    * effects. */
-  track?: (tx: Tx, found: (eid: Eid) => Bundle | null | undefined) => Tracker
+  track?: (
+    tx: Tx,
+    found: (eid: Eid) => Bundle | null | undefined,
+    context?: HookContext,
+  ) => Tracker
   /** Ordered write policy. The factory sees the storage-ready bundles once;
    * the hook it returns checks or rewrites each live operation against the
    * operations already written before it. Opting in makes mutate and cascade
@@ -310,6 +321,9 @@ export type Plugin = {
    * rolls back everything written before it. Return undefined when this batch
    * needs no check from this plugin. */
   beforeWrite?: (bundles: Bundle[]) => WriteHook | undefined
+  /** Authorize a signed batch before compare-and-set can disclose held values.
+   * Runs inside the transaction, before the precondition's core and hooks. */
+  authorize?: Hook
   /** the plugin's name, for diagnostics */
   name: string
   /** the components this plugin contributes, as @yaks/vocab documents */

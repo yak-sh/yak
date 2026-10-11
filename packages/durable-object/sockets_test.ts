@@ -977,3 +977,32 @@ test('a deferred cold reset waits for its inherited snapshot ACK without losing 
     7,
   )
 })
+
+for (let person of ['bob', null]) {
+  let storage = store(), ctx = hibernation(), ws = wire()
+  let g = graph({ storage, vocab: shop }),
+    seen: (string | null | undefined)[] = []
+  g.apply([{ entity: { eid: 'private' }, product: { price: 3 } }])
+  g.use({
+    name: 'socket-person',
+    reads: (read) => read.person !== undefined,
+    answer: ({ opts }, rows) => {
+      seen.push(opts.person)
+      return rows
+    },
+  })
+  ws.serializeAttachment({
+    writer: { actor: person ? { by: person } : null },
+    subs: { products: '.product' },
+  })
+  ctx.live.push(ws)
+  let live = sockets(subscriptions(g), ctx, undefined, {
+    read: (read, writer) => ({ ...read, person: writer?.actor?.by ?? null }),
+  })
+  test(`legacy hibernated ${person ?? 'guest'} watches recover authenticated read identity`, () => {
+    live.wake()
+    live.message(ws, ask('again', '.product'))
+    assert(seen.length >= 2)
+    assertEquals(new Set(seen), new Set([person]))
+  })
+}

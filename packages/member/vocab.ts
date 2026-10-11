@@ -14,3 +14,7 @@ export let description: string = manifest.description
 
 /** Every vocabulary document this plugin contributes. */
 export let docs: VocabDoc[] = [memberDoc]
+
+export { memberKeywords } from './keywords.ts'
+import { memberKeywords } from './keywords.ts'
+export let keywords = [memberKeywords]

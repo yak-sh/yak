@@ -3,7 +3,8 @@
   "version": "0.2.10",
   "exports": {
     ".": "./mod.ts",
-    "./vocab": "./vocab.ts"
+    "./vocab": "./vocab.ts",
+    "./graph": "./graph.ts"
   },
   "license": "Apache-2.0",
   "description": "Access control for a graph: space membership, per-app permission grants, and access modes, with the checks that enforce them on reads and writes.",

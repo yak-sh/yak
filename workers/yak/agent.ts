@@ -594,6 +594,7 @@ export let reaching = async (
     use: (p) => (plugins.push(p), self),
     install: () => {},
     rewrites: () => false,
+    scope: (opts = {}) => opts,
     // Each reached store owns its answer hooks; this composition addresses
     // queries but does not reinterpret bundles already answered by a store.
     ask: (q) => addressing(vocab)(q, self.address),

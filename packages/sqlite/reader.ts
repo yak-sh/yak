@@ -40,9 +40,13 @@ export let reader = (
         'read',
       ),
     rows: (q, o) => rows(driver, vocab, q, { ...opts(), ...o }),
-    get: (ids, comps) =>
+    get: (ids, comps, o) =>
       ids.length
-        ? unit(driver, () => get(driver, vocab, ids, opts(), comps), 'read')
+        ? unit(
+          driver,
+          () => get(driver, vocab, ids, { ...opts(), ...o }, comps),
+          'read',
+        )
         : [],
   }
 }

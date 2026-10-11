@@ -7,16 +7,28 @@
   "$defs": {
     "floor": {
       "description": "The least a writer of this component holds. \"person\" is anyone signed in; \"viewer\", \"editor\" and \"owner\" are that level on the app, or more. Absent, the app's access mode decides alone.",
-      "enum": ["person", "viewer", "editor", "owner"]
+      "enum": [
+        "person",
+        "viewer",
+        "editor",
+        "owner"
+      ]
     },
     "permit": {
       "description": "Companion mark to local reference property. The owner of the stored reference's target may add or remove the mark on this existing row; other changes retain ordinary permissions.",
       "type": "object",
-      "propertyNames": { "pattern": "^[a-z][a-z0-9_]{0,39}$" },
+      "propertyNames": {
+        "pattern": "^[a-z][a-z0-9_]{0,39}$"
+      },
       "additionalProperties": {
         "type": "string",
         "pattern": "^[a-z][a-z0-9_]{0,39}$"
       }
+    },
+    "personal": {
+      "description": "Person-owned data: entity makes this component private on the authenticated person entity; a local reference property names the immutable owner of an entirely private entity.",
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_]{0,39}$"
     }
   }
 }

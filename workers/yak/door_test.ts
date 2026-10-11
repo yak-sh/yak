@@ -210,3 +210,16 @@ test('an opaque body failure does not replay a Store write', async () => {
   )
   assertEquals(attempts, 1)
 })
+
+test('the store door strips a visitor administrative claim and carries only its own vouch', async () => {
+  let seen: (string | null)[] = []
+  let door = doorOf((req) => {
+    seen.push(req.headers.get('x-yak-administrative'))
+    return Promise.resolve(new Response(''))
+  }, 'shop')
+  let request = () =>
+    new Request('https://shop/ws', { headers: { 'x-yak-administrative': '1' } })
+  await door('/query', request())
+  await door('/query', request(), { 'x-yak-administrative': '1' })
+  assertEquals(seen, [null, '1'])
+})

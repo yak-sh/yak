@@ -269,6 +269,7 @@ export let inSpace = async (
     : await ctx.dir.space(text(args.space, 'space'))
   if (!space) throw refuse('missing', `no space ${args.space}`)
   let who = asCaller(ctx, await roleIn(ctx, space, over))
+  if (over && await admin(ctx)) who.administrative = true
   if (!who.role) throw refuse('access', `not a member of ${space.slug}`)
   if (write && !writes(who.role)) {
     throw refuse('access', `not a writer of ${space.slug}`)

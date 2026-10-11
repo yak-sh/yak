@@ -6,7 +6,14 @@ import type { Vocab } from '@yaks/vocab'
 import { context, scope } from '@yaks/trace'
 import { after, each } from '@yaks/fp'
 import type { Bundle, Eid } from './bundle.ts'
-import type { Query, ReadOpts, ReadTx, Row, Storage } from './storage.ts'
+import type {
+  Query,
+  ReadOpts,
+  ReadTx,
+  Row,
+  Storage,
+  Visibility,
+} from './storage.ts'
 import type { Plugin, ReadView } from './plugin.ts'
 import type { Graph } from './graph.ts'
 import { Refused } from './errors.ts'
@@ -18,7 +25,15 @@ export type ReadStorage = Pick<Storage, 'read' | 'rows' | 'get'>
 export type Reader =
   & Pick<
     Graph,
-    'read' | 'rows' | 'get' | 'address' | 'ask' | 'answer' | 'view' | 'rewrites'
+    | 'read'
+    | 'rows'
+    | 'get'
+    | 'address'
+    | 'ask'
+    | 'answer'
+    | 'view'
+    | 'rewrites'
+    | 'scope'
   >
   & {
     use: (plugin: Plugin) => void
@@ -50,8 +65,52 @@ export let reader = (opts: {
   const emptyReadOpts: ReadOpts = {}
   let outsideRead = opts.outside ?? (() => ({
     read: (q, o) => storage.read(q, o),
-    get: (ids, comps) => storage.get(ids, comps),
+    get: (ids, comps, o) => storage.get(ids, comps, o),
   }))
+  let scoped = (readOpts: ReadOpts = {}): ReadOpts => {
+    let visibility = readOpts.visibility
+    let combine = (
+      a: Query | undefined,
+      b: Query | undefined,
+    ): Query | undefined =>
+      !a ? b : !b ? a : and(
+        typeof a == 'string' ? parse(a) : a,
+        typeof b == 'string' ? parse(b) : b,
+      )
+    for (let p of plugins) {
+      let more = p.scope?.({ opts: readOpts, tx: outsideRead(), vocab })
+      if (!more) continue
+      let components: NonNullable<Visibility['components']> = {
+        ...visibility?.components,
+      }
+      for (let [name, q] of Object.entries(more.components ?? {})) {
+        components[name] = combine(components[name], q)!
+      }
+      visibility = {
+        entity: combine(visibility?.entity, more.entity),
+        components,
+      }
+    }
+    return visibility ? { ...readOpts, visibility } : readOpts
+  }
+  let readContext = (plugin: Plugin, options: ReadOpts = {}) => {
+    let authoritative = outsideRead()
+    if (plugin.scope) return { opts: options, tx: authoritative, vocab }
+    let limited = (extra: ReadOpts = {}) =>
+      scoped({
+        ...options,
+        ...extra,
+        person: options.person,
+        administrative: options.administrative,
+      })
+    let read: ReadTx['read'] = (q, o) => authoritative.read(q, limited(o))
+    let tx: ReadTx = {
+      read,
+      whole: read,
+      get: (ids, comps, o) => authoritative.get(ids, comps, limited(o)),
+    }
+    return { opts: options, tx, vocab }
+  }
   // The same convenience a tool's arguments get (tool.ts `addressed`), applied
   // to a query string: wherever the query names an entity, an id a person can
   // type is resolved to the eid the store keys rows by (said.ts).
@@ -103,33 +162,43 @@ export let reader = (opts: {
       )
       if (!hooks.length) return q
       let ast = typeof q == 'string' ? parse(q) : q
-      let ctx = {
-        opts: readOpts ?? emptyReadOpts,
-        tx: outsideRead(),
-        vocab,
-      }
       return continuing(
-        each(hooks, ast, (at, p) => p.ask!(ctx, at)),
+        each(hooks, ast, (at, p) => p.ask!(readContext(p, readOpts), at)),
         (out) => out === ast ? q : out,
       )
     })
 
-  let answer = (bundles: Bundle[], readOpts?: ReadOpts, owner?: Plugin) => {
-    if (readOpts?.native || !answerHooks.length) return bundles
+  let answer = (
+    bundles: Bundle[],
+    readOpts?: ReadOpts,
+    owner?: Plugin,
+    mandatory = false,
+  ) => {
+    if (!answerHooks.length) return bundles
     let hooks = answerHooks.filter((p) =>
-      p != owner && (!p.reads || p.reads(readOpts ?? emptyReadOpts))
-    )
+      (p != owner || p.scope) && (!readOpts?.native || p.scope) &&
+      (!mandatory || p.scope) &&
+      (!p.reads || p.reads(readOpts ?? emptyReadOpts))
+    ).sort((a, b) => Number(!!b.scope) - Number(!!a.scope))
     if (!hooks.length) return bundles
-    let ctx = { opts: readOpts ?? emptyReadOpts, tx: outsideRead(), vocab }
-    return each(hooks, bundles, (at, p) => p.answer!(ctx, at))
+    return each(
+      hooks,
+      bundles,
+      (at, p) => p.answer!(readContext(p, readOpts), at),
+    )
   }
 
   let rewrites = (readOpts?: ReadOpts) =>
+    answerHooks.some((p) =>
+      p.scope && (!p.reads || p.reads(readOpts ?? emptyReadOpts))
+    ) ||
     !readOpts?.native && (
-      askHooks.some((p) => !p.reads || p.reads(readOpts ?? emptyReadOpts)) ||
-      answerHooks.some((p) => !p.reads || p.reads(readOpts ?? emptyReadOpts)) ||
-      viewHooks.some((p) => !p.reads || p.reads(readOpts ?? emptyReadOpts))
-    )
+        askHooks.some((p) => !p.reads || p.reads(readOpts ?? emptyReadOpts)) ||
+        answerHooks.some((p) =>
+          !p.reads || p.reads(readOpts ?? emptyReadOpts)
+        ) ||
+        viewHooks.some((p) => !p.reads || p.reads(readOpts ?? emptyReadOpts))
+      )
 
   type Viewed = { view: ReadView; owner: Plugin }
   let viewed = (query: Query, readOpts?: ReadOpts) => {
@@ -140,11 +209,6 @@ export let reader = (opts: {
     if (!hooks.length) return null
     return continuing(aim(query, address), (q) => {
       let original = typeof q == 'string' ? parse(q) : q
-      let ctx = {
-        opts: readOpts ?? emptyReadOpts,
-        tx: outsideRead(),
-        vocab,
-      }
       return continuing(
         each(
           hooks,
@@ -152,7 +216,7 @@ export let reader = (opts: {
           (at, p) =>
             at ??
               continuing(
-                p.view!(ctx, original),
+                p.view!(readContext(p, readOpts), original),
                 (v) => v ? { view: v, owner: p } : null,
               ),
         ),
@@ -182,7 +246,9 @@ export let reader = (opts: {
         ...v.query,
         clauses: v.query.clauses.filter((c) => !shaped.has(c.kind)),
       }, { ...readOpts, native: true }),
-      (rows) => continuing(v.expand ? v.expand(rows) : rows, v.answer),
+      (rows) =>
+        continuing(v.expand ? v.expand(rows) : rows, (expanded) =>
+          continuing(answer(expanded, readOpts, undefined, true), v.answer)),
     )
 
   // The owning view already reconstructed its answer. Other plugins finish
@@ -203,18 +269,18 @@ export let reader = (opts: {
       readOpts?.native || !askHooks.length && !answerHooks.length ||
       !rewrites(readOpts)
     ) {
-      return storage.get(eids, comps)
+      return storage.get(eids, comps, readOpts)
     }
     if (!comps?.length) {
       return continuing(
-        storage.get(eids, comps),
+        storage.get(eids, comps, readOpts),
         (out) => answer(out, readOpts),
       )
     }
     return continuing(ask(and(...comps.map(want)), readOpts), (q) => {
       let names = named(vocab, q, true)
       return continuing(
-        storage.get(eids, names ? [...names] : undefined),
+        storage.get(eids, names ? [...names] : undefined, readOpts),
         (out) => answer(out, readOpts),
       )
     })
@@ -230,12 +296,16 @@ export let reader = (opts: {
       (out) =>
         out
           ? continuing(
-            storage.get(eids),
+            storage.get(eids, undefined, readOpts),
             (bundles) =>
               continuing(
                 continuing(
                   out.view.expand ? out.view.expand(bundles) : bundles,
-                  out.view.answer,
+                  (expanded) =>
+                    continuing(
+                      answer(expanded, readOpts, undefined, true),
+                      out.view.answer,
+                    ),
                 ),
                 (rows) =>
                   answer(
@@ -290,7 +360,7 @@ export let reader = (opts: {
       ask(query, readOpts),
       (q) =>
         continuing(
-          readStored(q, readOpts, q !== query),
+          readStored(q, readOpts, !!readOpts?.native || q !== query),
           (rows) => answer(rows, readOpts),
         ),
     )
@@ -354,13 +424,14 @@ export let reader = (opts: {
 
   return {
     address,
-    ask,
+    scope: scoped,
+    ask: (q, o) => ask(q, scoped(o)),
     answer,
     view,
     rewrites,
-    read: (q, o) => read(q, o),
-    rows: (q, o) => rows(q, o),
-    get,
+    read: (q, o) => read(q, scoped(o)),
+    rows: (q, o) => rows(q, o === undefined ? scoped() : scoped(o)),
+    get: (ids, comps, o) => get(ids, comps, scoped(o)),
     use: (plugin) => {
       plugins.push(plugin)
       if (plugin.ask) askHooks.push(plugin)

@@ -255,6 +255,11 @@ export let sockets = (
     /** On peer-only recovery, register static durable watch interests without
      * repeating the snapshot already held by the page. Unknown queries open. */
     deferStatic?: boolean
+    /** Restore caller read context from the authenticated socket writer. */
+    read?: (
+      read: ReadOpts | undefined,
+      writer: PeerWriter | undefined,
+    ) => ReadOpts
     /** A host whose authenticated standing expires on wake can require a
      * new handshake before this writer relays again. */
     writer?: (writer: PeerWriter) => boolean | Promise<boolean>
@@ -278,6 +283,8 @@ export let sockets = (
   // opens the tiles it reaches and closes the ones it left, a message each.
   // Its stored map is written once the burst settles, not once a message.
   let owed = new Map<string, Record<string, Ask>>()
+  let reading = (held: Held | null): ReadOpts | undefined =>
+    opts.read ? opts.read(held?.read, held?.writer) : held?.read
   let defer = opts.defer ?? ((write) => void setTimeout(write, SETTLE))
   let pay = () => {
     let due = [...owed]
@@ -432,13 +439,13 @@ export let sockets = (
       return after(
         over(Object.entries(asks(ws)), ([id, ask]) => {
           if (openings) {
-            openings.push({ sink: send, id, query: ask, opts: held?.read })
+            openings.push({ sink: send, id, query: ask, opts: reading(held) })
           } else {
             return subs.restore([{
               sink: send,
               id,
               query: ask,
-              opts: held?.read,
+              opts: reading(held),
             }], deferStatic)
           }
         }),
@@ -516,7 +523,7 @@ export let sockets = (
                   data,
                   undefined,
                   input,
-                  (ws.deserializeAttachment() as Held | null)?.read,
+                  reading(ws.deserializeAttachment() as Held | null),
                   (ws.deserializeAttachment() as Held | null)?.writer,
                 ),
                 (verdict) => {

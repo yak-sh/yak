@@ -267,6 +267,8 @@ export type Graph = {
   install: () => void | Promise<void>
   /** Whether this caller needs plugin query or answer rewrites. */
   rewrites: (opts?: ReadOpts) => boolean
+  /** Compose mandatory relation restrictions for a caller's read. */
+  scope: (opts?: ReadOpts) => ReadOpts
   /** Run core addressing and plugin query rewrites; unchanged text stays text. */
   ask: (query: Query, opts?: ReadOpts) => Query | Promise<Query>
   /** Run plugin answer rewrites, also used by subscription transports. */
@@ -332,6 +334,7 @@ type Timing = <T>(
 ) => T | Promise<T>
 type Run = {
   admission: boolean
+  trusted?: boolean
   tracing?: Context
   parent: () => string | undefined
   resources: Record<string, Resource>
@@ -423,20 +426,22 @@ export let graph = (opts: Options): Graph => {
   let certified = (bundles: Bundle[]) =>
     !bundles.some(dead) &&
     plugins.every((p) =>
-      p.admission ? p.admission(bundles) : !p.track && !p.beforeWrite &&
-        ![
-          'prepare',
-          'precondition',
-          'rules',
-          'mutate',
-          'cascade',
-          'stamp',
-          'journal',
-          'commit',
-        ].some((name) => p.hooks?.[name as Phase]) &&
-        !p.rules?.some((r) =>
-          !['normalize', 'admit', 'mint', 'effect', 'audit'].includes(r.phase)
-        )
+      p.admission
+        ? p.admission(bundles)
+        : !p.track && !p.beforeWrite && !p.authorize &&
+          ![
+            'prepare',
+            'precondition',
+            'rules',
+            'mutate',
+            'cascade',
+            'stamp',
+            'journal',
+            'commit',
+          ].some((name) => p.hooks?.[name as Phase]) &&
+          !p.rules?.some((r) =>
+            !['normalize', 'admit', 'mint', 'effect', 'audit'].includes(r.phase)
+          )
     )
 
   // The hooks registered on a phase, in plugin registration order.
@@ -564,10 +569,15 @@ export let graph = (opts: Options): Graph => {
               graph: g,
               parent: run.parent(),
               admission: run.admission,
+              trusted: run.trusted,
             }),
           plugin,
         )
-        : h(bundles, tx, undefined, { graph: g, admission: run.admission })
+        : h(bundles, tx, undefined, {
+          graph: g,
+          admission: run.admission,
+          trusted: run.trusted,
+        })
       if (isPromise(out)) {
         return out.then((b) => runHooks(run, name, tx, calls, b, i + 1))
       }
@@ -707,6 +717,7 @@ export let graph = (opts: Options): Graph => {
       timed('gather', () => gather(tx, vocab, asking(b, checking)))
     let run: Run = {
       admission,
+      trusted: o.trusted,
       tracing,
       parent: () => current,
       resources,
@@ -869,7 +880,7 @@ export let graph = (opts: Options): Graph => {
 
     let inside = (bundles: Bundle[]): Bundle[] | Promise<Bundle[]> => {
       checking = admission && !fallback && certified(bundles)
-      let run = (tx: Tx) => {
+      let transacting = (tx: Tx) => {
         tx = traced(tx)
         // Every read the phases before the write will make, taken as one call.
         // It is handed to those phases alone — a snapshot of the graph as the
@@ -884,7 +895,12 @@ export let graph = (opts: Options): Graph => {
           let trackers: Tracker[] = []
           for (let p of plugins) {
             if (!p.track) continue
-            let tracker = p.track(tx, (eid) => snap.got.get(eid))
+            let tracker = p.track(tx, (eid) => snap.got.get(eid), {
+              graph: g,
+              trusted: o.trusted,
+              admission: checking,
+              bundles,
+            })
             trackers.push(tracker)
             tx = tracker.tx
           }
@@ -899,6 +915,16 @@ export let graph = (opts: Options): Graph => {
           return after(
             each(
               [
+                (b: Bundle[]) =>
+                  runHooks(
+                    run,
+                    'precondition',
+                    held,
+                    plugins.flatMap((p): [string, Hook][] =>
+                      p.authorize ? [[p.name, p.authorize]] : []
+                    ),
+                    b,
+                  ),
                 phase(
                   'precondition',
                   held,
@@ -1057,7 +1083,7 @@ export let graph = (opts: Options): Graph => {
       try {
         committed = timed(
           'transaction',
-          () => storage.tx(run, { admission: checking }),
+          () => storage.tx(transacting, { admission: checking }),
         )
       } catch (e) {
         return fell(e)
@@ -1227,6 +1253,7 @@ export let graph = (opts: Options): Graph => {
     plugins,
     address,
     rewrites,
+    scope: reads.scope,
     ask,
     answer,
     view,

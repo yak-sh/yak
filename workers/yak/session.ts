@@ -35,6 +35,8 @@ import { hostOf } from './route.ts'
 import { sha256 } from '@yaks/graph'
 
 export type Who = {
+  /** Explicit platform administrative access, vouched by the kernel. */
+  administrative?: boolean
   person: string | null
   role: Role | null
   /** The instrument the kernel verified, independent of the person's level. */
@@ -103,6 +105,7 @@ export let vouched = (who: Who): Record<string, string> => ({
   ...(who.person ? { 'x-yak-person': who.person } : {}),
   ...(who.role ? { 'x-yak-role': who.role } : {}),
   ...(who.via ? { 'x-yak-via': who.via } : {}),
+  ...(who.administrative ? { 'x-yak-administrative': '1' } : {}),
 })
 
 // The header a write adds to that vouch: what to call this person, so the

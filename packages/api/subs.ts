@@ -39,6 +39,7 @@ import { during, link, parent, peek, scope, unlink } from '@yaks/trace'
 import {
   coalesced,
   composed,
+  dead,
   formed,
   transient,
   type TransientFrame,
@@ -497,6 +498,41 @@ export let subscriptions = (graph: Graph, opts: {
   }
   let network = (sub: Sub) => sub.peer ? peerNet : durableNet
   let peerComp = (name: string) => syncOf(graph.vocab, name) == 'peers'
+  // Policies read dependencies without changing what the caller selected or
+  // requiring their private components on otherwise public members.
+  let dependencies = (reads: Interest | null, readOpts?: ReadOpts) => {
+    let visibility = graph.scope(readOpts).visibility
+    let policies = [
+      visibility?.entity,
+      ...Object.values(visibility?.components ?? {}),
+    ].filter((q): q is Query => q !== undefined)
+    if (!reads || !policies.length) return reads
+    let policy = interest(
+      {
+        kind: 'and',
+        clauses: policies.map((q) => typeof q == 'string' ? parse(q) : q),
+      },
+      graph.vocab,
+      graph.worn,
+    )
+    if (!policy) return null
+    let via = new Map(reads.via), far = new Set([...reads.far, ...policy.far])
+    for (let [comp, prop] of policy.via) {
+      if (via.has(comp) && via.get(comp) != prop) {
+        via.delete(comp)
+        far.add(comp)
+      } else if (!far.has(comp)) via.set(comp, prop)
+    }
+    return {
+      ...reads,
+      near: new Set([...reads.near, ...policy.near]),
+      far,
+      via,
+      whole: reads.whole || policy.whole,
+      alone: reads.alone && policy.alone,
+      unseen: reads.unseen || policy.unseen,
+    }
+  }
   let pendingWork: Promise<void> | undefined
   let observers = new Set<(bundles: Bundle[]) => void | Promise<unknown>>()
   let observed: Bundle[] = []
@@ -657,6 +693,8 @@ export let subscriptions = (graph: Graph, opts: {
       return sink(out)
     }
     if (!graph.rewrites(readOpts)) return sendPublished
+    let seen = new Set<Eid>()
+    let riders = new Set<Eid>()
     let patchOpts = { ...readOpts, patch: true }
     let waiting: Promise<void> | undefined
     let send = (frame: Frame) => {
@@ -671,7 +709,9 @@ export let subscriptions = (graph: Graph, opts: {
               key == 'relay' || raw && key == 'bundles' ? patchOpts : readOpts,
             ),
             (out) => {
-              rewritten[key] = out
+              rewritten[key] = raw && key == 'bundles'
+                ? out.filter((b) => !dead(b) || seen.has(b.entity.eid))
+                : out
             },
           )
         }),
@@ -680,41 +720,94 @@ export let subscriptions = (graph: Graph, opts: {
             over(['coverage', 'peerCoverage'] as const, (key) => {
               let coverage = frame[key]
               if (!coverage) return
-              let rows: Bundle[] = Object.entries(coverage).flatMap(
-                ([eid, comps]) => {
-                  if (comps === true) return []
-                  let row: Bundle = { entity: { eid } }
-                  for (let [comp, props] of Object.entries(comps)) {
-                    row[comp] = props === true
-                      ? {}
-                      : Object.fromEntries(props.map((p) => [p, null]))
-                  }
-                  return [row]
-                },
+              let whole = Object.keys(coverage).filter((eid) =>
+                coverage[eid] === true
               )
-              return after(
-                graph.answer(published(graph.vocab, rows), readOpts),
-                (out) => {
-                  rewritten[key] = { ...coverage }
-                  for (let row of out) {
-                    rewritten[key]![row.entity.eid] = Object.fromEntries(
-                      Object.entries(row).filter(([name]) => name != 'entity')
-                        .map((
-                          [name, props],
+              return after(graph.get(whole, undefined, readOpts), (held) => {
+                let rows: Bundle[] = Object.entries(coverage).flatMap(
+                  ([eid, scope]) => {
+                    if (scope === true) {
+                      return held.filter((b) => b.entity.eid == eid)
+                    }
+                    return [{
+                      entity: { eid },
+                      ...Object.fromEntries(
+                        Object.entries(scope).map((
+                          [comp, props],
                         ) => [
-                          name,
-                          props && typeof props == 'object'
-                            ? Object.keys(props).length
-                              ? Object.keys(props)
-                              : true
-                            : [],
+                          comp,
+                          props === true
+                            ? {}
+                            : Object.fromEntries(props.map((p) => [p, null])),
                         ]),
+                      ),
+                    }]
+                  },
+                )
+                return after(
+                  graph.answer(published(graph.vocab, rows), readOpts),
+                  (out) => {
+                    rewritten[key] = Object.fromEntries(
+                      out.map((
+                        row,
+                      ) => [
+                        row.entity.eid,
+                        Object.fromEntries(
+                          comps(row).map(([name, props]) => {
+                            let original = coverage[row.entity.eid]
+                            let fields = props && typeof props == 'object'
+                              ? Object.keys(props)
+                              : []
+                            return [
+                              name,
+                              original === true || original[name] === true ||
+                                !fields.length
+                                ? true
+                                : fields,
+                            ]
+                          }),
+                        ),
+                      ]),
                     )
-                  }
-                },
-              )
+                  },
+                )
+              })
             }),
-            () => sendPublished(rewritten),
+            () => {
+              for (
+                let b of [...rewritten.bundles ?? [], ...rewritten.relay ?? []]
+              ) seen.add(b.entity.eid)
+              for (let b of rewritten.peers ?? []) riders.add(b.entity.eid)
+              if (frame.gone) {
+                rewritten.gone = frame.gone.filter((eid) => seen.has(eid))
+              }
+              if (frame.peerGone) {
+                rewritten.peerGone = frame.peerGone.filter((eid) =>
+                  riders.has(eid)
+                )
+              }
+              if (frame.transientReset) {
+                rewritten.transientReset = frame.transientReset.filter((eid) =>
+                  seen.has(eid)
+                )
+              }
+              for (let eid of rewritten.gone ?? []) seen.delete(eid)
+              for (let eid of rewritten.peerGone ?? []) riders.delete(eid)
+              if (!frame.transient?.length) return sendPublished(rewritten)
+              let rows: Bundle[] = frame.transient.map((f) => ({
+                entity: { eid: f.entity },
+                [f.component]: { [f.property]: null },
+              }))
+              return after(graph.answer(rows, patchOpts), (visible) => {
+                rewritten.transient = frame.transient!.filter((f) =>
+                  visible.some((b) =>
+                    b.entity.eid == f.entity && b[f.component] &&
+                    f.property in (b[f.component] as Record<string, unknown>)
+                  )
+                )
+                return sendPublished(rewritten)
+              })
+            },
           ),
       )
     }
@@ -897,7 +990,10 @@ export let subscriptions = (graph: Graph, opts: {
         if (view) {
           sub.view = view
           sub.ast = view.original
-          sub.reads = interest(view.original, view.vocab, graph.worn)
+          sub.reads = dependencies(
+            interest(view.original, view.vocab, graph.worn),
+            readOpts,
+          )
           sub.peer = view.dependencies?.some(peerComp) ?? false
           sub.agg = aggregate(view.original)
           sub.want = named(view.vocab, view.original)
@@ -927,7 +1023,10 @@ export let subscriptions = (graph: Graph, opts: {
           (q) => {
             let ast = typeof q == 'string' ? parse(q) : q
             if (typeof q != 'string') sub.ast = ast
-            sub.reads = interest(ast, graph.vocab, graph.worn)
+            sub.reads = dependencies(
+              interest(ast, graph.vocab, graph.worn),
+              readOpts,
+            )
             let plan = peerPlan(ast, graph.vocab)
             sub.peer = plan.peers
             sub.durable = plan.durable
@@ -970,7 +1069,8 @@ export let subscriptions = (graph: Graph, opts: {
               // entities it selects moving.
               if (
                 held.get(sink)?.get(id) === sub && !sub.reads?.unseen &&
-                !sub.plan?.reaches.length && sub.opts?.now == null
+                !sub.plan?.reaches.length && sub.opts?.now == null &&
+                sub.opts?.person === undefined
               ) {
                 sub.routed = network(sub).add(sub, ast, sub.members)
                 if (sub.routed) join(sub, ast, bundles)
@@ -1263,7 +1363,7 @@ export let subscriptions = (graph: Graph, opts: {
                 s.members = ids
                 if (
                   reset && !s.reads?.unseen && !s.plan?.reaches.length &&
-                  s.opts?.now == null
+                  s.opts?.now == null && s.opts?.person === undefined
                 ) s.routed = network(s).add(s, queryOf(s), ids)
                 else if (s.routed) network(s).add(s, queryOf(s), ids)
                 rememberFields(s, set)
@@ -1467,7 +1567,7 @@ export let subscriptions = (graph: Graph, opts: {
       return collect()
     })
   }
-  let source = (
+  let gathered = (
     sub: Sub,
     scope?: Set<Eid>,
     scoped?: Bundle[] | Promise<Bundle[]>,
@@ -1520,6 +1620,15 @@ export let subscriptions = (graph: Graph, opts: {
         ),
     )
   }
+  let source = (
+    sub: Sub,
+    scope?: Set<Eid>,
+    scoped?: Bundle[] | Promise<Bundle[]>,
+  ) =>
+    after(
+      gathered(sub, scope, scoped),
+      (rows) => graph.answer(rows, { ...sub.opts, native: true }),
+    )
   let read = (
     sub: Sub,
     scope?: Set<Eid>,
@@ -1533,11 +1642,17 @@ export let subscriptions = (graph: Graph, opts: {
         native: !!sub.ast || graph.rewrites(sub.opts) || sub.opts?.native,
       })
     }
-    return after(prepared ?? source(sub, scope), (bundles) => {
-      let chosen = matcher(queryOf(sub), graph.vocab, sub.opts)(bundles)
-      return chosen.filter((b) => !scope || scope.has(b.entity.eid))
-        .map((b) => sub.cut(stored(b)))
-    })
+    return after(
+      after(
+        prepared ?? gathered(sub, scope),
+        (rows) => graph.answer(rows, { ...sub.opts, native: true }),
+      ),
+      (bundles) => {
+        let chosen = matcher(queryOf(sub), graph.vocab, sub.opts)(bundles)
+        return chosen.filter((b) => !scope || scope.has(b.entity.eid))
+          .map((b) => sub.cut(stored(b)))
+      },
+    )
   }
 
   let snapshot = (
@@ -1744,7 +1859,7 @@ export let subscriptions = (graph: Graph, opts: {
     pending.clear()
     for (const [sink, ids] of batch) {
       for (const [id, frames] of ids) {
-        if (held.get(sink)?.has(id)) sink({ id, transient: frames })
+        held.get(sink)?.get(id)?.send({ id, transient: frames })
       }
     }
   }

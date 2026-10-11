@@ -92,7 +92,7 @@ export type Tx = {
   /** lookup by id, not search: these entities as they stand, carrying the
    * components `comps` names or every one. A deleted one carries `tombstone`;
    * an unknown one is simply absent. */
-  get: (eids: Eid[], comps?: string[]) => Bundle[]
+  get: (eids: Eid[], comps?: string[], opts?: ReadOpts) => Bundle[]
   /** what declared rules are evaluated through: every match run against this
    * graph with `bundles` folded in, as though it had been written, and nothing
    * of it left behind */
@@ -127,7 +127,7 @@ export type Store = {
   rows: (query: Query, opts?: ReadOpts) => Row[]
   /** these entities as they stand, carrying the components `comps` names or
    * every one */
-  get: (eids: Eid[], comps?: string[]) => Bundle[]
+  get: (eids: Eid[], comps?: string[], opts?: ReadOpts) => Bundle[]
   /** run `body` in a transaction: commit on return, roll back on throw */
   tx: <R>(body: (tx: Tx) => R) => R
 }
@@ -406,6 +406,51 @@ export let ram = (vocab: Vocab, base: RamOpts = {}): Store => {
     return out
   }
 
+  // Remove hidden relations before the matcher can inspect a value or follow
+  // a reference. Every index for this read is built from this visible dataset.
+  let visible = (opts: ReadOpts): Index | Bundle[] => {
+    let scope = opts.visibility
+    if (!scope) return view()
+    let source = view()
+    let allowed = scope.entity
+      ? matcher(scope.entity, vocab, { now: opts.now ?? base.now })(source)
+      : source.list
+    let components = Object.entries(scope.components ?? {}).map(([name, q]) =>
+      [
+        name,
+        new Set(
+          matcher(q, vocab, { now: opts.now ?? base.now })(source).map((b) =>
+            b.entity.eid
+          ),
+        ),
+      ] as const
+    )
+    let present = new Set(allowed.map((b) => b.entity.eid))
+    return allowed.map((b) => {
+      let out = { ...b }
+      for (let [name, owners] of components) {
+        if (!owners.has(b.entity.eid)) delete out[name]
+      }
+      for (let [name, value] of comps(out)) {
+        if (!value) continue
+        for (let prop of vocab.props(name)) {
+          if (
+            isRef(name, prop) && typeof value[prop] == 'string' &&
+            !present.has(value[prop] as string)
+          ) {
+            out[name] = { ...out[name] as Comp, [prop]: null }
+          }
+        }
+      }
+      // Archetype metadata describes stored components, not this caller's view.
+      out.entity = {
+        eid: b.entity.eid,
+        ...b.entity.num === undefined ? {} : { num: b.entity.num },
+      }
+      return out
+    })
+  }
+
   let read = (
     query: Query,
     opts: ReadOpts = {},
@@ -415,7 +460,7 @@ export let ram = (vocab: Vocab, base: RamOpts = {}): Store => {
       now: opts.now ?? base.now,
       storageOrder: opts.storageOrder,
       computed: base.computed,
-    })(view())
+    })(visible(opts))
     return comps
       ? found.map(computed).map(only(new Set(comps)))
       : found.map(computed)
@@ -429,7 +474,7 @@ export let ram = (vocab: Vocab, base: RamOpts = {}): Store => {
       now: opts.now ?? base.now,
       storageOrder: opts.storageOrder,
       computed: base.computed,
-    })(view())
+    })(visible(opts))
 
   // The number an identity gets: the one it arrived with when this store
   // mirrors another graph (none until it is told), else the next one this
@@ -563,11 +608,14 @@ export let ram = (vocab: Vocab, base: RamOpts = {}): Store => {
   // The records themselves. A record is never mutated once stored, so the one a
   // read hands back is safe to keep, and costs no copy; a record cut to the
   // named components is a copy only when it carries others.
-  let get = (eids: Eid[], names?: string[]): Bundle[] => {
+  let get = (eids: Eid[], names?: string[], opts: ReadOpts = {}): Bundle[] => {
     let cut = only(names ? new Set(names) : null)
     let out: Bundle[] = []
+    let scoped = opts.visibility
+      ? new Map((visible(opts) as Bundle[]).map((b) => [b.entity.eid, b]))
+      : rows
     for (let eid of eids) {
-      let rec = rows.get(eid)
+      let rec = scoped.get(eid)
       if (rec) out.push(cut(computed(rec)))
     }
     return out

@@ -25,7 +25,7 @@ export let MEMBER_URI = 'https://yak.sh/vocab/member'
  */
 export let memberKeywords: Keywords = {
   uri: MEMBER_URI,
-  comp: ['floor', 'permit'],
+  comp: ['floor', 'permit', 'personal'],
   doc,
 }
 

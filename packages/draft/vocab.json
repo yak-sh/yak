@@ -1,6 +1,7 @@
 {
   "$vocabulary": {
-    "https://yak.sh/vocab/core": true
+    "https://yak.sh/vocab/core": true,
+    "https://yak.sh/vocab/member": true
   },
   "title": "draft",
   "$defs": {
@@ -29,7 +30,8 @@
           "stamped": true,
           "description": "how many writes of its text the store has taken, so an interface tells the newer text from the older"
         }
-      }
+      },
+      "personal": "by"
     },
     "typed": {
       "component": true,

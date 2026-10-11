@@ -101,10 +101,11 @@ export let api = (opts: Options): Handler => {
   let door: Handler = async (request) => {
     let path = new URL(request.url).pathname
     let who = await authenticate(request)
-    let readOpts = opts.read &&
+    let context = opts.read &&
         (path == '/query' || path == '/ws' || path == '/apply')
       ? await opts.read(request)
       : undefined
+    let readOpts: ReadOpts = { ...context, person: who?.by ?? null }
     if (path == '/apply') {
       return request.method == 'POST'
         ? await write(
