@@ -419,23 +419,23 @@ equal(await vault.load(), [])
 
 ## Options
 
-| Option               | Default                    | Purpose                                                                                  |
-| -------------------- | -------------------------- | ---------------------------------------------------------------------------------------- |
-| `url`                | none                       | Server base URL; omitted for a local-only graph.                                         |
-| `fetch`, `connect`   | global fetch and WebSocket | HTTP requests and socket creation.                                                       |
-| `timer`              | `setTimeout`               | Reconnect and deferred cache-write scheduling.                                           |
-| `headers`            | none                       | Headers added to `POST /apply`.                                                          |
-| `wait`, `most`       | 250, 30,000 ms             | Initial and maximum reconnect delay.                                                     |
-| `report`             | console warning            | Receive synchronization and server-cache failures.                                       |
-| `vault`              | `idb()` when available     | Persistence for local components, or `false`.                                            |
-| `wireVault`          | `wireIdb()` when available | Persistence for server data, or `false`.                                                 |
-| `epoch`              | none                       | Validated server epoch for restoring server data.                                        |
-| `retention`          | 20,000                     | Maximum inactive server rows retained.                                                   |
-| `answerBytes`        | 1,000,000                  | Encoded byte budget for retained server query metadata.                                  |
-| `retainUnownedProps` | false                      | Keep previously read fields for display after their subscription ends.                   |
-| `signal`             | plain object               | Factory for watch `value` and `ready` containers.                                        |
-| `mint`               | random UUID                | Id generator for entities created through aliases.                                       |
-| `provenance`         | graph default              | Policy for `created` and `updated` attribution; return `null` to leave it to the server. |
+| Option               | Default                    | Purpose                                                                      |
+| -------------------- | -------------------------- | ---------------------------------------------------------------------------- |
+| `url`                | none                       | Server base URL; omitted for a local-only graph.                             |
+| `fetch`, `connect`   | global fetch and WebSocket | HTTP requests and socket creation.                                           |
+| `timer`              | `setTimeout`               | Reconnect and deferred cache-write scheduling.                               |
+| `headers`            | none                       | Headers added to `POST /apply`.                                              |
+| `wait`, `most`       | 250, 30,000 ms             | Initial and maximum reconnect delay.                                         |
+| `report`             | console warning            | Receive synchronization and server-cache failures.                           |
+| `vault`              | `idb()` when available     | Persistence for local components, or `false`.                                |
+| `wireVault`          | `wireIdb()` when available | Persistence for server data, or `false`.                                     |
+| `epoch`              | none                       | Validated server epoch for restoring server data.                            |
+| `retention`          | 20,000                     | Maximum inactive server rows retained.                                       |
+| `answerBytes`        | 1,000,000                  | Encoded byte budget for retained server query metadata.                      |
+| `retainUnownedProps` | false                      | Keep previously read fields for display after their subscription ends.       |
+| `signal`             | plain object               | Factory for watch `value` and `ready` containers.                            |
+| `mint`               | random UUID                | Id generator for entities created through aliases.                           |
+| `provenance`         | graph default              | Policy for `created` and `updated`; `false` leaves provenance to the server. |
 
 ## Compatibility
 

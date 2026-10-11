@@ -154,10 +154,10 @@ export let stamps: Rule[] = [
 // built with one policy, or with none, share what their stamps compiled to.
 let policed = new WeakMap<StampPolicy, Rule[]>()
 
-/** The provenance rules: the default {@link stamps}, or one rule that lets a
- * policy choose the component or write none at all. Both paths use the same
- * timestamp, attribution and property narrowing. */
-export let provenance = (policy?: StampPolicy): Rule[] => {
+/** The provenance rules: the default {@link stamps}, a policy's rule, or none
+ * when provenance belongs to another graph. Mark rules remain independent. */
+export let provenance = (policy?: StampPolicy | false): Rule[] => {
+  if (policy === false) return []
   if (!policy) return stamps
   let made = policed.get(policy)
   if (!made) {

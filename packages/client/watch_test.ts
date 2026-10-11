@@ -76,7 +76,7 @@ test('an unrelated write does not wake a watch', () => {
   c.close()
 })
 
-let unchanged = boxClient(undefined, { provenance: () => null })
+let unchanged = boxClient(undefined, { provenance: false })
 
 unchanged.mutate([dal()])
 let heard = 0

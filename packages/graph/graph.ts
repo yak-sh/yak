@@ -219,8 +219,9 @@ export type Options = {
    * server that authenticated somebody overrides this before the batch ever
    * reaches `apply()` (`signed`). */
   actor?: Actor
-  /** Per-entity provenance policy; the core keeps the stamp mechanism. */
-  provenance?: StampPolicy
+  /** Per-entity provenance policy; false leaves created/updated to another
+   * graph. Mark stamping still runs. */
+  provenance?: StampPolicy | false
   /** the calling program's provenance clock, sampled once when a rule first
    * asks for #Now. `ApplyOpts.now` takes precedence. The default is still the
    * time the apply started. */

@@ -882,6 +882,27 @@ test('registries are per instance', () => {
 })
 
 for (let async of [false, true]) {
+  test(`a replica leaves provenance to its authority while stamping marks (${async ? 'async' : 'sync'})`, async () => {
+    let store = memory()
+    let one = graph({
+      storage: async ? slow(store) : store,
+      vocab: books,
+      provenance: false,
+    })
+    let now = '2026-09-01T01:02:03.000Z'
+    await one.apply([{ entity: { eid: 'b1' }, doc: { title: 'Dune' } }])
+    await one.apply([{
+      entity: { eid: 'b1' },
+      doc: { title: 'Dune II' },
+      sold: {},
+      $actor: { by: 'author' },
+    }], { now })
+    let [held] = await one.get(['b1'])
+    assertEquals(held.created, undefined)
+    assertEquals(held.updated, undefined)
+    assertEquals(held.sold, { at: now, by: 'author' })
+  })
+
   test(`provenance policy selects, overrides and suppresses without bypassing core clock (${async ? 'async' : 'sync'})`, async () => {
     let store = memory()
     let one = graph({

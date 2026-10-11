@@ -131,7 +131,7 @@ export let namedClient = (opts: {
     connect: (url) => tap(opts.connect(url)),
     vault: false,
     retainUnownedProps: true,
-    provenance: () => null,
+    provenance: false,
     wireVault: opts.wireVault && globalThis.indexedDB
       ? wireIdb(opts.wireVault)
       : false,

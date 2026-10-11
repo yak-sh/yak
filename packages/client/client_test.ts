@@ -487,7 +487,7 @@ test("a watch sees a peer's value, and nothing stores it", async () => {
 })
 
 test('a replica can leave provenance exclusively to its authority', () => {
-  let c = client(box, [], { vault: false, provenance: () => null })
+  let c = client(box, [], { vault: false, provenance: false })
   try {
     c.mutate([dal()])
     assertEquals(c.ent('r1')?.created, undefined)

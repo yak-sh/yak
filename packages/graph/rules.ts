@@ -449,11 +449,10 @@ export let fire = (
   // One view per entity, not per patch: the phases add bundles to the batch
   // as they go, and a rule is about the entity, so it must not fire once per
   // patch that mentions that entity.
-  let single = bundles.length == 1
   let watching = tick.phase == 'effect' && live.some(([, r]) => r.checked)
   let written = watching ? new Map<Eid, Set<string>>() : undefined
   let views: Bundle[]
-  if (single) {
+  if (bundles.length == 1) {
     let b = bundles[0]
     let view = merged(tick.of?.(b.entity.eid) ?? null, b)
     if (b.$actor) view.$actor ??= b.$actor
@@ -476,6 +475,9 @@ export let fire = (
     }
     views = [...seen.values()]
   }
+  // Births and earlier phases add patches for the same entity. Selection is
+  // over entities, so a one-entity view still needs only one predicate.
+  let single = views.length == 1
   let among = single
     ? {
       list: views,

@@ -103,9 +103,9 @@ export type ClientOpts = {
   /** how an eid is generated for an entity minted under an alias (default: a
    * random uuid) */
   mint?: () => Eid
-  /** how `created` and `updated` are stamped. A client that mirrors another
-   * graph can leave provenance entirely to that server. */
-  provenance?: StampPolicy
+  /** how `created` and `updated` are stamped. False leaves provenance entirely
+   * to the server while keeping mark stamping. */
+  provenance?: StampPolicy | false
 }
 
 /** A client: the graph, the pieces around it, and the four calls a page

@@ -1211,8 +1211,10 @@ The `stamp` phase fills `created` once, `updated` on subsequent writes, and
 [marks](../vocab/README.md#vocabulary) when first written. These components must
 be declared in the vocabulary. `now` or `clock` supplies the timestamp;
 `graph({ provenance })` can choose per-entity attribution while retaining the
-stamp mechanism. Trusted writes with `stamp: false` skip core stamps and marks,
-while plugin rules, hooks, validation, journaling, and effects still run.
+stamp mechanism. `graph({ provenance: false })` leaves `created` and `updated`
+to another graph while still stamping marks. Trusted writes with `stamp: false`
+skip core stamps and marks, while plugin rules, hooks, validation, journaling,
+and effects still run.
 
 ```ts
 import { graph, signed } from '@yaks/graph'
@@ -1241,6 +1243,9 @@ equal((await g.get(['b1']))[0].created, {
   at: '2026-01-01T00:00:00.000Z',
   by: 'ada',
 })
+const replica = graph({ storage: ram(vocab), vocab, provenance: false })
+await replica.apply([{ entity: { eid: 'b1' }, book: {} }])
+equal((await replica.get(['b1']))[0].created, undefined)
 ```
 
 ## Patch helpers and field edits
