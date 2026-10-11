@@ -69,6 +69,9 @@ export let merging: Hook = (bundles, tx) => {
  */
 export let drafts = (): Plugin => ({
   name: '@yaks/draft',
+  // Merging reads the transaction and rewrites its batch, with no external
+  // effects. Admission can rehearse it without calling storage's writer.
+  admission: () => true,
   vocab: [draftDoc],
   hooks: { precondition: merging },
 })
