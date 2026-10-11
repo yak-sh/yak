@@ -38,6 +38,13 @@ export type Driver = {
    */
   file?: boolean
   /**
+   * Keep planner statistics during installation. A file engine permits a
+   * bounded sample; Durable Object SQLite permits optimization but refuses
+   * `analysis_limit`, so any analysis there reads full indexes. Omitted for
+   * transient stores whose statistics would not outlive the connection.
+   */
+  statistics?: 'sampled' | 'full'
+  /**
    * How many terms one compound select may carry on this engine. Workerd, the
    * SQLite under a Durable Object, rejects a sixth (`ARMS`), where an
    * embedded SQLite takes the stock 500 (`STOCK`). A driver that leaves it out

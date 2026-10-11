@@ -196,6 +196,7 @@ export let driver = (
   return {
     query,
     tx: (body) => durable.transactionSync(body),
+    statistics: 'full',
     // Every driver over one object's storage is one connection.
     connection: durable,
   }

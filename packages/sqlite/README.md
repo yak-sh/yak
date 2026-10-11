@@ -504,6 +504,10 @@ vocab)` reads existing tables;
 `refit(vocab, standing)` builds table-rebuild statements. `fit(driver, vocab)`
 executes growth and rebuilds, returning errors for tables whose existing values
 cannot fit. `Store.install()` also maintains indexes, metadata, and archetypes.
+Drivers with `statistics` enabled keep planner statistics at installation:
+`sampled` permits bounded analysis, while `full` reads whole indexes. SQLite
+optimizes only tables with missing statistics or a tenfold size change. Reads
+and writes do not refresh statistics; a host calls `install()` at deployment.
 
 ```ts
 import { open } from '@yaks/sqlite/db'

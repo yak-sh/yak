@@ -8,7 +8,7 @@ import { test } from '@yaks/testing'
 import { assert, assertEquals, assertThrows } from '@std/assert'
 import { type Bundle, match, reads } from '@yaks/graph'
 import { blobKeywords, blobRead, blobSchema } from '@yaks/blob'
-import { insert } from '@yaks/sql'
+import { by, insert, scan } from '@yaks/sql'
 import { loadVocab } from '@yaks/vocab'
 import { durable, shop, store } from './testing.ts'
 import { driver } from './sql.ts'
@@ -18,8 +18,9 @@ import { kitchen, PROJECTED, PROJECTED_ROW, RECIPE } from '../sqlite/testing.ts'
 let comp = (b: Bundle, name: string) => b[name] as Record<string, unknown>
 
 test('install is idempotent, and a bundle survives the round trip', () => {
-  let s = store()
-  s.install() // create-if-not-exists: a woken object may call it every time
+  using db = durable()
+  let d = driver(db), s = storage(db, shop, { number: true })
+  s.install()
   s.tx((tx) =>
     tx.patch([{
       entity: { eid: 'p1' },
@@ -33,6 +34,36 @@ test('install is idempotent, and a bundle survives the round trip', () => {
   // A boolean would bind as the text 'true'; it lands as the 1 the column holds
   // and reads back as the boolean written.
   assertEquals(comp(p, 'product').available, true)
+  // Installation collects missing sizes, keeps modest growth, and refreshes
+  // outgrown sizes. Rebinding and ordinary reads leave the statistics alone.
+  let add = (from: number, to: number) => {
+    d.query(
+      insert(
+        'entity',
+        ...Array.from({ length: to - from + 1 }, (_, n) => {
+          let id = from + n
+          return { id, eid: `e${id}` }
+        }),
+      ),
+    )
+  }
+  let size = () =>
+    Number(
+      String(
+        scan(d, 'sqlite_stat1', by({ tbl: 'entity' }), ['stat'])[0]
+          ?.stat,
+      ).split(' ')[0],
+    )
+  s.install()
+  assertEquals(size(), 1)
+  add(2, 2)
+  storage(db, shop).install()
+  assertEquals(size(), 1)
+  add(3, 32)
+  s.read('.entity.eid=e1')
+  assertEquals(size(), 1)
+  storage(db, shop).install()
+  assertEquals(size(), 32)
 })
 
 test('an object and an array come back as the values written', () => {

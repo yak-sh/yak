@@ -43,8 +43,9 @@ export { shop }
 let REFUSED =
   /^\s*(begin|commit|end|rollback|savepoint|release|attach|detach|vacuum)\b/i
 
-// Schema cookies are private to the runtime's connection.
-let SCHEMA = /^\s*pragma\s+(?:["\w]+\.)?["']?schema_version\b/i
+// Schema cookies and the analysis sampling limit are private to the runtime.
+let SCHEMA =
+  /^\s*pragma\s+(?:["\w]+\.)?["']?(?:schema_version|analysis_limit)\b/i
 
 // workerd's SQL authorizer, at the one place it bites an object that reads its
 // own schema: a statement that names a table Cloudflare owns is refused — read,

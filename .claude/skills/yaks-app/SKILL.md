@@ -98,8 +98,11 @@ box. A query that works on the box can be refused in a store.
 - **128 MB per isolate**, shared by every object in it (`HELD` in
   packages/embedding/held.ts caps vector copies at 48 MB; the vectors are
   `search-and-embeddings`).
-- **Rows read are billed**, and stores collect no planner statistics yet
-  (T-61475): a filter that misses the archetype index scans the store.
+- **Rows read are billed.** Installation keeps planner statistics through
+  @yaks/sqlite's `analyzed`: Durable Objects permit optimize but refuse
+  analysis_limit, so an analyze reads full indexes. It runs only for missing
+  statistics or a tenfold size change, at installation rather than per request.
+  Measure costs on a throwaway copy; a person's store is no benchmark fixture.
 - **A boot is all or nothing.** It runs in one transaction. A schema that won't
   stand unwinds, and the store answers every request 503 with the reason
   (`graph.ts` `#stalled`), still keeping the writes it is sent (`writes.ts`),

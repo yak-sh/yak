@@ -742,9 +742,11 @@ export let SAMPLE = 400
  * ones this connection has already read — at install it has read none — and an
  * older SQLite that does not know that bit ignores it.
  *
- * Only for a driver over a file: an engine that hands out storage rather than a
- * database (a Durable Object's SQLite) refuses the pragma, and a scratch
- * in-memory store is gone before a plan could be worth improving.
+ * Drivers declare whether they can keep sampled or full statistics. A Durable
+ * Object supports optimize but refuses analysis_limit: its pass is unbounded.
+ * Optimize only analyzes missing statistics or a tenfold change in size, and
+ * installation is the only caller; ordinary reads never do this work. A
+ * scratch in-memory store keeps no statistics.
  *
  * Analyzing writes, so it needs the write lock, and every process that opens
  * the file runs it: `optimize` names every empty table on every open, since an
@@ -755,10 +757,19 @@ export let SAMPLE = 400
  * refuse a command over an optimization.
  */
 export let analyzed = (driver: Driver): void => {
-  if (!driver.file) return
-  atOnce(driver, () => {
-    driver.query({ t: 'pragma', name: 'analysis_limit', value: SAMPLE })
+  if (!driver.statistics) return
+  let optimize = () => {
+    if (driver.statistics == 'sampled') {
+      driver.query({ t: 'pragma', name: 'analysis_limit', value: SAMPLE })
+    }
     driver.query({ t: 'pragma', name: 'optimize', value: 0x10002 })
+  }
+  if (!driver.file) {
+    optimize()
+    return
+  }
+  atOnce(driver, () => {
+    optimize()
   })
 }
 

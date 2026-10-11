@@ -45,6 +45,11 @@ export let driver = (
       () => ({ rows: n }),
     )
   }
-  let d: Driver = { query, file: opts.file, arms: STOCK }
+  let d: Driver = {
+    query,
+    file: opts.file,
+    statistics: opts.file ? 'sampled' : undefined,
+    arms: STOCK,
+  }
   return d
 }
