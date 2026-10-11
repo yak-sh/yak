@@ -5,8 +5,14 @@
 // hears its page token and never the cookie, one app's token opens no other,
 // it keeps its words to itself, and it keeps a page's storage.
 import { test } from '@yaks/testing'
-import { assert, assertEquals, assertStringIncludes } from '@std/assert'
+import {
+  assert,
+  assertEquals,
+  assertRejects,
+  assertStringIncludes,
+} from '@std/assert'
 import { connector, kernel, signIn, txt, vocabFile } from './probe.ts'
+import { token as hash } from '@yaks/graph'
 
 test('an installed copy runs like its space, or sandboxed', async () => {
   let k = await kernel()
@@ -88,7 +94,117 @@ test('an installed copy runs like its space, or sandboxed', async () => {
       }),
       'sandboxed',
     )
+    await agent.tool('app_files', {
+      space: home,
+      app: 'other',
+      files: [{
+        path: 'vocab.json',
+        content: vocabFile({
+          recipe: { title: txt },
+          private_note: { body: txt },
+        }),
+      }],
+    })
     await agent.tool('app_deploy', { space: home, app: 'other' })
+
+    // The connector may read the copy, but a write must name it before its
+    // own words or an entity's history can put anything into its store.
+    let eid = crypto.randomUUID()
+    let write = (entities: unknown[], app?: string) =>
+      agent.tool('graph_apply', {
+        ...(app ? { app: `${home}/${app}` } : {}),
+        entities,
+      })
+    let row = () =>
+      agent.tool('graph_query', {
+        app: `${home}/other`,
+        q: `.entity.eid=${eid}&*`,
+      }).then(JSON.parse)
+    let note = {
+      entity: { eid },
+      private_note: { body: 'kept in the copy' },
+      doc: { title: 'private' },
+    }
+    await assertRejects(() => write([note]), Error)
+    await assertRejects(() => write([note], 'pantry'), Error)
+    assertEquals(await row(), [])
+    await write([note], 'other')
+    await assertRejects(
+      () =>
+        write([{
+          entity: { eid },
+          $was: { private_note: { body: hash(note.private_note.body) } },
+          doc: { title: 'guarded in another app' },
+        }], 'pantry'),
+      Error,
+    )
+    await assertRejects(
+      () => write([{ entity: { eid }, doc: { title: 'changed by history' } }]),
+      Error,
+    )
+    assertEquals((await row())[0].doc.title, 'private')
+
+    // Deleting a shared eid outside the copy must leave its part standing.
+    await write(
+      [{ entity: { eid }, doc: { title: 'in the pantry' } }],
+      'pantry',
+    )
+    await write([{ entity: { eid }, $delete: true }], 'pantry')
+    assertEquals((await row())[0].private_note.body, 'kept in the copy')
+    await write(
+      [{ entity: { eid }, doc: { title: 'in the pantry' } }],
+      'pantry',
+    )
+    await write([{ entity: { eid }, $delete: true }])
+    assertEquals((await row())[0].private_note.body, 'kept in the copy')
+    await write([{ entity: { eid }, $delete: true }], 'other')
+    assertEquals(await row(), [])
+
+    // A caller reaching only the sandbox has no implicit destination. Once
+    // they build a sibling, its words win even though the copy came first.
+    let guest = connector(k, (await signIn(k)).cookie)
+    await guest.tool('app_install', { name: offer })
+    await guest.tool('app_set', { app: 'notes', sandboxed: true })
+    await guest.tool('app_deploy', { app: 'notes' })
+    let soup = {
+      entity: { eid: crypto.randomUUID() },
+      recipe: { title: 'Soup' },
+    }
+    let change = (bundles: unknown[]) => guest.tool('graph_apply', { bundles })
+    await assertRejects(() => change([soup]), Error)
+    await assertRejects(
+      () =>
+        change([{
+          entity: { eid: crypto.randomUUID() },
+          doc: { title: 'Soup' },
+        }]),
+      Error,
+    )
+    // The current bundle interface can explicitly aim at the copy too.
+    await change([{ ...soup, $app: 'notes' }])
+    await guest.tool('app_new', { slug: 'pantry', title: 'Pantry' })
+    await guest.tool('app_files', {
+      app: 'pantry',
+      files: [{
+        path: 'vocab.json',
+        content: vocabFile({ recipe: { title: txt } }),
+      }],
+    })
+    await guest.tool('app_deploy', { app: 'pantry' })
+    await change([{
+      ...soup,
+      recipe: { title: 'Stew' },
+      doc: { title: 'Stew' },
+    }])
+    for (let [app, title] of [['notes', 'Soup'], ['pantry', 'Stew']]) {
+      let [saved] = JSON.parse(
+        await guest.tool('graph_query', {
+          app,
+          q: `.entity.eid=${soup.entity.eid}&.recipe`,
+        }),
+      )
+      assertEquals(saved.recipe.title, title)
+    }
 
     // The page: walled, never same-origin, no referrer, and its token in the
     // base every relative URL resolves against.

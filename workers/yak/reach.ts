@@ -76,6 +76,7 @@ import {
 import { refuse, rejected } from './tool.ts'
 import { caught } from './defects.ts'
 import { said as told } from './writes.ts'
+import { sandboxed } from './installed.ts'
 
 // The words the PLATFORM says in every store, including its vocabulary and
 // journal. A word outside this list was declared by an app, which is what
@@ -967,6 +968,10 @@ let routed = async (
   named: Reach | undefined,
   bundles: Bundle[],
 ) => {
+  // A sandboxed copy owns only writes aimed at it. Limit every routing
+  // decision together: declarations, existing homes, deaths and the fallback
+  // for a shared word must all choose from the same eligible destinations.
+  reach = reach.filter((r) => !sandboxed(r.app) || r == named)
   let { words, apart, vocab } = await spoken(env, reach)
   let { entities, eids, aliases } = minted(bundles, vocab)
   // Where the entity already lives, read only when the answer depends on it:
