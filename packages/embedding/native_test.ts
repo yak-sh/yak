@@ -245,6 +245,11 @@ test('another connection loads the newer build', () => {
 
 test('a database it was never installed on reads every vector', () => {
   let db = corpus(fresh(), 300)
+  assertThrows(
+    () => install(plain(db)),
+    Error,
+    'sqlite-vector extension is unavailable',
+  )
   assert(!build(db))
   let q = anchor(db, 9)
   assertEquals(names(db, q), names(plain(db), q))

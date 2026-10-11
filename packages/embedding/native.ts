@@ -57,7 +57,7 @@ import { pack } from './vector.ts'
  * extension's metadata table to the database. */
 export let install = (db: Statements): void => {
   if (!db.facilities?.vector) {
-    throw new Error('SQL statements cannot load sqlite-vector')
+    throw new Error('sqlite-vector extension is unavailable on this storage')
   }
   db.facilities.vector()
 }

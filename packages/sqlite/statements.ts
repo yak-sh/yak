@@ -6,7 +6,8 @@ import { unit } from './unit.ts'
 let held = new WeakMap<Driver, Statements>()
 let platform =
   (globalThis as { Deno?: { build: { os: string; arch: string } } }).Deno?.build
-let vectorPath = (): string | undefined => {
+/** The platform library's path, only when resolution reaches a local file. */
+export let vectorPath = (resolve = import.meta.resolve): string | undefined => {
   let names: Record<string, string> = {
     'linux-x86_64': '@sqlite-vector-linux-x86_64',
     'linux-aarch64': '@sqlite-vector-linux-aarch64',
@@ -21,7 +22,9 @@ let vectorPath = (): string | undefined => {
     : platform.os == 'darwin'
     ? 'dylib'
     : 'so'
-  return new URL(`./vector.${ext}`, import.meta.resolve(name)).pathname
+  let base = new URL(resolve(name))
+  if (base.protocol != 'file:') return
+  return new URL(`./vector.${ext}`, base).pathname
 }
 
 /** One stable capability per connection, sharing the graph's transaction. */

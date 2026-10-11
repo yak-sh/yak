@@ -1844,7 +1844,7 @@ export let bound = (
   let cs = ast.clauses
   for (let c of cs) {
     if (UNREACHED.has(c.kind) && !claims(ctx, c.kind)) {
-      throw new Unsupported(`.${c.kind}`)
+      throw new Unsupported(`.${c.kind}`, 'query extension is unavailable')
     }
   }
   let filters = cs.filter((c) => !directive(c) || claims(ctx, c.kind))

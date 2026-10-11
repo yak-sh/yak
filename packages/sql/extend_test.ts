@@ -77,7 +77,11 @@ test('an extension compiles a clause the binder would decline', () => {
           : null,
     },
   }
-  assertThrows(() => compile(parse('.near=x'), v), Unsupported)
+  assertThrows(
+    () => compile(parse('.near=x'), v),
+    Unsupported,
+    'query extension is unavailable',
+  )
   let { sql } = compile(parse('.near=x'), v, { extend: [near] })
   assert(sql.includes('select "entity" from "vec"'), sql)
 })

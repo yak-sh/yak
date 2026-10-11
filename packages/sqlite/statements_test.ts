@@ -6,7 +6,24 @@ import { docDoc } from '@yaks/doc'
 import { insert, select, table } from '@yaks/sql'
 import { open } from './db.ts'
 import { storage } from './mod.ts'
-import { statements } from './statements.ts'
+import { statements, vectorPath } from './statements.ts'
+
+test('an unresolved vector library leaves the native facility unavailable', () => {
+  equal(
+    vectorPath(() => 'npm:@sqliteai/sqlite-vector-linux-x86_64@1.1.2'),
+    undefined,
+  )
+  equal(vectorPath(() => 'https://example.com/vector/index.js'), undefined)
+  let ext = Deno.build.os == 'windows'
+    ? 'dll'
+    : Deno.build.os == 'darwin'
+    ? 'dylib'
+    : 'so'
+  equal(
+    vectorPath(() => 'file:///libraries/vector/index.js'),
+    `/libraries/vector/vector.${ext}`,
+  )
+})
 
 test('statement writes roll back with the graph transaction and nested units', () => {
   let driver = open(':memory:')
