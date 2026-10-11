@@ -30,22 +30,26 @@ deno add jsr:@yaks/page
 For a graph that records URLs without fetching them:
 
 ```ts
+import { equal } from '@yaks/testing'
 import { graph } from '@yaks/graph'
 import { ram } from '@yaks/ram'
 import { loadVocab } from '@yaks/vocab'
-import { docDoc, docs } from '@yaks/doc'
+import { docDoc } from '@yaks/doc'
 import { pageDoc, pageEid, pages } from '@yaks/page'
 
 let vocab = loadVocab([docDoc, pageDoc])
-let g = graph({ storage: ram(vocab), vocab, plugins: [docs(), pages()] })
+let g = graph({ storage: ram(vocab), vocab, plugins: [pages()] })
 let url = 'https://example.com/article'
+let eid = pageEid(url)
 
 await g.apply([{
-  entity: { eid: pageEid(url) },
+  entity: { eid },
   web: { url },
   doc: { title: 'An article' },
 }])
-console.log(await g.read('.web'))
+let [saved] = await g.get([eid])
+equal(saved.web, { url })
+equal(saved.doc, { title: 'An article' })
 ```
 
 Each object passed to `apply()` is a **bundle**: one entity's components as a
