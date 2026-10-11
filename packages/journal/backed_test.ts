@@ -60,10 +60,10 @@ let build = () => {
   let rows = (q: string) => sync(g.rows(q))
   // What a change says, on one line, its component by the name its `_comp`
   // gives it: `page p1 {"title":"Retro"}`.
+  let name = new Map(
+    read('._comp').map((b) => [b.entity.eid, (b._comp as Comp).name]),
+  )
   let said = (bs: Bundle[]) => {
-    let name = new Map(
-      read('._comp').map((b) => [b.entity.eid, (b._comp as Comp).name]),
-    )
     return bs.map((b) => {
       let c = b._change as Comp
       let comp = name.get(c.comp as string) ?? '-'
@@ -75,10 +75,15 @@ let build = () => {
 
 // The wiki as every reading test sees it, built once: they only read. A test
 // that writes builds its own.
-let built: ReturnType<typeof build> | undefined
-let fixture = () => built ??= build()
 let ada = { by: 'ada' }
 let bob = { by: 'bob', via: 'cli' }
+let built = build()
+let fixture = () => built
+let changes = built.read('._change.target=p1')
+let [newest] = built.read('._change.target=p1&.limit=1')
+let previous = built.read(
+  `._change.target=p1&.limit=1&.after=${newest.entity.eid}`,
+)
 
 test('an entity’s history is a query over its changes', () => {
   let { read, said } = fixture()
@@ -106,16 +111,26 @@ test('a change points at the _comp describing its component', () => {
 })
 
 test('a change names its transaction, which reads like any entity', () => {
-  let { g, read } = fixture()
-  let [first, second] = read('._change.target=p1')
+  let { g } = fixture()
+  let [first] = changes
   let tx = (first._change as { tx: string }).tx
   let [{ entity, _tx }] = sync(g.get([tx]))
   let { seq, at, by, via } = _tx as Record<string, unknown>
   assertEquals([entity.eid, seq, at, by, via], [tx, 1, NOW, 'ada', null])
+})
+
+test('a transaction selects its own changes', () => {
+  let { read } = fixture()
+  let [first] = changes
+  let tx = (first._change as { tx: string }).tx
   assertEquals(read(`._change.tx=${tx}`).map((b) => b.entity.eid), [
     first.entity.eid,
   ])
-  assertEquals(read(`.entity.eid=${second.entity.eid}`), [second])
+})
+
+test('a change reads by its own entity id', () => {
+  let second = changes[1]
+  assertEquals(fixture().read(`.entity.eid=${second.entity.eid}`), [second])
 })
 
 test('a transaction is found by who wrote it, and through it', () => {
@@ -134,14 +149,16 @@ test('a transaction is found by who wrote it, and through it', () => {
 })
 
 test('a history pages newest first', () => {
-  let { read, rows, said } = fixture()
-  let [last] = read('._change.target=p1&.limit=1')
-  assertEquals(said([last]), ['page p1 {"title":"Retro"}'])
-  assertEquals(
-    said(read(`._change.target=p1&.limit=1&.after=${last.entity.eid}`)),
-    ['page p1 {"title":"Kickoff"}'],
-  )
-  assertEquals(rows('._change.target=p1&.count'), [{ value: '', n: 2 }])
+  let { said } = fixture()
+  assertEquals(said([newest]), ['page p1 {"title":"Retro"}'])
+  assertEquals(said(previous), ['page p1 {"title":"Kickoff"}'])
+})
+
+test('a history counts every change despite its page size', () => {
+  assertEquals(fixture().rows('._change.target=p1&.count'), [{
+    value: '',
+    n: 2,
+  }])
 })
 
 test('a history reads who wrote each change through its transaction', () => {
@@ -178,11 +195,16 @@ test('an entity counts its changes by the reverse association', () => {
   ])
 })
 
+// These fixed answers share the read-only wiki; no journal row may leak into them.
+let ordinary = [
+  built.read('.page'),
+  built.read('._change.target=p1&.page'),
+  built.read('.refs=p1'),
+]
 test('the journal is no part of any other answer', () => {
-  let { read } = fixture()
-  assertEquals(read('.page').map((b) => b.entity.eid), ['p1'])
-  assertEquals(read('._change.target=p1&.page'), [])
-  assertEquals(read('.refs=p1'), [])
+  assertEquals(ordinary[0].map((b) => b.entity.eid), ['p1'])
+  assertEquals(ordinary[1], [])
+  assertEquals(ordinary[2], [])
 })
 
 test('nothing writes the journal’s components', () => {
