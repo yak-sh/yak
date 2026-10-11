@@ -319,6 +319,25 @@ called the platform and exited 0 in 0.535 seconds, and warm help exited 0 in
 observation, including source transfer, verification, disk writes and cold
 module downloads. Container startup precedes these command timings.
 
+T-122065 measures the first call immediately after `sandbox_write` lends a fresh
+sandbox, with no delay inserted before the timed command. Preparation finishes
+`yak --help` before lending returns: background installation alone races an
+immediate first call. The CLI workspace and module cache are ready when the
+agent receives the machine. Warm-up failures are reported and ordinary sandbox
+commands remain available.
+
+| SHA         | Gate run                                                              | First help before | First help after | Warm help after |
+| ----------- | --------------------------------------------------------------------- | ----------------: | ---------------: | --------------: |
+| `1578f73c8` | [38130517587](https://github.com/yak-sh/yak/actions/runs/38130517587) |            5.889s |           0.266s |          0.269s |
+
+Both observations use fresh throwaway accounts and time `yak --help` inside the
+container. The after probe verified live version
+`1c158fc5-724e-4351-ac37-383705aeea36`. Its fresh lending call took 12.25
+seconds end to end, including container startup, CLI preparation and RPC: the
+cold setup cost moves into lending rather than disappearing. Both help calls
+exited 0. The probe spaces and their containers were permanently erased
+afterwards.
+
 | SHA         | Gate run                                                              | Push → live | Observation                                           |
 | ----------- | --------------------------------------------------------------------- | ----------: | ----------------------------------------------------- |
 | `d058ad04e` | [38127723976](https://github.com/yak-sh/yak/actions/runs/38127723976) |     75.655s | first registry-pin and CLI-assets rollout             |
