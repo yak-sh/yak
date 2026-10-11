@@ -21,6 +21,7 @@
 // nothing here has moved: the last release's worker and pages still serve.
 import type { Answer, Ask, Plan } from '@yaks/esbuild'
 import { plan, Unplanned } from '@yaks/esbuild'
+import catalog from './.wrangler/packages.json' with { type: 'json' }
 import type { App, Space } from './directory.ts'
 import type { Module } from './dispatch.ts'
 import type { Env } from './env.ts'
@@ -137,8 +138,11 @@ let asked = async (env: Env, ask: Ask, app: App): Promise<Answer> => {
     r = await env.ESBUILD!.fetch(
       new Request('https://esbuild.invalid/', {
         method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify(ask),
+        headers: {
+          'content-type': 'application/json',
+          'x-yak-compiler-job': '1',
+        },
+        body: JSON.stringify({ ask, catalog }),
       }),
     )
     if (r.ok) return await r.json()

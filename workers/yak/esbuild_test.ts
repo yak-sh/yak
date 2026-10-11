@@ -7,6 +7,7 @@
 import { test } from '@yaks/testing'
 import { assert, assertEquals, assertRejects } from '@std/assert'
 import type { Answer, Ask } from '@yaks/esbuild'
+import catalog from './.wrangler/packages.json' with { type: 'json' }
 import * as apps from './apps.ts'
 import type { Env } from './env.ts'
 import { ADA, platform, seeded, visit } from './serving-probe.ts'
@@ -25,7 +26,9 @@ let scenario = async (
   let asks: Ask[] = []
   let ESBUILD = {
     fetch: async (r: Request) => {
-      let ask = await r.json() as Ask
+      let job = await r.json() as { ask: Ask; catalog: typeof catalog }
+      assertEquals(job.catalog, catalog)
+      let ask = job.ask
       asks.push(ask)
       let out = answer(ask)
       return out instanceof Response ? out : Response.json({

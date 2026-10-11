@@ -13,6 +13,7 @@
 // esbuild's process instead, the container answers that 507 itself.
 import { Container, getContainer } from '@cloudflare/containers'
 import catalog from '../.wrangler/packages.json' with { type: 'json' }
+import { forwarded } from './forward.ts'
 
 // The compilers' Durable Object namespace, as getContainer takes it.
 type Env = { COMPILER: Parameters<typeof getContainer<Compiler>>[0] }
@@ -55,11 +56,9 @@ export class Compiler extends Container<Env> {
 
 export default {
   fetch: async (req: Request, env: Env): Promise<Response> =>
-    req.method == 'POST'
-      ? await getContainer(env.COMPILER).fetch('http://compiler/', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: `{"ask":${await req.text()},"catalog":${CATALOG}}`,
-      })
-      : new Response('POST an ask', { status: 405 }),
+    await forwarded(
+      req,
+      (job) => getContainer(env.COMPILER).fetch(job),
+      CATALOG,
+    ),
 }

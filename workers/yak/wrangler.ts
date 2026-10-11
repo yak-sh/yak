@@ -1047,7 +1047,7 @@ if (import.meta.main) {
     ]),
   )
   let kernel = preflight(
-    () => readied,
+    () => Promise.all([readied, made.catalog]),
     () => inspected,
     () => bundled(argv, run),
     (bundle) =>
