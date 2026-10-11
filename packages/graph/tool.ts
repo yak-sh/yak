@@ -10,7 +10,8 @@ import { minted } from './mint.ts'
 import { Refused } from './errors.ts'
 import type { ReadTx } from './storage.ts'
 import type { Vocab } from '@yaks/vocab'
-import { after, each } from '@yaks/fp'
+import { after, each, same } from '@yaks/fp'
+import { merged } from './gather.ts'
 import { and, eq, present, want } from '@yaks/query'
 
 let part = (call: Bundle, comp: string): Comp | undefined =>
@@ -28,14 +29,18 @@ let part = (call: Bundle, comp: string): Comp | undefined =>
 export let argsOf = (call: Bundle): Record<string, unknown> =>
   (part(call, 'call')?.args ?? {}) as Record<string, unknown>
 
-/** Who asked: the `created{by, via}` a call carries — the identity it acts
- * for, and the run it came through — or `null` for nobody. A tool writes in
+/** Who decided the request: `call.actor` after an executable edit, otherwise
+ * `created{by, via}` — the identity it acts for and the run it came through —
+ * or `null` for nobody. A tool writes in
  * that name, never the runner's; one that needs the session behind a call
  * reads `via`. A call not yet stamped says it on `$actor`, as the batch that
  * writes it does. */
 export let who = (call: Bundle): Actor | null => {
+  let actor = part(call, 'call')?.actor as Actor | undefined
   let said = (prop: 'by' | 'via') =>
-    part(call, 'created')?.[prop] ?? call.$actor?.[prop]
+    actor != null
+      ? actor[prop]
+      : part(call, 'created')?.[prop] ?? call.$actor?.[prop]
   let by = said('by')
   let via = said('via')
   return by || via
@@ -44,6 +49,33 @@ export let who = (call: Bundle): Actor | null => {
       ...(via ? { via: String(via) } : {}),
     }
     : null
+}
+
+// A semantic edit transfers the whole identity pair. Keeping a missing `via`
+// from the original author would let the editor borrow that author's session.
+// Comparing the patched request keeps no-op edits and bookkeeping neutral.
+// Adding a call to an existing entity is also a new decision: its creation
+// stamp may belong to somebody else. A replica copies accepted authority.
+export let authoredCall = (
+  b: Bundle,
+  previous: Bundle | undefined,
+  actor: Actor,
+  vocab: Vocab,
+): Bundle => {
+  if (!b.call || !vocab.prop('call', 'actor')?.stamped) return b
+  if (!previous?.call && !previous?.created) return b
+  let before = part(previous!, 'call')
+  let next = part(merged(previous ?? null, b), 'call')!
+  if (
+    before &&
+    ['to', 'args', 'source', 'target'].every((prop) =>
+      same(
+        before[prop] ?? (prop == 'args' ? {} : null),
+        next[prop] ?? (prop == 'args' ? {} : null),
+      )
+    )
+  ) return b
+  return { ...b, call: { ...b.call as Comp, actor: { ...actor } } }
 }
 
 /** Resolve registered addresses for callers that supply their own fallback. */

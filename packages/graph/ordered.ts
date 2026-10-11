@@ -13,6 +13,7 @@ import { mutate } from './mutate.ts'
 import { cascade } from './cascade.ts'
 import { holding, type Snap } from './gather.ts'
 import { type State, state } from './state.ts'
+import { writers } from './stamp.ts'
 
 export let ordered = (
   bundles: Bundle[],
@@ -21,8 +22,10 @@ export let ordered = (
   snap: Snap,
   st: State,
   checks: WriteHook[],
+  replica = false,
 ): Bundle[] | Promise<Bundle[]> => {
   let held = holding(tx, vocab, snap)
+  let writer = writers(bundles)
   let killed = new Set(st.killed)
   return each(
     checks.every((check) => check.independent)
@@ -40,7 +43,7 @@ export let ordered = (
         (bs) => {
           let step = state()
           return after(
-            mutate(bs, held, step, vocab),
+            mutate(bs, held, step, vocab, replica, writer),
             (written) =>
               after(cascade(written, tx, vocab, step), (expanded) => {
                 for (let b of expanded) {

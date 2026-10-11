@@ -25,6 +25,11 @@
           "ref": "entity",
           "death": "keep",
           "description": "optional: the request or other entity this call came from"
+        },
+        "actor": {
+          "type": "object",
+          "stamped": true,
+          "description": "The by/via identity pair of whoever last changed the executable request. Server-owned; an empty pair means automation. When absent, the creation author still owns the request."
         }
       }
     },

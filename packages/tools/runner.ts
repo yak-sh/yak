@@ -8,7 +8,7 @@
 //
 // The call a tool is handed is the stored one, completed: its arguments
 // checked against the tool's schema and the entities they name resolved to
-// eids (./args.ts), `created{by, via}` saying who asked even
+// eids (./args.ts), `who(call)` saying who decided the request even
 // where the graph stamps nothing, and `process{pid, command, cwd}` naming the
 // program running it where the caller named one. That is a bundle, not a row —
 // the stored call never wears `process`.
@@ -648,7 +648,10 @@ export let runner = (g: Graph, opts: Opts): Runner => {
           execution: {
             by: redrive ? token((call.execution as Comp)?.by) : null,
           },
-          call: { to: token(c.to), args: token(c.args) },
+          call: Object.fromEntries(
+            g.vocab.props('call').filter((p) => p != 'id')
+              .map((p) => [p, token(c[p])]),
+          ),
         },
       }])
     } catch (error) {
@@ -777,7 +780,7 @@ export let runner = (g: Graph, opts: Opts): Runner => {
       let asking: Bundle = {
         ...call,
         call: { ...c, args },
-        ...actor ? { created: { ...call.created as Comp, ...actor } } : {},
+        ...!call.created && actor ? { created: { ...actor } } : {},
         ...opts.process ? { process: opts.process } : {},
       }
       let made = await tool.run(asking, host)

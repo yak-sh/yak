@@ -159,8 +159,8 @@ export type Surface = 'cli' | 'mcp'
  *
  * - `call{to, args, source}`, the arguments already checked against the tool's
  *   schema ({@link argsOf});
- * - `created{by, via}`, who asked and what it came through ({@link who}) — the
- *   caller's, never the runner's, so what a tool writes is written in the
+ * - call authority ({@link who}), who decided the request and what it came
+ *   through — the caller's, never the runner's, so what a tool writes is written in the
  *   name of whoever asked, and authorization is decided about them;
  * - `process{pid, command, cwd}`, the program on this machine running it: a
  *   tool that acts on the machine rather than the graph reads its working

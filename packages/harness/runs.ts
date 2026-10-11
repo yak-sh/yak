@@ -67,10 +67,7 @@ let settled = async (
 
 // Who called: what they asked a session is theirs (@yaks/tools signs the call
 // with its caller).
-let caller = (call: Bundle): Eid | undefined => {
-  let by = (call.created as Comp | undefined)?.by
-  return typeof by == 'string' ? by : undefined
-}
+let caller = (call: Bundle): Eid | undefined => who(call)?.by
 
 let text = (call: Bundle, body: string): Bundle => ({
   entity: { eid: crypto.randomUUID() },

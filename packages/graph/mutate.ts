@@ -21,11 +21,14 @@
 // nothing but events leaves whole.
 
 import { after } from '@yaks/fp'
-import type { Bundle } from './bundle.ts'
+import type { Actor, Bundle, Eid } from './bundle.ts'
 import { comps, dead, gives, raced } from './bundle.ts'
 import type { Tx } from './storage.ts'
 import type { State } from './state.ts'
 import { durableOf, ms, type Vocab } from '@yaks/vocab'
+import { authoredCall } from './tool.ts'
+import { merged } from './gather.ts'
+import { writers } from './stamp.ts'
 
 // The components a vocabulary declares as events, found once.
 let known = new WeakMap<Vocab, Set<string>>()
@@ -79,10 +82,18 @@ export let mutate = (
   tx: Tx,
   st: State,
   vocab: Vocab,
+  replica = false,
+  writerOf?: (eid: Eid) => Actor,
 ): Bundle[] | Promise<Bundle[]> => {
   let events = eventsOf(vocab)
   let eids = [...new Set(bundles.map((b) => b.entity.eid))]
   return after(tx.get(eids), (found) => {
+    let authoring = !replica && !!vocab.prop('call', 'actor')?.stamped &&
+      bundles.some((b) => b.call != null)
+    let previous = authoring
+      ? new Map(found.map((b) => [b.entity.eid, b]))
+      : undefined
+    let writer = authoring ? writerOf ?? writers(bundles) : undefined
     let present = new Set(found.map((b) => b.entity.eid))
     // Deleted before this batch began: a write may bring one back.
     let buried = new Set(
@@ -101,6 +112,7 @@ export let mutate = (
         // back. Any other write revives it.
         if (dead(b) || raced(b) || !gives(b)) return []
         buried.delete(eid)
+        previous?.delete(eid)
         back.push(eid)
       }
       if (dead(b)) {
@@ -113,6 +125,10 @@ export let mutate = (
       if (w != b) {
         st.heard.push(said(b, events))
         if (!comps(w).length) return []
+      }
+      if (previous) {
+        w = authoredCall(w, previous.get(eid), writer!(eid), vocab)
+        previous.set(eid, merged(previous.get(eid) ?? null, w))
       }
       live.push(w)
       present.add(eid)

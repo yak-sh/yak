@@ -79,6 +79,23 @@ test('a command that takes an argument runs in its store', async () => {
   let rows = async (q: string): Promise<Bundle[]> =>
     await (await store(`/query?q=${encodeURIComponent(q)}`, {}, ADA_OWNS))
       .json()
+  let cookies = new Map([[ADA, await as(ADA)], [ELI, await as(ELI)]])
+  let write = async (person: string, entities: Bundle[]) => {
+    let res = await apps.fetch(
+      visit('/cookbook/api/apply', {
+        method: 'POST',
+        headers: {
+          cookie: cookies.get(person)!,
+          'content-type': 'application/json',
+        },
+        body: JSON.stringify(entities),
+      }),
+      env,
+    )
+    assertEquals(res.status, 200, await res.text())
+    await p.object(storeName(space, app)).alarm()
+    await Promise.all([...p.states.get(storeName(space, app))!.pending])
+  }
   let record = async (
     person: string,
     name: string,
@@ -86,24 +103,11 @@ test('a command that takes an argument runs in its store', async () => {
     args: Record<string, unknown> = {},
   ) => {
     let id = crypto.randomUUID()
-    let res = await apps.fetch(
-      visit('/cookbook/api/apply', {
-        method: 'POST',
-        headers: {
-          cookie: await as(person),
-          'content-type': 'application/json',
-        },
-        body: JSON.stringify([{
-          entity: { eid: id },
-          call: { to: toolEid(name), args, source: id },
-          ...extra,
-        }]),
-      }),
-      env,
-    )
-    assertEquals(res.status, 200, await res.text())
-    await p.object(storeName(space, app)).alarm()
-    await Promise.all([...p.states.get(storeName(space, app))!.pending])
+    await write(person, [{
+      entity: { eid: id },
+      call: { to: toolEid(name), args, source: id },
+      ...extra,
+    }])
     return id
   }
   let answer = async (id: string) =>
@@ -133,6 +137,59 @@ test('a command that takes an argument runs in its store', async () => {
   let deniedNote = await record(ELI, 'owner_note')
   assertEquals((await failureOf(deniedNote)).refusal, { code: 'access' })
   assertEquals((await rows('.doc.title=owner%20note')).length, 0)
+
+  let future = Date.now() + 60_000
+  let sleeping = { wake: { at: new Date(future).toISOString() } }
+  let [altered, mine, unchanged, recurring] = Array.from(
+    { length: 4 },
+    () => crypto.randomUUID(),
+  )
+  await write(
+    ADA,
+    [altered, mine, unchanged, recurring].map((eid) => ({
+      entity: { eid },
+      call: {
+        to: toolEid(eid == recurring ? 'caller' : 'owner_word'),
+        args: eid == unchanged ? { a: 1, b: 2 } : {},
+      },
+      wake: {
+        ...sleeping.wake,
+        ...eid == recurring ? { every: '1d' } : {},
+      },
+    })),
+  )
+  await write(ELI, [
+    { entity: { eid: altered }, call: { args: { edited: true } } },
+    // Property order, a provider id and display text change no executable ask.
+    {
+      entity: { eid: unchanged },
+      call: { args: { b: 2, a: 1 }, id: 'provider-id' },
+      doc: { title: 'a label' },
+    },
+    { entity: { eid: recurring }, call: { args: { edited: true } } },
+  ])
+  await write(ADA, [{
+    entity: { eid: mine },
+    call: { args: { edited: true } },
+  }])
+  count = dispatched.length
+  await p.object(storeName(space, app)).tick(future)
+  await Promise.all([...p.states.get(storeName(space, app))!.pending])
+  assertEquals((await failureOf(altered)).refusal, { code: 'access' })
+  assertStringIncludes(String((await answer(mine)).body), 'welcome')
+  assertStringIncludes(String((await answer(unchanged)).body), 'welcome')
+  assertEquals(dispatched.length, count + 3)
+  let [invocation] = await rows(`.call.source=${recurring}&!wake&?call`)
+  assertStringIncludes(
+    String((await answer(invocation.entity.eid)).body),
+    'editor',
+  )
+  assertEquals(
+    dispatched.find((req) =>
+      req.headers.get('x-yak-command-call') == invocation.entity.eid
+    )?.headers.get('x-yak-person'),
+    ELI,
+  )
 
   // The command's own template goes through the same component floors as a
   // direct write: recording a call grants no authority to add an access row.

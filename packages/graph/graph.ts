@@ -986,8 +986,16 @@ export let graph = (opts: Options): Graph => {
                     return check ? [check] : []
                   })
                   return checks.length
-                    ? ordered(b, tx, vocab, snap, st, checks)
-                    : mutate(b, held, st, vocab)
+                    ? ordered(
+                      b,
+                      tx,
+                      vocab,
+                      snap,
+                      st,
+                      checks,
+                      !!(o.trusted && o.replica),
+                    )
+                    : mutate(b, held, st, vocab, !!(o.trusted && o.replica))
                 }),
                 phase(
                   'cascade',

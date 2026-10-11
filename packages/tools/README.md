@@ -431,11 +431,17 @@ runner. `otherwise` answers calls naming tools the runner lacks; without it,
 those calls are left for another runner. `takes(call)` can restrict which calls
 the runner accepts. `now` supplies the clock measuring `result.ms`.
 
-The runner uses the caller's identity from `created.by` or `$actor` when
-applying tool answers. It does not invent a caller identity when neither is
-present. `report` receives failures without recorded exceptions, including
-unrecorded reads, failed exception writes, completed-answer persistence and
-replies.
+The runner uses `who(call)` when applying tool answers. **Call authority** is
+the identity of whoever last decided its executable request. Changing the tool
+or target, arguments, or source records that editor's entire `{by, via}` pair in
+the server-owned `call.actor`. An empty pair means automation. Before an
+executable edit, authority comes from `created` or an unstamped call's `$actor`.
+No-op edits, provider ids, labels, claims, and wake firings keep call authority;
+each recurring invocation inherits its schedule's call authority. Authorization
+checks that identity's current standing when the call fires.
+
+`report` receives failures without recorded exceptions, including unrecorded
+reads, failed exception writes, completed-answer persistence and replies.
 
 A **reply** is extra answer bundles owed to a direct caller (`Reply`).
 `reply(call, answer, wrote)` runs after `call()`, never after a deferred
