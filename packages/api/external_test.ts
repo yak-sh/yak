@@ -89,7 +89,7 @@ test('an external deletion resets the active query to an empty answer', () => {
 
 let polling = (() => {
   let time = clock(), stopping = new AbortController()
-  let reads = 0, feeds = 0
+  let reads = 0
   handler({
     graph: graph({ vocab, storage: ram(vocab) }),
     storage: { revision: () => ++reads },
