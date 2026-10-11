@@ -86,8 +86,8 @@ export let columnLine = (q: string, status: string, limit: number): string => {
 // with the parse shown live as chips while you type, so 'P1 .domain=Eng
 // Ship it' announces what Enter will file. Enter files and clears for
 // the next title (filing a list is one uninterrupted keyboard); Escape
-// closes. Uncontrolled on purpose: the DOM owns the text, state only
-// mirrors it for the chips. The line is the person's draft per (board,
+// closes. Uncontrolled on purpose: the DOM owns the text, and the draft
+// supplies it for the chips. The line is the person's draft per (board,
 // column) (../drafts.ts): Board keeps a column with one open, here and in
 // every interface that draws the board, so a half-typed task is never lost
 // or hidden. Blur keeps it; filing spends it, in the same change as the task
@@ -101,9 +101,8 @@ export let QuickAdd = (
     focus?: boolean
   },
 ) => {
-  let [text, setText] = useState('')
   let box = useRef<HTMLTextAreaElement>(null)
-  let { sync, spend } = useDraft(dkey, box, setText)
+  let { text, sync, spend } = useDraft(dkey, box)
   useEffect(() => void (focus && box.current?.focus()), [])
   let { body, grouped } = spec(text)
   let p = grouped.filed?.priority
@@ -139,7 +138,6 @@ export let QuickAdd = (
             if (filed) {
               spend(bundlesOf(filed))
               t.value = ''
-              setText('')
             }
           } else if (ev.key == 'Escape') {
             spend()

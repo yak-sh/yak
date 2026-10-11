@@ -1555,6 +1555,7 @@ export let replayOutbox = async () => {
  * or a refusal/unknown outcome. Drafts retain their own recovery copy. */
 export let apply = (bundles: Bundle[]): Promise<Bundle[]> => {
   problem.value = ''
+  if (!bundles.length) return Promise.resolve([])
   let result: Promise<Bundle[]>
   try {
     result = Promise.resolve(ensureClient().box.mutate(bundles))
