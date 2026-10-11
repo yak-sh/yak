@@ -1,6 +1,6 @@
 // The graph plugins this package contributes: the module a server imports at
 // `@yaks/doc/graph`. There are no write-time rules here, only the component
-// itself.
+// itself and its body read token.
 
 import type { Plugin } from '@yaks/graph'
 import { docs as plugin } from './plugin.ts'

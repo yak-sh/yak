@@ -1,7 +1,9 @@
 import { equal, test } from '@yaks/testing'
 import { ram } from '@yaks/ram'
-import { and, map, present, want } from '@yaks/query'
+import { and, every, map, present, want } from '@yaks/query'
 import { graph } from './graph.ts'
+import { type Bundle, type Comp } from './bundle.ts'
+import { token } from './guard.ts'
 import type { Plugin } from './plugin.ts'
 import { books } from './testing.ts'
 
@@ -94,4 +96,85 @@ test('read hooks leave the current query text and result objects untouched', () 
   equal(calls, 0)
   let rows = [{ entity: { eid: 'r' } }]
   equal(g.answer(rows) === rows, true)
+})
+
+let viewed = () => {
+  let storage = ram(books)
+  storage.tx((tx) =>
+    tx.patch([{
+      entity: { eid: 'r' },
+      doc: { title: 'review' },
+      book: { pages: 12 },
+    }])
+  )
+  let reconstruct = (rows: Bundle[]) =>
+    rows.map((b) => ({
+      ...b,
+      review: { stars: (b.book as Comp).pages },
+    }))
+  return graph({
+    vocab: books,
+    storage,
+    plugins: [{
+      name: 'caller-review',
+      reads: (opts) => opts.speaks?.shop == 0,
+      view: (_ctx, original) => ({
+        original,
+        query: and(present('book'), every()),
+        vocab: books,
+        answer: reconstruct,
+      }),
+      answer: () => {
+        throw Error('a view must not reconstruct its caller values twice')
+      },
+    }, {
+      name: 'read-token',
+      answer: (_ctx, rows) =>
+        rows.map((b) => {
+          let review = b.review as Comp | undefined
+          return review && Object.hasOwn(review, 'stars')
+            ? { ...b, $was: { review: { stars: token(review.stars) } } }
+            : b
+        }),
+    }],
+  })
+}
+
+test('a caller view finishes query answers after reconstructing once', () => {
+  let g = viewed()
+  equal(g.read('.review', old), [{
+    entity: { eid: 'r' },
+    review: { stars: 12 },
+    $was: { review: { stars: token(12) } },
+  }])
+  equal(g.read('.book', { ...old, native: true }), [{
+    entity: { eid: 'r' },
+    book: { pages: 12 },
+  }])
+})
+
+test('a caller view finishes get answers after component selection', () => {
+  let g = viewed()
+  equal(g.get(['r'], ['review'], old), [{
+    entity: { eid: 'r' },
+    review: { stars: 12 },
+    $was: { review: { stars: token(12) } },
+  }])
+  equal(g.get(['r'], ['doc'], old), [{
+    entity: { eid: 'r' },
+    doc: { title: 'review' },
+  }])
+})
+
+test('a caller view finishes fields without witnessing unselected values', () => {
+  let g = viewed()
+  equal(g.read('.review&.fields=review.stars', old), [{
+    entity: { eid: 'r' },
+    review: { stars: 12 },
+    $was: { review: { stars: token(12) } },
+  }])
+  equal(g.read('.review&.fields=doc.title', old), [{
+    entity: { eid: 'r' },
+    doc: { title: 'review' },
+  }])
 })

@@ -231,8 +231,8 @@ let boot = async (
   let close = async () => {
     clearInterval(ticking)
     await server.shutdown()
+    await p[Symbol.asyncDispose]()
     await cf.stop()
-    p[Symbol.dispose]()
     Deno.removeSync(log)
   }
   let door = driven(

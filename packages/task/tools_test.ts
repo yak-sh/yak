@@ -1,6 +1,6 @@
 import { test } from '@yaks/testing'
-import { assertEquals } from '@std/assert'
-import type { Bundle, Comp, Graph } from '@yaks/graph'
+import { assertEquals, assertRejects } from '@std/assert'
+import { type Bundle, type Comp, type Graph, Stale, token } from '@yaks/graph'
 import { statusOf } from './words.ts'
 import { store, teamGraph } from './testing.ts'
 import { listing, runs } from './tools.ts'
@@ -89,5 +89,56 @@ test('what the line left out is left alone', async () => {
   assertEquals(comp((await g.read('.entity.eid="t"'))[0], 'doc'), {
     title: 'a better title',
     body: 'why',
+  })
+})
+
+test('a listed task guards its body and refuses a stale whole patch', async () => {
+  let { g } = teamGraph()
+  await g.apply([{
+    entity: { eid: 't' },
+    task: {},
+    doc: { title: 'draft', body: 'first' },
+  }])
+  let [read] = await tools.task_list!(
+    { entity: { eid: 'c1' }, call: { args: {} } },
+    g,
+  ) as Bundle[]
+  let was = read.$was!.doc.body
+  assertEquals(was, token('first'))
+  let update = async (args: Record<string, unknown>) =>
+    g.apply(
+      await tools.task_update!(...asked({ task: 't', ...args })) as Bundle[],
+    )
+  await update({ body: 'second', was })
+  let stale = await assertRejects(
+    () => update({ title: 'lost', body: 'third', status: 'done', was }),
+    Stale,
+  )
+  assertEquals(stale.current, 'second')
+  let [held] = await g.get(['t'])
+  assertEquals(comp(held, 'doc'), { title: 'draft', body: 'second' })
+  assertEquals(statusOf(g.vocab, held), 'open')
+})
+
+test('a task body without was keeps the blind replacement behavior', async () => {
+  let { g } = teamGraph()
+  await g.apply([{
+    entity: { eid: 't' },
+    task: {},
+    doc: { title: 'draft', body: 'first' },
+  }])
+  await g.apply(
+    await tools.task_update!(
+      ...asked({ task: 't', body: 'second' }),
+    ) as Bundle[],
+  )
+  await g.apply(
+    await tools.task_update!(
+      ...asked({ task: 't', title: 'renamed', was: token('first') }),
+    ) as Bundle[],
+  )
+  assertEquals(comp((await g.get(['t']))[0], 'doc'), {
+    title: 'renamed',
+    body: 'second',
   })
 })

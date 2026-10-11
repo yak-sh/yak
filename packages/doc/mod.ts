@@ -64,3 +64,4 @@
 
 export * from './comp.ts'
 export * from './plugin.ts'
+export * from './freshness.ts'

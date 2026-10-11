@@ -20,6 +20,7 @@
 // rehearses it before it is written. See the README.
 
 import { argsOf, type Bundle, type Comp } from '@yaks/graph'
+import { guarded } from '@yaks/doc'
 import { answer } from './decision.ts'
 import type { Runs } from '@yaks/graph/tools'
 import { conjoin } from '@yaks/query'
@@ -120,11 +121,11 @@ export let runs = (): Runs => ({
     let args = argsOf(call)
     let filed = filedIn(args)
     let doc = docIn(args)
-    return [{
+    return [guarded({
       entity: { eid: String(args.task) },
       ...(args.status ? marked[String(args.status)] : {}),
       ...(doc ? { doc } : {}),
       ...(filed ? { filed } : {}),
-    }]
+    }, args.was as string | null | undefined)]
   },
 })

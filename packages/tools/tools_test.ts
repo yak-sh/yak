@@ -13,6 +13,8 @@ import {
   graph,
   mint,
   Refused,
+  Stale,
+  token,
   type Tool,
 } from '@yaks/graph'
 import { effectDoc, effects } from '@yaks/effects'
@@ -1051,4 +1053,30 @@ test('a recurring call is a standing ask: one invocation per firing', async () =
     fired: { at: '2030-01-02T00:00:00.000Z' },
   }])
   assertEquals((await g.read('.call.source=daily&*')).length, 2)
+})
+
+let staleTool = await (async () => {
+  let vocab = words()
+  let g = graph({ vocab, storage: ram(vocab, { computed: executionComputed }) })
+  let body = 'Another writer’s\nprecious draft'
+  let r = runner(g, {
+    tools: [{
+      ...echo,
+      run: () => {
+        throw new Stale('doc1', 'doc', 'body', body)
+      },
+    }],
+  })
+  await r.ensure()
+  return { r, body }
+})()
+
+test('a stale tool refusal returns the committed text and its read token', async () => {
+  let { r, body } = staleTool
+  let call = called('example_echo', { value: 'hi' })
+  let landed = await r.call(call)
+  let text = worded(answerOf(landed, call.entity.eid))
+  assertEquals(faulted(landed, call.entity.eid), true)
+  assertEquals(text.includes(`current: ${JSON.stringify(body)}`), true)
+  assertEquals(text.includes(`was: ${token(body)}`), true)
 })

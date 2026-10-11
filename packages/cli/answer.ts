@@ -455,6 +455,14 @@ let joined = (groups: string[][]): string =>
 
 let nothing: Near = { links: [], comments: [] }
 
+// The token belongs to the body a page just showed, not to related entities
+// or compact tiles that show no body.
+let freshness = (answer: Bundle[]): string => {
+  let { them } = parted(answer)
+  let was = them.length == 1 ? them[0].$was?.doc?.body : undefined
+  return was === undefined ? '' : `was: ${was}`
+}
+
 /** An answer as the lines a terminal prints. `named` holds the entities its
  * references point at, so each prints as its id; one not there prints as its
  * handle. A lone entity is its `Page`, with what `near` holds beside it. */
@@ -475,7 +483,10 @@ export let printed = (
     (b, v, c) => tree(views, b, v, vocab, { ...c, deferred }),
     demand,
   )
-  return joined(groups.map((g) => g.map((n) => plain(n))))
+  return joined([
+    ...groups.map((g) => g.map((n) => plain(n))),
+    [freshness(answer)],
+  ])
 }
 
 /** The same answer painted for a terminal `columns` wide: the same views,
@@ -502,7 +513,10 @@ export let painted = async (
     near,
     (b, v, c) => mount(views, b, v, vocab, { ...c, readOnly: true }),
   )
-  return joined(groups.map((g) => g.map((n) => print(n, columns, dress))))
+  return joined([
+    ...groups.map((g) => g.map((n) => print(n, columns, dress))),
+    [freshness(answer)],
+  ])
 }
 
 /** An answer held in the terminal (@yaks/tui) until Ctrl-C, drawn as a

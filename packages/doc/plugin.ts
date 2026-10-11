@@ -1,17 +1,11 @@
-// The package as a graph plugin: one component, and no hooks at all.
-//
-// There is nothing to enforce. A title is a title, a body is a body, and every
-// rule anybody would want around them — who may write one, whether the text is
-// content-addressed, whether it is indexed for search — belongs to a package
-// that owns that question (@yaks/member, @yaks/blob, @yaks/fts), composed
-// beside this one. So the plugin is the vocabulary and a name, which is what a
-// base content domain should be.
+// Document reads carry the body token used by the graph precondition.
 
 import type { Plugin } from '@yaks/graph'
+import { witnessed } from './freshness.ts'
 import { docDoc } from './comp.ts'
 
 /**
- * The document plugin: the `doc{title, body}` component, and nothing else.
+ * The document plugin: `doc{title, body}` and its read token.
  *
  * ```ts
  * import { graph } from '@yaks/graph'
@@ -28,4 +22,8 @@ import { docDoc } from './comp.ts'
  * is one — depends on this one and leaves composing it to you, rather than
  * shipping a second copy of the component.
  */
-export let docs = (): Plugin => ({ name: '@yaks/doc', vocab: [docDoc] })
+export let docs = (): Plugin => ({
+  name: '@yaks/doc',
+  vocab: [docDoc],
+  answer: (_ctx, bundles) => bundles.map(witnessed),
+})

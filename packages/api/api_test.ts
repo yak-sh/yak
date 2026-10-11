@@ -273,11 +273,14 @@ test('a moved precondition answers 409, naming what it holds now', async () => {
   assertEquals(r.status, 409)
   assertEquals(await body(r), {
     error: 'Stale',
-    message: 'book.price of b1 has moved since it was read',
+    message: `book.price of b1 has moved since it was read\ncurrent: 12\nwas: ${
+      token(12)
+    }`,
     eid: 'b1',
     comp: 'book',
     prop: 'price',
     current: 12,
+    was: token(12),
   })
 })
 

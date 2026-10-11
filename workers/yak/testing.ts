@@ -859,20 +859,20 @@ export let platform = (
   // Every alarm that is due, delivered the way the runtime delivers one: the
   // instant cleared, then the object's `alarm()`, which may arm the next. A
   // test drives this by hand; a kernel (probe.ts) on a timer.
-  let ringing = false
-  let ring = async () => {
-    if (ringing) return
-    ringing = true
-    try {
+  let ringing: Promise<void> | null = null
+  let ring = (): Promise<void> => {
+    if (closing) return Promise.resolve()
+    if (ringing) return ringing
+    return ringing = (async () => {
       for (let [name, ctx] of states) {
         let at = await ctx.storage.getAlarm()
         if (at == null || at > Date.now()) continue
         await ctx.storage.deleteAlarm()
         await object(name).alarm()
       }
-    } finally {
-      ringing = false
-    }
+    })().finally(() => {
+      ringing = null
+    })
   }
   let closing: Promise<void> | null = null
   let close = () => {
@@ -881,9 +881,13 @@ export let platform = (
       for (let ctx of stores) ctx.storage[Symbol.dispose]()
       stores.length = 0
     }
-    let pending = () => stores.flatMap((ctx) => [...ctx.pending])
+    let pending = () => [
+      ...ringing ? [ringing] : [],
+      ...stores.flatMap((ctx) => [...ctx.pending]),
+    ]
     // A Durable Object's runtime retains its storage for waitUntil work.
-    // Work may start another pass, or call another store, before it settles.
+    // An alarm delivery can start such work or call another store before it
+    // settles, so closing waits through the active delivery as well.
     if (!pending().length) {
       release()
       return closing = Promise.resolve()

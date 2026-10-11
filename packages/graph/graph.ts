@@ -1137,24 +1137,33 @@ export let graph = (opts: Options): Graph => {
         ),
         // Accepted data is copied, never admitted again. Like accepted release
         // declarations, it may predate the current writer's admission rules.
-        o.trusted && o.replica ? (b: Bundle[]) => known(b, vocab) : phase(
-          'admit',
-          outside,
-          (b) =>
-            after(
-              admit(
-                requested(
-                  o.replica ? known(b, vocab) : b,
-                  plugins.flatMap((p) => p.requests ?? []),
+        o.trusted && o.replica
+          ? (b: Bundle[]) =>
+            known(b, vocab).map((row) => {
+              // Accepted rows are copied, not proposed against this replica.
+              // A source read token cannot guard the replica's prior value.
+              let out = { ...row }
+              delete out.$was
+              return out
+            })
+          : phase(
+            'admit',
+            outside,
+            (b) =>
+              after(
+                admit(
+                  requested(
+                    o.replica ? known(b, vocab) : b,
+                    plugins.flatMap((p) => p.requests ?? []),
+                  ),
+                  vocab,
+                  o.trusted,
+                  opts.teach,
+                  o.replica,
                 ),
-                vocab,
-                o.trusted,
-                opts.teach,
-                o.replica,
+                referring,
               ),
-              referring,
-            ),
-        ),
+          ),
         // Derive the id, then check it still matches: an id derived from a
         // value is only meaningful while the two agree (identity.ts
         // `identified`).

@@ -29,6 +29,9 @@ import { Refused } from './admit.ts'
 /** A refused precondition: which property changed, and what it holds now. The
  * committed value is included so the caller can merge onto it. */
 export class Stale extends Error {
+  /** The token for the current value, ready for a merged replacement. */
+  was: string | null
+
   /**
    * @param eid the entity whose property changed
    * @param comp the component it lives on
@@ -41,7 +44,11 @@ export class Stale extends Error {
     public prop: string,
     public current: unknown,
   ) {
-    super(`${comp}.${prop} of ${eid} has moved since it was read`)
+    super(
+      `${comp}.${prop} of ${eid} has moved since it was read\n` +
+        `current: ${JSON.stringify(current)}\nwas: ${token(current)}`,
+    )
+    this.was = token(current)
     this.name = 'Stale'
   }
 }

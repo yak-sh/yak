@@ -176,7 +176,7 @@
       "noun": "task",
       "verb": "update",
       "title": "Update a task",
-      "description": "Change a task’s status, title, body or filing. `status` is not a stored field: done adds the completed mark and removes the cancelled one, cancelled does the reverse, and open removes both. Anything left out is unchanged. Returns the applied bundles: JSON objects with entity ids and the components (named groups of fields) written or removed.",
+      "description": "Change a task’s status, title, body or filing. `status` is not a stored field: done adds the completed mark and removes the cancelled one, cancelled does the reverse, and open removes both. Anything left out is unchanged. With body, pass was from $was.doc.body on task_list or graph_show to refuse a concurrent body change; without was the replacement is blind. Returns the applied bundles: JSON objects with entity ids and the components (named groups of fields) written or removed.",
       "input": {
         "task": {
           "type": "string",
@@ -200,6 +200,10 @@
         "body": {
           "type": "string",
           "description": "a new body"
+        },
+        "was": {
+          "type": "string",
+          "description": "the SHA-256 at $was.doc.body returned by task_list or graph_show (was: in yak graph show); when supplied with body, refuse if the body moved since that read"
         },
         "project": {
           "type": "string",

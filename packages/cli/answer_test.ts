@@ -24,7 +24,7 @@ import {
   resolve,
 } from '@yaks/render'
 import type { Shown } from '@yaks/render/views'
-import { graph } from '@yaks/graph'
+import { graph, token } from '@yaks/graph'
 import { parse } from '@yaks/query'
 import { ram } from '@yaks/ram'
 import { printed, referenced, registry, show, terminal } from './answer.ts'
@@ -570,4 +570,14 @@ test('portable preparation follows selected and nested views, preserving require
     Error,
     'drawing failed',
   )
+})
+
+test('a shown body carries the token a replacement can pass back', () => {
+  let body = 'Draft with **emphasis**'
+  let was = token(body)
+  assertStringIncludes(
+    said({ ...t9, doc: { body }, $was: { doc: { body: was } } }),
+    `was: ${was}`,
+  )
+  assertEquals(said({ ...t9, doc: { body } }).includes('was:'), false)
 })

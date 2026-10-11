@@ -11,7 +11,7 @@
 import { loadVocab, pick, type Vocab, type VocabDoc } from '@yaks/vocab'
 import { type Graph, graph, type Storage } from '@yaks/graph'
 import { ram } from '@yaks/ram'
-import { docDoc } from '@yaks/doc'
+import { docDoc, docs } from '@yaks/doc'
 import { edgeDoc, edgeKeywords, edges } from '@yaks/edge'
 import { kernel, kernelDoc } from '@yaks/kernel'
 import { projectDoc, projects } from '@yaks/project'
@@ -69,7 +69,7 @@ export let teamGraph = (
   g: graph({
     storage,
     vocab: team,
-    plugins: [kernel(), edges(team), tasks(), projects(team)],
+    plugins: [docs(), kernel(), edges(team), tasks(), projects(team)],
   }),
   storage,
 })

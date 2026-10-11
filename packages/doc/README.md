@@ -18,7 +18,7 @@ compose `docs()` once per [graph](../graph/README.md#data-model). The
 
 ```ts
 import { docDoc, docs } from '@yaks/doc'
-import { graph } from '@yaks/graph'
+import { graph, token } from '@yaks/graph'
 import { ram } from '@yaks/ram'
 import { equal } from '@yaks/testing'
 import { loadVocab } from '@yaks/vocab'
@@ -30,9 +30,11 @@ await g.apply([{
   entity: { eid: 'meeting-1' },
   doc: { title: 'Meeting notes', body: 'The release is scheduled for Friday.' },
 }])
+const body = 'The release is scheduled for Friday.'
 equal(await g.read('.doc'), [{
   entity: { eid: 'meeting-1' },
-  doc: { title: 'Meeting notes', body: 'The release is scheduled for Friday.' },
+  doc: { title: 'Meeting notes', body },
+  $was: { doc: { body: token(body) } },
 }])
 ```
 
@@ -49,17 +51,17 @@ deno add jsr:@yaks/doc
 
 ## Exports
 
-| Import            | Exports                                  | Purpose                                                            |
-| ----------------- | ---------------------------------------- | ------------------------------------------------------------------ |
-| `@yaks/doc`       | `docDoc`, `docs`, `DOC`, `TITLE`, `BODY` | Vocabulary document, plugin factory, and component/property names. |
-| `@yaks/doc/vocab` | `docDoc`, `docs`, `description`          | Vocabulary documents and package description for a loader.         |
-| `@yaks/doc/graph` | `plugins`                                | Plugin array factory for a loader.                                 |
-| `@yaks/doc/views` | `views`                                  | Portable `Title` and `Body` views.                                 |
+| Import            | Exports                                                          | Purpose                                                            |
+| ----------------- | ---------------------------------------------------------------- | ------------------------------------------------------------------ |
+| `@yaks/doc`       | `docDoc`, `docs`, `DOC`, `TITLE`, `BODY`, `witnessed`, `guarded` | Vocabulary document, plugin factory, and component/property names. |
+| `@yaks/doc/vocab` | `docDoc`, `docs`, `description`                                  | Vocabulary documents and package description for a loader.         |
+| `@yaks/doc/graph` | `plugins`                                                        | Plugin array factory for a loader.                                 |
+| `@yaks/doc/views` | `views`                                                          | Portable `Title` and `Body` views.                                 |
 
 Root `docs()` returns a [plugin](../graph/README.md#data-model) with the
-vocabulary and no hooks. In `./vocab`, `docs` is an array of vocabulary
-documents. `plugins()` returns the root plugin in an array; it contributes no
-write-time rules.
+vocabulary and a read hook carrying `$was.doc.body` when an answer shows the
+body. In `./vocab`, `docs` is an array of vocabulary documents. `plugins()`
+returns the root plugin in an array; it contributes no write-time rules.
 
 ```ts
 import { BODY, DOC, docs as plugin, TITLE } from '@yaks/doc'
@@ -70,7 +72,37 @@ import { loadVocab } from '@yaks/vocab'
 
 const vocab = loadVocab(docs)
 equal(vocab.props(DOC), [TITLE, BODY])
-equal(plugins()[0], plugin())
+equal(plugins()[0].name, plugin().name)
+```
+
+## Freshness
+
+A **body token** is the graph's SHA-256 of the body a reader saw. Document reads
+carry it as `$was.doc.body`. Pass it back on a `graph_apply` bundle, or as `was`
+with `task_update`'s `body`. `yak graph show` prints it as `was:`. The graph
+refuses a stale replacement with the current body and its token, atomically with
+the rest of the batch. Omitting the token keeps a blind write.
+
+`witnessed(bundle)` adds the body token to a read answer. `guarded(bundle, was)`
+adds the supplied token to a body replacement, preserving any other guards;
+`undefined` leaves it unchanged, and `null` guards an absent body.
+
+```ts
+import { docDoc, docs, guarded } from '@yaks/doc'
+import { graph } from '@yaks/graph'
+import { ram } from '@yaks/ram'
+import { equal } from '@yaks/testing'
+import { loadVocab } from '@yaks/vocab'
+
+const vocab = loadVocab([docDoc])
+const g = graph({ vocab, storage: ram(vocab), plugins: [docs()] })
+await g.apply([{ entity: { eid: 'notes' }, doc: { body: 'First draft' } }])
+const [read] = await g.get(['notes'])
+await g.apply([guarded({
+  entity: read.entity,
+  doc: { body: 'Revised draft' },
+}, read.$was!.doc.body)])
+equal((await g.get(['notes']))[0].doc, { body: 'Revised draft' })
 ```
 
 ## Views

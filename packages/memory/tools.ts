@@ -34,8 +34,9 @@ import {
   type Comp,
   type Graph,
   Refused,
-  token,
 } from '@yaks/graph'
+import { guarded, witnessed } from '@yaks/doc'
+export { witnessed } from '@yaks/doc'
 import type { Runs } from '@yaks/graph/tools'
 import { MEMORY } from './comp.ts'
 import { EMPTY, FEEDBACK, marked, type Marking, saved } from './save.ts'
@@ -105,14 +106,6 @@ let holding = async (
   return found.find((b) => flat(words(b)).includes(want))
 }
 
-/** One memory as it is returned: whole, carrying the token a save will ask
- * for. Absent words read back as `null`, which is how the precondition check
- * records "it held none". */
-export let witnessed = (b: Bundle): Bundle => ({
-  ...b,
-  $was: { doc: { body: token(comp(b, 'doc').body ?? null) } },
-})
-
 /** The implementations of the tools ./vocab.json declares. A factory, like
  * every other entry point in these packages. A host sharing a graph between
  * spaces binds saves and recalls to one space through its options. */
@@ -176,13 +169,12 @@ export let runs = (
     if (scope) memory.scope = scope
     if (args.context != null) memory.context = str(args.context)
     if (args.about != null) memory.about = str(args.about)
-    return [{
+    return [guarded({
       entity: { eid: named },
       ...(Object.keys(doc).length ? { doc } : {}),
       ...(Object.keys(memory).length ? { [MEMORY]: memory } : {}),
       ...(feedback == null ? {} : { [FEEDBACK]: by ? { by } : {} }),
-      ...(said ? { $was: { doc: { body: str(args.was) || null } } } : {}),
-    }]
+    }, said ? str(args.was) || null : undefined)]
   },
 
   memory_recall: async (call, graph): Promise<Bundle[]> => {

@@ -114,10 +114,10 @@ export let reader = (opts: {
       )
     })
 
-  let answer = (bundles: Bundle[], readOpts?: ReadOpts) => {
+  let answer = (bundles: Bundle[], readOpts?: ReadOpts, owner?: Plugin) => {
     if (readOpts?.native || !answerHooks.length) return bundles
     let hooks = answerHooks.filter((p) =>
-      !p.reads || p.reads(readOpts ?? emptyReadOpts)
+      p != owner && (!p.reads || p.reads(readOpts ?? emptyReadOpts))
     )
     if (!hooks.length) return bundles
     let ctx = { opts: readOpts ?? emptyReadOpts, tx: outsideRead(), vocab }
@@ -131,7 +131,8 @@ export let reader = (opts: {
       viewHooks.some((p) => !p.reads || p.reads(readOpts ?? emptyReadOpts))
     )
 
-  let view = (query: Query, readOpts?: ReadOpts) => {
+  type Viewed = { view: ReadView; owner: Plugin }
+  let viewed = (query: Query, readOpts?: ReadOpts) => {
     if (readOpts?.native || !viewHooks.length) return null
     let hooks = viewHooks.filter((p) =>
       !p.reads || p.reads(readOpts ?? emptyReadOpts)
@@ -147,13 +148,20 @@ export let reader = (opts: {
       return continuing(
         each(
           hooks,
-          null as ReadView | null,
-          (at, p) => at ?? p.view!(ctx, original),
+          null as Viewed | null,
+          (at, p) =>
+            at ??
+              continuing(
+                p.view!(ctx, original),
+                (v) => v ? { view: v, owner: p } : null,
+              ),
         ),
-        (out) => out ? { ...out, original } : null,
+        (out) => out ? { ...out, view: { ...out.view, original } } : null,
       )
     })
   }
+  let view = (query: Query, readOpts?: ReadOpts) =>
+    continuing(viewed(query, readOpts), (out) => out?.view ?? null)
 
   // Candidates must reach the answer as whole bundles, before any final
   // shaping. Applying a caller's limit in storage could discard the only
@@ -177,15 +185,17 @@ export let reader = (opts: {
       (rows) => continuing(v.expand ? v.expand(rows) : rows, v.answer),
     )
 
-  let readView = (v: ReadView, readOpts?: ReadOpts) =>
+  // The owning view already reconstructed its answer. Other plugins finish
+  // the caller's projected bundles, just as they finish canonical reads.
+  let readView = ({ view: v, owner }: Viewed, readOpts?: ReadOpts) =>
     continuing(candidates(v, readOpts), (bundles) => {
       let p = projection(v.vocab, v.original)
-      if (p) {
-        return flat(p.fold(matchRows(p.query, v.vocab, readOpts)(bundles)))
-      }
-      return matcher(v.original, v.vocab, readOpts)(bundles).map(
-        only(named(v.vocab, v.original)),
-      )
+      let out = p
+        ? flat(p.fold(matchRows(p.query, v.vocab, readOpts)(bundles)))
+        : matcher(v.original, v.vocab, readOpts)(bundles).map(
+          only(named(v.vocab, v.original)),
+        )
+      return answer(out, readOpts, owner)
     })
 
   let getTranslated = (eids: Eid[], comps?: string[], readOpts?: ReadOpts) => {
@@ -216,17 +226,24 @@ export let reader = (opts: {
     }
     let q = and(eq('entity.eid', list(...eids)), ...comps?.map(want) ?? [])
     return continuing(
-      view(q, readOpts),
-      (v) =>
-        v
+      viewed(q, readOpts),
+      (out) =>
+        out
           ? continuing(
             storage.get(eids),
             (bundles) =>
               continuing(
-                continuing(v.expand ? v.expand(bundles) : bundles, v.answer),
-                (out) =>
-                  out.filter((b) => eids.includes(b.entity.eid)).map(
-                    only(comps ? new Set(comps) : null),
+                continuing(
+                  out.view.expand ? out.view.expand(bundles) : bundles,
+                  out.view.answer,
+                ),
+                (rows) =>
+                  answer(
+                    rows.filter((b) => eids.includes(b.entity.eid)).map(
+                      only(comps ? new Set(comps) : null),
+                    ),
+                    readOpts,
+                    out.owner,
                   ),
               ),
           )
@@ -261,7 +278,7 @@ export let reader = (opts: {
   ): Bundle[] | Promise<Bundle[]> => {
     if (viewHooks.length && !readOpts?.native) {
       return continuing(
-        view(query, readOpts),
+        viewed(query, readOpts),
         (v) => v ? readView(v, readOpts) : readRenamed(query, readOpts),
       )
     }
