@@ -2,6 +2,7 @@ import { test } from '@yaks/testing'
 import {
   assert,
   assertEquals,
+  assertIsError,
   assertRejects,
   assertStringIncludes,
 } from '@std/assert'
@@ -15,7 +16,13 @@ import { views as taskViews } from '@yaks/task/views'
 import { toolsDoc } from '@yaks/tools'
 import { views as toolViews } from '@yaks/tools/views'
 import { loadVocab } from '@yaks/vocab'
-import { define, prepared, type Renderer, resolve } from '@yaks/render'
+import {
+  define,
+  prepared,
+  type Registry,
+  type Renderer,
+  resolve,
+} from '@yaks/render'
 import type { Shown } from '@yaks/render/views'
 import { graph } from '@yaks/graph'
 import { parse } from '@yaks/query'
@@ -53,50 +60,64 @@ let t10 = {
   completed: {},
 }
 
-test('a drawing can require a reference, while missing data and drawing errors still fail', async () => {
-  let dependency = '33333333-3333-4333-8333-333333333333'
-  for (let declared of [true, false]) {
-    let views = define([{
-      view: 'Tile',
-      match: parse('.task'),
-      needs: () => declared ? [dependency] : [],
-      render: <Node>(
-        _b: unknown,
-        h: import('@yaks/render').H<Node>,
-        ctx: import('@yaks/render').RenderContext<Node>,
-      ) => {
-        let title =
-          ((ctx as Shown<Node>).get!(dependency)!.doc as { title: string })
-            .title
-        return h('span', {}, title)
-      },
-    }])
-    let reads: string[][] = [], lines: string[] = []
-    let c = { tui: false, out: (s: string) => lines.push(s) }
-    await show(c, views, vocab, [t9, t10], {}, {
-      lookup: (ids) => {
-        reads.push(ids)
-        return [{ entity: { eid: dependency }, doc: { title: 'Required' } }]
-      },
-      query: () => [],
-    })
-    assertEquals(reads, [[dependency]])
-    assertEquals(lines, ['Required\nRequired'])
-    await assertRejects(() => show(c, views, vocab, [t9, t10]), TypeError)
-  }
-  let broken = define([{
+let dependency = '33333333-3333-4333-8333-333333333333'
+// Keep the registrations stable, as a configured host does between answers.
+let required = [true, false].map((declared) =>
+  define([{
     view: 'Tile',
     match: parse('.task'),
-    render: () => {
-      throw new Error('drawing failed')
+    needs: () => declared ? [dependency] : [],
+    render: <Node>(
+      _b: unknown,
+      h: import('@yaks/render').H<Node>,
+      ctx: import('@yaks/render').RenderContext<Node>,
+    ) => {
+      let title =
+        ((ctx as Shown<Node>).get!(dependency)!.doc as { title: string })
+          .title
+      return h('span', {}, title)
     },
   }])
-  await assertRejects(
-    () => show({ tui: false, out: () => {} }, broken, vocab, [t9, t10]),
-    Error,
-    'drawing failed',
+)
+let broken = define([{
+  view: 'Tile',
+  match: parse('.task'),
+  render: () => {
+    throw new Error('drawing failed')
+  },
+}])
+// Prepare failed drawings once, like a host prepared before checking its output.
+let failure = (views: Registry) =>
+  show({ tui: false, out: () => {} }, views, vocab, [t9, t10]).then(
+    () => undefined,
+    (error: unknown) => error,
   )
-})
+let missing = await Promise.all(required.map(failure))
+let drawingError = await failure(broken)
+for (let [index, views] of required.entries()) {
+  test(
+    index == 0
+      ? 'a drawing can require a reference, while missing data and drawing errors still fail'
+      : 'a drawing can discover a required reference, while missing data still fails',
+    async () => {
+      let reads: string[][] = [], lines: string[] = []
+      let c = { tui: false, out: (s: string) => lines.push(s) }
+      await show(c, views, vocab, [t9, t10], {}, {
+        lookup: (ids) => {
+          reads.push(ids)
+          return [{ entity: { eid: dependency }, doc: { title: 'Required' } }]
+        },
+        query: () => [],
+      })
+      assertEquals(reads, [[dependency]])
+      assertEquals(lines, ['Required\nRequired'])
+      assertIsError(missing[index], TypeError)
+      if (index == 0) {
+        assertIsError(drawingError, Error, 'drawing failed')
+      }
+    },
+  )
+}
 
 test('a tool’s text prints as written, line for line', () => {
   let text = { entity: { eid: 'c' }, content: { body: 'one\ntwo\x1b[31m' } }

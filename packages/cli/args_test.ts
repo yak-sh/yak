@@ -124,30 +124,31 @@ test('a tool with no schema takes nothing', async () => {
   )
 })
 
-test('all named forms parse the same typed arguments including false', async () => {
-  for (
-    let [name, value, expected] of [
-      ['deploy', 'false', false],
-      ['deploy', 'true', true],
-      ['deploy', '0', false],
-      ['limit', '-2', -2],
-      ['meta', '{"x":1}', { x: 1 }],
-      ['path', 'two words', 'two words'],
-    ] as const
-  ) {
-    assertEquals(await args(['--app', 'r', `--${name}`, value]), {
-      app: 'r',
-      [name]: expected,
-    })
-    assertEquals(await args(['--app=r', `--${name}=${value}`]), {
-      app: 'r',
-      [name]: expected,
-    })
-    assertEquals(await args(['app=r', `${name}=${value}`]), {
-      app: 'r',
-      [name]: expected,
-    })
-  }
+// Each typed value exercises all spellings through the same tool grammar.
+for (
+  let [name, value, expected] of [
+    ['deploy', 'false', false],
+    ['deploy', 'true', true],
+    ['deploy', '0', false],
+    ['limit', '-2', -2],
+    ['meta', '{"x":1}', { x: 1 }],
+    ['path', 'two words', 'two words'],
+  ] as const
+) {
+  test(`all named forms parse ${name}=${value} as the same typed argument`, async () => {
+    for (
+      let words of [
+        ['--app', 'r', `--${name}`, value],
+        ['--app=r', `--${name}=${value}`],
+        ['app=r', `${name}=${value}`],
+      ]
+    ) {
+      assertEquals(await args(words), { app: 'r', [name]: expected })
+    }
+  })
+}
+
+test('both named file forms parse false as a boolean', async () => {
   for (let flag of [['--deploy', '@bool'], ['--deploy=@bool']]) {
     assertEquals(
       await argsFor(tool, ['--app', 'r', ...flag], {
