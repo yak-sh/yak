@@ -168,7 +168,7 @@ export let directoryConfig: Config = {
     '@yaks/secrets',
     { use: '@yaks/effects', words: ['provisional'] },
     { use: '@yaks/tools', words: ['content'] },
-    { use: '@yaks/git', words: ['ref'] },
+    { use: '@yaks/git', words: ['ref', 'repository'] },
     {
       use: '@yaks/platform',
       words: ['hostname', 'plan', 'deploy', 'switched'],

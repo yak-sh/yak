@@ -41,12 +41,15 @@ import { deadMailInboxRule } from './migrate.ts'
 import { doneRun } from '../../packages/effects/cleanup.ts'
 import { frozenMove, takeMove } from '@yaks/builders'
 import { keyEid } from '@yaks/key'
+import { repositoryRule } from './git-move.ts'
 /** A rule's name: where its stamp is kept in a store's memory, and the
  * `BOUNDARIES` entry its live release adds. */
 export type Mark = `yak/store/${string}`
 
 export type Rule = {
   mark: Mark
+  /** Only these stores owe or rehearse this rule; absent means every store. */
+  stores?: string[]
   /** The rows still in the old shape, naming what `move` reads. */
   find: string | Query
   /** One candidate's patch. `read` looks up evidence synchronously without
@@ -142,7 +145,12 @@ export let takeRule: Rule = {
   },
 }
 
-export let RULES: Rule[] = [deadMailInboxRule, doneEffectsRule, takeRule]
+export let RULES: Rule[] = [
+  deadMailInboxRule,
+  doneEffectsRule,
+  takeRule,
+  repositoryRule,
+]
 
 /** How far one rule got in one store. `after` is the last row it moved past;
  * `unspoken` is a word the rule reads that this store does not declare, so

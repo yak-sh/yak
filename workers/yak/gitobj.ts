@@ -248,7 +248,7 @@ let landing = async (
     // The word the directory gains about a release, written with the moved ref
     // (git.ts): `target` is what the commit is about, so a history joins to the
     // releases people already look at.
-    beside: (oids) => [{
+    beside: (oids) => [repository(at.repo), {
       entity: { eid: oids.oid },
       commit: {
         sha: oids.oid,
@@ -259,6 +259,12 @@ let landing = async (
     }],
   }
 }
+
+/** A clone address is also the repository's stable reference identity. */
+export let repository = (origin: string): Bundle => ({
+  entity: { eid: origin },
+  repository: { origin },
+})
 
 /**
  * yaks.app's releases, as @yaks/git's plugin reads them (git.ts): a `deploy`

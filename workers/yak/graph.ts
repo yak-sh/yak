@@ -2298,7 +2298,8 @@ export class Store {
       : []
 
   #moves = (): Rule[] =>
-    this.#lensMove ? [...this.#rules, this.#lensMove] : this.#rules
+    (this.#lensMove ? [...this.#rules, this.#lensMove] : this.#rules)
+      .filter((r) => !r.stores || r.stores.includes(this.#get('name') ?? ''))
 
   // The store as a rule reaches it. The patch is the kernel's own write, and
   // its effects wait in `held` for the caller: run once the batch commits,
