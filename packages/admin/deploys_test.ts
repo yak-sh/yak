@@ -9,6 +9,8 @@ import {
   command,
   type Commit,
   commitsIn,
+  compilerProtocolIn,
+  compilerRefusal,
   type Deploy,
   type Deployment,
   deploymentLists,
@@ -258,6 +260,37 @@ test('rollback fails closed for unknown migration sources or time-inferred commi
   }
   assertEquals(boundaries([deploy(1, [])])[0].refusal, undefined)
   assertEquals(rollbackTarget(boundaries([deploy(1, [])]), 'v1').id, 'v1')
+})
+
+test('kernel rollback preserves the serving compiler protocol', () => {
+  let legacy = compilerProtocolIn(
+    "headers: { 'content-type': 'application/json' }",
+  )
+  let current = compilerProtocolIn("headers: { 'x-yak-compiler-job': '1' }")
+  let unknown = compilerProtocolIn("headers: { 'x-yak-compiler-job': VERSION }")
+  let rows = [deploy(2, [], { live: 100 }), deploy(1, [])]
+  let guarded = (target: string | null) =>
+    rows.map((r) => ({
+      ...r,
+      refusal: compilerRefusal(r.live ? current : target, current),
+    }))
+  assertThrows(
+    () => rollbackTarget(guarded(legacy)),
+    Refused,
+    'compiler protocol changed',
+  )
+  assertThrows(
+    () => rollbackTarget(guarded(unknown)),
+    Refused,
+    'compiler protocol unknown',
+  )
+  assertEquals(rollbackTarget(guarded(current)).id, 'v1')
+  assert(compilerRefusal(legacy)?.includes('compiler protocol changed'))
+  assertEquals(compilerRefusal(current), undefined)
+  assertEquals(
+    compilerRefusal(current, null),
+    'no rollback: compiler protocol unknown',
+  )
 })
 
 test('main history keeps a data boundary after Wrangler ages its deployment out', () => {

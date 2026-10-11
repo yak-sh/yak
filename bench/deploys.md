@@ -232,6 +232,12 @@ kernel activation. The protocol was introduced with the old ask protocol still
 accepted, then the fallback was removed after that kernel served in production
 and staging.
 
+Kernel-only rollback leaves the compiler serving its current contract. The
+deployment history refuses kernels using the retired bare-ask protocol, or a
+protocol it cannot read; the transitional catalog-sending kernels remain valid
+targets. The protocol-1 floor also applies when main is reverted or its build
+fails, since neither restores the compiler Worker.
+
 | SHA         | gate run                                                              | push to live | observation                                                    |
 | ----------- | --------------------------------------------------------------------- | -----------: | -------------------------------------------------------------- |
 | `1849b73bc` | [38099071806](https://github.com/yak-sh/yak/actions/runs/38099071806) |      63.190s | package catalog caused a compiler upload                       |

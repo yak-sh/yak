@@ -108,6 +108,29 @@ export let marksIn = (source: string): string[] | null => {
   return marks.every((m) => m != null) ? marks : null
 }
 
+// Kernel-only rollback leaves the compiler serving its current protocol.
+// The header is the wire declaration, including in versions predating this
+// check. No header names the original bare-ask protocol; an expression we
+// cannot read is unknown, never permission to roll back.
+export let compilerProtocolIn = (source: string): string | null => {
+  let clean = source.replace(/\/\*[\s\S]*?\*\/|\/\/[^\n]*/g, '')
+  if (!clean.includes('x-yak-compiler-job')) return '0'
+  return clean.match(/['"]x-yak-compiler-job['"]\s*:\s*['"](\d+)['"]/)?.[1] ??
+    null
+}
+
+export let compilerRefusal = (
+  target: string | null,
+  // The catalog-free receiver requires protocol 1. Keep this floor even if
+  // main is reverted or its build fails: neither restores the sibling.
+  current: string | null = '1',
+): string | undefined =>
+  target == null || current == null
+    ? 'no rollback: compiler protocol unknown'
+    : target != current
+    ? `no rollback: compiler protocol changed (${target} → ${current})`
+    : undefined
+
 export let deploymentsFor = (id: string, deployments: Deployment[]) =>
   deployments.filter((d) =>
     d.versions.some((v) => v.version_id == id && v.percentage > 0)
@@ -370,7 +393,18 @@ export let deploys = async (
       floor.push(...found)
     }
   }
-  return boundaries(rows, floor)
+  let guarded = boundaries(rows, floor)
+  for (let row of guarded) {
+    if (row.refusal) continue
+    let source = row.commit && await git(root, [
+      'show',
+      `${row.commit.sha}:workers/yak/esbuild.ts`,
+    ], stopping)
+    row.refusal = compilerRefusal(
+      source?.ok ? compilerProtocolIn(source.out) : null,
+    )
+  }
+  return guarded
 }
 
 // Both activations of a two-phase deploy carry the same source commit. Keep
