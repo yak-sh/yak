@@ -630,10 +630,12 @@ filters with the four endpoints. Exact paths beat prefixes; longer prefixes beat
 shorter ones; plugin order breaks ties. A plugin's exact route can override an
 endpoint. A catch-all route only answers paths no endpoint claims. Host commits
 from `host.feed` reach the subscription registry as well as local graph commits.
-When `host.storage.revision` is available, the handler checks it every second
-and resets query answers after a store change, including writes from another
-process without a commit feed. Opening a query checks the revision before
-reusing a retained answer. The checks and commit feed stop with `host.stopping`.
+When the host has no commit feed and `host.storage.revision` is available, the
+handler checks it every second and resets query answers after a store change,
+including writes from another process. Opening a query checks the revision
+before reusing a retained answer. A host with a commit feed is never polled: the
+feed carries every commit as patches. The checks and commit feed stop with
+`host.stopping`.
 
 ```ts
 import { routed } from '@yaks/api'

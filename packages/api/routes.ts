@@ -78,7 +78,10 @@ export let handler = (host: Hosting, options: {
   // commits, and the host's feed for what every other process or thread
   // commits to the same store — a `yak` command beside `yak serve`, the effect
   // pool's thread — which that phase never runs for.
-  let revision = host.storage?.revision
+  // A commit feed already carries every commit, this process's and others',
+  // as precise patches. The revision is for a store without one: it moves on
+  // any write, so polling it beside a feed would reset every query each time.
+  let revision = host.feed ? undefined : host.storage?.revision
   let subs = subscriptions(graph, { activity: host.graph, revision })
   let stopFeed = host.feed?.((applied) => subs.commit(applied))
   let cancel = () => {}

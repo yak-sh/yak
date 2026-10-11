@@ -96,21 +96,32 @@ let polling = (() => {
     stopping: stopping.signal,
     who: () => null,
     routes: [],
-    feed: () => {
-      feeds++
-      return () => feeds--
-    },
   }, { timer: (fn, ms) => time.after(ms, fn), every: 5 })
-  return { time, stopping, reads: () => reads, feeds: () => feeds }
+  return { time, stopping, reads: () => reads }
 })()
-test('the host checks external store revisions until it stops', async () => {
+test('a host without a commit feed checks store revisions until it stops', async () => {
   let before = polling.reads()
   await polling.time.advance(5)
   equal(polling.reads(), before + 1)
   polling.stopping.abort()
-  equal(polling.feeds(), 0)
   await polling.time.advance(5)
   equal(polling.reads(), before + 1)
+})
+
+let fed = (() => {
+  let time = clock(), reads = 0
+  handler({
+    graph: graph({ vocab, storage: ram(vocab) }),
+    storage: { revision: () => ++reads },
+    who: () => null,
+    routes: [],
+    feed: () => () => {},
+  }, { timer: (fn, ms) => time.after(ms, fn), every: 5 })
+  return { time, reads: () => reads }
+})()
+test('a host with a commit feed never polls the store revision', async () => {
+  await fed.time.advance(20)
+  equal(fed.reads(), 0)
 })
 
 let feedOnly = (() => {
