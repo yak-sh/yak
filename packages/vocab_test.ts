@@ -20,6 +20,7 @@ import { type Bundle, graph, identities } from '@yaks/graph'
 import { idKeywords } from '@yaks/id'
 import { keyKeywords } from '@yaks/key'
 import { kernelKeywords } from '@yaks/kernel'
+import { memberKeywords } from '@yaks/member'
 import { nameKeywords } from '@yaks/names'
 import { ram } from '@yaks/ram'
 import {
@@ -61,6 +62,7 @@ let words: Record<string, Keywords> = Object.fromEntries(
     idKeywords,
     keyKeywords,
     kernelKeywords,
+    memberKeywords,
     nameKeywords,
   ].map((k) => [k.uri, k]),
 )

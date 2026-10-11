@@ -1576,7 +1576,9 @@ let indexedRelation = (
             {
               how: 'cross',
               src: raw(from, [], 'entity'),
-              on: raw('"entity"."eid" = "__named"."value"'),
+              on: raw(
+                `${ctx.d.col('entity', 'eid', ctx.v)} = "__named"."value"`,
+              ),
             },
             ...o.joins.map((j): Join => {
               let must = flattened(clauses).some((c) =>

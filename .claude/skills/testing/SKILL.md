@@ -83,7 +83,11 @@ stronger.
   shared by every checkout.
 - Packages exist so a change can be checked where it lives: run the package
   you changed (`deno task test packages/<name>`), and a change inside one yaks
-  app at most `deno task test apps/<name>`. The full suite is for a change that
+  app at most `deno task test apps/<name>`. A shared interface's consumers also
+  belong in that selection: SQL and SQLite reads are exercised by blob's
+  predicates, paths and projections, not just the storage packages. Vocabulary
+  declarations also meet in `packages/vocab_test.ts`, whose directory walk
+  needs `--all` to see changed JSON files. The full suite is for a change that
   reaches across packages in a way their own tests can't cover.
 - `deno task test:budget` runs the whole suite held to its budget, and the gate
   runs it: a test case over 1 ms fails unless bench/test-budget.json lists it,
