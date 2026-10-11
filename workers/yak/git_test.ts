@@ -140,6 +140,21 @@ test('a deploy mints one commit whose tree is the manifest', async () => {
   assert(shapes.some((b) => b.entity.eid == row.entity.archetype))
   const [ref] = await meta(env).query(`.ref.app=${app.eid}`)
   assert(ref.entity.archetype, 'directory refs carry derived classification')
+  let [commit] = await meta(env).query(`.commit&.entity.eid=${head}`)
+  assertEquals(Object.keys(commit.commit as object).sort(), [
+    'message',
+    'repo',
+    'target',
+  ])
+  let repo = (commit.commit as { repo: string }).repo
+  let [repository] = await meta(env).query(`.entity.eid=${repo}&?repository`)
+  assertObjectMatch(repository.repository as object, { origin: repo })
+  assertEquals(
+    (await meta(env).query(`.commit.repo.repository.origin=${repo}`)).map((b) =>
+      b.entity.eid
+    ),
+    [head],
+  )
   // The platform signed it; the person who deployed authored it, under the
   // pseudonymous address a public history gets until somebody opts out of it.
   assert(body.includes(`author Ada <${ADA}@users.yaks.app>`), body)

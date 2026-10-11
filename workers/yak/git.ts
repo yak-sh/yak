@@ -20,5 +20,3 @@ export let gitPlugin: Plugin = {
         : await (await import('./git_door.ts')).answer(at),
   ],
 }
-
-export { gitDirectoryDoc } from './facets/git-vocab.ts'

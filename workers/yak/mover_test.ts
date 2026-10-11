@@ -6,7 +6,9 @@ import { assert, assertEquals, assertRejects } from '@std/assert'
 import { type Bundle, type Comp, Stale, token } from '@yaks/graph'
 import { pick } from '@yaks/vocab'
 import { kernelDoc } from '@yaks/kernel/vocab'
-import { doorOf } from './door.ts'
+import { doorOf, PLATFORM_STORE } from './door.ts'
+import { commitRule } from './git-move.ts'
+import { lit } from '@yaks/sql'
 import { Store } from './graph.ts'
 import { KERNEL, metaOf } from './meta.ts'
 import {
@@ -477,6 +479,51 @@ test('mover contraction waits for the last value and rehearsal restores the colu
   await s.alarm()
   assert(!s.columns('was').includes('word'))
   assertEquals((await s.moves())[0].moved, 300)
+
+  // A core word has already contracted its declaration. Its retired column
+  // must contract through the mover without giving that column back to callers.
+  let ctx = state(PLATFORM_STORE)
+  let own = new Store(ctx, {}, [commitRule])
+  let door = doorOf((r) => own.fetch(r), PLATFORM_STORE)
+  let meta = metaOf(door)
+  let eid = '0123456789012345678901234567890123456789'
+  let repo = 'https://ada.yaks.app/notes.git'
+  await meta.apply([
+    { entity: { eid: repo }, repository: { origin: repo } },
+    { entity: { eid }, commit: { repo, message: 'Ship' } },
+  ], KERNEL)
+  let sql = driver(ctx.storage)
+  sql.query({
+    t: 'alter table',
+    table: 'commit',
+    add: { name: 'sha', type: 'text' },
+  })
+  sql.query({ t: 'update', table: 'commit', set: { sha: lit(eid) } })
+  let columns = () =>
+    sql.query({ t: 'pragma', name: 'table_info', arg: 'commit' }).map((c) =>
+      c.name
+    )
+  let move = async (rehearse = false) =>
+    (await (await door(`/move${rehearse ? '?rehearse=1' : ''}`, {
+      method: 'POST',
+    }, KERNEL)).json()).rules
+  let before = await meta.query('.commit&*')
+  let [proof] = await move(true)
+  assertEquals([proof.moved, proof.failed], [1, undefined])
+  assert(columns().includes('sha'))
+  assertEquals(await meta.query('.commit&*'), before)
+  await own.alarm()
+  assert(!columns().includes('sha'))
+  assertEquals(await meta.query('.commit&*'), before)
+  own = new Store(ctx, {}, [commitRule])
+  assertEquals(await meta.query('.commit&*'), before)
+  assertEquals(
+    (await meta.query(`.commit.repo.repository.origin=${repo}`)).map((b) =>
+      b.entity.eid
+    ),
+    [eid],
+  )
+  assertEquals((await move())[0].moved, 1)
 })
 
 test('a refused contraction unwinds its data batch and retries after wake', async () => {

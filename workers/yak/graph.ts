@@ -2313,6 +2313,19 @@ export class Store {
       }),
     tx: (body) => this.#tx(body),
     drop: (paths) => {
+      if (ownStore(this.#get('name') ?? '')) {
+        for (let path of paths) {
+          let [comp, prop, extra] = path.split('.')
+          if (!prop || extra || this.#vocab.prop(comp, prop)) {
+            throw new Error(`cannot contract declared core property ${path}`)
+          }
+          shed(this.#sql, this.#vocab, this.#vocab, comp, prop)
+        }
+        let errors = install(this.#sql, this.#vocab, blobRead(this.#vocab))
+        if (errors.length) throw errors[0]
+        watchEmbedding(statements(this.#sql), this.#texts.fields)
+        return
+      }
       let was = appDoc(this.#get('vocab') ?? '{}')
       this.#put(
         'vocab',

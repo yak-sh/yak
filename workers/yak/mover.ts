@@ -41,7 +41,7 @@ import { deadMailInboxRule } from './migrate.ts'
 import { doneRun } from '../../packages/effects/cleanup.ts'
 import { frozenMove, takeMove } from '@yaks/builders'
 import { keyEid } from '@yaks/key'
-import { repositoryRule } from './git-move.ts'
+import { commitRule } from './git-move.ts'
 /** A rule's name: where its stamp is kept in a store's memory, and the
  * `BOUNDARIES` entry its live release adds. */
 export type Mark = `yak/store/${string}`
@@ -149,7 +149,7 @@ export let RULES: Rule[] = [
   deadMailInboxRule,
   doneEffectsRule,
   takeRule,
-  repositoryRule,
+  commitRule,
 ]
 
 /** How far one rule got in one store. `after` is the last row it moved past;

@@ -251,7 +251,6 @@ let landing = async (
     beside: (oids) => [repository(at.repo), {
       entity: { eid: oids.oid },
       commit: {
-        sha: oids.oid,
         repo: at.repo,
         message,
         target: deploy.eid,
