@@ -126,31 +126,33 @@ test('the page learns the configured owner by the graph address interface', asyn
   assertEquals(await response.json(), { owner: row.entity.eid })
 })
 
+// Resolve the owner and prepare its admitted write once, then inspect the
+// stamps through the graph and retain the malformed-body refusal.
+let ownerRoutes = routes({
+  vocab,
+  graph,
+  config: { db: ':memory:', plugins: ['@yaks/browse'], person: 'lemon-cake' },
+  who: () => ({ by: 'server', via: 'terminal' }),
+})
+let post = ownerRoutes.find((r) => r.path == '/web/apply')!
+let [owner] = await graph.read('.doc.title=x')
+let response = await post.handle(
+  new Request('http://x/web/apply', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify([{
+      entity: { eid: 'reply' },
+      doc: { body: 'My reply' },
+      comment: { target: owner.entity.eid },
+      $actor: { by: 'spoofed' },
+    }, {
+      entity: { eid: 'question' },
+      task: {},
+      decided: { choice: 'Train' },
+    }]),
+  }),
+)
 test('web and terminal writes are attributed to the configured owner through API admission', async () => {
-  let rs = routes({
-    vocab,
-    graph,
-    config: { db: ':memory:', plugins: ['@yaks/browse'], person: 'lemon-cake' },
-    who: () => ({ by: 'server', via: 'terminal' }),
-  })
-  let post = rs.find((r) => r.path == '/web/apply')!
-  let [owner] = await graph.read('.doc.title=x')
-  let response = await post.handle(
-    new Request('http://x/web/apply', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify([{
-        entity: { eid: 'reply' },
-        doc: { body: 'My reply' },
-        comment: { target: owner.entity.eid },
-        $actor: { by: 'spoofed' },
-      }, {
-        entity: { eid: 'question' },
-        task: {},
-        decided: { choice: 'Train' },
-      }]),
-    }),
-  )
   assertEquals(response.status, 200)
   let [reply, decided] = await graph.get(['reply', 'question'])
   assertEquals((reply.created as Comp)?.by, owner.entity.eid)
