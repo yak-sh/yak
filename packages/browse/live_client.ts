@@ -1,6 +1,7 @@
 import { batch } from '@preact/signals'
 // Browse's learned projection and patch adapter over generic named watches.
 import { entire, namedClient, quiet } from '@yaks/client/named'
+import type { ClientOpts } from '@yaks/client'
 import { type Bundle, type Comp, dead } from '@yaks/graph'
 import type { Coverage, Frame, Socket } from '@yaks/sync'
 import { loadVocab } from '@yaks/vocab'
@@ -46,6 +47,8 @@ let browserVocab = () => {
 export type LiveClient = ReturnType<typeof liveClient>
 export let liveClient = (opts: {
   url: string
+  fetch?: ClientOpts['fetch']
+  report?: ClientOpts['report']
   connect: (url: string) => Socket
   changed: (eids: string[]) => void
   ready: (sub: string) => void

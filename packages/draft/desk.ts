@@ -88,11 +88,9 @@ type Held = {
   rev: number
   /** what is typed here */
   local: string
-  /** the write the store has not answered: its number, its text, and, when
-   * it is a spend, the text it emptied */
+  /** the write the store has not answered: its number and its text */
   flying?: number
   sent?: string
-  spent?: string
   /** the newest text heard while waiting on it */
   later?: Word
   /** when the last write left */
@@ -131,9 +129,9 @@ let answered = (h: Held, n: number, w: Word): Held => {
 // until the person types on.
 let failed = (h: Held, n: number): Held => {
   if (h.flying != n) return h
-  let local = h.spent != null && !h.local ? h.spent : h.local
-  let next: Held = { ...landed(h), local, stuck: true }
-  return h.later ? heard(next, h.later) : next
+  // Watches include the optimistic write. Its queued revision cannot prove
+  // acceptance after the write failed.
+  return { ...landed(h), stuck: true }
 }
 
 // A write settled: nothing in flight.
@@ -141,7 +139,6 @@ let landed = (h: Held): Held => ({
   ...h,
   flying: undefined,
   sent: undefined,
-  spent: undefined,
   later: undefined,
 })
 
@@ -171,7 +168,12 @@ export let desk = (
   let held = new Map<string, Held>()
   let shown = new Map<string, Signal<string>>()
   let timers = new Map<string, ReturnType<typeof setTimeout>>()
+  // Visible text can be emptied, or replaced by more typing, while a send
+  // waits. Each send keeps its own recovery copy until its answer arrives.
+  let recovery = new Map<string, Map<number, string>>()
+  let stashed = new Map<string, string>()
   let writes = 0
+  let closed = false
 
   let get = (place: string) => held.get(place) ?? fresh()
   let seen = (place: string) => {
@@ -184,9 +186,16 @@ export let desk = (
   let keep = (place: string, h: Held) => {
     let key = STASH + place
     try {
-      if (!behind(h)) return opts.stash?.removeItem(key)
-      let kept: Kept = { text: h.local, over: h.base, rev: h.rev }
-      opts.stash?.setItem(key, JSON.stringify(kept))
+      let spent = [...recovery.get(place)?.values() ?? []]
+      if (!behind(h) && !spent.length) return opts.stash?.removeItem(key)
+      let kept: Kept = {
+        text: spent.reduce((text, copy) => merge('', copy, text), h.local),
+        over: spent.length ? '' : h.base,
+        rev: h.rev,
+      }
+      let value = JSON.stringify(kept)
+      opts.stash?.setItem(key, value)
+      stashed.set(place, value)
     } catch (err) {
       opts.report?.(err)
     }
@@ -203,38 +212,85 @@ export let desk = (
     schedule(place)
   }
 
+  let forward = (bundles: Bundle[]) => {
+    if (!bundles.length) return
+    try {
+      Promise.resolve(client.mutate(bundles)).catch((err) => opts.report?.(err))
+    } catch (err) {
+      opts.report?.(err)
+    }
+  }
+
   // A write of what is typed, over what it was typed over, with `also`
   // beside it in one batch.
   let send = (place: string, also: Bundle[] = [], spent?: string) => {
     clearTimeout(timers.get(place))
     timers.delete(place)
     let by = opts.by()
-    if (!by) return also.length ? void client.mutate(also) : undefined
     let h = get(place)
     let n = ++writes
-    let eid = draftEid(by, place)
+    if (spent != null) {
+      let copies = recovery.get(place) ?? new Map<number, string>()
+      copies.set(n, spent)
+      recovery.set(place, copies)
+      h = { ...h, local: '', stuck: false }
+    }
+    let eid = by ? draftEid(by, place) : undefined
     let over = h.flying != null ? h.sent ?? h.base : h.base
-    hold(place, { ...h, flying: n, sent: h.local, spent, left: Date.now() })
+    hold(place, { ...h, flying: n, sent: h.local, left: Date.now() })
     let fail = (err: unknown) => {
       opts.report?.(err)
-      step(place, (h) => failed(h, n))
+      if (closed) return
+      let text = recovery.get(place)?.get(n)
+      recovery.get(place)?.delete(n)
+      step(place, (h) => ({
+        ...failed(h, n),
+        // Recovered sends are insertions: a newer empty watched draft must
+        // never read them as text another interface deleted.
+        base: text == null ? h.base : '',
+        local: text == null ? h.local : merge('', text, h.local),
+      }))
     }
     try {
       Promise.resolve(client.mutate([
         ...also,
-        {
-          entity: { eid },
-          draft: { by, place, text: h.local },
-          typed: { over },
-        },
+        ...eid
+          ? [{
+            entity: { eid },
+            draft: { by, place, text: h.local },
+            typed: { over },
+          }]
+          : [],
       ])).then((applied) => {
         let d = applied.find((b) => b.entity.eid == eid)?.draft as
           | { text?: string; rev?: number }
           | undefined
-        step(
-          place,
-          (h) => d ? answered(h, n, word(d)) : failed(h, n),
-        )
+        if (eid && !d) {
+          return fail(new Error('write accepted without its draft'))
+        }
+        // A closed desk may reconcile the copy it left, but never overwrite
+        // what a replacement desk typed. Only this receipt proves its base;
+        // watched optimistic text cannot stand in for acceptance.
+        if (closed) {
+          try {
+            let copy = stashed.get(place)
+            if (copy == null || opts.stash?.getItem(STASH + place) !== copy) {
+              return
+            }
+          } catch (error) {
+            opts.report?.(error)
+            return
+          }
+        }
+        recovery.get(place)?.delete(n)
+        let accept = (next: Held) =>
+          d
+            ? answered(next, n, word(d))
+            : next.flying == n
+            ? { ...landed(next), base: '' }
+            : next
+        if (closed) keep(place, accept(get(place)))
+        else step(place, accept)
       }, fail)
     } catch (err) {
       fail(err)
@@ -246,7 +302,7 @@ export let desk = (
   // its answer schedules the next.
   let schedule = (place: string) => {
     let h = get(place)
-    if (!due(h) || timers.has(place) || !opts.by()) return
+    if (closed || !due(h) || timers.has(place) || !opts.by()) return
     let wait = h.left + pace - Date.now()
     if (wait <= 0) return send(place)
     timers.set(place, setTimeout(() => send(place), wait))
@@ -300,12 +356,12 @@ export let desk = (
     spend: (place, also = []) => {
       let h = get(place)
       if (!behind(h) && !h.local) {
-        return also.length ? void client.mutate(also) : undefined
+        return forward(also)
       }
-      hold(place, { ...h, local: '', stuck: false })
       send(place, also, h.local)
     },
     close: () => {
+      closed = true
       stop()
       for (let t of timers.values()) clearTimeout(t)
       timers.clear()

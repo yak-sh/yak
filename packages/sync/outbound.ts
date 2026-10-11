@@ -21,7 +21,7 @@
 //              server with only the response lost, and a client that guesses
 //              wrong about that turns a network blip into data loss.
 
-import type { Bundle, Graph } from '@yaks/graph'
+import { type Bundle, formed, type Graph } from '@yaks/graph'
 import { replicate } from './mark.ts'
 import { guessed, inverse, outward } from './tier.ts'
 
@@ -29,6 +29,30 @@ import { guessed, inverse, outward } from './tier.ts'
  * whatever fields it carried — a `Stale` names the property and the value the
  * graph holds. */
 export type Refusal = { error: string; message: string; [k: string]: unknown }
+
+/** The server deliberately refused the batch; none of it was accepted. */
+export class WriteRefused extends Error {
+  readonly outcome = 'refused'
+  constructor(public sent: Bundle[], public refusal: Refusal) {
+    super(refusal.message)
+    this.name = refusal.error
+  }
+}
+
+/** No usable acceptance or refusal arrived. Reconcile or retry `sent`;
+ * the server may already have committed it. */
+export class WriteUnknown extends Error {
+  readonly outcome = 'unknown'
+  constructor(public sent: Bundle[], cause: unknown) {
+    super(
+      `write outcome unknown: ${
+        cause instanceof Error ? cause.message : String(cause)
+      }`,
+      { cause },
+    )
+    this.name = 'WriteUnknown'
+  }
+}
 
 /** How a request is sent. The global `fetch` satisfies it, and so does an
  * in-process handler, which is how this package is tested with no network. */
@@ -40,7 +64,7 @@ export type Trouble = {
   sent: Bundle[]
   /** the server's refusal, when it responded with one */
   refused?: Refusal
-  /** the transport error, when the request never arrived */
+  /** a transport or response failure: the server may have committed */
   error?: unknown
   /** whether the optimistic local change was undone */
   reverted: boolean
@@ -96,6 +120,11 @@ export let exchange = async (
   let { graph } = opts
   let sent = opts.sent ?? outward(bundles, graph.vocab)
   if (!sent.length) return { settled: true }
+  let unknown = (cause: unknown): PostResult => {
+    let error = new WriteUnknown(sent, cause)
+    opts.report({ sent, error, reverted: false })
+    return { settled: false, error }
+  }
   let res: Response
   try {
     res = await opts.fetch(
@@ -107,18 +136,35 @@ export let exchange = async (
     )
   } catch (error) {
     // Undelivered is not refused: the write may have been applied.
-    opts.report({ sent, error, reverted: false })
-    return { settled: false, error }
+    return unknown(error)
+  }
+  // A pending write is not an acceptance.
+  if (res.status == 202) {
+    return unknown(new Error(`HTTP ${res.status}`))
   }
   if (!res.ok) {
-    let refused = await refusalOf(res)
+    let refused: Refusal
+    try {
+      refused = await refusalOf(res)
+    } catch (error) {
+      return unknown(error)
+    }
+    // The graph's explicit refusal body confirms rollback even at 500. A
+    // generic gateway/server fault says nothing about whether it committed.
+    if (res.status >= 500 && refused.error == `HTTP ${res.status}`) {
+      return unknown(new Error(refused.message))
+    }
     let back = opts.held ? [] : inverse(bundles, graph.vocab)
     if (back.length) await replicate(graph, back)
     opts.report({ sent, refused, reverted: back.length > 0 })
     return { settled: true, refused }
   }
-  let applied = await res.json()
-  if (!Array.isArray(applied)) throw new Error('/apply returned no bundles')
+  let applied: Bundle[]
+  try {
+    applied = formed(await res.json())
+  } catch (error) {
+    return unknown(error)
+  }
   let landing = [
     ...(opts.held ? [] : guessed(bundles, graph.vocab)),
     ...applied,

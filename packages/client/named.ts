@@ -1,6 +1,12 @@
 // Named server watches over a generic client: shared wires, readiness retained
 // across reconnects, and landed frames delivered to their owning watch names.
-import { type Client, client, type Watch, wireIdb } from './mod.ts'
+import {
+  type Client,
+  client,
+  type ClientOpts,
+  type Watch,
+  wireIdb,
+} from './mod.ts'
 import { type Bundle } from '@yaks/graph'
 import { type Frame, replicate, type Socket } from '@yaks/sync'
 import type { Vocab } from '@yaks/vocab'
@@ -54,6 +60,8 @@ export let namedClient = (opts: {
   batch?: (work: () => void) => void
   wireVault?: Parameters<typeof wireIdb>[0]
   url: string
+  fetch?: ClientOpts['fetch']
+  report?: ClientOpts['report']
   connect: (url: string) => Socket
   changed: (eids: string[]) => void
   ready: (sub: string) => void
@@ -135,11 +143,8 @@ export let namedClient = (opts: {
     wireVault: opts.wireVault && globalThis.indexedDB
       ? wireIdb(opts.wireVault)
       : false,
-    // Local writes use echoed patches below, never sync's automatic POST.
-    fetch: () => {
-      throw new Error('writes leave through the durable outbox (live.ts)')
-    },
-    report: (r) => {
+    fetch: opts.fetch,
+    report: opts.report ?? ((r) => {
       let error = r.error
       if (r.refused) {
         error = Object.assign(new Error(r.refused.message), {
@@ -151,9 +156,10 @@ export let namedClient = (opts: {
         let message = error instanceof Error
           ? `${error.name}: ${error.message}`
           : String(error)
-        console.error(`live client — ${message}`, error)
+        let log = r.sent.length ? console.warn : console.error
+        log(`live client — ${message}`, error)
       }
-    },
+    }),
   })
   box.cache.onRows(opts.changed)
   let open = (sub: string, line: string) => {

@@ -137,9 +137,9 @@ export let village = (net: Net, deal: Deals) => {
 
   // A write of its own, which the store may refuse without anything else
   // going down with it, and which never stops the frame that made it.
-  let write = (bundles: Bundle[]) => {
+  let write = async (bundles: Bundle[]) => {
     try {
-      net.client.mutate(bundles)
+      await net.client.mutate(bundles)
     } catch (e) {
       console.warn('mossvale villagers:', e)
     }

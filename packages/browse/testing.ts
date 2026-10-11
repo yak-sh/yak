@@ -138,13 +138,14 @@ export let faked = (globals: Record<string, unknown>) => {
   }
 }
 
-// A test has no server: the control frames a mounted view sends go nowhere,
-// through live.ts's transport seam, and the cache is only what the test seeds.
-// `wire` is the page's own route, for a test that follows a write out to
-// /apply. live.ts reads the tables as it loads, so it is imported after them.
+// Control frames need no server; write requests receive a receipt. A test
+// that needs stamps, rules or refusal supplies its own host answer.
 let { clearForTest, resetForTest, useRoute } = await import('./live.ts')
 let { resetArchetypesForTest } = await import('./live_archetypes.ts')
-export let wire = useRoute(() => {})
+export let wire = useRoute(async (frame) => {
+  let request = (frame as { request?: Request }).request
+  if (request) return Response.json(await request.clone().json())
+})
 
 /** A live fixture starts with a new tab's state, even in a warm runtime. */
 export let test: typeof declareTest = (name, body, options) =>

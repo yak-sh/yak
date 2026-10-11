@@ -15,7 +15,7 @@ import {
 } from '@std/assert'
 import { client as keeper } from '@yaks/client'
 import { loadVocab } from '@yaks/vocab'
-import { test, until } from '@yaks/testing'
+import { test } from '@yaks/testing'
 import { browser, client, connector, kernel, seed, unique } from './probe.ts'
 
 // A row as a page reads one: the kind that names it, the spine, and a
@@ -357,8 +357,12 @@ test('a page keeping a copy of its store learns who made its own write', async (
       let c = rows.value[0]?.created
       return c && typeof c == 'object' && 'by' in c ? c.by : null
     }
-    copy.mutate([{ entity: { eid }, doc: { title: 'Plum tart' } }])
-    await until(() => !!by())
+    let applied = await copy.mutate([{
+      entity: { eid },
+      doc: { title: 'Plum tart' },
+    }])
+    let written = applied.find((b) => b.entity.eid == eid)!
+    assertEquals((written.created as { by: string }).by, them.person)
     assertEquals(by(), them.person)
   } finally {
     copy.close()

@@ -45,10 +45,13 @@ store is written at most once a pace (`pace`, 500 ms) per draft, one write in
 flight at a time; what was typed while one flew is merged onto its answer, and
 so is every text another interface makes the store hold. A spend goes at once,
 in the same batch as the send it went into, so a refused send leaves the draft.
+A spend keeps its emptied text in the stash until its write is accepted, even
+while the person types the next draft. A refusal or an unknown transport outcome
+restores those words; a reload recovers them from the stash.
 
-`client` is anything with a `mutate` answered by the applied bundles and a
-`watch`: a @yaks/client `client()` is one. `by` is read reactively; while it is
-unknown, typing is kept and written once it is.
+`client` is anything with a `mutate` answered by the server-applied bundles and
+a `watch`: a @yaks/client `client()` is one. `by` is read reactively; while it
+is unknown, typing is kept and written once it is.
 
 ## Files
 

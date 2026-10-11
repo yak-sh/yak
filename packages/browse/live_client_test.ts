@@ -2,7 +2,8 @@
 // frame the host sends does to the box and to the names that asked.
 import { test } from '@yaks/testing'
 import { tick } from './testing.ts'
-import { assertEquals } from '@std/assert'
+import { assertEquals, assertRejects } from '@std/assert'
+import { WriteRefused, WriteUnknown } from '@yaks/client'
 import type { Frame, Socket } from '@yaks/sync'
 import { liveClient } from './live_client.ts'
 
@@ -46,6 +47,65 @@ let row = (eid: string, title: string) => ({
   entity: { eid, num: 1 },
   doc: { title },
 })
+
+let writing = () => {
+  let response = Promise.withResolvers<Response>()
+  let c = liveClient({
+    url: 'http://host.test',
+    connect: () => host().socket,
+    fetch: () => response.promise,
+    report: () => {},
+    changed: () => {},
+    ready: () => {},
+    frame: () => {},
+  })
+  return { c, response }
+}
+
+test('the browser replica writes optimistically and resolves with stamped server bundles', async () => {
+  let { c, response } = writing()
+  try {
+    let receipt = Promise.resolve(c.box.mutate([row('write-stamps', 'local')]))
+    assertEquals(c.box.ent('write-stamps')?.doc, { title: 'local' })
+    let settled = false
+    receipt.then(() => settled = true)
+    await Promise.resolve()
+    assertEquals(settled, false)
+    let applied = [{
+      ...row('write-stamps', 'server'),
+      created: { by: 'owner', at: '2026-10-11T00:00:00.000Z' },
+    }]
+    response.resolve(Response.json(applied))
+    assertEquals(await receipt, applied)
+    assertEquals(c.box.ent('write-stamps')?.created, applied[0].created)
+  } finally {
+    c.box.close()
+  }
+})
+
+for (let refusal of [true, false]) {
+  test(`the browser replica rejects ${refusal ? 'refused' : 'unknown'} writes`, async () => {
+    let { c, response } = writing()
+    try {
+      let receipt = Promise.resolve(c.box.mutate([row('failed-write', 'keep')]))
+      if (refusal) {
+        response.resolve(Response.json({ error: 'Refused', message: 'no' }, {
+          status: 400,
+        }))
+      } else response.reject(new TypeError('response lost'))
+      let error = refusal
+        ? await assertRejects(() => receipt, WriteRefused)
+        : await assertRejects(() => receipt, WriteUnknown)
+      assertEquals(error.outcome, refusal ? 'refused' : 'unknown')
+      assertEquals(error.sent[0].doc, { title: 'keep' })
+      if (!refusal) {
+        assertEquals(c.box.ent('failed-write')?.doc, { title: 'keep' })
+      }
+    } finally {
+      c.box.close()
+    }
+  })
+}
 
 test('two names on one line share one subscription on the wire', () => {
   let { c, sent } = replica()

@@ -86,7 +86,7 @@ The module also exports `Client`, `ClientOpts`, `ClientWatchOpts`, `Watch`,
 | `watch(query, opts?)` | Return a live query result.                                           |
 | `read(query, opts?)`  | Read a query once, synchronously: the rows a watch on it would hold.  |
 | `ent(eid)`            | Read one cached entity, or `undefined` when it is absent from memory. |
-| `mutate(bundles)`     | Call the graph's `apply()`; returns bundles or a promise of bundles.  |
+| `mutate(bundles)`     | Show edits locally and resolve with the server-applied bundles.       |
 | `ready`               | Wait for local persistence and any configured epoch restore.          |
 | `setEpoch(epoch)`     | Validate the server cache epoch and refresh remote subscriptions.     |
 | `close()`             | Close all watches, the connection, and cache activity.                |
@@ -112,6 +112,11 @@ equal(remote.wire !== undefined, true)
 remote.close()
 ```
 
+An **acknowledged write** resolves with the server-applied bundles after its
+rules and stamps. `mutate(bundles)` keeps optimistic local visibility while
+waiting for that acknowledgement; awaiting its result never treats a local
+commit as server acceptance.
+
 Server-synchronized edits normally apply locally before `POST /apply` completes.
 Deletions wait for the server: the local tier keeps no inverse for one. Server
 refusals can revert optimistic edits and are reported through `opts.report`.
@@ -119,11 +124,20 @@ Components declared `sync: none` stay local; `sync: peers` components are
 relayed through the WebSocket. See [@yaks/sync](../sync/README.md) for transport
 and failure behavior.
 
+Its promise rejects with `WriteRefused` (`outcome: 'refused'`, `sent`,
+`refusal`) when the server deliberately refuses the batch. `WriteUnknown`
+(`outcome: 'unknown'`, `sent`, `cause`) means no usable acceptance or refusal
+arrived: a transport failure, broken response, pending response or server fault.
+The server may have committed, so reconcile by reading its state or retry with
+the same identities and appropriate preconditions. Keep draft and import
+recovery copies until acceptance. Both error classes are exported here and from
+`@yaks/sync`.
+
 `mutate(bundles, {optimistic: false})` waits for server admission before
 changing the local graph. Its promise rejects on a refusal or transport failure.
-Use it when a successful local edit must mean the server accepted it, such as
-marking work delivered. Browser-owned components in the batch land after that
-answer. Without a server, the mutation applies to the local graph.
+Use it to hold local visibility until the server accepts, such as marking work
+delivered. Browser-owned components in the batch land after that answer. Without
+a server, the mutation applies to the local graph.
 
 With a server connection, `mutate()` also accepts `alias: {name}` when the
 vocabulary declares `alias`. A name may belong to an entity absent from the

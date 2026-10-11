@@ -131,6 +131,17 @@ no local inverse; an accepted response supplies the tombstones. The inverse
 patches for optimistic writes affect touched properties and do not implement
 general conflict resolution for overlapping writes.
 
+`apply(bundles)` returns the server-applied bundles while keeping optimistic
+local visibility. It uses the same queue and reconciliation as the plugin's
+background graph writes. A write containing only browser-owned or relayed
+components returns its local result without an HTTP acknowledgement. Deliberate
+refusals reject with `WriteRefused` (`outcome: 'refused'`, `sent`, `refusal`);
+transport or response failures reject with `WriteUnknown` (`outcome: 'unknown'`,
+`sent`, `cause`). An unknown outcome keeps optimistic state because the server
+may have committed. Callers retain their recovery copies while they reconcile or
+retry. See [@yaks/client](../client/README.md#use) for the assembled mutation
+interface.
+
 `submit(bundles)` uses the same HTTP queue but waits for the server to resolve
 identity before applying its answer. It rejects on refusal or transport failure.
 Its caller must remove browser-owned components first;

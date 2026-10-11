@@ -26,9 +26,25 @@
 import type { Bundle, Eid, Graph, Plugin } from '@yaks/graph'
 import { after } from '@yaks/fp'
 import { dead } from '@yaks/graph'
-import { asked, asking, clean, ECHO, echoed, ruling, SENT } from './mark.ts'
-import { exchange, type Fetch, type Refusal, type Report } from './outbound.ts'
-import { relayed } from './tier.ts'
+import {
+  ACK,
+  asked,
+  asking,
+  clean,
+  ECHO,
+  echoed,
+  ruling,
+  SENT,
+} from './mark.ts'
+import {
+  exchange,
+  type Fetch,
+  type Refusal,
+  type Report,
+  WriteRefused,
+  WriteUnknown,
+} from './outbound.ts'
+import { outward, relayed } from './tier.ts'
 import { pacer } from './pace.ts'
 import { type Mine, saying } from './saying.ts'
 import { land } from './inbound.ts'
@@ -113,6 +129,9 @@ export type Sync = {
   /** Send an input batch whose identity the server must resolve before this
    * graph can hold it. The caller has separated browser-owned components. */
   submit: (sent: Bundle[]) => Promise<Bundle[]>
+  /** Apply optimistically, but answer only after server acceptance. Local-only
+   * writes stay synchronous. Refusals and unknown outcomes reject. */
+  apply: (bundles: Bundle[]) => Bundle[] | Promise<Bundle[]>
   /** resolves when every write in flight has been answered */
   idle: () => Promise<void>
   /** close the socket and stop reconnecting */
@@ -143,6 +162,8 @@ export let sync = (graph: Graph, opts: SyncOpts): Sync => {
   let report = opts.report ?? warn
   let timer: Timer = opts.timer ?? ((fn, ms) => setTimeout(fn, ms))
   let sending: Promise<void> = Promise.resolve()
+  let writes = 0
+  let receipts = new Map<number, { answer?: Promise<Bundle[] | undefined> }>()
   let asks = new Map<string, Ask>()
   let members = new Map<string, Set<Eid>>()
   // A fresh object on every invalidation guards asynchronous apply completion
@@ -170,8 +191,9 @@ export let sync = (graph: Graph, opts: SyncOpts): Sync => {
   // a refusal has nothing to revert and an unanswered request has nothing to
   // keep pinned.
   let send = (bundles: Bundle[], held = false) => {
+    if (!outward(bundles, graph.vocab).length) return
     let release = opts.replica?.protect(bundles.map((b) => b.entity.eid))
-    queue(() =>
+    let answer = queue(() =>
       exchange(bundles, {
         graph,
         url: opts.url,
@@ -181,8 +203,30 @@ export let sync = (graph: Graph, opts: SyncOpts): Sync => {
         held,
       }).then((result) => {
         if (result.settled || held) release?.(!held && !!result.applied?.length)
+        if (result.refused) {
+          throw new WriteRefused(outward(bundles, graph.vocab), result.refused)
+        }
+        if (result.error) {
+          throw result.error
+        }
+        return result.applied
       })
-    ).catch((error) => report({ sent: [], error, reverted: false }))
+    ).catch((error) => {
+      if (
+        !(error instanceof WriteRefused) && !(error instanceof WriteUnknown)
+      ) {
+        report({ sent: outward(bundles, graph.vocab), error, reverted: false })
+      }
+      throw error
+    })
+    // Background graph writes still report failures without an unhandled
+    // rejection. An acknowledged caller receives this same promise.
+    answer.catch(() => {})
+    for (let b of bundles) {
+      let receipt = receipts.get(b[ACK] as number)
+      if (receipt) receipt.answer = answer
+    }
+    return answer
   }
 
   let submit = (sent: Bundle[]): Promise<Bundle[]> =>
@@ -202,16 +246,40 @@ export let sync = (graph: Graph, opts: SyncOpts): Sync => {
         report({ sent, error, reverted: false })
         throw error
       }
-      if (result.refused) throw new Error(result.refused.message)
+      if (result.refused) throw new WriteRefused(sent, result.refused)
       if (result.error) throw result.error
       return result.applied ?? []
     })
+
+  let apply = (bundles: Bundle[]): Bundle[] | Promise<Bundle[]> => {
+    let id = ++writes
+    let receipt: { answer?: Promise<Bundle[] | undefined> } = {}
+    receipts.set(id, receipt)
+    try {
+      let result = after(
+        graph.apply(bundles.map((b) => ({ ...b, [ACK]: id }))),
+        (local) => {
+          receipts.delete(id)
+          return receipt.answer?.then((applied) => applied ?? local) ?? local
+        },
+      )
+      if (result instanceof Promise) {
+        // A fire-and-forget caller still has report(). Awaiting this promise
+        // still rejects, so recovery-sensitive callers can keep their copies.
+        result.catch(() => receipts.delete(id))
+      }
+      return result
+    } catch (error) {
+      receipts.delete(id)
+      throw error
+    }
+  }
 
   let plugin: Plugin = {
     name: '@yaks/sync',
     // The two marks a batch carries through `apply()` (./mark.ts): what the
     // caller sent, and what came back from the server.
-    requests: [SENT, ECHO],
+    requests: [SENT, ECHO, ACK],
     hooks: {
       // Inside the transaction, before the patches: the copy to put back.
       precondition: (bundles, tx) => {
@@ -372,6 +440,7 @@ export let sync = (graph: Graph, opts: SyncOpts): Sync => {
     },
     refusal: (id) => refusals.get(id),
     submit,
+    apply,
     idle: () => sending,
     close: () => {
       w.close()

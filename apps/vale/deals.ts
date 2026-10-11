@@ -123,9 +123,9 @@ export let deals = (net: Net) => {
       return null
     }
   }
-  let write = (bundles: Bundle[]) => {
+  let write = async (bundles: Bundle[]) => {
     try {
-      net.client.mutate(bundles)
+      await net.client.mutate(bundles)
     } catch (e) {
       console.warn('mossvale deals:', e)
     }

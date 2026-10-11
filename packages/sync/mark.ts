@@ -34,6 +34,10 @@ export let RULED = '$ruled'
 /** The mark on a batch that arrived from the server and must not go back. */
 export let ECHO = '$echo'
 
+// A write waiting for its HTTP answer. Local bookkeeping only; outward()
+// never sends it and clean() never returns it.
+export let ACK = '$ack'
+
 /** Mark a bundle as the caller's, with a copy of the entity it patches
  * (`null` when there was no such entity yet). */
 export let asking = (b: Bundle, was: Bundle | null): Bundle => ({
@@ -90,10 +94,14 @@ export let replicate = (
 /** A bundle with the marks removed: what a caller gets back from `apply()`,
  * which is their data and not this package's bookkeeping. */
 export let clean = (b: Bundle): Bundle => {
-  if (b[SENT] === undefined && b[ECHO] === undefined && !ruled(b)) return b
+  if (
+    b[SENT] === undefined && b[ECHO] === undefined && b[ACK] === undefined &&
+    !ruled(b)
+  ) return b
   let out = { ...b }
   delete out[SENT]
   delete out[ECHO]
   delete out[RULED]
+  delete out[ACK]
   return out
 }

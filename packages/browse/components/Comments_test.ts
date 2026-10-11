@@ -1,11 +1,11 @@
 import './Entity.tsx'
-import { changesOf } from '../wire.ts'
+import { bundlesOf, changesOf } from '../wire.ts'
 import { domainBundle } from '../domain-host.tsx'
 import '../domain-host.tsx'
 // Human-facing instruments use graph ids; browser clients keep their short
 // handles.
 import { test } from '@yaks/testing'
-import '../testing.ts'
+import { tick } from '../testing.ts'
 import { assertEquals } from '@std/assert'
 import { cache, ent, useRoute } from '../live.ts'
 import { act } from 'preact/test-utils'
@@ -172,11 +172,21 @@ test('shared comment send line keeps drafts, sends by submit or Enter once and l
     },
   }
   let sent: import('../types.ts').Change[] = []
+  let revision = 0
   let restore = useRoute((frame) => {
     if (
       frame && typeof frame == 'object' && 'apply' in frame &&
       Array.isArray(frame.apply)
-    ) sent.push(...frame.apply)
+    ) {
+      sent.push(...frame.apply)
+      let rows = bundlesOf(frame.apply)
+      for (let b of rows) {
+        if (b.draft && typeof b.draft == 'object') {
+          b.draft = { ...b.draft, rev: ++revision }
+        }
+      }
+      return Response.json(rows)
+    }
   })
   let seen = mount(h(Composer, { eid }))
   let input = () => seen.root.querySelector('textarea') as HTMLTextAreaElement
@@ -203,12 +213,13 @@ test('shared comment send line keeps drafts, sends by submit or Enter once and l
         }),
       )
     })
+    await tick()
     assertEquals(
       sent.filter((c) => c.name == 'comment').length,
       1,
       JSON.stringify(sent),
     )
-    assertEquals(drafts.text(commentPlace(eid)), '')
+    assertEquals(drafts.text(commentPlace(eid)), '', JSON.stringify(sent))
     await act(() => type('Second words'))
     let key = (shift: boolean) =>
       Object.assign(
@@ -227,6 +238,7 @@ test('shared comment send line keeps drafts, sends by submit or Enter once and l
     await act(() => {
       input().dispatchEvent(key(false))
     })
+    await tick()
     assertEquals(sent.filter((c) => c.name == 'comment').length, 2)
     assertEquals(input().value, '')
   } finally {

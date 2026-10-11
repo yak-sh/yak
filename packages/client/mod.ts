@@ -93,3 +93,4 @@ export { type Retained, retention, RETENTION_ROWS } from './retention.ts'
 export { wireStash, type WireVault } from './wire-vault.ts'
 
 export { ANSWER_BYTES, type SavedAnswer } from './answers.ts'
+export { WriteRefused, WriteUnknown } from '@yaks/sync'

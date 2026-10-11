@@ -141,8 +141,10 @@ export type Client = {
   /** one entity, whole, by id — `undefined` if this client has never held
    * it. A deleted entity comes back with a `tombstone` component. */
   ent: (eid: Eid) => Bundle | undefined
-  /** Apply bundles locally at once, then POST them. With `optimistic: false`,
-   * wait for server admission and reject on refusal or transport failure. */
+  /** Show edits locally at once, then resolve with the server-applied bundles
+   * after its rules and stamps. Reject with WriteRefused on deliberate refusal
+   * or WriteUnknown when acceptance is unknown. Local-only writes stay local.
+   * With `optimistic: false`, hold the edits until acceptance too. */
   mutate: (
     bundles: Bundle[],
     opts?: { optimistic?: boolean },
@@ -492,7 +494,8 @@ export let client = (
     },
     mutate: (bundles, opts = {}) => {
       let claim = wire && submission(vocab, bundles, opts.optimistic === false)
-      if (!wire || !claim) return g.apply(bundles)
+      if (!wire) return g.apply(bundles)
+      if (!claim) return wire.apply(bundles)
       return wire.submit(claim.sent).then(async (applied) => {
         let at = new Map(
           applied.flatMap((b) =>

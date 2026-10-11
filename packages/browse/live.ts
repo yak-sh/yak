@@ -129,6 +129,15 @@ let replacing = false
 let makeClient = () =>
   liveClient({
     url: config.host ? base() : 'http://replica.invalid',
+    fetch: async (request) => {
+      let bundles = await request.clone().json() as Bundle[]
+      let changes = changesOf(bundles)
+      let response = await route({ apply: changes, request }, uuid())
+      if (!(response instanceof Response)) {
+        throw new Error('write returned no response')
+      }
+      return response
+    },
     connect: (url) => socketFor(url),
     disk: typeof location !== 'undefined',
     frame: (subs, f, reset) => {
@@ -1477,19 +1486,8 @@ let armRedeliver = () => {
   ;(globalThis as { Deno?: { unrefTimer?: (id: number) => void } })
     .Deno?.unrefTimer?.(redeliver as unknown as number)
 }
-// Writes whose caller waits for the answer (apply), by delivery id. Only this
-// life's: a write replayed from a prior one has no caller left to tell.
-type Waiter = { ok: (applied: Bundle[]) => void; no: (why: Error) => void }
-let waiting = new Map<string, Waiter>()
-let settle = (id: string, applied?: Bundle[], why?: string) => {
-  let w = waiting.get(id)
-  waiting.delete(id)
-  if (applied) w?.ok(applied)
-  else w?.no(new Error(why))
-}
-let deliver = (changes: Change[], wait?: Waiter) => {
+let deliver = (changes: Change[]) => {
   let id = uuid()
-  if (wait) waiting.set(id, wait)
   let o = { changes, at: Date.now() }
   outbox.set(id, o)
   let client = ensureClient()
@@ -1553,17 +1551,21 @@ export let replayOutbox = async () => {
   }
 }
 
-/** Land bundles in the cache at once and send them through the outbox, like
- * `mutate`; the promise is the host's answer, the change as it applied it,
- * or its refusal. A refusal is also kept where the person sees it (refuse),
- * as every refused write is. */
-export let apply = (bundles: Bundle[]): Promise<Bundle[]> =>
-  new Promise((ok, no) => {
-    problem.value = ''
-    let changes = normalizeChanges(changesOf(bundles), { resolve: findEid })
-    applyLocal(changes)
-    deliver(changes, { ok, no })
+/** Optimistic visibility through the shared client, with its server receipt
+ * or a refusal/unknown outcome. Drafts retain their own recovery copy. */
+export let apply = (bundles: Bundle[]): Promise<Bundle[]> => {
+  problem.value = ''
+  let result: Promise<Bundle[]>
+  try {
+    result = Promise.resolve(ensureClient().box.mutate(bundles))
+  } catch (error) {
+    result = Promise.reject(error)
+  }
+  return result.catch((error) => {
+    problem.value = error instanceof Error ? error.message : String(error)
+    throw error
   })
+}
 
 // Land a local edit: cache first (instant render), then the acked wire.
 export let mutate = (...changes: Change[]) => {
@@ -1679,24 +1681,26 @@ let post = async (changes: Change[], id: string) => {
     let why = await res.text()
     refuse(id, why, outbox.get(id)?.changes ?? changes)
     acked(id)
-    settle(id, undefined, why)
     await heal(changes).catch(() => {})
     return
   }
   let applied = await res.json() as Bundle[]
   acked(id)
   applyLocal(changesOf(applied))
-  settle(id, applied)
   tell(changes)
 }
 
 // The write seam: a test counts deliveries without a host. Returns the prior
 // route so the test can restore it.
-let defaultRoute = (frame: unknown, id?: string) => {
+let defaultRoute = (frame: unknown, id?: string): void | Promise<Response> => {
+  let request = (frame as { request?: Request }).request
+  if (request) {
+    return fetch(new Request(new URL(hosting().apply, base()), request))
+  }
   let batch = (frame as { apply?: Change[] }).apply
   if (batch && id) void post(batch, id)
 }
-let route = defaultRoute
+let route: (frame: unknown, id?: string) => unknown = defaultRoute
 export let useRoute = (fn: typeof route): typeof route => {
   let prev = route
   route = fn

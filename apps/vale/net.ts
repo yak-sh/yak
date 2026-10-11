@@ -14,7 +14,14 @@
 // may write 30 times a minute, and a busy fight earns more rows than that.
 // Until they are sent, `mine` counts them already, so nothing on screen waits.
 import { FIGURE_BUILDS, FIGURE_ROWS, useFigures } from './figure.ts'
-import { type Client, client, type ClientOpts, type Watch } from '@yaks/client'
+import {
+  type Client,
+  client,
+  type ClientOpts,
+  type Watch,
+  WriteRefused,
+  WriteUnknown,
+} from '@yaks/client'
 import { comp, num, str } from './bundle.ts'
 import { loadVocab, type VocabDoc } from '@yaks/vocab'
 import { areaOf, looksOf, placeOf, REACH } from './area.ts'
@@ -133,8 +140,15 @@ export let connect = (
     last = Date.now()
     // This is a fire-and-forget effect: both local admission and a held
     // server write can refuse. Report either without breaking the game loop.
-    let refused = (error: unknown) =>
-      report({ sent: batch, error, reverted: false })
+    let refused = (error: unknown) => {
+      // The client already reports server outcomes. Local admission can
+      // refuse before reaching that boundary and still needs reporting.
+      if (
+        !(error instanceof WriteRefused) && !(error instanceof WriteUnknown)
+      ) {
+        report({ sent: batch, error, reverted: false })
+      }
+    }
     try {
       let result = c.mutate(batch)
       if (result instanceof Promise) void result.catch(refused)

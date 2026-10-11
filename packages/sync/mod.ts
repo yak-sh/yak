@@ -77,6 +77,8 @@ export {
   type Refusal,
   type Report,
   type Trouble,
+  WriteRefused,
+  WriteUnknown,
 } from './outbound.ts'
 export { hear, land, snapshot, strip } from './inbound.ts'
 export { type Mine } from './saying.ts'
