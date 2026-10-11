@@ -53,12 +53,16 @@ test('inactive LRU is bounded, reads touch without changing query order', async 
   c.close()
 })
 
+let shared = fixture({ retention: 0 })
+let sharedAll = shared.c.watch('.doc')
+let sharedOne = shared.c.watch('.doc.title=a')
+shared.frame('s1', [row('a'), row('b')])
+shared.frame('s2', [row('a')])
+
 test('active/shared owners exceed the inactive bound and gone is per answer', () => {
-  let { c, frame } = fixture({ retention: 0 })
-  let a = c.watch('.doc')
-  let b = c.watch('.doc.title=a')
-  frame('s1', [row('a'), row('b')])
-  frame('s2', [row('a')])
+  let { c, frame } = shared
+  let a = sharedAll
+  let b = sharedOne
   assertEquals(c.cache.size(), 0)
   assertEquals(c.read('.doc').length, 2)
   let notified = 0
@@ -75,15 +79,17 @@ test('active/shared owners exceed the inactive bound and gone is per answer', ()
   c.close()
 })
 
+let reopened = fixture({ retention: 1 })
+let old = reopened.c.watch('.doc')
+reopened.frame('s1', [row('a')])
+old.close()
+let again = reopened.c.watch('.doc')
+let other = reopened.c.watch('.doc.title=b')
+
 test('reopen before first frame pins retained hits; empty frame reconciles stale floor', () => {
-  let { c, frame } = fixture({ retention: 1 })
-  let old = c.watch('.doc')
-  frame('s1', [row('a')])
-  old.close()
-  let again = c.watch('.doc')
+  let { c, frame } = reopened
   assertEquals(readIds(again.value), ['a'])
   assertEquals(again.ready, false)
-  let other = c.watch('.doc.title=b')
   frame('s3', [row('b')])
   other.close()
   assert(c.ent('a'))
@@ -168,24 +174,34 @@ test('pending optimistic writes survive pressure, gone and stale socket snapshot
   c.close()
 })
 
+let acceptedResponse = Response.json([row('new')])
+let acceptedAnswer = Promise.withResolvers<Response>()
+let acceptedStarted = Promise.withResolvers<void>()
+let accepted = fixture({
+  retention: 0,
+  fetch: () => {
+    acceptedStarted.resolve()
+    return acceptedAnswer.promise
+  },
+})
+let acceptedMatching = accepted.c.watch('.doc')
+let acceptedUnrelated = accepted.c.watch('.doc.title=other')
+accepted.frame('s1', [])
+accepted.frame('s2', [])
+accepted.c.mutate([row('new')])
+await acceptedStarted.promise
+
 test('an accepted write stays in its matching watch until the socket answers', async () => {
-  let { c, frame } = fixture({
-    retention: 0,
-    fetch: async (request) => Response.json(JSON.parse(await request.text())),
-  })
-  let matching = c.watch('.doc')
-  let unrelated = c.watch('.doc.title=other')
-  frame('s1', [])
-  frame('s2', [])
-  c.mutate([row('new')])
+  let { c, frame } = accepted
+  let matching = acceptedMatching
+  let unrelated = acceptedUnrelated
   assertEquals(readIds(matching.value), ['new'])
+  acceptedAnswer.resolve(acceptedResponse)
   await c.wire!.idle()
   assertEquals(readIds(matching.value), ['new'])
   assertEquals(unrelated.value, [])
   frame('s1', [row('new')])
   assertEquals(readIds(matching.value), ['new'])
-  matching.close()
-  unrelated.close()
   c.close()
 })
 
@@ -324,18 +340,23 @@ let deferredVault = () => {
   return { read, vault }
 }
 
+let lateWire = []
+for (let mode of ['local', 'socket', 'empty']) {
+  let { read, vault } = deferredVault()
+  let { c, frame } = fixture({ epoch: 'one', wireVault: vault })
+  let w = c.watch('.doc')
+  if (mode === 'local') {
+    await c.mutate([{ entity: { eid: 'a' }, doc: { title: 'newer' } }])
+  }
+  if (mode === 'socket') {
+    frame('s1', [{ entity: { eid: 'a' }, doc: { title: 'newer' } }])
+  }
+  if (mode === 'empty') frame('s1')
+  lateWire.push({ mode, read, c, w })
+}
+
 test('late wire hydration cannot overwrite local writes, socket rows, or an empty first answer', async () => {
-  for (let mode of ['local', 'socket', 'empty']) {
-    let { read, vault } = deferredVault()
-    let { c, frame } = fixture({ epoch: 'one', wireVault: vault })
-    let w = c.watch('.doc')
-    if (mode === 'local') {
-      await c.mutate([{ entity: { eid: 'a' }, doc: { title: 'newer' } }])
-    }
-    if (mode === 'socket') {
-      frame('s1', [{ entity: { eid: 'a' }, doc: { title: 'newer' } }])
-    }
-    if (mode === 'empty') frame('s1')
+  for (let { mode, read, c, w } of lateWire) {
     read.resolve([saved('a')])
     await c.ready
     assertEquals(

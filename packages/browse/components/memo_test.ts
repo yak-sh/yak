@@ -8,22 +8,22 @@ import { assertEquals } from '@std/assert'
 import { memo } from './memo.ts'
 
 let { document } = parseHTML('<main></main>')
+let root = document.querySelector('main')!
+let value = signal(1)
+let runs = 0
+let Face = memo(({ label }: { label: string }) => {
+  runs++
+  return h('span', null, `${label}:${value.value}`)
+})
+let prior = Object.getOwnPropertyDescriptor(globalThis, 'document')
+Object.defineProperty(globalThis, 'document', {
+  value: document,
+  configurable: true,
+})
+render(h(Face, { label: 'a' }), root)
 
 test('memo sleeps on equal props and wakes for an owned signal', async () => {
-  let prior = Object.getOwnPropertyDescriptor(globalThis, 'document')
-  Object.defineProperty(globalThis, 'document', {
-    value: document,
-    configurable: true,
-  })
-  let value = signal(1)
-  let runs = 0
-  let Face = memo(({ label }: { label: string }) => {
-    runs++
-    return h('span', null, `${label}:${value.value}`)
-  })
-  let root = document.querySelector('main')!
   try {
-    render(h(Face, { label: 'a' }), root)
     render(h(Face, { label: 'a' }), root)
     assertEquals(runs, 1)
 

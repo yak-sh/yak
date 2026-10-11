@@ -23,6 +23,8 @@ let neighbors = [
   [0, 0, -1],
 ].map(([x, y, z]) => key(x, y, z) - key(0, 0, 0))
 
+let well = KINDS.well.make(0).vox
+
 test('no prop fights itself', () => {
   let fighting = Object.keys(KINDS)
     .map((kind) => [kind, fights(pack(model(kind, 0))).length])
@@ -53,7 +55,7 @@ test('finer tree and rock voxels keep their outline and share each mesh', () => 
 })
 
 test('the well has no pieces hanging apart from its footing', () => {
-  let unseen = new Set(KINDS.well.make(0).vox.keys())
+  let unseen = new Set(well.keys())
   while (unseen.size) {
     let first = unseen.values().next().value!
     let queue = [first], grounded = false

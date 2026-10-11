@@ -24,6 +24,11 @@ let SECRET = 'a probe secret'
 let ELSE = 'somebody else’s secret'
 let ME = 'me@yaks.app'
 
+// Import and derive both keys once; each link still signs and verifies its
+// own payload in the test, including verification under the foreign key.
+await seal('link', {}, SECRET)
+await seal('link', {}, ELSE)
+
 // The KV as `shelf` asks for it, in a map.
 let kv = () => {
   let rows = new Map<string, string>()

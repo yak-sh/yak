@@ -122,7 +122,40 @@ test('host reporter factories resolve each run, after JSON, including regression
   }
 })
 
+let acceptanceCalls = 0
+let acceptance = fixture([{
+  name: 'work',
+  unit: 'ms',
+  sample: () => {
+    acceptanceCalls++
+    return 100
+  },
+}])
+// Acceptance and validation need one sample; round aggregation is proved above.
+let acceptanceOptions = { ...acceptance.options, rounds: 1 }
+
 test('baseline acceptance is explicit and check fails closed before collecting', async () => {
+  let f = acceptance
+  let options = acceptanceOptions
+  await throws(
+    () => run(f.suite, { ...options, mode: 'check' }),
+    'Missing baseline',
+  )
+  equal(acceptanceCalls, 0)
+  await throws(
+    () => run(f.suite, { ...options, mode: 'accept' }),
+    'Tolerance',
+  )
+  equal(acceptanceCalls, 0)
+  await run(f.suite, { ...options, mode: 'accept', tolerance: .2 })
+  let accepted = f.saved.get('baseline')
+  f.suite.benches[0].sample = () => 120
+  equal((await run(f.suite, { ...options, mode: 'check' })).verdict, 'passed')
+  await run(f.suite, options)
+  equal(f.saved.get('baseline'), accepted)
+})
+
+for (let bad of ['null', '{}', '{', '{"version":2}']) {
   let calls = 0
   let f = fixture([{
     name: 'work',
@@ -132,37 +165,28 @@ test('baseline acceptance is explicit and check fails closed before collecting',
       return 100
     },
   }])
-  // Acceptance and validation need one sample; round aggregation is proved above.
+  f.saved.set('baseline', bad)
   let options = { ...f.options, rounds: 1 }
-  await throws(
-    () => run(f.suite, { ...options, mode: 'check' }),
-    'Missing baseline',
-  )
-  for (let bad of ['null', '{}', '{', '{"version":2}']) {
-    f.saved.set('baseline', bad)
+  test(`a malformed baseline fails closed before collecting (${bad})`, async () => {
     await throws(() => run(f.suite, { ...options, mode: 'check' }))
-  }
-  equal(calls, 0)
-  await throws(
-    () => run(f.suite, { ...options, mode: 'accept' }),
-    'Tolerance',
-  )
-  equal(calls, 0)
+    equal(calls, 0)
+  })
+}
+
+for (let bad of [NaN, Infinity, -1]) {
+  let f = fixture()
+  let options = { ...f.options, rounds: 1 }
   await run(f.suite, { ...options, mode: 'accept', tolerance: .2 })
   let accepted = f.saved.get('baseline')
-  f.suite.benches[0].sample = () => 120
-  equal((await run(f.suite, { ...options, mode: 'check' })).verdict, 'passed')
-  await run(f.suite, options)
-  equal(f.saved.get('baseline'), accepted)
-  for (let bad of [NaN, Infinity, -1]) {
-    f.suite.benches[0].sample = () => bad
+  f.suite.benches[0].sample = () => bad
+  test(`an invalid sample cannot replace an accepted baseline (${bad})`, async () => {
     await throws(
       () => run(f.suite, { ...options, mode: 'accept', tolerance: .2 }),
       'sample',
     )
     equal(f.saved.get('baseline'), accepted)
-  }
-})
+  })
+}
 
 test('ratchets reject incompatible comparisons and support both directions', async () => {
   let f = fixture()

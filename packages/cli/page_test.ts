@@ -52,6 +52,9 @@ test('a body once made is kept, and revalidated by its hash', async () => {
   let handle = kept('/x', 'text/plain', make)
   let first = await get(handle)
   assertEquals(await first.text(), 'made')
+  let second = await get(handle)
+  assertEquals(await second.text(), 'made')
+  assertEquals(second.headers.get('etag'), first.headers.get('etag'))
   let again = await handle(
     new Request('http://x/x', {
       headers: { 'if-none-match': first.headers.get('etag')! },

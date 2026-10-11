@@ -58,6 +58,12 @@ let host = handler({
 })
 let get = (path: string) => host(new Request(`http://x${path}`))
 
+// Read the fixture once; address resolution and the HTTP door remain the
+// behavior checked by the test below.
+let [kindless] = await graph.get(['kindless'])
+let kindlessId = human(vocab)(kindless)
+let kindlessRequest = new Request(`http://x/${kindlessId}`)
+
 test('every id letter the vocabulary uses has a route, in both cases', () => {
   let ls = letters(vocab)
   for (let l of ['T', 't', 'D', 'd']) assertEquals(ls.includes(l), true, l)
@@ -101,11 +107,12 @@ test('a name opens the page, and a path naming nothing is the 404 page', async (
 })
 
 test('a kindless entity opens at the id the page displays', async () => {
-  let [row] = await graph.get(['kindless'])
-  let id = human(vocab)(row)
-  assertEquals(id.startsWith('E-'), true)
-  assertEquals((await graph.address([id])).get(id), row.entity.eid)
-  assertEquals((await get(`/${id}`)).status, 200)
+  assertEquals(kindlessId.startsWith('E-'), true)
+  assertEquals(
+    (await graph.address([kindlessId])).get(kindlessId),
+    kindless.entity.eid,
+  )
+  assertEquals((await host(kindlessRequest)).status, 200)
 })
 
 test('every address answers the one page, which loads the bundled app', async () => {

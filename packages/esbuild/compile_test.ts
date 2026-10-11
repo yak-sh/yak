@@ -59,24 +59,51 @@ let run = (code: string, shared: Answer['shared'] = {}) => {
   return import(encode(rewrite(code, 'https://yaks.app/main.js')))
 }
 
-test('the server compiles a posted job into one module per page', async () => {
-  let job: Job = {
-    shared: true,
-    ask: page({
-      'main.ts': "import { n } from '@yaks/kit'\n" +
-        "import { twice } from './lib/twice'\n" +
-        'export let out: string = twice(n) + process.env.NODE_ENV',
-      'lib/twice.ts': 'export let twice = (n: number) => n * 2',
-    }),
-    catalog,
-  }
+// Start the file's native compiler once, outside any job's measured work.
+await bundle({ read: () => '' }, 'ready.ts')
+
+let job: Job = {
+  shared: true,
+  ask: page({
+    'main.ts': "import { n } from '@yaks/kit'\n" +
+      "import { twice } from './lib/twice'\n" +
+      'export let out: string = twice(n) + process.env.NODE_ENV',
+    'lib/twice.ts': 'export let twice = (n: number) => n * 2',
+  }),
+  catalog,
+}
+
+let extra: Catalog = {
+  ...catalog,
+  '@yaks/extra': {
+    files: {
+      'package.json': JSON.stringify({ exports: { '.': './mod.ts' } }),
+      'mod.ts': "export { n } from '@yaks/kit'",
+    },
+    dependencies: { '@yaks/kit': 'platform' },
+    version: `sha256:${'b'.repeat(64)}`,
+  },
+}
+let changed = structuredClone(catalog)
+// A caller-provided digest cannot make changed content reuse stale code.
+changed['@yaks/kit'].files['lib/n.ts'] = 'export let n = 2'
+
+let post = async (job: Job): Promise<Answer> => {
   let res = await compiler.fetch(
     new Request('http://compiler/', {
       method: 'POST',
       body: JSON.stringify(job),
     }),
   )
-  let got: Answer = await res.json()
+  equal(res.status, 200)
+  return res.json()
+}
+
+let posted = async () => {
+  let [got, bundled] = await Promise.all([
+    post(job),
+    post({ ...job, shared: undefined }),
+  ])
   equal(got.errors, [])
   let urls = imports(got.pages['main.ts'])
   equal(urls.length, 1)
@@ -85,49 +112,34 @@ test('the server compiles a posted job into one module per page', async () => {
     /^https:\/\/yaks\.app\/__packages\/[a-f0-9]{64}\/entry-0\.js$/,
   )
   equal((await run(got.pages['main.ts'], got.shared)).out, '2production')
-  let bundled = await compiler.fetch(
-    new Request('http://compiler/', {
-      method: 'POST',
-      body: JSON.stringify({ ...job, shared: undefined }),
-    }),
-  ).then((res) => res.json()) as Answer
   equal(bundled.errors, [])
   equal(bundled.shared, undefined)
   equal(imports(bundled.pages['main.ts']), [])
   equal((await run(bundled.pages['main.ts'])).out, '2production')
 
-  let extra: Catalog = {
-    ...catalog,
-    '@yaks/extra': {
+  let [second, newer] = await Promise.all([
+    compile({
       files: {
-        'package.json': JSON.stringify({ exports: { '.': './mod.ts' } }),
-        'mod.ts': "export { n } from '@yaks/kit'",
+        'package.json': JSON.stringify({
+          dependencies: { '@yaks/extra': 'platform' },
+        }),
+        'other/main.ts': "export { n } from '@yaks/extra'",
       },
-      dependencies: { '@yaks/kit': 'platform' },
-      version: `sha256:${'b'.repeat(64)}`,
-    },
-  }
-  let second = await compile({
-    files: {
-      'package.json': JSON.stringify({
-        dependencies: { '@yaks/extra': 'platform' },
-      }),
-      'other/main.ts': "export { n } from '@yaks/extra'",
-    },
-    pages: ['other/main.ts'],
-  }, extra)
+      pages: ['other/main.ts'],
+    }, extra),
+    compile(job.ask, changed),
+  ])
   equal(second.errors, [])
   for (let [path, code] of Object.entries(got.shared!)) {
     equal(second.shared![path], code)
   }
   equal((await run(second.pages['other/main.ts'], second.shared)).n, 1)
-  let changed = structuredClone(catalog)
-  // A caller-provided digest cannot make changed content reuse stale code.
-  changed['@yaks/kit'].files['lib/n.ts'] = 'export let n = 2'
-  let newer = await compile(job.ask, changed)
   equal(newer.errors, [])
   equal(imports(newer.pages['main.ts'])[0] == urls[0], false)
   equal((await run(newer.pages['main.ts'], newer.shared)).out, '4production')
+}
+
+let singletons = async () => {
   let browser: Catalog = structuredClone(catalog)
   browser['@yaks/kit'].dependencies.preact = '10.29.8'
   browser['@yaks/kit'].files['lib/mod.ts'] +=
@@ -156,6 +168,9 @@ test('the server compiles a posted job into one module per page', async () => {
   let mutated = await shared(fs, setup, browser, 'https://yaks.app')
   equal(mutated.urls.preact == modules.urls.preact, false)
   equal(mutated.urls['@yaks/kit'] == modules.urls['@yaks/kit'], false)
+}
+
+let independent = async () => {
   let twins: Catalog = {}
   for (let name of ['@yaks/first', '@yaks/second']) {
     twins[name] = {
@@ -185,6 +200,10 @@ test('the server compiles a posted job into one module per page', async () => {
     distinct.files,
   )
   equal(states.independent, true)
+}
+
+test('the server compiles a posted job into one module per page', async () => {
+  await Promise.all([posted(), singletons(), independent()])
 })
 
 test("a worker keeps its runtime's imports and bundles the rest", async () => {
