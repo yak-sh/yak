@@ -14,8 +14,8 @@
 //
 // A statement, but not necessarily one statement. Every backward term is a term
 // of the same compound SELECT, and workerd limits a compound SELECT to five
-// terms (./compound.ts). So the terms are grouped by table (a table's death
-// columns become one term, combined with OR) and cut into statements of as
+// terms (./compound.ts). Each reference column has its own indexed term,
+// cut into statements of as
 // many terms as the engine allows ({@link ARMS} unless its driver declares
 // more), all seeded the same way. A vocabulary {@link narrow} enough to fit in
 // one statement is answered whole, as an embedded SQLite answers any; a wider
@@ -38,8 +38,20 @@
 
 import { field } from './sqlite.ts'
 import type { Vocab } from '@yaks/vocab'
-import { type Arm, ARMS, arms, cut } from './compound.ts'
-import { each, type Frag, type Raw, raw } from './ast.ts'
+import { ARMS, cut } from './compound.ts'
+import {
+  call,
+  col,
+  cross,
+  eq,
+  type Frag,
+  oneOf,
+  type Raw,
+  raw,
+  select,
+  table,
+  val,
+} from './ast.ts'
 import { render } from './render.ts'
 import { type Dialect, sqlite } from './sqlite.ts'
 
@@ -67,27 +79,57 @@ let alive = (owner: string): string =>
  * inside itself; when it does not, the caller asks in rounds (see the header).
  */
 export let narrow = (v: Vocab, terms: number = ARMS): boolean =>
-  arms(v.deaths('cascade')).length <= terms
+  v.deaths('cascade').length <= terms
+
+// Each reference has its own seek. An OR over several columns lets stale
+// small-table statistics replace all their indexes with a table scan.
+let reference = (v: Vocab, comp: string, prop: string): string => {
+  let index = v.indexes(comp).find((i) => i.props[0] == prop && !i.present)
+  return index
+    ? sqlite.indexed!(comp, `${comp}_${index.props.join('_')}`)
+    : sqlite.table(comp)
+}
+
+let seeds = (eids: string[]) =>
+  render(select({
+    cols: [col('id', 'entity')],
+    ...(eids.length == 1
+      ? {
+        from: table('entity'),
+        where: oneOf(col('eid'), eids),
+      }
+      : {
+        from: call(
+          'json_each',
+          [val(JSON.stringify([...new Set(eids)]))],
+          '__seeds',
+        ),
+        joins: [cross(table('entity', undefined, 'sqlite_autoindex_entity_1'))],
+        where: eq(col('eid', 'entity'), col('value', '__seeds')),
+      }),
+  }))
 
 // The recursive CTE one statement opens with: the seed at depth 0, then this
 // group's terms — the rows whose death column points at something already
 // marked for deletion. `union` both deduplicates and, together with the
 // saturating depth, terminates.
-let closure = (eids: string[], group: Arm[], d: Dialect): Frag => {
-  let set = render(each(eids))
+let closure = (
+  v: Vocab,
+  eids: string[],
+  group: [string, string][],
+  d: Dialect,
+): Frag => {
+  let set = seeds(eids)
   return {
     sql: `with recursive ${W}("id", "depth") as (\n` +
-      `  select "entity"."id", 0 from "entity"` +
-      ` where "entity"."eid" in (${set.sql})\n` +
-      group.map(([comp, props]) => {
+      `  select "id", 0 from (${set.sql})\n` +
+      group.map(([comp, prop]) => {
         let own = d.ownerKey(comp)
-        let hits = props.map((p) => `"${comp}"."${field(p)}" = ${W}."id"`).join(
-          ' or ',
-        )
+        let hits = `"${comp}"."${field(prop)}" = ${W}."id"`
         return `  union select ${own}, min(${W}."depth" + 1, ${DEEP})` +
-          ` from ${W} cross join ${d.table(comp)} where (${hits}) and ${
-            alive(own)
-          }\n`
+          ` from ${W} cross join ${
+            reference(v, comp, prop)
+          } where (${hits}) and ${alive(own)}\n`
       }).join('') + `)\n`,
     params: set.params,
   }
@@ -97,10 +139,10 @@ let closure = (eids: string[], group: Arm[], d: Dialect): Frag => {
 // statement builds on when the cascade was too wide to restate (see
 // {@link narrow}).
 let named = (eids: string[]): Frag => {
-  let set = render(each(eids))
+  let set = seeds(eids)
   return {
     sql: `with ${W}("id") as (` +
-      `select "id" from "entity" where "eid" in (${set.sql}))\n`,
+      `${set.sql})\n`,
     params: set.params,
   }
 }
@@ -120,8 +162,8 @@ export let doomSql = (
   eids: string[],
   terms: number = ARMS,
 ): Raw[] =>
-  cut(arms(v.deaths('cascade')), terms).map((group) => {
-    let head = closure(eids, group, sqlite)
+  cut(v.deaths('cascade'), terms).map((group) => {
+    let head = closure(v, eids, group, sqlite)
     return raw(
       head.sql +
         `select ${E}."eid" as eid, ${E}."num" as num,` +
@@ -158,16 +200,17 @@ export let looseSql = (
   let soft = [...v.deaths('release'), ...v.deaths('detach')]
   if (!soft.length) return []
   let head = () =>
-    narrow(v, terms) ? closure(eids, arms(v.deaths('cascade')), d) : named(eids)
+    narrow(v, terms) ? closure(v, eids, v.deaths('cascade'), d) : named(eids)
   return cut(soft, terms).map((group) => {
     let open = head()
     return raw(
       open.sql + group.map(([comp, prop]) => {
         let own = d.ownerKey(comp)
-        return `select ? as comp, ? as prop, ${E}."eid" as eid,` +
+        return `select distinct ? as comp, ? as prop, ${E}."eid" as eid,` +
           ` ${E}."id" as ord` +
-          ` from ${d.table(comp)} join "entity" ${E} on ${E}."id" = ${own}` +
-          ` where "${comp}"."${field(prop)}" in (select "id" from ${W})` +
+          ` from ${W} cross join ${reference(v, comp, prop)}` +
+          ` cross join "entity" ${E} on ${E}."id" = ${own}` +
+          ` where "${comp}"."${field(prop)}" = ${W}."id"` +
           ` and ${own} not in (select "id" from ${W}) and ${alive(own)}`
       }).join('\n union all ') + ` order by "ord"`,
       [...open.params, ...group.flat()],

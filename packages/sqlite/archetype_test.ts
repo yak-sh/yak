@@ -634,7 +634,7 @@ test('archetype: a delete touches only the tables its entities hold', () => {
     entity: { eid: 'b' },
     $delete: true,
   }])
-  assertEquals(cleared.sort(), ['doc', 'link', 'task'])
+  assertEquals([...new Set(cleared)].sort(), ['doc', 'link', 'task'])
 })
 
 test('archetype: boot respects number exclusions and the persistent high-water mark', () => {

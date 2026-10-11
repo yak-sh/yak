@@ -164,7 +164,14 @@ export type Values = { t: 'values'; rows: Expr[][] }
  * `args`), or a query of its own. */
 export type Source =
   | Raw
-  | { t: 'table'; name: string; args?: Expr[]; as?: string }
+  | {
+    t: 'table'
+    name: string
+    args?: Expr[]
+    as?: string
+    /** Require a named index, or disable secondary indexes when false. */
+    indexed?: string | false
+  }
   | { t: 'from'; q: Query; as?: string }
 
 export type Join = {
@@ -469,10 +476,15 @@ export let raise = (how: Refusal, msg?: string): Expr => ({
 // ---- query builders ----
 
 export let select = (s: Omit<Select, 't'>): Select => ({ t: 'select', ...s })
-export let table = (name: string, as?: string): Source => ({
+export let table = (
+  name: string,
+  as?: string,
+  indexed?: string | false,
+): Source => ({
   t: 'table',
   name,
   as,
+  indexed,
 })
 /** A table-valued function as a source: `json_each(?)`. */
 export let call = (name: string, args: Expr[], as?: string): Source => ({

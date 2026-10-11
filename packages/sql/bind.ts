@@ -79,6 +79,7 @@ import {
   lit,
   not,
   or,
+  type Query,
   type Raw,
   raw,
   type Select,
@@ -947,6 +948,36 @@ let holding = (where: Cond, known: Cond): Cond =>
     ? and(...where.parts.map((p) => holding(p, known)))
     : where
 
+// Extensions return owner selections as AST membership tests. Driving from
+// those selections keeps a sparse FTS/vector hit list from scanning the spine
+// when statistics still describe a small store.
+let selection = (ctx: Ctx, test: Cond): Query | undefined => {
+  if (test.t == 'in' && !Array.isArray(test.set) && test.set.t == 'select') {
+    let first = test.set.cols?.[0]
+    if (!first || render(test.e).sql != ctx.d.ownerKey('entity')) return
+    let name = first.t == 'as' || first.t == 'col' ? first.name : undefined
+    if (!name) return
+    return select({
+      cols: [as(col(name, '__selected'), 'id')],
+      from: from(test.set, '__selected'),
+      distinct: true,
+    })
+  }
+  if (test.t != 'op' || test.op != 'or') return
+  let parts = test.parts.map((p) => selection(ctx, p))
+  if (parts.some((p) => !p)) return
+  let groups: Query[] = parts as Query[]
+  while (groups.length > ARMS) {
+    groups = cut(groups, ARMS).map((parts) =>
+      select({
+        cols: [col('id')],
+        from: from({ t: 'compound', op: 'union', parts }),
+      })
+    )
+  }
+  return { t: 'compound', op: 'union', parts: groups }
+}
+
 // The left JOINs for the tables this bind touched, keyed on the row they hang
 // off: the entity table for an ordinary query, or the child table inside a
 // reverse hop's subquery (which is the from there, so it is never joined to
@@ -1656,6 +1687,17 @@ let indexedRelation = (
   // instead of seeking X's entries and checking their using component.
   root ??= ctx.present && !ctx.candidates ? { comp: ctx.present } : undefined
   let s = rel(from, o)
+  if (!root && !ctx.candidates && !ctx.correlated && s.where) {
+    let tests = s.where.t == 'op' && s.where.op == 'and'
+      ? s.where.parts
+      : [s.where]
+    for (let test of tests) {
+      let q = selection(ctx, test)
+      if (!q) continue
+      ctx.candidates = { ...render(q), test }
+      break
+    }
+  }
   if (!root) {
     if (!ctx.candidates || ctx.spine || from != ctx.d.spine) return s
     return {

@@ -783,8 +783,8 @@ let vocab = loadVocab({
   },
 })
 equal(narrow(vocab), true)
-equal(doomSql(vocab, ['p1'])[0].params, ['["p1"]'])
-equal(looseSql(vocab, ['p1'])[0].params, ['["p1"]', 'note', 'related'])
+equal(doomSql(vocab, ['p1'])[0].params, ['p1'])
+equal(looseSql(vocab, ['p1'])[0].params, ['p1', 'note', 'related'])
 equal(arms([['note', 'about'], ['note', 'related']]), [['note', [
   'about',
   'related',

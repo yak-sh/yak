@@ -205,7 +205,12 @@ let source: (s: Source, c: Ctx) => string = kept((s: Source, c: Ctx) => {
   if (s.t == 'raw') return expr(s, c)
   let as = s.as ? ` as ${q(s.as)}` : ''
   if (s.t == 'from') return `(${query(s.q, c)})${as}`
-  return `${q(s.name)}${s.args ? `(${list(s.args, c)})` : ''}${as}`
+  return `${q(s.name)}${s.args ? `(${list(s.args, c)})` : ''}${as}` +
+    (s.indexed === false
+      ? ' not indexed'
+      : s.indexed
+      ? ` indexed by ${q(s.indexed)}`
+      : '')
 })
 
 let HOW = { join: 'join', left: 'left join', cross: 'cross join' }

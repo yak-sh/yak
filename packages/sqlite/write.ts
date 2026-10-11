@@ -47,10 +47,11 @@ import type { Vocab } from '@yaks/vocab'
 import type { Bundle, Comp, Entity } from '@yaks/graph'
 import { comps, Refused, TOMBSTONE } from '@yaks/graph'
 import {
-  among,
   and,
   as,
+  call,
   col,
+  cross,
   type Delete,
   type Driver,
   effect,
@@ -150,8 +151,20 @@ let stored = (driver: Driver, eids: string[]): Map<string, Spine> =>
         col('num', 'e'),
         as(grave(col('id', 'e')), 'dead'),
       ],
-      from: table('entity', 'e'),
-      where: oneOf(col('eid', 'e'), eids),
+      ...(eids.length == 1
+        ? {
+          from: table('entity', 'e'),
+          where: eq(col('eid', 'e'), val(eids[0])),
+        }
+        : {
+          from: call(
+            'json_each',
+            [val(JSON.stringify([...new Set(eids)]))],
+            '@eids',
+          ),
+          joins: [cross(table('entity', 'e', 'sqlite_autoindex_entity_1'))],
+          where: eq(col('eid', 'e'), col('value', '@eids')),
+        }),
     })).map((r) => [String(r.eid), {
       id: Number(r.id),
       num: r.num == null ? null : Number(r.num),
@@ -395,11 +408,11 @@ let patchOne = (
 export let unburySql = (eid: string): Delete => dropSql(eid, TOMBSTONE)
 
 /**
- * The statements that remove a set of entities: one delete per component
- * table, then one tombstone insert for the set. A list of any length rides as
- * one JSON parameter, so a wide vocabulary and a large batch do not multiply
- * storage operations by one another. Tables arrive in declaration order and
- * are cleared in reverse; an eid no entity uses tombstones nothing.
+ * The statements that remove a set of entities: each component deletion and
+ * tombstone insert seeks one owner. An IN subquery lets small-table statistics
+ * choose a scan even for a single deletion; equality retains the primary-key
+ * plan. Tables arrive in declaration order and are cleared in reverse; an eid
+ * no entity uses tombstones nothing. Every statement fits the host bind limit.
  */
 export let removeSql = (
   tables: string[],
@@ -407,25 +420,22 @@ export let removeSql = (
   at: string,
 ): Write[] => {
   if (!entities.length) return []
-  let ids = select({
-    cols: [col('id')],
-    from: table('entity'),
-    where: oneOf(col('eid'), entities.map((e) => e.eid)),
-  })
   return [
     ...tables.toReversed()
       .filter((comp) => comp != 'entity' && comp != TOMBSTONE)
-      .map((comp): Delete => ({
-        t: 'delete',
-        from: comp,
-        where: among(col('entity'), ids),
-      })),
-    bury(ids, at),
+      .flatMap((comp) =>
+        entities.map((e): Delete => ({
+          t: 'delete',
+          from: comp,
+          where: eq(col('entity'), owner(e.eid)),
+        }))
+      ),
+    ...entities.map((e) => bury(e.eid, at)),
   ]
 }
 
 // The tombstone an entity set's removal ends with.
-let bury = (ids: ReturnType<typeof select>, at: string): Insert => ({
+let bury = (eid: string, at: string): Insert => ({
   t: 'insert',
   or: 'ignore',
   into: 'tombstone',
@@ -433,7 +443,7 @@ let bury = (ids: ReturnType<typeof select>, at: string): Insert => ({
   q: select({
     cols: [col('id'), val(at)],
     from: table('entity'),
-    where: among(col('id'), ids),
+    where: eq(col('eid'), val(eid)),
   }),
 })
 

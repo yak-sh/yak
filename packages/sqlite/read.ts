@@ -609,9 +609,8 @@ let joinedPlan = (
   if (cache.has(key)) return cache.get(key)!
   let base = namedSpine(vocab, [ANY, ANY])
   let columns = [...base.cols!]
-  let joins: Join[] = []
   let props: string[][] = []
-  let width = columns.length, breadth = base.joins!.length + 1
+  let width = columns.length
   for (let [i, name] of names.entries()) {
     let alias = `@g${i}`
     let p = scoped(project(vocab, name, opts.derived, opts.backed), name, alias)
@@ -624,26 +623,30 @@ let joinedPlan = (
     })
     props.push(fields)
     width += fields.length + 1
-    breadth += p.joins.length + 1
     // The outer read and every nested projection fit workerd's column and
     // SQLite's joined-table limits. Wide entities keep the set-shaped gather.
-    if (width > 100 || breadth > 60 || fields.length + 1 > 100) {
+    if (width > 100 || p.joins.length + 1 > 60) {
       return bounded(cache, key, null, 128)
     }
-    joins.push(
-      left(table(name, alias), eq(col('entity', alias), col('id', 'e'))),
-      ...p.joins,
-    )
-    columns.push(as(col('entity', alias), `@${i}`))
+    // A scalar key lookup cannot become a scan of a component whose recorded
+    // size is one row. Each projected value keeps the same dependencies.
+    let lookup = (expr: Expr) =>
+      sub(select({
+        cols: [expr],
+        from: table(name, alias),
+        joins: p.joins,
+        where: eq(col('entity', alias), col('id', 'e')),
+      }))
+    columns.push(as(lookup(col('entity', alias)), `@${i}`))
     for (let [j, prop] of fields.entries()) {
       let expr = p.sel[j]
-      columns.push(as(expr.t == 'as' ? expr.e : expr, `@${i}.${prop}`))
+      columns.push(as(lookup(expr.t == 'as' ? expr.e : expr), `@${i}.${prop}`))
     }
   }
   let named = (eids: string[]): Named => {
     let spine = namedSpine(vocab, eids)
     let statement = render(
-      select({ ...spine, cols: columns, joins: [...spine.joins!, ...joins] }),
+      select({ ...spine, cols: columns }),
     )
     let bind = eids.length == 1 ? eids[0] : JSON.stringify(eids)
     return { statement, at: statement.params.indexOf(bind) }
