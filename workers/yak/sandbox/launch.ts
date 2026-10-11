@@ -1,6 +1,8 @@
 // The sandbox's yak launcher. The live platform supplies the same workspace
 // its Worker was built from; immutable directories keep concurrent commands
 // and a platform deployment from changing a running command's source files.
+// This launcher has no dependencies: Deno can fetch it before any workspace
+// or npm cache exists.
 
 type Release = { hash: string; url: string }
 

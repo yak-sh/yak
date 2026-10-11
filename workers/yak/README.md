@@ -31,7 +31,9 @@ directory. Commands share Deno's module cache across CLI releases. The CLI
 retains its lockfile and uses npm lazy caching, so a cold command downloads only
 the dependencies it imports. The first `yak` call pays for the workspace
 download and cold dependencies; later calls fetch only the launcher and
-descriptor until the sources change.
+descriptor until the sources change. Measured first-call and deploy timings are
+retained in
+[bench/deploys.md](../../bench/deploys.md#sandbox-cli-delivery-t-65018).
 
 The toolchain image is provisioned separately when its Dockerfile changes:
 
