@@ -117,6 +117,19 @@ export async function platformConfig(root: URL, platform: string) {
 }
 
 if (import.meta.main) {
+  // Workers' program reaches the kernel's deployment catalog. Prepare that
+  // input here too: this check runs alone and beside the other checks.
+  if (Deno.args[0] == 'workers') {
+    let status = await new Deno.Command('deno', {
+      args: [
+        'run',
+        '--no-lock',
+        '-A',
+        new URL('./compiler-packages.ts', import.meta.url).pathname,
+      ],
+    }).spawn().status
+    if (!status.success) throw new Error('Compiler catalog generation failed')
+  }
   let { config, entries } = await platformConfig(
     new URL('../', import.meta.url),
     Deno.args[0],

@@ -1,7 +1,7 @@
 // yak-esbuild (D-40376): the Worker in front of the compiler. The kernel's
 // ESBUILD binding posts it an app's ask, and it posts the compiler's
 // container (./Dockerfile, @yaks/esbuild/compile) a job: that ask, with the
-// toolkit catalog captured at this deployment beside it. The platform
+// toolkit catalog captured by that kernel deployment beside it. The platform
 // supplies the catalog; an app never does. What the container answers is
 // what this answers.
 //
@@ -12,14 +12,10 @@
 // a compile too big for the compiler (../esbuild.ts). When the killer takes
 // esbuild's process instead, the container answers that 507 itself.
 import { Container, getContainer } from '@cloudflare/containers'
-import catalog from '../.wrangler/packages.json' with { type: 'json' }
 import { forwarded } from './forward.ts'
 
 // The compilers' Durable Object namespace, as getContainer takes it.
 type Env = { COMPILER: Parameters<typeof getContainer<Compiler>>[0] }
-
-// The catalog as a job carries it, serialized once per isolate.
-let CATALOG = JSON.stringify(catalog)
 
 // The exit of a process killed with SIGKILL, which is how the out-of-memory
 // killer ends a container that outgrows its memory.
@@ -56,9 +52,5 @@ export class Compiler extends Container<Env> {
 
 export default {
   fetch: async (req: Request, env: Env): Promise<Response> =>
-    await forwarded(
-      req,
-      (job) => getContainer(env.COMPILER).fetch(job),
-      CATALOG,
-    ),
+    await forwarded(req, (job) => getContainer(env.COMPILER).fetch(job)),
 }

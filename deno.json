@@ -49,6 +49,7 @@
         "deno.json",
         "deno.lock",
         "bin/check-platform.ts",
+        "bin/compiler-packages.ts",
         "packages/**/*.ts",
         "packages/**/*.tsx",
         "packages/**/*.js",

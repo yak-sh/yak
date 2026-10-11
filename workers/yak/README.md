@@ -85,7 +85,9 @@ A push outside the watch paths deploys nothing: no build check, no version, and
 so nothing for the gate's `deploy time` step to measure — it says so and the
 deploy gate judges the rows already recorded (`bench/deploys.md`).
 
+The kernel captures the toolkit catalog and sends it with each compiler job.
 Catalog transpilation is reused from the restored Deno cache between builds.
+Package changes update the kernel without changing the compiler Worker's bundle.
 
 The build command installs Deno and the kernel's npm tree only; a Workers Build
 runs neither `deno task check` nor the tests. `SKIP_DEPENDENCY_INSTALL=1`
@@ -104,33 +106,33 @@ packages are missing. npm's hidden lockfile may omit package metadata;
 after success. Existing complete cache projects are adopted by their matching
 content key. Restored matching packages are reused regardless of file
 timestamps. An empty cache installs normally. Deploy mode generates web assets
-and the compiler catalog together with npm readiness. The kernel and outbound
-bundles and the deploy pre-flight check (`superseded`) start once npm is ready;
-the compiler bundle also waits for its catalog. Uploads wait for all generated
-files and the guard. Each changed sibling's upload runs as its own preparation
-allows. The kernel activates after all succeed, then prepares its sandbox base
-and updates its image. Each sibling is bundled locally and compared with its
-fully serving deployment's `inputs:<sha256>` annotation. The full digest is
-encoded as base64url, fitting Cloudflare's 50-character deployment summary; the
-version annotation also retains the full commit on its next line. A truncated
-hex annotation from an earlier release is read from its sole serving version,
-then that same version's deployment summary is refreshed once with the compact
+and the compiler catalog together with npm readiness. Sibling bundles and the
+deploy pre-flight check (`superseded`) start once npm is ready; the kernel
+bundle also waits for its catalog. Uploads wait for all generated files and the
+guard. Each changed sibling's upload runs as its own preparation allows. The
+kernel activates after all succeed, then prepares its sandbox base and updates
+its image. Each sibling is bundled locally and compared with its fully serving
+deployment's `inputs:<sha256>` annotation. The full digest is encoded as
+base64url, fitting Cloudflare's 50-character deployment summary; the version
+annotation also retains the full commit on its next line. A truncated hex
+annotation from an earlier release is read from its sole serving version, then
+that same version's deployment summary is refreshed once with the compact
 digest. The digest covers every upload module, the inputs of each container
 image the sibling runs (its Dockerfile and every file of its build context,
 `wrangler.ts` `images`), its configuration, Wrangler pin and environment. A
 matching sibling stays serving without another upload; changed inputs, an
 unreadable deployment or a release without the annotation upload normally. The
 compiler image has its own `inputs:<sha256>` registry tag, covering its
-Dockerfile and build context. A changed Worker or toolkit catalog reuses that
-image; only a missing image tag builds and pushes it. A changed sibling uploads
-its prepared modules and source maps through a temporary config beside the
-original, preserving its bindings and naming the registry image. Wrangler
-bundles no second time and rolls the image out without rebuilding it. Registry,
-build or push failures refuse the sibling and kernel deploy. Workers Builds has
-Docker, as the sandbox image already needs. `bin/build-yak` with no argument
-still runs the check and the workers tests by hand. A push's build that fails is
-started once more through the `BUILD_HOOK` deploy hook (builds.ts), since most
-failures are the network's; the second build's failure stands.
+Dockerfile and build context. A changed compiler Worker reuses that image; only
+a missing image tag builds and pushes it. A changed sibling uploads its prepared
+modules and source maps through a temporary config beside the original,
+preserving its bindings and naming the registry image. Wrangler bundles no
+second time and rolls the image out without rebuilding it. Registry, build or
+push failures refuse the sibling and kernel deploy. Workers Builds has Docker,
+as the sandbox image already needs. `bin/build-yak` with no argument still runs
+the check and the workers tests by hand. A push's build that fails is started
+once more through the `BUILD_HOOK` deploy hook (builds.ts), since most failures
+are the network's; the second build's failure stands.
 
 Builds run on watched-path pushes and finish in any order, so the deploy door
 (`wrangler.ts` `superseded`) deploys a commit only while no later commit changes

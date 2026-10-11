@@ -37,6 +37,9 @@ import { type Config, sourceOf } from './wrangler_app.ts'
 export let LOCK = 'package-lock.json'
 let CACHE = `${BUILT}.compile.json`
 let MODULE = `${BUILT}.worker.js`
+// Every compile sees the toolkit of the kernel accepting that deploy. Package
+// changes update this kernel's catalog without changing the compiler Worker.
+let CATALOG = JSON.stringify(catalog)
 
 type Cache = {
   compiler: string
@@ -142,7 +145,7 @@ let asked = async (env: Env, ask: Ask, app: App): Promise<Answer> => {
           'content-type': 'application/json',
           'x-yak-compiler-job': '1',
         },
-        body: JSON.stringify({ ask, catalog }),
+        body: `{"ask":${JSON.stringify(ask)},"catalog":${CATALOG}}`,
       }),
     )
     if (r.ok) return await r.json()

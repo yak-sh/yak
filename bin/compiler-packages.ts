@@ -1,4 +1,4 @@
-// The compiler deployment's source catalog, read from workspace manifests.
+// The kernel deployment's source catalog, read from workspace manifests.
 // Browser entries and their imports are captured, never app code or a bundle.
 // Each package keeps its exports and paths; the compiler picks the app's roots.
 import { dirname, join, relative, resolve } from 'node:path'
@@ -373,7 +373,7 @@ let kept = (path: string): Record<string, string> => {
   }
 }
 
-/** Materialize atomically before wrangler reads the compiler wrapper, with
+/** Materialize atomically before wrangler reads the kernel, with
  * reusable transpilation at `memo`, which can outlive the checkout. */
 export let write = async (
   root = repo,

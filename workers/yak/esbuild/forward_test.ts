@@ -20,23 +20,22 @@ test('compiler jobs carry the kernel catalog and preserve container refusals', a
         body: job,
       }),
       send,
-      '{"toolkit":"older sibling"}',
     ),
     response,
   )
   equal(
-    await forwarded(
+    (await forwarded(
       new Request('http://binding/', {
         method: 'POST',
         body: ask,
       }),
       send,
-      catalog,
-    ),
-    response,
+    )).status,
+    // An older kernel must never compile against a guessed toolkit catalog.
+    400,
   )
   equal(
-    (await forwarded(new Request('http://binding/'), send, catalog)).status,
+    (await forwarded(new Request('http://binding/'), send)).status,
     405,
   )
 })

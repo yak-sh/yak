@@ -1035,10 +1035,7 @@ if (import.meta.main) {
     siblings(argv).map((args) => [
       args[args.indexOf('-c') + 1],
       preflight(
-        () =>
-          args.includes('esbuild/wrangler.toml')
-            ? Promise.all([readied, made.catalog])
-            : readied,
+        () => readied,
         () => inspected,
         () => prepareSibling(args, wrangler),
         async (prepared) => uploadSibling(await prepared, run, wrangler),
