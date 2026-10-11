@@ -80,13 +80,9 @@ export let ids = {
   p2: 'page2',
 }
 
-/** A store holding two people, two runs and two pages, with nothing locked
- * yet. */
-export let store = (): Storage => {
-  let s = ram(pages, {
-    number: true,
-    computed: { ...executionComputed, ...attemptComputed },
-  })
+let computed = { ...executionComputed, ...attemptComputed }
+let bootstrap = (() => {
+  let s = ram(pages, { number: true, computed })
   let { ada, bo, run1, run2, p1, p2 } = ids
   graph({ storage: s, vocab: pages }).apply([
     { entity: { eid: ada }, person: { name: 'Ada' } },
@@ -96,6 +92,14 @@ export let store = (): Storage => {
     { entity: { eid: p1 }, page: { title: 'Lemon cake', by: ada } },
     { entity: { eid: p2 }, page: { title: 'Potluck', by: bo } },
   ], { trusted: true })
+  return s.read('*')
+})()
+
+/** A store holding two people, two runs and two pages, with nothing locked
+ * yet. */
+export let store = (): Storage => {
+  let s = ram(pages, { number: true, computed })
+  s.tx((tx) => tx.patch(bootstrap))
   return s
 }
 
