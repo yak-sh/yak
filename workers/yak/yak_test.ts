@@ -294,15 +294,15 @@ test('the kernel routes, vouches, serves, and surfaces', async () => {
     assertEquals((await viewer.put('/x.txt', 'no')).status, 403)
     assertEquals((await viewer.get(`id=${cake}`)).length, 1)
 
-    // The platform's own rows never leave the kernel (T-32585): the meta
-    // store is not an app, so nothing answers at its address — not for a
-    // stranger, not for the owner of `yak` himself, who reaches it through
-    // the graph tier instead.
+    // The space's index is public, while the directory store's rows are
+    // reached through the authenticated graph tier rather than app APIs.
+    let yak = await k.at('yak.yaks.app', '/')
+    assertEquals(yak.status, 200)
+    let front = await yak.text()
+    assertStringIncludes(front, 'yak')
+    assert(!front.includes('/platform/'))
     for (
       let path of [
-        // Its bare hostname is not a space's door either (T-33040): a space
-        // with no front page lists its apps, and this is nobody's space.
-        '/',
         '/platform/',
         '/platform/api/query?.signin',
         '/platform/api/apply',

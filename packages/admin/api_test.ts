@@ -16,6 +16,7 @@ import { docDoc } from '@yaks/doc'
 import { mailDoc } from '@yaks/mail/vocab'
 import { CallError } from '@yaks/tools'
 import { lined } from '../../workers/yak/wire.ts'
+import { PLATFORM_STORE } from '../../workers/yak/door.ts'
 import {
   acceptInvite,
   claimsOf,
@@ -99,6 +100,47 @@ test('admin query sends joined filters as the page reads them', async () => {
     await storeQuery(session, at, [`.entry.session=${eid}&?content`])
     await storeQuery(session, at, [`.entry.session=${eid}`, '?content'])
     assertEquals(parse(lines[0]), parse(lines[1]))
+  } finally {
+    globalThis.fetch = old
+  }
+})
+
+test('admin query reaches the platform directory by its space or store name', async () => {
+  let old = globalThis.fetch
+  let calls: unknown[] = []
+  let rows = [{ entity: { eid: 'app-1' }, app: { slug: 'recipes' } }]
+  globalThis.fetch = ((url: string, init: RequestInit) => {
+    calls.push({
+      path: new URL(url).pathname,
+      headers: init.headers,
+      params: init.body ? JSON.parse(String(init.body)).params : null,
+    })
+    return Promise.resolve({
+      status: 200,
+      ok: true,
+      json: () =>
+        Promise.resolve({ result: { structuredContent: { result: rows } } }),
+      text: () => Promise.resolve('[]'),
+    })
+  }) as typeof fetch
+  try {
+    for (let at of [PLATFORM_STORE.split('/')[0], PLATFORM_STORE]) {
+      assertEquals(await storeQuery('session', at, ['.app', '?doc']), rows)
+    }
+    assertEquals(
+      calls,
+      Array(2).fill({
+        path: '/mcp',
+        headers: {
+          'content-type': 'application/json',
+          authorization: 'Bearer session',
+        },
+        params: {
+          name: 'graph_query',
+          arguments: { app: PLATFORM_STORE, q: '.app&?doc' },
+        },
+      }),
+    )
   } finally {
     globalThis.fetch = old
   }

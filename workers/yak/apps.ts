@@ -1817,9 +1817,6 @@ let index = async (
   dir: ReturnType<typeof directory>,
   space: Space,
 ): Promise<Response> => {
-  // The directory's own space is nobody's space: nothing answers at its
-  // address, to anyone (T-32585), so it does not get a door either.
-  if (space.slug == META.space) return nothingHere(env)
   let who = await whoIs(req, env.SESSION_SECRET, (p) => dir.role(space, p))
   let { all, mine } = await shelf(dir, space, who)
   let owner = who.role == 'owner'

@@ -456,14 +456,19 @@ let graphed = async (
 // The filter grammar over an app's store — the same line the page's own
 // client.js sends. `&` joins clauses even when both are in one CLI word. A
 // named app is asked through the graph tier; a bare space is its front page's
-// store door.
+// store door. The platform's space names its directory, which is served only
+// through the graph tier.
 export let storeQuery = async (
   session: string,
   at: string,
   filters: string[],
 ) => {
-  if (where(at).length == 2) {
-    return graphed(session, 'graph_query', { app: at, q: filters.join('&') })
+  let [space, app] = where(at)
+  if (app || space == PLATFORM_STORE.split('/')[0]) {
+    return graphed(session, 'graph_query', {
+      app: app ? at : PLATFORM_STORE,
+      q: filters.join('&'),
+    })
   }
   let url = `${storeUrl(at, '/query')}?${filters.join('&')}`
   let r = await sent(url, session)
