@@ -65,6 +65,7 @@ export let appConfig: Config = {
     { use: '@yaks/id', words: [] },
     ...addressed,
     '@yaks/doc',
+    '@yaks/draft',
     '@yaks/member',
     {
       use: '@yaks/task',

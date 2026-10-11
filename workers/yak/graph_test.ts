@@ -22,6 +22,7 @@ import {
 import { stub } from '@std/testing/mock'
 import type { Frame } from '@yaks/api'
 import { type Bundle, type Comp, type Rule, sha256 } from '@yaks/graph'
+import { draftEid } from '@yaks/draft'
 import type { Wire } from '@yaks/durable-object'
 import { durable } from './testing.ts'
 import { doorOf, PLATFORM_STORE } from './door.ts'
@@ -261,6 +262,120 @@ test('a kernel completion patch keeps the writer the Store was given', () => {
   assertEquals(completion.status, 200)
   assertEquals(completion.by, APP)
 })
+
+let draftWrites = await (async () => {
+  let ctx = state()
+  using _db = ctx.storage
+  let store = await cookbook(ctx)
+  let eid = draftEid(ADA, 'command')
+  let write = (text: string, over: string, also: Bundle[] = []) =>
+    post(store, '/apply', [{
+      entity: { eid },
+      draft: { by: ADA, place: 'command', text },
+      typed: { over },
+    }, ...also], owner)
+  let read = async () =>
+    (await (await get(store, '/query?q=.draft%26*', owner)).json())[0]
+  let accepted = []
+  for (
+    let [text, over] of [
+      ['ship it', ''],
+      ['ship it now', 'ship it'],
+      ['Ship it', 'ship it'],
+    ]
+  ) accepted.push((await write(text, over)).status)
+  let merged = await read()
+  let refused = await write('', 'Ship it now', [{
+    entity: { eid: CAKE },
+    recipe: { serves: 'invalid' },
+  }])
+  let retained = await read()
+  await write('Ship it now please', 'Ship it now')
+  let sent = await write('', 'Ship it now', [{
+    entity: { eid: CAKE },
+    recipe: { serves: 2 },
+  }])
+  let concurrent = await read()
+  let spent = await write('', ' please', [{
+    entity: { eid: CAKE },
+    recipe: { serves: 3 },
+  }])
+  let ended = await read()
+  let action =
+    (await (await get(store, '/query?q=.recipe%26*', owner)).json())[0]
+  return {
+    accepted,
+    merged,
+    refused: refused.status,
+    retained,
+    sent: sent.status,
+    concurrent,
+    spent: spent.status,
+    ended,
+    action,
+  }
+})()
+test('an app store merges two draft writers over a shared base and stamps revisions', () => {
+  assertEquals(draftWrites.accepted, [200, 200, 200])
+  assertEquals(draftWrites.merged.draft, {
+    by: { eid: ADA, name: 'Ada' },
+    place: 'command',
+    text: 'Ship it now',
+    rev: 3,
+  })
+  assertEquals(draftWrites.merged.typed, undefined)
+})
+test('a refused action preserves the draft and its revision', () => {
+  assertEquals(draftWrites.refused, 400)
+  assertEquals(draftWrites.retained.draft, draftWrites.merged.draft)
+})
+test('an atomic draft spend keeps concurrent input beside the action', () => {
+  assertEquals([draftWrites.sent, draftWrites.spent], [200, 200])
+  assertEquals(draftWrites.concurrent.draft.text, ' please')
+  assertEquals(draftWrites.concurrent.draft.rev, 5)
+  assertEquals(draftWrites.ended.draft.text, '')
+  assertEquals(draftWrites.ended.draft.rev, 6)
+  assertEquals(draftWrites.action.recipe, { serves: 3 })
+})
+
+for (let name of ['draft', 'typed']) {
+  let ownedDraft = await (async () => {
+    let declaration = JSON.stringify({
+      $defs: {
+        [name]: {
+          component: true,
+          properties: {
+            text: { type: 'string' },
+            over: { type: 'string' },
+          },
+        },
+      },
+    })
+    let ctx = { ...state(), storage: durable('ada/cookbook', declaration) }
+    using _db = ctx.storage
+    let store = await cookbook(ctx, declaration)
+    let write = (text: string) =>
+      post(store, '/apply', [{
+        entity: { eid: CAKE },
+        [name]: { text, over: 'base' },
+        ...(name == 'typed'
+          ? { draft: { text } }
+          : { typed: { over: 'base' } }),
+      }], owner)
+    let first = (await write('base')).status
+    let initial =
+      (await (await get(store, '/query?q=.draft%26*', owner)).json())[0]
+        ?.draft.text
+    let statuses = [first, (await write('changed')).status]
+    let rows = await (await get(store, `/query?q=.${name}%26*`, owner)).json()
+    return { statuses, word: rows[0]?.[name], initial }
+  })()
+  test(`a retained app-owned ${name} keeps its declared shape and writes`, () => {
+    assertEquals(ownedDraft.statuses, [200, 200])
+    assertEquals(ownedDraft.word, { text: 'changed', over: 'base' })
+    assertEquals(ownedDraft.initial, 'base')
+  })
+}
 
 let coldDirectory = await (async () => {
   let ctx = state()

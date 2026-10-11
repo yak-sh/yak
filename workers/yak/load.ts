@@ -6,37 +6,38 @@ import * as vocab2 from '@yaks/blob/vocab'
 import * as vocab3 from '@yaks/builders/vocab'
 import * as vocab4 from '@yaks/connections/vocab'
 import * as vocab5 from '@yaks/doc/vocab'
-import * as vocab6 from '@yaks/dreaming/vocab'
-import * as vocab7 from '@yaks/edge/vocab'
-import * as vocab8 from '@yaks/effects/vocab'
-import * as vocab9 from '@yaks/git/vocab'
-import * as vocab10 from '@yaks/goal/vocab'
-import * as vocab11 from '@yaks/hook/vocab'
-import * as vocab12 from '@yaks/id/vocab'
-import * as vocab13 from '@yaks/kernel/vocab'
-import * as vocab14 from '@yaks/key/vocab'
-import * as vocab15 from '@yaks/mail/vocab'
-import * as vocab16 from '@yaks/member/vocab'
-import * as vocab17 from '@yaks/memory/vocab'
-import * as vocab18 from '@yaks/model/vocab'
-import * as vocab19 from '@yaks/openrouter/vocab'
-import * as vocab20 from '@yaks/persona/vocab'
-import * as vocab21 from '@yaks/platform/vocab'
-import * as vocab22 from '@yaks/project/vocab'
-import * as vocab23 from '@yaks/rtc/vocab'
-import * as vocab24 from '@yaks/secrets/vocab'
-import * as vocab25 from '@yaks/session/vocab'
-import * as vocab26 from '@yaks/task/vocab'
-import * as vocab27 from '@yaks/tools/vocab'
-import * as vocab28 from '@yaks/tunnel/vocab'
-import * as vocab29 from '@yaks/wake/vocab'
-import * as vocab30 from './facets/app-vocab.ts'
-import * as vocab31 from './facets/attribution-vocab.ts'
-import * as vocab32 from './facets/directory-vocab.ts'
-import * as vocab33 from './facets/git-vocab.ts'
-import * as vocab34 from './facets/meter-vocab.ts'
-import * as vocab35 from './facets/models-vocab.ts'
-import * as vocab36 from './facets/trash-vocab.ts'
+import * as vocab6 from '@yaks/draft/vocab'
+import * as vocab7 from '@yaks/dreaming/vocab'
+import * as vocab8 from '@yaks/edge/vocab'
+import * as vocab9 from '@yaks/effects/vocab'
+import * as vocab10 from '@yaks/git/vocab'
+import * as vocab11 from '@yaks/goal/vocab'
+import * as vocab12 from '@yaks/hook/vocab'
+import * as vocab13 from '@yaks/id/vocab'
+import * as vocab14 from '@yaks/kernel/vocab'
+import * as vocab15 from '@yaks/key/vocab'
+import * as vocab16 from '@yaks/mail/vocab'
+import * as vocab17 from '@yaks/member/vocab'
+import * as vocab18 from '@yaks/memory/vocab'
+import * as vocab19 from '@yaks/model/vocab'
+import * as vocab20 from '@yaks/openrouter/vocab'
+import * as vocab21 from '@yaks/persona/vocab'
+import * as vocab22 from '@yaks/platform/vocab'
+import * as vocab23 from '@yaks/project/vocab'
+import * as vocab24 from '@yaks/rtc/vocab'
+import * as vocab25 from '@yaks/secrets/vocab'
+import * as vocab26 from '@yaks/session/vocab'
+import * as vocab27 from '@yaks/task/vocab'
+import * as vocab28 from '@yaks/tools/vocab'
+import * as vocab29 from '@yaks/tunnel/vocab'
+import * as vocab30 from '@yaks/wake/vocab'
+import * as vocab31 from './facets/app-vocab.ts'
+import * as vocab32 from './facets/attribution-vocab.ts'
+import * as vocab33 from './facets/directory-vocab.ts'
+import * as vocab34 from './facets/git-vocab.ts'
+import * as vocab35 from './facets/meter-vocab.ts'
+import * as vocab36 from './facets/models-vocab.ts'
+import * as vocab37 from './facets/trash-vocab.ts'
 export let vocabFacets: Record<string, VocabFacet> = {
   '@yaks/alias': vocab0,
   '@yaks/archetype': vocab1,
@@ -44,37 +45,38 @@ export let vocabFacets: Record<string, VocabFacet> = {
   '@yaks/builders': vocab3,
   '@yaks/connections': vocab4,
   '@yaks/doc': vocab5,
-  '@yaks/dreaming': vocab6,
-  '@yaks/edge': vocab7,
-  '@yaks/effects': vocab8,
-  '@yaks/git': vocab9,
-  '@yaks/goal': vocab10,
-  '@yaks/hook': vocab11,
-  '@yaks/id': vocab12,
-  '@yaks/kernel': vocab13,
-  '@yaks/key': vocab14,
-  '@yaks/mail': vocab15,
-  '@yaks/member': vocab16,
-  '@yaks/memory': vocab17,
-  '@yaks/model': vocab18,
-  '@yaks/openrouter': vocab19,
-  '@yaks/persona': vocab20,
-  '@yaks/platform': vocab21,
-  '@yaks/project': vocab22,
-  '@yaks/rtc': vocab23,
-  '@yaks/secrets': vocab24,
-  '@yaks/session': vocab25,
-  '@yaks/task': vocab26,
-  '@yaks/tools': vocab27,
-  '@yaks/tunnel': vocab28,
-  '@yaks/wake': vocab29,
-  'yak/app': vocab30,
-  'yak/attribution': vocab31,
-  'yak/directory': vocab32,
-  'yak/git': vocab33,
-  'yak/meter': vocab34,
-  'yak/models': vocab35,
-  'yak/trash': vocab36,
+  '@yaks/draft': vocab6,
+  '@yaks/dreaming': vocab7,
+  '@yaks/edge': vocab8,
+  '@yaks/effects': vocab9,
+  '@yaks/git': vocab10,
+  '@yaks/goal': vocab11,
+  '@yaks/hook': vocab12,
+  '@yaks/id': vocab13,
+  '@yaks/kernel': vocab14,
+  '@yaks/key': vocab15,
+  '@yaks/mail': vocab16,
+  '@yaks/member': vocab17,
+  '@yaks/memory': vocab18,
+  '@yaks/model': vocab19,
+  '@yaks/openrouter': vocab20,
+  '@yaks/persona': vocab21,
+  '@yaks/platform': vocab22,
+  '@yaks/project': vocab23,
+  '@yaks/rtc': vocab24,
+  '@yaks/secrets': vocab25,
+  '@yaks/session': vocab26,
+  '@yaks/task': vocab27,
+  '@yaks/tools': vocab28,
+  '@yaks/tunnel': vocab29,
+  '@yaks/wake': vocab30,
+  'yak/app': vocab31,
+  'yak/attribution': vocab32,
+  'yak/directory': vocab33,
+  'yak/git': vocab34,
+  'yak/meter': vocab35,
+  'yak/models': vocab36,
+  'yak/trash': vocab37,
 }
 let facets: Record<string, () => Promise<unknown>> = {
   '@yaks/alias/graph': () => import('@yaks/alias/graph'),
@@ -86,6 +88,7 @@ let facets: Record<string, () => Promise<unknown>> = {
   '@yaks/connections/effects': () => import('@yaks/connections/effects'),
   '@yaks/connections/tools': () => import('@yaks/connections/tools'),
   '@yaks/doc/graph': () => import('@yaks/doc/graph'),
+  '@yaks/draft/graph': () => import('@yaks/draft/graph'),
   '@yaks/edge/graph': () => import('@yaks/edge/graph'),
   '@yaks/id/graph': () => import('@yaks/id/graph'),
   '@yaks/key/graph': () => import('@yaks/key/graph'),

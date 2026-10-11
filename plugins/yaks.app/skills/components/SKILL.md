@@ -55,6 +55,23 @@ the text itself is kept once, however many rows quote it. None of that is a row
 of the graph — there is no second entity beside your doc — so `.doc` returns
 your docs and a body reads back as the text you wrote.
 
+**`draft`** — `by` (eid), `place` (text), `text` (text); the store sets `rev`
+(number). A person's unsent input, kept across devices on the eid
+`draftEid(by, place)` from `@yaks/draft`. Write it with `typed` to preserve
+concurrent input, and empty its text in the same batch as the action that sends
+it. Keep a local recovery copy until the store acknowledges that batch.
+
+**`typed`** — `over` (text). An event beside a draft write naming the text the
+interface last heard from the store. The store merges both interfaces' edits
+over that shared text and increments the draft's revision; the event itself is
+not stored.
+
+    await apply({
+      entity: { eid: draftEid(person, 'command') },
+      draft: { by: person, place: 'command', text: 'ship it now' },
+      typed: { over: 'ship it' },
+    })
+
 **`filed`** — `priority` (number), `project` (eid), `assignee` (eid), `domain`
 (text). Optional portfolio filing, separate from task presence. A microtask
 needs no filing; add it when work belongs on a project board.
@@ -531,7 +548,7 @@ These are the names, all of them:
     builder_open builder_ring built call call_ready call_woken cancel
     cancelled checkout chosen cites comment commit compat completed
     connection contains content cost created delegates deliver delivered
-    deploy dispatch doc edge effect email entity entry error exception
+    deploy dispatch doc draft edge effect email entity entry error exception
     execution failed favorite fee feedback file filed finding fired former
     gallery gitobj grant home hook hostname image imported installed
     integration integration_install interrupted invite inviting key lease
@@ -543,7 +560,7 @@ These are the names, all of them:
     restored result retired revision rtc rtc_lapse satisfies screenshot secret seeded
     serves session session_run sfu signed_in signin space spend staged stop
     stripe supersedes supervises sweep switched task theme tool topic
-    trashed tree_entry tunnel updated usage uses using verified wake wants
+    trashed tree_entry tunnel typed updated usage uses using verified wake wants
     web worked worktree
 
 When your first choice is taken, ask what the component is _for_ and name that:
