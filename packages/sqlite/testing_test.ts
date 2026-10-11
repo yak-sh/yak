@@ -23,7 +23,7 @@ let extra = [insert('entity', { eid: 'fixture' })]
 let seeded = snapshot(vocab, {}, extra)
 extra[0] = insert('entity', { eid: 'changed' })
 let changed = snapshot(vocab, {}, extra)
-let one = preparedStore(vocab, {}, empty)
+let stores = [preparedStore(vocab, {}, empty), preparedStore(vocab, {}, empty)]
 let entities = select({ cols: [col('eid')], from: table('entity') })
 let objects = select({
   cols: [col('name')],
@@ -32,9 +32,10 @@ let objects = select({
 })
 
 test('prepared stores keep writes private and retain their complete schema', () => {
+  using one = stores[0]
+  using two = stores[1]
   one.statements.query(insert('entity', { eid: 'a' }))
   equal(one.statements.query(entities), [{ eid: 'a' }])
-  using two = preparedStore(vocab, {}, empty)
   equal(two.statements.query(entities), [])
   equal(
     two.statements.query(objects).map((r) => r.name).filter((name) =>
@@ -64,9 +65,10 @@ test('prepared drivers retain fixture rows, isolate writes and enforce keys', ()
   assertStringIncludes(refused.message, 'FOREIGN KEY')
 })
 
+let retained = [preparedDriver(seeded), preparedDriver(changed)]
 test('snapshots retain the fixture rows their extra statements request', () => {
-  using one = preparedDriver(seeded)
-  using two = preparedDriver(changed)
+  using one = retained[0]
+  using two = retained[1]
   equal(one.query(entities), [{ eid: 'fixture' }])
   equal(two.query(entities), [{ eid: 'changed' }])
 })

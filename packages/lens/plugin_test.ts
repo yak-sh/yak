@@ -237,6 +237,7 @@ test('find and put move seeded rows once through an expanded vocabulary', () => 
   equal(row.doc, { title: 'Seed cake' })
 })
 
+let timestampHistory = setup()
 test('landed timestamp steps are immutable and new steps must follow the retained history', async () => {
   let early = 20261003140000, late = 20261004102000
   let declaration = (step: number, to = 'doc.title') => ({
@@ -250,7 +251,7 @@ test('landed timestamp steps are immutable and new steps must follow the retaine
       },
     },
   })
-  let g = setup()
+  let g = timestampHistory
   g.apply(await described(g, [declaration(late)]), { trusted: true })
   equal(await described(g, [declaration(late)]), [])
   await throws(
