@@ -27,7 +27,10 @@ the chosen connection's bearer. The platform checks that account's existing
 permissions. Infrastructure operations (`deploys`, `errors`, `tail`, `rollback`,
 `revert`) use this box's Cloudflare/GitHub credentials and require the selected
 account to be the platform admin or the configured person's own email. `errors`
-also needs the Sentry API credential in this graph's vault.
+reads through the signed tracker door configured by `@yaks/tracker` in
+`tracker.json` beside this graph (or this config's own tracker plugin). The
+remote URL and vault reference come from that config. It lists bugs last seen in
+the requested window; counts and first seen cover each bug's lifetime.
 
 ## A throwaway without a browser
 

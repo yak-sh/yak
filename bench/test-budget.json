@@ -628,7 +628,6 @@
       "stopping a platform command interrupts its whole process group": 23.7
     },
     "packages/admin/logs_test.ts": {
-      "errors lists every issue Sentry holds for the window, across pages": 1.3,
       "tail follows the local Wrangler stream without polling MCP": 13.4
     },
     "packages/admin/push_test.ts": {

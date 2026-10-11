@@ -65,7 +65,7 @@ the vocabulary had them the other way round until D-45640 swapped them. Now
 of a tracked mistake, `exception{type, value, stack, …}` (@yaks/tools) is only
 what was thrown in it, and a failure the code expected is a `refusal{code}`
 (`Refused`, `CallError`, `refuse()`), not an error. Check the term in the tools
-it comes from (Sentry, Java, git, SQL) before naming.
+it comes from (Java, git, SQL) before naming.
 
 ## One aspect per component, one fact in one place
 

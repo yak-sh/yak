@@ -241,9 +241,10 @@ through the connector's graph tier (tool.ts `roleIn`).
   `yak admin apply <space>/<app> <bundles>` patches, adds or deletes its rows
   through the store's own apply (`--check` rehearses and keeps nothing). Both
   go through `graph_query` and `graph_apply` with `space` and `app`.
-- `yak admin errors` lists errors by Sentry issue (`--since`, 10m by default).
-  Sentry runs out of events monthly, so an empty answer may mean blind, not
-  healthy, until the platform's own tracker lands (D-45640).
+- `yak admin errors` reads platform bugs through the independent tracker's
+  signed door (`--since`, 10m by default). Every unexpected caught failure
+  reports to the tracker with its catch location (M-37965); a new platform
+  bug mails the owner through workers/tracker's delivery.
 - `yak admin tail` follows live events. It streams local Wrangler stdout, not
   the MCP door; its account check runs once before the stream, so following
   logs is not app traffic.

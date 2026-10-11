@@ -1,7 +1,7 @@
 // Platform operations run as the selected yaks.app connection. Without --as,
 // connections computes the person's own account, else the oldest sign-in.
 import { fileURLToPath } from 'node:url'
-import { basename } from 'node:path'
+import { basename, dirname } from 'node:path'
 import { argsOf, type Bundle, type Comp, type Graph } from '@yaks/graph'
 import type { Runs } from '@yaks/graph/tools'
 import {
@@ -15,6 +15,8 @@ import {
 import { CallError, Interrupted, said } from '@yaks/tools'
 import type { Host } from '@yaks/host'
 import { person } from '@yaks/cli/host'
+import { given, read as configAt, used } from '@yaks/cli/config'
+import type { Options as TrackerOptions } from '@yaks/tracker/routes'
 import { accountCredential, AccountError, authorize } from '@yaks/connections'
 import { authorizeCLI } from '@yaks/connections/cli'
 import { yaksApp } from '@yaks/connections/yaks-app'
@@ -45,7 +47,7 @@ import {
 import { deploys, rollback, table } from './deploys.ts'
 import { sweep } from './move.ts'
 import { push, type PushProgress, read } from './push.ts'
-import { errors, tail, TOKEN } from './logs.ts'
+import { errors, tail } from './logs.ts'
 import { revert } from './revert.ts'
 
 type Args = Record<string, unknown>
@@ -128,6 +130,44 @@ type Verb = (
   keep: Bundle[],
   graph: Graph,
 ) => Promise<Bundle[]> | Bundle[]
+
+// The tracker owns its remote address and signing-key reference. Admin uses
+// the same config as bug_list, without opening the independent tracker graph.
+export let tracker = async (
+  config: Host['config'],
+  vault: Local,
+): Promise<TrackerOptions> => {
+  let find = (config: Host['config']) =>
+    config.plugins?.find((p) => used(p) == '@yaks/tracker')
+  let plugin = find(config)
+  if (!plugin && config.db && config.db != ':memory:') {
+    let path = `${dirname(config.db)}/tracker.json`
+    try {
+      plugin = find(configAt(path))
+    } catch {
+      throw new CallError('tracker', `Tracker config unavailable: ${path}`)
+    }
+  }
+  if (!plugin) {
+    throw new CallError(
+      'tracker',
+      'Configure @yaks/tracker remote in tracker.json beside this graph',
+    )
+  }
+  let options = given(plugin) as TrackerOptions
+  let remote = options.remote
+  let credential = remote?.secret as unknown
+  let reference =
+    credential && typeof credential == 'object' && 'secret' in credential
+      ? String(credential.secret)
+      : undefined
+  let secret = reference
+    ? await reveal(vault, reference, { env: () => undefined })
+    : typeof credential == 'string'
+    ? credential
+    : undefined
+  return { remote: { url: remote?.url, secret } }
+}
 
 /** The implementations of the tools ./vocab.json declares. */
 export let runs = (
@@ -435,8 +475,12 @@ export let runs = (
 
     admin_errors: verb(async (call, vault) => {
       await platform(argsOf(call))
-      let token = await reveal(vault, TOKEN, { env: () => undefined })
-      await errors(word(argsOf(call), 'since'), token, out, note)
+      await errors(
+        word(argsOf(call), 'since'),
+        await tracker(host.config, vault),
+        out,
+        note,
+      )
       return []
     }),
 

@@ -1,14 +1,7 @@
-// The owner's view of yaks.app's failures: `tail` watches live traffic
-// through Wrangler's login, and `errors` reads the past from Sentry. Sentry is
-// the one record that holds them all: every failure the platform throws, logs
-// with console.error, or catches and answers (workers/yak/sentry.ts `caught`,
-// `defect`) is sent there, while Workers Logs is sampled and never sees a
-// failure a catch answered without a console line. Sentry is read with a
-// token that can read the org (`org:read`), kept in this box's vault as
-// `sentry`, an op:// reference, never a deployment secret. Without one,
-// `errors` refuses and says how to keep it; it never watches the future in
-// place of the past.
+// The owner’s view of yaks.app failures: tail watches live traffic through
+// Wrangler, and errors reads grouped failures through the signed tracker door.
 import { CallError } from '@yaks/tools'
+import { type Options, routes } from '@yaks/tracker/routes'
 import { WRANGLER } from '../../workers/yak/wrangler.ts'
 import { spawn, wasInterrupted } from './subprocess.ts'
 
@@ -163,15 +156,13 @@ export let records = (receive: (row: Row) => void) => {
 
 let UNITS: Record<string, number> = { s: 1, m: 60, h: 3600, d: 86_400 }
 
-// Sentry keeps events for 90 days at most, so a longer window asks for
-// nothing more.
 export let duration = (since = '10m'): number => {
   let match = /^(\d+)(s|m|h|d)?$/.exec(since)
   let seconds = match ? Number(match[1]) * UNITS[match[2] || 's'] : 0
-  if (!Number.isSafeInteger(seconds) || seconds <= 0 || seconds > 90 * 86_400) {
+  if (!Number.isSafeInteger(seconds) || seconds <= 0) {
     throw new CallError(
       'since',
-      '--since needs a duration from 1s to 90d (for example 10m)',
+      '--since needs a positive duration (for example 10m)',
     )
   }
   return seconds
@@ -227,128 +218,58 @@ export let tail = (
 ): Promise<number> =>
   live(root, (row) => out(eventLine(row)), note, signal, start)
 
-/** Where yaks.app's failures go: workers/yak/sentry.ts's org and project. */
-export let SENTRY = {
-  api: 'https://us.sentry.io/api/0',
-  org: 'yaks',
-  project: 'yaks-app',
-  environment: 'production',
-}
-
-// The name the Sentry token is kept under in this box's vault.
-export let TOKEN = 'sentry'
-
-// Said when there is no token, or Sentry refuses the one kept: where to make
-// one, the one line that keeps a reference to it, and the door for live
-// traffic.
-let keepIt = (why: string) =>
-  new CallError(
-    TOKEN,
-    `${why}. Reading Sentry needs a token that can read the ${SENTRY.org} ` +
-      'org (org:read), made at sentry.io → User Settings → Personal Tokens. ' +
-      "Keep an op:// reference to one in this box's vault, once:\n  yak " +
-      `graph apply --bundles '[{"entity":{"eid":"$s"},"secret":{"name":` +
-      `"${TOKEN}","value":"op://<vault>/<item>/<field>"}}]'\nLive traffic ` +
-      'is `yak admin tail --as admin@bot.yak.sh`.',
-  )
-
-// One row per issue and the door it broke at, over the window.
-let FIELDS = [
-  'issue',
-  'title',
-  'request',
-  'count()',
-  'min(timestamp)',
-  'max(timestamp)',
-]
-
-/** The events query for the `seconds` before `end`, one page at `cursor`.
- * API contract:
- * https://docs.sentry.io/api/explore/query-explore-events-in-table-format/ */
-export let asked = (seconds: number, end: number, cursor?: string) => {
-  let q = new URLSearchParams({
-    dataset: 'errors',
-    project: SENTRY.project,
-    environment: SENTRY.environment,
-    start: new Date(end - seconds * 1000).toISOString(),
-    end: new Date(end).toISOString(),
-    sort: '-count()',
-    per_page: '100',
-  })
-  for (let f of FIELDS) q.append('field', f)
-  if (cursor) q.set('cursor', cursor)
-  return `${SENTRY.api}/organizations/${SENTRY.org}/events/?${q}`
-}
-
-/** The cursor of the next page a Sentry `Link` header offers, when that page
- * has results. */
-export let next = (link: string | null) =>
-  /rel="next"; results="true"; cursor="([^"]+)"/.exec(link ?? '')?.[1]
-
-let history = async (
-  seconds: number,
-  token: string,
-  fetch: typeof globalThis.fetch,
-): Promise<Row[]> => {
-  let end = Date.now()
-  let rows: Row[] = [], cursor: string | undefined
-  let seen = new Set<string>()
-  for (;;) {
-    let res = await fetch(asked(seconds, end, cursor), {
-      headers: { authorization: `Bearer ${token}` },
-      signal: AbortSignal.timeout(15_000),
-    })
-    if (res.status == 401 || res.status == 403) {
-      await res.body?.cancel()
-      throw keepIt(`Sentry refused the ${TOKEN} token (${res.status})`)
-    }
-    if (!res.ok) {
-      throw new Error(
-        `the Sentry events query answered ${res.status}: ` +
-          line(await res.text()).slice(0, 300),
-      )
-    }
-    let data = object(await res.json()).data
-    if (!Array.isArray(data)) {
-      throw new Error('the Sentry events query answered no rows')
-    }
-    rows.push(...data.map(object))
-    cursor = next(res.headers.get('link'))
-    if (!cursor) return rows
-    if (seen.has(cursor)) throw new Error('Sentry repeated a page')
-    seen.add(cursor)
-  }
-}
-
-// The preceding window, or a refusal: never the next one in its place.
+// The preceding window is matched against the group's latest occurrence. Hits
+// and first seen describe the whole group, including retained older samples.
 export let errors = async (
   since: string | undefined,
-  token: string | undefined,
+  options: Options,
   out: Note,
   note: Note,
   fetch: typeof globalThis.fetch = globalThis.fetch,
 ): Promise<void> => {
   let seconds = duration(since)
-  if (!token) throw keepIt(`No ${TOKEN} token is kept on this box`)
-  let rows = await history(seconds, token, fetch)
+  let end = Date.now()
+  let from = new Date(end - seconds * 1000).toISOString()
+  let through = new Date(end).toISOString()
+  let door = routes({}, options, fetch).find((r) => r.path == '/tracker/bugs')!
+  let rows: import('@yaks/graph').Bundle[] = [], after = ''
+  for (;;) {
+    let query = `.bug.last>=${from} .bug.last<=${through} .order=entity.eid` +
+      (after ? ` .after=${after}` : '')
+    let params = new URLSearchParams({ query, limit: '100' })
+    let response = await door.handle(
+      new Request(`http://box/tracker/bugs?${params}`),
+    )
+    let body = await response.json()
+    if (!response.ok) throw new CallError('tracker', body.error)
+    if (!Array.isArray(body)) throw Error('tracker answered no bug rows')
+    rows.push(...body)
+    if (body.length < 100) break
+    let cursor = body.at(-1)?.entity?.eid
+    if (!cursor || cursor == after) throw Error('tracker repeated a bug page')
+    after = cursor
+  }
+  rows.sort((a, b) => Number(object(b.bug).hits) - Number(object(a.bug).hits))
   note(
-    `Sentry ${SENTRY.org}/${SENTRY.project} (${SENTRY.environment}): ` +
-      `preceding ${seconds}s; each issue is at ` +
-      `https://${SENTRY.org}.sentry.io/issues/<ISSUE>`,
+    `Tracker yaks.app: bugs last seen in preceding ${seconds}s; counts and first seen cover each bug's lifetime`,
   )
-  out('COUNT  FIRST SEEN  LAST SEEN  ISSUE  REQUEST  MESSAGE')
-  for (let r of rows) {
+  out('COUNT  FIRST SEEN  LAST SEEN  BUG  PLACE  MESSAGE')
+  for (let row of rows) {
+    let bug = object(row.bug)
     out(
       [
-        r['count()'],
-        iso(time(r['min(timestamp)'])),
-        iso(time(r['max(timestamp)'])),
-        r.issue,
-        r.request || '-',
-        r.title,
+        bug.hits,
+        iso(time(bug.first)),
+        iso(time(bug.last)),
+        row.entity.eid,
+        bug.spot || '-',
+        text(object(row.doc).title),
       ].map(line).join('  '),
     )
   }
-  let events = rows.reduce((n, r) => n + (Number(r['count()']) || 0), 0)
-  out(`${events} events, ${new Set(rows.map((r) => r.issue)).size} issues`)
+  out(
+    `${
+      rows.reduce((n, row) => n + Number(object(row.bug).hits || 0), 0)
+    } occurrences, ${rows.length} bugs`,
+  )
 }

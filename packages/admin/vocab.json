@@ -406,12 +406,12 @@
       "tool": true,
       "noun": "admin",
       "verb": "errors",
-      "title": "List yaks.app errors by Sentry issue",
-      "description": "Every yaks.app failure from the preceding window, thrown or caught, one line per Sentry issue and the request it broke at: count, first and last seen, issue and message. Reads Sentry with the `sentry` token this box's vault keeps, and refuses without it; `admin tail` watches live traffic. Infrastructure requires the platform admin or the configured person’s own account.",
+      "title": "List yaks.app failures by tracker bug",
+      "description": "Tracker bugs last seen in the preceding window, thrown or caught: lifetime count, first and last seen, global bug id, place and message. Reads the tracker through its signed door using the remote URL and vault reference in tracker.json beside this graph; `admin tail` watches live traffic. Infrastructure requires the platform admin or the configured person’s own account.",
       "input": {
         "since": {
           "type": "string",
-          "description": "how far back, up to 90d (default 10m)"
+          "description": "how far back, as a duration (default 10m)"
         },
         "as": {
           "type": "string",

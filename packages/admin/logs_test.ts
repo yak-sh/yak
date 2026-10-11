@@ -1,6 +1,14 @@
 import { test, until } from '@yaks/testing'
 import { assertEquals, assertRejects, assertThrows } from '@std/assert'
 import { CallError } from '@yaks/tools'
+import { ram } from '@yaks/ram'
+import { door as trackerDoor } from '../../workers/tracker/door.ts'
+import {
+  options as trackerOptions,
+  platform,
+  store as trackerStore,
+  vocab as trackerVocab,
+} from '../../workers/tracker/core.ts'
 import { duration, errors, eventLine, faultsOf, records, tail } from './logs.ts'
 
 let event = (over: Record<string, unknown> = {}) => ({
@@ -112,7 +120,7 @@ test('tail renders one line with the door, status and exception', () => {
   )
 })
 
-test('since accepts seconds, minutes, hours or days, up to 90 days', () => {
+test('since accepts positive seconds, minutes, hours or days', () => {
   for (
     let [input, expected] of [
       ['10m', 600],
@@ -120,107 +128,78 @@ test('since accepts seconds, minutes, hours or days, up to 90 days', () => {
       ['7', 7],
       ['30s', 30],
       ['3d', 259_200],
+      ['91d', 7_862_400],
     ] as const
   ) assertEquals(duration(input), expected)
   assertEquals(duration(), 600)
-  for (let input of ['0', '-1', '1.5m', 'forever', '91d']) {
+  for (let input of ['0', '-1', '1.5m', 'forever']) {
     assertThrows(() => duration(input), CallError, '--since')
   }
 })
 
-// Sentry's events door, answering `pages` in turn: each page's rows, and a
-// Link header naming the next page's cursor while one is left.
-let sentry = (pages: Record<string, unknown>[][], status = 200) => {
-  let asked: Request[] = []
-  let fetch = (url: string | URL | Request, init?: RequestInit) => {
-    let req = new Request(url, init)
-    asked.push(req)
-    let at = Number(new URL(req.url).searchParams.get('cursor') ?? 0)
-    let more = at + 1 < pages.length
-    let link = `<x>; rel="previous"; results="false"; cursor="0:0:1", ` +
-      `<x>; rel="next"; results="${more}"; cursor="${at + 1}"`
-    return Promise.resolve(
-      Response.json({ data: pages[at] ?? [] }, {
-        status,
-        headers: { link },
-      }),
-    )
-  }
-  return { fetch: fetch as typeof globalThis.fetch, asked }
-}
-
-let row = (
-  issue: string,
-  count: number,
-  request: string | null,
-  title: string,
-) => ({
-  issue,
-  title,
-  request,
-  'count()': count,
-  'min(timestamp)': '2026-09-25T21:35:26+00:00',
-  'max(timestamp)': '2026-09-25T22:11:17+00:00',
-})
-
-let listed = async (s: ReturnType<typeof sentry>, since = '6h') => {
+// The same signed door the deployed tracker answers, over an isolated graph.
+let remote = trackerStore(ram(trackerVocab, trackerOptions), { sink: () => {} })
+let ids = [1, 2, 3].map((n) =>
+  `00000000-0000-4000-8000-${String(n).padStart(12, '0')}`
+)
+await remote.graph.apply([
+  ...[2, 1, 8].map((hits, i) => ({
+    entity: { eid: ids[i] },
+    doc: {
+      title: i
+        ? 'Error: VPC binding failed'
+        : 'TypeError: Invalid\nredirect value',
+    },
+    bug: {
+      fault: `admin-${i}`,
+      hits,
+      first: '2026-09-25T21:35:26Z',
+      last: new Date(Date.now() - (i == 2 ? 86400000 : 1000)).toISOString(),
+    },
+  })),
+], { trusted: true })
+let secret = 'test-only'
+let upstream = trackerDoor(remote, platform, secret)
+let config = { remote: { url: 'https://tracker.test', secret } }
+let go = ((url, init) => upstream(new Request(url, init))) as typeof fetch
+let listed = async (options = config, fetch = go) => {
   let said: string[] = [], noted: string[] = []
-  await errors(since, 'tok', (l) => said.push(l), (l) => noted.push(l), s.fetch)
+  await errors('6h', options, (l) => said.push(l), (l) => noted.push(l), fetch)
   return { said, noted }
 }
 
-test('errors lists every issue Sentry holds for the window, across pages', async () => {
-  let s = sentry([
-    [row(
-      'YAKS-APP-12',
-      2,
-      'GET /connections/callback',
-      'TypeError: Invalid\nredirect value',
-    )],
-    [row('YAKS-APP-15', 1, null, 'Error: VPC binding failed')],
-  ])
-  let { said } = await listed(s)
-  assertEquals(said, [
-    'COUNT  FIRST SEEN  LAST SEEN  ISSUE  REQUEST  MESSAGE',
-    '2  2026-09-25T21:35:26.000Z  2026-09-25T22:11:17.000Z  YAKS-APP-12  GET /connections/callback  TypeError: Invalid redirect value',
-    '1  2026-09-25T21:35:26.000Z  2026-09-25T22:11:17.000Z  YAKS-APP-15  -  Error: VPC binding failed',
-    '3 events, 2 issues',
-  ])
-  // Each page is asked with the token, for the production errors of the
-  // preceding six hours, and the second one at the cursor the first named.
-  assertEquals(s.asked.map((r) => r.headers.get('authorization')), [
-    'Bearer tok',
-    'Bearer tok',
-  ])
-  let [first, second] = s.asked.map((r) => new URL(r.url).searchParams)
-  assertEquals(first.get('dataset'), 'errors')
-  assertEquals(first.get('environment'), 'production')
-  assertEquals(
-    Date.parse(first.get('end')!) - Date.parse(first.get('start')!),
-    6 * 3600 * 1000,
-  )
-  assertEquals(second.get('cursor'), '1')
-  assertEquals(second.get('start'), first.get('start'))
+// Exercise the signed HTTP reader alongside its shared graph fixture.
+let recent = await listed()
+let denied = await listed({ remote: { ...config.remote, secret: 'wrong' } })
+  .then(() => undefined, (error) => error)
+
+test('errors reads recent tracker bugs through the signed door', () => {
+  let { said, noted } = recent
+  assertEquals(said[0], 'COUNT  FIRST SEEN  LAST SEEN  BUG  PLACE  MESSAGE')
+  assertEquals(said.length, 4)
+  assertEquals(said[1].includes(ids[0]), true)
+  assertEquals(said[1].endsWith('TypeError: Invalid redirect value'), true)
+  assertEquals(said[2].includes(ids[1]), true)
+  assertEquals(said[3], '3 occurrences, 2 bugs')
+  assertEquals(noted[0].includes('lifetime'), true)
 })
 
-test('errors without a kept token refuses with the fix, and never tails forward', async () => {
+test('errors refuses unavailable tracker configuration without tailing forward', async () => {
   let said: string[] = []
-  let refusal = await assertRejects(
-    () => errors('30m', undefined, (l) => said.push(l), (l) => said.push(l)),
+  await assertRejects(
+    () => errors('30m', {}, (l) => said.push(l), (l) => said.push(l)),
     CallError,
-    'sentry',
+    'Remote tracker is not configured',
   )
   assertEquals(said, [])
-  assertEquals(/yak graph apply .*op:\/\/<vault>/.test(refusal.message), true)
 })
 
-test('a token Sentry refuses is answered with the same fix', async () => {
-  let refusal = await assertRejects(
-    () => listed(sentry([[]], 401)),
+test('tracker refuses an invalid signing key without exposing the credential', async () => {
+  await assertRejects(
+    () => Promise.reject(denied),
     CallError,
-    'Sentry refused the sentry token (401)',
+    'Remote tracker refused the read',
   )
-  assertEquals(/op:\/\/<vault>/.test(refusal.message), true)
 })
 
 test('tail follows the local Wrangler stream without polling MCP', async () => {

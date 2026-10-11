@@ -118,7 +118,7 @@
         "request_id": {
           "type": "string",
           "stamped": true,
-          "description": "the id returned to the caller and tagged in Sentry"
+          "description": "the id returned to the caller and tagged in the tracker"
         },
         "version": {
           "type": "number",
