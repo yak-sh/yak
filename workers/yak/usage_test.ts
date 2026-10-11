@@ -323,10 +323,9 @@ test('monthly serving quota: both tiers, comped spaces, and UTC reset', async ()
         'Thu, 01 Oct 2026 00:00:00 GMT',
       )
       assertStringIncludes(await out.text(), count(limit))
-      assertEquals(
-        refusedVisit({ ...full, slug: 'yourname' }, req, {}, NOW),
-        null,
-      )
+      for (let slug of ['yourname', 'yak']) {
+        assertEquals(refusedVisit({ ...full, slug }, req, {}, NOW), null)
+      }
       assertEquals(refusedVisit({ ...full, meter: null }, req, {}, NOW), null)
       assertEquals(
         refusedVisit(full, req, {}, new Date('2026-10-01T00:00:00Z')),

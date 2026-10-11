@@ -87,9 +87,10 @@ export type Meter = {
 }
 export type Tier = 'free' | 'plus'
 
-// Spaces the platform comps. `yourname` is its own shopfront — the six apps
-// every home page example links to (T-33053), one over the free five — and it
-// pays nobody, so it has no app/data ceiling (meter.ts `ceilings`).
+// Spaces the platform comps. `yak` holds its own directory, whose requests
+// serve every space. `yourname` is its shopfront, with the example apps every
+// home page links to. Neither has app/data or visitor ceilings (meter.ts
+// `ceilings`); platform traffic must not shut the directory's public doors.
 //
 // A comp is a constant, read here and written nowhere. `plan` is stamped
 // precisely so that a person cannot lift their own ceilings (billing.ts), and
@@ -97,7 +98,7 @@ export type Tier = 'free' | 'plus'
 // diff, rather than a request anybody can make. T-33164 asks for the operator
 // door that would make this a decision instead of a list — a comp, a support
 // credit and a demo all want one, and Stripe owns only the paying case.
-export let COMPED = ['yourname']
+export let COMPED = ['yourname', 'yak']
 
 // Paid features and mail/build allowances: `plus` also applies to comps.
 // Their separate app/data exemption is resolved by meter.ts from COMPED.
