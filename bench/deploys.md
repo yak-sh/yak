@@ -243,6 +243,12 @@ fails, since neither restores the compiler Worker.
 | `1849b73bc` | [38099071806](https://github.com/yak-sh/yak/actions/runs/38099071806) |      63.190s | package catalog caused a compiler upload                       |
 | `e9770723f` | [38100287556](https://github.com/yak-sh/yak/actions/runs/38100287556) |      53.444s | protocol transition; compiler still carried a fallback catalog |
 | `03673a8c9` | [38100519502](https://github.com/yak-sh/yak/actions/runs/38100519502) |      62.797s | removal of fallback; compiler code changed and uploaded        |
+| `51acbc60e` | [38101111396](https://github.com/yak-sh/yak/actions/runs/38101111396) |      45.596s | package change with the compiler catalog carried by yak        |
+
+The catalog-free package push took 17.594 seconds less than `1849b73bc`, with
+14.404 seconds below the ceiling. Its upload was 45.596 seconds and propagation
+was 0.000 seconds. This proves one main push under the limit with headroom; it
+does not establish an upper bound for queued builds.
 
 These rows are observations, not evidence of a fixed Cloudflare setup time. The
 supplied timelines put clone plus cache restore at 14–19 seconds, and one build
