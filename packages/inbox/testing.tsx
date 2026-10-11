@@ -42,7 +42,7 @@ import {
 } from '@yaks/inspect'
 import { inboxDoc } from './vocab.ts'
 import { plugins } from './graph.ts'
-import { inspectViews } from './views.tsx'
+import { inspectViews } from './inspect.tsx'
 
 /** The words the tests' graph speaks. */
 export let vocab = loadVocab([

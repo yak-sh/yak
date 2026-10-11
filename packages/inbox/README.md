@@ -162,13 +162,13 @@ The `./views` facet is the inbox a browsing app (@yaks/browse, in a browser and
 in `yak browse`) draws, and all of it: a config without @yaks/inbox has no inbox
 page, tab or count, and no page asks for a thread summary.
 
-- `inspectViews`: the `Inbox` view of a person (lanes, a search over said and
-  received words that can include archived threads, each thread opened in place
-  to read and answer, a new conversation) and of a project (one line per thread,
-  the whole count above a `limit` from the caller's context). Both are
-  @yaks/inspect views written against `io`: every entity in them is drawn
-  through the host's shared renderers (`Inbox.List.Tile`, `Inbox.Full`), and
-  marks go out through `io.apply`.
+- `await inspectViews()`: loads the `Inbox` view of a person (lanes, a search
+  over said and received words that can include archived threads, each thread
+  opened in place to read and answer, a new conversation) and of a project (one
+  line per thread, the whole count above a `limit` from the caller's context).
+  Both are @yaks/inspect views written against `io`: every entity in them is
+  drawn through the host's shared renderers (`Inbox.List.Tile`, `Inbox.Full`),
+  and marks go out through `io.apply`.
 - `home`: the owner's inbox as the app's home page, named Inbox.
 - `tabs`: `Inbox` as a tab on each person and project, ahead of the app's own.
 - `icons`: the glyph both wear.
