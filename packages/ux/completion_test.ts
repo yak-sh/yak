@@ -1,5 +1,6 @@
 import { assert, assertEquals } from '@std/assert'
 import { client } from '@yaks/client'
+import { signal } from '@preact/signals'
 import { desk, draftDoc, drafts } from '@yaks/draft'
 import { mint } from '@yaks/graph'
 import { test, tick } from '@yaks/testing'
@@ -13,6 +14,7 @@ let kept = () =>
   desk(client(loadVocab([draftDoc]), [drafts()], { vault: false }), {
     by: () => 'writer',
   })
+let sharedVocab = loadVocab(docs)
 let offers = (text: string, caret: number): Result => ({
   from: 0,
   to: caret,
@@ -49,6 +51,51 @@ test('generic completion keeps choices in Completion and text in the host draft'
   assertEquals(other.row(id)?.cands, [])
   c.dispose()
   other.dispose()
+})
+
+test('connected completion keeps its caret local and clears bound spent drafts', () => {
+  let front = client(sharedVocab, [], {
+    url: 'http://unopened.test',
+    vault: false,
+    wireVault: false,
+    connect: () => ({
+      readyState: 0,
+      send() {},
+      close() {},
+      addEventListener() {},
+    }),
+  })
+  let text = signal('remote command')
+  let drafts = {
+    text: () => text.value,
+    type: (_id: string, value: string) => text.value = value,
+  }
+  let fields = completion(front, { drafts, complete: offers })
+  let { document } = parseHTML('<input><input>')
+  let inputs = [...document.querySelectorAll('input')]
+  let off = inputs.map((input) => {
+    input.setSelectionRange = (from, to) => {
+      input.selectionStart = from
+      input.selectionEnd = to
+    }
+    return fields.bind('chat', input)
+  })
+  try {
+    assertEquals(inputs.map((input) => input.value), [
+      'remote command',
+      'remote command',
+    ])
+    text.value = '' // another interface spent the hosted draft
+    assertEquals(inputs.map((input) => input.value), ['', ''])
+    fields.type('chat', 'pe tail', 2)
+    assertEquals(inputs.map((input) => input.selectionStart), [2, 2])
+    drafts.type('chat', '') // this interface's send spent its draft
+    assertEquals(inputs.map((input) => input.value), ['', ''])
+  } finally {
+    for (let stop of off) stop()
+    fields.dispose()
+    front.close()
+  }
 })
 
 test('completion can use a host-named state component and replace only the offered span', () => {

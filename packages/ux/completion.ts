@@ -32,7 +32,7 @@ import {
  * is one. */
 export type Front = {
   mutate: (bundles: Bundle[]) => unknown
-  watch: (query: string) => {
+  watch: (query: string, opts?: { remote?: boolean }) => {
     value: Bundle[]
     subscribe: (fn: (rows: Bundle[]) => void) => () => void
     close?: () => void
@@ -133,7 +133,8 @@ export let completion = (front: Front, opts: Opts): Controller => {
   let { Float = Inline, component = 'Completion' } = opts
   // One watch for every field; each field's row is its own computed, so a
   // keystroke repaints the field it landed in and whoever reads that one.
-  let seen = front.watch(`.${component}`)
+  // Choices and carets stay on this interface even on a connected graph.
+  let seen = front.watch(`.${component}`, { remote: false })
   let rows = signal(seen.value)
   let off = seen.subscribe((all) => rows.value = all)
   let dispose = () => {
@@ -300,8 +301,8 @@ export let completion = (front: Front, opts: Opts): Controller => {
     for (let event of ['click', 'select', 'keyup']) {
       el.addEventListener(event, selected)
     }
-    let off = live(id).subscribe((r) => {
-      if (!r) return
+    let off = live(id).subscribe((row) => {
+      let r = row ?? placed('')
       let changed = el.value != r.text
       if (changed) el.value = r.text
       // Selection reports its start as the caret; preserve the selected range
