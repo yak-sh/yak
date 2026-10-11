@@ -129,7 +129,7 @@ let fixture = async (options: Options = {}) => {
     effort: 'high',
     trackers: [url],
     open: () =>
-      Object.assign(seen.watch('.bug !archived ?doc ?regressed ?resolved'), {
+      Object.assign(seen.watch('.bug ?doc ?regressed ?resolved ?archived'), {
         mutate: (rows: Bundle[]) => tracker.apply(rows, { trusted: true }),
       }),
     ...options,
@@ -504,6 +504,126 @@ test('cooldown leaves regressed work done until a later pass can request its fix
   cooled.close()
 })
 
+for (
+  let [bugMark, taskMark] of [
+    ['resolved', 'completed'],
+    ['archived', 'cancelled'],
+  ]
+) {
+  let f = await remote()
+  await f.replay()
+  await put(f.tracker, [{
+    entity: { eid: bug },
+    [bugMark]: { at: '2026-10-02T00:00:02Z' },
+  }])
+  await f.ready()
+  test(`the headless answer carries a tracker ${bugMark} mark to its task`, async () => {
+    let row = f.watch.value.find((row) => row.entity.eid == bug)!
+    ok(row[bugMark])
+    await follow(f.g)(row, url, f.watch.mutate)
+    ok((await f.g.get([taskEid(bug)]))[0][taskMark])
+    f.watch.close()
+    f.close()
+  })
+}
+
+// Tracker marks close existing work without requesting another fixer.
+for (
+  let [bugMark, taskMark] of [
+    ['resolved', 'completed'],
+    ['archived', 'cancelled'],
+  ]
+) {
+  let f = await fixture()
+  await f.replay()
+  await put(f.tracker, [{
+    entity: { eid: bug },
+    [bugMark]: { at: '2026-10-02T00:00:02Z' },
+  }])
+  f.commits.length = 0
+  f.trackerCommits.length = 0
+  test(`a tracker ${bugMark} mark closes its task once`, async () => {
+    await f.replay()
+    await f.replay()
+    let [task] = await f.g.get([taskEid(bug)])
+    equal(comp(task, taskMark).at, '2026-10-02T00:00:02Z')
+    equal(f.commits.length, 1)
+    equal(f.trackerCommits, [])
+    equal(await count(f.g, 'fixer'), 1)
+    f.close()
+  })
+
+  let empty = await fixture()
+  await put(empty.tracker, [{ entity: { eid: bug }, [bugMark]: {} }])
+  empty.trackerCommits.length = 0
+  test(`a tracker ${bugMark} bug without work creates no task`, async () => {
+    await empty.replay()
+    equal(empty.commits, [])
+    equal(empty.trackerCommits, [])
+    empty.close()
+  })
+}
+
+let archiveDone = await fixture({ provider: undefined })
+let linkedTask = identityEid('task', ['linked completed work'])
+await put(archiveDone.g, [{
+  entity: { eid: linkedTask },
+  task: {},
+  completed: { at: '2026-10-02T00:00:01Z' },
+}, link(linkedTask, 'about', bug)])
+await put(archiveDone.tracker, [{ entity: { eid: bug }, archived: {} }])
+archiveDone.trackerCommits.length = 0
+test('tracker archival cancels completed work linked under an older task id', async () => {
+  await archiveDone.replay()
+  let [task] = await archiveDone.g.get([linkedTask])
+  ok(task.cancelled && !task.completed)
+  equal(archiveDone.trackerCommits, [])
+  equal(await count(archiveDone.g, 'task'), 1)
+  archiveDone.close()
+})
+
+let closeRetry = await fixture({ provider: undefined })
+await closeRetry.replay()
+await put(closeRetry.tracker, [{ entity: { eid: bug }, resolved: {} }])
+closeRetry.breakBox(true)
+await throws(closeRetry.replay, 'box is unwritable')
+closeRetry.breakBox(false)
+test('a failed task closure retries the tracker resolution', async () => {
+  ok(!(await closeRetry.g.get([taskEid(bug)]))[0].completed)
+  await closeRetry.replay()
+  ok((await closeRetry.g.get([taskEid(bug)]))[0].completed)
+  closeRetry.close()
+})
+
+let trackerCycle = await fixture({ cooldown: 0 })
+await trackerCycle.replay()
+await put(trackerCycle.g, [{
+  entity: (await rows(trackerCycle.g, 'fixer'))[0].entity,
+  exit: {},
+}])
+await put(trackerCycle.tracker, [{
+  entity: { eid: bug },
+  resolved: { at: '2026-10-02T00:00:02Z' },
+}])
+await trackerCycle.replay()
+await put(trackerCycle.tracker, [{
+  entity: { eid: 'tracker-cycle-occurrence' },
+  error: {
+    fault: 'missing row',
+    at: '2026-10-02T00:00:03Z',
+    commit: 'd'.repeat(40),
+  },
+}])
+await group(trackerCycle.tracker, 'tracker-cycle-occurrence')
+test('a regression reopens work closed by a tracker resolution', async () => {
+  await trackerCycle.replay()
+  await trackerCycle.replay()
+  ok(!(await trackerCycle.g.get([taskEid(bug)]))[0].completed)
+  equal(await count(trackerCycle.g, 'task'), 1)
+  equal(await count(trackerCycle.g, 'fixer'), 2)
+  trackerCycle.close()
+})
+
 // Terminal work is the durable receipt for a tracker mark, across service runs.
 let finished = async (mark: string) => {
   let f = await fixture({ provider: undefined })
@@ -636,7 +756,7 @@ test('the follower marks the bug only in the tracker that holds its eid', async 
     trackers: ['http://empty.test', url],
     open: (address) =>
       address == url ? elsewhere.config.open!(address) : {
-        ...emptySeen.watch('.bug !archived ?doc ?regressed ?resolved'),
+        ...emptySeen.watch('.bug ?doc ?regressed ?resolved ?archived'),
         mutate: () => {
           throw new Error('no bug lives here')
         },

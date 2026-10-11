@@ -30,7 +30,7 @@ export let follow = (
   let { fix, home } = fixing(g, options)
   return (bug: Bundle, url: string, mutate: Client['mutate']) =>
     fix(async () => {
-      if (!bug.bug || bug.archived) return
+      if (!bug.bug) return
       let evidence = bug.entity.eid
       let eid = taskEid(evidence)
       let edges = await g.read(and(present('about'), eq('edge.to', evidence)))
@@ -38,6 +38,25 @@ export let follow = (
       let task = (await g.get([...new Set([...linked, eid])]))
         .find((row) => row.task)
       if (task) {
+        let close = bug.archived && !task.cancelled
+          ? 'cancelled'
+          : bug.resolved && !task.completed && !task.cancelled
+          ? 'completed'
+          : undefined
+        if (close) {
+          let source = close == 'cancelled' ? 'archived' : 'resolved'
+          await g.apply([{
+            entity: task.entity,
+            [close]: { at: comp(bug, source)?.at },
+            ...(close == 'cancelled' ? { completed: null } : {}),
+            $was: {
+              completed: { at: token(comp(task, 'completed')?.at) },
+              cancelled: { at: token(comp(task, 'cancelled')?.at) },
+            },
+          }], { trusted: true })
+          return
+        }
+        if (bug.archived) return
         let reopen = !!task.completed &&
           moment(comp(bug, 'regressed')?.at) >
             moment(comp(task, 'completed')?.at)
@@ -66,7 +85,7 @@ export let follow = (
         if (task.completed && !reopen) return
         return { task, bug: evidence, reopen }
       }
-      if (bug.resolved) return
+      if (bug.resolved || bug.archived) return
       let project = await home()
       let pointer =
         new URL(encodeURIComponent(evidence), `${url.replace(/\/$/, '')}/`).href

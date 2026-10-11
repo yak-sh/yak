@@ -73,12 +73,13 @@ fixer. Ordinary occurrences and old regression marks do not reopen completed
 work. Cancelled tasks remain cancelled.
 
 A completed task resolves its bug; a cancelled task archives it. The follower
-keeps resolved bugs in its answer and leaves archived bugs out, so cancelling
-work after completion still archives its bug. Only open bugs file tasks or
-request fixers. [Tracker](../tracker/README.md) owns these marks: resolution
-allows a later regression to reopen the bug; archival stops its notifications. A
-regression newer than completion stays open even while a fixer gate holds the
-task completed.
+keeps resolved and archived bugs in its answer. A tracker resolution completes
+its task; archival cancels it. Cancelling work after completion still archives
+its bug. Only open bugs file tasks or request fixers.
+[Tracker](../tracker/README.md) owns these marks: resolution allows a later
+regression to reopen the bug; archival stops its notifications. A regression
+newer than completion stays open even while a fixer gate holds the task
+completed.
 
 The follower writes each mark through the same client's `/apply` door, with
 `optimistic: false` to await tracker admission. Its task and `about` edge are

@@ -51,8 +51,8 @@ export let track = (url: string, options: ClientOpts = {}): Tracker => {
     wireVault: false,
   })
   try {
-    // Resolved bugs remain visible so cancelling their work can archive them.
-    let watch = remote.watch('.bug !archived ?doc ?regressed ?resolved', {
+    // Terminal bugs remain visible so their marks can close existing work.
+    let watch = remote.watch('.bug ?doc ?regressed ?resolved ?archived', {
       evaluate: 'server',
     })
     return {
