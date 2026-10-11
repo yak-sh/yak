@@ -26,6 +26,36 @@ let sync = (out: Bundle[] | Promise<Bundle[]>): Bundle[] => {
 let held = (one: ReturnType<typeof g>, eid: string) =>
   (one.get([eid]) as Bundle[])[0]
 
+test('fresh rules sharing a match keep their callbacks and writes, and observe a changed match', () => {
+  let called: string[] = []
+  let factory = (name: string, pages: number): Plugin => ({
+    name,
+    rules: [{
+      phase: 'precondition',
+      match: '*book',
+      produce: { book: { pages } },
+      run: () => void called.push(name),
+    }],
+  })
+  let first = factory('first', 11)
+  let a = g([first])
+  let b = g([factory('second', 22)])
+  let write = (one: ReturnType<typeof g>) =>
+    sync(one.apply([{ entity: { eid: 'b1' }, book: { pages: 33 } }]))
+  write(a)
+  write(b)
+  assertEquals(comp(held(a, 'b1'), 'book').pages, 11)
+  assertEquals(comp(held(b, 'b1'), 'book').pages, 22)
+  first.rules![0].match = '.review, *book'
+  write(a)
+  assertEquals(comp(held(a, 'b1'), 'book').pages, 33)
+  assertEquals(called, ['first', 'second'])
+  first.rules![0].match = '*book'
+  write(a)
+  assertEquals(comp(held(a, 'b1'), 'book').pages, 11)
+  assertEquals(called, ['first', 'second', 'first'])
+})
+
 for (let count of [1, 2]) {
   test(`warmed admission refreshes relative-time rules (${count} rows)`, () => {
     let vocab = loadVocab([{

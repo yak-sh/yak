@@ -291,16 +291,27 @@ type Parsed = {
   in: WeakMap<Vocab, Ready>
 }
 
-// Parsed once per rule, and compiled once for each vocabulary. Keyed by the
-// rule object, so this is a memo rather than a registry: the graphs sharing a
-// rule share what it compiled to in each vocabulary, however they take turns,
-// and a rule whose match was changed is parsed again.
+// A match written as text shares its parsed declaration and per-vocabulary
+// compilation across rules. Factories make new rules for each graph, but their
+// callbacks and templates do not change what the match selects. Trees remain
+// per rule, and a changed match is read again, including a tree edited in place.
 let cache = new WeakMap<Rule, Parsed>()
+let strings = new Map<string, Parsed>()
+let MATCHES = 1024
 
 let parsed = (r: Rule): Parsed => {
   let key = typeof r.match == 'string' ? r.match : JSON.stringify(r.match)
   let hit = cache.get(r)
   if (hit && hit.match === r.match && hit.key == key) return hit
+  if (typeof r.match == 'string') {
+    hit = strings.get(key)
+    if (hit) {
+      strings.delete(key)
+      strings.set(key, hit)
+      cache.set(r, hit)
+      return hit
+    }
+  }
   let ast: Ast = typeof r.match == 'string'
     ? parse(r.match, { text: false })
     : r.match
@@ -319,6 +330,10 @@ let parsed = (r: Rule): Parsed => {
     in: new WeakMap(),
   }
   cache.set(r, made)
+  if (typeof r.match == 'string') {
+    strings.set(key, made)
+    if (strings.size > MATCHES) strings.delete(strings.keys().next().value!)
+  }
   return made
 }
 
