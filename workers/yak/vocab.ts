@@ -75,8 +75,8 @@ export let platformDocs = storeWords('directory').docs
 export let gitDocs = storeWords('git').docs
 export let platformVocab = (): Vocab => storeWords('directory').vocab
 export let gitVocab = (): Vocab => storeWords('git').vocab
-export let appDerived = (vocab: Vocab): Derived => ({
-  ...sessionDerived(vocab),
+export let appDerived = (vocab: Vocab, reading: Derived = {}): Derived => ({
+  ...sessionDerived(vocab, reading),
   ...builds(vocab),
 })
 

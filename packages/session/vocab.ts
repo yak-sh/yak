@@ -13,6 +13,7 @@ import type { Vocab, VocabDoc } from '@yaks/vocab'
 import type { Derived } from '@yaks/sql'
 import { sessionDoc } from './comp.ts'
 import { sessionDerived } from './status.ts'
+import { blobRead } from '@yaks/blob/vocab'
 import manifest from './deno.json' with { type: 'json' }
 
 export { sessionDoc }
@@ -25,4 +26,5 @@ export let description: string = manifest.description
 export let docs: VocabDoc[] = [sessionDoc]
 
 /** A transcript's status and cost. */
-export let derived = (vocab: Vocab): Derived => sessionDerived(vocab)
+export let derived = (vocab: Vocab): Derived =>
+  sessionDerived(vocab, blobRead(vocab))

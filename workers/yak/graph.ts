@@ -431,7 +431,7 @@ export let shapeOf = (name: string, declared: string | null): Shape => {
   let words = own ? storeWords(storeKind(name)) : appWords(declared ?? {})
   let { vocab } = words
   let read = blobRead(vocab)
-  let derived = { ...read, ...(own ? {} : appDerived(vocab)) }
+  let derived = { ...read, ...(own ? {} : appDerived(vocab, read)) }
   let searchable = fields(vocab)
   // The blob table first: the `doc_value` view and the search triggers read a
   // body's text out of it, so it has to be standing before they are.

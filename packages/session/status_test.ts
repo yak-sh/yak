@@ -539,7 +539,7 @@ for (let typed of [false, true]) {
       : vocab
     let d = mem()
     let storage1 = storage(d, v, {
-      derived: { ...sessionDerived(v), ...blobRead(v) },
+      derived: { ...sessionDerived(v, blobRead(v)), ...blobRead(v) },
     })
     storage1.install()
     for (let stmt of blobSchema()) d.query(stmt)

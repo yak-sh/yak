@@ -73,7 +73,6 @@ import type { Vocab } from '@yaks/vocab'
 export * from './state.ts'
 import { RETRIES } from './state.ts'
 import { claudeStops } from './claude-control.ts'
-import { blobRead } from '@yaks/blob/vocab'
 
 // Old servers still write state during the marks expansion. A non-null state
 // wins until cutover; otherwise waiting precedes admitted in the declared ladder.
@@ -822,8 +821,10 @@ export let sessionStatus = {
 /** The derived-property registry a SQLite store loads to read
  * `session.status`, compatible `dispatch.status`, and `session.cost` (./cost.ts)
  * where the vocabulary declares the `cost.dollars` it sums: a store may hold an app's own `cost`
- * in place of @yaks/model's. */
-export let sessionDerived = (vocab: Vocab): Derived => {
+ * in place of @yaks/model's. The configured `reading` registry resolves content
+ * before interpreting historical controls; without an override, content is
+ * text in its component. */
+export let sessionDerived = (vocab: Vocab, reading: Derived = {}): Derived => {
   // Small compositions can declare dispatch without loading kernel's marks.
   // Missing marks are absent, not tables to read (nor an empty CASE ladder).
   let marks = ['waiting', 'admitted'].filter((comp) => vocab.comp(comp))
@@ -833,7 +834,7 @@ export let sessionDerived = (vocab: Vocab): Derived => {
     expr: (owner: Expr) => dispatchStatus.expr(owner, marks),
   }
   let states = { ...attemptDerived(vocab), ...executionDerived(vocab) }
-  let text = blobRead(vocab)['content.body']?.text
+  let text = reading['content.body']?.text
   return {
     ...states,
     'session.status': {
