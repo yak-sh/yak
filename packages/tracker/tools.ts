@@ -52,7 +52,8 @@ export let runs = (
       if (!remote && !bug) throw new CallError('bug', `not a bug: ${eid}`)
       if (remote || options.remote) {
         try {
-          await upstream(options.remote ?? {}, eid, name, go)
+          let held = await upstream(options.remote ?? {}, eid, name, go)
+          if (!held && remote) throw Error('Remote tracker bug not found')
         } catch (error) {
           throw new CallError('remote', (error as Error).message)
         }

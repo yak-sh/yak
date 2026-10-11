@@ -216,6 +216,21 @@ for (let [verb, name] of [['resolve', 'resolved'], ['archive', 'archived']]) {
   test(`an already marked box bug still delivers ${verb} to the Worker`, async () => {
     ok((await retry.worker.get([ids[0]], [name]))[0][name])
   })
+  let boxOnly = await marking(undefined, undefined, true, false)
+  await boxOnly.call(`bug_${verb}`, { bug: ids[0] })
+  test(`box bug ${verb} marks locally when the Worker does not hold it`, async () => {
+    ok((await boxOnly.box.get([ids[0]], [name]))[0][name])
+    equal(await boxOnly.worker.read('.bug'), [])
+    equal(await boxOnly.box.read('.bug.status=open'), [])
+  })
+  let missing = await marking(undefined, undefined, false, false)
+  test(`platform bug ${verb} refuses a bug the Worker does not hold`, async () => {
+    await throws(
+      () => missing.call(`bug_${verb}`, { bug: ids[0], source: 'yaks.app' }),
+      'Remote tracker bug not found',
+    )
+    equal(await missing.box.read('.bug'), [])
+  })
   let platformOnly = await marking(undefined, undefined, false)
   let remoteMark = await platformOnly.call(`bug_${verb}`, {
     bug: ids[0],
@@ -267,7 +282,26 @@ for (let [verb, name] of [['resolve', 'resolved'], ['archive', 'archived']]) {
         undefined,
         true,
       ],
-      ['missing Worker bug', config, undefined, false],
+      [
+        'missing Worker route',
+        config,
+        (() =>
+          Promise.resolve(
+            Response.json({ error: 'tracker route not found' }, {
+              status: 404,
+            }),
+          )) as typeof fetch,
+        true,
+      ],
+      [
+        'Worker failure',
+        config,
+        (() =>
+          Promise.resolve(
+            Response.json({ error: 'bug not found' }, { status: 500 }),
+          )) as typeof fetch,
+        true,
+      ],
     ] as const
   ) {
     let failed = await marking(settings, transport, true, held)

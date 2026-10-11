@@ -74,13 +74,13 @@ export let delivery =
     }
   }
 
-/** A mark must reach the Worker before the box commits its own copy. */
+/** Mark a Worker copy, returning false when the Worker does not hold it. */
 export let mark = async (
   remote: Remote,
   bug: string,
   name: 'resolved' | 'archived',
   go: typeof fetch = fetch,
-): Promise<void> => {
+): Promise<boolean> => {
   let response = await request(
     remote,
     name == 'resolved' ? 'resolve' : 'archive',
@@ -92,8 +92,14 @@ export let mark = async (
     },
     go,
   )
-  await response.body?.cancel()
+  if (response.status == 404) {
+    let body = await response.json().catch(() => null)
+    if (body?.error == 'bug not found') return false
+  } else {
+    await response.body?.cancel()
+  }
   if (!response.ok) {
     throw Error(`Remote tracker refused the mark (${response.status})`)
   }
+  return true
 }
