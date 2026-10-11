@@ -4,7 +4,7 @@
 // decision, held in ./graph_test.ts.
 
 import { test } from '@yaks/testing'
-import { assert, assertEquals, assertThrows } from '@std/assert'
+import { assert, assertEquals, assertIsError, assertThrows } from '@std/assert'
 import type { Bundle, Comp } from './bundle.ts'
 import { mem, shop, spy, store } from './testing.ts'
 import { storage } from './mod.ts'
@@ -63,26 +63,28 @@ test('a null property clears it, its siblings untouched', () => {
   assertEquals(c(p, 'product').price, 12)
 })
 
+let dropped = store()
+write(dropped, [{
+  entity: { eid: 'p1' },
+  doc: { title: 'Mug' },
+  product: { price: 12 },
+}])
 test('a null component drops the row, the entity survives', () => {
-  let s = store()
-  write(s, [{
-    entity: { eid: 'p1' },
-    doc: { title: 'Mug' },
-    product: { price: 12 },
-  }])
+  let s = dropped
   write(s, [{ entity: { eid: 'p1' }, product: null }])
-  let [p] = s.read('.doc.title~=mug') as Bundle[]
+  let [p] = s.get(['p1'])
   assert(p)
   assertEquals(p.product, undefined)
   assertEquals(c(p, 'doc').title, 'Mug')
 })
 
+let booleans = store()
+write(booleans, [
+  { entity: { eid: 'p1' }, product: { available: true } },
+  { entity: { eid: 'p2' }, product: { available: false } },
+])
 test('a boolean round-trips through integer storage', () => {
-  let s = store()
-  write(s, [
-    { entity: { eid: 'p1' }, product: { available: true } },
-    { entity: { eid: 'p2' }, product: { available: false } },
-  ])
+  let s = booleans
   let read = (q: string) =>
     (s.read(q) as Bundle[]).map((b) => c(b, 'product').available)
   assertEquals(read('.product.available=1'), [true])
@@ -204,22 +206,26 @@ test('a patch asks once about identity, whatever the batch is', () => {
   assertEquals(asked(), 0)
 })
 
+// Prepare the nested store rollback once, including its transaction bookkeeping.
+let rollback = store()
+write(rollback, [{ entity: { eid: 'p1' }, product: { price: 12 } }])
+let rollbackError: unknown
+try {
+  rollback.tx((tx) => {
+    tx.patch([{ entity: { eid: 'p2' }, product: { price: 1 } }])
+    rollback.tx((inner) =>
+      inner.patch([{ entity: { eid: 'p3' }, product: {} }])
+    )
+    throw new Error('no')
+  })
+} catch (error) {
+  rollbackError = error
+}
 test('a transaction rolls back on a throw, and nests', () => {
-  let s = store()
-  write(s, [{ entity: { eid: 'p1' }, product: { price: 12 } }])
-  let threw = false
-  try {
-    s.tx((tx) => {
-      tx.patch([{ entity: { eid: 'p2' }, product: { price: 1 } }])
-      s.tx((inner) => inner.patch([{ entity: { eid: 'p3' }, product: {} }]))
-      throw new Error('no')
-    })
-  } catch {
-    threw = true
-  }
-  assert(threw)
-  assertEquals(s.tx((tx) => tx.get(['p2', 'p3'])), [])
-  assertEquals((s.tx((tx) => tx.get(['p1'])) as Bundle[]).length, 1)
+  assertIsError(rollbackError)
+  assertEquals(rollbackError.message, 'no')
+  assertEquals(rollback.tx((tx) => tx.get(['p2', 'p3'])), [])
+  assertEquals(rollback.tx((tx) => tx.get(['p1'])).length, 1)
 })
 
 test('numbering exceptions ask once across tables and entities', () => {

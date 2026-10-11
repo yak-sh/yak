@@ -75,15 +75,18 @@ test('a reference reads back as the target eid', () => {
   assertEquals(eids(s.read('.product.maker')), ['p1'])
 })
 
+let dereferences = store()
+seed(dereferences, [
+  { entity: { eid: 'm1' }, doc: { title: 'Acme' } },
+  { entity: { eid: 'p1' }, product: { price: 5, maker: 'm1' } },
+  { entity: { eid: 'm2' }, doc: { title: 'Other' } },
+  { entity: { eid: 'p2' }, product: { price: 6, maker: 'm2' } },
+])
 test('a reference-deref path filters through the target', () => {
-  let s = store()
-  seed(s, [
-    { entity: { eid: 'm1' }, doc: { title: 'Acme' } },
-    { entity: { eid: 'p1' }, product: { price: 5, maker: 'm1' } },
-    { entity: { eid: 'm2' }, doc: { title: 'Other' } },
-    { entity: { eid: 'p2' }, product: { price: 6, maker: 'm2' } },
+  let s = dereferences
+  assertEquals(s.rows('.product.maker.doc.title~=acme').map((r) => r.eid), [
+    'p1',
   ])
-  assertEquals(eids(s.read('.product.maker.doc.title~=acme')), ['p1'])
 })
 
 test('a reverse child property presence tests the child', () => {
@@ -102,14 +105,15 @@ test('a bare-word query requires an explicitly registered extension', () => {
   assertThrows(() => s.read('mug'), Unsupported)
 })
 
+let kinds = store()
+seed(kinds, [
+  { entity: { eid: 'p1' }, doc: { title: 'Mug' }, product: { price: 1 } },
+  { entity: { eid: 'd1' }, doc: { title: 'About' } },
+])
 test('the kind scope selects the most specific kind', () => {
-  let s = store()
-  seed(s, [
-    { entity: { eid: 'p1' }, doc: { title: 'Mug' }, product: { price: 1 } },
-    { entity: { eid: 'd1' }, doc: { title: 'About' } },
-  ])
-  assertEquals(eids(s.read('.kind=product')), ['p1'])
-  assertEquals(eids(s.read('.kind=doc')), ['d1'])
+  let s = kinds
+  assertEquals(s.rows('.kind=product').map((r) => r.eid), ['p1'])
+  assertEquals(s.rows('.kind=doc').map((r) => r.eid), ['d1'])
 })
 
 test('rows() hands back an aggregate shape verbatim', () => {

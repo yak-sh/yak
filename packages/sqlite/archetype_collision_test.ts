@@ -1,5 +1,10 @@
 import { test } from '@yaks/testing'
-import { assertEquals, assertNotEquals, assertThrows } from '@std/assert'
+import {
+  assertEquals,
+  assertIsError,
+  assertNotEquals,
+  assertThrows,
+} from '@std/assert'
 import {
   archetypeDoc,
   Archetypes,
@@ -112,67 +117,88 @@ for (let backend of ['ram', 'sqlite']) {
     if ('install' in s) s.install()
     let g = graph({ storage: s, vocab, plugins: [archetypes(sets)] })
     let get = (eid: string) => s.get([eid])[0]
+    let batches = [blobs, owners]
+    for (let bundles of first ? batches : batches.reverse()) g.apply(bundles)
+    let before = new Map([
+      'empty',
+      'document',
+      ...addresses.values(),
+    ].map((eid) => [eid, get(eid)]))
+    g.apply(ownerDeletes)
+    let after = new Map(protectedSets.map(({ eid }) => [eid, get(eid)]))
+    let refused = protectedSets.flatMap(({ eid }) =>
+      [{ entity: { eid }, $delete: true }, { entity: { eid }, archetype: null }]
+        .map((bundle) => {
+          try {
+            g.apply([bundle])
+          } catch (error) {
+            return error
+          }
+        })
+    )
+    let remaining = get(addresses.get('')!)
     test(`archetype/blob: ${backend}, blobs first=${first}`, () => {
-      let batches = [blobs, owners]
-      for (let bundles of first ? batches : batches.reverse()) g.apply(bundles)
       assertNotEquals(emptyId, addresses.get(''))
-      assertEquals(get('empty').entity.archetype, emptyId)
-      assertEquals(get('document').entity.archetype, docId)
+      assertEquals(before.get('empty')!.entity.archetype, emptyId)
+      assertEquals(before.get('document')!.entity.archetype, docId)
       for (let text of texts) {
-        let b = get(addresses.get(text)!)
+        let b = before.get(addresses.get(text)!)!
         assertEquals(b.blob_text, { text })
         assertEquals(b.entity.archetype, blobId)
         assertEquals(b.archetype, undefined)
       }
-      g.apply(ownerDeletes)
       for (let { eid, shape } of protectedSets) {
-        assertEquals(get(eid).archetype, shape)
-        assertThrows(() => g.apply([{ entity: { eid }, $delete: true }]))
-        assertThrows(() => g.apply([{ entity: { eid }, archetype: null }]))
+        assertEquals(after.get(eid)!.archetype, shape)
       }
-      assertEquals(get(addresses.get('')!).blob_text, { text: '' })
+      for (let error of refused) assertIsError(error)
+      assertEquals(remaining.blob_text, { text: '' })
     })
   }
 }
 
-test('archetype/blob: file backfill and reopen preserve text in both insertion orders', () => {
-  for (let first of [true, false]) {
-    let path = Deno.makeTempFileSync({ suffix: '.sqlite' })
-    let db = open(path)
-    try {
-      let s = storage(db, vocab)
-      s.install()
-      let batches = [texts.map(blob), owners]
-      for (let bundles of first ? batches : batches.reverse()) {
-        s.tx((tx) => tx.patch(bundles)) // legacy/unclassified physical rows
-      }
-      // As a file an older build wrote: no mark this vocabulary installed.
-      meta(db).del(SCHEMA)
-      s.install()
-      db.close()
-      db = open(path)
-      s = storage(db, vocab)
-      s.install()
-      assertEquals(backfill(db), {
-        entities: 0,
-        archetypes: 0,
-        retired: 0,
-      })
-      let get = (eid: string) => s.get([eid])[0]
-      assertEquals(get('empty').entity.archetype, eidOf([]))
-      for (let text of texts) {
-        assertEquals(get(sha256(text)).blob_text, { text })
-      }
-      let g = graph({ storage: s, vocab, plugins: [archetypes()] })
-      g.apply([{ entity: { eid: 'after-reopen' } }])
-      assertEquals(get('after-reopen').entity.archetype, eidOf([]))
-      assertThrows(() =>
-        g.apply([{ entity: { eid: eidOf([]) }, $delete: true }])
-      )
-    } finally {
-      db.close()
-      Deno.removeSync(path)
+let reopened = [true, false].map((first) => {
+  let path = Deno.makeTempFileSync({ suffix: '.sqlite' })
+  let db = open(path)
+  try {
+    let s = storage(db, vocab)
+    s.install()
+    let batches = [blobs, owners]
+    for (let bundles of first ? batches : batches.reverse()) {
+      s.tx((tx) => tx.patch(bundles)) // legacy/unclassified physical rows
     }
+    // As a file an older build wrote: no mark this vocabulary installed.
+    meta(db).del(SCHEMA)
+    s.install()
+    db.close()
+    db = open(path)
+    s = storage(db, vocab)
+    s.install()
+    let filled = backfill(db)
+    let get = (eid: string) => s.get([eid])[0]
+    let empty = get('empty').entity.archetype
+    let content = texts.map((text) => get(addresses.get(text)!).blob_text)
+    let g = graph({ storage: s, vocab, plugins: [archetypes()] })
+    g.apply([{ entity: { eid: 'after-reopen' } }])
+    let fresh = get('after-reopen').entity.archetype
+    let refused: unknown
+    try {
+      g.apply([{ entity: { eid: emptyId }, $delete: true }])
+    } catch (error) {
+      refused = error
+    }
+    return { filled, empty, content, fresh, refused }
+  } finally {
+    db.close()
+    Deno.removeSync(path)
+  }
+})
+test('archetype/blob: file backfill and reopen preserve text in both insertion orders', () => {
+  for (let fixture of reopened) {
+    assertEquals(fixture.filled, { entities: 0, archetypes: 0, retired: 0 })
+    assertEquals(fixture.empty, emptyId)
+    assertEquals(fixture.content, texts.map((text) => ({ text })))
+    assertEquals(fixture.fresh, emptyId)
+    assertIsError(fixture.refused)
   }
 })
 

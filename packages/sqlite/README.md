@@ -664,14 +664,14 @@ entity identity and do not appear in bundles or graph queries.
 
 ```ts
 import { open } from '@yaks/sqlite/db'
-import { EPOCH, epoch, epochAt, meta, storage } from '@yaks/sqlite'
+import { EPOCH, epoch, epochAt, META, meta, schema } from '@yaks/sqlite'
 import { loadVocab } from '@yaks/vocab'
 import { equal } from '@yaks/testing'
-
 let sql = open(':memory:')
 try {
   equal(epochAt(sql), undefined)
-  storage(sql, loadVocab({ $defs: {} })).install()
+  let tables = schema(loadVocab({ $defs: {} }))
+  sql.query(tables.find((s) => 'name' in s && s.name == META)!)
   let m = meta(sql)
   m.set('sweep', '42')
   equal(m.get('sweep'), '42')

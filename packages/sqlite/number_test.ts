@@ -167,11 +167,9 @@ test('an adopting store takes the number a patch states', () => {
   })
 })
 
+let local = storage(mem(), vocab, { number: true })
+local.install()
+local.tx((tx) => tx.patch([{ entity: { eid: 'old', num: 37574 }, task: {} }]))
 test('a store that is not adopting mints its own numbers regardless', () => {
-  let s = storage(mem(), vocab, { number: true })
-  s.install()
-  s.tx((tx) => {
-    tx.patch([{ entity: { eid: 'old', num: 37574 }, task: {} }])
-    assertEquals(tx.get(['old'])[0].entity.num, 1)
-  })
+  assertEquals(local.get(['old'])[0].entity.num, 1)
 })

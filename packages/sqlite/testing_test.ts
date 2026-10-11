@@ -1,5 +1,6 @@
 // A prepared schema is ready to use, and each store owns its writes.
-import { equal, test, throws } from '@yaks/testing'
+import { equal, test } from '@yaks/testing'
+import { assertIsError, assertStringIncludes } from '@std/assert'
 import { loadVocab } from '@yaks/vocab'
 import { col, insert, select, table } from '@yaks/sql'
 import { schema } from './mod.ts'
@@ -43,16 +44,24 @@ test('prepared stores keep writes private and retain their complete schema', () 
   )
 })
 
-test('prepared drivers retain fixture rows, isolate writes and enforce keys', async () => {
+let privateRows: unknown[], otherRows: unknown[], refused: unknown
+{
   using one = preparedDriver(seeded)
   using two = preparedDriver(seeded)
-  equal(one.query(entities), [{ eid: 'fixture' }])
+  privateRows = one.query(entities)
   one.query(insert('entity', { eid: 'private' }))
-  equal(two.query(entities), [{ eid: 'fixture' }])
-  await throws(
-    () => two.query(insert('item', { entity: 99, name: 'orphan' })),
-    'FOREIGN KEY',
-  )
+  otherRows = two.query(entities)
+  try {
+    two.query(insert('item', { entity: 99, name: 'orphan' }))
+  } catch (error) {
+    refused = error
+  }
+}
+test('prepared drivers retain fixture rows, isolate writes and enforce keys', () => {
+  equal(privateRows, [{ eid: 'fixture' }])
+  equal(otherRows, [{ eid: 'fixture' }])
+  assertIsError(refused)
+  assertStringIncludes(refused.message, 'FOREIGN KEY')
 })
 
 test('snapshots retain the fixture rows their extra statements request', () => {
