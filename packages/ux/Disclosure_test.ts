@@ -10,8 +10,8 @@ import { mount } from '../tui/testing.ts'
 import { disclosed, Disclosure, disclosureAt, isOpen } from './Disclosure.ts'
 import { docs } from './vocab.ts'
 
+let { document } = parseHTML('<html><body><main></main></body></html>')
 let page = () => {
-  let { document } = parseHTML('<html><body><main></main></body></html>')
   let prior = Object.getOwnPropertyDescriptor(globalThis, 'document')
   Object.defineProperty(globalThis, 'document', {
     value: document,
@@ -42,27 +42,43 @@ let page = () => {
   }
 }
 
-test('a disclosure is closed unless its supplied state says open', () => {
+// Draw each supplied state once and retain what the controlled view shows and
+// emits. The page is released before another host installs its document.
+let states = [undefined, false, true].map((open) => {
   using p = page()
-  for (let open of [undefined, false, true]) {
-    let e: Bundle = {
-      entity: { eid: disclosureAt('journal') },
-      ...(open === undefined ? {} : { Disclosure: { open } }),
-    }
-    p.draw(e)
+  let e: Bundle = {
+    entity: { eid: disclosureAt('journal') },
+    ...(open === undefined ? {} : { Disclosure: { open } }),
+  }
+  p.draw(e)
+  let button = p.button()
+  let body = p.root.ownerDocument.getElementById(
+    button.getAttribute('aria-controls')!,
+  )!
+  let state = {
+    open,
+    e,
+    expanded: button.getAttribute('aria-expanded'),
+    shown: !!p.root.querySelector('p'),
+    summary: button.textContent,
+    styled: button.classList.contains('journal-summary'),
+    hidden: body.hasAttribute('hidden'),
+  }
+  button.click()
+  return { ...state, emitted: p.sent.pop(), after: !!p.root.querySelector('p') }
+})
+test('a disclosure is closed unless its supplied state says open', () => {
+  for (let state of states) {
+    let { open, e } = state
     equal(isOpen(e), open === true)
-    equal(p.button().getAttribute('aria-expanded'), String(open === true))
-    equal(!!p.root.querySelector('p'), open === true)
-    equal(p.button().textContent, 'Completed')
-    equal(p.button().classList.contains('journal-summary'), true)
-    let body = p.root.ownerDocument.getElementById(
-      p.button().getAttribute('aria-controls')!,
-    )!
-    equal(body.hasAttribute('hidden'), open !== true)
-    p.button().click()
-    equal(p.sent.pop(), disclosed(e, open !== true))
+    equal(state.expanded, String(open === true))
+    equal(state.shown, open === true)
+    equal(state.summary, 'Completed')
+    equal(state.styled, true)
+    equal(state.hidden, open !== true)
+    equal(state.emitted, disclosed(e, open !== true))
     equal(
-      !!p.root.querySelector('p'),
+      state.after,
       open === true,
       'only the supplied state changes what is shown',
     )
