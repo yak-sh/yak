@@ -1,7 +1,43 @@
 import { equal, test } from '@yaks/testing'
 import { capture } from './report.ts'
 import { comp } from './model.ts'
-import { fixture } from './fixture_test.ts'
+import { fixture, vocab } from './fixture_test.ts'
+import { computed } from './vocab.ts'
+import { preparedStore } from '../sqlite/testing.ts'
+
+for (let backend of ['ram', 'sqlite']) {
+  for (let delayed of [false, true]) {
+    let burst = await (async () => {
+      let g = fixture(
+        { retain: 100 },
+        undefined,
+        (g) =>
+          delayed ? { ...g, read: (q, o) => Promise.resolve(g.read(q, o)) } : g,
+        backend == 'sqlite' ? preparedStore(vocab, { computed }) : undefined,
+      )
+      let rows = Array.from(
+        { length: 12 },
+        (_, i) =>
+          capture('burst, one..bug', {
+            sink: () => {},
+            eid: `burst-${i}`,
+            fault: 'burst, one..bug',
+          }),
+      )
+      await Promise.all(rows.map((b) => g.apply(b, { trusted: true })))
+      let [bug] = await g.read('.bug *')
+      // Redelivery through intake must not count an occurrence twice.
+      await Promise.all(rows.map((b) => g.apply(b, { trusted: true })))
+      let [again] = await g.read('.bug *')
+      return { bug, again, size: rows.length }
+    })()
+
+    test(`concurrent occurrence effects count the whole burst exactly once (${backend}, ${delayed ? 'async' : 'sync'} reads)`, () => {
+      equal(comp(burst.bug, 'bug').hits, burst.size)
+      equal(comp(burst.again, 'bug').hits, burst.size)
+    })
+  }
+}
 
 test('declared effects group intake and retain occurrences downstream', async () => {
   let at = '2026-10-02T00:00:10Z'

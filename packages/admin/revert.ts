@@ -63,6 +63,13 @@ export let revert = async (
   // owner can finish, not scratch that this command is entitled to erase.
   try {
     await needGit(tree, ['revert', '--no-edit', target], stopping, 'sha')
+    // These files are the explicit git revert, not a rebase that silently
+    // restores older content. Keep the exception scoped to that patch.
+    let paths = (await needGit(
+      tree,
+      ['diff', '--name-only', '-z', 'HEAD^', 'HEAD'],
+      stopping,
+    )).split('\0').filter(Boolean)
     for (let attempt = 0; attempt < 3; attempt++) {
       note('gating the revert: deno task check')
       let check = await output(Deno.execPath(), {
@@ -76,6 +83,7 @@ export let revert = async (
       let pushed = Date.now()
       let outcome = await land({
         cwd: tree,
+        allow: paths,
         run: (args, cwd) => git(cwd, args, stopping),
         write: (line, error) => (error ? note : out)(line.trimEnd()),
       })
