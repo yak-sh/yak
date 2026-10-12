@@ -88,10 +88,31 @@ export let verdict = (m: Head): boolean | null => {
  * or a bare address — and the envelope is the fallback when there is no header
  * at all.
  */
-export let author = (m: Received): string => {
-  let head = (m.headers.get('from') ?? '').trim()
+export let author = (m: Received): string =>
+  addressIn(m.headers.get('from')) || m.from
+
+/**
+ * Whom an answer goes to, from the `Reply-To:` header: the first address it
+ * names, or `''` when it names none. A relay (a feedback form, a list) writes
+ * for somebody else, so its `From:` is the relay and this is the person. A
+ * list's first reader is enough, the way a mail client's Reply answers one.
+ *
+ * ```ts
+ * import { answerer } from '@yaks/mail'
+ * let said = (v: string | null) => ({ from: '', to: '', headers: { get: () => v } })
+ * answerer(said('Ana <ana@x.example>, bo@x.example')) // 'ana@x.example'
+ * answerer(said('ana@x.example'))                     // 'ana@x.example'
+ * answerer(said(null))                                // ''
+ * ```
+ */
+export let answerer = (m: Received): string =>
+  addressIn(m.headers.get('reply-to')?.split(',')[0])
+
+// One address out of a header's either shape, `Ana <ana@x.example>` or bare.
+let addressIn = (said: string | null | undefined): string => {
+  let head = (said ?? '').trim()
   let angled = /<([^<>\s]+@[^<>\s]+)>/.exec(head)
-  return angled?.[1] ?? (/^\S+@\S+$/.test(head) ? head : m.from)
+  return angled?.[1] ?? (/^\S+@\S+$/.test(head) ? head : '')
 }
 
 /** The unbracketed Message-ID of a received letter, or `''`. */
@@ -119,6 +140,7 @@ export let messageId = (m: Received): string =>
 export let inbound = (m: Received, arrival: Arrival = {}): Bundle[] => {
   let at = arrival.at ?? m.headers.get('date') ?? new Date().toISOString()
   let answers = m.headers.get('in-reply-to')
+  let answer = answerer(m)
   return [{
     entity: { eid: arrival.eid ?? crypto.randomUUID() },
     [DOC]: {
@@ -135,6 +157,7 @@ export let inbound = (m: Received, arrival: Arrival = {}): Bundle[] => {
       // The header as written, beside `reply_to`: a reply to a letter this
       // graph never kept still says what it answers.
       ...(answers ? { in_reply_to: answers } : {}),
+      ...(answer ? { reply_address: answer } : {}),
       ...(arrival.verified == null ? {} : { verified: arrival.verified }),
     },
   }]

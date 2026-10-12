@@ -53,6 +53,13 @@
         "in_reply_to": {
           "type": "string",
           "description": "the Message-ID this letter answers, exactly as the header wrote it — what arrives before `reply_to` can name an entity, and all a reply to a letter nobody kept ever has"
+        },
+        "reply_address": {
+          "type": "string",
+          "description": "where an answer to a letter that arrived goes, from its `Reply-To:` header — absent when the header was, and then an answer goes to `from`",
+          "examples": [
+            "ana@example.com"
+          ]
         }
       }
     },

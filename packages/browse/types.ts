@@ -902,6 +902,7 @@ export type Mail = {
   message_id?: string | null
   verified?: boolean | null
   in_reply_to?: string | null
+  reply_address?: string | null
 }
 
 // The shared outcome and health facets (D-14945): `delivered` reached its

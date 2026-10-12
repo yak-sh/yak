@@ -35,14 +35,14 @@ let message = {
 }
 ```
 
-| Component   | Stored information                                                                                                                                                |
-| ----------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `mail`      | Sender and recipient addresses, time, related entity (`target`), threading fields, Message-ID (arrived with, or given by the transport), and verification result. |
-| `email`     | An entity's email address (`address`).                                                                                                                            |
-| `deliver`   | The recipient entity id (`to`) and when the message was handed to the sender (`tried`); requests outgoing delivery.                                               |
-| `delivered` | Delivery time (`at`).                                                                                                                                             |
-| `bounced`   | Failed delivery time and reason (`at`, `reason`).                                                                                                                 |
-| `notified`  | When a recipient was notified, by whom, and through which entity (`at`, `by`, `via`).                                                                             |
+| Component   | Stored information                                                                                                                                                                                                          |
+| ----------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `mail`      | Sender and recipient addresses, time, related entity (`target`), threading fields, Message-ID (arrived with, or given by the transport), verification result, and where an answer goes (`reply_address`, from `Reply-To:`). |
+| `email`     | An entity's email address (`address`).                                                                                                                                                                                      |
+| `deliver`   | The recipient entity id (`to`) and when the message was handed to the sender (`tried`); requests outgoing delivery.                                                                                                         |
+| `delivered` | Delivery time (`at`).                                                                                                                                                                                                       |
+| `bounced`   | Failed delivery time and reason (`at`, `reason`).                                                                                                                                                                           |
+| `notified`  | When a recipient was notified, by whom, and through which entity (`at`, `by`, `via`).                                                                                                                                       |
 
 The subject and body use `doc{title, body}` from [@yaks/doc](../doc/README.md).
 Load that package alongside this one. `mail.target` can refer to any entity, so

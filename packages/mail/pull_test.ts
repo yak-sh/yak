@@ -118,10 +118,22 @@ test('messageIdOf: the Message-ID inside the edge key', () => {
 })
 
 test('received: the edge fields become the headers arrive reads', () => {
-  let [m, arrival] = received({ ...letter(1), in_reply_to: '<a0@x.example>' })
+  let [m, arrival] = received({
+    ...letter(1),
+    in_reply_to: '<a0@x.example>',
+    reply_to: 'Ana <ana@far.example>',
+  })
   assertEquals(
-    ['from', 'subject', 'message-id', 'in-reply-to'].map(m.headers.get),
-    ['Bo <bo@far.example>', 'hello 1', 'm1@far.example', '<a0@x.example>'],
+    ['from', 'subject', 'message-id', 'in-reply-to', 'reply-to'].map(
+      m.headers.get,
+    ),
+    [
+      'Bo <bo@far.example>',
+      'hello 1',
+      'm1@far.example',
+      '<a0@x.example>',
+      'Ana <ana@far.example>',
+    ],
   )
   assertEquals(arrival, {
     at: '2026-09-23T12:00:00.000Z',

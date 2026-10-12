@@ -55,6 +55,18 @@ test('inbound: one letter, as it arrived', () => {
   }])
 })
 
+test('inbound: a relayed letter keeps whom it says to answer', () => {
+  let [b] = inbound(got({
+    from: 'yaks.app <hello@bot.example>',
+    'reply-to': 'Ana <ana@books.example>',
+  }))
+  assertEquals((b.mail as Record<string, unknown>).from, 'hello@bot.example')
+  assertEquals(
+    (b.mail as Record<string, unknown>).reply_address,
+    'ana@books.example',
+  )
+})
+
 test('verdict: the DKIM line, and the difference between failed and unasked', () => {
   let head = (v: string | null) => ({ get: () => v })
   assertEquals(

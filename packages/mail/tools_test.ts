@@ -208,6 +208,16 @@ test('a reply to an arrival goes to its author, from the desk it came to', async
   assertEquals((await g.get(['a1']))[0].archived, undefined)
 })
 
+test('a reply to a relayed letter goes to whom it says to answer', async () => {
+  let { g, post } = await club()
+  await g.apply([arrival('f1', {
+    from: 'hello@bot.example',
+    reply_address: 'ana@elsewhere.example',
+  })])
+  await did(g, 'mail_reply', { letter: 'f1', body: 'Fixed, thank you.' })
+  assertEquals(post.last()?.to, 'ana@elsewhere.example')
+})
+
 let outgoing = await club()
 await outgoing.g.apply([
   { entity: { eid: 'ana' }, email: { address: 'ana@books.example' } },

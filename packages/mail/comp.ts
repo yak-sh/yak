@@ -1,8 +1,8 @@
 // The components this package declares, as one vocabulary document to load
 // beside your own.
 //
-//   mail{from, to, at, target, reply_to, message_id, verified}
-//                                                      one letter's envelope
+//   mail{from, to, at, target, reply_to, message_id, verified, in_reply_to,
+//        reply_address}                                one letter's envelope
 //   email{address}                                     an address, as an entity
 //   deliver{to}                                        who it is for, as an entity
 //   delivered{at}                                      it left

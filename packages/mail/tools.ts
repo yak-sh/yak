@@ -266,8 +266,8 @@ export let runs = (
     ]
   },
 
-  // The reply goes to the far side — an arrival's author, or our own sent
-  // letter's recipient — and never to a fallback between the two: the wrong
+  // The reply goes to the far side — whom an arrival says to answer (its
+  // Reply-To, else its author), or our own sent letter's recipient — and never to a fallback between the two: the wrong
   // choice here is this graph's own address, so a reply that quietly went
   // there would look sent without being sent. An arrival is a letter with a
   // Message-ID that never asked to be sent: one of ours carries `deliver`, and
@@ -278,7 +278,11 @@ export let runs = (
     let mail = comp(letter, MAIL)!
     let arrived = !!prop(mail, 'message_id') && !comp(letter, DELIVER)
     let far = arrived
-      ? await recipientOf(graph, prop(mail, 'from'), options.domain)
+      ? await recipientOf(
+        graph,
+        prop(mail, 'reply_address') || prop(mail, 'from'),
+        options.domain,
+      )
       : { to: prop(comp(letter, DELIVER), 'to'), made: [] as Bundle[] }
     if (!far.to) {
       throw new CallError(

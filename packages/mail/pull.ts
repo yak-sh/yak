@@ -57,6 +57,8 @@ export type EdgeMessage = {
   verified?: boolean | null
   /** the `In-Reply-To:` header */
   in_reply_to?: string | null
+  /** the `Reply-To:` header, as written */
+  reply_to?: string | null
   /** the headers the edge kept: a JSON object, as text */
   headers?: string | null
 }
@@ -176,6 +178,7 @@ export let received = (m: EdgeMessage): [Received, Arrival] => {
     ['subject', m.subject],
     ['message-id', messageIdOf(m.id)],
     ['in-reply-to', m.in_reply_to],
+    ['reply-to', m.reply_to],
   ]
   for (let [k, v] of said) if (v) heads.set(k, v)
   let at = m.received_at ?? new Date(m.ts ?? Date.now()).toISOString()
