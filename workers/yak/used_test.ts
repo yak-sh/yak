@@ -3,13 +3,14 @@ import { derivedEid, graph, signed } from '@yaks/graph'
 import { ram } from '@yaks/ram'
 import { loadVocab } from '@yaks/vocab'
 import { useDoc } from './facets/directory-vocab.ts'
-import { recordUse, using } from './used.ts'
+import { recordUse, scheduleUse, using } from './used.ts'
 import { directory, fetch as directoryFetch } from './directory.ts'
 import { PLATFORM_STORE, storeOf } from './door.ts'
 import { KERNEL, meta } from './meta.ts'
 import { platform } from './testing.ts'
 import { Store } from './graph.ts'
 import type { Rule } from './mover.ts'
+import { within } from './defects.ts'
 
 let PERSON = derivedEid('fixture:person')
 let ADMIN = derivedEid('fixture:admin')
@@ -130,9 +131,25 @@ let visits = await (async () => {
     find: '.pulse.n=1',
     move: (row) => [{ entity: row.entity, pulse: { n: 2 } }],
   }
-  let current = new Store(p.states.get('used-proof/probe')!, p.env, [rule])
+  let state = p.states.get('used-proof/probe')!
+  let retained: Promise<unknown>[] = []
+  let keep = state.waitUntil
+  state.waitUntil = (work) => {
+    retained.push(work)
+    keep(work)
+  }
+  let current = new Store(state, p.env, [rule])
+  let reports: unknown[] = []
+  p.env.ERRORS = {
+    send: (rows) => {
+      reports.push(...rows)
+      return Promise.resolve()
+    },
+  }
   let get = p.env.STORE.get.bind(p.env.STORE)
   let receiptDown = false
+  let release: (response: Response) => void = () => {}
+  let stalled = new Promise<Response>((resolve) => release = resolve)
   p.env.STORE.get = (id) => {
     if (String(id) == 'used-proof/probe') {
       return { fetch: (r) => current.fetch(r) }
@@ -142,9 +159,7 @@ let visits = await (async () => {
       fetch: (r) =>
         receiptDown && String(id) == PLATFORM_STORE &&
           new URL(r.url).pathname == '/used'
-          ? Promise.resolve(
-            new Response('receipt unavailable', { status: 503 }),
-          )
+          ? stalled
           : stub.fetch(r),
     }
   }
@@ -163,15 +178,39 @@ let visits = await (async () => {
   await response.body?.cancel()
   found.push(await use())
   receiptDown = true
-  let failed = await ask('/apply', {
-    method: 'POST',
-    body: JSON.stringify([{ entity: { eid: 'pulse' }, pulse: { n: 3 } }]),
-  }, {
-    'x-yak-person': VISITOR,
-    'x-yak-role': 'editor',
-  }).then((r) => r.status, (e) => e.status)
-  checked = await ask('/query?q=.pulse.n=2', {}, KERNEL)
-  let unchanged = (await checked.json() as unknown[]).length
+  let served: number | undefined
+  let mutation = within(
+    p.env,
+    { request: 'user mutation' },
+    () =>
+      ask('/apply', {
+        method: 'POST',
+        body: JSON.stringify([{ entity: { eid: 'pulse' }, pulse: { n: 3 } }]),
+      }, {
+        'x-yak-person': VISITOR,
+        'x-yak-role': 'editor',
+      }),
+  ).then(async (r) => {
+    served = r.status
+    await r.body?.cancel()
+  })
+  await until(() => served != null, {
+    label: 'mutation served while receipt stalls',
+  })
+  checked = await ask('/query?q=.pulse.n=3', {}, KERNEL)
+  let changed = (await checked.json() as unknown[]).length
+  release(new Response('receipt unavailable', { status: 503 }))
+  await mutation
+  await Promise.all(retained)
+  await until(
+    () =>
+      reports.some((row) =>
+        (row as { error?: { tags?: { request?: string } } }).error?.tags
+          ?.request ==
+          'record app use'
+      ),
+    { label: 'failed background receipt reported' },
+  )
   receiptDown = false
   response = await ask('/query?q=.entity', {}, {
     'x-yak-person': ADMIN,
@@ -185,6 +224,9 @@ let visits = await (async () => {
     'x-yak-role': 'viewer',
   })
   await response.body?.cancel()
+  await until(async () => await use() != null, {
+    label: 'visitor receipt recorded',
+  })
   found.push(response.status, await use())
   let at = (found.at(-1) as { at: string }).at
   receiptDown = true
@@ -193,7 +235,7 @@ let visits = await (async () => {
   response = await ask('/query?q=.entity', {}, KERNEL)
   await response.body?.cancel()
   found.push(await use())
-  return { found, at, moved, failed, unchanged, coalesced }
+  return { found, at, moved, served, changed, coalesced }
 })()
 
 test('an app visit records use in the directory while platform diagnostics do not', () => {
@@ -201,7 +243,59 @@ test('an app visit records use in the directory while platform diagnostics do no
     at: visits.at,
   }])
   equal(visits.moved, 1)
-  equal(visits.failed, 503)
-  equal(visits.unchanged, 1)
+  equal(visits.served, 200)
+  equal(visits.changed, 1)
   equal(visits.coalesced, visits.at)
+})
+
+let delivery = await (async () => {
+  let entered: () => void = () => {}
+  let reporting = new Promise<void>((resolve) => entered = resolve)
+  let release: () => void = () => {}
+  let stalled = new Promise<void>((resolve) => release = resolve)
+  let retained: Promise<void>[] = []
+  let env = {
+    STORE: {
+      idFromName: (name: string) => name,
+      get: () => ({
+        fetch: () =>
+          Promise.resolve(new Response('unavailable', { status: 503 })),
+      }),
+    },
+    ERRORS: {
+      send: () => {
+        entered()
+        return stalled
+      },
+    },
+  }
+  let served: string | undefined
+  let request = within(
+    env,
+    {},
+    async () => {
+      scheduleUse(env, 'background-report-proof')
+      await reporting
+      return 'served'
+    },
+    undefined,
+    {
+      retain: (work) => {
+        retained.push(work)
+      },
+    },
+  ).then((answer) => {
+    served = answer
+  })
+  await until(() => served != null, {
+    label: 'response ignores stalled defect delivery',
+  })
+  release()
+  await request
+  await Promise.all(retained)
+  return served
+})()
+
+test('background receipt defect delivery does not delay the response', () => {
+  equal(delivery, 'served')
 })

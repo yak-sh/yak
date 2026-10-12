@@ -289,7 +289,8 @@ let appsOf = (env: Env, space: Space) =>
 let graphAt = (env: Env, space: Space, app: App, who: Who) => {
   let store = appStore(env.STORE, space, app, env)
   return {
-    query: (line: string) => metaOf(store, vouched(who)).query(line),
+    query: (line: string) =>
+      metaOf(store, { ...vouched(who), 'x-yak-observe': '1' }).query(line),
     mark: async (hits: Hit[], mark: 'notified' | 'archived') => {
       let legacy = hits.filter((h) => !h.tracked)
       let tracked = hits.filter((h) => h.tracked)

@@ -35,6 +35,10 @@ type Invocation = {
 let context = new AsyncLocalStorage<Invocation>()
 let reporters = new WeakMap<object, Coalesced>()
 
+/** Keep detached work alive without joining the request's awaited reports. */
+export let background = (work: Promise<void>): void =>
+  context.getStore()?.retain?.(work)
+
 export let delivery = (env: Bindings, clock?: WindowClock): Coalesced =>
   coalesce(env.ERRORS ? queue(env.ERRORS) : () => {}, {
     window: 10_000,

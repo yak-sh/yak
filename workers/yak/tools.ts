@@ -213,6 +213,7 @@ import {
 } from './seed.ts'
 import { Pending, said as sentence } from './writes.ts'
 import { archive, healed, line, openIn, serve } from './unseen.ts'
+import { scheduleUse } from './used.ts'
 import {
   atCeiling,
   ceilings,
@@ -1851,7 +1852,10 @@ export let wrote = (
       )
       return paths
     },
-  )
+  ).then((paths) => {
+    if (!who.administrative) scheduleUse(env, app.eid)
+    return paths
+  })
 }
 
 /**
@@ -2875,7 +2879,10 @@ let OURS: Row[] = [
               space,
             }
           },
-        )
+        ).then((result) => {
+          if (!who.administrative) scheduleUse(ctx.env, app.eid)
+          return result
+        })
       }
       // What this file has been (T-34508). Every write pins what it replaced,
       // so a path answers its own past — and `now` is at the top because "what

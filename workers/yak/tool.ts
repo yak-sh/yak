@@ -22,7 +22,6 @@ import type { Env } from './env.ts'
 import type { Spend } from './sandbox.ts'
 import type { Caller, Who } from './session.ts'
 import type { Clock } from './timing.ts'
-import { recordUse } from './used.ts'
 
 export type Ctx = {
   env: Env
@@ -275,7 +274,6 @@ export let inSpace = async (
   if (write && !writes(who.role)) {
     throw refuse('access', `not a writer of ${space.slug}`)
   }
-  if (write && !who.administrative) await recordUse(ctx.env.STORE, space.eid)
   return { space, who }
 }
 
@@ -300,7 +298,6 @@ export let inApp = async (
   let slug = text(args.app, 'app')
   let app = await ctx.dir.app(space, slug)
   if (!app) throw refuse('missing', `no app ${slug} in ${space.slug}`)
-  if (!who.administrative) await recordUse(ctx.env.STORE, app.eid)
   return {
     space,
     app,

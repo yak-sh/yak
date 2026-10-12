@@ -134,6 +134,14 @@ Good work here keeps a clear sense of who owes what: a deploy installs, an
 alarm does what was recorded, a read reads, and a store nobody touches costs
 nothing.
 
+Use receipts help the idle test-space sweep; they are background bookkeeping,
+kept alive with the Store's `waitUntil` or the request's background context.
+They never hold up a person's response or make it fail. A missed receipt cannot
+cost a person's work because any space with a person in it stays outside this
+sweep; report the receipt failure as a defect and serve the request. Reading
+app listings, diagnostics or permissions through the platform is observation,
+not use of those apps, and adds no activity hop to those reads.
+
 - **An alarm does recorded work.** An app alarm fires its stored wakes, moves
   explicitly owed schema rows, drains recorded effects whose handlers it
   composes and drains queued embeddings (`graph.ts`). Pending effects with no

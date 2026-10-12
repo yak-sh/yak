@@ -276,7 +276,7 @@ import {
 import { weighed } from './meter.ts'
 import { embedder, SPACE, texts } from './embedding.ts'
 import { directoryOf } from './directory.ts'
-import { recordUse, useUntil, using } from './used.ts'
+import { scheduleUse, useUntil, using } from './used.ts'
 import { instrumentActor, instrumentEid } from './instrument.ts'
 import { commandAt, commandReply } from './app-command.ts'
 import { vaultOf } from './vault.ts'
@@ -865,27 +865,30 @@ export class Store {
   #quiet: (() => void) | null = null
   #draft: Promise<void> | null = null
   #useScope = new AsyncLocalStorage<
-    { kernel: boolean; administrative: boolean }
+    {
+      kernel: boolean
+      administrative: boolean
+      observe?: boolean
+      maintenance?: boolean
+    }
   >()
-  #usedUntil = 0
-  #using: Promise<void> | null = null
 
-  #used(): Promise<void> {
+  #used(domain = false): void {
     let ns = this.#bind.STORE, app = this.#get('app')
+    let scope = this.#useScope.getStore()
     if (
-      !ns || !app || this.#usedUntil > Date.now() ||
+      !ns || !app ||
       storeKind(this.#get('name') ?? '') != 'app' ||
-      this.#useScope.getStore()?.administrative ||
-      this.#useScope.getStore()?.kernel
-    ) return Promise.resolve()
-    return this.#using ??= recordUse(ns, app).then((at) => {
-      if (at) this.#usedUntil = Date.parse(at)
-    }).finally(() => this.#using = null)
+      scope?.maintenance ||
+      (!domain && (scope?.administrative || scope?.kernel || scope?.observe))
+    ) return
+    scheduleUse(this.#bind, app, (work) => this.#ctx.waitUntil?.(work))
   }
 
   #maintenance<T>(run: () => T): T {
     return this.#useScope.run({
       kernel: true,
+      maintenance: true,
       administrative: this.#useScope.getStore()?.administrative ?? false,
     }, run)
   }
@@ -1169,8 +1172,9 @@ export class Store {
             if ('maintenance' in run && run.maintenance === true) {
               return this.#maintenance(() => run(...args))
             }
-            await this.#used()
-            return run(...args)
+            let result = await run(...args)
+            this.#used(true)
+            return result
           },
         ]),
       ))
@@ -1998,13 +2002,14 @@ export class Store {
     mail: () => this.#get('mail'),
     graph: this.#kernelGraph(g),
     as: async (who, bundles, via) => {
-      await this.#used()
-      return await this.#graph.apply(
+      let applied = await this.#graph.apply(
         signed(bundles, {
           ...(who ? { by: who } : {}),
           ...(via ? { via } : {}),
         }),
       )
+      this.#used(true)
+      return applied
     },
     commands: () => readTools(this.#get('tools') || '{}'),
     broke: (what, error) => void this.#broke(what, error),
@@ -2066,7 +2071,6 @@ export class Store {
                   if (!reads(access, role)) {
                     throw new Denied(person, appId, 'viewer', 'read')
                   }
-                  await this.#used()
                   if (person) {
                     this.#vouched.set(person, {
                       person,
@@ -2123,6 +2127,7 @@ export class Store {
                       argsOf(call),
                       acts,
                     )
+                  this.#used(true)
                   return [{
                     entity: { eid: '$answer' },
                     content: { body: answered.text },
@@ -2211,8 +2216,9 @@ export class Store {
   #clock: Pick<Graph, 'read' | 'apply'> = {
     read: (q, o) => (this.#subs ?? this.#graph).read(q, o),
     apply: async (b, o) => {
-      await this.#used()
-      return this.#trust(b as Bundle[], null, o)
+      let applied = await this.#trust(b as Bundle[], null, o)
+      this.#used(true)
+      return applied
     },
   }
 
@@ -2938,6 +2944,7 @@ export class Store {
       {
         kernel: request.headers.get('x-yak-kernel') == '1',
         administrative: request.headers.get('x-yak-administrative') == '1',
+        observe: request.headers.get('x-yak-observe') == '1',
       },
       () =>
         this.#traced(routeKind(request), () => this.#fetch(request), request),
@@ -2983,20 +2990,6 @@ export class Store {
       return this.#missing()
     }
     await this.#ensureStarted(request)
-    if (
-      !kernel && !request.headers.has('x-yak-administrative') &&
-      !this.#refused &&
-      (request.headers.has('x-yak-person') || request.headers.has('x-yak-via'))
-    ) {
-      if (this.#bind.STORE && this.#usedUntil <= Date.now()) {
-        try {
-          await this.#auth(request)
-        } catch (error) {
-          return refuse(error, request)
-        }
-      }
-      await this.#used()
-    }
     let tally = this.#pending
     this.#pending = new Map()
     let run = () =>
@@ -3044,6 +3037,12 @@ export class Store {
             leave()
           }
         }
+        if (
+          (answer.ok || answer.status == 101) &&
+          ['/query', '/apply', '/call', '/storage', '/ws'].includes(path) &&
+          (request.headers.has('x-yak-person') ||
+            request.headers.has('x-yak-via'))
+        ) this.#used()
         if (answer.status == 101) return answer
         let headers = new Headers(answer.headers)
         let { hops, r2 } = counts(tally)
@@ -4451,19 +4450,18 @@ export class Store {
         let input = decode(data)
         let message = 'value' in input ? input.value : null
         let held = ws.deserializeAttachment() as { read?: ReadOpts } | null
-        if (
-          storeKind(this.#get('name') ?? '') == 'app' &&
+        let active = storeKind(this.#get('name') ?? '') == 'app' &&
           !held?.read?.administrative && message &&
           typeof message == 'object' &&
           (('ask' in message && typeof message.ask == 'string') ||
             ('relay' in message && Array.isArray(message.relay) &&
               message.relay.length))
-        ) await this.#used()
         await this.#live.message(
           ws,
           data,
           prof ? (kind, work) => prof.run(`ws ${kind}`, work) : undefined,
         )
+        if (active && ws.readyState == 1) this.#used()
       } finally {
         this.#profile?.flush()
       }

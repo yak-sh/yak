@@ -138,6 +138,7 @@ let VOUCH = [
   'x-yak-write',
   'x-yak-kernel',
   'x-yak-administrative',
+  'x-yak-observe',
   'x-via',
   'x-yak-via',
 ]
