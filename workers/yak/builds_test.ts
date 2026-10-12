@@ -125,6 +125,13 @@ test('builds: the error names its statement, place and code', () => {
     'disk full',
   )
   assertEquals(failure(['Retrying after timeout']).reason, 'timeout')
+  assertEquals(
+    failure([
+      'Cloning repository...',
+      'Failed: error occurred while fetching repository',
+    ]),
+    { step: 'Workers Builds setup', reason: 'repository fetch failed' },
+  )
 })
 
 test('builds: a build that fails at staging says production deployed', async () => {

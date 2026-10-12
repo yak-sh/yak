@@ -162,6 +162,8 @@ let labelOf = (line: string) => {
     ? 'out of memory'
     : /\b(?:test failed|failed test|FAILURES)\b/i.test(line)
     ? 'test failure'
+    : /\bwhile fetching repository\b/i.test(line)
+    ? 'repository fetch failed'
     : undefined
 }
 
