@@ -137,15 +137,12 @@ export let fixing = (g: Graph, options: Options = {}) => {
     ]
   }
 
-  // Answers what it wrote, so a caller can tell the bug's tracker a fixer
-  // started.
   let fix = (read: () => Promise<Work | undefined>) =>
-    serial(async (): Promise<Bundle[]> => {
+    serial(async () => {
       let work = await read()
-      if (!work) return []
+      if (!work) return
       let rows = [...(work.writes ?? []), ...await request(work)]
       if (rows.length) await g.apply(rows, { trusted: true })
-      return rows
     })
   return { fix, home }
 }

@@ -76,15 +76,19 @@ export let follow = (
   // without one they are read with a command.
   let base = (at: string) => at.replace(/\/$/, '')
   let web = options.trackers?.find((at) => /^https?:/.test(at))
+  // The bug's work item: the derived task, or one an about edge links.
+  let taskOf = async (evidence: string) => {
+    let edges = await g.read(and(present('about'), eq('edge.to', evidence)))
+    let linked = edges.map((edge) => str(comp(edge, 'edge')?.from))
+    return (await g.get([...new Set([...linked, taskEid(evidence)])]))
+      .find((row) => row.task)
+  }
   let reconcile = (bug: Bundle, url: string, mutate: Client['mutate']) =>
     fix(async () => {
       if (!bug.bug) return
       let evidence = bug.entity.eid
       let eid = taskEid(evidence)
-      let edges = await g.read(and(present('about'), eq('edge.to', evidence)))
-      let linked = edges.map((edge) => str(comp(edge, 'edge')?.from))
-      let task = (await g.get([...new Set([...linked, eid])]))
-        .find((row) => row.task)
+      let task = await taskOf(evidence)
       if (task) {
         let close = bug.archived && !task.cancelled
           ? 'cancelled'
@@ -131,7 +135,6 @@ export let follow = (
         }
         if (task.cancelled || bug.resolved) return
         if (task.completed && !reopen) return
-        await take(g, bug, task, mutate)
         return { task, bug: evidence, reopen }
       }
       if (bug.resolved || bug.archived) return
@@ -161,12 +164,12 @@ export let follow = (
         ],
       }
     })
-  // A fixer this pass started is news at once; a replay re-sends it.
+  // The work commits first; telling the tracker a fixer took the bug comes
+  // after, so a tracker that cannot take the mark yet (an older Worker during
+  // a deploy) never holds back a fixer. A later pass sends what failed.
   return async (bug: Bundle, url: string, mutate: Client['mutate']) => {
-    let wrote = await reconcile(bug, url, mutate)
-    let held = wrote.find((row) => row.claim)
-    if (held && wrote.some((row) => row.fixer)) {
-      await take(g, bug, (await g.get([held.entity.eid]))[0], mutate)
-    }
+    await reconcile(bug, url, mutate)
+    if (!bug.bug || bug.resolved || bug.archived) return
+    await take(g, bug, await taskOf(bug.entity.eid), mutate)
   }
 }

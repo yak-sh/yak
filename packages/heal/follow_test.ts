@@ -236,6 +236,21 @@ test('a started fixer marks its bug taken in the tracker, once', async () => {
   took.close()
 })
 
+// An older tracker refuses the mark it doesn't know yet (a deploy in between).
+let unmarked = await fixture()
+let refusing = follow(unmarked.g, unmarked.config)
+let refused = await (async () => {
+  let [row] = await unmarked.tracker.get([bug])
+  return refusing(row, url, () => Promise.reject(Error('no take door')))
+})().then(() => undefined, (error: Error) => error.message)
+test('a tracker refusing the taken mark never holds back the fixer', async () => {
+  equal(refused, 'no take door')
+  equal(await count(unmarked.g, 'fixer'), 1)
+  await unmarked.replay()
+  ok(comp((await unmarked.tracker.get([bug]))[0], 'taken'))
+  unmarked.close()
+})
+
 let replayed = await fixture()
 await replayed.run()
 replayed.commits.length = 0
