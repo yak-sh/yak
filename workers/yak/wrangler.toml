@@ -661,7 +661,9 @@ bucket_name = "yak-blobs-staging"
 
 [[env.staging.r2_buckets]]
 binding = "MODEL_RECEIPTS"
-bucket_name = "yak-model-receipts"
+# Staging stays inline and keeps the inference/ namespace in its existing
+# private bucket, without binding production receipts or provisioning another.
+bucket_name = "yak-blobs-staging"
 
 [env.staging.cache]
 enabled = true
