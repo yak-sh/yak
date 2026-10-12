@@ -1,7 +1,7 @@
 // Command declarations are data. The memo keeps neither a vocabulary runtime
 // nor any closures; the chosen command loads its implementation by role.
 import { type Config, used } from './config.ts'
-import { facetsOf } from '@yaks/host/config'
+import { chosen, facetsOf } from '@yaks/host/config'
 import type { Declared } from './words.ts'
 import type { CliCommand, CliFacet } from './host.ts'
 import type { VocabFacet } from '@yaks/host'
@@ -29,7 +29,13 @@ export let declarations = (
   config: Config,
   controls = false,
 ): Promise<Declarations> => {
-  let inputs = config.plugins ?? []
+  // Options are capabilities lent to running factories. They neither change
+  // declarations nor belong in a discovery cache's identity or serialization.
+  let inputs = (config.plugins ?? []).map((input) => ({
+    use: used(input),
+    words: chosen(input),
+    facets: facetsOf(input),
+  }))
   let key = JSON.stringify([inputs, controls])
   let known = held.get(key) ??
     (!controls && held.get(JSON.stringify([inputs, true])))
@@ -46,7 +52,11 @@ export let declarations = (
       new URL('./derive.ts', import.meta.url).href,
       ...requests,
     ],
-    async () => (await import('./derive.ts')).derive(config, controls),
+    async () =>
+      (await import('./derive.ts')).derive(
+        { ...config, plugins: inputs },
+        controls,
+      ),
     {
       callbacks: { cli: ['run'] },
     },
