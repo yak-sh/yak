@@ -44,7 +44,7 @@ import { frozen } from '@yaks/fp'
 // ---- values ----
 
 // Quotes are double or single, and a backslash inside escapes the next char.
-let QUOTED = /^(["'])(.*)\1$/s
+let QUOTED = /^(["'])((?:\\.|(?!\1)[^\\])*)\1$/s
 let stripQuotes = (v: string): string => {
   let m = v.match(QUOTED)
   return m ? m[2].replace(/\\(.)/gs, '$1') : v
@@ -89,6 +89,7 @@ let LIST =
 // Recognizing a range needs no type, because the current matcher applies `..`
 // to every property.
 let atom = (raw: string): Value => {
+  if (QUOTED.test(raw)) return scalar(stripQuotes(raw))
   let m = raw.match(/^(.*?)\.\.(\.?)(.*)$/s)
   if (!m) return scalar(raw)
   let [, lo, excl, hi] = m
@@ -104,7 +105,7 @@ let value = (raw: string): Value => {
   let items = splitOutside(raw, ',')
   if (items.length == 1) return atom(raw)
   if (items.some((s) => !s)) throw new SyntaxError(LIST)
-  return { kind: 'list', items: items.map((s) => atom(stripQuotes(s))) }
+  return { kind: 'list', items: items.map(atom) }
 }
 
 // ---- component names ----
@@ -467,7 +468,7 @@ export let parseDot = (token: string): Clause[] | null => {
   // An ordinary predicate. Contains (`~=`) is deliberately literal, so its
   // value is one raw scalar; every other form parses list and range structure.
   if (op == '~=') return [{ kind: 'pred', path: segs, op, value: scalar(val) }]
-  return [{ kind: 'pred', path: segs, op: op as Op, value: value(val) }]
+  return [{ kind: 'pred', path: segs, op: op as Op, value: value(rawValue) }]
 }
 
 // ---- tokenizing a whole query ----

@@ -3,6 +3,7 @@ import { test } from '@yaks/testing'
 import { assertEquals } from '@std/assert'
 import { graph } from '@yaks/graph'
 import { loadVocab } from '@yaks/vocab'
+import { and, eq, list } from '@yaks/query'
 import { type Driver, render } from '@yaks/sql'
 import { get, storage } from './mod.ts'
 import { snapshot, textual } from './testing.ts'
@@ -31,6 +32,8 @@ store.tx((tx) =>
     { entity: { eid: 'public' } },
     { entity: { eid: 'hidden' } },
     { entity: { eid: 'history-1' } },
+    { entity: { eid: 'public,literal' } },
+    { entity: { eid: 'literal-link' }, pointers: { p0: 'public,literal' } },
     { entity: { eid: 'link' }, pointers: { p0: 'public', p1: 'hidden' } },
   ])
 )
@@ -45,6 +48,15 @@ let g = graph({
 // The wide statement's prepare belongs to opening this fixture's connection.
 g.rows('.refs=public')
 g.rows('.refs=hidden')
+let literal = () => g.rows(and(eq('pointers.p0', 'public,literal')))
+let literalList = () =>
+  g.rows(and(eq('pointers.p0', list('public,literal', 'public', 'hidden'))))
+literal()
+literalList()
+test('scoped reference equality preserves literal commas', () =>
+  assertEquals(literal(), [{ eid: 'literal-link' }]))
+test('scoped reference lists preserve literal members and hide denied targets', () =>
+  assertEquals(literalList(), [{ eid: 'literal-link' }, { eid: 'link' }]))
 test('wide backlinks stay scoped under the host parameter limit', () => {
   assertEquals(g.rows('.refs=public'), [{ eid: 'link' }])
 })

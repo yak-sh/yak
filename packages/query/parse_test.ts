@@ -57,6 +57,9 @@ let cases: [string, ReturnType<typeof and>][] = [
   ['.domain=Ops,Eng', and(eq('domain', list('Ops', 'Eng')))],
   // a quoted member may hold what a bare one cannot
   ['.tag="a b",c', and(eq('tag', list('a b', 'c')))],
+  ['.tag="a,b"', and(eq('tag', 'a,b'))],
+  [".tag='a..b'", and(eq('tag', 'a..b'))],
+  ['.tag="a,b","c..d"', and(eq('tag', list('a,b', 'c..d')))],
   ['.priority=1..5', and(eq('priority', range('1', '5')))],
   ['.priority=1...5', and(eq('priority', range('1', '5', true)))],
   ['.created.at=2026-07-25', and(eq('created.at', scalar('2026-07-25')))],

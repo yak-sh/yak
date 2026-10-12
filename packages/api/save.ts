@@ -96,18 +96,12 @@ export let saving = <C>(
       ).slice(-1)
       let prop = leaf && graph.vocab.prop(leaf.comp, leaf.prop)
       if (prop?.scalar != 'time' && prop?.scalar != 'number') return c
-      let text = (v: NonNullable<typeof c.value>): string =>
-        v.kind == 'list'
-          ? v.items.map(text).join(',')
-          : v.kind == 'range'
-          ? text(v.lo) + (v.exclusiveEnd ? '...' : '..') + text(v.hi)
-          : v.raw
       let op = c.op == '!=' ? '=' : c.op
-      let edges = timeEdges(op, text(c.value), now())
+      let edges = timeEdges(op, c.value, now())
       if (
         !edges ||
         JSON.stringify(edges) ==
-          JSON.stringify(timeEdges(op, text(c.value), now() + 366 * 86_400_000))
+          JSON.stringify(timeEdges(op, c.value, now() + 366 * 86_400_000))
       ) return c
       timed = true
       // A negative comparison can hold for a missing value as well.
@@ -134,9 +128,9 @@ export let saving = <C>(
         uncertain = true
         return
       }
-      let edges = timeEdges(c.op, c.value.raw, now())
+      let edges = timeEdges(c.op, c.value, now())
       if (!edges) return
-      let future = timeEdges(c.op, c.value.raw, now() + 1000)
+      let future = timeEdges(c.op, c.value, now() + 1000)
       if (JSON.stringify(edges) == JSON.stringify(future)) return
       if (c.where || graph.vocab.assoc(c.path[0])) {
         uncertain = true

@@ -404,6 +404,20 @@ test('save queries without a clock wake on relevant commits, not periodic reads'
   equal(f.timers.size, 0)
 })
 
+let literalTime = (() => {
+  let f = fixture('.updated.at=today,"today,yesterday"')
+  f.g.apply([{ entity: { eid: 'a' }, book: { status: 'draft' } }])
+  f.saved.write('one', f.write(7))
+  return f
+})()
+
+test('literal punctuation on a time field does not schedule a clock retry', () => {
+  let f = literalTime
+  equal(f.read(), undefined)
+  equal(f.timers.size, 0)
+  f.saved.drop('one')
+})
+
 test('a relevant commit during an asynchronous eligibility read is rechecked', async () => {
   let f = fixture('.book.status=shelved')
   f.g.apply([{ entity: { eid: 'a' }, book: { status: 'draft' } }])

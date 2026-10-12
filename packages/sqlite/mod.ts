@@ -50,6 +50,7 @@ import {
   type Derived,
   type Driver,
   erect,
+  literals,
   oneOf,
   type Raw,
   render,
@@ -496,7 +497,7 @@ export let storage = (
       if (c.kind == 'and' || c.kind == 'or') return c.clauses.forEach(visit)
       if (
         c.kind != 'pred' || c.where || c.op != '=' ||
-        c.value?.kind != 'scalar' || !c.value.raw
+        !literals(c.value)?.length
       ) return
       let hops = vocab.aim(c.path.join('.'), bare(c)), h = hops[0]
       let prop = h && vocab.prop(h.comp, h.prop)
@@ -504,7 +505,7 @@ export let storage = (
         hops.length != 1 || !prop?.ref || prop.computed ||
         base.derived?.[`${h.comp}.${h.prop}`] || vocab.comp(prop.ref)?.computed
       ) return
-      for (let eid of c.value.raw.split(',')) operands.add(eid)
+      for (let eid of literals(c.value)!) operands.add(eid)
     }
     visit(query)
     if (!operands.size) return undefined
@@ -578,8 +579,7 @@ export let storage = (
       if (c.kind != 'pred') return true
       let leaf = vocab.aim(c.path.join('.'), bare(c)).at(-1)
       return !leaf || vocab.prop(leaf.comp, leaf.prop)?.category != 'ref' ||
-        !c.not && c.op == '=' && c.value?.kind == 'scalar' &&
-          !!c.value.raw && !c.value.raw.includes('..')
+        !c.not && c.op == '=' && !!literals(c.value)?.length
     }
     if (o.visibility) {
       let policy = o.visibility.entity
