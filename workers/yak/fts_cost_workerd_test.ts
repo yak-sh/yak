@@ -24,6 +24,14 @@ test('a screened text ranking bounds work beyond its term statistics', async () 
   // Term postings and the broad screen are linear. Excluded matches must not
   // also cost ranking and owner lookups, or repeat MATCH per eligible owner.
   assert(report.read < report.history * 4 + 100, `${report.read} billed rows`)
+  assertEquals(report.screened.rows.map((r) => r.entity), ['near', 'far'])
+  assert(report.screened.rows[0].snippet.includes('\x01needle\x02'))
+  assertEquals(report.screened.written, 0)
+  // A narrow term should probe the large owner screen only for its hits.
+  assert(
+    report.screened.read < 100,
+    `${report.screened.read} billed rows for ${report.history} unrelated matches`,
+  )
   let sparse = report.queries['needle thread .comment .limit=2']
   assertEquals(sparse.rows, [{ eid: 'far' }, { eid: 'near' }])
   assertEquals(sparse.written, 0)

@@ -69,12 +69,17 @@ export let seed = (db: Driver, count: number): void => {
   for (let statement of schema(text)) db.query(statement)
   db.query(insert('entity', { id: 1, eid: 'near' }, { id: 2, eid: 'far' }))
   db.query(
-    insert('prose', { entity: 1, body: 'dragon dragon dragon' }, {
+    insert('prose', {
+      entity: 1,
+      body: 'dragon dragon dragon needle needle needle',
+    }, {
       entity: 2,
-      body: 'a dragon among many other things here',
+      body: 'a dragon among many other things here needle',
     }),
   )
-  db.query(insert('extra', { entity: 1, body: 'dragon dragon dragon' }))
+  db.query(
+    insert('extra', { entity: 1, body: 'dragon dragon dragon needle' }),
+  )
   db.query(insert('selected', { entity: 1 }, { entity: 2 }))
   db.query({ t: 'analyze' })
   // Statistics describe a small index before its unrelated history grows.
@@ -168,6 +173,11 @@ export let ftsCost = (storage: DurableStorage) => {
   let rows = find(db, text, 'dragon', { screen: selected, limit: 2 })
   counting = false
   let ranked = { rows, read, written, history }
+  read = written = 0
+  counting = true
+  let narrow = find(db, text, 'needle', { screen: selected, limit: 2 })
+  counting = false
+  let screened = { rows: narrow, read, written }
   mixed(db)
   let extension = search(text, db)
   let queries: Record<
@@ -216,5 +226,5 @@ export let ftsCost = (storage: DurableStorage) => {
     counting = false
     lookups[name] = { rows, read, written }
   }
-  return { ...ranked, queries, lookups }
+  return { ...ranked, screened, queries, lookups }
 }

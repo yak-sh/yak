@@ -232,7 +232,7 @@ let chosen = (
           name: '__fts_screen',
           cols: ['id'],
           q: opts.screen,
-          materialized: true,
+          materialized: false,
         }]
         : [],
       { name: 'hit', q: hits, materialized: true },

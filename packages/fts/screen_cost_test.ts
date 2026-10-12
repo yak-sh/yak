@@ -22,6 +22,13 @@ let statement = hits(text, 'dragon', { screen: selected, limit: 2 })!
 let { sql: query, params } = render(statement)
 let plan = sql.query({ t: 'explain query plan', of: statement })
   .map((r) => String(r.detail)).join('\n')
+let large = new Database(':memory:'), largeSql = driver(large)
+let largeHistory = 1000
+seed(largeSql, largeHistory)
+let narrow = hits(text, 'needle', { screen: selected, limit: 2 })!
+let { sql: narrowQuery, params: narrowParams } = render(narrow)
+let narrowPlan = largeSql.query({ t: 'explain query plan', of: narrow })
+  .map((r) => String(r.detail)).join('\n')
 
 test('a screened ranking reads its neighborhood despite unrelated matching history', () => {
   let prepared = db.prepare(query)
@@ -45,3 +52,31 @@ test('a screened ranking reads its neighborhood despite unrelated matching histo
     prepared.finalize()
   }
 })
+
+test(
+  'a narrow ranked term probes a large screen and keeps hit order and snippets',
+  () => {
+    let prepared = large.prepare(narrowQuery)
+    try {
+      let rows = prepared.all(...narrowParams)
+      assertEquals(rows.map((r) => r.entity), ['near', 'far'])
+      assert(String(rows[0].snippet).includes('\x01needle\x02'))
+      let scans = counters.symbols.sqlite3_stmt_status(
+        prepared.unsafeHandle,
+        1,
+        0,
+      )
+      let steps = counters.symbols.sqlite3_stmt_status(
+        prepared.unsafeHandle,
+        4,
+        0,
+      )
+      assert(
+        scans < 100,
+        `${scans} full-scan advances, ${steps} VM instructions\n${narrowPlan}`,
+      )
+    } finally {
+      prepared.finalize()
+    }
+  },
+)
