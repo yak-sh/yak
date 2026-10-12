@@ -19,8 +19,8 @@ let unwritable = (what: string) =>
 
 // A value the tokenizer or an operator would read as structure, quoted.
 let SPECIAL = /[\s&|()"']|^[=<>~!-]|^$/
-let quoted = (raw: string, q = '"') => q + raw.replace(/["'\\]/g, '\\$&') + q
-let plain = (raw: string, q = '"') => SPECIAL.test(raw) ? quoted(raw, q) : raw
+let quoted = (raw: string) => `"${raw.replace(/["'\\]/g, '\\$&')}"`
+let plain = (raw: string) => SPECIAL.test(raw) ? quoted(raw) : raw
 
 // A value as raw text. A value is split on commas and read for `..` after its
 // quotes come off, so neither can be quoted away inside a scalar, and a range's
@@ -37,11 +37,9 @@ let raw = (v: Value): string => {
   if (lo.endsWith('.') || hi.startsWith('.')) throw unwritable(`${lo}..${hi}`)
   return `${lo}${v.exclusiveEnd ? '...' : '..'}${hi}`
 }
-// A list's first member is double-quoted and the rest single, so a list whose
-// first and last members both need quotes is never read as one quoted value.
 let value = (v: Value): string =>
   v.kind == 'list'
-    ? v.items.map((item, i) => plain(raw(item), i ? "'" : '"')).join(',')
+    ? v.items.map((item) => plain(raw(item))).join(',')
     : plain(raw(v))
 
 // A bare word is a text term unless it reads as a clause, a group, `*` or a

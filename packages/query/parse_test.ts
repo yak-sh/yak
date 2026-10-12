@@ -57,6 +57,9 @@ let cases: [string, ReturnType<typeof and>][] = [
   ['.domain=Ops,Eng', and(eq('domain', list('Ops', 'Eng')))],
   // a quoted member may hold what a bare one cannot
   ['.tag="a b",c', and(eq('tag', list('a b', 'c')))],
+  // quoted first and last members are still three, never one quoted value
+  [".tag='a b',c,'d e'", and(eq('tag', list('a b', 'c', 'd e')))],
+  ['.tag="a\\"b",c', and(eq('tag', list('a"b', 'c')))],
   // Quotes group the operand; list and range syntax still has its meaning.
   ['.tag="a,b"', and(eq('tag', list('a', 'b')))],
   [".tag='a,b'", and(eq('tag', list('a', 'b')))],

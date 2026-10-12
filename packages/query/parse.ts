@@ -44,11 +44,19 @@ import { frozen } from '@yaks/fp'
 // ---- values ----
 
 // Quotes are double or single, and a backslash inside escapes the next char.
-let QUOTED = /^(["'])(.*)\1$/s
-let stripQuotes = (v: string): string => {
-  let m = v.match(QUOTED)
-  return m ? m[2].replace(/\\(.)/gs, '$1') : v
+// A value is quoted only when its opening quote closes at its last character:
+// `'a b',c,'d e'` opens and ends with a quote but is three members, not one.
+let closes = (v: string): number => {
+  for (let i = 1; i < v.length; i++) {
+    if (v[i] == '\\') i++
+    else if (v[i] == v[0]) return i
+  }
+  return -1
 }
+let stripQuotes = (v: string): string =>
+  (v[0] == '"' || v[0] == "'") && closes(v) == v.length - 1
+    ? v.slice(1, -1).replace(/\\(.)/gs, '$1')
+    : v
 
 // A split on `sep` that leaves quoted runs whole — and, when asked, leaves a
 // path's bracket whole too, since its commas separate its own arguments.
