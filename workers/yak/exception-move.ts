@@ -26,6 +26,7 @@ export let exceptionSource = {
 
 export let exceptionRule: Rule = {
   mark: 'yak/store/exception/1',
+  live: 'apps',
   core: ['exception'],
   find: '.exception&*',
   source: exceptionSource,
