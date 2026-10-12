@@ -480,7 +480,7 @@ let predLine = (p: Pred): string | undefined => {
   if (p.op === EXISTS) return `.${path}`
   return p.op === '' && !value ? `!${path}` : `.${path}${op}${value}`
 }
-export let predsToQuery = (preds: Pred[]): string | undefined => {
+let spellQuery = (preds: Pred[], key?: string): string | undefined => {
   if (!preds.length) return undefined
   let parts = preds.map(predLine)
   if (parts.some((s) => s === undefined)) return undefined
@@ -488,15 +488,20 @@ export let predsToQuery = (preds: Pred[]): string | undefined => {
   try {
     // Self-verify: the line must re-parse to the exact same preds, or it is not
     // trusted on the wire — the server would maintain a DIFFERENT set.
-    if (qkey(resolveRefs(parseQuery(line), findEid)) == qkey(preds)) return line
+    if (qkey(resolveRefs(parseQuery(line), findEid)) == (key ?? qkey(preds))) {
+      return line
+    }
   } catch { /* the caller must supply source or refuse this shape */ }
   return undefined
 }
 
+export let predsToQuery = (preds: Pred[]): string | undefined =>
+  spellQuery(preds)
+
 // The line a query rides, or nothing. Never queries are locally empty by
 // definition; a shape the grammar cannot spell back has no sub to open.
-let serverLine = (preds: Pred[]): string | undefined =>
-  preds.some((p) => p.op === NEVER) ? undefined : predsToQuery(preds)
+let serverLine = (preds: Pred[], key: string): string | undefined =>
+  preds.some((p) => p.op === NEVER) ? undefined : spellQuery(preds, key)
 
 // ...and having no line is a cache MISS, not an error. Over a partial cache the
 // local resolver still answers, best-effort, but the answer is not the graph's:
@@ -583,9 +588,8 @@ let refreshServerSets = (eids: Set<string>) => {
 // must hold-and-release through the hook (useQueryEids/useCommentsOn/
 // useBacklinks — T-21489): the card's sub opens on mount, the last drop tears
 // it down, and an imperative read meanwhile reuses the held set.
-let serverSet = (preds: Pred[], line: string): ServerSet => {
+let serverSet = (preds: Pred[], line: string, key: string): ServerSet => {
   let client = ensureClient()
-  let key = qkey(preds)
   let found = queryUses.get(key)
   if (!found) {
     // `q:<canonical preds>` — the projection is IN the key, so the same filter
@@ -622,15 +626,17 @@ export let queryEids = (preds: Pred[], source?: string): Signal<string[]> => {
     let held = queryUses.get(qkey(preds))
     return held?.n ? held.ids : mem.subscribe(preds)
   }
-  let line = source?.trim() || serverLine(preds)
-  return line ? serverSet(preds, line).ids : mem.subscribe(preds)
+  let key = qkey(preds)
+  let line = source?.trim() || serverLine(preds, key)
+  return line ? serverSet(preds, line, key).ids : mem.subscribe(preds)
 }
 // Ref-count a query for a component's lifetime (the hook's effect half); the
 // last release drops the set so distinct queries don't accumulate.
 export let holdQuery = (preds: Pred[], source?: string): Signal<string[]> => {
-  let line = source?.trim() || serverLine(preds)
+  let key = qkey(preds)
+  let line = source?.trim() || serverLine(preds, key)
   if (!line) return mem.hold(preds)
-  let s = serverSet(preds, line)
+  let s = serverSet(preds, line, key)
   s.n++
   return s.ids
 }
@@ -643,10 +649,11 @@ export let holdQuery = (preds: Pred[], source?: string): Signal<string[]> => {
 export let holdLocal = (preds: Pred[]): Signal<string[]> => mem.hold(preds)
 export let dropLocal = (preds: Pred[]) => mem.drop(preds)
 export let dropQuery = (preds: Pred[]) => {
-  let s = queryUses.get(qkey(preds))
+  let key = qkey(preds)
+  let s = queryUses.get(key)
   if (!s) return void mem.drop(preds)
   if (--s.n > 0) return
-  queryUses.delete(qkey(preds))
+  queryUses.delete(key)
   querySignals.delete(s.sub)
   dropBoard(s.sub)
 }
@@ -2315,13 +2322,14 @@ export let querySubscription = (
   preds: Pred[],
   source?: string,
 ): SubscriptionRead | undefined => {
-  let line = source?.trim() || serverLine(preds)
+  let key = qkey(preds)
+  let line = source?.trim() || serverLine(preds, key)
   if (!line) {
     return unserved(preds)
       ? { sub: '', state: { status: 'loading' } }
       : undefined
   }
-  let set = serverSet(preds, line)
+  let set = serverSet(preds, line, key)
   return { sub: set.sub, state: subscriptionState(set.sub) }
 }
 

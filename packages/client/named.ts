@@ -181,7 +181,7 @@ export let namedClient = (opts: {
     let h = handles.get(sub)
     if (!h) return
     handles.delete(sub)
-    let wire = entire(h.line)
+    let wire = h.watch.query
     let names = named.get(wire)
     names?.delete(sub)
     if (!names?.size) {
@@ -194,7 +194,7 @@ export let namedClient = (opts: {
   // as a socket message, preserving watch coverage and refusal behavior.
   let receive = (sub: string, body: Omit<Frame, 'id'>) => {
     let h = handles.get(sub)
-    let id = h && [...lines].find(([, line]) => line === entire(h.line))?.[0]
+    let id = h && [...lines].find(([, line]) => line === h.watch.query)?.[0]
     if (id && deliver) {
       deliver(
         { data: JSON.stringify({ ...body, id }) } as Event & { data: string },
@@ -219,7 +219,7 @@ export let namedClient = (opts: {
       handles.get(sub)?.watch.value.map((b) => b.entity.eid) ?? [],
     ready: (sub: string) => {
       let h = handles.get(sub)
-      return !!h && answered.has(entire(h.line))
+      return !!h && answered.has(h.watch.query)
     },
     patch: (bundles: Bundle[]) => replicate(box.graph, bundles),
   }
