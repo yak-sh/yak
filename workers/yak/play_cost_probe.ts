@@ -11,6 +11,7 @@ import { directoryLifecycleCost } from './directory_cost_fixture.ts'
 import { gitPushCost } from './git_cost_fixture.ts'
 import { ftsCost } from './fts_cost_fixture.ts'
 import { countCost } from './count_cost_fixture.ts'
+import { ownerCost } from './owner_cost_fixture.ts'
 import type { Env } from './env.ts'
 export { Store } from './graph.ts'
 export { GitCostStore } from './git_cost_fixture.ts'
@@ -54,6 +55,9 @@ export class PlayCost {
     }
   }
   async measure(req: Request): Promise<Response> {
+    if (new URL(req.url).searchParams.has('owners')) {
+      return Response.json(ownerCost(this.ctx.storage))
+    }
     if (new URL(req.url).searchParams.has('count')) {
       return Response.json(countCost(this.ctx.storage))
     }

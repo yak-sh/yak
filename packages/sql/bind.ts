@@ -158,6 +158,8 @@ type Ctx = {
   tables: Set<string>
   /** the first disjunction's entity ids, and the condition that tests them */
   candidates?: Frag & { test: Cond; whole?: boolean }
+  /** A mandatory finite root identity, known before presence is planned. */
+  bounded?: boolean
   present?: string
   owner?: string
   /** An owner probe needs a predicate, not global candidate selections. */
@@ -184,7 +186,7 @@ let byArchetype = (
   if (!ctx.archetypes || !ctx.d.archetype) return null
   // Bounded owner selections need only keyed component probes. Opening a
   // cold catalog here would read every unrelated shape before those owners.
-  if (ctx.candidates && !ctx.archetypes.held) return null
+  if ((ctx.bounded || ctx.candidates) && !ctx.archetypes.held) return null
   let ids = ctx.archetypes(predicate)
   if (!ids) return null
   let key = ctx.d.archetype(owner)
@@ -214,7 +216,9 @@ let owned = (ctx: Ctx, comp: string, where?: string): Cond => {
       params: [],
     })
   }
-  return ctx.correlated
+  // Known outer identities are already the driving set. Probe this component
+  // by each owner's key instead of building its entire owning set first.
+  return ctx.correlated || ctx.bounded
     ? cond({
       sql: `exists (select 1 from ${ctx.d.table(comp)} where ${
         ctx.d.ownerKey(comp)
@@ -1310,6 +1314,21 @@ let flattened = (clauses: Clause[]): Clause[] =>
     ? clauses.flatMap((c) => c.kind == 'and' ? flattened(c.clauses) : [c])
     : clauses
 
+// Canonical candidates and mandatory identity operands name the outer owners.
+// An OR arm alone does not bound its siblings; references keep their own scope.
+let owners = (ctx: Ctx, clauses: Clause[]): Identity | undefined => {
+  if (ctx.eids) return { eids: [...ctx.eids], nums: [] }
+  if (ctx.spine || claims(ctx, 'pred')) return
+  for (let c of flattened(clauses)) {
+    if (
+      c.kind != 'pred' || c.not || c.where ||
+      c.path.join('.') != 'entity.eid' || opOf(c) != ''
+    ) continue
+    let set = identity('eid', c.value, ctx.exactIds)
+    if (set) return set
+  }
+}
+
 let conjuncts = (ctx: Ctx, clauses: Clause[]): Cond[] => {
   let all: string[] = []
   let none: string[] = []
@@ -1676,16 +1695,10 @@ let indexedRelation = (
   if (
     !ctx.spine && !claims(ctx, 'pred') && ctx.d.indexed && from == ctx.d.spine
   ) {
-    let named = flattened(clauses).find((c) =>
-      c.kind == 'pred' &&
-      !c.not && !c.where && c.path.join('.') == 'entity.eid' && opOf(c) == ''
-    )
-    if (ctx.eids || named?.kind == 'pred') {
-      let set = ctx.eids
-        ? { eids: [...ctx.eids], nums: [] }
-        : identity('eid', (named as Pred).value, ctx.exactIds)
+    let set = owners(ctx, clauses)
+    if (set) {
       if (
-        set && set.eids.length && !set.nums.length &&
+        set.eids.length && !set.nums.length &&
         (ctx.eids || o.joins.length)
       ) {
         let s = rel(from, o)
@@ -2027,6 +2040,7 @@ export let bound = (
     references: opts.references,
     visibility: scope?.visibility ?? opts.visibility,
   }
+  ctx.bounded = owners(ctx, ast.clauses) != null
   // A required indexed scalar selects component owners before the entity
   // spine. CROSS JOIN fixes that driving order even when statistics still
   // describe the tiny graph from before history grew. INDEXED BY keeps a
