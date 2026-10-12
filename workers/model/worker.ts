@@ -177,6 +177,7 @@ export let host = (env: Env): InferenceHost => {
             base: record.provider.base ?? 'https://api.openai.com/v1',
           }),
         headers: record.provider.headers,
+        authentication: 'optional',
         store: false,
         web: false,
       })

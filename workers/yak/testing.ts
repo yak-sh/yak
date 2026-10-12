@@ -380,8 +380,12 @@ export let bucket = () => {
           arrayBuffer: () => Promise.resolve(part.buffer as ArrayBuffer),
         }
       },
-      put: (k: string, v: ArrayBuffer | Uint8Array) => {
-        let bytes = v instanceof Uint8Array ? v : new Uint8Array(v)
+      put: (k: string, v: ArrayBuffer | ArrayBufferView | string) => {
+        let bytes = typeof v == 'string'
+          ? new TextEncoder().encode(v)
+          : v instanceof ArrayBuffer
+          ? new Uint8Array(v)
+          : new Uint8Array(v.buffer, v.byteOffset, v.byteLength)
         held.set(k, new Uint8Array(bytes))
         if (!at.has(k)) at.set(k, Date.now())
         return Promise.resolve()

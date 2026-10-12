@@ -17,6 +17,7 @@ import type { Dispatch, Fetcher, Namespace } from './door.ts'
 import type { Meta } from './meta.ts'
 import type { Limiter } from './rate.ts'
 import type { Sandboxes } from '@yaks/machine/cloudflare'
+import type { Inference } from '@yaks/model'
 
 // The door's own word, said again here: every part of this kernel names its
 // bindings out of env.ts, and where a request may be handed is the door's to
@@ -48,6 +49,12 @@ export type Env = {
   // Explicitly disable recording, primarily for isolated cost comparisons.
   STORE_TRACING?: string
   MODEL_FETCH?: typeof fetch
+  // New asks use this independently deployed executor only once it is live.
+  MODEL?: {
+    submit(job: Inference): Promise<void>
+    version(): Promise<{ executor: string; id?: string }>
+  }
+  MODEL_RECEIPTS?: Bucket
   APEX?: string
   STORE: Namespace
   // The directory's store answered in-process, set only by the object that IS

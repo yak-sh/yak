@@ -3,7 +3,7 @@
 import { assertEquals, assertThrows } from '@std/assert'
 import { test, until } from '@yaks/testing'
 import { DIM } from './embedding.ts'
-import { platform } from './testing.ts'
+import { bucket, platform } from './testing.ts'
 
 test('platform disposal waits for store work before releasing storage', async () => {
   let release!: () => void
@@ -59,4 +59,19 @@ test('platform disposal waits for store work before releasing storage', async ()
     release()
     await p[Symbol.asyncDispose]()
   }
+})
+
+test('the runtime bucket stores strings and the bytes selected by a view', async () => {
+  let { r2 } = bucket()
+  await r2.put('receipt', '{"call":"original"}')
+  assertEquals(
+    new TextDecoder().decode(await (await r2.get('receipt'))!.arrayBuffer()),
+    '{"call":"original"}',
+  )
+  let bytes = new Uint8Array([9, 1, 2, 8])
+  await r2.put('view', new DataView(bytes.buffer, 1, 2))
+  assertEquals(
+    new Uint8Array(await (await r2.get('view'))!.arrayBuffer()),
+    new Uint8Array([1, 2]),
+  )
 })

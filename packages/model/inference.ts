@@ -10,6 +10,10 @@ import {
 
 /** A session yields while resume has no receipt; submit is idempotent by call. */
 export type Executor = {
+  /** A durable admission mark distinguishes these asks from older inline work. */
+  name?: string
+  /** New asks may dispatch only while the independently deployed service is live. */
+  available?: () => boolean | Promise<boolean>
   submit: (call: string, request: Request) => Promise<void>
   resume: (call: string) => Promise<Reply | undefined>
 }

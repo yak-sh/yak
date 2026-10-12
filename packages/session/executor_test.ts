@@ -390,3 +390,15 @@ scenario(
     equal(called, 1)
   },
 )
+
+scenario(
+  'enabling hosted execution leaves older inline asks interrupted',
+  async (p) => {
+    pending(p, false)
+    p.r.executor!.name = 'hosted'
+    await react(p.g, 'session', p.r)
+    equal((await p.g.get(['ask']))[0].interrupted, { code: 'restart' })
+    equal(p.submitted.length, 0)
+    equal(p.inline(), 0)
+  },
+)

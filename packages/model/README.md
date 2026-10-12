@@ -547,6 +547,11 @@ that call's frozen request and execution identity. An absent reply means
 pending; a terminal `ModelError` ends that ask. The session releases its runner
 while pending and resumes when `inference.receipt` is written.
 
+An executor's optional `available()` controls admission of new asks. An accepted
+ask keeps its executor even while admission is unavailable. With `name` set, the
+session records `inference.executor` when it creates the ask, so recovery can
+distinguish it from an interrupted inline call before the request is frozen.
+
 `inference{executor, request, receipt}` holds the pinned executor release and
 private object references on the original ask. Its receipt reference is absent
 until delivery can resume. Requests and receipts contain conversation data and

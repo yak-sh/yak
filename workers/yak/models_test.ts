@@ -11,7 +11,7 @@ import { begin, connect, need } from '@yaks/connections'
 import type { D1Like } from '@yaks/d1'
 import { d1 } from '../../packages/d1/testing.ts'
 import type { Bundle, Comp } from '@yaks/graph'
-import { directory } from './directory.ts'
+import { appStore, directory } from './directory.ts'
 import * as dirPart from './directory.ts'
 import type { Env } from './env.ts'
 import { accounted, BUDGET, countedMedia, monthOf } from './meter.ts'
@@ -25,7 +25,7 @@ import {
 } from '@yaks/model'
 import { records } from '@yaks/secrets'
 import { vaultOf } from './vault.ts'
-import { KERNEL, meta as appMeta } from './meta.ts'
+import { KERNEL, meta as appMeta, metaOf } from './meta.ts'
 import { receiptPrefix } from './blob-key.ts'
 import { type Binding, workersAi } from '@yaks/workers-ai'
 import { artifactStore, memoryBlobs, objectBlobs } from '@yaks/blob'
@@ -38,6 +38,13 @@ import * as apps from './apps.ts'
 import { ctxOf } from './connections.ts'
 import { as as signedIn, visit } from './serving-probe.ts'
 import { test, until } from '@yaks/testing'
+import { hosting } from './inference.ts'
+import {
+  type Env as ExecutorEnv,
+  run as infer,
+  submit,
+} from '../model/worker.ts'
+import type { Inference } from '@yaks/model'
 
 let ADA = 'a0000000-0000-4000-8000-0000000000ad'
 let BOB = 'b0000000-0000-4000-8000-0000000000b0'
@@ -178,12 +185,43 @@ let vale = async (
 }
 
 test('a connected OpenRouter model puts generated audio in the app store', async () => {
+  let dispatched: Inference[] = []
+  let workflows: Promise<unknown>[] = []
   let key = 'probe-openrouter-key'
   let vaultKey = btoa(String.fromCharCode(...new Uint8Array(32).fill(4)))
   let v = await vale(() => ({ response: 'workers-only' }), {
     env: { VAULT: d1() as unknown as D1Like, VAULT_KEY: vaultKey },
     models: BUDGET.free - 0.125,
   })
+  v.env.MODEL_RECEIPTS = v.env.BLOBS
+  let executorEnv: ExecutorEnv = {
+    RECEIPTS: v.env.MODEL_RECEIPTS,
+    KERNEL: hosting(v.env),
+    INFERENCES: {
+      create: ({ id, params }) => {
+        if (dispatched.some((sent) => sent.call === id)) {
+          return Promise.reject(Error('exists'))
+        }
+        assertEquals(id, params.call)
+        dispatched.push(params)
+        workflows.push(
+          infer(executorEnv, params, { do: (_name, _config, run) => run() }),
+        )
+        return Promise.resolve()
+      },
+      get: (id) =>
+        Promise.resolve({
+          status: () =>
+            dispatched.some((sent) => sent.call === id)
+              ? Promise.resolve({ status: 'running' })
+              : Promise.reject(Error('missing')),
+        }),
+    },
+  }
+  v.env.MODEL = {
+    version: () => Promise.resolve({ executor: 'yak-model-v1', id: 'live' }),
+    submit: (job) => submit(executorEnv, job),
+  }
   let c = ctxOf(v.env, { person: ADA, role: 'owner' })
   let space = (await v.dir.space('ada'))!
   let [connection] = await c.graph.apply(
@@ -271,6 +309,93 @@ test('a connected OpenRouter model puts generated audio in the app store', async
     assertEquals(file.headers.get('content-type'), 'audio/mpeg')
     assertEquals(new Uint8Array(await file.arrayBuffer()), bytes)
     assertEquals(calls, 2)
+    assertEquals(dispatched.length, 1)
+    await Promise.all(workflows)
+    let job = dispatched[0]
+    let host = hosting(v.env)
+    assertEquals(await host.submitted(job), true)
+    assertEquals(await host.claim(job), false)
+    await host.delivered(job)
+    await host.delivered(job)
+    assertEquals(
+      (await v.send('/query?trusted=1&q=.inference', {})).status,
+      400,
+    )
+    assert(
+      !JSON.stringify(await v.read(`.entity.eid=${job.call}&*`)).includes(
+        'inference/',
+      ),
+    )
+    await assertRejects(() =>
+      host.grants({ ...job, request: job.request + '-forged' })
+    )
+    await assertRejects(() => host.checkpoint(job, { submitted: { at: null } }))
+    let frozen = await v.env.MODEL_RECEIPTS!.get(job.request)
+    let privateRequest = JSON.parse(
+      new TextDecoder().decode(await frozen!.arrayBuffer()),
+    )
+    assertEquals(privateRequest.request.call, job.call)
+    assertEquals(privateRequest.app, v.app.eid)
+    assert(!JSON.stringify(privateRequest).includes(key))
+    // A text receipt has no media checkpoint, and an unknown price remains
+    // unknown while the answer is still made available to its original ask.
+    let store = metaOf(appStore(v.env.STORE, space, v.app, v.env), KERNEL)
+    let reports: Bundle[][] = []
+    v.env.ERRORS = {
+      send: (rows) => {
+        reports.push(rows)
+        return Promise.resolve()
+      },
+    }
+    for (let cost of [0, undefined]) {
+      let call = crypto.randomUUID(), session = crypto.randomUUID()
+      let next = {
+        ...job,
+        call,
+        request: `inference/${job.executor}/${call}/request`,
+        receipt: `inference/${job.executor}/${call}/receipt`,
+      }
+      await v.env.MODEL_RECEIPTS!.put(
+        next.request,
+        JSON.stringify({
+          ...privateRequest,
+          call,
+          request: { ...privateRequest.request, call },
+        }),
+      )
+      await v.env.MODEL_RECEIPTS!.put(
+        next.receipt,
+        JSON.stringify({
+          call,
+          reply: {
+            id: 'text',
+            model: SEED,
+            items: [{ kind: 'assistant', text: 'saved answer' }],
+            cost,
+          },
+        }),
+      )
+      await store.apply([
+        { entity: { eid: session }, session: {} },
+        {
+          entity: { eid: call },
+          entry: { session },
+          ask: { to: identityEid('model', [SEED]) },
+          inference: { executor: next.executor, request: next.request },
+        },
+      ])
+      await host.delivered(next)
+      await host.delivered(next)
+      let [ask] = await store.query(`.entity.eid=${call}&*`, { trusted: true })
+      assertEquals((ask.inference as Comp).receipt, next.receipt)
+      assertEquals(
+        ask.cost,
+        cost === undefined ? undefined : { dollars: 0, reported: true },
+      )
+    }
+    assertEquals(reports.length, 2)
+    assertEquals(reports[0][0].entity.eid, reports[1][0].entity.eid)
+    assertEquals((await v.spent()).meter!.models, BUDGET.free)
     let [cost] = await v.read(`.entry.session=${session}&.cost&*`)
     assertEquals(cost.cost, { dollars: 0.125, reported: true })
     let [built] = await v.read(`.entity.eid=${build}&.build&*`)

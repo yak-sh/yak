@@ -7,7 +7,14 @@
 // agent @yaks/spawn launches, or another host lent that provider.
 
 import type { Bundle, Comp, Eid, Graph } from '@yaks/graph'
-import { confirmed, type Model, ModelError, prefixCacheMark } from '@yaks/model'
+import {
+  confirmed,
+  type Executor,
+  type Listed,
+  type Model,
+  ModelError,
+  prefixCacheMark,
+} from '@yaks/model'
 import type { Served } from './react.ts'
 
 /** One provider's offering of a model: who serves it, under what name, and
@@ -77,6 +84,7 @@ export let providerResolver = (
   g: Graph,
   implementations: Readonly<Record<string, Model>>,
   override?: Model,
+  executorFor?: (provider: string) => Promise<Executor | undefined>,
 ): (using: Comp | undefined, model: Bundle) => Promise<Served> =>
 async (using, model) => {
   let all = await offers(g, model.entity.eid, implementations)
@@ -105,7 +113,7 @@ async (using, model) => {
     return { model: refuse, name: String((model.model as Comp).name) }
   }
   let serve = found.serve!
-  let wrapped: Model = Object.assign(async (req: Parameters<Model>[0]) => {
+  let describe = async () => {
     let listing = model.pending || !model.price
       ? serve.info
         ? await serve.info(found.name).catch((e) => {
@@ -117,23 +125,19 @@ async (using, model) => {
           return []
         }))?.find((m) => m.name == found.name)
       : undefined
+    return listing
+  }
+  let prepare = (req: Parameters<Model>[0], listing?: Listed) => {
     let modalities = listing?.modalities?.filter(
       (m): m is 'text' | 'image' | 'audio' =>
         m == 'text' || m == 'image' || m == 'audio',
     )
-    // Read retention per dispatch, not at startup or completion. The answer's
-    // explicit expiry wins; unknown providers must not inherit another TTL.
-    let [providerRow] = found.provider
-      ? await g.get([found.provider], ['provider'])
-      : []
-    let cache = {
-      requestedAt: Date.now(),
-      retention: (providerRow?.provider as Comp | undefined)?.cache_retention,
-    }
-    let reply = await serve({
+    return {
       ...req,
       ...!req.modalities && modalities?.length ? { modalities } : {},
-    })
+    }
+  }
+  let confirm = async (listing?: Listed) => {
     if (
       found.provider &&
       (model.pending || !all.some((o) => o.provider == found.provider))
@@ -143,12 +147,64 @@ async (using, model) => {
         { trusted: true },
       )
     }
+  }
+  let wrapped: Model = Object.assign(async (req: Parameters<Model>[0]) => {
+    let listing = await describe()
+    // Read retention per dispatch, not at startup or completion. The answer's
+    // explicit expiry wins; unknown providers must not inherit another TTL.
+    let [providerRow] = found.provider
+      ? await g.get([found.provider], ['provider'])
+      : []
+    let cache = {
+      requestedAt: Date.now(),
+      retention: (providerRow?.provider as Comp | undefined)?.cache_retention,
+    }
+    let reply = await serve(prepare(req, listing))
+    await confirm(listing)
     return {
       ...reply,
       cacheExpiresAt: prefixCacheMark(reply, cache).cache_expires_at,
     }
   }, serve)
-  return { model: wrapped, name: found.name }
+  let executor: Executor | undefined
+  if (executorFor) {
+    let [provider] = await g.get([found.provider], ['provider'])
+    executor = await executorFor(
+      String((provider?.provider as Comp | undefined)?.name ?? ''),
+    )
+  }
+  let listing: Listed | undefined
+  return {
+    model: wrapped,
+    name: found.name,
+    provider: found.provider,
+    ...executor
+      ? {
+        executor: {
+          ...executor,
+          submit: async (call, req) => {
+            listing = await describe()
+            // Metadata is free preparation; pricing must survive a Store restart
+            // so settlement can weigh a provider that does not report dollars.
+            if (listing) {
+              let { price, ...named } = listing
+              await g.apply([{
+                entity: model.entity,
+                model: { ...named, name: String((model.model as Comp).name) },
+                ...price ? { price } : {},
+              }], { trusted: true })
+            }
+            await executor.submit(call, prepare(req, listing))
+          },
+          resume: async (call) => {
+            let reply = await executor.resume(call)
+            if (reply) await confirm(listing)
+            return reply
+          },
+        },
+      }
+      : {},
+  }
 }
 
 /** Whether this host answers a transcript asking with `using`: the provider

@@ -3736,6 +3736,16 @@ export class Store {
     let no = unserved(line)
     if (no) throw new Refused(no)
     let agg = aggOf(line)
+    // Service callbacks need server-owned evidence that the public wire omits.
+    // Only the kernel's constructed door may ask for this read.
+    if (url.searchParams.get('trusted') == '1') {
+      if (request.headers.get('x-yak-kernel') != '1') {
+        throw new Refused('trusted queries require the kernel')
+      }
+      return agg
+        ? await this.#counted(line, agg, { administrative: true })
+        : Response.json(await this.#kernelGraph(this.#graph).read(line))
+    }
     if (agg && !live) {
       await this.#auth(request)
       return await this.#counted(line, agg, this.#callerRead(request))

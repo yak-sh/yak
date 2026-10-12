@@ -947,9 +947,14 @@ export let react = async (
         ? await deps.resolveModel(originalUsing, originalModel)
         : { model: deps.model, name: String(comp(originalModel, MODEL)?.name) }
       executor = original.executor ?? executor
+      if (!unfinished.inference && executor?.name) executor = undefined
+      if (
+        !unfinished.inference && executor?.available &&
+        !await executor.available()
+      ) executor = undefined
     }
   }
-  if (unfinished && executor && unfinished.inference) {
+  if (unfinished && executor && comp(unfinished, 'inference')?.request) {
     signer = { by: String(comp(unfinished, ASK)?.to), via: session }
     let reply: Reply | undefined
     try {
@@ -1239,6 +1244,9 @@ export let react = async (
       : { model: deps.model, name: modelName })
   const { model: providerModel, name: spelled } = resolved
   executor = resolved.executor ?? deps.executor
+  if (
+    !unfinished?.inference && executor?.available && !await executor.available()
+  ) executor = undefined
   if (!bodies && providerModel.anchor) {
     entries = await transcript(g, session)
     bodies = true
@@ -1470,6 +1478,7 @@ export let react = async (
       }
       : {},
     attempt: { by: deps.owner ?? session },
+    ...executor?.name ? { inference: { executor: executor.name } } : {},
   })
   const stream: Streams = new Map()
   let tail = Promise.resolve(), streamFailure: unknown
@@ -1536,17 +1545,23 @@ export let react = async (
     }
   }
   req.call = ask.entity.eid
-  if (executor) {
-    await executor.submit(ask.entity.eid, req)
-    return {
-      did: 'nothing',
-      status: await currentStatus(g, session),
-      added: [ask],
-      waiting: { call: ask.entity.eid },
-    }
-  }
   let reply: Reply
   try {
+    if (executor) {
+      try {
+        await executor.submit(ask.entity.eid, req)
+      } catch (error) {
+        if (!(error instanceof ModelError) || error.retry) throw error
+        executor = undefined
+        throw error
+      }
+      return {
+        did: 'nothing',
+        status: await currentStatus(g, session),
+        added: [ask],
+        waiting: { call: ask.entity.eid },
+      }
+    }
     req.onMedia = async (receipt) => {
       if (receipt.cost == null) return
       await g.apply([{
@@ -1559,6 +1574,7 @@ export let react = async (
     await tail
     if (streamFailure) throw streamFailure
   } catch (error) {
+    if (executor) throw error
     let e = error
     let phase = 'model'
     accepting = false

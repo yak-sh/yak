@@ -20,6 +20,8 @@ import { handler, type Lent } from './kernel.ts'
 import { egress } from './sandbox.ts'
 import { outbound } from './outbound.ts'
 import * as sitePart from './site.ts'
+import { hosting } from './inference.ts'
+import type { Inference, InferenceReceipt, Mark } from '@yaks/model'
 
 // The Store, at every address the binding names — the directory at
 // `yak/platform` and every app's own beside it (T-33815). It carries the DO's
@@ -116,6 +118,54 @@ export class Outbound extends WorkerEntrypoint {
       'Outbound send',
       () => outbound(req, this.env, caller),
       req,
+    )
+  }
+}
+
+// No public route reaches this entrypoint. Each executor callback is vouched
+// again against the ask and its immutable private request before doing work.
+export class ModelHost extends WorkerEntrypoint {
+  declare env: Env
+  submitted(job: Inference) {
+    return entry(
+      this.env,
+      'ModelHost submitted',
+      () => hosting(this.env).submitted(job),
+    )
+  }
+  claim(job: Inference) {
+    return entry(
+      this.env,
+      'ModelHost claim',
+      () => hosting(this.env).claim(job),
+    )
+  }
+  checkpoint(job: Inference, mark: Mark) {
+    return entry(
+      this.env,
+      'ModelHost checkpoint',
+      () => hosting(this.env).checkpoint(job, mark),
+    )
+  }
+  grants(job: Inference) {
+    return entry(
+      this.env,
+      'ModelHost grants',
+      () => hosting(this.env).grants(job),
+    )
+  }
+  delivered(job: Inference) {
+    return entry(
+      this.env,
+      'ModelHost delivered',
+      () => hosting(this.env).delivered(job),
+    )
+  }
+  report(job: Inference, failure: NonNullable<InferenceReceipt['failure']>) {
+    return entry(
+      this.env,
+      'ModelHost report',
+      () => hosting(this.env).report(job, failure),
     )
   }
 }

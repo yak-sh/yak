@@ -40,6 +40,7 @@ import { outbound } from './outbound.ts'
 import { caught } from './defects.ts'
 import type { Answer } from './apps.ts'
 import type { Stored } from './graph.ts'
+import { lending } from './inference.ts'
 
 export let guess = (sent: unknown) =>
   Math.ceil(JSON.stringify(sent ?? '').length / 4)
@@ -349,7 +350,12 @@ export let asking = (at: Stored): Handlers => {
   let run = running(at.graph, {
     holder: at.app,
     model: served,
-    resolveModel: providerResolver(at.graph, lent),
+    resolveModel: providerResolver(
+      at.graph,
+      lent,
+      undefined,
+      (provider) => lending(at, provider),
+    ),
     answers: answers(at.graph, lent),
     tools: [],
     toolSnapshot: () => Promise.resolve(tooled(at)),

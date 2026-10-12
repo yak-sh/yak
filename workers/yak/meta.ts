@@ -28,7 +28,7 @@ export type Meta = {
    * to screen platform bookkeeping using its authoritative vocabulary. */
   query: (
     line: string,
-    opts?: { live?: boolean; listing?: boolean },
+    opts?: { live?: boolean; listing?: boolean; trusted?: boolean },
   ) => Promise<Bundle[]>
   /** a batch of bundles → the batch as applied, aliases resolved */
   apply: (
@@ -89,7 +89,7 @@ export let metaOf = (
     return store.consume(
       `/query?q=${encodeURIComponent(line)}${opts?.live ? '&live=1' : ''}${
         opts?.listing ? '&listing=1' : ''
-      }`,
+      }${opts?.trusted ? '&trusted=1' : ''}`,
       async (r) => {
         if (!r.ok) throw await answered(r)
         return await r.json() as Bundle[]

@@ -252,6 +252,13 @@ records `inference{executor, request, receipt}` on the ask, and dispatches the
 same instance idempotently. The runner releases its lease while the receipt is
 pending.
 
+`providerResolver` accepts an executor factory as its fourth argument, keyed by
+the selected provider's name. It prepares the provider's metadata and modalities
+before submission and confirms the model on receipt. An executor's `available()`
+returning false leaves new asks on the inline provider. Its `name` records
+durable admission on the ask; older inline asks remain interrupted when a host
+enables it.
+
 On a later run, `Executor.resume(call)` reads the frozen request's outcome:
 `undefined` leaves the ask pending, a reply completes the same ask, and a
 terminal `ModelError` records its failure. A transport or receipt-read failure
