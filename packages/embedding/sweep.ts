@@ -108,8 +108,19 @@ export let sources = (
     let key = JSON.stringify([field.comp, field.on, field.not ?? []])
     groups.set(key, [...groups.get(key) ?? [], { field, ord }])
   })
+  // A row already resolves its owner's descriptor for shared exclusions.
+  // Retain that complete shape for this read alone; it can prove a later
+  // component or scope absent without seeking its table. Owners for which no
+  // row supplied a descriptor still take the physical-table path.
+  let shapes = new Map<number, Set<string>>()
   let rows = [...groups.values()].flatMap((group) => {
     let { field } = group[0]
+    let selected = owners?.filter((owner) => {
+      let shape = shapes.get(owner)
+      return !shape ||
+        shape.has(field.comp) && (!field.on || shape.has(field.on))
+    })
+    if (selected && !selected.length) return []
     let c = at('c')
     let values = group.map(({ field: f }, i) => {
       let stored = c(f.prop)
@@ -120,6 +131,7 @@ export let sources = (
         as(o('id'), 'owner'),
         as(o('eid'), 'eid'),
         as(e('hash'), 'had'),
+        ...classified && owners ? [as(a('tables'), 'shape')] : [],
         ...values,
       ],
       from: table(field.comp, 'c'),
@@ -147,7 +159,7 @@ export let sources = (
         },
       ],
       where: and(
-        ...owners ? [oneOf(c('entity'), owners)] : [],
+        ...selected ? [oneOf(c('entity'), selected)] : [],
         ...eligibility ? [eligibility] : allowed(field, c('entity')),
         not(exists(select({
           cols: [lit(1)],
@@ -155,8 +167,16 @@ export let sources = (
           where: eq(col('entity', 't'), c('entity')),
         }))),
       ),
-    })).flatMap((r) =>
-      group.flatMap(({ ord }, i) => {
+    })).flatMap((r) => {
+      if (r.shape != null) {
+        let shape = JSON.parse(String(r.shape))
+        if (
+          Array.isArray(shape) && shape.every((name) => typeof name == 'string')
+        ) {
+          shapes.set(Number(r.owner), new Set(shape))
+        }
+      }
+      return group.flatMap(({ ord }, i) => {
         let t = String(r[`t${i}`] ?? '')
         // Match SQLite trim's explicit whitespace list, including preserving
         // non-breaking spaces that are meaningful text under the same rule.
@@ -169,7 +189,7 @@ export let sources = (
           t,
         }]
       })
-    )
+    })
   })
   return assemble(rows.sort((a, b) => a.owner - b.owner || a.ord - b.ord))
 }
