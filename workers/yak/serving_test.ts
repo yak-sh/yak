@@ -687,10 +687,21 @@ test('the page wire: apply, query and search round-trip', async () => {
 
   // The filter grammar is the page's: the query string itself, and a row
   // carries the components the filter names, under the word it is called by.
-  let [row] = await page.query('.doc')
+  // Kept releases send suffix presence and optional selection (T-122930).
+  let [row] = await page.query('.doc!&.created?')
   assertEquals(row.kind, 'doc')
   assertEquals((row.entity as { eid: string }).eid, eid)
   assertEquals((row.doc as { title: string }).title, 'Lemon drizzle')
+  assertEquals(
+    (row.created as { at: string }).at,
+    (cake.created as { at: string }).at,
+  )
+  let old = await apps.fetch(
+    visit(`/cookbook/api/query?q=${encodeURIComponent('.doc!&.created?')}`),
+    env,
+  )
+  assertEquals(old.status, 200, await old.clone().text())
+  assertEquals(await old.json(), [row])
 
   // A kept Vale worker sends a queried hero's whole identity at its STORE
   // binding (T-95272). JSON page writes and worker-grant writes keep that
@@ -897,7 +908,7 @@ test('a subscription is that query still answering', async () => {
   sockets.get(name)!.push(ws)
   await object(name).webSocketMessage(
     ws,
-    JSON.stringify({ subscribe: '.doc&!person', id: '1:.doc' }),
+    JSON.stringify({ subscribe: '.doc!&.created?&!person', id: '1:.doc' }),
   )
   assertEquals(sent, [
     { id: '1:.doc', bundles: [], coverage: {}, transientReset: [] },

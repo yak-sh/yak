@@ -543,7 +543,7 @@ test('a board whose saved query cannot be read shows why', () => {
     b: {
       entity: { eid: 'b', num: 1 },
       doc: { eid: 'b', title: 'Old board' },
-      board: { eid: 'b', query: '.task!' },
+      board: { eid: 'b', query: '.task&.limit=nope' },
     },
   }
   let quiet = console.error
@@ -553,7 +553,7 @@ test('a board whose saved query cannot be read shows why', () => {
     assertEquals(root.querySelector('.Fault'), null)
     assertEquals(
       root.querySelector('.SubscriptionFailure')?.textContent
-        ?.includes('.task! is written .task'),
+        ?.includes('.limit takes a whole number'),
       true,
     )
   } finally {

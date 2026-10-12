@@ -187,9 +187,10 @@ equal(parse('task.status=open'), parse('.task.status=open'))
 ### Strict parsing and empty queries
 
 `parse(q, { text: false })` refuses bare words. Quoted text terms remain
-allowed. Each presence, absence, and requested form has one spelling; `.p!`,
-`.p!=`, `.p=`, `.p?`, and `!.p` throw with the accepted form. An empty query has
-a `never` clause, which selects nothing.
+allowed. Suffix presence `.p!` and optional `.p?` are translated to `.p` and
+`?p` for callers in kept app releases, including strict queries. `.p!=`, `.p=`,
+and `!.p` throw with the accepted form. An empty query has a `never` clause,
+which selects nothing.
 
 Parsed ASTs are frozen throughout and cached by query string and strictness.
 Treat them as immutable; construct a different AST with builders or `map()`.
@@ -199,6 +200,7 @@ import { and, never, parse, text } from '@yaks/query'
 import { equal, throws } from '@yaks/testing'
 
 equal(parse(''), and(never()))
+equal(parse('.drill!&.doc?'), parse('.drill&?doc'))
 equal(parse('"crash"', { text: false }), and(text('crash')))
 equal(
   (await throws(() => parse('crash', { text: false }))) instanceof SyntaxError,

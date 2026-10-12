@@ -136,8 +136,9 @@ let BOUND = new RegExp(`^\\$(${SEG})=(.*)$`, 's')
 let OPS = /^(!=|~=|<=|>=|->|<-|<|>|=)/
 
 // A clause in a spelling it had before each had one (T-39341), refused by the
-// one it has: presence was `.p!` (and `.p!=` with no value), absence `.p=`
-// with no value, the request `.p?`, and a prefix could take a dot, `!.p`.
+// one it has. Suffix presence `.p!` and optional `.p?` still arrive from kept
+// app releases and are translated below; `.p!=` with no value, absence `.p=`
+// with no value, and a dotted prefix `!.p` are refused.
 let spelled = (token: string, one: string) =>
   new SyntaxError(`${token} is written ${one}`)
 
@@ -349,18 +350,24 @@ export let parseDot = (token: string): Clause[] | null => {
   let quals = bracket == null ? [] : qualifiers(bracket)
   let segs = pathStr.split('.')
 
-  if (!rest) {
+  if (!dotted && (rest == '!' || rest == '?')) {
+    throw spelled(token, `${rest == '!' ? '.' : '?'}${pathStr}`)
+  }
+
+  if (!rest || rest == '!') {
     // A leading dot and no operator: presence — `.edges[cites]` selecting one
     // edge type is the exception.
+    // Kept releases speak suffix presence (T-122930). Read it here so every
+    // query door, subscriptions and strict matches share its answer.
     if (!dotted && bracket == null) return null
     if (pathStr == 'edges' && quals.length) return [edgeSelect(quals)]
     refuse(pathStr, quals, bracket)
     return [PRESENCE[pathStr] ?? pres(pathStr)]
   }
-  if (rest == '!') {
-    throw spelled(token, `.${pathStr}${bracket == null ? '' : `[${bracket}]`}`)
+  if (rest == '?') {
+    refuse(pathStr, quals, bracket)
+    return [{ kind: 'pred', path: segs, op: '?', value: null }]
   }
-  if (rest == '?') throw spelled(token, `?${pathStr}`)
   let o = rest.match(OPS)
   if (!o) {
     if (!dotted && bracket == null) return null

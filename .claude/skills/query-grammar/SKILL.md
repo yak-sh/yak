@@ -26,7 +26,7 @@ reference, and `yak help graph query` prints the short form agents get over MCP.
 The grammar is terse on purpose: what a person types in a search box is also a
 rule's match. Terseness pulls toward ambiguity, and the grammar holds it off two
 ways. A token's shape says what it is, and anything it can't read for certain is
-refused, never guessed: a property named without its component, an old
+refused, never guessed: a property named without its component, a malformed
 spelling, a stray word in a rule. Each refusal names the form that would have
 worked, so read it as the grammar teaching you. And look before inventing: what
 a design reaches for (include a component without filtering on it, say) is
@@ -40,16 +40,16 @@ A clause starts with a prefix character or holds an operator; anything else is
 a full-text word. `crash on save .updated.at=today` is three words and one
 filter. A malformed clause throws rather than becoming a search term.
 
-| written | means |
-| --- | --- |
-| `.task` | has the component |
-| `!filed` | lacks it (`.task !filed`: tasks not filed anywhere) |
-| `?doc` | carry it in the answer when present, without filtering |
-| `.task.status=open` | property equals |
-| `.p=a,b` / `.p=1..5` | any of / range (`1...5` excludes the end) |
-| `.p!=v` `.p~=v` | not equal / contains a literal substring |
-| `.p<v` `.p<=v` `.p>v` `.p>=v` | comparisons |
-| `word`, `"two words"`, `lemo*` | full-text terms (see `search-and-embeddings`) |
+| written                        | means                                                  |
+| ------------------------------ | ------------------------------------------------------ |
+| `.task`                        | has the component                                      |
+| `!filed`                       | lacks it (`.task !filed`: tasks not filed anywhere)    |
+| `?doc`                         | carry it in the answer when present, without filtering |
+| `.task.status=open`            | property equals                                        |
+| `.p=a,b` / `.p=1..5`           | any of / range (`1...5` excludes the end)              |
+| `.p!=v` `.p~=v`                | not equal / contains a literal substring               |
+| `.p<v` `.p<=v` `.p>v` `.p>=v`  | comparisons                                            |
+| `word`, `"two words"`, `lemo*` | full-text terms (see `search-and-embeddings`)          |
 
 - Whitespace, `&` and `,` between terms all mean AND; `&` survives a URL.
   `|` is OR and binds looser: `.a .b|.c` is `(a and b) or c`; parentheses
@@ -63,8 +63,12 @@ filter. A malformed clause throws rather than becoming a search term.
   second word becomes a search term.
 - The leading dot may be dropped after an operator (`task.status=open`), but
   not on a bare name: `.task` tests a component, `task` searches the word.
-- Each clause has one spelling; old forms (`.p!`, `.p?`, `!.p`) are refused
-  with a message naming the right one (`!.task is written !task`).
+- Suffix presence `.p!` and optional `.p?` are translated to `.p` and `?p`
+  by @yaks/query because kept app releases still send them (T-122930, M-37853).
+  They answer through every query door and in strict matches; released code
+  stays untouched. Other old
+  forms (`!.p`, `.p=`) are refused with a message naming the accepted one
+  (`!.task is written !task`).
 - The empty query selects nothing, and `graph_query` refuses it.
 
 ## What comes back
@@ -127,18 +131,18 @@ The parser emits plain scalars; the compiler reads them by the property's type.
 
 A directive belongs to the whole line wherever it is written.
 
-| directive | example | answers |
-| --- | --- | --- |
-| `.count` | `.task !completed !cancelled .count` | `{"count": 1394}` |
-| `.tally=` | `.task .tally=filed.project` | each value with its count (references come back as eids) |
-| `.distinct=` | `.distinct=filed.priority` | the values |
-| `.fields=` | `.fields=doc.title,filed.project.doc.title` | those properties; a path through a reference brings what it reaches as its own row |
-| `*` | `.task *` | every component of each row |
-| `.order=` | `.order=-created.at` | `-` is descending; `similar` (with `.near`), `search` (with words) and `hot` are rankings |
-| `.limit=` `.after=` | `.limit=50&.after=T-13882` | a window; `.after` continues past an entity in any order |
-| `.refs=` | `.refs=D-45640 .count` | what references it; `.refs` / `!refs` alone |
-| `.near=` | `.task .near=T-6461 .limit=3` | ranked by meaning (`search-and-embeddings`) |
-| `.edges` | `.edges[requires]` | asks for the edges touching the answer; it doesn't filter, and the caller fetches them (packages/edge/README.md) |
+| directive           | example                                     | answers                                                                                                          |
+| ------------------- | ------------------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
+| `.count`            | `.task !completed !cancelled .count`        | `{"count": 1394}`                                                                                                |
+| `.tally=`           | `.task .tally=filed.project`                | each value with its count (references come back as eids)                                                         |
+| `.distinct=`        | `.distinct=filed.priority`                  | the values                                                                                                       |
+| `.fields=`          | `.fields=doc.title,filed.project.doc.title` | those properties; a path through a reference brings what it reaches as its own row                               |
+| `*`                 | `.task *`                                   | every component of each row                                                                                      |
+| `.order=`           | `.order=-created.at`                        | `-` is descending; `similar` (with `.near`), `search` (with words) and `hot` are rankings                        |
+| `.limit=` `.after=` | `.limit=50&.after=T-13882`                  | a window; `.after` continues past an entity in any order                                                         |
+| `.refs=`            | `.refs=D-45640 .count`                      | what references it; `.refs` / `!refs` alone                                                                      |
+| `.near=`            | `.task .near=T-6461 .limit=3`               | ranked by meaning (`search-and-embeddings`)                                                                      |
+| `.edges`            | `.edges[requires]`                          | asks for the edges touching the answer; it doesn't filter, and the caller fetches them (packages/edge/README.md) |
 
 `.order`, `.limit` and `.after` shape rows, so an aggregate ignores them:
 `.count&.limit=20` counts every match. A trailing `~` in `.fields` mutes that
@@ -149,14 +153,14 @@ property from a subscription's change signal.
 A rule's or effect's `match` is the same grammar, parsed strict (`{ text: false
 }`: a stray word is refused, not searched), with more prefixes:
 
-| written | in a rule |
-| --- | --- |
+| written              | in a rule                                        |
+| -------------------- | ------------------------------------------------ |
 | `+comp`, `+comp.p=v` | add it, or assign a property, when the rule runs |
-| `+!comp` | must be absent, then added: fires once |
-| `*comp` | the rule's write set (also asserts presence) |
-| `-comp` | the current write removed it |
-| `$name` | a variable shared across patterns |
-| `#Name` | a singleton resource |
+| `+!comp`             | must be absent, then added: fires once           |
+| `*comp`              | the rule's write set (also asserts presence)     |
+| `-comp`              | the current write removed it                     |
+| `$name`              | a variable shared across patterns                |
+| `#Name`              | a singleton resource                             |
 
 Patterns for several entities are separated by `;`, joined by shared variables,
 and a bracket gathers inner matches into one binding:

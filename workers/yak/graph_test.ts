@@ -751,8 +751,8 @@ test('a malformed query is a 400 to the caller, not a failure', async () => {
   using logged = stub(console, 'error')
   for (
     let [q, error, said] of [
-      ['.recipe!', 'SyntaxError', '.recipe! is written .recipe'],
-      ['.recipe&.doc?&.count', 'SyntaxError', '.doc? is written ?doc'],
+      ['.recipe!!', 'SyntaxError', 'not a clause: .recipe!!'],
+      ['.recipe&?.doc&.count', 'SyntaxError', '?.doc is written ?doc'],
       [
         '.recipe.nope=1',
         'Unknown',

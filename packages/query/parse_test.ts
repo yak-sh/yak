@@ -395,25 +395,46 @@ test('refusals', () => {
   assertThrows(() => parse('?doc[x]'), Error, 'not a clause')
 })
 
-// Each clause has one spelling (T-39341): the forms it had beside that one are
-// refused by the one it has.
+test('kept release suffixes share the prefix forms at the parser', () => {
+  for (
+    let [old, now] of [
+      ['.drill!', '.drill'],
+      ['.drill!&.doc?', '.drill&?doc'],
+      ['.loan?', '?loan'],
+      ['.doc.title!', '.doc.title'],
+      ['.refs!', '.refs'],
+      ['.count!', '.count'],
+      ['.edges!', '.edges'],
+      ['.edges[cites]!', '.edges[cites]'],
+      ['(.drill!|.doc!)&?created', '(.drill|.doc)&?created'],
+      ['.drill!,.doc!', '.drill,.doc'],
+      ['.doc.title="Wow!"&.drill!', '.doc.title="Wow!"&.drill'],
+      ['.doc.title=Wow!&.drill!', '.doc.title=Wow!&.drill'],
+      ['.comments!.doc.title=Wow!&.drill!', '.comments!.doc.title=Wow!&.drill'],
+    ]
+  ) {
+    for (let opts of [{}, { text: false }]) {
+      assertEquals(parse(old, opts), parse(now, opts), old)
+    }
+  }
+  assertThrows(() => parse('.drill[foo]!'), SyntaxError, 'no qualifier')
+  assertThrows(() => parse('.doc[foo]?'), SyntaxError, 'no qualifier')
+})
+
+// Other spellings are refused by their accepted form.
 test('an old spelling is refused by the one it has now', () => {
   let said: [string, string][] = [
-    ['.assignee!', '.assignee'],
+    ['assignee!', '.assignee'],
+    ['loan?', '?loan'],
     ['.assignee!=', '.assignee'],
     ['.assignee=', '!assignee'],
     ['created.at=', '!created.at'],
-    ['.loan?', '?loan'],
     ['!.assignee', '!assignee'],
     ['?.doc', '?doc'],
     ['-.created', '-created'],
     ['+!.created', '+!created'],
     ['+.doc.title=$x', '+doc.title=$x'],
-    ['.refs!', '.refs'],
     ['.refs=', '!refs'],
-    ['.count!', '.count'],
-    ['.edges!', '.edges'],
-    ['.edges[cites]!', '.edges[cites]'],
   ]
   for (let [old, now] of said) {
     assertThrows(
