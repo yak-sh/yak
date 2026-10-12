@@ -4,7 +4,9 @@ import { col, type CreateTable, lit, select, table } from '@yaks/sql'
 import { open } from './db.ts'
 import { columns } from './physical.ts'
 import { storage } from './mod.ts'
-import { add, follow, printOf } from './follow.ts'
+import { add, follow, lacking, printOf } from './follow.ts'
+import { storage as readStore } from './read-store.ts'
+import { parse } from '@yaks/query'
 import { loadVocab } from '@yaks/vocab'
 
 let vocab = loadVocab({
@@ -43,4 +45,24 @@ test('a file follows its schema once per print, adding what it lacks', () => {
   assertEquals(db.query(select({ cols: [col('n')], from: table('log') })), [
     { n: 0 },
   ])
+})
+
+test('a reader reads a property no writer has added a column for as null', () => {
+  let dir = Deno.makeTempDirSync({ prefix: 'yak-follow-' })
+  let note = (props: Record<string, unknown>) =>
+    loadVocab({ $defs: { note: { component: true, properties: props } } })
+  let v1 = note({ text: { type: 'string' } })
+  let v2 = note({ text: { type: 'string' }, mood: { type: 'string' } })
+  let db = open(`${dir}/g.db`)
+  let store = storage(db, v1)
+  store.install()
+  store.tx((t) => t.patch([{ entity: { eid: 'n1' }, note: { text: 'hi' } }]))
+  let reader = open(`${dir}/g.db`, { readOnly: true })
+  let derived = lacking(reader, v2)
+  let read = readStore(reader, v2, { derived }).read(parse('.note'))
+  assertEquals(read.map((b) => b.note), [{ text: 'hi', mood: null }])
+  assertEquals(lacking(reader, v1), {})
+  reader.close()
+  db.close()
+  Deno.removeSync(dir, { recursive: true })
 })

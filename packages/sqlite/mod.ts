@@ -952,6 +952,6 @@ export let storage = (
 }
 
 export * from './migration.ts'
-export { add, follow, grow, printOf } from './follow.ts'
+export { add, follow, grow, lacking, printOf } from './follow.ts'
 
 export { doom } from './doom.ts'

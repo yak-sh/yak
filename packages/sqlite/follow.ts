@@ -14,9 +14,14 @@
 // runs in the pass; D-121389 moves it to windows the effects worker works off.
 
 import { type Column, type Driver, render, type Stmt } from '@yaks/sql/core'
+import { type Derived, field, lit, tagOf } from '@yaks/sql'
+import type { Vocab } from '@yaks/vocab'
 import { sha256 } from '@yaks/graph/sha256'
-import { meta, PRINTED, printed } from './meta.ts'
+import { installed, meta, PRINTED, printed } from './meta.ts'
 import { unit } from './unit.ts'
+import { plan } from './plan.ts'
+import { standing } from './ddl.ts'
+import { tables } from './layout.ts'
 
 /** The print of a composed schema: a store's own print (`Store.print`) and
  * every further statement the file needs, rendered. */
@@ -79,4 +84,36 @@ export let follow = (
     () => meta(driver).set(PRINTED + print, new Date().toISOString()),
   )
   return true
+}
+
+/**
+ * What a reader binds over a file no writer has brought to its vocabulary yet:
+ * each stored property whose column the file's table lacks, read as null, the
+ * way an entity reads a property it was never given. A reader never changes
+ * the schema, so it reads what the file holds. Nothing, where the store's
+ * tables are as this vocabulary makes them, which costs the store's print
+ * and one read of `server_meta`.
+ */
+export let lacking = (
+  driver: Driver,
+  vocab: Vocab,
+  derived: Derived = {},
+): Derived => {
+  let mark = installed(driver)?.split(' ')[0]
+  if (mark == plan(vocab, derived, !!driver.file).print) return {}
+  let was = standing(driver, vocab)
+  return Object.fromEntries(
+    tables(vocab).filter((comp) => comp in was).flatMap((comp) => {
+      let has = new Set(was[comp].cols.map((r) => String(r.name)))
+      return vocab.props(comp).map((p) => vocab.prop(comp, p)!)
+        .filter((c) =>
+          !c.computed && !has.has(field(c.prop)) &&
+          !derived[`${comp}.${c.prop}`]
+        )
+        .map((c) => [`${comp}.${c.prop}`, {
+          tag: tagOf(c),
+          expr: () => lit(null),
+        }])
+    }),
+  )
 }
