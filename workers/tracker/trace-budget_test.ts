@@ -150,30 +150,36 @@ test('queue acknowledges dropped traces without retrying or reporting and leaves
   await authority.boot()
   let acknowledged = 0, reported = 0, errored = 0
   let body = rows()
-  await consume([
-    {
-      body: [body[1]],
-      ack: () => acknowledged++,
-      retry: () => {
-        throw Error('trace retry')
+  await consume(
+    [
+      {
+        body: [body[1]],
+        ack: () => acknowledged++,
+        retry: () => {
+          throw Error('trace retry')
+        },
       },
-    },
-    {
-      body,
-      ack: () => acknowledged++,
-      retry: () => {
-        throw Error('trace retry')
+      {
+        body,
+        ack: () => acknowledged++,
+        retry: () => {
+          throw Error('trace retry')
+        },
       },
-    },
-  ], () => ({
-    ingest: () => {
-      errored++
+    ],
+    () => ({
+      ingest: () => {
+        errored++
+        return Promise.resolve()
+      },
+    }),
+    () => {
+      reported++
       return Promise.resolve()
     },
-  }), () => {
-    reported++
-    return Promise.resolve()
-  }, (scope, rows) => authority.admitTrace(scope, rows))
+    async () => {},
+    (scope, rows) => authority.admitTrace(scope, rows),
+  )
   equal([acknowledged, reported, errored], [2, 0, 0])
   await consume([{
     body: [{ entity: { eid: uuid() }, error: {} }],
@@ -187,7 +193,7 @@ test('queue acknowledges dropped traces without retrying or reporting and leaves
   }), () => {
     reported++
     return Promise.resolve()
-  })
+  }, async () => {})
   equal(errored, 1)
 })
 
@@ -238,6 +244,7 @@ test('trace authority transport failure retries without generating tracker error
       reported++
       return Promise.resolve()
     },
+    async () => {},
     () => Promise.reject(Error('authority unavailable')),
   )
   equal([retried, reported], [1, 0])

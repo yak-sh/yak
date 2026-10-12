@@ -85,13 +85,14 @@ test('trace queue drops malformed captures and retains validation of nonrecords'
       },
     }),
     async () => {},
+    async () => {},
     () => {
       dropped++
       return Promise.resolve()
     },
   )
-  // The metric-only batch is not a trace and still uses error validation.
-  equal([commits, retried, acknowledged, dropped], [0, 1, 6, 6])
+  // The metric-only batch is set aside through error validation.
+  equal([commits, retried, acknowledged, dropped], [0, 0, 7, 6])
   equal(batch([rows()[2]]).scope, space)
 })
 

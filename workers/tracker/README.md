@@ -68,7 +68,11 @@ not partial captures.
 Trusted error queue batches carry reporter bundles with `during.space` by global
 eid; a mixed-space batch never reaches a store. Error messages are acknowledged
 only after graph admission. Redelivery preserves grouping receipts and bug hit
-counts. Error intake does not share the trace allowance.
+counts. A batch refused by queue validation is preserved unchanged in
+`yak-errors-dead`, reported once and acknowledged. Failed preservation retries
+without reporting; store outages still retry admission. Rejection reports use
+the queue message's identity so redelivery cannot multiply bug hit counts. Error
+intake does not share the trace allowance.
 
 ### Trace write ceiling
 

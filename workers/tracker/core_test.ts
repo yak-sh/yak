@@ -41,6 +41,7 @@ let deliver = async (g: ReturnType<typeof fixture>, bodies: Bundle[][]) => {
     })),
     () => g,
     async () => {},
+    async () => {},
   )
   await g.drain()
   return {
@@ -87,8 +88,8 @@ let invalidOutcome = await deliver(fixture(), [
   missingStore,
   guarded,
 ])
-test('ordinary and migration word identities and mutable captures still retry', () => {
-  equal([invalidOutcome.ack, invalidOutcome.retry], [0, 3])
+test('ordinary and migration word identities and mutable captures are set aside', () => {
+  equal([invalidOutcome.ack, invalidOutcome.retry], [3, 0])
   equal(invalidOutcome.rows, [])
 })
 
@@ -140,10 +141,15 @@ test('queue commits full bundles then acks, duplicates preserve grouping and hit
       retry++
     },
   }
-  await consume([message], (scope) => {
-    equal(scope, space)
-    return g
-  }, async () => {})
+  await consume(
+    [message],
+    (scope) => {
+      equal(scope, space)
+      return g
+    },
+    async () => {},
+    async () => {},
+  )
   equal(acked, 1)
   equal((await g.graph.get(rows.map((r) => r.entity.eid))).length, 2)
   await g.drain()
@@ -153,7 +159,7 @@ test('queue commits full bundles then acks, duplicates preserve grouping and hit
   let retained = await g.bug(bug.entity.eid)
   equal(await g.bug(String((bug.doc as Comp).title)), retained)
   equal(retained.map((row) => row.entity.eid), [bug.entity.eid, occurrence])
-  await consume([message, message], () => g, async () => {})
+  await consume([message, message], () => g, async () => {}, async () => {})
   await g.drain()
   equal(((await g.bugs())[0].bug as Comp)?.hits, 1)
   equal(acked, 3)
@@ -186,9 +192,10 @@ test('queue isolates platform and each space; mixed or slug scopes never commit'
     ],
     (scope) => stores.get(scope)!,
     async () => {},
+    async () => {},
   )
-  equal(acked, 3)
-  equal(retry, 2)
+  equal(acked, 5)
+  equal(retry, 0)
   for (let [scope, g] of stores) {
     let [row] = await g.graph.get([occurrence])
     equal((row.during as Comp)?.space, scope == platform ? undefined : scope)
@@ -219,10 +226,10 @@ test('failed admission retries without ack and recovers on redelivery', async ()
   await consume([message], () => destination, () => {
     error++
     return Promise.reject(Error('report unavailable'))
-  })
+  }, async () => {})
   equal([acked, retry, error], [0, 1, 1])
   failed = false
-  await consume([message], () => destination, async () => {})
+  await consume([message], () => destination, async () => {}, async () => {})
   equal(acked, 1)
   equal((await g.graph.get([occurrence])).length, 1)
 })

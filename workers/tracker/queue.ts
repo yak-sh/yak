@@ -6,6 +6,7 @@ import { platform } from './core.ts'
 import { traceBatch } from '@yaks/tracker/intake'
 
 export type Message = {
+  id?: string
   body: unknown
   ack: () => void
   retry: () => void
@@ -64,11 +65,28 @@ export let consume = async (
   messages: Message[],
   destination: (scope: string) => Destination,
   report: (error: unknown) => Promise<void>,
+  reject: (message: Message, error: unknown) => Promise<void>,
   trace?: (scope: string, rows: Bundle[]) => Promise<unknown>,
 ): Promise<void> => {
   for (let message of messages.slice(0, 100)) {
     let tracing = Array.isArray(message.body) &&
       message.body.some((row) => row?.trace || row?.span)
+    let accepted: ReturnType<typeof batch> | undefined
+    if (!tracing) {
+      try {
+        accepted = batch(message.body)
+      } catch (error) {
+        // Admission cannot improve on retry. Preserve the original message
+        // before acknowledging; only failed preservation owes another try.
+        try {
+          await reject(message, error)
+          message.ack()
+        } catch {
+          message.retry()
+        }
+        continue
+      }
+    }
     try {
       if (
         tracing
@@ -78,7 +96,7 @@ export let consume = async (
         let capture = traceBatch(message.body)
         await trace?.(capture?.scope ?? '', message.body as Bundle[])
       } else {
-        let { scope, rows } = batch(message.body)
+        let { scope, rows } = accepted!
         await destination(scope).ingest(rows)
       }
       message.ack()

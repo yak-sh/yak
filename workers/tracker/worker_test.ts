@@ -61,7 +61,7 @@ test('tracker queue and scheduled failures identify their entrypoint', async () 
   let { w, check } = fixture()
   let retried = false
   await w.queue([{
-    body: [],
+    body: [{ entity: { eid: crypto.randomUUID() }, error: {} }],
     ack: () => {},
     retry: () => void (retried = true),
   }])

@@ -44,8 +44,8 @@ export let origin = (
   version: string | undefined,
   entrypoint: string,
   request?: Request,
+  eid: string = crypto.randomUUID(),
 ): Pick<Context, 'tags' | 'commit' | 'during' | 'request'> => {
-  let eid = crypto.randomUUID()
   return {
     tags: { script, version: version ?? 'unknown', entrypoint },
     commit: version,

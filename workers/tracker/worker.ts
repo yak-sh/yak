@@ -19,6 +19,7 @@ export type Stub = {
 }
 export type Env = Omit<Settings, 'TRACKERS'> & {
   BUNDLE_HASH?: string
+  REJECTED?: { send: (body: unknown) => Promise<void> }
   TRACKERS: { getByName: (scope: string) => Stub }
 }
 let uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
@@ -30,11 +31,15 @@ export let canary = (
   at = new Date().toISOString(),
 ) => {
   let fault = `tracker-canary|${hash}`
-  let context = origin('yak-tracker', version, 'fetch.canary', request)
   let eid = sha256(`${hash}|${nonce}`)
   let requestEid = sha256(`${eid}|request`)
-  context.during!.request = requestEid
-  context.request!.entity.eid = requestEid
+  let context = origin(
+    'yak-tracker',
+    version,
+    'fetch.canary',
+    request,
+    requestEid,
+  )
   let error = Error(`tracker deploy canary ${hash}`)
   // Repeated synthetic captures carry no varying caller stack.
   delete error.stack
@@ -63,16 +68,25 @@ export let worker = (
   ticket: typeof sign = sign,
   now: () => number = Date.now,
 ) => {
-  let report = (error: unknown, entrypoint: string, request?: Request) =>
-    caught(error, {
+  let report = (
+    error: unknown,
+    entrypoint: string,
+    request?: Request,
+    eid?: string,
+  ) => {
+    let context = origin(
+      'yak-tracker',
+      env.CF_VERSION_METADATA?.id,
+      entrypoint,
+      request,
+      eid ? sha256(`${eid}|request`) : undefined,
+    )
+    return caught(error, {
       sink: env.ERRORS ? queue(env.ERRORS) : () => {},
-      ...origin(
-        'yak-tracker',
-        env.CF_VERSION_METADATA?.id,
-        entrypoint,
-        request,
-      ),
+      ...context,
+      eid,
     })
+  }
   return {
     fetch: async (request: Request): Promise<Response> => {
       let scope = scopeOf(request)
@@ -158,6 +172,18 @@ export let worker = (
         messages,
         (scope) => env.TRACKERS.getByName(scope),
         (error) => report(error, 'queue'),
+        async (message, error) => {
+          if (!env.REJECTED) {
+            throw Error('tracker dead letter queue unavailable')
+          }
+          await env.REJECTED.send(message.body)
+          // Queues can redeliver even an acknowledged message. One stable
+          // occurrence keeps a repeated rejection from multiplying bug hits.
+          let eid = sha256(
+            `tracker|rejected|${message.id ?? JSON.stringify(message.body)}`,
+          )
+          await report(error, 'queue', undefined, eid)
+        },
         (scope, rows) =>
           env.TRACKERS.getByName(platform).admitTrace(scope, rows),
       ),

@@ -26,6 +26,10 @@ new_sqlite_classes = ["Tracker"]
 binding = "ERRORS"
 queue = "yak-errors"
 
+[[queues.producers]]
+binding = "REJECTED"
+queue = "yak-errors-dead"
+
 [[queues.consumers]]
 queue = "yak-errors"
 max_batch_size = 100
