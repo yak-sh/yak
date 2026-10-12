@@ -14,9 +14,6 @@ import { at, by, col, fn, insert, lit, scan, type Stmt } from '@yaks/sql'
 import { DIRTY, OWED, TABLE } from '@yaks/embedding'
 import { columns, objects as catalogue, reclassify } from '@yaks/sqlite'
 import { Store } from './graph.ts'
-import { exceptionRule } from './exception-move.ts'
-import type { Env } from './env.ts'
-import type { Rule } from './mover.ts'
 import { documented, respelled, unholed, unworded } from './migrate.ts'
 import { PLATFORM_STORE } from './door.ts'
 import { db, every, keep, slot } from './testing.ts'
@@ -130,16 +127,10 @@ test('a Store retires an old build identity index on its next schema wake', asyn
 })
 
 // A Store over the object, as a new incarnation, driven through its own doors.
-let newer = (
-  ctx: State,
-  name: string,
-  env: Partial<Env> = {},
-  rules?: Rule[],
-) => {
+let newer = (ctx: State, name: string) => {
   let store = new Store(
     ctx as unknown as ConstructorParameters<typeof Store>[0],
-    env as never,
-    rules,
+    {} as never,
   )
   let door = (path: string, init: RequestInit = {}, app?: string) => {
     let req = new Request(`http://store${path}`, init)
@@ -171,65 +162,6 @@ let run = (ctx: State, ...statements: Stmt[]) => {
   let d = db(ctx)
   for (let s of statements) d.query(s)
 }
-
-// Fixture runs both historical schemas before the timed interface assertions.
-let requestIdMoves = await Promise.all([false, true].map(async (partial) => {
-  let ctx = state()
-  let before = newer(ctx, PLATFORM_STORE)
-  let admitted = (await before.apply([{
-    entity: { eid: ONE },
-    exception: { type: 'Error', value: 'boom' },
-  }])).status
-  run(ctx, {
-    t: 'alter table',
-    table: 'exception',
-    add: { name: 'requestId' },
-  }, { t: 'update', table: 'exception', set: { requestId: lit('report-1') } })
-  if (partial) {
-    run(ctx, {
-      t: 'alter table',
-      table: 'exception',
-      add: { name: 'request_id' },
-    })
-  }
-  keep(ctx, 'schema', 'older schema')
-  let sent: Bundle[] = []
-  let next = newer(ctx, PLATFORM_STORE, {
-    ERRORS: {
-      send: (rows: Bundle[]) => {
-        sent.push(...rows)
-        return Promise.resolve()
-      },
-    } as Env['ERRORS'],
-  }, [{ ...exceptionRule, live: 'all' }])
-  let held = (await next.query('.exception')).length
-  let requestId =
-    scan(db(ctx), 'exception', undefined, ['requestId'])[0].requestId
-  await next.door('/move', { method: 'POST' })
-  await next.store.alarm()
-  return {
-    admitted,
-    held,
-    requestId,
-    delivered:
-      (sent[0]?.error as { tags?: { request_id?: string } } | undefined)?.tags
-        ?.request_id,
-    remaining: (await next.query('.exception')).length,
-    columns: columns(db(ctx), 'exception'),
-  }
-}))
-
-test('a Store forwards legacy request ids from the mover without rewriting rows at boot', () => {
-  for (let moved of requestIdMoves) {
-    assertEquals(moved.admitted, 200)
-    assertEquals(moved.held, 1)
-    assertEquals(moved.requestId, 'report-1')
-    assertEquals(moved.delivered, 'report-1')
-    assertEquals(moved.remaining, 0)
-    assertEquals(moved.columns.includes('requestId'), false)
-    assertEquals(moved.columns.includes('request_id'), false)
-  }
-})
 
 test('a raw writer classifies its changed owner rather than owing a schema census', async () => {
   let ctx = state()

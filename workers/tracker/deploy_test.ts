@@ -1,5 +1,5 @@
 // Deploy hooks prove changed-bundle activation and rollback without account
-// credentials, paid resources, or a minute-long test clock.
+// credentials, paid resources, or waiting for deployment propagation.
 import { clock, equal, test, throws } from '@yaks/testing'
 import { canary, deploy, type Hooks } from './deploy.ts'
 import { canary as receipt, worker } from './worker.ts'
@@ -9,7 +9,7 @@ import { matcher } from '@yaks/match'
 import type { Bundle, Comp } from '@yaks/graph'
 import { platform, vocab } from './core.ts'
 
-let fixture = () => {
+let fixture = (step = 15_000) => {
   let calls: string[] = []
   let time = clock()
   let hooks: Hooks = {
@@ -24,7 +24,7 @@ let fixture = () => {
       return Promise.resolve()
     },
     now: time.now,
-    wait: () => time.advance(15_000),
+    wait: () => time.advance(step),
   }
   return { hooks, calls }
 }
@@ -36,7 +36,7 @@ test('unchanged bundle does not deploy; changed bundle requires a canary', async
   equal(await deploy('new', hooks), true)
   equal(calls, ['deploy'])
 })
-test('missing or unavailable canary rolls back within one minute', async () => {
+test('missing or unavailable canary rolls back within ten minutes', async () => {
   for (
     let probe of [
       () => Promise.resolve(false),
@@ -47,8 +47,15 @@ test('missing or unavailable canary rolls back within one minute', async () => {
     hooks.canary = probe
     await throws(() => deploy('new', hooks))
     equal(calls, ['deploy', 'rollback:previous'])
-    equal(hooks.now(), 60_000)
+    equal(hooks.now(), 600_000)
   }
+})
+test('deployment waits for object convergence beyond one minute', async () => {
+  let { hooks, calls } = fixture()
+  hooks.canary = () => Promise.resolve(hooks.now() >= 360_000)
+  equal(await deploy('new', hooks), true)
+  equal(hooks.now(), 360_000)
+  equal(calls, ['deploy'])
 })
 test('first deployment reports a missing canary without inventing a rollback', async () => {
   let { hooks, calls } = fixture()
@@ -57,7 +64,7 @@ test('first deployment reports a missing canary without inventing a rollback', a
   equal(calls, ['deploy'])
 })
 let hash = 'a'.repeat(64)
-let setup = () => {
+let setup = (now: () => number = Date.now) => {
   let sent: Bundle[][] = []
   let secret = 'scratch'
   let received: Bundle[] = []
@@ -103,15 +110,18 @@ let setup = () => {
     equal(access.person, platform)
     equal(access.admin, true)
     return Promise.resolve('scratch-ticket')
-  })
+  }, now)
   let url = `https://tracker.test/canary?scope=platform&hash=${hash}`
   return { sent, object, w, url }
 }
 let publication = (url: string) =>
-  new Request(url, {
-    method: 'POST',
-    body: '{"during":{"space":"poison"}}',
-  })
+  new Request(
+    `${url}&nonce=${crypto.randomUUID()}&at=${new Date().toISOString()}`,
+    {
+      method: 'POST',
+      body: '{"during":{"space":"poison"}}',
+    },
+  )
 let publish = async (
   w: ReturnType<typeof worker>,
   url: string,
@@ -143,6 +153,13 @@ test('unsigned canary ignores caller data', () => {
     'https://tracker.test/canary',
   )
 })
+test('canary republication retains its immutable capture', async () => {
+  let { sent, w, url } = setup()
+  let request = publication(url)
+  let first = await publish(w, url, request.clone())
+  equal(await publish(w, url, request.clone()), first)
+  equal(sent[1], sent[0])
+})
 test('unsigned canary waits for delivery', async () => {
   let { w, url } = setup()
   let [row] = receipt(hash)
@@ -157,19 +174,43 @@ test('unsigned canary waits for grouping after delivery', async () => {
 test('unsigned canary reveals its grouped receipt', async () => {
   let { sent, object, w, url } = setup()
   let receipt = await publish(w, url)
-  await object.ingest(sent[0])
+  let acknowledged = false, retried = false
+  await w.queue([{
+    body: sent[0],
+    ack: () => void (acknowledged = true),
+    retry: () => void (retried = true),
+  }])
+  equal([acknowledged, retried], [true, false])
   await object.alarm()
   equal(await read(w, receipt), { arrived: true })
 })
-test('an older grouped canary cannot satisfy a fresh publication', async () => {
-  let { object, w, url } = setup()
-  await object.ingest([{
-    entity: { eid: '00000000-0000-4000-8000-000000000001' },
-    error: {
-      fault: `tracker-canary|${hash}`,
-      bug: '00000000-0000-4000-8000-000000000002',
-    },
+test('canary cannot declare a UUID-only object ready for content hashes', async () => {
+  let { sent, object, w, url } = setup()
+  let ingest = object.ingest
+  object.ingest = (rows) => {
+    if (rows.some((row) => !row.entity.eid.includes('-'))) {
+      return Promise.reject(Error('old object only admits UUID entities'))
+    }
+    return ingest(rows)
+  }
+  let receipt = await publish(w, url)
+  let acknowledged = false, retried = false
+  await w.queue([{
+    body: sent[0],
+    ack: () => void (acknowledged = true),
+    retry: () => void (retried = true),
   }])
+  await object.alarm()
+  equal([acknowledged, retried], [false, true])
+  equal(await read(w, receipt), { arrived: false })
+})
+let older = setup()
+let olderReceipt = await publish(older.w, older.url)
+await older.object.ingest(older.sent[0])
+await older.object.alarm()
+test('an older grouped canary cannot satisfy a fresh publication', async () => {
+  let { w, url } = older
+  equal(await read(w, olderReceipt), { arrived: true })
   let next = await publish(w, url)
   equal(await read(w, next), { arrived: false })
 })
@@ -202,7 +243,7 @@ test('public canary rejects tenant scopes, other bundles and malformed receipts'
   }
   equal(sent, [])
 })
-test('build polls its unsigned canary receipt once published and rolls back if it never arrives', async () => {
+test('build republishes its canary and rolls back if it never arrives', async () => {
   let methods: string[] = []
   let arrived = false
   let eid = '00000000-0000-4000-8000-000000000001'
@@ -222,13 +263,75 @@ test('build polls its unsigned canary receipt once published and rolls back if i
     let controller = new AbortController()
     time.after(ms, () => controller.abort())
     return controller.signal
-  })
-  let { hooks, calls } = fixture()
+  }, time.now)
+  let { hooks, calls } = fixture(300_000)
+  hooks.now = time.now
+  hooks.wait = () => time.advance(300_000)
   hooks.canary = probe
   await throws(() => deploy(hash, hooks))
   equal(calls, ['deploy', 'rollback:previous'])
-  equal(methods, ['POST', 'GET', 'GET', 'GET', 'GET'])
+  equal(methods, ['POST', 'GET', 'POST', 'GET'])
   arrived = true
   equal(await probe(), true)
-  equal(methods, ['POST', 'GET', 'GET', 'GET', 'GET', 'GET'])
+  equal(methods, ['POST', 'GET', 'POST', 'GET', 'POST', 'GET'])
+})
+
+let recoveryTime = clock(Date.now())
+let recovery = setup(recoveryTime.now)
+let recoveryProbe = canary(
+  'https://tracker.test',
+  hash,
+  (input, init) => recovery.w.fetch(new Request(input, init)),
+  () => new AbortController().signal,
+  recoveryTime.now,
+)
+let readiness = [await recoveryProbe()]
+// The first publication exhausted transport retries without reaching the DO.
+await recoveryTime.advance(29_999)
+readiness.push(await recoveryProbe())
+let beforeRetry = recovery.sent.length
+await recoveryTime.advance(1)
+readiness.push(await recoveryProbe())
+let acknowledged = false, retried = false
+await recovery.w.queue([{
+  body: recovery.sent[1],
+  ack: () => void (acknowledged = true),
+  retry: () => void (retried = true),
+}])
+await recovery.object.alarm()
+readiness.push(await recoveryProbe())
+test('lost canary delivery recovers with the same capture after convergence', () => {
+  equal(readiness, [false, false, false, true])
+  equal(beforeRetry, 1)
+  equal(recovery.sent.length, 2)
+  equal(recovery.sent[1], recovery.sent[0])
+  equal([acknowledged, retried], [true, false])
+})
+
+test('canary publication refuses malformed or stale caller parameters', async () => {
+  let { w, url, sent } = setup()
+  let valid = publication(url).url
+  for (
+    let edit of [
+      (url: URL) => url.searchParams.delete('nonce'),
+      (url: URL) => url.searchParams.set('nonce', 'chosen-entity'),
+      (url: URL) => url.searchParams.delete('at'),
+      (url: URL) => url.searchParams.set('at', 'invalid'),
+      (url: URL) =>
+        url.searchParams.set(
+          'at',
+          new Date(Date.now() - 16 * 60_000).toISOString(),
+        ),
+      (url: URL) =>
+        url.searchParams.set(
+          'at',
+          new Date(Date.now() + 2 * 60_000).toISOString(),
+        ),
+    ]
+  ) {
+    let target = new URL(valid)
+    edit(target)
+    equal((await w.fetch(new Request(target, { method: 'POST' }))).status, 400)
+  }
+  equal(sent, [])
 })

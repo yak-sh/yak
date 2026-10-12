@@ -15,7 +15,7 @@ export let deploy = async (hash: string, hooks: Hooks): Promise<boolean> => {
   let previous = await hooks.current()
   if (previous.hash == hash) return false
   await hooks.deploy(hash)
-  let until = hooks.now() + 60_000
+  let until = hooks.now() + 600_000
   do {
     try {
       if (await hooks.canary()) return true
@@ -35,21 +35,29 @@ export let canary = (
   hash: string,
   send: typeof fetch = fetch,
   timeout: (ms: number) => AbortSignal = AbortSignal.timeout,
+  now: () => number = Date.now,
 ) => {
   let eid: string | undefined
+  let nonce = crypto.randomUUID()
+  let at: string | undefined
+  let next = -Infinity
   return async (): Promise<boolean> => {
     let probe = new URL('/canary', url)
     probe.searchParams.set('scope', 'platform')
     probe.searchParams.set('hash', hash)
-    if (!eid) {
-      let response = await send(probe, {
+    if (now() >= next) {
+      at ??= new Date(now()).toISOString()
+      next = now() + 30_000
+      let publication = new URL(probe)
+      publication.searchParams.set('nonce', nonce)
+      publication.searchParams.set('at', at)
+      let response = await send(publication, {
         method: 'POST',
         signal: timeout(5000),
       })
-      if (!response.ok) return false
-      eid = (await response.json()).eid
-      if (!eid) return false
+      if (response.ok) eid = (await response.json()).eid
     }
+    if (!eid) return false
     probe.searchParams.set('eid', eid)
     let response = await send(probe, { signal: timeout(5000) })
     return response.ok && (await response.json()).arrived === true

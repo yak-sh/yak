@@ -1,7 +1,7 @@
 // The independent Worker routes authenticated reads/RPC, a public deployment
 // canary, and trusted queue deliveries. It has no directory or yak binding.
 
-import type { Bundle } from '@yaks/graph'
+import { type Bundle, minted, sha256 } from '@yaks/graph'
 import { bugEid } from '@yaks/tracker'
 import { sign } from './auth.ts'
 import { capture, caught, origin, queue } from '@yaks/tracker/report'
@@ -22,11 +22,27 @@ export type Env = Omit<Settings, 'TRACKERS'> & {
   TRACKERS: { getByName: (scope: string) => Stub }
 }
 let uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
-export let canary = (hash: string, version?: string, request?: Request) => {
+export let canary = (
+  hash: string,
+  version?: string,
+  request?: Request,
+  nonce: string = crypto.randomUUID(),
+  at = new Date().toISOString(),
+) => {
   let fault = `tracker-canary|${hash}`
-  let rows = capture(Error(`tracker deploy canary ${hash}`), {
+  let context = origin('yak-tracker', version, 'fetch.canary', request)
+  let eid = sha256(`${hash}|${nonce}`)
+  let requestEid = sha256(`${eid}|request`)
+  context.during!.request = requestEid
+  context.request!.entity.eid = requestEid
+  let error = Error(`tracker deploy canary ${hash}`)
+  // Repeated synthetic captures carry no varying caller stack.
+  delete error.stack
+  let rows = capture(error, {
     sink: () => {},
-    ...origin('yak-tracker', version, 'fetch.canary', request),
+    ...context,
+    eid,
+    at,
     fault,
   })
   // A deployment exercises grouping without notifying a synthetic bug.
@@ -42,7 +58,11 @@ export let scopeOf = (request: Request) => {
     ? scope
     : null
 }
-export let worker = (env: Env, ticket: typeof sign = sign) => {
+export let worker = (
+  env: Env,
+  ticket: typeof sign = sign,
+  now: () => number = Date.now,
+) => {
   let report = (error: unknown, entrypoint: string, request?: Request) =>
     caught(error, {
       sink: env.ERRORS ? queue(env.ERRORS) : () => {},
@@ -73,7 +93,7 @@ export let worker = (env: Env, ticket: typeof sign = sign) => {
           }
           if (request.method == 'GET') {
             let eid = url.searchParams.get('eid')
-            if (!eid || !uuid.test(eid)) {
+            if (!eid || !minted(eid)) {
               return json({ error: 'canary receipt required' }, 400)
             }
             if (!env.TRACKER_SECRET) {
@@ -103,8 +123,27 @@ export let worker = (env: Env, ticket: typeof sign = sign) => {
           if (request.method != 'POST') {
             return json({ error: 'canary method denied' }, 405)
           }
+          let nonce = url.searchParams.get('nonce')
+          let at = url.searchParams.get('at')
+          let date = at ? Date.parse(at) : NaN
+          if (
+            !nonce || !uuid.test(nonce) || !at || !Number.isFinite(date) ||
+            date < now() - 15 * 60_000 || date > now() + 60_000 ||
+            new Date(date).toISOString() != at
+          ) {
+            return json(
+              { error: 'fresh canary nonce and timestamp required' },
+              400,
+            )
+          }
           if (!env.ERRORS) return json({ error: 'queue unavailable' }, 503)
-          let rows = canary(hash, env.CF_VERSION_METADATA?.id, request)
+          let rows = canary(
+            hash,
+            env.CF_VERSION_METADATA?.id,
+            request,
+            nonce,
+            at,
+          )
           await env.ERRORS.send(rows)
           return json({ eid: rows[0].entity.eid })
         }

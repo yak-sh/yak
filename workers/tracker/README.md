@@ -136,16 +136,20 @@ build command empty. The wrapper installs Deno and the pinned npm dependencies.
 Watch `workers/tracker`, `packages` and `bin/build-tracker`.
 
 `deploy.ts` hashes the dry-run bundle and skips an unchanged deployment. It sets
-the nonsecret `BUNDLE_HASH` binding and publishes a server-minted canary through
-the Worker's queue, checks that intake and grouping produced its bug, and
-restores the prior deployed version if the canary is absent after one minute. A
-first deployment has no prior version; its failed canary reports that
-explicitly. No legacy error store is deleted, and yak reporting/read-path
+the nonsecret `BUNDLE_HASH` binding and publishes a content-hash canary through
+the Worker's queue. It republishes the same capture every thirty seconds until
+intake and grouping produce its bug, allowing Worker and object versions to
+converge. It restores the prior deployed version if the canary is absent after
+ten minutes. A first deployment has no prior version; its failed canary reports
+that explicitly. No legacy error store is deleted, and yak reporting/read-path
 changes are outside this Worker.
 
-`POST /canary?scope=platform&hash=<bundle-hash>` needs no ticket and returns
-`{eid}` for a fresh server-minted error. Only the deployed `BUNDLE_HASH` is
-accepted; the request body is ignored. `GET` on the same URL with
+`POST /canary?scope=platform&hash=<bundle-hash>&nonce=<uuid>&at=<iso-time>`
+needs no ticket and returns `{eid}` for a synthetic error. Only the deployed
+`BUNDLE_HASH` is accepted. The timestamp must be canonical ISO UTC, at most
+fifteen minutes old or one minute ahead. The server derives the content-hash eid
+from the bundle hash and nonce; retrying them with the same timestamp preserves
+the entire capture. The request body is ignored. `GET` on the same URL with
 `&eid=<receipt>` returns only `{arrived: boolean}` after that exact canary
 reaches grouping. Graph reads and other tracker operations require scope
 tickets.

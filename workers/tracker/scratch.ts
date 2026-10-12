@@ -129,7 +129,9 @@ try {
     200,
   )
   let canary = await server.fetch(
-    `/canary?scope=platform&hash=${'a'.repeat(64)}`,
+    `/canary?scope=platform&hash=${
+      'a'.repeat(64)
+    }&nonce=${crypto.randomUUID()}&at=${new Date().toISOString()}`,
     {
       method: 'POST',
     },

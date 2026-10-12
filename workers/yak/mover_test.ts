@@ -13,7 +13,6 @@ import { shapeOf, Store } from './graph.ts'
 import { storage as sqliteStorage } from '@yaks/sqlite'
 import { blobRead, blobs, sqliteBlobs } from '@yaks/blob'
 import { metaKeywords } from './vocab.ts'
-import { exceptionRule, exceptionSource } from './exception-move.ts'
 import { KERNEL, metaOf } from './meta.ts'
 import {
   dispatchMove,
@@ -95,7 +94,7 @@ let movingStore = async (
     query: (q: string) => meta.query(q),
     declare: (doc: unknown) => post('/vocab', JSON.stringify(doc)),
     apply: (rows: Bundle[]) => meta.apply(rows, KERNEL),
-    legacy: (rows: Bundle[], doc: VocabDoc) => {
+    source: (rows: Bundle[], doc: VocabDoc) => {
       let vocab = loadVocab(
         [...shapeOf(NAME, WORDS).vocab.docs, doc],
         metaKeywords,
@@ -833,8 +832,41 @@ await proof(
 )
 
 await proof(
-  'exception migration retains transcript history and durably transfers standalone reports',
+  'a mover reads retired sources, forwards selected rows and restores indexes after contraction',
   async (equal, ok) => {
+    let source: VocabDoc = {
+      $defs: {
+        now: {
+          component: true,
+          extends: true,
+          type: 'object',
+          properties: { earlier: { type: 'string' } },
+        },
+      },
+    }
+    let moving: Rule = {
+      mark: 'yak/store/retired-source/1',
+      find: '.now.earlier&*',
+      source,
+      move: (row) => [{
+        entity: row.entity,
+        now: row.output
+          ? { earlier: null, word: (row.now as Comp).earlier }
+          : null,
+        $was: {
+          now: {
+            earlier: token((row.now as Comp).earlier),
+            word: token((row.now as Comp).word),
+          },
+        },
+      }],
+      forward: (row) =>
+        row.output ? [] : [{
+          entity: row.entity,
+          now: { word: (row.now as Comp).earlier },
+        }],
+      drop: ['now.earlier'],
+    }
     let sent: Bundle[][] = []
     let s = await movingStore(0, {
       ERRORS: {
@@ -843,68 +875,66 @@ await proof(
           return Promise.resolve()
         },
       },
-    }, [exceptionRule])
-    await s.legacy([
+    }, [moving])
+    await s.source([
       {
-        entity: { eid: 'history' },
+        entity: { eid: 'local' },
         output: {},
-        content: { body: 'tool failed' },
-        exception: { message: 'tool failed', stack: 'trace' },
+        content: { body: 'keep the whole content' },
+        now: { earlier: 'kept' },
       },
       {
-        entity: { eid: 'report' },
-        doc: { title: 'preserved alongside report' },
-        exception: {
-          at: '2026-10-01T10:00:00.000Z',
-          message: 'broken app',
-          stack: 'report trace',
-          request_id: 'request-42',
-        },
+        entity: { eid: 'transfer' },
+        doc: { title: 'preserved beside transferred data' },
+        now: { earlier: 'sent' },
       },
-    ], exceptionSource)
-    equal((await s.query('preserved')).map((b) => b.entity.eid), [
-      'report',
-    ])
+    ], source)
+    equal((await s.query('preserved')).map((b) => b.entity.eid), ['transfer'])
     let before = await s.query('*')
-    let [proof] = await s.rehearse()
-    equal([proof.rows, proof.moved, proof.forwarded, proof.failed], [
-      2,
-      2,
-      1,
+    equal(
+      (before.find((b) => b.entity.eid == 'local')!.now as Comp).earlier,
       undefined,
-    ])
+    )
+    let [rehearsed] = await s.rehearse()
+    equal([
+      rehearsed.rows,
+      rehearsed.moved,
+      rehearsed.forwarded,
+      rehearsed.failed,
+    ], [2, 2, 1, undefined])
     equal(sent, [])
     equal(await s.query('*'), before)
-    ok(s.columns('exception').includes('message'))
-    s.wake({ ...exceptionRule, live: 'apps' })
+    ok(s.columns('now').includes('earlier'))
+    s.wake({ ...moving, live: 'apps' })
     await s.alarm()
-    equal(sent.length, 1)
-    equal(sent[0].length, 1)
-    let record = sent[0][0]
-    equal((record.error as Comp).at, '2026-10-01T10:00:00.000Z')
-    equal((record.exception as Comp).value, 'broken app')
-    equal((record.exception as Comp).stack, 'report trace')
-    equal((record.during as Comp).entity, 'report')
-    let [history] = await s.query('.entity.eid=history&*')
-    equal(history.exception, { type: 'Error', value: 'tool failed' })
-    equal((history.content as Comp).body, 'tool failed\n\ntrace')
-    let [report] = await s.query('.entity.eid=report&*')
-    equal((report.doc as Comp).title, 'preserved alongside report')
-    equal(report.exception, undefined)
-    ok(!s.columns('exception').includes('message'))
-    equal((await s.query('preserved')).map((b) => b.entity.eid), [
-      'report',
-    ])
+    equal(
+      sent.map((rows) =>
+        rows.map((row) => ({ entity: { eid: row.entity.eid }, now: row.now }))
+      ),
+      [
+        [{ entity: { eid: 'transfer' }, now: { word: 'sent' } }],
+      ],
+    )
+    let [local] = await s.query('.entity.eid=local&*')
+    equal(local.now, { word: 'kept' })
+    equal((local.content as Comp).body, 'keep the whole content')
+    let [transferred] = await s.query('.entity.eid=transfer&*')
+    equal((transferred.doc as Comp).title, 'preserved beside transferred data')
+    equal(transferred.now, undefined)
+    ok(!s.columns('now').includes('earlier'))
+    equal((await s.query('preserved')).map((b) => b.entity.eid), ['transfer'])
     await s.apply([{
-      entity: { eid: 'report' },
+      entity: { eid: 'transfer' },
       doc: { title: 'search after move' },
     }])
     equal((await s.query('preserved')).length, 0)
-    equal((await s.query('search')).map((b) => b.entity.eid), ['report'])
+    equal((await s.query('search')).map((b) => b.entity.eid), ['transfer'])
     let moved = (await s.moves())[0]
     equal([moved.moved, moved.forwarded], [2, 1])
     await s.alarm()
     equal(sent.length, 1)
+    let [again] = await s.rehearse()
+    equal([again.rows, again.moved, again.forwarded], [0, 0, 0])
   },
 )
 
