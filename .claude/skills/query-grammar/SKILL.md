@@ -66,7 +66,8 @@ filter. A malformed clause throws rather than becoming a search term.
 - Suffix presence `.p!` and optional `.p?` are translated to `.p` and `?p`
   by @yaks/query because kept app releases still send them (T-122930, M-37853).
   They answer through every query door and in strict matches; released code
-  stays untouched. Other old
+  stays untouched. `retired(parse(q))` names the ones a query used, and
+  yaks.app records who still sends them (`yaks-app`, T-123000). Other old
   forms (`!.p`, `.p=`) are refused with a message naming the accepted one
   (`!.task is written !task`).
 - The empty query selects nothing, and `graph_query` refuses it.

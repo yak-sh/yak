@@ -228,7 +228,12 @@ carried back from reads: a sender need not spell `entity.archetype` to send it.
 What app-grep cannot see sends too: a page already open runs the code it
 loaded and nothing reloads it, so rewriting a person's files leaves their open
 tab sending the old form, and a store keeps queries of its own. An old form a
-door stops reading breaks those first (M-37853, T-123000).
+door stops reading breaks those first (M-37853). So a store's query and socket
+doors note each retired spelling the grammar translates, with the app that
+sent it and the hour it last did (`translated{app, spelling, at}` in the
+platform store, workers/yak/used.ts): `yak admin query yak/platform
+'.translated' --as admin` lists who still sends one. A translation goes only
+when app-grep finds no sender and that list has none for a while.
 
 ## People's things
 

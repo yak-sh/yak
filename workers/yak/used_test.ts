@@ -299,3 +299,69 @@ let delivery = await (async () => {
 test('background receipt defect delivery does not delay the response', () => {
   equal(delivery, 'served')
 })
+
+let spoken = await (async () => {
+  using p = platform('retired spelling proof')
+  let dir = directory({ fetch: (r) => directoryFetch(r, p.env) }, true)
+  let space = await dir.own(VISITOR, 'retired-proof')
+  await dir.apply({
+    entities: [{
+      entity: { eid: 'retired-proof-app' },
+      app: {
+        slug: 'probe',
+        space: space.eid,
+        store: 'retired-proof/probe',
+        access: 'public',
+      },
+    }],
+  })
+  let app = (await dir.app(space, 'probe'))!
+  let ask = storeOf(p.env.STORE, 'retired-proof/probe', {
+    eid: app.eid,
+    access: 'public',
+  })
+  let status = async (path: string, init: RequestInit = {}) => {
+    let r = await ask(path, init, KERNEL)
+    await r.body?.cancel()
+    return r.status
+  }
+  let installed = await status('/vocab', {
+    method: 'POST',
+    body: JSON.stringify({
+      $defs: { pulse: { component: true, properties: {} } },
+    }),
+  })
+  let rows = async () =>
+    (await meta(p.env).query('.translated'))
+      .map((r) => r.translated as { app: string; spelling: string })
+      .map(({ app, spelling }) => ({ app, spelling }))
+      .sort((a, b) => a.spelling < b.spelling ? -1 : 1)
+  let asked = [
+    await status('/query?q=.pulse'),
+    await status(`/query?q=${encodeURIComponent('.pulse!&.doc?')}`),
+    await status(`/query?q=${encodeURIComponent('.pulse!')}`),
+  ]
+  await until(async () => (await rows()).length == 2, {
+    label: 'retired spellings recorded',
+  })
+  let door = storeOf(p.env.STORE, PLATFORM_STORE)
+  let refused = await Promise.all(['.pulse', '.a! .b?'].map(async (s) => {
+    let r = await door('/translated', {
+      method: 'POST',
+      body: JSON.stringify({ eid: app.eid, spelling: s }),
+    }, KERNEL)
+    await r.body?.cancel()
+    return r.status
+  }))
+  return { app: app.eid, installed, asked, rows: await rows(), refused }
+})()
+
+test('a query in a retired spelling records its app and spelling once', () => {
+  equal(spoken.installed, 200)
+  equal(spoken.asked, [200, 200, 200])
+  equal(spoken.rows, [
+    { app: spoken.app, spelling: '.doc?' },
+    { app: spoken.app, spelling: '.pulse!' },
+  ])
+  equal(spoken.refused, [400, 400])
+})

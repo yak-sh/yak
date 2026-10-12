@@ -197,7 +197,7 @@ import type {
 } from '@yaks/graph'
 import { argsOf, who } from '@yaks/graph/call'
 import { comps } from '@yaks/graph/bundle'
-import { graph } from '@yaks/graph'
+import { graph, identityEid } from '@yaks/graph'
 import { Refused } from '@yaks/graph/errors'
 import { sha256 } from '@yaks/graph/sha256'
 import { DELIVER, MAIL } from '@yaks/mail'
@@ -216,7 +216,14 @@ import {
   policy,
   reads,
 } from '@yaks/member'
-import { and, eq as equals, fields as project, list, parse } from '@yaks/query'
+import {
+  and,
+  eq as equals,
+  fields as project,
+  list,
+  parse,
+  retired,
+} from '@yaks/query'
 import { effectsIn, loadVocab, type Vocab, type VocabDoc } from '@yaks/vocab'
 import { type Anatomy, anatomy } from '@yaks/code/anatomy'
 import { workerAnatomy } from './anatomy.ts'
@@ -282,7 +289,13 @@ import {
 import { weighed } from './meter.ts'
 import { embedder, SPACE, texts } from './embedding.ts'
 import { directoryOf } from './directory.ts'
-import { scheduleUse, useUntil, using } from './used.ts'
+import {
+  isRetired,
+  scheduleRetired,
+  scheduleUse,
+  useUntil,
+  using,
+} from './used.ts'
 import { instrumentActor, instrumentEid } from './instrument.ts'
 import { commandAt, commandReply } from './app-command.ts'
 import { vaultOf } from './vault.ts'
@@ -893,6 +906,25 @@ export class Store {
       (!domain && (scope?.administrative || scope?.kernel || scope?.observe))
     ) return
     scheduleUse(this.#bind, app, (work) => this.#ctx.waitUntil?.(work))
+  }
+
+  // A query this app's code sent in a retired spelling (T-123000): the grammar
+  // reads it, and the platform store notes who still sends it. A line that does
+  // not parse is the door's to refuse, not this one's.
+  #spoke(line: unknown): void {
+    let ns = this.#bind.STORE, app = this.#get('app')
+    if (
+      typeof line != 'string' || !ns || !app ||
+      storeKind(this.#get('name') ?? '') != 'app'
+    ) return
+    let old: string[]
+    try {
+      old = retired(parse(line))
+    } catch {
+      return
+    }
+    if (!old.length) return
+    scheduleRetired(this.#bind, app, old, (work) => this.#ctx.waitUntil?.(work))
   }
 
   #maintenance<T>(run: () => T): T {
@@ -3518,6 +3550,50 @@ export class Store {
       }
       return json({ at })
     }
+    // An app's code sent a query in a retired spelling (T-123000): the hour it
+    // last did, one row per app and spelling, for whoever means to drop the
+    // grammar's translation of it (M-37853).
+    if (path == '/translated') {
+      if (
+        !kernel || request.method != 'POST' ||
+        this.#get('name') != PLATFORM_STORE
+      ) {
+        return json({ error: 'NotFound', message: 'no route' }, 404)
+      }
+      let { eid, spelling } = await request.json() as {
+        eid?: unknown
+        spelling?: unknown
+      }
+      if (
+        typeof eid != 'string' || !/^[a-zA-Z0-9_-]+$/.test(eid) ||
+        typeof spelling != 'string' || spelling.length > 200 ||
+        !isRetired(spelling)
+      ) {
+        return json(
+          {
+            error: 'Refused',
+            message: 'an app id and one retired spelling are required',
+          },
+          400,
+        )
+      }
+      let [app] = await this.#graph.read(`.entity.eid=${eid}`)
+      if (!app) {
+        return json({ error: 'NotFound', message: 'no such entity' }, 404)
+      }
+      let row = identityEid('translated', [eid, spelling])
+      let [held] = await this.#graph.read(`.entity.eid=${row} ?translated`)
+      let at = useUntil()
+      let previous = (held?.translated as Comp | undefined)?.at
+      if (typeof previous == 'string' && previous >= at) at = previous
+      else {
+        await this.#asIs([{
+          entity: { eid: '$translated' },
+          translated: { app: eid, spelling, at },
+        }], { stamp: false })
+      }
+      return json({ at })
+    }
     // A release belongs to the store, not a subscription. Tell even sockets
     // whose page has not subscribed yet; the page decides when to reload.
     if (path == '/attribute') {
@@ -3913,6 +3989,7 @@ export class Store {
     let no = unserved(line)
     if (no) throw new Refused(no)
     let agg = aggOf(line)
+    this.#spoke(line)
     // Service callbacks need server-owned evidence that the public wire omits.
     // Only the kernel's constructed door may ask for this read.
     if (url.searchParams.get('trusted') == '1') {
@@ -4506,6 +4583,10 @@ export class Store {
         let prof = this.#profile
         let input = decode(data)
         let message = 'value' in input ? input.value : null
+        if (message && typeof message == 'object') {
+          if ('subscribe' in message) this.#spoke(message.subscribe)
+          if ('ask' in message) this.#spoke(message.ask)
+        }
         let held = ws.deserializeAttachment() as { read?: ReadOpts } | null
         let active = storeKind(this.#get('name') ?? '') == 'app' &&
           !held?.read?.administrative && message &&

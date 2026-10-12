@@ -292,6 +292,23 @@ export let useDoc: VocabDoc = {
       journal: false,
       properties: { at: owned(time) },
     },
+    // An app whose code still sends a query in a retired spelling, which the
+    // grammar translates for kept releases (T-122930). A translation goes only
+    // once no app has sent its spelling for a while (T-123000, M-37853).
+    translated: {
+      description:
+        'A retired query spelling an app still sends, which the grammar translates, and the hour it last did.',
+      component: true,
+      type: 'object',
+      wire: false,
+      journal: false,
+      identity: ['app', 'spelling'],
+      properties: {
+        app: owned(ref('cascade')),
+        spelling: owned(text),
+        at: owned(time),
+      },
+    },
   },
 }
 export let docs: VocabDoc[] = [directoryDoc, sweepDoc, useDoc]

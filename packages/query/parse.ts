@@ -612,13 +612,27 @@ let parts = (tok: string, prev?: string, next?: string): string[] => {
   return out.filter(Boolean)
 }
 
-// One token to its clauses. A bare word is only ever a text term; to name the
-// component instead, write the leading dot (`.entity`).
-let read = (tok: string, opts: ParseOpts): Clause[] => {
+// A kept release's suffix spelling (`.p!`, `.p?`, T-122930), which parseDot
+// translates rather than refuses.
+let suffixed = (tok: string): boolean => {
+  let h = tok.startsWith('.') ? tok.match(HEAD) : null
+  let rest = h ? tok.slice(h[0].length) : ''
+  return rest == '!' || rest == '?'
+}
+
+// One token to its clauses, noting in `old` each retired spelling it read. A
+// bare word is only ever a text term; to name the component instead, write the
+// leading dot (`.entity`).
+let read = (tok: string, opts: ParseOpts, old: string[]): Clause[] => {
   if (tok == '*') return [every()]
-  if (tok.startsWith('(')) return parse(tok.slice(1, -1), opts).clauses
+  if (tok.startsWith('(')) {
+    let group = parse(tok.slice(1, -1), opts)
+    old.push(...retired(group))
+    return group.clauses
+  }
   if (!/^["']/.test(tok)) {
     let cs = parseDot(tok)
+    if (cs && suffixed(tok)) old.push(tok)
     if (cs) return cs
     if (opts.text === false) {
       throw new SyntaxError(
@@ -629,10 +643,31 @@ let read = (tok: string, opts: ParseOpts): Clause[] => {
   return [text(stripQuotes(tok))]
 }
 
-let clauses = (toks: string[], opts: ParseOpts): Clause[] =>
+let clauses = (toks: string[], opts: ParseOpts, old: string[]): Clause[] =>
   toks.flatMap((tok, i) =>
-    parts(tok, toks[i - 1], toks[i + 1]).flatMap((p) => read(p, opts))
+    parts(tok, toks[i - 1], toks[i + 1]).flatMap((p) => read(p, opts, old))
   )
+
+// The retired spellings each tree was read from, kept beside the frozen tree
+// rather than in it, so a translated query still deep-equals its current form.
+let RETIRED = new WeakMap<And, string[]>()
+
+/**
+ * The retired spellings a parsed query was written in: each suffix presence
+ * `.p!` or optional `.p?` the parser translated for a kept app release. A door
+ * that records who still sends them can tell when a translation may go
+ * (T-123000, M-37853).
+ *
+ * ```ts
+ * import { equal } from '@yaks/testing'
+ * import { parse, retired } from '@yaks/query'
+ *
+ * equal(retired(parse('.drill!&.doc?')), ['.drill!', '.doc?'])
+ * equal(retired(parse('.a!,.b (.c?|.d)')), ['.a!', '.c?'])
+ * equal(retired(parse('.drill ?doc !gone')), [])
+ * ```
+ */
+export let retired = (q: And): string[] => RETIRED.get(q) ?? []
 
 /**
  * A query string to its AST, parsed once. The same text asked again returns the
@@ -690,12 +725,18 @@ let fresh = (q: string, opts: ParseOpts): And => {
     if (tok == '|') alts.push([])
     else alts[alts.length - 1].push(tok)
   }
-  let groups = alts.map((toks) => clauses(toks, opts))
+  let old: string[] = []
+  let groups = alts.map((toks) => clauses(toks, opts, old))
   if (groups.length > 1 && groups.some((g) => !g.length)) {
     throw new SyntaxError(`an empty alternative beside |: ${q}`)
   }
   let out = groups.length == 1 ? groups[0] : alternation(groups)
-  return { kind: 'and', clauses: out.length ? out : [{ kind: 'never' }] }
+  let ast: And = {
+    kind: 'and',
+    clauses: out.length ? out : [{ kind: 'never' }],
+  }
+  if (old.length) RETIRED.set(ast, old)
+  return ast
 }
 
 // The alternatives beside `|`, with every directive lifted out to the whole

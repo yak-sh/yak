@@ -188,9 +188,10 @@ equal(parse('task.status=open'), parse('.task.status=open'))
 
 `parse(q, { text: false })` refuses bare words. Quoted text terms remain
 allowed. Suffix presence `.p!` and optional `.p?` are translated to `.p` and
-`?p` for callers in kept app releases, including strict queries. `.p!=`, `.p=`,
-and `!.p` throw with the accepted form. An empty query has a `never` clause,
-which selects nothing.
+`?p` for callers in kept app releases, including strict queries;
+`retired(parse(q))` lists the ones a query was written in, so a door can note
+who still sends them. `.p!=`, `.p=`, and `!.p` throw with the accepted form. An
+empty query has a `never` clause, which selects nothing.
 
 Parsed ASTs are frozen throughout and cached by query string and strictness.
 Treat them as immutable; construct a different AST with builders or `map()`.
