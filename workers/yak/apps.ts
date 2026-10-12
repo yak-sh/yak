@@ -1849,13 +1849,16 @@ let visits = async (env: Env, apps: App[]): Promise<Visits[] | null> => {
   }
 }
 
-// What a page arrived back from says: a form saved, or a service's sign-in
-// finished or not (connections.ts `callback`).
+// What a page arrived back from says: a form saved, a service's sign-in
+// finished or not (connections.ts `callback`), or an agent was disconnected
+// (identity.ts).
 let returned = (q: URLSearchParams) =>
   q.has('saved')
     ? { say: 'Saved.', no: false }
     : q.has('connected')
     ? { say: 'Connected.', no: false }
+    : q.has('disconnected')
+    ? { say: 'Disconnected.', no: false }
     : q.has('refused')
     ? { say: "The sign-in didn't finish. Try connecting again.", no: true }
     : null

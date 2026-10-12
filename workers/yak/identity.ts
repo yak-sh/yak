@@ -80,11 +80,12 @@ import {
   type AuthRequest,
   CimdFetchError,
   getOAuthApi,
+  type ListOptions,
   OAuthProvider,
   type OAuthProviderOptions,
 } from '@cloudflare/workers-oauth-provider'
 import { cookieValue, opened, seal, verify } from './lib/token.ts'
-import { agentsOf, replace, servicesOf } from './connected.ts'
+import { agentsOf, disconnect, replace, servicesOf } from './connected.ts'
 import {
   consented as handoffConsented,
   consenting as handoffConsenting,
@@ -347,11 +348,15 @@ let backTo = (back: string, env: Host) =>
 
 let dirOf = (env: Env) => directory(bound(env.DIRECTORY, dirPart.fetch, env))
 
-export let agents = (env: Env, person: string) => {
+// The provider as connected.ts reads it. A client whose metadata document
+// cannot be fetched just now is unknown, not gone: its grants still stand.
+let grants = (env: Env) => {
   let oauth = api(env)
-  return agentsOf({
-    listUserGrants: (person, options) => oauth.listUserGrants(person, options),
-    lookupClient: async (id) => {
+  return {
+    listUserGrants: (person: string, options?: ListOptions) =>
+      oauth.listUserGrants(person, options),
+    revokeGrant: (id: string, person: string) => oauth.revokeGrant(id, person),
+    lookupClient: async (id: string) => {
       try {
         return await oauth.lookupClient(id)
       } catch (error) {
@@ -359,16 +364,14 @@ export let agents = (env: Env, person: string) => {
         throw error
       }
     },
-  }, person)
+  }
 }
 
+export let agents = (env: Env, person: string) => agentsOf(grants(env), person)
+
 /** The outside services holding a grant from this person (connected.ts). */
-export let services = (env: Env, person: string) => {
-  let oauth = api(env)
-  return servicesOf({
-    listUserGrants: (person, options) => oauth.listUserGrants(person, options),
-  }, person)
-}
+export let services = (env: Env, person: string) =>
+  servicesOf(grants(env), person)
 
 // Who is asking, out of the platform session cookie and nothing else. It is
 // deliberately not `withAuth` above, which also answers an agent's bearer:
@@ -856,6 +859,24 @@ let ours = async (req: Request, env: Env): Promise<Response> => {
         headers: { 'cache-control': 'private, no-store' },
       },
     )
+  }
+
+  // A row's Disconnect button (connected_ui.ts): the person signed in on this
+  // browser revokes the grants of the one agent they chose. Only the session
+  // cookie is read, never a bearer, so no agent can be talked into
+  // disconnecting anyone; the Origin check every POST passes (route.ts
+  // `guarded`) keeps a sibling space's page from posting it.
+  if (path == '/oauth/agents/disconnect' && req.method == 'POST') {
+    let person = await browser(env, req)
+    let back = backTo(field('return'), env)
+    if (!person) {
+      let login = `/login?return=${encodeURIComponent(back)}`
+      return redirect(login, undefined, 303)
+    }
+    await disconnect(grants(env), person, field('agent'))
+    let to = new URL(back, req.url)
+    to.searchParams.set('disconnected', '1')
+    return redirect(to.href, undefined, 303)
   }
 
   // An invitation's one click (invite.ts, T-37880): accepted for the person

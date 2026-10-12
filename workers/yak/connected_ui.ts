@@ -10,7 +10,17 @@ let destinations: Partial<Record<Brand, { href: string; label: string }>> = {
   claude: { href: 'https://claude.ai/new', label: 'Open Claude' },
 }
 
-let row = (agent?: Agent, links = false) => {
+// A row's way out: it revokes what the row stands for and comes back to
+// `back` (identity.ts answers the post).
+let disconnect = (agent: Agent | undefined, back: string) =>
+  `<form class="Agents_Disconnect" method="post" action="/oauth/agents/disconnect">
+<input type="hidden" name="agent" data-agent-id value="${esc(agent?.id ?? '')}">
+<input type="hidden" name="return" value="${esc(back)}">
+<button class="Button Button-quiet" type="submit" data-agent-disconnect aria-label="Disconnect ${
+    esc(agent?.name ?? '')
+  }">Disconnect</button></form>`
+
+let row = (agent?: Agent, links = false, back = '') => {
   let link = agent?.brand &&
       Object.hasOwn(destinations, agent.brand)
     ? destinations[agent.brand]
@@ -26,12 +36,17 @@ let row = (agent?: Agent, links = false) => {
     esc(agent?.name ?? '')
   }</strong>
 <span class="Agents_State">${icon('check')}Connected</span></div>
-${open}</li>`
+${open}${disconnect(agent, back)}</li>`
 }
 
+/**
+ * The connected agents as rows, each with its Disconnect button returning
+ * to `back`, or as launch links.
+ */
 export let agentList = (
   agents: Agent[],
   view: 'rows' | 'links' = 'rows',
+  back = '',
 ) =>
   `<div data-agents${
     view == 'links' ? ' data-agent-links' : ''
@@ -40,8 +55,10 @@ export let agentList = (
     view == 'links' ? ' Agents-links' : ''
   }" aria-label="Connected agents" data-connected${
     agents.length ? '' : ' hidden'
-  }>${agents.map((c) => row(c, view == 'links')).join('')}</ul>
-<template data-agent-row>${row(undefined, view == 'links')}</template></div>`
+  }>${agents.map((c) => row(c, view == 'links', back)).join('')}</ul>
+<template data-agent-row>${
+    row(undefined, view == 'links', back)
+  }</template></div>`
 
 export let agentLive = (endpoint: string) =>
   `<script>(()=>{
@@ -71,6 +88,8 @@ let refresh=async()=>{
         let row=template.content.firstElementChild.cloneNode(true);
         let name=row.querySelector('[data-agent-name]');
         if(name)name.textContent=agent.name;
+        row.querySelector('[data-agent-id]')?.setAttribute('value',agent.id);
+        row.querySelector('[data-agent-disconnect]')?.setAttribute('aria-label','Disconnect '+agent.name);
         let link=row.querySelector('[data-agent-open]');
         if(destination){
           link.href=destination.href;

@@ -7,7 +7,7 @@ import type {
   GrantSummary,
   OAuthHelpers,
 } from '@cloudflare/workers-oauth-provider'
-import { agentsOf, servicesOf } from './connected.ts'
+import { agentsOf, disconnect, servicesOf } from './connected.ts'
 
 let grant = (
   clientId: string,
@@ -28,7 +28,15 @@ let provider = (
 ) => {
   let looked: string[] = []
   let users: string[] = []
-  let oauth: Pick<OAuthHelpers, 'listUserGrants' | 'lookupClient'> = {
+  let revoked: string[] = []
+  let oauth: Pick<
+    OAuthHelpers,
+    'listUserGrants' | 'lookupClient' | 'revokeGrant'
+  > = {
+    revokeGrant: (id, person) => {
+      revoked.push(`${person}:${id}`)
+      return Promise.resolve()
+    },
     listUserGrants: (person, options) => {
       users.push(person)
       let page = Number(options?.cursor ?? '0')
@@ -50,7 +58,7 @@ let provider = (
       return Promise.resolve(client)
     },
   }
-  return { oauth, looked, users }
+  return { oauth, looked, users, revoked }
 }
 
 test('agents: all pages, earliest active installation, stable order', async () => {
@@ -186,4 +194,29 @@ test('a Zapier grant is a connection, not an agent', async () => {
   assertEquals(await servicesOf(p.oauth, 'person', 0), [
     { name: 'Zapier', connectedAt: 20 },
   ])
+})
+
+test('disconnect revokes the grants of the one entry chosen, and no other', async () => {
+  let gone = async (agent: string) => {
+    let p = provider([[
+      grant('claude', { id: 'web', redirectUri: 'https://claude.ai/cb' }),
+      grant('claude', { id: 'com', redirectUri: 'https://claude.com/cb' }),
+      grant('desktop', { id: 'desktop' }),
+      grant('gpt', { id: 'gpt', redirectUri: 'https://chatgpt.com/cb' }),
+      grant('custom', { id: 'mine' }),
+      grant('zap', { id: 'zap', redirectUri: 'https://zapier.com/cb' }),
+      grant('gone', { id: 'gone' }),
+    ]], { desktop: 'Claude desktop', custom: 'My agent', zap: 'Zapier' })
+    await disconnect(p.oauth, 'person', agent)
+    return p.revoked
+  }
+  assertEquals(await gone('claude'), [
+    'person:web',
+    'person:com',
+    'person:desktop',
+  ])
+  assertEquals(await gone('custom'), ['person:mine'])
+  assertEquals(await gone('zap'), [])
+  assertEquals(await gone('gone'), [])
+  assertEquals(await gone(''), [])
 })

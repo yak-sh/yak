@@ -607,4 +607,7 @@
     text-underline-offset: .18em;
     white-space: nowrap;
   }
+  .Agents_Disconnect {
+    margin: 0;
+  }
 }

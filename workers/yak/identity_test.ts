@@ -189,6 +189,53 @@ test(
         await revoked.body?.cancel()
         assertEquals((await snapshots()).map((c) => c.id), [...remaining])
       }
+
+      // Disconnecting is the signed-in person's: a bearer is sent to sign in
+      // and another person's cookie reaches only their own grants. The one
+      // chosen loses every installation, its tokens with them; the other
+      // agent keeps its own.
+      let web = await authorize('https://claude.ai/cb', 'Claude on the web')
+      let com = await authorize('https://claude.com/cb', 'Claude again')
+      let kept = await authorize('https://chatgpt.com/cb', 'ChatGPT')
+      let disconnect = async (headers: Record<string, string>) => {
+        let res = await k.at('yaks.app', '/oauth/agents/disconnect', {
+          method: 'POST',
+          redirect: 'manual',
+          headers: {
+            'content-type': 'application/x-www-form-urlencoded',
+            ...headers,
+          },
+          body: new URLSearchParams({ agent: 'claude', return: '/connect' }),
+        })
+        assertEquals(res.status, 303)
+        let to = new URL(res.headers.get('location')!, 'https://yaks.app')
+        return to.pathname + to.search
+      }
+      let holds = async (token: string) => {
+        let res = await at('yaks.app', '/oauth/me', {
+          authorization: `Bearer ${token}`,
+        })
+        await res.body?.cancel()
+        return res.status == 200
+      }
+      equal(
+        await disconnect({ authorization: `Bearer ${web.access_token}` }),
+        `/login?return=${encodeURIComponent('/connect')}`,
+      )
+      equal(
+        await disconnect({ cookie: other.cookie }),
+        '/connect?disconnected=1',
+      )
+      equal((await snapshots()).map((c) => c.id), ['chatgpt', 'claude'])
+      equal(
+        await disconnect({ cookie: owner.cookie }),
+        '/connect?disconnected=1',
+      )
+      equal((await snapshots()).map((c) => c.id), ['chatgpt'])
+      equal(
+        await Promise.all([web, com, kept].map((c) => holds(c.access_token))),
+        [false, false, true],
+      )
     } finally {
       await k.stop()
     }

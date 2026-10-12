@@ -622,7 +622,7 @@
         <div class="Guide_Demo">
           <p class="Guide_Name">
             .Agents · .Agents_Row · .Agents_Info ·
-            .Agents_State · .Agents_Open
+            .Agents_State · .Agents_Open · .Agents_Disconnect
           </p>
           <div aria-live="polite">
             <ul class="Agents" aria-label="Connected agents">
@@ -639,6 +639,10 @@
                   Open ChatGPT
                   <svg class="Icon" aria-hidden="true"><use href="/icons.svg#external-link"></use></svg>
                 </a>
+                <form class="Agents_Disconnect" onsubmit="return false">
+                  <button class="Button Button-quiet" type="submit"
+                    aria-label="Disconnect ChatGPT">Disconnect</button>
+                </form>
               </li>
               <li class="Agents_Row">
                 <div class="Agents_Info">
@@ -648,6 +652,10 @@
                     Connected
                   </span>
                 </div>
+                <form class="Agents_Disconnect" onsubmit="return false">
+                  <button class="Button Button-quiet" type="submit"
+                    aria-label="Disconnect Claude Code">Disconnect</button>
+                </form>
               </li>
             </ul>
           </div>

@@ -2,7 +2,8 @@
 // Callback hosts identify web clients; local and older clients use their
 // registered names. Multiple installations of one agent share one entry.
 // A grant a re-authorization replaces is revoked here too, once the new one
-// is in the client's hands (`replace`).
+// is in the client's hands (`replace`), and the person disconnects an entry
+// by revoking the grants it stands for (`disconnect`).
 //
 // A service that signs in the way an agent does is not one: Zapier holds a
 // yaks.app grant as a space holds a Google Calendar token, so its grant is a
@@ -99,42 +100,73 @@ let callback = (uri: string | undefined) => {
   return {}
 }
 
+// Which listed agent a grant stands for, or nothing: a service's grant
+// (`servicesOf`) and one whose registration is gone are no agent. Each
+// client is looked up once however many grants it holds.
+let identifier = (oauth: Pick<Clients, 'lookupClient'>) => {
+  let clients = new Map<string, Promise<ClientInfo | null | undefined>>()
+  let lookup = (id: string) => {
+    let client = clients.get(id) ?? oauth.lookupClient(id)
+    clients.set(id, client)
+    return client
+  }
+  return async (grant: GrantSummary) => {
+    if (serviceOf(grant.redirectUri)) return
+    let host = callback(grant.redirectUri)
+    let brand = host.brand
+    let client: ClientInfo | null | undefined
+    if (!brand) {
+      client = await lookup(grant.clientId)
+      if (client === null) return
+      if (host.local) brand = named(client?.clientName)
+    }
+    return {
+      id: brand ?? grant.clientId,
+      name: brand ? names[brand] : client?.clientName?.trim() || 'Other agent',
+      ...(brand ? { brand } : {}),
+    }
+  }
+}
+
 export let agentsOf = async (
   oauth: Clients,
   person: string,
   now = Math.floor(Date.now() / 1000),
 ): Promise<Agent[]> => {
-  let clients = new Map<string, Promise<ClientInfo | null | undefined>>()
+  let which = identifier(oauth)
   let found = new Map<string, Agent>()
-  let identify = async (grant: GrantSummary) => {
-    let host = callback(grant.redirectUri)
-    let brand = host.brand
-    let client: ClientInfo | null | undefined
-    if (!brand) {
-      let lookup = clients.get(grant.clientId)
-      if (!lookup) {
-        lookup = oauth.lookupClient(grant.clientId)
-        clients.set(grant.clientId, lookup)
-      }
-      client = await lookup
-      if (client === null) return
-      if (host.local) brand = named(client?.clientName)
-    }
-    let id = brand ?? grant.clientId
-    let previous = found.get(id)
-    found.set(id, {
-      id,
-      name: brand ? names[brand] : client?.clientName?.trim() || 'Other agent',
-      ...(brand ? { brand } : {}),
+  for await (let grant of live(oauth, person, now)) {
+    let agent = await which(grant)
+    if (!agent) continue
+    let previous = found.get(agent.id)
+    found.set(agent.id, {
+      ...agent,
       connectedAt: Math.min(grant.createdAt, previous?.connectedAt ?? Infinity),
     })
-  }
-  for await (let grant of live(oauth, person, now)) {
-    if (!serviceOf(grant.redirectUri)) await identify(grant)
   }
   return [...found.values()].sort((a, b) =>
     a.name.localeCompare(b.name) || a.id.localeCompare(b.id)
   )
+}
+
+/**
+ * Disconnects one listed agent: revokes every grant the person holds that
+ * `agentsOf` folds into the entry `agent` names, and no other, a service's
+ * least of all. Answers the grants revoked. A revocation that fails throws:
+ * the person asked for it, and must not be told it is done.
+ */
+export let disconnect = async (
+  oauth: Clients & Pick<OAuthHelpers, 'revokeGrant'>,
+  person: string,
+  agent: string,
+) => {
+  let which = identifier(oauth)
+  let gone: string[] = []
+  for await (let grant of live(oauth, person, 0)) {
+    if ((await which(grant))?.id == agent) gone.push(grant.id)
+  }
+  await Promise.all(gone.map((id) => oauth.revokeGrant(id, person)))
+  return gone
 }
 
 // A client named by the URL of its metadata document (CIMD) is one id for

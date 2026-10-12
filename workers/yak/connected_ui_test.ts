@@ -24,7 +24,9 @@ let mount = (
 <details data-agent-setup${
     initial.length ? '' : ' open'
   }><input value="draft"></details>
-${view ? agentList(initial, view) : ''}${agentLive('/oauth/agents')}
+${view ? agentList(initial, view, '/manage/connect') : ''}${
+    agentLive('/oauth/agents')
+  }
 </body></html>`)
   let events: Record<string, () => Promise<void>> = {}
   let listen = (name: string, run: () => Promise<void>) => {
@@ -85,6 +87,36 @@ test('agent rows show names and only known web agent destinations', () => {
   )
   assert(m.list.querySelector('a')!.textContent!.includes('Open ChatGPT'))
   assertEquals(m.list.getAttribute('aria-label'), 'Connected agents')
+})
+
+test('each row disconnects its own agent, rows a refresh brings too', async () => {
+  let claude: Agent = {
+    id: 'claude',
+    brand: 'claude',
+    name: 'Claude',
+    connectedAt: 2,
+  }
+  let m = mount([chatgpt])
+  let posts = () =>
+    [...m.list.querySelectorAll('form')].map((f) => ({
+      action: f.getAttribute('action'),
+      method: f.getAttribute('method'),
+      fields: [...f.querySelectorAll('input')].map((i) =>
+        `${i.getAttribute('name')}=${i.getAttribute('value')}`
+      ),
+      label: f.querySelector('button')!.getAttribute('aria-label'),
+    }))
+  let post = (agent: Agent) => ({
+    action: '/oauth/agents/disconnect',
+    method: 'post',
+    fields: [`agent=${agent.id}`, 'return=/manage/connect'],
+    label: `Disconnect ${agent.name}`,
+  })
+  assertEquals(posts(), [post(chatgpt)])
+  m.show([chatgpt, claude])
+  await m.run()
+  assertEquals(posts(), [post(chatgpt), post(claude)])
+  assertEquals(mount([chatgpt], 'links').list.querySelector('form'), null)
 })
 
 test('compact agents render launch links and refresh without replacing drafts or stable links', async () => {

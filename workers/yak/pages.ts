@@ -1157,7 +1157,9 @@ export let desk = (at: DeskPage, env: Host = {}) => {
   let body = ''
   if (view == 'apps') body = library(at, env)
   if (view == 'connect') {
-    body = `${agentSetup(at.agents ?? [], env)}${copying}${tabbing}`
+    body = `${
+      agentSetup(at.agents ?? [], env, managePath('connect', at.pick))
+    }${copying}${tabbing}`
   }
   if (view == 'new') {
     body = `<section class="Desk_Start" ${state(true, !!at.agents?.length)}>
@@ -1956,8 +1958,9 @@ ${a.finish}, then ask:${firstAsk}
   }
 </fieldset>`
 
-let agentSetup = (agents: Agent[], env: Host) =>
-  `${agentList(agents)}
+// `back` is where a row's Disconnect returns to: the page it is on.
+let agentSetup = (agents: Agent[], env: Host, back: string) =>
+  `${agentList(agents, 'rows', back)}
 <p ${
     state(true, !!agents.length)
   }>Ask for an app, or keep improving one in the same chat.</p>
@@ -2063,7 +2066,7 @@ export let connect = (yours: Yours, status = 200, env: Host = {}) =>
     'Connect yaks.app',
     'Build and manage your apps from your usual chats.',
     status,
-    `${agentSetup(yours.agents ?? [], env)}
+    `${agentSetup(yours.agents ?? [], env, '/connect')}
 <details class="Attach"${status != 200 || yours.paid ? ' open' : ''}>
 <summary>Your address and plan</summary>
 ${mine(yours, env)}${plan(yours, env)}
