@@ -10,6 +10,7 @@ import { read } from './config.ts'
 import { restart } from './restart.ts'
 import { files } from '../tracker/file.ts'
 import { caught, spool } from '../tracker/report.ts'
+import type { Comp } from '@yaks/graph'
 
 let exists = (path: string) => Deno.stat(path).then(() => true, () => false)
 let gone = (pid: number) => {
@@ -148,6 +149,12 @@ test('restart drains tracker intake without losing its spool or a web request', 
     let oldTracker = start('probe-tracker@old.service', tracker)
     await wait(() => exists(`${dir}/probe-work-old.ready`), 'primary ready')
     await wait(() => exists(`${dir}/probe-tracker-old.ready`), 'tracker ready')
+    let worker = (await hosts[1].graph.read('.process')).find((row) =>
+      String((row.process as Comp).command).includes(
+        `${dir}/probe-tracker-old.ready`,
+      )
+    )
+    assert(worker)
     let web = start('probe-tracker-web@old.service', tracker)
     await wait(() => answering(ports[1]), 'tracker HTTP ready')
     // A client asking all through the handover, on a connection per request.
@@ -173,7 +180,7 @@ test('restart drains tracker intake without losing its spool or a web request', 
     await wait(() => exists(`${dir}/held`), 'tracker intake in flight')
     assertEquals(
       await Deno.readTextFile(`${dir}/held`),
-      String(oldTracker.proc.pid),
+      String((worker.process as Comp).pid),
     )
     let run = (_command: string, args: string[]) => {
       let action = args.includes('list-units') ? 'list' : args[2]
@@ -244,7 +251,7 @@ test('restart drains tracker intake without losing its spool or a web request', 
     )
   } finally {
     await Deno.writeTextFile(`${dir}/release`, '').catch(() => {})
-    for (let child of children) if (!child.ended) child.proc.kill('SIGKILL')
+    for (let child of children) if (!child.ended) child.proc.kill('SIGTERM')
     await Promise.all(children.map((child) => child.output))
     await Promise.all(hosts.map((host) => host.close()))
     for (let child of children) {

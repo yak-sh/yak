@@ -51,7 +51,7 @@ W=<your worktree>          # the repo root you are working in
 D=<scratchpad>/<task>      # your scratch directory
 yak init Probe --config $D/yak.json     # a fresh graph and a minimal config
 # edit $D/yak.json: "port" nobody uses (not 5173), and the plugins your change needs
-deno run -A --config $W/deno.json $W/packages/cli/yak.ts serve --config $D/yak.json > $D/serve.log 2>&1 &
+YAK_RUNTIME_CACHE=$D/runtime deno run -A --config $W/deno.json $W/packages/cli/yak.ts serve --config $D/yak.json > $D/serve.log 2>&1 &
 echo $! > $D/serve.pid
 until curl -sf -o /dev/null http://127.0.0.1:<port>/; do sleep 0.5; done
 ```
@@ -64,6 +64,9 @@ a loaded box, where any fixed sleep is either too short or wasted.
 - `yak init` writes a small plugin list (kernel, doc, task, session, api, web,
   browse, …). Add what your change touches, such as `@yaks/ui` and
   `@yaks/inspect`; the live list in `~/.yak/yak.json` is there to copy from.
+- `serve` and `work` pin their code in a [runtime snapshot](../../../packages/cli/README.md).
+  Give every probe launch `YAK_RUNTIME_CACHE=$D/runtime`, including unit
+  templates, so those cached sources are reaped with the probe.
 - `@yaks/session` reads every Claude transcript under `~/.claude/projects`
   unless told otherwise, which floods a probe with this box's sessions. Give it
   an empty directory:

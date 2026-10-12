@@ -410,6 +410,24 @@ and portable views. It imports only the selected subpaths; tools stay lazy.
 Unmapped packages use the ordinary JSR loader. An absent optional facet remains
 absent; an exported facet that fails still fails the load.
 
+A **runtime snapshot** is an immutable source tree used by a long-lived CLI
+command. From a Git checkout, `yak serve` and `yak work` run in a runtime
+snapshot containing the commit, tracked edits and untracked files. Deno resolves
+the workspace against that tree, and deferred tool imports read it too. A
+landing can add an export, change a tool or remove a dependency while the
+running command keeps its own code. The next launch uses the checkout's current
+code. JSR releases already have immutable sources.
+
+Runtime snapshots are cached by source content under
+`$XDG_CACHE_HOME/yak/runtime` (otherwise `$HOME/.cache/yak/runtime`);
+`YAK_RUNTIME_CACHE` selects another directory. Repeated launches reuse the same
+source URLs and Deno's module cache. Published snapshots remain immutable. The
+launcher forwards interrupts and waits for the command to drain. A detached duty
+worker has its own launcher and can outlive the web command while reusing its
+runtime snapshot. The graph config, database and working directory retain their
+caller's paths; file plugins and machine providers inside the source checkout
+follow the runtime snapshot.
+
 Command declarations and vocabulary documents are data. The CLI derives them
 once and keeps an internal memo under `$XDG_CACHE_HOME/yak/cli` (otherwise
 `$HOME/.cache/yak/cli`). Each command checks the configured plugins and the

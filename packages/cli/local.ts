@@ -198,7 +198,14 @@ export let work = async (
   let { reconcile } = await import('@yaks/tools')
   let running = Promise.all([host.duties(), reconcile(host.runner)])
   try {
-    if (ready) await Deno.writeTextFile(ready, `${Deno.pid}\n`)
+    if (ready) {
+      // Readiness identifies the launcher a caller owns and signals. The
+      // graph's process row identifies the child running these duties.
+      await Deno.writeTextFile(
+        ready,
+        `${Deno.env.get('YAK_LAUNCH_PID') ?? Deno.pid}\n`,
+      )
+    }
     await running
   } finally {
     if (ready) {

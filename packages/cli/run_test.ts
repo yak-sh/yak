@@ -89,6 +89,44 @@ let saying = (name: string): Command[] => [
 let one = saying('one')
 let two = saying('two')
 
+test('a runtime handoff leaves input consumption and execution to its receiver', async () => {
+  let command: Command = {
+    name: 'read',
+    description: 'Read an input',
+    inputSchema: { type: 'object', properties: { body: { type: 'string' } } },
+    run: () => {
+      throw new Error('ran in the sender')
+    },
+  }
+  assertEquals(
+    await ran([command], ['read', '--body', '-'], {
+      invoke: (selected) => {
+        assertEquals(selected, command)
+        return Promise.resolve(7)
+      },
+      reads: {
+        file: reads.file,
+        stdin: () => {
+          throw new Error('read in the sender')
+        },
+      },
+    }),
+    7,
+  )
+  assertEquals(
+    await ran(one, ['one'], { invoke: () => Promise.resolve(undefined) }),
+    0,
+  )
+  assertEquals(
+    await ran([command], ['read', '--help'], {
+      invoke: () => {
+        throw new Error('handed off a help page')
+      },
+    }),
+    0,
+  )
+})
+
 test('account selection stays separate from a tool’s as argument', async () => {
   let install = commands({
     tools: [{

@@ -11,10 +11,11 @@
 // That is why this is its own module. A command that only needs to know where
 // the graph is must not import host.ts, which pulls in every plugin a config
 // names — a cost `yak login` should not pay. So the config is read here, by a
-// module that imports no code: only this package's deno.json, for the release
-// a plugin named without a map entry is taken from (`located`).
+// module that opens no graph. This package's deno.json supplies the release a
+// plugin named without a map entry is taken from (`located`).
 
 import cli from './deno.json' with { type: 'json' }
+import { runtimePath } from './runtime.ts'
 
 export type { Config, Options, Plug } from '@yaks/host'
 import type { Config, Plug } from '@yaks/host'
@@ -69,7 +70,11 @@ export let configPath = (
 // `@yaks/…` is left to the import map. It names a package, never a file: a
 // plugin's modules are its subpaths, and only a package has those.
 let near = (spec: string, base: URL): string =>
-  spec.startsWith('.') || spec.startsWith('/') ? new URL(spec, base).href : spec
+  runtimePath(
+    spec.startsWith('.') || spec.startsWith('/')
+      ? new URL(spec, base).href
+      : spec,
+  )
 
 export { given, used } from '@yaks/host/config'
 // A subpath a package does not export is a module it does not have. Anything
@@ -252,6 +257,21 @@ export let read = (path: string): Config => {
       ? new URL(config.db, base).pathname
       : config.db,
     plugins: (config.plugins ?? []).map((plug) => resolved(plug, base)),
+    ...config.machines
+      ? {
+        machines: {
+          ...config.machines,
+          providers: Object.fromEntries(
+            Object.entries(config.machines.providers).map((
+              [name, provider],
+            ) => [
+              name,
+              { ...provider, use: near(provider.use, base) },
+            ]),
+          ),
+        },
+      }
+      : {},
   }
 }
 

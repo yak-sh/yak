@@ -301,6 +301,8 @@ export let own: Command[] = [
  * types them. */
 export let TOOLS: Command[] = [...own, ...appTools]
 
+let runtimeCall: Promise<number | undefined> | undefined
+
 /** One command line, from argv to an exit code, printing any refusal on the
  * way. A program with subcommands of its own passes them in, and they shadow
  * everything here. Whatever graph the command opened is closed when it is
@@ -320,7 +322,17 @@ export let main = async (
       let path = await personal()
       argv = ['--config', path, ...argv]
     }
-    return code = await cli([...extra, ...TOOLS], { ...YAK, argv })
+    return code = await cli([...extra, ...TOOLS], {
+      ...YAK,
+      argv,
+      invoke: import.meta.main
+        ? async (command, c) =>
+          c.config &&
+            (command.name == 'work' || command.roles?.includes('web'))
+            ? runtimeCall = (await import('./runtime.ts')).runtime(argv)
+            : undefined
+        : undefined,
+    })
   } finally {
     await held.close(code)
     await closeAccounts()
@@ -343,7 +355,7 @@ if (import.meta.main) {
   listen()
   let ran = main(Deno.args)
   wind.hold({
-    drain: () => held.stop() ? ran : undefined,
+    drain: () => held.stop() || runtimeCall ? ran : undefined,
     force: () => held.cut(),
   })
   wind.done.then(async (code) => {

@@ -194,6 +194,11 @@ os.execvp(args[0], [arg.replace('$$', '$') for arg in args])
     await wait(async () =>
       (await Deno.readTextFile(`${dir}/old.ready`)
         .catch(() => '')).trim() == String(old.proc.pid), 'old work ready')
+    let worker = (await host.graph.read('.process')).find((row) =>
+      String((row.process as Comp).command).includes(`${dir}/old.ready`)
+    )
+    assert(worker)
+    let workerPid = Number((worker.process as Comp).pid)
     let web = spawn('serve', '--no-duties')
     await wait(answering, 'HTTP ready')
     let provider = identityEid('provider', ['fake'])
@@ -239,7 +244,7 @@ os.execvp(args[0], [arg.replace('$$', '$') for arg in args])
     Deno.kill(pids[0], 0)
     old.kill('SIGTERM')
     await wait(
-      () => exists(`${dir}/stopped-${old.proc.pid}`),
+      () => exists(`${dir}/stopped-${workerPid}`),
       'old drain began',
     )
     assert(!old.ended(), 'old work exited before its admitted shell completed')
