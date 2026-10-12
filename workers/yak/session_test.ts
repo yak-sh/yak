@@ -202,7 +202,9 @@ let sessionBrowser = await browsing(
   asked(`${COOKIE}=${oldSession}`),
   ENV,
   async (req) =>
-    Response.json(await whoIs(req, SECRET, () => Promise.resolve('editor'))),
+    Response.json(
+      await whoIs(req, SECRET, () => Promise.resolve('editor'), 'garden'),
+    ),
 )
 let sessionWho = await sessionBrowser.json()
 let sessionClaims = await verify(
@@ -218,11 +220,20 @@ test('an existing session gains a browser instrument and keeps its person and st
     'garden',
     who.via,
   ])
+  let scoped = asked(`${COOKIE}=${old}`)
+  for (let space of [null, 'another-space']) {
+    assertEquals(
+      (await whoIs(scoped, SECRET, () => {
+        throw new Error('a session outside its space must not ask for a seat')
+      }, space)).person,
+      null,
+    )
+  }
   assertEquals((await verify(old, SECRET))?.person, 'p-1')
   let req = asked(`${COOKIE}=${old}`)
   assertEquals((await browserOf(req, SECRET))?.via, who.via)
   assertEquals(
-    (await whoIs(req, SECRET, () => Promise.resolve('editor'))).via,
+    (await whoIs(req, SECRET, () => Promise.resolve('editor'), 'garden')).via,
     who.via,
   )
 })
@@ -231,7 +242,12 @@ for (let [index, remember] of [true, true, false].entries()) {
   test(`an existing session ${remember ? 'remembers' : 'withholds'} its browser cookie on visit ${index + 1}`, async () => {
     let req = asked(`${COOKIE}=${oldSession}`), who = sessionWho
     let again = await browsing(req, ENV, async (req) => {
-      let caller = await whoIs(req, SECRET, () => Promise.resolve('editor'))
+      let caller = await whoIs(
+        req,
+        SECRET,
+        () => Promise.resolve('editor'),
+        'garden',
+      )
       assertEquals([caller.person, caller.role, caller.via], [
         'p-1',
         'editor',

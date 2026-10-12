@@ -16,7 +16,7 @@ import {
   assertStringIncludes,
 } from '@std/assert'
 import { parseHTML } from 'linkedom'
-import { test, until } from '@yaks/testing'
+import { equal, ok, test, until } from '@yaks/testing'
 import {
   allowed,
   connector,
@@ -29,7 +29,7 @@ import {
   signIn,
   unique,
 } from './probe.ts'
-import { COOKIE, sign } from './lib/token.ts'
+import { COOKIE, cookieValue, sign, verify } from './lib/token.ts'
 import { SENDS } from './signin.ts'
 import { managePath } from './route.ts'
 import type { Agent } from './connected.ts'
@@ -194,6 +194,131 @@ test(
     }
   },
 )
+
+// A custom-domain login through the same kernel: visiting asks, clicking
+// opens only that space, and a copied cookie cannot become account authority.
+let customHandoff = async (k: Kernel, person: string, full: string) => {
+  let slug = unique('handoff'), other = unique('outside')
+  let them = {
+    person,
+    cookie: full,
+    eids: { [slug]: crypto.randomUUID(), [other]: crypto.randomUUID() },
+  }
+  await meta(k).apply([slug, other].flatMap((name) => [
+    {
+      entity: { eid: them.eids[name] },
+      space: { slug: name },
+      doc: { title: name },
+    },
+    { member: { space: them.eids[name], person, role: 'owner' } },
+    { app: { space: them.eids[name], slug: 'notes', access: 'private' } },
+  ]))
+  let host = `${slug}.example.com`
+  await meta(k).apply([{
+    hostname: {
+      name: host,
+      serves: them.eids[slug],
+      stage: 'active',
+      at: new Date().toISOString(),
+    },
+  }])
+  let back = `https://${host}/notes/`
+  let asked = await k.at(
+    k.host,
+    `/login?return=${encodeURIComponent(back)}`,
+    {
+      redirect: 'manual',
+      headers: { cookie: them.cookie },
+    },
+  )
+  equal(asked.status, 200)
+  equal(asked.headers.get('location'), null)
+  let { document } = parseHTML(await asked.text())
+  let form = ok(
+    document.querySelector('form[method="post"][action="/login/handoff"]'),
+  )
+  let fields = Object.fromEntries([...form.querySelectorAll('input[name]')]
+    .map((
+      input,
+    ) => [input.getAttribute('name')!, input.getAttribute('value')!]))
+  let click = (cookie: string, values = fields) =>
+    k.at(k.host, '/login/handoff', {
+      method: 'POST',
+      redirect: 'manual',
+      headers: {
+        cookie,
+        'content-type': 'application/x-www-form-urlencoded',
+      },
+      body: new URLSearchParams(values).toString(),
+    })
+  let forged = await click(them.cookie, { ...fields, consent: '' })
+  equal(forged.status, 403)
+  await forged.body?.cancel()
+  let moved = await click(them.cookie, {
+    ...fields,
+    return: `https://${host}/other`,
+  })
+  equal(moved.status, 403)
+  await moved.body?.cancel()
+  let allowed = await click(them.cookie)
+  equal(allowed.status, 303)
+  let to = new URL(ok(allowed.headers.get('location')))
+  await allowed.body?.cancel()
+  let hand = await k.at(host, to.pathname + to.search, { redirect: 'manual' })
+  equal(hand.status, 303)
+  equal(hand.headers.get('location'), '/notes/')
+  let set = ok(hand.headers.get('set-cookie'))
+  ok(!set.includes('Domain='))
+  let cookie = set.split(';')[0]
+  equal(
+    (await verify(ok(cookieValue(cookie)), k.secret))?.space,
+    them.eids[slug],
+  )
+  await hand.body?.cancel()
+  let status = async (
+    host: string,
+    path: string,
+    cookie: string,
+    want: number,
+  ) => {
+    let res = await k.at(host, path, {
+      redirect: 'manual',
+      headers: { cookie },
+    })
+    equal(
+      res.status,
+      want,
+      path + ': ' + (await res.clone().text()).slice(0, 100),
+    )
+    await res.body?.cancel()
+  }
+  let identity = async (host: string, cookie: string) => {
+    let res = await k.at(host, '/notes/api/graph', { headers: { cookie } })
+    let who = await res.json()
+    return [who.person, who.role]
+  }
+  equal(await identity(host, cookie), [person, 'owner'])
+  equal(await identity(`${slug}.yaks.app`, cookie), [person, 'owner'])
+  let outside = await k.at(`${other}.yaks.app`, '/notes/api/graph', {
+    headers: { cookie },
+  })
+  equal((await outside.json()).person, null)
+  await status(k.host, '/oauth/agents', cookie, 401)
+  await status(k.host, '/manage', cookie, 303)
+  let denied = await connector(k, cookie).call('tools/call', {
+    name: 'grant',
+    arguments: {},
+  })
+  ok(denied.isError)
+  let outsideRead = await connector(k, cookie).call('tools/call', {
+    name: 'graph_query',
+    arguments: { space: other, app: 'notes', query: '.doc' },
+  })
+  ok(outsideRead.isError)
+  // Held full-account sessions retain the account and every existing seat.
+  equal(await identity(`${other}.yaks.app`, them.cookie), [person, 'owner'])
+  await status(k.host, '/oauth/agents', them.cookie, 200)
+}
 
 test('a person signs in by mail, and an agent by OAuth', async () => {
   let k = await kernel()
@@ -631,6 +756,7 @@ test('a person signs in by mail, and an agent by OAuth', async () => {
         /resource_metadata=/,
       )
     }
+    await customHandoff(k, me, cookie)
   } finally {
     await k.stop()
   }

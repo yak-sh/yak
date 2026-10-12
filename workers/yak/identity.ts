@@ -19,8 +19,9 @@
 // `/login?return=<url>`:
 // both cards carry that address forward, and the spent code lands them back on
 // it when it is one of ours (T-32593). Somebody already signed in is never
-// shown the box at all — `GET /login` reads the session first and sends them
-// on to that address, or to where a fresh sign-in would land them (T-34209).
+// shown the email box — `GET /login` reads the session first. A customer's
+// own domain asks for a click before receiving a session for its space;
+// other returns land on our zone or the dashboard (T-34209).
 //
 // Or they follow a LINK (link.ts, T-34351). Every code letter carries one that
 // spends that same code, so a person reading it on a phone types nothing; and
@@ -84,7 +85,16 @@ import {
 } from '@cloudflare/workers-oauth-provider'
 import { cookieValue, opened, seal, verify } from './lib/token.ts'
 import { agentsOf, servicesOf } from './connected.ts'
-import { HANDOFF, handoffTo, opener, safeNext, spender } from './handoff.ts'
+import {
+  consented as handoffConsented,
+  consenting as handoffConsenting,
+  destination,
+  HANDOFF,
+  handoffTo,
+  opener,
+  safeNext,
+  spender,
+} from './handoff.ts'
 export { HANDOFF } from './handoff.ts'
 import { directory, META, type Role, type Space } from './directory.ts'
 import {
@@ -132,6 +142,7 @@ import {
   askCode,
   askDelete,
   askEmail,
+  askHandoff,
   connect,
   deleted,
   lost,
@@ -149,7 +160,7 @@ import {
 } from './route.ts'
 import { canon, guess, mac, mint, nameOf, personOf, spend } from './signin.ts'
 import { RETRY, source, within } from './rate.ts'
-import { type Caller, minted, type Who } from './session.ts'
+import { type Caller, minted, sessionAt, type Who } from './session.ts'
 import { caught } from './defects.ts'
 import { sha256 } from '@yaks/graph'
 
@@ -224,12 +235,15 @@ export let asking = async (
   }
   if (!cookied || !env.SESSION_SECRET) return { who: null, tried }
   let claims = await verify(cookied, env.SESSION_SECRET)
+  let space = claims?.space ? await dirOf(env).at(claims.space) : null
+  if (claims?.space && !space) return { who: null, tried }
   return {
     who: claims
       ? {
         person: claims.person,
         via: 'session',
         until: claims.exp,
+        ...(space ? { space: space.slug, spaceEid: space.eid } : {}),
         instrument: claims.via ?? `session:${sha256(cookied)}`,
       }
       : null,
@@ -246,7 +260,10 @@ export let asking = async (
 export let withAuth = async (
   env: Env,
   req: Request,
-): Promise<Caller | null> => (await asking(env, req)).who
+): Promise<Caller | null> => {
+  let who = (await asking(env, req)).who
+  return who?.via == 'session' && who.space ? null : who
+}
 
 /** The admin HTTP doors take a website session or an OAuth token, never a
  * pasted grant. Verification remains `asking`'s, and a presented bearer never
@@ -358,9 +375,7 @@ export let services = (env: Env, person: string) => {
 // cannot reach it cannot be talked into it (billing.ts `buyer` takes the same
 // line for a purchase, C-33033).
 let browser = async (env: Env, req: Request) => {
-  let token = cookieValue(req.headers.get('cookie'))
-  if (!token || !env.SESSION_SECRET) return null
-  return (await verify(token, env.SESSION_SECRET))?.person ?? null
+  return (await sessionAt(req, env.SESSION_SECRET))?.person ?? null
 }
 
 // Closing a space (erase.ts, T-33166): `/space/<slug>/delete`, the one door a
@@ -585,29 +600,36 @@ let secret = (env: Env) => {
 // so the cookie sticks to it and no other — and send them on with the token
 // stripped from the address and no referrer to carry it off the page. A token
 // that fails any check becomes a fresh sign-in on the platform, aimed back at
-// where they were, which mints another honestly.
+// where they were, with consent asked again before a handoff is issued.
 export let handoff = async (req: Request, env: Env): Promise<Response> => {
   let url = new URL(req.url)
   let to = safeNext(url.searchParams.get('next') ?? '/')
-  let person = await opener(
+  let hand = await opener(
     url.searchParams.get('t') ?? '',
     secret(env),
     hostOf(req),
     spender(env.OAUTH_KV),
   )
-  if (!person) {
+  let at = await dirOf(env).serves(hostOf(req))
+  if (!hand || !at || hand.space && hand.space != at.space.eid) {
     return redirect(
       `https://${apex(env)}/login?return=${
         encodeURIComponent(`https://${hostOf(req)}${to}`)
       }`,
     )
   }
-  await claimed(req, env, person)
+  await claimed(req, env, hand.person)
   return new Response(null, {
     status: 303,
     headers: {
       location: to,
-      'set-cookie': await minted(req, env, secret(env), person),
+      'set-cookie': await minted(
+        req,
+        env,
+        secret(env),
+        hand.person,
+        at.space.eid,
+      ),
       'referrer-policy': 'no-referrer',
     },
   })
@@ -651,15 +673,27 @@ let landed = async (
   }
   await claimed(req, env, person)
   let set = await minted(req, env, secret(env), person)
-  // See Other: the code was POSTed, and where it sends them is a page to get,
-  // never that form again. A return on a customer's own hostname becomes a
-  // HANDOFF (the platform cookie just set never rides there); anything else is
-  // our own zone or the fallback, decided by `backTo`.
+  // A customer's own hostname asks for a click before receiving a session:
+  // proving the account on our site does not authorize signing into theirs.
+  // Other returns are our own zone or the fallback, decided by `backTo`.
   if (q) return allow(req, env, q, person, set)
-  let hand = back
-    ? await handoffTo(secret(env), dir, person, back, Date.now(), env)
-    : null
-  return redirect(hand ?? backTo(back, env), set, 303)
+  let at = back ? await destination(dir, back, env) : null
+  if (at) {
+    let page = askHandoff(
+      at.host,
+      back,
+      await handoffConsenting(
+        secret(env),
+        person,
+        back,
+        at.space,
+      ),
+      env,
+    )
+    page.headers.set('set-cookie', set)
+    return page
+  }
+  return redirect(backTo(back, env), set, 303)
 }
 
 /** A code attempt either opens or returns the same closed sign-in card. */
@@ -859,17 +893,42 @@ let ours = async (req: Request, env: Env): Promise<Response> => {
 
   if (path == '/login' && req.method == 'GET') {
     let back = url.searchParams.get('return')
-    // Already signed in? Then the platform has nothing to ask, so the box is
-    // never drawn (T-34209): honor the session and send them where they were
-    // going, which is `landed`'s one landing rule — a return on a customer's
-    // own hostname becomes a handoff, one on our zone is followed, a
-    // stranger's is refused and aimed nowhere in particular they land where a
-    // fresh sign-in lands them (`backTo`: their dashboard). It matches
-    // the consent page, which hands an already-signed-in browser one Allow
-    // rather than a fresh sign-in.
+    // Signed in already: skip the email box. `landed` asks for consent on
+    // a customer's own hostname, follows our zone and refuses a stranger's
+    // return, just as it does after a fresh sign-in.
     let who = await withAuth(env, req)
     if (who) return landed(req, env, who.person, '', back ?? '')
     return askEmail(null, back, undefined, undefined, undefined, env)
+  }
+
+  if (path == '/login/handoff' && req.method == 'POST') {
+    let person = await browser(env, req)
+    let back = field('return')
+    let dir = dirOf(env)
+    let at = await destination(dir, back, env)
+    if (
+      !person || !at || !await handoffConsented(
+        secret(env),
+        person,
+        back,
+        at.space,
+        field('consent'),
+      )
+    ) {
+      return new Response('That sign-in page has expired. Sign in again.', {
+        status: 403,
+      })
+    }
+    let to = await handoffTo(
+      secret(env),
+      dir,
+      person,
+      back,
+      Date.now(),
+      env,
+      at.space,
+    )
+    return to ? quiet(redirect(to, undefined, 303)) : lost(env)
   }
 
   // An address, and a code on its way to it. The platform reads nothing about

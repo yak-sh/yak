@@ -73,7 +73,12 @@ export let fetch = async (req: Request, env: Env): Promise<Response> => {
   if (!space) return nothingHere(env)
   let no = (why: string, status = 400) =>
     dropped({ space: space!.slug, why, status }, env)
-  let who = await whoIs(req, env.SESSION_SECRET, (p) => dir.role(space!, p))
+  let who = await whoIs(
+    req,
+    env.SESSION_SECRET,
+    (p) => dir.role(space!, p),
+    space!.eid,
+  )
   // Signing in is the way through for a stranger; for somebody signed in who
   // is nobody here, there is no way through and the sentence says whose it is
   // to give.

@@ -1574,9 +1574,28 @@ export let askConnect = (at: {
     }<p class="Note"><a href="${esc(at.back)}">Back to ${esc(at.app)}</a></p>`,
   )
 
+// A custom domain asking to sign in: consent names its host and its space.
+export let askHandoff = (
+  host: string,
+  back: string,
+  consent: string,
+  env: Host = {},
+) =>
+  shell(
+    env,
+    `Sign in to ${esc(host)}`,
+    'This signs you in to this space only.',
+    200,
+    `<form method="post" action="/login/handoff">${held('return', back)}${
+      held('consent', consent)
+    }
+<button class="Button" type="submit">Continue to ${esc(host)}</button>
+</form>${home(env)}`,
+    { 'cache-control': 'private, no-store', 'referrer-policy': 'no-referrer' },
+  )
+
 // An app asking, for a browser that is already signed in: one click is the
-// whole consent. `consent` is the form's own token (identity.ts `consenting`),
-// which only this page, drawn for this person, ever holds.
+// whole consent. `consent` is the form's own token (identity.ts `consenting`).
 export let askAllow = (
   email: string,
   q: string,

@@ -30,6 +30,7 @@ import { appStore, directory } from './directory.ts'
 import * as dirPart from './directory.ts'
 import { inApp } from './tool.ts'
 import { accept } from './invite.ts'
+import { narrowed } from './grants.ts'
 import type { Address } from './post.ts'
 import { letters } from './letters.ts'
 import type { Graph } from '@yaks/graph'
@@ -162,6 +163,17 @@ test('app_list says the caller’s role in each space it lists', async () => {
   // Hers is her own; his is the seat she gave him, said as the directory
   // says it — never guessed at from the fact that he can see it at all.
   assertEquals(await seen(bo), [['ada', 'a viewer'], ['bo', 'the owner']])
+  // A custom-domain visitor may hold a session for a space without a seat
+  // in it. Naming that space never makes the visitor its owner.
+  let his = (await dir.space('bo'))!
+  assertEquals(
+    await seen({
+      ...ada,
+      dir: narrowed(dir, his.slug, his.eid),
+      who: { person: hers, via: 'session', space: his.slug, spaceEid: his.eid },
+    }),
+    [],
+  )
 })
 
 let bytes = (s: string) => new TextEncoder().encode(s)

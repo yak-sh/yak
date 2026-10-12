@@ -188,4 +188,27 @@ test('a narrowed grant reaches one space and no other', async () => {
   // What a tool given no space asks for is the space the grant is for, not
   // whichever one the person would otherwise mean.
   assertEquals((await only.own('p-1')).slug, 'dana')
+  await assertRejects(
+    () => narrowed(dir, 'gone').own('p-1'),
+    Error,
+    'no space gone',
+  )
+  let moved = { ...spaces[0], slug: 'renamed' }
+  let replacement = { ...spaces[1], slug: 'dana' }
+  let current = [moved, replacement]
+  let changed = {
+    ...dir,
+    space: (slug: string) =>
+      Promise.resolve(current.find((s) => s.slug == slug) ?? null),
+    at: (eid: string) =>
+      Promise.resolve(current.find((s) => s.eid == eid) ?? null),
+    spaces: () => Promise.resolve(current),
+  } as Directory
+  let stable = narrowed(changed, 'dana', moved.eid)
+  assertEquals(await stable.space('dana'), null)
+  assertEquals(await stable.space('renamed'), moved)
+  assertEquals(await stable.role(replacement, 'p-1'), null)
+  assertEquals(await stable.role(moved, 'p-1'), 'owner')
+  assertEquals(await stable.spaces('p-1'), [moved])
+  assertEquals(await stable.own('p-1'), moved)
 })

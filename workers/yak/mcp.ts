@@ -644,6 +644,15 @@ let answered = async (
   // Everything else is still one POST in, one JSON out. A stream is a
   // person's own, so there is no public one.
   if (req.method == 'GET') {
+    if (auth?.space && auth.via == 'session') {
+      return json(403, {
+        error: {
+          code: 'access',
+          message:
+            'A credential for one space cannot subscribe to account events',
+        },
+      })
+    }
     return auth ? listen(env, auth.person, req) : unauthorized(req, env)
   }
   // Before anyone has signed in, this endpoint answers exactly three ways: the
@@ -747,7 +756,7 @@ let answered = async (
     // tool reads membership out of (grants.ts `narrowed`), so the narrowing
     // holds for the generic tier, the platform tier and an app's own tools at
     // once rather than tool by tool.
-    dir: auth.space ? narrowed(dir, auth.space) : dir,
+    dir: auth.space ? narrowed(dir, auth.space, auth.spaceEid) : dir,
     person: auth.person,
     who: auth,
     clock: c,

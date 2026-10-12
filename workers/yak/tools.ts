@@ -4089,9 +4089,12 @@ let OURS: Row[] = [
       let seats = args.space == null
         ? await ctx.dir.seats(ctx.person)
         : await seatIn(ctx, text(args.space, 'space'))
-      // Nobody's space yet: `own` mints them one, and it is theirs to own.
+      // An account with no space gains its own. A narrowed credential's
+      // `own` names its scope instead, so standing still comes from a seat.
       if (!seats.length) {
-        seats = [{ space: await ctx.dir.own(ctx.person), role: 'owner' }]
+        let space = await ctx.dir.own(ctx.person)
+        let role = await ctx.dir.role(space, ctx.person)
+        if (role) seats = [{ space, role }]
       }
       let seatOf = new Map(seats.map((s) => [s.space.eid, s]))
       let every = await ctx.dir.apps(seats.map((s) => s.space))
@@ -5220,6 +5223,13 @@ let OURS: Row[] = [
       let book = ledger(ctx.env.OAUTH_KV)
       if (!secret || !book) {
         throw refuse('unavailable', 'grants are not switched on here')
+      }
+      if (ctx.who?.space && ctx.who.via == 'session') {
+        throw refuse(
+          'access',
+          'A credential for one space cannot manage account grants. ' +
+            'Use the connector or the browser where you signed in.',
+        )
       }
       if (args.revoke != null) {
         let said = text(args.revoke, 'revoke')

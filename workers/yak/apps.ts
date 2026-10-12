@@ -1865,7 +1865,12 @@ let index = async (
   dir: ReturnType<typeof directory>,
   space: Space,
 ): Promise<Response> => {
-  let who = await whoIs(req, env.SESSION_SECRET, (p) => dir.role(space, p))
+  let who = await whoIs(
+    req,
+    env.SESSION_SECRET,
+    (p) => dir.role(space, p),
+    space.eid,
+  )
   let { all, mine } = await shelf(dir, space, who)
   let owner = who.role == 'owner'
   return spaceIndex({
@@ -2027,7 +2032,12 @@ let closed = async (
   dir: ReturnType<typeof directory>,
   space: Space,
 ): Promise<Response> => {
-  let who = await whoIs(req, env.SESSION_SECRET, (p) => dir.role(space, p))
+  let who = await whoIs(
+    req,
+    env.SESSION_SECRET,
+    (p) => dir.role(space, p),
+    space.eid,
+  )
   if (who.role != 'owner' || !who.person) return nothingHere(env)
   if (req.method != 'POST') {
     return spaceBinned({
@@ -2293,7 +2303,8 @@ let served = async (req: Request, env: Env, c: Clock): Promise<Response> => {
     }
     let who = await c.time(
       'who',
-      () => whoIs(req, env.SESSION_SECRET, (p) => dir.role(space!, p)),
+      () =>
+        whoIs(req, env.SESSION_SECRET, (p) => dir.role(space!, p), space!.eid),
     )
     if (!who.person) {
       return json(401, 'not_a_writer', NOBODY, signInAt(url.href, env))
@@ -2314,7 +2325,12 @@ let served = async (req: Request, env: Env, c: Clock): Promise<Response> => {
   // only thing asked, never a grant, and only once the space is over.
   let quota = refusedVisit(space, req, env)
   if (quota) {
-    let who = await whoIs(req, env.SESSION_SECRET, (p) => dir.role(space!, p))
+    let who = await whoIs(
+      req,
+      env.SESSION_SECRET,
+      (p) => dir.role(space!, p),
+      space!.eid,
+    )
     if (!who.role) return quota
     await quota.body?.cancel()
   }
@@ -2331,7 +2347,8 @@ let served = async (req: Request, env: Env, c: Clock): Promise<Response> => {
     }
     let who = await c.time(
       'who',
-      () => whoIs(req, env.SESSION_SECRET, (p) => dir.role(space!, p)),
+      () =>
+        whoIs(req, env.SESSION_SECRET, (p) => dir.role(space!, p), space!.eid),
     )
     return who.role == 'owner'
       ? binned({
@@ -2445,7 +2462,12 @@ let served = async (req: Request, env: Env, c: Clock): Promise<Response> => {
     req.headers.has('authorization')
   ) {
     let { who: caller } = await asking(env, req)
-    if (!caller || (caller.space && caller.space != space.slug)) {
+    if (
+      !caller ||
+      (caller.spaceEid
+        ? caller.spaceEid != space.eid
+        : caller.space && caller.space != space.slug)
+    ) {
       return json(401, 'not_a_reader', 'Sign in with yak login for this app')
     }
     bearer = {
@@ -2461,7 +2483,8 @@ let served = async (req: Request, env: Env, c: Clock): Promise<Response> => {
       () =>
         walls
           ? presented(req, env, dir, space!, store, paper?.token, path)
-          : whoIs(req, env.SESSION_SECRET, (p) => dir.role(space!, p)),
+          : whoIs(req, env.SESSION_SECRET, (p) =>
+            dir.role(space!, p), space!.eid),
     )
   // And the page's own address for its relative URLs: a sandboxed page's
   // carries a token for whoever loaded it, dying with their cookie.
@@ -2660,12 +2683,14 @@ let presented = async (
   if (!sent) {
     return path.startsWith('/api/')
       ? nobody
-      : whoIs(req, env.SESSION_SECRET, (p) => dir.role(space, p))
+      : whoIs(req, env.SESSION_SECRET, (p) => dir.role(space, p), space.eid)
   }
   let p = env.SESSION_SECRET
     ? await paged(sent, env.SESSION_SECRET, store)
     : null
-  if (!p) return whoIs(req, env.SESSION_SECRET, (p) => dir.role(space, p))
+  if (!p) {
+    return whoIs(req, env.SESSION_SECRET, (p) => dir.role(space, p), space.eid)
+  }
   if (!p.person) {
     return {
       ...nobody,

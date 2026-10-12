@@ -121,7 +121,12 @@ let cloner = async (
 ): Promise<Who> => {
   let said = password(req)
   if (!said) {
-    return await whoIs(req, env.SESSION_SECRET, (p) => dir.role(space, p))
+    return await whoIs(
+      req,
+      env.SESSION_SECRET,
+      (p) => dir.role(space, p),
+      space.eid,
+    )
   }
   let grant = env.SESSION_SECRET
     ? await heldGrant(said, env.SESSION_SECRET, ledger(env.OAUTH_KV))

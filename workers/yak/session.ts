@@ -74,18 +74,34 @@ export type Caller = {
   // and the one space it may reach when it was narrowed to one.
   grant?: string
   space?: string | null
+  /** Stable identity for a session's space, including across a rename. */
+  spaceEid?: string
 }
 
 export let nobody: Who = { person: null, role: null }
+
+/** A browser session within its reach. Account doors omit the space; app
+ * doors name its eid. Full-account sessions keep every existing seat. */
+export let sessionAt = async (
+  req: Request,
+  secret: string | undefined,
+  space: string | null = null,
+) => {
+  let token = cookieValue(req.headers.get('cookie'))
+  if (!token || !secret) return null
+  let claims = await verify(token, secret)
+  return claims && (!claims.space || claims.space == space) ? claims : null
+}
 
 export let whoIs = async (
   req: Request,
   secret: string | undefined,
   roleOf: (person: string) => Promise<Role | null>,
+  space: string | null = null,
 ): Promise<Who> => {
   let token = cookieValue(req.headers.get('cookie'))
   if (!token || !secret) return nobody
-  let claims = await verify(token, secret)
+  let claims = await sessionAt(req, secret, space)
   if (!claims) {
     let browser = await browserOf(req, secret)
     return browser

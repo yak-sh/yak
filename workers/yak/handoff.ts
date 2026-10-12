@@ -16,11 +16,64 @@ import { foreign } from './route.ts'
 // app's own routes do not collide with it.
 export let HANDOFF = '/__yak/signin'
 export let HANDOFF_LIFE = 60
-export type Hand = { person: string; host: string; jti: string; exp: number }
+export type Hand = {
+  person: string
+  host: string
+  space?: string
+  jti: string
+  exp: number
+}
 
 // A directory, just enough to verify a hostname is a customer's (directory.ts
 // `serves`: the hostname's app and space, or null for one never attached).
-type Serves = { serves: (host: string) => Promise<unknown> }
+type Serves = {
+  serves: (host: string) => Promise<{ space: { eid: string } } | null>
+}
+
+/** Resolve the destination before offering consent or issuing a token. */
+export let destination = async (dir: Serves, back: string, env: Host = {}) => {
+  let url
+  try {
+    url = new URL(back)
+  } catch {
+    return null
+  }
+  let host = url.hostname.toLowerCase()
+  if (url.protocol != 'https:' || !foreign(host, env)) return null
+  let at = await dir.serves(host)
+  return at ? { host, space: at.space.eid, url } : null
+}
+
+type Consent = { person: string; back: string; space: string; exp: number }
+
+export let consenting = (
+  secret: string,
+  person: string,
+  back: string,
+  space: string,
+) =>
+  seal(
+    'handoff-consent',
+    {
+      person,
+      back,
+      space,
+      exp: Math.floor(Date.now() / 1000) + 600,
+    } satisfies Consent,
+    secret,
+  )
+
+export let consented = async (
+  secret: string,
+  person: string,
+  back: string,
+  space: string,
+  token: string,
+) => {
+  let c = await opened<Consent>('handoff-consent', token, secret)
+  return !!c && c.person == person && c.back == back && c.space == space &&
+    typeof c.exp == 'number' && c.exp * 1000 > Date.now()
+}
 
 // The handoff URL for a return on a customer's own hostname, or null when
 // `back` is not one the directory vouches for — the one guard between a token
@@ -34,19 +87,15 @@ export let handoffTo = async (
   back: string,
   now = Date.now(),
   env: Host = {},
+  space?: string,
 ): Promise<string | null> => {
-  let url
-  try {
-    url = new URL(back)
-  } catch {
-    return null
-  }
-  let host = url.hostname.toLowerCase()
-  if (url.protocol != 'https:' || !foreign(host, env)) return null
-  if (!await dir.serves(host)) return null
+  let at = await destination(dir, back, env)
+  if (!at || space && space != at.space) return null
+  let { host, url } = at
   let hand: Hand = {
     person,
     host,
+    space: at.space,
     jti: crypto.randomUUID(),
     exp: Math.floor(now / 1000) + HANDOFF_LIFE,
   }
@@ -72,14 +121,17 @@ export let opener = async (
   host: string,
   spend: (jti: string) => Promise<boolean>,
   now = Date.now(),
-): Promise<string | null> => {
+): Promise<{ person: string; space: string | null } | null> => {
   let h = await opened<Hand>('handoff', t, secret)
   let sec = Math.floor(now / 1000)
   if (
     !h || typeof h.person != 'string' || typeof h.jti != 'string' ||
-    typeof h.exp != 'number' || h.exp <= sec || h.host != host.toLowerCase()
+    typeof h.exp != 'number' || h.exp <= sec || h.host != host.toLowerCase() ||
+    h.space != null && (typeof h.space != 'string' || !h.space)
   ) return null
-  return await spend(h.jti) ? h.person : null
+  return await spend(h.jti)
+    ? { person: h.person, space: h.space ?? null }
+    : null
 }
 
 // The single-use ledger over a KV: a spent jti is written with a life just past

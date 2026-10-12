@@ -243,17 +243,32 @@ export let revoke = async (
 // `own` answers the narrowed space too: a tool that was given no space asks
 // for the caller's own, and under a grant for one space that is the space it
 // means. Whether they may write there is still their membership, read below.
-export let narrowed = (dir: Directory, slug: string): Directory => ({
-  ...dir,
-  space: async (want: string) => (want == slug ? await dir.space(want) : null),
-  spaces: async (person: string, role?: Role) =>
-    (await dir.spaces(person, role)).filter((s) => s.slug == slug),
-  seats: async (person: string, role?: Role) =>
-    (await dir.seats(person, role)).filter((s) => s.space.slug == slug),
-  seated: async (person: string, role?: Role) =>
-    (await dir.seated(person, role)).filter((s) => s.space.slug == slug),
-  role: async (space: Parameters<Directory['role']>[0], person: string) =>
-    space.slug == slug ? await dir.role(space, person) : null,
-  own: async (person: string, want?: string) =>
-    (await dir.space(slug)) ?? await dir.own(person, want),
-})
+export let narrowed = (
+  dir: Directory,
+  slug: string,
+  eid?: string,
+): Directory => {
+  let matches = (space: Parameters<Directory['role']>[0]) =>
+    eid ? space.eid == eid : space.slug == slug
+  return {
+    ...dir,
+    space: async (want: string) => {
+      if (!eid && want != slug) return null
+      let space = await dir.space(want)
+      return space && matches(space) ? space : null
+    },
+    spaces: async (person: string, role?: Role) =>
+      (await dir.spaces(person, role)).filter(matches),
+    seats: async (person: string, role?: Role) =>
+      (await dir.seats(person, role)).filter((s) => matches(s.space)),
+    seated: async (person: string, role?: Role) =>
+      (await dir.seated(person, role)).filter((s) => matches(s.space)),
+    role: async (space: Parameters<Directory['role']>[0], person: string) =>
+      matches(space) ? await dir.role(space, person) : null,
+    own: async () => {
+      let space = eid ? await dir.at(eid) : await dir.space(slug)
+      if (!space) throw refuse('missing', `no space ${slug}`)
+      return space
+    },
+  }
+}

@@ -6,7 +6,15 @@
 // These functions carry no Cloudflare import, so this suite runs in plain Deno.
 import { test } from '@yaks/testing'
 import { assertEquals, assertMatch } from '@std/assert'
-import { HANDOFF, handoffTo, opener, safeNext, spender } from './handoff.ts'
+import {
+  consented,
+  consenting,
+  HANDOFF,
+  handoffTo,
+  opener,
+  safeNext,
+  spender,
+} from './handoff.ts'
 import { opened, seal } from './lib/token.ts'
 
 let SECRET = 'handoff-test-secret'
@@ -33,13 +41,16 @@ let tokenFor = (
 // A directory that vouches for exactly one customer hostname.
 let dir = {
   serves: (host: string) =>
-    Promise.resolve(host == 'good.com' ? { name: host } : null),
+    Promise.resolve(host == 'good.com' ? { space: { eid: 'space-1' } } : null),
 }
 
 test('opener: a valid token names its person and is spent', async () => {
   let spend = spender(kv())
   let t = await tokenFor({ person: 'u-1', host: 'good.com' })
-  assertEquals(await opener(t, SECRET, 'good.com', spend), 'u-1')
+  assertEquals(await opener(t, SECRET, 'good.com', spend), {
+    person: 'u-1',
+    space: null,
+  })
 })
 
 test('opener: expired, tampered, wrong-host, wrong-secret refused', async () => {
@@ -77,7 +88,10 @@ test('opener: expired, tampered, wrong-host, wrong-secret refused', async () => 
 test('opener: a token is single-use — a replay is refused', async () => {
   let spend = spender(kv()) // one ledger across both calls
   let t = await tokenFor({ person: 'u-1', host: 'good.com' })
-  assertEquals(await opener(t, SECRET, 'good.com', spend), 'u-1') // spent
+  assertEquals(await opener(t, SECRET, 'good.com', spend), {
+    person: 'u-1',
+    space: null,
+  }) // spent
   assertEquals(await opener(t, SECRET, 'good.com', spend), null) // refused
 })
 
@@ -106,11 +120,44 @@ test('handoffTo: mints only for a directory-verified custom host', async () => {
   assertMatch(to ?? '', new RegExp(`^https://good\\.com${HANDOFF}\\?t=`))
   let u = new URL(to!)
   assertEquals(u.searchParams.get('next'), '/recipes?a=1')
-  let hand = await opened<{ person: string; host: string }>(
+  let hand = await opened<{ person: string; host: string; space: string }>(
     'handoff',
     u.searchParams.get('t')!,
     SECRET,
   )
   assertEquals(hand?.person, 'u-1')
   assertEquals(hand?.host, 'good.com')
+  assertEquals(hand?.space, 'space-1')
+  assertEquals(
+    await opener(u.searchParams.get('t')!, SECRET, 'good.com', spender(kv())),
+    {
+      person: 'u-1',
+      space: 'space-1',
+    },
+  )
+  assertEquals(
+    await handoffTo(
+      SECRET,
+      dir,
+      'u-1',
+      'https://good.com/',
+      Date.now(),
+      {},
+      'another-space',
+    ),
+    null,
+  )
+})
+
+let back = 'https://good.com/recipes'
+let consent = await consenting(SECRET, 'u-1', back, 'space-1')
+test('handoff consent belongs to its person, destination and space', async () => {
+  assertEquals(await consented(SECRET, 'u-1', back, 'space-1', consent), true)
+  for (
+    let [person, to, space] of [
+      ['u-2', back, 'space-1'],
+      ['u-1', back + '/other', 'space-1'],
+      ['u-1', back, 'space-2'],
+    ]
+  ) assertEquals(await consented(SECRET, person, to, space, consent), false)
 })

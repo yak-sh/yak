@@ -28,7 +28,7 @@ export let fetch = async (req: Request, env: Env): Promise<Response> => {
   }
   let dir = directory(bound(env.DIRECTORY, dirPart.fetch, env), true)
   let all = await reachable({
-    dir: who.space ? narrowed(dir, who.space) : dir,
+    dir: who.space ? narrowed(dir, who.space, who.spaceEid) : dir,
     person: who.person,
   })
   let found = picked(all, said)

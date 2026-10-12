@@ -41,7 +41,7 @@ import { directory, type Plan, type Space, stamp } from './directory.ts'
 import { bound, type Env } from './env.ts'
 import { apex, type Host } from './host.ts'
 
-import { cookieValue, verify } from './lib/token.ts'
+import { sessionAt } from './session.ts'
 import { refusal } from '@yaks/hook'
 import { fault } from './unseen.ts'
 import { ask } from './stripe.ts'
@@ -226,9 +226,7 @@ let dirOf = (env: Env) =>
 // D-32751). It also keeps the oauth provider off this module's import graph,
 // which is what lets its seams be tested without a runtime.
 let buyer = async (env: Env, req: Request) => {
-  let token = cookieValue(req.headers.get('cookie'))
-  if (!token || !env.SESSION_SECRET) return null
-  return (await verify(token, env.SESSION_SECRET))?.person ?? null
+  return (await sessionAt(req, env.SESSION_SECRET))?.person ?? null
 }
 
 // The Stripe customer this space pays as, minted the first time it needs one
