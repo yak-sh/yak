@@ -6,7 +6,7 @@ export let sweepDoc: VocabDoc = {
       component: true,
       type: 'object',
       properties: {
-        kind: { type: 'string', enum: ['git', 'meter', 'trash'] },
+        kind: { type: 'string', enum: ['git', 'meter', 'trash', 'wrap'] },
         began: {
           type: 'string',
           format: 'date-time',

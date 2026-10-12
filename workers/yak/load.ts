@@ -40,6 +40,7 @@ import * as vocab36 from './facets/git-vocab.ts'
 import * as vocab37 from './facets/meter-vocab.ts'
 import * as vocab38 from './facets/models-vocab.ts'
 import * as vocab39 from './facets/trash-vocab.ts'
+import * as vocab40 from './facets/wrap-vocab.ts'
 export let vocabFacets: Record<string, VocabFacet> = {
   '@yaks/alias': vocab0,
   '@yaks/archetype': vocab1,
@@ -81,6 +82,7 @@ export let vocabFacets: Record<string, VocabFacet> = {
   'yak/meter': vocab37,
   'yak/models': vocab38,
   'yak/trash': vocab39,
+  'yak/wrap': vocab40,
 }
 let facets: Record<string, () => Promise<unknown>> = {
   '@yaks/alias/graph': () => import('@yaks/alias/graph'),
@@ -115,6 +117,8 @@ let facets: Record<string, () => Promise<unknown>> = {
   'yak/models/effects': () => import('./facets/models-effects.ts'),
   'yak/trash/graph': () => import('./facets/trash-graph.ts'),
   'yak/trash/effects': () => import('./facets/trash-effects.ts'),
+  'yak/wrap/graph': () => import('./facets/wrap-graph.ts'),
+  'yak/wrap/effects': () => import('./facets/wrap-effects.ts'),
 }
 export let load: Load = async (plugin, facet) => {
   if (facet == 'vocab') return vocabFacets[plugin] ?? null

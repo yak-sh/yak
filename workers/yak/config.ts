@@ -224,6 +224,7 @@ export let directoryConfig: Config = {
     'yak/meter',
     { use: 'yak/attribution', words: ['browser', 'attribute_writes'] },
     'yak/git',
+    'yak/wrap',
   ]),
 }
 
@@ -278,5 +279,10 @@ export let domains = {
     vocab: './facets/git-vocab.ts',
     graph: './facets/git-graph.ts',
     effects: './facets/git-effects.ts',
+  },
+  'yak/wrap': {
+    vocab: './facets/wrap-vocab.ts',
+    graph: './facets/wrap-graph.ts',
+    effects: './facets/wrap-effects.ts',
   },
 }

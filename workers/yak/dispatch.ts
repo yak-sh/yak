@@ -246,6 +246,31 @@ export default {
 
 export let SHIM = shim()
 
+// The wrapper's version, as the tag a script wears in the namespace: the
+// shim's own text, hashed with stand-ins for what each app gives it. An app's
+// modules are its own, but the wrapper is the platform's, so a release that
+// changes it owes every script already uploaded the new one (rewrap.ts).
+export let WRAP = 'wrap-' +
+  sha256(shim('$main', ['$door'], '$ai')).slice(0, 16)
+
+/** What a wrapper `shim` wrote wraps (the app's entry module, its tunneled
+ * doors and its models' name), read back off the lines it spells them on, or
+ * null where `text` is not such a wrapper. A wrapper older than a door says
+ * nothing of it, and had none. */
+export let wrapping = (text: string) => {
+  let line = (name: string) =>
+    new RegExp(`^let ${name} = (.*)$`, 'm').exec(text)?.[1]
+  let main = /^import app from ("[^"\n]*")$/m.exec(text)?.[1]
+  if (!main) return null
+  let tunneled = line('TUNNELED')
+  let ai = line('AI')
+  return {
+    main: (JSON.parse(main) as string).replace(/^\.\//, ''),
+    tunneled: tunneled ? JSON.parse(tunneled) as string[] : [],
+    ai: ai ? JSON.parse(ai) as string | null : null,
+  }
+}
+
 // The visitor an app's worker acts as, for one minute, on one store.
 export let granting = (secret: string, store: string, who: Who) =>
   seal(
@@ -732,7 +757,7 @@ export let answered = async (r: Response) => {
   throw new Error(`cloudflare: ${why || body.slice(0, 400) || r.status}`)
 }
 
-let sent = (env: Env, path: string, init: RequestInit) =>
+export let sent = (env: Env, path: string, init: RequestInit) =>
   fetch(api(env, path), {
     ...init,
     headers: {
@@ -856,9 +881,11 @@ export let upload = async (
   body.append(
     'metadata',
     new Blob([
-      JSON.stringify(
-        metadata(config, bound, tag, env.WORKER_NAME, durableOwner),
-      ),
+      JSON.stringify({
+        ...metadata(config, bound, tag, env.WORKER_NAME, durableOwner),
+        // Born wearing this release's wrapper, so rewrap.ts passes it by.
+        tags: [WRAP],
+      }),
     ], { type: 'application/json' }),
   )
   // Each part is named by the module name that imports it, and typed by what
