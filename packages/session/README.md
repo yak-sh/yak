@@ -566,6 +566,12 @@ one address, so a project's other addresses are filed under it: a letter to an
 entity wearing `email` with `filed.project` naming the project (hello@yaks.app,
 filed under the platform's project) is held for the project the same way.
 
+The next session is one at work. An outside session hears what is held on its
+own calls; a native transcript hears it only mid-turn (`pending` or `running`).
+One settled between turns hears only what is addressed to it, since a settled
+transcript is never over and would otherwise wake for every alert its project
+ever gets.
+
 Nothing starts a session for a held reply; it waits for one. A managed spawn in
 the project's checkout, with the thread as its brief and the project's common
 persona, is where that will plug in (./listen.ts), once sessions may be started

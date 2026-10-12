@@ -216,3 +216,43 @@ test('a held reply may reach a session of its project or of one above it', async
   equal(await heirs(desk, await desk.get(['to-hello'])), ['next'])
   equal(await heirs(desk, await desk.get(['to-loose'])), [])
 })
+
+// A native transcript of the project: settled between turns, or mid-turn.
+let transcript = (id: string, turn: 'settled' | 'working'): Bundle[] => [
+  { entity: { eid: id }, session: { id, persona: 'operator' } },
+  {
+    entity: { eid: `${id}-asked` },
+    entry: { session: id, seq: 1 },
+    content: { body: 'look into it' },
+    using: {},
+  },
+  ...turn == 'settled'
+    ? [{
+      entity: { eid: `${id}-done` },
+      entry: { session: id, seq: 2 },
+      output: { source: `${id}-asked` },
+      content: { body: 'done' },
+    }]
+    : [],
+]
+
+test('a native transcript at rest hears only what is addressed to it, never what is held for its project', async () => {
+  let g = graph({ storage: ram(office), vocab: office })
+  await g.apply([
+    { entity: { eid: 'p' }, project: {} },
+    { entity: { eid: 'operator' }, persona: { home: 'p' } },
+    ...transcript('resting', 'settled'),
+    ...transcript('working', 'working'),
+    { entity: { eid: 'news' }, knock: { target: 'p' }, doc: { body: 'bug' } },
+    { entity: { eid: 'alert' }, mail: { from: 'a@example.com', target: 'p' } },
+    {
+      entity: { eid: 'nudge' },
+      knock: { target: 'resting' },
+      doc: { body: 'you' },
+    },
+  ])
+  let heard = async (s: string) =>
+    (await pending(g, s)).map(({ item }) => item.entity.eid).sort()
+  equal(await heard('resting'), ['nudge'])
+  equal(await heard('working'), ['alert', 'news'])
+})

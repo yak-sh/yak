@@ -26,9 +26,14 @@
 // is the project's too, since an entity wears one address: hello@yaks.app,
 // where every platform letter asks to be answered, is filed under the
 // platform's project, which wears hello@bot.yak.sh. A knock at the project is
-// held the same
-// way: the graph's own news for whoever works for it, such as a bug the
-// tracker opened (@yaks/heal knocks with the task it files).
+// held the same way: the graph's own news for whoever works for it, such as
+// a bug the tracker opened (@yaks/heal knocks with the task it files).
+//
+// "The next session" is one at work. A native transcript at rest (settled
+// between turns, however long ago) hears only what is addressed to it, never
+// what is held for its project: a settled transcript is never over, so every
+// one the project ever ran would otherwise stay an heir, and each item would
+// wake one to spend a model turn on news meant for a live line of work.
 //
 // Nothing starts a session when none comes: a held reply waits for one. That
 // is where a managed spawn will plug in, once T-95308 lifts the ban on
@@ -68,7 +73,7 @@ import {
 import { safe } from '@yaks/text'
 import type { Vocab } from '@yaks/vocab'
 import { CLAIM, SESSION } from './comp.ts'
-import { statusOf } from './state.ts'
+import { statusOf, type TranscriptStatus } from './state.ts'
 
 let NOTIFIED = 'notified'
 
@@ -117,14 +122,20 @@ let newest = (
 ): Bundle[] | Promise<Bundle[]> =>
   graph.read(`.entry.session=${session}&.order=-entry.seq&.limit=3&*`)
 
+/** Where a session's transcript stands: stopped once its harness ended it,
+ * else what its newest entries say. `s` carries `session.ended`. */
+export let state = async (
+  graph: Pick<Graph, 'read'>,
+  s: Bundle,
+): Promise<TranscriptStatus> =>
+  statusOf(await newest(graph, s.entity.eid), comp(s, SESSION).ended == true)
+
 /** Whether a session is over: its harness ended it, or its transcript
  * stopped or failed. One between turns is not. */
 export let over = async (
   graph: Pick<Graph, 'read'>,
   s: Bundle,
-): Promise<boolean> =>
-  comp(s, SESSION).ended == true ||
-  ['stopped', 'failed'].includes(statusOf(await newest(graph, s.entity.eid)))
+): Promise<boolean> => ['stopped', 'failed'].includes(await state(graph, s))
 
 // A project and the projects filed under it at any depth (`->`), or above it
 // (`<-`): @yaks/project's sub-projects, read through `filed.project`.
@@ -312,7 +323,10 @@ export let pending = async (
   // A comment stays a thread message: the bus never feeds one to a native
   // transcript. An outside harness claiming work retains its listener exception.
   let [owner] = await graph.read(
-    and(eq('entity.eid', session), fields('session.persona')),
+    and(
+      eq('entity.eid', session),
+      fields('session.persona', 'session.ended'),
+    ),
   )
   let [process] = vocab.comp('process')
     ? await graph.get([session], ['process'])
@@ -331,9 +345,12 @@ export let pending = async (
   for (let q of addressedTo(vocab, session)) {
     for (let b of await graph.read(and(...q.clauses, every()))) hears(b)
   }
-  for (let b of await held(graph, session, await worksFor(graph, owner))) {
-    hears(b)
-  }
+  // What is held for the project waits for a session at work: an outside
+  // one hears it on its own call, a native one only mid-turn (see above).
+  let working = !native ||
+    !!owner && ['pending', 'running'].includes(await state(graph, owner))
+  let projects = working ? await worksFor(graph, owner) : []
+  for (let b of await held(graph, session, projects)) hears(b)
   if (!items.length) return []
   let pointed = [
     ...new Set(
