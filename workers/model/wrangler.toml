@@ -25,11 +25,10 @@ class_name = "InferenceWorkflow"
 binding = "RECEIPTS"
 bucket_name = "yak-model-receipts"
 
-# Enable when workers/yak exports the authenticated receipt host (T-122500).
-# [[services]]
-# binding = "KERNEL"
-# service = "yak"
-# entrypoint = "ModelHost"
+[[services]]
+binding = "KERNEL"
+service = "yak"
+entrypoint = "ModelHost"
 
 [alias]
 "file-type/core" = "../yak/node_modules/file-type/core.js"

@@ -337,6 +337,12 @@ simple = { limit = 60, period = 60 }
 binding = "BLOBS"
 bucket_name = "yak-blobs"
 
+# Private frozen hosted-model requests and executor receipts. This bucket is
+# shared with the independently deployed executor, never an app's files.
+[[r2_buckets]]
+binding = "MODEL_RECEIPTS"
+bucket_name = "yak-model-receipts"
+
 # Cloudflare's cache, in front of the Files and Site entrypoints. The default
 # gateway remains uncached: on its own this line would cache every route,
 # including tenant and authenticated responses.
@@ -652,6 +658,10 @@ simple = { limit = 60, period = 60 }
 [[env.staging.r2_buckets]]
 binding = "BLOBS"
 bucket_name = "yak-blobs-staging"
+
+[[env.staging.r2_buckets]]
+binding = "MODEL_RECEIPTS"
+bucket_name = "yak-model-receipts"
 
 [env.staging.cache]
 enabled = true

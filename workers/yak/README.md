@@ -22,6 +22,14 @@ and refuses the kernel upload. The pinned Wrangler bundles once, including node
 compatibility code and source maps; the upload reads those generated modules
 without bundling again.
 
+Hosted model execution has its own [executor release](../model/README.md),
+independently deployed by Workers Builds. A production kernel build adds its
+`MODEL` service binding only after that release has one fully serving version.
+Until then, or if deployment inspection fails, hosted calls run inline. Staging
+and local probes run inline. `MODEL_RECEIPTS` reads the executor's private
+request and receipt bucket. Kernel builds never deploy or replace an executor
+release.
+
 The kernel deploys once, using a stable sandbox toolchain image by registry
 reference. The live Worker's assets carry the CLI workspace, compressed and
 addressed by its source hash. A sandbox's `yak` fetches the live launcher and

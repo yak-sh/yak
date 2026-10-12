@@ -46,9 +46,8 @@ connection before activation. Bucket creation is an account operation:
 npx --yes --prefer-offline wrangler@4.111.0 r2 bucket create yak-model-receipts
 ```
 
-The `KERNEL` service binding is commented in `wrangler.toml` until the kernel
-exports `ModelHost`, its authenticated receipt host. Enable it with that kernel
-integration. The build refuses to publish a release without this binding;
+The `KERNEL` service binding calls the kernel's `ModelHost`, its authenticated
+receipt host. The build refuses to publish a release without this binding;
 publishing it first would freeze the binding out of its immutable configuration.
 There is no public route or workers.dev endpoint. Provider credentials are
 forwarded at the executor's outbound boundary; private request objects contain
@@ -59,6 +58,14 @@ token with Workers Builds Configuration Edit. Ordinary Worker deployment
 credentials do not configure the repository connection.
 
 ## Kernel integration
+
+A production kernel build inspects this executor release's deployments before
+uploading. It adds the `MODEL` service binding only when one version serves all
+traffic. Before the independent Workers Builds project publishes its first
+release, or when deployment inspection fails, hosted calls keep running inline.
+The next kernel build after publication enables dispatch to the executor;
+staging and local probes keep running inline. The kernel's `MODEL_RECEIPTS`
+binding reads the same private bucket as the executor's `RECEIPTS` binding.
 
 The kernel freezes the request privately before pinning `inference` on the ask.
 For ask `a`, the `Inference` Workflow parameters are:

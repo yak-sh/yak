@@ -18,6 +18,7 @@ import {
   command,
   images,
   members,
+  modelBound,
   preflight,
   prepareSibling,
   readiness,
@@ -36,6 +37,138 @@ import {
 
 let read = (path: string) =>
   Deno.readTextFileSync(new URL(path, import.meta.url))
+
+let modelOutput = (
+  deployments: unknown,
+  success = true,
+): Deno.CommandOutput => ({
+  success,
+  code: success ? 0 : 1,
+  signal: null,
+  stdout: new TextEncoder().encode(JSON.stringify(deployments)),
+  stderr: new TextEncoder().encode('unavailable'),
+})
+let modelDeployment = (
+  versions: { version_id: string; percentage: number }[],
+) => [{
+  created_on: '2026-10-12T00:00:00Z',
+  versions,
+}]
+let withModelConfig = async (check: (kernel: string) => Promise<void>) => {
+  let root = Deno.makeTempDirSync()
+  try {
+    Deno.mkdirSync(join(root, 'yak'))
+    Deno.mkdirSync(join(root, 'model'))
+    Deno.writeTextFileSync(join(root, 'model/wrangler.toml'), 'name="model-v1"')
+    let kernel = join(root, 'yak')
+    Deno.writeTextFileSync(
+      join(kernel, 'wrangler.toml'),
+      'main="index.ts"\n[[services]]\nbinding="FILES"\nservice="yak"\nentrypoint="Files"',
+    )
+    await check(kernel)
+    assertEquals([...Deno.readDirSync(kernel)].map((file) => file.name), [
+      'wrangler.toml',
+    ])
+  } finally {
+    Deno.removeSync(root, { recursive: true })
+  }
+}
+for (
+  let [name, result, available] of [
+    ['unpublished', modelOutput([]), false],
+    [
+      'fully serving',
+      modelOutput(modelDeployment([{ version_id: 'v1', percentage: 100 }])),
+      true,
+    ],
+    [
+      'split',
+      modelOutput(modelDeployment([
+        { version_id: 'v1', percentage: 50 },
+        { version_id: 'v2', percentage: 50 },
+      ])),
+      false,
+    ],
+    ['malformed', modelOutput(null), false],
+    ['refused', modelOutput([], false), false],
+    ['unreadable', Error('inspection failed'), false],
+  ] as const
+) {
+  test(`a ${name} executor deployment ${available ? 'enables' : 'leaves absent'} the kernel binding`, () =>
+    withModelConfig(async (kernel) => {
+      let args = ['deploy', '--message', 'commit']
+      let bound = await modelBound(args, (query) => {
+        assertEquals(query, [
+          'deployments',
+          'list',
+          '-c',
+          '../model/wrangler.toml',
+          '--json',
+        ])
+        return result instanceof Error
+          ? Promise.reject(result)
+          : Promise.resolve(result)
+      }, kernel)
+      try {
+        let config = parse(Deno.readTextFileSync(
+          join(
+            kernel,
+            bound.args.includes('-c') ? bound.args.at(-1)! : 'wrangler.toml',
+          ),
+        ))
+        assertEquals(config.services, [
+          { binding: 'FILES', service: 'yak', entrypoint: 'Files' },
+          ...(available ? [{ binding: 'MODEL', service: 'model-v1' }] : []),
+        ])
+        assertEquals(bound.args.slice(0, args.length), args)
+      } finally {
+        bound.remove()
+      }
+    }))
+}
+
+test('executor activation preserves the prepared upload and removes its disposable binding config', () =>
+  withModelConfig(async (kernel) => {
+    let source = join(kernel, '.bundle.toml')
+    Deno.writeTextFileSync(
+      source,
+      'main="entry.js"\nno_bundle=true\nbase_dir="bundle"',
+    )
+    let args = ['deploy', '--message', 'commit', '-c', source]
+    let bound = await modelBound(args, () =>
+      Promise.resolve(
+        modelOutput(modelDeployment([{ version_id: 'v1', percentage: 100 }])),
+      ), kernel)
+    try {
+      let config = parse(
+        Deno.readTextFileSync(join(kernel, bound.args.at(-1)!)),
+      )
+      assertEquals(config.main, 'entry.js')
+      assertEquals(config.no_bundle, true)
+      assertEquals(config.base_dir, 'bundle')
+      assertEquals(config.services, [{ binding: 'MODEL', service: 'model-v1' }])
+      assertEquals(bound.args.slice(0, -1), args.slice(0, -1))
+    } finally {
+      bound.remove()
+      Deno.removeSync(source)
+    }
+  }))
+
+test('local and staging commands leave executor activation to production builds', async () => {
+  for (
+    let args of [['dev'], ['deploy', '--dry-run'], [
+      'deploy',
+      '--env',
+      'staging',
+    ]]
+  ) {
+    let bound = await modelBound(args, () => {
+      throw Error('local and staging must not inspect the production executor')
+    })
+    assertEquals(bound.args, args)
+    bound.remove()
+  }
+})
 
 test('deploy prerequisites generate while npm is pending and settle before writes', async () => {
   let dependencies = Promise.withResolvers<boolean>()

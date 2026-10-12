@@ -475,6 +475,73 @@ export let siblingImages = async (
 
 type Bundle = { entry: string; output: string }
 
+// The executor has an independent Builds connection. Naming it before that
+// project publishes its first release would prevent kernel deployment, so
+// only a fully serving release grants the kernel its service binding.
+export let modelBound = async (
+  args: string[],
+  read = (args: string[]) =>
+    new Deno.Command('env', {
+      args: [...PINNED.flatMap((v) => ['-u', v]), ...WRANGLER, ...args],
+      cwd: dir,
+      stdout: 'piped',
+      stderr: 'piped',
+    }).output(),
+  root = dir,
+) => {
+  let unchanged = { args, remove: () => {} }
+  if (
+    command(args) != 'deploy' || envs(args).length ||
+    args.some((arg) => /^--dry-run(=|$)/.test(arg))
+  ) return unchanged
+  let model = '../model/wrangler.toml'
+  let name = parse(Deno.readTextFileSync(join(root, model))).name
+  if (typeof name != 'string') {
+    throw Error('Executor config has no release name')
+  }
+  try {
+    let result = await read(['deployments', 'list', '-c', model, '--json'])
+    if (
+      !result.success ||
+      !singleServing(JSON.parse(new TextDecoder().decode(result.stdout)))
+    ) {
+      console.log(
+        `${name}: no fully serving executor release; hosted calls remain inline`,
+      )
+      return unchanged
+    }
+  } catch {
+    console.log(
+      `${name}: executor deployment unreadable; hosted calls remain inline`,
+    )
+    return unchanged
+  }
+  let at = args.indexOf('-c')
+  let path = resolve(root, at >= 0 ? args[at + 1] : 'wrangler.toml')
+  let parsed = parse(Deno.readTextFileSync(path))
+  let services = Array.isArray(parsed.services) ? parsed.services : []
+  parsed.services = [
+    ...services.filter((service) => service.binding != 'MODEL'),
+    { binding: 'MODEL', service: name },
+  ]
+  let config = Deno.makeTempFileSync({
+    dir: dirname(path),
+    prefix: '.model-',
+    suffix: '.toml',
+  })
+  try {
+    Deno.writeTextFileSync(config, stringify(parsed))
+  } catch (error) {
+    Deno.removeSync(config)
+    throw error
+  }
+  let bound = [...args]
+  if (at >= 0) bound[at + 1] = relative(root, config)
+  else bound.push('-c', relative(root, config))
+  console.log(`${name}: serving executor bound as MODEL`)
+  return { args: bound, remove: () => Deno.removeSync(config) }
+}
+
 let bundleEntry = (output: string, meta: string, base: string): Bundle => {
   let { outputs } = JSON.parse(Deno.readTextFileSync(meta)) as {
     outputs: Record<string, { entryPoint?: string }>
@@ -1030,7 +1097,30 @@ if (import.meta.main) {
   let kernel = preflight(
     () => Promise.all([readied, made.catalog]),
     () => inspected,
-    () => bundled(argv, run),
+    async () => {
+      let bundle = await bundled(argv, run)
+      try {
+        let bound = argv.some((a) => /^(-c|--config)(=|$)/.test(a))
+          ? { args: bundle.args, remove: () => {} }
+          : await modelBound(bundle.args, (args) =>
+            new Deno.Command('env', {
+              args: [...PINNED.flatMap((v) => ['-u', v]), ...wrangler, ...args],
+              cwd: dir,
+              stdout: 'piped',
+              stderr: 'piped',
+            }).output())
+        return {
+          args: bound.args,
+          remove: () => {
+            bound.remove()
+            bundle.remove()
+          },
+        }
+      } catch (error) {
+        bundle.remove()
+        throw error
+      }
+    },
     (bundle) =>
       runWrangler(
         argv,
