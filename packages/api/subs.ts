@@ -639,6 +639,12 @@ export let subscriptions = (graph: Graph, opts: {
     )
   let relays = new Map<Sink, { bundles: Bundle[]; done: Promise<void> }>()
   let shared = new Map<string, Shared>()
+  // Moving peer predicates can ask the same stored question. Keep that
+  // answer across watches, including empty answers, until a commit moves it.
+  let durableCandidates = new Map<string, {
+    sub: Sub
+    rows: Bundle[] | Promise<Bundle[]>
+  }>()
   // The closed subscriptions keeping a shared answer, longest unasked first.
   let kept = new Map<string, Sub>()
   let keyOf = (sub: Sub) => JSON.stringify([sub.query, sub.opts ?? null])
@@ -1328,6 +1334,12 @@ export let subscriptions = (graph: Graph, opts: {
         named.has(link.comp) || link.rows.some((b) => wrote.has(b.entity.eid))
       ) backlinks.delete(key)
     }
+    for (let [key, held] of durableCandidates) {
+      if (
+        opts.invalidate || policyMoved(held.sub, applied) ||
+        applied.some((b) => notices(held.sub, b))
+      ) durableCandidates.delete(key)
+    }
     let subs = all()
     // A raw feed sends each transaction to a client, and this hook is handed
     // what the phases passed to each other — one patch each, with the `$`
@@ -1665,6 +1677,63 @@ export let subscriptions = (graph: Graph, opts: {
       return collect()
     })
   }
+  let candidatesOf = (sub: Sub): Bundle[] | Promise<Bundle[]> => {
+    if (!sub.durable) return []
+    let read = () =>
+      after(
+        graph.read(sub.durable!, {
+          ...sub.opts,
+          durable: true,
+          native: !!sub.ast || graph.rewrites(sub.opts) || sub.opts?.native,
+        }),
+        (rows) => rows.map(stored),
+      )
+    if (sub.opts?.now != null || moving(sub.durable)) return read()
+    let key = JSON.stringify([sub.durable, sub.opts ?? null])
+    let found = durableCandidates.get(key)
+    if (found) return found.rows
+    let held: { sub: Sub; rows: Bundle[] | Promise<Bundle[]> } = {
+      sub: {
+        ...sub,
+        reads: dependencies(
+          interest(sub.durable, graph.vocab, graph.worn),
+          sub.opts,
+        ),
+        members: new Set(),
+        want: null,
+      },
+      rows: [],
+    }
+    durableCandidates.set(key, held)
+    let release = () => {
+      if (durableCandidates.get(key) === held) durableCandidates.delete(key)
+    }
+    try {
+      held.rows = after(read(), (rows) => {
+        held.sub.members = new Set(rows.map((b) => b.entity.eid))
+        if (rows.length > HELD) release()
+        let n = 0
+        for (let [key, entry] of [...durableCandidates].reverse()) {
+          n += entry.sub.members.size
+          if (n > KEPT) durableCandidates.delete(key)
+        }
+        return rows
+      })
+      if (isPromise(held.rows)) {
+        held.rows = held.rows.catch((err) => {
+          release()
+          throw err
+        })
+      }
+    } catch (err) {
+      release()
+      throw err
+    }
+    while (durableCandidates.size > HELD) {
+      durableCandidates.delete(durableCandidates.keys().next().value!)
+    }
+    return held.rows
+  }
   let gathered = (
     sub: Sub,
     scope?: Set<Eid>,
@@ -1677,16 +1746,7 @@ export let subscriptions = (graph: Graph, opts: {
           (rows) => rows.map(stored),
         )
       : sub.candidates ??
-        (sub.candidates = sub.durable
-          ? after(
-            graph.read(sub.durable, {
-              ...sub.opts,
-              durable: true,
-              native: !!sub.ast || graph.rewrites(sub.opts) || sub.opts?.native,
-            }),
-            (rows) => rows.map(stored),
-          )
-          : [])
+        (sub.candidates = candidatesOf(sub))
     if (scope) {
       return after(candidates, (rows) => {
         let ids = new Set(scope)
@@ -2149,6 +2209,7 @@ export let subscriptions = (graph: Graph, opts: {
     for (let share of shared.values()) unshare(share)
     peerRows.clear()
     backlinks.clear()
+    durableCandidates.clear()
     let rows = new Map<string, Answer>()
     let answers = new Map<string, Reduced | Promise<Reduced>>()
     return after(
