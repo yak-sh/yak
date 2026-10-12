@@ -1,10 +1,9 @@
 // Where a request is going, read from its hostname and path and nothing else
 // (D-32318 §Routing). The apex `yaks.app` is the platform's own face;
-// `<space>.yaks.app/<app>/…` is an app in a space. A dev host — wrangler dev's
-// loopback, the workers.dev preview — serves as the apex, and only there does
-// `x-yak-host` stand in for a hostname a test cannot send (fetch refuses a
-// Host header): on the platform's own hostnames the header is ignored, so no
-// client routes itself into a space by header. Pure: only the configured host, no store.
+// `<space>.yaks.app/<app>/…` is an app in a space. On loopback, an explicit
+// LOCAL_DEV=1 lets `x-yak-host` stand in for a hostname a local test cannot
+// send (fetch refuses a Host header). Deployed hosts always ignore the header.
+// Pure: only the configured host, no store.
 import type { Env } from './env.ts'
 import { apex, type Host, spaceHost, url } from './host.ts'
 
@@ -297,12 +296,12 @@ export let aimedAt = (
 })
 
 let dev = (host: string) =>
-  host == 'localhost' || host == '127.0.0.1' || host.endsWith('.localhost') ||
-  host.endsWith('.workers.dev')
+  host == 'localhost' || host == '127.0.0.1' || host == '[::1]' ||
+  host.endsWith('.localhost')
 
-export let hostOf = (req: Request) => {
+export let hostOf = (req: Request, env: Host = {}) => {
   let host = new URL(req.url).hostname.toLowerCase()
-  return dev(host)
+  return env.LOCAL_DEV == '1' && dev(host)
     ? (req.headers.get('x-yak-host') ?? host).toLowerCase()
     : host
 }

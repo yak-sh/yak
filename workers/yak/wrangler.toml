@@ -7,6 +7,9 @@
 # once the owner points DNS at it — nothing deploys on its own.
 name = "yak"
 main = "index.ts"
+# The kernel and apps are reached through the zone or service bindings only.
+workers_dev = false
+preview_urls = false
 # Where esbuild finds each `@yaks/*` package: the workspace, written out by
 # the wrangler door before every run (wrangler.ts `aliased`; see `[alias]`).
 tsconfig = ".wrangler/paths.json"
@@ -76,8 +79,8 @@ invocation_logs = true
 enabled = true
 
 # Under `wrangler dev` a request's URL carries the first route's hostname
-# unless told otherwise; the loopback keeps local dev a dev host (route.ts),
-# where `x-yak-host` picks the hostname a request stands for.
+# unless told otherwise. Loopback with --var LOCAL_DEV:1 enables x-yak-host
+# for local probes (route.ts); deno task dev:yak supplies that flag.
 [dev]
 host = "127.0.0.1"
 
@@ -525,6 +528,8 @@ fflate = "./node_modules/fflate/esm/browser.js"
 # routing are repeated too, keeping the whole deployment visible in one place.
 [env.staging]
 name = "yak-staging"
+workers_dev = false
+preview_urls = false
 routes = [
   { pattern = "yaks.fyi/*", zone_name = "yaks.fyi" },
   { pattern = "*.yaks.fyi/*", zone_name = "yaks.fyi" },

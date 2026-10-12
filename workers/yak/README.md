@@ -9,6 +9,12 @@ Deploy is one command, from the repo root:
 deno task deploy:yak   # dev:yak for a local wrangler dev
 ```
 
+`deno task dev:yak` and `deno task dev:yak-staging` set `LOCAL_DEV=1`, which
+allows `x-yak-host` to select a hostname on loopback requests. A direct
+`wrangler dev` needs `--var LOCAL_DEV:1` to enable the same local override.
+Deployed requests ignore the header. Production and staging disable both
+workers.dev routes and preview URLs; callers use the zone or service bindings.
+
 A deploy of the kernel deploys its sibling Workers first, from the same commit
 and to the same environment: `yak-out` (`outbound/`, the dispatch namespace's
 outbound Worker) and `yak-esbuild` (`esbuild/`, the compiler `app_deploy` asks

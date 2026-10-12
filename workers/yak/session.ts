@@ -185,7 +185,7 @@ type Keeper = Host & Pick<Env, 'SESSION_SECRET'>
 // space's hostname. On a dev host there is no domain to share — an IP takes
 // no Domain attribute at all — so the cookie stays host-only.
 export let domainOf = (req: Request, env: Host) => {
-  let host = hostOf(req)
+  let host = hostOf(req, env)
   return host == apex(env) || host.endsWith(`.${apex(env)}`) ? apex(env) : ''
 }
 

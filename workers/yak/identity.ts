@@ -607,14 +607,14 @@ export let handoff = async (req: Request, env: Env): Promise<Response> => {
   let hand = await opener(
     url.searchParams.get('t') ?? '',
     secret(env),
-    hostOf(req),
+    hostOf(req, env),
     spender(env.OAUTH_KV),
   )
-  let at = await dirOf(env).serves(hostOf(req))
+  let at = await dirOf(env).serves(hostOf(req, env))
   if (!hand || !at || hand.space && hand.space != at.space.eid) {
     return redirect(
       `https://${apex(env)}/login?return=${
-        encodeURIComponent(`https://${hostOf(req)}${to}`)
+        encodeURIComponent(`https://${hostOf(req, env)}${to}`)
       }`,
     )
   }
@@ -1253,7 +1253,7 @@ let plain = async (req: Request, env: Env): Promise<Request> => {
 // this costs an object, not a connection.
 export let fetch = async (req: Request, env: Env): Promise<Response> => {
   // An explicit apex also names the OAuth issuer behind a local proxy.
-  if (env.APEX && hostOf(req) == apex(env)) {
+  if (env.APEX && hostOf(req, env) == apex(env)) {
     let at = new URL(req.url)
     req = new Request(hostUrl(env, at.pathname + at.search), req)
   }

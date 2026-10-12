@@ -2241,7 +2241,7 @@ export let fetch = (req: Request, env: Env): Promise<Response> => {
 // own (rung 1), and never onto a space that asked for nothing.
 let served = async (req: Request, env: Env, c: Clock): Promise<Response> => {
   let url = new URL(req.url)
-  let r = route(hostOf(req), url.pathname, env)
+  let r = route(hostOf(req, env), url.pathname, env)
   if (r.space == null) {
     return url.pathname == MANAGE || url.pathname.startsWith(`${MANAGE}/`)
       ? manage(req, env)

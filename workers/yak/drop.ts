@@ -67,7 +67,7 @@ let opened = async (file: File): Promise<Entry[]> => {
 }
 
 export let fetch = async (req: Request, env: Env): Promise<Response> => {
-  let r = route(hostOf(req), new URL(req.url).pathname, env)
+  let r = route(hostOf(req, env), new URL(req.url).pathname, env)
   let dir = directory(bound(env.DIRECTORY, dirPart.fetch, env), true)
   let space = r.space ? await dir.space(r.space) : null
   if (!space) return nothingHere(env)

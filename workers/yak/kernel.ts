@@ -500,7 +500,7 @@ export type Lent = { waitUntil: (work: Promise<unknown>) => void }
 
 let router = {
   async fetch(req: Request, env: Env): Promise<Response> {
-    let host = hostOf(req)
+    let host = hostOf(req, env)
     let r = route(host, new URL(req.url).pathname, env)
     try {
       req = unmounted(req)
@@ -571,7 +571,7 @@ let router = {
       let at = r.space == null ? await aimed(req, env, host) : null
       if (at) {
         req = at
-        r = route(hostOf(at), new URL(at.url).pathname, env)
+        r = route(hostOf(at, env), new URL(at.url).pathname, env)
       }
       let answer = await serve(req, env, r)
       return sealed(anyone ? cors(answer) : answer, env)
@@ -596,7 +596,7 @@ let router = {
         status ??= 400
         let path = new URL(req.url).pathname
         console.log(
-          `yak: ${req.method} ${hostOf(req)}${path} refused ${status}: ${
+          `yak: ${req.method} ${hostOf(req, env)}${path} refused ${status}: ${
             JSON.stringify(body)
           }`,
         )
@@ -622,7 +622,7 @@ let router = {
       // is what names the space and the app this was on its way to, and after
       // `aimed` it is the address the platform derived rather than the
       // customer's own domain.
-      let where = `${hostOf(req)}${new URL(req.url).pathname}`
+      let where = `${hostOf(req, env)}${new URL(req.url).pathname}`
       let requestId = crypto.randomUUID()
       console.log(
         `yak: ${req.method} ${where} failed ${requestId}: ${
@@ -683,7 +683,7 @@ export let handler = {
       {},
       async () => {
         let res = await slid(req, env, await router.fetch(req, env))
-        let host = hostOf(req)
+        let host = hostOf(req, env)
         if (host != apex(env) && !host.endsWith(`.${apex(env)}`)) return res
         // Every answer on our zone, including refusals and failures, carries
         // the transport policy. A customer's domain keeps its own policy.

@@ -57,6 +57,8 @@ export type Env = {
   }
   MODEL_RECEIPTS?: Bucket
   APEX?: string
+  // Local loopback probes may supply x-yak-host; never set on a deploy.
+  LOCAL_DEV?: string
   STORE: Namespace
   // The directory's store answered in-process, set only by the object that IS
   // the directory for the jobs it runs (graph.ts, meta.ts `meta`). Absent, the

@@ -14,6 +14,17 @@ let env = (answer: () => Response) => {
   } as unknown as Env
 }
 
+test('a hostname override cannot route a production request into an app', async () => {
+  let bindings = {
+    ...env(() => new Response('platform')),
+    APPS: { fetch: () => Promise.resolve(new Response('app')) },
+  }
+  let req = new Request('http://127.0.0.1/login', {
+    headers: { 'x-yak-host': 'override.yaks.app' },
+  })
+  equal(await (await handler.fetch(req, bindings)).text(), 'platform')
+})
+
 for (let host of ['yaks.app', 'hsts.yaks.app']) {
   for (let status of [200, 302, 404, 503, 101]) {
     test(`HSTS covers ${host} responses with status ${status}`, async () => {

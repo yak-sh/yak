@@ -5,7 +5,7 @@
 // (probe-suite.ts), for what only the runtime has: a socket, a letter at its
 // email door, a script beside the kernel. Both are driven over HTTP the way a
 // browser or a headless client would — a hostname rides `x-yak-host`, since
-// fetch refuses a Host header and the kernel honors ours on a dev host
+// fetch refuses a Host header and LOCAL_DEV=1 enables ours on loopback
 // (route.ts) — and both are configured alike (`vars`). A test on a shared
 // kernel keeps to data of its own: a person `signIn` mints, a space or an
 // address nobody else uses.
@@ -134,6 +134,7 @@ export let vars = (secret: string, cloudflare: string) => {
   let stripe = Deno.env.get('STRIPE_KEY')
   let price = Deno.env.get('STRIPE_PRICE')
   return {
+    LOCAL_DEV: '1',
     SESSION_SECRET: secret,
     MAIL_TOKEN: 'a-token',
     MAIL_API: cloudflare,

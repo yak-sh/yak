@@ -21,6 +21,7 @@ import { GRANT, tokenOf } from './grants.ts'
 import {
   browserOf,
   browsing,
+  domainOf,
   minted,
   SESSION,
   slid,
@@ -32,6 +33,21 @@ import { paged, paging } from './installed.ts'
 let SECRET = 'a-probe-secret'
 let ENV = { SESSION_SECRET: SECRET, APEX: 'yaks.app' }
 let DAY = 24 * 60 * 60
+
+test('session cookie domains follow the configured hostname trust', () => {
+  let req = (host: string) =>
+    new Request(`http://${host}/login`, {
+      headers: { 'x-yak-host': 'jeff.yaks.app' },
+    })
+  assertEquals(domainOf(req('localhost'), ENV), '')
+  assertEquals(
+    domainOf(req('localhost'), { ...ENV, LOCAL_DEV: '1' }),
+    'yaks.app',
+  )
+  assertEquals(domainOf(req('yak.workers.dev'), { ...ENV, LOCAL_DEV: '1' }), '')
+  assertEquals(domainOf(req('customer.example'), ENV), '')
+  assertEquals(domainOf(req('yaks.app'), ENV), 'yaks.app')
+})
 
 // The cookie a browser sends `days` into a ninety-day session.
 let aged = async (days: number, person = 'p-1') =>

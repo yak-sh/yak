@@ -74,14 +74,62 @@ test('aimedAt: a domain is carried to the address of what it serves', () => {
   })
 })
 
-test('hostOf: x-yak-host stands in on a dev host only', () => {
+test('hostOf: unconfigured requests ignore x-yak-host', () => {
+  for (
+    let host of [
+      'localhost',
+      '127.0.0.1',
+      '[::1]',
+      'space.localhost',
+      'yak.workers.dev',
+      'version-yak.workers.dev',
+      'yaks.app',
+      'maya.yaks.app',
+      'customer.example',
+    ]
+  ) {
+    assertEquals(
+      hostOf(
+        new Request(`http://${host}/`, {
+          headers: { 'x-yak-host': 'jeff.yaks.app' },
+        }),
+      ),
+      host,
+    )
+  }
+})
+
+test('hostOf: explicit local development overrides only loopback', () => {
   let at = (url: string, host?: string) =>
-    hostOf(new Request(url, { headers: host ? { 'x-yak-host': host } : {} }))
+    hostOf(
+      new Request(url, { headers: host ? { 'x-yak-host': host } : {} }),
+      { LOCAL_DEV: '1' },
+    )
   assertEquals(at('http://127.0.0.1:8787/', 'Jeff.yaks.app'), 'jeff.yaks.app')
-  assertEquals(at('http://yak.workers.dev/', 'jeff.yaks.app'), 'jeff.yaks.app')
+  assertEquals(at('http://[::1]:8787/', 'jeff.yaks.app'), 'jeff.yaks.app')
+  assertEquals(at('http://space.localhost/', 'jeff.yaks.app'), 'jeff.yaks.app')
+  assertEquals(
+    at('http://yak.workers.dev/', 'jeff.yaks.app'),
+    'yak.workers.dev',
+  )
   assertEquals(at('http://127.0.0.1:8787/'), '127.0.0.1')
   assertEquals(at('https://yaks.app/', 'jeff.yaks.app'), 'yaks.app')
   assertEquals(at('https://maya.yaks.app/', 'jeff.yaks.app'), 'maya.yaks.app')
+  assertEquals(
+    at('https://customer.example/', 'jeff.yaks.app'),
+    'customer.example',
+  )
+  for (let LOCAL_DEV of ['0', 'true', '']) {
+    assertEquals(
+      hostOf(
+        new Request('http://localhost/', {
+          headers: { 'x-yak-host': 'jeff.yaks.app' },
+        }),
+        { LOCAL_DEV },
+      ),
+      'localhost',
+    )
+  }
 })
 
 // Which hostnames the directory is asked about at all (T-33037): only ones
@@ -99,7 +147,7 @@ test("foreign: someone else's hostname, and nothing of ours", () => {
     [ORIGIN, false],
     ['127.0.0.1', false],
     ['localhost', false],
-    ['yak.workers.dev', false],
+    ['yak.workers.dev', true],
   ]
   for (let [host, want] of cases) assertEquals(foreign(host), want, host)
 })
