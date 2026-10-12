@@ -16,6 +16,15 @@ export type Asked = {
   alarm?: string | null
 }
 
+/** A display address or its immutable physical handle selects the same store. */
+export let select = (stores: Swept[], where?: string): Swept[] =>
+  stores.filter((store) =>
+    !where ||
+    [store.at, store.store].some((name) =>
+      name == where || name.startsWith(`${where}/`)
+    )
+  )
+
 let ms = (n: number) =>
   n < 1000 ? `${Math.round(n)}ms` : `${(n / 1000).toFixed(1)}s`
 
@@ -39,7 +48,7 @@ let standing = (s: Standing) =>
 export let line = (at: string, r: Rehearsal | Standing) =>
   `${at}  ${r.mark.replace(/^yak\/store\//, '')}  ${
     'rows' in r ? rehearsed(r) : standing(r)
-  }`
+  }${r.forwarded == null ? '' : `, ${r.forwarded} forwarded`}`
 
 // A store's lines, and how long it took to answer.
 // Woken, a store says the alarm it then holds: the mover moves only from it,
@@ -75,6 +84,7 @@ export let sweep = async (o: {
   let asked = 0
   let failed: string[] = []
   let rows: number | null = null
+  let forwarded: number | null = null
   let slow = { at: '', ms: 0 }
   for (let s of o.stores) {
     if (asked && o.pace) await wait(60_000 / o.pace, o.stopping)
@@ -87,7 +97,10 @@ export let sweep = async (o: {
       for (let l of lines(s.at, a, took)) o.out(l)
       if (took > slow.ms) slow = { at: s.at, ms: took }
       if (a.rules.some((r) => r.failed)) failed.push(s.at)
-      for (let r of a.rules) if ('rows' in r) rows = (rows ?? 0) + r.rows
+      for (let r of a.rules) {
+        if ('rows' in r) rows = (rows ?? 0) + r.rows
+        if (r.forwarded != null) forwarded = (forwarded ?? 0) + r.forwarded
+      }
     } catch (e) {
       failed.push(s.at)
       o.out(`${s.at}  failed: ${e instanceof Error ? e.message : e}`)
@@ -97,6 +110,7 @@ export let sweep = async (o: {
     `${asked} of ${o.stores.length} stores asked, ${failed.length} failed` +
     (failed.length ? `: ${failed.join(', ')}` : ''),
     ...(rows == null ? [] : [`${rows} rows found`]),
+    ...(forwarded == null ? [] : [`${forwarded} records forwarded`]),
     ...(slow.at ? [`slowest answer ${ms(slow.ms)}, from ${slow.at}`] : []),
   ]
 }

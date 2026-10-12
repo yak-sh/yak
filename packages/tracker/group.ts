@@ -1,7 +1,15 @@
 // Grouping decides patches from records; graph admission commits them together.
 // The occurrence link is the receipt: resends and retried effects never count twice.
 
-import { type Bundle, derivedEid, type Graph, Stale, token } from '@yaks/graph'
+import {
+  type Bundle,
+  type Comp,
+  derivedEid,
+  type Graph,
+  Stale,
+  token,
+} from '@yaks/graph'
+import { same } from '@yaks/fp'
 import { absent, and, eq, every } from '@yaks/query'
 import { faultOf } from './fault.ts'
 import { enrichFrames } from './frames.ts'
@@ -18,8 +26,38 @@ export let release = (row: Bundle): string => {
     ? `version:${e.version}`
     : ''
 }
+let imported = (row: Bundle): boolean =>
+  (comp(row, 'error').tags as Record<string, unknown> | undefined)?.migration ==
+    'exception/1'
+
+/** Only a group made wholly from imported samples inherits their lifecycle.
+ * Each mark requires every sample; its latest historical stamp is retained. */
+let migrationMarks = (rows: Bundle[]): Record<string, Comp | null> => {
+  if (!rows.length || !rows.every(imported)) return {}
+  return Object.fromEntries(['archived', 'notified', 'resolved'].map((name) => [
+    name,
+    rows.every((row) => row[name])
+      ? rows.toSorted((a, b) =>
+        str(comp(b, name).at).localeCompare(str(comp(a, name).at)) ||
+        a.entity.eid.localeCompare(b.entity.eid)
+      )[0][name] as Comp
+      : null,
+  ]))
+}
+let inherited = (row: Bundle, bug: Bundle | undefined, before: Bundle[]) => {
+  if (!imported(row)) return {}
+  let marks = migrationMarks([row, ...before])
+  if (!bug) return marks
+  let was = migrationMarks(before)
+  // A person's later action belongs to the group, not to the imported samples.
+  return Object.fromEntries(
+    Object.entries(marks).filter(([name]) =>
+      Object.hasOwn(was, name) && same(bug[name] ?? null, was[name])
+    ),
+  )
+}
 export let regresses = (row: Bundle, bug: Bundle, before: Bundle[]): boolean =>
-  !!bug.resolved && !!release(row) &&
+  !imported(row) && !!bug.resolved && !!release(row) &&
   !before.some((old) => release(old) == release(row))
 
 export let grouped = (
@@ -39,6 +77,7 @@ export let grouped = (
   let culprit = frames.find((f) => f.app && f.symbol)?.symbol
   let top = frames.find((f) => f.app) ?? frames[0]
   let back = !!bug && regresses(row, bug, before)
+  let marks = inherited(row, bug, before)
   return [
     {
       ...row,
@@ -50,6 +89,16 @@ export let grouped = (
       $was: {
         bug: { hits: token(old.hits) },
         resolved: { at: token(comp(bug, 'resolved').at) },
+        ...Object.fromEntries(
+          Object.keys(marks).map((name) => [
+            name,
+            Object.fromEntries(
+              ['at', 'by', 'via'].map((
+                prop,
+              ) => [prop, token(comp(bug, name)[prop])]),
+            ),
+          ]),
+        ),
       },
       ...!bug ? { doc: { title: title(row) } } : {},
       bug: {
@@ -71,6 +120,7 @@ export let grouped = (
         last: str(old.last) > at ? old.last : at,
         hits: Number(old.hits ?? 0) + Number(e.hits ?? 1),
       },
+      ...marks,
       ...back
         ? {
           resolved: null,

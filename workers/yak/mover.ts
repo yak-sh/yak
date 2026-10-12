@@ -174,6 +174,8 @@ export let RULES: Rule[] = [
  * it held nothing to move. */
 export type Stamp = {
   moved: number
+  /** Durable destination records; present only for forwarding rules. */
+  forwarded?: number
   at: string
   after?: string
   done?: string
@@ -190,6 +192,7 @@ export type Rehearsal = {
   mark: Mark
   rows: number
   moved: number
+  forwarded?: number
   batches: number
   unspoken?: string
   failed?: string
@@ -282,6 +285,7 @@ export let step = (
     return {
       ...was,
       moved: was?.moved ?? 0,
+      ...rule.forward ? { forwarded: was?.forwarded ?? 0 } : {},
       at: now,
       done: now,
       unspoken,
@@ -296,6 +300,9 @@ export let step = (
   }
   return {
     moved: (was?.moved ?? 0) + rows.length,
+    ...rule.forward
+      ? { forwarded: (was?.forwarded ?? 0) + prepared.forward.length }
+      : {},
     at: now,
     after: rows.at(-1)?.entity.eid ?? was?.after,
     ...(rows.length < n ? { done: now } : {}),
@@ -314,7 +321,13 @@ export let rehearse = (
   bound = REHEARSED,
 ): Rehearsal[] =>
   rules.map((rule) => {
-    let r: Rehearsal = { mark: rule.mark, rows: 0, moved: 0, batches: 0 }
+    let r: Rehearsal = {
+      mark: rule.mark,
+      rows: 0,
+      moved: 0,
+      batches: 0,
+      ...rule.forward ? { forwarded: 0 } : {},
+    }
     let back = Symbol('rehearsal')
     try {
       let [counted] = sync(m.rows(joined(rule.find, '.count')))
@@ -327,6 +340,7 @@ export let rehearse = (
           r.batches++
         }
         r.moved = s?.moved ?? 0
+        if (rule.forward) r.forwarded = s?.forwarded ?? 0
         throw back
       })
     } catch (e) {

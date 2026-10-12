@@ -1,5 +1,5 @@
 import { equal, ok, test } from '@yaks/testing'
-import type { Bundle } from '@yaks/graph'
+import { type Bundle, Stale } from '@yaks/graph'
 import { fixture } from './fixture_test.ts'
 import { group, grouped, retained, trim } from './group.ts'
 import { capture } from './report.ts'
@@ -30,6 +30,137 @@ let put = async (g: ReturnType<typeof fixture>, row: Bundle) => {
   await group(g, row.entity.eid)
 }
 let bugs = (g: ReturnType<typeof fixture>) => g.read('.bug *')
+
+let imported = (id: string, marks: Record<string, object> = {}): Bundle => {
+  let row = occurrence(id)
+  return {
+    ...row,
+    error: { ...comp(row, 'error'), tags: { migration: 'exception/1' } },
+    ...marks,
+  }
+}
+let historical: Record<string, { at: string }> = {
+  archived: { at: '2026-09-01T00:00:00Z' },
+  resolved: { at: '2026-09-02T00:00:00Z' },
+  notified: { at: '2026-09-03T00:00:00Z' },
+}
+let historyGroup = async (...rows: Bundle[]) => {
+  let g = fixture()
+  for (let row of rows) await put(g, row)
+  return (await bugs(g))[0]
+}
+
+let allMarked = await historyGroup(
+  imported('1', historical),
+  imported('2', historical),
+)
+test('imported marked samples preserve their group lifecycle and notification history', () => {
+  for (let name of Object.keys(historical)) {
+    equal(allMarked[name], historical[name])
+  }
+  equal(comp(allMarked, 'bug').status, 'archived')
+  equal(comp(allMarked, 'bug').hits, 2)
+})
+
+for (let order of ['marked-first', 'active-first']) {
+  let rows = [imported('1', historical), imported('2')]
+  let mixed = await historyGroup(
+    ...(order == 'marked-first' ? rows : rows.toReversed()),
+  )
+  test(`an active imported sample keeps its group active (${order})`, () => {
+    for (let name of Object.keys(historical)) equal(mixed[name], undefined)
+    equal(comp(mixed, 'bug').status, 'open')
+    equal(comp(mixed, 'bug').hits, 2)
+  })
+}
+
+let existingLifecycle = await (async () => {
+  let g = fixture()
+  await put(g, occurrence('1'))
+  let [bug] = await bugs(g)
+  let marks = {
+    resolved: { at: '2026-10-10T00:00:00Z' },
+    notified: { at: '2026-10-10T00:00:00Z' },
+  }
+  await g.apply([{ entity: bug.entity, ...marks }], { trusted: true })
+  let old = imported('2', historical)
+  old.error = { ...comp(old, 'error'), commit: b }
+  await put(g, old)
+  return { bug: (await bugs(g))[0], marks }
+})()
+test('importing old samples never changes an existing reporter group lifecycle', () => {
+  let { bug, marks } = existingLifecycle
+  equal(bug.resolved, marks.resolved)
+  equal(bug.notified, marks.notified)
+  equal(bug.archived, undefined)
+  equal(bug.regressed, undefined)
+  equal(comp(bug, 'bug').hits, 2)
+})
+
+let existingOpen = await historyGroup(
+  occurrence('1'),
+  imported('2', historical),
+)
+test('marked imported samples cannot close an existing open reporter group', () => {
+  for (let name of Object.keys(historical)) equal(existingOpen[name], undefined)
+  equal(comp(existingOpen, 'bug').status, 'open')
+})
+
+let later: Record<string, { at: string }> = {
+  archived: { at: '2026-10-10T00:00:00Z' },
+  resolved: { at: '2026-10-11T00:00:00Z' },
+  notified: { at: '2026-10-12T00:00:00Z' },
+}
+let latestHistorical = await historyGroup(
+  imported('1', historical),
+  imported('2', later),
+)
+test('fully marked imported groups keep the latest historical stamps', () => {
+  for (let name of Object.keys(later)) {
+    equal(latestHistorical[name], later[name])
+  }
+})
+
+let laterAction = await (async () => {
+  let g = fixture()
+  await put(g, imported('1', historical))
+  let [bug] = await bugs(g)
+  await g.apply([{ entity: bug.entity, ...later }], { trusted: true })
+  await put(g, imported('2'))
+  return (await bugs(g))[0]
+})()
+test('later group actions outrank lifecycle inherited from imported samples', () => {
+  for (let name of Object.keys(later)) equal(laterAction[name], later[name])
+})
+
+let markRace = await (async () => {
+  let g = fixture()
+  await put(g, imported('1', historical))
+  let row = imported('2')
+  await g.apply([row], { trusted: true })
+  let [bug] = await bugs(g)
+  let before = await g.read('.error.bug=' + bug.entity.eid + ' *')
+  await g.apply([{
+    entity: bug.entity,
+    archived: later.archived,
+    notified: later.notified,
+  }], { trusted: true })
+  let refused = false
+  try {
+    await g.apply(grouped(row, bug, before), { trusted: true })
+  } catch (error) {
+    refused = error instanceof Stale
+  }
+  await group(g, row.entity.eid)
+  return { refused, bug: (await bugs(g))[0] }
+})()
+test('an action racing imported grouping is guarded and preserved on retry', () => {
+  equal(markRace.refused, true)
+  equal(markRace.bug.archived, later.archived)
+  equal(markRace.bug.notified, later.notified)
+  equal(markRace.bug.resolved, undefined)
+  equal(comp(markRace.bug, 'bug').hits, 2)
+})
 
 test('grouping counts once, scopes apps, and reads people and status', async () => {
   let g = fixture()

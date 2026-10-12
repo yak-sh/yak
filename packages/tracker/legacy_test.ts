@@ -1,7 +1,7 @@
 // Migration transfers defects through tracker intake and keeps failed calls
 // in the session graph, with their text and all unrelated source data intact.
 import { equal, test } from '@yaks/testing'
-import { type Bundle, graph } from '@yaks/graph'
+import { type Bundle, graph, Stale } from '@yaks/graph'
 import { ram } from '@yaks/ram'
 import { loadVocab } from '@yaks/vocab'
 import { spineDoc } from '@yaks/kernel/vocab'
@@ -62,6 +62,61 @@ test('failed tool history stays on its entity without becoming another tracker r
     (move.patch.content as { body: string }).body,
     'other source data\n\nTypeError: missing field\n    at code.ts:1:2',
   )
+})
+
+let sourceVocab = loadVocab([spineDoc, toolsDoc, trackerDoc, {
+  $defs: {
+    exception: {
+      extends: true,
+      component: true,
+      type: 'object',
+      properties: {
+        at: { type: 'string' },
+        message: { type: 'string' },
+        request: { type: 'string' },
+        request_id: { type: 'string' },
+        version: { type: 'number' },
+      },
+    },
+  },
+}])
+let source = graph({ vocab: sourceVocab, storage: ram(sourceVocab) })
+let origin = '10000000-0000-4000-8000-000000000001'
+let empty = { ...old, output: { source: origin }, content: { body: '' } }
+source.apply([
+  { entity: { eid: origin }, content: { body: 'tool request' } },
+  empty,
+], { trusted: true })
+test('an empty history body retains its stack through guarded graph admission', async () => {
+  await source.apply([legacyException(empty).patch], { trusted: true })
+  let [row] = await source.get(['failure'])
+  equal(
+    (row.content as { body: string }).body,
+    (old.exception as { stack: string }).stack,
+  )
+  equal((row.exception as { value: string }).value, 'missing field')
+})
+
+let changed = graph({ vocab: sourceVocab, storage: ram(sourceVocab) })
+await changed.apply([old], { trusted: true })
+let pending = legacyException(old).patch
+await changed.apply([{
+  entity: old.entity,
+  exception: { type: 'TypeError', value: 'a new failure' },
+}], { trusted: true })
+test('a failure added while its historical report moves refuses the stale source removal', async () => {
+  let refused = false
+  try {
+    await changed.apply([pending], { trusted: true })
+  } catch (error) {
+    refused = error instanceof Stale
+  }
+  equal(refused, true)
+  equal((await changed.get(['failure']))[0].exception, {
+    ...old.exception as object,
+    type: 'TypeError',
+    value: 'a new failure',
+  })
 })
 
 test('standalone JSON diagnostics preserve their capture time and runtime context', () => {

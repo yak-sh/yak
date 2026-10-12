@@ -223,7 +223,11 @@ test('a live rule moves every row from the alarm, and says it is done', async ()
     await s.alarm()
   }
   let [said] = await s.moves()
-  assertEquals([said.moved, !!said.done], [250, true])
+  assertEquals([said.moved, said.forwarded, !!said.done], [
+    250,
+    undefined,
+    true,
+  ])
   assertEquals(await count(s, '.was'), 0)
   assertEquals(await count(s, '.now'), 250)
   let [moved] = await s.query(`.entity.eid=${first.entity.eid}&.now`)
@@ -781,7 +785,8 @@ await proof(
       },
     }, [forwarding()])
     let before = await s.query('*')
-    equal((await s.rehearse())[0].moved, 1)
+    let rehearsed = (await s.rehearse())[0]
+    equal([rehearsed.moved, rehearsed.forwarded], [1, 1])
     equal(sent, [])
     equal(await s.query('*'), before)
     await s.alarm()
@@ -791,7 +796,8 @@ await proof(
       before.filter((b) => b.was).map((b) => b.entity.eid),
     )
     equal(await count(s, '.was'), 0)
-    equal((await s.moves())[0].moved, 1)
+    let moved = (await s.moves())[0]
+    equal([moved.moved, moved.forwarded], [1, 1])
   },
 )
 
@@ -813,13 +819,16 @@ await proof(
     await s.alarm()
     equal(await s.query('*'), before)
     equal((await s.moves())[0].failed, 'queue unavailable')
-    equal((await s.moves())[0].moved, 0)
+    let failed = (await s.moves())[0]
+    equal([failed.moved, failed.forwarded], [0, 0])
     fail = false
     s.wake(forwarding())
     await s.alarm()
     equal(sent.length, 2)
     equal(sent[1], sent[0])
     equal(await count(s, '.was'), 0)
+    let moved = (await s.moves())[0]
+    equal([moved.moved, moved.forwarded], [1, 1])
   },
 )
 
@@ -858,7 +867,12 @@ await proof(
     ])
     let before = await s.query('*')
     let [proof] = await s.rehearse()
-    equal([proof.rows, proof.moved, proof.failed], [2, 2, undefined])
+    equal([proof.rows, proof.moved, proof.forwarded, proof.failed], [
+      2,
+      2,
+      1,
+      undefined,
+    ])
     equal(sent, [])
     equal(await s.query('*'), before)
     ok(s.columns('exception').includes('message'))
@@ -887,7 +901,8 @@ await proof(
     }])
     equal((await s.query('preserved')).length, 0)
     equal((await s.query('search')).map((b) => b.entity.eid), ['report'])
-    equal((await s.moves())[0].moved, 2)
+    let moved = (await s.moves())[0]
+    equal([moved.moved, moved.forwarded], [2, 1])
     await s.alarm()
     equal(sent.length, 1)
   },
@@ -918,7 +933,8 @@ await proof(
     let [row] = await s.query('.was&*')
     equal((row.was as Comp).word, 'changed during delivery')
     equal(await count(s, '.now'), 0)
-    equal((await s.moves())[0].moved, 0)
+    let failed = (await s.moves())[0]
+    equal([failed.moved, failed.forwarded], [0, 0])
     ok((await s.moves())[0].failed?.includes('was.word'))
   },
 )

@@ -172,54 +172,62 @@ let run = (ctx: State, ...statements: Stmt[]) => {
   for (let s of statements) d.query(s)
 }
 
-test('a Store forwards legacy request ids from the mover without rewriting rows at boot', async () => {
-  for (let partial of [false, true]) {
-    let ctx = state()
-    let before = newer(ctx, PLATFORM_STORE)
-    assertEquals(
-      (await before.apply([{
-        entity: { eid: ONE },
-        exception: { type: 'Error', value: 'boom' },
-      }])).status,
-      200,
-    )
+// Fixture runs both historical schemas before the timed interface assertions.
+let requestIdMoves = await Promise.all([false, true].map(async (partial) => {
+  let ctx = state()
+  let before = newer(ctx, PLATFORM_STORE)
+  let admitted = (await before.apply([{
+    entity: { eid: ONE },
+    exception: { type: 'Error', value: 'boom' },
+  }])).status
+  run(ctx, {
+    t: 'alter table',
+    table: 'exception',
+    add: { name: 'requestId' },
+  }, { t: 'update', table: 'exception', set: { requestId: lit('report-1') } })
+  if (partial) {
     run(ctx, {
       t: 'alter table',
       table: 'exception',
-      add: { name: 'requestId' },
-    }, { t: 'update', table: 'exception', set: { requestId: lit('report-1') } })
-    if (partial) {
-      run(ctx, {
-        t: 'alter table',
-        table: 'exception',
-        add: { name: 'request_id' },
-      })
-    }
-    keep(ctx, 'schema', 'older schema')
-    let sent: Bundle[] = []
-    let next = newer(ctx, PLATFORM_STORE, {
-      ERRORS: {
-        send: (rows: Bundle[]) => {
-          sent.push(...rows)
-          return Promise.resolve()
-        },
-      } as Env['ERRORS'],
-    }, [{ ...exceptionRule, live: 'all' }])
-    assertEquals((await next.query('.exception')).length, 1)
-    assertEquals(
-      scan(db(ctx), 'exception', undefined, ['requestId'])[0].requestId,
-      'report-1',
-    )
-    await next.door('/move', { method: 'POST' })
-    await next.store.alarm()
-    assertEquals(
-      (sent[0].error as { tags: { request_id: string } }).tags.request_id,
-      'report-1',
-    )
-    assertEquals((await next.query('.exception')).length, 0)
-    let cols = columns(db(ctx), 'exception')
-    assertEquals(cols.includes('requestId'), false)
-    assertEquals(cols.includes('request_id'), false)
+      add: { name: 'request_id' },
+    })
+  }
+  keep(ctx, 'schema', 'older schema')
+  let sent: Bundle[] = []
+  let next = newer(ctx, PLATFORM_STORE, {
+    ERRORS: {
+      send: (rows: Bundle[]) => {
+        sent.push(...rows)
+        return Promise.resolve()
+      },
+    } as Env['ERRORS'],
+  }, [{ ...exceptionRule, live: 'all' }])
+  let held = (await next.query('.exception')).length
+  let requestId =
+    scan(db(ctx), 'exception', undefined, ['requestId'])[0].requestId
+  await next.door('/move', { method: 'POST' })
+  await next.store.alarm()
+  return {
+    admitted,
+    held,
+    requestId,
+    delivered:
+      (sent[0]?.error as { tags?: { request_id?: string } } | undefined)?.tags
+        ?.request_id,
+    remaining: (await next.query('.exception')).length,
+    columns: columns(db(ctx), 'exception'),
+  }
+}))
+
+test('a Store forwards legacy request ids from the mover without rewriting rows at boot', () => {
+  for (let moved of requestIdMoves) {
+    assertEquals(moved.admitted, 200)
+    assertEquals(moved.held, 1)
+    assertEquals(moved.requestId, 'report-1')
+    assertEquals(moved.delivered, 'report-1')
+    assertEquals(moved.remaining, 0)
+    assertEquals(moved.columns.includes('requestId'), false)
+    assertEquals(moved.columns.includes('request_id'), false)
   }
 })
 

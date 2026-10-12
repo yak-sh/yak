@@ -185,6 +185,12 @@ thrown in an answer or transcript entry. Tracker extends it with `stack`,
 original failure separately; recording a failed call's history never creates
 another occurrence.
 
+Groups made solely from imported historical occurrences inherit a lifecycle mark
+only when every occurrence carries it, keeping the latest historical stamp.
+Importing an unmarked occurrence clears an inherited mark. Existing reporter
+groups and later actions on a group retain their own lifecycle; historical
+imports count without causing a release regression.
+
 ## Box delivery
 
 The CLI reporter writes each caught failure to the durable spool, with its

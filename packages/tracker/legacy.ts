@@ -37,9 +37,13 @@ export let legacyException = (row: Bundle): ExceptionMove => {
     /^[a-f0-9]{40}$/.test(row.entity.eid) &&
       str(x.request).startsWith(`BUILD yak ${row.entity.eid.slice(0, 8)}`)
   let was = {
-    exception: Object.fromEntries(
-      Object.entries(x).map(([prop, value]) => [prop, token(value)]),
-    ),
+    exception: {
+      type: token(x.type),
+      value: token(x.value),
+      ...Object.fromEntries(
+        Object.entries(x).map(([prop, value]) => [prop, token(value)]),
+      ),
+    },
   }
   let patch: Bundle = {
     entity: { eid: row.entity.eid },
@@ -54,7 +58,7 @@ export let legacyException = (row: Bundle): ExceptionMove => {
   }
   if (history && stack && !body.includes(stack)) {
     patch.content = { body: body ? `${body}\n\n${stack}` : stack }
-    patch.$was = { ...was, content: { body: token(body || null) } }
+    patch.$was = { ...was, content: { body: token(comp(row, 'content').body) } }
   }
   if (!history && (commit || row.session || row.secret)) {
     patch.failed = {

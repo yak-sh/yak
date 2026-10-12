@@ -44,11 +44,15 @@ export let stores = async (env: Env): Promise<Swept[]> => {
       ? [{ store: storeName(space, app), at: `${space.slug}/${app.slug}` }]
       : []
   })
-  return [
+  let all = [
     ...apps,
     { store: GIT_STORE, at: 'git' },
     { store: PLATFORM_STORE, at: 'directory' },
   ]
+  // A directory app can name the same physical handle as a platform store.
+  // Keep its final listing so each handle is asked once, the directory last.
+  let last = new Map(all.map((row, i) => [row.store, i]))
+  return all.filter((row, i) => last.get(row.store) == i)
 }
 
 export let fetch = async (req: Request, env: Env): Promise<Response> => {

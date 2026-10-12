@@ -45,7 +45,7 @@ import {
   zone,
 } from './api.ts'
 import { deploys, rollback, table } from './deploys.ts'
-import { sweep } from './move.ts'
+import { select, sweep } from './move.ts'
 import { push, type PushProgress, read, versions } from './push.ts'
 import { errors, tail } from './logs.ts'
 import { revert } from './revert.ts'
@@ -468,9 +468,7 @@ export let runs = (
       }
       let where = word(a, 'where')
       let at = await acting(a)
-      let stores = (await storesNow(at.bearer)).filter((s) =>
-        !where || s.at == where || s.at.startsWith(`${where}/`)
-      )
+      let stores = select(await storesNow(at.bearer), where)
       note(
         `${rehearse ? 'rehearsing' : 'waking'} ${stores.length} stores` +
           (pace ? `, ${pace} a minute` : ''),

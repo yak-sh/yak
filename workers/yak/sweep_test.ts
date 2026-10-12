@@ -68,6 +68,8 @@ test('the platform’s owner sweeps every store, one at a time', async () => {
   let { scenario, door } = await spaces()
   using _ = scenario
   let listed = await door(JEFF)
+  let handles = listed.body.map((s: sweep.Swept) => s.store)
+  assertEquals(handles, [...new Set(handles)])
   assertEquals(
     listed.body.map((s: sweep.Swept) => s.at).filter((at: string) =>
       at == 'ada/notes' || at == 'git' || at == 'directory'

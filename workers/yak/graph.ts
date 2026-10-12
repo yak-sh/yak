@@ -881,8 +881,10 @@ export class Store {
   }
 
   #started: Promise<void> | null = null
+  #startedDormant = false
   #facets = new Map<string, Prepared>()
   #dormant: boolean | null = null
+  #moveOnly = false
   #checking: Promise<boolean> | null = null
 
   #ensureStarted(request?: Request): Promise<void> {
@@ -907,7 +909,8 @@ export class Store {
     }
   }
 
-  // Object metadata, not graph rows: a dormant incarnation never opens SQL.
+  // Dormancy is object metadata. Ordinary dormant requests never open SQL;
+  // an explicit mover permit authorizes only maintenance alarms.
   #awake(): boolean | Promise<boolean> {
     if (this.#dormant != null) return !this.#dormant
     if (!this.#ctx.storage.get && !this.#bind.STORE) {
@@ -916,14 +919,19 @@ export class Store {
     }
     return this.#checking ??= (async () => {
       let dormant = await this.#ctx.storage.get<boolean>?.('dormant')
-      if (dormant) await this.#sleep()
-      else this.#dormant = false
+      if (dormant) {
+        this.#moveOnly = !!await this.#ctx.storage.get<boolean>?.('moving')
+        if (this.#moveOnly) this.#dormant = true
+        else await this.#sleep()
+      } else this.#dormant = false
       return !this.#dormant
     })().finally(() => this.#checking = null)
   }
 
   async #sleep() {
     this.#dormant = true
+    this.#moveOnly = false
+    await this.#ctx.storage.put?.('moving', false)
     await this.#ctx.storage.put?.('dormant', true)
     await this.#ctx.storage.deleteAlarm?.()
     for (let ws of this.#ctx.getWebSockets() as Closable[]) {
@@ -938,6 +946,7 @@ export class Store {
   }
 
   async #start(request?: Request) {
+    this.#startedDormant = !!this.#dormant
     let ctx = this.#ctx
     this.#sql = driver(ctx.storage, undefined, this.#measure)
     this.#sql.query(KV)
@@ -945,8 +954,10 @@ export class Store {
     // whose graph cannot boot still keeps what it is sent (writes.ts). What
     // the last incarnation set aside waits again, for this one's code.
     raise(this.#sql)
-    interrupted(this.#sql)
-    revived(this.#sql)
+    if (!this.#dormant) {
+      interrupted(this.#sql)
+      revived(this.#sql)
+    }
     this.#reshaping()
     let remembered = this.#get('name')
     await this.#prepare(request?.headers.get('x-store') ?? remembered ?? '')
@@ -960,7 +971,7 @@ export class Store {
       let access = heard.get('access')
       if (access) this.#mode(mode(access))
     })
-    if (!this.#refused) {
+    if (!this.#refused && !this.#dormant) {
       // Join this incarnation without discovering or starting work. Its own
       // writes can then persist attempts in the transaction that owes them.
       await this.#effects.work(this.#stored(this.#graph).graph, undefined, 0)
@@ -1393,7 +1404,7 @@ export class Store {
     // runtime and outlive every incarnation of this object, so whatever they
     // are watching is re-opened against the new one. Without this a deploy
     // would leave every open page subscribed to a registry nothing commits to.
-    let restored = this.#live.wake(!rebinding)
+    let restored = this.#dormant ? undefined : this.#live.wake(!rebinding)
     if (isPromise(restored)) {
       restored.catch((error) =>
         defect(error, { request: 'socket restore', store: name })
@@ -2113,7 +2124,10 @@ export class Store {
     at: string | null | undefined,
     reason = 'wake',
   ): Promise<unknown> => {
-    if (this.#dormant || !this.#alarm || !at) return
+    if (
+      (this.#dormant && !(this.#moveOnly && reason == 'mover')) ||
+      !this.#alarm || !at
+    ) return
     let result = await arm(this.#alarm, { at })
     if (this.#profile) {
       let held = await this.#alarm.getAlarm()
@@ -2312,7 +2326,7 @@ export class Store {
   async #alarmRequest(
     info?: { isRetry?: boolean; retryCount?: number },
   ): Promise<void> {
-    if (!await this.#awake()) return
+    if (!await this.#awake() && !this.#moveOnly) return
     await this.#ensureStarted()
     if (info?.isRetry && !this.#threw) {
       defect(new Error("a store's alarm was cut off before it finished"), {
@@ -2325,6 +2339,10 @@ export class Store {
     let run = async () => {
       let leave = await this.#enter(false)
       try {
+        if (this.#dormant) {
+          await this.#moving()
+          return
+        }
         // Writes the log still holds are replayed first, which is what makes
         // the replay need nobody after a deploy.
         let kept = waiting(this.#sql)
@@ -2453,7 +2471,7 @@ export class Store {
 
   // The store as a rule reaches it. The patch is the kernel's own write, and
   // its effects wait in `held` for the caller: run once the batch commits,
-  // dropped when it is a rehearsal.
+  // dropped when it is a rehearsal or the app remains dormant.
   #mover = (held: (() => void | Promise<void>)[], rule?: Rule): Moving => {
     let g = this.#graph
     if (rule?.source) {
@@ -2561,11 +2579,13 @@ export class Store {
   // A few batches, yielding the object between them, then the alarm again for
   // whatever is left.
   #moving = async (): Promise<void> => {
-    if (this.#dormant) return
+    if (this.#dormant && !this.#moveOnly) return
     let left = BATCHES
     let name = this.#get('name') ?? ''
     for (let rule of this.#owing()) {
-      while (left-- > 0 && !this.#refused && !this.#dormant) {
+      while (
+        left-- > 0 && !this.#refused && (!this.#dormant || this.#moveOnly)
+      ) {
         let held: (() => void | Promise<void>)[] = []
         let was = this.#stamp(rule)
         let now = new Date().toISOString()
@@ -2595,13 +2615,19 @@ export class Store {
             let failed = e instanceof Error ? e.message : String(e)
             this.#put(
               rule.mark,
-              JSON.stringify({ moved: 0, ...was, at: now, failed }),
+              JSON.stringify({
+                moved: 0,
+                ...rule.forward ? { forwarded: 0 } : {},
+                ...was,
+                at: now,
+                failed,
+              }),
             )
           } catch { /* the stamp is a report; the defect already went */ }
           break
         }
         if (this.#get('vocab') != vocabWas) this.#boot()
-        for (let run of held) {
+        for (let run of this.#dormant ? [] : held) {
           try {
             await run()
           } catch (e) {
@@ -2613,6 +2639,13 @@ export class Store {
       }
     }
     if (this.#owing().length) await this.#arming(this.#soon(), 'mover')
+    else if (this.#dormant && this.#moveOnly) {
+      this.#moveOnly = false
+      await this.#ctx.storage.put?.('moving', false)
+      if (this.#dormant && !this.#moveOnly) {
+        await this.#ctx.storage.deleteAlarm?.()
+      }
+    }
   }
 
   #workingEffects = () => {
@@ -2847,12 +2880,28 @@ export class Store {
     if (kernel && path == '/revive' && request.method == 'POST') {
       await this.#ctx.storage.put?.('dormant', false)
       this.#dormant = false
+      this.#moveOnly = false
+      await this.#ctx.storage.put?.('moving', false)
+      // Maintenance skipped ordinary recovery and runtime attachment. Finish
+      // an in-flight boot, then establish the active runtime once on restore.
+      await this.#started
+      if (this.#startedDormant) this.#started = null
       await this.#ensureStarted()
       if (this.#refused) return this.#stalled()
       await this.#arming(new Date().toISOString())
       return json({ ok: true })
     }
     if (!await this.#awake()) {
+      if (kernel && path == '/move' && request.method == 'POST') {
+        await this.#ensureStarted(request)
+        if (this.#refused) return this.#stalled()
+        let leave = await this.#enter(false)
+        try {
+          return await this.#serve(request)
+        } finally {
+          leave()
+        }
+      }
       if (kernel && path == '/' && request.method == 'DELETE') {
         await this.#ctx.storage.deleteAll()
         return json({ ok: true })
@@ -3551,7 +3600,13 @@ export class Store {
         this.#kv.clear()
         return Response.json({ store, rules })
       }
-      if (this.#owing().length) await this.#arming(new Date().toISOString())
+      if (this.#owing().length) {
+        if (this.#dormant) {
+          this.#moveOnly = true
+          await this.#ctx.storage.put?.('moving', true)
+        }
+        await this.#arming(new Date().toISOString(), 'mover')
+      }
       let rules: Standing[] = this.#moves().map((r) => ({
         mark: r.mark,
         live: runs(r, store),
