@@ -14,7 +14,6 @@
 
 import type { Eid } from '@yaks/graph'
 import {
-  among,
   and,
   as,
   at,
@@ -26,7 +25,6 @@ import {
   type Expr,
   fn,
   from,
-  join,
   lit,
   not,
   op,
@@ -183,6 +181,12 @@ let chosen = (
   let e = at('entity')
   let hit = at('hit')
   let b = at('best')
+  let eligible = (owner: Expr) =>
+    exists(select({
+      cols: [lit(1)],
+      from: table('__fts_screen'),
+      where: eq(col('id', '__fts_screen'), owner),
+    }))
   let hits = unionAll(...arms.map(({ name }, i) => {
     let fts = indexName(name)
     return select({
@@ -195,6 +199,9 @@ let chosen = (
       where: and(
         op('match', col(fts), val(t)),
         permitted(name, col('rowid', fts), opts.screens),
+        // Rank only admitted owners: materializing every text match first
+        // reads excluded content and leaves the outer join a broad hit set.
+        ...opts.screen ? [eligible(col('rowid', fts))] : [],
       ),
     })
   }))
@@ -211,14 +218,23 @@ let chosen = (
       as(hit('arm'), 'arm'),
     ],
     from: table('hit'),
-    joins: [join(table('entity'), eq(e('id'), hit('owner')))],
-    where: opts.screen ? and(alive, among(hit('owner'), opts.screen)) : alive,
+    // The ranked hit set drives owner lookups even with small stale statistics.
+    joins: [{ how: 'cross', src: table('entity') }],
+    where: and(alive, eq(e('id'), hit('owner'))),
     group: [hit('owner')],
     order: [col('rank')],
     limit: val(opts.limit ?? 20),
   })
   return select({
     with: [
+      ...opts.screen
+        ? [{
+          name: '__fts_screen',
+          cols: ['id'],
+          q: opts.screen,
+          materialized: true,
+        }]
+        : [],
       { name: 'hit', q: hits, materialized: true },
       { name: 'best', q: best, materialized: true },
     ],
