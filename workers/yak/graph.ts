@@ -4488,13 +4488,14 @@ export class Store {
           // changes roll back. Only the declaration is kept for selection when
           // the directory moves the release pointer.
           let rollback = Symbol('candidate schema')
+          let undone: Error | undefined
           try {
             this.#tx(() => {
               prepare()
-              let [undone] = this.#schema(
+              undone = this.#schema(
                 shapeOf(this.#get('name') ?? '', JSON.stringify(doc)),
-              )
-              throw undone ?? rollback
+              )[0]
+              throw rollback
             })
           } catch (e) {
             if (e !== rollback) {
@@ -4510,6 +4511,15 @@ export class Store {
             }
           }
           this.#kv.clear()
+          // The draft's words ask for what the rows already here cannot hold
+          // (a unique key they share): the caller's own data refuses its
+          // deploy, which is an answer to it, not a defect of ours.
+          if (undone) {
+            return Response.json({
+              error: 'Refused',
+              message: undone.message,
+            }, { status: 409 })
+          }
           this.#put(`vocab:${candidate}`, JSON.stringify(doc))
         } else {
           // The declaration and its DDL roll back together on boot failure.

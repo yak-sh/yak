@@ -249,7 +249,7 @@ test('a refused draft leaves the serving app store usable', async () => {
   )
 
   let failed = await put(draft, '/vocab', vocab(true))
-  assertEquals(failed.status, 503)
+  assertEquals(failed.status, 409)
   assert(
     (await failed.text()).includes('ability_design_kind is not built'),
   )
