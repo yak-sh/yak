@@ -36,7 +36,7 @@ import type { ReadOpts } from '@yaks/graph'
 import { after, isPromise, over } from '@yaks/fp'
 import type { DurableStorage } from './sql.ts'
 import { holds, MissingSubscriptions } from './holds.ts'
-import { type Delta, unpack } from './watches.ts'
+import { type Delta, pack, unpack } from './watches.ts'
 
 /**
  * The part of a hibernatable WebSocket this package uses: a frame out, and the
@@ -295,6 +295,7 @@ export let sockets = (
   let recovered = new Map<Wire, Promise<void>>()
   let waking: Promise<void> | undefined
   let queries = new Map<Wire, Record<string, Ask>>()
+  let baselines = new Map<Wire, Record<string, Ask>>()
   let repo: ReturnType<typeof holds> | undefined
   let backing = () => repo ??= holds(ctx.storage)
   // A page changes its watches in bursts: one that walks into another tile
@@ -323,6 +324,7 @@ export let sockets = (
     if (cached) return cached
     let held = ws.deserializeAttachment() as Held | null
     let found = copy(held?.subref ? backing().read(held.subref) : held?.subs)
+    if (held?.subref) baselines.set(ws, copy(found))
     for (let [id, ask] of Object.entries(unpack(held?.subdelta ?? {}))) {
       if (ask === null) delete found[id]
       else found[id] = ask
@@ -352,12 +354,34 @@ export let sockets = (
     if (fits(next)) {
       ws.serializeAttachment(next)
       if (was.subref) release(was.subref)
+      baselines.delete(ws)
     } else {
       let ref = was.subref ?? crypto.randomUUID()
       let short = { ...next, subs: undefined, subref: ref }
-      if (!fits(short, nextSubs)) return false
-      owe(ref, nextSubs)
-      ws.serializeAttachment(short)
+      // A watch burst changes only part of a large stored map. Keep that
+      // difference on the socket; compact only when it no longer fits.
+      let baseline = baselines.get(ws)
+      let delta = copy<Ask | null>()
+      if (baseline) {
+        for (let [id, ask] of Object.entries(nextSubs)) {
+          if (!Object.hasOwn(baseline, id) || baseline[id] !== ask) {
+            delta[id] = ask
+          }
+        }
+        for (let id of Object.keys(baseline)) {
+          if (!Object.hasOwn(nextSubs, id)) delta[id] = null
+        }
+      }
+      let overlay: Held = { ...short, subdelta: delta }
+      if (baseline && !fits(overlay, nextSubs)) overlay.subdelta = pack(delta)
+      if (baseline && fits(overlay, nextSubs)) {
+        ws.serializeAttachment(overlay)
+      } else {
+        if (!fits(short, nextSubs)) return false
+        baselines.set(ws, nextSubs)
+        owe(ref, nextSubs)
+        ws.serializeAttachment(short)
+      }
     }
     queries.set(ws, nextSubs)
     return true
@@ -374,6 +398,7 @@ export let sockets = (
     }
     sinks.delete(ws)
     queries.delete(ws)
+    baselines.delete(ws)
     let held = ws.deserializeAttachment() as Held | null
     if (held?.subref) {
       // The socket can outlive this incarnation. Clear its pointer before

@@ -1154,3 +1154,91 @@ test('serial snapshot acknowledgements fit the attachment through their complete
   assertEquals(ws.sent.map((f) => f.id), ids)
   assert(ws.sent.every((f) => !f.refused))
 })
+
+let firstTitle = `first${'a'.repeat(3000)}`
+let latestTitle = `latest${'b'.repeat(3000)}`
+let movingFixture = (() => {
+  let ready = watched(Object.fromEntries(
+    Array.from({ length: 6 }, (_, n) => [
+      `static${n}`,
+      `.doc.title="${String(n).repeat(600)}"`,
+    ]),
+  ))
+  let { storage, ctx, ws, live } = ready
+  send(live, ws, { unsubscribe: 'static0' })
+  send(live, ws, { subscribe: `.doc.title="${firstTitle}"`, id: 'moving0' })
+  for (let write of ctx.owed.splice(0)) write()
+  send(live, ws, { unsubscribe: 'moving0' })
+  send(live, ws, { subscribe: `.doc.title="${latestTitle}"`, id: 'moving1' })
+  let [g, woken] = instance(storage, ctx)
+  ws.sent.length = 0
+  woken.wake()
+  return { ...ready, g, woken }
+})()
+test('small moving watches preserve a stored baseline across hibernation', () => {
+  let { ws, g, written } = movingFixture
+  assertEquals(written(), 1)
+  assertEquals(ws.sent.map((f) => f.id), [
+    'static1',
+    'static2',
+    'static3',
+    'static4',
+    'static5',
+    'moving1',
+  ])
+  ws.sent.length = 0
+  g.apply([
+    { entity: { eid: 'old' }, doc: { title: firstTitle } },
+    { entity: { eid: 'current' }, doc: { title: latestTitle } },
+  ])
+  assertEquals(
+    ws.sent.map((f) => [f.id, f.bundles?.map((b) => b.entity.eid)]),
+    [
+      ['moving1', ['current']],
+    ],
+  )
+})
+
+let compactTitle = (() => {
+  let n = 123456789
+  return Array.from({ length: 6000 }, () => {
+    n ^= n << 13
+    n ^= n >>> 17
+    n ^= n << 5
+    return 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'[
+      (n >>> 0) % 62
+    ]
+  }).join('')
+})()
+let compactFixture = (() => {
+  let ready = watched({
+    static: `.doc.title="${'base'.repeat(800)}"`,
+    moving: '.doc.title=old',
+  })
+  let { storage, ctx, ws } = ready
+  let [, woken] = instance(storage, ctx)
+  woken.wake()
+  let query = `.doc.title="${compactTitle}"`
+  send(woken, ws, { subscribe: query, id: 'moving' })
+  send(woken, ws, { subscribe: '.doc.title=small', id: 'extra' })
+  let [g, later] = instance(storage, ctx)
+  ws.sent.length = 0
+  later.wake()
+  return { ...ready, g, later }
+})()
+test('a watch change beyond attachment space compacts then keeps later deltas', () => {
+  let { ctx, ws, g, later, written } = compactFixture
+  assertEquals(written(), 2)
+  assertEquals(ws.sent.map((f) => f.id), ['static', 'moving', 'extra'])
+  ws.sent.length = 0
+  g.apply([{ entity: { eid: 'changed' }, doc: { title: compactTitle } }])
+  assertEquals(
+    ws.sent.map((f) => [f.id, f.bundles?.map((b) => b.entity.eid)]),
+    [
+      ['moving', ['changed']],
+    ],
+  )
+  send(later, ws, { unsubscribe: 'extra' })
+  for (let write of ctx.owed.splice(0)) write()
+  assertEquals(written(), 2)
+})
