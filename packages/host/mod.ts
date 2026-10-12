@@ -174,8 +174,8 @@ export interface Host {
   /** Every commit another host makes to this store, as the patches it applied
    * : what a subscription registry or a cache over
    * {@link graph} is fed so it sees the writes its graph's `effect` phase
-   * never ran for. Without a plugin that offers one, nothing arrives. */
-  feed: Feed
+   * never ran for. Absent when no plugin offers one. */
+  feed?: Feed
   /** This host shutting down, as one fact: aborted by host shutdown
    * before the last transaction and before the database is closed. A plugin
    * that arms a timer — a settle, a retry, a poll — hangs it off this signal,

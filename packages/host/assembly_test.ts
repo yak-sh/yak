@@ -624,3 +624,23 @@ test('a shared assembly binds lazy tools and their evidence to each host', async
   equal(imports, [['library'], []])
   equal((await readers[1].runner.read(call))[0].book, { title: 'ana' })
 })
+
+// A host's routes poll the store when it has no feed (@yaks/api), so a feed
+// that hears nothing must not stand in for a plugin that offers one.
+test('a host carries a feed only when a plugin offers one', async () => {
+  let none = (await assembly(config, ['graph'], loading([]))).bind(binding())
+  equal(none.host.feed, undefined)
+  let heard: Bundle[][] = []
+  let offering: Load = (_, name) =>
+    Promise.resolve(
+      name == 'graph'
+        ? {
+          ...facets.graph,
+          feed: () => (each) => (each([{ entity: { eid: 'x' } }]), () => {}),
+        }
+        : facets[name] ?? null,
+    )
+  let fed = (await assembly(config, ['graph'], offering)).bind(binding())
+  fed.host.feed?.((applied) => void heard.push(applied))
+  equal(heard, [[{ entity: { eid: 'x' } }]])
+})

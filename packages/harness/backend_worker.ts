@@ -146,7 +146,7 @@ let serve = (port: MessagePort) => {
       // terminal too: the pool working a transcript's turn elsewhere, a `yak`
       // command run beside it. The feed stops when the host closes.
       let fed = subs
-      served.feed((applied) => fed.commit(applied))
+      served.feed?.((applied) => fed.commit(applied))
       return { names: a.names }
     }
     if (!a || !subs) throw new Error('Worker not initialized')
