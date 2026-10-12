@@ -49,15 +49,73 @@ let feed = async (
   if (!result.success) throw new Error(decode(result.stderr).trim())
 }
 
-/** Capture committed sources plus the worktree's edits. Published trees are
- * immutable and shared: stable URLs reuse Deno's module cache and the CLI's
- * declaration memo. A child resolves its workspace afresh over this tree;
- * its cwd and graph config still name the caller's data. */
+/** Which slot a launch runs from, and which idle entries go. A slot already
+ * holding these sources is shared. Otherwise the lowest number no live process
+ * names is rewritten: its paths repeat, so Deno's emits and the CLI's memo for
+ * unchanged files are reused, and the cache holds one tree per running
+ * version. Nothing a live process names is ever touched.
+ *
+ * ```ts
+ * import { assertEquals } from '@std/assert'
+ * let used = new Set(['0'])
+ * assertEquals(
+ *   slot([{ name: '0', hash: 'a' }, { name: '1', hash: 'b' }], used, 'b'),
+ *   { name: '1', fresh: false, prune: [] },
+ * )
+ * assertEquals(
+ *   slot([{ name: '0', hash: 'a' }, { name: '9f2c' }], used, 'c'),
+ *   { name: '1', fresh: true, prune: ['9f2c'] },
+ * )
+ * ```
+ */
+export let slot = (
+  entries: { name: string; hash?: string }[],
+  used: Set<string>,
+  hash: string,
+): { name: string; fresh: boolean; prune: string[] } => {
+  let hit = entries.find((e) => /^\d+$/.test(e.name) && e.hash == hash)
+  let n = 0
+  while (!hit && used.has(String(n))) n++
+  let name = hit?.name ?? String(n)
+  return {
+    name,
+    fresh: !hit,
+    prune: entries.map((e) => e.name).filter((e) => e != name && !used.has(e)),
+  }
+}
+
+let escape = (text: string) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+
+/** The cache entries a live process runs from, read from every command line.
+ * When processes can't be listed, every entry counts as live. */
+let live = async (cache: string, names: string[]): Promise<Set<string>> => {
+  try {
+    let { stdout } = await new Deno.Command('ps', {
+      args: ['-axww', '-o', 'command='],
+      stdout: 'piped',
+      stderr: 'null',
+    }).output()
+    let named = new RegExp(`${escape(cache)}/([^/\\s]+)`, 'g')
+    return new Set([...decode(stdout).matchAll(named)].map((m) => m[1]))
+  } catch {
+    return new Set(names)
+  }
+}
+
+/** Capture committed sources plus the worktree's edits into a runtime slot.
+ * A slot never changes while a process runs from it. The cache's lock keeps
+ * other launchers out until `release`, called once the child is started and
+ * names its slot. A child resolves its workspace afresh over this tree; its
+ * cwd and graph config still name the caller's data. */
 export let snapshot = async (
   root: string,
-): Promise<{ root: string; commit: string }> => {
+): Promise<{ root: string; commit: string; release: () => void }> => {
   if (runtimeRoot()) {
-    return { root, commit: Deno.env.get('YAK_RUNTIME_COMMIT')! }
+    return {
+      root,
+      commit: Deno.env.get('YAK_RUNTIME_COMMIT')!,
+      release: () => {},
+    }
   }
   let commit = decode(await git(root, 'rev-parse', 'HEAD')).trim()
   let patch = await git(root, 'diff', '--binary', commit)
@@ -85,47 +143,69 @@ export let snapshot = async (
     `${
       Deno.env.get('XDG_CACHE_HOME') ?? `${Deno.env.get('HOME')}/.cache`
     }/yak/runtime`
-  let target = `${cache}/${hash}`
-  try {
-    await Deno.stat(`${target}/deno.json`)
-    return { root: target, commit }
-  } catch (error) {
-    if (!(error instanceof Deno.errors.NotFound)) throw error
-  }
   await Deno.mkdir(cache, { recursive: true })
-  let dir = await Deno.makeTempDir({ dir: cache, prefix: '.building-' })
-  try {
-    await feed('tar', ['-x', '-C', dir], await git(root, 'archive', commit))
-    if (patch.length) await feed('git', ['apply', '--binary', '-'], patch, dir)
-    for (let { name, bytes, mode } of files) {
-      let to = `${dir}/${name}`
-      await Deno.mkdir(to.slice(0, to.lastIndexOf('/')), { recursive: true })
-      await Deno.writeFile(to, bytes, { mode: mode ?? undefined })
-    }
-    // Absolute source imports from a file plugin or provider follow the same
-    // tree, including imports made by modules outside the source checkout.
-    let config = JSON.parse(await Deno.readTextFile(`${dir}/deno.json`))
-    config.imports = {
-      ...config.imports,
-      [new URL(`file://${root}/`).href]: new URL(`file://${target}/`).href,
-    }
-    await Deno.writeTextFile(`${dir}/deno.json`, JSON.stringify(config))
-    try {
-      await Deno.rename(dir, target)
-    } catch (error) {
-      // Another launcher can publish the same captured sources first.
-      if (
-        !(error instanceof Deno.errors.AlreadyExists) &&
-        !(error instanceof Error && 'code' in error &&
-          error.code == 'ENOTEMPTY')
-      ) throw error
-    }
-    return { root: target, commit }
-  } finally {
-    await Deno.remove(dir, { recursive: true }).catch((error) => {
-      if (!(error instanceof Deno.errors.NotFound)) throw error
-    })
+  let lock = await Deno.open(`${cache}/.lock`, { create: true, write: true })
+  await lock.lock(true)
+  let held = true
+  let release = () => {
+    if (held) lock.close()
+    held = false
   }
+  try {
+    let entries = []
+    for await (let { name } of Deno.readDir(cache)) {
+      if (name == '.lock') continue
+      let mark = await Deno.readTextFile(`${cache}/${name}/.hash`)
+        .catch(() => undefined)
+      entries.push({ name, hash: mark })
+    }
+    let pick = slot(
+      entries,
+      await live(cache, entries.map((e) => e.name)),
+      hash,
+    )
+    let target = `${cache}/${pick.name}`
+    for (let name of pick.prune) {
+      await Deno.remove(`${cache}/${name}`, { recursive: true })
+    }
+    if (pick.fresh) await build({ root, commit, patch, files, target, hash })
+    return { root: target, commit, release }
+  } catch (error) {
+    release()
+    throw error
+  }
+}
+
+/** Write a slot from scratch. Its `.hash` comes last, so a slot cut short
+ * while building is never matched and is rewritten by the next launch. */
+let build = async ({ root, commit, patch, files, target, hash }: {
+  root: string
+  commit: string
+  patch: Uint8Array
+  files: { name: string; bytes: Uint8Array; mode: number | null }[]
+  target: string
+  hash: string
+}) => {
+  await Deno.remove(target, { recursive: true }).catch((error) => {
+    if (!(error instanceof Deno.errors.NotFound)) throw error
+  })
+  await Deno.mkdir(target)
+  await feed('tar', ['-x', '-C', target], await git(root, 'archive', commit))
+  if (patch.length) await feed('git', ['apply', '--binary', '-'], patch, target)
+  for (let { name, bytes, mode } of files) {
+    let to = `${target}/${name}`
+    await Deno.mkdir(to.slice(0, to.lastIndexOf('/')), { recursive: true })
+    await Deno.writeFile(to, bytes, { mode: mode ?? undefined })
+  }
+  // Absolute source imports from a file plugin or provider follow the same
+  // tree, including imports made by modules outside the source checkout.
+  let config = JSON.parse(await Deno.readTextFile(`${target}/deno.json`))
+  config.imports = {
+    ...config.imports,
+    [new URL(`file://${root}/`).href]: new URL(`file://${target}/`).href,
+  }
+  await Deno.writeTextFile(`${target}/deno.json`, JSON.stringify(config))
+  await Deno.writeTextFile(`${target}/.hash`, hash)
 }
 
 /** A file plugin inside the checkout follows the runtime's private tree too.
@@ -173,8 +253,10 @@ export let runtime = async (argv: string[]): Promise<number | undefined> => {
     return finished.promise
   }
   let release = wind.hold({ drain: stop, force: stop })
+  let unlock = () => {}
   try {
-    let { root: dir, commit } = await snapshot(root)
+    let { root: dir, commit, release: launched } = await snapshot(root)
+    unlock = launched
     if (stopped) return 143
     let url = new URL(`file://${dir}`).href
     // A separate session keeps a terminal interrupt from reaching the child
@@ -202,8 +284,11 @@ export let runtime = async (argv: string[]): Promise<number | undefined> => {
       stdout: 'inherit',
       stderr: 'inherit',
     }).spawn()
+    // The child's command line now names its slot, so no launcher rewrites it.
+    unlock()
     return (await child.status).code
   } finally {
+    unlock()
     finished.resolve()
     release()
   }

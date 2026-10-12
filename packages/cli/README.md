@@ -412,15 +412,19 @@ landing can add an export, change a tool or remove a dependency while the
 running command keeps its own code. The next launch uses the checkout's current
 code. JSR releases already have immutable sources.
 
-Runtime snapshots are cached by source content under
-`$XDG_CACHE_HOME/yak/runtime` (otherwise `$HOME/.cache/yak/runtime`);
-`YAK_RUNTIME_CACHE` selects another directory. Repeated launches reuse the same
-source URLs and Deno's module cache. Published snapshots remain immutable. The
-launcher forwards interrupts and waits for the command to drain. A detached duty
-worker has its own launcher and can outlive the web command while reusing its
-runtime snapshot. The graph config, database and working directory retain their
-caller's paths; file plugins and machine providers inside the source checkout
-follow the runtime snapshot.
+Runtime snapshots live in numbered slots under `$XDG_CACHE_HOME/yak/runtime`
+(otherwise `$HOME/.cache/yak/runtime`); `YAK_RUNTIME_CACHE` selects another
+directory. A launch whose sources a slot already holds shares it. Otherwise it
+rewrites the lowest slot no running process names on its command line, so a slot
+never changes under a process, and its paths repeat: Deno's compiled modules and
+the CLI's memo stay valid for every file the landing left alone. Slots no
+process runs from are removed at the next launch, so the cache holds one tree
+per running version. Launchers take the cache's lock until their child has
+started. The launcher forwards interrupts and waits for the command to drain. A
+detached duty worker has its own launcher and can outlive the web command while
+reusing its runtime snapshot. The graph config, database and working directory
+retain their caller's paths; file plugins and machine providers inside the
+source checkout follow the runtime snapshot.
 
 Command declarations and vocabulary documents are data. The CLI derives them
 once and keeps an internal memo under `$XDG_CACHE_HOME/yak/cli` (otherwise
