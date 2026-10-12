@@ -6,6 +6,7 @@ import { capture, origin } from '@yaks/tracker/report'
 import { batch } from '../tracker/queue.ts'
 import { platform } from '../tracker/core.ts'
 import { caught, defect, delivery, within } from './defects.ts'
+import { type Own, replaced } from './resets.ts'
 
 let recorded = () => {
   let rows: Bundle[][] = []
@@ -115,31 +116,41 @@ test('a caught failure counts once per invocation and refusals stay back', async
   ok(rows.every((r) => batch(r).scope == platform))
 })
 
-test('an object the runtime moved stays back; a reset our code caused does not', async () => {
+// What an instance the runtime moved meets is its replacement's to redo; the
+// same words reaching a live object or the Worker are a call out of retries.
+let GONE =
+  'Connection closed: this Durable Object instance is no longer active. Reconnect or retry the request.'
+let CODE = 'Durable Object reset because its code was updated.'
+let TIMEOUT =
+  'Durable Object storage operation exceeded timeout which caused object to be reset.'
+let reports = async (instance?: Own) => {
   let { rows, time, env } = recorded()
-  await within(env, {}, () => {
-    caught(
-      new Error(
-        'Connection closed: this Durable Object instance is no longer active. Reconnect or retry the request.',
-      ),
-      { request: 'write' },
-    )
-    defect(new Error('Durable Object reset because its code was updated.'), {})
-    defect(
-      new Error(
-        'Durable Object storage operation exceeded timeout which caused object to be reset.',
-      ),
-      {},
-    )
-  }, time)
-  equal(
-    rows.flat().filter((r) => r.exception).map((r) =>
-      (r.exception as { value: string }).value
-    ),
-    [
-      'Durable Object storage operation exceeded timeout which caused object to be reset.',
-    ],
+  await within(
+    env,
+    {},
+    () => {
+      caught(new Error(GONE), { request: 'write' })
+      defect(new Error(CODE), {})
+      defect(new Error(TIMEOUT), {})
+    },
+    time,
+    { replaced: instance && (() => replaced(instance)) },
   )
+  return rows.flat().flatMap((r) =>
+    r.exception ? [(r.exception as { value: string }).value] : []
+  )
+}
+let storage = (exec: () => unknown) => ({ storage: { sql: { exec } } })
+
+test('a moved instance reports none of its resets; a live caller and our own reset do', async () => {
+  equal(
+    await reports(storage(() => {
+      throw new Error(GONE)
+    })),
+    [TIMEOUT],
+  )
+  equal(await reports(storage(() => [])), [GONE, CODE, TIMEOUT])
+  equal(await reports(), [GONE, CODE, TIMEOUT])
 })
 
 test('parallel invocation tags remain isolated and escaping failures reach tracker', async () => {

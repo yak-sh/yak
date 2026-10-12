@@ -32,6 +32,9 @@ type Invocation = {
   clock?: WindowClock
   retain?: (pending: Promise<void>) => void
   origin?: ReturnType<typeof origin>
+  // Whether the runtime has moved the object this invocation runs in off its
+  // instance (resets.ts `replaced`); absent outside a Durable Object.
+  replaced?: () => boolean
 }
 let context = new AsyncLocalStorage<Invocation>()
 let reporters = new WeakMap<object, Coalesced>()
@@ -47,7 +50,8 @@ export let delivery = (env: Bindings, clock?: WindowClock): Coalesced =>
   })
 
 /** A runtime entry keeps delivery alive and reports a failure escaping its
- * own catch. Nested entries retain the caller's tags and duplicate catches. */
+ * own catch. Nested entries retain the caller's tags and duplicate catches,
+ * and the object the outermost one runs in. */
 export let within = <T>(
   env: Bindings,
   tags: Tags,
@@ -56,6 +60,7 @@ export let within = <T>(
   options: {
     retain?: (pending: Promise<void>) => void
     origin?: ReturnType<typeof origin>
+    replaced?: () => boolean
   } = {},
 ): T => {
   let parent = context.getStore()
@@ -67,6 +72,7 @@ export let within = <T>(
     clock: clock ?? parent?.clock,
     retain: options.retain ?? parent?.retain,
     origin: options.origin ?? parent?.origin,
+    replaced: options.replaced ?? parent?.replaced,
   }
   return context.run(invocation, () => {
     let failed = (error: unknown): never => {
@@ -105,15 +111,19 @@ export let reported = (error: unknown) => {
 /** Only exception data and explicit tags leave. One thrown object can pass
  * several catches; a later invocation reusing it is another occurrence. An
  * occurrence about other code than the running version (a failed build)
- * names the commit it concerns. An object the runtime moved to a new instance
- * is no defect: its work is run again by whoever owns it (resets.ts). */
+ * names the commit it concerns. What an instance the runtime moved meets in
+ * its own invocations is no defect: its work is run again by whoever owns it
+ * (resets.ts). The same words met by a live object, or by the Worker, are a
+ * call that ran out of retries, and are reported. */
 export let defect = (
   error: unknown,
   tags: Tags,
   details: { hit?: Hit; fault?: string; commit?: string } = {},
 ) => {
   let invocation = context.getStore()
-  if (!invocation?.env.ERRORS || moved(error)) return
+  if (!invocation?.env.ERRORS || moved(error) && invocation.replaced?.()) {
+    return
+  }
   if (error && typeof error == 'object') {
     if (invocation.seen.has(error)) return
     invocation.seen.add(error)

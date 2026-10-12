@@ -4,6 +4,7 @@ import { within } from './defects.ts'
 import { origin } from '@yaks/tracker/report'
 import type { Env } from './env.ts'
 import { learn } from './running.ts'
+import { type Own, replaced } from './resets.ts'
 
 let clock = {
   now: Date.now,
@@ -23,13 +24,20 @@ let clock = {
   },
 }
 
+// A Durable Object's state, when the invocation is one of its own.
+let own = (state: unknown): state is Own =>
+  typeof (state as Own | undefined)?.storage?.sql?.exec == 'function'
+
 // Every invocation enters here, the Worker's and each object's, so this is
-// also where an isolate learns which deploy it runs (running.ts).
+// also where an isolate learns which deploy it runs (running.ts). An object's
+// invocation can ask whether the runtime has since moved it off this instance
+// (resets.ts `replaced`).
 export let entry = <T>(
   env: Partial<Env>,
   request: string,
   run: () => T,
   http?: Request,
+  state?: unknown,
 ): T => (
   learn(env.CF_VERSION_METADATA),
     within(
@@ -45,6 +53,7 @@ export let entry = <T>(
           request,
           http,
         ),
+        replaced: own(state) ? () => replaced(state) : undefined,
       },
     )
 )
@@ -53,7 +62,8 @@ export let entry = <T>(
  * boundary. A callback installed by construction retains its invocation scope. */
 export let instrument = <C>(Original: C): C => {
   let Base = Original as unknown as new (...args: unknown[]) => object
-  let bindings = new WeakMap<object, Partial<Env>>()
+  // Each object's own constructor arguments: its state and its env.
+  let made = new WeakMap<object, { state: unknown; env: Partial<Env> }>()
   class Tracked extends Base {}
   for (let method of Object.getOwnPropertyNames(Base.prototype)) {
     if (method == 'constructor') continue
@@ -62,22 +72,29 @@ export let instrument = <C>(Original: C): C => {
     Object.defineProperty(Tracked.prototype, method, {
       value(this: object, ...args: unknown[]) {
         return entry(
-          bindings.get(this) ?? {},
+          made.get(this)?.env ?? {},
           `${Base.name} ${method}`,
           () => Reflect.apply(run, this, args),
           args.find((arg): arg is Request => arg instanceof Request),
+          made.get(this)?.state,
         )
       },
     })
   }
   return new Proxy(Tracked, {
     construct(target, args, newTarget) {
-      let env = args[1] as Partial<Env> ?? {}
-      return entry(env, `${Base.name} constructor`, () => {
-        let object = Reflect.construct(target, args, newTarget)
-        bindings.set(object, env)
-        return object
-      })
+      let [state, env = {}] = args as [unknown, Partial<Env>?]
+      return entry(
+        env,
+        `${Base.name} constructor`,
+        () => {
+          let object = Reflect.construct(target, args, newTarget)
+          made.set(object, { state, env })
+          return object
+        },
+        undefined,
+        state,
+      )
     },
   }) as unknown as C
 }

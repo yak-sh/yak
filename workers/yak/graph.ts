@@ -257,6 +257,7 @@ import { realtimeOf } from './rtc.ts'
 import { storedTools } from './package-tools.ts'
 import type { Env } from './env.ts'
 import { conditionalWakes } from './conditional-wakes.ts'
+import { resumed } from './wake.ts'
 import type { Binding } from './post.ts'
 import { ledger } from './ledger.ts'
 import {
@@ -2469,6 +2470,9 @@ export class Store {
 
   // Whether this incarnation's last alarm threw (`alarm`).
   #threw = false
+  // When this incarnation began: a platform job marked begun before it was
+  // begun by an instance that is gone (wake.ts `resumed`).
+  #born = Date.now()
 
   /** The runtime's clock going off: whatever this object armed itself for.
    * The runtime retries an alarm whose run failed. One that threw was reported
@@ -2512,6 +2516,16 @@ export class Store {
         if (kept) {
           this.#stuck = false
           await this.#drain()
+        }
+        // A platform job an instance died in the middle of fires again in
+        // this tick: @yaks/wake spent its occurrence, so nothing else runs it
+        // before the next one (wake.ts `resumed`).
+        if (this.#get('name') == PLATFORM_STORE) {
+          await resumed(
+            this.#clock,
+            this.#born,
+            (job, e) => this.#broke(`wake ${job}`, e),
+          )
         }
         await this.#tick(Date.now())
         this.#workingEffects()

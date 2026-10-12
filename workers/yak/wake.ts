@@ -4,13 +4,13 @@
 // what is left here is the seeding, the job tag those rows wear, where a
 // failed job is written down, and what becomes of a job its object died under.
 //
-// A job runs in the object that fired it, and a deploy resets that object
-// wherever the job is: no catch runs and no report leaves an object that no
-// longer exists, and the occurrence is spent (@yaks/wake runs an effect at
-// most once). So a run is marked on its own row while it lasts
-// (`sweep.began`), and the next incarnation reads a mark older than itself as
-// a run that died and fires the job again (`resumed`). Every job here is a
-// sweep that can run twice.
+// A job runs in the object that fired it, and a deploy or the runtime moving
+// the object (resets.ts) takes that instance away wherever the job is: what
+// its catches meet is no defect, and the occurrence is spent (@yaks/wake runs
+// an effect at most once). So a run is marked on its own row while it lasts
+// (`sweep.began`), and the next incarnation's alarm reads a mark older than
+// itself as a run that died and fires the job again (`resumed`, graph.ts
+// `alarm`). Every job here is a sweep that can run twice.
 //
 // A reset is expected — each deploy resets every object twice, and so does a
 // `wrangler tail` starting — so a run it kills is not a failure: the run after

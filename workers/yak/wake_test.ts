@@ -19,7 +19,7 @@ import { GRAPHQL } from './usage.ts'
 import { GIT_STORE, PLATFORM_STORE, storeOf } from './door.ts'
 import { KERNEL, metaOf } from './meta.ts'
 import type { Env } from './env.ts'
-import { reporting } from './wake.ts'
+import { reporting, STUCK } from './wake.ts'
 import { appStore, storeName } from './directory.ts'
 import { trash, trashSpace, untrash, untrashSpace } from './erase.ts'
 import { ADA, platform as probe, seeded } from './serving-probe.ts'
@@ -177,8 +177,72 @@ test('a job is marked begun on its row while it runs, and cleared after', async 
   assertEquals(marks[1], { began: null, since: null })
 })
 
-// A deploy resets the object under whatever job it is running: the job's own
-// catch never runs, so the incarnation after it is what can tell. A reset is
+// The runtime moved the directory to a new instance in the middle of its
+// hourly reading, and retried the alarm on the new one. The reading's
+// occurrence was spent, so that retry is what runs it again. A move is
+// expected and says nothing; a job no run has finished for `STUCK` does.
+let died = async (began: string, since: string | null = null) => {
+  let rows: Bundle[] = [], readings = 0
+  let fetch = globalThis.fetch
+  globalThis.fetch = () => {
+    readings++
+    return Promise.resolve(
+      Response.json({ data: { viewer: { accounts: [] } } }),
+    )
+  }
+  try {
+    let p = platform('wake resumed', {
+      CF_ANALYTICS_TOKEN: 'test',
+      ERRORS: { send: (s: Bundle[]) => (rows.push(...s), Promise.resolve()) },
+    })
+    await directory(p)
+    await meta(p.env).apply([{
+      entity: { eid: 'yak-meter' },
+      sweep: { began, since },
+    }], KERNEL)
+    let store = new Store(p.states.get(PLATFORM_STORE)!, p.env)
+    p.env.STORE = {
+      idFromName: (n) => n,
+      get: () => ({ fetch: (req: Request) => store.fetch(req) }),
+    } as typeof p.env.STORE
+    await within(
+      p.env,
+      {},
+      () => store.alarm({ isRetry: true, retryCount: 1 }),
+      clock(),
+    )
+    return {
+      readings,
+      sweep: (await wake(p.env, 'yak-meter')).sweep,
+      reported: rows.flatMap((r) =>
+        r.exception ? [(r.exception as { value: string }).value] : []
+      ),
+    }
+  } finally {
+    globalThis.fetch = fetch
+  }
+}
+let ago = (ms: number) => new Date(Date.now() - ms).toISOString()
+
+test('a job its instance died in runs again at the next alarm, reported once stuck', async () => {
+  let began = ago(60_000),
+    since = ago(STUCK),
+    done = { began: null, since: null }
+  assertEquals(await died(began), {
+    readings: 1,
+    sweep: { kind: 'meter', ...done },
+    reported: [],
+  })
+  assertEquals(await died(began, since), {
+    readings: 1,
+    sweep: { kind: 'meter', ...done },
+    reported: [
+      `wake meter: no run has finished since ${since}; ` +
+      `the run begun ${began} died unfinished`,
+    ],
+  })
+})
+
 test('the meter wake runs its job at the supplied hour', async () => {
   let asked: Record<string, unknown>[] = []
   let fetch = globalThis.fetch

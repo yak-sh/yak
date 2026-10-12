@@ -5,10 +5,14 @@
 // update, another machine, a deploy, or a newer deploy reaching it (running.ts
 // `behind`). The instance that was moved fails what it had in flight, and
 // whoever owns that work runs it again: a caller's door fetches again on a
-// fresh stub (door.ts `retryOnce`), and the runtime retries an alarm that
-// failed. Cloudflare documents the move as part of an object's life, so it is
-// no defect. A reset our own code caused is: a storage operation over its
-// timeout, or a kill for the CPU or memory limit.
+// fresh stub (door.ts `retryOnce`), the runtime retries an alarm that failed,
+// the effect pool runs an effect again, and the platform job it died in fires
+// again at the next incarnation's alarm (wake.ts `resumed`). Cloudflare
+// documents the move as part of an object's life, so what the moved instance
+// meets is no defect. A live object that meets the words from an object it
+// called has run out of retries, and that is a failure; so is a reset our own
+// code caused: a storage operation over its timeout, or a kill for the CPU or
+// memory limit.
 
 let MOVED = [
   'Durable Object instance is no longer active',
@@ -39,6 +43,33 @@ let says = (e: unknown, words: string[]) =>
  * ```
  */
 export let moved = (e: unknown): boolean => says(e, MOVED)
+
+/** The slice of a Durable Object's state that reaches its own storage. */
+export type Own = { storage: { sql: { exec(query: string): unknown } } }
+
+/**
+ * Whether the runtime has moved the object off the instance this state
+ * belongs to. A moved instance can no longer reach its own storage, which
+ * refuses it in the words `moved` knows; the live one answers.
+ *
+ * ```ts
+ * import { assertEquals } from '@std/assert'
+ * let gone = new Error('Connection closed: this Durable Object instance is ' +
+ *   'no longer active. Reconnect or retry the request.')
+ * let answering = { storage: { sql: { exec: () => [] } } }
+ * let refusing = { storage: { sql: { exec: () => { throw gone } } } }
+ * assertEquals(replaced(answering), false)
+ * assertEquals(replaced(refusing), true)
+ * ```
+ */
+export let replaced = (state: Own): boolean => {
+  try {
+    state.storage.sql.exec('SELECT 1')
+    return false
+  } catch (e) {
+    return moved(e)
+  }
+}
 
 /**
  * The object was reset under a request, and the runtime's guidance is to fetch
