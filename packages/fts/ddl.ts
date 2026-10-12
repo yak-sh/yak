@@ -79,6 +79,7 @@ import {
   render,
   select,
   type Stmt,
+  sub,
   table,
 } from '@yaks/sql'
 
@@ -270,21 +271,24 @@ export let schema = (fields: Field[], derived: Derived = {}): Stmt[] => {
 //
 // A scoped index holds one row per entity carrying both components, so its
 // rows are counted through its view's join rather than off the text's table.
+// Both counts belong to one statement's read snapshot: a writer committing
+// between separate reads would make a whole index look incomplete and cause
+// a needless rebuild, holding the writer for the entire transcript archive.
 let fault = (
   db: Driver,
   ix: Index,
   deep: boolean,
 ): string | undefined => {
   let fts = indexName(ix.name)
-  let rows = (t: string) =>
-    Number(
-      db.query(select({ cols: [as(count(), 'n')], from: table(t) }))[0].n,
-    )
+  let rows = (t: string) => sub(select({ cols: [count()], from: table(t) }))
   try {
-    let [indexed, held] = [
-      rows(`${fts}_docsize`),
-      rows(ix.on ? textName(ix.name) : ix.comp),
-    ]
+    let counts = db.query(select({
+      cols: [
+        as(rows(`${fts}_docsize`), 'indexed'),
+        as(rows(ix.on ? textName(ix.name) : ix.comp), 'held'),
+      ],
+    }))[0]
+    let indexed = Number(counts.indexed), held = Number(counts.held)
     if (indexed != held) return `${fts} holds ${indexed} of ${held} rows`
     if (deep) db.query(command(fts, 'integrity-check', 1))
   } catch (e) {

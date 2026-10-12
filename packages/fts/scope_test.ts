@@ -46,10 +46,13 @@ let text = fields(talk)
 
 // A database with the tables, the index, and one entity per id; `said` writes
 // the text, `entry` makes it an entry, in whichever order a test calls them.
-let talking = () => {
+let talking = (size = 4) => {
   let db = mem()
-  for (let s of [...TABLES, ...schema(text)]) db.query(s)
-  for (let id = 1; id <= 4; id++) {
+  let make = () => {
+    for (let s of [...TABLES, ...schema(text)]) db.query(s)
+  }
+  db.template ? db.template('fts/talking', make) : make()
+  for (let id = 1; id <= size; id++) {
     db.query(insert('entity', { id, eid: `e${id}` }))
   }
   let said = (id: number, body: string) =>
@@ -96,6 +99,30 @@ test('the index follows the text and the membership', () => {
   t.db.query({ t: 'delete', from: 'content', where: by({ entity: 1 }) })
   assertEquals(t.found('worker'), [])
   assertEquals(heal(t.db, text), [])
+})
+
+test('healing observes membership and its index in the same snapshot', () => {
+  let t = talking(1)
+  t.said(1, 'facets')
+  // A second writer commits immediately after the first read finishes. Its
+  // triggers keep the index whole; maintenance must not mistake that commit
+  // for drift and take the writer to rebuild it.
+  let pending = true
+  assertEquals(
+    heal({
+      ...t.db,
+      query: (s) => {
+        let rows = t.db.query(s)
+        if (pending && s.t == 'select') {
+          pending = false
+          t.entry(1)
+        }
+        return rows
+      },
+    }, text),
+    [],
+  )
+  assertEquals(t.found('facets'), ['e1'])
 })
 
 test('adopting an existing store indexes its entries once, and again changes nothing', () => {
