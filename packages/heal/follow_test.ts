@@ -880,3 +880,40 @@ test('the platform tracker is followed first, its task naming the command that r
   )
   platform.close()
 })
+
+let held = await fixture()
+test("until the platform's first poll settles, no other tracker's bug takes a slot", async () => {
+  let listeners: ((bundles: Bundle[]) => void)[] = []
+  let polled = { ready: false }
+  let stop = new AbortController()
+  let before = -1, waits = 0
+  await service(held.host, {
+    ...held.config,
+    remote: { url: 'https://tracker.example' },
+    open: (at) =>
+      at == 'yaks.app'
+        ? {
+          query: '.bug',
+          value: [] as Bundle[],
+          get ready() {
+            return polled.ready
+          },
+          subscribe: (fn: (bundles: Bundle[]) => void) => (
+            listeners.push(fn), () => {}
+          ),
+          close: () => {},
+          mutate: (rows: Bundle[]) => Promise.resolve(rows),
+        }
+        : held.config.open!(at),
+    wait: async () => {
+      if (++waits == 1) {
+        before = await count(held.g, 'task')
+        polled.ready = true
+        for (let fn of listeners) fn([])
+      } else if (await count(held.g, 'task') > 0 || waits > 20) stop.abort()
+    },
+  }, stop.signal)
+  equal(before, 0)
+  equal(await count(held.g, 'task'), 1)
+  held.close()
+})

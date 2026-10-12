@@ -27,7 +27,9 @@ The `@yaks/heal/service` **follower** follows bugs in the configured tracker
 graphs through a headless [client](../client/README.md) subscription on `/ws`,
 and the platform tracker on yaks.app, when `remote` names it, through
 [tracker](../tracker/README.md)'s polled `./poll` watch. The platform's bugs
-reach people, so each pass takes them first; their tasks link
+reach people, so each pass takes them first, and after a restart no other
+tracker's bug takes a fixer slot until the platform's first poll settles
+(answered or failed, within the poll's timeout); their tasks link
 `yak bug show <eid> --source yaks.app`, since the Worker has no page. Its marks
 carry no precondition. The tracker web role serves that query independently of
 intake. One process holds the `@yaks/heal` service lease: the subscription and

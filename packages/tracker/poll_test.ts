@@ -51,3 +51,22 @@ test('a failed poll is reported and leaves the answer not ready', async () => {
   equal(polled.ready, false)
   polled.close()
 })
+
+test('a poll that hangs settles as failed', async () => {
+  let failures: unknown[] = []
+  let polled = poll(remote, '.bug', {
+    timeout: 5,
+    go: ((_: unknown, init?: RequestInit) =>
+      new Promise((_, fail) =>
+        init?.signal?.addEventListener('abort', () =>
+          fail(init.signal!.reason))
+      )) as typeof fetch,
+    report: (error) =>
+      failures.push(error),
+  })
+  let heard = 0
+  polled.subscribe(() => heard++)
+  await until(() => heard > 0)
+  equal([polled.ready, failures.length], [false, 1])
+  polled.close()
+})

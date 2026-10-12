@@ -111,6 +111,7 @@ export let service = async (
   if (!urls.length) return
   let once = signal.aborted
   let watches = new Map<string, Tracker>()
+  let heard = new Set<string>()
   let reconcile = follow(host.graph, options)
   // A changed answer ends the wait at once; the timer re-checks tasks and gates.
   let nudge = () => {}
@@ -148,7 +149,11 @@ export let service = async (
           let watch = watches.get(url)
           if (!watch) {
             watch = open(url)
-            watch.subscribe(() => nudge())
+            let at = url
+            watch.subscribe(() => {
+              heard.add(at)
+              nudge()
+            })
             watches.set(url, watch)
           }
           if (watch.refused) {
@@ -156,7 +161,12 @@ export let service = async (
             watches.delete(url)
             throw new Error(watch.refused)
           }
-          if (!watch.ready) continue
+          if (!watch.ready) {
+            // Until the platform's first poll settles, no other tracker's bug
+            // takes a fixer slot; a poll always settles, answered or failed.
+            if (url == platform && !once && !heard.has(url)) break
+            continue
+          }
           for (let bug of watch.value) {
             if (!once && signal.aborted) return
             try {
