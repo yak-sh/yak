@@ -131,7 +131,10 @@ test('a Store an older release opened is brought to its schema again, though its
   await newer(ctx, 'ada/vale').query('.build&*', APP)
   let indexes = () =>
     catalogue(db(ctx), { type: 'index' })
-      .filter((i) => i.sql != null).map((i) => i.name).sort()
+      .filter((i) => i.sql != null).map((i) => {
+        assert(typeof i.name == 'string')
+        return i.name
+      }).sort()
   let stood = indexes()
   // The release before prints, a rollback away, retires an index and keeps
   // only its own stamp.
