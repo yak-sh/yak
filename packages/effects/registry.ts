@@ -57,7 +57,8 @@ import type {
 import { after, each, isPromise, over } from '@yaks/fp'
 import { during, link, peek, unlink } from '@yaks/trace'
 import { asked, match, reads } from '@yaks/graph'
-import { type Clause, eq, fields, list } from '@yaks/query'
+import { filter } from '@yaks/match'
+import { bare, type Clause, eq, fields, list } from '@yaks/query'
 import { type EffectDecl, effectsIn, type Vocab } from '@yaks/vocab'
 import {
   BEFORE,
@@ -342,16 +343,31 @@ export let effects = (vocab: Vocab, opts: Opts = {}): Effects => {
     if (plan.patterns.length != 1 || plan.collections.length) {
       throw new Error('an effect target must be a single-entity query')
     }
-    let filter = plan.patterns[0].filter
+    let queryFilter = plan.patterns[0].filter
+    // Stored local facts are already gathered by this transaction. Anything
+    // needing another entity or a computed read stays with the storage reader.
+    let local = (c: Clause): boolean => {
+      if (c.kind == 'and' || c.kind == 'or') return c.clauses.every(local)
+      if (c.kind != 'pred' || c.where || c.not) return false
+      let hops = vocab.aim(c.path.join('.'), bare(c)), h = hops[0]
+      if (hops.length != 1 || !h || vocab.comp(h.comp)?.computed) return false
+      let prop = h.prop && vocab.prop(h.comp, h.prop)
+      let absent = c.value?.kind == 'scalar' && c.value.raw == ''
+      return !prop || !prop.computed && prop.scalar != 'time' &&
+          (!prop.ref || !c.value || absent)
+    }
+    if (local(queryFilter)) {
+      let test = filter(queryFilter, vocab)
+      return after(
+        tx.get(eids, reads(plan, vocab)),
+        (rows) => rows.filter((b) => test(b)).map((b) => b.entity.eid),
+      )
+    }
     return after(
       tx.read({
-        ...filter,
-        clauses: [
-          ...filter.clauses,
-          eq('entity.eid', list(...eids)),
-          fields('entity.eid'),
-        ],
-      }),
+        ...queryFilter,
+        clauses: [...queryFilter.clauses, fields('entity.eid')],
+      }, { eids }),
       (rows) => rows.map((b) => b.entity.eid),
     )
   }
@@ -365,9 +381,15 @@ export let effects = (vocab: Vocab, opts: Opts = {}): Effects => {
       ...new Set(
         slots.filter((s) =>
           !disabled.has(s.id) &&
-          seen.some((e) =>
-            watching(s, e) || (s.kind == 'matched' && s.watch?.includes(e.name))
-          )
+          // The graph adds created/updated after this precondition, so an
+          // input event cannot yet say which stamp trigger will fire.
+          (s.comp == 'created' || s.comp == 'updated' ||
+            s.kind == 'matched' &&
+              s.watch?.some((c) => c == 'created' || c == 'updated') ||
+            seen.some((e) =>
+              watching(s, e) ||
+              (s.kind == 'matched' && s.watch?.includes(e.name))
+            ))
         )
           .map((s) => s.effect?.target).filter((q): q is string => !!q),
       ),

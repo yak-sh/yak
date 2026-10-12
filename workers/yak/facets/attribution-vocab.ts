@@ -33,7 +33,7 @@ export let registrationDoc: VocabDoc = {
       effect: true,
       created: ['created', 'updated'],
       changed: ['updated'],
-      active: '(.created.via !created.by|.updated.via !updated.by)',
+      target: '(.created.via !created.by|.updated.via !updated.by)',
       description: 'register this browser’s guest work for durable attribution',
     },
   },

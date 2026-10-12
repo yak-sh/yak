@@ -464,6 +464,7 @@ export let ram = (vocab: Vocab, base: RamOpts = {}): Store => {
     let found = matcher(query, vocab, {
       now: opts.now ?? base.now,
       storageOrder: opts.storageOrder,
+      eids: opts.eids,
       computed: base.computed,
     })(among)
     let gathered = found.map((b) => computed(b, among))
@@ -477,6 +478,7 @@ export let ram = (vocab: Vocab, base: RamOpts = {}): Store => {
     answer(query, vocab, {
       now: opts.now ?? base.now,
       storageOrder: opts.storageOrder,
+      eids: opts.eids,
       computed: base.computed,
     })(visible(opts))
 

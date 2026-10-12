@@ -29,6 +29,9 @@ export type Visibility = {
 /** Options passed with a read, such as a fixed `now` for relative time
  * expressions. */
 export type ReadOpts = {
+  /** Restrict root candidates to canonical eids, before shaping the answer.
+   * Referenced entities and query operands keep their ordinary semantics. */
+  eids?: readonly Eid[]
   /** Authenticated person; null is a guest, absent is an internal read. */
   person?: Eid | null
   /** Explicit administrative access vouched by the host. */

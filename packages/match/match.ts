@@ -68,6 +68,8 @@ export type Query = string | Ast
 /** Options for one run: the moment a relative time phrase resolves against, and
  * the rules that read the vocabulary's computed properties. */
 export type MatchOpts = {
+  /** Canonical root candidates, without hiding their referenced entities. */
+  eids?: readonly Eid[]
   /** Permission gates compare canonical eids without human-id addressing. */
   exactIds?: boolean
   /** the reference moment for time phrases (default: now) */
@@ -133,7 +135,13 @@ let compare = (a: unknown, b: unknown): number => {
 // the reference moment while compiling keeps that moment beside it and is
 // reused only for the same one.
 type Kind = 'select' | 'filter' | 'rows'
-type Kept = { at?: number; physical?: boolean; exact?: boolean; made: unknown }
+type Kept = {
+  at?: number
+  physical?: boolean
+  exact?: boolean
+  eids?: string
+  made: unknown
+}
 let NONE: Computed = {}
 let kept = new WeakMap<
   Vocab,
@@ -160,6 +168,7 @@ let once = <T>(
   let hit = forms[kind]
   if (
     hit && hit.physical === opts.storageOrder && hit.exact === opts.exactIds &&
+    hit.eids === JSON.stringify(opts.eids) &&
     (hit.at === undefined || hit.at === opts.now)
   ) {
     return hit.made as T
@@ -175,12 +184,14 @@ let once = <T>(
     computed: opts.computed ?? {},
     exactIds: opts.exactIds,
     storageOrder: opts.storageOrder,
+    eids: opts.eids,
   }
   let made = make(ctx)
   forms[kind] = {
     at: timed ? opts.now ?? NaN : undefined,
     physical: opts.storageOrder,
     exact: opts.exactIds,
+    eids: JSON.stringify(opts.eids),
     made,
   }
   return made
@@ -199,7 +210,13 @@ let compiled = (
   }
   let filters = cs.filter((c) => !directive(c))
   let { test, needs } = compile(ctx, { kind: 'and', clauses: filters })
-  return { cs, test, needs }
+  if (!ctx.eids) return { cs, test, needs }
+  let eids = new Set(ctx.eids)
+  return {
+    cs,
+    test: (b, among) => eids.has(b.entity.eid) && test(b, among),
+    needs: [{ eids: [...eids] }],
+  }
 }
 
 // A directive's path (order, fields, distinct, tally) resolved to the one

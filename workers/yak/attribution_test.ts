@@ -86,6 +86,7 @@ test('settled guest history owes zero registration work on repeated idle boots',
     $actor: { via: 'browser' },
   })))
   await original.drain()
+  assertEquals(original.errors, [])
   assertEquals(receipts.length, 107)
   await original.fx.stop()
   receipts.length = 0
@@ -129,6 +130,16 @@ test('original guest writes owe durable registration, recovered once after resta
     doc: { title: 'Edited' },
     $actor: { via: 'editor-browser' },
   }], { now: '2026-10-04T00:00:01.000Z' })
+  // Waiting guest work belongs to its own target. Another author's edit
+  // must not acquire a registration run because this guest still needs one.
+  await writer.g.apply([{
+    entity: { eid: 'signed-in' },
+    doc: { title: 'Edited signed in' },
+    $actor: {
+      by: 'aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa',
+      via: 'signed-browser',
+    },
+  }])
   let pending = await writer.g.read('.effect.state=pending')
   assertEquals(pending.length, 2)
   assertEquals(receipts.length, 0)

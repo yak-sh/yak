@@ -5,10 +5,11 @@
 // any other way, when the schema moves, and when another connection commits
 // (@yaks/sql `revision`'s `outside`).
 //
-// A transaction can roll back what it wrote, so nothing a transaction still
-// open has written is kept: it is read from SQL while the transaction runs,
-// and kept again once it has ended either way. A write this package cannot
-// attribute keeps nothing at all until the transaction ends. The transactions
+// A transaction can roll back what it wrote, so its known writes stay in its
+// pending image until commit. A getter for stored components can read that
+// image while classification is still owed; a whole or dynamic read uses SQL.
+// A write this package cannot attribute leaves the image unknown until the
+// transaction ends. The transactions
 // are the ones this connection says: `begin` and savepoints through `query`,
 // and the driver's own `tx`.
 //
@@ -885,7 +886,32 @@ export let memoized = (
       // held in part with them, cut to them. What one reads is held in part,
       // unless it says all there is: an entity storage lacks, or a dead one.
       let wanted = comps && new Set(comps)
-      let missing = [...new Set(eids)].filter((eid) => !holds(eid, wanted))
+      // This transaction already knows the stored aspects its own patches
+      // produced. Their rows stand now; classification can still be owed.
+      let written = new Map<string, Bundle | null>()
+      if (c.depth && !c.blind && comps && !comps.some((n) => dynamic.has(n))) {
+        for (let eid of eids) {
+          let b = k.after.get(eid), part = k.afterPart.get(eid)
+          if (
+            b === undefined || b === LOST ||
+            part && !comps.every((n) => part.has(n))
+          ) continue
+          if (b && comps.some((n) => b[n] != null && HOLE in (b[n] as Comp))) {
+            continue
+          }
+          written.set(
+            eid,
+            b && Object.fromEntries(
+              Object.entries(b).filter(([n]) =>
+                n == 'entity' || n == 'tombstone' || wanted!.has(n)
+              ),
+            ) as Bundle | null,
+          )
+        }
+      }
+      let missing = [...new Set(eids)].filter((eid) =>
+        !written.has(eid) && !holds(eid, wanted)
+      )
       let read = new Set(missing)
       let fresh = new Map(
         (missing.length ? get(missing, comps) : []).map((
@@ -899,7 +925,9 @@ export let memoized = (
           hold(eid, b, wanted && b && !dead(b) ? wanted : undefined)
         }
       }
-      let hits = eids.filter((eid) => !read.has(eid) && k.held.get(eid))
+      let hits = eids.filter((eid) =>
+        !written.has(eid) && !read.has(eid) && k.held.get(eid)
+      )
       // A hit's dynamic components are read now, in one statement.
       let names = [
         ...new Set(
@@ -916,6 +944,10 @@ export let memoized = (
         ) => [b.entity.eid, b]),
       )
       let out = eids.flatMap((eid) => {
+        if (written.has(eid)) {
+          let b = written.get(eid)
+          return b ? [structuredClone(b)] : []
+        }
         if (read.has(eid)) return fresh.has(eid) ? [fresh.get(eid)!] : []
         let held = k.held.get(eid)!
         k.held.delete(eid)

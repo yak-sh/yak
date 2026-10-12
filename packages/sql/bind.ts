@@ -120,6 +120,8 @@ import { backedDialect, backingOf, computed, hasComputed } from './spine.ts'
 import type { ArchetypeSet } from './archetype.ts'
 
 export type BindOpts = {
+  /** Canonical root candidates; references and operands remain unrestricted. */
+  eids?: readonly string[]
   /** Permission gates compare canonical eids without human-id addressing. */
   exactIds?: boolean
   /** Reference operands resolved and admitted against this read's snapshot. */
@@ -161,6 +163,7 @@ type Ctx = {
   /** An owner probe needs a predicate, not global candidate selections. */
   correlated?: boolean
   exactIds?: boolean
+  eids?: BindOpts['eids']
   references?: BindOpts['references']
   visibility?: BindOpts['visibility']
   archetypes?: ArchetypeSet
@@ -1587,9 +1590,14 @@ let indexedRelation = (
       c.kind == 'pred' &&
       !c.not && !c.where && c.path.join('.') == 'entity.eid' && opOf(c) == ''
     )
-    if (named?.kind == 'pred') {
-      let set = identity('eid', named.value, ctx.exactIds)
-      if (set && !set.nums.length && o.joins.length) {
+    if (ctx.eids || named?.kind == 'pred') {
+      let set = ctx.eids
+        ? { eids: [...ctx.eids], nums: [] }
+        : identity('eid', (named as Pred).value, ctx.exactIds)
+      if (
+        set && set.eids.length && !set.nums.length &&
+        (ctx.eids || o.joins.length)
+      ) {
         let s = rel(from, o)
         return {
           ...s,
@@ -1907,6 +1915,7 @@ export let bound = (
     spine,
     correlated: scope?.correlated,
     exactIds: opts.exactIds,
+    eids: opts.eids,
     references: opts.references,
     visibility: scope?.visibility ?? opts.visibility,
   }
@@ -1944,7 +1953,8 @@ export let bound = (
   // A component page (including the platform's negative listing screen)
   // already has a keyed driving table. No catalog is needed to discover it.
   if (
-    !spine && !claims(ctx, 'pred') && ctx.d.owned && find<Limit>(cs, 'limit')
+    !spine && !opts.eids && !claims(ctx, 'pred') && ctx.d.owned &&
+    find<Limit>(cs, 'limit')
   ) {
     let facets = flattened(filters).map((c) => facetOf(ctx, c))
     let required = facets.filter((f) => f?.present)
@@ -1957,7 +1967,8 @@ export let bound = (
     }
   }
   if (
-    !ctx.present && !spine && !claims(ctx, 'pred') && ctx.d.owned &&
+    !ctx.present && !spine && !opts.eids && !claims(ctx, 'pred') &&
+    ctx.d.owned &&
     !find<Count>(cs, 'count') &&
     !flattened(filters).some((c) =>
       c.kind == 'pred' && c.path.join('.') == 'entity.eid' && !c.not
@@ -1980,6 +1991,17 @@ export let bound = (
   }
   let where = and(
     ...conjuncts(ctx, filters),
+    ...opts.eids
+      ? [clause({ ...ctx, exactIds: true }, {
+        kind: 'pred',
+        path: ['entity', 'eid'],
+        op: '=',
+        value: {
+          kind: 'list',
+          items: opts.eids.map((raw) => ({ kind: 'scalar', raw })),
+        },
+      })]
+      : [],
     cond(ctx.d.live()),
   )
   // Callers that read columns beside the filter ask for their joins here. A
@@ -2174,6 +2196,7 @@ export let sourceScreen = (
     {
       ...opts,
       exactIds: true,
+      eids: undefined,
       visibility: undefined,
       archetypes: undefined,
       extend: [],
@@ -2307,6 +2330,7 @@ let visible = (
       {
         ...plain,
         exactIds: true,
+        eids: undefined,
         references: undefined,
         archetypes: undefined,
         extend: [],

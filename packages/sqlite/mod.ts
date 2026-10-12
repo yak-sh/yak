@@ -708,7 +708,12 @@ export let storage = (
       let rest = eids.filter((eid) => !moving.has(eid))
       let at = new Map(
         [
-          ...get(driver, vocab, moved, opts(), comps, pending),
+          ...memo.get(
+            (ids, names) => get(driver, vocab, ids, opts(), names, pending),
+            moved,
+            comps,
+            refresh,
+          ),
           ...rest.length ? cached(rest, comps, refresh) : [],
         ].map((b) => [b.entity.eid, b]),
       )

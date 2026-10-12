@@ -54,6 +54,7 @@ export type Ctx = {
   computed: Computed
   storageOrder?: boolean
   exactIds?: boolean
+  eids?: readonly string[]
 }
 
 /**
