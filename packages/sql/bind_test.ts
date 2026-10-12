@@ -555,7 +555,8 @@ test('reference equality compares indexed keys, not projected eids', () => {
   assertEquals(one.params, ['target'])
   // A list is one bound value however long it is: a host caps what one
   // statement binds, and a delete asks about every entity it deleted.
-  let many = compile(parse('.note.about=target,other'), v)
+  let targets = Array.from({ length: 65 }, (_, i) => `target-${i}`)
+  let many = compile(parse(`.note.about=${targets}`), v)
   assert(
     many.sql.includes(
       '"note"."about" in (select "__key".id from json_each(?) as "__ids" ' +
@@ -563,7 +564,7 @@ test('reference equality compares indexed keys, not projected eids', () => {
     ),
     many.sql,
   )
-  assertEquals(many.params, ['["target","other"]'])
+  assertEquals(many.params, [JSON.stringify(targets)])
   for (let { sql } of [one, many]) assert(!sql.includes('__re'), sql)
   // Projection-based semantics still handle absent values, ranges and text
   // matching; these must not be mistaken for a list of literal reference ids.

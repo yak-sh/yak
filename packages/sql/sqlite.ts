@@ -22,7 +22,7 @@
 import type { Prop, Scalar, Vocab } from '@yaks/vocab'
 import { timeEdges, type Value } from '@yaks/query/core'
 import { type Frag, spelled } from './ast.ts'
-import { nest } from './render.ts'
+import { literal, nest } from './render.ts'
 
 // The type a value is coerced to before comparison — the vocabulary's property
 // category flattened to the one name the lowerings switch on.
@@ -141,6 +141,18 @@ let col = (comp: string, prop: string, v: Vocab): string | null => {
     : `"${comp}"."${field(prop)}"`
 }
 
+// Keep generated SQL bounded. Large lists still take one bind, and NUL
+// travels in that bind because a SQL string literal cannot carry it.
+let encoder = new TextEncoder()
+let referenceValues = (eids: string[]): string | undefined => {
+  if (
+    !eids.length || eids.length > 64 ||
+    eids.some((eid) => eid.length > 4096 || eid.includes('\0'))
+  ) return
+  let values = eids.map((eid) => `(${literal(eid)})`).join(', ')
+  return encoder.encode(values).length <= 4096 ? values : undefined
+}
+
 /**
  * Reference equality, reading the entity table from `from`. A reference column
  * stores an integer id, so comparing it to an eid means looking that eid up —
@@ -149,13 +161,20 @@ let col = (comp: string, prop: string, v: Vocab): string | null => {
  * transaction, so the comparison also finds entities that transaction has not
  * committed yet.
  *
- * A list is one parameter however long it is, for the reason {@link
- * Dialect.among} gives: the reverse read behind a delete names every entity it
- * deleted (T-38059).
+ * Small lists supply their eids as bounded literal values. Larger lists
+ * still use one parameter: a delete can name every entity it deleted
+ * (T-38059), while a host caps the values one statement binds.
  */
 export let refEqAt = (from: string): Dialect['refEq'] => (c, eids, negate) => {
+  let values = eids.length == 1 ? undefined : referenceValues(eids)
   let hit = eids.length == 1
     ? { sql: `${c} = (select id from ${from} where eid = ?)`, params: eids }
+    : values
+    ? {
+      sql: `${c} in (select "__key".id from (values ${values}) as "__ids" ` +
+        `cross join ${from} as "__key" where "__key".eid = "__ids".column1)`,
+      params: [],
+    }
     : {
       // Resolve a finite eid set from its values, never from stale estimates
       // of the identity table (which can predate retained transcript growth).
