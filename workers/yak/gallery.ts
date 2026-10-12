@@ -17,11 +17,14 @@
 // Why the approval. M-4522: what goes out under our name is ours to allow.
 // Nothing an agent says and nothing a person types can put an app on this
 // site — the ask is one stamp, the listing is a second one, and the second is
-// only ever written by somebody opening a link out of a letter to
-// hello@yaks.app. That letter is the one channel an agent has no way into,
-// which is exactly the shape space_delete's confirmation already has
-// (erase.ts): the same `seal` from the kernel's own secret, the same GET that
-// only ever draws, the same POST that acts.
+// only ever written by the platform's admin, signed in on the web, answering a
+// link out of a letter to hello@yaks.app. The letter alone is not enough: that
+// mailbox lands in the box's graph, where agents read it, so the link is only
+// where the answer happens, and the session cookie of an owner of the meta
+// space is who may give it. An agent holds a bearer token, never that cookie,
+// so it cannot answer — the same line the space delete door draws (erase.ts):
+// the same `seal` from the kernel's own secret, the same GET that only ever
+// draws, the same POST that acts.
 //
 // The two words on the row (vocab.ts `gallery`) say the whole state:
 //
@@ -42,6 +45,7 @@ import { opened, seal } from './lib/token.ts'
 import {
   type App,
   type Directory,
+  META,
   type Space,
   stamp,
   url,
@@ -54,6 +58,7 @@ import { GALLERY } from './seo.ts'
 import { foot, head, html, top } from './shell.ts'
 import { type Host, hosted, replyTo, url as siteUrl } from './host.ts'
 import { caught } from './defects.ts'
+import { sessionAt } from './session.ts'
 
 // Where the gallery lives, and where a letter's links land. What the page says
 // about itself — its title and its line — is seo.ts's, beside the same two
@@ -419,10 +424,10 @@ These links expire in one week.`,
 // delete does (erase.ts): a mail client that fetches every link in a letter
 // before anyone reads it must not be able to list an app by doing its job.
 //
-// The ticket is the whole authority here — the kernel signed it and it went to
-// one mailbox — so there is no cookie to check and nobody to be. That is the
-// difference between this door and the space one: there, the person confirming
-// owns the thing; here, the person confirming is us.
+// The ticket says which app and which answer; the cookie says who is answering
+// (`staff`). Both are needed: the ticket because the kernel signed what is
+// being decided, the cookie because the letter sits in a graph agents read.
+// The person confirming is us: an owner of the meta space, signed in.
 let review = (at: {
   title: string
   about: string
@@ -529,6 +534,15 @@ export let owned = async (dir: Directory, space: Space) => {
   return ''
 }
 
+// Who may answer: an owner of the meta space, by the platform session cookie
+// and nothing else — never a bearer token, which is what an agent holds.
+export let staff = async (req: Request, env: Env, dir: Directory) => {
+  let person = (await sessionAt(req, env.SESSION_SECRET))?.person
+  if (!person) return null
+  let meta = await dir.space(META.space)
+  return meta && await dir.role(meta, person) == 'owner' ? person : ''
+}
+
 // The review address this file answers at the apex. The public listing is
 // drawn behind the Site entrypoint (site.ts), outside the review ticket door.
 export let answer = async (
@@ -555,6 +569,26 @@ export let answer = async (
       'A gallery link lasts a week. Nothing has changed, and the app can be ' +
         'put forward again.',
       410,
+    )
+  }
+  // Signed out, which is what an agent is here: sent to sign in and handed back
+  // to this very page. Signed in as anybody but the platform's admin: refused.
+  let who = await staff(req, env, dir)
+  if (who == null) {
+    let back = asked.pathname +
+      (req.method == 'POST' ? `?t=${encodeURIComponent(held)}` : asked.search)
+    return new Response(null, {
+      status: 302,
+      headers: { location: `/login?return=${encodeURIComponent(back)}` },
+    })
+  }
+  if (!who) {
+    return done(
+      env,
+      'Only yaks.app can answer this.',
+      'A gallery request is answered by the platform, signed in. Nothing ' +
+        'was changed.',
+      403,
     )
   }
   // The app the ticket names, found among the offers — which is the whole of

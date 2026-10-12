@@ -346,10 +346,31 @@ test('an app reaches the gallery only when yaks.app says yes', async () => {
     assert(yes && no, 'the letter carries two links')
 
     // The GET only ever draws: a mail client that fetches every link in a
-    // letter must not be able to list an app by doing its job.
-    let drawn = await k.at('yaks.app', yes)
+    // letter must not be able to list an app by doing its job. And it draws
+    // only for the platform's admin, signed in: the letter lands where agents
+    // read mail, so the link alone answers nothing.
+    let admin = { cookie: k.owner.cookie }
+    let drawn = await k.at('yaks.app', yes, { headers: admin })
     assertEquals(drawn.status, 200)
     assertStringIncludes(await drawn.text(), '<form method="post"')
+    let token = new URLSearchParams(yes.split('?')[1]).get('t')!
+    let answer = (headers: Record<string, string>) =>
+      k.at('yaks.app', '/gallery/review', {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/x-www-form-urlencoded',
+          ...headers,
+        },
+        body: new URLSearchParams({ t: token }).toString(),
+        redirect: 'manual',
+      })
+    let signedOut = await answer({})
+    assertEquals(signedOut.status, 302)
+    assertStringIncludes(signedOut.headers.get('location')!, '/login?return=')
+    await signedOut.body?.cancel()
+    let maker = await answer({ cookie: jeff.cookie })
+    assertEquals(maker.status, 403)
+    await maker.body?.cancel()
     assert(
       !(await k.at('yaks.app', '/gallery').then((r) => r.text()))
         .includes('class="Make_Card"'),
@@ -357,12 +378,7 @@ test('an app reaches the gallery only when yaks.app says yes', async () => {
 
     // The POST acts. Now it is on the page, with its own share card and the
     // line that gives somebody their own copy.
-    let token = new URLSearchParams(yes.split('?')[1]).get('t')!
-    let ok = await k.at('yaks.app', '/gallery/review', {
-      method: 'POST',
-      headers: { 'content-type': 'application/x-www-form-urlencoded' },
-      body: new URLSearchParams({ t: token }).toString(),
-    })
+    let ok = await answer(admin)
     assertEquals(ok.status, 200)
     await ok.body?.cancel()
     let page = await k.at('yaks.app', '/gallery').then((r) => r.text())
@@ -452,7 +468,7 @@ test('an app reaches the gallery only when yaks.app says yes', async () => {
     )
     // The link out of the old letter is worth nothing now: there is no offer
     // to list, and it says so rather than stamping a row nothing points at.
-    let stale = await k.at('yaks.app', yes)
+    let stale = await k.at('yaks.app', yes, { headers: admin })
     assertEquals(stale.status, 409)
     assertStringIncludes(await stale.text(), 'no longer on offer')
 
@@ -475,7 +491,10 @@ test('an app reaches the gallery only when yaks.app says yes', async () => {
       .map((m) => m[1])[1]
     let off = await k.at('yaks.app', '/gallery/review', {
       method: 'POST',
-      headers: { 'content-type': 'application/x-www-form-urlencoded' },
+      headers: {
+        'content-type': 'application/x-www-form-urlencoded',
+        cookie: k.owner.cookie,
+      },
       body: new URLSearchParams({
         t: new URLSearchParams(turned.split('?')[1]).get('t')!,
       }).toString(),
