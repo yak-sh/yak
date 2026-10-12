@@ -61,12 +61,15 @@ export async function measure(path: string, samples: number, backlog: number) {
 
   let writes: Write[] = []
   let recording = false
+  let setup = false
   let kindOf = (bundles: Bundle[]) =>
-    bundles.length != 1 || !bundles[0].$was
+    !bundles.length || !bundles.every((b) => b.$was)
       ? 'apply'
-      : bundles[0].$delete
+      : bundles.every((b) => b.$delete)
       ? 'settle'
-      : (bundles[0].effect as { lease_token?: string })?.lease_token
+      : bundles.every((b) =>
+          (b.effect as { lease_token?: string })?.lease_token
+        )
       ? 'claim'
       : 'apply'
   let timed = async (
@@ -74,6 +77,11 @@ export async function measure(path: string, samples: number, backlog: number) {
     eid: string | undefined,
     run: () => unknown,
   ) => {
+    if (setup) {
+      let value = await run()
+      heard(kind)
+      return value
+    }
     let start = performance.now()
     if (!recording) {
       let value = await run()
@@ -140,17 +148,34 @@ export async function measure(path: string, samples: number, backlog: number) {
       doc: { body: 'worker bench comment' },
       comment: { target: TARGET },
     }])
+    // Creation can owe work too. Settle setup before timing the edit, so its
+    // claim and settle belong to the owing commit being measured.
+    let owed = pending()
+    if (owed) {
+      let done = settledAt(owed)
+      fx.wake()
+      await done
+      await fx.idle()
+    }
     return [{ entity: { eid }, doc: { body: 'worker bench comment, edited' } }]
   }
   // One run's life: owed by the edit's commit, picked up by the worker when
   // the writer nudges it (as a thread beside it does), claimed, run, settled.
   let life = async (kind = 'owe') => {
-    let bundles = await edit()
+    let bundles: Bundle[]
+    setup = true
+    try {
+      bundles = await edit()
+    } finally {
+      setup = false
+    }
     let done = settledAt(1)
     let start = performance.now()
     await timed(kind, bundles[0].entity.eid, () => g.apply(bundles))
     fx.wake()
-    return (await done) - start
+    let ms = (await done) - start
+    await fx.idle()
+    return ms
   }
 
   // Runs owed for no-op handlers, written through the graph a thousand at a

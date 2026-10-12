@@ -17,7 +17,7 @@
 // follows. An effect observing a new or moved wake can set the application's
 // timer or alarm.
 
-import type { Bundle, Hook, Plugin } from '@yaks/graph'
+import { type Bundle, type Hook, hook, type Plugin } from '@yaks/graph'
 import { type Clock, wakeOf } from './due.ts'
 import { recur } from './every.ts'
 import { WAKE, wakeDoc } from './comp.ts'
@@ -69,5 +69,8 @@ export let wakes = (opts: Opts = {}): Plugin => ({
   name: '@yaks/wake',
   admission: () => true,
   vocab: [wakeDoc],
-  hooks: { normalize: starting(opts), precondition: conditions },
+  hooks: {
+    normalize: hook([WAKE], starting(opts)),
+    precondition: hook([WAKE], conditions),
+  },
 })

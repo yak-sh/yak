@@ -6,8 +6,8 @@
 // (`plugins: [keys(vocab), aliases()]`). What is left is exactly what is
 // particular to a name: how you write one, and that a name resolves to an id.
 
-import type { Plugin } from '@yaks/graph'
-import { aliasDoc } from './comp.ts'
+import { hook, type Plugin } from '@yaks/graph'
+import { ALIAS, aliasDoc } from './comp.ts'
 import { split } from './sugar.ts'
 import { addressed } from './refs.ts'
 
@@ -35,5 +35,5 @@ export let aliases = (): Plugin => ({
   name: '@yaks/alias',
   vocab: [aliasDoc],
   address: addressed,
-  hooks: { normalize: split() },
+  hooks: { normalize: hook([ALIAS], split()) },
 })

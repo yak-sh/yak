@@ -14,7 +14,7 @@
 // trustworthy than a plugin claiming it: a page is named by its address whether
 // or not anybody loaded this module.
 
-import type { Bundle, Comp, Plugin } from '@yaks/graph'
+import { type Bundle, type Comp, hook, type Plugin } from '@yaks/graph'
 import { pageDoc, WEB } from './comp.ts'
 import { canon } from './url.ts'
 
@@ -47,5 +47,5 @@ let clean = (b: Bundle): Bundle => {
 export let pages = (): Plugin => ({
   name: '@yaks/page',
   vocab: [pageDoc],
-  hooks: { normalize: (bundles) => bundles.map(clean) },
+  hooks: { normalize: hook([WEB], (bundles) => bundles.map(clean)) },
 })

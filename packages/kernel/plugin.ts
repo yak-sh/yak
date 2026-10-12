@@ -1,7 +1,7 @@
 // The package as a graph plugin: the kernel's words, plus the hook that keeps
 // who finished a piece of work on its `completed` mark.
 
-import type { Plugin } from '@yaks/graph'
+import { hook, type Plugin } from '@yaks/graph'
 import { completing } from './completion.ts'
 import { kernelDoc } from './vocab.ts'
 
@@ -21,5 +21,5 @@ import { kernelDoc } from './vocab.ts'
 export let kernel = (): Plugin => ({
   name: '@yaks/kernel',
   vocab: [kernelDoc],
-  hooks: { precondition: (bundles, tx) => completing(bundles, tx) },
+  hooks: { precondition: hook(['completed'], completing) },
 })

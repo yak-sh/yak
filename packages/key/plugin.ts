@@ -7,7 +7,7 @@
 // only a loaded vocabulary knows. So a graph is built in two steps — load the
 // documents, then pass the same vocabulary to the plugin.
 
-import type { Hook, Plugin } from '@yaks/graph'
+import { type Hook, hook, type Plugin } from '@yaks/graph'
 import { dead } from '@yaks/graph/bundle'
 import { after } from '@yaks/fp'
 import type { Vocab } from '@yaks/vocab'
@@ -51,5 +51,8 @@ export let keys = (vocab: Vocab): Plugin => ({
   admission: (bundles) => bundles.every((b) => !dead(b) && b[KEY] !== null),
   vocab: [keyDoc],
   derive: { [KEY]: derive(names(vocab)) },
-  hooks: { mint: minting(vocab), cascade: retired(vocab) },
+  hooks: {
+    mint: hook([KEY], minting(vocab)),
+    cascade: hook([KEY], retired(vocab)),
+  },
 })

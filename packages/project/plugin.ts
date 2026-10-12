@@ -9,9 +9,9 @@
 // vocabulary to the plugin.
 
 import { after } from '@yaks/fp'
-import { type Plugin } from '@yaks/graph'
+import { hook, type Plugin } from '@yaks/graph'
 import type { Vocab } from '@yaks/vocab'
-import { projectDoc } from './comp.ts'
+import { BOARD, FILED, projectDoc } from './comp.ts'
 import { guarding } from './guard.ts'
 import { nesting } from './tree.ts'
 
@@ -30,7 +30,10 @@ export let projects = (vocab: Vocab): Plugin => {
     name: '@yaks/project',
     vocab: [projectDoc],
     hooks: {
-      precondition: (b, tx) => after(boards(b, tx), (b) => nesting(b, tx)),
+      precondition: hook(
+        [BOARD, FILED],
+        (b, tx) => after(boards(b, tx), (b) => nesting(b, tx)),
+      ),
     },
   }
 }

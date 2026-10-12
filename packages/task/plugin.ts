@@ -3,7 +3,7 @@
 // What a task is filed under, and the board that is a saved filter over the
 // filing, belong to @yaks/project — and so does the guard over a board's query.
 
-import type { Plugin } from '@yaks/graph'
+import { hook, type Plugin } from '@yaks/graph'
 import { deciding } from './decision.ts'
 import { taskDoc } from './comp.ts'
 
@@ -36,5 +36,5 @@ import { taskDoc } from './comp.ts'
 export let tasks = (): Plugin => ({
   name: '@yaks/task',
   vocab: [taskDoc],
-  hooks: { precondition: deciding },
+  hooks: { precondition: hook(['decision', 'decided', 'task'], deciding) },
 })

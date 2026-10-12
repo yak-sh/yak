@@ -7,7 +7,7 @@
 // something only a loaded vocabulary knows. So a graph is built in two steps —
 // load the documents, then pass that same vocabulary to the plugin.
 
-import type { Plugin } from '@yaks/graph'
+import { hook, type Plugin } from '@yaks/graph'
 import type { Vocab } from '@yaks/vocab'
 import { EDGE, names } from './relations.ts'
 import { derive } from './eid.ts'
@@ -38,5 +38,5 @@ export let edges = (vocab: Vocab): Plugin => ({
   name: '@yaks/edge',
   vocab: [edgeDoc],
   derive: { [EDGE]: derive(names(vocab)) },
-  hooks: { mint: stated(vocab) },
+  hooks: { mint: hook([EDGE], stated(vocab)) },
 })

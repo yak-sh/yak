@@ -6,7 +6,7 @@
 // substitute references in `precondition` and restore text in `commit`. `$blob`
 // carries the prepared references and original text through the batch.
 
-import type { Bundle, Comp, Plugin } from '@yaks/graph'
+import { type Bundle, type Comp, hook, type Plugin } from '@yaks/graph'
 import { after, each } from '@yaks/fp'
 import type { Vocab } from '@yaks/vocab'
 import { bodies, type Body } from './props.ts'
@@ -125,6 +125,7 @@ export let blobs = (
   opts: BlobOpts = {},
 ): Plugin => {
   let props = opts.props ?? bodies(vocab)
+  let keys = [...new Set(props.map((p) => p.comp))]
   let reference = opts.reference ?? ((sha: string) => sha)
   let prepare = (bundles: Bundle[]) => {
     // Cache only within this batch: a rolled-back transactional reference
@@ -158,13 +159,16 @@ export let blobs = (
     // Preparing a body may retain external bytes or mint a local reference.
     admission: (bundles) => bundles.every((b) => !written(b, props).length),
     hooks: {
-      prepare: (bundles) => store.transactional ? bundles : prepare(bundles),
-      precondition: (bundles) =>
+      prepare: hook(
+        keys,
+        (bundles) => store.transactional ? bundles : prepare(bundles),
+      ),
+      precondition: hook([...keys, STASH], (bundles) =>
         after(
           store.transactional ? prepare(bundles) : bundles,
           (ready) => ready.map(swap),
-        ),
-      commit: (bundles) => bundles.map(restore),
+        )),
+      commit: hook([STASH], (bundles) => bundles.map(restore)),
     },
   }
 }

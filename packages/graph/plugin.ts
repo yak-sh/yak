@@ -126,12 +126,28 @@ export type HookContext = {
   admission?: boolean
 }
 
-export type Hook = (
-  bundles: Bundle[],
-  tx: Tx,
-  err?: unknown,
-  context?: HookContext,
-) => Bundle[] | Promise<Bundle[]>
+export type Hook =
+  & ((
+    bundles: Bundle[],
+    tx: Tx,
+    err?: unknown,
+    context?: HookContext,
+  ) => Bundle[] | Promise<Bundle[]>)
+  & {
+    /** The bundle keys that can give this hook work. Presence includes null
+     * removals. Omitted keys leave the hook eligible for every batch. */
+    keys?: readonly string[]
+  }
+
+/** Declare which bundle keys give a hook work. Each hook sees the current
+ * batch, including earlier rewrites and cascades, before it is called or
+ * traced. Include `$delete` and `tombstone` when deletion itself matters. */
+export let hook = (keys: readonly string[], run: Hook): Hook =>
+  Object.assign(
+    (bundles: Bundle[], tx: Tx, err?: unknown, context?: HookContext) =>
+      run(bundles, tx, err, context),
+    { keys: [...keys] },
+  )
 
 /**
  * An ordered write hook may certify that this batch's checks and writes are

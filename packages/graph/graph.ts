@@ -562,6 +562,13 @@ export let graph = (opts: Options): Graph => {
   // Synchronous phases use plain loops. A continuation is needed only when a
   // core, rule or hook yields; all registrations still come from the moment
   // the phase began, and each hook gets its own context.
+  let relevant = (h: Hook, bundles: Bundle[]): boolean => {
+    if (!h.keys) return true
+    for (let b of bundles) {
+      for (let key of h.keys) if (key in b) return true
+    }
+    return false
+  }
   let runHooks = (
     run: Run,
     name: Phase,
@@ -572,6 +579,7 @@ export let graph = (opts: Options): Graph => {
   ): Bundle[] | Promise<Bundle[]> => {
     for (let i = start; i < calls.length; i++) {
       let [plugin, h] = calls[i]
+      if (!relevant(h, bundles)) continue
       let out = run.tracing && live(run.tracing) && peek(g)
         ? run.timed(
           name,
@@ -825,22 +833,24 @@ export let graph = (opts: Options): Graph => {
       return after(made, (b) =>
         after(
           each(hooks('effect'), b, (out, [plugin, hook]) =>
-            observed(plugin, out, () =>
-              tracing && live(tracing) && peek(g)
-                ? timed(
-                  'effect',
-                  () =>
-                    hook(out, outside, undefined, {
-                      graph: g,
-                      transaction: run.transaction,
-                      parent: current,
-                    }),
-                  plugin,
-                )
-                : hook(out, outside, undefined, {
-                  graph: g,
-                  transaction: run.transaction,
-                }))),
+            !relevant(hook, out)
+              ? out
+              : observed(plugin, out, () =>
+                tracing && live(tracing) && peek(g)
+                  ? timed(
+                    'effect',
+                    () =>
+                      hook(out, outside, undefined, {
+                        graph: g,
+                        transaction: run.transaction,
+                        parent: current,
+                      }),
+                    plugin,
+                  )
+                  : hook(out, outside, undefined, {
+                    graph: g,
+                    transaction: run.transaction,
+                  }))),
           () =>
             b,
         ))
@@ -854,6 +864,7 @@ export let graph = (opts: Options): Graph => {
     // to be told its rows are gone, whatever ended it.
     let auditing = (bundles: Bundle[], err: unknown) =>
       each(hooks('audit'), bundles, (b, [plugin, hook]) => {
+        if (!relevant(hook, b)) return b
         try {
           let out = tracing && live(tracing) && peek(g)
             ? timed(
