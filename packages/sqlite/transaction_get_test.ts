@@ -39,17 +39,24 @@ let fixture = () => {
   let g = graph({ vocab, storage: s })
   g.apply([{ entity: { eid: 'hero' }, player: { active: true } }])
   s.get(['hero'])
-  let query = d.query, calls = 0
+  let query = d.query, calls = 0, census = 0
   d.query = (stmt) => {
     calls++
+    if (
+      stmt.t == 'select' && !Array.isArray(stmt.from) &&
+      stmt.from && 't' in stmt.from && stmt.from.t == 'table' &&
+      ['player', 'position', 'details', 'summary'].includes(stmt.from.name)
+    ) census++
     return query(stmt)
   }
   return {
     d,
     s,
     calls: () => calls,
+    census: () => census,
     reset: () => {
       calls = 0
+      census = 0
     },
   }
 }
@@ -69,6 +76,9 @@ test('projected transaction getters use their authoritative writes before classi
     })
     assertEquals(known.calls(), 0)
   })
+  // Its complete after-state already establishes its component presence;
+  // settlement need not read every physical table to establish it again.
+  assertEquals(known.census(), 0)
 })
 
 let guarded = fixture()

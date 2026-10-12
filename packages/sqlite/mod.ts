@@ -726,6 +726,10 @@ export let storage = (
         for (let eid of owed) {
           let wrote = l.wrote(eid)
           if (wrote.born) known.set(eid, wrote.tables)
+          else {
+            let tables = memo.presence(eid, componentTables(driver))
+            if (tables) known.set(eid, tables)
+          }
         }
       }
       memo.writes(

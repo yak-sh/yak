@@ -73,6 +73,10 @@ type Get = (eids: string[], comps?: string[]) => Bundle[]
 
 /** A store's memory of whole entities. */
 export type Memo = {
+  /** The physical component tables an entity holds, where memory knows its
+   * whole after-state and reads every component table the file carries. Value
+   * coercion can leave a row's values unknown without losing its presence. */
+  presence: (eid: string, tables: readonly string[]) => string[] | undefined
   /** These entities through `get`: whole ones from memory where held. A
    * reader replacing dynamic components itself can defer their refresh. */
   get: (
@@ -836,7 +840,16 @@ export let memoized = (
     for (let eid of k.after.keys()) k.after.set(eid, LOST)
     seen = now
   }
+  let stored = new Set(['tombstone', ...tables(vocab)])
   return {
+    presence: (eid, tables) => {
+      sync()
+      if (c.blind || !tables.every((name) => stored.has(name))) return undefined
+      let b = prior(eid)
+      return b === LOST || b == null
+        ? undefined
+        : tables.filter((name) => b[name] != null)
+    },
     answer: (key, tables, run, query, membership, strict) => {
       if (!tables) return run()
       sync()
