@@ -13,7 +13,10 @@ test('numeric lists bill by consecutive runs without admitting fractional rows',
   console.log('NUMERIC_SELECTOR_COST', JSON.stringify(report))
   assertEquals(report.empty.rows, [])
   assertEquals(report.empty.written, 0)
-  assert(report.empty.read <= 5, `empty selector: ${report.empty.read} rows`)
+  assert(report.empty.read <= 2, `empty selector: ${report.empty.read} rows`)
+  assertEquals(report.gaps.rows, [])
+  assertEquals(report.gaps.written, 0)
+  assert(report.gaps.read <= 6, `gapped selector: ${report.gaps.read} rows`)
   assertEquals(report.occupied.rows.map((b) => (b.point as { x: number }).x), [
     1000,
     1001,

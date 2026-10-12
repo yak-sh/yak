@@ -1573,10 +1573,9 @@ let keyed = (ctx: Ctx, leaf: Hop): boolean =>
   !ctx.v.prop(leaf.comp, leaf.prop)!.computed &&
   !ctx.derived[`${leaf.comp}.${leaf.prop}`]
 
-// Every arm owns its indexed selection; unrelated alternatives share no joins.
 // An empty numeric list can otherwise pay one index seek for every member.
-// Probe its consecutive runs first, stopping at the first stored value. This
-// is only a gate: an occupied range still uses the original exact list, so
+// Probe its enclosing interval, then its runs, stopping at the first value.
+// This is only a gate: an occupied range uses the original exact list, so
 // fractional values can never turn it into an unbounded intermediate scan.
 let gatedList = (
   ctx: Ctx,
@@ -1620,16 +1619,27 @@ let gatedList = (
     ),
     limit: lit(1),
   }))
+  let arms: [Cond, Cond][] = [[gate, lit(-1)]]
+  if (runs.length > 1) {
+    let enclosing = exists(select({
+      cols: [lit(1)],
+      from: raw(src),
+      where: raw(`${c} between ${sorted[0]} and ${sorted.at(-1)}`),
+      limit: lit(1),
+    }))
+    arms.unshift([not(enclosing), lit(0)])
+  }
   return render(select({
     cols: [raw('*')],
     from: raw(src),
     where: cond(matches),
     // A WHERE gate is evaluated after IN has already sought its values.
     // LIMIT is evaluated before those seeks, and leaves outer shaping intact.
-    limit: { t: 'case', arms: [[gate, lit(-1)]], else: lit(0) },
+    limit: { t: 'case', arms, else: lit(0) },
   }))
 }
 
+// Every arm owns its indexed selection; unrelated alternatives share no joins.
 let indexedRelation = (
   ctx: Ctx,
   clauses: Clause[],

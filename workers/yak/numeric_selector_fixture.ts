@@ -41,7 +41,8 @@ export let numericSelectorCost = async (db: DurableStorage) => {
   let runs = (starts: number[]) =>
     starts.flatMap((x) => [x, x + 1, x + 2, x + 3])
   return {
-    empty: await measure(runs([10, 100, 10000, 100000])),
+    empty: await measure(runs([10000, 100000, 1000000, 10000000])),
+    gaps: await measure(runs([10, 100, 10000, 100000])),
     occupied: await measure(runs([10, 100, 1000, 10000])),
   }
 }
