@@ -1,4 +1,4 @@
-// A completed answer waits for storage without running its tool again.
+// A write waits for storage without repeating the work that produced it.
 // Only storage's explicit assurance that nothing committed permits a retry.
 
 import { backoff, sleep } from '@yaks/fp'
@@ -6,6 +6,8 @@ import { backoff, sleep } from '@yaks/fp'
 let retryable = (e: unknown): boolean =>
   !!e && typeof e == 'object' && 'retryable' in e && e.retryable === true
 
+/** Retry a write only when storage certifies that nothing committed. Report
+ * the first refusal, then wait with backoff until it can be persisted. */
 export let persist = async <T>(
   write: () => T | Promise<T>,
   report: (e: unknown) => unknown,

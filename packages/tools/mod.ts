@@ -26,6 +26,7 @@ export {
 } from './check.ts'
 export { CallError, parsed } from './args.ts'
 export { said } from './said.ts'
+export { persist } from './persist.ts'
 export {
   answerOf,
   faulted,

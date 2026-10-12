@@ -33,6 +33,7 @@ import { sealed } from '@yaks/secrets'
 import { lit } from '@yaks/sql'
 import { signer } from './local.ts'
 import { test, until } from '@yaks/testing'
+import { FakeTime } from '@std/testing/time'
 
 // The host of these tests, as its own writes are signed: this process, whose
 // row every composition here writes on the way in.
@@ -427,10 +428,39 @@ test('a command line writes as the session it names, through the same door as HT
 })
 
 test('a process writes itself in, signs with that row, and stamps its exit', async () => {
-  let host = await compose(
+  using time = new FakeTime()
+  let attempts = 0
+  let contended: Plugged = {
+    ...shop,
+    graph: {
+      plugins: (host) => {
+        let tx = host.storage.tx
+        host.storage.tx = (body, opts) => {
+          // The writer could not start: no callback ran and nothing committed.
+          if (++attempts <= 2) {
+            throw Object.assign(new Error('database is locked'), {
+              retryable: true,
+            })
+          }
+          return tx(body, opts)
+        }
+        return []
+      },
+    },
+  }
+  let pending = compose(
     { db: ':memory:', plugins: ['shop'] },
-    only({ shop }),
+    only({ shop: contended }),
   )
+  // Attach the rejection before advancing the timer, so a broken open fails
+  // this assertion rather than becoming an unhandled rejection.
+  let result = pending.then((host) => ({ host }), (error) => ({ error }))
+  await time.runMicrotasks()
+  await time.tickAsync(1000)
+  await time.tickAsync(2000)
+  let opened = await result
+  if ('error' in opened) throw opened.error
+  let host = opened.host
   try {
     assertEquals(host.me, me)
     assertEquals(writer(host.vocab)?.via, me)
@@ -442,7 +472,7 @@ test('a process writes itself in, signs with that row, and stamps its exit', asy
     assertEquals((row.created as Comp).by, me)
     assertEquals(row.exit, undefined)
   } finally {
-    host.close(7)
+    await host.close(7)
   }
   // Closed: the ending is stamped before the file is let go. A fresh host over
   // the same file would read it — this one is :memory:, so the assertion that

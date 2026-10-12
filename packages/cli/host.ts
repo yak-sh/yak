@@ -51,7 +51,7 @@ import { machineCapabilities } from './machines.ts'
  * @module
  */
 
-import type { Actor, Comp, Eid, Graph } from '@yaks/graph'
+import type { Actor, Bundle, Comp, Eid, Graph } from '@yaks/graph'
 import type { Vocab } from '@yaks/vocab'
 import {
   ended,
@@ -103,6 +103,7 @@ import { AsyncLocalStorage } from 'node:async_hooks'
 import { type Context as TraceContext, installContext } from '@yaks/trace'
 import { spool } from '@yaks/tracker/report'
 import { CallError } from '@yaks/tools/errors'
+import { persist } from '@yaks/tools'
 import { files } from '@yaks/tracker/file'
 import { type Traces, traces } from './traces.ts'
 import { traceControl } from './trace_control.ts'
@@ -475,6 +476,12 @@ let composed = async (
 
     let host: Host
     let g: Graph | undefined
+    let record = (bundles: Bundle[]) =>
+      persist(() => g!.apply(bundles), (error) =>
+        report(error, {
+          during: { process: selfEid() },
+          tags: { step: 'process write' },
+        }))
     let doing: Host['duties'] | undefined
     let stopping = new AbortController()
     let self = writer(vocab)
@@ -499,7 +506,7 @@ let composed = async (
           // A thread that failed before it wrote itself in holds nothing.
           if (!self || !g || !(await g.get([holder])).length) return
           if (!opts.readOnly) await host.runner.interrupt(why, holder)
-          await g.apply([
+          await record([
             ...await released(g, holder),
             { entity: { eid: holder }, [EXIT]: {} },
           ])
@@ -684,7 +691,7 @@ let composed = async (
     // (@yaks/effects `start`), not here.
     part?.('process')
     if (self && opts.process !== false && !opts.readOnly) {
-      await g.apply([started({ roles: [...roles] })])
+      await record([started({ roles: [...roles] })])
     }
     return {
       ...host,
@@ -741,7 +748,7 @@ let composed = async (
         }
         if (!self || opts.process === false || opts.readOnly) return shut()
         try {
-          await g!.apply([...await released(g!, selfEid()), ended(code)])
+          await record([...await released(g!, selfEid()), ended(code)])
         } catch (e) {
           await report(e, { tags: { step: 'close host' } })
         }
