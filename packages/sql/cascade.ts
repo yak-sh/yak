@@ -90,6 +90,9 @@ let reference = (v: Vocab, comp: string, prop: string): string => {
     : sqlite.table(comp)
 }
 
+let seed = (eids: string[]): string =>
+  eids.length == 1 ? eids[0] : JSON.stringify([...new Set(eids)])
+
 let seeds = (eids: string[]) =>
   render(select({
     cols: [col('id', 'entity')],
@@ -101,7 +104,7 @@ let seeds = (eids: string[]) =>
       : {
         from: call(
           'json_each',
-          [val(JSON.stringify([...new Set(eids)]))],
+          [val(seed(eids))],
           '__seeds',
         ),
         joins: [cross(table('entity', undefined, 'sqlite_autoindex_entity_1'))],
@@ -147,6 +150,31 @@ let named = (eids: string[]): Frag => {
   }
 }
 
+// The closure and reference terms depend on the vocabulary and engine's
+// allowance, never on the identities seeded into them. Keep their SQL once
+// for a single identity and for a JSON set, including the empty set. Each
+// answer owns its statement and bindings; no caller can change a kept plan.
+type Plan = Partial<Record<'doom' | 'loose', Raw[]>>
+let plans = new WeakMap<Vocab, Map<number, [Plan, Plan]>>()
+let planned = (
+  v: Vocab,
+  eids: string[],
+  terms: number,
+  kind: keyof Plan,
+  build: (v: Vocab, eids: string[], terms: number) => Raw[],
+): Raw[] => {
+  let cache = plans.get(v)
+  if (!cache) plans.set(v, cache = new Map())
+  let forms = cache.get(terms)
+  if (!forms) cache.set(terms, forms = [{}, {}])
+  let one = eids.length == 1
+  let plan = forms[one ? 0 : 1]
+  let held = plan[kind] ??= build(v, one ? [''] : [], terms)
+  if (!held.length) return []
+  let value = seed(eids)
+  return held.map((s) => raw(s.sql, [value, ...s.params.slice(1)], s.table))
+}
+
 /**
  * Everything deleted along with these entities, the named ones included: one row
  * per deleted entity, with the eid, the entity number, and the rung it was
@@ -161,7 +189,9 @@ export let doomSql = (
   v: Vocab,
   eids: string[],
   terms: number = ARMS,
-): Raw[] =>
+): Raw[] => planned(v, eids, terms, 'doom', doom)
+
+let doom = (v: Vocab, eids: string[], terms: number): Raw[] =>
   cut(v.deaths('cascade'), terms).map((group) => {
     let head = closure(v, eids, group, sqlite)
     return raw(
@@ -195,7 +225,9 @@ export let looseSql = (
   v: Vocab,
   eids: string[],
   terms: number = ARMS,
-): Raw[] => {
+): Raw[] => planned(v, eids, terms, 'loose', loose)
+
+let loose = (v: Vocab, eids: string[], terms: number): Raw[] => {
   let d = sqlite
   let soft = [...v.deaths('release'), ...v.deaths('detach')]
   if (!soft.length) return []
