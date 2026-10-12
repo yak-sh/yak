@@ -20,7 +20,7 @@
 // query excludes it.
 
 import type { Prop, Scalar, Vocab } from '@yaks/vocab'
-import { timeEdges } from '@yaks/query/core'
+import { timeEdges, type Value } from '@yaks/query/core'
 import { type Frag, spelled } from './ast.ts'
 import { nest } from './render.ts'
 
@@ -78,13 +78,13 @@ export type Dialect = {
   // then declines the whole compilation — exact or nothing).
   eq: (
     colExpr: string,
-    value: string,
+    value: Value,
     tag: Tag,
     textAffinity?: boolean,
   ) => Frag | null
   ne: (
     colExpr: string,
-    value: string,
+    value: Value,
     tag: Tag,
     textAffinity?: boolean,
   ) => Frag | null
@@ -99,7 +99,7 @@ export type Dialect = {
   time: (
     colExpr: string,
     op: string,
-    value: string,
+    value: Value,
     now: number,
     tag?: 'time' | 'number',
   ) => Frag | null
@@ -258,45 +258,54 @@ let cmp = (
     : { sql: `${textOf(c, textAffinity)} ${op} ?`, params: [value] }
 }
 
-// eq: '' means absent or empty; 'x..y' / 'x...y' is a range; 'a,b' is any-of;
-// anything else is an equality test. On a numeric column the operand must
+// Equality follows the operand's AST: a list is any-of, a range compares its
+// bounds, and a scalar is literal. On a numeric column the operand must
 // survive a round trip through JavaScript number formatting, or the only
 // correct compilation is a constant false.
 let eq = (
   c: string,
-  value: string,
+  value: Value,
   tag: Tag,
   textAffinity = false,
 ): Frag | null => {
-  if (value == '') {
+  if ((value.kind == 'scalar' || value.kind == 'time') && value.raw == '') {
     return {
       sql: `(${c} is null or ${textOf(c, textAffinity)} = '')`,
       params: [],
     }
   }
-  let r = value.match(/^(.*?)\.\.(\.?)(.*)$/s)
-  if (r) {
-    let [, lo, excl, hi] = r
-    let bound = cmp(c, '>=', lo, tag, textAffinity)
-    let upper = cmp(c, excl ? '<' : '<=', hi, tag, textAffinity)
+  if (value.kind == 'range') {
+    if (!('raw' in value.lo) || !('raw' in value.hi)) return null
+    let bound = cmp(c, '>=', value.lo.raw, tag, textAffinity)
+    let upper = cmp(
+      c,
+      value.exclusiveEnd ? '<' : '<=',
+      value.hi.raw,
+      tag,
+      textAffinity,
+    )
     if (!bound || !upper) return null
     return {
       sql: `(${c} is not null and ${bound.sql} and ${upper.sql})`,
       params: [...bound.params, ...upper.params],
     }
   }
-  if (value.includes(',')) {
-    let parts = value.split(',').map((p) => eq(c, p, tag, textAffinity))
+  if (value.kind == 'list') {
+    let parts = value.items.map((p) => eq(c, p, tag, textAffinity))
     let frags = parts.filter((p) => p != null)
-    return frags.length == parts.length ? anyOf(frags) : null
+    return !parts.length
+      ? { sql: '0', params: [] }
+      : frags.length == parts.length
+      ? anyOf(frags)
+      : null
   }
   if (NUMERIC_TAGS.includes(tag)) {
-    let n = held(value, tag)
+    let n = held(value.raw, tag)
     return numeric(n) && String(Number(n)) === n
       ? { sql: `${c} = ?`, params: [Number(n)] }
       : { sql: '0', params: [] }
   }
-  return { sql: `${textOf(c, textAffinity)} = ?`, params: [value] }
+  return { sql: `${textOf(c, textAffinity)} = ?`, params: [value.raw] }
 }
 
 // != is `not eq`, and eq(null, …) is false — but SQL's `not (null = ?)` is
@@ -304,7 +313,7 @@ let eq = (
 // back.
 let ne = (
   c: string,
-  value: string,
+  value: Value,
   tag: Tag,
   textAffinity = false,
 ): Frag | null => {

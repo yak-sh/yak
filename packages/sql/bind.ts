@@ -113,7 +113,7 @@ import {
   ladders,
 } from './derived.ts'
 import type { Extension, Site } from './extend.ts'
-import { type Identity, identity } from './ident.ts'
+import { type Identity, identity, literals } from './ident.ts'
 import { walk as walked } from './walk.ts'
 import { Unsupported, whole } from './unsupported.ts'
 import { backedDialect, backingOf, computed, hasComputed } from './spine.ts'
@@ -258,11 +258,8 @@ let extended = (ctx: Ctx, c: Clause): Cond | null => {
   return null
 }
 
-// A structured @yaks/query value flattened back into the single string the
-// dialect's lowering re-parses — a list into `a,b`, a range into `lo..hi`
-// (inclusive) or `lo...hi` (exclusive end). The dialect's `eq` splits it again
-// exactly as the JavaScript matcher does, so the round trip through the string
-// form loses nothing.
+// Text for diagnostics and value-less route decisions. Predicate lowering keeps
+// the AST: flattening a literal comma or range marker would change its meaning.
 let flat = (val: Value | null): string => {
   if (val == null) return ''
   if (val.kind == 'scalar' || val.kind == 'time') return val.raw
@@ -412,21 +409,22 @@ let lowerScalar = (
   ctx: Ctx,
   c: string,
   op: string,
-  value: string,
+  value: Value | null,
   tag: Tag,
   textAffinity = false,
 ): Frag | null => {
   let d = ctx.d
   if (op == EXISTS) return { sql: `${c} is not null`, params: [] }
+  value ??= { kind: 'scalar', raw: '' }
   if ((tag == 'time' || tag == 'number') && op != '~') {
     let t = d.time(c, op, value, ctx.now, tag)
     if (t) return t
   }
   if (op == '') return d.eq(c, value, tag, textAffinity)
   if (op == '!') return d.ne(c, value, tag, textAffinity)
-  if (op == '~') return d.contains(c, value)
+  if (op == '~') return d.contains(c, flat(value))
   if (['<', '<=', '>', '>='].includes(op)) {
-    let inner = d.cmp(c, op, value, tag, textAffinity)
+    let inner = d.cmp(c, op, flat(value), tag, textAffinity)
     return inner &&
       { sql: `(${c} is not null and ${inner.sql})`, params: inner.params }
   }
@@ -547,7 +545,7 @@ let single = (ctx: Ctx, hop: Hop, p: Pred): Cond => {
   if (hop.comp != 'entity') ctx.tables.add(hop.comp)
   // On the entity table, `=` names entities instead of comparing a column.
   if (hop.comp == 'entity' && op == '') {
-    let set = identity(hop.prop, flat(p.value), ctx.exactIds)
+    let set = identity(hop.prop, p.value, ctx.exactIds)
     if (set) return cond(inSet(ctx, set))
   }
   let read = readProp(ctx, hop.comp, hop.prop, ctx.d.ownerKey(hop.comp))
@@ -557,24 +555,21 @@ let single = (ctx: Ctx, hop: Hop, p: Pred): Cond => {
       `.${hop.comp}.${hop.prop} has no registered expression`,
     )
   }
-  let value = flat(p.value)
+  let values = literals(p.value)
   let def = ctx.v.prop(hop.comp, hop.prop)
-  let refs = op == '' && value && !value.includes('..') &&
-    value.split(',').every(Boolean) && def?.category == 'ref' &&
+  let refs = op == '' && values?.length && def?.category == 'ref' &&
     !def.computed && !ctx.derived[`${hop.comp}.${hop.prop}`] && ctx.d.refCol
   if (!refs && op != EXISTS) {
     opaque(read.tag, 'a filter on it', `${hop.comp}.${hop.prop}`)
   }
-  let frag = refs
-    ? refEq(ctx, hop.comp, hop.prop, value.split(','))
-    : lowerScalar(
-      ctx,
-      read.expr,
-      op,
-      flat(p.value),
-      read.tag,
-      read.textAffinity,
-    )
+  let frag = refs ? refEq(ctx, hop.comp, hop.prop, values!) : lowerScalar(
+    ctx,
+    read.expr,
+    op,
+    p.value,
+    read.tag,
+    read.textAffinity,
+  )
   if (!frag) {
     throw new Unsupported('this predicate', `.${hop.comp}.${hop.prop} ${p.op}`)
   }
@@ -718,7 +713,7 @@ let path = (ctx: Ctx, hops: Hop[], p: Pred): Cond => {
   if (op != EXISTS) {
     opaque(read.tag, 'a filter on it', `${leaf.comp}.${leaf.prop}`)
   }
-  let frag = lowerScalar(ctx, read.expr, op, flat(p.value), read.tag)
+  let frag = lowerScalar(ctx, read.expr, op, p.value, read.tag)
   if (!frag) {
     throw new Unsupported(
       'this path predicate',
@@ -1199,7 +1194,7 @@ let wants = (v: Vocab, backed: Backings, c: Clause): string[] => {
   if (!hop || op == 'want') return []
   let value = flat(c.value)
   if (hop.comp == 'entity' && op == '') {
-    let set = identity(hop.prop, value)
+    let set = identity(hop.prop, c.value)
     let eids = set && !set.nums.length ? set.eids : []
     return Object.keys(backed).filter((k) =>
       eids.length &&
@@ -1593,7 +1588,7 @@ let indexedRelation = (
       !c.not && !c.where && c.path.join('.') == 'entity.eid' && opOf(c) == ''
     )
     if (named?.kind == 'pred') {
-      let set = identity('eid', flat(named.value), ctx.exactIds)
+      let set = identity('eid', named.value, ctx.exactIds)
       if (set && !set.nums.length && o.joins.length) {
         let s = rel(from, o)
         return {

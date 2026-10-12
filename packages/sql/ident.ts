@@ -14,6 +14,17 @@
 // changes.
 
 import { parse } from '@yaks/id'
+import type { Value } from '@yaks/query/core'
+
+/** Literal operands for keyed equality, or undefined for ranges and absence. */
+export let literals = (value: Value | null): string[] | undefined => {
+  if (!value || value.kind == 'range') return undefined
+  if (value.kind != 'list') return value.raw ? [value.raw] : undefined
+  let items = value.items.map(literals)
+  return items.every((item): item is string[] => item != null)
+    ? items.flat()
+    : undefined
+}
 
 /** An operand list, split into the eids and the entity numbers it names. */
 export type Identity = { eids: string[]; nums: number[] }
@@ -25,12 +36,15 @@ export type Identity = { eids: string[]; nums: number[] }
  */
 export let identity = (
   prop: string,
-  value: string,
+  value: string | Value | null,
   exact = false,
 ): Identity | undefined => {
-  if (!value || value.includes('..')) return undefined
+  let operands = typeof value == 'string'
+    ? !value || value.includes('..') ? undefined : value.split(',')
+    : literals(value)
+  if (!operands) return undefined
   let out: Identity = { eids: [], nums: [] }
-  for (let operand of value.split(',')) {
+  for (let operand of operands) {
     let id = exact && prop == 'eid' ? undefined : parse(operand)
     if (id) out.nums.push(id.num)
     else if (prop == 'num') return undefined

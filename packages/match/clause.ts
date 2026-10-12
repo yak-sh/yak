@@ -19,7 +19,7 @@ import {
   type Walk,
   WALK_LIMIT,
 } from '@yaks/query/core'
-import { identity, Unsupported } from '@yaks/sql/core'
+import { identity, literals, Unsupported } from '@yaks/sql/core'
 import type { Assoc, Hop, Vocab } from '@yaks/vocab'
 import {
   type Bundle,
@@ -86,9 +86,8 @@ let arm = (test: Test, needs: Need[] = [], alone = true): Arm => ({
 })
 let wearing = (comp: string): Need[] => comp == 'entity' ? [] : [{ comp }]
 
-// A structured value flattened back to the single string ./value.ts re-parses —
-// a list to `a,b`, a range to `lo..hi` (inclusive) or `lo...hi` (exclusive end).
-// ./value.ts splits it again, so the round trip is faithful.
+// Display text for route decisions. Scalar tests and keyed candidates retain
+// the structured operand, so punctuation in a literal cannot become syntax.
 let flat = (val: Value | null): string => {
   if (val == null) return ''
   if (val.kind == 'scalar' || val.kind == 'time') return val.raw
@@ -118,10 +117,10 @@ let opOf = (p: Pred): string =>
 // ./value.ts reads a range before a list and an empty item as absence, and
 // neither files under a key.
 let KEYED = ['text', 'enum', 'eid']
-let keys = (op: string, value: string, tag: string): string[] | null => {
-  if (op != '' || !KEYED.includes(tag) || /\.\./.test(value)) return null
-  let out = value.split(',')
-  return out.every(Boolean) ? [...new Set(out)] : null
+let keys = (op: string, value: Value | null, tag: string): string[] | null => {
+  if (op != '' || !KEYED.includes(tag)) return null
+  let out = literals(value)
+  return out ? [...new Set(out)] : null
 }
 
 // The bounds a number property's value lies within when a comparison, a range
@@ -131,21 +130,24 @@ let keys = (op: string, value: string, tag: string): string[] | null => {
 let BANDED = ['number', 'priority']
 let band = (
   op: string,
-  value: string,
+  value: Value | null,
   tag: string,
 ): [number, number] | null => {
   if (!BANDED.includes(tag)) return null
+  let raw = flat(value)
   let n = (s: string) => numeric(s) ? Number(s) : NaN
-  let r = op == '' ? value.match(/^(.*?)\.\.\.?(.*)$/s) : null
+  let r = op == '' && value?.kind == 'range'
+    ? [flat(value.lo), flat(value.hi)]
+    : null
   let [lo, hi] = op == '<' || op == '<='
-    ? [-Infinity, n(value)]
+    ? [-Infinity, n(raw)]
     : op == '>' || op == '>='
-    ? [n(value), Infinity]
+    ? [n(raw), Infinity]
     : op != ''
     ? [NaN, NaN]
     : r
-    ? [n(r[1]), n(r[2])]
-    : [n(value), n(value)]
+    ? [n(r[0]), n(r[1])]
+    : [n(raw), n(raw)]
   return Number.isNaN(lo) || Number.isNaN(hi) ? null : [lo, hi]
 }
 
@@ -177,10 +179,14 @@ let scalar = (
     )
   }
   let op = opOf(p)
-  let value = flat(p.value)
   // The moment is asked for only by a time phrase: reading it ties the compiled
   // form to that moment (./match.ts `once`).
-  let hit = check(op, value, read.tag, () => ctx.now)
+  let hit = check(
+    op,
+    p.value ?? { kind: 'scalar', raw: '' },
+    read.tag,
+    () => ctx.now,
+  )
   if (!hit) {
     throw new Unsupported(
       'this predicate',
@@ -191,9 +197,9 @@ let scalar = (
   let needs: Need[] = []
   if (read.bound && !hit(null)) {
     needs.push({ comp: hop.comp })
-    let ks = read.stored && keys(op, value, read.tag)
+    let ks = read.stored && keys(op, p.value, read.tag)
     if (ks) needs.push({ comp: hop.comp, prop: hop.prop, keys: ks })
-    let range = read.stored && band(op, value, read.tag)
+    let range = read.stored && band(op, p.value, read.tag)
     if (range) needs.push({ comp: hop.comp, prop: hop.prop, range })
   }
   return { hit: (b, among) => hit(b ? read.read(b, among) : null), needs }
@@ -217,7 +223,7 @@ let single = (ctx: Ctx, hop: Hop, p: Pred): Arm => {
   // property, so it is a set lookup — the same operand list @yaks/sql compiles
   // to `in (?, …)`.
   if (hop.comp == 'entity' && op == '') {
-    let set = identity(hop.prop, flat(p.value), ctx.exactIds)
+    let set = identity(hop.prop, p.value, ctx.exactIds)
     if (set) {
       let eids = new Set(set.eids)
       let nums = new Set(set.nums)

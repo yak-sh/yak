@@ -237,6 +237,18 @@ let item = (s: string, now: number): Edge[] | null => {
   return lo && hi && [...edges('>=', lo), ...edges(r[2] ? '<' : '<=', hi)]
 }
 
+let typedItem = (v: Value, now: number): Edge[] | null => {
+  if (v.kind == 'list') return null
+  if (v.kind == 'range') {
+    if (!('raw' in v.lo) || !('raw' in v.hi)) return null
+    let lo = timeSpan(v.lo.raw, now), hi = timeSpan(v.hi.raw, now)
+    return lo && hi &&
+      [...edges('>=', lo), ...edges(v.exclusiveEnd ? '<' : '<=', hi)]
+  }
+  let sp = timeSpan(v.raw, now)
+  return sp && edges('=', sp)
+}
+
 /**
  * What `op` against a time operand asks of a stamp, resolved against `now`:
  * any of the returned arms, each a list of edges that must all hold. Equality
@@ -255,15 +267,24 @@ let item = (s: string, now: number): Edge[] | null => {
  */
 export let timeEdges = (
   op: string,
-  value: string,
+  value: string | Value,
   now: number = Date.now(),
 ): Edge[][] | null => {
   if (!OPS.includes(op)) return null
   if (op != '=') {
-    let sp = timeSpan(value, now)
+    if (typeof value != 'string' && !('raw' in value)) return null
+    let sp = timeSpan(typeof value == 'string' ? value : value.raw, now)
     return sp && [edges(op, sp)]
   }
-  let arms = value.split(',').map((s) => item(s, now))
+  if (typeof value != 'string' && value.kind == 'list') {
+    let arms = value.items.map((v) => timeEdges('=', v, now))
+    return arms.length && arms.every((a): a is Edge[][] => a != null)
+      ? arms.flat()
+      : null
+  }
+  let arms = typeof value == 'string'
+    ? value.split(',').map((s) => item(s, now))
+    : [typedItem(value, now)]
   return arms.every((a): a is Edge[] => a != null) ? arms : null
 }
 
@@ -287,12 +308,6 @@ export let drifts = (
   scalar: (p: Pred) => string | undefined,
   now: number = Date.now(),
 ): boolean => {
-  let text = (v: Value): string =>
-    v.kind == 'list'
-      ? v.items.map(text).join(',')
-      : v.kind == 'range'
-      ? text(v.lo) + (v.exclusiveEnd ? '...' : '..') + text(v.hi)
-      : v.raw
   let visit = (c: Clause): boolean => {
     if (c.kind == 'and' || c.kind == 'or') return c.clauses.some(visit)
     if (c.kind != 'pred') return false
@@ -305,7 +320,7 @@ export let drifts = (
       return true
     }
     if (type != 'time' && type != 'number') return false
-    let op = c.op == '!=' ? '=' : c.op, value = text(c.value)
+    let op = c.op == '!=' ? '=' : c.op, value = c.value
     return JSON.stringify(timeEdges(op, value, now)) !=
       JSON.stringify(timeEdges(op, value, now + 366 * 86_400_000))
   }

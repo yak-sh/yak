@@ -6,13 +6,69 @@ import { test } from '@yaks/testing'
 import { assert, assertEquals, assertFalse, assertThrows } from '@std/assert'
 import { Unsupported } from '@yaks/sql'
 import { Unknown } from '@yaks/vocab'
-import { absent, and, eq, parse, pred, present } from '@yaks/query'
+import {
+  absent,
+  and,
+  eq,
+  list,
+  ne,
+  parse,
+  pred,
+  present,
+  range,
+} from '@yaks/query'
 import { filter, matcher } from './match.ts'
 import { index } from './read.ts'
 import { bundles, NOW, shop } from './testing.ts'
 
 let sel = (q: string): string[] =>
   matcher(q, shop, { now: NOW })(bundles).map((b) => b.entity.eid)
+
+test('structured equality keeps literal punctuation distinct from lists and ranges', () => {
+  let rows = ['a,b', 'a..b', 'a', 'b'].map((title, i) => ({
+    entity: { eid: `literal-${i}` },
+    doc: { title },
+  }))
+  let select = (q: ReturnType<typeof and>) =>
+    matcher(q, shop)(rows).map((b) => b.entity.eid)
+  for (
+    let [value, expected] of [
+      ['a,b', ['literal-0']],
+      ['a..b', ['literal-1']],
+      [list('a,b', 'a'), ['literal-0', 'literal-2']],
+      [range('a', 'b'), ['literal-0', 'literal-1', 'literal-2', 'literal-3']],
+    ] as const
+  ) assertEquals(select(and(eq('doc.title', value))), [...expected])
+  assertEquals(select(and(ne('doc.title', 'a,b'))), [
+    'literal-1',
+    'literal-2',
+    'literal-3',
+  ])
+  assertEquals(matcher('.doc.title=a,b', shop)(rows).map((b) => b.entity.eid), [
+    'literal-2',
+    'literal-3',
+  ])
+})
+
+test('identity and reference filters retain literal operands', () => {
+  let rows = ['part,one', 'part..two', 'part'].flatMap((eid, i) => [
+    { entity: { eid }, doc: { title: eid } },
+    { entity: { eid: `ref-${i}` }, book: { author: eid } },
+  ])
+  let select = (field: string, value: Parameters<typeof eq>[1]) =>
+    matcher(and(eq(field, value)), shop)(rows).map((b) => b.entity.eid).sort()
+  for (
+    let [value, ids, refs] of [
+      ['part,one', ['part,one'], ['ref-0']],
+      ['part..two', ['part..two'], ['ref-1']],
+      [list('part,one', 'part'), ['part', 'part,one'], ['ref-0', 'ref-2']],
+    ] as const
+  ) {
+    assertEquals(select('entity.eid', value), [...ids])
+    assertEquals(select('book.author', value), [...refs])
+  }
+  assertEquals(select('book.author.doc.title', 'part,one'), ['ref-0'])
+})
 
 test('a scalar filter selects, and an absent property is a value', () => {
   assertEquals(sel('.book.price>=12'), ['b1', 'b2'])

@@ -4,13 +4,39 @@
 
 import { test } from '@yaks/testing'
 import { assertEquals } from '@std/assert'
-import { isTimeLiteral, timeInstant, timeSpan } from './mod.ts'
+import {
+  isTimeLiteral,
+  list,
+  range,
+  scalar,
+  timeEdges,
+  timeInstant,
+  timeSpan,
+} from './mod.ts'
 
 let at = (...a: number[]) =>
   new Date(a[0], a[1], a[2], a[3] ?? 0, a[4] ?? 0).getTime()
 
 // A fixed clock so ranges are deterministic: 2026-09-02T12:00 local.
 let NOW = +new Date(2026, 8, 2, 12, 0, 0)
+
+test('structured time operands preserve literal punctuation', () => {
+  assertEquals(timeEdges('=', list(), NOW), null)
+  assertEquals(timeEdges('=', scalar('today,yesterday'), NOW), null)
+  assertEquals(timeEdges('=', scalar('yesterday..today'), NOW), null)
+  assertEquals(
+    timeEdges('=', list('today', 'yesterday'), NOW),
+    timeEdges('=', 'today,yesterday', NOW),
+  )
+  assertEquals(
+    timeEdges('=', list(list('today'), 'yesterday'), NOW),
+    timeEdges('=', 'today,yesterday', NOW),
+  )
+  assertEquals(
+    timeEdges('=', range('yesterday', 'today'), NOW),
+    timeEdges('=', 'yesterday..today', NOW),
+  )
+})
 
 test('today names a midnight-to-midnight range', () => {
   let s = timeSpan('today', NOW)!

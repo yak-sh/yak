@@ -21,7 +21,7 @@
 // a comparison against an operand the property's type cannot hold. The caller
 // turns that into an `Unsupported` refusal rather than a wrong answer.
 
-import { timeEdges } from '@yaks/query/core'
+import { timeEdges, type Value } from '@yaks/query/core'
 import { held, type Tag } from '@yaks/sql/core'
 
 /**
@@ -83,18 +83,39 @@ export let cmp = (op: string, value: string, tag: Tag): Check | null => {
  * for any of several. Returns `null` when a bound or a list member has a type
  * the property cannot hold.
  */
-export let eq = (value: string, tag: Tag): Check | null => {
-  if (value == '') return (v) => v == null || String(v) == ''
-  let r = value.match(/^(.*?)\.\.(\.?)(.*)$/s)
-  if (r) {
-    let [, lo, excl, hi] = r
-    let low = cmp('>=', lo, tag)
-    let high = cmp(excl ? '<' : '<=', hi, tag)
+export let eq = (value: string | Value, tag: Tag): Check | null => {
+  // String callers supply operand grammar; an AST already says which parts
+  // are literal, and must never be parsed a second time.
+  if (typeof value == 'string') {
+    let r = value.match(/^(.*?)\.\.(\.?)(.*)$/s)
+    if (r) {
+      return eq({
+        kind: 'range',
+        lo: { kind: 'scalar', raw: r[1] },
+        hi: { kind: 'scalar', raw: r[3] },
+        exclusiveEnd: !!r[2],
+      }, tag)
+    }
+    if (value.includes(',')) {
+      let parts = value.split(',').map((p) => eq(p, tag))
+      return parts.every((p): p is Check => p != null)
+        ? (v) => parts.some((p) => p(v))
+        : null
+    }
+    value = { kind: 'scalar', raw: value }
+  }
+  if ((value.kind == 'scalar' || value.kind == 'time') && value.raw == '') {
+    return (v) => v == null || String(v) == ''
+  }
+  if (value.kind == 'range') {
+    if (!('raw' in value.lo) || !('raw' in value.hi)) return null
+    let low = cmp('>=', value.lo.raw, tag)
+    let high = cmp(value.exclusiveEnd ? '<' : '<=', value.hi.raw, tag)
     if (!low || !high) return null
     return (v) => v != null && low(v) && high(v)
   }
-  if (value.includes(',')) {
-    let parts = value.split(',').map((p) => eq(p, tag))
+  if (value.kind == 'list') {
+    let parts = value.items.map((p) => eq(p, tag))
     if (parts.some((p) => !p)) return null
     return (v) => parts.some((p) => p!(v))
   }
@@ -102,19 +123,20 @@ export let eq = (value: string, tag: Tag): Check | null => {
     // An operand that does not survive a round trip through number formatting
     // ('12.0' formats back as '12') can equal no stored number, so the exact
     // answer is a constant false.
-    let n = held(value, tag)
+    let n = held(value.raw, tag)
     return numeric(n) && String(Number(n)) === n
       ? (v) => v != null && Number(v) == Number(n)
       : () => false
   }
-  return (v) => v != null && String(v) == value
+  let raw = value.raw
+  return (v) => v != null && String(v) == raw
 }
 
 /**
  * Not-equals: everything equality does not select, including the rows whose
  * property (or whole component) is absent.
  */
-export let ne = (value: string, tag: Tag): Check | null => {
+export let ne = (value: string | Value, tag: Tag): Check | null => {
   let hit = eq(value, tag)
   return hit && ((v) => !hit(v))
 }
@@ -142,7 +164,7 @@ let iso = (ms: number): string => new Date(ms).toISOString()
  */
 export let time = (
   op: string,
-  value: string,
+  value: string | Value,
   now: number,
   tag: 'time' | 'number' = 'time',
 ): Check | null => {
@@ -163,8 +185,17 @@ export let time = (
 
 // Whether an operand is made of time phrases: what one names moves with the
 // clock, but whether it is one does not.
-let phrased = (op: string, value: string): boolean =>
+let phrased = (op: string, value: string | Value): boolean =>
   timeEdges(op == '' || op == '!' ? '=' : op, value, 0) != null
+
+let textOf = (value: string | Value): string =>
+  typeof value == 'string'
+    ? value
+    : value.kind == 'list'
+    ? value.items.map(textOf).join(',')
+    : value.kind == 'range'
+    ? textOf(value.lo) + (value.exclusiveEnd ? '...' : '..') + textOf(value.hi)
+    : value.raw
 
 /**
  * The whole scalar path in one call: an operator, its operand and the
@@ -173,7 +204,7 @@ let phrased = (op: string, value: string): boolean =>
  */
 export let check = (
   op: string,
-  value: string,
+  value: string | Value,
   tag: Tag,
   now: number | (() => number),
 ): Check | null => {
@@ -185,9 +216,10 @@ export let check = (
   }
   if (op == '') return eq(value, tag)
   if (op == '!') return ne(value, tag)
-  if (op == '~') return contains(value)
+  let raw = textOf(value)
+  if (op == '~') return contains(raw)
   if (['<', '<=', '>', '>='].includes(op)) {
-    let inner = cmp(op, value, tag)
+    let inner = cmp(op, raw, tag)
     return inner && ((v) => v != null && inner(v))
   }
   return null

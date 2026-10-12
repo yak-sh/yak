@@ -5,7 +5,7 @@
 import { test } from '@yaks/testing'
 import { assert, assertEquals, assertThrows } from '@std/assert'
 import { gather } from '@yaks/graph'
-import { and, eq, or } from '@yaks/query'
+import { and, eq, list, ne, or, range } from '@yaks/query'
 import { ARMS, insert, lit, Unsupported } from '@yaks/sql'
 import { loadVocab } from '@yaks/vocab'
 import type { Bundle, Comp } from './bundle.ts'
@@ -16,6 +16,88 @@ import { reader } from './reader.ts'
 
 let c = (b: Bundle, name: string): Comp => b[name] as Comp
 let eids = (bs: Bundle[]): string[] => bs.map((b) => b.entity.eid).sort()
+
+let literalStore = (() => {
+  let s = store()
+  seed(
+    s,
+    ['a,b', 'a..b', 'a', 'b'].map((title, i) => ({
+      entity: { eid: `literal-${i}` },
+      doc: { title },
+    })),
+  )
+  return s
+})()
+
+test('scalar equality keeps commas and range markers literal', () => {
+  let s = literalStore
+  for (
+    let [value, expected] of [
+      ['a,b', ['literal-0']],
+      ['a..b', ['literal-1']],
+    ] as const
+  ) assertEquals(eids(s.read(and(eq('doc.title', value)))), [...expected])
+})
+
+test('explicit lists and ranges retain their comparisons', () => {
+  let s = literalStore
+  assertEquals(eids(s.read(and(eq('doc.title', list('a,b', 'a'))))), [
+    'literal-0',
+    'literal-2',
+  ])
+  assertEquals(eids(s.read(and(eq('doc.title', range('a', 'b'))))), [
+    'literal-0',
+    'literal-1',
+    'literal-2',
+    'literal-3',
+  ])
+})
+
+test('literal inequality and parsed any-of select different operands', () => {
+  let s = literalStore
+  assertEquals(eids(s.read(and(ne('doc.title', 'a,b')))), [
+    'literal-1',
+    'literal-2',
+    'literal-3',
+  ])
+  assertEquals(eids(s.read('.doc.title=a,b')), ['literal-2', 'literal-3'])
+})
+
+let literalRefs = (() => {
+  let s = store()
+  seed(
+    s,
+    ['part,one', 'part..two', 'part'].flatMap((eid, i) => [
+      { entity: { eid }, doc: { title: eid } },
+      { entity: { eid: `ref-${i}` }, product: { maker: eid } },
+    ]),
+  )
+  return s
+})()
+
+let literalOperands = [
+  ['part,one', ['part,one'], ['ref-0']],
+  ['part..two', ['part..two'], ['ref-1']],
+  [list('part,one', 'part'), ['part', 'part,one'], ['ref-0', 'ref-2']],
+] as const
+
+test('identity filters retain literal operands', () => {
+  for (let [value, ids] of literalOperands) {
+    assertEquals(eids(literalRefs.read(and(eq('entity.eid', value)))), [...ids])
+  }
+})
+
+test('reference and path filters retain literal operands', () => {
+  for (let [value, _ids, refs] of literalOperands) {
+    assertEquals(eids(literalRefs.read(and(eq('product.maker', value)))), [
+      ...refs,
+    ])
+  }
+  assertEquals(
+    eids(literalRefs.read(and(eq('product.maker.doc.title', 'part,one')))),
+    ['ref-0'],
+  )
+})
 
 test('a scalar filter selects the matching entities', () => {
   let s = store()
