@@ -82,7 +82,7 @@ type Worded = {
     {
       words?: Words
       own?: WeakMap<VocabDoc[], Words>
-      recent?: { source: string; words: Words }
+      sources?: { entries: Map<string, Words>; chars: number }
     }
   >
 }
@@ -111,14 +111,27 @@ export let wordsOf = (
   let held = choice.own ??= new WeakMap()
   let words = held.get(own)
   if (!words) {
-    // Graph-owned documents are JSON data, often decoded afresh by a host.
-    // Keep one equivalent compilation beside the identity cache, so repeated
-    // loads share the vocabulary without retaining every document ever seen.
+    // Hosts often decode the same small set of graph-owned documents afresh.
+    // Retain equivalent compilations across interleaved graphs, bounded by
+    // both their count and the source text they keep.
     let source = JSON.stringify(own)
-    words = choice.recent?.source == source
-      ? choice.recent.words
-      : spoken(vocabs, own, opts)
-    choice.recent = { source, words }
+    let sources = choice.sources ??= { entries: new Map(), chars: 0 }
+    words = sources.entries.get(source)
+    if (words) {
+      sources.entries.delete(source)
+      sources.entries.set(source, words)
+    } else {
+      words = spoken(vocabs, own, opts)
+      if (source.length <= 256 * 1024) {
+        sources.entries.set(source, words)
+        sources.chars += source.length
+        while (sources.entries.size > 16 || sources.chars > 256 * 1024) {
+          let first = sources.entries.keys().next().value!
+          sources.entries.delete(first)
+          sources.chars -= first.length
+        }
+      }
+    }
     held.set(own, words)
   }
   return words
