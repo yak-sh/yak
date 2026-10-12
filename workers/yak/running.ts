@@ -1,13 +1,14 @@
 // Which deploy of this Worker an isolate runs, and whether a caller's is newer
-// (T-123372).
+// (T-123372, T-123489).
 //
 // Cloudflare leaves a Durable Object on the code it started with for minutes
 // after a deploy, so a door the deploy added answers "no route" to the new
 // code calling it until the runtime gets round to restarting the object. Every
-// request to a store therefore carries the version its caller runs (door.ts
-// `doorOf`), and a store that a newer caller reaches restarts itself on the
-// spot (graph.ts `#behind`); the caller's retry of an evicted request
-// (door.ts `evicted`) then meets the new code.
+// request to an object therefore carries the version its caller runs (door.ts
+// `doorOf` for a store, `fetchOf` for the Wire and the Builder), and an object
+// that a newer caller reaches restarts itself on the spot (`behind`); the
+// caller's retry of an evicted request (door.ts `evicted`) then meets the new
+// code.
 //
 // The version is the runtime's own (`CF_VERSION_METADATA`): a fresh id and
 // upload time on every deploy, the same for the Worker and every object it
@@ -87,3 +88,63 @@ export let caller = (headers: Headers): Version | null =>
 export let newer = (theirs: Version | null, mine: Version | null): boolean =>
   !!theirs && !!mine && theirs.id != mine.id &&
   Date.parse(theirs.at) > Date.parse(mine.at)
+
+/** The slice of an object's state a restart needs. Each object declares its
+ * own state; a stand-in that cannot restart leaves `abort` out. */
+export type Restartable = {
+  abort?(reason?: string): void
+  storage: {
+    get?<T>(key: string): Promise<T | undefined>
+    put?(key: string, value: unknown): Promise<void>
+    // Whatever was written, made durable before the restart drops it.
+    sync?(): Promise<void>
+  }
+}
+
+/** The key an object that restarted for a newer deploy remembers it under. */
+export let RESTARTED = 'restarted for'
+
+// The words the restart fails the request in flight with: the runtime's own,
+// so every caller's retry already knows them (door.ts `RESETS`).
+let BEHIND = 'Durable Object reset because a newer deploy reached it:'
+
+/**
+ * Restart this object, before it does anything for the request, when its
+ * caller runs a later deploy than it does. Once per version: an object the
+ * runtime starts again on older code is where the runtime means it to be,
+ * and it serves.
+ *
+ * ```ts
+ * import { assertEquals } from '@std/assert'
+ * let kept = new Map<string, unknown>(), restarts: string[] = []
+ * let ctx = {
+ *   abort: (why?: string) => void restarts.push(why ?? ''),
+ *   storage: {
+ *     get: <T>(k: string) => Promise.resolve(kept.get(k) as T | undefined),
+ *     put: (k: string, v: unknown) => Promise.resolve(void kept.set(k, v)),
+ *   },
+ * }
+ * let from = (id: string, at: string) =>
+ *   new Headers({ [WORKER_VERSION]: id, [WORKER_VERSION_AT]: at })
+ * let mine = { id: 'a', timestamp: '2026-10-12T16:00:00Z' }
+ * await behind(from('b', '2026-10-12T16:30:00Z'), mine, ctx)
+ * await behind(from('b', '2026-10-12T16:30:00Z'), mine, ctx)
+ * await behind(from('z', '2026-10-12T15:00:00Z'), mine, ctx)
+ * assertEquals(restarts.length, 1)
+ * assertEquals(kept.get(RESTARTED), 'b')
+ * ```
+ */
+export let behind = async (
+  headers: Headers,
+  mine: Meta | null | undefined,
+  ctx: Restartable,
+): Promise<void> => {
+  let theirs = caller(headers), s = ctx.storage
+  if (
+    !theirs || !newer(theirs, versionOf(mine)) || !ctx.abort || !s.get ||
+    !s.put || await s.get(RESTARTED) == theirs.id
+  ) return
+  await s.put(RESTARTED, theirs.id)
+  await s.sync?.()
+  ctx.abort(`${BEHIND} ${theirs.id}`)
+}

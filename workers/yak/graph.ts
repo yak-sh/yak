@@ -268,7 +268,7 @@ import {
   type Namespace,
   PLATFORM_STORE,
 } from './door.ts'
-import { caller, newer, versionOf } from './running.ts'
+import { behind, RESTARTED, versionOf } from './running.ts'
 import { type Meta, meta, metaOf, minted } from './meta.ts'
 import { caught, defect } from './defects.ts'
 import { counts, hop, type Tally, tallying } from './lib/hops.ts'
@@ -524,7 +524,7 @@ export type State = Hibernation & {
     get?<T>(key: string): Promise<T | undefined>
     put?(key: string, value: unknown): Promise<void>
     // Whatever was written, made durable before the object restarts itself
-    // (`#behind`): a restart drops writes still in flight.
+    // (running.ts `behind`): a restart drops writes still in flight.
     sync?(): Promise<void>
     deleteAlarm?(): Promise<void>
     getAlarm?(): Promise<number | null>
@@ -803,12 +803,6 @@ let routeKind = (request: Request): string => {
     ? `${request.method} ${path}`
     : 'http other'
 }
-
-// What an object that restarted for a newer deploy remembers (`#behind`), and
-// the words its restart fails the request in flight with: the runtime's own,
-// so every caller's retry already knows them (door.ts `RESETS`).
-let RESTARTED = 'restarted for'
-let BEHIND = 'Durable Object reset because a newer deploy reached it:'
 
 let traceContext = new AsyncLocalStorage<Context | undefined>()
 installContext({
@@ -2604,32 +2598,13 @@ export class Store {
   #version = () => this.#bind.CF_VERSION_METADATA?.id ?? null
 
   // The Worker version this incarnation runs, and the last deploy it
-  // restarted for (`#behind`): after a deploy, "live at 100%" says where the
+  // restarted for (running.ts `behind`): after a deploy, "live at 100%" says where the
   // Worker is, and only the object can say where it is.
   async #running() {
     return {
       version: versionOf(this.#bind.CF_VERSION_METADATA),
       restartedFor: (await this.#ctx.storage.get<string>?.(RESTARTED)) ?? null,
     }
-  }
-
-  // A caller on a later deploy than this incarnation (T-123372, running.ts).
-  // The runtime leaves an object on the code it started with for minutes after
-  // a deploy, so a door the deploy added would answer "no route" until then.
-  // The object restarts instead, before it does anything for the request, and
-  // the caller's retry (door.ts `evicted`, which knows these words) meets the
-  // new code. Once per version: an object the runtime starts again on older
-  // code is where the runtime means it to be, and it serves.
-  async #behind(request: Request): Promise<void> {
-    let theirs = caller(request.headers), ctx = this.#ctx, s = ctx.storage
-    if (
-      !theirs || !newer(theirs, versionOf(this.#bind.CF_VERSION_METADATA)) ||
-      !ctx.abort || !s.get || !s.put ||
-      await s.get(RESTARTED) == theirs.id
-    ) return
-    await s.put(RESTARTED, theirs.id)
-    await s.sync?.()
-    ctx.abort(`${BEHIND} ${theirs.id}`)
   }
 
   // ---- the mover (mover.ts, D-45640) ---------------------------------------
@@ -3078,7 +3053,9 @@ export class Store {
   }
 
   async #fetch(request: Request): Promise<Response> {
-    await this.#behind(request)
+    // A caller on a later deploy restarts this object before it does anything
+    // for the request, so a door the deploy added answers (running.ts).
+    await behind(request.headers, this.#bind.CF_VERSION_METADATA, this.#ctx)
     let path = new URL(request.url).pathname
     let kernel = request.headers.get('x-yak-kernel') == '1'
     if (kernel && path == '/dormant' && request.method == 'POST') {

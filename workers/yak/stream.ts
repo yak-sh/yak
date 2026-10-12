@@ -45,6 +45,7 @@ import { rosterLine } from '@yaks/mcp/roster'
 import { VERSION } from './seo.ts'
 import type { Env } from './env.ts'
 import { evicted, fetchOf, type Namespace } from './door.ts'
+import { behind, type Restartable } from './running.ts'
 
 // The slice of the Durable Object runtime this object touches, structurally,
 // so `deno check` reads it without @cloudflare/workers-types.
@@ -52,7 +53,8 @@ type Kv = {
   get<T>(key: string): Promise<T | undefined>
   put(key: string, value: unknown): Promise<void>
 }
-type State = { storage: Kv }
+type State = Restartable & { storage: Kv }
+type Meta = { id?: string; timestamp?: string }
 
 // What one person's log holds: a notification says "your list moved", so many
 // of them say nothing more than one.
@@ -135,9 +137,14 @@ export class Wire {
   // The log, read from storage once and held while the object lives.
   news: News | undefined
 
-  constructor(state: State, env: { CF_VERSION_METADATA?: { id?: string } }) {
+  // The deploy this incarnation runs, which a newer caller's restarts it off
+  // (running.ts `behind`).
+  meta: Meta | undefined
+
+  constructor(state: State, env: { CF_VERSION_METADATA?: Meta }) {
     this.state = state
-    this.mark = env?.CF_VERSION_METADATA?.id ?? VERSION
+    this.meta = env?.CF_VERSION_METADATA
+    this.mark = this.meta?.id ?? VERSION
   }
 
   async log(): Promise<News> {
@@ -335,6 +342,9 @@ export class Wire {
   }
 
   async fetch(req: Request): Promise<Response> {
+    // A caller on a later deploy restarts this object first. Its streams drop
+    // and resume as they do at any release, onto the new code.
+    await behind(req.headers, this.meta, this.state)
     let path = new URL(req.url).pathname
     // Every way in passes the release check first: this object is the one
     // place that sees both the deploy it is running and the streams held

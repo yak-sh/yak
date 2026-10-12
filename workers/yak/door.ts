@@ -268,10 +268,14 @@ export let retryOnce = async <T>(
   }
 }
 
-/** A request factory, not a spent Request: both attempts get their own body. */
+/** A request factory, not a spent Request: both attempts get their own body.
+ * Each carries the caller's deploy, so an object still on older code restarts
+ * onto it rather than answering for it (running.ts `behind`). */
 export let fetchOf =
   (ns: Namespace, name: string) => (make: () => Request): Promise<Response> =>
-    retryOnce(() => ns.get(ns.idFromName(name)).fetch(make()))
+    retryOnce(() => ns.get(ns.idFromName(name)).fetch(stamped(make())))
+
+let stamped = (req: Request) => (stamp(req.headers), req)
 
 // A request can be built twice from its init only while the body is a value:
 // a stream, or a Request whose body the first build took, is spent.

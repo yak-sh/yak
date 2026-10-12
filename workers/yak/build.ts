@@ -81,6 +81,7 @@ import {
 import type { Beat, Line } from './builder.ts'
 import { directory, type Space } from './directory.ts'
 import { fetchOf } from './door.ts'
+import { behind, type Restartable } from './running.ts'
 import * as dirPart from './directory.ts'
 import type { Env } from './env.ts'
 import { building } from './pages.ts'
@@ -98,8 +99,8 @@ import { caught } from './defects.ts'
  * is checked with no Deno anywhere in scope (door.ts). What is Cloudflare's
  * here is the socket slice above, which is checked where it is declared.
  */
-export type State = Hibernation & {
-  storage: DurableStorage & {
+export type State = Hibernation & Restartable & {
+  storage: DurableStorage & Restartable['storage'] & {
     // The one way to empty an object: dropping the tables leaves metadata
     // behind, and an object whose storage is empty ceases to exist. It is what
     // a deleted space's conversation goes through ({@link Builder.wipe}), the
@@ -377,6 +378,12 @@ export class Builder {
    * never reached from the internet.
    */
   async fetch(request: Request): Promise<Response> {
+    // A caller on a later deploy restarts this object first, but only an idle
+    // one: a build in flight (a model call can take minutes) or a page's
+    // socket is never cut for it, and keeps the code it started on.
+    if (!this.#building && !this.#ctx.getWebSockets().length) {
+      await behind(request.headers, this.#env.CF_VERSION_METADATA, this.#ctx)
+    }
     let url = new URL(request.url)
     if (url.pathname == '/wipe') {
       // Nobody's but the kernel's, and no person's at all: the space is being

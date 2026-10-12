@@ -6,10 +6,13 @@
 // start next.
 import { test } from '@yaks/testing'
 import { assert, assertEquals, assertRejects } from '@std/assert'
-import { doorOf, evicted, storeOf } from './door.ts'
+import { doorOf, evicted, fetchOf, storeOf } from './door.ts'
 import { Store } from './graph.ts'
+import { Wire } from './stream.ts'
+import { Builder } from './build.ts'
+import type { Env } from './env.ts'
 import { learn, WORKER_VERSION, WORKER_VERSION_AT } from './running.ts'
-import { state } from './testing.ts'
+import { kvStorage, state } from './testing.ts'
 
 let A = { id: 'a', timestamp: '2026-10-12T16:00:00Z' }
 let B = { id: 'b', timestamp: '2026-10-12T16:30:00Z' }
@@ -112,4 +115,57 @@ test('a call that reaches a store on the old deploy is answered by the new one',
   let answer = await storeOf(ns, 'ada/cookbook')('/restore')
   assertEquals(answer.status, 404)
   assertEquals(o.restarts.length, 1)
+})
+
+// The Wire and the Builder are reached through `fetchOf`, which stamps the
+// caller's deploy the way a store's door does (T-123489). Each is one
+// incarnation here; `abort` throws as workerd's does.
+let restartable = () => {
+  let restarts: string[] = []
+  let abort = (reason?: string) => {
+    restarts.push(reason ?? '')
+    throw new Error(reason)
+  }
+  return { restarts, abort }
+}
+
+let through = (object: { fetch(req: Request): Promise<Response> }) =>
+  fetchOf({ idFromName: (n: string) => n, get: () => object }, 'ada')
+
+test('a Wire on an older deploy restarts once for a newer caller', async () => {
+  learn(B)
+  let r = restartable()
+  let wire = new Wire({ storage: kvStorage(), abort: r.abort }, {
+    CF_VERSION_METADATA: A,
+  })
+  let roster = () =>
+    new Request('http://wire/roster', {
+      method: 'POST',
+      body: JSON.stringify({ session: 's', version: 'v', names: [] }),
+    })
+  // The request in flight fails in the runtime's own words, and the caller's
+  // retry is served: started again on the same older code, the object is
+  // where the runtime means it to be.
+  assertEquals((await through(wire)(roster)).status, 200)
+  assertEquals(r.restarts.length, 1)
+  assert(evicted(new Error(r.restarts[0])))
+})
+
+test('an idle Builder restarts for a newer caller, a watched one keeps its code', async () => {
+  learn(B)
+  let at = () => {
+    let r = restartable()
+    let ctx = Object.assign(state(), { abort: r.abort })
+    let env: Partial<Env> = { CF_VERSION_METADATA: A }
+    return { ...r, ctx, builder: new Builder(ctx, env as Env) }
+  }
+  let ask = () => new Request('http://builder/nowhere')
+  let idle = at()
+  assertEquals((await through(idle.builder)(ask)).status, 404)
+  assertEquals(idle.restarts.length, 1)
+  // A page's socket is never cut for a deploy that is only passing through.
+  let watched = at()
+  watched.ctx.acceptWebSocket({} as never)
+  assertEquals((await through(watched.builder)(ask)).status, 404)
+  assertEquals(watched.restarts, [])
 })
