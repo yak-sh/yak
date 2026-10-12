@@ -121,6 +121,14 @@ How a query is written is `query-grammar`. How one is answered:
 - Row reads are the cost, on the box and in a Durable Object alike, so ask for
   what you'll read: `.count` over rows, `.fields` over whole bundles,
   `g.get(eids, comps)` over a query by eid.
+- A key seek says where a read starts, not how often it repeats. Reading each
+  property in its own scalar lookup can keep every key plan and still bill the
+  same component row many times. SQL read changes earn their proof with both
+  `EXPLAIN QUERY PLAN` under small statistics and workerd cursor counters:
+  `workers/yak/query_cost_workerd_test.ts` and
+  `workers/yak/entry_page_cost_workerd_test.ts` cover page reads and gathers;
+  the other `*_cost_workerd_test.ts` files cover their consumers. Returned-row
+  counts and a successful live smoke check cannot substitute for billed rows.
 - Computed properties (`task.status`, a component's `status` keyword,
   `build.cost`) are derived at read, never stored, and a filter on a status binds
   as presence.

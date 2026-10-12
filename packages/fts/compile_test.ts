@@ -3,7 +3,7 @@
 import { test } from '@yaks/testing'
 import { assert, assertEquals } from '@std/assert'
 import { parse } from '@yaks/query'
-import { compile } from '@yaks/sql'
+import { bind, compile } from '@yaks/sql'
 import { fields } from './fields.ts'
 import { search } from './compile.ts'
 import { shelf, shop } from './testing.ts'
@@ -52,8 +52,16 @@ test('a search with no word in it finds nothing', () => {
   assertEquals(found('""'), [])
 })
 
+let indexed = shelf()
 test('a matched entity is found by its spine id, needing no join', () => {
-  let { sql: s } = sql('dragon')
-  assert(s.includes('"entity"."id" in (select "rowid" from "book_fts"'), s)
-  assert(!s.includes('left join "book"'), s)
+  let db = indexed
+  let stmt = bind(parse('dragon'), shop, { extend: [search(text)] })
+  assertEquals(
+    db.query(stmt).map((row) => String(row.eid)).sort(),
+    ['book-1', 'book-2', 'review-4'],
+  )
+  let plan = db.query({ t: 'explain query plan', of: stmt })
+    .map((row) => String(row.detail)).join('\n')
+  assert(plan.includes('SEARCH entity USING INTEGER PRIMARY KEY'), plan)
+  assert(!/\b(?:SCAN|SEARCH) (?:book|review)\b/.test(plan), plan)
 })

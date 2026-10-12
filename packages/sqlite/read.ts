@@ -33,6 +33,7 @@ import {
   eq,
   exists,
   type Expr,
+  fn,
   from,
   idOf,
   type Join,
@@ -40,6 +41,7 @@ import {
   left,
   lit,
   oneOf,
+  op,
   type Query as Sub,
   type Raw,
   render,
@@ -628,20 +630,27 @@ let joinedPlan = (
     if (width > 100 || p.joins.length + 1 > 60) {
       return bounded(cache, key, null, 128)
     }
-    // A scalar key lookup cannot become a scan of a component whose recorded
-    // size is one row. Each projected value keeps the same dependencies.
-    let lookup = (expr: Expr) =>
+    // Read every value in one primary-key lookup. A scalar lookup pins the
+    // plan even for one-row statistics; packing the row avoids billing that
+    // same lookup again for each property. Concatenation drops JSON's subtype
+    // so every adapter returns the same text for this internal projection.
+    columns.push(as(
       sub(select({
-        cols: [expr],
+        cols: [op(
+          '||',
+          fn(
+            'json_array',
+            col('entity', alias),
+            ...p.sel.map((e) => e.t == 'as' ? e.e : e),
+          ),
+          lit(''),
+        )],
         from: table(name, alias),
         joins: p.joins,
         where: eq(col('entity', alias), col('id', 'e')),
-      }))
-    columns.push(as(lookup(col('entity', alias)), `@${i}`))
-    for (let [j, prop] of fields.entries()) {
-      let expr = p.sel[j]
-      columns.push(as(lookup(expr.t == 'as' ? expr.e : expr), `@${i}.${prop}`))
-    }
+      })),
+      `@${i}`,
+    ))
   }
   let named = (eids: string[]): Named => {
     let spine = namedSpine(vocab, eids)
@@ -707,10 +716,14 @@ let joinedGet = (
     ) return { spine: rows }
     for (let [i, name] of names.entries()) {
       if (row[`@${i}`] == null || current && !current.includes(name)) continue
-      let values = Object.fromEntries(
-        plan.props[i].map((prop) => [prop, row[`@${i}.${prop}`]]),
-      )
-      bundle[name] = decoded(vocab, name, values) as Comp
+      let values = JSON.parse(String(row[`@${i}`])) as unknown[]
+      bundle[name] = decoded(
+        vocab,
+        name,
+        Object.fromEntries(
+          plan.props[i].map((prop, j) => [prop, values[j + 1]]),
+        ),
+      ) as Comp
     }
   }
   backedGet(

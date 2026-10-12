@@ -58,7 +58,12 @@ let vocab = loadVocab({
     doc: {
       component: true,
       type: 'object',
-      properties: { title: { type: 'string', search: true } },
+      properties: {
+        title: { type: 'string', search: true },
+        enabled: { type: 'boolean' },
+        metadata: { type: 'object' },
+        boxed: { type: ['string', 'object'] },
+      },
     },
   },
 })
@@ -96,6 +101,16 @@ let fixture = (() => {
   d.query(insert('mark', { entity: 10, of: 1 }))
   d.query(insert('link', { entity: 11, to: 1 }))
   d.query(insert('doc', { entity: 9, title: 'small statistics needle' }))
+  s.tx((tx) =>
+    tx.patch([{
+      entity: { eid: 'e8' },
+      doc: {
+        enabled: false,
+        metadata: { labels: ['"quoted"', null] },
+        boxed: 'string',
+      },
+    }])
+  )
   d.query({ t: 'pragma', name: 'optimize', value: 0x10002 })
   d.query(insert('entity', ...ids.slice(21).map((eid) => ({ eid }))))
   return { d, statements }
@@ -215,6 +230,16 @@ test('gathered components retain their values under stale statistics', () => {
   assertEquals(rows.length, 4)
   assertEquals(rows, gathered)
   assert(rows.some((row) => row.entity.eid == 'e4' && row.result))
+})
+
+get(fixture.d, vocab, ['e8'], {}, ['doc'])
+test('a keyed component read preserves JSON, booleans and nulls', () => {
+  assertEquals(get(fixture.d, vocab, ['e8'], {}, ['doc'])[0].doc, {
+    title: 'small statistics needle',
+    enabled: false,
+    metadata: { labels: ['"quoted"', null] },
+    boxed: 'string',
+  })
 })
 
 test('FTS selected doc reads seek matching documents', () => {
