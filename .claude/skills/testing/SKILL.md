@@ -61,6 +61,12 @@ assertion.
 - A helper that stands in for a door behaves like the door. One that skips a
   header or a check the door sends lets the test pass where production fails:
   a store called without its access-mode header once read every app as public.
+- An optional driver method changes which path existing helpers choose.
+  @yaks/sql's `run` returns an affected count; `query` executes commands too.
+  Follow counted writes and resultless batches through their consumers: fewer
+  billed rows can still mean twice as many engine operations. The Store's
+  bounded-delete test and its workerd storage-failure test exercise both the
+  operation budget and the waiting writer's answer.
 
 ## Seeing it fail
 

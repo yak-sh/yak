@@ -3116,12 +3116,17 @@ export class Store {
       await null
       try {
         for (let k = next(sql); k; k = next(sql, k.seq)) {
+          let live = this.#callers.has(k.seq)
+          started(sql, k.seq)
+          let r = await this.#land(k, live)
+          let kept = r.status >= 500 && held(sql, k.seq)
+          let answer = kept ? parked(k.seq, await said(r)) : r
+          // A storage failure can escape even the write log's error handler.
+          // Keep the live caller reachable until every response read is done,
+          // so the failure cleanup below can still answer it.
           let caller = this.#callers.get(k.seq)
           this.#callers.delete(k.seq)
-          started(sql, k.seq)
-          let r = await this.#land(k, !!caller)
-          let kept = r.status >= 500 && held(sql, k.seq)
-          caller?.(kept ? parked(k.seq, await said(r)) : r)
+          caller?.(answer)
         }
       } catch (e) {
         this.#stuck = true

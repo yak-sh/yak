@@ -76,10 +76,11 @@ export type Driver = {
   connection?: object
 }
 
-/** A statement run for its effect, through `run` where the driver has one. */
+/** A statement run for its effect. Query executes commands too; asking for
+ * an affected count can require another engine operation, so reserve `run`
+ * for callers that consume its count. */
 export let effect = (driver: Driver, s: Stmt): void => {
-  if (driver.run) driver.run(s)
-  else driver.query(s)
+  driver.query(s)
 }
 
 /** How many rows a table holds, or how many of them a condition keeps. */

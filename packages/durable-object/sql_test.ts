@@ -2,8 +2,9 @@
 import { equal, ok, test } from '@yaks/testing'
 import { assertThrows } from '@std/assert'
 import { during, peek, record } from '@yaks/trace'
-import { select, table } from '@yaks/sql'
+import { col, effect, insert, select, table, val } from '@yaks/sql'
 import { driver, type DurableStorage } from './sql.ts'
+import { durable } from './testing.ts'
 
 let calls = 0
 let fail = false
@@ -31,6 +32,38 @@ let d = driver(
   (read, written) => measured.push([read, written]),
 )
 let stmt = select({ from: table('book') })
+
+let commandStorage = durable()
+let commands = 0
+let commandExec = commandStorage.sql.exec.bind(commandStorage.sql)
+commandStorage.sql.exec = (sql, ...params) => {
+  commands++
+  return commandExec(sql, ...params)
+}
+let commandDriver = driver(commandStorage)
+commandDriver.query({
+  t: 'create table',
+  name: 'resultless',
+  cols: [{ name: 'price', type: 'integer' }],
+})
+commandDriver.query(insert('resultless', { price: 1 }))
+
+test('a resultless command changes its row with one engine operation', () => {
+  commands = 0
+  effect(commandDriver, {
+    t: 'update',
+    table: 'resultless',
+    set: { price: val(2) },
+  })
+  equal(commands, 1)
+  equal(
+    commandDriver.query(select({
+      cols: [col('price')],
+      from: table('resultless'),
+    })),
+    [{ price: 2 }],
+  )
+})
 
 test('SQL spans report billed cursor rows, including failures, without extra SQL', () => {
   equal(d.query(stmt), [{ value: 1 }])
