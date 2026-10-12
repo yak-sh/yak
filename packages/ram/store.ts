@@ -33,6 +33,7 @@ import type {
   Binding,
   Bundle,
   Comp,
+  Doom,
   Eid,
   Entity,
   Match,
@@ -98,6 +99,8 @@ export type Tx = {
    * graph with `bundles` folded in, as though it had been written, and nothing
    * of it left behind */
   bindings: (matches: Match[], bundles: Bundle[]) => Binding[][]
+  /** The deletion closure and references to clear, from the stored index. */
+  doom: (eids: Eid[]) => Doom | null
   /** apply these patches → the entities they created, each with its `num` */
   patch: (bundles: Bundle[]) => Entity[]
   /** Evict live payloads, not identities. A later patch keeps the same number.
@@ -261,7 +264,11 @@ export let ram = (vocab: Vocab, base: RamOpts = {}): Store => {
   let put = (eid: Eid, b: Bundle | undefined) => {
     let was = rows.get(eid)
     let checks: Unique[] = []
-    for (let comp in was) checks.push(...uniqueOf(comp))
+    // Components are immutable; their unique keys stay held by the same eid
+    // when another component changes. Row-bearing indexes still move below.
+    for (let comp in was) {
+      if (was[comp] !== b?.[comp]) checks.push(...uniqueOf(comp))
+    }
     for (let comp in b) {
       if (!was || !(comp in was)) checks.push(...uniqueOf(comp))
     }
@@ -676,8 +683,60 @@ export let ram = (vocab: Vocab, base: RamOpts = {}): Store => {
     }
   }
 
+  // Resolve deletion through the same reference indexes queries use.
+  let doom = (eids: Eid[]): Doom | null => {
+    let cascade = vocab.deaths('cascade')
+    let soft = [...vocab.deaths('release'), ...vocab.deaths('detach')]
+    if ([...cascade, ...soft].some(([c, p]) => base.computed?.[`${c}.${p}`])) {
+      return null
+    }
+    let owners = (targets: Eid[], props: [string, string][]): Bundle[] => {
+      let found = new Map<Eid, Bundle>()
+      for (let [comp, prop] of props) {
+        if (!worn.has(comp)) continue
+        let held = keys(comp, prop)
+        for (let target of targets) {
+          for (let [eid, b] of held.get(keyOf(target)!) ?? NONE) {
+            found.set(eid, b)
+          }
+        }
+      }
+      return [...found.values()].sort((a, b) =>
+        (a.entity.num ?? 0) - (b.entity.num ?? 0)
+      )
+    }
+    let gone = eids.map((eid) => ({ eid, depth: 0 }))
+    let dead = new Set(eids)
+    let front = eids
+    for (let depth = 1; front.length; depth++) {
+      let next: Eid[] = []
+      for (let b of owners(front, cascade)) {
+        let eid = b.entity.eid
+        if (dead.has(eid)) continue
+        dead.add(eid)
+        gone.push({ eid, depth })
+        next.push(eid)
+      }
+      front = next
+    }
+    let targets = [...dead]
+    let loose: Doom['loose'] = []
+    for (let b of owners(targets, soft)) {
+      let eid = b.entity.eid
+      if (dead.has(eid)) continue
+      for (let [comp, prop] of soft) {
+        let target = valueOf(b, comp, prop)
+        if (target != null && dead.has(String(target))) {
+          loose.push({ eid, comp, prop })
+        }
+      }
+    }
+    return { gone, loose }
+  }
+
   let tx: Tx = {
     read,
+    doom,
     get,
     bindings: ask,
     patch,
