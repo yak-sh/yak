@@ -52,7 +52,7 @@ test('a failed poll is reported and leaves the answer not ready', async () => {
   polled.close()
 })
 
-test('a poll that hangs settles as failed', async () => {
+test('a poll that hangs settles as failed, and says it timed out', async () => {
   let failures: unknown[] = []
   let polled = poll(remote, '.bug', {
     timeout: 5,
@@ -67,6 +67,8 @@ test('a poll that hangs settles as failed', async () => {
   let heard = 0
   polled.subscribe(() => heard++)
   await until(() => heard > 0)
-  equal([polled.ready, failures.length], [false, 1])
+  equal([polled.ready, failures.map(String)], [false, [
+    'Error: Remote tracker did not answer in time',
+  ]])
   polled.close()
 })

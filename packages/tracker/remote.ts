@@ -5,6 +5,12 @@ import type { Sink } from './report.ts'
 import { sign } from './ticket.ts'
 
 export type Remote = { url?: string; secret?: string }
+
+/** A failure a timeout caused. It is named as one; any other failure names no
+ * cause, since a cause can carry the address or the upstream's body. */
+export let late = (error: unknown) =>
+  error instanceof DOMException && error.name == 'TimeoutError'
+
 export let request = async (
   remote: Remote,
   path: string,
@@ -53,8 +59,13 @@ export let request = async (
         AbortSignal.timeout(15_000),
       ]),
     })
-  } catch {
-    throw Error('Remote tracker is unavailable')
+  } catch (error) {
+    throw late(error)
+      ? new DOMException(
+        'Remote tracker did not answer in time',
+        'TimeoutError',
+      )
+      : Error('Remote tracker is unavailable')
   }
 }
 export let delivery =

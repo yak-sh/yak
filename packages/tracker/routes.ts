@@ -2,7 +2,7 @@
  * every request so the CLI's vault-backed secret can rotate without a restart.
  * Remote bundles are never applied to the box's graph. */
 import type { Route } from '@yaks/api'
-import { type Remote, request as upstream } from './remote.ts'
+import { late, type Remote, request as upstream } from './remote.ts'
 
 export type Options = { remote?: Remote }
 let uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
@@ -64,9 +64,11 @@ export let read = async (
       )
     }
     return { ok: true, value: await response.json() }
-  } catch {
+  } catch (error) {
     // Neither a credential, ticket, configured URL nor upstream body is an error report.
-    return refused('Remote tracker is unavailable', 502)
+    return late(error)
+      ? refused('Remote tracker did not answer in time', 504)
+      : refused('Remote tracker is unavailable', 502)
   }
 }
 
