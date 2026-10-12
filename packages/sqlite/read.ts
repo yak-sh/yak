@@ -171,7 +171,10 @@ let projection = (
     let tag = c.ref ? backed[c.ref]?.tag : undefined
     if (over) {
       for (let d of over.deps ?? []) deps.add(d)
-      sel.push(as(over.expr(own('entity')), c.prop))
+      let value = !c.computed && storedOnly(over, v)
+        ? over.text!(own(field(c.prop)))
+        : over.expr(own('entity'))
+      sel.push(as(value, c.prop))
     } else if (tag) {
       sel.push(as(eidAt(tag, own(field(c.prop))), c.prop))
     } else if (c.category == 'ref' && named) {

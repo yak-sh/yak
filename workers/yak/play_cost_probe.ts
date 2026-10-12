@@ -1,3 +1,4 @@
+import { blobGatherCost } from './blob_gather_cost_fixture.ts'
 import { coldMessages } from './cold_message_fixture.ts'
 import { writeStorageFailure } from './write_storage_failure_fixture.ts'
 import { sqlRun } from './sql_run_fixture.ts'
@@ -50,6 +51,9 @@ export class PlayCost {
   async measure(req: Request): Promise<Response> {
     if (new URL(req.url).searchParams.has('write-storage-failure')) {
       return Response.json(await writeStorageFailure(this.ctx.storage))
+    }
+    if (new URL(req.url).searchParams.has('blob-gather')) {
+      return Response.json(blobGatherCost(this.ctx.storage))
     }
     if (new URL(req.url).searchParams.has('sql-run')) {
       return Response.json(sqlRun(this.ctx.storage))
