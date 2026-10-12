@@ -167,10 +167,15 @@ export let remote = async (
     replica.close()
     throw e
   }
-  // The TUI paints this terminal, so its defects must not be spoken to it: the
-  // backend owns the graph, and it takes them.
-  let detachDiagnostics = diagnostics().attach({
-    apply: (bundles) => request('exception', [bundles]) as Promise<Bundle[]>,
+  // The backend owns the host reporter, so frontend diagnostics cross that
+  // door with their scrubbed thrown value and catch context.
+  let detachDiagnostics = diagnostics().attach(async (error, context) => {
+    let e = error as Error
+    await request('report', [{
+      name: e.name,
+      message: e.message,
+      stack: e.stack,
+    }, context])
   })
   let rows = (id: string) =>
     (members.get(id) ?? []).flatMap((id) => {

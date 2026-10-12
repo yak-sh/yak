@@ -1,11 +1,7 @@
 // The app_errors command reads an app's exception rows, including fields a
 // stored report left empty.
 import { test } from '@yaks/testing'
-import {
-  assertEquals,
-  assertObjectMatch,
-  assertStringIncludes,
-} from '@std/assert'
+import { assertEquals, assertStringIncludes } from '@std/assert'
 import { appStore } from './directory.ts'
 import { KERNEL, metaOf } from './meta.ts'
 import { ADA, platform, seeded } from './serving-probe.ts'
@@ -16,27 +12,18 @@ test('app_errors lists a break whose stored stack is null', async () => {
   using p = platform()
   let { env } = p
   let { dir, space, app } = await seeded(env)
-  let store = metaOf(appStore(env.STORE, space, app))
-  await store.apply([{
-    entity: { eid: '$break' },
-    exception: {
-      at: '2026-09-28T00:00:00Z',
-      request: 'page /cookbook/',
-      message: 'failed before a stack was available',
-      stack: null,
-    },
-  }], KERNEL)
-  let [row] = await store.query('.exception')
-  assertObjectMatch(row, { exception: { stack: null } })
+  await noted({
+    request: 'page /cookbook/',
+    message: 'failed before a stack was available',
+    version: 1,
+  }, { env, space, app })
   let listed = await call(
     { env, dir, person: ADA },
     'app_errors',
     { space: 'ada', app: 'cookbook' },
   )
   assertStringIncludes(listed.text, 'page /cookbook/ — failed before a stack')
-  await noted(() => {
-    throw Error('new reports must not write to the app store')
-  }, {
+  await noted({
     request: 'page /cookbook/new',
     message: 'new tracked break',
     version: 1,

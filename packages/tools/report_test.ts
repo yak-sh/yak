@@ -46,7 +46,7 @@ let fixture = (fail = false, error: unknown = defect) => {
 }
 
 let recorded = fixture()
-test('a recorded tool defect leaves its original exception without a direct report', async () => {
+test('a tool defect reports its original error once and keeps its answer in history', async () => {
   let { g, r, call, told, writes } = recorded
   let answer = await r.call(call)
   let fault = answer.find((b) => b.exception)!
@@ -54,9 +54,9 @@ test('a recorded tool defect leaves its original exception without a direct repo
   equal(row.exception, {
     type: defect.name,
     value: defect.message,
-    stack: defect.stack,
   })
-  equal(told, [])
+  equal(told, [defect])
+  equal((told[0] as Error).stack, defect.stack)
   equal(writes(), 1)
 })
 

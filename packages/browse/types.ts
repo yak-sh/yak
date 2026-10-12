@@ -919,13 +919,11 @@ export type Failure = {
   reason?: string | null
 }
 
-// The break facet (D-17077): an unexpected fault, the self-healing trigger.
-// `stack` optional — a JS throw carries one, a died process may not.
+// What was thrown, retained in an answer or transcript entry (@yaks/tools).
 export type Exception = {
   eid: string
-  at?: string | null
-  message?: string | null
-  stack?: string | null
+  type?: string | null
+  value?: string | null
 }
 
 // The self-healing diagnosis facet (D-17077): a task auto-filed about an

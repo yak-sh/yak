@@ -560,7 +560,7 @@ export let Session = (
   }, [entries.status])
   let live = awake(e)
   let status = state.status
-  let fault = e.exception?.message ?? e.failed?.reason
+  let fault = e.exception?.value ?? e.failed?.reason
   // Every substrate reads graph entries. The web asks for a bounded tail;
   // the TUI keeps its own scrollback. The fallback log is only for internal
   // derivations while the explicit read state paints below.

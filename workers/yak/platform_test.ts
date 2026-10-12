@@ -25,7 +25,6 @@ import { Store } from './graph.ts'
 import { KERNEL, metaOf, minted } from './meta.ts'
 import { mint, personOf, spend } from './signin.ts'
 import { doorOf, PLATFORM_STORE } from './door.ts'
-import { noted } from './unseen.ts'
 import { named } from './testing.ts'
 
 let state = () => {
@@ -285,22 +284,6 @@ test('first-member admission sees a seat written around the directory cache', as
     },
   ], KERNEL)
   assertEquals(await dir.memberless(yak), false)
-})
-
-test("a break the platform noted about itself is the meta store's", async () => {
-  let { at } = platform()
-  await noted((bundles) => at.apply(bundles, KERNEL), {
-    request: 'billing POST /stripe',
-    message: 'signature refused',
-    stack: 'at verify',
-  })
-  let [broke] = await at.query('.exception')
-  let e = broke.exception as { request: string; message: string }
-  assertEquals(e.request, 'billing POST /stripe')
-  assertEquals(e.message, 'signature refused')
-  // It wears no `doc`, so the platform's own crashes never show up in the
-  // query a person's agent is taught as "everything you saved" (T-32533).
-  assertEquals(broke.doc, undefined)
 })
 
 test("the meter and the plan are the platform's word, not a person's", async () => {

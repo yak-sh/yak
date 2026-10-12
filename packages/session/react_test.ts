@@ -1416,11 +1416,10 @@ test('unexpected model failures reach diagnostics, expected model errors do not'
       assertEquals(exceptions[0].exception, {
         type: error.name,
         value: error.message,
-        stack: error.stack,
       })
     }
   }
-  assertEquals(reported.length, 0)
+  assertEquals(reported.length, 1)
 })
 
 test('provider completion allocates positions after concurrently admitted notices', async () => {

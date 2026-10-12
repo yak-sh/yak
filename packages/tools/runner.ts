@@ -150,8 +150,8 @@ export type Opts = {
   /** the graph the tools read and write, when that is not the graph the calls
    * are recorded in (a server that keeps its call records separately) */
   host?: Graph
-  /** where failures without a recorded exception are reported, with the call
-   * and the tool it asked for, including a defect whose exception write failed.
+  /** where caught failures are reported with the original thrown value, the
+   * call and the tool it asked for, independently of recording its answer.
    * A refusal (a `CallError`, or an error @yaks/graph's
    * `status` puts below 500) is never reported. A report that answers a
    * promise is awaited before the call's answer is. */
@@ -708,7 +708,7 @@ export let runner = (g: Graph, opts: Opts): Runner => {
     // which call it came from. An expected refusal gets `refusal{code}`: a
     // `CallError` with its code, or an error the graph's `status` puts below
     // 500 (a `Refused` write, an `Unknown` name) with its name. Anything else
-    // is a defect, reported through its exception record.
+    // is a defect, reported with its original thrown value.
     let faulted = async (error: unknown): Promise<Bundle[]> => {
       if (error instanceof Interrupted) {
         return [{
@@ -724,7 +724,7 @@ export let runner = (g: Graph, opts: Opts): Runner => {
         ? (error as Error).name
         : undefined
       if (
-        code == undefined && unrecorded &&
+        code == undefined &&
         actionable(String(exceptionOf(error).value))
       ) {
         await opts.report?.(error, call, tool.name)
@@ -761,9 +761,8 @@ export let runner = (g: Graph, opts: Opts): Runner => {
         ...ended,
         ...code ? [{ entity: call.entity, interrupted: { code } }] : [],
       ]
-      // A retry reports the storage error, never the call's own failure: that
-      // goes through its exception once the write commits, or directly from
-      // the caller below if storage refuses it for good.
+      // A retry reports the storage error separately from the call's failure,
+      // which was reported at its catch boundary before recording the answer.
       // The exception's properties are stamped: only its catcher writes them.
       let trusted = made.some((b) => b.exception)
       let landed = await persist(
@@ -804,22 +803,12 @@ export let runner = (g: Graph, opts: Opts): Runner => {
       // returned: a transaction the graph refuses is this call's failure,
       // rather than a call left claimed with nothing recorded about it.
       let made = await faulted(error)
-      try {
-        answered = await land(
-          made,
-          error instanceof Interrupted ? 'interrupted' : 'failed',
-          undefined,
-          error instanceof Interrupted ? error.code : undefined,
-        )
-      } catch (writeError) {
-        if (
-          made.some((b) => b.exception) &&
-          actionable(String(exceptionOf(error).value))
-        ) {
-          await opts.report?.(error, call, tool.name)
-        }
-        throw writeError
-      }
+      answered = await land(
+        made,
+        error instanceof Interrupted ? 'interrupted' : 'failed',
+        undefined,
+        error instanceof Interrupted ? error.code : undefined,
+      )
     } finally {
       held.delete(id)
     }

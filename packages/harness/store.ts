@@ -38,6 +38,8 @@ export type Harness = {
    * as the host's own runner adds it (@yaks/cli `Host.reply`): the entities
    * near one it just created, among them */
   reply?: Reply
+  /** The host's catch boundary, delivering original failures to its tracker. */
+  report?: Host['report']
   /** every tool the host runs, its plugins' own among them (`memory_around`),
    * read when a transcript names one the harness does not carry for all */
   hostTools?: () => NamedTool[]
@@ -64,6 +66,7 @@ export let hosted = (
     artifacts: host.artifacts,
     machines: host.machines,
     reply: host.reply,
+    report: host.report,
     hostTools: () => host.tools,
     migrations: host.storage.migrations,
     close,

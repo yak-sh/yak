@@ -104,17 +104,17 @@ is assigned a fresh eid first.
 
 `toolsDoc` declares these [components](../graph/README.md#data-model):
 
-| Component                            | Purpose                                                                                           |
-| ------------------------------------ | ------------------------------------------------------------------------------------------------- |
-| `tool{name, description, revision?}` | Identifies a registered tool; its eid is derived from `name`.                                     |
-| `call{to, args, id?, source?}`       | Names the tool, arguments, optional provider id, and originating entity.                          |
-| `execution{by, state}`               | Holds the call claim and computed execution state.                                                |
-| `result{call, ms?}`                  | Records completion and duration when the runner observed the start.                               |
-| `content{body}`                      | Carries content.                                                                                  |
-| `output{source?, id?, value?}`       | Records output.                                                                                   |
-| `refusal{code}`                      | A **refusal** records a deliberate rejection with a reason code.                                  |
-| `exception`                          | An **exception** records an unexpected failure; diagnostic properties may be stamped by the host. |
-| `finding{level}`                     | Carries a [check](#health-checks)'s verdict.                                                      |
+| Component                            | Purpose                                                                  |
+| ------------------------------------ | ------------------------------------------------------------------------ |
+| `tool{name, description, revision?}` | Identifies a registered tool; its eid is derived from `name`.            |
+| `call{to, args, id?, source?}`       | Names the tool, arguments, optional provider id, and originating entity. |
+| `execution{by, state}`               | Holds the call claim and computed execution state.                       |
+| `result{call, ms?}`                  | Records completion and duration when the runner observed the start.      |
+| `content{body}`                      | Carries content.                                                         |
+| `output{source?, id?, value?}`       | Records output.                                                          |
+| `refusal{code}`                      | A **refusal** records a deliberate rejection with a reason code.         |
+| `exception{type?, value?}`           | An **exception** keeps what was thrown in an answer or transcript entry. |
+| `finding{level}`                     | Carries a [check](#health-checks)'s verdict.                             |
 
 `callDoc` omits the `tool` declaration; `toolDoc` contains only that
 declaration. `toolsDoc` contains both and the runner's effect rules. Importing
@@ -147,16 +147,14 @@ to a tool that writes: every write phase runs, the write rolls back, and the
 proposed answer is returned. The runner still records completion.
 
 Throw `CallError(code, message)` for an expected refusal. Other thrown values
-produce an `exception` answer, reported by `@yaks/heal`. If recording that
-exception fails, `report` receives the original failure directly. The exception
-write is not retried after this fallback, so a later commit cannot report it
-again. Both paths skip known provider transients through `actionable`. Invalid
-arguments, failed schema validation, and refused graph writes also produce
-failed calls. The runner resolves schema-declared
-[references](../vocab/README.md#routing-and-references) through `g.address`
-before invocation. A tool that writes is refused if such an argument names no
-entity of the declared component; a read-only tool can read whatever the id
-names, including deleted history.
+produce an `exception` answer. `report` receives the original thrown value once,
+with its stack, whether or not recording the answer succeeds. Reporting skips
+known provider transients through `actionable`. Invalid arguments, failed schema
+validation, and refused graph writes also produce failed calls. The runner
+resolves schema-declared [references](../vocab/README.md#routing-and-references)
+through `g.address` before invocation. A tool that writes is refused if such an
+argument names no entity of the declared component; a read-only tool can read
+whatever the id names, including deleted history.
 
 ```ts
 import { graph, type Tool } from '@yaks/graph'
@@ -440,8 +438,9 @@ No-op edits, provider ids, labels, claims, and wake firings keep call authority;
 each recurring invocation inherits its schedule's call authority. Authorization
 checks that identity's current standing when the call fires.
 
-`report` receives failures without recorded exceptions, including unrecorded
-reads, failed exception writes, completed-answer persistence and replies.
+`report` receives caught failures, including tool defects, unrecorded reads,
+completed-answer persistence and replies. Recording an `exception` answer keeps
+the call’s history; it does not create another tracker occurrence.
 
 A **reply** is extra answer bundles owed to a direct caller (`Reply`).
 `reply(call, answer, wrote)` runs after `call()`, never after a deferred

@@ -35,7 +35,7 @@
 import { type Bundle, type Comp, type Row, token } from '@yaks/graph'
 import { isPromise } from '@yaks/fp'
 import { and, conjoin, parse, type Query } from '@yaks/query'
-import { Unknown } from '@yaks/vocab'
+import { Unknown, type VocabDoc } from '@yaks/vocab'
 import { GIT_STORE, PLATFORM_STORE } from './door.ts'
 import { deadMailInboxRule } from './migrate.ts'
 import { doneRun } from '../../packages/effects/cleanup.ts'
@@ -43,19 +43,33 @@ import { frozenMove, takeMove } from '@yaks/builders'
 import { keyEid } from '@yaks/key'
 import { commitRule } from './git-move.ts'
 import { platformRule } from './platform-move.ts'
+import { exceptionRule } from './exception-move.ts'
 /** A rule's name: where its stamp is kept in a store's memory, and the
  * `BOUNDARIES` entry its live release adds. */
 export type Mark = `yak/store/${string}`
+
+export type MoveContext = { store: string; app?: string; space?: string }
 
 export type Rule = {
   mark: Mark
   /** Only these stores owe or rehearse this rule; absent means every store. */
   stores?: string[]
+  /** These components must belong to the platform, never this app's declaration. */
+  core?: string[]
   /** The rows still in the old shape, naming what `move` reads. */
   find: string | Query
   /** One candidate's patch. `read` looks up evidence synchronously without
    * adding reached rows to the candidate page or cursor. */
   move: (row: Bundle, read?: (line: string) => Bundle[]) => Bundle[]
+  /** Retired declarations, visible only while reading/applying this move. */
+  source?: VocabDoc
+  /** Durable records delivered before the guarded source patches commit.
+   * Rehearsal computes these records but never delivers them. */
+  forward?: (
+    row: Bundle,
+    read?: (line: string) => Bundle[],
+    context?: MoveContext,
+  ) => Bundle[]
   /** Where it runs for real. Absent, it is only rehearsed. */
   live?: 'apps' | 'all'
   /** Source properties to shed with the final batch, once the rule is drained. */
@@ -152,6 +166,7 @@ export let RULES: Rule[] = [
   takeRule,
   commitRule,
   platformRule,
+  exceptionRule,
 ]
 
 /** How far one rule got in one store. `after` is the last row it moved past;
@@ -184,6 +199,7 @@ export type Rehearsal = {
  * transaction, and a transaction cannot wait. `apply` holds its effects for
  * the caller, which runs them once the batch commits, or drops them. */
 export type Moving = {
+  context?: MoveContext
   read: (line: string | Query) => Bundle[] | Promise<Bundle[]>
   rows: (line: string | Query) => Row[] | Promise<Row[]>
   apply: (patch: Bundle[]) => Bundle[] | Promise<Bundle[]>
@@ -221,32 +237,57 @@ let joined = (query: string | Query, line: string) =>
 let page = (rule: Rule, n: number, after?: string) =>
   joined(rule.find, conjoin(`.limit=${n}`, after ? `.after=${after}` : ''))
 
-/** One batch: the rows past the stamp's cursor, moved, and the stamp that
- * says so. A page shorter than a batch is the last one. */
+/** A bounded snapshot and its pure plan. A host can durably deliver `forward`
+ * outside the transaction before committing the guarded source patches. */
+export type Batch = {
+  rows: Bundle[]
+  patch: Bundle[]
+  forward: Bundle[]
+  unspoken?: string
+}
+
+export let batch = (
+  m: Moving,
+  rule: Rule,
+  was: Stamp | null,
+  n: number,
+): Batch => {
+  let rows: Bundle[]
+  try {
+    rows = sync(m.read(page(rule, n, was?.after)))
+  } catch (e) {
+    if (!(e instanceof Unknown)) throw e
+    return { rows: [], patch: [], forward: [], unspoken: e.prop }
+  }
+  let read = (line: string) => sync(m.read(line))
+  return {
+    rows,
+    patch: rows.flatMap((row) => rule.move(row, read)),
+    forward: rows.flatMap((row) => rule.forward?.(row, read, m.context) ?? []),
+  }
+}
+
+/** One batch commits the prepared snapshot. A page shorter than a batch is
+ * the last one. Source guards refuse any changes made during delivery. */
 export let step = (
   m: Moving,
   rule: Rule,
   was: Stamp | null,
   n: number,
   now: string,
+  prepared: Batch = batch(m, rule, was, n),
 ): Stamp => {
-  let rows: Bundle[]
-  try {
-    rows = sync(m.read(page(rule, n, was?.after)))
-  } catch (e) {
-    if (!(e instanceof Unknown)) throw e
+  let { rows, patch, unspoken } = prepared
+  if (unspoken) {
     return {
       ...was,
       moved: was?.moved ?? 0,
       at: now,
       done: now,
-      unspoken: e.prop,
+      unspoken,
     }
   }
-  if (rows.length) {
-    let read = (line: string) => sync(m.read(line))
-    sync(m.apply(rows.flatMap((row) => rule.move(row, read))))
-  }
+  if (patch.length) sync(m.apply(patch))
   if (rows.length < n && rule.drop?.length) {
     if (!m.drop) {
       throw new Error('a store mover must support property contraction')

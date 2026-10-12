@@ -10,6 +10,7 @@ import { provisionalDoc } from '@yaks/effects'
 import { type Bundle, type Graph, graph } from '@yaks/graph'
 import { ram } from '@yaks/ram'
 import { toolsDoc } from '@yaks/tools/vocab'
+import { kernelDoc } from '@yaks/kernel/vocab'
 import { loadVocab } from '@yaks/vocab'
 import {
   isHandle,
@@ -34,9 +35,9 @@ import {
 
 // The graph a host builds: the plugin over one vault, writing what it says
 // about a seal back through the graph, and reporting where the graph does. `call` is @yaks/tools', a component whose
-// text carries a whole batch as JSON, and so are `error`, `exception` and
-// `content`, the words a failed seal is said in.
-let vocab = loadVocab([secretsDoc, provisionalDoc, toolsDoc, docDoc])
+// text carries a whole batch as JSON. `failed` records a terminal seal outcome;
+// the original failure reaches the graph's reporter.
+let vocab = loadVocab([secretsDoc, provisionalDoc, toolsDoc, docDoc, kernelDoc])
 let setup = <V extends Vault = Local>(vault: V = ramVault() as V) => {
   let reported: unknown[] = []
   let g = graph({
@@ -265,22 +266,31 @@ test('a failure the vault calls retryable is provisional, tried again until it s
   assertEquals(reported, [])
 })
 
-test('any other failure is an exception, reported, and the value is gone', async () => {
+let terminalSeal = await (async () => {
   let { g, vault, reported } = setup(failing(new Error('no such table')))
   await g.apply([sealed('A', 'one')])
   let said = (await whole(g, 'A'))!
-  assertEquals([said.provisional, said.error], [undefined, undefined])
-  assertEquals(said.exception, {})
-  assert(
-    String((said.content as Record<string, string>).body).includes('no such'),
-  )
-  assertEquals((reported[0] as Error).message, 'no such table')
-  assertEquals(await reveal(vault, 'A', none), undefined)
-  // Given again, it seals, and the failure is over.
+  let missing = await reveal(vault, 'A', none)
   await g.apply([sealed('A', 'one')])
   let now = (await whole(g, 'A'))!
-  assertEquals([now.exception, now.content], [undefined, undefined])
-  assertEquals(await reveal(vault, 'A'), 'one')
+  let value = await reveal(vault, 'A')
+  return { said, now, missing, value, reported }
+})()
+test('a terminal seal failure records its outcome, reports once and can be retried', () => {
+  let { said, now, missing, value, reported } = terminalSeal
+  assertEquals([said.provisional, said.error], [undefined, undefined])
+  assertEquals(said.exception, undefined)
+  assertEquals(
+    (said.failed as Record<string, unknown>).reason,
+    'the key could not be saved: no such table',
+  )
+  assertEquals(said.content, undefined)
+  assertEquals(reported.length, 1)
+  assertEquals((reported[0] as Error).message, 'no such table')
+  assertEquals(missing, undefined)
+  // Given again, it seals, and the failure is over.
+  assertEquals([now.failed, now.content], [undefined, undefined])
+  assertEquals(value, 'one')
 })
 
 test('a retryable failure that outlasts every try is reported', async () => {
@@ -291,7 +301,11 @@ test('a retryable failure that outlasts every try is reported', async () => {
   await writing
   let said = (await whole(g, 'A'))!
   assertEquals(said.provisional, undefined)
-  assertEquals([said.error, said.exception], [undefined, {}])
+  assertEquals([said.error, said.exception], [undefined, undefined])
+  assertEquals(
+    (said.failed as Record<string, unknown>).reason,
+    'the key could not be saved: Network connection lost.',
+  )
   assertEquals(reported.length, 1)
 })
 

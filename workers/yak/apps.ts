@@ -1346,7 +1346,6 @@ let api = async (
       : null
     for (let broke of reports) {
       await noted(
-        (bundles) => metaOf(store).apply(bundles, KERNEL),
         { ...broke, version: broke.version ?? version },
         { env, space, app, request: req },
       )
@@ -1584,7 +1583,6 @@ let api = async (
             : await serving(env, space, app)
           let url = new URL(req.url)
           await noted(
-            (bundles) => metaOf(store).apply(bundles, KERNEL),
             {
               request: `${req.method} ${url.pathname}${url.search}`,
               version,

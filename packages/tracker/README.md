@@ -89,15 +89,16 @@ hundred plus the first occurrence of each commit (or version without a commit).
 
 ## Browsing
 
-The tracker writes the first error's type and value (or message) to `doc.title`.
-A bug's **headline** is the first line of that title, with terminal colours left
-out, an address without its query and an id or a long number cut to its start.
-Wherever a bug is named (a list row, a link, a card's bar) it reads as its
-headline; its page shows the whole message on a press. `bug.fault` is the
-grouping key, on the bug's page behind a press. The `./views` facet exports
-portable bug and error readings, and inspector views whose `asks` request the
-bug's errors. The host answers those asks and draws each error through the same
-registry. The count includes trimmed errors.
+The tracker writes the first error's exception type and value, or its
+`error.message` when nothing was thrown, to `doc.title`. A bug's **headline** is
+the first line of that title, with terminal colours left out, an address without
+its query and an id or a long number cut to its start. Wherever a bug is named
+(a list row, a link, a card's bar) it reads as its headline; its page shows the
+whole message on a press. `bug.fault` is the grouping key, on the bug's page
+behind a press. The `./views` facet exports portable bug and error readings, and
+inspector views whose `asks` request the bug's errors. The host answers those
+asks and draws each error through the same registry. The count includes trimmed
+errors.
 
 The box config sets `@yaks/web`’s `with.home` (`title` and `query`) to list open
 bugs by descending `bug.hits` (worst first); resolved and archived bugs remain
@@ -178,9 +179,11 @@ and hosted app files remain text: v1 supplies no source-map guesses.
 The browser capture script is served through the platform asset and uses the
 platform intake payload. The platform admits captured failures into the tracker.
 
-Tools still declares legacy exception fields until T-59080 migrates them. Its
-new `type` and `value` coexist with those fields; tracker extends only `frames`
-and `mechanism` for now. No legacy exception rows are cleared.
+[@yaks/tools](../tools/README.md) declares `exception{type, value}` for what was
+thrown in an answer or transcript entry. Tracker extends it with `stack`,
+`frames` and `mechanism` on an error occurrence. Catch boundaries report the
+original failure separately; recording a failed call's history never creates
+another occurrence.
 
 ## Box delivery
 

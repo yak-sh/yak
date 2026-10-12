@@ -156,8 +156,13 @@
     "exception": {
       "component": true,
       "type": "object",
-      "description": "The tracker’s thrown-value detail; legacy stack belongs to tools until T-59080.",
+      "description": "The tracker’s stack, parsed frames and catch mechanism for a thrown value.",
       "properties": {
+        "stack": {
+          "type": "string",
+          "stamped": true,
+          "description": "The stack trace, as the runtime reported it."
+        },
         "frames": {
           "type": "array",
           "stamped": true,

@@ -121,26 +121,15 @@ export type Breaks = (bundles: Bundle[]) => Promise<unknown>
 export let metaBreaks = (env: Env): Breaks => (bundles) =>
   meta(env).apply(bundles, KERNEL)
 
-/** A build retry receipt or pre-tracker failure's legacy exception shape. */
-export let exceptionOf = (broke: {
-  request: string
-  requestId?: string
-  version?: number | null
-  message: string
-  stack?: string
-}) => ({
-  at: new Date().toISOString(),
-  request: broke.request,
-  request_id: broke.requestId ?? null,
-  version: broke.version ?? null,
-  message: broke.message,
-  stack: broke.stack ?? '',
-})
-
 export let noted = async (
-  breaks: Breaks,
-  broke: Parameters<typeof exceptionOf>[0],
-  at?: {
+  broke: {
+    request: string
+    requestId?: string
+    version?: number | null
+    message: string
+    stack?: string
+  },
+  at: {
     env: Env
     space: Space
     app: App
@@ -177,10 +166,8 @@ export let noted = async (
         request_id: broke.requestId,
       },
     }))
-  } else {
-    await breaks([{ entity: { eid: '$broke' }, exception: exceptionOf(broke) }])
   }
-  if (!at || hushed(at.space, at.app)) return
+  if (hushed(at.space, at.app)) return
   try {
     let dir = directory(bound(at.env.DIRECTORY, dirPart.fetch, at.env))
     // The same line the unseen block will carry, minus the id — this seam

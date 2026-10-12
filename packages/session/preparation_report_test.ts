@@ -48,15 +48,14 @@ let recorded = fixture()
 await settle(recorded.g, 'child', recorded.r)
 let rejected = fixture(true)
 
-test('a preparation defect records its original exception without a direct report', async () => {
+test('a preparation defect reports its original error once and keeps history', async () => {
   let { g, told } = recorded
   let [row] = await g.get(['child:preparation-error'])
   equal(row.exception, {
     type: defect.name,
     value: defect.message,
-    stack: defect.stack,
   })
-  equal(told, [])
+  equal(told, [defect])
 })
 
 test('a rejected preparation exception write reports the original defect once', async () => {

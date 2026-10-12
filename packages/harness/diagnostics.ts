@@ -1,9 +1,8 @@
-/** Defect receipts are not transcript entries: recording one must not wake a
- * model. An exception a process catches is an `exception` entity in the graph
- * where it matters — and where there is no graph to take it, or the graph is
- * the thing that broke, it is stderr. There is no second journal.
+/** Diagnostics deliver scrubbed failures to the host's reporter without
+ * writing transcript entries or local defect rows. With no reporter, or when
+ * delivery fails, stderr keeps the failure. There is no second journal.
  */
-import type { Bundle, Graph } from '@yaks/graph'
+import type { Host } from '@yaks/host'
 
 export type FailureContext = { phase: string; session?: string }
 export let describeFailure = (error: unknown): string => {
@@ -24,7 +23,7 @@ export let createDiagnostics = (opts: {
 } = {}) => {
   let seen = new WeakSet<object>()
   let pending = new Set<Promise<void>>()
-  let sinks: ((row: Bundle) => unknown)[] = []
+  let sinks: NonNullable<Host['report']>[] = []
   let warn = opts.warn ?? ((text: string) => console.error(text))
   let redact = (text: string) => {
     for (let secret of opts.secrets ?? []) {
@@ -52,16 +51,22 @@ export let createDiagnostics = (opts: {
     let save = sinks.at(-1)
     // Nowhere to write it is not nowhere to say it: the terminal is the floor.
     if (!save) return warn(JSON.stringify(record))
+    let thrown = new Error(
+      redact(error instanceof Error ? error.message : String(error)),
+    )
+    thrown.name = error instanceof Error ? error.name : 'Error'
+    thrown.stack = body
     let job = Promise.resolve().then(() =>
-      save({
-        entity: { eid: id },
-        exception: {},
-        content: { body: JSON.stringify(record, null, 2) },
+      save(thrown, {
+        eid: id,
+        at: record.at,
+        tags: { phase: context.phase, pid: record.pid },
+        ...(context.session ? { during: { session: context.session } } : {}),
       })
     ).then(() => {}, (failure) => {
-      // Never recursively try to write a database failure to that database.
+      // A failed report cannot recursively report itself.
       warn(
-        'Exception graph write failed: ' + redact(describeFailure(failure)) +
+        'Diagnostic delivery failed: ' + redact(describeFailure(failure)) +
           '\nOriginal exception: ' + body,
       )
     })
@@ -70,8 +75,7 @@ export let createDiagnostics = (opts: {
   }
   return {
     report,
-    attach: (g: Pick<Graph, 'apply'>) => {
-      let save = (row: Bundle) => g.apply([row], { trusted: true })
+    attach: (save: NonNullable<Host['report']>) => {
       sinks.push(save)
       return () => {
         let at = sinks.indexOf(save)
@@ -85,7 +89,7 @@ export let createDiagnostics = (opts: {
         new Promise<void>((done) => timer = setTimeout(done, timeout)),
       ])
       clearTimeout(timer)
-      if (pending.size) warn('Exception graph writes still pending')
+      if (pending.size) warn('Diagnostic deliveries still pending')
     },
   }
 }

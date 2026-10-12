@@ -4,6 +4,7 @@ import { test } from '@yaks/testing'
 import './testing.ts'
 import { assertEquals } from '@std/assert'
 import { type EntryRow, graphLog, pageEntries } from './entry_log.ts'
+import { exceptionOf } from '@yaks/tools'
 
 let row = (
   eid: string,
@@ -113,7 +114,7 @@ test('what an entry is decides its row', () => {
     }),
     { kind: 'error', text: 'is_error: not permitted' },
   )
-  assertEquals(shown({ exception: { message: 'boom' } }), {
+  assertEquals(shown({ exception: exceptionOf(new Error('boom')) }), {
     kind: 'error',
     text: 'boom',
   })

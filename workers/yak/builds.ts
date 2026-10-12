@@ -26,7 +26,7 @@
 import { Stale } from '@yaks/graph'
 import type { Env } from './env.ts'
 import { caught, defect } from './defects.ts'
-import { type Breaks, exceptionOf, metaBreaks } from './unseen.ts'
+import { type Breaks, metaBreaks } from './unseen.ts'
 import { accountUrl } from './workers_api.ts'
 
 /** The part of a Workers Builds event this reads. */
@@ -204,20 +204,13 @@ export let diagnosed = async (env: Env, b: Broke): Promise<Broke> => {
  * only the first note of a commit does. A build with no commit is noted under
  * an id of its own and earns none. */
 export let first = async (breaks: Breaks, b: Broke): Promise<boolean> => {
-  let exception = exceptionOf({
-    request: b.request,
-    message: b.error.message,
-    stack: b.error.stack,
-  })
-  if (!b.commit) {
-    await breaks([{ entity: { eid: '$broke' }, exception }])
-    return false
-  }
+  if (!b.commit) return false
+  let failed = { at: new Date().toISOString(), reason: b.error.message }
   try {
     await breaks([{
       entity: { eid: b.commit },
-      $was: { exception: { request: null } },
-      exception,
+      $was: { failed: { at: null } },
+      failed,
     }])
     return true
   } catch (e) {

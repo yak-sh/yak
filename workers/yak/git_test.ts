@@ -184,14 +184,11 @@ test('the git object store can write down a break of its own', async () => {
   let [noted] = await git.apply([{
     entity: { eid: crypto.randomUUID() },
     exception: {
-      at: new Date().toISOString(),
-      request: 'wake seed',
-      version: null,
-      message: 'it broke',
-      stack: '',
+      type: 'Error',
+      value: 'it broke',
     },
   }], KERNEL)
-  assertObjectMatch(noted, { exception: { message: 'it broke' } })
+  assertObjectMatch(noted, { exception: { value: 'it broke' } })
 })
 
 test('the next deploy follows the last one and moves the branch', async () => {

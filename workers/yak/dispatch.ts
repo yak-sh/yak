@@ -52,14 +52,13 @@ import type { Caller } from '@yaks/egress'
 import { COOKIE, opened, seal } from './lib/token.ts'
 import { sha256 } from '@yaks/graph'
 import type { App, Role, Space } from './directory.ts'
-import { appStore, storeName, url } from './directory.ts'
+import { storeName, url } from './directory.ts'
 import type { Env } from './env.ts'
 import { accountUrl } from './workers_api.ts'
 import { oops } from './pages.ts'
 import type { Who } from './session.ts'
 import type { Dispatch } from './door.ts'
 import { failed, noted, refusal } from './unseen.ts'
-import { KERNEL, metaOf } from './meta.ts'
 import {
   type Bound,
   type Config,
@@ -364,9 +363,7 @@ export let workerBreak = async (
   if (refused(error) || refusal(error.message)) return
   let request = `worker ${req.method} ${new URL(req.url).pathname}`
   let version = app.version
-  await noted((bundles) =>
-    metaOf(appStore(env.STORE, space, app))
-      .apply(bundles, KERNEL), {
+  await noted({
     request,
     version,
     message: error.message,

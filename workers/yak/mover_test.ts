@@ -3,13 +3,17 @@
 // leaves the store serving until fixed code arrives.
 import { test } from '@yaks/testing'
 import { assert, assertEquals, assertRejects } from '@std/assert'
-import { type Bundle, type Comp, Stale, token } from '@yaks/graph'
-import { pick } from '@yaks/vocab'
+import { type Bundle, type Comp, graph, Stale, token } from '@yaks/graph'
+import { loadVocab, pick, type VocabDoc } from '@yaks/vocab'
 import { kernelDoc } from '@yaks/kernel/vocab'
 import { doorOf, PLATFORM_STORE } from './door.ts'
 import { commitRule } from './git-move.ts'
 import { lit } from '@yaks/sql'
-import { Store } from './graph.ts'
+import { shapeOf, Store } from './graph.ts'
+import { storage as sqliteStorage } from '@yaks/sqlite'
+import { blobRead, blobs, sqliteBlobs } from '@yaks/blob'
+import { metaKeywords } from './vocab.ts'
+import { exceptionRule, exceptionSource } from './exception-move.ts'
 import { KERNEL, metaOf } from './meta.ts'
 import {
   dispatchMove,
@@ -49,8 +53,16 @@ let rule = (o: Partial<Rule> = {}): Rule => ({
 
 // One app store holding `n` rows in the old shape, and the doors onto it.
 let store = async (n: number, ...rules: Rule[]) => {
+  return await movingStore(n, {}, rules)
+}
+
+let movingStore = async (
+  n: number,
+  env: ConstructorParameters<typeof Store>[1],
+  rules: Rule[],
+) => {
   let ctx = state()
-  let o = new Store(ctx, {}, rules)
+  let o = new Store(ctx, env, rules)
   let fetch = (r: Request) => o.fetch(r)
   let door = doorOf(fetch, NAME)
   let meta = metaOf(door)
@@ -65,7 +77,7 @@ let store = async (n: number, ...rules: Rule[]) => {
     await meta.apply(rows.slice(i, i + 100) as Bundle[], KERNEL)
   }
   return {
-    wake: (...rules: Rule[]) => o = new Store(ctx, {}, rules),
+    wake: (...rules: Rule[]) => o = new Store(ctx, env, rules),
     columns: (name: string) =>
       driver(ctx.storage).query({ t: 'pragma', name: 'table_info', arg: name })
         .map((c) => c.name),
@@ -83,6 +95,20 @@ let store = async (n: number, ...rules: Rule[]) => {
     query: (q: string) => meta.query(q),
     declare: (doc: unknown) => post('/vocab', JSON.stringify(doc)),
     apply: (rows: Bundle[]) => meta.apply(rows, KERNEL),
+    legacy: (rows: Bundle[], doc: VocabDoc) => {
+      let vocab = loadVocab(
+        [...shapeOf(NAME, WORDS).vocab.docs, doc],
+        metaKeywords,
+      )
+      let g = graph({
+        vocab,
+        plugins: [blobs(vocab, sqliteBlobs(driver(ctx.storage)))],
+        storage: sqliteStorage(driver(ctx.storage), vocab, {
+          derived: blobRead(vocab),
+        }),
+      })
+      return g.apply(rows, { trusted: true })
+    },
     moves: async () => (await post('/move')).rules as Standing[],
     held: async () => (await post('/move')).alarm as string | null,
     rehearse: async () => (await post('/move?rehearse=1')).rules as Rehearsal[],
@@ -714,3 +740,197 @@ test('legacy done effect cleanup rehearses without moving human data or failures
   )
   assertEquals((await s.query('.effect.state=pending')).length, 1)
 })
+
+// Store setup and alarms are fixture preparation; the timed test checks their
+// captured interface answers, including delivery-time observations.
+let proof = async (
+  name: string,
+  run: (
+    equal: (actual: unknown, expected: unknown) => void,
+    ok: (value: unknown) => void,
+  ) => Promise<void>,
+) => {
+  let checks: (() => void)[] = []
+  await run(
+    (actual, expected) => {
+      let observed = structuredClone(actual), wanted = structuredClone(expected)
+      checks.push(() => assertEquals(observed, wanted))
+    },
+    (value) => checks.push(() => assert(value)),
+  )
+  test(name, () => {
+    for (let check of checks) check()
+  })
+}
+
+let forwarding = (): Rule & { forward: (row: Bundle) => Bundle[] } => ({
+  ...rule(),
+  forward: (row) => [{ entity: row.entity, now: row.was }],
+})
+
+await proof(
+  'a mover forwards durably before removal and rehearsal never sends',
+  async (equal) => {
+    let sent: Bundle[][] = []
+    let s = await movingStore(1, {
+      ERRORS: {
+        send: async (rows) => {
+          equal(await count(s, '.was'), 1)
+          sent.push(rows)
+        },
+      },
+    }, [forwarding()])
+    let before = await s.query('*')
+    equal((await s.rehearse())[0].moved, 1)
+    equal(sent, [])
+    equal(await s.query('*'), before)
+    await s.alarm()
+    equal(sent.length, 1)
+    equal(
+      sent[0].map((b) => b.entity.eid),
+      before.filter((b) => b.was).map((b) => b.entity.eid),
+    )
+    equal(await count(s, '.was'), 0)
+    equal((await s.moves())[0].moved, 1)
+  },
+)
+
+await proof(
+  'a failed mover delivery retains source rows and retries the same identities',
+  async (equal) => {
+    let sent: Bundle[][] = [], fail = true
+    let s = await movingStore(1, {
+      ERRORS: {
+        send: (rows) => {
+          sent.push(rows)
+          return fail
+            ? Promise.reject(new Error('queue unavailable'))
+            : Promise.resolve()
+        },
+      },
+    }, [forwarding()])
+    let before = await s.query('*')
+    await s.alarm()
+    equal(await s.query('*'), before)
+    equal((await s.moves())[0].failed, 'queue unavailable')
+    equal((await s.moves())[0].moved, 0)
+    fail = false
+    s.wake(forwarding())
+    await s.alarm()
+    equal(sent.length, 2)
+    equal(sent[1], sent[0])
+    equal(await count(s, '.was'), 0)
+  },
+)
+
+await proof(
+  'exception migration retains transcript history and durably transfers standalone reports',
+  async (equal, ok) => {
+    let sent: Bundle[][] = []
+    let s = await movingStore(0, {
+      ERRORS: {
+        send: (rows) => {
+          sent.push(rows)
+          return Promise.resolve()
+        },
+      },
+    }, [exceptionRule])
+    await s.legacy([
+      {
+        entity: { eid: 'history' },
+        output: {},
+        content: { body: 'tool failed' },
+        exception: { message: 'tool failed', stack: 'trace' },
+      },
+      {
+        entity: { eid: 'report' },
+        doc: { title: 'preserved alongside report' },
+        exception: {
+          at: '2026-10-01T10:00:00.000Z',
+          message: 'broken app',
+          stack: 'report trace',
+          request_id: 'request-42',
+        },
+      },
+    ], exceptionSource)
+    equal((await s.query('preserved')).map((b) => b.entity.eid), [
+      'report',
+    ])
+    let before = await s.query('*')
+    let [proof] = await s.rehearse()
+    equal([proof.rows, proof.moved, proof.failed], [2, 2, undefined])
+    equal(sent, [])
+    equal(await s.query('*'), before)
+    ok(s.columns('exception').includes('message'))
+    s.wake({ ...exceptionRule, live: 'apps' })
+    await s.alarm()
+    equal(sent.length, 1)
+    equal(sent[0].length, 1)
+    let record = sent[0][0]
+    equal((record.error as Comp).at, '2026-10-01T10:00:00.000Z')
+    equal((record.exception as Comp).value, 'broken app')
+    equal((record.exception as Comp).stack, 'report trace')
+    equal((record.during as Comp).entity, 'report')
+    let [history] = await s.query('.entity.eid=history&*')
+    equal(history.exception, { type: 'Error', value: 'tool failed' })
+    equal((history.content as Comp).body, 'tool failed\n\ntrace')
+    let [report] = await s.query('.entity.eid=report&*')
+    equal((report.doc as Comp).title, 'preserved alongside report')
+    equal(report.exception, undefined)
+    ok(!s.columns('exception').includes('message'))
+    equal((await s.query('preserved')).map((b) => b.entity.eid), [
+      'report',
+    ])
+    await s.apply([{
+      entity: { eid: 'report' },
+      doc: { title: 'search after move' },
+    }])
+    equal((await s.query('preserved')).length, 0)
+    equal((await s.query('search')).map((b) => b.entity.eid), ['report'])
+    equal((await s.moves())[0].moved, 2)
+    await s.alarm()
+    equal(sent.length, 1)
+  },
+)
+
+await proof(
+  'mover source guards retain changes made while delivery is in flight',
+  async (equal, ok) => {
+    let s = await movingStore(1, {
+      ERRORS: {
+        send: async () => {
+          let [row] = await s.query('.was&*')
+          await s.apply([{
+            entity: row.entity,
+            was: { word: 'changed during delivery' },
+          }])
+        },
+      },
+    }, [{
+      ...forwarding(),
+      move: (row) =>
+        rule().move(row).map((patch) => ({
+          ...patch,
+          $was: { was: { word: token((row.was as Comp).word) } },
+        })),
+    }])
+    await s.alarm()
+    let [row] = await s.query('.was&*')
+    equal((row.was as Comp).word, 'changed during delivery')
+    equal(await count(s, '.now'), 0)
+    equal((await s.moves())[0].moved, 0)
+    ok((await s.moves())[0].failed?.includes('was.word'))
+  },
+)
+
+await proof(
+  'a platform move skips a component declared by the app',
+  async (equal) => {
+    let s = await store(1, rule({ core: ['was'] }))
+    equal(await s.rehearse(), [])
+    await s.alarm()
+    equal(await count(s, '.was'), 1)
+    equal(await count(s, '.now'), 0)
+    equal(await s.moves(), [])
+  },
+)

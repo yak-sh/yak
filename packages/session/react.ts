@@ -726,20 +726,22 @@ export let react = async (
     added: Bundle[],
     failure?: { error: unknown; phase: string },
   ): Promise<Step> => {
+    let superseded = false
     try {
       added = await g.apply(added, { trusted: true })
     } catch (error) {
-      let superseded = error instanceof Stale && error.comp == 'attempt' &&
+      superseded = error instanceof Stale && error.comp == 'attempt' &&
         error.prop == 'by' && added.some((b) =>
           b.entity.eid == error.eid && b.$was?.attempt?.by != null
         )
+      throw error
+    } finally {
       if (failure && !superseded) {
         let exception = exceptionOf(failure.error)
         if (actionable(String(exception.value))) {
           deps.report?.(failure.error, session, failure.phase)
         }
       }
-      throw error
     }
     return {
       did: 'asked',

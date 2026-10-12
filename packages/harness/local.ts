@@ -121,7 +121,7 @@ export type Here = {
  * where a defect is written. */
 export let here = (h: Harness, opts: Omit<Opts, 'h'> = {}): Here => {
   let env = opts.env ?? Deno.env.get
-  let detach = diagnostics().attach(h.g)
+  let detach = h.report ? diagnostics().attach(h.report) : () => {}
   let report = (error: unknown, where: FailureContext) =>
     diagnostics().report(error, where)
   let binding = machines(h.g, opts.machines ?? h.machines)

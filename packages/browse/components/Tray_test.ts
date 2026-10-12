@@ -158,8 +158,7 @@ test('a session exception reads failed while the session rests', () => {
   let e = status('running', 'idle')
   e.exception = {
     eid: e.eid,
-    at: '2026-07-01T00:00:00Z',
-    message: 'responses: failed',
+    value: 'responses: failed',
   }
   assertEquals(graphStanding(e), 'failed')
 })

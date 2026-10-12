@@ -16,7 +16,7 @@ let fixture = async (pending = false) => {
     {
       entity: { eid: 'error' },
       error: { bug: 'bug', message: 'Old failure' },
-      exception: { type: 'Error', message: 'Old failure' },
+      exception: { type: 'Error', value: 'Old failure' },
     },
     ...pending
       ? [{

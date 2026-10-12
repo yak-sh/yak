@@ -563,17 +563,17 @@ adapter and its performance limits are documented in
 ### Defect diagnostics
 
 Unexpected failures at the executable boundary (including global errors and
-unhandled rejections), runner steps, effects, and frontend
-projections/submissions become an `exception` entity in the graph. Inspect
-`.exception` through the graph tools. These diagnostic entities have no `entry`:
-they neither enter a conversation nor wake a model. Their `content.body`
-contains JSON with the stack, recursive cause chain, timestamp, process ID,
-phase, and session when known. Expected tool refusals use `refusal{code}`.
+unhandled rejections), runner steps, effects and frontend
+projections/submissions reach the host's reporter. The tracker keeps their
+stack, recursive cause chain, timestamp, process ID, phase and session when
+known. Expected tool refusals use `refusal{code}`. A transcript's
+`exception{type, value}` keeps what happened in the conversation and does not
+create another defect report.
 
-There is no second journal. If no graph is available or the diagnostic graph
-write fails, the record is written to stderr as one JSON line. A failed
-diagnostic write includes the original failure without recursively attempting
-more graph writes. Graph writes drain for at most 250ms at executable shutdown.
+There is no second journal. With no reporter, a record is written to stderr as
+one JSON line. A failed delivery includes the original failure without
+recursively reporting itself. Deliveries drain for at most 250ms at executable
+shutdown.
 
 Global handlers observe rather than suppress fatal runtime defaults, restoring
 the terminal on the fatal path. Embedded users of `local()` get runner

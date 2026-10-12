@@ -211,7 +211,7 @@ import {
   reads,
 } from '@yaks/member'
 import { and, eq as equals, fields as project, list, parse } from '@yaks/query'
-import { effectsIn, type Vocab, type VocabDoc } from '@yaks/vocab'
+import { effectsIn, loadVocab, type Vocab, type VocabDoc } from '@yaks/vocab'
 import { type Anatomy, anatomy } from '@yaks/code/anatomy'
 import { workerAnatomy } from './anatomy.ts'
 import { answerOf, type Runner, runner, toolEid } from '@yaks/tools'
@@ -254,9 +254,9 @@ import {
 } from './door.ts'
 import { type Meta, meta, metaOf, minted } from './meta.ts'
 import { caught, defect } from './defects.ts'
-import { runtimeExceptions } from './runtime_exceptions.ts'
 import { counts, hop, type Tally, tallying } from './lib/hops.ts'
 import {
+  batch,
   BATCHES,
   type Mark,
   type Moving,
@@ -327,6 +327,7 @@ import {
   gitVocab,
   grew,
   meant,
+  metaKeywords,
   numbered,
   platformVocab,
   storeWords,
@@ -1309,21 +1310,6 @@ export class Store {
       doc: 'arm this object for the wake a write just moved',
       created: (e) => this.#arming(e.comp?.at as string),
       changed: { at: (e) => this.#arming(e.comp?.at as string) },
-    })
-    runtimeExceptions(fx, async (error, event, tx) => {
-      let [row] = await tx.get([event.entity.eid])
-      let source = (row?.output as Comp | undefined)?.source
-      let [origin] = source ? await tx.get([String(source)]) : []
-      let request = origin?.call
-        ? 'tool'
-        : event.entity.eid.endsWith(':preparation-error')
-        ? 'model prepare'
-        : origin?.ask
-        ? 'model'
-        : row?.entry
-        ? 'model compaction'
-        : 'exception'
-      defect(error, { request, store: name })
     })
     wakeRegistered()
     // The app's own commands, run here (T-37605, D-37562). @yaks/tools
@@ -2460,40 +2446,119 @@ export class Store {
 
   #moves = (): Rule[] =>
     (this.#lensMove ? [...this.#rules, this.#lensMove] : this.#rules)
-      .filter((r) => !r.stores || r.stores.includes(this.#get('name') ?? ''))
+      .filter((r) =>
+        (!r.stores || r.stores.includes(this.#get('name') ?? '')) &&
+        !r.core?.some((comp) =>
+          meant(this.#get('vocab')).$defs?.[comp]?.component === true
+        )
+      )
 
   // The store as a rule reaches it. The patch is the kernel's own write, and
   // its effects wait in `held` for the caller: run once the batch commits,
   // dropped when it is a rehearsal.
-  #mover = (held: (() => void | Promise<void>)[]): Moving => ({
-    read: (q) => this.#graph.read(q, { native: true }),
-    rows: (q) => this.#graph.rows(q, { native: true }),
-    apply: (patch) =>
-      this.#trust(patch, null, {
-        deferEffects: (run) => void held.push(run),
-      }),
-    tx: (body) => this.#tx(body),
-    drop: (paths) => {
-      if (ownStore(this.#get('name') ?? '')) {
-        for (let path of paths) {
-          let [comp, prop, extra] = path.split('.')
-          if (!prop || extra || this.#vocab.prop(comp, prop)) {
-            throw new Error(`cannot contract declared core property ${path}`)
-          }
-          shed(this.#sql, this.#vocab, this.#vocab, comp, prop)
-        }
-        let errors = install(this.#sql, this.#vocab, blobRead(this.#vocab))
-        if (errors.length) throw errors[0]
-        watchEmbedding(statements(this.#sql), this.#texts.fields)
-        return
+  #mover = (held: (() => void | Promise<void>)[], rule?: Rule): Moving => {
+    let g = this.#graph
+    if (rule?.source) {
+      let source = {
+        ...rule.source,
+        $defs: Object.fromEntries(
+          Object.entries(rule.source.$defs ?? {}).map(([comp, schema]) => {
+            let columns = this.#sql.query({
+              t: 'pragma',
+              name: 'table_info',
+              arg: comp,
+            }).map((c) => c.name)
+            return [comp, {
+              ...schema,
+              properties: Object.fromEntries(
+                Object.entries(schema.properties ?? {}).filter(([prop]) =>
+                  !this.#vocab.prop(comp, prop) && columns.includes(prop)
+                ),
+              ),
+            }]
+          }),
+        ),
       }
-      let was = appDoc(this.#get('vocab') ?? '{}')
-      this.#put(
-        'vocab',
-        this.#prepared(JSON.stringify(contractPaths(was, paths))),
-      )
-    },
-  })
+      let vocab = loadVocab([...this.#vocab.docs, source], metaKeywords)
+      let derived = {
+        ...blobRead(vocab),
+        ...(!ownStore(this.#get('name') ?? '')
+          ? appDerived(vocab, blobRead(vocab))
+          : {}),
+      }
+      g = graph({
+        vocab,
+        storage: sqliteStorage(this.#sql, vocab, {
+          schemaReady: () => true,
+          derived,
+          number: numbered(vocab),
+        }),
+        plugins: this.#graph.plugins,
+        report: (error, { phase, plugin }) =>
+          defect(error, {
+            request: `${plugin} ${phase}`,
+            store: this.#get('name'),
+          }),
+      })
+    }
+    return {
+      context: {
+        store: this.#get('name') ?? '',
+        ...this.#get('app') ? { app: this.#get('app')! } : {},
+        ...this.#get('space') ? { space: this.#get('space')! } : {},
+      },
+      read: (q) => g.read(q, { native: true }),
+      rows: (q) => g.rows(q, { native: true }),
+      apply: (patch) => {
+        let was = this.#kernelling
+        this.#kernelling = true
+        try {
+          return g.apply(signed(patch, null), {
+            trusted: true,
+            deferEffects: (run) => void held.push(run),
+          })
+        } finally {
+          this.#kernelling = was
+        }
+      },
+      tx: (body) => this.#tx(body),
+      drop: (paths) => {
+        let contracted = false
+        let retained = paths.filter((path) => {
+          let [comp, prop] = path.split('.')
+          if (!prop || this.#vocab.prop(comp, prop)) return true
+          shed(this.#sql, this.#vocab, this.#vocab, comp, prop)
+          contracted = true
+          return false
+        })
+        if (contracted) {
+          let errors = install(this.#sql, this.#vocab, blobRead(this.#vocab))
+          if (errors.length) throw errors[0]
+          watchEmbedding(statements(this.#sql), this.#texts.fields)
+        }
+        if (!retained.length) return
+        paths = retained
+        if (ownStore(this.#get('name') ?? '')) {
+          for (let path of paths) {
+            let [comp, prop, extra] = path.split('.')
+            if (!prop || extra || this.#vocab.prop(comp, prop)) {
+              throw new Error(`cannot contract declared core property ${path}`)
+            }
+            shed(this.#sql, this.#vocab, this.#vocab, comp, prop)
+          }
+          let errors = install(this.#sql, this.#vocab, blobRead(this.#vocab))
+          if (errors.length) throw errors[0]
+          watchEmbedding(statements(this.#sql), this.#texts.fields)
+          return
+        }
+        let was = appDoc(this.#get('vocab') ?? '{}')
+        this.#put(
+          'vocab',
+          this.#prepared(JSON.stringify(contractPaths(was, paths))),
+        )
+      },
+    }
+  }
 
   // A few batches, yielding the object between them, then the alarm again for
   // whatever is left.
@@ -2509,8 +2574,18 @@ export class Store {
         let s: Stamp
         let vocabWas = this.#get('vocab')
         try {
+          let m = this.#mover(held, rule)
+          let plan = this.#tx(() => batch(m, rule, was, SIZE))
+          if (plan.forward.length) {
+            if (!this.#bind.ERRORS) {
+              throw new Error('mover delivery is unavailable')
+            }
+            for (let record of plan.forward) {
+              await this.#bind.ERRORS.send([record])
+            }
+          }
           s = this.#tx(() => {
-            let s = step(this.#mover(held), rule, was, SIZE, now)
+            let s = step(m, rule, was, SIZE, now, plan)
             this.#put(rule.mark, JSON.stringify(s))
             return s
           })
@@ -3472,7 +3547,9 @@ export class Store {
       if (!kernel) return json({ error: 'NotFound', message: 'no route' }, 404)
       let store = this.#get('name') ?? ''
       if (new URL(request.url).searchParams.get('rehearse') == '1') {
-        let rules = rehearse(this.#mover([]), this.#moves(), SIZE)
+        let rules = this.#moves().flatMap((rule) =>
+          rehearse(this.#mover([], rule), [rule], SIZE)
+        )
         this.#kv.clear()
         return Response.json({ store, rules })
       }

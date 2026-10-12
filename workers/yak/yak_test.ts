@@ -387,7 +387,7 @@ test('the kernel routes, vouches, serves, and surfaces', async () => {
       headers: { cookie, 'x-yak-kernel': '1' },
       body: JSON.stringify([{
         entity: { eid: crypto.randomUUID() },
-        exception: { message: 'forged' },
+        exception: { value: 'forged' },
       }]),
     })
     assertEquals(forgedFlag.status, 200)

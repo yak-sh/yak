@@ -1,4 +1,4 @@
-// Exception writers and heal use the same reporting filter.
+// Catch boundaries share the reporting filter declared by @yaks/tools.
 
 /**
  * Whether a failure is worth reporting: anything but a known transient.

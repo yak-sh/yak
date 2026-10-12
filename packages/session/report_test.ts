@@ -22,7 +22,6 @@ let original = new TypeError('model defect')
 let exception = {
   type: original.name,
   value: original.message,
-  stack: original.stack,
 }
 let storageError = new Error('database is full')
 
@@ -93,7 +92,7 @@ for (let phase of ['model', 'compaction', 'forced'] as const) {
   for (let fails of [false, true]) {
     // Fixture composition is shared setup, outside the timed behavior.
     let { g, deps, saved, reported } = await fixture(phase, fails)
-    test(`${phase} defects ${fails ? 'report their original error when recording fails' : 'report through their exception alone'}`, async () => {
+    test(`${phase} defects ${fails ? 'report their original error when recording fails' : 'report their original error and keep history'}`, async () => {
       let caught: unknown
       try {
         await react(g, session, deps)
@@ -101,8 +100,8 @@ for (let phase of ['model', 'compaction', 'forced'] as const) {
         caught = error
       }
       equal(caught, fails ? storageError : undefined)
-      equal(reported, fails ? [original] : [])
-      if (fails) equal(reported[0] === original, true)
+      equal(reported, [original])
+      equal(reported[0] === original, true)
       equal(saved.length, fails ? 0 : 1)
       if (!fails) {
         equal(saved[0].exception as Comp, exception)

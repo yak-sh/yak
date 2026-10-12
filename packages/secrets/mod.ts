@@ -38,9 +38,8 @@
  * box in @yaks/cli, a D1 database in @yaks/d1. The host hands its vault to the
  * plugin (`@yaks/secrets/graph`).
  * While a value is on its way to the vault its secret wears `provisional`
- * (@yaks/effects). A failed seal leaves `exception` (@yaks/tools)
- * with its message in `content`; a vocabulary that declares none of those
- * still seals, and simply shows nothing in between.
+ * (@yaks/effects). A failed seal leaves `failed{reason}` (@yaks/kernel).
+ * Hosts compose these vocabularies to record sealing's progress and outcome.
  *
  * @module
  */

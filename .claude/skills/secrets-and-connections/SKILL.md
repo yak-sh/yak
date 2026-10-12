@@ -130,10 +130,12 @@ input, `yak auth --key` takes an agent grant or service key the same way, and
 yaks.app's connections page takes a pasted key.
 
 To check one: `yak graph query '.secret.name=NAME&*'`. It wears `provisional`
-while its value is on the way to the vault, `error` while a seal is retried,
-and `exception` with `content` when the seal failed for good; the value is then
-gone and has to be given again. Deleting the entity, or its `secret` component,
-drops it from the vault (`unsealed(name)` is that bundle).
+while its value is on the way to the vault, with `content` explaining a retry,
+and `failed{reason}` when sealing was given up on; the value is then gone and
+has to be given again. The original failure reaches the host's reporter; the
+secret holds its operation's outcome. A successful seal removes `failed`.
+Deleting the entity, or its `secret` component, drops it from the vault
+(`unsealed(name)` is that bundle).
 
 ## Connections: a credential for an outside service
 

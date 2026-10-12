@@ -16,3 +16,4 @@ export {
 export { type Crumb, type Frame, type Level } from './model.ts'
 
 export { enrichFrames, type Resolve, stackFrames } from './frames.ts'
+export { type ExceptionMove, legacyException } from './legacy.ts'

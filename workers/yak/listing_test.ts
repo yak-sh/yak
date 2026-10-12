@@ -102,7 +102,7 @@ test("the kernel's own rows are not the person's", () => {
     {
       kind: 'entity',
       entity: { eid: 'b', num: 2 },
-      exception: { message: 'boom' },
+      exception: { value: 'boom' },
       created: { by: null },
     },
   ])
@@ -142,7 +142,7 @@ test('refusals are hidden by default but explicit transcript and refusal asks in
     refusal: { code: 'limit' },
     content: { body: 'Budget exhausted' },
   }
-  let exception = { ...refusal, exception: { message: 'unexpected' } }
+  let exception = { ...refusal, exception: { value: 'unexpected' } }
   let body = JSON.stringify([refusal, exception])
   assertEquals(rows(listing(body, '.content')), [])
   assertEquals(rows(listing(body, '.created')), [])

@@ -215,11 +215,10 @@ exactly when it matters — an import.
 Seed a fortnight of a guestbook and every `created.at` reads today, truthfully:
 today is when you wrote them. Draw `jotting.written`.
 
-**`exception`** — `at`, `message`, `stack`, `request`, `version`, all
-server-set. **`failed`** — `at`, `message`, server-set. The platform's own rows
-about your app: what a route threw, what a page reported. Nothing you write.
-They stay out of every listing unless the filter names one (`.exception`), and
-`app_errors` is the tool meant for them.
+**`exception`** — `type`, `value`, both server-set: what was thrown in an answer
+or transcript entry. Defect reports belong to the tracker; `app_errors` reads
+the app's tracked occurrences. A failed tool call in a session remains that
+session's history.
 
 Not listed: `edge`, which is a relation between two entities rather than a
 component on either one — last section.

@@ -21,7 +21,7 @@ import { compose, type Config, person, type Served } from '@yaks/cli/host'
 import { type Local, local } from './local.ts'
 import { hosted } from './store.ts'
 import { diagnostics, uncaught } from './diagnostics.ts'
-import type { Bundle, Eid } from '@yaks/graph'
+import type { Eid } from '@yaks/graph'
 uncaught(diagnostics(), self)
 
 /** One backend, on `port`: the graph its `init` names, and every command
@@ -171,10 +171,21 @@ let serve = (port: MessagePort) => {
     }
     // Narrow command/projection API: never evaluate caller-provided code.
     switch (method) {
-      case 'exception':
-        // The frontend owns the terminal: a defect it catches is written
-        // into the graph here rather than over the pane it is painting.
-        return await a.h.g.apply(args[0] as Bundle[], { trusted: true })
+      case 'report': {
+        if (!a.h.report) throw new Error('The host has no diagnostic reporter')
+        let thrown = args[0] as {
+          name: string
+          message: string
+          stack?: string
+        }
+        let error = new Error(thrown.message)
+        error.name = thrown.name
+        error.stack = thrown.stack
+        return await a.h.report(
+          error,
+          args[1] as Parameters<NonNullable<typeof a.h.report>>[1],
+        )
+      }
       case 'runtime':
         return a.runtime(String(args[0]))
       case 'control':

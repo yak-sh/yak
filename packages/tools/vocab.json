@@ -65,7 +65,7 @@
     "output": {
       "component": true,
       "type": "object",
-      "description": "What produced the text beside it: the request, for a model\u2019s own output, or the call whose failure is being reported. Only output carries it \u2014 text a person or a system wrote has none.",
+      "description": "What produced the text beside it: the request, for a model’s own output, or the call whose failure is being reported. Only output carries it — text a person or a system wrote has none.",
       "properties": {
         "source": {
           "type": "string",
@@ -75,7 +75,7 @@
         },
         "id": {
           "type": "string",
-          "description": "the provider's id for this piece of output, as `call.id` is its id for the call \u2014 what a later revision of the same item is matched on"
+          "description": "the provider's id for this piece of output, as `call.id` is its id for the call — what a later revision of the same item is matched on"
         },
         "value": {
           "type": "object",
@@ -97,48 +97,17 @@
     "exception": {
       "component": true,
       "type": "object",
-      "description": "A failure the code did not expect, whoever caused it: a defect report, not a stop. On its own, its message is on the `content` component beside it; these properties are filled in by whichever process caught the error, and by nobody else.",
+      "description": "What was thrown, retained in an answer or transcript entry. The catcher reports the original failure to the tracker separately.",
       "properties": {
-        "at": {
-          "type": "string",
-          "format": "date-time",
-          "stamped": true,
-          "description": "when it was caught"
-        },
-        "message": {
-          "type": "string",
-          "stamped": true,
-          "description": "the error message"
-        },
-        "stack": {
-          "type": "string",
-          "stamped": true,
-          "description": "the stack trace, as the runtime reported it"
-        },
-        "request": {
-          "type": "string",
-          "stamped": true,
-          "description": "what was being served when it threw"
-        },
-        "request_id": {
-          "type": "string",
-          "stamped": true,
-          "description": "the id returned to the caller and tagged in the tracker"
-        },
-        "version": {
-          "type": "number",
-          "stamped": true,
-          "description": "the build that threw it"
-        },
         "type": {
           "type": "string",
           "stamped": true,
-          "description": "The thrown value\u2019s class."
+          "description": "The thrown value’s class."
         },
         "value": {
           "type": "string",
           "stamped": true,
-          "description": "The thrown value\u2019s message."
+          "description": "The thrown value’s message."
         }
       }
     },

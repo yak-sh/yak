@@ -1,30 +1,30 @@
 import { test } from '@yaks/testing'
 import { assert, assertEquals, assertMatch } from '@std/assert'
 import { createDiagnostics, uncaught } from './diagnostics.ts'
-import { harness } from './testing.ts'
+import type { Context } from '@yaks/tracker/report'
 
-test('a defect is an exception entity, stack and cause kept, secrets redacted, and never an entry', async () => {
-  let h = await harness()
+test('a defect reaches its reporter once with stack and cause kept and secrets redacted', async () => {
+  let reported: { error: Error; context: Partial<Context> }[] = []
   let reporter = createDiagnostics({ secrets: ['secret-key-123'] })
-  let detach = reporter.attach(h.g)
+  let detach = reporter.attach((error, context = {}) => {
+    reported.push({ error: error as Error, context })
+  })
   let error = new Error('savepoint failed secret-key-123', {
     cause: new Error('statement busy'),
   })
   reporter.report(error, { phase: 'projection', session: 'selected' })
   reporter.report(error, { phase: 'unhandledrejection' })
   await reporter.drain()
-  let rows = await h.g.read('.exception&*')
-  assertEquals(rows.length, 1)
-  assert(!rows[0].entry)
-  assertEquals(await h.g.read('.entry&*'), [])
-  let said = JSON.parse(String((rows[0].content as { body: string }).body))
-  assertMatch(said.body, /Caused by:/)
-  assertMatch(said.body, /statement busy/)
-  assertMatch(said.body, /diagnostics_test.ts/)
-  assert(!said.body.includes('secret-key-123'))
-  assertEquals(said.session, 'selected')
+  assertEquals(reported.length, 1)
+  let said = reported[0]
+  assertMatch(said.error.stack!, /Caused by:/)
+  assertMatch(said.error.stack!, /statement busy/)
+  assertMatch(said.error.stack!, /diagnostics_test.ts/)
+  assert(!said.error.stack!.includes('secret-key-123'))
+  assertEquals(said.error.message, 'savepoint failed [redacted]')
+  assertEquals(said.context.during?.session, 'selected')
+  assertEquals(said.context.tags?.phase, 'projection')
   detach()
-  h.close()
 })
 
 test('a defect nobody can take is said on the terminal, not lost', async () => {
@@ -41,20 +41,18 @@ let failedSink = await (async () => {
   let warnings: string[] = []
   let attempts = 0
   let reporter = createDiagnostics({ warn: (s) => warnings.push(s) })
-  reporter.attach({
-    apply: () => {
-      attempts++
-      throw new Error('database broken')
-    },
+  reporter.attach(() => {
+    attempts++
+    throw new Error('reporter broken')
   })
   reporter.report(new Error('original failure'), { phase: 'daemon' })
   await reporter.drain()
   return { warnings, attempts }
 })()
-test('a database failure cannot recurse: the original is printed instead', () => {
+test('a delivery failure cannot recurse: the original is printed instead', () => {
   assertEquals(failedSink.attempts, 1)
   assertEquals(failedSink.warnings.length, 1)
-  assertMatch(failedSink.warnings[0], /database broken/)
+  assertMatch(failedSink.warnings[0], /reporter broken/)
   assertMatch(
     failedSink.warnings[0],
     /Original exception:[\s\S]*original failure/,
@@ -104,13 +102,16 @@ test('diagnostics say the same runtime error once across error and rejection pha
   assertEquals(said.length, 1)
 })
 
-test('a graph shutdown drain is bounded', async () => {
+let undelivered = await (async () => {
   let warnings: string[] = []
   let reporter = createDiagnostics({ warn: (s) => warnings.push(s) })
-  reporter.attach({ apply: () => new Promise(() => {}) })
+  reporter.attach(() => new Promise<void>(() => {}))
   reporter.report(new Error('original'), { phase: 'shutdown' })
   await reporter.drain(1)
-  assertMatch(warnings[0], /still pending/)
+  return warnings
+})()
+test('a diagnostic shutdown drain is bounded', () => {
+  assertMatch(undelivered[0], /still pending/)
 })
 
 test('a fatal unhandled rejection really exits the subprocess, saying what it was', async () => {

@@ -21,7 +21,7 @@
  * - `using{provider, model, effort}` — set or switched on an input, recorded
  *   as served on an ask.
  * - `stop`, `refusal{code}`, `exception` — a stop marker; a
- *   deliberate no; a legacy/interruption/check outcome; a defect report.
+ *   deliberate no; what was thrown while producing the entry.
  *
  * `fork{from}` on a session continues another transcript from one of its
  * entries: the parent's entries up to it are the fork's prefix.

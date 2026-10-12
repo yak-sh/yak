@@ -14,12 +14,11 @@ let transient = [
 export let actionable = (message: string): boolean =>
   !transient.some((re) => re.test(message))
 
-/** The original error's type, message and stack for an exception record. */
+/** What was thrown, for an answer or transcript entry. */
 export let exceptionOf = (error: unknown): Comp =>
   error instanceof Error
     ? {
       type: error.name,
       value: error.message,
-      ...error.stack ? { stack: error.stack } : {},
     }
     : { value: String(error) }

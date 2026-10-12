@@ -63,7 +63,7 @@ let toolOf = (c: EntryRow['comps'], name: Names) =>
 let failure = (c: EntryRow['comps']) => {
   let refusal = c.refusal
   return c.exception
-    ? text(c.exception.message) || text(c.content?.body) || 'exception'
+    ? text(c.exception.value) || text(c.content?.body) || 'exception'
     : refusal
     ? [text(refusal.code), text(c.content?.body)].filter(Boolean).join(': ')
     : undefined

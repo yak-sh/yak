@@ -342,12 +342,11 @@ grouped approximately by function, **not** by dependency order.
   session's own entity; and its JSON-lines stdout is read back as that session's
   entries — exactly once, tracked by the `imported{source, line}` component on
   each. It defines no components of its own.
-- **[@yaks/heal](./heal)** — reports actionable exceptions through the host and
-  follows a separate tracker graph. Each bug gets one task and an `about` edge;
-  its count and stack stay in the tracker. The follower requests a @yaks/spawn
-  session holding the task's claim, marked `fixer{bug}`, behind the provider,
-  `nofix`, cap and cooldown gates. Tracker regressions can start another fixer
-  on completed work.
+- **[@yaks/heal](./heal)** — follows a separate tracker graph. Each bug gets one
+  task and an `about` edge; its count and stack stay in the tracker. The
+  follower requests a @yaks/spawn session holding the task's claim, marked
+  `fixer{bug}`, behind the provider, `nofix`, cap and cooldown gates. Tracker
+  regressions can start another fixer on completed work.
 - **[@yaks/context](./context)** — Build instruction entries with source ids and
   snapshot hashes so a transcript can record what a model was given.
   `promptEntry()` itself performs no writes; `outputView()` stores projection

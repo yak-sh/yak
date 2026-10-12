@@ -22,20 +22,9 @@ export let exceptionDoc: VocabDoc = {
   title: 'exception',
   $defs: {
     exception: {
-      component: true,
-      type: 'object',
+      ...toolsDoc.$defs!.exception,
       kind: true,
       before: ['doc'],
-      properties: {
-        at: owned(time),
-        request: owned(text),
-        request_id: owned(text),
-        version: owned(num),
-        message: owned(text),
-        stack: owned(text),
-        type: toolsDoc.$defs!.exception.properties!.type,
-        value: toolsDoc.$defs!.exception.properties!.value,
-      },
     },
   },
 }

@@ -30,7 +30,7 @@
 //     + stop                 the runner performs nothing after this
 //     + refusal{code}        a deliberate no, never tracked
 //     + finding{level}       measured check results
-//     + exception            unexpected: a defect report, not a stop
+//     + exception{type, value} what was thrown while producing this entry
 //
 // An ask and a call share no properties on purpose: one is the runner reaching
 // a model, the other the model reaching a tool. What a provider keeps about an
@@ -41,7 +41,7 @@
 //
 // Half the entry components above are declared by other packages, and this
 // document declares only its own: `content`, `output`, `call`, `result`,
-// `refusal`, `error` and `exception` are @yaks/tools's — a call is the record of having
+// `refusal` and `exception` are @yaks/tools's — a call is the record of having
 // asked a tool, whoever asked it — and an instruction assembled from parts is
 // @yaks/context's `prompt`. What a `using` names — `provider`, `model` — is
 // @yaks/model's, as are `questions` and `answer`, and what a `call.to` names is

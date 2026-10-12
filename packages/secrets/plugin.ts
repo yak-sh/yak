@@ -28,7 +28,7 @@
 // whoever wrote the value gets their answer once it is sealed and never sees
 // the mark; only another reader in between does. A seal that fails says so on
 // the secret: `provisional{note}` while a seal is being retried,
-// `exception` for a failure somebody has to fix.
+// `failed{reason}` when sealing was given up on.
 //
 // Nothing touches the vault inside the transaction. A vault may answer later
 // (D1 on yaks.app) and a transaction may not wait for it (a Durable Object's
@@ -242,10 +242,9 @@ let told = (e: unknown) => e instanceof Error ? e.message : String(e)
  * again here, while the value is still in memory and the writer is still
  * waiting; a later success removes the mark and its message. Anything else —
  * or a retryable failure that outlasts every try, so one failure can be both —
- * is a defect somebody has to fix: the mark comes off, an `exception` goes on
- * with what went wrong in `content` beside it, and the failure is rethrown for
- * the graph to report. Either way the value is gone, and the person gives it
- * again.
+ * ends the operation: the provisional mark comes off, `failed{reason}` records
+ * why sealing was given up on, and the original failure is rethrown for the
+ * graph to report. Either way the value is gone, and the person gives it again.
  */
 let sealing = (vault: Vault, write: Write): Hook => {
   let { waiting, minted } = holding(vault)
@@ -274,7 +273,7 @@ let sealing = (vault: Vault, write: Write): Hook => {
         mark({
           entity: { eid },
           [PROVISIONAL]: null,
-          ...b?.exception ? { exception: null } : {},
+          ...b?.failed ? { failed: null } : {},
           ...b?.content ? { content: null } : {},
         }))
     let attempt = (n: number): unknown =>
@@ -292,8 +291,8 @@ let sealing = (vault: Vault, write: Write): Hook => {
             mark({
               entity: { eid },
               [PROVISIONAL]: null,
-              exception: {},
-              content: { body: `the key could not be saved: ${told(err)}` },
+              failed: { reason: `the key could not be saved: ${told(err)}` },
+              content: null,
             }),
             () => {
               throw err

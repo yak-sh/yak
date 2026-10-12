@@ -398,6 +398,17 @@ A clean rule goes `live: 'apps'`, then `'all'`, the directory last, and its mark
 joins `BOUNDARIES` in that release. `yak admin move` wakes the dormant stores a
 few a minute and says where each rule stands in each.
 
+A rule can declare retired source properties for its migration reads. Those
+properties remain private to the mover and contract after the final batch; the
+serving vocabulary keeps one shape. A core rule skips components owned by an
+app's own declaration.
+
+A rule can also forward records to the durable tracker queue. The mover prepares
+a bounded source snapshot, waits for every queue acknowledgement, then commits
+guarded source patches and its cursor together. A failed send keeps the source
+rows; retrying uses the same occurrence ids. Rehearsal rolls back source patches
+and sends no queue records.
+
 An app's declared lens also supplies its mover rule. Its expanded vocabulary
 holds source columns only while they hold values. The final batch drops empty
 translated app properties and columns in the same transaction as its stamp;

@@ -1,7 +1,6 @@
 /**
- * Reports actionable exceptions through the host and starts fixers for bug
- * tasks already in the graph. The root exports the vocabulary and pure
- * actionable filter; handlers live at `@yaks/heal/effects`.
+ * Follows tracker bugs to file tasks and request fixers. The root exports the
+ * vocabulary and pure actionable filter used by catch boundaries.
  */
 
 export { healDoc } from './vocab.ts'

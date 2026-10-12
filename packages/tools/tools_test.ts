@@ -660,12 +660,11 @@ test('a defect is reported with its tool; a refusal is not', async () => {
   assertEquals(named.find((b) => b.refusal)?.refusal, { code: 'Refused' })
   assertEquals(said, [])
   await r.call(called('example_broke', { value: 'x' }))
-  assertEquals(said, [])
+  assertEquals(said, [[broke, 'example_broke']])
   let [fault] = await g.read('.exception&*')
   assertEquals(fault.exception, {
     type: broke.name,
     value: broke.message,
-    stack: broke.stack,
   })
 })
 
