@@ -28,7 +28,16 @@ import { monitor } from './monitor.ts'
 import { activate } from './mail.ts'
 import type { Bundle } from '@yaks/graph'
 import { sha256 } from '@yaks/graph/sha256'
-import { FIT, meta, schema } from '@yaks/sqlite'
+import {
+  FIT,
+  follow,
+  forget,
+  meta,
+  printed,
+  printFor,
+  printOf,
+  schema,
+} from '@yaks/sqlite'
 import { col, eq, render, select, table, val } from '@yaks/sql'
 import {
   reserveTrace,
@@ -77,6 +86,11 @@ export type Settings = {
 }
 let TRACE_READY = 'trace-ceiling-v1'
 let ddl = schema(vocab, options.derived)
+// The tracker follows its vocabulary through its print, as the box and every
+// yaks.app store do (@yaks/sqlite `follow`): its storage's own, with nothing
+// beside it. The stamp and `trace-ready` are the markers the release before
+// prints reads, which a rollback can still run.
+let PRINT = printOf(printFor(vocab, options.derived), [])
 let SCHEMA_READY = sha256([FIT, ...ddl.map((s) => render(s).sql)].join('\n'))
 // Reserve both installations on every capture, including warm/redeliveries.
 // Only empty storage may be installed by tracing; standing data never gets
@@ -157,20 +171,27 @@ export class Tracker {
       if (install) await this.#mail()
       return this.tracker
     }
-    let ready = install &&
-      await this.ctx.storage.get<string>('schema') == SCHEMA_READY
+    let sql = driver(this.ctx.storage)
     let saved = install
       ? storage(this.ctx.storage, vocab, {
         ...options,
-        schemaReady: () => ready,
+        schemaReady: () => printed(sql, PRINT),
       })
       : this.#traceStorage()
     if (install) {
-      if (!ready) {
+      // Until the release before prints can no longer run, its stamp decides
+      // when the pass runs, since it installs over whatever a print stands
+      // for; a print the tracker lacks at this stamp is recorded with no pass.
+      let held = await this.ctx.storage.get<string>('schema')
+      if (held && held != SCHEMA_READY) forget(sql, PRINT)
+      let ran = false
+      follow(sql, PRINT, () => {
+        if (held == SCHEMA_READY) return
         saved.install()
         this.#traceMeta().set('trace-ready', TRACE_READY)
-        await this.ctx.storage.put('schema', SCHEMA_READY)
-      }
+        ran = true
+      })
+      if (ran) await this.ctx.storage.put('schema', SCHEMA_READY)
     }
     let tracker = store(saved, this.#config)
     this.live = sockets(subscriptions(tracker.graph), this.ctx)
