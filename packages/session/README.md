@@ -244,6 +244,60 @@ console.log(await transcript(g, 'session'))
 Replace the local function with `responses({ credential })` from `@yaks/openai`
 to use that provider; also load its `openaiDoc` vocabulary.
 
+A host can lend an [executor](../model/README.md) through `Deps.executor`, or
+return one as `Served.executor` from `resolveModel` for a selected provider. The
+runner commits the original ask before `Executor.submit(call, request)`;
+`request.call` and `call` name that ask. The executor freezes the request,
+records `inference{executor, request, receipt}` on the ask, and dispatches the
+same instance idempotently. The runner releases its lease while the receipt is
+pending.
+
+On a later run, `Executor.resume(call)` reads the frozen request's outcome:
+`undefined` leaves the ask pending, a reply completes the same ask, and a
+terminal `ModelError` records its failure. A transport or receipt-read failure
+is thrown for the effects pool to retry. Restart does not buy another response.
+An ask committed before its request was frozen is dispatched under its original
+id and transcript boundary. Changing `inference.receipt` owes `session_run` a
+run; a receipt arriving while a lease is held is checked again when that lease
+is released.
+
+This example lends an executor through a provider selection. Its in-memory
+methods illustrate the interface; a host supplies durable request storage,
+idempotent submission, and receipt delivery behind them.
+
+```ts
+import { type Executor, type Model } from '@yaks/model'
+import { type Served } from '@yaks/session'
+import { equal } from '@yaks/testing'
+
+let model: Model = async (request) => ({
+  id: 'reply',
+  model: request.model,
+  items: [],
+})
+let submitted: string[] = []
+let executor: Executor = {
+  submit: async (call, request) => {
+    equal(request.call, call)
+    submitted.push(call)
+  },
+  resume: async () => undefined,
+}
+let served: Served = { name: 'example', model, executor }
+await served.executor!.submit('ask-1', {
+  call: 'ask-1',
+  model: served.name,
+  items: [],
+  tools: [],
+})
+equal(submitted, ['ask-1'])
+equal(await served.executor!.resume('ask-1'), undefined)
+```
+
+The hosted ask records its exact offered tool names in `using.tools`. Returned
+tool calls keep those tools' stable graph identities, and execution uses the
+source ask's offer even when a later input selects different tools.
+
 A provider refusal is recorded as `refusal{code}` with its
 `response{body, headers}` beside it. A retryable request wears
 `interrupted{code}` and `provisional{note}` while the effects pool still owes

@@ -105,13 +105,15 @@ let isSession = async (g: Graph, eid: Eid): Promise<boolean> =>
 
 let admission = ['spawned', 'dispatch', 'admitted', 'waiting']
 
-// The newest entry's seq: how a run tells, after letting go, whether anything
-// landed since it last looked.
-let newest = async (g: Graph, session: Eid): Promise<number> => {
+type Seen = { seq: number; waiting?: Step['waiting'] }
+
+// The newest entry's seq, with the receipt checked by a hosted pending step:
+// receipt mutations leave entry positions unchanged.
+let newest = async (g: Graph, session: Eid): Promise<Seen> => {
   let [last] = await g.read(
     `.entry.session=${session}&.order=-entry.seq&.limit=1`,
   )
-  return last ? seqOf(last) : 0
+  return { seq: last ? seqOf(last) : 0 }
 }
 
 // Whether transcripts here can hold tasks at all: a graph that has tasks and
@@ -311,7 +313,7 @@ let step = async (g: Graph, session: Eid, r: Runner): Promise<Step> => {
 
 // The steps a held transcript takes: until one does nothing, or it ends.
 // Answers the newest seq it saw.
-let turns = async (g: Graph, session: Eid, r: Runner): Promise<number> => {
+let turns = async (g: Graph, session: Eid, r: Runner): Promise<Seen> => {
   // A terminal transcript owes no model step. Use the already-derived fact
   // before loading all entry marks; old unresolved calls still keep settled
   // transcripts runnable and are queried explicitly when that matters.
@@ -347,7 +349,9 @@ let turns = async (g: Graph, session: Eid, r: Runner): Promise<number> => {
       await ended(g, session, r)
       break
     }
-    if (s.did == 'nothing') break
+    if (s.did == 'nothing') {
+      return { ...await newest(g, session), waiting: s.waiting }
+    }
   }
   return newest(g, session)
 }
@@ -360,7 +364,7 @@ let held = async (
   g: Graph,
   session: Eid,
   r: Runner,
-): Promise<number | null> => {
+): Promise<Seen | null> => {
   let seen = await holding(g, `${RUN}/${session}`, {
     holder: r.holder,
     hold: r.hold ?? HOLD,
@@ -372,9 +376,16 @@ let held = async (
   return seen ?? null
 }
 
-// Whether something landed after `seen` that the transcript owes a turn for.
-let owed = async (g: Graph, session: Eid, seen: number) => {
-  if (await newest(g, session) <= seen) return false
+// Whether an entry or hosted receipt changed since the pass last checked it.
+let owed = async (g: Graph, session: Eid, seen: Seen) => {
+  let changed = (await newest(g, session)).seq > seen.seq
+  if (!changed && seen.waiting) {
+    let [ask] = await g.get([seen.waiting.call], ['inference', 'attempt'])
+    let receipt = comp(ask, 'inference')?.receipt
+    changed = comp(ask, 'attempt')?.by != null && !!receipt &&
+      receipt != seen.waiting.receipt
+  }
+  if (!changed) return false
   let status = await currentStatus(g, session)
   return status == 'pending' || status == 'running'
 }
@@ -464,7 +475,10 @@ export let passing = (g: Graph, session: Eid): Promise<void> | undefined =>
 // completed or was cancelled, or holding one that contains or requires it.
 let about = async (g: Graph, e: Event): Promise<Eid[]> => {
   let b = await one(g, e.entity.eid, ['entry', 'ask', 'task', 'edge'])
-  if (b?.entry) return b.ask ? [] : [String(comp(b, 'entry')?.session)]
+  if (b?.entry) {
+    if (b.ask && !(e.name == 'inference' && e.comp?.receipt)) return []
+    return [String(comp(b, 'entry')?.session)]
+  }
   if (b && await isSession(g, b.entity.eid)) return [b.entity.eid]
   if (!holds(g)) return []
   let tasks = new Set<Eid>()

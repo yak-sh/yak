@@ -38,6 +38,14 @@ import {
  * are, or `null` for nobody signed in. */
 export type Caller = { app: Eid; level: Level | null; person: Eid | null }
 
+/** A host-authorized credential, lent for one outbound call. Keep it only
+ * while sending; persisted requests carry its sentinel, never its value. */
+export type Grant = {
+  sentinel: string
+  value: string
+  hosts: readonly string[]
+}
+
 /** A call the egress will not send. */
 export class Refused extends Error {
   constructor(message: string) {
@@ -65,7 +73,15 @@ let SIZED = ['content-length', 'transfer-encoding']
 
 // One connection a request's sentinel stands for, checked, with the value that
 // goes in its place.
-type Hit = { eid: Eid; sentinel: string; value: string; oauth: boolean }
+type Hit = Grant & { eid: Eid; oauth: boolean }
+
+let destination = (hosts: readonly string[], url: URL, name: string) => {
+  if (url.protocol != 'https:' || !hosts.includes(url.host)) {
+    throw new Refused(
+      `${name} is sent only to ${hosts.join(', ') || 'no host'}, over https`,
+    )
+  }
+}
 
 // The connections a request's sentinels stand for, once the caller may call
 // out through each and the request goes where each may be sent.
@@ -93,26 +109,19 @@ let check = async (
     }
     let i = await known(c.graph.read, name)
     let hosts = i?.hosts ?? []
-    if (!i || url.protocol != 'https:' || !hosts.includes(url.host)) {
-      throw new Refused(
-        `${name} is sent only to ${hosts.join(', ') || 'no host'}, over https`,
-      )
-    }
+    destination(hosts, url, name)
     let value = await credential(c, eid)
     if (!value) throw new Refused(`${name} holds no credential`)
-    return { eid, sentinel, value, oauth: !keyed(i) }
+    return { eid, sentinel, value, hosts, oauth: !keyed(i!) }
   }))
 }
 
-/** Send a request for a caller, with the credential each of its sentinels
- * stands for in its place. A service that refuses an access token (401) is
- * asked once more with a refreshed one. */
-export let forward = async (
-  c: Ctx,
-  caller: Caller,
+// Prepare once so an OAuth retry sends the same body. Both host boundaries
+// use this byte-preserving swap and prevent redirects carrying credentials.
+let prepare = async (
   req: Request,
-): Promise<Response> => {
-  let send = c.fetch ?? fetch
+  send: typeof fetch,
+) => {
   let url = new URL(req.url)
   let tail = req.url.slice(url.origin.length)
   let headers = [...req.headers].filter(([k]) => !SIZED.includes(k))
@@ -122,8 +131,7 @@ export let forward = async (
       sentinels,
     )),
   ]
-  let hits = found.length ? await check(c, caller, url, found) : []
-  let sent = (by: Hit[]) => {
+  let sent = (by: readonly Grant[]) => {
     let values = new Map(by.map((h) => [h.sentinel, h.value]))
     let raw = new Map(by.map((h) => [h.sentinel, utf8(h.value)]))
     return send(
@@ -138,6 +146,37 @@ export let forward = async (
       }),
     )
   }
+  return { url, found, sent }
+}
+
+/** Send using grants a trusted host has authorized for this call. Every
+ * sentinel must have a grant for the destination; credentials follow no
+ * redirects. The executor obtains grants at I/O, outside durable steps. */
+export let granted = async (
+  grants: readonly Grant[],
+  req: Request,
+  send: typeof fetch = fetch,
+): Promise<Response> => {
+  let { url, found, sent } = await prepare(req, send)
+  let hits = found.map((sentinel) => {
+    let grant = grants.find((g) => g.sentinel == sentinel)
+    if (!grant) throw new Refused('a sentinel has no grant for this call')
+    destination(grant.hosts, url, 'the granted credential')
+    return grant
+  })
+  return sent(hits)
+}
+
+/** Send a request for a caller, with the credential each of its sentinels
+ * stands for in its place. A service that refuses an access token (401) is
+ * asked once more with a refreshed one. */
+export let forward = async (
+  c: Ctx,
+  caller: Caller,
+  req: Request,
+): Promise<Response> => {
+  let { url, found, sent } = await prepare(req, c.fetch ?? fetch)
+  let hits = found.length ? await check(c, caller, url, found) : []
   let res = await sent(hits)
   if (res.status != 401 || !hits.some((h) => h.oauth)) return res
   let again = await Promise.all(

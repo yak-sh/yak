@@ -44,11 +44,11 @@ deno add jsr:@yaks/model
 
 ## Exports
 
-| Export              | Provides                                                                                                                                                                                                                                                                                                                                                                                                                                           |
-| ------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `@yaks/model`       | `Model`, `Request`, `Reply`, `Item`, `Tool`, `TextDelta`, `Question`, `Questions`, `Answer`, `Usage`, `Price`, `Mark`, `Answered`, `Listed`; `ModelError`; `models`, `modelDoc`, `addressed`, `requesting`, `confirmed`; `weigh`, `billed`; `MediaReceipt`, `MediaReceipts`, `mediaReceipts`, `receivedMedia`, `recoveredMedia`; component-name constants `PROVIDER`, `MODEL`, `TOOL`, `QUESTIONS`, `ANSWER`, `USAGE`, `PRICE`, `COST`, `RESPONSE` |
-| `@yaks/model/vocab` | `modelDoc`, `docs`, `description`                                                                                                                                                                                                                                                                                                                                                                                                                  |
-| `@yaks/model/graph` | `plugins()`, returning `[models()]`                                                                                                                                                                                                                                                                                                                                                                                                                |
+| Export              | Provides                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| ------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `@yaks/model`       | `Executor`, `Inference`, `InferenceHost`, `InferenceReceipt`, `FrozenModelRequest`, `infer`, `inferenceReply`, `frozenRequest`, `thawedRequest`; `Model`, `Request`, `Reply`, `Item`, `Tool`, `TextDelta`, `Question`, `Questions`, `Answer`, `Usage`, `Price`, `Mark`, `Answered`, `Listed`; `ModelError`; `models`, `modelDoc`, `addressed`, `requesting`, `confirmed`; `weigh`, `billed`; `MediaReceipt`, `MediaReceipts`, `mediaReceipts`, `receivedMedia`, `recoveredMedia`; component-name constants `PROVIDER`, `MODEL`, `TOOL`, `QUESTIONS`, `ANSWER`, `USAGE`, `PRICE`, `COST`, `RESPONSE` |
+| `@yaks/model/vocab` | `modelDoc`, `docs`, `description`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| `@yaks/model/graph` | `plugins()`, returning `[models()]`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
 
 ## Items and delivery
 
@@ -485,3 +485,50 @@ is no transport-wide default. Existing asks without expiry remain cold, so no
 backfill is needed. Consumers also require a completed ask, known
 `usage.input_tokens` and `usage.output_tokens`, and the selected
 `model.context`.
+
+## Hosted inference
+
+An **executor** (`Executor`) accepts an original ask by `submit(call, request)`
+and reads its completed reply through `resume(call)`. Repeated submission keeps
+that call's frozen request and execution identity. An absent reply means
+pending; a terminal `ModelError` ends that ask. The session releases its runner
+while pending and resumes when `inference.receipt` is written.
+
+`inference{executor, request, receipt}` holds the pinned executor release and
+private object references on the original ask. Its receipt reference is absent
+until delivery can resume. Requests and receipts contain conversation data and
+must stay private. `frozenRequest` removes process callbacks and serializes
+image bytes; `thawedRequest` restores the model request.
+
+```ts
+import { frozenRequest, thawedRequest } from '@yaks/model'
+import { equal } from '@yaks/testing'
+
+const request = frozenRequest({
+  model: 'example',
+  tools: [],
+  items: [{
+    kind: 'image',
+    bytes: new Uint8Array([1, 2]),
+    mediaType: 'image/png',
+    label: 'input',
+  }],
+  onText: () => {},
+})
+const restored = thawedRequest(JSON.parse(JSON.stringify(request)))
+equal(restored.items[0], {
+  kind: 'image',
+  bytes: new Uint8Array([1, 2]),
+  mediaType: 'image/png',
+  label: 'input',
+})
+equal(restored.onText, undefined)
+```
+
+`infer(job, host)` saves an `InferenceReceipt` before returning its reference.
+The host atomically claims submission, supplies the provider adapter and private
+storage, and awaits provider acknowledgement checkpoints. A repeated step reads
+its receipt or calls `Model.recover` without generation. A complete provider
+receipt permits delivery retries; an unrecoverable outcome records interruption.
+`inferenceReply` reads that result and refuses to regenerate it. Billing and
+transcript delivery belong to the host and each keep the original ask identity.

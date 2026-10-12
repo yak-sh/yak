@@ -77,7 +77,7 @@ let runner = () => {
   })
   let run = (name: string, eid: string) =>
     handlers[name](event(eid), g.outside, (b) => g.apply(b))
-  return { run, providers }
+  return { run, providers, handlers }
 }
 
 test('session routing answers empty session identities without accounting', async () => {
@@ -86,6 +86,21 @@ test('session routing answers empty session identities without accounting', asyn
   await r.run('session_run', 'input')
   await r.run('session_run', 'ask')
   assertEquals(r.providers, [{}, {}])
+})
+
+test('a hosted receipt owes its ask session a run without transcript accounting', async () => {
+  let r = runner()
+  await r.handlers.session_run(
+    {
+      kind: 'changed',
+      name: 'inference',
+      entity: { eid: 'ask' },
+      comp: { receipt: 'private-receipt' },
+    },
+    g.outside,
+    (b) => g.apply(b),
+  )
+  assertEquals(r.providers, [{}])
 })
 
 test('an imported transcript routes an ask without loading its history', async () => {

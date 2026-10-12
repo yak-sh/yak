@@ -53,6 +53,7 @@ import type {
 import {
   ANSWER,
   type Answer,
+  type Executor,
   type Item,
   MODEL,
   type Model,
@@ -146,7 +147,12 @@ export type Tool = Declared & {
 
 /** A model as one provider serves it: the adapter that asks, and the name
  * that provider knows the model by (`serves.name`). */
-export type Served = { model: Model; name: string; provider?: Eid }
+export type Served = {
+  model: Model
+  name: string
+  provider?: Eid
+  executor?: Executor
+}
 
 /** What `react` is handed beside the graph. */
 export type Deps = {
@@ -170,6 +176,8 @@ export type Deps = {
    * arbitrary (possibly media-only) model. */
   compactModel?: Served
   model: Model
+  /** Hosted execution persists an ask and yields while its receipt is pending. */
+  executor?: Executor
   /** Choose the provider that serves the model, and what it calls the model. */
   resolveModel?: (using: Comp | undefined, model: Bundle) => Promise<Served>
   tools: Tool[]
@@ -207,10 +215,20 @@ export type Deps = {
   mint?: () => Eid
 }
 
+type Streams = Map<
+  string,
+  {
+    entry: Bundle
+    writer: Awaited<ReturnType<ReturnType<typeof transient>['begin']>>
+  }
+>
+
 /** What one step did. */
 export type Step = {
   did: 'asked' | 'ran' | 'nothing'
   status: TranscriptStatus
+  /** A hosted receipt this step checked, for a wake racing lease release. */
+  waiting?: { call: Eid; receipt?: string }
   /** the entries appended, in order */
   added: Bundle[]
 }
@@ -791,8 +809,190 @@ export let react = async (
       throw e
     }
   }
+  let complete = async (
+    ask: Bundle,
+    reply: Reply,
+    providerModel: Model,
+    byName: Map<string, Eid>,
+    stream: Streams = new Map(),
+  ): Promise<Step> => {
+    const finalAsk: Bundle = {
+      ...ask,
+      ...providerModel.mark?.(reply) ?? {},
+      ...reply.usage ? { usage: reply.usage } : {},
+      ...reply.cost == null ? {} : {
+        cost: { dollars: reply.cost, reported: reply.costReported ?? true },
+      },
+      attempt: { by: null },
+    }
+    let added: Bundle[] = [finalAsk]
+    let textIndex = 0
+    for (let item of reply.items) {
+      if (item.kind == 'assistant') {
+        const active = stream.get(item.id ?? String(textIndex))
+        textIndex++
+        added.push(
+          active
+            ? {
+              entity: active.entry.entity,
+              $was: { [CONTENT]: { body: active.writer.expected() } },
+              [CONTENT]: { body: item.text },
+              [OUTPUT]: { source: ask.entity.eid },
+            }
+            : line({
+              [CONTENT]: { body: item.text },
+              [OUTPUT]: { source: ask.entity.eid },
+            }),
+        )
+      } else if (item.kind == 'call') {
+        // The model's arguments are JSON text; a call's are the object it
+        // spells. Text that spells no object is kept as the model wrote it, so
+        // the transcript resends it verbatim, and the call is refused (`served`).
+        let args = objectIn(item.args)
+        added.push(line(
+          {
+            [CALL]: {
+              to: byName.get(item.name),
+              id: item.id,
+              ...args ? { args } : {},
+              source: ask.entity.eid,
+            },
+          },
+          args ? undefined : item.args,
+        ))
+      }
+    }
+    // One entry per answer, said as a line too, so a person reading the
+    // transcript sees what was decided and a query can match
+    // `.answer.question=plan`. No later turn reads it (`lines`).
+    for (let [question, a] of Object.entries(reply.answers ?? {})) {
+      let { type: _, ...answer } = a
+      added.push(line({
+        [ANSWER]: { question, ...answer },
+        [OUTPUT]: { source: ask.entity.eid },
+      }, saying(question, a)))
+    }
+    for (let artifact of reply.artifacts ?? []) {
+      let eid = artifact.address
+      added.push({
+        entity: { eid },
+        artifact: {
+          address: artifact.address,
+          media_type: artifact.media_type,
+          size: artifact.size,
+        },
+      })
+      added.push(line({
+        attachment: {
+          artifact: eid,
+          call: artifact.call,
+          ...artifact.revised_prompt
+            ? { revised_prompt: artifact.revised_prompt }
+            : {},
+        },
+        [OUTPUT]: { source: ask.entity.eid },
+        [CONTENT]: {
+          body: 'Generated media: ' + eid + ' (' + artifact.media_type + ', ' +
+            artifact.size + ' bytes)',
+        },
+      }))
+    }
+    // The reply and its minted entry ids stay in this closure. A commit followed
+    // by a failed transcript read retries the guarded finish, not the provider.
+    let finalize = async () => {
+      if (!deps.streaming) {
+        return await finish(ask, finalAsk, added.slice(1)) ?? await current()
+      }
+      if (
+        [...stream.values()].some((active) =>
+          !added.some((b) => b.entity.eid == active.entry.entity.eid)
+        )
+      ) {
+        let omitted = await finish(
+          ask,
+          {
+            entity: ask.entity,
+            attempt: { by: null },
+            interrupted: { code: 'superseded' },
+          },
+          [
+            line(
+              { [EXCEPTION]: {} },
+              'Completed reply omitted a streamed text item; retained partial output',
+            ),
+          ],
+        )
+        if (!omitted) return current()
+        for (const active of stream.values()) await active.writer.commit()
+        return omitted
+      }
+      return await finish(ask, finalAsk, added.slice(1)) ?? await current()
+    }
+    try {
+      return await (deps.attempt?.retry
+        ? deps.attempt.retry(finalize)
+        : finalize())
+    } finally {
+      for (const active of stream.values()) active.writer.discard()
+    }
+  }
   const unfinished = entries.find((b) => attemptState(b) == 'inflight')
+  let original: Served | undefined
+  let executor = deps.executor
   if (unfinished) {
+    let originalUsing = comp(unfinished, USING)
+    let [originalModel] = await g.get([String(comp(unfinished, ASK)?.to)])
+    if (originalModel) {
+      original = deps.resolveModel
+        ? await deps.resolveModel(originalUsing, originalModel)
+        : { model: deps.model, name: String(comp(originalModel, MODEL)?.name) }
+      executor = original.executor ?? executor
+    }
+  }
+  if (unfinished && executor && unfinished.inference) {
+    signer = { by: String(comp(unfinished, ASK)?.to), via: session }
+    let reply: Reply | undefined
+    try {
+      reply = await executor.resume(unfinished.entity.eid)
+    } catch (error) {
+      // Executor transport/receipt reads are repeatable; a terminal provider
+      // outcome is recorded on this ask and never becomes a new purchase.
+      if (!(error instanceof ModelError) || error.retry) throw error
+      return await finish(unfinished, {
+        entity: unfinished.entity,
+        attempt: { by: null },
+        interrupted: { code: error.code },
+        failed: { reason: error.message },
+      }, [line({
+        ...failing(g, error),
+        [OUTPUT]: { source: unfinished.entity.eid },
+      }, error.message)]) ?? await current()
+    }
+    if (!reply) {
+      return {
+        ...await current(),
+        waiting: {
+          call: unfinished.entity.eid,
+          receipt: comp(unfinished, 'inference')?.receipt as string | undefined,
+        },
+      }
+    }
+    let calls = reply.items.flatMap((item) =>
+      item.kind == 'call' ? [[item.name, toolEid(item.name)] as const] : []
+    )
+    let known = new Set(
+      (await g.get(calls.map(([, eid]) => eid), [TOOL])).filter((b) => b.tool)
+        .map((b) => b.entity.eid),
+    )
+    return complete(
+      unfinished,
+      reply,
+      original?.model ?? deps.model,
+      new Map(calls.filter(([, eid]) => known.has(eid))),
+    )
+  }
+  if (unfinished?.inference && !executor) return current()
+  if (unfinished && !executor) {
     // The request may have reached the provider. Its partial output stays in
     // the transcript, but only a completed ask can be used as an anchor.
     // Continue from that history after the former worker has gone.
@@ -827,7 +1027,18 @@ export let react = async (
     )
     return recovered ?? await current()
   }
-  let using = usingBefore(entries)
+  if (unfinished && executor) {
+    let through = comp(unfinished, ASK)?.through
+    newest = entries.find((b) => b.entity.eid == through)
+    if (!newest) throw new Error('Original ask context boundary is missing')
+    entries = entries.filter((b) => seqOf(b) <= seqOf(newest!))
+    status = 'pending'
+  }
+  let using = unfinished && executor
+    ? comp(unfinished, USING)
+    : open.length && asked
+    ? comp(asked, USING) ?? usingBefore(entries)
+    : usingBefore(entries)
   const tools = offered(
     deps.toolSnapshot
       ? await deps.toolSnapshot(
@@ -1022,9 +1233,12 @@ export let react = async (
       line({ [REFUSAL]: { code: 'no_model' } }, 'no model in force'),
     ])
   }
-  const { model: providerModel, name: spelled } = deps.resolveModel
-    ? await deps.resolveModel(using, modelEntity!)
-    : { model: deps.model, name: modelName }
+  const resolved = original ??
+    (deps.resolveModel
+      ? await deps.resolveModel(using, modelEntity!)
+      : { model: deps.model, name: modelName })
+  const { model: providerModel, name: spelled } = resolved
+  executor = resolved.executor ?? deps.executor
   if (!bodies && providerModel.anchor) {
     entries = await transcript(g, session)
     bodies = true
@@ -1244,25 +1458,20 @@ export let react = async (
       )
     }
   }
-  let ask = line({
+  let ask = unfinished && executor ? unfinished : line({
     [ASK]: { to: modelEid, through: newest.entity.eid },
-    ...using || req.instructions
+    ...using || req.instructions || executor
       ? {
         [USING]: {
           ...using,
           instructions: req.instructions ?? null,
+          ...executor ? { tools: req.tools.map((tool) => tool.name) } : {},
         },
       }
       : {},
     attempt: { by: deps.owner ?? session },
   })
-  const stream = new Map<
-    string,
-    {
-      entry: Bundle
-      writer: Awaited<ReturnType<ReturnType<typeof transient>['begin']>>
-    }
-  >()
+  const stream: Streams = new Map()
   let tail = Promise.resolve(), streamFailure: unknown
   let accepting = true, checkpointAt = Date.now(), pendingDeltas = 0
   const checkpointMs = deps.checkpointMs ?? 2000
@@ -1326,9 +1535,18 @@ export let react = async (
       })
     }
   }
+  req.call = ask.entity.eid
+  if (executor) {
+    await executor.submit(ask.entity.eid, req)
+    return {
+      did: 'nothing',
+      status: await currentStatus(g, session),
+      added: [ask],
+      waiting: { call: ask.entity.eid },
+    }
+  }
   let reply: Reply
   try {
-    req.call = ask.entity.eid
     req.onMedia = async (receipt) => {
       if (receipt.cost == null) return
       await g.apply([{
@@ -1495,126 +1713,11 @@ export let react = async (
     if (failed && retried) throw again(e as ModelError)
     return failed ?? await current()
   }
-  const finalAsk: Bundle = {
-    ...ask,
-    ...providerModel.mark?.(reply) ?? {},
-    ...reply.usage ? { usage: reply.usage } : {},
-    ...reply.cost == null
-      ? {}
-      : { cost: { dollars: reply.cost, reported: reply.costReported ?? true } },
-    attempt: { by: null },
-  }
-  let added: Bundle[] = [finalAsk]
-  let textIndex = 0
-  let byName = new Map(
-    [...toolEntities].map(([eid, t]) => [t.name, eid] as const),
+  return complete(
+    ask,
+    reply,
+    providerModel,
+    new Map([...toolEntities].map(([eid, t]) => [t.name, eid])),
+    stream,
   )
-  for (let item of reply.items) {
-    if (item.kind == 'assistant') {
-      const active = stream.get(item.id ?? String(textIndex))
-      textIndex++
-      added.push(
-        active
-          ? {
-            entity: active.entry.entity,
-            $was: { [CONTENT]: { body: active.writer.expected() } },
-            [CONTENT]: { body: item.text },
-            [OUTPUT]: { source: ask.entity.eid },
-          }
-          : line({
-            [CONTENT]: { body: item.text },
-            [OUTPUT]: { source: ask.entity.eid },
-          }),
-      )
-    } else if (item.kind == 'call') {
-      // The model's arguments are JSON text; a call's are the object it
-      // spells. Text that spells no object is kept as the model wrote it, so
-      // the transcript resends it verbatim, and the call is refused (`served`).
-      let args = objectIn(item.args)
-      added.push(line(
-        {
-          [CALL]: {
-            to: byName.get(item.name),
-            id: item.id,
-            ...args ? { args } : {},
-            source: ask.entity.eid,
-          },
-        },
-        args ? undefined : item.args,
-      ))
-    }
-  }
-  // One entry per answer, said as a line too, so a person reading the
-  // transcript sees what was decided and a query can match
-  // `.answer.question=plan`. No later turn reads it (`lines`).
-  for (let [question, a] of Object.entries(reply.answers ?? {})) {
-    let { type: _, ...answer } = a
-    added.push(line({
-      [ANSWER]: { question, ...answer },
-      [OUTPUT]: { source: ask.entity.eid },
-    }, saying(question, a)))
-  }
-  for (let artifact of reply.artifacts ?? []) {
-    let eid = artifact.address
-    added.push({
-      entity: { eid },
-      artifact: {
-        address: artifact.address,
-        media_type: artifact.media_type,
-        size: artifact.size,
-      },
-    })
-    added.push(line({
-      attachment: {
-        artifact: eid,
-        call: artifact.call,
-        ...artifact.revised_prompt
-          ? { revised_prompt: artifact.revised_prompt }
-          : {},
-      },
-      [OUTPUT]: { source: ask.entity.eid },
-      [CONTENT]: {
-        body: 'Generated media: ' + eid + ' (' + artifact.media_type + ', ' +
-          artifact.size + ' bytes)',
-      },
-    }))
-  }
-  // The reply and its minted entry ids stay in this closure. A commit followed
-  // by a failed transcript read retries the guarded finish, not the provider.
-  let finalize = async () => {
-    if (!deps.streaming) {
-      return await finish(ask, finalAsk, added.slice(1)) ?? await current()
-    }
-    if (
-      [...stream.values()].some((active) =>
-        !added.some((b) => b.entity.eid == active.entry.entity.eid)
-      )
-    ) {
-      let omitted = await finish(
-        ask,
-        {
-          entity: ask.entity,
-          attempt: { by: null },
-          interrupted: { code: 'superseded' },
-        },
-        [
-          line(
-            { [EXCEPTION]: {} },
-            'Completed reply omitted a streamed text item; retained partial output',
-          ),
-        ],
-      )
-      if (!omitted) return current()
-      for (const active of stream.values()) await active.writer.commit()
-      return omitted
-    }
-    return await finish(ask, finalAsk, added.slice(1)) ?? await current()
-  }
-  try {
-    return await (deps.attempt?.retry
-      ? deps.attempt.retry(finalize)
-      : finalize())
-  } finally {
-    for (const active of stream.values()) active.writer.discard()
-  }
 }

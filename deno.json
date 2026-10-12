@@ -209,6 +209,8 @@
     "packages/d1/conform.ts",
     "packages/mail/conform.ts",
     "workers/yak/conform.ts",
+    "workers/model/conform.ts",
+    "workers/model/index.ts",
     "workers/yak/fixtures",
     "**/.wrangler",
     ".tasks",

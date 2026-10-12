@@ -1,0 +1,39 @@
+# An executor release is independent of the kernel's deploy. Retain its names
+# while any accepted call may still need its Workflow or private receipt.
+name = "yak-model-v1"
+main = "index.ts"
+account_id = "0f9613dfd3f0451df0bd0f12a1372ea3"
+tsconfig = ".wrangler/paths.json"
+compatibility_date = "2026-07-01"
+compatibility_flags = ["nodejs_compat"]
+workers_dev = false
+preview_urls = false
+
+[version_metadata]
+binding = "VERSION_METADATA"
+
+[observability.logs]
+enabled = true
+invocation_logs = true
+
+[[workflows]]
+binding = "INFERENCES"
+name = "yak-model-v1"
+class_name = "InferenceWorkflow"
+
+[[r2_buckets]]
+binding = "RECEIPTS"
+bucket_name = "yak-model-receipts"
+
+# Enable when workers/yak exports the authenticated receipt host (T-122500).
+# [[services]]
+# binding = "KERNEL"
+# service = "yak"
+# entrypoint = "ModelHost"
+
+[alias]
+"file-type/core" = "../yak/node_modules/file-type/core.js"
+"croner" = "../yak/node_modules/croner/dist/croner.js"
+"marked" = "../yak/node_modules/marked/lib/marked.esm.js"
+"@cfworker/json-schema" = "../yak/node_modules/@cfworker/json-schema/dist/esm/index.js"
+"@std/yaml" = "../yak/node_modules/@std/yaml/mod.js"

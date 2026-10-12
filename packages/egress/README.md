@@ -45,3 +45,38 @@ The credential goes only to the host that was checked: a request carrying one
 does not follow redirects, so a redirect comes back to the caller, whose next
 request is checked again. The body is sent whole, byte for byte, apart from the
 swap.
+
+## A grant from a trusted host
+
+A **grant** is a credential and the destinations a trusted host authorized for
+one call: `{sentinel, value, hosts}`. `granted(grants, request, send?)` forwards
+using those grants without reading a graph or vault. A separate executor can
+obtain grants from its host at I/O and send a long response directly, keeping
+the host outside the response stream. It keeps the grant only while sending;
+durable requests carry sentinels, never credential values.
+
+```ts
+import { granted } from '@yaks/egress'
+import { equal } from '@yaks/testing'
+
+let sentinel = 'yak_sentinel_' + 'A'.repeat(43)
+let grants = [{ sentinel, value: 'service-key', hosts: ['api.example'] }]
+let sent = ''
+await granted(
+  grants,
+  new Request('https://api.example/', {
+    headers: { authorization: `Bearer ${sentinel}` },
+  }),
+  async (request) => {
+    sent = new Request(request).headers.get('authorization')!
+    return new Response(null)
+  },
+)
+equal(sent, 'Bearer service-key')
+```
+
+Every sentinel found in the request must have a grant allowing its HTTPS
+destination, including the port. An ungranted sentinel or refused destination
+throws `Refused` before sending. Substitution, body preservation and redirect
+handling are the same as `forward`; obtaining and refreshing the grants is the
+host's responsibility.

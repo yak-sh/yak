@@ -735,7 +735,8 @@
         "admitted"
       ],
       "changed": [
-        "dispatch.state"
+        "dispatch.state",
+        "inference.receipt"
       ],
       "removed": [
         "contains",

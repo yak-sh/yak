@@ -120,6 +120,7 @@ export let appConfig: Config = {
         'cost',
         'questions',
         'answer',
+        'inference',
       ],
     },
     { use: '@yaks/blob', words: ['artifact', 'representation'] },

@@ -62,6 +62,17 @@ import type { Artifact } from '@yaks/blob'
 import { modelDoc, type Price, type Usage, weigh } from './vocab.ts'
 import type { MediaReceipt } from './media.ts'
 export {
+  type Executor,
+  type FrozenModelRequest,
+  frozenRequest,
+  infer,
+  type Inference,
+  type InferenceHost,
+  type InferenceReceipt,
+  inferenceReply,
+  thawedRequest,
+} from './inference.ts'
+export {
   type MediaReceipt,
   type MediaReceipts,
   mediaReceipts,

@@ -557,7 +557,7 @@ These are the names, all of them:
     connection contains content cost created delegates deliver delivered
     deploy dispatch doc draft edge effect email entity entry error exception
     execution failed favorite fee feedback file filed finding fired former
-    gallery gitobj grant home hook hostname image imported installed
+    gallery gitobj grant home hook hostname image imported inference installed
     integration integration_install interrupted invite inviting key lease
     lines mail mail_post member memory meter model
     notice notified notify_trash opened openrouter order output output_of

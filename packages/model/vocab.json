@@ -263,6 +263,28 @@
         "process",
         "http"
       ]
+    },
+    "inference": {
+      "component": true,
+      "type": "object",
+      "wire": false,
+      "sync": "none",
+      "journal": false,
+      "description": "the pinned executor and private frozen request and completed receipt references for the original model ask",
+      "properties": {
+        "executor": {
+          "type": "string",
+          "description": "the independently deployed executor release that accepted this ask"
+        },
+        "request": {
+          "type": "string",
+          "description": "private frozen request object reference"
+        },
+        "receipt": {
+          "type": "string",
+          "description": "private completed receipt object reference; absent while pending"
+        }
+      }
     }
   }
 }

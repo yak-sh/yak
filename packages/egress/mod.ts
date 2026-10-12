@@ -20,4 +20,4 @@
  * @module
  */
 
-export { type Caller, forward, Refused } from './egress.ts'
+export { type Caller, forward, type Grant, granted, Refused } from './egress.ts'
