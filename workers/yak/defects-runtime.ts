@@ -3,6 +3,7 @@ import { waitUntil } from 'cloudflare:workers'
 import { within } from './defects.ts'
 import { origin } from '@yaks/tracker/report'
 import type { Env } from './env.ts'
+import { learn } from './running.ts'
 
 let clock = {
   now: Date.now,
@@ -22,27 +23,31 @@ let clock = {
   },
 }
 
+// Every invocation enters here, the Worker's and each object's, so this is
+// also where an isolate learns which deploy it runs (running.ts).
 export let entry = <T>(
   env: Partial<Env>,
   request: string,
   run: () => T,
   http?: Request,
-): T =>
-  within(
-    env,
-    { request },
-    run,
-    clock,
-    {
-      retain: waitUntil,
-      origin: origin(
-        env.WORKER_NAME ?? 'yak',
-        env.CF_VERSION_METADATA?.id,
-        request,
-        http,
-      ),
-    },
-  )
+): T => (
+  learn(env.CF_VERSION_METADATA),
+    within(
+      env,
+      { request },
+      run,
+      clock,
+      {
+        retain: waitUntil,
+        origin: origin(
+          env.WORKER_NAME ?? 'yak',
+          env.CF_VERSION_METADATA?.id,
+          request,
+          http,
+        ),
+      },
+    )
+)
 
 /** Construction, lifecycle callbacks and RPC methods share the same reporting
  * boundary. A callback installed by construction retains its invocation scope. */

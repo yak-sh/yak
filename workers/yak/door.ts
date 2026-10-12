@@ -13,6 +13,7 @@
 import type { Caller } from '@yaks/egress'
 import { hop, writing } from './lib/hops.ts'
 import { defect } from './defects.ts'
+import { stamp } from './running.ts'
 
 // A store reports the statements it ran for this fetch, including any store
 // it asked in turn. Only the door sees every answer, so it is also where a
@@ -184,6 +185,9 @@ export let doorOf = (
     let req = new Request(`http://store${path}`, init)
     for (let h of VOUCH) req.headers.delete(h)
     for (let [k, v] of Object.entries(headers)) req.headers.set(k, v)
+    // The deploy this caller runs, so a store still on older code restarts
+    // onto this one rather than answering for it (running.ts).
+    stamp(req.headers)
     req.headers.set('x-store', name)
     if (app) {
       req.headers.set('x-yak-app', app.eid)

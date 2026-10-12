@@ -268,6 +268,7 @@ import {
   type Namespace,
   PLATFORM_STORE,
 } from './door.ts'
+import { caller, newer, versionOf } from './running.ts'
 import { type Meta, meta, metaOf, minted } from './meta.ts'
 import { caught, defect } from './defects.ts'
 import { counts, hop, type Tally, tallying } from './lib/hops.ts'
@@ -522,6 +523,9 @@ export type State = Hibernation & {
     // store without them simply never wakes itself.
     get?<T>(key: string): Promise<T | undefined>
     put?(key: string, value: unknown): Promise<void>
+    // Whatever was written, made durable before the object restarts itself
+    // (`#behind`): a restart drops writes still in flight.
+    sync?(): Promise<void>
     deleteAlarm?(): Promise<void>
     getAlarm?(): Promise<number | null>
     setAlarm?(at: number): Promise<void>
@@ -799,6 +803,12 @@ let routeKind = (request: Request): string => {
     ? `${request.method} ${path}`
     : 'http other'
 }
+
+// What an object that restarted for a newer deploy remembers (`#behind`), and
+// the words its restart fails the request in flight with: the runtime's own,
+// so every caller's retry already knows them (door.ts `RESETS`).
+let RESTARTED = 'restarted for'
+let BEHIND = 'Durable Object reset because a newer deploy reached it:'
 
 let traceContext = new AsyncLocalStorage<Context | undefined>()
 installContext({
@@ -2593,6 +2603,25 @@ export class Store {
   // release (`#select`).
   #version = () => this.#bind.CF_VERSION_METADATA?.id ?? null
 
+  // A caller on a later deploy than this incarnation (T-123372, running.ts).
+  // The runtime leaves an object on the code it started with for minutes after
+  // a deploy, so a door the deploy added would answer "no route" until then.
+  // The object restarts instead, before it does anything for the request, and
+  // the caller's retry (door.ts `evicted`, which knows these words) meets the
+  // new code. Once per version: an object the runtime starts again on older
+  // code is where the runtime means it to be, and it serves.
+  async #behind(request: Request): Promise<void> {
+    let theirs = caller(request.headers), ctx = this.#ctx, s = ctx.storage
+    if (
+      !theirs || !newer(theirs, versionOf(this.#bind.CF_VERSION_METADATA)) ||
+      !ctx.abort || !s.get || !s.put ||
+      await s.get(RESTARTED) == theirs.id
+    ) return
+    await s.put(RESTARTED, theirs.id)
+    await s.sync?.()
+    ctx.abort(`${BEHIND} ${theirs.id}`)
+  }
+
   // ---- the mover (mover.ts, D-45640) ---------------------------------------
   //
   // Rows brought into a new shape after this object has booted, from its
@@ -3039,6 +3068,7 @@ export class Store {
   }
 
   async #fetch(request: Request): Promise<Response> {
+    await this.#behind(request)
     let path = new URL(request.url).pathname
     let kernel = request.headers.get('x-yak-kernel') == '1'
     if (kernel && path == '/dormant' && request.method == 'POST') {
