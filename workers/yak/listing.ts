@@ -14,7 +14,7 @@
 // what was asked for. Anything that is not a row listing (an aggregate, a
 // count) passes through as it came.
 
-import { conjoin } from '@yaks/query'
+import { clauses, conjoin, parse } from '@yaks/query'
 import type { Personal } from '@yaks/member'
 
 // The platform's bookkeeping about a row — who wrote it and when, whether it
@@ -61,8 +61,8 @@ export type Row = Record<string, unknown>
 /** The paths a line's `.fields` projection names, each a list of segments, or
  * none when it projects nothing. */
 export let projects = (line: string): string[][] =>
-  /(?:^|&)\.fields=([^&]*)/.exec(line)?.[1].split(',')
-    .map((path) => path.replace(/~$/, '').split('.')) ?? []
+  clauses(parse(line.replace(/^[?&]+/, '')))
+    .find((c) => c.kind == 'fields')?.fields.map((f) => f.path) ?? []
 
 /** Whether a filter line names a component, in any of the three ways a clause
  * can: present (`.created`), absent (`!created`) or wanted (`?created`), or on

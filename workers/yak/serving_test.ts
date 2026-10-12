@@ -289,6 +289,16 @@ test('an app worker can send a stored query as one encoded filter', async () => 
   let rows = await res.json()
   assertEquals(rows.length, 1)
   assertEquals(rows[0].doc.title, title)
+  // A projection can carry only the identity: it is still a matching row.
+  for (let separator of ['&', ' ']) {
+    let line = `.doc.title~=Wren${separator}.fields=entity.eid`
+    let res = await apps.fetch(
+      visit(`/cookbook/api/query?q=${encodeURIComponent(line)}`),
+      env,
+    )
+    assertEquals(res.status, 200)
+    assertEquals(await res.json(), [{ kind: 'entity', entity: { eid: CAKE } }])
+  }
 })
 
 test('an app serves audio and video with byte ranges', async () => {

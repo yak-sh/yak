@@ -220,6 +220,22 @@ test('what is not a row listing passes through as it came', () => {
   assertEquals(listing('not json at all', '.doc'), 'not json at all')
 })
 
+test('listings read projection directives through the query grammar', () => {
+  let row = { entity: { eid: 'saved' }, created: { at: 'now' } }
+  let body = JSON.stringify([row])
+  for (
+    let line of [
+      '.doc .fields=entity.eid,created.at~ .limit=1',
+      '?.doc&.fields=entity.eid,created.at~&.limit=1',
+      '(.doc .fields=entity.eid,created.at~)',
+      '.doc|.fields="entity.eid,created.at~"',
+    ]
+  ) {
+    assertEquals(rows(listing(body, line)), [row])
+  }
+  assertEquals(rows(listing(body, '"a&.fields=entity.eid"')), [])
+})
+
 // Outputs speak human: a reference to somebody the store knows carries their
 // name, so a view's one query draws a byline (C-32730 item 5).
 test('a reference to a person answers with a name', () => {
