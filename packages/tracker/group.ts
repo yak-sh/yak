@@ -1,14 +1,10 @@
 // Grouping decides patches from records; graph admission commits them together.
 // The occurrence link is the receipt: resends and retried effects never count twice.
 
-import {
-  type Bundle,
-  type Comp,
-  derivedEid,
-  type Graph,
-  Stale,
-  token,
-} from '@yaks/graph'
+import type { Bundle, Comp, Graph } from '@yaks/graph'
+import { derivedEid } from '@yaks/graph/identity'
+import { Stale } from '@yaks/graph/errors'
+import { token } from '@yaks/graph/sha256'
 import { after, same } from '@yaks/fp'
 import { absent, and, eq, every } from '@yaks/query'
 import { faultOf } from './fault.ts'

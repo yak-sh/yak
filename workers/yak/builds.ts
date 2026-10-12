@@ -23,7 +23,7 @@
 // no receipt yet. Delivering one failure twice therefore notes it once, and
 // only the note that lands earns the retry.
 
-import { Stale } from '@yaks/graph'
+import { Stale } from '@yaks/graph/errors'
 import type { Env } from './env.ts'
 import { caught, defect } from './defects.ts'
 import { type Breaks, metaBreaks } from './unseen.ts'

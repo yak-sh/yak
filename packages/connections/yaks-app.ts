@@ -1,7 +1,7 @@
 // yaks.app signs in as a discovered MCP integration. A bot walks the same
 // sign-in and consent pages, retaining its website session only in the vault.
 import type { Graph } from '@yaks/graph'
-import { Refused } from '@yaks/graph'
+import { Refused } from '@yaks/graph/errors'
 import { discover } from '@yaks/mcp-client/oauth'
 import { registered, registration } from './clients.ts'
 import { integrationEid, known } from './integrations.ts'

@@ -18,7 +18,8 @@
 
 import { CallError } from '@yaks/tools/errors'
 import type { Actor, Bundle, Comp, Eid, Graph, Was } from '@yaks/graph'
-import { token, TOMBSTONE } from '@yaks/graph'
+import { token } from '@yaks/graph/sha256'
+import { TOMBSTONE } from '@yaks/graph/bundle'
 import type { Batch } from './batch.ts'
 import type { Log } from './log.ts'
 

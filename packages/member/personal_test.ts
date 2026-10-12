@@ -1,5 +1,6 @@
 import { type Comp, graph, signed, type Tx } from '@yaks/graph'
 import { ram } from '@yaks/ram'
+import { graph as readonly } from '@yaks/graph/read'
 import { loadVocab } from '@yaks/vocab'
 import { equal, test } from '@yaks/testing'
 import { assertThrows } from '@std/assert'
@@ -326,3 +327,23 @@ test('transaction ownership uses gathered absence before pending writes', () => 
     text: 'mine',
   })
 })
+
+for (let person of ['alice', 'bob', null]) {
+  for (let native of [false, true]) {
+    test(`read-only personal scopes (${person ?? 'guest'}, native ${native})`, () => {
+      let g = readonly({ vocab, storage: read.storage })
+      g.use(personal(vocab, { draft: 'by', preference: 'entity' }))
+      let opts = { person, native }
+      for (let q of ['.draft', '.draft .fields=draft.text']) {
+        equal(g.read(q, opts), read.read(q, opts))
+        equal(g.rows(q, opts), read.rows(q, opts))
+      }
+      equal(g.rows('.draft .count', opts), read.rows('.draft .count', opts))
+      equal(
+        g.get(['alice', 'private'], undefined, opts),
+        read.get(['alice', 'private'], undefined, opts),
+      )
+      if (person != 'alice') equal(g.get(['private'], undefined, opts), [])
+    })
+  }
+}

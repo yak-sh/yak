@@ -19,7 +19,8 @@
 
 import type { Bundle, Comp, Eid, Graph } from '@yaks/graph'
 import { after } from '@yaks/fp'
-import { comps, dead, transient } from '@yaks/graph'
+import { comps, dead } from '@yaks/graph/bundle'
+import { transient } from '@yaks/graph/read'
 import { replicate } from './mark.ts'
 import type { Mine } from './saying.ts'
 import type { Frame } from './socket.ts'

@@ -1,6 +1,6 @@
 // The owner’s view of yaks.app failures: tail watches live traffic through
 // Wrangler, and errors reads grouped failures through the signed tracker door.
-import { CallError } from '@yaks/tools'
+import { CallError } from '@yaks/tools/errors'
 import { type Options, routes } from '@yaks/tracker/routes'
 import { WRANGLER } from '../../workers/yak/wrangler.ts'
 import { spawn, wasInterrupted } from './subprocess.ts'

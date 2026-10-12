@@ -1,19 +1,11 @@
 // The model is one registered builder tool. It opens an ordinary transcript;
 // its completed entry is adapted to the same output value code tools return.
 
-import {
-  type Binding,
-  type Bundle,
-  type Comp,
-  derivedEid,
-  type Eid,
-  type Graph,
-  type Tool,
-  type Tx,
-} from '@yaks/graph'
+import type { Binding, Bundle, Comp, Eid, Graph, Tool, Tx } from '@yaks/graph'
+import { derivedEid } from '@yaks/graph/identity'
 import { link } from '@yaks/edge'
 import { kindOf, textOf } from '@yaks/session'
-import { toolEid } from '@yaks/tools'
+import { toolEid } from '@yaks/tools/result'
 import { toolsSaid } from '@yaks/vocab/tools'
 import doc from './vocab.json' with { type: 'json' }
 import { ids } from './build.ts'

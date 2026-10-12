@@ -4,11 +4,23 @@
 import { test } from '@yaks/testing'
 import { assertEquals, assertThrows } from '@std/assert'
 import { admit, Refused } from './admit.ts'
+import { formed as shaped } from './bundle.ts'
+import { formed } from './mod.ts'
 import { loadVocab } from '@yaks/vocab'
 import { books } from './testing.ts'
 
 let one = (b: Record<string, unknown>, trusted = false) =>
   admit([b as never], books, trusted)
+
+test('the write door validates prune after the shared bundle shape', () => {
+  let invalid = [{ entity: { eid: 'orphan' }, $prune: true, doc: {} }]
+  assertEquals(shaped(invalid), invalid)
+  assertThrows(() => formed(invalid), Refused, '$prune removes only')
+  assertEquals(formed([{ entity: { eid: '' }, $prune: true }]), [{
+    entity: { eid: '' },
+    $prune: true,
+  }])
+})
 
 test('an unknown component refuses the batch, naming it', () => {
   assertThrows(

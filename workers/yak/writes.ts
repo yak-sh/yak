@@ -14,7 +14,9 @@
 // These plain tables belong to no vocabulary or app migration. Their placement
 // beside the graph makes receipt persistence and mutation atomic even when
 // the graph above storage cannot stand.
-import { type Bundle, composed, Refused } from '@yaks/graph'
+import type { Bundle } from '@yaks/graph'
+import { composed } from '@yaks/graph/bundle'
+import { Refused } from '@yaks/graph/errors'
 import { carries } from '@yaks/secrets'
 import {
   among,
@@ -130,7 +132,9 @@ export let raise = (db: Driver) => {
   let has = db.query({ t: 'pragma', name: 'table_info', arg: LOG })
     .map((r) => String(r.name))
   for (let add of WRITES.cols) {
-    if (!has.includes(add.name)) db.query({ t: 'alter table', table: LOG, add })
+    if (!has.includes(add.name)) {
+      db.query({ t: 'alter table', table: LOG, add })
+    }
   }
   for (let stmt of schema().slice(2)) db.query(stmt)
 }

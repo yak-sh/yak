@@ -34,7 +34,7 @@
 // bigger than a part (`parts`). A seed is one part at most; a load bigger than
 // one is written a part per batch, each whole or not at all.
 import type { Bundle } from '@yaks/graph'
-import { CallError } from '@yaks/tools'
+import { CallError } from '@yaks/tools/errors'
 import { read } from '@yaks/yaml'
 import { type Sheet, sheet } from './csv.ts'
 import { refuse } from './tool.ts'

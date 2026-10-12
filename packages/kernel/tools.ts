@@ -7,7 +7,8 @@
 // tool returns one new entity carrying both components, and the tool runner
 // commits it signed as whoever called it.
 
-import { argsOf, type Bundle } from '@yaks/graph'
+import type { Bundle } from '@yaks/graph'
+import { argsOf } from '@yaks/graph/call'
 import type { Runs } from '@yaks/graph/tools'
 
 /** The implementations of the tools ./vocab.json declares. A function that

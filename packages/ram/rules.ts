@@ -21,7 +21,7 @@
 // bundles, however large the page's graph.
 
 import type { Bind, Binding, Eid, Match, Pattern } from '@yaks/graph'
-import { collected } from '@yaks/graph'
+import { collected } from '@yaks/graph/declared'
 import {
   type Bundle,
   filter,

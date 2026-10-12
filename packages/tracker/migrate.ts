@@ -1,7 +1,8 @@
 // The box transition reads the retired title only while moving it to doc.
 // Guards preserve a concurrent edit; a conflicting human title stops, never
 // discards either value. This module is not imported by the running tracker.
-import { type Graph, token } from '@yaks/graph'
+import type { Graph } from '@yaks/graph'
+import { token } from '@yaks/graph/sha256'
 import { comp, str, title } from './model.ts'
 
 export let migrateTitles = async (g: Graph): Promise<number> => {

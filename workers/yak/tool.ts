@@ -14,7 +14,7 @@
 // is the vocabulary a row is written in.
 import type { Security } from '@yaks/mcp'
 import { writes } from '@yaks/member'
-import { CallError } from '@yaks/tools'
+import { CallError } from '@yaks/tools/errors'
 import { fill } from '@yaks/yaml'
 import { WORDS } from './content.ts'
 import { appStore, type Directory, META, type Space } from './directory.ts'

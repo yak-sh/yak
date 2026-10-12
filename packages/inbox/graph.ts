@@ -1,5 +1,6 @@
 // The inbox read is a query result, not a stored snapshot of attention.
-import { type Bundle, derivedEid, type Graph, type Plugin } from '@yaks/graph'
+import type { Bundle, Graph, Plugin } from '@yaks/graph'
+import { derivedEid } from '@yaks/graph/identity'
 import { map, parse, type Query } from '@yaks/query'
 import type { Search } from './threads.ts'
 import { readInbox, readThread } from './read.ts'

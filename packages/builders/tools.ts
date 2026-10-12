@@ -4,19 +4,14 @@
 // through a tool call. `build` is that reconciliation for any host's door:
 // the box's `builder build` tool below, and a yaks.app store's declared tool.
 
-import {
-  type Actor,
-  argsOf,
-  type Bundle,
-  type Comp,
-  type Graph,
-  sha256,
-  signed,
-  who,
-} from '@yaks/graph'
+import type { Actor, Bundle, Comp, Graph } from '@yaks/graph'
+import { argsOf, who } from '@yaks/graph/call'
+import { sha256 } from '@yaks/graph/sha256'
+import { signed } from '@yaks/graph/provenance'
 import type { Runs } from '@yaks/graph/tools'
 import { human } from '@yaks/id'
-import { CallError, said } from '@yaks/tools'
+import { CallError } from '@yaks/tools/errors'
+import { said } from '@yaks/tools/result'
 import type { Vocab } from '@yaks/vocab'
 import { held } from '@yaks/key'
 import { BUILD_OF, buildOf, clock, type Options, reconcile } from './build.ts'
@@ -126,7 +121,9 @@ export let build = async (
   let found = await held(graph, BUILD_OF, values)
   return values.map((v) => {
     let owner = found.get(v)
-    if (!owner) throw new CallError('refused', `build_of key ${v} has no owner`)
+    if (!owner) {
+      throw new CallError('refused', `build_of key ${v} has no owner`)
+    }
     return owner
   })
 }

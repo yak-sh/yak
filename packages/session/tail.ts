@@ -31,17 +31,12 @@
 // This module reads files; it is reached through `@yaks/session/tail`, never
 // the main module, which a browser loads.
 
-import {
-  type Bundle,
-  type Comp,
-  derivedEid,
-  type Eid,
-  type Graph,
-  status,
-  TOMBSTONE,
-  who,
-} from '@yaks/graph'
-import { toolEid } from '@yaks/tools'
+import type { Bundle, Comp, Eid, Graph } from '@yaks/graph'
+import { derivedEid } from '@yaks/graph/identity'
+import { status } from '@yaks/graph/errors'
+import { TOMBSTONE } from '@yaks/graph/bundle'
+import { who } from '@yaks/graph/call'
+import { toolEid } from '@yaks/tools/result'
 import type { Comps, Reader, Said } from './readers.ts'
 import { humanCaller } from './who.ts'
 
@@ -271,7 +266,9 @@ export let tail = async (
       'created',
     ])
     : []
-  let operatorStored = comp(session, 'session')?.operator as boolean | undefined
+  let operatorStored = comp(session, 'session')?.operator as
+    | boolean
+    | undefined
   let automatic = session && (
     comp(session, 'session')?.source || comp(session, 'spawned')?.parent ||
     !await humanCaller(g, who(session), session.entity.eid)

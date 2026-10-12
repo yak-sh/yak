@@ -6,7 +6,7 @@ import type {
   TranscriptWindow,
 } from '@yaks/session'
 import { streamingEnabled } from './streaming.ts'
-import { transient } from '@yaks/graph'
+import { transient } from '@yaks/graph/read'
 import type { ImageOptions } from './images.ts'
 import type { ModelSelection } from './model_selection.ts'
 /** Worker frontend. UI state remains in the frontend's private graph. */

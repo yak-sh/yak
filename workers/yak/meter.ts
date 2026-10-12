@@ -38,7 +38,8 @@ import {
 import { guess } from './models.ts'
 import { modelInfo } from '@yaks/workers-ai'
 import { defect } from './defects.ts'
-import { derivedEid, Stale } from '@yaks/graph'
+import { derivedEid } from '@yaks/graph/identity'
+import { Stale } from '@yaks/graph/errors'
 
 // What one store did, as the analytics answer them (usage.ts `read`). Bytes
 // come from the store itself, and the month and the letters from the row being
@@ -347,7 +348,9 @@ export let refusedVisit = (
 ): Response | null => {
   let limit = ceilings(space.tier, space.slug)
   if (!limit || requestUnits(spent(space, now)) < limit.requests) return null
-  let reset = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1))
+  let reset = new Date(
+    Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1),
+  )
   return new Response(
     req.method == 'HEAD'
       ? null

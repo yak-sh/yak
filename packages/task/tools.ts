@@ -19,7 +19,8 @@
 // (@yaks/edge) — applied in one transaction, and `graph_apply` with `check`
 // rehearses it before it is written. See the README.
 
-import { argsOf, type Bundle, type Comp } from '@yaks/graph'
+import type { Bundle, Comp } from '@yaks/graph'
+import { argsOf } from '@yaks/graph/call'
 import { guarded } from '@yaks/doc'
 import { answer } from './decision.ts'
 import type { Runs } from '@yaks/graph/tools'

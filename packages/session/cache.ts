@@ -3,7 +3,7 @@
 // The reader needs only the graph's read/get doors, on a box or an app store.
 
 import type { Bundle, Comp, Graph } from '@yaks/graph'
-import { Refused } from '@yaks/graph'
+import { Refused } from '@yaks/graph/errors'
 import { and, eq, ge, lt, or, present, want } from '@yaks/query'
 
 export type CacheOpts = {

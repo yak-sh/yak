@@ -23,7 +23,7 @@
 
 import { map, type Pred, type Query } from '@yaks/query'
 import type { Bundle, Comp, Graph, Plugin } from '@yaks/graph'
-import { derivedEid, identities } from '@yaks/graph'
+import { derivedEid, identities } from '@yaks/graph/identity'
 import { link, unlink } from '@yaks/edge'
 import { type Ids, toBundles, type Vocab, type VocabDoc } from '@yaks/vocab'
 

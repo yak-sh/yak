@@ -53,7 +53,8 @@
 // are copies; dynamic components (computed, or derived from anything but this
 // connection's rows) are read again on every hit. Bounded by count and bytes,
 // the longest unread let go first; a scan is read through, not kept.
-import { type Bundle, type Comp, comps, dead, type Entity } from '@yaks/graph'
+import type { Bundle, Comp, Entity } from '@yaks/graph'
+import { comps, dead } from '@yaks/graph/bundle'
 import type { Prop, Vocab } from '@yaks/vocab'
 import { type And, bare, type Clause, drifts, type Pred } from '@yaks/query'
 import {
@@ -366,7 +367,9 @@ let tell = (driver: Driver, c: Connection) => {
     c.learned.clear()
     for (let [answers, key] of c.answered) answers.delete(key)
     c.answered = []
-    for (let k of c.kept) for (let eid of k.after.keys()) k.after.set(eid, LOST)
+    for (let k of c.kept) {
+      for (let eid of k.after.keys()) k.after.set(eid, LOST)
+    }
   }
   let ended = (committed: boolean) => {
     if (!committed) undone()
@@ -844,7 +847,9 @@ export let memoized = (
   return {
     presence: (eid, tables) => {
       sync()
-      if (c.blind || !tables.every((name) => stored.has(name))) return undefined
+      if (c.blind || !tables.every((name) => stored.has(name))) {
+        return undefined
+      }
       let b = prior(eid)
       return b === LOST || b == null
         ? undefined
@@ -994,7 +999,9 @@ export let memoized = (
         tombstone: { deleted_at: at },
       })
       let now = new Map<string, Bundle | null | typeof LOST>()
-      for (let [eid, b] of was) now.set(eid, b === LOST ? LOST : buried(eid, b))
+      for (let [eid, b] of was) {
+        now.set(eid, b === LOST ? LOST : buried(eid, b))
+      }
       stand(was, now, before)
     },
     patch: (bundles, body) => {

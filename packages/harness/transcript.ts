@@ -1,6 +1,6 @@
 /** Terminal transcript trees selected by query specificity, not a kind switch. */
 import type { Comp } from '@yaks/graph'
-import { toolEid } from '@yaks/tools'
+import { toolEid } from '@yaks/tools/result'
 import { parse } from '@yaks/query'
 import { define, type Renderer, type Rendering } from '@yaks/render'
 import { entryBody } from '@yaks/session'
@@ -109,7 +109,9 @@ export let transcriptViews = define([
     render: (b, h, ctx) => {
       let eid = String((b.attachment as Comp).artifact ?? '')
       let alt = String((b.content as Comp).body ?? 'Image artifact')
-      let load = ctx.image as ((eid: string) => Promise<Uint8Array>) | undefined
+      let load = ctx.image as
+        | ((eid: string) => Promise<Uint8Array>)
+        | undefined
       if (!load || !ctx.inlineImages) return h('div', { wrap: '1' }, alt)
       return h('terminal-image', {
         ref: (node: unknown) => {

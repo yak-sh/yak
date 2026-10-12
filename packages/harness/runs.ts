@@ -12,16 +12,10 @@
 // `model_list` lists the OpenAI endpoint's catalog through the credential the
 // harness uses. A tool answers, it does not write to a terminal.
 
-import {
-  argsOf,
-  type Bundle,
-  type Comp,
-  type Eid,
-  type Graph,
-  identityEid,
-  Refused,
-  who,
-} from '@yaks/graph'
+import type { Bundle, Comp, Eid, Graph } from '@yaks/graph'
+import { argsOf, who } from '@yaks/graph/call'
+import { identityEid } from '@yaks/graph/identity'
+import { Refused } from '@yaks/graph/errors'
 import type { Runs } from '@yaks/graph/tools'
 import type { Host } from '@yaks/host'
 

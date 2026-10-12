@@ -27,7 +27,7 @@
 
 import { cast, unknownComps, unknownProps, type Vocab } from '@yaks/vocab'
 import type { Bundle, Comp } from './bundle.ts'
-import { comps, dead, reserved } from './bundle.ts'
+import { comps, dead, formed as shaped, reserved } from './bundle.ts'
 
 import { Refused } from './errors.ts'
 import { prunable } from './prune.ts'
@@ -59,27 +59,10 @@ export let unstamped = (
   return bundles
 }
 
-/**
- * The bundles, refused unless they form a batch: an array whose every
- * member is an object whose `entity` names an eid. Every door hands `apply()`
- * what arrived, and the first phase reads each bundle's eid, so the shape is
- * refused here, before anything reads it, naming the bundle by its place.
- */
 export let formed = (bundles: unknown): Bundle[] => {
-  if (!Array.isArray(bundles)) {
-    throw new Refused('a batch is an array of bundles')
-  }
-  bundles.forEach((b, i) => {
-    let eid = b && typeof b == 'object' ? b.entity?.eid : undefined
-    if (typeof eid != 'string' || (!eid && b.$prune !== true)) {
-      throw new Refused(
-        `bundle ${i} needs an entity: {entity: {eid}} — an eid you mint, or ` +
-          `'$name' to have the graph mint one`,
-      )
-    }
-    prunable(b)
-  })
-  return bundles
+  let shapedBundles = shaped(bundles)
+  shapedBundles.forEach(prunable)
+  return shapedBundles
 }
 
 // One component patch, admitted: undeclared and server-owned properties refused,

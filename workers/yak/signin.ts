@@ -20,7 +20,9 @@
 // door does with a refusal is the door's: it answers exactly what an accepted
 // ask answers and mails nothing, because a visible refusal would say whether
 // an address had been asked for.
-import { type Bundle, Stale, token } from '@yaks/graph'
+import type { Bundle } from '@yaks/graph'
+import { Stale } from '@yaks/graph/errors'
+import { token } from '@yaks/graph/sha256'
 import { KERNEL, type Meta, minted } from './meta.ts'
 import { hmac } from './lib/hmac.ts'
 

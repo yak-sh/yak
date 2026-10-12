@@ -9,7 +9,14 @@
     "./routes": "./routes.ts",
     "./vocab": "./vocab.ts",
     "./value": "./value.ts",
-    "./views": "./views.ts"
+    "./views": "./views.ts",
+    "./read": "./read.ts",
+    "./result": "./result.ts",
+    "./persist": "./persist.ts",
+    "./fault": "./fault.ts",
+    "./check": "./check.ts",
+    "./state": "./state.ts",
+    "./display": "./display.ts"
   },
   "license": "Apache-2.0",
   "description": "Executes recorded graph tool calls and keeps their answers, duration, and execution state; parses app-declared commands and provides their HTTP route and answer rendering.",

@@ -1,5 +1,6 @@
 // Vocabulary assembly from already-imported facets, with no storage opened.
-import { type NamedTool, toolName } from '@yaks/graph'
+import type { NamedTool } from '@yaks/graph'
+import { toolName } from '@yaks/graph/call'
 import { tier } from '@yaks/graph/tools'
 import { derived as callsDerived } from '@yaks/tools/vocab'
 import { toolsIn } from '@yaks/vocab/tools'

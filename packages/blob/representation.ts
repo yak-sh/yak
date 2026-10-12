@@ -2,7 +2,7 @@
 // served. Its identity includes the app/store scope, type and filename, so a
 // later edit cannot change the headers at an already-issued URL.
 
-import { sha256 } from '@yaks/graph'
+import { sha256 } from '@yaks/graph/sha256'
 import { mediaType } from './content_type.ts'
 
 export type Representation = {

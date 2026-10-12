@@ -20,7 +20,8 @@ import type { Bundle, Comp } from '@yaks/graph'
 import { timed } from '@yaks/api/timing'
 import { type Registered, registration } from '@yaks/connections'
 
-import { CallError, valueIn } from '@yaks/tools'
+import { CallError } from '@yaks/tools/errors'
+import { valueIn } from '@yaks/tools/value'
 import { PLATFORM_STORE } from '../../workers/yak/door.ts'
 import type { Swept } from '../../workers/yak/sweep.ts'
 import type { Asked } from './move.ts'
@@ -421,7 +422,10 @@ let refusalCode: Record<number, string> = {
 
 let shortBody = (body: unknown) => {
   let text = typeof body == 'string' ? body : JSON.stringify(body) ?? ''
-  return text.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 120)
+  return text.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim().slice(
+    0,
+    120,
+  )
 }
 
 let refusedResponse = (r: Response, body: unknown) =>
@@ -443,7 +447,10 @@ let graphed = async (
   tool: 'graph_query' | 'graph_apply',
   args: Record<string, unknown>,
 ): Promise<Bundle[]> => {
-  let answer = await rpc(session)('tools/call', { name: tool, arguments: args })
+  let answer = await rpc(session)('tools/call', {
+    name: tool,
+    arguments: args,
+  })
   saidBy(answer)
   let result = (answer.structuredContent as { result?: unknown } | undefined)
     ?.result
@@ -477,7 +484,9 @@ export let storeQuery = async (
     let refusal = refusedResponse(r, body)
     throw new CallError(refusal.code, refusal.message)
   }
-  if (!r.ok) throw new Error(`${at} refused the query: ${JSON.stringify(body)}`)
+  if (!r.ok) {
+    throw new Error(`${at} refused the query: ${JSON.stringify(body)}`)
+  }
   return body
 }
 

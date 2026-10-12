@@ -50,8 +50,8 @@
 // namespace; we do not set it, because a test must not need the account.
 import type { Caller } from '@yaks/egress'
 import { COOKIE, opened, seal } from './lib/token.ts'
-import { sha256 } from '@yaks/graph'
 import { instrumentEid } from './instrument.ts'
+import { sha256 } from '@yaks/graph/sha256'
 import type { App, Role, Space } from './directory.ts'
 import { storeName, url } from './directory.ts'
 import type { Env } from './env.ts'
@@ -832,7 +832,9 @@ export let upload = async (
     let r = await sent(env, `/${scriptName(store)}`, { method: 'GET' })
     if (r.status == 404) await r.body?.cancel()
     else {
-      let details = await answered(r) as { script?: { migration_tag?: string } }
+      let details = await answered(r) as {
+        script?: { migration_tag?: string }
+      }
       tag = details?.script?.migration_tag
     }
   }

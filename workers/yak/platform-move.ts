@@ -1,6 +1,7 @@
 // Re-admit the directory's platform rows through the package's declarations.
 // Entity ids and property values stay fixed, including kept deploy pointers.
-import { type Comp, token } from '@yaks/graph'
+import type { Comp } from '@yaks/graph'
+import { token } from '@yaks/graph/sha256'
 import { PLATFORM_STORE } from './door.ts'
 import type { Rule } from './mover.ts'
 

@@ -2,7 +2,8 @@
 // fingerprints start at the cutover baseline; old calls did not freeze whole
 // input rows or the tool revision, so their definition remains unknown.
 
-import { type Bundle, type Comp, type ReadTx, token } from '@yaks/graph'
+import type { Bundle, Comp, ReadTx } from '@yaks/graph'
+import { token } from '@yaks/graph/sha256'
 import type { Vocab } from '@yaks/vocab'
 import { BUILD_OF, buildOf, selected } from './build.ts'
 import { held } from '@yaks/key'

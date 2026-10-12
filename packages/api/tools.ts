@@ -38,9 +38,11 @@
 // Sharing is asked for, never assumed: a second server started by mistake on a
 // taken port is refused rather than quietly handed half its requests.
 
-import { argsOf, type Bundle } from '@yaks/graph'
+import type { Bundle } from '@yaks/graph'
+import { argsOf } from '@yaks/graph/call'
 import type { Runs } from '@yaks/graph/tools'
-import { CallError, type Runner } from '@yaks/tools'
+import type { Runner } from '@yaks/tools'
+import { CallError } from '@yaks/tools/errors'
 import { denoListen, denoReady } from './deno.ts'
 import type { Handler } from './route.ts'
 

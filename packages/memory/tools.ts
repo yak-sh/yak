@@ -28,13 +28,9 @@
 // @yaks/embedding. A server with neither returns the newest of what the words
 // selected, which is a worse answer and not a broken one.
 
-import {
-  argsOf,
-  type Bundle,
-  type Comp,
-  type Graph,
-  Refused,
-} from '@yaks/graph'
+import type { Bundle, Comp, Graph } from '@yaks/graph'
+import { argsOf } from '@yaks/graph/call'
+import { Refused } from '@yaks/graph/errors'
 import { guarded, witnessed } from '@yaks/doc'
 export { witnessed } from '@yaks/doc'
 import type { Runs } from '@yaks/graph/tools'

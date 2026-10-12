@@ -7,7 +7,8 @@
 // only a loaded vocabulary knows. So a graph is built in two steps — load the
 // documents, then pass the same vocabulary to the plugin.
 
-import { dead, type Hook, type Plugin } from '@yaks/graph'
+import type { Hook, Plugin } from '@yaks/graph'
+import { dead } from '@yaks/graph/bundle'
 import { after } from '@yaks/fp'
 import type { Vocab } from '@yaks/vocab'
 import { KEY, names } from './kinds.ts'

@@ -11,7 +11,8 @@
 // that a reopened page can show something before the server answers.
 import type { Bundle, Eid, Graph, Reduced } from '@yaks/graph'
 import { after } from '@yaks/fp'
-import { comps, dead, transient } from '@yaks/graph'
+import { comps, dead } from '@yaks/graph/bundle'
+import { transient } from '@yaks/graph/read'
 import type { Store } from '@yaks/ram'
 import {
   type Ask,
@@ -354,7 +355,9 @@ export let retention = (
     if (opts.retainUnownedProps) return
     let changed: Eid[] = []
     for (let eid of eids) {
-      if (!protectedByOwner(eid) || pins.has(eid) || awaiting.has(eid)) continue
+      if (!protectedByOwner(eid) || pins.has(eid) || awaiting.has(eid)) {
+        continue
+      }
       let b = held(eid)
       if (!b || dead(b)) continue
       let cuts: Bundle = { entity: b.entity }
@@ -693,7 +696,9 @@ export let retention = (
     },
     epoch: async (epoch) => {
       if (closed) throw new Error('client cache is closed')
-      if (!epoch) throw new Error('an authoritative nonempty epoch is required')
+      if (!epoch) {
+        throw new Error('an authoritative nonempty epoch is required')
+      }
       let turn = ++generation
       let beforeFrames = frames
       let touched = new Set<Eid>()

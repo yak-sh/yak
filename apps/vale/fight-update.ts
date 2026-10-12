@@ -1,7 +1,8 @@
 // Lossless, guarded plans for moving persisted fight.dealt JSON text to the
 // declared array. This module never writes a store; keep the original export
 // until the operator verifies every restored value.
-import { type Bundle, type Comp, token } from '@yaks/graph'
+import type { Bundle, Comp } from '@yaks/graph'
+import { token } from '@yaks/graph/sha256'
 
 let fight = (row: Bundle) => row.fight as Comp | undefined
 let guarded = (value: Comp) =>

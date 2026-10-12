@@ -34,7 +34,8 @@ import {
 } from '@modelcontextprotocol/core'
 import type { JSONRPCMessage } from '@modelcontextprotocol/server'
 import { type Authenticate, type Handler, json, refuse } from '@yaks/api'
-import { type Actor, type Bundle, type Graph, namedTool } from '@yaks/graph'
+import type { Actor, Bundle, Graph } from '@yaks/graph'
+import { namedTool } from '@yaks/graph/call'
 import { SESSION, sessionFor, speaking } from '@yaks/session'
 import { runner } from '@yaks/tools'
 import {

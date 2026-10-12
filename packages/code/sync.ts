@@ -16,14 +16,9 @@
 // later read fills it in.
 // Import links are cleared the same way, with @yaks/edge's `unlink`.
 
-import {
-  type Bundle,
-  type Comp,
-  type Eid,
-  type Graph,
-  identities,
-  signed,
-} from '@yaks/graph'
+import type { Bundle, Comp, Eid, Graph } from '@yaks/graph'
+import { identities } from '@yaks/graph/identity'
+import { signed } from '@yaks/graph/provenance'
 import type { Actor } from '@yaks/graph'
 import { link, unlink } from '@yaks/edge'
 import type { Binding } from '@yaks/mirror'

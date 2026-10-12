@@ -56,7 +56,8 @@
 // ordinary doors with the caller's identity and the app's access rule
 // (workers/yak/declared.ts). So a tool can do exactly what the person
 // calling it could do on the page, and never more.
-import { argsOf, type Bundle, type Graph, type Tool } from '@yaks/graph'
+import type { Bundle, Graph, Tool } from '@yaks/graph'
+import { argsOf } from '@yaks/graph/call'
 import {
   publicToolSchema,
   toolCheck,
@@ -227,7 +228,10 @@ export let parseTools = (
     try {
       source = JSON.parse(source)
     } catch {
-      throw new CallError('arguments', `${file} is not JSON — ${TOOLS_EXAMPLE}`)
+      throw new CallError(
+        'arguments',
+        `${file} is not JSON — ${TOOLS_EXAMPLE}`,
+      )
     }
   }
   let wrong: string[] = []
@@ -346,7 +350,9 @@ export let parseTools = (
       (typeof entry.worker != 'string' ||
         !/^\/[\w/-]+$/.test(entry.worker) || entry.worker.includes('..'))
     ) {
-      wrong.push(`${name}.worker is an absolute path in this app, like "/tick"`)
+      wrong.push(
+        `${name}.worker is an absolute path in this app, like "/tick"`,
+      )
     }
     if (
       entry.apply != null && !object(entry.apply) && !Array.isArray(entry.apply)

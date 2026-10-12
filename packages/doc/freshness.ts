@@ -1,7 +1,8 @@
 // Document freshness at the read/write boundary. The graph owns the token
 // and atomic precondition check; every document uses the same bundle guard.
 
-import { type Bundle, type Comp, token } from '@yaks/graph'
+import type { Bundle, Comp } from '@yaks/graph'
+import { token } from '@yaks/graph/sha256'
 import { BODY, DOC } from './comp.ts'
 
 /** Carry the token for the body this answer shows. A projected title alone

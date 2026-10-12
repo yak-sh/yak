@@ -5,8 +5,7 @@
 
 import { test } from '@yaks/testing'
 import { assertEquals } from '@std/assert'
-import { sha256 } from './sha256.ts'
-import { token } from './guard.ts'
+import { sha256, token } from '@yaks/graph/sha256'
 
 let hex = (buf: ArrayBuffer) =>
   [...new Uint8Array(buf)].map((b) => b.toString(16).padStart(2, '0')).join('')

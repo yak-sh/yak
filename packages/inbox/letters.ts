@@ -1,7 +1,8 @@
 /** The inbox's letters: which threads cross to a mail client, and how each is
  * rendered. The graph keeps each queued snapshot (`mail_notice`); @yaks/mail
  * sends the letters, and clocks are supplied at the boundary. */
-import { type Bundle, type Comp, derivedEid, type Graph } from '@yaks/graph'
+import type { Bundle, Comp, Graph } from '@yaks/graph'
+import { derivedEid } from '@yaks/graph/identity'
 import type { Vocab } from '@yaks/vocab'
 import type { Decision } from '@yaks/task'
 import type { Door } from './options.ts'

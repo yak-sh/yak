@@ -2,14 +2,9 @@
 // batch that marks the item said; a caller using a tool sees owed lines in
 // that tool's reply. The listener for an outside harness uses listen.ts.
 
-import {
-  type Bundle,
-  type Comp,
-  derivedEid,
-  type Eid,
-  type Graph,
-  who,
-} from '@yaks/graph'
+import type { Bundle, Comp, Eid, Graph } from '@yaks/graph'
+import { derivedEid } from '@yaks/graph/identity'
+import { who } from '@yaks/graph/call'
 import { absent, and, type Clause, every, present } from '@yaks/query'
 import { deliver, heirs, over, pending } from './listen.ts'
 

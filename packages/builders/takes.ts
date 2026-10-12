@@ -1,7 +1,8 @@
 // Restore retained-take locators and frozen-binding provenance without making
 // content, changing attempt keys or touching the calls that already paid for it.
 
-import { type Binding, type Bundle, type Comp, token } from '@yaks/graph'
+import type { Binding, Bundle, Comp } from '@yaks/graph'
+import { token } from '@yaks/graph/sha256'
 import { keyed, keyEid } from '@yaks/key'
 import { OUTPUT_OF, outputOf } from './build.ts'
 import { inputKey } from './key.ts'
@@ -60,7 +61,11 @@ export let takeMove = (row: Bundle, evidence: Bundle[]): Bundle[] => {
     throw new Error(`output ${row.entity.eid} has no frozen binding`)
   }
   let old = `${made.build}/${made.slot}`
-  let value = outputOf(String(made.build), String(made.slot), String(made.call))
+  let value = outputOf(
+    String(made.build),
+    String(made.slot),
+    String(made.call),
+  )
   let oldRow = rows.get(keyEid(OUTPUT_OF, old))
   let oldKey = comp(oldRow, 'key')
   let takeKey = comp(rows.get(keyEid(OUTPUT_OF, value)), 'key')

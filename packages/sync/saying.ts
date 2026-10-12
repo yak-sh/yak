@@ -15,7 +15,7 @@
 // over: the last writer holds it, so it is no longer this node's to say.
 
 import type { Bundle, Eid } from '@yaks/graph'
-import { comps } from '@yaks/graph'
+import { comps } from '@yaks/graph/bundle'
 import { bundled, key, type Said } from './pace.ts'
 
 /** Whether this node is saying one component of one entity. */

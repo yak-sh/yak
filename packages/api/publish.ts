@@ -1,5 +1,5 @@
 import type { Bundle } from '@yaks/graph'
-import { reserved } from '@yaks/graph'
+import { reserved } from '@yaks/graph/bundle'
 import { syncOf, type Vocab } from '@yaks/vocab'
 
 /** The bundles a transport may send. A `sync: none` component belongs to

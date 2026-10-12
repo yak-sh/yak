@@ -29,7 +29,10 @@
 
 import type { Eid, Hook, Tx } from '@yaks/graph'
 import { after } from '@yaks/fp'
-import { dead, Refused, substitute, token } from '@yaks/graph'
+import { dead } from '@yaks/graph/bundle'
+import { Refused } from '@yaks/graph/errors'
+import { substitute } from '@yaks/graph/identity'
+import { token } from '@yaks/graph/sha256'
 import type { Vocab } from '@yaks/vocab'
 import { ofOf, valueOf } from './comp.ts'
 import { keyEid, tagOf } from './eid.ts'

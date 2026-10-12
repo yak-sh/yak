@@ -12,7 +12,8 @@
  * @module
  */
 
-import { type Bundle, derivedEid } from '@yaks/graph'
+import type { Bundle } from '@yaks/graph'
+import { derivedEid } from '@yaks/graph/identity'
 
 /** What the `Edit` component holds. */
 export type Row = {

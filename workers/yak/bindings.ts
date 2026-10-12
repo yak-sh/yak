@@ -1,7 +1,7 @@
 // A resource belongs to the app's immutable store handle. The directory keeps
 // the intent before Cloudflare is called, so a lost reply can be found by name
 // on retry and a failed deploy never strands storage without an owner.
-import { sha256, token } from '@yaks/graph'
+import { sha256, token } from '@yaks/graph/sha256'
 import type { App } from './directory.ts'
 import type { Env } from './env.ts'
 import { KERNEL, meta } from './meta.ts'

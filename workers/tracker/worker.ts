@@ -1,7 +1,9 @@
 // The independent Worker routes authenticated reads/RPC, a public deployment
 // canary, and trusted queue deliveries. It has no directory or yak binding.
 
-import { type Bundle, minted, sha256 } from '@yaks/graph'
+import type { Bundle } from '@yaks/graph'
+import { minted } from '@yaks/graph/identity'
+import { sha256 } from '@yaks/graph/sha256'
 import { bugEid } from '@yaks/tracker'
 import { sign } from './auth.ts'
 import { capture, caught, origin, queue } from '@yaks/tracker/report'
@@ -131,7 +133,9 @@ export let worker = (
                 headers: { authorization: `Bearer ${signed}` },
               }),
             )
-            if (!response.ok) return json({ error: 'tracker unavailable' }, 503)
+            if (!response.ok) {
+              return json({ error: 'tracker unavailable' }, 503)
+            }
             return json({ arrived: (await response.json()).length == 1 })
           }
           if (request.method != 'POST') {

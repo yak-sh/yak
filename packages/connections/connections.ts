@@ -42,7 +42,8 @@
 // refreshing a token), and act on the graph and vault they are given.
 
 import { CallError } from '@yaks/tools/errors'
-import { type Bundle, type Comp, type Eid, token } from '@yaks/graph'
+import type { Bundle, Comp, Eid } from '@yaks/graph'
+import { token } from '@yaks/graph/sha256'
 import { edgeEid, link } from '@yaks/edge'
 import {
   type Attempt,
@@ -505,7 +506,9 @@ export let accountOf = async (
       redirect: 'manual',
       signal: AbortSignal.timeout(30_000),
     })
-    if (!res.ok) throw new Error(`the userinfo endpoint refused: ${res.status}`)
+    if (!res.ok) {
+      throw new Error(`the userinfo endpoint refused: ${res.status}`)
+    }
     body = await res.json()
   }
   return typeof body.email == 'string' && body.email.includes('@')
@@ -519,7 +522,9 @@ let signIn = async (c: Ctx, b: Bundle, staged?: Tokens): Promise<Client> => {
   let name = String(comp(b, CONNECTION).integration)
   let i = await known(c.graph.read, name)
   if (!i?.authorize || !i.token) {
-    throw new Error(`${name} is connected with a pasted key, not by signing in`)
+    throw new Error(
+      `${name} is connected with a pasted key, not by signing in`,
+    )
   }
   let registered = await clientOf(c.vault, c.graph.read, i)
   if (!connectable(i, registered)) {

@@ -117,13 +117,65 @@ across processes and does not implement every SQL query feature.
 
 ## Exports
 
-| Import               | Exports                                                                                                                                                                                            |
-| -------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `@yaks/graph`        | `graph`; `Bundle`, `Graph`, `Access`, `Storage`, `Tx`, `ReadTx`, `Plugin`, `Rule`, `Tool`; identity, admission, gather, patch, projection, rule, stamp, schema, edit, transient, and error helpers |
-| `@yaks/graph/errors` | `Refused`, a graph refusal independent of admission and writes                                                                                                                                     |
-| `@yaks/graph/schema` | `admitSchema`, full checks for opted-in property schemas and numeric constraints                                                                                                                   |
-| `@yaks/graph/vocab`  | `graphDoc`, `docs`, `description`: built-in tool declarations                                                                                                                                      |
-| `@yaks/graph/tools`  | `loadTools`, `runs`, `tier`, `generic`, and their implementation types                                                                                                                             |
+| Import                   | Exports                                                                                                                                                                                            |
+| ------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `@yaks/graph`            | `graph`; `Bundle`, `Graph`, `Access`, `Storage`, `Tx`, `ReadTx`, `Plugin`, `Rule`, `Tool`; identity, admission, gather, patch, projection, rule, stamp, schema, edit, transient, and error helpers |
+| `@yaks/graph/read`       | `graph`, a read-only graph; `reader`, the read pipeline; projection, aggregate, and transient helpers                                                                                              |
+| `@yaks/graph/bundle`     | Bundle types, component and tombstone helpers, `formed`, `requested`, `composed`, `coalesced`, `coalescer`                                                                                         |
+| `@yaks/graph/identity`   | `mint`, `minted`, `identityEid`, `derivedEid`, identity rules, `resolve`, `substitute`, `isAlias`                                                                                                  |
+| `@yaks/graph/provenance` | `signed`, `actorOf`, `writers`, provenance and mark rules                                                                                                                                          |
+| `@yaks/graph/sha256`     | `sha256`, `token`                                                                                                                                                                                  |
+| `@yaks/graph/errors`     | `Refused`, `Stale`, `status`, `STATUS`                                                                                                                                                             |
+| `@yaks/graph/storage`    | Storage and transaction types; `detached` for a committed read transaction                                                                                                                         |
+| `@yaks/graph/call`       | Tool naming, argument, actor, and reference helpers                                                                                                                                                |
+| `@yaks/graph/declared`   | Declared-rule matching, input preparation, and output planning                                                                                                                                     |
+| `@yaks/graph/guard`      | `guard`, the precondition phase, and its `Stale` and `token` bindings                                                                                                                              |
+| `@yaks/graph/schema`     | `admitSchema`, full checks for opted-in property schemas and numeric constraints                                                                                                                   |
+| `@yaks/graph/vocab`      | `graphDoc`, `docs`, `description`: built-in tool declarations                                                                                                                                      |
+| `@yaks/graph/tools`      | `loadTools`, `runs`, `tier`, `generic`, and their implementation types                                                                                                                             |
+
+### Read-only graphs
+
+`@yaks/graph/read` constructs a graph over committed storage. It keeps query
+projection, addressing, scope, ask, answer and view hooks, traced reads,
+`outside`, `plugins`, `use`, `worn`, and storage revisions. `apply`, `admit`,
+and `install` refuse before any write hook or storage mutation runs. `reader`
+offers only the read pipeline when a consumer does not need the graph interface.
+
+```ts
+import { graph as writable } from '@yaks/graph'
+import { graph } from '@yaks/graph/read'
+import { Refused } from '@yaks/graph/errors'
+import { ram } from '@yaks/ram'
+import { loadVocab } from '@yaks/vocab'
+import { equal } from '@yaks/testing'
+
+const vocab = loadVocab({ $defs: { book: { component: true } } })
+const storage = ram(vocab)
+await writable({ storage, vocab }).apply([
+  { entity: { eid: 'b1' }, book: {} },
+])
+let prepared = 0
+const g = graph({
+  storage,
+  vocab,
+  plugins: [{
+    name: 'preparation',
+    hooks: { prepare: (bundles) => (prepared++, bundles) },
+  }],
+})
+equal(await g.read('.book'), [{ entity: { eid: 'b1' }, book: {} }])
+let refused = false
+try {
+  await g.apply([{ entity: { eid: 'b2' }, book: {} }])
+} catch (error) {
+  if (!(error instanceof Refused)) throw error
+  refused = true
+}
+equal(refused, true)
+equal(prepared, 0)
+equal(await g.get(['b2']), [])
+```
 
 ## Writes and reads
 
@@ -258,7 +310,8 @@ const vocab = loadVocab({
 })
 const g = graph({ storage: ram(vocab), vocab })
 
-const { token, Stale } = await import('@yaks/graph')
+const { token } = await import('@yaks/graph/sha256')
+const { Stale } = await import('@yaks/graph/errors')
 await g.apply([{ entity: { eid: 'b1' }, book: { title: 'Dune' } }])
 await g.apply([{
   entity: { eid: 'b1' },
@@ -814,7 +867,10 @@ const g = graph({
     },
   }],
 })
-const applied = await g.apply([{ entity: { eid: 'b1' }, book: { pages: 412 } }])
+const applied = await g.apply([{
+  entity: { eid: 'b1' },
+  book: { pages: 412 },
+}])
 equal(applied[0].tracked, { pages: 412 })
 equal((await g.get(['b1']))[0].tracked, { pages: 412 })
 ```

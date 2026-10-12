@@ -8,7 +8,8 @@
 import { test } from '@yaks/testing'
 import { assert, assertEquals, assertThrows } from '@std/assert'
 import { effects } from '@yaks/effects'
-import { graph, invoked, match, reads } from '@yaks/graph'
+import { graph } from '@yaks/graph'
+import { invoked, match, reads } from '@yaks/graph/declared'
 import type { Binding, Bundle, Storage } from '@yaks/graph'
 import { shop } from './testing.ts'
 

@@ -24,7 +24,8 @@
 
 import { z } from 'zod'
 import { zodToJsonSchema } from 'zod-to-json-schema'
-import { type Schema, type Tool, toolName } from '@yaks/graph'
+import type { Schema, Tool } from '@yaks/graph'
+import { toolName } from '@yaks/graph/call'
 import type { Guide } from '@yaks/graph'
 import { type Search, tier } from '@yaks/graph/tools'
 import type { Vocab } from '@yaks/vocab'

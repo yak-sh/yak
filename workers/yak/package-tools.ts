@@ -1,6 +1,7 @@
 // Package declarations are the connector's fixed store-tool roster. The host
 // lends the store and caller; the package owns the arguments and implementation.
-import { argsOf, type Bundle, type NamedTool } from '@yaks/graph'
+import type { Bundle, NamedTool } from '@yaks/graph'
+import { argsOf } from '@yaks/graph/call'
 import { loadTools } from '@yaks/graph/tools'
 import type { Host } from '@yaks/host'
 import type { Composition } from '@yaks/host/anatomy'

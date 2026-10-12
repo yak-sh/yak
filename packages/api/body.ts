@@ -1,6 +1,6 @@
 // Read a whole request before acting on it. A cancelled upload is the
 // caller's refusal; failures elsewhere keep their original error identity.
-import { Refused } from '@yaks/graph'
+import { Refused } from '@yaks/graph/errors'
 
 /** Receive body bytes, distinguishing cancellation from a server failure. */
 export let receiveBody = async <T>(

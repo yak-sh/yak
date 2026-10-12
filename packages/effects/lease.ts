@@ -29,14 +29,10 @@
 // is written.
 
 import { after } from '@yaks/fp'
-import {
-  type Access,
-  type Bundle,
-  derivedEid,
-  type Eid,
-  Stale,
-  token,
-} from '@yaks/graph'
+import type { Access, Bundle, Eid } from '@yaks/graph'
+import { derivedEid } from '@yaks/graph/identity'
+import { Stale } from '@yaks/graph/errors'
+import { token } from '@yaks/graph/sha256'
 
 /** The name of the component a lease is stored as. */
 export let LEASE = 'lease'

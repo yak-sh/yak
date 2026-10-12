@@ -35,7 +35,10 @@ import type {
   Plugin,
   Tx,
 } from '@yaks/graph'
-import { comps, dead, minted, Refused, TOMBSTONE, writers } from '@yaks/graph'
+import { comps, dead, TOMBSTONE } from '@yaks/graph/bundle'
+import { writers } from '@yaks/graph/provenance'
+import { minted } from '@yaks/graph/identity'
+import { Refused } from '@yaks/graph/errors'
 import { after } from '@yaks/fp'
 import type { Vocab } from '@yaks/vocab'
 import {
@@ -374,7 +377,10 @@ export let log = (opts: LogOpts): Log => {
   }
   // The joins from a field to its change, and from a change to its
   // transaction.
-  let ofChange = join(table('journal_change', 'jc'), eq(jc('id'), jf('change')))
+  let ofChange = join(
+    table('journal_change', 'jc'),
+    eq(jc('id'), jf('change')),
+  )
   let ofTx = join(table('journal_tx', 'jt'), eq(jt('id'), jc('tx')))
   // A property recorded by address reads its text back through the content
   // it names.

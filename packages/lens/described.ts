@@ -1,4 +1,5 @@
-import { type Bundle, type Comp, derivedEid, type Graph } from '@yaks/graph'
+import type { Bundle, Comp, Graph } from '@yaks/graph'
+import { derivedEid } from '@yaks/graph/identity'
 import type { VocabDoc } from '@yaks/vocab'
 import { compile, type Speaks } from './compile.ts'
 import { history } from './steps.ts'

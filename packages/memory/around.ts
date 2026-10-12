@@ -12,13 +12,9 @@
 // that declares them; where a graph does not declare one, the tool answers
 // without it or says it cannot.
 
-import {
-  argsOf,
-  type Bundle,
-  type Comp,
-  type Graph,
-  Refused,
-} from '@yaks/graph'
+import type { Bundle, Comp, Graph } from '@yaks/graph'
+import { argsOf } from '@yaks/graph/call'
+import { Refused } from '@yaks/graph/errors'
 import type { Runs } from '@yaks/graph/tools'
 
 /** How many entries either side of one `memory_around` reads when not told. */

@@ -16,7 +16,8 @@
 // this side is saying are said again first, since the server held them under
 // the connection that closed.
 
-import { type Bundle, coalesced, type Eid } from '@yaks/graph'
+import type { Bundle, Eid } from '@yaks/graph'
+import { coalesced } from '@yaks/graph/bundle'
 import type { Coverage } from './coverage.ts'
 
 /** The part of a WebSocket this package uses. The standard `WebSocket`

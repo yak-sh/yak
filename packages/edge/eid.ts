@@ -10,13 +10,9 @@
 // creates a link, the server that accepts it, the code that removes it —
 // because an id computed two different ways is two different ids.
 
-import {
-  type Bundle,
-  type Comp,
-  comps,
-  derivedEid,
-  type Eid,
-} from '@yaks/graph'
+import type { Bundle, Comp, Eid } from '@yaks/graph'
+import { comps } from '@yaks/graph/bundle'
+import { derivedEid } from '@yaks/graph/identity'
 import type { Derive } from '@yaks/graph'
 
 /**

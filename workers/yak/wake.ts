@@ -21,7 +21,8 @@
 // Seeds are insert-once: a restart must not rewind `at`, erase `fired`, or
 // undo a schedule someone deliberately paused. A new recurring seed starts
 // at its first calendar instant at or after the moment it was discovered.
-import { type Bundle, type Graph, Stale } from '@yaks/graph'
+import type { Bundle, Graph } from '@yaks/graph'
+import { Stale } from '@yaks/graph/errors'
 import { next, span } from '@yaks/wake'
 import type { Env } from './env.ts'
 import { KERNEL, meta } from './meta.ts'

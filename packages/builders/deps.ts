@@ -2,15 +2,10 @@ import { step, steps } from './steps.ts'
 // Builder dependencies are graph rows: query components find new matches,
 // selected entity ids find content changes, and both survive effect workers.
 
-import {
-  type Binding,
-  type Bundle,
-  identityEid,
-  match,
-  reads,
-  type ReadTx,
-  token,
-} from '@yaks/graph'
+import type { Binding, Bundle, ReadTx } from '@yaks/graph'
+import { identityEid } from '@yaks/graph/identity'
+import { match, reads } from '@yaks/graph/declared'
+import { token } from '@yaks/graph/sha256'
 import { and, type Clause, eq, list } from '@yaks/query'
 import type { Vocab } from '@yaks/vocab'
 

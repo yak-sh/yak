@@ -2,7 +2,8 @@
 // identifies one attempt; definition edits never invalidate an input fingerprint.
 // Nested collections change the key without changing the build's identity.
 
-import { type Binding, type Bundle, sha256 } from '@yaks/graph'
+import type { Binding, Bundle } from '@yaks/graph'
+import { sha256 } from '@yaks/graph/sha256'
 import type { Wiring } from './answer.ts'
 
 export { content } from '@yaks/kernel'

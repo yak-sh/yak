@@ -1,15 +1,9 @@
 // Repository instructions are discovered by description and loaded on demand.
 // A session with a machine reads that machine's files; a session without one
 // discovers graph skills without asking a provider to provision anything.
-import {
-  argsOf,
-  type Bundle,
-  type Comp,
-  type Eid,
-  type Graph,
-  Refused,
-  who,
-} from '@yaks/graph'
+import type { Bundle, Comp, Eid, Graph } from '@yaks/graph'
+import { argsOf, who } from '@yaks/graph/call'
+import { Refused } from '@yaks/graph/errors'
 import type { Item } from '@yaks/model'
 import type { Machine } from '@yaks/machine'
 import type { Reply } from '@yaks/tools'

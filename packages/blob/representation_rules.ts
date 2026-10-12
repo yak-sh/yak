@@ -2,7 +2,9 @@
 // graph must never change or delete the row that gives that URL its headers.
 
 import { after } from '@yaks/fp'
-import { type Comp, dead, type Plugin, Refused } from '@yaks/graph'
+import type { Comp, Plugin } from '@yaks/graph'
+import { dead } from '@yaks/graph/bundle'
+import { Refused } from '@yaks/graph/errors'
 import { type Representation, represents } from './representation.ts'
 
 export let representations = (): Plugin => ({
@@ -38,7 +40,9 @@ export let representations = (): Plugin => ({
               !old && patch &&
               !represents(b.entity.eid, patch as Representation)
             ) {
-              throw new Refused('a blob representation must use its derived id')
+              throw new Refused(
+                'a blob representation must use its derived id',
+              )
             }
           }
           return bundles

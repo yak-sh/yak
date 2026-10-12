@@ -3,7 +3,7 @@
 
 import type { TrackerStore } from './core.ts'
 import { capture, type Context, origin } from '@yaks/tracker/report'
-import { derivedEid } from '@yaks/graph'
+import { derivedEid } from '@yaks/graph/identity'
 import { and, eq, fields } from '@yaks/query'
 
 export let heartbeat = derivedEid('tracker|box-heartbeat')

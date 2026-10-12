@@ -24,7 +24,7 @@
 // and the server will reach the same ones from the same patch.
 
 import type { Bundle, Comp } from '@yaks/graph'
-import { comps, dead } from '@yaks/graph'
+import { comps, dead } from '@yaks/graph/bundle'
 import { durableOf, saveOf, type Sync, syncOf, type Vocab } from '@yaks/vocab'
 import { asked, before, ruled } from './mark.ts'
 

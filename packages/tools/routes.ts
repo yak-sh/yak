@@ -1,6 +1,6 @@
 // A declared tool at an HTTP door. The host resolves the tool and caller;
 // this reads the invocation and answers its result or expected refusal.
-import { status } from '@yaks/graph'
+import { status } from '@yaks/graph/errors'
 import { CallError, parsed } from './args.ts'
 
 type Handler = (request: Request) => Response | Promise<Response>

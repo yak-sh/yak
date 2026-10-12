@@ -1,7 +1,8 @@
 // Graph reads and working-tree views. A local view never imports files into
 // the graph: uncommitted edits belong to the checkout until its mirror runs.
 
-import { type Bundle, type Comp, type Graph, Refused } from '@yaks/graph'
+import type { Bundle, Comp, Graph } from '@yaks/graph'
+import { Refused } from '@yaks/graph/errors'
 import { and, eq, every, present } from '@yaks/query'
 import { locate } from '@yaks/git/host'
 import { SKILL } from './comp.ts'
@@ -69,7 +70,8 @@ export let skillLocation = async (
   let locations = files.filter((b) => {
     let path = text(b, 'file', 'path')
     return !!text(b, 'file', 'repository') &&
-      !!path && /^\.claude\/skills\/[a-z0-9][a-z0-9_-]*\/SKILL\.md$/i.test(path)
+      !!path &&
+      /^\.claude\/skills\/[a-z0-9][a-z0-9_-]*\/SKILL\.md$/i.test(path)
   })
   if (locations.length > 1) {
     throw new Refused(`Skill ${eid} references more than one SKILL.md`)
@@ -236,7 +238,8 @@ export let skillsAt = async (g: Graph, cwd?: string): Promise<Bundle[]> => {
     : []
   // An unregistered checkout still has readable local skills, but neither its
   // repository nor their temporary view identities are written to the graph.
-  let repository = repositories[0]?.entity.eid ?? `view:repository:${at.common}`
+  let repository = repositories[0]?.entity.eid ??
+    `view:repository:${at.common}`
   return localSkills(g, at.path, await repoSkills(g, repository))
 }
 

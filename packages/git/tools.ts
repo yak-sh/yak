@@ -23,18 +23,16 @@
 // which is what keeps the mark meaning "somebody looked" rather than
 // "somebody edited this".
 //
-import {
-  argsOf,
-  type Bundle,
-  type Comp,
-  type Graph,
-  Refused,
-} from '@yaks/graph'
+import type { Bundle, Comp, Graph } from '@yaks/graph'
+import { argsOf } from '@yaks/graph/call'
+import { Refused } from '@yaks/graph/errors'
 import type { Runs } from '@yaks/graph/tools'
 import { and, present, want } from '@yaks/query'
 import { human } from '@yaks/id'
 import { verify as entityVerify } from '@yaks/kernel'
-import { CallError, checked, type Finding, type Level } from '@yaks/tools'
+import type { Finding, Level } from '@yaks/tools'
+import { CallError } from '@yaks/tools/errors'
+import { checked } from '@yaks/tools/check'
 import { land, LandError, run as git } from './land.ts'
 import {
   CITES,
@@ -141,7 +139,9 @@ export let runs = (): Runs => ({
       }
       throw error
     }
-    if (!('landed' in outcome)) throw new CallError('diverged', said.join('\n'))
+    if (!('landed' in outcome)) {
+      throw new CallError('diverged', said.join('\n'))
+    }
     return [{
       entity: { eid: '$landed' },
       content: { body: [...said, `landed ${outcome.landed}`].join('\n') },

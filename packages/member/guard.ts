@@ -43,7 +43,8 @@
 
 import type { Ask, Bundle, Comp, Eid, Hook, Tx } from '@yaks/graph'
 import { after } from '@yaks/fp'
-import { actorOf as writerOf, comps, dead } from '@yaks/graph'
+import { actorOf as writerOf } from '@yaks/graph/provenance'
+import { comps, dead } from '@yaks/graph/bundle'
 import type { Vocab } from '@yaks/vocab'
 import { GOVERNED, GRANT, MEMBER } from './comp.ts'
 import { levelOn, modeOn, type Viewer, type Where } from './policy.ts'

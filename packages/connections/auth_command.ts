@@ -4,7 +4,7 @@ import type { CliCommand } from '@yaks/cli/host'
 import { person } from '@yaks/cli/config'
 import { yaksApp } from './yaks-app.ts'
 import { authorize } from './authorize.ts'
-import { Refused } from '@yaks/graph'
+import { Refused } from '@yaks/graph/errors'
 import { connect, need, pick } from './connections.ts'
 import { authIO, authorizeCLI } from './authorize_cli.ts'
 

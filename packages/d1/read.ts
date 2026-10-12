@@ -38,7 +38,7 @@ import {
 } from '@yaks/sql'
 import { compSql, decoded, OWNER, setSql, spine } from '@yaks/sqlite'
 import type { Bundle, Comp, Entity } from '@yaks/graph'
-import { tombstoned } from '@yaks/graph'
+import { tombstoned } from '@yaks/graph/bundle'
 import type { Vocab } from '@yaks/vocab'
 import type { Row } from './d1.ts'
 

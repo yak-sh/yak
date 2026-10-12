@@ -3,7 +3,7 @@
 // link; a phone folds the sidebar behind the bar's menu, and going anywhere
 // folds it again.
 import { signal } from '@preact/signals'
-import { derivedEid } from '@yaks/graph'
+import { derivedEid } from '@yaks/graph/identity'
 import { Button, Shell } from '@yaks/ui'
 import { hosting, pagePath } from '../hosting.ts'
 import {

@@ -1,4 +1,6 @@
-import { type Bundle, sha256, TOMBSTONE } from '@yaks/graph'
+import type { Bundle } from '@yaks/graph'
+import { sha256 } from '@yaks/graph/sha256'
+import { TOMBSTONE } from '@yaks/graph/bundle'
 import { Archetypes, tablesOf } from '@yaks/archetype/sets'
 import {
   and,
@@ -60,7 +62,11 @@ let point = (target: number | null, which: Expr): Stmt => ({
 })
 
 /** Counts from a boot: existing assignments stay untouched on a repeated run. */
-export type Backfill = { entities: number; archetypes: number; retired: number }
+export type Backfill = {
+  entities: number
+  archetypes: number
+  retired: number
+}
 
 // Physical discovery belongs to schema changes, not each gameplay write.
 // revision observes the statements already passing through this connection;
@@ -554,7 +560,15 @@ export function entomb(driver: Driver, eids: string[], number = false): void {
     let cache = new Archetypes()
     let counts: Backfill = { entities: 0, archetypes: 0, retired: 0 }
     let tables = () => facets(driver)
-    let { mint } = minter(run, driver, cache, tables, new Map(), number, counts)
+    let { mint } = minter(
+      run,
+      driver,
+      cache,
+      tables,
+      new Map(),
+      number,
+      counts,
+    )
     let dead = mint(cache.intern([TOMBSTONE]).eid)
     run(point(dead, oneOf(col('eid'), [...new Set(eids)])))
   })

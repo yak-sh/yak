@@ -26,7 +26,7 @@
 
 import type { Bundle, Comp, Eid, Graph, Plugin } from '@yaks/graph'
 import { after } from '@yaks/fp'
-import { comps, dead } from '@yaks/graph'
+import { comps, dead } from '@yaks/graph/bundle'
 import type { Vocab } from '@yaks/vocab'
 import { ECHO, local, replicate } from '@yaks/sync'
 
@@ -105,8 +105,9 @@ export let stash = (seed: Saved[] = []): Vault => {
       for (let row of rows) {
         let current = held.get(row.eid)
         if (!current) continue
-        if (JSON.stringify(current) == JSON.stringify(row)) held.delete(row.eid)
-        else changed.push(current)
+        if (JSON.stringify(current) == JSON.stringify(row)) {
+          held.delete(row.eid)
+        } else changed.push(current)
       }
       return Promise.resolve(changed)
     },

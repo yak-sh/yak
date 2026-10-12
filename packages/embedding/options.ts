@@ -36,7 +36,8 @@
 // sweep without a restart.
 
 import type { Bundle, Comp } from '@yaks/graph'
-import { dead, identityEid } from '@yaks/graph'
+import { dead } from '@yaks/graph/bundle'
+import { identityEid } from '@yaks/graph/identity'
 import { edgeEid } from '@yaks/edge'
 import { MODEL, PROVIDER } from '@yaks/model'
 import type { Vocab } from '@yaks/vocab'

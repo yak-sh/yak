@@ -8,7 +8,7 @@
 // other than Deno supplies its own.
 
 import type { Graph, ReadOpts } from '@yaks/graph'
-import { Refused } from '@yaks/graph'
+import { Refused } from '@yaks/graph/errors'
 import { type Authenticate } from './actor.ts'
 import { ask, write, type WriteContext } from './doors.ts'
 import { denoUpgrade } from './deno.ts'

@@ -18,7 +18,8 @@
 // acting for, and an owner's approval is recorded as the owner's only when the
 // owner is the one calling.
 
-import { argsOf, type Bundle, type Comp } from '@yaks/graph'
+import type { Bundle, Comp } from '@yaks/graph'
+import { argsOf } from '@yaks/graph/call'
 import type { Runs } from '@yaks/graph/tools'
 
 // The text a person reads. A body nobody supplied is omitted rather than

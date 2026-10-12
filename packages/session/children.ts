@@ -6,13 +6,8 @@ import { appendEntry } from './append.ts'
 // that same child; preparation is deferred until the runner admits it
 // (./run.ts).
 import { aside, dispatchStatus } from './admission.ts'
-import {
-  type Bundle,
-  type Comp,
-  type Eid,
-  type Graph,
-  identityEid,
-} from '@yaks/graph'
+import type { Bundle, Comp, Eid, Graph } from '@yaks/graph'
+import { identityEid } from '@yaks/graph/identity'
 import { link } from '@yaks/edge'
 import { done, statusOf as taskStatus } from '@yaks/task'
 import { type Tool, type ToolContext, ToolError, transcript } from './react.ts'

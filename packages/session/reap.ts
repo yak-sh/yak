@@ -20,7 +20,8 @@
 
 import type { Bundle, Comp, Eid, ReadTx, Storage } from '@yaks/graph'
 import { after } from '@yaks/fp'
-import { detached, TOMBSTONE } from '@yaks/graph'
+import { detached } from '@yaks/graph/storage'
+import { TOMBSTONE } from '@yaks/graph/bundle'
 import { CLAIM, SESSION } from './comp.ts'
 
 /**

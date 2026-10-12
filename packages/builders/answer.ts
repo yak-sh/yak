@@ -10,15 +10,9 @@
 // something its answer made, which makes the link this build's alone; a later
 // answer leaves its links as history and clears their choice.
 
-import {
-  type Binding,
-  type Bundle,
-  type Comp,
-  type Eid,
-  type ReadTx,
-  Refused,
-  token,
-} from '@yaks/graph'
+import type { Binding, Bundle, Comp, Eid, ReadTx } from '@yaks/graph'
+import { Refused } from '@yaks/graph/errors'
+import { token } from '@yaks/graph/sha256'
 import type { Vocab } from '@yaks/vocab'
 import { and, eq, present } from '@yaks/query'
 import { EDGE, edgeEid, link, relations, unlink } from '@yaks/edge'

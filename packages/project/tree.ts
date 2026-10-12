@@ -16,7 +16,7 @@
 
 import type { Bundle, Comp, Eid, Hook } from '@yaks/graph'
 import { after, each } from '@yaks/fp'
-import { Refused } from '@yaks/graph'
+import { Refused } from '@yaks/graph/errors'
 import { FILED, PROJECT } from './comp.ts'
 
 /** What reading up a lineage needs: entities by eid, synchronously or not. */

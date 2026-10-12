@@ -22,7 +22,8 @@
 
 import type { Eid, ReadTx } from '@yaks/graph'
 import { after } from '@yaks/fp'
-import { alive, minted } from '@yaks/graph'
+import { alive } from '@yaks/graph/bundle'
+import { minted } from '@yaks/graph/identity'
 import { ofOf } from '@yaks/key'
 import { aliasEid } from './comp.ts'
 

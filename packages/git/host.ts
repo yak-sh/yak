@@ -8,14 +8,9 @@
 // are kept out of ./mod.ts, which type-checks with only the web platform in
 // scope.
 
-import {
-  type Bundle,
-  type Comp,
-  derivedEid,
-  type Graph,
-  identityEid,
-  token,
-} from '@yaks/graph'
+import type { Bundle, Comp, Graph } from '@yaks/graph'
+import { derivedEid, identityEid } from '@yaks/graph/identity'
+import { token } from '@yaks/graph/sha256'
 import { refEid } from './refs.ts'
 
 export { checkoutDoc } from './checkout_vocab.ts'

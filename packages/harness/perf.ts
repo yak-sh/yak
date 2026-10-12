@@ -1,6 +1,7 @@
 // Reproducible hot-path probe, outside the fast test tier:
 // deno run -A packages/harness/perf.ts
-import { type Bundle, identityEid } from '@yaks/graph'
+import type { Bundle } from '@yaks/graph'
+import { identityEid } from '@yaks/graph/identity'
 import { type Runner, settle } from '@yaks/session'
 import { seed } from './agent.ts'
 import { harness } from './testing.ts'

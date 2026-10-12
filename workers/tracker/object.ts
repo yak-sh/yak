@@ -26,7 +26,8 @@ import { door, json } from './door.ts'
 import { authorize } from './auth.ts'
 import { monitor } from './monitor.ts'
 import { activate } from './mail.ts'
-import { type Bundle, sha256 } from '@yaks/graph'
+import type { Bundle } from '@yaks/graph'
+import { sha256 } from '@yaks/graph/sha256'
 import { FIT, meta, schema } from '@yaks/sqlite'
 import { col, eq, render, select, table, val } from '@yaks/sql'
 import {
@@ -185,7 +186,12 @@ export class Tracker {
     this.#mailReady = true
   }
   #origin = (entrypoint: string, request?: Request) =>
-    origin('yak-tracker', this.env.CF_VERSION_METADATA?.id, entrypoint, request)
+    origin(
+      'yak-tracker',
+      this.env.CF_VERSION_METADATA?.id,
+      entrypoint,
+      request,
+    )
   #report = (error: unknown, entrypoint: string, request?: Request) =>
     caught(error, { sink: this.sink, ...this.#origin(entrypoint, request) })
   recover = async (error: unknown, entrypoint: string, request?: Request) => {
@@ -325,7 +331,11 @@ export class Tracker {
   }
   fetch = async (request: Request): Promise<Response> => {
     try {
-      let access = await authorize(request, this.env.TRACKER_SECRET, this.scope)
+      let access = await authorize(
+        request,
+        this.env.TRACKER_SECRET,
+        this.scope,
+      )
       if (!access) return json({ error: 'tracker scope denied' }, 403)
       if (
         new URL(request.url).pathname == '/heartbeat' &&

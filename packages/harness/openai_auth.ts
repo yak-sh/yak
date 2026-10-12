@@ -1,7 +1,7 @@
 // OpenAI's credential for this harness: an explicit API key, or the ChatGPT
 // grant in the person's default OpenAI connection. Refresh stays in the vault.
 
-import { Refused } from '@yaks/graph'
+import { Refused } from '@yaks/graph/errors'
 import {
   CODEX,
   type Credential,

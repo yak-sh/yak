@@ -1,14 +1,13 @@
-import {
-  type Access,
-  type Bundle,
-  type Eid,
-  type Match,
-  type Query,
-  type ReadOpts,
-  Refused,
-  Stale,
-  type WriteOpts,
+import type {
+  Access,
+  Bundle,
+  Eid,
+  Match,
+  Query,
+  ReadOpts,
+  WriteOpts,
 } from '@yaks/graph'
+import { Refused, Stale } from '@yaks/graph/errors'
 import { type Port, type PortLink, portLink } from '@yaks/sync/port'
 import type { Vocab } from '@yaks/vocab'
 

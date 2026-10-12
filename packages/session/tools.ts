@@ -45,20 +45,16 @@
 // else reads, ./status.ts `statusOf` over the entries, rather than a second
 // copy of it.
 
-import {
-  argsOf,
-  type Bundle,
-  type Comp,
-  type Graph,
-  Refused,
-  token,
-  TOMBSTONE,
-  who,
-} from '@yaks/graph'
+import type { Bundle, Comp, Graph } from '@yaks/graph'
+import { argsOf, who } from '@yaks/graph/call'
+import { Refused } from '@yaks/graph/errors'
+import { token } from '@yaks/graph/sha256'
+import { TOMBSTONE } from '@yaks/graph/bundle'
 import type { Runs } from '@yaks/graph/tools'
 import { human } from '@yaks/id'
 import { and, eq, every, present } from '@yaks/query'
-import { checked, type Finding } from '@yaks/tools'
+import type { Finding } from '@yaks/tools'
+import { checked } from '@yaks/tools/check'
 import { carried } from '@yaks/persona'
 import type { Vocab } from '@yaks/vocab'
 import { CLAIM, SESSION } from './comp.ts'

@@ -41,7 +41,8 @@ import type {
   Row,
 } from '@yaks/graph'
 import { isPromise, same } from '@yaks/fp'
-import { comps, dead, only, TOMBSTONE, tombstoned } from '@yaks/graph'
+import { comps, dead, TOMBSTONE, tombstoned } from '@yaks/graph/bundle'
+import { only } from '@yaks/graph/read'
 import {
   type Computed,
   type Index,
@@ -203,7 +204,10 @@ export let ram = (vocab: Vocab, base: RamOpts = {}): Store => {
   // entities by the key their value files under (@yaks/match `keyOf`), or for
   // each number a query has asked for a range of, by band (`bandOf`).
   let worn = new Map<string, Map<Eid, Bundle>>()
-  let filed = new Map<string, [string, string, Map<string, Map<Eid, Bundle>>]>()
+  let filed = new Map<
+    string,
+    [string, string, Map<string, Map<Eid, Bundle>>]
+  >()
   let banded = new Map<
     string,
     [string, string, Map<number, Map<Eid, Bundle>>]

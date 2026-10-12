@@ -18,14 +18,9 @@
 // goes off.
 
 import { after, over } from '@yaks/fp'
-import {
-  type Bundle,
-  type Hook,
-  type Query,
-  type ReadTx,
-  Stale,
-  token,
-} from '@yaks/graph'
+import type { Bundle, Hook, Query, ReadTx } from '@yaks/graph'
+import { Stale } from '@yaks/graph/errors'
+import { token } from '@yaks/graph/sha256'
 import { and, limit, parse } from '@yaks/query'
 import { WAKE, type Wake } from './comp.ts'
 import { wakeOf } from './due.ts'

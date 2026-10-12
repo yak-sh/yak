@@ -50,7 +50,8 @@
 
 import { field } from '@yaks/sql'
 import type { Vocab } from '@yaks/vocab'
-import { type Bundle, comps, dead, type Eid } from '@yaks/graph'
+import type { Bundle, Eid } from '@yaks/graph'
+import { comps, dead } from '@yaks/graph/bundle'
 import {
   as,
   call,

@@ -10,7 +10,12 @@
     "./errors": "./errors.ts",
     "./bundle": "./bundle.ts",
     "./sha256": "./sha256.ts",
-    "./identity": "./identity.ts"
+    "./identity": "./identity.ts",
+    "./provenance": "./stamp.ts",
+    "./storage": "./storage.ts",
+    "./call": "./tool.ts",
+    "./declared": "./declared.ts",
+    "./guard": "./guard.ts"
   },
   "license": "Apache-2.0",
   "description": "The entity-component data model, the bundle write format, and the phased, pluggable transaction pipeline the yaks packages share.",

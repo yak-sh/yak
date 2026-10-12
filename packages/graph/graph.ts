@@ -56,7 +56,6 @@ import {
   parent,
   peek,
   recording,
-  scope,
 } from '@yaks/trace'
 import { after, each, isPromise } from '@yaks/fp'
 import {
@@ -115,7 +114,7 @@ import {
 } from './rules.ts'
 import { own, type Ready, ready, settle } from './declared.ts'
 import { state } from './state.ts'
-import { reader as reading } from './read.ts'
+import { queries, reader as reading, retained } from './read.ts'
 import { NeedsWrite, rehearsing } from './admission.ts'
 import { referenced } from './tool.ts'
 import { prune } from './prune.ts'
@@ -644,29 +643,10 @@ export let graph = (opts: Options): Graph => {
     return runHooks(run, name, tx, calls, bundles)
   }
 
-  // Restore an operation's context whenever its retained transaction enters
-  // storage. Keep a synchronous rule's deeper span only within this ancestry.
-  let tracedTx = (tx: Tx, owner: () => Context): Tx =>
-    Object.fromEntries(
-      Object.entries(tx).map((
-        [name, method],
-      ) => [
-        name,
-        typeof method != 'function' ? method : (...args: unknown[]) => {
-          let at = owner()
-          let inside = context(at.parent)
-          return scope(
-            inside?.channel == at.channel && live(at) ? inside : at,
-            () => Reflect.apply(method, tx, args),
-          )
-        },
-      ]),
-    ) as Tx
-
   let outsideRead = (): Tx => {
     let tx = detached(storage)
     let at = context()
-    return at ? tracedTx(tx, () => at) : tx
+    return at ? retained(tx, () => at) : tx
   }
 
   let applying = (
@@ -691,7 +671,7 @@ export let graph = (opts: Options): Graph => {
     let instant: string | undefined
     let moment = () => instant ??= o.now ?? opts.clock?.() ?? iso(began)
     let traced = (tx: Tx): Tx =>
-      tracing ? tracedTx(tx, () => ({ ...tracing, parent: current })) : tx
+      tracing ? retained(tx, () => ({ ...tracing, parent: current })) : tx
     let protecting = (tx: Tx, pending: Bundle[] = []): Tx => {
       if (o.trusted && o.replica) return tx
       return {
@@ -1356,7 +1336,7 @@ export let graph = (opts: Options): Graph => {
   }
 
   let reads = reading({ storage, vocab, plugins, outside: outsideRead })
-  let { address, ask, answer, view, rewrites, read, rows, get } = reads
+  let { address, ask, answer, view, rewrites } = reads
 
   let g: Graph = {
     vocab,
@@ -1376,56 +1356,7 @@ export let graph = (opts: Options): Graph => {
       return g
     },
     install: () => storage.install(),
-    // The rows carry what the query names (./projection.ts), the same answer
-    // at every door. A `.fields` projection is read as its rows, and answers
-    // the entities its paths reach beside the ones it selects.
-    read: (query, readOpts) => {
-      let c = peek(g)
-      if (!c) return read(query, readOpts)
-      return during(
-        c.begin({
-          kind: 'query',
-          name: 'read',
-          package: '@yaks/graph',
-          parent: readOpts?.parent,
-        }),
-        () => read(query, readOpts),
-        'ok',
-        (out) => ({ rows: out.length }),
-      )
-    },
-    rows: (query, readOpts) => {
-      let c = peek(g)
-      if (!c) {
-        return rows(query, readOpts)
-      }
-      return during(
-        c.begin({
-          kind: 'query',
-          name: 'rows',
-          package: '@yaks/graph',
-          parent: readOpts?.parent,
-        }),
-        () => rows(query, readOpts),
-        'ok',
-        (out) => ({ rows: out.length }),
-      )
-    },
-    get: (eids, comps, readOpts) => {
-      let c = peek(g)
-      if (!c) return get(eids, comps, readOpts)
-      return during(
-        c.begin({
-          kind: 'get',
-          name: 'get',
-          package: '@yaks/graph',
-          parent: readOpts?.parent,
-        }),
-        () => get(eids, comps, readOpts),
-        'ok',
-        (out) => ({ input: eids.length, rows: out.length }),
-      )
-    },
+    ...queries(() => g, reads),
     apply,
     admit: (bundles, o) => apply(bundles, { ...o, check: true }, true),
   }

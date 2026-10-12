@@ -30,18 +30,13 @@ import { listed, names, projects, type Row, STAMPS } from './listing.ts'
 import { bare } from './wire.ts'
 import { archetypes } from '@yaks/archetype'
 import { edges } from '@yaks/edge'
-import {
-  type Bundle,
-  dead,
-  type Entity,
-  flat,
-  identities,
-  type Projection,
-  projection,
-  requested,
-  resolve,
-  status,
-} from '@yaks/graph'
+import type { Bundle, Entity, Projection } from '@yaks/graph'
+import { dead } from '@yaks/graph/bundle'
+import { flat, projection } from '@yaks/graph/read'
+import { requested } from '@yaks/graph/bundle'
+import { resolve } from '@yaks/graph/identity'
+import { identities } from '@yaks/graph/identity'
+import { status } from '@yaks/graph/errors'
 import { keys } from '@yaks/key'
 import {
   type App,
@@ -167,8 +162,9 @@ let segsOf = (line: string): string[] => {
   let segs: string[] = []
   for (let tok of tokens(bare(line))) {
     let last = segs.length - 1
-    if (last >= 0 && (tok == '|' || segs[last].endsWith('|'))) segs[last] += tok
-    else segs.push(tok)
+    if (last >= 0 && (tok == '|' || segs[last].endsWith('|'))) {
+      segs[last] += tok
+    } else segs.push(tok)
   }
   return segs
 }
@@ -302,7 +298,10 @@ let asked = async (
   let tried = await Promise.all(reach.map(async (r) => {
     try {
       let out = await doorOf(env, r, said, live)(line)
-      return { at: at(r), bundles: (Array.isArray(out) ? out : []) as Bundle[] }
+      return {
+        at: at(r),
+        bundles: (Array.isArray(out) ? out : []) as Bundle[],
+      }
     } catch (e) {
       // A store left out of the merge is a quieter answer, never a silent one.
       caught(e, { request: 'reach' })
@@ -804,7 +803,10 @@ let union = (docs: VocabDoc[]): Vocab => {
       defs[name] = schema
     }
   }
-  return loadVocab([...CORE.docs, { title: 'space', $defs: defs }], appKeywords)
+  return loadVocab(
+    [...CORE.docs, { title: 'space', $defs: defs }],
+    appKeywords,
+  )
 }
 
 // Which stores declare which word — the routing table a write follows and the

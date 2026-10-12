@@ -1,6 +1,6 @@
 /** Project a captured tree to immutable, reference-linked span entities.
  * Stable span identities make redelivery idempotent without merging metrics. */
-import { derivedEid } from '@yaks/graph'
+import { derivedEid } from '@yaks/graph/identity'
 import type { Event } from '@yaks/trace'
 import type { Clock, During, TraceRow } from './model.ts'
 import { ran } from './ran.ts'

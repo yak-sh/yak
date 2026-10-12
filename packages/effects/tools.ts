@@ -25,19 +25,16 @@
 // and not a fault — the check reports that and finds nothing.
 
 import { and, eq, list } from '@yaks/query'
-import {
-  addressed,
-  argsOf,
-  type Bundle,
-  type Comp,
-  type Graph,
-  signed,
-  token,
-  who,
-} from '@yaks/graph'
+import type { Bundle, Comp, Graph } from '@yaks/graph'
+import { addressed, argsOf, who } from '@yaks/graph/call'
+import { signed } from '@yaks/graph/provenance'
+import { token } from '@yaks/graph/sha256'
 import type { Runs } from '@yaks/graph/tools'
 import { human } from '@yaks/id'
-import { CallError, checked, type Finding, said } from '@yaks/tools'
+import type { Finding } from '@yaks/tools'
+import { CallError } from '@yaks/tools/errors'
+import { checked } from '@yaks/tools/check'
+import { said } from '@yaks/tools/result'
 import { effectsIn, type Vocab } from '@yaks/vocab'
 import { EFFECT } from './pool.ts'
 

@@ -1,5 +1,5 @@
 // Filesystem agreement and linked-export boundaries for the skills mirror.
-import { Refused } from '@yaks/graph'
+import { Refused } from '@yaks/graph/errors'
 import type { Run } from '@yaks/git/land'
 import type { Agreed } from '@yaks/mirror'
 
@@ -97,7 +97,10 @@ export let prepareTree = async (
   ) throw new Refused('skills: export needs a clean linked non-main worktree')
   let current = (await git(tree, ['rev-parse', 'HEAD'])).trim()
   if (current == head) return
-  let ancestor = await run(['merge-base', '--is-ancestor', current, head], tree)
+  let ancestor = await run(
+    ['merge-base', '--is-ancestor', current, head],
+    tree,
+  )
   if (!ancestor.ok) {
     if (ancestor.code != 1) throw new Refused(ancestor.err || ancestor.out)
     throw new Refused(

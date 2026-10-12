@@ -15,8 +15,9 @@
 // what they say and shows when a hero talks to them, and where the land's
 // people went is news its people talk about. A decision Jev could not make
 // leaves them on their routine: at home. Their daily rhythm is derived in the page; only human dialogue asks a model.
-import { type Bundle, token } from '@yaks/graph'
-import { toolEid } from '@yaks/tools'
+import type { Bundle } from '@yaks/graph'
+import { token } from '@yaks/graph/sha256'
+import { toolEid } from '@yaks/tools/result'
 import type { Line } from './chat.ts'
 import { BEASTS } from './beasts.ts'
 import { aliasOf } from './names.ts'

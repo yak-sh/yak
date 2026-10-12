@@ -29,7 +29,8 @@
 
 import type { Graph } from '@yaks/graph'
 import type { Runs } from '@yaks/graph/tools'
-import { checked, type Finding } from '@yaks/tools'
+import type { Finding } from '@yaks/tools'
+import { checked } from '@yaks/tools/check'
 import {
   as,
   col,
@@ -92,7 +93,8 @@ export let runs = (
       if (!last) return checked(call.entity.eid, about, [])
       // Where no index serves, a database only this process has open holds its
       // vectors in memory (./held.ts): no search reads them.
-      let held = db.ownership == 'exclusive' && (!said.installed || !said.model)
+      let held = db.ownership == 'exclusive' &&
+        (!said.installed || !said.model)
       if (held) return checked(call.entity.eid, about, [])
       if (!said.installed) {
         return warn(

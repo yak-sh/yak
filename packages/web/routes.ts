@@ -17,7 +17,8 @@ import { type Application, application } from './app.ts'
 // own), icons and manifest. The vocabulary is @yaks/api's `/vocab`.
 
 import { type Authenticate, type Route, write } from '@yaks/api'
-import { dead, type Graph } from '@yaks/graph'
+import type { Graph } from '@yaks/graph'
+import { dead } from '@yaks/graph/bundle'
 import { addressId, prefixOf } from '@yaks/id'
 import { everforest, kits, stylesheet } from '@yaks/ui'
 import type { Vocab } from '@yaks/vocab'

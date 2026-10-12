@@ -45,7 +45,8 @@
 import { field, revision } from '@yaks/sql'
 import type { Vocab } from '@yaks/vocab'
 import type { Bundle, Comp, Entity } from '@yaks/graph'
-import { comps, Refused, TOMBSTONE } from '@yaks/graph'
+import { comps, TOMBSTONE } from '@yaks/graph/bundle'
+import { Refused } from '@yaks/graph/errors'
 import {
   and,
   as,

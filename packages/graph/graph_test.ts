@@ -11,7 +11,8 @@ import { isPromise } from '@yaks/fp'
 import { Checked, graph } from './graph.ts'
 import type { Bundle } from './bundle.ts'
 import type { Plugin } from './plugin.ts'
-import { Stale, token } from './guard.ts'
+import { Stale } from '@yaks/graph/errors'
+import { token } from '@yaks/graph/sha256'
 import { Refused } from './admit.ts'
 import { books, comp, isDead, memory, slow } from './testing.ts'
 import { loadVocab } from '@yaks/vocab'
@@ -792,7 +793,9 @@ test('effects run after the commit and a failing one is telemetry', () => {
       },
     ],
   })
-  let out = sync(one.apply([{ entity: { eid: 'b1' }, doc: { title: 'Dune' } }]))
+  let out = sync(
+    one.apply([{ entity: { eid: 'b1' }, doc: { title: 'Dune' } }]),
+  )
   assertEquals(seen, ['Dune']) // the effect saw committed data
   assertEquals(errs.length, 1)
   assert(out.length > 0) // and the batch was not broken by the broken effect
@@ -992,7 +995,9 @@ test('the rules phase runs after the guard and before the patches land', () => {
       journal: (b) => (seen.push('journal'), b),
     },
   }])
-  let out = sync(one.apply([{ entity: { eid: 'b1' }, doc: { title: 'Dune' } }]))
+  let out = sync(
+    one.apply([{ entity: { eid: 'b1' }, doc: { title: 'Dune' } }]),
+  )
   assertEquals(seen, ['precondition', 'rules', 'journal'])
   let [derived] = one.get(['b2']) as Bundle[]
   assertEquals(comp(derived, 'doc').title, 'derived')

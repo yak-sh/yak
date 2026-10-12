@@ -1,13 +1,9 @@
 // One owner-invoked cleanup for legacy successful runs. Failed/pending work,
 // other components on a run, and its target's human-readable data stay intact.
-import {
-  type Access,
-  type Bundle,
-  type Comp,
-  comps,
-  Stale,
-  token,
-} from '@yaks/graph'
+import type { Access, Bundle, Comp } from '@yaks/graph'
+import { comps } from '@yaks/graph/bundle'
+import { Stale } from '@yaks/graph/errors'
+import { token } from '@yaks/graph/sha256'
 
 /** Guarded successful settlement, preserving any other data on the run. */
 export let finishedRun = (row: Bundle): Bundle[] => {

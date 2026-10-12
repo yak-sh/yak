@@ -21,7 +21,8 @@
 //              server with only the response lost, and a client that guesses
 //              wrong about that turns a network blip into data loss.
 
-import { type Bundle, formed, type Graph } from '@yaks/graph'
+import type { Bundle, Graph } from '@yaks/graph'
+import { formed } from '@yaks/graph/bundle'
 import { replicate } from './mark.ts'
 import { guessed, inverse, outward } from './tier.ts'
 

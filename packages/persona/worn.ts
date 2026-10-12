@@ -30,7 +30,8 @@
 
 import { and, eq, type Input, list, present } from '@yaks/query'
 import { after, each } from '@yaks/fp'
-import { type Bundle, detached, type Eid, type Storage } from '@yaks/graph'
+import type { Bundle, Eid, Storage } from '@yaks/graph'
+import { detached } from '@yaks/graph/storage'
 import { EDGE, relations } from '@yaks/edge'
 import { DOC } from '@yaks/doc'
 import type { Vocab } from '@yaks/vocab'

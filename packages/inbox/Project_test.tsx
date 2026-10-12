@@ -4,7 +4,7 @@
 import { test } from '@yaks/testing'
 import { assertEquals } from '@std/assert'
 import type { Bundle } from '@yaks/graph'
-import { toolEid } from '@yaks/tools'
+import { toolEid } from '@yaks/tools/result'
 import type { Row } from './reader.ts'
 import type { Thread } from './threads.ts'
 import { host, mount, press, shop, texts, wait } from './testing.tsx'

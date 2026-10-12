@@ -20,7 +20,7 @@
 
 import type { Bundle, Eid, Hook } from '@yaks/graph'
 import { after } from '@yaks/fp'
-import { TOMBSTONE } from '@yaks/graph'
+import { TOMBSTONE } from '@yaks/graph/bundle'
 import { CONFLICT } from './comp.ts'
 import { Bounced } from './bounce.ts'
 

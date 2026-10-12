@@ -92,13 +92,17 @@ try {
 
 ## Exports
 
-| Import path            | Purpose                                                                                                                                |
-| ---------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
-| `@yaks/sqlite`         | Storage, schema/read/write helpers, [overlays](#querying-pending-changes-with-an-overlay), archetype helpers, metadata, and migrations |
-| `@yaks/sqlite/db`      | `open(path)`: an embedded Deno database as a cached driver                                                                             |
-| `@yaks/sqlite/read-db` | `open(path)`: an existing file as a cached read-only driver, without loading the native writer                                         |
-| `@yaks/sqlite/vocab`   | `sqliteDoc` and `docs`, declaring storage and archetype diagnostic tools                                                               |
-| `@yaks/sqlite/tools`   | `runs({ storage: storage(sql, vocab) }, options?)`, implementing those checks on the application's connection                          |
+| Import path               | Purpose                                                                                                                                |
+| ------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
+| `@yaks/sqlite`            | Storage, schema/read/write helpers, [overlays](#querying-pending-changes-with-an-overlay), archetype helpers, metadata, and migrations |
+| `@yaks/sqlite/db`         | `open(path)`: an embedded Deno database as a cached driver                                                                             |
+| `@yaks/sqlite/read-db`    | `open(path)`: an existing file as a cached read-only driver, without loading the native writer                                         |
+| `@yaks/sqlite/reader`     | Committed reads of an installed database                                                                                               |
+| `@yaks/sqlite/read-store` | Read-only storage with index, diagnostic and revision capabilities                                                                     |
+| `@yaks/sqlite/physical`   | Inspection of installed tables, columns and schema objects                                                                             |
+| `@yaks/sqlite/migration`  | Migration readiness, monitoring and explicit installation control                                                                      |
+| `@yaks/sqlite/vocab`      | `sqliteDoc` and `docs`, declaring storage and archetype diagnostic tools                                                               |
+| `@yaks/sqlite/tools`      | `runs({ storage: storage(sql, vocab) }, options?)`, implementing those checks on the application's connection                          |
 
 The vocabulary export declares [tools](../tools/README.md), not graph
 components. The checks inspect foreign-key enforcement/violations, SQLite
@@ -168,12 +172,16 @@ passes the dead by however they were removed.
 storage interface for an already-installed database. It exposes `read`, `rows`
 and `get`, uses the same query compiler and snapshot rules as `storage()`, and
 accepts the same derived and backed read bindings. It loads no schema installer
-or mutation pipeline. Open the file with `open(path, {readOnly: true})` from
-`@yaks/sqlite/db` when writes must also be prevented at the database boundary.
-The same read-only driver is available as `open(path)` from
-`@yaks/sqlite/read-db`, which binds the native reading and extension-loading
-APIs. Extensions can read installed indexes; SQLite refuses metadata writes.
-Both readers leave the database and WAL untouched when they close.
+or mutation pipeline. `@yaks/sqlite/read-store` exports
+`storage(driver, vocab, options)` with statements, diagnostics, migrations,
+revision, computed-property presence and schema descriptions. It refuses
+`install` and write-transaction callbacks before they run. Open the file with
+`open(path, {readOnly: true})` from `@yaks/sqlite/db` when writes must also be
+prevented at the database boundary. The same read-only driver is available as
+`open(path)` from `@yaks/sqlite/read-db`, which binds the native reading and
+extension-loading APIs. Extensions can read installed indexes; SQLite refuses
+metadata writes. Both readers leave the database and WAL untouched when they
+close.
 
 `read` accepts a query string or [query AST](../query/README.md#query-model) and
 returns whole bundles, resolving stored integer references back to public ids.

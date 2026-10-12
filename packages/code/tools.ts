@@ -6,17 +6,11 @@
 // itself, in batches, as the caller. What it returns is only the report:
 // handing a whole codebase back to the runner would make it the call's answer.
 
-import {
-  type Actor,
-  argsOf,
-  type Bundle,
-  type Comp,
-  type Graph,
-  who,
-} from '@yaks/graph'
+import type { Actor, Bundle, Comp, Graph } from '@yaks/graph'
+import { argsOf, who } from '@yaks/graph/call'
 import type { Runs } from '@yaks/graph/tools'
 import { sync } from '@yaks/mirror'
-import { CallError } from '@yaks/tools'
+import { CallError } from '@yaks/tools/errors'
 import { codeMirror } from './sync.ts'
 
 /** Sync the checkout at `cwd` into `g`, and say what it did in one line. */

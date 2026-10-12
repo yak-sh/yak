@@ -5,7 +5,8 @@
 
 import { dirname } from '@std/path/posix/dirname'
 import { resolve } from '@std/path/posix/resolve'
-import { type Bundle, type Comp, derivedEid, type Graph } from '@yaks/graph'
+import type { Bundle, Comp, Graph } from '@yaks/graph'
+import { derivedEid } from '@yaks/graph/identity'
 import {
   EXIT,
   type Exit,

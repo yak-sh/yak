@@ -23,7 +23,7 @@ import {
   unionAll,
 } from '@yaks/sql'
 import type { Bundle, Comp } from '../bundle.ts'
-import { tombstoned } from '@yaks/graph'
+import { tombstoned } from '@yaks/graph/bundle'
 
 let read1 = (v: Vocab, comp: string, derived: Derived): Prop[] =>
   v.props(comp).map((p) => v.prop(comp, p)!)

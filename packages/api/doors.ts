@@ -10,14 +10,9 @@
 // changes is that neither the request body nor the response body is ever
 // whole in memory.
 
-import {
-  aggregate,
-  type Bundle,
-  type Graph,
-  type ReadOpts,
-  reduced,
-  Refused,
-} from '@yaks/graph'
+import type { Bundle, Graph, ReadOpts } from '@yaks/graph'
+import { aggregate, reduced } from '@yaks/graph/read'
+import { Refused } from '@yaks/graph/errors'
 import type { Actor } from '@yaks/graph'
 import { parse } from '@yaks/query'
 import { during, parent, peek, scope } from '@yaks/trace'
@@ -235,7 +230,9 @@ export let write = async (
   context?: WriteContext,
   opts?: ReadOpts,
 ): Promise<Response> => {
-  if (poured(request)) return pour(graph, request, who, activity, context, opts)
+  if (poured(request)) {
+    return pour(graph, request, who, activity, context, opts)
+  }
   let body = JSON.parse(await readBody(request))
   if (!Array.isArray(body)) {
     throw new Refused('/apply takes a JSON array of bundles')

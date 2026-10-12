@@ -1,7 +1,8 @@
 // The platform's lens wiring: the page's kept deploy decides what it speaks;
 // the store keeps the newest chain when its code is rolled back.
 import { compile, type GraphOp, lensesIn, versions } from '@yaks/lens'
-import { type Bundle, type Comp, type ReadOpts, Refused } from '@yaks/graph'
+import type { Bundle, Comp, ReadOpts } from '@yaks/graph'
+import { Refused } from '@yaks/graph/errors'
 import type { PropSchema, VocabDoc } from '@yaks/vocab'
 import type { App, Directory, Space } from './directory.ts'
 import { storeName } from './directory.ts'

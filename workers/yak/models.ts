@@ -1,7 +1,7 @@
 // Providers lent to each app store; model offerings come from successful answers.
 import type { Handlers } from '@yaks/effects'
 import type { Bundle, Comp } from '@yaks/graph'
-import { derivedEid, identityEid } from '@yaks/graph'
+import { derivedEid, identityEid } from '@yaks/graph/identity'
 import {
   answers,
   providerResolver,
@@ -9,7 +9,7 @@ import {
   type Tool,
   type ToolContext,
 } from '@yaks/session'
-import { worded } from '@yaks/tools'
+import { worded } from '@yaks/tools/result'
 import { edits, mode, writes } from '@yaks/member'
 import {
   billed,
@@ -455,7 +455,11 @@ export let modelRun: Answer = async (
     if (e instanceof ModelError) {
       return json(STATUS[e.code] ?? 502, e.code, e.message)
     }
-    caught(e, { request: 'POST /api/ai/run', space: space.slug, app: app.slug })
+    caught(e, {
+      request: 'POST /api/ai/run',
+      space: space.slug,
+      app: app.slug,
+    })
     return json(
       502,
       'model_failed',

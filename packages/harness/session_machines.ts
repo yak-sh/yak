@@ -2,7 +2,8 @@
 // reach them. A record precedes provisioning, so another worker can resume an
 // interrupted request without inventing a second sandbox.
 import { CallError } from '@yaks/tools/errors'
-import { type Bundle, type Comp, derivedEid, type Graph } from '@yaks/graph'
+import type { Bundle, Comp, Graph } from '@yaks/graph'
+import { derivedEid } from '@yaks/graph/identity'
 import type { Machine, MachineFile, MachineRef } from '@yaks/machine'
 import { type ChildLimits, runningAt } from '@yaks/session'
 import { type Snapshot, snapshot } from '@yaks/context'

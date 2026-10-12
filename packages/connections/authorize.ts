@@ -1,7 +1,7 @@
 /** Terminal authorization over integration data. Discovery and unattended
  * callbacks can be supplied by a CLI host without depending on the harness. */
 import type { Eid, Graph } from '@yaks/graph'
-import { Refused } from '@yaks/graph'
+import { Refused } from '@yaks/graph/errors'
 import type { Vault } from '@yaks/secrets'
 import { install, type Integration } from './integrations.ts'
 import { REDIRECT, signins } from './signin.ts'

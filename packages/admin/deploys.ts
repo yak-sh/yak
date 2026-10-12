@@ -2,7 +2,7 @@
 // it traffic can. Keep every stored-shape boundary in this history, even after
 // someone rolls the code back. The directory does not roll its rows back.
 import type { Ran } from '@yaks/git/land'
-import { CallError } from '@yaks/tools'
+import { CallError } from '@yaks/tools/errors'
 import { WRANGLER } from '../../workers/yak/wrangler.ts'
 import { Refused } from './refusal.ts'
 import { output } from './subprocess.ts'

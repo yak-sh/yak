@@ -20,7 +20,8 @@
 // twice needs no lock: the Message-ID already identifies which letter this is
 // (./arrive.ts).
 
-import { type Graph, Refused } from '@yaks/graph'
+import type { Graph } from '@yaks/graph'
+import { Refused } from '@yaks/graph/errors'
 import type { Config } from '@yaks/host'
 import { json, refuse, type Route, Unauthorized } from '@yaks/api'
 import { arrived } from './arrive.ts'

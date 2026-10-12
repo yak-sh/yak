@@ -27,17 +27,10 @@
 // from the two.
 
 import { after } from '@yaks/fp'
-import {
-  type Actor,
-  addressed,
-  type Bundle,
-  type Comp,
-  type Eid,
-  type Graph,
-  identityEid,
-  TOMBSTONE,
-  type Tx,
-} from '@yaks/graph'
+import type { Actor, Bundle, Comp, Eid, Graph, Tx } from '@yaks/graph'
+import { addressed } from '@yaks/graph/call'
+import { identityEid } from '@yaks/graph/identity'
+import { TOMBSTONE } from '@yaks/graph/bundle'
 import { SESSION } from './comp.ts'
 
 /** Whether a request came from a person or their command, rather than an

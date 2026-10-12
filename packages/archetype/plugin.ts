@@ -1,13 +1,7 @@
 import { after } from '@yaks/fp'
-import {
-  type Bundle,
-  comps,
-  dead,
-  type Plugin,
-  Refused,
-  type Tracker,
-  type Tx,
-} from '@yaks/graph'
+import type { Bundle, Plugin, Tracker, Tx } from '@yaks/graph'
+import { comps, dead } from '@yaks/graph/bundle'
+import { Refused } from '@yaks/graph/errors'
 import { type Archetype, archetypeDoc, Archetypes, tablesOf } from './sets.ts'
 
 type Held = { set: Archetype; assigned?: string; dead: boolean }
@@ -267,7 +261,9 @@ function tracking(
         for (let b of rows) {
           if (existing.has(b.entity.eid)) descriptor(b)
           if (!existing.has(b.entity.eid) && (dead(b) || comps(b).length)) {
-            throw new Refused(`Archetype identity is occupied: ${b.entity.eid}`)
+            throw new Refused(
+              `Archetype identity is occupied: ${b.entity.eid}`,
+            )
           }
         }
         let made: Bundle[] = [...needed.values()].filter((a) =>

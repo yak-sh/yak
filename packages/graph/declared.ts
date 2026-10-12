@@ -41,6 +41,7 @@ import {
   reads,
   writes,
 } from './join.ts'
+export * from './join.ts'
 import type { Tx } from './storage.ts'
 import { after } from '@yaks/fp'
 import type { Value } from '@yaks/query'
@@ -137,7 +138,9 @@ let worth = (
       ? (held as { [Symbol.toPrimitive]: () => unknown })[Symbol.toPrimitive]()
       : held
   }
-  if (prop?.scalar == 'number' || prop?.scalar == 'priority') return Number(raw)
+  if (prop?.scalar == 'number' || prop?.scalar == 'priority') {
+    return Number(raw)
+  }
   if (prop?.scalar == 'bool') return raw == 'true' || raw == '1'
   return raw
 }

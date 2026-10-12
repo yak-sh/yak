@@ -65,7 +65,8 @@ import type {
   Loose,
   Tx,
 } from '@yaks/graph'
-import { comps, only, tombstoned } from '@yaks/graph'
+import { comps, tombstoned } from '@yaks/graph/bundle'
+import { only } from '@yaks/graph/read'
 import { matcher } from '@yaks/match'
 import {
   type BindOpts,

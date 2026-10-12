@@ -1,6 +1,7 @@
 // File opening and local reads stay read-only even with a writer holding the
 // WAL write lock. Installation is explicit and never part of these commands.
-import { equal, ok, test } from '@yaks/testing'
+import { equal, ok, test, throws } from '@yaks/testing'
+import type { GraphFacet, Load } from '@yaks/host'
 import { compose, facet } from './host.ts'
 import { read } from './config.ts'
 import { close } from './held.ts'
@@ -39,6 +40,10 @@ test('local read commands leave graph bytes unchanged under a concurrent writer'
     entity: { eid: '12345678-1234-1234-1234-123456789abc' },
     doc: { title: 'kept' },
   }])
+  let snapshot = await host.graph.get(
+    ['12345678-1234-1234-1234-123456789abc'],
+    ['doc'],
+  )
   await host.close()
   let writer = open(db)
   try {
@@ -85,8 +90,58 @@ test('local read commands leave graph bytes unchanged under a concurrent writer'
       (await cli('graph', 'show', '12345678-1234-1234-1234-123456789abc'))
         .includes('kept'),
     )
-    let reader = await compose(config, ['graph'], facet, { readOnly: true })
+    let prepared: string[] = []
+    let loading: Load = async (plugin, name) => {
+      let loaded = await facet(plugin, name)
+      if (plugin != '@yaks/kernel' || name != 'graph') return loaded
+      let original = loaded as GraphFacet | null
+      let graph: GraphFacet = {
+        ...original,
+        plugins: (host, options) => [
+          ...original?.plugins?.(host, options) ?? [],
+          {
+            name: 'external preparation',
+            hooks: Object.fromEntries(
+              ['normalize', 'prepare'].map((phase) => [
+                phase,
+                (bundles: import('@yaks/graph').Bundle[]) => {
+                  prepared.push(phase)
+                  return bundles
+                },
+              ]),
+            ),
+          },
+        ],
+      }
+      return graph as NonNullable<typeof loaded>
+    }
+    let reader = await compose(config, ['graph'], loading, { readOnly: true })
     try {
+      let patch = [{
+        entity: { eid: '12345678-1234-1234-1234-123456789abc' },
+        doc: { title: 'attempted' },
+      }]
+      await throws(() => reader.graph.apply(patch))
+      await throws(() => reader.graph.apply(patch, { check: true }))
+      await throws(() => reader.graph.admit(patch))
+      await throws(() => reader.graph.install())
+      await throws(() => reader.storage.install())
+      await throws(() =>
+        reader.storage.tx(() => prepared.push('storage callback'))
+      )
+      await throws(() =>
+        reader.storage.tx((tx) => {
+          prepared.push('prune callback')
+          tx.prune?.(['orphan'])
+        })
+      )
+      equal(prepared, [])
+      equal(
+        reader.storage.statements.atomic(() =>
+          reader.graph.get(['12345678-1234-1234-1234-123456789abc'], ['doc'])
+        ),
+        snapshot,
+      )
       equal(
         reader.storage.statements.query(
           select({

@@ -12,7 +12,9 @@
 // phases and a second no-op run. The script loads vocabulary only: no services,
 // provider provisioning, host composition or implicit schema installer runs.
 import { archetypes } from '@yaks/archetype'
-import { type Bundle, type Comp, graph, token } from '@yaks/graph'
+import type { Bundle, Comp } from '@yaks/graph'
+import { graph } from '@yaks/graph'
+import { token } from '@yaks/graph/sha256'
 import { journal, log } from '@yaks/journal'
 import type { Driver } from '@yaks/sql'
 import {
@@ -286,7 +288,9 @@ let run = async () => {
       }
       drain = { db: await Deno.realPath(config.db!), workers: captured }
       try {
-        let prior = JSON.parse(await Deno.readTextFile(opts.drainFile)) as Drain
+        let prior = JSON.parse(
+          await Deno.readTextFile(opts.drainFile),
+        ) as Drain
         assert(
           prior.db == drain.db,
           'Existing drain receipt belongs to another graph',

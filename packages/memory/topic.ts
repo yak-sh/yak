@@ -16,13 +16,10 @@
 // topic to use. The last is checked when the topic is written, so two builds
 // that looked at once and found nothing still meet.
 
-import {
-  argsOf,
-  type Bundle,
-  type Graph,
-  identityEid,
-  Refused,
-} from '@yaks/graph'
+import type { Bundle, Graph } from '@yaks/graph'
+import { argsOf } from '@yaks/graph/call'
+import { identityEid } from '@yaks/graph/identity'
+import { Refused } from '@yaks/graph/errors'
 import type { Runs } from '@yaks/graph/tools'
 import { terms } from './recall.ts'
 

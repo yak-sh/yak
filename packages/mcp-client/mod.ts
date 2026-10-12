@@ -5,7 +5,8 @@ import type {
   CallToolResult,
   Tool as RemoteTool,
 } from '@modelcontextprotocol/sdk/types.js'
-import { argsOf, type Tool, type ToolId } from '@yaks/graph'
+import type { Tool, ToolId } from '@yaks/graph'
+import { argsOf } from '@yaks/graph/call'
 import { errorsText, toolCheck } from '@yaks/vocab/tools'
 import type { jsonSchemaValidator } from '@modelcontextprotocol/sdk/validation/types.js'
 
@@ -107,7 +108,9 @@ export const namespaceOf = (name: string): string => {
 export const nameOf = (server: string, name: string): string => {
   const namespace = namespaceOf(server)
   if (!/^[a-zA-Z0-9_-]+$/.test(name)) {
-    throw new Error('MCP remote tool name cannot be exposed unchanged: ' + name)
+    throw new Error(
+      'MCP remote tool name cannot be exposed unchanged: ' + name,
+    )
   }
   const exposed = namespace + '__' + name
   if (exposed.length > 64) {
@@ -256,7 +259,10 @@ export const connect = (server: Server, options: Options = {}): Connection => {
           }
           if (cursor) cursors.add(cursor)
           if (all.length > 1000) {
-            throw new MCPError('MCP discovery exceeded 1000 tools', server.name)
+            throw new MCPError(
+              'MCP discovery exceeded 1000 tools',
+              server.name,
+            )
           }
         } while (cursor)
         const seen = new Set<string>()

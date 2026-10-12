@@ -7,14 +7,9 @@
 // `builder build` builds it until the mark comes off, and `builder_open`
 // answers that removal.
 
-import {
-  type Bundle,
-  type Comp,
-  type ReadTx,
-  Refused,
-  Stale,
-  token,
-} from '@yaks/graph'
+import type { Bundle, Comp, ReadTx } from '@yaks/graph'
+import { Refused, Stale } from '@yaks/graph/errors'
+import { token } from '@yaks/graph/sha256'
 import type { Handler, Handlers } from '@yaks/effects'
 import type { Vocab } from '@yaks/vocab'
 import { next, WAKE } from '@yaks/wake'
@@ -165,7 +160,9 @@ export let effects = (
   options: Omit<Options, 'vocab'> = {},
 ): Handlers => {
   if (options.rest && next(options.rest, Date.now()) == null) {
-    console.warn(`@yaks/builders: invalid rest ${JSON.stringify(options.rest)}`)
+    console.warn(
+      `@yaks/builders: invalid rest ${JSON.stringify(options.rest)}`,
+    )
     return {}
   }
   return watches({ ...options, vocab: host.vocab })

@@ -12,7 +12,8 @@
 // the `report` its host supplies, with the error when one was thrown; a host
 // that supplies none has it said on the console, as a failure was before.
 
-import { type Bundle, status } from '@yaks/graph'
+import type { Bundle } from '@yaks/graph'
+import { status } from '@yaks/graph/errors'
 import { during, link, parent, peek, unlink } from '@yaks/trace'
 import { fault, json, refusal } from './refuse.ts'
 import type { Handler } from './route.ts'
@@ -191,7 +192,9 @@ export let served =
       return { answer, err }
     })
     if (span) unlink(o.graph!, request)
-    if (answer.status < 500 || answer.headers.has('x-request-id')) return answer
+    if (answer.status < 500 || answer.headers.has('x-request-id')) {
+      return answer
+    }
     let id = crypto.randomUUID()
     let b = requested(id, request, {
       status: answer.status,

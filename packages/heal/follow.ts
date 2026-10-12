@@ -2,13 +2,9 @@
 // derived task and about edge; task completion and fixer history decide what
 // a replay owes without a private follower checkpoint.
 
-import {
-  type Bundle,
-  type Comp,
-  type Graph,
-  identityEid,
-  token,
-} from '@yaks/graph'
+import type { Bundle, Comp, Graph } from '@yaks/graph'
+import { identityEid } from '@yaks/graph/identity'
+import { token } from '@yaks/graph/sha256'
 import type { Client } from '@yaks/client'
 import { link } from '@yaks/edge'
 import { and, eq, present } from '@yaks/query'
@@ -88,7 +84,8 @@ export let follow = (
       if (bug.resolved || bug.archived) return
       let project = await home()
       let pointer =
-        new URL(encodeURIComponent(evidence), `${url.replace(/\/$/, '')}/`).href
+        new URL(encodeURIComponent(evidence), `${url.replace(/\/$/, '')}/`)
+          .href
       task = {
         entity: { eid },
         task: {},

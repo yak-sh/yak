@@ -4,14 +4,9 @@
  * `inbox_archive` puts a thread away until qualifying new activity, refreshing
  * the mark atomically so a repeated archive gets a fresh time.
  */
-import {
-  argsOf,
-  type Bundle,
-  type Eid,
-  type Graph,
-  Refused,
-  who,
-} from '@yaks/graph'
+import type { Bundle, Eid, Graph } from '@yaks/graph'
+import { argsOf, who } from '@yaks/graph/call'
+import { Refused } from '@yaks/graph/errors'
 import type { Runs } from '@yaks/graph/tools'
 import { CallError } from '@yaks/tools/errors'
 import { readInbox } from './read.ts'

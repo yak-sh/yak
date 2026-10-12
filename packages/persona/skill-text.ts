@@ -4,7 +4,7 @@
 // opaque string: commands, file references and substitutions are never run.
 
 import { parse, stringify, YamlSyntaxError } from '@std/yaml'
-import { Refused } from '@yaks/graph'
+import { Refused } from '@yaks/graph/errors'
 
 /** The normalized parts of a skill, without an entity id or graph effects. */
 export type SkillText = {
@@ -107,7 +107,9 @@ export let parseSkill = (text: string, title: string): SkillText => {
   let user = boolean(fields['user-invocable'], true, 'user-invocable')
   // The vocabulary has no "neither" invocation mode. Losing either restriction
   // while importing would make an intentionally inaccessible skill callable.
-  if (!model && !user) throw new Refused('Skill disables both invocation modes')
+  if (!model && !user) {
+    throw new Refused('Skill disables both invocation modes')
+  }
   let fork = fields.context === 'fork'
   let options = Object.fromEntries(
     Object.entries(fields).filter(([key]) =>

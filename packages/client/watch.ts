@@ -35,7 +35,7 @@
 
 import type { Bundle, Eid, Graph, Reduced } from '@yaks/graph'
 import { after, over, same } from '@yaks/fp'
-import { named, only, projection, transient } from '@yaks/graph'
+import { named, only, projection, transient } from '@yaks/graph/read'
 import { type Net, net } from '@yaks/match'
 import { parse } from '@yaks/query'
 

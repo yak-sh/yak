@@ -17,7 +17,8 @@
 // in another — and together they are one link.
 
 import type { Bundle, Comp, Eid, Hook } from '@yaks/graph'
-import { comps, Refused } from '@yaks/graph'
+import { comps } from '@yaks/graph/bundle'
+import { Refused } from '@yaks/graph/errors'
 import type { Vocab } from '@yaks/vocab'
 import { EDGE, names } from './relations.ts'
 import { tagOf } from './eid.ts'

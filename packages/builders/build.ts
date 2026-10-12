@@ -2,16 +2,9 @@ import { step, steps } from './steps.ts'
 // A builder is a query-to-tool definition. Each outer binding has one stable
 // build; its changing content asks the tool through a fresh recorded call.
 
-import {
-  type Binding,
-  type Bundle,
-  type Comp,
-  type Eid,
-  match,
-  reads,
-  type ReadTx,
-  token,
-} from '@yaks/graph'
+import type { Binding, Bundle, Comp, Eid, ReadTx } from '@yaks/graph'
+import { match, reads } from '@yaks/graph/declared'
+import { token } from '@yaks/graph/sha256'
 import { held, keyed } from '@yaks/key'
 import type { Vocab } from '@yaks/vocab'
 import { next } from '@yaks/wake'
@@ -176,7 +169,9 @@ export let selected = (
     let plan = match(query)
     let [found] = yield* step(tx.bindings([plan], [], reads(plan, vocab)))
     let all = [...new Set(found.flatMap(ids))]
-    let rows = new Map((yield* step(tx.get(all))).map((b) => [b.entity.eid, b]))
+    let rows = new Map(
+      (yield* step(tx.get(all))).map((b) => [b.entity.eid, b]),
+    )
     let builds = [
       ...new Set(
         [...rows.values()].map((b) => str(comp(b, BUILT), 'build')).filter(

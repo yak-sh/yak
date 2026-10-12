@@ -14,7 +14,7 @@
 import type { Bundle, Io } from '@yaks/inspect'
 import type { Row } from './reader.ts'
 import { type Search, type Thread } from './threads.ts'
-import { toolEid } from '@yaks/tools'
+import { toolEid } from '@yaks/tools/result'
 import { summaryQuery } from './queries.ts'
 
 /** A thread's rows as the summary carries them. */

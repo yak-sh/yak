@@ -32,7 +32,8 @@
 // the app stores, then every store, the directory last. The release that
 // makes a rule live adds its mark to migrate.ts `BOUNDARIES`, so a rollback
 // never lands on code that cannot read what it moved.
-import { type Bundle, type Comp, type Row, token } from '@yaks/graph'
+import type { Bundle, Comp, Row } from '@yaks/graph'
+import { token } from '@yaks/graph/sha256'
 import { isPromise } from '@yaks/fp'
 import { and, conjoin, parse, type Query } from '@yaks/query'
 import { Unknown, type VocabDoc } from '@yaks/vocab'

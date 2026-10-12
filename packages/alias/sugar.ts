@@ -18,7 +18,7 @@
 // consulted.
 
 import type { Bundle, Hook } from '@yaks/graph'
-import { Refused } from '@yaks/graph'
+import { Refused } from '@yaks/graph/errors'
 import { KEY, keyed } from '@yaks/key'
 import { ALIAS, nameOf } from './comp.ts'
 

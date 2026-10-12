@@ -36,13 +36,11 @@ import type {
   Tool,
   Tx,
 } from '@yaks/graph'
-import {
-  addressing,
-  aggregate,
-  argsOf,
-  composed as perEntity,
-  detached,
-} from '@yaks/graph'
+import { addressing } from '@yaks/graph/read'
+import { aggregate } from '@yaks/graph/read'
+import { argsOf } from '@yaks/graph/call'
+import { composed as perEntity } from '@yaks/graph/bundle'
+import { detached } from '@yaks/graph/storage'
 import { parse } from '@yaks/query'
 import { addressed, wordish } from '@yaks/alias'
 import { barred, openly } from './anon.ts'

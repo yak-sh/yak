@@ -18,7 +18,9 @@
 // The read is fenced by ./serve.ts.
 
 import { type Authenticate, json, refuse, type Route, signed } from '@yaks/api'
-import { type Graph, Stale, token } from '@yaks/graph'
+import type { Graph } from '@yaks/graph'
+import { Stale } from '@yaks/graph/errors'
+import { token } from '@yaks/graph/sha256'
 import { addressOf, type Artifact, keep } from './artifact.ts'
 import { type Backend, backend } from './backend.ts'
 import { type Served, served, servedOpen } from './serve.ts'

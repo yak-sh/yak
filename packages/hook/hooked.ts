@@ -13,7 +13,8 @@
 // receiver that crashed after writing and before acknowledging only repeats
 // itself.
 
-import { type Bundle, derivedEid, type Eid } from '@yaks/graph'
+import type { Bundle, Eid } from '@yaks/graph'
+import { derivedEid } from '@yaks/graph/identity'
 import { DOC } from '@yaks/doc'
 import { link } from '@yaks/edge'
 

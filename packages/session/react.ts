@@ -1,22 +1,15 @@
 import { Unsupported } from '@yaks/match'
 import { compactAsk } from './compact_ask.ts'
-import {
-  actionable,
-  CallError,
-  exceptionOf,
-  runner,
-  toolEid,
-  UnfinishedCall,
-} from '@yaks/tools'
-export { CallError as ToolError } from '@yaks/tools'
-import {
-  argsOf,
-  identityEid,
-  Refused,
-  Stale,
-  token,
-  transient,
-} from '@yaks/graph'
+import { actionable, exceptionOf } from '@yaks/tools/fault'
+import { UnfinishedCall } from '@yaks/tools/errors'
+import { CallError } from '@yaks/tools/errors'
+import { toolEid } from '@yaks/tools/result'
+export { CallError as ToolError } from '@yaks/tools/errors'
+import { argsOf } from '@yaks/graph/call'
+import { identityEid } from '@yaks/graph/identity'
+import { Refused, Stale } from '@yaks/graph/errors'
+import { token } from '@yaks/graph/sha256'
+import { transient } from '@yaks/graph/read'
 // The runner's one step. `react(graph, session)` reads the newest entry of a
 // transcript and does the one next thing it calls for: a pending input or
 // result asks the model; an open tool call is run; a failure the provider may
@@ -455,7 +448,9 @@ export let project = (
       let eid = String(comp(b, RESULT)?.call)
       let call = byId.get(eid)
       if (!call?.call) {
-        throw new Error(`Result ${b.entity.eid} references missing call ${eid}`)
+        throw new Error(
+          `Result ${b.entity.eid} references missing call ${eid}`,
+        )
       }
       let text = opts.results?.get(b.entity.eid) ?? textOf(b)
       let ms = comp(b, RESULT)?.ms
@@ -1134,6 +1129,7 @@ export let react = async (
         throw new CallError('tool', 'no such tool: ' + comp(call, CALL)?.to)
       },
     }
+    const { runner } = await import('@yaks/tools')
     const run = runner(g, {
       tools: [...toolEntities.values()].map(served),
       otherwise: unserved,

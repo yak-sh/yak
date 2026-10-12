@@ -3,7 +3,7 @@ import { lstat, readdir, readFile, realpath } from 'node:fs/promises'
 import type { Stats } from 'node:fs'
 import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
-import { Refused } from '@yaks/graph'
+import { Refused } from '@yaks/graph/errors'
 let execute = promisify(execFile)
 let safe = (path: string): boolean =>
   !/[\\:]/.test(path) &&

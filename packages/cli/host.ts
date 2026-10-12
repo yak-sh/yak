@@ -64,14 +64,10 @@ import {
   vanished,
 } from '@yaks/process'
 import { lit } from '@yaks/sql'
-import {
-  columns,
-  installMigrations,
-  migrations,
-  storage,
-  type Store,
-} from '@yaks/sqlite'
-import { open } from '@yaks/sqlite/db'
+import type { Store } from '@yaks/sqlite'
+import { columns } from '@yaks/sqlite/physical'
+import { installMigrations, migrations } from '@yaks/sqlite/migration'
+import type { Opened } from '@yaks/sqlite/db'
 import { adopt, fields as searched, find, type Hit, search } from '@yaks/fts'
 import { effects, released } from '@yaks/effects'
 import { type Local, peek, warm } from '@yaks/secrets'
@@ -103,7 +99,7 @@ import { AsyncLocalStorage } from 'node:async_hooks'
 import { type Context as TraceContext, installContext } from '@yaks/trace'
 import { spool } from '@yaks/tracker/report'
 import { CallError } from '@yaks/tools/errors'
-import { persist } from '@yaks/tools'
+import { persist } from '@yaks/tools/persist'
 import { files } from '@yaks/tracker/file'
 import { type Traces, traces } from './traces.ts'
 import { traceControl } from './trace_control.ts'
@@ -375,7 +371,13 @@ let composed = async (
     config.tracker && !opts.readOnly ? revision() : undefined,
   )
   let installing = opts.install ?? path == ':memory:'
-  let opened: ReturnType<typeof open> | undefined
+  let opened: Opened | undefined
+  let open = async (): Promise<Opened> => {
+    let driver = opts.readOnly
+      ? await import('@yaks/sqlite/read-db')
+      : await import('@yaks/sqlite/db')
+    return driver.open(path)
+  }
   let recorded: Traces | undefined
   let captureControl: ReturnType<typeof traceControl> | undefined
   try {
@@ -396,7 +398,7 @@ let composed = async (
     }
     if (exists) {
       part?.('sqlite')
-      opened = open(path, { readOnly: opts.readOnly })
+      opened = await open()
       part?.('migrations')
       if (installing) installMigrations(opened)
       migrations(opened).ready()
@@ -456,12 +458,16 @@ let composed = async (
       plugins,
       observed,
       part,
+      readOnly: opts.readOnly,
     })
+    let { storage } = opts.readOnly
+      ? await import('@yaks/sqlite/read-store')
+      : await import('@yaks/sqlite')
     let { vocab, derived, backed } = plan.words
 
     if (!opened) {
       part?.('sqlite')
-      opened = open(path, { readOnly: opts.readOnly })
+      opened = await open()
       part?.('migrations')
       if (installing) installMigrations(opened)
     } else part?.('migrations')

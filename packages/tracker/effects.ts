@@ -1,7 +1,9 @@
 // The three downstream jobs. Intake never groups or notifies in its transaction.
 // Notifications use a deterministic mail eid, so retry cannot send a second letter.
 
-import { type Bundle, derivedEid, type Graph, token } from '@yaks/graph'
+import type { Bundle, Graph } from '@yaks/graph'
+import { derivedEid } from '@yaks/graph/identity'
+import { token } from '@yaks/graph/sha256'
 import type { Handlers } from '@yaks/effects'
 import { comp, str } from './model.ts'
 import { type Enrich, group, reframe, trim } from './group.ts'

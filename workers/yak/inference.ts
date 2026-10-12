@@ -3,7 +3,10 @@
 import { artifactStore, type Bucket, objectBlobs } from '@yaks/blob'
 import { resolve } from '@yaks/connections'
 import { type Grant, grants as authorized } from '@yaks/egress'
-import { type Comp, derivedEid, Stale, token } from '@yaks/graph'
+import type { Comp } from '@yaks/graph'
+import { derivedEid } from '@yaks/graph/identity'
+import { Stale } from '@yaks/graph/errors'
+import { token } from '@yaks/graph/sha256'
 import {
   billed,
   type Executor,

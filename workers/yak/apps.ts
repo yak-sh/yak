@@ -118,7 +118,9 @@ import { webAsset, webPage, webPath } from './web.ts'
 import { releaseStatus } from './release-status.ts'
 import { pageSpeaks } from './lenses.ts'
 import { appDoc } from './vocab.ts'
-import { type Bundle, Stale, status, token } from '@yaks/graph'
+import type { Bundle } from '@yaks/graph'
+import { Stale, status } from '@yaks/graph/errors'
+import { token } from '@yaks/graph/sha256'
 import { callStored } from './package-tools.ts'
 import { edits, mode, reads, writes } from '@yaks/member'
 import { APP_JSON, type Door } from './door.ts'
@@ -1154,7 +1156,9 @@ let gave = async (
           represents(rep.eid, b.representation as typeof rep.row)
         )
       ) {
-        throw new Error(`blob representation write was not applied: ${rep.eid}`)
+        throw new Error(
+          `blob representation write was not applied: ${rep.eid}`,
+        )
       }
       return rep
     }
@@ -1599,7 +1603,11 @@ let api = async (
           })
         }
       }
-      caught(e, { request: 'GET /api/query', space: space.slug, app: app.slug })
+      caught(e, {
+        request: 'GET /api/query',
+        space: space.slug,
+        app: app.slug,
+      })
       return rejection(e)
     }
   }
@@ -1830,7 +1838,11 @@ let visits = async (env: Env, apps: App[]): Promise<Visits[] | null> => {
   if (asked.some((s) => !s)) return null
   try {
     let all = await Promise.all(asked as Promise<Stats>[])
-    return apps.map((a, i) => ({ slug: a.slug, title: a.title, stats: all[i] }))
+    return apps.map((a, i) => ({
+      slug: a.slug,
+      title: a.title,
+      stats: all[i],
+    }))
   } catch (e) {
     caught(e, { request: 'views' })
     return null
@@ -2453,7 +2465,11 @@ let served = async (req: Request, env: Env, c: Clock): Promise<Response> => {
   ) return json(401, 'not_a_reader', 'This page token does not open this app')
   let itself = await granted(req, env.SESSION_SECRET, store)
   if (bearing(req) && !itself) {
-    return json(401, 'not_a_reader', 'This worker grant does not open this app')
+    return json(
+      401,
+      'not_a_reader',
+      'This worker grant does not open this app',
+    )
   }
   // Machine clients use the same login bearer as the connector. Verify it
   // at the app door too, before the cookie/page-token path, and read the

@@ -30,16 +30,12 @@
 // written here, so its vocabulary is loaded once per isolate and not once per
 // door. The platform diagnostic fields on `exception` remain intact.
 
-import {
-  type AdmitOpts,
-  type Bundle,
-  comps,
-  type Graph,
-  graph,
-} from '@yaks/graph'
+import type { AdmitOpts, Bundle, Graph } from '@yaks/graph'
+import { comps } from '@yaks/graph/bundle'
+import { graph } from '@yaks/graph'
 import { ram } from '@yaks/ram'
 import { loadVocab, type PropSchema, type VocabDoc } from '@yaks/vocab'
-import { toolsDoc } from '@yaks/tools'
+import { toolsDoc } from '@yaks/tools/vocab'
 import { spineDoc } from '@yaks/kernel/vocab'
 import { appKeywords } from './vocab.ts'
 

@@ -1,4 +1,4 @@
-import { Interrupted } from '@yaks/tools'
+import { Interrupted } from '@yaks/tools/errors'
 
 /** How long an interrupted command has to stop before its group is killed. */
 export let GRACE = 5_000

@@ -5,7 +5,8 @@
  */
 
 import { type ComponentChildren, h, type JSX } from 'preact'
-import { type Bundle, derivedEid } from '@yaks/graph'
+import type { Bundle } from '@yaks/graph'
+import { derivedEid } from '@yaks/graph/identity'
 import { Button, type Props } from '@yaks/ui'
 
 /** The page entity carrying this owner's disclosure state. */

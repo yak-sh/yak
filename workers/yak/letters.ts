@@ -19,7 +19,8 @@
 // subject and calls the app store's declared tool. The store owns the write,
 // including the sender stamp, member guard, relay rule and month's ceiling.
 import { z } from 'zod'
-import { argsOf, type Bundle, type Tool } from '@yaks/graph'
+import type { Bundle, Tool } from '@yaks/graph'
+import { argsOf } from '@yaks/graph/call'
 import { mailbox } from './directory.ts'
 import { read } from './reach.ts'
 import { apex, type Host } from './host.ts'

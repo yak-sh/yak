@@ -20,7 +20,8 @@
 
 import type { Ask, Binding, Bundle, Comp, Eid, Entity, Tx } from '@yaks/graph'
 import { after } from '@yaks/fp'
-import { comps, dead, doomed } from '@yaks/graph'
+import { comps, dead } from '@yaks/graph/bundle'
+import { doomed } from '@yaks/graph/read'
 import type { Vocab } from '@yaks/vocab'
 
 /** What triggered a handler: one of the three things that can happen to a

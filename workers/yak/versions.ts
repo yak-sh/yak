@@ -43,7 +43,8 @@
 // With one key space the sweep is one pass for the whole bucket rather than one
 // per app: an object another app still names is not the first app's to free.
 import type { Blobs as Pins, Objects } from '@yaks/blob'
-import { mint, token } from '@yaks/graph'
+import { mint } from '@yaks/graph/identity'
+import { token } from '@yaks/graph/sha256'
 import type { App, Directory, Space } from './directory.ts'
 import type { Reload } from '@yaks/platform'
 import { vouched, type Who } from './session.ts'

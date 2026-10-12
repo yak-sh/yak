@@ -17,7 +17,8 @@
 // `signin`, an `exception` — whose properties are server-owned and refused at
 // the ordinary door. It is never forwarded from anywhere a client can reach
 // (directory.ts vouch), so it cannot arrive from outside.
-import { type Bundle, Stale } from '@yaks/graph'
+import type { Bundle } from '@yaks/graph'
+import { Stale } from '@yaks/graph/errors'
 import type { Hit } from '@yaks/embedding'
 import { type Door, type Namespace, PLATFORM_STORE, storeOf } from './door.ts'
 import { Pending, said } from './writes.ts'

@@ -30,7 +30,8 @@
 // passed to `graph.apply()` is committed entirely or not at all.
 
 import type { Bundle, Comp, Hook } from '@yaks/graph'
-import { comps, Refused } from '@yaks/graph'
+import { comps } from '@yaks/graph/bundle'
+import { Refused } from '@yaks/graph/errors'
 import { parse, type Value } from '@yaks/query'
 import type { Vocab } from '@yaks/vocab'
 import { BOARD } from './comp.ts'

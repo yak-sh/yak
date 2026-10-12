@@ -32,8 +32,8 @@ import type { Role } from './directory.ts'
 import type { Env } from './env.ts'
 import { apex, type Host } from './host.ts'
 import { hostOf } from './route.ts'
-import { sha256 } from '@yaks/graph'
 import { instrumentEid } from './instrument.ts'
+import { sha256 } from '@yaks/graph/sha256'
 
 export type Who = {
   /** Explicit platform administrative access, vouched by the kernel. */

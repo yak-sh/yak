@@ -35,7 +35,7 @@ import { type Look, lookOf } from './make.ts'
 import { type Place, placeOf as savedPlace } from './place.ts'
 import { once as read } from './once.ts'
 import { pageDocs } from './page-state.ts'
-import { toolEid } from '@yaks/tools'
+import { toolEid } from '@yaks/tools/result'
 
 export type Bundle = NonNullable<ReturnType<Client['ent']>>
 

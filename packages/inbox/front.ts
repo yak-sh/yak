@@ -11,7 +11,7 @@
 import { signal } from '@preact/signals'
 import { useLayoutEffect, useMemo } from 'preact/hooks'
 import { type Client, client } from '@yaks/client'
-import { derivedEid } from '@yaks/graph'
+import { derivedEid } from '@yaks/graph/identity'
 import { loadVocab, type VocabDoc } from '@yaks/vocab'
 import doc from './front.json' with { type: 'json' }
 

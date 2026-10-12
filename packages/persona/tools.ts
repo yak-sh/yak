@@ -7,7 +7,9 @@
 // where that text becomes files: each project's personas in its checkout
 // (./files.ts), and a line for each file that moved.
 
-import { argsOf, type Bundle, type Graph, Refused } from '@yaks/graph'
+import type { Bundle, Graph } from '@yaks/graph'
+import { argsOf } from '@yaks/graph/call'
+import { Refused } from '@yaks/graph/errors'
 import type { Runs } from '@yaks/graph/tools'
 import { plan, sync } from '@yaks/mirror'
 import { personaMirror, remembered } from './files.ts'

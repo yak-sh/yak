@@ -5,7 +5,8 @@
 // processes reading the same occurrence compete at the graph's transaction
 // boundary instead of both firing it.
 
-import { type Bundle, type Graph, token } from '@yaks/graph'
+import type { Bundle, Graph } from '@yaks/graph'
+import { token } from '@yaks/graph/sha256'
 import { due, ring, wakeOf } from './due.ts'
 import { cadence, matches } from './while.ts'
 

@@ -2,7 +2,8 @@
 // connections computes the person's own account, else the oldest sign-in.
 import { fileURLToPath } from 'node:url'
 import { basename, dirname } from 'node:path'
-import { argsOf, type Bundle, type Comp, type Graph } from '@yaks/graph'
+import type { Bundle, Comp, Graph } from '@yaks/graph'
+import { argsOf } from '@yaks/graph/call'
 import type { Runs } from '@yaks/graph/tools'
 import {
   isOpRef,
@@ -12,7 +13,9 @@ import {
   sealed,
   type Vault,
 } from '@yaks/secrets'
-import { CallError, Interrupted, said } from '@yaks/tools'
+import { CallError } from '@yaks/tools/errors'
+import { Interrupted } from '@yaks/tools/errors'
+import { said } from '@yaks/tools/result'
 import type { Host } from '@yaks/host'
 import { person } from '@yaks/cli/host'
 import { given, read as configAt, used } from '@yaks/cli/config'
@@ -304,7 +307,10 @@ export let runs = (
       // Read before the account is: a typo is a typo whoever is signed in.
       let bps = word(a, 'bps')
       if (bps != null && !/^\d+$/.test(bps)) {
-        throw new CallError('bps', `not a whole number of basis points: ${bps}`)
+        throw new CallError(
+          'bps',
+          `not a whole number of basis points: ${bps}`,
+        )
       }
       let at = await acting(a)
       let now = bps == null
@@ -412,7 +418,10 @@ export let runs = (
       let refs = { id: word(a, 'id') ?? '', secret: word(a, 'secret') }
       for (let [arg, ref] of Object.entries(refs)) {
         if (ref != null && !isOpRef(ref)) {
-          throw new CallError(arg, 'an op:// reference, never the value itself')
+          throw new CallError(
+            arg,
+            'an op:// reference, never the value itself',
+          )
         }
       }
       let read = (ref: string) => opRead()(ref, AbortSignal.timeout(10_000))

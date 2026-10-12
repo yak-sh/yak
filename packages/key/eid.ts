@@ -10,14 +10,9 @@
 // This function is the only place the derivation is written, because an id
 // computed two ways is two ids.
 
-import {
-  type Bundle,
-  type Comp,
-  comps,
-  type Derive,
-  derivedEid,
-  type Eid,
-} from '@yaks/graph'
+import type { Bundle, Comp, Derive, Eid } from '@yaks/graph'
+import { comps } from '@yaks/graph/bundle'
+import { derivedEid } from '@yaks/graph/identity'
 import { VALUE } from './comp.ts'
 
 /**

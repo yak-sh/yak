@@ -25,21 +25,17 @@
 // this package's `bounced{reason}` is what records the answer arriving the
 // hard way.
 
-import {
-  addressed,
-  argsOf,
-  type Bundle,
-  type Comp,
-  type Eid,
-  type Graph,
-  who,
-} from '@yaks/graph'
+import type { Bundle, Comp, Eid, Graph } from '@yaks/graph'
+import { addressed, argsOf, who } from '@yaks/graph/call'
 import { BODY, DOC, TITLE } from '@yaks/doc'
 import { human } from '@yaks/id'
 import { threadOf as attentionTarget } from '@yaks/notify'
 import { ancestry, markAttention } from '@yaks/notify/attention'
 import { absent, and, eq, every, list, present } from '@yaks/query'
-import { CallError, checked, type Finding, said } from '@yaks/tools'
+import type { Finding } from '@yaks/tools'
+import { CallError } from '@yaks/tools/errors'
+import { checked } from '@yaks/tools/check'
+import { said } from '@yaks/tools/result'
 import type { Runs } from '@yaks/graph/tools'
 import { wearer } from './arrive.ts'
 import { post } from './effects.ts'

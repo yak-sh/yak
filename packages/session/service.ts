@@ -38,7 +38,8 @@
 // what a session says now never waits behind it. What a person typed and what
 // the model said stay, and so does everything nobody imported.
 
-import { type Bundle, type Eid, type Graph, TOMBSTONE } from '@yaks/graph'
+import type { Bundle, Eid, Graph } from '@yaks/graph'
+import { TOMBSTONE } from '@yaks/graph/bundle'
 import { feed } from './bus.ts'
 import { SESSION } from './comp.ts'
 import { claude, subagent } from './readers.ts'

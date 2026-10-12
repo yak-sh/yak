@@ -3,7 +3,10 @@
 // stale. File and symbol citations have a narrower answer in @yaks/git.
 
 import { cmp } from '@yaks/fp'
-import { type Bundle, type Comp, comps, Refused, sha256 } from '@yaks/graph'
+import type { Bundle, Comp } from '@yaks/graph'
+import { comps } from '@yaks/graph/bundle'
+import { Refused } from '@yaks/graph/errors'
+import { sha256 } from '@yaks/graph/sha256'
 import type { Vocab } from '@yaks/vocab'
 
 export let CITES = 'cites'

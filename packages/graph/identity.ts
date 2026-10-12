@@ -34,6 +34,8 @@ import { comps } from './bundle.ts'
 import type { Derive } from './alias.ts'
 import { Refused } from './errors.ts'
 import { sha256 } from './sha256.ts'
+export { mint, minted } from './mint.ts'
+export { isAlias, resolve, substitute } from './alias.ts'
 
 /**
  * The eid derived from a string: the leading 16 bytes of `sha256(sentence)`,

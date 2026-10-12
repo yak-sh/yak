@@ -1,15 +1,9 @@
 // Skills import from the primary checkout. Graph exports are proposals in a
 // dedicated linked worktree: no mirror write is allowed to touch main.
-import {
-  type Bundle,
-  type Comp,
-  derivedEid,
-  type Graph,
-  identityEid,
-  Refused,
-  Stale,
-  token,
-} from '@yaks/graph'
+import type { Bundle, Comp, Graph } from '@yaks/graph'
+import { derivedEid, identityEid } from '@yaks/graph/identity'
+import { Refused, Stale } from '@yaks/graph/errors'
+import { token } from '@yaks/graph/sha256'
 import { and, eq, every, present } from '@yaks/query'
 import { land, LandError, type Run, run } from '@yaks/git/land'
 import { repositoryEid } from '@yaks/git/host'
@@ -471,7 +465,9 @@ let syncRepository = async (
         result.removed.includes(`${tree}/${old}`) &&
         result.wrote.includes(`${tree}/${next}`)
       ) {
-        for (let path of groups.get(skill.entity.eid) ?? []) verifying.add(path)
+        for (let path of groups.get(skill.entity.eid) ?? []) {
+          verifying.add(path)
+        }
       }
     }
     for (let original of verifying) {

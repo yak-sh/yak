@@ -31,11 +31,13 @@
 // because importing it pulls in everything that opens one — a cost `yak help`
 // should not pay, nor `yak login` on a machine with no graph.
 
-import { type Actor, type Bundle, type Graph, mint, signed } from '@yaks/graph'
+import type { Actor, Bundle, Graph } from '@yaks/graph'
+import { mint } from '@yaks/graph/identity'
+import { signed } from '@yaks/graph/provenance'
 import type { AnatomyObservation } from '@yaks/code/anatomy'
 import type { Vocab } from '@yaks/vocab'
 import { EFFECT } from '@yaks/effects'
-import { answerOf, faulted, structured, toolEid } from '@yaks/tools'
+import { answerOf, faulted, structured, toolEid } from '@yaks/tools/result'
 import { registry, show, terminal } from './answer.ts'
 import { type Config, exported, read, used } from './config.ts'
 import { facetsOf } from '@yaks/host/config'
@@ -56,7 +58,6 @@ import {
 } from './host.ts'
 import { readThread } from './read_thread.ts'
 import { thread } from '@yaks/threads'
-import { reconcile } from '@yaks/tools'
 import { during, peek } from '@yaks/trace'
 import { rolesOf } from './roles.ts'
 export { rolesOf } from './roles.ts'
@@ -194,6 +195,7 @@ export let work = async (
   hosts.set(key, opening)
   let host = await opening
   await host.bury()
+  let { reconcile } = await import('@yaks/tools')
   let running = Promise.all([host.duties(), reconcile(host.runner)])
   try {
     if (ready) await Deno.writeTextFile(ready, `${Deno.pid}\n`)

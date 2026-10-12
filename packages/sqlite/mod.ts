@@ -70,7 +70,7 @@ import type {
   Match,
   ReadOpts,
 } from '@yaks/graph'
-import { sha256 } from '@yaks/graph'
+import { sha256 } from '@yaks/graph/sha256'
 import { after, isPromise } from '@yaks/fp'
 import { context, scope } from '@yaks/trace'
 import type { Query } from './read.ts'

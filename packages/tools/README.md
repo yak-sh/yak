@@ -705,17 +705,28 @@ returns the same answer and transient result shape as a recorded call, including
 refusals; `runner.call(call)` retains recorded execution for stored work,
 including deferred reads.
 
+`@yaks/tools/read` exports `reader(graph, options)`, the same invocation
+boundary without a recorded runner. Its `read` method validates, resolves
+references, attributes answers and reports faults in the same way; methods for
+recorded work refuse. `@yaks/tools/result` supplies the tool identities and
+answer formatting shared by both runners. `@yaks/tools/persist` supplies
+storage-certified write retries without loading either runner.
+`@yaks/tools/fault` classifies defects, and `@yaks/tools/errors` keeps shared
+invocation error identities.
+
 ```ts
 import { graph, mint } from '@yaks/graph'
 import { ram } from '@yaks/ram'
 import { loadVocab } from '@yaks/vocab'
 import { kernelDoc, kernelKeywords } from '@yaks/kernel'
-import { answerOf, callDoc, runner, toolDoc, toolEid } from '@yaks/tools'
+import { callDoc, toolDoc } from '@yaks/tools/vocab'
+import { reader } from '@yaks/tools/read'
+import { answerOf, toolEid } from '@yaks/tools/result'
 import { equal } from '@yaks/testing'
 
 let vocab = loadVocab([kernelDoc, callDoc, toolDoc], [kernelKeywords])
 let g = graph({ vocab, storage: ram(vocab) })
-let r = runner(g, {
+let r = reader(g, {
   tools: [{
     name: 'example_read',
     description: 'Read without recording',

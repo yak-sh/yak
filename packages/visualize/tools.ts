@@ -2,7 +2,8 @@
 // A tool observes its actual host, not another process serving the same store.
 
 import type { Anatomy } from '@yaks/code/anatomy'
-import { argsOf, type Bundle } from '@yaks/graph'
+import type { Bundle } from '@yaks/graph'
+import { argsOf } from '@yaks/graph/call'
 import type { Runs } from '@yaks/graph/tools'
 import { capture } from './capture.ts'
 import { select, type SelectOptions, snapshot } from './snapshot.ts'

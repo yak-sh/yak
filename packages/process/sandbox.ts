@@ -3,7 +3,7 @@
 // stay outside that mount. The supervisor outlives the host that requested it.
 import { resolve } from '@std/path/posix/resolve'
 import { decodeBase64, encodeBase64 } from '@std/encoding/base64'
-import { derivedEid } from '@yaks/graph'
+import { derivedEid } from '@yaks/graph/identity'
 import type {
   LentMachine,
   Machine,
@@ -457,7 +457,9 @@ export let sandboxProvider = (o: SandboxProviderOpts): MachineProvider => {
           path.startsWith('/') || guest == '/workspace' ||
           !guest.startsWith('/workspace/')
         ) {
-          throw new Error('sandbox: exported paths must be under its directory')
+          throw new Error(
+            'sandbox: exported paths must be under its directory',
+          )
         }
         // Read inside bubblewrap, not on the host: a workspace symlink must
         // never turn a file export into a read of the host's private files.

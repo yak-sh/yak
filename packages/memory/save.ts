@@ -16,7 +16,8 @@
 // saved instead of. Two lines is enough to say "we were looking at the recipe
 // app" and not enough to restate what was said.
 
-import { type Bundle, type Eid, Refused } from '@yaks/graph'
+import type { Bundle, Eid } from '@yaks/graph'
+import { Refused } from '@yaks/graph/errors'
 import { MEMORY } from './comp.ts'
 
 /** The most context a memory carries, in lines. */

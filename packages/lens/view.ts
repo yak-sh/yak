@@ -1,4 +1,6 @@
-import { type Bundle, type Comp, Stale, token } from '@yaks/graph'
+import type { Bundle, Comp } from '@yaks/graph'
+import { Stale } from '@yaks/graph/errors'
+import { token } from '@yaks/graph/sha256'
 import { matcher } from '@yaks/match'
 import { parse } from '@yaks/query'
 import type { PropSchema, Vocab } from '@yaks/vocab'

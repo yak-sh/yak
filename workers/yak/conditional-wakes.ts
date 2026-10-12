@@ -1,6 +1,7 @@
 // One incarnation's authoritative wake catalog. Conditions are never cached:
 // rouse still checks their current peer/durable truth on every invocation.
-import { type Bundle, comps, dead } from '@yaks/graph'
+import type { Bundle } from '@yaks/graph'
+import { comps, dead } from '@yaks/graph/bundle'
 import { rouse } from '@yaks/wake'
 import type { Driver } from '@yaks/wake'
 

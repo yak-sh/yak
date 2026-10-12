@@ -21,14 +21,9 @@
 // A timeout is not a kill. A run still going when the wait gives up is reported
 // as still going and left alone; killing it is what `stop` is for.
 
-import {
-  argsOf,
-  type Bundle,
-  type Comp,
-  type Graph,
-  signed,
-  who,
-} from '@yaks/graph'
+import type { Bundle, Comp, Graph } from '@yaks/graph'
+import { argsOf, who } from '@yaks/graph/call'
+import { signed } from '@yaks/graph/provenance'
 import type { Runs } from '@yaks/graph/tools'
 import { human } from '@yaks/id'
 import { EXIT, PROCESS } from '@yaks/process'
@@ -45,7 +40,7 @@ import {
   usingBefore,
 } from '@yaks/session'
 import { render } from '@yaks/text'
-import { CallError } from '@yaks/tools'
+import { CallError } from '@yaks/tools/errors'
 import { spelling } from './run.ts'
 
 /** What config can set for these tools. */

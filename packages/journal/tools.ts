@@ -15,7 +15,9 @@
 // a write, and one a server has to decide it offers — and a feed is a cursor a
 // consumer holds, not a question anybody types.
 
-import { argsOf, type Bundle, type Comp, Refused } from '@yaks/graph'
+import type { Bundle, Comp } from '@yaks/graph'
+import { argsOf } from '@yaks/graph/call'
+import { Refused } from '@yaks/graph/errors'
 import type { Runs } from '@yaks/graph/tools'
 import type { Batch } from './batch.ts'
 import { applied } from './undo.ts'

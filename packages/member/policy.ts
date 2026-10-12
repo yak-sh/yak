@@ -35,7 +35,7 @@
 
 import type { Bundle, Comp, Eid, ReadTx, Storage } from '@yaks/graph'
 import { after } from '@yaks/fp'
-import { detached } from '@yaks/graph'
+import { detached } from '@yaks/graph/storage'
 import { and, eq, or } from '@yaks/query'
 import { ACCESS, GRANT, MEMBER } from './comp.ts'
 import { edits, type Level, level, type Mode, mode, reads } from './words.ts'
@@ -120,7 +120,8 @@ export let levelOn = (
       // to write.
       let owner = where.space && found.some((b) => {
         let m = of(b, MEMBER)
-        return m?.space == where.space && m?.person == who && m?.role == 'owner'
+        return m?.space == where.space && m?.person == who &&
+          m?.role == 'owner'
       })
       if (owner) return 'owner' as Level
       let g = found.map((b) => of(b, GRANT))

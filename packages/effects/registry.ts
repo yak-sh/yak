@@ -56,7 +56,7 @@ import type {
 } from '@yaks/graph'
 import { after, each, isPromise, over } from '@yaks/fp'
 import { during, link, peek, unlink } from '@yaks/trace'
-import { asked, match, reads } from '@yaks/graph'
+import { asked, match, reads } from '@yaks/graph/declared'
 import { filter } from '@yaks/match'
 import { bare, type Clause, fields } from '@yaks/query'
 import { type EffectDecl, effectsIn, type Vocab } from '@yaks/vocab'

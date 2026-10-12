@@ -39,16 +39,11 @@
 
 import type { Event, Handlers } from '@yaks/effects'
 import { held as lease, HOLD, holding } from '@yaks/effects'
-import {
-  type Bundle,
-  type Comp,
-  type Eid,
-  type Graph,
-  Stale,
-  token,
-} from '@yaks/graph'
+import type { Bundle, Comp, Eid, Graph } from '@yaks/graph'
+import { Stale } from '@yaks/graph/errors'
+import { token } from '@yaks/graph/sha256'
 import { effectsIn } from '@yaks/vocab'
-import { actionable, exceptionOf } from '@yaks/tools'
+import { actionable, exceptionOf } from '@yaks/tools/fault'
 import { active, admitNext, dispatchStatus, queue, swap } from './admission.ts'
 import { type ChildLimits, deliverChild } from './children.ts'
 import { CLAIM } from './comp.ts'

@@ -22,7 +22,8 @@
 
 import { and, every, present, want } from '@yaks/query'
 import { human } from '@yaks/id'
-import { checked, type Finding } from '@yaks/tools'
+import type { Finding } from '@yaks/tools'
+import { checked } from '@yaks/tools/check'
 import type { Bundle, Comp, Graph } from '@yaks/graph'
 import type { Runs } from '@yaks/graph/tools'
 import type { Vocab } from '@yaks/vocab'

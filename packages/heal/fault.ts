@@ -10,4 +10,4 @@
  * actionable('no such table: bug') // true
  * ```
  */
-export { actionable } from '@yaks/tools'
+export { actionable } from '@yaks/tools/fault'

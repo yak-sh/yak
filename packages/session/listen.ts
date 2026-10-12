@@ -34,16 +34,10 @@
 // seconds rather than waiting on commits: @yaks/client's `watch` hears only the
 // commits made in its own process.
 
-import {
-  type Actor,
-  type Bundle,
-  type Comp,
-  type Eid,
-  type Graph,
-  signed,
-  Stale,
-  token,
-} from '@yaks/graph'
+import type { Actor, Bundle, Comp, Eid, Graph } from '@yaks/graph'
+import { signed } from '@yaks/graph/provenance'
+import { Stale } from '@yaks/graph/errors'
+import { token } from '@yaks/graph/sha256'
 import { human } from '@yaks/id'
 import {
   absent,

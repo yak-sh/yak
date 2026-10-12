@@ -46,4 +46,4 @@ export type Authenticate = (
 // kept. It is defined in @yaks/graph beside `land` — signing a write is a
 // fact about a graph, not about HTTP — and re-exported here, where `/apply`
 // reaches for it.
-export { signed } from '@yaks/graph'
+export { signed } from '@yaks/graph/provenance'

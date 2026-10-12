@@ -23,13 +23,8 @@
 // which ones its provider reads.
 
 import { and, eq, type Input, list, present } from '@yaks/query'
-import {
-  type Bundle,
-  type Comp,
-  type Eid,
-  type Graph,
-  Refused,
-} from '@yaks/graph'
+import type { Bundle, Comp, Eid, Graph } from '@yaks/graph'
+import { Refused } from '@yaks/graph/errors'
 import { relations } from '@yaks/edge'
 import { DOC, TITLE } from '@yaks/doc'
 import { human } from '@yaks/id'

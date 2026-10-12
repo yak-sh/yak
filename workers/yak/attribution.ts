@@ -2,7 +2,9 @@
 // directory keeps one browser and a worked edge to each app it reached. The
 // edge remains unfinished until that store has filled every matching byline.
 import { link } from '@yaks/edge'
-import { type Bundle, type Comp, type Graph, Stale, token } from '@yaks/graph'
+import type { Bundle, Comp, Graph } from '@yaks/graph'
+import { Stale } from '@yaks/graph/errors'
+import { token } from '@yaks/graph/sha256'
 import { KERNEL, meta } from './meta.ts'
 import type { Env } from './env.ts'
 import { browserOf } from './session.ts'

@@ -1,7 +1,8 @@
 // A person's private rows and aspects. App roles never confer ownership.
 import { after } from '@yaks/fp'
 import { absent, and, eq, or } from '@yaks/query/core'
-import { actorOf as writerOf, dead } from '@yaks/graph'
+import { actorOf as writerOf } from '@yaks/graph/provenance'
+import { dead } from '@yaks/graph/bundle'
 import type {
   Bundle,
   Comp,
@@ -252,7 +253,10 @@ export let personal = (vocab: Vocab, declared: Personal = {}): Plugin => {
             let out = b
             for (let [name, prop, eid] of references(b)) {
               if (!allowed.has(eid)) {
-                out = { ...out, [name]: { ...out[name] as Comp, [prop]: null } }
+                out = {
+                  ...out,
+                  [name]: { ...out[name] as Comp, [prop]: null },
+                }
               }
             }
             return out

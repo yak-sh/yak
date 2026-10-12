@@ -9,7 +9,7 @@
  */
 
 import { h, type JSX } from 'preact'
-import { identityEid } from '@yaks/graph'
+import { identityEid } from '@yaks/graph/identity'
 import type { Io } from './host.ts'
 
 /** The eid of the package named `name`. */

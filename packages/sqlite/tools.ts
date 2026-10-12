@@ -3,7 +3,8 @@
 // supplies no diagnostics cannot establish a verdict, so its checks warn.
 
 import type { Runs } from '@yaks/graph/tools'
-import { checked, type Finding } from '@yaks/tools'
+import type { Finding } from '@yaks/tools'
+import { checked } from '@yaks/tools/check'
 
 /** What configuration this package's checks accept. */
 export type Options = {

@@ -1,4 +1,5 @@
-import { type Bundle, type Plugin, Refused, Stale } from '@yaks/graph'
+import type { Bundle, Plugin } from '@yaks/graph'
+import { Refused, Stale } from '@yaks/graph/errors'
 import { after, each } from '@yaks/fp'
 import { and, every, map, or, parse, present } from '@yaks/query'
 import { loadVocab, type Vocab } from '@yaks/vocab'
@@ -254,7 +255,11 @@ export let lenses = (
                   speaks !== undefined &&
                   (!speaks || typeof speaks != 'object' ||
                     Array.isArray(speaks))
-                ) throw new Error('Lens: $speaks must be a package version map')
+                ) {
+                  throw new Error(
+                    'Lens: $speaks must be a package version map',
+                  )
+                }
                 let { $speaks: _, ...bundle } = row
                 let spoken = speaks === undefined
                   ? undefined

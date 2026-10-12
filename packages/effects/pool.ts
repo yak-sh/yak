@@ -84,7 +84,9 @@ import {
   type Span,
   unlink,
 } from '@yaks/trace'
-import { derivedEid, Stale, token } from '@yaks/graph'
+import { derivedEid } from '@yaks/graph/identity'
+import { Stale } from '@yaks/graph/errors'
+import { token } from '@yaks/graph/sha256'
 import {
   after as cursorAfter,
   and,
@@ -286,7 +288,9 @@ export let working = async (
   for (let b of rows) {
     let l = (b[LEASE] ?? {}) as Comp
     let holder = l.holder as Eid | undefined
-    if (!holder || holder == o.except || l.name != `${POOL}/${holder}`) continue
+    if (!holder || holder == o.except || l.name != `${POOL}/${holder}`) {
+      continue
+    }
     if (Date.parse(String(l.until)) <= now) continue
     if (!await o.gone?.(holder)) return true
   }

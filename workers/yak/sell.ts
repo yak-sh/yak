@@ -35,7 +35,7 @@
 // exception entity in the meta store, a refusal is a sentence the person reads,
 // and the webhook's filing is capped so a stranger posting garbage at a public
 // door cannot write rows without end.
-import { sha256 } from '@yaks/graph'
+import { sha256 } from '@yaks/graph/sha256'
 import { moved } from './billing.ts'
 import { ask } from './stripe.ts'
 import { refusal } from '@yaks/hook'
@@ -581,7 +581,11 @@ export let buying = async (
       await rows(`.entity.eid=${items.map((i) => i.product).join(',')}`),
       items,
     )
-    let asked = body as { success?: unknown; cancel?: unknown; email?: unknown }
+    let asked = body as {
+      success?: unknown
+      cancel?: unknown
+      email?: unknown
+    }
     success = backAt(at.root, asked.success)
     cancel = backAt(at.root, asked.cancel)
   } catch (e) {
@@ -810,7 +814,9 @@ export let apply = async (env: Env, event: Event): Promise<string> => {
     await disconnect(env, space)
     return `${space.slug} disconnected`
   }
-  if (type == 'checkout.session.completed') return await sold(env, space, event)
+  if (type == 'checkout.session.completed') {
+    return await sold(env, space, event)
+  }
   if (type == 'charge.refunded' || type.startsWith('charge.dispute.')) {
     return await settled(env, space, event)
   }
@@ -1115,7 +1121,9 @@ export let priceAt = async (dir: Directory, file: Response) => {
 export let fees = async (req: Request, env: Env) => {
   let dir = dirOf(env)
   let meta = await dir.space(dirPart.META.space)
-  if (!meta) return json(503, 'no_platform', 'the directory has not seeded yet')
+  if (!meta) {
+    return json(503, 'no_platform', 'the directory has not seeded yet')
+  }
   let who = await adminWho(
     env,
     req,

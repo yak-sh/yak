@@ -29,7 +29,7 @@
 // subscription registry keys by its `Sink`, and a test keys by a string.
 
 import type { Bundle, Comp, Eid } from '@yaks/graph'
-import { comps } from '@yaks/graph'
+import { comps } from '@yaks/graph/bundle'
 import { durableOf, ms, syncOf, type Vocab } from '@yaks/vocab'
 
 /** How a timer is set, so a test can control the clock. Returns the function

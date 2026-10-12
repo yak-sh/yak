@@ -1,7 +1,7 @@
 // A session row names the work and shows its latest activity and model.
 import { test, tick } from '../../testing.ts'
 import { test as preparedTest } from '@yaks/testing'
-import { identityEid } from '@yaks/graph'
+import { identityEid } from '@yaks/graph/identity'
 import { h, render } from 'preact'
 import { assert, assertEquals } from '@std/assert'
 import { parseHTML } from 'linkedom'
@@ -230,7 +230,10 @@ test('session stderr is an error only for a non-zero exit', () => {
     render(h(SessionDiagnostics, { stderr: 'noise', exit: 0 }), root)
     assertEquals(root.querySelector('.Session_Err-fail'), null)
     render(h(SessionDiagnostics, { stderr: 'broken', exit: 2 }), root)
-    assertEquals(root.querySelector('.Session_Err-fail')?.textContent, 'broken')
+    assertEquals(
+      root.querySelector('.Session_Err-fail')?.textContent,
+      'broken',
+    )
   } finally {
     render(null, root)
     if (prior) Object.defineProperty(globalThis, 'document', prior)
@@ -435,7 +438,10 @@ test('sessionMentions == resolveMentions(threadMentions)', () => {
       text: 'see T-1 and T-1',
     },
   }]
-  assertEquals(sessionMentions(thread), resolveMentions(threadMentions(thread)))
+  assertEquals(
+    sessionMentions(thread),
+    resolveMentions(threadMentions(thread)),
+  )
 })
 
 test('SessionRow loads its task title when no peer delivered it', async () => {

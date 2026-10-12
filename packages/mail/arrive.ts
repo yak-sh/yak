@@ -24,7 +24,8 @@
 // same letter twice, or a sweep that pulls a message it already pulled,
 // records it once: the second call returns no bundles at all.
 
-import { type Bundle, type Eid, type Graph, Refused } from '@yaks/graph'
+import type { Bundle, Eid, Graph } from '@yaks/graph'
+import { Refused } from '@yaks/graph/errors'
 import { and, type Clause, eq, limit } from '@yaks/query'
 import { canon, local as localOf } from './addr.ts'
 import { EMAIL, MAIL } from './comp.ts'

@@ -4,7 +4,8 @@
 
 import { test } from '@yaks/testing'
 import { assert, assertEquals } from '@std/assert'
-import { type Bundle, derivedEid } from '@yaks/graph'
+import type { Bundle } from '@yaks/graph/bundle'
+import { derivedEid } from '@yaks/graph/identity'
 import { door } from './door.ts'
 import { installPair, made, post, req, shopGraph } from './testing.ts'
 import { worker } from './worker.ts'

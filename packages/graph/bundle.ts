@@ -20,6 +20,8 @@
 // except `$alias`, which is how the graph tells the caller which id its
 // `$name` became.
 
+import { Refused } from './errors.ts'
+
 /** An entity's id: a string the client generates (a uuid, or a content hash).
  * A reference property reads back as the target's `eid`, so this is also the
  * type of a reference. */
@@ -160,3 +162,179 @@ export let tombstoned = (entity: Entity): Bundle => ({
   entity,
   [TOMBSTONE]: {},
 })
+
+/**
+ * A list of patches composed into one bundle per entity, in the order the
+ * batch first named each one: the identity with whatever `num` storage
+ * assigned, every component as applied, the `$alias` the caller referred to it
+ * by, and no other `$` key. An entity the batch deleted comes back as
+ * `{entity, tombstone: {}}`.
+ *
+ * ```ts
+ * import { composed } from '@yaks/graph'
+ *
+ * let now = '2026-09-25T12:00:00.000Z'
+ * composed([
+ *   { entity: { eid: 'b1' }, doc: { title: 'Dune' }, $actor: { by: 'ada' } },
+ *   { entity: { eid: 'b1' }, created: { at: now, by: 'ada' } },
+ *   { entity: { eid: 'b1', num: 3 } },
+ * ])
+ * // [{ entity: { eid: 'b1', num: 3 },
+ * //    doc: { title: 'Dune' }, created: { at: now, by: 'ada' } }]
+ * ```
+ */
+export let composed = (bundles: Bundle[]): Bundle[] => {
+  let { by, gone, said } = folded(bundles)
+  return [...by.values()].filter((b) => said.has(b.entity.eid)).map((b) =>
+    gone.has(b.entity.eid)
+      ? {
+        entity: b.entity,
+        ...(typeof b.$alias == 'string' ? { $alias: b.$alias } : {}),
+        [TOMBSTONE]: {},
+      }
+      : b
+  )
+}
+
+// The patches folded into one bundle per entity, with the entities something
+// other than a quiet bundle named and the ones deleted.
+//
+// The loop is the whole function, and what it returns is built before it
+// starts. The first batch a graph applies can be a whole world, and V8
+// compiles a function whose first call spends that long in one loop while it
+// is still inside it (on-stack replacement), before any code after the loop has
+// run; that code, having told the compiler nothing, sent every later call back
+// out of the compiled loop.
+let folded = (bundles: Bundle[]) => {
+  let out = {
+    by: new Map<Eid, Bundle>(),
+    gone: new Set<Eid>(),
+    said: new Set<Eid>(),
+  }
+  let { by, gone, said } = out
+  for (let b of bundles) {
+    let eid = b.entity.eid
+    let one = by.get(eid)
+    if (!one) by.set(eid, one = { entity: { eid } })
+    if (!b.$quiet) said.add(eid)
+    // The identity is merged rather than replaced: only the phase that created
+    // it knows the `num`, and only the caller's own bundle carries the alias.
+    // The first number wins, so a batch spread across several stores reads
+    // the way a query over them does — a num is one store's own counter, while
+    // the eid identifies the entity everywhere.
+    if (b.entity.num !== undefined && one.entity.num == null) {
+      one.entity = { ...one.entity, num: b.entity.num }
+    }
+    if (b.entity.archetype !== undefined) {
+      one.entity.archetype = b.entity.archetype
+    }
+    if (typeof b.$alias == 'string') one.$alias = b.$alias
+    if (dead(b)) gone.add(eid)
+    for (let name of Object.keys(b)) {
+      if (reserved(name)) continue
+      let comp = b[name] as Comp | null
+      let was = one[name] as Comp | null | undefined
+      one[name] = comp == null ? null : was ? { ...was, ...comp } : { ...comp }
+    }
+  }
+  return out
+}
+
+/** Accumulate unsent patches without re-reading the whole batch on each add. */
+export let coalescer = (): {
+  add: (bundles: Bundle[]) => void
+  read: () => Bundle[]
+} => {
+  let clears = new Map<Eid, Bundle>()
+  let values = new Map<Eid, Bundle>()
+  let order = new Set<Eid>()
+  let add = (bundles: Bundle[]) => {
+    for (let b of bundles) {
+      let eid = b.entity.eid
+      order.add(eid)
+      for (let [name, patch] of comps(b)) {
+        if (patch == null) {
+          let clear = clears.get(eid) ?? { entity: { eid } }
+          clear[name] = null
+          clears.set(eid, clear)
+          let value = values.get(eid)
+          if (value) delete value[name]
+        } else {
+          let value = values.get(eid) ?? { entity: { eid } }
+          value[name] = { ...value[name] as Comp | undefined, ...patch }
+          values.set(eid, value)
+        }
+      }
+    }
+  }
+  let read = (): Bundle[] => {
+    let out: Bundle[] = []
+    for (let eid of order) {
+      let clear = clears.get(eid)
+      let value = values.get(eid)
+      if (clear) out.push(clear)
+      if (value && comps(value).length) out.push(value)
+    }
+    return out
+  }
+  return { add, read }
+}
+
+/** Fold unsent patches by entity and component, preserving clear-then-write. */
+export let coalesced = (bundles: Bundle[]): Bundle[] => {
+  let batch = coalescer()
+  batch.add(bundles)
+  return batch.read()
+}
+
+/**
+ * The bundles, refused unless they form a batch: an array whose every
+ * member is an object whose `entity` names an eid. Every door hands `apply()`
+ * what arrived, and the first phase reads each bundle's eid, so the shape is
+ * refused here, before anything reads it, naming the bundle by its place.
+ */
+export let formed = (bundles: unknown): Bundle[] => {
+  if (!Array.isArray(bundles)) {
+    throw new Refused('a batch is an array of bundles')
+  }
+  bundles.forEach((b, i) => {
+    let eid = b && typeof b == 'object' ? b.entity?.eid : undefined
+    if (typeof eid != 'string' || (!eid && b.$prune !== true)) {
+      throw new Refused(
+        `bundle ${i} needs an entity: {entity: {eid}} — an eid you mint, or ` +
+          `'$name' to have the graph mint one`,
+      )
+    }
+  })
+  return bundles
+}
+
+/** The requests `apply()` answers itself. */
+export let REQUESTS: string[] = [
+  '$delete',
+  '$prune',
+  '$was',
+  '$actor',
+  '$alias',
+  '$quiet',
+]
+
+/**
+ * Every bundle's `$` keys, checked against what this graph can answer. The
+ * refusal names the request and lists the ones it has, because a caller asking
+ * for something nobody registered has the wrong idea of this graph.
+ */
+export let requested = (bundles: Bundle[], answered: string[]): Bundle[] => {
+  let known = new Set([...REQUESTS, ...answered])
+  for (let b of bundles) {
+    let alien = Object.keys(b).filter((k) => k.startsWith('$') && !known.has(k))
+    if (alien.length) {
+      throw new Refused(
+        `unknown request${alien.length > 1 ? 's' : ''}: ${
+          alien.join(', ')
+        } — this graph answers ${[...known].join(', ')}`,
+      )
+    }
+  }
+  return bundles
+}

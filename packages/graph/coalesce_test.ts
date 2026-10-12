@@ -3,7 +3,7 @@
 
 import { test } from '@yaks/testing'
 import { assertEquals } from '@std/assert'
-import { coalesced } from './coalesce.ts'
+import { coalesced } from '@yaks/graph/bundle'
 
 test('coalesced patches retain the clear before a later partial value', () => {
   assertEquals(

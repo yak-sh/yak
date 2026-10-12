@@ -19,7 +19,8 @@
  */
 
 import { batch, effect, type Signal, signal, untracked } from '@preact/signals'
-import { type Bundle, derivedEid } from '@yaks/graph'
+import type { Bundle } from '@yaks/graph'
+import { derivedEid } from '@yaks/graph/identity'
 import { merge } from './merge.ts'
 
 /** The eid of the draft `by` types in `place`: the same in every interface,

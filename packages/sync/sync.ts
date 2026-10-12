@@ -25,7 +25,7 @@
 
 import type { Bundle, Eid, Graph, Plugin } from '@yaks/graph'
 import { after } from '@yaks/fp'
-import { dead } from '@yaks/graph'
+import { dead } from '@yaks/graph/bundle'
 import {
   ACK,
   asked,
@@ -202,7 +202,9 @@ export let sync = (graph: Graph, opts: SyncOpts): Sync => {
         report,
         held,
       }).then((result) => {
-        if (result.settled || held) release?.(!held && !!result.applied?.length)
+        if (result.settled || held) {
+          release?.(!held && !!result.applied?.length)
+        }
         if (result.refused) {
           throw new WriteRefused(outward(bundles, graph.vocab), result.refused)
         }

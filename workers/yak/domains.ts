@@ -27,7 +27,7 @@ import { answered } from './dispatch.ts'
 import type { Env } from './env.ts'
 import { apex as hostApex, type Host } from './host.ts'
 import { type Host as Hostname, stamp } from './directory.ts'
-import { token } from '@yaks/graph'
+import { token } from '@yaks/graph/sha256'
 
 export let needsHostnames = (env: Host = {}) =>
   'the platform has no Cloudflare token to attach custom hostnames with ' +

@@ -1,6 +1,6 @@
 // The box shares one signed tracker transport for reads, intake and bug marks.
 // Credentials are read at use time and never reach redirects or error text.
-import { derivedEid } from '@yaks/graph'
+import { derivedEid } from '@yaks/graph/identity'
 import type { Sink } from './report.ts'
 import { sign } from './ticket.ts'
 

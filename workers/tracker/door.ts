@@ -4,8 +4,9 @@
 import type { TrackerStore } from './core.ts'
 import { authorize } from './auth.ts'
 import { api } from '@yaks/api'
-import { CallError } from '@yaks/tools'
-import { minted, status } from '@yaks/graph'
+import { CallError } from '@yaks/tools/errors'
+import { minted } from '@yaks/graph/identity'
+import { status } from '@yaks/graph/errors'
 import type { Bundle } from '@yaks/graph'
 import { platform } from './core.ts'
 import { batch } from './queue.ts'
@@ -90,7 +91,8 @@ async (request: Request): Promise<Response> => {
     })
   }
   if (path == '/ws') {
-    return websocket?.(request) ?? json({ error: 'websocket unavailable' }, 503)
+    return websocket?.(request) ??
+      json({ error: 'websocket unavailable' }, 503)
   }
   if (path == '/query' || path == '/vocab') {
     return await api({ graph: tracker.graph })(request)
@@ -103,7 +105,10 @@ async (request: Request): Promise<Response> => {
       !Number.isSafeInteger(n) || n < 1 || n > 100 ||
       (cursor != null && !uuid.test(cursor))
     ) {
-      return json({ error: 'limit must be 1..100 and after a global eid' }, 400)
+      return json(
+        { error: 'limit must be 1..100 and after a global eid' },
+        400,
+      )
     }
     if (path == '/traces') {
       let app = url.searchParams.get('app') ?? undefined
@@ -170,7 +175,10 @@ async (request: Request): Promise<Response> => {
       return json({ error: 'bug global eid required' }, 400)
     }
     try {
-      await tracker.mark(body.bug, path == '/resolve' ? 'resolved' : 'archived')
+      await tracker.mark(
+        body.bug,
+        path == '/resolve' ? 'resolved' : 'archived',
+      )
     } catch (error) {
       if (error instanceof CallError && error.code == 'bug') {
         return json({ error: 'bug not found' }, 404)

@@ -1,6 +1,6 @@
 // Kept app releases still declare the old command grammar. Translate it at
 // the platform boundary; the packages and callers share the new declaration.
-import { CallError } from '@yaks/tools'
+import { CallError } from '@yaks/tools/errors'
 import { parseTools, type Tools } from '@yaks/tools/declared'
 import { errorsText, toolCheck } from '@yaks/vocab/tools'
 

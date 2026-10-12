@@ -8,7 +8,8 @@
 // component's name points at its CTE, so what changes is a name.
 
 import type { Vocab } from '@yaks/vocab'
-import { type Binding, type Bundle, collected, type Match } from '@yaks/graph'
+import type { Binding, Bundle, Match } from '@yaks/graph'
+import { collected } from '@yaks/graph/declared'
 import {
   type BindOpts,
   type Cte,

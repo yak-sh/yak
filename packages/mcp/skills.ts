@@ -7,7 +7,8 @@ import {
   ProtocolError,
   ResourceTemplate,
 } from '@modelcontextprotocol/server'
-import { type Bundle, type Graph, Refused } from '@yaks/graph'
+import type { Bundle, Graph } from '@yaks/graph'
+import { Refused } from '@yaks/graph/errors'
 import { repoSkills, skillFiles } from '@yaks/persona/skills'
 import { renderSkill } from '@yaks/persona/skill-text'
 import { parse, YamlSyntaxError } from '@std/yaml'

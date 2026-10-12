@@ -5,13 +5,10 @@
 // name, `T-7`, a transcript's own id), and a tool that writes must never be
 // handed one that names nothing, or it mints an entity under it.
 
-import {
-  type Graph,
-  type NamedTool,
-  referenced,
-  Refused,
-  TOMBSTONE,
-} from '@yaks/graph'
+import type { Graph, NamedTool } from '@yaks/graph'
+import { referenced } from '@yaks/graph/call'
+import { Refused } from '@yaks/graph/errors'
+import { TOMBSTONE } from '@yaks/graph/bundle'
 import { validateToolInput } from '@yaks/vocab/tools'
 import { CallError } from './errors.ts'
 export { CallError } from './errors.ts'

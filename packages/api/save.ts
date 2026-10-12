@@ -2,15 +2,9 @@
 // store it when its stored entity matches the query, even after disconnect.
 import { matcher } from '@yaks/match'
 import { after, isPromise, over } from '@yaks/fp'
-import {
-  type Actor,
-  type Bundle,
-  type Comp,
-  comps,
-  formed,
-  type Graph,
-  signed,
-} from '@yaks/graph'
+import type { Actor, Bundle, Comp, Graph } from '@yaks/graph'
+import { comps, formed } from '@yaks/graph/bundle'
+import { signed } from '@yaks/graph/provenance'
 import { saveOf, syncOf } from '@yaks/vocab'
 import { and, bare, type Clause, eq, parse, timeEdges } from '@yaks/query'
 import type { Timer } from './relay.ts'

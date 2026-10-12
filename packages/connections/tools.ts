@@ -5,7 +5,7 @@
 // through trusted code (`connect`), never through a tool's arguments, which a
 // graph keeps as the text of a call.
 
-import { argsOf } from '@yaks/graph'
+import { argsOf } from '@yaks/graph/call'
 import type { Runs } from '@yaks/graph/tools'
 import { list, need } from './connections.ts'
 

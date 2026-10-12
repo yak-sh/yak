@@ -22,7 +22,8 @@
 // application's own scheme, the text is the address and rewriting it would be
 // the bug.
 
-import { type Eid, identityEid } from '@yaks/graph'
+import type { Eid } from '@yaks/graph'
+import { identityEid } from '@yaks/graph/identity'
 import { WEB } from './comp.ts'
 
 // The parameters that name the trip rather than the destination: ad networks'

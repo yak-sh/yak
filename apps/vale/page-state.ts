@@ -3,7 +3,9 @@
  * to these rows and send controlled outputs through mutate; no hook owns state.
  */
 import { type Client, client } from '@yaks/client'
-import { type Bundle, comps, derivedEid, mint } from '@yaks/graph'
+import type { Bundle } from '@yaks/graph'
+import { comps } from '@yaks/graph/bundle'
+import { derivedEid, mint } from '@yaks/graph/identity'
 import { parse } from '@yaks/query'
 import { loadVocab } from '@yaks/vocab'
 import { kitDocs } from '@yaks/ux'

@@ -39,7 +39,8 @@ import {
   type Repo,
   type Writes,
 } from '@yaks/git'
-import { type Bundle, type Eid, identityEid } from '@yaks/graph'
+import type { Bundle, Eid } from '@yaks/graph/bundle'
+import { identityEid } from '@yaks/graph/identity'
 import { r2Objects } from './lib/objects.ts'
 import { GIT_STORE, type Namespace, storeOf } from './door.ts'
 import { spaceHost } from './host.ts'

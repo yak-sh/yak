@@ -1,9 +1,10 @@
 // The box's transition door for homes written before session machines.
 // Only the SQLite-facing CLI knows the old column. The harness sees a machine
 // home; retained worktree values let workers already in flight finish normally.
-import { type Comp, derivedEid, type Graph } from '@yaks/graph'
+import type { Comp, Graph } from '@yaks/graph'
+import { derivedEid } from '@yaks/graph/identity'
 import { col, type Driver, eq, select, table, val } from '@yaks/sql'
-import { columns } from '@yaks/sqlite'
+import { columns } from '@yaks/sqlite/physical'
 
 /** Stable per-session identity, shared with the one-time stored-row mover. */
 export let migratedMachine = (session: string): string =>

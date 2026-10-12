@@ -24,7 +24,7 @@
 
 import type { Bundle, Eid, Graph, Tx } from '@yaks/graph'
 import { after } from '@yaks/fp'
-import { detached } from '@yaks/graph'
+import { detached } from '@yaks/graph/storage'
 import { and, eq, or, present } from '@yaks/query'
 import { EDGE } from '@yaks/edge'
 import { settled, statusOf } from './words.ts'

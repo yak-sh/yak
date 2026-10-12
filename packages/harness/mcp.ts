@@ -1,6 +1,6 @@
 /** Host composition: shared MCP connections, signed in through their connections. */
 import { graphMCP } from './mcp_registry.ts'
-import { toolName } from '@yaks/graph'
+import { toolName } from '@yaks/graph/call'
 import type { Harness } from './store.ts'
 import { type Tool, type ToolContext, ToolError } from '@yaks/session'
 import { artifactStore } from '@yaks/blob'

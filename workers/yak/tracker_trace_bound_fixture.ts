@@ -1,6 +1,7 @@
 // Actual workerd cursor writes from both the global reservation and target
 // graphs. Installation is explicit setup; rejected floods install nothing.
-import { type Bundle, derivedEid } from '@yaks/graph'
+import type { Bundle } from '@yaks/graph'
+import { derivedEid } from '@yaks/graph/identity'
 import type { Cost, TraceStorage } from './store_trace_fixture.ts'
 import { type State, Tracker } from '../tracker/object.ts'
 import { platform } from '../tracker/core.ts'

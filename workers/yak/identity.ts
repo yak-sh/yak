@@ -163,7 +163,7 @@ import { canon, guess, mac, mint, nameOf, personOf, spend } from './signin.ts'
 import { RETRY, source, within } from './rate.ts'
 import { type Caller, minted, sessionAt, type Who } from './session.ts'
 import { caught } from './defects.ts'
-import { sha256 } from '@yaks/graph'
+import { sha256 } from '@yaks/graph/sha256'
 
 // What a grant carries and a token gives back: the person, nothing else.
 // Membership is read from the directory at request time, never a claim.
@@ -546,7 +546,9 @@ export let choose = async (
 ): Promise<{ address?: string; slug?: string; error?: string }> => {
   let dir = dirOf(env)
   let space = at ?? await dir.own(person)
-  if (want == space.slug) return { address: `${want}.${apex(env)}`, slug: want }
+  if (want == space.slug) {
+    return { address: `${want}.${apex(env)}`, slug: want }
+  }
   if (!SLUG.test(want)) {
     return {
       error: 'An address is lowercase letters, numbers and dashes, ' +
@@ -874,7 +876,11 @@ let ours = async (req: Request, env: Env): Promise<Response> => {
   if (path == '/connect' && req.method == 'POST') {
     let who = await withAuth(env, req)
     if (!who) return redirect('/login?return=%2Fconnect')
-    let out = await choose(env, who.person, field('space').trim().toLowerCase())
+    let out = await choose(
+      env,
+      who.person,
+      field('space').trim().toLowerCase(),
+    )
     // A fetch gets the answer to put in the page; a plain form post — no
     // script, or one that did not load — gets the page back around it.
     return (req.headers.get('accept') ?? '').includes('application/json')

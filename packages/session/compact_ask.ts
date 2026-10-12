@@ -1,12 +1,7 @@
 // Record a model exchange through the existing request/session components.
 // Passive inputs keep this observed exchange out of the session runner's work.
-import {
-  type Bundle,
-  type Comp,
-  type Eid,
-  type Graph,
-  identityEid,
-} from '@yaks/graph'
+import type { Bundle, Comp, Eid, Graph } from '@yaks/graph'
+import { identityEid } from '@yaks/graph/identity'
 import {
   MODEL,
   type Model,

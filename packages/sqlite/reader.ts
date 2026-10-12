@@ -3,7 +3,7 @@
 // mutation pipeline, migrations or diagnostics.
 import type { BindOpts, Driver } from '@yaks/sql'
 import type { Vocab } from '@yaks/vocab'
-import type { ReadStorage } from '@yaks/graph/read'
+import type { Store } from './mod.ts'
 import { EPOCH, meta } from './meta.ts'
 import { get, read, rows, tagOf } from './read.ts'
 import { unit } from './unit.ts'
@@ -30,7 +30,7 @@ export let reader = (
   driver: Driver,
   vocab: Vocab,
   base: BindOpts = {},
-): ReadStorage => {
+): Pick<Store, 'read' | 'rows' | 'get'> => {
   let opts = options(driver, base)
   return {
     read: (q, o, comps) =>

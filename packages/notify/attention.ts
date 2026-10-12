@@ -1,5 +1,6 @@
 /** Graph writes for a person's subscription attention. */
-import { type Bundle, type Graph, mint } from '@yaks/graph'
+import type { Bundle, Graph } from '@yaks/graph'
+import { mint } from '@yaks/graph/identity'
 import { attention } from './mod.ts'
 
 /** A letter's ancestors, resolving both graph eids and mail Message-IDs. */

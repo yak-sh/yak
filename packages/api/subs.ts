@@ -36,31 +36,28 @@
 import type { Bundle, Eid, Graph, Query, ReadOpts } from '@yaks/graph'
 import { after, isPromise, over } from '@yaks/fp'
 import { during, link, parent, peek, scope, unlink } from '@yaks/trace'
-import {
-  coalesced,
-  composed,
-  dead,
-  formed,
-  transient,
-  type TransientFrame,
+import type { TransientFrame } from '@yaks/graph'
+import { coalesced, composed, dead, formed } from '@yaks/graph/bundle'
+import { transient } from '@yaks/graph/read'
+import type {
+  Agg,
+  Coverage,
+  Projected,
+  Projection,
+  ReadView,
+  Reduced,
 } from '@yaks/graph'
 import {
-  type Agg,
   aggregate,
-  comps,
-  type Coverage,
   flat,
   named,
   only,
   project,
-  type Projected,
-  type Projection,
   projection,
-  type ReadView,
-  type Reduced,
   reduced,
-  Refused,
-} from '@yaks/graph'
+} from '@yaks/graph/read'
+import { comps } from '@yaks/graph/bundle'
+import { Refused } from '@yaks/graph/errors'
 import { matcher, net, rows as matchRows } from '@yaks/match'
 import { type And, bare, drifts, parse } from '@yaks/query'
 import { paceOf, saveOf, syncOf } from '@yaks/vocab'

@@ -6,7 +6,7 @@
 // Store admission again, which needs the Store's row counts.
 import type { VocabDoc } from '@yaks/vocab'
 import type { Tools } from '@yaks/tools/declared'
-import { CallError } from '@yaks/tools'
+import { CallError } from '@yaks/tools/errors'
 import { read } from '@yaks/yaml'
 import {
   type App,

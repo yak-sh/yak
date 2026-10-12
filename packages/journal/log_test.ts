@@ -8,7 +8,8 @@
 
 import { test } from '@yaks/testing'
 import { assert, assertEquals, assertThrows } from '@std/assert'
-import { type Bundle, mint } from '@yaks/graph'
+import type { Bundle } from '@yaks/graph/bundle'
+import { mint } from '@yaks/graph/identity'
 import { effects } from '@yaks/effects'
 import { ddl, journal, type Log, log } from './log.ts'
 import { col, notNull, tally, val } from '@yaks/sql'

@@ -3,7 +3,7 @@
 import { and, eq, list, parse, want } from '@yaks/query/core'
 import { matcher, rows as matchRows } from '@yaks/match'
 import type { Vocab } from '@yaks/vocab'
-import { context, scope } from '@yaks/trace'
+import { type Context, context, during, live, peek, scope } from '@yaks/trace'
 import { after, each } from '@yaks/fp'
 import type { Bundle, Eid } from './bundle.ts'
 import type {
@@ -14,8 +14,9 @@ import type {
   Storage,
   Visibility,
 } from './storage.ts'
+import { detached } from './storage.ts'
 import type { Plugin, ReadView } from './plugin.ts'
-import type { Graph } from './graph.ts'
+import type { Graph, Options } from './graph.ts'
 import { Refused } from './errors.ts'
 import { addressing } from './said.ts'
 import { flat, named, only, projection } from './projection.ts'
@@ -444,3 +445,133 @@ export let reader = (opts: {
     },
   }
 }
+
+// Retained reads and writes restore the operation whose transaction they hold.
+export let retained = <T extends ReadTx>(tx: T, owner: () => Context): T =>
+  Object.fromEntries(
+    Object.entries(tx).map((
+      [name, method],
+    ) => [
+      name,
+      typeof method != 'function' ? method : (...args: unknown[]) => {
+        let at = owner()
+        let inside = context(at.parent)
+        return scope(
+          inside?.channel == at.channel && live(at) ? inside : at,
+          () => Reflect.apply(method, tx, args),
+        )
+      },
+    ]),
+  ) as T
+
+/** Trace the shared read pipeline at its graph boundary. */
+export let queries = (
+  owner: () => object,
+  reads: Pick<Reader, 'read' | 'rows' | 'get'>,
+): Pick<Graph, 'read' | 'rows' | 'get'> => {
+  let { read, rows, get } = reads
+  return {
+    read: (query, readOpts) => {
+      let c = peek(owner())
+      if (!c) return read(query, readOpts)
+      return during(
+        c.begin({
+          kind: 'query',
+          name: 'read',
+          package: '@yaks/graph',
+          parent: readOpts?.parent,
+        }),
+        () => read(query, readOpts),
+        'ok',
+        (out) => ({ rows: out.length }),
+      )
+    },
+    rows: (query, readOpts) => {
+      let c = peek(owner())
+      if (!c) {
+        return rows(query, readOpts)
+      }
+      return during(
+        c.begin({
+          kind: 'query',
+          name: 'rows',
+          package: '@yaks/graph',
+          parent: readOpts?.parent,
+        }),
+        () => rows(query, readOpts),
+        'ok',
+        (out) => ({ rows: out.length }),
+      )
+    },
+    get: (eids, comps, readOpts) => {
+      let c = peek(owner())
+      if (!c) return get(eids, comps, readOpts)
+      return during(
+        c.begin({
+          kind: 'get',
+          name: 'get',
+          package: '@yaks/graph',
+          parent: readOpts?.parent,
+        }),
+        () => get(eids, comps, readOpts),
+        'ok',
+        (out) => ({ input: eids.length, rows: out.length }),
+      )
+    },
+  }
+}
+
+/** A graph over committed storage: reads keep every registered hook, while
+ * attempted writes refuse before preparation, admission or storage callbacks. */
+export let graph = (opts: Options): Graph => {
+  let refuse = (): never => {
+    throw new Refused('a read-only graph cannot write')
+  }
+  let storage: Storage = { ...opts.storage, install: refuse, tx: refuse }
+  let plugins = [...opts.plugins ?? []]
+  let outside = detached(storage)
+  let reads = reader({
+    storage,
+    vocab: opts.vocab,
+    plugins,
+    outside: () => {
+      let at = context()
+      return at ? retained(outside, () => at) : outside
+    },
+  })
+  let g: Graph = {
+    ...reads,
+    ...queries(() => g, reads),
+    vocab: opts.vocab,
+    storage,
+    outside,
+    plugins,
+    worn: (comp, prop) => storage.worn?.(comp, prop) ?? false,
+    use: (plugin) => {
+      plugins.push(plugin)
+      reads.use(plugin)
+      return g
+    },
+    apply: refuse,
+    admit: refuse,
+    install: refuse,
+  }
+  return g
+}
+
+export { type Agg, aggregate, type Reduced, reduced } from './aggregate.ts'
+export {
+  type Coverage,
+  flat,
+  named,
+  only,
+  project,
+  type Projected,
+  type Projection,
+  projection,
+} from './projection.ts'
+export { transient, type TransientFrame, type Transients } from './transient.ts'
+
+export { doomed } from './cascade.ts'
+
+export { addressing } from './said.ts'

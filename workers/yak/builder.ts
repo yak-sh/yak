@@ -48,7 +48,8 @@ import {
   type Reply,
   weigh,
 } from '@yaks/model'
-import { valueIn, worded } from '@yaks/tools'
+import { valueIn } from '@yaks/tools/value'
+import { worded } from '@yaks/tools/result'
 import { workersAi } from '@yaks/workers-ai'
 import { running } from './agent.ts'
 import { directory, type Space } from './directory.ts'

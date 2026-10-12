@@ -1,7 +1,7 @@
 // A command line authorizes one connection in one process. The return URL is
 // read with terminal echo off, never passed as a tool argument or graph data.
 
-import { Refused } from '@yaks/graph'
+import { Refused } from '@yaks/graph/errors'
 import { OAuthError } from '@yaks/oauth'
 import type { Authorization } from './authorize.ts'
 export type { Authorization } from './authorize.ts'

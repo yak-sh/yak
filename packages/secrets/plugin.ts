@@ -39,7 +39,7 @@
 import { PROVISIONAL, type Write } from '@yaks/effects'
 import type { Bundle, Eid, Hook, Plugin, Tx } from '@yaks/graph'
 import { after, each, isPromise } from '@yaks/fp'
-import { dead } from '@yaks/graph'
+import { dead } from '@yaks/graph/bundle'
 import { isOpRef } from './op.ts'
 import { secretEid } from './reveal.ts'
 import { handle, isHandle } from './sentinel.ts'

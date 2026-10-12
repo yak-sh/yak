@@ -60,7 +60,8 @@
 // bytes with nothing left pointing at them.
 import { r2Objects } from './lib/objects.ts'
 import { receiptPrefix } from './blob-key.ts'
-import { type Bundle, token } from '@yaks/graph'
+import type { Bundle } from '@yaks/graph'
+import { token } from '@yaks/graph/sha256'
 import { declarationOf, keepDeclaration } from './declaration.ts'
 import { sandboxed } from './installed.ts'
 import { isTestAddress } from './lib/bots.ts'
@@ -766,7 +767,10 @@ export let collected = async (env: Env, now = new Date()) => {
         !refused(space, env) && await nobodys(dir, d) &&
         !d.apps.some((a) => a.published)
       ) {
-        await erase(env, dir, d, { person: d.members[0].person, role: 'owner' })
+        await erase(env, dir, d, {
+          person: d.members[0].person,
+          role: 'owner',
+        })
         gone++
         continue
       }

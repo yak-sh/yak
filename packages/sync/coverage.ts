@@ -2,7 +2,8 @@
 // It is not a second copy of the data: a property missing from a bundle but
 // outside the delivery's coverage has simply not been loaded, and must not be
 // read as a null the server asserted.
-import { type Bundle, comps, type Coverage } from '@yaks/graph'
+import type { Bundle, Coverage } from '@yaks/graph'
+import { comps } from '@yaks/graph/bundle'
 
 export type { Coverage }
 

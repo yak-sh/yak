@@ -80,8 +80,8 @@
 //                             segment, the front page answers what is left
 import { origin } from '@yaks/tracker/report'
 import { caught, within } from './defects.ts'
-import { CallError } from '@yaks/tools'
-import { Stale } from '@yaks/graph'
+import { CallError } from '@yaks/tools/errors'
+import { Stale } from '@yaks/graph/errors'
 import { refused as toolRefusal } from '@yaks/tools/routes'
 import * as apps from './apps.ts'
 import { sealed } from './cache.ts'

@@ -12,7 +12,7 @@
 // `personal` names the owner of a private entity or private person component.
 
 import type { Keywords, Vocab, VocabDoc } from '@yaks/vocab'
-import { marked } from '@yaks/graph'
+import { marked } from '@yaks/graph/provenance'
 import doc from './meta/member.vocab.json' with { type: 'json' }
 import { floor, type Floors, isFloor } from './words.ts'
 

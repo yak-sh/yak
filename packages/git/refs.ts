@@ -23,7 +23,7 @@
 
 import type { Blobs } from '@yaks/blob'
 import type { Bundle, Comp, Eid } from '@yaks/graph'
-import { derivedEid } from '@yaks/graph'
+import { derivedEid } from '@yaks/graph/identity'
 import { treeOf, type Who } from './commit.ts'
 import { BLOB, REF } from './comp.ts'
 import { MAIN } from './http.ts'
@@ -107,7 +107,8 @@ export let refAt = async (
   name = MAIN,
 ): Promise<string | null> => {
   let [row] = await refs.read(`.entity.eid=${refEid(app, name)}`)
-  return id((row?.[REF] as Record<string, unknown> | undefined)?.commit) || null
+  return id((row?.[REF] as Record<string, unknown> | undefined)?.commit) ||
+    null
 }
 
 /** An object already written, with both its ids: its SHA-1 id is the row's own

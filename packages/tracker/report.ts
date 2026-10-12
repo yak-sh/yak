@@ -1,7 +1,8 @@
 // Reporting hands scrubbed bundles to a generic sink. Neither capture nor a
 // failed sink can change the caller's result; fallback never calls the reporter.
 
-import { type Actor, type Bundle, status } from '@yaks/graph'
+import type { Actor, Bundle } from '@yaks/graph'
+import { status } from '@yaks/graph/errors'
 import { comp, type Crumb, type Level, str } from './model.ts'
 import { faultOf } from './fault.ts'
 

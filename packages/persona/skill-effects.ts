@@ -5,7 +5,8 @@
 // own lease so graph edits need not wait for the polling duty to finish.
 
 import { type Handlers, holding, sleep } from '@yaks/effects'
-import { derivedEid, type Eid, type Graph } from '@yaks/graph'
+import type { Eid, Graph } from '@yaks/graph'
+import { derivedEid } from '@yaks/graph/identity'
 import { dirname, join, resolve } from 'node:path'
 import { skillRoots, syncSkills } from './skill-mirror.ts'
 

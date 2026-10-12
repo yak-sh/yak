@@ -1,7 +1,8 @@
 // Only the trusted server queue chooses a store. A message is one complete
 // graph batch: mixed spaces are rejected before any object receives it.
 
-import { type Bundle, minted } from '@yaks/graph'
+import type { Bundle } from '@yaks/graph'
+import { minted } from '@yaks/graph/identity'
 import { platform } from './core.ts'
 import { traceBatch } from '@yaks/tracker/intake'
 
@@ -58,7 +59,9 @@ export let batch = (body: unknown): { scope: string; rows: Bundle[] } => {
     // Error companions may omit context, but may not smuggle a second scope.
     if (typeof space == 'string') scopes.add(space)
   }
-  if (scopes.size != 1) throw Error('tracker batch must name exactly one store')
+  if (scopes.size != 1) {
+    throw Error('tracker batch must name exactly one store')
+  }
   return { scope: [...scopes][0], rows }
 }
 export let consume = async (

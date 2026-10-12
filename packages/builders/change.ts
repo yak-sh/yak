@@ -1,15 +1,10 @@
 // Immediate builders are a transaction rule, not an effect for every edit.
 // Dependencies narrow the builders; reconciliation over the pending batch
 // writes calls only for inputs that really changed or entered the selection.
-import {
-  type Bundle,
-  type Comp,
-  comps,
-  dead,
-  guard,
-  type Hook,
-  resolve,
-} from '@yaks/graph'
+import type { Bundle, Comp, Hook } from '@yaks/graph'
+import { comps, dead } from '@yaks/graph/bundle'
+import { guard } from '@yaks/graph/guard'
+import { resolve } from '@yaks/graph/identity'
 import { after, each } from '@yaks/fp'
 import { and, eq, limit, present } from '@yaks/query'
 import type { Vocab } from '@yaks/vocab'

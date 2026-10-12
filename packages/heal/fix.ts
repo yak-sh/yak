@@ -2,13 +2,9 @@
 // follower. A decision and its writes are serialized so the cap sees earlier
 // requests; the task claim guards against another writer taking the work.
 
-import {
-  addressed,
-  type Bundle,
-  type Comp,
-  type Graph,
-  token,
-} from '@yaks/graph'
+import type { Bundle, Comp, Graph } from '@yaks/graph'
+import { addressed } from '@yaks/graph/call'
+import { token } from '@yaks/graph/sha256'
 import { human } from '@yaks/id'
 import { absent, and, eq, present, want } from '@yaks/query'
 

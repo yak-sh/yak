@@ -20,47 +20,13 @@
 
 import type { Vocab } from '@yaks/vocab'
 import { after } from '@yaks/fp'
-import type { Bundle, Comp, Eid } from './bundle.ts'
+import type { Bundle, Comp } from './bundle.ts'
 import { dead } from './bundle.ts'
 import type { Tx } from './storage.ts'
-import { sha256 } from './sha256.ts'
-import { Refused } from './admit.ts'
-
-/** A refused precondition: which property changed, and what it holds now. The
- * committed value is included so the caller can merge onto it. */
-export class Stale extends Error {
-  /** The token for the current value, ready for a merged replacement. */
-  was: string | null
-
-  /**
-   * @param eid the entity whose property changed
-   * @param comp the component it lives on
-   * @param prop the property itself
-   * @param current the value the graph holds now (`null` if it holds none)
-   */
-  constructor(
-    public eid: Eid,
-    public comp: string,
-    public prop: string,
-    public current: unknown,
-  ) {
-    super(
-      `${comp}.${prop} of ${eid} has moved since it was read\n` +
-        `current: ${JSON.stringify(current)}\nwas: ${token(current)}`,
-    )
-    this.was = token(current)
-    this.name = 'Stale'
-  }
-}
-
-/** The token a caller puts in `$was`: the SHA-256 of a value it read, or
- * `null` when it read no value. One function, so both ends hash the same
- * way. A JSON value (an `object` or `array` property) is hashed as its JSON
- * text, so two different objects never share a token. */
-export let token = (value: unknown): string | null =>
-  value == null
-    ? null
-    : sha256(typeof value == 'object' ? JSON.stringify(value) : String(value))
+import { token } from './sha256.ts'
+export { token } from './sha256.ts'
+import { Refused, Stale } from './errors.ts'
+export { Stale } from './errors.ts'
 
 /**
  * The precondition phase: check every `$was` the batch carries against the

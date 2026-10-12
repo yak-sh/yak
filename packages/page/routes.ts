@@ -26,7 +26,7 @@
 
 import type { Route } from '@yaks/api'
 import type { Bundle, Comp, Graph, Storage } from '@yaks/graph'
-import { detached } from '@yaks/graph'
+import { detached } from '@yaks/graph/storage'
 import { type Blobs, served } from '@yaks/blob'
 import { DOC, TITLE } from '@yaks/doc'
 import { WEB } from './comp.ts'

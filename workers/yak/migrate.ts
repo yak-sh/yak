@@ -33,7 +33,8 @@ import {
 } from '@yaks/sqlite'
 import type { Index, Vocab } from '@yaks/vocab'
 
-import { type Bundle, type Comp, token } from '@yaks/graph'
+import type { Bundle, Comp } from '@yaks/graph'
+import { token } from '@yaks/graph/sha256'
 import type { Rule } from './mover.ts'
 
 // T-65228: app stores never composed mail_inbox. T-65357 stopped owing new
@@ -217,7 +218,8 @@ let ARGS: Record<string, Record<string, unknown>> = {
 // than which must be sent.
 let worded = (t: unknown) =>
   record(t) && ('optional' in t ||
-    record(t.input) && Object.values(t.input).some((w) => typeof w == 'string'))
+    record(t.input) &&
+      Object.values(t.input).some((w) => typeof w == 'string'))
 
 // One tool in the shape a package declares one: each argument a JSON Schema,
 // and `required` naming every argument but the ones it left `optional`.

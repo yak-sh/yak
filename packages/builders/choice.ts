@@ -1,19 +1,12 @@
 // Choosing a retained take changes only the chosen marks. The hook enforces
 // one mark per build/slot at every graph door, including plain entity patches.
 
-import {
-  type Actor,
-  type Comp,
-  comps,
-  dead,
-  type Graph,
-  type Hook,
-  type Plugin,
-  Refused,
-  signed,
-} from '@yaks/graph'
+import type { Actor, Comp, Graph, Hook, Plugin } from '@yaks/graph'
+import { comps, dead } from '@yaks/graph/bundle'
+import { Refused } from '@yaks/graph/errors'
+import { signed } from '@yaks/graph/provenance'
 import { after } from '@yaks/fp'
-import { CallError } from '@yaks/tools'
+import { CallError } from '@yaks/tools/errors'
 import { changing } from './change.ts'
 import { syncOf } from '@yaks/vocab'
 
@@ -84,7 +77,9 @@ export let choose = async (
   let names = await graph.address([output])
   let eid = names.get(output) ?? output
   let [row] = await graph.get([eid])
-  if (!row?.built) throw new CallError('refused', `${output} is no output take`)
+  if (!row?.built) {
+    throw new CallError('refused', `${output} is no output take`)
+  }
   await graph.apply(signed([{ entity: row.entity, chosen: {} }], actor), {
     trusted: true,
   })

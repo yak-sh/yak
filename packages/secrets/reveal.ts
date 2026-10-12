@@ -23,7 +23,7 @@
 
 import type { Bundle, Eid } from '@yaks/graph'
 import { after } from '@yaks/fp'
-import { identityEid } from '@yaks/graph'
+import { identityEid } from '@yaks/graph/identity'
 import { deadline, type OpRead, opRead } from './op.ts'
 import { sentinel } from './sentinel.ts'
 import type { Local, Vault } from './vault.ts'

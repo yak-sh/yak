@@ -15,7 +15,9 @@
 
 import type { Bundle, Comp, Eid, ReadTx } from '@yaks/graph'
 import { after } from '@yaks/fp'
-import { composed, dead, raced, token, writers } from '@yaks/graph'
+import { composed, dead, raced } from '@yaks/graph/bundle'
+import { token } from '@yaks/graph/sha256'
+import { writers } from '@yaks/graph/provenance'
 import { paceOf, syncOf, type Vocab } from '@yaks/vocab'
 
 /** How often one via writes one entity’s component, in ms, by name. */
@@ -124,7 +126,8 @@ let clocks = (
 // A JSON-valued property read from storage is another object, but the same
 // value is still a retry. Use the graph's own value tokens for that case.
 let same = (a: unknown, b: unknown) =>
-  a == b || typeof a == 'object' && typeof b == 'object' && token(a) == token(b)
+  a == b ||
+  typeof a == 'object' && typeof b == 'object' && token(a) == token(b)
 
 // Whether this patch gives or changes a value; clearing goes at once.
 let writes = (patch: Comp | null, held: Comp | undefined) =>
@@ -145,7 +148,9 @@ export let pacing = (
   now: number = Date.now(),
   instrument?: Instrument,
 ): Bundle[] | Promise<Bundle[]> => {
-  if (!bundles.some((b) => Object.keys(paces).some((c) => b[c]))) return bundles
+  if (!bundles.some((b) => Object.keys(paces).some((c) => b[c]))) {
+    return bundles
+  }
   let eids = [...new Set(bundles.map((b) => b.entity.eid))]
   let writer = writers(bundles)
   return after(tx.get(eids), (rows) => {

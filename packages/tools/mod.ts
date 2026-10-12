@@ -31,20 +31,22 @@ export {
   answerOf,
   faulted,
   MOST,
-  type Opts,
   READY,
-  reconcile,
-  type Reply,
   RULES,
-  type Runner,
-  runner,
   structured,
   toolEid,
   toolRow,
-  UnfinishedCall,
   WOKEN,
   worded,
   WORDS,
+} from './result.ts'
+export {
+  type Opts,
+  reconcile,
+  type Reply,
+  type Runner,
+  runner,
+  UnfinishedCall,
 } from './runner.ts'
 export { valueIn } from './value.ts'
 export { actionable, exceptionOf } from './fault.ts'

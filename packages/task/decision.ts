@@ -1,6 +1,7 @@
 /** Questions and answers: pure values, checked at the graph's write boundary. */
 import { after } from '@yaks/fp'
-import { type Bundle, type Comp, type Hook, Refused } from '@yaks/graph'
+import type { Bundle, Comp, Hook } from '@yaks/graph'
+import { Refused } from '@yaks/graph/errors'
 
 /** A label and a line saying what choosing it means. */
 export type Choice = { label: string; description: string }

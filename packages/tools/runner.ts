@@ -56,92 +56,32 @@
 // the execution rows — belongs to the server and carries no identity at all.
 
 import {
-  asked,
   type Bundle,
   type Comp,
-  type Declared,
+  derivedEid,
   type Eid,
-  emitted,
   type Graph,
   mint,
   type NamedTool,
   namedTool,
   type Ready,
-  ready,
   signed,
   Stale,
-  status,
-  token,
   type Tool,
   who,
 } from '@yaks/graph'
-import { derivedEid, identityEid } from '@yaks/graph'
-import { effectsIn } from '@yaks/vocab'
-import { CallError, parsed, resolved, validated } from './args.ts'
-import { toolsDoc } from './vocab.ts'
-import { valueIn } from './value.ts'
-import { executionState, Interrupted } from './state.ts'
+import { token } from '@yaks/graph/sha256'
+import { CallError, UnfinishedCall } from './errors.ts'
+export { UnfinishedCall } from './errors.ts'
 import { persist } from './persist.ts'
-import { actionable, exceptionOf } from './fault.ts'
+import { invoke } from './invoke.ts'
+import { answerOf, HELD, results, toolEid, toolRow } from './result.ts'
 
 // What each call is doing right now in this process, keyed per graph, not per
 // runner: a second runner over the same graph that is asked for a call in
 // flight finds the first's promise instead of racing it, and an effect finds
 // the call taken.
 let running = new WeakMap<Graph, Map<Eid, Promise<Bundle[]>>>()
-
-/** A stored claim exists but no result does. The caller must reconcile it:
- * running the tool again could repeat an effect the outside world already
- * saw. */
-export class UnfinishedCall extends Error {
-  constructor(public call: Eid) {
-    super('Call execution was started without a recorded result: ' + call)
-    this.name = 'UnfinishedCall'
-  }
-}
-
-/** The two effects this package declares, as written in the vocabulary: the
- * call that is due now, and the one that is due once its wake has fired —
- * each a query the runner also asks on its own, for what a crash left. */
-export let RULES: Declared[] = effectsIn(toolsDoc)
-  .flatMap((e) => e.match ? [{ name: e.name, match: e.match }] : [])
-
-/** Every call claimed and not yet answered: the identities explicit recovery
- * asks for beside the rules, which owe nothing for a claimed call. */
-export let HELD = '.call&.execution&!results'
-
-/** The rule that selects a call due now — the one whose emit names the result
- * entity. */
-export let READY = 'call_ready'
-
-/** The rule that selects a deferred call once its wake has fired. */
-export let WOKEN = 'call_woken'
-
-// Each name's id, derived once: it is a hash, and a server that builds a
-// runner per request names every tool it has each time.
-let eids = new Map<string, Eid>()
-
-/** The entity id a call points at for a tool of this name: the id the
- * vocabulary's `identity` on `tool.name` derives, so a graph's tool rows are
- * the same rows every time a runner is built. */
-export let toolEid = (name: string): Eid => {
-  let eid = eids.get(name)
-  if (!eid) eids.set(name, eid = identityEid('tool', [name]))
-  return eid
-}
-
-/** The row a registered tool advertises to stored calls and builders. */
-export let toolRow = (tool: Tool): Bundle => {
-  let named = namedTool(tool)
-  return {
-    entity: { eid: toolEid(named.name) },
-    tool: {
-      name: named.name,
-      description: named.description,
-      revision: named.revision ?? null,
-    },
-  }
-}
 
 /** What a runner is built with. */
 export type Opts = {
@@ -247,203 +187,6 @@ export type Runner = {
   ) => Promise<Bundle[]>
 }
 
-/** The most characters of an answer's text {@link worded} says: the copy on
- * the result entity, what a model reads over MCP, a transcript's line. What
- * lies past it is counted, not said — the answer itself is the bundles. */
-export let WORDS = 256 * 1024
-
-/** The most characters an answer may take as JSON before the runner refuses
- * it as `too_large`: far below the longest string a JavaScript engine can
- * build, so a door that sends an answer whole (MCP, `/apply`, `--json`) never
- * fails to. */
-export let MOST = 64 * 1024 * 1024
-
-// Parts said one after another until `most` characters are spent, the last
-// cut where the budget ends, and a line counting the parts left unsaid. Each
-// part is said only when it is reached, so the cost is the budget's, never the
-// answer's.
-let spent = <T>(
-  parts: T[],
-  say: (part: T) => string,
-  sep: string,
-  most: number,
-): { text: string; left: number } => {
-  let text = ''
-  let said = 0
-  for (let part of parts) {
-    let s = (said ? sep : '') + say(part)
-    if (text.length + s.length > most) {
-      return {
-        text: text + s.slice(0, most - text.length),
-        left: parts.length - said,
-      }
-    }
-    text += s
-    said++
-  }
-  return { text, left: 0 }
-}
-
-// JSON.stringify(answer, null, 2), said one bundle at a time.
-let inset = (b: Bundle) =>
-  '  ' + JSON.stringify(b, null, 2).replaceAll('\n', '\n  ')
-
-// A search answer carries a query-only hit, not the entity's whole body: the
-// kind, title and words that found it, and, for a neighbour of something a
-// call just made, the entity it is `near` and its `status`. Say that hit as one
-// line for an MCP reader; structuredContent keeps its fields.
-let hitOf = (b: Bundle): Comp | null => {
-  let hit = b.hit as Comp | undefined
-  return hit && typeof hit == 'object' && typeof hit.kind == 'string' &&
-      typeof hit.snippet == 'string'
-    ? hit
-    : null
-}
-
-let hitLine = (b: Bundle, hit: Comp): string => {
-  // deno-lint-ignore no-control-regex -- the search markers are intentional
-  let mark = /\x01([^\x02]*)\x02/g
-  // deno-lint-ignore no-control-regex -- a result must not command a terminal
-  let ctrl = /[\x00-\x1f\x7f-\x9f]/g
-  let clean = (s: string) => s.replace(/\s+/g, ' ').replace(ctrl, '').trim()
-  let said = (k: string) => typeof hit[k] == 'string' ? clean(hit[k]) : ''
-  let title = said('title')
-  let status = said('status')
-  let near = said('near')
-  let source = hit.source == 'meaning' ? ' (meaning)' : ''
-  let snippet = clean(String(hit.snippet).replace(mark, '*$1*'))
-  return `${near ? `near ${near}: ` : ''}${b.entity.eid}${
-    title ? ` ${title}` : ''
-  } · ${clean(String(hit.kind))}${status ? ` ${status}` : ''}${source}${
-    snippet ? ` — ${snippet}` : ''
-  }`
-}
-
-// What a tool's text answer carries: the spine every row has (@yaks/kernel),
-// its words, the call it answers, and a fault's `refusal` or `exception`. An
-// entity carrying more (a transcript entry, a comment, a memory, a row a tool
-// made) is data, and its words alone would drop which one it is and who wrote
-// it.
-let SPOKEN = new Set([
-  'entity',
-  'created',
-  'updated',
-  'content',
-  'output',
-  'refusal',
-  'exception',
-])
-
-// A bundle said as a line of its own: the words a text answer carries, or its
-// hit. Null for one that is data, said whole.
-let line = (b: Bundle): string | null => {
-  let body = (b.content as Comp | undefined)?.body
-  if (
-    typeof body == 'string' &&
-    Object.keys(b).every((k) => k[0] == '$' || SPOKEN.has(k))
-  ) return body
-  let hit = hitOf(b)
-  return hit ? hitLine(b, hit) : null
-}
-
-/**
- * A tool's answer as text: each bundle as a line where it is one — a text
- * answer's `content{body}`, or a compact `hit` line for a search result — and
- * as JSON where it is data, or the bundles as JSON where none is a line. An
- * entity that carries words among other components (a transcript entry, a
- * comment) is data: said whole, its eid and its writer with its words. It is
- * copied onto the result entity as `content{body}` so a model, a terminal and
- * a transcript all read the answer the same way. It says at most `most`
- * characters and counts the rest, so an answer of any size words in bounded
- * time and space.
- *
- * ```ts
- * import { assertEquals } from '@std/assert'
- * let said = (body: string) => ({ entity: { eid: body }, content: { body } })
- * assertEquals(worded([said('one'), said('two')]), 'one\ntwo')
- * let entry = { ...said('hi'), entry: { session: 's', seq: 2 } }
- * assertEquals(worded([said('one'), entry]), 'one\n' +
- *   '  ' + JSON.stringify(entry, null, 2).replaceAll('\n', '\n  '))
- * assertEquals(
- *   worded([said('one'), said('two'), said('three')], 5),
- *   'one\nt\n… 2 of 3 not said: an answer is worded in 5 characters',
- * )
- * ```
- */
-export let worded = (answer: Bundle[], most = WORDS): string => {
-  let lines = answer.some((b) => line(b) != null)
-  let { text, left } = lines
-    ? spent(answer, (b) => line(b) ?? inset(b), '\n', most)
-    : spent(answer, inset, ',\n', most)
-  let open = lines ? '' : '[\n'
-  return left
-    ? `${open}${text}\n… ${left} of ${answer.length} ` +
-      `not said: an answer is worded in ${most} characters`
-    : lines
-    ? text
-    : answer.length
-    ? `[\n${text}\n]`
-    : '[]'
-}
-
-// An answer too long to send whole is refused, and so never reaches a door
-// that would build its JSON in one string. It is measured one bundle at a
-// time, stopping once past `most`, so measuring any answer costs at most that.
-let measured = (answer: Bundle[], most: number) => {
-  let size = 0
-  for (let b of answer) {
-    size += JSON.stringify(b).length
-    if (size > most) {
-      throw new CallError(
-        'too_large',
-        `the answer is ${answer.length} entities, past the ${most} ` +
-          'characters of JSON a call answers in: ask for fewer',
-      )
-    }
-  }
-}
-
-/**
- * A tool's answer as data, for a reader that parses rather than reads: the
- * bundles under `result`, or, from a tool that declares an `outputSchema`
- * because its answer is not entities, the {@link valueIn} it answered in that
- * shape. A refusal carries no such value, and is its bundles like any other.
- * MCP sends this as `structuredContent`; `yak … --json` prints it.
- */
-export let structured = (
-  tool: { outputSchema?: Record<string, unknown> },
-  answer: Bundle[],
-): Record<string, unknown> =>
-  (tool.outputSchema ? valueIn(answer) : undefined) ?? { result: answer }
-
-// The runner's own record of one call, told apart from the answer by identity,
-// never by shape: a tool that reads transcripts answers other calls and their
-// results, and those are the answer.
-let owned = (call: Eid) => (b: Bundle): boolean =>
-  b.entity.eid == call || (b.result as Comp | undefined)?.call == call
-
-/**
- * Did this call fail? Read from the runner's own record — `execution{state}`
- * on the call — rather than guessed from the shape of the answer: a tool that
- * queries for broken rows (or failed calls) returns entities carrying `error`,
- * `exception` and `execution`, and reporting faults is not itself a fault.
- */
-export let faulted = (landed: Bundle[], call: Eid): boolean => {
-  let row = landed.find((b) => b.entity.eid == call)
-  return !!row && ['failed', 'interrupted'].includes(
-    executionState(row, landed) ?? '',
-  )
-}
-
-/**
- * What a call answered, for display: the tool's own bundles, without the
- * runner's record of this call — the call itself and its result, which
- * carries a copy of the answer's text so a transcript can show one line per
- * result; a caller rendering the answer itself would otherwise show it twice.
- */
-export let answerOf = (landed: Bundle[], call: Eid): Bundle[] =>
-  landed.filter((b) => !owned(call)(b))
-
 /**
  * Build a runner over a graph.
  *
@@ -470,16 +213,7 @@ export let runner = (g: Graph, opts: Opts): Runner => {
   let by = new Map(tools.map((t) => [toolEid(t.name), t]))
   let otherwise = opts.otherwise && namedTool(opts.otherwise)
   let now = opts.now ?? (() => performance.now())
-  let host = opts.host ?? g
-  // The rules as this graph can query them (@yaks/graph `asked`). A graph that
-  // schedules nothing never loaded the wake components: there `!wake` matches
-  // everything and drops out, and `call_woken`, which requires them, never
-  // matches — one rule text, correct in both graphs.
-  let plans: Ready[] = ready(RULES)
-    .map((p) => ({ ...p, plan: asked(p.plan, g.vocab) }))
-    .filter((p): p is Ready => !!p.plan)
-  let answering = plans.find((p) => p.rule.name == READY)!
-  let woken = plans.find((p) => p.rule.name == WOKEN)
+  let { rules: plans, ending } = results(g.vocab, now)
   let inflight = running.get(g) ?? new Map<Eid, Promise<Bundle[]>>()
   running.set(g, inflight)
   // The calls this runner claimed and whose tool has not returned, with when
@@ -533,22 +267,6 @@ export let runner = (g: Graph, opts: Opts): Runner => {
     if (!result.length) return []
     let made = await g.read(`.output.source=${id}&*`)
     return [...made, ...result]
-  }
-
-  // The result entity, built the way the rule would write it: one match of
-  // `call_ready`, emitted. Its id is derived from that match, so it is the
-  // same entity however many times a call is run.
-  let attached = (id: Eid, ms?: number, sleeps = false): Bundle => {
-    let rule = sleeps && woken ? woken : answering
-    let name = rule.plan.patterns[0].entity!
-    let [made] = emitted(rule, {
-      entities: [id, null],
-      vars: { [name]: id },
-    }, g.vocab)
-    return {
-      ...made,
-      result: { ...made.result as Comp, ...ms == null ? {} : { ms } },
-    }
   }
 
   // The claim this runner writes.
@@ -661,38 +379,6 @@ export let runner = (g: Graph, opts: Opts): Runner => {
     return execute({ ...call, execution: claim() }, tool)
   }
 
-  // What ends a claimed call: the result the rule names, worded from what it
-  // said, and the claim moved on from `running`, refused if another hand
-  // moved it first.
-  // How long it ran is left out where nobody saw it start.
-  let ending = (
-    call: Bundle,
-    started: number | undefined,
-    state: string,
-    said: Bundle[],
-    before: string | null = 'running',
-  ): Bundle[] => [
-    {
-      ...attached(
-        call.entity.eid,
-        started == null ? undefined : Math.round(now() - started),
-        !!call.wake,
-      ),
-      content: { body: worded(said) },
-      $was: { result: { call: null } },
-    },
-    {
-      entity: { eid: call.entity.eid },
-      execution: { by: (call.execution as Comp)?.by ?? null },
-      ...(state == 'interrupted' ? { interrupted: { code: 'transport' } } : {}),
-      $was: {
-        execution: {
-          by: before == null ? null : token((call.execution as Comp)?.by),
-        },
-      },
-    },
-  ]
-
   // Running a claimed call: the tool, its answer, and the record of both.
   let execute = async (
     call: Bundle,
@@ -701,43 +387,8 @@ export let runner = (g: Graph, opts: Opts): Runner => {
     unrecorded = false,
   ): Promise<Bundle[]> => {
     let id = call.entity.eid
-    let c = call.call as Comp
     let started = now()
     held.set(id, { call, started })
-    // What a thrown error becomes: the fault as its own entity, recording
-    // which call it came from. An expected refusal gets `refusal{code}`: a
-    // `CallError` with its code, or an error the graph's `status` puts below
-    // 500 (a `Refused` write, an `Unknown` name) with its name. Anything else
-    // is a defect, reported with its original thrown value.
-    let faulted = async (error: unknown): Promise<Bundle[]> => {
-      if (error instanceof Interrupted) {
-        return [{
-          entity: { eid: '$fault' },
-          content: { body: String(error) },
-          output: { source: id },
-          ...(g.vocab.comp('notice') ? { notice: {} } : {}),
-        }]
-      }
-      let code = error instanceof CallError
-        ? error.code
-        : status(error) < 500
-        ? (error as Error).name
-        : undefined
-      if (
-        code == undefined &&
-        actionable(String(exceptionOf(error).value))
-      ) {
-        await opts.report?.(error, call, tool.name)
-      }
-      return [{
-        entity: { eid: '$fault' },
-        content: { body: String(error) },
-        output: { source: id },
-        ...code == undefined
-          ? { exception: exceptionOf(error) }
-          : { refusal: { code } },
-      }]
-    }
     // Writing the answer. A read-only tool's answer is not a write — its
     // bundles are entities that already exist, and applying them would patch
     // every row the query found and move its `updated` stamp — so a read
@@ -771,43 +422,24 @@ export let runner = (g: Graph, opts: Opts): Runner => {
       )
       return keeps ? landed : [...made, ...landed]
     }
-    let answered: Bundle[]
     let wrote: Bundle[] = []
+    let answered: Bundle[]
     try {
-      let args = await resolved(tool, validated(tool, parsed(c.args)), host)
-      let actor = who(call)
-      let asking: Bundle = {
-        ...call,
-        call: { ...c, args },
-        ...!call.created && actor ? { created: { ...actor } } : {},
-        ...opts.process ? { process: opts.process } : {},
-      }
-      let made = await tool.run(asking, host)
-      if (!tool.applied) made = signed(made, actor)
-      measured(made, opts.most ?? MOST)
-      // A rehearsal: `check: true` to a tool that writes runs the write's
-      // every phase and rolls it back, so the answer is the batch as a kept
-      // write would have returned it, or the refusal it would have met.
-      if (!tool.readOnly && !tool.applied && args.check === true) {
-        answered = await land(
-          await g.apply(made, { check: true }),
-          'done',
-          false,
-        )
-      } else {
-        answered = await land(made, 'done')
-        if (!tool.readOnly && !tool.applied) wrote = answerOf(answered, id)
-      }
-    } catch (error) {
-      // This catches both the tool's own throw and a rejection of what it
-      // returned: a transaction the graph refuses is this call's failure,
-      // rather than a call left claimed with nothing recorded about it.
-      let made = await faulted(error)
-      answered = await land(
-        made,
-        error instanceof Interrupted ? 'interrupted' : 'failed',
-        undefined,
-        error instanceof Interrupted ? error.code : undefined,
+      answered = await invoke(
+        call,
+        tool,
+        g,
+        opts,
+        async (made, state, keeps, code) => {
+          let out = await land(made, state, keeps, code)
+          if (
+            state == 'done' && !tool.readOnly && !tool.applied &&
+            keeps !== false
+          ) {
+            wrote = answerOf(out, id)
+          }
+          return out
+        },
       )
     } finally {
       held.delete(id)
@@ -977,3 +609,18 @@ export let runner = (g: Graph, opts: Opts): Runner => {
  * host recovers its recorded runs instead; it needs no startup scan. */
 export let reconcile = (r: Runner): Promise<Bundle[]> =>
   r.drive({ redrive: true })
+
+export {
+  answerOf,
+  faulted,
+  HELD,
+  MOST,
+  READY,
+  RULES,
+  structured,
+  toolEid,
+  toolRow,
+  WOKEN,
+  worded,
+  WORDS,
+} from './result.ts'

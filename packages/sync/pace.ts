@@ -15,7 +15,7 @@
 // forty things sends one message a pace, not forty.
 
 import type { Bundle, Comp, Eid } from '@yaks/graph'
-import { comps } from '@yaks/graph'
+import { comps } from '@yaks/graph/bundle'
 import { paceOf, type Vocab } from '@yaks/vocab'
 import type { Timer } from './socket.ts'
 

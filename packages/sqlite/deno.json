@@ -7,7 +7,10 @@
     "./tools": "./tools.ts",
     "./db": "./db.ts",
     "./reader": "./reader.ts",
-    "./read-db": "./read-db.ts"
+    "./read-db": "./read-db.ts",
+    "./physical": "./physical.ts",
+    "./migration": "./migration.ts",
+    "./read-store": "./read-store.ts"
   },
   "license": "Apache-2.0",
   "description": "SQLite storage for a graph: builds a schema from a vocabulary, reads queries as bundles, and applies transactional patches.",

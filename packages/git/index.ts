@@ -34,7 +34,7 @@
 import type { Blobs } from '@yaks/blob'
 import { link } from '@yaks/edge'
 import type { Bundle, Comp, Eid, Graph } from '@yaks/graph'
-import { derivedEid } from '@yaks/graph'
+import { derivedEid } from '@yaks/graph/identity'
 import { keyed, valueOf } from '@yaks/key'
 import { type Commit, commitBody } from './commit.ts'
 import { BLOB, COMPAT, GITOBJ, PARENT, TREE_ENTRY } from './comp.ts'
@@ -198,7 +198,9 @@ export let index = (g: Writes, store: Blobs): Index => {
   ): Promise<Oids> => {
     // The object and its links are one atomic graph write. Its digest names
     // immutable bytes, so finding it also means its keys and links stand.
-    if ((await g.read(`.${GITOBJ}&.entity.eid=${oids.oid}`)).length) return oids
+    if ((await g.read(`.${GITOBJ}&.entity.eid=${oids.oid}`)).length) {
+      return oids
+    }
     let [sha] = await Promise.all([
       put(body),
       body256 ? put(framed(type, body256)) : undefined,

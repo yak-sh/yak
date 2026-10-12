@@ -23,14 +23,9 @@
 // reads are @yaks/doc's `doc{title, body}`. So the composition works from the
 // whole entity, which is what the effect reads anyway.
 
-import {
-  type Bundle,
-  type Comp,
-  type Entity,
-  type ReadTx,
-  Stale,
-  token,
-} from '@yaks/graph'
+import type { Bundle, Comp, Entity, ReadTx } from '@yaks/graph'
+import { Stale } from '@yaks/graph/errors'
+import { token } from '@yaks/graph/sha256'
 import { after } from '@yaks/fp'
 import type { Handler } from '@yaks/effects'
 import { BODY, DOC, TITLE } from '@yaks/doc'

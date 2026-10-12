@@ -1,7 +1,8 @@
 // Resolve places against the catalog only when its bytes match the failing
 // commit. One catalog read keeps a module and its exports in the same snapshot.
 
-import { type Bundle, type Comp, identityEid } from '@yaks/graph'
+import type { Bundle, Comp } from '@yaks/graph'
+import { identityEid } from '@yaks/graph/identity'
 
 export type Place = { path: string; function?: string; line?: number }
 export type Catalog = { get: (ids: string[]) => Promise<Bundle[]> }

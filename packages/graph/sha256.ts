@@ -113,7 +113,10 @@ let padded = (input: string): Uint8Array => {
 }
 
 // Each byte as two hex digits.
-let HEX = Array.from({ length: 256 }, (_, i) => i.toString(16).padStart(2, '0'))
+let HEX = Array.from(
+  { length: 256 },
+  (_, i) => i.toString(16).padStart(2, '0'),
+)
 
 // The initial hash value: the first 32 bits of the fractional parts of the
 // square roots of the first 8 primes.
@@ -177,3 +180,12 @@ export let sha256 = (input: string): string => {
   }
   return hex
 }
+
+/** The token a caller puts in `$was`: the SHA-256 of a value it read, or
+ * `null` when it read no value. One function, so both ends hash the same
+ * way. A JSON value (an `object` or `array` property) is hashed as its JSON
+ * text, so two different objects never share a token. */
+export let token = (value: unknown): string | null =>
+  value == null
+    ? null
+    : sha256(typeof value == 'object' ? JSON.stringify(value) : String(value))

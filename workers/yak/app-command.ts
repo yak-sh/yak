@@ -1,7 +1,8 @@
 // One app's stored commands and the effect boundary that runs one. The MCP
 // command and a page's /api/command supply the same caller-scoped store acts.
 import { invoke, mayCall, type ToolDef, type Tools } from '@yaks/tools/declared'
-import { CallError, display } from '@yaks/tools'
+import { CallError } from '@yaks/tools/errors'
+import { display } from '@yaks/tools/display'
 import { legacyOptions } from '@yaks/vocab/tools'
 import { type Bundle } from '@yaks/graph'
 import { type App, type Space } from './directory.ts'
@@ -24,7 +25,8 @@ type Acts = {
 /** Keep the worker's bytes for clients and show JSON as readable fields. */
 export let workerReply = async (res: Response, name: string, at: string) => {
   let answer = await res.text()
-  let mime = res.headers.get('content-type')?.split(';')[0].trim().toLowerCase()
+  let mime = res.headers.get('content-type')?.split(';')[0].trim()
+    .toLowerCase()
   let json = mime == 'application/json' || mime?.endsWith('+json')
   return {
     text: json && answer

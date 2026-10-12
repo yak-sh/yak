@@ -1,6 +1,6 @@
 // A targeted design update preserves every property a person changed. The
 // baseline is the previous shipped seed, not the row's age or authorship.
-import { token } from '@yaks/graph'
+import { token } from '@yaks/graph/sha256'
 import type { Bundle } from './net.ts'
 import { comp } from './bundle.ts'
 

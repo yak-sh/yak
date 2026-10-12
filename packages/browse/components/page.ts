@@ -1,7 +1,7 @@
 // View state belongs to the page's graph. Stable places survive remounts;
 // subscriptions last only as long as the parts that read them.
 import { signal } from '@preact/signals'
-import { derivedEid } from '@yaks/graph'
+import { derivedEid } from '@yaks/graph/identity'
 import { useLayoutEffect, useMemo } from 'preact/hooks'
 import { front } from './fields.tsx'
 

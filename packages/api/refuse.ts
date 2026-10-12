@@ -9,7 +9,7 @@
 // `status`: the one table every door reads to tell a caller's refusal from a
 // defect, which any package's error joins by setting its own `name`.
 
-import { status } from '@yaks/graph'
+import { status } from '@yaks/graph/errors'
 
 /** A refusal, as a client reads it: the error's name, its message, and any
  * fields the error carried (a {@link https://jsr.io/@yaks/graph | Stale}

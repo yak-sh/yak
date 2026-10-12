@@ -1,7 +1,7 @@
 /** Completed events become closed-minute bundles. Fixed histogram boundaries
  * make distributions additive across processes without retaining individual
  * durations. Start events carry no measurement and are ignored. */
-import { derivedEid } from '@yaks/graph'
+import { derivedEid } from '@yaks/graph/identity'
 import type { Event } from '@yaks/trace'
 import { type Clock, minute, type TimingRow } from './model.ts'
 

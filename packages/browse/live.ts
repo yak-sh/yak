@@ -75,7 +75,7 @@ import { normalizeChanges } from './props.ts'
 import * as idb from './idb.ts'
 import { bundlesOf, changesOf, yakLine } from './wire.ts'
 import { diff, gaps } from './subs.ts'
-import { dead } from '@yaks/graph'
+import { dead } from '@yaks/graph/bundle'
 
 // A cache row: the spine plus whichever components the entity carries.
 // Derived from EntCore so a new component (types.ts) threads through here —
@@ -207,7 +207,11 @@ let makeClient = () =>
               (!before?.[name] ||
                 !sameProps(before[name]!, comp as Record<string, unknown>))
             ) {
-              changes.push({ eid, name, comp: comp as Record<string, unknown> })
+              changes.push({
+                eid,
+                name,
+                comp: comp as Record<string, unknown>,
+              })
             }
           }
         }

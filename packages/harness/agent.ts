@@ -21,17 +21,12 @@ import { dispatchStatus } from '@yaks/session/admission'
 // instead of creating a second set. That is what makes `using{model}` on an
 // entry mean the same thing across restarts.
 
-import {
-  type Bundle,
-  type Comp,
-  type Eid,
-  type Graph,
-  identityEid,
-} from '@yaks/graph'
+import type { Bundle, Comp, Eid, Graph } from '@yaks/graph'
+import { identityEid } from '@yaks/graph/identity'
 import type { Effects } from '@yaks/effects'
 import type { Vocab } from '@yaks/vocab'
 import { MODEL, type Model, PROVIDER, TOOL } from '@yaks/model'
-import { toolEid } from '@yaks/tools'
+import { toolEid } from '@yaks/tools/result'
 import {
   admit,
   answer,

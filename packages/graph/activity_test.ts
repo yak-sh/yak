@@ -3,6 +3,7 @@ import { equal, ok, test, throws } from '@yaks/testing'
 import { channel, type Event, peek, record } from '@yaks/trace'
 import { isPromise } from '@yaks/fp'
 import { graph } from './graph.ts'
+import { graph as readonly } from '@yaks/graph/read'
 import { token } from './guard.ts'
 import { loadVocab } from '@yaks/vocab'
 import { ram } from '@yaks/ram'
@@ -121,20 +122,22 @@ test('query, rows and get expose counts without query text or row contents', asy
     entity: { eid: 'book-private' },
     book: { title: 'private' },
   }])
-  let c = channel(g)
-  let off = c.subscribe(() => {})
-  await g.read('.book.title=private', { parent: 'request' })
-  await g.rows('.book', { parent: 'request' })
-  await g.get(['book-private'], ['book'], { parent: 'request' })
-  let ends = c.history().filter((e) => e.stage == 'end')
-  equal(ends.map((e) => [e.kind, e.name, e.parent, e.counts?.rows]), [
-    ['query', 'read', 'request', 1],
-    ['query', 'rows', 'request', 1],
-    ['get', 'get', 'request', 1],
-  ])
-  let text = JSON.stringify(c.history())
-  ok(!text.includes('private'))
-  off()
+  for (let reader of [g, readonly({ vocab, storage: g.storage })]) {
+    let c = channel(reader)
+    let off = c.subscribe(() => {})
+    await reader.read('.book.title=private', { parent: 'request' })
+    await reader.rows('.book', { parent: 'request' })
+    await reader.get(['book-private'], ['book'], { parent: 'request' })
+    let ends = c.history().filter((e) => e.stage == 'end')
+    equal(ends.map((e) => [e.kind, e.name, e.parent, e.counts?.rows]), [
+      ['query', 'read', 'request', 1],
+      ['query', 'rows', 'request', 1],
+      ['get', 'get', 'request', 1],
+    ])
+    let text = JSON.stringify(c.history())
+    ok(!text.includes('private'))
+    off()
+  }
 })
 
 test('only fired declared rules emit activity; refused batches cannot commit', async () => {

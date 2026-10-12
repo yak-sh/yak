@@ -1,14 +1,9 @@
 /** Assemble a graph from role-selected facets and capabilities lent by its host. */
-import {
-  type Actor,
-  type Comp,
-  type Graph,
-  graph,
-  type NamedTool,
-  toolName,
-} from '@yaks/graph'
+import type { Actor, Comp, Graph, NamedTool } from '@yaks/graph'
+import type { graph } from '@yaks/graph'
+import { toolName } from '@yaks/graph/call'
 import { loadTools, type Search, tier } from '@yaks/graph/tools'
-import { type Reply, type Runner, runner } from '@yaks/tools'
+import type { Reply, Runner, runner } from '@yaks/tools'
 import { CallError } from '@yaks/tools/errors'
 import { toolsIn } from '@yaks/vocab/tools'
 import { effectsIn } from '@yaks/vocab'
@@ -88,6 +83,8 @@ export type Assembly = {
   bind: (binding: Binding) => { host: Host; services: Duty[] }
 }
 export type AssemblyOpts = {
+  /** Read factories admit no imperative work; loaded before binding. */
+  readOnly?: boolean
   /** Resolved plugin options, when the concrete host has a vault. */
   plugins?: Configured[]
   /** Already-loaded vocabulary, shared with the concrete host's schema plan. */
@@ -135,6 +132,7 @@ export type Prepared = {
   routes: Taken<'routes'>
   ui: Taken<'ui'>
   service: Taken<'service'>
+  factories: { graph: typeof graph; runner: typeof runner }
 }
 
 let configured = (config: Config): Configured[] =>
@@ -186,19 +184,26 @@ export let prepare = async (
       name,
     ) => [plugin, name] as const)
   ))
-  let [vocab, graph, effects, routes, ui, service] = await Promise.all([
-    take('graph', 'vocab'),
-    take('graph', 'graph'),
-    take('effects', 'effects'),
-    take('web', 'routes'),
-    take('web', 'ui'),
-    taking(
-      plugins.filter(([p]) => services.includes(p)),
-      'service',
-      observedLoad,
-    ),
-  ])
-  return { vocab, graph, effects, routes, ui, service }
+  let [vocab, graph, effects, routes, ui, service, factories] = await Promise
+    .all([
+      take('graph', 'vocab'),
+      take('graph', 'graph'),
+      take('effects', 'effects'),
+      take('web', 'routes'),
+      take('web', 'ui'),
+      taking(
+        plugins.filter(([p]) => services.includes(p)),
+        'service',
+        observedLoad,
+      ),
+      opts.readOnly
+        ? Promise.all([import('@yaks/graph/read'), import('@yaks/tools/read')])
+          .then(([g, t]) => ({ graph: g.graph, runner: t.reader }))
+        : Promise.all([import('@yaks/graph'), import('@yaks/tools')]).then((
+          [g, t],
+        ) => ({ graph: g.graph, runner: t.runner })),
+    ])
+  return { vocab, graph, effects, routes, ui, service, factories }
 }
 
 /** Pure assembly of imported facets; its binding runs inside the host's transaction. */
@@ -428,7 +433,7 @@ export let assemble = (
         )
       }
       part?.('graph')
-      g = (binding.graph ?? graph)({
+      g = (binding.graph ?? prepared.factories.graph)({
         storage: host.storage,
         vocab,
         // A write no request attributed is the host's own: its rules, its
@@ -532,7 +537,7 @@ export let assemble = (
       // written on the first call and at start-up, never while assembling: a
       // one-shot command opens a host to ask one question and should not write
       // just to say hello.
-      let run = calls = runner(g, {
+      let run = calls = prepared.factories.runner(g, {
         tools,
         // This host owns the calls it claims, so the start-up pass re-runs its
         // own interrupted calls and leaves alone another runner's, or those an

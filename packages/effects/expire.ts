@@ -3,14 +3,10 @@
 // see the same transaction as an ordinary component removal.
 import { expireOf } from '@yaks/vocab'
 import { and, type Clause, parse, present } from '@yaks/query'
-import {
-  type Access,
-  type Bundle,
-  type Comp,
-  comps,
-  Stale,
-  token,
-} from '@yaks/graph'
+import type { Access, Bundle, Comp } from '@yaks/graph'
+import { comps } from '@yaks/graph/bundle'
+import { Stale } from '@yaks/graph/errors'
+import { token } from '@yaks/graph/sha256'
 import { HOLD, LEASE, leaseEid, sleep, take } from './lease.ts'
 
 /** The daily expiration duty shared by every effects worker. */

@@ -5,7 +5,8 @@ import { fn, lit, op } from '@yaks/sql'
 import { type State, Store } from './graph.ts'
 import { settleWorld, worldBindings } from './play_world_fixture.ts'
 import { parseTools } from '@yaks/tools/declared'
-import { graph, identityEid } from '@yaks/graph'
+import { graph } from '@yaks/graph'
+import { identityEid } from '@yaks/graph/identity'
 import { described } from '@yaks/code/described'
 import { edgeEid } from '@yaks/edge'
 import { driver, profile, type Summary } from '@yaks/durable-object'
@@ -305,7 +306,10 @@ export let productionGap = async (
   )
   await settleWorld(store, storage)
   let reports: Summary[] = [],
-    shapes = new Map<string, { read: number; written: number; calls: number }>()
+    shapes = new Map<
+      string,
+      { read: number; written: number; calls: number }
+    >()
   let p = profile((r) => reports.push(r)),
     exec = storage.sql.exec.bind(storage.sql)
   let total = { read: 0, written: 0, calls: 0 }

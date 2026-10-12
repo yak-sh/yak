@@ -1,4 +1,6 @@
-import { mint, type NamedTool, namedTool, offered, toolName } from '@yaks/graph'
+import type { NamedTool } from '@yaks/graph'
+import { mint } from '@yaks/graph/identity'
+import { namedTool, offered, toolName } from '@yaks/graph/call'
 import { legacyOptions } from '@yaks/vocab/tools'
 import { fromJsonSchema, ProtocolError } from '@modelcontextprotocol/server'
 // The server: a graph, its tools, and the MCP protocol implementation that
@@ -20,25 +22,19 @@ import { fromJsonSchema, ProtocolError } from '@modelcontextprotocol/server'
 
 import { McpServer } from '@modelcontextprotocol/server'
 import type { CallToolResult } from '@modelcontextprotocol/server'
-import {
-  type Actor,
-  type Bundle,
-  type Graph,
-  status,
-  type Tool,
-  toolsOf,
-} from '@yaks/graph'
+import type { Actor, Bundle, Graph, Tool } from '@yaks/graph'
+import { status } from '@yaks/graph/errors'
+import { toolsOf } from '@yaks/graph'
+import type { Opts as RunnerOpts, Runner } from '@yaks/tools'
 import {
   answerOf,
-  CallError,
   faulted,
-  type Opts as RunnerOpts,
-  type Runner,
-  runner,
   structured,
   toolEid,
   worded,
-} from '@yaks/tools'
+} from '@yaks/tools/result'
+import { CallError } from '@yaks/tools/errors'
+import { runner } from '@yaks/tools'
 import type { BundleOpts, Depth } from './schema.ts'
 import {
   core,
@@ -160,7 +156,9 @@ export type Options = {
    * tool list has changed under it (roster.ts). Called once per tool result,
    * and what it returns is sent as a trailing content block, so a JSON result
    * stays valid JSON. */
-  roster?: (names: string[]) => string | undefined | Promise<string | undefined>
+  roster?: (
+    names: string[],
+  ) => string | undefined | Promise<string | undefined>
 
   /** a calling program with more than tools to serve — resources, prompts,
    * capabilities of its own — registers them on the same server here, after

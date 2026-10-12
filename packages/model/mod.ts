@@ -44,18 +44,10 @@
  */
 
 import { after } from '@yaks/fp'
-import {
-  type Bundle,
-  type Comp,
-  dead,
-  type Eid,
-  type Hook,
-  identityEid,
-  minted,
-  type Plugin,
-  type ReadTx,
-  Refused,
-} from '@yaks/graph'
+import type { Bundle, Comp, Eid, Hook, Plugin, ReadTx } from '@yaks/graph'
+import { dead } from '@yaks/graph/bundle'
+import { identityEid, minted } from '@yaks/graph/identity'
+import { Refused } from '@yaks/graph/errors'
 import type { VocabDoc } from '@yaks/vocab'
 import { edgeEid } from '@yaks/edge'
 import type { Artifact } from '@yaks/blob'

@@ -8,7 +8,7 @@
 // not (an icon, a .wasm). Dotfiles are left out: nothing the platform serves
 // starts with a dot, and `.DS_Store` is not part of an app.
 
-import { CallError } from '@yaks/tools'
+import { CallError } from '@yaks/tools/errors'
 import { type Reply, saidBy, valueOf } from './api.ts'
 
 /** One file as app_files takes it. */

@@ -1,6 +1,6 @@
 // Box telemetry observes the runtime channel, never the watched database.
 // Selection happens after a root completes; all unselected trees die in memory.
-import { type Bundle } from '@yaks/graph'
+import type { Bundle } from '@yaks/graph'
 import { type RequestState, sampleRequest, selectRequest } from '@yaks/timing'
 import { channel, type Event } from '@yaks/trace'
 import type { Sink } from '@yaks/tracker/report'
