@@ -66,7 +66,7 @@ import {
 import type { Store } from '@yaks/sqlite'
 import { migrations, migrationSchema } from '@yaks/sqlite/migration'
 import { add, follow, lacking, printOf } from '@yaks/sqlite/follow'
-import { SCHEMA_DUTY, tend } from '@yaks/sqlite/owe'
+import { filler, SCHEMA_DUTY, tend } from '@yaks/sqlite/owe'
 import type { Opened } from '@yaks/sqlite/db'
 import {
   adopt,
@@ -584,7 +584,9 @@ let composed = async (
           follow(sql, print, () => {
             store!.install()
             add(sql, beside)
-            if (text.length) adopt(sql, text, derived, { heal: false })
+            if (text.length) {
+              adopt(sql, text, derived, { heal: false, fill: filler(sql) })
+            }
           })
         } catch (error) {
           void report(error, {

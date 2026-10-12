@@ -9,9 +9,9 @@
 //
 // Two openers that find the same print missing both run the pass: every step
 // of it reads the file under the write lock before it changes anything, so the
-// second one finds nothing left to do. An index over a populated table is
-// written down instead, for the effects worker to build (./owe.ts); a table's
-// refit and a text index's fill still run here.
+// second one finds nothing left to do. An index over a populated table, and a
+// text index over one, are written down instead, for the effects worker to
+// build and fill in windows (./owe.ts); a table's refit still runs here.
 
 import { type Column, type Driver, render, type Stmt } from '@yaks/sql/core'
 import { type Derived, field, lit, tagOf } from '@yaks/sql'

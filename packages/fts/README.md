@@ -181,6 +181,13 @@ other triggers referencing these indexes, and calls `heal()` last. It returns
 `{ recut, dropped, healed }`. A second call with the same configuration makes no
 changes. Review custom triggers before adopting existing indexes.
 
+`{ fill }` hands each index `adopt` would rebuild to a `Filler`, which fills it
+in windows behind a cursor instead: `owe(fill)` takes on the emptied index and
+returns the cursor expression, and its triggers keep only the rows the cursor
+has passed until the filler puts the plain ones in place. `pending(fts)` keeps
+an index still being filled guarded on the next call. @yaks/sqlite's owed work
+(`filler`) is one; returning undefined rebuilds as before.
+
 A schema installer can use `{ heal: false }` to skip the content census of
 retained indexes. Missing indexes and changed views or writers are still
 rebuilt; unchanged indexes keep their terms without reading their content:

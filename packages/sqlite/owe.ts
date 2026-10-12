@@ -24,17 +24,25 @@ import {
   col,
   count,
   type CreateIndex,
+  type CreateTrigger,
   type Driver,
+  eq,
   erect,
+  type Expr,
+  fn,
   from,
   ge,
+  gt,
+  le,
   lit,
   lt,
   select,
   type Stmt,
+  sub,
   table,
   val,
 } from '@yaks/sql/core'
+import type { Filler } from '@yaks/fts'
 import { META } from './layout.ts'
 import { meta } from './meta.ts'
 import { unit } from './unit.ts'
@@ -47,6 +55,9 @@ export let SCHEMA_DUTY = '@yaks/sqlite/schema'
  * box's copy an index over 10,000 rows builds in about 10 ms, and over its
  * 4,057,139 `created` rows in 2.6 s. */
 export let BIG = 10_000
+/** The rows one window fills into a text index: 94 ms over the box's
+ * `entry_fts`, whose 403,151 rows take 94 s in one `rebuild`. */
+export let FILL = 1_000
 /** How long a window that failed waits before it is tried again. */
 export let RETRY = 3_600_000
 
@@ -58,7 +69,16 @@ export type Owed =
     /** an index over a table of {@link BIG} rows or more: SQLite builds an
      * index in one statement, so this is the one window that holds the lock
      * for seconds, off the opening path */
-    { kind: 'index'; stmt: CreateIndex }
+    | { kind: 'index'; stmt: CreateIndex }
+    /** a text index filled {@link FILL} rows a window from `source`, its
+     * triggers keeping the rows `cursor` has passed (@yaks/fts `Filler`) */
+    | {
+      kind: 'fill'
+      source: string
+      props: string[]
+      triggers: CreateTrigger[]
+      cursor: number
+    }
   )
 
 let key = (w: Pick<Owed, 'kind' | 'name'>) => `${OWED}${w.kind}:${w.name}`
@@ -139,12 +159,84 @@ export let work = (driver: Driver, now = Date.now()): Worked | undefined => {
 // row then gone.
 let step = (driver: Driver, w: Owed): boolean => {
   let finish = () => (meta(driver).del(key(w)), true)
-  let here = new Set(catalogue(driver).map((o) => o.name))
-  // A table a later vocabulary dropped or rebuilt takes its owed index with it.
-  if (!here.has(w.stmt.on)) return finish()
-  driver.query({ ...w.stmt, ifNot: true })
-  return finish()
+  let here = new Map(catalogue(driver).map((o) => [o.name, o]))
+  if (w.kind == 'index') {
+    // A table a later vocabulary dropped takes its owed index with it.
+    if (!here.has(w.stmt.on)) return finish()
+    driver.query({ ...w.stmt, ifNot: true })
+    return finish()
+  }
+  // An index a later pass rebuilt whole, or dropped, is no longer this work's.
+  let guarded = here.get(w.triggers[0]?.name)?.sql?.includes(key(w))
+  if (!here.has(w.name) || !guarded) return finish()
+  let rows = (where: Expr) =>
+    select({ cols: [col('entity')], from: table(w.source), where })
+  let [{ hi }] = driver.query(select({
+    cols: [as(fn('max', col('entity')), 'hi')],
+    from: from({
+      ...rows(gt(col('entity'), lit(w.cursor))),
+      order: [col('entity')],
+      limit: lit(FILL),
+    }, 'w'),
+  }))
+  if (hi == null) {
+    for (let t of w.triggers) {
+      driver.query({ t: 'drop', kind: 'trigger', name: t.name, ifExists: true })
+    }
+    erect(driver, w.triggers)
+    return finish()
+  }
+  driver.query({
+    t: 'insert',
+    into: w.name,
+    cols: ['rowid', ...w.props],
+    q: select({
+      cols: [
+        col('entity'),
+        ...w.props.map((p) => fn('coalesce', col(p), lit(''))),
+      ],
+      from: table(w.source),
+      where: and(
+        gt(col('entity'), lit(w.cursor)),
+        le(col('entity'), lit(Number(hi))),
+      ),
+    }),
+  })
+  owe(driver, { ...w, cursor: Number(hi) })
+  return false
 }
+
+// What a filling index's triggers read its cursor through: the owed row
+// itself, so there is one copy of how far it has got. A row that is gone
+// reads as every row passed.
+let cursorOf = (fts: string): Expr =>
+  fn(
+    'coalesce',
+    sub(select({
+      cols: [fn('json_extract', col('v'), lit('$.cursor'))],
+      from: table(META),
+      where: eq(col('k'), lit(key({ kind: 'fill', name: fts }))),
+    })),
+    lit(Number.MAX_SAFE_INTEGER),
+  )
+
+/**
+ * The {@link Filler} @yaks/fts `adopt` hands a new or changed text index to:
+ * on a file, an index whose content holds more than one window's rows is owed
+ * and filled {@link FILL} rows at a time; a smaller one is rebuilt at once.
+ */
+export let filler = (driver: Driver): Filler => ({
+  pending: (fts) =>
+    owed(driver).some((w) => w.kind == 'fill' && w.name == fts)
+      ? cursorOf(fts)
+      : undefined,
+  owe: ({ fts, ...fill }) => {
+    let here = catalogue(driver).some((o) => o.name == META)
+    if (!driver.file || !here || !holds(driver, fill.source, FILL + 1)) return
+    owe(driver, { kind: 'fill', name: fts, ...fill, cursor: 0 })
+    return cursorOf(fts)
+  },
+})
 
 let sleep = (ms: number, signal: AbortSignal) =>
   new Promise<void>((done) => {

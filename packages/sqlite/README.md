@@ -890,13 +890,14 @@ On a file, work whose cost grows with rows is written down rather than done
 while the schema pass holds the write lock (`@yaks/sqlite/owe`):
 `build(driver,
 stmts)` runs statements as `erect` does but owes each new index
-over a table of `BIG` (10,000) rows or more. Owed work sits in `server_meta` as
-`owed:<kind>:<name>`, its statements as data, so any process can finish it.
-`work(driver)` does one window of the first that is due; a window that throws is
-kept with its error and tried again an hour later. `tend(driver, {signal})`
-works windows until the signal aborts; on the box the process serving the
-effects role runs it under the `@yaks/sqlite/schema` lease. A database in memory
-owes nothing.
+over a table of `BIG` (10,000) rows or more, and `filler(driver)` is the
+@yaks/fts `Filler` that fills a text index over more than `FILL` (1,000) rows
+that many a window. Owed work sits in `server_meta` as `owed:<kind>:<name>`, its
+statements as data, so any process can finish it. `work(driver)` does one window
+of the first that is due; a window that throws is kept with its error and tried
+again an hour later. `tend(driver, {signal})` works windows until the signal
+aborts; on the box the process serving the effects role runs it under the
+`@yaks/sqlite/schema` lease. A database in memory owes nothing.
 
 ## Preannounced migrations
 

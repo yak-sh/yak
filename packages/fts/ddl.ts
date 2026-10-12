@@ -60,6 +60,7 @@ import {
   textName,
 } from './fields.ts'
 import {
+  and,
   as,
   catalogue,
   col,
@@ -75,6 +76,7 @@ import {
   fn,
   type Insert,
   join,
+  le,
   lit,
   render,
   select,
@@ -115,8 +117,11 @@ let sourceOf = (ix: Index, derived: Derived): string =>
 
 // One index and the triggers keeping it, plus the view it reads its content
 // back through when any of its columns has to be resolved or it is read on
-// behalf of another component.
-let index = (ix: Index, derived: Derived): Stmt[] => {
+// behalf of another component. An index being filled in windows (`Filler`)
+// has triggers that keep only the rows its `cursor` has passed: a row ahead of
+// it is read as it stands when its window comes, and deleting a row the index
+// never held would corrupt it.
+let index = (ix: Index, derived: Derived, cursor?: Expr): Stmt[] => {
   let { name, comp, props, on } = ix
   let fts = indexName(name)
   let read = reader(comp, derived)
@@ -150,19 +155,19 @@ let index = (ix: Index, derived: Derived): Stmt[] => {
   })
   // The text's own triggers, which for a scoped index fire only for an entity
   // that already carries `on`.
-  let guard = (over: string, event: CreateTrigger['event']) =>
-    on && over == comp
-      ? {
-        when: exists(select({
-          cols: [lit(1)],
-          from: table(on),
-          where: eq(
-            col('entity', on),
-            col('entity', event == 'delete' ? 'old' : 'new'),
-          ),
-        })),
-      }
-      : {}
+  let guard = (over: string, event: CreateTrigger['event']) => {
+    let row = event == 'delete' ? 'old' : 'new'
+    let scoped = on && over == comp
+      ? exists(select({
+        cols: [lit(1)],
+        from: table(on),
+        where: eq(col('entity', on), col('entity', row)),
+      }))
+      : undefined
+    let passed = cursor && le(col('entity', row), cursor)
+    let when = scoped && passed ? and(scoped, passed) : scoped ?? passed
+    return when ? { when } : {}
+  }
   let trigger = (
     what: string,
     event: CreateTrigger['event'],
@@ -410,6 +415,32 @@ export type AdoptOpts = HealOpts & {
   /** Check retained indexes for drift (default true). Schema installation can
    * keep unchanged indexes without reading their content. */
   heal?: boolean
+  /** Who fills a new or changed index in windows, rather than `rebuild`ing
+   * it in one statement. */
+  fill?: Filler
+}
+
+/** An index to fill: its name, where it reads its content back from, its
+ * columns, and the triggers it keeps once it holds every row. */
+export type Fill = {
+  fts: string
+  source: string
+  props: string[]
+  triggers: CreateTrigger[]
+}
+
+/**
+ * Someone who fills an index in windows, behind a cursor: its triggers keep
+ * only the rows the cursor has passed, each window reads the next rows from
+ * the index's content into it, and the last puts {@link Fill.triggers} in
+ * place. @yaks/sqlite's owed work is one.
+ */
+export type Filler = {
+  /** the cursor an index still being filled guards its triggers with */
+  pending: (fts: string) => Expr | undefined
+  /** take on filling `fill`, which is empty: its cursor, or undefined to have
+   * it rebuilt at once */
+  owe: (fill: Fill) => Expr | undefined
 }
 
 export let adopt = (
@@ -438,7 +469,8 @@ export let adopt = (
       gone('trigger', t)
       dropped.push(t)
     }
-    let mine = index(ix, derived)
+    let pending = opts.fill?.pending(fts)
+    let mine = index(ix, derived, pending)
     let changed = false
     let ours: ['view' | 'trigger', string][] = [
       ['view', textName(ix.name)],
@@ -460,11 +492,24 @@ export let adopt = (
       if (kind == 'trigger' && had == null) changed = true
     }
     if (!same) gone('table', fts)
-    erect(db, mine)
-    if (!same || opts.heal === false && changed) {
-      db.query(command(fts, 'rebuild'))
-      recut.push(fts)
+    let rebuild = !same || opts.heal === false && changed
+    let cursor = rebuild
+      ? opts.fill?.owe({
+        fts,
+        source: sourceOf(ix, derived),
+        props: ix.props,
+        triggers: index(ix, derived).filter((s) => s.t == 'create trigger'),
+      })
+      : undefined
+    // Filled in windows: an emptied index, and triggers behind the cursor.
+    if (cursor) {
+      if (same) db.query(command(fts, 'delete-all'))
+      for (let t of owned(ix)) gone('trigger', t)
+      mine = index(ix, derived, cursor)
     }
+    erect(db, mine)
+    if (rebuild && !cursor) db.query(command(fts, 'rebuild'))
+    if (rebuild) recut.push(fts)
   }
   let healed = opts.heal === false ? [] : heal(db, fields, opts)
   return { recut, dropped, healed }
