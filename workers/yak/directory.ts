@@ -563,7 +563,7 @@ export let FRESH = 'x-yak-fresh'
 // The headers an ordinary caller carries through to the store. The directory
 // binding is internal; its `stamp` door passes the kernel header separately
 // for platform-owned properties that an ordinary graph write cannot set.
-let VOUCH = ['x-yak-person', 'x-yak-role', 'x-yak-via']
+let VOUCH = ['x-yak-person', 'x-yak-role', 'x-yak-via', 'x-yak-administrative']
 
 let forwarded = (req: Request) =>
   Object.fromEntries(

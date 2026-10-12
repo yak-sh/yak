@@ -92,6 +92,7 @@ import {
 import {
   api,
   type Authenticate,
+  decode,
   type Frame,
   type Handler,
   json,
@@ -274,6 +275,7 @@ import {
 import { weighed } from './meter.ts'
 import { embedder, SPACE, texts } from './embedding.ts'
 import { directoryOf } from './directory.ts'
+import { recordUse, useUntil, using } from './used.ts'
 import { commandAt, commandReply } from './app-command.ts'
 import { vaultOf } from './vault.ts'
 import {
@@ -859,6 +861,31 @@ export class Store {
   #visits = 0
   #quiet: (() => void) | null = null
   #draft: Promise<void> | null = null
+  #useScope = new AsyncLocalStorage<
+    { kernel: boolean; administrative: boolean }
+  >()
+  #usedUntil = 0
+  #using: Promise<void> | null = null
+
+  #used(): Promise<void> {
+    let ns = this.#bind.STORE, app = this.#get('app')
+    if (
+      !ns || !app || this.#usedUntil > Date.now() ||
+      storeKind(this.#get('name') ?? '') != 'app' ||
+      this.#useScope.getStore()?.administrative ||
+      this.#useScope.getStore()?.kernel
+    ) return Promise.resolve()
+    return this.#using ??= recordUse(ns, app).then((at) => {
+      if (at) this.#usedUntil = Date.parse(at)
+    }).finally(() => this.#using = null)
+  }
+
+  #maintenance<T>(run: () => T): T {
+    return this.#useScope.run({
+      kernel: true,
+      administrative: this.#useScope.getStore()?.administrative ?? false,
+    }, run)
+  }
 
   constructor(
     ctx: State,
@@ -891,7 +918,7 @@ export class Store {
   #ensureStarted(request?: Request): Promise<void> {
     return this.#started ??= tallying(this.#pending, async () => {
       try {
-        await this.#start(request)
+        await this.#maintenance(() => this.#start(request))
       } catch (e) {
         this.#failed(e)
       }
@@ -1130,6 +1157,20 @@ export class Store {
       report: (error, { handler }) =>
         defect(error, { request: `effect ${handler}`, store: name }),
     })
+    let handle = fx.handle.bind(fx)
+    fx.handle = (handlers) =>
+      handle(Object.fromEntries(
+        Object.entries(handlers).map(([name, run]) => [
+          name,
+          async (...args: Parameters<typeof run>) => {
+            if ('maintenance' in run && run.maintenance === true) {
+              return this.#maintenance(() => run(...args))
+            }
+            await this.#used()
+            return run(...args)
+          },
+        ]),
+      ))
     // Where the directory keeps a connection's credential (vault.ts). A key
     // comes out of a write before anything else reads it, and is sealed once
     // the write commits, by the same plugin; an app's store keeps none.
@@ -1242,6 +1283,9 @@ export class Store {
             this.#lowering,
             ...options.plugins ?? [],
             this.#vouching,
+            ...(meta
+              ? [using(() => !this.#useScope.getStore()?.administrative)]
+              : []),
             ...(app
               ? [this.#guarding(app, vocab, meant(this.#get('vocab')))]
               : []),
@@ -1941,13 +1985,15 @@ export class Store {
     app: this.#get('app'),
     mail: () => this.#get('mail'),
     graph: this.#kernelGraph(g),
-    as: async (who, bundles, via) =>
-      await this.#graph.apply(
+    as: async (who, bundles, via) => {
+      await this.#used()
+      return await this.#graph.apply(
         signed(bundles, {
           ...(who ? { by: who } : {}),
           ...(via ? { via } : {}),
         }),
-      ),
+      )
+    },
     commands: () => readTools(this.#get('tools') || '{}'),
     broke: (what, error) => void this.#broke(what, error),
   })
@@ -2008,6 +2054,7 @@ export class Store {
                   if (!reads(access, role)) {
                     throw new Denied(person, appId, 'viewer', 'read')
                   }
+                  await this.#used()
                   if (person) {
                     this.#vouched.set(person, {
                       person,
@@ -2151,7 +2198,10 @@ export class Store {
   // `#Now` its rules read.
   #clock: Pick<Graph, 'read' | 'apply'> = {
     read: (q, o) => (this.#subs ?? this.#graph).read(q, o),
-    apply: (b, o) => this.#trust(b as Bundle[], null, o),
+    apply: async (b, o) => {
+      await this.#used()
+      return this.#trust(b as Bundle[], null, o)
+    },
   }
 
   // A wake with `while` repeats only while one of its conditions holds, and
@@ -2376,7 +2426,10 @@ export class Store {
 
   // Deployment materializes descriptions and shipped rows. Loading an
   // incarnation does not derive work, sweep history or inspect owed targets.
-  #deployed = async (): Promise<void> => {
+  #deployed = (): Promise<void> =>
+    this.#maintenance(() => this.#installDeployment())
+
+  #installDeployment = async (): Promise<void> => {
     this.#graph.storage.install()
     watchEmbedding(statements(this.#sql), this.#texts.fields)
     // A deploy is where the model can change: where a stored vector was made
@@ -2578,7 +2631,9 @@ export class Store {
 
   // A few batches, yielding the object between them, then the alarm again for
   // whatever is left.
-  #moving = async (): Promise<void> => {
+  #moving = (): Promise<void> => this.#maintenance(() => this.#moveRows())
+
+  #moveRows = async (): Promise<void> => {
     if (this.#dormant && !this.#moveOnly) return
     let left = BATCHES
     let name = this.#get('name') ?? ''
@@ -2867,7 +2922,14 @@ export class Store {
    * sockets it inherited.
    */
   fetch(request: Request): Promise<Response> {
-    return this.#traced(routeKind(request), () => this.#fetch(request), request)
+    return this.#useScope.run(
+      {
+        kernel: request.headers.get('x-yak-kernel') == '1',
+        administrative: request.headers.get('x-yak-administrative') == '1',
+      },
+      () =>
+        this.#traced(routeKind(request), () => this.#fetch(request), request),
+    )
   }
 
   async #fetch(request: Request): Promise<Response> {
@@ -2909,6 +2971,20 @@ export class Store {
       return this.#missing()
     }
     await this.#ensureStarted(request)
+    if (
+      !kernel && !request.headers.has('x-yak-administrative') &&
+      !this.#refused &&
+      (request.headers.has('x-yak-person') || request.headers.has('x-yak-via'))
+    ) {
+      if (this.#bind.STORE && this.#usedUntil <= Date.now()) {
+        try {
+          await this.#auth(request)
+        } catch (error) {
+          return refuse(error, request)
+        }
+      }
+      await this.#used()
+    }
     let tally = this.#pending
     this.#pending = new Map()
     let run = () =>
@@ -3348,6 +3424,32 @@ export class Store {
   async #serve(request: Request): Promise<Response> {
     let path = new URL(request.url).pathname
     let kernel = request.headers.get('x-yak-kernel') == '1'
+    if (path == '/used') {
+      if (
+        !kernel || request.method != 'POST' ||
+        this.#get('name') != PLATFORM_STORE
+      ) {
+        return json({ error: 'NotFound', message: 'no route' }, 404)
+      }
+      let { eid } = await request.json() as { eid?: unknown }
+      if (typeof eid != 'string' || !/^[a-zA-Z0-9_-]+$/.test(eid)) {
+        return json(
+          { error: 'Refused', message: 'an entity id is required' },
+          400,
+        )
+      }
+      let [row] = await this.#graph.read(`.entity.eid=${eid} ?used`)
+      if (!row) {
+        return json({ error: 'NotFound', message: 'no such entity' }, 404)
+      }
+      let at = useUntil()
+      let previous = (row.used as Comp | undefined)?.at
+      if (typeof previous == 'string' && previous >= at) at = previous
+      else {
+        await this.#asIs([{ entity: { eid }, used: { at } }], { stamp: false })
+      }
+      return json({ at })
+    }
     // A release belongs to the store, not a subscription. Tell even sockets
     // whose page has not subscribed yet; the page decides when to reload.
     if (path == '/attribute') {
@@ -4334,7 +4436,18 @@ export class Store {
       if (this.#unbuilt) return void this.#hangUp(ws)
       try {
         let prof = this.#profile
-        return this.#live.message(
+        let input = decode(data)
+        let message = 'value' in input ? input.value : null
+        let held = ws.deserializeAttachment() as { read?: ReadOpts } | null
+        if (
+          storeKind(this.#get('name') ?? '') == 'app' &&
+          !held?.read?.administrative && message &&
+          typeof message == 'object' &&
+          (('ask' in message && typeof message.ask == 'string') ||
+            ('relay' in message && Array.isArray(message.relay) &&
+              message.relay.length))
+        ) await this.#used()
+        await this.#live.message(
           ws,
           data,
           prof ? (kind, work) => prof.run(`ws ${kind}`, work) : undefined,

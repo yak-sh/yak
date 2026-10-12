@@ -1,8 +1,7 @@
-// Test-space eligibility, from existing directory records. Readings are
-// monthly totals, not event times: a positive reading conservatively counts
-// as use at its reading time. Missing provenance cannot prove inactivity.
+// Test-space eligibility, from directory evidence of use. Lifecycle stamps
+// and monthly bills describe platform work too; neither is a use clock.
+// Creation gives a new record its grace period, and used survives bookkeeping.
 import { isTestAddress } from './lib/bots.ts'
-import type { Meter } from './directory.ts'
 
 export let PROTECTED = new Set([
   'yak',
@@ -26,30 +25,13 @@ export type Row = {
   hostname?: { serves: Ref }
   email?: { address: string }
   published?: unknown
-  created?: { at?: string }
-  updated?: { at?: string }
-  meter?: Partial<Meter>
+  created?: { at?: string; by?: Ref | null; via?: string | null }
+  used?: { at?: string }
 }
 let id = (ref: Ref) => typeof ref == 'string' ? ref : ref.eid
-let counts: (keyof Meter)[] = [
-  'requests',
-  'ws_messages',
-  'ws_hibernated',
-  'rows_read',
-  'rows_written',
-  'emails',
-  'builds',
-  'models',
-  'realtime',
-  'seconds',
-]
 let quiet = (row: Row, cutoff: number) => {
-  let at = row.updated?.at ?? row.created?.at ?? ''
-  if (!(Date.parse(at) <= cutoff)) return false
-  if (row.meter && counts.some((key) => Number(row.meter![key] ?? 0) > 0)) {
-    if (!(Date.parse(row.meter.at ?? '') <= cutoff)) return false
-  }
-  return true
+  if (!(Date.parse(row.created?.at ?? '') <= cutoff)) return false
+  return !row.used || Date.parse(row.used.at ?? '') <= cutoff
 }
 
 export let inactive = (rows: Row[], now = Date.now()) =>
@@ -86,4 +68,4 @@ export let idleSpaces = (rows: Row[], now = Date.now()): string[] => {
 
 export let CENSUS =
   '(.space | .app | .member | .grant | .invite | .hostname | .email)' +
-  ' ?created ?updated ?meter ?published'
+  ' ?created ?used ?published'

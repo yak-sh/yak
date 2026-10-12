@@ -24,7 +24,7 @@ let selected = (edit: (rows: Row[]) => void = () => {}) => {
 test('only an unpublished test space with seven days of recorded inactivity goes', () => {
   assertEquals(selected(), ['space'])
   for (let i of [0, 1, 2]) {
-    assertEquals(selected((rows) => rows[i].updated = { at: at(IDLE - 1) }), [])
+    assertEquals(selected((rows) => rows[i].used = { at: at(IDLE - 1) }), [])
     assertEquals(selected((rows) => delete rows[i].created), [])
   }
   assertEquals(selected((rows) => rows[1].published = { name: 'probe' }), [])
@@ -57,48 +57,10 @@ test('only an unpublished test space with seven days of recorded inactivity goes
   )
 })
 
-test('readings count activity, while storage and lifetime totals do not', () => {
-  for (
-    let key of [
-      'requests',
-      'ws_messages',
-      'ws_hibernated',
-      'rows_read',
-      'rows_written',
-      'emails',
-      'builds',
-      'models',
-      'realtime',
-      'seconds',
-    ]
-  ) {
-    assertEquals(
-      selected((rows) => rows[0].meter = { [key]: 1, at: at(0) }),
-      [],
-    )
-    assertEquals(selected((rows) => rows[0].meter = { [key]: 1 }), [])
-  }
-  assertEquals(
-    selected((rows) =>
-      rows[0].meter = {
-        requests: 1,
-        at: at(IDLE),
-      }
-    ),
-    ['space'],
-  )
-  assertEquals(
-    selected((rows) =>
-      rows[0].meter = {
-        requests: 0,
-        bytes: 123,
-        files: 456,
-        built: 99,
-        at: at(0),
-      }
-    ),
-    ['space'],
-  )
+test('use expires after seven days and missing evidence keeps the space', () => {
+  assertEquals(selected((rows) => rows[0].used = { at: at(IDLE) }), ['space'])
+  assertEquals(selected((rows) => rows[0].used = {}), [])
+  assertEquals(selected((rows) => rows[0].used = { at: at(0) }), [])
 })
 
 test('platform and reviewer spaces survive whatever their members', () => {

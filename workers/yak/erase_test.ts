@@ -39,6 +39,7 @@ import { ai, platform, sandboxes } from './testing.ts'
 import { named, spending, workbench } from './sandbox.ts'
 import type { Who } from './session.ts'
 import { KERNEL, meta } from './meta.ts'
+import { call } from './tools.ts'
 
 let space = (over: Partial<Space> = {}): Space => ({
   eid: 'space-eid',
@@ -301,6 +302,95 @@ let owned = async (env: Env) => {
   return { dir, space: await makes(dir, 'ada') }
 }
 
+let idlePreview = await (async () => {
+  using p = platform('idle preview')
+  let g = meta(p.env)
+  let now = new Date()
+  let old = new Date(now.getTime() - 8 * day).toISOString()
+  let person = 'idle-bot'
+  await g.apply(
+    [
+      {
+        entity: { eid: person },
+        person: {},
+        email: { address: 'idle@bot.yak.sh' },
+      },
+      ...['quiet', 'used'].flatMap((slug) => [
+        {
+          entity: { eid: slug },
+          space: { slug },
+          created: { at: old, by: person },
+        },
+        {
+          entity: { eid: `${slug}-seat` },
+          member: { space: slug, person, role: 'owner' },
+          created: { at: old, by: person },
+        },
+        {
+          entity: { eid: `${slug}-app` },
+          app: {
+            space: slug,
+            slug: 'notes',
+            access: 'private',
+            draft: `${slug}/.drafts/notes`,
+          },
+          created: { at: old, by: person },
+        },
+      ]),
+    ],
+    KERNEL,
+    { stamp: false },
+  )
+  let touches = ['quiet', 'quiet-seat', 'quiet-app', 'used', 'used-app']
+    .map((eid) => ({ entity: { eid }, doc: { title: 'Platform bookkeeping' } }))
+  await g.apply(touches, KERNEL)
+  await g.apply([{
+    entity: { eid: 'quiet-app' },
+    meter: { requests: 100, rows_written: 100, at: now.toISOString() },
+  }], KERNEL)
+  // Platform copying changes R2 upload dates without anybody editing a file.
+  await r2Objects(p.env.BLOBS).put(
+    'quiet/notes/NOTES.md',
+    new TextEncoder().encode('Platform copy'),
+  )
+  await r2Objects(p.env.BLOBS).put(
+    'quiet/notes/history/NOTES.md.json',
+    new TextEncoder().encode(JSON.stringify([
+      { at: now.toISOString(), by: '' },
+      { at: old, by: person },
+    ])),
+  )
+  await g.apply([{
+    entity: { eid: 'platform-reference' },
+    memory: { space: 'quiet' },
+    doc: { title: 'Platform bookkeeping' },
+  }], KERNEL)
+  // Selection must never enter an app Store, including a dormant one.
+  let ns = p.env.STORE
+  p.env.STORE = {
+    idFromName: (name) => {
+      assertEquals(name, 'yak/platform')
+      return ns.idFromName(name)
+    },
+    get: (id) => ns.get(id),
+  }
+  let before = await abandoned(p.env, now)
+  let dir = directory({ fetch: (r) => dirPart.fetch(r, p.env) }, true)
+  await call({ env: p.env, dir, person }, 'app_files', {
+    space: 'used',
+    app: 'notes',
+    path: 'index.html',
+    content: 'A person edited their existing draft',
+  })
+  // A later platform write must preserve the independent evidence of use.
+  await g.apply(touches, KERNEL)
+  return { before, after: await abandoned(p.env, new Date()) }
+})()
+
+test('the idle preview ignores platform touches but keeps a space somebody used', () => {
+  assertEquals(idlePreview, { before: ['quiet', 'used'], after: ['quiet'] })
+})
+
 // A page's socket, as far as a replay is concerned: what it was sent.
 let wire = () => {
   let sent: unknown[] = []
@@ -513,7 +603,7 @@ test(
       [{
         entity: { eid: 'last-app-write' },
         grant: { app: 'probe-app-99', person: ADA, access: 'viewer' },
-        created: { at: new Date(after.getTime() - day).toISOString() },
+        created: { at: new Date(after.getTime() - day).toISOString(), by: ADA },
       }],
       KERNEL,
       { stamp: false },
@@ -534,7 +624,7 @@ test(
         entity: { eid: 'recent-memory' },
         memory: { space: probe.eid },
         doc: { title: 'Still in use' },
-        created: { at: new Date(after.getTime() - day).toISOString() },
+        created: { at: new Date(after.getTime() - day).toISOString(), by: ADA },
       }],
       KERNEL,
       { stamp: false },

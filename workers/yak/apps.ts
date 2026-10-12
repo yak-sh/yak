@@ -129,6 +129,7 @@ import { ADDRESS } from './route.ts'
 import { caught } from './defects.ts'
 import { full, fullFiles } from './usage.ts'
 import { refusedVisit } from './meter.ts'
+import { recordUse } from './used.ts'
 import { modifying, sha256 } from './versions.ts'
 import { DAYS, NOT_ON, type Stats, stats, statsOf, viewed } from './views.ts'
 import { own as connection } from './connections.ts'
@@ -2176,6 +2177,7 @@ let firstly = async (
   // page at all.
   let home = await c.time('home', () => dir.home(space))
   if (!home || !home.first.some((g) => covers(g, path))) return null
+  if (!who.administrative) await recordUse(env.STORE, home.eid)
   // The app comes back beside the answer because the answer is the HOME app's
   // and the address is another app's: a page view is counted against whoever
   // actually served it (views.ts).
@@ -2582,14 +2584,14 @@ let served = async (req: Request, env: Env, c: Clock): Promise<Response> => {
     if (!itself && !who.person && !await within(env.API_RATE, source(req))) {
       return wall(reporting(tooMany(), req, at))
     }
-    return wall(reporting(
-      await c.time(
-        'api',
-        () => api(req, env, dir, space!, app!, path.slice(4), who, c, at),
-      ),
-      req,
-      at,
-    ))
+    if (reads(mode(app.access), who.role) && !who.administrative) {
+      await recordUse(env.STORE, app.eid)
+    }
+    let answer = await c.time(
+      'api',
+      () => api(req, env, dir, space!, app!, path.slice(4), who, c, at),
+    )
+    return wall(reporting(answer, req, at))
   }
   // A private app hides its page too, not only its data (C-32607 item 5):
   // `access: private` says only its members can see it, and its files are
@@ -2610,6 +2612,9 @@ let served = async (req: Request, env: Env, c: Clock): Promise<Response> => {
   // is still the visitor, so a worker that only passes a store read on refuses
   // exactly what the page would have.
   let mayRead = !!itself || reads(mode(app.access), who.role)
+  if ((mayRead || app.script) && !who.administrative) {
+    await recordUse(env.STORE, app.eid)
+  }
   // Both at once, because they are two halves of one answer and neither
   // needs the other's result (T-33176). The app's own worker answers first
   // where it has one and the file is what it falls back to, so asking the

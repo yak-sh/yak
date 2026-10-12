@@ -104,6 +104,7 @@ import { ending } from './billing.ts'
 import { NOTES } from './standing.ts'
 import {
   draftFiles,
+  history,
   moved,
   own,
   type Pinner,
@@ -821,8 +822,8 @@ export let collected = async (env: Env, now = new Date()) => {
   return gone
 }
 
-// No app store is woken by the preview. R2's own upload times also keep recent
-// file edits alive, even when nobody deployed them or wrote app data.
+// No app store is woken by the preview. File history records the original
+// edit's time and author, which a platform copy or rename does not change.
 export let abandoned = async (env: Env, now = new Date(), only?: string) => {
   let rows = await meta(env).query(CENSUS) as unknown as Row[]
   let eligible = new Set(idleSpaces(rows, now.getTime()))
@@ -831,7 +832,7 @@ export let abandoned = async (env: Env, now = new Date(), only?: string) => {
   for (let space of await dir.all()) {
     if (only && space.eid != only) continue
     if (!eligible.has(space.eid) || refused(space, env)) continue
-    // All existing directory references carry their last-write stamps: memory,
+    // Directory references carry their creation and use clocks: memory,
     // connections, deploys, space or app hostnames, invitations and reports.
     // Ask generically so a new space-owned record needs no cleanup whitelist.
     let apps = await dir.apps(space)
@@ -843,19 +844,30 @@ export let abandoned = async (env: Env, now = new Date(), only?: string) => {
       let writes = await meta(env).query(
         `(${
           refs.slice(i, i + 5).map((eid) => `.refs=${eid}`).join(' | ')
-        }) ?created ?updated`,
+        }) ?created ?used`,
       ) as unknown as Row[]
-      used = !inactive(writes, now.getTime())
+      used = !inactive(
+        writes.filter((row) => row.used || row.created?.by || row.created?.via),
+        now.getTime(),
+      )
     }
     if (used) continue
-    let cursor: string | undefined
-    do {
-      let page = await env.BLOBS.list({ prefix: `${space.slug}/`, cursor })
-      used ||= page.objects.some((o) =>
-        !(o.uploaded.getTime() <= now.getTime() - IDLE)
-      )
-      cursor = page.truncated ? page.cursor : undefined
-    } while (cursor && !used)
+    let blobs = r2Objects(env.BLOBS)
+    for (let app of apps) {
+      let prefix = `${space.slug}/${app.slug}/`
+      for (let key of await blobs.list(`${prefix}history/`)) {
+        let edits = await history(
+          blobs,
+          prefix,
+          key.slice(`${prefix}history/`.length, -'.json'.length),
+        )
+        used ||= edits.some((edit) =>
+          edit.by && !(Date.parse(edit.at) <= now.getTime() - IDLE)
+        )
+        if (used) break
+      }
+      if (used) break
+    }
     if (!used) result.push(space.eid)
   }
   return result

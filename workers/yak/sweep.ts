@@ -22,6 +22,7 @@ import { KERNEL } from './meta.ts'
 import { adminWho } from './identity.ts'
 
 export let PATH = '/api/move'
+export let IDLE_PATH = '/api/idle-spaces'
 
 /** One store a sweep asks: its name, and what a person calls it. */
 export type Swept = { store: string; at: string }
@@ -66,6 +67,18 @@ export let fetch = async (req: Request, env: Env): Promise<Response> => {
   )
   if (who.role != 'owner') {
     return json(403, 'not_owner', `a sweep is an owner of ${meta.slug}'s`)
+  }
+  if (new URL(req.url).pathname == IDLE_PATH) {
+    if (req.method != 'GET') {
+      return json(405, 'method_not_allowed', 'read the idle spaces')
+    }
+    let { abandoned } = await import('./erase.ts')
+    let idle = new Set(await abandoned(env))
+    return Response.json(
+      (await dir.all()).filter((space) => idle.has(space.eid))
+        .map(({ eid, slug }) => ({ eid, slug })),
+      { headers: { 'cache-control': 'private, no-store' } },
+    )
   }
   let all = await stores(env)
   if (req.method == 'GET') return Response.json(all)

@@ -459,7 +459,8 @@ test('a deploy says how many round trips it took', async () => {
     }),
     // A delta draft checks the draft, deletion marker and legacy source for
     // each absent path, then writes its bytes and clears its deletion marker.
-    { hops: 5, r2: 10 },
+    // The two permission checks also receipt the space and app's use.
+    { hops: 7, r2: 10 },
   )
   let deploy = await costs('app_deploy', { space: 'ada', app: 'recipes' })
   // Include the tree and commit's reads that prevent immutable object rewrites.
@@ -494,8 +495,8 @@ test('a deploy says how many round trips it took', async () => {
 // And what a listing costs (T-35431). The shape is what the exact numbers are
 // here to hold: the directory is asked a fixed five times however many spaces
 // and apps the answer has — the caller's seats, the apps across them, what is
-// bound to those apps — and only the one fact an app's own store alone holds
-// (what is broken in it, unseen.ts `noted`) costs per app, two facets each,
+// bound to those apps. Reading what is broken in each app (unseen.ts `noted`)
+// costs two facets and one acknowledged use receipt per app,
 // asked as one wave. Space by space and app by app it was 38.
 test('a listing asks the directory a fixed number of times', async () => {
   let { env } = platform('listing-hops-secret')
@@ -519,10 +520,10 @@ test('a listing asks the directory a fixed number of times', async () => {
     else assertEquals(said.stmts > 0, true)
     return { hops: said.hops, stmts: said.stmts, r2: said.r2 }
   }
-  // 3 seats + 1 apps + 1 bindings, then 9 apps × 2 facets.
+  // 3 seats + 1 apps + 1 bindings, then 9 apps × (2 facets + 1 receipt).
   assertEquals(await costs('about', {}), { hops: 0, stmts: 0, r2: 0 })
   let all = await costs('app_list', {})
-  assertEquals({ hops: all.hops, r2: all.r2 }, { hops: 23, r2: 0 })
+  assertEquals({ hops: all.hops, r2: all.r2 }, { hops: 32, r2: 0 })
   // One space named is read and its seat asked for by name — 2 for 3 apps.
   let one = await costs('app_list', { space: 'one' })
   assertEquals({ hops: one.hops, r2: one.r2 }, { hops: 10, r2: 0 })

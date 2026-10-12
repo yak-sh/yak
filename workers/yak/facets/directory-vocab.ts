@@ -280,4 +280,18 @@ export let directoryDoc: VocabDoc = {
     },
   },
 }
-export let docs: VocabDoc[] = [directoryDoc, sweepDoc]
+export let useDoc: VocabDoc = {
+  title: 'directory-use',
+  reserved: false,
+  $defs: {
+    used: {
+      description: 'When a person or their app last used this entity.',
+      component: true,
+      type: 'object',
+      wire: false,
+      journal: false,
+      properties: { at: owned(time) },
+    },
+  },
+}
+export let docs: VocabDoc[] = [directoryDoc, sweepDoc, useDoc]

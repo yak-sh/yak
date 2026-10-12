@@ -209,7 +209,9 @@ let serve = async (req: Request, env: Env, r: Route) => {
   if (path == '/api/tunnel') return tunnel.fetch(req, env)
   // The store mover's sweep (sweep.ts, D-45640): the owner's door onto every
   // store's rehearsal and wake, before the connector for the same reason.
-  if (path == sweep.PATH) return sweep.fetch(req, env)
+  if (path == sweep.PATH || path == sweep.IDLE_PATH) {
+    return sweep.fetch(req, env)
+  }
   if (path == '/mcp' || path.startsWith('/api/')) {
     return bound(env.MCP, mcp, env).fetch(req)
   }

@@ -5,6 +5,7 @@ import { effectsIn } from '@yaks/vocab'
 import type { Options } from './store.ts'
 import { contributed } from '../attribution.ts'
 import { KERNEL } from '../meta.ts'
+import { maintenance } from '../used.ts'
 
 export let effects = (_host: unknown, options: Options): Handlers => {
   let at = options.store
@@ -15,7 +16,7 @@ export let effects = (_host: unknown, options: Options): Handlers => {
       !effectsIn(at.graph.vocab.docs).some((e) => e.name == 'register_writes')
     ) return {}
     return {
-      register_writes: async (event, tx) => {
+      register_writes: maintenance(async (event, tx) => {
         if (!at.app) return
         let [row] = await tx.get([event.entity.eid])
         let vias = new Set<string>()
@@ -26,7 +27,7 @@ export let effects = (_host: unknown, options: Options): Handlers => {
         for (let via of vias) {
           await contributed({ STORE: at.env.STORE! }, via, at.app)
         }
-      },
+      }),
     }
   }
   return {

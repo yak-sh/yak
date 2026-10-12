@@ -55,7 +55,7 @@ test('OAuth names the account and opens admin doors without a website cookie', a
     equal(post.status, 405)
     await post.body?.cancel()
 
-    for (let path of ['/api/fee', '/api/move']) {
+    for (let path of ['/api/fee', '/api/move', '/api/idle-spaces']) {
       await status(path, bearer(ownerToken), 200)
       await status(path, { cookie: k.owner.cookie }, 200)
       await status(path, bearer(token), 403)
@@ -66,6 +66,14 @@ test('OAuth names the account and opens admin doors without a website cookie', a
         cookie: k.owner.cookie,
       }, 403)
     }
+    let census = await get('/api/idle-spaces', bearer(ownerToken))
+    equal(await census.json(), [])
+    let destructive = await k.at(k.host, '/api/idle-spaces', {
+      method: 'POST',
+      headers: bearer(ownerToken),
+    })
+    equal(destructive.status, 405)
+    await destructive.body?.cancel()
     let fee = await k.at(k.host, '/api/fee', {
       method: 'POST',
       headers: {
@@ -105,7 +113,7 @@ test('OAuth names the account and opens admin doors without a website cookie', a
     // A pasted grant remains a connector/app credential, not an admin door.
     let grant = await connector(k, k.owner.cookie).answer('grant', {})
     let held = ok(/^yak login (\S+)/.exec(grant.text)?.[1])
-    for (let path of ['/api/fee', '/api/move', tunnel]) {
+    for (let path of ['/api/fee', '/api/move', '/api/idle-spaces', tunnel]) {
       await status(path, { ...bearer(held), cookie: k.owner.cookie }, 403)
     }
     await status('/oauth/userinfo', bearer(held), 401)
