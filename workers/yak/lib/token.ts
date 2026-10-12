@@ -5,7 +5,7 @@
 // space the sign-in happened at (null for the platform-wide door), and a unix
 // second the token dies at — and the mac is HMAC-SHA256 over the claims text
 // under the session's own key. An edited or forged token fails the mac, an old
-// one fails `exp`. WebCrypto's constant-time verify checks a seal; repeat
+// one fails `exp`. WebCrypto authenticates a seal when signing or verifying;
 // opens can reuse that result for the exact seal and key. The role a person
 // holds is membership, read from the directory, never a claim: a token
 // cannot promote.
@@ -92,15 +92,26 @@ let key = (secret: string, use: Use) =>
 let sealWith = async (k: CryptoKey, value: unknown) => {
   let body = b64u(enc.encode(JSON.stringify(value)))
   let mac = await crypto.subtle.sign('HMAC', k, enc.encode(body))
-  return `${body}.${b64u(new Uint8Array(mac))}`
+  let sealed = `${body}.${b64u(new Uint8Array(mac))}`
+  remember(k, sealed)
+  return sealed
 }
 
-// Only successful WebCrypto verifications, kept by the immutable key and
+// Only successful WebCrypto signatures and verifications, kept by the key and
 // exact seal. Count and length bound the memory per key; the WeakMap lets it
 // go with the key. Values and expiry decisions are never kept.
 let verified = new WeakMap<CryptoKey, Set<string>>()
 let verificationLimit = 256
 let sealLimit = 4096
+
+let remember = (k: CryptoKey, sealed: string) => {
+  if (sealed.length > sealLimit) return
+  let seen = verified.get(k)
+  if (!seen) verified.set(k, seen = new Set())
+  seen.delete(sealed)
+  seen.add(sealed)
+  if (seen.size > verificationLimit) seen.delete(seen.values().next().value!)
+}
 
 // The value under a mac this key made, or null. A miss uses WebCrypto's
 // constant-time verify; a hit reuses its result and parses the value afresh.
@@ -119,15 +130,7 @@ let openWith = async (k: CryptoKey, sealed: string) => {
         enc.encode(body),
       )
       if (!ok) return null
-      if (sealed.length <= sealLimit) {
-        seen = verified.get(k)
-        if (!seen) verified.set(k, seen = new Set())
-        seen.delete(sealed)
-        seen.add(sealed)
-        if (seen.size > verificationLimit) {
-          seen.delete(seen.values().next().value!)
-        }
-      }
+      remember(k, sealed)
     }
     return JSON.parse(dec.decode(unb64u(body)))
   } catch {
