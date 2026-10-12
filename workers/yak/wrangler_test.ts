@@ -87,6 +87,21 @@ test('a container deployment retries the SDK API failure that omits the resource
   assertEquals({ code, calls }, { code: 0, calls: 2 })
 })
 
+test('a consumed asset completion token starts a fresh Wrangler upload', async () => {
+  let args = ['deploy', '--env', 'staging', '-c', '.bundle.toml']
+  let calls: string[][] = []
+  let code = await runStep(args, (argv) => {
+    calls.push(argv)
+    return Promise.resolve({
+      code: calls.length == 1 ? 1 : 0,
+      output:
+        `[ERROR] ${apiFailure}\nCompletion token has already been consumed [code: 100312]`,
+      log: responseLog(400),
+    })
+  }, { wait: () => Promise.resolve() })
+  assertEquals({ code, calls }, { code: 0, calls: [args, args] })
+})
+
 for (
   let [name, output, log] of [
     [
@@ -124,6 +139,11 @@ for (
       'local failure after an API warning',
       `[ERROR] ${apiFailure}\n[ERROR] Invalid configuration`,
       responseLog(503),
+    ],
+    [
+      'denial after a consumed token warning',
+      `[ERROR] ${apiFailure}\nCompletion token has already been consumed [code: 100312]\n[ERROR] ${apiFailure}\nAuthentication error [code: 10000]`,
+      responseLog(401),
     ],
     ['unknown API failure', apiFailure, ''],
   ]

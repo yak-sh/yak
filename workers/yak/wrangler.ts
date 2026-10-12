@@ -194,6 +194,9 @@ let transient = ({ output, log = '' }: StepResult) => {
     output,
   )
   if (!malformed && !failed) return false
+  // Asset completion tokens are single-use. A new Wrangler process starts a
+  // fresh upload session rather than resubmitting the consumed token.
+  if (failed && /\[code: 100312\]/.test(output)) return true
   let status = /\b(?:GET|POST|PUT|PATCH|DELETE|HEAD|OPTIONS) \/\S+ -> (\d{3})\b/
     .exec(output)?.[1]
   if (!status) {
@@ -232,7 +235,7 @@ export let runStep = async (
     if (signal?.aborted) return 130
     let ms = 1000 * 2 ** (attempt - 1)
     console.log(
-      `Cloudflare API temporarily unavailable; retrying Wrangler ${
+      `Temporary Cloudflare API failure; retrying Wrangler ${
         command(args)
       } (attempt ${attempt + 1}/3) in ${ms / 1000}s`,
     )
