@@ -33,6 +33,7 @@ import {
   type Extension,
   FALSE,
   lit,
+  lookup,
   op,
   or,
   type Screen,
@@ -40,7 +41,6 @@ import {
   table,
   Unsupported,
   val,
-  when,
 } from '@yaks/sql'
 import { permitted, ranked, screens } from './search.ts'
 import { type Field, indexes, indexName } from './fields.ts'
@@ -126,10 +126,12 @@ export let search = (fields: Field[], db?: Driver): Extension => {
       let ids = rank()
       // No match selects no rows, so there is nothing to put in order.
       if (!ids.length) return lit(null)
-      return when(
-        ids.map((id, i) => [lit(id), lit(i)]),
-        lit(ids.length),
+      // Site.owner is this row's stable integer id, including cursor anchors.
+      return lookup(
         site.owner,
+        ids.map((id, i) => [id, lit(i)]),
+        { stable: true },
+        lit(ids.length),
       )
     },
   }

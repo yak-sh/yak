@@ -88,7 +88,6 @@ test('the ranking is compiled, not bound — no params in the order', async () =
     { extend: [semantic(db, embedder)] },
   )
   let [, order] = sql.split(' order by ')
-  assert(order.startsWith('case "entity"."id" when '), order)
   assert(!order.includes('?'), order)
   // every value the statement does bind is an integer id, never text
   assert(params.every((p) => typeof p == 'number'), `${params}`)

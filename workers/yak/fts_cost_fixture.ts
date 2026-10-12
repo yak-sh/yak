@@ -8,12 +8,16 @@ import {
   compile,
   type Driver,
   eq,
+  fn,
   insert,
+  lit,
+  lookup,
   not,
   render,
   select,
   table,
   val,
+  when,
 } from '@yaks/sql'
 import { loadVocab } from '@yaks/vocab'
 
@@ -184,5 +188,33 @@ export let ftsCost = (storage: DurableStorage) => {
     counting = false
     queries[query] = { rows, read, written }
   }
-  return { ...ranked, queries }
+  let lookups: Record<
+    string,
+    { rows: unknown[]; read: number; written: number }
+  > = {}
+  let arms = Array.from(
+    { length: 1000 },
+    (_, i): [number, ReturnType<typeof lit>] => [i + 1, lit(i)],
+  )
+  let key = col('id', 'entity')
+  for (
+    let [name, value] of [
+      [
+        'linear',
+        when(arms.map(([n, value]) => [lit(n), value]), lit(1000), key),
+      ],
+      ['stable', lookup(key, arms, { stable: true }, lit(1000))],
+      ['bound', lookup(key, arms, { stable: true }, val(1000))],
+    ] as const
+  ) {
+    read = written = 0
+    counting = true
+    let rows = db.query(select({
+      cols: [as(fn('sum', value), 'n')],
+      from: table('entity'),
+    }))
+    counting = false
+    lookups[name] = { rows, read, written }
+  }
+  return { ...ranked, queries, lookups }
 }

@@ -65,6 +65,7 @@ All exports are available from `@yaks/sql`; the table groups them by purpose.
 | Query compilation     | `compile`, `bind`, `BindOpts`, `Compiled`, `screen`, `tallied`, `Unsupported`, `whole`                                      |
 | SQL nodes             | `Expr`, `Query`, `Stmt`, `Select`, `Insert`, `Update`, `Delete`, schema-operation types, `Raw`, `Param`, and their builders |
 | Rendering             | `render`, `shape`, `excerpt`, `isRaw`                                                                                       |
+| Numeric lookup        | `lookup`                                                                                                                    |
 | Drivers               | `Driver`, `Row`, `effect`, `scan`, `tally`, `revision`                                                                      |
 | Property reads        | `Tag`, `tagOf`, `held`, `field`, `Derived`, `DerivedProp`, `ladders`, `derivedOf`, `worn`                                   |
 | Computed components   | `Backing`, `Backings`, `eidOf`, `idOf`, `eidAt`                                                                             |
@@ -253,6 +254,37 @@ keeping identifiers for diagnosis. `excerpt` is the shape a trace keeps of a
 statement it ran: at most 512 characters, and past that its start and how many
 parameters it binds. Treat built nodes as immutable: rendering caches
 parameter-free parts.
+
+### Numeric lookup
+
+`lookup(key, arms, { stable: true }, missing)` is a **numeric lookup**: it
+selects the value paired with a finite numeric key. The first duplicate key
+wins. Null and non-numeric keys return `missing` (null by default). Only the
+selected value or default is evaluated, in each row where it is selected.
+
+```ts
+import { as, lit, lookup, select } from '@yaks/sql'
+import { open } from '@yaks/sqlite/db'
+import { equal } from '@yaks/testing'
+
+let db = open(':memory:')
+try {
+  equal(
+    db.query(select({
+      cols: [as(lookup(lit(7), [[7, lit('seven')]], { stable: true }), 'word')],
+    })),
+    [{ word: 'seven' }],
+  )
+} finally {
+  db.close()
+}
+```
+
+The required `{ stable: true }` capability permits reading the key more than
+once. The caller guarantees its value and numeric type remain fixed during the
+row, including after SQL query flattening. A stored integer owner id is stable;
+a volatile function or a column derived from one is not. Numeric lookup uses
+balanced comparisons, so a large map does not walk every earlier key.
 
 ## Driver
 

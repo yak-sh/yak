@@ -38,4 +38,10 @@ test('a screened text ranking bounds work beyond its term statistics', async () 
     report.queries['dragon .comment .order=search .limit=1005'].rows.length,
     report.history + 1,
   )
+  assertEquals(report.lookups.stable.rows, report.lookups.linear.rows)
+  assertEquals(report.lookups.bound.rows, report.lookups.linear.rows)
+  assertEquals(report.lookups.stable.written, 0)
+  assertEquals(report.lookups.bound.written, 0)
+  assert(report.lookups.stable.read <= report.lookups.linear.read)
+  assert(report.lookups.bound.read <= report.lookups.linear.read)
 })

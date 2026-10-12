@@ -38,11 +38,11 @@ import {
   type Extension,
   FALSE,
   lit,
+  lookup,
   type Screen,
   type Site,
   Unsupported,
   val,
-  when,
 } from '@yaks/sql'
 import type { Statements } from '@yaks/sql'
 import { type Near, nearest, type Rank, vectorOf } from './near.ts'
@@ -143,14 +143,15 @@ export let semantic = (
           '@yaks/embedding',
         )
       }
-      // An empty neighbourhood selects no rows, so there is nothing to put in
-      // order — and a case with no arms is not a statement.
+      // An empty neighbourhood selects no rows, so there is nothing to order.
       if (!held.length) return lit(null)
       // The neighbours are already in order, so their position is the sort key.
-      return when(
-        held.map((n, i) => [lit(n.owner), lit(i)]),
-        lit(held.length),
+      // Site.owner is this row's stable integer id, including cursor anchors.
+      return lookup(
         site.owner,
+        held.map((n, i) => [n.owner, lit(i)]),
+        { stable: true },
+        lit(held.length),
       )
     },
     neighbours: () => held ?? [],
