@@ -16,6 +16,8 @@ let cases = ([
   ['.order=hot', []],
   ['.filed.assignee.doc.title~=jeff', []],
   ['.updated.at=today', ['moving-time']],
+  ['.updated.at="today,yesterday"', []],
+  ['.updated.at=today,"today,yesterday"', []],
   ['.updated.at>="1 hour ago"', ['moving-time']],
 ] as [string, string[]][]).map(([q, want]) => ({
   q,

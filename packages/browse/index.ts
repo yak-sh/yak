@@ -14,7 +14,8 @@
 // moves to IDB, `anchor` swaps its lookup; the derivation and callers stay put.
 import { type Dep, type Idx, indexes, vocab } from './types.ts'
 import { isRef } from './props.ts'
-import { EXISTS, ORDER, type Pred, TEXT, WANT } from './query.ts'
+import { EXISTS, operandOf, ORDER, type Pred, TEXT, WANT } from './query.ts'
+import { literals } from '@yaks/sql'
 
 // A row as the index reads it — the merged-components shape both the live cache
 // and a client Row speak. Kept structural so index.ts carries no cycle back to
@@ -213,11 +214,14 @@ export let anchor = (ix: Index, preds: Pred[]): Set<string> | undefined => {
       continue
     }
     if (
-      !p.at && p.comp && p.prop && p.op == '' && p.value &&
-      !p.value.includes(',') && !/\.\./.test(p.value) && isRef(p.comp, p.prop)
+      !p.at && p.comp && p.prop && p.op == '' && isRef(p.comp, p.prop)
     ) {
-      consider(ix.refs.get(refKey(p.comp, p.prop))?.get(p.value) ?? NONE)
-      continue
+      let values = literals(operandOf(p) ?? null)
+      if (values) {
+        let refs = ix.refs.get(refKey(p.comp, p.prop))
+        consider(new Set(values.flatMap((v) => [...refs?.get(v) ?? []])))
+        continue
+      }
     }
     if (p.comp && implies(p)) consider(ix.byComp.get(p.comp) ?? NONE)
   }

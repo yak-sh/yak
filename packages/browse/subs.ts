@@ -2,8 +2,8 @@
 // live.ts's agreement check: which queries are expected to differ (`gaps`) and
 // what differs (`diff`). subs_test.ts drives it with plain values.
 import { propAt } from './props.ts'
-import { leafOf, type Pred } from './query.ts'
-import { timeSpan } from '@yaks/query'
+import { leafOf, operandOf, type Pred } from './query.ts'
+import { timeEdges } from '@yaks/query'
 
 // Agreement is hard for moving time: membership can change with no write.
 // Path membership is maintained from far-side reference invalidation.
@@ -13,21 +13,16 @@ import { timeSpan } from '@yaks/query'
 // bound, and the difference is the feature, not a divergence to assert on.
 export type Gap = 'moving-time' | 'window'
 
-let atoms = (value: string) =>
-  value.split(',').flatMap((v) => {
-    let m = v.match(/^(.*?)\.\.(?:\.?)(.*)$/s)
-    return m ? [m[1], m[2]] : [v]
-  }).filter(Boolean)
-
-let fixed = (value: string) => /^\d{4}-\d{2}-\d{2}(?:[t ].*)?$/i.test(value)
-
 let moving = (p: Pred): boolean => {
   // A reverse hop moves when its SUB-filter has a moving-time leaf: a parent
   // ages out of `.comments.created.at=today` with nobody writing to it.
   if (p.rev) return p.rev.preds.some(moving)
   let target = leafOf(p)
   if (propAt(target.comp, target.prop)?.type != 'time') return false
-  return atoms(p.value).some((v) => !fixed(v) && !!timeSpan(v))
+  let op = p.op == '' || p.op == '!' ? '=' : p.op
+  let value = operandOf(p) ?? p.value
+  return JSON.stringify(timeEdges(op, value, 0)) !=
+    JSON.stringify(timeEdges(op, value, 366 * 86_400_000))
 }
 
 export let gaps = (preds: Pred[]): Gap[] => [

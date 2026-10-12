@@ -4,11 +4,39 @@ import { assertEquals } from '@std/assert'
 import {
   adopt,
   edgeRider,
+  matchQuery,
   pageRanked,
   parseQuery,
   resolveRefs,
   windowOf,
 } from './query.ts'
+
+test('browser matching preserves quoted scalars, lists and ranges', () => {
+  let titles = ['a,b', 'a..b', 'a', 'b']
+  let select = (q: string) =>
+    titles.filter((title) => matchQuery({ doc: { title } }, parseQuery(q)))
+  assertEquals(select('.doc.title="a,b"'), ['a,b'])
+  assertEquals(select(".doc.title='a..b'"), ['a..b'])
+  assertEquals(select('.doc.title="a,b",a'), ['a,b', 'a'])
+  assertEquals(select('.doc.title=a..b'), titles)
+  assertEquals(adopt(parseQuery('.doc.title="a,b"')), { doc: { title: 'a,b' } })
+})
+
+test('saved reference literals resolve as one operand', () => {
+  let eid = '11111111-1111-4111-8111-111111111111'
+  for (let name of ['person,one', 'person..two']) {
+    let seen: string[] = []
+    let preds = resolveRefs(
+      parseQuery(`.filed.assignee="${name}"`),
+      (value) => {
+        seen.push(value)
+        return eid
+      },
+    )
+    assertEquals(seen, [name])
+    assertEquals(matchQuery({ filed: { assignee: eid } }, preds), true)
+  }
+})
 
 test('edge selectors accept boolean and named relation declarations', () => {
   for (let type of ['cites', 'imports', 'referenced']) {

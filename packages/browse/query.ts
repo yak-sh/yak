@@ -69,8 +69,8 @@ import {
 import { Unknown } from '@yaks/vocab'
 import { term as ftsTerm } from '@yaks/fts'
 import { type Check, check } from '@yaks/match'
-import { type Tag, tagOf } from '@yaks/sql'
-import { bare, type Clause, parse, timeSpan, type Value } from '@yaks/query'
+import { literals, type Tag, tagOf } from '@yaks/sql'
+import { bare, type Clause, parse, scalar, type Value } from '@yaks/query'
 import { frozen } from '@yaks/fp'
 export { ftsTerm }
 export { WALK_DEPTH, WALK_LIMIT } from '@yaks/query'
@@ -91,6 +91,8 @@ export type Pred = {
   prop: string
   op: string
   value: string
+  /** Structured property operand; value remains its display text. */
+  operand?: Value
   // A path predicate's chain: deref the reference at `comp.prop`, then follow
   // each hop in `at` in turn — every hop but the LAST is another `{eid}` deref
   // — and test the final hop's column against op/value. A single-element `at`
@@ -222,6 +224,12 @@ export type Rev = {
 // pred is its own leaf. Every reader resolving the tested column (its type,
 // ref-resolution, quarantine reveal) reads THROUGH this, never `p.comp`.
 export let leafOf = (p: Pred): Hop => p.at ? p.at[p.at.length - 1] : p
+
+/** A property predicate's structured operand, including hand-built scalars. */
+export let operandOf = (p: Pred): Value | undefined =>
+  p.prop && ['', '!', '~', '<', '<=', '>', '>='].includes(p.op)
+    ? p.operand ?? scalar(p.value)
+    : undefined
 
 // What a pred evaluates against: an entity's components, merged — the
 // shape of both a live-cache row and a client Row's `.comps`.
@@ -469,7 +477,7 @@ export let namesLazy = (preds: Pred[]) =>
 export let scopedSessions = (preds: Pred[]): string[] =>
   preds
     .filter((p) => p.comp == 'entry' && p.prop == 'session' && p.op == '')
-    .flatMap((p) => p.value.includes('..') ? [] : p.value.split(','))
+    .flatMap((p) => literals(operandOf(p) ?? null) ?? [])
     .filter(Boolean)
 
 // Quarantine is invisible by default, but mentioning the facet is the
@@ -559,12 +567,11 @@ let kindScope = (value: string): Pred[] => {
   return out
 }
 
-// Time phrases stay authored: a saved `today` must advance tomorrow. timeSpan()
-// validates that language without freezing it; every other scalar becomes its
-// canonical comparison string through the same parser writes use.
+// Time operands stay authored; the shared matcher resolves their phrases and
+// literal scalars. Other property input sugar uses the same parser writes use.
 let atom = (p: Prop, value: string): string => {
   if (!value) return value
-  if (tagFor(p) == 'time' && timeSpan(value)) return value
+  if (tagFor(p) == 'time') return value
   if (tagFor(p) == 'eid') {
     try {
       return String(parseProp(p, value))
@@ -575,15 +582,12 @@ let atom = (p: Prop, value: string): string => {
   return String(parseProp(p, value))
 }
 
-let range = (p: Prop, value: string): string => {
-  let m = value.match(/^(.*?)\.\.(\.?)(.*)$/s)
-  if (!m) return atom(p, value)
-  let [, lo, excl, hi] = m
-  return `${atom(p, lo)}..${excl ? '.' : ''}${atom(p, hi)}`
-}
-
-let typedValue = (p: Prop, value: string): string =>
-  value.split(',').map((v) => range(p, v)).join(',')
+let mapValue = (value: Value, f: (raw: string) => string): Value =>
+  value.kind == 'list'
+    ? { ...value, items: value.items.map((v) => mapValue(v, f)) }
+    : value.kind == 'range'
+    ? { ...value, lo: mapValue(value.lo, f), hi: mapValue(value.hi, f) }
+    : { ...value, raw: f(value.raw) }
 
 // Grammar belongs to @yaks/query. This pass binds its schema-free clauses to
 // the fleet's routed predicates (also consumed by browser matching, reference
@@ -820,8 +824,12 @@ let bindClause = (c: Clause): Pred[] => {
     return [p]
   }
   p.tag = tagFor(leaf)
+  p.operand = c.value ?? scalar('')
   let type = typed(leaf.comp, leaf.prop)
-  if (type && p.op != '~' && p.value != '') p.value = typedValue(type, p.value)
+  if (type && p.op != '~' && p.value != '') {
+    p.operand = mapValue(p.operand, (raw) => atom(type, raw))
+    p.value = flatValue(p.operand)
+  }
   return [p]
 }
 
@@ -911,7 +919,9 @@ let tagAt = (p: Pred): Tag => p.tag ?? tagFor(leafOf(p))
 // (the subscription sweep hands the matcher a later moment on purpose).
 let checks = new WeakMap<Pred, Check | null>()
 let compiled = (p: Pred, tag: Tag): Check | null => {
-  if (!checks.has(p)) checks.set(p, check(p.op, p.value, tag, 0))
+  if (!checks.has(p)) {
+    checks.set(p, check(p.op, operandOf(p) ?? p.value, tag, 0))
+  }
   return checks.get(p)!
 }
 
@@ -925,7 +935,7 @@ let compiled = (p: Pred, tag: Tag): Check | null => {
 // no place to throw.
 let test = (v: unknown, p: Pred, now?: number, tag = tagAt(p)): boolean => {
   let hit = tag == 'time'
-    ? check(p.op, p.value, tag, now ?? Date.now())
+    ? check(p.op, operandOf(p) ?? p.value, tag, now ?? Date.now())
     : compiled(p, tag)
   return !!hit && hit(v ?? null)
 }
@@ -972,21 +982,21 @@ export let resolveRefs = (
     if ((!spine && !isRef(comp, target)) || (p.op != '' && p.op != '!')) {
       return p
     }
-    if (!p.value || /\.\./.test(p.value)) return p
+    let operand = operandOf(p)
+    if (!operand || !literals(operand)?.length) return p
     let type = spine ? anyRef : typed(comp, target)
     if (!type) return p
-    let value = p.value.split(',')
-      .map((part) => {
-        if (!part) return part
-        try {
-          return String(parseProp(type, part, { resolve: lookup }))
-        } catch (error) {
-          if (error instanceof IdError) throw error
-          return part // a live saved query may name an entity not here yet
-        }
-      })
-      .join(',')
-    return value == p.value ? p : { ...p, value }
+    let next = mapValue(operand, (part) => {
+      if (!part) return part
+      try {
+        return String(parseProp(type, part, { resolve: lookup }))
+      } catch (error) {
+        if (error instanceof IdError) throw error
+        return part // a live saved query may name an entity not here yet
+      }
+    })
+    let value = flatValue(next)
+    return value == p.value ? p : { ...p, value, operand: next }
   })
 
 // Does an entity satisfy every pred? A TEXT pred reads the doc itself —
@@ -1215,7 +1225,8 @@ export function adopt(preds: Pred[], comp?: string) {
     if (
       p.comp != comp || !p.prop || p.at?.length || p.op != '' || p.value == ''
     ) continue
-    if (p.value.includes(',') || /\.\./.test(p.value)) continue
+    let operand = operandOf(p)
+    if (operand?.kind != 'scalar' && operand?.kind != 'time') continue
     out[p.prop] = /^-?\d+(\.\d+)?$/.test(p.value) ? Number(p.value) : p.value
   }
   return out

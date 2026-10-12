@@ -47,6 +47,7 @@ import {
   namesLazy,
   NEAR,
   NEVER,
+  operandOf,
   ORDER,
   parseQuery,
   type Pred,
@@ -369,15 +370,33 @@ let querySignals = new Map<string, Signal<string[]>>() // sub name -> its signal
 // the round-trip below refuses every one of them, and the same filter under
 // two bindings would open two server sets.
 let qkey = (preds: Pred[]) =>
-  JSON.stringify(preds, (k, v) => k == 'tag' ? undefined : v)
+  JSON.stringify(preds, (k, v) => {
+    if (k == 'tag') return undefined
+    if (v && typeof v == 'object' && 'comp' in v && 'op' in v && 'value' in v) {
+      let { tag: _tag, operand: _operand, ...plain } = v
+      let operand = operandOf(v)
+      return operand ? { ...plain, operand } : plain
+    }
+    return v
+  })
 
 // Programmatic queries must round-trip through the Tasks grammar. The browser
 // transports the result opaquely; FTS, semantic ranking and graph-wide walks
 // must never be re-evaluated against a partial working set.
 let quoteQuery = (value: string) =>
   /[\s&"'\\]/.test(value) ? JSON.stringify(value) : value
+let operandLine = (value: NonNullable<Pred['operand']>): string =>
+  value.kind == 'list'
+    ? value.items.map(operandLine).join(',')
+    : value.kind == 'range'
+    ? operandLine(value.lo) + (value.exclusiveEnd ? '...' : '..') +
+      operandLine(value.hi)
+    : /[,]|\.\./.test(value.raw)
+    ? JSON.stringify(value.raw)
+    : quoteQuery(value.raw)
 let predLine = (p: Pred): string | undefined => {
-  let value = quoteQuery(p.value)
+  let operand = operandOf(p)
+  let value = operand ? operandLine(operand) : quoteQuery(p.value)
   let op = p.op === ''
     ? '='
     : p.op === '~'
