@@ -1,7 +1,9 @@
 import { test } from '@yaks/testing'
 import { assertEquals, assertStringIncludes } from '@std/assert'
 import {
+  inside,
   ours,
+  reap,
   running,
   scratch,
   strays,
@@ -212,5 +214,57 @@ test('scratch git fixtures do not inherit the caller repository', async () => {
     assertEquals(await git('-C', caller, 'status', '--porcelain'), '')
   } finally {
     Deno.removeSync(root, { recursive: true })
+  }
+})
+
+// A test's server outlives a test killed before its `finally`, in a session of
+// its own; what still marks it is the run in its environment or its cwd.
+let sleeper = (env: Record<string, string>, cwd?: string) =>
+  new Deno.Command('sleep', { args: ['30'], env, cwd, clearEnv: true }).spawn()
+
+test('reap ends what runs in a run directory and leaves the rest', async () => {
+  let dir = Deno.makeTempDirSync({ prefix: 'scratch-reap-' })
+  let path = { PATH: Deno.env.get('PATH') ?? '' }
+  let marked = sleeper({ ...path, YAK_CONFIG: `${dir}/yak.json` })
+  let working = sleeper(path, dir)
+  let other = sleeper(path)
+  try {
+    assertEquals(inside(dir).sort(), [marked.pid, working.pid].sort())
+    let ended = await reap(dir)
+    assertEquals(
+      ended.map((l) => Number(l.split(' ')[0])).sort(),
+      [
+        marked.pid,
+        working.pid,
+      ].sort(),
+    )
+    assertStringIncludes(ended[0], 'sleep 30')
+    assertEquals((await marked.status).signal, 'SIGTERM')
+    assertEquals(running(other.pid), true)
+  } finally {
+    for (let p of [marked, working, other]) {
+      try {
+        p.kill('SIGKILL')
+      } catch { /* ended */ }
+      await p.status
+    }
+    Deno.removeSync(dir, { recursive: true })
+  }
+})
+
+test('a run ends a detached process it left behind and says so', async () => {
+  let dir = Deno.makeTempDirSync({ prefix: 'scratch-left-' })
+  let said: string[] = []
+  try {
+    let code = await scratch(
+      ['sh', '-c', 'setsid sleep 30 >/dev/null 2>&1 &'],
+      { PATH: Deno.env.get('PATH') ?? '', TMPDIR: dir },
+      (l) => said.push(l),
+    )
+    assertEquals(code, 0)
+    assertStringIncludes(said.join('\n'), '1 process still ran')
+    assertEquals(inside(`${dir}/tasks-run-${Deno.pid}`), [])
+  } finally {
+    Deno.removeSync(dir, { recursive: true })
   }
 })

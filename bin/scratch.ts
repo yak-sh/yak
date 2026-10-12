@@ -14,7 +14,10 @@
 //
 // Three doors close the directory: normal exit, an accepted signal, and the
 // next run's stale sweep inside an explicitly owned base (a SIGKILLed run
-// cannot clean up after itself). Shared /tmp is never swept. Afterwards the
+// cannot clean up after itself). Shared /tmp is never swept. Each door first
+// ends the processes still running in the directory, since a test's server
+// outlives a test killed before its `finally`, and its launcher's child sits
+// in a session of its own. Afterwards the
 // run reports any new `tasks-*`
 // entry that appeared in the base directory: that is a spawn site writing to a
 // hard-coded `/tmp` instead of TMPDIR, and it is how /tmp filled to 0 bytes
@@ -55,6 +58,99 @@ export let running = (pid: number) => {
   }
 }
 
+let proc = (pid: number, file: string) => {
+  try {
+    return new TextDecoder().decode(Deno.readFileSync(`/proc/${pid}/${file}`))
+  } catch {
+    return undefined
+  }
+}
+
+// A zombie has exited; only its parent's wait is left.
+let living = (pid: number) => {
+  let stat = proc(pid, 'stat')
+  return stat != null && stat[stat.lastIndexOf(')') + 2] != 'Z'
+}
+
+/**
+ * The processes still living in a run directory: a test's server, the worker
+ * its launcher handed off, a child whose test was killed before its `finally`.
+ * Whatever session or parent each has ended up with, it carries the run in its
+ * environment (TMPDIR and the state directories) or works inside it.
+ */
+export let inside = (dir: string): number[] => {
+  let within = (path: string) => path == dir || path.startsWith(dir + '/')
+  let pids: number[] = []
+  let names: string[]
+  try {
+    names = [...Deno.readDirSync('/proc')].map((e) => e.name)
+  } catch {
+    return pids
+  }
+  for (let name of names) {
+    let pid = Number(name)
+    if (!pid || pid == Deno.pid) continue
+    let env = proc(pid, 'environ')?.split('\0') ?? []
+    let cwd = ''
+    try {
+      cwd = Deno.readLinkSync(`/proc/${pid}/cwd`).replace(/ \(deleted\)$/, '')
+    } catch { /* gone, or not ours to read */ }
+    if (within(cwd) || env.some((e) => within(e.slice(e.indexOf('=') + 1)))) {
+      pids.push(pid)
+    }
+  }
+  return pids
+}
+
+/**
+ * End what still runs in a run directory before it is removed: asked to stop,
+ * then cut off once `wait` ms pass. A process that keeps running after its run
+ * holds a port and a deleted graph, and nothing else will ever end it.
+ * Answers each process found, by pid and command line.
+ */
+export let reap = async (dir: string, wait = 10_000): Promise<string[]> => {
+  let found = new Map<number, string>()
+  let ask = (signal: Deno.Signal) => {
+    for (let pid of inside(dir)) {
+      if (!found.has(pid)) {
+        let line = proc(pid, 'cmdline')?.replaceAll('\0', ' ').trim() ?? ''
+        found.set(pid, line.slice(0, 160))
+      }
+      try {
+        Deno.kill(pid, signal)
+      } catch { /* already gone */ }
+    }
+  }
+  let settle = async (ms: number) => {
+    let end = Date.now() + ms
+    while ([...found.keys()].some(living) && Date.now() < end) {
+      await new Promise((r) => setTimeout(r, 50))
+    }
+  }
+  ask('SIGTERM')
+  if (!found.size) return []
+  await settle(wait)
+  // Whatever outlasted the wait, or started while the rest wound down.
+  ask('SIGKILL')
+  await settle(2000)
+  return [...found].map(([pid, line]) => `${pid} ${line}`)
+}
+
+// A process the run left behind is a test that did not stop what it started.
+let ended = (lines: string[], say: (line: string) => void) => {
+  if (!lines.length) return
+  let many = `${lines.length} process${lines.length == 1 ? '' : 'es'}`
+  say(`\n─── ${many} still ran in the run directory, now ended ───`)
+  for (let line of lines) say(`  ${line}`)
+}
+
+/** The run directories among `names` whose runner is gone. */
+export let stale = (names: Iterable<string>, alive = running) =>
+  [...names].filter((name) => {
+    let owner = /^tasks-run-(\d+)$/.exec(name)
+    return owner && !alive(Number(owner[1]))
+  })
+
 /**
  * Remove the run directories of runs that are gone, among the base's
  * `tasks-*` entries (read here unless the caller already has them). A run
@@ -67,9 +163,7 @@ export let sweep = (
   names: Set<string> = tasksEntries(base),
 ) => {
   let gone: string[] = []
-  for (let name of names) {
-    let owner = /^tasks-run-(\d+)$/.exec(name)
-    if (!owner || alive(Number(owner[1]))) continue
+  for (let name of stale(names, alive)) {
     try {
       Deno.removeSync(`${base}/${name}`, { recursive: true })
       gone.push(name)
@@ -107,7 +201,10 @@ export let scratch = async (
   let before = tasksEntries(base)
   // A dead PID proves no process owns it, not that this run owns its files.
   // The default /tmp is shared with other sessions.
-  if (mine) sweep(base, running, before)
+  if (mine) {
+    for (let name of stale(before)) ended(await reap(`${base}/${name}`), say)
+    sweep(base, running, before)
+  }
   let dir = `${base}/tasks-run-${Deno.pid}`
   Deno.mkdirSync(dir, { recursive: true })
 
@@ -169,6 +266,7 @@ export let scratch = async (
     Deno.removeSignalListener(signal, handler)
   }
 
+  ended(await reap(dir), say)
   let held: unknown
   try {
     Deno.removeSync(dir, { recursive: true })

@@ -226,6 +226,30 @@ export let runtimeStack = (
   to = runtimeRoot() ? Deno.env.get('YAK_RUNTIME_ROOT') : undefined,
 ): string => from && to ? stack.replaceAll(to + '/', from + '/') : stack
 
+/** End as the launcher would have asked, once it is gone. A launcher killed
+ * outright forwards nothing, and its child, in a session of its own, would
+ * outlive it holding the port and the graph. A gone launcher is a SIGTERM
+ * not yet sent, so the child sends it to itself and winds down as usual. An
+ * independent worker has a launcher of its own, so outliving the command that
+ * started it is untouched. */
+export let orphaned = (launcher: number, every = 1000) => {
+  let alive = () => {
+    try {
+      Deno.kill(launcher, 0)
+      return true
+    } catch (error) {
+      return !(error instanceof Deno.errors.NotFound)
+    }
+  }
+  let timer = setInterval(() => {
+    if (Deno.ppid == launcher || alive()) return
+    clearInterval(timer)
+    Deno.kill(Deno.pid, 'SIGTERM')
+  }, every)
+  Deno.unrefTimer(timer)
+  return () => clearInterval(timer)
+}
+
 /** Run a persistent CLI command from immutable sources, forwarding its terminal
  * and interrupts and waiting for the child to drain. JSR releases are already
  * immutable. Independent workers reuse the sources with their own lifetime. */
@@ -238,6 +262,8 @@ export let runtime = async (argv: string[]): Promise<number | undefined> => {
     // Consume the launch token: an independent CLI invocation must own its
     // child, even if it inherits this process's environment and sources.
     Deno.env.delete('YAK_RUNTIME_PINNED')
+    let launcher = Number(Deno.env.get('YAK_LAUNCH_PID'))
+    if (launcher > 0) orphaned(launcher)
     return
   }
   let child: Deno.ChildProcess | undefined

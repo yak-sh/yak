@@ -47,7 +47,15 @@ let child = (dir: string, args: string[], env: Record<string, string>) => {
     assertEquals(result.code, 0, text(result.stderr))
     return result
   }
-  return { proc, output, kill, exit }
+  // The launcher forwards a SIGTERM and waits for its command to drain; a
+  // SIGKILL reaches only the launcher, so it is the last resort.
+  let stop = async () => {
+    kill('SIGTERM')
+    await until(() => ended, { timeout: 10000, label: 'CLI stops' })
+      .catch(() => kill('SIGKILL'))
+    return await output
+  }
+  return { proc, output, kill, exit, stop }
 }
 
 test('ordinary serve fallback outlives HTTP shutdown', async () => {
@@ -105,8 +113,7 @@ test('ordinary serve fallback outlives HTTP shutdown', async () => {
     let freed = Deno.listen({ hostname: '127.0.0.1', port })
     freed.close()
   } finally {
-    web?.kill('SIGKILL')
-    let result = await web?.output
+    let result = await web?.stop()
     if (result?.code) console.error(text(result.stderr))
     if (worker != null && !absent(worker)) Deno.kill(worker, 'SIGTERM')
     try {
@@ -175,8 +182,7 @@ esac
       '--user --no-block stop yak-work@old.service yak-web@old.service',
     ])
   } finally {
-    run?.kill('SIGKILL')
-    await run?.output
+    await run?.stop()
     await Deno.remove(dir, { recursive: true })
   }
 })
