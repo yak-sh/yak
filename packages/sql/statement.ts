@@ -23,6 +23,8 @@ let relation = (s: Stmt): string => {
     case 'update':
     case 'alter table':
       return s.table
+    case 'analyze':
+      return s.table ?? ''
     case 'delete':
       return s.from
     case 'create index':

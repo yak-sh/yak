@@ -75,6 +75,8 @@ export type Measure = (rowsRead?: number, rowsWritten?: number) => void
  * satisfies it.
  */
 export type DurableSql = {
+  /** The runtime's stored-byte count, without a SQL statement. */
+  readonly databaseSize?: number
   /** run a statement with its bindings and hand back the rows */
   exec(query: string, ...bindings: SqlValue[]): SqlCursor<Row>
 }
@@ -196,7 +198,9 @@ export let driver = (
   return {
     query,
     tx: (body) => durable.transactionSync(body),
-    statistics: 'full',
+    statistics: durable.sql.databaseSize == null
+      ? undefined
+      : { bytes: () => durable.sql.databaseSize! },
     // Every driver over one object's storage is one connection.
     connection: durable,
   }

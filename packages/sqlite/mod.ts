@@ -85,7 +85,14 @@ import {
   standing,
   tabled,
 } from './ddl.ts'
-import { epoch, installed, meta, SCHEMA } from './meta.ts'
+import {
+  analyzedAt,
+  epoch,
+  installation,
+  installed,
+  meta,
+  SCHEMA,
+} from './meta.ts'
 import { ast, get, read, type ReadCache, rows, screened } from './read.ts'
 import { doom } from './doom.ts'
 import { unit } from './unit.ts'
@@ -801,13 +808,16 @@ export let storage = (
     let { print, made } = plan(vocab, base.derived, !!driver.file)
     let mark = (strays: string[]) =>
       [print, shape(driver, [...made, ...strays]), ...strays].join(' ')
+    let receipt: ReturnType<typeof installation>
     let matches = () => {
-      let was = installed(driver)
+      receipt = installation(driver)
+      let was = receipt?.schema
       return was == mark(was?.split(' ').slice(2) ?? [])
     }
     // The fast path only reads. A changed file is inspected again *after*
     // taking its write lock, and tables, growth and indexes commit together.
-    if (!matches()) {
+    let unchanged = matches()
+    if (!unchanged) {
       let keys = (value: string): Stmt => ({
         t: 'pragma',
         name: 'foreign_keys',
@@ -817,7 +827,11 @@ export let storage = (
       let seal = () => {
         epoch(driver)
         if (classified) backfill(driver, numbered)
-        meta(driver).set(SCHEMA, mark(componentTables(driver, made)))
+        receipt = {
+          schema: mark(componentTables(driver, made)),
+          statistics: receipt?.statistics,
+        }
+        meta(driver).set(SCHEMA, receipt.schema)
       }
       let make = () =>
         unit(driver, () => {
@@ -843,7 +857,11 @@ export let storage = (
             epoch(driver)
             if (classified) backfill(driver, numbered)
             if (fresh || clean) {
-              meta(driver).set(SCHEMA, mark(componentTables(driver, made)))
+              receipt = {
+                schema: mark(componentTables(driver, made)),
+                statistics: receipt?.statistics,
+              }
+              meta(driver).set(SCHEMA, receipt.schema)
             }
           })
         }
@@ -851,7 +869,12 @@ export let storage = (
         driver.query(keys('on'))
       }
     }
-    analyzed(driver)
+    let analyze = () => {
+      let statistics = analyzed(driver, receipt?.statistics, unchanged)
+      if (statistics && receipt) analyzedAt(driver, receipt.schema, statistics)
+    }
+    if (typeof driver.statistics == 'object') unit(driver, analyze)
+    else analyze()
     ready = true
   }
   let ensure = () => {

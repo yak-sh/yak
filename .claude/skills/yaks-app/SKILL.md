@@ -100,9 +100,16 @@ box. A query that works on the box can be refused in a store.
   `search-and-embeddings`).
 - **Rows read are billed.** Installation keeps planner statistics through
   @yaks/sqlite's `analyzed`: Durable Objects permit optimize but refuse
-  analysis_limit, so an analyze reads full indexes. It runs only for missing
-  statistics or a tenfold size change, at installation rather than per request.
-  Measure costs on a throwaway copy; a person's store is no benchmark fixture.
+  analysis_limit, so an analyze reads full indexes. A durable receipt in the
+  existing schema metadata skips analysis until a populated table or index
+  lacks statistics, or tenfold growth in stored bytes (not row density).
+  Complete existing statistics are adopted once. Remember empty tables and
+  use plain `count(*)` with comparison in JavaScript: workerd bills zero rows
+  while empty; `LIMIT 1` and SQL comparisons still bill a row. Optimize alone repeats empty-table analysis, scanning stat1
+  and stat4 while its outer cursor omits that work. Prove reopened installs
+  with the kernel's row counters and check per-store analytics after the next
+  deploy; a JS incarnation restart alone need not reopen SQLite. Measure costs
+  on a throwaway copy; a person's store is no benchmark fixture.
 - **A boot is all or nothing.** It runs in one transaction. A schema that won't
   stand unwinds, and the store answers every request 503 with the reason
   (`graph.ts` `#stalled`), still keeping the writes it is sent (`writes.ts`),

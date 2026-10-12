@@ -60,6 +60,7 @@ import {
   NOW,
   render,
   type Row,
+  scan,
   select,
   type Stmt,
   sub,
@@ -70,6 +71,7 @@ import { unit } from './unit.ts'
 import { busy } from './error.ts'
 import { unversioned, versioned } from './versions.ts'
 
+import type { Statistics } from './meta.ts'
 import { META, tables } from './layout.ts'
 export { META, tables } from './layout.ts'
 
@@ -735,18 +737,19 @@ export let SAMPLE = 400
  * thousand `call` rows — which is how opening an imported graph came to read
  * the archive end to end six times before answering (T-37734).
  *
- * `PRAGMA optimize` is what SQLite offers for exactly this: it re-analyzes a
- * table whose size has drifted from what was recorded and does nothing at all
- * otherwise, so this runs on every install and writes only when the numbers
- * have moved. The mask (0x10002) asks after every table rather than only the
- * ones this connection has already read — at install it has read none — and an
- * older SQLite that does not know that bit ignores it.
+ * File drivers sample through optimize. Full-analysis engines provide their
+ * stored bytes without scanning rows; installation carries the last successful
+ * size in its durable schema receipt. An unchanged store below tenfold byte
+ * growth executes no statistics SQL, including after a connection restart.
+ * Missing statistics on a populated table or index also trigger analysis.
+ * Existing complete statistics are adopted once by installations predating
+ * receipts; empty tables are remembered and checked with zero-billed counts.
  *
- * Drivers declare whether they can keep sampled or full statistics. A Durable
- * Object supports optimize but refuses analysis_limit: its pass is unbounded.
- * Optimize only analyzes missing statistics or a tenfold change in size, and
- * installation is the only caller; ordinary reads never do this work. A
- * scratch in-memory store keeps no statistics.
+ * Optimize is not itself a durable gate: empty indexed tables get no stat1
+ * row, so it analyzes them repeatedly, scanning existing stat1/stat4 entries
+ * to delete records for each empty table. Its outer cursor omits this nested
+ * work. The full pass therefore needs a receipt before explicit ANALYZE.
+ * Ordinary reads never analyze. Scratch memory stores keep no statistics.
  *
  * Analyzing writes, so it needs the write lock, and every process that opens
  * the file runs it: `optimize` names every empty table on every open, since an
@@ -756,8 +759,68 @@ export let SAMPLE = 400
  * busy timeout here would stall the open behind a writer, and failing it would
  * refuse a command over an optimization.
  */
-export let analyzed = (driver: Driver): void => {
+export let analyzed = (
+  driver: Driver,
+  previous?: Statistics,
+  unchanged = false,
+): Statistics | undefined => {
   if (!driver.statistics) return
+  if (typeof driver.statistics == 'object') {
+    let bytes = driver.statistics.bytes()
+    // SQLite's plain fast count bills zero rows for an empty table. Keep the
+    // comparison in JavaScript: a SQL expression disables that optimization.
+    let populated = (name: string) =>
+      Number(
+        driver.query(select({
+          cols: [as(fn('count'), 'n')],
+          from: table(name),
+        }))[0]?.n,
+      ) > 0
+    if (
+      previous && unchanged && bytes < previous.bytes * 10 &&
+      !previous.empty.some(populated)
+    ) return
+    let tables = driver.query({ t: 'pragma', name: 'table_list' })
+    let names = tables.filter((r) =>
+      r.schema == 'main' &&
+      (r.type == 'table' || r.type == 'shadow') &&
+      !/^sqlite_|^_+cf_/i.test(String(r.name))
+    )
+    let stats = tables.some((r) => r.name == 'sqlite_stat1')
+      ? scan(driver, 'sqlite_stat1', undefined, ['tbl', 'idx'])
+      : []
+    let taken = new Set(stats.map((r) => String(r.tbl)))
+    let indexes = new Set(stats.map((r) => String(r.idx)))
+    let missing = names.filter((r) => !taken.has(String(r.name)))
+      .map((r) => String(r.name))
+    let incomplete = names.filter((r) =>
+      !taken.has(String(r.name)) ||
+      driver.query({ t: 'pragma', name: 'index_list', arg: String(r.name) })
+        .some((i) =>
+          !indexes.has(String(r.wr == 1 && i.origin == 'pk' ? r.name : i.name))
+        )
+    ).map((r) => String(r.name))
+    // Empty additions need no analysis. Adopt existing useful statistics once,
+    // provided no populated table or index lacks them.
+    if (
+      (previous
+        ? bytes < previous.bytes * 10
+        : unchanged && taken.has('entity')) &&
+      !incomplete.some(populated)
+    ) return { bytes: previous?.bytes ?? bytes, empty: missing }
+    if (!populated('entity')) return
+    // Explicit analysis exposes its complete cost through the cursor, rather
+    // than optimize's internally executed statements hiding that work.
+    driver.query({ t: 'analyze' })
+    let after = new Set(
+      scan(driver, 'sqlite_stat1', undefined, ['tbl'])
+        .map((r) => String(r.tbl)),
+    )
+    return {
+      bytes: driver.statistics.bytes(),
+      empty: names.map((r) => String(r.name)).filter((n) => !after.has(n)),
+    }
+  }
   let optimize = () => {
     if (driver.statistics == 'sampled') {
       driver.query({ t: 'pragma', name: 'analysis_limit', value: SAMPLE })

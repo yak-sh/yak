@@ -19,6 +19,10 @@ let comp = (b: Bundle, name: string) => b[name] as Record<string, unknown>
 
 test('install is idempotent, and a bundle survives the round trip', () => {
   using db = durable()
+  // The runtime supplies size without a SQL scan. Drive that boundary to
+  // exercise growth without making a large fixture for a policy test.
+  let bytes = 1024
+  Object.defineProperty(db.sql, 'databaseSize', { get: () => bytes })
   let d = driver(db), s = storage(db, shop, { number: true })
   s.install()
   s.tx((tx) =>
@@ -57,9 +61,11 @@ test('install is idempotent, and a bundle survives the round trip', () => {
   s.install()
   assertEquals(size(), 1)
   add(2, 2)
+  bytes *= 2
   storage(db, shop).install()
   assertEquals(size(), 1)
   add(3, 32)
+  bytes *= 16
   s.read('.entity.eid=e1')
   assertEquals(size(), 1)
   storage(db, shop).install()

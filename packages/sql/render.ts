@@ -400,6 +400,8 @@ let stmt = (s: Stmt, c: Ctx): string => {
               ? literal(s.value)
               : word(s.value, 'pragma value')
           }`)
+    case 'analyze':
+      return s.table == null ? 'analyze' : `analyze ${q(s.table)}`
     case 'vacuum':
       return s.into == null
         ? 'vacuum'

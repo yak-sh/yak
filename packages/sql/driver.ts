@@ -43,7 +43,10 @@ export type Driver = {
    * `analysis_limit`, so any analysis there reads full indexes. Omitted for
    * transient stores whose statistics would not outlive the connection.
    */
-  statistics?: 'sampled' | 'full'
+  statistics?: 'sampled' | {
+    /** Stored bytes, read from the engine without a SQL row scan. */
+    bytes: () => number
+  }
   /**
    * How many terms one compound select may carry on this engine. Workerd, the
    * SQLite under a Durable Object, rejects a sixth (`ARMS`), where an

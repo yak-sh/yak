@@ -343,6 +343,9 @@ export type Pragma = {
 /** Rebuild the database, optionally into another file. */
 export type Vacuum = { t: 'vacuum'; into?: string }
 
+/** Collect planner statistics for the database or one named table. */
+export type Analyze = { t: 'analyze'; table?: string }
+
 /** How SQLite would run a statement, one row per step of its plan. */
 export type Explain = { t: 'explain query plan'; of: Stmt }
 
@@ -368,6 +371,7 @@ export type Stmt =
   | Drop
   | Pragma
   | Vacuum
+  | Analyze
   | Explain
   | Tx
 

@@ -45,7 +45,10 @@ export let deployCost = async (storage: State['storage'], history: number) => {
         doc: { title: `Retained document ${start + i}`, body: 'lemon orchard' },
       })),
     )
-  }
+  } // History and its statistics are established before measuring a release
+  // change. A first pass over newly populated tables is setup, not redeployment.
+
+  ;(await store.door).graph.storage.install()
   // Establish the serving schema and descriptions. No owned migration or AI.
   await storage.deleteAlarm?.()
   let sql = storage.sql.exec.bind(storage.sql)

@@ -505,9 +505,16 @@ vocab)` reads existing tables;
 executes growth and rebuilds, returning errors for tables whose existing values
 cannot fit. `Store.install()` also maintains indexes, metadata, and archetypes.
 Drivers with `statistics` enabled keep planner statistics at installation:
-`sampled` permits bounded analysis, while `full` reads whole indexes. SQLite
-optimizes only tables with missing statistics or a tenfold size change. Reads
-and writes do not refresh statistics; a host calls `install()` at deployment.
+`sampled` permits bounded analysis; a full-analysis engine supplies a `bytes`
+getter without a row scan. Installation persists its analysis receipt beside the
+schema fingerprint and skips analysis until a populated table or index lacks
+statistics, or stored bytes grow tenfold. Empty tables are remembered; their
+plain counts cost zero billed rows while they stay empty. This measures byte
+growth, not row density. An unchanged store with complete existing statistics
+adopts them once without reanalysis. Reads and writes do not refresh statistics;
+a host calls `install()` at deployment. Optimize alone cannot gate full
+analysis: empty tables retain no statistics row and repeatedly scan existing
+statistics during analysis.
 
 ```ts
 import { open } from '@yaks/sqlite/db'

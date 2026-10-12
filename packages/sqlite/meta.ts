@@ -62,11 +62,37 @@ export let EPOCH = 'epoch'
  * `install`). */
 export let SCHEMA = 'schema'
 
+/** A completed full pass, including tables that were empty and therefore
+ * have no SQLite statistics row to remember the pass by. */
+export type Statistics = { bytes: number; empty: string[] }
+
 /** The fingerprint of the schema this file last had installed, or undefined
  * for a file no install has finished in — one that may not have this table
  * yet. */
 export let installed = (driver: Driver): string | undefined =>
-  kept(driver, SCHEMA)
+  installation(driver)?.schema
+
+/** The schema and its analysis receipt share the installation's existing
+ * metadata read. File stores keep their plain stamp; full analysis records
+ * stored bytes after a successful pass so another incarnation can skip it. */
+export let installation = (
+  driver: Driver,
+): { schema: string; statistics?: Statistics } | undefined => {
+  let value = kept(driver, SCHEMA)
+  if (value == null) return
+  let [schema, statistics] = value.split('\n')
+  return {
+    schema,
+    statistics: statistics == null ? undefined : JSON.parse(statistics),
+  }
+}
+
+/** Keep an analysis receipt without changing the public schema fingerprint. */
+export let analyzedAt = (
+  driver: Driver,
+  schema: string,
+  statistics: Statistics,
+): void => meta(driver).set(SCHEMA, `${schema}\n${JSON.stringify(statistics)}`)
 
 // A key's value, read without assuming the table is there yet.
 let kept = (driver: Driver, k: string): string | undefined =>

@@ -2,6 +2,7 @@
 export {
   type Alter,
   among,
+  type Analyze,
   and,
   as,
   at,
