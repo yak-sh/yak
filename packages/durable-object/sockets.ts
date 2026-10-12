@@ -110,6 +110,7 @@ type Held = {
   writer?: PeerWriter
   subs?: Record<string, Ask>
   subref?: string
+  subdelta?: Record<string, Ask | null>
   relay?: string[]
   acks?: boolean
   frames?: boolean
@@ -305,6 +306,10 @@ export let sockets = (
     if (cached) return cached
     let held = ws.deserializeAttachment() as Held | null
     let found = held?.subref ? backing().read(held.subref) : held?.subs ?? {}
+    for (let [id, ask] of Object.entries(held?.subdelta ?? {})) {
+      if (ask === null) delete found[id]
+      else found[id] = ask
+    }
     queries.set(ws, found)
     return found
   }
@@ -322,6 +327,7 @@ export let sockets = (
       ...was,
       subs: nextSubs,
       subref: undefined,
+      subdelta: undefined,
       ...(acks ? { acks: true } : {}),
       ...(frames ? { frames: true } : {}),
       seen: was.seen?.filter((id) => id in nextSubs),
@@ -355,7 +361,12 @@ export let sockets = (
     if (held?.subref) {
       // The socket can outlive this incarnation. Clear its pointer before
       // deleting the row, so a later wake cannot read a row we removed.
-      ws.serializeAttachment({ ...held, subref: undefined, subs: undefined })
+      ws.serializeAttachment({
+        ...held,
+        subref: undefined,
+        subdelta: undefined,
+        subs: undefined,
+      })
       release(held.subref)
     }
     return dropped

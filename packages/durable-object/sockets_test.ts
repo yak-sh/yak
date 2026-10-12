@@ -8,7 +8,8 @@ import { assert, assertEquals, assertThrows } from '@std/assert'
 import { test, until } from '@yaks/testing'
 import { map as queryMap } from '@yaks/query'
 import { subscriptions as subscribed } from '@yaks/api'
-import { type Bundle, type Graph, graph } from '@yaks/graph'
+import { type Bundle, type Graph, graph, type Storage } from '@yaks/graph'
+import { ram } from '@yaks/ram'
 import { loadVocab, type Vocab } from '@yaks/vocab'
 import type { Frame } from '@yaks/api'
 import { durable, shop, store } from './testing.ts'
@@ -76,7 +77,7 @@ let hibernation = () => {
 // One object instance over storage that outlives it — a fresh graph, a fresh
 // registry, a fresh sink map, exactly what waking up gives you.
 let instance = (
-  storage: ReturnType<typeof store>,
+  storage: Storage,
   ctx: ReturnType<typeof hibernation>,
   vocab: Vocab = shop,
   report?: (error: Error) => void,
@@ -1006,3 +1007,39 @@ for (let person of ['bob', null]) {
     assertEquals(new Set(seen), new Set([person]))
   })
 }
+
+let deltaFixture = (() => {
+  let storage = ram(shop), ctx = hibernation(), ws = wire()
+  ctx.live.push(ws)
+  holds(ctx.storage).write('baseline', {
+    old: '.doc.title=old',
+    kept: '.kind=product',
+  })
+  ws.serializeAttachment({
+    subref: 'baseline',
+    subdelta: { old: null, newer: '.doc.title=new' },
+  })
+  let [g, live] = instance(storage, ctx)
+  live.wake()
+  return { storage, ctx, ws, g, live }
+})()
+test('a woken socket applies stored watch additions and removals', () => {
+  let { storage, ctx, ws, g, live } = deltaFixture
+  assertEquals(ws.sent.map((f) => f.id), ['kept', 'newer'])
+  ws.sent.length = 0
+  g.apply([
+    { entity: { eid: 'old' }, doc: { title: 'old' } },
+    { entity: { eid: 'new' }, doc: { title: 'new' } },
+  ])
+  assertEquals(
+    ws.sent.map((f) => [f.id, f.bundles?.map((b) => b.entity.eid)]),
+    [
+      ['newer', ['new']],
+    ],
+  )
+  send(live, ws, { unsubscribe: 'newer' })
+  let [, woken] = instance(storage, ctx)
+  ws.sent.length = 0
+  woken.wake()
+  assertEquals(ws.sent.map((f) => f.id), ['kept'])
+})
