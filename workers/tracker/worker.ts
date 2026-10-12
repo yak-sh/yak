@@ -128,15 +128,24 @@ export let worker = (
               'q',
               `.entity.eid=${eid} .error.fault="tracker-canary|${hash}" .error.bug .limit=1`,
             )
-            let response = await env.TRACKERS.getByName(platform).fetch(
-              new Request(query, {
-                headers: { authorization: `Bearer ${signed}` },
-              }),
-            )
+            let object = env.TRACKERS.getByName(platform)
+            let headers = { authorization: `Bearer ${signed}` }
+            let response = await object.fetch(new Request(query, { headers }))
             if (!response.ok) {
               return json({ error: 'tracker unavailable' }, 503)
             }
-            return json({ arrived: (await response.json()).length == 1 })
+            if ((await response.json()).length != 1) {
+              return json({ arrived: false })
+            }
+            // An object moves to a new version minutes after this Worker, so
+            // the canary has arrived only once the object runs this bundle too.
+            // An object from before the route answers 404 and is not there yet.
+            let bundle = await object.fetch(
+              new Request('https://tracker.internal/bundle', { headers }),
+            )
+            return json({
+              arrived: bundle.ok && (await bundle.json()).hash == hash,
+            })
           }
           if (request.method != 'POST') {
             return json({ error: 'canary method denied' }, 405)

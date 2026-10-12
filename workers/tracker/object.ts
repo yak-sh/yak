@@ -62,6 +62,7 @@ export type TraceAdmission = {
   reason?: string
 }
 export type Settings = {
+  BUNDLE_HASH?: string
   CF_VERSION_METADATA?: { id: string }
   TRACKERS?: {
     getByName: (
@@ -371,6 +372,17 @@ export class Tracker {
         }
         await this.ctx.storage.put('heartbeat', Date.now())
         return json({ ok: true })
+      }
+      // The bundle this object runs, which a deploy waits on: objects move to
+      // a new version eventually, minutes after the Worker in front of them.
+      if (new URL(request.url).pathname == '/bundle') {
+        if (this.scope != platform || !access.admin) {
+          return json({ error: 'platform only' }, 403)
+        }
+        return json({
+          hash: this.env.BUNDLE_HASH ?? null,
+          version: this.env.CF_VERSION_METADATA?.id ?? null,
+        })
       }
       if (new URL(request.url).pathname == '/trace-budget') {
         if (this.scope != platform || !access.admin) {

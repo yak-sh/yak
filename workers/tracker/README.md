@@ -154,6 +154,8 @@ needs no ticket and returns `{eid}` for a synthetic error. Only the deployed
 fifteen minutes old or one minute ahead. The server derives the content-hash eid
 from the bundle hash and nonce; retrying them with the same timestamp preserves
 the entire capture. The request body is ignored. `GET` on the same URL with
-`&eid=<receipt>` returns only `{arrived: boolean}` after that exact canary
-reaches grouping. Graph reads and other tracker operations require scope
-tickets.
+`&eid=<receipt>` returns only `{arrived: boolean}`, true once that exact canary
+has reached grouping and the platform Tracker object reports the same
+`BUNDLE_HASH` (its admin-only `GET /bundle`). A Durable Object moves to a new
+version seconds to minutes after the Worker, so until then the deploy is not
+live. Graph reads and other tracker operations require scope tickets.

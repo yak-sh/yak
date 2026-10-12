@@ -69,15 +69,21 @@ let setup = (now: () => number = Date.now) => {
   let secret = 'scratch'
   let received: Bundle[] = []
   let object = {
+    // The bundle the object runs; null is an object from before `/bundle`.
+    runs: hash as string | null,
     fetch: (request: Request) =>
       Promise.resolve(
-        request.headers.get('authorization') == 'Bearer scratch-ticket'
-          ? json(
+        request.headers.get('authorization') != 'Bearer scratch-ticket'
+          ? json({ error: 'tracker scope denied' }, 403)
+          : new URL(request.url).pathname == '/bundle'
+          ? object.runs
+            ? json({ hash: object.runs })
+            : json({ error: 'tracker route not found' }, 404)
+          : json(
             matcher(new URL(request.url).searchParams.get('q')!, vocab)(
               received,
             ),
-          )
-          : json({ error: 'tracker scope denied' }, 403),
+          ),
       ),
     ingest: (rows: Bundle[]) => {
       received.push(...rows)
@@ -182,6 +188,18 @@ test('unsigned canary reveals its grouped receipt', async () => {
   }])
   equal([acknowledged, retried], [true, false])
   await object.alarm()
+  equal(await read(w, receipt), { arrived: true })
+})
+test('canary waits for the object to run the deployed bundle', async () => {
+  let { sent, object, w, url } = setup()
+  let receipt = await publish(w, url)
+  await object.ingest(sent[0])
+  await object.alarm()
+  for (let runs of [null, 'b'.repeat(64)]) {
+    object.runs = runs
+    equal(await read(w, receipt), { arrived: false })
+  }
+  object.runs = hash
   equal(await read(w, receipt), { arrived: true })
 })
 test('canary cannot declare a UUID-only object ready for content hashes', async () => {

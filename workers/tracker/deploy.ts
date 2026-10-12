@@ -1,6 +1,8 @@
 #!/usr/bin/env -S deno run -A
-// Deploy only a changed bundle, then require its queue canary to become a bug.
-// A missing canary rolls back to the exact version saved before this deploy.
+// Deploy only a changed bundle, then require its queue canary to become a bug
+// in a Tracker object that runs this bundle: objects move to a new version
+// minutes after the Worker, and the deploy is live only once they have. A
+// missing canary rolls back to the exact version saved before this deploy.
 import { root, run } from './wrangler.ts'
 
 export type Hooks = {

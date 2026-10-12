@@ -261,3 +261,44 @@ test('deployment canaries remain archived after grouping and owe no mail', async
   equal((await g.read('.mail')).length, 0)
   equal(!!(await g.get([opening.entity.eid]))[0].archived, true)
 })
+test('a platform object tells an admin the bundle it runs, before booting', async () => {
+  let secret = 'scratch'
+  let object = new Tracker({
+    id: { name: platform },
+    getWebSockets: () => [],
+    acceptWebSocket: () => {},
+    storage: {
+      sql: {
+        exec: () => {
+          throw Error('scratch storage unavailable')
+        },
+      },
+      transactionSync: (body) => body(),
+      get: () => Promise.resolve(undefined),
+      put: async () => {},
+      setAlarm: () => Promise.resolve(),
+    },
+  }, {
+    TRACKER_SECRET: secret,
+    BUNDLE_HASH: 'a'.repeat(64),
+    CF_VERSION_METADATA: { id: '00000000-0000-4000-8000-000000000012' },
+  })
+  let ask = async (admin: boolean) =>
+    await object.fetch(
+      new Request('https://tracker.internal/bundle', {
+        headers: {
+          authorization: `Bearer ${await sign({
+            scope: platform,
+            person: platform,
+            admin,
+            exp: Date.now() / 1000 + 60,
+          }, secret)}`,
+        },
+      }),
+    )
+  equal(await (await ask(true)).json(), {
+    hash: 'a'.repeat(64),
+    version: '00000000-0000-4000-8000-000000000012',
+  })
+  equal((await ask(false)).status, 403)
+})

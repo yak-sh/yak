@@ -76,6 +76,16 @@ safety lives in recovery, and recovery is quick:
 Staging (yaks.fyi) deploys after production from the same build, so it is a
 sandbox for billing, not a canary.
 
+"Live at 100%" is the Worker. Each Durable Object (a store, the directory)
+moves to the new version on its own, seconds to minutes later; Cloudflare
+releases them eventually consistently. So a call from the new Worker can reach
+a store still on the previous code: a new store route or RPC answers as
+missing for a while, and a probe right after a deploy can see the old
+behavior. A bug's occurrence carries the version it ran (`commit`); one from
+the previous version in that window is the lag, not the change. Keep a
+Worker-to-store call working against the previous store code. The tracker's
+own deploy waits for its object (`workers/tracker/deploy.ts`).
+
 The same deploy carries two container images: the builder's sandbox and the
 app compiler (`yak-esbuild`, a Worker in front of native esbuild, built from
 packages/esbuild by workers/yak/esbuild/Dockerfile). Workers Builds has Docker,
