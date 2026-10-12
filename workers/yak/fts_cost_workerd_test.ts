@@ -32,6 +32,22 @@ test('a screened text ranking bounds work beyond its term statistics', async () 
     report.screened.read < 100,
     `${report.screened.read} billed rows for ${report.history} unrelated matches`,
   )
+  for (
+    let query of [
+      'dragon needle .comment .limit=2',
+      'needle dragon .comment .limit=2',
+    ]
+  ) {
+    assertEquals(report.queries[query].rows, [])
+    assertEquals(report.queries[query].written, 0)
+  }
+  let bounded = report.queries['dragon .entity.eid=later-1000001,later-1000002']
+  assertEquals(
+    bounded.rows.map((r) => String((r as { eid: string }).eid)).sort(),
+    ['later-1000001', 'later-1000002'],
+  )
+  assertEquals(bounded.written, 0)
+  assert(bounded.read < 100, `${bounded.read} bounded membership billed rows`)
   let sparse = report.queries['needle thread .comment .limit=2']
   assertEquals(sparse.rows, [{ eid: 'far' }, { eid: 'near' }])
   assertEquals(sparse.written, 0)
@@ -45,6 +61,32 @@ test('a screened text ranking bounds work beyond its term statistics', async () 
   assertEquals(
     report.queries['dragon .comment .order=search .limit=1005'].rows.length,
     report.history + 1,
+  )
+  assertEquals(report.broad.rows, [{ eid: 'later-1000002' }, {
+    eid: 'later-1000001',
+  }])
+  assertEquals(report.broad.written, 0)
+  assert(report.broad.read <= 18027, `${report.broad.read} broad billed rows`)
+  assertEquals(report.all, [{ value: '', n: report.history * 2 + 3 }])
+  assertEquals(
+    report.wide.rows.map((r) => String(r.eid)).sort(),
+    [...report.wide.ids].sort(),
+  )
+  assertEquals(report.wide.written, 0)
+  assert(report.wide.read <= 4554, `${report.wide.read} wide billed rows`)
+  assert(
+    report.wide.parameters <= 100,
+    `${report.wide.parameters} bound parameters`,
+  )
+  assertEquals(report.few.rows.map((r) => String(r.eid)).sort(), report.few.ids)
+  assertEquals(report.few.written, 0)
+  assert(
+    report.few.read < 300,
+    `${report.few.read} finite multi-term billed rows`,
+  )
+  assert(
+    report.few.parameters <= 100,
+    `${report.few.parameters} bound parameters`,
   )
   assertEquals(report.lookups.stable.rows, report.lookups.linear.rows)
   assertEquals(report.lookups.bound.rows, report.lookups.linear.rows)

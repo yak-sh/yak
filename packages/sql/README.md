@@ -553,10 +553,25 @@ entity admitted by the other filters, without ordering, limits or projections.
 `begin(screen)` runs once per bind and lets a reused Extension reset its state.
 The screen excludes that Extension's clauses and returns `null` when there are
 no remaining filters. Ranking among these ids before limiting preserves the
-other filters. The exported `screen` builds this statement for a whole query.
+other filters. The exported `screen` builds this statement for a whole query. A
+clause's `Site.screen` supplies candidates for its own root owner scope; it is
+absent inside child filters and when compiling another extension's screen. Its
+`maximum` reports a proven upper bound on owner count, so a short owner list can
+drive keyed reads. `Site.share(query)` supplies a source for an uncorrelated
+relation, sharing its bound values across the current statement. Erasing an
+extension's clauses widens nested Boolean filters and negative child tests,
+preserving every possible match.
 
 ```ts
-import { compile, type Extension, lit, screen } from '@yaks/sql'
+import {
+  among,
+  col,
+  compile,
+  type Extension,
+  lit,
+  screen,
+  select,
+} from '@yaks/sql'
 import { parse } from '@yaks/query'
 import { equal } from '@yaks/testing'
 import { loadVocab } from '@yaks/vocab'
@@ -575,7 +590,17 @@ let ranking: Extension = {
   begin: (screen) => {
     candidates.push(screen()?.params ?? null)
   },
-  compile: { text: () => lit(true) },
+  compile: {
+    text: (_clause, site) => {
+      let within = site.screen?.()
+      return within
+        ? among(
+          site.owner,
+          select({ cols: [col('id')], from: site.share(within) }),
+        )
+        : lit(true)
+    },
+  },
   order: (value, site) => value == 'rank' ? site.owner : null,
 }
 compile(parse('poetry .doc.title=Dune .order=rank .limit=2'), vocab, {

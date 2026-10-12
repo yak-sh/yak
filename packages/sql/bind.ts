@@ -112,7 +112,7 @@ import {
   idOf,
   ladders,
 } from './derived.ts'
-import type { Extension, Site } from './extend.ts'
+import type { Extension, Screen, Site } from './extend.ts'
 import { type Identity, identity, literals } from './ident.ts'
 import { walk as walked } from './walk.ts'
 import { Unsupported, whole } from './unsupported.ts'
@@ -164,6 +164,9 @@ type Ctx = {
   candidates?: Frag & { test: Cond; whole?: boolean }
   /** A mandatory finite root identity, known before presence is planned. */
   bounded?: boolean
+  screens?: Map<Extension, Screen>
+  shared: Map<Query, { cte: Cte; source: Source }>
+  identities: WeakMap<Pred, Cond>
   present?: string
   owner?: string
   /** An owner probe needs a predicate, not global candidate selections. */
@@ -260,13 +263,54 @@ let site = (ctx: Ctx, owner = ctx.owner ?? ctx.d.ownerKey('entity')): Site => ({
     ctx.tables.add(comp)
     return raw(ctx.d.ownerKey(comp))
   },
+  share: (q) => share(ctx, q),
   from: (comp, as) =>
     raw(`${source(ctx, comp)} as "${as.replaceAll('"', '""')}"`),
 })
 
+let identifiers = (ctx: Ctx, texts: string[]): Set<string> => {
+  let names = new Set(ctx.v.all.map((name) => name.toLowerCase()))
+  for (
+    let text of [
+      ...texts,
+      ctx.d.spine,
+      ...[...ctx.shared.values()].map((r) => r.cte.name),
+    ]
+  ) {
+    for (let name of text.match(/[A-Za-z_][A-Za-z_0-9]*/g) ?? []) {
+      names.add(name.toLowerCase())
+    }
+  }
+  return names
+}
+
+// Reuse bindings without asking each consumer to manage a CTE namespace.
+// Referenced source identifiers include alternate dialect/overlay names;
+// resolving an unused source could open its backing or visibility policy.
+let share = (ctx: Ctx, query: Query): Source => {
+  let found = ctx.shared.get(query)
+  if (found) return found.source
+  let rendered = render(query)
+  let names = identifiers(ctx, [rendered.sql])
+  let prefix = `__shared_${ctx.d.name.replace(/[^A-Za-z_0-9]/g, '_')}_`
+  let next = ctx.shared.size, name = prefix + next
+  while (names.has(name.toLowerCase())) name = prefix + ++next
+  let source = table(name)
+  ctx.shared.set(query, {
+    source,
+    cte: { name, q: rendered, materialized: false },
+  })
+  return source
+}
+
 let extended = (ctx: Ctx, c: Clause): Cond | null => {
   for (let e of ctx.ext) {
-    let out = e.compile[c.kind]?.(c, site(ctx))
+    let out = e.compile[c.kind]?.(c, {
+      ...site(ctx),
+      ...!ctx.owner && !ctx.correlated && ctx.screens?.has(e)
+        ? { screen: ctx.screens.get(e) }
+        : {},
+    })
     if (out) return out
   }
   return null
@@ -560,7 +604,11 @@ let single = (ctx: Ctx, hop: Hop, p: Pred): Cond => {
   // On the entity table, `=` names entities instead of comparing a column.
   if (hop.comp == 'entity' && op == '') {
     let set = identity(hop.prop, p.value, ctx.exactIds)
-    if (set) return cond(inSet(ctx, set))
+    if (set) {
+      let test = cond(inSet(ctx, set))
+      if (!ctx.owner && !ctx.correlated) ctx.identities.set(p, test)
+      return test
+    }
   }
   let read = readProp(ctx, hop.comp, hop.prop, ctx.d.ownerKey(hop.comp))
   if (!read) {
@@ -1320,7 +1368,10 @@ let flattened = (clauses: Clause[]): Clause[] =>
 
 // Canonical candidates and mandatory identity operands name the outer owners.
 // An OR arm alone does not bound its siblings; references keep their own scope.
-let owners = (ctx: Ctx, clauses: Clause[]): Identity | undefined => {
+let owners = (
+  ctx: Ctx,
+  clauses: Clause[],
+): (Identity & { clause?: Pred }) | undefined => {
   if (ctx.eids) return { eids: [...ctx.eids], nums: [] }
   if (ctx.spine || claims(ctx, 'pred')) return
   for (let c of flattened(clauses)) {
@@ -1329,7 +1380,7 @@ let owners = (ctx: Ctx, clauses: Clause[]): Identity | undefined => {
       c.path.join('.') != 'entity.eid' || opOf(c) != ''
     ) continue
     let set = identity('eid', c.value, ctx.exactIds)
-    if (set) return set
+    if (set) return { ...set, clause: c }
   }
 }
 
@@ -1523,20 +1574,50 @@ let find = <T extends Clause>(cs: Clause[], kind: string): T | undefined =>
  * because a window or an ordering shapes an answer rather than narrowing it,
  * and a query with nothing else in it has nothing to narrow by: null.
  */
-export let screen = (
+let selectionScreen = (
   ast: And,
   vocab: Vocab,
   opts: BindOpts = {},
   d: Dialect = sqlite,
+  screening = false,
 ): Raw | null => {
   let rest = ast.clauses.filter((c) => !directive(c))
-  if (!rest.length && !opts.visibility) return null
-  let admits = bound({ ...ast, clauses: rest }, vocab, opts, d)
+  if (!rest.length && !opts.visibility && !opts.eids) return null
+  let admits = bound({ ...ast, clauses: rest }, vocab, opts, d, [], {
+    screening,
+  })
   return render({
     ...admits,
     cols: [raw(`${d.ownerKey('entity')} as id`)],
     order: [],
   })
+}
+
+export let screen = (
+  ast: And,
+  vocab: Vocab,
+  opts: BindOpts = {},
+  d: Dialect = sqlite,
+): Raw | null => selectionScreen(ast, vocab, opts, d)
+
+// Erasing a clause widens a screen. A true OR arm admits everything; under a
+// negative child quantifier the whole predicate must go, since weakening its
+// child condition would strengthen the negation.
+let erased = (c: Clause, mine: Set<Clause['kind']>): Clause => {
+  let yes = (): And => ({ kind: 'and', clauses: [] })
+  let trueClause = (c: Clause) => c.kind == 'and' && !c.clauses.length
+  if (mine.has(c.kind)) return yes()
+  if (c.kind == 'and' || c.kind == 'or') {
+    let children = c.clauses.map((child) => erased(child, mine))
+    if (children.every((child, i) => child === c.clauses[i])) return c
+    if (c.kind == 'or' && children.some(trueClause)) return yes()
+    return { ...c, clauses: children.filter((child) => !trueClause(child)) }
+  }
+  if (c.kind == 'pred' && c.where) {
+    let where = erased(c.where, mine)
+    if (where !== c.where) return c.not ? yes() : { ...c, where }
+  }
+  return c
 }
 
 // The rest of the query, as the screen an extension that ranks is given. This
@@ -1549,10 +1630,35 @@ export let screen = (
 // would wipe out what it remembered about the outer one — and have it ask for a
 // screen of a screen.
 let beginning = (
-  extensions: Extension[],
+  ctx: Ctx,
+  ast: And,
   screen: (e: Extension) => Raw | null,
+  screening = false,
 ) => {
-  for (let e of extensions) e.begin?.(() => screen(e))
+  let finite = owners(ctx, ast.clauses)
+  ctx.bounded = finite != null
+  for (let e of ctx.ext) {
+    let preparing = false
+    let candidates: Screen = () => {
+      if (preparing) return null
+      preparing = true
+      try {
+        return screen(e)
+      } finally {
+        preparing = false
+      }
+    }
+    Object.defineProperty(candidates, 'maximum', {
+      get: () => {
+        let finite = owners(ctx, ast.clauses)
+        return !ctx.spine && finite && !finite.nums.length
+          ? finite.eids.length
+          : undefined
+      },
+    })
+    if (!screening) (ctx.screens ??= new Map()).set(e, candidates)
+    e.begin?.(candidates)
+  }
 }
 
 let screenFor = (
@@ -1562,13 +1668,14 @@ let screenFor = (
   d: Dialect,
   e: Extension,
 ): Raw | null => {
-  let mine = new Set(Object.keys(e.compile))
+  let mine = new Set(Object.keys(e.compile) as Clause['kind'][])
   let quiet = (opts.extend ?? []).map(({ begin: _begin, ...rest }) => rest)
-  return screen(
-    { ...ast, clauses: ast.clauses.filter((c) => !mine.has(c.kind)) },
+  return selectionScreen(
+    erased(ast, mine) as And,
     vocab,
     { ...opts, extend: quiet },
     d,
+    true,
   )
 }
 
@@ -1708,24 +1815,29 @@ let indexedRelation = (
   ) {
     let set = owners(ctx, clauses)
     if (set) {
-      if (
-        set.eids.length && !set.nums.length &&
-        (ctx.eids || o.joins.length)
-      ) {
+      if (set.eids.length && !set.nums.length) {
         let s = rel(from, o)
+        let eids = [...new Set(set.eids)]
+        let known = set.clause && ctx.identities.get(set.clause)
+        let names = identifiers(ctx, [render(s).sql])
+        let prefix = `__named_${ctx.d.name.replace(/[^A-Za-z_0-9]/g, '_')}_`
+        let next = 0, name = prefix + next
+        while (names.has(name.toLowerCase())) name = prefix + ++next
+        let named = `"${name}"`
         return {
           ...s,
+          where: s.where && known ? holding(s.where, known) : s.where,
           // One eid is a constant row, read for nothing; more are a JSON
           // array's members, one bind however many.
-          from: set.eids.length == 1
-            ? raw('(select ? as "value") as "__named"', set.eids)
-            : raw('json_each(?) as "__named"', [JSON.stringify(set.eids)]),
+          from: eids.length == 1
+            ? raw(`(select ? as "value") as ${named}`, eids)
+            : raw(`json_each(?) as ${named}`, [JSON.stringify(eids)]),
           joins: [
             {
               how: 'cross',
               src: raw(from, [], 'entity'),
               on: raw(
-                `${ctx.d.col('entity', 'eid', ctx.v)} = "__named"."value"`,
+                `${ctx.d.col('entity', 'eid', ctx.v)} = ${named}."value"`,
               ),
             },
             ...o.joins.map((j): Join => {
@@ -2020,6 +2132,7 @@ type Scope = {
   visibility?: BindOpts['visibility']
   dialect?: Dialect
   correlated?: boolean
+  screening?: boolean
 }
 
 export let bound = (
@@ -2045,7 +2158,10 @@ export let prepared = (
 ): { opts: BindOpts; spine?: string; lower: () => Select } => {
   d = absentDialect(d, vocab, opts.absent)
   if (opts.visibility) {
-    return { opts, lower: () => visible(ast, vocab, opts, d, reads) }
+    return {
+      opts,
+      lower: () => visible(ast, vocab, opts, d, reads, scope?.screening),
+    }
   }
   // The spine first (./spine.ts): a query that asks for a computed component's
   // entities reads that backing's rows, which no extension indexes and no
@@ -2061,6 +2177,8 @@ export let prepared = (
     now: opts.now ?? Date.now(),
     storageOrder: opts.storageOrder,
     tables: new Set(),
+    shared: new Map(),
+    identities: new WeakMap(),
     archetypes: spine ? undefined : opts.archetypes,
     spine,
     correlated: scope?.correlated,
@@ -2077,42 +2195,42 @@ export let prepared = (
     }
     Object.defineProperty(ctx.archetypes, 'held', { get: () => held.held })
   }
-  ctx.bounded = owners(ctx, ast.clauses) != null
+  let captured: BindOpts = {
+    derived: ctx.derived,
+    backed: ctx.backed,
+    extend: ctx.ext,
+    now: ctx.now,
+    storageOrder: ctx.storageOrder,
+    exactIds: ctx.exactIds,
+    references: ctx.references,
+    archetypes: ctx.archetypes,
+    visibility: ctx.visibility,
+    eids: ctx.eids,
+  }
+  let screenOpts = { ...opts, ...captured }
   // A new query, and what the rest of it selects. An extension that remembers
   // what it resolved for one query is told here, before any clause compiles, so
   // that what a long-lived extension remembers is always this query's; one that
   // ranks asks for the screen and ranks among the rows the other clauses admit
   // (./extend.ts `Begin`, `Screen`).
-  beginning(ctx.ext, (e) =>
+  beginning(ctx, ast, (e) =>
     screenFor(
       ast,
       vocab,
-      scope ? { ...opts, visibility: scope.visibility } : opts,
+      screenOpts,
       scope?.dialect ?? d,
       e,
-    ))
+    ), scope?.screening)
   return {
-    opts: {
-      derived: ctx.derived,
-      backed: ctx.backed,
-      extend: ctx.ext,
-      now: ctx.now,
-      storageOrder: ctx.storageOrder,
-      exactIds: ctx.exactIds,
-      references: ctx.references,
-      archetypes: ctx.archetypes,
-      visibility: ctx.visibility,
-      eids: opts.eids,
-    },
+    opts: captured,
     spine,
-    lower: () => lower(ast, ctx, opts, reads, scope),
+    lower: () => lower(ast, ctx, reads, scope),
   }
 }
 
 let lower = (
   ast: And,
   ctx: Ctx,
-  opts: BindOpts,
   reads: string[],
   scope?: Scope,
 ): Select => {
@@ -2125,6 +2243,13 @@ let lower = (
   // their outer joins, as must derived values and alternate backing sources.
   let relation = (from: string, o: Parameters<typeof rel>[1]): Select =>
     indexedRelation(ctx, ast.clauses, from, o)
+  let finished = (s: Select): Select =>
+    ctx.shared.size
+      ? {
+        ...s,
+        with: [...ctx.shared.values()].map((r) => r.cte).concat(s.with ?? []),
+      }
+      : s
   let cs = ast.clauses
   for (let c of cs) {
     if (UNREACHED.has(c.kind) && !claims(ctx, c.kind)) {
@@ -2135,7 +2260,7 @@ let lower = (
   let count = find<Count>(cs, 'count')
   // A count of one physical component needs its owners and their graves,
   // without loading every archetype or joining unused entity columns.
-  let counted = count && !spine && !opts.eids && !ctx.correlated &&
+  let counted = count && !spine && !ctx.eids && !ctx.correlated &&
       (!ctx.visibility || ctx.d.scoped) && !reads.length && filters.length == 1
     ? facetOf(ctx, filters[0])
     : null
@@ -2155,7 +2280,7 @@ let lower = (
   // A component page (including the platform's negative listing screen)
   // already has a keyed driving table. No catalog is needed to discover it.
   if (
-    !spine && !opts.eids && !claims(ctx, 'pred') && ctx.d.owned &&
+    !spine && !ctx.eids && !claims(ctx, 'pred') && ctx.d.owned &&
     find<Limit>(cs, 'limit')
   ) {
     let facets = flattened(filters).map((c) => facetOf(ctx, c))
@@ -2169,7 +2294,7 @@ let lower = (
     }
   }
   if (
-    !ctx.present && !spine && !opts.eids && !claims(ctx, 'pred') &&
+    !ctx.present && !spine && !ctx.eids && !claims(ctx, 'pred') &&
     ctx.d.owned &&
     !find<Count>(cs, 'count') &&
     !flattened(filters).some((c) =>
@@ -2193,14 +2318,14 @@ let lower = (
   }
   let where = and(
     ...conjuncts(ctx, filters),
-    ...opts.eids
+    ...ctx.eids
       ? [clause({ ...ctx, exactIds: true }, {
         kind: 'pred',
         path: ['entity', 'eid'],
         op: '=',
         value: {
           kind: 'list',
-          items: opts.eids.map((raw) => ({ kind: 'scalar', raw })),
+          items: ctx.eids.map((raw) => ({ kind: 'scalar', raw })),
         },
       })]
       : [],
@@ -2216,11 +2341,11 @@ let lower = (
   // `.count`: how many entities the filter selects, returned under an empty
   // key so that every aggregate comes back in the same value-and-count shape.
   if (count) {
-    return relation(ctx.d.spine, {
+    return finished(relation(ctx.d.spine, {
       cols: [`'' as value`, 'count(*) as n'],
       joins: joinsOf(ctx),
       where,
-    })
+    }))
   }
   // `.distinct`/`.tally`: the values of a property, or a count per value, as
   // `tallied` counts them; an absent value, and an empty text, is dropped.
@@ -2244,7 +2369,7 @@ let lower = (
       : counted == 'number'
       ? `${expr} is not null`
       : `${expr} is not null and ${value} != ''`
-    return relation(ctx.d.spine, {
+    return finished(relation(ctx.d.spine, {
       cols: [`${value} as value`, ...tally ? ['count(*) as n'] : []],
       joins: joinsOf(ctx),
       where: and(cond({ sql: held, params: [] }), where),
@@ -2252,7 +2377,7 @@ let lower = (
       // a reference that names no entity has no eid to count under
       having: key ? `${expr} is not null` : undefined,
       order: [value],
-    })
+    }))
   }
 
   // An ordinary query. Ordering, then the window within it. `.order=-field` is descending, and an
@@ -2339,7 +2464,7 @@ let lower = (
         where: cond({ sql: '1', params: [] }),
         order: ordered,
       })
-      return {
+      return finished({
         ...projected,
         with: [{
           name: '__page',
@@ -2355,16 +2480,16 @@ let lower = (
           },
           ...projected.joins ?? [],
         ],
-      }
+      })
     }
-    return relation(ctx.d.spine, {
+    return finished(relation(ctx.d.spine, {
       cols,
       joins: joinsOf(ctx),
       where: cond({ sql: `${owner} in (${page.sql})`, params: page.params }),
       order: ordered,
-    })
+    }))
   }
-  return {
+  return finished({
     ...relation(ctx.d.spine, {
       cols,
       joins: joinsOf(ctx),
@@ -2372,7 +2497,7 @@ let lower = (
       order: ordered,
     }),
     limit: limit ? val(limit.n) : undefined,
-  }
+  })
 }
 
 // Visibility is a relation, not a predicate appended to the outer selection:
@@ -2482,6 +2607,7 @@ let visible = (
   opts: BindOpts,
   base: Dialect,
   reads: string[],
+  screening = false,
 ): Select => {
   let visibility = opts.visibility!
   let plain = { ...opts, visibility: undefined }
@@ -2686,7 +2812,7 @@ let visible = (
     },
     scoped,
     reads,
-    { visibility, dialect: base },
+    { visibility, dialect: base, screening },
   )
   return { ...out, with: [...ctes.values(), ...out.with ?? []] }
 }

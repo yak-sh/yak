@@ -36,8 +36,10 @@ import {
   lookup,
   op,
   or,
+  type Raw,
   type Screen,
   select,
+  type Source,
   table,
   Unsupported,
   val,
@@ -53,6 +55,10 @@ export let SEARCH = 'search'
 // follow, newest first.
 export let RANKED = 1000
 
+// MATCH opens a cursor per keyed candidate. Keep seeks to a handful of owners;
+// larger screens retain the single walk through a term's postings.
+let FEW = 4
+
 // The @yaks/sql extension that resolves bare words against the search indexes.
 // It handles the `text` clause, covering every indexed field, and orders by
 // relevance to those words. Without this extension @yaks/sql rejects bare
@@ -65,6 +71,8 @@ export let search = (fields: Field[], db?: Driver): Extension => {
   // The owners in relevance order, resolved once a query.
   let held: number[] | null = null
   let sources: ReturnType<typeof screens> = {}
+  let membership = new Map<Screen, Raw | null>()
+  let shared = new Map<Screen, Source>()
   let rank = (): number[] => {
     if (held) return held
     let stmt = ranked(fields, words.join(' '), {
@@ -82,6 +90,8 @@ export let search = (fields: Field[], db?: Driver): Extension => {
       asked = screen
       held = null
       sources = {}
+      membership.clear()
+      shared.clear()
     },
     compile: {
       text: (clause, site) => {
@@ -94,6 +104,16 @@ export let search = (fields: Field[], db?: Driver): Extension => {
         // A screen compiled for another extension reads this clause again.
         if (!words.includes(t)) words.push(t)
         sources = screens(fields, site.vocab, { visibility: site.visibility })
+        let screen = site.screen
+        let allowed: Source | undefined
+        if (screen?.maximum != null && screen.maximum <= FEW) {
+          if (!membership.has(screen)) membership.set(screen, screen())
+          let within = membership.get(screen)
+          if (within) {
+            allowed = shared.get(screen)
+            if (!allowed) shared.set(screen, allowed = site.share(within))
+          }
+        }
         return or(
           ...indexes(fields).map(({ name }) => {
             let fts = indexName(name)
@@ -105,6 +125,12 @@ export let search = (fields: Field[], db?: Driver): Extension => {
                 where: and(
                   op('match', col(fts), val(t)),
                   permitted(name, col('rowid', fts), sources),
+                  ...allowed
+                    ? [among(
+                      col('rowid', fts),
+                      select({ cols: [col('id')], from: allowed }),
+                    )]
+                    : [],
                 ),
               }),
             )

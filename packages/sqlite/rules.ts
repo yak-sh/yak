@@ -36,15 +36,16 @@ export let matched = (
   // The outer match is anchored to a changed batch; a collection reads every
   // member belonging to that outer binding, including members the batch did
   // not touch.
-  collected(m, (plan, anchored) =>
-    driver.query({
-      ...rule(
-        { patterns: plan.patterns },
-        vocab,
-        opts,
-        anchored ? on : { ...on, touched: undefined },
-      ),
-      with: over,
+  collected(m, (plan, anchored) => {
+    let statement = rule(
+      { patterns: plan.patterns },
+      vocab,
+      opts,
+      anchored ? on : { ...on, touched: undefined },
+    )
+    return driver.query({
+      ...statement,
+      with: [...over, ...statement.with ?? []],
     }).map((row: Row) => ({
       entities: plan.patterns.map((p, i) =>
         p.makes ? null : String(row[`e${i}`])
@@ -52,7 +53,8 @@ export let matched = (
       vars: Object.fromEntries(
         plan.vars.map((name) => [name, row[`v_${name}`]]),
       ),
-    })))
+    }))
+  })
 
 /**
  * How declared rules are evaluated (@yaks/graph `Tx.bindings`): run every match

@@ -40,6 +40,7 @@ import {
   and,
   col,
   cross,
+  type Cte,
   type Expr,
   FALSE,
   type Join,
@@ -171,6 +172,7 @@ export let rule = (
   let at = on.at ?? ((comp: string) => comp)
   let touched = on.touched
   let extend = [...(opts.extend ?? []), removals(on.gone ?? (() => null))]
+  let ctes: Cte[] = []
   let froms: Source[] = []
   let joins: Join[] = []
   let conds: Expr[] = []
@@ -213,6 +215,7 @@ export let rule = (
         vocab.aim(b.path.join('.')).length == 1 ? [b.path.join('.')] : []
       ),
     )
+    ctes.push(...r.with ?? [])
     froms.push(...[r.from ?? []].flat())
     joins.push(...r.joins ?? [])
     if (r.where) conds.push(r.where)
@@ -312,6 +315,7 @@ export let rule = (
 
   return {
     t: 'select',
+    ...ctes.length ? { with: ctes } : {},
     distinct: true,
     cols,
     from: start.length ? start : froms,

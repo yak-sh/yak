@@ -42,7 +42,7 @@
 
 import type { Clause } from '@yaks/query/core'
 import type { Vocab } from '@yaks/vocab'
-import type { Expr, Raw, Source } from './ast.ts'
+import type { Expr, Query, Raw, Source } from './ast.ts'
 import type { BindOpts } from './bind.ts'
 
 // What a contributed compiler is given besides the clause: everything the
@@ -58,6 +58,11 @@ export type Site = {
   now: number
   // this row's integer id in the entity table
   owner: Expr
+  // Candidates for this owner scope, excluding this extension. Absent inside
+  // child filters and another extension's screen, whose owner scope differs.
+  screen?: Screen
+  // Share an uncorrelated relation and its bindings across this statement.
+  share: (query: Query) => Source
   // pull a component's table into the statement as a LEFT JOIN; returns that
   // table's owner column
   join: (comp: string) => Expr
@@ -125,4 +130,7 @@ export type Begin = (screen: Screen) => void
 // rank should not have to pay, and it returns null when there is nothing else
 // in the query — there is nothing to narrow by, so every entity in the database
 // is a candidate.
-export type Screen = () => Raw | null
+export type Screen = (() => Raw | null) & {
+  // A proven upper bound on owner count; a short list may drive key seeks.
+  maximum?: number
+}
