@@ -523,9 +523,19 @@ export let healed = async (
   return old.length ? close(env, space, app, who, old) : 0
 }
 
-// The section a tool reply carries: nothing when nothing is unseen.
+// The section a tool reply carries: nothing when nothing is unseen. Its last
+// line says what ends them, because the write it rides is often the fix: a
+// page that failed to load a script before the script existed rides the very
+// write that adds it (E-34329, T-34338). The next deploy closes them
+// ({@link healed}), so nothing needs a call to say they are stale.
+let ENDS = 'Each is said once. The next deploy closes them, and the new code ' +
+  "reports again any it still makes; app_errors(seen: ['all']) closes them " +
+  'without one.'
+
 export let unseenBlock = (seen: Seen[]) =>
-  seen.length ? `\n\n## unseen errors\n${seen.map(line).join('\n')}` : ''
+  seen.length
+    ? `\n\n## unseen errors\n${seen.map(line).join('\n')}\n${ENDS}`
+    : ''
 
 // Where the space stands against its ceilings, said once (T-32758). It rides
 // this channel because it is the same kind of news as a break — something the

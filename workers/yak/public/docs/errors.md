@@ -175,10 +175,14 @@ something, under a heading, one line each. A read-only tool (`app_list`,
     ## unseen errors
     - E-84 2026-08-14T10:02:11.004Z exception recipes v3: page /recipes/ —
       boom is not a function
+    Each is said once. The next deploy closes them, and the new code reports
+    again any it still makes; app_errors(seen: ['all']) closes them without one.
 
 Sending them marks each one, so the next reply does not repeat them. The mark
 records that you were told, not that anything was fixed: `app_errors` still
-lists them.
+lists them. Often the write they ride is already the fix (a page that failed to
+load `app.js` before `app.js` existed), so there is nothing to dismiss: the
+deploy that ships it closes them.
 
 Only what is still new is included. A break naming a version below the one the
 app serves now was made by code a later release replaced, and one naming no

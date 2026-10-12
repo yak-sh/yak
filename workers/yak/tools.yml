@@ -305,7 +305,9 @@ store_load:
     minute stops between parts. Either way the answer names the part to pass
     as part: to go on. A large dataset gets in without being
     typed into a call: app_files op: fetch downloads the file into the app,
-    and store_load writes it into the store. Unlike a seed it is not
+    and store_load writes it into the store; one already on a machine that
+    can reach the app is POSTed as NDJSON to its ./api/apply with a grant
+    token. Unlike a seed it is not
     once-only: each call patches and adds as the caller, so the rows carry
     the caller's attribution. It applies whatever the file contains, deletes
     included: a bundle with $delete: true (or tombstone: {}) deletes that
@@ -714,7 +716,11 @@ grant:
     A short-lived token that signs the `yak` CLI in as this person: the same
     identity and exactly the same access they have here, never more. For
     working from a terminal, or a script that reaches their apps; the
-    response is the one line to paste. It lasts an hour unless `hours` says
+    response is the one line to paste. A script sends the token as
+    `authorization: Bearer <token>` to an app's own endpoints, so a dataset
+    already in your own environment goes into a store by POSTing it as NDJSON
+    to the app's ./api/apply, never typed into a tool call
+    (https://yaks.app/docs/store). It lasts an hour unless `hours` says
     otherwise (24 at most), and `space` limits it to one space, which is the
     right choice when the token is going somewhere less safe than their
     laptop. The token is shown once, in the response, and stored nowhere it
