@@ -26,6 +26,7 @@ let server = createTestHarness({
       compatibility_flags: ['nodejs_compat'],
       tsconfig: '.wrangler/paths.json',
       alias: {
+        fflate: `${root}/../yak/node_modules/fflate/esm/browser.js`,
         croner: `${root}/../yak/node_modules/croner/dist/croner.js`,
         marked: `${root}/../yak/node_modules/marked/lib/marked.esm.js`,
         '@cfworker/json-schema':
@@ -38,7 +39,10 @@ let server = createTestHarness({
       migrations: [{ tag: 'v1', new_sqlite_classes: ['Tracker'] }],
       vars: { TRACKER_SECRET: secret, BUNDLE_HASH: 'a'.repeat(64) },
       queues: {
-        producers: [{ binding: 'ERRORS', queue: 'tracker-scratch-errors' }],
+        producers: [
+          { binding: 'ERRORS', queue: 'tracker-scratch-errors' },
+          { binding: 'REJECTED', queue: 'tracker-scratch-dead' },
+        ],
         consumers: [{
           queue: 'tracker-scratch-errors',
           max_batch_size: 10,
