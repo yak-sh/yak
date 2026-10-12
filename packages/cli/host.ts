@@ -374,77 +374,104 @@ let composed = async (
     // a command that reports nothing does not wait on git to learn it.
     config.tracker && !opts.readOnly ? revision() : undefined,
   )
-  // Where this graph's secrets are kept (./vault.ts), and each secret an
-  // option names read once now, so the option has it the first time a factory
-  // looks. Only those: a secret code reads at the moment it is used (`reveal`)
-  // is fetched then, and a command does not wait on 1Password for it.
-  part?.('vault')
-  let vault = vaultOf(path)
-  await warm(vault, (config.plugins ?? []).flatMap((p) => bound(given(p))))
-  let secretDeclarations = (config.plugins ?? []).flatMap((p) =>
-    secretNames(given(p)).map((name) => ({ name, package: used(p) }))
-  )
-  let plugins = named(config, vault)
-  let declared = load === facet ? await declarations(config) : undefined
-  let stored = new Map(
-    declared?.vocabs.filter((v) => v.value !== null).map((v) => [v.plugin, v]),
-  )
-  part?.('roles')
-  let observed = compositionAnatomy(
-    (config.plugins ?? []).map((p) => ({
-      name: used(p),
-      facets: facetsOf(p),
-    })),
-    roles,
-    ROLES,
-    secretDeclarations,
-  )
-  // A declaration hit substitutes data only while its sources agree. The
-  // assembly sees the same facets as an ordinary loader, without CLI policy.
-  let preparedLoad: Load = Object.assign(
-    async <F extends keyof Facets>(
-      plugin: string,
-      name: F,
-    ): Promise<Facets[F] | null> => {
-      let data = name == 'vocab' ? stored.get(plugin) : undefined
-      return data && !data.factories
-        ? data.value as Facets[F] | null
-        : declared && !declared.facets[plugin].includes(name)
-        ? null
-        : await load(plugin, name)
-    },
-    {
-      together: (requests: readonly (readonly [string, keyof Facets])[]) =>
-        load.together?.(
-          requests.filter(([plugin, name]) =>
-            (!declared || declared.facets[plugin].includes(name)) &&
-            (name != 'vocab' || !declared || !!stored.get(plugin)?.factories)
-          ),
-        ) ?? Promise.resolve(),
-    },
-  )
-  let plan = await assembly(config, roles, preparedLoad, {
-    plugins,
-    observed,
-    part,
-  })
-  let { vocab, derived, backed } = plan.words
-
-  part?.('sqlite')
   let installing = opts.install ?? path == ':memory:'
-  if (installing && opts.readOnly) {
-    throw new Error('a reader cannot install a graph')
-  }
-  let sql = open(path, { readOnly: opts.readOnly })
-  part?.('migrations')
+  let opened: ReturnType<typeof open> | undefined
   let recorded: Traces | undefined
   let captureControl: ReturnType<typeof traceControl> | undefined
   try {
+    if (installing && opts.readOnly) {
+      throw new Error('a reader cannot install a graph')
+    }
+    // An existing graph can refuse before any plugin runtime is imported.
+    // Keep its connection; absent graphs wait for a valid assembly before
+    // creating a file or its directory.
+    let exists = false
+    if (path != ':memory:') {
+      try {
+        Deno.statSync(path)
+        exists = true
+      } catch (error) {
+        if (!(error instanceof Deno.errors.NotFound)) throw error
+      }
+    }
+    if (exists) {
+      part?.('sqlite')
+      opened = open(path, { readOnly: opts.readOnly })
+      part?.('migrations')
+      if (installing) installMigrations(opened)
+      migrations(opened).ready()
+    }
+    // Where this graph's secrets are kept (./vault.ts), and each secret an
+    // option names read once now, so the option has it the first time a factory
+    // looks. Only those: a secret code reads at the moment it is used (`reveal`)
+    // is fetched then, and a command does not wait on 1Password for it.
+    part?.('vault')
+    let vault = vaultOf(path)
+    await warm(vault, (config.plugins ?? []).flatMap((p) => bound(given(p))))
+    let secretDeclarations = (config.plugins ?? []).flatMap((p) =>
+      secretNames(given(p)).map((name) => ({ name, package: used(p) }))
+    )
+    let plugins = named(config, vault)
+    let declared = load === facet ? await declarations(config) : undefined
+    let stored = new Map(
+      declared?.vocabs.filter((v) => v.value !== null).map((
+        v,
+      ) => [v.plugin, v]),
+    )
+    part?.('roles')
+    let observed = compositionAnatomy(
+      (config.plugins ?? []).map((p) => ({
+        name: used(p),
+        facets: facetsOf(p),
+      })),
+      roles,
+      ROLES,
+      secretDeclarations,
+    )
+    // A declaration hit substitutes data only while its sources agree. The
+    // assembly sees the same facets as an ordinary loader, without CLI policy.
+    let preparedLoad: Load = Object.assign(
+      async <F extends keyof Facets>(
+        plugin: string,
+        name: F,
+      ): Promise<Facets[F] | null> => {
+        let data = name == 'vocab' ? stored.get(plugin) : undefined
+        return data && !data.factories
+          ? data.value as Facets[F] | null
+          : declared && !declared.facets[plugin].includes(name)
+          ? null
+          : await load(plugin, name)
+      },
+      {
+        together: (requests: readonly (readonly [string, keyof Facets])[]) =>
+          load.together?.(
+            requests.filter(([plugin, name]) =>
+              (!declared || declared.facets[plugin].includes(name)) &&
+              (name != 'vocab' || !declared || !!stored.get(plugin)?.factories)
+            ),
+          ) ?? Promise.resolve(),
+      },
+    )
+    let plan = await assembly(config, roles, preparedLoad, {
+      plugins,
+      observed,
+      part,
+    })
+    let { vocab, derived, backed } = plan.words
+
+    if (!opened) {
+      part?.('sqlite')
+      opened = open(path, { readOnly: opts.readOnly })
+      part?.('migrations')
+      if (installing) installMigrations(opened)
+    } else part?.('migrations')
+    let sql = opened
+    // Facet imports may have awaited while another process announced work.
+    // Refuse again on the retained connection before domain schema or factories.
+    migrations(sql).ready()
     if (installing) {
-      installMigrations(sql)
       for (let statement of blobSchema()) sql.query(statement)
     }
-    migrations(sql).ready()
     // Before explicit expansion, ordinary CLI reads still work over old homes.
     // Only this SQLite boundary knows the absent destination; plugins see a
     // canonical empty machine reference, and provisioning waits for expansion.
@@ -485,7 +512,7 @@ let composed = async (
     let doing: Host['duties'] | undefined
     let stopping = new AbortController()
     let self = writer(vocab)
-    let bound = plan.bind({
+    let built = plan.bind({
       host: {
         vault,
         blobs: sqliteBlobs(sql),
@@ -628,11 +655,11 @@ let composed = async (
           : undefined
       },
     })
-    host = bound.host
+    host = built.host
     g = host.graph
     let calls = host.runner
     let fx = host.fx
-    let duties = bound.services
+    let duties = built.services
     let effecting = roles.includes('effects')
     // Started together and stopped together, by one signal: a host shutting
     // down is one fact, and a duty that outlived the database it
@@ -756,11 +783,23 @@ let composed = async (
       },
     }
   } catch (error) {
-    await recorded?.close()
-    captureControl?.close()
-    await report(error, { tags: { step: 'compose host' } })
-    await report.close()
-    sql.close()
+    try {
+      try {
+        await recorded?.close()
+      } finally {
+        captureControl?.close()
+      }
+    } finally {
+      try {
+        try {
+          await report(error, { tags: { step: 'compose host' } })
+        } finally {
+          await report.close()
+        }
+      } finally {
+        opened?.close()
+      }
+    }
     throw error
   }
 }

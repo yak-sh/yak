@@ -1826,3 +1826,21 @@ test('compose refuses roles without a graph', async () => {
     'its roles include graph',
   )
 })
+
+test('an invalid plugin config creates no absent database', async () => {
+  let dir = Deno.makeTempDirSync()
+  let path = `${dir}/absent/graph.db`
+  try {
+    await assertRejects(
+      () =>
+        composing({ db: path, plugins: ['broken'] }, ['graph'], () => {
+          throw new Error('broken plugin import')
+        }, { install: true }),
+      Error,
+      'broken plugin import',
+    )
+    assertThrows(() => Deno.statSync(`${dir}/absent`), Deno.errors.NotFound)
+  } finally {
+    Deno.removeSync(dir, { recursive: true })
+  }
+}, { tags: ['migration'] })

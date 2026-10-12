@@ -9,6 +9,8 @@ import {
   objects,
 } from '@yaks/sqlite'
 import { tally } from '@yaks/sql'
+import { compose } from '@yaks/cli/host'
+import type { Facets, Load } from '@yaks/host'
 import { local } from './local.ts'
 import { harness, repo } from './testing.ts'
 
@@ -33,19 +35,56 @@ test('closing the agent stops its migration monitor', async () => {
   }
 })
 
+const pendingDir = Deno.makeTempDirSync()
+const pendingPath = pendingDir + '/test.db'
+const pendingSql = opened(pendingPath)
+installMigrations(pendingSql)
+migrations(pendingSql).announce('new-schema', 0)
+
 test('pending migration refuses harness startup before installing domain tables', async () => {
-  const dir = Deno.makeTempDirSync()
-  const path = dir + '/test.db'
-  const sql = opened(path)
+  const path = pendingPath
+  const sql = pendingSql
   try {
-    installMigrations(sql)
-    const control = migrations(sql)
-    control.announce('new-schema', 0)
+    const config = { db: path, plugins: ['broken'] }
+    await assertRejects(
+      () =>
+        compose(config, ['graph'], () => {
+          throw new Error('broken plugin import')
+        }, { install: true }),
+      MigrationPending,
+    )
+    let made = false
+    const factories = {
+      derived: () => {
+        made = true
+        return {}
+      },
+    }
+    const load: Load = <F extends keyof Facets>(_: string, name: F) =>
+      Promise.resolve((name == 'vocab' ? factories : null) as Facets[F] | null)
+    await assertRejects(
+      () => compose(config, ['graph'], load, { install: true }),
+      MigrationPending,
+    )
+    assertEquals(made, false)
     await assertRejects(() => harness(path), MigrationPending)
     assertEquals(objects(sql, { name: 'entity' }), [])
+    assertEquals(objects(sql, { name: 'blob_text' }), [])
+    const control = migrations(sql)
+    control.acknowledge(control.read()!.generation)
+    const loading: Load = (_, name) => {
+      if (name == 'graph') control.announce('next-schema', 0)
+      return Promise.resolve(null)
+    }
+    await assertRejects(
+      () => compose(config, ['graph'], loading, { install: true }),
+      MigrationPending,
+    )
+    assertEquals(objects(sql, { name: 'entity' }), [])
+    assertEquals(objects(sql, { name: 'blob_text' }), [])
   } finally {
     sql.close()
-    Deno.removeSync(dir, { recursive: true })
+    Deno.removeSync(pendingDir, { recursive: true })
   }
 })
 
