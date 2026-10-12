@@ -377,10 +377,24 @@ export let sockets = (
       if (baseline && fits(overlay, nextSubs)) {
         ws.serializeAttachment(overlay)
       } else {
-        if (!fits(short, nextSubs)) return false
-        baselines.set(ws, nextSubs)
-        owe(ref, nextSubs)
-        ws.serializeAttachment(short)
+        // Repeated query paths often compress the complete watch map below
+        // the attachment limit. Its existing delta format carries the map
+        // over an empty base, preserving ACK room before anything spills.
+        let packed: Held = {
+          ...next,
+          subs: undefined,
+          subdelta: pack(nextSubs),
+        }
+        if (fits(packed, nextSubs)) {
+          ws.serializeAttachment(packed)
+          if (was.subref) release(was.subref)
+          baselines.delete(ws)
+        } else {
+          if (!fits(short, nextSubs)) return false
+          baselines.set(ws, nextSubs)
+          owe(ref, nextSubs)
+          ws.serializeAttachment(short)
+        }
       }
     }
     queries.set(ws, nextSubs)

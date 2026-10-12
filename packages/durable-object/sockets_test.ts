@@ -507,7 +507,7 @@ test('a subscription bigger than an attachment survives hibernation', () => {
   let ws = wire()
   ctx.live.push(ws)
 
-  let title = 'x'.repeat(3000)
+  let title = compactTitle
   send(live, ws, {
     subscribe: `.doc.title=${JSON.stringify(title)}`,
     id: 'big',
@@ -554,7 +554,7 @@ test('a burst of watch changes stores its map once', () => {
     if (/^insert into "socket_subscriptions"/.test(query)) stored++
     return exec(query, ...bindings)
   }
-  let title = (n: number) => String(n).repeat(3000)
+  let title = (n: number) => `${compactTitle}${n}`
   let [, live] = instance(storage, ctx)
   for (let n = 0; n < 4; n++) {
     send(live, ws, {
@@ -585,7 +585,7 @@ test('a lost subscription row retires its socket without blocking other subscrib
   let stale = wire(), healthy = wire()
   ctx.live.push(stale, healthy)
   send(first, stale, {
-    subscribe: `.doc.title=${JSON.stringify('x'.repeat(3000))}`,
+    subscribe: `.doc.title=${JSON.stringify(compactTitle)}`,
     id: 'big',
   })
   send(first, healthy, { subscribe: '.kind=product', id: 'p' })
@@ -621,7 +621,7 @@ test('a frame on a hibernated socket with a lost row closes it', () => {
   ctx.live.push(ws)
   let [, first] = instance(storage, ctx)
   send(first, ws, {
-    subscribe: `.doc.title=${JSON.stringify('x'.repeat(3000))}`,
+    subscribe: `.doc.title=${JSON.stringify(compactTitle)}`,
     id: 'big',
   })
   let ref = (ws.deserializeAttachment() as { subref: string }).subref
@@ -640,7 +640,7 @@ test('a hibernated frame includes subscription restore in its scope', () => {
   ctx.live.push(ws)
   first.message(
     ws,
-    ask('big', `.doc.title=${JSON.stringify('x'.repeat(3000))}`),
+    ask('big', `.doc.title=${JSON.stringify(compactTitle)}`),
   )
   let [, woken] = instance(storage, ctx)
   let exec = ctx.storage.sql.exec.bind(ctx.storage.sql)
@@ -1080,9 +1080,10 @@ test('compressed watch changes restore their exact interests', () => {
 let watched = (queries: Record<string, string>) => {
   let storage = ram(shop), ctx = hibernation(), ws = wire()
   ctx.live.push(ws)
-  let written = 0, exec = ctx.storage.sql.exec.bind(ctx.storage.sql)
+  let written = 0, reads = 0, exec = ctx.storage.sql.exec.bind(ctx.storage.sql)
   ctx.storage.sql.exec = (sql, ...bindings) => {
     if (/^insert into "socket_subscriptions"/.test(sql)) written++
+    if (/^select.*"socket_subscriptions"/.test(sql)) reads++
     return exec(sql, ...bindings)
   }
   let [, live] = instance(storage, ctx)
@@ -1090,7 +1091,7 @@ let watched = (queries: Record<string, string>) => {
     send(live, ws, { subscribe, id })
   }
   for (let write of ctx.owed.splice(0)) write()
-  return { storage, ctx, ws, live, written: () => written }
+  return { storage, ctx, ws, live, written: () => written, reads: () => reads }
 }
 
 let namedFixture = (() => {
@@ -1175,9 +1176,10 @@ let movingFixture = (() => {
   woken.wake()
   return { ...ready, g, woken }
 })()
-test('small moving watches preserve a stored baseline across hibernation', () => {
-  let { ws, g, written } = movingFixture
-  assertEquals(written(), 1)
+test('small moving watches survive hibernation without backing reads or writes', () => {
+  let { ws, g, written, reads } = movingFixture
+  assertEquals(written(), 0)
+  assertEquals(reads(), 0)
   assertEquals(ws.sent.map((f) => f.id), [
     'static1',
     'static2',
@@ -1228,7 +1230,7 @@ let compactFixture = (() => {
 })()
 test('a watch change beyond attachment space compacts then keeps later deltas', () => {
   let { ctx, ws, g, later, written } = compactFixture
-  assertEquals(written(), 2)
+  assertEquals(written(), 1)
   assertEquals(ws.sent.map((f) => f.id), ['static', 'moving', 'extra'])
   ws.sent.length = 0
   g.apply([{ entity: { eid: 'changed' }, doc: { title: compactTitle } }])
@@ -1240,5 +1242,5 @@ test('a watch change beyond attachment space compacts then keeps later deltas', 
   )
   send(later, ws, { unsubscribe: 'extra' })
   for (let write of ctx.owed.splice(0)) write()
-  assertEquals(written(), 2)
+  assertEquals(written(), 1)
 })
