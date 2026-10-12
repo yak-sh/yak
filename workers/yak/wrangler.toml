@@ -196,6 +196,10 @@ class_name = "Builder"
 name = "SANDBOX"
 class_name = "Sandbox"
 
+[[durable_objects.bindings]]
+name = "WORKSPACES"
+class_name = "Workspaces"
+
 [[migrations]]
 tag = "v1"
 new_sqlite_classes = ["Store"]
@@ -211,6 +215,10 @@ new_sqlite_classes = ["Builder"]
 [[migrations]]
 tag = "v4"
 new_sqlite_classes = ["Sandbox"]
+
+[[migrations]]
+tag = "v5"
+new_sqlite_classes = ["Workspaces"]
 
 # The container uses a prebuilt registry image. Its tag is the toolchain
 # Dockerfile's hash; sandbox_test.ts checks its SDK against package.json.
@@ -589,6 +597,10 @@ class_name = "Builder"
 name = "SANDBOX"
 class_name = "Sandbox"
 
+[[env.staging.durable_objects.bindings]]
+name = "WORKSPACES"
+class_name = "Workspaces"
+
 [[env.staging.migrations]]
 tag = "v1"
 new_sqlite_classes = ["Store"]
@@ -604,6 +616,10 @@ new_sqlite_classes = ["Builder"]
 [[env.staging.migrations]]
 tag = "v4"
 new_sqlite_classes = ["Sandbox"]
+
+[[env.staging.migrations]]
+tag = "v5"
+new_sqlite_classes = ["Workspaces"]
 
 [[env.staging.containers]]
 class_name = "Sandbox"

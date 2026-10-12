@@ -3,6 +3,12 @@ import { DurableObject } from 'cloudflare:workers'
 import { exercise } from './sandbox_provider_fixture.ts'
 
 export class ContainerProbe extends DurableObject {
+  getState() {
+    return { status: 'stopped' }
+  }
+  listProcesses() {
+    return []
+  }
   async setSleepAfter(after) {
     await this.ctx.storage.put('sleep', after)
   }
@@ -69,10 +75,24 @@ export class ContainerProbe extends DurableObject {
   }
 }
 
+export class WorkspaceProbe extends DurableObject {
+  async fork(_source, name) {
+    await this.ctx.storage.put(`copy:${name}`, true)
+    return []
+  }
+  async retire() {
+    return [...(await this.ctx.storage.list({ prefix: 'copy:' })).keys()]
+      .map((key) => key.slice(5))
+  }
+  async destroy() {
+    await this.ctx.storage.deleteAll()
+  }
+}
+
 export default {
   async fetch(_req, env) {
     try {
-      return Response.json(await exercise(env.SANDBOX))
+      return Response.json(await exercise(env.SANDBOX, env.WORKSPACES))
     } catch (e) {
       return new Response(e.stack, { status: 500 })
     }

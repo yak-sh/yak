@@ -17,6 +17,7 @@ import type { Dispatch, Fetcher, Namespace } from './door.ts'
 import type { Meta } from './meta.ts'
 import type { Limiter } from './rate.ts'
 import type { Sandboxes } from '@yaks/machine/cloudflare'
+import type { Workspaces } from './workspaces.ts'
 import type { Inference } from '@yaks/model'
 
 // The door's own word, said again here: every part of this kernel names its
@@ -241,6 +242,7 @@ export type Env = {
   // workerd probes, where the sandbox tools say so rather than half-running —
   // and absent under `wrangler dev` on a machine with no container engine.
   SANDBOX?: Sandboxes
+  WORKSPACES?: Workspaces
   // The single static token OpenAI's apps directory fetches to verify the
   // domain (index.ts serves it at /.well-known/openai-apps-challenge). A
   // secret so the open-source repo carries no token; unset, that path 404s.

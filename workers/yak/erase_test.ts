@@ -36,7 +36,7 @@ import * as dirPart from './directory.ts'
 import type { App, Host, Space } from './directory.ts'
 import type { Env } from './env.ts'
 import { ai, platform, sandboxes } from './testing.ts'
-import { spending, workbench } from './sandbox.ts'
+import { named, spending, workbench } from './sandbox.ts'
 import type { Who } from './session.ts'
 import { KERNEL, meta } from './meta.ts'
 
@@ -333,7 +333,7 @@ test('a deleted space takes its conversation and its workbench', async () => {
   assertEquals(builder(space.eid).said().length, 2)
   let bench = await workbench(env, space, ADA, spending())
   await bench.provider.exec(bench.ref, 'cargo build')
-  assertEquals([...box.alive], [`build-${space.eid}`])
+  assertEquals([...box.alive], [named(space, ADA)])
 
   await erase(env, dir, await census(dir, space), who)
 

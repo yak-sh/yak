@@ -526,6 +526,12 @@ export let sandboxes = (answer: (cmd: string) => Ran | void = () => {}) => {
   let env: Record<string, string>[] = []
   let files = new Map<string, string>()
   let alive = new Set<string>()
+  let copies = new Map<string, Set<string>>()
+  let states = new Map<
+    string,
+    { files: Map<string, string>; processes: typeof processes }
+  >()
+  let sequence = 0
   // Every process a `startProcess` began, by its id, kept after it exits.
   let processes = new Map<
     string,
@@ -537,14 +543,29 @@ export let sandboxes = (answer: (cmd: string) => Ran | void = () => {}) => {
       stderr: string
     }
   >()
+  let state = (name: string) => {
+    let row = states.get(name)
+    if (!row) {
+      row = { files: states.size ? new Map() : files, processes: new Map() }
+      states.set(name, row)
+    }
+    return row
+  }
   type Opts = { cwd?: string; timeout?: number; env?: Record<string, string> }
   let heard = (name: string, cmd: string, opts?: Opts) => {
+    files = state(name).files
     alive.add(name)
     ran.push(cmd)
     env.push(opts?.env ?? {})
     return answer(cmd) ?? {}
   }
   let box = (name: string) => ({
+    getState: () =>
+      Promise.resolve({ status: alive.has(name) ? 'healthy' : 'stopped' }),
+    listProcesses: () =>
+      Promise.resolve(
+        [...state(name).processes].map(([id, p]) => ({ id, ...p })),
+      ),
     exec: (cmd: string, opts?: Opts) => {
       let said = heard(name, cmd, opts)
       return Promise.resolve({
@@ -556,9 +577,9 @@ export let sandboxes = (answer: (cmd: string) => Ran | void = () => {}) => {
     },
     startProcess: (cmd: string, opts?: Opts) => {
       let said = heard(name, cmd, opts)
-      let id = `proc-${processes.size + 1}`
-      let pid = processes.size + 100
-      processes.set(id, {
+      let id = `proc-${++sequence}`
+      let pid = sequence + 99
+      state(name).processes.set(id, {
         pid,
         status: said.running ? 'running' : 'completed',
         exitCode: said.running ? undefined : said.exitCode ?? 0,
@@ -568,16 +589,16 @@ export let sandboxes = (answer: (cmd: string) => Ran | void = () => {}) => {
       return Promise.resolve({ id, pid })
     },
     getProcess: (id: string) => {
-      let p = processes.get(id)
+      let p = state(name).processes.get(id)
       return Promise.resolve(p ? { id, ...p } : null)
     },
     killProcess: (id: string) => {
-      let p = processes.get(id)
+      let p = state(name).processes.get(id)
       if (p?.status == 'running') p.status = 'killed'
       return Promise.resolve()
     },
     getProcessLogs: (id: string) => {
-      let p = processes.get(id)
+      let p = state(name).processes.get(id)
       return Promise.resolve({
         stdout: p?.stdout ?? '',
         stderr: p?.stderr ?? '',
@@ -586,11 +607,13 @@ export let sandboxes = (answer: (cmd: string) => Ran | void = () => {}) => {
     mkdir: () => Promise.resolve({ success: true }),
     writeFile: (path: string, content: string) => {
       alive.add(name)
+      files = state(name).files
       files.set(path, content)
       return Promise.resolve({ success: true })
     },
     readFile: (path: string, opts?: { encoding?: string }) => {
       alive.add(name)
+      files = state(name).files
       let held = files.get(path)
       if (held == null) return Promise.reject(new Error(`no file ${path}`))
       return Promise.resolve({
@@ -599,12 +622,35 @@ export let sandboxes = (answer: (cmd: string) => Ran | void = () => {}) => {
           : held,
       })
     },
-    destroy: () => Promise.resolve(void alive.delete(name)),
+    fork: (target: string) => {
+      let children = copies.get(name) ?? new Set<string>()
+      if (!children.has(target)) {
+        children.add(target)
+        copies.set(name, children)
+        let source = states.get(name)
+        if (source) {
+          let next = state(target)
+          for (let [path, value] of source.files) next.files.set(path, value)
+        }
+      }
+      return Promise.resolve([...states.get(name)?.processes.keys() ?? []])
+    },
+    forks: () => Promise.resolve([...copies.get(name) ?? []]),
+    retire: () => Promise.resolve([...copies.get(name) ?? []]),
+    destroy: () => {
+      alive.delete(name)
+      states.get(name)?.files.clear()
+      states.get(name)?.processes.clear()
+      copies.delete(name)
+      return Promise.resolve()
+    },
   })
   return {
     ran,
     env,
-    files,
+    get files() {
+      return files
+    },
     alive,
     // `getSandbox` addresses one by name off the namespace; nothing here
     // needs an id object, so the name is the id.
@@ -615,6 +661,24 @@ export let sandboxes = (answer: (cmd: string) => Ran | void = () => {}) => {
     },
   }
 }
+
+// The test namespace's coordinator records filesystem copies independently
+// of command invocations, as WORKSPACES does beside SANDBOX in production.
+export let workspaces = (
+  ns: NonNullable<Env['SANDBOX']>,
+): NonNullable<Env['WORKSPACES']> => ({
+  idFromName: (name) => name,
+  get: (id) => {
+    let source = ns.get(ns.idFromName(String(id))) as ReturnType<
+      ReturnType<typeof sandboxes>['SANDBOX']['get']
+    >
+    return {
+      fork: (_name, target) => source.fork(target),
+      retire: () => source.retire(),
+      destroy: () => Promise.resolve(),
+    }
+  },
+})
 
 /**
  * Workers static assets over a directory (wrangler.toml `[assets]`), with the
@@ -859,6 +923,8 @@ export let platform = (
       }),
     },
     ...vars,
+    WORKSPACES: vars.WORKSPACES ??
+      (vars.SANDBOX ? workspaces(vars.SANDBOX) : undefined),
   } as unknown as Env
   // Every alarm that is due, delivered the way the runtime delivers one: the
   // instant cleared, then the object's `alarm()`, which may arm the next. A

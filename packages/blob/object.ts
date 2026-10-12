@@ -39,7 +39,7 @@ export type Bucket = {
   /** write an object under this key */
   put: (
     key: string,
-    value: ArrayBuffer | ArrayBufferView | string,
+    value: ArrayBuffer | ArrayBufferView | string | ReadableStream<Uint8Array>,
   ) => Promise<unknown>
   /** remove the object under this key */
   delete: (key: string) => Promise<unknown>

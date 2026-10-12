@@ -6,7 +6,7 @@ import { joining, posting, SPACE, wiped } from './build.ts'
 import type { Space } from './directory.ts'
 import type { Namespace } from './door.ts'
 import type { Env } from './env.ts'
-import { platform, sandboxes } from './testing.ts'
+import { platform, sandboxes, workspaces } from './testing.ts'
 import { destroyed, named, workbench } from './sandbox.ts'
 import {
   type Box,
@@ -225,7 +225,7 @@ for (let { method, args, result } of methods) {
           let calls = 0
           let ns: Sandboxes = {
             idFromName: (name) => {
-              assertEquals(name, named(space))
+              assertEquals(name, named(space, who.person!))
               return name
             },
             get: () => {
@@ -245,7 +245,7 @@ for (let { method, args, result } of methods) {
             },
           }
           let provider = cloudflareProvider(ns, { retry: retryOnce })
-          let ref = { id: named(space) }
+          let ref = { id: named(space, who.person!) }
           let { machine } = await provider.wake(ref)
           assertEquals(gets, 0, 'take the stub per invocation, not per box')
           let call = () =>
@@ -287,8 +287,13 @@ test('sandbox cleanup and initial sleep also retry evictions', async () => {
         ++destroy == 1 ? Promise.reject(flagged()) : Promise.resolve(),
     }),
   }
-  await workbench({ SANDBOX: ns }, space, who.person, { since: null })
-  assertEquals(await destroyed({ SANDBOX: ns }, space), true)
+  await workbench(
+    { SANDBOX: ns, WORKSPACES: workspaces(ns) },
+    space,
+    who.person,
+    { since: null },
+  )
+  assertEquals(await destroyed({ SANDBOX: ns }, space, who.person!), true)
   assertEquals(sleep, 2)
   assertEquals(destroy, 2)
 })

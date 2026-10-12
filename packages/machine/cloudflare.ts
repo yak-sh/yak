@@ -16,6 +16,8 @@ type Run = { cwd?: string; timeout?: number; env?: Record<string, string> }
  * one knob the deploy has no way to set. The SDK's process calls answer
  * objects carrying methods as well; only their data is read here. */
 export type Box = {
+  getState(): Promise<{ status: string }>
+  listProcesses(): Promise<BoxProcess[]>
   exec(
     cmd: string,
     opts?: Run,
@@ -53,7 +55,7 @@ export type Sandboxes = {
 export let CWD = '/workspace'
 /** Commands have a four-minute ceiling, including background processes. */
 export let TIMEOUT = 240_000
-/** Idle containers sleep after five minutes, keeping their files. */
+/** Idle containers shut down after five minutes; their files are temporary. */
 export let NAP = 300
 export let SLEEP = `${NAP / 60}m`
 
@@ -66,6 +68,161 @@ export type CloudflareOptions = {
 /** Cloudflare's synchronous exec is also used to expand artifact globs. */
 export type CloudflareProvider = MachineProvider & {
   exec(ref: MachineRef, command: string): ReturnType<Box['exec']>
+  archive(ref: MachineRef): Promise<WorkspaceArchive>
+  restore(ref: MachineRef, body: ReadableStream<Uint8Array>): Promise<void>
+  active(ref: MachineRef): Promise<boolean>
+  processes(ref: MachineRef): Promise<BoxProcess[]>
+}
+
+/** Process data detached from the SDK's process-control methods. */
+export type BoxProcess = {
+  id: string
+  status: string
+  pid?: number
+  exitCode?: number
+}
+
+/** A bounded stream of a workspace's tar archive, with its temporary file's
+ * lifetime explicit for callers that stop reading before the end. */
+export type WorkspaceArchive = {
+  body: ReadableStream<Uint8Array>
+  size: number
+  dispose(): Promise<void>
+}
+
+let CHUNK = 256 * 1024
+let quoted = (value: string) => `'${value.replaceAll("'", "'\\''")}'`
+let base64 = (bytes: Uint8Array): string => {
+  let parts: string[] = []
+  for (let i = 0; i < bytes.length; i += 8192) {
+    parts.push(String.fromCharCode(...bytes.subarray(i, i + 8192)))
+  }
+  return btoa(parts.join(''))
+}
+let checked = async (box: Box, command: string): Promise<string> => {
+  let result = await box.exec(command, { timeout: TIMEOUT })
+  if (result.exitCode !== 0) {
+    throw new Error(`cloudflare: workspace command failed: ${result.stderr}`)
+  }
+  return result.stdout
+}
+
+let archive = async (box: Box): Promise<WorkspaceArchive> => {
+  let path = quoted(`/tmp/yak-workspace-${crypto.randomUUID()}.tar`)
+  let disposed = false
+  let dispose = async () => {
+    if (!disposed) {
+      await checked(box, `rm -f -- ${path}`)
+      disposed = true
+    }
+  }
+  try {
+    let stdout = await checked(
+      box,
+      `tar -C ${quoted(CWD)} -cf ${path} . && wc -c < ${path}`,
+    )
+    let size = Number(stdout.trim())
+    if (!Number.isSafeInteger(size) || size < 0 || !stdout.trim()) {
+      throw new Error('cloudflare: invalid workspace archive size')
+    }
+    let offset = 0
+    let body = new ReadableStream<Uint8Array>({
+      async pull(controller) {
+        try {
+          if (disposed || offset === size) {
+            await dispose()
+            controller.close()
+            return
+          }
+          let content = await checked(
+            box,
+            `set -o pipefail; dd if=${path} bs=${CHUNK} skip=${
+              offset / CHUNK
+            } count=1 status=none | base64`,
+          )
+          let bytes = Uint8Array.from(
+            atob(content.trim()),
+            (c) => c.charCodeAt(0),
+          )
+          if (bytes.length !== Math.min(CHUNK, size - offset)) {
+            throw new Error('cloudflare: incomplete workspace archive')
+          }
+          offset += bytes.length
+          controller.enqueue(bytes)
+        } catch (error) {
+          let failure = error
+          try {
+            await dispose()
+          } catch (cleanup) {
+            failure = new AggregateError(
+              [error, cleanup],
+              'workspace archive failed',
+            )
+          }
+          controller.error(failure)
+        }
+      },
+      cancel: dispose,
+    }, { highWaterMark: 0 })
+    return { body, size, dispose }
+  } catch (error) {
+    await dispose()
+    throw error
+  }
+}
+
+let restore = async (
+  box: Box,
+  body: ReadableStream<Uint8Array>,
+): Promise<void> => {
+  let path = `/tmp/yak-workspace-${crypto.randomUUID()}.tar`
+  let part = `${path}.part`
+  let reader = body.getReader()
+  try {
+    await checked(box, `: > ${quoted(path)}`)
+    let offset = 0
+    for (;;) {
+      let next = await reader.read()
+      if (next.done) break
+      for (let i = 0; i < next.value.length; i += CHUNK) {
+        let bytes = next.value.subarray(i, i + CHUNK)
+        await box.writeFile(part, base64(bytes), { encoding: 'base64' })
+        // An RPC retry overwrites precisely the same bytes instead of appending.
+        await checked(
+          box,
+          `dd if=${quoted(part)} of=${
+            quoted(path)
+          } bs=${CHUNK} seek=${offset} oflag=seek_bytes conv=notrunc status=none`,
+        )
+        offset += bytes.length
+      }
+    }
+    // Root in the source can replace its tar binary or forge an archive. The
+    // clean target's data filter refuses writes through escaping paths,
+    // hardlinks and devices. Symbolic links themselves are workspace data
+    // (a Python venv normally points at /usr/bin/python3); allow their targets
+    // while still refusing any later member that writes through such a link.
+    let extract = `import os, pathlib, tarfile
+def workspace(member, dest):
+ if not member.issym(): return tarfile.data_filter(member, dest)
+ root = os.path.realpath(dest)
+ path = pathlib.Path(dest, member.name)
+ if member.name.startswith('/') or os.path.commonpath([root, str(path.parent.resolve())]) != root:
+  raise tarfile.OutsideDestinationError(member, str(path))
+ if path.is_symlink(): path.unlink()
+ filtered = tarfile.data_filter(member.replace(linkname='.'), dest)
+ return filtered.replace(linkname=member.linkname)
+with tarfile.open(${JSON.stringify(path)}) as archive:
+ archive.extractall(${JSON.stringify(CWD)}, filter=workspace)`
+    await checked(box, `python3 -I -c ${quoted(extract)}`)
+  } finally {
+    try {
+      await reader.cancel()
+    } finally {
+      reader.releaseLock()
+      await checked(box, `rm -f -- ${quoted(path)} ${quoted(part)}`)
+    }
+  }
 }
 
 /** A provider bound to one deployed container namespace. Stable request ids
@@ -78,7 +235,7 @@ export let cloudflareProvider = (
 ): CloudflareProvider => {
   let retry = options.retry ??
     (async <T>(send: () => T | Promise<T>) => await send())
-  let boxOf = (ref: MachineRef): Box => {
+  let boxOf = (ref: MachineRef, invocation = true): Box => {
     if (ref.address != null) {
       throw new Error('cloudflare: cannot attach an existing machine')
     }
@@ -86,11 +243,15 @@ export let cloudflareProvider = (
       retry(() => send(ns.get(ns.idFromName(ref.id))))
     let dressed = async <T extends Run>(opts?: T) => ({
       ...opts,
-      env: { ...await options.env?.(), ...opts?.env },
+      ...(invocation
+        ? { env: { ...await options.env?.(), ...opts?.env } }
+        : {}),
     })
     return {
       exec: (cmd, opts) =>
         call(async (box) => box.exec(cmd, await dressed(opts))),
+      getState: () => call((box) => box.getState()),
+      listProcesses: () => call((box) => box.listProcesses()),
       startProcess: (cmd, opts) =>
         call(async (box) => box.startProcess(cmd, await dressed(opts))),
       getProcess: (id) => call((box) => box.getProcess(id)),
@@ -129,6 +290,21 @@ export let cloudflareProvider = (
       await boxOf(ref).destroy()
     },
     exec: (ref, command) => boxOf(ref).exec(command, { cwd: CWD }),
+    archive: (ref) => archive(boxOf(ref, false)),
+    restore: (ref, body) => restore(boxOf(ref, false), body),
+    active: async (ref) => {
+      let { status } = await boxOf(ref).getState()
+      return status === 'running' || status === 'healthy'
+    },
+    processes: async (ref) =>
+      (await boxOf(ref).listProcesses()).map((
+        { id, status, pid, exitCode },
+      ) => ({
+        id,
+        status,
+        ...pid === undefined ? {} : { pid },
+        ...exitCode === undefined ? {} : { exitCode },
+      })),
     export: async function* (ref, paths) {
       // Absolute paths are kept for sandbox_ship's published contract. Relative
       // paths resolve from the deployed image's workspace.

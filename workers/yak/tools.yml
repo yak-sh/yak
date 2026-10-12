@@ -137,7 +137,7 @@ app_files:
 sandbox_shell:
   title: Run a build command
   description: >-
-    Run one command in this space's build sandbox, a Linux container for
+    Run one command in your build sandbox for this space, a Linux container for
     what a browser cannot do on its own: compile something to WebAssembly,
     run a generator, minify an asset. Installed: Rust 1.98.1 with the
     wasm32-unknown-unknown target, wasm-bindgen 0.2.128 and wasm-opt 132;

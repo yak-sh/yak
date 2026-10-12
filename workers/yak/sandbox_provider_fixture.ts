@@ -1,9 +1,10 @@
 // Exercise the provider and the published tools inside workerd. The namespace
 // is a test Durable Object with RPC methods, never a container or live account.
 import { released, spending, workbench } from './sandbox.ts'
+import type { Workspaces } from './workspaces.ts'
 import type { Space } from './directory.ts'
 import { cloudflareProvider, type Sandboxes } from '@yaks/machine/cloudflare'
-export let exercise = async (ns: Sandboxes) => {
+export let exercise = async (ns: Sandboxes, workspaces: Workspaces) => {
   let id = crypto.randomUUID()
   let ref = { id }
   let provider = cloudflareProvider(ns, {
@@ -44,14 +45,19 @@ export let exercise = async (ns: Sandboxes) => {
   let space = { eid: crypto.randomUUID(), slug: 'provider-lifecycle' } as Space
   let spend = spending()
   let host = await workbench(
-    { SANDBOX: ns },
+    { SANDBOX: ns, WORKSPACES: workspaces },
     space,
     'probe-person',
     spend,
     () => 0,
   )
   await host.machine.write('/workspace/held', 'held')
-  let spent = await released({ SANDBOX: ns }, space, spend, () => 42001)
+  let spent = await released(
+    { SANDBOX: ns, WORKSPACES: workspaces },
+    space,
+    spend,
+    () => 42001,
+  )
   let removed = false
   try {
     await (await host.provider.wake(host.ref)).machine.read('/workspace/held')

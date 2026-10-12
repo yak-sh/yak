@@ -7,8 +7,7 @@
 // Owner, 2026-09-05: "and can we also give the agent some sandbox tools so
 // they could compile rust, etc. if they needed to?"
 //
-// One sandbox per build session, and a build session is a space — the same key
-// the builder's conversation is held under (T-34240), so a person talking to
+// One sandbox per person per space (T-37893), so a person talking to
 // the builder and the same person's own agent over the connector reach one
 // workbench rather than two. It is a Cloudflare Container behind a Durable
 // Object (`@cloudflare/sandbox`), which the deploy provisions from
@@ -43,7 +42,7 @@
 // What keeps it from running forever: the build destroys it when it ends, and
 // {@link SLEEP} is the backstop for a build that never says so — the container
 // sleeps on its own after that long idle, which is where the billing stops.
-// A sleeping sandbox wakes with its files still there.
+// Idle shutdown ends its processes and temporary files; ship artifacts before it sleeps.
 //
 // And it is signed in as the caller (T-34387). Every command runs with
 // `YAKS_TOKEN` and `YAKS_HOST` in its environment — a grant (grants.ts),
@@ -66,6 +65,7 @@ import { type Grant, type Kv, ledger, mint, tokenOf } from './grants.ts'
 import { type Host, url } from './host.ts'
 import { refuse } from './tool.ts'
 import { caught } from './defects.ts'
+import type { Workspaces } from './workspaces.ts'
 
 /**
  * The container time one build has spent, and when it started spending it.
@@ -83,6 +83,9 @@ export type Spend = {
   // closure because it belongs to the build, exactly as the seconds do.
   signing?: Promise<Record<string, string>>
   preparing?: Promise<void>
+  person?: string
+  legacy?: string[]
+  copying?: Promise<string[]>
 }
 
 export let spending = (): Spend => ({ since: null })
@@ -151,7 +154,7 @@ export let NO_BOX =
   'and js — and nothing needs compiling.'
 
 /** How many sandboxes one person may hold awake at once, by the plan of the
- * space they are working in (T-37883). A sandbox is keyed per space, so
+ * space they are working in (T-37883). A sandbox is keyed per person and space, so
  * without this a person owning five spaces holds five containers, which is
  * every one the deploy runs (wrangler.toml `max_instances`). */
 export let AWAKE: Record<Tier, number> = { free: 1, plus: 2 }
@@ -247,11 +250,18 @@ export let overBudget = (spent: number) =>
  * than its slug: a slug is renamed and an eid is not, and a workbench that
  * followed a rename to a fresh container would lose the half-built tree
  * inside it. */
-export let named = (space: Space) => `build-${space.eid}`
+export let named = (space: Space, person: string) =>
+  `build-${space.eid}-${person}`
+
+// The old shared box is the workspace source; WORKSPACES holds the durable
+// census of clean personal copies. The source receives no new command environment. Keeping it
+// reachable also lets a compile already running finish across the deploy.
+export let shared = (space: Space) => `build-${space.eid}`
 
 /** What a grant is made and unmade with: the secret it is sealed under and
  * the ledger it is written in (grants.ts). */
 type Keys = Host & { SESSION_SECRET?: string; OAUTH_KV?: unknown }
+type Bound = Keys & { SANDBOX?: Sandboxes; WORKSPACES?: Workspaces }
 
 // Whether a grant has enough life left to hand to a command. One command may
 // run for {@link TIMEOUT}, so a grant with less than that left is one that
@@ -285,11 +295,9 @@ export let signed = async (
   let book = ledger(env.OAUTH_KV)
   let secret = env.SESSION_SECRET
   if (!book || !secret) return {}
-  let holder = named(space)
+  let holder = named(space, person)
   let was = await book.wearing(holder)
-  // Only this caller's own: a container woken by somebody else earlier is
-  // still one container, and the person running commands in it now is who its
-  // commands must speak as.
+  // A personal container reuses only its person's still-valid grant.
   let has = was?.person == person ? await book.held(was.person, was.id) : null
   if (alive(has, now)) {
     return {
@@ -310,11 +318,10 @@ export let signed = async (
 // failure, like the destroy it rides with: the grant dies of old age anyway,
 // and a container nobody could revoke for is not a reason to fail the caller
 // who was closing their space.
-let bared = async (env: Keys, space: Space) => {
+let bared = async (env: Keys, space: Space, holder: string) => {
   try {
     let book = ledger(env.OAUTH_KV)
     if (!book) return
-    let holder = named(space)
     let was = await book.wearing(holder)
     if (!was) return
     await book.drop(was.person, was.id)
@@ -333,7 +340,7 @@ exec deno run --quiet --no-config --reload --allow-net --allow-env --allow-read 
 /** The host lends its configured provider after checking the build's budget.
  * Billing starts at first need; grants are supplied only to command invocations. */
 export let workbench = async (
-  env: { SANDBOX?: Sandboxes } & Keys,
+  env: Bound,
   space: Space,
   person: string,
   spend: Spend,
@@ -343,6 +350,10 @@ export let workbench = async (
   let spent = seconds(spend, now())
   if (spent >= BUDGET) throw refuse('limit', overBudget(spent))
   let first = spend.since == null
+  if (spend.person != null && spend.person != person) {
+    throw new Error('a sandbox build belongs to one person')
+  }
+  spend.person = person
   spend.since ??= now()
   let provider = cloudflareProvider(env.SANDBOX, {
     retry: retryOnce,
@@ -350,7 +361,24 @@ export let workbench = async (
     sleepError: (e) =>
       caught(e, { request: 'sandbox sleep', space: space.slug }),
   })
-  let ref = { id: named(space) }
+  let ref = { id: named(space, person) }
+  let source = { id: shared(space) }
+  // Snapshot only the workspace into a clean container, never its processes,
+  // system files or environment. The source records completed copies so a
+  // retry or another command cannot overwrite the person's later work.
+  let old = cloudflareProvider(env.SANDBOX, { retry: retryOnce })
+  if (!env.WORKSPACES) throw new Error('no sandbox workspace coordinator')
+  let workspace = env.WORKSPACES.get(env.WORKSPACES.idFromName(source.id))
+  spend.copying ??= retryOnce(() => workspace.fork(source.id, ref.id)).then(
+    async (processes) => {
+      await bared(env, space, source.id)
+      return processes
+    },
+  ).catch((error) => {
+    spend.copying = undefined
+    throw error
+  })
+  spend.legacy = await spend.copying
   let lent = await (first ? provider.request!(ref) : provider.wake(ref))
   spend.preparing ??= (async () => {
     await lent.machine.write('/usr/local/bin/yak', LAUNCHER)
@@ -365,11 +393,27 @@ export let workbench = async (
     }
   })()
   await spend.preparing
-  return { ...lent, provider, ref }
+  if (!spend.legacy?.length) return { ...lent, provider, ref }
+  let legacy = (await old.wake(source)).machine
+  let processes = new Set(spend.legacy)
+  let machine = lent.machine
+  let of = (id: string) => processes.has(id) ? legacy : machine
+  return {
+    ...lent,
+    machine: {
+      ...machine,
+      look: (id: string) => of(id).look(id),
+      tail: (id: string, n: number) => of(id).tail(id, n),
+      kill: (id: string, signal: 'SIGTERM' | 'SIGKILL') =>
+        of(id).kill(id, signal),
+    },
+    provider,
+    ref,
+  }
 }
 
 /**
- * This space's container, destroyed. Answers whether there was a binding to
+ * This person's container in the space, destroyed. Answers whether there was a binding to
  * destroy one through at all.
  *
  * A container that would not die is telemetry, never a failed caller: it
@@ -379,13 +423,14 @@ export let workbench = async (
  * what `/privacy` says goes with the space.
  */
 export let destroyed = async (
-  env: { SANDBOX?: Sandboxes } & Keys,
+  env: Bound,
   space: Space,
+  person: string,
 ) => {
   if (!env.SANDBOX) return false
   try {
     await cloudflareProvider(env.SANDBOX, { retry: retryOnce }).release({
-      id: named(space),
+      id: named(space, person),
     })
   } catch (e) {
     caught(e, { request: 'sandbox destroy', space: space.slug })
@@ -394,7 +439,26 @@ export let destroyed = async (
   // container is a bearer nobody is holding. It is read off the ledger rather
   // than passed in, so erasing a space (erase.ts) revokes the grant a build
   // minted in some other request just as a build's own end does.
-  await bared(env, space)
+  await bared(env, space, named(space, person))
+  return true
+}
+
+/** Erase every copy, including those of members who have since left. */
+export let destroyedAll = async (
+  env: Bound,
+  space: Space,
+) => {
+  if (!env.SANDBOX) return false
+  let provider = cloudflareProvider(env.SANDBOX, { retry: retryOnce })
+  let source = { id: shared(space) }
+  if (!env.WORKSPACES) throw new Error('no sandbox workspace coordinator')
+  let workspace = env.WORKSPACES.get(env.WORKSPACES.idFromName(source.id))
+  let copies = await retryOnce(() => workspace.retire())
+  for (let ref of [...copies.map((id) => ({ id })), source]) {
+    await provider.release(ref)
+    await bared(env, space, ref.id)
+  }
+  await retryOnce(() => workspace.destroy())
   return true
 }
 
@@ -425,7 +489,7 @@ export let paid = async (
  * would each put the other's properties back.
  */
 export let released = async (
-  env: { SANDBOX?: Sandboxes },
+  env: Bound,
   space: Space,
   spend: Spend,
   now = Date.now,
@@ -433,7 +497,9 @@ export let released = async (
   let spent = seconds(spend, now())
   // The seconds are counted whether or not it went; a build that never woke
   // one has nothing to destroy.
-  if (spend.since != null) await destroyed(env, space)
+  if (spend.since != null && spend.person) {
+    await destroyed(env, space, spend.person)
+  }
   spend.since = null
   return spent
 }

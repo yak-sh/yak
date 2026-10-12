@@ -249,9 +249,15 @@ export let probeSuite = async () => {
           tsconfig: kernel.tsconfig,
           alias: kernel.alias,
           durable_objects: {
-            bindings: [{ name: 'SANDBOX', class_name: 'ContainerProbe' }],
+            bindings: [
+              { name: 'SANDBOX', class_name: 'ContainerProbe' },
+              { name: 'WORKSPACES', class_name: 'WorkspaceProbe' },
+            ],
           },
-          migrations: [{ tag: 'v1', new_sqlite_classes: ['ContainerProbe'] }],
+          migrations: [{
+            tag: 'v1',
+            new_sqlite_classes: ['ContainerProbe', 'WorkspaceProbe'],
+          }],
         },
       },
       {

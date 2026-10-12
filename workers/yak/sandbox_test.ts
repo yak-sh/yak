@@ -30,7 +30,7 @@ import { directory } from './directory.ts'
 import * as dirPart from './directory.ts'
 import type { Env } from './env.ts'
 import * as apps from './apps.ts'
-import { platform, type Ran, sandboxes } from './testing.ts'
+import { platform, type Ran, sandboxes, workspaces } from './testing.ts'
 import { GRANT, held, ledger } from './grants.ts'
 import {
   asleep,
@@ -183,7 +183,7 @@ test('the machine tools write, run and read, and a ship copies out', async () =>
   assertEquals(await wasm.text(), WASM)
 
   // Every one of those touched the same container, under the space's own id.
-  assertEquals([...box.alive], [`build-${space.eid}`])
+  assertEquals([...box.alive], [named(space, ADA)])
 })
 
 test('sandbox_exec, as the directory listed it, runs its cmd and answers as sandbox_shell does', async () => {
@@ -302,7 +302,7 @@ test('a lend returns a usable machine while the CLI warms', async () => {
     cmd == 'yak --help >/dev/null' ? { running: true } : { stdout: 'ready' }
   )
   let space = { eid: 'warm', slug: 'warm' } as dirPart.Space
-  let env = { SANDBOX: box.SANDBOX }
+  let env = { SANDBOX: box.SANDBOX, WORKSPACES: workspaces(box.SANDBOX) }
   let spend = spending()
   let lent = await workbench(env, space, ADA, spend)
   let warm = await lent.machine.look('proc-1')
@@ -333,7 +333,7 @@ for (let failure of ['rpc', 'exit']) {
       return { stdout: 'ready' }
     })
     let space = { eid: 'warm-failed', slug: 'warm-failed' } as dirPart.Space
-    let env = { SANDBOX: box.SANDBOX }
+    let env = { SANDBOX: box.SANDBOX, WORKSPACES: workspaces(box.SANDBOX) }
     let lent = await workbench(env, space, ADA, spending())
     assertEquals(
       (await lent.provider.exec(lent.ref, 'echo ready')).stdout,
@@ -375,7 +375,7 @@ test('a release answers the seconds held, and the container goes', async () => {
   let spend = spending()
   let bench = await workbench(env, space, ADA, spend, () => clock)
   await bench.provider.exec(bench.ref, 'sleep 42')
-  assertEquals([...box.alive], [`build-${space.eid}`])
+  assertEquals([...box.alive], [named(space, ADA)])
   clock = 42_300
   let spent = await released(env, space, spend, () => clock)
 
@@ -431,9 +431,9 @@ test('destroying the container revokes what it was wearing', async () => {
   // Destroy is the one door — a build's own end (`released`) and a space
   // being erased (erase.ts) both come through it, and neither has to be
   // holding the grant to end it.
-  assertEquals(await destroyed(env, space), true)
+  assertEquals(await destroyed(env, space, ADA), true)
   assertEquals(await held(token, SECRET, book), null)
-  assertEquals(await book.wearing(named(space)), null)
+  assertEquals(await book.wearing(named(space, ADA)), null)
 
   // The next wake mints a fresh one rather than saying the dead one again.
   await tool('sandbox_shell').run(lone, { command: 'ls' })
@@ -705,7 +705,7 @@ test('a lone connector call pays for itself and leaves the container', async () 
   // It is counted — a second at least, since the call rounds up — and the
   // container is still there for the next call.
   assert(((await dirOf(env).space('ada'))!.meter?.seconds ?? 0) >= 1)
-  assertEquals([...box.alive], [`build-${space.eid}`])
+  assertEquals([...box.alive], [named(space, ADA)])
 })
 
 // T-37883: one person holds one sandbox at a time on the free tier. A space

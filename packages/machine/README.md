@@ -149,6 +149,14 @@ The host supplies `options.env` at command invocation (for example, a scoped
 grant), `options.retry` for transient RPC failures, and `options.sleepError` to
 report a failed idle configuration. This provider knows no account or meter.
 
+`archive(ref)` streams a tar snapshot of `/workspace`, with its byte length and
+an explicit `dispose()` for callers that stop reading early.
+`restore(ref, body)` restores that stream into a clean destination and refuses
+writes outside `/workspace`. Transfers use bounded chunks and carry no
+invocation environment. `active(ref)` reads the container's state without
+starting it; `processes(ref)` returns process data without the SDK's control
+methods.
+
 The namespace in this example is a stand-in for the deployed binding:
 
 ```ts
