@@ -411,11 +411,11 @@
       "noun": "admin",
       "verb": "errors",
       "title": "List yaks.app failures by tracker bug",
-      "description": "Tracker bugs last seen in the preceding window, thrown or caught: lifetime count, first and last seen, global bug id, place and message. Reads the tracker through its signed door using the remote URL and vault reference in tracker.json beside this graph; `admin tail` watches live traffic. Infrastructure requires the platform admin or the configured person’s own account.",
+      "description": "Every unresolved tracker bug (not resolved or archived) last seen in the preceding 7 days by default, newest first; since narrows or widens the window. Thrown or caught: lifetime count, first and last seen, global bug id, place and message. Reads the tracker through its signed door using the remote URL and vault reference in tracker.json beside this graph; `admin tail` watches live traffic. Infrastructure requires the platform admin or the configured person’s own account.",
       "input": {
         "since": {
           "type": "string",
-          "description": "how far back, as a duration (default 10m)"
+          "description": "how far back bugs were last seen, as a duration (default 7d); narrows or widens the unresolved bug window"
         },
         "as": {
           "type": "string",

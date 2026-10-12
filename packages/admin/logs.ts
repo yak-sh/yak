@@ -156,7 +156,7 @@ export let records = (receive: (row: Row) => void) => {
 
 let UNITS: Record<string, number> = { s: 1, m: 60, h: 3600, d: 86_400 }
 
-export let duration = (since = '10m'): number => {
+export let duration = (since = '7d'): number => {
   let match = /^(\d+)(s|m|h|d)?$/.exec(since)
   let seconds = match ? Number(match[1]) * UNITS[match[2] || 's'] : 0
   if (!Number.isSafeInteger(seconds) || seconds <= 0) {
@@ -218,8 +218,8 @@ export let tail = (
 ): Promise<number> =>
   live(root, (row) => out(eventLine(row)), note, signal, start)
 
-// The preceding window is matched against the group's latest occurrence. Hits
-// and first seen describe the whole group, including retained older samples.
+// Unresolved bugs are matched by their latest occurrence in the preceding
+// window. Hits and first seen cover the whole group, including older samples.
 export let errors = async (
   since: string | undefined,
   options: Options,
@@ -234,7 +234,8 @@ export let errors = async (
   let door = routes({}, options, fetch).find((r) => r.path == '/tracker/bugs')!
   let rows: import('@yaks/graph').Bundle[] = [], after = ''
   for (;;) {
-    let query = `.bug.last>=${from} .bug.last<=${through} .order=entity.eid` +
+    let query =
+      `!resolved !archived .bug.last>=${from} .bug.last<=${through} .order=-bug.last` +
       (after ? ` .after=${after}` : '')
     let params = new URLSearchParams({ query, limit: '100' })
     let response = await door.handle(
@@ -249,9 +250,8 @@ export let errors = async (
     if (!cursor || cursor == after) throw Error('tracker repeated a bug page')
     after = cursor
   }
-  rows.sort((a, b) => Number(object(b.bug).hits) - Number(object(a.bug).hits))
   note(
-    `Tracker yaks.app: bugs last seen in preceding ${seconds}s; counts and first seen cover each bug's lifetime`,
+    `Tracker yaks.app: ${rows.length} unresolved bugs (not resolved or archived) last seen in preceding ${seconds}s, newest first; counts and first seen cover each bug's lifetime`,
   )
   out('COUNT  FIRST SEEN  LAST SEEN  BUG  PLACE  MESSAGE')
   for (let row of rows) {

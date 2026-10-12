@@ -131,7 +131,7 @@ test('since accepts positive seconds, minutes, hours or days', () => {
       ['91d', 7_862_400],
     ] as const
   ) assertEquals(duration(input), expected)
-  assertEquals(duration(), 600)
+  assertEquals(duration(), 604_800)
   for (let input of ['0', '-1', '1.5m', 'forever']) {
     assertThrows(() => duration(input), CallError, '--since')
   }
@@ -139,49 +139,70 @@ test('since accepts positive seconds, minutes, hours or days', () => {
 
 // The same signed door the deployed tracker answers, over an isolated graph.
 let remote = trackerStore(ram(trackerVocab, trackerOptions), { sink: () => {} })
-let ids = [1, 2, 3].map((n) =>
-  `00000000-0000-4000-8000-${String(n).padStart(12, '0')}`
+let ids = Array.from(
+  { length: 109 },
+  (_, i) => `00000000-0000-4000-8000-${String(109 - i).padStart(12, '0')}`,
 )
-await remote.graph.apply([
-  ...[2, 1, 8].map((hits, i) => ({
-    entity: { eid: ids[i] },
+let now = Date.now(), hour = 3_600_000
+let ages = [...Array.from({ length: 105 }, (_, i) => i + 1), 8 * 24, 1, 1, -1]
+await remote.graph.apply(
+  ids.map((eid, i) => ({
+    entity: { eid },
     doc: {
-      title: i
-        ? 'Error: VPC binding failed'
-        : 'TypeError: Invalid\nredirect value',
+      title: i ? `Error: bug ${i}` : 'TypeError: Invalid\nredirect value',
     },
     bug: {
       fault: `admin-${i}`,
-      hits,
+      hits: i + 1,
       first: '2026-09-25T21:35:26Z',
-      last: new Date(Date.now() - (i == 2 ? 86400000 : 1000)).toISOString(),
+      last: new Date(now - ages[i] * hour).toISOString(),
     },
+    ...(i == 106 ? { resolved: {} } : i == 107 ? { archived: {} } : {}),
   })),
-], { trusted: true })
+  { trusted: true },
+)
 let secret = 'test-only'
 let upstream = trackerDoor(remote, platform, secret)
 let config = { remote: { url: 'https://tracker.test', secret } }
 let go = ((url, init) => upstream(new Request(url, init))) as typeof fetch
-let listed = async (options = config, fetch = go) => {
+let listed = async (
+  since?: string,
+  options = config,
+  fetch = go,
+) => {
   let said: string[] = [], noted: string[] = []
-  await errors('6h', options, (l) => said.push(l), (l) => noted.push(l), fetch)
+  await errors(since, options, (l) => said.push(l), (l) => noted.push(l), fetch)
   return { said, noted }
 }
+let bugsIn = ({ said }: Awaited<ReturnType<typeof listed>>) =>
+  said.slice(1, -1).map((line) => line.split('  ')[3])
 
-// Exercise the signed HTTP reader alongside its shared graph fixture.
+// Exercise filtering and pagination through the deployed tracker's signed door.
 let recent = await listed()
-let denied = await listed({ remote: { ...config.remote, secret: 'wrong' } })
-  .then(() => undefined, (error) => error)
+let narrow = await listed('90m'), wide = await listed('14d')
+let denied = await listed(undefined, {
+  remote: { ...config.remote, secret: 'wrong' },
+}).then(() => undefined, (error) => error)
 
-test('errors reads recent tracker bugs through the signed door', () => {
-  let { said, noted } = recent
-  assertEquals(said[0], 'COUNT  FIRST SEEN  LAST SEEN  BUG  PLACE  MESSAGE')
-  assertEquals(said.length, 4)
-  assertEquals(said[1].includes(ids[0]), true)
-  assertEquals(said[1].endsWith('TypeError: Invalid redirect value'), true)
-  assertEquals(said[2].includes(ids[1]), true)
-  assertEquals(said[3], '3 occurrences, 2 bugs')
-  assertEquals(noted[0].includes('lifetime'), true)
+test('errors defaults to every unresolved bug seen in the last week, newest first', () => {
+  assertEquals(bugsIn(recent), ids.slice(0, 105))
+  assertEquals(
+    recent.said[0],
+    'COUNT  FIRST SEEN  LAST SEEN  BUG  PLACE  MESSAGE',
+  )
+  assertEquals(
+    recent.said[1].endsWith('TypeError: Invalid redirect value'),
+    true,
+  )
+  assertEquals(recent.said.at(-1), '5565 occurrences, 105 bugs')
+  assertEquals(recent.noted[0].includes('105 unresolved bugs'), true)
+  assertEquals(recent.noted[0].includes('604800s'), true)
+  assertEquals(recent.noted[0].includes('lifetime'), true)
+})
+
+test('errors since narrows or widens the unresolved bug window', () => {
+  assertEquals(bugsIn(narrow), ids.slice(0, 1))
+  assertEquals(bugsIn(wide), ids.slice(0, 106))
 })
 
 test('errors refuses unavailable tracker configuration without tailing forward', async () => {

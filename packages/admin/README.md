@@ -29,8 +29,15 @@ permissions. Infrastructure operations (`deploys`, `errors`, `tail`, `rollback`,
 account to be the platform admin or the configured person's own email. `errors`
 reads through the signed tracker door configured by `@yaks/tracker` in
 `tracker.json` beside this graph (or this config's own tracker plugin). The
-remote URL and vault reference come from that config. It lists bugs last seen in
-the requested window; counts and first seen cover each bug's lifetime.
+remote URL and vault reference come from that config. It lists every unresolved
+bug (not resolved or archived) last seen in the preceding 7 days, newest first.
+`--since` narrows or widens that window; the header counts the matching bugs,
+and counts and first seen cover each bug's lifetime.
+
+```sh
+yak admin errors --as admin
+yak admin errors --since 14d --as admin
+```
 
 ## A throwaway without a browser
 
