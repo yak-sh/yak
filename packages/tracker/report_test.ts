@@ -1,6 +1,6 @@
 import { equal, ok, test, throws } from '@yaks/testing'
 import { CallError } from '@yaks/tools'
-import { Refused } from '@yaks/graph'
+import { type Bundle, Refused } from '@yaks/graph'
 import {
   capture,
   caught,
@@ -88,14 +88,19 @@ test('capture preserves provenance, scrubs request secrets and bounds breadcrumb
   equal((comp(rows[0], 'breadcrumbs').items as unknown[]).length, 20)
 })
 
-test('a thrown object reports its contents and the place that reported it', () => {
+test('a thrown object reports its contents and the place that reported it', async () => {
+  let top = (row: Bundle) => str(comp(row, 'exception').stack).split('\n')[1]
   let reportedHere = (value: unknown) => capture(value, { sink: () => {} })[0]
   let refusal = reportedHere({ error: 'Refused', message: 'bug.fault moved' })
   let plain = reportedHere({ id: 7 })
   equal(title(refusal), 'Refused: bug.fault moved')
   equal(title(plain), 'Object: {"id":7}')
-  ok(str(comp(refusal, 'exception').stack).includes('reportedHere'))
+  ok(top(refusal).includes('reportedHere'))
   ok(faultOf(refusal) != faultOf(plain))
+  let rows: Bundle[] = []
+  let caughtHere = () => caught({ id: 7 }, { sink: (r) => void (rows = r) })
+  await caughtHere()
+  ok(top(rows[0]).includes('caughtHere'))
 })
 
 test('queue, spool and post transport the same reporter eids', async () => {

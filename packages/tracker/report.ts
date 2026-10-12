@@ -99,19 +99,29 @@ export let scrub = (rows: Bundle[]): Bundle[] =>
     return out
   })
 
-// This module's own frames, which every stack taken here begins with. A
-// bundle (the yak Worker) has no URL for a module, and its frames all name the
-// one bundle, so there nothing is dropped rather than everything.
-let here = URL.canParse(import.meta.url)
-  ? new URL(import.meta.url).pathname
-  : undefined
-
 let json = (value: object): string => {
   try {
     return (JSON.stringify(value) ?? String(value)).slice(0, 1000)
   } catch {
     return String(value)
   }
+}
+
+// The stack below this module's outermost door, where a value was reported.
+// The cut is by function, never by file: a Worker bundles every module into
+// one file, where import.meta.url names none of them. A door not on the stack
+// leaves no frames. V8 and JavaScriptCore cut; their types do not declare it,
+// and a runtime without it leaves no stack.
+let cut: unknown = Reflect.get(Error, 'captureStackTrace')
+let below = (): string => {
+  if (typeof cut != 'function') return ''
+  for (let door of [caught, report, capture, described]) {
+    let at: { stack?: string } = {}
+    cut.call(Error, at, door)
+    let frames = (at.stack ?? '').split('\n').slice(1).join('\n')
+    if (frames) return frames
+  }
+  return ''
 }
 
 /** What a thrown value says it is. An Error says so itself. Any other object
@@ -142,8 +152,7 @@ export let described = (
   let own = error as Record<string, unknown>
   let named = [own.name, own.error, own.code]
     .find((v): v is string => typeof v == 'string' && v != '')
-  let stack = (new Error().stack ?? '').split('\n')
-    .filter((line) => !here || !line.includes(here)).slice(1).join('\n')
+  let stack = below()
   return {
     type: named ?? error.constructor?.name ?? 'Object',
     value: typeof own.message == 'string' ? own.message : json(error),
