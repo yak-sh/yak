@@ -321,6 +321,7 @@ test('deploy timing: a commit Cloudflare never built has nothing to time', () =>
   assertEquals(built([{ name: 'gate' }, { name: 'dry-run' }]), false)
   assertEquals(built([]), false)
   assertEquals(built([{ name: 'gate' }, { name: 'Workers Builds: yak' }]), true)
+  assertEquals(built([{ name: 'Workers Builds: yak-tracker' }]), false)
 })
 
 test('deploy timing: the job summary carries the row the record accepts', () => {

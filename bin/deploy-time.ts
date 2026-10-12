@@ -97,7 +97,7 @@ export let versionFor = (sha: string, pushed: string, versions: Version[]) => {
 // every docs-or-CI commit. Cloudflare's own check run is the signal, asked for
 // only after the version wait expires, when a real build's check exists.
 export let built = (runs: { name: string }[]) =>
-  runs.some((r) => r.name.startsWith('Workers Builds'))
+  runs.some((r) => r.name == 'Workers Builds: yak')
 
 // Cloudflare silently ignores an override for a version outside the active
 // deployment. A 200 alone can therefore be the old code, even during rollout.
@@ -320,7 +320,9 @@ export let main = async (args = Deno.args) => {
           check_runs: [],
         }))
         if (!built(checks.check_runs)) {
-          console.log(`${sha.slice(0, 8)}: no Workers Build — nothing to time`)
+          console.log(
+            `${sha.slice(0, 8)}: no kernel Workers Build — nothing to time`,
+          )
           skipped = true
           continue
         }
