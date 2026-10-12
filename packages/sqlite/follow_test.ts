@@ -7,7 +7,7 @@ import { storage } from './mod.ts'
 import { add, follow, forget, lacking, printOf } from './follow.ts'
 import { storage as readStore } from './read-store.ts'
 import { parse } from '@yaks/query'
-import { loadVocab } from '@yaks/vocab'
+import { loadVocab, type PropSchema } from '@yaks/vocab'
 
 let vocab = loadVocab({
   $defs: {
@@ -65,7 +65,7 @@ test('an unfinished pass leaves its print for the next opener, and so does forge
 
 test('a reader reads a property no writer has added a column for as null', () => {
   let dir = Deno.makeTempDirSync({ prefix: 'yak-follow-' })
-  let note = (props: Record<string, unknown>) =>
+  let note = (props: Record<string, PropSchema>) =>
     loadVocab({ $defs: { note: { component: true, properties: props } } })
   let v1 = note({ text: { type: 'string' } })
   let v2 = note({ text: { type: 'string' }, mood: { type: 'string' } })
