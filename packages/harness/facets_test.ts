@@ -7,7 +7,7 @@ import { commands as localCommands } from '../cli/subcommands.ts'
 import { argsOf, type Bundle, mint, namedTool, offered } from '@yaks/graph'
 import { answerOf, toolEid, worded } from '@yaks/tools'
 import { toolDefinition } from '@yaks/vocab/tools'
-import { parametersOf } from './tools.ts'
+import { inputSchemaOf } from '@yaks/mcp/tools'
 import { connect } from '../mcp/testing.ts'
 import { textOf, transcript } from '@yaks/session'
 import { selectedUsing } from './model_selection.ts'
@@ -230,7 +230,7 @@ test('JSON Schema tool uses identical metadata and constraints through MCP and p
       },
     }
     assertEquals(listed.inputSchema, published)
-    assertEquals(parametersOf(tool), published)
+    assertEquals<unknown>(inputSchemaOf(tool), published)
     const args = await argsFor(tool, ['root', '-n', '3'], reads)
     const response = await c.callTool({ name: 'example_list', arguments: args })
     assertEquals(response.isError, undefined)

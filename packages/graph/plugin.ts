@@ -254,6 +254,10 @@ export type Tool<R = Bundle[]> = {
    * that keeps the process — a server, a stream that never returns — is
    * offered only where a person holds that process: `["cli"]`. */
   surfaces?: readonly Surface[]
+  /** false: the tool answers a call by its name but no listing names it — a
+   * name a published directory still sends, kept as a translation onto the
+   * tool that does its work now. Listed by default. */
+  listed?: boolean
   /** the roles the process running it serves (@yaks/cli `ROLES`), where it
    * needs more than the graph every tool runs over: `serve` answers HTTP, so
    * its process serves `web`. */

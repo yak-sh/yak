@@ -174,17 +174,14 @@ export let rejected = (status: number, text: string) =>
 
 export let str = (description: string) => ({ type: 'string', description })
 
+// The two arguments nearly every tool takes, so each word here is sent once
+// per tool on every listing.
 export let SPACE = str(
-  'the space slug: the short name in <space>.yaks.app, not a full URL. ' +
-    'When optional, omit it to use the unique reachable space holding the ' +
-    'named live app, otherwise the only space the person owns (created if ' +
-    'needed). If more than one matches, the error asks you to choose. ' +
-    'Always supply it when this tool requires space',
+  'the space slug, as in <space>.yaks.app; if optional and omitted, the ' +
+    "space holding the app, else the person's only space",
 )
 
-export let APP = str(
-  'the app slug: the short name in <space>.yaks.app/<app>/, not a full URL',
-)
+export let APP = str('the app slug, as in <space>.yaks.app/<app>/')
 
 export let text = (v: unknown, what: string) => {
   if (typeof v != 'string' || !v) {

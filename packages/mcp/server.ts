@@ -198,26 +198,21 @@ export let prepared = async (
  * bundle is and not what any component holds: a fully typed bundle is tens of
  * kilobytes of vocabulary, and `tools/list` would carry a copy per tool before
  * the agent has asked its first question. What a component holds is
- * `graph_schema`'s answer, asked for when it is wanted.
+ * `graph_schema`'s answer, asked for when it is wanted. It carries no prose
+ * for the same reason: it rides on every tool, and `graph_apply`'s
+ * description says what a bundle is once.
  */
 export let answerSchema: { type: 'object'; [key: string]: unknown } = {
   type: 'object',
   properties: {
     result: {
       type: 'array',
-      description: 'one bundle per entity this tool answered about',
       items: {
         type: 'object',
-        description:
-          'an entity and the components it carries: `entity` says which ' +
-          'entity, and every other key is a component of it',
         properties: {
           entity: {
             type: 'object',
-            description: 'which entity this bundle is about',
-            properties: {
-              eid: { type: 'string', description: "the entity's id" },
-            },
+            properties: { eid: { type: 'string' } },
             required: ['eid'],
           },
         },
@@ -227,12 +222,7 @@ export let answerSchema: { type: 'object'; [key: string]: unknown } = {
         // @yaks/graph's — are not components and are not objects, so they are
         // matched first and left open.
         patternProperties: { '^\\$': {} },
-        additionalProperties: {
-          type: ['object', 'null'],
-          description:
-            "one component's properties, or null where the transaction " +
-            'removed it',
-        },
+        additionalProperties: { type: ['object', 'null'] },
       },
     },
   },
@@ -345,11 +335,12 @@ let spelling = (tool: NamedTool): Record<string, unknown> | undefined => {
 }
 
 /**
- * Every tool this server lists, in the order it registers them: the generic
+ * Every tool this server answers, in the order it registers them: the generic
  * tier, then the graph's plugins', then the caller's own. A caller that
  * already has the tier in its own list passes `core: false`, so the tier is
  * not added twice. A tool offered only elsewhere (`surfaces` without `mcp`)
- * is neither listed nor callable here.
+ * is neither listed nor callable here; one marked `listed: false` is callable
+ * and left out of `tools/list` ({@link shown}).
  *
  * ```ts ignore
  * let names = listing(opts).map(toolName)
@@ -372,10 +363,15 @@ export let listing = (opts: Options): Tool[] =>
     ...(opts.tools ?? []),
   ].filter(offered('mcp'))
 
+/** Whether `tools/list` names a tool: all but the ones marked `listed: false`,
+ * which answer a call by name and are never offered. */
+export let shown = (t: Pick<Tool, 'listed'>): boolean => t.listed !== false
+
 /** The roster this server serves: the tool names it lists, in listing order.
  * This is what a client caches when it connects, and what
  * {@link rosterVersion} hashes. */
-export let roster = (opts: Options): string[] => listing(opts).map(toolName)
+export let roster = (opts: Options): string[] =>
+  listing(opts).filter(shown).map(toolName)
 
 /**
  * One tool's behavior, as MCP's four hints (`ToolAnnotations`). A client reads
@@ -453,7 +449,7 @@ export let server = (opts: Options): McpServer => {
     report,
     ...opts.reply ? { reply: opts.reply } : {},
   })
-  let names = tools.map((t) => t.name)
+  let names = tools.filter(shown).map((t) => t.name)
 
   let callbacks = new Map<
     string,
@@ -508,7 +504,7 @@ export let server = (opts: Options): McpServer => {
   // every tool is listed with the one
   // answer schema, since every tool answers bundles, unless it declared its own.
   mcp.server.setRequestHandler('tools/list', () => ({
-    tools: tools.map((t) => ({
+    tools: tools.filter(shown).map((t) => ({
       name: t.name,
       ...(t.title ? { title: t.title } : {}),
       description: t.description,

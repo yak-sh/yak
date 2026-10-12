@@ -2,8 +2,8 @@ import { machines } from './session_machines.ts'
 import { processProvider } from '@yaks/process/machine'
 import { test } from '@yaks/testing'
 import { assert, assertEquals } from '@std/assert'
-import { graphTools, harnessTools, parametersOf } from './tools.ts'
-import { core } from '@yaks/mcp/tools'
+import { graphTools, harnessTools } from './tools.ts'
+import { core, inputSchemaOf } from '@yaks/mcp/tools'
 import { identityEid } from '@yaks/graph'
 import { toolEid } from '@yaks/tools'
 import { harness, processes, repo } from './testing.ts'
@@ -12,7 +12,7 @@ import { local } from './local.ts'
 let schemas = async () => {
   let h = await harness()
   let table = core({ vocab: h.vocab, depth: 'names' })
-    .map((t) => [t.name, parametersOf(t)] as const)
+    .map((t) => [t.name, inputSchemaOf(t)] as const)
   h.close()
   return new Map(table)
 }

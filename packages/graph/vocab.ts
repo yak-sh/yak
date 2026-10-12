@@ -31,6 +31,23 @@ export let description: string = manifest.description
 /** Every document this package declares. */
 export let docs: VocabDoc[] = [graphDoc]
 
+// The meta-schema's prose is written for a person authoring a vocabulary. A
+// client checking an answer needs its shape, and every tool listing carries
+// it, so the answer's schema is the shape alone: each `description` keyword
+// goes, and what a value holds (`const`, `enum`, `default`, `examples`) is left
+// as written.
+let DATA = new Set(['const', 'enum', 'default', 'examples'])
+let bare = (s: unknown): unknown =>
+  Array.isArray(s)
+    ? s.map(bare)
+    : s && typeof s == 'object'
+    ? Object.fromEntries(
+      Object.entries(s)
+        .filter(([k, v]) => k != 'description' || typeof v != 'string')
+        .map(([k, v]) => [k, DATA.has(k) ? v : bare(v)]),
+    )
+    : s
+
 // An answer describes a composed vocabulary, including internal and UX
 // components. The authoring meta-schema reserves those names for the host;
 // its name restriction does not constrain what the host reports.
@@ -46,7 +63,10 @@ let reported = (keywords: Keywords[]): Record<string, unknown> => {
   >
   // Tool schemas are already read as 2020-12. Omit the dialect line, which
   // clients defaulting to an older draft can refuse before checking a value.
-  let schema = { ...meta, properties: { ...properties, $defs: defs } }
+  let schema = bare({
+    ...meta,
+    properties: { ...properties, $defs: defs },
+  }) as Record<string, unknown>
   reports.set(keywords, schema)
   return schema
 }

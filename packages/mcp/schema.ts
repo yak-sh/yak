@@ -122,20 +122,18 @@ let compSchema = (
   o: BundleOpts,
 ): z.ZodTypeAny => {
   let info = vocab.comp(name)
+  // A server-owned property is left out of the write schema: the server
+  // stamps it, and a write that names one is not the caller's to make.
+  let props = vocab.props(name)
+    .filter((prop) => !o.write || info?.writable.includes(prop))
   let shape = Object.fromEntries(
-    vocab.props(name).map((prop) => {
+    props.map((prop) => {
       let def = vocab.prop(name, prop)!
-      // A server-owned property is named in the write schema but left untyped:
-      // a caller that reads a bundle and sends it back will include one, and
-      // @yaks/graph's `admit` drops it rather than refusing the transaction.
       // The caller's own `prop` function is consulted only where a type is
       // being emitted at all: `names` costs a third of `full` by leaving every
       // value untyped, and typing some properties in the middle of that would
       // be neither.
-      let owned = o.write && !info?.writable.includes(prop)
-      let said = owned || o.depth != 'full'
-        ? null
-        : o.prop?.(def, o) ?? typed(def)
+      let said = o.depth != 'full' ? null : o.prop?.(def, o) ?? typed(def)
       // An untyped property is `unknown`, which already allows the null a
       // cleared property reads back as — declaring that separately would double
       // what the schema costs in the agent's context for nothing.

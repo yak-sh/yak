@@ -13,9 +13,9 @@ import { type Blobs, valueTools } from '@yaks/blob'
 // and the only
 // thing between them is a difference of format. A graph tool declares its
 // arguments as a Zod schema, because that is what the MCP SDK takes; a model
-// wants JSON Schema. So this file is one conversion and one adapter:
-// `parametersOf` renders a tool's arguments as JSON Schema, and `graphTools`
-// writes A call entity for each one and records what it returned.
+// wants JSON Schema. So this file is one adapter: `graphTools` declares each
+// tool with its arguments as JSON Schema, writes a call entity for each call
+// and records what it returned.
 //
 // The model never calls a tool function directly here either. A call is an
 // entity attributed to the session that asked for it, so what the tool writes
@@ -38,14 +38,6 @@ import {
   type Tool,
   ToolError,
 } from '@yaks/session'
-
-/** A graph tool's arguments as JSON Schema, the way a model declaration takes
- * them. */
-export let parametersOf = (tool: GraphTool): Record<string, unknown> => {
-  if (tool.inputSchema) return inputSchemaOf(tool)
-  let { $schema: _, ...json } = inputSchemaOf(tool)
-  return json
-}
 
 /**
  * Graph tools as tools a model may call: the generic tier (`graph_apply`,
@@ -77,7 +69,7 @@ export let graphTools = (
   return tier.map((t) => ({
     name: toolName(t),
     description: t.description,
-    parameters: parametersOf(t),
+    parameters: inputSchemaOf(t),
     // A call, signed as the session that asked: the runner runs the function
     // and lands what it answered in that session's name.
     run: async (args: Record<string, unknown>, call) => {

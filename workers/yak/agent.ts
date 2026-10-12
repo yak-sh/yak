@@ -241,19 +241,22 @@ export let sugared = (ctx: Ctx, t: Sugar): Tool => ({
  * order, whoever is asking — which is what a directory that snapshots
  * `tools/list` at submission and serves it forever needs from us
  * (declared.ts). The names a directory listed and no tool carries any more
- * follow, as their translations (published.ts).
+ * follow, as their translations (published.ts): they answer a call and are
+ * left out of `tools/list`, where they would only say a second time what the
+ * tool doing their work now says.
  */
-export let platform = (ctx: Ctx): Plugin => ({
-  name: 'yak/platform',
-  tools: [
-    ...[...TOOLS, ...PUBLISHED].map((t) =>
-      ctx.person || openly(t)
-        ? sugared(ctx, t)
-        : barred(sugared(ctx, t), ctx.env)
-    ),
-    ...packageTools(ctx).map((t) => ctx.person ? t : barred(t, ctx.env)),
-  ],
-})
+export let platform = (ctx: Ctx): Plugin => {
+  let bound = (t: Sugar) =>
+    ctx.person || openly(t) ? sugared(ctx, t) : barred(sugared(ctx, t), ctx.env)
+  return {
+    name: 'yak/platform',
+    tools: [
+      ...TOOLS.map(bound),
+      ...PUBLISHED.map((t) => ({ ...bound(t), listed: false })),
+      ...packageTools(ctx).map((t) => ctx.person ? t : barred(t, ctx.env)),
+    ],
+  }
+}
 
 /**
  * The post room's own verbs, as a second plugin (letters.ts): `mail_list` and

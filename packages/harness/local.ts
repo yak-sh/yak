@@ -28,7 +28,7 @@ import { graphTools, harnessTools } from './tools.ts'
 import { skillItems, skillTools } from './skills.ts'
 
 export { type Harness, hosted } from './store.ts'
-export { graphTools, harnessTools, parametersOf } from './tools.ts'
+export { graphTools, harnessTools } from './tools.ts'
 
 // A Harness must be passed under `h`, never spread into the options. Explicit
 // exclusions also catch spreads, which TypeScript's excess-property check skips.

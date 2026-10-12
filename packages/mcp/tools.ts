@@ -63,21 +63,80 @@ export let shapeOf = (tool: Tool): Record<string, z.ZodTypeAny> =>
     ) => [name, zodOf(toolName(tool), `argument '${name}'`, s)!]),
   )
 
+type Json = { [key: string]: unknown }
+let isObj = (v: unknown): v is Json =>
+  !!v && typeof v == 'object' && !Array.isArray(v)
+let open = (v: unknown) => v === true || (isObj(v) && !Object.keys(v).length)
+
+// A converted Zod schema, said in fewer words. zod-to-json-schema spells out
+// what JSON Schema already assumes (an object open to more properties, an
+// object naming none) and writes a nullable object or enum as an `anyOf`
+// beside `{type: 'null'}`, which is a type list. Each says the same thing, and
+// `graph_apply`'s input says it once per component, on a listing every client
+// is sent before it asks anything. Its draft-07 dialect line goes too: MCP
+// reads a tool schema as 2020-12, which means the same for every keyword here.
+let terse = (s: unknown): unknown => {
+  if (!isObj(s)) return s
+  let { anyOf, properties, items, additionalProperties, $schema: _, ...rest } =
+    s
+  let out: Json = { ...rest }
+  if (isObj(properties) && Object.keys(properties).length) {
+    out.properties = Object.fromEntries(
+      Object.entries(properties).map(([k, v]) => [k, terse(v)]),
+    )
+  }
+  if (items !== undefined) out.items = terse(items)
+  if (additionalProperties !== undefined && !open(additionalProperties)) {
+    out.additionalProperties = terse(additionalProperties)
+  }
+  if (!Array.isArray(anyOf)) return out
+  let kept = anyOf.map(terse)
+  let one = kept.filter((k) => !(isObj(k) && k.type == 'null'))
+  let [only] = one
+  if (
+    one.length == 1 && kept.length == 2 && isObj(only) &&
+    typeof only.type == 'string' && !only.anyOf
+  ) {
+    return {
+      ...only,
+      type: [only.type, 'null'],
+      ...(Array.isArray(only.enum) ? { enum: [...only.enum, null] } : {}),
+      ...out,
+    }
+  }
+  return { ...out, anyOf: kept }
+}
+
 /**
  * A tool's arguments as JSON Schema, whichever way it declared them: its own
  * `inputSchema`, or its Zod shape converted. This is exactly what
  * `tools/list` sends, so anything else that needs a tool's argument
  * grammar — a CLI mapping a command onto it, say — reads what an MCP client
  * reads.
+ *
+ * ```ts
+ * import { assertEquals } from '@std/assert'
+ * import { z } from 'zod'
+ * import { inputSchemaOf } from '@yaks/mcp/tools'
+ *
+ * let doc = z.object({ title: z.string().nullable().optional() }).passthrough()
+ * let tool = { name: 'write', input: { doc: doc.nullable() }, run: () => [] }
+ * assertEquals(inputSchemaOf(tool).properties, {
+ *   doc: {
+ *     type: ['object', 'null'],
+ *     properties: { title: { type: ['string', 'null'] } },
+ *   },
+ * })
+ * ```
  */
 export let inputSchemaOf = (
   tool: Tool,
 ): { type: 'object'; [key: string]: unknown } =>
   publicToolSchema(
-    tool.inputSchema ?? zodToJsonSchema(z.object(shapeOf(tool)), {
+    tool.inputSchema ?? terse(zodToJsonSchema(z.object(shapeOf(tool)), {
       target: 'jsonSchema7',
       $refStrategy: 'none',
-    }),
+    })) as Json,
   ) as { type: 'object'; [key: string]: unknown }
 
 /** What the generic tier needs in order to describe itself. */

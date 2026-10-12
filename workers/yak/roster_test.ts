@@ -164,10 +164,7 @@ test(
           t.name,
         )
       }
-      // What a directory published is what a client installed from it calls
-      // (published.ts), so every name it listed is listed here still.
       let names = listed.map((t) => t.name)
-      assertEquals(LISTING.tools.filter((n) => !names.includes(n)), [])
 
       // ---- what anybody may read ----------------------------------------
       assertStringIncludes(await tool('about'), 'yaks.app is a place')
@@ -764,7 +761,11 @@ test(
 
       // ---- and the assertion this module exists for -------------------------
       if (Deno.env.get('YAK_PROBE_TRACE')) console.log(heard.join('\n'))
-      let missed = listed.map((t) => t.name).filter((n) => !called.has(n))
+      // What a directory published is what a client installed from it calls
+      // (published.ts), so every name it listed is answered here too, listed
+      // or not.
+      let missed = [...new Set([...names, ...LISTING.tools])]
+        .filter((n) => !called.has(n))
       assertEquals(
         missed,
         [],

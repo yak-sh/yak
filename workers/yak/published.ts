@@ -5,9 +5,11 @@
 // that snapshot to everyone who installs it from there; only `tools/call`
 // reaches us. So every name in the listing answers, with the arguments it was
 // listed with, until a new listing is released. A tool renamed or dropped
-// since is kept here as a translation onto what does its work now, and only
-// the connector door lists one (agent.ts `platform`): the builder, which no
-// directory lists, never sees them.
+// since is kept here as a translation onto what does its work now. Only the
+// connector door answers one (agent.ts `platform`), and no `tools/list` names
+// it: a call reaching it came from a snapshot, and a client listing the tools
+// today is offered the tool doing the work. The builder, which no directory
+// lists, never sees them.
 //
 // The release that publishes a new listing replaces LISTING with the tools it
 // lists and deletes every translation whose name it no longer carries.
@@ -669,6 +671,7 @@ let BUILDERS: Row[] = [{
   },
 }]
 
-/** The translations, worded: listed on the connector door beside `TOOLS`. */
+/** The translations, worded: answered on the connector door beside `TOOLS`,
+ * and unlisted. */
 export let PUBLISHED: Tool[] = [...ROWS, ...MEMORY, ...CONNECTIONS, ...BUILDERS]
   .map(worded)

@@ -119,23 +119,32 @@ test('every tool publishes its answer, and its answers fit it', async () => {
   await client.close()
 })
 
+// The write door as a client's validator holds it: whether one bundle passes.
+let door = (schema: unknown) => {
+  let check = new AjvJsonSchemaValidator().getValidator(
+    schema as Parameters<AjvJsonSchemaValidator['getValidator']>[0],
+  )
+  return (bundle: Record<string, unknown>) =>
+    check({ bundles: [{ entity: { eid: '$b' }, ...bundle }] }).valid
+}
+
 test('graph_apply takes the vocabulary, typed and described', async () => {
   let schema = await writing()
   let book = at(schema, 'properties', 'bundles', 'items', 'properties', 'book')
-  let props = at(book, 'anyOf', '0', 'properties')
+  let props = at(book, 'properties')
   assertEquals(Object.keys(props as object), ['price', 'status', 'author'])
-  assertEquals(at(props, 'price', 'type'), ['number', 'null'])
   assertEquals(at(props, 'price', 'description'), 'what it costs, in pounds')
-  assertEquals(at(props, 'status', 'anyOf', '0', 'enum'), [
-    'draft',
-    'shelved',
-    'sold',
-  ])
-  // The two sugars a batch may say beside its components.
-  let items = at(schema, 'properties', 'bundles', 'items', 'properties')
-  assertEquals(at(items, '$delete', 'type'), 'boolean')
-  assertEquals(at(items, '$was', 'type'), 'object')
-  assertEquals(at(items, 'entity', 'required'), ['eid'])
+  let ok = door(schema)
+  assertEquals(ok({ book: { price: 9, status: 'sold' } }), true)
+  assertEquals(ok({ book: { price: 'nine' } }), false)
+  assertEquals(ok({ book: { status: 'lost' } }), false)
+  // A null property is cleared and a null component removed.
+  assertEquals(ok({ book: { price: null, status: null } }), true)
+  assertEquals(ok({ book: null }), true)
+  // The two sugars a batch may say beside its components, and the entity.
+  assertEquals(ok({ $delete: true, $was: { book: { price: null } } }), true)
+  assertEquals(ok({ $delete: 'yes' }), false)
+  assertEquals(ok({ entity: {} }), false)
 })
 
 // A host whose door takes a property differently than the vocabulary declares
@@ -159,8 +168,6 @@ test('a host states its own reading of a property on the write door', async () =
     'items',
     'properties',
     'book',
-    'anyOf',
-    '0',
     'properties',
     'author',
   )
@@ -169,26 +176,18 @@ test('a host states its own reading of a property on the write door', async () =
 
 test('the write door names its own words, and stays open to newer ones', async () => {
   let schema = await writing()
-  let comp = (name: string) =>
-    at(
-      schema,
-      'properties',
-      'bundles',
-      'items',
-      'properties',
-      name,
-      'anyOf',
-      '0',
-    )
-  // `created.at` and `created.by` are the server's own, so they are named and
-  // never typed: a client that read a bundle and sent it back is not punished
-  // for the stamps riding along, and nothing invites it to write one.
-  assertEquals(at(comp('created'), 'properties'), { at: {}, by: {} })
+  let items = at(schema, 'properties', 'bundles', 'items', 'properties')
+  // `created.at` and `created.by` are the server's own, so nothing invites a
+  // client to write one, and one that read a bundle and sent it back is not
+  // refused by its own copy of this schema for the stamps riding along.
+  assertEquals(at(items, 'created', 'properties'), undefined)
+  let ok = door(schema)
+  assertEquals(ok({ created: { at: '2026-10-12', by: 'm1' } }), true)
   // And each component is open (T-34277): a client caches this schema with the
   // tool list it came in and the vocabulary grows under it, so a closed one
   // would have that stale copy refuse a property that now exists. The schema
   // describes; the server decides, and says which properties are declared.
-  assertEquals(at(comp('book'), 'additionalProperties'), true)
+  assertEquals(ok({ book: { pages: 300 } }), true)
 })
 
 test('a JSON Schema input declaration reaches the listing unchanged', async () => {

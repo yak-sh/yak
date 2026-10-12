@@ -59,14 +59,14 @@ budgets.
 
 ## Exports
 
-| Import                | Main exports                                                                     |
-| --------------------- | -------------------------------------------------------------------------------- |
-| `@yaks/harness`       | `agent`, `seed`, `sessionTitle`, `titleOf`, and their types; web platform only   |
-| `@yaks/harness/local` | `local`, `hosted`, `harnessTools`, `graphTools`, `parametersOf`, and their types |
-| `@yaks/harness/tui`   | `views`: a lone session or entry, drawn as the terminal app                      |
-| `@yaks/harness/vocab` | `docs`, the harness's own words                                                  |
-| `@yaks/harness/tools` | `runs(host)`, the functions behind the tools `vocab.json` declares               |
-| `@yaks/harness/cli`   | `commands`, the session terminal control                                         |
+| Import                | Main exports                                                                   |
+| --------------------- | ------------------------------------------------------------------------------ |
+| `@yaks/harness`       | `agent`, `seed`, `sessionTitle`, `titleOf`, and their types; web platform only |
+| `@yaks/harness/local` | `local`, `hosted`, `harnessTools`, `graphTools`, and their types               |
+| `@yaks/harness/tui`   | `views`: a lone session or entry, drawn as the terminal app                    |
+| `@yaks/harness/vocab` | `docs`, the harness's own words                                                |
+| `@yaks/harness/tools` | `runs(host)`, the functions behind the tools `vocab.json` declares             |
+| `@yaks/harness/cli`   | `commands`, the session terminal control                                       |
 
 ## Use
 
