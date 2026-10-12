@@ -31,10 +31,12 @@ import { dirname, join, relative, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { createHash } from 'node:crypto'
 import { Buffer } from 'node:buffer'
+import { stripVTControlCharacters } from 'node:util'
 import { parse, stringify } from '@std/toml'
 import packages from './package.json' with { type: 'json' }
 import { imaged } from './sandbox/base.ts'
 import { installed } from './dependencies.ts'
+import { sleep } from '@yaks/fp'
 export { stale } from './dependencies.ts'
 
 export let WRANGLER = [
@@ -173,6 +175,96 @@ export let command = (args: string[]) => {
   for (let i = 0; i < args.length; i++) {
     if (args[i] == '--env' || args[i] == '-e') i++
     else if (!args[i].startsWith('--env=')) return args[i]
+  }
+}
+
+type StepResult = { code: number; output: string; log?: string }
+
+let deploying = (args: string[]) =>
+  command(args) == 'deploy' ||
+  (command(args) == 'versions' && args.includes('deploy'))
+
+// JSON API errors hide their HTTP status on the console. Wrangler's sanitized
+// debug file records it even at normal verbosity. Use the last response before
+// the final API error, never an earlier request that Wrangler recovered from.
+let transient = ({ output, log = '' }: StepResult) => {
+  output = stripVTControlCharacters(output).split('[ERROR]').at(-1)!
+  let malformed = output.includes('Received a malformed response from the API')
+  let failed = /A request to the Cloudflare API(?: \([^\n]+\))? failed\./.exec(
+    output,
+  )
+  if (!malformed && !failed) return false
+  let status = /\b(?:GET|POST|PUT|PATCH|DELETE|HEAD|OPTIONS) \/\S+ -> (\d{3})\b/
+    .exec(output)?.[1]
+  if (!status) {
+    let at = log.lastIndexOf(
+      failed?.[0] ?? 'Received a malformed response from the API',
+    )
+    let before = at < 0 ? log : log.slice(0, at)
+    status = [
+      ...before.matchAll(/-- START CF API RESPONSE:[^\n]*\b(\d{3})\s*$/gm),
+    ]
+      .at(-1)?.[1]
+  }
+  return status
+    ? status.startsWith('5') || (malformed && Number(status) < 400)
+    : malformed
+}
+
+/** Run one Wrangler step, keeping its arguments and exit code. The command
+ * boundary supplies diagnostics; the timer and signal belong to the caller.
+ * Deploys get three attempts; permanent failures and other commands get one. */
+export let runStep = async (
+  args: string[],
+  execute: (args: string[]) => Promise<StepResult>,
+  { wait = sleep, signal }: {
+    wait?: typeof sleep
+    signal?: AbortSignal
+  } = {},
+): Promise<number> => {
+  for (let attempt = 1;; attempt++) {
+    if (signal?.aborted) return 130
+    let result = await execute(args)
+    if (
+      !result.code || result.code == 130 || result.code == 143 ||
+      !deploying(args) || attempt == 3 || !transient(result)
+    ) return result.code
+    if (signal?.aborted) return 130
+    let ms = 1000 * 2 ** (attempt - 1)
+    console.log(
+      `Cloudflare API temporarily unavailable; retrying Wrangler ${
+        command(args)
+      } (attempt ${attempt + 1}/3) in ${ms / 1000}s`,
+    )
+    await wait(ms, signal)
+  }
+}
+
+// Forward bytes immediately, retaining only the diagnostic tail. Parallel
+// siblings write directly rather than locking a shared stdout stream writer.
+let forwarded = async (
+  from: ReadableStream<Uint8Array>,
+  to: { write: (bytes: Uint8Array) => Promise<number> },
+) => {
+  let decoder = new TextDecoder(), tail = ''
+  for await (let bytes of from) {
+    tail = (tail + decoder.decode(bytes, { stream: true })).slice(-65536)
+    for (let at = 0; at < bytes.length;) {
+      at += await to.write(bytes.subarray(at))
+    }
+  }
+  return tail + decoder.decode()
+}
+
+let logTail = (path: string) => {
+  try {
+    using file = Deno.openSync(path)
+    let bytes = new Uint8Array(Math.min(file.statSync().size, 65536))
+    file.seekSync(-bytes.length, Deno.SeekMode.End)
+    let size = file.readSync(bytes) ?? 0
+    return new TextDecoder().decode(bytes.subarray(0, size))
+  } catch {
+    return ''
   }
 }
 
@@ -1034,7 +1126,7 @@ if (import.meta.main) {
     argv.push('--message', new TextDecoder().decode(commit.stdout).trim())
   }
   let children = new Set<Deno.ChildProcess>()
-  let interrupted = false
+  let stopped = new AbortController()
   // A signal to this door reaches wrangler too; otherwise a stopped `tail`
   // leaves wrangler streaming and its reader waiting on a pipe that never
   // closes (verify-deploy.ts hung ten minutes on a three-minute tail). The
@@ -1044,7 +1136,7 @@ if (import.meta.main) {
   // runs with an allowlist (npm, npx, git, pgrep, kill, docker, env).
   for (let signal of ['SIGINT', 'SIGTERM'] as const) {
     Deno.addSignalListener(signal, () => {
-      interrupted = true
+      stopped.abort()
       let pids = [...children].flatMap((child) => [
         ...descendants(child.pid),
         child.pid,
@@ -1057,25 +1149,59 @@ if (import.meta.main) {
     })
   }
   // env(1) execs wrangler in its own place, so the pid signalled is the same.
-  let run = async (argv: string[], unpinned = false) => {
-    if (interrupted) return 130
-    console.log(
-      `Wrangler ${command(argv)} ${
-        argv.includes('-c') ? argv[argv.indexOf('-c') + 1] : 'wrangler.toml'
-      }: starting at ${((performance.now() - started) / 1000).toFixed(3)}s`,
-    )
-    let [cmd, ...args] = unpinned
-      ? ['env', ...PINNED.flatMap((v) => ['-u', v]), ...wrangler]
-      : wrangler
-    let child = new Deno.Command(cmd, { args: [...args, ...argv], cwd: dir })
-      .spawn()
-    children.add(child)
-    try {
-      return (await child.status).code
-    } finally {
-      children.delete(child)
-    }
-  }
+  let run = (argv: string[], unpinned = false) =>
+    runStep(argv, async (argv) => {
+      console.log(
+        `Wrangler ${command(argv)} ${
+          argv.includes('-c') ? argv[argv.indexOf('-c') + 1] : 'wrangler.toml'
+        }: starting at ${((performance.now() - started) / 1000).toFixed(3)}s`,
+      )
+      let [cmd, ...args] = unpinned
+        ? ['env', ...PINNED.flatMap((v) => ['-u', v]), ...wrangler]
+        : wrangler
+      let capture = deploying(argv)
+      let log = capture ? Deno.makeTempFileSync({ suffix: '.log' }) : undefined
+      try {
+        let child = new Deno.Command(cmd, {
+          args: [...args, ...argv],
+          cwd: dir,
+          ...(log
+            ? {
+              env: {
+                WRANGLER_LOG_PATH: log,
+                WRANGLER_WRITE_LOGS: 'true',
+                WRANGLER_LOG_SANITIZE: 'true',
+              },
+              stdout: 'piped' as const,
+              stderr: 'piped' as const,
+            }
+            : {}),
+        }).spawn()
+        children.add(child)
+        try {
+          let completed = await Promise.allSettled([
+            child.status,
+            capture ? forwarded(child.stdout, Deno.stdout) : '',
+            capture ? forwarded(child.stderr, Deno.stderr) : '',
+          ])
+          for (let result of completed) {
+            if (result.status == 'rejected') throw result.reason
+          }
+          let [status, stdout, stderr] = completed.map((result) =>
+            (result as PromiseFulfilledResult<unknown>).value
+          ) as [Deno.CommandStatus, string, string]
+          return {
+            code: status.code,
+            output: `${stdout}\n${stderr}`,
+            log: log ? logTail(log) : '',
+          }
+        } finally {
+          children.delete(child)
+        }
+      } finally {
+        if (log) Deno.removeSync(log)
+      }
+    }, { signal: stopped.signal })
   let made = preparing()
   let readied = made.dependencies.then(() => {
     // Choose after npm has installed: a cold checkout has this pin now too.

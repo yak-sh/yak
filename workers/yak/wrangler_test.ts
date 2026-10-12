@@ -6,7 +6,7 @@
 // `deno check` reads, and the workspace (wrangler.ts `members`) is what esbuild
 // bundles by. A workers.json entry pointing anywhere else type-checks one file
 // and bundles another.
-import { test } from '@yaks/testing'
+import { clock, test } from '@yaks/testing'
 import { assert, assertEquals } from '@std/assert'
 import { dirname, join, relative } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -22,6 +22,7 @@ import {
   preflight,
   prepareSibling,
   readiness,
+  runStep,
   runWrangler,
   sameServing,
   sameSibling,
@@ -34,6 +35,223 @@ import {
   superseded,
   uploadSibling,
 } from './wrangler.ts'
+
+let apiFailure =
+  'A request to the Cloudflare API (/accounts/a/workers/scripts/yak) failed.'
+let malformed = (status: number) =>
+  `Received a malformed response from the API\n<!DOCTYPE html>\nGET /accounts/a/workers/scripts/yak/subdomain -> ${status} Gateway Timeout`
+let responseLog = (status: number) =>
+  `--- 2026-10-12T10:00:00.000Z debug\n-- START CF API RESPONSE: Server response ${status}\n---`
+
+test('a Wrangler step retries a Cloudflare gateway failure with the same upload arguments', async () => {
+  let args = ['deploy', '-c', '.bundle.toml', '--message', 'commit']
+  let calls: string[][] = [], waits: number[] = []
+  let code = await runStep(args, (argv) => {
+    calls.push(argv)
+    return Promise.resolve({
+      code: calls.length == 1 ? 1 : 0,
+      output: malformed(504),
+    })
+  }, {
+    wait: (ms) => {
+      waits.push(ms)
+      return Promise.resolve()
+    },
+  })
+  assertEquals({ code, calls: calls.length }, { code: 0, calls: 2 })
+  assertEquals(calls, [args, args])
+  assert(waits.length == 1 && waits[0] > 0)
+})
+
+for (let status of [500, 502, 503, 504, 524, 599]) {
+  test(`a Wrangler deploy retries a JSON API ${status} with no HTTP status on the console`, async () => {
+    let calls = 0
+    let code = await runStep(['deploy'], () =>
+      Promise.resolve({
+        code: ++calls == 1 ? 1 : 0,
+        output: apiFailure,
+        log: `${responseLog(200)}\n${responseLog(status)}\n${apiFailure}`,
+      }), { wait: () => Promise.resolve() })
+    assertEquals({ code, calls }, { code: 0, calls: 2 })
+  })
+}
+
+test('a container deployment retries the SDK API failure that omits the resource name', async () => {
+  let output = 'A request to the Cloudflare API failed.', calls = 0
+  let code = await runStep(['deploy'], () =>
+    Promise.resolve({
+      code: ++calls == 1 ? 1 : 0,
+      output,
+      log: `${responseLog(503)}\n${output}`,
+    }), { wait: () => Promise.resolve() })
+  assertEquals({ code, calls }, { code: 0, calls: 2 })
+})
+
+for (
+  let [name, output, log] of [
+    [
+      'authentication',
+      `${apiFailure}\nAuthentication error [code: 10000]`,
+      responseLog(401),
+    ],
+    [
+      'validation',
+      `${apiFailure}\nInvalid binding [code: 10021]`,
+      responseLog(400),
+    ],
+    [
+      'SDK authentication',
+      'A request to the Cloudflare API failed.',
+      responseLog(401),
+    ],
+    ['HTML denial', malformed(403), responseLog(504)],
+    [
+      'WAF block',
+      'The Cloudflare API responded with a WAF block page instead of the expected JSON response',
+      responseLog(403),
+    ],
+    [
+      'recovered gateway followed by denial',
+      apiFailure,
+      `${responseLog(504)}\n${responseLog(403)}\n${apiFailure}`,
+    ],
+    [
+      'local build',
+      'Build failed with 1 error: Could not resolve import',
+      responseLog(503),
+    ],
+    [
+      'local failure after an API warning',
+      `[ERROR] ${apiFailure}\n[ERROR] Invalid configuration`,
+      responseLog(503),
+    ],
+    ['unknown API failure', apiFailure, ''],
+  ]
+) {
+  test(`a Wrangler ${name} failure exits immediately`, async () => {
+    let calls = 0
+    let code = await runStep(['deploy'], () => {
+      calls++
+      return Promise.resolve({ code: 7, output, log })
+    }, {
+      wait: () => {
+        throw Error('permanent failure must not wait')
+      },
+    })
+    assertEquals({ code, calls }, { code: 7, calls: 1 })
+  })
+}
+
+test('a malformed API response without an HTTP status retries a sibling activation', async () => {
+  let calls = 0
+  let code = await runStep(
+    ['versions', 'deploy', 'v1@100%', '--yes'],
+    () =>
+      Promise.resolve({
+        code: ++calls == 1 ? 1 : 0,
+        output: 'Received a malformed response from the API\n<html>',
+      }),
+    { wait: () => Promise.resolve() },
+  )
+  assertEquals({ code, calls }, { code: 0, calls: 2 })
+})
+
+test('an HTML response with a successful HTTP status still retries the malformed API step', async () => {
+  let calls = 0
+  let code = await runStep(['deploy'], () =>
+    Promise.resolve({
+      code: ++calls == 1 ? 1 : 0,
+      output: malformed(200),
+    }), { wait: () => Promise.resolve() })
+  assertEquals({ code, calls }, { code: 0, calls: 2 })
+})
+
+test('persistent API failure stops after bounded waits and returns the final exit code', async () => {
+  let calls = 0, waits: number[] = []
+  let code = await runStep(['deploy'], () =>
+    Promise.resolve({
+      code: 7 + calls++,
+      output: malformed(504),
+    }), {
+    wait: (ms) => {
+      waits.push(ms)
+      return Promise.resolve()
+    },
+  })
+  assertEquals({ code, calls }, { code: 9, calls: 3 })
+  assertEquals(waits.length, 2)
+  assert(waits.every((ms) => ms > 0) && waits[1] > waits[0])
+})
+
+test('each retry uses only its own diagnostics and a permanent second failure stops the step', async () => {
+  let calls = 0
+  let code = await runStep(['deploy'], () =>
+    Promise.resolve({
+      code: ++calls == 1 ? 1 : 7,
+      output: calls == 1 ? malformed(504) : apiFailure,
+      log: calls == 1 ? responseLog(504) : responseLog(403),
+    }), { wait: () => Promise.resolve() })
+  assertEquals({ code, calls }, { code: 7, calls: 2 })
+})
+
+test('interrupting the retry wait prevents another Wrangler process', async () => {
+  let time = clock(), stopped = new AbortController(), calls = 0
+  let waiting = Promise.withResolvers<void>()
+  let code = runStep(['deploy'], () => {
+    calls++
+    return Promise.resolve({ code: 1, output: malformed(504) })
+  }, {
+    signal: stopped.signal,
+    wait: (ms) =>
+      new Promise<void>((resolve) => {
+        time.after(ms, resolve)
+        waiting.resolve()
+      }),
+  })
+  await waiting.promise
+  await time.advance(999)
+  assertEquals(calls, 1)
+  stopped.abort()
+  await time.advance(1)
+  assertEquals({ code: await code, calls }, { code: 130, calls: 1 })
+})
+
+for (let args of [['tail'], ['dev'], ['delete'], ['versions', 'view', 'v1']]) {
+  test(`a Wrangler ${args.join(' ')} command is never restarted after an API failure`, async () => {
+    let calls = 0
+    let code = await runStep(args, () => {
+      calls++
+      return Promise.resolve({ code: 1, output: malformed(504) })
+    })
+    assertEquals({ code, calls }, { code: 1, calls: 1 })
+  })
+}
+
+for (let code of [0, 130, 143]) {
+  test(`a Wrangler exit ${code} is preserved despite earlier API diagnostics`, async () => {
+    let calls = 0
+    let result = await runStep(['deploy'], () => {
+      calls++
+      return Promise.resolve({ code, output: malformed(504) })
+    }, {
+      wait: () => {
+        throw Error('no retry is owed')
+      },
+    })
+    assertEquals({ code: result, calls }, { code, calls: 1 })
+  })
+}
+
+test('a step cancelled before it starts spawns no Wrangler process', async () => {
+  let stopped = new AbortController()
+  stopped.abort()
+  assertEquals(
+    await runStep(['deploy'], () => {
+      throw Error('cancelled step must not execute')
+    }, { signal: stopped.signal }),
+    130,
+  )
+})
 
 let read = (path: string) =>
   Deno.readTextFileSync(new URL(path, import.meta.url))
