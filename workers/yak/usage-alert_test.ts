@@ -98,7 +98,11 @@ test('hourly account alert is mailed once and kept on the wake row', async () =>
     return Promise.resolve(Response.json({ success: true }))
   }
   try {
-    await assertRejects(() => sweep(p.env, at(10)), Error, 'mail failed')
+    await assertRejects(
+      () => sweep(p.env, at(10)),
+      Error,
+      'send failed (HTTP 503)',
+    )
     assertEquals(
       (await meta(p.env).query('.entity.eid=yak-meter'))[0].account_alert,
       undefined,
