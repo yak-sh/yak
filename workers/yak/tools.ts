@@ -107,6 +107,7 @@ import { inspect as inspectStore } from './store-inspect.ts'
 // cycle through declared.ts, so nothing from there may be read while this
 // module's own body runs.
 import { tooLong } from './standing.ts'
+import { pairs, shelf } from './shelf.ts'
 import { meta, minted } from './meta.ts'
 import {
   daysLeft,
@@ -4672,7 +4673,18 @@ let OURS: Row[] = [
       },
     },
     run: async (ctx, args) => {
-      let offers = await ctx.dir.offers()
+      // One offer per app: an owner's own re-offered copy stands for the
+      // offer it came from (shelf.ts).
+      let all = await ctx.dir.offers()
+      let spaces = [
+        ...new Set(pairs(all).flat().map(({ space }) => space)),
+      ]
+      let owners = new Map(
+        await Promise.all(
+          spaces.map(async (s) => [s.eid, await ctx.dir.owners(s)] as const),
+        ),
+      )
+      let offers = shelf(all, owners)
       let line = ({ space, app }: (typeof offers)[number]) =>
         `- ${app.published!.name} v${app.published!.version} — ` +
         `${app.title}${
