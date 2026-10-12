@@ -15,3 +15,12 @@ test('Vale embedding work reads no schema catalog while playing', async () => {
   assert(r.components.embedding_owed.written > 0)
   assert(r.components.embedding.written > 0)
 })
+
+test('chat commits check owed text once before their embedding pass', async () => {
+  let r = await playReport()
+  let queued = r.sourceShapes.chatting.filter((s) =>
+    s.sql.includes('from "embedding_owed"')
+  )
+  assertEquals(queued.reduce((n, s) => n + s.cost.read, 0), 4)
+  assert(r.components.embedding.written > 0)
+})

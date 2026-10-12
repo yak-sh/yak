@@ -1272,8 +1272,7 @@ export class Store {
               hooks: {
                 effect: (bundles) => {
                   if (
-                    this.#texts && queues(this.#texts.fields, bundles) &&
-                    this.#owes()
+                    this.#texts && queues(this.#texts.fields, bundles)
                   ) this.#embedding()
                   return bundles
                 },
