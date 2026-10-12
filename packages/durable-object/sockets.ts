@@ -130,9 +130,12 @@ let KEYS = 16
 let bytes = new TextEncoder()
 let open = (ws: Wire) => ws.readyState == 1
 
+let copy = <T>(values: Record<string, T> = {}): Record<string, T> =>
+  Object.assign(Object.create(null), values)
+
 let fits = (held: Held, subs = held.subs ?? {}) => {
-  // Serial ACKs allow only one snapshot on the wire at a time. Reserve its
-  // longest possible subscription id, not every id in the query map.
+  // Batched delivery checks each group before sending it; reserve enough
+  // space for its longest individual snapshot as watches are added.
   let longest: string | undefined
   let width = 0
   for (let [id, ask] of Object.entries(subs)) {
@@ -142,7 +145,20 @@ let fits = (held: Held, subs = held.subs ?? {}) => {
       width = size
     }
   }
-  let seen = longest === undefined ? held.seen : [longest]
+  // Serial ACKs retain every snapshot already delivered while the next one
+  // waits. Reserve the complete chain so later delivery cannot exceed the cap.
+  let seen = held.acks && !held.frames
+    ? [
+      ...new Set([
+        ...held.seen ?? [],
+        ...Object.entries(subs).filter(([, ask]) => ask !== true).map(([id]) =>
+          id
+        ),
+      ]),
+    ]
+    : longest === undefined
+    ? held.seen
+    : [longest]
   let full = held.acks ? { ...held, owed: '0'.repeat(36), seen } : held
   return bytes.encode(JSON.stringify(held)).length <= CAP &&
     bytes.encode(JSON.stringify(full)).length <= CAP
@@ -306,7 +322,7 @@ export let sockets = (
     let cached = queries.get(ws)
     if (cached) return cached
     let held = ws.deserializeAttachment() as Held | null
-    let found = held?.subref ? backing().read(held.subref) : held?.subs ?? {}
+    let found = copy(held?.subref ? backing().read(held.subref) : held?.subs)
     for (let [id, ask] of Object.entries(unpack(held?.subdelta ?? {}))) {
       if (ask === null) delete found[id]
       else found[id] = ask
@@ -549,7 +565,7 @@ export let sockets = (
                   let now = subs.relaying(to)
                   if (now.join('\n') != was) remember(ws, now, asks(ws))
                   if (!ask) return
-                  let subscriptions = { ...asks(ws) }
+                  let subscriptions = copy(asks(ws))
                   if (ask.ask === undefined) delete subscriptions[ask.id]
                   else subscriptions[ask.id] = ask.ask
                   if (hold(ws, subscriptions, ask.acks, ask.frames)) return

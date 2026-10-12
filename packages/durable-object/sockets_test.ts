@@ -1018,31 +1018,40 @@ let deltaFixture = (() => {
   })
   ws.serializeAttachment({
     subref: 'baseline',
-    subdelta: { old: null, newer: '.doc.title=new' },
+    subdelta: {
+      old: null,
+      newer: '.doc.title=new',
+      ['__proto__']: '.doc.title=proto',
+    },
   })
   let [g, live] = instance(storage, ctx)
   live.wake()
   return { storage, ctx, ws, g, live }
 })()
 test('a woken socket applies stored watch additions and removals', () => {
-  let { storage, ctx, ws, g, live } = deltaFixture
-  assertEquals(ws.sent.map((f) => f.id), ['kept', 'newer'])
+  let { ws, g } = deltaFixture
+  assertEquals(ws.sent.map((f) => f.id), ['kept', 'newer', '__proto__'])
   ws.sent.length = 0
   g.apply([
     { entity: { eid: 'old' }, doc: { title: 'old' } },
     { entity: { eid: 'new' }, doc: { title: 'new' } },
+    { entity: { eid: 'proto' }, doc: { title: 'proto' } },
   ])
   assertEquals(
     ws.sent.map((f) => [f.id, f.bundles?.map((b) => b.entity.eid)]),
     [
       ['newer', ['new']],
+      ['__proto__', ['proto']],
     ],
   )
+})
+test('changing a decoded watch map preserves its remaining interests', () => {
+  let { storage, ctx, ws, live } = deltaFixture
   send(live, ws, { unsubscribe: 'newer' })
   let [, woken] = instance(storage, ctx)
   ws.sent.length = 0
   woken.wake()
-  assertEquals(ws.sent.map((f) => f.id), ['kept'])
+  assertEquals(ws.sent.map((f) => f.id), ['kept', '__proto__'])
 })
 
 let packedFixture = (() => {
@@ -1066,4 +1075,82 @@ test('compressed watch changes restore their exact interests', () => {
   assertEquals(ws.sent.map((f) => [f.id, f.bundles?.[0].entity.eid]), [
     ['current', 'p'],
   ])
+})
+
+let watched = (queries: Record<string, string>) => {
+  let storage = ram(shop), ctx = hibernation(), ws = wire()
+  ctx.live.push(ws)
+  let written = 0, exec = ctx.storage.sql.exec.bind(ctx.storage.sql)
+  ctx.storage.sql.exec = (sql, ...bindings) => {
+    if (/^insert into "socket_subscriptions"/.test(sql)) written++
+    return exec(sql, ...bindings)
+  }
+  let [, live] = instance(storage, ctx)
+  for (let [id, subscribe] of Object.entries(queries)) {
+    send(live, ws, { subscribe, id })
+  }
+  for (let write of ctx.owed.splice(0)) write()
+  return { storage, ctx, ws, live, written: () => written }
+}
+
+let namedFixture = (() => {
+  let ready = watched(Object.fromEntries([
+    ['constructor', '.doc.title=old'],
+    ['__proto__', '.doc.title=old'],
+    ['static', `.doc.title="${'base'.repeat(700)}"`],
+  ]))
+  let { storage, ctx, ws, live } = ready
+  send(live, ws, { unsubscribe: 'constructor' })
+  send(live, ws, { subscribe: '.doc.title=latest', id: '__proto__' })
+  let [g, woken] = instance(storage, ctx)
+  ws.sent.length = 0
+  woken.wake()
+  return { ...ready, g }
+})()
+test('prototype-named watches retain replacements and removals after hibernation', () => {
+  let { ws, g } = namedFixture
+  assertEquals(ws.sent.map((f) => f.id), ['__proto__', 'static'])
+  ws.sent.length = 0
+  g.apply([
+    { entity: { eid: 'old' }, doc: { title: 'old' } },
+    { entity: { eid: 'new' }, doc: { title: 'latest' } },
+  ])
+  assertEquals(
+    ws.sent.map((f) => [f.id, f.bundles?.map((b) => b.entity.eid)]),
+    [
+      ['__proto__', ['new']],
+    ],
+  )
+})
+
+let serialFixture = (() => {
+  let storage = ram(shop), ctx = hibernation(), ws = wire()
+  ctx.live.push(ws)
+  let [, live] = instance(storage, ctx)
+  send(live, ws, {
+    subscribe: `.doc.title="${'base'.repeat(700)}"`,
+    id: 'static',
+    acks: true,
+  })
+  for (let write of ctx.owed.splice(0)) write()
+  send(live, ws, {
+    subscribe: `.doc.title="${'x'.repeat(1100)}"`,
+    id: 'moving',
+    acks: true,
+  })
+  let ids = ['static', 'moving']
+  for (let n = 0; n < 10; n++) {
+    let id = `watch-${n}-${'a'.repeat(30)}`
+    ids.push(id)
+    send(live, ws, { subscribe: '.product', id, acks: true })
+  }
+  return { ws, live, ids }
+})()
+test('serial snapshot acknowledgements fit the attachment through their complete chain', () => {
+  let { ws, live, ids } = serialFixture
+  for (let n = 0; n < ids.length; n++) {
+    send(live, ws, { ack: ws.sent[n].ack })
+  }
+  assertEquals(ws.sent.map((f) => f.id), ids)
+  assert(ws.sent.every((f) => !f.refused))
 })
