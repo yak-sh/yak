@@ -17,6 +17,14 @@ export let normalize = (text: string): string =>
   text
     .toLowerCase()
     .replace(
+      /\b(sub|cus|cs|pi|si|in|evt|pm|seti|ch|acct|price|prod)_(?:(?:test|live)_)?[a-z0-9]{12,}\b/g,
+      '$1_#',
+    ) // Stripe's long opaque object ids; keep the object type
+    .replace(
+      /(\binternal error;\s*reference\s*=\s*)[a-z0-9]+\b/g,
+      '$1#',
+    ) // Cloudflare's per-occurrence reference
+    .replace(
       /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/g,
       '#',
     )
