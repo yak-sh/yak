@@ -1,10 +1,13 @@
 // The wrap pass against a stand-in for Cloudflare's account API: what it reads
-// back, what it writes, and what it leaves alone.
+// back, what it writes, and what it leaves alone; and the directory bringing
+// it forward at each version of the Worker.
 import { test } from '@yaks/testing'
-import { assertEquals } from '@std/assert'
+import { assert, assertEquals } from '@std/assert'
 import { shim, WRAP, wrapping } from './dispatch.ts'
-import { parts, rewrapped } from './rewrap.ts'
+import { parts, rewrapped, ROW } from './rewrap.ts'
 import type { Env } from './env.ts'
+import { platform } from './testing.ts'
+import { KERNEL, meta } from './meta.ts'
 
 let env = { CF_ACCOUNT: 'acct', CF_WORKERS_TOKEN: 'a-token' } as Env
 let AT = '/client/v4/accounts/acct/workers/dispatch/namespaces/yak-apps/scripts'
@@ -204,4 +207,21 @@ test('a pass takes at most so many, and says how many are left', async () => {
   )
   let { out } = await account(scripts, () => rewrapped(env, 2))
   assertEquals(out, { rewrapped: 2, failed: 0, left: 1 })
+})
+
+test('each version of the Worker brings the wrap pass forward, once', async () => {
+  let p = platform('wrap pass', { CF_VERSION_METADATA: { id: 'v1' } })
+  let at = async () =>
+    ((await meta(p.env).query(`.entity.eid=${ROW}`))[0].wake as { at: string })
+      .at
+  let LATER = '2031-01-01T05:10:00.000Z'
+  let later = () =>
+    meta(p.env).apply([{ entity: { eid: ROW }, wake: { at: LATER } }], KERNEL)
+  await at()
+  await later()
+  assertEquals(await at(), LATER)
+  p.env.CF_VERSION_METADATA = { id: 'v2' }
+  assert(await at() < LATER)
+  await later()
+  assertEquals(await at(), LATER)
 })

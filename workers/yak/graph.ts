@@ -1599,6 +1599,17 @@ export class Store {
   } {
     let unchanged = () => ({ deploymentMoved: false, effects: [] })
     if (this.#candidate(req)) return unchanged()
+    // The platform's own stores have no release of their own: the Worker's
+    // deploy is theirs. Each version it runs owes their deployment pass, and
+    // with it their start-up effects, once; an eviction under the same
+    // version owes nothing.
+    if (ownStore(this.#name() ?? '')) {
+      let version = this.#version()
+      return {
+        deploymentMoved: !!version && this.#get('deployed') != version,
+        effects: [],
+      }
+    }
     let release = req.headers.get('x-yak-release')
     if (release == null || !/^[a-z0-9-]+$/.test(release)) return unchanged()
     let active = this.#get('release')
@@ -2531,8 +2542,16 @@ export class Store {
     // Rows a rule still owes here are moved from the alarm, never by the wake
     // that found them owing (mover.ts).
     if (this.#owing().length) await this.#arming(this.#soon(), 'mover')
-    this.#put('deployed', this.#get('release') ?? '0')
+    this.#put(
+      'deployed',
+      (ownStore(this.#name() ?? '') ? this.#version() : null) ??
+        this.#get('release') ?? '0',
+    )
   }
+
+  // The Worker version this object runs under, which is a platform store's
+  // release (`#select`).
+  #version = () => this.#bind.CF_VERSION_METADATA?.id ?? null
 
   // ---- the mover (mover.ts, D-45640) ---------------------------------------
   //
