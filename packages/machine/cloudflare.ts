@@ -12,6 +12,9 @@ import type {
  * what beside the container's own environment. */
 type Run = { cwd?: string; timeout?: number; env?: Record<string, string> }
 
+/** The SDK's serializable workspace snapshot, without a container identity. */
+export type WorkspaceCopy = { id: string; dir: string; localBucket?: boolean }
+
 /** One sandbox, as this file asks for it: what the tools do with it, plus the
  * one knob the deploy has no way to set. The SDK's process calls answer
  * objects carrying methods as well; only their data is read here. */
@@ -41,6 +44,10 @@ export type Box = {
   ): Promise<{ content: string }>
   destroy(): Promise<unknown>
   setSleepAfter?(after: string): unknown
+  /** Clean filesystem copies, recorded by the source so erasure finds them. */
+  fork?(name: string): Promise<string[]>
+  retire?(): Promise<string[]>
+  restoreWorkspace?(copy: WorkspaceCopy): Promise<boolean>
 }
 
 /** The `SANDBOX` binding: a Durable Object namespace handing out one by name. */
@@ -66,6 +73,8 @@ export type CloudflareOptions = {
 /** Cloudflare's synchronous exec is also used to expand artifact globs. */
 export type CloudflareProvider = MachineProvider & {
   exec(ref: MachineRef, command: string): ReturnType<Box['exec']>
+  fork(source: MachineRef, target: MachineRef): Promise<string[]>
+  retire(source: MachineRef): Promise<MachineRef[]>
 }
 
 /** A provider bound to one deployed container namespace. Stable request ids
@@ -102,6 +111,20 @@ export let cloudflareProvider = (
       readFile: (path, opts) => call((box) => box.readFile(path, opts)),
       destroy: () => call((box) => box.destroy()),
       setSleepAfter: (after) => call((box) => box.setSleepAfter?.(after)),
+      fork: (name) =>
+        call((box) => {
+          if (!box.fork) {
+            throw new Error('cloudflare: workspace copies unsupported')
+          }
+          return box.fork(name)
+        }),
+      retire: () =>
+        call((box) => {
+          if (!box.retire) {
+            throw new Error('cloudflare: copy retirement unsupported')
+          }
+          return box.retire()
+        }),
     }
   }
   let wake = (ref: MachineRef) =>
@@ -129,6 +152,9 @@ export let cloudflareProvider = (
       await boxOf(ref).destroy()
     },
     exec: (ref, command) => boxOf(ref).exec(command, { cwd: CWD }),
+    fork: (source, target) => boxOf(source).fork!(target.id),
+    retire: async (source) =>
+      (await boxOf(source).retire!()).map((id) => ({ id })),
     export: async function* (ref, paths) {
       // Absolute paths are kept for sandbox_ship's published contract. Relative
       // paths resolve from the deployed image's workspace.

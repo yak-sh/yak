@@ -3,6 +3,14 @@ import { DurableObject } from 'cloudflare:workers'
 import { exercise } from './sandbox_provider_fixture.ts'
 
 export class ContainerProbe extends DurableObject {
+  async fork(name) {
+    await this.ctx.storage.put(`copy:${name}`, true)
+    return []
+  }
+  async retire() {
+    return [...(await this.ctx.storage.list({ prefix: 'copy:' })).keys()]
+      .map((key) => key.slice(5))
+  }
   async setSleepAfter(after) {
     await this.ctx.storage.put('sleep', after)
   }
