@@ -215,6 +215,10 @@ The mirror's `.releases` indexes are deployed versions; the directory's
 pointers when saying what published code sends, rather than treating every
 kept release as a published offer. A write audit also follows whole identities
 carried back from reads: a sender need not spell `entity.archetype` to send it.
+What app-grep cannot see sends too: a page already open runs the code it
+loaded and nothing reloads it, so rewriting a person's files leaves their open
+tab sending the old form, and a store keeps queries of its own. An old form a
+door stops reading breaks those first (M-37853, T-123000).
 
 ## People's things
 
