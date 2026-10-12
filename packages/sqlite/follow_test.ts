@@ -7,7 +7,7 @@ import { storage } from './mod.ts'
 import { add, follow, forget, lacking, printOf } from './follow.ts'
 import { storage as readStore } from './read-store.ts'
 import { parse } from '@yaks/query'
-import { loadVocab, type PropSchema } from '@yaks/vocab'
+import { loadVocab } from '@yaks/vocab'
 
 let vocab = loadVocab({
   $defs: {
@@ -63,21 +63,38 @@ test('an unfinished pass leaves its print for the next opener, and so does forge
   assertEquals([at(true), passes], [true, 3])
 })
 
-test('a reader reads a property no writer has added a column for as null', () => {
+test('a reader reads what no writer has added a column or table for as never given', () => {
   let dir = Deno.makeTempDirSync({ prefix: 'yak-follow-' })
-  let note = (props: Record<string, PropSchema>) =>
-    loadVocab({ $defs: { note: { component: true, properties: props } } })
-  let v1 = note({ text: { type: 'string' } })
-  let v2 = note({ text: { type: 'string' }, mood: { type: 'string' } })
+  let v1 = vocab
+  let v2 = loadVocab({
+    $defs: {
+      note: {
+        component: true,
+        properties: { text: { type: 'string' }, mood: { type: 'string' } },
+      },
+      pin: { component: true, properties: { at: { type: 'string' } } },
+    },
+  })
   let db = open(`${dir}/g.db`)
   let store = storage(db, v1)
   store.install()
   store.tx((t) => t.patch([{ entity: { eid: 'n1' }, note: { text: 'hi' } }]))
   let reader = open(`${dir}/g.db`, { readOnly: true })
-  let derived = lacking(reader, v2)
-  let read = readStore(reader, v2, { derived }).read(parse('.note'))
-  assertEquals(read.map((b) => b.note), [{ text: 'hi', mood: null }])
-  assertEquals(lacking(reader, v1), {})
+  let behind = lacking(reader, v2)
+  assertEquals(behind.absent, ['pin'])
+  let read = readStore(reader, v2, behind)
+  let eids = (q: string) => read.read(parse(q)).map((b) => b.entity.eid)
+  assertEquals(read.read(parse('.note')).map((b) => b.note), [
+    { text: 'hi', mood: null },
+  ])
+  assertEquals(
+    [eids('.pin'), eids('.note !pin'), eids('.pin.at=x | .note'), eids('*')],
+    [[], ['n1'], ['n1'], ['n1']],
+  )
+  assertEquals(read.get(['n1']).map((b) => Object.keys(b).sort()), [
+    ['entity', 'note'],
+  ])
+  assertEquals(lacking(reader, v1), { derived: {}, absent: [] })
   reader.close()
   db.close()
   Deno.removeSync(dir, { recursive: true })

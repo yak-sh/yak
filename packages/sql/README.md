@@ -50,6 +50,9 @@ equal(render(bind(ast, vocab)).sql, compiled.sql)
 declared types, collects joins and returns a `Select`. `render` returns `Raw`;
 `compile` calls both. Send `sql` and `params` together to the engine.
 `BindOpts.now` fixes the moment relative time literals resolve against.
+`BindOpts.absent` names component tables a file does not hold yet, for a reader
+no writer has caught up: each reads as an empty relation of its columns, so a
+query about it answers what it would before anyone wrote a row.
 
 `@yaks/sql/core` provides SQL statements as data, rendering, and the driver
 interface without loading query binding. `@yaks/sql/query` adds query binding

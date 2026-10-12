@@ -112,31 +112,38 @@ export let forget = (driver: Driver, print: string): void => {
 /**
  * What a reader binds over a file no writer has brought to its vocabulary yet:
  * each stored property whose column the file's table lacks, read as null, the
- * way an entity reads a property it was never given. A reader never changes
- * the schema, so it reads what the file holds. Nothing, where the store's
- * tables are as this vocabulary makes them, which costs the store's print
- * and one read of `server_meta`.
+ * way an entity reads a property it was never given, and each component whose
+ * table the file lacks, read as a table no entity wears (@yaks/sql
+ * `absent`). A reader never changes the schema, so it reads what the file
+ * holds. Nothing, where the store's tables are as this vocabulary makes them,
+ * which costs the store's print and one read of `server_meta`.
  */
 export let lacking = (
   driver: Driver,
   vocab: Vocab,
   derived: Derived = {},
-): Derived => {
+): { derived: Derived; absent: string[] } => {
   let mark = installed(driver)?.split(' ')[0]
-  if (mark == plan(vocab, derived, !!driver.file).print) return {}
+  if (mark == plan(vocab, derived, !!driver.file).print) {
+    return { derived: {}, absent: [] }
+  }
   let was = standing(driver, vocab)
-  return Object.fromEntries(
-    tables(vocab).filter((comp) => comp in was).flatMap((comp) => {
-      let has = new Set(was[comp].cols.map((r) => String(r.name)))
-      return vocab.props(comp).map((p) => vocab.prop(comp, p)!)
-        .filter((c) =>
-          !c.computed && !has.has(field(c.prop)) &&
-          !derived[`${comp}.${c.prop}`]
-        )
-        .map((c) => [`${comp}.${c.prop}`, {
-          tag: tagOf(c),
-          expr: () => lit(null),
-        }])
-    }),
-  )
+  let held = tables(vocab)
+  return {
+    absent: held.filter((comp) => !(comp in was)),
+    derived: Object.fromEntries(
+      held.filter((comp) => comp in was).flatMap((comp) => {
+        let has = new Set(was[comp].cols.map((r) => String(r.name)))
+        return vocab.props(comp).map((p) => vocab.prop(comp, p)!)
+          .filter((c) =>
+            !c.computed && !has.has(field(c.prop)) &&
+            !derived[`${comp}.${c.prop}`]
+          )
+          .map((c) => [`${comp}.${c.prop}`, {
+            tag: tagOf(c),
+            expr: () => lit(null),
+          }])
+      }),
+    ),
+  }
 }

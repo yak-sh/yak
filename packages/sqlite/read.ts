@@ -897,10 +897,13 @@ export let get = (
     })
   }
   let pending = new Set(unclassified)
-  // The tables this read may touch: every component's, or the named ones'.
-  let names = comps
-    ? [...new Set(comps)].filter((c) => readable(vocab).has(c))
-    : tables(vocab)
+  // The tables this read may touch: every component's, or the named ones',
+  // less any the file does not hold yet, which no entity can wear.
+  let gone = new Set(opts.absent)
+  let names =
+    (comps
+      ? [...new Set(comps)].filter((c) => readable(vocab).has(c))
+      : tables(vocab)).filter((c) => !gone.has(c))
   let remembered = at(
     at(shapes, driver, () => new WeakMap()),
     vocab,

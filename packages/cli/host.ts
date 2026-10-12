@@ -480,8 +480,12 @@ let composed = async (
     // Refuse again on the retained connection before domain schema or factories.
     migrations(sql).ready()
     // A reader reads what the file holds: a property whose column no writer
-    // has added yet reads as null rather than failing the read.
-    if (opts.readOnly) Object.assign(derived, lacking(sql, vocab, derived))
+    // has added yet reads as null, and a component whose table no writer has
+    // created yet is worn by no entity, rather than failing the read.
+    let behind = opts.readOnly
+      ? lacking(sql, vocab, derived)
+      : { derived: {}, absent: [] }
+    Object.assign(derived, behind.derived)
 
     part?.('host')
     let chosen = plugins.find(([name]) => name == '@yaks/blob')?.[1].store as
@@ -560,6 +564,7 @@ let composed = async (
         host = built
         store = storage(sql, vocab, {
           derived,
+          absent: behind.absent,
           backed,
           extend,
           number: config.numbers ?? false,

@@ -600,8 +600,9 @@ otherwise runs `pass` and records the print, unless `pass` answers false for
 something it left undone. `add(driver, stmts)` is the pass for statements that
 only add. `forget(driver, print)` makes the next opener run the pass again, for
 a host whose file something that keeps no print may have changed. A reader binds
-`lacking(driver, vocab)`, which reads a column the file does not have yet as
-null.
+`lacking(driver, vocab)`: its `derived` reads a column the file does not have
+yet as null, and its `absent` names the component tables the file does not have
+yet, which read as worn by no entity (@yaks/sql's `absent` option).
 
 ## The storage layout
 

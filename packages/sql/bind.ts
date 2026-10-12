@@ -117,6 +117,7 @@ import { type Identity, identity, literals } from './ident.ts'
 import { walk as walked } from './walk.ts'
 import { Unsupported, whole } from './unsupported.ts'
 import { backedDialect, backingOf, computed, hasComputed } from './spine.ts'
+import { absentDialect } from './absent.ts'
 import type { ArchetypeSet } from './archetype.ts'
 
 export type BindOpts = {
@@ -132,6 +133,9 @@ export type BindOpts = {
     components?: Record<string, string | And>
   }
   derived?: Derived
+  /** Component tables the file does not hold yet, for a reader no writer has
+   * caught up: each reads as an empty relation (./absent.ts). */
+  absent?: readonly string[]
   /** the rows each computed component is read from (./derived.ts) */
   backed?: Backings
   extend?: Extension[]
@@ -2039,6 +2043,7 @@ export let prepared = (
   scope?: Scope,
   hear?: () => void,
 ): { opts: BindOpts; spine?: string; lower: () => Select } => {
+  d = absentDialect(d, vocab, opts.absent)
   if (opts.visibility) {
     return { opts, lower: () => visible(ast, vocab, opts, d, reads) }
   }
