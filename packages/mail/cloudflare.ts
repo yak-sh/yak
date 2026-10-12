@@ -111,7 +111,9 @@ let wait = (res: Response) => {
  * what the API reported, not just "send failed". A letter that never reached
  * the API, or that it declined with a 429, rejects as `Unsent` instead.
  */
-export let deliver = ({ account, token, base, fetch: call }: Account) => {
+export let deliver = (
+  { account, token, base, fetch: call }: Account,
+): (body: Payload) => Promise<Receipt> => {
   let root = (base ?? 'https://api.cloudflare.com/client/v4').replace(
     /\/+$/,
     '',
