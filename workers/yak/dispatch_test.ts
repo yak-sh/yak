@@ -698,6 +698,60 @@ test('the shim gives the app its doors and keeps the grant', async () => {
   }
 })
 
+// A door takes what a Fetcher takes: the request the worker was handed, a
+// URL, or a Request of its own, whose method and body go with it. A URL
+// names a place on the host, so an app at `/recipes/` and a home app at the
+// bare hostname reach the same file.
+test('a door takes a Request or a URL as a Fetcher does', async () => {
+  let dir = Deno.makeTempDirSync({ prefix: 'yak-shim-' })
+  try {
+    Deno.writeTextFileSync(`${dir}/entry.js`, SHIM)
+    Deno.writeTextFileSync(
+      `${dir}/worker.js`,
+      `export default {
+        async fetch(req, env) {
+          let said = []
+          for (let r of [
+            await env.FILES.fetch(req),
+            await env.FILES.fetch(new URL('/style.css?v=2', req.url)),
+            await env.STORE.fetch(new Request(new URL('/recipes/api/query?.doc', req.url), { method: 'POST', body: 'x' })),
+          ]) said.push(await r.text())
+          return Response.json(said)
+        },
+      }`,
+    )
+    let { default: shim } = await import(`file://${dir}/entry.js`)
+    let kernel = {
+      fetch: async (r: Request) =>
+        new Response(
+          [
+            r.method,
+            new URL(r.url).pathname + new URL(r.url).search,
+            await r.text(),
+          ]
+            .join(' '),
+        ),
+    }
+    let visit = (url: string) =>
+      shim.fetch(
+        new Request(url, { headers: { 'x-yak-app': 'recipes' } }),
+        { KERNEL: kernel },
+        {},
+      ).then((r: Response) => r.json())
+    assertEquals(await visit('https://jeff.yaks.app/recipes/style.css'), [
+      'GET /recipes/style.css ',
+      'GET /recipes/style.css?v=2 ',
+      'POST /recipes/api/query?.doc x',
+    ])
+    assertEquals(
+      (await visit('https://jeff.yaks.app/style.css'))[0],
+      'GET /recipes/style.css ',
+    )
+  } finally {
+    Deno.removeSync(dir, { recursive: true })
+  }
+})
+
 test('a vpc_services name is a door to the kernel as the app, never a binding', async () => {
   let dir = Deno.makeTempDirSync({ prefix: 'yak-shim-' })
   try {

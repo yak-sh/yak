@@ -168,29 +168,43 @@ export default {
     headers.delete(SELF)
     let origin = new URL(req.url).origin
     let slug = req.headers.get('x-yak-app') || ''
-    // A path onto the app's own doors, never a URL: a leading slash is the
-    // app's root and not the hostname's, so the two are joined by hand. The
-    // grant it spends is the whole difference between the doors.
+    // What a door is handed, as a Fetcher takes it: a path, a URL or a
+    // Request. Sent where \`to\` aims what it names, with the Request's own
+    // method, headers and body, and \`init\` over them.
+    let toward = (input, init, to) => {
+      let asked = input instanceof Request ? input : null
+      let out = new Request(to(asked ? asked.url : String(input)), asked ?? init)
+      return asked && init ? new Request(out, init) : out
+    }
+    // Where a door's argument lands under it. A path is the app's own: a
+    // leading slash is the app's root and not the hostname's. A URL names a
+    // place on the host (the request the worker was handed, say), so the
+    // door's own prefix comes off it, which a home app's bare address never
+    // had.
+    let within = (under) => (at) => {
+      if (!/^[a-z][a-z0-9+.-]*:/i.test(at)) return at.replace(/^\\/+/, '')
+      let url = new URL(at)
+      let path = url.pathname.startsWith(under)
+        ? url.pathname.slice(under.length)
+        : url.pathname.replace(/^\\/+/, '')
+      return path + url.search
+    }
+    // The grant it spends is the whole difference between the doors.
     let door = (under, held) => ({
-      fetch: (path, init) => {
-        let to = origin + under + String(path).replace(/^\\/+/, '')
-        let out = new Request(to, init)
+      fetch: (input, init) => {
+        let out = toward(input, init, (at) => origin + under + within(under)(at))
         out.headers.set(GRANT, held)
         return env.KERNEL.fetch(out)
       },
     })
     let api = '/' + slug + '/api/'
-    // The machine: a URL as a binding to it takes one, or a path, and only
-    // its path and query go on.
+    // The machine: only the path and query of what it is handed go on.
     let machine = {
       fetch: (input, init) => {
-        let asked = input instanceof Request ? input : null
-        let at = new URL(asked ? asked.url : String(input), 'http://machine')
-        let out = new Request(
-          origin + api + 'tunneled' + at.pathname + at.search,
-          asked ?? init,
-        )
-        if (asked && init) out = new Request(out, init)
+        let out = toward(input, init, (at) => {
+          let url = new URL(at, 'http://machine')
+          return origin + api + 'tunneled' + url.pathname + url.search
+        })
         out.headers.set(GRANT, self)
         return env.KERNEL.fetch(out)
       },
