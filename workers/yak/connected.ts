@@ -1,6 +1,8 @@
 // Connected agents are a view of the OAuth provider's surviving grants.
 // Callback hosts identify web clients; local and older clients use their
 // registered names. Multiple installations of one agent share one entry.
+// A grant a re-authorization replaces is revoked here too, once the new one
+// is in the client's hands (`replace`).
 //
 // A service that signs in the way an agent does is not one: Zapier holds a
 // yaks.app grant as a space holds a Google Calendar token, so its grant is a
@@ -133,6 +135,56 @@ export let agentsOf = async (
   return [...found.values()].sort((a, b) =>
     a.name.localeCompare(b.name) || a.id.localeCompare(b.id)
   )
+}
+
+// A client named by the URL of its metadata document (CIMD) is one id for
+// every account that uses it: every ChatGPT signs in as
+// https://chatgpt.com/oauth/client.json. A registered client's id is its own.
+let shared = (clientId: string) => clientId.startsWith('https://')
+
+/**
+ * The grants a newly exchanged one replaces: the person's others from the
+ * same client, and for a shared client only those returning to the same
+ * callback, the library's own rule for re-authorization.
+ *
+ * ```ts
+ * import { assertEquals } from '@std/assert'
+ * let g = (id: string, clientId: string, redirectUri?: string) =>
+ *   ({ id, clientId, redirectUri, userId: 'p', createdAt: 0, metadata: {},
+ *     scope: [] })
+ * let mine = g('new', 'abc')
+ * assertEquals(superseded([g('old', 'abc'), g('other', 'xyz'), mine], mine),
+ *   ['old'])
+ * let gpt = 'https://chatgpt.com/oauth/client.json'
+ * let here = g('new', gpt, 'https://chatgpt.com/cb/1')
+ * assertEquals(superseded([g('old', gpt, 'https://chatgpt.com/cb/1'),
+ *   g('elsewhere', gpt, 'https://chatgpt.com/cb/2'), here], here), ['old'])
+ * ```
+ */
+export let superseded = (grants: GrantSummary[], mine: GrantSummary) =>
+  grants.filter((g) =>
+    g.id != mine.id && g.clientId == mine.clientId &&
+    (!shared(mine.clientId) || g.redirectUri == mine.redirectUri)
+  ).map((g) => g.id)
+
+// Re-authorizing a client replaces the person's older grant for it, but only
+// once the new grant's code is exchanged. The library would revoke at consent
+// instead (`revokeExistingGrants`), before the client has the new grant: an
+// exchange that then fails, or a sign-in abandoned at the client, left the
+// person with neither, and their assistant could no longer reach yaks.app
+// with nothing on our side to say so (T-121901). A revocation that fails is
+// left standing; it is a grant the person still holds, not a broken one.
+export let replace = async (
+  oauth: Pick<OAuthHelpers, 'listUserGrants' | 'revokeGrant'>,
+  person: string,
+  grantId: string,
+) => {
+  let grants: GrantSummary[] = []
+  for await (let grant of live(oauth, person, 0)) grants.push(grant)
+  let mine = grants.find((g) => g.id == grantId)
+  let gone = mine ? superseded(grants, mine) : []
+  await Promise.allSettled(gone.map((id) => oauth.revokeGrant(id, person)))
+  return gone
 }
 
 /** The services holding a grant from this person, one entry per service. */

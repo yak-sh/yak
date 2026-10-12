@@ -84,7 +84,7 @@ import {
   type OAuthProviderOptions,
 } from '@cloudflare/workers-oauth-provider'
 import { cookieValue, opened, seal, verify } from './lib/token.ts'
-import { agentsOf, servicesOf } from './connected.ts'
+import { agentsOf, replace, servicesOf } from './connected.ts'
 import {
   consented as handoffConsented,
   consenting as handoffConsenting,
@@ -783,6 +783,9 @@ let allow = async (
     metadata: {},
     scope: ask.scope,
     props: { person } satisfies Props,
+    // The grant this replaces stays until the client exchanges the new
+    // grant's code (`tokenExchangeCallback` below, connected.ts `replace`).
+    revokeExistingGrants: false,
   })
   return redirect(redirectTo, set)
 }
@@ -1183,6 +1186,13 @@ let opts = (env: Env): OAuthProviderOptions<Env> => ({
   // (grants.ts) — those are pasted into a terminal, not held by a connector.
   accessTokenTTL: YEAR,
   refreshTokenTTL: undefined,
+  // A re-authorization replaces the person's older grant for that client only
+  // now, when the client holds the new grant (connected.ts `replace`).
+  tokenExchangeCallback: async (o) => {
+    if (o.grantType == 'authorization_code') {
+      await replace(api(env), o.userId, o.grantId)
+    }
+  },
   scopesSupported: [OAUTH.scope],
   resourceMetadata: {
     scopes_supported: [OAUTH.scope],
