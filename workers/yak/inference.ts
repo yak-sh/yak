@@ -69,17 +69,20 @@ let requestAt = async (env: Bindings, job: Inference) => {
   ) throw new ModelError('inference_request')
   return frozen
 }
-let location = async (env: Bindings, app: string) => {
+let location = async (env: Bindings, app: string, dormant = false) => {
   if (!env.STORE) throw new ModelError('unbound')
   let found = await directoryOf(env.STORE).appAt(app)
-  if (!found || found.app.trashed || found.space.trashed) {
+  if (!found || (!dormant && (found.app.trashed || found.space.trashed))) {
     throw new ModelError('inference_app')
   }
   return found
 }
-let authenticated = async (env: Bindings, job: Inference) => {
-  let frozen = await requestAt(env, job)
-  let found = await location(env, frozen.app)
+let askAt = async (
+  env: Bindings,
+  job: Inference,
+  frozen: PrivateRequest,
+  found: Awaited<ReturnType<typeof location>>,
+) => {
   let graph = metaOf(appStore(env.STORE!, found.space, found.app, env), KERNEL)
   let [ask] = await graph.query(`.entity.eid=${job.call}&*`, { trusted: true })
   let pinned = ask?.inference as Comp | undefined
@@ -89,6 +92,27 @@ let authenticated = async (env: Bindings, job: Inference) => {
   ) throw new ModelError('inference_identity')
   return { frozen, found, graph, ask }
 }
+let authenticated = async (env: Bindings, job: Inference) => {
+  let frozen = await requestAt(env, job)
+  return askAt(env, job, frozen, await location(env, frozen.app))
+}
+// The executor writes a complete private receipt only after authenticating
+// the original ask. Its account can be settled while its Store is asleep.
+let completed = async (env: Bindings, job: Inference) => {
+  let frozen = await requestAt(env, job)
+  let found = await location(env, frozen.app, true)
+  let receipt = await read<InferenceReceipt>(env, job.receipt)
+  if (
+    !receipt || receipt.call !== job.call ||
+    (!receipt.reply && !receipt.failure)
+  ) throw new ModelError('inference_receipt')
+  let active = found.app.trashed || found.space.trashed
+    ? undefined
+    : await askAt(env, job, frozen, found)
+  return { frozen, found, receipt, graph: active?.graph, ask: active?.ask }
+}
+let budgetRefusal = (failure?: InferenceReceipt['failure']) =>
+  failure?.code === 'limit' && !failure.interrupted
 let platformSentinel = async (env: Bindings, name: string) =>
   sentinel(await vaultOf(env).salt(), 'hosted-inference:' + name)
 let providerAt = async (
@@ -221,31 +245,32 @@ export let lending = async (
 }
 
 /** Only the private ModelHost service entrypoint calls this interface. The
- * frozen app and the ask's server-owned pin authenticate every operation. */
+ * frozen app and the ask's server-owned pin authenticate paid operations;
+ * complete private receipts retain accounting authority while an app sleeps. */
 export let hosting = (env: Bindings): Kernel => ({
   submitted: async (job) => !!(await authenticated(env, job)).ask.submitted,
   claim: async (job) => {
     let { graph, found, ask } = await authenticated(env, job)
-    if (ask.submitted) return false
+    if (ask.submitted) return { claimed: false }
     let no = await refusedSpend(
       directoryOf(env.STORE!),
       found.space,
       'models',
       env,
     )
-    if (no) throw new ModelError('limit', no)
+    if (no) return { refused: { code: 'limit', reason: no } }
     try {
       await submitCall(
         { apply: (b) => graph.apply(b) },
         job.call,
         new Date().toISOString(),
       )
-      return true
+      return { claimed: true }
     } catch (error) {
       if (
         error instanceof Stale && error.eid === job.call &&
         error.comp === 'submitted'
-      ) return false
+      ) return { claimed: false }
       throw error
     }
   },
@@ -279,18 +304,13 @@ export let hosting = (env: Bindings): Kernel => ({
     )
   },
   delivered: async (job) => {
-    let { frozen, found, graph, ask } = await authenticated(env, job)
-    let receipt = await read<InferenceReceipt>(env, job.receipt)
-    if (
-      !receipt || receipt.call !== job.call ||
-      (!receipt.reply && !receipt.failure)
-    ) throw new ModelError('inference_receipt')
+    let { frozen, found, graph, ask, receipt } = await completed(env, job)
     let media = await read<MediaReceipt>(
       env,
       `inference/${job.executor}/${job.call}/media`,
     )
     let cost =
-      (ask.cost as { dollars: number; reported: boolean } | undefined) ??
+      (ask?.cost as { dollars: number; reported: boolean } | undefined) ??
         (receipt.reply ? billed(receipt.reply, frozen.price) : undefined)
     if (media && media.call !== job.call) {
       throw new ModelError('inference_identity')
@@ -306,12 +326,21 @@ export let hosting = (env: Bindings): Kernel => ({
         cost.dollars,
         cost.reported,
       )
-    } else {
+    } else if (!budgetRefusal(receipt.failure)) {
       await hosting(env).report(job, {
         code: 'inference_cost',
         interrupted: false,
         reason: 'The original hosted call cost is unknown',
       })
+    }
+    if (!graph) {
+      // Trash stops app work, not the accounting for a purchase already made.
+      // Restore can publish this same private receipt without spending again.
+      throw new ModelError(
+        'inference_delivery',
+        'The original hosted receipt is retained until its app is restored',
+        { after: 1000 },
+      )
     }
     // A finished artifact is content-addressed; copy it into the app's own
     // namespace before any subscription can advertise its download address.
@@ -335,7 +364,8 @@ export let hosting = (env: Bindings): Kernel => ({
     }])
   },
   report: async (job, failure) => {
-    let { ask, found } = await authenticated(env, job)
+    let { ask, found } = await completed(env, job)
+    if (budgetRefusal(failure)) return
     if (!env.ERRORS) throw new Error('tracker intake is unavailable')
     let error = Object.assign(new Error(failure.reason), {
       name: failure.exception?.type ?? failure.code,
@@ -346,7 +376,7 @@ export let hosting = (env: Bindings): Kernel => ({
     await env.ERRORS.send(capture(error, {
       sink: () => {},
       eid: derivedEid('inference-report|' + job.call + '|' + failure.code),
-      at: (ask.submitted as Comp | undefined)?.at as string | undefined,
+      at: (ask?.submitted as Comp | undefined)?.at as string | undefined,
       during: { app: found.app.eid, space: found.space.eid, entity: job.call },
       tags: { request: 'hosted model ' + failure.code, executor: job.executor },
     }))
