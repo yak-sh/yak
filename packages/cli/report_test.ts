@@ -58,7 +58,10 @@ test('a composed tracker drains a separate spool, preserving error attribution',
     await files(config.tracker.spool).append(`${JSON.stringify(traced)}\n`)
     let resolve!: (commit: string) => void
     let commit = new Promise<string>((done) => resolve = done)
-    let report = reporter(config, actor, commit)
+    let report = reporter(config, actor, commit, {
+      command: 'yak graph query',
+      roles: 'graph',
+    })
     let pending = report(new Error('failure'), {
       during: { entity, process },
       tags: { handler: 'mail_post' },
@@ -106,7 +109,7 @@ test('a composed tracker drains a separate spool, preserving error attribution',
     let { source, handler, command } = comp(remoteRows[0], 'error')
       .tags as Record<string, string>
     equal([source, handler], ['box', 'mail_post'])
-    equal(command.startsWith('yak'), true)
+    equal(command, 'yak graph query')
     equal(comp(remoteRows[0], 'created').by, actor.by)
     equal(comp(remoteRows[0], 'during').entity, entity)
     equal(await tracker.graph.read('.trace *'), [])

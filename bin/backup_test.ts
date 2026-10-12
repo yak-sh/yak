@@ -298,7 +298,7 @@ test('a backup stuck behind another is killed at its bound and reported', async 
     equal(records.length, 1)
     equal(comp(records[0].rows[0], 'error').tags, {
       source: 'box',
-      command: 'yak',
+      command: 'backup',
       job: 'backup',
       exit_code: 124,
     })
@@ -350,7 +350,7 @@ test('a failed daily backup becomes a tracker bug', async () => {
     equal(comp(row, 'error').level, 'error')
     equal(comp(row, 'error').tags, {
       source: 'box',
-      command: 'yak',
+      command: 'backup',
       job: 'backup',
       exit_code: 1,
     })

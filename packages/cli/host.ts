@@ -78,7 +78,7 @@ import {
 } from '@yaks/fts'
 import { effects, released } from '@yaks/effects'
 import { type Local, peek, warm } from '@yaks/secrets'
-import { reporter, revision } from './report.ts'
+import { command, reporter, revision } from './report.ts'
 import {
   artifactsAt,
   type Backend,
@@ -376,7 +376,7 @@ let composed = async (
     // Asked now and awaited only by a report: the commit is this run's, and
     // a command that reports nothing does not wait on git to learn it.
     config.tracker && !opts.readOnly ? revision() : undefined,
-    roles,
+    { command: command(Deno.args), roles: roles.join(',') },
   )
   let opened: Opened | undefined
   let open = async (): Promise<Opened> => {

@@ -38,19 +38,13 @@ export let command = (argv: readonly string[]): string => {
 }
 let WORD = /^[a-z][a-z-]*$/
 
-let argv = (): string[] => {
-  try {
-    return Deno.args
-  } catch {
-    return []
-  }
-}
-
+// Callers name their invocation; a supervisor using this spool is not a yak
+// command merely because it shares the CLI's reporting boundary.
 export let reporter = (
   config: Config,
   actor?: Actor,
   commit?: string | Promise<string | undefined>,
-  roles: readonly string[] = [],
+  tags: Context['tags'] = {},
 ): {
   (error: unknown, context?: Partial<Context>): Promise<void>
   close: () => Promise<void>
@@ -72,8 +66,7 @@ export let reporter = (
       ...context,
       tags: {
         source: 'box',
-        command: command(argv()),
-        ...roles.length ? { roles: roles.join(',') } : {},
+        ...tags,
         ...context.tags,
       },
       sink: (rows) =>

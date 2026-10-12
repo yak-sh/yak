@@ -61,7 +61,9 @@ try {
 if (code != 0 && !restoring) {
   try {
     let path = configPath()
-    await reporter(path ? read(path) : {}, undefined, await revision())(
+    await reporter(path ? read(path) : {}, undefined, await revision(), {
+      command: 'backup',
+    })(
       new Error(`backup failed (exit ${code}): ${diagnostic.trim()}`),
       { during: { kind: 'backup' }, tags: { job: 'backup', exit_code: code } },
     )
