@@ -93,8 +93,7 @@ stronger.
   reaches across packages in a way their own tests can't cover, and a change
   to how @yaks/query parses, @yaks/match evaluates, @yaks/sql compiles,
   @yaks/sqlite plans or @yaks/graph applies is always that: every package that
-  reads or writes depends on it (the inbox, search and the yaks.app row-cost
-  tests have each broken that way). Run `deno task test` and
+  reads or writes depends on it, and its own tests can't see them. Run `deno task test` and
   `deno task test --tag=workerd workers/yak` once before landing it.
 - `deno task test:budget` runs the whole suite held to its budget, and the gate
   runs it: a test case over 1 ms fails unless bench/test-budget.json lists it,
