@@ -15,6 +15,7 @@ import {
 import type { Env } from './env.ts'
 import { isTestAddress } from './lib/bots.ts'
 import { Pending } from './writes.ts'
+import { moved } from './resets.ts'
 import type { Ctx } from './tools.ts'
 
 export type Hit = { id: string; account: 'person' | 'test' }
@@ -104,14 +105,15 @@ export let reported = (error: unknown) => {
 /** Only exception data and explicit tags leave. One thrown object can pass
  * several catches; a later invocation reusing it is another occurrence. An
  * occurrence about other code than the running version (a failed build)
- * names the commit it concerns. */
+ * names the commit it concerns. An object the runtime moved to a new instance
+ * is no defect: its work is run again by whoever owns it (resets.ts). */
 export let defect = (
   error: unknown,
   tags: Tags,
   details: { hit?: Hit; fault?: string; commit?: string } = {},
 ) => {
   let invocation = context.getStore()
-  if (!invocation?.env.ERRORS) return
+  if (!invocation?.env.ERRORS || moved(error)) return
   if (error && typeof error == 'object') {
     if (invocation.seen.has(error)) return
     invocation.seen.add(error)

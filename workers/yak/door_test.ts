@@ -2,14 +2,7 @@
 // anything else it throws through untouched.
 import { test } from '@yaks/testing'
 import { assertEquals, assertRejects } from '@std/assert'
-import {
-  ACCEPTED,
-  APP_JSON,
-  doorOf,
-  evicted,
-  type Namespace,
-  storeOf,
-} from './door.ts'
+import { ACCEPTED, APP_JSON, doorOf, type Namespace, storeOf } from './door.ts'
 import { retry as retryWrite } from './write-log.ts'
 import { counts, tallying } from './lib/hops.ts'
 import { metaOf } from './meta.ts'
@@ -62,14 +55,6 @@ let storageTimeout = () =>
   new Error(
     'Durable Object storage operation exceeded timeout which caused object to be reset.',
   )
-
-test('evicted: the runtime flag, or its words', () => {
-  assertEquals(evicted(gone()), true)
-  assertEquals(evicted(flagged()), true)
-  assertEquals(evicted(storageTimeout()), true)
-  assertEquals(evicted(new Error('boot failed')), false)
-  assertEquals(evicted(null), false)
-})
 
 test('an evicted POST is sent again with its body intact', async () => {
   for (let reset of [gone(), storageTimeout()]) {

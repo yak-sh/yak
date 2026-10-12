@@ -115,6 +115,33 @@ test('a caught failure counts once per invocation and refusals stay back', async
   ok(rows.every((r) => batch(r).scope == platform))
 })
 
+test('an object the runtime moved stays back; a reset our code caused does not', async () => {
+  let { rows, time, env } = recorded()
+  await within(env, {}, () => {
+    caught(
+      new Error(
+        'Connection closed: this Durable Object instance is no longer active. Reconnect or retry the request.',
+      ),
+      { request: 'write' },
+    )
+    defect(new Error('Durable Object reset because its code was updated.'), {})
+    defect(
+      new Error(
+        'Durable Object storage operation exceeded timeout which caused object to be reset.',
+      ),
+      {},
+    )
+  }, time)
+  equal(
+    rows.flat().filter((r) => r.exception).map((r) =>
+      (r.exception as { value: string }).value
+    ),
+    [
+      'Durable Object storage operation exceeded timeout which caused object to be reset.',
+    ],
+  )
+})
+
 test('parallel invocation tags remain isolated and escaping failures reach tracker', async () => {
   let { rows, time, env } = recorded()
   let resume = Promise.withResolvers<void>()

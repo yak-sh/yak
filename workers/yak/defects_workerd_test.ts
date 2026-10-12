@@ -47,7 +47,7 @@ test('an interrupted store upload keeps no rows or writes and reports no failure
   equal(samples(k.log).length, before)
 })
 
-test('a store alarm cut off by the runtime is reported once by its retry', async () => {
+test('a store alarm cut off twice running is reported once by its second retry', async () => {
   let k = await workerd()
   let before = samples(k.log).length
   let response = await fetch(`${k.base}/__defects/alarm/${crypto.randomUUID()}`)
@@ -60,7 +60,7 @@ test('a store alarm cut off by the runtime is reported once by its retry', async
     [{
       request: 'alarm',
       store: 'ada/notes',
-      retry: '1',
+      retry: '2',
       script: 'yak',
       version: 'unknown',
       entrypoint: 'store probe',

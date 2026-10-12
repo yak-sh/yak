@@ -2473,7 +2473,11 @@ export class Store {
   /** The runtime's clock going off: whatever this object armed itself for.
    * The runtime retries an alarm whose run failed. One that threw was reported
    * where it threw; one the runtime killed for its limits left nothing behind
-   * that could report it, so its retry does (M-37965). */
+   * that could report it, so its retry does (M-37965). A run cut off once
+   * is also what the runtime moving the object looks like (resets.ts), and
+   * nothing survives the move to tell the two apart, so the report waits for
+   * the second retry: a move is one-off, a run its limits kill is killed
+   * again. */
   alarm(info?: { isRetry?: boolean; retryCount?: number }): Promise<void> {
     return this.#traced('alarm', () => this.#alarmRequest(info))
   }
@@ -2483,7 +2487,7 @@ export class Store {
   ): Promise<void> {
     if (!await this.#awake() && !this.#moveOnly) return
     await this.#ensureStarted()
-    if (info?.isRetry && !this.#threw) {
+    if (info?.isRetry && (info.retryCount ?? 0) > 1 && !this.#threw) {
       defect(new Error("a store's alarm was cut off before it finished"), {
         request: 'alarm',
         store: this.#name(),

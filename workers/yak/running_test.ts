@@ -6,7 +6,8 @@
 // start next.
 import { test } from '@yaks/testing'
 import { assert, assertEquals, assertRejects } from '@std/assert'
-import { doorOf, evicted, fetchOf, storeOf } from './door.ts'
+import { doorOf, fetchOf, storeOf } from './door.ts'
+import { evicted } from './resets.ts'
 import { Store } from './graph.ts'
 import { Wire } from './stream.ts'
 import { Builder } from './build.ts'

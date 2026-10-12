@@ -44,7 +44,8 @@
 import { rosterLine } from '@yaks/mcp/roster'
 import { VERSION } from './seo.ts'
 import type { Env } from './env.ts'
-import { evicted, fetchOf, type Namespace } from './door.ts'
+import { fetchOf, type Namespace } from './door.ts'
+import { evicted } from './resets.ts'
 import { behind, type Restartable } from './running.ts'
 
 // The slice of the Durable Object runtime this object touches, structurally,
@@ -365,7 +366,7 @@ export class Wire {
 // within the person it already belongs to.
 let wireOf = (ns: Namespace, person: string) => fetchOf(ns, person)
 
-// The object went away under a stream it held: reset (door.ts `evicted`), or
+// The object went away under a stream it held: reset (resets.ts `evicted`), or
 // the connection to it lost with it.
 let gone = (e: unknown) =>
   evicted(e) ||

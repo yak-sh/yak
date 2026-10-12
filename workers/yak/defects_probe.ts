@@ -74,6 +74,7 @@ export class StoreCases extends DurableObject {
       await door('/vocab', { method: 'POST', body: '{}' }, KERNEL)
       if (new URL(req.url).pathname.includes('/alarm/')) {
         await store.alarm({ isRetry: true, retryCount: 1 })
+        await store.alarm({ isRetry: true, retryCount: 2 })
         await store.alarm()
         return Response.json({ retried: true })
       }
