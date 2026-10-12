@@ -297,3 +297,33 @@ check(
     equal((await letters(g)).length, 1)
   },
 )
+
+// The platform tracker holds a copy of each box bug; the box writes its letter.
+let source = (row: Bundle, from: string): Bundle => ({
+  entity: { eid: crypto.randomUUID() },
+  error: { at, bug: row.entity.eid, tags: { source: from } },
+})
+let platform = (g: Graph, row: Bundle) =>
+  effects({ graph: g }, { ...options, forwarded: ['box'] }).bug_notify(
+    { entity: row.entity, name: 'bug', kind: 'created' },
+    g,
+    (rows) => put(g, rows),
+  )
+
+check('a bug forwarded by the box gets its letter only there', async (g) => {
+  let boxed = bug(), mixed = bug()
+  await put(g, [
+    boxed,
+    mixed,
+    source(boxed, 'box'),
+    source(mixed, 'box'),
+    source(mixed, 'yaks.app'),
+  ])
+  await platform(g, boxed)
+  await platform(g, mixed)
+  equal(
+    (await letters(g)).map((m) => comp(m, 'mail').target),
+    [mixed.entity.eid],
+  )
+  ok((await g.get([boxed.entity.eid]))[0].notified)
+})

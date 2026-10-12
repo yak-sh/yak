@@ -11,6 +11,7 @@ import { enrichFrames } from './frames.ts'
 import { sourceFrames, type SourceOptions } from '@yaks/code/source'
 import { followUp, letter } from './letter.ts'
 import { occurrences } from './reading.ts'
+import { tags } from './spread.ts'
 import { human } from '@yaks/id'
 
 export type Options = {
@@ -25,6 +26,10 @@ export type Options = {
   store?: string
   /** Tracker web address for links in notification letters. */
   url?: string
+  /** Capture sources (`error.tags.source`) forwarded here by a tracker that
+   * writes their letters itself: a bug every kept occurrence of which came
+   * from one is marked seen here without a letter, so it sends one letter. */
+  forwarded?: string[]
   /** A space's stream notification; the unseen reply owns its notified mark. */
   notify?: (bugs: Bundle[]) => void | Promise<void>
   retain?: number
@@ -59,6 +64,13 @@ let letterEid = (options: Options, row: Bundle) =>
 // The opening's letter heads the bug's thread; later letters answer it.
 let opening = (options: Options, row: Bundle) =>
   occasion(options, row.entity.eid, 'created', comp(row, 'created').at)
+
+// Every kept occurrence came from a source whose own tracker announces it.
+let elsewhere = (options: Options, errors: Bundle[]) =>
+  !!options.forwarded?.length && errors.length > 0 &&
+  errors.every((b) =>
+    options.forwarded!.includes(str(tags(b).find(([k]) => k == 'source')?.[1]))
+  )
 
 let open = (row: Bundle | undefined): row is Bundle =>
   !!row?.bug && !row.archived && !row.resolved && !row.notified
@@ -104,6 +116,9 @@ export let notify = async (
     return
   }
   let errors = await g.read(occurrences(eid))
+  if (elsewhere(options, errors)) {
+    return void await g.apply([receipt(row)], { trusted: true })
+  }
   let request = str(comp(errors[0], 'during').request)
   let [asked] = request ? await g.get([request]) : []
   let to = address(g, row, options)

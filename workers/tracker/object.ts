@@ -110,6 +110,8 @@ export class Tracker {
       report: (error) => this.#report(error, 'Tracker.effect'),
       store: this.scope,
       url: 'https://tracker.yak.sh',
+      // The box tracker writes the letters for the box's own bugs.
+      forwarded: ['box'],
       ...env.MAIL
         ? {
           sender: {

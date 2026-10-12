@@ -77,26 +77,29 @@ so concurrent processes never share an append offset.
 `effects({graph}, options)` accepts `code: {cwd, url, origins}` for box frame
 resolution through the fleet catalog, an `enrich` function for another host, a
 space `notify` stream callback, or a platform/box mail `to`, `from` and global
-tracker `store` eid. Each bug opening and each regression gets its own letter
-immediately. Its identity derives from the store, recipient, bug eid, opening or
-regression mark, and full `created.at` or `regressed.at`, so a replayed effect
-keeps the same letter. A letter is read alone by someone deciding whether it is
-urgent, so `letter.ts` writes from the bug and its retained occurrences all the
-tracker holds: the subject names where it ran (box or yaks.app, the space and
-app, and "test account" when only test accounts were reached), the bug and its
-headline; the body carries the whole message, where it ran (process or worker,
-app version, operation), whom it reached, how often and in the last hour, the
-failing request, the code, the commit, the top of the stack, the breadcrumbs
-before it, every other tag, and a bug link. Reporters supply what it reads: the
-box tags its `command` and host `roles`, yaks.app its `space` and `app` slugs
-and whose space it is (`account`). A regression's letter answers the opening's
-thread, and `bug_follow` adds one reply there when a bug is resolved or
-archived; a bug that opened without a letter stays quiet. Bugs become notified
-only after their occasion's letter has its `delivered` mark; an earlier
-occasion's delivery cannot mark a later regression notified. Space replies own
-their own notified mark. Archived bugs still count but never notify. Retention
-keeps the newest hundred plus the first occurrence of each commit (or version
-without a commit).
+tracker `store` eid. `forwarded` names capture sources another tracker writes
+the letters for: a bug whose kept occurrences all carry one of those
+`error.tags.source` values is marked seen without a letter, so a bug the box
+forwards to the platform tracker sends one letter, the box's. Each bug opening
+and each regression gets its own letter immediately. Its identity derives from
+the store, recipient, bug eid, opening or regression mark, and full `created.at`
+or `regressed.at`, so a replayed effect keeps the same letter. A letter is read
+alone by someone deciding whether it is urgent, so `letter.ts` writes from the
+bug and its retained occurrences all the tracker holds: the subject names where
+it ran (box or yaks.app, the space and app, and "test account" when only test
+accounts were reached), the bug and its headline; the body carries the whole
+message, where it ran (process or worker, app version, operation), whom it
+reached, how often and in the last hour, the failing request, the code, the
+commit, the top of the stack, the breadcrumbs before it, every other tag, and a
+bug link. Reporters supply what it reads: the box tags its `command` and host
+`roles`, yaks.app its `space` and `app` slugs and whose space it is (`account`).
+A regression's letter answers the opening's thread, and `bug_follow` adds one
+reply there when a bug is resolved or archived; a bug that opened without a
+letter stays quiet. Bugs become notified only after their occasion's letter has
+its `delivered` mark; an earlier occasion's delivery cannot mark a later
+regression notified. Space replies own their own notified mark. Archived bugs
+still count but never notify. Retention keeps the newest hundred plus the first
+occurrence of each commit (or version without a commit).
 
 ## Browsing
 
@@ -216,10 +219,10 @@ interrupted and repeated delivery safe.
 
 `./remote` shares the signed transport with the read-through routes. Intake and
 bug marks each carry a separate capability, so a reader's ticket cannot submit
-errors or mark bugs. The Worker keeps its existing notification delivery for new
-platform bugs; box captures carry `error.tags.source=box`. Reports retain their
-capture time across retries. Host shutdown waits for every report's durable
-spool write.
+errors or mark bugs. Box captures carry `error.tags.source=box`; the Worker
+writes letters for platform bugs and leaves box bugs to the box tracker
+(`forwarded: ['box']`). Reports retain their capture time across retries. Host
+shutdown waits for every report's durable spool write.
 
 ## Bounded trace admission
 
