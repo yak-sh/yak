@@ -396,7 +396,7 @@ export let retire = (d: Driver, before: Vocab, after: Vocab) => {
  * runs first and indexes no longer declared, changed, or naming the column go
  * with it. The vocabularies say which indexes remain; `install()` must not
  * mistake an unchanged unique constraint for a new one after this column is
- * shed.
+ * shed. Returns whether the column was dropped.
  */
 export let shed = (
   d: Driver,
@@ -405,7 +405,7 @@ export let shed = (
   name: string,
   prop: string,
 ) => {
-  if (!columns(d, name).includes(prop)) return
+  if (!columns(d, name).includes(prop)) return false
   recut(d)
   let indexes = catalogue(d).filter((i) =>
     i.type == 'index' && i.tbl_name == name && i.sql != null
@@ -423,6 +423,7 @@ export let shed = (
     d.query({ t: 'drop', kind: 'index', name: i.name, ifExists: true })
   }
   d.query(unseat(name, prop))
+  return true
 }
 
 /** The schema a vocabulary implies, raised over whatever the object holds.

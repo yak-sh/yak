@@ -8,7 +8,7 @@ import { loadVocab, pick, type VocabDoc } from '@yaks/vocab'
 import { kernelDoc } from '@yaks/kernel/vocab'
 import { doorOf, PLATFORM_STORE } from './door.ts'
 import { commitRule } from './git-move.ts'
-import { lit } from '@yaks/sql'
+import { lit, revision } from '@yaks/sql'
 import { shapeOf, Store } from './graph.ts'
 import { storage as sqliteStorage } from '@yaks/sqlite'
 import { blobRead, blobs, sqliteBlobs } from '@yaks/blob'
@@ -77,6 +77,7 @@ let movingStore = async (
   }
   return {
     wake: (...rules: Rule[]) => o = new Store(ctx, env, rules),
+    schema: () => revision(driver(ctx.storage), 'schema'),
     columns: (name: string) =>
       driver(ctx.storage).query({ t: 'pragma', name: 'table_info', arg: name })
         .map((c) => c.name),
@@ -765,6 +766,29 @@ let proof = async (
     for (let check of checks) check()
   })
 }
+
+await proof(
+  'contracting absent columns keeps the serving schema and warmed reads',
+  async (equal, ok) => {
+    let s = await store(
+      1,
+      rule({
+        find: '.now',
+        move: () => [],
+        drop: ['now.earlier', 'missing.earlier'],
+      }),
+    )
+    let before = await s.query('.was&*')
+    equal(await s.query('.was&*'), before)
+    let schema = s.schema()
+    await s.alarm()
+    let [moved] = await s.moves()
+    equal([moved.moved, moved.failed], [0, undefined])
+    ok(moved.done)
+    equal(s.schema(), schema)
+    equal(await s.query('.was&*'), before)
+  },
+)
 
 let forwarding = (): Rule & { forward: (row: Bundle) => Bundle[] } => ({
   ...rule(),

@@ -2543,8 +2543,8 @@ export class Store {
         let retained = paths.filter((path) => {
           let [comp, prop] = path.split('.')
           if (!prop || this.#vocab.prop(comp, prop)) return true
-          shed(this.#sql, this.#vocab, this.#vocab, comp, prop)
-          contracted = true
+          contracted = shed(this.#sql, this.#vocab, this.#vocab, comp, prop) ||
+            contracted
           return false
         })
         if (contracted) {
