@@ -1,4 +1,4 @@
-import { equal, test } from '@yaks/testing'
+import { equal, test, throws } from '@yaks/testing'
 import { identityEid } from '@yaks/graph'
 import { effectDoc, held } from '@yaks/effects'
 import { kernelDoc } from '@yaks/kernel/vocab'
@@ -127,6 +127,79 @@ scenario(
       [],
     )
     equal((await p.g.get([call]))[0].ask != null, true)
+  },
+)
+
+scenario(
+  'new asks use the inline provider until the hosted executor is live',
+  async (p) => {
+    p.r.executor!.available = () => false
+    equal((await react(p.g, 'session', p.r)).status, 'settled')
+    equal(p.inline(), 1)
+    equal(p.submitted, [])
+    let asks = (await transcript(p.g, 'session')).filter((b) => b.ask)
+    equal(asks.length, 1)
+    equal(asks[0].inference, undefined)
+    equal(asks[0].attempt, { by: null })
+  },
+)
+
+scenario(
+  'accepted asks resume their receipt while the hosted executor is unavailable',
+  async (p) => {
+    pending(p)
+    p.r.executor!.available = () => false
+    p.reply(saved)
+    equal((await react(p.g, 'session', p.r)).status, 'settled')
+    equal(p.resumed, ['ask'])
+    equal(p.inline(), 0)
+    equal(p.submitted, [])
+    equal((await p.g.get(['ask']))[0].cost, { dollars: 0.02, reported: true })
+  },
+)
+
+scenario(
+  'a final dispatch refusal settles the original ask without pending work',
+  async (p) => {
+    let calls: string[] = []
+    p.r.executor!.submit = (call) => {
+      calls.push(call)
+      return Promise.reject(
+        new ModelError('limit', 'The account budget is spent'),
+      )
+    }
+    equal((await react(p.g, 'session', p.r)).status, 'failed')
+    await react(p.g, 'session', p.r)
+    let entries = await transcript(p.g, 'session')
+    let asks = entries.filter((b) => b.ask)
+    equal(asks.map((b) => b.entity.eid), calls)
+    equal(asks[0].attempt, { by: null })
+    equal(asks[0].inference, undefined)
+    equal(entries.find((b) => b.refusal)?.refusal, { code: 'limit' })
+    equal(p.inline(), 0)
+  },
+)
+
+scenario(
+  'a transient dispatch failure retries the same ask without inline generation',
+  async (p) => {
+    let submit = p.r.executor!.submit
+    let calls: string[] = []
+    let failure = new Error('Executor unavailable')
+    p.r.executor!.submit = (call, request) => {
+      calls.push(call)
+      return calls.length == 1 ? Promise.reject(failure) : submit(call, request)
+    }
+    await throws(() => react(p.g, 'session', p.r), /Executor unavailable/)
+    let [ask] = await p.g.get([calls[0]])
+    equal((ask.attempt as Record<string, unknown>).by != null, true)
+    equal(ask.failed, undefined)
+    equal(ask.inference, undefined)
+    await react(p.g, 'session', p.r)
+    equal(calls, [ask.entity.eid, ask.entity.eid])
+    equal(p.submitted.map((request) => request.call), [ask.entity.eid])
+    equal((await transcript(p.g, 'session')).filter((b) => b.ask).length, 1)
+    equal(p.inline(), 0)
   },
 )
 
