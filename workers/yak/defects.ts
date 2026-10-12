@@ -102,11 +102,13 @@ export let reported = (error: unknown) => {
 }
 
 /** Only exception data and explicit tags leave. One thrown object can pass
- * several catches; a later invocation reusing it is another occurrence. */
+ * several catches; a later invocation reusing it is another occurrence. An
+ * occurrence about other code than the running version (a failed build)
+ * names the commit it concerns. */
 export let defect = (
   error: unknown,
   tags: Tags,
-  details: { hit?: Hit; fault?: string } = {},
+  details: { hit?: Hit; fault?: string; commit?: string } = {},
 ) => {
   let invocation = context.getStore()
   if (!invocation?.env.ERRORS) return
@@ -123,7 +125,7 @@ export let defect = (
   let rows = capture(error, {
     ...invocation.origin,
     sink,
-    commit: env.CF_VERSION_METADATA?.id,
+    commit: details.commit ?? env.CF_VERSION_METADATA?.id,
     fault: details.fault,
     environment: env.ENVIRONMENT == 'staging' ? 'staging' : 'production',
     tags: Object.fromEntries(

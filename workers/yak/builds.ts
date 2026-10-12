@@ -4,8 +4,12 @@
 // the tracker hears it, and the meta store keeps the retry receipt
 // (unseen.ts). The version already live keeps serving through a
 // failed build, so what breaks is only that the fix in it never arrives, and
-// nothing about the site says so. Each failed build is its own tracker bug,
-// so each one is news rather than another event on a bug already seen.
+// nothing about the site says so. Builds that fail for one cause are one
+// tracker bug, filed under the failing step and error the log names (or one
+// "unknown" cause while the log is unreadable), so one cause brings one letter
+// and one fixer however many commits it breaks. Each failure is a hit under
+// the commit it built, so a build that fails after its bug was resolved
+// brings the bug back.
 //
 // The subscription asks for failures alone; anything else that arrives is
 // acknowledged unread, and so is a failed build of any branch but the one
@@ -24,6 +28,7 @@
 // only the note that lands earns the retry.
 
 import { Stale } from '@yaks/graph/errors'
+import { normalize } from '@yaks/tracker'
 import type { Env } from './env.ts'
 import { caught, defect } from './defects.ts'
 import { type Breaks, metaBreaks } from './unseen.ts'
@@ -183,8 +188,13 @@ export let logsOf = async (env: Env, uuid?: string) => {
   }
 }
 
-/** Enrich one failure at the reporting boundary, leaving raw logs behind. */
-export let diagnosed = async (env: Env, b: Broke): Promise<Broke> => {
+/** Enrich one failure at the reporting boundary, leaving raw logs behind.
+ * Its `cause` is what its bug is filed under: the step and error the log
+ * names, with volatile parts gone, or `unknown` when the log can't be read. */
+export let diagnosed = async (
+  env: Env,
+  b: Broke,
+): Promise<Broke & { cause: string }> => {
   let detail = await logsOf(env, b.uuid)
   let summary = typeof detail == 'string'
     ? `Details unavailable: ${detail}`
@@ -192,6 +202,9 @@ export let diagnosed = async (env: Env, b: Broke): Promise<Broke> => {
   let link = buildUrl(env, b)
   return {
     ...b,
+    cause: typeof detail == 'string'
+      ? 'unknown'
+      : normalize(`${detail.step}: ${detail.reason}`),
     error: new BuildFailed(
       `${b.error.message}. ${summary}. Build log: ${
         link ?? 'location unavailable'
@@ -260,7 +273,10 @@ export let builds = async (batch: Batch, env: Env) => {
         ...b.tags,
         build_log: buildUrl(env, b),
         retry,
-      }, { fault: `build failed:${b.build}` })
+      }, {
+        fault: `build failed:${b.tags.worker}:${b.cause}`,
+        commit: b.commit ?? b.build,
+      })
     }
     m.ack()
   }

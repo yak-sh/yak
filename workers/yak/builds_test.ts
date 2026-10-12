@@ -163,12 +163,6 @@ let rebuilt = async (...batches: Built[][]) => {
         )
       }
     }, time)
-    // Distinct failed builds leave independently, even when their normalized
-    // summaries and stack sites match. Redelivery coalesces repeat samples.
-    assertEquals(
-      samples.length,
-      new Set(batches.flat().map((e) => broke(e)?.build)).size,
-    )
     await time.advance(10_000)
   } finally {
     globalThis.fetch = fetch
@@ -230,4 +224,59 @@ test('builds: a failed hook request does not disclose its credential', async () 
   } finally {
     globalThis.fetch = was
   }
+})
+
+// What the tracker hears when these builds fail, each log ending in its line.
+let filed = async (logs: Record<string, string>) => {
+  let samples: Bundle[] = []
+  let env = {
+    META: meta(),
+    CF_ACCOUNT: 'account',
+    BUILD_LOG_TOKEN: 'token',
+    WORKERS_API: 'https://cloudflare.test',
+    ERRORS: {
+      send: (rows: Bundle[]) => (samples.push(...rows), Promise.resolve()),
+    },
+  } as Env
+  let time = clock()
+  let fetch = globalThis.fetch
+  globalThis.fetch = (input) => {
+    let uuid = String(input).match(/builds\/builds\/([^/]+)\/logs/)?.[1]
+    return Promise.resolve(Response.json({
+      success: true,
+      result: { lines: [[1, '--- deno task check'], [2, logs[uuid!] ?? '']] },
+    }))
+  }
+  let failed = (uuid: string, commit: string) => {
+    let e = event('failed')
+    e.payload!.buildUuid = uuid
+    e.payload!.buildTriggerMetadata!.commitHash = commit
+    return { body: e, ack() {} }
+  }
+  try {
+    await within(env, {}, () =>
+      builds({
+        messages: Object.keys(logs).map((uuid, i) => failed(uuid, `c${i}`)),
+      }, env), time)
+    await time.advance(10_000)
+  } finally {
+    globalThis.fetch = fetch
+  }
+  return samples.map((row) => {
+    let e = row.error as { fault: string; commit: string; hits?: number }
+    return [e.fault, e.commit, e.hits ?? 1]
+  })
+}
+
+test('builds: failures of one cause are one bug, each under the commit it built', async () => {
+  let [first, second, third] = await filed({
+    'build-1': 'error: TS2322 in report.ts:103',
+    'build-2': 'error: TS2322 in report.ts:105',
+    'build-3': 'the upload timed out',
+  }).then((rows) =>
+    rows.toSorted((a, b) => String(a[1]).localeCompare(String(b[1])))
+  )
+  assertEquals(first[0], second[0])
+  assertEquals(first[0] == third[0], false)
+  assertEquals([first[1], second[1], third[1]], ['c0', 'c1', 'c2'])
 })
