@@ -24,6 +24,8 @@ let vocab = loadVocab([...shop.docs, archetypeDoc, {
       component: true,
       type: 'object',
     },
+    t: { component: true, type: 'object' },
+    _t: { component: true, type: 'object' },
   },
 }])
 test('archetype query golden: presence/kind, value joins, boolean, paths, reverse and aggregates', () => {
@@ -34,15 +36,42 @@ test('archetype query golden: presence/kind, value joins, boolean, paths, revers
   let g = graph({ storage: s, vocab, plugins: [archetypes()] })
   seedIdentities(g, 'stub')
   g.apply([
-    { entity: { eid: 'a' }, doc: {}, marker: {} },
+    { entity: { eid: 'a' }, doc: {}, marker: {}, t: {} },
     {
       entity: { eid: 'b' },
       doc: { title: 'B' },
       product: { price: 4, maker: 'a' },
+      _t: {},
     },
     { entity: { eid: 'c' }, product: { maker: 'stub' } },
     { entity: { eid: 'r' }, review: { product: 'b', stars: 5 }, marker: {} },
   ])
+  g.apply([{ entity: { eid: 'grave' }, t: {}, _t: {} }])
+  g.apply([{ entity: { eid: 'grave' }, $delete: true }])
+  for (let component of ['t', '_t']) {
+    assertEquals(s.rows(`.${component} .count`), [{ value: '', n: 1 }])
+    assertEquals(
+      s.rows(`.${component} .count`, {
+        visibility: { entity: '.entity.eid=a' },
+      }),
+      [{ value: '', n: component == 't' ? 1 : 0 }],
+    )
+    assertEquals(
+      s.rows(`.${component} .count`, {
+        visibility: { components: { [component]: '.entity.eid=b' } },
+      }),
+      [{ value: '', n: component == '_t' ? 1 : 0 }],
+    )
+    assertEquals(
+      s.rows(`.${component} .count`, {
+        visibility: {
+          entity: '.entity.eid=a',
+          components: { [component]: '.entity.eid=b' },
+        },
+      }),
+      [{ value: '', n: 0 }],
+    )
+  }
   for (
     let q of [
       '.doc',
@@ -57,6 +86,12 @@ test('archetype query golden: presence/kind, value joins, boolean, paths, revers
       '!doc.title',
       '.doc !doc.title',
       '.doc .count',
+      '.doc .count .limit=1 .order=-doc.title .after=a',
+      '.doc !product .count',
+      '(.doc|.product) .count',
+      '!doc .count',
+      '.review.product.doc .count',
+      '.kind=doc .count',
       '.product .tally=product.status',
       '.doc .order=doc.title .limit=1',
       '.product.maker.marker',
@@ -169,6 +204,23 @@ test('a wide archetype catalog still answers a component query', () => {
     $defs: {
       ...flags,
       excluded: { component: true, type: 'object', properties: {} },
+      private: {
+        component: true,
+        properties: { by: { type: 'string', ref: 'entity' } },
+      },
+      edge: {
+        component: true,
+        properties: {
+          from: { type: 'string', ref: 'entity' },
+          to: { type: 'string', ref: 'entity' },
+        },
+      },
+      comment: {
+        component: true,
+        properties: { target: { type: 'string', ref: 'entity' } },
+      },
+      references: { component: true, type: 'object' },
+      recalled: { component: true, type: 'object' },
     },
   }])
   let db = spy(mem(), (_, params) => {
@@ -187,6 +239,64 @@ test('a wide archetype catalog still answers a component query', () => {
       ).flat(),
     ),
   })))
+  let transferred = 0
+  let reading = (): Driver => ({
+    ...db,
+    query: (statement) => {
+      let found = db.query(statement)
+      transferred += found.length
+      return found
+    },
+  })
+  let cold = storage(reading(), v, { schemaReady: () => true })
+  assertEquals(
+    cold.rows('.excluded .count', {
+      visibility: { entity: '!private|.private.by=reader' },
+    }),
+    [{ value: '', n: 0 }],
+  )
+  assert(
+    transferred <= 10,
+    `an empty count transferred ${transferred} unrelated rows`,
+  )
+  seedIdentities(g, 'reader', 'other')
+  g.apply([
+    { entity: { eid: 'link' }, edge: { from: 'reader', to: 'reader' } },
+    { entity: { eid: 'note' }, comment: { target: 'reader' } },
+    {
+      entity: { eid: 'mentioned' },
+      edge: { from: 'reader', to: 'other' },
+      references: {},
+    },
+    {
+      entity: { eid: 'remembered' },
+      comment: { target: 'reader' },
+      recalled: {},
+    },
+    {
+      entity: { eid: 'hidden' },
+      edge: { from: 'reader', to: 'other' },
+      private: { by: 'other' },
+    },
+  ])
+  for (
+    let [eid, expected] of [
+      ['missing', []],
+      ['reader', ['link', 'note']],
+    ] as const
+  ) {
+    transferred = 0
+    let fresh = storage(reading(), v, { schemaReady: () => true })
+    let q = `(.edge.from=${eid}|.edge.to=${eid}|.comment.target=${eid})` +
+      '&!references&!recalled&.limit=100'
+    assertEquals(
+      fresh.rows(q, {
+        visibility: { entity: '!private|.private.by=reader' },
+      }).map((row) => row.eid).sort(),
+      [...expected],
+    )
+    assert(transferred <= 10, `${eid}: ${transferred} unrelated rows`)
+  }
   assertEquals(s.rows('.doc !excluded .count')[0]?.n, 120)
 })
 

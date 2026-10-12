@@ -369,11 +369,17 @@ export let sqlite: Dialect = {
   name: 'sqlite',
   spine: '"entity"',
   membership: '"entity"."eid" as eid',
-  live: (owner = '"entity"."id"') => ({
-    sql:
-      `not exists (select 1 from tombstone "t" where "t"."entity" = ${owner})`,
-    params: [],
-  }),
+  live: (owner = '"entity"."id"') => {
+    let alias = 't'
+    // The owner may come from a component named like our local alias.
+    while (new RegExp(`\\b${alias}\\b`, 'i').test(owner)) alias = `_${alias}`
+    let tomb = q(alias)
+    return {
+      sql:
+        `not exists (select 1 from tombstone ${tomb} where ${tomb}."entity" = ${owner})`,
+      params: [],
+    }
+  },
   table,
   ownerKey,
   joinOn: (comp, base) => `"${comp}"."entity" = ${ownerKey(base)}`,

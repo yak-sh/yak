@@ -1,7 +1,36 @@
 // A narrow ranked search amid unrelated matching text, counted by workerd.
 import { driver, type DurableStorage } from '@yaks/durable-object'
-import { type Field, find, schema } from '@yaks/fts'
-import { as, col, type Driver, insert, render, select, table } from '@yaks/sql'
+import { type Field, find, schema, search } from '@yaks/fts'
+import { parse } from '@yaks/query'
+import {
+  as,
+  col,
+  compile,
+  type Driver,
+  eq,
+  insert,
+  not,
+  render,
+  select,
+  table,
+  val,
+} from '@yaks/sql'
+import { loadVocab } from '@yaks/vocab'
+
+export let vocab = loadVocab({
+  $defs: {
+    entity: { component: true, properties: {} },
+    comment: { component: true, properties: {} },
+    prose: {
+      component: true,
+      properties: { body: { type: 'string', search: true } },
+    },
+    extra: {
+      component: true,
+      properties: { body: { type: 'string', search: true } },
+    },
+  },
+})
 
 export let text: Field[] = [
   { comp: 'prose', prop: 'body' },
@@ -74,6 +103,54 @@ export let seed = (db: Driver, count: number): void => {
   }
 }
 
+// Sparse words in a large component: words can come from different indexes,
+// and a matching entity without the required component must stay excluded.
+export let mixed = (db: Driver): void => {
+  db.query({
+    t: 'create table',
+    name: 'comment',
+    cols: [{ name: 'entity', type: 'integer', pk: true }],
+  })
+  db.query(insert('comment', { entity: 1 }, { entity: 2 }))
+  db.query({ t: 'analyze' })
+  for (
+    let [entity, body] of [
+      [1, 'needle'],
+      [2, 'needle thread'],
+      [3, 'needle thread'],
+    ] as const
+  ) {
+    db.query({
+      t: 'update',
+      table: 'prose',
+      set: { body: val(body) },
+      where: eq(col('entity'), val(entity)),
+    })
+  }
+  db.query({
+    t: 'update',
+    table: 'extra',
+    set: { body: val('thread') },
+    where: eq(col('entity'), val(1)),
+  })
+  db.query({
+    t: 'insert',
+    or: 'ignore',
+    into: 'comment',
+    cols: ['entity'],
+    q: select({
+      cols: [col('id')],
+      from: table('entity'),
+      where: not(eq(col('id'), val(3))),
+    }),
+  })
+  for (let id of [1000001, 1000002]) {
+    db.query(insert('entity', { id, eid: `later-${id}` }))
+    db.query(insert('prose', { entity: id, body: 'dragon' }))
+    db.query(insert('comment', { entity: id }))
+  }
+}
+
 export let ftsCost = (storage: DurableStorage) => {
   let history = 1000
   let counting = false, read = 0, written = 0
@@ -86,5 +163,26 @@ export let ftsCost = (storage: DurableStorage) => {
   counting = true
   let rows = find(db, text, 'dragon', { screen: selected, limit: 2 })
   counting = false
-  return { rows, read, written, history }
+  let ranked = { rows, read, written, history }
+  mixed(db)
+  let extension = search(text, db)
+  let queries: Record<
+    string,
+    { rows: unknown[]; read: number; written: number }
+  > = {}
+  for (
+    let query of [
+      'needle thread .comment .limit=2',
+      '.comment (needle|thread)',
+      'needle .comment !extra',
+      'dragon .comment .order=search .limit=1005',
+    ]
+  ) {
+    read = written = 0
+    counting = true
+    let rows = db.query(compile(parse(query), vocab, { extend: [extension] }))
+    counting = false
+    queries[query] = { rows, read, written }
+  }
+  return { ...ranked, queries }
 }

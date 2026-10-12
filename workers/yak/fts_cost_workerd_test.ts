@@ -7,11 +7,35 @@ test('a screened text ranking bounds work beyond its term statistics', async () 
   let res = await fetch(`${workerd().base}/__play_cost/?fts=1`)
   assertEquals(res.status, 200, await res.clone().text())
   let report = await res.json() as ReturnType<typeof ftsCost>
-  console.log('FTS_COST', JSON.stringify(report))
+  console.log(
+    'FTS_COST',
+    JSON.stringify({
+      ...report,
+      queries: Object.fromEntries(
+        Object.entries(report.queries).map((
+          [q, r],
+        ) => [q, { ...r, rows: r.rows.length }]),
+      ),
+    }),
+  )
   assertEquals(report.rows.map((r) => r.entity), ['near', 'far'])
   assert(report.rows[0].snippet.includes('\x01dragon\x02'))
   assertEquals(report.written, 0)
   // Term postings and the broad screen are linear. Excluded matches must not
   // also cost ranking and owner lookups, or repeat MATCH per eligible owner.
   assert(report.read < report.history * 4 + 100, `${report.read} billed rows`)
+  let sparse = report.queries['needle thread .comment .limit=2']
+  assertEquals(sparse.rows, [{ eid: 'far' }, { eid: 'near' }])
+  assertEquals(sparse.written, 0)
+  assert(sparse.read < 100, `${sparse.read} mixed-query billed rows`)
+  assertEquals(report.queries['.comment (needle|thread)'].rows, [
+    { eid: 'near' },
+    { eid: 'far' },
+  ])
+  assertEquals(report.queries['needle .comment !extra'].rows, [{ eid: 'far' }])
+  // Ranking decorates its first 1000 hits, but membership retains every hit.
+  assertEquals(
+    report.queries['dragon .comment .order=search .limit=1005'].rows.length,
+    report.history + 1,
+  )
 })

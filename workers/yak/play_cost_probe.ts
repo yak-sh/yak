@@ -10,6 +10,7 @@ import { statisticsCases } from './statistics_cases_fixture.ts'
 import { directoryLifecycleCost } from './directory_cost_fixture.ts'
 import { gitPushCost } from './git_cost_fixture.ts'
 import { ftsCost } from './fts_cost_fixture.ts'
+import { countCost } from './count_cost_fixture.ts'
 import type { Env } from './env.ts'
 export { Store } from './graph.ts'
 export { GitCostStore } from './git_cost_fixture.ts'
@@ -53,6 +54,9 @@ export class PlayCost {
     }
   }
   async measure(req: Request): Promise<Response> {
+    if (new URL(req.url).searchParams.has('count')) {
+      return Response.json(countCost(this.ctx.storage))
+    }
     if (new URL(req.url).searchParams.has('fts')) {
       return Response.json(ftsCost(this.ctx.storage))
     }

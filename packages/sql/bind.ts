@@ -182,6 +182,9 @@ let byArchetype = (
   missing = false,
 ): Cond | null => {
   if (!ctx.archetypes || !ctx.d.archetype) return null
+  // Bounded owner selections need only keyed component probes. Opening a
+  // cold catalog here would read every unrelated shape before those owners.
+  if (ctx.candidates && !ctx.archetypes.held) return null
   let ids = ctx.archetypes(predicate)
   if (!ids) return null
   let key = ctx.d.archetype(owner)
@@ -940,7 +943,9 @@ let union = (ctx: Ctx, alts: Clause[]): Cond => {
 // the statement already decides it, so testing it again only reads every row
 // twice. Under an OR or a NOT it still decides something, and stays.
 let holding = (where: Cond, known: Cond): Cond =>
-  where === known
+  known.t == 'op' && known.op == 'and'
+    ? known.parts.reduce((where, part) => holding(where, part), where)
+    : where === known
     ? TRUE
     : where.t == 'op' && where.op == 'and'
     ? and(...where.parts.map((p) => holding(p, known)))
@@ -974,6 +979,22 @@ let selection = (ctx: Ctx, test: Cond): Query | undefined => {
     )
   }
   return { t: 'compound', op: 'union', parts: groups }
+}
+
+// Every mandatory owner selection narrows the candidates. Keep conjunctions
+// as intersections, including words matched through different text indexes.
+let intersection = (parts: Query[]): Query => {
+  if (parts.length == 1) return parts[0]
+  let groups = parts.map((q) => select({ cols: [col('id')], from: from(q) }))
+  while (groups.length > ARMS) {
+    groups = cut(groups, ARMS).map((parts) =>
+      select({
+        cols: [col('id')],
+        from: from({ t: 'compound', op: 'intersect', parts }),
+      })
+    )
+  }
+  return { t: 'compound', op: 'intersect', parts: groups }
 }
 
 // The left JOINs for the tables this bind touched, keyed on the row they hang
@@ -1351,6 +1372,9 @@ let conjuncts = (ctx: Ctx, clauses: Clause[]): Cond[] => {
   // time the statement runs.
   let wearing = [...narrowed, ...rest.flatMap((c) => implied(ctx, c))]
     .filter((comp) => facetOf(ctx, present(comp)))
+  // Resolve indexed selections before choosing how to check their facets.
+  // A disjunction can provide candidates even when no component is required.
+  let conditions = new Map(rest.map((c) => [c, clause(ctx, c)]))
   let shape = (!ctx.present || ctx.archetypes?.held) &&
       all.length + none.length > 1
     ? byArchetype(ctx, { all: [...new Set([...all, ...wearing])], none })
@@ -1366,10 +1390,10 @@ let conjuncts = (ctx: Ctx, clauses: Clause[]): Cond[] => {
       ...cs.filter((c) => {
         let f = facetOf(ctx, c)
         return !f?.present || !required.has(f.comp)
-      }).map((c) => clause(ctx, c)),
+      }).map((c) => conditions.get(c) ?? clause(ctx, c)),
     ]
   }
-  return [...narrow, shape, ...rest.map((x) => clause(ctx, x))]
+  return [...narrow, shape, ...conditions.values()]
 }
 
 // The component whose row a value test needs, if it needs one.
@@ -1754,24 +1778,39 @@ let indexedRelation = (
   // A presence table is the fallback, after a bounded indexed predicate.
   // Otherwise `.using .entry.session=X` walks every request in the graph
   // instead of seeking X's entries and checking their using component.
-  root ??= ctx.present && !ctx.candidates ? { comp: ctx.present } : undefined
   let s = rel(from, o)
   if (!root && !ctx.candidates && !ctx.correlated && s.where) {
     let tests = s.where.t == 'op' && s.where.op == 'and'
       ? s.where.parts
       : [s.where]
-    for (let test of tests) {
+    let selected = tests.flatMap((test) => {
       let q = selection(ctx, test)
-      if (!q) continue
-      ctx.candidates = { ...render(q), test }
-      break
+      return q ? [{ q, test }] : []
+    })
+    if (selected.length) {
+      ctx.candidates = {
+        ...render(intersection(selected.map((s) => s.q))),
+        test: and(...selected.map((s) => s.test)),
+      }
     }
   }
+  root ??= ctx.present && !ctx.candidates ? { comp: ctx.present } : undefined
   if (!root) {
     if (!ctx.candidates || ctx.spine || from != ctx.d.spine) return s
     return {
       ...s,
-      where: s.where && holding(s.where, ctx.candidates.test),
+      // A planned presence spine elided its own predicate while binding.
+      // When candidates replace it, check that component by each owner's key.
+      where: and(
+        s.where ? holding(s.where, ctx.candidates.test) : TRUE,
+        ...ctx.present
+          ? [owned({
+            ...ctx,
+            correlated: true,
+            owner: ctx.d.ownerKey('entity'),
+          }, ctx.present)]
+          : [],
+      ),
       from: raw(
         `(${ctx.candidates.sql}) as "${
           ctx.candidates.whole ? 'entity' : '__candidates'
@@ -2019,6 +2058,26 @@ export let bound = (
     }
   }
   let filters = cs.filter((c) => !directive(c) || claims(ctx, c.kind))
+  let count = find<Count>(cs, 'count')
+  // A count of one physical component needs its owners and their graves,
+  // without loading every archetype or joining unused entity columns.
+  let counted = count && !spine && !opts.eids && !ctx.correlated &&
+      (!ctx.visibility || ctx.d.scoped) && !reads.length && filters.length == 1
+    ? facetOf(ctx, filters[0])
+    : null
+  let stored = scope?.dialect ?? ctx.d
+  if (
+    counted?.present &&
+    (stored.source?.(counted.comp) ?? `"${counted.comp}"`) ==
+      `"${counted.comp}"` &&
+    stored.table(counted.comp) == `"${counted.comp}"`
+  ) {
+    return rel(ctx.d.table(counted.comp), {
+      cols: [`'' as value`, 'count(*) as n'],
+      joins: [],
+      where: cond(ctx.d.live(ctx.d.ownerKey(counted.comp))),
+    })
+  }
   // A component page (including the platform's negative listing screen)
   // already has a keyed driving table. No catalog is needed to discover it.
   if (
@@ -2077,7 +2136,6 @@ export let bound = (
   // derived value can depend on another component even when no filter does.
   for (let path of reads) resolveField(ctx, path)
 
-  let count = find<Count>(cs, 'count')
   let distinct = find<Distinct>(cs, 'distinct')
   let tally = find<Tally>(cs, 'tally')
 
