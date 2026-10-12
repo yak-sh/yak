@@ -432,14 +432,15 @@ once and keeps an internal memo under `$XDG_CACHE_HOME/yak/cli` (otherwise
 `$HOME/.cache/yak/cli`). Each command checks the configured plugins and the
 contents of their facets, static dependencies and resolution config before
 reusing it. Changing those inputs rebuilds the memo automatically; a missing,
-damaged or unwritable memo uses ordinary discovery. Nothing needs building or
-running beforehand. Vocabulary factories, selected terminal controls and the
-facets for the process's roles still load their code at runtime. A command
-imports its runtime, selected implementation and those facets together; views
-join that import when the command will draw an answer. Literal imports used to
-derive metadata are tracked too. Imports inside `run` callbacks belong to
-invocation: the memo excludes those callbacks, and the selected command loads
-their current code when it runs.
+damaged or unwritable memo uses ordinary discovery. A memo nothing has read for
+a day, such as a deleted worktree's or a probe config's, goes at the next miss.
+Nothing needs building or running beforehand. Vocabulary factories, selected
+terminal controls and the facets for the process's roles still load their code
+at runtime. A command imports its runtime, selected implementation and those
+facets together; views join that import when the command will draw an answer.
+Literal imports used to derive metadata are tracked too. Imports inside `run`
+callbacks belong to invocation: the memo excludes those callbacks, and the
+selected command loads their current code when it runs.
 
 ```ts
 import { subpaths } from './config.ts'

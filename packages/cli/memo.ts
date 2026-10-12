@@ -3,7 +3,9 @@
 // dependencies cannot be proved leaves the ordinary derivation in charge.
 // Every command asks, so a hit is proved the way a version control index
 // proves a clean tree: by each source's stat as it was read, and by its
-// contents only where that stat moved.
+// contents only where that stat moved. A memo nothing has read for a day (a
+// deleted worktree's, a probe config's, an older version's) goes at the next
+// miss.
 
 /** A source module, or an optional facet of a configured package. */
 export type MemoRoot = string | readonly [plugin: string, facet: string]
@@ -21,6 +23,8 @@ export type MemoFiles = {
   ) => void
   renameSync: (from: string, to: string) => void
   removeSync: (path: string) => void
+  readDirSync: (path: string) => Iterable<{ name: string }>
+  utimeSync: (path: string, atime: Date, mtime: Date) => void
 }
 
 export type MemoOptions = {
@@ -47,6 +51,8 @@ type Record<T> = {
 }
 
 let VERSION = 6
+let HOUR = 3_600_000
+let DAY = 24 * HOUR
 let FILES = ['deno.json', 'deno.jsonc']
 let encoder = new TextEncoder()
 let sha256 = async (text: string): Promise<string> =>
@@ -71,6 +77,26 @@ let packageKey = (s: string): string => {
     : key
 }
 let pathOf = (s: string) => decodeURIComponent(new URL(s).pathname)
+
+/** The memos a miss sweeps: those nothing has read for a day. A hit moves its
+ * memo's time at most hourly, so a memo in use never ages out.
+ *
+ * ```ts
+ * import { assertEquals } from '@std/assert'
+ * let now = Date.parse('2026-10-12T12:00:00Z')
+ * assertEquals(
+ *   idle([
+ *     { name: 'gone.json', at: now - 2 * 86_400_000 },
+ *     { name: 'used.json', at: now - 3_600_000 },
+ *   ], now),
+ *   ['gone.json'],
+ * )
+ * ```
+ */
+export let idle = (
+  entries: readonly { name: string; at: number }[],
+  now: number,
+): string[] => entries.filter((e) => now - e.at > DAY).map((e) => e.name)
 
 // No parser in an ordinary memo hit, and no subprocess in either path.
 import type { ImportSpecifier } from 'es-module-lexer/js'
@@ -243,6 +269,34 @@ export let remember = async <T>(
       } catch { /* A renamed draft is already gone. */ }
     }
   }
+  // A hit says it was read, at most hourly, so a sweep leaves it alone.
+  let seen = () => {
+    try {
+      let at = io.statSync(file).mtime?.getTime()
+      if (at != null && Date.now() - at > HOUR) {
+        let now = new Date()
+        io.utimeSync(file, now, now)
+      }
+    } catch { /* An unrefreshed memo is only rebuilt sooner. */ }
+  }
+  let sweep = () => {
+    try {
+      let entries = []
+      for (let { name } of io.readDirSync(dir)) {
+        let path = `${dir}/${name}`
+        if (path == file) continue
+        try {
+          let at = io.statSync(path).mtime?.getTime()
+          if (at != null) entries.push({ name, at })
+        } catch { /* Another miss swept it first. */ }
+      }
+      for (let name of idle(entries, Date.now())) {
+        try {
+          io.removeSync(`${dir}/${name}`)
+        } catch { /* Another miss swept it first. */ }
+      }
+    } catch { /* Sweeping is optional. */ }
+  }
   try {
     let known: Record<T> = JSON.parse(read(file) ?? 'null')
     if (
@@ -252,7 +306,10 @@ export let remember = async <T>(
       Array.isArray(known.stats) && known.stats.length == known.files.length
     ) {
       let stats = known.files.map(stat)
-      if (stats.every((s, i) => s && s == known.stats[i])) return known.value
+      if (stats.every((s, i) => s && s == known.stats[i])) {
+        seen()
+        return known.value
+      }
       // A stat moved without saying whether its contents did (a checkout, a
       // touch): contents that still agree keep the memo, under the new stats.
       if (known.source == await snapshot(known.files)) {
@@ -444,6 +501,7 @@ export let remember = async <T>(
           source: sourceHash,
           value,
         })
+        sweep()
       }
     } catch { /* Persistence is optional. */ }
   }

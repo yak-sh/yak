@@ -25,25 +25,36 @@ let fixture = (
     if (!files.has(path)) throw absent
     return files.get(path)!
   }
-  // A file's stat moves with its contents, and with a touch alone.
+  // A file's stat moves with its contents, and with a touch alone. A file
+  // written here, or given a time, carries that time instead.
   let touched = new Map<string, number>()
+  let times = new Map<string, number>()
   let io: MemoFiles = {
     readTextFileSync: (path) => (reads.push(path), read(path)),
     statSync: (path) => {
       let text = read(path)
       let at = new Date(
-        Date.parse('2026-01-01') + parseInt(sha256(text).slice(0, 6), 16) +
-          (touched.get(path) ?? 0),
+        times.get(path) ??
+          Date.parse('2026-01-01') + parseInt(sha256(text).slice(0, 6), 16) +
+            (touched.get(path) ?? 0),
       )
       return { size: text.length, mtime: at, ctime: at, ino: 1 }
     },
     mkdirSync: () => {},
-    writeTextFileSync: (path, text) => void files.set(path, text),
+    writeTextFileSync: (path, text) => {
+      files.set(path, text)
+      times.set(path, Date.now())
+    },
     renameSync: (from, to) => {
       files.set(to, read(from))
+      times.set(to, times.get(from) ?? Date.now())
       files.delete(from)
     },
     removeSync: (path) => void files.delete(path),
+    readDirSync: (dir) =>
+      [...files.keys()].filter((p) => p.startsWith(`${dir}/`))
+        .map((p) => ({ name: p.slice(dir.length + 1) })),
+    utimeSync: (path, _, mtime) => void times.set(path, mtime.getTime()),
   }
   let resolve = (name: string) => {
     if (name.startsWith('file:')) return name
@@ -80,6 +91,7 @@ let fixture = (
     opts,
     runs: () => runs,
     touched,
+    times,
     sourcesRead,
   }
 }
@@ -217,6 +229,31 @@ test('changing configuration rebuilds without storing its values', async () => {
     ),
     false,
   )
+})
+
+let DAY = 86_400_000
+let memos = (f: ReturnType<typeof fixture>) =>
+  [...f.files.keys()].filter((p) => p.startsWith('/memo/')).sort()
+
+test('a miss sweeps memos nothing has read for a day', async () => {
+  let f = fixture()
+  f.files.set('/memo/gone.json', '{}')
+  f.times.set('/memo/gone.json', Date.now() - 2 * DAY)
+  f.files.set('/memo/used.json', '{}')
+  f.times.set('/memo/used.json', Date.now() - DAY / 2)
+  await f.get()
+  equal(memos(f).filter((p) => p.endsWith('d.json')), ['/memo/used.json'])
+  equal(memos(f).length, 2)
+})
+
+test('a memo still being read survives the sweep', async () => {
+  let f = fixture()
+  await f.get(undefined, { config: 'one' })
+  let [kept] = memos(f)
+  f.times.set(kept, Date.now() - 2 * DAY)
+  equal((await f.get(undefined, { config: 'one' })).run, 1)
+  equal((await f.get(undefined, { config: 'two' })).run, 2)
+  equal(memos(f).includes(kept), true)
 })
 
 // `type` can also name a runtime value; only the TS type modifiers erase it.
