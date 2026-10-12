@@ -7,6 +7,7 @@ import { sign } from './auth.ts'
 import { door } from './door.ts'
 import { monitor } from './monitor.ts'
 import { delivery } from '@yaks/tracker/remote'
+import type { Comp } from '@yaks/graph'
 
 let space = '00000000-0000-4000-8000-000000000001'
 let other = '00000000-0000-4000-8000-000000000002'
@@ -23,6 +24,65 @@ let request = (path: string, token: string, body?: unknown) =>
       ...body ? { body: JSON.stringify(body) } : {},
     },
   )
+
+let hashIds = await (async () => {
+  let g = fixture()
+  let app = 'a'.repeat(40), bug = 'b'.repeat(40), error = 'c'.repeat(40)
+  await g.ingest(capture(Error('historical failure'), {
+    sink: () => {},
+    eid: error,
+    during: { app },
+  }))
+  await g.drain()
+  await g.graph.apply([{
+    entity: { eid: bug },
+    bug: { fault: 'historical bug' },
+  }], { trusted: true })
+  let route = door(g, platform, secret)
+  let auth = await sign({
+    scope: platform,
+    person: 'box',
+    admin: true,
+    ingest: true,
+    mark: true,
+    exp: Date.now() / 1000 + 60,
+  }, secret)
+  let byApp = await route(request(`/bugs?app=${app}`, auth))
+  let byBug = await route(request(`/bugs?bug=${bug}`, auth))
+  let archived = await route(request('/archive', auth, { bug }))
+  let notified = await route(
+    request('/app-errors', auth, { app, eids: [error], mark: 'notified' }),
+  )
+  let readError = await route(
+    request(
+      `/query?q=${encodeURIComponent(`.entity.eid=${error} .error *`)}`,
+      auth,
+    ),
+  )
+  return {
+    g,
+    app,
+    bug,
+    error,
+    byApp: byApp.status,
+    byBug: byBug.status,
+    archived: archived.status,
+    notified: notified.status,
+    rows: await readError.json(),
+  }
+})()
+test('tracker reads and marks preserve content-addressed global identities', async () => {
+  equal([hashIds.byApp, hashIds.byBug, hashIds.archived, hashIds.notified], [
+    200,
+    200,
+    200,
+    200,
+  ])
+  equal(hashIds.rows[0].entity.eid, hashIds.error)
+  equal((hashIds.rows[0].during as Comp).app, hashIds.app)
+  let rows = await hashIds.g.graph.get([hashIds.bug, hashIds.error])
+  equal(rows.every((row) => row.archived || row.notified), true)
+})
 
 test('tracker doors fail closed for other spaces, expired tickets and nonadmins', async () => {
   let g = fixture()

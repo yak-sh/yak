@@ -1,7 +1,7 @@
 // Only the trusted server queue chooses a store. A message is one complete
 // graph batch: mixed spaces are rejected before any object receives it.
 
-import type { Bundle } from '@yaks/graph'
+import { type Bundle, minted } from '@yaks/graph'
 import { platform } from './core.ts'
 import { traceBatch } from '@yaks/tracker/intake'
 
@@ -11,7 +11,7 @@ export type Message = {
   retry: () => void
 }
 export type Destination = { ingest: (rows: Bundle[]) => Promise<void> }
-let eid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+let uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 export let batch = (body: unknown): { scope: string; rows: Bundle[] } => {
   if (!Array.isArray(body) || !body.length || body.length > 100) {
     throw Error('tracker queue expects 1..100 bundles')
@@ -20,14 +20,17 @@ export let batch = (body: unknown): { scope: string; rows: Bundle[] } => {
   let scopes = new Set<string>()
   let errors = rows.some((row) => row?.error)
   for (let row of rows) {
-    if (!row?.entity || !eid.test(row.entity.eid) || row.$delete || row.$was) {
+    if (
+      !row?.entity || typeof row.entity.eid != 'string' ||
+      !minted(row.entity.eid) || row.$delete || row.$was
+    ) {
       throw Error('tracker queue expects immutable global entities')
     }
     let during = row.during
     let space = during && typeof during == 'object' && 'space' in during
       ? during.space
       : undefined
-    if (space != null && (typeof space != 'string' || !eid.test(space))) {
+    if (space != null && (typeof space != 'string' || !uuid.test(space))) {
       throw Error('tracker space must be a global eid')
     }
     if (row.trace || row.span) {
@@ -39,9 +42,9 @@ export let batch = (body: unknown): { scope: string; rows: Bundle[] } => {
       let span = row.span
       if (
         span && (typeof span != 'object' || !('trace' in span) ||
-          typeof span.trace != 'string' || !eid.test(span.trace) ||
+          typeof span.trace != 'string' || !uuid.test(span.trace) ||
           ('parent' in span && span.parent != null &&
-            (typeof span.parent != 'string' || !eid.test(span.parent))))
+            (typeof span.parent != 'string' || !uuid.test(span.parent))))
       ) {
         throw Error('tracker span references must be global eids')
       }

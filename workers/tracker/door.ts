@@ -5,7 +5,7 @@ import type { TrackerStore } from './core.ts'
 import { authorize } from './auth.ts'
 import { api } from '@yaks/api'
 import { CallError } from '@yaks/tools'
-import { status } from '@yaks/graph'
+import { minted, status } from '@yaks/graph'
 import type { Bundle } from '@yaks/graph'
 import { platform } from './core.ts'
 import { batch } from './queue.ts'
@@ -73,10 +73,10 @@ async (request: Request): Promise<Response> => {
     if (
       !body || typeof body != 'object' || Array.isArray(body) ||
       typeof body.app != 'string' ||
-      !uuid.test(body.app) || !Array.isArray(body.eids) ||
+      !minted(body.app) || !Array.isArray(body.eids) ||
       body.eids.length > 100 ||
       body.eids.some((eid: unknown) =>
-        typeof eid != 'string' || !uuid.test(eid)
+        typeof eid != 'string' || !minted(eid)
       ) ||
       !['notified', 'archived'].includes(body.mark)
     ) {
@@ -127,7 +127,7 @@ async (request: Request): Promise<Response> => {
       return json({ error: 'limit must be 1..100' }, 400)
     }
     for (let key of ['app', 'bug']) {
-      if (params.has(key) && !uuid.test(params.get(key)!)) {
+      if (params.has(key) && !minted(params.get(key)!)) {
         return json({ error: `${key} must be a global eid` }, 400)
       }
     }
@@ -165,7 +165,7 @@ async (request: Request): Promise<Response> => {
     if (
       !body || typeof body != 'object' || Array.isArray(body) ||
       Object.keys(body).some((key) => key != 'bug') ||
-      typeof body.bug != 'string' || !uuid.test(body.bug)
+      typeof body.bug != 'string' || !minted(body.bug)
     ) {
       return json({ error: 'bug global eid required' }, 400)
     }

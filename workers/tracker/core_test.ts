@@ -2,7 +2,7 @@
 // and effect handlers used by Durable Objects, without a platform kernel.
 
 import { equal, ok, test } from '@yaks/testing'
-import { type Comp, graph } from '@yaks/graph'
+import { type Bundle, type Comp, graph } from '@yaks/graph'
 import { ram } from '@yaks/ram'
 import { capture } from '@yaks/tracker/report'
 import { options, platform, store, vocab } from './core.ts'
@@ -18,6 +18,79 @@ let records = (scope?: string, id = occurrence) =>
     during: scope ? { space: scope } : {},
   })
 let fixture = () => store(ram(vocab, options), { sink: () => {} })
+
+let legacy = (id: string, source = 'yak/git') =>
+  capture(Error('legacy failure'), {
+    eid: id,
+    sink: () => {},
+    tags: { migration: 'exception/1', store: source },
+    during: { entity: id },
+    .../^[a-f0-9]{40}$/.test(id) ? { commit: id } : {},
+  })
+let deliver = async (g: ReturnType<typeof fixture>, bodies: Bundle[][]) => {
+  let ack = 0, retry = 0
+  await consume(
+    bodies.map((body) => ({
+      body,
+      ack: () => {
+        ack++
+      },
+      retry: () => {
+        retry++
+      },
+    })),
+    () => g,
+    async () => {},
+  )
+  await g.drain()
+  return {
+    ack,
+    retry,
+    rows: await g.graph.read('.error *'),
+    bugs: await g.bugs(),
+  }
+}
+
+for (let id of ['a'.repeat(40), 'b'.repeat(64)]) {
+  let body = legacy(id)
+  let outcome = await deliver(fixture(), [body, body])
+  test(`queued content-addressed errors keep their identity and count retries once (${id.length == 40 ? 'commit' : 'blob'})`, () => {
+    equal([outcome.ack, outcome.retry], [2, 0])
+    equal(outcome.rows.length, 1)
+    let [row] = outcome.rows
+    equal(row.entity.eid, id)
+    equal((row.during as Comp).entity, id)
+    equal((row.error as Comp).commit, id.length == 40 ? id : undefined)
+    equal((row.error as Comp).tags, {
+      migration: 'exception/1',
+      store: 'yak/git',
+    })
+    equal((outcome.bugs[0].bug as Comp).hits, 1)
+    equal(body[0].entity.eid, id)
+  })
+}
+
+let unchanged = legacy(occurrence)
+let unchangedOutcome = await deliver(fixture(), [unchanged, unchanged])
+test('UUID migration occurrence identities remain unchanged', () => {
+  equal([unchangedOutcome.ack, unchangedOutcome.retry], [2, 0])
+  equal(unchangedOutcome.rows[0].entity.eid, occurrence)
+})
+
+let invalidNamed = records(undefined, 'ordinary-named-id')
+let missingStore = legacy('unscoped-named-id')
+;(missingStore[0].error as Comp).tags = { migration: 'exception/1' }
+let guarded = legacy('c'.repeat(40))
+guarded[0].$was = { error: { bug: null } }
+let invalidOutcome = await deliver(fixture(), [
+  invalidNamed,
+  missingStore,
+  guarded,
+])
+test('ordinary and migration word identities and mutable captures still retry', () => {
+  equal([invalidOutcome.ack, invalidOutcome.retry], [0, 3])
+  equal(invalidOutcome.rows, [])
+})
 
 let failedStorage = ram(vocab, options)
 await graph({ vocab, storage: failedStorage }).apply([
