@@ -2,7 +2,7 @@
 // A person's inbox: lanes of policy threads, a search, each thread opened in
 // place, a new conversation, and page state and words that outlive a remount.
 import { test } from '@yaks/testing'
-import { assertEquals } from '@std/assert'
+import { assertEquals, assertStringIncludes } from '@std/assert'
 import { act } from 'preact/test-utils'
 import { type Bundle, identityEid } from '@yaks/graph'
 import { parse } from '@yaks/query'
@@ -98,7 +98,15 @@ test('a person’s inbox lanes policy threads, shows the newest words and answer
       'Take the train.',
     ])
     assertEquals(texts(seen.root, '.Inbox_Reason'), ['blocking · decision'])
+    assertStringIncludes(
+      seen.root.querySelector('[data-thread]')!.textContent!,
+      'Expand thread blocking · decision at 2026-10-02T13:00:00Z',
+    )
     await expand(seen.root)
+    assertStringIncludes(
+      seen.root.querySelector('[data-thread]')!.textContent!,
+      'Collapse thread blocking · decision at 2026-10-02T13:00:00Z',
+    )
     assertEquals(seen.root.querySelector('[data-decision]') != null, true)
     assertEquals(
       seen.root.querySelector('.Notes_Children')?.textContent?.includes(

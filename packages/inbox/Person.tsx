@@ -125,11 +125,11 @@ let ThreadRow = (
             title={t.unread ? 'unread' : 'read'}
           />
           {open ? 'Collapse thread' : 'Expand thread'}
-        </Button>
+        </Button>{' '}
         <Frame.Reason>
           {t.blocking ? 'blocking · ' : ''}
           {t.reason}
-        </Frame.Reason>
+        </Frame.Reason>{' '}
         <Stamp>{io.when(t.at)}</Stamp>
         {t.latest.eid != t.eid && show(io, t.latest.eid, 'Inbox.List.Tile')}
       </div>
