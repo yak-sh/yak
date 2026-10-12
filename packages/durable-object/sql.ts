@@ -17,13 +17,17 @@
 //   That is what `Driver.tx` exists for.
 
 import {
+  as,
   type Driver,
+  fn,
   type Param,
   render,
   type Row,
+  select,
   shape,
   statement,
   type Stmt,
+  writing,
 } from '@yaks/sql'
 import { during, measure as traced, peek } from '@yaks/trace'
 
@@ -197,6 +201,15 @@ export let driver = (
   query({ t: 'pragma', name: 'foreign_keys', value: 'on' })
   return {
     query,
+    run: (s) => {
+      query(s)
+      // Cursor rowsWritten includes indexes and triggers, whereas the writer
+      // needs rows this statement affected. changes() answers that without
+      // materializing RETURNING rows, and its scalar query reads no table.
+      return writing(s)
+        ? Number(query(select({ cols: [as(fn('changes'), 'n')] }))[0].n)
+        : 0
+    },
     tx: (body) => durable.transactionSync(body),
     statistics: durable.sql.databaseSize == null
       ? undefined
