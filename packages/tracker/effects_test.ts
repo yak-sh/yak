@@ -2,7 +2,7 @@ import { equal, test } from '@yaks/testing'
 import { capture } from './report.ts'
 import { comp } from './model.ts'
 import { fixture, vocab } from './fixture_test.ts'
-import { computed } from './vocab.ts'
+import { derived } from './vocab.ts'
 import { preparedStore } from '../sqlite/testing.ts'
 
 for (let backend of ['ram', 'sqlite']) {
@@ -13,7 +13,9 @@ for (let backend of ['ram', 'sqlite']) {
         undefined,
         (g) =>
           delayed ? { ...g, read: (q, o) => Promise.resolve(g.read(q, o)) } : g,
-        backend == 'sqlite' ? preparedStore(vocab, { computed }) : undefined,
+        backend == 'sqlite'
+          ? preparedStore(vocab, { derived: derived() })
+          : undefined,
       )
       let rows = Array.from(
         { length: 12 },
