@@ -21,7 +21,12 @@
 // project's from the start: a new letter to the project's address (a platform
 // alert, a person's feedback), an answer to a tracker's letter (another graph
 // sent it, so this one never kept it), or to a letter that arrived here.
-// Nobody else could ever hear it. A knock at the project is held the same
+// Nobody else could ever hear it. An address filed under the project
+// (@yaks/project's `filed.project` on an entity wearing @yaks/mail's `email`)
+// is the project's too, since an entity wears one address: hello@yaks.app,
+// where every platform letter asks to be answered, is filed under the
+// platform's project, which wears hello@bot.yak.sh. A knock at the project is
+// held the same
 // way: the graph's own news for whoever works for it, such as a bug the
 // tracker opened (@yaks/heal knocks with the task it files).
 //
@@ -199,6 +204,20 @@ export let knocked = (projects?: Eid[]): And =>
     absent(NOTIFIED),
   )
 
+/** The addresses filed under these projects: entities wearing `email` that
+ * are not projects themselves. A letter to one reached the project. */
+let addresses = async (
+  graph: Pick<Graph, 'vocab' | 'read'>,
+  projects: Eid[],
+): Promise<Eid[]> =>
+  graph.vocab.comp('email') && graph.vocab.prop('filed', 'project')
+    ? (await graph.read(and(
+      present('email'),
+      absent('project'),
+      eq('filed.project', value(projects)),
+    ))).map((b) => b.entity.eid)
+    : []
+
 /** What is held for these projects, unsaid: every knock at one, and each
  * letter that answers no letter, or one no session wrote, or one a session
  * other than `session` wrote and is over. */
@@ -212,7 +231,8 @@ export let held = async (
     ? await graph.read(and(...knocked(projects).clauses, every()))
     : []
   if (!graph.vocab.comp('mail')) return knocks
-  let mail = await graph.read(and(...arrived(projects).clauses, every()))
+  let reach = [...projects, ...await addresses(graph, projects)]
+  let mail = await graph.read(and(...arrived(reach).clauses, every()))
   if (!mail.length) return knocks
   let to = (b: Bundle) => str(comp(b, 'mail').reply_to)
   let answered = [...new Set(mail.map(to).filter(Boolean))]

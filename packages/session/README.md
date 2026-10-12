@@ -561,7 +561,10 @@ its start hook says the directory, and `session_context` records the common
 persona of the checkout holding it (@yaks/persona's `carried`), the one its
 instruction files say. A session wearing no persona hears only its own replies.
 A letter sent with `mail send --about <project>` goes out from the project's
-address, so its answer is routed to the project (@yaks/mail).
+address, so its answer is routed to the project (@yaks/mail). An entity wears
+one address, so a project's other addresses are filed under it: a letter to an
+entity wearing `email` with `filed.project` naming the project (hello@yaks.app,
+filed under the platform's project) is held for the project the same way.
 
 Nothing starts a session for a held reply; it waits for one. A managed spawn in
 the project's checkout, with the thread as its brief and the project's common

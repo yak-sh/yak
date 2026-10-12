@@ -148,6 +148,19 @@ await desk.apply([
   { entity: { eid: 're-alert' }, mail: { ...re, reply_to: 'alert' } },
   { entity: { eid: 'stray' }, mail: { ...re, in_reply_to: 'b1@tracker' } },
   { entity: { eid: 'out' }, mail: { ...re, in_reply_to: 'b2' }, deliver: {} },
+  // A letter to an address filed under the project, as hello@yaks.app is,
+  // and one to an address filed nowhere, which nobody hears.
+  { entity: { eid: 'hello' }, email: { address: 'hello@example.app' } },
+  { entity: { eid: 'hello' }, filed: { project: 'p' } },
+  { entity: { eid: 'loose' }, email: { address: 'loose@example.app' } },
+  {
+    entity: { eid: 'to-hello' },
+    mail: { from: 'a@example.com', target: 'hello' },
+  },
+  {
+    entity: { eid: 'to-loose' },
+    mail: { from: 'a@example.com', target: 'loose' },
+  },
   // The graph's own news for the project: a bug the tracker opened.
   {
     entity: { eid: 'knock-p' },
@@ -180,6 +193,7 @@ for (
         'reply-ended-2',
         'reply-stopped-1',
         'stray',
+        'to-hello',
       ],
       'a letter or knock that reached the project, or a reply whose letter’s writer is over or was no session, is heard by a session of the project or of a project above it',
     ],
@@ -199,4 +213,6 @@ test('a held reply may reach a session of its project or of one above it', async
   equal((await heirs(desk, [atP])).sort(), ['next'])
   equal((await heirs(desk, [atSub])).sort(), ['nearby', 'next'])
   equal(await heirs(desk, await desk.get(['knock-p'])), ['next'])
+  equal(await heirs(desk, await desk.get(['to-hello'])), ['next'])
+  equal(await heirs(desk, await desk.get(['to-loose'])), [])
 })
