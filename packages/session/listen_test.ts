@@ -134,9 +134,9 @@ for (
     wrote('stopped', 'p'),
   ].flat()
 ) await desk.apply([bundle])
-// Letters no session wrote: an alert that arrived at the project, the owner's
-// answer to it, his answer to a letter another graph sent (this one never kept
-// it), and an answer going out, which is nobody's to hear.
+// Letters no session wrote to: an alert that arrived at the project, the
+// owner's answer to it, his answer to a letter another graph sent (this one
+// never kept it), and an answer going out, which is nobody's to hear.
 let re = { from: 'owner@example.com', target: 'p' }
 await desk.apply([
   {
@@ -165,13 +165,14 @@ for (
     [
       'next',
       [
+        'alert',
         're-alert',
         'reply-ended-1',
         'reply-ended-2',
         'reply-stopped-1',
         'stray',
       ],
-      'once a letter’s writer is over, or when no session wrote it, a session of the project its reply reached hears it, or of a project above it',
+      'a letter that reached the project, or a reply whose letter’s writer is over or was no session, is heard by a session of the project or of a project above it',
     ],
     [
       'nearby',

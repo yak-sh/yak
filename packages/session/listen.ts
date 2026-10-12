@@ -17,15 +17,16 @@
 // sub-project's work is done under its parent's persona (@yaks/project). A
 // session wearing no persona has no project and hears only its own replies.
 //
-// A reply to a letter no session wrote is the project's from the start: an
-// answer to a tracker's letter or a platform alert (another graph sent it, so
-// this one never kept it), or to a letter that arrived here. Nobody else could
-// ever hear it.
+// A letter no session wrote to, or whose writer can no longer hear it, is the
+// project's from the start: a new letter to the project's address (a platform
+// alert, a person's feedback), an answer to a tracker's letter (another graph
+// sent it, so this one never kept it), or to a letter that arrived here.
+// Nobody else could ever hear it.
 //
 // Nothing starts a session when none comes: a held reply waits for one. That
 // is where a managed spawn will plug in, once T-95308 lifts the ban on
 // starting sessions (C-121250) and the owner picks its provider, model and
-// spend: an owing (D-121352) on the rows {@link held} reads, a reply nobody
+// spend: an owing (D-121352) on the rows {@link held} reads, a letter nobody
 // else can hear and that nobody has heard, starting @yaks/spawn's run in the
 // project's checkout with the thread as its brief and the project's common
 // persona as its own. The session it starts is then a session of the project,
@@ -54,7 +55,6 @@ import {
   fields,
   type Input,
   list,
-  or,
   present,
   walk,
 } from '@yaks/query'
@@ -150,16 +150,16 @@ export let worksFor = async (
   return home ? await family(graph, home, '->') : []
 }
 
-/** The sessions that may hear these replies once they are held: each wearing
- * a persona whose home is a project a reply reached, or a project that one is
- * filed under. Whether a reply is held yet is {@link held}'s to say. */
+/** The sessions that may hear these letters once they are held: each wearing
+ * a persona whose home is a project a letter reached, or a project that one is
+ * filed under. Whether a letter is held yet is {@link held}'s to say. */
 export let heirs = async (
   graph: Pick<Graph, 'vocab' | 'read'>,
-  replies: Bundle[],
+  letters: Bundle[],
 ): Promise<Eid[]> => {
   if (!graph.vocab.prop('persona', 'home')) return []
   let reached = [
-    ...new Set(replies.map((b) => str(comp(b, 'mail').target)).filter(Boolean)),
+    ...new Set(letters.map((b) => str(comp(b, 'mail').target)).filter(Boolean)),
   ]
   if (!reached.length) return []
   let homes = [
@@ -172,31 +172,32 @@ export let heirs = async (
   )).map((b) => b.entity.eid)
 }
 
-/** The replies that reached these projects (any, left out), unsaid: arrivals
- * (no `deliver`) answering a letter, whether or not this graph kept it. */
-export let answers = (projects?: Eid[]): And =>
+/** The letters that reached these projects (any, left out), unsaid: every
+ * arrival (no `deliver`), a new letter or an answer, whether or not this graph
+ * kept the letter it answers. */
+export let arrived = (projects?: Eid[]): And =>
   and(
     present('mail'),
     absent('deliver'),
     projects ? eq('mail.target', value(projects)) : present('mail.target'),
-    or(present('mail.reply_to'), present('mail.in_reply_to')),
     absent(NOTIFIED),
   )
 
-/** The replies held for these projects, unsaid: each answers a letter no
- * session wrote, or one a session other than `session` wrote and is over. */
+/** The letters held for these projects, unsaid: each answers no letter, or
+ * one no session wrote, or one a session other than `session` wrote and is
+ * over. */
 export let held = async (
   graph: Pick<Graph, 'vocab' | 'read' | 'get'>,
   session: Eid,
   projects: Eid[],
 ): Promise<Bundle[]> => {
   if (!projects.length || !graph.vocab.comp('mail')) return []
-  let replies = await graph.read(and(...answers(projects).clauses, every()))
-  if (!replies.length) return []
+  let mail = await graph.read(and(...arrived(projects).clauses, every()))
+  if (!mail.length) return []
   let to = (b: Bundle) => str(comp(b, 'mail').reply_to)
-  let letters = [...new Set(replies.map(to).filter(Boolean))]
+  let answered = [...new Set(mail.map(to).filter(Boolean))]
   let writer = new Map(
-    (letters.length ? await graph.get(letters, ['created']) : [])
+    (answered.length ? await graph.get(answered, ['created']) : [])
       .map((b) => [b.entity.eid, str(comp(b, 'created').via)]),
   )
   let vias = [...new Set(writer.values())].filter(Boolean)
@@ -213,7 +214,7 @@ export let held = async (
   }
   let wrote = new Set(sessions.map((s) => s.entity.eid))
   let by = (b: Bundle) => writer.get(to(b)) ?? ''
-  return replies.filter((b) => !wrote.has(by(b)) || gone.has(by(b)))
+  return mail.filter((b) => !wrote.has(by(b)) || gone.has(by(b)))
 }
 
 /** Who wrote an item: the run it came through, else the identity. */
