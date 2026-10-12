@@ -2,7 +2,8 @@
 // graph must never change or delete the row that gives that URL its headers.
 
 import { after } from '@yaks/fp'
-import { type Comp, hook, type Plugin } from '@yaks/graph'
+import type { Comp } from '@yaks/graph/bundle'
+import { hook, type Plugin } from '@yaks/graph/plugin'
 import { dead } from '@yaks/graph/bundle'
 import { Refused } from '@yaks/graph/errors'
 import { type Representation, represents } from './representation.ts'

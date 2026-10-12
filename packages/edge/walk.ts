@@ -21,7 +21,8 @@
 
 import { and, eq, type Input, list, present } from '@yaks/query'
 import { after, each } from '@yaks/fp'
-import { type Eid, type Storage } from '@yaks/graph'
+import type { Eid } from '@yaks/graph/bundle'
+import type { Storage } from '@yaks/graph/storage'
 import type { Vocab } from '@yaks/vocab'
 import { EDGE, relations } from './relations.ts'
 

@@ -1,11 +1,12 @@
 // Hook eligibility follows the batch as earlier hooks and cascades rewrite it.
 import { equal, ok, test, throws } from '@yaks/testing'
 import { record } from '@yaks/trace'
-import { graph, hook } from './mod.ts'
+import { graph } from './mod.ts'
+import { hook } from '@yaks/graph/plugin'
 import { books, memory } from './testing.ts'
 
 test('hook keys see earlier rewrites and null removals before tracing', async () => {
-  let seen: unknown[] = [], always = 0
+  let seen: unknown[] = [], contexts: unknown[] = [], always = 0
   let g = graph({
     vocab: books,
     storage: memory(),
@@ -24,7 +25,9 @@ test('hook keys see earlier rewrites and null removals before tracing', async ()
     }, {
       name: 'books',
       hooks: {
-        normalize: hook(['book'], (b) => {
+        normalize: hook(['book'], (b, _tx, err, context) => {
+          equal(err, undefined)
+          contexts.push(context?.graph)
           seen.push(b[0].book)
           return b
         }),
@@ -42,6 +45,7 @@ test('hook keys see earlier rewrites and null removals before tracing', async ()
   equal(added.result[0].book, { pages: 3 })
   await g.apply([{ entity: { eid: 'idle' }, book: null }])
   equal(seen, [{ pages: 3 }, null])
+  equal(contexts, [g, g])
   equal(always, 3)
 })
 

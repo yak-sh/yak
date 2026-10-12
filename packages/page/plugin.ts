@@ -14,7 +14,8 @@
 // trustworthy than a plugin claiming it: a page is named by its address whether
 // or not anybody loaded this module.
 
-import { type Bundle, type Comp, hook, type Plugin } from '@yaks/graph'
+import type { Bundle, Comp } from '@yaks/graph/bundle'
+import { hook, type Plugin } from '@yaks/graph/plugin'
 import { pageDoc, WEB } from './comp.ts'
 import { canon } from './url.ts'
 

@@ -7,7 +7,7 @@
 // something only a loaded vocabulary knows. So a graph is built in two steps —
 // load the documents, then pass that same vocabulary to the plugin.
 
-import { hook, type Plugin } from '@yaks/graph'
+import { hook, type Plugin } from '@yaks/graph/plugin'
 import type { Vocab } from '@yaks/vocab'
 import { EDGE, names } from './relations.ts'
 import { derive } from './eid.ts'

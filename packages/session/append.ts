@@ -1,7 +1,9 @@
 /** Transactional transcript ordering. Omit seq to append; explicit positions are
  * reserved for import and must be positive, unique integers. */
 import { after } from '@yaks/fp'
-import { type Bundle, type Comp, type Graph, type Hook } from '@yaks/graph'
+import type { Bundle, Comp } from '@yaks/graph/bundle'
+import type { Graph } from '@yaks/graph'
+import type { Hook } from '@yaks/graph/plugin'
 import { parse } from '@yaks/query'
 import { UnknownSession } from './unknown.ts'
 

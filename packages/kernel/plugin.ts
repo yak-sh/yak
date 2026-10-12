@@ -1,7 +1,7 @@
 // The package as a graph plugin: the kernel's words, plus the hook that keeps
 // who finished a piece of work on its `completed` mark.
 
-import { hook, type Plugin } from '@yaks/graph'
+import { hook, type Plugin } from '@yaks/graph/plugin'
 import { completing } from './completion.ts'
 import { kernelDoc } from './vocab.ts'
 

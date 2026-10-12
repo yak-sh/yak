@@ -3,7 +3,7 @@
 // What a task is filed under, and the board that is a saved filter over the
 // filing, belong to @yaks/project — and so does the guard over a board's query.
 
-import { hook, type Plugin } from '@yaks/graph'
+import { hook, type Plugin } from '@yaks/graph/plugin'
 import { deciding } from './decision.ts'
 import { taskDoc } from './comp.ts'
 

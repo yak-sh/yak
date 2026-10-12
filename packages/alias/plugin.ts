@@ -6,7 +6,7 @@
 // (`plugins: [keys(vocab), aliases()]`). What is left is exactly what is
 // particular to a name: how you write one, and that a name resolves to an id.
 
-import { hook, type Plugin } from '@yaks/graph'
+import { hook, type Plugin } from '@yaks/graph/plugin'
 import { ALIAS, aliasDoc } from './comp.ts'
 import { split } from './sugar.ts'
 import { addressed } from './refs.ts'

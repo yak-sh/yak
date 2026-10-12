@@ -9,7 +9,7 @@
 // vocabulary to the plugin.
 
 import { after } from '@yaks/fp'
-import { hook, type Plugin } from '@yaks/graph'
+import { hook, type Plugin } from '@yaks/graph/plugin'
 import type { Vocab } from '@yaks/vocab'
 import { BOARD, FILED, projectDoc } from './comp.ts'
 import { guarding } from './guard.ts'

@@ -6,7 +6,8 @@
 // substitute references in `precondition` and restore text in `commit`. `$blob`
 // carries the prepared references and original text through the batch.
 
-import { type Bundle, type Comp, hook, type Plugin } from '@yaks/graph'
+import type { Bundle, Comp } from '@yaks/graph/bundle'
+import { hook, type Plugin } from '@yaks/graph/plugin'
 import { after, each } from '@yaks/fp'
 import type { Vocab } from '@yaks/vocab'
 import { bodies, type Body } from './props.ts'

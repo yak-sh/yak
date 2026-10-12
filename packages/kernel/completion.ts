@@ -9,7 +9,8 @@
 // component, or the `$actor.by` the `apply()` call carries, or null.
 
 import { after } from '@yaks/fp'
-import { type Comp, type Hook } from '@yaks/graph'
+import type { Comp } from '@yaks/graph/bundle'
+import type { Hook } from '@yaks/graph/plugin'
 
 export let completing: Hook = (bundles, tx) => {
   let writes = bundles.filter((b) => b.completed != null)

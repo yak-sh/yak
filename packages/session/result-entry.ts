@@ -1,6 +1,7 @@
 /** Session association is a rule, not a responsibility of the tool executor. */
 import { after } from '@yaks/fp'
-import { type Bundle, type Comp, type Hook } from '@yaks/graph'
+import type { Bundle, Comp } from '@yaks/graph/bundle'
+import type { Hook } from '@yaks/graph/plugin'
 
 /** Add transcript membership only when absent. Sequencing is a separate rule.
  * Execution diagnostics use output.source to identify the same call.
