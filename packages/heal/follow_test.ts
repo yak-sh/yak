@@ -20,6 +20,7 @@ import { projectDoc } from '@yaks/project'
 import { sessionDoc } from '@yaks/session'
 import { toolsDoc } from '@yaks/tools/vocab'
 import { mailDoc } from '@yaks/mail/vocab'
+import { notifyDoc } from '@yaks/notify/vocab'
 import { modelDoc } from '@yaks/model'
 import { processDoc } from '@yaks/process'
 import { watches } from '@yaks/client'
@@ -52,6 +53,7 @@ let vocab = loadVocab([
   pick(modelDoc, 'provider', 'model'),
   pick(processDoc, 'process', 'exit'),
   pick(healDoc, 'fixer', 'nofix'),
+  pick(notifyDoc, 'knock'),
 ], [kernelKeywords, edgeKeywords])
 
 let trackerVocab = loadVocab([
@@ -212,6 +214,9 @@ test('the tracker follower files task, evidence edge and fixer atomically', asyn
   ok(String(comp(task, 'doc').body).includes(`${url}/${bug}`))
   ok(!task.bug && !String(comp(task, 'doc').body).includes('stack'))
   equal(comp((await tracker.get([bug]))[0], 'bug').hits, 7)
+  let knock = written.find((row) => row.knock)!
+  equal(comp(knock, 'knock').target, project)
+  ok(String(comp(knock, 'doc').body).includes('TypeError: missing row'))
   fresh.close()
 })
 
@@ -223,6 +228,7 @@ test('a second follower and a replay leave the box untouched', async () => {
   await replayed.replay()
   equal(replayed.commits, [])
   equal(await count(replayed.g, 'task'), 1)
+  equal(await count(replayed.g, 'knock'), 1)
   equal(await count(replayed.g, 'fixer'), 1)
   replayed.close()
 })

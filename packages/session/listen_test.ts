@@ -4,6 +4,7 @@ import { type Bundle, type Graph, graph } from '@yaks/graph'
 import { idKeywords } from '@yaks/id'
 import { kernelDoc } from '@yaks/kernel/vocab'
 import { mailDoc } from '@yaks/mail/vocab'
+import { notifyDoc } from '@yaks/notify/vocab'
 import { toolsDoc } from '@yaks/tools/vocab'
 import { personaDoc } from '@yaks/persona/vocab'
 import { projectDoc } from '@yaks/project/vocab'
@@ -82,6 +83,7 @@ let office = loadVocab([
   kernelDoc,
   docDoc,
   mailDoc,
+  notifyDoc,
   sessionDoc,
   toolsDoc,
   personaDoc,
@@ -146,6 +148,12 @@ await desk.apply([
   { entity: { eid: 're-alert' }, mail: { ...re, reply_to: 'alert' } },
   { entity: { eid: 'stray' }, mail: { ...re, in_reply_to: 'b1@tracker' } },
   { entity: { eid: 'out' }, mail: { ...re, in_reply_to: 'b2' }, deliver: {} },
+  // The graph's own news for the project: a bug the tracker opened.
+  {
+    entity: { eid: 'knock-p' },
+    knock: { target: 'p' },
+    doc: { title: '', body: 'BuildFailed: the build of yak failed' },
+  },
 ])
 
 let hears = async (session: string) =>
@@ -166,13 +174,14 @@ for (
       'next',
       [
         'alert',
+        'knock-p',
         're-alert',
         'reply-ended-1',
         'reply-ended-2',
         'reply-stopped-1',
         'stray',
       ],
-      'a letter that reached the project, or a reply whose letter’s writer is over or was no session, is heard by a session of the project or of a project above it',
+      'a letter or knock that reached the project, or a reply whose letter’s writer is over or was no session, is heard by a session of the project or of a project above it',
     ],
     [
       'nearby',
@@ -189,4 +198,5 @@ test('a held reply may reach a session of its project or of one above it', async
   let [atP, atSub] = await desk.get(['reply-ended-1', 'reply-ended-2'])
   equal((await heirs(desk, [atP])).sort(), ['next'])
   equal((await heirs(desk, [atSub])).sort(), ['nearby', 'next'])
+  equal(await heirs(desk, await desk.get(['knock-p'])), ['next'])
 })

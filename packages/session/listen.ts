@@ -21,7 +21,9 @@
 // project's from the start: a new letter to the project's address (a platform
 // alert, a person's feedback), an answer to a tracker's letter (another graph
 // sent it, so this one never kept it), or to a letter that arrived here.
-// Nobody else could ever hear it.
+// Nobody else could ever hear it. A knock at the project is held the same
+// way: the graph's own news for whoever works for it, such as a bug the
+// tracker opened (@yaks/heal knocks with the task it files).
 //
 // Nothing starts a session when none comes: a held reply waits for one. That
 // is where a managed spawn will plug in, once T-95308 lifts the ban on
@@ -150,8 +152,12 @@ export let worksFor = async (
   return home ? await family(graph, home, '->') : []
 }
 
-/** The sessions that may hear these letters once they are held: each wearing
- * a persona whose home is a project a letter reached, or a project that one is
+// The project a held item reached: a letter's target, or a knock's.
+let reachedBy = (b: Bundle): string =>
+  str(comp(b, 'mail').target) || str(comp(b, 'knock').target)
+
+/** The sessions that may hear these items once they are held: each wearing
+ * a persona whose home is a project an item reached, or a project that one is
  * filed under. Whether a letter is held yet is {@link held}'s to say. */
 export let heirs = async (
   graph: Pick<Graph, 'vocab' | 'read'>,
@@ -159,7 +165,7 @@ export let heirs = async (
 ): Promise<Eid[]> => {
   if (!graph.vocab.prop('persona', 'home')) return []
   let reached = [
-    ...new Set(letters.map((b) => str(comp(b, 'mail').target)).filter(Boolean)),
+    ...new Set(letters.map(reachedBy).filter(Boolean)),
   ]
   if (!reached.length) return []
   let homes = [
@@ -183,17 +189,31 @@ export let arrived = (projects?: Eid[]): And =>
     absent(NOTIFIED),
   )
 
-/** The letters held for these projects, unsaid: each answers no letter, or
- * one no session wrote, or one a session other than `session` wrote and is
- * over. */
+/** The knocks at these projects (any project, left out), unsaid. */
+export let knocked = (projects?: Eid[]): And =>
+  and(
+    present('knock'),
+    projects
+      ? eq('knock.target', value(projects))
+      : present('knock.target.project'),
+    absent(NOTIFIED),
+  )
+
+/** What is held for these projects, unsaid: every knock at one, and each
+ * letter that answers no letter, or one no session wrote, or one a session
+ * other than `session` wrote and is over. */
 export let held = async (
   graph: Pick<Graph, 'vocab' | 'read' | 'get'>,
   session: Eid,
   projects: Eid[],
 ): Promise<Bundle[]> => {
-  if (!projects.length || !graph.vocab.comp('mail')) return []
+  if (!projects.length) return []
+  let knocks = graph.vocab.comp('knock')
+    ? await graph.read(and(...knocked(projects).clauses, every()))
+    : []
+  if (!graph.vocab.comp('mail')) return knocks
   let mail = await graph.read(and(...arrived(projects).clauses, every()))
-  if (!mail.length) return []
+  if (!mail.length) return knocks
   let to = (b: Bundle) => str(comp(b, 'mail').reply_to)
   let answered = [...new Set(mail.map(to).filter(Boolean))]
   let writer = new Map(
@@ -214,7 +234,10 @@ export let held = async (
   }
   let wrote = new Set(sessions.map((s) => s.entity.eid))
   let by = (b: Bundle) => writer.get(to(b)) ?? ''
-  return mail.filter((b) => !wrote.has(by(b)) || gone.has(by(b)))
+  return [
+    ...knocks,
+    ...mail.filter((b) => !wrote.has(by(b)) || gone.has(by(b))),
+  ]
 }
 
 /** Who wrote an item: the run it came through, else the identity. */

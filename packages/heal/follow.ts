@@ -18,6 +18,29 @@ let comp = (row: Bundle | undefined, name: string) =>
 let str = (value: unknown) => value == null ? '' : String(value)
 let moment = (value: unknown) => Date.parse(str(value))
 
+// A new bug is news for whoever works for the project: a knock at it, which a
+// session of the project hears on its bus (@yaks/session). It lands with the
+// task, so a replay that finds the task knocks no second time.
+let knock = (
+  g: Graph,
+  project: string | undefined,
+  bug: string,
+  title: string,
+  where: string,
+): Bundle[] =>
+  project && g.vocab.comp('knock')
+    ? [{
+      entity: { eid: identityEid('heal_knock', [bug]) },
+      knock: { target: project },
+      doc: {
+        title: '',
+        body: `New bug: ${
+          title.length > 240 ? `${title.slice(0, 240)}…` : title
+        } (${where})`,
+      },
+    }]
+    : []
+
 /** Reconcile a tracker answer. The caller retries either store's failed writes. */
 export let follow = (
   g: Graph,
@@ -91,21 +114,23 @@ export let follow = (
             .href
         })`
         : `${url}'s tracker: \`yak bug show ${evidence} --source ${url}\``
+      let title = str(comp(bug, 'doc')?.title).split('\n')[0] ||
+        'Fix tracker bug'
       task = {
         entity: { eid },
         task: {},
-        doc: {
-          title: str(comp(bug, 'doc')?.title).split('\n')[0] ||
-            'Fix tracker bug',
-          body: `Fix the bug recorded at ${where}.`,
-        },
+        doc: { title, body: `Fix the bug recorded at ${where}.` },
         filed: { ...(project ? { project } : {}), priority: 1 },
         $was: { doc: { title: null } },
       }
       return {
         task,
         bug: evidence,
-        writes: [task, link(eid, 'about', evidence)],
+        writes: [
+          task,
+          link(eid, 'about', evidence),
+          ...knock(g, project, evidence, title, where),
+        ],
       }
     })
 }
