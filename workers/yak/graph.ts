@@ -314,7 +314,6 @@ import {
 // A JSON answer's headers, for one the write log kept as text.
 let JSONED = { headers: { 'content-type': 'application/json' } }
 import { apex, url } from './host.ts'
-import { activation } from './activation.ts'
 import {
   documented,
   install,
@@ -786,7 +785,6 @@ installContext({
 })
 
 export class Store {
-  #activation?: ReturnType<typeof activation>
   #load: Load
   #ctx: State
   #vocab!: Vocab
@@ -2946,32 +2944,6 @@ export class Store {
    * sockets it inherited.
    */
   fetch(request: Request): Promise<Response> {
-    if (new URL(request.url).pathname == '/_activate') {
-      if (request.headers.get('x-yak-activation') != '1') {
-        return Promise.resolve(
-          Response.json({ success: false }, { status: 403 }),
-        )
-      }
-      let storage = this.#ctx.storage
-      if (!storage.get || !storage.put) {
-        return Promise.resolve(
-          Response.json({ success: false }, { status: 503 }),
-        )
-      }
-      this.#activation ??= activation(
-        {
-          get: (key) => storage.get!(key),
-          put: (key, value) => storage.put!(key, value),
-        },
-        this.#bind.CF_ACCOUNT ?? '',
-        fetch,
-        (stage) =>
-          defect(new Error('Cloudflare activation could not be confirmed'), {
-            request: `platform activation: ${stage}`,
-          }),
-      )
-      return this.#activation(request)
-    }
     return this.#useScope.run(
       {
         kernel: request.headers.get('x-yak-kernel') == '1',

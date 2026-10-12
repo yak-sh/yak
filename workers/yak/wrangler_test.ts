@@ -38,25 +38,6 @@ import {
 
 let apiFailure =
   'A request to the Cloudflare API (/accounts/a/workers/scripts/yak) failed.'
-
-test('an unreadable serving ancestry refuses activation', () => {
-  let head = 'a'.repeat(40), sha = 'b'.repeat(40)
-  assert(superseded({
-    head,
-    tip: head,
-    changed: false,
-    live: [{ sha, ahead: null }],
-  }))
-  assertEquals(
-    superseded({
-      head,
-      tip: head,
-      changed: false,
-      live: [{ sha, ahead: false }],
-    }),
-    null,
-  )
-})
 let malformed = (status: number) =>
   `Received a malformed response from the API\n<!DOCTYPE html>\nGET /accounts/a/workers/scripts/yak/subdomain -> ${status} Gateway Timeout`
 let responseLog = (status: number) =>

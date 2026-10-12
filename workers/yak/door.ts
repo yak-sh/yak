@@ -121,7 +121,6 @@ export let ACCEPTED = 'x-yak-accepted'
 export let APP_JSON = 'x-yak-app-json'
 
 let VOUCH = [
-  'x-yak-activation',
   IDEMPOTENCY,
   ACCEPTED,
   APP_JSON,

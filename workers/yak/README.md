@@ -170,17 +170,6 @@ the watched source and no live version is ahead of it. An app-only push starts
 no replacement build and does not supersede the last one. A build that loses the
 race to newer Worker source deploys nothing and says why in its log.
 
-The **activation gate** is one Durable Object per platform Worker, reached at
-`/_activate`. Wrangler's local API proxy checks ancestry against the serving
-deployment and sends that deployment's id with each activation. The gate
-serializes the deployment-id check and the complete Cloudflare activation. A
-changed id requires a fresh read and ancestry check; an older build cannot
-activate after a newer one. Both version activations and combined uploads with
-containers or migrations pass through the gate. An unreadable serving commit
-refuses activation. An uncertain activation keeps its durable mark across
-restarts until Cloudflare's serving deployment proves its outcome. Credentials
-pass through the activation request and are never stored.
-
 The sandbox tools use the Cloudflare provider in
 [@yaks/machine](../../packages/machine/README.md#cloudflare-containers).
 `sandbox.ts` checks allowances, supplies the caller's scoped grant, and counts

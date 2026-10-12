@@ -159,9 +159,6 @@ let serve = async (req: Request, env: Env, r: Route) => {
     return bound(env.APPS, apps.fetch, env).fetch(req)
   }
   let path = r.path
-  if (path == '/_activate') {
-    return (await import('./activation.ts')).fetchActivation(req, env)
-  }
   if (path == '/icons.svg') {
     return new Response(sprite(), {
       headers: {
