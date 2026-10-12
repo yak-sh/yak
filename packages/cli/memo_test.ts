@@ -20,12 +20,23 @@ let fixture = (
     ['/source/words.json', '{"title":"one"}'],
   ])
   let absent = new Deno.errors.NotFound('absent')
+  let reads: string[] = []
   let read = (path: string) => {
     if (!files.has(path)) throw absent
     return files.get(path)!
   }
+  // A file's stat moves with its contents, and with a touch alone.
+  let touched = new Map<string, number>()
   let io: MemoFiles = {
-    readTextFileSync: read,
+    readTextFileSync: (path) => (reads.push(path), read(path)),
+    statSync: (path) => {
+      let text = read(path)
+      let at = new Date(
+        Date.parse('2026-01-01') + parseInt(sha256(text).slice(0, 6), 16) +
+          (touched.get(path) ?? 0),
+      )
+      return { size: text.length, mtime: at, ctime: at, ino: 1 }
+    },
     mkdirSync: () => {},
     writeTextFileSync: (path, text) => void files.set(path, text),
     renameSync: (from, to) => {
@@ -55,7 +66,22 @@ let fixture = (
     inputs: unknown = {},
   ) => remember(inputs, roots, make, opts)
   let memo = () => [...files.keys()].find((p) => p.startsWith('/memo/'))!
-  return { files, io, get, memo, opts, runs: () => runs }
+  // The sources a call read: the memo itself is not one.
+  let sourcesRead = async (call: () => Promise<unknown>) => {
+    reads.length = 0
+    await call()
+    return reads.filter((p) => p.startsWith('/source/'))
+  }
+  return {
+    files,
+    io,
+    get,
+    memo,
+    opts,
+    runs: () => runs,
+    touched,
+    sourcesRead,
+  }
 }
 
 let reusable = fixture()
@@ -80,8 +106,22 @@ let changed = async (source?: string) => {
   equal(f.files.size, 5)
 }
 
-test('transitive source content invalidates a command memo without timestamps', () =>
-  changed())
+test('transitive source content invalidates a command memo', () => changed())
+
+test('a memo whose sources kept their stats is reused without reading them', async () => {
+  let f = fixture()
+  await f.get()
+  equal(await f.sourcesRead(() => f.get()), [])
+  equal(f.runs(), 1)
+})
+
+test('a touched source whose contents agree keeps the memo', async () => {
+  let f = fixture()
+  await f.get()
+  f.touched.set('/source/words.json', 1)
+  equal(await f.get(), { title: 'one', run: 1 })
+  equal(await f.sourcesRead(() => f.get()), [])
+})
 
 test('literal dynamic source content invalidates a command memo', () =>
   changed('let words = await import("./words.json")'))
@@ -119,15 +159,6 @@ test('a damaged command memo is derived again', async () => {
   let f = fixture()
   await f.get()
   f.files.set(f.memo(), '{')
-  equal(await f.get(), { title: 'one', run: 2 })
-})
-
-test('a changed memo payload must still agree with its checksum', async () => {
-  let f = fixture()
-  await f.get()
-  let record = JSON.parse(f.files.get(f.memo())!)
-  record.value.title = 'damaged'
-  f.files.set(f.memo(), JSON.stringify(record))
   equal(await f.get(), { title: 'one', run: 2 })
 })
 

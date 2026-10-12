@@ -1,12 +1,18 @@
 // Derived command declarations, kept between processes while their inputs and
 // sources agree. A memo is disposable: an unreadable memo or a source whose
 // dependencies cannot be proved leaves the ordinary derivation in charge.
+// Every command asks, so a hit is proved the way a version control index
+// proves a clean tree: by each source's stat as it was read, and by its
+// contents only where that stat moved.
 
 /** A source module, or an optional facet of a configured package. */
 export type MemoRoot = string | readonly [plugin: string, facet: string]
 
 export type MemoFiles = {
   readTextFileSync: (path: string) => string
+  statSync: (
+    path: string,
+  ) => Pick<Deno.FileInfo, 'size' | 'mtime' | 'ctime' | 'ino'>
   mkdirSync: (path: string, options: Deno.MkdirOptions) => void
   writeTextFileSync: (
     path: string,
@@ -33,12 +39,14 @@ type Record<T> = {
   version: number
   roots: string[]
   files: string[]
+  /** each file's stat as its contents were read, '' where they could still
+   * change without moving it */
+  stats: string[]
   source: string
-  hash: string
   value: T
 }
 
-let VERSION = 5
+let VERSION = 6
 let FILES = ['deno.json', 'deno.jsonc']
 let encoder = new TextEncoder()
 let sha256 = async (text: string): Promise<string> =>
@@ -114,9 +122,9 @@ let directory = (): string | undefined => {
 /** Reuse JSON data while the configuration and every literal source dependency
  * are unchanged. Static imports and literal dynamic imports are tracked; a
  * caller supplies roots for modules chosen by runtime callbacks. Callbacks
- * projected out of the data keep their imports for invocation. Source contents,
- * including missing files, are checked rather
- * than timestamps. Only the digest of `inputs` is kept; callers project away
+ * projected out of the data keep their imports for invocation. A source agrees
+ * while its stat has not moved, or, once it has, while its contents (or its
+ * absence) still do. Only the digest of `inputs` is kept; callers project away
  * closures and host capabilities before returning their data. */
 export let remember = async <T>(
   inputs: unknown,
@@ -202,22 +210,56 @@ export let remember = async <T>(
       throw e
     }
   }
+  // A file's size, times and inode, which every write to it moves. One written
+  // within the clock's last tick could be written again without moving them,
+  // so it has no stat to trust ('').
+  let stat = (path: string): string => {
+    try {
+      let { size, mtime, ctime, ino } = io.statSync(path)
+      let at = [mtime?.getTime(), ctime?.getTime()]
+      return at.some((t) => t == null || Date.now() - t < 2)
+        ? ''
+        : `${size} ${at.join(' ')} ${ino}`
+    } catch (e) {
+      if (e instanceof Deno.errors.NotFound) return 'absent'
+      throw e
+    }
+  }
   let fingerprint = (files: Iterable<[string, string | null]>) =>
     digest(Array.from(files, ([path, text]) => framed(path, text)).join(''))
   let snapshot = (files: string[]) =>
     fingerprint(files.map((path) => [path, read(path)]))
+  let keep = (record: Record<T>) => {
+    let draft = `${file}.${crypto.randomUUID()}`
+    try {
+      io.mkdirSync(dir, { recursive: true, mode: 0o700 })
+      io.writeTextFileSync(draft, JSON.stringify(record), { mode: 0o600 })
+      io.renameSync(draft, file)
+    } catch {
+      /* Persistence is optional. */
+    } finally {
+      try {
+        io.removeSync(draft)
+      } catch { /* A renamed draft is already gone. */ }
+    }
+  }
   try {
     let known: Record<T> = JSON.parse(read(file) ?? 'null')
     if (
       known?.version == VERSION && 'value' in known &&
       JSON.stringify(known.roots) == JSON.stringify(identities) &&
       Array.isArray(known.files) && known.files.length > 0 &&
-      known.hash ==
-        await digest(
-          JSON.stringify([known.roots, known.files, known.source, known.value]),
-        ) &&
-      known.source == await snapshot(known.files)
-    ) return known.value
+      Array.isArray(known.stats) && known.stats.length == known.files.length
+    ) {
+      let stats = known.files.map(stat)
+      if (stats.every((s, i) => s && s == known.stats[i])) return known.value
+      // A stat moved without saying whether its contents did (a checkout, a
+      // touch): contents that still agree keep the memo, under the new stats.
+      if (known.source == await snapshot(known.files)) {
+        keep({ ...known, stats })
+        return known.value
+      }
+    }
   } catch (error) {
     if (error instanceof Deno.errors.PermissionDenied) return await make()
     // A damaged memo is rebuilt.
@@ -241,6 +283,7 @@ export let remember = async <T>(
   if (!writable) return await make()
 
   let sources = new Map<string, string | null>()
+  let stats = new Map<string, string>()
   type Imports = { [key: string]: string }
   type Manifest = {
     imports?: Imports
@@ -251,8 +294,12 @@ export let remember = async <T>(
   let locks = new Map<string, { [specifier: string]: string }>()
   let scanned = new Set<string>()
   let ancestors = new Set<string>()
+  // Its stat before its contents: a write after the read moves the stat kept.
   let watch = (path: string) => {
-    if (!sources.has(path)) sources.set(path, read(path))
+    if (!sources.has(path)) {
+      stats.set(path, stat(path))
+      sources.set(path, read(path))
+    }
     return sources.get(path)!
   }
   let ancestry = (specifier: string) => {
@@ -385,33 +432,20 @@ export let remember = async <T>(
   // Derivation errors always reach the caller, regardless of cache failures.
   let value = await make()
   if (sourceHash !== undefined) {
-    let draft = `${file}.${crypto.randomUUID()}`
     try {
       // A source changed while derivation ran: the next call must derive too.
       let dependencies = [...sources.keys()]
-      if (sourceHash != await snapshot(dependencies)) {
-        return value
+      if (sourceHash == await snapshot(dependencies)) {
+        keep({
+          version: VERSION,
+          roots: identities,
+          files: dependencies,
+          stats: dependencies.map((path) => stats.get(path)!),
+          source: sourceHash,
+          value,
+        })
       }
-      let record: Record<T> = {
-        version: VERSION,
-        roots: identities,
-        files: dependencies,
-        source: sourceHash,
-        hash: await digest(
-          JSON.stringify([identities, dependencies, sourceHash, value]),
-        ),
-        value,
-      }
-      io.mkdirSync(dir, { recursive: true, mode: 0o700 })
-      io.writeTextFileSync(draft, JSON.stringify(record), { mode: 0o600 })
-      io.renameSync(draft, file)
-    } catch {
-      /* Persistence is optional. */
-    } finally {
-      try {
-        io.removeSync(draft)
-      } catch { /* A renamed draft is already gone. */ }
-    }
+    } catch { /* Persistence is optional. */ }
   }
   return value
 }
