@@ -131,7 +131,6 @@ test('since accepts positive seconds, minutes, hours or days', () => {
       ['91d', 7_862_400],
     ] as const
   ) assertEquals(duration(input), expected)
-  assertEquals(duration(), 604_800)
   for (let input of ['0', '-1', '1.5m', 'forever']) {
     assertThrows(() => duration(input), CallError, '--since')
   }
@@ -178,29 +177,28 @@ let bugsIn = ({ said }: Awaited<ReturnType<typeof listed>>) =>
   said.slice(1, -1).map((line) => line.split('  ')[3])
 
 // Exercise filtering and pagination through the deployed tracker's signed door.
-let recent = await listed()
+let all = await listed()
 let narrow = await listed('90m'), wide = await listed('14d')
 let denied = await listed(undefined, {
   remote: { ...config.remote, secret: 'wrong' },
 }).then(() => undefined, (error) => error)
 
-test('errors defaults to every unresolved bug seen in the last week, newest first', () => {
-  assertEquals(bugsIn(recent), ids.slice(0, 105))
+test('errors defaults to every unresolved bug however old, newest first', () => {
+  assertEquals(bugsIn(all), [ids[108], ...ids.slice(0, 106)])
   assertEquals(
-    recent.said[0],
+    all.said[0],
     'COUNT  FIRST SEEN  LAST SEEN  BUG  PLACE  MESSAGE',
   )
   assertEquals(
-    recent.said[1].endsWith('TypeError: Invalid redirect value'),
+    all.said[2].endsWith('TypeError: Invalid redirect value'),
     true,
   )
-  assertEquals(recent.said.at(-1), '5565 occurrences, 105 bugs')
-  assertEquals(recent.noted[0].includes('105 unresolved bugs'), true)
-  assertEquals(recent.noted[0].includes('604800s'), true)
-  assertEquals(recent.noted[0].includes('lifetime'), true)
+  assertEquals(all.said.at(-1), '5780 occurrences, 107 bugs')
+  assertEquals(all.noted[0].includes('107 unresolved bugs'), true)
+  assertEquals(all.noted[0].includes('lifetime'), true)
 })
 
-test('errors since narrows or widens the unresolved bug window', () => {
+test('errors since optionally narrows unresolved bugs by last seen', () => {
   assertEquals(bugsIn(narrow), ids.slice(0, 1))
   assertEquals(bugsIn(wide), ids.slice(0, 106))
 })

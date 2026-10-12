@@ -271,12 +271,12 @@ An account’s credential is a connection in the CLI’s graph, never a token fi
 has carried, even after its deployment ages out of Cloudflare’s history. This
 conservatively includes failed builds. An inferred commit or incomplete
 migration history cannot authorize rollback. `errors` reads every unresolved
-platform bug (not resolved or archived) last seen in the preceding 7 days,
-newest first, through the tracker's signed door. `--since` narrows or widens
-that window; the header counts the matching bugs and each line gives lifetime
-counts. The tracker connection in this box's config supplies the URL and signing
-key. `tail` watches live traffic, using the box's GNU `timeout` to stop Wrangler
-and its launcher together.
+platform bug (not resolved or archived), however old, newest first, through the
+tracker's signed door. There is no time window by default; `--since` optionally
+narrows by last seen. The header counts the matching bugs and each line gives
+lifetime counts. The tracker connection in this box's config supplies the URL
+and signing key. `tail` watches live traffic, using the box's GNU `timeout` to
+stop Wrangler and its launcher together.
 
 `revert` requires main to match its remote, gates a fresh worktree, and uses the
 same primitive as `task land` to publish. It re-gates after a rebase, checks the
