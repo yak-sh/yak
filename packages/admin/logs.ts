@@ -254,7 +254,7 @@ export let errors = async (
     after = cursor
   }
   note(
-    `Tracker yaks.app: ${rows.length} unresolved bugs (not resolved or archived)${seen}, newest first; counts and first seen cover each bug's lifetime`,
+    `Tracker: ${rows.length} unresolved bugs from yaks.app and the box (not resolved or archived)${seen}, newest first; counts and first seen cover each bug's lifetime`,
   )
   out('COUNT  FIRST SEEN  LAST SEEN  BUG  PLACE  MESSAGE')
   for (let row of rows) {

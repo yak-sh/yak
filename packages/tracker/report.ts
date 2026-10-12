@@ -99,30 +99,73 @@ export let scrub = (rows: Bundle[]): Bundle[] =>
     return out
   })
 
+// This module's own frames, which every stack taken here begins with.
+let here = new URL(import.meta.url).pathname
+
+let json = (value: object): string => {
+  try {
+    return (JSON.stringify(value) ?? String(value)).slice(0, 1000)
+  } catch {
+    return String(value)
+  }
+}
+
+/** What a thrown value says it is. An Error says so itself. Any other object
+ * (a refusal's `{error, message}`, a plain `{code, …}`) says its own name and
+ * message, or its JSON, never `[object Object]`; it carries no stack, so the
+ * stack is where it was reported from. A string or number is its message.
+ *
+ * ```ts
+ * import { equal } from '@yaks/testing'
+ * import { described } from '@yaks/tracker/report'
+ *
+ * equal(described({ error: 'Refused', message: 'no' })?.type, 'Refused')
+ * equal(described({ id: 7 })?.value, '{"id":7}')
+ * equal(described('broken'), undefined)
+ * ```
+ */
+export let described = (
+  error: unknown,
+): { type: string; value: string; stack?: string } | undefined => {
+  if (error instanceof Error) {
+    return {
+      type: error.name,
+      value: error.message,
+      ...error.stack ? { stack: error.stack } : {},
+    }
+  }
+  if (!error || typeof error != 'object') return undefined
+  let own = error as Record<string, unknown>
+  let named = [own.name, own.error, own.code]
+    .find((v): v is string => typeof v == 'string' && v != '')
+  let stack = (new Error().stack ?? '').split('\n')
+    .filter((line) => !line.includes(here)).slice(1).join('\n')
+  return {
+    type: named ?? error.constructor?.name ?? 'Object',
+    value: typeof own.message == 'string' ? own.message : json(error),
+    ...stack ? { stack: `${named ?? 'Object'}\n${stack}` } : {},
+  }
+}
+
 export let capture = (error: unknown, context: Context): Bundle[] => {
-  let thrown = error instanceof Error
+  let shown = described(error)
   let row: Bundle = {
     entity: { eid: context.eid ?? crypto.randomUUID() },
     ...context.actor ? { $actor: context.actor } : {},
     error: {
       at: context.at ?? new Date().toISOString(),
       level: context.level ?? 'error',
-      ...!thrown ? { message: String(error) } : {},
+      ...error instanceof Error
+        ? {}
+        : { message: shown ? `${shown.type}: ${shown.value}` : String(error) },
       ...context.fault ? { fault: context.fault } : {},
       ...context.commit ? { commit: context.commit } : {},
       ...context.version != null ? { version: context.version } : {},
       ...context.environment ? { environment: context.environment } : {},
       ...context.tags ? { tags: context.tags } : {},
     },
-    ...error instanceof Error
-      ? {
-        exception: {
-          type: error.name,
-          value: error.message,
-          ...error.stack ? { stack: error.stack } : {},
-          mechanism: context.mechanism ?? 'catch',
-        },
-      }
+    ...shown
+      ? { exception: { ...shown, mechanism: context.mechanism ?? 'catch' } }
       : {},
     ...context.during ? { during: context.during } : {},
     ...context.breadcrumbs

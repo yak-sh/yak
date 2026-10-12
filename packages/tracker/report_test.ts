@@ -10,7 +10,8 @@ import {
   report,
   spool,
 } from './report.ts'
-import { comp } from './model.ts'
+import { comp, str, title } from './model.ts'
+import { faultOf } from './fault.ts'
 import { fixture } from './fixture_test.ts'
 import { intake } from './service.ts'
 import { runs as mail } from '@yaks/mail/tools'
@@ -85,6 +86,16 @@ test('capture preserves provenance, scrubs request secrets and bounds breadcrumb
   equal(comp(rows[1], 'request').url, 'https://host/path')
   ok(!comp(rows[1], 'request').headers && !comp(rows[1], 'request').body)
   equal((comp(rows[0], 'breadcrumbs').items as unknown[]).length, 20)
+})
+
+test('a thrown object reports its contents and the place that reported it', () => {
+  let reportedHere = (value: unknown) => capture(value, { sink: () => {} })[0]
+  let refusal = reportedHere({ error: 'Refused', message: 'bug.fault moved' })
+  let plain = reportedHere({ id: 7 })
+  equal(title(refusal), 'Refused: bug.fault moved')
+  equal(title(plain), 'Object: {"id":7}')
+  ok(str(comp(refusal, 'exception').stack).includes('reportedHere'))
+  ok(faultOf(refusal) != faultOf(plain))
 })
 
 test('queue, spool and post transport the same reporter eids', async () => {
