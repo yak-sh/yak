@@ -13,7 +13,6 @@
 // the rest of the spine, so a store that has installed already has it.
 
 import {
-  catalogue,
   col,
   type Driver,
   effect,
@@ -102,9 +101,11 @@ export let PRINTED = 'schema:'
 export let printed = (driver: Driver, print: string): boolean =>
   kept(driver, PRINTED + print) != null
 
-// A key's value, read without assuming the table is there yet.
+// A key's value, read without assuming the table is there yet. The table is
+// asked after by name (`table_info`, empty for one that is not there) rather
+// than found in the whole catalogue, which a store reads on every wake.
 let kept = (driver: Driver, k: string): string | undefined =>
-  catalogue(driver).some((o) => o.name == META)
+  driver.query({ t: 'pragma', name: 'table_info', arg: META }).length
     ? meta(driver).get(k)
     : undefined
 

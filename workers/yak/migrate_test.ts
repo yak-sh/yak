@@ -126,6 +126,21 @@ test('a Store retires an old build identity index on its next schema wake', asyn
   assertEquals((await moved.query('.build&*', APP)).length, 2)
 })
 
+test('a Store an older release opened is brought to its schema again, though its print is recorded', async () => {
+  let ctx = state()
+  await newer(ctx, 'ada/vale').query('.build&*', APP)
+  let indexes = () =>
+    catalogue(db(ctx), { type: 'index' })
+      .filter((i) => i.sql != null).map((i) => i.name).sort()
+  let stood = indexes()
+  // The release before prints, a rollback away, retires an index and keeps
+  // only its own stamp.
+  run(ctx, { t: 'drop', kind: 'index', name: stood[0], ifExists: true })
+  keep(ctx, 'schema', 'older schema')
+  await newer(ctx, 'ada/vale').query('.build&*', APP)
+  assertEquals(indexes(), stood)
+})
+
 // A Store over the object, as a new incarnation, driven through its own doors.
 let newer = (ctx: State, name: string) => {
   let store = new Store(

@@ -169,7 +169,7 @@ export {
   unfit,
   unresolved,
 } from './ddl.ts'
-export { EPOCH, epoch, epochAt, type Meta, meta } from './meta.ts'
+export { EPOCH, epoch, epochAt, type Meta, meta, printed } from './meta.ts'
 export { decoded, isJsonb, jsonIn, jsonOut, projected } from './jsonb.ts'
 export {
   compSql,
@@ -953,6 +953,14 @@ export let storage = (
 }
 
 export * from './migration.ts'
-export { add, follow, grow, lacking, printOf } from './follow.ts'
+export {
+  add,
+  follow,
+  forget,
+  grow,
+  lacking,
+  printFor,
+  printOf,
+} from './follow.ts'
 
 export { doom } from './doom.ts'

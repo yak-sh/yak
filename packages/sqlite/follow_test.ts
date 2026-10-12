@@ -4,7 +4,7 @@ import { col, type CreateTable, lit, select, table } from '@yaks/sql'
 import { open } from './db.ts'
 import { columns } from './physical.ts'
 import { storage } from './mod.ts'
-import { add, follow, lacking, printOf } from './follow.ts'
+import { add, follow, forget, lacking, printOf } from './follow.ts'
 import { storage as readStore } from './read-store.ts'
 import { parse } from '@yaks/query'
 import { loadVocab } from '@yaks/vocab'
@@ -45,6 +45,22 @@ test('a file follows its schema once per print, adding what it lacks', () => {
   assertEquals(db.query(select({ cols: [col('n')], from: table('log') })), [
     { n: 0 },
   ])
+})
+
+test('an unfinished pass leaves its print for the next opener, and so does forget', () => {
+  let db = open(':memory:')
+  let store = storage(db, vocab)
+  let print = printOf(store.print(), [])
+  let passes = 0
+  let at = (done: boolean) =>
+    follow(db, print, () => {
+      passes++
+      store.install()
+      return done
+    })
+  assertEquals([at(false), at(true), at(true), passes], [true, true, false, 2])
+  forget(db, print)
+  assertEquals([at(true), passes], [true, 3])
 })
 
 test('a reader reads a property no writer has added a column for as null', () => {

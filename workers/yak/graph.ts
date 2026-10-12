@@ -129,8 +129,13 @@ import {
 } from '@yaks/sql'
 import {
   FIT,
+  follow,
+  forget,
   identity as inspectIdentity,
   inspect as inspectStorage,
+  printed,
+  printFor,
+  printOf,
   schema,
   storage as sqliteStorage,
 } from '@yaks/sqlite'
@@ -401,13 +406,15 @@ let preparing = (kind: keyof typeof configs): Promise<Prepared> => {
 /** What a store raises out of its words (`#build`): the words, whether it is
  * one of the platform's own two stores rather than an app, what its storage
  * reads a stored value through, which properties are searched, and the schema
- * as one word. */
+ * as one word: its print (@yaks/sqlite `follow`), and the stamp an older
+ * release kept in `yak_kv`, which a rollback still reads. */
 type Shape = {
   words: ReturnType<typeof storeWords>
   vocab: Vocab
   own: boolean
   derived: Derived
   searchable: Field[]
+  print: string
   stamp: string
   ddl: Stmt[]
 }
@@ -446,20 +453,22 @@ export let shapeOf = (name: string, declared: string | null): Shape => {
   let searchable = fields(vocab)
   // The blob table first: the `doc_value` view and the search triggers read a
   // body's text out of it, so it has to be standing before they are.
-  let ddl = [
-    ...blobSchema(),
-    ...schema(vocab, derived),
+  let after = [
     ...ftsSchema(searchable, read),
     ...vectorSchema(),
     ...(vocab.comp('_tx') ? journalDdl() : []),
   ]
-  // With the revision of the fitting that brings standing tables to it
-  // (@yaks/sqlite `FIT`), which reads what it changes off the tables: a store
-  // an older fitting left behind installs once more when that learns more.
+  let ddl = [...blobSchema(), ...schema(vocab, derived), ...after]
+  let beside = [...blobSchema(), ...after]
+  // The print is the box's (packages/cli/host.ts): the storage's own print,
+  // which carries the revision of the fitting that brings standing tables to
+  // it (@yaks/sqlite `FIT`), and every statement beside it. The stamp is the
+  // same schema in the shape an older release kept, for a rollback to find.
+  let print = printOf(printFor(vocab, derived), beside)
   let stamp = sha256(
     [FIT, ...ddl.map((s) => render(s).sql)].join('\n'),
   )
-  let shape = { words, vocab, own, derived, searchable, stamp, ddl }
+  let shape = { words, vocab, own, derived, searchable, print, stamp, ddl }
   cache.set(key, shape)
   if (shapes.size > SHAPES) shapes.delete(shapes.keys().next().value!)
   return shape
@@ -1068,20 +1077,35 @@ export class Store {
     }
   }
 
-  #schema(vocab: Vocab, stamp: string, name: string) {
+  // A store follows its vocabulary through its print, as the box does
+  // (@yaks/sqlite `follow`, D-121389): a wake whose print the store recorded
+  // runs no DDL, and one whose print is new adds what is missing and records
+  // it. An unnamed object raises nothing yet; its first named request picks
+  // its kind.
+  //
+  // The release before prints kept only the stamp, and a rollback can still
+  // run it; it installs over whatever a print stands for. So until it can no
+  // longer run, the stamp decides when the pass runs: where it is not this
+  // one, the print is forgotten and the pass runs again, and where it is, a
+  // print the store lacks is recorded with no pass. Each pass writes the stamp.
+  #schema({ vocab, print, stamp }: Shape, name: string) {
     let held = this.#get('schema')
-    if (!(this.#get('name') || held) || held == stamp) return
-    // Install only changed definitions. Unrelated words must not discard
-    // search indexes or audit every entity on the request that discovers them.
-    lifecycleColumns(this.#sql, vocab)
-    erect(this.#sql, blobSchema())
-    if (vocab.comp('_tx')) erect(this.#sql, journalDdl())
-    let unfit = install(this.#sql, vocab, blobRead(vocab))
-    for (let e of unfit) defect(e, { request: 'schema fit', store: name })
-    if (!unfit.length) {
+    if (!(this.#get('name') || held)) return
+    if (held && held != stamp) forget(this.#sql, print)
+    follow(this.#sql, print, () => {
+      if (held == stamp) return
+      // Install only changed definitions. Unrelated words must not discard
+      // search indexes or audit every entity on the request that discovers
+      // them.
+      lifecycleColumns(this.#sql, vocab)
+      erect(this.#sql, blobSchema())
+      if (vocab.comp('_tx')) erect(this.#sql, journalDdl())
+      let unfit = install(this.#sql, vocab, blobRead(vocab))
+      for (let e of unfit) defect(e, { request: 'schema fit', store: name })
+      if (unfit.length) return false
       watchEmbedding(statements(this.#sql), texts(vocab, blobRead(vocab)))
       this.#put('schema', stamp)
-    }
+    })
   }
 
   #build() {
@@ -1113,7 +1137,7 @@ export class Store {
       name,
       this.#get('vocab'),
     )
-    let { vocab, own, derived, searchable, stamp } = shape
+    let { vocab, own, derived, searchable, print } = shape
     this.#lensMove = lensRule(name, declaration, (path) => {
       let [comp, prop] = path.split('.')
       return prop ? !!vocab.prop(comp, prop) : !!vocab.comp(comp)
@@ -1137,7 +1161,7 @@ export class Store {
     // An unnamed object raises nothing yet. Its first named request selects
     // the store kind before boot, so an app's tables never land in a newborn
     // directory or Git store. `#learn` rebuilds when later metadata changes.
-    this.#schema(vocab, stamp, name)
+    this.#schema(shape, name)
     let app = this.#get('app')
     // Each incarnation binds declared effects to its host capabilities.
     // An effect writes back through the kernel's own door — a new batch
@@ -1243,7 +1267,7 @@ export class Store {
             // minted, while an app's entities are pointed at by the eid its client
             // minted and never by a number, so nothing mints one for them.
             number: numbered(vocab),
-            schemaReady: () => this.#get('schema') == stamp,
+            schemaReady: () => printed(drive, print),
             extend,
             // A body is stored as its address (@yaks/blob `store: "blob"`), so the
             // reads and the `doc_value` view resolve it as prose. The FTS schema
@@ -4363,11 +4387,10 @@ export class Store {
           try {
             this.#tx(() => {
               prepare()
-              let { vocab, stamp } = shapeOf(
+              this.#schema(
+                shapeOf(this.#get('name') ?? '', JSON.stringify(doc)),
                 this.#get('name') ?? '',
-                JSON.stringify(doc),
               )
-              this.#schema(vocab, stamp, this.#get('name') ?? '')
               throw rollback
             })
           } catch (e) {

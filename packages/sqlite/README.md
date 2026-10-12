@@ -587,6 +587,22 @@ try {
 }
 ```
 
+### Following a composed schema
+
+A host that writes a file brings it to everything the file needs as it opens:
+the store's own statements and every statement beside them (blob storage,
+migration control, a plugin's tables, the full-text indexes). Their **print** is
+`printOf(store.print(), beside)`; `printFor(vocab, derived?, file?)` says what
+`store.print()` would, for a host that composes its print before it binds a
+store. `follow(driver, print, pass)` runs nothing where the file has recorded
+the print (`printed(driver, print)`, a `server_meta` row `schema:<print>`), and
+otherwise runs `pass` and records the print, unless `pass` answers false for
+something it left undone. `add(driver, stmts)` is the pass for statements that
+only add. `forget(driver, print)` makes the next opener run the pass again, for
+a host whose file something that keeps no print may have changed. A reader binds
+`lacking(driver, vocab)`, which reads a column the file does not have yet as
+null.
+
 ## The storage layout
 
 - `entity`: integer `id`, public `eid`, optional `num`, and

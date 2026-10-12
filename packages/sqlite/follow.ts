@@ -29,6 +29,15 @@ import { tables } from './layout.ts'
 export let printOf = (store: string, stmts: Stmt[]): string =>
   sha256([store, ...stmts.map((s) => render(s).sql)].join(';\n'))
 
+/** What `Store.print` says, known from the vocabulary alone: for a host that
+ * composes its print before it binds the store it will open with it, the way
+ * a yaks.app store keeps one print per vocabulary it has seen. */
+export let printFor = (
+  vocab: Vocab,
+  derived: Derived = {},
+  file = false,
+): string => plan(vocab, derived, file).print
+
 // A column as `add column` takes it onto a standing table: SQLite refuses a
 // key or a unique column there, a NOT NULL without a literal default, and a
 // default that is an expression. The CHECK waits for the table's refit, since
@@ -73,19 +82,31 @@ export let add = (driver: Driver, stmts: Stmt[]): void =>
 
 /** Bring a file to the composed schema `print` names: nothing, where the file
  * has recorded it; otherwise `pass`, which adds what is missing, and then the
- * record. True when the pass ran. */
+ * record. A pass that left something it could not do (a table it could not
+ * fit) answers false, and the print stays unrecorded so the next opener tries
+ * again. True when the pass ran. */
 export let follow = (
   driver: Driver,
   print: string,
-  pass: () => void,
+  pass: () => boolean | void,
 ): boolean => {
   if (printed(driver, print)) return false
-  pass()
+  if (pass() === false) return true
   unit(
     driver,
     () => meta(driver).set(PRINTED + print, new Date().toISOString()),
   )
   return true
+}
+
+/** Forget that a file stands at `print`, so its next opener runs the pass
+ * again: for a host whose file something that keeps no print may have changed,
+ * the way a yaks.app store's older release, still a rollback away, installs
+ * over whatever a print stands for. */
+export let forget = (driver: Driver, print: string): void => {
+  if (printed(driver, print)) {
+    unit(driver, () => meta(driver).del(PRINTED + print))
+  }
 }
 
 /**
