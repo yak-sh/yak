@@ -127,6 +127,16 @@ test('each store response reports the SQL it ran for that fetch', async () => {
   assert(measured > 0 && measured <= calls - before)
 })
 
+test('a query tree sent as text is refused, never run as two words', async () => {
+  let ctx = state()
+  using _db = ctx.storage
+  let store = new Store(ctx)
+  let q = encodeURIComponent('[object Object]')
+  for (let path of [`/query?q=${q}`, `/query?q=${q}&listing=1`]) {
+    assertEquals((await get(store, path, owner)).status, 500)
+  }
+})
+
 test('a Store row profile attributes SQL to the HTTP route', async () => {
   let ctx = state()
   using _db = ctx.storage

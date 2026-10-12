@@ -11,6 +11,7 @@ import { by, val } from '@yaks/sql'
 import { driver } from '@yaks/durable-object'
 import { commitOnto, type Writes } from '@yaks/git'
 import { graph } from '@yaks/graph'
+import { stringify } from '@yaks/query'
 import { ram } from '@yaks/ram'
 import { vocab as gitVocab } from '../../packages/git/testing.ts'
 import tasks from '../../apps/village-tasks/vocab.json' with { type: 'json' }
@@ -276,7 +277,7 @@ export let gitCost = async (
   let store = new Store(context(storage), {}, [])
   let ask = door(() => store, { 'x-store': GIT_STORE })
   let objects = {
-    read: (q) => ask('/query?q=' + encodeURIComponent(String(q))),
+    read: (q) => ask('/query?q=' + encodeURIComponent(stringify(q))),
     apply: (b) => ask('/apply', { 'x-yak-kernel': '1' }, b),
   } as Writes
   let refs = graph({ vocab: gitVocab, storage: ram(gitVocab) })

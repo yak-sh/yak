@@ -66,13 +66,26 @@ equal(
 equal(JSON.parse(JSON.stringify(query)), query)
 ```
 
+`stringify()` is the inverse: a tree written as the text `parse()` reads back to
+it, for a door that carries only text. A value the grammar cannot say (an
+equality on `a,b` or `1..5`) throws rather than become another query.
+
+```ts
+import { and, eq, parse, stringify, want } from '@yaks/query'
+import { equal } from '@yaks/testing'
+
+const tree = and(eq('doc.title', 'Two words'), want('entity'))
+equal(stringify(tree), '.doc.title="Two words"&?entity')
+equal(parse(stringify(tree)), tree)
+```
+
 ## Exports
 
 All exports are available from `@yaks/query`.
 
 | Part                      | Exports                                                                                                                 |
 | ------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
-| Parsing                   | `parse`, `parseDot`, `tokens`, `conjoin`, `valued`, `cursor`, `ParseOpts`                                               |
+| Parsing                   | `parse`, `stringify`, `parseDot`, `tokens`, `conjoin`, `valued`, `cursor`, `ParseOpts`                                  |
 | Predicates                | `eq`, `ne`, `contains`, `lt`, `le`, `gt`, `ge`, `present`, `absent`, `want`, `pred`, `bare`                             |
 | Values and text           | `coerce`, `scalar`, `list`, `range`, `time`, `text`, `never`                                                            |
 | Composition               | `and`, `or`, `map`                                                                                                      |

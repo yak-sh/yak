@@ -30,6 +30,7 @@ import type {
   Eid,
   Graph,
   Plugin,
+  Query,
   Reduced,
   Row,
   Storage,
@@ -41,7 +42,7 @@ import { aggregate } from '@yaks/graph/read'
 import { argsOf } from '@yaks/graph/call'
 import { composed as perEntity } from '@yaks/graph/bundle'
 import { detached } from '@yaks/graph/storage'
-import { parse } from '@yaks/query'
+import { parse, stringify } from '@yaks/query'
 import { addressed, wordish } from '@yaks/alias'
 import { barred, openly } from './anon.ts'
 import type { Search } from '@yaks/mcp'
@@ -350,24 +351,27 @@ let unreduced = (value: Reduced): Row[] =>
 let held = (ctx: Ctx, reach: Reach[]): Storage => {
   let self: Storage
   // The reach's answer to a line, and whether the line asked for a reduction.
-  let asked = async (q: unknown) => {
-    let { said, line } = scope(String(q))
+  // A tree is the graph's own read (a reference looked up by title, a tool's
+  // query), already in the store's grammar, so it is written as text and not
+  // translated again.
+  let asked = async (q: Query) => {
+    let { said, line } = scope(stringify(q))
     let where = said ? [await named(ctx, said)] : reach
     // An agent's grammar is the page's (guide.md): `id=`, `limit=` and `after=`
     // where the store writes `.entity.eid=`, `.limit=` and `.after=`, and a value
     // written as it reads rather than as a store would parse it. One
     // translation for every door a person's own line arrives at (wire.ts).
-    let one = await byName(self, lined(line))
+    let one = await byName(self, typeof q == 'string' ? lined(line) : line)
     let answer = await read(ctx.env, where, one)
     return { answer, reduced: !!aggregate(parse(one)) }
   }
-  let rows = async (q: unknown): Promise<Row[]> => {
+  let rows = async (q: Query): Promise<Row[]> => {
     let { answer, reduced } = await asked(q)
     return reduced ? unreduced(answer as Reduced) : answer as Row[]
   }
   // A reduction has no members to list, so a read of one lists none, as a
   // store's own read of it does.
-  let bundles = async (q: unknown): Promise<Bundle[]> => {
+  let bundles = async (q: Query): Promise<Bundle[]> => {
     let { answer, reduced } = await asked(q)
     return reduced ? [] : answer as Bundle[]
   }

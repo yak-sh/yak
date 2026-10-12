@@ -697,6 +697,10 @@ let aggOf = (line: string): Agg | null =>
   parse(line).clauses.map((c) => c.kind as Agg).find((k) => AGGS.includes(k)) ??
     null
 
+// A query tree sent where text goes arrives as `[object Object]`, which reads
+// as two words that match nothing. The sender's bug, never a question.
+let FORMATTED = /\[object [A-Z]\w*\]/
+
 let unserved = (line: string): string | null => {
   for (let seg of line.split('&')) {
     if (seg.startsWith('work=')) {
@@ -3996,6 +4000,12 @@ export class Store {
   #asked = served(async (request) => {
     let url = new URL(request.url)
     let line = url.searchParams.get('q') ?? ''
+    let formatted = line.match(FORMATTED)
+    if (formatted) {
+      let e = new TypeError(`a query was sent as ${formatted[0]}`)
+      defect(e, { request: 'query', store: this.#get('name') })
+      throw e
+    }
     if (url.searchParams.get('listing') == '1') {
       let own = ownStore(this.#get('name') ?? '')
       let words = PLATFORM.filter((name) =>

@@ -41,6 +41,7 @@ import {
 } from '@yaks/git'
 import type { Bundle, Eid } from '@yaks/graph/bundle'
 import { identityEid } from '@yaks/graph/identity'
+import { stringify } from '@yaks/query'
 import { r2Objects } from './lib/objects.ts'
 import { GIT_STORE, type Namespace, storeOf } from './door.ts'
 import { spaceHost } from './host.ts'
@@ -104,7 +105,7 @@ export let held = (m: Meta): Held => ({
 // index as one over a graph in this process — which is the whole reason the
 // package asks for {@link Writes} and not a `Graph`.
 let writes = (dir: Held): Writes => ({
-  read: (query) => dir.read(String(query)),
+  read: (query) => dir.read(stringify(query)),
   apply: (bundles) => dir.write(bundles),
 })
 

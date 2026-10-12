@@ -95,6 +95,15 @@ test('typed and untyped eid filters return the same rows and counts at each door
         assertEquals(await across(`${q} .count`), { count: rows.length })
       }
     }
+    // A reference written as a title is looked up across the reach as a tree
+    // the graph builds, which reaches each store as its query line.
+    let shown = JSON.parse(
+      await agent.tool('graph_show', { ids: ['salt & pepper'] }),
+    )
+    assertEquals(
+      shown.map((r: { entity: { eid: string } }) => r.entity.eid),
+      [match],
+    )
   } finally {
     await k.stop()
   }
