@@ -8,7 +8,7 @@ import { test } from '@yaks/testing'
 import { assert, assertEquals, assertRejects } from '@std/assert'
 import { doorOf, evicted, storeOf } from './door.ts'
 import { Store } from './graph.ts'
-import { learn, VERSION, VERSION_AT } from './running.ts'
+import { learn, WORKER_VERSION, WORKER_VERSION_AT } from './running.ts'
 import { state } from './testing.ts'
 
 let A = { id: 'a', timestamp: '2026-10-12T16:00:00Z' }
@@ -36,7 +36,9 @@ let object = (first: typeof A, next: typeof A = first) => {
       new Request('http://store/restore', {
         headers: {
           'x-store': 'ada/cookbook',
-          ...from ? { [VERSION]: from.id, [VERSION_AT]: from.timestamp } : {},
+          ...from
+            ? { [WORKER_VERSION]: from.id, [WORKER_VERSION_AT]: from.timestamp }
+            : {},
         },
       }),
     )
@@ -77,10 +79,13 @@ test("a caller's door stamps its deploy, and a request's own claim is dropped", 
     return Promise.resolve(new Response('ok'))
   }, 'ada/cookbook')
   await door('/restore', {
-    headers: { [VERSION]: 'forged', [VERSION_AT]: '2099-01-01T00:00:00Z' },
+    headers: {
+      [WORKER_VERSION]: 'forged',
+      [WORKER_VERSION_AT]: '2099-01-01T00:00:00Z',
+    },
   })
-  assertEquals(sent[0].get(VERSION), B.id)
-  assertEquals(sent[0].get(VERSION_AT), B.timestamp)
+  assertEquals(sent[0].get(WORKER_VERSION), B.id)
+  assertEquals(sent[0].get(WORKER_VERSION_AT), B.timestamp)
 })
 
 test('a call that reaches a store on the old deploy is answered by the new one', async () => {

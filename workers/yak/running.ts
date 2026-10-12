@@ -21,9 +21,10 @@ export type Version = { id: string; at: string }
 /** The binding's shape, as env.ts declares it. */
 type Meta = { id?: string; timestamp?: string }
 
-/** The headers a request to a store says its caller's version in. */
-export let VERSION = 'x-yak-version'
-export let VERSION_AT = 'x-yak-version-at'
+/** The headers a request to a store says its caller's version in. Not
+ * `x-yak-version`, which is a page's own version (client.js, lenses.ts). */
+export let WORKER_VERSION = 'x-yak-worker-version'
+export let WORKER_VERSION_AT = 'x-yak-worker-version-at'
 
 /**
  * The binding as a version, when it says enough to compare.
@@ -54,18 +55,18 @@ export let running = (): Version | null => here
 /** Stamp a request to a store with the version its caller runs. A version a
  * request already carried is never kept: only the kernel says it. */
 export let stamp = (headers: Headers, version = running()): void => {
-  headers.delete(VERSION)
-  headers.delete(VERSION_AT)
+  headers.delete(WORKER_VERSION)
+  headers.delete(WORKER_VERSION_AT)
   if (!version) return
-  headers.set(VERSION, version.id)
-  headers.set(VERSION_AT, version.at)
+  headers.set(WORKER_VERSION, version.id)
+  headers.set(WORKER_VERSION_AT, version.at)
 }
 
 /** The caller's version, as a request to a store says it. */
 export let caller = (headers: Headers): Version | null =>
   versionOf({
-    id: headers.get(VERSION) ?? undefined,
-    timestamp: headers.get(VERSION_AT) ?? undefined,
+    id: headers.get(WORKER_VERSION) ?? undefined,
+    timestamp: headers.get(WORKER_VERSION_AT) ?? undefined,
   })
 
 /**
