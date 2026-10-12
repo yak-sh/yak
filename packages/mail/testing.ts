@@ -9,7 +9,7 @@
 
 import { type Actor, type Graph, graph } from '@yaks/graph'
 import { ram } from '@yaks/ram'
-import { type Effects, effects } from '@yaks/effects'
+import { effectDoc, type Effects, effects } from '@yaks/effects'
 import { loadVocab, type Vocab, type VocabDoc } from '@yaks/vocab'
 import { docDoc, docs } from '@yaks/doc'
 import { kernelDoc } from '@yaks/kernel'
@@ -17,6 +17,7 @@ import { notifyDoc } from '@yaks/notify'
 import { mailDoc } from './comp.ts'
 import { mailbox } from './plugin.ts'
 import { type Stash, stash } from './stash.ts'
+import type { Sender } from './send.ts'
 
 let doc: VocabDoc = {
   $defs: {
@@ -94,6 +95,9 @@ let doc: VocabDoc = {
  * letter's subject and body live in. */
 export let club: Vocab = loadVocab([docDoc, mailDoc, notifyDoc, doc])
 
+// The same club, keeping its effects as runs the pool retries.
+let pooled: Vocab = loadVocab([docDoc, mailDoc, notifyDoc, doc, effectDoc])
+
 /** A clock that does not move, so a test can assert on `delivered.at`. */
 export let noon = (): string => '2026-09-05T12:00:00.000Z'
 
@@ -116,25 +120,35 @@ export type Rig = {
   local?: string
   /** whose graph it is: the writer of a batch that names none */
   owner?: Actor
+  /** the transport in place of the stash, for a test of how sends fail */
+  sender?: Sender
+  /** keep effects as pooled runs, retried at once, which `fx.work` runs */
+  pool?: boolean
 }
 
 /** A club with a post room. */
-export let clubhouse = ({ refuse, local, owner }: Rig = {}): Club => {
+export let clubhouse = (
+  { refuse, local, owner, sender, pool }: Rig = {},
+): Club => {
+  let vocab = pool ? pooled : club
   // The write function the sending effect records an outcome through: the
   // club's own graph, trusted, since `delivered` and `bounced` are
   // server-owned. `g` is built below, and this only ever runs post-commit.
-  let fx = effects(club, { write: (b) => g.apply(b, { trusted: true }) })
+  let fx = effects(vocab, {
+    write: (b) => g.apply(b, { trusted: true }),
+    ...(pool ? { backoff: () => 0, report: () => {} } : {}),
+  })
   let post = stash(refuse ? { refuse } : {})
   let g = graph({
-    storage: ram(club),
-    vocab: club,
+    storage: ram(vocab),
+    vocab,
     ...(owner ? { actor: owner } : {}),
     plugins: [
       fx,
       docs(),
       mailbox({
         domain: 'books.example',
-        sender: post,
+        sender: sender ?? post,
         effects: fx,
         now: noon,
         ...(local ? { local } : {}),

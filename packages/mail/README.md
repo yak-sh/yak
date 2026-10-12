@@ -64,7 +64,11 @@ message.
 
 Sending is at most once. The handler stamps `deliver.tried` before the message
 reaches the transport, so a crash between the send and its outcome leaves a
-message with `tried` and no outcome, which is never handed over again. The
+message with `tried` and no outcome, which is never handed over again. A sender
+that knows the message never left rejects with `Unsent` (`@yaks/host/senders`):
+the handler gives the claim back, writes the reason to `deliver.waiting` and
+fails the run, so the pool hands it over again after `retry.after` (six tries).
+The Cloudflare sender rejects that way for a failed connection and a 429. The
 `mail_post` effect declares a sweep over the messages still owed a send, so a
 worker coming up replays it and a message written while no sender could run goes
 out with the first process that has one.
@@ -122,8 +126,8 @@ sending.
 
 Success writes `delivered{at}`, and the Message-ID the receipt carries as
 `mail.message_id`, which is what a reply to the letter threads on. A rejected
-send writes `bounced{at, reason}`. Missing recipient addresses and missing
-sender addresses also produce `bounced`.
+send writes `bounced{at, reason}`, unless it was `Unsent`. Missing recipient
+addresses and missing sender addresses also produce `bounced`.
 
 ### The transport is supplied by the caller
 

@@ -36,6 +36,8 @@ let proc = async (storage: Storage, handlers: Handlers) => {
     write: (b) => g.apply(b, { trusted: true }),
     report: (error) => reports.push(error),
     tries: 1,
+    // A declaration's own tries outrank `tries`: spend them all at once.
+    backoff: () => 0,
   })
   fx.handle(handlers)
   let g = graph({

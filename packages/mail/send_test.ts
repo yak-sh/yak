@@ -4,6 +4,8 @@ import type { Bundle, Comp } from '@yaks/graph'
 import { clubhouse, noon } from './testing.ts'
 import { message } from './send.ts'
 import { arrived } from './arrive.ts'
+import { stash } from './stash.ts'
+import { Unsent } from '@yaks/host/senders'
 
 let ana = 'p-ana'
 let letter = 'e-potluck'
@@ -114,6 +116,50 @@ test('a transport that refuses writes the reason it gave', async () => {
     comp(await read(g, letter), 'bounced')?.reason,
     'no route to host',
   )
+})
+
+// A club whose transport drops the first `drops` sends before they leave.
+let dropping = async (drops: number) => {
+  let post = stash()
+  let club = clubhouse({
+    pool: true,
+    sender: {
+      send: (m) =>
+        drops-- > 0
+          ? Promise.reject(new Unsent('not sent: tls handshake eof', 0))
+          : post.send(m),
+    },
+  })
+  await club.g.apply([{
+    entity: { eid: ana },
+    person: { name: 'Ana' },
+    email: { address: 'ana@books.example' },
+  }, {
+    entity: { eid: letter },
+    doc: { title: 'hi', body: 'hi' },
+    mail: { from: 'hello@books.example' },
+    deliver: { to: ana },
+  }])
+  await club.fx.work(club.g)
+  let row = await read(club.g, letter)
+  await club.fx.stop()
+  return { post, row }
+}
+
+test('a letter that never left goes on the next try, not bounced', async () => {
+  let { post, row } = await dropping(1)
+  assertEquals(post.sent.length, 1)
+  assertEquals(comp(row, 'delivered')?.at, '2026-09-05T12:00:00.000Z')
+  assertEquals(comp(row, 'bounced'), undefined)
+  assertEquals(comp(row, 'deliver')?.waiting ?? null, null)
+})
+
+test('a letter that never leaves waits, owed, for the sweep', async () => {
+  let { post, row } = await dropping(Infinity)
+  assertEquals(post.sent.length, 0)
+  assertEquals(comp(row, 'bounced'), undefined)
+  assertEquals(comp(row, 'deliver')?.tried ?? null, null)
+  assertEquals(comp(row, 'deliver')?.waiting, 'not sent: tls handshake eof')
 })
 
 test('a reply threads on what the answered letter went out as', async () => {

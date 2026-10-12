@@ -1,6 +1,7 @@
 import { test } from '@yaks/testing'
 import { assertEquals, assertRejects } from '@std/assert'
 import { cloudflare, type Fetch, payload } from './cloudflare.ts'
+import { Unsent } from '@yaks/host/senders'
 import type { Message } from './send.ts'
 
 let m: Message = {
@@ -71,6 +72,31 @@ test('cloudflare: a refusal rejects with what the API said', async () => {
     Error,
     'HTTP 504',
   )
+})
+
+test('cloudflare: a letter that never reached the API rejects as unsent', async () => {
+  let failing = (message: string): Fetch => () =>
+    Promise.reject(new TypeError(message))
+  let send = (call: Fetch) =>
+    cloudflare({ account: 'a', token: 't', fetch: call }).send(m)
+  let tls = await send(failing(
+    'error sending request for url (https://api.cloudflare.com/x): client error (Connect): tls handshake eof',
+  )).catch((e) => e)
+  assertEquals(tls instanceof Unsent, true)
+  assertEquals(tls.retry, { after: 1000 })
+  // the API declining to take it yet waits as long as it asks
+  let [busy] = answers('{"success":false}', 429)
+  let limited: Fetch = (url, init) =>
+    busy(url, init).then((r) =>
+      new Response(r.body, { status: 429, headers: { 'retry-after': '7' } })
+    )
+  let later = await send(limited).catch((e) => e)
+  assertEquals(later instanceof Unsent, true)
+  assertEquals(later.retry, { after: 7000 })
+  // a failure after the request may have arrived is a bounce, as before
+  let cut = await send(failing('connection closed before message completed'))
+    .catch((e) => e)
+  assertEquals(cut instanceof Unsent, false)
 })
 
 test('a subject-only letter has an empty visible HTML body accepted by the builder schema', async () => {

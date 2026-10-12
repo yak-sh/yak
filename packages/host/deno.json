@@ -5,6 +5,7 @@
     ".": "./mod.ts",
     "./assembly": "./assembly.ts",
     "./roles": "./roles.ts",
+    "./senders": "./senders.ts",
     "./words": "./words.ts",
     "./config": "./config.ts",
     "./documents": "./documents.ts",

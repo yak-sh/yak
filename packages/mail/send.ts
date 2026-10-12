@@ -33,6 +33,7 @@ import { at } from './addr.ts'
 import { html, text } from './md.ts'
 import { BOUNCED, DELIVER, DELIVERED, EMAIL, MAIL } from './comp.ts'
 import type { Message, Sender } from '@yaks/host'
+import { Unsent } from '@yaks/host/senders'
 export type { Message, Receipt, Sender } from '@yaks/host'
 
 /** How the effect is built. */
@@ -132,7 +133,10 @@ export let message = (
  * it, and it is idempotent: only a
  * letter still {@link owed} a send is touched, and `deliver.tried` is written
  * before the letter reaches the transport, so a crash between the send and its
- * outcome leaves a letter that is never handed over twice.
+ * outcome leaves a letter that is never handed over twice. The one exception
+ * is a sender's `Unsent` rejection, which knows the letter never left: the
+ * claim is given back and the run fails to be tried again, so a dropped
+ * connection is a wait, not a bounce.
  *
  * The outcome is written back through @yaks/effects' write function — a new
  * transaction through the graph's own `apply()` — so "this letter left" is
@@ -182,23 +186,40 @@ export let sending =
           }])
         }
         let answered = mail.reply_to == null ? '' : String(mail.reply_to)
+        // A refused guard on `deliver.tried` means another writer moved it.
+        let raced = (error: unknown) =>
+          error instanceof Stale && error.eid == event.entity.eid &&
+          error.comp == DELIVER && error.prop == 'tried'
         // Two committed triggers can read the same untried letter. Claim the
         // hand-over atomically before either reaches the sender.
+        let stamp = now()
         let tried = async () => {
           try {
             await write([{
               entity: event.entity,
-              [DELIVER]: { tried: now(), waiting: null },
+              [DELIVER]: { tried: stamp, waiting: null },
               $was: { [DELIVER]: { tried: token(deliver.tried) } },
             }])
             return true
           } catch (error) {
-            if (
-              error instanceof Stale && error.eid == event.entity.eid &&
-              error.comp == DELIVER && error.prop == 'tried'
-            ) return false
+            if (raced(error)) return false
             throw error
           }
+        }
+        // The sender knows the letter never left: give the claim back, say
+        // why it waits, and throw, so the pool hands it over again after the
+        // wait the sender asked for. The sweep finds it if every try fails.
+        let unsent = async (error: Unsent) => {
+          try {
+            await write([{
+              entity: event.entity,
+              [DELIVER]: { tried: null, waiting: error.message.slice(0, 240) },
+              $was: { [DELIVER]: { tried: token(stamp) } },
+            }])
+          } catch (raceError) {
+            if (!raced(raceError)) throw raceError
+          }
+          throw error
         }
         return after(
           answered ? threadOf(tx, answered) : '',
@@ -224,7 +245,10 @@ export let sending =
                   [DELIVERED]: { at: now() },
                 }]),
               (err) =>
-                fail(String((err as Error)?.message ?? err).slice(0, 240), err),
+                err instanceof Unsent ? unsent(err) : fail(
+                  String((err as Error)?.message ?? err).slice(0, 240),
+                  err,
+                ),
             ),
         )
       })

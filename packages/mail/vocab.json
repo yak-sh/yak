@@ -264,7 +264,8 @@
         "deliver"
       ],
       "sweep": ".mail&.deliver&!delivered&!bounced&!deliver.tried",
-      "description": "hand an outbound letter to the sender and record its outcome. The sweep replays the letters still owed, so one written while no sender could run is sent by the first process that can"
+      "tries": 6,
+      "description": "hand an outbound letter to the sender and record its outcome. A send the sender knows never left is tried again. The sweep replays the letters still owed, so one written while no sender could run is sent by the first process that can"
     }
   }
 }

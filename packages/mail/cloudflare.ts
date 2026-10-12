@@ -12,7 +12,14 @@
 // why ./md.ts rejects one. The threading headers carry the bracketed
 // Message-ID; the receipt returns the unbracketed one the next reply threads
 // on.
+//
+// A failure says whether the letter left. A fetch that fails while connecting
+// never reached the API (Deno names the phase, `client error (Connect)`, for a
+// refused connection, a DNS failure and a broken TLS handshake alike), and a
+// 429 is the API declining to take it yet. Both reject as `Unsent`, so the
+// letter is tried again; anything else may have left, and is a bounce.
 
+import { Unsent } from '@yaks/host/senders'
 import type { Message, Receipt, Sender } from './send.ts'
 
 /** The Email Sending payload, as the API takes it. */
@@ -83,6 +90,17 @@ let parse = (raw: string): Answer => {
   }
 }
 
+let said = (err: unknown) => String((err as Error)?.message ?? err)
+
+// The connect phase, as Deno's fetch names it in the rejection.
+let connecting = (err: unknown) => /\(Connect\)/.test(said(err))
+
+// A 429's Retry-After, in seconds, as the wait before the next try.
+let wait = (res: Response) => {
+  let s = Number(res.headers.get('retry-after'))
+  return s > 0 ? s * 1000 : 1000
+}
+
 /**
  * A {@link Sender} over Cloudflare Email Sending.
  *
@@ -93,7 +111,8 @@ let parse = (raw: string): Answer => {
  *
  * A failure rejects with the status and the start of the response body, which
  * is what gets written to the letter as `bounced.reason` — so a bounce records
- * what the API reported, not just "send failed".
+ * what the API reported, not just "send failed". A letter that never reached
+ * the API, or that it declined with a 429, rejects as `Unsent` instead.
  */
 export let cloudflare = (
   { account, token, base, fetch: call }: Account,
@@ -112,9 +131,14 @@ export let cloudflare = (
           'content-type': 'application/json',
         },
         body: JSON.stringify(payload(message)),
+      }).catch((err) => {
+        throw connecting(err) ? new Unsent(`not sent: ${said(err)}`) : err
       })
       let raw = await res.text()
       let answer = parse(raw)
+      if (res.status == 429) {
+        throw new Unsent(`not sent (HTTP 429): ${raw.slice(0, 200)}`, wait(res))
+      }
       if (!res.ok || !answer.success) {
         throw new Error(
           `send failed (HTTP ${res.status}): ${raw.slice(0, 200)}`,

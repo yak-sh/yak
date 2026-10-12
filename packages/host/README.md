@@ -26,6 +26,7 @@ equal(stopped(), true)
 | `@yaks/host`                                  | `assembly`, facet contracts, `Host`, `Config`, `Configured`, `Options`, `Plug`, `Role`, `Feed`, `MigrationMonitor`, `Message`, `Receipt`, `Sender`, `ROLES`, `every` |
 | `@yaks/host/assembly`                         | `assembly`, `prepare`, `assemble`, `Prepared`, `Assembly`, `AssemblyOpts`, `Binding`, `Meaning`                                                                      |
 | `@yaks/host/roles`                            | Role and facet selection data without loading the assembly runtime                                                                                                   |
+| `@yaks/host/senders`                          | `Message`, `Receipt`, `Sender`, `Unsent`                                                                                                                             |
 | `@yaks/host/words`                            | Vocabulary assembly, `wordsOf`, `taking`, `Words`, `Declared`, `Taken`                                                                                               |
 | `@yaks/host/config`                           | Configuration types, `used`, `given`, `chosen`                                                                                                                       |
 | `@yaks/host/documents`, `@yaks/host/keywords` | Shared intrinsic declarations and vocabulary keywords                                                                                                                |
@@ -184,7 +185,8 @@ reference and command directory.
 host constructs the sender and owns its credentials, metering and lifetime. A
 lent name takes precedence over mail's built-in Cloudflare and stash senders.
 The assembly passes this capability to plugin factories through `Binding.host`
-or `Binding.ready`.
+or `Binding.ready`. A sender rejects with `Unsent` (`@yaks/host/senders`) when
+the message certainly never left, so mail tries it again instead of bouncing it.
 
 ```ts
 import type { Host, Message } from '@yaks/host'
