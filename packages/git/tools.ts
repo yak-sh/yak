@@ -8,12 +8,13 @@
 // (@yaks/cli local.ts).
 //
 // A landing refused for the caller's own state is an expected invocation
-// failure: a moved base is returned as a divergence, and a worktree that is
-// dirty, detached or on the base, shared-checkout changes overlap the landing,
-// or a revert the guard caught, is a `LandError`. Both become a `CallError`
-// carrying Git's whole account, which the tool runner records as a failed call
-// and a command line reports as exit 1. An unexpected Git command failure
-// escapes as a plain error, for the runner to report as the fault it is.
+// failure: a moved base is returned as a divergence, which becomes a
+// `CallError` carrying Git's whole account, and a worktree that is dirty,
+// detached or on the base, shared-checkout changes overlap the landing, or a
+// revert the guard caught, is a `LandError`, which is one already. The tool
+// runner records either as a failed call and a command line reports it as
+// exit 1. An unexpected Git command failure escapes as a plain error, for the
+// runner to report as the fault it is.
 //
 // `cites check` is a check — a tool whose verb is `check`, which is all a
 // doctor is (@yaks/tools ./check.ts) — so a citation that moved is a finding
@@ -33,7 +34,7 @@ import { verify as entityVerify } from '@yaks/kernel'
 import type { Finding, Level } from '@yaks/tools'
 import { CallError } from '@yaks/tools/errors'
 import { checked } from '@yaks/tools/check'
-import { land, LandError, run as git } from './land.ts'
+import { land, run as git } from './land.ts'
 import {
   CITES,
   FILE,
@@ -123,22 +124,14 @@ export let runs = (): Runs => ({
     // arrived: what the caller reads is Git's own account, not a summary of
     // it.
     let said: string[] = []
-    let outcome
-    try {
-      outcome = await land({
-        cwd,
-        allow: str(args['allow-revert']).split(',').filter(Boolean),
-        write: (text) => {
-          let line = text.trimEnd()
-          if (line) said.push(line)
-        },
-      })
-    } catch (error) {
-      if (error instanceof LandError) {
-        throw new CallError('land', error.message)
-      }
-      throw error
-    }
+    let outcome = await land({
+      cwd,
+      allow: str(args['allow-revert']).split(',').filter(Boolean),
+      write: (text) => {
+        let line = text.trimEnd()
+        if (line) said.push(line)
+      },
+    })
     if (!('landed' in outcome)) {
       throw new CallError('diverged', said.join('\n'))
     }

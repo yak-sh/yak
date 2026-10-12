@@ -502,9 +502,11 @@ test('a detached worktree is refused, a failing git is a fault', async () => {
     land({ ...quiet, cwd: '/t', run: answering(fails, code) })
   let e = await assertRejects(() => at('symbolic-ref', 1))
   assertEquals((e as Error).name, 'LandError')
+  assertEquals(e instanceof CallError, true)
   for (let fails of ['symbolic-ref', 'worktree list']) {
     let e = await assertRejects(() => at(fails))
     assertEquals((e as Error).name, 'Error', fails)
+    assertEquals(e instanceof CallError, false, fails)
   }
 })
 

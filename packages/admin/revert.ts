@@ -1,10 +1,11 @@
 // Correct main, then wait for Workers Builds to serve the correction. Land is
 // the same git primitive `yak land` calls; its two outcomes matter here: a
 // rebase needs another gate, and a local landing is not proof of a push. A
-// landing land refuses (LandError) or a rebase that conflicts is an answer
-// about the revert asked for, so it refuses the caller, as `yak land` does.
+// landing land refuses (a LandError is a CallError) or a rebase that conflicts
+// is an answer about the revert asked for, so it refuses the caller, as
+// `yak land` does.
 import { CallError } from '@yaks/tools/errors'
-import { land, LandError } from '@yaks/git/land'
+import { land } from '@yaks/git/land'
 import { deploys, git, needGit, table } from './deploys.ts'
 import { output } from './subprocess.ts'
 
@@ -88,9 +89,6 @@ export let revert = async (
         allow: paths,
         run: (args, cwd) => git(cwd, args, stopping),
         write: (line, error) => (error ? note : out)(line.trimEnd()),
-      }).catch((e) => {
-        if (e instanceof LandError) throw new CallError('land', e.message)
-        throw e
       })
       if (!('landed' in outcome)) {
         if (outcome.conflict) {

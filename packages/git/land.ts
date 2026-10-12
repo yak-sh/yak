@@ -36,6 +36,7 @@
 // landing, and again after a rebase if the incoming diff could affect it. Land
 // neither runs tests nor knows of any. It runs `git` as a subprocess, so like
 // ./host.ts it is kept out of this package's portable entry point (./mod.ts).
+import { CallError } from '@yaks/tools/errors'
 
 /** One run of git. `out` and `err` are RAW, exactly as Git wrote them — a
  * caller that prints Git's own output must not have it trimmed out from under
@@ -52,11 +53,13 @@ export type Run = (args: string[], cwd: string) => Promise<Ran>
 
 /** A landing refused for the caller's own state: not in a linked worktree on
  * a branch, a dirty worktree, local changes in the shared checkout that the
- * landing would overwrite, or a revert the guard caught. An unexpected Git
- * command failure is a plain `Error`, a fault somebody has to hear about. */
-export class LandError extends Error {
+ * landing would overwrite, or a revert the guard caught. It is a `CallError`,
+ * so whatever tool lands, a refusal reaches its caller as an answer and never
+ * as a fault. An unexpected Git command failure is a plain `Error`, a fault
+ * somebody has to hear about. */
+export class LandError extends CallError {
   constructor(message: string) {
-    super(message)
+    super('land', message)
     this.name = 'LandError'
   }
 }
