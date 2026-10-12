@@ -1633,31 +1633,35 @@ let beginning = (
   ctx: Ctx,
   ast: And,
   screen: (e: Extension) => Raw | null,
+  candidates: (e: Extension) => Raw | null,
   screening = false,
 ) => {
   let finite = owners(ctx, ast.clauses)
   ctx.bounded = finite != null
   for (let e of ctx.ext) {
     let preparing = false
-    let candidates: Screen = () => {
-      if (preparing) return null
-      preparing = true
-      try {
-        return screen(e)
-      } finally {
-        preparing = false
+    let view = (read: (e: Extension) => Raw | null): Screen => {
+      let selected: Screen = () => {
+        if (preparing) return null
+        preparing = true
+        try {
+          return read(e)
+        } finally {
+          preparing = false
+        }
       }
+      Object.defineProperty(selected, 'maximum', {
+        get: () => {
+          let finite = owners(ctx, ast.clauses)
+          return !ctx.spine && finite && !finite.nums.length
+            ? finite.eids.length
+            : undefined
+        },
+      })
+      return selected
     }
-    Object.defineProperty(candidates, 'maximum', {
-      get: () => {
-        let finite = owners(ctx, ast.clauses)
-        return !ctx.spine && finite && !finite.nums.length
-          ? finite.eids.length
-          : undefined
-      },
-    })
-    if (!screening) (ctx.screens ??= new Map()).set(e, candidates)
-    e.begin?.(candidates)
+    if (!screening) (ctx.screens ??= new Map()).set(e, view(candidates))
+    e.begin?.(view(screen))
   }
 }
 
@@ -2208,19 +2212,25 @@ export let prepared = (
     eids: ctx.eids,
   }
   let screenOpts = { ...opts, ...captured }
+  let selected = (e: Extension, options: BindOpts) =>
+    screenFor(ast, vocab, options, scope?.dialect ?? d, e)
   // A new query, and what the rest of it selects. An extension that remembers
   // what it resolved for one query is told here, before any clause compiles, so
   // that what a long-lived extension remembers is always this query's; one that
   // ranks asks for the screen and ranks among the rows the other clauses admit
   // (./extend.ts `Begin`, `Screen`).
-  beginning(ctx, ast, (e) =>
-    screenFor(
-      ast,
-      vocab,
-      screenOpts,
-      scope?.dialect ?? d,
-      e,
-    ), scope?.screening)
+  beginning(
+    ctx,
+    ast,
+    (e) =>
+      selected(e, {
+        ...opts,
+        eids: ctx.eids,
+        ...scope ? { visibility: scope.visibility } : {},
+      }),
+    (e) => selected(e, screenOpts),
+    scope?.screening,
+  )
   return {
     opts: captured,
     spine,

@@ -137,6 +137,17 @@ for (let replace of [false, true]) {
   })
 }
 
+test('site candidates retain the enclosing query reference map', () => {
+  let opts: BindOpts = { eids: ['target'], references: { chosen: 3 } }
+  opts.extend = [{
+    name: 'replacing',
+    begin: () => opts.references = { chosen: 4 },
+    compile: bounded,
+  }]
+  let statement = compile(parse('.post.author=chosen Chosen'), ownerVocab, opts)
+  assertEquals(db.query(statement).map((r) => r.eid), ['target'])
+})
+
 test('mutually dependent extension screens remain a conservative bound', () => {
   let first: Screen | undefined, second: Screen | undefined
   let extensions: Extension[] = [
