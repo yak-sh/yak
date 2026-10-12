@@ -9,7 +9,7 @@ import { toolsIn } from '@yaks/vocab/tools'
 import { effectsIn } from '@yaks/vocab'
 import type { VocabDoc } from '@yaks/vocab'
 import type { Effects, Handlers } from '@yaks/effects'
-import type { Extension } from '@yaks/sql'
+import type { Extension, Stmt } from '@yaks/sql'
 import { gather } from '@yaks/ui/contributions'
 import type { Authenticate, Filter, Handler, Route } from '@yaks/api'
 import type { Host, Role } from './mod.ts'
@@ -59,8 +59,10 @@ export type Binding = {
   extend?: (host: Host) => Extension[]
   /** Construct the graph with any additional hooks and options the host owns. */
   graph?: typeof graph
-  /** Schema work after extensions have bound, before graph plugins are asked. */
-  install?: (host: Host) => void
+  /** Bring the store to its composed schema, given the statements the graph
+   * plugins need beside the store's own, after extensions have bound and
+   * before graph plugins are asked. A reader leaves it out. */
+  schema?: (host: Host, stmts: Stmt[]) => void
   /** The host's graph-dependent capabilities, before effect and tool factories. */
   ready?: (host: Host) => void
   /** Combine the host's text index with the plugin's optional meaning index. */
@@ -403,11 +405,11 @@ export let assemble = (
         ...graphs.flatMap(([r, options]) => r.extend?.(host, options) ?? []),
       )
       extend.push(...binding.extend?.(host) ?? [])
-      part?.('install')
-      if (binding.install) {
-        binding.install(host)
-        for (let [r, options] of graphs) r.install?.(host, options)
-      }
+      part?.('schema')
+      binding.schema?.(
+        host,
+        graphs.flatMap(([r, options]) => r.schema?.(host, options) ?? []),
+      )
       part?.('effects')
       let fx = watching = binding.effects(
         host,

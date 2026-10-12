@@ -1,6 +1,6 @@
 // Where the vectors are kept and read: the `graph` export
-// (`@yaks/embedding/graph`) — the vector table installed through the host's own
-// database connection, the `.near` compiler the read path consults, and the
+// (`@yaks/embedding/graph`) — the vector table, which a writing host adds to its
+// own database, the `.near` compiler the read path consults, and the
 // reply a tool call that created something is answered with (./neighbours.ts).
 // "The server" here means whichever process opened the graph and loaded this
 // package.
@@ -12,7 +12,6 @@
 // plugin can ask for a neighbourhood, and one that did not gets the compiler's
 // own refusal. Nobody wires it up by hand.
 //
-// The installer prepares the tables; composition only binds readers.
 // This package declares no component. No client ever writes a vector: it is
 // derived from text another package's vocabulary declares, it is never sent to
 // a client, and no patch creates one — which is why the table is created in SQL
@@ -25,21 +24,17 @@ import type { Derived, Extension } from '@yaks/sql'
 import type { Vocab } from '@yaks/vocab'
 import { semantic } from './compile.ts'
 import { type Statements, statements } from '@yaks/sql'
-import { rekey, schema } from './ddl.ts'
+import { schema } from './ddl.ts'
 import { resolved } from './fields.ts'
 import { chosen, type Options, ready, spaceOf } from './options.ts'
 import { type Hit, meaning as search, type MeaningOpts } from './search.ts'
 import { type Host, neighbours } from './neighbours.ts'
 
-/** Install the vector table and its dirty flag in the host's database. It
- * contributes no rule to `apply()`: nothing a client writes is a vector, and
- * what keeps the vectors in step with the text is the sweep (`./service`), off
- * the write path. */
-export let install = (host: { storage: { statements?: Statements } }): void => {
-  let db = statements(host.storage)
-  rekey(db)
-  for (let statement of schema()) db.query(statement)
-}
+/** The vector table and its dirty flag, which a writing host adds with the
+ * rest of its composed schema. It contributes no rule to `apply()`: nothing a
+ * client writes is a vector, and what keeps the vectors in step with the text
+ * is the sweep (`./service`), off the write path. */
+export { schema }
 
 /** Binding the index does not create or migrate its tables. */
 export let plugins = (): Plugin[] => []

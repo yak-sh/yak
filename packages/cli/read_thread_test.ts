@@ -15,7 +15,7 @@ test('the web reader sees commits and closes after a refused query', async () =>
     file,
     JSON.stringify({ db: 'yak.db', plugins: ['@yaks/doc', '@yaks/process'] }),
   )
-  let host = await compose(read(file), ['graph'], undefined, { install: true })
+  let host = await compose(read(file), ['graph'], undefined)
   let reader = readThread(file)
   try {
     await reader.ready()
@@ -60,7 +60,7 @@ test('web reader forwards observed query and refusal trees into the waiting requ
     file,
     JSON.stringify({ db: 'yak.db', plugins: ['@yaks/doc'] }),
   )
-  let host = await compose(read(file), ['graph'], undefined, { install: true })
+  let host = await compose(read(file), ['graph'], undefined)
   let reader = readThread(file)
   try {
     await host.graph.apply([{

@@ -1,6 +1,6 @@
 // `@yaks/journal/graph` — what a server composed from a config file imports to
-// switch the journal on. Its installer creates append-only tables over the
-// host's statement-capable storage and returns the plugin that writes a row per
+// switch the journal on. Its schema is the append-only tables a writing host
+// adds to its store, and it returns the plugin that writes a row per
 // component every transaction touched.
 //
 // `logFor` is here rather than inside `plugins` because `@yaks/journal/tools`
@@ -12,7 +12,7 @@
 import type { Bundle, Plugin } from '@yaks/graph'
 import { type Derived, type Statements, statements, type Stmt } from '@yaks/sql'
 import type { Vocab } from '@yaks/vocab'
-import { ddl, grown, journal, type Log, log } from './mod.ts'
+import { ddl, journal, type Log, log } from './mod.ts'
 import { follow, type Heard } from './feed.ts'
 
 let logs = new WeakMap<object, Log>()
@@ -34,18 +34,10 @@ export let logFor = (host: Bound): Log => {
   return found
 }
 
-/** Prepare journal storage explicitly. A store an
- * older journal made gains the columns it predates first. */
-export let install = (host: Bound): void => {
-  let sql = statements(host.storage)
-  for (let s of ddl()) sql.query(s)
-  let has = sql.query({
-    t: 'pragma',
-    name: 'table_info',
-    arg: 'journal_tx',
-  })
-  for (let s of grown(has.map((c) => String(c.name)))) sql.query(s)
-}
+/** The journal's tables, which a writing host adds with the rest of its
+ * composed schema; a store an older journal made gains the columns it
+ * predates there (@yaks/sqlite `grow`). */
+export let schema = (): Stmt[] => ddl()
 
 /** Bind journal hooks over the tables the installer prepared, recording what
  * the host's vocabulary does not keep out of the journal. */

@@ -892,12 +892,12 @@ incremented with each committed announcement. A **migration watch**
 (`MigrationWatch`) polls a migration control and calls its callback once when
 the generation changes, pending or failed work appears, or polling fails.
 
-The graph installer calls `installMigrations(driver)` to create the control
-table. Applications bind `migrations(driver)` and call `ready()` before opening
-their graph; binding never creates a table. `run(name, change)` commits an
-announcement, waits without holding a write transaction, then commits a
-synchronous migration and its completion record together. `announce`, `apply`,
-and `fail` expose the stages separately.
+A writer adds the control table with the rest of its composed schema
+(`migrationSchema()`, `follow()`). Applications bind `migrations(driver)` and
+call `ready()` before opening their graph; binding never creates a table.
+`run(name, change)` commits an announcement, waits without holding a write
+transaction, then commits a synchronous migration and its completion record
+together. `announce`, `apply`, and `fail` expose the stages separately.
 
 This example uses a zero grace period and an explicit watch check because both
 connections are controlled by the example. Cooperating applications use the same
@@ -907,9 +907,10 @@ and `watchMigrations()` defaults to one second.
 ```ts
 import { open } from '@yaks/sqlite/db'
 import {
+  add,
   columns,
-  installMigrations,
   migrations,
+  migrationSchema,
   watchMigrations,
 } from '@yaks/sqlite'
 import { equal, throws } from '@yaks/testing'
@@ -917,7 +918,7 @@ import { equal, throws } from '@yaks/testing'
 let path = await Deno.makeTempFile({ suffix: '.db' })
 let app = open(path), migrator = open(path)
 let notices: Error[] = []
-installMigrations(app)
+add(app, migrationSchema())
 let control = migrations(app)
 let changes = migrations(migrator)
 let watch = watchMigrations(control, (reason) => notices.push(reason))

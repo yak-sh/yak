@@ -87,8 +87,8 @@ a loaded box, where any fixed sleep is either too short or wasted.
 - For the whole of the box's data, copy the bench snapshot
   (`~/.cache/yak-bench/base.db`, bench/README.md) into `$D` with `cp`: nothing
   writes it, and sqlite's `.backup` of it rereads the file without end through
-  its read-only `-shm`. The snapshot can predate the schema your code expects,
-  so run `yak upgrade --config $D/yak.json` on the copy before serving it.
+  its read-only `-shm`. The snapshot can predate the schema your code expects;
+  the first writer that opens the copy brings it to that schema.
 - Harness and process state have their own homes: set `HARNESS_HOME` and
   `TASKS_HOME` to directories under `$D` when the change touches sessions or
   spawned runs (packages/harness/README.md). Keep `HOME`, so Deno's module cache

@@ -7,7 +7,7 @@ import { effects } from './effects.ts'
 import { at } from './testing.ts'
 
 test('declared lifecycle releases stopped machines without destroying settled-turn files', async () => {
-  let host = await compose(at(), ['graph'], undefined, { install: true })
+  let host = await compose(at(), ['graph'], undefined)
   let releases: unknown[] = []
   host.machines = {
     defaultProvider: 'fixture',

@@ -73,9 +73,7 @@ export let harness = async (
   db = ':memory:',
   lease?: number,
 ): Promise<Harness & { sql: import('@yaks/sql').Statements }> => {
-  let host = await compose(at(db, lease), ['graph'], undefined, {
-    install: true,
-  })
+  let host = await compose(at(db, lease), ['graph'], undefined, {})
   let g = host.graph
   await g.apply(await install(g.read), { trusted: true })
   await g.apply([

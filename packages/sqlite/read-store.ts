@@ -10,6 +10,7 @@ import { statements } from './statements.ts'
 import { screened } from './read.ts'
 import { options, reader } from './reader.ts'
 import { unit } from './unit.ts'
+import { plan } from './plan.ts'
 
 /** Bind every committed-store capability without admitting write callbacks.
  * Index plugins receive the same statement, revision and schema descriptions
@@ -41,6 +42,7 @@ export let storage = (
       ...indexed(vocab),
     ],
     grown: () => grown(vocab, standing(driver, vocab)),
+    print: () => plan(vocab, base.derived, !!driver.file).print,
     screen: (q, o) => screened(driver, vocab, q, { ...opts(), ...o }),
     install: refuse,
     tx: refuse,

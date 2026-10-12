@@ -178,7 +178,7 @@ let serving = (host: { handler?: Handler }): Handler => {
 // Every role the config's graph has: what a test here assembles, unless it is
 // about which roles a process serves.
 let compose = (config: Config, load?: Load) =>
-  composing(config, every(config), load, { install: true })
+  composing(config, every(config), load)
 
 let write = (path: string, body: unknown) =>
   Deno.writeTextFileSync(path, JSON.stringify(body))
@@ -1774,7 +1774,7 @@ test('query extensions receive storage capabilities without a driver or state di
       } as Facets[typeof part]
     }
     return null
-  }, { install: true, process: false })
+  }, { process: false })
   try {
     assertEquals(await host.graph.get(['absent']), [])
   } finally {
@@ -1838,7 +1838,7 @@ test('an invalid plugin config creates no absent database', async () => {
       () =>
         composing({ db: path, plugins: ['broken'] }, ['graph'], () => {
           throw new Error('broken plugin import')
-        }, { install: true }),
+        }),
       Error,
       'broken plugin import',
     )

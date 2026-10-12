@@ -33,7 +33,6 @@ test('local read commands leave graph bytes unchanged under a concurrent writer'
   )
   let config = read(file)
   let host = await compose(config, ['graph'], facet, {
-    install: true,
     process: false,
   })
   await host.graph.apply([{

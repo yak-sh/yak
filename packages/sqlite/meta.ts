@@ -94,6 +94,14 @@ export let analyzedAt = (
   statistics: Statistics,
 ): void => meta(driver).set(SCHEMA, `${schema}\n${JSON.stringify(statistics)}`)
 
+/** The prefix of the key a file records each composed schema's print under
+ * (./follow.ts): `schema:<print>`, its value when it was recorded. */
+export let PRINTED = 'schema:'
+
+/** Whether this file has recorded the composed schema `print` names. */
+export let printed = (driver: Driver, print: string): boolean =>
+  kept(driver, PRINTED + print) != null
+
 // A key's value, read without assuming the table is there yet.
 let kept = (driver: Driver, k: string): string | undefined =>
   catalogue(driver).some((o) => o.name == META)

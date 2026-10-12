@@ -1,23 +1,25 @@
-// The graph facet: the vector table raised in the host's own database, and the
+// The graph facet: the vector table a writing host adds to its database, and the
 // `.near` compiler a host gets without wiring one up.
 
 import { test } from '@yaks/testing'
 import { assert, assertEquals, assertThrows } from '@std/assert'
 import { parse } from '@yaks/query'
 import { compile, tally } from '@yaks/sql'
-import { extend, install, meaning, plugins } from './graph.ts'
+import { add } from '@yaks/sqlite'
+import { open } from '@yaks/sqlite/db'
+import { extend, meaning, plugins, schema } from './graph.ts'
 import { TABLE } from './ddl.ts'
 import { mem, none, shop, stocked } from './testing.ts'
 
 let hash = { embedder: { provider: 'hash' } }
 
-test('plugins raises the vectors and adds no rule to apply()', () => {
-  let sql = mem()
-  install({ storage: { statements: sql } })
+test('the schema raises the vectors, and plugins add no rule to apply()', () => {
+  let sql = open(':memory:')
+  add(sql, schema())
   assertEquals(plugins(), [])
   assertEquals(tally(sql, TABLE), 0)
-  // Installation is idempotent. Binding is independent of installation.
-  install({ storage: { statements: sql } })
+  // Adding it again changes nothing.
+  add(sql, schema())
 })
 
 test('the extension a config builds answers .near over these vectors', async () => {
@@ -83,7 +85,6 @@ test('a phrase search sees an embedder that arrives after composition', async ()
 })
 
 test('SQL facets reject storage without a statement capability', () => {
-  assertThrows(() => install({ storage: {} }), Error, 'no SQL statements')
   assertThrows(() => extend({ storage: {} }, hash), Error, 'no SQL statements')
   assertThrows(
     () => meaning({ storage: {}, vocab: shop, graph: none }),

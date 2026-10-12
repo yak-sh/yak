@@ -83,7 +83,7 @@ test('box role groups and enriches a spool occurrence through its configured cat
       },
       ['graph', 'effects', '@yaks/tracker'],
       undefined,
-      { install: true },
+      {},
     )
     let error = new Error('broken')
     error.stack = `Error: broken\n at fail (file://${dir}/fail.ts:1:33)`

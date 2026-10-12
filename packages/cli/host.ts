@@ -63,12 +63,18 @@ import {
   store as machine,
   vanished,
 } from '@yaks/process'
-import { lit } from '@yaks/sql'
 import type { Store } from '@yaks/sqlite'
-import { columns } from '@yaks/sqlite/physical'
-import { installMigrations, migrations } from '@yaks/sqlite/migration'
+import { migrations, migrationSchema } from '@yaks/sqlite/migration'
+import { add, follow, printOf } from '@yaks/sqlite/follow'
 import type { Opened } from '@yaks/sqlite/db'
-import { adopt, fields as searched, find, type Hit, search } from '@yaks/fts'
+import {
+  adopt,
+  fields as searched,
+  find,
+  type Hit,
+  schema as textSchema,
+  search,
+} from '@yaks/fts'
 import { effects, released } from '@yaks/effects'
 import { type Local, peek, warm } from '@yaks/secrets'
 import { reporter, revision } from './report.ts'
@@ -211,9 +217,9 @@ export type Served = Host & {
 
 /** How a host is composed, beyond its roles. */
 export type ComposeOpts = {
-  /** Create or upgrade schema. Ordinary file-backed hosts only bind it. */
-  install?: boolean
-  /** Open SQLite read-only and record no process or tool-call bookkeeping. */
+  /** Open SQLite read-only and record no process or tool-call bookkeeping. A
+   * reader never changes the schema; every other host brings the file to its
+   * composed schema as it opens (@yaks/sqlite `follow`). */
   readOnly?: boolean
   /** the thread running the duties this host hands off */
   thread?: Thread
@@ -371,7 +377,6 @@ let composed = async (
     config.tracker && !opts.readOnly ? revision() : undefined,
     roles,
   )
-  let installing = opts.install ?? path == ':memory:'
   let opened: Opened | undefined
   let open = async (): Promise<Opened> => {
     let driver = opts.readOnly
@@ -382,9 +387,6 @@ let composed = async (
   let recorded: Traces | undefined
   let captureControl: ReturnType<typeof traceControl> | undefined
   try {
-    if (installing && opts.readOnly) {
-      throw new Error('a reader cannot install a graph')
-    }
     // An existing graph can refuse before any plugin runtime is imported.
     // Keep its connection; absent graphs wait for a valid assembly before
     // creating a file or its directory.
@@ -401,7 +403,6 @@ let composed = async (
       part?.('sqlite')
       opened = await open()
       part?.('migrations')
-      if (installing) installMigrations(opened)
       migrations(opened).ready()
     }
     // Where this graph's secrets are kept (./vault.ts), and each secret an
@@ -470,25 +471,13 @@ let composed = async (
       part?.('sqlite')
       opened = await open()
       part?.('migrations')
-      if (installing) installMigrations(opened)
+      // A new file has no migration control yet; a writer adds it first.
+      if (!opts.readOnly) add(opened, migrationSchema())
     } else part?.('migrations')
     let sql = opened
     // Facet imports may have awaited while another process announced work.
     // Refuse again on the retained connection before domain schema or factories.
     migrations(sql).ready()
-    if (installing) {
-      for (let statement of blobSchema()) sql.query(statement)
-    }
-    // Before explicit expansion, ordinary CLI reads still work over old homes.
-    // Only this SQLite boundary knows the absent destination; plugins see a
-    // canonical empty machine reference, and provisioning waits for expansion.
-    if (
-      !installing && vocab.prop('home', 'machine') &&
-      columns(sql, 'home').includes('worktree') &&
-      !columns(sql, 'home').includes('machine')
-    ) {
-      derived['home.machine'] = { tag: 'number', expr: () => lit(null) }
-    }
 
     part?.('host')
     let chosen = plugins.find(([name]) => name == '@yaks/blob')?.[1].store as
@@ -576,7 +565,21 @@ let composed = async (
       },
       // The text index follows plugin compilers, preserving their precedence.
       extend: () => text.length ? [search(text, sql)] : [],
-      install: installing ? (built) => built.storage.install() : undefined,
+      // One print covers everything this file needs: the store's tables, the
+      // ones beside them, the plugins' own and the text indexes. A file that
+      // recorded it opens with no DDL; one that did not adds what is missing.
+      schema: opts.readOnly ? undefined : (_built, stmts) => {
+        let beside = [...migrationSchema(), ...blobSchema(), ...stmts]
+        let print = printOf(store!.print(), [
+          ...beside,
+          ...textSchema(text, derived),
+        ])
+        follow(sql, print, () => {
+          store!.install()
+          add(sql, beside)
+          if (text.length) adopt(sql, text, derived, { heal: false })
+        })
+      },
       effects: (built, disabled) => {
         return effects(vocab, {
           owes: roles.includes('effects') ? 'handled' : 'declared',
@@ -617,8 +620,6 @@ let composed = async (
         built.machines.resolveHome = resolveSessionHome(sql, () => built.graph)
       },
       search: (built, meaning) => {
-        part?.('fts')
-        if (installing && text.length) adopt(sql, text, derived)
         part?.('search')
         return text.length
           ? async (words, opts) => {

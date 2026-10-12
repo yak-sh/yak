@@ -85,7 +85,7 @@ test('ordinary serve fallback outlives HTTP shutdown', async () => {
       read(`${dir}/yak.json`),
       ['graph'],
       undefined,
-      { install: true, process: false },
+      { process: false },
     )
     await installed.close()
     web = child(dir, ['--config', `${dir}/yak.json`, 'serve'], {})

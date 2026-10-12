@@ -142,7 +142,7 @@ test('restart drains tracker intake without losing its spool or a web request', 
         }),
       )
       hosts.push(
-        await compose(read(config), ['graph'], undefined, { install: true }),
+        await compose(read(config), ['graph'], undefined),
       )
     }
     let old = start('probe-work@old.service', work)

@@ -34,9 +34,7 @@ export let trackerConfig = (dir: string) => ({
 test('a composed tracker drains a separate spool, preserving error attribution', async () => {
   let dir = await Deno.makeTempDir()
   let config = { ...trackerConfig(dir), db: ':memory:' }
-  let host = await compose(config, ['graph', '@yaks/tracker'], undefined, {
-    install: true,
-  })
+  let host = await compose(config, ['graph', '@yaks/tracker'], undefined, {})
   try {
     let actor = { by: mint(), via: mint() }
     let entity = mint(), process = mint()

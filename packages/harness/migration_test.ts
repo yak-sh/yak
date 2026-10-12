@@ -3,9 +3,10 @@ import { assertEquals, assertRejects } from '@std/assert'
 import { FakeTime } from '@std/testing/time'
 import { open as opened } from '@yaks/sqlite/db'
 import {
-  installMigrations,
+  add,
   MigrationPending,
   migrations,
+  migrationSchema,
   objects,
 } from '@yaks/sqlite'
 import { tally } from '@yaks/sql'
@@ -38,7 +39,7 @@ test('closing the agent stops its migration monitor', async () => {
 const pendingDir = Deno.makeTempDirSync()
 const pendingPath = pendingDir + '/test.db'
 const pendingSql = opened(pendingPath)
-installMigrations(pendingSql)
+add(pendingSql, migrationSchema())
 migrations(pendingSql).announce('new-schema', 0)
 
 test('pending migration refuses harness startup before installing domain tables', async () => {
@@ -50,7 +51,7 @@ test('pending migration refuses harness startup before installing domain tables'
       () =>
         compose(config, ['graph'], () => {
           throw new Error('broken plugin import')
-        }, { install: true }),
+        }),
       MigrationPending,
     )
     let made = false
@@ -63,7 +64,7 @@ test('pending migration refuses harness startup before installing domain tables'
     const load: Load = <F extends keyof Facets>(_: string, name: F) =>
       Promise.resolve((name == 'vocab' ? factories : null) as Facets[F] | null)
     await assertRejects(
-      () => compose(config, ['graph'], load, { install: true }),
+      () => compose(config, ['graph'], load),
       MigrationPending,
     )
     assertEquals(made, false)
@@ -77,7 +78,7 @@ test('pending migration refuses harness startup before installing domain tables'
       return Promise.resolve(null)
     }
     await assertRejects(
-      () => compose(config, ['graph'], loading, { install: true }),
+      () => compose(config, ['graph'], loading),
       MigrationPending,
     )
     assertEquals(objects(sql, { name: 'entity' }), [])

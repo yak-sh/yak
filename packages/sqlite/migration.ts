@@ -6,6 +6,7 @@ import {
   type Expr,
   lit,
   select,
+  type Stmt,
   table,
   val,
 } from '@yaks/sql'
@@ -43,9 +44,10 @@ export class MigrationPending extends Error {
   }
 }
 
-/** Create the control table during installation, never when binding a reader. */
-export function installMigrations(db: Driver): void {
-  db.query({
+/** The control table, as the statement a graph's composed schema carries
+ * (./follow.ts): a writer adds it where it is missing, a reader never does. */
+export function migrationSchema(): Stmt[] {
+  return [{
     t: 'create table',
     name: CONTROL,
     ifNot: true,
@@ -64,10 +66,10 @@ export function installMigrations(db: Driver): void {
       { name: 'finished', type: 'real' },
       { name: 'error', type: 'text' },
     ],
-  })
+  }]
 }
 
-/** Bind migration control over a graph the installer prepared. */
+/** Bind migration control over a graph a writer has brought to its schema. */
 export function migrations(db: Driver): MigrationControl {
   const one = eq(col('singleton'), lit(1))
   const set = (set: Record<string, Expr>) =>

@@ -128,13 +128,13 @@ twenty writes; `._tx.via=S-7` is what one session wrote, and
 written ahead of a tag for the store and the component, so `yak graph show` and
 a link open one directly.
 
-The graph installer calls `@yaks/journal/graph`'s `install(host)` to create and
-upgrade journal tables. The host supplies `storage.statements`, the synchronous
-statement capability from `@yaks/sql`; storage without that capability cannot
-bind a journal. Journal statements participate in the graph's storage
-transaction, so a rollback removes both the graph write and its history. Its
-`plugins(host)` only binds transaction hooks; opening a graph never creates
-indexes over its history.
+`@yaks/journal/graph`'s `schema()` is the journal's tables as statements, which
+a writing host adds with the rest of its composed schema (@yaks/sqlite
+`follow`). The host supplies `storage.statements`, the synchronous statement
+capability from `@yaks/sql`; storage without that capability cannot bind a
+journal. Journal statements participate in the graph's storage transaction, so a
+rollback removes both the graph write and its history. Its `plugins(host)` only
+binds transaction hooks.
 
 `backed(vocab)`, exported by the root and by `@yaks/journal/vocab`, is what a
 store reads them through: `storage(driver, vocab, { backed: backed(vocab) })`
@@ -283,8 +283,8 @@ change it) and hands each commit to `each` in order. A commit `each` fails on is
 offered again at the next look, up to five times, before it is reported and
 passed over. @yaks/api feeds its `/ws` subscriptions this way.
 
-A store an older journal made gains the `host` column the next time
-`@yaks/journal/graph` opens it (`grown()`).
+A store an older journal made gains the `host` column the next time a writing
+host opens it (`schema()`, @yaks/sqlite `grow`).
 
 ## Undo
 
@@ -349,11 +349,11 @@ The root exports `ddl`, `log`, `journal`, `backed`, `applied`, `undone`, `undo`,
 `Final`, value encoding helpers, and types including `Log`, `LogOpts`, `Batch`,
 `Entry`, `Patch`, `Delta` and `Cas`.
 
-| Sub-module export     | Purpose                                                            |
-| --------------------- | ------------------------------------------------------------------ |
-| `@yaks/journal/vocab` | `journalDoc`, `docs` and `backed`: `_tx`, `_change`, `history`     |
-| `@yaks/journal/graph` | `plugins(host)` installs tables/plugin; `logFor(host)` binds a log |
-| `@yaks/journal/tools` | `runs(host)` implements the history tool                           |
+| Sub-module export     | Purpose                                                                |
+| --------------------- | ---------------------------------------------------------------------- |
+| `@yaks/journal/vocab` | `journalDoc`, `docs` and `backed`: `_tx`, `_change`, `history`         |
+| `@yaks/journal/graph` | `schema()` its tables; `plugins(host)` the hooks; `logFor(host)` a log |
+| `@yaks/journal/tools` | `runs(host)` implements the history tool                               |
 
 ## Compatibility
 

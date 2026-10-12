@@ -165,15 +165,6 @@ export let opened = (
   return host
 }
 
-/** Install or upgrade the graph a config names. No services are started. */
-export let install = async (path: string): Promise<void> => {
-  let host = await compose(read(path), ['graph'], facet, {
-    install: true,
-    process: false,
-  })
-  await host.close()
-}
-
 /** The independent duty process. Its graph is registered with the same wind
  * down path as any command: stop claims, finish in-flight work, then close.
  * Readiness means the pool's handlers and graph are assembled, not that old

@@ -10,6 +10,7 @@
     "./read-db": "./read-db.ts",
     "./physical": "./physical.ts",
     "./migration": "./migration.ts",
+    "./follow": "./follow.ts",
     "./read-store": "./read-store.ts"
   },
   "license": "Apache-2.0",

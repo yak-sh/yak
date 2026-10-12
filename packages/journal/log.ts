@@ -217,17 +217,6 @@ export let ddl = (spine = 'entity'): Stmt[] => {
   ]
 }
 
-/** What brings a journal a store already holds up to {@link ddl}'s shape,
- * given the columns its `journal_tx` has now: each column it predates, added.
- * A store opened by an older journal gains them the next time it is opened,
- * so nothing writes a row its table cannot take. */
-export let grown = (has: string[]): Stmt[] =>
-  has.includes('host') ? [] : [{
-    t: 'alter table',
-    table: 'journal_tx',
-    add: { name: 'host', type: 'text' },
-  }]
-
 // The properties an after-image records: everything but `eid`, which is the
 // row's own identity and already the change's entity.
 let written = (value: Comp): [string, unknown][] =>

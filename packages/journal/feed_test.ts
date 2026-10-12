@@ -8,10 +8,10 @@ import { assertEquals, assertThrows } from '@std/assert'
 import type { Bundle } from '@yaks/graph'
 import { applied } from './undo.ts'
 import { follow } from './feed.ts'
-import { ddl, grown } from './log.ts'
-import { install, logFor, plugins } from './graph.ts'
+import { ddl } from './log.ts'
+import { logFor, plugins, schema } from './graph.ts'
 import { mem } from '../sqlite/testing.ts'
-import { statements } from '@yaks/sqlite'
+import { add, statements } from '@yaks/sqlite'
 import { sync, wiki, wikiGraph, wikiLog } from './testing.ts'
 
 let fixture = (n: number) => {
@@ -113,20 +113,15 @@ test('a store an older journal made takes the host once it is opened again', () 
   let columns = () =>
     db.query({ t: 'pragma', name: 'table_info', arg: 'journal_tx' })
       .map((c) => String(c.name))
-  assertEquals(grown(columns()).length, 1)
+  assertEquals(columns().includes('host'), false)
+  add(db, schema())
   let host = { storage: { statements: statements(db) } }
-  install(host)
   plugins({ ...host, vocab: wiki })
-  assertEquals(grown(columns()), [])
+  assertEquals(columns().includes('host'), true)
 })
 
 test('a journal requires storage that offers statements', () => {
   let host = { storage: {} }
-  assertThrows(
-    () => install(host),
-    Error,
-    'this storage offers no SQL statements',
-  )
   assertThrows(
     () => logFor(host),
     Error,

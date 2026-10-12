@@ -47,13 +47,11 @@ import {
   and,
   type BindOpts,
   col,
-  type Derived,
   type Driver,
   erect,
   literals,
   oneOf,
   type Raw,
-  render,
   type Row,
   select,
   sourceScreen,
@@ -70,13 +68,11 @@ import type {
   Match,
   ReadOpts,
 } from '@yaks/graph'
-import { sha256 } from '@yaks/graph/sha256'
 import { after, isPromise } from '@yaks/fp'
 import { context, scope } from '@yaks/trace'
 import type { Query } from './read.ts'
 import {
   analyzed,
-  FIT,
   fit,
   grown,
   indexed,
@@ -107,6 +103,7 @@ import {
   ledger,
 } from './archetype.ts'
 import { componentTables, shape } from './physical.ts'
+import { plan } from './plan.ts'
 import { births, patch, prune, remove, revive, spines } from './write.ts'
 import { bindings } from './rules.ts'
 import { basis, local, memoized } from './memo.ts'
@@ -268,6 +265,9 @@ export type Store = {
    * that already exists (ddl.ts `grown`). Read after `ddl()` has run.
    */
   grown: () => Stmt[]
+  /** the print of the statements {@link install} runs, the store's part of a
+   * composed schema's print (./follow.ts) */
+  print: () => string
   /** run them — create the tables and indexes the vocabulary needs, and
    * classify what the archetype backfill finds unclassified; nothing, where
    * the file's schema is as this vocabulary last installed it */
@@ -301,8 +301,9 @@ export type Opts = BindOpts & {
    * True asserts that this vocabulary and its derived schema, metadata and
    * archetypes already stand; false asks this adapter to install them. The
    * host must bind a new store when its schema changes. File drivers never
-   * install on an operation: their schema belongs to the explicit installer.
-   * Explicit `install()` always validates, regardless of this check. */
+   * install on an operation: their host brings them to its composed schema
+   * as it opens (./follow.ts). `install()` always validates, regardless of
+   * this check. */
   schemaReady?: () => boolean
   /** Give new spines a human-readable number. Opt-IN: left out, an entity is
    * its eid and nothing else, which is what a store whose entities nobody ever
@@ -320,45 +321,6 @@ export type Opts = BindOpts & {
    * not be fitted to the vocabulary, left as it was (ddl.ts `fit`). One
    * line on the console, by default (ddl.ts `logged`). */
   report?: (error: Error) => void
-}
-
-// What `install()` runs, known once per vocabulary and read overrides: the
-// fingerprint of its statements, the statements that create an object where
-// it is missing, and the objects they create. Over a current file the
-// rendering and the hashing were most of what an install cost, and none of it
-// moves while a process holds the same vocabulary: a Vocab is a value nobody
-// mutates once it is loaded, so the object itself is the key.
-type Make = Extract<
-  Stmt,
-  { t: 'create table' | 'create index' | 'create view' | 'create trigger' }
->
-type Plan = { print: string; raised: Make[]; made: string[] }
-let makes = (s: Stmt): s is Make =>
-  s.t == 'create table' || s.t == 'create index' || s.t == 'create view' ||
-  s.t == 'create trigger'
-let plans = [
-  new WeakMap<Vocab, WeakMap<Derived, Plan>>(),
-  new WeakMap<Vocab, WeakMap<Derived, Plan>>(),
-]
-let NONE: Derived = {}
-let plan = (vocab: Vocab, derived: Derived = NONE, file = false): Plan => {
-  let held = plans[Number(file)]
-  let by = held.get(vocab) ?? new WeakMap<Derived, Plan>()
-  held.set(vocab, by)
-  let known = by.get(derived)
-  if (known) return known
-  let stmts = [...tabled(vocab, derived, file), ...indexed(vocab)]
-  let raised = stmts.filter(makes)
-  let fresh = {
-    // The fitting's revision rides beside them (ddl.ts `FIT`): what fitting
-    // changes is read off the file, so a fitting that learns something new
-    // installs again over a file whose statements are as they were.
-    print: sha256([FIT, ...stmts.map((s) => render(s).sql)].join(';\n')),
-    raised,
-    made: raised.map((s) => s.name),
-  }
-  by.set(derived, fresh)
-  return fresh
 }
 
 // The read options a statement is the same under (@yaks/graph `ReadOpts`).
@@ -815,7 +777,8 @@ export let storage = (
       settle,
     }
   }
-  // File schema belongs to an explicit installer, never to an operation.
+  // A file store is brought to its schema by its host as it opens
+  // (./follow.ts), never by an operation.
   // In-memory stores are private scratch values and may prepare themselves.
   let ready = false
   let install = () => {
@@ -913,6 +876,7 @@ export let storage = (
       ...indexed(vocab),
     ],
     grown: () => grown(vocab, standing(driver, vocab)),
+    print: () => plan(vocab, base.derived, !!driver.file).print,
     install,
     read: (query, o, comps) => {
       ensure()
@@ -988,5 +952,6 @@ export let storage = (
 }
 
 export * from './migration.ts'
+export { add, follow, grow, printOf } from './follow.ts'
 
 export { doom } from './doom.ts'

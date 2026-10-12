@@ -29,7 +29,7 @@ test('the harness and blob door share the graph artifact store', async () => {
             : p
         )
       }
-      let host = await compose(config, ['graph'], undefined, { install: true })
+      let host = await compose(config, ['graph'], undefined)
       try {
         let h = hosted(host)
         let bytes = Uint8Array.from(atob(png), (c) => c.charCodeAt(0))

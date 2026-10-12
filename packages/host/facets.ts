@@ -1,7 +1,7 @@
 /** The subpaths a plugin contributes to a composed graph. */
 import type { Authenticate, Filter, Handler, Route } from '@yaks/api'
 import type { Eid, Plugin } from '@yaks/graph'
-import type { Backings, Derived, Extension } from '@yaks/sql'
+import type { Backings, Derived, Extension, Stmt } from '@yaks/sql'
 import type { Handlers } from '@yaks/effects'
 import type { Reply } from '@yaks/tools'
 import type { Runs } from '@yaks/graph/tools'
@@ -28,8 +28,9 @@ export type VocabFacet = {
 }
 
 /** `<plugin>/graph` — what a write means, what a query may ask for, and who
- * is writing. `install` prepares its tables only during explicit installation;
- * `plugins` binds hooks without changing storage. `extend` contributes the clause
+ * is writing. `schema` says, as data, the tables of its own the plugin's store
+ * needs, which a writing host adds with the rest of its composed schema
+ * (@yaks/sqlite `follow`); `plugins` binds hooks without changing storage. `extend` contributes the clause
  * compilers every read path consults (@yaks/sql `Extension`), which is how a
  * package holding an index of its own — a text search, a vector, a link table
  * — can answer a clause the compiler would otherwise reject.
@@ -43,8 +44,9 @@ export type VocabFacet = {
  * graph. It is handed the host with nothing open on it yet — keep the
  * reference, do not call it. At most one plugin may export it. */
 export type GraphFacet = {
-  /** Schema and migrations, run only by the explicit graph installer. */
-  install?: (host: Host, options: Options) => void
+  /** The statements creating this plugin's own tables, each of which only adds
+   * what is missing; a table that stands gains the columns it lacks. */
+  schema?: (host: Host, options: Options) => Stmt[]
   plugins?: (host: Host, options: Options) => Plugin[]
   /** Bundles owed to a caller beside the answer to a direct tool call. */
   reply?: (host: Host, options: Options) => Reply

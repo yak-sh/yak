@@ -131,18 +131,14 @@ bound, read its anatomy: `yak visualize anatomy --group facets`
 `~/.yak/yak.json` is the box's spine, and the box serves other configs beside
 it (`~/.yak/tracker.json` is the tracker's). A plugin runs in a config once its
 `plugins` list names it, as `"@yaks/x"` or `{"use": "@yaks/x", "with": {…}}`,
-its components have tables, and the server restarts. Today only the graph
-installer, `yak upgrade --config <file>` (packages/cli/README.md, "graph
-installer"), creates those tables; until it runs, every query naming the new
-plugin's components fails with "no such table". That is a gap, not a design:
-T-115787 makes the schema follow the vocabulary wherever a graph is opened for
-writing. Every `yak`
+and the server restarts. Its tables need no step: the first process that opens
+the graph to write with the plugin in its config adds them (packages/cli/README.md,
+"The schema follows the vocabulary"). Every `yak`
 command composes from yak.json, so an entry that fails to compose takes all of
 them down together, and that has happened. Treat the edit like work on a
 running patient: prove the config on a scratch server first
 (`end-to-end-checks`), keep a copy of the old file and a `.backup` of its db,
-then edit it, run `yak upgrade --config <file>`, and run `yak restart`, the
-agent restart door. The file is plain JSON on disk, so a
+then edit it and run `yak restart`, the agent restart door. The file is plain JSON on disk, so a
 key in `with` is `{"secret": "NAME"}` and the value lives in the vault
 (`secrets-and-connections`).
 

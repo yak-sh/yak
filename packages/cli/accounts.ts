@@ -46,12 +46,11 @@ export let personal = async (state: string = stateDir()): Promise<string> => {
     ) + '\n',
     { createNew: true, mode: 0o600 },
   )
-  // Explicit auth creates and installs its personal graph. Ordinary token
-  // lookups only open this already-installed file.
+  // Explicit auth creates its personal graph; opening it to write adds the
+  // schema. Ordinary token lookups only read this file.
   let { compose } = await import('./host.ts')
   let { read } = await import('./config.ts')
   let host = await compose(read(path), ['graph'], undefined, {
-    install: true,
     process: false,
   })
   await host.close()

@@ -325,9 +325,7 @@ test('a failed daily backup becomes a tracker bug', async () => {
     { ...read(f.configPath), db: `${f.dir}/tracker.db` },
     ['graph', 'effects', '@yaks/tracker'],
     undefined,
-    {
-      install: true,
-    },
+    {},
   )
   try {
     await seed(f.remote, ['2026-01-01T044200Z'])
