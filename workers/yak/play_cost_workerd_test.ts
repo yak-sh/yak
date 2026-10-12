@@ -14,7 +14,7 @@ import type { Report } from './play_cost_fixture.ts'
 
 /** Rows per player-minute: the owner's bar, and what is held until then. */
 let BAR = 99
-let HELD = { read: 204, written: 181 }
+let HELD = { read: 156, written: 181 }
 
 test('Vale play costs no more rows per player-minute than it has been cut to', async () => {
   let report = await playReport()

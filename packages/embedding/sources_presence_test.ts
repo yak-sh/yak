@@ -66,7 +66,10 @@ let reads = 0
 let measured: Statements = {
   ...db,
   query: (s) => {
-    if (s.t == 'select' && s.from?.t == 'table' && s.from.name == 'content') {
+    if (
+      s.t == 'select' && !Array.isArray(s.from) &&
+      s.from?.t == 'table' && s.from.name == 'content'
+    ) {
       reads++
     }
     return db.query(s)
