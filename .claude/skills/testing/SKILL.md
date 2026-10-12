@@ -90,7 +90,12 @@ stronger.
   predicates, paths and projections, not just the storage packages. Vocabulary
   declarations also meet in `packages/vocab_test.ts`, whose directory walk
   needs `--all` to see changed JSON files. The full suite is for a change that
-  reaches across packages in a way their own tests can't cover.
+  reaches across packages in a way their own tests can't cover, and a change
+  to how @yaks/query parses, @yaks/match evaluates, @yaks/sql compiles,
+  @yaks/sqlite plans or @yaks/graph applies is always that: every package that
+  reads or writes depends on it (the inbox, search and the yaks.app row-cost
+  tests have each broken that way). Run `deno task test` and
+  `deno task test --tag=workerd workers/yak` once before landing it.
 - `deno task test:budget` runs the whole suite held to its budget, and the gate
   runs it: a test case over 1 ms fails unless bench/test-budget.json lists it,
   a listed one fails past its record (times the list's slack), and so does a
