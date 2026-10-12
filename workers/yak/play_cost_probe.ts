@@ -1,4 +1,5 @@
 import { referenceSelectorCost } from './reference_selector_fixture.ts'
+import { collectionSelectorCost } from './collection_selector_fixture.ts'
 import { blobGatherCost } from './blob_gather_cost_fixture.ts'
 import { numericSelectorCost } from './numeric_selector_fixture.ts'
 import { coldMessages } from './cold_message_fixture.ts'
@@ -53,6 +54,9 @@ export class PlayCost {
   async measure(req: Request): Promise<Response> {
     if (new URL(req.url).searchParams.has('write-storage-failure')) {
       return Response.json(await writeStorageFailure(this.ctx.storage))
+    }
+    if (new URL(req.url).searchParams.has('collection-selector')) {
+      return Response.json(collectionSelectorCost(this.ctx.storage))
     }
     if (new URL(req.url).searchParams.has('reference-selector')) {
       return Response.json(referenceSelectorCost(this.ctx.storage))

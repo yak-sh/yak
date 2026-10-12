@@ -21,7 +21,7 @@
 
 import type { Prop, Scalar, Vocab } from '@yaks/vocab'
 import { timeEdges, type Value } from '@yaks/query/core'
-import { type Frag, spelled } from './ast.ts'
+import { bounded, type Frag, spelled } from './ast.ts'
 import { literal, nest } from './render.ts'
 
 // The type a value is coerced to before comparison — the vocabulary's property
@@ -143,14 +143,10 @@ let col = (comp: string, prop: string, v: Vocab): string | null => {
 
 // Keep generated SQL bounded. Large lists still take one bind, and NUL
 // travels in that bind because a SQL string literal cannot carry it.
-let encoder = new TextEncoder()
 let referenceValues = (eids: string[]): string | undefined => {
-  if (
-    !eids.length || eids.length > 64 ||
-    eids.some((eid) => eid.length > 4096 || eid.includes('\0'))
-  ) return
-  let values = eids.map((eid) => `(${literal(eid)})`).join(', ')
-  return encoder.encode(values).length <= 4096 ? values : undefined
+  return bounded(eids)
+    ? eids.map((eid) => `(${literal(eid)})`).join(', ')
+    : undefined
 }
 
 /**

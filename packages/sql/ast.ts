@@ -18,7 +18,8 @@
 // ```
 //
 // Names are identifiers, always quoted; a value is a bound parameter, or, where
-// SQLite binds none (a trigger, a view, a default), a literal the renderer
+// SQLite binds none (a trigger, a view, a default) or a bounded collection
+// needs no virtual rows, a literal the renderer
 // quotes. A function, an operator, a type and a pragma are checked against
 // what a name can be, so no string a caller holds becomes SQL text by passing
 // through here.
@@ -530,16 +531,44 @@ export let unionAll = (...parts: Query[]): Compound => ({
   parts,
 })
 
-/** The members of a JSON array bound as one parameter: `(select value from
- * json_each(?))`, as a set for {@link among}. A host caps how many parameters
- * one statement binds (a Durable Object's SQLite takes 100), so a list of any
- * length rides as one. SQLite reads each member as a row, and a Durable Object
- * bills it as one: {@link oneOf} spells out the lists it can. */
+/** A collection as a query with one `value` column. Bounded collections use
+ * literal VALUES, costing no virtual rows; others use one JSON parameter,
+ * respecting a host's bound-parameter ceiling regardless of collection size. */
 export let each = (list: readonly Param[]): Query =>
-  select({
-    cols: [col('value')],
-    from: call('json_each', [val(JSON.stringify(list))]),
-  })
+  bounded(list)
+    ? select({
+      cols: [as(col('column1'), 'value')],
+      from: from({ t: 'values', rows: list.map((v) => [lit(v)]) }),
+    })
+    : select({
+      cols: [col('value')],
+      from: call('json_each', [val(JSON.stringify(list))]),
+    })
+
+/** Whether a finite collection fits in literal SQL without changing the
+ * values JSON would supply. Larger collections and strings containing NUL
+ * remain one JSON bind, respecting hosts' parameter ceilings. */
+export let bounded = (
+  list: readonly Param[],
+): list is readonly (string | number | boolean | null)[] => {
+  if (spelled(list)) return true
+  if (!list.length || list.length > 64) return false
+  let bytes = (list.length - 1) * 2
+  for (let v of list) {
+    if (typeof v == 'string') {
+      if (v.length > 4096 || v.includes('\0')) return false
+      bytes += new TextEncoder().encode(v).length + 4 +
+        (v.match(/'/g)?.length ?? 0)
+    } else if (
+      v == null || typeof v == 'boolean' ||
+      typeof v == 'number' && Number.isFinite(v)
+    ) {
+      bytes += (v == null ? 4 : typeof v == 'boolean' ? 1 : String(v).length) +
+        2
+    } else return false
+  }
+  return bytes <= 4096
+}
 
 /** Whether a list is written into the statement rather than bound as JSON:
  * integers, as few as keep the statement short. Written out as rows of a
@@ -560,8 +589,8 @@ export let spelled = (list: readonly unknown[]): list is number[] =>
   list.every((v) => Number.isSafeInteger(v))
 
 /** `e` is one of `list`, read the way that costs fewest rows: one value is an
- * equality, integers are spelled out ({@link spelled}), and any other list is
- * bound once as JSON ({@link each}).
+ * equality, bounded collections are literal VALUES, and others bind once as
+ * JSON ({@link each}).
  *
  * ```ts
  * import { col, oneOf, render, select, table } from '@yaks/sql'
@@ -570,13 +599,13 @@ export let spelled = (list: readonly unknown[]): list is number[] =>
  *   render(select({ cols: [col('eid')], from: table('entity'), where: oneOf(col('id'), list) })).sql
  * ids(['a']) // 'select "eid" from "entity" where "id" = ?'
  * ids([1, 2]) // 'select "eid" from "entity" where "id" in (values (1), (2))'
- * ids(['a', 'b']) // 'select "eid" from "entity" where "id" in (select "value" from "json_each"(?))'
+ * ids(['a', 'b']) // `select "eid" from "entity" where "id" in (values ('a'), ('b'))`
  * ```
  */
 export let oneOf = (e: Expr, list: readonly Param[]): Expr =>
   list.length == 1
     ? eq(e, val(list[0]))
-    : spelled(list)
+    : bounded(list)
     ? among(e, { t: 'values', rows: list.map((v) => [lit(v)]) })
     : among(e, each(list))
 

@@ -20,7 +20,6 @@ import {
   as,
   type Backings,
   type BindOpts,
-  call,
   col,
   compile,
   cross,
@@ -414,7 +413,7 @@ let owning = (
   key: Expr,
 ): { from: Source; joins: Join[]; where: Expr } =>
   ids.length == 1 ? { from: src, joins: [], where: eq(key, val(ids[0])) } : {
-    from: call('json_each', [val(JSON.stringify(ids))], '@owners'),
+    from: from(each(ids), '@owners'),
     joins: [cross(src)],
     where: eq(key, col('value', '@owners')),
   }

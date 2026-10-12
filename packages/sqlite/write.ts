@@ -49,15 +49,16 @@ import { comps, Refused, TOMBSTONE } from '@yaks/graph'
 import {
   and,
   as,
-  call,
   col,
   cross,
   type Delete,
   type Driver,
+  each,
   effect,
   eq,
   exists,
   type Expr,
+  from,
   type Insert,
   isNull,
   lit,
@@ -157,11 +158,7 @@ let stored = (driver: Driver, eids: string[]): Map<string, Spine> =>
           where: eq(col('eid', 'e'), val(eids[0])),
         }
         : {
-          from: call(
-            'json_each',
-            [val(JSON.stringify([...new Set(eids)]))],
-            '@eids',
-          ),
+          from: from(each([...new Set(eids)]), '@eids'),
           joins: [cross(table('entity', 'e', 'sqlite_autoindex_entity_1'))],
           where: eq(col('eid', 'e'), col('value', '@eids')),
         }),

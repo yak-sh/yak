@@ -111,9 +111,6 @@ test('classified gathers select only present tables and only their owners', () =
   // connection wrote
   assertEquals(asked.length, 4)
   assert(!asked.some((s) => /union all|from "product"/.test(s.sql)))
-  for (let q of asked.slice(2)) {
-    assertEquals(JSON.parse(String(q.params[0])).length, 2)
-  }
   // What the graph wrote is held; a store bound afresh reads it.
   asked = []
   s.tx((tx) => tx.get(['a']))

@@ -110,8 +110,10 @@ equal(read.sql, 'select "title" from "book" where "author" = ?')
 equal(read.params, ["O'Brien"])
 equal(render(insert('book', { title: 'Dune' })).params, ['Dune'])
 
-// A set of any length uses one parameter.
-equal(render(among(col('id'), each([1, 2, 3]))).params, ['[1,2,3]'])
+// A short collection costs no parameters; a larger one uses one.
+equal(render(among(col('id'), each([1, 2, 3]))).params, [])
+let many = Array.from({ length: 1000 }, (_, i) => i)
+equal(render(among(col('id'), each(many))).params, [JSON.stringify(many)])
 
 let schema = render({
   t: 'create table',
