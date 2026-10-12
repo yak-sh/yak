@@ -8,6 +8,7 @@ import { token } from '@yaks/graph/sha256'
 import type { Client } from '@yaks/client'
 import { link } from '@yaks/edge'
 import { and, eq, present } from '@yaks/query'
+import { remoteBug } from '@yaks/tracker'
 import { fixing, type Options } from './fix.ts'
 
 /** One tracker bug always names the same work item. */
@@ -44,9 +45,14 @@ let knock = (
 /** Reconcile a tracker answer. The caller retries either store's failed writes. */
 export let follow = (
   g: Graph,
-  options: Options = {},
+  options: Options & { trackers?: string[] } = {},
 ): (bug: Bundle, url: string, mutate: Client['mutate']) => Promise<void> => {
   let { fix, home } = fixing(g, options)
+  // A tracker graph has a page per bug. The platform's Worker answers only
+  // signed reads, so its bugs open on a tracker web's side for them, and
+  // without one they are read with a command.
+  let base = (at: string) => at.replace(/\/$/, '')
+  let web = options.trackers?.find((at) => /^https?:/.test(at))
   return (bug: Bundle, url: string, mutate: Client['mutate']) =>
     fix(async () => {
       if (!bug.bug) return
@@ -106,13 +112,11 @@ export let follow = (
       }
       if (bug.resolved || bug.archived) return
       let project = await home()
-      // A tracker graph has a page per bug; the platform's is read with a
-      // command, since its Worker answers only signed reads.
-      let where = /^https?:/.test(url)
-        ? `[the tracker](${
-          new URL(encodeURIComponent(evidence), `${url.replace(/\/$/, '')}/`)
-            .href
-        })`
+      let page = /^https?:/.test(url)
+        ? `${base(url)}/${encodeURIComponent(evidence)}`
+        : web && `${base(web)}${remoteBug(url, evidence)}`
+      let where = page
+        ? `[the tracker](${page})`
         : `${url}'s tracker: \`yak bug show ${evidence} --source ${url}\``
       let title = str(comp(bug, 'doc')?.title).split('\n')[0] ||
         'Fix tracker bug'

@@ -860,25 +860,33 @@ test('a tracker regression during mark admission rejects the old completion', as
   raced.close()
 })
 
-let platform = await fixture()
-test('the platform tracker is followed first, its task naming the command that reads it', async () => {
+// What the service opens when the platform is followed, and the body of the
+// platform bug's task.
+let platform = async (trackers: string[]) => {
+  let f = await fixture({ trackers })
   let opened: string[] = []
-  await service(platform.host, {
-    ...platform.config,
+  await service(f.host, {
+    ...f.config,
     remote: { url: 'https://tracker.example' },
     open: (at) => {
       opened.push(at)
-      return platform.config.open!(at)
+      return f.config.open!(at)
     },
   })
+  let [task] = await f.g.get([taskEid(bug)])
+  f.close()
+  return { opened, body: String(comp(task, 'doc').body) }
+}
+
+test('the platform tracker is followed first, its task linking its page on the tracker web', async () => {
+  let { opened, body } = await platform([url])
   equal(opened, ['yaks.app', url])
-  let [task] = await platform.g.get([taskEid(bug)])
-  ok(
-    String(comp(task, 'doc').body).includes(
-      `yak bug show ${bug} --source yaks.app`,
-    ),
-  )
-  platform.close()
+  ok(body.includes(`(${url}/?q=.bug&side=yaks.app&bug=${bug})`))
+})
+
+test("with no tracker web, a platform bug's task names the command that reads it", async () => {
+  let { body } = await platform([])
+  ok(body.includes(`yak bug show ${bug} --source yaks.app`))
 })
 
 let held = await fixture()

@@ -29,13 +29,15 @@ and the platform tracker on yaks.app, when `remote` names it, through
 [tracker](../tracker/README.md)'s polled `./poll` watch. The platform's bugs
 reach people, so each pass takes them first, and after a restart no other
 tracker's bug takes a fixer slot until the platform's first poll settles
-(answered or failed, within the poll's timeout); their tasks link
-`yak bug show <eid> --source yaks.app`, since the Worker has no page. Its marks
-carry no precondition. The tracker web role serves that query independently of
-intake. One process holds the `@yaks/heal` service lease: the subscription and
-the serial fixer decisions are a continuing duty, rather than work owed by a box
-commit to the effects pool. Serve that role beside the box's other worker roles,
-for example `yak work --roles effects,@yaks/heal`.
+(answered or failed, within the poll's timeout). The Worker has no page, so
+their tasks link the bug's page on the first configured tracker web
+(`/?q=.bug&side=yaks.app&bug=<eid>`), or with none name
+`yak bug show <eid> --source yaks.app`. Its marks carry no precondition. The
+tracker web role serves that query independently of intake. One process holds
+the `@yaks/heal` service lease: the subscription and the serial fixer decisions
+are a continuing duty, rather than work owed by a box commit to the effects
+pool. Serve that role beside the box's other worker roles, for example
+`yak work --roles effects,@yaks/heal`.
 
 For a bug without a task, one apply writes the task, its `about` edge and, when
 the gates allow it, the fixer request. An existing task linked by an `about`
