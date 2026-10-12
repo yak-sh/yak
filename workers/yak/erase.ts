@@ -64,6 +64,7 @@ import type { Bundle } from '@yaks/graph'
 import { token } from '@yaks/graph/sha256'
 import { declarationOf, keepDeclaration } from './declaration.ts'
 import { sandboxed } from './installed.ts'
+import { componentsOf } from './vocab.ts'
 import { isTestAddress } from './lib/bots.ts'
 import {
   CENSUS,
@@ -532,6 +533,10 @@ let rehomed = async (
   who: Who,
 ): Promise<Bundle[]> => {
   if (sandboxed(app)) return []
+  let home = await declarationOf(env, space, app)
+  // An app with no component declarations cannot be anyone's vocabulary
+  // home. Check its release metadata before waking stores to find borrowers.
+  if (!componentsOf([home.vocab]).length) return []
   let peers = (await dir.apps(space)).filter((one) =>
     one.eid != app.eid && !one.trashed && !sandboxed(one) && one.version
   )
@@ -547,7 +552,6 @@ let rehomed = async (
   }))
   users = users.filter(({ uses }) => Object.values(uses).includes(app.slug))
   if (!users.length) return []
-  let home = await declarationOf(env, space, app)
   let homes: Record<string, string> = {}
   let patches: Bundle[] = [{
     entity: { eid: app.eid },

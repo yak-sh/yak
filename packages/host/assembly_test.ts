@@ -7,7 +7,7 @@ import { ramVault } from '@yaks/secrets'
 import { equal, test, throws } from '@yaks/testing'
 import type { VocabDoc } from '@yaks/vocab'
 import { toolEid } from '@yaks/tools'
-import { assembly, type Binding } from './assembly.ts'
+import { assemble, assembly, type Binding, prepare } from './assembly.ts'
 import { compositionAnatomy } from './anatomy.ts'
 import type { Config } from './config.ts'
 import type { Facets, Load } from './facets.ts'
@@ -94,6 +94,36 @@ test('portable assembly loads tool code once on its first call', async () => {
   equal(toolImports, ['vocab', 'graph', 'tools'])
   await lazy.runner.read(asked)
   equal(toolImports, ['vocab', 'graph', 'tools'])
+})
+
+let deferred = await prepare(config, ['graph'], loading([]))
+let runner = deferred.factories.runner
+let runners = 0
+deferred.factories.runner = (...args) => {
+  runners++
+  return runner(...args)
+}
+let parts: string[] = []
+let deferredPlan = assemble(config, ['graph'], loading([]), deferred, {
+  part: (name) => parts.push(name),
+})
+test('graph reads and writes leave the tool runner deferred until a call needs it', async () => {
+  let before = runners
+  let { host } = deferredPlan.bind(binding())
+  let boundParts = parts.length
+  await host.graph.apply([{ entity: { eid: 'd' }, book: { title: 'Dune' } }])
+  equal((await host.graph.get(['d']))[0].book, { title: 'Dune!' })
+  equal(runners, before)
+  equal(host.tools.some((t) => t.name == 'graph_show'), true)
+  equal(runners, before)
+  let call = {
+    entity: { eid: 'show' },
+    call: { to: toolEid('graph_show'), args: { ids: ['d'] } },
+  }
+  equal((await host.runner.read(call))[0].book, { title: 'Dune!' })
+  await host.runner.read(call)
+  equal(runners, before + 1)
+  equal(parts.length, boundParts)
 })
 
 test('portable assembly lets its host surround contributed graph hooks', async () => {

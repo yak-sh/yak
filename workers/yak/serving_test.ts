@@ -1534,7 +1534,18 @@ test("a trashed front page is nobody's, and the owner restores it there", async 
   using k = await router()
   k.put('ada/cookbook/index.html', '<!doctype html><body>cookbook</body>')
   k.put('ada/garden/index.html', '<!doctype html><body>garden</body>')
+  let stores = k.env.STORE, opened: string[] = []
+  k.env.STORE = {
+    ...stores,
+    get: (id) => {
+      opened.push(String(id))
+      return stores.get(id)
+    },
+  }
   await trash(k.env, k.dir, k.space, k.app, { person: ADA, role: 'owner' })
+  // Cookbook owns no components, so deleting it has no vocabulary to move
+  // into Garden. That unrelated app's store stays asleep.
+  assertEquals(opened.includes('ada/garden.bbb222'), false)
 
   // `/` is the space's index again, listing the app that is still here.
   let bare = await k.at('/')

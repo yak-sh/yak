@@ -322,13 +322,19 @@ export let assemble = (
       let ranked: Search | undefined
       let replying: Reply | undefined
       let calls: Runner | undefined
+      let makeTools: (() => NamedTool[]) | undefined
+      let makeRunner: (() => Runner) | undefined
+      let toolPart = part
       let host: Host = {
         ...lent,
         config,
         roles,
         vocab,
         derived,
-        anatomy: observed.read,
+        anatomy: () => {
+          if (makeTools) host.tools
+          return observed.read()
+        },
         observe: observed.observe,
         ui: gather(dressed.map(([facet]) => facet)),
         who: (request) => authenticate(request),
@@ -351,12 +357,12 @@ export let assemble = (
           return watching
         },
         get tools() {
-          if (!made) throw new Error('the tools are not built yet')
-          return made
+          if (!makeTools) throw new Error('the tools are not built yet')
+          return made ??= makeTools()
         },
         get runner() {
-          if (!calls) throw new Error('the tool runner is not built yet')
-          return calls
+          if (!makeRunner) throw new Error('the tool runner is not built yet')
+          return calls ??= makeRunner()
         },
         get handler() {
           return answering
@@ -493,34 +499,36 @@ export let assemble = (
       //
       // A plugin's own tools are listed from its vocabulary and run by its
       // `./tools`, imported the first time one of them is called.
-      let generic = tier({ search: ranked, keywords: vocab.keywords })
-      part?.('tools')
-      observed.tier(generic)
-      let tools = made = [
-        ...generic,
-        ...contributions.filter(({ facets }) =>
-          facets === undefined || facets.includes('tools')
-        ).flatMap(({ docs, options, plugin }) =>
-          loadTools(docs, async () => {
-            let code = await observedLoad(plugin, 'tools')
-            let runs = code?.runs?.(host, optionsOf(plugin, options)) ?? {}
-            let declarations = toolsIn(docs)
-            let names = declarations.map((d) => d.name ?? toolName(d))
-            let joined = declarations.filter((d) =>
-              typeof (runs[d.name ?? toolName(d)] ??
-                runs[[d.noun, d.verb].filter(Boolean).join('_')]) == 'function'
-            ).map((d) => d.name ?? toolName(d))
-            // loadTools joins the whole module; a missing run rejects that join.
-            observed.runs(
-              plugin,
-              joined,
-              joined.length == names.length ? joined : [],
-            )
-            return runs
-          })
-        ),
-      ]
-      part?.('runner')
+      makeTools = () => {
+        toolPart?.('tools')
+        let generic = tier({ search: ranked, keywords: vocab.keywords })
+        observed.tier(generic)
+        return [
+          ...generic,
+          ...contributions.filter(({ facets }) =>
+            facets === undefined || facets.includes('tools')
+          ).flatMap(({ docs, options, plugin }) =>
+            loadTools(docs, async () => {
+              let code = await observedLoad(plugin, 'tools')
+              let runs = code?.runs?.(host, optionsOf(plugin, options)) ?? {}
+              let declarations = toolsIn(docs)
+              let names = declarations.map((d) => d.name ?? toolName(d))
+              let joined = declarations.filter((d) =>
+                typeof (runs[d.name ?? toolName(d)] ??
+                  runs[[d.noun, d.verb].filter(Boolean).join('_')]) ==
+                  'function'
+              ).map((d) => d.name ?? toolName(d))
+              // loadTools joins the whole module; a missing run rejects that join.
+              observed.runs(
+                plugin,
+                joined,
+                joined.length == names.length ? joined : [],
+              )
+              return runs
+            })
+          ),
+        ]
+      }
       let replies = graphs.flatMap(([r, options]) =>
         r.reply ? [r.reply(host, options)] : []
       )
@@ -537,28 +545,40 @@ export let assemble = (
       // written on the first call and at start-up, never while assembling: a
       // one-shot command opens a host to ask one question and should not write
       // just to say hello.
-      let run = calls = prepared.factories.runner(g, {
-        tools,
-        // This host owns the calls it claims, so the start-up pass re-runs its
-        // own interrupted calls and leaves alone another runner's, or those an
-        // imported transcript recorded as already run.
-        ...(self ? { owner: self.by } : {}),
-        // This process, on every call it runs, for a tool that acts on the
-        // machine rather than the graph: `yak land` fast-forwards the checkout
-        // the person typed in, because the tool runs in the same process that
-        // read the command line (local.ts). A host answering HTTP reports its
-        // own, which is the accurate answer — a call arriving over HTTP acts on
-        // the machine that received it.
-        ...process ? { process } : {},
-        report: (error, call, tool) =>
-          readOnly ? console.error(error) : host.report?.(error, {
-            actor: call.$actor ?? self ?? undefined,
-            during: { entity: call.entity.eid, kind: 'call', process: host.me },
-            tags: { tool },
-          }),
-        ...replying ? { reply: replying } : {},
-      })
+      makeRunner = () => {
+        let tools = host.tools
+        toolPart?.('runner')
+        return prepared.factories.runner(g!, {
+          tools,
+          // This host owns the calls it claims, so the start-up pass re-runs its
+          // own interrupted calls and leaves alone another runner's, or those an
+          // imported transcript recorded as already run.
+          ...(self ? { owner: self.by } : {}),
+          // This process, on every call it runs, for a tool that acts on the
+          // machine rather than the graph: `yak land` fast-forwards the checkout
+          // the person typed in, because the tool runs in the same process that
+          // read the command line (local.ts). A host answering HTTP reports its
+          // own, which is the accurate answer — a call arriving over HTTP acts on
+          // the machine that received it.
+          ...process ? { process } : {},
+          report: (error, call, tool) =>
+            readOnly ? console.error(error) : host.report?.(error, {
+              actor: call.$actor ?? self ?? undefined,
+              during: {
+                entity: call.entity.eid,
+                kind: 'call',
+                process: host.me,
+              },
+              tags: { tool },
+            }),
+          ...replying ? { reply: replying } : {},
+        })
+      }
+      // A graph-only caller can read and write without paying to build tools
+      // it never asks for. Effects need the runner now to register owed calls;
+      // every other caller reaches the same construction through Host.
       if (effecting) {
+        let run = host.runner
         let due: Handlers[string] = (e) => run.due(e.entity.eid)
         fx.handle(
           Object.fromEntries(
@@ -602,6 +622,8 @@ export let assemble = (
           run: (signal) => mod.service!(host, options, signal),
         }
       })
+      // Deferred capabilities run after composition's timing spans have ended.
+      toolPart = undefined
       return { host, services: duties }
     },
   }

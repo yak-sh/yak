@@ -108,7 +108,8 @@ export interface Host {
   filters: Filter[]
   /** every tool declared across the plugins, joined to the code behind it,
    * with this graph's own generic tier (@yaks/graph `tier`) first. One list: a
-   * command line runs it, and a transport that lists tools lists it. */
+   * command line runs it, and a transport that lists tools lists it. Built on
+   * first access, including an anatomy read that describes the tools. */
   tools: NamedTool[]
   /** ranked text search over this graph, where its vocabulary marks a property
    * `search: true` and @yaks/fts indexed it — what the tier's `search` tool
@@ -121,7 +122,8 @@ export interface Host {
   reply?: Reply
   /** the one tool runner over this graph: what writes a `call` row, runs the
    * function and writes the result back for recorded work. Direct read-only
-   * requests validate and answer without recording bookkeeping. */
+   * requests validate and answer without recording bookkeeping. Built on first
+   * access, or during assembly when the effects role needs its handlers. */
   runner: Runner
   /** The work this process does that nobody asked for: the effect pool where
    * it serves `effects` (@yaks/effects `work` — any number of processes work
