@@ -853,3 +853,24 @@ test('a tracker regression during mark admission rejects the old completion', as
   ok(!(await raced.tracker.get([bug]))[0].resolved)
   raced.close()
 })
+
+let platform = await fixture()
+test('the platform tracker is followed first, its task naming the command that reads it', async () => {
+  let opened: string[] = []
+  await service(platform.host, {
+    ...platform.config,
+    remote: { url: 'https://tracker.example' },
+    open: (at) => {
+      opened.push(at)
+      return platform.config.open!(at)
+    },
+  })
+  equal(opened, ['yaks.app', url])
+  let [task] = await platform.g.get([taskEid(bug)])
+  ok(
+    String(comp(task, 'doc').body).includes(
+      `yak bug show ${bug} --source yaks.app`,
+    ),
+  )
+  platform.close()
+})

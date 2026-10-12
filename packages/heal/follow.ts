@@ -83,16 +83,21 @@ export let follow = (
       }
       if (bug.resolved || bug.archived) return
       let project = await home()
-      let pointer =
-        new URL(encodeURIComponent(evidence), `${url.replace(/\/$/, '')}/`)
-          .href
+      // A tracker graph has a page per bug; the platform's is read with a
+      // command, since its Worker answers only signed reads.
+      let where = /^https?:/.test(url)
+        ? `[the tracker](${
+          new URL(encodeURIComponent(evidence), `${url.replace(/\/$/, '')}/`)
+            .href
+        })`
+        : `${url}'s tracker: \`yak bug show ${evidence} --source ${url}\``
       task = {
         entity: { eid },
         task: {},
         doc: {
           title: str(comp(bug, 'doc')?.title).split('\n')[0] ||
             'Fix tracker bug',
-          body: `Fix the bug recorded at [the tracker](${pointer}).`,
+          body: `Fix the bug recorded at ${where}.`,
         },
         filed: { ...(project ? { project } : {}), priority: 1 },
         $was: { doc: { title: null } },

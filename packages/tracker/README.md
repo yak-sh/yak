@@ -17,6 +17,7 @@ references may name entities in other stores.
 | `./tools`   | `bug_list`, `bug_show`, `bug_resolve`, `bug_archive`        |
 | `./service` | Spool record admission and acknowledgement                  |
 | `./remote`  | Signed remote reads, bug marks and durable error delivery   |
+| `./poll`    | A polled watch of the platform tracker's bugs, with marks   |
 
 ```ts
 import { normalize } from '@yaks/tracker'

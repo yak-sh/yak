@@ -24,12 +24,16 @@ deno add jsr:@yaks/heal
 ## What happens
 
 The `@yaks/heal/service` **follower** follows bugs in the configured tracker
-graphs through a headless [client](../client/README.md) subscription on `/ws`.
-The tracker web role serves that query independently of intake. One process
-holds the `@yaks/heal` service lease: the subscription and the serial fixer
-decisions are a continuing duty, rather than work owed by a box commit to the
-effects pool. Serve that role beside the box's other worker roles, for example
-`yak work --roles effects,@yaks/heal`.
+graphs through a headless [client](../client/README.md) subscription on `/ws`,
+and the platform tracker on yaks.app, when `remote` names it, through
+[tracker](../tracker/README.md)'s polled `./poll` watch. The platform's bugs
+reach people, so each pass takes them first; their tasks link
+`yak bug show <eid> --source yaks.app`, since the Worker has no page. Its marks
+carry no precondition. The tracker web role serves that query independently of
+intake. One process holds the `@yaks/heal` service lease: the subscription and
+the serial fixer decisions are a continuing duty, rather than work owed by a box
+commit to the effects pool. Serve that role beside the box's other worker roles,
+for example `yak work --roles effects,@yaks/heal`.
 
 For a bug without a task, one apply writes the task, its `about` edge and, when
 the gates allow it, the fixer request. An existing task linked by an `about`
@@ -91,8 +95,12 @@ service.
   "use": "@yaks/heal",
   "with": {
     "trackers": ["http://127.0.0.1:5175"],
-    "provider": "codex",
-    "model": "gpt-5.6-sol",
+    "remote": {
+      "url": "https://your-tracker-worker.example",
+      "secret": { "secret": "TRACKER_SECRET" }
+    },
+    "provider": "claude",
+    "model": "opus",
     "effort": "high",
     "project": "P-19",
     "cap": 2,
@@ -102,12 +110,14 @@ service.
 ```
 
 `trackers` names base URLs of tracker graphs, not database files or config
-paths. With none, the follower has nothing to do. `provider`, `model` and
-`project` are ids or names. `cap` defaults to 2; `cooldown` defaults to 1800000
-ms; a changed tracker answer starts a pass within a second, and `every` (default
-60000 ms) re-checks the gates and task marks when nothing changed. Every key is
-optional. Without `provider`, bugs still get tasks, but no fixer is requested. A
-host running without duties runs no follower.
+paths. `remote` is the platform tracker Worker, the same `{url, secret}` as
+@yaks/tracker's own `remote`, polled every 30 seconds at most. With neither, the
+follower has nothing to do. `provider`, `model` and `project` are ids or names.
+`cap` defaults to 2; `cooldown` defaults to 1800000 ms; a changed tracker answer
+starts a pass within a second, and `every` (default 60000 ms) re-checks the
+gates and task marks when nothing changed. Every key is optional. Without
+`provider`, bugs still get tasks, but no fixer is requested. A host running
+without duties runs no follower.
 
 ## Exports
 

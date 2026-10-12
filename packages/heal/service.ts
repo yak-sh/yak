@@ -9,6 +9,8 @@ import type { Host } from '@yaks/host'
 import { kernelDoc, kernelKeywords } from '@yaks/kernel'
 import { docDoc } from '@yaks/doc'
 import { trackerDoc } from '@yaks/tracker/vocab'
+import { poll } from '@yaks/tracker/poll'
+import type { Remote } from '@yaks/tracker/remote'
 import { loadVocab, type VocabDoc } from '@yaks/vocab'
 import { follow } from './follow.ts'
 import type { Options as FixOptions } from './fix.ts'
@@ -16,12 +18,20 @@ import type { Options as FixOptions } from './fix.ts'
 export { follow, taskEid } from './follow.ts'
 
 /** A tracker answer and its acknowledged write door, on the same client. */
-export type Tracker = Watch & { mutate: Client['mutate'] }
+export type Tracker =
+  & Pick<Watch, 'query' | 'value' | 'ready' | 'subscribe' | 'close'>
+  & { refused?: string; mutate: Client['mutate'] }
+
+/** How the platform tracker is named among the followed trackers. */
+export const PLATFORM = 'yaks.app'
 
 /** The service's config and injectable graph and clock doors. */
 export type Options = FixOptions & {
   /** Base URLs of tracker graphs; no tracker is followed unless named. */
   trackers?: string[]
+  /** The platform tracker Worker, the same `{url, secret}` as
+   * @yaks/tracker's own `remote`: polled, and followed before the trackers. */
+  remote?: Remote
   /** Time between passes when no tracker answer changed, in ms (default
    * 60000): re-check task marks and gates that open with time (cap, cooldown). */
   every?: number
@@ -84,7 +94,14 @@ export let service = async (
   options: Options = {},
   signal: AbortSignal = AbortSignal.abort(),
 ): Promise<void> => {
-  let urls = [...new Set(options.trackers ?? [])]
+  // The platform's bugs reach people, so they take fixer slots first. Its
+  // answer is keyed and linked as `yaks.app`, since the Worker's address is
+  // no page anyone can open.
+  let platform = options.remote?.url ? PLATFORM : undefined
+  let urls = [
+    ...platform ? [platform] : [],
+    ...new Set(options.trackers ?? []),
+  ]
   if (!urls.length) return
   let once = signal.aborted
   let watches = new Map<string, Tracker>()
@@ -98,12 +115,18 @@ export let service = async (
       else console.error(error)
     } catch { /* a reporting failure cannot stop recovery */ }
   }
-  let open = options.open ?? ((url: string) =>
-    track(url, {
-      report: (trouble) => {
-        void report(trouble.error ?? trouble.refused)
-      },
-    }))
+  let open = options.open ??
+    ((url: string) =>
+      url == PLATFORM
+        ? poll(options.remote!, '.bug', {
+          every: options.every && Math.min(options.every, 30_000),
+          report: (error) => void report(error),
+        })
+        : track(url, {
+          report: (trouble) => {
+            void report(trouble.error ?? trouble.refused)
+          },
+        }))
   try {
     do {
       let moved = changed()
