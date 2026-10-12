@@ -5,6 +5,7 @@ import {
   eq,
   type Param,
   type Row,
+  type SchemaObject,
   select,
   type Stmt,
   table,
@@ -166,7 +167,7 @@ export let checks = (sql: string): Record<string, string> => {
 export let objects = (
   driver: Driver,
   fields: Record<string, Param> = {},
-): Row[] =>
+): SchemaObject[] =>
   catalogue(driver).filter((o) =>
     Object.entries(fields).every(([k, v]) => o[k as keyof typeof o] == v)
   )

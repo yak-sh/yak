@@ -87,7 +87,7 @@ export let store = (storage: Storage, config: Config) => {
     bug: string,
     name: 'resolved' | 'archived' | 'taken',
     task?: string,
-  ) => {
+  ): Promise<void> => {
     // A fixer's mark has no tool: only heal writes it, through this door.
     if (name == 'taken') {
       let [row] = await g.get([bug])
