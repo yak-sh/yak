@@ -27,8 +27,8 @@ export type Polled = {
 export type PollOpts = {
   /** time between polls, in ms (default 30000) */
   every?: number
-  /** how long one poll may take before it counts as failed, in ms (default
-   * 20000), so every poll settles */
+  /** how long one page of a poll may take before the poll counts as failed,
+   * in ms (default 20000), so every poll settles */
   timeout?: number
   /** a failed poll; the next one retries */
   report?: (error: unknown) => void
@@ -57,23 +57,23 @@ export let poll = (
   let value: Bundle[] = [], ready = false
   let listeners = new Set<(bundles: Bundle[]) => void>()
   let stop = new AbortController()
-  let page = async (after: string, signal: AbortSignal): Promise<Bundle[]> => {
+  let page = async (after: string): Promise<Bundle[]> => {
     let params = new URLSearchParams({
       limit: String(PAGE),
       query: `${query} .order=entity.eid${after ? ` .after=${after}` : ''}`,
     })
+    let signal = AbortSignal.any([
+      stop.signal,
+      AbortSignal.timeout(opts.timeout ?? 20_000),
+    ])
     let result = await read({ remote }, 'bugs', params, signal, go)
     if (!result.ok) throw Error(result.error)
     return result.value as Bundle[]
   }
   let all = async () => {
-    let signal = AbortSignal.any([
-      stop.signal,
-      AbortSignal.timeout(opts.timeout ?? 20_000),
-    ])
     let rows: Bundle[] = [], after = ''
     for (;;) {
-      let got = await page(after, signal)
+      let got = await page(after)
       rows.push(...got)
       if (got.length < PAGE) return rows
       after = got.at(-1)!.entity.eid
