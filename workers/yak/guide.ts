@@ -393,6 +393,14 @@ export let UNDO =
   'last 30 days, and called with no time it reports the window and every ' +
   'restore already made.'
 
+// How a read here narrows to one app: the platform's `.in=` clause (agent.ts
+// `scope`), said on graph_query where the query is written, since the query
+// grammar the tool's own description teaches does not have it.
+export let NARROW =
+  'Signed in, a read answers every app you can reach at once. To read one ' +
+  "app, add .in=<app> to the query ('.recipe&.in=recipes'), or " +
+  '.in=<space>/<app> where two of your spaces have an app by that name.'
+
 export let whole = (env: Host = {}) => url(env, '/docs.md')
 export let WHOLE = whole()
 

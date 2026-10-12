@@ -136,6 +136,9 @@ export type Options = {
   /** how a caller undoes a delete on this deployment, appended to
    * `graph_apply`'s description — see {@link CoreOpts.undo} */
   undo?: CoreOpts['undo']
+  /** how a read is narrowed to one part of this deployment's graph, appended
+   * to `graph_query`'s description — see {@link CoreOpts.narrow} */
+  narrow?: CoreOpts['narrow']
   /** what every tool this server lists declares about signing in
    * ({@link Security}), declared per tool because that is where a client reads
    * it — a tool carrying `securitySchemes` in its own `meta` keeps that
@@ -363,6 +366,7 @@ export let listing = (opts: Options): Tool[] =>
       readOnly: opts.readOnly,
       scope: opts.scope,
       undo: opts.undo,
+      narrow: opts.narrow,
     })),
     ...toolsOf(opts.graph.plugins),
     ...(opts.tools ?? []),

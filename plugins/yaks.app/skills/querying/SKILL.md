@@ -397,6 +397,21 @@ Name a component beside it and you are back to the ordinary rule:
 `id=<eid>&?doc` returns that entity's doc alone. Anything the store minted an
 eid for is addressable this way, including a blob you uploaded.
 
+## One app, or every app you reach
+
+A page's `query()` reads its own app's store, and so does a worker's
+`env.STORE`. `graph_query` in an agent's tools reads more: signed in, it answers
+every app the person can reach at once, one bundle per entity. To read one app,
+add `.in=` to the filter with the app's name:
+
+    .recipe&.in=recipes
+
+Where two of the person's spaces have an app by that name, name the space too:
+`.in=kitchen/recipes`. `.in=` belongs to the connector, not to the grammar, so a
+page or a worker never writes it. Signed out there is no reach to narrow:
+`graph_query` takes the space and the app as arguments instead, and refuses
+`.in=`.
+
 ## Words
 
 A bare word is a full-text term over every doc — title and body — and the answer

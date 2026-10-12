@@ -84,6 +84,20 @@ test('a read-only door lists no write, and its reads take its scope', async () =
   await client.close()
 })
 
+test("a door's own way to narrow a read is said where the query is written", async () => {
+  let narrow = 'Add .in=<shelf> to q to read one shelf.'
+  let client = await connect({ narrow })
+  let tools = (await client.listTools()).tools as {
+    name: string
+    description: string
+  }[]
+  let of = (name: string) => tools.find((t) => t.name == name)!.description
+  assert(of('graph_query').endsWith(narrow))
+  assert(!of('graph_show').includes(narrow))
+  assert(!of('graph_apply').includes(narrow))
+  await client.close()
+})
+
 // A directory reviewing a connector asks a tool that queries something to name
 // the documentation for what it queries, so each of these closes with the page
 // that explains it. The address is the project's own: these tools are the same

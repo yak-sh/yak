@@ -4,8 +4,9 @@
 // `@yaks/graph/tools` — and this file restates their arguments in the form
 // this transport accepts, plus everything a declaration cannot know because it
 // is written before there is a server: the bundles this vocabulary accepts,
-// the way back out of a delete this store offers, the extra arguments an
-// endpoint scopes its reads by, and whether the write tool is listed at all.
+// the way back out of a delete this store offers, how a read narrows to one
+// part of the graph, the extra arguments an endpoint scopes its reads by, and
+// whether the write tool is listed at all.
 //
 // So the command line and an MCP tool list describe the same tools, and each
 // description is written in one place.
@@ -107,6 +108,12 @@ export type CoreOpts = {
    * where there is no way back, since a promise nobody can keep is worse than
    * silence. */
   undo?: string
+  /** how a read here is narrowed to one part of this graph, in its own words,
+   * appended to `graph_query`'s description — yaks.app reads every app in a
+   * person's reach at once, and `.in=<app>` on the query line reads one. A
+   * clause a query grammar does not have is said by the server that answers
+   * it, where an agent reads it at the moment it writes the query. */
+  narrow?: string
   /** extra arguments every read here requires, as the JSON Schema of each,
    * merged into each read tool's input, for a server whose reads are scoped by
    * something of its own — yaks.app's signed-out endpoint names which app to
@@ -227,8 +234,10 @@ export let core = (opts: CoreOpts): Tool[] => {
         // to read — and those arguments come first, where a caller reads them.
         let scope = t.readOnly && opts.scope ? opts.scope : {}
         let required = [...Object.keys(scope), ...(said.required ?? [])]
+        let narrow = t.name == 'graph_query' && opts.narrow
         return {
           ...t,
+          ...(narrow ? { description: `${t.description} ${narrow}` } : {}),
           inputSchema: {
             ...said,
             properties: { ...scope, ...said.properties },
