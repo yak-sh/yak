@@ -1574,6 +1574,62 @@ let keyed = (ctx: Ctx, leaf: Hop): boolean =>
   !ctx.derived[`${leaf.comp}.${leaf.prop}`]
 
 // Every arm owns its indexed selection; unrelated alternatives share no joins.
+// An empty numeric list can otherwise pay one index seek for every member.
+// Probe its consecutive runs first, stopping at the first stored value. This
+// is only a gate: an occupied range still uses the original exact list, so
+// fractional values can never turn it into an unbounded intermediate scan.
+let gatedList = (
+  ctx: Ctx,
+  pred: Pred | undefined,
+  src: string,
+): Frag | null => {
+  if (ctx.d.scoped || !pred || opOf(pred) != '' || pred.value?.kind != 'list') {
+    return null
+  }
+  let [comp, prop] = pred.path
+  let p = ctx.v.prop(comp, prop)
+  if (p?.scalar != 'number' || pred.value.items.length > 512) return null
+  let values: number[] = []
+  for (let v of pred.value.items) {
+    if (v.kind != 'scalar') return null
+    let n = Number(v.raw)
+    if (!Number.isSafeInteger(n) || String(n) != v.raw) return null
+    values.push(n)
+  }
+  let sorted = [...new Set(values)].sort((a, b) => a - b)
+  let runs: [number, number][] = []
+  for (let n of sorted) {
+    let last = runs.at(-1)
+    if (last && n == last[1] + 1) last[1] = n
+    else runs.push([n, n])
+  }
+  if (!runs.length || runs.length == sorted.length || runs.length > 32) {
+    return null
+  }
+  let c = ctx.d.col(comp, prop, ctx.v)
+  if (!c) return null
+  let matches = ctx.d.eq(c, pred.value, 'number')
+  if (!matches) return null
+  let gate = exists(select({
+    cols: [lit(1)],
+    from: raw(src),
+    where: or(
+      ...runs.map(([lo, hi]) =>
+        raw(lo == hi ? `${c} = ${lo}` : `${c} between ${lo} and ${hi}`)
+      ),
+    ),
+    limit: lit(1),
+  }))
+  return render(select({
+    cols: [raw('*')],
+    from: raw(src),
+    where: cond(matches),
+    // A WHERE gate is evaluated after IN has already sought its values.
+    // LIMIT is evaluated before those seeks, and leaves outer shaping intact.
+    limit: { t: 'case', arms: [[gate, lit(-1)]], else: lit(0) },
+  }))
+}
+
 let indexedRelation = (
   ctx: Ctx,
   clauses: Clause[],
@@ -1638,7 +1694,7 @@ let indexedRelation = (
       }
     }
   }
-  let root: { comp: string; index?: string } | undefined
+  let root: { comp: string; index?: string; pred?: Pred } | undefined
   if (!ctx.spine && !claims(ctx, 'pred') && ctx.d.indexed) {
     let scalar = flattened(clauses).some((c) =>
       c.kind == 'pred' && !c.not &&
@@ -1681,7 +1737,7 @@ let indexedRelation = (
           (ctx.d.table(comp) != `"${comp}"` ||
             source(ctx, comp) != `"${comp}"`)
       ) continue
-      root = { comp, index: `${comp}_${index.props.join('_')}` }
+      root = { comp, index: `${comp}_${index.props.join('_')}`, pred: c }
       break
     }
   }
@@ -1728,6 +1784,7 @@ let indexedRelation = (
     ? ctx.d.owned?.(root.comp)
     : ctx.d.table(root.comp)
   if (!src) return s
+  let gated = root.index && gatedList(ctx, root.pred, src)
   // Physical paging must seek the driving index, rather than test its joined
   // entity after visiting every earlier row in that handler's history.
   if (
@@ -1745,7 +1802,9 @@ let indexedRelation = (
   }
   let indexed: Select = {
     ...s,
-    from: raw(src),
+    from: gated
+      ? raw(`(${gated.sql}) as "${root.comp}"`, gated.params)
+      : raw(src),
     // The presence filter was elided when its table was the planned spine.
     // An indexed predicate can replace that spine; keep requiring its rows.
     where: ctx.present && root.comp != ctx.present
