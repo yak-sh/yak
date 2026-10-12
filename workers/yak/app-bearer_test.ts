@@ -74,6 +74,21 @@ test('app store reads honor login bearers and live membership, and reject invali
     )
     assertEquals(crossed.status, 401)
     assertEquals((await crossed.json()).error.code, 'not_a_reader')
+    // The same grant loads a dataset from outside the page: NDJSON to the
+    // app's apply door, written as the person it names.
+    let load = await k.at(`${space}.${k.host}`, '/private/api/apply', {
+      method: 'POST',
+      headers: {
+        authorization: `Bearer ${narrow}`,
+        'content-type': 'application/x-ndjson',
+      },
+      body: ['Row one', 'Row two'].map((title, i) =>
+        JSON.stringify({ entity: { eid: `$r${i}` }, doc: { title } })
+      ).join('\n'),
+    })
+    assertEquals(load.status, 200)
+    let rows = (await load.text()).trim().split('\n').map((l) => JSON.parse(l))
+    assertEquals(rows.map((r) => r.doc.title), ['Row one', 'Row two'])
   } finally {
     await k.stop()
   }

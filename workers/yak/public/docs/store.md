@@ -565,6 +565,7 @@ file:
 
     curl -X POST https://ada.yaks.app/cookbook/api/apply \
       -H 'content-type: application/x-ndjson' \
+      -H "authorization: Bearer $TOKEN" \
       --data-binary @rows.ndjson
 
 The answer is NDJSON too — one saved row per line, as each fifty commit — and it
@@ -576,6 +577,15 @@ line can be refused. So a refusal is the last line instead:
 that line is read, and the fifty it was in rolled back whole. One thing to
 watch: an alias resolves inside its own run of 50 lines and nowhere else, so
 write `$cake` and the row pointing at it near each other.
+
+From outside a page (a terminal, a script, an assistant's own sandbox) the
+writer is whoever the token names. The `grant` tool mints one,
+`grant(space:
+'ada')`: it lasts an hour, reaches that one space, and writes as
+the person with exactly their access, so the rows carry their name. That is how
+a dataset already sitting on a machine goes into a store without being typed
+into a tool call, and without opening the app to everyone while it loads. Revoke
+it when the load is done: `grant(revoke: <id>)`, with the id its answer named.
 
 Each endpoint is governed by the app's `access` — its read rule for `query`,
 `blob/<eid>` and the live socket, its write rule for `apply` and `blob`, and
