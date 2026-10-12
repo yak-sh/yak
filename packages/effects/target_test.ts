@@ -98,11 +98,10 @@ test('local effect targets reconcile subjects leaving and entering scope and rem
   ])
 })
 
+let related = fixture('.entity.eid=C-2 .comment.post.post.published=true')
+related.g.apply([post('parent', true)])
 test('relational effect targets keep human reference addressing and exact subjects', () => {
-  let f = fixture(
-    '.entity.eid=C-2 .comment.post.post.published=true',
-  )
-  f.g.apply([post('parent', true)])
+  let f = related
   f.g.apply([{
     entity: { eid: 'guest-0' },
     comment: { post: 'parent', text: 'Hello' },
@@ -111,8 +110,9 @@ test('relational effect targets keep human reference addressing and exact subjec
   assertEquals(f.seen, ['created guest-0', 'removed guest-0'])
 })
 
+let computed = fixture('.post.ready=true')
 test('computed effect targets retain their storage-derived membership', () => {
-  let f = fixture('.post.ready=true')
+  let f = computed
   f.g.apply([post('guest-0', true), post('outside', false)])
   f.g.apply([post('guest-0', false), post('outside', true)])
   f.g.apply([{ entity: { eid: 'outside' }, post: null }])
@@ -161,4 +161,16 @@ test('automatic stamp triggers retain subjects leaving their prior target scope'
     $actor: { via: 'signed-browser' },
   }])
   assertEquals(exits, ['guest-0'])
+})
+
+let pattern = effects(blog), matches: string[] = []
+pattern.on('.post.published=true', (e) => matches.push(e.entity.eid))
+let patterned = graph({
+  vocab: blog,
+  storage: ram(blog),
+  plugins: [pattern],
+})
+test('single-entity matched triggers select canonical changed subjects', () => {
+  patterned.apply([post('guest-0', true)])
+  assertEquals(matches, ['guest-0'])
 })

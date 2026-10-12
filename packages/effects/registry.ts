@@ -58,7 +58,7 @@ import { after, each, isPromise, over } from '@yaks/fp'
 import { during, link, peek, unlink } from '@yaks/trace'
 import { asked, match, reads } from '@yaks/graph'
 import { filter } from '@yaks/match'
-import { bare, type Clause, eq, fields, list } from '@yaks/query'
+import { bare, type Clause, fields } from '@yaks/query'
 import { type EffectDecl, effectsIn, type Vocab } from '@yaks/vocab'
 import {
   BEFORE,
@@ -558,9 +558,8 @@ export let effects = (vocab: Vocab, opts: Opts = {}): Effects => {
     // Asked about the entities this batch touched and no others: an index
     // lookup, not a scan with the batch picked out afterwards.
     let { filter } = one[0]
-    let about = eq('entity.eid', list(...touched))
     return after(
-      tx.read({ ...filter, clauses: [...filter.clauses, about] }),
+      tx.read(filter, { eids: [...touched] }),
       (rows) =>
         rows.map((b) => ({
           kind: 'matched' as Kind,
