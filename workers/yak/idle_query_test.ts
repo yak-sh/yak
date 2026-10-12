@@ -10,6 +10,8 @@ import { compSql, storage } from '@yaks/sqlite'
 import { appDerived, appVocab } from './vocab.ts'
 import { catalog } from '../../packages/sqlite/catalog.ts'
 
+let browser = '00000000-0000-4000-8000-000000000001'
+
 test('platform boot sweeps and single session reads never scan entity', async () => {
   let d = mem(), v = appVocab()
   let derived = appDerived(v)
@@ -19,7 +21,7 @@ test('platform boot sweeps and single session reads never scan entity', async ()
   g.apply([{
     entity: { eid: 'village' },
     session: {},
-    $actor: { via: 'browser' },
+    $actor: { via: browser },
   }])
   g.apply([{ entity: { eid: 'village' }, session: { actor: 'village' } }])
   for (
@@ -53,7 +55,7 @@ test('guest attribution seeks nullable reference keys without scanning stamp ind
   g.apply([{
     entity: { eid: 'guest-write' },
     doc: { title: 'Kept' },
-    $actor: { via: 'browser' },
+    $actor: { via: browser },
   }])
   // Exercise the catalog fallback a store with unclassified identities uses.
   d.query({

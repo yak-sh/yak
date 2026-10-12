@@ -6,7 +6,7 @@
 
 import { test } from '@yaks/testing'
 import { assert, assertEquals, assertStringIncludes } from '@std/assert'
-import { type Bundle, graph, who } from '@yaks/graph'
+import { type Bundle, derivedEid, graph, who } from '@yaks/graph'
 import { loadVocab, type VocabDoc } from '@yaks/vocab'
 import { toolsDoc } from '@yaks/tools'
 import { ram } from '@yaks/ram'
@@ -14,7 +14,9 @@ import { comp, connect, result, shop, shopGraph, text } from './testing.ts'
 import { roster } from './server.ts'
 import { rosterLine, rosterVersion } from './roster.ts'
 
-let ada = { by: 'm1' }
+let MEMBER = derivedEid('fixture:m1')
+
+let ada = { by: MEMBER }
 let spring: Bundle = {
   entity: { eid: 'b1' },
   doc: { title: 'The Left Hand of Spring' },
@@ -131,7 +133,7 @@ test('a batch applied comes back as it landed, and reads back', async () => {
   assertEquals(wrote[0].entity.eid, 'b1')
   assertEquals(typeof wrote[0].entity.num, 'number')
   assertEquals(comp(wrote[0], 'book').price, 12)
-  assertEquals(comp(wrote[0], 'created').by, 'm1')
+  assertEquals(comp(wrote[0], 'created').by, MEMBER)
   assertEquals(wrote[0].$actor, undefined)
 
   // A mint answers the word the caller named it by, and a delete answers the
@@ -260,7 +262,7 @@ test('the server signs the batch, never the client', async () => {
   // actor, and the runner signed the tool's bundles with the same name.
   assertEquals(
     comp((await graph.read('.book.price=12&*'))[0], 'created').by,
-    'm1',
+    MEMBER,
   )
 })
 
@@ -282,10 +284,10 @@ test('a tool runs as whoever called it', async () => {
   let client = await connect({ graph, actor: ada })
   await called(client, 'shelve')
   // The tool was handed the caller, not the process running it…
-  assertEquals(seen, 'm1')
+  assertEquals(seen, MEMBER)
   // …and what it answered is written in that name.
   let [shelved] = await graph.read('.book.status=shelved&*')
-  assertEquals(comp(shelved, 'created').by, 'm1')
+  assertEquals(comp(shelved, 'created').by, MEMBER)
   await client.close()
 })
 
@@ -485,7 +487,7 @@ test('a plugin contributes tools the way it contributes components', async () =>
   assertEquals(found.map((b) => b.entity.eid), ['b1'])
   assertEquals(
     comp((await graph.read('.book.status=shelved&*'))[0], 'created').by,
-    'm1',
+    MEMBER,
   )
 })
 

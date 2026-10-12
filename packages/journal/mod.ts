@@ -51,8 +51,9 @@
  * let j = log({ rows: (s) => db.query(s) })
  * let g = graph({ storage: store, vocab, plugins: [journal(j, vocab)] })
  *
+ * let ada = '00000000-0000-4000-8000-000000000001'
  * g.apply([{ entity: { eid: 'p1' }, page: { title: 'Kickoff' },
- *           $actor: { by: 'ada' } }])
+ *           $actor: { by: ada } }])
  *
  * j.history('p1')   // every transaction that touched the page, oldest first
  * j.since(0)        // the feed: the transactions after a cursor, oldest first

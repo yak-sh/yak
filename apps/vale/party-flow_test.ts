@@ -18,11 +18,12 @@ test('two heroes invite and accept through their pages into one party', async ()
   let vocab = appVocab(words)
   let store = graph({ vocab, storage: ram(vocab) })
   let heroes = { a: crypto.randomUUID(), b: crypto.randomUUID() }
+  let owners = { a: crypto.randomUUID(), b: crypto.randomUUID() }
   for (let id of ['a', 'b'] as const) {
     store.apply(signed([{
       entity: { eid: heroes[id] },
       player: {},
-    }], { by: `owner-${id}` }))
+    }], { by: owners[id] }))
   }
   let fetchBefore = globalThis.fetch
   globalThis.fetch = async (url, init) => {
@@ -38,7 +39,7 @@ test('two heroes invite and accept through their pages into one party', async ()
       let socket = pair()
       let handler = api({
         graph: store,
-        authenticate: () => ({ by: `owner-${id}` }),
+        authenticate: () => ({ by: owners[id] }),
         socketTimer: () => {},
         upgrade: () => ({
           socket: socket.server,
@@ -62,7 +63,7 @@ test('two heroes invite and accept through their pages into one party', async ()
       net.choose(heroes[id])
       let party = parties(net)
       party.me({
-        person: `owner-${id}`,
+        person: owners[id],
         name: id,
         role: null,
         reads: true,
@@ -91,7 +92,7 @@ test('two heroes invite and accept through their pages into one party', async ()
     assertEquals(b.party.invites, [])
     let replies = await store.read('.party_reply&*') as Bundle[]
     assertEquals(replies.map((r) => [writer(r), r.party_reply]), [[
-      'owner-b',
+      owners.b,
       {
         invite: invite.eid,
         to: heroes.b,

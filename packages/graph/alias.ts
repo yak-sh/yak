@@ -41,7 +41,10 @@ export let isAlias = (eid: Eid): boolean => eid.startsWith('$')
 export type Derive = (comp: Comp, bundle: Bundle) => Eid
 
 // The aliases a bundle references, through its reference properties.
-let pointsAt = (b: Bundle, vocab: Vocab): Eid[] =>
+let pointsAt = (
+  b: Bundle,
+  vocab: Vocab,
+): Eid[] =>
   comps(b).flatMap(([name, comp]) =>
     Object.entries(comp ?? {}).flatMap(([prop, val]) =>
       typeof val == 'string' && isAlias(val) &&
@@ -60,8 +63,23 @@ let rewrite = (
   vocab: Vocab,
   at: Map<Eid, Eid>,
   strict: boolean,
+  actors = true,
 ): Bundle => {
   let out: Bundle = { ...b }
+  if (actors && b.$actor) {
+    out.$actor = { ...b.$actor }
+    for (let prop of ['by', 'via'] as const) {
+      let value = b.$actor[prop]
+      if (value === undefined) continue
+      let eid = at.get(value)
+      if (eid) out.$actor[prop] = eid
+      else if (strict && isAlias(value)) {
+        throw new Refused(
+          `$actor.${prop} references ${value}, which this batch does not create`,
+        )
+      }
+    }
+  }
   for (let [name, comp] of comps(b)) {
     if (!comp) continue
     let props: Comp | undefined
@@ -131,7 +149,12 @@ export let resolve = (
   )
   // No aliases, and nothing referencing one: the common case, left exactly
   // alone.
-  if (!groups.size && !bundles.some((b) => pointsAt(b, vocab).length)) {
+  if (
+    !groups.size &&
+    !bundles.some((b) =>
+      pointsAt(b, vocab).length || Object.values(b.$actor ?? {}).some(isAlias)
+    )
+  ) {
     return bundles
   }
   let at = new Map<Eid, Eid>()
@@ -157,7 +180,7 @@ export let resolve = (
       // which bundle in the batch carried the deriving component.
       let named: Eid | undefined
       for (let b of groups.get(alias)!) {
-        let full = rewrite(b, vocab, at, true)
+        let full = rewrite(b, vocab, at, true, false)
         let by = comps(full).find(([name, comp]) => comp && derive[name])
         if (by) named = derive[by[0]](by[1] as Comp, full)
         if (named) break

@@ -26,6 +26,8 @@ import { inboxAt, planned, queue } from './letters.ts'
 import { reading } from './mail.ts'
 import { service } from './service.ts'
 
+let agent = '00000000-0000-4000-8000-000000000001'
+
 let at = (n: number) => `2026-10-02T12:00:${String(n).padStart(2, '0')}.000Z`
 let inbox = {
   person: 'person',
@@ -48,7 +50,7 @@ let decision = {
 }
 let row = (eid: string, comps: Row['comps'], n = 1): Row => ({
   eid,
-  comps: { created: { at: at(n), by: 'agent' }, ...comps },
+  comps: { created: { at: at(n), by: agent }, ...comps },
 })
 let reader = {
   actor: 'person',
@@ -93,7 +95,7 @@ let vocab = loadVocab([
 let world = async () => {
   let g = graph({
     vocab,
-    actor: { by: 'agent' },
+    actor: { by: agent },
     storage: ram(vocab),
     plugins: [kernel(), tasks(), edges(vocab)],
   })

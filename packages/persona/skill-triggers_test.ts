@@ -4,6 +4,7 @@ import { equal, test } from '@yaks/testing'
 import { identityEid } from '@yaks/graph'
 import { owing } from './testing.ts'
 
+let locator = '11111111-1111-4111-8111-111111111111'
 let fixture = () => owing('skill_files')
 
 test('tool content owes no skill reconciliation; skill text and companion files do', async () => {
@@ -79,13 +80,17 @@ test('scope includes metadata, skill locators and root changes but excludes othe
   }])
   equal(await queued(), [])
   await g.apply([{
-    entity: { eid: 'locator' },
+    entity: { eid: locator },
     edge: { from: 'skill', to: 'repository' },
     references: {},
   }])
   equal((await queued()).length > 0, true)
   await clear()
-  await g.apply([{ entity: { eid: 'locator' }, references: null, edge: null }])
+  await g.apply([{
+    entity: { eid: locator },
+    references: null,
+    edge: null,
+  }])
   equal((await queued()).length > 0, true)
   await clear()
   await g.apply([{
@@ -145,7 +150,10 @@ for (let f of [bareFixture, locatorFixture, endpointFixture]) {
   ])
   await f.clear()
 }
-await endpointFixture.g.apply([{ entity: { eid: 'locator' }, references: {} }])
+await endpointFixture.g.apply([{
+  entity: { eid: locator },
+  references: {},
+}])
 await endpointFixture.clear()
 
 test('a bare edge touching a skill owes nothing; adding endpoints to its reference locator does', async () => {
@@ -159,14 +167,17 @@ test('a bare edge touching a skill owes nothing; adding endpoints to its referen
 
 test('a reference locator with no endpoints owes no skill reconciliation', async () => {
   let { g, queued } = locatorFixture
-  await g.apply([{ entity: { eid: 'locator' }, references: {} }])
+  await g.apply([{
+    entity: { eid: locator },
+    references: {},
+  }])
   equal(await queued(), [])
 })
 
 test('adding endpoints to a skill reference locator owes reconciliation', async () => {
   let { g, queued } = endpointFixture
   await g.apply([{
-    entity: { eid: 'locator' },
+    entity: { eid: locator },
     edge: { from: 'skill', to: 'document' },
   }])
   equal((await queued()).length, 1)

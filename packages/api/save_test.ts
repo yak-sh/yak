@@ -1,12 +1,16 @@
 /// <reference lib="deno.ns" />
 import { equal, test, throws, until } from '@yaks/testing'
-import { type Bundle, type Comp, graph, Refused } from '@yaks/graph'
+import { type Bundle, type Comp, derivedEid, graph, Refused } from '@yaks/graph'
 import { ram } from '@yaks/ram'
 import { loadVocab, type Vocab, type VocabDoc } from '@yaks/vocab'
 import { fake, req, shop } from './testing.ts'
 import { api } from './route.ts'
 import { saving } from './save.ts'
 import { type Frame, subscriptions } from './subs.ts'
+
+let ADA = derivedEid('fixture:Ada')
+let BEA = derivedEid('fixture:Bea')
+let BROWSER = derivedEid('fixture:browser')
 
 let vocabulary = (query: string, extra: VocabDoc[] = []) =>
   loadVocab([...shop.docs, ...extra, {
@@ -106,11 +110,11 @@ let fixture = (
 }
 
 test('peer saving merges latest patches once an interval and settles when quiet', () => {
-  let f = fixture(), writer = { actor: { by: 'Ada', via: 'browser' } }
+  let f = fixture(), writer = { actor: { by: ADA, via: BROWSER } }
   f.saved.write('one', f.write(1), writer)
   equal(f.read(), { x: 1 })
   let updated = (f.g.get(['a']) as Bundle[])[0].updated as Comp
-  equal([updated.by, updated.via], ['Ada', 'browser'])
+  equal([updated.by, updated.via], [ADA, BROWSER])
   f.saved.write('one', f.write(2), writer)
   f.saved.write('one', [{ entity: { eid: 'a' }, position: { y: 3 } }], writer)
   equal(f.read(), { x: 1 })
@@ -129,7 +133,7 @@ let lastWriter = fixture()
 lastWriter.saved.write('one', lastWriter.write(1))
 lastWriter.saved.write('one', lastWriter.write(2))
 lastWriter.saved.write('two', [{ entity: { eid: 'a' }, position: { y: 3 } }], {
-  actor: { by: 'Bea' },
+  actor: { by: BEA },
 })
 lastWriter.saved.write('one', lastWriter.write(4, 'b'))
 // Preserve the value observed before disconnect while preparing the held state.
@@ -145,7 +149,7 @@ test('pending saves stay with the last writer after disconnect', () => {
   f.tick(1000)
   equal(f.read(), { x: 2, y: 3 })
   let updated = (f.g.get(['a']) as Bundle[])[0].updated as Comp
-  equal(updated?.by, 'Bea')
+  equal(updated?.by, BEA)
   equal(f.timers.size, 0)
 })
 
@@ -162,19 +166,19 @@ test('a clear removes the saved value and its pending timer', () => {
 })
 
 test('a refused takeover cannot poison a legitimate pending save', () => {
-  let f = fixture(), writer = { actor: { by: 'Ada' } }
+  let f = fixture(), writer = { actor: { by: ADA } }
   f.g.use({
     name: 'ownership',
     hooks: {
       precondition: (b) => {
-        if (b.some((row) => row.$actor?.by != 'Ada')) throw new Error('denied')
+        if (b.some((row) => row.$actor?.by != ADA)) throw new Error('denied')
         return b
       },
     },
   })
   f.saved.write('one', f.write(1), writer)
   f.saved.write('one', f.write(2), writer)
-  throws(() => f.saved.write('two', f.write(9), { actor: { by: 'Bea' } }))
+  throws(() => f.saved.write('two', f.write(9), { actor: { by: BEA } }))
   f.tick(1000)
   equal(f.read(), { x: 2 })
   equal(f.failures, [])
@@ -232,8 +236,8 @@ test('live peer queries use held values while ordinary graph reads retain the sa
   let f = fixture(), frames: Frame[] = []
   let subs = subscriptions(f.g, { timer: f.timer, now: f.now }),
     writer = () => {}
-  await subs.relay(writer, f.write(1), { actor: { by: 'Ada' } })
-  await subs.relay(writer, f.write(2), { actor: { by: 'Ada' } })
+  await subs.relay(writer, f.write(1), { actor: { by: ADA } })
+  await subs.relay(writer, f.write(2), { actor: { by: ADA } })
   equal(f.read(), { x: 1 })
   equal((await subs.snapshot('.position') as Bundle[])[0].position, { x: 2 })
   subs.open(
@@ -312,7 +316,7 @@ test('the socket saves with its authenticated actor and vocabulary versions', as
   }
   let handler = api({
     graph: g,
-    authenticate: () => ({ by: 'Ada', via: 'browser' }),
+    authenticate: () => ({ by: ADA, via: BROWSER }),
     read: () => ({ speaks: { garden: 1 } }),
     upgrade: () => ({ socket, response: new Response(null, { status: 101 }) }),
   })
@@ -323,7 +327,7 @@ test('the socket saves with its authenticated actor and vocabulary versions', as
   )
   equal(socket.taken().map((f) => f.refused), [])
   equal(f.read(), { x: 1 })
-  equal(writes.map((rows) => rows[0].$actor), [{ by: 'Ada', via: 'browser' }])
+  equal(writes.map((rows) => rows[0].$actor), [{ by: ADA, via: BROWSER }])
   equal(writes.map((rows) => rows[0].$speaks), [{ garden: 1 }])
   socket.emit('close')
 })

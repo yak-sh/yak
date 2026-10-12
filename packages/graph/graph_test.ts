@@ -18,6 +18,15 @@ import { loadVocab } from '@yaks/vocab'
 import { ram } from '@yaks/ram'
 import { match } from './join.ts'
 
+let ada = '00000000-0000-4000-8000-000000000001'
+let me = '00000000-0000-4000-8000-000000000002'
+let you = '00000000-0000-4000-8000-000000000003'
+let shop = '00000000-0000-4000-8000-000000000004'
+let till = '00000000-0000-4000-8000-000000000005'
+let post = '00000000-0000-4000-8000-000000000006'
+let author = '00000000-0000-4000-8000-000000000007'
+let writer = '00000000-0000-4000-8000-000000000008'
+
 let g = (plugins: Plugin[] = []) =>
   graph({ storage: memory(), vocab: books, plugins })
 
@@ -284,20 +293,20 @@ test('the answer is one bundle per entity, and no pipeline key', () => {
     entity: { eid: 'b1' },
     doc: { title: 'Dune' },
     book: { pages: 412 },
-    $actor: { by: 'ada' },
+    $actor: { by: ada },
   }], { now: '2026-01-01T00:00:00.000Z' }))
   assertEquals(wrote.length, 1)
   assertEquals(wrote[0], {
     entity: { eid: 'b1', num: 1 },
     doc: { title: 'Dune' },
     book: { pages: 412 },
-    created: { at: '2026-01-01T00:00:00.000Z', by: 'ada' },
+    created: { at: '2026-01-01T00:00:00.000Z', by: ada },
   })
   // A mint keeps the word the caller named it by, and nothing else.
   let [minted] = sync(one.apply([{
     entity: { eid: '$new' },
     doc: { title: 'Emma' },
-    $actor: { by: 'ada' },
+    $actor: { by: ada },
   }]))
   assertEquals(minted.$alias, '$new')
   assert(minted.entity.eid != '$new' && minted.entity.num != null)
@@ -366,19 +375,19 @@ test('a null component drops the row, the entity survives', () => {
 test('births are stamped created, later touches updated', () => {
   let one = g()
   let born = sync(one.apply([
-    { entity: { eid: 'b1' }, doc: { title: 'Dune' }, $actor: { by: 'me' } },
+    { entity: { eid: 'b1' }, doc: { title: 'Dune' }, $actor: { by: me } },
   ], { now: '2026-01-01T00:00:00.000Z' }))
   assertEquals(at(born, 'b1', 'created'), {
     at: '2026-01-01T00:00:00.000Z',
-    by: 'me',
+    by: me,
   })
   assertEquals(born.find((b) => b.updated), undefined)
   let again = sync(one.apply([
-    { entity: { eid: 'b1' }, doc: { title: 'Dune II' }, $actor: { by: 'you' } },
+    { entity: { eid: 'b1' }, doc: { title: 'Dune II' }, $actor: { by: you } },
   ], { now: '2026-01-02T00:00:00.000Z' }))
   assertEquals(at(again, 'b1', 'updated'), {
     at: '2026-01-02T00:00:00.000Z',
-    by: 'you',
+    by: you,
   })
   assertEquals(again.find((b) => b.created), undefined)
 })
@@ -507,33 +516,33 @@ test("a batch nobody signed is the graph's own, and a signed one is not", () => 
   let one = graph({
     storage: memory(),
     vocab: books,
-    actor: { by: 'shop', via: 'shop' },
+    actor: { by: shop, via: shop },
   })
   // Nobody at a door: an effect, a boot pass, a load poured in.
   let own = sync(one.apply([{ entity: { eid: 'b1' }, doc: { title: 'Dune' } }]))
-  assertEquals(at(own, 'b1', 'created').by, 'shop')
+  assertEquals(at(own, 'b1', 'created').by, shop)
   // And a door that named somebody has the last word.
   let hers = sync(one.apply([{
     entity: { eid: 'b2' },
     doc: { title: 'Dune II' },
-    $actor: { by: 'ada' },
+    $actor: { by: ada },
   }]))
-  assertEquals(at(hers, 'b2', 'created').by, 'ada')
+  assertEquals(at(hers, 'b2', 'created').by, ada)
 })
 
 test("each entity is its own bundle's writer's, and the rest the batch's", () => {
   let out = sync(
     g().apply([
-      { entity: { eid: 'b1' }, doc: { title: 'Dune' }, $actor: { by: 'ada' } },
-      { entity: { eid: 'b2' }, sold: {}, $actor: { by: 'till' } },
+      { entity: { eid: 'b1' }, doc: { title: 'Dune' }, $actor: { by: ada } },
+      { entity: { eid: 'b2' }, sold: {}, $actor: { by: till } },
       { entity: { eid: 'b3' }, doc: { title: 'Emma' } },
     ]),
   )
   assertEquals(
     ['b1', 'b2', 'b3'].map((eid) => at(out, eid, 'created').by),
-    ['ada', 'till', 'ada'],
+    [ada, till, ada],
   )
-  assertEquals(at(out, 'b2', 'sold').by, 'till')
+  assertEquals(at(out, 'b2', 'sold').by, till)
 })
 
 test('a mark is signed where it lands, and the first telling stands', () => {
@@ -542,24 +551,24 @@ test('a mark is signed where it lands, and the first telling stands', () => {
     entity: { eid: 'b1' },
     doc: { title: 'Dune' },
     sold: {},
-    $actor: { by: 'me', via: 'till' },
+    $actor: { by: me, via: till },
   }], { now: '2026-01-01T00:00:00.000Z' }))
   assertEquals(at(out, 'b1', 'sold'), {
     at: '2026-01-01T00:00:00.000Z',
-    by: 'me',
-    via: 'till',
+    by: me,
+    via: till,
   })
   // Said again, by somebody else, a day later: a mark is not a touch.
   sync(one.apply([{
     entity: { eid: 'b1' },
     sold: {},
-    $actor: { by: 'you', via: 'post' },
+    $actor: { by: you, via: post },
   }], { now: '2026-01-02T00:00:00.000Z' }))
   let [held] = one.get(['b1']) as Bundle[]
   assertEquals(comp(held, 'sold'), {
     at: '2026-01-01T00:00:00.000Z',
-    by: 'me',
-    via: 'till',
+    by: me,
+    via: till,
   })
 })
 
@@ -895,12 +904,12 @@ for (let async of [false, true]) {
       entity: { eid: 'b1' },
       doc: { title: 'Dune II' },
       sold: {},
-      $actor: { by: 'author' },
+      $actor: { by: author },
     }], { now })
     let [held] = await one.get(['b1'])
     assertEquals(held.created, undefined)
     assertEquals(held.updated, undefined)
-    assertEquals(held.sold, { at: now, by: 'author' })
+    assertEquals(held.sold, { at: now, by: author })
   })
 
   test(`provenance policy selects, overrides and suppresses without bypassing core clock (${async ? 'async' : 'sync'})`, async () => {
@@ -911,7 +920,7 @@ for (let async of [false, true]) {
       provenance: (b) =>
         b.entity.eid == 'skip' ? null : {
           kind: b.entity.eid == 'edit' ? 'updated' : 'created',
-          by: b.entity.eid == 'unowned' ? null : 'author',
+          by: b.entity.eid == 'unowned' ? null : author,
           via: 'not-in-this-vocabulary',
         },
     })
@@ -920,12 +929,12 @@ for (let async of [false, true]) {
       ['birth', 'edit', 'skip', 'unowned'].map((eid) => ({
         entity: { eid },
         doc: { title: eid },
-        $actor: { by: 'writer' },
+        $actor: { by: writer },
       })),
       { now },
     )
-    assertEquals(at(out, 'birth', 'created'), { at: now, by: 'author' })
-    assertEquals(at(out, 'edit', 'updated'), { at: now, by: 'author' })
+    assertEquals(at(out, 'birth', 'created'), { at: now, by: author })
+    assertEquals(at(out, 'edit', 'updated'), { at: now, by: author })
     assertEquals(at(out, 'unowned', 'created'), { at: now, by: null })
     let skipped = out.find((b) => b.entity.eid == 'skip')!
     assertEquals(skipped.created, undefined)
@@ -956,7 +965,7 @@ test('provenance policy narrows an attribution-only vocabulary, including explic
     vocab,
     provenance: (b) => ({
       kind: 'created',
-      by: b.entity.eid == 'a' ? 'author' : null,
+      by: b.entity.eid == 'a' ? author : null,
       via: 'omitted',
     }),
   })
@@ -964,7 +973,7 @@ test('provenance policy narrows an attribution-only vocabulary, including explic
     { entity: { eid: 'a' }, doc: { title: 'A' } },
     { entity: { eid: 'b' }, doc: { title: 'B' } },
   ]))
-  assertEquals(at(out, 'a', 'created'), { by: 'author' })
+  assertEquals(at(out, 'a', 'created'), { by: author })
   assertEquals(at(out, 'b', 'created'), { by: null })
 })
 

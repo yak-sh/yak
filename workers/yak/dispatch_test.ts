@@ -63,7 +63,7 @@ let space: Space = {
   tunnel: null,
 }
 let app: App = {
-  eid: 'a1',
+  eid: '00000000-0000-4000-8000-000000000002',
   slug: 'recipes',
   space: 's1',
   version: 7,
@@ -113,7 +113,11 @@ let visit = (path = '/hello', headers: Record<string, string> = {}) =>
     },
   })
 
-let who = { person: 'p1', role: 'editor' as const, via: 'browser-1' }
+let who = {
+  person: 'p1',
+  role: 'editor' as const,
+  via: '00000000-0000-4000-8000-000000000001',
+}
 let standing = (who: Who | null) =>
   who && { person: who.person, role: who.role }
 
@@ -163,7 +167,7 @@ test('the worker is handed who is looking, and never the cookie', async () => {
 
 test('the worker acts as its vouched browser without receiving the browser cookie', async () => {
   let m = mirror()
-  let guest = { ...nobody, via: 'browser-1' }
+  let guest = { ...nobody, via: who.via }
   await ran(
     envOf(m.get),
     space,
@@ -193,7 +197,13 @@ test('what the worker sends out is said to be the app’s, for this visitor', as
     who,
   )
   assertEquals(asked, ['jeff_recipes', {}, {
-    outbound: { CALLER: { app: 'a1', level: 'editor', person: 'p1' } },
+    outbound: {
+      CALLER: {
+        app: app.eid,
+        level: 'editor',
+        person: 'p1',
+      },
+    },
   }])
 })
 
@@ -425,7 +435,7 @@ test('a client cannot send its own grant, or say who it is', async () => {
         'jeff/recipes',
       ),
     ),
-    { person: 'a1', role: 'editor' },
+    { person: app.eid, role: 'editor' },
   )
 })
 
@@ -448,7 +458,10 @@ test('a worker is handed the app itself, and only on its own store', async () =>
     )
   // The app entity, at editor — the level that carries it past its own access
   // mode and no further: an editor writes the data and not the roster.
-  assertEquals(standing(await back(mine)), { person: 'a1', role: 'editor' })
+  assertEquals(standing(await back(mine)), {
+    person: app.eid,
+    role: 'editor',
+  })
   // And it opens nowhere else, exactly like the visitor's.
   assertEquals(await back(mine, 'jeff/photos'), null)
   assertEquals(
@@ -478,7 +491,12 @@ test('the app keeps its instrument when its self grant is renewed', async () => 
 })
 
 test('the app acting as itself is told apart from any visitor', () => {
-  assert(itsApp({ person: 'a1', role: 'editor' }, app))
+  assert(
+    itsApp(
+      { person: app.eid, role: 'editor' },
+      app,
+    ),
+  )
   assert(!itsApp(who, app))
   assert(!itsApp(nobody, app))
   assert(!itsApp(null, app))

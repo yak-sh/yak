@@ -136,6 +136,9 @@ export type Tx = {
   /** remove these entities: their component rows are deleted, and their
    * identity is tombstoned, keeping its eid and number */
   remove: (entities: Entity[]) => void | Promise<void>
+  /** Erase identity rows already checked as empty and unreferenced by the
+   * graph's explicit repair request. Ordinary deletion uses `remove`. */
+  prune?: (eids: Eid[]) => void | Promise<void>
   /** bring these tombstoned entities back: the tombstone clears, the identity
    * keeps its eid and number, and no component returns — the patch that
    * follows gives each what it holds. Which writes may do this is the mutate

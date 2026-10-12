@@ -26,8 +26,16 @@
 // and its rows out. No platform API, no driver object, and no transaction of
 // its own — the caller owns the transaction.
 
-import type { Actor, Bundle, Comp, Eid, Plugin, Tx } from '@yaks/graph'
-import { comps, dead, TOMBSTONE, writers } from '@yaks/graph'
+import type {
+  Actor,
+  Bundle,
+  Comp,
+  Eid,
+  HookContext,
+  Plugin,
+  Tx,
+} from '@yaks/graph'
+import { comps, dead, minted, Refused, TOMBSTONE, writers } from '@yaks/graph'
 import { after } from '@yaks/fp'
 import type { Vocab } from '@yaks/vocab'
 import {
@@ -276,6 +284,10 @@ export type Log = {
   scrubValue: (field: number, value: string) => void
   /** point one recorded content-addressed value at different content */
   scrubRef: (field: number, ref: number) => void
+  /** Journal metadata rows still pointing at an exact entity identity. */
+  refs: (target: Eid) => number
+  /** Repair a malformed identity in journal metadata, preserving every entry. */
+  retarget: (from: Eid, to: Eid) => void
 }
 
 /**
@@ -312,6 +324,54 @@ export let log = (opts: LogOpts): Log => {
   let one = (s: Stmt) => rows(s)[0]
   let num = (v: unknown) => Number(v ?? 0)
   let str = (v: unknown) => (v == null ? null : String(v))
+  let refs = (target: Eid): number => {
+    let tables: [string, Expr][] = [
+      [
+        'journal_tx',
+        or(eq(col('actor'), idOf(target)), eq(col('via'), idOf(target))),
+      ],
+      ['journal_change', eq(col('entity'), idOf(target))],
+    ]
+    return tables.reduce((n, [name, where]) =>
+      n + num(
+        one(select({
+          cols: [as(fn('count', lit('*')), 'n')],
+          from: table(name),
+          where,
+        }))?.n,
+      ), 0)
+  }
+  let retarget = (from: Eid, to: Eid): void => {
+    if (minted(from) || !minted(to)) {
+      throw new Refused(
+        '$journal_from repairs a malformed identity into a generated eid',
+      )
+    }
+    if (
+      !one(
+        select({
+          cols: [col(idCol)],
+          from: table(spine),
+          where: eq(col(eidCol), val(to)),
+        }),
+      )
+    ) {
+      throw new Refused(`journal destination ${to} names nothing`)
+    }
+    for (
+      let [name, prop] of [['journal_tx', 'actor'], ['journal_tx', 'via'], [
+        'journal_change',
+        'entity',
+      ]]
+    ) {
+      rows({
+        t: 'update',
+        table: name,
+        set: { [prop]: idOf(to) },
+        where: eq(col(prop), idOf(from)),
+      })
+    }
+  }
   // The joins from a field to its change, and from a change to its
   // transaction.
   let ofChange = join(table('journal_change', 'jc'), eq(jc('id'), jf('change')))
@@ -875,6 +935,8 @@ export let log = (opts: LogOpts): Log => {
     seek,
     scrubValue,
     scrubRef,
+    refs,
+    retarget,
   }
 }
 
@@ -924,12 +986,44 @@ export let journal = (
   return {
     name: opts.name ?? '@yaks/journal',
     admission: () => true,
+    requests: ['$journal_from'],
     wants: (bundles) => {
       let eids = deleting(bundles)
       return eids.length ? [{ eids }] : []
     },
     hooks: {
+      normalize: (
+        bundles: Bundle[],
+        _tx: Tx,
+        _err: unknown,
+        context?: HookContext,
+      ) => {
+        for (let b of bundles) {
+          if (!('$journal_from' in b)) continue
+          if (!context?.trusted) {
+            throw new Refused(
+              '$journal_from requires a trusted maintenance write',
+            )
+          }
+          if (
+            typeof b.$journal_from != 'string' || minted(b.$journal_from) ||
+            !minted(b.entity.eid)
+          ) {
+            throw new Refused(
+              '$journal_from is an exact malformed identity, on a generated destination eid',
+            )
+          }
+        }
+        return bundles
+      },
       precondition: (bundles: Bundle[], tx: Tx) => {
+        for (let b of bundles) {
+          if (b.$prune && n.refs(b.entity.eid)) {
+            throw new Refused(
+              `cannot prune ${b.entity.eid}: journal history still references it; repair with $journal_from first`,
+            )
+          }
+        }
         let eids = deleting(bundles)
         if (!eids.length) return bundles
         return after(tx.get(eids), (found) => {
@@ -944,6 +1038,14 @@ export let journal = (
             )
             : bundles
         })
+      },
+      commit: (bundles: Bundle[]) => {
+        for (let b of bundles) {
+          if (typeof b.$journal_from == 'string') {
+            n.retarget(b.$journal_from, b.entity.eid)
+          }
+        }
+        return bundles
       },
       journal: (bundles: Bundle[], _tx: Tx) => {
         let writer = writers(bundles)

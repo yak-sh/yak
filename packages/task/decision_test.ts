@@ -16,6 +16,9 @@ import { openDeps } from './deps.ts'
 import { statusOf } from './words.ts'
 import { runs } from './tools.ts'
 
+let agent = '00000000-0000-4000-8000-000000000001'
+let session = '00000000-0000-4000-8000-000000000002'
+
 let ask = {
   question: 'Which route?',
   choices: [
@@ -50,11 +53,11 @@ let world = async () => {
 for (let choice of ['Bus', 'Walk together']) {
   test(`asking and answering ${choice} releases requiring work as the answerer`, async () => {
     let { g, call, row } = await world()
-    await call('decision_new', { ...ask, assignee: 'person' }, 'agent')
+    await call('decision_new', { ...ask, assignee: 'person' }, agent)
     let [asked] = await g.read('.decision&*')
     let eid = asked.entity.eid
     assertEquals(asked.decision, ask)
-    assertEquals((asked.created as Comp).by, 'agent')
+    assertEquals((asked.created as Comp).by, agent)
     assertEquals((asked.filed as Comp).assignee, 'person')
     await g.apply([
       { entity: { eid: 'work' }, task: {} },
@@ -77,7 +80,7 @@ for (let choice of ['Bus', 'Walk together']) {
     let refused = await call('decision_answer', {
       decision: eid,
       choice: 'Train',
-    }, 'agent')
+    }, agent)
     assertEquals(refused.some((b) => b.refusal), true)
     assertEquals((await row(eid)).decided, answered.decided)
   })
@@ -85,7 +88,7 @@ for (let choice of ['Bus', 'Walk together']) {
 
 test('direct answers use server stamps and keep approval verdicts independent', async () => {
   let { g, call, row } = await world()
-  await call('decision_new', ask, 'agent')
+  await call('decision_new', ask, agent)
   let [asked] = await g.read('.decision&*')
   let eid = asked.entity.eid
   await assertRejects(
@@ -93,7 +96,7 @@ test('direct answers use server stamps and keep approval verdicts independent', 
       await g.apply([{
         ...answer(eid, 'Train')[0],
         decided: { choice: 'Train', by: 'owner', at: 'forged' },
-        $actor: { by: 'agent', via: 'session' },
+        $actor: { by: agent, via: session },
       }]),
     Refused,
     'decided.by is server-owned',
@@ -103,14 +106,14 @@ test('direct answers use server stamps and keep approval verdicts independent', 
   await g.apply(
     answer(eid, 'Train').map((b) => ({
       ...b,
-      $actor: { by: 'agent', via: 'session' },
+      $actor: { by: agent, via: session },
     })),
   )
   assertEquals(
     (await row(eid)).decided && ((await row(eid)).decided as Comp).by,
-    'agent',
+    agent,
   )
-  assertEquals(((await row(eid)).decided as Comp).via, 'session')
+  assertEquals(((await row(eid)).decided as Comp).via, session)
   await g.apply([{
     entity: { eid: 'proposal' },
     task: {},
@@ -130,11 +133,11 @@ test('invalid asks and cancelled or blank answers refuse atomically', async () =
       { ...ask, question: ' ' },
     ]
   ) {
-    let result = await call('decision_new', invalid, 'agent')
+    let result = await call('decision_new', invalid, agent)
     assertEquals(result.some((b) => b.refusal), true)
   }
   assertEquals(await g.read('.decision&*'), [])
-  await call('decision_new', ask, 'agent')
+  await call('decision_new', ask, agent)
   let [asked] = await g.read('.decision&*')
   let eid = asked.entity.eid
   let rejected = await call(

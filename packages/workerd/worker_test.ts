@@ -4,10 +4,12 @@
 
 import { test } from '@yaks/testing'
 import { assert, assertEquals } from '@std/assert'
-import type { Bundle } from '@yaks/graph'
+import { type Bundle, derivedEid } from '@yaks/graph'
 import { door } from './door.ts'
 import { installPair, made, post, req, shopGraph } from './testing.ts'
 import { worker } from './worker.ts'
+
+let MEMBER = derivedEid('fixture:m1')
 
 type Env = { DB: string }
 
@@ -24,7 +26,7 @@ let shop = (opts: { required?: boolean } = {}) => {
         graph,
         authenticate: door({
           cookie: 'shop_session',
-          verify: (token) => (token == 'ada' ? { by: 'm1' } : null),
+          verify: (token) => (token == 'ada' ? { by: MEMBER } : null),
           required: opts.required,
         }),
       }
@@ -72,7 +74,7 @@ test('the door names the writer of a request', async () => {
   let signed: Bundle[] = await body(
     await w.fetch(req('/query?q=.book.price=9%26%3Fcreated'), env),
   )
-  assertEquals((signed[0].created as { by?: string }).by, 'm1')
+  assertEquals((signed[0].created as { by?: string }).by, MEMBER)
 })
 
 test('a required door refuses with the api refusal shape', async () => {

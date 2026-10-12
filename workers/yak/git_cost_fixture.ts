@@ -10,6 +10,7 @@ import { BODY, held, refAt } from './gitobj.ts'
 import { meter, type Steps } from './release_cost_fixture.ts'
 import { DIR, oid, treeEntries, treeOf } from '@yaks/git'
 import { r2Objects } from './lib/objects.ts'
+import { directoryStanding } from './directory_standing_fixture.ts'
 
 export class GitCostStore {
   #store: Store
@@ -93,6 +94,7 @@ export let gitPushCost = async (
   await run('app_new', { slug: 'probe', title: 'Probe' })
   let space = (await dir.space(slug))!
   let app = (await dir.app(space, 'probe'))!
+  await directoryStanding(bindings.STORE, space, app, person)
   let paths = Array.from(
     { length: count },
     (_, i) =>

@@ -239,6 +239,9 @@ let platform = async (meter?: Record<string, unknown>) => {
     space: { slug: 'ada' },
     doc: { title: 'Ada' },
     ...(meter ? { meter: { month: monthOf(new Date()), ...meter } } : {}),
+  }, {
+    entity: { eid: APP },
+    app: { slug: 'cookbook', space: SPACE, access: 'private' },
   }], KERNEL)
   // What the space has spent this month, as the directory holds it.
   let spent = async () => {

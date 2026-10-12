@@ -16,6 +16,8 @@ import { seedDesigns } from './designs_fixture.ts'
 
 seedDesigns()
 
+let PERSON = '22222222-2222-4222-8222-222222222222'
+let OTHER_PERSON = '33333333-3333-4333-8333-333333333333'
 let HERO = '01234567-89ab-cdef-0123-456789abcdef'
 let OTHER = '11234567-89ab-cdef-0123-456789abcdef'
 let fixture = async (named = false) => {
@@ -27,13 +29,13 @@ let fixture = async (named = false) => {
     {
       entity: { eid: HERO },
       player: {},
-      $actor: { by: 'person' },
+      $actor: { by: PERSON },
       position: { level: 'mossvale', x: 50, z: 50 },
     },
     {
       entity: { eid: OTHER },
       player: {},
-      $actor: { by: 'other' },
+      $actor: { by: OTHER_PERSON },
     },
     { entity: { eid: 'old' }, look: { player: HERO, name: 'Old name', at: 1 } },
     { entity: { eid: 'now' }, look: { player: HERO, name: 'Matt', at: 2 } },
@@ -72,7 +74,7 @@ let fixture = async (named = false) => {
   let ask = (
     command: string,
     args: Record<string, unknown>,
-    person = 'person',
+    person = PERSON,
     role = 'owner',
   ) =>
     worker.fetch(
@@ -129,7 +131,12 @@ test('hero commands accept current names and eids, default to the caller, and re
 test('hero commands authorize the author when the store names their reference', async () => {
   let { ask, wrote } = await fixture(true)
   assertEquals(
-    (await ask('where', { player: HERO }, 'person', 'editor')).status,
+    (await ask(
+      'where',
+      { player: HERO },
+      PERSON,
+      'editor',
+    )).status,
     200,
   )
   assertEquals((await ask('gather', { player: HERO })).status, 200)
@@ -140,7 +147,12 @@ test('hero commands authorize the author when the store names their reference', 
   })
   for (let command of ['where', 'gather']) {
     assertEquals(
-      (await ask(command, { player: OTHER }, 'person', 'editor')).status,
+      (await ask(
+        command,
+        { player: OTHER },
+        PERSON,
+        'editor',
+      )).status,
       403,
     )
   }
@@ -150,12 +162,22 @@ test('hero commands authorize the author when the store names their reference', 
 test('hero commands refuse ambiguous names with each matching hero and retain authorization', async () => {
   let { g, ask, wrote } = await fixture()
   assertEquals(
-    (await ask('where', { player: 'Yaks' }, 'person', 'editor')).status,
+    (await ask(
+      'where',
+      { player: 'Yaks' },
+      PERSON,
+      'editor',
+    )).status,
     403,
   )
   assertEquals((await ask('gather', { player: 'Yaks' })).status, 403)
   assertEquals(
-    (await ask('damage', { player: 'Matt', on: false }, 'person', 'editor'))
+    (await ask(
+      'damage',
+      { player: 'Matt', on: false },
+      PERSON,
+      'editor',
+    ))
       .status,
     403,
   )
@@ -163,7 +185,7 @@ test('hero commands refuse ambiguous names with each matching hero and retain au
     (await ask(
       'teleport',
       { player: 'Matt', x: 50, z: 50 },
-      'person',
+      PERSON,
       'editor',
     )).status,
     403,

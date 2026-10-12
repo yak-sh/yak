@@ -581,7 +581,10 @@ let composed = async (
           nudge: opts.thread?.nudge,
           report: (error, job) =>
             void report(error, {
-              during: { entity: job.event.entity.eid, process: built.me },
+              during: {
+                ...job.event ? { entity: job.event.entity.eid } : {},
+                process: built.me,
+              },
               tags: { handler: job.handler },
             }),
         })

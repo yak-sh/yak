@@ -41,7 +41,7 @@ for (let recover of [true, false]) {
             sink: () => {},
             eid: 'catalog-failure',
             tags: { handler: job.handler },
-            during: { entity: job.event.entity.eid },
+            during: job.event ? { entity: job.event.entity.eid } : undefined,
           }),
           { trusted: true },
         ))

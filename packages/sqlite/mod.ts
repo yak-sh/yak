@@ -107,7 +107,7 @@ import {
   ledger,
 } from './archetype.ts'
 import { componentTables, shape } from './physical.ts'
-import { births, patch, remove, revive, spines } from './write.ts'
+import { births, patch, prune, remove, revive, spines } from './write.ts'
 import { bindings } from './rules.ts'
 import { basis, local, memoized } from './memo.ts'
 import { revision } from '@yaks/sql'
@@ -192,6 +192,8 @@ export {
   numberSql,
   patch,
   patchSql,
+  prune,
+  pruneSql,
   remove,
   removeSql,
   revive,
@@ -230,6 +232,8 @@ export type Tx = {
   patch: (bundles: Bundle[]) => Entity[]
   /** remove these entities: rows gone, identity tombstoned */
   remove: (entities: Entity[]) => void
+  /** Erase identities checked by an explicit orphan repair request. */
+  prune: (eids: string[]) => void
   /** bring these tombstoned entities back: tombstone gone, identity kept */
   revive: (eids: string[]) => void
 }
@@ -656,6 +660,7 @@ export let storage = (
       )
     },
     revive: (eids) => memo.writes(() => revive(driver, eids), () => eids),
+    prune: (eids) => memo.writes(() => prune(driver, vocab, eids), () => eids),
   }
   // A unit over a store that keeps archetypes keeps every pointer in step,
   // whichever door wrote: @yaks/graph's tracker, a hook writing through a

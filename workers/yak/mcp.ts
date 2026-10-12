@@ -91,6 +91,7 @@ import { ledger } from './ledger.ts'
 import { instructions, pageFor, UNDO } from './guide.ts'
 import { asking, challenge, unauthorized } from './identity.ts'
 import { narrowed } from './grants.ts'
+import { instrumentEid } from './instrument.ts'
 import { listViews, readView } from './declared.ts'
 import { answer, asset, docs, SIGNIN } from './preauth.ts'
 import type { Reach } from './reach.ts'
@@ -349,7 +350,7 @@ let instrumentOf = async (
   )
   return instrument?.person == person && typeof instrument.via == 'string' &&
       instrument.via
-    ? instrument.via
+    ? instrumentEid(instrument.via)
     : null
 }
 

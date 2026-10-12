@@ -9,6 +9,7 @@ import type { Env } from './env.ts'
 import { driver } from '@yaks/durable-object'
 import { by, col, val } from '@yaks/sql'
 import { meter } from './release_cost_fixture.ts'
+import { directoryStanding } from './directory_standing_fixture.ts'
 
 export let directoryLifecycleCost = async (
   storage: State['storage'],
@@ -49,8 +50,18 @@ export let directoryLifecycleCost = async (
   let dir = directory({ fetch: (req) => directoryFetch(req, env) }, true)
   // Seed the platform through its write door before adding unrelated history.
   await dir.apply({ entities: [] })
-  let space = (await dir.space('yak'))!
   let person = (await dir.personAt('admin@bot.yak.sh'))!
+  let slug = `lifecycle-cost-${crypto.randomUUID().slice(0, 8)}`
+  let spaceId = crypto.randomUUID()
+  await meta.apply([{
+    entity: { eid: spaceId },
+    space: { slug },
+    doc: { title: 'Directory lifecycle cost probe' },
+  }, {
+    entity: { eid: crypto.randomUUID() },
+    member: { space: spaceId, person, role: 'owner' },
+  }], KERNEL)
+  let space = (await dir.space(slug))!
   let documents = Math.min(history, 2000)
   for (let start = 0; start < documents; start += 100) {
     await meta.apply(
@@ -103,7 +114,7 @@ export let directoryLifecycleCost = async (
   let run = async (name: string, args: Args) => {
     m.step(name)
     return await call({ env, dir, person }, name.split(' ')[0], {
-      space: 'yak',
+      space: slug,
       ...args,
     })
   }
@@ -115,6 +126,13 @@ export let directoryLifecycleCost = async (
       if (!(e instanceof Error) || !e.message.includes('no app probe')) throw e
     }
     await run('app_new', { slug: 'probe', title: 'Probe' })
+    m.step(null)
+    await directoryStanding(
+      bindings.STORE,
+      space,
+      (await dir.app(space, 'probe'))!,
+      person,
+    )
     await run('app_files', {
       app: 'probe',
       files: [{

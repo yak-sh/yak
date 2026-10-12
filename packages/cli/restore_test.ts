@@ -63,7 +63,10 @@ let fixture = () => {
         g,
         args.bundles as Bundle[],
         { by: 'caller' },
-        args.check === true,
+        {
+          check: args.check === true,
+          stamp: args.stamp as boolean | undefined,
+        },
       )
       return 0
     })], {
@@ -115,6 +118,28 @@ test('a checked restoration rolls its changes back', async () => {
   let { g, line } = fixture()
   assertEquals(await line(['--restore', '--check'], patch('sale')), 0)
   assertEquals(await g.get(['sale']), [])
+})
+
+test('an explicit stamp repair preserves the supplied provenance', async () => {
+  let { g, line } = fixture()
+  await g.apply([{
+    entity: { eid: 'sale' },
+    doc: { title: 'Sale' },
+    $actor: { by: 'caller' },
+  }])
+  assertEquals(
+    await line(['--restore', '--stamp=false'], [{
+      entity: { eid: 'sale' },
+      updated: { by: 'then', at: historical.at },
+    }]),
+    0,
+  )
+  assertEquals(comp((await g.get(['sale']))[0], 'updated'), {
+    by: 'then',
+    at: historical.at,
+  })
+  assertEquals(await line(['--stamp=false'], patch('ordinary')), 2)
+  assertEquals(await g.get(['ordinary']), [])
 })
 
 test('restoration refuses a stale guard', async () => {

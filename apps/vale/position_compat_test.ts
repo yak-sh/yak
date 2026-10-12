@@ -26,7 +26,10 @@ import { grew } from '../../workers/yak/vocab.ts'
 let app = { ...words, package: '@app/vale-compat' }
 let speaks = { [packageEid(app.package)]: 0 }
 let moment = '2026-10-03T18:00:00.000Z', time = Date.parse(moment)
-let person = { by: 'kim', via: 'browser' }
+let person = {
+  by: '11111111-1111-4111-8111-111111111111',
+  via: '22222222-2222-4222-8222-222222222222',
+}
 let value = (row: Bundle, name: string) => row[name] as Record<string, unknown>
 let setup = async (guard = false, expanded = false, shuffled = false) => {
   let vocab = loadVocab([
@@ -167,7 +170,10 @@ test('kept Vale writes directed marks under the hero owner, guards converted val
   )
   equal(value((await g.get(['hero']))[0], 'position').x, 3)
   equal((await old(g)).teleport, 'request')
-  equal(value((await g.get(['request']))[0], 'completed').by, 'kim')
+  equal(
+    value((await g.get(['request']))[0], 'completed').by,
+    person.by,
+  )
   await throws(
     () =>
       g.apply(
@@ -191,7 +197,7 @@ test('kept Vale writes directed marks under the hero owner, guards converted val
         entity: { eid: 'hero' },
         seen: { teleport: 'next-request' },
         $speaks: speaks,
-      }], { by: 'stranger' }),
+      }], { by: '33333333-3333-4333-8333-333333333333' }),
     )
   )
   await g.apply([{
@@ -297,7 +303,11 @@ test('the mover preserves newer saved values, historical attribution, contracts 
     player: {},
     seen: { level: 'old', x: 1, z: 2, at: moment, teleport: 'request', yaw: 2 },
     position: { level: 'new', x: 99, z: 99, at: time + 1 },
-    updated: { by: 'kim', via: 'browser', at: moment },
+    updated: {
+      by: person.by,
+      via: person.via,
+      at: moment,
+    },
   }
   let request: Bundle = {
     entity: { eid: 'request' },
@@ -305,7 +315,11 @@ test('the mover preserves newer saved values, historical attribution, contracts 
   }
   let moved = chain.put([source], { facts: [source, request], migrate: true })
   equal(moved[0].position, source.position)
-  equal(moved[1].completed, { by: 'kim', via: 'browser', at: moment })
+  equal(moved[1].completed, {
+    by: person.by,
+    via: person.via,
+    at: moment,
+  })
   let noAck = { ...source, seen: { ...value(source, 'seen'), teleport: null } }
   equal(
     chain.put([noAck], {

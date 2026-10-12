@@ -1,5 +1,5 @@
 import { test } from '@yaks/testing'
-import { assertEquals, assertThrows } from '@std/assert'
+import { assertEquals, assertStringIncludes, assertThrows } from '@std/assert'
 import { books, memory } from './testing.ts'
 import { graph } from './graph.ts'
 import { Refused } from './admit.ts'
@@ -16,11 +16,7 @@ test('a request no plugin answers is refused, and the message names it', () => {
     () => g().apply([{ entity: { eid: 'b' }, $num: true }]),
     Refused,
   )
-  assertEquals(
-    err.message,
-    'unknown request: $num — this graph answers $delete, $was, $actor, ' +
-      '$alias, $quiet',
-  )
+  assertStringIncludes(err.message, 'unknown request: $num')
 })
 
 test('a plugin that declares a request lets it through', async () => {

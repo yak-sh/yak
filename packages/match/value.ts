@@ -99,7 +99,7 @@ export let eq = (value: string | Value, tag: Tag): Check | null => {
     if (value.includes(',')) {
       let parts = value.split(',').map((p) => eq(p, tag))
       return parts.every((p): p is Check => p != null)
-        ? (v) => parts.some((p) => p(v))
+        ? (v) => v != null && parts.some((p) => p(v))
         : null
     }
     value = { kind: 'scalar', raw: value }
@@ -117,7 +117,7 @@ export let eq = (value: string | Value, tag: Tag): Check | null => {
   if (value.kind == 'list') {
     let parts = value.items.map((p) => eq(p, tag))
     if (parts.some((p) => !p)) return null
-    return (v) => parts.some((p) => p!(v))
+    return (v) => v != null && parts.some((p) => p!(v))
   }
   if (NUMERIC.includes(tag)) {
     // An operand that does not survive a round trip through number formatting

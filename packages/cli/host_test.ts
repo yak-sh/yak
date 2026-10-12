@@ -38,6 +38,11 @@ import { FakeTime } from '@std/testing/time'
 // The host of these tests, as its own writes are signed: this process, whose
 // row every composition here writes on the way in.
 let me = selfEid()
+let ana = {
+  by: '00000000-0000-4000-8000-000000000001',
+  via: '00000000-0000-4000-8000-000000000002',
+}
+let jo = '00000000-0000-4000-8000-000000000003'
 
 let doc: VocabDoc = {
   title: 'shop',
@@ -356,7 +361,6 @@ test('a plugin’s tools are imported by the first call of one of them', async (
 test('a host that names itself writes as itself, and a plugin may say who else', async () => {
   // The plugin names a caller for the requests that carry a token, and says
   // nothing about the rest — which is the host's own writing.
-  let ana = { by: 'ana', via: 'her-run' }
   let told: Plugged = {
     graph: {
       authenticate: () => (r) => r.headers.get('authorization') ? ana : null,
@@ -382,7 +386,7 @@ test('a host that names itself writes as itself, and a plugin may say who else',
     assertEquals(stamp((await wrote())[0]).by, me)
     assertEquals(
       stamp((await wrote({ authorization: 'Bearer t' }))[0]).by,
-      'ana',
+      ana.by,
     )
     // And what the host writes with nobody at any door at all — an effect, a
     // boot pass — is signed the same way.
@@ -395,7 +399,6 @@ test('a host that names itself writes as itself, and a plugin may say who else',
 
 test('a command line writes as the session it names, through the same door as HTTP, or as the person typing it', async () => {
   // The door knows one run by its `x-via`, as @yaks/session's does.
-  let ana = { by: 'ana', via: 'her-run' }
   let told: Plugged = {
     graph: {
       authenticate: () => (r) =>
@@ -403,7 +406,7 @@ test('a command line writes as the session it names, through the same door as HT
     },
   }
   let host = await compose(
-    { db: ':memory:', plugins: ['shop', 'told'], person: 'jo' },
+    { db: ':memory:', plugins: ['shop', 'told'], person: jo },
     only({ shop, told }),
   )
   try {
@@ -414,14 +417,14 @@ test('a command line writes as the session it names, through the same door as HT
         call: { to: toolEid('book_add'), args: { title: 'Dune' } },
         ...await signer(host, via, typed),
       })).find((b) => b.book)?.created as Comp
-    assertEquals((await add('her-run')).by, 'ana')
+    assertEquals((await add('her-run')).by, ana.by)
     // A run the door does not know, or none at all, is this process's writing.
     assertEquals((await add('nobody')).by, me)
     assertEquals((await add()).by, me)
     // A line typed at a terminal, naming no session, is the config's person's;
     // a session typed into a terminal is still that session's.
-    assertEquals((await add(undefined, true)).by, 'jo')
-    assertEquals((await add('her-run', true)).by, 'ana')
+    assertEquals((await add(undefined, true)).by, jo)
+    assertEquals((await add('her-run', true)).by, ana.by)
   } finally {
     host.close()
   }

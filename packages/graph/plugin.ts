@@ -111,6 +111,9 @@ export let INSIDE: Phase[] = [
 /** The hook's graph and operation; the third argument remains the audit error.
  * An observed operation also carries its current activity parent. */
 export type HookContext = {
+  /** One storage transaction attempt, stable across rewritten bundles and
+   * shared with its effect or rollback hooks. Absent before it opens. */
+  transaction?: object
   graph: object
   /** An internal server capability, never accepted from incoming bundles. */
   trusted?: boolean

@@ -8,11 +8,13 @@ import { intake, service } from './service.ts'
 import { fixture } from './fixture_test.ts'
 import { comp } from './model.ts'
 
+let person = '00000000-0000-4000-8000-000000000001'
+let session = '00000000-0000-4000-8000-000000000002'
 let record = (eid: string) =>
   capture('broken', {
     sink: () => {},
     eid,
-    actor: { by: 'person', via: 'session' },
+    actor: { by: person, via: session },
   })
 let left = async (dir: string) =>
   (await Array.fromAsync(Deno.readDir(dir))).map((e) => e.name)
@@ -39,8 +41,8 @@ test('a file spool survives reopening, preserves concurrent appends and actors',
     equal(rows.length, 20)
     ok(
       rows.every((row) =>
-        comp(row, 'created').by == 'person' &&
-        comp(row, 'created').via == 'session'
+        comp(row, 'created').by == person &&
+        comp(row, 'created').via == session
       ),
     )
     equal(await left(dir), [])

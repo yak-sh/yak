@@ -8,7 +8,13 @@ import { assert, assertEquals, assertThrows } from '@std/assert'
 import { test, until } from '@yaks/testing'
 import { map as queryMap } from '@yaks/query'
 import { subscriptions as subscribed } from '@yaks/api'
-import { type Bundle, type Graph, graph, type Storage } from '@yaks/graph'
+import {
+  type Bundle,
+  derivedEid,
+  type Graph,
+  graph,
+  type Storage,
+} from '@yaks/graph'
 import { ram } from '@yaks/ram'
 import { pack } from './watches.ts'
 import { loadVocab, type Vocab } from '@yaks/vocab'
@@ -16,6 +22,9 @@ import type { Frame } from '@yaks/api'
 import { durable, shop, store } from './testing.ts'
 import { type Sockets, sockets, type Wire } from './sockets.ts'
 import { holds } from './holds.ts'
+
+let PERSON = derivedEid('fixture:person')
+let TAB = derivedEid('fixture:tab')
 
 // A relay batch or a save's timer, due as soon as what is running settles: the
 // pause it would wait in a socket's object is no part of what is checked here.
@@ -185,7 +194,7 @@ test('a woken socket saves and finishes values as its vouched writer', async () 
   })
   let storage = store(vocab), ctx = hibernation(), ws = wire()
   ctx.live.push(ws)
-  ws.serializeAttachment({ writer: { actor: { by: 'person', via: 'tab' } } })
+  ws.serializeAttachment({ writer: { actor: { by: PERSON, via: TAB } } })
   let [initial, first] = instance(storage, ctx, vocab)
   initial.apply([{ entity: { eid: 'hero' }, hero: { name: 'Hero' } }])
   first.message(ws, ask('hero', '.entity.eid=hero'))
@@ -203,8 +212,8 @@ test('a woken socket saves and finishes values as its vouched writer', async () 
   await woken.close(ws)
   let [row] = g.get(['hero']) as Bundle[]
   assertEquals(row.position, { x: 2 })
-  assertEquals((row.updated as { by: string }).by, 'person')
-  assertEquals((row.updated as { via: string }).via, 'tab')
+  assertEquals((row.updated as { by: string }).by, PERSON)
+  assertEquals((row.updated as { via: string }).via, TAB)
 })
 
 test('a legacy socket answers reads and reconnects before every relay', () => {
@@ -389,7 +398,7 @@ test('an idle area subscriber hears a mover after hibernation', async () => {
   g.apply([{ entity: { eid: 'mover' }, product: { price: 3 } }])
   let idle = wire(), moving = wire()
   moving.serializeAttachment({
-    writer: { actor: { by: 'person', via: 'tab' } },
+    writer: { actor: { by: PERSON, via: TAB } },
   })
   ctx.live.push(idle, moving)
   send(first, idle, {

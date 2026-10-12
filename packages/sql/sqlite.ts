@@ -308,11 +308,13 @@ let eq = (
   if (value.kind == 'list') {
     let parts = value.items.map((p) => eq(c, p, tag, textAffinity))
     let frags = parts.filter((p) => p != null)
-    return !parts.length
-      ? { sql: '0', params: [] }
-      : frags.length == parts.length
-      ? anyOf(frags)
-      : null
+    if (!parts.length) return { sql: '0', params: [] }
+    if (frags.length != parts.length) return null
+    let inner = anyOf(frags)
+    return {
+      sql: `(${c} is not null and ${inner.sql})`,
+      params: inner.params,
+    }
   }
   if (NUMERIC_TAGS.includes(tag)) {
     let n = held(value.raw, tag)

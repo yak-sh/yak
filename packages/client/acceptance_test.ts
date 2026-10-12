@@ -6,7 +6,7 @@ import { ram } from '@yaks/ram'
 import { loadVocab } from '@yaks/vocab'
 import { client } from './client.ts'
 import { WriteRefused, WriteUnknown } from './mod.ts'
-import { box, comp } from './testing.ts'
+import { box, comp, COOK } from './testing.ts'
 
 let vocab = loadVocab([...box.docs, {
   $defs: {
@@ -14,7 +14,7 @@ let vocab = loadVocab([...box.docs, {
     cook: { rule: true, match: '.recipe +!cooked' },
   },
 }])
-let server = graph({ vocab, storage: ram(vocab), actor: { by: 'cook' } })
+let server = graph({ vocab, storage: ram(vocab), actor: { by: COOK } })
 let gate = Promise.withResolvers<void>()
 let requested = Promise.withResolvers<void>()
 let write: Bundle[] = [{ entity: { eid: 'dal' }, recipe: { serves: 4 } }]
@@ -55,7 +55,7 @@ test('ordinary mutation returns server rules and stamps', async () => {
   let receipt = await stamped.mutate(write)
   equal(receipt, accepted)
   equal(receipt[0].cooked, {})
-  equal(comp(receipt[0], 'created').by, 'cook')
+  equal(comp(receipt[0], 'created').by, COOK)
   stamped.close()
 })
 

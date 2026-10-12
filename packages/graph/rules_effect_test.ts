@@ -19,6 +19,7 @@ let held = (one: ReturnType<typeof graph>, eid = 'b1') =>
 let shelfWords = loadVocab(
   pick(books.docs[0], ['entity', 'book', 'doc', 'bookmark']),
 )
+let librarian = '00000000-0000-4000-8000-000000000001'
 let now = '2026-09-07T04:20:00.000Z'
 let tagged = (marked = false) => {
   let one = graph({ storage: memory(), vocab: shelfWords })
@@ -44,7 +45,7 @@ let tagged = (marked = false) => {
     one.apply([{
       entity: { eid: 'b1' },
       bookmark: { of: 'b1' },
-      $actor: { by: 'librarian' },
+      $actor: { by: librarian },
     }], { now })
   return { one, seen, mark }
 }
@@ -52,7 +53,7 @@ let newlyMarked = tagged(), alreadyMarked = tagged(true)
 
 test('effect rules match stored tags and this batch’s writes', () => {
   assert(!isPromise(newlyMarked.mark()))
-  assertEquals(newlyMarked.seen, [['b1', { pages: 412 }, now, 'librarian']])
+  assertEquals(newlyMarked.seen, [['b1', { pages: 412 }, now, librarian]])
 })
 
 test('a stored trigger ignores unrelated edits and observes another trigger write', () => {
@@ -60,7 +61,7 @@ test('a stored trigger ignores unrelated edits and observes another trigger writ
   one.apply([{ entity: { eid: 'b1' }, doc: { title: 'Dune, revised' } }])
   assertEquals(seen, [])
   mark()
-  assertEquals(seen, [['b1', { pages: 412 }, now, 'librarian']])
+  assertEquals(seen, [['b1', { pages: 412 }, now, librarian]])
 })
 
 test('effect rules share a frozen view and resources, before hooks', () => {

@@ -6,7 +6,7 @@
 import { test, until } from '@yaks/testing'
 import { assert, assertEquals, assertRejects } from '@std/assert'
 import { FakeTime } from '@std/testing/time'
-import { type Bundle, graph } from '@yaks/graph'
+import { type Bundle, derivedEid, graph } from '@yaks/graph'
 import { graphDoc } from '@yaks/graph/vocab'
 import { subscriptions, Unauthorized } from '@yaks/api'
 import { ram } from '@yaks/ram'
@@ -17,7 +17,9 @@ import { mcp } from './mount.ts'
 import { routes } from './routes.ts'
 import { comp, pinned, shop, shopGraph } from './testing.ts'
 
-let ada = { by: 'm1' }
+let MEMBER = derivedEid('fixture:m1')
+
+let ada = { by: MEMBER }
 
 let sessionVocab = loadVocab([...shop.docs, sessionDoc, {
   $defs: {
@@ -77,7 +79,7 @@ test('the door answers the protocol, and signs what a tool writes', async () => 
   assertEquals(said.result.isError, undefined)
 
   let found: Bundle[] = await graph.read('.book.price=12&*')
-  assertEquals(comp(found[0], 'created').by, 'm1')
+  assertEquals(comp(found[0], 'created').by, MEMBER)
 })
 
 test('a slow tool answers with its committed outcome', async () => {
@@ -283,8 +285,12 @@ test('an MCP connection writes through its own graph session', async () => {
 
 test('authentication keeps its actor while the MCP session names the run', async () => {
   let g = sessionGraph()
-  await g.apply([{ entity: { eid: 'm1' }, doc: { title: 'A member' } }])
-  let door = mcp({ graph: g, sessions: g, authenticate: () => ({ by: 'm1' }) })
+  await g.apply([{ entity: { eid: MEMBER }, doc: { title: 'A member' } }])
+  let door = mcp({
+    graph: g,
+    sessions: g,
+    authenticate: () => ({ by: MEMBER }),
+  })
   let first = await door(rpc('initialize', {
     protocolVersion: '2025-06-18',
     capabilities: {},
@@ -293,7 +299,7 @@ test('authentication keeps its actor while the MCP session names the run', async
   let id = first.headers.get('mcp-session-id')
   assert(id)
   let [session] = await g.read(`.session.id=${JSON.stringify(id)}&*`)
-  assertEquals(comp(session, 'session').actor, 'm1')
+  assertEquals(comp(session, 'session').actor, MEMBER)
   await door(
     new Request(
       call('graph_apply', {
@@ -303,15 +309,15 @@ test('authentication keeps its actor while the MCP session names the run', async
     ),
   )
   let made = comp((await g.get(['b1']))[0], 'created')
-  assertEquals(made.by, 'm1')
+  assertEquals(made.by, MEMBER)
   assertEquals(made.via, session.entity.eid)
 })
 
 test('x-via keeps its session, and a one-shot CLI call gets one', async () => {
   let g = sessionGraph()
   await g.apply([
-    { entity: { eid: 'm1' }, doc: { title: 'A member' } },
-    { entity: { eid: 's1' }, session: { id: 'harness-run', actor: 'm1' } },
+    { entity: { eid: MEMBER }, doc: { title: 'A member' } },
+    { entity: { eid: 's1' }, session: { id: 'harness-run', actor: MEMBER } },
   ])
   let door = mcp({
     graph: g,
@@ -329,7 +335,7 @@ test('x-via keeps its session, and a one-shot CLI call gets one', async () => {
     }),
   )
   assertEquals(harness.headers.get('mcp-session-id'), null)
-  assertEquals(comp((await g.get(['b1']))[0], 'created').by, 'm1')
+  assertEquals(comp((await g.get(['b1']))[0], 'created').by, MEMBER)
   assertEquals(comp((await g.get(['b1']))[0], 'created').via, 's1')
   assertEquals((await g.read('.session')).length, 1)
 
@@ -498,7 +504,7 @@ test('a pinned modern HTTP client discovers awaited facets and records malformed
     )
     let calls = await g.read('.call&?created')
     assertEquals(calls.length, 1)
-    assertEquals(comp(calls[0], 'created').by, 'm1')
+    assertEquals(comp(calls[0], 'created').by, MEMBER)
     assertEquals(comp(calls[0], 'call').args, { bundles: 'malformed' })
     let wrote = await client.callTool({
       name: 'graph_apply',
@@ -511,7 +517,7 @@ test('a pinned modern HTTP client discovers awaited facets and records malformed
       },
     })
     assertEquals(wrote.isError, undefined)
-    assertEquals(comp((await g.get(['modern-book']))[0], 'created').by, 'm1')
+    assertEquals(comp((await g.get(['modern-book']))[0], 'created').by, MEMBER)
     assertEquals(
       (await client.listResources()).resources[0].uri,
       'shop://shelf',
@@ -606,7 +612,7 @@ test('stdio selects modern or legacy using the same attributed tool factory', as
         .map((b) => b.entity.eid),
       ['b1'],
     )
-    assertEquals(comp((await graph.get(['b1']))[0], 'created').by, 'm1')
+    assertEquals(comp((await graph.get(['b1']))[0], 'created').by, MEMBER)
   } finally {
     await Promise.all([modern.close(), legacy.close()])
     await Promise.all(served.map((s) => s.close()))

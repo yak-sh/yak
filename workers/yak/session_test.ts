@@ -29,6 +29,7 @@ import {
   whoIs,
 } from './session.ts'
 import { paged, paging } from './installed.ts'
+import { instrumentEid } from './instrument.ts'
 
 let SECRET = 'a-probe-secret'
 let ENV = { SESSION_SECRET: SECRET, APEX: 'yaks.app' }
@@ -231,7 +232,7 @@ test('an existing session gains a browser instrument and keeps its person and st
   let old = oldSession, who = sessionWho, claims = sessionClaims
   assertEquals([who.person, who.role], ['p-1', 'editor'])
   assert(who.via)
-  assertEquals([claims?.person, claims?.space, claims?.via], [
+  assertEquals([claims?.person, claims?.space, instrumentEid(claims!.via!)], [
     'p-1',
     'garden',
     who.via,
@@ -274,7 +275,10 @@ for (let [index, remember] of [true, true, false].entries()) {
     let set = again.headers.get('set-cookie')
     if (remember) {
       assert(set)
-      assertEquals((await verify(value(set), SECRET))?.via, who.via)
+      assertEquals(
+        instrumentEid((await verify(value(set), SECRET))!.via!),
+        who.via,
+      )
     } else assertEquals(set, null)
     await again.body?.cancel()
   })
@@ -283,7 +287,10 @@ for (let [index, remember] of [true, true, false].entries()) {
 test('signing in keeps an existing session instrument and a different session has its own', async () => {
   let req = asked(`${COOKIE}=${oldSession}`), who = sessionWho
   let replacement = await minted(req, ENV, SECRET, 'p-1', 'garden')
-  assertEquals((await verify(value(replacement), SECRET))?.via, who.via)
+  assertEquals(
+    instrumentEid((await verify(value(replacement), SECRET))!.via!),
+    who.via,
+  )
   // A minute apart from the fixture's expiry: one second could equal it when
   // the test starts a second after the fixture, minting the same token.
   let other = await sign({
@@ -320,7 +327,11 @@ test('forged and expired browser instruments never become a writer', async () =>
 })
 
 test('a page and worker visit preserve a browser instrument without turning it into a person', async () => {
-  let who = { person: null, role: null, via: 'browser-1' }
+  let who = {
+    person: null,
+    role: null,
+    via: '00000000-0000-4000-8000-000000000001',
+  }
   let token = await granting(SECRET, 'eve/game', who)
   let req = new Request('https://eve.yaks.app/game/api/apply', {
     headers: { [VISIT]: token },

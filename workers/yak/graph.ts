@@ -96,6 +96,7 @@ import {
   type Frame,
   type Handler,
   json,
+  type PeerWriter,
   poured,
   published,
   readBody,
@@ -276,6 +277,7 @@ import { weighed } from './meter.ts'
 import { embedder, SPACE, texts } from './embedding.ts'
 import { directoryOf } from './directory.ts'
 import { recordUse, useUntil, using } from './used.ts'
+import { instrumentActor, instrumentEid } from './instrument.ts'
 import { commandAt, commandReply } from './app-command.ts'
 import { vaultOf } from './vault.ts'
 import {
@@ -607,9 +609,10 @@ export type Vouch = {
 export let vouchOf = (req: Request): Vouch => {
   let said = req.headers.get('x-yak-role')
   let person = req.headers.get('x-yak-person')
+  let via = req.headers.get('x-yak-via')
   return {
     person,
-    via: req.headers.get('x-yak-via'),
+    via: via ? instrumentEid(via) : null,
     level: person && said ? level(said) : null,
     title: person ? req.headers.get('x-yak-title') : null,
   }
@@ -1604,9 +1607,12 @@ export class Store {
           bundles: Bundle[]
           actor: Actor | null
         }
-        let result = this.#graph.apply(signed(bundles, actor), {
-          deferEffects: (run) => effects.push(run),
-        })
+        let result = this.#graph.apply(
+          signed(bundles, instrumentActor(actor)),
+          {
+            deferEffects: (run) => effects.push(run),
+          },
+        )
         if (result instanceof Promise) {
           throw new Error('a staged seed must apply synchronously')
         }
@@ -1736,7 +1742,7 @@ export class Store {
       if (!reads(mode(definition?.access), standing)) return false
       this.#vouched.set(person, {
         person,
-        via: actor?.via ?? null,
+        via: instrumentActor(actor)?.via ?? null,
         level: standing,
         title: null,
       })
@@ -1925,6 +1931,7 @@ export class Store {
     let plugin = members({
       app,
       vocab,
+      instrument: instrumentEid,
       floors: floorsOf(manifest),
       level: (who) =>
         who ? this.#vouched.get(who)?.level ?? undefined : undefined,
@@ -1960,10 +1967,15 @@ export class Store {
     let was = this.#kernelling
     this.#kernelling = true
     try {
-      return this.#graph[admission ? 'admit' : 'apply'](bundles, {
-        ...opts,
-        trusted: true,
-      })
+      return this.#graph[admission ? 'admit' : 'apply'](
+        bundles.map((b) =>
+          b.$actor ? { ...b, $actor: instrumentActor(b.$actor)! } : b
+        ),
+        {
+          ...opts,
+          trusted: true,
+        },
+      )
     } finally {
       this.#kernelling = was
     }
@@ -2035,7 +2047,7 @@ export class Store {
                   ) {
                     throw new Error('app is unavailable')
                   }
-                  let actor = who(call)
+                  let actor = instrumentActor(who(call))
                   // Unattributed recorded work is the app's automation. A
                   // browser's vouched instrument alone never supplies a person.
                   let person = actor?.by ?? (actor?.via ? null : appId)
@@ -3762,16 +3774,13 @@ export class Store {
           })
           : this.#runner()
         await run.ensure([name])
+        let vouch = vouchOf(request)
         let call = signed([{
           entity: { eid: id },
           call: { to: toolEid(name), args, id, source },
         }], {
-          ...(request.headers.get('x-yak-person')
-            ? { by: request.headers.get('x-yak-person')! }
-            : {}),
-          ...(request.headers.get('x-yak-via')
-            ? { via: request.headers.get('x-yak-via')! }
-            : {}),
+          ...(vouch.person ? { by: vouch.person } : {}),
+          ...(vouch.via ? { via: vouch.via } : {}),
         })[0]
         let answer = answerOf(await run.call(call), id)
         let failure = answer.find((b) => b.refusal || b.exception)
@@ -4013,6 +4022,8 @@ export class Store {
   // sink it was opened with.
   #naming(subs: Subs, words: string[]): Subs {
     let wrapped = new Map<Sink, Sink>()
+    let writing = (writer: PeerWriter | undefined) =>
+      writer ? { ...writer, actor: instrumentActor(writer.actor) } : writer
     let by = (sink: Sink): Sink => {
       let held = wrapped.get(sink)
       if (!held) {
@@ -4071,11 +4082,12 @@ export class Store {
       drop: (sink) => subs.drop(by(sink)),
       commit: subs.commit,
       check: subs.check,
-      // A relay carries no membership news and no stored rows, so there is
-      // nothing here to rename — only the sink to translate.
-      relay: (sink, bundles, writer) => subs.relay(by(sink), bundles, writer),
+      // Hibernated writers keep the same instrument identity as HTTP writes,
+      // including attachments made with a credential's outside id.
+      relay: (sink, bundles, writer) =>
+        subs.relay(by(sink), bundles, writing(writer)),
       enqueue: (sink, bundles, writer) =>
-        (subs.enqueue ?? subs.relay)(by(sink), bundles, writer),
+        (subs.enqueue ?? subs.relay)(by(sink), bundles, writing(writer)),
       pace: subs.pace,
       save: subs.save,
       relaying: (sink) => subs.relaying(by(sink)),

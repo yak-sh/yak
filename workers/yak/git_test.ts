@@ -10,7 +10,12 @@
 // registration, the cross-store write and the vocabulary all have to be right
 // for this file to pass.
 import { test } from '@yaks/testing'
-import { assert, assertEquals, assertObjectMatch } from '@std/assert'
+import {
+  assert,
+  assertEquals,
+  assertNotEquals,
+  assertObjectMatch,
+} from '@std/assert'
 import { treeEntries } from '@yaks/git'
 import { r2Objects } from './lib/objects.ts'
 import { directory } from './directory.ts'
@@ -148,11 +153,16 @@ test('a deploy mints one commit whose tree is the manifest', async () => {
   ])
   let repo = (commit.commit as { repo: string }).repo
   let [repository] = await meta(env).query(`.entity.eid=${repo}&?repository`)
-  assertObjectMatch(repository.repository as object, { origin: repo })
+  let origin = (repository.repository as { origin: string }).origin
+  assert(
+    origin.startsWith('https://'),
+    'the repository retains its clone address',
+  )
+  assertNotEquals(repo, origin, 'a clone address is not an entity identity')
   assertEquals(
-    (await meta(env).query(`.commit.repo.repository.origin=${repo}`)).map((b) =>
-      b.entity.eid
-    ),
+    (await meta(env).query(`.commit.repo.repository.origin=${origin}`)).map((
+      b,
+    ) => b.entity.eid),
     [head],
   )
   // The platform signed it; the person who deployed authored it, under the

@@ -131,6 +131,13 @@ let empty = snapshot(wiki, base, [
   },
 ])
 
+/** Live actor identities, seeded before a fixture starts journaling. */
+export let actors = (g: Graph) =>
+  g.apply(
+    ACTORS.map((eid) => ({ entity: { eid }, render: { state: 'actor' } })),
+    { now: NOW },
+  )
+
 /** An embedded database with the wiki's tables and the journal's, and a log
  * bound to it — what a graph and a test both read through. The statement
  * capability is returned beside them so the tools use the same storage. */
@@ -144,6 +151,7 @@ export let wikiLog = (): {
 } => {
   let db = preparedDriver(empty)
   let store = storage(db, wiki, base)
+  actors(graph({ storage: store, vocab: wiki }))
   let texts = blobs(wiki, sqliteBlobs(db))
   let as = (j: Log, plugins: Options['plugins'] = []) =>
     graph({

@@ -20,7 +20,11 @@ import type { Value } from '@yaks/query/core'
 export let literals = (value: Value | null): string[] | undefined => {
   if (!value || value.kind == 'range') return undefined
   if (value.kind != 'list') return value.raw ? [value.raw] : undefined
-  let items = value.items.map(literals)
+  // An empty scalar on its own asks for absence; inside a list it names the
+  // empty value, so keyed membership must retain it as a literal.
+  let items = value.items.map((item) =>
+    item.kind == 'scalar' || item.kind == 'time' ? [item.raw] : literals(item)
+  )
   return items.every((item): item is string[] => item != null)
     ? items.flat()
     : undefined
@@ -39,6 +43,7 @@ export let identity = (
   value: string | Value | null,
   exact = false,
 ): Identity | undefined => {
+  if (prop != 'eid' && prop != 'num') return undefined
   let operands = typeof value == 'string'
     ? !value || value.includes('..') ? undefined : value.split(',')
     : literals(value)

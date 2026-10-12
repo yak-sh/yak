@@ -6,6 +6,11 @@ import { harnessTools } from './tools.ts'
 import { local } from './local.ts'
 import { harness, repo, working } from './testing.ts'
 
+let dependency = '00000000-0000-4000-8000-000000000001'
+let laterEditor = '00000000-0000-4000-8000-000000000002'
+let other = '00000000-0000-4000-8000-000000000003'
+let nextAuthor = '00000000-0000-4000-8000-000000000004'
+
 let setup = async () => {
   let h = await harness()
   await h.g.apply([
@@ -201,7 +206,7 @@ for (let finish of ['complete', 'unlink']) {
       { entity: { eid: 'work' }, completed: {} },
       { entity: { eid: 'dep' }, task: {} },
       {
-        entity: { eid: 'edge' },
+        entity: { eid: dependency },
         edge: { from: 'work', to: 'dep' },
         contains: {},
       },
@@ -227,7 +232,7 @@ for (let finish of ['complete', 'unlink']) {
     await h.g.apply(
       finish == 'complete'
         ? [{ entity: { eid: 'dep' }, completed: {} }]
-        : [{ entity: { eid: 'edge' }, tombstone: {} }] as Bundle[],
+        : [{ entity: { eid: dependency }, tombstone: {} }] as Bundle[],
     )
     let receipt = await until(async () =>
       (await transcript(h.g, 'p')).find((b) =>
@@ -364,7 +369,7 @@ for (let writer of ['p', 'child', 'other', 'external']) {
       await h.fx.idle()
       asks = 0
       let before = (await transcript(h.g, 'p')).length
-      let actor = writer == 'child' ? child : writer
+      let actor = writer == 'child' ? child : writer == 'other' ? other : writer
       if (writer == 'external') {
         await h.g.apply([{ entity: { eid: 'work' }, completed: {} }])
       } else {
@@ -407,7 +412,7 @@ for (let writer of ['p', 'child', 'other', 'external']) {
       await h.g.apply([{
         entity: { eid: 'work' },
         completed: {},
-        $actor: { by: 'later-editor' },
+        $actor: { by: laterEditor },
       }])
       await deliverChild(h.g, child)
       await deliverChild(h.g, child)
@@ -496,10 +501,10 @@ test('reopening a task allows a new completion author', async () => {
   await h.g.apply([{
     entity: { eid: 'work' },
     completed: {},
-    $actor: { by: 'q' },
+    $actor: { by: nextAuthor },
   }])
   let [work] = await h.g.read('.task&*')
-  assertEquals((work.completed as Comp).by, 'q')
+  assertEquals((work.completed as Comp).by, nextAuthor)
   h.close()
 })
 

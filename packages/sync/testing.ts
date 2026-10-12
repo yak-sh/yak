@@ -10,7 +10,7 @@
 // leaves the client: what a cook has typed and not saved.
 
 import { loadVocab, type Vocab, type VocabDoc } from '@yaks/vocab'
-import { type Bundle, type Graph, graph } from '@yaks/graph'
+import { type Bundle, derivedEid, type Graph, graph } from '@yaks/graph'
 import { ram } from '@yaks/ram'
 import { api, type Handler, subscriptions } from '@yaks/api'
 import { marks } from './mark.ts'
@@ -201,7 +201,7 @@ export type Server = {
 /** The cook the server's handler treats every request as coming from — so a
  * stamped property the client could not have written itself shows up in a
  * read. */
-export let COOK = 'c1'
+export let COOK = derivedEid('fixture:cook')
 
 /** A server graph behind a @yaks/api handler, upgrading to stand-in sockets. */
 export let server = (): Server => {

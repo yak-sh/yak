@@ -17,11 +17,19 @@ export let restorable = (
         type: 'boolean',
         description: 'preserve supplied server-owned values in a local graph',
       },
+      stamp: {
+        type: 'boolean',
+        description:
+          'generate stamps during a local restoration (default: true)',
+      },
     },
   },
   run: (args, c) => {
     let { restore: restoring, ...input } = args
-    if (!restoring) return command.run(input, c)
+    if (!restoring) {
+      if (input.stamp !== undefined) throw new Usage('--stamp needs --restore')
+      return command.run(input, c)
+    }
     if (!c.config) {
       throw new Usage('--restore needs a local graph opened with --config')
     }

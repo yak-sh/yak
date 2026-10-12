@@ -49,7 +49,7 @@ import { GOVERNED, GRANT, MEMBER } from './comp.ts'
 import { levelOn, modeOn, type Viewer, type Where } from './policy.ts'
 import { Denied } from './deny.ts'
 import { floorsIn, type Permits, permitsIn } from './keywords.ts'
-import { pacesIn, pacing } from './pace.ts'
+import { type Instrument, pacesIn, pacing } from './pace.ts'
 import { edits, type Floors, type Level, stands, writes } from './words.ts'
 
 /** Which app a guard decides for, and whose roster governs it. */
@@ -68,6 +68,9 @@ export type Guard = Where & {
   /** Current standing vouched by the receiving boundary. Null is an
    * authoritative absence; undefined asks the stored roster. */
   level?: (who: Viewer) => Level | null | undefined
+  /** Canonical identity of a vouched instrument, including stored identities
+   * retained while a host migrates its attribution. Defaults to exact eids. */
+  instrument?: Instrument
 }
 
 /** The principal a signed transaction acts as: every bundle in it was signed by
@@ -109,10 +112,17 @@ let short = (
 
 // Theirs: the person owns their entity and bylined rows; an unbylined row
 // belongs only to the instrument that made it.
-let mine = (row: Bundle, who: Viewer, via: Eid | undefined) => {
+let mine = (
+  row: Bundle,
+  who: Viewer,
+  via: Eid | undefined,
+  instrument: Instrument,
+) => {
   let created = row.created as Comp | undefined
   return !!who && row.entity.eid == who ||
-    (created?.by ? created.by == who : !!via && created?.via == via)
+    (created?.by ? created.by == who : !!via &&
+      typeof created?.via == 'string' &&
+      instrument(created.via) == instrument(via))
 }
 
 // Nothing this bundle says differs from the row it names.
@@ -131,12 +141,13 @@ let adding = (
   bundles: Bundle[],
   via: Eid | undefined,
   permits: Permits,
+  instrument: Instrument,
 ) =>
   after(tx.get([...new Set(bundles.map((b) => b.entity.eid))]), (rows) => {
     let held = new Map(rows.map((r) => [r.entity.eid, r]))
     let foreign = bundles.filter((b) => {
       let row = held.get(b.entity.eid)
-      return row && !mine(row, who, via) && !idle(b, row)
+      return row && !mine(row, who, via, instrument) && !idle(b, row)
     })
     if (!foreign.length) return bundles
     // Read referenced owners once, from stored requests rather than incoming
@@ -162,7 +173,8 @@ let adding = (
           comps(b).every(([name, patch]) =>
             refs(row, name).some((eid) => {
               let target = owners.get(eid)
-              return !!target && !dead(target) && mine(target, who, via) &&
+              return !!target && !dead(target) &&
+                mine(target, who, via, instrument) &&
                 (patch === null || !row[name] ||
                   idle({ entity: b.entity, [name]: patch }, row))
             })
@@ -204,6 +216,7 @@ export let guarding = (where: Guard): Hook => {
   let floors = held(where)
   let permits = permitsIn(where.vocab)
   let paces = pacesIn(where.vocab)
+  let instrument = where.instrument ?? ((via: Eid) => via)
   if (Object.keys(paces).length && !where.vocab.comp('_pace')) {
     throw new Error('stored pacing needs memberDoc in the graph vocabulary')
   }
@@ -232,8 +245,9 @@ export let guarding = (where: Guard): Hook => {
                 bundles,
                 writerOf(bundles).via,
                 permits,
+                instrument,
               ),
-              (b) => pacing(paces, tx, b),
+              (b) => pacing(paces, tx, b, Date.now(), where.instrument),
             )
           },
         ),

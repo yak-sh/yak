@@ -8,7 +8,7 @@
 
 import { test } from '@yaks/testing'
 import { assert, assertEquals, assertThrows } from '@std/assert'
-import type { Bundle } from '@yaks/graph'
+import { type Bundle, mint } from '@yaks/graph'
 import { effects } from '@yaks/effects'
 import { ddl, journal, type Log, log } from './log.ts'
 import { col, notNull, tally, val } from '@yaks/sql'
@@ -69,6 +69,46 @@ test('a batch row carries the actor, the instrument and the moment', () => {
     NOW,
     1,
   ])
+  assertThrows(
+    () =>
+      f.g.apply([{ entity: { eid: 'bob' }, $prune: true }], { trusted: true }),
+    Error,
+    'journal history',
+  )
+  let by = mint(), via = mint(), target = mint()
+  let repairs: Bundle[] = [
+    {
+      entity: { eid: by },
+      render: { state: 'historical actor' },
+      $journal_from: 'bob',
+    },
+    {
+      entity: { eid: via },
+      render: { state: 'historical instrument' },
+      $journal_from: 'cli',
+    },
+    {
+      entity: { eid: target },
+      render: { state: 'historical target' },
+      $journal_from: 'p1',
+    },
+  ]
+  assertThrows(() => f.g.apply(repairs), Error, 'trusted maintenance')
+  sync(f.g.apply(repairs, { trusted: true, check: true }))
+  assertEquals(f.j.history('p1')[0], batch)
+  assertEquals(f.j.history(target), [])
+  sync(f.g.apply(repairs, { trusted: true }))
+  let [repaired] = f.j.history(target)
+  assertEquals([repaired.by, repaired.via, repaired.at, repaired.seq], [
+    by,
+    via,
+    NOW,
+    1,
+  ])
+  assertEquals(repaired.deltas, batch.deltas.map((d) => ({ ...d, target })))
+  assertEquals(f.j.history('p1'), [])
+  assertEquals(f.j.by(via)[0].seq, 1)
+  assertEquals(['bob', 'cli', 'p1'].map(f.j.refs), [0, 0, 0])
 })
 
 test('the provenance stamps are not recorded twice', () => {

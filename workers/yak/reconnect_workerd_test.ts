@@ -29,8 +29,8 @@ test('a signed-in socket survives repeated cold incarnations without losing curr
     }),
   )
   assertEquals(r.validCloses, [])
-  // One lookup per cold principal, not one per message.
-  assertEquals(r.validQueries, 29)
+  // App and membership lookups once per cold principal, not per message.
+  assertEquals(r.validQueries, 28)
   assertEquals(r.accepted.length, 1)
   assertEquals(r.accepted[0].endsWith(' cursor'), true)
   assertEquals(r.revokedCloses, [{

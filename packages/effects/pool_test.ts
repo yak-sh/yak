@@ -20,7 +20,7 @@ import { loadVocab, pick } from '@yaks/vocab'
 import { parse } from '@yaks/query'
 import { memory } from '../graph/testing.ts'
 import { test, tick, until } from '@yaks/testing'
-import { effects, type Handler, type Opts } from './registry.ts'
+import { effects, type Handler, type Job, type Opts } from './registry.ts'
 import { leaseEid } from './lease.ts'
 import { MAX, POOL, working } from './pool.ts'
 import { pooledBlog } from './testing.ts'
@@ -127,16 +127,27 @@ committingFx.handle({
 })
 // This private store starts empty; join the worker without a backlog pass.
 await committingFx.work(committingGraph, undefined, 0)
-let commitPost = (bundle: Bundle) =>
-  after(
+let commitPost = (bundle: Bundle) => {
+  let context = { graph: committingGraph, transaction: {} }
+  return after(
     committingStore.tx((tx) =>
-      after(committingFx.hooks!.precondition!([bundle], tx), (ready) => {
-        tx.patch(ready)
-        return committingFx.hooks!.commit!(ready, tx)
-      })
+      after(
+        committingFx.hooks!.precondition!([bundle], tx, undefined, context),
+        (ready) => {
+          tx.patch(ready)
+          return committingFx.hooks!.commit!(ready, tx, undefined, context)
+        },
+      )
     ),
-    (committed) => committingFx.hooks!.effect!(committed, committingOutside),
+    (committed) =>
+      committingFx.hooks!.effect!(
+        committed.map((b) => ({ ...b })),
+        committingOutside,
+        undefined,
+        context,
+      ),
   )
+}
 
 test('a process working the pool runs what it writes, once committed', async () => {
   await commitPost(post('p1'))
@@ -352,20 +363,21 @@ test('a run that got somewhere counts its next failure as its first', async () =
 
 test('a run its worker dropped is run again, unless running twice is not safe', async () => {
   let s = store()
+  let eid = '00000000-0000-4000-8000-000000000001'
   // A worker that claims both runs as it writes them, and dies in both.
   let dead = proc(s, { lease: 10, now: () => 0 })
   let hang = () => new Promise(() => {})
   dead.fx.handle({ post_note: hang, post_gone: hang })
   await dead.fx.work(dead.g)
-  await dead.g.apply([post('p1')])
-  await dead.g.apply([{ entity: { eid: 'p1' }, post: null }])
+  await dead.g.apply([post(eid)])
+  await dead.g.apply([{ entity: { eid }, post: null }])
   let next = proc(s, { now: () => 1_000 })
   next.fx.handle({ post_note: next.note, post_gone: next.note })
   await next.fx.work(next.g)
   await next.fx.idle()
-  assertEquals(next.ran, ['created p1'])
-  assertEquals(await run(next.g, 'post_note'), undefined)
-  assertEquals((await run(next.g, 'post_gone')).state, 'failed')
+  assertEquals(next.ran, [`created ${eid}`])
+  assertEquals(await run(next.g, 'post_note', eid), undefined)
+  assertEquals((await run(next.g, 'post_gone', eid)).state, 'failed')
 })
 
 test('a sweep owes what it selects one run, however many workers start at once', async () => {
@@ -431,12 +443,13 @@ test('a pass on the way through leaves the pool to a process that stays', async 
 
 test('a process working only some effects leaves the rest to a pass through', async () => {
   let s = store()
+  let eid = '00000000-0000-4000-8000-000000000001'
   let some = proc(s, { owner: 'some' })
   let cli = proc(s, { owner: 'cli' })
   some.fx.handle({ post_gone: some.note })
   cli.fx.handle(every(cli.note))
-  await cli.g.apply([post('p0')])
-  await cli.g.apply([{ entity: { eid: 'p0' }, $delete: true }])
+  await cli.g.apply([post(eid)])
+  await cli.g.apply([{ entity: { eid }, $delete: true }])
   let up = new AbortController()
   let serving = some.fx.work(some.g, up.signal)
   // It has been through a pass, so it would be present by now if it were.
@@ -648,6 +661,16 @@ test('a restart sweep selects identities without projecting every target', async
   await p.fx.idle()
   assertEquals(p.ran.sort(), ['p1', 'p2'])
   assertEquals(p.oops, [])
+
+  let failures: Job[] = []
+  let failed = proc(s, { report: (_error, job) => void failures.push(job) })
+  failed.fx.handle({ post_swept: failed.note })
+  failed.g.rows = () => {
+    throw Error('cannot select sweep')
+  }
+  await failed.fx.work(failed.g)
+  await failed.fx.idle()
+  assertEquals(failures.map((job) => job.event?.entity.eid), [undefined])
 })
 
 test('a worker settles disabled runs from older writers without calling a handler', async () => {

@@ -2,6 +2,7 @@
 import { Store } from './graph.ts'
 import type { State } from './graph.ts'
 import type { Namespace } from './door.ts'
+import { useUntil } from './used.ts'
 
 export let reconnect = async (storage: State['storage']) => {
   let app = crypto.randomUUID(),
@@ -41,26 +42,37 @@ export let reconnect = async (storage: State['storage']) => {
   let directory: Namespace = {
     idFromName: (n) => n,
     get: () => ({
-      fetch: (req: Request) =>
-        Promise.resolve((() => {
-          let q = new URL(req.url).searchParams.get('q') ?? ''
-          queries.push(q)
-          if (q.includes(`.entity.eid=${app}`)) {
-            return Response.json([{
-              entity: { eid: app },
-              app: { space, access: 'private' },
-            }])
+      fetch: async (req: Request) => {
+        let url = new URL(req.url)
+        if (url.pathname == '/used') {
+          if (req.method != 'POST' || req.headers.get('x-yak-kernel') != '1') {
+            throw new Error('unexpected use request')
           }
-          if (q.includes('.member')) {
-            return Response.json(
-              revoked ? [] : [{
-                entity: { eid: crypto.randomUUID() },
-                member: { space, person, role: 'owner' },
-              }],
-            )
-          }
-          return Response.json([])
-        })()),
+          let { eid } = await req.json() as { eid: string }
+          if (eid != app) throw new Error('unknown app use')
+          return Response.json({ at: useUntil() })
+        }
+        if (url.pathname != '/query') {
+          throw new Error('unexpected directory request')
+        }
+        let q = url.searchParams.get('q') ?? ''
+        queries.push(q)
+        if (q.includes(`.entity.eid=${app}`)) {
+          return Response.json([{
+            entity: { eid: app },
+            app: { space, access: 'private' },
+          }])
+        }
+        if (q.includes('.member')) {
+          return Response.json(
+            revoked ? [] : [{
+              entity: { eid: crypto.randomUUID() },
+              member: { space, person, role: 'owner' },
+            }],
+          )
+        }
+        return Response.json([])
+      },
     }),
   }
   let closed: { code?: number; reason?: string }[] = []

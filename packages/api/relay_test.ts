@@ -6,7 +6,7 @@
 
 import { test } from '@yaks/testing'
 import { assert, assertEquals, assertIsError, assertThrows } from '@std/assert'
-import { type Bundle, type Graph, graph } from '@yaks/graph'
+import { type Bundle, derivedEid, type Graph, graph } from '@yaks/graph'
 import { admitSchema } from '@yaks/graph/schema'
 import { ram } from '@yaks/ram'
 import { loadVocab } from '@yaks/vocab'
@@ -14,6 +14,10 @@ import { shop as shopVocab, shopGraph } from './testing.ts'
 import { api } from './route.ts'
 import { relay as relaying } from './relay.ts'
 import { type Frame, type Sink, subscriptions } from './subs.ts'
+
+let ADA = derivedEid('fixture:Ada')
+let BEA = derivedEid('fixture:Bea')
+let TAB = derivedEid('fixture:tab')
 
 let ear = () => {
   let heard: Frame[] = []
@@ -1058,7 +1062,7 @@ for (let method of ['relay', 'enqueue'] as const) {
       hooks: {
         precondition: (rows) => {
           identities.push(rows[0].$actor)
-          if (rows.some((b) => b.$actor?.by != 'Ada')) throw new Error('denied')
+          if (rows.some((b) => b.$actor?.by != ADA)) throw new Error('denied')
           return rows
         },
       },
@@ -1068,9 +1072,9 @@ for (let method of ['relay', 'enqueue'] as const) {
     assert(send)
     subs.open(watcher.to, 'all', '.book&*')
     watcher.take()
-    let write = (row: Bundle, by = 'Ada') =>
+    let write = (row: Bundle, by = ADA) =>
       send(writer.to, [row], {
-        actor: { by, via: 'tab' },
+        actor: { by, via: TAB },
         speaks: { garden: 1 },
       })
     let row = { entity: { eid: 'b1' }, browsing: { x: 1 } }
@@ -1088,7 +1092,7 @@ for (let method of ['relay', 'enqueue'] as const) {
       }
     }
     for (let browsing of [{ x: 9 }, null]) {
-      refuse(() => write({ ...row, browsing }, 'Bea'))
+      refuse(() => write({ ...row, browsing }, BEA))
     }
     refuse(() => write({ ...row, $was: { book: { price: null } } }))
     refuse(() => write({ ...row, $mystery: true }))
@@ -1098,7 +1102,7 @@ for (let method of ['relay', 'enqueue'] as const) {
 
   test(`${method} refuses unsaved input before changing its held value`, async () => {
     let { watcher, writer, identities, subs, row, failures } = refusedInput
-    assertEquals(identities[0], { by: 'Ada', via: 'tab' })
+    assertEquals(identities[0], { by: ADA, via: TAB })
     assertEquals(subs.relaying(writer.to), ['b1 browsing'])
     for (let [i, error] of failures.entries()) {
       assertIsError(error, Error, i < 2 ? 'denied' : undefined)

@@ -5,6 +5,9 @@ import { arrived, type Book, known, named, routed, wearer } from './arrive.ts'
 import type { Received } from './inbound.ts'
 import { clubhouse, type Rig } from './testing.ts'
 
+let secretary = '00000000-0000-4000-8000-000000000001'
+let sender = '00000000-0000-4000-8000-000000000002'
+
 let ana = 'p-ana'
 let pile = 'p-triage'
 let domain = 'books.example'
@@ -76,8 +79,8 @@ test('known: the letter a Message-ID names', async () => {
 
 test('named: the id grammar is the address grammar', async () => {
   let { g } = await seeded()
-  let book = knowing(g, { 'S-31': 'sess-31' })
-  assertEquals(await named(book, 'S-31@books.example', domain), 'sess-31')
+  let book = knowing(g, { 'S-31': sender })
+  assertEquals(await named(book, 'S-31@books.example', domain), sender)
   // Somebody else's domain is somebody else's namespace.
   assertEquals(await named(book, 'S-31@elsewhere.com', domain), null)
   assertEquals(await named(book, 'S-99@books.example', domain), null)
@@ -85,9 +88,9 @@ test('named: the id grammar is the address grammar', async () => {
 
 test('routed: the book wins, the id grammar catches the rest', async () => {
   let { g } = await seeded()
-  let book = knowing(g, { 'S-31': 'sess-31' })
+  let book = knowing(g, { 'S-31': sender })
   assertEquals(await routed(book, 'ana@books.example', domain), ana)
-  assertEquals(await routed(book, 'S-31@books.example', domain), 'sess-31')
+  assertEquals(await routed(book, 'S-31@books.example', domain), sender)
   assertEquals(await routed(book, 'club@books.example', domain), null)
 })
 
@@ -128,9 +131,9 @@ test('arrived: a stranger writes to the triage pile', async () => {
 })
 
 // One owner-backed address book; each case writes a fresh arrival.
-let owned = (await seeded({ owner: { by: 'p-secretary' } })).g
+let owned = (await seeded({ owner: { by: secretary } })).g
 let receiveOwned = arrived({
-  graph: knowing(owned, { 'S-31': 'sess-31' }),
+  graph: knowing(owned, { 'S-31': sender }),
   domain,
   triage: pile,
 })
@@ -143,7 +146,7 @@ for (
     ],
     [
       'S-31@books.example',
-      'sess-31',
+      sender,
       'arrived: an id-addressed sender owns its letter',
     ],
     [

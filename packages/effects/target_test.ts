@@ -124,6 +124,8 @@ test('computed effect targets retain their storage-derived membership', () => {
   ])
 })
 
+let guestBrowser = '00000000-0000-4000-8000-000000000001'
+let signedBrowser = '00000000-0000-4000-8000-000000000002'
 let stamps = loadVocab(blog.docs.map((doc) => ({
   ...doc,
   $defs: {
@@ -138,7 +140,7 @@ let stamps = loadVocab(blog.docs.map((doc) => ({
     note: {
       effect: true,
       changed: ['updated'],
-      target: '.updated.via=guest-browser',
+      target: `.updated.via=${guestBrowser}`,
     },
   },
 })))
@@ -152,13 +154,13 @@ let writing = graph({
 writing.apply([post('guest-0', false)])
 writing.apply([{
   ...post('guest-0', true),
-  $actor: { via: 'guest-browser' },
+  $actor: { via: guestBrowser },
 }])
 exits.length = 0
 test('automatic stamp triggers retain subjects leaving their prior target scope', () => {
   writing.apply([{
     ...post('guest-0', false),
-    $actor: { via: 'signed-browser' },
+    $actor: { via: signedBrowser },
   }])
   assertEquals(exits, ['guest-0'])
 })

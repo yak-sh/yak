@@ -39,9 +39,22 @@ let declaration: VocabDoc = {
   },
 }
 
+let actors = {
+  person: '11111111-1111-4111-8111-111111111111',
+  signed: '22222222-2222-4222-8222-222222222222',
+  guest: '33333333-3333-4333-8333-333333333333',
+  another: '44444444-4444-4444-8444-444444444444',
+  stranger: '55555555-5555-4555-8555-555555555555',
+  other: '66666666-6666-4666-8666-666666666666',
+  forged: '77777777-7777-4777-8777-777777777777',
+}
+
 let owner = { by: 'owner' }
-let person = { by: 'kim', via: 'signed-browser' }
-let guest = { via: 'guest-browser' }
+let person = {
+  by: actors.person,
+  via: actors.signed,
+}
+let guest = { via: actors.guest }
 let mark = (eid = 'request'): Bundle => ({ entity: { eid }, completed: {} })
 let patch = (comp: string, value: Bundle[string], eid = 'request'): Bundle => ({
   entity: { eid },
@@ -121,9 +134,15 @@ test('a referenced hero owner completes once, in either hook order', async () =>
       by: person.by,
       via: person.via,
     })
-    await f.g.apply(signed([mark()], { ...person, via: 'another-browser' }), {
-      now: '2026-10-03T00:00:00Z',
-    })
+    await f.g.apply(
+      signed([mark()], {
+        ...person,
+        via: actors.another,
+      }),
+      {
+        now: '2026-10-03T00:00:00Z',
+      },
+    )
     assertEquals((await f.read()).completed, done)
     assertEquals((await f.read()).request, { hero: 'hero', x: 1 })
   }
@@ -138,7 +157,9 @@ test('only an unbylined hero belongs to its browser', async () => {
     via: guest.via,
   })
   for (
-    let actor of [null, { by: 'stranger' }, { via: 'other-browser' }, {
+    let actor of [null, { by: actors.stranger }, {
+      via: actors.other,
+    }, {
       via: person.via,
     }]
   ) {
@@ -180,7 +201,10 @@ test('a referenced owner may remove a mark without editing the request', async (
     let before = await f.read(eid)
     await assertRejects(
       async () =>
-        await f.apply({ by: 'stranger' }, patch('completed', null, eid)),
+        await f.apply(
+          { by: actors.stranger },
+          patch('completed', null, eid),
+        ),
       Denied,
     )
     await assertRejects(
@@ -227,7 +251,7 @@ test('permission requires a live stored target and obeys mode and mark floors', 
 test('a completion does not accept client stamps or forged actors', async () => {
   let f = await fixture()
   await assertRejects(async () =>
-    await f.apply({ by: 'stranger' }, {
+    await f.apply({ by: actors.stranger }, {
       ...mark(),
       $actor: person,
     }), Denied)
@@ -236,8 +260,8 @@ test('a completion does not accept client stamps or forged actors', async () => 
       await f.apply(person, {
         ...mark(),
         completed: {
-          by: 'stranger',
-          via: 'forged',
+          by: actors.stranger,
+          via: actors.forged,
           at: '2020-01-01T00:00:00Z',
         },
       }),

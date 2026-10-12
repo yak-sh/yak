@@ -6,12 +6,14 @@
 import { test } from '@yaks/testing'
 import { assert, assertEquals } from '@std/assert'
 import { stub } from '@std/testing/mock'
-import type { Bundle } from '@yaks/graph'
+import { type Bundle, derivedEid } from '@yaks/graph'
 import { CHUNK } from './doors.ts'
 import { api } from './route.ts'
 import { comp, req, shopGraph } from './testing.ts'
 
-let ada = { by: 'm1' }
+let MEMBER = derivedEid('fixture:m1')
+
+let ada = { by: MEMBER }
 
 /** A handler over a fresh shop, the width of every batch that reached the
  * graph, and a hook to hold the nth one open. */

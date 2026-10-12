@@ -9,13 +9,12 @@ import { blobKeywords } from '@yaks/blob'
 import { edgeKeywords } from '@yaks/edge'
 import { type Bundle, type Comp, graph } from '@yaks/graph'
 import { ram } from '@yaks/ram'
-import { lit } from '@yaks/sql'
 import { loadVocab, metaDoc } from '@yaks/vocab'
 import { mem } from '../sqlite/testing.ts'
 import { storage } from '../sqlite/mod.ts'
 import { backed, ddl, journal, log } from './mod.ts'
 import { journalDoc } from './vocab.ts'
-import { NOW, sync, wiki } from './testing.ts'
+import { actors, NOW, sync, wiki } from './testing.ts'
 
 let vocab = loadVocab([...wiki.docs, metaDoc, journalDoc], [
   edgeKeywords,
@@ -31,12 +30,7 @@ let build = () => {
   let store = storage(db, vocab, { backed: backed(vocab) })
   store.install()
   for (let s of ddl()) db.query(s)
-  db.query({
-    t: 'insert',
-    into: 'entity',
-    cols: ['eid'],
-    rows: ['ada', 'bob', 'cli'].map((a) => [lit(a)]),
-  })
+  actors(graph({ storage: store, vocab }))
   let g = graph({
     storage: store,
     vocab,

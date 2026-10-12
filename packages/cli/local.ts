@@ -236,9 +236,9 @@ export let restoreInto = (
   graph: Graph,
   bundles: Bundle[],
   actor: Actor | null,
-  check = false,
+  opts: { check?: boolean; stamp?: boolean } = {},
 ): Bundle[] | Promise<Bundle[]> =>
-  graph.apply(signed(bundles, actor), { trusted: true, check })
+  graph.apply(signed(bundles, actor), { ...opts, trusted: true })
 
 /** The filesystem command's restoration door, unavailable to remote calls. */
 export let restore = async (
@@ -251,7 +251,7 @@ export let restore = async (
     host.graph,
     args.bundles as Bundle[],
     $actor ?? null,
-    args.check === true,
+    { check: args.check === true, stamp: args.stamp !== false },
   )
   c.out(JSON.stringify(bundles, null, 2))
   return 0

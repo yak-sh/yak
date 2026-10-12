@@ -13,6 +13,11 @@ import type { Namespace } from './door.ts'
 import { platformVocab } from './vocab.ts'
 import type { Stored } from './graph.ts'
 
+let browser = '00000000-0000-4000-8000-000000000001'
+let signedBrowser = '00000000-0000-4000-8000-000000000002'
+let editorBrowser = '00000000-0000-4000-8000-000000000003'
+let another = '00000000-0000-4000-8000-000000000004'
+
 // Each boot gets a new registry over the same durable rows. The namespace
 // answers locally; neither the app nor directory is a live store.
 let registered = loadVocab([spineDoc, docDoc, effectDoc, registrationDoc])
@@ -83,7 +88,7 @@ test('settled guest history owes zero registration work on repeated idle boots',
   await original.g.apply(Array.from({ length: 107 }, (_, i) => ({
     entity: { eid: `guest-${i}` },
     doc: { title: `Guest ${i}` },
-    $actor: { via: 'browser' },
+    $actor: { via: browser },
   })))
   await original.drain()
   assertEquals(original.errors, [])
@@ -116,19 +121,19 @@ test('original guest writes owe durable registration, recovered once after resta
     doc: { title: 'Signed in' },
     $actor: {
       by: 'aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa',
-      via: 'signed-browser',
+      via: signedBrowser,
     },
   }])
   assertEquals((await writer.g.read('.effect')).length, 0)
   await writer.g.apply([{
     entity: { eid: 'guest' },
     doc: { title: 'Guest' },
-    $actor: { via: 'browser' },
+    $actor: { via: browser },
   }], { now: '2026-10-04T00:00:00.000Z' })
   await writer.g.apply([{
     entity: { eid: 'guest' },
     doc: { title: 'Edited' },
-    $actor: { via: 'editor-browser' },
+    $actor: { via: editorBrowser },
   }], { now: '2026-10-04T00:00:01.000Z' })
   // Waiting guest work belongs to its own target. Another author's edit
   // must not acquire a registration run because this guest still needs one.
@@ -137,7 +142,7 @@ test('original guest writes owe durable registration, recovered once after resta
     doc: { title: 'Edited signed in' },
     $actor: {
       by: 'aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa',
-      via: 'signed-browser',
+      via: signedBrowser,
     },
   }])
   let pending = await writer.g.read('.effect.state=pending')
@@ -149,17 +154,17 @@ test('original guest writes owe durable registration, recovered once after resta
   // Both runs read the current stamps; each registers each distinct guest
   // browser. No additional run is invented at boot.
   assertEquals(receipts.map((r) => r[0].entity.eid).sort(), [
-    'browser',
-    'browser',
-    'editor-browser',
-    'editor-browser',
+    browser,
+    browser,
+    editorBrowser,
+    editorBrowser,
   ])
   assertEquals((await recovery.g.read('.effect.state=pending')).length, 0)
   assertEquals((await recovery.g.read('.effect')).length, 0)
   await recovery.g.apply([{
     entity: { eid: 'guest' },
     doc: { title: 'Edited again' },
-    $actor: { via: 'editor-browser' },
+    $actor: { via: editorBrowser },
   }], { now: '2026-10-04T00:00:02.000Z' })
   await recovery.fx.idle()
   assertEquals(receipts.length, 6)
@@ -176,7 +181,7 @@ test('directory attribution recovery still fills unfinished signed-in receipts',
   await app.apply([{
     entity: { eid: 'guest' },
     doc: { title: 'Kept' },
-    $actor: { via: 'browser' },
+    $actor: { via: browser },
   }])
   let calls = 0
   let STORE: Namespace = {
@@ -203,10 +208,10 @@ test('directory attribution recovery still fills unfinished signed-in receipts',
       app: { slug: 'guest', space: 'space', access: 'open', version: 1 },
     },
     {
-      entity: { eid: 'browser' },
+      entity: { eid: browser },
       browser: { by: 'aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa' },
     },
-    link('browser', 'worked', 'app'),
+    link(browser, 'worked', 'app'),
   ], { trusted: true, stamp: false })
   let recovery = boot(vocab, storage, STORE, true)
   await recovery.drain()
@@ -231,7 +236,7 @@ await bounded.apply(
   ['a', 'b', 'c'].map((eid) => ({
     entity: { eid },
     doc: { title: eid },
-    $actor: { via: 'browser' },
+    $actor: { via: browser },
   })),
   { now: boundedAt },
 )
@@ -239,27 +244,27 @@ await bounded.apply(
 test('attribution is bounded, repeatable, and leaves timestamps intact', async () => {
   let g = bounded, now = boundedAt
   assertEquals(
-    await attributed(g, 'browser', 'aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa', 2),
+    await attributed(g, browser, 'aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa', 2),
     {
       filled: 2,
       more: true,
     },
   )
   assertEquals(
-    await attributed(g, 'browser', 'aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa', 2),
+    await attributed(g, browser, 'aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa', 2),
     {
       filled: 1,
       more: false,
     },
   )
-  assertEquals(await attributed(g, 'browser', 'other', 2), {
+  assertEquals(await attributed(g, browser, 'other', 2), {
     filled: 0,
     more: false,
   })
   for (let row of await g.read('.doc ?created ?updated')) {
     assertEquals(row.created, {
       at: now,
-      via: 'browser',
+      via: browser,
       by: 'aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa',
     })
     assertEquals(row.updated, undefined)
@@ -271,12 +276,12 @@ test('a byline that moved after selection cannot be assigned to the wrong browse
   g.apply([{
     entity: { eid: 'a' },
     doc: { title: 'First' },
-    $actor: { via: 'browser' },
+    $actor: { via: browser },
   }])
   g.apply([{
     entity: { eid: 'a' },
     doc: { title: 'Second' },
-    $actor: { via: 'browser' },
+    $actor: { via: browser },
   }])
   let changed = {
     ...g,
@@ -285,18 +290,17 @@ test('a byline that moved after selection cannot be assigned to the wrong browse
       g.apply([{
         entity: { eid: 'a' },
         doc: { title: 'Third' },
-        $actor: { via: 'another' },
+        $actor: { via: another },
       }])
       return rows
     },
   }
   await assertRejects(
-    () =>
-      attributed(changed, 'browser', 'aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa'),
+    () => attributed(changed, browser, 'aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa'),
     Stale,
   )
   let [row] = await g.get(['a'])
   assertEquals((row.created as Comp)?.by, undefined)
-  assertEquals((row.updated as Comp)?.via, 'another')
+  assertEquals((row.updated as Comp)?.via, another)
   assertEquals((row.updated as Comp)?.by, undefined)
 })

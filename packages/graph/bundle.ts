@@ -73,6 +73,9 @@ export type Bundle =
     entity: Entity
     /** shorthand — delete the whole entity (it is tombstoned) */
     $delete?: boolean
+    /** remove an exact malformed identity only when it holds nothing and no
+     * references point at it; generated identities cannot be pruned */
+    $prune?: boolean
     /** a per-property precondition that must still hold */
     $was?: Was
     /** who is writing this entity: an entity whose bundles name nobody is

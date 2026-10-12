@@ -16,6 +16,7 @@ import { profile, type Summary } from '../../packages/durable-object/profile.ts'
 import words from '../../apps/vale/vocab.json' with { type: 'json' }
 import { born } from '../../apps/vale/villagers.ts'
 import { GIVERS } from '../../apps/vale/quests.ts'
+import { useUntil } from './used.ts'
 
 export let worldBindings = (app: string, person: string): Bindings => {
   let vocab = platformVocab()
@@ -40,6 +41,35 @@ export let worldBindings = (app: string, person: string): Bindings => {
             return Response.json(
               await directory.read(url.searchParams.get('q')!),
             )
+          }
+          if (url.pathname == '/used') {
+            if (
+              req.method != 'POST' || req.headers.get('x-yak-kernel') != '1'
+            ) {
+              return Response.json({ error: 'NotFound', message: 'no route' }, {
+                status: 404,
+              })
+            }
+            let { eid } = await req.json() as { eid: string }
+            let [row] = await directory.get([eid])
+            if (!row) {
+              return Response.json({
+                error: 'NotFound',
+                message: 'no such entity',
+              }, {
+                status: 404,
+              })
+            }
+            let at = useUntil()
+            let previous = (row.used as { at?: string } | undefined)?.at
+            if (previous && previous >= at) at = previous
+            else {
+              await directory.apply([{ entity: { eid }, used: { at } }], {
+                trusted: true,
+                stamp: false,
+              })
+            }
+            return Response.json({ at })
           }
           let body = await req.json() as { entities?: Bundle[] } | Bundle[]
           return Response.json(

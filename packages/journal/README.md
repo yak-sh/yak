@@ -159,6 +159,15 @@ journal records what the graph passes to it.
 The SQL `trace` column is an optional note. The graph plugin leaves it unset;
 `log.write({ at, by, via, note }, patches)` can supply it directly.
 
+Trusted maintenance writes can repair malformed historical identities with
+`{ entity: { eid: destination }, $journal_from: 'legacy-writer' }`. The
+destination is a generated eid, already present or created by the same batch;
+the source is its exact stored, non-generated spelling. The journal updates its
+actor, instrument and change-target references inside the graph transaction,
+preserving transaction order, timestamps and recorded values. It leaves ordinary
+graph references unchanged. A missing source is a no-op. `$prune` refuses while
+journal references remain, so repair history before pruning the source.
+
 ## In a server
 
 Add the package to a compatible `yak` plugin configuration:

@@ -14,6 +14,7 @@ import { runs } from '@yaks/builders/tools'
 import { builderDoc } from '@yaks/builders/vocab'
 import { invokePackage } from './package-tools.ts'
 import type { Ctx } from './tool.ts'
+import { useUntil } from './used.ts'
 
 test('hosted provider, model and native input override keeps supplied main outputs current', async () => {
   let vocab = workshop()
@@ -78,6 +79,13 @@ test('hosted provider, model and native input override keeps supplied main outpu
         idFromName: (name: string) => name,
         get: () => ({
           fetch: async (req: Request) => {
+            if (new URL(req.url).pathname == '/used') {
+              assertEquals(req.method, 'POST')
+              assertEquals(req.headers.get('x-yak-kernel'), '1')
+              let { eid } = await req.json() as { eid: string }
+              assert(['space', 'app'].includes(eid))
+              return Response.json({ at: useUntil() })
+            }
             assertEquals(new URL(req.url).pathname, '/call')
             assertEquals(req.headers.get('x-yak-person'), person)
             let body = await req.json()

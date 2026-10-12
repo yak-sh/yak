@@ -89,6 +89,7 @@ import {
   numberSql,
   patchSql,
   projected,
+  pruneSql,
   refit,
   removeSql,
   schema,
@@ -263,6 +264,7 @@ export let storage = <S extends Prepared<S>>(
     // overlay so a read that changed nothing never routes a query through
     // @yaks/match.
     let held = new Map<Eid, Bundle>()
+    let pruned = new Set<Eid>()
     let known = new Map<Eid, Spine>()
     // The identities this transaction mints, each paired with the position of
     // its insert in `pending` — that statement's RETURNING is where its number
@@ -293,7 +295,8 @@ export let storage = <S extends Prepared<S>>(
       for (let e of ask) if (!known.has(e)) known.set(e, null)
     }
 
-    let at = (eid: Eid): Bundle | undefined => dirty.get(eid) ?? held.get(eid)
+    let at = (eid: Eid): Bundle | undefined =>
+      pruned.has(eid) ? undefined : dirty.get(eid) ?? held.get(eid)
 
     let buried = (eid: Eid): boolean => known.get(eid)?.dead == true
 
@@ -335,11 +338,16 @@ export let storage = <S extends Prepared<S>>(
     // The committed answer with this transaction's own entities taken out,
     // then those re-judged against the same query in their pending state.
     let overlaid = (query: Query, now: number | undefined, all: Bundle[]) => {
-      if (!dirty.size) return all
+      if (!dirty.size && !pruned.size) return all
       let mine = matcher(query, vocab, { now: now ?? base.now })(
         [...dirty.values()].filter((b) => b.tombstone == null),
       )
-      return [...all.filter((b) => !dirty.has(b.entity.eid)), ...mine]
+      return [
+        ...all.filter((b) =>
+          !dirty.has(b.entity.eid) && !pruned.has(b.entity.eid)
+        ),
+        ...mine,
+      ]
     }
 
     // Who dies with these entities, and what has to let go of them: the
@@ -518,6 +526,16 @@ export let storage = <S extends Prepared<S>>(
           dirty.set(e.eid, tombstoned(entity))
         }
         pending.push(...removeSql([...vocab.all], found, now))
+      },
+      prune: (eids) => {
+        moved = true
+        pending.push(...pruneSql(vocab, eids))
+        for (let eid of eids) {
+          pruned.add(eid)
+          known.set(eid, null)
+          dirty.delete(eid)
+          held.delete(eid)
+        }
       },
     }
 

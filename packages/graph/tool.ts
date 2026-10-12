@@ -111,6 +111,11 @@ export let referenced = (
 ): Eid[] | Promise<Eid[]> =>
   after(graph.address(ids, kind), (at) => {
     let eids = ids.map((id) => at.get(id) ?? id)
+    if (eids.some((id) => !id)) {
+      throw new Refused(
+        'an empty reference names nothing; use null to clear it',
+      )
+    }
     let words = eids.filter((id) => !!id && !id.startsWith('$') && !minted(id))
     if (!words.length) return eids
     return after(graph.get(words), (rows) => {

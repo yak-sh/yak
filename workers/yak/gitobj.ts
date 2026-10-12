@@ -39,7 +39,7 @@ import {
   type Repo,
   type Writes,
 } from '@yaks/git'
-import type { Bundle, Eid } from '@yaks/graph'
+import { type Bundle, type Eid, identityEid } from '@yaks/graph'
 import { r2Objects } from './lib/objects.ts'
 import { GIT_STORE, type Namespace, storeOf } from './door.ts'
 import { spaceHost } from './host.ts'
@@ -224,6 +224,7 @@ let landing = async (
   if ((await dir.read(`.commit.target=${deploy.eid}`)).length) return null
   let at = await placed(dir, env, deploy.app)
   if (!at) return null
+  let recorded = repository(at.repo)
   let message = `deploy ${deploy.version}\n`
   let repo: Repo = {
     refs: writes(dir),
@@ -248,10 +249,10 @@ let landing = async (
     // The word the directory gains about a release, written with the moved ref
     // (git.ts): `target` is what the commit is about, so a history joins to the
     // releases people already look at.
-    beside: (oids) => [repository(at.repo), {
+    beside: (oids) => [recorded, {
       entity: { eid: oids.oid },
       commit: {
-        repo: at.repo,
+        repo: recorded.entity.eid,
         message,
         target: deploy.eid,
       },
@@ -259,9 +260,9 @@ let landing = async (
   }
 }
 
-/** A clone address is also the repository's stable reference identity. */
+/** A clone address identifies a repository; references carry its derived eid. */
 export let repository = (origin: string): Bundle => ({
-  entity: { eid: origin },
+  entity: { eid: identityEid('repository', [origin]) },
   repository: { origin },
 })
 

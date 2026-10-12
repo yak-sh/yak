@@ -51,6 +51,7 @@
 import type { Caller } from '@yaks/egress'
 import { COOKIE, opened, seal } from './lib/token.ts'
 import { sha256 } from '@yaks/graph'
+import { instrumentEid } from './instrument.ts'
 import type { App, Role, Space } from './directory.ts'
 import { storeName, url } from './directory.ts'
 import type { Env } from './env.ts'
@@ -286,7 +287,9 @@ export let granted = async (
   return {
     person: g.person ?? null,
     role: g.role ?? null,
-    via: typeof g.via == 'string' && g.via ? g.via : `visit:${sha256(sealed)}`,
+    via: instrumentEid(
+      typeof g.via == 'string' && g.via ? g.via : `visit:${sha256(sealed)}`,
+    ),
   }
 }
 

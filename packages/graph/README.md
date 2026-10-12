@@ -150,6 +150,30 @@ handling added to it. It contains one composed patch per affected entity; it is
 not a full snapshot of every affected entity. A deleted entity is represented by
 its identity plus `tombstone: {}`.
 
+`$prune: true` repairs a malformed **orphan identity**: an identity whose eid
+was not generated, which holds no components except an optional tombstone, and
+which no reference names. It uses the exact stored eid, including an empty
+string, and removes the identity itself. Generated eids, held components and
+inbound references refuse the batch. The request carries no component edits; its
+returned tombstone lets subscribers remove the orphan from their caches. Pruning
+runs after transaction hooks, and the repair is recorded by its caller rather
+than the component journal.
+
+```ts
+import { graph } from '@yaks/graph'
+import { ram } from '@yaks/ram'
+import { loadVocab } from '@yaks/vocab'
+import { equal } from '@yaks/testing'
+
+const vocab = loadVocab({ $defs: {} })
+const store = ram(vocab)
+// An identity left by a malformed writer.
+store.tx((tx) => tx.patch([{ entity: { eid: 'server' } }]))
+const g = graph({ storage: store, vocab })
+await g.apply([{ entity: { eid: 'server' }, $prune: true }])
+equal(await g.get(['server']), [])
+```
+
 `read(query)` returns the bundles matching the query. For example, `.book`
 selects entities that have that component, and `.book.pages>400` filters on a
 property. See [@yaks/query](../query/README.md) for the syntax and which parts
@@ -541,6 +565,11 @@ equal((await g.read('.entity.eid=dune'))[0].entity.eid, 'b1')
 ```
 
 ## Plugins and transactions
+
+Use `context.transaction` for bookkeeping that must survive a rewritten batch.
+Every hook inside a storage transaction and its effect or audit hooks share that
+object. A retried transaction receives a fresh object; hooks before the
+transaction opens receive none.
 
 `graph({ plugins })` registers plugins at construction; `g.use(plugin)` adds one
 to that graph. Load `vocabOf(plugins)` into the vocabulary before constructing
@@ -1255,13 +1284,14 @@ const vocab = loadVocab({
     },
   },
 })
+const ada = '00000000-0000-4000-8000-000000000001'
 const g = graph({ storage: ram(vocab), vocab })
-await g.apply(signed([{ entity: { eid: 'b1' }, book: {} }], { by: 'ada' }), {
+await g.apply(signed([{ entity: { eid: 'b1' }, book: {} }], { by: ada }), {
   now: '2026-01-01T00:00:00.000Z',
 })
 equal((await g.get(['b1']))[0].created, {
   at: '2026-01-01T00:00:00.000Z',
-  by: 'ada',
+  by: ada,
 })
 const replica = graph({ storage: ram(vocab), vocab, provenance: false })
 await replica.apply([{ entity: { eid: 'b1' }, book: {} }])

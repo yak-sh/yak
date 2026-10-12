@@ -15,6 +15,7 @@ import { Refused } from './errors.ts'
 /** The requests `apply()` answers itself. */
 export let REQUESTS: string[] = [
   '$delete',
+  '$prune',
   '$was',
   '$actor',
   '$alias',

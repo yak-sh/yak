@@ -13,9 +13,11 @@ import {
   seed,
   signIn,
 } from './probe.ts'
-import { COOKIE, sign } from './lib/token.ts'
+import { COOKIE, seal, sign } from './lib/token.ts'
 import { browserOf, SESSION } from './session.ts'
 import { GRANT, granting } from './dispatch.ts'
+import { link } from '@yaks/edge'
+import { instrumentEid } from './instrument.ts'
 
 let setup = async (k: Kernel) => {
   let space = `pace${crypto.randomUUID().slice(0, 8)}`
@@ -206,16 +208,28 @@ test('stored pacing separates entities and sealed vias, keeps earlier writers, a
 test('a guest pace survives signing in and the adoption of its unsigned stamps', async () => {
   let k = await kernel()
   try {
-    let { host } = await setup(k)
+    let { host, owner, at } = await setup(k)
+    let source = `session:${crypto.randomUUID()}`
+    let cookie = `${COOKIE}=${await seal('browser', {
+      via: source,
+      exp: Math.floor(Date.now() / 1000) + SESSION,
+    }, k.secret)}`
+    let receipt = link(source, 'worked', owner.eids[`${at.space}/${at.app}`])
+    // An existing receipt from before instruments were graph identities.
+    await meta(k).apply([
+      { entity: { eid: source }, browser: {} },
+      receipt,
+    ])
     let eid = crypto.randomUUID()
-    let first = await client(k, host, 'world').post([move(eid, 1)])
+    let first = await client(k, host, 'world', cookie).post([move(eid, 1)])
     assertEquals(first.status, 200, await first.text())
-    let cookie = (first.headers.get('set-cookie') ?? '').split(';')[0]
     let browser = await browserOf(
       new Request(`https://${host}/`, { headers: { cookie } }),
       k.secret,
     )
     assert(browser)
+    assertEquals(browser.via, instrumentEid(source))
+    assertEquals(browser.source, source)
     let page = client(k, host, 'world', cookie)
     await paced(await page.post([move(eid, 2)]))
     let person = await signIn({
@@ -231,10 +245,25 @@ test('a guest pace survives signing in and the adoption of its unsigned stamps',
       k.secret,
     )
     assertEquals(signed?.via, browser.via)
+    assertEquals(signed?.source, source)
+    let identities = await meta(k).query(
+      `.entity.eid=${source},${browser.via}&?browser`,
+    )
+    assertEquals(identities.length, 2)
+    assertEquals(
+      identities.map((row) => idOf((row.browser as { by?: unknown }).by)),
+      [person.person, person.person],
+    )
     await until(async () => {
       let [row] = await page.get(`.entity.eid=${eid}&?created`)
       return idOf((row.created as { by?: unknown }).by) == person.person
     }, { timeout: 5000, label: 'guest position adopted after sign-in' })
+    await until(async () => {
+      let [row] = await meta(k).query(
+        `.entity.eid=${receipt.entity.eid}&?completed`,
+      )
+      return !!row.completed
+    }, { timeout: 5000, label: 'legacy receipt completed after sign-in' })
     await paced(
       await client(k, host, 'world', person.cookie).post([move(eid, 3)]),
     )
@@ -244,6 +273,21 @@ test('a guest pace survives signing in and the adoption of its unsigned stamps',
     await client(k, host, 'world', person.cookie).applied([
       move(crypto.randomUUID(), 4),
     ])
+    await signIn({
+      ...k,
+      at: (host, path, init = {}) =>
+        k.at(host, path, {
+          ...init,
+          headers: { ...init.headers as Record<string, string>, cookie },
+        }),
+    })
+    let claimed = await meta(k).query(
+      `.entity.eid=${source},${browser.via}&?browser`,
+    )
+    assertEquals(
+      claimed.map((row) => idOf((row.browser as { by?: unknown }).by)),
+      [person.person, person.person],
+    )
   } finally {
     await k.stop()
   }

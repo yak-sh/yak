@@ -30,6 +30,7 @@
 // call, like the cookie's.
 import { opened, seal } from './lib/token.ts'
 import { sha256 } from '@yaks/graph'
+import { instrumentEid } from './instrument.ts'
 import type { App } from './directory.ts'
 import { SESSION } from './session.ts'
 
@@ -109,7 +110,9 @@ export let paged = async (
   return {
     person: typeof p.person == 'string' ? p.person : null,
     exp: p.exp,
-    via: typeof p.via == 'string' && p.via ? p.via : `page:${sha256(sealed)}`,
+    via: instrumentEid(
+      typeof p.via == 'string' && p.via ? p.via : `page:${sha256(sealed)}`,
+    ),
   }
 }
 

@@ -2573,7 +2573,7 @@
       "the reading an effect takes never reaches the caller": 4
     },
     "packages/journal/mod.ts": {
-      "packages/journal/mod.ts: 83bed815b596": 4.9
+      "packages/journal/mod.ts: 8057b768fdee": 4.9
     },
     "packages/journal/tools_test.ts": {
       "a death answers as the death it was": 5.2,

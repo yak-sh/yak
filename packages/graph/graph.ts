@@ -80,7 +80,7 @@ import type {
 } from './plugin.ts'
 import { type Derive, isAlias, resolve, substitute } from './alias.ts'
 import { identified, identities } from './identity.ts'
-import { mint as fresh } from './mint.ts'
+import { mint as fresh, minted } from './mint.ts'
 import { admit, formed, known, unstamped } from './admit.ts'
 import { Refused } from './errors.ts'
 import { requested } from './request.ts'
@@ -118,6 +118,7 @@ import { state } from './state.ts'
 import { reader as reading } from './read.ts'
 import { NeedsWrite, rehearsing } from './admission.ts'
 import { referenced } from './tool.ts'
+import { prune } from './prune.ts'
 
 /** Checking options. `overlay` is the host's already admitted, canonical
  * component values, used to check a partial patch's complete proposed value.
@@ -337,12 +338,19 @@ type Timing = <T>(
   plugin?: string,
 ) => T | Promise<T>
 type Run = {
+  transaction?: object
   admission: boolean
   trusted?: boolean
   tracing?: Context
   parent: () => string | undefined
   resources: Record<string, Resource>
   timed: Timing
+  admit: (
+    bundles: Bundle[],
+    tx: Tx,
+    pending?: Bundle[],
+  ) => Bundle[] | Promise<Bundle[]>
+  actors: (bundles: Bundle[], tx: ReadTx) => Bundle[] | Promise<Bundle[]>
 }
 
 // A moment written out once for each millisecond: formatting a timestamp
@@ -571,6 +579,7 @@ export let graph = (opts: Options): Graph => {
           () =>
             h(bundles, tx, undefined, {
               graph: g,
+              transaction: run.transaction,
               parent: run.parent(),
               admission: run.admission,
               trusted: run.trusted,
@@ -579,9 +588,11 @@ export let graph = (opts: Options): Graph => {
         )
         : h(bundles, tx, undefined, {
           graph: g,
+          transaction: run.transaction,
           admission: run.admission,
           trusted: run.trusted,
         })
+      out = after(out, (b) => run.actors(b, tx))
       if (isPromise(out)) {
         return out.then((b) => runHooks(run, name, tx, calls, b, i + 1))
       }
@@ -618,6 +629,7 @@ export let graph = (opts: Options): Graph => {
         phase: name,
         bundles,
         resources: run.resources,
+        admit: (made) => run.admit(made, tx, bundles),
         of,
         tracing,
         owner: tracing
@@ -680,7 +692,15 @@ export let graph = (opts: Options): Graph => {
     let moment = () => instant ??= o.now ?? opts.clock?.() ?? iso(began)
     let traced = (tx: Tx): Tx =>
       tracing ? tracedTx(tx, () => ({ ...tracing, parent: current })) : tx
-    let outside = traced(detached(storage))
+    let protecting = (tx: Tx, pending: Bundle[] = []): Tx => {
+      if (o.trusted && o.replica) return tx
+      return {
+        ...tx,
+        patch: (made) =>
+          after(referring(formed(made), tx, pending), (b) => tx.patch(b)),
+      }
+    }
+    let outside = traced(protecting(detached(storage)))
     // One registry for the whole apply, so `#Now` is one instant however many
     // phases and rules read it.
     let resources = resourced(moment)
@@ -726,6 +746,8 @@ export let graph = (opts: Options): Graph => {
       parent: () => current,
       resources,
       timed,
+      admit: (b, tx, pending) => referring(admit(b, vocab, true), tx, pending),
+      actors: (b, tx) => actors(b, tx),
     }
 
     // A phase: the core's own work first (it is what the rules and hooks
@@ -777,7 +799,7 @@ export let graph = (opts: Options): Graph => {
       // Freeze that view once, before any observer acts; each rule runs on its
       // own for isolation, but they share the phase's resources and the same
       // starting state.
-      let run = () =>
+      let observing = () =>
         after(
           outside.get([
             ...new Set(
@@ -807,6 +829,8 @@ export let graph = (opts: Options): Graph => {
                     phase: 'effect',
                     bundles: applied,
                     resources: shared,
+                    admit: (made) =>
+                      run.admit(made, outside, applied),
                     of: (eid) =>
                       held.get(eid),
                     tracing: tracing && live(tracing) && peek(g)
@@ -817,7 +841,7 @@ export let graph = (opts: Options): Graph => {
                 )))
           },
         )
-      let made = rules.length ? observed('graph', applied, run) : applied
+      let made = rules.length ? observed('graph', applied, observing) : applied
       return after(made, (b) =>
         after(
           each(hooks('effect'), b, (out, [plugin, hook]) =>
@@ -828,11 +852,15 @@ export let graph = (opts: Options): Graph => {
                   () =>
                     hook(out, outside, undefined, {
                       graph: g,
+                      transaction: run.transaction,
                       parent: current,
                     }),
                   plugin,
                 )
-                : hook(out, outside))),
+                : hook(out, outside, undefined, {
+                  graph: g,
+                  transaction: run.transaction,
+                }))),
           () =>
             b,
         ))
@@ -853,12 +881,17 @@ export let graph = (opts: Options): Graph => {
               () =>
                 hook(b, outside, err, {
                   graph: g,
+                  transaction: run.transaction,
                   parent: current,
                   admission,
                 }),
               plugin,
             )
-            : hook(b, outside, err, { graph: g, admission })
+            : hook(b, outside, err, {
+              graph: g,
+              admission,
+              transaction: run.transaction,
+            })
           return isPromise(out)
             ? out.catch((e) => {
               report(e, { phase: 'audit', plugin })
@@ -883,9 +916,15 @@ export let graph = (opts: Options): Graph => {
     }
 
     let inside = (bundles: Bundle[]): Bundle[] | Promise<Bundle[]> => {
-      checking = admission && !fallback && certified(bundles)
+      checking = admission && !fallback && !bundles.some((b) => b.$prune) &&
+        certified(bundles)
       let transacting = (tx: Tx) => {
+        run.transaction = {}
         tx = traced(tx)
+        // Rules, hooks and stamps all write through this transaction. Their
+        // references meet the same door as the caller's, before storage can
+        // intern an unresolved name as an identity.
+        tx = protecting(tx, bundles)
         // Every read the phases before the write will make, taken as one call.
         // It is handed to those phases alone — a snapshot of the graph as the
         // batch found it is exactly what a precondition needs, and exactly
@@ -1001,7 +1040,7 @@ export let graph = (opts: Options): Graph => {
                       held,
                       vocab,
                       ask,
-                      (made) => admit(made, vocab, true),
+                      (made) => run.admit(made, held, b),
                       tracing && live(tracing) && peek(g)
                         ? { ...tracing, parent: current }
                         : undefined,
@@ -1010,6 +1049,7 @@ export let graph = (opts: Options): Graph => {
                   holds,
                 ),
                 phase('mutate', held, (b) => {
+                  b = b.filter((row) => !row.$prune)
                   if (checking && !certified(b)) throw new NeedsWrite()
                   checks = plugins.flatMap((p) => {
                     let check = p.beforeWrite?.(b)
@@ -1057,6 +1097,12 @@ export let graph = (opts: Options): Graph => {
                     (b: Bundle[]) => st.heard.length ? rejoin(b, st.heard) : b,
                     phase('commit', tx),
                     flush,
+                    (b: Bundle[]) =>
+                      prune(
+                        [...b, ...bundles.filter((row) => row.$prune)],
+                        tx,
+                        vocab,
+                      ),
                   ]),
               ],
               bundles,
@@ -1116,17 +1162,30 @@ export let graph = (opts: Options): Graph => {
 
     // Resolve only the refs admission keeps. Server-owned or computed input
     // values that admission discards must not introduce a lookup or refusal.
-    let referring = (named: Bundle[]): Bundle[] | Promise<Bundle[]> => {
+    let referring = (
+      named: Bundle[],
+      tx: ReadTx = outsideRead(),
+      pending: Bundle[] = [],
+      aliases = false,
+    ): Bundle[] | Promise<Bundle[]> => {
       let targets = new Set(
-        named.filter((row) => gives(row) && !dead(row))
+        [...pending, ...named].filter((row) => gives(row) && !dead(row))
           .map((row) => row.entity.eid),
       )
       let refs = named.flatMap((row, i) =>
         comps(row).flatMap(([comp, patch]) =>
           Object.entries(patch ?? {}).flatMap(([prop, value]) => {
             let p = vocab.prop(comp, prop)
+            if (
+              p?.category == 'ref' && typeof value == 'string' &&
+              isAlias(value) && !aliases
+            ) {
+              throw new Refused(
+                `${comp}.${prop} references unresolved alias ${value}`,
+              )
+            }
             return p?.category == 'ref' && typeof value == 'string' &&
-                !isAlias(value) && !targets.has(value)
+                !isAlias(value) && !minted(value) && !targets.has(value)
               ? [{ i, comp, prop, value, kind: String(p.ref) }]
               : []
           })
@@ -1138,7 +1197,7 @@ export let graph = (opts: Options): Graph => {
         (out, { i, comp, prop, value, kind }) =>
           after(
             referenced(
-              { ...outsideRead(), vocab, address },
+              { ...tx, vocab, address },
               [value],
               kind,
             ),
@@ -1153,6 +1212,42 @@ export let graph = (opts: Options): Graph => {
       )
     }
 
+    // Actor metadata is not a component, so component admission never sees
+    // it. Resolve it before either stamps or journal hooks can consume it.
+    let actors = (
+      named: Bundle[],
+      tx: ReadTx = outsideRead(),
+    ): Bundle[] | Promise<Bundle[]> => {
+      if (
+        !named.some((b) =>
+          Object.values(b.$actor ?? {}).some((id) =>
+            !minted(id) && !isAlias(id)
+          )
+        )
+      ) return named
+      let targets = new Set(
+        named.filter((b) => gives(b) && !dead(b)).map((b) => b.entity.eid),
+      )
+      return each(named, [] as Bundle[], (out, b) => {
+        let who = b.$actor
+        if (!who) return [...out, b]
+        return after(
+          each(['by', 'via'] as const, { ...who }, (actor, prop) => {
+            let value = actor[prop]
+            if (
+              value === undefined || minted(value) || isAlias(value) ||
+              targets.has(value)
+            ) return actor
+            return after(
+              referenced({ ...tx, vocab, address }, [value]),
+              ([eid]) => ({ ...actor, [prop]: eid }),
+            )
+          }),
+          (actor) => [...out, { ...b, $actor: actor }],
+        )
+      })
+    }
+
     // The run, end to end: the phases before the transaction, the transaction,
     // and then the return value — composed once, at the point every exit from
     // `apply()` passes through, the commit and a dry run's rollback alike.
@@ -1161,6 +1256,7 @@ export let graph = (opts: Options): Graph => {
         // Normalization may rewrite server-owned fields; it cannot hide that
         // an untrusted caller explicitly asked to write one.
         (b: Bundle[]) => o.trusted ? b : unstamped(b, vocab, o.ignoreStamped),
+        actors,
         // Every id the batch names — a bundle's own, a reference's —
         // resolved the way a read and a tool's arguments resolve theirs, so a
         // name or a `T-7` lands on the entity it names and one that names
@@ -1171,9 +1267,15 @@ export let graph = (opts: Options): Graph => {
           (b) =>
             after(
               address(
-                b.map((row) => row.entity.eid).filter((id) => !isAlias(id)),
+                b.filter((row) => !row.$prune).map((row) => row.entity.eid)
+                  .filter((id) => !isAlias(id)),
               ),
-              (at) => substitute(b, vocab, at),
+              (at) =>
+                at.size
+                  ? b.map((row) =>
+                    row.$prune ? row : substitute([row], vocab, at)[0]
+                  )
+                  : b,
             ),
         ),
         // Accepted data is copied, never admitted again. Like accepted release
@@ -1203,7 +1305,7 @@ export let graph = (opts: Options): Graph => {
                   o.replica,
                   o.ignoreStamped,
                 ),
-                referring,
+                (b) => referring(b, outsideRead(), [], true),
               ),
           ),
         // Derive the id, then check it still matches: an id derived from a

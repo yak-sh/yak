@@ -7,24 +7,36 @@ import type { Graph } from '@yaks/graph'
 import type { Event } from '@yaks/effects'
 import { link, owing, world } from './testing.ts'
 
+let words = '11111111-1111-4111-8111-111111111111'
 let fixture = () => owing('persona_files')
 
 for (let name of ['doc', 'content']) {
   for (let kind of ['created', 'changed', 'removed'] as const) {
     let { g, queued, clear } = fixture()
     await g.apply([{
-      entity: { eid: 'words' },
+      entity: { eid: words },
       ...(kind == 'created' ? {} : { [name]: { body: 'before' } }),
     }])
     await clear()
     test(`${name} ${kind} owes persona files only for words they say`, async () => {
       await g.apply([{
-        entity: { eid: 'words' },
+        entity: { eid: words },
         [name]: kind == 'removed' ? null : { body: 'after' },
       }])
       equal((await queued()).length, 1)
-      let event = { kind, name, entity: { eid: 'words' } } as Event
-      equal(await moves(event, g.storage, new Set(['words'])), true)
+      let event = {
+        kind,
+        name,
+        entity: { eid: words },
+      } as Event
+      equal(
+        await moves(
+          event,
+          g.storage,
+          new Set([words]),
+        ),
+        true,
+      )
       equal(await moves(event, g.storage, new Set(['elsewhere'])), false)
     })
   }

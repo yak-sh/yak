@@ -6,6 +6,7 @@ import { type Bundle, type Comp, type Graph, Stale, token } from '@yaks/graph'
 import { KERNEL, meta } from './meta.ts'
 import type { Env } from './env.ts'
 import { browserOf } from './session.ts'
+import { instrumentEid } from './instrument.ts'
 
 /** Register a committed guest write. A durable app effect owes this receipt,
  * so signing in and a reset may happen before the directory learns about it. */
@@ -14,6 +15,7 @@ export let contributed = async (
   via: string,
   app: string,
 ) => {
+  via = instrumentEid(via)
   await meta(env).apply([
     { entity: { eid: via }, browser: {} },
     { ...link(via, 'worked', app), completed: null },
@@ -26,17 +28,35 @@ export let claimed = async (req: Request, env: Env, by: string) => {
   let browser = env.SESSION_SECRET && await browserOf(req, env.SESSION_SECRET)
   if (!browser) return
   let g = meta(env)
-  let rows = await g.query(`.entity.eid=${browser.via} .browser`)
-  let held = rows[0]?.browser as Comp | undefined
-  if (held?.by) return
-  let receipts = await g.query(`.worked .edge.from=${browser.via} !completed`)
+  let vias = [
+    ...new Set([browser.via, ...browser.source ? [browser.source] : []]),
+  ]
+  let found = await g.query(
+    `.entity.eid=${vias.join(',')} .browser|.worked .edge.from=${
+      vias.join(',')
+    } !completed`,
+  )
+  let rows = found.filter((row) => row.browser)
+  if (
+    rows.some((row) => {
+      let held = (row.browser as Comp | undefined)?.by
+      return held && held != by
+    })
+  ) return
+  let claiming = new Set([
+    ...rows.filter((row) => !(row.browser as Comp | undefined)?.by)
+      .map((row) => row.entity.eid),
+    ...rows.some((row) => row.entity.eid == browser.via) ? [] : [browser.via],
+  ])
+  if (!claiming.size) return
+  let receipts = found.filter((row) => row.worked)
   try {
     await g.apply([
-      {
-        entity: { eid: browser.via },
+      ...[...claiming].map((via) => ({
+        entity: { eid: via },
         browser: { by },
         $was: { browser: { by: null } },
-      },
+      })),
       ...receipts.map((r) => ({ entity: r.entity, worked: {} })),
     ], KERNEL)
   } catch (error) {
@@ -53,16 +73,21 @@ export let attributed = async (
   by: string,
   size = 30,
 ) => {
+  let vias = [...new Set([via, instrumentEid(via)])]
   let rows = await graph.read(
-    `(.created.via=${via} !created.by|.updated.via=${via} !updated.by) .limit=${size} ?created ?updated`,
+    `(.created.via=${vias.join(',')} !created.by|.updated.via=${
+      vias.join(',')
+    } !updated.by) .limit=${size} ?created ?updated`,
   ) as Bundle[]
   let bundles = rows.map((r) => {
     let out: Bundle = { entity: r.entity, $was: {} }
     for (let name of ['created', 'updated']) {
       let stamp = r[name] as Comp | undefined
-      if (stamp?.via == via && !stamp.by) {
+      if (
+        typeof stamp?.via == 'string' && vias.includes(stamp.via) && !stamp.by
+      ) {
         out[name] = { by }
-        out.$was![name] = { by: null, via: token(via) }
+        out.$was![name] = { by: null, via: token(stamp.via) }
       }
     }
     return out

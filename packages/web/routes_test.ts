@@ -135,11 +135,12 @@ test('the page learns the configured owner by the graph address interface', asyn
 
 // Resolve the owner and prepare its admitted write once, then inspect the
 // stamps through the graph and retain the malformed-body refusal.
+let terminal = '00000000-0000-4000-8000-000000000001'
 let ownerRoutes = routes({
   vocab,
   graph,
   config: { db: ':memory:', plugins: ['@yaks/browse'], person: 'lemon-cake' },
-  who: () => ({ by: 'server', via: 'terminal' }),
+  who: () => ({ by: 'server', via: terminal }),
 })
 let post = ownerRoutes.find((r) => r.path == '/web/apply')!
 let [owner] = await graph.read('.doc.title=x')
@@ -163,7 +164,7 @@ test('web and terminal writes are attributed to the configured owner through API
   assertEquals(response.status, 200)
   let [reply, decided] = await graph.get(['reply', 'question'])
   assertEquals((reply.created as Comp)?.by, owner.entity.eid)
-  assertEquals((reply.created as Comp)?.via, 'terminal')
+  assertEquals((reply.created as Comp)?.via, terminal)
   assertEquals((decided.decided as Comp)?.by, owner.entity.eid)
   await assertRejects(
     async () =>

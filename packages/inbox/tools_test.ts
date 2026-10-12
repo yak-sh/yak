@@ -27,6 +27,9 @@ import { inboxDoc } from './vocab.ts'
 import { mailDoc } from '@yaks/mail/vocab'
 import { runs as mail } from '@yaks/mail/tools'
 
+let agent = '00000000-0000-4000-8000-000000000001'
+let caller = '00000000-0000-4000-8000-000000000002'
+
 let tools = loadTools(inboxDoc, runs())
 let vocab = loadVocab([
   kernelDoc,
@@ -65,15 +68,15 @@ test('inbox new accepts caller text and stores a conversation under that caller'
     text: 'Plan the work',
   })
   let { g, create } = world()
-  let made = await create(String(args.text), 'caller')
+  let made = await create(String(args.text), caller)
   let stored = (await g.get([made.entity.eid]))[0]
   assertEquals(stored.conversation, {})
   assertEquals(stored.doc, { title: '  Plan the work', body: text })
-  assertEquals((stored.created as Comp).by, 'caller')
-  let other = await create('Agent words', 'agent')
+  assertEquals((stored.created as Comp).by, caller)
+  let other = await create('Agent words', agent)
   assertEquals(
     ((await g.get([other.entity.eid]))[0].created as Comp).by,
-    'agent',
+    agent,
   )
 })
 
@@ -89,10 +92,10 @@ test('an empty conversation is refused without inventing caller words', async ()
 
 test('conversation reads retain the mark, root words, ordered replies and archive activity', async () => {
   let { g, create } = world()
-  await g.apply([{ entity: { eid: 'caller' }, doc: { title: 'Caller' } }])
-  let made = await create('Question\nOriginal words', 'caller')
+  await g.apply([{ entity: { eid: caller }, doc: { title: 'Caller' } }])
+  let made = await create('Question\nOriginal words', caller)
   let eid = made.entity.eid
-  let who: Reader = { actor: 'caller' }
+  let who: Reader = { actor: caller }
   let row = (b: Bundle): Row => ({
     eid: b.entity.eid,
     comps: b as Row['comps'],
@@ -106,23 +109,23 @@ test('conversation reads retain the mark, root words, ordered replies and archiv
   assertEquals(thread.row.comps.conversation, {})
   assertEquals(thread.row.comps.doc?.body, 'Question\nOriginal words')
   assertEquals(thread.lane, 'Recent')
-  let archived = await markAttention(g, 'caller', eid, 'archived')
+  let archived = await markAttention(g, caller, eid, 'archived')
   await g.apply(archived, {
     now: '2100-01-01T00:00:00.000Z',
   })
-  who = readerAt((await g.get([archived[0].entity.eid])).map(row), 'caller')
+  who = readerAt((await g.get([archived[0].entity.eid])).map(row), caller)
   assertEquals((await inbox()).some((t) => t.eid == eid), false)
   await g.apply([{
     entity: { eid: 'answer' },
     comment: { target: eid },
     doc: { body: 'An answer' },
-    $actor: { by: 'agent' },
+    $actor: { by: agent },
   }], { now: '2100-01-01T00:00:01.000Z' })
   await g.apply([{
     entity: { eid: 'followup' },
     comment: { target: eid, reply_to: 'answer' },
     doc: { body: 'Follow up' },
-    $actor: { by: 'caller' },
+    $actor: { by: caller },
   }], { now: '2100-01-01T00:00:02.000Z' })
   thread = (await inbox()).find((t) => t.eid == eid)!
   assertEquals(thread.lane, 'Replies')

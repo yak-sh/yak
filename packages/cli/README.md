@@ -585,6 +585,10 @@ yak graph apply --config ./yak.json --bundles @history.json --restore --check
 yak graph apply --config ./yak.json --bundles @history.json --restore
 ```
 
+For a repair that must preserve provenance, `--restore --stamp=false` accepts
+the supplied stamps without generating new ones. Guards, rules, reference
+admission and journaling still run, and the journal records the current writer.
+
 Remote authentication uses `$YAKS_TOKEN` when set. Otherwise,
 `yak auth yaks.app` signs in through OAuth. The sign-in is a connection in the
 configured graph. A machine with no graph creates a small personal graph in its

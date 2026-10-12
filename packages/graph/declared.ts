@@ -212,7 +212,7 @@ export let settle = (
   tx: Tx,
   vocab: Vocab,
   resource: (name: string) => unknown = () => undefined,
-  admit: (made: Bundle[]) => Bundle[] = (made) => made,
+  admit: (made: Bundle[]) => Bundle[] | Promise<Bundle[]> = (made) => made,
   tracing?: Context,
 ): Bundle[] | Promise<Bundle[]> => {
   // An empty batch is about nothing, and a match with no batch under it is
@@ -261,7 +261,8 @@ export let settle = (
         // vocabulary does not declare is dropped, and a value it rejects
         // refuses the whole batch. A rule is server code, so it is allowed to
         // write server-owned properties.
-        return round([...bundles, ...admit(made)])
+        return after(admit(made), (accepted) =>
+          round([...bundles, ...accepted]))
       },
     )
   return round(bundles)

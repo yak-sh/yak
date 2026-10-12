@@ -33,6 +33,7 @@ import type { Env } from './env.ts'
 import { apex, type Host } from './host.ts'
 import { hostOf } from './route.ts'
 import { sha256 } from '@yaks/graph'
+import { instrumentEid } from './instrument.ts'
 
 export type Who = {
   /** Explicit platform administrative access, vouched by the kernel. */
@@ -112,7 +113,7 @@ export let whoIs = async (
     person: claims.person,
     role: await roleOf(claims.person),
     until: claims.exp,
-    via: claims.via ?? `session:${sha256(token)}`,
+    via: instrumentEid(claims.via ?? `session:${sha256(token)}`),
   }
 }
 
@@ -120,7 +121,7 @@ export let whoIs = async (
 export let vouched = (who: Who): Record<string, string> => ({
   ...(who.person ? { 'x-yak-person': who.person } : {}),
   ...(who.role ? { 'x-yak-role': who.role } : {}),
-  ...(who.via ? { 'x-yak-via': who.via } : {}),
+  ...(who.via ? { 'x-yak-via': instrumentEid(who.via) } : {}),
   ...(who.administrative ? { 'x-yak-administrative': '1' } : {}),
 })
 
@@ -153,7 +154,17 @@ export let titling = async (
 // agent's token has the provider's own, shorter life.
 export let SESSION = 90 * 24 * 60 * 60
 
-type Browser = { via: string; exp: number }
+type Browser = {
+  via: string
+  exp: number
+  /** The verified outside id whose stored receipts still use their old eid. */
+  source?: string
+}
+
+let browserIdentity = (source: string, exp: number): Browser => {
+  let via = instrumentEid(source)
+  return { via, exp, ...source != via ? { source } : {} }
+}
 
 /** The browser's instrument off its cookie, whether signed in or out. A
  * browser seal authenticates no person and never opens as a session. */
@@ -165,15 +176,12 @@ export let browserOf = async (
   if (!token || !secret) return null
   let claims = await verify(token, secret)
   if (claims) {
-    return {
-      via: claims.via ?? `session:${sha256(token)}`,
-      exp: claims.exp,
-    }
+    return browserIdentity(claims.via ?? `session:${sha256(token)}`, claims.exp)
   }
   let browser = await opened<Browser>('browser', token, secret)
   return browser && typeof browser.via == 'string' && browser.via &&
       typeof browser.exp == 'number' && browser.exp * 1000 > Date.now()
-    ? { via: browser.via, exp: browser.exp }
+    ? browserIdentity(browser.via, browser.exp)
     : null
 }
 
@@ -206,7 +214,7 @@ export let minted = (
         person,
         space,
         exp: Math.floor(Date.now() / 1000) + SESSION,
-        via: browser?.via ?? crypto.randomUUID(),
+        via: browser?.source ?? browser?.via ?? crypto.randomUUID(),
       },
       secret,
     )
@@ -240,7 +248,7 @@ export let browsing = async (
     browser && (!claims || claims.via && !claims.legacy) &&
     browser.exp - Date.now() / 1000 > SESSION / 2
   ) return serve(req)
-  let via = browser?.via ?? crypto.randomUUID()
+  let via = browser?.source ?? browser?.via ?? crypto.randomUUID()
   let exp = Math.floor(Date.now() / 1000) + SESSION
   let token = claims
     ? await sign(

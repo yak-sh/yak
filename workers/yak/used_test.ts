@@ -1,5 +1,5 @@
 import { equal, test, until } from '@yaks/testing'
-import { graph, signed } from '@yaks/graph'
+import { derivedEid, graph, signed } from '@yaks/graph'
 import { ram } from '@yaks/ram'
 import { loadVocab } from '@yaks/vocab'
 import { useDoc } from './facets/directory-vocab.ts'
@@ -10,6 +10,11 @@ import { KERNEL, meta } from './meta.ts'
 import { platform } from './testing.ts'
 import { Store } from './graph.ts'
 import type { Rule } from './mover.ts'
+
+let PERSON = derivedEid('fixture:person')
+let ADMIN = derivedEid('fixture:admin')
+let BROWSER = derivedEid('fixture:browser')
+let VISITOR = derivedEid('fixture:visitor')
 
 let vocab = loadVocab({
   $defs: {
@@ -29,19 +34,19 @@ let observed = (() => {
   let remember = () => found.push(use())
   g.apply(patch('installed'))
   remember()
-  g.apply(signed(patch('person changed'), { by: 'person' }), {
+  g.apply(signed(patch('person changed'), { by: PERSON }), {
     now: '2026-10-01T12:00:00Z',
   })
   remember()
   g.apply(patch('platform touched'), { now: '2026-10-11T21:00:00Z' })
   remember()
   allowed = false
-  g.apply(signed(patch('administrative repair'), { by: 'admin' }), {
+  g.apply(signed(patch('administrative repair'), { by: ADMIN }), {
     now: '2026-10-12T12:00:00Z',
   })
   remember()
   allowed = true
-  g.apply(signed(patch('guest changed'), { via: 'browser' }), {
+  g.apply(signed(patch('guest changed'), { via: BROWSER }), {
     now: '2026-10-13T12:00:00Z',
   })
   remember()
@@ -49,7 +54,7 @@ let observed = (() => {
     trusted: true,
     stamp: false,
   })
-  g.apply(signed(patch('same-hour directory edit'), { by: 'person' }), {
+  g.apply(signed(patch('same-hour directory edit'), { by: PERSON }), {
     now: '2026-10-13T12:02:00Z',
   })
   remember()
@@ -70,7 +75,7 @@ test('directory use survives platform writes and excludes administrative work', 
 let visits = await (async () => {
   using p = platform('directory use proof')
   let dir = directory({ fetch: (r) => directoryFetch(r, p.env) }, true)
-  let space = await dir.own('visitor', 'used-proof')
+  let space = await dir.own(VISITOR, 'used-proof')
   await dir.apply({
     entities: [{
       entity: { eid: 'use-proof-app' },
@@ -162,21 +167,21 @@ let visits = await (async () => {
     method: 'POST',
     body: JSON.stringify([{ entity: { eid: 'pulse' }, pulse: { n: 3 } }]),
   }, {
-    'x-yak-person': 'visitor',
+    'x-yak-person': VISITOR,
     'x-yak-role': 'editor',
   }).then((r) => r.status, (e) => e.status)
   checked = await ask('/query?q=.pulse.n=2', {}, KERNEL)
   let unchanged = (await checked.json() as unknown[]).length
   receiptDown = false
   response = await ask('/query?q=.entity', {}, {
-    'x-yak-person': 'admin',
+    'x-yak-person': ADMIN,
     'x-yak-role': 'owner',
     'x-yak-administrative': '1',
   })
   await response.body?.cancel()
   found.push(await use())
   response = await ask('/query?q=.entity', {}, {
-    'x-yak-person': 'visitor',
+    'x-yak-person': VISITOR,
     'x-yak-role': 'viewer',
   })
   await response.body?.cancel()

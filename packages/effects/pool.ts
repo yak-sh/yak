@@ -805,14 +805,12 @@ export let pool = (ctx: Ctx, opts: Partial<PoolOpts> = {}): Pool => {
       let query = s.effect?.sweep
       if (!query || !s.run || seen.has(s.id)) continue
       seen.add(s.id)
-      let comp = s.effect!.created![0]
       try {
         await swept(g, s, query)
       } catch (err) {
         ctx.report(err, {
           handler: s.id,
           slot: s,
-          event: { kind: 'created', entity: { eid: '' }, name: comp },
         })
       }
     }

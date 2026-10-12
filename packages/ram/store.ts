@@ -108,6 +108,8 @@ export type Tx = {
   evict: (eids: Eid[]) => void
   /** remove these entities: their components go, their identity is tombstoned */
   remove: (entities: Entity[]) => void
+  /** Erase identities the graph has checked as empty and unreferenced. */
+  prune: (eids: Eid[]) => void
   /** bring these tombstoned entities back, with their identity and no
    * components */
   revive: (eids: Eid[]) => void
@@ -756,6 +758,13 @@ export let ram = (vocab: Vocab, base: RamOpts = {}): Store => {
         save(eid)
         cold.delete(eid)
         put(eid, tombstoned(entity))
+      }
+    },
+    prune: (eids) => {
+      for (let eid of eids) {
+        save(eid)
+        cold.delete(eid)
+        put(eid, undefined)
       }
     },
     revive: (eids) => {

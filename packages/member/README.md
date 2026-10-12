@@ -141,6 +141,11 @@ that transaction. It is handed the vocabulary the graph was loaded with, whose
 components may declare who writes them and how often (below). Batches without an
 actor are anonymous, so ordinary writes are allowed only when the app is `open`.
 
+A host migrating instrument identities may supply `instrument`, a pure function
+from an instrument id to its canonical eid. Ownership, companion permission and
+pacing compare both the vouched writer and stored instrument through that same
+function. Without it, instrument eids compare exactly.
+
 The code receiving a request must authenticate the caller and replace any
 client-supplied actor before applying bundles. [@yaks/api](../api) uses
 `signed()` for that replacement. This package trusts the actor it receives.

@@ -20,6 +20,9 @@ import {
 import { filter, matcher } from './match.ts'
 import { index } from './read.ts'
 import { bundles, NOW, shop } from './testing.ts'
+import { spineDoc } from '@yaks/kernel'
+import { archetypeDoc } from '@yaks/archetype'
+import { loadVocab } from '@yaks/vocab'
 
 let sel = (q: string): string[] =>
   matcher(q, shop, { now: NOW })(bundles).map((b) => b.entity.eid)
@@ -68,6 +71,41 @@ test('identity and reference filters retain literal operands', () => {
     assertEquals(select('book.author', value), [...refs])
   }
   assertEquals(select('book.author.doc.title', 'part,one'), ['ref-0'])
+})
+
+test('a list containing empty text matches an empty value, not an absent property', () => {
+  let rows = [
+    { entity: { eid: 'empty' }, doc: { title: '' } },
+    { entity: { eid: 'named' }, doc: { title: 'Ada' } },
+    { entity: { eid: 'unset' }, doc: {} },
+    { entity: { eid: 'absent' } },
+  ]
+  for (let value of [list('', 'Ada'), list('')]) {
+    assertEquals(
+      matcher(and(eq('doc.title', value)), shop)(rows).map((b) => b.entity.eid),
+      value.items.length == 1 ? ['empty'] : ['empty', 'named'],
+    )
+  }
+})
+
+let spined = loadVocab([spineDoc, archetypeDoc])
+test('spine reference equality compares archetypes rather than owner identity', () => {
+  let shape = '11111111-1111-4111-8111-111111111111'
+  let rows = [
+    { entity: { eid: '', archetype: shape } },
+    { entity: { eid: 'yak', archetype: shape } },
+    { entity: { eid: shape }, archetype: { tables: 'entity' } },
+  ]
+  assertEquals(
+    matcher(and(eq('entity.archetype', list('', 'yak'))), spined)(rows),
+    [],
+  )
+  assertEquals(
+    matcher(and(eq('entity.archetype', shape)), spined)(rows).map((b) =>
+      b.entity.eid
+    ),
+    ['', 'yak'],
+  )
 })
 
 test('a scalar filter selects, and an absent property is a value', () => {

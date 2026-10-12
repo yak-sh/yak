@@ -1,12 +1,14 @@
 /// <reference lib="deno.ns" />
 import { equal, test } from '@yaks/testing'
-import { graph, type ReadOpts, transient } from '@yaks/graph'
+import { derivedEid, graph, type ReadOpts, transient } from '@yaks/graph'
 import { personal } from '@yaks/member'
 import { ram } from '@yaks/ram'
 import { loadVocab } from '@yaks/vocab'
 import { api } from './route.ts'
 import { type Frame, subscriptions } from './subs.ts'
 import { post, req, shop, shopGraph } from './testing.ts'
+
+let BOB = derivedEid('fixture:bob')
 
 let privateVocab = loadVocab([...shop.docs, {
   $defs: {
@@ -46,7 +48,7 @@ let privateGraph = (legacy = false) => {
   return g
 }
 
-for (let person of ['bob', null]) {
+for (let [name, person] of [['bob', BOB], ['guest', null]] as const) {
   let g = shopGraph(), seen: (string | null | undefined)[] = []
   g.use({
     name: 'read-caller',
@@ -61,11 +63,11 @@ for (let person of ['bob', null]) {
     authenticate: () => person ? { by: person } : null,
     read: () => ({ speaks: {} }),
   })
-  test(`HTTP binds ${person ?? 'guest'} identity for reads`, async () => {
+  test(`HTTP binds ${name} identity for reads`, async () => {
     await handler(req('/query?q=.book'))
     equal(seen.splice(0), [person])
   })
-  test(`HTTP binds ${person ?? 'guest'} identity for write replies`, async () => {
+  test(`HTTP binds ${name} identity for write replies`, async () => {
     await handler(
       post('/apply', [{ entity: { eid: 'b' }, book: { price: 1 } }]),
     )
@@ -77,7 +79,7 @@ let privateRows = privateGraph(),
   watches = subscriptions(privateRows),
   frames: Frame[] = []
 let sink = (f: Frame) => frames.push(f)
-watches.open(sink, 'raw', true, { person: 'bob' })
+watches.open(sink, 'raw', true, { person: BOB })
 test('raw subscription patches contain no private row', async () => {
   await watches.commit([{
     entity: { eid: 'secret' },
@@ -91,14 +93,14 @@ removedRows.apply([{ entity: { eid: 'secret' }, $delete: true }], {
 })
 let removedWatches = subscriptions(removedRows)
 removedWatches.open((frame) => removedFrames.push(frame), 'all', true, {
-  person: 'bob',
+  person: BOB,
 })
 test('raw subscription removals contain no unknown private identity', async () => {
   await removedWatches.commit([{ entity: { eid: 'secret' }, $delete: true }])
   equal(removedFrames.splice(0).flatMap((f) => f.bundles ?? []), [])
 })
 test('subscription coverage omits private rows and preference aspects', async () => {
-  await watches.open(sink, 'people', '.book&?doc', { person: 'bob' })
+  await watches.open(sink, 'people', '.book&?doc', { person: BOB })
   let [people] = frames.splice(0)
   equal(people.bundles?.map((b) => b.entity.eid), ['ada'])
   equal(people.coverage, { ada: { book: true } })
@@ -107,7 +109,7 @@ test('subscription coverage omits private rows and preference aspects', async ()
 let liveRows = privateGraph()
 test('raw subscriptions filter private transient properties and entities', async () => {
   let g = liveRows, subs = subscriptions(g), frames: Frame[] = []
-  await subs.open((f) => frames.push(f), 'raw', true, { person: 'bob' })
+  await subs.open((f) => frames.push(f), 'raw', true, { person: BOB })
   let drafts = transient(g)
   drafts.receive({
     id: 'd',
@@ -141,7 +143,7 @@ test('HTTP reductions carry the caller scope to the graph row interface', async 
         return [{ n: 0 }]
       },
     },
-    authenticate: () => ({ by: 'bob' }),
+    authenticate: () => ({ by: BOB }),
   })
   equal(
     await (await handler(req('/query?q=' + encodeURIComponent('.book&.count'))))
@@ -150,11 +152,11 @@ test('HTTP reductions carry the caller scope to the graph row interface', async 
       count: 0,
     },
   )
-  equal(seen?.person, 'bob')
+  equal(seen?.person, BOB)
 })
 
 let foreignGraph = privateGraph(),
-  foreign = api({ graph: foreignGraph, authenticate: () => ({ by: 'bob' }) })
+  foreign = api({ graph: foreignGraph, authenticate: () => ({ by: BOB }) })
 for (
   let [label, q, expected] of [
     ['listing', '.draft&*', []],
@@ -189,7 +191,7 @@ let legacyGraph = privateGraph(true),
   legacyWatches = subscriptions(legacyGraph),
   legacyFrames: Frame[] = []
 legacyWatches.open((frame) => legacyFrames.push(frame), 'all', true, {
-  person: 'bob',
+  person: BOB,
   speaks: { shop: 0 },
 })
 test('raw caller vocabulary transformations cannot rename a private aspect past its policy', async () => {

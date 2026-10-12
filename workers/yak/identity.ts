@@ -110,6 +110,7 @@ import {
   went,
 } from './erase.ts'
 import { CLI_GRANT, GRANT, held, ledger } from './grants.ts'
+import { instrumentEid } from './instrument.ts'
 import {
   links,
   type Once,
@@ -213,7 +214,7 @@ export let asking = async (
             until: g.exp,
             grant: g.id,
             space: g.space,
-            instrument: `${CLI_GRANT}:${g.person}:${g.id}`,
+            instrument: instrumentEid(`${CLI_GRANT}:${g.person}:${g.id}`),
           }
           : null,
         tried,
@@ -227,7 +228,7 @@ export let asking = async (
           person,
           via: 'oauth',
           until: token?.expiresAt,
-          instrument: `oauth:${sha256(bearer[1])}`,
+          instrument: instrumentEid(`oauth:${sha256(bearer[1])}`),
         }
         : null,
       tried,
@@ -244,7 +245,7 @@ export let asking = async (
         via: 'session',
         until: claims.exp,
         ...(space ? { space: space.slug, spaceEid: space.eid } : {}),
-        instrument: claims.via ?? `session:${sha256(cookied)}`,
+        instrument: instrumentEid(claims.via ?? `session:${sha256(cookied)}`),
       }
       : null,
     tried,

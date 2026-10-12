@@ -5,7 +5,7 @@
 import { equal, test, tick, until } from '@yaks/testing'
 import { map as queryMap } from '@yaks/query'
 import { assert, assertEquals } from '@std/assert'
-import { type Bundle, type Graph, graph } from '@yaks/graph'
+import { type Bundle, derivedEid, type Graph, graph } from '@yaks/graph'
 import { ram } from '@yaks/ram'
 import { col, count, eq, lit, select, sub, table } from '@yaks/sql'
 import { storage } from '@yaks/sqlite'
@@ -16,6 +16,8 @@ import { edgeDoc, edgeKeywords, link } from '@yaks/edge'
 import { journalDoc } from '@yaks/journal/vocab'
 import { comp, shop as shopVocab, shopGraph } from './testing.ts'
 import { type Frame, type Sink, subscriptions } from './subs.ts'
+
+let ADA = derivedEid('fixture:ada')
 
 // A sink that remembers, and hands over what it has heard since last asked.
 let ear = () => {
@@ -407,14 +409,14 @@ test('the raw feed carries the batch exactly as it was applied', () => {
   graph.apply([{
     entity: { eid: 'b1' },
     doc: { title: 'Spring' },
-    $actor: { by: 'ada' },
+    $actor: { by: ADA },
   }])
   let [batch] = take()
   assertEquals(batch.id, 'all')
   assertEquals(batch.bundles!.length, 1)
   let [one] = batch.bundles!
   assertEquals(comp(one, 'doc'), { title: 'Spring' })
-  assertEquals(comp(one, 'created').by, 'ada')
+  assertEquals(comp(one, 'created').by, ADA)
   assert(comp(one, 'created').at != null)
   assertEquals(one.$actor, undefined)
 })

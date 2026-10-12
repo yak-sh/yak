@@ -133,12 +133,12 @@ export type Slot = Policy & {
   run?: Handler
 }
 
-/** One handler run, for a {@link Report}. */
+/** A handler or registry failure, for a {@link Report}. */
 export type Job = {
   /** the slot's id */
   handler: string
-  /** the committed change it is running for */
-  event: Event
+  /** the committed change it is running for; absent when finding work failed */
+  event?: Event
   /** the registration itself, where there is one */
   slot?: Slot
 }
@@ -667,7 +667,6 @@ export let effects = (vocab: Vocab, opts: Opts = {}): Effects => {
           report(err, {
             handler: s.id,
             slot: s,
-            event: { kind: 'matched', entity: { eid: '' }, name: s.comp },
           })
           return out
         }
@@ -744,12 +743,11 @@ export let effects = (vocab: Vocab, opts: Opts = {}): Effects => {
   // handled effect where there is no pool to hand it to.
   let here = (s: Slot) => !!s.run && (!s.effect || !pooled)
 
-  // The runs a batch's own process claimed, from the transaction that owed
-  // them to the phase that starts them, keyed by the batch's first bundle —
-  // the same object in both phases.
-  let owed = new WeakMap<Bundle, Owed[]>()
-  // The batches that wrote runs down and left some for another to claim.
-  let left = new WeakSet<Bundle>()
+  // The transaction that claimed work carries it through post-commit hooks,
+  // even when another hook replaces a bundle while canonicalizing its actor.
+  // Standalone hooks without a transaction context retain their bundle key.
+  let owed = new WeakMap<object, Owed[]>()
+  let left = new WeakSet<object>()
 
   // Inside the transaction: the runs this batch owes, written down.
   let owesAll = opts.owes == 'declared'
@@ -784,8 +782,9 @@ export let effects = (vocab: Vocab, opts: Opts = {}): Effects => {
                 if (context!.parent) link(context!.graph, run, context!.parent)
               }
             }
-            if (mine.length) owed.set(bundles[0], mine)
-            if (mine.length < found.length) left.add(bundles[0])
+            let key = context?.transaction ?? bundles[0]
+            if (mine.length) owed.set(key, mine)
+            if (mine.length < found.length) left.add(key)
             return bundles
           },
         ),
@@ -795,16 +794,17 @@ export let effects = (vocab: Vocab, opts: Opts = {}): Effects => {
   // After the commit: the runs this process claimed as it wrote them are
   // started, and every observer runs.
   let effect: Hook = (bundles, tx, _err, context) => {
-    let mine = bundles[0] && owed.get(bundles[0])
+    let key = context?.transaction ?? bundles[0]
+    let mine = key && owed.get(key)
     let clean = () => {
       for (let b of bundles) delete b[TARGETS]
       return unmark(strip(bundles))
     }
     if (mine) {
-      owed.delete(bundles[0])
+      owed.delete(key!)
       pooled!.start(mine)
     }
-    if (bundles[0] && (left.delete(bundles[0]) || mine?.length)) opts.nudge?.()
+    if (key && (left.delete(key) || mine?.length)) opts.nudge?.()
     let gen = generation(bundles)
     if (gen > depth || !slots.some(here)) return clean()
     let write = writer(gen)

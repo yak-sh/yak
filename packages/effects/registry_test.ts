@@ -349,6 +349,7 @@ test('a pattern over two entities needs a storage that answers bindings', () => 
   // The batch committed; a question this storage cannot answer is telemetry.
   sync(g.apply([post('p1')]))
   assertEquals(oops.map((j) => j.handler), ['post.matched'])
+  assertEquals(oops.map((j) => j.event?.entity.eid), [undefined])
 })
 
 // A registry over the blog with its effects declared and no pool to write

@@ -1,6 +1,6 @@
 import { test } from '@yaks/testing'
 import { assert, assertEquals, assertRejects } from '@std/assert'
-import { type Graph, graph } from '@yaks/graph'
+import { derivedEid, type Graph, graph } from '@yaks/graph'
 import { type Authenticate, type Route, routed } from '@yaks/api'
 import { loadVocab, type VocabDoc } from '@yaks/vocab'
 import { storage } from '@yaks/sqlite'
@@ -13,6 +13,8 @@ import type { Bucket } from './object.ts'
 import { type Backend, type Options, PREFIX, routes } from './routes.ts'
 import { blobSchema, sqliteBlobs } from './sqlite.ts'
 import { representations } from './representation_rules.ts'
+
+let ANA = derivedEid('fixture:ana')
 
 // The spine, which no package's own document declares: a host composes it from
 // its kernel, and a test needs the two properties a bundle is addressed by.
@@ -371,11 +373,11 @@ test('an upload is by whoever the door says is calling', async () => {
   let h = host()
   // The host's own answer to "who is this", as `@yaks/cli` composes it from
   // the plugins: a route reads it rather than writing as nobody.
-  let ask = door({ ...h, who: () => ({ by: 'ana' }) })
+  let ask = door({ ...h, who: () => ({ by: ANA }) })
   let sha = await addressOf(text)
   assertEquals((await ask(put(sha, text))).status, 200)
   let [row] = await h.graph.read(`.entity.eid=${sha}`)
-  assertEquals((row.created as { by: string }).by, 'ana')
+  assertEquals((row.created as { by: string }).by, ANA)
 })
 
 test('a door that knows nobody uploads as nobody, not as the caller', async () => {

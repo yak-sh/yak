@@ -89,6 +89,8 @@ export type Tick = {
   bundles: Bundle[]
   /** the singletons a rule may name with `#`, by name */
   resources: Record<string, Resource>
+  /** The owning graph admits generated patches before they join the batch. */
+  admit?: (bundles: Bundle[]) => Bundle[] | Promise<Bundle[]>
   /** the graph as this batch found it, for the entities the batch names. A
    * rule asks about a component the batch does not carry — a condition on
    * `created`, say — through this; a phase with nothing gathered leaves it out,
@@ -592,7 +594,11 @@ export let fire = (
         }
       }
       if (!names.length) return out
-      return [...out, { entity: { eid: views[i].entity.eid }, ...patch }]
+      let emitted = [{ entity: { eid: views[i].entity.eid }, ...patch }]
+      return after(
+        tick.admit ? tick.admit(emitted) : emitted,
+        (accepted) => [...out, ...accepted],
+      )
     })
   }
   return after(

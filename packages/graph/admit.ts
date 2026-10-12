@@ -30,6 +30,7 @@ import type { Bundle, Comp } from './bundle.ts'
 import { comps, dead, reserved } from './bundle.ts'
 
 import { Refused } from './errors.ts'
+import { prunable } from './prune.ts'
 export { Refused } from './errors.ts'
 
 let serverOwned = (name: string, prop: string): never => {
@@ -70,12 +71,13 @@ export let formed = (bundles: unknown): Bundle[] => {
   }
   bundles.forEach((b, i) => {
     let eid = b && typeof b == 'object' ? b.entity?.eid : undefined
-    if (typeof eid != 'string' || !eid) {
+    if (typeof eid != 'string' || (!eid && b.$prune !== true)) {
       throw new Refused(
         `bundle ${i} needs an entity: {entity: {eid}} — an eid you mint, or ` +
           `'$name' to have the graph mint one`,
       )
     }
+    prunable(b)
   })
   return bundles
 }

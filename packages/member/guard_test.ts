@@ -12,6 +12,13 @@ import { Paced } from './pace.ts'
 import type { Floors } from './words.ts'
 import { grant, guarded, ids, setMode, store } from './testing.ts'
 
+let browsers = {
+  main: '11111111-1111-4111-8111-111111111111',
+  other: '22222222-2222-4222-8222-222222222222',
+  another: '33333333-3333-4333-8333-333333333333',
+  owner: '44444444-4444-4444-8444-444444444444',
+}
+
 let sync = (out: Bundle[] | Promise<Bundle[]>): Bundle[] => {
   assert(!isPromise(out), 'apply() went async over a Map')
   return out
@@ -244,7 +251,7 @@ test('an anonymous row is nobody’s, and saying it again is no change', () => {
 
 test('a guest changes and deletes only rows made through its via', () => {
   let s = opened()
-  let guest = { via: 'browser' }
+  let guest = { via: browsers.main }
   as(s, guest, { entity: { eid: 'guest' }, pick: { title: 'One' } })
   as(s, guest, { entity: { eid: 'guest' }, pick: { title: 'Two' } })
   assertEquals(titleOf(s, 'guest'), 'Two')
@@ -254,7 +261,11 @@ test('a guest changes and deletes only rows made through its via', () => {
     assertEquals(stamp?.by, undefined)
     assertEquals(stamp?.via, guest.via)
   }
-  for (let other of [null, { via: 'other-browser' }, { by: 'browser' }]) {
+  for (
+    let other of [null, { via: browsers.other }, {
+      by: browsers.main,
+    }]
+  ) {
     denied(() =>
       as(s, other, { entity: { eid: 'guest' }, pick: { title: 'x' } })
     )
@@ -266,19 +277,21 @@ test('a guest changes and deletes only rows made through its via', () => {
   as(s, guest, { entity: { eid: 'guest' }, $delete: true })
   assertEquals(s.read('.entity.eid=guest'), [])
   assertEquals(
-    as(s, { via: 'other-browser' }, {
+    as(s, { via: browsers.other }, {
       entity: { eid: 'guest' },
       $delete: true,
     }),
     [],
   )
   assertEquals(
-    as(s, { via: 'other-browser' }, { entity: { eid: 'guest' } }),
+    as(s, { via: browsers.other }, {
+      entity: { eid: 'guest' },
+    }),
     [],
   )
   assert((s.get(['guest']) as Bundle[])[0].tombstone)
   denied(() =>
-    as(s, { via: 'other-browser' }, {
+    as(s, { via: browsers.other }, {
       entity: { eid: 'guest' },
       pick: { title: 'revived' },
     })
@@ -287,13 +300,15 @@ test('a guest changes and deletes only rows made through its via', () => {
 
 let signedStore = opened()
 let signedGraph = guarded(signedStore, ids.list)
-signedGraph.apply([authored({ by: ids.kim, via: 'browser' }, {
-  entity: { eid: 'signed' },
-  pick: { title: 'One' },
-})])
+signedGraph.apply([
+  authored({ by: ids.kim, via: browsers.main }, {
+    entity: { eid: 'signed' },
+    pick: { title: 'One' },
+  }),
+])
 test('a signed-in row belongs to its by even when a guest has its via', () => {
   let s = signedStore
-  let other = { via: 'browser' }
+  let other = { via: browsers.main }
   denied(() =>
     signedGraph.admit([
       authored(other, { entity: { eid: 'signed' }, pick: { title: 'x' } }),
@@ -304,15 +319,17 @@ test('a signed-in row belongs to its by even when a guest has its via', () => {
       authored(other, { entity: { eid: 'signed' }, $delete: true }),
     ])
   )
-  signedGraph.apply([authored({ by: ids.kim, via: 'another-browser' }, {
-    entity: { eid: 'signed' },
-    pick: { title: 'Two' },
-  })])
+  signedGraph.apply([
+    authored({ by: ids.kim, via: browsers.another }, {
+      entity: { eid: 'signed' },
+      pick: { title: 'Two' },
+    }),
+  ])
   assertEquals(titleOf(s, 'signed'), 'Two')
 })
 
 test('another signed-in person gains no ownership from a row’s via', () => {
-  let other = { by: ids.mo, via: 'browser' }
+  let other = { by: ids.mo, via: browsers.main }
   for (let change of [{ pick: { title: 'x' } }, { $delete: true }]) {
     denied(() =>
       signedGraph.admit([
@@ -384,19 +401,19 @@ test('a declared floor of person is anyone signed in', () => {
 
 test('a writer paces each entity separately, including an owner', () => {
   let s = opened()
-  let kim = { by: ids.kim, via: 'browser' }
+  let kim = { by: ids.kim, via: browsers.main }
   as(s, kim, line('l1'))
   as(s, kim, line('l2'))
   let e = paced(() => as(s, kim, line('l1', 'edited')))
   assertEquals([e.actor, e.entity, e.comp, e.pace], [
-    'browser',
+    browsers.main,
     'l1',
     'line',
     HOUR,
   ])
   assert(e.wait > HOUR - 60_000 && e.wait <= HOUR, `${e.wait}`)
   as(s, kim, line('l1'))
-  let owner = { by: ids.dana, via: 'owners-browser' }
+  let owner = { by: ids.dana, via: browsers.owner }
   as(s, owner, line('l3'))
   as(s, owner, line('l4'))
   paced(() => as(s, owner, line('l3', 'edited')))
@@ -408,7 +425,7 @@ test('one batch writes distinct paced entities', () => {
   sync(
     guarded(s, ids.list).apply([line('l1'), line('l2')].map((b) => ({
       ...b,
-      $actor: { by: ids.raj, via: 'browser' },
+      $actor: { by: ids.raj, via: browsers.main },
     }))),
   )
   assertEquals((s.read('.line') as Bundle[]).length, 2)
@@ -416,7 +433,7 @@ test('one batch writes distinct paced entities', () => {
 
 test('a paced refusal rolls back all values and clocks in its batch', () => {
   let s = opened()
-  let actor = { by: ids.raj, via: 'browser' }
+  let actor = { by: ids.raj, via: browsers.main }
   as(s, actor, line('l1'))
   paced(() =>
     sync(

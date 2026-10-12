@@ -16,6 +16,12 @@ import { ram } from '@yaks/ram'
 import { memberDoc } from './comp.ts'
 import { Paced, pacesIn, pacing } from './pace.ts'
 
+let actors = {
+  browser: '11111111-1111-4111-8111-111111111111',
+  one: '22222222-2222-4222-8222-222222222222',
+  two: '33333333-3333-4333-8333-333333333333',
+}
+
 let vocab = loadVocab([memberDoc, {
   $defs: {
     position: {
@@ -98,7 +104,7 @@ let volume = (eid: string, level = 0): Bundle => ({
   entity: { eid },
   volume: { level },
 })
-let browser = { via: 'browser' }
+let browser = { via: actors.browser }
 let refused = (fn: () => unknown) => assertThrows(fn, Paced) as Paced
 
 test('one instrument writes distinct entities together and apart', () => {
@@ -107,7 +113,7 @@ test('one instrument writes distinct entities together and apart', () => {
   f.at(100, browser, position('c'))
   let e = refused(() => f.at(100, browser, position('a', 1)))
   assertEquals([e.actor, e.entity, e.comp, e.wait], [
-    'browser',
+    actors.browser,
     'a',
     'position',
     900,
@@ -126,11 +132,31 @@ test('components on the same entity hold independent clocks', () => {
 
 test('by does not split a via clock, and alternating vias preserve each clock', () => {
   let f = admission()
-  f.at(0, { by: 'one', via: 'a' }, position('shared'))
-  refused(() => f.at(100, { by: 'two', via: 'a' }, position('shared', 1)))
-  f.at(100, { by: 'one', via: 'b' }, position('shared', 1))
+  f.at(
+    0,
+    { by: actors.one, via: 'a' },
+    position('shared'),
+  )
+  refused(() =>
+    f.at(
+      100,
+      { by: actors.two, via: 'a' },
+      position('shared', 1),
+    )
+  )
+  f.at(
+    100,
+    { by: actors.one, via: 'b' },
+    position('shared', 1),
+  )
   assertEquals(
-    refused(() => f.at(200, { by: 'one', via: 'a' }, position('shared', 2)))
+    refused(() =>
+      f.at(
+        200,
+        { by: actors.one, via: 'a' },
+        position('shared', 2),
+      )
+    )
       .wait,
     800,
   )
@@ -144,11 +170,17 @@ test('by does not split a via clock, and alternating vias preserve each clock', 
 
 test('writers with no via share a clock even when their by differs', () => {
   let f = admission()
-  f.at(0, { by: 'one' }, position('shared'))
-  let e = refused(() => f.at(100, { by: 'two' }, position('shared', 1)))
+  f.at(0, { by: actors.one }, position('shared'))
+  let e = refused(() =>
+    f.at(
+      100,
+      { by: actors.two },
+      position('shared', 1),
+    )
+  )
   assertEquals([e.actor, e.wait], [null, 900])
   refused(() => f.at(100, null, position('shared', 1)))
-  f.at(100, { by: 'two' }, position('another'))
+  f.at(100, { by: actors.two }, position('another'))
   f.at(100, browser, position('shared', 1))
   f.at(1000, null, position('shared', 2))
 })
@@ -189,7 +221,13 @@ for (
   let [attack, _pace] of Object.entries({
     clear: null,
     empty: { writes: [] },
-    forged: { writes: [{ comp: 'position', via: 'browser', at: -1000 }] },
+    forged: {
+      writes: [{
+        comp: 'position',
+        via: actors.browser,
+        at: -1000,
+      }],
+    },
   })
 ) {
   test(`clients cannot replace server clocks with ${attack} clocks`, () => {
@@ -260,16 +298,22 @@ test('legacy stamps initialize recent clocks once, then component clocks stand a
 test('a legacy signed writer with no via enters the pooled clock', () => {
   let f = fixture()
   graph({ storage: f.storage, vocab }).apply(
-    signed([position('a')], { by: 'one' }),
+    signed([position('a')], { by: actors.one }),
     {
       now: new Date(0).toISOString(),
     },
   )
   assertEquals(
-    refused(() => f.at(100, { by: 'two' }, position('a', 1))).wait,
+    refused(() =>
+      f.at(
+        100,
+        { by: actors.two },
+        position('a', 1),
+      )
+    ).wait,
     900,
   )
-  f.at(1000, { by: 'two' }, position('a', 1))
+  f.at(1000, { by: actors.two }, position('a', 1))
 })
 
 test('a delete wins over paced patches, and its clocks die with it', () => {

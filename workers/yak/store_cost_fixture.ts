@@ -4,6 +4,7 @@ import { IDEMPOTENCY } from './door.ts'
 import type { Namespace } from './door.ts'
 import type { DurableStorage } from '@yaks/durable-object'
 import { profile, type Summary } from '../../packages/durable-object/profile.ts'
+import { useUntil } from './used.ts'
 
 type Storage = DurableStorage & {
   sql: DurableStorage['sql'] & { databaseSize: number }
@@ -50,10 +51,41 @@ export let storeCost = async (storage: Storage, kind: string) => {
     deleteAlarm: () => storage.deleteAlarm(),
   }
   let reports: number[] = []
+  let app = crypto.randomUUID(),
+    space = crypto.randomUUID(),
+    person = crypto.randomUUID()
   let ns: Namespace = {
     idFromName: (name) => name,
     get: () => ({
       fetch: async (req: Request) => {
+        let url = new URL(req.url)
+        if (url.pathname == '/used') {
+          if (req.method != 'POST' || req.headers.get('x-yak-kernel') != '1') {
+            throw new Error('unexpected use request')
+          }
+          let { eid } = await req.json() as { eid: string }
+          if (eid != app) throw new Error('unknown app use')
+          return Response.json({ at: useUntil() })
+        }
+        if (url.pathname == '/query') {
+          let q = url.searchParams.get('q') ?? ''
+          if (q.includes(`.entity.eid=${app}`)) {
+            return Response.json([{
+              entity: { eid: app },
+              app: { space, access: 'public' },
+            }])
+          }
+          if (q.includes('.member')) {
+            return Response.json([{
+              entity: { eid: crypto.randomUUID() },
+              member: { space, person, role: 'owner' },
+            }])
+          }
+          return Response.json([])
+        }
+        if (url.pathname != '/apply') {
+          throw new Error('unexpected directory request')
+        }
         let body = await req.json() as { meter: { bytes: number } }[]
         reports.push(body[0].meter.bytes)
         return Response.json(body)
@@ -65,14 +97,13 @@ export let storeCost = async (storage: Storage, kind: string) => {
     getWebSockets: () => [],
     acceptWebSocket: () => {},
   }, { STORE: ns })
-  let app = crypto.randomUUID()
   let headers: Record<string, string> = kind == 'directory'
     ? { 'x-store': 'yak/platform', 'x-yak-kernel': '1' }
     : {
       'x-store': 'probe/store-cost',
       'x-yak-app': app,
       'x-yak-role': 'owner',
-      'x-yak-person': crypto.randomUUID(),
+      'x-yak-person': person,
       'x-yak-access': 'public',
     }
   let post = async (path: string, body: unknown, keyed = false) => {
@@ -92,7 +123,6 @@ export let storeCost = async (storage: Storage, kind: string) => {
     return response.json()
   }
   if (kind == 'directory') {
-    let space = crypto.randomUUID()
     await post('/apply', [
       {
         entity: { eid: space },

@@ -76,7 +76,7 @@
 
 import { test } from '@yaks/testing'
 import { assert, assertEquals } from '@std/assert'
-import { type Bundle, graph, token } from '@yaks/graph'
+import { type Bundle, graph, mint, token } from '@yaks/graph'
 import { members } from '@yaks/member'
 import { club, ids } from '../member/testing.ts'
 import { counted, type Hops, shop } from './testing.ts'
@@ -176,7 +176,12 @@ test('a $delete with a cascade', async () => {
 test('a member-guarded write', async () => {
   let name = 'a member-guarded write'
   let { store, hops, reset } = await counted(club)
-  let { club: c, dana, raj, mo, list, notes } = ids
+  let c = mint(),
+    dana = mint(),
+    raj = mint(),
+    mo = mint(),
+    list = mint(),
+    notes = mint()
   // The club, seeded the way it is seeded everywhere else — before any guard
   // exists, which is what a bootstrap is.
   await graph({ storage: store, vocab: club }).apply([

@@ -1,12 +1,14 @@
 /// <reference lib="deno.ns" />
 
 import { assertEquals } from '@std/assert'
-import { type Bundle, graph } from '@yaks/graph'
+import { type Bundle, derivedEid, graph } from '@yaks/graph'
 import { ram } from '@yaks/ram'
 import { test } from '@yaks/testing'
 import { CHUNK } from './doors.ts'
 import { api } from './route.ts'
 import { comp, post, req, shop as shopVocab } from './testing.ts'
+
+let ADA = derivedEid('fixture:ada')
 
 let row = (i: number, cost: unknown = i): Bundle => ({
   entity: { eid: `b${i}` },
@@ -57,7 +59,7 @@ for (let stream of [false, true]) {
       })
       let handler = api({
         graph: g,
-        authenticate: () => ({ by: 'ada' }),
+        authenticate: () => ({ by: ADA }),
         read: (request) =>
           Promise.resolve(
             new URL(request.url).searchParams.get('version') == '1'
@@ -94,7 +96,7 @@ for (let stream of [false, true]) {
       )
       assertEquals(
         applied.map((b) => comp(b, 'created').by),
-        bundles.map(() => 'ada'),
+        bundles.map(() => ADA),
       )
       assertEquals(
         (await graph.read('.book')).length,

@@ -111,7 +111,9 @@ let mark = (
   // edits) and a graph whose policy supplied the writer both run before this.
   let said = (prop: string) => held?.[prop] != null
   let out: Comp = {}
-  if (has.includes('at') && !said('at')) out.at = now
+  if (has.includes('at') && !said('at')) {
+    out.at = vocab.prop(comp, 'at')?.scalar == 'number' ? Date.parse(now) : now
+  }
   for (let prop of ['by', 'via'] as const) {
     if (!has.includes(prop) || said(prop)) continue
     if (overrides && prop in overrides) out[prop] = overrides[prop]

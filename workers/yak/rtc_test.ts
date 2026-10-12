@@ -15,6 +15,7 @@ import {
   type Track,
 } from './probe.ts'
 import { platform } from './testing.ts'
+import { meta as platformMeta } from './meta.ts'
 
 test("an app's voice door calls for its members, and for visitors where it opens voice", async () => {
   let k = await kernel()
@@ -130,10 +131,18 @@ test('a lease nobody renewed closes its call at Realtime and drops its row', asy
     await at(`${sessionId}/tracks/new`, {
       tracks: [{ location: 'local', trackName: 'voice' }],
     })
+    let app = crypto.randomUUID(), space = crypto.randomUUID()
+    await platformMeta(p.env).apply([
+      { entity: { eid: space }, space: { slug: 'ada' } },
+      {
+        entity: { eid: app },
+        app: { slug: 'room', space, access: 'public' },
+      },
+    ])
     let store = p.env.STORE.get(p.env.STORE.idFromName('ada/room'))
     let headers = {
       'x-store': 'ada/room',
-      'x-yak-app': crypto.randomUUID(),
+      'x-yak-app': app,
       'x-yak-access': 'public',
       'x-yak-kernel': '1',
     }

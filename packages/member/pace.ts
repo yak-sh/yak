@@ -20,6 +20,7 @@ import { paceOf, syncOf, type Vocab } from '@yaks/vocab'
 
 /** How often one via writes one entity’s component, in ms, by name. */
 export type Paces = Record<string, number>
+export type Instrument = (via: Eid) => Eid
 
 /** A write refused for coming sooner than its component's pace. */
 export class Paced extends Error {
@@ -82,14 +83,30 @@ export let pacesIn = (v: Vocab): Paces =>
 // One independent clock. The ledger is read whole, never queried inside.
 type Write = { comp: string; via: Eid | null; at: number }
 
-let clocks = (row: Bundle | undefined, paces: Paces, now: number): Write[] => {
+let clocks = (
+  row: Bundle | undefined,
+  paces: Paces,
+  now: number,
+  instrument?: Instrument,
+): Write[] => {
   let ledger = row?._pace as Comp | undefined
-  if (ledger) return ledger.writes as Write[]
+  if (ledger && !instrument) return ledger.writes as Write[]
+  let recent = new Map<string, Write>()
+  let remember = (write: Write) => {
+    let via = write.via == null ? null : instrument?.(write.via) ?? write.via
+    let key = JSON.stringify([write.comp, via])
+    if (write.at > (recent.get(key)?.at ?? -Infinity)) {
+      recent.set(key, { ...write, via })
+    }
+  }
+  if (ledger) {
+    for (let write of ledger.writes as Write[]) remember(write)
+    return [...recent.values()]
+  }
   // TODO: Remove this transition reader once pre-ledger rows have migrated.
   // Their stamps lack component history, so conservatively initialize every
   // worn paced component from both recent instruments. The first accepted
   // write persists these clocks; all later checks read only the ledger.
-  let recent = new Map<string, Write>()
   for (let stamp of ['created', 'updated']) {
     let s = row?.[stamp] as Comp | undefined
     if (!s) continue
@@ -98,10 +115,7 @@ let clocks = (row: Bundle | undefined, paces: Paces, now: number): Write[] => {
     let via = s.via as Eid | undefined ?? null
     for (let [comp, pace] of Object.entries(paces)) {
       if (!row?.[comp] || at + pace <= now) continue
-      let key = JSON.stringify([comp, via])
-      if (at > (recent.get(key)?.at ?? -Infinity)) {
-        recent.set(key, { comp, via, at })
-      }
+      remember({ comp, via, at })
     }
   }
   return [...recent.values()]
@@ -129,6 +143,7 @@ export let pacing = (
   tx: ReadTx,
   bundles: Bundle[],
   now: number = Date.now(),
+  instrument?: Instrument,
 ): Bundle[] | Promise<Bundle[]> => {
   if (!bundles.some((b) => Object.keys(paces).some((c) => b[c]))) return bundles
   let eids = [...new Set(bundles.map((b) => b.entity.eid))]
@@ -147,8 +162,9 @@ export let pacing = (
       if (dead(b)) continue
       let eid = b.entity.eid
       let row = held.get(eid)
-      let via = writer(eid).via ?? null
-      let recent = clocks(row, paces, now)
+      let wrote = writer(eid).via
+      let via = wrote == null ? null : instrument?.(wrote) ?? wrote
+      let recent = clocks(row, paces, now, instrument)
       let next: Write[] | undefined
       for (let [comp, pace] of Object.entries(paces)) {
         if (!writes(b[comp] as Comp | null, row?.[comp] as Comp | undefined)) {
