@@ -99,8 +99,12 @@ export let scrub = (rows: Bundle[]): Bundle[] =>
     return out
   })
 
-// This module's own frames, which every stack taken here begins with.
-let here = new URL(import.meta.url).pathname
+// This module's own frames, which every stack taken here begins with. A
+// bundle (the yak Worker) has no URL for a module, and its frames all name the
+// one bundle, so there nothing is dropped rather than everything.
+let here = URL.canParse(import.meta.url)
+  ? new URL(import.meta.url).pathname
+  : undefined
 
 let json = (value: object): string => {
   try {
@@ -139,7 +143,7 @@ export let described = (
   let named = [own.name, own.error, own.code]
     .find((v): v is string => typeof v == 'string' && v != '')
   let stack = (new Error().stack ?? '').split('\n')
-    .filter((line) => !line.includes(here)).slice(1).join('\n')
+    .filter((line) => !here || !line.includes(here)).slice(1).join('\n')
   return {
     type: named ?? error.constructor?.name ?? 'Object',
     value: typeof own.message == 'string' ? own.message : json(error),
