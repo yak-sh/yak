@@ -1,7 +1,7 @@
 // Tracker tests use graph admission and queries, with no filesystem or Worker.
 // External references use UUIDs or commit hashes: absent word names are refused
 // even in trusted writes, while global eids need no local catalog record.
-import { graph } from '@yaks/graph'
+import { type Graph, graph } from '@yaks/graph'
 import { loadVocab } from '@yaks/vocab'
 import { kernelDoc, kernelKeywords } from '@yaks/kernel'
 import { toolsDoc } from '@yaks/tools/vocab'
@@ -27,6 +27,7 @@ export let vocab = loadVocab([
 export let fixture = (
   options?: Options,
   clock = () => '2026-10-02T00:00:10Z',
+  adapt = (g: Graph): Graph => g,
 ) => {
   let g: ReturnType<typeof graph>
   let fx = options
@@ -39,6 +40,6 @@ export let fixture = (
     clock,
     plugins: fx ? [fx] : [],
   })
-  if (fx) fx.handle(effects({ graph: g }, options))
+  if (fx) fx.handle(effects({ graph: adapt(g) }, options))
   return g
 }
