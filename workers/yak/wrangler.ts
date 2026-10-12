@@ -1,4 +1,4 @@
-#!/usr/bin/env -S deno run --allow-read --allow-write --allow-net=registry.cloudflare.com --allow-env=WRANGLER_CI_OVERRIDE_NETWORK_MODE_HOST --allow-run=deno,npm,npx,git,pgrep,kill,docker,env
+#!/usr/bin/env -S deno run --allow-read --allow-write --allow-net=registry.cloudflare.com,api.cloudflare.com,yaks.app,127.0.0.1 --allow-env=WRANGLER_CI_OVERRIDE_NETWORK_MODE_HOST --allow-run=deno,npm,npx,git,pgrep,kill,docker,env
 // The one door to this Worker's wrangler: `deno task deploy:yak`,
 // `deno task dev:yak`, their `-staging` variants and the test runner
 // (bin/test.ts) all come through here, so the pinned version is written once
@@ -37,6 +37,7 @@ import packages from './package.json' with { type: 'json' }
 import { imaged } from './sandbox/base.ts'
 import { installed } from './dependencies.ts'
 import { sleep } from '@yaks/fp'
+import { activationClient } from './activation-client.ts'
 export { stale } from './dependencies.ts'
 
 export let WRANGLER = [
@@ -961,8 +962,12 @@ export let superseded = ({ head, tip, changed, live }: Seen): string | null => {
       : `main is at ${short(tip)}; watched source could not be compared`
   }
   let newer = live.find((l) => l.ahead)
-  return newer
-    ? `${short(newer.sha)} is live and ahead of ${short(head)}`
+  if (newer) return `${short(newer.sha)} is live and ahead of ${short(head)}`
+  let unread = live.find((l) => l.ahead == null)
+  return unread
+    ? `live commit ${short(unread.sha)} could not be compared with ${
+      short(head)
+    }`
     : null
 }
 
@@ -1008,6 +1013,7 @@ export let seen = async (
           'fetch',
           '--quiet',
           '--no-tags',
+          '--no-write-fetch-head',
           `--filter=${filter}`,
           'origin',
           sha,
@@ -1100,6 +1106,7 @@ if (import.meta.main) {
   // resolution to every read/upload even when the exact package is installed.
   let executable = join(dir, 'node_modules/.bin/wrangler')
   let wrangler = WRANGLER
+  let head = ''
   let guarded = command(argv) === 'deploy' && !argv.includes('--dry-run')
   let inspect = async () => {
     if (!guarded) return true
@@ -1126,7 +1133,9 @@ if (import.meta.main) {
       stderr: 'inherit',
     }).output()
     if (!commit.success) Deno.exit(commit.code)
-    argv.push('--message', new TextDecoder().decode(commit.stdout).trim())
+    let message = new TextDecoder().decode(commit.stdout).trim()
+    head = message.slice(0, 40)
+    argv.push('--message', message)
   }
   let children = new Set<Deno.ChildProcess>()
   let stopped = new AbortController()
@@ -1164,17 +1173,42 @@ if (import.meta.main) {
         : wrangler
       let capture = deploying(argv)
       let log = capture ? Deno.makeTempFileSync({ suffix: '.log' }) : undefined
+      let client = guarded && capture && !argv.includes('--dry-run')
+        ? activationClient(
+          String(
+            parse(Deno.readTextFileSync(join(dir, 'wrangler.toml'))).account_id,
+          ),
+          head,
+          async (commits) => superseded(await seen(dir, commits)),
+        )
+        : undefined
+      let proxy = client
+        ? Deno.serve(
+          { hostname: '127.0.0.1', port: 0, onListen: () => {} },
+          (request) => client.fetch(request),
+        )
+        : undefined
       try {
         let child = new Deno.Command(cmd, {
           args: [...args, ...argv],
           cwd: dir,
-          ...(log
-            ? {
-              env: {
+          env: {
+            ...(proxy
+              ? {
+                CLOUDFLARE_API_BASE_URL:
+                  `http://127.0.0.1:${proxy.addr.port}/client/v4`,
+              }
+              : {}),
+            ...(log
+              ? {
                 WRANGLER_LOG_PATH: log,
                 WRANGLER_WRITE_LOGS: 'true',
                 WRANGLER_LOG_SANITIZE: 'true',
-              },
+              }
+              : {}),
+          },
+          ...(log
+            ? {
               stdout: 'piped' as const,
               stderr: 'piped' as const,
             }
@@ -1194,7 +1228,7 @@ if (import.meta.main) {
             (result as PromiseFulfilledResult<unknown>).value
           ) as [Deno.CommandStatus, string, string]
           return {
-            code: status.code,
+            code: client?.skipped ? 0 : status.code,
             output: `${stdout}\n${stderr}`,
             log: log ? logTail(log) : '',
           }
@@ -1202,6 +1236,7 @@ if (import.meta.main) {
           children.delete(child)
         }
       } finally {
+        await proxy?.shutdown()
         if (log) Deno.removeSync(log)
       }
     }, { signal: stopped.signal })
