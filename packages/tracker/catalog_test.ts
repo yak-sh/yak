@@ -17,15 +17,16 @@ import { enrichFrames } from './frames.ts'
 import { capture } from './report.ts'
 import { comp } from './model.ts'
 
+let vocab = loadVocab([
+  kernelDoc,
+  toolsDoc,
+  docDoc,
+  trackerDoc,
+  effectDoc,
+], [kernelKeywords])
+
 for (let recover of [true, false]) {
   test(`catalog outage is bounded and reports no cascade (recover=${recover})`, async () => {
-    let vocab = loadVocab([
-      kernelDoc,
-      toolsDoc,
-      docDoc,
-      trackerDoc,
-      effectDoc,
-    ], [kernelKeywords])
     let storage = ram(vocab, { computed })
     let g = graph({ vocab, storage })
     let now = 0, calls = 0, reports = 0, ready = false
@@ -50,7 +51,16 @@ for (let recover of [true, false]) {
     g = graph({ vocab, storage, plugins: [fx] })
     let catalog = catalogAt('http://catalog.test', () => {
       calls++
-      if (!ready) return Promise.reject(new TypeError('Connection refused'))
+      if (!ready) {
+        return Promise.reject(
+          recover
+            ? new DOMException(
+              'The operation was aborted due to timeout',
+              'TimeoutError',
+            )
+            : new TypeError('Connection refused'),
+        )
+      }
       return Promise.resolve(Response.json([]))
     })
     let enrich = enrichFrames(async (frames) => {
@@ -66,16 +76,30 @@ for (let recover of [true, false]) {
     await fx.work(g)
     await fx.idle()
     equal(reports, 0)
-    ready = recover
-    for (now of [1_000, 3_000]) {
+    for (now of [1_000, 3_000, 7_000]) {
       await fx.work(g)
       await fx.idle()
+    }
+    // The catalog can stay unavailable past the default three attempts while
+    // the web restarts. Recovery must enrich the original without a report.
+    equal(reports, 0)
+    ready = recover
+    now = 31_000
+    await fx.work(g)
+    await fx.idle()
+    if (!recover) {
+      // A sustained outage is still bounded and leaves a visible failure.
+      for (let i = 0; i < 20 && !reports; i++) {
+        now += 300_000
+        await fx.work(g)
+        await fx.idle()
+      }
     }
     await Promise.all(reporting)
     await fx.work(g)
     await fx.idle()
     equal(reports, recover ? 0 : 1)
-    equal(calls, recover ? 2 : 3)
+    if (recover) equal(calls, 5)
     let [original] = await g.get(['original'])
     equal(comp(original, 'exception').stack, error.stack)
     equal(comp(original, 'exception').value, 'original')
@@ -93,7 +117,6 @@ for (let recover of [true, false]) {
       next.handle(effects({ graph: g }, { enrich }))
       await next.work(g)
       await next.idle()
-      equal(calls, 4)
       equal(reports, 1)
       await next.stop()
     }

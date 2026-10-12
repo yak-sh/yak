@@ -156,8 +156,10 @@ tracker. Loading the mail vocabulary alone sends nothing.
 order, including causes. It bounds stacks and frames and removes URL query
 strings. `error_group` commits parsed text and counts the occurrence without
 contacting the code catalog. `error_frames` enriches it separately, so catalog
-downtime cannot stall intake or grouping. Catalog failures retry in the effect
-pool; starting the pool rechecks retained occurrences without recounting them.
+downtime cannot stall intake or grouping. Catalog failures get ten attempts with
+the effect pool's backoff, allowing a restart to finish before a failure is
+reported. Starting the pool rechecks retained occurrences without recounting
+them.
 
 The box resolver accepts paths only under its repository's Git checkout roots,
 or HTTP module URLs at explicitly configured origins. It checks regular files in

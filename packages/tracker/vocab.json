@@ -386,7 +386,8 @@
     },
     "error_frames": {
       "effect": true,
-      "description": "Resolve grouped stack frames through the code catalog without recounting occurrences; retry unresolved records when the pool starts.",
+      "description": "Resolve grouped stack frames through the code catalog without recounting occurrences; allow ten attempts with pool backoff for catalog restarts, and retry unresolved records when the pool starts.",
+      "tries": 10,
       "changed": [
         "error.bug"
       ],
