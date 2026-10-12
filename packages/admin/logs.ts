@@ -1,6 +1,9 @@
 // The owner’s view of yaks.app failures: tail watches live traffic through
 // Wrangler, and errors reads grouped failures through the signed tracker door.
+import type { Route } from '@yaks/api'
+import type { Bundle } from '@yaks/graph'
 import { CallError } from '@yaks/tools/errors'
+import { fixes, opened, span } from '@yaks/tracker/fixtime'
 import { type Options, routes } from '@yaks/tracker/routes'
 import { WRANGLER } from '../../workers/yak/wrangler.ts'
 import { spawn, wasInterrupted } from './subprocess.ts'
@@ -218,7 +221,33 @@ export let tail = (
 ): Promise<number> =>
   live(root, (row) => out(eventLine(row)), note, signal, start)
 
-// The optional window matches unresolved bugs by their latest occurrence.
+// Every bug the tracker's signed door answers for a query, page by page.
+let pages = async (door: Route, query: string): Promise<Bundle[]> => {
+  let rows: Bundle[] = [], after = ''
+  for (;;) {
+    let params = new URLSearchParams({
+      query: query + (after ? ` .after=${after}` : ''),
+      limit: '100',
+    })
+    let response = await door.handle(
+      new Request(`http://box/tracker/bugs?${params}`),
+    )
+    let body = await response.json()
+    if (!response.ok) throw new CallError('tracker', body.error)
+    if (!Array.isArray(body)) throw Error('tracker answered no bug rows')
+    rows.push(...body)
+    if (body.length < 100) return rows
+    let cursor = body.at(-1)?.entity?.eid
+    if (!cursor || cursor == after) throw Error('tracker repeated a bug page')
+    after = cursor
+  }
+}
+
+let named = (row: Bundle) =>
+  `${row.entity.eid} ${line(object(row.doc).title).slice(0, 80)}`
+
+// The optional window matches unresolved bugs by their latest occurrence and
+// times the fixes resolved within it; without one, fixes over the last week.
 // Hits and first seen cover the whole group, including older samples.
 export let errors = async (
   since: string | undefined,
@@ -227,32 +256,16 @@ export let errors = async (
   note: Note,
   fetch: typeof globalThis.fetch = globalThis.fetch,
 ): Promise<void> => {
-  let window = '', seen = ''
+  let window = '', seen = '', end = Date.now()
+  let seconds = since == undefined ? 7 * 86_400 : duration(since)
+  let from = new Date(end - seconds * 1000).toISOString()
   if (since != undefined) {
-    let seconds = duration(since), end = Date.now()
-    let from = new Date(end - seconds * 1000).toISOString()
-    let through = new Date(end).toISOString()
-    window = ` .bug.last>=${from} .bug.last<=${through}`
+    window = ` .bug.last>=${from} .bug.last<=${new Date(end).toISOString()}`
     seen = ` last seen in preceding ${seconds}s`
   }
   let door = routes({}, options, fetch).find((r) => r.path == '/tracker/bugs')!
-  let rows: import('@yaks/graph').Bundle[] = [], after = ''
-  for (;;) {
-    let query = `!resolved !archived${window} .order=-bug.last` +
-      (after ? ` .after=${after}` : '')
-    let params = new URLSearchParams({ query, limit: '100' })
-    let response = await door.handle(
-      new Request(`http://box/tracker/bugs?${params}`),
-    )
-    let body = await response.json()
-    if (!response.ok) throw new CallError('tracker', body.error)
-    if (!Array.isArray(body)) throw Error('tracker answered no bug rows')
-    rows.push(...body)
-    if (body.length < 100) break
-    let cursor = body.at(-1)?.entity?.eid
-    if (!cursor || cursor == after) throw Error('tracker repeated a bug page')
-    after = cursor
-  }
+  let rows = await pages(door, `!resolved !archived${window} .order=-bug.last`)
+  let fixed = await pages(door, `.resolved .resolved.at>=${from}`)
   note(
     `Tracker: ${rows.length} unresolved bugs from yaks.app and the box (not resolved or archived)${seen}, newest first; counts and first seen cover each bug's lifetime`,
   )
@@ -275,4 +288,19 @@ export let errors = async (
       rows.reduce((n, row) => n + Number(object(row.bug).hits || 0), 0)
     } occurrences, ${rows.length} bugs`,
   )
+  let { count, median, worst } = fixes(fixed), last = since ?? '7d'
+  out(
+    worst
+      ? `Time to fix, resolved in the last ${last}: ${count} bug${
+        count == 1 ? '' : 's'
+      }, median ${span(median!)}, worst ${span(worst.ms)} (${named(worst.bug)})`
+      : `Time to fix: no bug resolved in the last ${last}`,
+  )
+  let oldest = rows.reduce<Bundle | undefined>(
+    (a, b) => !a || opened(b) < opened(a) ? b : a,
+    undefined,
+  )
+  if (oldest) {
+    out(`Open longest: ${span(end - opened(oldest))} (${named(oldest)})`)
+  }
 }

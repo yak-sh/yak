@@ -1,5 +1,10 @@
 import { test, until } from '@yaks/testing'
-import { assertEquals, assertRejects, assertThrows } from '@std/assert'
+import {
+  assertEquals,
+  assertMatch,
+  assertRejects,
+  assertThrows,
+} from '@std/assert'
 import { CallError } from '@yaks/tools'
 import { ram } from '@yaks/ram'
 import { door as trackerDoor } from '../../workers/tracker/door.ts'
@@ -173,8 +178,10 @@ let listed = async (
   await errors(since, options, (l) => said.push(l), (l) => noted.push(l), fetch)
   return { said, noted }
 }
+let totalAt = (said: string[]) =>
+  said.findIndex((line) => line.endsWith(' bugs') && line.includes('occurr'))
 let bugsIn = ({ said }: Awaited<ReturnType<typeof listed>>) =>
-  said.slice(1, -1).map((line) => line.split('  ')[3])
+  said.slice(1, totalAt(said)).map((line) => line.split('  ')[3])
 
 // Exercise filtering and pagination through the deployed tracker's signed door.
 let all = await listed()
@@ -193,9 +200,22 @@ test('errors defaults to every unresolved bug however old, newest first', () => 
     all.said[2].endsWith('TypeError: Invalid redirect value'),
     true,
   )
-  assertEquals(all.said.at(-1), '5780 occurrences, 107 bugs')
+  assertEquals(all.said[totalAt(all.said)], '5780 occurrences, 107 bugs')
   assertEquals(all.noted[0].includes('107 unresolved bugs'), true)
   assertEquals(all.noted[0].includes('lifetime'), true)
+})
+
+test('errors times the fixes resolved in its window and the longest open bug', () => {
+  let [fixed, open] = all.said.slice(totalAt(all.said) + 1)
+  assertMatch(
+    fixed,
+    new RegExp(
+      `^Time to fix, resolved in the last 7d: 1 bug, median \\d+d\\d*h?, worst \\d+d\\d*h? \\(${
+        ids[106]
+      } Error: bug 106\\)$`,
+    ),
+  )
+  assertMatch(open, new RegExp(`^Open longest: \\d+d\\d*h? \\(${ids[108]} `))
 })
 
 test('errors since optionally narrows unresolved bugs by last seen', () => {
