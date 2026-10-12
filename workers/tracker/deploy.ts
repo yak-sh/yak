@@ -2,7 +2,8 @@
 // Deploy only a changed bundle, then require its queue canary to become a bug
 // in a Tracker object that runs this bundle: objects move to a new version
 // minutes after the Worker, and the deploy is live only once they have. A
-// missing canary rolls back to the exact version saved before this deploy.
+// missing canary rolls back to the exact version saved before this deploy,
+// unless a newer build has deployed since: that build answers for the Worker.
 import { root, run } from './wrangler.ts'
 
 export type Hooks = {
@@ -24,6 +25,10 @@ export let deploy = async (hash: string, hooks: Hooks): Promise<boolean> => {
     } catch { /* rollback if unavailable */ }
     await hooks.wait()
   } while (hooks.now() < until)
+  // A newer build that deployed meanwhile owns the Worker and its objects, so
+  // this canary could never arrive; rolling back would undo that build.
+  let now = await hooks.current()
+  if (now.hash && now.hash != hash) return false
   if (previous.version) await hooks.rollback(previous.version)
   throw Error(
     previous.version

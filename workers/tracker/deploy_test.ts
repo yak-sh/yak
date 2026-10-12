@@ -12,10 +12,14 @@ import { platform, vocab } from './core.ts'
 let fixture = (step = 15_000) => {
   let calls: string[] = []
   let time = clock()
+  // What the hooks read is what is deployed.
+  let live = { version: 'previous', hash: 'old' }
+  let another = (hash: string) => live = { version: hash, hash }
   let hooks: Hooks = {
-    current: () => Promise.resolve({ version: 'previous', hash: 'old' }),
-    deploy: () => {
+    current: () => Promise.resolve(live),
+    deploy: (hash) => {
       calls.push('deploy')
+      another(hash)
       return Promise.resolve()
     },
     canary: () => Promise.resolve(false),
@@ -26,7 +30,7 @@ let fixture = (step = 15_000) => {
     now: time.now,
     wait: () => time.advance(step),
   }
-  return { hooks, calls }
+  return { hooks, calls, another }
 }
 test('unchanged bundle does not deploy; changed bundle requires a canary', async () => {
   let { hooks, calls } = fixture()
@@ -55,6 +59,13 @@ test('deployment waits for object convergence beyond one minute', async () => {
   hooks.canary = () => Promise.resolve(hooks.now() >= 360_000)
   equal(await deploy('new', hooks), true)
   equal(hooks.now(), 360_000)
+  equal(calls, ['deploy'])
+})
+test('a build superseded by a newer deployment never rolls it back', async () => {
+  let { hooks, calls, another } = fixture()
+  let wait = hooks.wait
+  hooks.wait = () => (another('newer'), wait())
+  equal(await deploy('new', hooks), false)
   equal(calls, ['deploy'])
 })
 test('first deployment reports a missing canary without inventing a rollback', async () => {
