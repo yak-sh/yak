@@ -229,9 +229,11 @@ interrupted and repeated delivery safe.
 `./remote` shares the signed transport with the read-through routes. Intake and
 bug marks each carry a separate capability, so a reader's ticket cannot submit
 errors or mark bugs. Box captures carry `error.tags.source=box`; the Worker
-writes letters for platform bugs and leaves box bugs to the box tracker
-(`forwarded: ['box']`). Reports retain their capture time across retries. Host
-shutdown waits for every report's durable spool write.
+writes letters for platform bugs and leaves box bugs to the box tracker, and a
+person's app failures (`source=app`) to their space's
+(`forwarded: ['box',
+'app']`). Reports retain their capture time across retries.
+Host shutdown waits for every report's durable spool write.
 
 ## Bounded trace admission
 

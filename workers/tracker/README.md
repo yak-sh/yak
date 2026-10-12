@@ -74,6 +74,12 @@ without reporting; store outages still retry admission. Rejection reports use
 the queue message's identity so redelivery cannot multiply bug hit counts. Error
 intake does not share the trace allowance.
 
+A failure in an app whose space belongs to a person is recorded twice: in the
+space's store for its owner, and in the platform's as its own occurrence, with
+no space or app in `during` and `error.tags.source=app`, so `yak admin errors`
+and heal see it. The platform groups it by fault and marks it alone; the space's
+tracker writes its letter (`forwarded: ['box', 'app']`).
+
 ### Trace write ceiling
 
 The platform tracker object serializes admission for every space and reserves a

@@ -12,7 +12,11 @@ deno add jsr:@yaks/heal
 - `task{}` + `doc{title, body}` + `filed{project, priority}` is the work item in
   the box graph. Its eid derives from the tracker bug's global eid. An
   `about{}` + `edge{from, to}` links the task to that bug; its body links to the
-  tracker page. The count and stack belong to the tracker alone.
+  tracker page. A platform bug's body adds that a failure in a person's app
+  (`source: app`) is fixed in yaks.app only when yaks.app caused it, and its
+  task is cancelled when the app's own code did, which archives the platform's
+  record and leaves the owner's. The count and stack belong to the tracker
+  alone.
 - `fixer{bug}` sits on a requested fixer session. `bug` is the tracker bug's
   global eid, kept across stores and deletion. Legacy fixers may still name
   their box bug tasks.

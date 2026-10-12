@@ -83,8 +83,12 @@ let app: App = {
   theme: null,
 }
 
-// App worker failures enter the tenant tracker through its queue interface.
+// App worker failures enter the tenant tracker through its queue interface;
+// a person's also enter the platform's, with no space in `during`.
 let wrote: Bundle[] = []
+let during = (row: Bundle) => row.during as { space?: string } | undefined
+let kept = () => wrote.filter((row) => row.error && during(row)?.space)
+let shared = () => wrote.filter((row) => row.error && !during(row)?.space)
 let envOf = (get: (name: string) => { fetch(r: Request): Promise<Response> }) =>
   ({
     SESSION_SECRET: SECRET,
@@ -318,7 +322,7 @@ test('a command failure is captured once across worker and caller', () =>
       caught(e, { request: 'outer command reporter' })
     }
     assert(failure instanceof Error)
-    assertEquals(wrote.filter((row) => row.error).length, 1)
+    assertEquals(kept().length, 1)
     assertEquals(seen.length, 0)
     assertEquals((wrote[0].error as { tags: unknown }).tags, {
       script: scriptName(app.script ?? `${space.slug}/${app.slug}`),
@@ -577,8 +581,7 @@ test('an answered worker 5xx reaches the tracker with its app', () =>
     await ran(envOf(mirror(503).get), space, app, visit(), who)
     assertEquals(seen.length, 0)
     assertEquals(
-      (wrote.filter((row) => row.error).at(-1)!.error as { tags: unknown })
-        .tags,
+      (kept().at(-1)!.error as { tags: unknown }).tags,
       {
         script: scriptName(app.script ?? `${space.slug}/${app.slug}`),
         version: '7',
@@ -607,11 +610,7 @@ test("a worker that throws is the app's break, and is filed here", async () => {
   })
   let out = await ran(envOf(boom), space, app, visit(), who)
   assertEquals(out!.status, 500, 'the visitor gets the soft page')
-  assertEquals(
-    wrote.filter((row) => row.error).length,
-    1,
-    'one break, and only one',
-  )
+  assertEquals(kept().length, 1, 'one break, and only one')
   assertEquals(wrote[0].during, {
     space: space.eid,
     app: app.eid,
@@ -626,6 +625,41 @@ test("a worker that throws is the app's break, and is filed here", async () => {
   )
   assertEquals(broke.value, 'undefined is not an object')
   assert(String(broke.stack).includes('undefined is not an object'))
+})
+
+// A person's app breaking may be the platform's doing, so the platform's
+// tracker records it too, as its own occurrence; a probe's space is left out.
+test("a person's app break is the platform's to look at too", async () => {
+  wrote = []
+  await ran(envOf(mirror(503).get), space, app, visit(), who)
+  let [platform] = shared()
+  assertEquals(shared().length, 1)
+  assert(platform.entity.eid != kept()[0].entity.eid)
+  assertEquals(platform.during, {
+    kind: 'exception',
+    request: wrote.at(-1)!.entity.eid,
+  })
+  let tags = (platform.error as { tags: Record<string, unknown> }).tags
+  assertEquals([tags.source, tags.space, tags.app], ['app', 'jeff', 'recipes'])
+  let probe = { ...space, eid: 's-probe', slug: 'probe' }
+  let env = {
+    ...envOf(mirror(503).get),
+    STORE: {
+      idFromName: (n: string) => n,
+      get: () => ({
+        fetch: () =>
+          Promise.resolve(Response.json([{
+            entity: { eid: 'p-probe' },
+            member: { person: 'p-probe', space: probe.eid },
+            email: { address: 'probe@bot.yak.sh' },
+          }])),
+      }),
+    },
+  } as unknown as Env
+  wrote = []
+  await ran(env, probe, app, visit(), who)
+  let account = (kept()[0].error as { tags: { account?: string } }).tags.account
+  assertEquals([kept().length, shared().length, account], [1, 0, 'test'])
 })
 
 // And the same rule the answered status reads: a no the app's worker relayed

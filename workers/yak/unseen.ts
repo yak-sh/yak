@@ -154,6 +154,35 @@ let viewing = async (env: Env, space: Space, request?: Request) => {
 // controls recovery rather than recording a second ordinary failure.
 export type Breaks = (bundles: Bundle[]) => Promise<unknown>
 
+// A failure that reached a person's app is the platform's to look at too,
+// since yaks.app may have caused it: `yak admin errors` and heal read the
+// platform's tracker. Its record there is its own occurrence and bug, never
+// the space's: no space or app in `during`, so it groups by fault alone, and
+// its release is the platform build, the app's version beside it. Archiving
+// it there (the app's own code broke) leaves the owner's record open. Tagged
+// `source: app`, the space's tracker writes the one letter.
+let seenByPlatform = (
+  error: Error,
+  version: number | null | undefined,
+  at: { env: Env; request?: Request; entrypoint?: string },
+  reached: Record<string, string | undefined>,
+) => {
+  let place = origin(
+    at.env.WORKER_NAME ?? 'yak',
+    at.env.CF_VERSION_METADATA?.id,
+    at.entrypoint ?? 'browser report',
+    at.request,
+  )
+  return capture(error, {
+    ...place,
+    sink: () => {},
+    version: version ?? undefined,
+    environment: at.env.ENVIRONMENT == 'staging' ? 'staging' : 'production',
+    during: { ...place.during, kind: 'exception' },
+    tags: { ...place.tags, ...reached, source: 'app' },
+  })
+}
+
 /** Workers Builds keeps its retry receipt in the directory's store. Ordinary
  * platform and app failures enter the tracker rather than this receipt log. */
 export let metaBreaks = (env: Env): Breaks => (bundles) =>
@@ -189,6 +218,14 @@ export let noted = async (
     )
     let account = await ownedBy(at.env, at.space)
     let viewer = await viewing(at.env, at.space, at.request)
+    let reached = {
+      space: at.space.slug,
+      app: at.app.slug,
+      request: broke.request,
+      request_id: broke.requestId,
+      ...account ? { account } : {},
+      ...viewer ? { user_id: viewer } : {},
+    }
     await queue(at.env.ERRORS)(capture(error, {
       ...place,
       commit: undefined,
@@ -200,16 +237,13 @@ export let noted = async (
         app: at.app.eid,
         kind: 'exception',
       },
-      tags: {
-        ...place.tags,
-        space: at.space.slug,
-        app: at.app.slug,
-        request: broke.request,
-        request_id: broke.requestId,
-        ...account ? { account } : {},
-        ...viewer ? { user_id: viewer } : {},
-      },
+      tags: { ...place.tags, ...reached },
     }))
+    if (account == 'person') {
+      await queue(at.env.ERRORS)(
+        seenByPlatform(error, broke.version, at, reached),
+      )
+    }
   }
   if (hushed(at.space, at.app)) return
   try {

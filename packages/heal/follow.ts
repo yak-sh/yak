@@ -12,6 +12,12 @@ import { and, eq, present } from '@yaks/query'
 import { remoteBug } from '@yaks/tracker'
 import { fixing, type Options } from './fix.ts'
 
+// Only the platform's tracker records failures in people's apps (tagged
+// `source: app`); cancelling the task archives the platform's record alone.
+let APP = ' If its occurrences are tagged `source: app`, it broke in a ' +
+  "person's yaks app: fix yaks.app if yaks.app caused it, never change the " +
+  "app, and if the app's own code did, cancel this task saying why."
+
 /** One tracker bug always names the same work item. */
 export let taskEid = (bug: string): string => identityEid('heal_task', [bug])
 
@@ -150,7 +156,12 @@ export let follow = (
       task = {
         entity: { eid },
         task: {},
-        doc: { title, body: `Fix the bug recorded at ${where}.` },
+        doc: {
+          title,
+          body: `Fix the bug recorded at ${where}.${
+            /^https?:/.test(url) ? '' : APP
+          }`,
+        },
         filed: { ...(project ? { project } : {}), priority: 1 },
         $was: { doc: { title: null } },
       }
