@@ -744,7 +744,7 @@ test('the connect page teaches one agent at a time', async () => {
     let one = panel(html, key)
     assertStringIncludes(one, 'https://yaks.app/mcp')
     assertStringIncludes(one, '<div class="Connect_Next">')
-    assertStringIncludes(one, 'aria-label="Copy the sample app request"')
+    assertStringIncludes(one, 'aria-label="Copy the first app request"')
   }
   assertStringIncludes(
     html,

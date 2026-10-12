@@ -37,7 +37,7 @@
 // our site is not something that comes back on its own. The trash is the other
 // direction and does the opposite: nothing is written at all (erase.ts keeps
 // every other word exactly as it was, which is what makes a restore exact) and
-// every reader here screens a trashed app and a trashed space out. So a
+// `offers()` (directory.ts) screens a trashed app and a trashed space out. So a
 // trashed app leaves the gallery the moment it is thrown away, and a restored
 // one is back where it was without asking anybody twice.
 import { r2Objects } from './lib/objects.ts'
@@ -166,14 +166,9 @@ let shownOf = (space: Space, app: App, env: Host): Shown => ({
 // published app and nothing else: unpublishing is what takes an app out of
 // that list, and it takes it out of this one at the same moment without a
 // second rule to keep in step.
-//
-// A trashed app and an app in a trashed space are screened here rather than
-// unlisted on the row — see the note at the top of this file.
 export let listed = async (dir: Directory, env: Host = {}): Promise<Shown[]> =>
   (await dir.offers())
-    .filter(({ space, app }) =>
-      app.gallery?.listedAt && !app.trashed && !space.trashed
-    )
+    .filter(({ app }) => app.gallery?.listedAt)
     .map(({ space, app }) => shownOf(space, app, env))
     .sort((a, b) => b.since.localeCompare(a.since))
 
@@ -596,7 +591,7 @@ export let answer = async (
   // away since the letter went is simply not there any more, and the answer
   // says so rather than stamping a row nothing points at.
   let at = (await dir.offers()).find(({ app }) => app.eid == ok.app)
-  if (!at || at.app.trashed || at.space.trashed) {
+  if (!at) {
     return done(
       env,
       'That app is no longer on offer.',

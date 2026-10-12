@@ -801,12 +801,7 @@ let library = (at: DeskPage, env: Host) =>
       : `<section class="Desk_Empty"><h2>Your apps will live here</h2>
 <div ${
         state(true, !!at.agents?.length)
-      }><p>Ask your agent for your first app. Try this:</p>${
-        copyable(
-          'Use yaks.app to build me a recipe box.',
-          'a first app request',
-        )
-      }</div>
+      }><p>Ask your agent for your first app. Try this:</p>${firstAsk}</div>
 <div ${
         state(false, !at.agents?.length)
       }><p>A recipe box, a book club page, a tool for your day. Start with an idea.</p>
@@ -1760,9 +1755,12 @@ let chatgptFields = (env: Host) =>
 let external = (href: string, label: string) =>
   `<a href="${esc(href)}" target="_blank" rel="noopener">${label}</a>`
 
-let request = copyable(
-  'Use yaks.app to build me a personal recipe box where I can save, search and tag recipes.',
-  'the sample app request',
+// What a person asks for their first app. The assistant already knows them,
+// so the ask hands it their own situation rather than a scenario we made up
+// for them (the app-ideas prompt's own question, prompts/app-ideas.md).
+let firstAsk = copyable(
+  "Any yaks.app ideas you think I'd like, based on our chat history?",
+  'the first app request',
 )
 
 // An address on this platform, written out for somebody to type or paste.
@@ -1951,8 +1949,8 @@ ${
           : ''
       }
 <div class="Connect_Next"><p>Make your first app</p>
-${a.finish}, then ask:${request}
-<span class="Note">Try it, then ask for a change in the same chat. Keep shaping it as you use it.</span></div>
+${a.finish}, then ask:${firstAsk}
+<span class="Note">Pick one to build, then ask for changes in the same chat. Keep shaping it as you use it.</span></div>
 </section></div>`
     ).join('')
   }

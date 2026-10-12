@@ -1175,15 +1175,18 @@ export let directory = (via: Fetcher | Part, now = false) => {
       let row = await one(`.published.name=${name}&.app`)
       return row?.app ? await self.appAt(row.entity.eid) : null
     },
-    // Every offer standing, newest first — what a person's agent browses.
+    // Every offer standing, newest first — what a person's agent browses. A
+    // trashed app, or any app in a trashed space, offers nothing: the trash
+    // writes nothing on the row (erase.ts), so the offer is screened here and
+    // a restore puts it back as it was.
     offers: async (): Promise<{ space: Space; app: App }[]> => {
       let rows = (await query(`.published&.app&${ABOUT}`)).map(appOf)
-        .filter((a) => a.published)
+        .filter((a) => a.published && !a.trashed)
         .sort((a, b) => b.published!.at.localeCompare(a.published!.at))
       let out: { space: Space; app: App }[] = []
       for (let app of rows) {
         let space = await self.at(app.space)
-        if (space) out.push({ space, app })
+        if (space && !space.trashed) out.push({ space, app })
       }
       return out
     },

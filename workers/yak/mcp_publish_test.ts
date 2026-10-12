@@ -439,18 +439,29 @@ test('an app reaches the gallery only when yaks.app says yes', async () => {
     }).then((r) => r.text())
     assertStringIncludes(space, 'in the gallery')
 
-    // The trash writes nothing: the listing simply stops being drawn, and a
-    // restore gives it back with nobody asked twice.
+    // The trash writes nothing: the listing and the offer simply stop being
+    // drawn, and a restore gives both back with nobody asked twice.
+    let offers = () =>
+      connector(k).tool('app_published', { words: `${published} v` })
     await agent.tool('app_delete', { space: mine, app: 'recipes' })
     assert(
       !(await k.at('yaks.app', '/gallery').then((r) => r.text()))
         .includes('class="Make_Card"'),
+    )
+    assertStringIncludes(await offers(), 'nothing published says')
+    assertStringIncludes(
+      (await assertRejects(
+        () => agent.tool('app_install', { space: mine, name: published }),
+        Error,
+      )).message,
+      `nothing is published as ${published}`,
     )
     await agent.tool('app_restore', { space: mine, app: 'recipes' })
     assertStringIncludes(
       await k.at('yaks.app', '/gallery').then((r) => r.text()),
       'Recipe box',
     )
+    assertStringIncludes(await offers(), `- ${published} v`)
 
     // Withdrawing is the other direction, and it clears the word: the app is
     // off the page, and putting it back asks yaks.app once more.

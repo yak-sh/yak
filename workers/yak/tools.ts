@@ -4715,8 +4715,12 @@ let OURS: Row[] = [
     },
     run: async (ctx, args) => {
       let name = slug(args.name, 'name')
+      // `offered` still names a trashed app, whose name stays claimed for the
+      // trash's thirty days; it is not on offer until it is restored.
       let offer = await ctx.dir.offered(name)
-      if (!offer?.app.published) {
+      if (
+        !offer?.app.published || offer.app.trashed || offer.space.trashed
+      ) {
         throw refuse(
           'missing',
           `nothing is published as ${name} — app_published lists what is on ` +

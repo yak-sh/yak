@@ -84,24 +84,16 @@ test('the two stamps distinguish unsubmitted, pending and listed apps', () => {
   assertEquals(standing(app({ gallery: live })), 'listed')
 })
 
-// A listing is a published app, and nothing else may be one: the reader
-// screens what the row cannot say for itself — a trashed app, and an app whose
-// whole space is in the trash — so both leave the page the moment they are
-// thrown away and are back, unasked, when they are restored.
-test('the listing is the approved offers, minus what is in the trash', async () => {
-  let at = (over: Partial<App>, s: Partial<Space> = {}) => ({
-    space: space(s),
-    app: app(over),
-  })
+// A listing is a published app yaks.app said yes to, and nothing else may be
+// one.
+test('the listing is the approved offers', async () => {
+  let at = (over: Partial<App>) => ({ space: space(), app: app(over) })
   let dir = (offers: { space: Space; app: App }[]) => // deno-lint-ignore no-explicit-any
   ({ offers: () => Promise.resolve(offers) } as any)
-  let trash = { at: '2026-09-06T00:00:00.000Z', by: 'p' }
   let all = await listed(dir([
     at({ eid: 'never', gallery: null }),
     at({ eid: 'waiting', gallery: asked }),
     at({ eid: 'shown', gallery: live }),
-    at({ eid: 'binned', gallery: live, trashed: trash }),
-    at({ eid: 'space-gone', gallery: live }, { trashed: trash }),
   ]))
   assertEquals(all.map((a) => a.eid), ['shown'])
   assertEquals(all[0].at, 'https://jeff.yaks.app/recipes/')
