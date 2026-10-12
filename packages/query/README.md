@@ -106,8 +106,8 @@ component prefix or an operator identifies a clause. Malformed clauses throw
 | `?comp` / `?comp.prop`        | requested when present, without filtering |
 
 Contains keeps its entire value as one scalar, including commas or `..`. The
-other operators parse unquoted list and range structure; a quoted atom is one
-scalar.
+other operators parse list and range structure, including a whole quoted
+operand. Quotes group tokens; they do not turn that structure into a literal.
 
 ```ts
 import {
@@ -151,14 +151,15 @@ more loosely; parentheses group clauses. A comma inside a value makes a list,
 with no spaces and no empty members. `.p=a,b` is one predicate; `.p=a, b`
 throws. A comma between valued clauses can follow whitespace: `.p=a, .q=b`.
 
-Quote values containing spaces or literal commas and range markers, using single
-or double quotes; a backslash inside quotes escapes the next character.
-`.doc.title="a,b..c"` compares the whole literal `a,b..c`. A list or range can
-quote each member or bound separately: `.created.at="30s ago"...now`. Unquoted
-`.doc.title~=two words` is a predicate containing `two` followed by the text
-term `words`. Paths with operators may omit the leading dot: `task.status=open`
-and `.task.status=open` parse alike. Without an operator, `task` is a text term
-and `.task` tests presence.
+Quote values containing spaces, using single or double quotes; a backslash
+inside quotes escapes the next character. `.entity.eid="a,b"` selects either id,
+and `.priority="1..5"` compares against the range. Literal equality with commas
+or range markers is expressed by an AST scalar, such as
+`eq('doc.title', 'a,b..c')`. Contains (`~=`) keeps these characters literal in
+string queries too. Unquoted `.doc.title~=two words` is a predicate containing
+`two` followed by the text term `words`. Paths with operators may omit the
+leading dot: `task.status=open` and `.task.status=open` parse alike. Without an
+operator, `task` is a text term and `.task` tests presence.
 
 `conjoin()` combines query strings so each narrows the whole of the others,
 grouping a string with a top-level `|` before joining it.

@@ -103,7 +103,7 @@ test('epoch millisecond properties resolve the same time bounds in both evaluato
     ['.book.price="30s ago"', ['boundary', 'recent']],
     ['.book.price!="30s ago"', ['future', 'missing', 'old']],
     [`.book.price>=${iso}`, ['boundary', 'future', 'recent']],
-    ['.book.price="30s ago"...now', ['boundary', 'recent']],
+    ['.book.price="30s ago...now"', ['boundary', 'recent']],
     ['.book.price="30s ago",now', ['boundary', 'recent']],
     [`.book.price<=${NOW - 30_000}`, ['boundary', 'old']],
     [`.book.price=${NOW - 30_000}`, ['boundary']],

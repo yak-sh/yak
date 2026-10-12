@@ -44,13 +44,11 @@ import { frozen } from '@yaks/fp'
 // ---- values ----
 
 // Quotes are double or single, and a backslash inside escapes the next char.
-let QUOTED = /^(["'])((?:\\.|(?!\1)[^\\])*)\1$/s
+let QUOTED = /^(["'])(.*)\1$/s
 let stripQuotes = (v: string): string => {
   let m = v.match(QUOTED)
   return m ? m[2].replace(/\\(.)/gs, '$1') : v
 }
-let opens = (s: string, grouped = false): boolean =>
-  !s || /[=<>,]$|\.\.?\.$/.test(s) || grouped && /[(\s&|]$/.test(s)
 
 // A split on `sep` that leaves quoted runs whole — and, when asked, leaves a
 // path's bracket whole too, since its commas separate its own arguments.
@@ -68,19 +66,15 @@ let splitOutside = (s: string, sep: string, brackets = false): string[] => {
     } else if (bracket) {
       cur += c
       if (c == ']') bracket = false
-    } else if (
-      (c == '"' || c == "'") &&
-      (opens(cur) || sep == '..' && cur == '.')
-    ) {
+    } else if (c == '"' || c == "'") {
       quote = c
       cur += c
     } else if (brackets && c == '[' && PATH.test(cur)) {
       bracket = true
       cur += c
-    } else if (s.startsWith(sep, i)) {
+    } else if (c == sep) {
       out.push(cur)
       cur = ''
-      i += sep.length - 1
     } else cur += c
   }
   out.push(cur)
@@ -95,19 +89,10 @@ let LIST =
 // Recognizing a range needs no type, because the current matcher applies `..`
 // to every property.
 let atom = (raw: string): Value => {
-  if (QUOTED.test(raw)) return scalar(stripQuotes(raw))
-  if (!raw.includes('..')) return scalar(raw)
-  let [lo, ...rest] = splitOutside(raw, '..')
-  if (!rest.length) return scalar(raw)
-  let hi = rest.join('..')
-  let exclusiveEnd = hi.startsWith('.')
-  if (exclusiveEnd) hi = hi.slice(1)
-  return {
-    kind: 'range',
-    lo: scalar(stripQuotes(lo)),
-    hi: scalar(stripQuotes(hi)),
-    exclusiveEnd,
-  }
+  let m = raw.match(/^(.*?)\.\.(\.?)(.*)$/s)
+  if (!m) return scalar(raw)
+  let [, lo, excl, hi] = m
+  return { kind: 'range', lo: scalar(lo), hi: scalar(hi), exclusiveEnd: !!excl }
 }
 
 // A whole value: a comma-separated list means any-of; a single part is its
@@ -119,7 +104,7 @@ let value = (raw: string): Value => {
   let items = splitOutside(raw, ',')
   if (items.length == 1) return atom(raw)
   if (items.some((s) => !s)) throw new SyntaxError(LIST)
-  return { kind: 'list', items: items.map(atom) }
+  return { kind: 'list', items: items.map((s) => atom(stripQuotes(s))) }
 }
 
 // ---- component names ----
@@ -482,7 +467,7 @@ export let parseDot = (token: string): Clause[] | null => {
   // An ordinary predicate. Contains (`~=`) is deliberately literal, so its
   // value is one raw scalar; every other form parses list and range structure.
   if (op == '~=') return [{ kind: 'pred', path: segs, op, value: scalar(val) }]
-  return [{ kind: 'pred', path: segs, op: op as Op, value: value(rawValue) }]
+  return [{ kind: 'pred', path: segs, op: op as Op, value: value(val) }]
 }
 
 // ---- tokenizing a whole query ----
@@ -511,14 +496,14 @@ export let tokens = (q: string): string[] => {
       if (c == '\\' && i + 1 < q.length) cur += q[++i]
       else if (c == quote) quote = ''
     } else if (depth) {
-      if ((c == '"' || c == "'") && opens(cur, true)) quote = c
+      if ((c == '"' || c == "'") && /[=<>,(\s&|]$/.test(cur)) quote = c
       else if (c == '(') depth++
       else if (c == ')') depth--
       cur += c
     } else if (bracket) {
       cur += c
       if (c == ']') bracket = false
-    } else if ((c == '"' || c == "'") && opens(cur)) {
+    } else if ((c == '"' || c == "'") && /^$|[=<>,]$/.test(cur)) {
       quote = c
       cur += c
     } else if (c == '(' && !cur) {

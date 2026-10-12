@@ -50,7 +50,7 @@ let scenario = () => {
     ['.item (.item.key=probe|.node)', ['archived', 'open', 'resolved']],
     ['.item.key=probe|.node', ['archived', 'bare', 'open', 'resolved']],
     ['.item.status=open', ['empty', 'open', 'other']],
-    ['.item.status="open,resolved"', []],
+    ['.item.status="open,resolved"', ['empty', 'open', 'other', 'resolved']],
   ] as const
   try {
     let answers = cases.map(([query, expected]) => ({
