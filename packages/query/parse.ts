@@ -49,6 +49,8 @@ let stripQuotes = (v: string): string => {
   let m = v.match(QUOTED)
   return m ? m[2].replace(/\\(.)/gs, '$1') : v
 }
+let opens = (s: string, grouped = false): boolean =>
+  !s || /[=<>,]$|\.\.?\.$/.test(s) || grouped && /[(\s&|]$/.test(s)
 
 // A split on `sep` that leaves quoted runs whole — and, when asked, leaves a
 // path's bracket whole too, since its commas separate its own arguments.
@@ -66,15 +68,19 @@ let splitOutside = (s: string, sep: string, brackets = false): string[] => {
     } else if (bracket) {
       cur += c
       if (c == ']') bracket = false
-    } else if (c == '"' || c == "'") {
+    } else if (
+      (c == '"' || c == "'") &&
+      (opens(cur) || sep == '..' && cur == '.')
+    ) {
       quote = c
       cur += c
     } else if (brackets && c == '[' && PATH.test(cur)) {
       bracket = true
       cur += c
-    } else if (c == sep) {
+    } else if (s.startsWith(sep, i)) {
       out.push(cur)
       cur = ''
+      i += sep.length - 1
     } else cur += c
   }
   out.push(cur)
@@ -90,14 +96,17 @@ let LIST =
 // to every property.
 let atom = (raw: string): Value => {
   if (QUOTED.test(raw)) return scalar(stripQuotes(raw))
-  let m = raw.match(/^(.*?)\.\.(\.?)(.*)$/s)
-  if (!m) return scalar(raw)
-  let [, lo, excl, hi] = m
+  if (!raw.includes('..')) return scalar(raw)
+  let [lo, ...rest] = splitOutside(raw, '..')
+  if (!rest.length) return scalar(raw)
+  let hi = rest.join('..')
+  let exclusiveEnd = hi.startsWith('.')
+  if (exclusiveEnd) hi = hi.slice(1)
   return {
     kind: 'range',
     lo: scalar(stripQuotes(lo)),
     hi: scalar(stripQuotes(hi)),
-    exclusiveEnd: !!excl,
+    exclusiveEnd,
   }
 }
 
@@ -502,14 +511,14 @@ export let tokens = (q: string): string[] => {
       if (c == '\\' && i + 1 < q.length) cur += q[++i]
       else if (c == quote) quote = ''
     } else if (depth) {
-      if ((c == '"' || c == "'") && /[=<>,(\s&|]$/.test(cur)) quote = c
+      if ((c == '"' || c == "'") && opens(cur, true)) quote = c
       else if (c == '(') depth++
       else if (c == ')') depth--
       cur += c
     } else if (bracket) {
       cur += c
       if (c == ']') bracket = false
-    } else if ((c == '"' || c == "'") && /^$|[=<>,]$/.test(cur)) {
+    } else if ((c == '"' || c == "'") && opens(cur)) {
       quote = c
       cur += c
     } else if (c == '(' && !cur) {
