@@ -85,6 +85,10 @@ A base version behind the live version returns the live files the deploy would
 remove or replace and leaves the live version alone. After reviewing that
 answer, repeat the command with `--confirm` to deploy the staged files.
 
+A base version ahead of the live version means live went back since this
+checkout deployed (a rollback through another door). The push then writes
+nothing; `--confirm` deploys the directory over what is live.
+
 ```sh
 yak admin push apps/mail --space reviewer --as reviewer
 yak admin push apps/mail --space reviewer --as reviewer --confirm

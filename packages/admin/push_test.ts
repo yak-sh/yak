@@ -169,6 +169,30 @@ test('a stale push keeps its base through a fresh list and explicit confirmation
   assertEquals(seen, [3])
 })
 
+test('a base past live writes nothing until confirmed, then pushes from live', async () => {
+  let p = platform({ mail: held('index.html') })
+  let seen: number[] = []
+  let opts = {
+    base: 2,
+    remember: (version: number) => {
+      seen.push(version)
+    },
+  }
+  let said = await push(p.ask, [file('new.js')], { app: 'mail' }, opts)
+  assert(said.at(-1)?.includes('--confirm'))
+  assertEquals([p.writes, p.deployed, p.held('mail'), seen], [
+    [],
+    [],
+    ['index.html'],
+    [],
+  ])
+  await push(p.ask, [file('new.js')], { app: 'mail' }, {
+    ...opts,
+    confirm: true,
+  })
+  assertEquals([p.bases, p.held('mail'), seen], [[1], ['new.js'], [1, 2]])
+})
+
 // Persistence happens through the same boundary the CLI uses, prepared once
 // so assertions measure the behavior rather than filesystem scheduling.
 let remembered = await (async () => {

@@ -248,8 +248,22 @@ export let push = async (
   if (!created) {
     opts.progress?.({ phase: 'list', state: 'done', count: held.held.size })
   }
-  let base = opts.base ?? held.version
-  if (opts.base == null) await opts.remember?.(base)
+  // A remembered base past live means live went back (a rollback through
+  // another door) since this checkout deployed. Pushing would undo that, so
+  // it is asked for before a single file is written, and once confirmed the
+  // push starts from what is live.
+  if (opts.base != null && opts.base > held.version && !opts.confirm) {
+    return [
+      ...said,
+      `live is v${held.version}, behind v${opts.base} this checkout last ` +
+      'deployed (rolled back elsewhere); nothing was written, confirm with ' +
+      '--confirm to deploy these files over it',
+    ]
+  }
+  let base = opts.base != null && opts.base <= held.version
+    ? opts.base
+    : held.version
+  if (base != opts.base) await opts.remember?.(base)
   opts.progress?.({ phase: 'hash', state: 'start', count: files.length })
   let hashes = await Promise.all(files.map(shaOf))
   let changed = files.filter((f, i) => held.held.get(f.path) != hashes[i])
