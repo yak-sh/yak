@@ -563,11 +563,13 @@ let RemoteBug = (
     return h(Section.Sub, { role: 'status' }, `Reading the bug from ${side}…`)
   }
   let errors = rows.filter((b) => b.error)
+  // An occurrence opens on this page; the bug and the requests read with it
+  // are on it already.
   let link = (eid: string) =>
-    eid == bug
-      ? remoteBug(side, bug)
-      : errors.some((b) => b.entity.eid == eid)
+    errors.some((b) => b.entity.eid == eid)
       ? remoteBug(side, bug, eid)
+      : rows.some((b) => b.entity.eid == eid)
+      ? remoteBug(side, bug)
       : io.link(eid)
   let id = (b: Bundle) => io.id({ ...b, entity: { eid: b.entity.eid } })
   let there: Io = {
