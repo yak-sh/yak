@@ -281,7 +281,7 @@ for (let [verb, name] of [['resolve', 'resolved'], ['archive', 'archived']]) {
     )
   })
   for (
-    let [reason, settings, transport, held] of [
+    let [reason, settings, transport, held, said = 'Remote tracker'] of [
       [
         'unavailable',
         config,
@@ -319,6 +319,7 @@ for (let [verb, name] of [['resolve', 'resolved'], ['archive', 'archived']]) {
             }),
           )) as typeof fetch,
         true,
+        `Remote tracker has no ${verb} door`,
       ],
       [
         'Worker failure',
@@ -335,7 +336,7 @@ for (let [verb, name] of [['resolve', 'resolved'], ['archive', 'archived']]) {
     test(`box bug ${verb} refuses ${reason} without a local mark`, async () => {
       await throws(
         () => failed.call(`bug_${verb}`, { bug: ids[0] }),
-        'Remote tracker',
+        said,
       )
       ok(!(await failed.box.get([ids[0]], [name]))[0][name])
     })

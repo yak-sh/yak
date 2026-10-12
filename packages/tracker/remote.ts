@@ -113,6 +113,11 @@ export let mark = async (
   if (response.status == 404) {
     let body = await response.json().catch(() => null)
     if (body?.error == 'bug not found') return false
+    // A Worker whose deploy has not reached its object yet answers a new door
+    // as no route, while the box already sends it.
+    if (body?.error == 'tracker route not found') {
+      throw Error(`Remote tracker has no ${doors[name]} door (404)`)
+    }
   } else {
     await response.body?.cancel()
   }
