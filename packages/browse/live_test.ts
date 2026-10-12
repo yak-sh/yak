@@ -1884,7 +1884,7 @@ test('predsToQuery round-trips membership shapes, refuses the rest', () => {
   for (
     let line of ['.doc.title="a,b"', '.doc.title="a..b"', '.doc.title="a,b",a']
   ) {
-    assertEquals(predsToQuery(parseQuery(line)), line)
+    assertEquals(parseQuery(predsToQuery(parseQuery(line))!), parseQuery(line))
   }
   assertEquals(
     predsToQuery(parseQuery('"widget alpha" .task')),

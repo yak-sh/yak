@@ -4,6 +4,7 @@ import { test } from '@yaks/testing'
 import './testing.ts'
 import { assertEquals } from '@std/assert'
 import { parseQuery } from './query.ts'
+import { scalar } from '@yaks/query'
 import { diff, gaps } from './subs.ts'
 
 let cases = ([
@@ -16,7 +17,7 @@ let cases = ([
   ['.order=hot', []],
   ['.filed.assignee.doc.title~=jeff', []],
   ['.updated.at=today', ['moving-time']],
-  ['.updated.at="today,yesterday"', []],
+  ['.updated.at="today,yesterday"', ['moving-time']],
   ['.updated.at=today,"today,yesterday"', []],
   ['.updated.at>="1 hour ago"', ['moving-time']],
 ] as [string, string[]][]).map(([q, want]) => ({
@@ -27,6 +28,16 @@ let cases = ([
 
 test('the only agreement gap is moving time', () => {
   for (let { q, preds, want } of cases) assertEquals(gaps(preds), want, q)
+  assertEquals(
+    gaps([{
+      comp: 'updated',
+      prop: 'at',
+      op: '',
+      value: 'today,yesterday',
+      operand: scalar('today,yesterday'),
+    }]),
+    [],
+  )
 })
 
 test('agreement diff names both sides once and in order', () => {

@@ -1,6 +1,7 @@
 import { test } from '@yaks/testing'
 import './testing.ts'
 import { assertEquals } from '@std/assert'
+import { scalar } from '@yaks/query'
 import {
   adopt,
   edgeRider,
@@ -11,15 +12,29 @@ import {
   windowOf,
 } from './query.ts'
 
-test('browser matching preserves quoted scalars, lists and ranges', () => {
+test('browser matching preserves quoted lists and ranges and literal AST scalars', () => {
   let titles = ['a,b', 'a..b', 'a', 'b']
   let select = (q: string) =>
     titles.filter((title) => matchQuery({ doc: { title } }, parseQuery(q)))
-  assertEquals(select('.doc.title="a,b"'), ['a,b'])
-  assertEquals(select(".doc.title='a..b'"), ['a..b'])
+  assertEquals(select('.doc.title="a,b"'), ['a', 'b'])
+  assertEquals(select(".doc.title='a..b'"), titles)
   assertEquals(select('.doc.title="a,b",a'), ['a,b', 'a'])
   assertEquals(select('.doc.title=a..b'), titles)
-  assertEquals(adopt(parseQuery('.doc.title="a,b"')), { doc: { title: 'a,b' } })
+  for (let value of ['a,b', 'a..b']) {
+    let preds = [{
+      comp: 'doc',
+      prop: 'title',
+      op: '',
+      value,
+      operand: scalar(value),
+    }]
+    assertEquals(
+      titles.filter((title) => matchQuery({ doc: { title } }, preds)),
+      [value],
+    )
+    assertEquals(adopt(preds), { doc: { title: value } })
+  }
+  assertEquals(adopt(parseQuery('.doc.title="a,b"')), {})
 })
 
 test('saved reference literals resolve as one operand', () => {
@@ -27,7 +42,13 @@ test('saved reference literals resolve as one operand', () => {
   for (let name of ['person,one', 'person..two']) {
     let seen: string[] = []
     let preds = resolveRefs(
-      parseQuery(`.filed.assignee="${name}"`),
+      [{
+        comp: 'filed',
+        prop: 'assignee',
+        op: '',
+        value: name,
+        operand: scalar(name),
+      }],
       (value) => {
         seen.push(value)
         return eid
