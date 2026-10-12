@@ -220,7 +220,13 @@ test('an opaque body failure does not replay a Store write', async () => {
 
 test('the store door strips a visitor administrative claim and carries only its own vouch', async () => {
   for (
-    let header of ['x-yak-administrative', 'x-yak-observe', ACCEPTED, APP_JSON]
+    let header of [
+      'x-yak-administrative',
+      'x-yak-observe',
+      'x-yak-activation',
+      ACCEPTED,
+      APP_JSON,
+    ]
   ) {
     let seen: (string | null)[] = []
     let door = doorOf((req) => {
