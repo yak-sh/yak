@@ -910,6 +910,83 @@ let asked = async (store: Store, q: string) => {
   return { status: r.status, body: await r.json() }
 }
 
+let textRanking = await (async () => {
+  let ctx = state()
+  using _db = ctx.storage
+  let mine = { ...owner, access: 'public' }
+  let guest = { app: APP, access: 'public' }
+  let store = await cookbook(ctx, SCHEMA, mine)
+  let draft = draftEid(ADA, 'search-proof')
+  let wrote = await post(store, '/apply', [
+    {
+      entity: { eid: 'far' },
+      recipe: { serves: 2 },
+      doc: { title: 'a dragon among many other things kept here' },
+    },
+    {
+      entity: { eid: 'near' },
+      recipe: { serves: 2 },
+      doc: { title: 'dragon dragon dragon' },
+    },
+    {
+      entity: { eid: 'outside' },
+      recipe: { serves: 8 },
+      doc: { title: 'dragon' },
+    },
+    {
+      entity: { eid: draft },
+      recipe: { serves: 2 },
+      doc: { title: 'dragon' },
+      draft: { by: ADA, place: 'search-proof', text: 'unsent' },
+    },
+  ], mine)
+  let read = async (line: string, v: Vouch = guest) => {
+    let res = await get(store, `/query?q=${encodeURIComponent(line)}`, v)
+    let body = await res.json()
+    return {
+      status: res.status,
+      eids: Array.isArray(body) ? body.map((b: Bundle) => b.entity.eid) : body,
+    }
+  }
+  let line = 'dragon .recipe.serves=2 .order=search *'
+  let ranked = await read(line)
+  let limited = await read(line + ' .limit=1')
+  let screened = await read('dragon .recipe.serves=8 .order=search .limit=1 *')
+  let privateOwner = await read('dragon .draft .order=search *', mine)
+  let privateGuest = await read('dragon .draft .order=search *')
+  let rehearsal = await post(store, '/apply?check=1', [{
+    entity: { eid: 'near' },
+    doc: { title: 'plate' },
+  }], mine)
+  let retained = await read(line)
+  return {
+    wrote: wrote.status,
+    ranked,
+    limited,
+    screened,
+    privateOwner,
+    privateGuest,
+    rehearsal: rehearsal.status,
+    retained,
+    draft,
+  }
+})()
+test('a Store ranks text within the query screen and caller visibility', () => {
+  assertEquals(textRanking.wrote, 200)
+  assertEquals(textRanking.ranked, { status: 200, eids: ['near', 'far'] })
+  assertEquals(textRanking.limited, { status: 200, eids: ['near'] })
+  assertEquals(textRanking.screened, { status: 200, eids: ['outside'] })
+  assertEquals(textRanking.privateOwner, {
+    status: 200,
+    eids: [textRanking.draft],
+  })
+  assertEquals(textRanking.privateGuest, { status: 200, eids: [] })
+})
+test('a rehearsed Store write preserves ranked text', () => {
+  assertEquals(textRanking.rehearsal, 200)
+  assertEquals(textRanking.retained, { status: 200, eids: ['near', 'far'] })
+})
+
 // An object, a list and a union are written and read back as themselves, and a
 // filter asks only whether one is there (docs/components.md).
 test('an app keeps objects and arrays, and asks only whether one is there', async () => {

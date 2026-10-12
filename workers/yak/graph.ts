@@ -1206,7 +1206,7 @@ export class Store {
         return store
       },
       extend: () => [
-        search(searchable),
+        search(searchable, drive),
         semantic(statements(drive), { model: SPACE }, {
           fields: this.#texts.fields,
         }),
