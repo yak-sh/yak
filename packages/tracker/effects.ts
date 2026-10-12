@@ -10,7 +10,7 @@ import { type Enrich, group, reframe, trim } from './group.ts'
 import { enrichFrames } from './frames.ts'
 import { sourceFrames, type SourceOptions } from '@yaks/code/source'
 import { followUp, letter } from './letter.ts'
-import { occurrences } from './reading.ts'
+import { occurrences, remoteBug } from './reading.ts'
 import { tags } from './spread.ts'
 import { human } from '@yaks/id'
 
@@ -30,6 +30,11 @@ export type Options = {
    * writes their letters itself: a bug every kept occurrence of which came
    * from one is marked seen here without a letter, so it sends one letter. */
   forwarded?: string[]
+  /** The side of the tracker web this store's bugs open on when they are not
+   * in the web's own graph: `yaks.app` for the platform tracker, which the
+   * box's tracker web reads through. Its letters name a bug by global eid,
+   * since its numbers mean nothing there. */
+  side?: string
   /** A space's stream notification; the unseen reply owns its notified mark. */
   notify?: (bugs: Bundle[]) => void | Promise<void>
   retain?: number
@@ -140,10 +145,14 @@ export let notify = async (
   }], { trusted: true })
 }
 
-// A bug's name and page: its human id where the store keeps one.
+// A bug's name and page: its human id where the store keeps one, or its
+// global eid on the side the tracker web reads it from.
 let address = (g: Graph, row: Bundle, options: Options) => {
-  let name = row.entity.num ? human(g.vocab)(row) : row.entity.eid
-  let path = `/${encodeURIComponent(name)}`
+  let eid = row.entity.eid
+  let name = row.entity.num && !options.side ? human(g.vocab)(row) : eid
+  let path = options.side
+    ? remoteBug(options.side, eid)
+    : `/${encodeURIComponent(name)}`
   return {
     name,
     url: options.url ? new URL(path, options.url).href : path,

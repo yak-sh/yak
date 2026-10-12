@@ -327,3 +327,27 @@ check('a bug forwarded by the box gets its letter only there', async (g) => {
   )
   ok((await g.get([boxed.entity.eid]))[0].notified)
 })
+
+check(
+  "a platform bug's letter opens it on the side the tracker web reads it from",
+  async (g) => {
+    let row = bug()
+    row.entity = { ...row.entity, num: 7 }
+    await put(g, [row])
+    await effects({ graph: g }, { ...options, side: 'yaks.app' }).bug_notify(
+      { entity: row.entity, name: 'bug', kind: 'created' },
+      g,
+      (rows) => put(g, rows),
+    )
+    let [letter] = await letters(g)
+    let { title, body } = comp(letter, 'doc') as Record<string, string>
+    let eid = row.entity.eid
+    ok(title.includes(`${eid}: `), title)
+    ok(
+      body.includes(
+        `(https://bugs.example.test/?q=.bug&side=yaks.app&bug=${eid})`,
+      ),
+      body,
+    )
+  },
+)

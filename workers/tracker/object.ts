@@ -109,8 +109,10 @@ export class Tracker {
       sink: this.sink,
       report: (error) => this.#report(error, 'Tracker.effect'),
       store: this.scope,
+      // The box's tracker web reads platform bugs through; the box tracker
+      // writes the letters for the box's own bugs.
       url: 'https://tracker.yak.sh',
-      // The box tracker writes the letters for the box's own bugs.
+      side: 'yaks.app',
       forwarded: ['box'],
       ...env.MAIL
         ? {

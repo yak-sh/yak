@@ -81,25 +81,29 @@ tracker `store` eid. `forwarded` names capture sources another tracker writes
 the letters for: a bug whose kept occurrences all carry one of those
 `error.tags.source` values is marked seen without a letter, so a bug the box
 forwards to the platform tracker sends one letter, the box's. Each bug opening
-and each regression gets its own letter immediately. Its identity derives from
-the store, recipient, bug eid, opening or regression mark, and full `created.at`
-or `regressed.at`, so a replayed effect keeps the same letter. A letter is read
-alone by someone deciding whether it is urgent, so `letter.ts` writes from the
-bug and its retained occurrences all the tracker holds: the subject names where
-it ran (box or yaks.app, the space and app, and "test account" when only test
-accounts were reached), the bug and its headline; the body carries the whole
-message, where it ran (process or worker, app version, operation), whom it
-reached, how often and in the last hour, the failing request, the code, the
-commit, the top of the stack, the breadcrumbs before it, every other tag, and a
-bug link. Reporters supply what it reads: the box tags its `command` and host
-`roles`, yaks.app its `space` and `app` slugs and whose space it is (`account`).
-A regression's letter answers the opening's thread, and `bug_follow` adds one
-reply there when a bug is resolved or archived; a bug that opened without a
-letter stays quiet. Bugs become notified only after their occasion's letter has
-its `delivered` mark; an earlier occasion's delivery cannot mark a later
-regression notified. Space replies own their own notified mark. Archived bugs
-still count but never notify. Retention keeps the newest hundred plus the first
-occurrence of each commit (or version without a commit).
+and each regression gets its own letter immediately. `side` names the side of
+the tracker web a store's bugs open on when they are not in its own graph: the
+platform tracker's letters (`side: 'yaks.app'`) name a bug by global eid and
+link to `/?q=.bug&side=yaks.app&bug=<eid>`, where the box's tracker web reads it
+through `/tracker/bugs` and draws it with the same pages. Its identity derives
+from the store, recipient, bug eid, opening or regression mark, and full
+`created.at` or `regressed.at`, so a replayed effect keeps the same letter. A
+letter is read alone by someone deciding whether it is urgent, so `letter.ts`
+writes from the bug and its retained occurrences all the tracker holds: the
+subject names where it ran (box or yaks.app, the space and app, and "test
+account" when only test accounts were reached), the bug and its headline; the
+body carries the whole message, where it ran (process or worker, app version,
+operation), whom it reached, how often and in the last hour, the failing
+request, the code, the commit, the top of the stack, the breadcrumbs before it,
+every other tag, and a bug link. Reporters supply what it reads: the box tags
+its `command` and host `roles`, yaks.app its `space` and `app` slugs and whose
+space it is (`account`). A regression's letter answers the opening's thread, and
+`bug_follow` adds one reply there when a bug is resolved or archived; a bug that
+opened without a letter stays quiet. Bugs become notified only after their
+occasion's letter has its `delivered` mark; an earlier occasion's delivery
+cannot mark a later regression notified. Space replies own their own notified
+mark. Archived bugs still count but never notify. Retention keeps the newest
+hundred plus the first occurrence of each commit (or version without a commit).
 
 ## Browsing
 

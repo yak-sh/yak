@@ -9,6 +9,26 @@ export let openBugs = '.bug.status=open * .order=-bug.hits'
 export let occurrences = (eid: string): string =>
   `.error.bug=${eid} * .order=-error.at`
 
+/** A bug's page on the box's tracker web when it lives on another side (the
+ * platform tracker, `yaks.app`), read through by global eid; one of its
+ * occurrences opens on the same page.
+ *
+ * ```ts
+ * import { assertEquals } from '@std/assert'
+ * assertEquals(
+ *   remoteBug('yaks.app', 'b', 'e'),
+ *   '/?q=.bug&side=yaks.app&bug=b&error=e',
+ * )
+ * ```
+ */
+export let remoteBug = (side: string, bug: string, error?: string): string =>
+  `/?${new URLSearchParams({
+    q: '.bug',
+    side,
+    bug,
+    ...error ? { error } : {},
+  })}`
+
 /** The whole message a bug or an error says. */
 export let said = (e: Bundle): string =>
   e.bug ? str(comp(e, 'doc').title) : title(e)

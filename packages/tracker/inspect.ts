@@ -7,8 +7,10 @@
  * @module
  */
 import { type ComponentChildren, h, type JSX } from 'preact'
+import { useEffect, useState } from 'preact/hooks'
 import { parse } from '@yaks/query'
 import {
+  all as baseViews,
   type Bundle,
   type Io,
   mention,
@@ -36,6 +38,7 @@ import {
   occurrences,
   pip,
   relatedTraces,
+  remoteBug,
   said,
   standing,
   where,
@@ -521,6 +524,86 @@ let ErrorPage = ({ e, io, got }: Props): JSX.Element => {
   )
 }
 
+/** What the box's tracker doors (./routes.ts) answered for one bug: the bug,
+ * its kept occurrences and their requests. */
+type Read = { bug: string; rows?: Bundle[]; error?: string }
+
+/** A bug on another side (the platform tracker), read through the box's
+ * tracker doors and drawn with these same pages. Only its read and link doors
+ * change; nothing is admitted to the box's or the page's graph. Its numbers
+ * belong to the other store, so its rows read by eid. */
+let RemoteBug = (
+  { io, side, bug, error }: {
+    io: Io
+    side: string
+    bug: string
+    error?: string
+  },
+): JSX.Element => {
+  let [read, set] = useState<Read>()
+  useEffect(() => {
+    let abort = new AbortController()
+    void fetch(`/tracker/bugs?${new URLSearchParams({ bug })}`, {
+      signal: abort.signal,
+    }).then(async (r) => {
+      let body = await r.json()
+      if (!r.ok) throw Error(body.error ?? `the tracker answered ${r.status}`)
+      if (!abort.signal.aborted) set({ bug, rows: body })
+    }).catch((e) => {
+      if (!abort.signal.aborted) set({ bug, error: String(e?.message ?? e) })
+    })
+    return () => abort.abort()
+  }, [bug])
+  let held = read?.bug == bug ? read : undefined
+  if (held?.error) {
+    return h(Section.Sub, { role: 'alert' }, `Bug unavailable: ${held.error}`)
+  }
+  let rows = held?.rows ?? [], [e] = rows
+  if (!e) {
+    return h(Section.Sub, { role: 'status' }, `Reading the bug from ${side}…`)
+  }
+  let errors = rows.filter((b) => b.error)
+  let link = (eid: string) =>
+    eid == bug
+      ? remoteBug(side, bug)
+      : errors.some((b) => b.entity.eid == eid)
+      ? remoteBug(side, bug, eid)
+      : io.link(eid)
+  let id = (b: Bundle) => io.id({ ...b, entity: { eid: b.entity.eid } })
+  let there: Io = {
+    ...io,
+    get: (eid) => rows.find((b) => b.entity.eid == eid) ?? io.get(eid),
+    link,
+    id,
+    show: (b, view, ctx) =>
+      io.show({ ...b, entity: { eid: b.entity.eid } }, view, {
+        ...ctx,
+        link,
+        id,
+      }),
+  }
+  let picked = error ? errors.find((b) => b.entity.eid == error) : undefined
+  return picked
+    ? h(ErrorPage, {
+      e: picked,
+      io: there,
+      ctx: {},
+      got: {
+        traces: {
+          rows: [],
+          ready: false,
+          error: `not read across from ${side}`,
+        },
+      },
+    })
+    : h(BugPage, {
+      e,
+      io: there,
+      ctx: {},
+      got: { errors: { rows: errors, ready: true } },
+    })
+}
+
 /** The pages this package draws in the inspector. */
 export let inspectViews: View[] = [
   {
@@ -537,5 +620,26 @@ export let inspectViews: View[] = [
       return related ? { traces: related.query } : {}
     },
     Render: ErrorPage,
+  },
+  {
+    // A bug query's page, where a letter about a bug on another side opens it
+    // (`?q=.bug&side=yaks.app&bug=…`). Its second clause outranks timing's
+    // query page, which draws no bug query differently.
+    view: 'Inspect.Query',
+    match: parse(".entity.eid~='browse-query:' .entity.eid~='.bug'"),
+    Render: (props) => {
+      let params = new URLSearchParams(
+        typeof location == 'undefined' ? '' : location.search,
+      )
+      let side = params.get('side') ?? 'box', bug = params.get('bug')
+      return side != 'box' && bug
+        ? h(RemoteBug, {
+          io: props.io,
+          side,
+          bug,
+          error: params.get('error') ?? undefined,
+        })
+        : h(baseViews.find((v) => v.view == 'Inspect.Query')!.Render, props)
+    },
   },
 ]
