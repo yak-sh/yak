@@ -103,6 +103,7 @@ import {
   ledger,
 } from './archetype.ts'
 import { componentTables, shape } from './physical.ts'
+import { build } from './owe.ts'
 import { plan } from './plan.ts'
 import { births, patch, prune, remove, revive, spines } from './write.ts'
 import { bindings } from './rules.ts'
@@ -816,7 +817,7 @@ export let storage = (
           erect(driver, retabled(driver, vocab, base.derived))
           let unfit = fit(driver, vocab)
           for (let stmt of retired(driver, vocab)) driver.query(stmt)
-          erect(driver, indexed(vocab))
+          build(driver, indexed(vocab))
           unfit.forEach(report)
           clean = !unfit.length
           // Memory templates keep schema, never a store's lineage identity.

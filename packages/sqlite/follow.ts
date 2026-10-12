@@ -9,9 +9,9 @@
 //
 // Two openers that find the same print missing both run the pass: every step
 // of it reads the file under the write lock before it changes anything, so the
-// second one finds nothing left to do. Work whose cost grows with rows (an
-// index over a populated table, a table's refit, filling a text index) still
-// runs in the pass; D-121389 moves it to windows the effects worker works off.
+// second one finds nothing left to do. An index over a populated table is
+// written down instead, for the effects worker to build (./owe.ts); a table's
+// refit and a text index's fill still run here.
 
 import { type Column, type Driver, render, type Stmt } from '@yaks/sql/core'
 import { type Derived, field, lit, tagOf } from '@yaks/sql'
@@ -19,6 +19,7 @@ import type { Vocab } from '@yaks/vocab'
 import { sha256 } from '@yaks/graph/sha256'
 import { installed, meta, PRINTED, printed } from './meta.ts'
 import { unit } from './unit.ts'
+import { build } from './owe.ts'
 import { plan } from './plan.ts'
 import { standing } from './ddl.ts'
 import { tables } from './layout.ts'
@@ -62,10 +63,11 @@ export let grow = (driver: Driver, stmts: Stmt[]): Stmt[] =>
   })
 
 /** Run `stmts`, each of which only adds what is missing, then the columns
- * their standing tables lack, in one unit under the write lock. */
+ * their standing tables lack, in one unit under the write lock. An index over
+ * a populated table is owed rather than built (./owe.ts). */
 export let add = (driver: Driver, stmts: Stmt[]): void =>
   unit(driver, () => {
-    for (let s of stmts) driver.query(s)
+    build(driver, stmts)
     for (let s of grow(driver, stmts)) driver.query(s)
   })
 

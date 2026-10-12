@@ -66,6 +66,7 @@ import {
 import type { Store } from '@yaks/sqlite'
 import { migrations, migrationSchema } from '@yaks/sqlite/migration'
 import { add, follow, lacking, printOf } from '@yaks/sqlite/follow'
+import { SCHEMA_DUTY, tend } from '@yaks/sqlite/owe'
 import type { Opened } from '@yaks/sqlite/db'
 import {
   adopt,
@@ -682,8 +683,23 @@ let composed = async (
     g = host.graph
     let calls = host.runner
     let fx = host.fx
-    let duties = built.services
     let effecting = roles.includes('effects')
+    // Whoever works the effects also works off the schema work a pass owed
+    // (@yaks/sqlite/owe), one process at a time under its lease.
+    let duties = effecting && !opts.readOnly
+      ? [...built.services, {
+        name: SCHEMA_DUTY,
+        run: (signal: AbortSignal) =>
+          tend(sql, {
+            signal,
+            report: (error, work) =>
+              void report(error, {
+                during: { process: selfEid() },
+                tags: { step: 'schema', work },
+              }),
+          }),
+      }]
+      : built.services
     // Started together and stopped together, by one signal: a host shutting
     // down is one fact, and a duty that outlived the database it
     // reads would be a crash nobody asked for. One that throws is reported
