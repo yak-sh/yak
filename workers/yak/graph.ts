@@ -2603,6 +2603,16 @@ export class Store {
   // release (`#select`).
   #version = () => this.#bind.CF_VERSION_METADATA?.id ?? null
 
+  // The Worker version this incarnation runs, and the last deploy it
+  // restarted for (`#behind`): after a deploy, "live at 100%" says where the
+  // Worker is, and only the object can say where it is.
+  async #running() {
+    return {
+      version: versionOf(this.#bind.CF_VERSION_METADATA),
+      restartedFor: (await this.#ctx.storage.get<string>?.(RESTARTED)) ?? null,
+    }
+  }
+
   // A caller on a later deploy than this incarnation (T-123372, running.ts).
   // The runtime leaves an object on the code it started with for minutes after
   // a deploy, so a door the deploy added would answer "no route" until then.
@@ -3786,7 +3796,10 @@ export class Store {
       }
       let seq = at.get('seq')
       if (seq == null) {
-        return Response.json({ physical: inspectStorage(this.#sql) })
+        return Response.json({
+          physical: inspectStorage(this.#sql),
+          running: await this.#running(),
+        })
       }
       let n = Number(seq)
       if (!Number.isSafeInteger(n) || n < 1) {

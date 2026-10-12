@@ -88,6 +88,20 @@ test("a caller's door stamps its deploy, and a request's own claim is dropped", 
   assertEquals(sent[0].get(WORKER_VERSION_AT), B.timestamp)
 })
 
+test('a store says the version it runs and the deploy it restarted for', async () => {
+  let o = object(A)
+  await assertRejects(() => o.ask(B))
+  let inspected = await o.live.fetch(
+    new Request('http://store/inspect', {
+      headers: { 'x-store': 'ada/cookbook', 'x-yak-kernel': '1' },
+    }),
+  )
+  assertEquals((await inspected.json()).running, {
+    version: { id: A.id, at: A.timestamp },
+    restartedFor: B.id,
+  })
+})
+
 test('a call that reaches a store on the old deploy is answered by the new one', async () => {
   learn(B)
   let o = object(A, B)

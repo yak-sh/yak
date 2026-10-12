@@ -4,11 +4,15 @@
 import type { Identity, StoreSize } from '@yaks/sqlite'
 import type { Event } from '@yaks/trace'
 import type { Door } from './door.ts'
+import type { Version } from './running.ts'
 import { KERNEL } from './meta.ts'
 import { rejected } from './tool.ts'
 
 export type Inspection = {
   physical?: StoreSize
+  /** The Worker version the store runs, and the deploy it last restarted for
+   * (graph.ts `#running`). */
+  running?: { version: Version | null; restartedFor: string | null }
   identity?: Identity
   dryRun?: {
     seq: number
