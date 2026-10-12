@@ -49,11 +49,14 @@ swap.
 ## A grant from a trusted host
 
 A **grant** is a credential and the destinations a trusted host authorized for
-one call: `{sentinel, value, hosts}`. `granted(grants, request, send?)` forwards
-using those grants without reading a graph or vault. A separate executor can
-obtain grants from its host at I/O and send a long response directly, keeping
-the host outside the response stream. It keeps the grant only while sending;
-durable requests carry sentinels, never credential values.
+one call: `{sentinel, value, hosts}`. `grants(ctx, caller, sentinels)`
+authorizes the requested sentinels through the caller's app, level and person,
+and reads their current credentials, refreshing access tokens when needed.
+`granted(grants, request, send?)` forwards using those grants without reading a
+graph or vault. A separate executor can obtain grants from its host at I/O and
+send a long response directly, keeping the host outside the response stream. It
+keeps the grant only while sending; durable requests carry sentinels, never
+credential values.
 
 ```ts
 import { granted } from '@yaks/egress'

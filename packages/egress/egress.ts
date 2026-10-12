@@ -83,13 +83,13 @@ let destination = (hosts: readonly string[], url: URL, name: string) => {
   }
 }
 
-// The connections a request's sentinels stand for, once the caller may call
-// out through each and the request goes where each may be sent.
+// The connections the caller may use. A request checks its destination before
+// reading credentials; a host grant lends its allowed destinations with them.
 let check = async (
   c: Ctx,
   caller: Caller,
-  url: URL,
-  found: string[],
+  found: readonly string[],
+  url?: URL,
 ): Promise<Hit[]> => {
   let mine = await used(c, caller.app, caller.person)
   return Promise.all(found.map(async (sentinel) => {
@@ -109,12 +109,25 @@ let check = async (
     }
     let i = await known(c.graph.read, name)
     let hosts = i?.hosts ?? []
-    destination(hosts, url, name)
+    if (url) destination(hosts, url, name)
     let value = await credential(c, eid)
     if (!value) throw new Refused(`${name} holds no credential`)
     return { eid, sentinel, value, hosts, oauth: !keyed(i!) }
   }))
 }
+
+/** Authorize only the requested sentinels for a vouched caller. Credentials
+ * are refreshed when needed and lent only until the next outbound call. */
+export let grants = async (
+  c: Ctx,
+  caller: Caller,
+  found: readonly string[],
+): Promise<Grant[]> =>
+  (await check(c, caller, found)).map(({ sentinel, value, hosts }) => ({
+    sentinel,
+    value,
+    hosts,
+  }))
 
 // Prepare once so an OAuth retry sends the same body. Both host boundaries
 // use this byte-preserving swap and prevent redirects carrying credentials.
@@ -176,7 +189,7 @@ export let forward = async (
   req: Request,
 ): Promise<Response> => {
   let { url, found, sent } = await prepare(req, c.fetch ?? fetch)
-  let hits = found.length ? await check(c, caller, url, found) : []
+  let hits = found.length ? await check(c, caller, found, url) : []
   let res = await sent(hits)
   if (res.status != 401 || !hits.some((h) => h.oauth)) return res
   let again = await Promise.all(

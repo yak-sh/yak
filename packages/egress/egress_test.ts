@@ -22,7 +22,7 @@ import {
   resolve,
   USES,
 } from '@yaks/connections'
-import { type Caller, forward, Refused } from './mod.ts'
+import { type Caller, forward, granted, grants, Refused } from './mod.ts'
 
 let here: VocabDoc = {
   $defs: {
@@ -183,12 +183,15 @@ test('a key goes out in its sentinel’s place wherever the app put it, with eve
   )
 })
 
-let refused: [string, Caller, string][] = [
+let unauthorized: [string, Caller, string][] = [
   ['a caller holding nothing', { ...ann, person: null }, `?k=${KEY}`],
   ['another app', { app: 'other', level: 'owner', person: null }, `?k=${KEY}`],
   ['another person’s own', { ...viewer, person: 'bob' }, `?k=${ANN}`],
   ['a person’s own, for nobody', { ...viewer, level: 'owner' }, `?k=${ANN}`],
   ['an unknown sentinel', viewer, `?k=${SENTINEL}${'A'.repeat(43)}`],
+]
+let refused: [string, Caller, string][] = [
+  ...unauthorized,
   ['a host not named', viewer, `https://api.example/?k=${KEY}`],
   ['plain http', viewer, `http://api.texts.example/?k=${KEY}`],
   ['another port', viewer, `https://api.texts.example:8443/?k=${KEY}`],
@@ -242,6 +245,44 @@ let calendarRequest = new Request('https://api.example/events', {
 })
 let events = () => forward(c, viewer, calendarRequest)
 
+test('a vouched caller receives only the requested grants for direct execution', async () => {
+  answering([200])
+  let held = await grants(c, viewer, [KEY])
+  assertEquals(held, [{
+    sentinel: KEY,
+    value: 'sk-live',
+    hosts: ['api.texts.example'],
+  }])
+  assertEquals(seen, [])
+  await granted(
+    held,
+    new Request('https://api.texts.example/', {
+      headers: { authorization: KEY },
+    }),
+    net,
+  )
+  assertEquals(seen[0].headers.get('authorization'), 'sk-live')
+})
+
+for (let [why, caller, url] of unauthorized) {
+  test(`grants refuse ${why}`, async () => {
+    answering()
+    let sentinel = new URL(url, 'https://api.texts.example/').searchParams
+      .get('k')!
+    await assertRejects(() => grants(c, caller, [sentinel]), Refused)
+    assertEquals(seen, [])
+  })
+}
+
+test('grants preserve a person’s own and an open connection’s authorization', async () => {
+  assertEquals((await grants(c, ann, [ANN]))[0].value, 'ann-key')
+  assertEquals(
+    (await grants(c, { app: 'widget', level: null, person: null }, [KEY]))[0]
+      .value,
+    'sk-live',
+  )
+})
+
 test(
   'an access token the service refuses is refreshed, and the call made once more',
   async () => {
@@ -251,6 +292,7 @@ test(
       seen.map((r) => r.headers.get('authorization') ?? r.url),
       ['Bearer A1', 'https://auth.example/token', 'Bearer A2'],
     )
+    assertEquals((await grants(c, viewer, [GRANT]))[0].value, 'A2')
   },
 )
 
