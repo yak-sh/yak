@@ -1,5 +1,5 @@
 /** Shared Worker entry point for graph duties. @module */
-import { type Port, portLink } from '@yaks/sync'
+import { type Port, portLink } from '@yaks/sync/port'
 
 import type { Host, Open, Start } from './types.ts'
 

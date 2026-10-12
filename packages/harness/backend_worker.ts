@@ -15,7 +15,7 @@ import type { ListPage } from './agent.ts'
  * every test's backend in it (testing.ts `worker`). A backend's state is its
  * own; what the Worker holds is the modules, and the observer that reports
  * what escapes all of them. */
-import { portLink } from '@yaks/sync'
+import { portLink } from '@yaks/sync/port'
 import { subscriptions } from '@yaks/api'
 import { compose, type Config, person, type Served } from '@yaks/cli/host'
 import { type Local, local } from './local.ts'

@@ -9,7 +9,7 @@ import {
   Stale,
   type WriteOpts,
 } from '@yaks/graph'
-import { type Port, type PortLink, portLink } from '@yaks/sync'
+import { type Port, type PortLink, portLink } from '@yaks/sync/port'
 import type { Vocab } from '@yaks/vocab'
 
 // Error identity matters: losing a claim is a Stale refusal, not a failed run.

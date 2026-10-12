@@ -2,7 +2,7 @@
 import { test } from '@yaks/testing'
 import { assertEquals, assertRejects } from '@std/assert'
 import { FakeTime } from '@std/testing/time'
-import { portLink } from './port.ts'
+import { portLink } from '@yaks/sync/port'
 
 class Conflict extends Error {
   constructor(public current: unknown) {

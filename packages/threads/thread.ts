@@ -1,5 +1,5 @@
 import type { Access, Eid } from '@yaks/graph'
-import { type PortLink, portLink } from '@yaks/sync'
+import { type PortLink, portLink } from '@yaks/sync/port'
 import { serve } from './graph.ts'
 import type { Start } from './types.ts'
 

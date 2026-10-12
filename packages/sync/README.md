@@ -453,7 +453,8 @@ no graph policy, authorization, optimistic writes, reconnection, or frame
 backpressure.
 
 ```ts
-import { type Frame, portLink } from '@yaks/sync'
+import type { Frame } from '@yaks/sync'
+import { portLink } from '@yaks/sync/port'
 import { equal } from '@yaks/testing'
 
 const { port1, port2 } = new MessageChannel()
@@ -488,7 +489,7 @@ support structured cloning; a decoder can restore an Error subclass and its
 data.
 
 ```ts
-import { portLink } from '@yaks/sync'
+import { portLink } from '@yaks/sync/port'
 import { equal, throws } from '@yaks/testing'
 
 class Conflict extends Error {
@@ -520,11 +521,13 @@ try {
 
 ## Exports
 
-There is one root export, with no sub-module exports.
+The root exports replication and transport; the port subpath exports just the
+MessagePort transport.
 
-| Export       | Contents                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
-| ------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `@yaks/sync` | `sync`, `Sync`, `SyncOpts`, `Replica`, `SubscribeOpts`; `post`, HTTP types (`Fetch`, `PostOpts`, `Refusal`, `Report`, `Trouble`); `land`, `strip`, `snapshot`, `hear`, `Mine`; `wire`, `backoff`, socket types (`Ask`, `Connect`, `Frame`, `Socket`, `Timer`, `Wire`, `WireOpts`); `syncOf`, `durableOf`, `local`, `outbound`, `stored`, `outward`, `inverse`, `guessed`; `asked`, `asking`, `before`, `clean`, `echo`, `echoed`, `marks`, `replicate`, `ruled`, `ruling`, `SENT`, `RULED`, `ECHO`; `covers`, `delivered`, `Coverage`; `portLink`, `Port`, `PortLink`, `RequestOptions` |
+| Export            | Contents                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| ----------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `@yaks/sync`      | `sync`, `Sync`, `SyncOpts`, `Replica`, `SubscribeOpts`; `post`, HTTP types (`Fetch`, `PostOpts`, `Refusal`, `Report`, `Trouble`); `land`, `strip`, `snapshot`, `hear`, `Mine`; `wire`, `backoff`, socket types (`Ask`, `Connect`, `Frame`, `Socket`, `Timer`, `Wire`, `WireOpts`); `syncOf`, `durableOf`, `local`, `outbound`, `stored`, `outward`, `inverse`, `guessed`; `asked`, `asking`, `before`, `clean`, `echo`, `echoed`, `marks`, `replicate`, `ruled`, `ruling`, `SENT`, `RULED`, `ECHO`; `covers`, `delivered`, `Coverage`; `portLink`, `Port`, `PortLink`, `RequestOptions` |
+| `@yaks/sync/port` | `portLink`, `Port`, `PortLink`, `RequestOptions`, without the replication client                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
 
 `post(bundles, options)` sends and reconciles one write outside the Sync's
 ordered queue, resolving to whether its outcome is known. It uses the same
