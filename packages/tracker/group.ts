@@ -9,7 +9,7 @@ import {
   Stale,
   token,
 } from '@yaks/graph'
-import { same } from '@yaks/fp'
+import { after, same } from '@yaks/fp'
 import { absent, and, eq, every } from '@yaks/query'
 import { faultOf } from './fault.ts'
 import { enrichFrames } from './frames.ts'
@@ -133,28 +133,39 @@ export let grouped = (
 }
 
 /** Existing groups can have migrated eids. New groups have deterministic ids;
- * guarded counters serialize competing workers without process-local locks. */
+ * guarded counters serialize competing workers without process-local locks.
+ * Contention rebases here, without spending the effect's failure attempts. */
 export let group = async (
   g: Graph,
   eid: string,
   enrich?: Enrich,
 ): Promise<void> => {
-  let [row] = await g.get([eid])
-  if (!row?.error || row.refusal || comp(row, 'error').bug) return
-  let full = await (enrich ?? enrichFrames())(row)
-  let fault = faultOf(full)
-  let app = str(comp(full, 'during').app)
-  let [bug] = await g.read(
-    and(
-      eq('bug.fault', fault),
-      app ? eq('bug.app', app) : absent('bug.app'),
-      every(),
-    ),
-  )
-  let before = bug
-    ? await g.read(and(eq('error.bug', bug.entity.eid), every()))
-    : []
-  await g.apply(grouped(full, bug, before), { trusted: true })
+  for (;;) {
+    let [row] = await g.get([eid])
+    if (!row?.error || row.refusal || comp(row, 'error').bug) return
+    let full = await (enrich ?? enrichFrames())(row)
+    let fault = faultOf(full)
+    let app = str(comp(full, 'during').app)
+    try {
+      // Local reads and admission stay in one turn. Other processes still
+      // compete through the guards, and a lost claim rereads its receipt too.
+      await after(
+        g.read(and(
+          eq('bug.fault', fault),
+          app ? eq('bug.app', app) : absent('bug.app'),
+          every(),
+        )),
+        ([bug]) =>
+          after(
+            bug ? g.read(and(eq('error.bug', bug.entity.eid), every())) : [],
+            (before) => g.apply(grouped(full, bug, before), { trusted: true }),
+          ),
+      )
+      return
+    } catch (error) {
+      if (!(error instanceof Stale)) throw error
+    }
+  }
 }
 
 /** Newest hundred, plus the first occurrence of each release. */
