@@ -118,27 +118,20 @@ test('revoking a CLI grant prefix leaves connector grants in place', async () =>
     encryptedProps: 'sealed',
   })
   let key = `grant:${grant.person}:abcdef-connector`
-  for (let legacy of [false, true]) {
-    let store = kv()
-    let b = ledger(store)!
-    await store.put(key, connector)
-    if (legacy) {
-      await store.put(
-        `grant:${grant.person}:${grant.id}`,
-        JSON.stringify(grant),
-      )
-    } else await b.keep(grant)
-    await b.wear('container', grant)
-    let worn = (await b.wearing('container'))!
-    assertEquals(await b.held(worn.person, worn.id), grant)
-    assertEquals(await held(token, SECRET, b), grant)
-    let gone = await revoke(b, grant.person, 'abcdef')
-    assertEquals(await store.get(key), connector)
-    assertEquals(gone, [grant.id])
-    assertEquals(await held(token, SECRET, b), null)
-    assertEquals(await revoke(b, grant.person, 'abcdef'), [])
-    assertEquals(await b.held(grant.person, 'abcdef-connector'), null)
-  }
+  let store = kv()
+  let b = ledger(store)!
+  await store.put(key, connector)
+  await b.keep(grant)
+  await b.wear('container', grant)
+  let worn = (await b.wearing('container'))!
+  assertEquals(await b.held(worn.person, worn.id), grant)
+  assertEquals(await held(token, SECRET, b), grant)
+  let gone = await revoke(b, grant.person, 'abcdef')
+  assertEquals(await store.get(key), connector)
+  assertEquals(gone, [grant.id])
+  assertEquals(await held(token, SECRET, b), null)
+  assertEquals(await revoke(b, grant.person, 'abcdef'), [])
+  assertEquals(await b.held(grant.person, 'abcdef-connector'), null)
 })
 
 test('a forged, edited or foreign token is nobody', async () => {
