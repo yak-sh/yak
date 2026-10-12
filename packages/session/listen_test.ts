@@ -134,6 +134,19 @@ for (
     wrote('stopped', 'p'),
   ].flat()
 ) await desk.apply([bundle])
+// Letters no session wrote: an alert that arrived at the project, the owner's
+// answer to it, his answer to a letter another graph sent (this one never kept
+// it), and an answer going out, which is nobody's to hear.
+let re = { from: 'owner@example.com', target: 'p' }
+await desk.apply([
+  {
+    entity: { eid: 'alert' },
+    mail: { from: 'alerts@example.com', target: 'p' },
+  },
+  { entity: { eid: 're-alert' }, mail: { ...re, reply_to: 'alert' } },
+  { entity: { eid: 'stray' }, mail: { ...re, in_reply_to: 'b1@tracker' } },
+  { entity: { eid: 'out' }, mail: { ...re, in_reply_to: 'b2' }, deliver: {} },
+])
 
 let hears = async (session: string) =>
   (await pending(desk, session)).map(({ item }) => item.entity.eid).sort()
@@ -151,8 +164,14 @@ for (
     ],
     [
       'next',
-      ['reply-ended-1', 'reply-ended-2', 'reply-stopped-1'],
-      'once a letter’s writer is over, a session of the project its reply reached hears it, or of a project above it',
+      [
+        're-alert',
+        'reply-ended-1',
+        'reply-ended-2',
+        'reply-stopped-1',
+        'stray',
+      ],
+      'once a letter’s writer is over, or when no session wrote it, a session of the project its reply reached hears it, or of a project above it',
     ],
     [
       'nearby',

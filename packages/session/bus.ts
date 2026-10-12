@@ -6,7 +6,7 @@ import type { Bundle, Comp, Eid, Graph } from '@yaks/graph'
 import { derivedEid } from '@yaks/graph/identity'
 import { who } from '@yaks/graph/call'
 import { absent, and, type Clause, every, present } from '@yaks/query'
-import { deliver, heirs, over, pending } from './listen.ts'
+import { answers, deliver, heirs, over, pending } from './listen.ts'
 
 let comp = (b: Bundle, name: string): Comp => (b[name] ?? {}) as Comp
 
@@ -33,12 +33,16 @@ let candidates = async (g: Graph): Promise<Eid[]> => {
       : [],
   ]
   // A reply is for the session that wrote the letter it answers, and once
-  // that session is over, for a session of the project it reached.
-  let replies = g.vocab.comp('mail')
-    ? await g.read(
-      unsaid(present('mail'), present('mail.reply_to.created.via.session')),
-    )
-    : []
+  // that session is over, or when no session wrote it, for a session of the
+  // project it reached.
+  let [replies, reached] = g.vocab.comp('mail')
+    ? await Promise.all([
+      g.read(
+        unsaid(present('mail'), present('mail.reply_to.created.via.session')),
+      ),
+      g.read(and(...answers().clauses, every())),
+    ])
+    : [[], []]
   let items = (await Promise.all(queries.map((q) => g.read(q)))).flat()
   let answered = await g.get(
     replies.map((b) => String(comp(b, 'mail').reply_to)),
@@ -63,7 +67,7 @@ let candidates = async (g: Graph): Promise<Eid[]> => {
           ? [String(comp(b, 'claim').session)]
           : [],
       ]),
-      ...await heirs(g, replies),
+      ...await heirs(g, [...replies, ...reached]),
     ]),
   ]
 }

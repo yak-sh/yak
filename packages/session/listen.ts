@@ -17,11 +17,16 @@
 // sub-project's work is done under its parent's persona (@yaks/project). A
 // session wearing no persona has no project and hears only its own replies.
 //
+// A reply to a letter no session wrote is the project's from the start: an
+// answer to a tracker's letter or a platform alert (another graph sent it, so
+// this one never kept it), or to a letter that arrived here. Nobody else could
+// ever hear it.
+//
 // Nothing starts a session when none comes: a held reply waits for one. That
 // is where a managed spawn will plug in, once T-95308 lifts the ban on
 // starting sessions (C-121250) and the owner picks its provider, model and
-// spend: an owing (D-121352) on the rows {@link held} reads, a reply whose
-// writer is over and that nobody has heard, starting @yaks/spawn's run in the
+// spend: an owing (D-121352) on the rows {@link held} reads, a reply nobody
+// else can hear and that nobody has heard, starting @yaks/spawn's run in the
 // project's checkout with the thread as its brief and the project's common
 // persona as its own. The session it starts is then a session of the project,
 // and hears the reply through this same rule.
@@ -49,6 +54,7 @@ import {
   fields,
   type Input,
   list,
+  or,
   present,
   walk,
 } from '@yaks/query'
@@ -166,38 +172,48 @@ export let heirs = async (
   )).map((b) => b.entity.eid)
 }
 
-/** The replies held for these projects, unsaid: each answers a letter a
- * session other than `session` wrote, and that session is over. */
+/** The replies that reached these projects (any, left out), unsaid: arrivals
+ * (no `deliver`) answering a letter, whether or not this graph kept it. */
+export let answers = (projects?: Eid[]): And =>
+  and(
+    present('mail'),
+    absent('deliver'),
+    projects ? eq('mail.target', value(projects)) : present('mail.target'),
+    or(present('mail.reply_to'), present('mail.in_reply_to')),
+    absent(NOTIFIED),
+  )
+
+/** The replies held for these projects, unsaid: each answers a letter no
+ * session wrote, or one a session other than `session` wrote and is over. */
 export let held = async (
   graph: Pick<Graph, 'vocab' | 'read' | 'get'>,
   session: Eid,
   projects: Eid[],
 ): Promise<Bundle[]> => {
   if (!projects.length || !graph.vocab.comp('mail')) return []
-  let replies = await graph.read(and(
-    present('mail'),
-    eq('mail.target', value(projects)),
-    present('mail.reply_to.created.via.session'),
-    absent(NOTIFIED),
-    every(),
-  ))
+  let replies = await graph.read(and(...answers(projects).clauses, every()))
   if (!replies.length) return []
   let to = (b: Bundle) => str(comp(b, 'mail').reply_to)
+  let letters = [...new Set(replies.map(to).filter(Boolean))]
   let writer = new Map(
-    (await graph.get([...new Set(replies.map(to))], ['created']))
+    (letters.length ? await graph.get(letters, ['created']) : [])
       .map((b) => [b.entity.eid, str(comp(b, 'created').via)]),
   )
-  let others = [...new Set(writer.values())].filter((w) => w && w != session)
-  let gone = new Set<Eid>()
-  let sessions = others.length
-    ? await graph.read(
-      and(eq('entity.eid', value(others)), fields('session.ended')),
-    )
+  let vias = [...new Set(writer.values())].filter(Boolean)
+  let sessions = vias.length
+    ? await graph.read(and(
+      eq('entity.eid', value(vias)),
+      present(SESSION),
+      fields('session.ended'),
+    ))
     : []
+  let gone = new Set<Eid>()
   for (let s of sessions) {
-    if (await over(graph, s)) gone.add(s.entity.eid)
+    if (s.entity.eid != session && await over(graph, s)) gone.add(s.entity.eid)
   }
-  return replies.filter((b) => gone.has(writer.get(to(b)) ?? ''))
+  let wrote = new Set(sessions.map((s) => s.entity.eid))
+  let by = (b: Bundle) => writer.get(to(b)) ?? ''
+  return replies.filter((b) => !wrote.has(by(b)) || gone.has(by(b)))
 }
 
 /** Who wrote an item: the run it came through, else the identity. */
