@@ -7,11 +7,7 @@
 // Wire object (stream.ts), which holds a person's open agent stream, and the
 // Builder (build.ts), which holds a space's build conversation.
 import { waitUntil, WorkerEntrypoint } from 'cloudflare:workers'
-import {
-  BackupExpiredError,
-  BackupNotFoundError,
-  Sandbox as Workbench,
-} from '@cloudflare/sandbox'
+import { Sandbox as Workbench } from '@cloudflare/sandbox'
 import type { Caller } from '@yaks/egress'
 import { Builder as Built } from './build.ts'
 import { Store as Stored } from './graph.ts'
@@ -21,10 +17,7 @@ import * as filePart from './files.ts'
 import { builds } from './builds.ts'
 import type { Env, Inbound } from './env.ts'
 import { handler, type Lent } from './kernel.ts'
-import { egress, TIMEOUT } from './sandbox.ts'
-import { afterCompiles, copies } from './sandbox-copies.ts'
-import type { WorkspaceCopy } from '@yaks/machine/cloudflare'
-import { r2RawObjects } from './lib/objects.ts'
+import { egress } from './sandbox.ts'
 import { outbound } from './outbound.ts'
 import * as sitePart from './site.ts'
 import { hosting } from './inference.ts'
@@ -59,66 +52,9 @@ export { ContainerProxy } from '@cloudflare/sandbox'
 export class Sandbox extends Workbench<Env> {
   override enableInternet = false
   override interceptHttps = true
-  #copies: ReturnType<typeof copies>
   constructor(...made: ConstructorParameters<typeof Workbench<Env>>) {
-    // The SDK's binding mode streams backups through R2, without handing a
-    // storage credential to the container or buffering the workspace here.
-    super(made[0], { ...made[1], BACKUP_BUCKET: made[1].BLOBS } as Env)
+    super(...made)
     this.allowedHosts = egress(made[1])
-    this.#copies = copies(
-      made[0].storage,
-      async () => {
-        // Snapshot an in-use source without reaching into the SDK's private
-        // session bookkeeping. Idle shutdown has already ended its runtime;
-        // a new space's coordinator never starts an empty source container.
-        if (!made[0].container?.running) {
-          return { processes: [] }
-        }
-        let processes = await this.listProcesses()
-        let snapshot = await afterCompiles(
-          processes,
-          TIMEOUT,
-          () => this.createBackup({ dir: '/workspace', localBucket: true }),
-        )
-        return { snapshot, processes: processes.map((p) => p.id) }
-      },
-      async (name, snapshot) => {
-        let ns = made[1].SANDBOX!
-        return await ns.get(ns.idFromName(name)).restoreWorkspace!(snapshot)
-      },
-      async ({ id }) => {
-        let bucket = r2RawObjects(made[1].BLOBS)
-        await bucket.delete(`backups/${id}/data.sqsh`)
-        await bucket.delete(`backups/${id}/meta.json`)
-      },
-    )
-  }
-  fork(name: string) {
-    return this.#copies.fork(name)
-  }
-  retire() {
-    return this.#copies.retire()
-  }
-  async restoreWorkspace(snapshot: WorkspaceCopy) {
-    // This is a new, clean box: switching its transport cannot interrupt an
-    // old compile. RPC streams the archive rather than buffering it in JS.
-    await this.setTransport('rpc')
-    try {
-      await this.restoreBackup(snapshot)
-      return true
-    } catch (e) {
-      if (e instanceof BackupExpiredError || e instanceof BackupNotFoundError) {
-        return false
-      }
-      throw e
-    }
-  }
-  override async destroy() {
-    await this.#copies.retire()
-    await this.#copies.discard()
-    let result = await super.destroy()
-    await this.#copies.clear()
-    return result
   }
 }
 

@@ -680,12 +680,12 @@ PyPI, npm, the Go module proxy, Ubuntu's archive, and yaks.app itself. Any other
 address is refused, so a build fetches what it needs from a registry, not from a
 URL.
 
-**One sandbox at a time.** Your sandbox is private to you in each space, and one
-person holds one awake at a time on the free plan, two on the Plus plan. A
-sandbox sleeps five minutes after its last command, and the next space's wakes
-then. The month's build time — the sandbox's, and compiling TypeScript and npm
-packages at `app_deploy` — is 1 hour on the free plan, shared by the free spaces
-you own, and 10 hours for each space on the Plus plan.
+**One sandbox at a time.** Each space has its own, and one person holds one
+awake at a time on the free plan, two on the Plus plan. A sandbox sleeps five
+minutes after its last command, and the next space's wakes then. The month's
+build time — the sandbox's, and compiling TypeScript and npm packages at
+`app_deploy` — is 1 hour on the free plan, shared by the free spaces you own,
+and 10 hours for each space on the Plus plan.
 
 That container is **signed in as you**. Two variables are set in every command's
 environment, and the `yak` CLI is installed:
