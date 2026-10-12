@@ -168,6 +168,10 @@ let bandOf = (v: unknown): number | undefined => {
 let valueOf = (b: Bundle | undefined, comp: string, prop: string): unknown =>
   (b?.[comp] as Comp | undefined)?.[prop]
 
+// A vocabulary never changes: resolve its status-bearing components once,
+// rather than inspect every component of every row each time it is gathered.
+let ladders = new WeakMap<Vocab, string[]>()
+
 /**
  * A store over a Map of bundles, bound to a vocabulary once. It is the storage
  * a client graph and a fast test run on:
@@ -388,13 +392,21 @@ export let ram = (vocab: Vocab, base: RamOpts = {}): Store => {
 
   // Reads carry the computed values a server would send, without storing
   // them. Compute against the whole index before cutting requested components.
+  let statuses = ladders.get(vocab)
+  if (!statuses) {
+    ladders.set(
+      vocab,
+      statuses = vocab.all.filter((name) => vocab.comp(name)?.ladder),
+    )
+  }
   let derived = Object.entries(base.computed ?? {}).map(([path, read]) =>
     [...path.split('.'), read] as [string, string, Computed[string]]
   )
   let computed = (b: Bundle, among: Index): Bundle => {
     let out = b
-    for (let [name, value] of comps(b)) {
-      if (!value || !vocab.comp(name)?.ladder) continue
+    for (let name of statuses) {
+      let value = b[name] as Comp | undefined
+      if (!value) continue
       out = { ...out, [name]: { ...value, status: statusOf(vocab, name, b) } }
     }
     for (let [name, prop, read] of derived) {
@@ -467,7 +479,9 @@ export let ram = (vocab: Vocab, base: RamOpts = {}): Store => {
       eids: opts.eids,
       computed: base.computed,
     })(among)
-    let gathered = found.map((b) => computed(b, among))
+    let gathered = statuses.length || derived.length
+      ? found.map((b) => computed(b, among))
+      : found
     return comps ? gathered.map(only(new Set(comps))) : gathered
   }
 
