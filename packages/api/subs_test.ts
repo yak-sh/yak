@@ -502,10 +502,7 @@ test('windowed property filters skip births without their components', () => {
   assertEquals([reads, e.take()], [[], []])
 
   g.apply([{ entity: { eid: 'r1' }, review: { stars: 3 } }])
-  assertEquals(reads, [
-    review + '&.entity.eid=r1',
-    bare + '&.entity.eid=r1',
-  ])
+  assertEquals(reads, [])
   assertEquals(e.take().map((f) => [f.id, ids(f)]), [
     ['reviews', ['r1']],
     ['bare', ['r1']],
@@ -513,12 +510,12 @@ test('windowed property filters skip births without their components', () => {
 
   reads = []
   g.apply([{ entity: { eid: 'b1' }, book: { price: 9 } }])
-  assertEquals(reads, [book + '&.entity.eid=b1'])
+  assertEquals(reads, [])
   assertEquals(e.take().map((f) => [f.id, ids(f)]), [['books', ['b1']]])
 
   reads = []
   g.apply([{ entity: { eid: 'b1' }, book: null }])
-  assertEquals(reads, [book + '&.entity.eid=b1'])
+  assertEquals(reads, [])
   assertEquals(e.take().map((f) => [f.id, f.gone]), [['books', ['b1']]])
 })
 
@@ -551,7 +548,7 @@ test('a created edit on a member refreshes its window', () => {
   g.apply([{ entity: { eid: 'r1' }, doc: { title: 'Edited' } }], {
     now: '2026-01-02T00:00:00.000Z',
   })
-  assertEquals(reads, [query + '&.entity.eid=r1'])
+  assertEquals(reads, [])
   let [frame] = e.take()
   assertEquals(ids(frame), ['r1'])
   assertEquals(
@@ -614,6 +611,10 @@ test('a derived value that needs its component skips births without it', () => {
 
 test('commits made while a pass reads are one pass after it', async () => {
   let g = shop()
+  g.apply([
+    { entity: { eid: 'old1' }, book: { price: 99 } },
+    { entity: { eid: 'old2' }, book: { price: 100 } },
+  ])
   let gate: Promise<void> | undefined
   let reads: string[] = []
   let spy: Graph = {
@@ -1334,7 +1335,7 @@ test('local ordered windows query members and births, refill from unseen rows af
   assertEquals(reads, [window])
 })
 
-test('underfilled local windows send only edited members until their capacity fills', () => {
+test('underfilled local windows use commit facts and send only edited members', () => {
   let g = shop()
   g.apply(
     Array.from(
@@ -1360,10 +1361,11 @@ test('underfilled local windows send only edited members until their capacity fi
   e.take()
   seen = []
   g.apply([{ entity: { eid: 'new-under' }, book: { price: 3 } }])
-  assertEquals(seen, [['new-under']])
+  assertEquals(seen, [])
   assertEquals(e.take().map(ids), [['new-under']])
   g.apply([{ entity: { eid: 'underC' }, book: { price: 20 } }])
   assertEquals(e.take().map(ids), [['underC']])
   g.apply([{ entity: { eid: 'underC' }, book: null }])
   assertEquals(e.take().map((f) => f.gone), [['underC']])
+  assertEquals(seen, [])
 })

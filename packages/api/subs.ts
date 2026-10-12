@@ -1471,19 +1471,22 @@ export let subscriptions = (graph: Graph, opts: {
                       if (
                         s.members.size < limit.n &&
                         [...s.members].filter((id) => !local.has(id)).length +
-                              local.size <= limit.n &&
-                        [...local].every((id) => /^[a-zA-Z0-9_-]+$/.test(id))
+                              local.size <= limit.n
                       ) {
-                        let query = s.query + '&.entity.eid=' +
-                          [...local].join(',')
-                        return after(load(s, query), (answer) => {
-                          let unaffected = [...s.members].filter((id) =>
-                            !local.has(id)
-                          ).length
-                          return unaffected + answer.found.length <= limit.n
-                            ? push(s, local, () => answer)
-                            : push(s, undefined, load)
-                        })
+                        // The window has room for every affected row. Its
+                        // authoritative commit facts already contain what the
+                        // local query needs; apply the caller's policies before
+                        // deciding membership, just as routed watches do.
+                        return after(
+                          graph.answer(
+                            now.filter((b) => local.has(b.entity.eid)),
+                            { ...s.opts, native: true },
+                          ),
+                          (rows) => push(s, local, () => answered(
+                            matcher(queryOf(s), graph.vocab, s.opts)(rows)
+                              .map(s.cut),
+                          )),
+                        )
                       }
                       let candidates = [...new Set([...s.members, ...local])]
                       if (

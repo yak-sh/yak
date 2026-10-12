@@ -66,6 +66,34 @@ let fixture = (only?: string, references = false) => {
   return { g, subs, ear, reads: () => reads }
 }
 let reused = fixture()
+let windowed = (() => {
+  let { g, subs, ear, reads } = fixture(), alice = ear(), bob = ear()
+  let query = '.book&?preference&.order=book.price&.limit=10'
+  subs.open(alice.sink, 'window', query, { person: 'alice' })
+  subs.open(bob.sink, 'window', query, { person: 'bob' })
+  alice.take()
+  bob.take()
+  return { g, reads, alice, bob }
+})()
+test('underfilled windows filter commit facts for each caller before delivering', () => {
+  let { g, reads, alice, bob } = windowed
+  let before = reads()
+  g.apply([{
+    entity: { eid: 'bob' },
+    book: { price: 4 },
+    preference: { color: 'changed' },
+  }], { trusted: true })
+  equal(reads(), before)
+  equal(alice.take()[0].bundles, [{
+    entity: { eid: 'bob' },
+    book: { price: 4 },
+  }])
+  equal(bob.take()[0].bundles, [{
+    entity: { eid: 'bob' },
+    book: { price: 4 },
+    preference: { color: 'changed' },
+  }])
+})
 test('a person reopens a retained query without reading its unchanged rows', () => {
   let { subs, ear, reads } = reused, first = ear(), next = ear()
   subs.open(first.sink, 'books', '.book&*', { person: 'bob' })
