@@ -9,8 +9,8 @@ import { edgeDoc, edgeKeywords } from '@yaks/edge/vocab'
 import { loadVocab } from '@yaks/vocab'
 import { show } from '../cli/answer.ts'
 import { connectionsDoc } from './vocab.ts'
-import { integrationEid } from './integrations.ts'
-import { views } from './views.ts'
+import { integrationEid } from '@yaks/connections/identity'
+import { views } from '@yaks/connections/views'
 
 let vocab = loadVocab([connectionsDoc, secretsDoc, docDoc, edgeDoc], [
   edgeKeywords,
@@ -23,6 +23,8 @@ let registry = define([
 ])
 
 test('a connection draws its integration, account, status and using apps', async () => {
+  let openai = '88a02620-b31f-821a-82ee-3365eeb6ae5b'
+  equal(integrationEid('openai'), openai)
   let app = { entity: { eid: 'app' }, doc: { title: 'Trip planner' } }
   for (
     let [integration, account, status, used, expected] of [
@@ -50,7 +52,7 @@ test('a connection draws its integration, account, status and using apps', async
       doc: { title: 'Secret title', body: 'PRIVATE_BODY' },
     }
     let service = {
-      entity: { eid: integrationEid('openai') },
+      entity: { eid: openai },
       integration: { name: 'openai', title: 'OpenAI' },
     }
     let link = {

@@ -185,10 +185,11 @@ its vault, and the redirect):
 `@yaks/connections/vocab` declares the components and the tools
 `connection_need` and `connection_list`; `@yaks/connections/tools` implements
 the tools; `@yaks/connections/effects` installs the built integrations when the
-process starts. A host that composes this package also composes @yaks/secrets
-over its vault, the plugin and its effect, which seals each credential once the
-write commits and drops it when the connection is deleted, and @yaks/edge, which
-derives each `uses` link's id.
+process starts. `@yaks/connections/identity` derives an integration's id from
+its name for views and other readers. A host that composes this package also
+composes @yaks/secrets over its vault, the plugin and its effect, which seals
+each credential once the write commits and drops it when the connection is
+deleted, and @yaks/edge, which derives each `uses` link's id.
 
 ## Terminal sign-in
 

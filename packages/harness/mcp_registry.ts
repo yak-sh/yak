@@ -6,12 +6,8 @@ import { checkNamespaces, checkToolNames, type Server } from '@yaks/mcp-client'
 import type { Remote } from './mcp_auth.ts'
 import { graphToolName, serverOf } from '@yaks/mcp-client/servers'
 import { discover } from '@yaks/mcp-client/oauth'
-import {
-  INTEGRATION,
-  integrationEid,
-  registered,
-  registration,
-} from '@yaks/connections'
+import { registered, registration } from '@yaks/connections'
+import { INTEGRATION, integrationEid } from '@yaks/connections/identity'
 import {
   authorizedMCP,
   type MCPAuthAction,

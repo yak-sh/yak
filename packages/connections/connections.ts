@@ -61,13 +61,12 @@ import {
 } from '@yaks/secrets'
 import {
   connectable,
-  INTEGRATION,
   type Integration,
-  integrationEid,
   keyed,
   known,
   type Read,
 } from './integrations.ts'
+import { INTEGRATION, integrationEid } from './identity.ts'
 import { clientOf } from './clients.ts'
 
 export let CONNECTION = 'connection'

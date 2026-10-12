@@ -15,14 +15,12 @@
 // writes over a built integration, or changes where its tokens are sent.
 
 import { after, cmp } from '@yaks/fp'
-import { type Bundle, type Eid, type Query } from '@yaks/graph'
-import { identityEid } from '@yaks/graph/identity'
+import type { Bundle, Query } from '@yaks/graph'
 import type { Scheme } from '@yaks/hook'
+import { INTEGRATION, integrationEid } from './identity.ts'
 import googleCalendar from './google-calendar.json' with { type: 'json' }
 import openrouter from './openrouter.json' with { type: 'json' }
 import openai from './openai.json' with { type: 'json' }
-
-export let INTEGRATION = 'integration'
 
 /** An outside service, as data. */
 export type Integration = {
@@ -91,11 +89,6 @@ export let keyed = (i: Integration): boolean => !i.token
  * it names, once that client is kept (./clients.ts). */
 export let connectable = (i: Integration, client?: unknown): boolean =>
   keyed(i) || i.answers == 'key' || !!i.client_id || !!client
-
-/** An integration's entity: derived from its name, so one name is one
- * integration. */
-export let integrationEid = (name: string): Eid =>
-  identityEid(INTEGRATION, [name])
 
 /** An integration by name, as the graph holds it. */
 export let known = async (

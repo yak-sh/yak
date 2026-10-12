@@ -3,7 +3,7 @@
 import { parse } from '@yaks/query/core'
 import { define, type H, type Registry, type RenderContext } from '@yaks/render'
 import type { Shown } from '@yaks/render/views'
-import { integrationEid } from './integrations.ts'
+import { integrationEid } from './identity.ts'
 import type { Bundle } from '@yaks/render'
 
 type Connection = { integration: string; account?: string; status: string }

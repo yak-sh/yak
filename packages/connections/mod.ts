@@ -47,13 +47,12 @@ export {
   connectable,
   install,
   installed,
-  INTEGRATION,
   type Integration,
-  integrationEid,
   keyed,
   known,
   type Read,
 } from './integrations.ts'
+export { INTEGRATION, integrationEid } from './identity.ts'
 export {
   clientOf,
   type Registered,
