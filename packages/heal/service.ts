@@ -2,7 +2,13 @@
 // each pass reads the present answer again, so neither a failed box write nor
 // a failed tracker mark loses work.
 
-import { type Client, client, type ClientOpts, type Watch } from '@yaks/client'
+import {
+  type Client,
+  client,
+  type ClientOpts,
+  type Watch,
+  WriteRefused,
+} from '@yaks/client'
 import { sleep } from '@yaks/effects'
 import type { Graph } from '@yaks/graph'
 import type { Host } from '@yaks/host'
@@ -123,8 +129,14 @@ export let service = async (
           report: (error) => void report(error),
         })
         : track(url, {
+          // A refused mark is the tracker refusing heal's own write: an
+          // Error that names the refusal, never its bare body.
           report: (trouble) => {
-            void report(trouble.error ?? trouble.refused)
+            void report(
+              trouble.refused
+                ? new WriteRefused(trouble.sent, trouble.refused)
+                : trouble.error,
+            )
           },
         }))
   try {
