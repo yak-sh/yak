@@ -171,7 +171,10 @@ export type Worked =
  * when nothing is. A window that throws leaves its work as it was, marked to
  * be tried again in an hour, and says why.
  */
-export let work = (driver: Driver, now = Date.now()): Worked | undefined => {
+export let work = (
+  driver: Driver,
+  now: number = Date.now(),
+): Worked | undefined => {
   let due = owed(driver).find((w) => !w.next || Date.parse(w.next) <= now)
   if (!due) return
   try {
