@@ -740,7 +740,7 @@ export let SAMPLE = 400
  * File drivers sample through optimize. Full-analysis engines provide their
  * stored bytes without scanning rows; installation carries the last successful
  * size in its durable schema receipt. An unchanged store below tenfold byte
- * growth executes no statistics SQL, including after a connection restart.
+ * growth bills no rows for statistics, including after a connection restart.
  * Missing statistics on a populated table or index also trigger analysis.
  * Existing complete statistics are adopted once by installations predating
  * receipts; empty tables are remembered and checked with zero-billed counts.

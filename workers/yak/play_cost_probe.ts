@@ -1,5 +1,6 @@
 import { coldMessages } from './cold_message_fixture.ts'
 import { statisticsCost } from './statistics_cost_fixture.ts'
+import { statisticsCases } from './statistics_cases_fixture.ts'
 import { directoryLifecycleCost } from './directory_cost_fixture.ts'
 import { gitPushCost } from './git_cost_fixture.ts'
 import type { Env } from './env.ts'
@@ -45,6 +46,9 @@ export class PlayCost {
     }
   }
   async measure(req: Request): Promise<Response> {
+    if (new URL(req.url).searchParams.has('statisticsCases')) {
+      return Response.json(await statisticsCases(this.ctx.storage))
+    }
     if (new URL(req.url).searchParams.has('statistics')) {
       return Response.json(await statisticsCost(this.ctx.storage))
     }
