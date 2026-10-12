@@ -338,6 +338,27 @@ test('a command failure is captured once across worker and caller', () =>
     })
   }))
 
+test('an app failure names the signed-in person who saw it, and nobody else', () =>
+  tracked(async () => {
+    let env = envOf(mirror(503).get)
+    let token = await sign({
+      person: 'p1',
+      space: space.eid,
+      exp: Math.floor(Date.now() / 1000) + 600,
+      via: crypto.randomUUID(),
+    }, SECRET)
+    let seenBy = async (req: Request) => {
+      wrote = []
+      await workerBreak(env, space, app, req, new Error('worker fell over'))
+      return (wrote[0].error as { tags: Record<string, unknown> }).tags.user_id
+    }
+    assertEquals(
+      await seenBy(visit('/hello', { cookie: `${COOKIE}=${token}` })),
+      'p1',
+    )
+    assertEquals(await seenBy(visit()), undefined)
+  }))
+
 test('an app sets cookies for its own host, and none for the zone', async () => {
   // Login fixation (T-37876): an app that sets the platform's session, or any
   // cookie scoped past its own hostname, signs visitors elsewhere in as

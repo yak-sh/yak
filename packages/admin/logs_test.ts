@@ -19,6 +19,7 @@ import {
   store as trackerStore,
   vocab as trackerVocab,
 } from '../../workers/tracker/core.ts'
+import { capture } from '@yaks/tracker/report'
 import { duration, errors, eventLine, faultsOf, records, tail } from './logs.ts'
 
 let event = (over: Record<string, unknown> = {}) => ({
@@ -170,6 +171,16 @@ await remote.graph.apply(
   })),
   { trusted: true },
 )
+// Occurrences name whom two bugs reached: two people, and test accounts only.
+let seen = (bug: string, tags: Record<string, string>) => {
+  let [row] = capture(Error('seen'), { sink: () => {}, tags })
+  return { ...row, error: { ...row.error as object, bug } }
+}
+await remote.graph.apply([
+  seen(ids[1], { user_id: 'p1', account: 'person', space: 'jill' }),
+  seen(ids[1], { user_id: 'p2', account: 'person', space: 'jill' }),
+  seen(ids[2], { user_id: 't1', account: 'test', space: 't1' }),
+], { trusted: true })
 let secret = 'test-only'
 let upstream = trackerDoor(remote, platform, secret)
 let config = { remote: { url: 'https://tracker.test', secret } }
@@ -201,7 +212,7 @@ test('errors defaults to every unresolved bug however old, newest first', () => 
   assertEquals(bugsIn(all), [ids[108], ...ids.slice(0, 106)])
   assertEquals(
     all.said[0],
-    'COUNT  FIRST SEEN  LAST SEEN  BUG  PLACE  MESSAGE',
+    'COUNT  FIRST SEEN  LAST SEEN  BUG  REACHED  PLACE  MESSAGE',
   )
   assertEquals(
     all.said[2].endsWith('TypeError: Invalid redirect value'),
@@ -210,6 +221,14 @@ test('errors defaults to every unresolved bug however old, newest first', () => 
   assertEquals(all.said[totalAt(all.said)], '5780 occurrences, 107 bugs')
   assertEquals(all.noted[0].includes('107 unresolved bugs'), true)
   assertEquals(all.noted[0].includes('lifetime'), true)
+})
+
+test('errors says whom each bug reached, a person apart from a probe', () => {
+  let cell = (eid: string) =>
+    all.said.find((line) => line.split('  ')[3] == eid)?.split('  ')[4]
+  assertEquals(cell(ids[1]), '2 people')
+  assertEquals(cell(ids[2]), 'test accounts only')
+  assertEquals(cell(ids[3]), 'no person recorded')
 })
 
 test('errors times the fixes resolved in its window and the longest open bug', () => {

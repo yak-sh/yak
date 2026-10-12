@@ -30,7 +30,7 @@ import {
 } from '@yaks/ui'
 import { Disclosure, disclosureAt, isOpen } from '@yaks/ux'
 import { comp, type Crumb, type Frame, str } from './model.ts'
-import { count, headline, place, sha, thrown } from './brief.ts'
+import { count, headline, place, sha, thrown, whom } from './brief.ts'
 import { spread, tags, type Tally } from './spread.ts'
 import { Histogram } from './Histogram.ts'
 import {
@@ -308,7 +308,9 @@ let BugPage = ({ e, io, got }: Props): JSX.Element => {
       facts: [
         [h(Dot, { mod: pip(e) }), ' ', standing(e)],
         count(hits, 'hit'),
-        bug.people != null ? count(Number(bug.people), 'actor') : null,
+        bug.people != null || bug.account != null
+          ? whom(Number(bug.people ?? 0), str(bug.account))
+          : null,
         bug.last ? ['last ', at(io, str(bug.last))] : null,
         bug.first ? ['since ', at(io, str(bug.first))] : null,
       ],

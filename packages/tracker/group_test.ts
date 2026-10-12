@@ -23,7 +23,7 @@ let occurrence = (
     at: `2026-10-02T00:00:${id.padStart(2, '0')}Z`,
     commit,
     during: { app: scope, kind: 'call' },
-    actor: { by },
+    tags: { user_id: by },
   })[0]
 let put = async (g: ReturnType<typeof fixture>, row: Bundle) => {
   await g.apply([row], { trusted: true })

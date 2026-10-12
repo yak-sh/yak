@@ -20,7 +20,7 @@ import {
   stamp,
 } from './directory.ts'
 import { bound, type Env } from './env.ts'
-import { vouched, type Who } from './session.ts'
+import { sessionAt, vouched, type Who } from './session.ts'
 import { KERNEL, meta, metaOf } from './meta.ts'
 import { told } from './stream.ts'
 import { level, standing } from './meter.ts'
@@ -132,6 +132,19 @@ let ownedBy = async (env: Env, space: Space): Promise<string | undefined> => {
   }
 }
 
+// Who was looking when an app broke: the person a signed-in session for this
+// space names, read from the cookie alone. A visitor who is not signed in, or
+// a request with no browser behind it, names nobody.
+let viewing = async (env: Env, space: Space, request?: Request) => {
+  if (!request) return undefined
+  try {
+    return (await sessionAt(request, env.SESSION_SECRET, space.eid))?.person
+  } catch (why) {
+    caught(why, { request: 'read who saw a break' })
+    return undefined
+  }
+}
+
 // App failures are immutable tracker occurrences. The queue chooses the
 // independent space store by global eid; a failing app store cannot swallow its
 // own report. Existing app-store rows remain readable by their published ids.
@@ -175,6 +188,7 @@ export let noted = async (
       at.request,
     )
     let account = await ownedBy(at.env, at.space)
+    let viewer = await viewing(at.env, at.space, at.request)
     await queue(at.env.ERRORS)(capture(error, {
       ...place,
       commit: undefined,
@@ -193,6 +207,7 @@ export let noted = async (
         request: broke.request,
         request_id: broke.requestId,
         ...account ? { account } : {},
+        ...viewer ? { user_id: viewer } : {},
       },
     }))
   }

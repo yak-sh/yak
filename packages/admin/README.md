@@ -32,9 +32,10 @@ reads through the signed tracker door configured by `@yaks/tracker` in
 remote URL and vault reference come from that config. It lists every unresolved
 bug (not resolved or archived), however old, newest first. There is no time
 window by default; `--since` optionally narrows by last seen. The header counts
-the matching bugs; counts and first seen cover each bug's lifetime. The last
-lines time the fixes: the median and worst time to fix (first seen, or its
-regression, to resolved) of the bugs resolved in the window, a week without
+the matching bugs; counts and first seen cover each bug's lifetime. Each row
+says whom the bug reached: people, test accounts only, or no person recorded.
+The last lines time the fixes: the median and worst time to fix (first seen, or
+its regression, to resolved) of the bugs resolved in the window, a week without
 `--since`, and how long the oldest open bug has been open. Then people's letters
 in the same window: each letter a person wrote to the platform's addresses
 (bot.yak.sh, yaks.app), how many have a reply in their thread with the median

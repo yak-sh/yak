@@ -87,3 +87,20 @@ export let moment = (at: string): string =>
 /** A count and its noun, plural past one. */
 export let count = (n: number, noun: string): string =>
   `${n.toLocaleString('en-US')} ${noun}${n == 1 ? '' : 's'}`
+
+/// whom(2, 'person') -> '2 people'
+/// whom(1, 'person') -> '1 person'
+/// whom(0, 'person') -> "a person's space, no signed-in person recorded"
+/// whom(3, 'test') -> 'test accounts only'
+/// whom(0, null) -> 'no person recorded'
+/** Whom a bug reached, from the people its occurrences name and the kind of
+ * account they reached (`bug.people`, `bug.account`): a person's failure
+ * reads apart from a probe's at a glance. */
+export let whom = (people: number, account: string | null | undefined) =>
+  account == 'test'
+    ? 'test accounts only'
+    : people
+    ? people == 1 ? '1 person' : `${people.toLocaleString('en-US')} people`
+    : account == 'person'
+    ? "a person's space, no signed-in person recorded"
+    : 'no person recorded'

@@ -5,6 +5,7 @@ import type { Bundle, Comp, Graph } from '@yaks/graph'
 import { human } from '@yaks/id'
 import { answers, arrived, automated, sender } from '@yaks/mail/answers'
 import { CallError } from '@yaks/tools/errors'
+import { whom } from '@yaks/tracker/brief'
 import { fixes, opened, span, spread } from '@yaks/tracker/fixtime'
 import { type Options, routes } from '@yaks/tracker/routes'
 import { WRANGLER } from '../../workers/yak/wrangler.ts'
@@ -327,7 +328,7 @@ export let errors = async (
   note(
     `Tracker: ${rows.length} unresolved bugs from yaks.app and the box (not resolved or archived)${seen}, newest first; counts and first seen cover each bug's lifetime`,
   )
-  out('COUNT  FIRST SEEN  LAST SEEN  BUG  PLACE  MESSAGE')
+  out('COUNT  FIRST SEEN  LAST SEEN  BUG  REACHED  PLACE  MESSAGE')
   for (let row of rows) {
     let bug = object(row.bug)
     out(
@@ -336,6 +337,10 @@ export let errors = async (
         iso(time(bug.first)),
         iso(time(bug.last)),
         row.entity.eid,
+        whom(
+          Number(bug.people ?? 0),
+          typeof bug.account == 'string' ? bug.account : null,
+        ),
         bug.spot || '-',
         text(object(row.doc).title),
       ].map(line).join('  '),

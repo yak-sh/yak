@@ -50,7 +50,16 @@
         },
         "people": {
           "type": "number",
-          "description": "Distinct actors among retained occurrences.",
+          "description": "Distinct people its retained occurrences reached, by their user_id tag.",
+          "computed": true
+        },
+        "account": {
+          "type": "string",
+          "enum": [
+            "person",
+            "test"
+          ],
+          "description": "person when any retained occurrence reached a person or a person's space, test when every one it names is a test account; absent when none names one.",
           "computed": true
         }
       },

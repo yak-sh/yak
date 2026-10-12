@@ -6,7 +6,7 @@
 
 import type { Bundle } from '@yaks/graph'
 import { comp, type Crumb, type Frame, str } from './model.ts'
-import { count, headline, sha } from './brief.ts'
+import { count, headline, sha, whom } from './brief.ts'
 import { frameAt, said, where } from './reading.ts'
 import { tags, tally } from './spread.ts'
 
@@ -102,6 +102,7 @@ export let tested = (errors: Bundle[]): boolean => {
 
 /// reached([tagged({ user_id: 'a', account: 'person', space: 's' }), tagged({ user_id: 'b', account: 'test', space: 's' })]) -> '2 people, 1 of them a test account · 1 space'
 /// reached([tagged({ account: 'test', space: 't122930', app: 'drills' })]) -> 'test accounts only · 1 space · 1 app'
+/// reached([tagged({ account: 'person', space: 'jill', app: 'flavors' })]) -> "a person's space, no signed-in person recorded · 1 space · 1 app"
 /// reached([tagged({ source: 'box' })]) -> 'no person recorded'
 /** Whom it reached: the people its occurrences name, whether only test
  * accounts, and how many spaces and apps. */
@@ -111,15 +112,18 @@ export let reached = (errors: Bundle[]): string => {
     errors,
     (b) => tag(b, 'account') == 'test' ? tag(b, 'user_id') : '',
   )
+  let account = tested(errors)
+    ? 'test'
+    : errors.some((b) => tag(b, 'account') == 'person')
+    ? 'person'
+    : null
   let spaces = tally(errors, space).length
   let apps = tally(errors, app).length
   return [
-    tested(errors) && people.length < 2
-      ? 'test accounts only'
-      : people.length
-      ? (people.length == 1 ? '1 person' : `${people.length} people`) +
-        (tests.length ? `, ${tests.length} of them a test account` : '')
-      : 'no person recorded',
+    whom(people.length, account) +
+    (account != 'test' && tests.length
+      ? `, ${tests.length} of them a test account`
+      : ''),
     spaces ? count(spaces, 'space') : '',
     apps ? count(apps, 'app') : '',
   ].filter(Boolean).join(' · ')
