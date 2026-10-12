@@ -44,6 +44,7 @@ let UPLOAD = /^blobs\/[0-9a-f]{64}$/
 export let isFile = (key: string) => {
   let parts = key.split('/')
   return parts.length >= 3 &&
+    !parts[0].startsWith('.') &&
     !parts.some((p) => p == '' || p == '.' || p == '..') &&
     !UPLOAD.test(parts.slice(2).join('/'))
 }

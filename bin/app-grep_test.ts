@@ -11,6 +11,8 @@ test('isFile: an app file, never an upload or the platform bytes', () => {
   let cases: [string, boolean][] = [
     ['yourname/recipes/index.html', true],
     ['yourname/recipes/lib/app.js', true],
+    ['yourname/recipes/.well-known/settings.json', true],
+    [`.model-receipts/app-eid/${sha}`, false],
     ['yourname/recipes/blobs/notes.js', true],
     [`yourname/recipes/blobs/${sha}`, false],
     [`sha/${sha}`, false],

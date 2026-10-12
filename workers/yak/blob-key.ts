@@ -3,6 +3,7 @@
 export let blobPrefix = (space: { slug: string }, app: { slug: string }) =>
   `${space.slug}/${app.slug}/blobs/`
 
-/** Outside every served app prefix; an app eid survives space renames. */
+/** Internal root namespaces cannot be space names or mirrored app files.
+ * An app eid keeps the private receipt prefix stable across space renames. */
 export let receiptPrefix = (app: { eid: string }) =>
   `.model-receipts/${app.eid}/`
