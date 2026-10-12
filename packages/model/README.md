@@ -44,11 +44,11 @@ deno add jsr:@yaks/model
 
 ## Exports
 
-| Export              | Provides                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
-| ------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `@yaks/model`       | `Executor`, `Inference`, `InferenceHost`, `InferenceReceipt`, `FrozenModelRequest`, `infer`, `inferenceReply`, `frozenRequest`, `thawedRequest`; `Model`, `Request`, `Reply`, `Item`, `Tool`, `TextDelta`, `Question`, `Questions`, `Answer`, `Usage`, `Price`, `Mark`, `Answered`, `Listed`; `ModelError`; `models`, `modelDoc`, `addressed`, `requesting`, `confirmed`; `weigh`, `billed`; `MediaReceipt`, `MediaReceipts`, `mediaReceipts`, `receivedMedia`, `recoveredMedia`; component-name constants `PROVIDER`, `MODEL`, `TOOL`, `QUESTIONS`, `ANSWER`, `USAGE`, `PRICE`, `COST`, `RESPONSE` |
-| `@yaks/model/vocab` | `modelDoc`, `docs`, `description`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
-| `@yaks/model/graph` | `plugins()`, returning `[models()]`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| Export              | Provides                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `@yaks/model`       | `Executor`, `Inference`, `InferenceHost`, `InferenceReceipt`, `FrozenModelRequest`, `infer`, `inferenceReply`, `frozenRequest`, `thawedRequest`; `Model`, `Request`, `Reply`, `Item`, `Tool`, `TextDelta`, `Question`, `Questions`, `Answer`, `Usage`, `Price`, `Mark`, `Answered`, `Listed`; `ModelError`; `models`, `modelDoc`, `addressed`, `requesting`, `confirmed`; `weigh`, `billed`; `submitted`, `acknowledged`, `submitCall`; `MediaReceipt`, `MediaReceipts`, `MediaRecord`, `mediaReceipts`, `receivedMedia`, `recoveredMedia`; component-name constants `PROVIDER`, `MODEL`, `TOOL`, `QUESTIONS`, `ANSWER`, `USAGE`, `PRICE`, `COST`, `RESPONSE` |
+| `@yaks/model/vocab` | `modelDoc`, `docs`, `description`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| `@yaks/model/graph` | `plugins()`, returning `[models()]`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
 
 ## Items and delivery
 
@@ -195,10 +195,11 @@ equal(model.anchor!({}), undefined)
 ## Providers and models in a graph
 
 `modelDoc` declares `provider`, `model`, `serves`, `usage`, `price`, `cost`,
-`response`, `questions` and `answer`. `models()` supplies a graph
-[plugin](../graph/README.md#data-model) with that vocabulary, name addressing
-and the `requesting` normalization [hook](../graph/README.md#data-model).
-`@yaks/model/graph` exports the same plugin through `plugins()`.
+`response`, `questions`, `answer` and `submitted{at}`. `models()` supplies a
+graph [plugin](../graph/README.md#data-model) with that vocabulary, name
+addressing and the `requesting` normalization
+[hook](../graph/README.md#data-model). `@yaks/model/graph` exports the same
+plugin through `plugins()`.
 
 Provider and model names are each an
 [identity](../vocab/README.md#identity-and-indexes). `addressed` resolves those
@@ -391,29 +392,44 @@ equal(error.response?.headers, { 'retry-after': '1' })
 
 A **media receipt** (`MediaReceipt`) is private delivery metadata attributed to
 an original model request by `call`: its provider `id`, `model`, `input` and
-`response`, optional cost, and optional delivered reply. `MediaReceipts`
-provides `read(call)` and `save(receipt)`. Keep media receipts private; provider
-responses can include temporary URL credentials.
+`response`, optional cost, and optional delivered reply. `complete: false` marks
+an incomplete recording, retained privately and refused by delivery. Media
+receipts can also hold text responses. `MediaReceipts` provides `read(call)` and
+`save(receipt)`. Keep media receipts private; provider responses can include
+temporary URL credentials.
 
-`receivedMedia` saves a media receipt before calling `Request.onMedia`.
-`recoveredMedia` returns a saved reply, or calls `deliver` and saves its reply;
-it never generates media. A provider implements that delivery through
-`Model.recover(call)`.
+`provider` identifies the adapter that owns delivery; legacy Workers AI receipts
+have no provider field.
+
+`receivedMedia` saves a media receipt before awaiting `Request.onReceipt`, then
+calls `Request.onMedia` for a complete recording. `recoveredMedia` returns a
+saved reply, or calls `deliver` and saves its reply; it never generates media. A
+provider implements that delivery through `Model.recover(call)`.
 
 `mediaReceipts` adapts a private `read`/`update` interface. It refuses a second
 provider id for the same call and verifies the saved media receipt. Its `update`
 callback must receive the stored mutable data and durably save it.
 
+Its optional second argument is a private `Blobs` store from `@yaks/blob`. With
+it, the full receipt is saved and verified as a content-addressed payload before
+the record stores only `call`, `id`, `model` and the payload address.
+`MediaRecord` describes that pointer and existing inline receipts. Reading a
+pointer verifies its payload and reconstructs the receipt; a missing or corrupt
+payload fails rather than requesting another generation. Existing inline
+receipts remain readable and become pointers only when normally saved during
+delivery. Both the record store and the payload store must remain private.
+
 ```ts
 import {
-  type MediaReceipt,
   mediaReceipts,
+  type MediaRecord,
   receivedMedia,
   recoveredMedia,
 } from '@yaks/model'
 import { equal } from '@yaks/testing'
+import { memoryBlobs } from '@yaks/blob'
 
-const records = new Map<string, Partial<MediaReceipt>>()
+const records = new Map<string, MediaRecord>()
 const store = mediaReceipts({
   read: async (call) => records.get(call),
   update: async (call, fn) => {
@@ -422,7 +438,7 @@ const store = mediaReceipts({
     records.set(call, record)
     return result
   },
-})
+}, memoryBlobs())
 let checkpoints = 0
 await receivedMedia(
   {
@@ -445,6 +461,43 @@ const deliver = async () => {
 const reply = await recoveredMedia('c1', store, deliver)
 equal(await recoveredMedia('c1', store, deliver), reply)
 equal([checkpoints, deliveries], [1, 1])
+```
+
+## Submission checkpoints
+
+A **submission checkpoint** is the awaited `Request.onSubmit` callback at the
+paid HTTP boundary. The host calls `submitCall(graph, call, at)` to write
+server-only `submitted{at}` on the original ask, guarded against an existing
+submission. A lost acknowledgement still counts as submitted. Adapters with a
+submission checkpoint send at most one paid POST; retrying the original ask must
+recover its receipt or report an uncertain outcome.
+
+`Request.onAck` receives provider-owned components at the first acknowledgement,
+before the adapter consumes more output. `Request.onReceipt` receives private
+output before conversion, download, delivery or cost lookup, including partial
+media. These callbacks finish before the adapter proceeds; a storage failure
+stops it.
+
+```ts
+import { acknowledged, type Request, submitted } from '@yaks/model'
+import { equal } from '@yaks/testing'
+
+let order: string[] = []
+const request: Request = {
+  call: 'ask-1',
+  model: 'example',
+  items: [],
+  tools: [],
+  onSubmit: async () => {
+    order.push('submitted')
+  },
+  onAck: async (mark) => {
+    order.push(String(mark.example.response_id))
+  },
+}
+await submitted(request)
+await acknowledged(request, { example: { response_id: 'reply-1' } })
+equal(order, ['submitted', 'reply-1'])
 ```
 
 ## Limits

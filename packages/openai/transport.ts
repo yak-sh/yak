@@ -101,6 +101,9 @@ export type ResponseOptions = {
 
 /** Per-exchange cancellation and a hook for every parsed frame (after redaction). */
 export type RunOptions = {
+  /** Await durable submission immediately before POST. Its presence forbids
+   * replay, including authentication refresh, after an uncertain outcome. */
+  submit?: (request: ResponseRequest) => unknown
   /** Do not replay once callers expose partial output. Checked after failure. */
   noRetry?: boolean | (() => boolean)
   /** Stable conversation affinity. Local Codex probes observed reuse with
@@ -109,7 +112,7 @@ export type RunOptions = {
    * remains the provider's decision, never guaranteed by this header. */
   conversation?: string
   signal?: AbortSignal
-  event?: (event: ResponseEvent) => void
+  event?: (event: ResponseEvent) => unknown
 }
 
 let knownEvents = new Set([
@@ -493,7 +496,7 @@ let usage = (value: unknown): ResponseUsage | undefined => {
 let terminal = async (
   response: Response,
   secrets: string[],
-  notify?: (event: ResponseEvent) => void,
+  notify?: RunOptions['event'],
   kick?: () => void,
 ): Promise<ResponseResult> => {
   if (!response.body) {
@@ -510,7 +513,8 @@ let terminal = async (
     let frame =
       (secrets.length ? safe(parsed, secrets) : parsed) as ResponseEvent
     kick?.()
-    notify?.(frame)
+    await notify?.(frame)
+    kick?.()
     if (!knownEvents.has(frame.type)) unknown.push(frame)
     if (frame.type == 'response.output_item.done') {
       let item = safe(frame.item, secrets)
@@ -682,9 +686,13 @@ export let transport = (options: ResponseOptions): {
       return { endpoint, payload, headers }
     }
     let prepared = prepare()
+    let hookFailed = false
     while (true) {
       run.signal?.throwIfAborted()
       let { endpoint, payload, headers } = prepared
+
+      await run.submit?.(JSON.parse(payload))
+      run.signal?.throwIfAborted()
 
       // One deadline spans this whole exchange — the connect, the wait on the
       // first frame, and every mid-stream gap — each frame pushing it forward.
@@ -716,6 +724,7 @@ export let transport = (options: ResponseOptions): {
 
         if (
           response.status == 401 &&
+          !run.submit &&
           !refreshed &&
           options.credentials.refresh
         ) {
@@ -757,9 +766,16 @@ export let transport = (options: ResponseOptions): {
             },
           )
         }
-        return await terminal(response, secrets, run.event, dog.kick)
+        return await terminal(response, secrets, async (event) => {
+          try {
+            await run.event?.(event)
+          } catch (error) {
+            hookFailed = true
+            throw error
+          }
+        }, dog.kick)
       } catch (error) {
-        if (run.signal?.aborted) throw error
+        if (run.signal?.aborted || hookFailed) throw error
         let fail = error
         if (
           dog.stalled() &&
@@ -771,6 +787,7 @@ export let transport = (options: ResponseOptions): {
         // the same way, and a caller that states how long it can wait rides one
         // out instead of failing in five seconds.
         if (
+          run.submit ||
           (typeof run.noRetry == 'function' ? run.noRetry() : run.noRetry) ||
           !(fail instanceof ResponseError) || !transient(fail) ||
           (failures >= retries && waited >= patienceMs)

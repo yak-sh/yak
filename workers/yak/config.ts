@@ -116,6 +116,7 @@ export let appConfig: Config = {
       use: '@yaks/model',
       words: [
         'model',
+        'submitted',
         'usage',
         'cost',
         'questions',
@@ -124,6 +125,7 @@ export let appConfig: Config = {
       ],
     },
     { use: '@yaks/blob', words: ['artifact', 'representation'] },
+    '@yaks/openai',
     '@yaks/openrouter',
     {
       use: '@yaks/builders',

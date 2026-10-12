@@ -552,13 +552,13 @@ These are the names, all of them:
     gallery gitobj grant home hook hostname image imported inference installed
     integration integration_install interrupted invite inviting key lease
     lines mail mail_post member memory meter model
-    notice notified notify_trash opened openrouter order output output_of
+    notice notified notify_trash openai opened openrouter order output output_of
     parent pending person plan price product project provider provisional
     published quarantined questions quote reads recalled ref referenced
     refusal register_writes report repository representation requires
     restored result retired revision rtc rtc_lapse satisfies screenshot secret seeded
     serves session session_run sfu signed_in signin space spend staged stop
-    stripe subscription supersedes supervises sweep switched task theme tool topic
+    stripe submitted subscription supersedes supervises sweep switched task theme tool topic
     trashed tree_entry tunnel typed updated usage uses using verified wake wants
     web worked worktree
 

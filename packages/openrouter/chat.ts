@@ -1,8 +1,18 @@
 /** Chat Completions for generated media and Alibaba explicit-cache models. */
-import { cacheExpiry, ModelError, type Reply, type Request } from '@yaks/model'
-import { generatedMedia, jsonFrames, type MediaStore } from '@yaks/openai'
+import {
+  acknowledged,
+  cacheExpiry,
+  type MediaReceipt,
+  type MediaReceipts,
+  ModelError,
+  receivedMedia,
+  type Reply,
+  type Request,
+  submitted,
+} from '@yaks/model'
+import { jsonFrames, type MediaStore } from '@yaks/openai'
 import { chatTools, messages } from './prompt.ts'
-import { generationCost } from './cost.ts'
+import { deliver, type Output } from './media.ts'
 
 export type MediaOptions = MediaStore & {
   /** Audio settings vary by model; Lyria uses MP3 without a voice. */
@@ -49,7 +59,7 @@ let usage = (raw: unknown) => {
   }
 }
 
-let image = (v: unknown, call: string, options: MediaOptions) => {
+let image = (v: unknown) => {
   let url = str(obj(obj(v).image_url).url)
   let match = /^data:(image\/(?:png|jpeg|webp));base64,([A-Za-z0-9+/=]+)$/.exec(
     url,
@@ -57,7 +67,7 @@ let image = (v: unknown, call: string, options: MediaOptions) => {
   if (!match) {
     throw new ModelError('media_format', 'Unsupported generated image URL')
   }
-  return generatedMedia(match[2], match[1], call, options)
+  return { data: match[2], mediaType: match[1] }
 }
 
 /** The chat door streams text/tools, or decodes generated media to artifacts. */
@@ -68,6 +78,7 @@ export let chat = async (
     fetch?: typeof fetch
     signal?: AbortSignal
     media?: MediaOptions
+    receipts?: MediaReceipts
   },
 ): Promise<Reply> => {
   if (req.questions) {
@@ -93,33 +104,36 @@ export let chat = async (
     pcm16: 'audio/pcm',
   }[format]
   let key = await options.key()
+  let body = {
+    model: req.model,
+    messages: messages(req),
+    ...req.conversation ? { session_id: req.conversation } : {},
+    ...!media ? { tools: chatTools(req) } : {},
+    ...req.effort ? { reasoning: { effort: req.effort } } : {},
+    modalities: req.modalities,
+    ...audio ? { audio: { format, ...options.media?.audio } } : {},
+    stream: !media || audio,
+    ...!media || audio ? { stream_options: { include_usage: true } } : {},
+    ...req.tokens ? { max_tokens: req.tokens } : {},
+  }
+  let init: RequestInit = {
+    method: 'POST',
+    headers: {
+      authorization: 'Bearer ' + key,
+      'content-type': 'application/json',
+      ...req.conversation ? { 'x-session-id': req.conversation } : {},
+    },
+    body: JSON.stringify(body),
+    signal: req.signal && options.signal
+      ? AbortSignal.any([req.signal, options.signal])
+      : req.signal ?? options.signal,
+  }
   let response: Response
+  await submitted(req)
   try {
     response = await (options.fetch ?? fetch)(
       'https://openrouter.ai/api/v1/chat/completions',
-      {
-        method: 'POST',
-        headers: {
-          authorization: 'Bearer ' + key,
-          'content-type': 'application/json',
-          ...req.conversation ? { 'x-session-id': req.conversation } : {},
-        },
-        body: JSON.stringify({
-          model: req.model,
-          messages: messages(req),
-          ...req.conversation ? { session_id: req.conversation } : {},
-          ...!media ? { tools: chatTools(req) } : {},
-          ...req.effort ? { reasoning: { effort: req.effort } } : {},
-          modalities: req.modalities,
-          ...audio ? { audio: { format, ...options.media?.audio } } : {},
-          stream: !media || audio,
-          ...!media || audio ? { stream_options: { include_usage: true } } : {},
-          ...req.tokens ? { max_tokens: req.tokens } : {},
-        }),
-        signal: req.signal && options.signal
-          ? AbortSignal.any([req.signal, options.signal])
-          : req.signal ?? options.signal,
-      },
+      init,
     )
   } catch (error) {
     if (
@@ -145,9 +159,15 @@ export let chat = async (
   }
   let id = '', model = req.model, text = '', chunks: string[] = []
   let images: unknown[] = [], reported: unknown
+  let finished = false
   let cacheExpiresAt: string | null | undefined
   let calls = new Map<number, { id: string; name: string; args: string }>()
-  let receive = (value: Data) => {
+  let receive = async (value: Data) => {
+    let next = str(value.id)
+    if (next && next != id) {
+      await acknowledged(req, { openrouter: { response_id: next } })
+      id = next
+    }
     if (value.error) {
       let error = obj(value.error)
       throw new ModelError(
@@ -155,13 +175,13 @@ export let chat = async (
         str(error.message).slice(0, 512) || 'OpenRouter stream failed',
       )
     }
-    id = str(value.id) || id
     model = str(value.model) || model
     reported = value.usage ?? reported
     if (value.cache_expires_at !== undefined) {
       cacheExpiresAt = cacheExpiry(value.cache_expires_at) ?? null
     }
     let choice = obj(list(value.choices)[0])
+    if (choice.finish_reason != null) finished = true
     let delta = obj(choice.delta ?? choice.message)
     let audioPart = obj(delta.audio)
     let said = str(delta.content) || str(audioPart.transcript)
@@ -180,6 +200,42 @@ export let chat = async (
     }
     if (audioPart.data) chunks.push(str(audioPart.data))
     images.push(...list(delta.images))
+    if (id && (audioPart.data || list(delta.images).length)) {
+      await receivedMedia(req, receipt(false), options.receipts)
+    }
+  }
+  let receipt = (complete: boolean): MediaReceipt => {
+    let billed = usage(reported)
+    let output: Output = {
+      kind: 'chat',
+      reply: {
+        id,
+        model,
+        items: [
+          ...text || !calls.size ? [{ kind: 'assistant' as const, text }] : [],
+          ...[...calls.entries()].sort(([a], [b]) => a - b).map(([, c]) => ({
+            kind: 'call' as const,
+            ...c,
+          })),
+        ],
+        ...billed,
+        ...cacheExpiresAt !== undefined ? { cacheExpiresAt } : {},
+      },
+      audio: chunks.join(''),
+      mediaType,
+      images: images.map(image),
+      lookupCost: audio,
+    }
+    return {
+      provider: 'openrouter',
+      call: req.call ?? id,
+      id,
+      model,
+      input: body,
+      response: output,
+      complete,
+      ...billed.cost != null ? { cost: billed.cost, costReported: true } : {},
+    }
   }
   if (!media || audio) {
     if (!response.body) {
@@ -192,47 +248,30 @@ export let chat = async (
       let frame of jsonFrames(
         response.body,
         (kind, reason) => new ModelError(kind, reason),
+        undefined,
+        () => {
+          finished = true
+        },
       )
-    ) receive(frame)
-  } else receive(obj(await response.json()))
+    ) await receive(frame)
+    if (audio && !finished) {
+      throw new ModelError(
+        'media_incomplete',
+        'OpenRouter audio stream ended before completion',
+      )
+    }
+  } else await receive(obj(await response.json()))
   if (!id) {
     throw new ModelError('media_response', 'OpenRouter returned no response ID')
   }
-  let artifacts: NonNullable<Reply['artifacts']> = []
-  if (chunks.length) {
-    artifacts.push(
-      await generatedMedia(
-        chunks.join(''),
-        mediaType,
-        id + ':audio',
-        options.media!,
-      ),
-    )
-  }
-  for (let [index, value] of images.entries()) {
-    artifacts.push(await image(value, id + ':image:' + index, options.media!))
-  }
-  let billed = usage(reported)
-  if (audio && billed.cost == null) {
-    billed.cost = await generationCost(id, {
-      ...options,
-      signal: req.signal && options.signal
-        ? AbortSignal.any([req.signal, options.signal])
-        : req.signal ?? options.signal,
-    })
-  }
-  return {
-    id,
-    model,
-    items: [
-      ...text || !calls.size ? [{ kind: 'assistant' as const, text }] : [],
-      ...[...calls.entries()].sort(([a], [b]) => a - b).map(([, c]) => ({
-        kind: 'call' as const,
-        ...c,
-      })),
-    ],
-    ...artifacts.length ? { artifacts } : {},
-    ...billed,
-    ...cacheExpiresAt !== undefined ? { cacheExpiresAt } : {},
-  }
+  let complete = receipt(true)
+  await receivedMedia(req, complete, options.receipts)
+  let reply = await deliver(complete, {
+    ...options,
+    signal: req.signal && options.signal
+      ? AbortSignal.any([req.signal, options.signal])
+      : req.signal ?? options.signal,
+  })
+  await options.receipts?.save({ ...complete, cost: reply.cost, reply })
+  return reply
 }

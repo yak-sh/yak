@@ -51,8 +51,9 @@ modalities without tool declarations.
 
 The root module exports `responses`, its `Options` type, and `openrouterDoc`,
 the schema for `openrouter{response_id}`. `./vocab` exports that document and
-its `docs` list. The adapter returns replies without storing them; the session
-runner can use its `mark(reply)` result to store response metadata in the graph.
+its `docs` list. The session runner can use `mark(reply)` to store response
+metadata in the graph. `Request.onAck` records `openrouter{response_id}` at the
+first provider acknowledgement, before later stream events are processed.
 
 ## Signing in
 
@@ -66,15 +67,18 @@ action.
 
 OpenRouter's documented Responses API is stateless. Every request includes the
 complete applicable conversation. This adapter sends `store: false`, never
-`previous_response_id`, and exposes no continuation anchor. It records
-`openrouter{response_id}` for diagnostics only. Expect higher request bytes than
-a provider supporting stored continuation, especially for forks.
+`previous_response_id`, and exposes no continuation anchor. The response ID
+identifies the provider's generation for diagnostics and cost lookup; it cannot
+replay media. Expect higher request bytes than a provider supporting stored
+continuation, especially for forks.
 
-The Responses transport retries transient failures before text reaches the
-caller. It does not replay text delivered through `onText`, or retry a rejected
-request such as HTTP 400. Cancellation uses `Request.signal`. Native
-`image_generation` and `web_search` declarations are not enabled on text
-requests; function tools remain available there.
+The Responses transport can retry transient failures before text reaches the
+caller when no durable submission checkpoint is supplied. With
+`Request.onSubmit`, it awaits that checkpoint immediately before the paid POST
+and never retries the POST. A rejected checkpoint prevents submission.
+Cancellation uses `Request.signal`. Native `image_generation` and `web_search`
+declarations are not enabled on text requests; function tools remain available
+there.
 
 ## Prompt caching
 
@@ -126,6 +130,65 @@ Audio cost is the provider's billed amount: chat audio uses `usage.cost`, and
 speech uses its `X-Generation-Id` to read `/api/v1/generation`'s
 `data.total_cost`. Missing audio usage takes the same lookup. Only metadata
 lookups retry; a paid generation is never replayed to obtain its bill.
+
+## Private receipts and recovery
+
+Supply `receipts: MediaReceipts` to keep
+[media receipts](../model/README.md#generated-media-recovery) in durable private
+storage. `Request.call` attributes each receipt to the original ask. Streamed
+audio is checkpointed with `complete: false`; unfinished output stays private
+and cannot be recovered as a finished artifact. The complete receipt is saved
+before artifact conversion, storage, or cost lookup. `Request.onReceipt` is
+awaited after each save, and `Request.onMedia` receives complete receipts only.
+Responses and text Chat Completions also keep complete receipts.
+
+`model.recover(call)` returns a saved reply or resumes artifact delivery and
+cost lookup from its receipt. It never submits another generation. OpenRouter
+generation metadata supplies cost, not replayable audio: a missing or partial
+receipt fails recovery, leaving any provider spend unknown.
+
+This example uses a private in-memory receipt store and a fixture response. A
+host that needs recovery across process loss supplies durable private storage.
+
+```ts
+import { responses } from '@yaks/openrouter'
+import type { MediaReceipt } from '@yaks/model'
+import { equal } from '@yaks/testing'
+
+let receipt: MediaReceipt | undefined
+let posts = 0
+let model = responses({
+  key: () => 'fixture',
+  speech: [],
+  receipts: {
+    read: () => Promise.resolve(receipt),
+    save: (value) => {
+      receipt = value
+      return Promise.resolve()
+    },
+  },
+  fetch: () => {
+    posts++
+    return Promise.resolve(
+      new Response(
+        'data: ' + JSON.stringify({
+          id: 'generation',
+          choices: [{ delta: { content: 'Hello' } }],
+          usage: { cost: 0.001 },
+        }) + '\n\ndata: [DONE]\n\n',
+      ),
+    )
+  },
+})
+let reply = await model({
+  call: 'ask',
+  model: 'qwen/qwen3-max',
+  items: [],
+  tools: [],
+})
+equal(await model.recover!('ask'), reply)
+equal(posts, 1)
+```
 
 ## Cached-prefix expiry
 

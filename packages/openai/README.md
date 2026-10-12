@@ -68,6 +68,70 @@ transport's `retry` for a failure that may pass, and `response{body, headers}`:
 the redacted body and the limit headers, never the request's. Other exceptions,
 including application callback failures, propagate unchanged.
 
+## Submission checkpoints and recovery
+
+The adapter awaits `request.onSubmit` immediately before the paid POST and
+`request.onAck` with `openai{response_id}` at the first provider
+acknowledgement. Supplying `onSubmit` prevents automatic paid retries, including
+a 401 credential refresh. Credential loading may retry before submission. The
+low-level transport offers the same boundary through `run(request, { submit })`,
+passing the wire request body to the callback. Its `event` callback is awaited
+before the next frame; a callback failure propagates without a provider retry.
+
+Supply `receipts` to save private
+[media receipts](../model/README.md#generated-media-recovery) before image
+conversion or reply delivery. The adapter records text responses too. It retains
+partial image events with `complete: false`; these cannot be recovered as a
+finished reply. Complete receipts contain the original call, wire request,
+provider response, completed output items and any reported cost. `onReceipt`
+runs after saving each receipt; `onMedia` runs only for a complete receipt. Keep
+both callbacks and storage private, since they contain image payloads.
+
+`model.recover(call)` delivers a complete receipt without another paid POST and
+saves the reply for repeated recovery. A missing receipt remains missing;
+recovery does not ask the provider to generate a replacement. This example uses
+a scripted provider and memory storage:
+
+```ts
+import { equal } from '@yaks/testing'
+import type { MediaReceipt } from '@yaks/model'
+import { responses } from '@yaks/openai'
+
+let receipt: MediaReceipt | undefined
+let posts = 0
+let model = responses({
+  credential: () => ({ token: 'example' }),
+  receipts: {
+    read: async () => receipt,
+    save: async (value) => {
+      receipt = value
+    },
+  },
+  fetch: async () => {
+    posts++
+    return new Response(
+      'data: ' + JSON.stringify({
+        type: 'response.completed',
+        response: {
+          id: 'response-1',
+          model: 'example',
+          status: 'completed',
+          output: [],
+        },
+      }) + '\n\n',
+    )
+  },
+})
+let reply = await model({
+  call: 'ask-1',
+  model: 'example',
+  items: [],
+  tools: [],
+})
+equal(await model.recover!('ask-1'), reply)
+equal(posts, 1)
+```
+
 ## Provider-native transport
 
 `responses` adapts the shared `transport` to neutral model items. A caller that

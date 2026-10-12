@@ -16,9 +16,19 @@ import * as dirPart from './directory.ts'
 import type { Env } from './env.ts'
 import { accounted, BUDGET, countedMedia, monthOf } from './meter.ts'
 import { identityEid } from '@yaks/graph'
-import { type Model, ModelError, weigh } from '@yaks/model'
+import {
+  mediaReceipts,
+  type MediaRecord,
+  type Model,
+  ModelError,
+  weigh,
+} from '@yaks/model'
+import { records } from '@yaks/secrets'
+import { vaultOf } from './vault.ts'
+import { KERNEL, meta as appMeta } from './meta.ts'
+import { receiptPrefix } from './blob-key.ts'
 import { type Binding, workersAi } from '@yaks/workers-ai'
-import { artifactStore, memoryBlobs } from '@yaks/blob'
+import { artifactStore, memoryBlobs, objectBlobs } from '@yaks/blob'
 import { assertRejects } from '@std/assert'
 
 import { parseTools } from '@yaks/tools/declared'
@@ -673,6 +683,11 @@ test('original media debit is atomic once across concurrent and repeated recover
 test('recovery door accounts an existing attachment without download or generation', async () => {
   let v = await vale(() => {
     throw new Error('No generation')
+  }, {
+    env: {
+      VAULT: d1() as unknown as D1Like,
+      VAULT_KEY: btoa(String.fromCharCode(...new Uint8Array(32).fill(4))),
+    },
   })
   let session = crypto.randomUUID(), call = crypto.randomUUID()
   let artifact = crypto.randomUUID()
@@ -727,6 +742,55 @@ test('recovery door accounts an existing attachment without download or generati
   assertEquals((await recover()).status, 200)
   assertEquals((await recover()).status, 200)
   assertAlmostEquals((await v.spent()).meter!.models, 0.45)
+  assertEquals(v.asked, [])
+  // A receipt without delivered artifacts must use the adapter that recorded it.
+  let original = crypto.randomUUID()
+  let space = (await v.dir.space('ada'))!
+  let app = (await v.dir.app(space, 'vale'))!
+  let store = mediaReceipts(
+    records<MediaRecord>(
+      {
+        apply: (bundles) =>
+          appMeta({ STORE: v.env.STORE }).apply(bundles, KERNEL),
+      },
+      vaultOf(v.env),
+      'generated-media:' + app.eid + ':',
+    ),
+    objectBlobs(v.env.BLOBS, receiptPrefix(app)),
+  )
+  let bytes = new Uint8Array(576)
+  bytes.set([255, 251, 180, 0])
+  await store.save({
+    call: original,
+    id: 'or-generation',
+    provider: 'openrouter',
+    model: 'speech',
+    input: {},
+    cost: 0.04,
+    response: {
+      kind: 'speech',
+      reply: { id: 'or-generation', model: 'speech', items: [] },
+      audio: btoa(String.fromCharCode(...bytes)),
+      mediaType: 'audio/mpeg',
+      images: [],
+      lookupCost: false,
+    },
+  })
+  assertEquals(
+    (await v.send('/apply', [{
+      entity: { eid: original },
+      entry: { session, seq: 3 },
+      ask: {},
+    }])).status,
+    200,
+  )
+  call = original
+  assertEquals((await recover()).status, 200)
+  assertEquals(
+    (await v.read(`.output.source=${original}&.attachment`)).length,
+    1,
+  )
+  assertAlmostEquals((await v.spent()).meter!.models, 0.49)
   assertEquals(v.asked, [])
 })
 

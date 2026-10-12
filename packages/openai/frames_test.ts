@@ -1,6 +1,7 @@
 import { test } from '@yaks/testing'
 import { assertEquals, assertRejects } from '@std/assert'
 import { frames, ResponseError, type ResponseEvent } from './mod.ts'
+import { jsonFrames } from './sse.ts'
 
 let bytes = new TextEncoder().encode(
   ': comment\r\nevent: ignored\r\ndata: {"type":"delta",\r\ndata: "delta":"hé🙂"}\r\n\r\n' +
@@ -38,5 +39,21 @@ test('SSE cancels and releases its reader on malformed frames or early exit', as
     else await assertRejects(consume, ResponseError)
     assertEquals(cancelled, true)
     assertEquals(stream.locked, false)
+  }
+})
+
+test('SSE distinguishes the provider completion sentinel from ordinary EOF', async () => {
+  for (let ending of ['', 'data: [DONE]\n\n', 'data: [DONE]']) {
+    let done = 0
+    let options = [
+      new Response('data: {"chunk":"audio"}\n\n' + ending).body!,
+      (kind: string, message: string) => new ResponseError(kind, message),
+      undefined,
+      () => done++,
+    ] as const
+    let events = []
+    for await (let event of jsonFrames(...options)) events.push(event)
+    assertEquals(events, [{ chunk: 'audio' }])
+    assertEquals(done, ending ? 1 : 0)
   }
 })

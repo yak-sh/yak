@@ -3,8 +3,10 @@ export { listed, listing } from './list.ts'
 /** OpenRouter's stateless OpenResponses adapter. */
 import {
   type CacheContext,
+  type MediaReceipts,
   type Model,
   prefixCacheMark,
+  recoveredMedia,
   type Reply,
   type Request,
 } from '@yaks/model'
@@ -14,6 +16,7 @@ import {
 } from '@yaks/openai'
 import { chat, type MediaOptions } from './chat.ts'
 import { speech } from './speech.ts'
+import { deliver } from './media.ts'
 import { openrouterDoc } from './vocab.ts'
 import { alibabaCache, responseBody, tools } from './prompt.ts'
 
@@ -22,22 +25,25 @@ export type Options = Pick<ResponsesOptions, 'fetch' | 'signal'> & {
   /** Obtain an OpenRouter API key. Never supply another provider's credentials. */
   key: () => string | Promise<string>
   media?: MediaOptions
+  /** Private provider output used to resume delivery without purchasing again. */
+  receipts?: MediaReceipts
   /** Models served by OpenRouter's byte-stream speech endpoint. */
   speech?: readonly string[]
 }
 
 /** Always sends complete context. OpenRouter rejects stored continuations. */
 export let responses = (options: Options): Model => {
-  let call = (req: Request) =>
+  let call = (req?: Request) =>
     openResponses({
       ...options,
+      provider: 'openrouter',
       credential: async () => ({
         token: await options.key(),
         base: 'https://openrouter.ai/api/v1',
       }),
       store: false,
       web: false,
-      shape: (body) => responseBody(req, body),
+      shape: req ? (body) => responseBody(req, body) : undefined,
     })
   let speechNames: Promise<string[]> | undefined
   let models: ReturnType<typeof listing> | undefined
@@ -69,6 +75,13 @@ export let responses = (options: Options): Model => {
         )
       },
       vocab: openrouterDoc,
+      recover: (id: string) =>
+        recoveredMedia(id, options.receipts, (receipt) => {
+          let response = receipt.response as { api?: string }
+          return response.api == 'responses'
+            ? call().recover!(id)
+            : deliver(receipt, options)
+        }),
       mark: (reply: Reply, cache?: CacheContext) => ({
         openrouter: { response_id: reply.id, ...prefixCacheMark(reply, cache) },
       }),

@@ -12,6 +12,7 @@ import {
 import { worded } from '@yaks/tools'
 import { edits, mode, writes } from '@yaks/member'
 import {
+  billed,
   confirmed,
   type MediaReceipt,
   mediaReceipts,
@@ -32,7 +33,7 @@ import { ctxOf } from './connections.ts'
 import { vaultOf } from './vault.ts'
 import { KERNEL, meta } from './meta.ts'
 import { storeOf } from './door.ts'
-import { blobPrefix } from './blob-key.ts'
+import { blobPrefix, receiptPrefix } from './blob-key.ts'
 import { filled, schemaOf } from '@yaks/tools/declared'
 import { accounted, countedMedia, metered } from './meter.ts'
 import { outbound } from './outbound.ts'
@@ -121,17 +122,22 @@ let mediaStore = (at: Stored): import('@yaks/openai').MediaStore => ({
   },
 })
 
-// App-scoped records use the directory's existing secure vault.
+// The vault holds small app-scoped pointers; private object storage holds media.
 let receiptsFor = (at: Stored) =>
   at.env.STORE
-    ? mediaReceipts(records<Partial<MediaReceipt>>(
-      {
-        apply: (bundles) =>
-          meta({ STORE: at.env.STORE! }).apply(bundles, KERNEL),
-      },
-      vaultOf(at.env),
-      'generated-media:' + at.app + ':',
-    ))
+    ? mediaReceipts(
+      records<Partial<MediaReceipt>>(
+        {
+          apply: (bundles) =>
+            meta({ STORE: at.env.STORE! }).apply(bundles, KERNEL),
+        },
+        vaultOf(at.env),
+        'generated-media:' + at.app + ':',
+      ),
+      at.env.BLOBS
+        ? objectBlobs(at.env.BLOBS, receiptPrefix({ eid: at.app! }))
+        : undefined,
+    )
     : undefined
 
 /** Recover or account media on its original ask, without generation.
@@ -155,26 +161,44 @@ export let recovering = async (at: Stored, call: string) => {
     )
     return outputs
   }
-  let model = workersAi(at.env.AI!, {
-    media: mediaStore(at),
-    fetch: at.env.MODEL_FETCH,
-    receipts: receiptsFor(at),
-  })
+  let receipts = receiptsFor(at)
+  let receipt = await receipts?.read(call)
+  let providers: Record<string, () => Model> = {
+    [PROVIDER]: () =>
+      workersAi(at.env.AI!, {
+        media: mediaStore(at),
+        fetch: at.env.MODEL_FETCH,
+        receipts,
+      }),
+    [OPENROUTER]: () => connected(at),
+    openai: () => gateway(at),
+  }
+  let provider = receipt?.provider ?? PROVIDER
+  let model = providers[provider]?.()
+  if (!model?.recover) {
+    throw new ModelError(
+      'media_provider',
+      'No delivery adapter for ' + provider,
+    )
+  }
   let reply = await model.recover!(call)
-  if (reply.cost == null) {
+  let to = (ask.ask as Comp).to
+  let [modelRow] = typeof to == 'string' ? await at.graph.get([to]) : []
+  let charge = billed(reply, modelRow?.price as Price | undefined)
+  if (!charge) {
     throw new ModelError('media_cost', 'No recording cost')
   }
   await countedMedia(
     { STORE: at.env.STORE },
     found.space,
     call,
-    reply.cost,
-    reply.costReported ?? true,
+    charge.dollars,
+    charge.reported,
   )
   let session = (ask.entry as Comp).session
   let patches: Bundle[] = [{
     entity: ask.entity,
-    cost: { dollars: reply.cost, reported: reply.costReported ?? true },
+    cost: charge,
     attempt: { by: null },
     interrupted: null,
     failed: null,
@@ -263,6 +287,19 @@ let connected = (at: Stored) =>
       )
     },
     media: mediaStore(at),
+    receipts: receiptsFor(at),
+  })
+
+let gateway = (at: Stored) =>
+  openai({
+    base: at.env.OPENAI_API,
+    gateway: at.env.AI_GATEWAY,
+    account: at.env.CF_ACCOUNT,
+    ai: at.env.AI,
+    key: at.env.OPENAI_API_KEY,
+    token: at.env.AI_GATEWAY_TOKEN,
+    fetch: at.env.MODEL_FETCH,
+    receipts: receiptsFor(at),
   })
 
 /**
@@ -301,19 +338,10 @@ export let asking = (at: Stored): Handlers => {
     (req: Parameters<Model>[0]) => music(req.model) ? audio(req) : text(req),
     { info: (name: string) => text.info!(name) },
   )
-  let gateway = openai({
-    base: at.env.OPENAI_API,
-    gateway: at.env.AI_GATEWAY,
-    account: at.env.CF_ACCOUNT,
-    ai: at.env.AI,
-    key: at.env.OPENAI_API_KEY,
-    token: at.env.AI_GATEWAY_TOKEN,
-    fetch: at.env.MODEL_FETCH,
-  })
   let lent = {
     [PROVIDER]: served,
     [OPENROUTER]: accounted(at.env, payer(at.app), connected(at)),
-    openai: accounted(at.env, payer(at.app), gateway, async (name) => {
+    openai: accounted(at.env, payer(at.app), gateway(at), async (name) => {
       let [row] = await at.graph.get([identityEid('model', [name])])
       return row?.price as Price | undefined
     }),

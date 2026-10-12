@@ -3,14 +3,20 @@ import { generatedImages, type Images } from './images.ts'
 // Provider-neutral model items in and out; transport.ts alone owns the HTTP
 // calls to the Responses API.
 import {
+  acknowledged,
   type CacheContext,
   cacheExpiry,
   type Item,
+  type MediaReceipt,
+  type MediaReceipts,
   type Model,
   ModelError,
   prefixCacheMark,
+  receivedMedia,
+  recoveredMedia,
   type Reply,
   type Request,
+  submitted,
   type Usage,
 } from '@yaks/model'
 import type { Credential } from './credential.ts'
@@ -32,10 +38,14 @@ export let OPENAI_COMP = 'openai'
 /** How the model is reached. */
 export type Options = Omit<ResponseOptions, 'credentials'> & RunOptions & {
   credential: () => Credential | Promise<Credential>
+  /** Provider component used for acknowledgements, marks and private receipts. */
+  provider?: string
   /** Retry a rejected credential once with a fresh bearer. */
   refresh?: (stale: TransportCredential) => Credential | Promise<Credential>
   /** Configure native image storage and offer the tool on every ask. */
   images?: Images
+  /** Private provider results retained before artifact conversion or delivery. */
+  receipts?: MediaReceipts
   /** Offer provider-hosted web search, page opening, and find-in-page. */
   web?: boolean
 }
@@ -210,22 +220,31 @@ export let responses = (opts: Options): Model =>
       listing(await opts.credential(), opts.fetch, opts.refresh, opts.headers),
     vocab: openaiDoc,
     mark: (reply: Reply, cache?: CacheContext) => ({
-      [OPENAI_COMP]: {
+      [opts.provider ?? OPENAI_COMP]: {
         response_id: reply.id,
         ...prefixCacheMark(reply, cache),
       },
     }),
     anchor: (comps: Record<string, unknown>) => {
       if (!opts.store) return undefined
-      let id = (comps[OPENAI_COMP] as Record<string, unknown> | undefined)
+      let id = (comps[opts.provider ?? OPENAI_COMP] as
+        | Record<string, unknown>
+        | undefined)
         ?.response_id
       return typeof id == 'string' && id ? id : undefined
     },
+    recover: (call: string) =>
+      recoveredMedia(
+        call,
+        opts.receipts,
+        (receipt) => delivered(receipt, opts),
+      ),
   })
 
 let ask = (opts: Options) => {
   let client = transport({
     ...opts,
+    shape: (request) => request,
     credentials: { get: opts.credential, refresh: opts.refresh },
   })
   return async (req: Request): Promise<Reply> => {
@@ -240,16 +259,76 @@ let ask = (opts: Options) => {
       // Never retry without the tool based on an ambiguous provider error.
       let selected = opts.images
       const textIndexes = new Map<string, number>()
+      let responseId = ''
+      let prepared = body(req, opts.store, selected, opts.web ?? true)
+      let wire = (opts.shape?.(prepared) ?? prepared) as ResponseRequest
+      let output: Frame[] = []
+      let receipt: MediaReceipt | undefined
+      let checkpointed = false
       let out = await client.run(
-        body(req, opts.store, selected, opts.web ?? true),
+        wire,
         {
+          submit: req.onSubmit || opts.submit
+            ? async (request) => {
+              wire = request
+              await opts.submit?.(request)
+              await submitted(req)
+            }
+            : undefined,
           signal: req.signal && opts.signal
             ? AbortSignal.any([req.signal, opts.signal])
             : req.signal ?? opts.signal,
-          noRetry: () => !!req.onText && textIndexes.size > 0,
+          noRetry: () => checkpointed || !!req.onText && textIndexes.size > 0,
           conversation: req.conversation,
           // Image payloads must never escape through diagnostic/event subscribers.
-          event: (event) => {
+          event: async (event) => {
+            let response = record(event.response) ? event.response : undefined
+            let id = str(response?.id ?? event.response_id)
+            if (id && !responseId) {
+              responseId = id
+              checkpointed ||= !!req.onAck
+              await acknowledged(req, {
+                [opts.provider ?? OPENAI_COMP]: { response_id: id },
+              })
+            }
+            if (
+              event.type == 'response.output_item.done' && record(event.item)
+            ) {
+              output.push(event.item)
+            }
+            let terminal = event.type == 'response.completed'
+            let complete = terminal && response?.status == 'completed' &&
+              typeof response.model == 'string'
+            let partial =
+              event.type == 'response.image_generation_call.partial_image' ||
+              (event.type == 'response.output_item.done' &&
+                record(event.item) &&
+                event.item.type == 'image_generation_call')
+            if ((terminal || partial) && responseId) {
+              let { cost } = tokenUsage(response?.usage)
+              receipt = {
+                provider: opts.provider ?? OPENAI_COMP,
+                call: req.call ?? responseId,
+                id: responseId,
+                model: str(response?.model, req.model),
+                input: wire,
+                response: {
+                  api: 'responses',
+                  response: response ?? { id: responseId },
+                  items: output.length
+                    ? [...output]
+                    : Array.isArray(response?.output)
+                    ? response.output
+                    : [],
+                  ...partial ? { event } : {},
+                },
+                complete,
+                ...cost !== undefined ? { cost, costReported: true } : {},
+              }
+              checkpointed ||= !!opts.receipts || !!req.onReceipt ||
+                !!req.onMedia
+              await receivedMedia(req, receipt, opts.receipts)
+            }
             if (
               (event.type == 'response.output_text.delta' ||
                 event.type == 'response.refusal.delta') &&
@@ -263,23 +342,17 @@ let ask = (opts: Options) => {
                 text: event.delta,
               })
             }
-            opts.event?.(imageSafe(event))
+            await opts.event?.(imageSafe(event))
           },
         },
       )
-      let artifacts = await generatedImages(out.items, selected)
-      return {
-        id: str(out.response.id),
-        model: out.model,
-        ...out.response.cache_expires_at !== undefined
-          ? {
-            cacheExpiresAt: cacheExpiry(out.response.cache_expires_at) ?? null,
-          }
-          : {},
-        items: items(out.items),
-        ...artifacts.length ? { artifacts } : {},
-        ...tokenUsage(out.response.usage),
-      }
+      let reply = await delivery(
+        out.response,
+        out.items.length ? out.items : responseItems(out.response),
+        selected,
+      )
+      if (receipt) await opts.receipts?.save({ ...receipt, reply })
+      return reply
     } catch (error) {
       // Invalid request history is a caller defect, not an operational refusal.
       // Keep the transport exception (including provider details) healable.
@@ -296,6 +369,41 @@ let ask = (opts: Options) => {
         body || headers ? { body, headers } : undefined,
       )
     }
+  }
+}
+
+let delivered = (receipt: MediaReceipt, opts: Options): Promise<Reply> => {
+  let data = receipt.response
+  if (
+    !record(data) || data.api != 'responses' || !record(data.response) ||
+    data.response.status != 'completed' ||
+    typeof data.response.model != 'string' ||
+    data.response.id != receipt.id ||
+    !Array.isArray(data.items) || !data.items.every(record)
+  ) {
+    throw new ModelError('media_receipt', 'Invalid Responses receipt')
+  }
+  return delivery(data.response, data.items, opts.images)
+}
+
+let responseItems = (response: Frame): Frame[] =>
+  Array.isArray(response.output) ? response.output.filter(record) : []
+
+let delivery = async (
+  response: Frame,
+  output: Frame[],
+  images?: Images,
+): Promise<Reply> => {
+  let artifacts = await generatedImages(output, images)
+  return {
+    id: str(response.id),
+    model: str(response.model),
+    ...response.cache_expires_at !== undefined
+      ? { cacheExpiresAt: cacheExpiry(response.cache_expires_at) ?? null }
+      : {},
+    items: items(output),
+    ...artifacts.length ? { artifacts } : {},
+    ...tokenUsage(response.usage),
   }
 }
 

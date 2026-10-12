@@ -8,7 +8,7 @@ import { kernelDoc, kernelKeywords } from '@yaks/kernel'
 import { nameKeywords } from '@yaks/names'
 import { ram } from '@yaks/ram'
 import { loadVocab } from '@yaks/vocab'
-import { billed, modelDoc, models } from './mod.ts'
+import { billed, modelDoc, models, submitCall } from './mod.ts'
 
 let using = {
   $defs: {
@@ -23,11 +23,11 @@ let using = {
   },
 }
 
+let vocab = loadVocab([kernelDoc, modelDoc, using], [
+  kernelKeywords,
+  nameKeywords,
+])
 let shelf = () => {
-  let vocab = loadVocab([kernelDoc, modelDoc, using], [
-    kernelKeywords,
-    nameKeywords,
-  ])
   let g = graph({ storage: ram(vocab), vocab, plugins: [models()] })
   g.apply([
     { entity: { eid: '$p' }, provider: { name: 'codex' } },
@@ -39,6 +39,17 @@ let shelf = () => {
 let ASTRA = identityEid('model', ['gpt-6-astra'])
 let CODEX = identityEid('provider', ['codex'])
 let E = 'e0000000-0000-4000-8000-000000000001'
+let submissionVocab = loadVocab([{
+  $defs: {
+    entity: { component: true, wire: false, properties: {} },
+    submitted: modelDoc.$defs!.submitted,
+  },
+}])
+let submissionGraph = graph({
+  storage: ram(submissionVocab),
+  vocab: submissionVocab,
+})
+submissionGraph.apply([{ entity: { eid: E } }])
 
 test('a provider or a model is addressed by its name', () => {
   let g = shelf()
@@ -92,4 +103,16 @@ test('reported cost beats row pricing and unknown cost stays unknown', () => {
     reported: true,
   })
   assertEquals(billed(reply), undefined)
+})
+
+test('submission is guarded before purchase and cannot be claimed twice', async () => {
+  let g = submissionGraph
+  let at = '2026-10-12T00:00:00.000Z'
+  let results = await Promise.allSettled([
+    submitCall(g, E, at),
+    submitCall(g, E, at),
+  ])
+  assertEquals(results.map((r) => r.status), ['fulfilled', 'rejected'])
+  g.apply([{ entity: { eid: E }, submitted: null }])
+  assertEquals((await g.get([E]))[0].submitted, { at })
 })

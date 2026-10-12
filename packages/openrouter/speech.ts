@@ -1,11 +1,34 @@
 // OpenRouter's speech door answers audio bytes rather than a chat message.
 // The adapter keeps those bytes in the caller's artifact store before the
 // session records their address.
-import { ModelError, type Reply, type Request } from '@yaks/model'
-import { generatedBytes, type MediaStore } from '@yaks/openai'
-import { generationCost } from './cost.ts'
+import {
+  acknowledged,
+  type MediaReceipt,
+  type MediaReceipts,
+  ModelError,
+  receivedMedia,
+  type Reply,
+  type Request,
+  submitted,
+} from '@yaks/model'
+import type { MediaStore } from '@yaks/openai'
+import { deliver, type Output } from './media.ts'
+import { encoded } from './bytes.ts'
 
-let audio = async (res: Response, max: number) => {
+let joined = (parts: Uint8Array[], size: number) => {
+  let bytes = new Uint8Array(size), at = 0
+  for (let part of parts) {
+    bytes.set(part, at)
+    at += part.length
+  }
+  return bytes
+}
+
+let audio = async (
+  res: Response,
+  max: number,
+  checkpoint: (data: string) => Promise<void>,
+) => {
   if (!Number.isSafeInteger(max) || max < 1) {
     throw new ModelError('media_limit', 'Invalid media size limit')
   }
@@ -22,13 +45,9 @@ let audio = async (res: Response, max: number) => {
       )
     }
     parts.push(part)
+    await checkpoint(encoded(joined(parts, size)))
   }
-  let bytes = new Uint8Array(size), at = 0
-  for (let part of parts) {
-    bytes.set(part, at)
-    at += part.length
-  }
-  return bytes
+  return encoded(joined(parts, size))
 }
 
 export let speech = async (
@@ -38,6 +57,7 @@ export let speech = async (
     fetch?: typeof fetch
     signal?: AbortSignal
     media?: MediaStore
+    receipts?: MediaReceipts
   },
 ): Promise<Reply> => {
   if (!options.media) {
@@ -54,26 +74,29 @@ export let speech = async (
     throw new ModelError('input', 'Speech models need a text prompt')
   }
   let key = await options.key()
+  let body = {
+    model: req.model,
+    input: input.text,
+    response_format: 'mp3',
+  }
+  let init: RequestInit = {
+    method: 'POST',
+    headers: {
+      authorization: 'Bearer ' + key,
+      'content-type': 'application/json',
+      ...req.conversation ? { 'x-session-id': req.conversation } : {},
+    },
+    body: JSON.stringify(body),
+    signal: req.signal && options.signal
+      ? AbortSignal.any([req.signal, options.signal])
+      : req.signal ?? options.signal,
+  }
   let res: Response
+  await submitted(req)
   try {
     res = await (options.fetch ?? fetch)(
       'https://openrouter.ai/api/v1/audio/speech',
-      {
-        method: 'POST',
-        headers: {
-          authorization: 'Bearer ' + key,
-          'content-type': 'application/json',
-          ...req.conversation ? { 'x-session-id': req.conversation } : {},
-        },
-        body: JSON.stringify({
-          model: req.model,
-          input: input.text,
-          response_format: 'mp3',
-        }),
-        signal: req.signal && options.signal
-          ? AbortSignal.any([req.signal, options.signal])
-          : req.signal ?? options.signal,
-      },
+      init,
     )
   } catch (error) {
     if (
@@ -96,17 +119,39 @@ export let speech = async (
       'OpenRouter returned no generation ID',
     )
   }
-  let artifact = await generatedBytes(
-    await audio(res, options.media.maxBytes ?? 64 * 1024 * 1024),
-    'audio/mpeg',
-    id,
-    options.media,
+  await acknowledged(req, { openrouter: { response_id: id } })
+  let receipt = (data: string, complete: boolean): MediaReceipt => {
+    let output: Output = {
+      kind: 'speech',
+      reply: { id, model: req.model, items: [] },
+      audio: data,
+      mediaType: 'audio/mpeg',
+      images: [],
+      lookupCost: true,
+    }
+    return {
+      provider: 'openrouter',
+      call: req.call ?? id,
+      id,
+      model: req.model,
+      input: body,
+      response: output,
+      complete,
+    }
+  }
+  let data = await audio(
+    res,
+    options.media.maxBytes ?? 64 * 1024 * 1024,
+    (data) => receivedMedia(req, receipt(data, false), options.receipts),
   )
-  let cost = await generationCost(id, {
+  let complete = receipt(data, true)
+  await receivedMedia(req, complete, options.receipts)
+  let reply = await deliver(complete, {
     ...options,
     signal: req.signal && options.signal
       ? AbortSignal.any([req.signal, options.signal])
       : req.signal ?? options.signal,
   })
-  return { id, model: req.model, items: [], artifacts: [artifact], cost }
+  await options.receipts?.save({ ...complete, cost: reply.cost, reply })
+  return reply
 }

@@ -2,7 +2,7 @@
  * @yaks/openai implements {@link https://jsr.io/@yaks/model | @yaks/model}'s
  * `Model` interface over OpenAI's Responses API: one streamed exchange over
  * `fetch`, a bearer an application supplies, and the endpoint it reaches. It
- * stores nothing and starts no process; a server that wants a model calls
+ * opens no database and starts no process; a server that wants a model calls
  * {@link responses} and gets back a `Model`.
  *
  * ```ts ignore

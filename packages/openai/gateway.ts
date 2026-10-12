@@ -1,5 +1,5 @@
 // Responses through a Cloudflare AI Gateway. Credentials and routing are data.
-import { type Model, ModelError } from '@yaks/model'
+import { type MediaReceipts, type Model, ModelError } from '@yaks/model'
 import { responses } from './responses.ts'
 
 export type Gateway = {
@@ -10,6 +10,7 @@ export type Gateway = {
   key?: string
   token?: string
   fetch?: typeof fetch
+  receipts?: MediaReceipts
 }
 
 export let endpoint = async (o: Gateway): Promise<string> => {
@@ -29,6 +30,7 @@ export let gateway = (o: Gateway): Model => {
     authentication: 'optional',
     headers: o.token ? { 'cf-aig-authorization': `Bearer ${o.token}` } : {},
     fetch: o.fetch,
+    receipts: o.receipts,
     store: false,
     web: false,
   })

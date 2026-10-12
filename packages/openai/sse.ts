@@ -3,13 +3,18 @@ export let jsonFrames = async function* (
   body: ReadableStream<Uint8Array>,
   fault: (kind: 'transport' | 'malformed_stream', message: string) => Error,
   check?: (value: Record<string, unknown>) => void,
+  done?: () => void,
 ): AsyncGenerator<Record<string, unknown>> {
   let reader = body.getReader()
   let frame = (block: string) => {
     let data = block.split(/\r?\n/)
       .filter((line) => line.startsWith('data:'))
       .map((line) => line.slice(5).trimStart()).join('\n')
-    if (!data || data == '[DONE]') return
+    if (!data) return
+    if (data == '[DONE]') {
+      done?.()
+      return
+    }
     let value: unknown
     try {
       value = JSON.parse(data)

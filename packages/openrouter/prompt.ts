@@ -1,6 +1,7 @@
 /** Stable tool declarations and append-only provider cache boundaries. */
 import type { Item, Request, Tool } from '@yaks/model'
 import { input, type ResponseRequest } from '@yaks/openai'
+import { encoded } from './bytes.ts'
 
 type Part = {
   type: 'text' | 'image_url'
@@ -54,13 +55,6 @@ export let alibabaCache = (model: string) => alibaba.has(model.split(':')[0])
 export let explicit = (model: string) =>
   model.startsWith('anthropic/') || alibabaCache(model)
 
-let encoded = (bytes: Uint8Array) => {
-  let chunks: string[] = []
-  for (let at = 0; at < bytes.length; at += 8192) {
-    chunks.push(String.fromCharCode(...bytes.subarray(at, at + 8192)))
-  }
-  return btoa(chunks.join(''))
-}
 let text = (value: string): Part[] => [{ type: 'text', text: value }]
 let message = (item: Item): Message =>
   item.kind == 'call'

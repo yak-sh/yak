@@ -7,6 +7,21 @@
   },
   "title": "model",
   "$defs": {
+    "submitted": {
+      "component": true,
+      "type": "object",
+      "wire": false,
+      "journal": false,
+      "description": "the original model ask was submitted for a paid generation; an uncertain acknowledgement still counts as submitted",
+      "properties": {
+        "at": {
+          "type": "string",
+          "format": "date-time",
+          "stamped": true,
+          "description": "recorded before the paid request, guarded against any prior submission"
+        }
+      }
+    },
     "provider": {
       "component": true,
       "type": "object",

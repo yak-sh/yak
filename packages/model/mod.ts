@@ -76,6 +76,7 @@ export {
   type MediaReceipt,
   type MediaReceipts,
   mediaReceipts,
+  type MediaRecord,
   receivedMedia,
   recoveredMedia,
 } from './media.ts'
@@ -90,6 +91,7 @@ export {
   weigh,
 } from './vocab.ts'
 export { cachedPrefixExpires, cacheExpiry, prefixCacheMark } from './cache.ts'
+export { acknowledged, submitCall, submitted } from './submission.ts'
 export type { CacheContext } from './cache.ts'
 import type { CacheContext } from './cache.ts'
 
@@ -163,6 +165,12 @@ export type TextDelta = { index: number; id?: string; text: string }
 export type Request = {
   /** The original request entity, stable across delivery recovery. */
   call?: string
+  /** Durably guard submission before the paid POST. Presence disables replay. */
+  onSubmit?: () => Promise<void>
+  /** Persist the provider's first acknowledgement before consuming more output. */
+  onAck?: (mark: Mark) => Promise<void>
+  /** Durably checkpoint private output, including incomplete streamed media. */
+  onReceipt?: (receipt: MediaReceipt) => Promise<void>
   /** A private receipt is already durable when this checkpoint runs. */
   onMedia?: (receipt: MediaReceipt) => Promise<void>
   /** Optional cancellation of this request, not of independent tool processes. */

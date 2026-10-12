@@ -8,6 +8,7 @@ import { assert, assertEquals, assertStringIncludes } from '@std/assert'
 import { parse } from '@std/toml'
 import { next } from '@yaks/wake'
 import { r2Objects } from './lib/objects.ts'
+import { receiptPrefix } from './blob-key.ts'
 import type { Wire } from '@yaks/durable-object'
 import type { Held } from './build.ts'
 import {
@@ -376,6 +377,10 @@ test(
         `ada/${slug}/index.html`,
         new TextEncoder().encode(`<h1>${slug}</h1>`),
       )
+      await r2Objects(env.BLOBS).put(
+        receiptPrefix(app) + 'recording',
+        new TextEncoder().encode('private provider output'),
+      )
       return app
     }
     let ago = (days: number) => ({
@@ -383,8 +388,8 @@ test(
     })
 
     let live = await make('live')
-    await make('fresh', ago(29))
-    await make('old', ago(31))
+    let fresh = await make('fresh', ago(29))
+    let old = await make('old', ago(31))
     // A title from before the one-line rule (T-37885).
     await dir.apply({
       entities: [{
@@ -416,6 +421,15 @@ test(
     let keys = await r2Objects(env.BLOBS).list('ada/')
     assertEquals(keys.some((k) => k.startsWith('ada/old/')), false)
     assertEquals(keys.some((k) => k.startsWith('ada/fresh/')), true)
+    assertEquals(await r2Objects(env.BLOBS).list(receiptPrefix(old)), [])
+    assertEquals(
+      await r2Objects(env.BLOBS).has(receiptPrefix(fresh) + 'recording'),
+      true,
+    )
+    assertEquals(
+      await r2Objects(env.BLOBS).has(receiptPrefix(live) + 'recording'),
+      true,
+    )
     // A second run has nothing to do, and the app still in its days is still
     // there to be restored.
     assertEquals(await collected(env), 0)
