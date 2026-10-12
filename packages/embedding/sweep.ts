@@ -20,11 +20,11 @@ import {
   eq,
   exists,
   fn,
-  from,
   isNull,
   join,
   lit,
   not,
+  oneOf,
   or,
   select,
   type Statements,
@@ -33,7 +33,7 @@ import {
   val,
 } from '@yaks/sql'
 import { type Embedder, hash, Refused } from './embedder.ts'
-import { allowed, type Field, pieces } from './fields.ts'
+import { allowed, type Field } from './fields.ts'
 import { TABLE } from './ddl.ts'
 import { due, left, owe, paid, watch } from './owed.ts'
 import { pack, unit } from './vector.ts'
@@ -82,7 +82,7 @@ export let sources = (
   fields: Field[],
   owners?: number[],
 ): Source[] => {
-  let s = at('s'), o = at('o'), e = at('e')
+  let o = at('o'), e = at('e')
   // Shared exclusions are one property of the owner. Its descriptor answers
   // all of them in one seek, rather than seeking every excluded table for
   // every text field. Partial and older stores keep the physical-table check.
@@ -98,26 +98,41 @@ export let sources = (
           eq(fn('instr', a('tables'), val(JSON.stringify(name))), lit(0))
         ),
       ),
-      and(isNull(a('entity')), ...allowed(fields[0], s('owner'))),
+      and(isNull(a('entity')), ...allowed(fields[0], col('entity', 'c'))),
     )
     : undefined
-  let rows = pieces(
-    fields,
-    owners,
-    db.arms,
-    classified ? () => [] : allowed,
-  ).flatMap((text) =>
-    db.query(select({
+  // One row supplies every field of a component. Resolving a body can seek
+  // another table, so read it once and drop blank pieces after it comes back.
+  let groups = new Map<string, { field: Field; ord: number }[]>()
+  fields.forEach((field, ord) => {
+    let key = JSON.stringify([field.comp, field.on, field.not ?? []])
+    groups.set(key, [...groups.get(key) ?? [], { field, ord }])
+  })
+  let rows = [...groups.values()].flatMap((group) => {
+    let { field } = group[0]
+    let c = at('c')
+    let values = group.map(({ field: f }, i) => {
+      let stored = c(f.prop)
+      return as(f.text ? f.text(stored) : stored, `t${i}`)
+    })
+    return db.query(select({
       cols: [
         as(o('id'), 'owner'),
         as(o('eid'), 'eid'),
         as(e('hash'), 'had'),
-        as(s('ord'), 'ord'),
-        as(s('t'), 't'),
+        ...values,
       ],
-      from: from(text, 's'),
+      from: table(field.comp, 'c'),
       joins: [
-        join(table('entity', 'o'), eq(o('id'), s('owner'))),
+        join(table('entity', 'o'), eq(o('id'), c('entity'))),
+        ...field.on
+          ? [
+            join(
+              table(field.on, 'scope'),
+              eq(col('entity', 'scope'), c('entity')),
+            ),
+          ]
+          : [],
         ...classified
           ? [{
             how: 'left' as const,
@@ -128,28 +143,35 @@ export let sources = (
         {
           how: 'left',
           src: table(TABLE, 'e'),
-          on: eq(e('owner'), s('owner')),
+          on: eq(e('owner'), c('entity')),
         },
       ],
       where: and(
-        ...eligibility ? [eligibility] : [],
+        ...owners ? [oneOf(c('entity'), owners)] : [],
+        ...eligibility ? [eligibility] : allowed(field, c('entity')),
         not(exists(select({
           cols: [lit(1)],
           from: table('tombstone', 't'),
-          where: eq(col('entity', 't'), s('owner')),
+          where: eq(col('entity', 't'), c('entity')),
         }))),
       ),
-    }))
-  )
-  return assemble(
-    rows.map((r) => ({
-      owner: Number(r.owner),
-      eid: String(r.eid),
-      had: r.had == null ? null : String(r.had),
-      ord: Number(r.ord),
-      t: String(r.t),
-    })).sort((a, b) => a.owner - b.owner || a.ord - b.ord),
-  )
+    })).flatMap((r) =>
+      group.flatMap(({ ord }, i) => {
+        let t = String(r[`t${i}`] ?? '')
+        // Match SQLite trim's explicit whitespace list, including preserving
+        // non-breaking spaces that are meaningful text under the same rule.
+        if (!/[^ \t\n\r\v\f]/.test(t)) return []
+        return [{
+          owner: Number(r.owner),
+          eid: String(r.eid),
+          had: r.had == null ? null : String(r.had),
+          ord,
+          t,
+        }]
+      })
+    )
+  })
+  return assemble(rows.sort((a, b) => a.owner - b.owner || a.ord - b.ord))
 }
 
 /** Store one entity's vector, replacing whatever it had. */
