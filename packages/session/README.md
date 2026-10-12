@@ -397,6 +397,16 @@ on stdin.
 | SessionStart, SubagentStart | `yak session context --hook -` | creates the session under the harness's id; prints its claims |
 | SessionEnd                  | `yak session wrap --hook -`    | releases the session's claims                                 |
 
+It also writes a PostToolUse HTTP hook posting each tool call to the server's
+hook door, `POST /session/hook` (`@yaks/session/routes`; `server` names the
+`yak serve`, default `http://localhost:5173`). A harness runs its subagents and
+forks under the session's own id, and only the hook event says which context a
+call came from (Claude Code's `agent_id`). So the door answers a call from the
+session's own line of work with what the bus owes the session, as the context
+the harness adds after the call, and a subagent's with nothing. The first event
+marks the session `hooked{}`, and from then on the bus says nothing beside a
+tool reply to it.
+
 ## Transcripts from outside
 
 A session a harness runs outside this package's daemon is read into the graph
@@ -535,11 +545,11 @@ addressed to that session.
 
 A letter answering one a session wrote (`mail.reply_to` naming a letter whose
 `created.via` is that session) is that session's: a native transcript gets it as
-input, and an outside harness hears it from `yak session listen` or beside its
-next tool reply, once. The reply reaches the session wherever the far side sent
-it, to the session's own address or to its project's. While that session may
-still hear it, the reply waits for it unmarked, and a session resumed under the
-same id hears it then.
+input, and an outside harness hears it from `yak session listen`, at its hook
+door, or beside its next tool reply when it has no hook, once. The reply reaches
+the session wherever the far side sent it, to the session's own address or to
+its project's. While that session may still hear it, the reply waits for it
+unmarked, and a session resumed under the same id hears it then.
 
 Once the session that wrote the letter is over (its harness ended it, or its
 transcript stopped or failed), a reply sent to a project is held for that

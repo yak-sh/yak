@@ -8,6 +8,7 @@
     "./tools": "./tools.ts",
     "./views": "./views.ts",
     "./service": "./service.ts",
+    "./routes": "./routes.ts",
     "./tail": "./tail.ts",
     "./status": "./status.ts",
     "./admission": "./admission.ts"

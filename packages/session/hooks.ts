@@ -11,8 +11,12 @@
 // tool parses the payload, and nothing in between has to know the harness's
 // own JSON format.
 //
-// Between the edges, nothing: the harness writes every turn to a transcript
-// file of its own, and the package's duty reads it from there (./service.ts).
+// Between the edges, the turns are not carried: the harness writes every turn
+// to a transcript file of its own, and the package's duty reads it from there
+// (./service.ts). One entry runs between them: after each tool call the
+// harness posts the event to the graph's hook door (./routes.ts), the one
+// report that says whether the call came from the session's own line of work
+// or from a subagent sharing its id, and adds what the bus owes the session.
 //
 // Nothing here may fail loudly. A hook that exits non-zero is a session that
 // will not start, so every entry ends `|| true`: a graph that is not there
@@ -25,12 +29,17 @@
 //
 // The merge is the careful part. A settings file is the person's, with their
 // own entries in it, so an install replaces what an earlier install wrote and
-// leaves everything else exactly where it was — identified by the commands,
-// which is the only durable marker a JSON file carries.
+// leaves everything else exactly where it was — identified by the commands
+// and the door's path, the only durable markers a JSON file carries.
+
+import { PATH } from './routes.ts'
 
 /** One lifecycle entry, in the form a harness settings file stores it. */
 export type Hook = {
-  hooks: { type: 'command'; command: string; timeout?: number }[]
+  hooks: (
+    | { type: 'command'; command: string; timeout?: number }
+    | { type: 'http'; url: string; timeout?: number }
+  )[]
 }
 
 /** Where the entries go, unless the caller names another path. */
@@ -45,27 +54,40 @@ let cmd = (command: string, timeout?: number): Hook => ({
   }],
 })
 
+// A hook posted to a server: a server that is down costs the harness the
+// timeout and nothing else.
+let post = (url: string): Hook => ({
+  hooks: [{ type: 'http', url, timeout: 2 }],
+})
+
+/** The server a session's hook door is on, unless the caller names another. */
+export let SERVER = 'http://localhost:5173'
+
 /**
  * The entries this package owns, keyed by the harness event each responds to.
  *
  * `yak` is the path to the command on this machine — a full path where it is
- * not on the harness's path.
+ * not on the harness's path. `server` is the `yak serve` the hook door is on.
  */
-export let lifecycle = (yak = 'yak'): Record<string, Hook[]> => ({
+export let lifecycle = (
+  yak = 'yak',
+  server = SERVER,
+): Record<string, Hook[]> => ({
   SessionStart: [cmd(`${yak} session context --hook - || true`)],
   SubagentStart: [cmd(`${yak} session context --hook - || true`)],
+  PostToolUse: [post(`${server.replace(/\/+$/, '')}${PATH}`)],
   SessionEnd: [cmd(`${yak} session wrap --hook - || true`, 5)],
 })
 
-// Ours, identified by the command it runs, including the turn hooks an older
-// install wrote (`session/turn.ts`), which an install now takes out. A
-// person's own entry never runs either.
+// Ours, identified by the command it runs or the door it posts to, including
+// the turn hooks an older install wrote (`session/turn.ts`), which an install
+// now takes out. A person's own entry never runs either.
 let MINE =
   /\byak\b.*\bsession (context|wrap) --hook\b|\bsession\b\S*\/turn\.ts\b/
 let mine = (h: unknown): boolean =>
-  ((h as Hook | undefined)?.hooks ?? []).some((x) =>
-    MINE.test(x?.command ?? '')
-  )
+  ((h as Hook | undefined)?.hooks ?? []).some((
+    x: { url?: string; command?: string },
+  ) => !!x?.url?.endsWith(PATH) || MINE.test(x?.command ?? ''))
 
 /**
  * The lifecycle entries merged into the hooks a settings file already had:
@@ -92,7 +114,7 @@ export let merged = (
  * Answers the path written. */
 export let install = (
   path: string,
-  opts: { yak?: string; remove?: boolean } = {},
+  opts: { yak?: string; server?: string; remove?: boolean } = {},
 ): string => {
   let settings: Record<string, unknown> = {}
   try {
@@ -102,7 +124,7 @@ export let install = (
   }
   let hooks = merged(
     settings.hooks as Record<string, unknown> | undefined,
-    lifecycle(opts.yak),
+    lifecycle(opts.yak, opts.server),
     opts.remove,
   )
   let next: Record<string, unknown> = { ...settings, hooks }

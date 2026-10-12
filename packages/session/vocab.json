@@ -55,6 +55,12 @@
       "properties": {},
       "description": "an entry to be read before the next ask"
     },
+    "hooked": {
+      "component": true,
+      "type": "object",
+      "properties": {},
+      "description": "on a session: its harness reports the tool calls of its own line of work to the hook door (POST /session/hook), where the bus says what the session is owed. Every context the harness runs shares the session’s id, so a tool reply never says it"
+    },
     "brief": {
       "component": true,
       "type": "object",
@@ -655,7 +661,7 @@
       "noun": "hooks",
       "verb": "install",
       "title": "Install the lifecycle hooks",
-      "description": "Write SessionStart and SessionEnd hooks (commands run when an agent session starts or ends) into a Claude-compatible harness settings file, so every session starts by reading its context back (session_context) and ends by wrapping up (session_wrap). The turns in between are read from the harness's own transcript file by the package's duty. Replaces an earlier install, including the turn hooks an older one wrote, and leaves every other entry in the file alone. Writes to the machine the tool runs on. Returns a text confirmation naming the settings path. Pass remove: true to uninstall just these hooks.",
+      "description": "Write SessionStart and SessionEnd hooks (commands run when an agent session starts or ends) into a Claude-compatible harness settings file, so every session starts by reading its context back (session_context) and ends by wrapping up (session_wrap), and a PostToolUse HTTP hook that posts each tool call to the server's hook door, where the session hears what it is owed and its subagents hear nothing. The turns in between are read from the harness's own transcript file by the package's duty. Replaces an earlier install, including the turn hooks an older one wrote, and leaves every other entry in the file alone. Writes to the machine the tool runs on. Returns a text confirmation naming the settings path. Pass remove: true to uninstall just these hooks.",
       "input": {
         "path": {
           "type": "string",
@@ -664,6 +670,10 @@
         "yak": {
           "type": "string",
           "description": "the path to the yak command on this machine"
+        },
+        "server": {
+          "type": "string",
+          "description": "the yak serve whose hook door the PostToolUse hook posts to (default http://localhost:5173)"
         },
         "remove": {
           "type": "boolean",

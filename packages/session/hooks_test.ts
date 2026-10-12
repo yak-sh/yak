@@ -15,8 +15,11 @@ test('an install leads each event and keeps everything else', () => {
 
 test('a second install replaces the first, never doubles it', () => {
   let once = merged({ SessionStart: [theirs] }, lifecycle())
-  let twice = merged(once, lifecycle('/usr/local/bin/yak'))
+  let twice = merged(once, lifecycle('/usr/local/bin/yak', 'http://box:9'))
   assertEquals(twice.SessionStart.length, 2)
+  assertEquals(twice.PostToolUse, [{
+    hooks: [{ type: 'http', url: 'http://box:9/session/hook', timeout: 2 }],
+  }])
   assertEquals(twice.SessionStart[1], theirs)
   assert(
     JSON.stringify(twice.SessionStart[0]).includes('/usr/local/bin/yak'),
@@ -38,6 +41,7 @@ test('a settings file keeps the keys nobody asked about', () => {
     let said = JSON.parse(Deno.readTextFileSync(path))
     assertEquals(said.model, 'opus')
     assertEquals(Object.keys(said.hooks).sort(), [
+      'PostToolUse',
       'SessionEnd',
       'SessionStart',
       'SubagentStart',

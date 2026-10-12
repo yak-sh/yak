@@ -1,12 +1,15 @@
 // Delivery of the session bus. A native transcript gets an input in the same
 // batch that marks the item said; a caller using a tool sees owed lines in
-// that tool's reply. The listener for an outside harness uses listen.ts.
+// that tool's reply, or, when its harness reports to the hook door, the
+// context that harness adds after a call of its own (./routes.ts). The
+// listener for an outside harness uses listen.ts.
 
 import type { Bundle, Comp, Eid, Graph } from '@yaks/graph'
 import { derivedEid } from '@yaks/graph/identity'
 import { who } from '@yaks/graph/call'
 import { absent, and, type Clause, every, present } from '@yaks/query'
 import { arrived, deliver, heirs, over, pending } from './listen.ts'
+import { sessionFor } from './who.ts'
 
 let comp = (b: Bundle, name: string): Comp => (b[name] ?? {}) as Comp
 
@@ -105,22 +108,68 @@ export let feed = async (g: Graph): Promise<number> => {
   return count
 }
 
-/** Lines owed to an outside caller, appended to a direct tool reply. */
+// Every line owed to an outside session, each marked said as it is taken.
+let owed = async (
+  g: Graph,
+  id: Eid,
+): Promise<{ item: Bundle; line: string }[]> => {
+  let out: { item: Bundle; line: string }[] = []
+  for (let said of await pending(g, id)) {
+    if (await deliver(g, null, said.item)) out.push(said)
+  }
+  return out
+}
+
+/** Lines owed to an outside caller, appended to a direct tool reply. A
+ * session whose harness reports to the hook door ({@link heard}) hears there
+ * instead: its forks and subagents call tools under its id too, and the first
+ * of them to call would take what its own line of work is owed. */
 export let reply = async (g: Graph, call: Bundle): Promise<Bundle[]> => {
   if (!g.vocab.comp('notified')) return []
   let id = who(call)?.via
   if (!id) return []
   let [session] = await g.get([id])
-  if (!session?.session || await native(g, session)) return []
-  let out: Bundle[] = []
-  for (let { item, line } of await pending(g, id)) {
-    if (!await deliver(g, null, item)) continue
-    out.push({
-      entity: {
-        eid: derivedEid(`session reply ${call.entity.eid} ${item.entity.eid}`),
-      },
-      content: { body: line },
-    })
+  if (!session?.session || session.hooked || await native(g, session)) {
+    return []
   }
-  return out
+  return (await owed(g, id)).map(({ item, line }) => ({
+    entity: {
+      eid: derivedEid(`session reply ${call.entity.eid} ${item.entity.eid}`),
+    },
+    content: { body: line },
+  }))
+}
+
+/** What a harness hook reports: the harness's id for its session, and the
+ * subagent the event came from, when it came from one (Claude Code's
+ * `session_id` and `agent_id`). */
+export type Hook = {
+  session_id?: unknown
+  agent_id?: unknown
+  hook_event_name?: unknown
+}
+
+/**
+ * The hook door's answer to one event: the lines owed to the session, when
+ * the event came from the session's own line of work, as the context the
+ * harness adds to it. An event from a subagent hears nothing, so what the
+ * session is owed waits for the session. The first event marks the session
+ * `hooked`, and from then on the bus says nothing in a tool reply to it.
+ */
+export let heard = async (g: Graph, hook: Hook): Promise<object> => {
+  if (!g.vocab.comp('notified') || hook.agent_id) return {}
+  let said = typeof hook.session_id == 'string' ? hook.session_id : ''
+  let session = said ? await sessionFor(g, said) : undefined
+  if (!session?.session) return {}
+  let id = session.entity.eid
+  if (!session.hooked) await g.apply([{ entity: { eid: id }, hooked: {} }])
+  let lines = (await owed(g, id)).map(({ line }) => line)
+  return lines.length
+    ? {
+      hookSpecificOutput: {
+        hookEventName: String(hook.hook_event_name ?? 'PostToolUse'),
+        additionalContext: lines.join('\n'),
+      },
+    }
+    : {}
 }

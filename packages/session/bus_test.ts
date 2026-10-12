@@ -14,7 +14,7 @@ import { storage } from '@yaks/sqlite'
 import { toolsDoc } from '@yaks/tools/vocab'
 import { loadVocab } from '@yaks/vocab'
 import { test, until } from '@yaks/testing'
-import { feed, reply } from './bus.ts'
+import { feed, heard, reply } from './bus.ts'
 import { sessionDoc } from './comp.ts'
 import { sessions } from './plugin.ts'
 import { service } from './service.ts'
@@ -114,6 +114,37 @@ test('an outside caller receives what was addressed to its session once', async 
   )
   assertEquals((await g.get(['letter']))[0].notified != null, true)
   assertEquals(await reply(g, call), [])
+})
+
+test('a hooked session hears at its hook, never through a subagent or a tool reply', async () => {
+  let g = await fresh()
+  let letter = async () => !!(await g.get(['letter']))[0].notified
+  let call = { entity: { eid: 'call' }, created: { via: 'outside' } }
+  assertEquals(await heard(g, { session_id: 'outside', agent_id: 'fork' }), {})
+  assertEquals(await letter(), false)
+  let said = await heard(g, {
+    session_id: 'outside',
+    hook_event_name: 'PostToolUse',
+  }) as { hookSpecificOutput: { additionalContext: string } }
+  assertEquals(
+    said.hookSpecificOutput.additionalContext.includes('A letter'),
+    true,
+  )
+  assertEquals(await letter(), true)
+  await g.apply([{
+    entity: { eid: 'later' },
+    mail: { from: 'a@example.com', to: 'b@example.com' },
+    deliver: { to: 'outside' },
+    doc: { title: 'A later letter' },
+  }], { trusted: true })
+  assertEquals(await reply(g, call), [])
+  assertEquals(await heard(g, { session_id: 'outside', agent_id: 'fork' }), {})
+  assertEquals(
+    JSON.stringify(await heard(g, { session_id: 'outside' })).includes(
+      'A later letter',
+    ),
+    true,
+  )
 })
 
 test('the session duty delivers without a Claude transcript directory', async () => {

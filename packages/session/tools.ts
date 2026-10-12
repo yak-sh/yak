@@ -334,6 +334,7 @@ export let runs = (
         body: `${args.remove ? 'removed from' : 'wrote'} ${
           install(str(args.path) || settingsPath(), {
             yak: str(args.yak) || undefined,
+            server: str(args.server) || undefined,
             remove: !!args.remove,
           })
         }`,
