@@ -149,14 +149,6 @@ The host supplies `options.env` at command invocation (for example, a scoped
 grant), `options.retry` for transient RPC failures, and `options.sleepError` to
 report a failed idle configuration. This provider knows no account or meter.
 
-A namespace may also implement workspace copying: `fork(source, target)` makes a
-clean filesystem copy once and returns the source's retained process ids.
-`retire(source)` closes copying and returns every destination to erase,
-including copies no longer in use. These calls carry no invocation environment
-and refuse namespaces without that capability. The host keeps credentials in
-clean copies and uses retained ids only to finish work already running in the
-source.
-
 The namespace in this example is a stand-in for the deployed binding:
 
 ```ts

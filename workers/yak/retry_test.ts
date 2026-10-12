@@ -225,7 +225,7 @@ for (let { method, args, result } of methods) {
           let calls = 0
           let ns: Sandboxes = {
             idFromName: (name) => {
-              assertEquals(name, named(space, who.person!))
+              assertEquals(name, named(space))
               return name
             },
             get: () => {
@@ -245,7 +245,7 @@ for (let { method, args, result } of methods) {
             },
           }
           let provider = cloudflareProvider(ns, { retry: retryOnce })
-          let ref = { id: named(space, who.person!) }
+          let ref = { id: named(space) }
           let { machine } = await provider.wake(ref)
           assertEquals(gets, 0, 'take the stub per invocation, not per box')
           let call = () =>
@@ -288,7 +288,7 @@ test('sandbox cleanup and initial sleep also retry evictions', async () => {
     }),
   }
   await workbench({ SANDBOX: ns }, space, who.person, { since: null })
-  assertEquals(await destroyed({ SANDBOX: ns }, space, who.person!), true)
+  assertEquals(await destroyed({ SANDBOX: ns }, space), true)
   assertEquals(sleep, 2)
   assertEquals(destroy, 2)
 })

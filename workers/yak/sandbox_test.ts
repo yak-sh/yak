@@ -183,7 +183,7 @@ test('the machine tools write, run and read, and a ship copies out', async () =>
   assertEquals(await wasm.text(), WASM)
 
   // Every one of those touched the same container, under the space's own id.
-  assertEquals([...box.alive], [named(space, ADA)])
+  assertEquals([...box.alive], [`build-${space.eid}`])
 })
 
 test('sandbox_exec, as the directory listed it, runs its cmd and answers as sandbox_shell does', async () => {
@@ -375,7 +375,7 @@ test('a release answers the seconds held, and the container goes', async () => {
   let spend = spending()
   let bench = await workbench(env, space, ADA, spend, () => clock)
   await bench.provider.exec(bench.ref, 'sleep 42')
-  assertEquals([...box.alive], [named(space, ADA)])
+  assertEquals([...box.alive], [`build-${space.eid}`])
   clock = 42_300
   let spent = await released(env, space, spend, () => clock)
 
@@ -431,9 +431,9 @@ test('destroying the container revokes what it was wearing', async () => {
   // Destroy is the one door — a build's own end (`released`) and a space
   // being erased (erase.ts) both come through it, and neither has to be
   // holding the grant to end it.
-  assertEquals(await destroyed(env, space, ADA), true)
+  assertEquals(await destroyed(env, space), true)
   assertEquals(await held(token, SECRET, book), null)
-  assertEquals(await book.wearing(named(space, ADA)), null)
+  assertEquals(await book.wearing(named(space)), null)
 
   // The next wake mints a fresh one rather than saying the dead one again.
   await tool('sandbox_shell').run(lone, { command: 'ls' })
@@ -705,7 +705,7 @@ test('a lone connector call pays for itself and leaves the container', async () 
   // It is counted — a second at least, since the call rounds up — and the
   // container is still there for the next call.
   assert(((await dirOf(env).space('ada'))!.meter?.seconds ?? 0) >= 1)
-  assertEquals([...box.alive], [named(space, ADA)])
+  assertEquals([...box.alive], [`build-${space.eid}`])
 })
 
 // T-37883: one person holds one sandbox at a time on the free tier. A space
