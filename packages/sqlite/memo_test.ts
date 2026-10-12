@@ -9,9 +9,9 @@ import { open } from './db.ts'
 import { Denied, members } from '@yaks/member'
 import { club } from '../member/testing.ts'
 import { grant, ids, setMode } from '../member/testing.ts'
-import { mem } from './testing.ts'
+import { kitchen, mem, preparedStore, RECIPE, snapshot } from './testing.ts'
 import { get, read } from './read.ts'
-import { basis } from './memo.ts'
+import { basis, memoized } from './memo.ts'
 import { parse } from '@yaks/query'
 
 let vocab = loadVocab([{
@@ -63,6 +63,62 @@ test('certified admission reuses bounded authoritative reads and returns deep co
   // Only transaction boundaries, no SQL get or catalog validation.
   assertEquals(f.calls(), 20)
   assertEquals(f.get().player, { active: true })
+})
+
+let recipes = loadVocab([...vocab.docs, ...kitchen.docs])
+let recipeSnapshot = snapshot(kitchen)
+
+test('whole and narrowed cache reads isolate nested JSON values', () => {
+  let memo = memoized(mem(), recipes)
+  let read = (comps?: string[]) =>
+    memo.get(
+      (_ids, comps) => [{
+        entity: { eid: 'cake' },
+        recipe: RECIPE,
+        ...!comps ? { player: { active: true } } : {},
+      }],
+      ['cake'],
+      comps,
+    )[0]
+  read()
+  for (let comps of [undefined, ['recipe']]) {
+    let b = read(comps)
+    let recipe = b.recipe as typeof RECIPE
+    recipe.meta.steps[0].mix = false
+    recipe.tags.push('changed')
+    assertEquals(b.player, comps ? undefined : { active: true })
+    assertEquals(read(comps).recipe, RECIPE)
+  }
+})
+
+test('pending partial cache reads isolate nested JSON values', () => {
+  using s = preparedStore(kitchen, {}, recipeSnapshot)
+  s.tx((tx) => {
+    tx.patch([{ entity: { eid: 'cake' }, recipe: RECIPE }])
+    let meta = { oven: 200, steps: [{ mix: false }] }
+    tx.patch([{ entity: { eid: 'cake' }, recipe: { meta } }])
+    let b = tx.get(['cake'], ['recipe'])[0]
+    ;(b.recipe as typeof RECIPE).meta.steps[0].mix = true
+    assertEquals(tx.get(['cake'], ['recipe'])[0].recipe, { ...RECIPE, meta })
+  })
+  assertEquals((s.get(['cake'])[0].recipe as typeof RECIPE).meta.steps, [{
+    mix: false,
+  }])
+})
+
+test('cache copies retain aliases between flat component objects', () => {
+  let memo = memoized(mem(), vocab), shared = {}
+  let read = () =>
+    memo.get(() => [{
+      entity: { eid: 'hero' },
+      player: shared,
+      position: shared,
+    }], ['hero'])[0]
+  read()
+  let b = read()
+  assert(b.player === b.position)
+  ;(b.player as { active?: boolean }).active = false
+  assertEquals(read().player, {})
 })
 
 test('admission snapshot follows durable changes, temporary rows and rollback', () => {

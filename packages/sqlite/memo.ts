@@ -555,6 +555,47 @@ let sizeOf = (b: Bundle) =>
     (_key, value) => typeof value == 'bigint' ? String(value) : value,
   ).length * 2
 
+// Copy only the facets this read exposes. Scalar components need fresh
+// objects; nested or special values keep structuredClone's semantics, shared
+// references included, across the selected bundle.
+let copy = (
+  b: Bundle,
+  wanted?: Set<string>,
+  omitted: string[] = [],
+): Bundle => {
+  let out = Object.fromEntries(
+    Object.entries(b).filter(([name]) =>
+      !omitted.includes(name) &&
+      (!wanted || name == 'entity' || name == 'tombstone' || wanted.has(name))
+    ),
+  ) as Bundle
+  let values = Object.values(out)
+  for (let i = 0; i < values.length; i++) {
+    let comp = values[i]
+    if (comp == null) continue
+    if (
+      values.indexOf(comp) != i || typeof comp != 'object' ||
+      Object.getPrototypeOf(comp) != Object.prototype
+    ) {
+      return structuredClone(out)
+    }
+    for (let value of Object.values(comp)) {
+      let type = typeof value
+      if (
+        value != null && type == 'object' || type == 'function' ||
+        type == 'symbol'
+      ) {
+        return structuredClone(out)
+      }
+    }
+  }
+  for (let name of Object.keys(out)) {
+    let comp = out[name]
+    if (comp != null) out[name] = { ...comp as Comp }
+  }
+  return out
+}
+
 /** The memory of whole entities for a store bound to `driver` and `vocab`. */
 export let memoized = (
   driver: Driver,
@@ -917,14 +958,7 @@ export let memoized = (
           if (b && comps.some((n) => b[n] != null && HOLE in (b[n] as Comp))) {
             continue
           }
-          written.set(
-            eid,
-            b && Object.fromEntries(
-              Object.entries(b).filter(([n]) =>
-                n == 'entity' || n == 'tombstone' || wanted!.has(n)
-              ),
-            ) as Bundle | null,
-          )
+          written.set(eid, b)
         }
       }
       let missing = [...new Set(eids)].filter((eid) =>
@@ -964,21 +998,14 @@ export let memoized = (
       let out = eids.flatMap((eid) => {
         if (written.has(eid)) {
           let b = written.get(eid)
-          return b ? [structuredClone(b)] : []
+          return b ? [copy(b, wanted)] : []
         }
         if (read.has(eid)) return fresh.has(eid) ? [fresh.get(eid)!] : []
         let held = k.held.get(eid)!
         k.held.delete(eid)
         k.held.set(eid, held)
         if (!held) return []
-        let b = structuredClone(held)
-        for (let name of Object.keys(b)) {
-          if (
-            names.includes(name) ||
-            wanted && name != 'entity' && name != 'tombstone' &&
-              !wanted.has(name)
-          ) delete b[name]
-        }
+        let b = copy(held, wanted, names)
         return [Object.assign(b, current.get(eid) ?? {})]
       })
       trim()
