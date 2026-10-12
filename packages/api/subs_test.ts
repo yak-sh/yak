@@ -544,7 +544,7 @@ let createdWindow = (() => {
 })()
 
 test('a created edit on a member refreshes its window', () => {
-  let { g, reads, e, query } = createdWindow
+  let { g, reads, e } = createdWindow
   g.apply([{ entity: { eid: 'r1' }, doc: { title: 'Edited' } }], {
     now: '2026-01-02T00:00:00.000Z',
   })

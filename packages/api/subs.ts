@@ -1482,10 +1482,12 @@ export let subscriptions = (graph: Graph, opts: {
                             now.filter((b) => local.has(b.entity.eid)),
                             { ...s.opts, native: true },
                           ),
-                          (rows) => push(s, local, () => answered(
-                            matcher(queryOf(s), graph.vocab, s.opts)(rows)
-                              .map(s.cut),
-                          )),
+                          (rows) =>
+                            push(s, local, () =>
+                              answered(
+                                matcher(queryOf(s), graph.vocab, s.opts)(rows)
+                                  .map(s.cut),
+                              )),
                         )
                       }
                       let candidates = [...new Set([...s.members, ...local])]
