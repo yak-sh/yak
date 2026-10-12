@@ -142,22 +142,48 @@ export let holds = (driver: Driver, name: string, n: number): boolean =>
     }))[0]?.n ?? 0,
   ) >= n
 
+/** Whether the engine refused a unique index because rows already in its
+ * table share a key. */
+let collides = (e: unknown): boolean =>
+  e instanceof Error && /unique constraint failed/i.test(e.message)
+
+/** What is reported of a unique index the rows in its table break: it is not
+ * built, and the table serves without it. */
+export let unbuilt = (s: CreateIndex, e: unknown): Error =>
+  new Error(
+    `${s.name} is not built: rows in ${s.on} share its key and need a ` +
+      `migration that prepares them (${e instanceof Error ? e.message : e})`,
+    { cause: e },
+  )
+
 /**
  * Run `stmts` as `erect` does, owing each index a file lacks over a table of
- * {@link BIG} rows or more instead of building it here.
+ * {@link BIG} rows or more instead of building it here. A new unique index the
+ * rows already in its table break is left unbuilt and returned, so the file
+ * opens with the shape it holds and the caller reports it; a failed statement
+ * undoes only itself, so the rest stands.
  */
-export let build = (driver: Driver, stmts: readonly Stmt[]): void => {
+export let build = (driver: Driver, stmts: readonly Stmt[]): Error[] => {
   let names = new Set(catalogue(driver).map((o) => o.name))
-  if (!driver.file || !names.has(META)) return erect(driver, stmts)
-  erect(
-    driver,
-    stmts.filter((s) => {
-      if (s.t != 'create index' || names.has(s.name)) return true
-      if (!names.has(s.on) || !holds(driver, s.on, BIG)) return true
-      owe(driver, { kind: 'index', name: s.name, stmt: s })
-      return false
-    }),
-  )
+  let owing = !!driver.file && names.has(META)
+  let now = stmts.filter((s) => {
+    if (!owing || s.t != 'create index' || names.has(s.name)) return true
+    if (!names.has(s.on) || !holds(driver, s.on, BIG)) return true
+    owe(driver, { kind: 'index', name: s.name, stmt: s })
+    return false
+  })
+  let unique = (s: Stmt): s is CreateIndex =>
+    s.t == 'create index' && !!s.unique && !names.has(s.name)
+  erect(driver, now.filter((s) => !unique(s)))
+  return now.filter(unique).flatMap((s) => {
+    try {
+      driver.query(s)
+      return []
+    } catch (e) {
+      if (!collides(e)) throw e
+      return [unbuilt(s, e)]
+    }
+  })
 }
 
 /** What one call to {@link work} did: the work it finished or advanced, or

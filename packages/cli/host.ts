@@ -577,25 +577,33 @@ let composed = async (
       // One print covers everything this file needs: the store's tables, the
       // ones beside them, the plugins' own and the text indexes. A file that
       // recorded it opens with no DDL; one that did not adds what is missing.
-      // A pass that fails (a unique index the rows break) is reported and the
-      // graph opens with the shape it holds; the next opener tries again.
+      // What the pass leaves undone (a table whose rows do not fit, a unique
+      // index they break) or a pass that fails is reported, and the graph
+      // opens with the shape it holds; the print stays unrecorded, so the
+      // next opener tries again.
       schema: opts.readOnly ? undefined : (_built, stmts) => {
         let beside = [...migrationSchema(), ...blobSchema(), ...stmts]
         let indexes = textSchema(text, derived)
         let print = printOf(store!.print(), [...beside, ...indexes])
-        try {
-          follow(sql, print, () => {
-            store!.install([...beside, ...indexes])
-            add(sql, beside)
-            if (text.length) {
-              adopt(sql, text, derived, { heal: false, fill: filler(sql) })
-            }
-          })
-        } catch (error) {
+        let told = (error: unknown) =>
           void report(error, {
             during: { process: selfEid() },
             tags: { step: 'schema' },
           })
+        try {
+          follow(sql, print, () => {
+            let left = [
+              ...store!.install([...beside, ...indexes]),
+              ...add(sql, beside),
+            ]
+            if (text.length) {
+              adopt(sql, text, derived, { heal: false, fill: filler(sql) })
+            }
+            left.forEach(told)
+            return !left.length
+          })
+        } catch (error) {
+          told(error)
         }
       },
       effects: (built, disabled) => {

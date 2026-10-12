@@ -113,6 +113,18 @@ test('a window that fails waits an hour, and a dropped table takes its work', ()
   done()
 })
 
+test('a unique index the rows break is answered unbuilt, and the rest stands', () => {
+  let { db, done } = file()
+  rows(db, 'note', 2, lit(1))
+  let left = build(db, [index('note', true), index('small', true)])
+  assertEquals([has(db, 'note_x'), has(db, 'small_x')], [false, true])
+  assertEquals(left.map((e) => e.message.split(':')[0]), [
+    'note_x is not built',
+  ])
+  assertThrows(() => build(db, [{ ...index('note', true), cols: [col('y')] }]))
+  done()
+})
+
 test('a database in memory builds every index at once', () => {
   let db = open(':memory:')
   db.query({ t: 'create table', name: 'big', cols: [{ name: 'x' }] })

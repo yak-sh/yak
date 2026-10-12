@@ -188,8 +188,13 @@ export class Tracker {
       let ran = false
       follow(sql, PRINT, () => {
         if (held == SCHEMA_READY) return
-        saved.install()
+        // What the install leaves undone (a unique index the rows break) is
+        // reported; the tracker serves the shape it holds, and the next boot
+        // tries again.
+        let left = saved.install()
         this.#traceMeta().set('trace-ready', TRACE_READY)
+        for (let e of left) void this.#report(e, 'Tracker.schema')
+        if (left.length) return false
         ran = true
       })
       if (ran) await this.ctx.storage.put('schema', SCHEMA_READY)

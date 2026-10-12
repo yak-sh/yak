@@ -10,7 +10,6 @@ import { adopt, fields } from '@yaks/fts'
 import { rekey, schema as vectorSchema } from '@yaks/embedding'
 import { reserved } from '@yaks/durable-object'
 import {
-  and,
   catalogue,
   col,
   type Derived,
@@ -20,7 +19,6 @@ import {
   notNull,
   select,
   table,
-  tally,
 } from '@yaks/sql'
 import {
   backfill,
@@ -31,6 +29,7 @@ import {
   retabled,
   retired,
 } from '@yaks/sqlite'
+import { build } from '@yaks/sqlite/owe'
 import type { Index, Vocab } from '@yaks/vocab'
 
 import type { Bundle, Comp } from '@yaks/graph'
@@ -431,40 +430,19 @@ export let shed = (
 /** The schema a vocabulary implies, raised over whatever the object holds.
  * Only the tables that stood before it can be behind their vocabulary
  * (@yaks/sqlite `fit`), so a fresh object is asked nothing about its columns,
- * keys or checks. What `fit` had to leave as it stood comes back, for the
- * caller to report. A unique index can be added while it has no complete keys
- * to index, even if its table has older rows. Otherwise existing rows need a
- * preparing migration, unless the same index stood before a rebuild. */
+ * keys or checks. What it had to leave undone comes back for the caller to
+ * report, and the store serves the shape it holds: a table `fit` left as it
+ * stood, and a new unique index the rows already there break (@yaks/sqlite
+ * `build`). */
 export let install = (
   d: Driver,
   vocab: Vocab,
   derived: Derived = {},
 ): Error[] => {
-  let stood = new Set(named(d, 'index').map((i) => i.name))
   erect(d, retabled(d, vocab, derived))
   let unfit = fit(d, vocab)
   for (let stmt of retired(d, vocab)) d.query(stmt)
-  let held = new Set(named(d, 'index').map((i) => i.name))
-  let ready = {
-    ...vocab,
-    indexes: (table: string) =>
-      vocab.indexes(table).filter((i) => {
-        let name = `${table}_${i.props.join('_')}`
-        if (held.has(name)) return false
-        if (stood.has(name) || !i.unique || !tally(d, table)) return true
-        // Rows without a complete key occupy no slot in a unique index. A
-        // newly added nullable property therefore leaves the index empty even
-        // when its component already has rows.
-        let key = [...i.props, ...(i.present ?? [])]
-        if (!tally(d, table, and(...key.map((p) => notNull(col(p)))))) {
-          return true
-        }
-        throw new Error(
-          `skipped unique index ${name}: existing rows require a preparing migration`,
-        )
-      }),
-  }
-  erect(d, indexed(ready))
+  unfit.push(...build(d, indexed(vocab)))
   // Search is app composition, after all indexed columns have been raised:
   // the full-text indexes, and the table the vectors are kept in beside the
   // triggers that note which of them changed (@yaks/embedding). The triggers

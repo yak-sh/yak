@@ -386,10 +386,11 @@ is on; staging has no tail consumer.
 
 A yaks.app version that adds a column or index never removes or re-indexes what
 old code depends on in the same version. A version that starts depending on a
-new shape ships after the version that created it. Create a unique index over
-existing rows inside the pass that prepares them; if no row has a complete key,
-the new index can be created as empty. Otherwise skip it with a report and
-refuse to serve without the declared constraint.
+new shape ships after the version that created it. A new unique index is built
+over existing rows whenever they fit it. Where rows share its key, the wake
+leaves it unbuilt, reports it, and the store serves without the constraint until
+a pass prepares those rows; a draft's deploy that declares it is refused with
+the same reason.
 
 - Creating an index before its column existed broke directory boot.
 - Rollback boot failed on an old vocabulary index the migrated rows violated.

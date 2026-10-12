@@ -274,8 +274,10 @@ export type Store = {
    * the file's schema is as this vocabulary last installed it. `beside` is
    * the rest of the composed schema (./follow.ts): a table too big to rebuild
    * at once is rebuilt later (./owe.ts), and its indexes and triggers there
-   * are raised again on the rebuilt one */
-  install: (beside?: Stmt[]) => void
+   * are raised again on the rebuilt one. Answers what it left undone, each
+   * also reported: a table whose rows do not fit its new shape, and a unique
+   * index those rows break (./owe.ts `build`) */
+  install: (beside?: Stmt[]) => Error[]
   /** a query → its entities, with `comps` only where named: which entities
    * match and what they carry read as one snapshot, in a unit that takes no
    * write lock, so another process's commit is seen whole or not at all */
@@ -785,7 +787,8 @@ export let storage = (
   // (./follow.ts), never by an operation.
   // In-memory stores are private scratch values and may prepare themselves.
   let ready = false
-  let install = (beside: Stmt[] = []) => {
+  let install = (beside: Stmt[] = []): Error[] => {
+    let left: Error[] = []
     let { print, made } = plan(vocab, base.derived, !!driver.file)
     let mark = (strays: string[]) =>
       [print, shape(driver, [...made, ...strays]), ...strays].join(' ')
@@ -831,9 +834,9 @@ export let storage = (
           })
           forgo(driver, kept)
           for (let stmt of retired(driver, vocab)) driver.query(stmt)
-          build(driver, indexed(vocab))
-          unfit.forEach(report)
-          clean = !unfit.length
+          left = [...unfit, ...build(driver, indexed(vocab))]
+          left.forEach(report)
+          clean = !left.length
           // Memory templates keep schema, never a store's lineage identity.
           if (driver.file && clean) seal()
         })
@@ -868,6 +871,7 @@ export let storage = (
     if (typeof driver.statistics == 'object') unit(driver, analyze)
     else analyze()
     ready = true
+    return left
   }
   let ensure = () => {
     if (driver.file || ready) return

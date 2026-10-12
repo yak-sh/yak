@@ -73,11 +73,14 @@ export let grow = (driver: Driver, stmts: Stmt[]): Stmt[] =>
 
 /** Run `stmts`, each of which only adds what is missing, then the columns
  * their standing tables lack, in one unit under the write lock. An index over
- * a populated table is owed rather than built (./owe.ts). */
-export let add = (driver: Driver, stmts: Stmt[]): void =>
+ * a populated table is owed rather than built, and a unique index the rows
+ * already there break is left unbuilt and returned for the caller to report
+ * (./owe.ts). */
+export let add = (driver: Driver, stmts: Stmt[]): Error[] =>
   unit(driver, () => {
-    build(driver, stmts)
+    let left = build(driver, stmts)
     for (let s of grow(driver, stmts)) driver.query(s)
+    return left
   })
 
 /** Bring a file to the composed schema `print` names: nothing, where the file

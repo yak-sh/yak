@@ -267,8 +267,9 @@ export type Graph = {
   plugins: Plugin[]
   /** register another plugin (its hooks join the ones already there) */
   use: (plugin: Plugin) => Graph
-  /** make the storage ready for this graph's vocabulary */
-  install: () => void | Promise<void>
+  /** make the storage ready for this graph's vocabulary, answering what it
+   * left undone (Storage `install`) */
+  install: () => void | Error[] | Promise<void | Error[]>
   /** Whether this caller needs plugin query or answer rewrites. */
   rewrites: (opts?: ReadOpts) => boolean
   /** Compose mandatory relation restrictions for a caller's read. */

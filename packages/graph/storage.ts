@@ -169,8 +169,10 @@ export type Storage = {
    * answered from elsewhere (@yaks/sql `worn`). */
   worn?: (comp: string, prop: string) => boolean
   /** make the store ready for the bound vocabulary: its schema, where it has
-   * one */
-  install: () => void | Promise<void>
+   * one. A store may answer what it had to leave undone, each already
+   * reported (a table whose rows do not fit, a unique index they break); it
+   * serves the shape it holds meanwhile. */
+  install: () => void | Error[] | Promise<void | Error[]>
   /** a query → its entities, with `comps` only where the caller names them */
   read: (
     query: Query,

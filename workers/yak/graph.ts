@@ -1088,9 +1088,15 @@ export class Store {
   // longer run, the stamp decides when the pass runs: where it is not this
   // one, the print is forgotten and the pass runs again, and where it is, a
   // print the store lacks is recorded with no pass. Each pass writes the stamp.
-  #schema({ vocab, print, stamp }: Shape, name: string) {
+  //
+  // What the pass leaves undone (a table whose rows do not fit, a unique index
+  // they break) is answered for the caller: a wake reports it and serves the
+  // shape the store holds, and a draft's deploy is refused with it. The print
+  // stays unrecorded, so the next wake tries again.
+  #schema({ vocab, print, stamp }: Shape): Error[] {
+    let left: Error[] = []
     let held = this.#get('schema')
-    if (!(this.#get('name') || held)) return
+    if (!(this.#get('name') || held)) return left
     if (held && held != stamp) forget(this.#sql, print)
     follow(this.#sql, print, () => {
       if (held == stamp) return
@@ -1100,12 +1106,12 @@ export class Store {
       lifecycleColumns(this.#sql, vocab)
       erect(this.#sql, blobSchema())
       if (vocab.comp('_tx')) erect(this.#sql, journalDdl())
-      let unfit = install(this.#sql, vocab, blobRead(vocab))
-      for (let e of unfit) defect(e, { request: 'schema fit', store: name })
-      if (unfit.length) return false
+      left = install(this.#sql, vocab, blobRead(vocab))
+      if (left.length) return false
       watchEmbedding(statements(this.#sql), texts(vocab, blobRead(vocab)))
       this.#put('schema', stamp)
     })
+    return left
   }
 
   #build() {
@@ -1161,7 +1167,9 @@ export class Store {
     // An unnamed object raises nothing yet. Its first named request selects
     // the store kind before boot, so an app's tables never land in a newborn
     // directory or Git store. `#learn` rebuilds when later metadata changes.
-    this.#schema(shape, name)
+    for (let e of this.#schema(shape)) {
+      defect(e, { request: 'schema fit', store: name })
+    }
     let app = this.#get('app')
     // Each incarnation binds declared effects to its host capabilities.
     // An effect writes back through the kernel's own door — a new batch
@@ -4406,11 +4414,10 @@ export class Store {
           try {
             this.#tx(() => {
               prepare()
-              this.#schema(
+              let [undone] = this.#schema(
                 shapeOf(this.#get('name') ?? '', JSON.stringify(doc)),
-                this.#get('name') ?? '',
               )
-              throw rollback
+              throw undone ?? rollback
             })
           } catch (e) {
             if (e !== rollback) {

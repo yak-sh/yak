@@ -652,7 +652,7 @@ let unsatisfiable = async () => {
   return ctx
 }
 
-test('a declared index the rows cannot satisfy refuses the boot', async () => {
+test('a declared index the rows cannot satisfy is reported, and the store serves', async () => {
   let ctx = await unsatisfiable()
   let seen: Bundle[] = []
   let env = {
@@ -663,19 +663,22 @@ test('a declared index the rows cannot satisfy refuses the boot', async () => {
       },
     },
   }
-  await within(
-    env,
-    {},
-    () =>
-      refused(newer(ctx, PLATFORM_STORE), 'skipped unique index space_slug'),
-    clock(),
-  )
+  await within(env, {}, async () => {
+    let now = newer(ctx, PLATFORM_STORE)
+    let r = await now.apply([
+      { entity: { eid: crypto.randomUUID() }, doc: { title: 'Cy' } },
+    ])
+    assertEquals(r.status, 200)
+  }, clock())
+  assertEquals(catalogue(db(ctx), { name: 'space_slug' }).length, 0)
   assertEquals(slot(ctx, 'schema'), 'older schema')
   assertEquals(seen.length, 1)
   assertEquals((seen[0].error as { tags: unknown }).tags, {
-    request: 'schema',
+    request: 'schema fit',
     store: PLATFORM_STORE,
   })
+  let { value } = seen[0].exception as { value: string }
+  assert(value.includes('space_slug is not built'), value)
 })
 
 test('a nullable unique key is raised over older rows without one', async () => {
