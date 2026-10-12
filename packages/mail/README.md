@@ -476,10 +476,12 @@ The root import `@yaks/mail` provides:
 Separate entry points provide `mailDoc` and `docs` from `@yaks/mail/vocab`,
 `plugins()` from `@yaks/mail/graph`, `effects()` and `post()` from
 `@yaks/mail/effects`, `routes()`, `PATH`, and `Posted` from `@yaks/mail/routes`,
-`service()` and `EVERY` from `@yaks/mail/service`, and `runs()` plus thread
-helpers from `@yaks/mail/tools`. They are not root re-exports. Their `host`
-argument is the process that opened the graph, represented by the services each
-function needs; for example, `routes()` needs `{ graph }`, and
+`service()` and `EVERY` from `@yaks/mail/service`, `runs()` plus thread helpers
+from `@yaks/mail/tools`, and from `@yaks/mail/answers` who a letter that arrived
+is from (`sender`, `automated`) and the first delivered reply in its thread
+(`answers`), which `yak admin errors` times. They are not root re-exports. Their
+`host` argument is the process that opened the graph, represented by the
+services each function needs; for example, `routes()` needs `{ graph }`, and
 `{ graph, config }` to ask the configured packages what an arrival means.
 
 ## What is deliberately not here

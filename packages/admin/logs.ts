@@ -1,9 +1,11 @@
 // The owner’s view of yaks.app failures: tail watches live traffic through
 // Wrangler, and errors reads grouped failures through the signed tracker door.
 import type { Route } from '@yaks/api'
-import type { Bundle } from '@yaks/graph'
+import type { Bundle, Comp, Graph } from '@yaks/graph'
+import { human } from '@yaks/id'
+import { answers, arrived, automated, sender } from '@yaks/mail/answers'
 import { CallError } from '@yaks/tools/errors'
-import { fixes, opened, span } from '@yaks/tracker/fixtime'
+import { fixes, opened, span, spread } from '@yaks/tracker/fixtime'
 import { type Options, routes } from '@yaks/tracker/routes'
 import { WRANGLER } from '../../workers/yak/wrangler.ts'
 import { spawn, wasInterrupted } from './subprocess.ts'
@@ -246,15 +248,71 @@ let pages = async (door: Route, query: string): Promise<Bundle[]> => {
 let named = (row: Bundle) =>
   `${row.entity.eid} ${line(object(row.doc).title).slice(0, 80)}`
 
+// The platform's own addresses: what a person writes to, and what a letter
+// from is never a person's.
+let OURS = /@(?:[\w-]+\.)*(?:bot\.yak\.sh|yaks\.app)$/i
+let ours = (address: string) => OURS.test(address)
+
+// People's letters beside the bugs: each letter a person wrote to one of the
+// platform's addresses in the window, how long until a reply in its thread
+// left (@yaks/mail/answers), and every one still waiting. Archiving a letter
+// says it needs no answer.
+let letters = async (
+  graph: Pick<Graph, 'read' | 'vocab'>,
+  from: string,
+  end: number,
+  last: string,
+  out: Note,
+) => {
+  let got = (await graph.read(
+    `!deliver .mail.at>=${from} ?mail ?doc ?archived .limit=1000`,
+  )).filter((b) => {
+    let who = sender(b), to = String((b.mail as Comp | undefined)?.to ?? '')
+    return ours(to) && who && !ours(who) && !automated(who)
+  })
+  let sent = await graph.read(
+    `.mail.reply_to .delivered.at>=${from} ?mail ?delivered .limit=1000`,
+  )
+  let paired = answers(got, sent), id = human(graph.vocab)
+  let { count, median, worst } = spread(
+    paired.flatMap((a) =>
+      a.ms == undefined ? [] : [{ ms: a.ms, of: a.letter }]
+    ),
+  )
+  let title = (b: Bundle) =>
+    line((b.doc as Comp | undefined)?.title).slice(0, 80)
+  out(
+    `People's letters in the last ${last}: ${got.length}, answered ${count}` +
+      (worst
+        ? `, median ${span(median!)}, worst ${span(worst.ms)} (${
+          id(worst.of)
+        } ${title(worst.of)})`
+        : ''),
+  )
+  for (
+    let { letter } of paired.filter((a) => !a.answer && !a.letter.archived)
+  ) {
+    out(
+      `Unanswered ${span(end - arrived(letter))}: ${id(letter)} from ${
+        sender(letter)
+      }  ${title(letter)}`,
+    )
+  }
+}
+
 // The optional window matches unresolved bugs by their latest occurrence and
 // times the fixes resolved within it; without one, fixes over the last week.
-// Hits and first seen cover the whole group, including older samples.
+// Hits and first seen cover the whole group, including older samples. Given
+// the graph, people's letters in the same window follow.
 export let errors = async (
   since: string | undefined,
   options: Options,
   out: Note,
   note: Note,
-  fetch: typeof globalThis.fetch = globalThis.fetch,
+  { fetch = globalThis.fetch, graph }: {
+    fetch?: typeof globalThis.fetch
+    graph?: Pick<Graph, 'read' | 'vocab'>
+  } = {},
 ): Promise<void> => {
   let window = '', seen = '', end = Date.now()
   let seconds = since == undefined ? 7 * 86_400 : duration(since)
@@ -293,7 +351,7 @@ export let errors = async (
     worst
       ? `Time to fix, resolved in the last ${last}: ${count} bug${
         count == 1 ? '' : 's'
-      }, median ${span(median!)}, worst ${span(worst.ms)} (${named(worst.bug)})`
+      }, median ${span(median!)}, worst ${span(worst.ms)} (${named(worst.of)})`
       : `Time to fix: no bug resolved in the last ${last}`,
   )
   let oldest = rows.reduce<Bundle | undefined>(
@@ -303,4 +361,5 @@ export let errors = async (
   if (oldest) {
     out(`Open longest: ${span(end - opened(oldest))} (${named(oldest)})`)
   }
+  if (graph) await letters(graph, from, end, last, out)
 }

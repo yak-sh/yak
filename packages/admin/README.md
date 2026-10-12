@@ -35,7 +35,11 @@ window by default; `--since` optionally narrows by last seen. The header counts
 the matching bugs; counts and first seen cover each bug's lifetime. The last
 lines time the fixes: the median and worst time to fix (first seen, or its
 regression, to resolved) of the bugs resolved in the window, a week without
-`--since`, and how long the oldest open bug has been open.
+`--since`, and how long the oldest open bug has been open. Then people's letters
+in the same window: each letter a person wrote to the platform's addresses
+(bot.yak.sh, yaks.app), how many have a reply in their thread with the median
+and worst time to that reply, and every one still waiting, oldest last. A letter
+that needs no answer is archived (`archived{}`) to leave the list.
 
 ```sh
 yak admin errors --as admin

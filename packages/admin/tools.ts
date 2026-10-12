@@ -501,13 +501,14 @@ export let runs = (
       return [said(call, table(await deploys(root, host.stopping)))]
     }),
 
-    admin_errors: verb(async (call, vault) => {
+    admin_errors: verb(async (call, vault, _keep, graph) => {
       await platform(argsOf(call))
       await errors(
         word(argsOf(call), 'since'),
         await tracker(host.config, vault),
         out,
         note,
+        { graph },
       )
       return []
     }),

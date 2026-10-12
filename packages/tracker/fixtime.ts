@@ -48,11 +48,28 @@ export let span = (ms: number): string => {
     : `${s}s`
 }
 
-export type Fixes = {
-  /** resolved bugs with a measurable time to fix */
+/** How a set of timed things spread: how many, the median, and the worst
+ * with the thing it timed. */
+export type Spread<T> = {
   count: number
   median?: number
-  worst?: { ms: number; bug: Bundle }
+  worst?: { ms: number; of: T }
+}
+
+/// spread([{ ms: 3, of: 'c' }, { ms: 1, of: 'a' }, { ms: 2, of: 'b' }])
+///   -> { count: 3, median: 2, worst: { ms: 3, of: 'c' } }
+/// spread([{ ms: 1, of: 'a' }, { ms: 4, of: 'b' }]).median -> 2.5
+/// spread([]) -> { count: 0 }
+/** Median and worst over timed things, in any order. */
+export let spread = <T>(timed: { ms: number; of: T }[]): Spread<T> => {
+  let sorted = [...timed].sort((a, b) => a.ms - b.ms), n = sorted.length
+  if (!n) return { count: 0 }
+  let mid = n >> 1
+  return {
+    count: n,
+    median: n % 2 ? sorted[mid].ms : (sorted[mid - 1].ms + sorted[mid].ms) / 2,
+    worst: sorted[n - 1],
+  }
 }
 
 /// let bug = (h, m) => ({ entity: { eid: `${h}:${m}` },
@@ -62,17 +79,8 @@ export type Fixes = {
 /// [four.count, four.median, four.worst?.ms] -> [4, 240_000, 3_600_000]
 /// fixes([]) -> { count: 0 }
 /** Median and worst time to fix over resolved bugs. */
-export let fixes = (rows: Bundle[]): Fixes => {
-  let timed = rows.flatMap((bug) => {
-    let ms = fixtime(bug)
-    return ms == undefined ? [] : [{ ms, bug }]
-  }).sort((a, b) => a.ms - b.ms)
-  let n = timed.length
-  if (!n) return { count: 0 }
-  let mid = n >> 1
-  return {
-    count: n,
-    median: n % 2 ? timed[mid].ms : (timed[mid - 1].ms + timed[mid].ms) / 2,
-    worst: timed[n - 1],
-  }
-}
+export let fixes = (rows: Bundle[]): Spread<Bundle> =>
+  spread(rows.flatMap((of) => {
+    let ms = fixtime(of)
+    return ms == undefined ? [] : [{ ms, of }]
+  }))
