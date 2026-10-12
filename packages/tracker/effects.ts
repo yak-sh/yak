@@ -30,6 +30,17 @@ export type Options = {
 
 let openedAt = (row: Bundle) =>
   str(comp(row, 'regressed').at || comp(row, 'created').at)
+
+// A bug that opens now from an occurrence a day or more old is history
+// arriving late (moved records, a backlog forwarded after an outage): nothing
+// is failing now, so it is marked seen without a letter. A regression is
+// always news.
+let LATE = 24 * 60 * 60 * 1000
+let late = (row: Bundle) => {
+  let first = Date.parse(str(comp(row, 'bug').first))
+  return !comp(row, 'regressed').at &&
+    Date.parse(openedAt(row)) - first >= LATE
+}
 let letterEid = (options: Options, row: Bundle) =>
   derivedEid(
     `tracker-notify|${
@@ -79,6 +90,7 @@ export let notify = async (
   if (options.notify) return await options.notify([row])
   if (!options.to || !options.store) return
   if (options.since && openedAt(row) < options.since) return
+  if (late(row)) return void await g.apply([receipt(row)], { trusted: true })
   let letter = letterEid(options, row)
   let [exists] = await g.get([letter])
   if (exists?.mail) {

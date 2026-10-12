@@ -179,3 +179,27 @@ test('space openings still use their notify stream', async () => {
   equal((await letters(g)).length, 0)
   ok(!(await g.get([row.entity.eid]))[0].notified)
 })
+
+check(
+  'a bug opening from occurrences a day old is marked seen without a letter',
+  async (g) => {
+    let row = bug()
+    row.bug = { ...comp(row, 'bug'), first: '2026-09-20T00:00:00Z' }
+    await put(g, [row])
+    await replay(g, row)
+    equal((await letters(g)).length, 0)
+    let [seen] = await g.get([row.entity.eid])
+    ok(seen?.notified)
+  },
+)
+
+check(
+  'a bug opening from a recent occurrence still gets its letter',
+  async (g) => {
+    let row = bug()
+    row.bug = { ...comp(row, 'bug'), first: at }
+    await put(g, [row])
+    await replay(g, row)
+    equal((await letters(g)).length, 1)
+  },
+)
