@@ -20,7 +20,7 @@ import {
 import { open } from '@yaks/sqlite/db'
 import { statements } from '@yaks/sqlite'
 import { bury, SPINE, TOMBSTONE } from '../sqlite/testing.ts'
-import { schema, TABLE } from './ddl.ts'
+import { BUILD, DIRTY, schema, TABLE } from './ddl.ts'
 import { absorb, hold, RESCORE } from './held.ts'
 import { nearest, type NearOpts } from './near.ts'
 import { pack, unit, unpack } from './vector.ts'
@@ -161,6 +161,40 @@ test('a copy whose dirty set another driver cleared loads again', () => {
   absorb(other)
   assertEquals(top(db, q)[0], `v-${N + 1}`)
   alike(db)
+})
+
+let settling = statements(open(':memory:'))
+for (let s of [SPINE, TOMBSTONE, ...schema()]) settling.query(s)
+settling.query(insert('entity', { id: 1, eid: 'fresh' }))
+
+test('settling vectors before a search reads no vectors or build metadata', () => {
+  let db = settling
+  let vec = Float32Array.of(1, 0)
+  db.query({
+    ...insert(TABLE, { owner: 1, model, hash: '', vec: pack(vec) }),
+    or: 'replace',
+  })
+  let reads: string[] = []
+  let measured: Statements = {
+    ...db,
+    query: (s) => {
+      if (s.t == 'select') reads.push(render(s).sql)
+      return db.query(s)
+    },
+  }
+  absorb(measured)
+  assertEquals(
+    reads.filter((sql) =>
+      sql.includes(`\"${TABLE}\"`) || sql.includes(`\"${BUILD}\"`)
+    ),
+    [],
+  )
+  let n = Number(db.query(select({ from: table(BUILD) }))[0].n)
+  assertEquals(db.query(select({ from: table(DIRTY) })), [])
+  absorb(measured)
+  assertEquals(Number(db.query(select({ from: table(BUILD) }))[0].n), n)
+  assertEquals(hold(measured, model)?.size, 1)
+  assertEquals(nearest(measured, vec, { model, limit: 1 })[0].entity, 'fresh')
 })
 
 test('a buried entity, or one moved to another model, is no neighbour', () => {

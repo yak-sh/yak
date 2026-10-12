@@ -278,9 +278,12 @@ let dirty = (db: Statements, model: string): Map<number, Uint8Array | null> =>
 // index reads the dirty set, the set is the copies' alone: cleared, with a new
 // build numbered so every other copy of it loads again.
 let owned = (db: Statements) => db.ownership == 'exclusive' && !installed(db)
-let clear = (db: Statements): number => {
+let advance = (db: Statements): void => {
   db.query({ t: 'update', table: BUILD, set: { n: op('+', col('n'), lit(1)) } })
   db.query({ t: 'delete', from: DIRTY })
+}
+let clear = (db: Statements): number => {
+  advance(db)
   return current(db).n
 }
 
@@ -362,10 +365,17 @@ export let hold = (db: Statements, model: string): Held | null => {
 export let absorb = (db: Statements): void => {
   if (!owned(db)) return
   let h = copies.get(db)
+  // Until a search holds a copy, there are no codes to refresh. Settle the
+  // dirty owners and invalidate any other copy without reading their vectors
+  // or the build number nobody here needs.
+  if (!h) {
+    if (tally(db, DIRTY)) advance(db)
+    return
+  }
   let now = current(db).n
-  let set = dirty(db, h?.model ?? '')
+  let set = dirty(db, h.model)
   if (!set.size) return
-  if (h && h.n == now) {
+  if (h.n == now) {
     for (let [owner, vec] of set) {
       if (!vec) lose(h, owner)
       else if (!keep(h, owner, vec)) {
@@ -377,7 +387,7 @@ export let absorb = (db: Statements): void => {
     }
   }
   let n = clear(db)
-  if (h && h.n == now) h.n = n
+  if (h.n == now) h.n = n
 }
 
 // The `m` best of the scored, best first: the highest score, and for equal
