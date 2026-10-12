@@ -16,6 +16,7 @@ import {
   builds,
   type Built,
   diagnosed,
+  failure,
   rebuild,
 } from './builds.ts'
 import type { Env } from './env.ts'
@@ -84,7 +85,7 @@ test('builds: report links to the failing build and summarizes its log safely', 
     ])
     assertStringIncludes(
       report.error.message,
-      'Step: deno task check; error: TypeScript TS2322',
+      'Step: deno task check; error: TS2322 at [redacted]',
     )
     assertStringIncludes(
       report.error.message,
@@ -95,6 +96,34 @@ test('builds: report links to the failing build and summarizes its log safely', 
   } finally {
     globalThis.fetch = was
   }
+})
+
+test('builds: the error names its statement, place and code', () => {
+  let log = [
+    'Executing user deploy command: deno task deploy:yak',
+    'Task deploy:yak deno run -A workers/yak/wrangler.ts deploy',
+    '✘ [ERROR] A request to the Cloudflare API (/accounts/0f9613dfd3f0451df0bd0f12a1372ea3/workers/scripts/yak) failed.',
+    '',
+    '  Uncaught TypeError: Invalid URL string.',
+    '    at null.<anonymous> (file:///opt/buildhome/repo/packages/tracker/report.ts:103:12)',
+    '    at init_report (index.js:1:298)',
+    '   [code: 10021]',
+    'Failed: error occurred while running deploy command',
+  ]
+  assertEquals(failure(log), {
+    step: 'deploy yak',
+    reason: 'Uncaught TypeError: Invalid URL string at ' +
+      'packages/tracker/report.ts:103 [code 10021]',
+  })
+  assertEquals(failure(['--- deno task test', 'error: Test failed']), {
+    step: 'deno task test',
+    reason: 'Test failed',
+  })
+  assertEquals(
+    failure(['ENOSPC: no space left on device']).reason,
+    'disk full',
+  )
+  assertEquals(failure(['Retrying after timeout']).reason, 'timeout')
 })
 
 test('builds: a logs API failure keeps the build link in the report', async () => {

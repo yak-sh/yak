@@ -97,50 +97,111 @@ type Logs = {
   }
 }
 
-// Build output can print credentials. Only fixed labels and numeric status
-// codes leave this function; no log line is sent to the tracker or the meta store.
-export let failure = (
-  lines: string[],
-  prior = { step: 'Workers Builds setup', reason: 'see build log' },
-) => {
-  let { step, reason } = prior
-  for (let line of lines) {
-    if (line.includes('--- installing deno')) step = 'install Deno'
-    if (line.includes('--- deno task check')) step = 'deno task check'
-    if (line.includes('--- deno task test')) {
-      step = 'deno task test'
-    }
-    if (line.includes('Executing user deploy command')) step = 'deploy command'
-    if (/Task deploy:yak-staging\b/.test(line)) step = 'deploy staging'
-    else if (/Task deploy:yak\b/.test(line)) step = 'deploy yak'
+// Build output can print credentials, so no line leaves here as printed. The
+// failing step is a fixed label. The error is the one statement that names it
+// (a compiler's, the runtime's or wrangler's) with its place in the repo and
+// its code, everything shaped like a credential replaced, and the whole
+// capped. A failure that prints no statement keeps a fixed label for what it
+// looks like: a timeout, a full disk.
 
-    let type = line.match(/\bTS\d{4}\b/)?.[0]
-    let http = line.match(
-      /\b(?:HTTP|status|returned(?: error:)?|response)\s*(4\d\d|5\d\d)\b/i,
-    )?.[1]
-    if (type) reason = `TypeScript ${type}`
-    else if (http) reason = `HTTP ${http}`
-    else if (/\binternal server error\b/i.test(line)) {
-      reason = 'Cloudflare internal error'
-    } else if (/\bcould not resolve file type\b/i.test(line)) {
-      reason = 'file type could not be resolved'
-    } else if (/\b(?:timed? out|timeout|ETIMEDOUT)\b/i.test(line)) {
-      reason = 'timeout'
-    } else if (
-      /\b(?:ENOTFOUND|could not resolve host|DNS lookup failed)\b/i.test(line)
-    ) {
-      reason = 'DNS failure'
-    } else if (/\b(?:ECONNRESET|connection reset)\b/i.test(line)) {
-      reason = 'connection reset'
-    } else if (/\b(?:ENOSPC|no space left on device)\b/i.test(line)) {
-      reason = 'disk full'
-    } else if (/\b(?:out of memory|OOM)\b/i.test(line)) {
-      reason = 'out of memory'
-    } else if (/\b(?:test failed|failed test|FAILURES)\b/i.test(line)) {
-      reason = 'test failure'
-    }
-  }
-  return { step, reason }
+/** Replace what could be a credential in one printed line. */
+export let scrub = (line: string) =>
+  line
+    .replace(/\b(Bearer|Basic)\s+\S+/gi, '$1 [redacted]')
+    .replace(/:\/\/[^\s/@]+@/g, '://[redacted]@')
+    .replace(/(https?:\/\/[^\s?#)"']+)[?#][^\s)"']*/g, '$1')
+    .replace(
+      /\b(\w*(?:token|secret|password|passwd|credential|api_?key)\w*)(\s*[:=]\s*)("[^"]*"|'[^']*'|\S+)/gi,
+      '$1$2[redacted]',
+    )
+    .replace(
+      /\b(?:(?:sk|pk|rk)[-_][\w-]{6,}|(?:ghp|gho|ghs|whsec)_\w{6,}|xox[abp]-[\w-]+|AKIA[A-Z0-9]{12,}|eyJ[\w-]{10,}(?:\.[\w-]+)*)/g,
+      '[redacted]',
+    )
+    .replace(/\b(?=[\w-]*\d)(?=[\w-]*[A-Za-z])[\w-]{24,}/g, '[redacted]')
+
+/// scrub('https://u:p@h.test/x?k=1') -> 'https://[redacted]@h.test/x'
+/// scrub('error: TS2322 at sk-proj-private-value') -> 'error: TS2322 at [redacted]'
+/// scrub('API_TOKEN=abc123 Bearer xyz') -> 'API_TOKEN=[redacted] Bearer [redacted]'
+
+let STEPS: [RegExp, string][] = [
+  [/--- installing deno/, 'install Deno'],
+  [/--- deno task check/, 'deno task check'],
+  [/--- deno task test/, 'deno task test'],
+  [/Executing user deploy command/, 'deploy command'],
+  [/Task deploy:yak-staging\b/, 'deploy staging'],
+  [/Task deploy:yak\b/, 'deploy yak'],
+]
+
+let stepOf = (line: string) => STEPS.find(([p]) => p.test(line))?.[1]
+
+let labelOf = (line: string) => {
+  let type = line.match(/\bTS\d{4}\b/)?.[0]
+  let http = line.match(
+    /\b(?:HTTP|status|returned(?: error:)?|response)\s*(4\d\d|5\d\d)\b/i,
+  )?.[1]
+  return type
+    ? `TypeScript ${type}`
+    : http
+    ? `HTTP ${http}`
+    : /\binternal server error\b/i.test(line)
+    ? 'Cloudflare internal error'
+    : /\bcould not resolve file type\b/i.test(line)
+    ? 'file type could not be resolved'
+    : /\b(?:timed? out|timeout|ETIMEDOUT)\b/i.test(line)
+    ? 'timeout'
+    : /\b(?:ENOTFOUND|could not resolve host|DNS lookup failed)\b/i.test(line)
+    ? 'DNS failure'
+    : /\b(?:ECONNRESET|connection reset)\b/i.test(line)
+    ? 'connection reset'
+    : /\b(?:ENOSPC|no space left on device)\b/i.test(line)
+    ? 'disk full'
+    : /\b(?:out of memory|OOM)\b/i.test(line)
+    ? 'out of memory'
+    : /\b(?:test failed|failed test|FAILURES)\b/i.test(line)
+    ? 'test failure'
+    : undefined
+}
+
+// A named error says more than a bare marker: wrangler's `✘ [ERROR] A
+// request … failed.` is followed by the `Uncaught TypeError: …` that caused it.
+let NAMED = /\b\w*(?:Error|Exception):\s+\S|\bTS\d{4}\b/
+let MARKER = /^(?:✘\s*\[ERROR\]|error(?:\[[^\]]*\])?:)\s*/i
+let rank = (line: string) =>
+  NAMED.test(line) ? 2 : MARKER.test(line.trim()) ? 1 : 0
+
+let REPO = /(?:file:\/\/)?\/opt\/buildhome\/repo\//g
+
+/** The statement at `i`, with the repo place and code printed under it. */
+let statement = (lines: string[], i: number) => {
+  let near = lines.slice(i + 1, i + 16).join('\n')
+  let place = near.match(/\/repo\/([^\s:)'"]+):(\d+)/)
+  let code = near.match(/\[code:\s*(\d+)\]/)?.[1]
+  let text = lines[i].trim().replace(MARKER, '').replace(REPO, '')
+    .replace(/\.$/, '')
+  let said = scrub(
+    [text, place && `at ${place[1]}:${place[2]}`, code && `[code ${code}]`]
+      .filter(Boolean).join(' '),
+  )
+  return said.length > 300 ? said.slice(0, 299) + '…' : said
+}
+
+/** The failing step and its error, from a build's whole log. The step is the
+ * last one the log entered; the error is the first named statement in it, else
+ * the first marked one, else a label for what the step's lines look like. */
+export let failure = (lines: string[]) => {
+  let step = 'Workers Builds setup'
+  let label = 'see build log'
+  let at = -1
+  let best = 0
+  lines.forEach((line, i) => {
+    let s = stepOf(line)
+    if (s) [step, at, best] = [s, -1, 0]
+    label = labelOf(line) ?? label
+    let r = rank(line)
+    if (r > best) [at, best] = [i, r]
+  })
+  return { step, reason: at < 0 ? label : statement(lines, at) }
 }
 
 /** Read every log page so the failing step at the end is visible. A broken
@@ -148,7 +209,7 @@ export let failure = (
 export let logsOf = async (env: Env, uuid?: string) => {
   if (!uuid || !env.CF_ACCOUNT) return 'build UUID or account unavailable'
   if (!env.BUILD_LOG_TOKEN) return 'BUILD_LOG_TOKEN unavailable'
-  let detail = failure([])
+  let lines: string[] = []
   let seen = new Set<string>()
   let cursor: string | undefined
   let signal = AbortSignal.timeout(20_000)
@@ -167,13 +228,10 @@ export let logsOf = async (env: Env, uuid?: string) => {
       if (!res.ok) return `build logs returned HTTP ${res.status}`
       let page = await res.json() as Logs
       if (!page.success || !page.result) return 'build logs response failed'
-      detail = failure(
-        (page.result.lines ?? []).flatMap((row) => {
-          let line = row.at(-1)
-          return typeof line == 'string' ? [line] : []
-        }),
-        detail,
-      )
+      for (let row of page.result.lines ?? []) {
+        let line = row.at(-1)
+        if (typeof line == 'string') lines.push(line)
+      }
       cursor = page.result.truncated ? page.result.cursor : undefined
       if (page.result.truncated && !cursor) {
         return 'build logs pagination failed'
@@ -181,7 +239,7 @@ export let logsOf = async (env: Env, uuid?: string) => {
       if (cursor && seen.has(cursor)) return 'build logs repeated a page'
       if (cursor) seen.add(cursor)
     } while (cursor)
-    return detail
+    return failure(lines)
   } catch (error) {
     caught(error, { request: 'read build logs', build: uuid })
     return signal.aborted ? 'build logs timed out' : 'build logs request failed'
