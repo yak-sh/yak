@@ -81,13 +81,14 @@
 import { origin } from '@yaks/tracker/report'
 import { caught, within } from './defects.ts'
 import { CallError } from '@yaks/tools'
+import { Stale } from '@yaks/graph'
 import { refused as toolRefusal } from '@yaks/tools/routes'
 import * as apps from './apps.ts'
 import { sealed } from './cache.ts'
 import * as billing from './billing.ts'
 import * as dirPart from './directory.ts'
 import { directory } from './directory.ts'
-import { customOf, reading, stageOf, type Step, steps } from './domains.ts'
+import { customOf, reading, refresh, type Step } from './domains.ts'
 import * as drop from './drop.ts'
 import { bound, type Env, type Handler, type Inbound } from './env.ts'
 import * as docs from './docs.ts'
@@ -305,9 +306,9 @@ let serve = async (req: Request, env: Env, r: Route) => {
 // The directory's cached `stage` (stamped by domain_attach and domain_status,
 // directory.ts `Host`) answers `active` for free, so a live domain pays no
 // Cloudflare call on every request. Anything else asks Cloudflare directly
-// for the three steps a person waits through (domains.ts `steps`), because
+// for provisioning and checks ownership (domains.ts `refresh`), because
 // the cached `stage` is one word and the page wants to say which of DNS,
-// validation or certificate is still pending — the same reading
+// ownership, validation or certificate is still pending — the same reading
 // `domain_status` gives an agent, handed to the visitor instead. A platform
 // not configured to ask Cloudflare (`reachable`, domains.ts) falls back to a
 // plain "still connecting" line rather than a 500 for every visitor of every
@@ -317,20 +318,22 @@ let settling = async (env: Env, host: string): Promise<Response | null> => {
   if (!foreign(host, env)) return null
   let served = await directory(bound(env.DIRECTORY, dirPart.fetch, env))
     .serves(host)
-  if (served?.host.stage == 'active') return null
+  if (
+    served?.host.stage == 'active' &&
+    (served.host.verified || served.host.verification == null)
+  ) return null
   let how: Step[] | null = null
   let stage: 'pending' | 'active' | 'error' = served?.host.stage == 'error'
     ? 'error'
     : 'pending'
   try {
     let custom = await customOf(env, host)
-    how = custom ? steps(custom) : null
-    if (how) stage = stageOf(how)
+    if (served) ({ how, stage } = await refresh(env, served.host, custom))
   } catch (e) {
     // No CF_ZONE/CF_HOSTNAMES_TOKEN, or Cloudflare itself unreachable: the
     // cached stage above (or `pending`, where there is none at all) still
     // says something true, just without the per-step detail.
-    caught(e, { request: 'domain settling' })
+    if (!(e instanceof Stale)) caught(e, { request: 'domain settling' })
   }
   return stage == 'active' ? null : provisioning(
     host,

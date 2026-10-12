@@ -27,6 +27,7 @@
 import type { Reload } from '@yaks/platform'
 import { type Host as HostEnv, spaceHost } from './host.ts'
 import type { Bundle } from '@yaks/graph'
+import type { Rec } from './domains.ts'
 import {
   type Door,
   type Fetcher,
@@ -303,6 +304,8 @@ export type Host = {
   serves: string
   stage: HostStage | null
   at: string
+  verification: Partial<Rec> | null
+  verified: string | null
 }
 
 // A reference property, as a read hands it back: the bare eid, or `{eid, name}`
@@ -358,7 +361,9 @@ type Row = {
     serves: Id
     stage?: HostStage | null
     at?: string | null
+    verification?: Partial<Rec> | null
   }
+  verified?: { at?: string | null }
   deploy?: {
     app: Id
     version: number
@@ -655,8 +660,9 @@ export let stamp = async (
   mutation: { entities: Bundle[] },
   opts?: { stamp?: boolean },
 ) => {
-  await metaStore(env).apply(mutation.entities, KERNEL, opts)
+  let applied = await metaStore(env).apply(mutation.entities, KERNEL, opts)
   cached(metaStore(env)).clear()
+  return applied
 }
 
 // A listing carries the components the filter names (@yaks/graph `wanted`),
@@ -806,6 +812,8 @@ let hostOf = (r: Row): Host => ({
   serves: idOf(r.hostname!.serves),
   stage: r.hostname!.stage ?? null,
   at: r.hostname!.at ?? '',
+  verification: r.hostname!.verification ?? null,
+  verified: r.verified?.at ?? null,
 })
 
 // A deploy of an app, as versions.ts reads one: the manifest parsed, since
@@ -1140,7 +1148,7 @@ export let directory = (via: Fetcher | Part, now = false) => {
     // cached, so a domain serves the moment it is attached rather than a TTL
     // later.
     serves: async (host: string) => {
-      let row = await one(`.hostname.name=${host}`)
+      let row = await one(`.hostname.name=${host}&?verified`)
       if (!row?.hostname) return null
       let eid = idOf(row.hostname.serves)
       let aimed = hostOf(row)
@@ -1158,7 +1166,7 @@ export let directory = (via: Fetcher | Part, now = false) => {
         space.eid,
         ...(await self.apps(space)).map((a) => a.eid),
       ])
-      return (await query('.hostname')).map(hostOf)
+      return (await query('.hostname&?verified')).map(hostOf)
         .filter((h) => mine.has(h.serves))
     },
     // The app offered under a platform-wide name (T-32888), with the space it

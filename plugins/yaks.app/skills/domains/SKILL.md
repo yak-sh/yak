@@ -1,6 +1,6 @@
 ---
 name: domains
-description: 'A custom domain (yaks.app). Pointing a domain the person already owns at their space or at one app of it: the CNAME to add and where to type it at GoDaddy, Namecheap, Squarespace and the rest, the apex problem and the three ways through it, what each pending state means, and why a domain stays stuck.'
+description: 'A custom domain (yaks.app). Pointing a domain the person already owns at their space or at one app of it: the CNAME and ownership TXT record to add and where to type them at GoDaddy, Namecheap, Squarespace and the rest, the apex problem and the three ways through it, what each pending state means, and why a domain stays stuck.'
 ---
 
 # A custom domain
@@ -53,12 +53,12 @@ existing `.yaks.app` address in the meantime.
 
 ## The three tools
 
-- `domain_attach(app?, hostname)` — provisions the hostname and returns the DNS
-  record that has to be added, as data: `records: [{type, name, value}]`. Name
-  an `app` and the domain is that app's; leave it out and the domain is the
-  space's. Only the space owner may attach one.
+- `domain_attach(app?, hostname)` — provisions the hostname and tells you the
+  CNAME and ownership TXT record to add, including each full name and exact
+  value. Name an `app` and the domain is that app's; leave it out and the domain
+  is the space's. Only the space owner may attach one.
 - `domain_status(hostname?)` — what each domain points at, and where
-  provisioning has got to, split into the three things that can be outstanding.
+  provisioning has got to, split into the four things that can be outstanding.
   Leave `hostname` out to get every domain in the space.
 - `domain_detach(hostname)` — hands the hostname back. What it served is
   untouched: same data, same files, same `<space>.yaks.app` address.
@@ -67,18 +67,27 @@ A domain points at one place, and a hostname belongs to one place across the
 whole platform. `www.example.com` and `example.com` are two hostnames, so attach
 both if they want both.
 
-## The record
+## The records
 
-Always the same shape, whatever the registrar calls the fields:
+The **CNAME** directs traffic to yaks.app:
 
     CNAME   example.com   →   origin.saas.yaks.app
 
-`domain_attach` returns exactly that, as data. Read it out of `records` rather
-than out of the message — the value is the one thing that must be typed
-character for character.
+The **ownership TXT record** proves control of this hostname's DNS. Its name is
+`_cf-custom-hostname.<hostname>` and its value is a token unique to this
+attachment. Copy the exact name and value from `domain_attach` or
+`domain_status`; a token from an earlier attachment does not verify this one.
 
-Nothing serves at the domain until that record resolves. Until then the hostname
-serves whatever it served before.
+Add both records where the domain's DNS is managed. For `www.example.com`, a
+panel that appends `example.com` needs `www` for the CNAME and
+`_cf-custom-hostname.www` for the TXT record. The TXT record's name is separate
+from the CNAME's, so they can coexist.
+
+The domain serves the space or app only after the TXT record is verified,
+Cloudflare accepts the hostname, and its certificate is ready. A CNAME already
+pointing here proves where traffic goes, not who owns the hostname. Existing
+active hostnames keep serving. After ownership is verified, the TXT record can
+be removed; keep the CNAME for as long as the domain should serve here.
 
 ## The panels
 
@@ -171,12 +180,14 @@ they will ask about once their DNS is on Cloudflare.
 
 ## Reading the status
 
-`domain_status` reports three steps, each with `done`, `waiting` or `error`,
+`domain_status` reports four steps, each with `done`, `waiting` or `error`,
 because each one waits on somebody different:
 
-- **dns** — whether the record resolves to yaks.app. Waiting means the person
-  has not added it yet, or it has not propagated. This is the only step they can
-  do anything about.
+- **ownership** — whether the ownership TXT record matches this attachment.
+  Waiting means the person must add the exact TXT name and value the tool gives.
+- **dns** — whether the CNAME resolves to yaks.app. Waiting means the person has
+  not added it yet, or it has not propagated. The ownership TXT record and CNAME
+  are the two records the person adds.
 - **validation** — whether Cloudflare has accepted the hostname as one we may
   serve. It follows dns.
 - **certificate** — whether the HTTPS certificate is issued. This is the step
@@ -213,8 +224,8 @@ doing in between — check again in five minutes rather than changing anything.
 
 `domain_detach(hostname)` gives the hostname back and leaves the app exactly as
 it was, still serving at `<space>.yaks.app`. It does not touch the person's DNS
-— that record is theirs, in their registrar, and after detaching it points at
-nothing, so tell them to delete it.
+— those records are theirs, in their registrar. Tell them to delete the CNAME
+and ownership TXT record for the detached hostname.
 
 Detach before re-attaching a domain somewhere else. A hostname belongs to one
 app on the whole platform, and `domain_attach` refuses a name that is taken

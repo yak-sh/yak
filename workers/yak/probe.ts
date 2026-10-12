@@ -141,6 +141,7 @@ export let vars = (secret: string, cloudflare: string) => {
     CF_ZONE: 'zone',
     CF_HOSTNAMES_TOKEN: 'a-token',
     HOSTNAMES_API: cloudflare,
+    DNS_API: `${cloudflare}/dns-query`,
     STRIPE_WEBHOOK_SECRET: WEBHOOK_SECRET,
     STRIPE_CONNECT_WEBHOOK_SECRET: WEBHOOK_SECRET,
     OPENAI_APPS_CHALLENGE: CHALLENGE,
@@ -812,6 +813,7 @@ export let seed = async (
 // A worker upload keeps its script and secret names for later API calls.
 export let cloudflare = (log: string) => {
   let held = new Map<string, Custom>()
+  let dns = new Map<string, string[]>()
   let calls = new Map<string, Track[]>()
   let workers = new Map<string, { version: string; secrets: Set<string> }>()
   let sfu = async (req: Request, path: string) => {
@@ -856,6 +858,28 @@ export let cloudflare = (log: string) => {
   let server = Deno.serve({ port: 0, onListen: () => {} }, async (req) => {
     let url = new URL(req.url)
     let ok = (result: unknown) => Response.json({ success: true, result })
+    if (url.pathname == '/probe/txt') {
+      let { name, values } = await req.json()
+      dns.set(name, values)
+      return ok(null)
+    }
+    if (url.pathname == '/probe/hostname') {
+      let { hostname, over } = await req.json()
+      let custom = held.get(hostname)
+      if (custom) Object.assign(custom, over)
+      return ok(custom ?? null)
+    }
+    if (url.pathname == '/dns-query') {
+      let name = url.searchParams.get('name') ?? ''
+      return Response.json({
+        Status: 0,
+        Answer: (dns.get(name) ?? []).map((value) => ({
+          name,
+          type: 16,
+          data: JSON.stringify(value),
+        })),
+      })
+    }
     if (url.pathname == '/tracker-probe' && req.method == 'POST') {
       Deno.writeTextFileSync(log, `yak-tracker ${await req.text()}\n`, {
         append: true,
@@ -905,6 +929,11 @@ export let cloudflare = (log: string) => {
           hostname,
           status: 'active',
           ssl: { status: 'active' },
+          ownership_verification: {
+            type: 'txt',
+            name: `_cf-custom-hostname.${hostname}`,
+            value: crypto.randomUUID(),
+          },
         }
         held.set(hostname, custom)
         return ok(custom)
@@ -918,7 +947,10 @@ export let cloudflare = (log: string) => {
     }
     let want = url.searchParams.get('hostname') ?? ''
     let found = held.get(want)
-    return ok(found ? [found] : [])
+    // Cloudflare can omit the ownership challenge once active. The platform
+    // must retain the POST's challenge rather than trust that omission.
+    let { ownership_verification: _record, ...active } = found ?? {}
+    return ok(found ? [found.status == 'active' ? active : found] : [])
   })
   return {
     url: `http://127.0.0.1:${(server.addr as Deno.NetAddr).port}`,
@@ -951,6 +983,32 @@ export let attach = async (k: Pick<Kernel, 'cloudflare'>, hostname: string) => {
     body: JSON.stringify({ hostname }),
   })
   await made.body?.cancel()
+}
+
+/** The TXT records served by the kernel's DNS stand-in. */
+export let dnsTxt = async (
+  k: Pick<Kernel, 'cloudflare'>,
+  name: string,
+  ...values: string[]
+) => {
+  let response = await fetch(`${k.cloudflare}/probe/txt`, {
+    method: 'POST',
+    body: JSON.stringify({ name, values }),
+  })
+  await response.body?.cancel()
+}
+
+/** Read or change one hostname at the kernel's Cloudflare stand-in. */
+export let domainState = async (
+  k: Pick<Kernel, 'cloudflare'>,
+  hostname: string,
+  over: Partial<Custom> = {},
+): Promise<Custom> => {
+  let response = await fetch(`${k.cloudflare}/probe/hostname`, {
+    method: 'POST',
+    body: JSON.stringify({ hostname, over }),
+  })
+  return (await response.json()).result
 }
 
 /** Whether the kernel's stand-in for Cloudflare holds `hostname` attached. */

@@ -14,6 +14,7 @@ import {
   apex,
   type Custom,
   customOf,
+  ownership,
   provision,
   reachable,
   reading,
@@ -56,7 +57,10 @@ let LIVE: Custom = {
   ssl: { status: 'active' },
 }
 
-let state = (c: Custom) => steps(c).map((s) => `${s.step}:${s.state}`)
+let state = (c: Custom) =>
+  steps(c, true).filter((s) => s.step != 'ownership').map((s) =>
+    `${s.step}:${s.state}`
+  )
 
 test('the three moments a person waits through read differently', () => {
   assertEquals(state(MADE), [
@@ -74,13 +78,14 @@ test('the three moments a person waits through read differently', () => {
     'validation:done',
     'certificate:done',
   ])
-  assertEquals(stageOf(steps(MADE)), 'pending')
-  assertEquals(stageOf(steps(WAITING)), 'pending')
-  assertEquals(stageOf(steps(LIVE)), 'active')
+  assertEquals(stageOf(steps(MADE, true)), 'pending')
+  assertEquals(stageOf(steps(WAITING, true)), 'pending')
+  assertEquals(stageOf(steps(LIVE, true)), 'active')
+  assertEquals(stageOf(steps(LIVE)), 'pending')
   // Same stage, different sentence: `pending` twice over is exactly what
   // made an agent guess, so the words have to disagree. Cloudflare's own
   // are handed on, because they are more specific than ours.
-  let said = (c: Custom) => steps(c)[0].said
+  let said = (c: Custom) => steps(c, true)[1].said
   assert(said(MADE) != said(WAITING), said(MADE))
   assertEquals(
     said(WAITING),
@@ -97,7 +102,7 @@ test('the certificate step is read apart from the hostname', () => {
     ['dns:done', 'validation:done', 'certificate:waiting'],
   )
   assertEquals(
-    stageOf(steps({ ...LIVE, ssl: { status: 'pending_issuance' } })),
+    stageOf(steps({ ...LIVE, ssl: { status: 'pending_issuance' } }, true)),
     'pending',
   )
   // A certificate authority that refused says why, and the why is what the
@@ -108,26 +113,26 @@ test('the certificate step is read apart from the hostname', () => {
       status: 'pending_validation',
       validation_errors: [{ message: 'caa_error: pki.goog' }],
     },
-  })
-  assertEquals(caa[2].state, 'error')
-  assertEquals(caa[2].said, 'caa_error: pki.goog')
+  }, true)
+  assertEquals(caa[3].state, 'error')
+  assertEquals(caa[3].said, 'caa_error: pki.goog')
   assertEquals(stageOf(caa), 'error')
 })
 
 test('a word Cloudflare has not shown us yet is said, not assumed', () => {
   // Never `done` on a guess: an unknown word waits, carrying itself.
-  let odd = steps({ ...LIVE, status: 'pending_migration' })
-  assertEquals(odd[1].state, 'waiting')
-  assertEquals(odd[1].said, 'Cloudflare says pending migration')
+  let odd = steps({ ...LIVE, status: 'pending_migration' }, true)
+  assertEquals(odd[2].state, 'waiting')
+  assertEquals(odd[2].said, 'Cloudflare says pending migration')
   // Every timeout says the same thing, and the list of them grows.
-  let out = steps({ ...LIVE, ssl: { status: 'issuance_timed_out' } })
-  assertEquals(out[2].state, 'error')
+  let out = steps({ ...LIVE, ssl: { status: 'issuance_timed_out' } }, true)
+  assertEquals(out[3].state, 'error')
   assertEquals(stageOf(out), 'error')
   // And the two ends of giving up are named with the verb that fixes them.
   for (let status of ['moved', 'deleted', 'blocked']) {
-    assertEquals(stageOf(steps({ ...LIVE, status })), 'error')
+    assertEquals(stageOf(steps({ ...LIVE, status }, true)), 'error')
   }
-  assert(/attach/.test(steps({ ...LIVE, status: 'moved' })[1].said))
+  assert(/attach/.test(steps({ ...LIVE, status: 'moved' }, true)[2].said))
 })
 
 test('the record a person adds is one CNAME, at the name itself', () => {
@@ -135,6 +140,10 @@ test('the record a person adds is one CNAME, at the name itself', () => {
     { type: 'CNAME', name: 'herbusiness.com', value: ORIGIN },
   ])
   assertEquals(records('www.herbusiness.com')[0].name, 'www.herbusiness.com')
+  assertEquals(records(MADE.hostname, {}, MADE.ownership_verification)[1], {
+    ...MADE.ownership_verification,
+    type: 'TXT',
+  })
 })
 
 test('the apex hint knows a bare name from one with a label', () => {
@@ -153,13 +162,13 @@ test('the apex hint knows a bare name from one with a label', () => {
 })
 
 test('the lines an agent reads out say the order of the wait', () => {
-  let said = reading(steps(WAITING)).split('\n')
-  assertEquals(said.length, 3)
-  assert(said[0].startsWith('… dns:'), said[0])
+  let said = reading(steps(WAITING, true)).split('\n')
+  assertEquals(said.length, 4)
+  assert(said[1].startsWith('… dns:'), said[1])
   assertEquals(
-    reading(steps(LIVE)).split('\n').filter((l) => l[0] == '✓')
+    reading(steps(LIVE, true)).split('\n').filter((l) => l[0] == '✓')
       .length,
-    3,
+    4,
   )
 })
 
@@ -201,6 +210,43 @@ let recorded = async (
 
 let ok = (result: unknown) =>
   Response.json({ success: true, errors: [], messages: [], result })
+
+test('only an exact ownership TXT answer proves control of the hostname', async () => {
+  let rec = MADE.ownership_verification!
+  let answer = { name: rec.name + '.', type: 16, data: `"${rec.value}"` }
+  for (
+    let [reply, expected] of [
+      [{ Status: 0, Answer: [answer] }, true],
+      [{ Status: 0, Answer: [{ ...answer, data: '"stale-token"' }] }, false],
+      [
+        { Status: 0, Answer: [{ ...answer, name: 'another.example.com' }] },
+        false,
+      ],
+      [{ Status: 0, Answer: [{ ...answer, type: 5 }] }, false],
+      [{ Status: 2, Answer: [answer] }, false],
+      [{ Status: 0 }, false],
+      [{
+        Status: 0,
+        Answer: [{
+          ...answer,
+          data: `"${rec.value.slice(0, 8)}" "${rec.value.slice(8)}"`,
+        }],
+      }, true],
+    ] as const
+  ) {
+    let { out, calls } = await recorded(
+      () => Response.json(reply),
+      () => ownership(env, rec),
+    )
+    assertEquals(out, expected)
+    let url = new URL(calls[0].url)
+    assertEquals(url.hostname, 'cloudflare-dns.com')
+    assertEquals(url.searchParams.get('name'), rec.name)
+    assertEquals(url.searchParams.get('type'), 'TXT')
+  }
+  assertEquals(await ownership(env, null), false)
+  assertEquals(await ownership(env, {}), false)
+})
 
 test('provisioning asks for the hostname and nothing else', async () => {
   let { out, calls } = await recorded(

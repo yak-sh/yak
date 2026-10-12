@@ -195,6 +195,8 @@ export type Env = {
   // attaching a domain is a conversation, and the test that holds it must be
   // able to have it.
   HOSTNAMES_API?: string
+  // DNS-over-HTTPS JSON endpoint for hostname ownership TXT lookups.
+  DNS_API?: string
   // The paid tier (billing.ts, T-33125). STRIPE_KEY is the restricted API key
   // checkout, the portal and one subscription read speak to Stripe with;
   // STRIPE_WEBHOOK_SECRET is what the events Stripe posts are verified

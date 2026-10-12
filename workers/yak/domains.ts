@@ -9,9 +9,9 @@
 // and the mapping, because the mapping is the part that has to be right: an
 // agent walking a person through their registrar can only say "your CNAME
 // hasn't arrived yet" instead of "it's still pending" if we hand it the
-// difference. So `steps()` splits Cloudflare's two verdicts into the three a
-// person experiences — the record they added, the hostname Cloudflare
-// accepted, the certificate it issued — and a word we have never seen falls
+// difference. So `steps()` joins the ownership check to Cloudflare's verdicts:
+// the records they added, the hostname Cloudflare accepted and the certificate
+// it issued. A word we have never seen falls
 // through as `waiting` carrying that word, which is the truth: we do not know
 // it, and pretending it is fine would be worse.
 //
@@ -26,6 +26,8 @@
 import { answered } from './dispatch.ts'
 import type { Env } from './env.ts'
 import { apex as hostApex, type Host } from './host.ts'
+import { type Host as Hostname, stamp } from './directory.ts'
+import { token } from '@yaks/graph'
 
 export let needsHostnames = (env: Host = {}) =>
   'the platform has no Cloudflare token to attach custom hostnames with ' +
@@ -62,14 +64,21 @@ export let apex = (host: string) => {
     (l.length == 3 && SECOND.test(l[1]) && l[2].length == 2)
 }
 
-// The DNS a person adds where their domain's records live. One record: the
-// hostname itself, aimed at the fallback origin (route.ts origin), which is
-// the name Cloudflare for SaaS routes back to this Worker.
+// The DNS a person adds: the hostname aimed at the fallback origin (route.ts
+// origin), and this attachment's ownership TXT challenge at its separate name.
 export type Rec = { type: string; name: string; value: string }
 
-export let records = (host: string, env: Host = {}): Rec[] => [
+export let records = (
+  host: string,
+  env: Host = {},
+  verification?: Partial<Rec> | null,
+): Rec[] => [
   { type: 'CNAME', name: host, value: `origin.saas.${hostApex(env)}` },
+  ...txt(verification) ? [{ ...verification as Rec, type: 'TXT' }] : [],
 ]
+
+let txt = (r?: Partial<Rec> | null): r is Rec =>
+  r?.type?.toLowerCase() == 'txt' && !!r.name && !!r.value
 
 // The custom hostname as Cloudflare answers it — the fields read here, and
 // no more. `verification_errors` is what it says about the hostname pointing
@@ -116,10 +125,9 @@ export let customOf = async (env: Env, host: string) => {
   return found.find((c) => c.hostname == host) ?? null
 }
 
-// Provision it. HTTP validation, because once the person's CNAME points here
-// Cloudflare answers the challenge itself — there is no second record for
-// them to add and no file for them to serve. An `active` answer straight away
-// happens when the record was already in place.
+// Certificate HTTP validation is separate from ownership. Cloudflare can
+// activate a hostname from a leftover CNAME; only the ownership TXT challenge
+// below proves the person making this attachment controls its DNS.
 export let provision = async (env: Env, host: string) => {
   reachable(env)
   return await answered(
@@ -148,11 +156,11 @@ export let release = async (env: Env, host: string) => {
   return true
 }
 
-// ── Reading it: the three steps a person experiences ───────────────────────
+// ── Reading ownership, routing and certificate readiness ──────────────────
 
 export type State = 'done' | 'waiting' | 'error'
 export type Step = {
-  step: 'dns' | 'validation' | 'certificate'
+  step: 'ownership' | 'dns' | 'validation' | 'certificate'
   state: State
   said: string
 }
@@ -236,11 +244,18 @@ let dns = (c: Custom): [State, string] => {
 
 let pair = ([state, said]: [State, string]) => ({ state, said })
 
-export let steps = (c: Custom): Step[] => {
+export let steps = (c: Custom, owned = false): Step[] => {
   let bad = (c.ssl?.validation_errors ?? [])
     .map((e) => e.message).filter(Boolean).join('; ')
   let cert = read(CERT, c.ssl?.status)
   return [
+    {
+      step: 'ownership',
+      state: owned ? 'done' : 'waiting',
+      said: owned
+        ? 'hostname ownership is verified'
+        : 'add the ownership TXT record to verify control of this hostname',
+    },
     { step: 'dns', ...pair(dns(c)) },
     { step: 'validation', ...pair(read(VALID, c.status)) },
     {
@@ -250,7 +265,91 @@ export let steps = (c: Custom): Step[] => {
   ]
 }
 
-// What the entity's `stage` becomes: active once all three are done, error
+// A TXT answer consists of quoted strings; join its fragments before comparing
+// the whole token. A different name, a CNAME or an unsuccessful lookup proves
+// nothing. DNS is consulted only until this attachment has a durable receipt.
+export let ownership = async (env: Env, record: Partial<Rec> | null) => {
+  if (!txt(record)) return false
+  let at = new URL(env.DNS_API ?? 'https://cloudflare-dns.com/dns-query')
+  at.searchParams.set('name', record.name)
+  at.searchParams.set('type', 'TXT')
+  let r = await fetch(at, {
+    headers: { accept: 'application/dns-json' },
+    signal: AbortSignal.timeout(5000),
+  })
+  if (!r.ok) {
+    await r.body?.cancel()
+    throw new Error(`ownership TXT lookup answered ${r.status}`)
+  }
+  let reply = await r.json() as {
+    Status: number
+    Answer?: { name: string; type: number; data: string }[]
+  }
+  if (reply.Status != 0) return false
+  let name = (s: string) => s.toLowerCase().replace(/\.$/, '')
+  return (reply.Answer ?? []).some((a) => {
+    if (a.type != 16 || name(a.name) != name(record.name)) return false
+    let parts = a.data.match(/"(?:[^"\\]|\\.)*"/g) ?? []
+    if (!parts.length || parts.join(' ') != a.data) return false
+    return parts.map((s) => JSON.parse(s)).join('') == record.value
+  })
+}
+
+// Both the connector and a visitor can advance provisioning. They use this
+// same gate, retaining Cloudflare's challenge even if a later API answer omits
+// it. Previously active hostnames keep their standing; pending old rows still
+// have to prove ownership. Receipt, challenge and stage commit together, guarded
+// against another refresh or a detach/re-attach while the DNS lookup was away.
+export let refresh = async (env: Env, row: Hostname, custom: Custom | null) => {
+  let verification = txt(row.verification)
+    ? row.verification
+    : custom?.ownership_verification ?? row.verification
+  let owned = !!row.verified ||
+    (row.stage == 'active' && row.verification == null)
+  let unavailable = false
+  if (!owned) {
+    try {
+      owned = await ownership(env, verification)
+    } catch {
+      unavailable = true
+    }
+  }
+  let how = custom ? steps(custom, owned) : null
+  if (how && unavailable) {
+    how[0].said = 'ownership TXT lookup is unavailable — check again shortly'
+  } else if (how && !owned && !txt(verification)) {
+    how[0].said = 'Cloudflare has not supplied an ownership TXT record yet'
+  }
+  let stage = how ? stageOf(how) : 'error' as const
+  if (
+    stage != row.stage || token(verification) != token(row.verification) ||
+    (owned && !row.verified)
+  ) {
+    let at = new Date().toISOString()
+    let applied = await stamp(env, {
+      entities: [{
+        entity: { eid: row.eid },
+        hostname: { verification, stage, at },
+        ...owned && !row.verified ? { verified: { at } } : {},
+        $was: {
+          hostname: {
+            name: token(row.name),
+            serves: token(row.serves),
+            stage: token(row.stage),
+            verification: token(row.verification),
+          },
+          verified: { at: token(row.verified) },
+        },
+      }],
+    })
+    if (!applied.some((b) => b.entity.eid == row.eid && b.hostname)) {
+      return { how: null, stage: 'pending' as const, records: [] }
+    }
+  }
+  return { how, stage, records: records(row.name, env, verification) }
+}
+
+// What the entity's `stage` becomes: active once all four are done, error
 // the moment any of them is, pending otherwise.
 export let stageOf = (steps: Step[]) =>
   steps.some((s) => s.state == 'error')

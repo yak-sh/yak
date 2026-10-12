@@ -10,13 +10,17 @@ import { test } from '@yaks/testing'
 import {
   assert,
   assertEquals,
+  assertObjectMatch,
   assertRejects,
   assertStringIncludes,
 } from '@std/assert'
 import {
+  attach,
   attached,
   client,
   connector,
+  dnsTxt,
+  domainState,
   kernel,
   meta,
   onPlus,
@@ -424,8 +428,17 @@ test(
         apps: ['site', 'recipes'],
       }])
       await onPlus(k, eids[jeff12])
+      let owner = client(k, `${jeff12}.yaks.app`, 'recipes', cookie)
+      await owner.put('/index.html', '<!doctype html><h1>Our recipes</h1>')
       let agent = connector(k, cookie)
       await agent.tool('app_set', { space: jeff12, app: 'site', home: true })
+      await agent.tool('app_deploy', { space: jeff12, app: 'recipes' })
+      let dir = meta(k)
+      let pending = async (host: string) => {
+        let [row] = await dir.query(`.hostname.name=${host}`)
+        assertObjectMatch(row, { hostname: { stage: 'pending' } })
+        assertEquals((await k.at(host, '/')).status, 503)
+      }
 
       // No app named: the domain is the space's, and the answer says what that
       // means at the address rather than leaving it to be guessed.
@@ -436,6 +449,14 @@ test(
       assertStringIncludes(space, `${ourbookclub104} is attached to ${jeff12}.`)
       assertStringIncludes(space, `https://${ourbookclub104}/<app>/`)
       assertStringIncludes(space, 'CNAME')
+      // A dangling CNAME lets Cloudflare answer active immediately. That
+      // proves where traffic goes, not who attached the name here.
+      await pending(ourbookclub104)
+      let spaceRecord = (await domainState(k, ourbookclub104))
+        .ownership_verification!
+      assertStringIncludes(space, 'TXT')
+      assertStringIncludes(space, spaceRecord.name)
+      assertStringIncludes(space, spaceRecord.value)
 
       // An app named: that app, at the root of its own domain — both at once.
       let app = await agent.tool('domain_attach', {
@@ -452,6 +473,12 @@ test(
         `The app answers at https://${herbusiness104}/.`,
       )
 
+      await pending(herbusiness104)
+      let appRecord = (await domainState(k, herbusiness104))
+        .ownership_verification!
+      assertStringIncludes(app, appRecord.name)
+      assertStringIncludes(app, appRecord.value)
+
       // And the status says which is which, in the same words.
       let how = await agent.tool('domain_status', { space: jeff12 })
       assertStringIncludes(how, `${ourbookclub104} → ${jeff12}`)
@@ -460,6 +487,45 @@ test(
         how,
         `every app at https://${ourbookclub104}/<app>/`,
       )
+
+      assertStringIncludes(how, spaceRecord.name)
+      assertStringIncludes(how, spaceRecord.value)
+      assertStringIncludes(how, appRecord.name)
+      assertStringIncludes(how, appRecord.value)
+      await pending(herbusiness104)
+      await dnsTxt(k, appRecord.name, `stale-${appRecord.value}`)
+      await agent.tool('domain_status', { space: jeff12 })
+      await pending(herbusiness104)
+      await dnsTxt(k, appRecord.name, appRecord.value)
+      assertEquals((await k.at(herbusiness104, '/')).status, 200)
+      assertStringIncludes(
+        await (await k.at(herbusiness104, '/')).text(),
+        'Our recipes',
+      )
+      // Ownership is a receipt: removing its TXT record and a certificate
+      // transition do not make a verified attachment need a fresh proof.
+      await dnsTxt(k, appRecord.name)
+      await domainState(k, herbusiness104, {
+        ssl: { status: 'pending_deployment' },
+      })
+      await agent.tool('domain_status', { space: jeff12 })
+      assertEquals((await k.at(herbusiness104, '/')).status, 503)
+      await domainState(k, herbusiness104, { ssl: { status: 'active' } })
+      assertEquals((await k.at(herbusiness104, '/')).status, 200)
+      let legacy = unique('legacy') + '.com'
+      await attach(k, legacy)
+      await dir.apply([{
+        hostname: {
+          name: legacy,
+          serves: eids[`${jeff12}/recipes`],
+          stage: 'active',
+        },
+      }])
+      assertEquals((await k.at(legacy, '/')).status, 200)
+      await domainState(k, legacy, { ssl: { status: 'pending_deployment' } })
+      await agent.tool('domain_status', { space: jeff12, hostname: legacy })
+      await domainState(k, legacy, { ssl: { status: 'active' } })
+      assertEquals((await k.at(legacy, '/')).status, 200)
 
       // Detached, the space keeps the one address it always had, and the app's
       // own domain is untouched.
@@ -481,6 +547,25 @@ test(
       // The hostname went back to Cloudflare with it.
       assert(!await attached(k, ourbookclub104))
       assert(await attached(k, herbusiness104))
+      // Reattaching is a new claim. A token left by the old attachment may
+      // not grant the new attachment authority over the hostname.
+      await dnsTxt(k, appRecord.name, appRecord.value)
+      await agent.tool('domain_detach', {
+        space: jeff12,
+        hostname: herbusiness104,
+      })
+      let again = await agent.tool('domain_attach', {
+        space: jeff12,
+        app: 'recipes',
+        hostname: herbusiness104,
+      })
+      let fresh = (await domainState(k, herbusiness104)).ownership_verification!
+      assert(fresh.value != appRecord.value)
+      assertStringIncludes(again, fresh.value)
+      await agent.tool('domain_status', { space: jeff12 })
+      await pending(herbusiness104)
+      await dnsTxt(k, fresh.name, fresh.value)
+      assertEquals((await k.at(herbusiness104, '/')).status, 200)
     } finally {
       await k.stop()
     }

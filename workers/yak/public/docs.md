@@ -235,13 +235,14 @@ shape of the checkout endpoint, what an order contains, and who can read one.
 ## A custom domain
 
 A space, or one app of it, can also answer at a domain the person already owns,
-with the `.yaks.app` address still working. `domain_attach` returns the one
-record to add, a CNAME at the hostname pointing at `origin.saas.yaks.app`, and
-`domain_status` says how far it has got. Custom domains need Plus.
+with the `.yaks.app` address still working. `domain_attach` gives the CNAME
+pointing at `origin.saas.yaks.app` and the ownership TXT record to add. The
+domain serves only after ownership is verified and Cloudflare is ready;
+`domain_status` says what is still needed. Custom domains need Plus.
 
-Deeper: <https://yaks.app/docs/domains.md> — the record to add and where to type
-it at each registrar, the apex, moving DNS to Cloudflare, and what each pending
-state means.
+Deeper: <https://yaks.app/docs/domains.md> — the records to add and where to
+type it at each registrar, the apex, moving DNS to Cloudflare, and what each
+pending state means.
 
 ## The filter grammar
 

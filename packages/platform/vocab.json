@@ -146,6 +146,10 @@
           ],
           "description": "pending while it is being set up, active once it serves, error if it cannot"
         },
+        "verification": {
+          "type": "object",
+          "description": "Cloudflare's ownership TXT record for this attachment, retained after Cloudflare activates it; empty while provisioning"
+        },
         "at": {
           "type": "string",
           "format": "date-time",

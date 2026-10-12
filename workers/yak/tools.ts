@@ -134,10 +134,8 @@ import {
   provision,
   reachable,
   reading,
-  records,
+  refresh,
   release,
-  stageOf,
-  steps,
 } from './domains.ts'
 import { bound, type Env } from './env.ts'
 // The gallery is its own part (gallery.ts): the two stamps, the letter that
@@ -3452,7 +3450,9 @@ let OURS: Row[] = [
       let at = moment(text(args.at, 'at'))
       let done = await putBack(
         store,
-        (r) => stamp(ctx.env, { entities: recorded(app.eid, r) }),
+        async (r) => {
+          await stamp(ctx.env, { entities: recorded(app.eid, r) })
+        },
         at,
         ctx.person,
       )
@@ -4370,6 +4370,7 @@ let OURS: Row[] = [
             name: host,
             serves: (app ?? space).eid,
             stage: 'pending',
+            verification: {},
             at,
           },
         }],
@@ -4385,23 +4386,16 @@ let OURS: Row[] = [
         )
         throw e
       }
-      let how = steps(custom)
-      let stage = stageOf(how)
-      // What Cloudflare says is the platform's word, not the person's, so it
-      // is stamped rather than written as them (directory.ts `stamp`) — which
-      // is also what lets a viewer's domain_status refresh a stage below.
-      if (stage != 'pending') {
-        await stamp(ctx.env, {
-          entities: [{ entity: { eid }, hostname: { stage, at } }],
-        })
-      }
-      let recs = records(host, ctx.env)
+      let row = (await ctx.dir.hosts(space)).find((h) => h.eid == eid)
+      if (!row) throw refuse('conflict', `${host} was detached while attaching`)
+      let { how, records: recs } = await refresh(ctx.env, row, custom)
+      if (!how) throw refuse('conflict', `${host} was detached while attaching`)
       return {
         text:
           `${host} is attached to ${place(space, app)}. ${
             serving(host, app)
           }\n\n` +
-          `Add this record where ${host}'s DNS is managed:\n\n` +
+          `Add these records where ${host}'s DNS is managed:\n\n` +
           recs.map((r) => `  ${r.type}  ${r.name}  →  ${r.value}`).join('\n') +
           '\n\n' + (apex(host) ? apexHelp(ctx.env) : '') +
           `${reading(how)}\n\nDNS usually takes minutes and can take a day; ` +
@@ -4443,7 +4437,6 @@ let OURS: Row[] = [
       }
       reachable(ctx.env)
       let apps = await ctx.dir.apps(space)
-      let out = []
       let lines = []
       for (let row of rows) {
         // What this domain points at. `hosts` answered only the rows aimed
@@ -4455,38 +4448,21 @@ let OURS: Row[] = [
         // A row whose hostname Cloudflare no longer has is the one state
         // nothing else can explain, and it is not something a person can
         // wait out: say the verb that fixes it.
-        let how = custom ? steps(custom) : null
-        let stage = how ? stageOf(how) : 'error' as const
-        if (stage != row.stage) {
-          await stamp(ctx.env, {
-            entities: [{
-              entity: { eid: row.eid },
-              hostname: { stage, at: new Date().toISOString() },
-            }],
-          })
-        }
+        let { how, stage, records: recs } = await refresh(ctx.env, row, custom)
         lines.push(
           `${row.name} → ${where}` +
-            (stage == 'active' ? ` — live. ${serving(row.name, app)}` : '') +
+            (stage == 'active' ? ' — live.' : '.') +
+            ` ${serving(row.name, app)}` +
             '\n' +
             (how
               ? reading(how)
               : '✗ Cloudflare no longer has this hostname — domain_detach ' +
                 'it and domain_attach it again') +
             (stage == 'active' ? '' : '\n' +
-              records(row.name, ctx.env).map((r) =>
-                `  ${r.type}  ${r.name}  →  ${r.value}`
-              ).join('\n')),
+              recs.map((r) => `  ${r.type}  ${r.name}  →  ${r.value}`).join(
+                '\n',
+              )),
         )
-        out.push({
-          hostname: row.name,
-          serves: where,
-          url: `https://${row.name}/`,
-          stage,
-          apex: apex(row.name),
-          records: records(row.name, ctx.env),
-          steps: how ?? [],
-        })
       }
       return { text: lines.join('\n\n'), space }
     },
@@ -4534,8 +4510,8 @@ let OURS: Row[] = [
         text: `${host} is detached from ${place(space, app)}` +
           (had ? '' : ' (Cloudflare had already given it back)') +
           `. It still answers at ${back}.` +
-          `\n\nRemove the CNAME for ${host} wherever its DNS is managed; it ` +
-          'points at nothing now.',
+          `\n\nRemove the CNAME and ownership TXT record for ${host} ` +
+          'wherever its DNS is managed; this attachment no longer uses them.',
         space,
       }
     },
