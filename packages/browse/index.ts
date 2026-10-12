@@ -45,6 +45,22 @@ export let indexesFor = (comp: string): Idx[] => {
 
 let refKey = (comp: string, prop: string) => `${comp}.${prop}`
 
+// Vocabulary is immutable; learning another host replaces it. Group its
+// references once so a row update examines only the components that row has.
+let refGroups = new WeakMap<typeof vocab, Map<string, string[]>>()
+let refsByComp = () => {
+  let found = refGroups.get(vocab)
+  if (found) return found
+  found = new Map()
+  for (let [comp, prop] of vocab.refProps()) {
+    let props = found.get(comp)
+    if (props) props.push(prop)
+    else found.set(comp, [prop])
+  }
+  refGroups.set(vocab, found)
+  return found
+}
+
 export type Index = {
   // "comp.prop" → referenced eid → the eids referring through that column
   refs: Map<string, Map<string, Set<string>>>
@@ -89,29 +105,26 @@ export let reindex = (
   before: Row | undefined,
   after: Row | undefined,
 ) => {
-  for (let [c, p] of vocab.refProps()) {
-    let was = refVal(before, c, p)
-    let now = refVal(after, c, p)
-    if (was == now) continue
-    let key = refKey(c, p)
-    let m = ix.refs.get(key)
-    if (!m) ix.refs.set(key, m = new Map())
-    if (was != null) {
-      let s = m.get(was)
-      if (s) {
-        s.delete(eid)
-        if (!s.size) m.delete(was)
-      }
-    }
-    if (now != null) add(m, now, eid)
-    if (!m.size) ix.refs.delete(key)
-  }
+  let refs = refsByComp()
   for (
     let c of new Set([
       ...Object.keys(before ?? {}),
       ...Object.keys(after ?? {}),
     ])
   ) {
+    if (before?.[c] !== after?.[c]) {
+      for (let p of refs.get(c) ?? []) {
+        let was = refVal(before, c, p)
+        let now = refVal(after, c, p)
+        if (was == now) continue
+        let key = refKey(c, p)
+        let m = ix.refs.get(key)
+        if (!m) ix.refs.set(key, m = new Map())
+        if (was != null) drop(m, was, eid)
+        if (now != null) add(m, now, eid)
+        if (!m.size) ix.refs.delete(key)
+      }
+    }
     let had = !!before?.[c]
     let has = !!after?.[c]
     if (had == has) continue
