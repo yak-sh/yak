@@ -26,7 +26,7 @@ import { told } from './stream.ts'
 import { level, standing } from './meter.ts'
 import { caught, defect } from './defects.ts'
 import { capture, origin, queue } from '@yaks/tracker/report'
-import { errorsAt } from './app-errors.ts'
+import { errorsAt, errorsIn } from './app-errors.ts'
 import { refuse } from './tool.ts'
 import { isTestAddress } from './lib/bots.ts'
 
@@ -385,32 +385,56 @@ export let openIn = async (
           .map((b) => ({ kind: facet, ...b }) as unknown as Hit)
       ),
       errorsAt(env, space, app, who).read(all).then((rows) =>
-        rows.map((row) => {
-          let error = row.error as Record<string, unknown>
-          let exception = row.exception as Record<string, unknown> | undefined
-          let tags = error.tags as Record<string, unknown> | undefined
-          let broke = {
-            at: error.at,
-            version: error.version,
-            request: tags?.request,
-            code: error.code,
-            message: exception?.value || error.message ||
-              (row.content as Record<string, unknown> | undefined)?.body || '',
-            stack: exception?.stack,
-          }
-          return {
-            ...row,
-            tracked: true,
-            kind: exception ? 'exception' : 'error',
-            ...exception ? { exception: broke } : { error: broke },
-          } as unknown as Hit
-        })
+        rows.map(trackedHit)
       ),
     ])
     return found.flat()
   } catch (e) {
     throw new Error(`${app.slug}: ${e instanceof Error ? e.message : e}`)
   }
+}
+
+// A tracker occurrence in the shape a line and an archive read.
+let trackedHit = (row: Bundle): Hit => {
+  let error = row.error as Record<string, unknown>
+  let exception = row.exception as Record<string, unknown> | undefined
+  let tags = error.tags as Record<string, unknown> | undefined
+  let broke = {
+    at: error.at,
+    version: error.version,
+    request: tags?.request,
+    code: error.code,
+    message: exception?.value || error.message ||
+      (row.content as Record<string, unknown> | undefined)?.body || '',
+    stack: exception?.stack,
+  }
+  return {
+    ...row,
+    tracked: true,
+    kind: exception ? 'exception' : 'error',
+    ...exception ? { exception: broke } : { error: broke },
+  } as unknown as Hit
+}
+
+/** Every app's open occurrences in a space, by app eid, from one read of the
+ * space's tracker. A listing or a reply that spans the space reads this and
+ * no app's store: an app nobody uses stays asleep, and its month's requests
+ * are its visitors' alone (T-123502). The rows an app's own store keeps
+ * (pre-tracker breaks, its transcripts' errors) are read where one app is
+ * named: `app_errors`, an archive, a deploy. */
+export let trackedIn = async (
+  env: Env,
+  space: Space,
+  who: Who,
+  all = false,
+) => {
+  let by = new Map<string, Hit[]>()
+  if (space.trashed) return by
+  for (let row of await errorsIn(env, space, who).read(all)) {
+    let app = String((row.during as { app?: unknown }).app)
+    by.set(app, [...by.get(app) ?? [], trackedHit(row)])
+  }
+  return by
 }
 
 // Errors from code other than the live version remain readable but do not
@@ -431,8 +455,11 @@ export let past = (app: { version?: number | null }, h: Hit) => {
 // and passed over, and offering it again on the next reply would be the same
 // noise a reply later.
 //
-// Every app at once: the rider rides every write in the space, and asked in
-// turn it paid each store's latency one after another.
+// Named, one app is read whole ({@link openIn}). Unnamed is the rider, which
+// rides every write in the space: it reads the space's tracker once
+// ({@link trackedIn}) and wakes no app's store. An app's own rows are never
+// news to it: they are breaks from before the tracker, long since offered, or
+// its transcripts' errors, which name no version ({@link past}).
 export let serve = async (
   env: Env,
   space: Space,
@@ -440,15 +467,37 @@ export let serve = async (
   app?: App,
   all = false,
 ) => {
-  let apps = app ? [app] : await appsOf(env, space)
-  let each = await Promise.all(apps.map(async (a): Promise<Seen[]> => {
-    let hits = await openIn(env, space, a, who, all)
-    let fresh = hits.filter((h) => !('notified' in h))
-    if (fresh.length) await graphAt(env, space, a, who).mark(fresh, 'notified')
-    let said = all ? hits : hits.filter((h) => !past(a, h))
-    return said.map((hit) => ({ app: a, hit }))
-  }))
+  if (app) {
+    return offered(
+      env,
+      space,
+      who,
+      app,
+      await openIn(env, space, app, who, all),
+      all,
+    )
+  }
+  let open = await trackedIn(env, space, who, all)
+  if (!open.size) return []
+  let each = await Promise.all(
+    (await appsOf(env, space)).filter((a) => !a.trashed && open.has(a.eid))
+      .map((a) => offered(env, space, who, a, open.get(a.eid)!, all)),
+  )
   return each.flat()
+}
+
+let offered = async (
+  env: Env,
+  space: Space,
+  who: Who,
+  app: App,
+  hits: Hit[],
+  all: boolean,
+): Promise<Seen[]> => {
+  let fresh = hits.filter((h) => !('notified' in h))
+  if (fresh.length) await graphAt(env, space, app, who).mark(fresh, 'notified')
+  let said = all ? hits : hits.filter((h) => !past(app, h))
+  return said.map((hit) => ({ app, hit }))
 }
 
 // Closed: the mark that stops an item showing, here and in the unseen

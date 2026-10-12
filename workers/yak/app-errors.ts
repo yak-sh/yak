@@ -39,28 +39,43 @@ let request = async (
   return response.json()
 }
 
+// The open occurrences a filter names, a page of 100 at a time.
+let opened = async (
+  env: Env,
+  space: Space,
+  who: Who,
+  filter: string,
+  all: boolean,
+): Promise<Bundle[]> => {
+  let rows: Bundle[] = [], after = ''
+  for (;;) {
+    let query =
+      `.error ${filter} !archived ${
+        all ? '' : '!notified'
+      } * .order=entity.eid .limit=100` + (after ? ` .after=${after}` : '')
+    let page = await request(
+      env,
+      space,
+      who,
+      `/query?q=${encodeURIComponent(query)}`,
+    ) as Bundle[]
+    rows.push(...page)
+    if (page.length < 100) return rows
+    let next = page.at(-1)!.entity.eid
+    if (next == after) throw Error('tracker repeated an app error page')
+    after = next
+  }
+}
+
+/** Every app's open occurrences in a space, in one read of the space's
+ * tracker: what a listing or a reply needs without waking any app's store. */
+export let errorsIn = (env: Env, space: Space, who: Who) => ({
+  read: (all: boolean) => opened(env, space, who, '.during.app', all),
+})
+
 export let errorsAt = (env: Env, space: Space, app: App, who: Who) => ({
-  read: async (all: boolean): Promise<Bundle[]> => {
-    let rows: Bundle[] = [], after = ''
-    for (;;) {
-      let query =
-        `.error .during.app=${app.eid} !archived ${
-          all ? '' : '!notified'
-        } * .order=entity.eid .limit=100` +
-        (after ? ` .after=${after}` : '')
-      let page = await request(
-        env,
-        space,
-        who,
-        `/query?q=${encodeURIComponent(query)}`,
-      ) as Bundle[]
-      rows.push(...page)
-      if (page.length < 100) return rows
-      let next = page.at(-1)!.entity.eid
-      if (next == after) throw Error('tracker repeated an app error page')
-      after = next
-    }
-  },
+  read: (all: boolean) =>
+    opened(env, space, who, `.during.app=${app.eid}`, all),
   mark: async (rows: Bundle[], mark: 'notified' | 'archived') => {
     for (let at = 0; at < rows.length; at += 100) {
       await request(env, space, who, '/app-errors', {

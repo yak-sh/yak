@@ -212,7 +212,7 @@ import {
   type Text,
 } from './seed.ts'
 import { Pending, said as sentence } from './writes.ts'
-import { archive, healed, line, openIn, serve } from './unseen.ts'
+import { archive, healed, line, serve, trackedIn } from './unseen.ts'
 import { scheduleUse } from './used.ts'
 import {
   atCeiling,
@@ -4103,25 +4103,18 @@ let OURS: Row[] = [
         let role = await ctx.dir.role(space, ctx.person)
         if (role) seats = [{ space, role }]
       }
-      let seatOf = new Map(seats.map((s) => [s.space.eid, s]))
       let every = await ctx.dir.apps(seats.map((s) => s.space))
       // Two lists, because they are two different things to say: what the
       // person has, and what they threw away and can still have back
       // (erase.ts, T-34430).
       let living = every.filter((a) => !a.trashed)
       let bound = await bindings(ctx.env, living)
-      // What is broken in each app, which only that app's store knows
-      // (unseen.ts `noted` writes it there, dispatch.ts files it). One wave
-      // for all of them, so the listing waits once however many apps it has.
+      // What is broken in each app, as each space's tracker holds it: one read
+      // a space, all at once, and no app's store woken to list it (T-123502).
       let broken = new Map(
-        await Promise.all(living.map(async (app) => {
-          let { space, role } = seatOf.get(app.space)!
-          let who = asCaller(ctx, role)
-          return [
-            app.eid,
-            (await openIn(ctx.env, space, app, who, true)).length,
-          ] as const
-        })),
+        (await Promise.all(seats.map(async ({ space, role }) => [
+          ...await trackedIn(ctx.env, space, asCaller(ctx, role), true),
+        ]))).flat().map(([app, hits]) => [app, hits.length] as const),
       )
       let lines: string[] = []
       for (let { space, role } of seats) {

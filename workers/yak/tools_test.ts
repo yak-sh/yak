@@ -37,6 +37,7 @@ import type { Graph } from '@yaks/graph'
 import { clock } from './timing.ts'
 import { KERNEL, meta } from './meta.ts'
 import { stages } from '../../bin/app-deploy-time.ts'
+import { running } from './agent.ts'
 
 test('staging tool URLs and app mail use the same configured host', async () => {
   let delivered: { to: string; from: Address }[] = []
@@ -491,12 +492,12 @@ test('a deploy says how many round trips it took', async () => {
   assertEquals(listed.value?.unreleased, false)
 })
 
-// And what a listing costs (T-35431). The shape is what the exact numbers are
-// here to hold: the directory is asked a fixed five times however many spaces
-// and apps the answer has — the caller's seats, the apps across them, what is
-// bound to those apps — and only the one fact an app's own store alone holds
-// (what is broken in it, unseen.ts `noted`) costs per app, two facets each,
-// asked as one wave. Space by space and app by app it was 38.
+// And what a listing costs (T-35431, T-123502). The shape is what the exact
+// numbers are here to hold: the directory is asked a fixed five times however
+// many spaces and apps the answer has — the caller's seats, the apps across
+// them, what is bound to those apps — and no app's store at all, since what is
+// broken in each is the space's tracker's to say. A listing that woke every
+// store spent the month's requests of apps nobody had opened.
 test('a listing asks the directory a fixed number of times', async () => {
   let { env } = platform('listing-hops-secret')
   let dir = directory({ fetch: (r) => dirPart.fetch(r, env) }, true)
@@ -519,14 +520,48 @@ test('a listing asks the directory a fixed number of times', async () => {
     else assertEquals(said.stmts > 0, true)
     return { hops: said.hops, stmts: said.stmts, r2: said.r2 }
   }
-  // 3 seats + 1 apps + 1 bindings, then 9 apps × 2 facets.
+  // 3 seats + 1 apps + 1 bindings, and nothing per app.
   assertEquals(await costs('about', {}), { hops: 0, stmts: 0, r2: 0 })
   let all = await costs('app_list', {})
-  assertEquals({ hops: all.hops, r2: all.r2 }, { hops: 23, r2: 0 })
-  // One space named is read and its seat asked for by name — 2 for 3 apps.
+  assertEquals({ hops: all.hops, r2: all.r2 }, { hops: 5, r2: 0 })
+  // One space named is read and its seat asked for by name, then its apps
+  // and their bindings.
   let one = await costs('app_list', { space: 'one' })
-  assertEquals({ hops: one.hops, r2: one.r2 }, { hops: 10, r2: 0 })
+  assertEquals({ hops: one.hops, r2: one.r2 }, { hops: 4, r2: 0 })
   assertEquals(all.stmts > one.stmts, true)
+})
+
+// And what a write's reply costs: it says what broke across the space's apps
+// (unseen.ts `serve`) from the space's tracker, so its cost does not grow
+// with the apps the space holds, and an app nobody opens is never woken by a
+// write beside it (T-123502).
+test('a write costs the same however many apps its space holds', async () => {
+  let { env } = platform('rider-hops-secret')
+  let dir = directory({ fetch: (r) => dirPart.fetch(r, env) }, true)
+  let ADA = 'a0000000-0000-4000-8000-0000000000ad'
+  let setup: Ctx = { env, dir, person: ADA }
+  // Three apps stay under the free plan's ceiling line, which a fourth
+  // would add to the reply once (unseen.ts `ceiling`).
+  for (let [space, apps] of [['few', 1], ['many', 3]] as const) {
+    await call(setup, 'space_new', { slug: space, title: space })
+    for (let i = 0; i < apps; i++) {
+      await call(setup, 'app_new', { space, slug: `app-${i}`, title: 'a' })
+    }
+  }
+  await booted(setup)
+  let rename = TOOLS.find((t) => t.name == 'space_set')!
+  let hops = async (space: string) => {
+    let c = clock()
+    let said = await c.counting(() =>
+      running({ env, dir, person: ADA, clock: c }, rename)({
+        space,
+        title: `${space} renamed`,
+      })
+    )
+    assertStringIncludes(JSON.stringify(said[0].content), 'renamed')
+    return stages(c.header()).hops
+  }
+  assertEquals(await hops('many'), await hops('few'))
 })
 
 // The other half of asking once: every row of the one answer has to find its
