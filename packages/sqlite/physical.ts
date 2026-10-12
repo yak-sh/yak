@@ -206,8 +206,10 @@ export let required = (driver: Driver, name: string): string[] => {
  * component table has an integer entity primary key. Tombstone and archetype
  * are component tables (the latter's own archetype is the one-element fixed
  * point). `known` names tables the caller already accounts for: they are left
- * out without being asked about. No other name is reserved: an app may call a
- * component `journal` (@yaks/journal keeps its own rows in `journal_*`).
+ * out without being asked about. A name starting `_yaks_` is a table being
+ * rebuilt beside a component's, or one's old rows waiting to be cleared
+ * (./owe.ts). No other name is reserved: an app may call a component `journal`
+ * (@yaks/journal keeps its own rows in `journal_*`).
  */
 let components = new WeakMap<
   Driver,
@@ -228,7 +230,8 @@ export function componentTables(
       .filter((r) => r.schema == 'main' && r.type == 'table')
       .map((r) => String(r.name))
       .filter((name) =>
-        name != 'entity' && !name.startsWith('sqlite_') && !/^_+cf_/i.test(name)
+        name != 'entity' && !name.startsWith('sqlite_') &&
+        !name.startsWith('_yaks_') && !/^_+cf_/i.test(name)
       )
       .sort()
     held = { revision: current, tables: found, checked: new Map() }

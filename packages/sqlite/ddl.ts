@@ -557,29 +557,36 @@ export let unresolved = (
   )
 
 /**
+ * What rebuilding one table takes ({@link refit}): the table as its vocabulary
+ * says it, the columns it has, the ones carried over, and the reference
+ * columns whose stored form changes (an eid becoming the entity's integer id,
+ * or back), each read through the entity spine.
+ */
+export type Refitting = {
+  fresh: CreateTable
+  old: string[]
+  cols: string[]
+  changed: Record<string, { from: string; to: string }>
+}
+
+/**
  * What {@link grown} cannot fix: a constraint the vocabulary changed its mind
  * about after a table was created. A reference's death word decides whether its
  * column carries a foreign key, an enum is its column's check (`closed`),
- * `required` is its NOT NULL, and SQLite alters none of them in place. So a table whose keys or checks disagree with
- * the vocabulary is rebuilt: its rows set aside as they are, the table made
- * again as the vocabulary says, and the rows brought back. It is made under its
- * own name rather than renamed into it, because a rename checks every view and
- * trigger that names the table while it is gone (`doc_value` names `doc`).
+ * `required` is its NOT NULL, and SQLite alters none of them in place. So a
+ * table whose keys or checks disagree with the vocabulary is rebuilt.
  *
  * Undeclared columns come back, even when empty: another process may have
  * installed a newer vocabulary. Removing a column is an explicit migration.
- * A kept column keeps its type and nothing else. The
- * table's triggers and undeclared indexes go with it, for whoever raised them
- * to raise again at boot (@yaks/fts `adopt`); the declared indexes are
- * {@link indexed}'s, which runs after.
+ * A kept column keeps its type and nothing else.
  *
- * Each table's statements, by name: none for a file that already fits, which
+ * Each table that needs it, by name: none for a file that already fits, which
  * is every boot but the one after the vocabulary changed.
  */
-export let refit = (
+export let refitting = (
   vocab: Vocab,
   was: Standing,
-): Record<string, Stmt[]> =>
+): Record<string, Refitting> =>
   Object.fromEntries(
     comps(vocab, was).flatMap((comp) => {
       let t = was[comp]
@@ -594,41 +601,71 @@ export let refit = (
       let refs = converted(t, fresh, referenceFields(vocab, comp))
       if (fits(t, fresh, refs.length)) return []
       let old = t.cols.map((r) => String(r.name))
-      let cols = fresh.cols.map((r) => r.name).filter((name) =>
-        old.includes(name)
+      let cols = fresh.cols.map((r) => r.name).filter((n) => old.includes(n))
+      let changed = Object.fromEntries(
+        refs.map(({ name, from, to }) => [name, { from, to }]),
       )
+      return [[comp, { fresh, old, cols, changed }]]
+    }),
+  )
+
+/** The value `r` carries over for column `c`, read off `row`: as stored, or
+ * through the entity spine where its stored form changes. */
+export let carried = (r: Refitting, c: string, row: string): Expr => {
+  let to = r.changed[c]
+  return to
+    ? sub(select({
+      cols: [col(to.to)],
+      from: table('entity'),
+      where: eq(col(to.from), col(c, row)),
+    }))
+    : col(c, row)
+}
+
+/**
+ * The statements rebuilding each table {@link refitting} names, in one unit:
+ * its rows set aside as they are, the table made again as the vocabulary
+ * says, and the rows brought back. It is made under its own name rather than
+ * renamed into it, because a rename checks every view and trigger that names
+ * the table while it is gone (`doc_value` names `doc`). The table's triggers
+ * and undeclared indexes go with it, for whoever raised them to raise again at
+ * boot (@yaks/fts `adopt`); the declared indexes are {@link indexed}'s, which
+ * runs after. A table too big to rebuild in one unit is owed instead, and
+ * rebuilt beside itself in windows (./owe.ts).
+ */
+export let refit = (
+  vocab: Vocab,
+  was: Standing,
+): Record<string, Stmt[]> =>
+  Object.fromEntries(
+    Object.entries(refitting(vocab, was)).map(([comp, r]) => {
       let aside = `${comp}__refit`
-      let changed = new Map(refs.map((r) => [r.name, r]))
-      let copy = (into: string, from: string, names: string[]): Stmt => ({
-        t: 'insert',
-        into,
-        cols: names,
-        q: select({
-          cols: names.map((c) =>
-            from == aside && changed.has(c)
-              ? sub(select({
-                cols: [col(changed.get(c)!.to)],
-                from: table('entity'),
-                where: eq(col(changed.get(c)!.from), col(c, aside)),
-              }))
-              : col(c)
-          ),
-          from: table(from),
-        }),
-      })
-      return [[comp, [
+      return [comp, [
         // A column of no type holds each value exactly as it was stored.
         {
           t: 'create table',
           name: aside,
-          cols: old.map((name) => ({ name })),
+          cols: r.old.map((name) => ({ name })),
         },
-        copy(aside, comp, old),
+        {
+          t: 'insert',
+          into: aside,
+          cols: r.old,
+          q: select({ cols: r.old.map((c) => col(c)), from: table(comp) }),
+        },
         { t: 'drop', kind: 'table', name: comp },
-        fresh,
-        copy(comp, aside, cols),
+        r.fresh,
+        {
+          t: 'insert',
+          into: comp,
+          cols: r.cols,
+          q: select({
+            cols: r.cols.map((c) => carried(r, c, aside)),
+            from: table(aside),
+          }),
+        },
         { t: 'drop', kind: 'table', name: aside },
-      ]]]
+      ]]
     }),
   )
 
@@ -670,11 +707,13 @@ export let grown = (vocab: Vocab, was: Standing): Stmt[] => [
  * the shape the vocabulary now says (a value its enum no longer lists) is left
  * exactly as it stood, and returned with the engine's reason: those rows need a
  * migration that prepares them. Until one runs, the old constraint admits them,
- * and admission holds every new write to the vocabulary.
+ * and admission holds every new write to the vocabulary. A table `owe` takes
+ * on is left for it to rebuild later.
  */
 export let fit = (
   driver: Driver,
   vocab: Vocab,
+  owe: (comp: string, r: Refitting) => boolean = () => false,
 ): Error[] =>
   unit(driver, () => {
     let was = behind(driver, vocab)
@@ -685,6 +724,7 @@ export let fit = (
         checks.some((q) => driver.query(q).length),
       ]),
     )
+    let plans = refitting(vocab, was)
     return Object.entries(refit(vocab, was)).flatMap(([comp, stmts]) => {
       if (missing[comp]) {
         return [
@@ -693,6 +733,7 @@ export let fit = (
           ),
         ]
       }
+      if (owe(comp, plans[comp])) return []
       try {
         unit(driver, () => stmts.forEach((s) => driver.query(s)))
         return []

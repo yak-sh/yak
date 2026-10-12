@@ -576,13 +576,11 @@ let composed = async (
       // graph opens with the shape it holds; the next opener tries again.
       schema: opts.readOnly ? undefined : (_built, stmts) => {
         let beside = [...migrationSchema(), ...blobSchema(), ...stmts]
-        let print = printOf(store!.print(), [
-          ...beside,
-          ...textSchema(text, derived),
-        ])
+        let indexes = textSchema(text, derived)
+        let print = printOf(store!.print(), [...beside, ...indexes])
         try {
           follow(sql, print, () => {
-            store!.install()
+            store!.install([...beside, ...indexes])
             add(sql, beside)
             if (text.length) {
               adopt(sql, text, derived, { heal: false, fill: filler(sql) })

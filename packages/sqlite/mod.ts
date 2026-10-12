@@ -103,7 +103,7 @@ import {
   ledger,
 } from './archetype.ts'
 import { componentTables, shape } from './physical.ts'
-import { build } from './owe.ts'
+import { build, forgo, reshape } from './owe.ts'
 import { plan } from './plan.ts'
 import { births, patch, prune, remove, revive, spines } from './write.ts'
 import { bindings } from './rules.ts'
@@ -271,8 +271,11 @@ export type Store = {
   print: () => string
   /** run them — create the tables and indexes the vocabulary needs, and
    * classify what the archetype backfill finds unclassified; nothing, where
-   * the file's schema is as this vocabulary last installed it */
-  install: () => void
+   * the file's schema is as this vocabulary last installed it. `beside` is
+   * the rest of the composed schema (./follow.ts): a table too big to rebuild
+   * at once is rebuilt later (./owe.ts), and its indexes and triggers there
+   * are raised again on the rebuilt one */
+  install: (beside?: Stmt[]) => void
   /** a query → its entities, with `comps` only where named: which entities
    * match and what they carry read as one snapshot, in a unit that takes no
    * write lock, so another process's commit is seen whole or not at all */
@@ -782,7 +785,7 @@ export let storage = (
   // (./follow.ts), never by an operation.
   // In-memory stores are private scratch values and may prepare themselves.
   let ready = false
-  let install = () => {
+  let install = (beside: Stmt[] = []) => {
     let { print, made } = plan(vocab, base.derived, !!driver.file)
     let mark = (strays: string[]) =>
       [print, shape(driver, [...made, ...strays]), ...strays].join(' ')
@@ -814,8 +817,19 @@ export let storage = (
       let make = () =>
         unit(driver, () => {
           if (matches()) return
-          erect(driver, retabled(driver, vocab, base.derived))
-          let unfit = fit(driver, vocab)
+          let tables = retabled(driver, vocab, base.derived)
+          erect(driver, tables)
+          let after = (comp: string) =>
+            [...tables, ...indexed(vocab), ...beside].filter((s) =>
+              (s.t == 'create index' || s.t == 'create trigger') && s.on == comp
+            )
+          let kept = new Set<string>()
+          let unfit = fit(driver, vocab, (comp, r) => {
+            let owes = reshape(driver, comp, r, after(comp))
+            if (owes) kept.add(comp)
+            return owes
+          })
+          forgo(driver, kept)
           for (let stmt of retired(driver, vocab)) driver.query(stmt)
           build(driver, indexed(vocab))
           unfit.forEach(report)

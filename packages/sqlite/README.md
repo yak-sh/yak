@@ -904,16 +904,29 @@ try {
 
 On a file, work whose cost grows with rows is written down rather than done
 while the schema pass holds the write lock (`@yaks/sqlite/owe`):
-`build(driver,
-stmts)` runs statements as `erect` does but owes each new index
-over a table of `BIG` (10,000) rows or more, and `filler(driver)` is the
-@yaks/fts `Filler` that fills a text index over more than `FILL` (1,000) rows
-that many a window. Owed work sits in `server_meta` as `owed:<kind>:<name>`, its
-statements as data, so any process can finish it. `work(driver)` does one window
-of the first that is due; a window that throws is kept with its error and tried
-again an hour later. `tend(driver, {signal})` works windows until the signal
-aborts; on the box the process serving the effects role runs it under the
-`@yaks/sqlite/schema` lease. A database in memory owes nothing.
+
+- `build(driver, stmts)` runs statements as `erect` does but owes each new index
+  over a table of `BIG` (10,000) rows or more: one window, the index's build.
+- `filler(driver)` is the @yaks/fts `Filler` that fills a text index over more
+  than `FILL` (1,000) rows that many a window.
+- `reshape(driver, comp, refitting, after)` takes on a refit (./ddl.ts) of a
+  table of `BIG` rows or more: the table is built beside it as
+  `_yaks_refit_<comp>`, `COPY` (20,000) rows a window, with triggers carrying
+  each write behind the cursor across; once every row is there one window swaps
+  the names and raises `after` (the indexes and triggers the composed schema
+  puts on the table) on the new one, owing each big index. The old rows wait as
+  `_yaks_old_<comp>` and are deleted `CLEAR` (10,000) a window.
+  `install(beside)` on the store passes the rest of the composed schema for
+  `after`, and a pass that no longer needs a rebuild gives it up (`forgo`).
+  `_yaks_` names no component table.
+
+Owed work sits in `server_meta` as `owed:<kind>:<name>`, its statements as data,
+so any process can finish it. `work(driver)` does one window of the first that
+is due (indexes, then fills, then refits, then clearing); a window that throws
+is kept with its error and tried again an hour later. `tend(driver, {signal})`
+works windows until the signal aborts; on the box the process serving the
+effects role runs it under the `@yaks/sqlite/schema` lease. A database in memory
+owes nothing.
 
 ## Preannounced migrations
 
