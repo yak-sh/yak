@@ -45,8 +45,8 @@ test('builds: a failure is filed under its build, with its commit', () => {
   assertInstanceOf(b.error, BuildFailed)
   assertEquals(
     b.error.message,
-    'the Workers Build of yak at 191f7134 (main) failed, so it never ' +
-      'deployed: @yaks/mail pulls what arrived',
+    'the Workers Build of yak at 191f7134 (main) failed: ' +
+      '@yaks/mail pulls what arrived',
   )
 })
 
@@ -85,7 +85,8 @@ test('builds: report links to the failing build and summarizes its log safely', 
     ])
     assertStringIncludes(
       report.error.message,
-      'Step: deno task check; error: TS2322 at [redacted]',
+      'Step: deno task check; error: TS2322 at [redacted]; ' +
+        'production did not deploy',
     )
     assertStringIncludes(
       report.error.message,
@@ -126,6 +127,32 @@ test('builds: the error names its statement, place and code', () => {
   assertEquals(failure(['Retrying after timeout']).reason, 'timeout')
 })
 
+test('builds: a build that fails at staging says production deployed', async () => {
+  let env = { CF_ACCOUNT: 'account', BUILD_LOG_TOKEN: 'test-token' } as Env
+  let was = globalThis.fetch
+  globalThis.fetch = () =>
+    Promise.resolve(Response.json({
+      success: true,
+      result: {
+        lines: [
+          [1, 'Task deploy:yak deno run -A workers/yak/wrangler.ts deploy'],
+          [2, 'Task deploy:yak-staging deno run -A workers/yak/wrangler.ts'],
+          [3, '✘ [ERROR] A request to the Cloudflare API failed.'],
+        ],
+      },
+    }))
+  try {
+    let report = await diagnosed(env, broke(event('failed'))!)
+    assertStringIncludes(
+      report.error.message,
+      'Step: deploy staging; error: A request to the Cloudflare API failed; ' +
+        'production deployed; staging did not',
+    )
+  } finally {
+    globalThis.fetch = was
+  }
+})
+
 test('builds: a logs API failure keeps the build link in the report', async () => {
   let env = { CF_ACCOUNT: 'account', BUILD_LOG_TOKEN: 'test-token' } as Env
   let was = globalThis.fetch
@@ -137,6 +164,7 @@ test('builds: a logs API failure keeps the build link in the report', async () =
       'Details unavailable: build logs returned HTTP 403',
     )
     assertStringIncludes(report.error.message, '/production/builds/build-1')
+    assertEquals(report.error.message.includes('deploy'), false)
   } finally {
     globalThis.fetch = was
   }

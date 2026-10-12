@@ -2,14 +2,16 @@
 // subscription writes to the `yak-builds` queue (wrangler.toml
 // `[[queues.consumers]]`), and a failed build is a fault like any other:
 // the tracker hears it, and the meta store keeps the retry receipt
-// (unseen.ts). The version already live keeps serving through a
-// failed build, so what breaks is only that the fix in it never arrives, and
-// nothing about the site says so. Builds that fail for one cause are one
-// tracker bug, filed under the failing step and error the log names (or one
-// "unknown" cause while the log is unreadable), so one cause brings one letter
-// and one fixer however many commits it breaks. Each failure is a hit under
-// the commit it built, so a build that fails after its bug was resolved
-// brings the bug back.
+// (unseen.ts). bin/build-yak deploys production and then staging, so a
+// build says what it deployed only through the step its log shows failing:
+// one that fails before production deploys leaves the live version serving
+// and the fix in it never arrives, while one that fails at staging has
+// already deployed production. An unreadable log claims neither. Builds that
+// fail for one cause are one tracker bug, filed under the failing step and
+// error the log names (or one "unknown" cause while the log is unreadable),
+// so one cause brings one letter and one fixer however many commits it
+// breaks. Each failure is a hit under the commit it built, so a build that
+// fails after its bug was resolved brings the bug back.
 //
 // The subscription asks for failures alone; anything else that arrives is
 // acknowledged unread, and so is a failed build of any branch but the one
@@ -72,7 +74,7 @@ export let broke = (b: Built) => {
     request: `BUILD ${worker} ${short}`,
     error: new BuildFailed(
       `the Workers Build of ${worker} at ${short} (${branch ?? '?'}) ` +
-        `failed, so it never deployed: ${commitMessage ?? ''}`.trim(),
+        `failed: ${commitMessage ?? ''}`.trim(),
     ),
     tags: { worker, commit: commitHash, branch },
   }
@@ -204,6 +206,16 @@ export let failure = (lines: string[]) => {
   return { step, reason: at < 0 ? label : statement(lines, at) }
 }
 
+/** What a failing step left deployed: staging deploys after production, so
+ * only its own failure leaves production's deploy standing. */
+export let deployed = (step: string) =>
+  step == 'deploy staging'
+    ? 'production deployed; staging did not'
+    : 'production did not deploy'
+
+/// deployed('deploy staging') -> 'production deployed; staging did not'
+/// deployed('deno task check') -> 'production did not deploy'
+
 /** Read every log page so the failing step at the end is visible. A broken
  * logs API leaves the build report intact and says why details are absent. */
 export let logsOf = async (env: Env, uuid?: string) => {
@@ -256,7 +268,7 @@ export let diagnosed = async (
   let detail = await logsOf(env, b.uuid)
   let summary = typeof detail == 'string'
     ? `Details unavailable: ${detail}`
-    : `Step: ${detail.step}; error: ${detail.reason}`
+    : `Step: ${detail.step}; error: ${detail.reason}; ${deployed(detail.step)}`
   let link = buildUrl(env, b)
   return {
     ...b,
