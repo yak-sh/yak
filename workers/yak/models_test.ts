@@ -314,7 +314,7 @@ test('a connected OpenRouter model puts generated audio in the app store', async
     let job = dispatched[0]
     let host = hosting(v.env)
     assertEquals(await host.submitted(job), true)
-    assertEquals(await host.claim(job), false)
+    assertEquals(await host.claim(job), { claimed: false })
     await host.delivered(job)
     await host.delivered(job)
     assertEquals(
@@ -411,6 +411,56 @@ test('a connected OpenRouter model puts generated audio in the app store', async
       !JSON.stringify(await v.read(`.entry.session=${session}&*`))
         .includes(key),
     )
+    // A paid receipt still owes the account even after the app is trashed.
+    let dormantCall = crypto.randomUUID()
+    let dormant = {
+      ...job,
+      call: dormantCall,
+      request: `inference/${job.executor}/${dormantCall}/request`,
+      receipt: `inference/${job.executor}/${dormantCall}/receipt`,
+    }
+    await v.env.MODEL_RECEIPTS!.put(
+      dormant.request,
+      JSON.stringify({
+        ...privateRequest,
+        call: dormantCall,
+        request: { ...privateRequest.request, call: dormantCall },
+      }),
+    )
+    await v.env.MODEL_RECEIPTS!.put(
+      dormant.receipt,
+      JSON.stringify({
+        call: dormantCall,
+        reply: { id: 'paid', model: SEED, items: [], cost: 0.02 },
+      }),
+    )
+    let dormantSession = crypto.randomUUID()
+    await store.apply([
+      { entity: { eid: dormantSession }, session: {} },
+      {
+        entity: { eid: dormantCall },
+        entry: { session: dormantSession },
+        ask: { to: identityEid('model', [SEED]) },
+        submitted: { at: new Date().toISOString() },
+        inference: { executor: dormant.executor, request: dormant.request },
+      },
+    ])
+    await appMeta(v.env).apply([{
+      entity: { eid: v.app.eid },
+      trashed: { at: new Date().toISOString(), by: ADA },
+    }], KERNEL)
+    await until(async () => (await v.send('/query?q=.ask', {})).status === 404)
+    for (let i = 0; i < 2; i++) {
+      await assertRejects(() => host.delivered(dormant))
+    }
+    assertAlmostEquals((await v.spent()).meter!.models, BUDGET.free + 0.02)
+    await host.report(dormant, {
+      code: 'inference_delivery',
+      reason: 'Awaiting restore',
+      interrupted: false,
+    })
+    await assertRejects(() => host.grants(job))
+    assertEquals(calls, 2)
   } finally {
     globalThis.fetch = original
   }

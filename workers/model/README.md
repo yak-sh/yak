@@ -88,9 +88,12 @@ version metadata. The service has no public fetch door.
 
 `Kernel` in `worker.ts` defines the `ModelHost` service contract. `submitted`
 reads the ask's submission mark; `claim` atomically writes it only if absent;
-`checkpoint` awaits provider-owned acknowledgement marks. `grants` authorizes
-credentials for that ask at each outbound call. The executor swaps the grants
-in-process with `@yaks/egress`, so the provider stream stays outside the kernel.
+`checkpoint` awaits provider-owned acknowledgement marks. `claim` returns
+`{claimed: boolean}` or `{refused: {code, reason}}`; the executor translates a
+refusal into its local `ModelError`, keeping expected budget refusals separate
+from transport failures across RPC. `grants` authorizes credentials for that ask
+at each outbound call. The executor swaps the grants in-process with
+`@yaks/egress`, so the provider stream stays outside the kernel.
 
 The bucket keeps the complete `InferenceReceipt` at the receipt reference,
 provider evidence at `inference/<executor>/<ask>/media`, and generated artifacts

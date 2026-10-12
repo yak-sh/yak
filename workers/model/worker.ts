@@ -39,7 +39,9 @@ export type Steps = {
  * claim writes submitted{at} guarded against an existing mark. */
 export type Kernel = {
   submitted: (job: Inference) => Promise<boolean>
-  claim: (job: Inference) => Promise<boolean>
+  claim: (job: Inference) => Promise<
+    { claimed: boolean } | { refused: { code: string; reason: string } }
+  >
   checkpoint: (job: Inference, mark: Mark) => Promise<void>
   grants: (job: Inference) => Promise<Grant[]>
   delivered: (job: Inference) => Promise<void>
@@ -137,7 +139,13 @@ export let host = (env: Env): InferenceHost => {
   return {
     read: (job) => read<InferenceReceipt>(env, job.receipt),
     save: (job, receipt) => save(env, job.receipt, receipt),
-    claim: (job) => kernel(env).claim(job),
+    claim: async (job) => {
+      let result = await kernel(env).claim(job)
+      if ('refused' in result) {
+        throw new ModelError(result.refused.code, result.refused.reason)
+      }
+      return result.claimed
+    },
     submitted: (job) => kernel(env).submitted(job),
     checkpoint: (job, mark) => kernel(env).checkpoint(job, mark),
     recoverable: async (job) => {

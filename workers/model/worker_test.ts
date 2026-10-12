@@ -2,7 +2,14 @@
 // errors from being mistaken for an acknowledged submission.
 import { equal, test, throws } from '@yaks/testing'
 import type { Bucket } from '@yaks/blob'
-import { type Env, type FrozenRequest, RELEASE, run, submit } from './worker.ts'
+import {
+  type Env,
+  type FrozenRequest,
+  host,
+  RELEASE,
+  run,
+  submit,
+} from './worker.ts'
 import { activated, reusable } from './wrangler.ts'
 
 let job = {
@@ -150,4 +157,15 @@ test('exhausted delivery reports its failure while retaining the complete answer
     }), 'kernel unavailable')
   equal(reported, ['kernel unavailable'])
   equal(JSON.parse(objects.get(job.receipt)!), saved)
+})
+
+test('the RPC submission result preserves a budget refusal as a local ModelError', async () => {
+  let { env } = fixture()
+  env.KERNEL!.claim = () =>
+    Promise.resolve({
+      refused: { code: 'limit', reason: 'Account budget spent' },
+    })
+  await throws(() => host(env).claim(job), /Account budget spent/)
+  env.KERNEL!.claim = () => Promise.resolve({ claimed: false })
+  equal(await host(env).claim(job), false)
 })

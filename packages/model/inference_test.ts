@@ -7,7 +7,13 @@ import {
   type InferenceReceipt,
   inferenceReply,
 } from './inference.ts'
-import { type Mark, type Model, type Reply, type Request } from './mod.ts'
+import {
+  type Mark,
+  type Model,
+  ModelError,
+  type Reply,
+  type Request,
+} from './mod.ts'
 
 let job = {
   call: 'ask',
@@ -167,4 +173,19 @@ test('an unexpected provider failure retains its reason and exception', async ()
   await infer(job, host)
   equal(state.saved?.failure?.reason, 'receipt decoding failed')
   equal(state.saved?.failure?.exception?.type, 'TypeError')
+})
+
+test('a budget refusal before paid submission keeps a final unsubmitted outcome', async () => {
+  let { host, state } = fixture()
+  host.claim = () =>
+    Promise.reject(new ModelError('limit', 'Account budget spent'))
+  await infer(job, host)
+  await infer(job, host)
+  equal([state.submitted, state.purchases], [false, 0])
+  equal(state.saved?.failure, {
+    code: 'limit',
+    interrupted: false,
+    reason: 'Account budget spent',
+  })
+  await throws(() => inferenceReply(state.saved!), /Account budget spent/)
 })

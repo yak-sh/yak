@@ -162,10 +162,12 @@ export let infer = async (
   } catch (error) {
     // A lost claim acknowledgement may have committed. The next attempt reads
     // durable submission evidence; a preparation failure has made no purchase.
-    if (submissionFailure || (fresh && !sent)) throw error
+    let refused = submissionFailure instanceof ModelError &&
+      submissionFailure.code === 'limit' && !submissionFailure.retry
+    if (submissionFailure && !refused || (fresh && !sent)) throw error
     // A delivery failure may have a durable provider receipt: let the step
     // retry recovery. Missing/partial evidence must become an interruption.
-    if (await host.recoverable?.(job)) {
+    if (!refused && await host.recoverable?.(job)) {
       throw new ModelError(
         'inference_delivery',
         'Receipt delivery is pending',
@@ -178,7 +180,7 @@ export let infer = async (
         code: error instanceof ModelError
           ? error.code
           : 'inference_interrupted',
-        interrupted: true,
+        interrupted: !refused,
         reason: error instanceof Error ? error.message : String(error),
         ...error instanceof Error && !(error instanceof ModelError)
           ? { exception: { type: error.name, stack: error.stack } }

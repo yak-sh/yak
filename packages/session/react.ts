@@ -966,7 +966,9 @@ export let react = async (
       return await finish(unfinished, {
         entity: unfinished.entity,
         attempt: { by: null },
-        interrupted: { code: error.code },
+        ...error.code === 'inference_interrupted'
+          ? { interrupted: { code: error.code } }
+          : {},
         failed: { reason: error.message },
       }, [line({
         ...failing(g, error),
