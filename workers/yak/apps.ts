@@ -121,7 +121,7 @@ import { appDoc } from './vocab.ts'
 import { type Bundle, Stale, status, token } from '@yaks/graph'
 import { callStored } from './package-tools.ts'
 import { edits, mode, reads, writes } from '@yaks/member'
-import type { Door } from './door.ts'
+import { APP_JSON, type Door } from './door.ts'
 import { type Clock, clock, timed } from './timing.ts'
 import { fault, noted, refusal, serving } from './unseen.ts'
 import { recoverRelease } from './tools.ts'
@@ -1664,6 +1664,10 @@ let api = async (
         headers: { 'content-type': 'application/x-ndjson' },
       }, { ...headers, ...(await named(env, who, app)) })
     }
+    // Kept app workers send the identity returned by their query (Vale's
+    // damage handler, T-95272). This JSON form keeps answering; the store
+    // still owns its archetype. A connector's write carries no such vouch.
+    headers[APP_JSON] = '1'
     // Each wire in, the same wire out (wire.ts): the page's envelope is
     // answered `{ok, aliases, bundles}`, and the Store's bare array, which a
     // page keeping its own copy sends, is answered with the batch as applied.

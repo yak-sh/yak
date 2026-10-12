@@ -1,6 +1,6 @@
 import { test } from '@yaks/testing'
 import { assertEquals, assertRejects } from '@std/assert'
-import { type Comp, graph, mint } from '@yaks/graph'
+import { type Comp, graph, mint, Refused } from '@yaks/graph'
 import { loadTools } from '@yaks/graph/tools'
 import { ram } from '@yaks/ram'
 import { loadVocab } from '@yaks/vocab'
@@ -88,11 +88,24 @@ test('direct answers use server stamps and keep approval verdicts independent', 
   await call('decision_new', ask, 'agent')
   let [asked] = await g.read('.decision&*')
   let eid = asked.entity.eid
-  await g.apply([{
-    ...answer(eid, 'Train')[0],
-    decided: { choice: 'Train', by: 'owner', at: 'forged' },
-    $actor: { by: 'agent', via: 'session' },
-  }])
+  await assertRejects(
+    async () =>
+      await g.apply([{
+        ...answer(eid, 'Train')[0],
+        decided: { choice: 'Train', by: 'owner', at: 'forged' },
+        $actor: { by: 'agent', via: 'session' },
+      }]),
+    Refused,
+    'decided.by is server-owned',
+  )
+  assertEquals((await row(eid)).decided, undefined)
+  assertEquals((await row(eid)).completed, undefined)
+  await g.apply(
+    answer(eid, 'Train').map((b) => ({
+      ...b,
+      $actor: { by: 'agent', via: 'session' },
+    })),
+  )
   assertEquals(
     (await row(eid)).decided && ((await row(eid)).decided as Comp).by,
     'agent',

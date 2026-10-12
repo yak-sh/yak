@@ -59,10 +59,14 @@ test("an app's letters, listed and sent through the connector", async () => {
         title: 'Thanks for the pudding',
         body: 'It went in **one** sitting.',
       }),
-    ) as Letter[]
+    ) as (Letter & { created: { at: string } })[]
     assertEquals(sent.mail.from, `${jeff41}.recipes@yaks.app`)
     assertEquals(sent.doc.title, 'Thanks for the pudding')
     assert(sent.deliver!.to, 'the letter names a recipient entity')
+
+    // The connector returns the store's stamped receipt. Re-applying that
+    // answer as another caller write would refuse its server-owned fields.
+    assert(sent.created.at, 'the answer keeps the app’s creation stamp')
 
     // The mailbox, newest first: what it wrote, then the two that arrived.
     let titles = async (args: Record<string, unknown> = {}) =>

@@ -1079,10 +1079,30 @@ reference handling, stamps, and journaling alongside the caller's bundles.
 ## Admission and schema checks
 
 Core admission rejects undeclared components and properties, casts string
-properties, and checks vocabulary types and enum values. It drops
-[stamped and computed properties](../vocab/README.md#property-types-and-checks)
-from ordinary writes. `Refused` reports invalid writes; `status(error)` maps
-named errors to HTTP status codes (`Stale` is 409; an unlisted error is 500).
+properties, and checks vocabulary types and enum values. An ordinary write to a
+[stamped property](../vocab/README.md#property-types-and-checks) is refused,
+naming the property and explaining that only trusted writers may write it.
+Trusted writes admit stamped properties. Computed properties are dropped from
+writes except trusted replicas. Send a patch of writable properties, not a whole
+bundle read back with server-owned stamps. `Refused` reports invalid writes;
+`status(error)` maps named errors to HTTP status codes (`Stale` is 409; an
+unlisted error is 500).
+
+At a host boundary that serves shipped callers, `ignoreStamped` names the
+stamped properties those callers still send. Admission drops only those
+properties without granting authority to write them:
+
+```ts
+import { graph } from './mod.ts'
+import { books, memory } from './testing.ts'
+import { equal } from '@yaks/testing'
+
+let g = graph({ vocab: books, storage: memory() })
+let sent = [{ entity: { eid: 'b1', num: 7 }, doc: { title: 'Dune' } }]
+await g.apply(sent, { ignoreStamped: ['entity.num'] })
+equal((await g.get(['b1']))[0].entity.num, 1) // the store's own number
+equal(sent[0].entity.num, 7)
+```
 
 `admitSchema(vocab)` adds full JSON Schema checks for properties with
 `validate: true`, required values on affected components, tree constraints, and

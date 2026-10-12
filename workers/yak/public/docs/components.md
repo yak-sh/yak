@@ -298,8 +298,14 @@ comes from, never what some other store has:
       · https://yaks.app/docs.md
 
 A property that exists but is the server's (`created.at`, `completed.via`) is
-neither refused nor written. It is dropped in silence, so a row you read and
-patch straight back is never punished for carrying its own stamps.
+refused too, by name, and nothing in the batch is written. A row you read
+carries those stamps, so write back only the properties you mean to change:
+
+    created.at is server-owned (stamped); only trusted writers may write it
+
+An app's JSON write door ignores `entity.archetype` carried back in the identity
+of a row it read. The store derives that property; the supplied value is never
+written.
 
 ## What an unwritten property reads back as
 

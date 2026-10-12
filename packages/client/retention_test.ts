@@ -2,7 +2,7 @@
 import { test } from '@yaks/testing'
 import { assert, assertEquals, assertThrows } from '@std/assert'
 import type { Bundle } from '@yaks/graph'
-import { echo } from '@yaks/sync'
+import { replicate } from '@yaks/sync'
 import { loadVocab } from '@yaks/vocab'
 import { client, type ClientOpts } from './client.ts'
 import { box, comp, fakeDb, fakeIdb, pair } from './testing.ts'
@@ -10,9 +10,13 @@ import { wireIdb } from './idb.ts'
 import { type Saved, stash } from './vault.ts'
 import { wireStash, type WireVault } from './wire-vault.ts'
 
-let row = (eid: string, num = 10): Bundle => ({
-  entity: { eid, num },
+let write = (eid: string): Bundle => ({
+  entity: { eid },
   doc: { title: eid },
+})
+let row = (eid: string, num = 10): Bundle => ({
+  ...write(eid),
+  entity: { eid, num },
 })
 let saved = (eid: string): Saved => ({
   eid,
@@ -188,7 +192,7 @@ let acceptedMatching = accepted.c.watch('.doc')
 let acceptedUnrelated = accepted.c.watch('.doc.title=other')
 accepted.frame('s1', [])
 accepted.frame('s2', [])
-accepted.c.mutate([row('new')])
+accepted.c.mutate([write('new')])
 await acceptedStarted.promise
 
 test('an accepted write stays in its matching watch until the socket answers', async () => {
@@ -214,7 +218,7 @@ test('overlapping pending writes release only their own pins; uncertain transpor
     fetch: () => ++calls === 1 ? first.promise : second.promise,
     report: () => {},
   })
-  c.mutate([row('a')])
+  c.mutate([write('a')])
   c.mutate([{ entity: { eid: 'a' }, doc: { title: 'second' } }])
   first.resolve(Response.json([]))
   await Promise.resolve()
@@ -396,7 +400,7 @@ test('storage enumeration and reactive refresh do not touch LRU', async () => {
   frame('s1', [row('a'), row('b')])
   w.close()
   await c.graph.read('.doc')
-  await c.graph.apply(echo([row('c')]))
+  await replicate(c.graph, [row('c')])
   await Promise.resolve()
   assertEquals(c.ent('a'), undefined)
   assert(c.ent('b'))
@@ -485,7 +489,7 @@ test('refusal releases pending protection after restoring the old image', async 
 
 test('local-only graphs do not evict their sole copy of wire-default data', async () => {
   let c = client(box, [], { vault: false, retention: 0 })
-  await c.mutate([row('a'), row('b')])
+  await c.mutate([write('a'), write('b')])
   await Promise.resolve()
   assertEquals(readIds(c.read('.doc')), ['a', 'b'])
   assertEquals(c.cache.size(), 0)

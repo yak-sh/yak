@@ -22,7 +22,8 @@ import {
 import { PAGES, uriOf } from './guide.ts'
 import { PROMPTS } from './prompts.ts'
 import { sha256 } from './versions.ts'
-import { facing, GUIDE, minted } from './mcp-probe.ts'
+import { facing, GUIDE, HELLO, minted } from './mcp-probe.ts'
+import { APP_JSON } from './door.ts'
 
 let jeff54 = unique('jeff54')
 let jeff_work54 = unique('jeff-work54')
@@ -725,30 +726,53 @@ test(
       assertEquals(stamped.length, 1)
       assert(stamped[0].created, 'naming a stamp asks for it back')
 
-      // A seed that tried to date itself: `created.at` is the store's own
-      // record of when it first saw a row and cannot be given a past moment,
-      // so it is dropped and the row reads as written now (T-33147).
-      let old = minted(
-        await agent.tool('graph_apply', {
-          bundles: [{
-            entity: { eid: '$old' },
-            $app: 'recipes',
-            doc: { title: 'Written in April' },
-            created: { at: '2026-04-11T12:00:00Z' },
-          }],
-        }),
-        '$old',
+      // The app JSON compatibility vouch is the host's, never a connector
+      // request header. The same copied identity at this door is refused.
+      let forged = connector({
+        ...k,
+        at: (at, path, init = {}) =>
+          k.at(at, path, {
+            ...init,
+            headers: { ...init.headers, [APP_JSON]: '1' },
+          }),
+      }, await signedIn(k, person))
+      await forged.call('initialize', HELLO)
+      await assertRejects(
+        () =>
+          forged.tool('graph_apply', {
+            bundles: [{
+              entity: { ...hit.entity, archetype: 'a-client-cannot-pick-this' },
+              $app: 'recipes',
+              doc: { title: 'Unwritten' },
+            }],
+          }),
+        Error,
+        'entity.archetype is server-owned',
       )
-      let [aged] = JSON.parse(
-        await agent.tool('graph_query', { q: `id=${old}&.created` }),
-      ) as { created: { at: string } }[]
+
+      // A seed cannot date itself: the refusal names the store-owned stamp
+      // and leaves the whole row unwritten (T-95272).
+      await assertRejects(
+        () =>
+          agent.tool('graph_apply', {
+            bundles: [{
+              entity: { eid: '$old' },
+              $app: 'recipes',
+              doc: { title: 'Written in April' },
+              created: { at: '2026-04-11T12:00:00Z' },
+            }],
+          }),
+        Error,
+        'created.at is server-owned',
+      )
       assertEquals(
-        aged.created.at.slice(0, 4),
-        String(new Date().getFullYear()),
+        JSON.parse(
+          await agent.tool('graph_query', {
+            q: '.doc.title="Written in April"',
+          }),
+        ),
+        [],
       )
-      await agent.tool('graph_apply', {
-        bundles: [{ entity: { eid: old }, tombstone: {} }],
-      })
       let found = JSON.parse(await agent.tool('search', { words: 'lemon' }))
       assertEquals(
         found.map((r: { entity: { eid: string } }) => r.entity.eid),
@@ -976,9 +1000,20 @@ test(
       ])
       // Once the old name holds nothing, the next deploy drops it: the rename
       // is finished and the store answers one word (T-38052).
+      await assertRejects(
+        () =>
+          agent.tool('graph_apply', {
+            bundles: [{
+              entity: notes[0].entity,
+              note: { text: null, body: 'wrote it' },
+            }],
+          }),
+        Error,
+        'entity.archetype is server-owned',
+      )
       await agent.tool('graph_apply', {
         bundles: [{
-          entity: notes[0].entity,
+          entity: { eid: notes[0].entity.eid },
           note: { text: null, body: 'wrote it' },
         }],
       })

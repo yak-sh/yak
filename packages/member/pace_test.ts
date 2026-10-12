@@ -8,6 +8,7 @@ import {
   type Actor,
   type Bundle,
   graph,
+  Refused,
   signed,
   type Storage,
 } from '@yaks/graph'
@@ -194,8 +195,21 @@ for (
   test(`clients cannot replace server clocks with ${attack} clocks`, () => {
     let f = fixture()
     f.at(0, browser, position('a'))
-    f.at(100, browser, { entity: { eid: 'a' }, _pace })
-    refused(() => f.at(100, browser, { ...position('a', 1), _pace }))
+    if (_pace) {
+      assertThrows(
+        () => f.at(100, browser, { entity: { eid: 'a' }, _pace }),
+        Refused,
+        '_pace.writes is server-owned',
+      )
+      assertThrows(
+        () => f.at(100, browser, { ...position('a', 1), _pace }),
+        Refused,
+        '_pace.writes is server-owned',
+      )
+    } else {
+      f.at(100, browser, { entity: { eid: 'a' }, _pace })
+    }
+    refused(() => f.at(100, browser, position('a', 1)))
   })
 }
 

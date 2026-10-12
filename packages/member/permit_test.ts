@@ -7,6 +7,7 @@ import {
   type Actor,
   type Bundle,
   graph,
+  Refused,
   signed,
   Stale,
   token,
@@ -230,10 +231,19 @@ test('a completion does not accept client stamps or forged actors', async () => 
       ...mark(),
       $actor: person,
     }), Denied)
-  await f.apply(person, {
-    ...mark(),
-    completed: { by: 'stranger', via: 'forged', at: '2020-01-01T00:00:00Z' },
-  })
+  await assertRejects(
+    async () =>
+      await f.apply(person, {
+        ...mark(),
+        completed: {
+          by: 'stranger',
+          via: 'forged',
+          at: '2020-01-01T00:00:00Z',
+        },
+      }),
+    Refused,
+    'completed.by is server-owned',
+  )
   assertEquals((await f.read()).completed, undefined)
   await f.apply(person, mark())
   assertEquals((await f.read()).completed, {

@@ -60,6 +60,9 @@ keeps its own copy casts it in or keeps ghosts.
 - Admission refuses a component or property no vocabulary declares, naming it.
   The vocabulary is the contract every reader relies on, so the fix is a
   declaration (`vocabulary`), not a bundle shaped to slip past it.
+- An untrusted write naming a stamped property is refused with its name and
+  server-owned reason. A host's `ignoreStamped` policy drops only the properties
+  its shipped callers still send; it grants no authority to write stamps.
 
 ## Show what you read: `$was`
 

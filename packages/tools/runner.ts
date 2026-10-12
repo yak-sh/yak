@@ -642,7 +642,7 @@ export let runner = (g: Graph, opts: Opts): Runner => {
     // The claim. A runner that loses it to another has nothing to run.
     try {
       await g.apply([{
-        entity: call.entity,
+        entity: { eid: id },
         execution: claim(),
         $was: {
           execution: {
@@ -682,7 +682,7 @@ export let runner = (g: Graph, opts: Opts): Runner => {
       $was: { result: { call: null } },
     },
     {
-      entity: call.entity,
+      entity: { eid: call.entity.eid },
       execution: { by: (call.execution as Comp)?.by ?? null },
       ...(state == 'interrupted' ? { interrupted: { code: 'transport' } } : {}),
       $was: {
@@ -759,7 +759,7 @@ export let runner = (g: Graph, opts: Opts): Runner => {
       let bundles = [
         ...(keeps ? made : []),
         ...ended,
-        ...code ? [{ entity: call.entity, interrupted: { code } }] : [],
+        ...code ? [{ entity: { eid: id }, interrupted: { code } }] : [],
       ]
       // A retry reports the storage error separately from the call's failure,
       // which was reported at its catch boundary before recording the answer.

@@ -67,7 +67,7 @@ export let follow = (
           : undefined
         if (mark && !bug[mark]) {
           await mutate([{
-            entity: bug.entity,
+            entity: { eid: bug.entity.eid },
             [mark]: {},
             // A new regression or someone else's mark invalidates this answer.
             $was: {

@@ -4,7 +4,16 @@ import { assert, assertEquals } from '@std/assert'
 import type { Bundle, Comp, Graph } from '@yaks/graph'
 import { test, until as soon } from '@yaks/testing'
 import { blogGraph, pooledBlog } from './testing.ts'
-import { drop, held, holding, LEASE, leaseEid, take, until } from './lease.ts'
+import {
+  drop,
+  held,
+  holding,
+  LEASE,
+  leaseEid,
+  released,
+  take,
+  until,
+} from './lease.ts'
 
 let g = () => {
   let g = blogGraph([], pooledBlog)
@@ -39,6 +48,22 @@ let renewing = g()
 await take(renewing, 'sweep', { holder: 'p1', hold: 100, now: at(0) })
 let releasing = g()
 await take(releasing, 'sweep', { holder: 'p1', hold: 1000, now: at(0) })
+let ending = g()
+await take(ending, 'ours', { holder: 'p1', hold: 1000, now: at(0) })
+await take(ending, 'theirs', { holder: 'p2', hold: 1000, now: at(0) })
+
+test('a holder ending releases its leases in an ordinary batch without replaying identity stamps', async () => {
+  await ending.apply([
+    ...await released(ending, 'p1'),
+    { entity: { eid: 'p1' }, subscriber: { email: 'ended@example.com' } },
+  ])
+  assertEquals((await held(ending, 'ours'))?.holder, null)
+  assertEquals((await held(ending, 'ours'))?.until, null)
+  assertEquals((await held(ending, 'theirs'))?.holder, 'p2')
+  assertEquals((await ending.get(['p1']))[0].subscriber, {
+    email: 'ended@example.com',
+  })
+})
 
 test('the holder renews its own, and a rival has to wait out the lapse', async () => {
   let graph = renewing

@@ -81,7 +81,9 @@ test('a subscription opens on the set it already selects', () => {
 
 test('component-selected snapshots cover requested components, including absent ones', () => {
   let graph = shop()
-  graph.apply([{ entity: { eid: 'b1', num: 1 }, book: { price: 12 } }])
+  graph.apply([{ entity: { eid: 'b1', num: 1 }, book: { price: 12 } }], {
+    trusted: true,
+  })
   let subs = subscriptions(graph)
   let { to, take } = ear()
   subs.open(to, 'books', '.book&?doc')
@@ -91,7 +93,7 @@ test('component-selected snapshots cover requested components, including absent 
     coverage,
   }])
 
-  graph.apply([{ entity: { eid: 'b1', num: 1 }, doc: { title: 'Dune' } }])
+  graph.apply([{ entity: { eid: 'b1' }, doc: { title: 'Dune' } }])
   assertEquals(take().map(told), [{
     bundles: [{
       entity: { eid: 'b1', num: 1 },
@@ -100,7 +102,7 @@ test('component-selected snapshots cover requested components, including absent 
     }],
     coverage,
   }])
-  graph.apply([{ entity: { eid: 'b1', num: 1 }, doc: null }])
+  graph.apply([{ entity: { eid: 'b1' }, doc: null }])
   assertEquals(take().map(told), [{
     bundles: [{ entity: { eid: 'b1', num: 1 }, book: { price: 12 } }],
     coverage,

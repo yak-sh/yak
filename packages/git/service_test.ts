@@ -3,7 +3,7 @@
 // long enough, and nothing else does.
 import { test, until } from '@yaks/testing'
 import { assert, assertEquals } from '@std/assert'
-import { discover, inUse, processPaths } from './host.ts'
+import { createWorktree, discover, inUse, processPaths } from './host.ts'
 import {
   collect as collectOnHost,
   IDLE,
@@ -38,13 +38,14 @@ let seeded = template(async (dir) => {
 })
 
 /** A repository with one checkout cut per name, and its graph. */
-let fixture = async () => {
+let fixture = async (number = false) => {
   let dir = await seeded()
   let repo = dir + '/repo'
   return {
     repo,
     common: repo + '/.git',
     g: graphed({
+      number,
       docs: [{
         $defs: {
           session: {
@@ -203,15 +204,23 @@ test('the service collects each repository the graph knows', async () => {
 })
 
 test('collection retires externally removed observations and preserves managed restore history', async () => {
-  let f = await fixture()
+  let f = await fixture(true)
   try {
     let gone = await f.cut('gone')
-    let managed = await f.cut('managed')
     let tree = await discover(f.g, gone)
-    let saved = await discover(f.g, managed)
-    await f.g.apply([{ entity: saved.entity, worktree: { managed: true } }])
+    let saved = await createWorktree(f.g, f.repo, {
+      path: f.repo + '/../managed',
+      branch: 'managed',
+    })
+    let managed = String((saved.worktree as { path: string }).path)
+    assert(typeof tree.entity.num == 'number')
+    assert(typeof saved.entity.num == 'number')
     await git(f.repo, 'worktree', 'remove', gone)
     await git(f.repo, 'worktree', 'remove', managed)
+    await git(f.repo, 'branch', '-D', 'gone')
+    await discover(f.g, f.repo)
+    let [ref] = await f.g.read('.ref.name=refs/heads/gone')
+    assertEquals((ref.ref as { present: boolean }).present, false)
     assertEquals(await collect(f.g, f.common), {})
     assertEquals((await f.g.get([tree.entity.eid]))[0]?.worktree, undefined)
     assert((await f.g.get([saved.entity.eid]))[0]?.worktree)

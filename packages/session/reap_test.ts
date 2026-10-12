@@ -46,6 +46,9 @@ test('a graph with no locks at all is no work', () => {
 test('staleLeases only reads — the releases are the caller’s to apply', () => {
   let s = held()
   let free = staleLeases(detached(s)) as Bundle[]
-  assertEquals(free, [{ entity: { eid: ids.p2, num: 6 }, claim: null }])
+  assertEquals(free.map((b) => [b.entity.eid, b.claim]), [[ids.p2, null]])
   assertEquals(lockOn(s, ids.p2)?.session, ids.gone)
+  locked(s, clock).apply(free)
+  assertEquals(lockOn(s, ids.p2), undefined)
+  assertEquals(lockOn(s, ids.p1)?.session, ids.run1)
 })

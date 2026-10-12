@@ -66,7 +66,7 @@ export let store = (): Blobs & {
  * guess.
  */
 export let fixture = (
-  more: { docs?: VocabDoc[]; plugins?: Plugin[] } = {},
+  more: { docs?: VocabDoc[]; plugins?: Plugin[]; number?: boolean } = {},
 ): {
   g: Graph
   bytes: ReturnType<typeof store>
@@ -79,7 +79,7 @@ export let fixture = (
     ])
     : vocab
   let g = graph({
-    storage: ram(v),
+    storage: ram(v, { number: more.number }),
     vocab: v,
     plugins: [edges(v), keys(v), ...more.plugins ?? []],
   })

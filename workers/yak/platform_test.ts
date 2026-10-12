@@ -15,7 +15,7 @@
 // caller speaks the graph's own wire, `meta` is `metaOf` over the platform's
 // door, and the fleet-shaped object they used to reach is gone (T-33807).
 import { test } from '@yaks/testing'
-import { assert, assertEquals } from '@std/assert'
+import { assert, assertEquals, assertRejects } from '@std/assert'
 import type { Bundle } from '@yaks/graph'
 import type { Wire } from '@yaks/durable-object'
 import { durable } from './testing.ts'
@@ -307,10 +307,20 @@ test("the meter and the plan are the platform's word, not a person's", async () 
   assertEquals(seen.meter?.month, month)
   assertEquals(seen.meter?.requests, 12)
   assertEquals(seen.tier, 'free')
-  // A person cannot lift their own ceiling: the properties are server-owned, so
-  // the ordinary door drops them rather than writing them.
-  await at.apply([{ entity: { eid: s.eid }, plan: { tier: 'plus' } }], as(ada))
+  // A person cannot lift their own ceiling: naming a server-owned property
+  // refuses the entire patch.
+  await assertRejects(
+    () =>
+      at.apply([{
+        entity: { eid: s.eid },
+        doc: { title: 'Forged upgrade' },
+        plan: { tier: 'plus' },
+      }], as(ada)),
+    Error,
+    'plan.tier is server-owned',
+  )
   assertEquals((await dir.space('ada'))!.tier, 'free')
+  assertEquals((await dir.space('ada'))!.title, seen.title)
   // And the space that pays as a customer is found by it.
   await at.apply([{
     entity: { eid: s.eid },

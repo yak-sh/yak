@@ -381,7 +381,7 @@ test('the kernel routes, vouches, serves, and surfaces', async () => {
     assertEquals(broken.created, undefined)
 
     // The kernel flag is the kernel's: a client sending it is still a client,
-    // and its server-owned batch is dropped, not written.
+    // and its server-owned batch is refused.
     let forgedFlag = await k.at(`${jeff69}.yaks.app`, '/recipes/api/apply', {
       method: 'POST',
       headers: { cookie, 'x-yak-kernel': '1' },
@@ -390,7 +390,11 @@ test('the kernel routes, vouches, serves, and surfaces', async () => {
         exception: { value: 'forged' },
       }]),
     })
-    assertEquals(forgedFlag.status, 200)
+    assertEquals(forgedFlag.status, 400)
+    assertStringIncludes(
+      (await forgedFlag.json()).error.message,
+      'exception.value is server-owned',
+    )
     assertEquals(await owner.get('.exception'), [])
   } finally {
     await k.stop()

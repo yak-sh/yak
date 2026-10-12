@@ -19,7 +19,7 @@ test('platform boot sweeps and single session reads never scan entity', async ()
   g.apply([{
     entity: { eid: 'village' },
     session: {},
-    created: { via: 'browser' },
+    $actor: { via: 'browser' },
   }])
   g.apply([{ entity: { eid: 'village' }, session: { actor: 'village' } }])
   for (

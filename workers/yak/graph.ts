@@ -246,6 +246,7 @@ import type { Binding } from './post.ts'
 import { ledger } from './ledger.ts'
 import {
   ACCEPTED,
+  APP_JSON,
   doorOf,
   GIT_STORE,
   IDEMPOTENCY,
@@ -3273,6 +3274,9 @@ export class Store {
         throw new Refused('/apply takes a JSON array of bundles')
       }
       let kernel = request.headers.get('x-yak-kernel') == '1'
+      if (!kernel && request.headers.get(APP_JSON) == '1') {
+        opts = { ...opts, ignoreStamped: ['entity.archetype'] }
+      }
       // Only trusted bookkeeping may preserve the last write's provenance.
       if (kernel && new URL(request.url).searchParams.get('stamp') == '0') {
         opts = { ...opts, stamp: false }

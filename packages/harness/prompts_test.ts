@@ -248,7 +248,10 @@ test('retired CLI instructions are omitted on future asks without rewriting hist
     )
     let history = await a.transcript(id)
     let ask = history.find((b) => b.ask)!
-    await h.g.apply([{ entity: ask.entity, using: { instructions: retired } }])
+    await h.g.apply([{
+      entity: { eid: ask.entity.eid },
+      using: { instructions: retired },
+    }])
     await a.send(id, 'continue')
     await a.idle(id)
     assertEquals(requests.at(-1)!.instructions, undefined)
@@ -278,7 +281,7 @@ test('retired CLI instructions are omitted on future asks without rewriting hist
     await a.idle(child)
     assertEquals(requests.at(-1)!.instructions, undefined)
     await h.g.apply([{
-      entity: latest.entity,
+      entity: { eid: latest.entity.eid },
       using: { instructions: 'Custom instructions stay.' },
     }])
     await a.send(id, 'custom')

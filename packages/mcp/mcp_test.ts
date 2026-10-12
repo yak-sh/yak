@@ -409,7 +409,21 @@ test('graph_schema hands over the words of this graph', async () => {
 })
 
 test('a refusal is the tool error the agent reads, not a broken call', async () => {
-  let client = await connect()
+  let graph = shopGraph()
+  let client = await connect({ graph })
+  for (let check of [false, true]) {
+    let out = await called(client, 'graph_apply', {
+      bundles: [
+        { entity: { eid: 'b1' }, book: { price: 12 } },
+        { entity: { eid: 'b2' }, created: { at: null } },
+      ],
+      check,
+    })
+    assertEquals(out.isError, true)
+    assertStringIncludes(text(out), 'created.at is server-owned')
+    assertStringIncludes(text(out), 'only trusted writers')
+    assertEquals(await graph.get(['b1', 'b2']), [])
+  }
   // The write door's schema is the vocabulary (T-34153), so a bundle with no
   // identity and a value of the wrong type are each refused where they were
   // typed — with the path that names them.

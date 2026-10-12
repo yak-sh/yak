@@ -39,7 +39,7 @@ export let staleLeases = (tx: ReadTx): Bundle[] | Promise<Bundle[]> =>
           .map((b) => b.entity.eid),
       )
       return locked.filter((b) => !live.has(holder(b)))
-        .map((b): Bundle => ({ entity: b.entity, [CLAIM]: null }))
+        .map((b): Bundle => ({ entity: { eid: b.entity.eid }, [CLAIM]: null }))
     })
   })
 

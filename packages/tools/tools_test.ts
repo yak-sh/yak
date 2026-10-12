@@ -20,6 +20,7 @@ import {
 import { effectDoc, effects } from '@yaks/effects'
 import { ram } from '@yaks/ram'
 import { kernelDoc, kernelKeywords } from '@yaks/kernel'
+import { idDoc } from '@yaks/id/vocab'
 import { executionComputed } from './state.ts'
 import { loadVocab } from '@yaks/vocab'
 import {
@@ -27,6 +28,7 @@ import {
   callDoc,
   CallError,
   faulted,
+  Interrupted,
   runner,
   toolDoc,
   toolEid,
@@ -54,7 +56,7 @@ let echo: Tool = {
 }
 
 let words = (extra: Record<string, unknown> = {}) =>
-  loadVocab([callDoc, toolDoc, kernelDoc, {
+  loadVocab([callDoc, toolDoc, kernelDoc, idDoc, {
     $defs: {
       person: { component: true, properties: {} },
       // What a runner's owner is: a process, and its ending (@yaks/process).
@@ -67,7 +69,10 @@ let words = (extra: Record<string, unknown> = {}) =>
 
 let world = (tools: Tool[] = [echo], owner?: string) => {
   let vocab = words()
-  let g = graph({ vocab, storage: ram(vocab, { computed: executionComputed }) })
+  let g = graph({
+    vocab,
+    storage: ram(vocab, { number: true, computed: executionComputed }),
+  })
   if (owner) {
     g.apply(
       ['host1', 'host2', 'dead'].map((eid) => ({
@@ -87,7 +92,7 @@ let watched = (tools: Tool[] = [echo], extra = {}) => {
   let fx = effects(vocab, { report: () => {} })
   let g = graph({
     vocab,
-    storage: ram(vocab, { computed: executionComputed }),
+    storage: ram(vocab, { number: true, computed: executionComputed }),
     plugins: [fx],
   })
   let r = runner(g, { tools, report: () => {} })
@@ -190,13 +195,13 @@ test('recorded call effects recover pending and crashed calls without reconcilia
     {
       entity: crashed.entity,
       effect: {
-        state: 'running',
+        state: 'pending',
         lease_owner: 'old-worker',
         lease_token: 'abandoned',
         lease_expiry: '2000-01-01T00:00:00.000Z',
       },
     },
-  ])
+  ], { trusted: true })
   let next = process('new-worker')
   await next.g.apply([{
     entity: { eid: 'new-worker' },
@@ -220,6 +225,7 @@ test('a call is the transcript: the ask, the answer, the result beside it', asyn
   assertEquals(body(answer.find((b) => b.output)), 'hi 2')
   assertEquals(body(result), 'hi 2')
   assertEquals(typeof (result.result as Comp).ms, 'number')
+  assertEquals(typeof (await g.read('.call&*'))[0].entity.num, 'number')
   assertEquals(
     ((await g.read('.execution&*'))[0].execution as Comp).state,
     'done',
@@ -525,7 +531,14 @@ test('a claim whose holder has exited is free, and runs once', async () => {
 test('an interrupted call is answered as interrupted, and no sweep runs it again', async () => {
   let hang = Promise.withResolvers<Bundle[]>()
   let stuck: Tool = { ...echo, verb: 'wait', run: () => hang.promise }
-  let { g, r } = world([echo, stuck], 'host1')
+  let cut: Tool = {
+    ...echo,
+    verb: 'cut',
+    run: () => {
+      throw new Interrupted('the connection closed', 'transport')
+    },
+  }
+  let { g, r } = world([echo, stuck, cut], 'host1')
   await r.ensure()
   let asked = r.call(called('example_wait', { value: 'forever' }))
   await r.call(called('example_echo', { value: 'done' }))
@@ -538,6 +551,11 @@ test('an interrupted call is answered as interrupted, and no sweep runs it again
   assertEquals(await runner(g, { tools: [stuck], owner: 'host2' }).drive(), [])
   hang.resolve([])
   await assertRejects(() => asked)
+  let answer = await r.call(called('example_cut', { value: 'cut' }))
+  assertEquals(
+    (answer.find((b) => b.interrupted)!.interrupted as Comp).code,
+    'transport',
+  )
 })
 
 test('a holder that died is interrupted for, from what the graph says it held', async () => {

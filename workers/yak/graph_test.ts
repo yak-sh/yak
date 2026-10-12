@@ -1450,15 +1450,16 @@ test('a visitor to an open app adds, and touches no price, order or row of the o
     }),
     200,
   )
-  // What was sold is written by the platform, and nobody else moves it: an
-  // order's properties are server-owned, so a page's say-so lands nothing at
-  // all.
-  assertEquals(
-    await status(open, {
-      entity: { eid: O },
-      order: { status: 'paid', total_cents: 1 },
-    }),
-    200,
+  // What was sold is written by the platform: a page naming an order's
+  // server-owned properties is refused, with nothing written.
+  let refused = await post(store, '/apply', [{
+    entity: { eid: O },
+    order: { status: 'paid', total_cents: 1 },
+  }], open)
+  assertEquals(refused.status, 400)
+  assertStringIncludes(
+    (await refused.json()).message,
+    'order.status is server-owned',
   )
   assertEquals(
     await (await get(store, `/query?q=.entity.eid=${O}`, own)).json(),
@@ -1471,7 +1472,7 @@ test('a visitor to an open app adds, and touches no price, order or row of the o
   )
   assertEquals(
     await status(own, { entity: { eid: O }, order: { status: 'refunded' } }),
-    200,
+    400,
   )
   let rows = await (await get(store, `/query?q=.entity.eid=${P},${O}`, own))
     .json()
@@ -1707,8 +1708,18 @@ test('app archetypes classify writes and migrate old rows only on schema changes
     .json() as Bundle[]
   assert(descriptors.some((b) => b.entity.eid == original))
   // A returned pointer is not a writable classification.
-  await post(store, '/apply', [{
+  let refused = await post(store, '/apply', [{
     entity: { eid: CAKE, archetype: 'forged' },
+    recipe: { serves: 5 },
+  }], owner)
+  assertEquals(refused.status, 400)
+  assertStringIncludes(
+    (await refused.json()).message,
+    'entity.archetype is server-owned',
+  )
+  assertEquals(((await read(store))[0].recipe as { serves: number }).serves, 4)
+  await post(store, '/apply', [{
+    entity: { eid: CAKE },
     recipe: { serves: 5 },
   }], owner)
   let updated = (await read(store))[0].entity.archetype
@@ -1752,10 +1763,15 @@ test('app archetype descriptors are read-only and vocabulary extension tracks ne
   let descriptors = await (await get(store, '/query?q=.archetype', owner))
     .json() as Bundle[]
   let before = JSON.stringify(descriptors)
-  await post(store, '/apply', [{
+  let refused = await post(store, '/apply', [{
     entity: descriptors[0].entity,
     archetype: { tables: '["recipe"]' },
   }], owner)
+  assertEquals(refused.status, 400)
+  assertStringIncludes(
+    (await refused.json()).message,
+    'entity.archetype is server-owned',
+  )
   assertEquals(
     JSON.stringify(
       await (await get(store, '/query?q=.archetype', owner)).json(),

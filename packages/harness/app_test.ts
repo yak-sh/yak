@@ -454,7 +454,7 @@ test('task mode paints claimed work and subagent, then its delivered result with
       ui.text(),
     )
     assert(ui.text().includes(`Harness — ${parent.entity.eid.slice(0, 8)}`))
-    await a.h.g.apply([{ entity: task.entity, completed: {} }])
+    await a.h.g.apply([{ entity: { eid: task.entity.eid }, completed: {} }])
     childReply.resolve({
       id: 'r',
       model: 'fake',

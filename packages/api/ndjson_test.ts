@@ -130,31 +130,38 @@ test('the answer is line for line: bookkeeping stays out of it', async () => {
 })
 
 test('a refusal is the last line: which line, and what landed', async () => {
-  let { handler } = shop()
-  let r = await handler(ndjson(
-    '/apply',
-    [
-      ...load(CHUNK), // lines 1…50 — one whole chunk, and it commits
-      JSON.stringify({ entity: { eid: 'x1' }, book: { price: 1 } }),
-      JSON.stringify({ entity: { eid: 'x2' }, book: { colour: 'red' } }),
-      JSON.stringify({ entity: { eid: 'x3' }, book: { price: 3 } }),
-    ].join('\n'),
-  ))
-  // A 200 with the refusal in the body: the first bundles were on the wire
-  // before the bad line was read, so there is no status left to say it in.
-  assertEquals(r.status, 200)
-  let answered = await rows(r)
-  assertEquals(answered.length, CHUNK + 1)
-  let no = answered.at(-1)
-  assertEquals(no.error, 'Refused')
-  assert(no.message.includes('book.colour'), no.message)
-  assertEquals(no.line, CHUNK + 2)
-  assertEquals(no.committed, CHUNK)
-  // Its chunk rolled back whole, and nothing after it was read.
-  assertEquals(
-    (await (await handler(ask('.book.price>0'))).json()).length,
-    CHUNK,
-  )
+  for (let patch of [{ book: { colour: 'red' } }, { created: { at: null } }]) {
+    let { handler } = shop()
+    let r = await handler(ndjson(
+      '/apply',
+      [
+        ...load(CHUNK), // lines 1…50 — one whole chunk, and it commits
+        JSON.stringify({ entity: { eid: 'x1' }, book: { price: 1 } }),
+        JSON.stringify({ entity: { eid: 'x2' }, ...patch }),
+        JSON.stringify({ entity: { eid: 'x3' }, book: { price: 3 } }),
+      ].join('\n'),
+    ))
+    // A 200 with the refusal in the body: the first bundles were on the wire
+    // before the bad line was read, so there is no status left to say it in.
+    assertEquals(r.status, 200)
+    let answered = await rows(r)
+    assertEquals(answered.length, CHUNK + 1)
+    let no = answered.at(-1)
+    assertEquals(no.error, 'Refused')
+    assert(
+      no.message.includes(
+        'book' in patch ? 'book.colour' : 'created.at is server-owned',
+      ),
+      no.message,
+    )
+    assertEquals(no.line, CHUNK + 2)
+    assertEquals(no.committed, CHUNK)
+    // Its chunk rolled back whole, and nothing after it was read.
+    assertEquals(
+      (await (await handler(ask('.book.price>0'))).json()).length,
+      CHUNK,
+    )
+  }
 })
 
 test('a line that is not JSON names itself', async () => {

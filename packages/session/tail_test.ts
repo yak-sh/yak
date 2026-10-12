@@ -200,7 +200,7 @@ test('a resume starts where the log was read, whatever became of its entries', (
     })
     // The lines that made nothing, and an entry deleted since, stay read.
     let [entry] = await g.read(`.entry.session=${ids.run1}`)
-    await g.apply([{ entity: entry.entity, $delete: true }])
+    await g.apply([{ entity: { eid: entry.entity.eid }, $delete: true }])
     assertEquals((await tail(g, path, { session: ids.run1 })).line, 3)
     // A log that says nothing at all is read once, into a session of its own.
     let quiet = `${path}.quiet`

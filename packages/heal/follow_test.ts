@@ -13,6 +13,7 @@ import { ram } from '@yaks/ram'
 import { edgeDoc, edgeEid, edgeKeywords, link } from '@yaks/edge'
 import { loadVocab, type VocabDoc } from '@yaks/vocab'
 import { kernelDoc, kernelKeywords } from '@yaks/kernel'
+import { archetypeDoc, archetypes } from '@yaks/archetype'
 import { docDoc } from '@yaks/doc'
 import { taskDoc } from '@yaks/task'
 import { projectDoc } from '@yaks/project'
@@ -54,6 +55,7 @@ let vocab = loadVocab([
 ], [kernelKeywords, edgeKeywords])
 
 let trackerVocab = loadVocab([
+  archetypeDoc,
   pick(
     kernelDoc,
     'entity',
@@ -70,6 +72,7 @@ let trackerGraph = () =>
   graph({
     vocab: trackerVocab,
     storage: ram(trackerVocab, { computed }),
+    plugins: [archetypes()],
     clock: () => '2026-10-02T00:00:10Z',
   })
 

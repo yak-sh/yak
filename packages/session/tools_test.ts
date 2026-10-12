@@ -203,6 +203,20 @@ test('a session that exists is handed back what it was in the middle of', async 
   )
 })
 
+test('session context resumes a numbered transcript through an ordinary write', async () => {
+  let g = locked(store())
+  await g.apply([{ entity: { eid: ids.run1 }, session: { ended: true } }])
+  let [before] = await g.get([ids.run1])
+  let said = await runs({ vocab: pages }).session_context!(
+    { entity: { eid: 'c1' }, call: { args: { session: 'one' } } },
+    g,
+  ) as Bundle[]
+  await g.apply([said[0]])
+  let [after] = await g.get([ids.run1])
+  assertEquals(after.entity, before.entity)
+  assertEquals(after.session, { id: 'one', ended: null })
+})
+
 test('a wrap records the account and lets go of everything', async () => {
   let rows = [
     row({ entity: { eid: 's1' }, session: { id: 'abc' } }, 'session.id'),

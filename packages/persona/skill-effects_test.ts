@@ -626,7 +626,7 @@ test('skill effects real temp Git and RAM graph preserve import/export agreement
     let [skill] = await repoSkills(graph, repository)
     assert(skill)
     await graph.apply([{
-      entity: skill.entity,
+      entity: { eid: skill.entity.eid },
       content: { body: 'Exported\n' },
     }])
     await invoke(fx)

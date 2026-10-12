@@ -133,7 +133,7 @@ export let artifactTools = (
       }
       // The existing call entry provides stable identity and ordering. Replays patch the same attachment.
       await g.apply([{
-        entity: ctx.call.entity,
+        entity: { eid: ctx.call.entity.eid },
         attachment: { artifact: eid, audience, revision },
         content: {
           body:

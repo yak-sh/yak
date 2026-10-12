@@ -75,7 +75,7 @@ export let leasing = (opts: LeaseOpts = {}): Hook => (bundles, tx) => {
     }
     if (!fresh.size) return bundles
     // A new lock is stamped with the moment it was taken. `at` is
-    // server-owned, so admission already dropped whatever a client sent; this
+    // server-owned, so admission refuses it from an untrusted client; this
     // phase runs after admission, which is what lets a hook stamp at all.
     let stamp = now()
     return bundles.map((b) => {

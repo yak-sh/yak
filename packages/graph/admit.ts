@@ -10,12 +10,10 @@
 //   an undeclared property is refused     on a component the vocabulary does
 //                                       declare, an unrecognized property is a
 //                                       typo, for the same reason
-//   a server-owned property is dropped    `stamped` properties are readable but
-//                                       never writable by a client; a caller
-//                                       that sends one is ignored rather than
-//                                       refused (reading a whole bundle back
-//                                       and sending it again is a normal thing
-//                                       to do)
+//   a server-owned property is refused    `stamped` properties are readable but
+//                                       only trusted writers may write them;
+//                                       a caller must send the patch it means,
+//                                       not replay server-owned values
 //
 // A string property's value is cast to a string first (@yaks/vocab `cast`): the
 // schema is what a reader gets back, so a number sent to a text property is
@@ -33,6 +31,32 @@ import { comps, dead, reserved } from './bundle.ts'
 
 import { Refused } from './errors.ts'
 export { Refused } from './errors.ts'
+
+let serverOwned = (name: string, prop: string): never => {
+  throw new Refused(
+    `${name}.${prop} is server-owned (stamped); only trusted writers may write it`,
+  )
+}
+
+/** Check what an untrusted caller named before normalization can remove or
+ * replace it. Identity is structural, but its declared properties have the
+ * same ownership as every other component's. */
+export let unstamped = (
+  bundles: Bundle[],
+  vocab: Vocab,
+  ignored: readonly string[] = [],
+): Bundle[] => {
+  for (let b of bundles) {
+    for (let [name, patch] of [['entity', b.entity] as const, ...comps(b)]) {
+      for (let k of Object.keys(patch ?? {})) {
+        if (vocab.prop(name, k)?.stamped && !ignored.includes(`${name}.${k}`)) {
+          serverOwned(name, k)
+        }
+      }
+    }
+  }
+  return bundles
+}
 
 /**
  * The bundles, refused unless they form a batch: an array whose every
@@ -56,14 +80,13 @@ export let formed = (bundles: unknown): Bundle[] => {
   return bundles
 }
 
-// One component patch, admitted: undeclared properties refused, unwritable ones
-// dropped, values validated. Returns undefined when the caller sent properties
-// and every one of them was dropped — nothing is left to write.
+// One component patch, admitted: undeclared and server-owned properties refused,
+// computed values dropped, writable values validated.
 //
 // A caller may write the client-writable properties, and the server-owned ones
 // when it is trusted. A computed property (`computed: true`) is neither — it
-// is derived, so there is nothing to write — and is dropped like a stamped
-// one, except in a replica, which keeps the value the graph it copies derived.
+// is derived, so there is nothing to write — and is dropped, except in a
+// replica, which keeps the value the graph it copies derived.
 let admitComp = (
   v: Vocab,
   name: string,
@@ -77,12 +100,15 @@ let admitComp = (
   // a derivation may answer wider than the words a client writes (a claimed
   // task's status is `wip`).
   let derived: Comp = {}
-  let asked = false
-  let any = false
+  let ignored = false
   for (let k of Object.keys(patch)) {
     let p = v.prop(name, k)
     if (!p) {
       alien.push(k)
+      continue
+    }
+    if (p.stamped && !trusted) {
+      ignored = true
       continue
     }
     // A computed property is never a write, so a patch of nothing else names
@@ -91,16 +117,13 @@ let admitComp = (
       if (replica) derived[k] = patch[k]
       continue
     }
-    asked = true
-    if (p.stamped && !trusted) continue
     kept[k] = patch[k]
-    any = true
   }
   // The refusal lists the vocabulary, not just the mistake: a caller writing a
   // property that does not exist has the wrong idea of this component, and the
   // properties it actually has are the shortest way to correct that.
   if (alien.length) throw new Refused(unknownProps(v, name, alien))
-  if (asked && !any) return undefined
+  if (ignored && !Object.keys(kept).length) return undefined
   let cut = cast(v, name, kept)
   let errs = v.check(name, cut, { stamped: trusted })
   if (errs.length) throw new Refused(errs.join('; '))
@@ -127,12 +150,15 @@ export let known = (bundles: Bundle[], vocab: Vocab): Bundle[] =>
 /**
  * The admit phase: every bundle in the batch, reduced to what this caller may
  * write, or refused if it names a component or property this graph's
- * vocabulary does not declare. A bundle whose components were all dropped is
- * removed from the batch — it asked for nothing this caller may write.
+ * vocabulary does not declare, or a server-owned property. A bundle whose
+ * components were all dropped is removed from the batch — it asked for nothing
+ * this caller may write.
  * `trusted` admits server-owned properties; it is the calling program's
  * decision, never a client's. `teach` ends the refusal of an undeclared
  * component (@yaks/vocab `unknownComps`). A `replica` (trusted) keeps the
  * computed values its source sent.
+ * A host may name `ignoreStamped` properties its shipped callers still send;
+ * those are dropped without granting the caller authority to write them.
  */
 export let admit = (
   bundles: Bundle[],
@@ -140,6 +166,7 @@ export let admit = (
   trusted = false,
   teach?: string,
   replica = false,
+  ignoreStamped: readonly string[] = [],
 ): Bundle[] => {
   let alien = new Set<string>()
   for (let b of bundles) {
@@ -148,7 +175,17 @@ export let admit = (
     }
   }
   if (alien.size) throw new Refused(unknownComps([...alien], teach))
+  if (!trusted) unstamped(bundles, vocab, ignoreStamped)
   return bundles.flatMap((b) => {
+    // Identity is reserved structurally, but its declared properties still
+    // belong to the server (for example entity.archetype).
+    if (!trusted) {
+      for (let k of Object.keys(b.entity)) {
+        if (!vocab.prop('entity', k)?.stamped) continue
+        b = { ...b, entity: { ...b.entity } }
+        delete (b.entity as Comp)[k]
+      }
+    }
     let sent = comps(b)
     if (!sent.length) return [b]
     let out: Bundle = { entity: b.entity }
@@ -164,7 +201,13 @@ export let admit = (
         kept++
         continue
       }
-      let admitted = admitComp(vocab, name, patch, trusted, replica && trusted)
+      let admitted = admitComp(
+        vocab,
+        name,
+        patch,
+        trusted,
+        replica && trusted,
+      )
       if (!admitted) continue
       out[name] = admitted
       kept++

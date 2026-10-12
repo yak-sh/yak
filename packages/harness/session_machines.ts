@@ -122,11 +122,11 @@ export let machines = (g: Graph, configured?: Machines): SessionMachines => {
     if (at.machine) return at
     let translated = await configured?.resolveHome?.(session)
     if (translated?.machine) {
-      await g.apply([{ entity: owner.entity, home: translated }])
+      await g.apply([{ entity: { eid: session }, home: translated }])
       return { ...at, ...translated }
     }
     let id = await requested(session)
-    await g.apply([{ entity: owner.entity, home: { machine: id } }])
+    await g.apply([{ entity: { eid: session }, home: { machine: id } }])
     return { ...at, machine: id }
   }
   let lent = async (session: string) => {

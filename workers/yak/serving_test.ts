@@ -35,7 +35,7 @@ import * as apps from './apps.ts'
 import * as fileDoor from './files.ts'
 import { appStore, directory, stamp, storeName } from './directory.ts'
 import * as dirPart from './directory.ts'
-import { scriptName } from './dispatch.ts'
+import { granting, scriptName } from './dispatch.ts'
 import type { Env } from './env.ts'
 import { analytics, dataset } from './testing.ts'
 import { emptied, trash, trashSpace } from './erase.ts'
@@ -661,13 +661,13 @@ let wireFixture = async () => {
     { entities: [{ entity: { eid: eli }, person: {} }] },
     ADA_OWNS,
   )
-  return { scenario, env, eli }
+  return { scenario, env, eli, space, app }
 }
 let wireScene = await wireFixture()
 
 test('the page wire: apply, query and search round-trip', async () => {
   using _scenario = wireScene.scenario
-  let { env, eli } = wireScene
+  let { env, eli, space, app } = wireScene
   let page = client(env, await as(ADA))
 
   // The page's own envelope in, the page's own answer out — the shape the
@@ -691,6 +691,54 @@ test('the page wire: apply, query and search round-trip', async () => {
   assertEquals(row.kind, 'doc')
   assertEquals((row.entity as { eid: string }).eid, eid)
   assertEquals((row.doc as { title: string }).title, 'Lemon drizzle')
+
+  // A kept Vale worker sends a queried hero's whole identity at its STORE
+  // binding (T-95272). JSON page writes and worker-grant writes keep that
+  // form, while the archetype remains the store's own derived value.
+  let identity = row.entity as { eid: string; archetype: string }
+  assert(identity.archetype)
+  let copied = (body: string) => ({
+    entity: { ...identity, archetype: 'a-client-cannot-pick-this' },
+    doc: { body },
+  })
+  let pageWrite = await apps.fetch(
+    visit('/cookbook/api/apply', {
+      method: 'POST',
+      headers: { cookie: await as(ADA), 'content-type': 'application/json' },
+      body: JSON.stringify([copied('three lemons and a lemon glaze')]),
+    }),
+    env,
+  )
+  assertEquals(pageWrite.status, 200, await pageWrite.clone().text())
+  assert(Array.isArray(await pageWrite.json()))
+  let workerWrite = await apps.fetch(
+    visit('/cookbook/api/apply', {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        'x-yak-grant': await granting(
+          env.SESSION_SECRET!,
+          storeName(space, app),
+          { person: ADA, role: 'owner' },
+        ),
+      },
+      body: JSON.stringify({
+        entities: [copied('three lemons and a lemon icing')],
+      }),
+    }),
+    env,
+  )
+  assertEquals(workerWrite.status, 200, await workerWrite.clone().text())
+  assertEquals((await workerWrite.json()).ok, true)
+  let [kept] = await page.query(`.entity.eid=${eid}`)
+  assert(
+    (kept.entity as { archetype: string }).archetype !=
+      'a-client-cannot-pick-this',
+  )
+  assertEquals(
+    (kept.doc as { body: string }).body,
+    'three lemons and a lemon icing',
+  )
 
   // An address, in the page's own grammar.
   assertEquals((await page.query(`.entity.eid=${eid}`)).length, 1)

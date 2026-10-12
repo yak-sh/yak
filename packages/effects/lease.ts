@@ -180,7 +180,7 @@ export let released = (
     g.read(`.${LEASE}.holder=${holder}`),
     (rows: Bundle[]): Bundle[] =>
       rows.map((b) => ({
-        entity: b.entity,
+        entity: { eid: b.entity.eid },
         [LEASE]: { holder: null, until: null },
       })),
   )

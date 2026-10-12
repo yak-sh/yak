@@ -281,7 +281,7 @@ export let runs = (host: Host, options: Options = {}): Runs => {
         managed = comp(provider, 'provider')?.transport == 'process'
       }
       await graph.apply(signed([{
-        entity: managed ? row.entity : { eid: uuid() },
+        entity: { eid: managed ? row.entity.eid : uuid() },
         ...managed ? {} : { entry: { session: row.entity.eid } },
         stop: {},
       }], who(call)))

@@ -29,7 +29,7 @@ import type { Bundle } from '@yaks/graph'
  * graph and in whose name. It writes as the kernel — the server itself, not the
  * client whose batch triggered the effect — so it must be applied `trusted`: an
  * outcome an effect records (`delivered`, `bounced`) is a server-owned
- * property, and an untrusted apply would drop exactly the properties the effect
+ * property, and an untrusted apply would refuse the properties the effect
  * exists to write, as in
  * `effects(vocab, { write: (b) => g.apply(b, { trusted: true }) })`.
  */

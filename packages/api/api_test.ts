@@ -393,3 +393,20 @@ test('/query answers a projection as bundles, with what its paths reach', async 
 test('a count over nothing is zero, never an empty list', async () => {
   assertEquals(await body(await shop()(ask('.book&.count'))), { count: 0 })
 })
+
+test('HTTP refuses stamped properties atomically, including dry runs', async () => {
+  let graph = shopGraph()
+  let handler = api({ graph })
+  for (let path of ['/apply', '/apply?check=1']) {
+    let r = await handler(post(path, [
+      { entity: { eid: 'b1' }, book: { price: 12 } },
+      { entity: { eid: 'b2' }, created: { at: null } },
+    ]))
+    assertEquals(r.status, 400)
+    let said = await body(r)
+    assertEquals(said.error, 'Refused')
+    assert(said.message.includes('created.at is server-owned'))
+    assert(said.message.includes('only trusted writers'))
+    assertEquals(await graph.get(['b1', 'b2']), [])
+  }
+})

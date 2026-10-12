@@ -2,8 +2,8 @@
 // Read it through the graph and invoke it through the runner, including hosts
 // whose write guards require one operation at a time.
 import { test } from '@yaks/testing'
-import { assertEquals } from '@std/assert'
-import { type Actor, type Bundle, graph, who } from '@yaks/graph'
+import { assertEquals, assertThrows } from '@std/assert'
+import { type Actor, type Bundle, graph, Refused, who } from '@yaks/graph'
 import { ram } from '@yaks/ram'
 import { loadVocab } from '@yaks/vocab'
 import { kernelDoc } from '@yaks/kernel'
@@ -22,7 +22,7 @@ let patch = (call: Record<string, unknown>, actor: Actor = editor): Bundle => ({
   call,
   $actor: actor,
 })
-let cases: [string, Bundle[], Actor | null][] = [
+let cases: [string, Bundle[], Actor | null, string?][] = [
   ['arguments', [patch({ args: { a: 2 } })], editor],
   ['tool', [patch({ to: toolEid('other') })], editor],
   ['source', [patch({ source: 'other-source' })], editor],
@@ -39,8 +39,17 @@ let cases: [string, Bundle[], Actor | null][] = [
   ['same data and provider id', [patch({
     args: { b: [2, 3], a: 1 },
     id: 'revised',
-    actor: original,
   })], original],
+  [
+    'forged authority',
+    [patch({
+      args: { b: [2, 3], a: 1 },
+      id: 'revised',
+      actor: original,
+    })],
+    original,
+    'call.actor',
+  ],
   ['bookkeeping after edit', [patch({ args: { a: 2 } }), {
     entity: { eid: 'pending' },
     content: { body: 'label' },
@@ -57,7 +66,7 @@ let cases: [string, Bundle[], Actor | null][] = [
 ]
 
 for (let ordered of [false, true]) {
-  for (let [name, edits, expected] of cases) {
+  for (let [name, edits, expected, refused] of cases) {
     let g = graph({ vocab, storage: ram(vocab) })
     let seen: (Actor | null)[] = []
     let r = runner(g, {
@@ -93,8 +102,19 @@ for (let ordered of [false, true]) {
     }])
     if (ordered) g.use({ name: 'ordered', beforeWrite: () => (bs) => bs })
     test(`call authority: ${name} (${ordered ? 'ordered' : 'batch'})`, async () => {
-      await g.apply(edits)
+      if (refused) {
+        assertThrows(
+          () => g.apply(edits),
+          Refused,
+          `${refused} is server-owned`,
+        )
+      } else {
+        await g.apply(edits)
+      }
       let [call] = await g.get(['pending'])
+      if (refused) {
+        assertEquals((call.call as Record<string, unknown>).id, undefined)
+      }
       assertEquals(who(call), expected)
       await r.read(call)
       assertEquals(seen, [expected])

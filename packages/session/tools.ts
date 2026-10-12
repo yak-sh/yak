@@ -289,7 +289,7 @@ export let runs = (
       // Only the difference is written back — a transcript's own properties are
       // not this tool's to restate.
       {
-        entity: found?.entity ?? { eid },
+        entity: { eid },
         [SESSION]: {
           id,
           ended: null,

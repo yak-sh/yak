@@ -989,3 +989,72 @@ test('the rules phase runs after the guard and before the patches land', () => {
   assertEquals(comp(derived, 'doc').title, 'derived')
   assert(at(out, 'b2', 'created'), "a rule's entity is stamped like any other")
 })
+
+test('normalization cannot hide an explicit stamped write', () => {
+  let g = graph({
+    vocab: books,
+    storage: memory(),
+    plugins: [{
+      name: 'rewrite',
+      hooks: {
+        normalize: (bs) =>
+          bs.map((b) => {
+            let out: Bundle = { ...b, entity: { eid: b.entity.eid } }
+            delete out.created
+            return out
+          }),
+      },
+    }],
+  })
+  for (
+    let [sent, property] of [
+      [{ entity: { eid: 'b1' }, created: { at: 'now' } }, 'created.at'],
+      [{ entity: { eid: 'b1', num: 7 }, doc: { title: 'Dune' } }, 'entity.num'],
+    ] as [Bundle, string][]
+  ) {
+    assertThrows(() => g.apply([sent]), Refused, `${property} is server-owned`)
+  }
+  assertEquals(g.get(['b1']), [])
+})
+
+for (let async of [false, true]) {
+  test(`stamped writes refuse the whole batch, including checks (${async ? 'async' : 'sync'})`, async () => {
+    let one = graph({
+      vocab: books,
+      storage: async ? slow(memory()) : memory(),
+    })
+    await one.apply([{ entity: { eid: 'b1' }, doc: { title: 'Before' } }])
+    let before = await one.get(['b1'])
+    for (let check of [false, true]) {
+      for (let at of ['2026-10-07T00:00:00Z', null]) {
+        let refused: unknown
+        try {
+          await one.apply([
+            { entity: { eid: 'b1' }, doc: { title: 'After' } },
+            { entity: { eid: 'b2' }, created: { at } },
+          ], { check })
+        } catch (error) {
+          refused = error
+        }
+        assert(refused instanceof Refused)
+        assert(refused.message.includes('created.at is server-owned'))
+        assertEquals(await one.get(['b1']), before)
+        assertEquals(await one.get(['b2']), [])
+      }
+    }
+    // A migration can preserve provenance, and a trusted writer can clear it.
+    await one.apply([{
+      entity: { eid: 'b1' },
+      created: { at: '2020-01-01T00:00:00Z' },
+    }], { trusted: true, stamp: false })
+    assertEquals(
+      comp((await one.get(['b1']))[0], 'created').at,
+      '2020-01-01T00:00:00Z',
+    )
+    await one.apply([{ entity: { eid: 'b1' }, created: { at: null } }], {
+      trusted: true,
+      stamp: false,
+    })
+    assertEquals(comp((await one.get(['b1']))[0], 'created').at ?? null, null)
+  })
+}

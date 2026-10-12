@@ -35,6 +35,7 @@ let fixture = () => {
     }],
   })
   let ordinary = 0
+  let said: string[] = []
   let command: Command = {
     name: 'graph_apply',
     noun: 'graph',
@@ -76,9 +77,9 @@ let fixture = () => {
       ],
       env: () => undefined,
       out: () => {},
-      note: () => {},
+      note: (line) => said.push(line),
     })
-  return { g, journal, line, ordinary: () => ordinary }
+  return { g, journal, line, said, ordinary: () => ordinary }
 }
 let patch = (eid: string): Bundle[] => [{
   entity: { eid },
@@ -88,15 +89,14 @@ let patch = (eid: string): Bundle[] => [{
 }]
 
 // Compile the shared vocabulary's rules before the timed cases.
-fixture().g.apply(patch('warm'))
+fixture().g.apply(patch('warm'), { trusted: true })
 
-test('ordinary graph apply drops supplied server-owned history', async () => {
-  let { g, line, ordinary } = fixture()
-  assertEquals(await line([], patch('sale')), 0)
+test('ordinary graph apply refuses supplied server-owned history', async () => {
+  let { g, line, said, ordinary } = fixture()
+  assertEquals(await line([], patch('sale')), 1)
   assertEquals(ordinary(), 1)
-  let [sale] = await g.get(['sale'])
-  assertEquals(comp(sale, 'sold'), {})
-  assertEquals(comp(sale, 'created'), { at: now, by: 'caller' })
+  assert(said.join('\n').includes('sold.at is server-owned'))
+  assertEquals(await g.get(['sale']), [])
 })
 
 test('local restore preserves history and stamps its current journal writer', async () => {

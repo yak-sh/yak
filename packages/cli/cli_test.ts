@@ -13,7 +13,8 @@ import { doorUrl, initialize, rpc, Unauthorized } from './rpc.ts'
 import { saidBy } from './roster.ts'
 import { toolHelp } from './show.ts'
 import { type Listed as Tool, spelling } from './tool.ts'
-import { globals, via } from './run.ts'
+import { cli, globals, via } from './run.ts'
+import { YAK } from './yak.ts'
 
 let reads: Reads = { file: () => '', stdin: () => '' }
 
@@ -118,14 +119,47 @@ test('a command line goes through the published schema and answers', async () =>
 })
 
 test('a tool that refused says so, and the words are what is printed', async () => {
-  let ask = client()
+  let home = Deno.makeTempDirSync()
+  let graph = shopGraph()
+  let door = mcp({ graph })
+  let ask = rpc({ url: doorUrl('shop.test'), fetch: (req) => door(req) })
   await initialize(ask)
-  let said = await ask('tools/call', {
+  let malformed = await ask('tools/call', {
     name: 'graph_apply',
     arguments: { bundles: [{ book: {} }] },
   })
-  assertEquals(said.isError, true)
-  assert(saidBy(said).text.includes('"entity"'))
+  assertEquals(malformed.isError, true)
+  assert(saidBy(malformed).text.includes('"entity"'))
+  let said: string[] = []
+  try {
+    for (let check of [false, true]) {
+      let code = await cli([], {
+        ...YAK,
+        argv: [
+          'graph',
+          'apply',
+          '--bundles',
+          JSON.stringify([
+            { entity: { eid: 'b1' }, book: { price: 12 } },
+            { entity: { eid: 'b2' }, created: { at: null } },
+          ]),
+          ...(check ? ['--check'] : []),
+        ],
+        host: 'shop.test',
+        ask,
+        env: (name) => name == 'YAKS_HOME' ? home : undefined,
+        reads,
+        out: (line) => said.push(line),
+        note: (line) => said.push(line),
+      })
+      assertEquals(code, 1)
+      assert(said.join('\n').includes('created.at is server-owned'))
+      assert(said.join('\n').includes('only trusted writers'))
+      assertEquals(await graph.get(['b1', 'b2']), [])
+    }
+  } finally {
+    Deno.removeSync(home, { recursive: true })
+  }
 })
 
 test('a 401 is one sentence a person can act on', async () => {

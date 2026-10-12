@@ -5,6 +5,7 @@
 
 import { test } from '@yaks/testing'
 import { assertEquals } from '@std/assert'
+import { replicate } from '@yaks/sync'
 import { boxClient, comp, fakeDb, fakeIdb } from './testing.ts'
 import { stash, type Vault } from './vault.ts'
 
@@ -47,7 +48,10 @@ test('a rebuild keeps the number the entity had', async () => {
   let first = boxClient(undefined, { vault })
   await first.ready
   // The number is the server's to give; here it arrives on the patch itself.
-  await first.mutate([{ entity: { eid: 'r1', num: 7 }, draft: { text: 'x' } }])
+  await replicate(first.graph, [{
+    entity: { eid: 'r1', num: 7 },
+    draft: { text: 'x' },
+  }])
   first.close()
   let next = boxClient(undefined, { vault })
   await next.ready

@@ -26,10 +26,12 @@ import type { ToolDefinition } from '@yaks/vocab/tools'
 
 /**
  * The phases of `apply()`, in order:
+ * Explicit stamped input is checked before normalization so a rewrite cannot
+ * hide a caller's attempt to write a server-owned property.
  *
  * - `normalize` — canonicalize what arrived. Pure, before the transaction.
- * - `admit` — refuse an undeclared component or property, drop server-owned
- *   properties, validate each value against the vocabulary.
+ * - `admit` — refuse undeclared components and properties or server-owned properties,
+ *   drop computed properties, validate each value against the vocabulary.
  * - `mint` — give every `$alias` in the batch a real id (a fresh one, or one
  *   derived from the content) and rewrite the references to it.
  * - `prepare` — finish idempotent external work before taking the transaction's

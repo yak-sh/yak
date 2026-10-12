@@ -193,9 +193,12 @@ Deleting cascades to entities that exist only about the deleted one. Writing to
 the same eid later brings it back, holding only what that write gives it; a
 write whose `$was` was read before the delete is dropped.
 
-A row you read can be handed straight back as a patch: the fields a read adds —
-`kind`, `rank`, the stamps — are dropped on the way in, and a reference that
-came back as `{eid, name}` writes as the eid it named.
+A row you read can be handed back as a patch without its stamps: the fields a
+read adds, `kind` and `rank`, are dropped on the way in, and a reference that
+came back as `{eid, name}` writes as the eid it named. A stamp (`created.at`,
+`completed.via`) is the server's, and a write naming one is refused. The app's
+JSON write door ignores `entity.archetype` in a returned identity; the store
+derives it instead of writing the supplied value.
 
 ### Only one of you wins: `$was`
 

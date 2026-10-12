@@ -145,7 +145,7 @@ export let reconcile = async (g: Graph, common: string): Promise<void> => {
     } catch (error) {
       if (!(error instanceof Deno.errors.NotFound)) throw error
       await g.apply([{
-        entity: tree.entity,
+        entity: { eid: tree.entity.eid },
         worktree: null,
         $was: {
           worktree: Object.fromEntries(
@@ -215,7 +215,7 @@ export let discover = async (g: Graph, cwd: string): Promise<Bundle> => {
   for (let old of await g.read('.ref.app=' + repository)) {
     if (!found.has(old.entity.eid)) {
       bundles.push({
-        entity: old.entity,
+        entity: { eid: old.entity.eid },
         ref: { present: false, oid: null, target: null },
       })
     }
@@ -359,7 +359,7 @@ let create = async (g: Graph, source: string, request: CheckoutRequest) => {
   }
   let current = await discover(g, path)
   await g.apply([{
-    entity: current.entity,
+    entity: { eid: current.entity.eid },
     worktree: { managed: true },
     checkout: { state: 'ready', error: null },
   }])

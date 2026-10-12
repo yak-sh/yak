@@ -308,7 +308,7 @@ let syncRepository = async (
       } else {
         if (file) {
           bundles.push(guarded(file, {
-            entity: file.entity,
+            entity: { eid: file.entity.eid },
             file: null,
             content: null,
           }))
@@ -321,7 +321,7 @@ let syncRepository = async (
         ) {
           bundles.push(
             guarded(edge, {
-              entity: edge.entity,
+              entity: { eid: edge.entity.eid },
               edge: null,
               references: null,
             }),
@@ -503,7 +503,7 @@ let syncRepository = async (
       ) continue
       moves.push(
         guarded(skill, {
-          entity: skill.entity,
+          entity: { eid: skill.entity.eid },
           doc: {},
           content: {},
           skill: {},
@@ -519,7 +519,11 @@ let syncRepository = async (
         let fid = fileId(destination, repository)
         let body = comp(file, 'content').body
         moves.push(
-          guarded(file, { entity: file.entity, file: null, content: null }),
+          guarded(file, {
+            entity: { eid: file.entity.eid },
+            file: null,
+            content: null,
+          }),
         )
         moves.push(guarded(before.get(fid), {
           entity: { eid: fid },
@@ -535,7 +539,7 @@ let syncRepository = async (
           ) {
             moves.push(
               guarded(edge, {
-                entity: edge.entity,
+                entity: { eid: edge.entity.eid },
                 edge: null,
                 references: null,
               }),

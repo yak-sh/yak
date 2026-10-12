@@ -80,7 +80,7 @@ test('skill mirror graph edit lands a skill-only commit and leaves main clean', 
     await syncSkills(g, root, memory)
     let skill = (await repoSkills(g, repository))[0]
     await g.apply([{
-      entity: skill.entity,
+      entity: { eid: skill.entity.eid },
       content: { body: 'Updated instructions\n' },
     }])
     let result = await syncSkills(g, root, memory)
@@ -116,7 +116,10 @@ test('skill mirror refuses concurrent divergence and dirty main graph exports', 
   try {
     await syncSkills(g, root, memory)
     let skill = (await repoSkills(g, repository))[0]
-    await g.apply([{ entity: skill.entity, content: { body: 'Graph edit\n' } }])
+    await g.apply([{
+      entity: { eid: skill.entity.eid },
+      content: { body: 'Graph edit\n' },
+    }])
     let path = `${root}/.claude/skills/sample/SKILL.md`
     Deno.writeTextFileSync(path, text('sample', 'File edit\n'))
     let result = await syncSkills(g, root, memory)
@@ -138,7 +141,7 @@ test('skill mirror imports deletions without deleting unrelated entity state', a
   try {
     await syncSkills(g, root, memory)
     let skill = (await repoSkills(g, repository))[0]
-    await g.apply([{ entity: skill.entity, persona: {} }])
+    await g.apply([{ entity: { eid: skill.entity.eid }, persona: {} }])
     await git(
       root,
       'rm',
@@ -209,7 +212,10 @@ test('skill mirror title rename retains UUID and relocates companion identities'
   try {
     await syncSkills(g, root, memory)
     let skill = (await repoSkills(g, repository))[0]
-    await g.apply([{ entity: skill.entity, doc: { title: 'renamed' } }])
+    await g.apply([{
+      entity: { eid: skill.entity.eid },
+      doc: { title: 'renamed' },
+    }])
     let result = await syncSkills(g, root, memory)
     assertEquals(result.failed, [])
     assertEquals(result.conflicts, [])
@@ -364,8 +370,8 @@ test('skill mirror refuses title swaps without touching locators or main', async
     let second = skills.find((b) => (b.doc as Comp)?.title == 'second')!
     let head = await git(root, 'rev-parse', 'HEAD')
     await g.apply([
-      { entity: sample.entity, doc: { title: 'second' } },
-      { entity: second.entity, doc: { title: 'sample' } },
+      { entity: { eid: sample.entity.eid }, doc: { title: 'second' } },
+      { entity: { eid: second.entity.eid }, doc: { title: 'sample' } },
     ])
     let result = await syncSkills(g, root, memory)
     assertEquals(result.wrote, [])
@@ -399,8 +405,11 @@ test('skill mirror leaves conflicted rename untouched when another skill lands',
     let sample = skills.find((b) => (b.doc as Comp)?.title == 'sample')!
     let other = skills.find((b) => (b.doc as Comp)?.title == 'other')!
     await g.apply([
-      { entity: sample.entity, doc: { title: 'renamed' } },
-      { entity: other.entity, content: { body: 'Other graph edit\n' } },
+      { entity: { eid: sample.entity.eid }, doc: { title: 'renamed' } },
+      {
+        entity: { eid: other.entity.eid },
+        content: { body: 'Other graph edit\n' },
+      },
     ])
     Deno.mkdirSync(`${root}/.claude/skills/renamed`)
     Deno.writeTextFileSync(
@@ -468,7 +477,10 @@ test('skill mirror blocks reads and same agreements across a conflicted rename',
   try {
     await syncSkills(g, root, memory)
     let skill = (await repoSkills(g, repository))[0]
-    await g.apply([{ entity: skill.entity, doc: { title: 'renamed' } }])
+    await g.apply([{
+      entity: { eid: skill.entity.eid },
+      doc: { title: 'renamed' },
+    }])
     let agreed = Deno.readTextFileSync(memory)
     Deno.mkdirSync(`${root}/.claude/skills/renamed`)
     Deno.writeTextFileSync(
@@ -503,7 +515,7 @@ test('skill mirror advances a clean landed export branch after unrelated main co
     await syncSkills(g, root, memory)
     let skill = (await repoSkills(g, repository))[0]
     await g.apply([{
-      entity: skill.entity,
+      entity: { eid: skill.entity.eid },
       content: { body: 'First export\n' },
     }])
     let first = await syncSkills(g, root, memory)
@@ -512,7 +524,7 @@ test('skill mirror advances a clean landed export branch after unrelated main co
     await git(root, 'add', '.')
     await git(root, 'commit', '-m', 'Unrelated advance')
     await g.apply([{
-      entity: skill.entity,
+      entity: { eid: skill.entity.eid },
       content: { body: 'Second export\n' },
     }])
     let second = await syncSkills(g, root, memory)
@@ -530,7 +542,7 @@ test('skill mirror advances a clean landed export branch after unrelated main co
     await git(second.worktree!, 'add', '.')
     await git(second.worktree!, 'commit', '-m', 'Unlanded')
     await g.apply([{
-      entity: skill.entity,
+      entity: { eid: skill.entity.eid },
       content: { body: 'Third export\n' },
     }])
     let refused = await syncSkills(g, root, memory)
@@ -546,7 +558,10 @@ test('skill mirror never adopts main or a dirty linked export worktree', async (
   try {
     await syncSkills(g, root, memory)
     let skill = (await repoSkills(g, repository))[0]
-    await g.apply([{ entity: skill.entity, content: { body: 'Proposal\n' } }])
+    await g.apply([{
+      entity: { eid: skill.entity.eid },
+      content: { body: 'Proposal\n' },
+    }])
     let head = await git(root, 'rev-parse', 'HEAD')
     let refused = await syncSkills(g, root, memory, { worktree: root })
     assertEquals(refused.failed.length, 1)
@@ -570,7 +585,10 @@ test('skill mirror does not acknowledge or relink a landed rename with changed b
   try {
     await syncSkills(g, root, memory)
     let skill = (await repoSkills(g, repository))[0]
-    await g.apply([{ entity: skill.entity, doc: { title: 'renamed' } }])
+    await g.apply([{
+      entity: { eid: skill.entity.eid },
+      doc: { title: 'renamed' },
+    }])
     let agreed = Deno.readTextFileSync(memory)
     let changed = false
     let report = await syncSkills(g, root, memory, {
@@ -603,7 +621,10 @@ test('skill mirror only acknowledges exact non-rename export bytes after landing
   try {
     await syncSkills(g, root, memory)
     let skill = (await repoSkills(g, repository))[0]
-    await g.apply([{ entity: skill.entity, content: { body: 'Proposal\n' } }])
+    await g.apply([{
+      entity: { eid: skill.entity.eid },
+      content: { body: 'Proposal\n' },
+    }])
     let agreed = Deno.readTextFileSync(memory)
     let changed = false
     let report = await syncSkills(g, root, memory, {

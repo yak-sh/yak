@@ -5,7 +5,14 @@
 import { test } from '@yaks/testing'
 import { kernelDoc } from '@yaks/kernel'
 import { assert, assertEquals, assertRejects } from '@std/assert'
-import { type Bundle, type Comp, graph, Stale, token } from '@yaks/graph'
+import {
+  type Bundle,
+  type Comp,
+  graph,
+  Refused,
+  Stale,
+  token,
+} from '@yaks/graph'
 import { loadTools } from '@yaks/graph/tools'
 import { ram } from '@yaks/ram'
 import { loadVocab, type VocabDoc } from '@yaks/vocab'
@@ -266,18 +273,29 @@ test(
   'only the host marks an integration built, and need never writes over one',
   async () => {
     let { g } = await setup()
-    let made = (name: string, hosts: string[]) => ({
-      entity: { eid: integrationEid(name) },
-      integration: { name, hosts, built: true },
-    })
-    await g.apply([made('mine', ['api.mine.example'])])
-    assertEquals((await known(g.read, 'mine'))?.built, undefined)
+    await assertRejects(
+      async () =>
+        await g.apply([{
+          entity: { eid: integrationEid('mine') },
+          integration: {
+            name: 'mine',
+            hosts: ['api.mine.example'],
+            built: true,
+          },
+        }]),
+      Refused,
+      'integration.built is server-owned',
+    )
+    assertEquals(await known(g.read, 'mine'), undefined)
     let asked = await need(g.read, {
       owner: 'space',
       integration: 'late',
       hosts: ['api.late.example'],
     })
-    await g.apply([made('late', ['elsewhere.example'])])
+    await g.apply([{
+      entity: { eid: integrationEid('late') },
+      integration: { name: 'late', hosts: ['elsewhere.example'] },
+    }])
     await assertRejects(async () => await g.apply(asked), Stale)
     assertEquals((await known(g.read, 'late'))?.hosts, ['elsewhere.example'])
   },

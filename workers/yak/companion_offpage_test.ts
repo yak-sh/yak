@@ -1,7 +1,7 @@
 // A Vale objective, from the person's command through the app Store's wake
 // and worker, while no page runs. Only Jev's outside answer is scripted.
 import { test } from '@yaks/testing'
-import { assert, assertEquals } from '@std/assert'
+import { assert, assertEquals, assertStringIncludes } from '@std/assert'
 import { FakeTime } from '@std/testing/time'
 import { flat } from '../../apps/vale/terrain.ts'
 import { rows as themes } from '../../apps/vale/themes_fixture.ts'
@@ -27,14 +27,16 @@ test('a companion works off-page across pause, restart and retry', async () => {
   let k = await seeded(p.env)
   let name = storeName(k.space, k.app)
   let door = appStore(p.env.STORE, k.space, k.app)
-  let write = async (path: string, body: unknown) => {
+  let write = async (path: string, body: unknown, status = 200) => {
     let res = await door(path, {
       method: 'POST',
       body: JSON.stringify(
         path == '/apply' ? (body as { entities: unknown[] }).entities : body,
       ),
     }, ADA_OWNS)
-    assertEquals(res.status, 200, await res.text())
+    let answer = await res.text()
+    assertEquals(res.status, status, answer)
+    return JSON.parse(answer)
   }
   let words = JSON.parse(Deno.readTextFileSync(
     new URL('../../apps/vale/vocab.json', import.meta.url),
@@ -199,10 +201,22 @@ test('a companion works off-page across pause, restart and retry', async () => {
   await fire()
   let [paused] = await read(door, `.entity.eid=${eid}&?companion`)
   assertEquals(paused.companion.call, chosen.companion.call)
-  await write('/apply', {
+  let refused = await write('/apply', {
     entities: [{
       entity: { eid },
       call: order.call,
+      wake: { while: [{ match: '.directive', every: '5s' }] },
+    }],
+  }, 400)
+  assertStringIncludes(refused.message, 'call.actor is server-owned')
+  let [stillPaused] = await read(door, `.entity.eid=${eid}&?call&?wake`)
+  assertEquals(stillPaused.call, undefined)
+  assertEquals(stillPaused.wake, undefined)
+  // Resuming authors the call again; its actor is vouched for by this write.
+  await write('/apply', {
+    entities: [{
+      entity: { eid },
+      call: { to: order.call.to, args: order.call.args },
       wake: { while: [{ match: '.directive', every: '5s' }] },
     }],
   })

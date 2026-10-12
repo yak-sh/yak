@@ -428,7 +428,9 @@ test('session stop ends a managed run', async () => {
       async () => comp((await g.get([row.entity.eid]))[0], 'exit'),
       'the managed run to stop',
     )
-    assertEquals(comp((await g.get([row.entity.eid]))[0], 'stop'), {})
+    let [stopped] = await g.get([row.entity.eid])
+    assertEquals(stopped.entity.num, row.entity.num)
+    assertEquals(comp(stopped, 'stop'), {})
   } finally {
     Deno.removeSync(where, { recursive: true })
   }

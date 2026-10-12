@@ -564,7 +564,6 @@ test('app_list answers what the month cost', async () => {
       },
       {
         entity: { eid: eids[metered35] },
-        plan: { tier: 'free' },
         meter: spent,
       },
     ])
@@ -634,14 +633,12 @@ test('the free tier: a warning once, then the refusals', async () => {
       // 81% of the request ceiling, and nothing else near one.
       {
         entity: { eid: eids[brim36] },
-        plan: { tier: 'free' },
         meter: { ...row, requests: 40_500, bytes: 0 },
       },
       // A gigabyte held: the byte ceiling, exactly at it. The space's reading
       // says so, and so does the size its one app's store reported.
       {
         entity: { eid: eids[heavySpace] },
-        plan: { tier: 'free' },
         meter: { ...row, requests: 0, bytes: 1024 ** 3 },
       },
       {

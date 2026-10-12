@@ -37,7 +37,9 @@ for (let i = 0; i < 60; i++) {
   await settle(h.g, 's', r)
   // Remove the ask: every sample sees the same 1,000-entry prefix.
   let asks = [...await h.g.read('.ask'), { entity: { eid: `input${i}` } }]
-  await h.g.apply(asks.map((b) => ({ entity: b.entity, tombstone: {} })))
+  await h.g.apply(
+    asks.map((b) => ({ entity: { eid: b.entity.eid }, tombstone: {} })),
+  )
   if (i >= 10) apply.push(applied - before)
 }
 let summary = (xs: number[]) => {

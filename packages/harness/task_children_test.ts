@@ -1,5 +1,5 @@
 import { assert, assertEquals, assertRejects } from '@std/assert'
-import type { Bundle, Comp } from '@yaks/graph'
+import { type Bundle, type Comp, Refused } from '@yaks/graph'
 import { deliverChild, sessionTools, textOf, transcript } from '@yaks/session'
 import { test, until } from '@yaks/testing'
 import { harnessTools } from './tools.ts'
@@ -394,9 +394,19 @@ for (let writer of ['p', 'child', 'other', 'external']) {
       }
       let after = (await transcript(h.g, 'p')).length
       // Reconstruct delivery from durable state, with no remembered actor/event.
+      await assertRejects(
+        async () =>
+          await h.g.apply([{
+            entity: { eid: 'work' },
+            completed: { at: '2026-01-01T00:00:00Z' },
+            $actor: { by: 'later-editor' },
+          }]),
+        Refused,
+        'completed.at is server-owned',
+      )
       await h.g.apply([{
         entity: { eid: 'work' },
-        completed: { at: '2026-01-01T00:00:00Z' },
+        completed: {},
         $actor: { by: 'later-editor' },
       }])
       await deliverChild(h.g, child)

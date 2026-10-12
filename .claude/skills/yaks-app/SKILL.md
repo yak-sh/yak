@@ -201,6 +201,13 @@ searches every app's live files and kept versions; it is how you find out
 whether a word is free before you take it. Namespacing (D-59567) is designed,
 not built. Shaping the word is `vocabulary`'s ground.
 
+An app-grep audit distinguishes live files, kept versions and published offers.
+The mirror's `.releases` indexes are deployed versions; the directory's
+`.published` rows name which pinned release an install serves. Follow those
+pointers when saying what published code sends, rather than treating every
+kept release as a published offer. A write audit also follows whole identities
+carried back from reads: a sender need not spell `entity.archetype` to send it.
+
 ## People's things
 
 The platform is where other people keep what matters to them, and these follow

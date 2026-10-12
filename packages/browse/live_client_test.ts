@@ -43,9 +43,13 @@ let replica = () => {
   return { c, frames, ...h }
 }
 
-let row = (eid: string, title: string) => ({
-  entity: { eid, num: 1 },
+let write = (eid: string, title: string) => ({
+  entity: { eid },
   doc: { title },
+})
+let row = (eid: string, title: string) => ({
+  ...write(eid, title),
+  entity: { eid, num: 1 },
 })
 
 let writing = () => {
@@ -62,10 +66,13 @@ let writing = () => {
   return { c, response }
 }
 
+let stamped = writing()
 test('the browser replica writes optimistically and resolves with stamped server bundles', async () => {
-  let { c, response } = writing()
+  let { c, response } = stamped
   try {
-    let receipt = Promise.resolve(c.box.mutate([row('write-stamps', 'local')]))
+    let receipt = Promise.resolve(
+      c.box.mutate([write('write-stamps', 'local')]),
+    )
     assertEquals(c.box.ent('write-stamps')?.doc, { title: 'local' })
     let settled = false
     receipt.then(() => settled = true)
@@ -84,10 +91,13 @@ test('the browser replica writes optimistically and resolves with stamped server
 })
 
 for (let refusal of [true, false]) {
+  let failed = writing()
   test(`the browser replica rejects ${refusal ? 'refused' : 'unknown'} writes`, async () => {
-    let { c, response } = writing()
+    let { c, response } = failed
     try {
-      let receipt = Promise.resolve(c.box.mutate([row('failed-write', 'keep')]))
+      let receipt = Promise.resolve(
+        c.box.mutate([write('failed-write', 'keep')]),
+      )
       if (refusal) {
         response.resolve(Response.json({ error: 'Refused', message: 'no' }, {
           status: 400,

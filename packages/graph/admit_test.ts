@@ -44,15 +44,71 @@ test('a name every object inherits is still unknown', () => {
   )
 })
 
-test('a server-owned property is dropped, and admitted when trusted', () => {
-  let [out] = one({ entity: { eid: 'b1' }, created: { at: 'now' }, doc: {} })
-  assertEquals(out.created, undefined)
-  let [ok] = one({ entity: { eid: 'b1' }, created: { at: 'now' } }, true)
-  assertEquals(ok.created, { at: 'now' })
+test('a server-owned property is refused, and admitted when trusted', () => {
+  for (let at of ['now', null]) {
+    assertThrows(
+      () => one({ entity: { eid: 'b1' }, created: { at }, doc: {} }),
+      Refused,
+      'created.at is server-owned (stamped); only trusted writers may write it',
+    )
+    let [ok] = one({ entity: { eid: 'b1' }, created: { at } }, true)
+    assertEquals(ok.created, { at })
+  }
+  let identities = loadVocab({
+    $defs: {
+      entity: {
+        component: true,
+        wire: false,
+        properties: { archetype: { type: 'string', stamped: true } },
+      },
+    },
+  })
+  let sent = [{ entity: { eid: 'b1', archetype: 'forged' } }]
+  assertThrows(
+    () => admit(sent, identities),
+    Refused,
+    'entity.archetype is server-owned',
+  )
+  assertEquals(admit(sent, identities, true), sent)
 })
 
-test('a bundle of nothing but server-owned properties leaves the batch', () => {
-  assertEquals(one({ entity: { eid: 'b1' }, created: { at: 'now' } }), [])
+test('a bundle of nothing but server-owned properties is refused', () => {
+  assertThrows(
+    () => one({ entity: { eid: 'b1' }, created: { at: 'now' } }),
+    Refused,
+    'created.at is server-owned',
+  )
+})
+
+test('a host compatibility policy drops only its named stamped properties', () => {
+  let sent = [{
+    entity: { eid: 'b1', num: 7 },
+    created: { at: 'now' },
+    book: { pages: 3 },
+  }]
+  let ignored = ['entity.num', 'created.at']
+  assertEquals(admit(sent, books, false, undefined, false, ignored), [{
+    entity: { eid: 'b1' },
+    book: { pages: 3 },
+  }])
+  assertEquals(sent[0].entity.num, 7)
+  assertEquals(sent[0].created.at, 'now')
+  assertEquals(
+    admit(
+      [{ entity: { eid: 'b1' }, created: { at: 'now' } }],
+      books,
+      false,
+      undefined,
+      false,
+      ignored,
+    ),
+    [],
+  )
+  assertThrows(
+    () => admit(sent, books, false, undefined, false, ['entity.num']),
+    Refused,
+    'created.at is server-owned',
+  )
 })
 
 test('a component sent with only computed properties is still there', () => {
@@ -102,12 +158,13 @@ test('a null component, a null property and a bare tag all pass', () => {
   assertEquals(out.bookmark, {})
 })
 
-test('a delete survives even when its components were all dropped', () => {
-  let [out] = one({
-    entity: { eid: 'b1' },
-    $delete: true,
-    created: { at: 'now' },
-  })
+test('a delete does not excuse writing a server-owned property', () => {
+  assertThrows(
+    () => one({ entity: { eid: 'b1' }, $delete: true, created: { at: 'now' } }),
+    Refused,
+    'created.at is server-owned',
+  )
+  let [out] = one({ entity: { eid: 'b1' }, $delete: true })
   assertEquals(out.$delete, true)
 })
 
@@ -115,4 +172,20 @@ test('the reserved keys ride through untouched', () => {
   let was = { doc: { title: 'abc' } }
   let [out] = one({ entity: { eid: 'b1' }, doc: { title: 'x' }, $was: was })
   assertEquals(out.$was, was)
+})
+
+test('a non-wire component does not silently drop a stamped property', () => {
+  let vocab = loadVocab({
+    $defs: {
+      run: {
+        component: true,
+        wire: false,
+        type: 'object',
+        properties: { state: { type: 'string', stamped: true } },
+      },
+    },
+  })
+  let sent = [{ entity: { eid: 'r1' }, run: { state: 'done' } }]
+  assertThrows(() => admit(sent, vocab), Refused, 'run.state is server-owned')
+  assertEquals(admit(sent, vocab, true), sent)
 })
