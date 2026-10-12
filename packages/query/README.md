@@ -153,7 +153,8 @@ throws. A comma between valued clauses can follow whitespace: `.p=a, .q=b`.
 
 Quote values containing spaces or literal commas and range markers, using single
 or double quotes; a backslash inside quotes escapes the next character.
-`.doc.title="a,b..c"` compares the whole literal `a,b..c`. Unquoted
+`.doc.title="a,b..c"` compares the whole literal `a,b..c`. A list or range can
+quote each member or bound separately: `.created.at="30s ago"...now`. Unquoted
 `.doc.title~=two words` is a predicate containing `two` followed by the text
 term `words`. Paths with operators may omit the leading dot: `task.status=open`
 and `.task.status=open` parse alike. Without an operator, `task` is a text term

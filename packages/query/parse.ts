@@ -93,7 +93,12 @@ let atom = (raw: string): Value => {
   let m = raw.match(/^(.*?)\.\.(\.?)(.*)$/s)
   if (!m) return scalar(raw)
   let [, lo, excl, hi] = m
-  return { kind: 'range', lo: scalar(lo), hi: scalar(hi), exclusiveEnd: !!excl }
+  return {
+    kind: 'range',
+    lo: scalar(stripQuotes(lo)),
+    hi: scalar(stripQuotes(hi)),
+    exclusiveEnd: !!excl,
+  }
 }
 
 // A whole value: a comma-separated list means any-of; a single part is its

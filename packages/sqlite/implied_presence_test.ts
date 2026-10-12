@@ -4,7 +4,7 @@ import './sqlitepath.ts'
 import { Database } from '@db/sqlite'
 import { loadVocab } from '@yaks/vocab'
 import { compile, render } from '@yaks/sql'
-import { parse } from '@yaks/query'
+import { and, eq, list, parse, scalar } from '@yaks/query'
 import { equal, ok, test } from '@yaks/testing'
 import { storage } from './mod.ts'
 import { driver } from './native.ts'
@@ -50,6 +50,7 @@ let scenario = () => {
     ['.item (.item.key=probe|.node)', ['archived', 'open', 'resolved']],
     ['.item.key=probe|.node', ['archived', 'bare', 'open', 'resolved']],
     ['.item.status=open', ['empty', 'open', 'other']],
+    ['.item.status="open,resolved"', []],
   ] as const
   try {
     let answers = cases.map(([query, expected]) => ({
@@ -57,6 +58,11 @@ let scenario = () => {
       expected: [...expected],
       found: s.rows(query).map((r) => r.eid).sort(),
     }))
+    let statuses = and(eq('item.status', list('open', 'resolved')))
+    let listed = s.rows(statuses).map((r) => r.eid).sort()
+    let clause = statuses.clauses[0]
+    if (clause.kind == 'pred') clause.value = scalar('open,resolved')
+    let literal = s.rows(statuses).map((r) => r.eid).sort()
     let query = '.item.key=probe .item.status=open .fields=entity.eid'
     let sql = render(compile(parse(query), vocab))
     let measure = () => {
@@ -81,7 +87,7 @@ let scenario = () => {
         })))
       )
     }
-    return { answers, small, large: measure() }
+    return { answers, listed, literal, small, large: measure() }
   } finally {
     db.close()
   }
@@ -89,6 +95,11 @@ let scenario = () => {
 // Native setup and measurements belong to this scenario, outside case timing.
 let result = scenario()
 counters.close()
+
+test('editing a status list into a literal changes the selected rows', () => {
+  equal(result.listed, ['empty', 'open', 'other', 'resolved'])
+  equal(result.literal, [])
+})
 
 test('implied presence preserves status, missing values, absence and disjunctions', () => {
   for (let { query, found, expected } of result.answers) {

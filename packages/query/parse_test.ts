@@ -62,6 +62,10 @@ let cases: [string, ReturnType<typeof and>][] = [
   ['.tag="a,b","c..d"', and(eq('tag', list('a,b', 'c..d')))],
   ['.priority=1..5', and(eq('priority', range('1', '5')))],
   ['.priority=1...5', and(eq('priority', range('1', '5', true)))],
+  [
+    '.created.at="30s ago"..."now"',
+    and(eq('created.at', range('30s ago', 'now', true))),
+  ],
   ['.created.at=2026-07-25', and(eq('created.at', scalar('2026-07-25')))],
   // presence and absence
   ['.assignee', and(present('assignee'))],

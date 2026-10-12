@@ -1246,13 +1246,13 @@ let rungs = (ctx: Ctx, c: Clause): Clause | null => {
   if (ctx.derived[key] !== ladders(ctx.v)[key]) return null
   // Only the vocabulary's expansion is kept. Current query values, database
   // IDs and caller overrides are read anew, including edits to a built AST.
-  let raw = flat(c.value)
+  let value = JSON.stringify(c.value)
   let cached = ladderFilters.get(ctx.v)
   let held = cached?.get(c)
-  if (held?.comp == hop.comp && held.value == raw) return held.clause
-  let said = raw.includes('..') ? [] : raw.split(',')
+  if (held?.comp == hop.comp && held.value == value) return held.clause
+  let said = literals(c.value)
   let given = [...l.rungs.map((r) => r.status), l.default]
-  if (!said.length || said.some((s) => !given.includes(s))) return null
+  if (!said?.length || said.some((s) => !given.includes(s))) return null
   let arm = (up: number, rung?: string): Clause => ({
     kind: 'and',
     clauses: [
@@ -1267,7 +1267,7 @@ let rungs = (ctx: Ctx, c: Clause): Clause | null => {
   ])
   let out: Clause = arms.length == 1 ? arms[0] : { kind: 'or', clauses: arms }
   if (!cached) ladderFilters.set(ctx.v, cached = new WeakMap())
-  cached.set(c, { comp: hop.comp, value: raw, clause: out })
+  cached.set(c, { comp: hop.comp, value, clause: out })
   return out
 }
 
