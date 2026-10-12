@@ -16,7 +16,6 @@ import {
   type Derived,
   type Driver,
   erect,
-  isNull,
   lit,
   notNull,
   select,
@@ -346,27 +345,6 @@ let named = (d: Driver, type: string): { name: string; sql: string }[] =>
 let columns = (d: Driver, name: string): string[] =>
   d.query({ t: 'pragma', name: 'table_info', arg: name })
     .map((r) => String(r.name))
-
-/** Keep request ids filed before exception's property took its wire name. */
-export let requestIds = (d: Driver, vocab: Vocab) => {
-  let cols = columns(d, 'exception')
-  if (!cols.includes('requestId')) return
-  if (!cols.includes('request_id')) {
-    d.query({
-      t: 'alter table',
-      table: 'exception',
-      rename: { column: 'requestId', to: 'request_id' },
-    })
-    return
-  }
-  d.query({
-    t: 'update',
-    table: 'exception',
-    set: { request_id: col('requestId') },
-    where: isNull(col('request_id')),
-  })
-  shed(d, vocab, vocab, 'exception', 'requestId')
-}
 
 /**
  * Every definition this object stands on, dropped: its views, its triggers and

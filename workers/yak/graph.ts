@@ -312,7 +312,6 @@ import {
   documented,
   install,
   lifecycleColumns,
-  requestIds,
   respelled,
   retire,
   shed,
@@ -1028,7 +1027,6 @@ export class Store {
     if (!(this.#get('name') || held) || held == stamp) return
     // Install only changed definitions. Unrelated words must not discard
     // search indexes or audit every entity on the request that discovers them.
-    requestIds(this.#sql, vocab)
     lifecycleColumns(this.#sql, vocab)
     erect(this.#sql, blobSchema())
     if (vocab.comp('_tx')) erect(this.#sql, journalDdl())

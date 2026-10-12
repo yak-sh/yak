@@ -17,6 +17,7 @@ export let exceptionSource = {
         stack: text,
         request: text,
         request_id: text,
+        requestId: text,
         version: { type: 'number' as const, stamped: true },
       },
     },

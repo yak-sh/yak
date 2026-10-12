@@ -24,8 +24,8 @@ export let legacyException = (row: Bundle): ExceptionMove => {
     } catch { /* ordinary content remains ordinary content */ }
   }
   let raw = str(x.value ?? x.message ?? diagnostic.body ?? body)
-  let named = /^([\w.]*Error):\s*([^\n]*)/.exec(raw)
-  let stacked = /^([\w.]*Error):/.exec(str(x.stack))
+  let named = /^([A-Z][\w.]*):\s*([^\n]*)/.exec(raw)
+  let stacked = /^([A-Z][\w.]*):/.exec(str(x.stack))
   let type = str(x.type) || stacked?.[1] || named?.[1] || 'Error'
   let value = x.value != null || !named ? raw : raw.slice(named[1].length + 2)
   if (diagnostic.body) value = value.split('\n')[0]
@@ -84,7 +84,9 @@ export let legacyException = (row: Bundle): ExceptionMove => {
     tags: {
       migration: 'exception/1',
       ...x.request ? { request: x.request } : {},
-      ...x.request_id ? { request_id: x.request_id } : {},
+      ...(x.request_id ?? x.requestId)
+        ? { request_id: x.request_id ?? x.requestId }
+        : {},
       ...diagnostic.phase ? { phase: diagnostic.phase } : {},
       ...diagnostic.pid ? { pid: diagnostic.pid } : {},
       ...diagnostic.session ? { session: diagnostic.session } : {},

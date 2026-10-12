@@ -14,6 +14,9 @@ import { at, by, col, fn, insert, lit, scan, type Stmt } from '@yaks/sql'
 import { DIRTY, OWED, TABLE } from '@yaks/embedding'
 import { columns, objects as catalogue, reclassify } from '@yaks/sqlite'
 import { Store } from './graph.ts'
+import { exceptionRule } from './exception-move.ts'
+import type { Env } from './env.ts'
+import type { Rule } from './mover.ts'
 import { documented, respelled, unholed, unworded } from './migrate.ts'
 import { PLATFORM_STORE } from './door.ts'
 import { db, every, keep, slot } from './testing.ts'
@@ -127,10 +130,16 @@ test('a Store retires an old build identity index on its next schema wake', asyn
 })
 
 // A Store over the object, as a new incarnation, driven through its own doors.
-let newer = (ctx: State, name: string) => {
+let newer = (
+  ctx: State,
+  name: string,
+  env: Partial<Env> = {},
+  rules?: Rule[],
+) => {
   let store = new Store(
     ctx as unknown as ConstructorParameters<typeof Store>[0],
-    {} as never,
+    env as never,
+    rules,
   )
   let door = (path: string, init: RequestInit = {}, app?: string) => {
     let req = new Request(`http://store${path}`, init)
@@ -163,48 +172,54 @@ let run = (ctx: State, ...statements: Stmt[]) => {
   for (let s of statements) d.query(s)
 }
 
-test('a Store keeps exception request ids across the rename', async () => {
+test('a Store forwards legacy request ids from the mover without rewriting rows at boot', async () => {
   for (let partial of [false, true]) {
     let ctx = state()
     let before = newer(ctx, PLATFORM_STORE)
     assertEquals(
       (await before.apply([{
         entity: { eid: ONE },
-        exception: { request_id: 'report-1' },
+        exception: { type: 'Error', value: 'boom' },
       }])).status,
       200,
     )
+    run(ctx, {
+      t: 'alter table',
+      table: 'exception',
+      add: { name: 'requestId' },
+    }, { t: 'update', table: 'exception', set: { requestId: lit('report-1') } })
     if (partial) {
-      run(
-        ctx,
-        { t: 'alter table', table: 'exception', add: { name: 'requestId' } },
-        {
-          t: 'update',
-          table: 'exception',
-          set: { request_id: lit(null), requestId: lit('report-1') },
-        },
-      )
-    } else {
       run(ctx, {
         t: 'alter table',
         table: 'exception',
-        rename: { column: 'request_id', to: 'requestId' },
+        add: { name: 'request_id' },
       })
     }
     keep(ctx, 'schema', 'older schema')
-    let [row] = await newer(ctx, PLATFORM_STORE).query('.exception')
+    let sent: Bundle[] = []
+    let next = newer(ctx, PLATFORM_STORE, {
+      ERRORS: {
+        send: (rows: Bundle[]) => {
+          sent.push(...rows)
+          return Promise.resolve()
+        },
+      } as Env['ERRORS'],
+    }, [{ ...exceptionRule, live: 'all' }])
+    assertEquals((await next.query('.exception')).length, 1)
     assertEquals(
-      (row.exception as { request_id: string }).request_id,
+      scan(db(ctx), 'exception', undefined, ['requestId'])[0].requestId,
       'report-1',
     )
-    let cols = db(ctx).query({
-      t: 'pragma',
-      name: 'table_info',
-      arg: 'exception',
-    })
-      .map((r) => r.name)
-    assertEquals(cols.includes('request_id'), true)
+    await next.door('/move', { method: 'POST' })
+    await next.store.alarm()
+    assertEquals(
+      (sent[0].error as { tags: { request_id: string } }).tags.request_id,
+      'report-1',
+    )
+    assertEquals((await next.query('.exception')).length, 0)
+    let cols = columns(db(ctx), 'exception')
     assertEquals(cols.includes('requestId'), false)
+    assertEquals(cols.includes('request_id'), false)
   }
 })
 
@@ -213,7 +228,7 @@ test('a raw writer classifies its changed owner rather than owing a schema censu
   let before = newer(ctx, PLATFORM_STORE)
   assertEquals(
     (await before.apply([
-      { entity: { eid: ONE }, exception: { request_id: 'report-1' } },
+      { entity: { eid: ONE }, exception: { value: 'report-1' } },
       { entity: { eid: TWO }, doc: { title: 'two' } },
     ])).status,
     200,
@@ -222,7 +237,7 @@ test('a raw writer classifies its changed owner rather than owing a schema censu
   let two = Number(scan(d, 'entity', by({ eid: TWO }), ['id'])[0].id)
   // Past every door, as a script or an older Store's own write could.
   ctx.storage.transactionSync(() => {
-    run(ctx, insert('exception', { entity: two, request_id: 'report-2' }))
+    run(ctx, insert('exception', { entity: two, value: 'report-2' }))
     reclassify(d, [TWO], true)
   })
   let reported = async () =>
@@ -239,7 +254,7 @@ test('a Store heals vector tables made while their key was named entity', async 
   assertEquals(
     (await before.apply([{
       entity: { eid: ONE },
-      exception: { request_id: 'report-1' },
+      exception: { value: 'report-1' },
     }])).status,
     200,
   )
