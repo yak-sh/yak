@@ -67,7 +67,7 @@ let trackerVocab = loadVocab([
     'archived',
   ),
   pick(docDoc, 'doc'),
-  pick(trackerDoc, 'bug', 'error', 'during', 'regressed'),
+  pick(trackerDoc, 'bug', 'error', 'during', 'regressed', 'taken'),
   pick(mailDoc, 'notified'),
 ], [kernelKeywords])
 let trackerGraph = () =>
@@ -135,9 +135,12 @@ let fixture = async (options: Options = {}) => {
     effort: 'high',
     trackers: [url],
     open: () =>
-      Object.assign(seen.watch('.bug ?doc ?regressed ?resolved ?archived'), {
-        mutate: (rows: Bundle[]) => tracker.apply(rows, { trusted: true }),
-      }),
+      Object.assign(
+        seen.watch('.bug ?doc ?regressed ?resolved ?archived ?taken'),
+        {
+          mutate: (rows: Bundle[]) => tracker.apply(rows, { trusted: true }),
+        },
+      ),
     ...options,
   }
   let errors: unknown[] = []
@@ -218,6 +221,19 @@ test('the tracker follower files task, evidence edge and fixer atomically', asyn
   equal(comp(knock, 'knock').target, project)
   ok(String(comp(knock, 'doc').body).includes('TypeError: missing row'))
   fresh.close()
+})
+
+let took = await fixture()
+await took.replay()
+let marked = took.trackerCommits.length
+test('a started fixer marks its bug taken in the tracker, once', async () => {
+  let [row] = await took.tracker.get([bug])
+  let [task] = await took.g.get([taskEid(bug)])
+  equal(comp(row, 'taken').task, task.entity.num ? undefined : task.entity.eid)
+  await took.replay()
+  await took.run()
+  equal(took.trackerCommits.length, marked)
+  took.close()
 })
 
 let replayed = await fixture()

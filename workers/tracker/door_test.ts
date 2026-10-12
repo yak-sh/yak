@@ -145,6 +145,14 @@ test('scoped RPC reads, resolves, archives and never exposes trusted intake', as
       .status,
     200,
   )
+  equal(
+    (await route(
+      request('/take', marker, { bug: bugs[0].entity.eid, task: 'T-7' }),
+    )).status,
+    200,
+  )
+  let [taken] = await g.graph.get([bugs[0].entity.eid], ['taken'])
+  equal((taken.taken as { task?: string }).task, 'T-7')
   let box = fixture(), tenant = fixture()
   let receive = door(box, platform, secret)
   let captureRows = capture(Error('box failed'), {
@@ -271,7 +279,7 @@ let elsewhere = await sign({
   mark: true,
   exp: Date.now() / 1000 + 60,
 }, secret)
-for (let path of ['/resolve', '/archive', '/deployed']) {
+for (let path of ['/resolve', '/archive', '/take', '/deployed']) {
   for (
     let [kind, token] of [['reader', reader], ['intake', intakeOnly], [
       'other scope',
@@ -288,14 +296,23 @@ for (let path of ['/resolve', '/archive', '/deployed']) {
           .status,
         403,
       )
-      let [bug] = await marked.graph.get([other], ['resolved', 'archived'])
-      equal([bug.resolved, bug.archived], [undefined, undefined])
+      let [bug] = await marked.graph.get([other], [
+        'resolved',
+        'archived',
+        'taken',
+      ])
+      equal([bug.resolved, bug.archived, bug.taken], [
+        undefined,
+        undefined,
+        undefined,
+      ])
     })
   }
 }
-for (let path of ['/resolve', '/archive']) {
+for (let path of ['/resolve', '/archive', '/take']) {
   for (
     let [kind, body] of [
+      ['a long task', JSON.stringify({ bug: other, task: 'x'.repeat(101) })],
       ['null', 'null'],
       ['invalid JSON', '{'],
       ['array', '[]'],
@@ -316,8 +333,16 @@ for (let path of ['/resolve', '/archive']) {
   }
   test(`tracker ${path} refuses missing bugs instead of creating marks`, async () => {
     equal((await markDoor(request(path, marker, { bug: space }))).status, 404)
-    let [row] = await marked.graph.get([space], ['resolved', 'archived'])
-    equal([row?.resolved, row?.archived], [undefined, undefined])
+    let [row] = await marked.graph.get([space], [
+      'resolved',
+      'archived',
+      'taken',
+    ])
+    equal([row?.resolved, row?.archived, row?.taken], [
+      undefined,
+      undefined,
+      undefined,
+    ])
   })
 }
 test('bug marking tickets cannot submit error captures', async () => {

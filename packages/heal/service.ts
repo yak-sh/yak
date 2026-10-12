@@ -55,7 +55,7 @@ let pick = (doc: VocabDoc, ...names: string[]): VocabDoc => ({
 let vocab = loadVocab([
   pick(kernelDoc, 'entity', 'created', 'updated', 'resolved', 'archived'),
   pick(docDoc, 'doc'),
-  pick(trackerDoc, 'bug', 'regressed'),
+  pick(trackerDoc, 'bug', 'regressed', 'taken'),
 ], [kernelKeywords])
 
 /** A headless tracker subscription. Closing it releases the whole client. */
@@ -68,9 +68,12 @@ export let track = (url: string, options: ClientOpts = {}): Tracker => {
   })
   try {
     // Terminal bugs remain visible so their marks can close existing work.
-    let watch = remote.watch('.bug ?doc ?regressed ?resolved ?archived', {
-      evaluate: 'server',
-    })
+    let watch = remote.watch(
+      '.bug ?doc ?regressed ?resolved ?archived ?taken',
+      {
+        evaluate: 'server',
+      },
+    )
     return {
       get query() {
         return watch.query

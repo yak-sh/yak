@@ -242,6 +242,37 @@
         }
       }
     },
+    "taken": {
+      "component": true,
+      "type": "object",
+      "description": "A fixer started on the bug. Written again when a fixer takes it after a regression.",
+      "properties": {
+        "at": {
+          "type": "string",
+          "stamped": true,
+          "description": "When the fixer started.",
+          "format": "date-time"
+        },
+        "by": {
+          "type": "string",
+          "ref": "entity",
+          "death": "keep",
+          "stamped": true,
+          "description": "Who marked it taken."
+        },
+        "via": {
+          "type": "string",
+          "ref": "entity",
+          "death": "keep",
+          "stamped": true,
+          "description": "The session or client."
+        },
+        "task": {
+          "type": "string",
+          "description": "The work item, by the name the graph working on it gives it (T-123)."
+        }
+      }
+    },
     "error_group": {
       "effect": true,
       "description": "Group each ungrouped occurrence, atomically counting and linking it.",
@@ -267,12 +298,16 @@
     },
     "bug_follow": {
       "effect": true,
-      "description": "Tell a bug's letter thread when the bug is resolved or archived, once per mark.",
+      "description": "Tell a bug's letter thread when a fixer takes the bug and when it is resolved or archived, once per mark, and once per opening for taken.",
       "created": [
         "resolved",
-        "archived"
+        "archived",
+        "taken"
       ],
-      "active": ".bug .resolved|.bug .archived"
+      "changed": [
+        "taken.at"
+      ],
+      "active": ".bug .resolved|.bug .archived|.bug .taken"
     },
     "error_trim": {
       "effect": true,

@@ -5,6 +5,7 @@ import type { Bundle, Comp, Storage } from '@yaks/graph'
 import { derivedEid } from '@yaks/graph/identity'
 import { graph } from '@yaks/graph'
 import { loadVocab } from '@yaks/vocab'
+import { CallError } from '@yaks/tools/errors'
 import { kernelDoc, kernelKeywords } from '@yaks/kernel'
 import { toolsDoc } from '@yaks/tools/vocab'
 import { apiDoc } from '@yaks/api/vocab'
@@ -82,7 +83,20 @@ export let store = (storage: Storage, config: Config) => {
         limit(Math.min(Math.max(count, 1), 100)),
       ),
     )
-  let mark = async (bug: string, name: 'resolved' | 'archived') => {
+  let mark = async (
+    bug: string,
+    name: 'resolved' | 'archived' | 'taken',
+    task?: string,
+  ) => {
+    // A fixer's mark has no tool: only heal writes it, through this door.
+    if (name == 'taken') {
+      let [row] = await g.get([bug])
+      if (!row?.bug) throw new CallError('bug', `not a bug: ${bug}`)
+      return void await g.apply([{
+        entity: { eid: bug },
+        taken: task ? { task } : {},
+      }], { trusted: true })
+    }
     let call: Bundle = {
       entity: { eid: crypto.randomUUID() },
       call: { args: { bug } },

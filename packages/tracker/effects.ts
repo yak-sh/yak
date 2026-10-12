@@ -9,7 +9,7 @@ import { comp, str } from './model.ts'
 import { type Enrich, group, reframe, trim } from './group.ts'
 import { enrichFrames } from './frames.ts'
 import { sourceFrames, type SourceOptions } from '@yaks/code/source'
-import { followUp, letter } from './letter.ts'
+import { followUp, letter, type Mark } from './letter.ts'
 import { occurrences, remoteBug } from './reading.ts'
 import { tags } from './spread.ts'
 import { human } from '@yaks/id'
@@ -160,8 +160,10 @@ let address = (g: Graph, row: Bundle, options: Options) => {
   }
 }
 
-/** A resolved or archived bug says so in its thread, once per mark. Only a
- * bug that has a thread hears: one that opened unannounced stays quiet. */
+/** A bug says in its thread when a fixer takes it and when it is resolved or
+ * archived, once per mark; a fixer's word once per opening, so taking it again
+ * before it reopens says nothing new. Only a bug that has a thread hears: one
+ * that opened unannounced stays quiet. */
 export let follow = async (
   g: Graph,
   eid: string,
@@ -169,16 +171,25 @@ export let follow = async (
 ): Promise<void> => {
   if (options.notify || !options.to || !options.store) return
   let [row] = await g.get([eid])
-  let mark: 'resolved' | 'archived' | undefined = row?.resolved
+  let mark: Mark | undefined = row?.resolved
     ? 'resolved'
     : row?.archived
     ? 'archived'
+    : row?.taken
+    ? 'taken'
     : undefined
   if (!row?.bug || !mark) return
   let at = comp(row, mark).at
   if (options.since && str(at) < options.since) return
-  let said = occasion(options, eid, mark, at)
   let back = comp(row, 'regressed').at
+  // A fixer that took the bug before it came back is no news about this opening.
+  if (mark == 'taken' && back && str(at) < str(back)) return
+  let said = occasion(
+    options,
+    eid,
+    mark,
+    mark == 'taken' ? back ?? comp(row, 'created').at : at,
+  )
   // An opening that came in late had no letter; its regression's starts one.
   let heads = [
     opening(options, row),

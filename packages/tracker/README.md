@@ -99,7 +99,8 @@ request, the code, the commit, the top of the stack, the breadcrumbs before it,
 every other tag, and a bug link. Reporters supply what it reads: the box tags
 its `command` and host `roles`, yaks.app its `space` and `app` slugs and whose
 space it is (`account`). A regression's letter answers the opening's thread, and
-`bug_follow` adds one reply there when a bug is resolved or archived; a bug that
+`bug_follow` adds one reply there when a bug is resolved or archived, and one
+when a fixer takes it (`taken{at, by, via, task}`, once per opening); a bug that
 opened without a letter stays quiet. Bugs become notified only after their
 occasion's letter has its `delivered` mark; an earlier occasion's delivery
 cannot mark a later regression notified. Space replies own their own notified

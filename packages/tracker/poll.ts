@@ -18,8 +18,9 @@ export type Polled = {
   subscribe: (fn: (bundles: Bundle[]) => void) => () => void
   /** stop polling */
   close: () => void
-  /** send each bundle's `resolved` or `archived` mark to the Worker. Its
-   * marks carry no precondition, so a bundle's `$was` is not checked. */
+  /** send each bundle's `resolved`, `archived` or `taken` mark to the
+   * Worker. Its marks carry no precondition, so a bundle's `$was` is not
+   * checked. */
   mutate: (bundles: Bundle[]) => Promise<Bundle[]>
 }
 
@@ -118,12 +119,15 @@ export let poll = (
     close: () => stop.abort(),
     mutate: async (bundles) => {
       for (let b of bundles) {
-        let name: 'resolved' | 'archived' | undefined = b.resolved
-          ? 'resolved'
+        let name = b.resolved
+          ? 'resolved' as const
           : b.archived
-          ? 'archived'
+          ? 'archived' as const
+          : b.taken
+          ? 'taken' as const
           : undefined
-        if (name) await mark(remote, b.entity.eid, name, go)
+        let task = (b.taken as { task?: string } | undefined)?.task
+        if (name) await mark(remote, b.entity.eid, name, go, task)
       }
       return bundles
     },

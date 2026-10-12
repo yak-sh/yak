@@ -36,7 +36,9 @@ export let request = async (
     person: 'box-tracker',
     admin: true,
     ...path == 'errors' ? { ingest: true } : {},
-    ...['resolve', 'archive', 'deployed'].includes(path) ? { mark: true } : {},
+    ...['resolve', 'archive', 'take', 'deployed'].includes(path)
+      ? { mark: true }
+      : {},
     exp: Math.floor(Date.now() / 1000) + 60,
   }, remote.secret)
   let headers = new Headers(init.headers)
@@ -74,21 +76,26 @@ export let delivery =
     }
   }
 
-/** Mark a Worker copy, returning false when the Worker does not hold it. */
+// The Worker's door for each mark, by the mark's name.
+let doors = { resolved: 'resolve', archived: 'archive', taken: 'take' }
+
+/** Mark a Worker copy, returning false when the Worker does not hold it. A
+ * `taken` mark names the fixer's `task`. */
 export let mark = async (
   remote: Remote,
   bug: string,
-  name: 'resolved' | 'archived',
+  name: keyof typeof doors,
   go: typeof fetch = fetch,
+  task?: string,
 ): Promise<boolean> => {
   let response = await request(
     remote,
-    name == 'resolved' ? 'resolve' : 'archive',
+    doors[name],
     new URLSearchParams({ scope: 'platform' }),
     {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ bug }),
+      body: JSON.stringify(task ? { bug, task } : { bug }),
     },
     go,
   )

@@ -4,7 +4,7 @@ import { type Bundle, type Graph, graph } from '@yaks/graph'
 import { ram } from '@yaks/ram'
 import { fixture, vocab } from './fixture_test.ts'
 import { effects } from './effects.ts'
-import { comp } from './model.ts'
+import { comp, str } from './model.ts'
 
 let options = {
   to: crypto.randomUUID(),
@@ -181,6 +181,32 @@ check('a regression and a resolve answer the opening letter', async (g) => {
     equal(comp(m, 'mail').reply_to, opening.entity.eid)
     equal(comp(m, 'doc').title, `Re: ${comp(opening, 'doc').title}`)
   }
+})
+
+check('a fixer taking the bug is said once per opening', async (g) => {
+  let row = bug()
+  await put(g, [row])
+  await replay(g, row)
+  let take = async (at: string) => {
+    await put(g, [{ entity: row.entity, taken: { at, task: 'T-7' } }])
+    await follow(g, row)
+  }
+  let said = async () =>
+    (await letters(g)).map((m) => str(comp(m, 'doc').body)).slice(1)
+  await take('2026-10-02T00:01:00Z')
+  await take('2026-10-02T00:01:30Z')
+  equal((await said()).length, 1)
+  ok((await said())[0].includes('A fixer started on it'))
+  ok((await said())[0].includes('working T-7'))
+  await put(g, [{
+    entity: row.entity,
+    regressed: { at: '2026-10-02T00:02:00Z' },
+  }])
+  await replay(g, row, 'regressed')
+  await follow(g, row)
+  equal((await said()).filter((b) => b.includes('fixer')).length, 1)
+  await take('2026-10-02T00:03:00Z')
+  equal((await said()).filter((b) => b.includes('fixer')).length, 2)
 })
 
 check(

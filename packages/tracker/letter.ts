@@ -263,10 +263,25 @@ export let letter = (
   }
 }
 
-/** A later word in the bug's thread: it was resolved or archived. */
+// What a mark says in the bug's thread.
+let word = (bug: Bundle, mark: Mark, at: string): string => {
+  let task = str(comp(bug, 'taken').task)
+  return mark == 'taken'
+    ? `A fixer started on it ${at}${
+      task ? `, working ${task}` : ''
+    }. You hear here when it is resolved.`
+    : mark == 'resolved'
+    ? `Resolved ${at}. If it happens again in a new release, it reopens and you hear here.`
+    : `Archived ${at}. It stays quiet even if it happens again.`
+}
+
+export type Mark = 'taken' | 'resolved' | 'archived'
+
+/** A later word in the bug's thread: a fixer took it, or it was resolved or
+ * archived. */
 export let followUp = (
   bug: Bundle,
-  mark: 'resolved' | 'archived',
+  mark: Mark,
   thread: string,
   to: Address,
 ): { title: string; body: string } => {
@@ -274,9 +289,7 @@ export let followUp = (
   return {
     title: thread.startsWith('Re: ') ? thread : `Re: ${thread}`,
     body: [
-      mark == 'resolved'
-        ? `Resolved ${at}. If it happens again in a new release, it reopens and you hear here.`
-        : `Archived ${at}. It stays quiet even if it happens again.`,
+      word(bug, mark, at),
       '',
       `${count(Number(b.hits ?? 1), 'hit')} in all, the last ${
         when(str(b.last))

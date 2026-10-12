@@ -7,6 +7,7 @@ import { identityEid } from '@yaks/graph/identity'
 import { token } from '@yaks/graph/sha256'
 import type { Client } from '@yaks/client'
 import { link } from '@yaks/edge'
+import { human } from '@yaks/id'
 import { and, eq, present } from '@yaks/query'
 import { remoteBug } from '@yaks/tracker'
 import { fixing, type Options } from './fix.ts'
@@ -42,6 +43,28 @@ let knock = (
     }]
     : []
 
+// A running fixer holding the bug's task has taken the bug, and the tracker
+// tells the bug's letter thread. It is news once per opening: a bug with no
+// `taken` mark, or one that came back after it, both times read off the
+// tracker's own clock. A replay or a stale answer sends nothing new.
+let take = async (
+  g: Graph,
+  bug: Bundle,
+  task: Bundle | undefined,
+  mutate: Client['mutate'],
+) => {
+  let holder = str(comp(task, 'claim')?.session)
+  if (!task || !holder || bug.resolved || bug.archived) return
+  let [fixer] = await g.get([holder])
+  if (str(comp(fixer, 'fixer')?.bug) != bug.entity.eid || fixer.exit) return
+  let back = moment(comp(bug, 'regressed')?.at)
+  if (bug.taken && !(back > moment(comp(bug, 'taken')?.at))) return
+  await mutate([{
+    entity: { eid: bug.entity.eid },
+    taken: { task: task.entity.num ? human(g.vocab)(task) : task.entity.eid },
+  }], { optimistic: false })
+}
+
 /** Reconcile a tracker answer. The caller retries either store's failed writes. */
 export let follow = (
   g: Graph,
@@ -53,7 +76,7 @@ export let follow = (
   // without one they are read with a command.
   let base = (at: string) => at.replace(/\/$/, '')
   let web = options.trackers?.find((at) => /^https?:/.test(at))
-  return (bug: Bundle, url: string, mutate: Client['mutate']) =>
+  let reconcile = (bug: Bundle, url: string, mutate: Client['mutate']) =>
     fix(async () => {
       if (!bug.bug) return
       let evidence = bug.entity.eid
@@ -108,6 +131,7 @@ export let follow = (
         }
         if (task.cancelled || bug.resolved) return
         if (task.completed && !reopen) return
+        await take(g, bug, task, mutate)
         return { task, bug: evidence, reopen }
       }
       if (bug.resolved || bug.archived) return
@@ -137,4 +161,12 @@ export let follow = (
         ],
       }
     })
+  // A fixer this pass started is news at once; a replay re-sends it.
+  return async (bug: Bundle, url: string, mutate: Client['mutate']) => {
+    let wrote = await reconcile(bug, url, mutate)
+    let held = wrote.find((row) => row.claim)
+    if (held && wrote.some((row) => row.fixer)) {
+      await take(g, bug, (await g.get([held.entity.eid]))[0], mutate)
+    }
+  }
 }

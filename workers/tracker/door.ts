@@ -157,7 +157,13 @@ async (request: Request): Promise<Response> => {
   if (path == '/unseen') {
     return json(await tracker.unseen(url.searchParams.get('app') ?? undefined))
   }
-  if (request.method == 'POST' && (path == '/resolve' || path == '/archive')) {
+  let marks = {
+    '/resolve': 'resolved',
+    '/archive': 'archived',
+    '/take': 'taken',
+  } as const
+  if (request.method == 'POST' && path in marks) {
+    let name = marks[path as keyof typeof marks]
     if (access.mark !== true) {
       return json({ error: 'tracker bug marks denied' }, 403)
     }
@@ -167,18 +173,19 @@ async (request: Request): Promise<Response> => {
     } catch {
       return json({ error: 'bug global eid required' }, 400)
     }
+    // Only a fixer's mark names its task: a short name, not a body of text.
+    let keys = name == 'taken' ? ['bug', 'task'] : ['bug']
     if (
       !body || typeof body != 'object' || Array.isArray(body) ||
-      Object.keys(body).some((key) => key != 'bug') ||
-      typeof body.bug != 'string' || !minted(body.bug)
+      Object.keys(body).some((key) => !keys.includes(key)) ||
+      typeof body.bug != 'string' || !minted(body.bug) ||
+      body.task != undefined &&
+        (typeof body.task != 'string' || body.task.length > 100)
     ) {
       return json({ error: 'bug global eid required' }, 400)
     }
     try {
-      await tracker.mark(
-        body.bug,
-        path == '/resolve' ? 'resolved' : 'archived',
-      )
+      await tracker.mark(body.bug, name, body.task)
     } catch (error) {
       if (error instanceof CallError && error.code == 'bug') {
         return json({ error: 'bug not found' }, 404)
