@@ -35,6 +35,7 @@ import { BOUNCED, DELIVER, DELIVERED, EMAIL, MAIL } from './comp.ts'
 import type { Message, Sender } from '@yaks/host'
 import { Unsent } from '@yaks/host/senders'
 export type { Message, Receipt, Sender } from '@yaks/host'
+export { Unsent }
 
 /** How the effect is built. */
 export type Post = {

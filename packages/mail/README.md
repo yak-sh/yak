@@ -139,7 +139,10 @@ type Sender = { send: (message: Message) => Promise<Receipt> }
 
 `cloudflare({ account, token })` implements this interface using Cloudflare
 Email Sending and `fetch`. Credentials are arguments, not read from environment
-variables by the sender. Its optional `base` and `fetch` arguments support tests
+variables by the sender. `deliver({ account, token })` is the one request
+underneath it, for a caller that builds its own `Payload` (several recipients, a
+display name, a Reply-To of its own); it rejects the same way, `Unsent` for a
+letter that never left. Its optional `base` and `fetch` arguments support tests
 and alternate endpoints. `stash()` retains messages in `sent`, provides
 `last()`, and returns receipts named `stash-1`, `stash-2`, and so on.
 `stash({ refuse: 'reason' })` simulates delivery failure.
@@ -454,21 +457,21 @@ and `tel` URLs. Relative links remain text. To use another renderer, construct a
 
 The root import `@yaks/mail` provides:
 
-| Exports                                                                    | Purpose                                                                    |
-| -------------------------------------------------------------------------- | -------------------------------------------------------------------------- |
-| `mailDoc`, `MAIL`, `EMAIL`, `DELIVER`, `DELIVERED`, `BOUNCED`, `NOTIFIED`  | Vocabulary and component names.                                            |
-| `mailbox`, `Mailbox`                                                       | Graph plugin and its options.                                              |
-| `sending`, `message`, `addressOf`, `Post`, `Sender`, `Message`, `Receipt`  | Sending handler, message composition, address lookup, and transport types. |
-| `cloudflare`, `payload`, `Account`, `Payload`, `Fetch`                     | Cloudflare transport and request construction.                             |
-| `stash`, `Stash`, `Kept`                                                   | In-memory transport.                                                       |
-| `inbound`, `author`, `messageId`, `verdict`, `Received`, `Arrival`, `Head` | Incoming-message conversion and header interpretation.                     |
-| `arrived`, `wearer`, `named`, `routed`, `known`, `Arrivals`, `Book`        | Graph lookups used when receiving.                                         |
-| `Reading`, `Read`                                                          | What another package makes of an arrival.                                  |
-| `pull`, `edge`, `received`, `hookTo`, `messageIdOf`, `Edge`, `Pulled`      | Pulling arrivals from an edge.                                             |
-| `invited`, `Invite`, `Welcome`, `Seat`                                     | Membership invitation handler and types.                                   |
-| `canon`, `local`, `at`, `parts`, `address`                                 | Address parsing and normalization.                                         |
-| `html`, `text`, `tokens`, `linkable`, `escape`, `Token`                    | Body rendering.                                                            |
-| `Options`, `Transport`, `Door`, `Pull`                                     | Plugin configuration types.                                                |
+| Exports                                                                             | Purpose                                                                    |
+| ----------------------------------------------------------------------------------- | -------------------------------------------------------------------------- |
+| `mailDoc`, `MAIL`, `EMAIL`, `DELIVER`, `DELIVERED`, `BOUNCED`, `NOTIFIED`           | Vocabulary and component names.                                            |
+| `mailbox`, `Mailbox`                                                                | Graph plugin and its options.                                              |
+| `sending`, `message`, `addressOf`, `Post`, `Sender`, `Message`, `Receipt`, `Unsent` | Sending handler, message composition, address lookup, and transport types. |
+| `cloudflare`, `deliver`, `payload`, `Account`, `Payload`, `Fetch`                   | Cloudflare transport and request construction.                             |
+| `stash`, `Stash`, `Kept`                                                            | In-memory transport.                                                       |
+| `inbound`, `author`, `messageId`, `verdict`, `Received`, `Arrival`, `Head`          | Incoming-message conversion and header interpretation.                     |
+| `arrived`, `wearer`, `named`, `routed`, `known`, `Arrivals`, `Book`                 | Graph lookups used when receiving.                                         |
+| `Reading`, `Read`                                                                   | What another package makes of an arrival.                                  |
+| `pull`, `edge`, `received`, `hookTo`, `messageIdOf`, `Edge`, `Pulled`               | Pulling arrivals from an edge.                                             |
+| `invited`, `Invite`, `Welcome`, `Seat`                                              | Membership invitation handler and types.                                   |
+| `canon`, `local`, `at`, `parts`, `address`                                          | Address parsing and normalization.                                         |
+| `html`, `text`, `tokens`, `linkable`, `escape`, `Token`                             | Body rendering.                                                            |
+| `Options`, `Transport`, `Door`, `Pull`                                              | Plugin configuration types.                                                |
 
 Separate entry points provide `mailDoc` and `docs` from `@yaks/mail/vocab`,
 `plugins()` from `@yaks/mail/graph`, `effects()` and `post()` from

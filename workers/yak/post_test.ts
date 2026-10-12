@@ -40,7 +40,7 @@ test('platform letters sink every recipient, including feedback copies', async (
   let original = globalThis.fetch
   globalThis.fetch = ((_url: string, init: RequestInit) => {
     sent.push(JSON.parse(String(init.body)))
-    return Promise.resolve(new Response('{}'))
+    return Promise.resolve(Response.json({ success: true }))
   }) as typeof fetch
   try {
     for (let MAIL_SINK of [undefined, 'owner@example.com']) {
@@ -71,4 +71,24 @@ test('platform letters sink every recipient, including feedback copies', async (
   } finally {
     globalThis.fetch = original
   }
+})
+
+// The binding names a refusal by its code: a rate limit never let the letter
+// leave, so the sending effect may try it again; any other refusal may have
+// sent it, and bounces.
+test('a rate-limited app letter is unsent, any other refusal is not', async () => {
+  let refusing = (code: string): Binding => ({
+    send: () => Promise.reject(Object.assign(new Error(code), { code })),
+  })
+  let letter = {
+    from: 'ada.recipes@yaks.fyi',
+    to: 'reader@example.com',
+    subject: 'Your recipe',
+    text: 'The recipe',
+    html: '<p>The recipe</p>',
+  }
+  let named = (code: string) =>
+    posting(refusing(code)).send(letter).then(() => '', (e: Error) => e.name)
+  assertEquals(await named('E_RATE_LIMIT_EXCEEDED'), 'Unsent')
+  assertEquals(await named('E_DELIVERY_FAILED'), 'Error')
 })

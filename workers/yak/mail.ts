@@ -2,12 +2,14 @@
 // adapters. Nothing above this line knows how a letter travels — identity.ts
 // asks for `mail(env, store)` and calls it.
 //
-// `sending` is the hosted adapter: Cloudflare Email Sending, the same payload
-// shape src/mailer.ts `payload`/`send` post from the Deno server (from/name,
-// to, reply_to, subject, text, html). It is written out rather than imported
-// because that module reads `Deno.env` and renders its html through md.ts's
-// markdown door — a whole vendored parser for a six-digit code that has no
-// markup in it. A change to the API's shape is a change to both.
+// `sending` is the hosted adapter: Cloudflare Email Sending through @yaks/mail's
+// one client for it (`deliver`), with a payload of its own: a display name,
+// every reader on one send, and a Reply-To that is not the sender. These
+// letters have no row behind them to retry from (a sign-in code is never
+// written down), so a letter that never left, which `deliver` says by
+// rejecting as `Unsent` (no connection, a 429), is tried again here, a few
+// times and briefly, while somebody waits for it. Any other failure may have
+// left, and is thrown at once: a letter is sent at most once.
 //
 // `printed` is the local adapter: the letter on the Worker's own log, where
 // whoever is running `wrangler dev` reads it (and a probe reads it out of the
@@ -19,6 +21,7 @@
 // graph — however it is reached — can never mint a session (T-32585).
 import type { Env } from './env.ts'
 import { esc } from './html.ts'
+import { deliver, type Payload, Unsent } from '@yaks/mail'
 
 // `to` is one address or several. Email Sending takes a list, and one send to
 // several recipients is one letter: it either reaches every reader or none, so
@@ -47,31 +50,47 @@ export let printed = (): Mail => (l) => {
   return Promise.resolve()
 }
 
-export let sending =
-  (token: string, account: string, api: string, env: Host = {}): Mail =>
-  async (l) => {
+// How often a letter that never left is tried, and the longest wait between
+// tries whatever the API asks: somebody is waiting on a sign-in code.
+let TRIES = 3
+let PAUSE = 2000
+let sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms))
+
+export let sending = (
+  token: string,
+  account: string,
+  api: string,
+  env: Host = {},
+  pause = sleep,
+): Mail => {
+  // The global fetch, looked up at each call rather than held unbound.
+  let post = deliver({
+    account,
+    token,
+    base: api,
+    fetch: (u, i) => fetch(u, i),
+  })
+  return async (l) => {
     if (!token || !account) throw new Error('mail is not configured')
-    let res = await fetch(`${api}/accounts/${account}/email/sending/send`, {
-      method: 'POST',
-      headers: {
-        authorization: `Bearer ${token}`,
-        'content-type': 'application/json',
-      },
-      body: JSON.stringify({
-        from: { address: FROM, name: 'yaks.app' },
-        to: [l.to].flat(),
-        reply_to: l.replyTo ?? replyTo(env),
-        subject: l.subject,
-        text: l.body,
-        html: `<p>${esc(l.body).replaceAll('\n\n', '</p><p>')}</p>`,
-      }),
-    })
-    if (!res.ok) {
-      throw new Error(
-        `mail failed (HTTP ${res.status}): ${(await res.text()).slice(0, 200)}`,
-      )
+    let body: Payload = {
+      from: { address: FROM, name: 'yaks.app' },
+      to: [l.to].flat(),
+      reply_to: l.replyTo ?? replyTo(env),
+      subject: l.subject,
+      text: l.body,
+      html: `<p>${esc(l.body).replaceAll('\n\n', '</p><p>')}</p>`,
+    }
+    for (let tried = 1;; tried++) {
+      try {
+        await post(body)
+        return
+      } catch (e) {
+        if (!(e instanceof Unsent) || tried >= TRIES) throw e
+        await pause(Math.min(e.retry.after, PAUSE))
+      }
     }
   }
+}
 
 let API = 'https://api.cloudflare.com/client/v4'
 

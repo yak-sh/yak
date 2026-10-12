@@ -17,7 +17,13 @@
 // sending effect, graph.ts) and the inbound route (`email()`, index.ts) to the
 // same sentence. A slug carries no dot (route.ts `SLUG`), so the single dot in
 // a local part is unambiguously the seam between the space and the app.
-import { type Message, parts, type Receipt, type Sender } from '@yaks/mail'
+import {
+  type Message,
+  parts,
+  type Receipt,
+  type Sender,
+  Unsent,
+} from '@yaks/mail'
 import { SLUG } from './route.ts'
 import { apex, type Host } from './host.ts'
 import type { Env } from './env.ts'
@@ -101,6 +107,10 @@ export type Binding = {
   }): Promise<{ messageId?: string }>
 }
 
+// Email Sending's Workers API names a refusal by its `code`.
+let limited = (err: unknown) =>
+  (err as { code?: string })?.code == 'E_RATE_LIMIT_EXCEEDED'
+
 /**
  * The binding as an @yaks/mail {@link Sender}: the seam the sending effect
  * hands one composed letter to.
@@ -109,6 +119,10 @@ export type Binding = {
  * the workerd stand-in, a deploy that lost the binding. A letter then comes to
  * rest as a `bounced` saying so, which someone can read off the entity, rather
  * than sitting unsent with nothing written about it.
+ *
+ * The binding's error carries a `code`. A rate limit is the one that knows the
+ * letter never left, the binding's 429, so it rejects as `Unsent` and the
+ * sending effect tries it again; any other may have left, and bounces.
  */
 export let posting = (
   mail?: Binding,
@@ -131,6 +145,10 @@ export let posting = (
           },
         }
         : {}),
+    }).catch((err) => {
+      throw limited(err)
+        ? new Unsent(`not sent: ${(err as Error).message}`)
+        : err
     })
     let id = String(sent?.messageId ?? '').replace(/[<>]/g, '')
     return id ? { id } : {}

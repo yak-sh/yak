@@ -102,50 +102,55 @@ let wait = (res: Response) => {
 }
 
 /**
- * A {@link Sender} over Cloudflare Email Sending.
- *
- * ```ts
- * import { cloudflare } from '@yaks/mail'
- * // in a Worker: cloudflare({ account: env.CF_ACCOUNT, token: env.CF_EMAIL_TOKEN })
- * ```
+ * One Email Sending request: the API's one client here, for a caller that
+ * builds its own {@link Payload} (several recipients, a display name, a
+ * Reply-To of its own). It answers the receipt.
  *
  * A failure rejects with the status and the start of the response body, which
  * is what gets written to the letter as `bounced.reason` — so a bounce records
  * what the API reported, not just "send failed". A letter that never reached
  * the API, or that it declined with a 429, rejects as `Unsent` instead.
  */
-export let cloudflare = (
-  { account, token, base, fetch: call }: Account,
-): Sender => {
+export let deliver = ({ account, token, base, fetch: call }: Account) => {
   let root = (base ?? 'https://api.cloudflare.com/client/v4').replace(
     /\/+$/,
     '',
   )
   let go: Fetch = call ?? fetch
-  return {
-    send: async (message: Message): Promise<Receipt> => {
-      let res = await go(`${root}/accounts/${account}/email/sending/send`, {
-        method: 'POST',
-        headers: {
-          authorization: `Bearer ${token}`,
-          'content-type': 'application/json',
-        },
-        body: JSON.stringify(payload(message)),
-      }).catch((err) => {
-        throw connecting(err) ? new Unsent(`not sent: ${said(err)}`) : err
-      })
-      let raw = await res.text()
-      let answer = parse(raw)
-      if (res.status == 429) {
-        throw new Unsent(`not sent (HTTP 429): ${raw.slice(0, 200)}`, wait(res))
-      }
-      if (!res.ok || !answer.success) {
-        throw new Error(
-          `send failed (HTTP ${res.status}): ${raw.slice(0, 200)}`,
-        )
-      }
-      let id = String(answer.result?.message_id ?? '').replace(/[<>]/g, '')
-      return id ? { id } : {}
-    },
+  return async (body: Payload): Promise<Receipt> => {
+    let res = await go(`${root}/accounts/${account}/email/sending/send`, {
+      method: 'POST',
+      headers: {
+        authorization: `Bearer ${token}`,
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify(body),
+    }).catch((err) => {
+      throw connecting(err) ? new Unsent(`not sent: ${said(err)}`) : err
+    })
+    let raw = await res.text()
+    let answer = parse(raw)
+    if (res.status == 429) {
+      throw new Unsent(`not sent (HTTP 429): ${raw.slice(0, 200)}`, wait(res))
+    }
+    if (!res.ok || !answer.success) {
+      throw new Error(`send failed (HTTP ${res.status}): ${raw.slice(0, 200)}`)
+    }
+    let id = String(answer.result?.message_id ?? '').replace(/[<>]/g, '')
+    return id ? { id } : {}
   }
+}
+
+/**
+ * A {@link Sender} over Cloudflare Email Sending: {@link deliver} of the
+ * message's {@link payload}.
+ *
+ * ```ts
+ * import { cloudflare } from '@yaks/mail'
+ * // in a Worker: cloudflare({ account: env.CF_ACCOUNT, token: env.CF_EMAIL_TOKEN })
+ * ```
+ */
+export let cloudflare = (account: Account): Sender => {
+  let post = deliver(account)
+  return { send: (message: Message) => post(payload(message)) }
 }

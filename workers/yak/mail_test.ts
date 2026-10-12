@@ -76,7 +76,7 @@ test('one send carries every reader, from one address', async () => {
   let real = globalThis.fetch
   globalThis.fetch = ((_url: string, init: RequestInit) => {
     posted.push(JSON.parse(String(init.body)))
-    return Promise.resolve(new Response('{}'))
+    return Promise.resolve(Response.json({ success: true }))
   }) as unknown as typeof fetch
   try {
     let send = sending('token', 'account', 'https://api.test')
@@ -99,6 +99,44 @@ test('one send carries every reader, from one address', async () => {
   ])
 })
 
+// A platform letter has no row to be retried from, so one that never left (a
+// 429, or no connection) is tried again in place, waiting no longer than a
+// person waiting on a code should; anything that may have left is thrown at
+// once, never sent twice.
+test('a platform letter that never left is tried again, a few times', async () => {
+  let run = async (...statuses: number[]) => {
+    let posts = 0
+    let waits: number[] = []
+    let real = globalThis.fetch
+    globalThis.fetch = (() => {
+      let status = statuses[posts++] ?? 200
+      return Promise.resolve(
+        status == 200
+          ? Response.json({ success: true })
+          : new Response('{}', { status, headers: { 'retry-after': '30' } }),
+      )
+    }) as unknown as typeof fetch
+    try {
+      let send = sending('token', 'account', 'https://api.test', {}, (ms) => {
+        waits.push(ms)
+        return Promise.resolve()
+      })
+      let failed = await send({ to: REPLY_TO, subject: 's', body: 'b' })
+        .then(() => '', (e: Error) => e.name)
+      return { posts, waits, failed }
+    } finally {
+      globalThis.fetch = real
+    }
+  }
+  assertEquals(await run(429, 200), { posts: 2, waits: [2000], failed: '' })
+  assertEquals(await run(429, 429, 429), {
+    posts: 3,
+    waits: [2000, 2000],
+    failed: 'Unsent',
+  })
+  assertEquals(await run(500), { posts: 1, waits: [], failed: 'Error' })
+})
+
 // A deploy can send when it has the local adapter, or a token and an account;
 // the account may be the Worker's own (CF_ACCOUNT), so the token is the one
 // secret a deploy must set. Staging with only the Connect secret cannot.
@@ -117,7 +155,7 @@ test('mail: the Worker account carries the send when MAIL_ACCOUNT is unset', asy
   let real = globalThis.fetch
   globalThis.fetch = ((url: string) => {
     urls.push(url)
-    return Promise.resolve(new Response('{}'))
+    return Promise.resolve(Response.json({ success: true }))
   }) as unknown as typeof fetch
   try {
     await mail({
