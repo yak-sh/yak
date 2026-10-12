@@ -372,6 +372,9 @@ export let effects = (vocab: Vocab, opts: Opts = {}): Effects => {
     )
   }
   let scoped = (bundles: Bundle[], tx: ReadTx) => {
+    if (!slots.some((s) => !disabled.has(s.id) && s.effect?.target)) {
+      return bundles
+    }
     let prior = (bundles[0]?.[BEFORE] ?? {}) as Before
     let eids = [
       ...new Set([...bundles.map((b) => b.entity.eid), ...Object.keys(prior)]),
@@ -541,7 +544,7 @@ export let effects = (vocab: Vocab, opts: Opts = {}): Effects => {
         )
       }
       return after(
-        tx.bindings([plan], pending, reads(plan, vocab)),
+        tx.bindings([plan], pending, s.watch!),
         ([rows]) =>
           rows
             .filter((r) => r.entities.some((e) => e && touched.has(e)))
