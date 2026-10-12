@@ -10,6 +10,7 @@ import { map as queryMap } from '@yaks/query'
 import { subscriptions as subscribed } from '@yaks/api'
 import { type Bundle, type Graph, graph, type Storage } from '@yaks/graph'
 import { ram } from '@yaks/ram'
+import { pack } from './watches.ts'
 import { loadVocab, type Vocab } from '@yaks/vocab'
 import type { Frame } from '@yaks/api'
 import { durable, shop, store } from './testing.ts'
@@ -1042,4 +1043,27 @@ test('a woken socket applies stored watch additions and removals', () => {
   ws.sent.length = 0
   woken.wake()
   assertEquals(ws.sent.map((f) => f.id), ['kept'])
+})
+
+let packedFixture = (() => {
+  let storage = ram(shop), ctx = hibernation(), ws = wire()
+  ctx.live.push(ws)
+  holds(ctx.storage).write('packed', { old: '.doc.title=old' })
+  ws.serializeAttachment({
+    subref: 'packed',
+    subdelta: pack({ old: null, current: '.kind=product' }),
+  })
+  let [g, live] = instance(storage, ctx)
+  return { ws, g, live }
+})()
+
+test('compressed watch changes restore their exact interests', () => {
+  let { ws, g, live } = packedFixture
+  live.wake()
+  assertEquals(ws.sent.map((f) => f.id), ['current'])
+  ws.sent.length = 0
+  g.apply([{ entity: { eid: 'p' }, product: { price: 1 } }])
+  assertEquals(ws.sent.map((f) => [f.id, f.bundles?.[0].entity.eid]), [
+    ['current', 'p'],
+  ])
 })

@@ -36,6 +36,7 @@ import type { ReadOpts } from '@yaks/graph'
 import { after, isPromise, over } from '@yaks/fp'
 import type { DurableStorage } from './sql.ts'
 import { holds, MissingSubscriptions } from './holds.ts'
+import { type Delta, unpack } from './watches.ts'
 
 /**
  * The part of a hibernatable WebSocket this package uses: a frame out, and the
@@ -110,7 +111,7 @@ type Held = {
   writer?: PeerWriter
   subs?: Record<string, Ask>
   subref?: string
-  subdelta?: Record<string, Ask | null>
+  subdelta?: Delta | string
   relay?: string[]
   acks?: boolean
   frames?: boolean
@@ -306,7 +307,7 @@ export let sockets = (
     if (cached) return cached
     let held = ws.deserializeAttachment() as Held | null
     let found = held?.subref ? backing().read(held.subref) : held?.subs ?? {}
-    for (let [id, ask] of Object.entries(held?.subdelta ?? {})) {
+    for (let [id, ask] of Object.entries(unpack(held?.subdelta ?? {}))) {
       if (ask === null) delete found[id]
       else found[id] = ask
     }

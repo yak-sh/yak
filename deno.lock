@@ -2071,7 +2071,8 @@
       "packages/durable-object": {
         "dependencies": [
           "jsr:@std/assert@1",
-          "npm:@cloudflare/workers-types@^4.20260702.1"
+          "npm:@cloudflare/workers-types@^4.20260702.1",
+          "npm:fflate@0.8.3"
         ]
       },
       "packages/edge": {
