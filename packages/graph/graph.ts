@@ -1168,10 +1168,6 @@ export let graph = (opts: Options): Graph => {
       pending: Bundle[] = [],
       aliases = false,
     ): Bundle[] | Promise<Bundle[]> => {
-      let targets = new Set(
-        [...pending, ...named].filter((row) => gives(row) && !dead(row))
-          .map((row) => row.entity.eid),
-      )
       let refs = named.flatMap((row, i) =>
         comps(row).flatMap(([comp, patch]) =>
           Object.entries(patch ?? {}).flatMap(([prop, value]) => {
@@ -1185,14 +1181,21 @@ export let graph = (opts: Options): Graph => {
               )
             }
             return p?.category == 'ref' && typeof value == 'string' &&
-                !isAlias(value) && !minted(value) && !targets.has(value)
+                !isAlias(value) && !minted(value)
               ? [{ i, comp, prop, value, kind: String(p.ref) }]
               : []
           })
         )
       )
+      // Rules admit each output separately. Most outputs need no resolution;
+      // scanning the pending batch for each one makes stamping quadratic.
+      if (!refs.length) return named
+      let targets = new Set(
+        [...pending, ...named].filter((row) => gives(row) && !dead(row))
+          .map((row) => row.entity.eid),
+      )
       return each(
-        refs,
+        refs.filter(({ value }) => !targets.has(value)),
         named,
         (out, { i, comp, prop, value, kind }) =>
           after(
