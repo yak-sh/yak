@@ -369,6 +369,7 @@ let composed = async (
     // Asked now and awaited only by a report: the commit is this run's, and
     // a command that reports nothing does not wait on git to learn it.
     config.tracker && !opts.readOnly ? revision() : undefined,
+    roles,
   )
   let installing = opts.install ?? path == ':memory:'
   let opened: Opened | undefined

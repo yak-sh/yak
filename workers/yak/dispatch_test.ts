@@ -324,8 +324,11 @@ test('a command failure is captured once across worker and caller', () =>
       script: scriptName(app.script ?? `${space.slug}/${app.slug}`),
       version: '7',
       entrypoint: 'fetch',
+      space: space.slug,
+      app: app.slug,
       request: 'worker POST /recipes/inspect',
       request_id: undefined,
+      account: 'person',
     })
     assertEquals(wrote[0].during, {
       space: space.eid,
@@ -559,8 +562,11 @@ test('an answered worker 5xx reaches the tracker with its app', () =>
         script: scriptName(app.script ?? `${space.slug}/${app.slug}`),
         version: '7',
         entrypoint: 'fetch',
+        space: space.slug,
+        app: app.slug,
         request: 'worker GET /recipes/hello',
         request_id: undefined,
+        account: 'person',
       },
     )
   }))

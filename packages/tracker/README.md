@@ -12,7 +12,7 @@ references may name entities in other stores.
 | `./vocab`   | Tracker words, RAM computations and SQL-derived expressions |
 | `./report`  | Capture, transport and `coalesce`                           |
 | `./page`    | Classic browser capture script and twenty breadcrumbs       |
-| `./effects` | `error_group`, `bug_notify`, `error_trim`                   |
+| `./effects` | `error_group`, `bug_notify`, `bug_follow`, `error_trim`     |
 | `./views`   | Bug pages, list rows, error frames and the Bugs destination |
 | `./tools`   | `bug_list`, `bug_show`, `bug_resolve`, `bug_archive`        |
 | `./service` | Spool record admission and acknowledgement                  |
@@ -80,13 +80,23 @@ space `notify` stream callback, or a platform/box mail `to`, `from` and global
 tracker `store` eid. Each bug opening and each regression gets its own letter
 immediately. Its identity derives from the store, recipient, bug eid, opening or
 regression mark, and full `created.at` or `regressed.at`, so a replayed effect
-keeps the same letter. The subject names the bug and its headline; the body
-carries the whole message, where it happened, its historical hits, first and
-last seen times, and a bug link. Bugs become notified only after their
-occasion's letter has its `delivered` mark; an earlier occasion's delivery
-cannot mark a later regression notified. Space replies own their own notified
-mark. Archived bugs still count but never notify. Retention keeps the newest
-hundred plus the first occurrence of each commit (or version without a commit).
+keeps the same letter. A letter is read alone by someone deciding whether it is
+urgent, so `letter.ts` writes from the bug and its retained occurrences all the
+tracker holds: the subject names where it ran (box or yaks.app, the space and
+app, and "test account" when only test accounts were reached), the bug and its
+headline; the body carries the whole message, where it ran (process or worker,
+app version, operation), whom it reached, how often and in the last hour, the
+failing request, the code, the commit, the top of the stack, the breadcrumbs
+before it, every other tag, and a bug link. Reporters supply what it reads: the
+box tags its `command` and host `roles`, yaks.app its `space` and `app` slugs
+and whose space it is (`account`). A regression's letter answers the opening's
+thread, and `bug_follow` adds one reply there when a bug is resolved or
+archived; a bug that opened without a letter stays quiet. Bugs become notified
+only after their occasion's letter has its `delivered` mark; an earlier
+occasion's delivery cannot mark a later regression notified. Space replies own
+their own notified mark. Archived bugs still count but never notify. Retention
+keeps the newest hundred plus the first occurrence of each commit (or version
+without a commit).
 
 ## Browsing
 

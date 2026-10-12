@@ -265,6 +265,15 @@
       "active": ".bug !archived !resolved !notified|.mail .delivered",
       "sweep": ".bug !archived !resolved !notified"
     },
+    "bug_follow": {
+      "effect": true,
+      "description": "Tell a bug's letter thread when the bug is resolved or archived, once per mark.",
+      "created": [
+        "resolved",
+        "archived"
+      ],
+      "active": ".bug .resolved|.bug .archived"
+    },
     "error_trim": {
       "effect": true,
       "description": "Keep the newest hundred occurrences and the first of each commit or version.",

@@ -83,25 +83,119 @@ check(
     await put(g, [row])
     await replay(g, row)
     let [letter] = await letters(g)
-    equal(
-      comp(letter, 'doc').title,
-      `${row.entity.eid}: TypeError: broken ${row.entity.eid.slice(0, 8)}…`,
+    let { title, body } = comp(letter, 'doc') as Record<string, string>
+    ok(
+      title.endsWith(
+        `${row.entity.eid}: TypeError: broken ${row.entity.eid.slice(0, 8)}…`,
+      ),
     )
-    equal(
-      comp(letter, 'doc').body,
-      [
-        comp(row, 'doc').title,
-        '',
-        'Where: app/src/run.ts:42 · run',
-        'Hits: 3',
-        `First seen: ${at}`,
-        'Last seen: 2026-10-02T00:00:12Z',
-        '',
-        `[View ${row.entity.eid}](https://bugs.example.test/${row.entity.eid})`,
-      ].join('\n'),
-    )
+    for (
+      let said of [
+        comp(row, 'doc').title as string,
+        'app/src/run.ts:42 · run',
+        '3 hits',
+        '2026-10-02 00:00:12 UTC',
+        `(https://bugs.example.test/${row.entity.eid})`,
+      ]
+    ) ok(body.includes(said), said)
     equal(comp(letter, 'mail').from, options.from)
     equal(comp(letter, 'deliver').to, options.to)
+  },
+)
+
+// An app's occurrence, as yaks.app reports one from a test account's space.
+let occurrence = (row: Bundle, request: string): Bundle[] => [{
+  entity: { eid: crypto.randomUUID() },
+  error: {
+    at,
+    bug: row.entity.eid,
+    commit: '2e13aff3a1b2c3d4e5f60718293a4b5c6d7e8f90',
+    tags: {
+      script: 't1_drills',
+      space: 't1',
+      app: 'drills',
+      version: '3',
+      entrypoint: 'browser report',
+      account: 'test',
+    },
+  },
+  during: { request },
+}, {
+  entity: { eid: request },
+  request: {
+    method: 'POST',
+    url: 'https://t1.yaks.app/drills/api/query',
+    status: 500,
+  },
+}]
+
+check(
+  'a letter says where it ran, whom it reached and the request that failed',
+  async (g) => {
+    let row = bug()
+    await put(g, [row, ...occurrence(row, crypto.randomUUID())])
+    await replay(g, row)
+    let [letter] = await letters(g)
+    let { title, body } = comp(letter, 'doc') as Record<string, string>
+    ok(title.startsWith('[yaks.app t1/drills test account] '), title)
+    for (
+      let said of [
+        't1/drills · v3 · browser report',
+        'test accounts only',
+        'POST https://t1.yaks.app/drills/api/query → 500',
+        '2e13aff',
+      ]
+    ) ok(body.includes(said), said)
+  },
+)
+
+let follow = (g: Graph, row: Bundle) =>
+  handler(g).bug_follow(
+    { entity: row.entity, name: 'resolved', kind: 'created' },
+    g,
+    (rows) => put(g, rows),
+  )
+
+check('a regression and a resolve answer the opening letter', async (g) => {
+  let row = bug()
+  await put(g, [row])
+  await replay(g, row)
+  let [opening] = await letters(g)
+  await put(g, [{
+    entity: row.entity,
+    resolved: { at: '2026-10-02T00:01:00Z' },
+  }])
+  await follow(g, row)
+  await follow(g, row)
+  await put(g, [{
+    entity: row.entity,
+    resolved: null,
+    regressed: { at: '2026-10-02T00:02:00Z' },
+  }])
+  await replay(g, row, 'regressed')
+  let later = (await letters(g)).filter((m) =>
+    m.entity.eid != opening.entity.eid
+  )
+  equal(later.length, 2)
+  for (let m of later) {
+    equal(comp(m, 'mail').reply_to, opening.entity.eid)
+    equal(comp(m, 'doc').title, `Re: ${comp(opening, 'doc').title}`)
+  }
+})
+
+check(
+  'a bug that opened without a letter stays quiet when resolved',
+  async (g) => {
+    let row = bug()
+    row.bug = { ...comp(row, 'bug'), first: '2026-09-20T00:00:00Z' }
+    await put(g, [row])
+    await replay(g, row)
+    await put(g, [{
+      entity: row.entity,
+      resolved: { at: '2026-10-02T00:01:00Z' },
+    }])
+    await follow(g, row)
+    equal((await letters(g)).length, 0)
   },
 )
 

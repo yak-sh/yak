@@ -103,10 +103,12 @@ test('a composed tracker drains a separate spool, preserving error attribution',
     await service(host, { remote, fetch: go })
     let remoteRows = await tracker.graph.read('.error ?created ?during *')
     equal(remoteRows.length, 1)
-    equal(comp(remoteRows[0], 'error').tags, {
-      source: 'box',
-      handler: 'mail_post',
-    })
+    // Where it ran rides beside the catch's own tag: the process's command,
+    // here this test runner's.
+    let { source, handler, command } = comp(remoteRows[0], 'error')
+      .tags as Record<string, string>
+    equal([source, handler], ['box', 'mail_post'])
+    equal(command.startsWith('yak'), true)
     equal(comp(remoteRows[0], 'created').by, actor.by)
     equal(comp(remoteRows[0], 'during').entity, entity)
     equal(await tracker.graph.read('.trace *'), [])

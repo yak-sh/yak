@@ -9,8 +9,8 @@ import { comp, str } from './model.ts'
 import { type Enrich, group, reframe, trim } from './group.ts'
 import { enrichFrames } from './frames.ts'
 import { sourceFrames, type SourceOptions } from '@yaks/code/source'
-import { headline } from './brief.ts'
-import { occurrences, said, where } from './reading.ts'
+import { followUp, letter } from './letter.ts'
+import { occurrences } from './reading.ts'
 import { human } from '@yaks/id'
 
 export type Options = {
@@ -43,18 +43,22 @@ let late = (row: Bundle) => {
   return !comp(row, 'regressed').at &&
     Date.parse(openedAt(row)) - first >= LATE
 }
-let letterEid = (options: Options, row: Bundle) =>
+let occasion = (options: Options, eid: string, kind: string, at: unknown) =>
   derivedEid(
     `tracker-notify|${
-      JSON.stringify([
-        options.store,
-        options.to,
-        row.entity.eid,
-        row.regressed ? 'regressed' : 'created',
-        openedAt(row),
-      ])
+      JSON.stringify([options.store, options.to, eid, kind, at])
     }`,
   )
+let letterEid = (options: Options, row: Bundle) =>
+  occasion(
+    options,
+    row.entity.eid,
+    row.regressed ? 'regressed' : 'created',
+    openedAt(row),
+  )
+// The opening's letter heads the bug's thread; later letters answer it.
+let opening = (options: Options, row: Bundle) =>
+  occasion(options, row.entity.eid, 'created', comp(row, 'created').at)
 
 let open = (row: Bundle | undefined): row is Bundle =>
   !!row?.bug && !row.archived && !row.resolved && !row.notified
@@ -93,35 +97,86 @@ export let notify = async (
   if (!options.to || !options.store) return
   if (options.since && openedAt(row) < options.since) return
   if (late(row)) return void await g.apply([receipt(row)], { trusted: true })
-  let letter = letterEid(options, row)
-  let [exists] = await g.get([letter])
+  let mailed = letterEid(options, row)
+  let [exists] = await g.get([mailed])
   if (exists?.mail) {
     if (exists.delivered) await g.apply([receipt(row)], { trusted: true })
     return
   }
-  let bug = comp(row, 'bug')
-  let [newest] = bug.spot ? [] : await g.read(occurrences(eid) + ' .limit=1')
-  let name = row.entity.num ? human(g.vocab)(row) : eid
-  let path = `/${encodeURIComponent(name)}`
-  let url = options.url ? new URL(path, options.url).href : path
+  let errors = await g.read(occurrences(eid))
+  let request = str(comp(errors[0], 'during').request)
+  let [asked] = request ? await g.get([request]) : []
+  let to = address(g, row, options)
+  let { title, body } = letter(row, errors, asked, to)
+  let [head] = row.regressed ? await g.get([opening(options, row)]) : []
   await g.apply([{
-    entity: { eid: letter },
+    entity: { eid: mailed },
     doc: {
-      title: `${name}: ${headline(said(row))}`,
-      body: [
-        said(row),
-        '',
-        `Where: ${where(row, newest) || 'Unknown'}`,
-        `Hits: ${str(bug.hits)}`,
-        `First seen: ${str(bug.first)}`,
-        `Last seen: ${str(bug.last)}`,
-        '',
-        `[View ${name}](${url})`,
-      ].join('\n'),
+      title: head?.mail ? `Re: ${str(comp(head, 'doc').title)}` : title,
+      body,
     },
     mail: {
       at: openedAt(row),
       target: eid,
+      ...options.from ? { from: options.from } : {},
+      ...head?.mail ? { reply_to: head.entity.eid } : {},
+    },
+    deliver: { to: options.to },
+  }], { trusted: true })
+}
+
+// A bug's name and page: its human id where the store keeps one.
+let address = (g: Graph, row: Bundle, options: Options) => {
+  let name = row.entity.num ? human(g.vocab)(row) : row.entity.eid
+  let path = `/${encodeURIComponent(name)}`
+  return {
+    name,
+    url: options.url ? new URL(path, options.url).href : path,
+    now: new Date().toISOString(),
+  }
+}
+
+/** A resolved or archived bug says so in its thread, once per mark. Only a
+ * bug that has a thread hears: one that opened unannounced stays quiet. */
+export let follow = async (
+  g: Graph,
+  eid: string,
+  options: Options,
+): Promise<void> => {
+  if (options.notify || !options.to || !options.store) return
+  let [row] = await g.get([eid])
+  let mark: 'resolved' | 'archived' | undefined = row?.resolved
+    ? 'resolved'
+    : row?.archived
+    ? 'archived'
+    : undefined
+  if (!row?.bug || !mark) return
+  let at = comp(row, mark).at
+  if (options.since && str(at) < options.since) return
+  let said = occasion(options, eid, mark, at)
+  let back = comp(row, 'regressed').at
+  // An opening that came in late had no letter; its regression's starts one.
+  let heads = [
+    opening(options, row),
+    ...back ? [occasion(options, eid, 'regressed', back)] : [],
+  ]
+  let found = await g.get([said, ...heads])
+  let mailed = (eid: string) => found.find((r) => r.entity.eid == eid && r.mail)
+  let head = heads.map(mailed).find(Boolean)
+  if (mailed(said) || !head) return
+  let { title, body } = followUp(
+    row,
+    mark,
+    str(comp(head, 'doc').title),
+    address(g, row, options),
+  )
+  await g.apply([{
+    entity: { eid: said },
+    doc: { title, body },
+    mail: {
+      at: str(at),
+      target: eid,
+      reply_to: head.entity.eid,
       ...options.from ? { from: options.from } : {},
     },
     deliver: { to: options.to },
@@ -140,6 +195,7 @@ export let effects = (
     error_group: (e) => group(host.graph, e.entity.eid),
     error_frames: (e) => reframe(host.graph, e.entity.eid, enrich),
     bug_notify: (e) => notify(host.graph, e.entity.eid, { ...options, url }),
+    bug_follow: (e) => follow(host.graph, e.entity.eid, { ...options, url }),
     error_trim: async (e) => {
       let [row] = await host.graph.get([e.entity.eid])
       let bug = str(comp(row, 'error').bug)

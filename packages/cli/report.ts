@@ -26,10 +26,31 @@ export let revision = async (): Promise<string | undefined> => {
   }
 }
 
+/// command(['serve', '--no-duties']) -> 'yak serve'
+/// command(['graph', 'query', '.bug .order=-bug.hits']) -> 'yak graph query'
+/// command(['memory', 'save', '@/tmp/body.md', '--id', 'M-1']) -> 'yak memory save'
+/// command([]) -> 'yak'
+/** The command a process runs, as its leading words: never an argument's
+ * value, which may be anything a person typed. */
+export let command = (argv: readonly string[]): string => {
+  let lead = argv.slice(0, 2), stop = lead.findIndex((w) => !WORD.test(w))
+  return ['yak', ...lead.slice(0, stop < 0 ? 2 : stop)].join(' ')
+}
+let WORD = /^[a-z][a-z-]*$/
+
+let argv = (): string[] => {
+  try {
+    return Deno.args
+  } catch {
+    return []
+  }
+}
+
 export let reporter = (
   config: Config,
   actor?: Actor,
   commit?: string | Promise<string | undefined>,
+  roles: readonly string[] = [],
 ): {
   (error: unknown, context?: Partial<Context>): Promise<void>
   close: () => Promise<void>
@@ -49,7 +70,12 @@ export let reporter = (
       commit: config.tracker?.commit ?? at,
       environment: 'production',
       ...context,
-      tags: { source: 'box', ...context.tags },
+      tags: {
+        source: 'box',
+        command: command(argv()),
+        ...roles.length ? { roles: roles.join(',') } : {},
+        ...context.tags,
+      },
       sink: (rows) =>
         file(rows.map((row) => {
           let exception = row.exception as Comp | undefined

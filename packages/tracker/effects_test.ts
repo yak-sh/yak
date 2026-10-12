@@ -81,7 +81,10 @@ test('declared effects group intake and retain occurrences downstream', async ()
     await hit(`back-${version}`, version)
     let [back] = await g.get([bug.entity.eid])
     equal(comp(back, 'regressed').at, at)
-    let letters = await g.read('.mail *')
+    // Each resolve also answers the thread; those are notify_test's.
+    let letters = (await g.read('.mail *')).filter((b) =>
+      !String(comp(b, 'doc').body).startsWith('Resolved ')
+    )
     equal(letters.length, version)
     let letter = letters.find((b) =>
       b.entity.eid != first.entity.eid && comp(b, 'mail').at == at
