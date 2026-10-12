@@ -23,7 +23,16 @@ import { esc } from './html.ts'
 // `to` is one address or several. Email Sending takes a list, and one send to
 // several recipients is one letter: it either reaches every reader or none, so
 // a caller never has to say which half of a delivery worked.
-export type Letter = { to: string | string[]; subject: string; body: string }
+//
+// `replyTo` is where an answer goes: the platform's own address (host.ts
+// `replyTo`) unless the letter is about somebody who should hear it directly —
+// a person's feedback is answered to the person, not to ourselves.
+export type Letter = {
+  to: string | string[]
+  subject: string
+  body: string
+  replyTo?: string
+}
 export type Mail = (l: Letter) => Promise<void>
 
 import { FROM } from './mail-config.ts'
@@ -51,7 +60,7 @@ export let sending =
       body: JSON.stringify({
         from: { address: FROM, name: 'yaks.app' },
         to: [l.to].flat(),
-        reply_to: replyTo(env),
+        reply_to: l.replyTo ?? replyTo(env),
         subject: l.subject,
         text: l.body,
         html: `<p>${esc(l.body).replaceAll('\n\n', '</p><p>')}</p>`,

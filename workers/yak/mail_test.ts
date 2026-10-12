@@ -82,15 +82,21 @@ test('one send carries every reader, from one address', async () => {
     let send = sending('token', 'account', 'https://api.test')
     await send({ to: REPLY_TO, subject: 's', body: 'b' })
     await send({ to: [REPLY_TO, GRAPH], subject: 's', body: 'b' })
+    await send({ to: REPLY_TO, subject: 's', body: 'b', replyTo: 'ann@x.test' })
   } finally {
     globalThis.fetch = real
   }
   assertEquals(posted.map((p) => p.to), [
     ['hello@yaks.app'],
     ['hello@yaks.app', 'task@bot.yak.sh'],
+    ['hello@yaks.app'],
   ])
-  assertEquals(posted.map((p) => p.from.address), [FROM, FROM])
-  assertEquals(posted.map((p) => p.reply_to), [REPLY_TO, REPLY_TO])
+  assertEquals(posted.map((p) => p.from.address), [FROM, FROM, FROM])
+  assertEquals(posted.map((p) => p.reply_to), [
+    REPLY_TO,
+    REPLY_TO,
+    'ann@x.test',
+  ])
 })
 
 // A deploy can send when it has the local adapter, or a token and an account;

@@ -165,6 +165,8 @@ test('feedback reaches the platform, in the words it was said in', async () => {
     // send, two readers: the graph copy is the letter, not a summary of it.
     assertEquals(sent.to, ['hello@yaks.app', 'task@bot.yak.sh'])
     assertEquals(await letter(k, 'task@bot.yak.sh', 'app_rename'), sent)
+    // Answering it, from either copy, reaches the person who said it.
+    assertEquals(sent.replyTo, them.email)
 
     // The row, in the meta store: the words, who said them, and where they
     // were standing — the app, the deploy it was serving, and the platform's

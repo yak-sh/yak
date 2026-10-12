@@ -566,7 +566,12 @@ export let connector = (
 // (`cloudflare`), so no store anywhere holds a code a read could spend.
 // A letter may be addressed to several readers at once (mail.ts `Letter`), so
 // "to this address" is membership, not equality.
-export type Letter = { to: string | string[]; subject: string; body: string }
+export type Letter = {
+  to: string | string[]
+  subject: string
+  body: string
+  replyTo?: string
+}
 
 export let letters = (k: Pick<Kernel, 'log'>, to: string): Letter[] =>
   [...Deno.readTextFileSync(k.log).matchAll(/yak-mail (\{.*\})/g)]
@@ -849,10 +854,15 @@ export let cloudflare = (log: string) => {
     }
     return Response.json({})
   }
-  let wrote = (to: string | string[], subject: string, body = '') =>
+  let wrote = (
+    to: string | string[],
+    subject: string,
+    body = '',
+    replyTo?: string,
+  ) =>
     Deno.writeTextFileSync(
       log,
-      `yak-mail ${JSON.stringify({ to, subject, body })}\n`,
+      `yak-mail ${JSON.stringify({ to, subject, body, replyTo })}\n`,
       { append: true },
     )
   let server = Deno.serve({ port: 0, onListen: () => {} }, async (req) => {
@@ -917,8 +927,8 @@ export let cloudflare = (log: string) => {
       return ok({ script: { id: name }, version_id: held.version })
     }
     if (url.pathname.endsWith('/email/sending/send')) {
-      let { to, subject, text } = await req.json()
-      wrote(to, subject, text)
+      let { to, subject, text, reply_to } = await req.json()
+      wrote(to, subject, text, reply_to)
       return ok({})
     }
     if (req.method == 'POST') {

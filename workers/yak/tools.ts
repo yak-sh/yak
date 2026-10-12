@@ -5362,10 +5362,12 @@ let OURS: Row[] = [
         ...await titling(ctx.dir, ctx.person),
       })
       let eid = minted(wrote).$said ?? ''
-      // The letter, to two readers at once: the platform's own address, which
-      // is the one a person reading it would reply to (mail.ts REPLY_TO), and
-      // the fleet's task graph (mail.ts GRAPH), where the sweep turns it into
-      // mail an operator is notified of instead of one a person must relay.
+      // The letter, to two readers at once: the platform's own address, where
+      // a person reads it, and the fleet's task graph (mail.ts GRAPH), where
+      // the sweep turns it into mail an operator is notified of instead of one
+      // a person must relay. Either one's reply goes to whoever said it, when
+      // they are signed in: the answer is for them, and our own address in
+      // Reply-To would send it back to us.
       // One send, so it reaches both or neither and the answer below stays
       // true either way. It leads with the words: what was said is the report,
       // and everything else is a line of context under a rule, so a person
@@ -5386,6 +5388,7 @@ let OURS: Row[] = [
       let test = isTestAddress(email ?? '')
       let sent = !test && await mail(ctx.env)({
         to: [replyTo(ctx.env), GRAPH],
+        ...(email ? { replyTo: email } : {}),
         subject: `feedback: ${opening}`,
         body: `${said.trim()}\n\n—\n` +
           `${from}\n` +
