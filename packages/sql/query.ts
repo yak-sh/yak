@@ -4,6 +4,7 @@ import type { Vocab } from '@yaks/vocab'
 import { bind, type BindOpts } from './bind.ts'
 import type { Raw } from './ast.ts'
 import { render } from './render.ts'
+import { referenceQuery } from './reference_query.ts'
 
 export * from './core.ts'
 export * from './derived.ts'
@@ -30,4 +31,5 @@ export let compile = (
   ast: And,
   vocab: Vocab,
   opts: BindOpts = {},
-): Compiled => render(bind(ast, vocab, opts))
+): Compiled =>
+  referenceQuery(ast, vocab, opts) ?? render(bind(ast, vocab, opts))

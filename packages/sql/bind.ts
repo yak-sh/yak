@@ -1544,6 +1544,13 @@ export let screen = (
 // a query inside a query, and telling an extension that a new one had begun
 // would wipe out what it remembered about the outer one — and have it ask for a
 // screen of a screen.
+let beginning = (
+  extensions: Extension[],
+  screen: (e: Extension) => Raw | null,
+) => {
+  for (let e of extensions) e.begin?.(() => screen(e))
+}
+
 let screenFor = (
   ast: And,
   vocab: Vocab,
@@ -2005,19 +2012,36 @@ export let bind = (ast: And, vocab: Vocab, opts: BindOpts = {}): Select =>
 
 // The same, through a dialect of this package's own — the renamed one a rule's
 // patterns are bound through (./match.ts).
+type Scope = {
+  visibility?: BindOpts['visibility']
+  dialect?: Dialect
+  correlated?: boolean
+}
+
 export let bound = (
   ast: And,
   vocab: Vocab,
   opts: BindOpts,
   d: Dialect,
   reads: string[] = [],
-  scope?: {
-    visibility?: BindOpts['visibility']
-    dialect?: Dialect
-    correlated?: boolean
-  },
-): Select => {
-  if (opts.visibility) return visible(ast, vocab, opts, d, reads)
+  scope?: Scope,
+): Select => prepared(ast, vocab, opts, d, reads, scope).lower()
+
+// Begin once, retaining the context chosen before callbacks run. A caller may
+// reuse a proven lowering after this boundary; falling back continues this
+// same context, including its spine and the original live query/options.
+export let prepared = (
+  ast: And,
+  vocab: Vocab,
+  opts: BindOpts,
+  d: Dialect = sqlite,
+  reads: string[] = [],
+  scope?: Scope,
+  hear?: () => void,
+): { opts: BindOpts; spine?: string; lower: () => Select } => {
+  if (opts.visibility) {
+    return { opts, lower: () => visible(ast, vocab, opts, d, reads) }
+  }
   // The spine first (./spine.ts): a query that asks for a computed component's
   // entities reads that backing's rows, which no extension indexes and no
   // archetype describes.
@@ -2040,7 +2064,54 @@ export let bound = (
     references: opts.references,
     visibility: scope?.visibility ?? opts.visibility,
   }
+  if (hear && ctx.archetypes) {
+    let held = ctx.archetypes
+    ctx.archetypes = (p) => {
+      hear()
+      return held(p)
+    }
+    Object.defineProperty(ctx.archetypes, 'held', { get: () => held.held })
+  }
   ctx.bounded = owners(ctx, ast.clauses) != null
+  // A new query, and what the rest of it selects. An extension that remembers
+  // what it resolved for one query is told here, before any clause compiles, so
+  // that what a long-lived extension remembers is always this query's; one that
+  // ranks asks for the screen and ranks among the rows the other clauses admit
+  // (./extend.ts `Begin`, `Screen`).
+  beginning(ctx.ext, (e) =>
+    screenFor(
+      ast,
+      vocab,
+      scope ? { ...opts, visibility: scope.visibility } : opts,
+      scope?.dialect ?? d,
+      e,
+    ))
+  return {
+    opts: {
+      derived: ctx.derived,
+      backed: ctx.backed,
+      extend: ctx.ext,
+      now: ctx.now,
+      storageOrder: ctx.storageOrder,
+      exactIds: ctx.exactIds,
+      references: ctx.references,
+      archetypes: ctx.archetypes,
+      visibility: ctx.visibility,
+      eids: opts.eids,
+    },
+    spine,
+    lower: () => lower(ast, ctx, opts, reads, scope),
+  }
+}
+
+let lower = (
+  ast: And,
+  ctx: Ctx,
+  opts: BindOpts,
+  reads: string[],
+  scope?: Scope,
+): Select => {
+  let vocab = ctx.v, spine = ctx.spine
   // A required indexed scalar selects component owners before the entity
   // spine. CROSS JOIN fixes that driving order even when statistics still
   // describe the tiny graph from before history grew. INDEXED BY keeps a
@@ -2049,22 +2120,6 @@ export let bound = (
   // their outer joins, as must derived values and alternate backing sources.
   let relation = (from: string, o: Parameters<typeof rel>[1]): Select =>
     indexedRelation(ctx, ast.clauses, from, o)
-  // A new query, and what the rest of it selects. An extension that remembers
-  // what it resolved for one query is told here, before any clause compiles, so
-  // that what a long-lived extension remembers is always this query's; one that
-  // ranks asks for the screen and ranks among the rows the other clauses admit
-  // (./extend.ts `Begin`, `Screen`).
-  for (let e of ctx.ext) {
-    e.begin?.(() =>
-      screenFor(
-        ast,
-        vocab,
-        scope ? { ...opts, visibility: scope.visibility } : opts,
-        scope?.dialect ?? d,
-        e,
-      )
-    )
-  }
   let cs = ast.clauses
   for (let c of cs) {
     if (UNREACHED.has(c.kind) && !claims(ctx, c.kind)) {
