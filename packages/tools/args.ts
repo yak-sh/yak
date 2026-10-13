@@ -25,6 +25,20 @@ export let parsed = (args: unknown): Args => {
   return args as Args
 }
 
+type Issue = { path: (string | number)[]; message: string }
+let issued = (e: unknown): e is { issues: Issue[] } =>
+  Array.isArray((e as { issues?: unknown }).issues)
+
+// A per-property refusal, each issue at its path from the argument it is in
+// (`bundles: Required`, `bundles.0.doc.title: Expected string, received
+// number`): the parser saw only the argument's value, so its own paths never
+// name the argument.
+let refusal = (key: string, error: Error): string =>
+  issued(error) && error.issues.length
+    ? error.issues.map((i) => `${[key, ...i.path].join('.')}: ${i.message}`)
+      .join('; ')
+    : String(error)
+
 /** A tool's arguments, validated against the JSON Schema on its declaration,
  * or against the legacy per-property schemas that parse themselves. */
 export let validated = (tool: NamedTool, args: Args): Args => {
@@ -49,7 +63,7 @@ export let validated = (tool: NamedTool, args: Args): Args => {
     } catch (error) {
       if (error instanceof CallError) throw error
       if (error instanceof Error && error.name == 'ZodError') {
-        throw new CallError('arguments', String(error))
+        throw new CallError('arguments', refusal(key, error))
       }
       throw error
     }

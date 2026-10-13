@@ -82,6 +82,7 @@
 import { fromJsonSchema, type McpServer } from '@modelcontextprotocol/server'
 import { CfWorkerJsonSchemaValidator } from '@modelcontextprotocol/server/validators/cf-worker'
 import { type Exchange, mcp, roster, rosterVersion } from '@yaks/mcp'
+import { translated } from '@yaks/mcp/tools'
 import { reaching, searching } from './agent.ts'
 import { anonymous, asked, opened, READS, scope } from './anon.ts'
 import * as dirPart from './directory.ts'
@@ -261,12 +262,10 @@ async (
   server.server.setRequestHandler('logging/setLevel', () => ({}))
 }
 
-// An old caller is answered, never corrected (C-32607 item 2). The generic
-// tier's argument names changed when those tools became @yaks/mcp's (T-33812)
-// — `entities` and `change` are `bundles`, `filter` and `query` are `q`, `text` is
-// `words` — and a connector configured against the old names is somebody's,
-// already installed. So the argument names are translated here, as the request
-// arrives, and the tool sees one shape.
+// An old caller is answered, never corrected (C-32607 item 2). A connector
+// configured against the generic tier's former argument names is somebody's,
+// already installed; @yaks/mcp `translated` renames them at every door, and
+// here first, so what follows reads the current names.
 //
 // The `app`/`space` pair that named one app moves too: on a write it becomes
 // `$app` on each bundle, on a read an `.in=` filter — both the
@@ -275,21 +274,15 @@ async (
 // read off the arguments before any graph exists (anon.ts `opened`), so
 // `scoped` tells us whether this caller has a reach for an app to be narrowed
 // out of.
-let SAID: Record<string, Record<string, string>> = {
-  graph_apply: { entities: 'bundles', change: 'bundles' },
-  graph_query: { filter: 'q', query: 'q' },
-  search: { text: 'words' },
-}
+let SCOPED = new Set(['graph_apply', 'graph_query', 'search'])
 
 let heard = (
   name: string,
   args: Record<string, unknown>,
   scoped: boolean,
 ) => {
-  let moved = SAID[name]
-  if (!moved) return args
-  let out: Record<string, unknown> = {}
-  for (let [k, v] of Object.entries(args)) out[moved[k] ?? k] = v
+  if (!SCOPED.has(name)) return args
+  let out = translated(name, args)
   // The old argument shape let a bundle name no entity at all and had the
   // store mint one; the bundle shape @yaks/mcp accepts wants the alias written
   // out. An old caller keeps its silence, and the alias it never asked for is

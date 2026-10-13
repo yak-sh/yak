@@ -209,6 +209,54 @@ export let pointing = (said: string): string =>
       'graph_schema reports what this graph declares right now.'
     : said
 
+// The generic tier's former argument names, each onto the one that takes it
+// now. A client lists the tools once, when it connects, and sends what that
+// list named for as long as it stays connected, and a directory serves the
+// list it snapshotted until a new one is released, so a renamed argument keeps
+// answering under its old name (M-37853). An entry goes once nothing still
+// sends it.
+let FORMER: Record<string, Record<string, string>> = {
+  graph_apply: { change: 'bundles', entities: 'bundles' },
+  graph_query: { filter: 'q', query: 'q' },
+  search: { text: 'words' },
+}
+
+// A key of a table, never one it inherits (`constructor`, `toString`).
+let own = (table: Record<string, string>, k: string) =>
+  Object.hasOwn(table, k) ? table[k] : undefined
+
+/**
+ * A call's arguments with each former name of a generic tool's argument
+ * translated onto the current one, which every door does before the call is
+ * recorded or checked, so the tool sees one shape. Where the caller sent both,
+ * the current name wins.
+ *
+ * ```ts
+ * import { assertEquals } from '@std/assert'
+ * import { translated } from '@yaks/mcp/tools'
+ *
+ * assertEquals(translated('graph_apply', { change: [], check: true }), {
+ *   bundles: [],
+ *   check: true,
+ * })
+ * assertEquals(translated('graph_query', { q: '.task', query: '.doc' }), {
+ *   q: '.task',
+ * })
+ * ```
+ */
+export let translated = (
+  tool: string,
+  args: Record<string, unknown>,
+): Record<string, unknown> => {
+  if (!Object.hasOwn(FORMER, tool)) return args
+  let now = (k: string) => own(FORMER[tool], k) ?? k
+  return Object.fromEntries(
+    Object.entries(args)
+      .filter(([k]) => now(k) == k || !Object.hasOwn(args, now(k)))
+      .map(([k, v]) => [now(k), v]),
+  )
+}
+
 // One declared argument, in Zod. Not a general JSON Schema reader: the only
 // declaration it ever sees is the write's own, so it handles the shapes that
 // one declaration uses rather than pretending to cover all of JSON Schema.

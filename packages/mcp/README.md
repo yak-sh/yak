@@ -149,7 +149,7 @@ equal(asked, 1)
 | `@yaks/mcp`        | `bundleSchema`, `schemaSchema`, `BundleOpts`, `Depth`: Zod schemas for bundles and schema results                                                   |
 | `@yaks/mcp`        | `listing`, `roster`, `rosterVersion`, `rosterLine`: tool definitions, names, and change notices                                                     |
 | `@yaks/mcp`        | `shapeOf`, `inputSchemaOf`, `annotated`, `COMMAND`, `Security`: argument schemas, MCP annotations, command metadata key, and security metadata type |
-| `@yaks/mcp/tools`  | `core`, `shapeOf`, `inputSchemaOf`: the generic tier and argument schemas without the MCP SDK, for a host that describes tools and serves none      |
+| `@yaks/mcp/tools`  | `core`, `shapeOf`, `inputSchemaOf`, `translated`: the generic tier, argument schemas and former argument names without the MCP SDK                  |
 | `@yaks/mcp/skills` | `attachSkills`: scoped prompts, resources and complete Skills manifests                                                                             |
 | `@yaks/mcp/stdio`  | `stdio`: connect the server to process stdin and stdout                                                                                             |
 
@@ -262,6 +262,18 @@ tool result. The application must track each client's previous list and update
 it when a notice is sent; this stateless HTTP handler does not maintain
 sessions. A release change without a tool-name change changes the version but
 produces no notice.
+
+A renamed argument keeps answering under its former name: every call is put
+through `translated(tool, args)` before it is recorded or checked, so a client
+whose list predates the rename is answered and the tool sees one shape. Where a
+caller sends both names, the current one wins.
+
+```ts
+import { assertEquals } from '@std/assert'
+import { translated } from '@yaks/mcp/tools'
+
+assertEquals(translated('graph_apply', { change: [] }), { bundles: [] })
+```
 
 New components automatically appear in `graph_schema` and newly generated write
 schemas. A new component therefore does not require a new tool.

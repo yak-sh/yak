@@ -42,6 +42,7 @@ import {
   inputSchemaOf,
   pointing,
   type Search,
+  translated,
 } from './tools.ts'
 import type { Guide } from '@yaks/graph'
 import { validator } from './validator.ts'
@@ -498,7 +499,7 @@ export let server = (
       let id = mint()
       let asked: Bundle = {
         entity: { eid: id },
-        call: { to: toolEid(t.name), args: args ?? {} },
+        call: { to: toolEid(t.name), args: translated(t.name, args ?? {}) },
         ...(actor ? { $actor: { ...actor } } : {}),
       }
       try {

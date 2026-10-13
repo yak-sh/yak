@@ -178,6 +178,22 @@ test('a batch applied comes back as it landed, and reads back', async () => {
   assertEquals(found[0].doc, { title: 'The Left Hand of Spring' })
 })
 
+test('a client listed before an argument was renamed is still answered', async () => {
+  let client = await connect({ actor: ada })
+  let [wrote] = bundles(result(
+    await called(client, 'graph_apply', { change: [spring] }),
+  ))
+  assertEquals(wrote.entity.eid, 'b1')
+  let found = bundles(result(
+    await called(client, 'graph_query', { query: '.book.price<20' }),
+  ))
+  assertEquals(found.map((b) => b.entity.eid), ['b1'])
+  // A call missing the argument altogether is told which one.
+  let none = await called(client, 'graph_apply', {})
+  assertEquals(none.isError, true)
+  assertStringIncludes(text(none), 'bundles: Required')
+})
+
 test('a checked batch says what would land and keeps none of it', async () => {
   let g = shopGraph()
   let client = await connect({ graph: g, actor: ada })
@@ -449,7 +465,7 @@ test('a refusal is the tool error the agent reads, not a broken call', async () 
     assert(Array.isArray(out.content))
     return String(out.content[0].text)
   }
-  assert((await said([{ book: {} }])).includes('"entity"'))
+  assert((await said([{ book: {} }])).includes('bundles.0.entity'))
   // A property nobody declared is the server's refusal, not the schema's: the
   // schema is open so a client's cached copy cannot refuse a word this graph
   // has since learned. It names the properties that do exist, and where to read

@@ -129,7 +129,7 @@ test('a tool that refused says so, and the words are what is printed', async () 
     arguments: { bundles: [{ book: {} }] },
   })
   assertEquals(malformed.isError, true)
-  assert(saidBy(malformed).text.includes('"entity"'))
+  assert(saidBy(malformed).text.includes('bundles.0.entity'))
   let said: string[] = []
   try {
     for (let check of [false, true]) {
