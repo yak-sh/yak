@@ -44,8 +44,11 @@ export type Backfilled = {
   release: string
   had: boolean
   wrote: boolean
-  store?: 'same' | 'unread' | { vocab: string[]; tools: string[] }
+  store?: string | { vocab: Differ; tools: Differ }
 }
+
+/** Each name whose value differs: the Store's, and the reconstruction's. */
+type Differ = Record<string, { store: unknown; built: unknown }>
 
 let json = (status: number, code: string, message: string) =>
   Response.json({ error: { code, message } }, { status })
@@ -63,10 +66,18 @@ let canonical = (v: unknown): unknown =>
     )
     : v
 
-let differing = (a: Record<string, unknown>, b: Record<string, unknown>) =>
-  [...new Set([...Object.keys(a), ...Object.keys(b)])].filter((name) =>
-    JSON.stringify(canonical(a[name])) != JSON.stringify(canonical(b[name]))
-  ).sort()
+let differing = (
+  store: Record<string, unknown>,
+  built: Record<string, unknown>,
+): Differ =>
+  Object.fromEntries(
+    [...new Set([...Object.keys(store), ...Object.keys(built)])].sort()
+      .filter((name) =>
+        JSON.stringify(canonical(store[name])) !=
+          JSON.stringify(canonical(built[name]))
+      )
+      .map((name) => [name, { store: store[name], built: built[name] }]),
+  )
 
 // What the Store serves for the release, read the way readers read it before
 // T-65378, set beside the reconstruction.
@@ -78,19 +89,20 @@ let compared = async (
 ): Promise<Backfilled['store']> => {
   if (app.trashed || space.trashed) return 'unread'
   let read = (path: string) =>
-    appStore(env.STORE, space, app).consume(path, async (r) => {
-      if (r.ok) return await r.text()
-      await r.body?.cancel()
-      return null
-    })
+    appStore(env.STORE, space, app).consume(
+      path,
+      async (r) =>
+        r.ok ? await r.text() : `unread ${r.status}: ${await r.text()}`,
+    )
   let [vocab, tools] = await Promise.all([read('/vocab'), read('/tools')])
-  if (vocab == null || tools == null) return 'unread'
-  let doc = JSON.parse(vocab)
+  for (let said of [vocab, tools]) if (said.startsWith('unread')) return said
   let diff = {
-    vocab: differing(doc.$defs ?? {}, built.vocab.$defs ?? {}),
+    vocab: differing(JSON.parse(vocab).$defs ?? {}, built.vocab.$defs ?? {}),
     tools: differing(readTools(tools), built.tools),
   }
-  return diff.vocab.length || diff.tools.length ? diff : 'same'
+  return Object.keys(diff.vocab).length || Object.keys(diff.tools).length
+    ? diff
+    : 'same'
 }
 
 export let backfill = async (

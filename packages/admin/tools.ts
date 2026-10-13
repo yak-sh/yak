@@ -514,8 +514,9 @@ export let runs = (
           if (one.had) continue
           lacked++
           if (one.wrote) wrote++
-          if (one.store == 'unread') unread++
-          else if (one.store && one.store != 'same') differ++
+          if (typeof one.store == 'string' && one.store.startsWith('unread')) {
+            unread++
+          } else if (one.store && one.store != 'same') differ++
           let store = one.store == null
             ? ''
             : `  store: ${
