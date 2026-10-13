@@ -1334,6 +1334,19 @@ let carried = (q: string | null, back?: string | null) =>
     ? `<script>if (location.hash) document.currentScript.previousElementSibling.value += location.hash</script>`
     : '')
 
+// The sign-in card's first line. When `back` is a page on a space, it names
+// that address: somebody who tapped "sign in" on a friend's app reads where
+// they are going, not a pitch for building apps. Only a host under the apex is
+// named; any other address is the door's to judge, and the card says nothing.
+let welcome = (back: string | null, env: Host) => {
+  let to = back && URL.canParse(back) ? new URL(back) : null
+  return to?.hostname.endsWith(`.${apex(env)}`)
+    ? `Sign in to continue to ${
+      esc(to.hostname + to.pathname.replace(/\/$/, ''))
+    }.`
+    : 'Build an app by asking Claude or ChatGPT.'
+}
+
 // Ask for an address. `who` names the app asking, when one is (the OAuth
 // consent page is this page — signing in is the consent), and `why` is the
 // soft refusal, when there was one: a sign-in link that had already been used
@@ -1349,7 +1362,7 @@ export let askEmail = (
   shell(
     env,
     'Sign in or sign up',
-    why ?? 'Build an app by asking Claude or ChatGPT.',
+    why ?? welcome(back, env),
     status,
     `<form method="post" action="/login">${carried(q, back)}
 <p>${

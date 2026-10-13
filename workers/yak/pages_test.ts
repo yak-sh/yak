@@ -55,6 +55,19 @@ test('pages: staging sign-in and error pages link to their own apex', async () =
   }
 })
 
+test('pages: the sign-in card names the app it hands back to', async () => {
+  let lead = async (back: string | null) =>
+    parseHTML(await askEmail(null, back, undefined, undefined, 200, env).text())
+      .document.querySelector('main > p')?.textContent
+  assertEquals(
+    await lead('https://ada.yaks.fyi/potluck/'),
+    'Sign in to continue to ada.yaks.fyi/potluck.',
+  )
+  for (let back of [null, '/connect', 'https://elsewhere.test/yaks.fyi/']) {
+    assertEquals(await lead(back), 'Build an app by asking Claude or ChatGPT.')
+  }
+})
+
 test('pages: staging space management and connector forms keep their host', async () => {
   for (let view of ['apps', 'settings', 'connect', 'selling'] as const) {
     await staged(desk({ ...page, view }, env), [
