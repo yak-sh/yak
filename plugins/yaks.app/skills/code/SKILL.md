@@ -169,8 +169,8 @@ Two consequences worth building around:
   header the platform sets.
 - `/api/*` is never yours. That segment is the platform's own endpoints — apply,
   query, me, graph, ws, commands, command, blob, files/`<path>`, report, plus
-  `client.js` and `report.js` — and a request for one is answered by the
-  platform without the worker being called at all. Your routes live beside it.
+  `client.js` — and a request for one is answered by the platform without the
+  worker being called at all. Your routes live beside it.
 
 These files are never served to the web at all, worker or no worker:
 `worker.js`, `vocab.json`, `wrangler.jsonc` and `wrangler.json`. Those are the

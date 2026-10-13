@@ -94,10 +94,12 @@ Better still is not to be refused. `me()` on load reports `reads`, `writes` and
 
 ## The reporter
 
-The platform injects `./api/report.js` into every HTML page it serves — first
-inside `<head>`, else first inside `<body>`, else at the end of a document with
-neither, and once. There is nothing to import and no opt-in. It catches four
-things:
+The platform weaves its reporter into every HTML page it serves, as an inline
+script — first inside `<head>`, else first inside `<body>`, else at the end of a
+document with neither, and once — so the page waits on no request for it. There
+is nothing to import and no opt-in. A page whose worker answers with its own
+`Content-Security-Policy` has that policy admit the reporter by its hash. It
+catches four things:
 
 - **A script error.** The message, the stack, the file and the line.
 - **A resource that never loaded** — a script, stylesheet, image, or a module in
