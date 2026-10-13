@@ -111,6 +111,14 @@ test('the served client: a page saves, lists and watches', async () => {
     assertEquals((await store.search('lemon'))[0].entity.eid, cake)
     assertEquals(await store.query('.doc&.count'), { count: 1 })
 
+    // A subscription's first rows do not wait for its socket: they come from a
+    // query on the connection the page already has. No socket opens here at
+    // all, and the page is still drawn.
+    let painted = await new Promise((done) => {
+      let stop = store.subscribe('.doc', (rows: Row[]) => (stop(), done(rows)))
+    })
+    assertEquals(painted, await store.query('.doc'))
+
     // A second component on the same entity, and the filter that reads it.
     await store.apply({
       entity: { eid: cake },

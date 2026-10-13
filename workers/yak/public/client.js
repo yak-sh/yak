@@ -228,6 +228,7 @@ export let store = (base) => {
       let f = JSON.parse(e.data)
       let sub = subs.get(f.id)
       if (!sub) return
+      sub.heard = true
       // The store's own sentence about a query it could not serve; uncaught
       // on purpose, so the reporter tells the person's agent about it.
       if (f.refused) throw new Error(f.refused.message ?? f.refused.error)
@@ -236,7 +237,8 @@ export let store = (base) => {
     }
     s.onclose = () => {
       sock = null
-      if (subs.size) setTimeout(open, Math.min(1000 * 2 ** tries++, 15000))
+      let again = () => subs.size && open()
+      if (subs.size) setTimeout(again, Math.min(1000 * 2 ** tries++, 15000))
     }
     return s
   }
@@ -253,8 +255,19 @@ export let store = (base) => {
   let subscribe = (filter, cb) => {
     let name = `${++n}:${filter}`
     let q = asked(filter)
-    subs.set(name, { q, rows: new Map(), riders: [], cb })
+    let sub = { q, rows: new Map(), riders: [], cb, heard: false }
+    subs.set(name, sub)
     tell({ subscribe: q, id: name })
+    // A socket that is not open yet is a handshake away — a connection of
+    // its own and an upgrade — while a query rides the connection the page
+    // already has. So the first rows come from a query, unless the socket
+    // answers first; its answer is the whole set and replaces them. A query
+    // that fails says nothing here: the socket says what went wrong.
+    if (sock?.readyState != 1) {
+      query(filter).then((rows) => {
+        if (subs.get(name) == sub && !sub.heard) cb(rows)
+      }, () => {})
+    }
     return () => {
       if (!subs.delete(name)) return
       // No subscriptions, no socket: the last one to leave closes it, and the

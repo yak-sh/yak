@@ -65,16 +65,20 @@ type Live = {
   subscribe: (filter: string, on: (rows: Row[]) => void) => () => void
 }
 
-// What a subscription has said so far, and a wait for its next word.
+// What a subscription shows, waited for. Its first rows may arrive twice, from
+// a query and then from the socket, so a test waits on what the page would
+// draw rather than counting answers.
 let heard = (live: Live, filter: string) => {
-  let seen: Row[][] = []
-  let stop = live.subscribe(filter, (rows: Row[]) => seen.push(rows))
-  let next = async (n: number) => {
-    await until(() => seen.length >= n, { timeout: 15_000 })
-    return seen[n - 1]
+  let last: Row[] | undefined
+  let stop = live.subscribe(filter, (rows: Row[]) => last = rows)
+  let showing = async (want: (rows: Row[]) => boolean) => {
+    await until(() => last != null && want(last), { timeout: 15_000 })
+    return last!
   }
-  return { next, stop }
+  return { showing, stop }
 }
+let named = (...want: string[]) => (rows: Row[]) =>
+  titles(rows).join('|') == want.join('|')
 
 test('a page watches a component homed in another app', async () => {
   let k = workerd()
@@ -176,13 +180,13 @@ test('a page watches its store and hears what others write', async () => {
     let open = heard(p.live, '.task.status=open&?doc')
     let bylines = heard(p.live, '.doc&.created')
     try {
-      assertEquals(titles(await open.next(1)), ['Lemon cake'])
+      await open.showing(named('Lemon cake'))
       // Another device writes, and the page hears it without asking.
       await p.store.apply({
         entity: { eid: cake },
         doc: { title: 'Lime cake' },
       })
-      assertEquals(titles(await open.next(2)), ['Lime cake'])
+      await open.showing(named('Lime cake'))
       // A subscription is that query still answering, so it answers with the
       // rows `query()` hands back for the same filter: its kind, its body, and
       // no eid inside a component (C-32624 item 2).
@@ -191,13 +195,18 @@ test('a page watches its store and hears what others write', async () => {
         task: {},
       })
       assertEquals(
-        await open.next(3),
+        await open.showing((rows) => rows.length == 2),
         await p.store.query('.task.status=open&?doc'),
       )
       // The byline rides the same projection, so a page draws its writers
       // without a second question.
       assertEquals(
-        [...new Set((await bylines.next(1)).map((r) => r.created.by.name))],
+        [
+          ...new Set(
+            (await bylines.showing((rows) => rows.length > 0))
+              .map((r) => r.created.by.name),
+          ),
+        ],
         [p.them.name],
       )
     } finally {
@@ -237,16 +246,14 @@ test('a page watching a projection hears what its paths reach', async () => {
     try {
       // The step names its recipe, and the recipe it reaches rides beside it
       // with its title: the rows `query()` answers.
-      let first = await steps.next(1)
-      assertEquals(titles(first), ['Zest three lemons', 'Lemon cake'])
+      let first = await steps.showing(named('Zest three lemons', 'Lemon cake'))
       assertEquals(first, await p.store.query(filter))
       // A write to the recipe moves no step, and the page still hears it.
       await p.store.apply({
         entity: { eid: cake },
         doc: { title: 'Lime cake' },
       })
-      let next = await steps.next(2)
-      assertEquals(titles(next), ['Zest three lemons', 'Lime cake'])
+      let next = await steps.showing(named('Zest three lemons', 'Lime cake'))
       assertEquals(next, await p.store.query(filter))
     } finally {
       steps.stop()
@@ -321,7 +328,7 @@ test('a page watching its store hears a letter arrive', async () => {
   try {
     let mail = heard(p.live, '.mail&?doc')
     try {
-      assertEquals(await mail.next(1), [])
+      await mail.showing((rows) => rows.length == 0)
       let landed = await arrives(k, {
         from: 'ana@books.example',
         to: `${p.slug}.recipes@yaks.app`,
@@ -331,7 +338,7 @@ test('a page watching its store hears a letter arrive', async () => {
         ),
       })
       assertEquals(landed.status, 200)
-      let [letter] = await mail.next(2)
+      let [letter] = await mail.showing((rows) => rows.length == 1)
       assertEquals([letter.kind, letter.doc.title], ['mail', 'Bring a dish'])
       assertEquals(letter.mail.from, 'ana@books.example')
     } finally {
