@@ -116,6 +116,7 @@ import {
 } from './route.ts'
 import * as sell from './sell.ts'
 import * as sweep from './sweep.ts'
+import * as backfill from './backfill.ts'
 import * as tunnel from './tunnel.ts'
 import { slid } from './session.ts'
 import * as site from './site.ts'
@@ -212,6 +213,8 @@ let serve = async (req: Request, env: Env, r: Route) => {
   if (path == sweep.PATH || path == sweep.IDLE_PATH) {
     return sweep.fetch(req, env)
   }
+  // One-time (backfill.ts, T-123629): declaration snapshots for old releases.
+  if (path == backfill.PATH) return backfill.fetch(req, env)
   if (path == '/mcp' || path.startsWith('/api/')) {
     return bound(env.MCP, mcp, env).fetch(req)
   }

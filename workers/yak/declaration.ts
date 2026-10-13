@@ -27,7 +27,7 @@ import { withKinds } from './kinds.ts'
 import { componentsOf } from './vocab.ts'
 
 export type Declaration = { vocab: VocabDoc; tools: Tools }
-let key = (space: Space, app: App, release: string) =>
+export let key = (space: Space, app: App, release: string) =>
   `${space.slug}/.declarations/${app.eid}/${
     app.source?.split('/').pop() ?? 'legacy'
   }/${release}.json`
@@ -48,7 +48,11 @@ export let keepDeclaration = async (
 // Older releases have no accepted snapshot. Their immutable deploy files are
 // still available. Preserve retired words conservatively (only the Store can
 // know whether their columns are empty), and reconstruct homes in app order.
-let legacy = async (env: Env, space: Space, app: App): Promise<Declaration> => {
+export let legacy = async (
+  env: Env,
+  space: Space,
+  app: App,
+): Promise<Declaration> => {
   let dir = directory(bound(env.DIRECTORY, directoryFetch, env))
   let blobs = r2Objects(env.BLOBS)
 

@@ -120,6 +120,31 @@
         "where"
       ]
     },
+    "admin_declarations": {
+      "tool": true,
+      "noun": "admin",
+      "verb": "declarations",
+      "title": "Write the declaration snapshots old yaks.app releases lack",
+      "description": "One-time (T-123629). Every space in turn, or the one named: each app's serving release without a declaration snapshot gets the one discovery reconstructs for it today. --rehearse writes nothing and compares each with what its Store serves. The platform owner may run it everywhere; a space's owner on their own space.\n\n  yak admin declarations --rehearse --as admin@bot.yak.sh\n  yak admin declarations ada --as ada@bot.yak.sh",
+      "input": {
+        "space": {
+          "type": "string",
+          "description": "only this space"
+        },
+        "rehearse": {
+          "type": "boolean",
+          "description": "write nothing; compare with each Store"
+        },
+        "as": {
+          "type": "string",
+          "description": "the yaks.app connection to act as, by whole address or the part before @"
+        }
+      },
+      "openWorld": true,
+      "positional": [
+        "space"
+      ]
+    },
     "admin_tunnel": {
       "tool": true,
       "noun": "admin",
