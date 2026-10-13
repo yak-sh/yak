@@ -271,7 +271,7 @@ import {
   PLATFORM_STORE,
   storeOf,
 } from './door.ts'
-import { behind, restartedFor, versionOf } from './running.ts'
+import { behind, redeployed, restartedFor, versionOf } from './running.ts'
 import { KERNEL, type Meta, meta, metaOf, minted } from './meta.ts'
 import { caught, defect, refusing } from './defects.ts'
 import { counts, hop, type Tally, tallying } from './lib/hops.ts'
@@ -2484,19 +2484,28 @@ export class Store {
   }
 
   // Whether the end of this object's last alarm run is already accounted
-  // for: it threw here and was reported where it threw, or the instance it
-  // ran on was moved and said so (`#handOver`). The runtime's retry of a run
-  // nothing accounts for reports it (`alarm`).
+  // for: it threw here and was reported where it threw, the instance it ran
+  // on was moved and said so (`#handOver`), or it ran on an earlier deploy,
+  // which restarted the object under it (`#ran`). The runtime's retry of a
+  // run nothing accounts for reports it (`alarm`).
   #accounted = false
+  // Whether an alarm has run on this incarnation. The first one notes the
+  // deploy it runs on, and finds whether the last run was on another: a
+  // deploy restarts every object it reaches (running.ts `behind`, or the
+  // runtime's own "code was updated"), and the run it cuts off is retried on
+  // the new code. A kill of the very run a deploy cut off goes unseen; the
+  // next one is reported.
+  #ran = false
   // When this incarnation began: a platform job marked begun before it was
   // begun by an instance that is gone (wake.ts `resumed`).
   #born = Date.now()
 
   /** The runtime's clock going off: whatever this object armed itself for.
    * The runtime retries an alarm whose run failed, and the retry reports a run
-   * nothing accounted for. One that threw was reported where it threw, and an
+   * nothing accounted for. One that threw was reported where it threw, an
    * instance the runtime moved mid-run tells the one that replaced it
-   * (`#handOver`), so what is left is a run the runtime killed for its CPU or
+   * (`#handOver`), and a run a deploy cut off is retried on the new deploy
+   * (`#ran`), so what is left is a run the runtime killed for its CPU or
    * memory limit, which no code of ours saw (M-37965). Each kill is reported
    * by the retry that follows it. */
   alarm(info?: { isRetry?: boolean; retryCount?: number }): Promise<void> {
@@ -2509,6 +2518,13 @@ export class Store {
     if (!await this.#awake() && !this.#moveOnly) return
     await this.#ensureStarted()
     let name = this.#name()
+    if (!this.#ran) {
+      this.#ran = true
+      let meta = this.#bind.CF_VERSION_METADATA
+      if (await redeployed(this.#ctx.storage, 'alarm ran on', meta)) {
+        this.#accounted = true
+      }
+    }
     if (info?.isRetry && !this.#accounted) {
       defect(new Error("a store's alarm was cut off before it finished"), {
         request: 'alarm',

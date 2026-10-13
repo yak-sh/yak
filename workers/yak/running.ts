@@ -108,6 +108,39 @@ let RESTARTED = 'restarted for'
 // so every caller's retry already knows them (@yaks/durable-object `evicted`).
 let BEHIND = 'Durable Object reset because a newer deploy reached it:'
 
+/**
+ * Note under `key` the deploy this isolate runs, and say whether another one
+ * was noted there before: the object last did that work on other code, so a
+ * deploy came between. Where the runtime names no version nothing is noted.
+ *
+ * ```ts
+ * import { assertEquals } from '@std/assert'
+ * let kept = new Map<string, unknown>()
+ * let storage = {
+ *   get: <T>(k: string) => Promise.resolve(kept.get(k) as T | undefined),
+ *   put: (k: string, v: unknown) => Promise.resolve(void kept.set(k, v)),
+ * }
+ * let a = { id: 'a', timestamp: '2026-10-12T16:00:00Z' }
+ * let b = { id: 'b', timestamp: '2026-10-12T16:30:00Z' }
+ * assertEquals(await redeployed(storage, 'ran', a), false)
+ * assertEquals(await redeployed(storage, 'ran', a), false)
+ * assertEquals(await redeployed(storage, 'ran', b), true)
+ * assertEquals(await redeployed(storage, 'ran', undefined), false)
+ * ```
+ */
+export let redeployed = async (
+  storage: Restartable['storage'],
+  key: string,
+  mine: Meta | null | undefined,
+): Promise<boolean> => {
+  let here = versionOf(mine)
+  if (!here || !storage.get || !storage.put) return false
+  let last = await storage.get<string>(key)
+  if (last == here.id) return false
+  await storage.put(key, here.id)
+  return last != null
+}
+
 /** The deploy this object last restarted for, as `behind` keeps it. A record
  * in any other shape says nothing. */
 export let restartedFor = async (

@@ -1,7 +1,8 @@
 // A store's alarm run the runtime cut off is reported by the retry that
 // follows it (graph.ts `alarm`): a kill for the CPU or memory limit leaves none
 // of our code running to say so. A run the runtime moved to a new instance is
-// no failure, and the instance it was moved off tells the new one.
+// no failure, and the instance it was moved off tells the new one; nor is a
+// run a deploy restarted the object under, whose retry runs the new code.
 import { clock, equal, test } from '@yaks/testing'
 import type { Bundle } from '@yaks/graph'
 import { within } from './defects.ts'
@@ -30,7 +31,7 @@ let object = async () => {
       get: () => ({ fetch: (req: Request) => current.fetch(req) }),
     },
   }
-  let instance = () => {
+  let instance = (deploy?: string) => {
     let moved = false
     let { exec } = held.storage.sql
     let sql = Object.assign(Object.create(held.storage.sql), {
@@ -43,7 +44,12 @@ let object = async () => {
       ...held,
       storage: Object.assign(Object.create(held.storage), { sql }),
     }
-    let store = current = new Store(own, env)
+    let store = current = new Store(own, {
+      ...env,
+      ...deploy
+        ? { CF_VERSION_METADATA: { id: deploy, timestamp: deploy } }
+        : {},
+    })
     let alarm = (retryCount = 0) =>
       within(
         env,
@@ -80,4 +86,14 @@ test('a run the runtime moved hands over, and its retry reports nothing', async 
   await o.first.alarm().catch(() => {})
   await next.alarm(1)
   equal(o.reported(), [])
+})
+
+test('a retry on the deploy that restarted the run reports nothing, and a kill after it does', async () => {
+  let o = await object()
+  let [old, next] = ['2026-10-13T04:09:35Z', '2026-10-13T04:31:00Z']
+  await o.instance(old).alarm()
+  await o.instance(next).alarm(1)
+  equal(o.reported(), [])
+  await o.instance(next).alarm(1)
+  equal(o.reported(), [{ request: 'alarm', store: NAME, app: APP, retry: '1' }])
 })
