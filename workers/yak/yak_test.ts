@@ -145,7 +145,7 @@ test('the kernel routes, vouches, serves, and surfaces', async () => {
     assertMatch(deep.headers.get('content-type') ?? '', /text\/html/)
     let inside = await deep.text()
     assertStringIncludes(inside, '<h1>Our recipe box</h1>')
-    assertStringIncludes(inside, '/recipes/api/report.js')
+    assertStringIncludes(inside, 'data-yak-at="/recipes/"')
     // And the base, which is what keeps a relative `./api/client.js` on this
     // page pointing at the app rather than at its depth (T-32907).
     assertStringIncludes(inside, '<base href="/recipes/">')

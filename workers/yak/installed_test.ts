@@ -227,7 +227,7 @@ test('an installed copy runs like its space, or sandboxed', async () => {
     )
     assertStringIncludes(
       html,
-      `<script src="${mine}api/report.js" data-version="2"></script>`,
+      `<script data-yak-at="${mine}" data-yak-version="2">`,
     )
 
     // The API hears the token, from its path or as a bearer, and never the

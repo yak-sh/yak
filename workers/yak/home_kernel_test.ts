@@ -204,15 +204,11 @@ test('the front page is served at the space root', async () => {
     assertEquals(root.status, 200)
     let served = await root.text()
     assertStringIncludes(served, '<h1>Her business</h1>')
-    // Its reporter is at the root as well — report.js reads its own door out
-    // of its src, so the tag has to name the address the page was served at.
+    // Its reporter's doors are at the root as well — report.js reads them
+    // off its tag, so the tag has to name the address the page was served at.
     assertStringIncludes(
       served,
-      '<script src="/api/report.js" data-version="1">',
-    )
-    assertEquals(
-      (await k.at(`${jeff23}.yaks.app`, '/api/report.js')).status,
-      200,
+      '<script data-yak-at="/" data-yak-version="1">',
     )
 
     // The page's own relative URLs, resolved as a browser would and then

@@ -201,8 +201,10 @@ and hosted app files remain text: v1 supplies no source-map guesses.
 
 ## Transition boundaries
 
-The browser capture script is served through the platform asset and uses the
-platform intake payload. The platform admits captured failures into the tracker.
+The browser capture script is woven inline into each page an app serves
+(workers/yak/page-script.ts), reads its door off its tag's `data-yak-at` and the
+page's release off `data-yak-version`, and uses the platform intake payload. The
+platform admits captured failures into the tracker.
 
 [@yaks/tools](../tools/README.md) declares `exception{type, value}` for what was
 thrown in an answer or transcript entry. Tracker extends it with `stack`,

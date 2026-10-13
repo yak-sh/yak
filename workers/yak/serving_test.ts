@@ -98,12 +98,8 @@ test('a page is served with its base and its reporter', async () => {
   assertEquals(page.status, 200)
   let html = await page.text()
   assert(html.includes('<base href="/cookbook/">'), html)
-  assert(html.includes('src="/cookbook/api/report.js" data-version="1"'), html)
-  assert(html.includes('src="/cookbook/api/release.js" data-version="1"'), html)
-  assertEquals(
-    (await apps.fetch(visit('/cookbook/api/release.js'), env)).status,
-    200,
-  )
+  assertEquals(woven(html).length, 2, html)
+  assertStringIncludes(html, 'data-yak-at="/cookbook/" data-yak-version="1"')
   // And the client an app imports is the platform's own file, beside the
   // doors it wraps.
   let js = await apps.fetch(visit('/cookbook/api/client.js'), env)
@@ -1159,6 +1155,22 @@ let router = async (
   }
 }
 
+// The platform's inline scripts in a served page, and the hash a policy
+// names each by.
+let woven = (html: string) =>
+  [...html.matchAll(/<script data-yak-at[^>]*>([\s\S]*?)<\/script>/g)]
+    .map((m) => m[1])
+let hashed = async (text: string) =>
+  `'sha256-${
+    btoa(String.fromCharCode(
+      ...new Uint8Array(
+        await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text)),
+      ),
+    ))
+  }'`
+let unwoven = (html: string) =>
+  html.replace(/<script data-yak-at[^>]*>[\s\S]*?<\/script>/g, '')
+
 test('worker HTML carries its reporter without changing its page or headers', async () => {
   let csp = "default-src 'self'; script-src 'self'"
   for (
@@ -1198,7 +1210,6 @@ test('worker HTML carries its reporter without changing its page or headers', as
       let page = await k.at(path)
       assertEquals(page.status, 201)
       assertEquals(page.statusText, 'Created menu')
-      assertEquals(page.headers.get('content-security-policy'), csp)
       assertEquals(page.headers.get('cache-control'), 'no-store')
       assertEquals(page.headers.get('x-menu'), 'today')
       assertStringIncludes(
@@ -1206,9 +1217,16 @@ test('worker HTML carries its reporter without changing its page or headers', as
         `${at}api/report`,
       )
       let body = await page.text()
-      assertEquals(body.split(`src="${at}api/report.js"`).length - 1, 1)
-      assertEquals(body.split(`src="${at}api/release.js"`).length - 1, 1)
-      assertEquals(body.replace(/<script[^>]*><\/script>/g, ''), html)
+      let scripts = woven(body)
+      assertEquals(scripts.length, 2)
+      assertEquals(body.split(`data-yak-at="${at}"`).length - 1, 2)
+      assertEquals(unwoven(body), html)
+      // The worker's own policy still holds, and lets the platform's two
+      // inline scripts run by their hashes and nothing else.
+      assertEquals(
+        page.headers.get('content-security-policy'),
+        `${csp} ${(await Promise.all(scripts.map(hashed))).join(' ')}`,
+      )
     }
     // A non-home app keeps its slug prefix instead of the home mount.
     await stamp(k.env, {
@@ -1216,9 +1234,8 @@ test('worker HTML carries its reporter without changing its page or headers', as
     })
     let page = await k.at('/cookbook/menu')
     let body = await page.text()
-    assertEquals(body.split('src="/cookbook/api/report.js"').length - 1, 1)
-    assertEquals(body.split('src="/cookbook/api/release.js"').length - 1, 1)
-    assertEquals(body.replace(/<script[^>]*><\/script>/g, ''), html)
+    assertEquals(body.split('data-yak-at="/cookbook/"').length - 1, 2)
+    assertEquals(unwoven(body), html)
   }
 })
 

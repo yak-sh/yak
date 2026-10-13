@@ -122,6 +122,7 @@ import { pageSocket } from './page-socket.ts'
 import { webAsset, webPage, webPath } from './web.ts'
 import { releaseStatus } from './release-status.ts'
 import { pageSpeaks } from './lenses.ts'
+import { admitted, pageScript } from './page-script.ts'
 import { appDoc } from './vocab.ts'
 import type { Bundle } from '@yaks/graph'
 import { misfit, Refused, Stale, status } from '@yaks/graph/errors'
@@ -356,24 +357,41 @@ let platformFile = (req: Request, env: Env, path: string) =>
     }),
   )
 
-// The reporter, into every page the kernel serves, wherever the page has a
-// place to put it: first inside `<head>`, else first inside `<body>`, else
-// at the end of a document with neither. Streaming — the bytes are never
-// held — and once, whichever came first.
+// The reporter, into every page the kernel serves (page-script.ts), wherever
+// the page has a place to put it: first inside `<head>`, else first inside
+// `<body>`, else at the end of a document with neither. Streaming — the bytes
+// are never held — and once, whichever came first.
 //
-// Its src is the app's address as served (`at`), because report.js reads the
-// door out of its own src: at the app's prefix normally, at the root for a
-// front page or a custom domain, where the prefix is an address the browser
-// asking cannot reach (T-33040).
-let reported = (at: string, page: Response, version: number) => {
-  let tag =
-    `<script src="${at}api/report.js" data-version="${version}"></script>` +
-    `<script src="${at}api/release.js" data-version="${version}"></script>`
+// It is told the app's address as served (`at`), where it finds its doors: at
+// the app's prefix normally, at the root for a front page or a custom domain,
+// where the prefix is an address the browser asking cannot reach (T-33040).
+//
+// A page answered with a policy of its own (an app's worker can send one) has
+// that policy admit the two scripts by their hashes (page-script.ts
+// `admitted`), so its own rules hold for everything else. A `<meta>` policy
+// governs only what follows it, and the tags come first.
+let reported = async (
+  env: Env,
+  at: string,
+  page: Response,
+  version: number,
+) => {
+  let { tags, hashes } = await pageScript(env.ASSETS, at, version)
   let done = false
   let once = (put: (s: string, o: { html: boolean }) => void) => {
     if (done) return
     done = true
-    put(tag, { html: true })
+    put(tags, { html: true })
+  }
+  let policy = page.headers.get('content-security-policy')
+  if (policy) {
+    let headers = new Headers(page.headers)
+    headers.set('content-security-policy', admitted(policy, hashes))
+    page = new Response(page.body, {
+      status: page.status,
+      statusText: page.statusText,
+      headers,
+    })
   }
   return new HTMLRewriter()
     .on('head', { element: (el) => once((s, o) => el.prepend(s, o)) })
@@ -786,6 +804,7 @@ let asset = async (
   // `stored`) and carries a token for them: it is sent whole every time, and
   // no cache on the way may keep it.
   let page = await woven(
+    env,
     await got.text(),
     at,
     bare,
@@ -816,6 +835,7 @@ let asset = async (
 // mount, and one cached copy of the bytes serving every mount beats one copy
 // per mount.
 let woven = async (
+  env: Env,
   original: string,
   at: string,
   bare: string,
@@ -824,11 +844,12 @@ let woven = async (
 ) => {
   let own = pinned(at, mapped(original, at, bare, app.source), app)
   let page = based(at, tags ? intoHead(own, tags) : own)
-  return await reported(
+  return await (await reported(
+    env,
     at,
     released(new Response(page), original, at, bare, app.source),
     app.version ?? 0,
-  ).text()
+  )).text()
 }
 
 let versionedAsset = async (
@@ -1413,10 +1434,7 @@ let api = async (
   // The store client an app's pages import (public/client.js), served beside
   // the doors it wraps so a page needs no address but its own. One file for
   // every app, so it comes from the platform's assets, not the app's blobs.
-  if (
-    path == '/client.js' || path == '/report.js' || path == '/release.js' ||
-    path == '/storage.js'
-  ) {
+  if (path == '/client.js' || path == '/storage.js') {
     return platformFile(req, env, path)
   }
   let store = appStore(env.STORE, space, app, env)
@@ -2674,7 +2692,7 @@ let served = async (req: Request, env: Env, c: Clock): Promise<Response> => {
         page.body &&
         page.headers.get('content-type')?.startsWith('text/html')
       ) {
-        page = reported('/', page, early.app.version ?? 0)
+        page = await reported(env, '/', page, early.app.version ?? 0)
       }
       let res = reporting(page, req, '/')
       return sandboxed(early.app) ? walled(res) : res
@@ -2811,7 +2829,7 @@ let served = async (req: Request, env: Env, c: Clock): Promise<Response> => {
     own?.body &&
     own.headers.get('content-type')?.startsWith('text/html')
   ) {
-    own = reported(at, own, app.version ?? 0)
+    own = await reported(env, at, own, app.version ?? 0)
   }
   let page = own ?? await file!
   // Rung 4, and it is last rather than fourth in the code because rungs 3 and

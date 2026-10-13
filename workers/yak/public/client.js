@@ -90,12 +90,12 @@ let door = (base) => async (path, init) => {
   return body ? JSON.parse(body) : null
 }
 
-// The injected release tag belongs to the page that is still running, even
-// after the app's serving pointer has moved.
+// The release the platform's tags in this page name (page-script.ts) is the
+// page that is still running, even after the app's serving pointer has moved.
 let pageVersion = () => {
   let value = globalThis.document?.querySelector(
-    'script[src$="api/release.js"][data-version]',
-  )?.dataset.version
+    'script[data-yak-version]',
+  )?.dataset.yakVersion
   return value != null && /^[0-9]+$/.test(value) ? value : null
 }
 

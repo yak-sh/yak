@@ -1,12 +1,14 @@
 // Every HTML page hears releases without changing its client or opening a
 // socket of its own. Nothing here reloads until the person presses Reload.
+// Woven inline into the page beside the reporter (page-script.ts).
 ;(() => {
   let script = document.currentScript
   if (!script) return
-  let version = Number(script.dataset.version)
-  let door = new URL('release', script.src)
+  let version = Number(script.dataset.yakVersion)
+  let at = new URL(script.dataset.yakAt, location.href)
+  let door = new URL('api/release', at)
   door.searchParams.set('version', String(version))
-  let socketDoor = new URL('ws', script.src)
+  let socketDoor = new URL('api/ws', at)
   let latest = version
   let busy = false
   let again = false

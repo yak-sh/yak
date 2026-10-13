@@ -29,11 +29,11 @@ test('a kept page speaks its vocabulary on writes, queries and composed socket p
     await files.put('/vocab.json', JSON.stringify(old))
     await agent.tool('app_deploy', { space: slug, app })
     let html = await (await k.at(host, `/${app}/`)).text()
-    let version = /api\/release.js" data-version="([0-9]+)"/.exec(html)?.[1]
+    let version = /data-yak-version="([0-9]+)"/.exec(html)?.[1]
     assert(version)
     Object.defineProperty(globalThis, 'document', {
       configurable: true,
-      value: { querySelector: () => ({ dataset: { version } }) },
+      value: { querySelector: () => ({ dataset: { yakVersion: version } }) },
     })
     let source = await (await k.at(host, `/${app}/api/client.js`)).text()
     Deno.writeTextFileSync(`${dir}/client.js`, source)

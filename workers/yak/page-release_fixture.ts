@@ -65,8 +65,7 @@ export let browser = (prevent = false) => {
   }
   let document = {
     currentScript: {
-      src: 'https://ada.yaks.app/cookbook/api/release.js',
-      dataset: { version: '1' },
+      dataset: { yakAt: '/cookbook/', yakVersion: '1' },
     },
     visibilityState: 'visible',
     body: { prepend: (n: Element) => nodes.unshift(n) },

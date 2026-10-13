@@ -61,32 +61,28 @@ test('a page reports its own breaks, and the agent hears', async () => {
     await agent.tool('app_deploy', app)
     let page = await k.at(`${jeff59}.yaks.app`, '/recipes/')
     let html = await page.text()
+    assertStringIncludes(reporterIn(html), "addEventListener('error'")
     assertEquals(
-      html.split('/recipes/api/report.js').length - 1,
-      1,
-      'injected once',
+      html.split('data-yak-at="/recipes/"').length - 1,
+      2,
+      'injected once, beside the release listener',
     )
     assertMatch(
       html,
-      /<head><script src="\/recipes\/api\/report\.js" data-version="\d+">/,
+      /<head><script data-yak-at="\/recipes\/" data-yak-version="\d+">/,
     )
     assertMatch(
       page.headers.get('reporting-endpoints') ?? '',
       /yak="http.*\/recipes\/api\/report"/,
     )
     assertMatch(page.headers.get('nel') ?? '', /"report_to":"yak"/)
-    assertMatch(
-      (await k.at(`${jeff59}.yaks.app`, '/recipes/api/report.js')).headers
-        .get('content-type') ?? '',
-      /javascript/,
-    )
 
     // A page with no head and no body still gets it.
     await files.put('/bare.html', '<!doctype html><h1>bare</h1>')
     await agent.tool('app_deploy', app)
     assertMatch(
       await (await k.at(`${jeff59}.yaks.app`, '/recipes/bare.html')).text(),
-      /<h1>bare<\/h1>[\s\S]*report\.js/,
+      /<h1>bare<\/h1>[\s\S]*data-yak-at/,
     )
 
     // What the injected script posts, and what the browser posts on its own.
@@ -421,14 +417,10 @@ test('a break names the page version that ran, not the newest release', async ()
     )
     await agent.tool('app_deploy', { space: jeff64, app: 'recipes' })
     let html = await (await k.at(`${jeff64}.yaks.app`, '/recipes/')).text()
-    let tag = html.match(
-      /<script[^>]*src="[^" ]*report\.js"[^>]*data-version="(\d+)"/,
-    )
+    let tag = html.match(/<script data-yak-at[^>]*data-yak-version="(\d+)"/)
     assert(tag, 'the served page names its reporter version')
     let version = Number(tag[1])
-    let code =
-      await (await k.at(`${jeff64}.yaks.app`, '/recipes/api/report.js'))
-        .text()
+    let code = reporterIn(html)
     let old = browser(code, page, version)
     await meta(k).apply([
       {
@@ -509,9 +501,10 @@ test('a page that dies on its first import says so', async () => {
     )
     await agent.tool('app_deploy', app)
     let page = await k.at(`${jeff62}.yaks.app`, '/weather/')
+    let shell = await page.text()
     assertMatch(
-      await page.text(),
-      /<script src="\/weather\/api\/report\.js" data-version="\d+">/,
+      shell,
+      /<script data-yak-at="\/weather\/" data-yak-version="\d+">/,
     )
     assertEquals(
       (await k.at(`${jeff62}.yaks.app`, '/weather/app.js')).status,
@@ -542,9 +535,7 @@ test('a page that dies on its first import says so', async () => {
 
     // And the soft state the page shows instead of empty space, carried by
     // the reporter the page is served.
-    let reporter =
-      await (await k.at(`${jeff62}.yaks.app`, '/weather/api/report.js'))
-        .text()
+    let reporter = reporterIn(shell)
     assertStringIncludes(
       reporter,
       'Something went wrong. Try reloading the page.',
@@ -554,6 +545,11 @@ test('a page that dies on its first import says so', async () => {
     await k.stop()
   }
 })
+
+// The reporter as a served page carries it: the first of the platform's
+// inline scripts (page-script.ts).
+let reporterIn = (html: string) =>
+  /<script data-yak-at[^>]*>([\s\S]*?)<\/script>/.exec(html)?.[1] ?? ''
 
 // Not everything in a page is the app's. Cloudflare's assets layer injects
 // its analytics beacon into every page we serve and cannot be told not to
@@ -573,8 +569,7 @@ let browser = (code: string, page: string, version = 1) => {
   }
   let doc = {
     currentScript: {
-      src: new URL('api/report.js', page).href,
-      dataset: { version: String(version) },
+      dataset: { yakAt: new URL(page).pathname, yakVersion: String(version) },
     },
     baseURI: page,
     readyState: 'complete',
@@ -627,9 +622,9 @@ test("the platform's own scripts are never the app's break", async () => {
     let agent = connector(k, cookie)
     let app = { space: jeff63, app: 'weather' }
     let page = `https://${jeff63}.yaks.app/weather/`
-    let code =
-      await (await k.at(`${jeff63}.yaks.app`, '/weather/api/report.js'))
-        .text()
+    let code = await Deno.readTextFile(
+      new URL('./public/report.js', import.meta.url),
+    )
 
     // The beacon the edge injected, blocked in the visitor's browser. It is
     // on nobody's origin but Cloudflare's, so it is not the app's file: the

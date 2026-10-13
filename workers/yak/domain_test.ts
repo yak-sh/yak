@@ -82,13 +82,12 @@ test('a hostname finds its app, and only one app', async () => {
     // `herbusiness.com/recipes/photo.png` — carried on to `/recipes/recipes/`
     // and lost.
     assertStringIncludes(html, '<base href="/">')
-    // The reporter is at the root too, so a page's breaks on the domain
-    // reach the app's store: at the app's platform prefix its script was a
+    // The reporter's doors are at the root too, so a page's breaks on the
+    // domain reach the app's store: at the app's platform prefix they were a
     // 404 on this hostname, and nothing reported (T-33040).
-    assertStringIncludes(html, '<script src="/api/report.js" data-version="1">')
-    assertEquals(
-      (await k.at(herbusiness101, '/api/report.js')).status,
-      200,
+    assertStringIncludes(
+      html,
+      '<script data-yak-at="/" data-yak-version="1">',
     )
     let shot = await k.at(herbusiness101, '/photo.png')
     assertEquals(shot.status, 200)

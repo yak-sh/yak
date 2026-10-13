@@ -122,7 +122,7 @@ test('an app names no app, and the copy works at its own address', async () => {
       let html = await r.text()
       assertStringIncludes(html, '<h1>Chores</h1>')
       // The reporter still rides along, at her address.
-      assertStringIncludes(html, '/sisters/api/report.js')
+      assertStringIncludes(html, 'data-yak-at="/sisters/"')
       let base = /<base href="([^"]+)">/.exec(html)?.[1]
       assertEquals(base, '/sisters/', at)
       for (
@@ -140,7 +140,7 @@ test('an app names no app, and the copy works at its own address', async () => {
 
     // The page that brought its own base keeps it, alone.
     let own = await (await k.at(host, '/sisters/own.html')).text()
-    assertEquals(own.split('<base').length - 1, 1)
+    assertEquals(own.split('<base href=').length - 1, 1)
     assertStringIncludes(own, '<base href="/elsewhere/">')
 
     // With no address asked for, a copy lands at the app's own slug — the one
