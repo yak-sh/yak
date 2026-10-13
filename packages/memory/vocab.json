@@ -225,16 +225,16 @@
       "noun": "memory",
       "verb": "recall",
       "title": "Recall memories",
-      "description": "Find saved memories containing all the words in said, not necessarily as an exact phrase. Pass words you expect the memory to contain, not a paraphrase. near is an entity id or name used to rank results by meaning when the server has a vector index for similarity search; it does not remove the said filter. Without near, the newest words come first unless ids selects particular memories. With neither said nor near, returns the newest memories. Results are bundles (JSON objects with entity ids and component fields), each whole: the words wherever the memory marks them (a doc's body, a session entry's content) and its context, never snippets. Each carries $was.doc.body, the string to pass as memory_save’s was when replacing those words. Optional ids, scope and feedback narrow the results; limit defaults to 8.",
+      "description": "Find saved memories by what they are about. Where the server has a vector index, said ranks them by meaning, closest first, whether or not they share its words; without one, said selects the memories containing all its words, newest first. near is an entity id or name whose meaning ranks the results instead, and said then selects by its words. With neither said nor near, returns the newest memories. Results are bundles (JSON objects with entity ids and component fields), each whole: the words wherever the memory marks them (a doc's body, a session entry's content) and its context, never snippets. Each carries $was.doc.body, the string to pass as memory_save’s was when replacing those words. Optional ids, scope and feedback narrow the results; limit defaults to 8.",
       "input": {
         "said": {
           "type": "string",
-          "description": "words the memory must contain, matched as text terms rather than an exact phrase"
+          "description": "what the memory is about, in a few words: ranked by meaning where this server has a vector index, otherwise matched as text terms the memory must all contain"
         },
         "near": {
           "type": "string",
           "ref": "entity",
-          "description": "entity id or name whose meaning ranks the results, when this server has a vector index; any said filter still applies"
+          "description": "entity id or name whose meaning ranks the results, when this server has a vector index; said then selects by its words"
         },
         "ids": {
           "type": "array",

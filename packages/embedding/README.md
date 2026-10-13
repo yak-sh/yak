@@ -142,13 +142,15 @@ outside a Worker is such a row as well: `api: "openai"`, its base
 embedder below, and `model2vec`.
 
 `@yaks/embedding/graph` creates the vector tables through the host's SQL driver.
-Its `extend()` export registers the `.near` compiler; its `meaning()` factory
-resolves the current embedder on each search, so a key arriving later is used
-without rebuilding the host. `@yaks/embedding/service` is the plugin's service,
-held by one process per graph: it sweeps the queue, takes the next batch at once
-while work is left, and looks again after `after` once the queue is empty. The
-graph write does not await embedding. The service stops when its signal aborts,
-and a pass the host ended leaves its work queued.
+Its `extend()` export registers the `.near` compiler; its `meaning()` factory is
+the host's `meaning` (@yaks/host), which resolves the current embedder on each
+search, so a key arriving later is used without rebuilding the host, and ranks
+among what a `within` filter line admits, compiled by the storage's `screen`.
+`@yaks/embedding/service` is the plugin's service, held by one process per
+graph: it sweeps the queue, takes the next batch at once while work is left, and
+looks again after `after` once the queue is empty. The graph write does not
+await embedding. The service stops when its signal aborts, and a pass the host
+ended leaves its work queued.
 
 Options:
 

@@ -103,9 +103,17 @@ these are the words for it:
   top 8, the re-scored answer all of them. Copies share `HELD` (48 MB) per
   isolate; past it a store reads every row.
 - The store drains its sweep after each commit and from its alarm, behind its
-  own traffic. Memory recall ranks a space's memories in the directory through
-  the same `.near` (workers/yak/memory.ts, graph.ts `/meaning`). The store
-  itself is `yaks-app`'s.
+  own traffic. The store itself is `yaks-app`'s.
+
+## Words ranked by meaning
+
+A host ranks words by meaning through `host.meaning` (@yaks/host): words and
+a filter line in, the entities nearest them among what the line admits out. On
+the box @yaks/embedding's graph facet offers it; a yaks.app store lends its
+own over Workers AI (workers/yak/graph.ts). Memory recall is its consumer
+(@yaks/memory `memory_recall`): `said` ranks a space's memories by meaning,
+and the store then reads the ones it names, so the ranking never decides what
+a caller may read. The `search` tool merges it with full-text hits.
 
 ## What we've learned
 

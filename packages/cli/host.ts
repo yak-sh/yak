@@ -646,7 +646,7 @@ let composed = async (
         built.machines = machineCapabilities(built, config, path)
         built.machines.resolveHome = resolveSessionHome(sql, () => built.graph)
       },
-      search: (built, meaning) => {
+      search: (built) => {
         part?.('search')
         return text.length
           ? async (words, opts) => {
@@ -658,7 +658,7 @@ let composed = async (
             let count = Math.max(20, limit * 2)
             let [literal, similar] = await Promise.all([
               Promise.resolve(find(sql, text, words, { limit: count })),
-              meaning?.(words, { limit: count }) ?? Promise.resolve([]),
+              built.meaning?.(words, { limit: count }) ?? Promise.resolve([]),
             ])
             let hits = merged(literal, similar, limit)
             let found = await built.graph.get(hits.map((h) => h.entity))

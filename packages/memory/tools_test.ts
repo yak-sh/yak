@@ -379,6 +379,36 @@ test('a recall answers whole memories, each wearing its token', async () => {
   assertEquals(feedback.map((b) => heard(b).said), ['use grams, never cups'])
 })
 
+test('a host ranking by meaning orders a recall, among what it admits', async () => {
+  let g = fresh()
+  await write(g, [{ entity: { eid: 'jeff' }, person: { name: 'Jeff' } }])
+  let [soft] = eids(await save({ said: 'keep it soft, not technical' }, g))
+  let [grams] = eids(await save({ said: 'use grams', feedback: 'jeff' }, g))
+  // An index that ranks the gentle one nearest, among what `within` admits.
+  let meaning = async (_: string, { within = '' } = {}) => {
+    let admitted = eids(await g.read(within))
+    return [soft, grams].filter((e) => admitted.includes(e))
+      .map((entity) => ({ entity, similarity: 1, excerpt: '' }))
+  }
+  let reported: unknown[] = []
+  let recall =
+    (host: Parameters<typeof runs>[0]) =>
+    async (args: Record<string, unknown>) =>
+      eids(await runs(host).memory_recall!(call(args), g) as Bundle[])
+  let ranked = recall({ meaning })
+  // Words neither memory holds, nearest first rather than newest.
+  assertEquals(await ranked({ said: 'how the pages look' }), [soft, grams])
+  assertEquals(await ranked({ said: 'pages', feedback: true }), [grams])
+  assertEquals(await ranked({}), [grams, soft])
+  // An index that fails is a worse order, and the host hears of it.
+  let broken = recall({
+    meaning: () => Promise.reject(new Error('no model')),
+    report: (e) => void reported.push(e),
+  })
+  assertEquals(await broken({ said: 'grams' }), [grams])
+  assertEquals(reported.length, 1)
+})
+
 let spaces = await (async () => {
   let g = fresh()
   let ada = crypto.randomUUID()

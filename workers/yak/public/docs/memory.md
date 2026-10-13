@@ -92,11 +92,13 @@ _how_ rather than _what_: "always show me the link", "keep the pages plain",
 Recall before you build or change anything, and whenever a choice is one they
 might already have made:
 
-    store_memory_recall { said: 'pages' }
+    store_memory_recall { said: 'how the pages should look' }
 
-Give it words you expect the memory to hold, not a paraphrase: it answers the
-memories holding all of them, newest first. With no `said` at all you get the
-newest.
+Say what you are about to decide, in a few words. It answers the memories
+nearest that in meaning, closest first, whether or not they share a word with
+it, so "how the pages should look" finds "keep it soft, not technical". A memory
+saved a moment ago is ranked once its vector is made, a few seconds later. With
+no `said` at all you get the newest.
 
 Each one comes back whole: the sentence and its context. Never a snippet — half
 of what somebody said is worse than none of it.

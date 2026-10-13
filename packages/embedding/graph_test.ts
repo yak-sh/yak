@@ -2,9 +2,9 @@
 // `.near` compiler a host gets without wiring one up.
 
 import { test } from '@yaks/testing'
-import { assert, assertEquals, assertThrows } from '@std/assert'
+import { assert, assertEquals, assertRejects, assertThrows } from '@std/assert'
 import { parse } from '@yaks/query'
-import { compile, tally } from '@yaks/sql'
+import { compile, screen as compileScreen, tally } from '@yaks/sql'
 import { add } from '@yaks/sqlite'
 import { open } from '@yaks/sqlite/db'
 import { extend, meaning, plugins, schema } from './graph.ts'
@@ -82,6 +82,28 @@ test('a phrase search sees an embedder that arrives after composition', async ()
   assertEquals(await find('dragon'), [])
   options.embedder = { provider: 'hash' }
   assert((await find('dragon')).length > 0)
+})
+
+test('a phrase search ranks only among what a filter line admits', async () => {
+  let db = await stocked()
+  let screen = (q: string) => compileScreen(parse(q), shop)
+  let find = meaning(
+    { storage: { statements: db, screen }, vocab: shop, graph: none },
+    hash,
+  )
+  let ranked = async (within?: string) =>
+    (await find('dragon burglar', { within })).map((h) => h.entity)
+  assertEquals((await ranked()).length, 4)
+  assertEquals(await ranked('.book.price>15'), ['book-2'])
+  await assertRejects(
+    () =>
+      meaning({ storage: { statements: db }, vocab: shop, graph: none }, hash)(
+        'dragon',
+        { within: '.book' },
+      ),
+    Error,
+    'cannot narrow',
+  )
 })
 
 test('SQL facets reject storage without a statement capability', () => {

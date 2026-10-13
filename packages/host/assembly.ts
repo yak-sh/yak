@@ -22,7 +22,7 @@ import {
   type Options,
   used,
 } from './config.ts'
-import type { Duty, FacetName, Load, MeaningHit } from './facets.ts'
+import type { Duty, FacetName, Load, Meaning } from './facets.ts'
 import { type Composition, compositionAnatomy } from './anatomy.ts'
 import { common, ROLES } from './roles.ts'
 import { type Taken, taking, type Words, wordsOf } from './words.ts'
@@ -65,8 +65,9 @@ export type Binding = {
   schema?: (host: Host, stmts: Stmt[]) => void
   /** The host's graph-dependent capabilities, before effect and tool factories. */
   ready?: (host: Host) => void
-  /** Combine the host's text index with the plugin's optional meaning index. */
-  search?: (host: Host, meaning?: Meaning) => Search | undefined
+  /** Combine the host's text index with its meaning index, where it has one
+   * ({@link Host.meaning}). */
+  search?: (host: Host) => Search | undefined
   actor?: Actor | null
   process?: Comp
   readOnly?: boolean
@@ -75,10 +76,6 @@ export type Binding = {
   /** Loading and binding evidence belongs to this host, never the shared plan. */
   observed?: Composition
 }
-export type Meaning = (
-  words: string,
-  opts?: { limit?: number },
-) => Promise<MeaningHit[]>
 export type Assembly = {
   words: Words
   /** Bind the loaded facets to the host's capabilities. Services are returned for its scheduler. */
@@ -322,6 +319,7 @@ export let assemble = (
       let filters: Filter[] = []
       let made: NamedTool[] | undefined
       let ranked: Search | undefined
+      let meant: Meaning | undefined = lent.meaning
       let replying: Reply | undefined
       let calls: Runner | undefined
       let makeTools: (() => NamedTool[]) | undefined
@@ -382,6 +380,9 @@ export let assemble = (
         },
         get search() {
           return ranked
+        },
+        get meaning() {
+          return meant
         },
         get reply() {
           return replying
@@ -487,16 +488,21 @@ export let assemble = (
         observed.effects(by, true)
       }
       part?.('search')
-      let meanings = graphs.flatMap(([r, options]) =>
-        r.meaning ? [r.meaning(host, options)] : []
-      )
+      // One meaning index: the one a plugin offers, or the one the host lends.
+      let meanings = [
+        ...(meant ? [meant] : []),
+        ...graphs.flatMap(([r, options]) =>
+          r.meaning ? [r.meaning(host, options)] : []
+        ),
+      ]
       if (meanings.length > 1) {
         throw new CallError(
           'config',
           'more than one meaning index answers search',
         )
       }
-      ranked = binding.search?.(host, meanings[0])
+      meant = meanings[0]
+      ranked = binding.search?.(host)
       // The generic tools belong to this graph, not to any transport: they are
       // declared in @yaks/graph's own vocabulary and implemented there, and a
       // host has a graph whether or not anything is listening. So the tier is

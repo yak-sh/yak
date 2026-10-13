@@ -2,17 +2,16 @@
 // context, never a snippet — because half of what somebody said is worse than
 // none of it. What is ranked is which ones, not how much of them.
 //
-// Several rankings, one result. Where the server has a vector service, a
-// {@link Ranker} returns which memories are nearest in meaning to the words
-// asked about ("how do they like the pages to look"), and this package never
-// learns how that is done. A server whose store does the same thing answers
-// `.near=<entity>` in the query string itself (@yaks/embedding), and
-// {@link Asked.near} is where that goes. With neither, the words select:
-// {@link line} builds a query string carrying the words, which every yaks store
-// answers as a full-text search over the text a memory marks — a doc's body, a
-// transcript entry's content — and the newest of the selected rows come first,
-// because a query string carries no bm25 score. None of this is configured; a caller that has a ranker
-// passes one.
+// Several rankings, one result. Where the host keeps vectors of its text, it
+// ranks words by meaning (@yaks/host `meaning`) and the recall tool reads the
+// memories it names in that order (./tools.ts); this package never learns how
+// that is done. A store with vectors also answers `.near=<entity>` in the query
+// string itself (@yaks/embedding), and {@link Asked.near} is where that goes.
+// With neither, the words select: {@link line} builds a query string carrying
+// the words, which every yaks store answers as a full-text search over the text
+// a memory marks — a doc's body, a transcript entry's content — and the newest
+// of the selected rows come first, because a query string carries no bm25
+// score.
 
 import type { Bundle, Comp, Eid } from '@yaks/graph'
 import { MEMORY } from './comp.ts'
@@ -31,17 +30,6 @@ export type Memory = {
   /** when they said it, as the store stamped it */
   at: string
 }
-
-/**
- * The memories of a space nearest in meaning to some words, closest first —
- * ids only, since the store returns the memories themselves. A server with a
- * vector service supplies one; a server with none supplies nothing, and
- * {@link line} ranks by word matching instead.
- */
-export type Ranker = (
-  words: string,
-  scope: { space: Eid; limit: number },
-) => Promise<Eid[]>
 
 let comp = (b: Bundle, name: string): Comp =>
   (b[name] && typeof b[name] == 'object' ? b[name] : {}) as Comp
@@ -163,14 +151,16 @@ export let line = (asked: Asked): string => {
 }
 
 /**
- * The memories a store returned, in the order a {@link Ranker} asked for. A
- * store returns a set; the ranking is the caller's, and an id the store did
- * not return (a memory since deleted) simply drops out.
+ * The bundles a store returned, in the order a ranking named them. A store
+ * returns a set; the ranking is the caller's, and an id the store did not
+ * return (a memory since deleted, one the caller may not read) drops out.
+ *
+ * ```ts
+ * ordered(['b', 'a'], [{ entity: { eid: 'a' } }, { entity: { eid: 'b' } }])
+ * // [{ entity: { eid: 'b' } }, { entity: { eid: 'a' } }]
+ * ```
  */
-export let ordered = (ids: Eid[], held: Memory[]): Memory[] => {
-  let by = new Map(held.map((m) => [m.eid, m]))
-  return ids.flatMap((id) => {
-    let m = by.get(id)
-    return m ? [m] : []
-  })
+export let ordered = (ids: Eid[], held: Bundle[]): Bundle[] => {
+  let by = new Map(held.map((b) => [b.entity.eid, b]))
+  return ids.flatMap((id) => by.get(id) ?? [])
 }

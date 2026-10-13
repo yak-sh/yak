@@ -20,7 +20,7 @@
 
 import type { Graph, Plugin } from '@yaks/graph'
 import type { Reply } from '@yaks/tools'
-import type { Derived, Extension } from '@yaks/sql'
+import type { Derived, Extension, Raw } from '@yaks/sql'
 import type { Vocab } from '@yaks/vocab'
 import { semantic } from './compile.ts'
 import { type Statements, statements } from '@yaks/sql'
@@ -78,20 +78,34 @@ export let extend = (
     : []
 }
 
-/** A phrase search over this graph's vectors. Resolve options and the rows
- * they name on every call: the service may have started embedding after a key
- * or a provider arrived, without a new host or a new search function. */
+/** A phrase search over this graph's vectors, among what the `within` filter
+ * line admits where one is given (the storage's `screen` compiles it). Resolve
+ * options and the rows they name on every call: the service may have started
+ * embedding after a key or a provider arrived, without a new host or a new
+ * search function. */
 export let meaning = (
   host: {
-    storage: { statements?: Statements }
+    storage: {
+      statements?: Statements
+      screen?: (query: string) => Raw | null
+    }
     vocab: Vocab
     graph: Pick<Graph, 'get'>
     derived?: Derived
   },
   options: Options = {},
-): (words: string, opts?: MeaningOpts) => Promise<Hit[]> => {
+): (
+  words: string,
+  opts?: Pick<MeaningOpts, 'limit' | 'floor'> & { within?: string },
+) => Promise<Hit[]> => {
   let db = statements(host.storage)
-  return async (words, opts) => {
+  let among = (within: string) => {
+    let screen = host.storage.screen
+    if (!screen) throw new Error('this storage cannot narrow a search')
+    return () => screen(within)
+  }
+  return async (words, opts = {}) => {
+    let { within, ...rest } = opts
     let now = await ready(host.vocab, options, host.graph)
     return now.embedder
       ? await search(
@@ -99,7 +113,12 @@ export let meaning = (
         resolved(now.text, host.derived),
         now.embedder,
         words,
-        { ...opts, vocab: host.vocab, floor: opts?.floor ?? options.floor },
+        {
+          ...rest,
+          vocab: host.vocab,
+          floor: rest.floor ?? options.floor,
+          ...(within ? { screen: among(within) } : {}),
+        },
       )
       : []
   }

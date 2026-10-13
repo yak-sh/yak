@@ -46,8 +46,7 @@ import type { Supply } from '@yaks/builders'
 import type { Ask } from '@yaks/builders/tools'
 import { edgeEid } from '@yaks/edge'
 import { CONNECTION } from '@yaks/connections'
-import { heard, LAST, ordered } from '@yaks/memory'
-import { ranker } from './memory.ts'
+import { heard, LAST } from '@yaks/memory'
 import { invokePackage } from './package-tools.ts'
 import { apex } from './host.ts'
 
@@ -351,20 +350,15 @@ let MEMORY: Row[] = [
       let { space } = await inSpace(ctx, args)
       let said = args.words == null ? '' : String(args.words)
       let limit = args.limit == null ? LAST : Number(args.limit)
-      let recall = (ask: Record<string, unknown>) =>
-        invokePackage(ctx, 'memory_recall', {
+      let recall = async (ask: Record<string, unknown>) =>
+        (await invokePackage(ctx, 'memory_recall', {
           space: space.slug,
           limit,
           ...ask,
-        })
-      let ids = said
-        ? await ranker(ctx.env)(said, { space: space.eid, limit })
-        : []
-      let held = ids.length
-        ? ordered(ids, (await recall({ ids })).map(heard))
-        : []
-      if (!held.length && said) held = (await recall({ said })).map(heard)
-      if (!held.length) held = (await recall({})).map(heard)
+        })).map(heard)
+      // Words nothing answers answer the newest, as this name always did.
+      let held = said ? await recall({ said }) : []
+      if (!held.length) held = await recall({})
       if (!held.length) {
         return {
           space,

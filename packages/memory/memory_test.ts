@@ -107,11 +107,12 @@ test('a bundle reads back whole, and a byline speaks human', () => {
   assertEquals(heard({ entity: { eid: 'm2' } }).said, '')
 })
 
-test("the ranker's order is the answer's order", () => {
-  let held = [said({ eid: 'a' }), said({ eid: 'b' }), said({ eid: 'c' })]
-  assertEquals(ordered(['c', 'a'], held).map((m) => m.eid), ['c', 'a'])
+test("the ranking's order is the answer's order", () => {
+  let held = ['a', 'b', 'c'].map((eid) => ({ entity: { eid } }))
+  let order = (ids: string[]) => ordered(ids, held).map((b) => b.entity.eid)
+  assertEquals(order(['c', 'a']), ['c', 'a'])
   // An id the store did not answer for — a memory since deleted — drops out.
-  assertEquals(ordered(['z', 'b'], held).map((m) => m.eid), ['b'])
+  assertEquals(order(['z', 'b']), ['b'])
 })
 
 test('the passage says the sentence whole, with its context under it', () => {

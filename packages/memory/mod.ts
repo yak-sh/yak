@@ -36,9 +36,8 @@
  * - {@link words} reads the words from whichever component holds them;
  * - {@link line} builds the read: a query string in the filter grammar every
  *   yaks store answers — with words in it, the store's full-text index selects
- *   them; with none, newest first — and {@link Ranker} is the interface a
- *   server with a vector service implements to rank by meaning instead, with
- *   {@link ordered} putting the store's result into that order;
+ *   them; with none, newest first — and {@link ordered} puts what a store
+ *   returned into the order a ranking by meaning named;
  * - {@link passage} builds the text an agent is given at the start of a
  *   conversation: the newest few, whole, under one heading, bounded by
  *   {@link LAST} and {@link BYTES}.

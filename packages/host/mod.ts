@@ -4,7 +4,7 @@ import type { MachineProvider } from '@yaks/machine'
 import type { Bundle, Eid, Graph, NamedTool, Storage } from '@yaks/graph'
 import type { Search } from '@yaks/graph/tools'
 import type { Vocab } from '@yaks/vocab'
-import type { Derived, Statements } from '@yaks/sql'
+import type { Derived, Raw, Statements } from '@yaks/sql'
 import type { Authenticate, Filter, Handler, Route } from '@yaks/api'
 import type { Anatomy, AnatomyObserver } from '@yaks/code/anatomy'
 import type { Contributions } from '@yaks/ui'
@@ -14,6 +14,7 @@ import type { Vault } from '@yaks/secrets'
 import type { Finding, Reply, Runner } from '@yaks/tools'
 import type { Context } from '@yaks/tracker/report'
 import type { Config } from './config.ts'
+import type { Meaning } from './facets.ts'
 import type { Sender } from './senders.ts'
 export type { Message, Receipt, Sender } from './senders.ts'
 export type { Config, Configured, Options, Plug } from './config.ts'
@@ -54,6 +55,10 @@ export interface Host {
   vocab: Vocab
   storage: Storage & {
     statements?: Statements
+    /** a filter line → a statement selecting the ids of the entities it
+     * admits (@yaks/sqlite `screen`): what a search beside the graph is
+     * narrowed by */
+    screen?: (query: string) => Raw | null
     migrations?: MigrationMonitor
     checks?: {
       storage: () => Finding[]
@@ -115,6 +120,10 @@ export interface Host {
    * `search: true` and @yaks/fts indexed it — what the tier's `search` tool
    * answers with, and what a transport restating the tier asks for. */
   search?: Search
+  /** words ranked by meaning over this graph's vectors, where it keeps them:
+   * the index a plugin's graph facet offers (@yaks/embedding), or the one a
+   * concrete host lends. Absent where nothing embeds this graph's text. */
+  meaning?: Meaning
   /** what a direct tool call is owed beside its answer, from every plugin
    * that offers some : what {@link runner} adds, and
    * what a runner of another's tools over this graph adds too (@yaks/harness).
@@ -195,6 +204,7 @@ export type {
   Facets,
   GraphFacet,
   Load,
+  Meaning,
   MeaningHit,
   RoutesFacet,
   ServiceFacet,
@@ -207,7 +217,6 @@ export {
   assembly,
   type AssemblyOpts,
   type Binding,
-  type Meaning,
   prepare,
   type Prepared,
 } from './assembly.ts'

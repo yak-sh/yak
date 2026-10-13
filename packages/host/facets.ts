@@ -52,10 +52,7 @@ export type GraphFacet = {
   reply?: (host: Host, options: Options) => Reply
   extend?: (host: Host, options: Options) => Extension[]
   /** Search a phrase by meaning through this plugin's own index. */
-  meaning?: (
-    host: Host,
-    options: Options,
-  ) => (words: string, opts?: { limit?: number }) => Promise<MeaningHit[]>
+  meaning?: (host: Host, options: Options) => Meaning
   authenticate?: (host: Host, options: Options) => Authenticate
   /** the commits other hosts make to this store (@yaks/journal's feed) */
   feed?: (host: Host, options: Options) => Feed
@@ -67,6 +64,14 @@ export type MeaningHit = {
   similarity: number
   excerpt: string
 }
+
+/** Words → the entities nearest them in meaning, closest first, at most
+ * `limit` of them. `within` is a filter line naming the entities a hit must be
+ * among; its directives are ignored. */
+export type Meaning = (
+  words: string,
+  opts?: { limit?: number; within?: string },
+) => Promise<MeaningHit[]>
 
 /** `<plugin>/tools` — the functions behind its `tool: true` declarations,
  * keyed by tool name.

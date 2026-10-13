@@ -209,7 +209,7 @@ line of context where the words need it: a paraphrase loses what they said,
 and nobody afterwards can get it back. A memory is also yours to use: a note
 on how or why you built something is worth keeping the same way. Memories are
 kept for the whole space, and the newest few are given to every agent that
-connects here; store_memory_recall finds the rest by the words they hold,
+connects here; store_memory_recall finds the rest by what they are about,
 which saves the person saying a thing twice. A NOTES.md is about one app; a
 memory is kept for the whole space. Call guide with page memory.
 

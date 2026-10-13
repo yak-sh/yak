@@ -126,39 +126,23 @@ filter; without `near` or explicit ids, the newest words come first (descending
 or an entry's content. Search terms do not request BM25 ranking. A `.near` query
 requires a configured embedding index.
 
-`Ranker` is the interface for an application-supplied semantic search function:
-
-```ts
-import type { Eid } from '@yaks/graph'
-
-type Ranker = (
-  words: string,
-  scope: { space: Eid; limit: number },
-) => Promise<Eid[]>
-```
-
-It returns semantically similar memory ids, closest first, and `ordered()`
-reorders the store's result to match. Nothing here knows how that is done: on
-yaks.app it is the store's own vectors, embedded by Workers AI and ranked by
-[@yaks/embedding](https://jsr.io/@yaks/embedding), and without a ranker the
-query filters by words and sorts by entity number. The library does not
-automatically call a ranker; the application does.
-
-An external vector index must use the same dimensions and similarity metric as
-the embedding model. Creating and updating that index is the server's
-responsibility.
+Ranking by meaning is the host's: `host.meaning` ([@yaks/host](../host)) takes
+words and a filter line and answers the entities nearest them in meaning among
+what the line admits, closest first. `ordered(ids, bundles)` puts what a store
+returned into that order. Nothing here knows how the ranking is done: on the box
+it is [@yaks/embedding](https://jsr.io/@yaks/embedding)'s graph facet, and on
+yaks.app it is the store's own vectors, embedded by Workers AI.
 
 ## The passage
 
 `passage({ name, space }, memories)` builds the text an agent is given at the
 start of a conversation. Pass `Memory` records in the desired order; use
-`heard(bundle)` to convert graph results and `ordered(ids, memories)` to apply
-an external ranking. Each statement is quoted in full with its context below.
-The helper includes at most `LAST` (8) records and targets `BYTES` (2048) UTF-8
-bytes of record text. The first record is always included even if oversized, and
-the heading and omitted-results notice are additional bytes. This is not a
-strict total-output bound. If records are omitted, a notice names
-`memory_recall`, so the application should expose that tool.
+`heard(bundle)` to convert graph results. Each statement is quoted in full with
+its context below. The helper includes at most `LAST` (8) records and targets
+`BYTES` (2048) UTF-8 bytes of record text. The first record is always included
+even if oversized, and the heading and omitted-results notice are additional
+bytes. This is not a strict total-output bound. If records are omitted, a notice
+names `memory_recall`, so the application should expose that tool.
 
 ## The tools
 
@@ -191,12 +175,15 @@ another writer changed since you read it is rejected as a whole rather than
 overwritten; the words of anything a memory marks (a comment, an entry, a task)
 are what happened there and are never replaced.
 
-`memory recall` returns complete memories, not excerpts. `said` is converted to
-search terms, so use words expected in the stored statement, not a new question
-about it. Those terms are filters, not a guaranteed exact phrase or a relevance
-ranking. `near` names an existing entity for semantic ranking when
-[@yaks/embedding](https://jsr.io/@yaks/embedding) is configured. Without that
-ranking or explicit ids, the newest words come first.
+`memory recall` returns complete memories, not excerpts. `said` says what the
+memory is about. Where the host ranks by meaning (`host.meaning`), the memories
+nearest it come first, among those the recall's space, `scope` and `feedback`
+admit, whether or not they share a word with it. Where it does not, or it names
+none yet (a memory saved a moment ago), `said` becomes search terms the memory
+must all contain, newest first. A ranking that fails is reported to
+`host.report` and the words select instead. `near` names an existing entity to
+rank by its meaning, and `said` then selects by its words. With neither, the
+newest come first.
 
 `memory source` answers where a person said words: the earliest entity they
 wrote holding them verbatim, the same entity a save given `said` and `feedback`

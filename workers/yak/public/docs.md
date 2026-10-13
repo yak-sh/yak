@@ -159,8 +159,8 @@ limit, and the three places it is handed over.
 
 The other half is the person's own words, kept for the whole space:
 `store_memory_save` keeps a sentence verbatim with a line of context, and
-`store_memory_recall` finds it again by the words it holds. Save what they say
-the moment they say how they want something built or handled.
+`store_memory_recall` finds it again by what it is about. Save what they say the
+moment they say how they want something built or handled.
 
 Deeper: <https://yaks.app/docs/memory.md> — the shape of a memory, what context
 is for, and how a recall is ranked.

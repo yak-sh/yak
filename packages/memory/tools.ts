@@ -21,12 +21,16 @@
 // pass that token back. The words a mark sits on are what happened where they
 // were said, and no save replaces them.
 //
-// Nothing here ranks. `line()` (./recall.ts) builds the query string, and the
-// store answers it: its full-text index selects the memories containing the
-// words — all of them, which is what somebody searching means — and its vectors
-// order those results where a `near` was named and the server composed
-// @yaks/embedding. A server with neither returns the newest of what the words
-// selected, which is a worse answer and not a broken one.
+// Nothing here ranks. Words are ranked by meaning where the host keeps vectors
+// of its text (@yaks/host `meaning`): it names the memories nearest them among
+// those the rest of the recall admits, and the store reads those, so a rank
+// never decides what a caller may read. Where it keeps none, or it names none
+// (a memory saved a moment ago, not embedded yet), `line()` (./recall.ts)
+// builds the query string and the store answers it: its full-text index
+// selects the memories containing every word, newest first. A `near` is ranked
+// by the store's vectors in that query string, and the words then select. An
+// index that fails is a worse order, never a failed recall: the host hears of
+// it, and the words select.
 
 import type { Bundle, Comp, Graph } from '@yaks/graph'
 import { argsOf } from '@yaks/graph/call'
@@ -34,9 +38,10 @@ import { Refused } from '@yaks/graph/errors'
 import { guarded, witnessed } from '@yaks/doc'
 export { witnessed } from '@yaks/doc'
 import type { Runs } from '@yaks/graph/tools'
+import type { Host } from '@yaks/host'
 import { MEMORY } from './comp.ts'
 import { EMPTY, FEEDBACK, marked, type Marking, saved } from './save.ts'
-import { type Asked, line, terms, words } from './recall.ts'
+import { type Asked, line, ordered, terms, words } from './recall.ts'
 import { around } from './around.ts'
 import { topics } from './topic.ts'
 
@@ -102,11 +107,30 @@ let holding = async (
   return found.find((b) => flat(words(b)).includes(want))
 }
 
+/** What a recall asks of its host: words ranked by meaning, where it keeps
+ * vectors, and where to say that ranking failed. */
+export type Ranking = Partial<Pick<Host, 'meaning' | 'report'>>
+
+// The memories nearest the words in meaning, among those `asked` admits
+// without them, closest first: none where the host keeps no vectors.
+let nearest = async (host: Ranking, asked: Asked): Promise<string[]> => {
+  if (!host.meaning) return []
+  try {
+    let within = line({ ...asked, said: '' })
+    let hits = await host.meaning(asked.said!, { limit: asked.limit, within })
+    return hits.map((h) => h.entity)
+  } catch (e) {
+    if (!host.report) throw e
+    await host.report(e)
+    return []
+  }
+}
+
 /** The implementations of the tools ./vocab.json declares. A factory, like
  * every other entry point in these packages. A host sharing a graph between
  * spaces binds saves and recalls to one space through its options. */
 export let runs = (
-  _host?: unknown,
+  host: Ranking = {},
   { space }: { space?: string } = {},
 ): Runs => ({
   memory_save: async (call, graph): Promise<Bundle[]> => {
@@ -187,7 +211,13 @@ export let runs = (
       ...(args.feedback ? { feedback: true } : {}),
       ...(named.length ? { eids: named } : {}),
     }
-    return (await graph.read(line(asked))).map(witnessed)
+    let ranked = asked.said?.trim() && !near && !named.length
+      ? await nearest(host, asked)
+      : []
+    let read = async (a: Asked) => (await graph.read(line(a))).map(witnessed)
+    return ranked.length
+      ? ordered(ranked, await read({ ...asked, said: '', eids: ranked }))
+      : await read(asked)
   },
 
   memory_source: async (call, graph): Promise<Bundle[]> => {

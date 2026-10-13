@@ -120,8 +120,10 @@ storage binds, the assembly adds plugin extensions, then `Binding.extend` adds
 the host's own compilers. `Binding.install` prepares schema before graph-facet
 installers run. `Binding.graph` can add the host's own hooks and graph options
 around the contributed plugins. `Binding.ready` lends graph-dependent
-capabilities before effect factories run. `Binding.search` combines the host's
-text search with the optional plugin meaning index.
+capabilities before effect factories run. `Host.meaning` ranks words by meaning
+among what a filter line admits: the index a plugin's graph facet offers, or one
+the binding lends in `Binding.host`, never both. `Binding.search` combines the
+host's text search with it.
 
 ## Storage capabilities
 

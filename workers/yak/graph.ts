@@ -1305,6 +1305,19 @@ export class Store {
         bury: () => Promise.resolve([]),
         gone: () => Promise.resolve(false),
         report: (error) => defect(error, { request: 'plugin', store: name }),
+        // Words ranked by meaning among what a filter line selects (@yaks/host
+        // `meaning`), what a memory recall asks (@yaks/memory): the words
+        // embedded by the model this store's vectors are in, and those vectors
+        // scanned. A store with no model bound ranks nothing.
+        meaning: async (words, { limit, within } = {}) => {
+          let model = embedder(this.#bind)
+          if (!model) return []
+          let { statements: db, fields, screen } = this.#texts
+          return await meaning(db, fields, model, words, {
+            limit,
+            screen: within ? () => screen(within) : undefined,
+          })
+        },
       },
       storage: (_host, extend) => {
         store = sqliteStorage(
@@ -3731,30 +3744,6 @@ export class Store {
         db: `do:${this.#get('name') ?? ''}`,
         bytes: this.#ctx.storage.sql.databaseSize,
       })
-    }
-    // Words ranked by meaning among what a filter line selects, nearest first
-    // (memory.ts): the words embedded by the model this store's vectors are
-    // in, and those vectors scanned (@yaks/embedding `meaning`). A store with
-    // no model bound answers nothing. The kernel's alone, like `/inspect`.
-    if (path == '/meaning') {
-      if (!kernel || request.method != 'GET') {
-        return json({ error: 'NotFound', message: 'no route' }, 404)
-      }
-      let at = new URL(request.url).searchParams
-      let model = embedder(this.#bind)
-      if (!model) return Response.json([])
-      try {
-        let within = at.get('within')
-        let { statements: db, fields, screen } = this.#texts
-        return Response.json(
-          await meaning(db, fields, model, at.get('q') ?? '', {
-            limit: Number(at.get('limit') ?? 20),
-            screen: within ? () => screen(within) : undefined,
-          }),
-        )
-      } catch (e) {
-        return refuse(e, request)
-      }
     }
     if (path == '/trace') {
       if (!kernel || request.method != 'POST') {
