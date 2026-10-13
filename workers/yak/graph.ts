@@ -2415,10 +2415,12 @@ export class Store {
     if (selected?.reason && this.#bind.ERRORS) {
       // HTTP already carries vouched scope. Alarms/sockets can use metadata
       // planted by deploy/control, but only selected work pays for that lookup.
+      // A trace is a report, so storage gone under the run costs the sample,
+      // never the run's own answer or error.
       let space = request?.headers.get('x-yak-space') ??
-        (this.#started ? this.#get('space') : null)
+        (this.#started ? this.#said('space') : null)
       let app = request?.headers.get('x-yak-app') ??
-        (this.#started ? this.#get('app') : null)
+        (this.#started ? this.#said('app') : null)
       if (space) {
         let rows = sampleRequest(captured.spans, {
           origin,
