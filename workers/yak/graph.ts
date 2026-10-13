@@ -424,16 +424,20 @@ let preparing = (kind: keyof typeof configs): Promise<Prepared> => {
  * one of the platform's own two stores rather than an app, what its storage
  * reads a stored value through, which properties are searched, and the schema
  * as one word: its print (@yaks/sqlite `follow`), and the stamp an older
- * release kept in `yak_kv`, which a rollback still reads. */
+ * release kept in `yak_kv`, which a rollback still reads. The print and the
+ * stamp render the whole schema, so they are made when first asked, which a
+ * store whose schema this code already stood up never does (`#schema`).
+ * `key` names the shape in every isolate: which store and which words. */
 type Shape = {
   words: ReturnType<typeof storeWords>
   vocab: Vocab
   own: boolean
   derived: Derived
   searchable: Field[]
-  print: string
-  stamp: string
-  ddl: Stmt[]
+  readonly print: string
+  readonly stamp: string
+  readonly ddl: Stmt[]
+  readonly key: string
 }
 
 // Fixed kinds and the core app shape live for this isolate. App declarations
@@ -470,22 +474,41 @@ export let shapeOf = (name: string, declared: string | null): Shape => {
   let searchable = fields(vocab)
   // The blob table first: the `doc_value` view and the search triggers read a
   // body's text out of it, so it has to be standing before they are.
-  let after = [
+  let after = () => [
     ...ftsSchema(searchable, read),
     ...vectorSchema(),
     ...(vocab.comp('_tx') ? journalDdl() : []),
   ]
-  let ddl = [...blobSchema(), ...schema(vocab, derived), ...after]
-  let beside = [...blobSchema(), ...after]
   // The print is the box's (packages/cli/host.ts): the storage's own print,
   // which carries the revision of the fitting that brings standing tables to
   // it (@yaks/sqlite `FIT`), and every statement beside it. The stamp is the
   // same schema in the shape an older release kept, for a rollback to find.
-  let print = printOf(printFor(vocab, derived), beside)
-  let stamp = sha256(
-    [FIT, ...ddl.map((s) => render(s).sql)].join('\n'),
-  )
-  let shape = { words, vocab, own, derived, searchable, print, stamp, ddl }
+  let print: string | undefined, stamp: string | undefined
+  let ddl: Stmt[] | undefined, named: string | undefined
+  let shape: Shape = {
+    words,
+    vocab,
+    own,
+    derived,
+    searchable,
+    get print() {
+      return print ??= printOf(printFor(vocab, derived), [
+        ...blobSchema(),
+        ...after(),
+      ])
+    },
+    get ddl() {
+      return ddl ??= [...blobSchema(), ...schema(vocab, derived), ...after()]
+    },
+    get stamp() {
+      return stamp ??= sha256(
+        [FIT, ...shape.ddl.map((s) => render(s).sql)].join('\n'),
+      )
+    },
+    get key() {
+      return named ??= sha256(key)
+    },
+  }
   cache.set(key, shape)
   if (shapes.size > SHAPES) shapes.delete(shapes.keys().next().value!)
   return shape
@@ -597,6 +620,9 @@ type Word =
   | 'access'
   | 'mail'
   | 'schema'
+  // The Worker version, words and stamp of the last schema pass that left
+  // nothing undone (`#schema`).
+  | 'fitted'
   // The vocabulary the platform's own stores last described in rows.
   | 'descriptions'
   // That a deployment pass (`#deployed`) has run here.
@@ -1144,10 +1170,17 @@ export class Store {
   // they break) is answered for the caller: a wake reports it and serves the
   // shape the store holds, and a draft's deploy is refused with it. The print
   // stays unrecorded, so the next wake tries again.
-  #schema({ vocab, print, stamp }: Shape): Error[] {
+  //
+  // A pass that leaves nothing undone is remembered as fitted: this Worker
+  // version, these words, and the stamp it left. A wake that finds all three
+  // as they were renders no schema at all, and one that finds any moved (a
+  // deploy, a new vocabulary, a rollback's pass) asks the print again.
+  #schema(shape: Shape): Error[] {
     let left: Error[] = []
     let held = this.#get('schema')
     if (!(this.#get('name') || held)) return left
+    if (this.#stood(shape)) return left
+    let { vocab, print, stamp } = shape
     if (held && held != stamp) forget(this.#sql, print)
     follow(this.#sql, print, () => {
       if (held == stamp) return
@@ -1162,7 +1195,19 @@ export class Store {
       watchEmbedding(statements(this.#sql), texts(vocab, blobRead(vocab)))
       this.#put('schema', stamp)
     })
+    let fit = this.#fit(shape)
+    if (!left.length && fit) this.#put('fitted', fit)
     return left
+  }
+
+  #fit(shape: Shape): string | null {
+    let version = this.#version()
+    return version && `${version} ${shape.key} ${this.#get('schema') ?? ''}`
+  }
+
+  #stood(shape: Shape): boolean {
+    let fit = this.#fit(shape)
+    return !!fit && this.#get('fitted') == fit
   }
 
   #build() {
@@ -1194,7 +1239,7 @@ export class Store {
       name,
       this.#get('vocab'),
     )
-    let { vocab, own, derived, searchable, print } = shape
+    let { vocab, own, derived, searchable } = shape
     this.#lensMove = lensRule(name, declaration, (path) => {
       let [comp, prop] = path.split('.')
       return prop ? !!vocab.prop(comp, prop) : !!vocab.comp(comp)
@@ -1339,7 +1384,8 @@ export class Store {
             // minted, while an app's entities are pointed at by the eid its client
             // minted and never by a number, so nothing mints one for them.
             number: numbered(vocab),
-            schemaReady: () => printed(drive, print),
+            schemaReady: () =>
+              this.#stood(shape) || printed(drive, shape.print),
             extend,
             // A body is stored as its address (@yaks/blob `store: "blob"`), so the
             // reads and the `doc_value` view resolve it as prose. The FTS schema

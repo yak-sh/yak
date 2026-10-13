@@ -233,6 +233,36 @@ let cookbook = async (ctx = state(), manifest = SCHEMA, v = owner) => {
   return store
 }
 
+test('a store wakes without its schema under the code that fitted it, and follows new words', async () => {
+  let ctx = state()
+  using _db = ctx.storage
+  let on = (id: string) => ({ CF_VERSION_METADATA: { id } })
+  let wake = async (id: string, path = '/query?q=.recipe') =>
+    await get(new Store(ctx, on(id)), path, owner)
+  let stmts = (r: Response) => Number(r.headers.get('x-yak-stmts'))
+  assertEquals(
+    (await post(new Store(ctx, on('a')), '/vocab', SCHEMA, owner)).status,
+    200,
+  )
+  let fitted = await wake('a'), deployed = await wake('b')
+  assertEquals([fitted.status, deployed.status], [200, 200])
+  assert(stmts(fitted) < stmts(deployed))
+  let grown = JSON.stringify({
+    $defs: {
+      ...JSON.parse(SCHEMA).$defs,
+      dish: { properties: { n: { type: 'number' } } },
+    },
+  })
+  assertEquals(
+    (await post(new Store(ctx, on('b')), '/vocab', grown, owner)).status,
+    200,
+  )
+  let wrote = await post(new Store(ctx, on('b')), '/apply', [
+    { entity: { eid: CAKE }, dish: { n: 1 } },
+  ], owner)
+  assertEquals(wrote.status, 200)
+})
+
 let appOwned = await (async () => {
   let ctx = state()
   using _db = ctx.storage

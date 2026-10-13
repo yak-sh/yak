@@ -26,6 +26,12 @@ let lang = (file: string) => file.endsWith('.json') ? 'JSON' : 'YAML'
  * ```
  */
 export let read = (text: string, file = 'yaml'): unknown => {
+  // Most of what is read is JSON, which the runtime's own parser reads many
+  // times faster than the YAML one: a store reads its vocab.json this way on
+  // every wake. Whatever it refuses is the YAML parser's to read or explain.
+  try {
+    return JSON.parse(text)
+  } catch { /* YAML, or neither */ }
   try {
     return parse(text)
   } catch (e) {
