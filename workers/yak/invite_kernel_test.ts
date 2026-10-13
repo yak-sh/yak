@@ -11,6 +11,7 @@ import {
   connector,
   kernel,
   letter,
+  letters,
   meta,
   signIn,
 } from './probe.ts'
@@ -148,6 +149,60 @@ test('a friend who has not accepted is told the invitation waits', async () => {
 
     await accepted(k, ana.email, ana.cookie)
     assertStringIncludes(await page(ana.cookie), '<h1>Diary</h1>')
+  } finally {
+    await k.stop()
+  }
+})
+
+test('the owner and their assistant see who is in and who has not accepted', async () => {
+  let k = await kernel()
+  try {
+    let jeff = await signIn(k)
+    let his = connector(k, jeff.cookie)
+    await his.tool('app_new', { slug: 'diary', title: 'Diary' })
+    let [ana, bo, cy] = [await signIn(k), await signIn(k), await signIn(k)]
+    await his.tool('member_add', { email: ana.email, app: 'diary' })
+    await his.tool('member_add', { email: bo.email })
+    await his.tool('member_add', { email: cy.email, role: 'viewer' })
+    await accepted(k, ana.email, ana.cookie)
+    await accepted(k, bo.email, bo.cookie)
+    let today = new Date().toISOString().slice(0, 10)
+
+    let listed = await his.tool('app_list')
+    assertStringIncludes(listed, `<${bo.email}> (editor)`)
+    assertStringIncludes(listed, `<${ana.email}> (editor)`)
+    assertStringIncludes(listed, `<${cy.email}> (viewer, letter sent ${today})`)
+    // A member reads the apps, not who else was let in.
+    let bos = await connector(k, bo.cookie).tool('app_list')
+    assert(!bos.includes(cy.email) && !bos.includes(ana.email))
+
+    let page = await k.at('yaks.app', '/manage/people', {
+      headers: { cookie: jeff.cookie },
+    }).then((r) => r.text())
+    for (let them of [ana, bo, cy]) assertStringIncludes(page, them.email)
+    assertStringIncludes(page, 'not accepted yet')
+    let eid = /name="again" value="([^"]+)"/.exec(page)![1]
+    let before = letters(k, cy.email).length
+    let again = await k.at('yaks.app', '/manage/people', {
+      method: 'POST',
+      redirect: 'manual',
+      headers: {
+        cookie: jeff.cookie,
+        origin: 'https://yaks.app',
+        'content-type': 'application/x-www-form-urlencoded',
+      },
+      body: new URLSearchParams({ again: eid }),
+    })
+    await again.body?.cancel()
+    assertEquals(again.status, 303)
+    await letter(k, cy.email, '/invite?t=', before)
+    let back = new URL(again.headers.get('location')!)
+    assertStringIncludes(
+      await k.at('yaks.app', back.pathname + back.search, {
+        headers: { cookie: jeff.cookie },
+      }).then((r) => r.text()),
+      'Sent again.',
+    )
   } finally {
     await k.stop()
   }

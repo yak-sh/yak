@@ -95,6 +95,13 @@ anyone else would get "Nothing here yet." or a refusal. Calling `member_add`
 again for them says they had not accepted yet and sends another letter.
 `member_remove` withdraws a pending invitation the same way it removes a member.
 
+`app_list` says who is in each space the caller owns: its members, each app's
+guests, and every invitation not accepted yet with the day its latest letter
+went. When someone says they cannot get in, that is the first thing to read. The
+owner sees the same on the People page of their dashboard
+(yaks.app/manage/people), where a waiting invitation has a button that sends its
+letter again.
+
 ## One app, or the space
 
 `app` is the whole of the difference, and it is a difference in what they get:

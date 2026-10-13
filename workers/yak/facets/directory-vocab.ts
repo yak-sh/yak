@@ -101,7 +101,9 @@ export let directoryDoc: VocabDoc = {
     // `member` or `grant` row and drops this one. A word of its own rather
     // than a pending mark on the seat, so everything that reads `member` and
     // `grant` (reach, the roster, a bare app slug) reads accepted rows and
-    // nothing else, with no filter for a new reader to forget.
+    // nothing else, with no filter for a new reader to forget. `sent` is when
+    // its latest letter went, which is what its inviter asks when the person
+    // says they cannot get in (people.ts).
     invite: {
       component: true,
       type: 'object',
@@ -112,6 +114,7 @@ export let directoryDoc: VocabDoc = {
         to: ref('cascade'),
         person: ref('cascade'),
         role: { type: 'string', enum: ['owner', 'editor', 'viewer'] },
+        sent: owned(time),
       },
     },
     // How many invitations this person has sent in the hour it names

@@ -257,6 +257,18 @@ export type Role = 'owner' | 'editor' | 'viewer'
 
 /** A person's place in a space: the space, and what they are in it. */
 export type Seat = { space: Space; role: Role }
+
+/** A place one person holds or is offered: a seat in a space, a grant on one
+ * app, or an invitation to either, not yet accepted, with when its latest
+ * letter went. `on` is the space or app it is in. */
+export type Held = {
+  eid: string
+  held: 'seat' | 'grant' | 'invite'
+  on: string
+  person: string
+  role: Role
+  sent: string | null
+}
 /** The modes an app's `access.mode` takes, from everyone to its own people. */
 export let MODES = ['public', 'open', 'private'] as const
 export type Access = typeof MODES[number]
@@ -391,7 +403,7 @@ type Row = {
   created?: { at?: string }
   member?: { space: Id; person: Id; role: Role }
   grant?: { app: Id; person: Id; access: Role }
-  invite?: { to: Id; person: Id; role: Role }
+  invite?: { to: Id; person: Id; role: Role; sent?: string | null }
   inviting?: { hour?: string | null; sent?: number | null }
   email?: { address: string }
   former?: { slug: string; slugs?: string | null }
@@ -1307,6 +1319,39 @@ export let directory = (via: Fetcher | Part, now = false) => {
         }
         : null
     },
+    // Everyone holding or offered a place in these spaces and apps: each seat,
+    // each guest's grant and each invitation standing, in one read however
+    // many there are (people.ts gives it its shape). Fresh, because the page
+    // showing it is the page an invitation was just sent again from.
+    held: async (spaces: string[], apps: string[]): Promise<Held[]> => {
+      if (!spaces.length && !apps.length) return []
+      let list = (ids: string[]) => ids.join(',')
+      let asked = [
+        ...spaces.length ? [`.member.space=${list(spaces)}`] : [],
+        ...apps.length ? [`.grant.app=${list(apps)}`] : [],
+        `.invite.to=${list([...spaces, ...apps])}`,
+      ]
+      return (await query(asked.join(' | '), true)).flatMap((r): Held[] => {
+        let { member: m, grant: g, invite: i } = r
+        let at = m
+          ? { held: 'seat' as const, on: m.space, who: m.person, role: m.role }
+          : g
+          ? { held: 'grant' as const, on: g.app, who: g.person, role: g.access }
+          : i
+          ? { held: 'invite' as const, on: i.to, who: i.person, role: i.role }
+          : null
+        return at
+          ? [{
+            eid: r.entity.eid,
+            held: at.held,
+            on: idOf(at.on),
+            person: idOf(at.who),
+            role: at.role,
+            sent: i?.sent ?? null,
+          }]
+          : []
+      })
+    },
     // How many invitations this person has sent in the hour it names. Fresh:
     // two invitations a second apart must not both read the same count.
     inviting: async (person: string) =>
@@ -1344,14 +1389,26 @@ export let directory = (via: Fetcher | Part, now = false) => {
       (await self.known(person))?.name ?? null,
     // Both at once, from the person's one row: what to call them and where to
     // write to them. Null for anybody the platform has no address for.
-    known: async (person: string) => {
-      let row = await one(`.entity.eid=${person}`)
-      return row?.email
-        ? {
-          name: nameOf(row.doc?.title, row.email.address),
-          email: row.email.address,
-        }
-        : null
+    known: async (person: string) =>
+      (await self.persons([person])).get(person) ?? null,
+    // The same, for many people in one read.
+    persons: async (
+      persons: string[],
+    ): Promise<Map<string, { name: string; email: string }>> => {
+      if (!persons.length) return new Map()
+      let rows = await query(`.entity.eid=${persons.join(',')}`)
+      return new Map(
+        rows.flatMap((row) =>
+          row.email
+            ? [
+              [row.entity.eid, {
+                name: nameOf(row.doc?.title, row.email.address),
+                email: row.email.address,
+              }] as const,
+            ]
+            : []
+        ),
+      )
     },
     // Every space this person belongs to, the meta space left out: `yak` is
     // the platform's own, and a person who owns it (the first to sign in)

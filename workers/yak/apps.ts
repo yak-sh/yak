@@ -83,10 +83,14 @@ import {
   desk as deskPage,
   invitedTo,
   nothingHere,
+  sentence,
   spaceBinned,
   spaceIndex,
   type Visits,
 } from './pages.ts'
+import { allowed, placeOf, send } from './invite.ts'
+import { peopleIn } from './people.ts'
+import { CallError } from '@yaks/tools/errors'
 import { daysLeft, untrash, untrashSpace } from './erase.ts'
 import {
   hostOf,
@@ -1912,6 +1916,8 @@ let visits = async (env: Env, apps: App[]): Promise<Visits[] | null> => {
 let returned = (q: URLSearchParams) =>
   q.has('saved')
     ? { say: 'Saved.', no: false }
+    : q.has('sent')
+    ? { say: 'Sent again.', no: false }
     : q.has('connected')
     ? { say: 'Connected.', no: false }
     : q.has('disconnected')
@@ -2067,6 +2073,11 @@ let desk = async (
     fee: rate(await feeOf(dir)),
     name: await dir.nameAt(owner) ?? '',
     agents: await (await identity()).agents(env, owner),
+    // Who is in the space and its apps (people.ts), read only for the page
+    // that shows it.
+    people: view == 'people'
+      ? (await peopleIn(dir, [space], all))[0]
+      : undefined,
     // What the person connected for themselves and what each space of
     // theirs calls out through (connections.ts), read only for the page that
     // shows it: this space first, which a new connection is made for.
@@ -2130,6 +2141,43 @@ let closed = async (
   return redirect(manageAt(space.slug, 'apps', env), 303)
 }
 
+// Another letter for an invitation to this space or one of its apps, from the
+// owner pressing the button: nothing when it went, else what to say. An
+// invitation that is gone (accepted or withdrawn since the page was drawn)
+// or is somebody else's space's says so and sends nothing.
+let again = async (
+  env: Env,
+  dir: ReturnType<typeof directory>,
+  space: Space,
+  who: Owner,
+  eid: string,
+): Promise<{ say: string; no: boolean } | null> => {
+  let invite = await dir.invitation(eid)
+  let place = invite && await placeOf(dir, invite.to)
+  if (!invite || place?.space.eid != space.eid) {
+    return { say: 'That invitation is no longer waiting.', no: true }
+  }
+  let email = await dir.emailAt(invite.person)
+  if (!email) return { say: 'That invitation is no longer waiting.', no: true }
+  try {
+    await allowed(env, dir, space, who.person)
+  } catch (e) {
+    if (e instanceof CallError) return { say: sentence(e.message), no: true }
+    throw e
+  }
+  let sent = await send(env, dir, {
+    invite: invite.eid,
+    place: place!,
+    email,
+    role: invite.role,
+    by: who.person,
+  })
+  return sent ? null : {
+    say: "The letter couldn't be sent just now. Try again in a minute.",
+    no: true,
+  }
+}
+
 // Account forms return to the section that submitted them. Settings fields
 // are independent; changing an address cannot overwrite an omitted name.
 // Every space's page shares the cookie's site, so ownership alone is
@@ -2151,6 +2199,15 @@ let saved = async (
     return said instanceof Response
       ? said
       : desk(req, env, dir, space, who, 'connections', said)
+  }
+  // The People page's button: another letter for an invitation not yet
+  // accepted, exactly as asking member_add again sends one (invite.ts).
+  if (form.has('again')) {
+    let said = await again(env, dir, space, who, String(form.get('again')))
+    if (said) return desk(req, env, dir, space, who, 'people', said)
+    let to = sentFrom(req, env)
+    to.searchParams.set('sent', '1')
+    return redirect(to.href, 303)
   }
   if (form.get('billing') == 'checkout') return checkout(env, req, space)
   if (form.get('billing') == 'portal') return portal(env, req, space)

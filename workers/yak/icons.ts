@@ -16,11 +16,13 @@ import Plug from 'lucide/dist/esm/icons/plug.mjs'
 import Plus from 'lucide/dist/esm/icons/plus.mjs'
 import Settings2 from 'lucide/dist/esm/icons/settings-2.mjs'
 import Trash2 from 'lucide/dist/esm/icons/trash-2.mjs'
+import Users from 'lucide/dist/esm/icons/users.mjs'
 
 export let icons = {
   'layout-grid': LayoutGrid,
   bot: Bot,
   plug: Plug,
+  users: Users,
   'chart-no-axes-column-increasing': ChartNoAxesColumnIncreasing,
   'credit-card': CreditCard,
   'settings-2': Settings2,

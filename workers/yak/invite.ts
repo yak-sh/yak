@@ -20,11 +20,15 @@ import {
   type Directory,
   type Role,
   type Space,
+  stamp,
   url,
 } from './directory.ts'
 import { reachChanged } from './declared.ts'
+import { caught } from './defects.ts'
 import type { Env } from './env.ts'
 import { type Host, spaceHost, url as hostUrl } from './host.ts'
+import { mail } from './mail.ts'
+import { counted, refusedSpend } from './meter.ts'
 import { closed, invited, lost } from './pages.ts'
 import { INVITE } from './route.ts'
 import { refuse } from './tool.ts'
@@ -60,6 +64,102 @@ export let paced = (
     )
   }
   return { hour, sent: sent + 1 }
+}
+
+/**
+ * What stops one more invitation going out from this person for this space:
+ * the space's letters this month (meter.ts), then the inviter's hour, which
+ * this one is counted on. Asked before anything is written, so a refused
+ * invitation writes and mails nothing at all (T-32963).
+ */
+export let allowed = async (
+  env: Env,
+  dir: Directory,
+  space: Space,
+  person: string,
+) => {
+  let no = await refusedSpend(dir, space, 'emails', env)
+  if (no) throw refuse('limit', no)
+  await stamp(env, {
+    entities: [{
+      entity: { eid: person },
+      inviting: paced(await dir.inviting(person)),
+    }],
+  })
+}
+
+// Their words, marked as theirs: quoted the way a letter quotes, so a reader
+// can tell what the person wrote from what the platform did.
+let quoted = (said: string) =>
+  said.split('\n').map((l) => `> ${l}`.trimEnd()).join('\n')
+
+/**
+ * The letter for an invitation standing: the first, or another for somebody
+ * who has not accepted yet. It goes from the platform's own sender, the one
+ * the sign-in code rides (mail.ts), under fixed words; what the inviter chose
+ * (their name, the app's title, their note) is in the body, marked as theirs.
+ * It names what it opens with the address it opens at, and who invited them
+ * by name, since an address is what a letter is sent to and never what a
+ * person is called (T-32654). Once it goes it counts on the space's month and
+ * stamps the invitation `sent`, which is what its inviter reads back
+ * (people.ts). True when it went; a failure to send is reported and answered
+ * as false, for the caller to say.
+ */
+export let send = async (
+  env: Env,
+  dir: Directory,
+  o: {
+    invite: string
+    place: Place
+    email: string
+    role: Role
+    /** who is inviting them, by person */
+    by: string
+    /** what to call them, where the inviter said */
+    name?: string
+    note?: string
+  },
+): Promise<boolean> => {
+  let { space, app } = o.place
+  let host = spaceHost(env, space.slug)
+  let what = app
+    ? `${app.title} (${host}/${app.slug})`
+    : `${space.title} (${host})`
+  let by = await dir.nameAt(o.by)
+  let accept = await acceptLink(env.SESSION_SECRET, {
+    invite: o.invite,
+    to: app ? app.eid : space.eid,
+  }, env)
+  let sent = await mail(env)({
+    to: o.email,
+    subject: SUBJECT,
+    body: (o.name ? `Hi ${o.name},\n\n` : '') +
+      // Their words first, and marked as theirs, so a reader never takes the
+      // platform to be saying them (T-32963).
+      (o.note ? `${by ?? 'They'} wrote:\n\n${quoted(o.note)}\n\n` : '') +
+      `${by ?? 'Someone'} invited you to ` +
+      `${o.role == 'viewer' ? 'see' : 'use'} ${what}. ` +
+      `Accept with one click:\n\n` +
+      `${accept}\n\n` +
+      `Sign in with this address (${o.email}) if you are asked to. There ` +
+      'is nothing to install and no account to make first. Until you ' +
+      'accept, nothing of theirs is shared with you, and if you did not ' +
+      'expect this you can ignore it.',
+  }).then(() => true).catch((e) => {
+    caught(e, { invite: o.invite, space: space.slug })
+    return false
+  })
+  if (!sent) return false
+  await Promise.all([
+    counted(env, space),
+    stamp(env, {
+      entities: [{
+        entity: { eid: o.invite },
+        invite: { sent: new Date().toISOString() },
+      }],
+    }),
+  ])
+  return true
 }
 
 type Sealed = { invite: string; to: string }

@@ -227,7 +227,6 @@ import { scheduleUse } from './used.ts'
 import {
   atCeiling,
   ceilings,
-  counted,
   countedSpend,
   free,
   monthOf,
@@ -238,7 +237,8 @@ import {
   standing,
   tooManySpaces,
 } from './meter.ts'
-import { acceptLink, paced, SUBJECT } from './invite.ts'
+import { allowed, send } from './invite.ts'
+import { aloud, peopleIn } from './people.ts'
 import {
   BUILT,
   draftFiles,
@@ -2135,13 +2135,8 @@ let noteOf = (v: unknown) => {
   return said
 }
 
-// Their words, marked as theirs: quoted the way a letter quotes, so a reader
-// can tell what the person wrote from what the platform did.
 // The article a role takes: an editor, an owner, a viewer.
 let an = (role: Role) => role == 'viewer' ? 'a' : 'an'
-
-let quoted = (said: string) =>
-  said.split('\n').map((l) => `> ${l}`.trimEnd()).join('\n')
 
 // How many of these one person gets in an hour. A few is plenty: feedback is
 // a person noticing something, not a stream, and the fourth in an hour is
@@ -4143,6 +4138,15 @@ let OURS: Row[] = [
       // person has, and what they threw away and can still have back
       // (erase.ts, T-34430).
       let living = every.filter((a) => !a.trashed)
+      // Who is in each space the caller owns and in each of its apps, and who
+      // has yet to accept (people.ts): the owner's to read, as on their
+      // dashboard's People page, and two reads however many there are.
+      let owned = seats.filter((s) => s.role == 'owner').map((s) => s.space)
+      let people = peopleIn(
+        ctx.dir,
+        owned,
+        living.filter((a) => owned.some((s) => s.eid == a.space)),
+      ).then((all) => new Map(all.map((r) => [r.space.eid, r])))
       let bound = await bindings(ctx.env, living)
       // What is broken in each app, as each space's tracker holds it: one read
       // a space, all at once, and no app's store woken to list it (T-123502).
@@ -4151,9 +4155,11 @@ let OURS: Row[] = [
           ...await trackedIn(ctx.env, space, asCaller(ctx, role), true),
         ]))).flat().map(([app, hits]) => [app, breaks(hits)] as const),
       )
+      let gathered = await people
       let lines: string[] = []
       for (let { space, role } of seats) {
         let mine = every.filter((a) => a.space == space.eid)
+        let them = gathered.get(space.eid)
         let apps = mine.filter((a) => !a.trashed)
         let bin = mine.filter((a) => a.trashed)
         // The space itself may be in the trash (erase.ts, T-34431), and then
@@ -4175,8 +4181,15 @@ let OURS: Row[] = [
                 : ''
             }`,
         )
+        if (them) {
+          lines.push(
+            ...aloud('members', them.members, them.invited, ctx.person)
+              .map((line) => `  ${line}`),
+          )
+        }
         for (let app of apps) {
           let held = bound.filter((b) => b.app == app.eid)
+          let here = them?.apps.find((a) => a.app.eid == app.eid)
           let errors = broken.get(app.eid) ?? 0
           // What this app spent this month, as the hourly sweep last read it
           // (usage.ts). Nothing metered yet says nothing.
@@ -4206,6 +4219,12 @@ let OURS: Row[] = [
             }`,
           )
           lines.push(...bindingLines(held).map((line) => `  ${line}`))
+          if (here) {
+            lines.push(
+              ...aloud('guests', here.guests, here.invited, ctx.person)
+                .map((line) => `  ${line}`),
+            )
+          }
         }
         if (!apps.length) lines.push('- no apps yet')
         // Where the space stands against what it is allowed (T-32758), in a
@@ -5072,14 +5091,7 @@ let OURS: Row[] = [
       // Anyone else is invited, and nothing is theirs until they accept
       // (invite.ts, T-37880). The letter is counted twice before it goes: on
       // the space's monthly letters, and on the inviter's hour.
-      let no = await refusedSpend(ctx.dir, space, 'emails', ctx.env)
-      if (no) throw refuse('limit', no)
-      await stamp(ctx.env, {
-        entities: [{
-          entity: { eid: ctx.person },
-          inviting: paced(await ctx.dir.inviting(ctx.person)),
-        }],
-      })
+      await allowed(ctx.env, ctx.dir, space, ctx.person)
       let to = app ? app.eid : space.eid
       let standing = await ctx.dir.invite(to, person)
       let eid = standing?.eid ?? crypto.randomUUID()
@@ -5090,42 +5102,15 @@ let OURS: Row[] = [
             : { entity: { eid }, invite: { to, person, role: want } },
         ],
       }, vouched(who))
-      // The letter, from the platform's own sender — the one the sign-in
-      // code rides (mail.ts). Its subject is fixed words; what the inviter
-      // chose (their name, the app's title, their note) is in the body,
-      // marked as theirs.
-      // Named with the address it opens at, which is what they will see.
-      let host = spaceHost(ctx.env, space.slug)
-      let what = app
-        ? `${app.title} (${host}/${app.slug})`
-        : `${space.title} (${host})`
-      // Who invited them, by name — an address is what the letter is sent
-      // to, never what a person is called (T-32654).
-      let by = await ctx.dir.nameAt(ctx.person)
-      let accept = await acceptLink(ctx.env.SESSION_SECRET, {
+      let sent = await send(ctx.env, ctx.dir, {
         invite: eid,
-        to,
-      }, ctx.env)
-      let sent = await mail(ctx.env)({
-        to: email,
-        subject: SUBJECT,
-        body: (name ? `Hi ${name},\n\n` : '') +
-          // Their words first, and marked as theirs, so a reader never takes
-          // the platform to be saying them (T-32963).
-          (note ? `${by ?? 'They'} wrote:\n\n${quoted(note)}\n\n` : '') +
-          `${by ?? 'Someone'} invited you to ` +
-          `${want == 'viewer' ? 'see' : 'use'} ${what}. ` +
-          `Accept with one click:\n\n` +
-          `${accept}\n\n` +
-          `Sign in with this address (${email}) if you are asked to. There ` +
-          'is nothing to install and no account to make first. Until you ' +
-          'accept, nothing of theirs is shared with you, and if you did not ' +
-          'expect this you can ignore it.',
-      }).then(() => true).catch((e) => {
-        caught(e, { tool: 'member_add', space: space.slug })
-        return false
+        place: { space, app },
+        email,
+        role: want,
+        by: ctx.person,
+        name,
+        note,
       })
-      if (sent) await counted(ctx.env, space)
       return {
         // Asked again for somebody who never accepted: that is the news when
         // they say they cannot get in, so the answer says so first.

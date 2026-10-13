@@ -29,6 +29,7 @@ export type ManageView =
   | 'apps'
   | 'connect'
   | 'connections'
+  | 'people'
   | 'new'
   | 'visits'
   | 'selling'
@@ -43,6 +44,7 @@ export let manageView = (path: string): ManageView | null => {
     'apps',
     'connect',
     'connections',
+    'people',
     'new',
     'visits',
     'selling',

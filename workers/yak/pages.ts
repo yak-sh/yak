@@ -13,8 +13,9 @@ import type { Agent } from './connected.ts'
 import type { Connections, Face, Shown, Using } from './connections.ts'
 import { agentList, agentLive } from './connected_ui.ts'
 import { icon, type IconName } from './icons.ts'
-import { esc } from './html.ts'
-import { tile } from './render/mod.ts'
+import { day, esc } from './html.ts'
+import { holder, tile } from './render/mod.ts'
+import type { People, Person } from './people.ts'
 export { esc } from './html.ts'
 import {
   enabling,
@@ -643,6 +644,8 @@ export type DeskPage = {
   no?: boolean
   view?: ManageView
   connections?: Connections
+  /** who is in the space and its apps, and who has yet to accept */
+  people?: People
 }
 
 let deskCss = `
@@ -738,6 +741,7 @@ let deskCss = `
 
 let navIcons = {
   apps: 'layout-grid',
+  people: 'users',
   connect: 'bot',
   connections: 'plug',
   visits: 'chart-no-axes-column-increasing',
@@ -765,7 +769,7 @@ ${icon(navIcons[key])}${label}${
     url(env, '/yaks-app.png')
   }" width="36" height="36" alt="">yaks.app</a>
 <nav class="SideNav" aria-label="Manage your apps">
-${link('apps', 'Apps')}${link('connect', 'Agents')}${
+${link('apps', 'Apps')}${link('people', 'People')}${link('connect', 'Agents')}${
     link('connections', 'Connections')
   }<hr>
 ${link('visits', 'Visits')}${at.sell ? link('selling', 'Selling') : ''}
@@ -924,7 +928,7 @@ let trash = (at: DeskPage) =>
     : '<section class="Desk_Empty"><h2>Trash is empty</h2></section>'
 
 // A sentence out of a lowercase line: what a failed seal wrote beside it.
-let sentence = (text: string) =>
+export let sentence = (text: string) =>
   text.charAt(0).toUpperCase() + text.slice(1) +
   (/[.!?]$/.test(text) ? '' : '.')
 
@@ -1139,6 +1143,40 @@ let connections = (at: DeskPage, env: Host) => {
   }`
 }
 
+// Who is in the space and in each of its apps, and who has yet to accept
+// (people.ts): a list for the space and one for each app anybody is a guest of
+// or invited to, each row drawn by its renderer (render/held.ts), and beside
+// an invitation the button that sends its letter again (apps.ts `saved`).
+let people = (at: DeskPage) => {
+  let r = at.people
+  if (!r) return ''
+  let again = (p: Person) =>
+    p.held == 'invite'
+      ? `<form class="People_Again" method="post" action="${
+        managePath('people', at.pick)
+      }"><input type="hidden" name="again" value="${
+        esc(p.eid)
+      }"><button class="Button Button-quiet" type="submit" aria-label="Send the invitation to ${
+        esc(p.email ?? p.name)
+      } again">Send again</button></form>`
+      : ''
+  let list = (title: string, all: Person[]) =>
+    all.length
+      ? `<h2 class="Desk_Group">${esc(title)}</h2><ul class="People">${
+        all.map((p) => `<li class="People_Row">${holder(p)}${again(p)}</li>`)
+          .join('')
+      }</ul>`
+      : ''
+  let apps = r.apps.map((a) =>
+    list(`${a.app.title} · this app only`, [...a.guests, ...a.invited])
+  ).join('')
+  return `${list('Members · every app', [...r.members, ...r.invited])}${apps}${
+    r.members.length < 2 && !r.invited.length && !apps
+      ? '<section class="Desk_Empty"><h2>Just you so far</h2><p>Ask your assistant to invite someone by their email address, to one app or to every app here.</p></section>'
+      : '<p class="Note">To invite someone else, or take someone off, ask your assistant.</p>'
+  }`
+}
+
 // The dashboard's page for one space, at the apex (apps.ts `manage`). What
 // it aims at the space itself — an app, the drop zone, the builder — it names
 // by the space's own address.
@@ -1147,6 +1185,7 @@ export let desk = (at: DeskPage, env: Host = {}) => {
   let site = `https://${spaceHost(env, at.space)}`
   let titles = {
     apps: 'Your apps',
+    people: 'People',
     connect: 'Your agents',
     connections: 'Connections',
     new: 'New app',
@@ -1193,6 +1232,7 @@ export let desk = (at: DeskPage, env: Host = {}) => {
   }
   if (view == 'trash') body = trash(at)
   if (view == 'connections') body = connections(at, env)
+  if (view == 'people') body = people(at)
   return shell(
     env,
     `${titles[view]} · ${esc(at.space)}`,
@@ -1711,16 +1751,6 @@ change while nothing is built there.</p>
 //
 // A day, not a timestamp: "runs until 14 October 2026" is what somebody wants
 // to know, and the hour is noise on a monthly bill.
-let day = (iso: string) => {
-  let at = new Date(iso)
-  return Number.isNaN(at.getTime()) ? '' : at.toLocaleDateString('en-GB', {
-    day: 'numeric',
-    month: 'long',
-    year: 'numeric',
-    timeZone: 'UTC',
-  })
-}
-
 let plan = (
   y: Pick<Yours, 'slug' | 'plan' | 'paid'>,
   env: Host,

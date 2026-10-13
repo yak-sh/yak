@@ -494,9 +494,10 @@ test('a deploy says how many round trips it took', async () => {
 })
 
 // And what a listing costs (T-35431, T-123502). The shape is what the exact
-// numbers are here to hold: the directory is asked a fixed five times however
-// many spaces and apps the answer has — the caller's seats, the apps across
-// them, what is bound to those apps — and no app's store at all, since what is
+// numbers are here to hold: the directory is asked a fixed number of times
+// however many spaces and apps the answer has — the caller's seats, the apps
+// across them, what is bound to those apps, who is in the spaces the caller
+// owns (T-123886) — and no app's store at all, since what is
 // broken in each is the space's tracker's to say. A listing that woke every
 // store spent the month's requests of apps nobody had opened.
 test('a listing asks the directory a fixed number of times', async () => {
@@ -521,14 +522,16 @@ test('a listing asks the directory a fixed number of times', async () => {
     else assertEquals(said.stmts > 0, true)
     return { hops: said.hops, stmts: said.stmts, r2: said.r2 }
   }
-  // 3 seats + 1 apps + 1 bindings, and nothing per app.
+  // 3 seats + 1 apps + 1 bindings + 1 for who is in the spaces she owns
+  // (people.ts), and nothing per app. The people it names are one read more,
+  // and here that is only her, whose row the seats already read.
   assertEquals(await costs('about', {}), { hops: 0, stmts: 0, r2: 0 })
   let all = await costs('app_list', {})
-  assertEquals({ hops: all.hops, r2: all.r2 }, { hops: 5, r2: 0 })
-  // One space named is read and its seat asked for by name, then its apps
-  // and their bindings.
+  assertEquals({ hops: all.hops, r2: all.r2 }, { hops: 6, r2: 0 })
+  // One space named is read and its seat asked for by name, then its apps,
+  // their bindings, who is in it and their rows.
   let one = await costs('app_list', { space: 'one' })
-  assertEquals({ hops: one.hops, r2: one.r2 }, { hops: 4, r2: 0 })
+  assertEquals({ hops: one.hops, r2: one.r2 }, { hops: 6, r2: 0 })
   assertEquals(all.stmts > one.stmts, true)
 })
 

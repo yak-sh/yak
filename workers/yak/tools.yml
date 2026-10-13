@@ -484,9 +484,12 @@ app_list:
     version it is at, its access (public, open or private), how many errors
     are still open in it (app_errors lists them), which app is the
     space's front page, and what the month has cost against what the space
-    is allowed. Deleted apps are listed under Trash with the days each has
-    left, until app_restore brings it back or the 30 days run out.
-    Documentation: https://yaks.app/docs.
+    is allowed. In a space they own, it also says who is in it: its members,
+    each app's guests, and every invitation not accepted yet with the day its
+    latest letter went, so "my friend can't get in" starts here (member_add
+    sends another letter, member_remove withdraws one). Deleted apps are
+    listed under Trash with the days each has left, until app_restore brings
+    it back or the 30 days run out. Documentation: https://yaks.app/docs.
 commands:
   title: List app commands
   description: >-

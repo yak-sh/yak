@@ -610,4 +610,45 @@
   .Agents_Disconnect {
     margin: 0;
   }
+
+  /* People: who holds a place in a space or an app, a row each, with what
+     can be done about one at the row's end. */
+  .People {
+    display: grid;
+    gap: var(--half-gap);
+    margin: 0 0 var(--gap);
+    padding: 0;
+    list-style: none;
+  }
+  .People_Row {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: var(--half-gap) var(--gap);
+    padding: var(--gap);
+    border: 1px solid var(--edge);
+    border-radius: var(--small-radius);
+    background: var(--paper);
+    box-shadow: inset 0 1px var(--rim);
+    text-align: left;
+  }
+  .People_Who {
+    display: grid;
+    flex: 1 1 12rem;
+    gap: var(--quarter-gap);
+    min-width: 0;
+    color: var(--ink);
+    overflow-wrap: anywhere;
+  }
+  .People_Email,
+  .People_Role {
+    color: var(--soft-ink);
+    font-size: var(--small);
+  }
+  .People_Waiting {
+    color: var(--warn);
+  }
+  .People_Again {
+    margin: 0;
+  }
 }
