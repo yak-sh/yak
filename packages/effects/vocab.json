@@ -45,7 +45,7 @@
           "type": "object",
           "additionalProperties": true,
           "stamped": true,
-          "description": "on a `removed` run, what the commit removed from the target, as it was before the commit: each component by name, since the run cannot read it afterwards"
+          "description": "on a `removed` run, the component it is about as it was before the commit, by name, since the run cannot read it afterwards"
         },
         "kind": {
           "type": "string",

@@ -46,10 +46,10 @@ type Fired = Parameters<Handlers[string]>
 /** Whether a write moves the persona files, given the entities the last pass
  * said (none until a pass has been made, and then every write counts). Text or
  * a link counts when it touches what the last pass said, a link that went
- * read by the ends it had (@yaks/effects `Event.before`); a persona moving
- * always does. A project with a repository put away or brought back does too:
- * the last pass never said it while it was archived, and its checkout is what
- * the files are written into. */
+ * read by the ends its `edge` had (@yaks/effects `Event.before`); a persona
+ * moving always does. A project with a repository put away or brought back
+ * does too: the last pass never said it while it was archived, and its
+ * checkout is what the files are written into. */
 export let moves = async (
   e: Fired[0],
   tx: Fired[1],
@@ -62,7 +62,7 @@ export let moves = async (
     return !!(row?.project && row.repo)
   }
   if (e.name == DOC || e.name == 'content') return about(e.entity.eid)
-  if (e.name == 'contains' || e.name == 'reads') {
+  if (e.name == EDGE || e.name == 'contains' || e.name == 'reads') {
     let ends = (e.before?.[EDGE] ??
       (await tx.get([e.entity.eid], [EDGE]))[0]?.[EDGE]) as Comp | undefined
     return about(ends?.from, ends?.to)

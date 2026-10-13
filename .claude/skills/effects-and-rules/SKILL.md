@@ -98,8 +98,8 @@ What any errand runner that can't lose work lives with:
 
 - **A scope is the subject.** A declaration's `target` query narrows its
   component triggers to the entities it reconciles. It is checked before and
-  after the write, so removing a component or moving out of scope still owes
-  reconciliation. A global `active` query instead asks whether the duty is
+  after the write, so removing a component, moving out of scope or dying in a
+  cascade still owes reconciliation. A global `active` query instead asks whether the duty is
   enabled anywhere.
 - **A trigger is broad.** `created: ['completed']` fires for every entity that
   ever gains `completed`, whoever wrote it. `active: '<query>'` or a `match`
@@ -113,7 +113,11 @@ What any errand runner that can't lose work lives with:
   rather than repeated. `attempt.retry(body)` retries a local completion
   without replaying the external part.
 - **A run reads the present.** It rebuilds its event from the target's current
-  state. A value it needs as it was at the time, it stores itself.
+  state. A value it needs as it was at the time, it stores itself. A removal is
+  the exception: its event keeps the component that went (`before`), and only
+  that one. An effect that needs a deleted link's ends watches `edge` going,
+  narrowed by a `target` (`.requires|.contains`); one watching `content` going
+  keeps every body it matches, so its `target` keeps it to what it is about.
 - **A failure keeps its kind.** `tries` (default three) with backoff (1s,
   doubling, at most 5 min), then `failed` with its error. A final no (a usage
   limit, a refusal) stays final: relabelled as an interruption, one retried

@@ -749,12 +749,12 @@
         "inference.receipt"
       ],
       "removed": [
-        "contains",
-        "requires"
+        "edge"
       ],
+      "target": ".entry|.session|.task|.requires|.contains",
       "sweep": ".session.status=pending,running,queued (.entries.using|.entries.ask)|.dispatch.status=active,queued,waiting",
       "tries": 8,
-      "description": "run a transcript until it has nothing more to do: a `using` on an entry asks for a turn, a cancel withdraws the request in flight, a stop ends it (and gives up a child's place), a child is admitted, or a task a transcript holds completes, is cancelled or loses a dependency. A model request the provider failed but may yet answer is asked again after the pool's backoff, eight tries in a row at most"
+      "description": "run a transcript until it has nothing more to do: a `using` on an entry asks for a turn, a cancel withdraws the request in flight, a stop ends it (and gives up a child's place), a child is admitted, or a task a transcript holds completes, is cancelled or loses a dependency (a `requires` or `contains` link going, read by the ends it had). A model request the provider failed but may yet answer is asked again after the pool's backoff, eight tries in a row at most"
     },
     "session_release": {
       "effect": true,
@@ -778,10 +778,10 @@
         "cancelled"
       ],
       "removed": [
-        "contains",
-        "requires"
+        "edge"
       ],
-      "description": "wake every transcript parked on a task that waits on the one that finished, or on a task whose link to an unfinished dependency went away: where its run is over, an input carrying the `using` in force asks for its next turn, which whoever answers that provider runs (the session runner, or @yaks/spawn for a command line)"
+      "target": ".completed|.cancelled|.requires|.contains",
+      "description": "wake every transcript parked on a task that waits on the one that finished, or on a task whose link to an unfinished dependency went away (a `requires` or `contains` edge going, read by the ends it had): where its run is over, an input carrying the `using` in force asks for its next turn, which whoever answers that provider runs (the session runner, or @yaks/spawn for a command line)"
     }
   }
 }

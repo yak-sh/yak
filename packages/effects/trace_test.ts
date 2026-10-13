@@ -94,18 +94,22 @@ test('an event carries the patch, and the num the batch minted', () => {
   assertEquals(e.entity, { eid: 'p1', num: 7 })
 })
 
-test('a removal carries what the batch removed, as it was before', () => {
+test('a removal carries its own component as it was before, and no other', () => {
   let edge = { from: 'y', to: 'x' }
   let removals = (bundles: Bundle[]) =>
     events(bundles).filter((e) => e.kind == 'removed')
       .map((e) => [e.name, e.before])
-  let gone = { entity: { eid: 'e1' }, edge, requires: {} }
+  let e1 = { eid: 'e1' }
   equal(
     removals(batch(
-      { e1: { edge, requires: {} } },
-      { entity: { eid: 'e1' }, $delete: true },
+      { e1: { edge, requires: {}, content: { body: 'long' } } },
+      { entity: e1, $delete: true },
     )),
-    [['edge', gone], ['requires', gone]],
+    [
+      ['edge', { entity: e1, edge }],
+      ['requires', { entity: e1, requires: {} }],
+      ['content', { entity: e1, content: { body: 'long' } }],
+    ],
   )
   // A component taken off a living entity, and one born and removed in the
   // same batch, which nothing read before it.
@@ -117,7 +121,7 @@ test('a removal carries what the batch removed, as it was before', () => {
     )),
     [
       ['post', { entity: { eid: 'p1' }, post: { title: 'One' } }],
-      ['note', { entity: { eid: 'p1' }, post: { title: 'One' } }],
+      ['note', undefined],
     ],
   )
 })

@@ -124,6 +124,24 @@ test('computed effect targets retain their storage-derived membership', () => {
   ])
 })
 
+let doomed = loadVocab([...blog.docs, {
+  $defs: {
+    note: { effect: true, removed: ['comment'], target: '.comment.text=kept' },
+  },
+}])
+test('effect targets scope what a cascade deletes by what it was', () => {
+  let seen: string[] = []
+  let fx = effects(doomed).handle({ note: (e) => seen.push(e.entity.eid) })
+  let g = graph({ vocab: doomed, storage: ram(doomed), plugins: [fx] })
+  let comment = (eid: string, text: string) => ({
+    entity: { eid },
+    comment: { post: 'parent', text },
+  })
+  g.apply([post('parent', true), comment('c1', 'kept'), comment('c2', 'other')])
+  g.apply([{ entity: { eid: 'parent' }, $delete: true }])
+  assertEquals(seen, ['c1'])
+})
+
 let guestBrowser = '00000000-0000-4000-8000-000000000001'
 let signedBrowser = '00000000-0000-4000-8000-000000000002'
 let stamps = loadVocab(blog.docs.map((doc) => ({

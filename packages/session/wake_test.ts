@@ -200,6 +200,19 @@ test('a managed run parked on a task is woken when a dependency link goes away',
   assert(textOf(wake).includes('no longer waits on #x'), textOf(wake))
 })
 
+test('a managed run parked on a task is woken when a dependency it waits on is deleted', async () => {
+  let w = await world()
+  await w.g.apply(managed('m1', 0))
+  await w.idle()
+  assertEquals(await w.claim('y'), 'm1')
+  // The link goes with x: only what the commit found says which ends it had.
+  await w.g.apply([{ entity: { eid: 'x' }, $delete: true }])
+  await w.idle()
+  let [wake] = (await transcript(w.g, 'm1')).slice(-1)
+  assertEquals((wake.using as Comp).provider, CLI)
+  assert(textOf(wake).includes('no longer waits on #x'), textOf(wake))
+})
+
 test('a managed run that failed lets go of the task it was waiting on', async () => {
   let w = await world()
   await w.g.apply(managed('m1', 3))

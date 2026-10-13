@@ -349,6 +349,8 @@ export let effects = (vocab: Vocab, opts: Opts = {}): Effects => {
     let local = (c: Clause): boolean => {
       if (c.kind == 'and' || c.kind == 'or') return c.clauses.every(local)
       if (c.kind != 'pred' || c.where || c.not) return false
+      // A reverse association reads the entities that point here.
+      if (!vocab.comp(c.path[0]) && vocab.assoc(c.path[0])) return false
       let hops = vocab.aim(c.path.join('.'), bare(c)), h = hops[0]
       if (hops.length != 1 || !h || vocab.comp(h.comp)?.computed) return false
       let prop = h.prop && vocab.prop(h.comp, h.prop)
@@ -376,10 +378,15 @@ export let effects = (vocab: Vocab, opts: Opts = {}): Effects => {
       return bundles
     }
     let prior = (bundles[0]?.[BEFORE] ?? {}) as Before
-    let eids = [
-      ...new Set([...bundles.map((b) => b.entity.eid), ...Object.keys(prior)]),
-    ]
-    let seen = events(bundles)
+    let batch = new Set(bundles.map((b) => b.entity.eid))
+    // What dies with the batch is not in it until the write runs, so it is
+    // read as deleted here: a target scopes a casualty by what it was.
+    let doomed = Object.keys(prior).filter((eid) => !batch.has(eid))
+    let eids = [...batch, ...doomed]
+    let seen = events([
+      ...bundles,
+      ...doomed.map((eid) => ({ entity: { eid }, $delete: true })),
+    ])
     let queries = [
       ...new Set(
         slots.filter((s) =>

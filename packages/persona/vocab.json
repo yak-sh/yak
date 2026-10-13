@@ -128,9 +128,11 @@
         "content",
         "contains",
         "reads",
+        "edge",
         "archived"
       ],
-      "description": "write the persona files again: a persona, its home, text a persona says in doc or content, a link carrying or reading it, or a project with a repository archived or restored moved",
+      "target": ".persona|.edges_to.edge.from.persona|.contains|.reads|.project .repo",
+      "description": "write the persona files again: a persona, its home, text a persona says in doc or content, a link carrying or reading it (read by the ends it had once it is gone), or a project with a repository archived or restored moved",
       "option": "files"
     },
     "skill": {

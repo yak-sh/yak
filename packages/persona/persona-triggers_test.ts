@@ -5,6 +5,8 @@ import { effects, moves } from './effects.ts'
 import { personaFiles } from './files.ts'
 import type { Graph } from '@yaks/graph'
 import type { Event } from '@yaks/effects'
+import type { Comp } from '@yaks/graph'
+import { edgeEid } from '@yaks/edge'
 import { link, owing, world } from './testing.ts'
 
 let words = '11111111-1111-4111-8111-111111111111'
@@ -13,17 +15,29 @@ let fixture = () => owing('persona_files')
 for (let name of ['doc', 'content']) {
   for (let kind of ['created', 'changed', 'removed'] as const) {
     let { g, queued, clear } = fixture()
-    await g.apply([{
-      entity: { eid: words },
+    let text = (eid: string) => ({
+      entity: { eid },
+      memory: {},
       ...(kind == 'created' ? {} : { [name]: { body: 'before' } }),
-    }])
+    })
+    await g.apply([
+      { entity: { eid: 'persona' }, persona: {} },
+      text(words),
+      text('unsaid'),
+      link('persona', 'contains', words),
+    ])
     await clear()
     test(`${name} ${kind} owes persona files only for words they say`, async () => {
-      await g.apply([{
-        entity: { eid: words },
-        [name]: kind == 'removed' ? null : { body: 'after' },
-      }])
-      equal((await queued()).length, 1)
+      for (let eid of [words, 'unsaid']) {
+        await g.apply([{
+          entity: { eid },
+          [name]: kind == 'removed' ? null : { body: 'after' },
+        }])
+      }
+      equal(
+        (await queued()).map((b) => (b.effect as Comp).target),
+        [words],
+      )
       let event = {
         kind,
         name,
@@ -145,13 +159,34 @@ test('a persona link going away owes a pass only where it touched what was said'
   let gone = (from: string, to: string) =>
     ({
       kind: 'removed',
-      name: 'contains',
+      name: 'edge',
       entity: { eid: 'link' },
-      before: { entity: { eid: 'link' }, edge: { from, to }, contains: {} },
+      before: { entity: { eid: 'link' }, edge: { from, to } },
     }) as Event
   let said = new Set(['persona'])
   equal(await moves(gone('persona', 'note'), g.storage, said), true)
   equal(await moves(gone('elsewhere', 'note'), g.storage, said), false)
+})
+
+test('a deleted persona link keeps only its ends, and deleted words no persona says owe nothing', async () => {
+  let { g, queued, clear } = fixture()
+  await g.apply([
+    { entity: { eid: 'persona' }, persona: {} },
+    { entity: { eid: 'note' }, memory: {}, doc: { body: 'said' } },
+    { entity: { eid: 'entry' }, content: { body: 'long' } },
+    link('persona', 'contains', 'note'),
+  ])
+  await clear()
+  await g.apply([{ entity: { eid: 'entry' }, $delete: true }])
+  equal(await queued(), [])
+  await g.apply([{
+    entity: { eid: edgeEid('persona', 'contains', 'note') },
+    $delete: true,
+  }])
+  equal(
+    (await queued()).map((b) => (b.effect as Comp).before).filter(Boolean),
+    [{ edge: { from: 'persona', to: 'note' } }, { contains: {} }],
+  )
 })
 
 let checkout = [
@@ -211,11 +246,17 @@ test('archiving what holds no checkout starts no pass', async () => {
   equal(await archive(g, said, 'note', true), false)
 })
 
-test('putting an entity away, or bringing it back, owes persona files', async () => {
+test('putting a project with a repository away, or bringing it back, owes persona files', async () => {
   let { g, queued } = fixture()
-  await g.apply([{ entity: { eid: 'project' }, project: {} }])
+  await g.apply([
+    { entity: { eid: 'project' }, project: {}, repo: { repository: 'repo' } },
+    { entity: { eid: 'plain' }, project: {} },
+  ])
   for (let [archived, owed] of [[{}, 1], [null, 2]] as const) {
-    await g.apply([{ entity: { eid: 'project' }, archived }])
+    await g.apply([
+      { entity: { eid: 'project' }, archived },
+      { entity: { eid: 'plain' }, archived },
+    ])
     equal((await queued()).length, owed)
   }
 })

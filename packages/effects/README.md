@@ -103,10 +103,11 @@ derives events from the applied [patches](../graph/README.md#data-model).
 A `changed` event describes the applied patch, not a comparison of old and new
 values. `comp` holds the component on creation, the applied properties on
 change, and is absent on removal. A removal carries `before` instead: the entity
-holding everything the commit removed from it, as it was before the commit, so a
-handler can still read what a deleted edge pointed at. `touched` lists every
+holding the component that went, as it was before the commit, and nothing else
+it lost. A handler that needs what a deleted link pointed at watches `edge`
+going, narrowed by a `target`, and reads `before.edge`. `touched` lists every
 component the same commit moved on that entity, including removals. A pooled run
-keeps both.
+keeps both, so a removal's row is never larger than the component it is about.
 
 ```ts
 import { graph } from '@yaks/graph'
@@ -572,11 +573,11 @@ start-up work.
 
 Commit-triggered runs can be gated with `active`, a query that must match an
 entity; sweeps use their own query. A `target` query limits triggers to subjects
-matching before or after the write, including removals and moves out of scope.
-An `option` names the declaring plugin's boolean opt-in; the composing host
-passes disabled names to the registry so every writer agrees with its workers.
-Writes to pool entities owe no effects, preventing pool bookkeeping from
-producing more runs.
+matching before or after the write, including removals, moves out of scope and
+what a cascade deletes. An `option` names the declaring plugin's boolean opt-in;
+the composing host passes disabled names to the registry so every writer agrees
+with its workers. Writes to pool entities owe no effects, preventing pool
+bookkeeping from producing more runs.
 
 ```ts
 import { graph } from '@yaks/graph'
