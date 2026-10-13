@@ -84,6 +84,14 @@ test('a page reports its own breaks, and the agent hears', async () => {
       await (await k.at(`${jeff59}.yaks.app`, '/recipes/bare.html')).text(),
       /<h1>bare<\/h1>[\s\S]*data-yak-at/,
     )
+    // And with neither tag, it comes ahead of the page's own first script,
+    // so a throw there is heard.
+    await files.put('/thrown.html', '<h1>thrown</h1><script>boom()</script>')
+    await agent.tool('app_deploy', app)
+    assertMatch(
+      await (await k.at(`${jeff59}.yaks.app`, '/recipes/thrown.html')).text(),
+      /<h1>thrown<\/h1><script data-yak-at[\s\S]*<script>boom\(\)<\/script>/,
+    )
 
     // What the injected script posts, and what the browser posts on its own.
     assertEquals(
@@ -132,7 +140,11 @@ test('a page reports its own breaks, and the agent hears', async () => {
     // The words carry more than the list; the list as data is the files.
     let entries = list.value?.files
     assert(Array.isArray(entries))
-    assertEquals(entries.map((file) => file.path), ['bare.html', 'index.html'])
+    assertEquals(entries.map((file) => file.path), [
+      'bare.html',
+      'index.html',
+      'thrown.html',
+    ])
     assert(
       !(await agent.tool('app_files', { ...app, op: 'list' })).includes(
         'unseen',

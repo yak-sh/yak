@@ -104,9 +104,16 @@ export let durable = (name = '', declaration: string | null = null) => {
 
 // The streaming HTML rewriter, in the one shape apps.ts asks for it
 // (`reported` weaves the reporter into every page): a tag prepended inside the
-// first `head` or `body`, else appended to the document. Deno has none, and
-// what a page carries out of that door is part of what the door does.
-type El = { prepend(s: string, o: { html: boolean }): void }
+// first `head` or `body`, or put before the first `script`, else appended to
+// the document. Each selector's first element is handed over in document
+// order, as the streaming one meets them. Deno has none, and what a page
+// carries out of that door is part of what the door does.
+type El = {
+  prepend(s: string, o: { html: boolean }): void
+  before(s: string, o: { html: boolean }): void
+}
+let opening = (selector: string) =>
+  new RegExp(`<${selector}(?=[\\s>/])[^>]*>`, 'i')
 
 class Rewriter {
   #on: [string, (el: El) => void][] = []
@@ -121,13 +128,23 @@ class Rewriter {
   }
   transform(res: Response) {
     let done = res.text().then((html) => {
-      for (let [selector, element] of this.#on) {
-        let at = new RegExp(`<${selector}[^>]*>`, 'i').exec(html)
-        if (!at) continue
+      let met = this.#on
+        .map(([selector, element]) => ({
+          selector,
+          element,
+          at: opening(selector).exec(html)?.index ?? -1,
+        }))
+        .filter((m) => m.at >= 0)
+        .sort((a, b) => a.at - b.at)
+      for (let { selector, element } of met) {
+        let at = opening(selector).exec(html)!
         element({
           prepend: (s) => {
             let cut = at.index + at[0].length
             html = html.slice(0, cut) + s + html.slice(cut)
+          },
+          before: (s) => {
+            html = html.slice(0, at.index) + s + html.slice(at.index)
           },
         })
       }

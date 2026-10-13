@@ -358,9 +358,12 @@ let platformFile = (req: Request, env: Env, path: string) =>
   )
 
 // The reporter, into every page the kernel serves (page-script.ts), wherever
-// the page has a place to put it: first inside `<head>`, else first inside
-// `<body>`, else at the end of a document with neither. Streaming — the bytes
-// are never held — and once, whichever came first.
+// the page has a place to put it ahead of its own code: first inside
+// `<head>`, else first inside `<body>`, else before the page's first script,
+// else at the end of a document with none of them. A page needs neither tag,
+// and one without them that threw in its first script went unreported when
+// the reporter landed after it. Streaming — the bytes are never held — and
+// once, whichever came first.
 //
 // It is told the app's address as served (`at`), where it finds its doors: at
 // the app's prefix normally, at the root for a front page or a custom domain,
@@ -396,6 +399,7 @@ let reported = async (
   return new HTMLRewriter()
     .on('head', { element: (el) => once((s, o) => el.prepend(s, o)) })
     .on('body', { element: (el) => once((s, o) => el.prepend(s, o)) })
+    .on('script', { element: (el) => once((s, o) => el.before(s, o)) })
     .onDocument({ end: (end) => once((s, o) => end.append(s, o)) })
     .transform(page)
 }
