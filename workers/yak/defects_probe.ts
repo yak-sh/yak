@@ -67,6 +67,12 @@ export class StoreCases extends DurableObject {
       env,
     )
   }
+  // A deploy arms the store's alarm for the rows its rules owe (graph.ts
+  // `#installDeployment`), and the runtime lets only an object with an alarm
+  // handler set one. The probe plays the runtime's part, calling the store's
+  // alarm itself in the order it checks, so the runtime's own delivery runs
+  // nothing that could fall between those calls.
+  alarm(): void {}
   fetch(req: Request): Promise<Response> {
     return entry(bindings(this.env), 'store probe', async () => {
       let store = new Store(this.state)
