@@ -1865,6 +1865,16 @@ let clients = (env: Host) => [
     key: 'chatgpt',
     tab: 'ChatGPT',
     title: 'ChatGPT — on the web',
+    // Who can, before anyone starts: OpenAI's help page on developer mode
+    // (help.openai.com/en/articles/12584461) puts full MCP, writes included,
+    // in beta for Business, Enterprise and Edu, turned on by an admin; Pro
+    // connects with read and fetch only; Free and Plus go unnamed; and MCP
+    // apps are web only.
+    intro: 'On ChatGPT Business, Enterprise or Edu, you can add yaks.app ' +
+      'and build with it once an admin turns it on. On Pro it connects but ' +
+      'can only read, so it can’t build. Free and Plus can’t add it this ' +
+      'way today, but Claude works on any plan. It works on the web, not in ' +
+      'the phone app.',
     steps: [
       'Copy this URL:' +
       fields(field('Connection', url(env, '/mcp'), 'the connection URL')),
@@ -1877,11 +1887,6 @@ let clients = (env: Host) => [
       '<b>Create as a plugin</b>.',
       'Sign in with your email when ChatGPT asks.',
     ],
-    // OpenAI's page says only that "account and workspace policies apply"
-    // to adding a custom MCP server (developers.openai.com/plugins/deploy/
-    // connect-chatgpt); it names no plan, so none is named here.
-    note: 'If ChatGPT does not show <b>Add custom MCP server</b>, your ' +
-      'account or workspace may not allow it. In a workspace, ask an admin.',
     // The repository's plugin names production; a staging visitor needs the
     // manual setup above to stay with this deployment.
     details: apex(env) == apex()
@@ -1963,6 +1968,7 @@ ${
       }>
 <label class="Tabs_Tab" for="tab-${a.key}">${a.tab}</label>
 <section class="Card Tabs_Panel Tabs_Panel-${a.key}"><h2>${a.title}</h2>
+${a.intro ? `<p>${a.intro}</p>` : ''}
 ${
         a.paths
           ? a.paths.map((p) =>
