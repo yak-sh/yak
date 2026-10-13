@@ -404,7 +404,7 @@ let asks = async (
       space: s.space,
       app,
       who,
-      refuse: () => new Response(null, { status: 403 }),
+      refuse: () => Promise.resolve(new Response(null, { status: 403 })),
       json: (status) => new Response(null, { status }),
       visiting: () => Promise.resolve(null),
     }
@@ -600,7 +600,7 @@ test(
         space: s.space,
         app,
         who: { person: null, role },
-        refuse: () => new Response(null, { status: 403 }),
+        refuse: () => Promise.resolve(new Response(null, { status: 403 })),
         json: (status) => new Response(null, { status }),
         visiting: () => Promise.resolve(null),
       }

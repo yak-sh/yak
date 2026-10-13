@@ -313,7 +313,7 @@ test('the /stats door only shares counts with app members', async () => {
       space: { slug: 'one' },
       app: { eid: 'e', slug: 'app' },
       who: { person: role ? 'p' : null, role },
-      refuse: () => new Response(null, { status: 403 }),
+      refuse: () => Promise.resolve(new Response(null, { status: 403 })),
       json: (status: number) => new Response(null, { status }),
     }) as never
 

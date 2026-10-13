@@ -256,7 +256,7 @@ let reach = async (
     space: over.space ?? tunneled,
     app: over.app ?? mail,
     who: over.who ?? itself,
-    refuse: () => new Response(null, { status: 403 }),
+    refuse: () => Promise.resolve(new Response(null, { status: 403 })),
     json: (status, code) => Response.json({ error: { code } }, { status }),
     visiting: () => Promise.resolve(null),
   })
