@@ -178,9 +178,10 @@ test('a job is marked begun on its row while it runs, and cleared after', async 
 })
 
 // The runtime moved the directory to a new instance in the middle of its
-// hourly reading, and retried the alarm on the new one. The reading's
-// occurrence was spent, so that retry is what runs it again. A move is
-// expected and says nothing; a job no run has finished for `STUCK` does.
+// hourly reading, the instance it moved off said so (graph.ts `#handOver`),
+// and the runtime retried the alarm on the new one. The reading's occurrence
+// was spent, so that retry is what runs it again. A move is expected and says
+// nothing; a job no run has finished for `STUCK` does.
 let died = async (began: string, since: string | null = null) => {
   let rows: Bundle[] = [], readings = 0
   let fetch = globalThis.fetch
@@ -205,6 +206,9 @@ let died = async (began: string, since: string | null = null) => {
       idFromName: (n) => n,
       get: () => ({ fetch: (req: Request) => store.fetch(req) }),
     } as typeof p.env.STORE
+    await store.fetch(
+      new Request('http://store/moved', { method: 'POST', headers: KERNEL }),
+    )
     await within(
       p.env,
       {},

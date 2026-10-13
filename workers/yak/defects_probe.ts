@@ -70,11 +70,19 @@ export class StoreCases extends DurableObject {
   fetch(req: Request): Promise<Response> {
     return entry(bindings(this.env), 'store probe', async () => {
       let store = new Store(this.state)
-      let door = doorOf((r) => store.fetch(r), 'ada/notes')
+      let alarm = new URL(req.url).pathname.includes('/alarm/')
+      let door = doorOf(
+        (r) => store.fetch(r),
+        'ada/notes',
+        alarm ? { eid: 'ada-notes', access: 'private' } : undefined,
+      )
       await door('/vocab', { method: 'POST', body: '{}' }, KERNEL)
-      if (new URL(req.url).pathname.includes('/alarm/')) {
+      if (alarm) {
+        // A retry after a kill, then one after a move the instance it moved
+        // off said so for (graph.ts `#handOver`), then the next alarm.
         await store.alarm({ isRetry: true, retryCount: 1 })
-        await store.alarm({ isRetry: true, retryCount: 2 })
+        await door('/moved', { method: 'POST' }, KERNEL)
+        await store.alarm({ isRetry: true, retryCount: 1 })
         await store.alarm()
         return Response.json({ retried: true })
       }
