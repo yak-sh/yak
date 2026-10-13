@@ -37,8 +37,6 @@ import {
   requestUnits,
   size,
   spent,
-  standing,
-  usedBuilds,
   WARN,
   weighed,
 } from './meter.ts'
@@ -403,11 +401,11 @@ test('Plus ceilings are distinct and comped apps/data stay uncapped', () => {
   assertEquals(level(space({ bytes: PLUS.bytes }, 'plus'), 1, NOW), 'over')
   let comped = { ...space({ bytes: PLUS.bytes * 2 }, 'plus'), slug: 'yourname' }
   assertEquals(level(comped, 10000, NOW), 'ok')
-  let said = standing(space({ bytes: PLUS.bytes }, 'plus'), 51, NOW)
-  assertStringIncludes(said, 'plus tier')
-  assertStringIncludes(said, '51 apps (unlimited)')
-  assertStringIncludes(said, '10 GB of 10 GB')
-  assertStringIncludes(said, 'App serving pauses at')
+  let said = gauged(space({ bytes: PLUS.bytes }, 'plus'), 51, NOW)
+  assertStringIncludes(said, '10 GB of 10 GB of app data')
+  assertStringIncludes(said, 'at the limit for app data')
+  // The Plus plan sets no ceiling on apps, so the line counts none.
+  assert(!/ of [\d,]+ apps/.test(said), said)
   assertEquals(JSON.parse(JSON.stringify(PLUS)).apps, null)
   assertStringIncludes(
     atCeiling(space({}, 'plus'), 'bytes'),
@@ -415,34 +413,25 @@ test('Plus ceilings are distinct and comped apps/data stay uncapped', () => {
   )
 })
 
-test('the line says every number against its ceiling', () => {
-  let said = standing(
-    space({ requests: 41_000, bytes: 900 * 1024 ** 2 }),
-    3,
-    NOW,
-  )
-  assertStringIncludes(said, '3 of 5 apps')
-  assertStringIncludes(said, '41,000 of 50,000 estimated request units')
-  assertStringIncludes(said, 'WebSocket messages at 20:1')
-  assertStringIncludes(said, '900 MB of 1 GB')
-  assertStringIncludes(said, '0 of 100 emails')
-  // The hour those figures were read: the meter is an hourly rollup, and a
-  // bare number reads as live (C-32869 item 6).
-  assertStringIncludes(said, '(as of 12:00 UTC)')
-  assertStringIncludes(said, 'App serving pauses at')
-})
-
 test("a space's month is one line, and names a ceiling only near or at it", () => {
   let line = gauged(
-    space({ requests: 39_000, models: 0.05, realtime: 0.01 }),
+    space({
+      requests: 39_000,
+      bytes: 700 * 1024 ** 2,
+      models: 0.05,
+      realtime: 0.01,
+    }),
     3,
     NOW,
   )
   for (
     let said of [
+      // The hour those figures were read: the meter is an hourly rollup, and
+      // a bare number reads as live (C-32869 item 6).
       '(as of 12:00 UTC)',
       '3 of 5 apps',
       '39,000 of 50,000 request units',
+      '700 MB of 1 GB of app data',
       '0 of 100 emails',
       '$0.06 of model use and voice ($0.01 of it voice)',
     ]
@@ -460,17 +449,6 @@ test("a space's month is one line, and names a ceiling only near or at it", () =
   assertStringIncludes(early, 'request units and app data not read yet')
   assertStringIncludes(early, '3 of 100 emails')
   assert(!early.includes('of 50,000'), early)
-})
-
-test('before the first sweep the line says so, not zero', () => {
-  let said = standing(space({ at: '', emails: 3 }), 1, NOW)
-  assertStringIncludes(said, '1 of 5 apps')
-  assertStringIncludes(said, 'have not been read yet')
-  // The letters are counted as they happen rather than swept, so they are a
-  // number even here (T-33688).
-  assertStringIncludes(said, '3 of 100 emails')
-  assert(!said.includes('of 50,000 requests'), 'it claimed a request count')
-  assertStringIncludes(said, 'App serving pauses at')
 })
 
 // A refusal points at the page that describes the plans and never at anything
@@ -493,8 +471,8 @@ test('a refusal names the ceiling and where the plans are written', () => {
     '2,500 emails a month',
   )
   assert(
-    !/checkout/i.test(standing(space(), 3)),
-    'the standing line names no purchase either',
+    !/checkout/i.test(gauged(space(), 5, NOW)),
+    "the month's line names no purchase either",
   )
 })
 
@@ -553,7 +531,7 @@ test('a free space gets five builds each month regardless of lifetime use', asyn
 
   // A refusal costs them nothing — not the build, and not the sentence: the
   // count is written by the loop that finished one, and this one never ran.
-  assertEquals(usedBuilds(after, NOW), 5)
+  assertEquals(spent(after, NOW).builds, 5)
   assertEquals(
     await c.read('month', 'builds', 'models', 'seconds', 'built'),
     one,
@@ -562,7 +540,7 @@ test('a free space gets five builds each month regardless of lifetime use', asyn
   // The monthly allowance resets; the lifetime figure remains available.
   let october = new Date('2026-10-02T00:00:00Z')
   assertEquals(spent(after, october).built, 45)
-  assertEquals(usedBuilds(after, october), 0)
+  assertEquals(spent(after, october).builds, 0)
   assertEquals(await refusedBuild(after, october), null)
 })
 
@@ -615,17 +593,16 @@ test('the build line warns at 80%, and the line says both numbers', () => {
 
   // Build counts are per space; model cost is attributed to this space while
   // the budget is shared across its owner's account.
-  let said = standing(space({ builds: 1, models: 0.04, built: 1 }), 2, NOW)
-  assertStringIncludes(
-    said,
-    '1 of 5 builds a month ($0.04 of model use and voice here, ' +
-      "from the owner's account budget, and 0 of 3,600 build seconds this month)",
+  let said = gauged(space({ builds: 1, models: 0.04, built: 1 }), 2, NOW)
+  assertStringIncludes(said, '1 of 5 builds, 0 of 3,600 build seconds')
+  assertStringIncludes(said, "$0.04 of model use and voice from the owner's")
+  let plus = gauged(
+    space({ builds: 4, models: 0.0012, built: 44 }, 'plus'),
+    9,
+    NOW,
   )
-  assertStringIncludes(said, 'a build past 5')
-  assertStringIncludes(
-    standing(space({ builds: 4, models: 0.0012, built: 44 }, 'plus'), 9, NOW),
-    `4 of ${BUILDS.plus} builds a month ($0.0012 of model use and voice here`,
-  )
+  assertStringIncludes(plus, `4 of ${BUILDS.plus} builds`)
+  assertStringIncludes(plus, '$0.0012 of model use and voice')
 })
 
 test('Plus byte writes use the 10 GB ceiling as the stores last told it; comped spaces bypass it', async () => {
@@ -787,8 +764,8 @@ test('R2 accounting sweeps without analytics, follows deletion and survives the 
     'over',
   )
   assertStringIncludes(
-    standing(space({ files: FILES.plus }, 'plus'), 0, NOW),
-    '50 GB of 50 GB photos and files',
+    gauged(space({ files: FILES.plus }, 'plus'), 0, NOW),
+    '50 GB of 50 GB of photos and files',
   )
 })
 

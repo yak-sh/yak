@@ -23,7 +23,7 @@ import { bound, type Env } from './env.ts'
 import { sessionAt, vouched, type Who } from './session.ts'
 import { KERNEL, meta, metaOf } from './meta.ts'
 import { told } from './stream.ts'
-import { level, standing } from './meter.ts'
+import { gauged, level } from './meter.ts'
 import { caught, defect } from './defects.ts'
 import { capture, origin, queue } from '@yaks/tracker/report'
 import { errorsAt, errorsIn } from './app-errors.ts'
@@ -723,16 +723,18 @@ export let unseenBlock = (seen: Seen[]) =>
     ? `\n\n## unseen errors\n${folds(seen).map(line).join('\n')}\n${ENDS}`
     : ''
 
-// Where the space stands against its ceilings, said once (T-32758). It rides
-// this channel because it is the same kind of news as a break — something the
-// agent has to know and nobody said — and it wears the same mark: `notified`,
-// here on the space itself, cleared by the hourly sweep when the standing
-// moves (usage.ts). So the agent hears a line when it is news, and not on
-// every reply after. Nothing is said while a space is under 80% of every
-// ceiling.
+// Where the space stands against its ceilings, said once (T-32758), in the
+// line app_list says for the space (meter.ts `gauged`). It rides this channel
+// because it is the same kind of news as a break — something the agent has to
+// know and nobody said — and it wears the same mark: `notified`, here on the
+// space itself, cleared by the hourly sweep when the standing moves
+// (usage.ts). So the agent hears a line when it is news, and not on every
+// reply after. Nothing is said while a space is under 80% of every ceiling.
 export let ceiling = async (env: Env, space: Space) => {
   let apps = await appsOf(env, space)
   if (space.told || level(space, apps.length) == 'ok') return ''
   await stamp(env, { entities: [{ entity: { eid: space.eid }, notified: {} }] })
-  return `\n\n## ceiling\n${standing(space, apps.length, new Date(), env)}`
+  return `\n\n## ceiling\n${space.slug}: ${
+    gauged(space, apps.length, new Date(), env)
+  }`
 }

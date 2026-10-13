@@ -371,10 +371,6 @@ export let refusedVisit = (
   )
 }
 
-// Both plans count completed builds in the current calendar month.
-export let usedBuilds = (space: Space, now = new Date()) =>
-  spent(space, now).builds
-
 /** A ceiling a space answers to: what it has used and what it is allowed. */
 export type Gauge = { used: number; limit: number }
 export type Ceiling = 'apps' | 'requests' | 'bytes' | 'files' | Limited
@@ -437,68 +433,6 @@ let asOf = (at: string) => {
   return Number.isNaN(read.getTime())
     ? ''
     : ` (as of ${read.toISOString().slice(11, 16)} UTC)`
-}
-
-// The line the agent reads once a space nears a ceiling (unseen.ts
-// `ceiling`): every number against its ceiling, and what happens at each. One
-// line, because the agent has work to get back to.
-export let standing = (
-  space: Space,
-  apps: number,
-  now = new Date(),
-  env: Host = {},
-) => {
-  let free = ceilings(space.tier, space.slug)
-  let m = spent(space, now)
-  let mail = `${count(m.emails)} of ${count(letters(space.tier))} emails`
-  let made = `${count(usedBuilds(space, now))} of ${
-    count(builds(space.tier))
-  } builds a month`
-  // Space meters attribute model and voice cost; the budget is shared by the
-  // owner's accounts across spaces, so no space may state its own ceiling.
-  let voice = m.realtime ? ` (${dollars(m.realtime)} of it voice)` : ''
-  let cost =
-    `${dollars(used(m, 'models'))} of model use and voice here${voice}, ` +
-    `from the owner's account budget, and ${count(m.seconds)} of ${
-      count(allowance('seconds', space.tier))
-    } build seconds this month`
-  let files = `${size(m.files ?? 0)} of ${
-    size(FILES[space.tier ?? 'free'])
-  } photos and files (hourly reading)`
-  if (!free) {
-    return `${space.slug}: no ceilings on this plan beyond ${mail} and ` +
-      `${made} (${cost}), and ${files}.`
-  }
-  let refused =
-    `App serving pauses at ${count(free.requests)} monthly request units ` +
-    `(HTTP 429 to everyone but the space's own people signed in, checked ` +
-    `hourly; resets on the 1st UTC); ${
-      free.apps == null ? '' : `an app past ${free.apps}, `
-    }a build past ${count(builds(space.tier))}, data past ${
-      size(free.bytes)
-    }, files past ${size(free.files)}, the account budget spent, or the ${
-      count(letters(space.tier) + 1)
-    }st letter sent is refused — a letter that ` +
-    `arrives always lands. Plan settings: ${planSettings(space.slug, env)}`
-  let head = `${space.slug} (${
-    space.tier ?? 'free'
-  } tier, ${m.month}): ${apps}${
-    free.apps == null ? ' apps (unlimited)' : ` of ${free.apps} apps`
-  }`
-  let read = asOf(m.at)
-  // The apps, the letters and the builds are counted here and now; the rest
-  // waits on the sweep. Before the first one this month there is no reading at
-  // all, and zero would be a claim rather than a number.
-  if (!read) {
-    return `${head}, ${files}, ${mail}, ${made} (${cost}). The month's request units and ` +
-      `data have not been read yet — the meter sweeps hourly. ${refused}`
-  }
-  return `${head}, ${count(requestUnits(m))} of ${count(free.requests)} ` +
-    `estimated request units (incoming WebSocket messages at 20:1), ` +
-    `${size(m.bytes)} of ${
-      size(free.bytes)
-    } app data, ${files}, ${mail}${read}, ${made} ` +
-    `(${cost}). ${refused}`
 }
 
 /** Where a space stands, as data: each ceiling it answers to, what models and

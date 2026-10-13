@@ -674,9 +674,10 @@ test('the free tier: a warning once, then the refusals', async () => {
     assertStringIncludes(listed, 'near the limit for request units')
     let files = { space: brim36, app: 'one', op: 'list' }
     let said = await agent.tool('app_files', files)
-    assertStringIncludes(said, '## ceiling')
-    assertStringIncludes(said, '40,500 of 50,000 estimated request units')
-    assertStringIncludes(said, 'App serving pauses at')
+    // In the same line the listing says for the space.
+    assertStringIncludes(said, `## ceiling\n${brim36}: This month`)
+    assertStringIncludes(said, '40,500 of 50,000 request units')
+    assertStringIncludes(said, 'near the limit for request units')
     let again = await agent.tool('app_files', files)
     assert(!again.includes('## ceiling'), 'the ceiling line is said once')
 
