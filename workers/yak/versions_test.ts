@@ -110,9 +110,11 @@ let memory = () => {
         if (!v) throw new Error(`no blob at ${k}`)
         return Promise.resolve(v as Uint8Array<ArrayBuffer>)
       },
-      delete: (k) => {
-        m.delete(k)
-        at.delete(k)
+      delete: (keys) => {
+        for (let k of [keys].flat()) {
+          m.delete(k)
+          at.delete(k)
+        }
         return Promise.resolve()
       },
       list: (prefix) => Promise.resolve(keys(prefix)),

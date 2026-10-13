@@ -314,7 +314,7 @@ If you did not ask for this, ignore this letter and nothing happens at all.`,
 let swept = async (env: Env, prefix: string) => {
   let blobs = r2Objects(env.BLOBS)
   let keys = await blobs.list(prefix)
-  for (let key of keys) await blobs.delete(key)
+  await blobs.delete(keys)
   return keys
 }
 

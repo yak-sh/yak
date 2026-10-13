@@ -170,12 +170,18 @@ export let draftFiles = (
         known?.gone.delete(path(key))
       }
     },
-    delete: async (key) => {
-      if (!inDraft(key)) return blobs.delete(key)
-      await blobs.put(deleted(key), new Uint8Array())
-      await blobs.delete(key)
-      known?.own.delete(path(key))
-      known?.gone.add(path(key))
+    // What lies outside the draft goes in one trip; a draft path leaves its
+    // deletion marker first, one at a time.
+    delete: async (keys) => {
+      let all = [keys].flat()
+      let outside = all.filter((key) => !inDraft(key))
+      if (outside.length) await blobs.delete(outside)
+      for (let key of all.filter(inDraft)) {
+        await blobs.put(deleted(key), new Uint8Array())
+        await blobs.delete(key)
+        known?.own.delete(path(key))
+        known?.gone.add(path(key))
+      }
     },
     list: async (prefix) => {
       if (!prefix.startsWith(at)) return blobs.list(prefix)
@@ -877,7 +883,6 @@ export let pruned = async (
   now = Date.now(),
 ) => {
   let named = new Set<string>()
-  let gone = 0
   for (let { prefix, app } of apps) {
     let space = `${prefix.split('/')[0]}/`
     let stage = `${space}.releases/${app.eid}/`
@@ -908,19 +913,20 @@ export let pruned = async (
         if (file.sha) named.add(file.sha)
       }
     }
-    for (let [key, landed] of Object.entries(await blobs.uploaded(stage))) {
-      if (namedFiles.has(key)) continue
-      if (legacy.some((source) => key.startsWith(source))) continue
-      if (now - landed < GRACE) continue
-      await blobs.delete(key)
-    }
+    await blobs.delete(
+      Object.entries(await blobs.uploaded(stage)).filter(([key, landed]) =>
+        !namedFiles.has(key) &&
+        !legacy.some((source) => key.startsWith(source)) &&
+        now - landed >= GRACE
+      ).map(([key]) => key),
+    )
     let drafts = `${prefix.split('/')[0]}/.drafts/${app.eid}/`
     let active = app.draft
-    for (let [key, landed] of Object.entries(await blobs.uploaded(drafts))) {
-      if (active && key.startsWith(`${active}/`)) continue
-      if (now - landed < GRACE) continue
-      await blobs.delete(key)
-    }
+    await blobs.delete(
+      Object.entries(await blobs.uploaded(drafts)).filter(([key, landed]) =>
+        !(active && key.startsWith(`${active}/`)) && now - landed >= GRACE
+      ).map(([key]) => key),
+    )
     for (let key of await blobs.list(`${prefix}history/`)) {
       let all = entries(await blobs.read(key))
       let keep = trimmed(all, now)
@@ -940,13 +946,12 @@ export let pruned = async (
       for (let sha of Object.values(v.files)) named.add(sha)
     }
   }
-  for (let [key, landed] of Object.entries(await blobs.uploaded(SHA))) {
-    if (named.has(key.slice(SHA.length))) continue
-    if (now - landed < GRACE) continue
-    await blobs.delete(key)
-    gone++
-  }
-  return gone
+  let unnamed = Object.entries(await blobs.uploaded(SHA)).filter((
+    [key, landed],
+  ) => !named.has(key.slice(SHA.length)) && now - landed >= GRACE)
+    .map(([key]) => key)
+  await blobs.delete(unnamed)
+  return unnamed.length
 }
 
 /**

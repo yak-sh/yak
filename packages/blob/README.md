@@ -248,8 +248,8 @@ let bucket: Bucket = {
   put: async (key, value) => {
     held.set(key, new Uint8Array(value as Uint8Array))
   },
-  delete: async (key) => {
-    held.delete(key)
+  delete: async (keys) => {
+    for (let key of [keys].flat()) held.delete(key)
   },
   list: async ({ prefix }) => ({
     truncated: false,

@@ -10,10 +10,11 @@ import { type Bucket, bucketObjects, objectBlobs } from './object.ts'
 // The stand-in a test runs against: the same methods over a Map, because no
 // test should need a network or a cloud account to prove the wiring. A listing
 // pages two keys at a time, so a store that stopped at the first page shows.
-let fake = (): Bucket & { keys: () => string[] } => {
+let fake = (): Bucket & { keys: () => string[]; deletes: number } => {
   let held = new Map<string, Uint8Array>()
   return {
     keys: () => [...held.keys()],
+    deletes: 0,
     head: (key) => {
       let bytes = held.get(key)
       return Promise.resolve(
@@ -46,7 +47,11 @@ let fake = (): Bucket & { keys: () => string[] } => {
       held.set(key, new Uint8Array(value as ArrayBuffer))
       return Promise.resolve(null)
     },
-    delete: (key) => Promise.resolve(held.delete(key)),
+    delete(keys) {
+      this.deletes++
+      for (let key of [keys].flat()) held.delete(key)
+      return Promise.resolve()
+    },
     list: ({ prefix, cursor }) => {
       let keys = [...held.keys()].filter((k) => k.startsWith(prefix)).sort()
       let from = Number(cursor ?? 0)
@@ -116,4 +121,15 @@ test('a store keyed by name reads, deletes and lists every page', async () => {
   assertEquals(await files.uploaded('a/'), { 'a/x': 3, 'a/y': 3, 'a/zz': 4 })
   await files.delete('a/y')
   assertEquals(await files.list('a/'), ['a/x', 'a/zz'])
+  await files.delete(['a/x', 'a/zz'])
+  assertEquals(await files.list('a/'), [])
+})
+
+test('a store keyed by name deletes a thousand keys in one call', async () => {
+  let bucket = fake()
+  let files = bucketObjects(bucket)
+  let keys = Array.from({ length: 2001 }, (_, i) => `k/${i}`)
+  for (let key of keys) await files.put(key, encode(key))
+  await files.delete(keys)
+  assertEquals([bucket.keys(), bucket.deletes], [[], 3])
 })

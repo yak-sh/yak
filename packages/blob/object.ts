@@ -41,8 +41,9 @@ export type Bucket = {
     key: string,
     value: ArrayBuffer | ArrayBufferView | string | ReadableStream<Uint8Array>,
   ) => Promise<unknown>
-  /** remove the object under this key */
-  delete: (key: string) => Promise<unknown>
+  /** remove the object under this key, or under each of these keys: at most
+   * {@link DELETES} of them in one call */
+  delete: (keys: string | string[]) => Promise<unknown>
   /** one page of the objects whose keys start with `prefix`, each with the
    * moment it landed and its size in bytes; `cursor` continues a truncated
    * page */
@@ -52,6 +53,9 @@ export type Bucket = {
     cursor?: string
   }>
 }
+
+/** The most keys one bucket delete takes: R2's own limit. */
+export let DELETES = 1000
 
 /** A stored object's length and validator, with its body read on demand. */
 export type Opened = {
@@ -130,8 +134,10 @@ export type Objects = {
   get(key: string): Promise<Uint8Array<ArrayBuffer>>
   /** length and validator first, then stream only the bytes the caller needs */
   open(key: string): Promise<Opened | null>
-  /** remove the object under this key */
-  delete(key: string): Promise<void>
+  /** remove the object under this key, or under each of these keys in as few
+   * round trips as the bucket allows: a sweep of a thousand objects is one
+   * call, not a thousand */
+  delete(keys: string | string[]): Promise<void>
   /** every key under a prefix, sorted */
   list(prefix: string): Promise<string[]>
   /** the same keys, each with the moment it landed in epoch milliseconds: a
@@ -188,8 +194,11 @@ export let bucketObjects = (bucket: Bucket): Objects => ({
     return new Uint8Array(await object.arrayBuffer())
   },
   open: (key) => open(bucket, key),
-  delete: async (key) => {
-    await bucket.delete(key)
+  delete: async (keys) => {
+    if (typeof keys == 'string') return void await bucket.delete(keys)
+    for (let at = 0; at < keys.length; at += DELETES) {
+      await bucket.delete(keys.slice(at, at + DELETES))
+    }
   },
   list: async (prefix) => Object.keys(await walk(bucket, prefix)).sort(),
   uploaded: (prefix) => walk(bucket, prefix),

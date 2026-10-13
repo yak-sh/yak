@@ -2429,7 +2429,7 @@ let OURS: Row[] = [
         { entities },
         vouched(who),
       )
-      for (let key of keys) await blobs.delete(key)
+      await blobs.delete(keys)
       let now = (await ctx.dir.space(to ?? space.slug))!
       return {
         text: `space ${now.slug}${title == null ? '' : ` "${title}"`}: ` +
@@ -3859,7 +3859,7 @@ let OURS: Row[] = [
         )
       }
       await ctx.dir.apply({ entities }, vouched(who))
-      for (let key of keys) await blobs.delete(key)
+      await blobs.delete(keys)
       let now = (await ctx.dir.app(space, to ?? app.slug))!
       // The gallery, after the rest: what the letter names is the app as it
       // stands when the ask goes, title and address included, so a rename in

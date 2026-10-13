@@ -402,9 +402,11 @@ export let bucket = () => {
         if (!at.has(k)) at.set(k, Date.now())
         return Promise.resolve()
       },
-      delete: (k: string) => {
-        held.delete(k)
-        at.delete(k)
+      delete: (keys: string | string[]) => {
+        for (let k of [keys].flat()) {
+          held.delete(k)
+          at.delete(k)
+        }
         return Promise.resolve()
       },
       list: ({ prefix }: { prefix: string }) =>

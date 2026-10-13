@@ -192,12 +192,16 @@ export let staged = async (
         : files.has(key),
     put: (key, bytes) =>
       key.startsWith(root) ? put(key, bytes) : files.put(key, bytes),
-    delete: async (key) => {
-      if (!key.startsWith(root)) return files.delete(key)
-      let path = key.slice(root.length)
-      let held = index[path]
-      delete index[path]
-      if (held?.key == key.slice(space.length)) await raw.delete(key)
+    delete: async (keys) => {
+      let all = [keys].flat()
+      let outside = all.filter((key) => !key.startsWith(root))
+      if (outside.length) await files.delete(outside)
+      for (let key of all.filter((key) => key.startsWith(root))) {
+        let path = key.slice(root.length)
+        let held = index[path]
+        delete index[path]
+        if (held?.key == key.slice(space.length)) await raw.delete(key)
+      }
     },
     list: (at) =>
       at.startsWith(root)

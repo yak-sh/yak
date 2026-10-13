@@ -47,9 +47,10 @@ export let counted = (objects: Objects, tally?: Tally): Objects => {
       trip('open')
       return objects.open(key)
     },
-    delete: (key) => {
-      trip('delete')
-      return objects.delete(key)
+    // No keys is no call: the bucket is never asked.
+    delete: (keys) => {
+      if ([keys].flat().length) trip('delete')
+      return objects.delete(keys)
     },
     list: (prefix) => {
       trip('list')

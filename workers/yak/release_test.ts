@@ -47,8 +47,8 @@ let memory = () => {
       if (!bytes) throw new Error(`no object at ${key}`)
       return Promise.resolve(bytes)
     },
-    delete: (key) => {
-      held.delete(key)
+    delete: (keys) => {
+      for (let key of [keys].flat()) held.delete(key)
       return Promise.resolve()
     },
     list: (prefix) => Promise.resolve(keys(prefix)),
