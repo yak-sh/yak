@@ -10,7 +10,6 @@
 import { loadVocab, type Vocab, type VocabDoc } from '@yaks/vocab'
 import type { Bundle, Comp, Query } from '@yaks/graph'
 import { type And, parse } from '@yaks/query'
-import type { Computed } from '@yaks/match'
 import { type Graph, graph, type Storage } from '@yaks/graph'
 import { ram } from '@yaks/ram'
 import { executionComputed } from '@yaks/tools'
@@ -19,7 +18,7 @@ import { toolsDoc } from '@yaks/tools/vocab'
 import { modelDoc } from '@yaks/model/vocab'
 import { sessionDoc } from './comp.ts'
 import { type SessionOpts, sessions } from './plugin.ts'
-import { statusOf } from './state.ts'
+import { statusComputed } from './state.ts'
 
 let doc: VocabDoc = {
   $defs: {
@@ -136,19 +135,10 @@ let queryOf = (query: Query): And => {
   return known
 }
 
-let transcriptComputed: Computed = {
-  'session.status': (b, among) =>
-    statusOf(
-      among.list.filter((entry) =>
-        (entry.entry as Comp | undefined)?.session == b.entity.eid
-      ),
-    ),
-}
-
 /** A transcript's graph door over RAM, with entry sequencing and status.
  * Model/reporting tests need these facts without the unrelated session hooks. */
 export let transcriptGraph = (vocab: Vocab): Graph => {
-  let storage = ram(vocab, { computed: transcriptComputed })
+  let storage = ram(vocab, { computed: statusComputed })
   let g = graph({ storage, vocab })
   g.read = (query, opts) => storage.read(queryOf(query), opts)
   g.get = storage.get

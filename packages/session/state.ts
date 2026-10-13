@@ -1,6 +1,7 @@
 // Transcript state from entry bundles alone. Rendering and in-memory readers
 // share this pure logic without loading SQL derivations or tool execution.
 import type { Bundle, Comp } from '@yaks/graph'
+import type { Computed } from '@yaks/match'
 import { stoppedNotice } from './claude-control.ts'
 import {
   ASK,
@@ -196,6 +197,19 @@ export let statusOf = (entries: Bundle[], ended = false): TranscriptStatus => {
     return 'settled'
   }
   return served(all) ? 'pending' : 'running'
+}
+
+/** `session.status` for an in-memory store (@yaks/ram's `computed`): the rule
+ * above over the session's entries, as @yaks/sqlite derives it (./status.ts),
+ * so a query filtering on it answers alike in both. */
+export let statusComputed: Computed = {
+  'session.status': (s, among) =>
+    statusOf(
+      among.list.filter((b) =>
+        (b.entry as Comp | undefined)?.session == s.entity.eid
+      ),
+      (s.session as Comp | undefined)?.ended == true,
+    ),
 }
 
 /** The `using` in force at an entry: the newest one at or before it. */

@@ -13,6 +13,7 @@ import { loadVocab } from '@yaks/vocab'
 import { docDoc } from '@yaks/doc'
 import { sessionDoc } from './comp.ts'
 import { hear, heirs, pending, said } from './listen.ts'
+import { statusComputed } from './state.ts'
 
 let vocab = loadVocab([docDoc, sessionDoc], [idKeywords])
 let named = (eid: string) => eid.toUpperCase()
@@ -74,12 +75,7 @@ test('what the session wrote itself is never said, and what is said is marked', 
   assertEquals(marked, ['c1'])
 })
 
-// A project with a sub-project, the personas its sessions wear and one from
-// elsewhere. Three sessions wrote to the owner from the project: one still
-// running, one its harness ended and one whose transcript stopped. The owner
-// answered each, and answered the ended one's second letter at the
-// sub-project's address.
-let office = loadVocab([
+let words = loadVocab([
   kernelDoc,
   docDoc,
   mailDoc,
@@ -105,7 +101,38 @@ let wrote = (by: string, to: string, n = 1): Bundle[] => [
     doc: { title: 'Re: a question', body: 'yes' },
   },
 ]
-let desk = graph({ storage: ram(office), vocab: office })
+// A native transcript wearing a persona: settled between turns, or mid-turn.
+let transcript = (
+  id: string,
+  persona: string,
+  turn: 'settled' | 'working',
+): Bundle[] => [
+  { entity: { eid: id }, session: { id, persona } },
+  {
+    entity: { eid: `${id}-asked` },
+    entry: { session: id, seq: 1 },
+    content: { body: 'look into it' },
+    using: {},
+  },
+  ...turn == 'settled'
+    ? [{
+      entity: { eid: `${id}-done` },
+      entry: { session: id, seq: 2 },
+      output: { source: `${id}-asked` },
+      content: { body: 'done' },
+    }]
+    : [],
+]
+let office = () =>
+  graph({ storage: ram(words, { computed: statusComputed }), vocab: words })
+
+// A project with a sub-project, the personas its sessions wear and one from
+// elsewhere. Three sessions wrote to the owner from the project: one still
+// running, one its harness ended and one whose transcript stopped. The owner
+// answered each, and answered the ended one's second letter at the
+// sub-project's address. Outside sessions and native transcripts work for
+// each project, the native ones mid-turn or at rest.
+let desk = office()
 await desk.apply([
   { entity: { eid: 'p' }, project: {} },
   { entity: { eid: 'sub' }, project: {}, filed: { project: 'p' } },
@@ -127,6 +154,9 @@ await desk.apply([
     session: { id: 'nearby', persona: 'specialist' },
   },
   { entity: { eid: 'other' }, session: { id: 'other', persona: 'stranger' } },
+  ...transcript('busy', 'operator', 'working'),
+  ...transcript('idle', 'operator', 'settled'),
+  ...transcript('busy-sub', 'specialist', 'working'),
 ])
 for (
   let bundle of [
@@ -208,41 +238,22 @@ for (
   test(what, async () => equal(await hears(session), [...heard]))
 }
 
-test('a held reply may reach a session of its project or of one above it', async () => {
+test('a held item may reach a native transcript at work of its project or of one above it', async () => {
   let [atP, atSub] = await desk.get(['reply-ended-1', 'reply-ended-2'])
-  equal((await heirs(desk, [atP])).sort(), ['next'])
-  equal((await heirs(desk, [atSub])).sort(), ['nearby', 'next'])
-  equal(await heirs(desk, await desk.get(['knock-p'])), ['next'])
-  equal(await heirs(desk, await desk.get(['to-hello'])), ['next'])
+  equal(await heirs(desk, [atP]), ['busy'])
+  equal((await heirs(desk, [atSub])).sort(), ['busy', 'busy-sub'])
+  equal(await heirs(desk, await desk.get(['knock-p'])), ['busy'])
+  equal(await heirs(desk, await desk.get(['to-hello'])), ['busy'])
   equal(await heirs(desk, await desk.get(['to-loose'])), [])
 })
 
-// A native transcript of the project: settled between turns, or mid-turn.
-let transcript = (id: string, turn: 'settled' | 'working'): Bundle[] => [
-  { entity: { eid: id }, session: { id, persona: 'operator' } },
-  {
-    entity: { eid: `${id}-asked` },
-    entry: { session: id, seq: 1 },
-    content: { body: 'look into it' },
-    using: {},
-  },
-  ...turn == 'settled'
-    ? [{
-      entity: { eid: `${id}-done` },
-      entry: { session: id, seq: 2 },
-      output: { source: `${id}-asked` },
-      content: { body: 'done' },
-    }]
-    : [],
-]
-
 test('a native transcript at rest hears only what is addressed to it, never what is held for its project', async () => {
-  let g = graph({ storage: ram(office), vocab: office })
+  let g = office()
   await g.apply([
     { entity: { eid: 'p' }, project: {} },
     { entity: { eid: 'operator' }, persona: { home: 'p' } },
-    ...transcript('resting', 'settled'),
-    ...transcript('working', 'working'),
+    ...transcript('resting', 'operator', 'settled'),
+    ...transcript('working', 'operator', 'working'),
     { entity: { eid: 'news' }, knock: { target: 'p' }, doc: { body: 'bug' } },
     { entity: { eid: 'alert' }, mail: { from: 'a@example.com', target: 'p' } },
     {

@@ -137,16 +137,17 @@ entry; for example, `@yaks/openai` stores `openai{response_id}`.
 Session status is derived from entries rather than stored. `statusOf()` returns
 `empty`, `pending`, `running`, `settled`, `stopped`, or `failed`.
 `sessionDerived` exposes the corresponding `session.status` SQL-derived
-property. A stop remains effective until new input resumes the transcript; late
-model replies and tool results can be recorded without admitting more work. An
-unanswered call from the newest model request keeps a transcript `running`
-regardless of later entries. Otherwise, input/result means `pending`, ask/call
-means `running`, output means `settled`, stop means `stopped`, a provider's
-error beside an interrupted ask means `pending` (the pool asks again), and
-exception, an error beside a completed ask, three consecutive errors, or one
-error coded `limit` (`LIMIT`, a request refused at a ceiling, which asking again
-would meet too) means `failed`. No entries means `empty`. There is no separate
-`input` component.
+property, and `statusComputed` the same rule for @yaks/ram's `computed`, so
+`.session.status=running` answers alike in memory. A stop remains effective
+until new input resumes the transcript; late model replies and tool results can
+be recorded without admitting more work. An unanswered call from the newest
+model request keeps a transcript `running` regardless of later entries.
+Otherwise, input/result means `pending`, ask/call means `running`, output means
+`settled`, stop means `stopped`, a provider's error beside an interrupted ask
+means `pending` (the pool asks again), and exception, an error beside a
+completed ask, three consecutive errors, or one error coded `limit` (`LIMIT`, a
+request refused at a ceiling, which asking again would meet too) means `failed`.
+No entries means `empty`. There is no separate `input` component.
 
 A request's `cost{dollars, reported}` (@yaks/model) is written beside its
 `usage`: the provider's own dollars where it reports them, and otherwise, in the
@@ -576,7 +577,7 @@ The main module exports:
 - parking: `wake()`, `unlinked()`, `rouse()`, `waits()`, `unanswered()`,
   `requested()`, `resting()` and `cleanEnd()`;
 - inspection: `statusOf()`, `kindOf()`, `textOf()`, `ordered()`,
-  `sessionDerived`, and the bounded transcript functions;
+  `sessionDerived`, `statusComputed`, and the bounded transcript functions;
 - identity and rendering: `sessionFor()`, `sessionEid()`, `speaking()`,
   `where()`, and `sessionViews`, the portable transcript renderers;
 - harness readers: `claude`, `subagent`, `codex`, `readers`, and `scrub()`;

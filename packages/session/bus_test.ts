@@ -9,6 +9,8 @@ import { docDoc } from '@yaks/doc'
 import { effects } from '@yaks/effects'
 import { mailDoc } from '@yaks/mail/vocab'
 import { notifyDoc } from '@yaks/notify/vocab'
+import { personaDoc } from '@yaks/persona/vocab'
+import { projectDoc } from '@yaks/project/vocab'
 import { ram } from '@yaks/ram'
 import { storage } from '@yaks/sqlite'
 import { toolsDoc } from '@yaks/tools/vocab'
@@ -16,6 +18,7 @@ import { loadVocab } from '@yaks/vocab'
 import { test, until } from '@yaks/testing'
 import { feed, heard, reply } from './bus.ts'
 import { sessionDoc } from './comp.ts'
+import { sessionDerived, statusComputed } from './status.ts'
 import { sessions } from './plugin.ts'
 import { service } from './service.ts'
 import { mem } from '../sqlite/testing.ts'
@@ -26,11 +29,19 @@ let vocab = loadVocab([
   docDoc,
   mailDoc,
   notifyDoc,
+  personaDoc,
+  projectDoc,
   sessionDoc,
   toolsDoc,
 ])
+let memory = () => ram(vocab, { computed: statusComputed })
+let lite = () => {
+  let s = storage(mem(), vocab, { derived: sessionDerived(vocab) })
+  s.install()
+  return s
+}
 let fresh = async (
-  store: Storage = ram(vocab),
+  store: Storage = memory(),
   woke?: (eid: string) => void,
 ) => {
   let fx = effects(vocab)
@@ -93,9 +104,7 @@ test('native bus delivery appends input and marks the item once', async () => {
 })
 
 test('SQLite finds the same addressed comment and knock', async () => {
-  let store = storage(mem(), vocab)
-  store.install()
-  let g = await fresh(store)
+  let g = await fresh(lite())
   assertEquals(await feed(g), 1)
   assertEquals(
     (await g.get(['note', 'knock'])).map((b) => !!b.notified),
@@ -192,9 +201,7 @@ test('native comments never feed through the bus; outside task claims retain the
 })
 
 test('a process-backed harness claim still hears comments with a using entry', async () => {
-  let store = storage(mem(), vocab)
-  store.install()
-  let g = await fresh(store)
+  let g = await fresh(lite())
   // The spawned runner's using entry is a request to its outside process; it
   // does not make the transcript native and deaf to claimed-work comments.
   await g.apply([
@@ -250,11 +257,7 @@ let said = async (g: Awaited<ReturnType<typeof fresh>>, eid: string) =>
   (await g.get([eid]))[0].notified != null
 
 for (
-  let [name, store] of [['RAM', () => ram(vocab)], ['SQLite', () => {
-    let s = storage(mem(), vocab)
-    s.install()
-    return s
-  }]] as const
+  let [name, store] of [['RAM', memory], ['SQLite', lite]] as const
 ) {
   test(`${name}: a reply reaches the session that wrote the letter, once, and waits unheard`, async () => {
     let g = await fresh(store())
@@ -284,5 +287,30 @@ for (
     // Nobody hears for a session that is not listening: its reply waits.
     assertEquals(await said(g, 'answer-gone'), false)
     assertEquals((await reply(g, call)).length, 0)
+  })
+  test(`${name}: what is held for a project is fed to its transcript at work, never one at rest`, async () => {
+    let g = await fresh(store())
+    await g.apply([
+      { entity: { eid: 'p' }, project: {} },
+      { entity: { eid: 'operator' }, persona: { home: 'p' } },
+      { entity: { eid: 'native' }, session: { persona: 'operator' } },
+      { entity: { eid: 'resting' }, session: { persona: 'operator' } },
+      {
+        entity: { eid: 'asked' },
+        entry: { session: 'resting' },
+        content: { body: 'look into it' },
+        using: {},
+      },
+      {
+        entity: { eid: 'answered' },
+        entry: { session: 'resting' },
+        output: { source: 'asked' },
+        content: { body: 'done' },
+      },
+      { entity: { eid: 'news' }, knock: { target: 'p' }, doc: { body: 'bug' } },
+    ], { trusted: true })
+    assertEquals(await feed(g), 2) // its own knock, and the project's news
+    assertEquals(await said(g, 'news'), true)
+    assertEquals((await g.read('.entry.session=resting')).length, 2)
   })
 }

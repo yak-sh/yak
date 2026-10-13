@@ -73,7 +73,7 @@ import {
 import { safe } from '@yaks/text'
 import type { Vocab } from '@yaks/vocab'
 import { CLAIM, SESSION } from './comp.ts'
-import { statusOf, type TranscriptStatus } from './state.ts'
+import { statusOf } from './state.ts'
 
 let NOTIFIED = 'notified'
 
@@ -122,20 +122,38 @@ let newest = (
 ): Bundle[] | Promise<Bundle[]> =>
   graph.read(`.entry.session=${session}&.order=-entry.seq&.limit=3&*`)
 
-/** Where a session's transcript stands: stopped once its harness ended it,
- * else what its newest entries say. `s` carries `session.ended`. */
-export let state = async (
-  graph: Pick<Graph, 'read'>,
-  s: Bundle,
-): Promise<TranscriptStatus> =>
-  statusOf(await newest(graph, s.entity.eid), comp(s, SESSION).ended == true)
-
 /** Whether a session is over: its harness ended it, or its transcript
  * stopped or failed. One between turns is not. */
 export let over = async (
   graph: Pick<Graph, 'read'>,
   s: Bundle,
-): Promise<boolean> => ['stopped', 'failed'].includes(await state(graph, s))
+): Promise<boolean> =>
+  comp(s, SESSION).ended == true ||
+  ['stopped', 'failed'].includes(statusOf(await newest(graph, s.entity.eid)))
+
+let eids = (rows: Bundle[]): Eid[] => rows.map((b) => b.entity.eid)
+
+// The transcript statuses of a turn in progress: the model or a tool owes it
+// an answer.
+let WORKING = ['pending', 'running']
+
+// Which of these native transcripts are at work, mid-turn: only such a one
+// hears what is held for its project. A status is read off the transcript's
+// entries, so it is asked of native transcripts alone, never of an outside
+// session's long log.
+let atWork = async (
+  graph: Pick<Graph, 'read'>,
+  sessions: Eid[],
+): Promise<Eid[]> =>
+  sessions.length
+    ? eids(
+      await graph.read(and(
+        eq('entity.eid', value(sessions)),
+        eq(`${SESSION}.status`, list(...WORKING)),
+        fields(`${SESSION}.persona`),
+      )),
+    )
+    : []
 
 // A project and the projects filed under it at any depth (`->`), or above it
 // (`<-`): @yaks/project's sub-projects, read through `filed.project`.
@@ -172,9 +190,12 @@ export let worksFor = async (
 let reachedBy = (b: Bundle): string =>
   str(comp(b, 'mail').target) || str(comp(b, 'knock').target)
 
-/** The sessions that may hear these items once they are held: each wearing
- * a persona whose home is a project an item reached, or a project that one is
- * filed under. Whether a letter is held yet is {@link held}'s to say. */
+/** The native transcripts at work that may hear these items once they are
+ * held: mid-turn, each wearing a persona whose home is a project an item
+ * reached, or a project that one is filed under. One settled between turns
+ * hears none of it, and an outside session hears it on its own calls, so the
+ * feed never reads either. Whether a letter is held yet is {@link held}'s to
+ * say. */
 export let heirs = async (
   graph: Pick<Graph, 'vocab' | 'read'>,
   letters: Bundle[],
@@ -189,9 +210,27 @@ export let heirs = async (
       (await Promise.all(reached.map((p) => family(graph, p, '<-')))).flat(),
     ),
   ]
-  return (await graph.read(
-    and(eq(`${SESSION}.persona.persona.home`, value(homes))),
-  )).map((b) => b.entity.eid)
+  // Each read narrows the next, so only a native transcript's entries are
+  // read for its status: the personas homed there, the native transcripts
+  // wearing one (a `using` entry, and no `process` running it outside the
+  // graph), and those at work.
+  let personas = eids(
+    await graph.read(and(
+      present('persona'),
+      eq('persona.home', value(homes)),
+      fields('persona.home'),
+    )),
+  )
+  if (!personas.length) return []
+  let native = eids(
+    await graph.read(and(
+      eq(`${SESSION}.persona`, value(personas)),
+      ...graph.vocab.comp('process') ? [absent('process')] : [],
+      present('entries.using'),
+      fields(`${SESSION}.persona`),
+    )),
+  )
+  return atWork(graph, native)
 }
 
 /** The letters that reached these projects (any, left out), unsaid: every
@@ -325,7 +364,7 @@ export let pending = async (
   let [owner] = await graph.read(
     and(
       eq('entity.eid', session),
-      fields('session.persona', 'session.ended'),
+      fields('session.persona'),
     ),
   )
   let [process] = vocab.comp('process')
@@ -347,8 +386,7 @@ export let pending = async (
   }
   // What is held for the project waits for a session at work: an outside
   // one hears it on its own call, a native one only mid-turn (see above).
-  let working = !native ||
-    !!owner && ['pending', 'running'].includes(await state(graph, owner))
+  let working = !native || (await atWork(graph, [session])).length > 0
   let projects = working ? await worksFor(graph, owner) : []
   for (let b of await held(graph, session, projects)) hears(b)
   if (!items.length) return []
