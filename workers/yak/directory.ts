@@ -1362,10 +1362,20 @@ export let directory = (via: Fetcher | Part, now = false) => {
       // never seen — someone who signed in before it kept a row — makes the
       // question itself unanswerable. No row, no memberships. Nobody at all
       // (an empty person, `member` above) belongs to nothing either.
-      if (!person || !(await one(`.entity.eid=${person}`))) return []
-      let members = await query(
+      //
+      // Both are asked at once: this is the first step of every signed-in
+      // call (mcp.ts `door`), so each read waited on in turn is a round trip
+      // under every tool. The memberships of a person with no row are never
+      // read, and their refusal is nobody's to report.
+      if (!person) return []
+      let asked = query(
         `.member.person=${person}${role ? `&.member.role=${role}` : ''}`,
       )
+      if (!(await one(`.entity.eid=${person}`))) {
+        asked.catch(() => {})
+        return []
+      }
+      let members = await asked
       let held = new Map<string, Role>()
       for (let m of members) {
         if (m.member) held.set(idOf(m.member.space), m.member.role)

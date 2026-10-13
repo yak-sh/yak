@@ -15,6 +15,19 @@ export type Table = { [tag: string]: Fn }
 /** The value itself. */
 export let id = <T>(x: T): T => x
 
+/// let n = 0
+/// let one = once(() => ++n)
+/// [one(), one(), n] -> [1, 1, 1]
+/**
+ * `f`, called the first time it is asked for and never again: every later
+ * asking answers the first answer. A promise is kept as itself, so callers
+ * waiting at once share one wait.
+ */
+export let once = <T>(f: () => T): () => T => {
+  let held: { v: T } | undefined
+  return () => (held ??= { v: f() }).v
+}
+
 /// always(1)() -> 1
 /** A function answering `x`, whatever it is given. */
 export let always = <T>(x: T) => (): T => x

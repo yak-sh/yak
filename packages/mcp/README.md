@@ -123,12 +123,28 @@ each loaded vocabulary document's instructions in document order and sends them
 in the MCP `initialize` response. Other plugins can add instructions beside
 their own component declarations.
 
+`instructions` may also be a function returning the text. It is called only for
+the exchange that sends it, `initialize` (or for a stdio connection), so a host
+whose instructions cost reads pays them once per connection, not on every call.
+`instructed(opts, exchange)` answers what a server for that exchange sends:
+
+```ts
+import { instructed } from '@yaks/mcp'
+import { equal } from '@yaks/testing'
+
+let asked = 0
+let opts = { instructions: () => `asked ${++asked}` }
+equal(await instructed(opts, { method: 'tools/call' }), undefined)
+equal(await instructed(opts, { method: 'initialize' }), 'asked 1')
+equal(asked, 1)
+```
+
 ## Exports
 
 | Import             | Exports and purpose                                                                                                                                 |
 | ------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `@yaks/mcp`        | `mcp`, `MountOptions`, `Handler`: HTTP handler and its types                                                                                        |
-| `@yaks/mcp`        | `server`, `Options`: SDK server for a caller-supplied transport                                                                                     |
+| `@yaks/mcp`        | `server`, `Options`, `instructed`: SDK server for a caller-supplied transport, and the instructions an exchange sends                               |
 | `@yaks/mcp`        | `core`, `CoreOpts`, `Search`, `Guide`: generic tool construction and callbacks                                                                      |
 | `@yaks/mcp`        | `bundleSchema`, `schemaSchema`, `BundleOpts`, `Depth`: Zod schemas for bundles and schema results                                                   |
 | `@yaks/mcp`        | `listing`, `roster`, `rosterVersion`, `rosterLine`: tool definitions, names, and change notices                                                     |
@@ -313,10 +329,11 @@ it.
 
 ## When a server offers more than tools
 
-The HTTP and stdio entrypoints await `extend(server)` and then
+The HTTP and stdio entrypoints await `extend(server, exchange)` and then
 `skills(server, exchange)` after registering tools. HTTP passes the method of
-that one exchange; stdio leaves it undefined for the connection. Use it to
-register SDK resources or prompts:
+that one exchange; stdio leaves it undefined for the connection. A host can
+leave out what that exchange never reads: a `tools/call` lists no resource or
+prompt. Use it to register SDK resources or prompts:
 
 ```ts ignore
 mcp({

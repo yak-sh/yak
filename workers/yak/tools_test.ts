@@ -38,6 +38,8 @@ import { clock } from './timing.ts'
 import { KERNEL, meta } from './meta.ts'
 import { stages } from '../../bin/app-deploy-time.ts'
 import { running } from './agent.ts'
+import { fetch as mcpFetch } from './mcp.ts'
+import { COOKIE, sign } from './lib/token.ts'
 
 test('staging tool URLs and app mail use the same configured host', async () => {
   let delivered: { to: string; from: Address }[] = []
@@ -529,6 +531,64 @@ test('a listing asks the directory a fixed number of times', async () => {
   let one = await costs('app_list', { space: 'one' })
   assertEquals({ hops: one.hops, r2: one.r2 }, { hops: 4, r2: 0 })
   assertEquals(all.stmts > one.stmts, true)
+})
+
+// And what every signed-in call pays before its tool runs (mcp.ts `door`,
+// T-35479): who the caller is and what they reach, read in four directory
+// round trips — the person, their seats, their spaces, and every app across
+// those spaces in one list — however many of each they hold. No exchange
+// reads an app's notes or a space's memories but the one that says them:
+// `about` adds one memory read per space, and nothing per app.
+test('a call costs the same however many spaces and apps it reaches', async () => {
+  let secret = 'door-hops-secret'
+  let { env } = platform(secret)
+  let dir = directory({ fetch: (r) => dirPart.fetch(r, env) }, true)
+  let held = async (person: string, spaces: string[], apps: string[]) => {
+    for (let space of spaces) {
+      await call({ env, dir, person }, 'space_new', {
+        slug: space,
+        title: space,
+      })
+      for (let app of apps) {
+        await call({ env, dir, person }, 'app_new', {
+          space,
+          slug: app,
+          title: app,
+        })
+      }
+    }
+    await booted({ env, dir, person })
+    return `${COOKIE}=${await sign(
+      { person, space: null, exp: Math.floor(Date.now() / 1000) + 3600 },
+      secret,
+    )}`
+  }
+  let few = await held('a0000000-0000-4000-8000-0000000000f1', ['few'], ['a'])
+  let many = await held(
+    'a0000000-0000-4000-8000-0000000000f3',
+    ['many-1', 'many-2', 'many-3'],
+    ['a', 'b', 'c'],
+  )
+  let hops = async (cookie: string, method: string, params: unknown = {}) => {
+    let res = await mcpFetch(
+      new Request('https://yaks.app/mcp', {
+        method: 'POST',
+        headers: { cookie, 'content-type': 'application/json' },
+        body: JSON.stringify({ jsonrpc: '2.0', id: 1, method, params }),
+      }),
+      env,
+    )
+    assertEquals(res.status, 200, await res.clone().text())
+    await res.body?.cancel()
+    return stages(res.headers.get('server-timing')).hops
+  }
+  let about = { name: 'about', arguments: {} }
+  for (let method of ['initialize', 'tools/list', 'prompts/list']) {
+    assertEquals(await hops(few, method), 4, method)
+    assertEquals(await hops(many, method), 4, method)
+  }
+  assertEquals(await hops(few, 'tools/call', about), 4 + 1)
+  assertEquals(await hops(many, 'tools/call', about), 4 + 3)
 })
 
 // And what a write's reply costs: it says what broke across the space's apps

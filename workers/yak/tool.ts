@@ -44,11 +44,12 @@ export type Ctx = {
   // T-34277). Set after the tools are assembled, since it is made of them, so
   // only a tool running sees it — which `about` is.
   roster?: { version: string; names: string[] }
-  // What the apps in reach say about themselves (standing.ts), assembled once
-  // per request by the door that also puts it in `initialize.instructions`
-  // (mcp.ts). `about` says it again, because a client that cached the
-  // instructions at connect has no other way to read them fresh.
-  standing?: string
+  // What the apps in reach say about themselves (standing.ts), read when it
+  // is asked for, by the door that also puts the roster in
+  // `initialize.instructions` (mcp.ts). `about` says it again, because a
+  // client that cached the instructions at connect has no other way to read
+  // them fresh.
+  standing?: () => Promise<string>
   // The container time this build has spent (sandbox.ts `Spend`), where a
   // build is what is running: builder.ts mints one per loop and pays for it
   // at the end. A connector call arrives without one and gets a fresh one, so

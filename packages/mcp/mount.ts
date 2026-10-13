@@ -40,6 +40,7 @@ import { SESSION, sessionFor, speaking } from '@yaks/session'
 import { runner } from '@yaks/tools'
 import {
   type Exchange,
+  instructed,
   listing,
   logged,
   type Options,
@@ -166,6 +167,7 @@ export let mcp = (opts: MountOptions): Handler => {
       : undefined
     let built = server({
       ...opts,
+      instructions: await instructed(opts, caller?.exchange),
       actor: caller?.actor ?? null,
       runner: running(),
     })
@@ -206,15 +208,17 @@ export let mcp = (opts: MountOptions): Handler => {
       if (conn && actor?.by && actor.by != actor.via) {
         caller = { by: actor.by, via: conn.session.entity.eid }
       }
+      let exchange = { method: rpc.data.method }
       let built = server({
         ...opts,
+        instructions: await instructed(opts, exchange),
         actor: caller,
         runner: running(),
       })
       // Whatever else the calling program serves — resources, prompts — is
       // registered before the request is answered, so `resources/list` sees
       // them on the very first call rather than the second.
-      await prepared(built, opts, { method: rpc.data.method })
+      await prepared(built, opts, exchange)
       let answer = json(await ask(built, rpc.data, ms))
       if (conn) answer.headers.set(ID, conn.id)
       return answer

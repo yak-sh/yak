@@ -84,6 +84,7 @@ export {
   answerSchema,
   COMMAND,
   type Exchange,
+  instructed,
   listing,
   type Options,
   roster,

@@ -120,7 +120,12 @@ let terse = (s: unknown): unknown => {
  * import { inputSchemaOf } from '@yaks/mcp/tools'
  *
  * let doc = z.object({ title: z.string().nullable().optional() }).passthrough()
- * let tool = { name: 'write', input: { doc: doc.nullable() }, run: () => [] }
+ * let tool = {
+ *   name: 'write',
+ *   description: 'Write a doc',
+ *   input: { doc: doc.nullable() },
+ *   run: () => [],
+ * }
  * assertEquals(inputSchemaOf(tool).properties, {
  *   doc: {
  *     type: ['object', 'null'],

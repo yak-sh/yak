@@ -29,7 +29,7 @@
 // and has no space to resolve it against — the door would have to remember
 // which apps this session has opened, and it remembers nothing (mcp.ts).
 import { workerBreak } from './dispatch.ts'
-import { type App, type Directory, type Space } from './directory.ts'
+import { type App, type Directory, type Role, type Space } from './directory.ts'
 import type { Env } from './env.ts'
 import { type Host, spaceHost } from './host.ts'
 import { acting, based } from './apps.ts'
@@ -38,7 +38,9 @@ export { toolsOf } from './app-command.ts'
 import { mayCall, schemaOf, type ToolDef } from '@yaks/tools/declared'
 import { legacyOptions } from '@yaks/vocab/tools'
 import { type Ctx, type Out, uiMeta, VIEW_MIME } from './tools.ts'
-import { refuse } from './tool.ts'
+import { asCaller, refuse } from './tool.ts'
+import { mode, reads } from '@yaks/member'
+import type { Reach } from './reach.ts'
 import type { Who } from './session.ts'
 import { r2Objects } from './lib/objects.ts'
 import { prefixOf } from './files.ts'
@@ -56,26 +58,50 @@ export let at = (space: Space, app: App) => `${space.slug}/${app.slug}`
 // slug, and then one name means two things: the first is the one that
 // answers, and a call for the other says which spaces have it.
 //
-// Every space's apps at once, and each directory read once per request
-// (directory.ts `directory`, T-34986): the door asks for this from four places
-// while it assembles itself, and asked in turn each was its own walk.
-export let reachable = async (ctx: Pick<Ctx, 'dir' | 'person'>) => {
-  let spaces = await ctx.dir.spaces(ctx.person)
+// Three directory reads however many spaces and apps there are (T-35479):
+// the person's seats, their spaces, and every app across those spaces in one
+// list, each read once per request (directory.ts `directory`). This is the
+// first thing every signed-in call does (mcp.ts `door`), so a read per space
+// here was a round trip per space under every tool. The answer keeps the
+// seats' order, each space's apps oldest first, and the role the seat holds.
+export let reachable = async (
+  ctx: Pick<Ctx, 'dir' | 'person'>,
+): Promise<{ space: Space; app: App; role: Role }[]> => {
   // A space in the trash is out of reach whole (erase.ts, T-34431): every
   // app in it leaves every list at once, and none is asked about, which is
   // also why `about` and the door's own instructions stop naming them.
   // An app in the trash declares nothing (erase.ts, T-34430): its tools and
   // its views leave every list the day it is deleted, which is the same
   // move a delete has always made — and they come back on a restore.
-  let each = await Promise.all(
-    spaces.filter((s) => !s.trashed).map(async (space) =>
-      (await ctx.dir.apps(space))
-        .filter((app) => !app.trashed)
-        .map((app) => ({ space, app }))
-    ),
+  let seats = (await ctx.dir.seats(ctx.person)).filter((s) => !s.space.trashed)
+  let apps = (await ctx.dir.apps(seats.map((s) => s.space)))
+    .filter((app) => !app.trashed)
+  return seats.flatMap(({ space, role }) =>
+    apps.filter((app) => app.space == space.eid)
+      .map((app) => ({ space, app, role }))
   )
-  return each.flat()
 }
+
+// Every store the caller reaches: every app in every space they belong to,
+// since an entity spans apps and only the whole set can compose it (T-32698).
+// What "reach" means is membership plus the app's own access: the door
+// remembers nothing about which apps a session has opened (see above), so a
+// public app in a space the caller is not in is on the web and not here. It is
+// read in a fixed number of directory round trips however many spaces and
+// apps there are (`reachable`, T-35479).
+//
+// And the trash is out of reach, whichever row wears the word (erase.ts,
+// T-34430, T-34431). This is the same answer `reachable` gives the roster, and
+// the two have to agree: a deleted app that still turned up in the passage
+// `about` and `initialize` put at the top of an agent's context would be an
+// app the agent goes on filing things in after the person threw it away.
+// Naming one is the way back to it — `app_restore` and `space_restore`, and
+// any tool that names the app explicitly, resolve it by name (`inApp`).
+export let inReach = async (ctx: Ctx): Promise<Reach[]> =>
+  (await reachable(ctx)).flatMap(({ space, app, role }) => {
+    let who = asCaller(ctx, role)
+    return reads(mode(app.access), who.role) ? [{ space, app, who }] : []
+  })
 
 let whoIn = async (ctx: Ctx, space: Space): Promise<Who> => ({
   person: ctx.person,

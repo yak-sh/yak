@@ -34,9 +34,11 @@
 // (tools.ts), the prompt a person picks by name, and the builder we run
 // ourselves (builder.ts).
 //
-// Bounded, because the notes are read on every call at the door: the file is
-// refused over CAP at the write rather than truncated at the read — half of
-// what somebody wrote is worse than a pointer to all of it.
+// Bounded, because the notes are handed to every agent that reaches the app:
+// the file is refused over CAP at the write rather than truncated at the read
+// — half of what somebody wrote is worse than a pointer to all of it.
+import { once } from '@yaks/fp'
+import { clock } from './timing.ts'
 import { r2Objects } from './lib/objects.ts'
 import { prefixOf } from './files.ts'
 import { type App, type Space, url } from './directory.ts'
@@ -93,8 +95,8 @@ export let notesOf = async (
   space: Space,
   app: App,
 ): Promise<string> => {
-  // `read` rather than has-then-get: this runs per app on every call at the
-  // door, and most apps have no notes, so a second round trip would land on
+  // `read` rather than has-then-get: this runs per app whenever the roster is
+  // said, and most apps have no notes, so a second round trip would land on
   // the common case.
   let bytes = await r2Objects(env.BLOBS).read(
     `${prefixOf(space, app)}/${NOTES}`,
@@ -202,6 +204,16 @@ let heard = async (ctx: Ctx): Promise<string[]> => {
     .filter(Boolean)
 }
 
+/** The passage, each half said only when something asks for it. */
+export type Standing = {
+  /** every app in reach, with what it says about itself */
+  apps: () => Promise<Entry[]>
+  /** the roster: every app, its address, what it holds, its commands */
+  text: () => Promise<string>
+  /** the roster with each app's notes, and what the person has said here */
+  notes: () => Promise<string>
+}
+
 /**
  * The passage, in its two lengths, and the apps it was made of.
  *
@@ -210,27 +222,33 @@ let heard = async (ctx: Ctx): Promise<string[]> => {
  * this morning has to be named or it is made a second time this afternoon.
  * `notes` is that same roster with what each app's person wrote under it and
  * what they have said in this space, and it is what `about` hands over when
- * something asks. Both are said fresh on every call at the door rather than
- * named by a mark the client compares (T-34541).
+ * something asks. Both are said fresh rather than named by a mark the client
+ * compares (T-34541).
+ *
+ * Each is read the first time it is asked for, and once: the door builds this
+ * on every call, and a call that reads neither — most of them — reads no
+ * app's notes and no space's memories (T-35479).
  *
  * A person with no apps gets no roster: there is nothing to say, and saying it
  * would put a heading with nothing under it at the top of every agent's
  * context.
  */
-export let standing = async (
+export let standing = (
   ctx: Ctx,
   reach?: { space: Space; app: App }[],
   commands?: { at: string; name: string }[],
-): Promise<{ text: string; notes: string; apps: Entry[] }> => {
-  let [apps, told] = await Promise.all([
-    entries(ctx, reach, commands),
-    heard(ctx),
-  ])
+): Standing => {
+  let c = ctx.clock ?? clock()
+  let apps = once(() => c.time('standing', () => entries(ctx, reach, commands)))
+  let said = once(() => heard(ctx))
   return {
-    text: passage(apps, false, ctx.env),
-    notes: [passage(apps, true, ctx.env), ...told].filter(Boolean)
-      .join('\n\n'),
     apps,
+    text: async () => passage(await apps(), false, ctx.env),
+    notes: async () => {
+      let [all, told] = await Promise.all([apps(), said()])
+      return [passage(all, true, ctx.env), ...told].filter(Boolean)
+        .join('\n\n')
+    },
   }
 }
 

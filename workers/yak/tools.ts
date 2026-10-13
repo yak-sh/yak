@@ -194,10 +194,9 @@ import {
 } from './host.ts'
 import { foreign, planSettings, RESERVED, SLUG } from './route.ts'
 import { globs } from './router.ts'
-import { type Reach, vocabAt } from './reach.ts'
+import { vocabAt } from './reach.ts'
 import { titling, vouched, type Who } from './session.ts'
 import { type Clock, clock } from './timing.ts'
-import { mode, reads } from '@yaks/member'
 import { canon, nameOf, personOf } from './signin.ts'
 import { ACCEPTED, type Door } from './door.ts'
 import {
@@ -309,7 +308,10 @@ let rostered = (ctx: Ctx) =>
 // client caches the instructions at connect and a person's apps move under it,
 // and an app made this morning is one the agent would otherwise not know to
 // put this afternoon's recipe in.
-let said = (ctx: Ctx) => ctx.standing ? `\n\n${ctx.standing}` : ''
+let said = async (ctx: Ctx) => {
+  let notes = await ctx.standing?.()
+  return notes ? `\n\n${notes}` : ''
+}
 
 // How a caller got in, said the way a person would say it (identity.ts
 // `Caller`).
@@ -1570,47 +1572,6 @@ let copied = (
       return { wrote: own(code), gone: own(gone) }
     },
   )
-}
-
-// Every store this call reaches. An app named is that one store, as it always
-// was; no app is the federated read (T-32698) — every app in every space the
-// caller belongs to, or in the space they named, since an entity spans apps
-// and only the whole set can compose it. What "reach" means is membership
-// plus the app's own access: the door remembers nothing about which apps a
-// session has opened (declared.ts), so a public app in a space the caller is
-// not in is on the web and not here.
-//
-// And the trash is out of reach, whichever row wears the word (erase.ts,
-// T-34430, T-34431). This is the same answer `reachable` gives the roster, and
-// the two have to agree: a deleted app that still turned up in the passage
-// `about` and `initialize` put at the top of an agent's context would be an
-// app the agent goes on filing things in after the person threw it away.
-// Naming one is the way back to it — `app_restore` and `space_restore`, and
-// any tool that names the app explicitly, take the early return above.
-export let inReach = async (ctx: Ctx, args: Args): Promise<Reach[]> => {
-  if (args.app != null) {
-    let { space, app, who } = await inApp(ctx, args)
-    return [{ space, app, who }]
-  }
-  let seats = args.space == null
-    ? await ctx.dir.seats(ctx.person)
-    : [await inSpace(ctx, args)].map(({ space, who }) => ({
-      space,
-      role: who.role!,
-    }))
-  // Every space at once: the role the seat already says, and an app list per
-  // space, none waiting on another's; a directory read is made once a request
-  // (directory.ts `directory`), so the roster's own walk a moment later is
-  // this one (T-34986).
-  let each = await Promise.all(
-    seats.filter((s) => !s.space.trashed).map(async ({ space, role }) => {
-      let who = asCaller(ctx, role)
-      return (await ctx.dir.apps(space))
-        .filter((app) => !app.trashed && reads(mode(app.access), who.role))
-        .map((app) => ({ space, app, who }))
-    }),
-  )
-  return each.flat()
 }
 
 let answer = (
@@ -5505,7 +5466,7 @@ let OURS: Row[] = [
     // data too, since a client keeps its cached list by that version.
     run: async (ctx) => ({
       text: publics(ctx.env).find((one) => one.name == t.name)!.text +
-        await whoami(ctx) + said(ctx) + rostered(ctx),
+        await whoami(ctx) + await said(ctx) + rostered(ctx),
       ...ctx.roster ? { value: { roster: ctx.roster } } : {},
     }),
   })),

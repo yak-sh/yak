@@ -283,7 +283,7 @@ export let prompt = async (env: Env, ctx?: Ctx): Promise<string> => {
   // the passage whole where the connector puts the roster on its instructions
   // and hands the notes over at `about` (T-34632). It goes last: it is about
   // this person's apps, and the guide it follows is about apps in general.
-  let apps = ctx ? (await standing(ctx)).notes : ''
+  let apps = ctx ? await standing(ctx).notes() : ''
   let after = apps ? `\n\n---\n\n${apps}` : ''
   try {
     let page = await asset(env, whole(env))

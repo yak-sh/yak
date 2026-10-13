@@ -111,8 +111,11 @@ export type Options = {
     sizes?: string[]
     theme?: 'light' | 'dark'
   }[]
-  /** what the agent should read before anything else */
-  instructions?: string
+  /** what the agent should read before anything else: the text, or a function
+   * making it, which is called only for an exchange that sends it
+   * ({@link instructed}). A host whose instructions cost reads to say pays
+   * them once per connection, at `initialize`, rather than on every call. */
+  instructions?: string | (() => string | Promise<string>)
   /** how much of the vocabulary each tool's output schema describes
    * (default: `full` — see {@link Depth}; `graph_apply`'s input schema is
    * always `full`) */
@@ -165,9 +168,11 @@ export type Options = {
 
   /** a calling program with more than tools to serve — resources, prompts,
    * capabilities of its own — registers them on the same server here, after
-   * its tools are registered. It is handed the SDK's own server object, and it
+   * its tools are registered. It is handed the SDK's own server object and the
+   * one exchange the server answers (undefined where it serves a whole
+   * connection), so it can leave out what that exchange never reads, and it
    * is awaited. */
-  extend?: (server: McpServer) => void | Promise<void>
+  extend?: (server: McpServer, exchange?: Exchange) => void | Promise<void>
   /** Skills attach to the same server, awaited before either era discovers it. */
   skills?: (server: McpServer, exchange?: Exchange) => void | Promise<void>
 }
@@ -181,9 +186,28 @@ export let prepared = async (
   opts: Pick<Options, 'extend' | 'skills'>,
   exchange?: Exchange,
 ): Promise<McpServer> => {
-  await opts.extend?.(built)
+  await opts.extend?.(built, exchange)
   await opts.skills?.(built, exchange)
   return built
+}
+
+/// let hi = { instructions: () => 'hi' }
+/// instructed(hi, { method: 'initialize' }) ~> 'hi'
+/// instructed(hi, { method: 'tools/call' }) ~> undefined
+/// instructed(hi) ~> 'hi'
+/**
+ * The instructions a server answering `exchange` sends: said for `initialize`,
+ * the one reply that carries them, and for a server serving a whole
+ * connection (no exchange), whose `initialize` is still to come. Any other
+ * exchange never sends them, so a function making them is not called.
+ */
+export let instructed = async (
+  opts: Pick<Options, 'instructions'>,
+  exchange?: Exchange,
+): Promise<string | undefined> => {
+  let said = opts.instructions
+  if (exchange && exchange.method != 'initialize') return undefined
+  return typeof said == 'function' ? await said() : said
 }
 
 /**
@@ -405,14 +429,18 @@ export let annotated = (
  * Build the MCP server for a graph: the generic tier (`graph_apply`,
  * `graph_query`, `graph_show`, `graph_schema`, and `search` when a
  * {@link https://jsr.io/@yaks/mcp/doc/~/Search | Search} was passed), plus
- * every tool the graph's plugins contribute and any you pass yourself.
+ * every tool the graph's plugins contribute and any you pass yourself. The
+ * instructions are the text itself here: a function making them is said by
+ * {@link instructed} for the exchange this server answers.
  *
  * ```ts ignore
  * let s = server({ graph, actor: { by: 'm1' } })
  * await s.connect(transport)
  * ```
  */
-export let server = (opts: Options): McpServer => {
+export let server = (
+  opts: Options & { instructions?: string },
+): McpServer => {
   let { graph } = opts
   let actor = opts.actor ?? null
   let mcp = new McpServer({

@@ -10,7 +10,7 @@ import {
   type StdioServerHandle,
 } from '@modelcontextprotocol/server/stdio'
 import type { Transport } from '@modelcontextprotocol/server'
-import { type Options, prepared, server } from './server.ts'
+import { instructed, type Options, prepared, server } from './server.ts'
 
 /**
  * Serve a graph over stdio until the stream closes, or `close()` on the handle
@@ -29,5 +29,6 @@ import { type Options, prepared, server } from './server.ts'
  */
 export let stdio = (opts: Options, wire?: Transport): StdioServerHandle =>
   serveStdio(async () => {
-    return await prepared(server(opts), opts)
+    let built = server({ ...opts, instructions: await instructed(opts) })
+    return await prepared(built, opts)
   }, wire ? { transport: wire } : {})

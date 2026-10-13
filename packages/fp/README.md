@@ -38,7 +38,9 @@ fails, which stops a pipe.
 
 `tap` calls a function and returns its input; it does not wait for a promise
 returned by that function. `typeOf` distinguishes null, arrays, regexes,
-promises, maps and sets from the other `typeof` results.
+promises, maps and sets from the other `typeof` results. `once(f)` calls `f` the
+first time it is asked and answers that first answer every time after; a promise
+is kept as itself, so callers waiting at once share one wait.
 
 ```ts
 import {
@@ -50,6 +52,7 @@ import {
   isNil,
   negate,
   not,
+  once,
   or,
   pipe,
   tap,
@@ -67,6 +70,9 @@ equal(compose(String, inc, inc)(5), '7')
 equal(compose(String)(inc)(5), '6')
 equal(id(7), 7)
 equal(always(7)(), 7)
+let made = 0
+let first = once(() => ++made)
+equal([first(), first(), made], [1, 1, 1])
 equal(isNil(null), true)
 equal(isNil(0), false)
 equal(negate(isNil)(0), true)

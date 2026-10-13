@@ -16,7 +16,7 @@ import { loadVocab, type Vocab, type VocabDoc } from '@yaks/vocab'
 import { type Bundle, type Graph, graph } from '@yaks/graph'
 import { ram } from '@yaks/ram'
 import { toolsDoc } from '@yaks/tools'
-import { type Options, server } from './server.ts'
+import { instructed, type Options, server } from './server.ts'
 
 let doc: VocabDoc = {
   $defs: {
@@ -115,7 +115,11 @@ export let pinned = {
 export let connect = async (
   opts: Omit<Options, 'graph'> & { graph?: Graph } = {},
 ): Promise<Client> => {
-  let mcp = server({ ...opts, graph: opts.graph ?? shopGraph() })
+  let mcp = server({
+    ...opts,
+    graph: opts.graph ?? shopGraph(),
+    instructions: await instructed(opts),
+  })
   await opts.extend?.(mcp)
   let [here, there] = InMemoryTransport.createLinkedPair()
   let client = new Client({ name: 'shop-test', version: '0.0.0' }, {

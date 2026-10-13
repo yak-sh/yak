@@ -81,7 +81,7 @@
 // ours to fix.
 import { fromJsonSchema, type McpServer } from '@modelcontextprotocol/server'
 import { CfWorkerJsonSchemaValidator } from '@modelcontextprotocol/server/validators/cf-worker'
-import { mcp, roster, rosterVersion } from '@yaks/mcp'
+import { type Exchange, mcp, roster, rosterVersion } from '@yaks/mcp'
 import { reaching, searching } from './agent.ts'
 import { anonymous, asked, opened, READS, scope } from './anon.ts'
 import * as dirPart from './directory.ts'
@@ -92,14 +92,14 @@ import { instructions, NARROW, pageFor, UNDO } from './guide.ts'
 import { asking, challenge, unauthorized } from './identity.ts'
 import { narrowed } from './grants.ts'
 import { instrumentEid } from './instrument.ts'
-import { listViews, readView } from './declared.ts'
+import { inReach, listViews, readView } from './declared.ts'
 import { answer, asset, docs, SIGNIN } from './preauth.ts'
 import type { Reach } from './reach.ts'
 import { PROMPTS } from './prompts.ts'
 import { says } from './route.ts'
 import { connector, VERSION } from './seo.ts'
-import { type Entry, prompted, standing } from './standing.ts'
-import { type Ctx, inReach, VIEW_MIME } from './tools.ts'
+import { prompted, type Standing, standing } from './standing.ts'
+import { type Ctx, VIEW_MIME } from './tools.ts'
 import { listen, rostered } from './stream.ts'
 import { type Clock, clock, timed } from './timing.ts'
 import { caught, reporter } from './defects.ts'
@@ -155,8 +155,20 @@ let refused = (req: Request, id: unknown, env: Env) => {
 // the pages an app declares (declared.ts, T-32687), which only someone who can
 // reach that app is told about. The platform contributes none of its own. The
 // prompts are the ones a person picks by name (prompts.ts, T-32981).
+//
+// What is read for them is read only for an exchange that reads it (@yaks/mcp
+// `Exchange`): an app's pages for a `resources/` request, its notes for a
+// `prompts/` one. A server is built for every call, and a `tools/call` lists
+// neither, so it reads no app for them (T-35479). A server serving a whole
+// connection has no one exchange, and is given everything.
 let promptValidator = new CfWorkerJsonSchemaValidator()
-let extend = (ctx: Ctx, apps: Entry[]) => async (server: McpServer) => {
+let reads = (exchange: Exchange | undefined, kind: string) =>
+  !exchange || exchange.method.startsWith(`${kind}/`)
+let extend = (ctx: Ctx, stood: Standing) =>
+async (
+  server: McpServer,
+  exchange?: Exchange,
+) => {
   for (let doc of docs(ctx.env)) {
     server.registerResource(doc.name, doc.uri, {
       title: doc.title,
@@ -170,7 +182,7 @@ let extend = (ctx: Ctx, apps: Entry[]) => async (server: McpServer) => {
       }],
     }))
   }
-  for (let view of await listViews(ctx)) {
+  for (let view of reads(exchange, 'resources') ? await listViews(ctx) : []) {
     server.registerResource(view.name, view.uri, {
       title: view.title,
       description: view.description,
@@ -184,11 +196,13 @@ let extend = (ctx: Ctx, apps: Entry[]) => async (server: McpServer) => {
   }
   // What this person has already made, for the prompt that is about that
   // (prompts.ts `app-ideas`): the apps in reach by name and address, taken
-  // from what was just gathered rather than read a second time.
-  let made = apps.map((e) => ({
-    title: e.app.title || e.app.slug,
-    url: url(e.space, e.app, ctx.env),
-  }))
+  // from what the door gathers rather than read a second time, and only when
+  // a prompt is asked for.
+  let made = async () =>
+    (await stood.apps()).map((e) => ({
+      title: e.app.title || e.app.slug,
+      url: url(e.space, e.app, ctx.env),
+    }))
   for (let p of PROMPTS) {
     server.registerPrompt(p.name, {
       title: p.title,
@@ -202,7 +216,7 @@ let extend = (ctx: Ctx, apps: Entry[]) => async (server: McpServer) => {
         required: p.arguments.filter((a) => a.required).map((a) => a.name),
         additionalProperties: true,
       }, promptValidator),
-    }, (args: Record<string, string | undefined>) => ({
+    }, async (args: Record<string, string | undefined>) => ({
       description: p.description,
       messages: [{
         role: 'user' as const,
@@ -214,7 +228,7 @@ let extend = (ctx: Ctx, apps: Entry[]) => async (server: McpServer) => {
                 .filter(([name]) => p.arguments.some((a) => a.name == name))
                 .map(([k, v]) => [k, String(v ?? '')]),
             ),
-            made,
+            await made(),
             ctx.env,
           ),
         },
@@ -226,6 +240,7 @@ let extend = (ctx: Ctx, apps: Entry[]) => async (server: McpServer) => {
   // recipes notes" and have them read back. It takes no arguments — the file
   // is the whole message — and `prompts` is already a declared capability,
   // since the four above registered it.
+  let apps = reads(exchange, 'prompts') ? await stood.apps() : []
   for (let p of prompted(apps, PROMPTS.map((one) => one.name))) {
     server.registerPrompt(p.name, {
       title: p.title,
@@ -365,13 +380,10 @@ let instrumentOf = async (
 let door = async (ctx: Ctx, session: string) => {
   // Each read made before any tool runs is a named stage on the call's
   // `Server-Timing` (timing.ts): this runs on every call, so what it costs is
-  // the floor under every write (T-34986).
+  // the floor under every write (T-34986). The reach is a fixed number of
+  // directory reads however many spaces and apps it holds (T-35479).
   let c = ctx.clock ?? clock()
-  let reach = await c.time('reach', () => inReach(ctx, {}))
-  // The commands the apps in reach declare (declared.ts). They are not tools
-  // and never appear in the tool list; they are read here so the instructions
-  // can name them under their app, and `commands` lists them again with their
-  // arguments when an agent asks.
+  let reach = await c.time('reach', () => inReach(ctx))
   // What the apps in reach report about themselves (standing.ts, T-34425):
   // every one of them named, with what it holds and its own commands. That
   // list is carried in the instructions, which is what a model reads before it
@@ -382,23 +394,18 @@ let door = async (ctx: Ctx, session: string) => {
   // else's prose there reads as an attempt to steer the model rather than as
   // their own notes.
   //
+  // Each is read only by the exchange that says it — `initialize` the roster,
+  // `about` the notes, a prompt the apps — and once (standing.ts): every other
+  // call reads no app's notes and no space's memories.
+  let stood = standing(ctx, reach)
+  ctx.standing = stood.notes
   // The graph, and how a property of it reads and writes: a reference reads
   // back in human form, and a component two of the caller's spaces declare
   // differently is given no type at all (agent.ts `reading`). The schemas in
   // the tool list are derived through it, so they describe what this server
-  // actually accepts and returns.
-  //
-  // The two are read at once, over the reach just paid for: each is its own
-  // fan-out across the apps, and what both need — a store's vocabulary — is
-  // read once per request (hops.ts `recall`). The commands are not listed here
-  // any more: the instructions name them from each app's declaration as it is
-  // read, and `commands` returns them with their arguments when asked. This
-  // runs on every call, so it is the floor under every write (T-34986).
-  let [apps, { graph, prop }] = await Promise.all([
-    c.time('standing', () => standing(ctx, reach)),
-    c.time('reaching', () => reaching(ctx, reach)),
-  ])
-  ctx.standing = apps.notes
+  // actually accepts and returns. A store's vocabulary is read once per
+  // request (hops.ts `recall`), and the roster reads the same declarations.
+  let { graph, prop } = await c.time('reaching', () => reaching(ctx, reach))
   let opts = {
     graph,
     // Where the call about to be served is recorded (ledger.ts): its own
@@ -434,9 +441,14 @@ let door = async (ctx: Ctx, session: string) => {
     // `serverInfo` shows this connector with a face, and nobody has to type
     // any of it into a form.
     ...connector(ctx.env),
-    instructions: apps.text
-      ? `${instructions(ctx.env)}\n\n---\n\n${apps.text}`
-      : instructions(ctx.env),
+    // Said for `initialize` only, the one reply that carries them (@yaks/mcp
+    // `instructed`).
+    instructions: async () => {
+      let apps = await stood.text()
+      return apps
+        ? `${instructions(ctx.env)}\n\n---\n\n${apps}`
+        : instructions(ctx.env)
+    },
     search: searching(ctx, reach),
     // What this connector needs: a token (preauth.ts SIGNIN). A tool that
     // works either way declares that itself and keeps it (tools.ts
@@ -445,8 +457,8 @@ let door = async (ctx: Ctx, session: string) => {
     // below, where they read one named app rather than the whole of somebody's
     // reach.
     security: SIGNIN,
-    extend: (server: McpServer) =>
-      c.time('extend', () => extend(ctx, apps.apps)(server)),
+    extend: (server: McpServer, exchange?: Exchange) =>
+      c.time('extend', () => extend(ctx, stood)(server, exchange)),
   }
   // What this connector lists right now, and the version naming that list.
   // `about` returns both (tools.ts), so a client that suspects its list is old
