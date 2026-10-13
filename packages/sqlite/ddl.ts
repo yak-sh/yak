@@ -778,18 +778,23 @@ export let SAMPLE = 400
  * thousand `call` rows — which is how opening an imported graph came to read
  * the archive end to end six times before answering (T-37734).
  *
- * File drivers sample through optimize. Full-analysis engines provide their
- * stored bytes without scanning rows; installation carries the last successful
- * size in its durable schema receipt. An unchanged store below tenfold byte
- * growth bills no rows for statistics, including after a connection restart.
- * Missing statistics on a populated table or index also trigger analysis.
- * Existing complete statistics are adopted once by installations predating
- * receipts; empty tables are remembered and checked with zero-billed counts.
+ * File drivers sample through optimize. Full-analysis engines (a Durable
+ * Object's, which refuses `analysis_limit`) provide their stored bytes without
+ * scanning rows and analyze a table at a time: this answers which tables are
+ * owed ({@link owing}), and {@link analyzing} works them off a few at a time,
+ * never inside the install that owed them, since one `ANALYZE` of a whole
+ * file reads every row of every index. An unchanged store below
+ * tenfold byte growth bills no rows for statistics, including after a
+ * connection restart. A table empty at its last analysis that holds rows now
+ * is owed, and so, after a schema change, is a populated table or index
+ * without statistics. Existing complete statistics are adopted once by
+ * installations predating receipts; empty tables are remembered and checked
+ * with zero-billed counts.
  *
  * Optimize is not itself a durable gate: empty indexed tables get no stat1
  * row, so it analyzes them repeatedly, scanning existing stat1/stat4 entries
  * to delete records for each empty table. Its outer cursor omits this nested
- * work. The full pass therefore needs a receipt before explicit ANALYZE.
+ * work. So what is owed is kept in a receipt, and analyzed explicitly.
  * Ordinary reads never analyze. Scratch memory stores keep no statistics.
  *
  * Analyzing writes, so it needs the write lock, and every process that opens
@@ -807,60 +812,7 @@ export let analyzed = (
 ): Statistics | undefined => {
   if (!driver.statistics) return
   if (typeof driver.statistics == 'object') {
-    let bytes = driver.statistics.bytes()
-    // SQLite's plain fast count bills zero rows for an empty table. Keep the
-    // comparison in JavaScript: a SQL expression disables that optimization.
-    let populated = (name: string) =>
-      Number(
-        driver.query(select({
-          cols: [as(fn('count'), 'n')],
-          from: table(name),
-        }))[0]?.n,
-      ) > 0
-    if (
-      previous && unchanged && bytes < previous.bytes * 10 &&
-      !previous.empty.some(populated)
-    ) return
-    let tables = driver.query({ t: 'pragma', name: 'table_list' })
-    let names = tables.filter((r) =>
-      r.schema == 'main' &&
-      (r.type == 'table' || r.type == 'shadow') &&
-      !/^sqlite_|^_+cf_/i.test(String(r.name))
-    )
-    let stats = tables.some((r) => r.name == 'sqlite_stat1')
-      ? scan(driver, 'sqlite_stat1', undefined, ['tbl', 'idx'])
-      : []
-    let taken = new Set(stats.map((r) => String(r.tbl)))
-    let indexes = new Set(stats.map((r) => String(r.idx)))
-    let missing = names.filter((r) => !taken.has(String(r.name)))
-      .map((r) => String(r.name))
-    let incomplete = names.filter((r) =>
-      !taken.has(String(r.name)) ||
-      driver.query({ t: 'pragma', name: 'index_list', arg: String(r.name) })
-        .some((i) =>
-          !indexes.has(String(r.wr == 1 && i.origin == 'pk' ? r.name : i.name))
-        )
-    ).map((r) => String(r.name))
-    // Empty additions need no analysis. Adopt existing useful statistics once,
-    // provided no populated table or index lacks them.
-    if (
-      (previous
-        ? bytes < previous.bytes * 10
-        : unchanged && taken.has('entity')) &&
-      !incomplete.some(populated)
-    ) return { bytes: previous?.bytes ?? bytes, empty: missing }
-    if (!populated('entity')) return
-    // Explicit analysis exposes its complete cost through the cursor, rather
-    // than optimize's internally executed statements hiding that work.
-    driver.query({ t: 'analyze' })
-    let after = new Set(
-      scan(driver, 'sqlite_stat1', undefined, ['tbl'])
-        .map((r) => String(r.tbl)),
-    )
-    return {
-      bytes: driver.statistics.bytes(),
-      empty: names.map((r) => String(r.name)).filter((n) => !after.has(n)),
-    }
+    return owing(driver, driver.statistics.bytes(), previous, unchanged)
   }
   let optimize = () => {
     if (driver.statistics == 'sampled') {
@@ -875,6 +827,120 @@ export let analyzed = (
   atOnce(driver, () => {
     optimize()
   })
+}
+
+// Whether a table expected to be empty holds rows. SQLite's plain fast count
+// bills nothing for an empty table, where `limit 1` bills a row; it bills every
+// row of a populated one, so this is never asked of a table likely to be. The
+// comparison stays in JavaScript: a SQL expression disables that optimization.
+let populated = (driver: Driver, name: string) =>
+  Number(
+    driver.query(select({ cols: [as(fn('count'), 'n')], from: table(name) }))[0]
+      ?.n,
+  ) > 0
+
+// Whether a table expected to hold rows does: one billed row at most.
+let holds = (driver: Driver, name: string) =>
+  driver.query(select({ cols: [lit(1)], from: table(name), limit: lit(1) }))
+    .length > 0
+
+let joined = (owed: string[] = [], more: string[]) => [
+  ...new Set([...owed, ...more]),
+]
+
+/**
+ * The planner statistics a full-analysis engine owes, as the receipt keeps
+ * them (./meta.ts `Statistics`), or undefined where nothing new is owed or
+ * the store holds nothing to analyze. Deciding reads no rows of any table that
+ * holds some: the stored bytes, zero-billed counts of the tables remembered
+ * empty, and after a schema change the catalogue and the statistics standing.
+ * A table owed stays owed until {@link analyzing} reaches it.
+ */
+let owing = (
+  driver: Driver,
+  bytes: number,
+  previous: Statistics | undefined,
+  unchanged: boolean,
+): Statistics | undefined => {
+  let owed = previous?.owed ?? []
+  if (previous && unchanged && bytes < previous.bytes * 10) {
+    let filled = previous.empty.filter((name) => populated(driver, name))
+    if (!filled.length) return
+    return {
+      bytes: previous.bytes,
+      empty: previous.empty.filter((name) => !filled.includes(name)),
+      owed: joined(owed, filled),
+    }
+  }
+  let tables = driver.query({ t: 'pragma', name: 'table_list' })
+  let names = tables.filter((r) =>
+    r.schema == 'main' &&
+    (r.type == 'table' || r.type == 'shadow') &&
+    !/^sqlite_|^_+cf_/i.test(String(r.name))
+  )
+  let stats = tables.some((r) => r.name == 'sqlite_stat1')
+    ? scan(driver, 'sqlite_stat1', undefined, ['tbl', 'idx'])
+    : []
+  let taken = new Set(stats.map((r) => String(r.tbl)))
+  let indexes = new Set(stats.map((r) => String(r.idx)))
+  // Adopt the statistics that stand, and owe the populated tables lacking
+  // them: one with statistics for some of its indexes held rows when it was
+  // analyzed, and one with none that is not owed already is counted for rows
+  // at no billed cost while it holds none.
+  if (
+    previous ? bytes < previous.bytes * 10 : unchanged && taken.has('entity')
+  ) {
+    let missing = names.map((r) => String(r.name))
+      .filter((name) => !taken.has(name) && !owed.includes(name))
+    let filled = missing.filter((name) => populated(driver, name))
+    let partial = names.filter((r) =>
+      taken.has(String(r.name)) &&
+      driver.query({ t: 'pragma', name: 'index_list', arg: String(r.name) })
+        .some((i) =>
+          !indexes.has(String(r.wr == 1 && i.origin == 'pk' ? r.name : i.name))
+        )
+    ).map((r) => String(r.name))
+    return {
+      bytes: previous?.bytes ?? bytes,
+      empty: missing.filter((name) => !filled.includes(name)),
+      owed: joined(owed, [...partial, ...filled]),
+    }
+  }
+  if (!holds(driver, 'entity')) return
+  // Tenfold growth, or no statistics to adopt: every table that holds rows
+  // afresh, found at a billed row a table, and the bytes stored now are what
+  // the next growth is measured from.
+  let all = names.map((r) => String(r.name))
+  let filled = all.filter((name) => holds(driver, name))
+  return {
+    bytes,
+    empty: all.filter((name) => !filled.includes(name)),
+    owed: filled,
+  }
+}
+
+/**
+ * Analyze up to `n` of the tables `statistics` owes, one `ANALYZE` each, and
+ * answer the receipt that follows: those tables no longer owed, and each that
+ * holds no rows remembered as empty, since no statistics row will. A table
+ * dropped since it was owed is no longer owed. Each statement reads that
+ * table's index rows, so a caller bounds `n` to keep a window short.
+ */
+export let analyzing = (
+  driver: Driver,
+  statistics: Statistics,
+  n: number,
+): Statistics => {
+  let owed = statistics.owed ?? []
+  let taken = owed.slice(0, n)
+  let empty = statistics.empty.filter((name) => !taken.includes(name))
+  for (let name of taken) {
+    let standing = driver.query({ t: 'pragma', name: 'table_list', arg: name })
+    if (!standing.length) continue
+    driver.query({ t: 'analyze', table: name })
+    if (!holds(driver, name)) empty.push(name)
+  }
+  return { bytes: statistics.bytes, empty, owed: owed.slice(taken.length) }
 }
 
 /** `body` now or not at all: run with no busy timeout, so where another

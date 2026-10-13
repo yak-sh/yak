@@ -641,6 +641,11 @@ type Word =
 // The most one person keeps in one app's storage, in characters of JSON.
 let STORED = 1024 * 1024
 
+// The most tables one alarm analyzes (`#analyzing`). The object yields between
+// them, so this bounds the alarm, not a request's wait; a deploy owes a few,
+// and only growth or a store's first statistics owe every table holding rows.
+let ANALYSES = 50
+
 export let KV: CreateTable = {
   t: 'create table',
   name: 'yak_kv',
@@ -899,6 +904,11 @@ export class Store {
   }
   #vectorWork: Promise<void> | null = null
   #vectorAgain = false
+  // The planner statistics a deployment pass owed (@yaks/sqlite `analyze`),
+  // a table at a time, answering how many stay owed; and whether any do, once
+  // asked this incarnation (`#analyzing`).
+  #analyze: (tables: number) => number = () => 0
+  #unanalyzed: boolean | null = null
   // The app's own commands, as a runner over this store (T-37605), beside the
   // manifest they were built from. A deploy is the only thing that moves that
   // manifest, and a new one is a new runner.
@@ -1254,6 +1264,7 @@ export class Store {
       fields: texts(vocab, derived),
       screen: (line) => store.screen(line),
     }
+    this.#analyze = (tables) => store.analyze(tables)
     // The schema this object stands at is one word (`shapeOf`): a wake under
     // the same vocabulary runs no DDL at all, and a deploy that added a
     // component raises its table on the next request. Every index the
@@ -1718,16 +1729,8 @@ export class Store {
     let unchanged = () => ({ deploymentMoved: false, effects: [] })
     if (this.#candidate(req)) return unchanged()
     // The platform's own stores have no release of their own: the Worker's
-    // deploy is theirs. Each version it runs owes their deployment pass, and
-    // with it their start-up effects, once; an eviction under the same
-    // version owes nothing.
-    if (ownStore(this.#name() ?? '')) {
-      let version = this.#version()
-      return {
-        deploymentMoved: !!version && this.#get('deployed') != version,
-        effects: [],
-      }
-    }
+    // deploy is theirs, and their alarm runs its pass (`#deploying`).
+    if (ownStore(this.#name() ?? '')) return unchanged()
     let release = req.headers.get('x-yak-release')
     if (release == null || !/^[a-z0-9-]+$/.test(release)) return unchanged()
     let active = this.#get('release')
@@ -2572,6 +2575,16 @@ export class Store {
           this.#stuck = false
           await this.#drain()
         }
+        // A pass that fails is reported and tried again a minute on, and the
+        // platform's own jobs below still run meanwhile.
+        if (this.#deploying()) {
+          try {
+            await this.#maintenance(() => this.#installDeployment())
+          } catch (e) {
+            defect(e, { request: 'deployment pass', store: this.#name() })
+            await this.#retry()
+          }
+        }
         // A platform job an instance died in the middle of fires again in
         // this tick: @yaks/wake spent its occurrence, so nothing else runs it
         // before the next one (wake.ts `resumed`).
@@ -2586,6 +2599,7 @@ export class Store {
         this.#workingEffects()
         this.#embedding()
         await this.#moving()
+        await this.#analyzing()
       } finally {
         this.#profile?.flush()
         leave()
@@ -2598,13 +2612,54 @@ export class Store {
   // was kept says so with the descriptions it wrote.
   #deployedOnce = () => !!(this.#get('deployed') ?? this.#get('descriptions'))
 
+  // Whether this is one of the platform's own stores, under a Worker version
+  // whose deployment pass, and with it its start-up effects, has not run
+  // here: owed once a version, by the alarm, and never by an eviction under
+  // the same one. `#deployArmed` is the version this incarnation armed it for.
+  #deploying = () => {
+    let version = this.#version()
+    return ownStore(this.#name() ?? '') && !!version &&
+      this.#get('deployed') != version
+  }
+  #deployArmed: string | null = null
+
+  // The planner statistics a deployment pass owed, a table at a time with the
+  // object yielded between them, up to ANALYSES an alarm, then the alarm again
+  // for the rest. An analysis reads every row of its table's indexes, so it is
+  // never a waking request's to pay. Whether any are owed is read once an
+  // incarnation, then known. A table whose analysis fails stays owed and is
+  // reported, and the next alarm tries it again.
+  #analyzing = async (): Promise<void> => {
+    if (this.#unanalyzed === false) return
+    let left = this.#analyze(0)
+    try {
+      for (let n = 0; n < ANALYSES && left; n++) {
+        if (n) await new Promise((r) => setTimeout(r, 0))
+        left = this.#analyze(1)
+      }
+    } catch (e) {
+      this.#unanalyzed = null
+      defect(e, { request: 'planner statistics', store: this.#name() })
+      return
+    }
+    this.#unanalyzed = left > 0
+    if (left) await this.#arming(this.#soon(), 'statistics')
+  }
+
   // Deployment materializes descriptions and shipped rows. Loading an
   // incarnation does not derive work, sweep history or inspect owed targets.
-  #deployed = (): Promise<void> =>
-    this.#maintenance(() => this.#installDeployment())
+  // What the pass leaves, rows a rule still owes (mover.ts) and planner
+  // statistics, is the alarm's, never the request's that ran it; an alarm
+  // that runs the pass goes on to both itself.
+  #deployed = async (): Promise<void> => {
+    await this.#maintenance(() => this.#installDeployment())
+    if (this.#owing().length) await this.#arming(this.#soon(), 'mover')
+    if (this.#analyze(0)) await this.#arming(this.#soon(), 'statistics')
+  }
 
   #installDeployment = async (): Promise<void> => {
     this.#graph.storage.install()
+    this.#unanalyzed = null
     watchEmbedding(statements(this.#sql), this.#texts.fields)
     // A deploy is where the model can change: where a stored vector was made
     // by another, every text owes its vector again (`#embedding` below).
@@ -2656,9 +2711,6 @@ export class Store {
     }
     this.#effectsReady = true
     this.#embedding()
-    // Rows a rule still owes here are moved from the alarm, never by the wake
-    // that found them owing (mover.ts).
-    if (this.#owing().length) await this.#arming(this.#soon(), 'mover')
     this.#put(
       'deployed',
       (ownStore(this.#name() ?? '') ? this.#version() : null) ??
@@ -3273,6 +3325,13 @@ export class Store {
     // A read does not owe deployment work. App declarations, descriptions and
     // shipped rows are installed by deployment POSTs, never by an eviction.
     if (selected.deploymentMoved) await this.#deployed()
+    // A platform store's deploy is every commit on main, and the request that
+    // first finds one is somebody's: it arms the alarm for the pass and is
+    // served at an ordinary wake's cost.
+    if (this.#deployArmed != this.#version() && this.#deploying()) {
+      this.#deployArmed = this.#version()
+      await this.#arming(this.#soon(), 'deploy')
+    }
     for (let run of selected.effects) await run()
 
     return null

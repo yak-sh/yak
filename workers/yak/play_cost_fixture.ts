@@ -15,6 +15,7 @@ import {
 } from '@yaks/durable-object'
 import words from '../../apps/vale/vocab.json' with { type: 'json' }
 import { seedWorld, settleWorld, worldBindings } from './play_world_fixture.ts'
+import { settle } from './release_cost_fixture.ts'
 import { areaOf, looksOf, placeOf, REACH } from '../../apps/vale/area.ts'
 import { SIZE } from '../../apps/vale/levels.ts'
 import { GIVERS } from '../../apps/vale/quests.ts'
@@ -602,6 +603,7 @@ export let idleWake = async (
     if (held.rules.every((r) => !r.live || r.done)) break
     if (i == 99) throw new Error('idle fixture did not settle')
   }
+  await settle(db, () => store)
   await db.deleteAlarm()
   let pending = await g.read('.effect.state=pending')
   if (pending.length) {

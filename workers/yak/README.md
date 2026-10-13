@@ -712,9 +712,14 @@ stores described before, which stay standing, unread: deleting them would incur
 billed writes. A query naming neither, a census or a search, counts and finds
 only what the store holds. The platform's own two stores still describe theirs
 in rows, in bounded writes with the hash last, since the directory's journal
-names a change's component by its row. Schema changes retain unchanged FTS
-indexes and writers. Classification audits are explicit repairs, not release
-installation work. The inspector omits history when its vocabulary has no
-`_change`. Standing journal tables and their rows are left untouched: removing
-them would incur billed writes. Schema rows are excluded from ordinary page
-listings unless named explicitly, like other platform-owned rows.
+names a change's component by its row. Their release is the Worker's, so every
+commit on main owes their deployment pass (descriptions, start-up effects,
+planner statistics) once: the first request under a new version arms their alarm
+for it and is served at an ordinary wake's cost. Planner statistics a pass owes,
+in any store, are analyzed a table at a time from the alarm (@yaks/sqlite
+`analyze`). Schema changes retain unchanged FTS indexes and writers.
+Classification audits are explicit repairs, not release installation work. The
+inspector omits history when its vocabulary has no `_change`. Standing journal
+tables and their rows are left untouched: removing them would incur billed
+writes. Schema rows are excluded from ordinary page listings unless named
+explicitly, like other platform-owned rows.

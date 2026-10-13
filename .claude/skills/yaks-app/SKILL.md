@@ -116,9 +116,13 @@ box. A query that works on the box can be refused in a store.
   `search-and-embeddings`).
 - **Rows read are billed.** Installation keeps planner statistics through
   @yaks/sqlite's `analyzed`: Durable Objects permit optimize but refuse
-  analysis_limit, so an analyze reads full indexes. A durable receipt in the
-  existing schema metadata skips analysis until a populated table or index
-  lacks statistics, or tenfold growth in stored bytes (not row density).
+  analysis_limit, so an analyze reads full indexes. Installation only owes
+  tables in a durable receipt in the existing schema metadata, and the alarm
+  analyzes them a table at a time (`#analyzing`, @yaks/sqlite `analyze`): a
+  table that was empty and holds rows, a populated table or index lacking
+  statistics after a schema change, every populated table at tenfold growth in
+  stored bytes (not row density). One whole-file analyze in the request that
+  found a deploy cost the directory 200,000 rows and 2.7 s (T-65622).
   Complete existing statistics are adopted once. Remember empty tables and
   use plain `count(*)` with comparison in JavaScript: workerd bills zero rows
   while empty; `LIMIT 1` and SQL comparisons still bill a row. Optimize alone repeats empty-table analysis, scanning stat1
@@ -170,6 +174,10 @@ not use of those apps, and adds no activity hop to those reads.
   move`), never by a cold read.
 - **A deploy installs.** Deployment POSTs materialize schema, lens
   descriptions, shipped rows, command identities and embedding queue triggers.
+  The platform's own two stores have no deploy POST: every commit on main is
+  their release, and the first request under a new Worker version arms their
+  alarm for the pass (`#deploying`) and is served at an ordinary wake's cost
+  (`version_wake_workerd_test.ts`).
   An app store's schema pages are derived from its vocabulary when read
   (@yaks/code's `describing`), so a deploy writes none; the platform's own two
   stores write theirs with `described`, where `_vocab.hash` skips an unchanged
@@ -177,8 +185,10 @@ not use of those apps, and adds no activity hop to those reads.
   from the storage schema stamp. `schemaReady` trusts the physical
   `schema` stamp a completed installation leaves, epoch and archetypes
   included; description bookkeeping never invalidates it, and a cold ordinary
-  request inspects no SQL schema signatures when it matches. What installing a
-  changed word still reads is T-65622.
+  request inspects no SQL schema signatures when it matches. The first request
+  after a deploy that changed a store's words still inspects its standing
+  schema (the catalogue and a pragma a table): rows in proportion to its
+  vocabulary, never to what it holds.
 - **App stores keep no journal** (T-65227). They don't load @yaks/journal, and
   declaring journal names in an app manifest doesn't turn it on; their
   inspector reads schema and entities without history. Journal tables and rows

@@ -35,11 +35,14 @@ export let statisticsCases = async (db: State['storage']) => {
     )
     if (!res.ok) throw new Error(await res.text())
     await res.body?.cancel()
+    // What a deploy owes, the alarm analyzes.
+    await store.alarm()
   }
   let reopen = async () => {
     store = new Store(ctx, {}, [])
     let s = (await store.door).graph.storage
     s.install()
+    await store.alarm()
     return s
   }
   let statistics = (name: string) =>

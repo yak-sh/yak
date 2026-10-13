@@ -19,6 +19,7 @@ import words from '../../apps/vale/vocab.json' with { type: 'json' }
 import { born } from '../../apps/vale/villagers.ts'
 import { GIVERS } from '../../apps/vale/quests.ts'
 import { useUntil } from './used.ts'
+import { settle } from './release_cost_fixture.ts'
 
 export let worldBindings = (app: string, person: string): Bindings => {
   let vocab = platformVocab()
@@ -235,6 +236,7 @@ export let worldTick = async (storage: State['storage'], history = 79_000) => {
     )
   }
   await store.alarm()
+  await settle(storage, () => store)
   await settleWorld(store, storage)
   await storage.deleteAlarm?.()
   let hero = crypto.randomUUID()

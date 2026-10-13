@@ -12,6 +12,7 @@ import { gitPushCost } from './git_cost_fixture.ts'
 import { ftsCost } from './fts_cost_fixture.ts'
 import { countCost } from './count_cost_fixture.ts'
 import { ownerCost } from './owner_cost_fixture.ts'
+import { appWake, directoryWake } from './version_wake_fixture.ts'
 import type { Env } from './env.ts'
 export { Store } from './graph.ts'
 export { GitCostStore } from './git_cost_fixture.ts'
@@ -95,6 +96,15 @@ export class PlayCost {
           this.env,
           Number(new URL(req.url).searchParams.get('files') ?? 530),
         ),
+      )
+    }
+    if (new URL(req.url).searchParams.has('version-wake')) {
+      let q = new URL(req.url).searchParams
+      let history = Number(q.get('history') ?? 100)
+      return Response.json(
+        q.get('version-wake') == 'directory'
+          ? await directoryWake(this.ctx.storage, this.env, history)
+          : await appWake(this.ctx.storage, history),
       )
     }
     if (new URL(req.url).searchParams.has('directory-lifecycle')) {

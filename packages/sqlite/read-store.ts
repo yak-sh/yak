@@ -45,6 +45,7 @@ export let storage = (
     print: () => plan(vocab, base.derived, !!driver.file).print,
     screen: (q, o) => screened(driver, vocab, q, { ...opts(), ...o }),
     install: refuse,
+    analyze: refuse,
     tx: refuse,
   }
 }

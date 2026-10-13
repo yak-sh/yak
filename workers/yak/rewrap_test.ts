@@ -8,6 +8,7 @@ import { parts, rewrapped, ROW } from './rewrap.ts'
 import type { Env } from './env.ts'
 import { platform } from './testing.ts'
 import { KERNEL, meta } from './meta.ts'
+import { PLATFORM_STORE } from './door.ts'
 
 let env = { CF_ACCOUNT: 'acct', CF_WORKERS_TOKEN: 'a-token' } as Env
 let AT = '/client/v4/accounts/acct/workers/dispatch/namespaces/yak-apps/scripts'
@@ -220,8 +221,12 @@ test('each version of the Worker brings the wrap pass forward, once', async () =
   await at()
   await later()
   assertEquals(await at(), LATER)
+  // The request that finds the new version arms the pass; its alarm runs it.
   p.env.CF_VERSION_METADATA = { id: 'v2' }
+  await at()
+  await p.object(PLATFORM_STORE).alarm()
   assert(await at() < LATER)
   await later()
+  await p.object(PLATFORM_STORE).alarm()
   assertEquals(await at(), LATER)
 })

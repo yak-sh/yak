@@ -73,6 +73,7 @@ import { context, scope } from '@yaks/trace'
 import type { Query } from './read.ts'
 import {
   analyzed,
+  analyzing,
   fit,
   grown,
   indexed,
@@ -278,6 +279,12 @@ export type Store = {
    * also reported: a table whose rows do not fit its new shape, and a unique
    * index those rows break (./owe.ts `build`) */
   install: (beside?: Stmt[]) => Error[]
+  /** analyze up to `tables` of the tables whose planner statistics
+   * {@link install} owes (./ddl.ts `analyzed`), each in its own unit, and
+   * answer how many stay owed: a full-analysis engine's install decides what
+   * is owed and leaves the reading to whoever calls this, off the request
+   * that installed. Nothing is ever owed on any other driver. */
+  analyze: (tables?: number) => number
   /** a query → its entities, with `comps` only where named: which entities
    * match and what they carry read as one snapshot, in a unit that takes no
    * write lock, so another process's commit is seen whole or not at all */
@@ -897,6 +904,20 @@ export let storage = (
     grown: () => grown(vocab, standing(driver, vocab)),
     print: () => plan(vocab, base.derived, !!driver.file).print,
     install,
+    analyze: (tables = Infinity) => {
+      let left = installation(driver)?.statistics?.owed?.length ?? 0
+      for (let n = 0; n < tables && left; n++) {
+        left = unit(driver, () => {
+          let receipt = installation(driver)
+          let statistics = receipt?.statistics
+          if (!receipt || !statistics?.owed?.length) return 0
+          let next = analyzing(driver, statistics, 1)
+          analyzedAt(driver, receipt.schema, next)
+          return next.owed?.length ?? 0
+        })
+      }
+      return left
+    },
     read: (query, o, comps) => {
       ensure()
       return unit(

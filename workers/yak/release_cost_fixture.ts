@@ -120,6 +120,24 @@ export let meter = (storage: State['storage']) => {
   }
 }
 
+/** Every alarm a Store armed for the next few seconds, delivered as the
+ * runtime delivers one, until none is: what it owes after a deploy (moved
+ * rows, planner statistics) done before a fixture measures it standing.
+ * Answers how many alarms that took. */
+export let settle = async (
+  storage: State['storage'],
+  store: () => { alarm: () => Promise<unknown> },
+): Promise<number> => {
+  let alarms = 0
+  for (; alarms < 100; alarms++) {
+    let at = await storage.getAlarm?.()
+    if (at == null || at > Date.now() + 5000) break
+    await storage.deleteAlarm?.()
+    await store().alarm()
+  }
+  return alarms
+}
+
 let HEADERS = {
   'x-store': 'probe/release-cost',
   'x-yak-app': 'bbbbbbbb-bbbb-4bbb-bbbb-bbbbbbbbbbbb',
@@ -159,7 +177,7 @@ let context = (storage: State['storage']) => ({
  * A small app's first release and the release after it, which changes no
  * word, each as tools.ts `published` sends it to the app's Store: the serving
  * release's reads, the candidate's declarations and seed, the notice, the
- * first request that selects the candidate, and the alarm it arms.
+ * first request that selects the candidate, and the alarms it arms.
  */
 export let releaseCost = async (storage: State['storage']) => {
   let store = new Store(context(storage), {}, [])
@@ -200,6 +218,7 @@ export let releaseCost = async (storage: State['storage']) => {
       await ask('/query?q=.village_task', as(to))
       m.step('alarm')
       await store.alarm()
+      await settle(storage, () => store)
       m.step(null)
       return { total: m.total(), steps: m.steps, top: m.top(10) }
     } finally {
@@ -238,6 +257,7 @@ export let wakeCost = async (storage: State['storage'], history: number) => {
       })),
     )
   }
+  await settle(storage, () => store)
   await storage.deleteAlarm?.()
   // The stamp the code before this one left: what a deploy finds.
   driver(storage).query({

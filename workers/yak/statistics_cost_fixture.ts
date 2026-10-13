@@ -47,6 +47,8 @@ export let statisticsCost = async (db: State['storage']) => {
     })))
   )
   g.storage.install()
+  // What an install owes, the alarm analyzes.
+  await store.alarm()
   let sql = db.sql.exec.bind(db.sql)
   let size = () =>
     scan(driver(db), 'sqlite_stat1', by({ tbl: 'note' }), ['stat'])

@@ -38,8 +38,13 @@ test('install is idempotent, and a bundle survives the round trip', () => {
   // A boolean would bind as the text 'true'; it lands as the 1 the column holds
   // and reads back as the boolean written.
   assertEquals(comp(p, 'product').available, true)
-  // Installation collects missing sizes, keeps modest growth, and refreshes
-  // outgrown sizes. Rebinding and ordinary reads leave the statistics alone.
+  // Installation owes missing sizes, keeps modest growth, and owes outgrown
+  // sizes again; analysis works off what it owes. Rebinding and ordinary reads
+  // leave the statistics alone.
+  let installed = (s: ReturnType<typeof storage>) => {
+    s.install()
+    assertEquals(s.analyze(), 0)
+  }
   let add = (from: number, to: number) => {
     d.query(
       insert(
@@ -58,17 +63,17 @@ test('install is idempotent, and a bundle survives the round trip', () => {
           ?.stat,
       ).split(' ')[0],
     )
-  s.install()
+  installed(s)
   assertEquals(size(), 1)
   add(2, 2)
   bytes *= 2
-  storage(db, shop).install()
+  installed(storage(db, shop))
   assertEquals(size(), 1)
   add(3, 32)
   bytes *= 16
   s.read('.entity.eid=e1')
   assertEquals(size(), 1)
-  storage(db, shop).install()
+  installed(storage(db, shop))
   assertEquals(size(), 32)
 })
 
