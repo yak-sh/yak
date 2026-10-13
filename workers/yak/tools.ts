@@ -102,7 +102,11 @@ import {
 // A whole store put back to a moment (T-34507) — the data half of what
 // app_rollback does for an app's files.
 import { mark, moment, oldest, putBack, recorded } from './recover.ts'
-import { inspect as inspectWrites, retry as retryWrite } from './write-log.ts'
+import {
+  inspect as inspectWrites,
+  retry as retryWrite,
+  said as writesSaid,
+} from './write-log.ts'
 import { KERNEL } from './meta.ts'
 import { inspect as inspectStore } from './store-inspect.ts'
 // Only the ceiling, and only ever called: tools.ts and standing.ts are a
@@ -2200,23 +2204,43 @@ export let uiMeta = (domain: string, csp: Csp = {}) => ({
   },
 })
 
-// The pages the `guide` tool offers, said two ways: the names alone for the
-// argument, and a name with its few words for the description, which is where
-// an agent chooses one (guide.ts `brief`).
-// One command's arguments, as a signature a model reads: the required ones,
-// then the optional ones marked `?`. It is the same JSON Schema `command`
-// takes in `args` (@yaks/tools/declared `schemaOf`), said the short way; the schema
-// itself rides in the answer's data.
-let argsOf = (input: unknown) => {
-  let s = (input ?? {}) as {
-    properties?: Record<string, unknown>
-    required?: string[]
-  }
-  let need = new Set(s.required ?? [])
-  return Object.keys(s.properties ?? {})
-    .map((arg) => (need.has(arg) ? arg : `${arg}?`))
-    .join(', ')
+// A command's arguments as JSON Schema, as far as its signature reads them.
+type Schema = {
+  type?: unknown
+  format?: unknown
+  enum?: unknown[]
+  items?: Schema
+  properties?: Record<string, Schema>
+  required?: string[]
+  description?: unknown
 }
+
+// One command's arguments, as a signature a model reads: each in the order
+// declared, `?` on one it may leave out, what it holds and, where the app
+// said, what it is for. It is the JSON Schema `command` takes in `args`
+// (@yaks/tools/declared `schemaOf`) said the short way, every fact of it,
+// since some hosts show their model only the words; the schema rides in the
+// answer's data too.
+let argsOf = (input: unknown): string => {
+  let s = (input ?? {}) as Schema
+  let need = new Set(s.required ?? [])
+  return Object.entries(s.properties ?? {}).map(([arg, a]) => {
+    let what = holds(a)
+    return `${arg}${need.has(arg) ? '' : '?'}${what && `: ${what}`}${
+      a.description ? ` (${a.description})` : ''
+    }`
+  }).join(', ')
+}
+
+// What one argument holds: the values it may take, or its type with its
+// format, what an array holds and an object's own fields.
+let holds = (a: Schema): string =>
+  a.enum ? a.enum.map((v) => JSON.stringify(v)).join(' | ') : [
+    ...a.type == null ? [] : [[a.type].flat().join(' | ')],
+    ...a.format == null ? [] : [String(a.format)],
+    ...a.items ? [`of ${holds(a.items) || 'anything'}`] : [],
+    ...a.properties ? [`{${argsOf(a)}}`] : [],
+  ].join(' ')
 
 /** Refused where the caller already owns as many free spaces as one person
  * gets (meter.ts `SPACES`, T-37882). A space in the trash is on its way out,
@@ -2230,6 +2254,9 @@ let roomFor = async (ctx: Ctx) => {
   }
 }
 
+// The pages the `guide` tool offers, said two ways: the names alone for the
+// argument, and a name with its few words for the description, which is where
+// an agent chooses one (guide.ts `brief`).
 let SLUGS = PAGES.map((p) => p.slug).join(', ')
 let COVERING = PAGES.map((p) => `${p.slug} (${p.brief})`).join(', ')
 
@@ -3647,14 +3674,7 @@ let OURS: Row[] = [
       let rows = await inspectWrites(store, seq, args.recent === true)
       return {
         text: rows.length
-          ? rows.map((r) =>
-            `${r.seq}: ${r.state}, ${r.tries} attempts, ${r.at}${
-              r.why ? ` — ${r.why}` : ''
-            }${
-              seq == null ? '' : `\nOriginal body:\n${r.body}\n` +
-                `Outcome (${r.status ?? 'pending'}):\n${r.answer ?? ''}`
-            }`
-          ).join('\n')
+          ? writesSaid(rows, seq != null)
           : `no kept writes in ${space.slug}/${app.slug}`,
         value: { writes: rows },
         space,
@@ -3682,7 +3702,7 @@ let OURS: Row[] = [
       let rows = await retryWrite(store, seq)
       return {
         text: rows.length
-          ? `write ${seq} is ${rows[0].state} in ${space.slug}/${app.slug}`
+          ? `in ${space.slug}/${app.slug}, write ${writesSaid(rows, true)}`
           : `write ${seq} applied in ${space.slug}/${app.slug}`,
         value: { writes: rows },
         space,

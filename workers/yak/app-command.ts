@@ -106,9 +106,13 @@ export let commandReply = async (
       },
       apply: async (bundles) => {
         let { entities, aliases } = await door.apply({ entities: bundles })
-        let said = Object.entries(aliases).map(([alias, eid]) =>
-          `${alias}=${eid}`
-        )
+        // Each entity written, by the alias it was minted under where it had
+        // one: the words carry what the data does.
+        let named = new Set(Object.values(aliases))
+        let said = [
+          ...Object.entries(aliases).map(([alias, eid]) => `${alias}=${eid}`),
+          ...entities.filter((eid) => !named.has(eid)),
+        ]
         return {
           text: `${name}: wrote ${entities.length} ${
             entities.length == 1 ? 'entity' : 'entities'

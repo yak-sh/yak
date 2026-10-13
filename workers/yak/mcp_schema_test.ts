@@ -340,23 +340,29 @@ test(
       })
       // Nothing at all is owed to the find.
       assertEquals(argsIn(find).need, [])
+      // The words say what each argument holds as well, for a host whose model
+      // reads only the words.
+      let words = await agent.tool('commands')
+      assertStringIncludes(words, 'add_recipe(title: string, ')
+      assertStringIncludes(words, 'serves?: number')
 
       // Adding writes the row: the kind, the title, the properties given — and
       // the name it answers to afterwards.
-      assertStringIncludes(
-        await agent.tool('command', {
-          name: 'add_recipe',
-          args: {
-            title: 'Lemon cake',
-            body: '3 lemons',
-            alias: 'lemon-cake',
-            serves: 8,
-          },
-        }),
-        // Two: the recipe, and the name it answers to — a key is an entity of
-        // its own (@yaks/key).
-        'add_recipe: wrote 2 entities',
-      )
+      let wrote = await agent.answer('command', {
+        name: 'add_recipe',
+        args: {
+          title: 'Lemon cake',
+          body: '3 lemons',
+          alias: 'lemon-cake',
+          serves: 8,
+        },
+      })
+      // Two: the recipe, and the name it answers to — a key is an entity of
+      // its own (@yaks/key). The words name each one the data does.
+      assertStringIncludes(wrote.text, 'add_recipe: wrote 2 entities')
+      for (let eid of wrote.value?.entities as string[]) {
+        assertStringIncludes(wrote.text, eid)
+      }
       // A second one with nothing but a title still wears the kind, so the find
       // answers it — and writes no nameless alias.
       await agent.tool('command', {
