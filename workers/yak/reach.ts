@@ -281,6 +281,19 @@ export let split = (line: string) => {
   return { parts, global }
 }
 
+/** Whether a line names a word the app uses (`/uses`, word → home slug),
+ * which its own store cannot answer alone.
+ *
+ * ```ts
+ * import { assertEquals } from '@std/assert'
+ * assertEquals(borrows('.fire&?doc', { fire: 'probe' }), true)
+ * assertEquals(borrows('.doc&.limit=5', { fire: 'probe' }), false)
+ * assertEquals(borrows('.constructor', {}), false)
+ * ```
+ */
+export let borrows = (line: string, uses: Record<string, string>) =>
+  [...split(line).parts.keys()].some((name) => Object.hasOwn(uses, name))
+
 let eidOf = (b: Bundle) => b.entity?.eid ?? ''
 
 // One line, asked of every store at once. A store that refuses contributes

@@ -4,10 +4,11 @@
 import { listed, type Row } from './listing.ts'
 import { type App, appStore, directory, type Space } from './directory.ts'
 import * as dirPart from './directory.ts'
+import { USES } from './door.ts'
 import { bound, type Env } from './env.ts'
 import { sandboxed } from './installed.ts'
 import { answered, metaOf } from './meta.ts'
-import { type Reach, read, split, vocabAt } from './reach.ts'
+import { borrows, type Reach, read, vocabAt } from './reach.ts'
 import { vouched, type Who } from './session.ts'
 import { caught } from './defects.ts'
 import type { VocabDoc } from '@yaks/vocab'
@@ -32,14 +33,16 @@ let appsAt = async (env: Env, space: Space, slugs: string[]) => {
     .filter((a): a is App => !!a && !sandboxed(a))
 }
 
-export let sources = async (
+// The stores a page's graph is read from: its own, then the home of each
+// word it uses that the caller may read.
+let homed = async (
   env: Env,
   space: Space,
   app: App,
   who: Who,
+  uses: Record<string, string>,
   headers: Record<string, string> = {},
 ) => {
-  let uses = await usesOf(env, space, app)
   let slugs = [...new Set(Object.values(uses))]
   let homes = (await appsAt(env, space, slugs))
     .filter((one) => reads(mode(one.access), who.role))
@@ -47,8 +50,19 @@ export let sources = async (
   return { uses, reach: [{ space, app, who, headers }, ...homes] as Reach[] }
 }
 
+export let sources = async (
+  env: Env,
+  space: Space,
+  app: App,
+  who: Who,
+  headers: Record<string, string> = {},
+) => homed(env, space, app, who, await usesOf(env, space, app), headers)
+
 export let borrowed = async (env: Env, space: Space, app: App, who: Who) =>
   (await sources(env, space, app, who)).reach.slice(1)
+
+let shown = (rows: unknown, line: string) =>
+  Array.isArray(rows) ? listed(rows as Row[], line) : rows
 
 export let reading = async (
   env: Env,
@@ -57,8 +71,7 @@ export let reading = async (
   live = false,
   headers: Record<string, string> = {},
 ): Promise<unknown> => {
-  let names = [...split(line).parts.keys()]
-  if (names.some((name) => uses[name])) {
+  if (borrows(line, uses)) {
     return read(
       env,
       reach.map((r, i) =>
@@ -74,9 +87,14 @@ export let reading = async (
     live,
     listing: true,
   })
-  return Array.isArray(rows) ? listed(rows as Row[], line) : rows
+  return shown(rows, line)
 }
 
+// A page's query costs one round trip to its own store: the store answers a
+// line of its own words and says beside it which words the app uses
+// (graph.ts `#paged`), so a line naming one comes back unanswered and is
+// composed from the store and those homes. A store still on the code before
+// that says nothing, and is asked the way it was then.
 export let queried = async (
   env: Env,
   space: Space,
@@ -85,7 +103,30 @@ export let queried = async (
   line: string,
   live = false,
   headers: Record<string, string> = {},
-) => reading(env, await sources(env, space, app, who), line, live, headers)
+) => {
+  let store = appStore(env.STORE, space, app, env)
+  let heard = sandboxed(app) ? null : await store.consume(
+    `/query?q=${encodeURIComponent(line)}${
+      live ? '&live=1' : ''
+    }&listing=1&uses=1`,
+    async (r) => {
+      let said = r.headers.get(USES)
+      if (said == null) return void await r.body?.cancel()
+      if (r.status == 204) {
+        return { uses: JSON.parse(said) as Record<string, string> }
+      }
+      if (!r.ok) throw await answered(r)
+      return { rows: await r.json() as unknown }
+    },
+    {},
+    { ...vouched(who), ...headers },
+  )
+  if (heard && 'rows' in heard) return shown(heard.rows, line)
+  let graph = heard
+    ? await homed(env, space, app, who, heard.uses)
+    : await sources(env, space, app, who)
+  return reading(env, graph, line, live, headers)
+}
 
 // The local graph uses the store's core documents plus only the borrowed
 // words declared by this app. A home may speak other words; those are not

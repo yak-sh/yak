@@ -268,7 +268,9 @@ import {
   IDEMPOTENCY,
   type Namespace,
   PLATFORM_STORE,
+  USES,
 } from './door.ts'
+import { borrows } from './reach.ts'
 import { behind, restartedFor, versionOf } from './running.ts'
 import { type Meta, meta, metaOf, minted } from './meta.ts'
 import { caught, defect, refusing } from './defects.ts'
@@ -4044,8 +4046,29 @@ export class Store {
         check: new URL(request.url).searchParams.has('check'),
       })
     }
-    if (path == '/query') return await this.#asked(request)
+    if (path == '/query') return await this.#paged(request)
     return await this.#route(request)
+  }
+
+  // A page's query asks with `uses=1` (page-graph.ts `queried`), so the one
+  // round trip that answers it also says, in `x-yak-uses`, which words this
+  // app uses from other homes, refusals included. A line naming one is not
+  // this store's to answer alone: it is answered 204, unread, and the kernel
+  // composes it from this store and those homes (reach.ts `read`).
+  async #paged(request: Request): Promise<Response> {
+    let url = new URL(request.url)
+    if (url.searchParams.get('uses') != '1') return await this.#asked(request)
+    let said = this.#held(request, 'uses')
+    let answer = borrows(url.searchParams.get('q') ?? '', JSON.parse(said))
+      ? new Response(null, { status: 204 })
+      : await this.#asked(request)
+    let headers = new Headers(answer.headers)
+    headers.set(USES, said)
+    return new Response(answer.body, {
+      status: answer.status,
+      statusText: answer.statusText,
+      headers,
+    })
   }
 
   // `/query`, watched as @yaks/api watches its own doors (`served`): a
@@ -4318,6 +4341,14 @@ export class Store {
     }
   }
 
+  // What a slot holds for this request, as JSON text: a candidate release's
+  // own, else the serving release's.
+  #held(request: Request, word: 'uses' | 'tools'): string {
+    let candidate = this.#candidate(request)
+    return (candidate && this.#get(`${word}:${candidate}`)) ??
+      this.#get(word) ?? '{}'
+  }
+
   // One of the object's own memory slots as a door: a GET reads back what it
   // last accepted, a POST replaces it whole. The body is stored as written —
   // whoever posts it is the one that can check it against the app's words
@@ -4327,9 +4358,7 @@ export class Store {
     let candidate = this.#candidate(request)
     let key: Word = candidate ? `${word}:${candidate}` : word
     if (request.method == 'GET') {
-      return Response.json(
-        JSON.parse(this.#get(key) ?? this.#get(word) ?? '{}'),
-      )
+      return Response.json(JSON.parse(this.#held(request, word)))
     }
     if (request.method != 'POST') {
       return Response.json(
