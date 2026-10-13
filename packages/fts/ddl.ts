@@ -306,23 +306,39 @@ export type HealOpts = {
   // false) — it reads the whole index, so it suits a maintenance pass rather
   // than start-up
   deep?: boolean
+  /** Who refills a drifted index in windows, rather than `rebuild`ing it in
+   * one statement. An index it is filling already holds only the rows its
+   * cursor has passed, so it is left to it. */
+  fill?: Filler
+  /** The store's read overrides, which the triggers of an index being
+   * refilled read its columns through (`schema`). */
+  derived?: Derived
 }
 
-// Check every index and rebuild the ones that have drifted; returns the names
-// of the indexes rebuilt (usually none). A rebuild that does not fix the
-// problem throws an error naming both results — the first reports what was
-// wrong, the second whether the damage extends beyond the index.
+// Check every index and rebuild the ones that have drifted, or have `fill`
+// refill them; returns the names of the indexes rebuilt or owed (usually
+// none). A rebuild that does not fix the problem throws an error naming both
+// results — the first reports what was wrong, the second whether the damage
+// extends beyond the index.
 export let heal = (
   db: Driver,
   fields: Field[],
   opts: HealOpts = {},
 ): string[] => {
   let deep = opts.deep ?? false
+  let derived = opts.derived ?? {}
   let healed: string[] = []
   for (let ix of indexes(fields)) {
+    let fts = indexName(ix.name)
+    if (opts.fill?.pending(fts)) continue
     let before = fault(db, ix, deep)
     if (!before) continue
-    let fts = indexName(ix.name)
+    healed.push(fts)
+    let cursor = opts.fill?.owe(filling(ix, derived))
+    if (cursor) {
+      erect(db, behind(db, ix, derived, cursor))
+      continue
+    }
     db.query(command(fts, 'rebuild'))
     let after = fault(db, ix, deep)
     if (after) {
@@ -330,7 +346,6 @@ export let heal = (
         `${fts} is still broken after a rebuild; before: ${before}; after: ${after}`,
       )
     }
-    healed.push(fts)
   }
   return healed
 }
@@ -411,13 +426,10 @@ let strays = (db: Driver, ix: Index): string[] => {
 //
 // Everything else runs with `if not exists` / `if exists`, so a second call on
 // the same database changes nothing, writes nothing, and returns empty lists.
-export type AdoptOpts = HealOpts & {
+export type AdoptOpts = Omit<HealOpts, 'derived'> & {
   /** Check retained indexes for drift (default true). Schema installation can
    * keep unchanged indexes without reading their content. */
   heal?: boolean
-  /** Who fills a new or changed index in windows, rather than `rebuild`ing
-   * it in one statement. */
-  fill?: Filler
 }
 
 /** An index to fill: its name, where it reads its content back from, its
@@ -427,6 +439,27 @@ export type Fill = {
   source: string
   props: string[]
   triggers: CreateTrigger[]
+}
+
+// What filling `ix` takes: where it reads its content back from, its
+// columns, and the triggers it keeps once it holds every row.
+let filling = (ix: Index, derived: Derived): Fill => ({
+  fts: indexName(ix.name),
+  source: sourceOf(ix, derived),
+  props: ix.props,
+  triggers: index(ix, derived).filter((s) => s.t == 'create trigger'),
+})
+
+// Empty a standing index for windows to fill behind `cursor`: its rows go,
+// and so do its triggers, whose replacements keep only the rows the cursor
+// has passed. Returns its statements, with those triggers, to raise.
+let behind = (db: Driver, ix: Index, derived: Derived, cursor: Expr) => {
+  let fts = indexName(ix.name)
+  if (declared(db, fts).length) db.query(command(fts, 'delete-all'))
+  for (let t of owned(ix)) {
+    db.query({ t: 'drop', kind: 'trigger', name: t, ifExists: true })
+  }
+  return index(ix, derived, cursor)
 }
 
 /**
@@ -493,24 +526,21 @@ export let adopt = (
     }
     if (!same) gone('table', fts)
     let rebuild = !same || opts.heal === false && changed
-    let cursor = rebuild
-      ? opts.fill?.owe({
-        fts,
-        source: sourceOf(ix, derived),
-        props: ix.props,
-        triggers: index(ix, derived).filter((s) => s.t == 'create trigger'),
-      })
-      : undefined
-    // Filled in windows: an emptied index, and triggers behind the cursor.
-    if (cursor) {
-      if (same) db.query(command(fts, 'delete-all'))
-      for (let t of owned(ix)) gone('trigger', t)
-      mine = index(ix, derived, cursor)
+    // The filler sizes the work by what the index reads its content through,
+    // so a view it reads is raised first.
+    if (rebuild && opts.fill) {
+      erect(
+        db,
+        mine.filter((s) => s.t == 'create view'),
+      )
     }
+    let cursor = rebuild ? opts.fill?.owe(filling(ix, derived)) : undefined
+    // Filled in windows: an emptied index, and triggers behind the cursor.
+    if (cursor) mine = behind(db, ix, derived, cursor)
     erect(db, mine)
     if (rebuild && !cursor) db.query(command(fts, 'rebuild'))
     if (rebuild) recut.push(fts)
   }
-  let healed = opts.heal === false ? [] : heal(db, fields, opts)
+  let healed = opts.heal === false ? [] : heal(db, fields, { ...opts, derived })
   return { recut, dropped, healed }
 }

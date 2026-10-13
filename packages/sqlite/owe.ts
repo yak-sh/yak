@@ -14,6 +14,11 @@
 // the index it will have. A window that fails is reported and tried again an
 // hour later, and nothing refuses an open on its account.
 //
+// The same process does a file's upkeep ({@link Daily}): planner statistics
+// once a day and as soon as an index or a rebuilt table is in place, and
+// whatever a host adds, such as the box's check of its text indexes. Opening
+// does neither.
+//
 // A file in memory belongs to one process, which has nobody to owe: its work
 // is done at once, as it was before any of this.
 
@@ -46,7 +51,7 @@ import {
   val,
 } from '@yaks/sql/core'
 import type { Filler } from '@yaks/fts'
-import { carried, type Refitting } from './ddl.ts'
+import { analyzed, carried, type Refitting } from './ddl.ts'
 import { META } from './layout.ts'
 import { meta } from './meta.ts'
 import { unit } from './unit.ts'
@@ -59,9 +64,11 @@ export let SCHEMA_DUTY = '@yaks/sqlite/schema'
  * box's copy an index over 10,000 rows builds in about 10 ms, and over its
  * 4,057,139 `created` rows in 2.6 s. */
 export let BIG = 10_000
-/** The rows one window fills into a text index: 94 ms over the box's
- * `entry_fts`, whose 403,151 rows take 94 s in one `rebuild`. */
-export let FILL = 1_000
+/** The rows one window fills into a text index. Its time goes on the text,
+ * not the rows: on the box's copy, whose `entry_fts` bodies run about 5 KB,
+ * 1,000 rows took 164 ms a window and up to 515 ms, and its 356,025 rows
+ * take 39 s in one `rebuild`. */
+export let FILL = 500
 /** The rows one window copies into a table being rebuilt: 5.6 ms for 20,000
  * of the box's `created`, whose rebuild in one unit holds the lock 10.2 s. */
 export let COPY = 20_000
@@ -70,6 +77,8 @@ export let COPY = 20_000
 export let CLEAR = 10_000
 /** How long a window that failed waits before it is tried again. */
 export let RETRY = 3_600_000
+/** How often a file's upkeep ({@link Daily}) is done. */
+export let DAY = 86_400_000
 
 /** One piece of owed work. `error` and `next` are a failed window's: what it
  * threw, and when it is tried again. */
@@ -193,16 +202,36 @@ export type Worked =
   | { name: string; error: unknown }
 
 /**
- * Do one window of the first owed work that is due, in one unit: undefined
- * when nothing is. A window that throws leaves its work as it was, marked to
- * be tried again in an hour, and says why.
+ * Upkeep whoever tends a file does once a day, after what it owes: planner
+ * statistics ({@link statistics}) always, and what a host adds, the way the
+ * box checks that its text indexes hold every row (@yaks/fts `heal`). `run`
+ * is one window, in one unit. When each is next due is kept in `server_meta`
+ * as `daily:<name>`.
+ */
+export type Daily = { name: string; run: (driver: Driver) => void }
+
+let DAILY = 'daily:'
+
+/** Planner statistics, sampled (./ddl.ts `analyzed`): due once a day, and as
+ * soon as an index or a rebuilt table is in place. */
+export let statistics: Daily = {
+  name: 'statistics',
+  run: (driver) => void analyzed(driver),
+}
+
+/**
+ * Do one window, in one unit: of the first owed work that is due, else of
+ * the first of `daily` that is due. Undefined when nothing is. A window that
+ * throws leaves its work as it was, marked to be tried again in an hour, and
+ * says why.
  */
 export let work = (
   driver: Driver,
   now: number = Date.now(),
+  daily: Daily[] = [],
 ): Worked | undefined => {
   let due = owed(driver).find((w) => !w.next || Date.parse(w.next) <= now)
-  if (!due) return
+  if (!due) return upkeep(driver, daily, now)
   try {
     return unit(driver, () => ({ name: key(due), done: step(driver, due) }))
   } catch (error) {
@@ -213,6 +242,33 @@ export let work = (
         next: new Date(now + RETRY).toISOString(),
       }))
     return { name: key(due), error }
+  }
+}
+
+// The first of `daily` that is due, done and put off a day; one that throws
+// is put off an hour.
+let upkeep = (
+  driver: Driver,
+  daily: Daily[],
+  now: number,
+): Worked | undefined => {
+  let m = meta(driver)
+  let due = daily.find((d) => {
+    let at = m.get(DAILY + d.name)
+    return !at || Date.parse(at) <= now
+  })
+  if (!due) return
+  let name = DAILY + due.name
+  let later = (ms: number) => m.set(name, new Date(now + ms).toISOString())
+  try {
+    unit(driver, () => {
+      due.run(driver)
+      later(DAY)
+    })
+    return { name, done: true }
+  } catch (error) {
+    unit(driver, () => later(RETRY))
+    return { name, error }
   }
 }
 
@@ -416,7 +472,8 @@ let windows: {
 }
 
 // One window of `w`, inside its unit; true when the work is finished, and its
-// row then gone.
+// row then gone. An index or a rebuilt table in place makes the statistics
+// due, since the planner has none for it yet.
 let step = (driver: Driver, w: Owed): boolean => {
   let here = new Map(catalogue(driver).map((o) => [o.name, o]))
   let done = (windows[w.kind] as (
@@ -425,6 +482,9 @@ let step = (driver: Driver, w: Owed): boolean => {
     h: Map<string, SchemaObject>,
   ) => boolean)(driver, w, here)
   if (done) meta(driver).del(key(w))
+  if (done && (w.kind == 'index' || w.kind == 'refit')) {
+    meta(driver).del(DAILY + statistics.name)
+  }
   return done
 }
 
@@ -513,9 +573,10 @@ let sleep = (ms: number, signal: AbortSignal) =>
   })
 
 /**
- * Work off what this file owes until `signal` aborts: a window, a pause as
- * long as the window held the lock so other writers get their turn, and a
- * look every `idle` milliseconds while nothing is due. A failed window is
+ * Work off what this file owes, and do its upkeep, until `signal` aborts: a
+ * window, a pause as long as the window held the lock so other writers get
+ * their turn, and a look every `idle` milliseconds while nothing is due.
+ * `daily` is the host's upkeep beside the statistics. A failed window is
  * `report`ed and waits its hour.
  */
 export let tend = async (
@@ -524,12 +585,14 @@ export let tend = async (
     signal: AbortSignal
     report?: (error: unknown, work: string) => void
     idle?: number
+    daily?: Daily[]
   },
 ): Promise<void> => {
   let idle = opts.idle ?? 60_000
+  let daily = [statistics, ...opts.daily ?? []]
   while (!opts.signal.aborted) {
     let at = performance.now()
-    let did = work(driver)
+    let did = work(driver, Date.now(), daily)
     if (did && 'error' in did) opts.report?.(did.error, did.name)
     let held = performance.now() - at
     await sleep(did ? Math.max(10, held) : idle, opts.signal)

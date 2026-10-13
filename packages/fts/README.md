@@ -167,12 +167,16 @@ delete trigger must resolve the old value after the component row changes.
 
 ## Maintaining existing indexes
 
-`heal(db, fields, { deep? })` compares component row counts with the FTS index's
-`_docsize` table and rebuilds inconsistent indexes. Counting the
-external-content index itself would only count its source rows. The default
-count check cannot detect every form of corruption. `deep: true` adds FTS5's
-full integrity check, which is more expensive and suits maintenance runs. The
-return value lists rebuilt indexes; a failed rebuild throws.
+`heal(db, fields, { deep?, fill?, derived? })` compares component row counts
+with the FTS index's `_docsize` table and rebuilds inconsistent indexes.
+Counting the external-content index itself would only count its source rows. The
+default count check cannot detect every form of corruption. `deep: true` adds
+FTS5's full integrity check, which is more expensive and suits maintenance runs.
+With a `Filler` (below), an inconsistent index is emptied and refilled in
+windows instead of rebuilt in one statement, and an index the filler is still
+filling is left to it; `derived` is the store's read overrides its triggers read
+through. The return value lists rebuilt or refilling indexes; a failed rebuild
+throws.
 
 `adopt(db, fields, reads?, options?)` brings an existing database into the
 generated layout. It preserves indexes whose columns and content source match,

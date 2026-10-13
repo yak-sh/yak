@@ -72,6 +72,7 @@ import {
   adopt,
   fields as searched,
   find,
+  heal,
   type Hit,
   schema as textSchema,
   search,
@@ -698,13 +699,21 @@ let composed = async (
     let fx = host.fx
     let effecting = roles.includes('effects')
     // Whoever works the effects also works off the schema work a pass owed
-    // (@yaks/sqlite/owe), one process at a time under its lease.
+    // (@yaks/sqlite/owe), one process at a time under its lease, and does the
+    // file's upkeep: its statistics, and once a day a check that each text
+    // index holds every row, refilling in windows one that drifted.
     let duties = effecting && !opts.readOnly
       ? [...built.services, {
         name: SCHEMA_DUTY,
         run: (signal: AbortSignal) =>
           tend(sql, {
             signal,
+            daily: text.length
+              ? [{
+                name: 'heal',
+                run: (d) => void heal(d, text, { derived, fill: filler(d) }),
+              }]
+              : [],
             report: (error, work) =>
               void report(error, {
                 during: { process: selfEid() },

@@ -24,7 +24,19 @@ import { loadVocab } from '@yaks/vocab'
 import { open } from './db.ts'
 import { META } from './layout.ts'
 import { storage } from './mod.ts'
-import { BIG, build, COPY, FILL, filler, owed, RETRY, work } from './owe.ts'
+import {
+  BIG,
+  build,
+  COPY,
+  type Daily,
+  DAY,
+  FILL,
+  filler,
+  owed,
+  RETRY,
+  statistics,
+  work,
+} from './owe.ts'
 import { adopt, type Field, heal } from '@yaks/fts'
 
 // Insert rows numbered `from` to `to` into `into`, as `entity` and `x`.
@@ -85,6 +97,10 @@ let index = (on: string, unique = false): CreateIndex => ({
 })
 let has = (db: ReturnType<typeof open>, name: string) =>
   catalogue(db).some((o) => o.name == name)
+// Work every owed window off.
+let drain = (db: ReturnType<typeof open>) => {
+  for (let w; (w = work(db));) if ('error' in w) throw w.error
+}
 
 test('an index over a big table is owed, and one window builds it', () => {
   let { db, done } = file()
@@ -177,6 +193,68 @@ test('a text index over many rows fills in windows behind its cursor', () => {
   done()
 })
 
+test('a new text index read through a view is sized by the view, and owed', () => {
+  let { db, done } = file()
+  let scoped: Field[] = [{ comp: 'note', prop: 'x', on: 'big' }]
+  rows(db, 'note', FILL + 500)
+  adopt(db, scoped, {}, { heal: false, fill: filler(db) })
+  assertEquals(owed(db).map((w) => w.name), ['big_fts'])
+  drain(db)
+  assertEquals(heal(db, scoped, { deep: true }), [])
+  done()
+})
+
+test('a drifted text index is refilled in windows, and one filling is left be', () => {
+  let { db, done } = file()
+  let notes: Field[] = [{ comp: 'note', prop: 'x' }]
+  rows(db, 'note', FILL + 500)
+  adopt(db, notes)
+  // A write its trigger missed: the index no longer holds every row.
+  db.query({ t: 'drop', kind: 'trigger', name: 'note_fts_insert' })
+  rows(db, 'note', FILL + 501, lit('missed'), FILL + 501)
+  let fill = filler(db)
+  assertEquals(heal(db, notes, { fill }), ['note_fts'])
+  assertEquals([owed(db).map((w) => w.name), heal(db, notes, { fill })], [
+    ['note_fts'],
+    [],
+  ])
+  drain(db)
+  let match = db.query(select({
+    cols: [col('rowid')],
+    from: table('note_fts'),
+    where: op('match', col('note_fts'), lit('missed')),
+  }))
+  assertEquals([match.length, heal(db, notes, { deep: true })], [1, []])
+  done()
+})
+
+test('upkeep is done once a day, and statistics as soon as an index is built', () => {
+  let { db, done } = file()
+  let now = Date.now()
+  let fails = true
+  let daily: Daily[] = [statistics, {
+    name: 'check',
+    run: () => {
+      if (fails) throw new Error('not today')
+    },
+  }]
+  let names = (at: number) => {
+    let did: string[] = []
+    for (let w; (w = work(db, at, daily));) {
+      did.push(`${w.name}${'error' in w ? ' failed' : ''}`)
+    }
+    return did
+  }
+  assertEquals(names(now), ['daily:statistics', 'daily:check failed'])
+  fails = false
+  assertEquals(names(now + 1), [])
+  assertEquals(names(now + RETRY), ['daily:check'])
+  build(db, [index('big')])
+  assertEquals(names(now + RETRY), ['owed:index:big_x', 'daily:statistics'])
+  assertEquals(names(now + RETRY + DAY), ['daily:statistics', 'daily:check'])
+  done()
+})
+
 // A creature whose `x` is one of `kinds`.
 let creatures = (kinds: string[]) =>
   loadVocab({
@@ -225,9 +303,6 @@ let foxes = (n: number) => {
 }
 let aside = (db: ReturnType<typeof open>) =>
   catalogue(db).filter((o) => o.name.startsWith('_yaks_')).map((o) => o.name)
-let drain = (db: ReturnType<typeof open>) => {
-  for (let w; (w = work(db));) if ('error' in w) throw w.error
-}
 
 test('a big table whose check moved is rebuilt beside itself in windows', () => {
   let n = COPY + 500

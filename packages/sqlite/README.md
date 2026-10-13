@@ -909,7 +909,7 @@ while the schema pass holds the write lock (`@yaks/sqlite/owe`):
 - `build(driver, stmts)` runs statements as `erect` does but owes each new index
   over a table of `BIG` (10,000) rows or more: one window, the index's build.
 - `filler(driver)` is the @yaks/fts `Filler` that fills a text index over more
-  than `FILL` (1,000) rows that many a window.
+  than `FILL` (500) rows that many a window.
 - `reshape(driver, comp, refitting, after)` takes on a refit (./ddl.ts) of a
   table of `BIG` rows or more: the table is built beside it as
   `_yaks_refit_<comp>`, `COPY` (20,000) rows a window, with triggers carrying
@@ -922,12 +922,22 @@ while the schema pass holds the write lock (`@yaks/sqlite/owe`):
   `_yaks_` names no component table.
 
 Owed work sits in `server_meta` as `owed:<kind>:<name>`, its statements as data,
-so any process can finish it. `work(driver)` does one window of the first that
-is due (indexes, then fills, then refits, then clearing); a window that throws
-is kept with its error and tried again an hour later. `tend(driver, {signal})`
-works windows until the signal aborts; on the box the process serving the
-effects role runs it under the `@yaks/sqlite/schema` lease. A database in memory
-owes nothing.
+so any process can finish it. `work(driver, now?, daily?)` does one window of
+the first that is due (indexes, then fills, then refits, then clearing); a
+window that throws is kept with its error and tried again an hour later.
+
+With nothing owed, `work` does the first **upkeep** (`Daily`, `{name, run}`) in
+`daily` that is due: each runs in one unit once a day, and one that throws is
+tried again an hour later; `server_meta` keeps when each is next due as
+`daily:<name>`. `statistics` (sampled planner statistics) is one, and is due
+again as soon as an owed index or a rebuilt table is in place. Opening a file
+whose print is recorded does neither.
+
+`tend(driver, {signal, daily?})` works windows and the statistics, with the
+host's `daily` beside them, until the signal aborts; on the box the process
+serving the effects role runs it under the `@yaks/sqlite/schema` lease, with a
+daily @yaks/fts `heal` that refills a drifted text index in windows. A database
+in memory owes nothing.
 
 ## Preannounced migrations
 
