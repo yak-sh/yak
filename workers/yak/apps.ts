@@ -480,9 +480,9 @@ export let pinned = (at: string, page: string, app: App) => {
 // as the scope a standalone window stays inside, the icon at the two sizes an
 // installer looks for, and the two colours — the app's own, or the platform's
 // (`themeColorOf`/`backgroundColorOf` above). The same icon file at both
-// sizes — one square png is all the platform asks an agent for, and resizing
-// it at the edge would be a second set of bytes to serve and cache for an
-// installer that scales anyway.
+// sizes — one square png, the app's own or its icon.svg drawn at 512
+// (raster.ts), and resizing it at the edge would be a second set of bytes to
+// serve and cache for an installer that scales anyway.
 export let manifesting = (app: App, at: string) => ({
   name: app.title || app.slug,
   short_name: app.title || app.slug,
@@ -628,8 +628,9 @@ let media = async (
 // The two addresses the kernel answers for an app that wrote neither file
 // (T-34493), so the links `pinned` wove in are never dead. Both are the
 // fallback and nothing more: an app with its own `icon.png` or its own
-// `manifest.webmanifest` is served that, because this is only reached where
-// the bucket had nothing.
+// `manifest.webmanifest` is served that, and one with an icon.svg is served
+// its drawing (files.ts `icon`), because this is only reached where the files
+// door had nothing.
 //
 // The icon is the platform's connector tile — opaque, square, 512 (site_test)
 // — so an app on a home screen wears the platform's face rather than the

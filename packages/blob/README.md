@@ -441,6 +441,25 @@ equal(await contentType(encode('<svg/>'), 'image/svg+xml'), 'image/svg+xml')
 equal(mimeOf('report.pdf'), 'application/pdf')
 ```
 
+`broken(bytes, type)` says what is wrong with bytes that claim to be a picture
+of `type`, as a clause, or `undefined` when they decode as one. A PNG is checked
+whole: each chunk's CRC, its header, and its pixel data inflated scanline by
+scanline. JPEG, GIF and WebP are checked as far as their headers go, an SVG is
+text with an `<svg>` element, and a type nothing here reads passes.
+
+```ts
+import { equal } from '@yaks/testing'
+import { broken, encode } from '@yaks/blob'
+
+let gif = new Uint8Array([...encode('GIF89a'), 2, 0, 3, 0])
+equal(await broken(gif, 'image/png'), 'its bytes are a GIF, not a PNG')
+equal(await broken(gif, 'image/gif'), undefined)
+equal(
+  await broken(encode('<html>'), 'image/svg+xml'),
+  'it has no <svg> element',
+)
+```
+
 ## HTTP responses
 
 `served(bytes, { mime?, name?, etag?, cache? }, request)` creates a byte-range

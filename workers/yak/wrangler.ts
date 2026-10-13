@@ -275,10 +275,15 @@ let logTail = (path: string) => {
 // commit and to the same environment, so no Worker is ever deployed by hand:
 // yak-out (outbound/) is this Worker's dispatch namespace's outbound Worker,
 // handing every fetch an app makes back to this Worker's `Outbound`
-// entrypoint, and yak-esbuild (esbuild/) is what the ESBUILD binding compiles
-// an app with at deploy (@yaks/esbuild), in a container of its own. Both
-// exist before this Worker's bindings name them.
-export let SIBLINGS = ['outbound/wrangler.toml', 'esbuild/wrangler.toml']
+// entrypoint, yak-esbuild (esbuild/) is what the ESBUILD binding compiles
+// an app with at deploy (@yaks/esbuild), in a container of its own, and
+// yak-raster (raster/) is what the RASTER binding draws an app's icon.svg
+// with. Each exists before this Worker's bindings name it.
+export let SIBLINGS = [
+  'outbound/wrangler.toml',
+  'esbuild/wrangler.toml',
+  'raster/wrangler.toml',
+]
 
 // Each sibling's deploy arguments, or none when these arguments are not a
 // deploy or already name a config of their own. A sibling's container rolls

@@ -427,6 +427,15 @@ service = "yak-tracker"
 binding = "ESBUILD"
 service = "yak-esbuild"
 
+# What draws an app's icon.svg as the icon.png a home screen reads (raster.ts):
+# yak-raster (raster/), a Worker of its own so resvg's WebAssembly is compiled
+# by the isolates that draw and never by the kernel's. This Worker's deploy
+# deploys it first. Absent under `wrangler dev` and the workerd probes, where
+# an icon.svg is kept unchecked and icon.png falls back to the platform's tile.
+[[services]]
+binding = "RASTER"
+service = "yak-raster"
+
 # The OAuth provider's own store (identity.ts): registered clients, grants,
 # and tokens. `wrangler dev` simulates it and ignores the id.
 [[kv_namespaces]]
@@ -725,6 +734,10 @@ service = "yak-tracker"
 [[env.staging.services]]
 binding = "ESBUILD"
 service = "yak-esbuild-staging"
+
+[[env.staging.services]]
+binding = "RASTER"
+service = "yak-raster-staging"
 
 [[env.staging.kv_namespaces]]
 binding = "OAUTH_KV"

@@ -37,7 +37,7 @@ import type { Reload } from '@yaks/platform'
 import { configured, deployWorker } from './deploy_worker.ts'
 import { compiled } from './esbuild.ts'
 import { bindingLines, bindings } from './bindings.ts'
-import { mediaTypeOf, type Objects } from '@yaks/blob'
+import { broken, mediaTypeOf, type Objects } from '@yaks/blob'
 import { blobPrefix } from './blob-key.ts'
 import { r2Objects, r2RawObjects } from './lib/objects.ts'
 import { staged } from './release.ts'
@@ -65,6 +65,7 @@ import { withKinds } from './kinds.ts'
 import type { PropSchema, VocabDoc } from '@yaks/vocab'
 import type { Props, Sheet } from './csv.ts'
 import { MAX, mimeOf, prefixOf } from './files.ts'
+import { drawn, ICON_SVG } from './raster.ts'
 import { failedScript } from './asset_url.ts'
 import { told as notify } from './stream.ts'
 import {
@@ -1740,6 +1741,48 @@ let offeredWords = async (files: Awaited<ReturnType<typeof offered>>) => {
   }
 }
 
+// A file named as a picture is one, refused at the write with what is wrong
+// and what to send instead, whichever door brought it (@yaks/blob `broken`). A
+// chat model asked for a PNG transcribes one it cannot checksum, and kept as it
+// came, that file served as the app's icon and drew nothing (T-123684). An
+// icon.svg is drawn here too, since the app's icon is drawn from it
+// (raster.ts), and one that cannot be is refused now rather than drawing
+// nothing later.
+let pictured = async (
+  env: Env,
+  app: App,
+  files: { path: string; bytes: Uint8Array }[],
+) => {
+  for (let f of files) {
+    let path = f.path.replace(/^\/+/, '')
+    let why = await broken(f.bytes, mimeOf(path))
+    if (why) {
+      throw refuse(
+        'arguments',
+        `${path} does not decode: ${why}. ${instead(path)}`,
+      )
+    }
+    if (path != ICON_SVG) continue
+    let drawing = await drawn(env, decoded(f.bytes), app.slug)
+    if (typeof drawing == 'string') {
+      throw refuse(
+        'arguments',
+        `${path} cannot be drawn as the app's icon: ${drawing}`,
+      )
+    }
+  }
+}
+
+// What to send in place of a picture that does not decode.
+let instead = (path: string) =>
+  path == 'icon.png'
+    ? `Write the icon as ${ICON_SVG} instead: a square SVG, sent as ` +
+      'content, which the platform draws as icon.png'
+    : mimeOf(path) == 'image/svg+xml'
+    ? "Send the SVG's markup as content"
+    : "Send the picture's own bytes (op: 'fetch' from its https URL, or " +
+      'sandbox_ship from the sandbox), or draw it as an SVG sent as content'
+
 /**
  * Bytes into the next release's private draft —
  * the write half of app_files, with no tool call in it, because bytes arrive
@@ -1748,7 +1791,7 @@ let offeredWords = async (files: Awaited<ReturnType<typeof offered>>) => {
  * made (T-34264). Neither is `content: string` — a `.wasm` would not survive
  * a decode — which is why this takes bytes. Answers their app-relative paths.
  */
-export let wrote = (
+export let wrote = async (
   env: Env,
   space: Space,
   app: App,
@@ -1756,6 +1799,7 @@ export let wrote = (
   files: { path: string; bytes: Uint8Array }[],
   c: Clock = clock(),
 ) => {
+  await c.time('pictures', () => pictured(env, app, files))
   let blobs = r2Objects(env.BLOBS)
   let dir = directory(bound(env.DIRECTORY, dirPart.fetch, env))
   return modifying(
@@ -1822,7 +1866,8 @@ export let wrote = (
 
 /**
  * What a write says about the bytes it stored: how many there are, their
- * sha256, and — for a `.json` file — whether they parse.
+ * sha256, for a `.json` file whether they parse, and for an icon.svg what it
+ * becomes.
  *
  * A model writes a file by transcribing it, and a long one comes out with a
  * bracket run miscounted. Answering the measurement in the same call that
@@ -1832,7 +1877,11 @@ export let wrote = (
  */
 export let stored = (path: string, bytes: Uint8Array, sha: string) =>
   `${bytes.byteLength} bytes, sha256 ${sha}` +
-  (/\.(json|yml)$/.test(path) ? `, ${parses(path, bytes)}` : '')
+  (/\.(json|yml)$/.test(path) ? `, ${parses(path, bytes)}` : '') +
+  (path == ICON_SVG
+    ? ', drawn as the 512×512 icon.png a home screen shows, unless the app ' +
+      'has an icon.png of its own'
+    : '')
 
 // A declaration file's verdict, in its own language: a `.json` through
 // JSON.parse, whose error carries the position — "at position 45971" names the

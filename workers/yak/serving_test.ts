@@ -458,6 +458,39 @@ test('an app is installable: the five tags, the icon, the manifest', async () =>
   assertEquals(await theirs.json(), { name: 'Ours' })
 })
 
+test('an app that wrote an icon.svg and no icon.png is served the svg drawn', async () => {
+  let drawing = new Uint8Array([0x89, 0x50, 0x4e, 0x47])
+  let asked: string[] = []
+  let up = true
+  using scenario = platform({
+    RASTER: {
+      fetch: async (req) => {
+        asked.push(await req.text())
+        return up
+          ? new Response(drawing)
+          : new Response('down', { status: 500 })
+      },
+    },
+  })
+  let { env, files } = scenario
+  await seeded(env)
+  let svg = '<svg viewBox="0 0 1 1"/>'
+  files.held.set('ada/cookbook/icon.svg', new TextEncoder().encode(svg))
+  let icon = await apps.fetch(visit('/cookbook/icon.png'), env)
+  assertEquals(icon.headers.get('content-type'), 'image/png')
+  assertEquals(new Uint8Array(await icon.arrayBuffer()), drawing)
+  assertEquals(asked, [svg])
+  // A drawing that fails leaves the app wearing the platform's tile, never a
+  // broken image, until a later request draws it.
+  up = false
+  let tile = await apps.fetch(visit('/cookbook/icon.png'), env)
+  assertEquals(tile.status, 200)
+  assertEquals(
+    new Uint8Array(await tile.arrayBuffer()),
+    await Deno.readFile(new URL('./public/connector-512.png', import.meta.url)),
+  )
+})
+
 test("an app's own colours, set through app_set, win over the platform's", async () => {
   using scenario = platform()
   let { env, files } = scenario

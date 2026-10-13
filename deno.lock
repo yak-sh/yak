@@ -46,6 +46,7 @@
     "npm:@napi-rs/canvas@0.1.80": "0.1.80",
     "npm:@preact/signals-core@^1.14.0": "1.14.4",
     "npm:@preact/signals@^2.9.0": "2.9.4_preact@10.29.7__preact-render-to-string@6.7.0_preact-render-to-string@6.7.0__preact@10.29.7",
+    "npm:@resvg/resvg-wasm@2.6.2": "2.6.2",
     "npm:@sqliteai/sqlite-vector-darwin-arm64@1.1.2": "1.1.2",
     "npm:@sqliteai/sqlite-vector-darwin-x86_64@1.1.2": "1.1.2",
     "npm:@sqliteai/sqlite-vector-linux-arm64@1.1.2": "1.1.2",
@@ -783,6 +784,9 @@
         "@preact/signals-core",
         "preact"
       ]
+    },
+    "@resvg/resvg-wasm@2.6.2": {
+      "integrity": "sha512-FqALmHI8D4o6lk/LRWDnhw95z5eO+eAa6ORjVg09YRR7BkcM6oPHU9uyC0gtQG5vpFLvgpeU4+zEAz2H8APHNw=="
     },
     "@sindresorhus/is@7.2.0": {
       "integrity": "sha512-P1Cz1dWaFfR4IR+U13mqqiGsLFf1KbayybWwdd2vfctdV6hDpUkgCY0nKOLLTMSoRd/jJNjtbqzf13K8DCCXQw=="
@@ -1958,6 +1962,7 @@
       "npm:@modelcontextprotocol/sdk@^1.12.0",
       "npm:@preact/signals-core@^1.14.0",
       "npm:@preact/signals@^2.9.0",
+      "npm:@resvg/resvg-wasm@2.6.2",
       "npm:@sqliteai/sqlite-vector-darwin-arm64@1.1.2",
       "npm:@sqliteai/sqlite-vector-darwin-x86_64@1.1.2",
       "npm:@sqliteai/sqlite-vector-linux-arm64@1.1.2",
@@ -2499,6 +2504,7 @@
             "npm:@jsr/std__yaml@1.2.0",
             "npm:@modelcontextprotocol/core@2.2.0",
             "npm:@modelcontextprotocol/server@2.2.0",
+            "npm:@resvg/resvg-wasm@2.6.2",
             "npm:croner@10.0.1",
             "npm:es-module-lexer@2.3.2",
             "npm:fflate@0.8.3",

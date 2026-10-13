@@ -1,6 +1,6 @@
 ---
 name: files
-description: "Files and pictures (yaks.app). app_deploy's reload and the yak-release event, including a custom notice that keeps unsaved input; app_files — what a write returns, the patch and fetch ops, the history every write keeps and the restore that puts one back, the icon.png that gives an app an icon on a home screen — then upload() for a file off an <input>: where the bytes are served back from, the attachment and image rows it writes, the 20 MB ceiling and the downscale under it, and a gallery that never shows one picture twice."
+description: "Files and pictures (yaks.app). app_deploy's reload and the yak-release event, including a custom notice that keeps unsaved input; app_files — what a write returns, the patch and fetch ops, the history every write keeps and the restore that puts one back, the icon.svg that gives an app an icon on a home screen — then upload() for a file off an <input>: where the bytes are served back from, the attachment and image rows it writes, the 20 MB ceiling and the downscale under it, and a gallery that never shows one picture twice."
 ---
 
 # Files and pictures
@@ -209,12 +209,27 @@ _saved_, and `app_restore` brings back an app that was deleted.
 
 ## An icon for the home screen
 
-Write an **`icon.png` beside `index.html`** — square, 512×512, on its own
-background rather than transparent — and the app has an icon everywhere. The
-file is the setting; there is nothing else to call. Bytes are not text, so it
-goes in as `base64` in place of `content`, or with `op: fetch` from a URL:
+Write an **`icon.svg` beside `index.html`** and the app has an icon everywhere.
+It is text, so it goes in as `content` like a page does:
 
-    app_files(app, files: [{path: 'icon.png', base64: '<the bytes>'}])
+    app_files(app, files: [{path: 'icon.svg', content:
+      '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">' +
+      '<rect width="24" height="24" fill="#4c773e"/>' +
+      '<circle cx="12" cy="12" r="6" fill="#fdf7ee"/></svg>'}])
+
+The platform draws it as `icon.png`, 512×512, which is the address a home screen
+reads. The SVG is drawn when it is written, and refused with the reason if it
+cannot be an icon:
+
+- its `<svg>` has `xmlns="http://www.w3.org/2000/svg"`, as any SVG file needs;
+- its `viewBox` is square;
+- it has no `<text>`: there is no font to draw letters with, so a letter is a
+  `<path>`;
+- it parses.
+
+Fill the square with a background of your own, a `<rect>` the size of the
+`viewBox`. Where the picture leaves the square bare it is drawn on white,
+because iOS fills a transparent icon with solid black.
 
 The page is served with the two links an installed app needs already in its
 head, at the app's own root:
@@ -228,15 +243,17 @@ from the app: its title as the `name`, its own address as `start_url` and
 `scope`, `display: standalone`, the icon at 512 and 192, and the colour the page
 sets in `<meta name="theme-color">` where it sets one.
 
-**What the page declares is kept.** Each link is added only where the page has
+**What the app writes is kept.** Each link is added only where the page has
 none, so an app that writes its own `apple-touch-icon` keeps it and still gets
 the manifest link, and an app that ships its own `manifest.webmanifest` is
-served that file rather than the generated one.
+served that file rather than the generated one. An `icon.png` of the app's own
+is served in place of the drawing: a picture fetched with `op: fetch`, or one
+`sandbox_ship` copies in. A picture is read the way a browser would read it when
+it is written, and one that does not decode is refused: a PNG's bytes cannot be
+written out by hand, so an icon an assistant makes is an SVG.
 
 Until an app writes an icon, `icon.png` serves the platform's own default tile,
-so an app somebody keeps on their phone is never a blank square. Transparency is
-the one trap: iOS fills a transparent icon with solid black, so give the picture
-a background of its own.
+so an app somebody keeps on their phone is never a blank square.
 
 ## upload, and what it returns
 
@@ -408,7 +425,10 @@ does both, so a guest at the party adds their own photo without signing in; on
 Ask before they pick, not after they wait:
 
     let who = await me()
-    if (!who.writes) show(`<a href="${who.signIn}">Sign in to add one</a>`)
+    if (!who.writes) {
+      show(who.signIn ? `<a href="${who.signIn}">Sign in to add one</a>`
+                      : 'Only members of this app can add one.')
+    }
 
 A refused upload throws an error carrying the platform's own message:
 `sign in to change this app` to a stranger, with `signIn` on it, and, to a

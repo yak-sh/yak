@@ -56,6 +56,10 @@ and setup; this is the map and the feel.
   call; `prompts/` and `public/docs/` are what those assistants read.
 - **Spending**: `models.ts` and its allowance, the one budget per account
   (M-42105). An app's builders are `builders-and-builds`.
+- **Drawing**: yak-raster (`raster/`), the Worker behind RASTER, draws an
+  app's icon.svg as the icon.png a home screen reads (`raster.ts`). It is its
+  own Worker because resvg is 2.4 MB of WebAssembly, which every isolate of
+  the kernel, each waking Store included, would compile on start.
 - **Keys**: a key a space or app uses is a connection, kept in the directory's
   vault; an app is handed only a sentinel, swapped for the key on the way out
   (`outbound.ts`). That whole corner is `secrets-and-connections`.

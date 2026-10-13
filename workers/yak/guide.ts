@@ -74,10 +74,10 @@ in a package.json beside index.html, and app_deploy compiles them. Four steps:
 1. app_new — the app. Leave the space argument out: signing in gave them
    one, and every tool uses it unless they have several.
 2. app_files — write index.html, and any css, js or images beside it; the
-   whole set in one call, as files: [{path, content}, ...]. Write an icon.png
-   beside index.html as well — square, 512, on its own background, base64 in
-   place of content — and the app has an icon when it is kept on a phone's
-   home screen.
+   whole set in one call, as files: [{path, content}, ...]. Write an icon.svg
+   beside index.html as well, as content: a square viewBox, a background that
+   fills it, and shapes rather than <text>, which has no font. The platform
+   draws it as the icon.png a phone's home screen shows.
 3. app_deploy — release them. app_files keeps its edits private until this
    runs; then they serve at once, as the version an error will name. It also
    registers any components the app declares in a vocab.json beside

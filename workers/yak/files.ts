@@ -21,6 +21,7 @@ import { blobAt, immutable } from './cache.ts'
 import { releaseFiles } from './release.ts'
 import type { Env, Fetcher } from './env.ts'
 import { BUILT } from './versions.ts'
+import { drawn, ICON_SVG } from './raster.ts'
 import { parse, WORKER } from './wrangler_app.ts'
 import * as shared from './shared.ts'
 
@@ -164,7 +165,7 @@ export let fetch = async (req: Request, env: Env): Promise<Response> => {
     }
     let compiled = built ? await blobs.open(built) : null
     let object = compiled ?? await blobs.open(key)
-    if (!object) return missing()
+    if (!object) return path == ICON ? icon(env, blobs, prefix, eid) : missing()
     return rangedOpen(object, req, {
       'content-type': compiled && !resource ? mimeOf('compiled.js') : type,
       [VERSION]: object.version,
@@ -180,12 +181,33 @@ export let fetch = async (req: Request, env: Env): Promise<Response> => {
   if (source && key == keyed(prefix, `/${await source}`)) return missing()
   let compiled = await made
   if (compiled) return served(compiled, resource ? type : mimeOf('compiled.js'))
+  if (!file && path == ICON) return icon(env, blobs, prefix, eid)
   if (!file && pretty(path)) {
     key = keyed(prefix, '/')
     file = await blobs.load(key)
   }
   if (!file) return missing()
   return served(file, mimeOf(key))
+}
+
+// An app's icon.png, where it wrote none, is its icon.svg drawn (raster.ts).
+// The drawing belongs to the release as much as the SVG does, so it is cached
+// with it. One that failed for a reason of ours answers uncached: the gateway
+// serves the platform's tile meanwhile (apps.ts `unwritten`), and the next
+// request draws again.
+let ICON = '/icon.png'
+let icon = async (env: Env, blobs: Objects, prefix: string, eid: string) => {
+  let svg = await blobs.load(keyed(prefix, `/${ICON_SVG}`))
+  if (!svg) return missing()
+  let png = await drawn(env, new TextDecoder().decode(svg.bytes), eid)
+  if (typeof png == 'string') return missing()
+  if (!png) {
+    return new Response('not drawn', {
+      status: 503,
+      headers: { 'cache-control': 'no-store' },
+    })
+  }
+  return served({ bytes: png, version: svg.version }, 'image/png')
 }
 
 // Only content-addressed bytes cross this cached door. The gateway already

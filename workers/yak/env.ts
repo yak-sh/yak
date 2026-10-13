@@ -269,6 +269,9 @@ export type Env = {
   // yak-esbuild, whose container compiles an app's TypeScript and npm imports
   // at deploy (esbuild.ts). Absent in a test run and the workerd probes.
   ESBUILD?: Fetcher
+  // yak-raster, which draws an app's icon.svg as its icon.png (raster.ts).
+  // Absent in a test run and the workerd probes.
+  RASTER?: Fetcher
   // Voice (rtc.ts): the platform's one Cloudflare Realtime SFU app, its id and
   // its secret, and one TURN key and its token. All four are secrets, kept in
   // 1Password beside each other. REALTIME_API is a probe's door to somewhere

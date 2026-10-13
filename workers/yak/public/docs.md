@@ -52,10 +52,11 @@ automatic reload. An app can take over the notice without losing input. Use
 `reload: 'required'` on `app_deploy` for a changed contract the vocabulary
 cannot describe; otherwise the platform derives the level.
 
-An `icon.png` beside `index.html` is the app's icon on a home screen. `upload`
-takes a file and returns where its bytes live, addressed by their own SHA-256,
-and a row that points at them is what a gallery draws. One upload is 20 MB at
-most, so downscale a photo on the page before sending it.
+An `icon.svg` beside `index.html`, square and without `<text>`, is drawn as the
+app's icon on a home screen. `upload` takes a file and returns where its bytes
+live, addressed by their own SHA-256, and a row that points at them is what a
+gallery draws. One upload is 20 MB at most, so downscale a photo on the page
+before sending it.
 
 Deeper: <https://yaks.app/docs/files.md> — releases, `yak-release`,
 `app_deploy`'s `reload`, the app's icon, uploads, pictures, and a gallery that

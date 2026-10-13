@@ -17,12 +17,14 @@ workers.dev routes and preview URLs; callers use the zone or service bindings.
 
 A deploy of the kernel deploys its sibling Workers first, from the same commit
 and to the same environment: `yak-out` (`outbound/`, the dispatch namespace's
-outbound Worker) and `yak-esbuild` (`esbuild/`, the compiler `app_deploy` asks
-for an app's TypeScript and npm imports, @yaks/esbuild). `yak-esbuild` is a
-Worker in front of a container running native esbuild; its image is
+outbound Worker), `yak-esbuild` (`esbuild/`, the compiler `app_deploy` asks for
+an app's TypeScript and npm imports, @yaks/esbuild) and `yak-raster` (`raster/`,
+which draws an app's `icon.svg` as its `icon.png` with resvg's WebAssembly, kept
+out of the kernel so no Store's isolate compiles it). `yak-esbuild` is a Worker
+in front of a container running native esbuild; its image is
 `esbuild/Dockerfile` over `packages/esbuild`, and its deploy builds and pushes
 the image like the kernel's sandbox. The siblings do not call one another, so
-their deploys run concurrently with the kernel bundle. Both must finish
+their deploys run concurrently with the kernel bundle. All must finish
 successfully before the kernel upload begins; a failure waits for the other work
 and refuses the kernel upload. The pinned Wrangler bundles once, including node
 compatibility code and source maps; the upload reads those generated modules

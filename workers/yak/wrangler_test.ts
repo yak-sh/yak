@@ -562,9 +562,9 @@ test("a sibling's images are its Dockerfiles and their build contexts", async ()
   await checkSiblingPreparation()
 })
 
-test('independent sibling deploys overlap and the kernel waits for both successes', async () => {
+test('independent sibling deploys overlap and the kernel waits for every success', async () => {
   let started: { args: string[]; unpinned?: boolean }[] = []
-  let waits = [Promise.withResolvers<number>(), Promise.withResolvers<number>()]
+  let waits = SIBLINGS.map(() => Promise.withResolvers<number>())
   let deploy = runWrangler(['deploy', '--env', 'staging'], (args, unpinned) => {
     started.push({ args, unpinned })
     return unpinned ? waits[started.length - 1].promise : Promise.resolve(0)
@@ -575,13 +575,13 @@ test('independent sibling deploys overlap and the kernel waits for both successe
       started.map((call) => call.args),
       siblings(['deploy', '--env', 'staging']),
     )
-    assertEquals(started.map((call) => call.unpinned), [true, true])
-    waits[0].resolve(0)
+    assertEquals(started.map((call) => call.unpinned), SIBLINGS.map(() => true))
+    for (let wait of waits.slice(0, -1)) wait.resolve(0)
     await Promise.resolve()
-    assertEquals(started.length, 2)
-    waits[1].resolve(0)
+    assertEquals(started.length, SIBLINGS.length)
+    waits.at(-1)!.resolve(0)
     assertEquals(await deploy, 0)
-    assertEquals(started[2], {
+    assertEquals(started[SIBLINGS.length], {
       args: ['deploy', '--env', 'staging'],
       unpinned: undefined,
     })
@@ -592,7 +592,7 @@ test('independent sibling deploys overlap and the kernel waits for both successe
 })
 
 for (let failure of [7, Error('process wait failed')]) {
-  test(`a sibling ${typeof failure == 'number' ? 'exit' : 'rejection'} waits for the other sibling and never deploys the kernel`, async () => {
+  test(`a sibling ${typeof failure == 'number' ? 'exit' : 'rejection'} waits for the other siblings and never deploys the kernel`, async () => {
     let other = Promise.withResolvers<number>()
     let starts = 0, ended = false
     let deploy = runWrangler(['deploy'], (_args, unpinned) => {
@@ -609,7 +609,7 @@ for (let failure of [7, Error('process wait failed')]) {
     })
     try {
       await Promise.resolve()
-      assertEquals(starts, 2)
+      assertEquals(starts, SIBLINGS.length)
       assertEquals(ended, false)
       other.resolve(0)
       assertEquals(

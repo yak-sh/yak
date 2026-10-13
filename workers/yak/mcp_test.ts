@@ -672,6 +672,22 @@ test(
         Error,
         'base64: not base64',
       )
+      // A picture is read the way a decoder reads it (T-123684): a PNG made
+      // up by hand is refused, saying what to send in its place.
+      await assertRejects(
+        () =>
+          agent.tool('app_files', {
+            ...app,
+            path: 'icon.png',
+            base64: btoa(
+              '\x89PNG\r\n\x1a\n\0\0\0\rIHDR\0\0\x02\0\0\0\x02\0\x08\x06' +
+                '\0\0\0\0\0\0\0',
+            ),
+          }),
+        Error,
+        'icon.png does not decode: its IHDR chunk fails its checksum. ' +
+          'Write the icon as icon.svg instead',
+      )
       assertMatch(await agent.tool('app_deploy', app), /v1/)
       let back = await k.at(`${jeff54}.yaks.app`, '/recipes/add.wasm')
       assertEquals(back.headers.get('content-type'), 'application/wasm')
