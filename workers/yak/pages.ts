@@ -1164,7 +1164,7 @@ export let desk = (at: DeskPage, env: Host = {}) => {
   }
   if (view == 'new') {
     body = `<section class="Desk_Start" ${state(true, !!at.agents?.length)}>
-<h2>Ask your agent for a new yaks.app</h2>${
+<h2>Ask your agent for a new yaks app</h2>${
       agentList(at.agents ?? [], 'links')
     }</section>${connectCard(at)}
 <div class="Desk_Options">${chat(`${site}/api/build`)}
