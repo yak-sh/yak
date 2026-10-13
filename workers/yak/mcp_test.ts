@@ -25,6 +25,11 @@ import { sha256 } from './versions.ts'
 import { facing, GUIDE, HELLO, minted } from './mcp-probe.ts'
 import { APP_JSON } from './door.ts'
 
+// The paths an app_files listing names: each file's line, before its sha,
+// and not the last line, which says what is live.
+let paths = (said: string) =>
+  said.split('\n').slice(0, -1).map((line) => line.split(' — ')[0]).join('\n')
+
 let jeff54 = unique('jeff54')
 let jeff_work54 = unique('jeff-work54')
 let maya54 = unique('maya54')
@@ -407,7 +412,7 @@ test(
         new RegExp(`${jeff54}\\.yaks\\.app\\/garden\\/`),
       )
       assertEquals(
-        await agent.tool('app_files', { app: 'garden', op: 'list' }),
+        paths(await agent.tool('app_files', { app: 'garden', op: 'list' })),
         '(no files)',
       )
       await agent.tool('space_new', { slug: jeff_work54, title: 'Work' })
@@ -421,7 +426,7 @@ test(
       // namespaced tool never asks (C-32730 item 6). app_new keeps asking —
       // it names an app nobody has yet.
       assertEquals(
-        await agent.tool('app_files', { app: 'garden', op: 'list' }),
+        paths(await agent.tool('app_files', { app: 'garden', op: 'list' })),
         '(no files)',
       )
       // The generic tier reads the caller's whole reach and names no app, so
@@ -444,7 +449,7 @@ test(
       )
       await agent.tool('app_delete', { space: jeff_work54, app: 'garden' })
       assertEquals(
-        await agent.tool('app_files', { app: 'garden', op: 'list' }),
+        paths(await agent.tool('app_files', { app: 'garden', op: 'list' })),
         '(no files)',
       )
 
@@ -492,7 +497,7 @@ test(
         content: 'h1{}',
       })
       assertEquals(
-        await agent.tool('app_files', { ...app, op: 'list' }),
+        paths(await agent.tool('app_files', { ...app, op: 'list' })),
         'css/site.css\nindex.html',
       )
       // A whole app in one call, and one answer naming every file it wrote
@@ -516,7 +521,7 @@ test(
           )}\nStaged for app_deploy.`,
       )
       assertEquals(
-        await agent.tool('app_files', { ...app, op: 'list' }),
+        paths(await agent.tool('app_files', { ...app, op: 'list' })),
         'app.js\ncss/site.css\nimg/logo.svg\nindex.html',
       )
       assertEquals(
@@ -1285,7 +1290,7 @@ test(
       })
       assertEquals((await asked('/cookbook/')).status, 200)
       assertEquals(
-        await agent.tool('app_files', { ...moved, op: 'list' }),
+        paths(await agent.tool('app_files', { ...moved, op: 'list' })),
         'css/site.css\nindex.html\nvocab.json\nvocab.yml',
       )
       let still = JSON.parse(
@@ -1398,7 +1403,7 @@ test(
         title: 'Sc',
       })
       assertEquals(
-        await agent.tool('app_files', { ...scratch, op: 'list' }),
+        paths(await agent.tool('app_files', { ...scratch, op: 'list' })),
         '(no files)',
       )
       // The generic tier reads every app at once, so what proves the store

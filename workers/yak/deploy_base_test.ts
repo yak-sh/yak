@@ -86,6 +86,10 @@ test('file reads and lists say which live version the draft was read against', (
   assertEquals((initial.value as { version: number }).version, 1)
   assertEquals((pending.value as { version: number }).version, 2)
   assertEquals((pending.value as { unreleased: boolean }).unreleased, true)
+  // The words say it too, since some hosts show their model only the words.
+  assertStringIncludes(initial.text, 'live v1, with nothing unreleased')
+  assertStringIncludes(pending.text, 'differs from live v2')
+  assertStringIncludes(pending.text, 'app_deploy(base: 2)')
   assertEquals((read.value as { version: number }).version, 2)
 })
 

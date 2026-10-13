@@ -341,8 +341,10 @@ test('a released app stages changed files over its source', async () => {
   )
   await s.tool('app_files', { op: 'delete', path: 'style.css' })
   assertEquals(
-    await s.tool('app_files', { op: 'list' }),
-    'index.html\nmain.ts',
+    (await s.tool('app_files', { op: 'list' })).split('\n')
+      .filter((line) => line.includes(' — sha256 '))
+      .map((line) => line.split(' — ')[0]),
+    ['index.html', 'main.ts'],
   )
   await assertRejects(
     () => s.tool('app_files', { op: 'read', path: 'style.css' }),

@@ -119,9 +119,9 @@ app_files:
     find is an exact string that must occur exactly once. op: fetch with
     path and url downloads an https body to path (how a library is vendored)
     and returns its integrity hash. Pass op explicitly unless writing. list
-    returns paths as text and files: [{path, sha}] as data, with unreleased
-    true when they differ from the live version; read returns the text;
-    delete confirms the path. Replaced or deleted bytes are kept for 30 days.
+    says each path with its SHA-256, the live version, and whether the draft
+    differs from it (as data too: files: [{path, sha}], version and
+    unreleased); read returns the text; delete confirms the path. Replaced or deleted bytes are kept for 30 days.
     To undo any write, patch, fetch or delete: op: history with path lists
     them newest first (sha256, size, when, by whom), and op: restore puts
     one back, the newest or the one sha or at names; a restore is itself a
@@ -214,8 +214,8 @@ app_deploy:
   description: >-
     Release the app's staged files as a version: files, vocabulary and
     worker begin serving together, and error reports name this version.
-    Send base as the live version the files were made on (app_files returns
-    version). When base is behind, the answer names the files this draft
+    Send base as the live version the files were made on (app_files op: list
+    says it). When base is behind, the answer names the files this draft
     would remove or replace and keeps it unreleased; after reviewing them,
     repeat with the same base and confirm: true. Leaving base out releases as
     usual. reload: required marks a contract change open pages must reload

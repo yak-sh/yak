@@ -196,6 +196,7 @@ test('a deploy is a version, and one word puts it back', async () => {
     })
     let pending = await agent.answer('app_files', { ...app, op: 'list' })
     assertEquals((pending.value as { unreleased: boolean }).unreleased, true)
+    assertStringIncludes(pending.text, 'Nothing is released yet')
     assertMatch(await agent.tool('app_deploy', app), /v1/)
 
     // v2: the change that broke it, with a file that did not exist before.
@@ -255,16 +256,17 @@ test('a deploy is a version, and one word puts it back', async () => {
       `no v9 of ${space}/recipes — it keeps v2, v1`,
     )
     let listing = await agent.answer('app_files', { ...app, op: 'list' })
-    assertEquals(listing.text.split('\n').sort(), ['broken.js', 'index.html'])
     let digest = (s: string) => sha256(new TextEncoder().encode(s))
-    assertEquals(listing.value, {
-      files: [
-        { path: 'broken.js', sha: await digest('throw new Error("no")') },
-        { path: 'index.html', sha: await digest('<h1>OOPS</h1>') },
-      ],
-      unreleased: false,
-      version: 2,
-    })
+    let files = [
+      { path: 'broken.js', sha: await digest('throw new Error("no")') },
+      { path: 'index.html', sha: await digest('<h1>OOPS</h1>') },
+    ]
+    assertEquals(listing.value, { files, unreleased: false, version: 2 })
+    // Every fact of the value is in the words a model reads.
+    for (let { path, sha } of files) {
+      assertStringIncludes(listing.text, `${path} — sha256 ${sha}`)
+    }
+    assertStringIncludes(listing.text, 'live v2, with nothing unreleased')
 
     // A size down from a deploy: every write keeps what it replaced
     // (versions.ts, T-34508). The page has been written three times by now, so

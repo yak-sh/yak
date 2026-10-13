@@ -2869,13 +2869,27 @@ let OURS: Row[] = [
           ? live.files
           : await manifest(view, prefix)
         let paths = Object.keys(files).sort()
+        let unreleased = !live || !same(live.files, files)
+        let version = app.version ?? 0
+        // Every fact in the value said in the words too: claude.ai's model
+        // reads only the words, and app_deploy's base is this version.
         return {
-          text: paths.join('\n') || '(no files)',
+          text: [
+            ...paths.length
+              ? paths.map((path) => `${path} — sha256 ${files[path]}`)
+              : ['(no files)'],
+            !live
+              ? 'Nothing is released yet.'
+              : unreleased
+              ? `The draft differs from live v${version}; ` +
+                `app_deploy(base: ${version}) releases it.`
+              : `These are live v${version}, with nothing unreleased.`,
+          ].join('\n'),
           space,
           value: {
             files: paths.map((path) => ({ path, sha: files[path] })),
-            unreleased: !live || !same(live.files, files),
-            version: app.version ?? 0,
+            unreleased,
+            version,
           },
         }
       }
