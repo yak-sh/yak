@@ -200,6 +200,32 @@ reads. `prohibited(name)` recognizes `_cf_` names regardless of case or leading
 underscore count. `reserved(name)` also recognizes SQLite's `sqlite_` tables,
 for code enumerating application-owned tables.
 
+## Resets
+
+The runtime moves an object to a new instance when it likes (a deploy, a runtime
+update, another machine), and the instance it moved fails its work in flight;
+whoever owns that work runs it again. `moved(error)` recognizes those words.
+`replaced(ctx.storage)` says whether this instance is the one that was moved: a
+reset instance still answers a read but refuses every write, so it asks through
+a transaction. `evicted(error)` is a reset a caller should send again for, and
+`killed(error)` a kill for the CPU or memory limit, which no code of the object
+sees.
+
+```ts
+import { assertEquals } from '@std/assert'
+import { moved, replaced } from '@yaks/durable-object'
+
+let error = new Error('Durable Object reset because its code was updated.')
+let reset = {
+  sql: { exec: () => [] },
+  transactionSync: () => {
+    throw error
+  },
+}
+// This instance was reset: the next one runs the work again, so no report.
+assertEquals(moved(error) && replaced(reset), true)
+```
+
 ## API
 
 The package has one import path, `@yaks/durable-object`:
@@ -211,6 +237,7 @@ The package has one import path, `@yaks/durable-object`:
 | `profile(emit)`                                         | Aggregates cursor costs into bounded summaries     |
 | `sockets(subs, ctx)`                                    | Returns `accept`, `message`, `close`, and `wake`   |
 | `prohibited`, `reserved`                                | Identify internal runtime tables                   |
+| `moved`, `replaced`, `evicted`, `killed`                | Tell a reset of this instance from a failure       |
 | `DurableStorage`, `DurableSql`, `SqlCursor`, `SqlValue` | Structural storage types                           |
 | `Hibernation`, `Wire`, `Sockets`, `Store`               | Structural socket and store types                  |
 

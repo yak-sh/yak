@@ -8,7 +8,7 @@ import { within } from './defects.ts'
 import { doorOf } from './door.ts'
 import { type State, Store } from './graph.ts'
 import { KERNEL } from './meta.ts'
-import { replaced } from './resets.ts'
+import { replaced } from '@yaks/durable-object'
 import { state } from './testing.ts'
 
 let NAME = 'ada/notes'
@@ -50,7 +50,7 @@ let object = async () => {
         {},
         () => store.alarm(retryCount ? { isRetry: true, retryCount } : {}),
         clock(),
-        { replaced: () => replaced(own) },
+        { replaced: () => replaced(own.storage) },
       )
     return { alarm, move: () => void (moved = true) }
   }

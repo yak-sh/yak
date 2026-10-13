@@ -5,9 +5,9 @@
 // failed job is written down, and what becomes of a job its object died under.
 //
 // A job runs in the object that fired it, and a deploy or the runtime moving
-// the object (resets.ts) takes that instance away wherever the job is: what
-// its catches meet is no defect, and the occurrence is spent (@yaks/wake runs
-// an effect at most once). So a run is marked on its own row while it lasts
+// the object (@yaks/durable-object `moved`) takes that instance away wherever
+// the job is: what its catches meet is no defect, and the occurrence is spent
+// (@yaks/wake runs an effect at most once). So a run is marked on its own row while it lasts
 // (`sweep.began`), and the next incarnation's alarm reads a mark older than
 // itself as a run that died and fires the job again (`resumed`, graph.ts
 // `alarm`). Every job here is a sweep that can run twice.

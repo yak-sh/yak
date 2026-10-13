@@ -2,12 +2,9 @@
 // object, and which of them are ours to fix.
 //
 // The runtime moves an object to a new instance whenever it likes: a runtime
-// update, another machine, a deploy, or a newer deploy reaching it (running.ts
-// `behind`). The instance that was moved fails what it had in flight, and
-// whoever owns that work runs it again: a caller's door fetches again on a
-// fresh stub (door.ts `retried`), the runtime retries an alarm that failed,
-// the effect pool runs an effect again, and the platform job it died in fires
-// again at the next incarnation's alarm (wake.ts `resumed`). Cloudflare
+// update, another machine, a deploy. The instance that was moved fails what it
+// had in flight, and whoever owns that work runs it again: a caller fetches
+// again on a fresh stub, the runtime retries an alarm that failed. Cloudflare
 // documents the move as part of an object's life, so what the moved instance
 // meets is no defect. A live object that meets the words from an object it
 // called has run out of retries, and that is a failure; so is a reset our own
@@ -44,27 +41,35 @@ let says = (e: unknown, words: string[]) =>
  */
 export let moved = (e: unknown): boolean => says(e, MOVED)
 
-/** The slice of a Durable Object's state that reaches its own storage. */
-export type Own = { storage: { sql: { exec(query: string): unknown } } }
+/** The slice of an object's storage that `replaced` asks. */
+export type Own = {
+  sql: { exec(query: string): unknown }
+  transactionSync<T>(body: () => T): T
+}
 
 /**
- * Whether the runtime has moved the object off the instance this state
- * belongs to. A moved instance can no longer reach its own storage, which
- * refuses it in the words `moved` knows; the live one answers.
+ * Whether the runtime has moved the object off the instance this storage
+ * belongs to. A moved instance refuses its own storage in the words `moved`
+ * knows, but not all of it: one reset for a deploy still answers a read and
+ * refuses every write (workerd's `ActorSqlite::requireNotBroken`). A
+ * transaction counts as a write even when its body only reads, so it asks
+ * both; the live instance answers.
  *
  * ```ts
  * import { assertEquals } from '@std/assert'
- * let gone = new Error('Connection closed: this Durable Object instance is ' +
- *   'no longer active. Reconnect or retry the request.')
- * let answering = { storage: { sql: { exec: () => [] } } }
- * let refusing = { storage: { sql: { exec: () => { throw gone } } } }
- * assertEquals(replaced(answering), false)
- * assertEquals(replaced(refusing), true)
+ * let reset = () => {
+ *   throw new Error('Durable Object reset because its code was updated.')
+ * }
+ * let sql = { exec: () => [] }
+ * let live = { sql, transactionSync: <T>(body: () => T) => body() }
+ * assertEquals(replaced(live), false)
+ * assertEquals(replaced({ sql, transactionSync: reset }), true)
+ * assertEquals(replaced({ ...live, sql: { exec: reset } }), true)
  * ```
  */
-export let replaced = (state: Own): boolean => {
+export let replaced = (storage: Own): boolean => {
   try {
-    state.storage.sql.exec('SELECT 1')
+    storage.transactionSync(() => storage.sql.exec('SELECT 1'))
     return false
   } catch (e) {
     return moved(e)

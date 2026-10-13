@@ -7,7 +7,7 @@
 import { test } from '@yaks/testing'
 import { assert, assertEquals, assertRejects } from '@std/assert'
 import { doorOf, fetchOf, storeOf } from './door.ts'
-import { evicted } from './resets.ts'
+import { evicted } from '@yaks/durable-object'
 import { Store } from './graph.ts'
 import { Wire } from './stream.ts'
 import { Builder } from './build.ts'

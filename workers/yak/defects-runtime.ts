@@ -4,7 +4,7 @@ import { within } from './defects.ts'
 import { origin } from '@yaks/tracker/report'
 import type { Env } from './env.ts'
 import { learn } from './running.ts'
-import { type Own, replaced } from './resets.ts'
+import { type Own, replaced } from '@yaks/durable-object'
 
 let clock = {
   now: Date.now,
@@ -25,13 +25,14 @@ let clock = {
 }
 
 // A Durable Object's state, when the invocation is one of its own.
-let own = (state: unknown): state is Own =>
-  typeof (state as Own | undefined)?.storage?.sql?.exec == 'function'
+let own = (state: unknown): state is { storage: Own } =>
+  typeof (state as { storage?: Own } | undefined)?.storage?.transactionSync ==
+    'function'
 
 // Every invocation enters here, the Worker's and each object's, so this is
 // also where an isolate learns which deploy it runs (running.ts). An object's
 // invocation can ask whether the runtime has since moved it off this instance
-// (resets.ts `replaced`).
+// (@yaks/durable-object `replaced`).
 export let entry = <T>(
   env: Partial<Env>,
   request: string,
@@ -53,7 +54,7 @@ export let entry = <T>(
           request,
           http,
         ),
-        replaced: own(state) ? () => replaced(state) : undefined,
+        replaced: own(state) ? () => replaced(state.storage) : undefined,
       },
     )
 )

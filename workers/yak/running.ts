@@ -7,8 +7,8 @@
 // request to an object therefore carries the version its caller runs (door.ts
 // `doorOf` for a store, `fetchOf` for the Wire and the Builder), and an object
 // that a newer caller reaches restarts itself on the spot (`behind`); the
-// caller's retry of an evicted request (resets.ts `evicted`) then meets the new
-// code.
+// caller's retry of an evicted request (@yaks/durable-object `evicted`) then
+// meets the new code.
 //
 // The version is the runtime's own (`CF_VERSION_METADATA`): a fresh id and
 // upload time on every deploy, the same for the Worker and every object it
@@ -105,7 +105,7 @@ export type Restartable = {
 let RESTARTED = 'restarted for'
 
 // The words the restart fails the request in flight with: the runtime's own,
-// so every caller's retry already knows them (resets.ts `evicted`).
+// so every caller's retry already knows them (@yaks/durable-object `evicted`).
 let BEHIND = 'Durable Object reset because a newer deploy reached it:'
 
 /** The deploy this object last restarted for, as `behind` keeps it. A record

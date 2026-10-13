@@ -8,7 +8,7 @@ import { platform } from '../tracker/core.ts'
 import { CallError } from '@yaks/tools/errors'
 import { caught, defect, delivery, refusing, within } from './defects.ts'
 import { Pending } from './writes.ts'
-import { type Own, replaced } from './resets.ts'
+import { type Own, replaced } from '@yaks/durable-object'
 
 let recorded = () => {
   let rows: Bundle[][] = []
@@ -176,16 +176,20 @@ let reports = async (instance?: Own) => {
     r.exception ? [(r.exception as { value: string }).value] : []
   )
 }
-let storage = (exec: () => unknown) => ({ storage: { sql: { exec } } })
+// An instance's storage. One reset for a deploy refuses writes and still
+// answers reads; one no longer active refuses both.
+let refuse = (words: string) => (): never => {
+  throw new Error(words)
+}
+let storage = (write = () => {}, read: () => unknown = () => []): Own => ({
+  sql: { exec: read },
+  transactionSync: (body) => (write(), body()),
+})
 
 test('a moved instance reports none of its resets; a live caller and our own reset do', async () => {
-  equal(
-    await reports(storage(() => {
-      throw new Error(GONE)
-    })),
-    [TIMEOUT],
-  )
-  equal(await reports(storage(() => [])), [GONE, CODE, TIMEOUT])
+  equal(await reports(storage(refuse(CODE))), [TIMEOUT])
+  equal(await reports(storage(undefined, refuse(GONE))), [TIMEOUT])
+  equal(await reports(storage()), [GONE, CODE, TIMEOUT])
   equal(await reports(), [GONE, CODE, TIMEOUT])
 })
 

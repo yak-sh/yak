@@ -57,6 +57,7 @@ export {
   type SqlValue,
 } from './sql.ts'
 export { storage, type Store } from './store.ts'
+export { evicted, killed, moved, type Own, replaced } from './resets.ts'
 export { profile, type Summary } from './profile.ts'
 export {
   type Hibernation,

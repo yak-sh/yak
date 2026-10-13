@@ -145,6 +145,7 @@ import {
   type DurableStorage,
   type Hibernation,
   profile,
+  replaced,
   type Sockets,
   sockets,
   type Wire,
@@ -271,7 +272,6 @@ import {
   storeOf,
 } from './door.ts'
 import { behind, restartedFor, versionOf } from './running.ts'
-import { replaced } from './resets.ts'
 import { KERNEL, type Meta, meta, metaOf, minted } from './meta.ts'
 import { caught, defect, refusing } from './defects.ts'
 import { counts, hop, type Tally, tallying } from './lib/hops.ts'
@@ -2564,13 +2564,13 @@ export class Store {
   }
 
   // The runtime moved this object off this instance during an alarm run
-  // (resets.ts `replaced`) and retries the run on the instance that replaced
-  // it. Only this one knows the run stopped for the move, so it tells that
-  // one, whose retry then has no cut-off to report. A run can finish or throw
-  // and still have been moved: either way its writes never landed.
+  // (@yaks/durable-object `replaced`) and retries the run on the instance that
+  // replaced it. Only this one knows the run stopped for the move, so it tells
+  // that one, whose retry then has no cut-off to report. A run can finish or
+  // throw and still have been moved: either way its writes never landed.
   async #handOver(name: string | null): Promise<void> {
     let ns = this.#bind.STORE
-    if (!ns || !name || !replaced(this.#ctx)) return
+    if (!ns || !name || !replaced(this.#ctx.storage)) return
     try {
       await storeOf(ns, name)('/moved', { method: 'POST' }, KERNEL)
     } catch (e) {

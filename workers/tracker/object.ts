@@ -5,6 +5,8 @@ import {
   driver,
   type DurableStorage,
   type Hibernation,
+  moved,
+  replaced,
   reserved,
   type Sockets,
   sockets,
@@ -224,8 +226,12 @@ export class Tracker {
       entrypoint,
       request,
     )
+  // What an instance the runtime moved meets is its replacement's to redo
+  // (@yaks/durable-object `replaced`).
   #report = (error: unknown, entrypoint: string, request?: Request) =>
-    caught(error, { sink: this.sink, ...this.#origin(entrypoint, request) })
+    moved(error) && replaced(this.ctx.storage)
+      ? Promise.resolve()
+      : caught(error, { sink: this.sink, ...this.#origin(entrypoint, request) })
   recover = async (error: unknown, entrypoint: string, request?: Request) => {
     await this.#report(error, entrypoint, request)
     try {

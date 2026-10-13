@@ -18,7 +18,7 @@ import {
 import type { Env } from './env.ts'
 import { isTestAddress } from './lib/bots.ts'
 import { Pending } from './writes.ts'
-import { moved } from './resets.ts'
+import { moved } from '@yaks/durable-object'
 import type { Ctx } from './tools.ts'
 
 export type Hit = { id: string; account: 'person' | 'test' }
@@ -36,7 +36,7 @@ type Invocation = {
   retain?: (pending: Promise<void>) => void
   origin?: ReturnType<typeof origin>
   // Whether the runtime has moved the object this invocation runs in off its
-  // instance (resets.ts `replaced`); absent outside a Durable Object.
+  // instance (@yaks/durable-object `replaced`); absent outside a Durable Object.
   replaced?: () => boolean
 }
 let context = new AsyncLocalStorage<Invocation>()
@@ -143,8 +143,8 @@ export let reported = (error: unknown) => {
  * occurrence about other code than the running version (a failed build)
  * names the commit it concerns. What an instance the runtime moved meets in
  * its own invocations is no defect: its work is run again by whoever owns it
- * (resets.ts). The same words met by a live object, or by the Worker, are a
- * call that ran out of retries, and are reported. */
+ * (@yaks/durable-object `moved`). The same words met by a live object, or by
+ * the Worker, are a call that ran out of retries, and are reported. */
 export let defect = (
   error: unknown,
   tags: Tags,
