@@ -34,7 +34,6 @@ let row = (
 let door = (rows: unknown[]) => {
   let wrote: Bundle[] = []
   let at: Meta = {
-    meaning: () => Promise.resolve([]),
     query: () => Promise.resolve(rows as Bundle[]),
     apply: (bundles) => {
       wrote.push(...bundles)
@@ -173,7 +172,6 @@ test('signing in clears the count', async () => {
 // refused, and nothing in its batch lands.
 let guarded = (rows: Signin[]) => {
   let at: Meta = {
-    meaning: () => Promise.resolve([]),
     query: () => Promise.resolve(structuredClone(rows) as unknown as Bundle[]),
     apply: (bundles) => {
       let row = (eid: string) => rows.find((r) => r.entity.eid == eid)

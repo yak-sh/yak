@@ -182,7 +182,6 @@ test(
     let time = clock()
     let tries = 0
     let store: Meta = {
-      meaning: () => Promise.resolve([]),
       query: () => Promise.resolve(codeRows[tries]),
       apply: (bundles) => {
         for (let b of bundles) {
