@@ -830,13 +830,13 @@ let preferences = (at: DeskPage, env: Host) => {
         esc(at.space)
       }</strong>.${
         esc(apex(env))
-      }</a></p><p class="Note">The address is fixed once you've created an app.</p>`
+      }</a></p><p class="Note">To change it, ask your assistant to move your space. Every app goes with it, and old links keep working.</p>`
       : `<form method="post" action="${managePath('settings', at.pick)}">
 <label for="your-address">Your address</label>
 <span class="At"><input class="Field" id="your-address" name="space" maxlength="63" autocomplete="off" spellcheck="false" value="${
         esc(at.space)
       }"><span>.${apex(env)}</span></span>
-<p class="Note">You can change this until you create your first app.</p><button class="Button" type="submit">Save address</button></form>`
+<p class="Note">Change it here before your first app. After that, your assistant can move your space.</p><button class="Button" type="submit">Save address</button></form>`
   }</section>
 <section class="Card"><h2>Homepage</h2><p>${
     home
