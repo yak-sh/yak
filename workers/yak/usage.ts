@@ -33,6 +33,7 @@
 // What a space is allowed — the ceilings, the letters, the line the agent
 // reads and the sentence a door says no with — is meter.ts, which this half
 // reads and the Store object reads too.
+import { patient } from '@yaks/blob'
 import type { Bundle } from '@yaks/graph'
 import * as dirPart from './directory.ts'
 import {
@@ -356,7 +357,9 @@ let fileSizes = async (env: Env, space: Space) => {
   let sizes = new Map<string, number>()
   let cursor: string | undefined
   do {
-    let page = await env.BLOBS.list({ prefix: `${space.slug}/`, cursor })
+    let page = await patient(() =>
+      env.BLOBS.list({ prefix: `${space.slug}/`, cursor })
+    )
     for (let object of page.objects) sizes.set(object.key, object.size)
     cursor = page.truncated ? page.cursor : undefined
   } while (cursor)

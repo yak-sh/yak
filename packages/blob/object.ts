@@ -57,6 +57,47 @@ export type Bucket = {
 /** The most keys one bucket delete takes: R2's own limit. */
 export let DELETES = 1000
 
+// R2's answers that say "not now" rather than "no", each of which its error
+// codes page says to retry: an internal error (10001), the service unavailable
+// (10043), and too many requests at once for one key or prefix (10058).
+let BUSY = [10001, 10043, 10058]
+
+let busy = (e: unknown) => BUSY.includes(Object(e).code)
+
+/**
+ * A bucket call, sent again while the bucket answers that it is busy: a burst
+ * of uploads to one space is enough for R2 to refuse some of them. Each wait
+ * doubles from `wait` milliseconds, jittered so calls that collided once do not
+ * collide again, and after `tries` the bucket's last answer is thrown. Any
+ * other refusal is thrown at once. Every call the stores below make to a bucket
+ * goes through it; a stream is read once, so a caller putting one cannot.
+ *
+ * ```ts
+ * import { patient } from '@yaks/blob'
+ * import { equal } from '@yaks/testing'
+ *
+ * let calls = 0
+ * let list = () =>
+ *   ++calls < 3 ? Promise.reject({ code: 10058 }) : Promise.resolve(['a/x'])
+ * equal(await patient(list, 5, 0), ['a/x'])
+ * ```
+ */
+export let patient = async <T>(
+  call: () => Promise<T>,
+  tries = 5,
+  wait = 100,
+): Promise<T> => {
+  for (let i = 1;; i++) {
+    try {
+      return await call()
+    } catch (e) {
+      if (i >= tries || !busy(e)) throw e
+      let ms = wait * 2 ** (i - 1) * (0.5 + Math.random())
+      await new Promise((ok) => setTimeout(ok, ms))
+    }
+  }
+}
+
 /** A stored object's length and validator, with its body read on demand. */
 export type Opened = {
   size: number
@@ -69,17 +110,21 @@ export type Opened = {
 export type Loaded = { bytes: Uint8Array<ArrayBuffer>; version: string }
 
 let open = async (bucket: Pick<Bucket, 'head' | 'get'>, key: string) => {
-  let head = await bucket.head(key)
+  let head = await patient(() => bucket.head(key))
   if (!head) return null
   return {
     size: head.size,
     version: head.etag.replace(/^"|"$/g, ''),
     read: async (range?: { from: number; to: number }) => {
-      let object = await bucket.get(
-        key,
-        range
-          ? { range: { offset: range.from, length: range.to - range.from + 1 } }
-          : undefined,
+      let object = await patient(() =>
+        bucket.get(
+          key,
+          range
+            ? {
+              range: { offset: range.from, length: range.to - range.from + 1 },
+            }
+            : undefined,
+        )
       )
       if (!object) throw new Error(`no object at ${key}`)
       return object.body
@@ -104,14 +149,14 @@ export let objectBlobs = (
   bucket: Pick<Bucket, 'head' | 'get' | 'put'>,
   prefix = '',
 ): Blobs => ({
-  has: async (sha) => (await bucket.head(prefix + sha)) != null,
+  has: async (sha) => (await patient(() => bucket.head(prefix + sha))) != null,
   get: async (sha) => {
-    let found = await bucket.get(prefix + sha)
+    let found = await patient(() => bucket.get(prefix + sha))
     return found ? new Uint8Array(await found.arrayBuffer()) : undefined
   },
   open: (sha) => open(bucket, prefix + sha),
   put: async (sha, bytes) => {
-    await bucket.put(prefix + sha, bytes)
+    await patient(() => bucket.put(prefix + sha, bytes))
   },
 })
 
@@ -153,7 +198,7 @@ let walk = async (bucket: Bucket, prefix: string) => {
   let at: Record<string, number> = {}
   let cursor: string | undefined
   do {
-    let page = await bucket.list({ prefix, cursor })
+    let page = await patient(() => bucket.list({ prefix, cursor }))
     for (let o of page.objects) at[o.key] = o.uploaded.getTime()
     cursor = page.truncated ? page.cursor : undefined
   } while (cursor)
@@ -171,16 +216,16 @@ let walk = async (bucket: Bucket, prefix: string) => {
  * ```
  */
 export let bucketObjects = (bucket: Bucket): Objects => ({
-  has: async (key) => (await bucket.head(key)) != null,
+  has: async (key) => (await patient(() => bucket.head(key))) != null,
   put: async (key, bytes) => {
-    await bucket.put(key, bytes)
+    await patient(() => bucket.put(key, bytes))
   },
   read: async (key) => {
-    let object = await bucket.get(key)
+    let object = await patient(() => bucket.get(key))
     return object ? new Uint8Array(await object.arrayBuffer()) : null
   },
   load: async (key) => {
-    let object = await bucket.get(key)
+    let object = await patient(() => bucket.get(key))
     return object
       ? {
         bytes: new Uint8Array(await object.arrayBuffer()),
@@ -189,15 +234,17 @@ export let bucketObjects = (bucket: Bucket): Objects => ({
       : null
   },
   get: async (key) => {
-    let object = await bucket.get(key)
+    let object = await patient(() => bucket.get(key))
     if (!object) throw new Error(`no object at ${key}`)
     return new Uint8Array(await object.arrayBuffer())
   },
   open: (key) => open(bucket, key),
   delete: async (keys) => {
-    if (typeof keys == 'string') return void await bucket.delete(keys)
+    if (typeof keys == 'string') {
+      return void await patient(() => bucket.delete(keys))
+    }
     for (let at = 0; at < keys.length; at += DELETES) {
-      await bucket.delete(keys.slice(at, at + DELETES))
+      await patient(() => bucket.delete(keys.slice(at, at + DELETES)))
     }
   },
   list: async (prefix) => Object.keys(await walk(bucket, prefix)).sort(),

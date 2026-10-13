@@ -1,7 +1,7 @@
 import { test } from '@yaks/testing'
 import { assertEquals, assertRejects } from '@std/assert'
 import { decode, encode } from './store.ts'
-import { type Bucket, bucketObjects, objectBlobs } from './object.ts'
+import { type Bucket, bucketObjects, objectBlobs, patient } from './object.ts'
 
 // That a real `R2Bucket` satisfies `Bucket` is checked by the compiler, in
 // conform.ts — it has to live outside this compile, because
@@ -132,4 +132,20 @@ test('a store keyed by name deletes a thousand keys in one call', async () => {
   for (let key of keys) await files.put(key, encode(key))
   await files.delete(keys)
   assertEquals([bucket.keys(), bucket.deletes], [[], 3])
+})
+
+test('a busy bucket is asked again, and only while busy', async () => {
+  let asked = (answers: unknown[]) => {
+    let n = 0
+    let call = () =>
+      n < answers.length ? Promise.reject(answers[n++]) : Promise.resolve(n)
+    return () => patient(call, 3, 0)
+  }
+  assertEquals(await asked([{ code: 10058 }, { code: 10001 }])(), 2)
+  await assertRejects(
+    asked([{ code: 10058 }, { code: 10058 }, 'third']),
+    'third',
+  )
+  let wrong = Object.assign(Error('list: no such bucket'), { code: 10006 })
+  await assertRejects(asked([wrong, { code: 10058 }]), Error, 'no such bucket')
 })

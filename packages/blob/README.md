@@ -82,7 +82,7 @@ use the same driver so their writes participate in the same transaction.
 | `blobs`, `BlobOpts`, `Reference`                                                                  | Graph write plugin and optional stored-reference mapping |
 | `Blobs`, `memoryBlobs`, `address`, `encode`, `decode`                                             | Store interface and text addressing                      |
 | `sqliteBlobs`, `blobSchema`, `Layout`                                                             | SQLite text storage                                      |
-| `fileBlobs`, `objectBlobs`, `Bucket`                                                              | Filesystem and object storage                            |
+| `fileBlobs`, `objectBlobs`, `Bucket`, `patient`                                                   | Filesystem and object storage                            |
 | `Objects`, `Opened`, `Loaded`, `bucketObjects`                                                    | A bucket keyed by name: read, delete, list               |
 | `blobRead`, `hydrate`                                                                             | SQL and post-read text resolution                        |
 | `Artifact`, `ArtifactStore`, `addressOf`, `keep`, `artifactStore`, `artifactBytes`, `artifactDoc` | Artifact storage, verified reads and declarations        |
@@ -204,6 +204,12 @@ and `list`). `objectBlobs` accepts its `head`, `get` and `put` methods.
 Cloudflare R2 bindings satisfy that interface; other object storage clients may
 need a wrapper. Its `open(sha)` reads object metadata first, then streams only a
 requested byte span. The package imports no cloud SDK.
+
+Both stores send every bucket call through `patient(call)`, which sends it again
+with a jittered, doubling wait while the bucket answers that it is busy (R2's
+10001, 10043 and 10058: a burst of requests at one key or prefix is refused, not
+queued). Any other refusal is thrown at once. A caller reaching the bucket
+itself uses the same.
 
 `bucketObjects(bucket)` is the same bucket keyed by name rather than by content:
 an **Objects** store whose caller chooses each key, as a host does for an app's
