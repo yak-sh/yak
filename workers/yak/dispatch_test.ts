@@ -42,6 +42,7 @@ import {
   WORKER,
   workerBreak,
 } from './dispatch.ts'
+import { CallError } from '@yaks/tools/errors'
 import { caught, within } from './defects.ts'
 import type { Env } from './env.ts'
 import { nobody, type Who } from './session.ts'
@@ -1056,24 +1057,50 @@ test('no script yet is nowhere to bind, and a removal names one', async () => {
   assertEquals(calls[0].url, `${AT}/jeff_recipes/secrets/WEATHER_KEY`)
 })
 
-test("cloudflare's refusal is what the agent is told", async () => {
-  await recorded(
+// Cloudflare refusing the upload with `message`: the error upload throws.
+let refusedWith = (message: string) =>
+  recorded(
     () =>
       Response.json({
         success: false,
-        errors: [{ code: 10021, message: 'Uncaught SyntaxError' }],
+        errors: [{ code: 10021, message }],
         result: null,
       }, { status: 400 }),
     () =>
-      assertRejects(
-        () =>
-          upload(api, 'jeff/recipes', [
-            { name: 'worker.js', bytes: source('export default {') },
-          ]),
-        Error,
-        'Uncaught SyntaxError',
-      ),
-  )
+      upload(api, 'jeff/recipes', [
+        { name: 'worker.js', bytes: source('export default {') },
+        { name: 'lib/util.js', bytes: source('export let x = 1') },
+      ]).then(() => null, (e) => e),
+  ).then(({ out }) => out as Error)
+
+test("the app's own code failing to load is the agent's to fix", async () => {
+  for (
+    let message of [
+      'Uncaught SyntaxError: missing ) after argument list\n  at worker.js:117:27\n',
+      'Uncaught TypeError: x is not a function\n  at f (lib/util.js:3:9)\n  at worker.js:1:8',
+      'Uncaught Error: No such module "lib/gone.js".\n  imported from "worker.js"',
+    ]
+  ) {
+    let e = await refusedWith(message)
+    assert(e instanceof CallError, message)
+    assertEquals(e.code, 'arguments')
+    assert(e.message.includes(message.split('\n')[0]), e.message)
+  }
+})
+
+test('a load failure in the wrapper, or naming no module, is ours', async () => {
+  for (
+    let message of [
+      'Uncaught SyntaxError: Unexpected token\n  at __yak_entry.js:4:1',
+      'Uncaught Error: No such module "worker.js".\n  imported from "__yak_entry.js"',
+      'Uncaught SyntaxError',
+      'Invalid binding',
+    ]
+  ) {
+    let e = await refusedWith(message)
+    assert(!(e instanceof CallError), message)
+    assert(e.message.includes(message.split('\n')[0]), e.message)
+  }
 })
 
 // ── A worker of more than one file, wasm included (T-34263) ────────────────

@@ -905,8 +905,31 @@ export let upload = async (
         method: 'PUT',
         body,
       }),
-    ),
+    ).catch((e) => {
+      throw unloaded(modules, e)
+    }),
   )
+}
+
+// Cloudflare refuses a script that fails as it loads (a syntax error, an
+// import of a file the app never wrote, a throw at startup), naming each
+// module the failure passed through. When every one is the app's own, the
+// app's code is the agent's to fix, so the deploy is refused; a failure in
+// the wrapper, or one naming no module, is ours.
+let PLACE = /([\w./@-]+):\d+:\d+|imported from "([^"]+)"/g
+
+let unloaded = (modules: Module[], e: unknown) => {
+  let said = e instanceof Error ? e.message.replace(/^cloudflare: /, '') : ''
+  let places = [...said.matchAll(PLACE)].map((m) => m[1] ?? m[2])
+  let theirs = (name: string) => modules.some((m) => m.name == name)
+  return places.length && places.every(theirs)
+    ? refuse(
+      'arguments',
+      `refused worker: ${
+        said.replace(/\s+/g, ' ').trim()
+      }; the prior worker is unchanged`,
+    )
+    : e
 }
 
 // The release id out of whatever the API answered, and '' when it named none.
