@@ -41,24 +41,26 @@ ${open}${disconnect(agent, back)}</li>`
 
 /**
  * The connected agents as rows, each with its Disconnect button returning
- * to `back`, or as launch links.
+ * to `back`, or as launch links. Links leave out an agent with no web
+ * destination (Claude Code, Cursor, the CLI), and a list with nothing in it
+ * hides, so the page around it says what to do next.
  */
 export let agentList = (
   agents: Agent[],
   view: 'rows' | 'links' = 'rows',
   back = '',
-) =>
-  `<div data-agents${
+) => {
+  let rows = agents.map((c) => row(c, view == 'links', back)).join('')
+  return `<div data-agents${
     view == 'links' ? ' data-agent-links' : ''
   } aria-live="polite">
 <ul class="Agents${
     view == 'links' ? ' Agents-links' : ''
-  }" aria-label="Connected agents" data-connected${
-    agents.length ? '' : ' hidden'
-  }>${agents.map((c) => row(c, view == 'links', back)).join('')}</ul>
+  }" aria-label="Connected agents"${rows ? '' : ' hidden'}>${rows}</ul>
 <template data-agent-row>${
     row(undefined, view == 'links', back)
   }</template></div>`
+}
 
 export let agentLive = (endpoint: string) =>
   `<script>(()=>{
@@ -69,7 +71,7 @@ let template=root?.querySelector('[data-agent-row]');
 let disconnected=document.querySelector('[data-disconnected]');
 if(!list&&!disconnected)return;
 let destinations=${JSON.stringify(destinations)};
-let connected=list?!list.hidden:disconnected.hidden, busy=false;
+let connected=disconnected?disconnected.hidden:!list.hidden, busy=false;
 let refresh=async()=>{
   if(busy||document.hidden)return;
   busy=true;
@@ -99,6 +101,7 @@ let refresh=async()=>{
         rows.append(row);
       }
       if(list.children.length!==rows.children.length||[...list.children].some((row,i)=>!row.isEqualNode(rows.children[i])))list.replaceChildren(rows);
+      list.hidden=!list.children.length;
     }
     let any=data.agents.length>0;
     document.querySelectorAll('[data-connected]').forEach(el=>{el.hidden=!any});

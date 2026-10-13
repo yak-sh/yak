@@ -143,7 +143,7 @@ test('compact agents render launch links and refresh without replacing drafts or
   let first = m.list.firstElementChild
   await m.run()
   assert(m.list.firstElementChild === first, 'unchanged links retain focus')
-  for (let agents of [[chatgpt, claude, local], [claude], []]) {
+  for (let agents of [[chatgpt, claude, local], [claude], [local], []]) {
     m.show(agents)
     await m.run('visibilitychange')
     assert(m.document.querySelector('input') === draft)
@@ -156,8 +156,9 @@ test('compact agents render launch links and refresh without replacing drafts or
         c == chatgpt ? 'https://chatgpt.com/' : 'https://claude.ai/new'
       ),
     )
-    assertEquals(m.list.hidden, !agents.length)
+    assertEquals(m.list.hidden, !agents.some((c) => c != local))
   }
+  assertEquals(mount([local], 'links').list.hidden, true)
 })
 
 test('agent refresh preserves drafts and changes setup only when an agent connects or leaves', async () => {

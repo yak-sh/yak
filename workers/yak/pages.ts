@@ -690,6 +690,7 @@ let deskCss = `
 .Desk_Empty p { margin: 0 auto 1rem; max-width: 28rem }
 .Desk_Start { margin-bottom: 2rem }
 .Desk_Start h2 { margin: 0 0 .75rem; font-size: 1.15rem }
+.Desk_Start .Agents { margin-bottom: 1rem }
 .Desk_Options { display: grid; gap: 1rem; align-items: start }
 .Desk_Options > .Card { margin: 0 }
 .Desk_Options .Button { --button-fill: var(--paper); --button-ink: var(--ink) }
@@ -1166,7 +1167,7 @@ export let desk = (at: DeskPage, env: Host = {}) => {
     body = `<section class="Desk_Start" ${state(true, !!at.agents?.length)}>
 <h2>Ask your agent for a new yaks app</h2>${
       agentList(at.agents ?? [], 'links')
-    }</section>${connectCard(at)}
+    }<p>Try this:</p>${firstAsk}</section>${connectCard(at)}
 <div class="Desk_Options">${chat(`${site}/api/build`)}
 <section class="Card"><h2>Upload your website</h2>${
       dropZone(undefined, `${site}/deploy`)
@@ -1216,7 +1217,7 @@ export let desk = (at: DeskPage, env: Host = {}) => {
           esc(at.say)
         }</p>`
         : ''
-    }${body}</div></div>${view == 'apps' ? copying : ''}${
+    }${body}</div></div>${['apps', 'new'].includes(view) ? copying : ''}${
       ['apps', 'new', 'connect'].includes(view)
         ? agentLive('/oauth/agents')
         : ''
