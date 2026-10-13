@@ -19,16 +19,22 @@ let GONE = 'Connection closed: this Durable Object instance is no longer ' +
 
 // One object's storage, the instances the runtime runs it on, and what
 // reached the tracker. An instance the runtime moves off finds its own SQL
-// refusing it in the runtime's words, as `replaced` reads it.
+// refusing it in the runtime's words, as `replaced` reads it. Every other
+// name is another object: the directory takes the store's own writes about
+// itself (meter.ts `weighed`) and applies nothing here.
 let object = async () => {
   let held = state(NAME)
   let rows: Bundle[] = []
   let current: Store
+  let elsewhere = { fetch: () => Promise.resolve(Response.json([])) }
   let env = {
     ERRORS: { send: (s: Bundle[]) => (rows.push(...s), Promise.resolve()) },
     STORE: {
       idFromName: (name: string) => name,
-      get: () => ({ fetch: (req: Request) => current.fetch(req) }),
+      get: (id: string) =>
+        id == NAME
+          ? { fetch: (req: Request) => current.fetch(req) }
+          : elsewhere,
     },
   }
   let instance = (deploy?: string) => {
