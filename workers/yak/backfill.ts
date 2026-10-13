@@ -7,14 +7,15 @@
 //   GET  /api/declarations                     every space, trashed ones too
 //   POST /api/declarations?space=<slug>        that space's missing snapshots
 //                                              written; `&rehearse=1` writes
-//                                              nothing and compares each with
-//                                              what its Store serves
+//                                              nothing and compares what each
+//                                              Store serves with discovery's
+//                                              reconstruction
 //
-// A space's snapshots are computed together before any is written, so each is
-// what discovery serves today: the reconstruction homes words in app order and
-// reads a sibling's snapshot where one exists. Trashed apps are included,
-// since a restore puts their pointer back without a deploy. Rehearsal reads a
-// live app's Store; a run touches no Store and no app file.
+// A space's snapshots are computed together before any is written: the
+// reconstruction homes words in app order and reads a sibling's snapshot where
+// one exists. Trashed apps are included, since a restore puts their pointer
+// back without a deploy. Both read each live app's Store; neither writes to a
+// Store or an app file.
 import {
   type App,
   appStore,
@@ -80,13 +81,12 @@ let differing = (
   )
 
 // What the Store serves for the release, read the way readers read it before
-// T-65378, set beside the reconstruction.
-let compared = async (
+// T-65378, or why it did not answer. A trashed app's Store is asleep.
+let served = async (
   env: Env,
   space: Space,
   app: App,
-  built: Declaration,
-): Promise<Backfilled['store']> => {
+): Promise<Declaration | string> => {
   if (app.trashed || space.trashed) return 'unread'
   let read = (path: string) =>
     appStore(env.STORE, space, app).consume(
@@ -96,14 +96,27 @@ let compared = async (
     )
   let [vocab, tools] = await Promise.all([read('/vocab'), read('/tools')])
   for (let said of [vocab, tools]) if (said.startsWith('unread')) return said
+  return { vocab: JSON.parse(vocab), tools: readTools(tools) }
+}
+
+let compared = (store: Declaration | string, built: Declaration) => {
+  if (typeof store == 'string') return store
   let diff = {
-    vocab: differing(JSON.parse(vocab).$defs ?? {}, built.vocab.$defs ?? {}),
-    tools: differing(readTools(tools), built.tools),
+    vocab: differing(store.vocab.$defs ?? {}, built.vocab.$defs ?? {}),
+    tools: differing(store.tools, built.tools),
   }
   return Object.keys(diff.vocab).length || Object.keys(diff.tools).length
     ? diff
     : 'same'
 }
+
+// The snapshot: the words the Store accepted, which only it knows (a retired
+// column it emptied, a word whose home it took over), and the commands
+// discovery serves today, the release's manifest through today's generator,
+// so no command a caller now sees goes away. An asleep Store leaves the
+// reconstruction whole.
+let snapshot = (store: Declaration | string, built: Declaration) =>
+  typeof store == 'string' ? built : { vocab: store.vocab, tools: built.tools }
 
 export let backfill = async (
   env: Env,
@@ -125,23 +138,34 @@ export let backfill = async (
     had: true,
     wrote: false,
   }))
+  let stores = await Promise.all(missing.map((app) => served(env, space, app)))
+  let writes: Promise<void>[] = []
   for (let [i, app] of missing.entries()) {
+    let store = stores[i]
+    // A live Store that did not answer is reported, never guessed at.
+    let failed = typeof store == 'string' && store != 'unread'
+    let wrote = !rehearse && !failed
+    if (wrote) {
+      writes.push(
+        keepDeclaration(
+          env,
+          space,
+          app,
+          releaseOf(app),
+          snapshot(store, built[i]),
+        ),
+      )
+    }
     out.push({
       app: app.slug,
       trashed: !!app.trashed,
       release: releaseOf(app),
       had: false,
-      wrote: !rehearse,
-      ...rehearse ? { store: await compared(env, space, app, built[i]) } : {},
+      wrote,
+      ...rehearse || failed ? { store: compared(store, built[i]) } : {},
     })
   }
-  if (!rehearse) {
-    await Promise.all(
-      missing.map((app, i) =>
-        keepDeclaration(env, space, app, releaseOf(app), built[i])
-      ),
-    )
-  }
+  await Promise.all(writes)
   return out
 }
 
