@@ -970,6 +970,7 @@ export class Store {
   #started: Promise<void> | null = null
   #startedDormant = false
   #facets = new Map<string, Prepared>()
+  #facetsLoading = new Map<string, Promise<void>>()
   #dormant: boolean | null = null
   #moveOnly = false
   #checking: Promise<boolean> | null = null
@@ -984,16 +985,23 @@ export class Store {
     })
   }
 
-  async #prepare(name: string) {
+  #prepare(name: string): Promise<void> {
     let kind = storeKind(name)
-    if (!this.#facets.has(kind)) {
-      this.#facets.set(
-        kind,
-        await (this.#load == load
-          ? preparing(kind)
-          : prepare(configs[kind], ['graph', 'effects'], this.#load)),
-      )
+    if (this.#facets.has(kind)) return Promise.resolve()
+    let loading = this.#facetsLoading.get(kind)
+    if (!loading) {
+      loading = (async () => {
+        this.#facets.set(
+          kind,
+          await (this.#load == load
+            ? preparing(kind)
+            : prepare(configs[kind], ['graph', 'effects'], this.#load)),
+        )
+      })()
+      this.#facetsLoading.set(kind, loading)
+      loading.catch(() => this.#facetsLoading.delete(kind))
     }
+    return loading
   }
 
   // Dormancy is object metadata. Ordinary dormant requests never open SQL;
@@ -3128,6 +3136,15 @@ export class Store {
   }
 
   async #fetch(request: Request): Promise<Response> {
+    // The request that wakes this object waits for it to start, and says how
+    // long beside its answer (`x-yak-wake`, timing.ts). The runtime's clock
+    // moves only across I/O, so that is the waiting, never the compute. The
+    // object's plugins load while its storage opens (`#awake`): an isolate
+    // that never ran them evaluates their modules then, and nothing in that
+    // touches storage, so a dormant object loses nothing but the CPU.
+    let waking = !this.#started, woke = Date.now()
+    let named = request.headers.get('x-store')
+    if (waking && named) this.#prepare(named).catch(() => {})
     // A caller on a later deploy restarts this object before it does anything
     // for the request, so a door the deploy added answers (running.ts).
     await behind(request.headers, this.#bind.CF_VERSION_METADATA, this.#ctx)
@@ -3177,6 +3194,7 @@ export class Store {
     await this.#ensureStarted(request)
     let tally = this.#pending
     this.#pending = new Map()
+    if (waking) tally.set('wake', Date.now() - woke)
     let run = () =>
       tallying(tally, async () => {
         let base = request.headers.get('x-yak-base-release')
@@ -3237,6 +3255,9 @@ export class Store {
           headers.set('x-yak-rows', String(tally.get('rows')))
         }
         headers.set('x-yak-r2', String(r2))
+        if (tally.has('wake')) {
+          headers.set('x-yak-wake', String(tally.get('wake')))
+        }
         return new Response(answer.body, {
           status: answer.status,
           statusText: answer.statusText,

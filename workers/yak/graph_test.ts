@@ -127,6 +127,18 @@ test('each store response reports the SQL it ran for that fetch', async () => {
   assert(measured > 0 && measured <= calls - before)
 })
 
+test('only the request that woke a store says how long it waited to start', async () => {
+  let ctx = state()
+  using _db = ctx.storage
+  let store = new Store(ctx)
+  let first = await get(store, '/query?q=.doc%26.count', owner)
+  assert(Number(first.headers.get('x-yak-wake')) >= 0)
+  let second = await get(store, '/query?q=.doc%26.count', owner)
+  assertEquals(second.headers.get('x-yak-wake'), null)
+  let woken = await get(new Store(ctx), '/query?q=.doc%26.count', owner)
+  assert(woken.headers.has('x-yak-wake'))
+})
+
 test('a query tree sent as text is refused, never run as two words', async () => {
   let ctx = state()
   using _db = ctx.storage

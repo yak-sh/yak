@@ -17,8 +17,9 @@ import { stamp } from './running.ts'
 import { evicted, killed } from '@yaks/durable-object'
 
 // A store reports the statements it ran for this fetch, including any store
-// it asked in turn. Only the door sees every answer, so it is also where a
-// parent request collects those costs.
+// it asked in turn, and how long it waited to start when this fetch woke it.
+// Only the door sees every answer, so it is also where a parent request
+// collects those costs.
 let metered = async (send: () => Promise<Response>): Promise<Response> => {
   let res = await send()
   for (
@@ -27,6 +28,7 @@ let metered = async (send: () => Promise<Response>): Promise<Response> => {
       ['x-yak-stmts', 'stmts'],
       ['x-yak-rows', 'rows'],
       ['x-yak-r2', 'r2.child'],
+      ['x-yak-wake', 'wake'],
     ]
   ) {
     let value = res.headers.get(header)

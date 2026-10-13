@@ -21,7 +21,6 @@
 // nothing here has moved: the last release's worker and pages still serve.
 import type { Answer, Ask, Plan } from '@yaks/esbuild'
 import { plan, Unplanned } from '@yaks/esbuild'
-import catalog from './.wrangler/packages.json' with { type: 'json' }
 import type { App, Space } from './directory.ts'
 import type { Module } from './dispatch.ts'
 import type { Env } from './env.ts'
@@ -41,7 +40,14 @@ let CACHE = `${BUILT}.compile.json`
 let MODULE = `${BUILT}.worker.js`
 // Every compile sees the toolkit of the kernel accepting that deploy. Package
 // changes update this kernel's catalog without changing the compiler Worker.
-let CATALOG = JSON.stringify(catalog)
+// It is 2.4 MB of package source, read only when an app compiles, so it is
+// imported then: evaluated at load, it was a fifth of every isolate's start,
+// each waking Store's included (T-123910).
+let catalogText: Promise<string> | undefined
+let CATALOG = () =>
+  catalogText ??= import('./.wrangler/packages.json', {
+    with: { type: 'json' },
+  }).then((m) => JSON.stringify(m.default))
 
 type Cache = {
   compiler: string
@@ -149,7 +155,7 @@ let asked = async (env: Env, ask: Ask, app: App): Promise<Answer> => {
         },
         body: `{"ask":${
           JSON.stringify(ask)
-        },"catalog":${CATALOG},"shared":true,"origin":${
+        },"catalog":${await CATALOG()},"shared":true,"origin":${
           JSON.stringify(url(env))
         }}`,
       }),

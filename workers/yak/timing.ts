@@ -18,6 +18,11 @@
 // but time, and a count is worth more than the field's tidiness: a duration
 // cannot tell one slow wait from forty fast ones, and forty fast ones is the
 // bug we keep writing. `hops;dur=7` is an N+1 read straight off a curl.
+//
+// `wake` is milliseconds again, and appears only when a store this request
+// reached had to start first (graph.ts `#fetch`): what those stores waited
+// for while starting. Their compute is not in it, since a store's clock moves
+// only across I/O; the difference is in the stage that called them.
 import { counts, type Tally, tallying } from './lib/hops.ts'
 
 export type Clock = ReturnType<typeof clock>
@@ -78,6 +83,7 @@ export let clock = () => {
         `hops;dur=${hops}`,
         `stmts;dur=${tally.get('stmts') ?? 0}`,
         ...(tally.has('rows') ? [`rows;dur=${tally.get('rows')}`] : []),
+        ...(tally.has('wake') ? [`wake;dur=${tally.get('wake')}`] : []),
         `r2;dur=${r2}`,
         `total;dur=${Date.now() - born}`,
       ].join(', ')
