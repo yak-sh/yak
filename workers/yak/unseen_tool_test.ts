@@ -6,7 +6,7 @@ import { appStore } from './directory.ts'
 import { KERNEL, metaOf } from './meta.ts'
 import { ADA, platform, seeded } from './serving-probe.ts'
 import { call } from './tools.ts'
-import { noted } from './unseen.ts'
+import { brokenIn, noted, serve } from './unseen.ts'
 
 test('app_errors lists a break whose stored stack is null', async () => {
   using p = platform()
@@ -97,4 +97,29 @@ test('app_errors shows a session error from its content', async () => {
     listed.text,
     'http_400 — OpenRouter speech request failed (400)',
   )
+})
+
+test('brokenIn says each break plainly and leaves it news', async () => {
+  using p = platform()
+  let { env } = p
+  let { space, app } = await seeded(env)
+  let ada = { person: ADA, role: 'owner' }
+  let at = { env, space, app }
+  for (let i = 0; i < 3; i++) {
+    await noted({ request: 'page /cookbook/', message: 'boom', version: 1 }, at)
+  }
+  await noted(
+    { request: 'page /cookbook/new', message: 'bang', version: 1 },
+    at,
+  )
+  let said = (await brokenIn(env, space, ada, [app])).get(app.eid)!
+  assertEquals(
+    said.map(({ said, where, times }) => ({ said, where, times })),
+    [
+      { said: 'bang', where: 'page /cookbook/new', times: 1 },
+      { said: 'boom', where: 'page /cookbook/', times: 3 },
+    ],
+  )
+  // Seen on the dashboard, not yet told: the assistant still hears of both.
+  assertEquals((await serve(env, space, ada)).length, 4)
 })

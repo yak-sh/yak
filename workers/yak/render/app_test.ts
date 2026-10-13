@@ -53,10 +53,10 @@ test('app Tile resolves by component and keeps the library card DOM', async () =
     view: 'apps',
   }).text()
   let expected = card(
-    `<a class="Apps_Item" href="https://ada.yaks.app/recipes/" target="_blank" rel="noopener">
+    `<div class="Apps_Item">
 <img src="https://ada.yaks.app/recipes/icon.png" width="44" height="44" alt="">
-<strong>Recipes</strong><span class="Apps_Path">/recipes</span>
-<span class="Apps_Tags"><span class="Apps_Tag">Homepage</span><span class="Apps_Tag">private</span><span class="Apps_Tag">gallery: waiting</span></span></a>`,
+<a class="Apps_Open" href="https://ada.yaks.app/recipes/" target="_blank" rel="noopener"><strong>Recipes</strong></a><span class="Apps_Path">/recipes</span>
+<span class="Apps_Tags"><span class="Apps_Tag">Homepage</span><span class="Apps_Tag">private</span><span class="Apps_Tag">gallery: waiting</span></span></div>`,
   )
   assertEquals(signature(card(html)), signature(expected))
 
@@ -102,14 +102,25 @@ test('app Tile preserves title fallback, empty tags and badge order', () => {
 
 test('app Tile escapes every label and attribute once', () => {
   let text = '<script>"A&B\'s"</script>'
-  let root = card(tile({
-    eid: 'app-1',
-    slug: text,
-    title: text,
-    access: text,
-    gallery: text,
-  }))
-  assertEquals(root.getAttribute('href'), `/${text}/`)
+  let root = card(tile(
+    {
+      eid: 'app-1',
+      slug: text,
+      title: text,
+      access: text,
+      gallery: text,
+    },
+    undefined,
+    2,
+  ))
+  assertEquals(
+    root.querySelector('.Apps_Open')?.getAttribute('href'),
+    `/${text}/`,
+  )
+  assertEquals(
+    root.querySelector('.Apps_Tag-warn')?.getAttribute('href'),
+    `#fix-${text}`,
+  )
   assertEquals(
     root.querySelector('img')?.getAttribute('src'),
     `/${text}/icon.png`,
@@ -118,7 +129,7 @@ test('app Tile escapes every label and attribute once', () => {
   assertEquals(root.querySelector('.Apps_Path')?.textContent, `/${text}`)
   assertEquals(
     [...root.querySelectorAll('.Apps_Tag')].map((t) => t.textContent),
-    [text, text],
+    ['2 errors', text, text],
   )
   assertEquals(root.querySelector('script'), null)
 })

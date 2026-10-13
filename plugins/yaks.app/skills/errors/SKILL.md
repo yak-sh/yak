@@ -164,6 +164,11 @@ tracker; they do not assert that the person’s app broke.
 existing ids and archive arguments; the tool translates those ids through their
 original app store. A new bug also notifies the platform operator by mail.
 
+The person sees them too. Their dashboard (<https://yaks.app/manage>) marks an
+app with its count of open errors, lists each one in the words `app_errors`
+uses, and suggests they ask you: "Fix the errors in my Chores app on yaks.app".
+Seeing them there marks nothing, so you still hear about each one.
+
 ## Hearing about it once
 
 New breaks are added to the end of the next reply from a tool that changes

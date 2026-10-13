@@ -2,7 +2,8 @@
 // a person sees when there is nothing at an address, when an app broke, and
 // where they sign in. One shell, three sentences, and an optional card of
 // markup under them. Shared controls and tokens come from public/controls.css.
-// Errors stay in the graph for the person's chatbot (D-32318 §Errors).
+// Errors are for the person's assistant to fix (D-32318 §Errors); the
+// dashboard marks the app they broke in and says what to ask it.
 //
 // Template values are escaped by `esc` at the call site; registry views use
 // the HTML host's escaping. A page carries an email address a stranger typed,
@@ -16,6 +17,7 @@ import { icon, type IconName } from './icons.ts'
 import { day, esc } from './html.ts'
 import { holder, tile } from './render/mod.ts'
 import type { People, Person } from './people.ts'
+import type { Plain } from './unseen.ts'
 export { esc } from './html.ts'
 import {
   enabling,
@@ -627,7 +629,8 @@ export type DeskPage = {
   /** the space the address named (`?space=`), carried by every link on the
    * page; none is the person's own */
   pick?: string
-  apps: Listed[]
+  /** each with its open errors, newest first (unseen.ts `plain`) */
+  apps: (Listed & { errors?: Plain[] })[]
   trash?: { slug: string; title: string; days: number }[]
   name?: string
   agents?: Agent[]
@@ -681,13 +684,21 @@ let deskCss = `
 .Desk_Connect p { margin: 0; font-size: .95rem; max-width: 34rem }
 .Desk_Connect .Button { --control-pad-inline: 1.1rem; flex: none; font-size: .9rem }
 .Apps { display: grid; grid-template-columns: repeat(auto-fill, minmax(13rem, 1fr)); gap: 1rem }
-.Apps_Item { display: flex; flex-direction: column; align-items: start; gap: .55rem; min-height: 12rem; padding: 1.25rem; border: 1px solid var(--line); border-radius: 1rem; background: var(--paper); color: var(--ink); text-decoration: none }
+.Apps_Item { position: relative; display: flex; flex-direction: column; align-items: start; gap: .55rem; min-height: 12rem; padding: 1.25rem; border: 1px solid var(--line); border-radius: 1rem; background: var(--paper); color: var(--ink) }
 .Apps_Item:hover { border-color: var(--accent) }
 .Apps_Item img { width: 44px; height: 44px; border-radius: .75rem; margin-bottom: .5rem }
 .Apps_Item strong { font-size: 1.05rem; line-height: 1.3 }
+.Apps_Open { color: inherit; text-decoration: none }
+.Apps_Open::after { content: ''; position: absolute; inset: 0; border-radius: inherit }
+.Apps_Open:focus-visible { outline: 0 }
+.Apps_Open:focus-visible::after { outline: 3px solid var(--accent); outline-offset: 3px }
 .Apps_Path { color: var(--soft-ink); font-size: .85rem }
 .Apps_Tags { display: flex; flex-wrap: wrap; gap: .45rem; margin-top: auto; padding-top: .5rem; font-size: .75rem; color: var(--soft-ink) }
 .Apps_Tag { padding: .1rem .5rem; border-radius: .35rem; background: var(--ground) }
+.Apps_Tag-warn { position: relative; background: color-mix(in srgb, var(--warn) 12%, var(--paper)); color: var(--warn); font-weight: 700; text-decoration: none }
+.Fix_List { display: grid; gap: .75rem; margin: 0 0 1rem; padding: 0; list-style: none }
+.Fix_List p { margin: 0; font-size: .9rem }
+.Fix .Fix_Said { color: var(--ink); font-family: var(--mono); font-size: .85rem; overflow-wrap: anywhere }
 .Desk_Empty { padding: 2.5rem 1rem; text-align: center }
 .Desk_Empty h2 { margin: 0 0 .5rem; font-size: 1.25rem }
 .Desk_Empty p { margin: 0 auto 1rem; max-width: 28rem }
@@ -797,13 +808,49 @@ let connectCard = (at: DeskPage) =>
     managePath('connect', at.pick)
   }">Connect agent</a></section>`
 
-let library = (at: DeskPage, env: Host) =>
-  `${connectCard(at)}${
+// What broke in an app, for its owner: each break as its line says it to their
+// assistant, how often and when last, and the one thing to do, which is to
+// ask that assistant. The app's mark on its tile links here.
+let SHOWN = 5
+let fixing = (a: DeskPage['apps'][number]) => {
+  let errors = a.errors ?? []
+  let n = errors.length
+  let title = a.title || a.slug
+  return `<section class="Card Fix" id="fix-${esc(a.slug)}"><h2>${
+    esc(title)
+  } has ${n == 1 ? 'an error' : `${n} errors`}</h2><ul class="Fix_List">${
+    errors.slice(0, SHOWN).map((e) =>
+      `<li><p class="Fix_Said">${esc(e.said || 'No message')}</p><p>${
+        e.where ? `${esc(e.where)} · ` : ''
+      }${e.times == 1 ? 'once' : `${e.times} times`}${
+        day(e.at) ? `, ${e.times == 1 ? '' : 'last '}on ${day(e.at)}` : ''
+      }</p></li>`
+    ).join('')
+  }</ul>${
+    n > SHOWN ? `<p class="Note">And ${n - SHOWN} more.</p>` : ''
+  }<p>Ask your assistant to fix ${n == 1 ? 'it' : 'them'}. Try this:</p>${
+    copyable(
+      `Fix the errors in my ${title} app on yaks.app`,
+      `the request to fix ${title}`,
+    )
+  }</section>`
+}
+
+let library = (at: DeskPage, env: Host) => {
+  let broken = at.apps.filter((a) => a.errors?.length)
+  return `${connectCard(at)}${
     at.apps.length
       ? `<div class="Apps">${
-        at.apps.map((a) => tile(a, `https://${spaceHost(env, at.space)}`))
-          .join('')
-      }</div>`
+        at.apps.map((a) =>
+          tile(a, `https://${spaceHost(env, at.space)}`, a.errors?.length)
+        ).join('')
+      }</div>${
+        broken.length
+          ? `<h2 class="Desk_Group">Needs fixing</h2>${
+            broken.map(fixing).join('')
+          }`
+          : ''
+      }`
       : `<section class="Desk_Empty"><h2>Your apps will live here</h2>
 <div ${
         state(true, !!at.agents?.length)
@@ -814,7 +861,8 @@ let library = (at: DeskPage, env: Host) =>
 <a href="${
         managePath('new', at.pick)
       }">More ways to make an app</a></div></section>`
-  }`
+  }${copying}`
+}
 
 let preferences = (at: DeskPage, env: Host) => {
   let home = at.apps.find((a) => a.home)

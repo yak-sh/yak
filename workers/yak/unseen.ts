@@ -325,12 +325,13 @@ let where = (hit: Hit) => {
   return spot(e.stack) || e.request || hit.doc?.title || e.code || ''
 }
 
+// What a break said.
+let said = (hit: Hit) => broke(hit).message || hit.content?.body || ''
+
 // What makes two occurrences one break: the same facet at the same place with
 // the same message. A page that threw on every load is one thing to fix.
 let same = (hit: Hit) =>
-  `${hit.exception ? 'exception' : 'error'} ${where(hit)} ${
-    broke(hit).message || hit.content?.body || ''
-  }`
+  `${hit.exception ? 'exception' : 'error'} ${where(hit)} ${said(hit)}`
 
 let newest = (a: Seen, b: Seen) =>
   String(broke(b.hit).at ?? '').localeCompare(String(broke(a.hit).at ?? ''))
@@ -349,6 +350,10 @@ export let folds = (seen: Seen[]): Seen[][] => {
 /** How many breaks these occurrences of one app make. */
 export let breaks = (hits: Hit[]) => new Set(hits.map(same)).size
 
+// How often one break happened, across its occurrences.
+let often = (fold: Seen[]) =>
+  fold.reduce((n, s) => n + (broke(s.hit).hits ?? 1), 0)
+
 // One line a break: the newest occurrence's id and moment, the facet, the
 // deploy, the place to open and the message, then how often it happened. An
 // item written before exceptions carried their own request still reads: its
@@ -358,14 +363,25 @@ export let breaks = (hits: Hit[]) => new Set(hits.map(same)).size
 export let line = (fold: Seen[]) => {
   let { app, hit } = fold[0]
   let e = broke(hit)
-  let times = fold.reduce((n, s) => n + (broke(s.hit).hits ?? 1), 0)
+  let times = often(fold)
   let first = broke(fold.at(-1)!.hit).at
   return `- ${idOf(hit)} ${e.at ?? ''} ${
     hit.exception ? 'exception' : 'error'
   } ${app.slug}${e.version ? ` v${e.version}` : ''}: ${where(hit)} — ${
-    e.message || hit.content?.body || ''
+    said(hit)
   }${times > 1 ? ` (${times} times${first ? ` since ${first}` : ''})` : ''}`
 }
+
+/** A break as its owner's dashboard shows it: what it said and where, in the
+ * words its line says to their assistant, how often, and when it last did. */
+export type Plain = { said: string; where: string; times: number; at: string }
+
+export let plain = (fold: Seen[]): Plain => ({
+  said: said(fold[0].hit),
+  where: where(fold[0].hit),
+  times: often(fold),
+  at: String(broke(fold[0].hit).at ?? ''),
+})
 
 // The place in a stack a person opens to fix it. A break reported from a
 // browser arrives as `<source>:<line>` already (public/report.js through
@@ -511,6 +527,24 @@ export let trackedIn = async (
     by.set(app, [...by.get(app) ?? [], trackedHit(row)])
   }
   return by
+}
+
+/** Each of these apps' open breaks in plain words, by app eid: what the
+ * owner's dashboard shows. It reads what `app_list` counts ({@link trackedIn})
+ * and marks nothing, so their assistant still hears of each one. */
+export let brokenIn = async (
+  env: Env,
+  space: Space,
+  who: Who,
+  apps: App[],
+) => {
+  let open = await trackedIn(env, space, who, true)
+  return new Map(
+    apps.filter((a) => open.has(a.eid)).map((app) => [
+      app.eid,
+      folds(open.get(app.eid)!.map((hit) => ({ app, hit }))).map(plain),
+    ]),
+  )
 }
 
 // Errors from code other than the live version remain readable but do not

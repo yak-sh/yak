@@ -12,7 +12,11 @@ import { guest, invitation, seat } from './held.ts'
 export let registry = define([app, seat, guest, invitation])
 export let vocab = platformVocab()
 
-export let tile = (a: SpacePage['apps'][number], at?: string) =>
+export let tile = (
+  a: SpacePage['apps'][number],
+  at?: string,
+  errors?: number,
+) =>
   render(
     registry,
     {
@@ -23,7 +27,7 @@ export let tile = (a: SpacePage['apps'][number], at?: string) =>
     },
     'List.Tile',
     vocab,
-    { gallery: a.gallery, at },
+    { gallery: a.gallery, at, errors },
   )
 
 // The row itself, as the directory keeps it, and who it is for beside it.

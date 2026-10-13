@@ -131,7 +131,7 @@ import { callStored } from './package-tools.ts'
 import { edits, mode, reads, writes } from '@yaks/member'
 import { APP_JSON, type Door } from './door.ts'
 import { type Clock, clock, timed } from './timing.ts'
-import { fault, noted, refusal, serving } from './unseen.ts'
+import { brokenIn, fault, noted, refusal, serving } from './unseen.ts'
 import { recoverRelease } from './tools.ts'
 import { ADDRESS } from './route.ts'
 import { caught, refusing } from './defects.ts'
@@ -2077,6 +2077,15 @@ let desk = async (
   let owner = who.person
   let { here, all } = await shelf(dir, space, who)
   let q = new URL(req.url).searchParams
+  // What is broken in each app (unseen.ts `brokenIn`), read only for the page
+  // that lists them: one read of the space's tracker, no app's store woken.
+  // A read that fails is reported and the apps are drawn without it.
+  let broken = view == 'apps' && all.length
+    ? await brokenIn(env, space, who, all).catch((e) => {
+      caught(e, { request: 'read open errors', space: space.slug })
+      return undefined
+    })
+    : undefined
   return deskPage({
     // Who visited (views.ts, T-34497). `null` is the platform with no
     // analytics token set, and a read that fails is `null` too: the page
@@ -2094,6 +2103,7 @@ let desk = async (
       home: a.home,
       access: a.access,
       gallery: pilled(standing(a)),
+      errors: broken?.get(a.eid),
     })),
     trash: here.filter((a) => a.trashed).map((a) => ({
       slug: a.slug,

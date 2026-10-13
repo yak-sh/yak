@@ -4,14 +4,17 @@
 // another person, and another page, from changing this account.
 import { test } from '@yaks/testing'
 import { assert, assertEquals, assertStringIncludes } from '@std/assert'
+import { parseHTML } from 'linkedom'
 import {
   client,
   connector,
   kernel,
   meta,
+  seed,
   sessionAt,
   signIn,
   stripeKey,
+  unique,
 } from './probe.ts'
 import { MANAGE, managePath } from './route.ts'
 
@@ -212,6 +215,59 @@ test('the dashboard is at the apex, whatever serves the space', async () => {
     )
     assertEquals(await title(), 'Dana')
     assertStringIncludes(await (await at('/')).text(), '<h1>My front page</h1>')
+  } finally {
+    await k.stop()
+  }
+})
+
+test('an app that throws is marked on the dashboard, with what to ask', async () => {
+  let k = await kernel()
+  try {
+    let space = unique('fixme')
+    let { cookie } = await seed(k, [{ slug: space, apps: ['chores', 'notes'] }])
+    let agent = connector(k, cookie)
+    let app = { space, app: 'chores' }
+    await agent.tool('app_files', {
+      ...app,
+      files: [{ path: 'index.html', content: '<h1>Chores</h1>' }],
+    })
+    await agent.tool('app_deploy', app)
+    for (let i = 0; i < 2; i++) {
+      await (await k.at(`${space}.yaks.app`, '/chores/api/report', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          message: 'chores is not a function',
+          url: `https://${space}.yaks.app/chores/`,
+        }),
+      })).body?.cancel()
+    }
+    let page = async () =>
+      parseHTML(
+        await (await k.at('yaks.app', managePath('apps', space), {
+          headers: { cookie },
+        })).text(),
+      ).document
+
+    let doc = await page()
+    let marks = [...doc.querySelectorAll('.Apps_Tag-warn')]
+    assertEquals(marks.map((m) => m.textContent), ['1 error'])
+    assertEquals(
+      marks[0].closest('.Apps_Item')?.querySelector('strong')?.textContent,
+      'chores',
+    )
+    let fix = doc.querySelector(marks[0].getAttribute('href')!)!
+    assertStringIncludes(fix.textContent!, 'chores is not a function')
+    assertStringIncludes(fix.textContent!, '2 times')
+    assertEquals(
+      fix.querySelector('.Pick')?.textContent,
+      'Fix the errors in my chores app on yaks.app',
+    )
+
+    // Fixed, as the assistant says it: the mark goes with it.
+    let id = (await agent.tool('app_errors', app)).split(' ')[1]
+    await agent.tool('app_errors', { ...app, fixed: [id] })
+    assertEquals((await page()).querySelector('.Apps_Tag-warn, .Fix'), null)
   } finally {
     await k.stop()
   }
