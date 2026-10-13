@@ -145,7 +145,6 @@ import {
   type DurableStorage,
   type Hibernation,
   profile,
-  replaced,
   type Sockets,
   sockets,
   type Wire,
@@ -269,10 +268,9 @@ import {
   IDEMPOTENCY,
   type Namespace,
   PLATFORM_STORE,
-  storeOf,
 } from './door.ts'
-import { behind, redeployed, restartedFor, versionOf } from './running.ts'
-import { KERNEL, type Meta, meta, metaOf, minted } from './meta.ts'
+import { behind, restartedFor, versionOf } from './running.ts'
+import { type Meta, meta, metaOf, minted } from './meta.ts'
 import { caught, defect, refusing } from './defects.ts'
 import { counts, hop, type Tally, tallying } from './lib/hops.ts'
 import {
@@ -2539,57 +2537,21 @@ export class Store {
     return result
   }
 
-  // Whether the end of this object's last alarm run is already accounted
-  // for: it threw here and was reported where it threw, the instance it ran
-  // on was moved and said so (`#handOver`), or it ran on an earlier deploy,
-  // which restarted the object under it (`#ran`). The runtime's retry of a
-  // run nothing accounts for reports it (`alarm`).
-  #accounted = false
-  // Whether an alarm has run on this incarnation. The first one notes the
-  // deploy it runs on, and finds whether the last run was on another: a
-  // deploy restarts every object it reaches (running.ts `behind`, or the
-  // runtime's own "code was updated"), and the run it cuts off is retried on
-  // the new code. A kill of the very run a deploy cut off goes unseen; the
-  // next one is reported.
-  #ran = false
   // When this incarnation began: a platform job marked begun before it was
   // begun by an instance that is gone (wake.ts `resumed`).
   #born = Date.now()
 
   /** The runtime's clock going off: whatever this object armed itself for.
-   * The runtime retries an alarm whose run failed, and the retry reports a run
-   * nothing accounted for. One that threw was reported where it threw, an
-   * instance the runtime moved mid-run tells the one that replaced it
-   * (`#handOver`), and a run a deploy cut off is retried on the new deploy
-   * (`#ran`), so what is left is a run the runtime killed for its CPU or
-   * memory limit, which no code of ours saw (M-37965). Each kill is reported
-   * by the retry that follows it. */
-  alarm(info?: { isRetry?: boolean; retryCount?: number }): Promise<void> {
-    return this.#traced('alarm', () => this.#alarmRequest(info))
+   * A run the runtime cut off is retried, on whatever instance holds the
+   * object then; one it killed for its limits ran none of our code and is
+   * reported from Cloudflare's own record of it (kills.ts). */
+  alarm(): Promise<void> {
+    return this.#traced('alarm', () => this.#alarmRequest())
   }
 
-  async #alarmRequest(
-    info?: { isRetry?: boolean; retryCount?: number },
-  ): Promise<void> {
+  async #alarmRequest(): Promise<void> {
     if (!await this.#awake() && !this.#moveOnly) return
     await this.#ensureStarted()
-    let name = this.#name()
-    if (!this.#ran) {
-      this.#ran = true
-      let meta = this.#bind.CF_VERSION_METADATA
-      if (await redeployed(this.#ctx.storage, 'alarm ran on', meta)) {
-        this.#accounted = true
-      }
-    }
-    if (info?.isRetry && !this.#accounted) {
-      defect(new Error("a store's alarm was cut off before it finished"), {
-        request: 'alarm',
-        store: name,
-        app: this.#said('app'),
-        retry: String(info.retryCount ?? ''),
-      })
-    }
-    this.#accounted = false
     let run = async () => {
       let leave = await this.#enter(false)
       try {
@@ -2627,27 +2589,7 @@ export class Store {
         leave()
       }
     }
-    let ran = this.#profile ? this.#profile.run('alarm', run) : run()
-    return ran.then(() => this.#handOver(name), async (e) => {
-      this.#accounted = true
-      await this.#handOver(name)
-      throw e
-    })
-  }
-
-  // The runtime moved this object off this instance during an alarm run
-  // (@yaks/durable-object `replaced`) and retries the run on the instance that
-  // replaced it. Only this one knows the run stopped for the move, so it tells
-  // that one, whose retry then has no cut-off to report. A run can finish or
-  // throw and still have been moved: either way its writes never landed.
-  async #handOver(name: string | null): Promise<void> {
-    let ns = this.#bind.STORE
-    if (!ns || !name || !replaced(this.#ctx.storage)) return
-    try {
-      await storeOf(ns, name)('/moved', { method: 'POST' }, KERNEL)
-    } catch (e) {
-      defect(e, { request: 'alarm hand-over', store: name })
-    }
+    return this.#profile ? this.#profile.run('alarm', run) : run()
   }
 
   // Whether a deployment pass has run here. A store from before `deployed`
@@ -3196,12 +3138,6 @@ export class Store {
     await behind(request.headers, this.#bind.CF_VERSION_METADATA, this.#ctx)
     let path = new URL(request.url).pathname
     let kernel = request.headers.get('x-yak-kernel') == '1'
-    // The instance the runtime moved this object off says its alarm run
-    // stopped for the move (`#handOver`), so the retry here reports nothing.
-    if (kernel && path == '/moved' && request.method == 'POST') {
-      this.#accounted = true
-      return json({ ok: true })
-    }
     if (kernel && path == '/dormant' && request.method == 'POST') {
       await this.#sleep()
       return json({ ok: true })

@@ -15,7 +15,7 @@ import type { Wake } from './wake.ts'
 import type { Load } from '@yaks/host'
 import { directoryConfig } from './config.ts'
 import { load } from './load.ts'
-import { GRAPHQL } from './usage.ts'
+import { GRAPHQL } from './analytics.ts'
 import { GIT_STORE, PLATFORM_STORE, storeOf } from './door.ts'
 import { KERNEL, metaOf } from './meta.ts'
 import type { Env } from './env.ts'
@@ -178,10 +178,9 @@ test('a job is marked begun on its row while it runs, and cleared after', async 
 })
 
 // The runtime moved the directory to a new instance in the middle of its
-// hourly reading, the instance it moved off said so (graph.ts `#handOver`),
-// and the runtime retried the alarm on the new one. The reading's occurrence
-// was spent, so that retry is what runs it again. A move is expected and says
-// nothing; a job no run has finished for `STUCK` does.
+// hourly reading and retried the alarm on the new one. The reading's
+// occurrence was spent, so that retry is what runs it again. A move is
+// expected and says nothing; a job no run has finished for `STUCK` does.
 let died = async (began: string, since: string | null = null) => {
   let rows: Bundle[] = [], readings = 0
   let fetch = globalThis.fetch
@@ -202,19 +201,7 @@ let died = async (began: string, since: string | null = null) => {
       sweep: { began, since },
     }], KERNEL)
     let store = new Store(p.states.get(PLATFORM_STORE)!, p.env)
-    p.env.STORE = {
-      idFromName: (n) => n,
-      get: () => ({ fetch: (req: Request) => store.fetch(req) }),
-    } as typeof p.env.STORE
-    await store.fetch(
-      new Request('http://store/moved', { method: 'POST', headers: KERNEL }),
-    )
-    await within(
-      p.env,
-      {},
-      () => store.alarm({ isRetry: true, retryCount: 1 }),
-      clock(),
-    )
+    await within(p.env, {}, () => store.alarm(), clock())
     return {
       readings,
       sweep: (await wake(p.env, 'yak-meter')).sweep,
@@ -231,7 +218,7 @@ let ago = (ms: number) => new Date(Date.now() - ms).toISOString()
 test('a job its instance died in runs again at the next alarm, reported once stuck', async () => {
   let began = ago(60_000),
     since = ago(STUCK),
-    done = { began: null, since: null }
+    done = { began: null, since: null, through: null }
   assertEquals(await died(began), {
     readings: 1,
     sweep: { kind: 'meter', ...done },

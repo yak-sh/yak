@@ -60,8 +60,7 @@ import { GRAPH, mail } from './mail.ts'
 import { replyTo } from './host.ts'
 import { KERNEL, meta } from './meta.ts'
 import { type Alerts, type Usage, warning } from './usage-alert.ts'
-
-export let GRAPHQL = 'https://api.cloudflare.com/client/v4/graphql'
+import { type Answer as Asked, ask, said } from './analytics.ts'
 
 // The whole month so far, grouped by Durable Object id. Invocation type
 // separates hibernated socket messages from ordinary requests; periodic
@@ -107,28 +106,22 @@ type Group = {
     inboundWebsocketMsgCount?: number
   }
 }
-type Answer = {
-  data?: {
-    viewer?: {
-      accounts?: {
-        durableObjectsInvocationsAdaptiveGroups?: Group[]
-        durableObjectsPeriodicGroups?: Group[]
-        accountInvocations?: Group[]
-        accountPeriodic?: Group[]
-      }[]
-    }
+type Data = {
+  viewer?: {
+    accounts?: {
+      durableObjectsInvocationsAdaptiveGroups?: Group[]
+      durableObjectsPeriodicGroups?: Group[]
+      accountInvocations?: Group[]
+      accountPeriodic?: Group[]
+    }[]
   }
-  errors?: { message?: string }[] | null
 }
+type Answer = Asked<Data>
 
 // The answer as rows, by object id. A group with no id has nobody to charge;
 // an id outside this deployment is never matched by its store binding.
 export let read = (answer: Answer) => {
-  let said = answer.errors?.length
-    ? answer.errors.map((e) => e.message).join('; ')
-    : ''
-  if (said) throw new Error(`analytics: ${said}`)
-  let account = answer.data?.viewer?.accounts?.[0]
+  let account = said(answer)?.viewer?.accounts?.[0]
   let by = new Map<string, Counts>()
   let of = (name: string) => {
     let row = by.get(name)
@@ -203,34 +196,6 @@ let accountAlert = async (env: Env, usage: Usage) => {
   }], KERNEL)
 }
 
-// One call to the analytics API. A token that cannot read analytics answers
-// 200 with `errors`, so both failures are one throw (`read` above).
-export let ask = async (
-  token: string,
-  account: string,
-  since: string,
-  until: string,
-  api = GRAPHQL,
-): Promise<Answer> => {
-  let r = await fetch(api, {
-    method: 'POST',
-    headers: {
-      authorization: `Bearer ${token}`,
-      'content-type': 'application/json',
-    },
-    body: JSON.stringify({
-      query: QUERY,
-      variables: { account, since, until },
-    }),
-  })
-  if (!r.ok) {
-    throw new Error(
-      `analytics: HTTP ${r.status}: ${(await r.text()).slice(0, 200)}`,
-    )
-  }
-  return await r.json() as Answer
-}
-
 // What an app holds, as its store last told the directory. Not read through
 // `thisMonth`: bytes held are not a month's spending, so a new month keeps the
 // figure until a write moves it.
@@ -242,12 +207,11 @@ export let sweep = async (env: Env, now = new Date()) => {
   let month = monthOf(now)
   let at = now.toISOString()
   let answer = env.CF_ANALYTICS_TOKEN
-    ? await ask(
-      env.CF_ANALYTICS_TOKEN,
-      env.CF_ACCOUNT ?? '',
-      `${month}-01T00:00:00Z`,
-      at,
-    )
+    ? await ask<Data>(env.CF_ANALYTICS_TOKEN, QUERY, {
+      account: env.CF_ACCOUNT ?? '',
+      since: `${month}-01T00:00:00Z`,
+      until: at,
+    })
     : null
   let counts = answer ? read(answer) : null
   let dir = directory(bound(env.DIRECTORY, dirPart.fetch, env))

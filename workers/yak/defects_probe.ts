@@ -69,29 +69,13 @@ export class StoreCases extends DurableObject {
   }
   // A deploy arms the store's alarm for the rows its rules owe (graph.ts
   // `#installDeployment`), and the runtime lets only an object with an alarm
-  // handler set one. The probe plays the runtime's part, calling the store's
-  // alarm itself in the order it checks, so the runtime's own delivery runs
-  // nothing that could fall between those calls.
+  // handler set one. Its delivery runs nothing here.
   alarm(): void {}
-  fetch(req: Request): Promise<Response> {
+  fetch(): Promise<Response> {
     return entry(bindings(this.env), 'store probe', async () => {
       let store = new Store(this.state)
-      let alarm = new URL(req.url).pathname.includes('/alarm/')
-      let door = doorOf(
-        (r) => store.fetch(r),
-        'ada/notes',
-        alarm ? { eid: 'ada-notes', access: 'private' } : undefined,
-      )
+      let door = doorOf((r) => store.fetch(r), 'ada/notes')
       await door('/vocab', { method: 'POST', body: '{}' }, KERNEL)
-      if (alarm) {
-        // A retry after a kill, then one after a move the instance it moved
-        // off said so for (graph.ts `#handOver`), then the next alarm.
-        await store.alarm({ isRetry: true, retryCount: 1 })
-        await door('/moved', { method: 'POST' }, KERNEL)
-        await store.alarm({ isRetry: true, retryCount: 1 })
-        await store.alarm()
-        return Response.json({ retried: true })
-      }
       let statuses: number[] = []
       let eid = crypto.randomUUID()
       for (let path of ['/apply', '/apply?check=1', '/vocab']) {
@@ -132,7 +116,7 @@ export class StoreCases extends DurableObject {
 export default {
   fetch(req: Request, env: Bindings) {
     let id = new URL(req.url).pathname.split('/').pop()!
-    if (/\/__defects\/(?:upload|alarm)\//.test(req.url)) {
+    if (/\/__defects\/upload\//.test(req.url)) {
       return env.STORECASE.getByName(id).fetch(req)
     }
     return entry(bindings(env), 'probe gateway', async () => {

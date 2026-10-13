@@ -6,7 +6,10 @@ export let sweepDoc: VocabDoc = {
       component: true,
       type: 'object',
       properties: {
-        kind: { type: 'string', enum: ['git', 'meter', 'trash', 'wrap'] },
+        kind: {
+          type: 'string',
+          enum: ['git', 'kills', 'meter', 'trash', 'wrap'],
+        },
         began: {
           type: 'string',
           format: 'date-time',
@@ -20,6 +23,14 @@ export let sweepDoc: VocabDoc = {
           description:
             'when the first of the runs that died unfinished in a row began; ' +
             'null once one ends',
+        },
+        through: {
+          type: 'string',
+          format: 'date-time',
+          stamped: true,
+          description:
+            'how far the last run that finished read; the next reads on ' +
+            'from there',
         },
       },
     },

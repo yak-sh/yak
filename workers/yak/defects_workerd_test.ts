@@ -46,25 +46,3 @@ test('an interrupted store upload keeps no rows or writes and reports no failure
   })
   equal(samples(k.log).length, before)
 })
-
-test('a store alarm the runtime killed is reported by its retry, a move is not', async () => {
-  let k = await workerd()
-  let before = samples(k.log).length
-  let response = await fetch(`${k.base}/__defects/alarm/${crypto.randomUUID()}`)
-  equal(await response.json(), { retried: true })
-  await until(() => samples(k.log).length > before)
-  equal(
-    samples(k.log).slice(before).map((row) =>
-      (row.error as { tags: unknown }).tags
-    ),
-    [{
-      request: 'alarm',
-      store: 'ada/notes',
-      app: 'ada-notes',
-      retry: '1',
-      script: 'yak',
-      version: 'unknown',
-      entrypoint: 'store probe',
-    }],
-  )
-})
