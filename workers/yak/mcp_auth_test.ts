@@ -601,7 +601,7 @@ test('signed out: the gallery, the guide, and one public app', async () => {
       () => anon.tool('graph_query', { q: '.jog' }),
       Error,
     )
-    assertStringIncludes(bare.message, 'signed out, a read answers for ONE app')
+    assertStringIncludes(bare.message, 'signed out, a read answers for one app')
     assertStringIncludes(bare.message, 'app_published')
     // Naming an app on the query line is not a way around it either: `.in=`
     // asks about a membership, and a stranger holds none.

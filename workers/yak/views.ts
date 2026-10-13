@@ -430,7 +430,9 @@ let STATS: Row[] = [
           : []
       let text = seen.total
         ? [
-          `${space.slug}/${app.slug} — ${seen.total} visits in ${seen.days} ` +
+          `${space.slug}/${app.slug} — ${seen.total} ${
+            seen.total == 1 ? 'visit' : 'visits'
+          } in ${seen.days} ` +
           `days (${appUrl(space, app, ctx.env)})`,
           ...list('Pages', seen.pages),
           ...list('Came from', seen.from),

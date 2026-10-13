@@ -182,7 +182,7 @@ An ask that belongs in one of these — another recipe, another chore, another
 entry — has somewhere to go already, rather than a second app for the same
 thing.
 
-An app's own verbs are COMMANDS, not tools of this list: run one with the
+An app's own verbs are commands, not tools of this list: run one with the
 command tool — the app, the command's name, and its arguments as args — and
 the commands tool says which there are and what each one takes.
 

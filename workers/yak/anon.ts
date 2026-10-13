@@ -121,7 +121,7 @@ export let scope = (env: Host = {}) => ({
 export let SCOPE = scope()
 
 let nameIt = (env: Host = {}) =>
-  'signed out, a read answers for ONE app: name space and app — ' +
+  'signed out, a read answers for one app: name space and app — ' +
   `the two halves of <space>.${apex(env)}/<app>/ — and the app must be one ` +
   'anyone with the link can read. app_published lists what people have ' +
   `published, and signing in at ${

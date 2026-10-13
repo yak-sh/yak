@@ -100,7 +100,7 @@ test('a read that names no app says it is needed signed out', async () => {
     await assertRejects(
       () => opened(ctx, args),
       CallError,
-      'signed out, a read answers for ONE app',
+      'signed out, a read answers for one app',
     )
   }
 })
