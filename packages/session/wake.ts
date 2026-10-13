@@ -6,15 +6,15 @@
 // ./run.ts answers for a provider a host lent a model for and @yaks/spawn
 // answers by running the command line again on the same thread. So one rule
 // wakes both kinds: `session_wake` writes that input when a dependency
-// finishes, and a managed run that ends calls {@link rouse} itself, for news
-// that came while it ran.
+// finishes or its link goes away, and a managed run that ends calls
+// {@link rouse} itself, for news that came while it ran.
 //
 // News is a dependency that finished after the claim was taken, by somebody
-// other than the transcript. A wake is named for the transcript, the task and
-// the finished dependencies it tells of, so the same news is told once, and a
-// wake that lands while a run is starting is refused rather than lost: it is
-// written beside the precondition that the run is still over, and the run
-// starting clears that first (@yaks/spawn).
+// other than the transcript, or the link to one that had not finished going
+// away. A wake is named for the transcript, the task and what it tells of, so
+// the same news is told once, and a wake that lands while a run is starting is
+// refused rather than lost: it is written beside the precondition that the run
+// is still over, and the run starting clears that first (@yaks/spawn).
 
 import type { Bundle, Comp, Eid, Graph } from '@yaks/graph'
 import { derivedEid } from '@yaks/graph/identity'
@@ -117,21 +117,34 @@ let news = async (g: Graph, task: Bundle): Promise<Bundle[]> => {
   })
 }
 
-// One wake per transcript, task and set of finished dependencies.
-let named = (session: Eid, task: Eid, told: Bundle[]) =>
+// What a wake tells of a held task: the dependencies that finished, and those
+// whose link went away.
+type Told = { done: Bundle[]; gone: Bundle[] }
+
+// One wake per transcript, task and set of things told: a finished dependency
+// by its eid, a link gone by `-` and the eid.
+let named = (session: Eid, task: Eid, { done, gone }: Told) =>
   derivedEid(
     `session wake ${session} ${task} ${
-      told.map((b) => b.entity.eid).toSorted().join(' ')
+      [
+        ...done.map((b) => b.entity.eid),
+        ...gone.map((b) => `-${b.entity.eid}`),
+      ].toSorted().join(' ')
     }`,
   )
 
-// The news a held task has that no wake told yet, or nothing.
-let untold = async (g: Graph, task: Bundle): Promise<Bundle[]> => {
-  let told = await news(g, task)
-  if (!told.length) return []
+// The news a held task has that no wake told yet, with `gone`, the
+// dependencies whose link the caller saw go away; or nothing.
+let untold = async (
+  g: Graph,
+  task: Bundle,
+  gone: Bundle[] = [],
+): Promise<Told | undefined> => {
+  let told = { done: await news(g, task), gone }
+  if (!told.done.length && !gone.length) return
   let session = String(comp(task, CLAIM)?.session)
   let [said] = await g.get([named(session, task.entity.eid, told)], ['entry'])
-  return said?.entry ? [] : told
+  return said?.entry ? undefined : told
 }
 
 /**
@@ -154,7 +167,7 @@ export let waits = async (
   let [row] = await g.get([task])
   if (!row?.task || comp(row, CLAIM)?.session != session) return false
   if (settled(taskStatus(g.vocab, row))) return false
-  return await openDeps(g, task) > 0 || (await untold(g, row)).length > 0
+  return await openDeps(g, task) > 0 || !!await untold(g, row)
 }
 
 /**
@@ -170,29 +183,32 @@ export let parked = async (g: Graph, session: Eid): Promise<boolean> => {
   return false
 }
 
-// The line a wake says: what finished, and what is left.
-let telling = async (g: Graph, task: Bundle, told: Bundle[]) => {
+// The line a wake says: what finished, what it waits on no more, and what is
+// left.
+let telling = async (g: Graph, task: Bundle, { done, gone }: Told) => {
   let id = human(g.vocab)
-  let them = told.map((b) => `${id(b)} (${taskStatus(g.vocab, b)})`)
+  let and = (them: string[]) =>
+    them.length > 1
+      ? `${them.slice(0, -1).join(', ')} and ${them.at(-1)}`
+      : them[0]
+  let them = done.map((b) => `${id(b)} (${taskStatus(g.vocab, b)})`)
   let left = await openDeps(g, task.entity.eid)
-  let which = them.length > 1
-    ? `${them.slice(0, -1).join(', ')} and ${them.at(-1)}, which ${
-      id(task)
-    } waits on, have finished`
-    : `${them[0]}, which ${id(task)} waits on, has finished`
-  return `${which}; ${
+  return [
+    done.length && `${and(them)}, which ${id(task)} waits on, ` +
+      `${done.length > 1 ? 'have' : 'has'} finished`,
+    gone.length && `${id(task)} no longer waits on ${and(gone.map(id))}`,
     left
       ? `${left} of its dependencies still open`
-      : 'nothing it waits on is open'
-  }.`
+      : 'nothing it waits on is open',
+  ].filter(Boolean).join('; ') + '.'
 }
 
 /**
  * Wake a transcript for news of the tasks it holds: where its run is over,
  * append an input carrying the `using` in force for each held task with a
- * dependency finished that it was not told of. Whoever answers that provider
- * runs the turn. A transcript still running is left alone; a managed run calls
- * this as it ends.
+ * dependency finished that it was not told of, or one in `gone` (by held
+ * task) whose link went away. Whoever answers that provider runs the turn. A
+ * transcript still running is left alone; a managed run calls this as it ends.
  *
  * ```ts
  * import { rouse } from '@yaks/session'
@@ -200,7 +216,11 @@ let telling = async (g: Graph, task: Bundle, told: Bundle[]) => {
  * // await rouse(graph, session)
  * ```
  */
-export let rouse = async (g: Graph, session: Eid): Promise<void> => {
+export let rouse = async (
+  g: Graph,
+  session: Eid,
+  gone: Record<Eid, Bundle[]> = {},
+): Promise<void> => {
   if (!holds(g)) return
   let row = await one(g, session, ['exit'])
   if (!await resting(g, session)) return
@@ -213,8 +233,8 @@ export let rouse = async (g: Graph, session: Eid): Promise<void> => {
   let wakes: Bundle[] = []
   for (let task of held) {
     if (settled(taskStatus(g.vocab, task))) continue
-    let told = await untold(g, task)
-    if (!told.length) continue
+    let told = await untold(g, task, gone[task.entity.eid])
+    if (!told) continue
     wakes.push({
       entity: { eid: named(session, task.entity.eid, told) },
       entry: { session },
@@ -254,4 +274,29 @@ export let wake = async (g: Graph, task: Eid): Promise<void> => {
       .filter((s): s is string => typeof s == 'string'),
   )
   for (let session of holders) await rouse(g, session)
+}
+
+/**
+ * The code behind `session_wake` for a dependency link that went away: the
+ * transcript parked on `task`, the end it led from, is {@link rouse}d and told
+ * `task` waits on `dep` no more, where `dep` had not finished. A dependency
+ * deleted with its link is told too, since whether it had finished went with
+ * it.
+ *
+ * ```ts
+ * import { unlinked } from '@yaks/session'
+ *
+ * // await unlinked(graph, 'y', 'x') // y requires x no more
+ * ```
+ */
+export let unlinked = async (
+  g: Graph,
+  task: Eid,
+  dep: Eid,
+): Promise<void> => {
+  let session = comp(await one(g, task, [CLAIM]), CLAIM)?.session
+  if (typeof session != 'string') return
+  let [row] = await g.get([dep])
+  if (row && settled(taskStatus(g.vocab, row))) return
+  await rouse(g, session, { [task]: [row ?? { entity: { eid: dep } }] })
 }

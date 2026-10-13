@@ -202,16 +202,19 @@ finishes, `session_wake` wakes every transcript parked on a task that waits on
 it, the same way for both kinds: it appends an input carrying the `using` in
 force, naming what finished. `session_run` answers that input for a provider a
 host lent a model for, and `@yaks/spawn` answers it by running the command line
-again on the provider's own thread.
+again on the provider's own thread. Deleting the link to a dependency that has
+not finished wakes the transcript parked on the task it led from the same way
+(`unlinked(graph, task, dep)`), read from the edge as the commit found it
+(`@yaks/effects` `Event.before`).
 
 News is a dependency that finished after the claim was taken, by somebody other
-than the holder. Each wake is named for the transcript, the task and the
-dependencies it tells of, so the same news is told once. A managed run that ends
-calls `rouse(graph, session)` itself, so a dependency that finished while it ran
-is told at once. `waits(graph, session, task)` says whether a held task still
-waits on something the holder is to be woken for, and
-`unanswered(graph, session)` lists what a transcript was told that its last turn
-or run was not given.
+than the holder, or the link to an unfinished one going away. Each wake is named
+for the transcript, the task and what it tells of, so the same news is told
+once. A managed run that ends calls `rouse(graph, session)` itself, so a
+dependency that finished while it ran is told at once.
+`waits(graph, session, task)` says whether a held task still waits on something
+the holder is to be woken for, and `unanswered(graph, session)` lists what a
+transcript was told that its last turn or run was not given.
 
 ```ts
 import { graph, identityEid } from '@yaks/graph'
@@ -570,8 +573,8 @@ The main module exports:
 - execution: `react()`, `settle()`, `running()`, `admitNext()`, `transcript()`,
   `sessionTools()`, and the provider lookups `offers()`, `providerResolver()`
   and `answers()`;
-- parking: `wake()`, `rouse()`, `waits()`, `unanswered()`, `requested()`,
-  `resting()` and `cleanEnd()`;
+- parking: `wake()`, `unlinked()`, `rouse()`, `waits()`, `unanswered()`,
+  `requested()`, `resting()` and `cleanEnd()`;
 - inspection: `statusOf()`, `kindOf()`, `textOf()`, `ordered()`,
   `sessionDerived`, and the bounded transcript functions;
 - identity and rendering: `sessionFor()`, `sessionEid()`, `speaking()`,

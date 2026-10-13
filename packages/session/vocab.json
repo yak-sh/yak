@@ -777,7 +777,11 @@
         "completed",
         "cancelled"
       ],
-      "description": "wake every transcript parked on a task that waits on the one that finished: where its run is over, an input carrying the `using` in force asks for its next turn, which whoever answers that provider runs (the session runner, or @yaks/spawn for a command line)"
+      "removed": [
+        "contains",
+        "requires"
+      ],
+      "description": "wake every transcript parked on a task that waits on the one that finished, or on a task whose link to an unfinished dependency went away: where its run is over, an input carrying the `using` in force asks for its next turn, which whoever answers that provider runs (the session runner, or @yaks/spawn for a command line)"
     }
   }
 }

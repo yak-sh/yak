@@ -57,7 +57,7 @@ import {
   type Step,
 } from './react.ts'
 import { seqOf, type TranscriptStatus, usingBefore } from './state.ts'
-import { cleanEnd, requested, waits, wake } from './wake.ts'
+import { cleanEnd, requested, unlinked, waits, wake } from './wake.ts'
 
 /** What a host lends the runner: how a step is taken (./react.ts `Deps`), the
  * bound on children, and who is running it. */
@@ -469,7 +469,8 @@ export let passing = (g: Graph, session: Eid): Promise<void> | undefined =>
 // The transcripts an event owes a run: the one an entry is in (not a turn the
 // runner itself took, which the run that wrote it carries on from), a
 // transcript itself (admitted, or swept up), or those holding a task that
-// completed or was cancelled, or holding one that contains or requires it.
+// completed or was cancelled, or holding one that contains or requires it. A
+// dependency edge that went away is read as the commit found it.
 let about = async (g: Graph, e: Event): Promise<Eid[]> => {
   let b = await one(g, e.entity.eid, ['entry', 'ask', 'task', 'edge'])
   if (b?.entry) {
@@ -480,19 +481,12 @@ let about = async (g: Graph, e: Event): Promise<Eid[]> => {
   if (!holds(g)) return []
   let tasks = new Set<Eid>()
   if (b?.task) tasks.add(b.entity.eid)
-  let edge = comp(b, 'edge')
+  let edge = comp(b, 'edge') ?? comp(e.before, 'edge')
   for (let end of [edge?.from, edge?.to]) if (end) tasks.add(String(end))
-  // A dependency edge that went away with its entity has no before-image to
-  // follow, so every task a transcript holds is looked at again.
-  let held = b
-    ? []
-    : (await g.read('.task&.claim.session&.fields=entity.eid')).map((t) =>
-      t.entity.eid
-    )
   for (let t of [...tasks]) {
     for (let from of await dependents(g, t)) tasks.add(from)
   }
-  let rows = await g.get([...tasks, ...held], [CLAIM])
+  let rows = await g.get([...tasks], [CLAIM])
   return [
     ...new Set(
       rows.map((t) => comp(t, 'claim')?.session)
@@ -609,9 +603,18 @@ export let running = (g: Graph, r: Runner): Handlers => ({
     ? { session_release: (e: Event) => release(g, e) }
     : {},
   ...declared(g, 'session_wake')
-    ? { session_wake: (e: Event) => wake(g, e.entity.eid) }
+    ? { session_wake: (e: Event) => woken(g, e) }
     : {},
 })
+
+// A task finished, or a dependency link went away: read as the commit found
+// it, since a deleted edge no longer says which ends it had.
+let woken = async (g: Graph, e: Event): Promise<void> => {
+  if (e.kind != 'removed') return await wake(g, e.entity.eid)
+  let edge = comp(e.before, 'edge') ??
+    comp(await one(g, e.entity.eid, ['edge']), 'edge')
+  if (edge) await unlinked(g, String(edge.from), String(edge.to))
+}
 
 let declared = (g: Graph, name: string) =>
   effectsIn(g.vocab.docs).some((e) => e.name == name)

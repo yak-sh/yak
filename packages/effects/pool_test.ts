@@ -80,6 +80,18 @@ test('a declared effect owes no row until its handler is registered', async () =
   assertEquals(await owed(a.g), ['post_note p1 pending'])
 })
 
+test('a run owed for a removal is handed what the commit removed', async () => {
+  let a = proc(store())
+  let eid = '00000000-0000-4000-8000-000000000001'
+  let gone: unknown[] = []
+  a.fx.handle({ post_gone: (e) => void gone.push(e.before?.post) })
+  await a.g.apply([post(eid)])
+  await a.g.apply([{ entity: { eid }, $delete: true }])
+  await a.fx.work(a.g)
+  await a.fx.idle()
+  assertEquals(gone, [{ title: 'One' }])
+})
+
 test('a batch that never commits owes nothing', async () => {
   let a = proc(store())
   await a.g.apply([post('p1')], { check: true })

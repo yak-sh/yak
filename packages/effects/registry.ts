@@ -601,8 +601,8 @@ export let effects = (vocab: Vocab, opts: Opts = {}): Effects => {
     let inPool = (eid: Eid) => {
       if (!poolEids) {
         poolEids = new Set<Eid>()
-        for (let [eid, comps] of Object.entries(prior)) {
-          if (comps.includes(EFFECT)) poolEids.add(eid)
+        for (let [eid, row] of Object.entries(prior)) {
+          if (row[EFFECT] != null) poolEids.add(eid)
         }
         for (let b of bundles) {
           if (b[EFFECT] != null) poolEids.add(b.entity.eid)

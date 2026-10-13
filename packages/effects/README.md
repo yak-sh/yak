@@ -88,9 +88,9 @@ or the other.
 ## Observers and events
 
 An **event** describes what triggered a handler (`Event`), with `kind`,
-`entity`, and the component's `name`. The registry reads component presence
-before applying bundles, including entities a cascade will delete, and derives
-events from the applied [patches](../graph/README.md#data-model).
+`entity`, and the component's `name`. The registry reads what each entity
+carries before applying bundles, including entities a cascade will delete, and
+derives events from the applied [patches](../graph/README.md#data-model).
 
 | Observer                       | Effect declaration       | Trigger                                                  |
 | ------------------------------ | ------------------------ | -------------------------------------------------------- |
@@ -102,8 +102,11 @@ events from the applied [patches](../graph/README.md#data-model).
 
 A `changed` event describes the applied patch, not a comparison of old and new
 values. `comp` holds the component on creation, the applied properties on
-change, and is absent on removal. `touched` lists every component the same
-commit moved on that entity, including removals. A pooled run keeps that list.
+change, and is absent on removal. A removal carries `before` instead: the entity
+holding everything the commit removed from it, as it was before the commit, so a
+handler can still read what a deleted edge pointed at. `touched` lists every
+component the same commit moved on that entity, including removals. A pooled run
+keeps both.
 
 ```ts
 import { graph } from '@yaks/graph'
@@ -124,7 +127,7 @@ fx.on('post', {
   doc: 'refresh the post view',
   created: (e) => seen.push([e.kind, e.comp]),
   changed: { published: (e) => seen.push([e.kind, e.comp]) },
-  removed: (e) => seen.push([e.kind, e.comp]),
+  removed: (e) => seen.push([e.kind, e.before?.post]),
 })
 await g.apply([{ entity: { eid: 'p1' }, post: {} }])
 await g.apply([{ entity: { eid: 'p1' }, post: { published: true } }])
@@ -132,7 +135,7 @@ await g.apply([{ entity: { eid: 'p1' }, $delete: true }])
 equal(seen, [
   ['created', {}],
   ['changed', { published: true }],
-  ['removed', undefined],
+  ['removed', { published: true }],
 ])
 equal(fx.docs(), [{
   comp: 'post',
@@ -201,9 +204,9 @@ commit transaction. An observer is never replayed after a crash. An effect's
 
 ### Event derivation helpers
 
-`before(vocab)` reads the component presence needed by `events`; `wanting`
-declares those reads for graph gathering. `strip` removes the temporary
-`$before` request from the applied bundles.
+`before(vocab)` reads what the batch's entities carry, which `events` needs;
+`wanting` declares those reads for graph gathering. `strip` removes the
+temporary `$before` request from the applied bundles.
 
 ```ts
 import { type Bundle, graph } from '@yaks/graph'

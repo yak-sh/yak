@@ -10,7 +10,7 @@ import { storage } from '@yaks/sqlite'
 import { mem } from '../sqlite/testing.ts'
 import { effectDoc, effects } from '@yaks/effects'
 import { loadVocab } from '@yaks/vocab'
-import { edgeDoc, edgeKeywords, edges, link } from '@yaks/edge'
+import { edgeDoc, edgeEid, edgeKeywords, edges, link } from '@yaks/edge'
 import { kernel, kernelDoc, kernelKeywords } from '@yaks/kernel'
 import { taskDoc, tasks } from '@yaks/task'
 import { processDoc } from '@yaks/process'
@@ -168,6 +168,36 @@ test('a managed run that ends waiting on a dependency is parked, and woken by it
   // The last run ends with nothing left to wait on, and lets go.
   await end('m1:third')
   assertEquals(await w.claim('y'), undefined)
+})
+
+test('a managed run parked on a task is woken when a dependency link goes away', async () => {
+  let w = await world()
+  await w.g.apply(managed('m1', 0))
+  await w.idle()
+  let said = async () => textOf((await transcript(w.g, 'm1')).at(-1)!)
+  // z is done before its link goes: nothing new to tell.
+  await w.g.apply([{ entity: { eid: 'z' }, completed: {} }])
+  await w.idle()
+  let told = await said()
+  await w.g.apply([{
+    entity: { eid: edgeEid('y', 'contains', 'z') },
+    $delete: true,
+  }])
+  await w.idle()
+  assertEquals(await said(), told)
+  // x is still open when y stops waiting on it.
+  let asked = (await transcript(w.g, 'm1')).filter((b) => b.using).at(-1)!
+  await w.g.apply(ending('m1', 'm1:second', asked.entity.eid))
+  await w.idle()
+  assertEquals(await w.claim('y'), 'm1')
+  await w.g.apply([{
+    entity: { eid: edgeEid('y', 'requires', 'x') },
+    $delete: true,
+  }])
+  await w.idle()
+  let [wake] = (await transcript(w.g, 'm1')).slice(-1)
+  assertEquals((wake.using as Comp).provider, CLI)
+  assert(textOf(wake).includes('no longer waits on #x'), textOf(wake))
 })
 
 test('a managed run that failed lets go of the task it was waiting on', async () => {

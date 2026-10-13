@@ -3,13 +3,15 @@
 // component keeps no rows, and a handled effect runs in the process that
 // committed (./registry.ts) — and it is what separates effects from writers:
 //
-//   effect{handler, target, comp, kind, state, attempts, at, generation,
-//          error, next, lease_owner, lease_token, lease_expiry}
+//   effect{handler, target, comp, kind, touched, before, state, attempts, at,
+//          generation, error, next, lease_owner, lease_token, lease_expiry}
 //
 // A commit writes one row for each run it owes, inside its own transaction,
 // whichever process wrote it: a crash after the commit cannot lose a run,
-// because the run was committed with the write. Any number of processes work
-// the pool, and a row is run by the one that claims it.
+// because the run was committed with the write. A run reads the target as it
+// stands when it runs, except for what the commit removed, which is gone by
+// then: a removal's row keeps that, as `before` (./trace.ts). Any number of
+// processes work the pool, and a row is run by the one that claims it.
 //
 // A claim is the row's own lease — owner, token, expiry — written through the
 // graph's own `apply()` with its precondition (@yaks/graph `$was`): the claim
@@ -84,6 +86,7 @@ import {
   type Span,
   unlink,
 } from '@yaks/trace'
+import { comps } from '@yaks/graph/bundle'
 import { derivedEid } from '@yaks/graph/identity'
 import { Stale } from '@yaks/graph/errors'
 import { token } from '@yaks/graph/sha256'
@@ -463,12 +466,18 @@ export let pool = (ctx: Ctx, opts: Partial<PoolOpts> = {}): Pool => {
         [String(row.target)],
         kind == 'started' ? [] : name ? [name] : undefined,
       )
+      let entity = found?.entity ?? { eid: String(row.target) }
+      let before = row.before as Comp | undefined
       let event: Event = {
         kind,
-        entity: found?.entity ?? { eid: String(row.target) },
+        entity,
         name,
         touched: row.touched as string[] | undefined,
-        ...(kind == 'removed' ? {} : { comp: found?.[name] as Comp }),
+        ...(kind != 'removed'
+          ? { comp: found?.[name] as Comp }
+          : before
+          ? { before: { ...before, entity } }
+          : {}),
       }
       try {
         if (!s?.run) throw new Error(`no effect is handled as ${row.handler}`)
@@ -1000,6 +1009,7 @@ export let pool = (ctx: Ctx, opts: Partial<PoolOpts> = {}): Pool => {
           comp: e.name,
           kind: e.kind,
           touched: e.touched,
+          ...e.before ? { before: Object.fromEntries(comps(e.before)) } : {},
           state: 'pending',
           attempts: ours ? 1 : 0,
           at,

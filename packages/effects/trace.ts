@@ -5,13 +5,15 @@
 // handler needs the difference — "a post was published" is not "a post exists"
 // — so this file derives it.
 //
-// It takes two readings. BEFORE the patches go in, `before()` reads which
-// components each entity in the batch already carries, plus the same for
-// everything the batch is about to delete (@yaks/graph's own `doomed()` walk,
-// so the death rule is reused, never re-implemented). After the commit,
-// `events()` replays the applied batch against that reading: a component absent
-// before is a creation, one present before is a change carrying only the
-// properties that moved, and a component or an entity that went is a removal.
+// It takes two readings. BEFORE the patches go in, `before()` reads what each
+// entity in the batch carries, plus the same for everything the batch is about
+// to delete (@yaks/graph's own `doomed()` walk, so the death rule is reused,
+// never re-implemented). After the commit, `events()` replays the applied
+// batch against that reading: a component absent before is a creation, one
+// present before is a change carrying only the properties that moved, and a
+// component or an entity that went is a removal, carrying what it was. That is
+// the one thing a handler cannot read afterwards: a deleted edge no longer
+// says which ends it had.
 //
 // The reading rides forward on the batch itself, under `$before`. A `$`-key is
 // not a component — `comps()` skips it, so no storage adapter ever sees it —
@@ -34,7 +36,8 @@ export type Kind = 'created' | 'changed' | 'removed' | 'matched' | 'started'
  * `comp` is the patch as applied, which is what makes a change readable: on a
  * `created` event it is the whole birth row, on a `changed` event only the
  * properties that moved, and on a `removed` event there is nothing left to
- * carry.
+ * carry. What went is `before` instead: everything the commit removed from the
+ * entity, as it stood before the commit.
  */
 export type Event = {
   /** what happened */
@@ -47,14 +50,19 @@ export type Event = {
   touched?: string[]
   /** the properties the change carried (absent on `removed`) */
   comp?: Comp
+  /** on `removed`, the entity as the commit found it, holding only what the
+   * commit removed from it: every such component, as it was. Absent where
+   * nothing removed was read before the commit (a component born and removed
+   * in one batch). */
+  before?: Bundle
   /** what each variable bound, for a `matched` event whose pattern named some */
   vars?: Record<string, unknown>
   /** the whole multi-entity match, including its collected members */
   binding?: Binding
 }
 
-/** What each entity carried before the batch: component names, by eid. */
-export type Before = Record<Eid, string[]>
+/** What each entity carried before the batch: its row, by eid. */
+export type Before = Record<Eid, Bundle>
 
 /** The key the reading rides forward on. Not a component: `$`-prefixed keys
  * are `apply()`'s pipeline, never properties, so storage never sees it. */
@@ -83,7 +91,7 @@ export let before = (
         tx.get([...new Set([...bundles.map((b) => b.entity.eid), ...gone])]),
         (found) => {
           let map: Before = {}
-          for (let b of found) map[b.entity.eid] = comps(b).map(([n]) => n)
+          for (let b of found) map[b.entity.eid] = b
           return bundles.map((b) => ({ ...b, [BEFORE]: map }))
         },
       ),
@@ -126,7 +134,8 @@ export let strip = (bundles: Bundle[]): Bundle[] => {
  * against the reading `before()` took: a component the entity did not carry is
  * `created` (once — a second patch for it in the same batch is a `changed`), a
  * component it did carry is `changed`, a null component or a deleted entity is
- * `removed`, one event per component the casualty carried.
+ * `removed`, one event per component the casualty carried, each carrying
+ * `before`: what the batch removed from that entity, as the reading found it.
  */
 export let events = (bundles: Bundle[]): Event[] => {
   let map = (bundles.find((b) => b[BEFORE])?.[BEFORE] ?? {}) as Before
@@ -143,7 +152,12 @@ export let events = (bundles: Bundle[]): Event[] => {
   let held = new Map<Eid, Set<string>>()
   let has = (eid: Eid): Set<string> => {
     let s = held.get(eid)
-    if (!s) held.set(eid, s = new Set(map[eid] ?? []))
+    if (!s) {
+      held.set(
+        eid,
+        s = new Set(map[eid] ? comps(map[eid]).map(([n]) => n) : []),
+      )
+    }
     return s
   }
   let out: Event[] = []
@@ -166,10 +180,21 @@ export let events = (bundles: Bundle[]): Event[] => {
     }
   }
   let touched = new Map<Eid, Set<string>>()
+  let gone = new Map<Eid, Bundle>()
   for (let e of out) {
     let names = touched.get(e.entity.eid) ?? new Set<string>()
     names.add(e.name)
     touched.set(e.entity.eid, names)
+    let was = map[e.entity.eid]?.[e.name]
+    if (e.kind != 'removed' || was == null) continue
+    let image = gone.get(e.entity.eid) ?? { entity: e.entity }
+    gone.set(e.entity.eid, { ...image, [e.name]: was })
   }
-  return out.map((e) => ({ ...e, touched: [...touched.get(e.entity.eid)!] }))
+  return out.map((e) => ({
+    ...e,
+    touched: [...touched.get(e.entity.eid)!],
+    ...e.kind == 'removed' && gone.has(e.entity.eid)
+      ? { before: gone.get(e.entity.eid) }
+      : {},
+  }))
 }

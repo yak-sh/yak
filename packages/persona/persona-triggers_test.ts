@@ -140,6 +140,20 @@ test('created contains and reads links rewrite persona files through the effects
   }
 })
 
+test('a persona link going away owes a pass only where it touched what was said', async () => {
+  let g = world()
+  let gone = (from: string, to: string) =>
+    ({
+      kind: 'removed',
+      name: 'contains',
+      entity: { eid: 'link' },
+      before: { entity: { eid: 'link' }, edge: { from, to }, contains: {} },
+    }) as Event
+  let said = new Set(['persona'])
+  equal(await moves(gone('persona', 'note'), g.storage, said), true)
+  equal(await moves(gone('elsewhere', 'note'), g.storage, said), false)
+})
+
 let checkout = [
   { entity: { eid: 'project' }, project: {}, repo: { repository: 'repo' } },
   { entity: { eid: 'repo' }, repository: { common: '/code/.git' } },
