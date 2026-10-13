@@ -5,7 +5,7 @@
 import { DurableObject } from 'cloudflare:workers'
 import { cloudflareProvider } from '@yaks/machine/cloudflare'
 import { afterCompiles, copies } from './sandbox-copies.ts'
-import { retryOnce } from './door.ts'
+import { retried } from './door.ts'
 import type { Env } from './env.ts'
 import { TIMEOUT } from './sandbox.ts'
 import { r2RawObjects } from './lib/objects.ts'
@@ -39,7 +39,7 @@ export class WorkspaceStore extends DurableObject<Env> {
     this.#storage = ctx.storage
     this.#bucket = env.BLOBS
     this.#prefix = `workspaces/${ctx.id.toString()}/`
-    let provider = cloudflareProvider(env.SANDBOX!, { retry: retryOnce })
+    let provider = cloudflareProvider(env.SANDBOX!, { retry: retried })
     this.#copies = copies(
       ctx.storage,
       async () => {

@@ -1,7 +1,7 @@
 // Retry the public callers, not just the helper: stubs consume POST bodies
 // before failing, and each new stub permits only one call.
 import { test } from '@yaks/testing'
-import { assertEquals, assertNotStrictEquals, assertRejects } from '@std/assert'
+import { assertEquals, assertRejects } from '@std/assert'
 import { joining, posting, SPACE, wiped } from './build.ts'
 import type { Space } from './directory.ts'
 import type { Namespace } from './door.ts'
@@ -13,7 +13,7 @@ import {
   cloudflareProvider,
   type Sandboxes,
 } from '@yaks/machine/cloudflare'
-import { retryOnce } from './door.ts'
+import { retried } from './door.ts'
 import { listen, rostered, told } from './stream.ts'
 
 let space: Space = {
@@ -36,7 +36,19 @@ let failures = [
   flagged,
   () => new Error('Durable Object instance is no longer active'),
   () => new Error('Durable Object reset because its code was updated'),
+  () => new Error('Durable Object reset because a newer deploy reached it: b'),
 ]
+// Each failure once, twice and three times running, then an unrelated error
+// that must not retry. A call fails when every send it made failed.
+let runs = (failure: () => Error) => [
+  [failure()],
+  [failure(), failure()],
+  [failure(), failure(), failure()],
+  [new Error('bad')],
+]
+let sends = (errors: Error[]) =>
+  errors[0].message == 'bad' ? 1 : Math.min(errors.length + 1, 3)
+let fails = (errors: Error[]) => sends(errors) == errors.length
 let upgrade = () =>
   new Request('https://ada.yaks.app/api/build', {
     headers: {
@@ -133,15 +145,10 @@ let callers: Array<{
 
 for (let caller of callers) {
   test(
-    caller.path + ': fresh stub and request, one eviction retry only',
+    caller.path + ': a fresh stub and request each send, three at most',
     async () => {
       for (let failure of failures) {
-        // Success, retry exhausted, and an unrelated error that must not retry.
-        for (
-          let errors of [[failure()], [failure(), failure()], [
-            new Error('bad'),
-          ]]
-        ) {
+        for (let errors of runs(failure)) {
           let gets = 0
           let seen: Request[] = []
           let ns: Namespace = {
@@ -175,7 +182,7 @@ for (let caller of callers) {
             },
           }
           let { env } = platform('test', { [caller.binding]: ns })
-          if (errors.length == 2 || errors[0].message == 'bad') {
+          if (fails(errors)) {
             assertEquals(
               await assertRejects(() => caller.run(env)),
               errors.at(-1),
@@ -183,9 +190,8 @@ for (let caller of callers) {
           } else {
             await caller.run(env)
           }
-          assertEquals(gets, errors[0].message == 'bad' ? 1 : 2)
-          assertEquals(seen.length, gets)
-          if (gets == 2) assertNotStrictEquals(seen[0], seen[1])
+          assertEquals(gets, sends(errors))
+          assertEquals(new Set(seen).size, gets)
         }
       }
     },
@@ -216,11 +222,7 @@ for (let { method, args, result } of methods) {
     'sandbox ' + method + ': fresh stub, intact arguments, bounded retry',
     async () => {
       for (let failure of failures) {
-        for (
-          let errors of [[failure()], [failure(), failure()], [
-            new Error('bad'),
-          ]]
-        ) {
+        for (let errors of runs(failure)) {
           let gets = 0
           let calls = 0
           let ns: Sandboxes = {
@@ -244,7 +246,7 @@ for (let { method, args, result } of methods) {
               } as unknown as Box
             },
           }
-          let provider = cloudflareProvider(ns, { retry: retryOnce })
+          let provider = cloudflareProvider(ns, { retry: retried })
           let ref = { id: named(space, who.person!) }
           let { machine } = await provider.wake(ref)
           assertEquals(gets, 0, 'take the stub per invocation, not per box')
@@ -258,14 +260,14 @@ for (let { method, args, result } of methods) {
               : method == 'destroy'
               ? provider.release(ref)
               : provider.request!(ref)
-          if (errors.length == 2 || errors[0].message == 'bad') {
+          if (fails(errors)) {
             assertEquals(await assertRejects(call), errors.at(-1))
           } else {
             let answer = await call()
             if (method == 'exec') assertEquals(answer, result)
             if (method == 'readFile') assertEquals(answer, 'café')
           }
-          assertEquals(gets, errors[0].message == 'bad' ? 1 : 2)
+          assertEquals(gets, sends(errors))
           assertEquals(calls, gets)
         }
       }

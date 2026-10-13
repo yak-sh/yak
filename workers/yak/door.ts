@@ -235,26 +235,36 @@ export let thrown = async (r: Response): Promise<Response> => {
   return r
 }
 
-/** Retry one replayable call. A second failure propagates unchanged. */
-export let retryOnce = async <T>(
+// How many times a replayable call is sent before its failure stands, as
+// Cloudflare's guidance for a Durable Object's retryable errors has it. An
+// object restarts once for each newer deploy that reaches it (running.ts
+// `behind`), and each restart fails what it had in flight: a call cut off by
+// one deploy's restart can have its retry cut off by the next one's when two
+// land seconds apart.
+let ATTEMPTS = 3
+
+/** Send one replayable call again while it fails in words `retry` knows, up
+ * to `ATTEMPTS` sends. The last failure propagates unchanged. */
+export let retried = async <T>(
   send: () => T | Promise<T>,
   replayable = true,
   retry: (error: unknown) => boolean = evicted,
 ): Promise<T> => {
-  try {
-    return await send()
-  } catch (e) {
-    if (!retry(e) || !replayable) throw e
-    return send()
+  for (let sent = 1;; sent++) {
+    try {
+      return await send()
+    } catch (e) {
+      if (!retry(e) || !replayable || sent >= ATTEMPTS) throw e
+    }
   }
 }
 
-/** A request factory, not a spent Request: both attempts get their own body.
+/** A request factory, not a spent Request: every send gets its own body.
  * Each carries the caller's deploy, so an object still on older code restarts
  * onto it rather than answering for it (running.ts `behind`). */
 export let fetchOf =
   (ns: Namespace, name: string) => (make: () => Request): Promise<Response> =>
-    retryOnce(() => ns.get(ns.idFromName(name)).fetch(stamped(make())))
+    retried(() => ns.get(ns.idFromName(name)).fetch(stamped(make())))
 
 let stamped = (req: Request) => (stamp(req.headers), req)
 
@@ -270,9 +280,9 @@ export let storeOf = (ns: Namespace, name: string, app?: Served): Door => {
   // I/O on behalf of a different request". Getting one costs nothing, so an
   // eviction, thrown or answered, is answered by taking another and building
   // the request again from the same init. Only a streamed body cannot be sent
-  // twice; that one error passes through. The first may have committed before
-  // its answer was lost, so both carry one idempotency key, and a store that
-  // applied the first answers the second as it answered the first
+  // again; that one error passes through. A send may have committed before
+  // its answer was lost, so every send carries one idempotency key, and a
+  // store that applied one answers the next as it answered the first
   // (writes.ts) rather than applying it again.
   let door = doorOf(
     (req) => ns.get(ns.idFromName(name)).fetch(req),
@@ -291,7 +301,7 @@ export let storeOf = (ns: Namespace, name: string, app?: Served): Door => {
     let method = init instanceof Request ? init.method : init.method ?? 'GET'
     let safe = method == 'GET' || method == 'HEAD'
     let request = `store ${path.split('?')[0]}`
-    return retryOnce(
+    return retried(
       async () => {
         try {
           return read(await thrown(await door(path, init, once)))

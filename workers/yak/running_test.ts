@@ -102,7 +102,7 @@ test('a store says the version it runs and the deploy it restarted for', async (
   )
   assertEquals((await inspected.json()).running, {
     version: { id: A.id, at: A.timestamp },
-    restartedFor: B.id,
+    restartedFor: { id: B.id, at: B.timestamp },
   })
 })
 

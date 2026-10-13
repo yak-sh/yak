@@ -78,11 +78,13 @@ test('an interrupted recovery command is not silently sent again', async () => {
   assertEquals(n.seen.length, 1)
 })
 
-test('a bodiless GET retries once; a second eviction and other errors throw', async () => {
-  let n = ns([flagged(), 'ok'])
+test('a bodiless GET is sent three times at most; other errors throw', async () => {
+  let n = ns([flagged(), gone(), 'ok'])
   assertEquals(await (await storeOf(n, 'jeff')('/query')).text(), 'ok')
-  assertEquals(n.seen.length, 2)
-  await assertRejects(() => storeOf(ns([gone(), gone()]), 'jeff')('/query'))
+  assertEquals(n.seen.length, 3)
+  let evicting = ns([gone(), gone(), gone(), 'unexpected retry'])
+  await assertRejects(() => storeOf(evicting, 'jeff')('/query'))
+  assertEquals(evicting.seen.length, 3)
   let other = ns([new Error('boot failed')])
   await assertRejects(() => storeOf(other, 'jeff')('/query'), Error, 'boot')
   assertEquals(other.seen.length, 1)

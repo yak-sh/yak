@@ -60,7 +60,7 @@ import {
 } from '@yaks/machine/cloudflare'
 export { CWD, NAP, SLEEP, TIMEOUT } from '@yaks/machine/cloudflare'
 import type { Space, Tier } from './directory.ts'
-import { retryOnce } from './door.ts'
+import { retried } from './door.ts'
 import { type Grant, type Kv, ledger, mint, tokenOf } from './grants.ts'
 import { type Host, url } from './host.ts'
 import { refuse } from './tool.ts'
@@ -356,7 +356,7 @@ export let workbench = async (
   spend.person = person
   spend.since ??= now()
   let provider = cloudflareProvider(env.SANDBOX, {
-    retry: retryOnce,
+    retry: retried,
     env: () => spend.signing ??= signed(env, space, person),
     sleepError: (e) =>
       caught(e, { request: 'sandbox sleep', space: space.slug }),
@@ -366,10 +366,10 @@ export let workbench = async (
   // Snapshot only the workspace into a clean container, never its processes,
   // system files or environment. The source records completed copies so a
   // retry or another command cannot overwrite the person's later work.
-  let old = cloudflareProvider(env.SANDBOX, { retry: retryOnce })
+  let old = cloudflareProvider(env.SANDBOX, { retry: retried })
   if (!env.WORKSPACES) throw new Error('no sandbox workspace coordinator')
   let workspace = env.WORKSPACES.get(env.WORKSPACES.idFromName(source.id))
-  spend.copying ??= retryOnce(() => workspace.fork(source.id, ref.id)).then(
+  spend.copying ??= retried(() => workspace.fork(source.id, ref.id)).then(
     async (processes) => {
       await bared(env, space, source.id)
       return processes
@@ -429,7 +429,7 @@ export let destroyed = async (
 ) => {
   if (!env.SANDBOX) return false
   try {
-    await cloudflareProvider(env.SANDBOX, { retry: retryOnce }).release({
+    await cloudflareProvider(env.SANDBOX, { retry: retried }).release({
       id: named(space, person),
     })
   } catch (e) {
@@ -449,16 +449,16 @@ export let destroyedAll = async (
   space: Space,
 ) => {
   if (!env.SANDBOX) return false
-  let provider = cloudflareProvider(env.SANDBOX, { retry: retryOnce })
+  let provider = cloudflareProvider(env.SANDBOX, { retry: retried })
   let source = { id: shared(space) }
   if (!env.WORKSPACES) throw new Error('no sandbox workspace coordinator')
   let workspace = env.WORKSPACES.get(env.WORKSPACES.idFromName(source.id))
-  let copies = await retryOnce(() => workspace.retire())
+  let copies = await retried(() => workspace.retire())
   for (let ref of [...copies.map((id) => ({ id })), source]) {
     await provider.release(ref)
     await bared(env, space, ref.id)
   }
-  await retryOnce(() => workspace.destroy())
+  await retried(() => workspace.destroy())
   return true
 }
 

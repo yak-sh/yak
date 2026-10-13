@@ -140,7 +140,7 @@ export let raise = (db: Driver) => {
 }
 
 // How long an applied write keeps its answer for a resend. The kernel resends
-// at once (door.ts `retryOnce`), so this is room to spare.
+// at once (door.ts `retried`), so this is room to spare.
 let WINDOW = 10 * 60_000
 let BATCH = 16
 

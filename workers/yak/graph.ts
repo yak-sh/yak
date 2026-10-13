@@ -270,7 +270,7 @@ import {
   PLATFORM_STORE,
   storeOf,
 } from './door.ts'
-import { behind, RESTARTED, versionOf } from './running.ts'
+import { behind, restartedFor, versionOf } from './running.ts'
 import { replaced } from './resets.ts'
 import { KERNEL, type Meta, meta, metaOf, minted } from './meta.ts'
 import { caught, defect, refusing } from './defects.ts'
@@ -2660,7 +2660,7 @@ export class Store {
   async #running() {
     return {
       version: versionOf(this.#bind.CF_VERSION_METADATA),
-      restartedFor: (await this.#ctx.storage.get<string>?.(RESTARTED)) ?? null,
+      restartedFor: await restartedFor(this.#ctx.storage),
     }
   }
 

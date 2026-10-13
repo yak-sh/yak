@@ -12,7 +12,7 @@ export type Inspection = {
   physical?: StoreSize
   /** The Worker version the store runs, and the deploy it last restarted for
    * (graph.ts `#running`). */
-  running?: { version: Version | null; restartedFor: string | null }
+  running?: { version: Version | null; restartedFor: Version | null }
   identity?: Identity
   dryRun?: {
     seq: number

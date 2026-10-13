@@ -101,18 +101,31 @@ export type Restartable = {
   }
 }
 
-/** The key an object that restarted for a newer deploy remembers it under. */
-export let RESTARTED = 'restarted for'
+// The key an object that restarted for a newer deploy remembers it under.
+let RESTARTED = 'restarted for'
 
 // The words the restart fails the request in flight with: the runtime's own,
 // so every caller's retry already knows them (resets.ts `evicted`).
 let BEHIND = 'Durable Object reset because a newer deploy reached it:'
 
+/** The deploy this object last restarted for, as `behind` keeps it. A record
+ * in any other shape says nothing. */
+export let restartedFor = async (
+  storage: Restartable['storage'],
+): Promise<Version | null> => {
+  let kept = await storage.get<Partial<Version>>?.(RESTARTED)
+  return typeof kept?.id == 'string' && typeof kept.at == 'string'
+    ? { id: kept.id, at: kept.at }
+    : null
+}
+
 /**
  * Restart this object, before it does anything for the request, when its
- * caller runs a later deploy than it does. Once per version: an object the
- * runtime starts again on older code is where the runtime means it to be,
- * and it serves.
+ * caller runs a later deploy than both the one it runs and the one it last
+ * restarted for. Restarts only move forward, so callers on two new deploys
+ * never take turns restarting it: an object the runtime starts again on older
+ * code is where the runtime means it to be, and it serves every caller no
+ * newer than the deploy it last restarted for.
  *
  * ```ts
  * import { assertEquals } from '@std/assert'
@@ -127,11 +140,15 @@ let BEHIND = 'Durable Object reset because a newer deploy reached it:'
  * let from = (id: string, at: string) =>
  *   new Headers({ [WORKER_VERSION]: id, [WORKER_VERSION_AT]: at })
  * let mine = { id: 'a', timestamp: '2026-10-12T16:00:00Z' }
- * await behind(from('b', '2026-10-12T16:30:00Z'), mine, ctx)
- * await behind(from('b', '2026-10-12T16:30:00Z'), mine, ctx)
+ * let b = from('b', '2026-10-12T16:30:00Z')
+ * let c = from('c', '2026-10-12T16:31:00Z')
+ * for (let them of [b, b, c, b, c]) await behind(them, mine, ctx)
  * await behind(from('z', '2026-10-12T15:00:00Z'), mine, ctx)
- * assertEquals(restarts.length, 1)
- * assertEquals(kept.get(RESTARTED), 'b')
+ * assertEquals(restarts.length, 2)
+ * assertEquals(await restartedFor(ctx.storage), {
+ *   id: 'c',
+ *   at: '2026-10-12T16:31:00Z',
+ * })
  * ```
  */
 export let behind = async (
@@ -142,9 +159,11 @@ export let behind = async (
   let theirs = caller(headers), s = ctx.storage
   if (
     !theirs || !newer(theirs, versionOf(mine)) || !ctx.abort || !s.get ||
-    !s.put || await s.get(RESTARTED) == theirs.id
+    !s.put
   ) return
-  await s.put(RESTARTED, theirs.id)
+  let last = await restartedFor(s)
+  if (last && !newer(theirs, last)) return
+  await s.put(RESTARTED, theirs)
   await s.sync?.()
   ctx.abort(`${BEHIND} ${theirs.id}`)
 }

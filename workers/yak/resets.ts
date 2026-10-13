@@ -5,7 +5,7 @@
 // update, another machine, a deploy, or a newer deploy reaching it (running.ts
 // `behind`). The instance that was moved fails what it had in flight, and
 // whoever owns that work runs it again: a caller's door fetches again on a
-// fresh stub (door.ts `retryOnce`), the runtime retries an alarm that failed,
+// fresh stub (door.ts `retried`), the runtime retries an alarm that failed,
 // the effect pool runs an effect again, and the platform job it died in fires
 // again at the next incarnation's alarm (wake.ts `resumed`). Cloudflare
 // documents the move as part of an object's life, so what the moved instance
