@@ -107,3 +107,48 @@ test('an invitation reaches nobody until its person accepts it', async () => {
     await k.stop()
   }
 })
+
+test('a friend who has not accepted is told the invitation waits', async () => {
+  let k = await kernel()
+  try {
+    let jeff = await signIn(k)
+    let his = connector(k, jeff.cookie)
+    let host = `${jeff.email.split('@')[0]}.yaks.app`
+    await his.tool('app_new', {
+      slug: 'diary',
+      title: 'Diary',
+      access: 'private',
+    })
+    await his.tool('app_files', {
+      app: 'diary',
+      files: [{ path: 'index.html', content: '<h1>Diary</h1>' }],
+    })
+    await his.tool('app_deploy', { app: 'diary' })
+    let [ana, bo] = [await signIn(k), await signIn(k)]
+    await his.tool('member_add', { email: ana.email, app: 'diary' })
+
+    let page = (cookie: string) =>
+      k.at(host, '/diary/', { headers: { cookie } }).then((r) => r.text())
+    let write = (cookie: string) =>
+      k.at(host, '/diary/api/apply', {
+        method: 'POST',
+        headers: { cookie, 'content-type': 'application/json' },
+        body: JSON.stringify({ entities: [{ doc: { title: 'hi' } }] }),
+      }).then((r) => r.text())
+    assertStringIncludes(await page(ana.cookie), 'Your invitation is waiting')
+    assertStringIncludes(await write(ana.cookie), 'invitation to this app')
+    // Somebody nobody invited learns nothing about the app.
+    assertStringIncludes(await page(bo.cookie), 'Nothing here yet')
+    assert(!(await write(bo.cookie)).includes('invitation'))
+    // Asked again, the owner hears she never accepted.
+    assertStringIncludes(
+      await his.tool('member_add', { email: ana.email, app: 'diary' }),
+      'had not accepted yet',
+    )
+
+    await accepted(k, ana.email, ana.cookie)
+    assertStringIncludes(await page(ana.cookie), '<h1>Diary</h1>')
+  } finally {
+    await k.stop()
+  }
+})

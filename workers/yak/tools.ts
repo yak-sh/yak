@@ -5127,13 +5127,18 @@ let OURS: Row[] = [
       })
       if (sent) await counted(ctx.env, space)
       return {
-        text: `${email} is invited as ${an(want)} ${want} of ` +
+        // Asked again for somebody who never accepted: that is the news when
+        // they say they cannot get in, so the answer says so first.
+        text:
+          `${email} ${
+            standing ? 'had not accepted yet, and stays' : 'is'
+          } invited as ${an(want)} ${want} of ` +
           (app
             ? `${space.slug}/${app.slug} and nothing else in ${space.slug}`
             : space.slug) +
           ` — ` +
           (sent
-            ? `the invitation${
+            ? `${standing ? 'another letter' : 'the invitation'}${
               note ? ' and your note are' : ' is'
             } on its way to them. It is theirs once they accept it from ` +
               `the letter, signed in with that address; until then nothing ` +

@@ -81,6 +81,7 @@ import { batched, lined, receipt } from './wire.ts'
 import {
   binned,
   desk as deskPage,
+  invitedTo,
   nothingHere,
   spaceBinned,
   spaceIndex,
@@ -183,7 +184,7 @@ export type Asked = {
   space: Space
   app: App
   who: Who
-  refuse: (what?: string) => Response
+  refuse: (what?: string) => Promise<Response>
   json: (status: number, code: string, says?: string) => Response
   visiting: (bytes: number) => Promise<Response | null>
 }
@@ -225,6 +226,28 @@ let MEMBER: Record<string, string> = {
   not_a_writer: 'you can read this app but not change it — its owner can ' +
     'make you an editor',
   not_a_reader: "this app is its owner's — they can let you in",
+}
+
+// Signed in and refused, with an invitation they have not accepted: the owner
+// already let them in, and the one thing left is the click in the letter,
+// which no page of the app may make for them (invite.ts). A viewer's
+// invitation does not lift a refusal to write, so it is not mentioned there.
+let WAITING = 'you have an invitation to this app waiting — accept it from ' +
+  'the letter yaks.app sent you, then come back'
+
+let waiting = async (
+  dir: ReturnType<typeof directory>,
+  space: Space,
+  app: App,
+  person: string,
+  what: string,
+) => {
+  let [mine, all] = await Promise.all([
+    dir.invite(app.eid, person),
+    dir.invite(space.eid, person),
+  ])
+  let held = mine ?? all
+  return held && (what == 'not_a_reader' || held.role != 'viewer')
 }
 
 let json = (
@@ -1407,14 +1430,22 @@ let api = async (
     }
   }
   // Signed out, the way through is to sign in (SAYS); signed in, it is the
-  // owner's to grant, so the sentence says so.
-  let refused = (what = 'not_a_writer') =>
-    who.person ? json(403, what, MEMBER[what]) : json(
-      401,
-      what,
-      SAYS[what],
-      signInAt(req.headers.get('referer') || req.url, env),
-    )
+  // owner's to grant, so the sentence says so, unless the owner already did.
+  let refused = async (what = 'not_a_writer') =>
+    who.person
+      ? json(
+        403,
+        what,
+        await waiting(dir, space, app, who.person, what)
+          ? WAITING
+          : MEMBER[what],
+      )
+      : json(
+        401,
+        what,
+        SAYS[what],
+        signInAt(req.headers.get('referer') || req.url, env),
+      )
   let mayRead = reads(mode(app.access), who.role)
   let mayPost = edits(mode(app.access), who.role)
   let versioned = assetPath(path)
@@ -2683,7 +2714,10 @@ let served = async (req: Request, env: Env, c: Clock): Promise<Response> => {
     : await c.time('worker', () => ran(env, space!, app!, req, who))
   // The worker passed, and the files are not this visitor's to see.
   if (!own && !file) {
-    return who.person ? nothingHere(env) : redirect(signInAt(req.url, env), 303)
+    if (!who.person) return redirect(signInAt(req.url, env), 303)
+    return await waiting(dir, space, app, who.person, 'not_a_reader')
+      ? invitedTo(app.title || app.slug, env)
+      : nothingHere(env)
   }
   // File pages already pass through woven(). Worker pages use the same
   // reporter, without buffering or changing their navigation and asset URLs.

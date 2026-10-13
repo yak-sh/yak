@@ -1523,6 +1523,19 @@ export let invited = (email: string, back: string, env: Host = {}) =>
 </form>${home(env)}`,
   )
 
+// A private app opened by someone invited to it who has not accepted yet: the
+// click in the letter is what is left, and no page of the app may make it for
+// them (invite.ts). Its title is theirs to read; the letter named it.
+export let invitedTo = (title: string, env: Host = {}) =>
+  shell(
+    env,
+    'Your invitation is waiting',
+    `Accept the invitation to ${
+      esc(title)
+    } from the letter yaks.app sent you, then open this link again.`,
+    403,
+  )
+
 // An invitation that is no longer open: withdrawn, or for a space or an app
 // that is gone. Which one is nobody's business but the inviter's.
 export let closed = (env: Host = {}) =>

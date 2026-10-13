@@ -89,8 +89,11 @@ their role, and the answer reports what it was before.
 An invitation is pending until its person accepts it, with the one click in the
 letter, signed in with the address it went to. Until then nothing of the space
 is in their reach: it is not in their listing, a bare app name never resolves to
-it, and their agent is told nothing about it. `member_remove` withdraws a
-pending invitation the same way it removes a member.
+it, and their agent is told nothing about it. Signed in with that address and
+opening the app, they are told their invitation is waiting in the letter, where
+anyone else would get "Nothing here yet." or a refusal. Calling `member_add`
+again for them says they had not accepted yet and sends another letter.
+`member_remove` withdraws a pending invitation the same way it removes a member.
 
 ## One app, or the space
 
