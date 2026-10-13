@@ -273,7 +273,7 @@ import {
 import { behind, RESTARTED, versionOf } from './running.ts'
 import { replaced } from './resets.ts'
 import { KERNEL, type Meta, meta, metaOf, minted } from './meta.ts'
-import { caught, defect } from './defects.ts'
+import { caught, defect, refusing } from './defects.ts'
 import { counts, hop, type Tally, tallying } from './lib/hops.ts'
 import {
   batch,
@@ -4614,10 +4614,16 @@ export class Store {
           kept,
         })
       } catch (e) {
+        // A manifest the store will not hold is the deploy's to fix; a
+        // failure to plant one it would hold is ours (defects.ts `refusing`).
+        let status = refusing(e, {
+          request: 'POST /vocab',
+          store: this.#name(),
+        })
         return Response.json({
           error: 'Refused',
           message: e instanceof Error ? e.message : String(e),
-        }, { status: 400 })
+        }, { status })
       }
     })
   }

@@ -5,7 +5,9 @@ import { type Bundle, Refused } from '@yaks/graph'
 import { capture, origin } from '@yaks/tracker/report'
 import { batch } from '../tracker/queue.ts'
 import { platform } from '../tracker/core.ts'
-import { caught, defect, delivery, within } from './defects.ts'
+import { CallError } from '@yaks/tools/errors'
+import { caught, defect, delivery, refusing, within } from './defects.ts'
+import { Pending } from './writes.ts'
 import { type Own, replaced } from './resets.ts'
 
 let recorded = () => {
@@ -114,6 +116,40 @@ test('a caught failure counts once per invocation and refusals stay back', async
     tags: { request_id: 'invocation', store: 'ada/notes' },
   })
   ok(rows.every((r) => batch(r).scope == platform))
+})
+
+test('a door keeps a refusal or relayed answer at its status and throws its own failure on, each reported once', async () => {
+  let { rows, time, env } = recorded()
+  let door = (e: unknown) => {
+    try {
+      return refusing(e, { request: 'door' })
+    } catch (thrown) {
+      caught(thrown, { request: 'entry' })
+      return thrown
+    }
+  }
+  let broke = new TypeError('fell over')
+  let answers = await within(env, {}, () =>
+    [
+      new Refused('no'),
+      new CallError('missing', 'no such product'),
+      Object.assign(new Error('relayed'), { status: 403 }),
+      Object.assign(new Error('stalled'), { name: 'Refused', status: 503 }),
+      new Pending('kept'),
+      Object.assign(new Error('store fell over'), { status: 500 }),
+      broke,
+    ].map(door), time)
+  equal(answers, [400, 404, 403, 503, 202, 500, broke])
+  equal(
+    rows.map(([row]) => [
+      (row.exception as { value: string }).value,
+      (row.error as { tags: unknown }).tags,
+    ]),
+    [
+      ['store fell over', { request: 'door' }],
+      ['fell over', { request: 'door' }],
+    ],
+  )
 })
 
 // What an instance the runtime moved meets is its replacement's to redo; the

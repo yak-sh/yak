@@ -3,6 +3,9 @@
 // headers, queries, bodies or console arguments. Repeat windows retain counts.
 import { AsyncLocalStorage } from 'node:async_hooks'
 import { type Bundle, type Comp } from '@yaks/graph'
+import { status } from '@yaks/graph/errors'
+import { CallError } from '@yaks/tools/errors'
+import { refused as toolRefusal } from '@yaks/tools/routes'
 import {
   capture,
   coalesce,
@@ -100,6 +103,33 @@ export let refused = (error: unknown) =>
 /** A caught failure is still ours when the catch answers a fallback. */
 export let caught = (error: unknown, tags: Tags) => {
   if (!refused(error)) defect(error, tags)
+}
+
+// The status of another door's answer, carried by the error that relays it
+// (meta.ts `answered`).
+let carried = (error: unknown) => {
+  let said = (error as { status?: unknown } | null)?.status
+  return typeof said == 'number' && said >= 400 && said < 600 ? said : null
+}
+
+// A kept write's 202, a tool's status by its code (@yaks/tools), a relayed
+// answer's own, else the one its name says (@yaks/graph `status`).
+let statusOf = (error: unknown): number =>
+  error instanceof Pending
+    ? 202
+    : error instanceof CallError
+    ? toolRefusal(error).status
+    : carried(error) ?? status(error)
+
+/** A door's catch-all. A refusal, or another door's answer it relays, keeps
+ * its own status, for the door to say in its own shape; what is ours among
+ * them is reported here with the door's tags. A failure raised here has no
+ * answer of its own: it is reported and thrown on, so the entry it reached
+ * answers 500 and reports nothing twice. Never a 4xx for a fault of ours. */
+export let refusing = (error: unknown, tags: Tags): number => {
+  caught(error, tags)
+  if (!refused(error) && carried(error) == null) throw error
+  return statusOf(error)
 }
 
 /** A tenant catch delivered through its own tracker scope. An outer catch

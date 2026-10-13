@@ -55,7 +55,7 @@ import { manageAt } from './route.ts'
 import { type Host, url as hostUrl } from './host.ts'
 import { adminWho } from './identity.ts'
 import { refuse } from './tool.ts'
-import { caught } from './defects.ts'
+import { caught, refusing } from './defects.ts'
 
 // ---- the fee ---------------------------------------------------------------
 
@@ -589,8 +589,11 @@ export let buying = async (
     success = backAt(at.root, asked.success)
     cancel = backAt(at.root, asked.cancel)
   } catch (e) {
-    caught(e, { request: 'POST /api/pay/checkout', app: at.app })
-    return no(400, 'refused', e instanceof Error ? e.message : String(e))
+    return no(
+      refusing(e, { request: 'POST /api/pay/checkout', app: at.app }),
+      'refused',
+      e instanceof Error ? e.message : String(e),
+    )
   }
   let email = String((body as { email?: unknown })?.email ?? '').trim()
   try {

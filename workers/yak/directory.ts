@@ -37,8 +37,15 @@ import {
 } from './door.ts'
 import { ADMIN } from './lib/bots.ts'
 import { recall, writing } from './lib/hops.ts'
-import { answered, KERNEL, type Meta, meta as metaStore } from './meta.ts'
-import { caught } from './defects.ts'
+import { refusal } from '@yaks/api'
+import {
+  answered,
+  KERNEL,
+  type Meta,
+  meta as metaStore,
+  written,
+} from './meta.ts'
+import { caught, refusing } from './defects.ts'
 import { mailFrom } from './post.ts'
 import { RESERVED, SLUG } from './route.ts'
 import { firstOf } from './router.ts'
@@ -601,6 +608,20 @@ export let part = (store: Meta) => ({
 
 export type Part = ReturnType<typeof part>
 
+// What went wrong, answered in the store's own terms and at its own status:
+// the store's body as it came when the error relays one, else the error as
+// @yaks/api says it. A failure raised here is thrown on to the entry that
+// reached this door (defects.ts `refusing`), never answered as the caller's
+// mistake.
+let refused = (e: unknown, tags: Record<string, string>) => {
+  let status = refusing(e, tags)
+  let body = (e as { body?: unknown } | null)?.body
+  return new Response(
+    typeof body == 'string' ? body : JSON.stringify(refusal(e)),
+    { status, headers: { 'content-type': 'application/json' } },
+  )
+}
+
 // The fleet's mutation envelope holds bundles under `entities`; the store
 // speaks bundles directly. HTTP carries only the headers this door admits.
 export let over = (store: Meta) => {
@@ -616,10 +637,7 @@ export let over = (store: Meta) => {
         }
         return Response.json(await door.apply(sent.entities ?? [], headers))
       } catch (e) {
-        caught(e, { request: 'directory /apply' })
-        return new Response(e instanceof Error ? e.message : String(e), {
-          status: 400,
-        })
+        return refused(e, { request: 'directory /apply' })
       }
     }
     if (url.pathname != '/query' || req.method != 'GET') return notFound()
@@ -632,10 +650,7 @@ export let over = (store: Meta) => {
         headers: { 'content-type': 'application/json' },
       })
     } catch (e) {
-      caught(e, { request: 'directory /query' })
-      return new Response(e instanceof Error ? e.message : String(e), {
-        status: 400,
-      })
+      return refused(e, { request: 'directory /query' })
     }
   }
 }
@@ -1022,8 +1037,7 @@ let remote = (via: Fetcher): Part => ({
         headers,
       }),
     )
-    if (!r.ok) throw await answered(r)
-    return r.json()
+    return written(r)
   },
 })
 

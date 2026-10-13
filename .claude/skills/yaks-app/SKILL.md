@@ -40,7 +40,9 @@ and setup; this is the map and the feel.
 - **The kernel Worker** (`workers/yak`). `index.ts` is the entry the runtime
   loads; `kernel.ts` is the router, and every route runs inside one catch that
   reports a failure (`unseen.ts` `fault`) and lets a deliberate no pass
-  (`unseen.ts` `refusal`).
+  (`unseen.ts` `refusal`). A door with a catch-all of its own answers through
+  `defects.ts` `refusing`: a refusal or a relayed answer keeps its status, and
+  a failure raised there is reported and thrown on, never answered as a 4xx.
 - **A store**: one Durable Object per app (`graph.ts`), a graph composed from
   the packages: `appVocab(manifest)`, @yaks/durable-object's storage over
   @yaks/sqlite, `graph()`, `api()` and sockets. It owns no behavior of its own.

@@ -164,7 +164,7 @@ import {
 import { canon, guess, mac, mint, nameOf, personOf, spend } from './signin.ts'
 import { RETRY, source, within } from './rate.ts'
 import { type Caller, minted, sessionAt, type Who } from './session.ts'
-import { caught } from './defects.ts'
+import { caught, refusing } from './defects.ts'
 import { sha256 } from '@yaks/graph/sha256'
 
 // What a grant carries and a token gives back: the person, nothing else.
@@ -1113,9 +1113,10 @@ let ours = async (req: Request, env: Env): Promise<Response> => {
         links: await book.ids(person),
       })
     } catch (e) {
+      let status = refusing(e, { request: `POST ${LINK}` })
       return Response.json({
         error: { code: 'refused', message: (e as Error).message },
-      }, { status: 400 })
+      }, { status })
     }
   }
 

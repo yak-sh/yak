@@ -1,12 +1,14 @@
 // Directory reads through its cache and the serving app roster that must be
 // fresh and coherent across apps in one request.
 import { test } from '@yaks/testing'
-import { assertEquals } from '@std/assert'
+import { assert, assertEquals } from '@std/assert'
+import { Stale } from '@yaks/graph/errors'
 import * as dirPart from './directory.ts'
 import { type App, directory, type Space } from './directory.ts'
 import type { Env } from './env.ts'
 import { tallying } from './lib/hops.ts'
-import type { Meta } from './meta.ts'
+import { answered, type Meta } from './meta.ts'
+import { Pending } from './writes.ts'
 
 let space: Space = {
   eid: 's1',
@@ -143,7 +145,6 @@ let hosts = () =>
       return Promise.resolve(rows)
     },
     apply: () => Promise.resolve([]),
-    meaning: () => Promise.resolve([]),
   }))
 
 test('a hostname resolves to its space and app, or to nobody', async () => {
@@ -175,7 +176,6 @@ test('a release reaches consumer and home through stale isolate caches', async (
   let reads = [0, 0]
   let isolate = (i: number) => {
     let store: Meta = {
-      meaning: () => Promise.resolve([]),
       query: (line) => {
         reads[i]++
         if (!line.includes('.app.space=s1')) return Promise.resolve([])
@@ -466,7 +466,6 @@ test('the directory part shares its cache, refreshes and clears it after a write
       version = 3
       return Promise.resolve([])
     },
-    meaning: () => Promise.resolve([]),
   }
   let first = dirPart.part(store), second = dirPart.part(store)
   let before = await first.query('app')
@@ -488,7 +487,6 @@ test('the directory HTTP door carries only admitted write headers to its part', 
       headers = sent
       return Promise.resolve(rows)
     },
-    meaning: () => Promise.resolve([]),
   }
   let rows = [{ entity: { eid: 'written' }, doc: { title: 'A title' } }]
   let result = await dirPart.over(store)(
@@ -504,4 +502,31 @@ test('the directory HTTP door carries only admitted write headers to its part', 
   )
   assertEquals(await result.json(), rows)
   assertEquals(headers, { 'x-yak-person': 'person', 'x-yak-kernel': '1' })
+})
+
+test("the directory door answers a refusal in the store's terms and throws a fault on", async () => {
+  let seeded = () => Promise.resolve([{ entity: { eid: 'seed' } }])
+  let door = (query: Meta['query'], apply: Meta['apply'] = seeded) =>
+    directory({
+      fetch: dirPart.over({ query, apply }),
+    })
+  let thrown = (p: Promise<unknown>) => p.then(() => null, (e) => e)
+  let no = await answered(
+    Response.json({ error: 'Unknown', message: 'no word' }, { status: 400 }),
+  )
+  let said = await thrown(door(() => Promise.reject(no)).space('jeff'))
+  assertEquals([said.name, said.message, said.status], [
+    'Unknown',
+    'no word',
+    400,
+  ])
+  let write = (e: Error) =>
+    thrown(door(seeded, () => Promise.reject(e)).apply({ entities: [] }))
+  assert(await write(new Stale('e1', 'doc', 'title', 'now')) instanceof Stale)
+  assert(await write(new Pending('kept')) instanceof Pending)
+  let broke = new TypeError('store fell over')
+  assertEquals(
+    await thrown(door(() => Promise.reject(broke)).space('jeff')),
+    broke,
+  )
 })

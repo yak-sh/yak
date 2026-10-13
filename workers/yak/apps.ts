@@ -119,7 +119,7 @@ import { releaseStatus } from './release-status.ts'
 import { pageSpeaks } from './lenses.ts'
 import { appDoc } from './vocab.ts'
 import type { Bundle } from '@yaks/graph'
-import { Stale, status } from '@yaks/graph/errors'
+import { Refused, Stale, status } from '@yaks/graph/errors'
 import { token } from '@yaks/graph/sha256'
 import { callStored } from './package-tools.ts'
 import { edits, mode, reads, writes } from '@yaks/member'
@@ -128,7 +128,7 @@ import { type Clock, clock, timed } from './timing.ts'
 import { fault, noted, refusal, serving } from './unseen.ts'
 import { recoverRelease } from './tools.ts'
 import { ADDRESS } from './route.ts'
-import { caught } from './defects.ts'
+import { caught, refusing } from './defects.ts'
 import { full, fullFiles } from './usage.ts'
 import { refusedVisit } from './meter.ts'
 import { scheduleUse } from './used.ts'
@@ -238,13 +238,13 @@ let json = (
     { status },
   )
 
-// Store refusals retain their HTTP status through the page's error envelope.
-let rejection = (error: unknown) =>
+// A refusal, or a store's answer it relays, keeps its HTTP status through the
+// page's error envelope. A failure raised here is reported with the door's
+// tags and thrown on, never answered as the page's mistake (defects.ts
+// `refusing`).
+let rejection = (error: unknown, tags: Record<string, string>) =>
   json(
-    error instanceof Error && 'status' in error &&
-      typeof error.status == 'number'
-      ? error.status
-      : 400,
+    refusing(error, tags),
     'refused',
     error instanceof Error ? error.message : String(error),
   )
@@ -1079,8 +1079,15 @@ let took = async (
   try {
     await graph.apply(file.bundles, KERNEL)
   } catch (e) {
-    caught(e, { request: 'POST /api/blob', space: space.slug, app: app.slug })
-    return rejection(e)
+    // Kept by the store's write log (writes.ts): the bytes are stored and their
+    // row lands when the app recovers, so the upload is not told it failed.
+    if (!(e instanceof Pending)) {
+      return rejection(e, {
+        request: 'POST /api/blob',
+        space: space.slug,
+        app: app.slug,
+      })
+    }
   }
   return Response.json({
     eid: file.sha,
@@ -1391,12 +1398,11 @@ let api = async (
         ),
       )
     } catch (e) {
-      caught(e, {
+      return rejection(e, {
         request: 'page vocabulary',
         space: space.slug,
         app: app.slug,
       })
-      return rejection(e)
     }
   }
   // Signed out, the way through is to sign in (SAYS); signed in, it is the
@@ -1569,7 +1575,7 @@ let api = async (
       let line = live || url.searchParams.has('q')
         ? url.searchParams.get('q')
         : lined(url.search.slice(1))
-      if (line == null) throw new Error('/query needs a query: ?q=…')
+      if (line == null) throw new Refused('/query needs a query: ?q=…')
       return Response.json(
         await queried(env, space, app, who, line, live, headers),
       )
@@ -1603,12 +1609,11 @@ let api = async (
           })
         }
       }
-      caught(e, {
+      return rejection(e, {
         request: 'GET /api/query',
         space: space.slug,
         app: app.slug,
       })
-      return rejection(e)
     }
   }
   // A page with only its own words listens straight to its store. A page that
@@ -1647,7 +1652,11 @@ let api = async (
         output: (answer.content as { body: string }).body,
       })
     } catch (e) {
-      return rejection(e)
+      return rejection(e, {
+        request: 'POST /api/choose',
+        space: space.slug,
+        app: app.slug,
+      })
     }
   }
   if (path == '/apply') {
@@ -1715,12 +1724,11 @@ let api = async (
           { status: 202 },
         )
       }
-      caught(e, {
+      return rejection(e, {
         request: 'POST /api/apply',
         space: space.slug,
         app: app.slug,
       })
-      return rejection(e)
     }
   }
   // What a sandboxed page keeps in localStorage (installed.ts,

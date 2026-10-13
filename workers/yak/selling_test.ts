@@ -335,7 +335,7 @@ test('a cart is priced at Stripe, paid, refunded and disputed', async () => {
   let wrong = await paying(k.env, {
     items: [{ product: crypto.randomUUID(), qty: 1 }],
   })
-  assertEquals(wrong.status, 400)
+  assertEquals(wrong.status, 404)
   assertStringIncludes(wrong.body.error.message, 'no product')
   // Nor send the buyer anywhere but back into the app.
   let away = await paying(k.env, { items, success: 'https://evil.example/' })

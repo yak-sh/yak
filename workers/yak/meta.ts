@@ -67,6 +67,24 @@ let refusal = (text: string): { error?: string; message: string } | null => {
   }
 }
 
+/** A write door's answer, as its caller hears it: the batch as applied, or the
+ * reason there is none. Every door that relays a store's write (the
+ * directory's included) answers in the store's own terms. */
+export let written = async (r: Response): Promise<Bundle[]> => {
+  // A precondition that no longer holds (409, @yaks/api refuse.ts) comes back
+  // as the graph's own `Stale`, so a caller that wrote on `$was` can tell
+  // "read again" from a failure.
+  if (r.status == 409) {
+    let s = await r.json() as Stale
+    throw new Stale(s.eid, s.comp, s.prop, s.current)
+  }
+  // Kept by the store's write log and applied later (writes.ts): the batch as
+  // applied does not exist yet, so there is nothing to return.
+  if (r.status == 202) throw new Pending(await said(r))
+  if (!r.ok) throw await answered(r)
+  return await r.json() as Bundle[]
+}
+
 /**
  * The graph's own doors over a store: `POST /apply` takes the bundles as they
  * are and answers the batch as applied, `GET /query?q=` takes the whole filter
@@ -94,20 +112,7 @@ export let metaOf = (
   apply: (bundles, headers = {}, opts = {}) => {
     return store.consume(
       opts.stamp === false ? '/apply?stamp=0' : '/apply',
-      async (r) => {
-        // A precondition that no longer holds (409, @yaks/api refuse.ts) comes
-        // back as the graph's own `Stale`, so a caller that wrote on `$was` can
-        // tell "read again" from a failure.
-        if (r.status == 409) {
-          let s = await r.json() as Stale
-          throw new Stale(s.eid, s.comp, s.prop, s.current)
-        }
-        // Kept by the store's write log and applied later (writes.ts): the
-        // batch as applied does not exist yet, so there is nothing to return.
-        if (r.status == 202) throw new Pending(await said(r))
-        if (!r.ok) throw await answered(r)
-        return await r.json() as Bundle[]
-      },
+      written,
       {
         method: 'POST',
         body: JSON.stringify(bundles),
