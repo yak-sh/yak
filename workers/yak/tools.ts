@@ -5017,7 +5017,11 @@ let OURS: Row[] = [
       // code rides (mail.ts). Its subject is fixed words; what the inviter
       // chose (their name, the app's title, their note) is in the body,
       // marked as theirs.
-      let what = app ? `${app.title} (${space.slug}/${app.slug})` : space.title
+      // Named with the address it opens at, which is what they will see.
+      let host = spaceHost(ctx.env, space.slug)
+      let what = app
+        ? `${app.title} (${host}/${app.slug})`
+        : `${space.title} (${host})`
       // Who invited them, by name — an address is what the letter is sent
       // to, never what a person is called (T-32654).
       let by = await ctx.dir.nameAt(ctx.person)
@@ -5032,8 +5036,9 @@ let OURS: Row[] = [
           // Their words first, and marked as theirs, so a reader never takes
           // the platform to be saying them (T-32963).
           (note ? `${by ?? 'They'} wrote:\n\n${quoted(note)}\n\n` : '') +
-          `${by ?? 'Someone'} invited you to ${what} on yaks.app, to ` +
-          `${want == 'viewer' ? 'read' : 'use'}. Accept with one click:\n\n` +
+          `${by ?? 'Someone'} invited you to ` +
+          `${want == 'viewer' ? 'see' : 'use'} ${what}. ` +
+          `Accept with one click:\n\n` +
           `${accept}\n\n` +
           `Sign in with this address (${email}) if you are asked to. There ` +
           'is nothing to install and no account to make first. Until you ' +
