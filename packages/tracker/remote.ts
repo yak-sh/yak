@@ -1,22 +1,10 @@
 // The box shares one signed tracker transport for reads, intake and bug marks.
 // Credentials are read at use time and never reach redirects or error text.
-// No connection outlives its request.
 import { derivedEid } from '@yaks/graph/identity'
 import type { Sink } from './report.ts'
 import { sign } from './ticket.ts'
 
 export type Remote = { url?: string; secret?: string }
-
-// A pooled HTTP/2 connection carries every later request to the Worker, and a
-// timeout resets only its stream. One whose path went bad (a 1 s round trip
-// beside 13 ms for a new connection to the same address) timed out request
-// after request for half an hour. A new connection per request costs a
-// handshake. Outside Deno, the runtime owns the connections.
-let pool: Deno.HttpClient | undefined
-let fresh = () =>
-  globalThis.Deno
-    ? { client: pool ??= Deno.createHttpClient({ poolMaxIdlePerHost: 0 }) }
-    : {}
 
 /** A failure a timeout caused. It is named as one; any other failure names no
  * cause, since a cause can carry the address or the upstream's body. */
@@ -64,7 +52,6 @@ export let request = async (
   try {
     return await go(url, {
       ...init,
-      ...fresh(),
       headers,
       redirect: 'error',
       signal: AbortSignal.any([
