@@ -66,9 +66,12 @@ let reads = 0
 let measured: Statements = {
   ...db,
   query: (s) => {
+    let named = (src?: unknown) =>
+      !!src && typeof src == 'object' && 't' in src && src.t == 'table' &&
+      'name' in src && src.name == 'content'
     if (
-      s.t == 'select' && !Array.isArray(s.from) &&
-      s.from?.t == 'table' && s.from.name == 'content'
+      s.t == 'select' &&
+      (named(s.from) || s.joins?.some((j) => named(j.src)))
     ) {
       reads++
     }

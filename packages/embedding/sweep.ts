@@ -17,14 +17,16 @@ import {
   as,
   at,
   col,
+  each,
   eq,
   exists,
   fn,
+  from,
   isNull,
+  type Join,
   join,
   lit,
   not,
-  oneOf,
   or,
   select,
   type Statements,
@@ -121,11 +123,17 @@ export let sources = (
         shape.has(field.comp) && (!field.on || shape.has(field.on))
     })
     if (selected && !selected.length) return []
-    let c = at('c')
+    let c = at('c'), w = at('w')
     let values = group.map(({ field: f }, i) => {
       let stored = c(f.prop)
       return as(f.text ? f.text(stored) : stored, `t${i}`)
     })
+    // Asked about some owners, the read starts from them: one seek of the
+    // component and one of the entity each. Left to its statistics, SQLite
+    // may scan every entity and test each against the list instead (it did
+    // after a bulk load, 79,000 rows a batch), so CROSS JOIN, whose order it
+    // keeps, spells the order out.
+    let how: Join['how'] = selected ? 'cross' : 'join'
     return db.query(select({
       cols: [
         as(o('id'), 'owner'),
@@ -134,9 +142,18 @@ export let sources = (
         ...classified && owners ? [as(a('tables'), 'shape')] : [],
         ...values,
       ],
-      from: table(field.comp, 'c'),
+      from: selected
+        ? from(each([...new Set(selected)]), 'w')
+        : table(field.comp, 'c'),
       joins: [
-        join(table('entity', 'o'), eq(o('id'), c('entity'))),
+        ...selected
+          ? [{
+            how,
+            src: table(field.comp, 'c'),
+            on: eq(c('entity'), w('value')),
+          }]
+          : [],
+        { how, src: table('entity', 'o'), on: eq(o('id'), c('entity')) },
         ...field.on
           ? [
             join(
@@ -159,7 +176,6 @@ export let sources = (
         },
       ],
       where: and(
-        ...selected ? [oneOf(c('entity'), selected)] : [],
         ...eligibility ? [eligibility] : allowed(field, c('entity')),
         not(exists(select({
           cols: [lit(1)],
