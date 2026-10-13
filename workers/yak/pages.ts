@@ -1851,6 +1851,13 @@ let clients = (env: Host) => [
         ],
       },
     ],
+    // Claude's own limits on custom connectors, from its documentation
+    // (claude.com/docs/connectors/custom/remote-mcp): the two that stop
+    // somebody partway through these steps.
+    note: 'Claude’s free plan allows one custom connector. On a Team or ' +
+      'Enterprise plan, an owner adds it under <b>Organization settings</b> ' +
+      '→ <b>Connectors</b>, and then you press <b>Connect</b> beside it ' +
+      'in <b>Customize</b> → <b>Connectors</b>.',
     finish: 'Open ' + external('https://claude.ai/new', 'a new Claude chat'),
   },
   {
