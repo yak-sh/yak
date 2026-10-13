@@ -1524,8 +1524,19 @@ let api = async (
     if (req.method != 'GET' && req.method != 'HEAD') {
       return json(405, 'method_not_allowed')
     }
+    // A release's module asking for `./api/client.js` is sent back out to the
+    // app's API. Where it is sent never changes for that address, so the
+    // browser keeps the hop instead of asking again on every load.
     let out = apiOut(versioned.path)
-    if (out) return redirect(out + new URL(req.url).search)
+    if (out) {
+      return new Response(null, {
+        status: 302,
+        headers: {
+          location: out + new URL(req.url).search,
+          'cache-control': browserImmutable,
+        },
+      })
+    }
     if (!mayRead) return refused('not_a_reader')
     let source = `${space.slug}/.releases/${app.eid}/${versioned.release}`
     if (source != app.source && !await dir.released(app, source)) {

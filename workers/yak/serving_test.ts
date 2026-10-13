@@ -26,6 +26,7 @@
 import {
   assert,
   assertEquals,
+  assertMatch,
   assertRejects,
   assertStringIncludes,
 } from '@std/assert'
@@ -129,6 +130,8 @@ test("a release's module imports the client by the page's own path", async () =>
   assertEquals((await apps.fetch(new Request(module), env)).status, 200)
   let url = new URL('./api/client.js', module)
   let res = await apps.fetch(new Request(url), env)
+  // The hop out of the release is the browser's to keep.
+  assertMatch(res.headers.get('cache-control') ?? '', /max-age=[1-9]/)
   for (let hops = 0; res.headers.has('location') && hops < 3; hops++) {
     url = new URL(res.headers.get('location')!, url)
     res = await apps.fetch(new Request(url), env)
