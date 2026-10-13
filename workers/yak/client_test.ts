@@ -52,6 +52,11 @@ test('the served client: a page saves, lists and watches', async () => {
     // And the precondition's hash beside them, which is not one of the doors:
     // it is what a page puts in `$was` (T-37614).
     assertMatch(source, /export let was = /)
+    // A page that already holds it is told so, without the bytes again.
+    let again = await k.at(`${jeff7}.yaks.app`, '/recipes/api/client.js', {
+      headers: { 'if-none-match': served.headers.get('etag') ?? '' },
+    })
+    assertEquals([again.status, await again.text()], [304, ''])
 
     // The page a person would be given, and its script, run here. The import
     // is the guide's own: relative, naming no app, resolved through the base

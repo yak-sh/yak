@@ -344,6 +344,18 @@ let moved = (req: Request, to: string) =>
     headers: { location: to },
   })
 
+// One of the platform's own scripts, from its assets, asked the way the
+// browser asked: its validators ride along, so a page that already holds the
+// file is answered 304 and no bytes, where a bare request re-sent the whole
+// file on every load.
+let platformFile = (req: Request, env: Env, path: string) =>
+  env.ASSETS.fetch(
+    new Request(new URL(path, req.url), {
+      method: req.method,
+      headers: [...req.headers].filter(([name]) => name.startsWith('if-')),
+    }),
+  )
+
 // The reporter, into every page the kernel serves, wherever the page has a
 // place to put it: first inside `<head>`, else first inside `<body>`, else
 // at the end of a document with neither. Streaming — the bytes are never
@@ -1405,7 +1417,7 @@ let api = async (
     path == '/client.js' || path == '/report.js' || path == '/release.js' ||
     path == '/storage.js'
   ) {
-    return env.ASSETS.fetch(new Request(new URL(path, req.url)))
+    return platformFile(req, env, path)
   }
   let store = appStore(env.STORE, space, app, env)
   // What the page (or the browser itself) says broke. Anyone may report —
@@ -2431,7 +2443,7 @@ let served = async (req: Request, env: Env, c: Clock): Promise<Response> => {
   // app's pages import, one file for every space. Nobody's secret: it is the
   // page's own script, and the door it opens still asks who is asking.
   if (url.pathname == `${BUILD}.js`) {
-    return env.ASSETS.fetch(new Request(new URL('/build.js', req.url)))
+    return platformFile(req, env, '/build.js')
   }
   if (url.pathname == BUILD) {
     let posts = req.method == 'POST'

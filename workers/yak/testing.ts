@@ -703,13 +703,24 @@ export let workspaces = (
 export let assets = (root: URL) => {
   let read = (path: string) =>
     Deno.readFile(new URL(`.${path}`, root)).catch(() => null)
-  let file = (path: string, bytes: Uint8Array<ArrayBuffer>) =>
-    new Response(bytes, {
-      headers: {
-        'content-type': contentType(path.slice(path.lastIndexOf('.'))) ??
-          'application/octet-stream',
-      },
-    })
+  // As the runtime's binding answers: an ETag of the bytes, and a 304 to a
+  // request already holding them.
+  let file = async (
+    path: string,
+    bytes: Uint8Array<ArrayBuffer>,
+    asked?: string | null,
+  ) => {
+    let etag = `"${(await sha256(bytes)).slice(0, 32)}"`
+    let headers = {
+      'content-type': contentType(path.slice(path.lastIndexOf('.'))) ??
+        'application/octet-stream',
+      'cache-control': 'public, max-age=0, must-revalidate',
+      etag,
+    }
+    return asked == etag
+      ? new Response(null, { status: 304, headers })
+      : new Response(bytes, { headers })
+  }
   return {
     fetch: async (req: Request) => {
       let url = new URL(req.url)
@@ -729,10 +740,11 @@ export let assets = (root: URL) => {
           ? file('.html', index)
           : new Response(null, { status: 404 })
       }
+      let asked = req.headers.get('if-none-match')
       let bytes = await read(path)
-      if (bytes) return file(path, bytes)
+      if (bytes) return file(path, bytes, asked)
       let html = await read(`${path}.html`)
-      if (html) return file('.html', html)
+      if (html) return file('.html', html, asked)
       if (await read(`${path}/index.html`)) return moved(`${path}/`)
       return new Response(null, { status: 404 })
     },
