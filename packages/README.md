@@ -494,7 +494,8 @@ grouped approximately by function, **not** by dependency order.
   kept, and a page's script bundled for the browser.
 
 - **[@yaks/admin](./admin)** — Platform operations on yaks.app as the selected
-  connection: stores, fee, deploys, logs, rollback and revert. Unpublished.
+  connection: stores, fee, deploys, logs, rollback and revert, and the deploy
+  catch-up that builds a main head Workers Builds left undeployed. Unpublished.
 
 - **[@yaks/harness](./harness)** — A local agent application combining SQLite,
   model execution, shell tools, graph tools and a terminal interface. As a `yak`

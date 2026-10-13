@@ -90,16 +90,16 @@ gated `deploy` branch instead; it was reverted the same day (M-37262).
 
 The dashboard settings, in full (Workers & Pages → `yak` → Settings → Builds):
 
-| setting                 | value                                    |
-| ----------------------- | ---------------------------------------- |
-| Repository              | `yak-sh/yak` (Cloudflare GitHub App)     |
-| Production branch       | `main`                                   |
-| Root directory          | `workers/yak`                            |
-| Build variable          | `SKIP_DEPENDENCY_INSTALL=1`              |
-| Build command           | `../../bin/build-yak install`            |
-| Deploy command          | `../../bin/build-yak deploy`             |
-| Build watch paths       | `workers/yak/*`, `packages/*`            |
-| Non-production branches | build only; previews off for now (below) |
+| setting                 | value                                                                                                                                                                  |
+| ----------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Repository              | `yak-sh/yak` (Cloudflare GitHub App)                                                                                                                                   |
+| Production branch       | `main`                                                                                                                                                                 |
+| Root directory          | `workers/yak`                                                                                                                                                          |
+| Build variable          | `SKIP_DEPENDENCY_INSTALL=1`                                                                                                                                            |
+| Build command           | `../../bin/build-yak install`                                                                                                                                          |
+| Deploy command          | `../../bin/build-yak deploy`                                                                                                                                           |
+| Build watch paths       | include `workers/yak/**`, `packages/**`, `src/**`, `deno.json`, `deno.lock`; exclude `**/*_test.*`, `**/README.md`, `.github/**`, `bench/**` (`wrangler.ts` `WATCHED`) |
+| Non-production branches | build only; previews off for now (below)                                                                                                                               |
 
 Worker Previews give a branch its own URL, and since Cloudflare's 2026-09-22
 launch each preview gets its own Durable Object namespace
@@ -164,7 +164,11 @@ build or push failures refuse the sibling and kernel deploy. Workers Builds has
 Docker for changed compiler images. `bin/build-yak` with no argument still runs
 the check and the workers tests by hand. A push's build that fails is started
 once more through the `BUILD_HOOK` deploy hook (builds.ts), since most failures
-are the network's; the second build's failure stands.
+are the network's; the second build's failure stands. A push Builds starts no
+build for fails nowhere, so the box looks: its deploy catch-up
+([@yaks/admin](../../packages/admin/README.md#the-deploy-catch-up)) starts
+main's build through a deploy hook of its own once main's head is not live 15
+minutes after it landed, and reports it.
 
 Builds run on watched-path pushes and finish in any order, so the deploy door
 (`wrangler.ts` `superseded`) deploys a commit only while no later commit changes

@@ -102,9 +102,39 @@ yak admin push apps/mail --space reviewer --as reviewer
 yak admin push apps/mail --space reviewer --as reviewer --confirm
 ```
 
+## The deploy catch-up
+
+Every push to main is meant to deploy yaks.app through Workers Builds, and
+sometimes Builds starts no build for a push at all. The **deploy catch-up** is
+this plugin's service: it notices main's head is not live and starts main's
+build itself.
+
+Each minute it reads main's head from origin. Once the head has landed `BOUND`
+(15 minutes, longer than any build measured) ago, it reads what `yak` serves
+with wrangler and compares the two commits through the build's watch paths
+(workers/yak/wrangler.ts `WATCHED`), so a push no build was meant for (a test, a
+README, an app) counts as live. A head that is not live gets one build through
+main's deploy hook, a `rebuilt{at, by, via, said}` mark on the commit's entity
+(its eid is its sha) with what Builds answered, and a tracker report tagged with
+the commit, what is live and what Builds said. A bound after that start, still
+not live, it gets the kernel's `failed{reason}` mark and a second report, and no
+other build: its log says why. A rollback newer than the head is an operator's
+choice and is left alone. Removing the marks asks for another start.
+
+```json
+{ "use": "@yaks/admin", "with": { "hook": { "secret": "BUILD_HOOK" } } }
+```
+
+`hook` is a deploy hook of the `yak` Worker's `main` (Workers & Pages → `yak` →
+Settings → Builds → Deploy hooks), a URL that can do nothing but start that
+build, kept in the vault. Without one the catch-up still reports, and says no
+build was started. Serve it with the box's other duties: `yak work` takes the
+`@yaks/admin` role.
+
 ## Facets
 
-- `./vocab` declares the admin tools, no components.
+- `./vocab` declares the admin tools and the `rebuilt` mark.
 - `./tools` implements those tools over the host's graph, config and vault.
 - `./cli` binds the account selector to the admin tools' `as` input.
+- `./service` is the deploy catch-up.
 - The root exports the platform API helpers, tools and vocabulary.

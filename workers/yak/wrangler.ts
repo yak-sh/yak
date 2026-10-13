@@ -936,8 +936,8 @@ export let descendants = (pid: number): number[] => {
 
 // ---- which commit may go live ----------------------------------------------
 //
-// Workers Builds runs one build per push that changes workers/yak or packages,
-// and the builds finish in whatever order they finish. A deploy stops when a
+// Workers Builds runs one build per push that changes the watched source
+// (`WATCHED`), and the builds finish in whatever order they finish. A deploy stops when a
 // newer build has source to deploy, or a newer version is already live. Other
 // pushes do not start a build, so they must not supersede the last one.
 // A live version that is neither behind nor ahead (a commit that never reached
@@ -983,9 +983,21 @@ let git = async (root: string, ...args: string[]) => {
 
 let SHA = /^[0-9a-f]{40}\b/
 
-// The paths in the Workers Builds dashboard (README.md). An app-only push
-// changes neither, so no later build exists to take this one's place.
-let WATCHED = ['workers/yak', 'packages']
+/** The production trigger's build watch paths (README.md), as git pathspecs:
+ * a push that changes none of these starts no build, so it neither supersedes
+ * this one nor leaves main ahead of what is live (packages/admin/catchup.ts).
+ * A test, a README or an app alone changes none. */
+export let WATCHED = [
+  'workers/yak',
+  'packages',
+  'src',
+  'deno.json',
+  'deno.lock',
+  ':(exclude,glob)**/*_test.*',
+  ':(exclude,glob)**/README.md',
+  ':(exclude,glob).github/**',
+  ':(exclude,glob)bench/**',
+]
 
 /**
  * What a deploy from `root`'s checkout sees, given the commits live now. A

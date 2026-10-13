@@ -4,6 +4,37 @@
   },
   "title": "admin",
   "$defs": {
+    "rebuilt": {
+      "component": true,
+      "type": "object",
+      "description": "on a main commit Workers Builds left not live past the bound: the deploy catch-up (packages/admin/catchup.ts) started main's build through its deploy hook, once. Removing it asks for another start",
+      "properties": {
+        "at": {
+          "type": "string",
+          "format": "date-time",
+          "stamped": true,
+          "description": "when the build was started"
+        },
+        "by": {
+          "type": "string",
+          "ref": "entity",
+          "death": "keep",
+          "stamped": true,
+          "description": "the process that started it"
+        },
+        "via": {
+          "type": "string",
+          "ref": "entity",
+          "death": "keep",
+          "stamped": true,
+          "description": "what the write came in through"
+        },
+        "said": {
+          "type": "string",
+          "description": "what Workers Builds answered the deploy hook: the build and its status, or why it refused"
+        }
+      }
+    },
     "admin_throwaway": {
       "tool": true,
       "noun": "admin",

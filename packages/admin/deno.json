@@ -5,7 +5,8 @@
     ".": "./mod.ts",
     "./vocab": "./vocab.ts",
     "./cli": "./cli.ts",
-    "./tools": "./tools.ts"
+    "./tools": "./tools.ts",
+    "./service": "./service.ts"
   },
   "publish": false,
   "description": "Platform operations on yaks.app as a selected connection: sign-in links, fee, stores, deploys, logs, rollback and revert. Unpublished: installed into the box's own yak.",

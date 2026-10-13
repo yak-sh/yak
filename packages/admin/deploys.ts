@@ -49,6 +49,7 @@ export type Deployment = {
   id: string
   created_on: string
   versions: { version_id: string; percentage: number }[]
+  annotations?: Record<string, string>
 }
 export type Deploy = {
   id: string
@@ -130,6 +131,34 @@ export let compilerRefusal = (
     : target != current
     ? `no rollback: compiler protocol changed (${target} → ${current})`
     : undefined
+
+/// shaIn('739f56b25cae820c8541a8b4a1ade2f7a6c7e9be A release module…') -> '739f56b25cae820c8541a8b4a1ade2f7a6c7e9be'
+/// shaIn('yaks.app emergency rollback to 739f56b2: build path broken') -> undefined
+/** The commit a version's or deployment's message leads with, written in full
+ * by the deploy door (workers/yak/wrangler.ts `--message`). */
+export let shaIn = (message?: string): string | undefined =>
+  message?.match(/^([a-f\d]{40})\b/i)?.[1].toLowerCase()
+
+/** What serves now: the newest deployment's leading version, the commit its
+ * message names (a rollback's names none; its version's does), when it went
+ * live, and whether an operator rolled back to it. */
+export let serving = (deployments: Deployment[]) => {
+  let now =
+    deployments.toSorted((a, b) =>
+      Date.parse(b.created_on) - Date.parse(a.created_on)
+    )[0]
+  let lead = now?.versions.toSorted((a, b) => b.percentage - a.percentage)[0]
+  return now && lead
+    ? {
+      version: lead.version_id,
+      sha: now.versions.length == 1
+        ? shaIn(now.annotations?.['workers/message'])
+        : undefined,
+      at: now.created_on,
+      rollback: now.annotations?.['workers/triggered_by'] == 'rollback',
+    }
+    : undefined
+}
 
 export let deploymentsFor = (id: string, deployments: Deployment[]) =>
   deployments.filter((d) =>
