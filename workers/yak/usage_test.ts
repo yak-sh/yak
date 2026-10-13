@@ -38,6 +38,7 @@ import {
   spent,
   standing,
   usedBuilds,
+  WARN,
   weighed,
 } from './meter.ts'
 
@@ -671,7 +672,7 @@ test('file ceilings use live R2 growth, allow duplicates and shrinking overwrite
         }],
         truncated: false,
       })
-    let old = space({ files: 0, month: '2026-08' }, tier)
+    let old = space({ files: cap * WARN, month: '2026-08' }, tier)
     assertEquals(
       await fullFiles(env, old, [{ key: 'jeff/b/new', bytes: 3 }]),
       '',
@@ -702,6 +703,18 @@ test('file ceilings use live R2 growth, allow duplicates and shrinking overwrite
         bytes: 1,
       }]),
       'photos and files',
+    )
+  }
+})
+
+test('an upload under the files warning line never waits on a busy bucket', async () => {
+  let { env } = platform('files-busy')
+  env.BLOBS.list = () => Promise.reject({ code: 10058 })
+  for (let tier of ['free', 'plus'] as const) {
+    let under = space({ files: FILES[tier] * WARN - 4 }, tier)
+    assertEquals(
+      await fullFiles(env, under, [{ key: 'jeff/b/new', bytes: 3 }]),
+      '',
     )
   }
 })

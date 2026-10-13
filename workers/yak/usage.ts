@@ -369,14 +369,21 @@ let fileSizes = async (env: Env, space: Space) => {
 export let filesOf = async (env: Env, space: Space) =>
   [...(await fileSizes(env, space)).values()].reduce((sum, n) => sum + n, 0)
 
-// Read R2 itself at upload time: the hourly reading cannot authorize a burst
-// of uploads or a new month's first upload. Use actual body sizes, never the
-// caller's Content-Length. Overwrites spend only growth; duplicates spend none.
+// The files ceiling, at every door that writes them, as `full` is for app
+// data: under the warning line the hourly reading with every byte arriving
+// added is close enough, and near it R2 itself is read. Listing a space's
+// whole prefix on every upload is what R2 refuses a burst of uploads for
+// (10058). Use actual body sizes, never the caller's Content-Length. Near the
+// line, overwrites spend only growth and duplicates spend none.
 export let fullFiles = async (
   env: Env,
   space: Space,
   writes: { key: string; bytes: number }[],
+  now = new Date(),
 ) => {
+  let ceiling = FILES[space.tier ?? 'free']
+  let arriving = writes.reduce((sum, w) => sum + w.bytes, 0)
+  if ((spent(space, now).files ?? 0) + arriving < ceiling * WARN) return ''
   let sizes = await fileSizes(env, space)
   let held = [...sizes.values()].reduce((sum, n) => sum + n, 0)
   let delta = 0
@@ -388,7 +395,7 @@ export let fullFiles = async (
   for (let [key, bytes] of incoming) {
     delta += bytes - (sizes.get(key) ?? 0)
   }
-  return delta > 0 && held + delta > FILES[space.tier ?? 'free']
+  return delta > 0 && held + delta > ceiling
     ? atCeiling(space, 'files', env)
     : ''
 }

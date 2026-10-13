@@ -1837,12 +1837,17 @@ test('photo and file uploads enforce space R2 limits from actual bytes', async (
       env,
     )
   for (let tier of ['free', 'plus'] as const) {
-    await stamp(env, {
-      entities: [{ entity: { eid: space.eid }, plan: { tier } }],
-    })
     let cap = tier == 'plus' ? 50 * 1024 ** 3 : 1024 ** 3
-    files.held.clear()
     occupied = cap - 3
+    // The hourly reading puts the space near its line, so R2 itself is read.
+    await stamp(env, {
+      entities: [{
+        entity: { eid: space.eid },
+        plan: { tier },
+        meter: { files: occupied },
+      }],
+    })
+    files.held.clear()
     // No length header, and an understated length: both are refused on bytes.
     for (let length of [undefined, '1']) {
       for (let path of ['blob', 'files/new.txt']) {
