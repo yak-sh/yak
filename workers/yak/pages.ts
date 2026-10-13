@@ -1865,23 +1865,22 @@ let clients = (env: Host) => [
     tab: 'ChatGPT',
     title: 'ChatGPT — on the web',
     steps: [
-      'Open ' +
-      external(
-        'https://chatgpt.com/#settings/Security',
-        'Security and login settings',
-      ) +
-      ', scroll down and turn on <b>Developer mode</b>.',
       'Copy this URL:' +
-      fields(field('Connection', url(env, '/mcp'), 'the connection URL')) +
-      'Then open ' +
-      external(
-        'https://chatgpt.com/plugins#settings/Connectors?create-connector=true&redirectAfter=%2F',
-        'Create a connection',
-      ) + ' and paste it into <b>Connection</b>.',
-      'Add the name, description and icon:' + chatgptFields(env),
-      'Check <b>I understand</b>, then click <b>Create</b>.',
+      fields(field('Connection', url(env, '/mcp'), 'the connection URL')),
+      'Open ' +
+      external('https://chatgpt.com/plugins', 'ChatGPT Plugins') +
+      ', tap the <b>+</b> button, then <b>Add custom MCP server</b>.',
+      'Add the name and description:' + chatgptFields(env),
+      'Under <b>Connection</b>, paste the URL you copied.',
+      'Read the warning, tap <b>I understand and want to continue</b>, then ' +
+      '<b>Create as a plugin</b>.',
       'Sign in with your email when ChatGPT asks.',
     ],
+    // OpenAI's page says only that "account and workspace policies apply"
+    // to adding a custom MCP server (developers.openai.com/plugins/deploy/
+    // connect-chatgpt); it names no plan, so none is named here.
+    note: 'If ChatGPT does not show <b>Add custom MCP server</b>, your ' +
+      'account or workspace may not allow it. In a workspace, ask an admin.',
     // The repository's plugin names production; a staging visitor needs the
     // manual setup above to stay with this deployment.
     details: apex(env) == apex()
