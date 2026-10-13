@@ -16,7 +16,9 @@ import {
   call,
   type Ctx,
   fetched,
+  type Listed,
   opOf,
+  type Out,
   parses,
   patched,
   sri,
@@ -41,6 +43,10 @@ import { stages } from '../../bin/app-deploy-time.ts'
 import { running } from './agent.ts'
 import { fetch as mcpFetch } from './mcp.ts'
 import { COOKIE, sign } from './lib/token.ts'
+
+// Every app app_list answered as data, across its spaces.
+let apps = (out: Out) =>
+  (out.value as { spaces: Listed[] }).spaces.flatMap((s) => s.apps)
 
 test('staging tool URLs and app mail use the same configured host', async () => {
   let delivered: { to: string; from: Address }[] = []
@@ -69,7 +75,7 @@ test('staging tool URLs and app mail use the same configured host', async () => 
   assertStringIncludes(made.text, 'https://ada.yaks.fyi/recipes/')
   let listed = await call(ctx, 'app_list', {})
   assertStringIncludes(listed.text, 'https://ada.yaks.fyi/recipes/')
-  assertStringIncludes(listed.text, 'ada.recipes@yaks.fyi')
+  assertEquals(apps(listed)[0].mailbox, 'ada.recipes@yaks.fyi')
   assertStringIncludes(
     (await call(ctx, 'about', {})).text,
     'https://yaks.fyi/login',
@@ -648,18 +654,12 @@ test('one read of the bindings still lands each on its own app', async () => {
       resource: 'recipes-db',
     },
   }], KERNEL)
-  let said = await call(ctx, 'app_list', {})
-  // Each app's line, and the binding lines indented under it: the binding
-  // named `recipes-db` sits under recipes and nothing sits under garden.
-  let lines = said.text.split('\n')
-  let under = (slug: string) =>
-    lines.slice(lines.findIndex((l) => l.includes(`(${slug})`)) + 1)
-      .filter((l) => l.startsWith('  ') || !l.startsWith('- '))
-      .slice(0, 1)
-      .filter((l) => l.startsWith('  '))
-  assertEquals(under('recipes').length, 1)
-  assertStringIncludes(under('recipes')[0], 'DB')
-  assertEquals(under('garden').length, 0)
+  let said = apps(await call(ctx, 'app_list', {}))
+  let on = (slug: string) => said.find((a) => a.slug == slug)!.bindings
+  assertEquals(on('recipes'), [
+    { name: 'DB', type: 'd1', resource: 'recipes-db', pending: true },
+  ])
+  assertEquals(on('garden'), [])
 })
 
 test('free custom domains return plan settings before provisioning', async () => {

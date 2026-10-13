@@ -29,6 +29,7 @@ import {
   FREE,
   LETTERS,
   level,
+  nearing,
   PLUS,
   pooled,
   refusedSpend,
@@ -429,6 +430,19 @@ test('the line says every number against its ceiling', () => {
   // bare number reads as live (C-32869 item 6).
   assertStringIncludes(said, '(as of 12:00 UTC)')
   assertStringIncludes(said, 'App serving pauses at')
+})
+
+test('a space says where it stands only near or at a ceiling, in one sentence', () => {
+  assertEquals(nearing(space({ requests: 39_000 }), 3, NOW), '')
+  let near = nearing(space({ requests: 41_000, emails: 100 }), 3, NOW)
+  assertStringIncludes(near, '41,000 of 50,000 request units')
+  assertStringIncludes(near, '100 of 100 emails')
+  assertStringIncludes(near, 'https://yaks.app/manage/billing?space=jeff')
+  assert(!near.includes('of 5 apps'), 'three of five apps is not near')
+  assertEquals(near.split('. ').length, 1)
+  assertStringIncludes(nearing(space(), 5, NOW), '5 of 5 apps')
+  // A comped space has no app ceiling to be near.
+  assertEquals(nearing({ ...space(), slug: 'yourname' }, 50, NOW), '')
 })
 
 test('before the first sweep the line says so, not zero', () => {

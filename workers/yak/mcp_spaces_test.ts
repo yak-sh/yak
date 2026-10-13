@@ -20,6 +20,11 @@ import {
   unique,
   vocabFile,
 } from './probe.ts'
+import type { Listed } from './tools.ts'
+
+// Every app app_list answered as data, across its spaces.
+let appsIn = (said: { value: unknown }) =>
+  (said.value as { spaces: Listed[] }).spaces.flatMap((s) => s.apps)
 
 // A notes app's words and its one command.
 let NOTES = vocabFile({ note: { at: txt } }, {
@@ -122,24 +127,28 @@ test('the front page moves, and only the owner moves it', async () => {
     assertStringIncludes(said, `https://${frontSpace}.yaks.app/`)
     assertEquals(await front45(), `do:${frontSpace}/second`)
 
-    // Said where the person reads what they have: in the sentence, and in the
-    // data the view beside it draws.
-    let listing = await agent.call('tools/call', {
-      name: 'app_list',
-      arguments: { space: frontSpace },
-    })
-    // Its address in the listing is the bare hostname: that is where it is —
-    // and so is its mailbox, the bare space name for the same reason.
+    // Said where the person reads what they have: the space's address opens
+    // it, and that address is the app's own in the listing — as is its
+    // mailbox, the bare space name for the same reason.
+    let listing = await agent.answer('app_list', { space: frontSpace })
     assertStringIncludes(
-      listing.content[0].text,
-      `second (second) v0, public: https://${frontSpace}.yaks.app/ · ${frontSpace}@yaks.app — ` +
-        'the front page',
+      listing.text,
+      `${frontSpace} — https://${frontSpace}.yaks.app/ opens second`,
     )
+    assertStringIncludes(
+      listing.text,
+      `- second: https://${frontSpace}.yaks.app/ — public`,
+    )
+    let second = appsIn(listing).find((a) => a.slug == 'second')!
+    assertEquals([second.home, second.mailbox], [
+      true,
+      `${frontSpace}@yaks.app`,
+    ])
     // And the other one still stands at a path of its own: being the front
     // page is where an app is, so the listing says it by saying the address.
     assertStringIncludes(
-      listing.content[0].text,
-      `first (first) v0, public: https://${frontSpace}.yaks.app/first/`,
+      listing.text,
+      `- first: https://${frontSpace}.yaks.app/first/ — public`,
     )
 
     // Cleared: both apps stand at their own addresses, and the space's own
@@ -156,12 +165,9 @@ test('the front page moves, and only the owner moves it', async () => {
     assertEquals(none.status, 200)
     assertStringIncludes(await none.text(), 'href="/first/"')
     assertEquals(await front45(), 404)
-    assertEquals(
-      (await agent.tool('app_list', { space: frontSpace })).includes(
-        'front page',
-      ),
-      false,
-    )
+    let cleared = await agent.answer('app_list', { space: frontSpace })
+    assert(!cleared.text.includes(' opens '), cleared.text)
+    assertEquals(appsIn(cleared).some((a) => a.home), false)
 
     let ann = await signIn(k, `ann-${crypto.randomUUID().slice(0, 8)}@yaks.app`)
     await agent.tool('member_add', {
@@ -441,12 +447,9 @@ test('deleting the front page puts the space back to the default', async () => {
     // either: `/garden/x` is the garden app's again. The row in the trash
     // still wears it — that is what a restore puts back — and no listing of
     // the space's apps says anything is the front page.
-    assertEquals(
-      (await agent.tool('app_list', { space: reset48 })).includes(
-        'front page',
-      ),
-      false,
-    )
+    let left = await agent.answer('app_list', { space: reset48 })
+    assert(!left.text.includes(' opens '), left.text)
+    assertEquals(appsIn(left).some((a) => a.home), false)
     assertEquals(
       (await meta(k).query(`.app.space=${them.eids[reset48]}&.home&!trashed`))
         .length,
@@ -614,10 +617,20 @@ test('an app goes to the trash, and app_restore brings it back', async () => {
     )
     assertEquals((await page()).status, 404)
     assertEquals((await listed()).includes('log_note'), false)
-    let saying = await agent.tool('app_list', { space: binlab49 })
-    assertStringIncludes(saying, 'Trash — app_restore brings one back')
-    assertStringIncludes(saying, '- Notes (notes), 30 days left')
-    assertEquals(saying.includes(`https://${binlab49}.yaks.app/notes/`), false)
+    let saying = await agent.answer('app_list', { space: binlab49 })
+    assertStringIncludes(
+      saying.text,
+      'In the trash: Notes (notes), 30 days left',
+    )
+    assertStringIncludes(saying.text, 'app_restore brings one back')
+    assertEquals(
+      saying.text.includes(`https://${binlab49}.yaks.app/notes/`),
+      false,
+    )
+    assertEquals(
+      (saying.value as { spaces: Listed[] }).spaces[0].trash,
+      [{ slug: 'notes', title: 'Notes', days: 30 }],
+    )
     // And the slug is held for it: a second app here is the one thing a
     // restore could not undo, so `app_new` refuses and says which two words
     // resolve it.

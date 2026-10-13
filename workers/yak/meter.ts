@@ -375,33 +375,42 @@ export let refusedVisit = (
 export let usedBuilds = (space: Space, now = new Date()) =>
   spent(space, now).builds
 
-// How full a space is, per space ceiling, as a fraction: 1 is at it. The
+/** A ceiling a space answers to: what it has used and what it is allowed. */
+export type Gauge = { used: number; limit: number }
+export type Ceiling = 'apps' | 'requests' | 'bytes' | 'files' | Limited
+
+// Each ceiling a space answers to this month: apps, request units and app data
+// where its plan limits them, and the allowances every plan carries. The
 // account's dollar budget is checked through `budgets`, not a space's reading.
-export let fullness = (space: Space, apps: number, now = new Date()) => {
+export let gauges = (
+  space: Space,
+  apps: number,
+  now = new Date(),
+): Partial<Record<Ceiling, Gauge>> => {
   let free = ceilings(space.tier, space.slug)
   let m = spent(space, now)
-  let both = {
-    files: (m.files ?? 0) / FILES[space.tier ?? 'free'],
-    ...Object.fromEntries(
-      LIMITED.map((
-        what,
-      ) => [what, used(m, what) / allowance(what, space.tier)]),
-    ),
+  return {
+    ...(free?.apps == null ? {} : { apps: { used: apps, limit: free.apps } }),
+    ...(free
+      ? {
+        requests: { used: requestUnits(m), limit: free.requests },
+        bytes: { used: m.bytes, limit: free.bytes },
+      }
+      : {}),
+    files: { used: m.files ?? 0, limit: FILES[space.tier ?? 'free'] },
+    ...Object.fromEntries(LIMITED.map((what) => [what, {
+      used: used(m, what),
+      limit: allowance(what, space.tier),
+    }])),
   }
-  return free
-    ? {
-      ...(free.apps == null ? {} : { apps: apps / free.apps }),
-      requests: requestUnits(m) / free.requests,
-      bytes: m.bytes / free.bytes,
-      ...both,
-    }
-    : both
 }
+
+let full = (g: Gauge) => g.used / g.limit
 
 // Where a space stands: nothing to say, near a ceiling, or past one. The
 // sweep watches this for a change, which is what un-tells the agent.
 export let level = (space: Space, apps: number, now = new Date()) => {
-  let worst = Math.max(...Object.values(fullness(space, apps, now)))
+  let worst = Math.max(...Object.values(gauges(space, apps, now)).map(full))
   return worst >= 1 ? 'over' : worst >= WARN ? 'near' : 'ok'
 }
 
@@ -430,8 +439,9 @@ let asOf = (at: string) => {
     : ` (as of ${read.toISOString().slice(11, 16)} UTC)`
 }
 
-// The line the agent reads: every number against its ceiling, and what
-// happens at each. One line, because the agent has work to get back to.
+// The line the agent reads once a space nears a ceiling (unseen.ts
+// `ceiling`): every number against its ceiling, and what happens at each. One
+// line, because the agent has work to get back to.
 export let standing = (
   space: Space,
   apps: number,
@@ -489,6 +499,64 @@ export let standing = (
       size(free.bytes)
     } app data, ${files}, ${mail}${read}, ${made} ` +
     `(${cost}). ${refused}`
+}
+
+/** Where a space stands, as data: each ceiling it answers to, what models and
+ * voice cost here from the owner's account budget, and when the hourly sweep
+ * last read it (null before the month's first reading). */
+export let standingOf = (
+  space: Space,
+  apps: number,
+  now = new Date(),
+  env: Host = {},
+) => {
+  let m = spent(space, now)
+  return {
+    tier: space.tier ?? 'free',
+    month: m.month,
+    read: m.at || null,
+    level: level(space, apps, now),
+    limits: gauges(space, apps, now),
+    models: m.models,
+    voice: m.realtime,
+    settings: planSettings(space.slug, env),
+  }
+}
+
+// Each ceiling as a person reads it. Request units say what happens at the
+// limit because nobody is refused it to their face: visitors are (apps.ts).
+let READ: Record<Ceiling, (g: Gauge) => string> = {
+  apps: (g) => `${count(g.used)} of ${count(g.limit)} apps`,
+  requests: (g) =>
+    `${count(g.used)} of ${count(g.limit)} request units this month ` +
+    '(its apps pause for visitors at the limit)',
+  bytes: (g) => `${size(g.used)} of ${size(g.limit)} of app data`,
+  files: (g) => `${size(g.used)} of ${size(g.limit)} of photos and files`,
+  emails: (g) => `${count(g.used)} of ${count(g.limit)} emails this month`,
+  builds: (g) => `${count(g.used)} of ${count(g.limit)} builds this month`,
+  seconds: (g) =>
+    `${count(g.used)} of ${count(g.limit)} build seconds this month`,
+}
+
+/** Where a space stands, in one sentence, only when a ceiling is near or
+ * reached: each one at four fifths or past it, and where the plan is
+ * settled. Nothing otherwise, since nothing needs saying. */
+export let nearing = (
+  space: Space,
+  apps: number,
+  now = new Date(),
+  env: Host = {},
+) => {
+  let close = (Object.entries(gauges(space, apps, now)) as [Ceiling, Gauge][])
+    .filter(([, g]) => full(g) >= WARN)
+  if (!close.length) return ''
+  let over = close.filter(([, g]) => full(g) >= 1).length
+  let state = !over ? 'near' : over == close.length ? 'at' : 'at or near'
+  return `${space.slug} is ${state} ${
+    close.length == 1 ? 'a limit' : 'its limits'
+  }: ${close.map(([what, g]) => READ[what](g)).join(', ')} — plan settings: ${
+    planSettings(space.slug, env)
+  }`
 }
 
 // The refusal, one sentence: what the ceiling is, and where the plans are

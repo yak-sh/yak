@@ -95,12 +95,12 @@ anyone else would get "Nothing here yet." or a refusal. Calling `member_add`
 again for them says they had not accepted yet and sends another letter.
 `member_remove` withdraws a pending invitation the same way it removes a member.
 
-`app_list` says who is in each space the caller owns: its members, each app's
-guests, and every invitation not accepted yet with the day its latest letter
-went. When someone says they cannot get in, that is the first thing to read. The
-owner sees the same on the People page of their dashboard
-(yaks.app/manage/people), where a waiting invitation has a button that sends its
-letter again.
+In each space the caller owns, `app_list` names every invitation not accepted
+yet with the day its latest letter went, and counts everyone else. When someone
+says they cannot get in, that is the first thing to read. Its structured result
+lists the members and each app's guests too, and the owner sees them all on the
+People page of their dashboard (yaks.app/manage/people), where a waiting
+invitation has a button that sends its letter again.
 
 ## One app, or the space
 
@@ -349,7 +349,7 @@ until someone calls `app_update`. That is the whole point — a publisher cannot
 change an app out from under the people using it, and an app someone is relying
 on does not change while they sleep.
 
-`app_published` shows the version on offer; the copy's own `app_list` line shows
+`app_published` shows the version on offer; the copy's own `app_versions` shows
 the version it is at.
 
 ## What an update does

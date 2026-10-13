@@ -40,7 +40,7 @@ import { granting, scriptName } from './dispatch.ts'
 import type { Env } from './env.ts'
 import { analytics, dataset, declared } from './testing.ts'
 import { emptied, trash, trashSpace } from './erase.ts'
-import { call, type Ctx, wrote } from './tools.ts'
+import { call, type Ctx, type Listed, wrote } from './tools.ts'
 import { archive, openIn, serve } from './unseen.ts'
 import { KERNEL, metaOf } from './meta.ts'
 import { PLATFORM_STORE } from './door.ts'
@@ -1921,12 +1921,14 @@ test('photo and file uploads enforce space R2 limits from actual bytes', async (
     let listing = await call({ env, dir, person: ADA }, 'app_list', {
       space: 'ada',
     })
-    // What the space stands at, in the listing's own words (meter.ts
-    // `standing`) — the structured copy of it went with the output schemas.
+    // Near the ceiling, the listing says so in a sentence (meter.ts
+    // `nearing`), and its value carries the reading whole.
     assertStringIncludes(
       listing.text,
-      `${size(cap - 2)} of ${size(cap)} photos and files`,
+      `${size(cap - 2)} of ${size(cap)} of photos and files`,
     )
+    let [stood] = (listing.value as { spaces: Listed[] }).spaces
+    assertEquals(stood.standing.limits.files, { used: cap - 2, limit: cap })
   }
 })
 

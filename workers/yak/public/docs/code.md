@@ -383,11 +383,10 @@ wrapper is internal), `compatibility_date`, `compatibility_flags`, `vars`,
 D1 databases, R2 buckets and Vectorize indexes belong to that app; yaks.app
 creates them at deploy and reuses them. A new Vectorize index also names its
 `dimensions` and `metric`, or a `preset`. `app_deploy` reports unsupported
-settings and `app_list` names the bindings. Removing a binding keeps its
-resource and data until the app is permanently deleted; the app's 30 days in the
-trash keep them too. A declared binding keeps its name, including `STORE`,
-`FILES` or `APP`; otherwise those names are the convenience bindings described
-above.
+settings and names the bindings. Removing a binding keeps its resource and data
+until the app is permanently deleted; the app's 30 days in the trash keep them
+too. A declared binding keeps its name, including `STORE`, `FILES` or `APP`;
+otherwise those names are the convenience bindings described above.
 
 `vpc_services` reaches a machine of the space owner's own, such as a server on
 their computer, without opening a port on it. The owner gives the space a tunnel

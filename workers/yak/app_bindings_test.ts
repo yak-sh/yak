@@ -11,7 +11,7 @@ import { directory, stamp } from './directory.ts'
 import * as dirPart from './directory.ts'
 import { platform } from './testing.ts'
 import { meta } from './meta.ts'
-import { call, type Ctx } from './tools.ts'
+import { call, type Ctx, type Listed } from './tools.ts'
 
 let PERSON = 'a0000000-0000-4000-8000-0000000000ad'
 let who = { 'x-yak-person': PERSON, 'x-yak-role': 'owner' }
@@ -166,6 +166,10 @@ let fixture = async () => {
     dir,
     app,
     tool,
+    // The app's bindings, as app_list answers them as data.
+    bound: async () =>
+      ((await call(ctx, 'app_list', {})).value as { spaces: Listed[] })
+        .spaces[0].apps[0].bindings,
     write,
     calls,
     uploads,
@@ -191,7 +195,7 @@ test('app bindings survive redeploy, removal and trash until permanent deletion'
     assertEquals(new Set(names).size, 3)
     for (let name of names) {
       assertStringIncludes(deployed, name)
-      assertStringIncludes(await k.tool('app_list'), name)
+      assert((await k.bound()).some((b) => b.resource == name))
     }
     for (let name of ['DB', 'MEDIA', 'SEARCH']) {
       assertStringIncludes(deployed, name)
@@ -369,7 +373,7 @@ test('a refused provisioning scope keeps draft files private and uploads no work
       assertStringIncludes(error.message, scope)
       assertStringIncludes(error.message, SCOPES)
       assertStringIncludes(error.message, 'creation pending')
-      assertStringIncludes(await k.tool('app_list'), 'creation pending')
+      assert((await k.bound()).some((b) => b.pending))
       assertEquals(error.message.includes('test-token'), false)
       assertEquals(k.uploads.length, 0)
       let response = await apps.fetch(

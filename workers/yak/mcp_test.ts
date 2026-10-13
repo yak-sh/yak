@@ -1314,9 +1314,8 @@ test(
         'nothing to change',
       )
 
-      // What the person has, in a sentence for the model and as data for the
-      // view beside it: every space, every app, its address, its version and
-      // what is still broken in it.
+      // What the person has, a line an app: every space, every app, its
+      // address, its access and what is still broken in it.
       let listing = await agent.call('tools/call', {
         name: 'app_list',
         arguments: {},
@@ -1328,7 +1327,7 @@ test(
       assertMatch(
         listing.content[0].text,
         new RegExp(
-          `Recipes \\(cookbook\\) v\\d+, public, 2 open errors: https:\\/\\/${jeff54}\\.yaks\\.app\\/cookbook\\/`,
+          `- Recipes: https:\\/\\/${jeff54}\\.yaks\\.app\\/cookbook\\/ — public, 2 open errors`,
         ),
       )
       // Both spaces, oldest first, each app under the one it lives in — and
@@ -1339,7 +1338,7 @@ test(
         all.indexOf(`${jeff54} — `) < all.indexOf(`${jeff_work54} — `),
         'the space it started with comes first',
       )
-      assertStringIncludes(all, '(garden)')
+      assertStringIncludes(all, `https://${jeff54}.yaks.app/garden/`)
       // Its garden went to the trash a moment ago, so the space has no apps
       // and one thing in the trash — with the days it has to change its mind
       // (erase.ts, T-34430).
@@ -1348,9 +1347,8 @@ test(
         [
           `${jeff_work54} — https://${jeff_work54}.yaks.app/ — you are the owner`,
           '- no apps yet',
-          'Trash — app_restore brings one back; erased for good when its ' +
-          'days run out',
-          '- Work garden (garden), 30 days left',
+          'In the trash: Work garden (garden), 30 days left — app_restore ' +
+          'brings one back',
         ],
       )
 

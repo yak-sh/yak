@@ -36,7 +36,7 @@ import { declarationOf, keepDeclaration } from './declaration.ts'
 import type { Reload } from '@yaks/platform'
 import { configured, deployWorker } from './deploy_worker.ts'
 import { compiled } from './esbuild.ts'
-import { bindingLines, bindings } from './bindings.ts'
+import { bindings } from './bindings.ts'
 import { broken, mediaTypeOf, type Objects } from '@yaks/blob'
 import { blobPrefix } from './blob-key.ts'
 import { r2Objects, r2RawObjects } from './lib/objects.ts'
@@ -230,15 +230,16 @@ import {
   countedSpend,
   free,
   monthOf,
+  nearing,
   refusedSpend,
   requestUnits,
   size,
   SPACES,
-  standing,
+  standingOf,
   tooManySpaces,
 } from './meter.ts'
 import { allowed, send } from './invite.ts'
-import { aloud, peopleIn } from './people.ts'
+import { aloud, peopleIn, shown } from './people.ts'
 import {
   BUILT,
   draftFiles,
@@ -2231,6 +2232,43 @@ let roomFor = async (ctx: Ctx) => {
 let SLUGS = PAGES.map((p) => p.slug).join(', ')
 let COVERING = PAGES.map((p) => `${p.slug} (${p.brief})`).join(', ')
 
+/** Someone in a space or an app, as app_list answers them (people.ts). */
+type Someone = ReturnType<typeof shown>
+
+/** One space as app_list answers it as data, `value.spaces`: everything the
+ * listing knows, where its words say only what a person needs. `members`,
+ * `invited`, `guests` are there only in a space the caller owns. */
+export type Listed = {
+  slug: string
+  title: string
+  url: string
+  role: Role
+  trashed: { days: number } | null
+  apps: {
+    slug: string
+    title: string
+    url: string
+    mailbox: string
+    version: number
+    access: Access
+    errors: number
+    home: boolean
+    usage: { requests: number; bytes: number } | null
+    bindings: {
+      name: string
+      type: string
+      resource: string
+      pending: boolean
+    }[]
+    guests?: Someone[]
+    invited?: Someone[]
+  }[]
+  trash: { slug: string; title: string; days: number }[]
+  members?: Someone[]
+  invited?: Someone[]
+  standing: ReturnType<typeof standingOf>
+}
+
 // The platform's own rows. The roster every door serves is these plus what
 // the plugins bring — `TOOLS`, at the foot of this file.
 let OURS: Row[] = [
@@ -4156,101 +4194,121 @@ let OURS: Row[] = [
         ]))).flat().map(([app, hits]) => [app, breaks(hits)] as const),
       )
       let gathered = await people
+      let now = new Date()
+      // Two readers, two forms (M-37853). The words are what an assistant
+      // passes on to a person as they are: an app a line, and only what
+      // somebody has to act on besides. The value is everything this listing
+      // knows, for whoever reads structure.
       let lines: string[] = []
+      let spaces: Listed[] = []
       for (let { space, role } of seats) {
         let mine = every.filter((a) => a.space == space.eid)
         let them = gathered.get(space.eid)
         let apps = mine.filter((a) => !a.trashed)
-        let bin = mine.filter((a) => a.trashed)
-        // The space itself may be in the trash (erase.ts, T-34431), and then
-        // nothing under it is answering however true the rest of the listing
-        // still is — every app is kept exactly as it is, and that address is
-        // where the person restores it.
-        // What the caller is here — the directory's `member` row, which this
-        // listing already read to answer at all. Said out loud because
-        // membership is the directory's fact: a client that asked an app's
-        // `/me` for it instead would wake a Durable Object per space to learn
-        // what this one answer already knows (T-35384).
+        let at = `https://${spaceHost(ctx.env, space.slug)}/`
+        let listed = apps.map((app) => {
+          let here = them?.apps.find((a) => a.app.eid == app.eid)
+          // What this app spent this month, as the hourly sweep last read it
+          // (usage.ts); null before its first reading.
+          let its = app.meter?.month == monthOf(now) ? app.meter : null
+          return {
+            slug: app.slug,
+            title: app.title,
+            url: url(space, app, ctx.env),
+            // Where its letters leave from and where a reader writes back
+            // (directory.ts `mailbox`).
+            mailbox: mailbox(space, app, ctx.env),
+            version: app.version ?? 0,
+            access: mode(app.access),
+            errors: broken.get(app.eid) ?? 0,
+            // The one the space's bare address opens (T-32947).
+            home: app.home,
+            usage: its
+              ? { requests: requestUnits(its), bytes: its.bytes }
+              : null,
+            bindings: bound.filter((b) => b.app == app.eid).map((b) => ({
+              name: b.name,
+              type: b.type,
+              resource: b.resource,
+              pending: !b.id,
+            })),
+            ...here
+              ? {
+                guests: here.guests.map(shown),
+                invited: here.invited.map(shown),
+              }
+              : {},
+          }
+        })
+        // What was thrown away and can still be had back (erase.ts, T-34430).
+        let trash = mine.filter((a) => a.trashed).map((a) => ({
+          slug: a.slug,
+          title: a.title,
+          days: daysLeft(a.trashed!),
+        }))
+        spaces.push({
+          slug: space.slug,
+          title: space.title,
+          url: at,
+          // What the caller is here — the directory's `member` row, which this
+          // listing already read to answer at all. A client that asked an
+          // app's `/me` for it instead would wake a Durable Object per space
+          // to learn what this one answer already knows (T-35384).
+          role,
+          // The space itself may be in the trash (erase.ts, T-34431), and then
+          // nothing under it answers, however true the rest still is.
+          trashed: space.trashed ? { days: daysLeft(space.trashed) } : null,
+          apps: listed,
+          trash,
+          ...them
+            ? {
+              members: them.members.map(shown),
+              invited: them.invited.map(shown),
+            }
+            : {},
+          standing: standingOf(space, apps.length, now, ctx.env),
+        })
+        let home = apps.find((a) => a.home)
         lines.push(
-          `${space.slug} — https://${spaceHost(ctx.env, space.slug)}/ — you ` +
+          `${space.slug} — ${at}${home ? ` opens ${home.title}` : ''} — you ` +
             `are ${role == 'owner' ? 'the owner' : `a ${role}`}${
               space.trashed
-                ? ` — IN THE TRASH, ${
+                ? ` — in the trash, ${
                   daysLeft(space.trashed)
                 } days left: nothing here answers until space_restore(space: '${space.slug}')`
                 : ''
             }`,
+          ...listed.map((a) =>
+            `- ${a.title}: ${a.url} — ${a.access}${
+              a.errors
+                ? `, ${a.errors} open ${a.errors == 1 ? 'error' : 'errors'}`
+                : ''
+            }`
+          ),
+          ...listed.length ? [] : ['- no apps yet'],
+          ...trash.length
+            ? [
+              `In the trash: ${
+                trash.map((a) =>
+                  `${a.title} (${a.slug}), ${a.days} ${
+                    a.days == 1 ? 'day' : 'days'
+                  } left`
+                ).join('; ')
+              } — app_restore brings one back`,
+            ]
+            : [],
+          // Who else is here (people.ts): an invitation somebody may be
+          // waiting on, and everyone else as a count and where to see them.
+          ...them ? aloud(them, ctx.person, ctx.env) : [],
+          // Where the space stands, only when a ceiling is near or reached
+          // (T-32758): so the agent knows before it makes the sixth app, not
+          // when the door says no.
+          ...[nearing(space, apps.length, now, ctx.env)].filter(Boolean),
         )
-        if (them) {
-          lines.push(
-            ...aloud('members', them.members, them.invited, ctx.person)
-              .map((line) => `  ${line}`),
-          )
-        }
-        for (let app of apps) {
-          let held = bound.filter((b) => b.app == app.eid)
-          let here = them?.apps.find((a) => a.app.eid == app.eid)
-          let errors = broken.get(app.eid) ?? 0
-          // What this app spent this month, as the hourly sweep last read it
-          // (usage.ts). Nothing metered yet says nothing.
-          let its = app.meter?.month == monthOf(new Date()) ? app.meter : null
-          // The one the bare hostname opens, said where the person can see
-          // it — the space line above is that address (T-32947).
-          let front = app.home
-          // The other address it has (directory.ts `mailbox`) is on the line
-          // too: where its letters leave from and where a reader writes back.
-          // Said here because this is the listing a person is shown when they
-          // ask what they have, and an address nobody is told is no address.
-          lines.push(
-            `- ${app.title} (${app.slug}) v${app.version ?? 0}, ${
-              mode(app.access)
-            }${
-              errors
-                ? `, ${errors} open ${errors == 1 ? 'error' : 'errors'}`
-                : ''
-            }${
-              its
-                ? `, ${requestUnits(its)} estimated request units, ${
-                  size(its.bytes)
-                }`
-                : ''
-            }: ${url(space, app, ctx.env)} · ${mailbox(space, app, ctx.env)}${
-              front ? ' — the front page' : ''
-            }`,
-          )
-          lines.push(...bindingLines(held).map((line) => `  ${line}`))
-          if (here) {
-            lines.push(
-              ...aloud('guests', here.guests, here.invited, ctx.person)
-                .map((line) => `  ${line}`),
-            )
-          }
-        }
-        if (!apps.length) lines.push('- no apps yet')
-        // Where the space stands against what it is allowed (T-32758), in a
-        // person's words rather than fractions — so the agent knows before it
-        // makes the sixth app, not when the door says no. A space with
-        // nothing in it has nothing to stand against, and says nothing.
-        else lines.push(standing(space, apps.length, new Date(), ctx.env))
-        // And what was thrown away and can still be had back (erase.ts,
-        // T-34430) — beside this space's own listing, since that is what it
-        // is about.
-        if (bin.length) {
-          lines.push(
-            'Trash — app_restore brings one back; erased for good when its ' +
-              'days run out',
-          )
-          for (let app of bin) {
-            lines.push(
-              `- ${app.title} (${app.slug}), ${daysLeft(app.trashed!)} ${
-                daysLeft(app.trashed!) == 1 ? 'day' : 'days'
-              } left`,
-            )
-          }
-        }
       }
       return {
         text: lines.join('\n'),
+        value: { spaces },
         // Only one space in hand has an unseen channel to append to.
         space: seats.length == 1 ? seats[0]!.space : undefined,
       }

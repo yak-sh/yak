@@ -16,6 +16,7 @@ import {
   signIn,
 } from './probe.ts'
 import { HELLO } from './mcp-probe.ts'
+import type { Listed } from './tools.ts'
 
 test('an invitation reaches nobody until its person accepts it', async () => {
   let k = await kernel()
@@ -168,13 +169,25 @@ test('the owner and their assistant see who is in and who has not accepted', asy
     await accepted(k, bo.email, bo.cookie)
     let today = new Date().toISOString().slice(0, 10)
 
-    let listed = await his.tool('app_list')
-    assertStringIncludes(listed, `<${bo.email}> (editor)`)
-    assertStringIncludes(listed, `<${ana.email}> (editor)`)
-    assertStringIncludes(listed, `<${cy.email}> (viewer, letter sent ${today})`)
+    // The words name who has yet to accept, which is what someone may be
+    // waiting on, and count the rest; the value names everyone.
+    let listed = await his.answer('app_list')
+    assertStringIncludes(listed.text, `${cy.email} (viewer`)
+    assertStringIncludes(listed.text, `letter sent ${today}`)
+    assertStringIncludes(listed.text, '2 other people')
+    assert(!listed.text.includes(bo.email) && !listed.text.includes(ana.email))
+    let [space] = (listed.value as { spaces: Listed[] }).spaces
+    let emails = (them?: { email: string | null; role: string }[]) =>
+      them?.map((p) => `${p.email} ${p.role}`)
+    assert(emails(space.members)!.includes(`${bo.email} editor`))
+    assertEquals(emails(space.invited), [`${cy.email} viewer`])
+    assertEquals(emails(space.apps[0].guests), [`${ana.email} editor`])
     // A member reads the apps, not who else was let in.
-    let bos = await connector(k, bo.cookie).tool('app_list')
-    assert(!bos.includes(cy.email) && !bos.includes(ana.email))
+    let bos = await connector(k, bo.cookie).answer('app_list')
+    assert(!bos.text.includes(cy.email) && !bos.text.includes(ana.email))
+    let jeffs = (bos.value as { spaces: Listed[] }).spaces
+      .find((s) => s.slug == space.slug)!
+    assert(!jeffs.members && !jeffs.invited && !jeffs.apps[0].guests)
 
     let page = await k.at('yaks.app', '/manage/people', {
       headers: { cookie: jeff.cookie },

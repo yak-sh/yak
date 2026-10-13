@@ -219,8 +219,9 @@ Mail is metered in both directions, per space, per calendar month — the
 allowance belongs to the space's plan, not to one app.
 
 The numbers are in the plan table at <https://yaks.app/pricing>. Read them
-there, not from a page that copies them, this one included; `app_list` prints
-where a space stands against what it is allowed.
+there, not from a page that copies them, this one included; `app_list` says when
+a space is near or at its allowance, and its structured result carries how many
+letters the month has counted.
 
 Only the send stops there. A letter written to the app lands however many the
 space has spent — and is counted like any other — because refusing one on

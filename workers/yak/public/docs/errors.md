@@ -321,8 +321,8 @@ wakes stop firing. What does not change: anything it saved.
 
 `app_restore` takes it back out and puts all of that back. A wake that came due
 while it sat there fires once, the way any stretch nobody was there for is
-caught up, and goes on at its cadence. You have 30 days; `app_list` shows a
-Trash section with the days each one has left, and the person can restore one
+caught up, and goes on at its cadence. You have 30 days; `app_list` lists what
+is in the trash with the days each one has left, and the person can restore one
 from their space's own page without an assistant at all. After 30 days the
 platform erases it, and then there is nothing to restore.
 

@@ -23,6 +23,7 @@ import {
   vocabFile,
 } from './probe.ts'
 import { FREE, monthOf } from './meter.ts'
+import type { Listed } from './tools.ts'
 import { minted } from './mcp-probe.ts'
 import { token } from '@yaks/graph'
 
@@ -576,9 +577,9 @@ test('app_list answers what the month cost', async () => {
       slug: meteredToo,
       title: 'Too',
     })
-    let said = await agent.tool('app_list', { space: metered35 })
-    assertStringIncludes(said, '1200 estimated request units')
-    assertStringIncludes(said, '241 MB')
+    let said = await agent.answer('app_list', { space: metered35 })
+    let [space] = (said.value as { spaces: Listed[] }).spaces
+    assertEquals(space.apps[0].usage, { requests: 1200, bytes: 252_706_816 })
 
     // The one number analytics cannot answer: what a store weighs. It comes
     // off the store itself (graph.ts `/graph`), which is where the sweep
@@ -593,15 +594,15 @@ test('app_list answers what the month cost', async () => {
     assert((await graph.json()).bytes > 0, 'the store says what it weighs')
 
     // Where the space stands against what it is allowed (T-32758), in the
-    // same answer: nothing here is near a ceiling, so it is only the numbers.
-    assertStringIncludes(said, `${metered35} (free tier`)
-    assertStringIncludes(said, '1 of 5 apps')
+    // same answer: nothing here is near a ceiling, so only the value says it.
+    assertEquals(space.standing.tier, 'free')
+    assertEquals(space.standing.limits.apps, { used: 1, limit: 5 })
+    assertEquals(space.standing.limits.requests?.used, 1200)
+    assert(!said.text.includes('limit'), said.text)
 
-    // And the other address every app has (T-34149), in the words: nobody
-    // should have to derive a mailbox from a slug. An app is a directory row
-    // rather than an entity in the caller's graph, so the listing says it in
-    // the sentence and there is nowhere else for it to be.
-    assertStringIncludes(said, `${metered35}.recipes@yaks.app`)
+    // And the other address every app has (T-34149): nobody should have to
+    // derive a mailbox from a slug.
+    assertEquals(space.apps[0].mailbox, `${metered35}.recipes@yaks.app`)
   } finally {
     await k.stop()
   }
@@ -655,11 +656,10 @@ test('the free tier: a warning once, then the refusals', async () => {
 
     // The line rides the unseen channel, once — the reply after is quiet. A
     // look-up leaves it unsaid: only a tool that writes carries the channel.
-    assert(
-      !(await agent.tool('app_list', { space: brim36 })).includes(
-        '## ceiling',
-      ),
-    )
+    let listed = await agent.tool('app_list', { space: brim36 })
+    assert(!listed.includes('## ceiling'))
+    // The listing says it too, in a sentence of its own, whenever it is near.
+    assertStringIncludes(listed, '40,500 of 50,000 request units')
     let files = { space: brim36, app: 'one', op: 'list' }
     let said = await agent.tool('app_files', files)
     assertStringIncludes(said, '## ceiling')
