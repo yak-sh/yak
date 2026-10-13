@@ -3,7 +3,8 @@
 // fields it carries, as JSON — so a client reads the same shape `apply()`
 // threw, not a prose translation of it. A stale precondition still reports
 // which property moved and what the graph holds now; a refused property still
-// names itself.
+// names itself, and a write that did not fit the vocabulary says
+// `misfit: true` (@yaks/graph `Misfit`).
 //
 // The HTTP status is derived from the error's `name` alone, by @yaks/graph's
 // `status`: the one table every door reads to tell a caller's refusal from a

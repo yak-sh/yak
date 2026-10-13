@@ -36,7 +36,7 @@ import { flat, projection } from '@yaks/graph/read'
 import { requested } from '@yaks/graph/bundle'
 import { resolve } from '@yaks/graph/identity'
 import { identities } from '@yaks/graph/identity'
-import { status } from '@yaks/graph/errors'
+import { misfit, status } from '@yaks/graph/errors'
 import { keys } from '@yaks/key'
 import {
   type App,
@@ -63,6 +63,7 @@ import {
 import { refuse, rejected } from './tool.ts'
 import { caught } from './defects.ts'
 import { said as told } from './writes.ts'
+import { answered } from './meta.ts'
 import { sandboxed } from './installed.ts'
 
 // The words the PLATFORM says in every store, including its vocabulary and
@@ -935,7 +936,13 @@ let sent = (
     if (res.status == 202) {
       throw refuse('unavailable', `${at(r)}: ${await told(res)}`)
     }
-    if (!res.ok) throw rejected(res.status, `${at(r)}: ${await told(res)}`)
+    if (!res.ok) {
+      // A write that did not fit the store's words still says so, so the
+      // page's door can file it as the app's break (apps.ts `mistaken`).
+      let no = await answered(res)
+      let e = rejected(res.status, `${at(r)}: ${no.message}`)
+      throw misfit(no) ? Object.assign(e, { misfit: true }) : e
+    }
     return await res.json() as Bundle[]
   }, {
     method: 'POST',

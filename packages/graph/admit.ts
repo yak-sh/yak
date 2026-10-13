@@ -24,17 +24,21 @@
 // the vocabulary's own `check`, not a JSON Schema validator: this package
 // depends on no validator, and a graph that wants full JSON Schema validation
 // registers one as an `admit` hook.
+//
+// Every refusal here is a `Misfit`: the writer's code is wrong about the
+// words. A bound a schema opts into (admit_schema.ts) refuses a value someone
+// typed, on purpose, and stays a plain `Refused`.
 
 import { cast, unknownComps, unknownProps, type Vocab } from '@yaks/vocab'
 import type { Bundle, Comp } from './bundle.ts'
 import { comps, dead, formed as shaped, reserved } from './bundle.ts'
 
-import { Refused } from './errors.ts'
+import { Misfit } from './errors.ts'
 import { prunable } from './prune.ts'
-export { Refused } from './errors.ts'
+export { Misfit, misfit, Refused } from './errors.ts'
 
 let serverOwned = (name: string, prop: string): never => {
-  throw new Refused(
+  throw new Misfit(
     `${name}.${prop} is server-owned (stamped); only trusted writers may write it`,
   )
 }
@@ -107,11 +111,11 @@ let admitComp = (
   // The refusal lists the vocabulary, not just the mistake: a caller writing a
   // property that does not exist has the wrong idea of this component, and the
   // properties it actually has are the shortest way to correct that.
-  if (alien.length) throw new Refused(unknownProps(v, name, alien))
+  if (alien.length) throw new Misfit(unknownProps(v, name, alien))
   if (ignored && !Object.keys(kept).length) return undefined
   let cut = cast(v, name, kept)
   let errs = v.check(name, cut, { stamped: trusted })
-  if (errs.length) throw new Refused(errs.join('; '))
+  if (errs.length) throw new Misfit(errs.join('; '))
   return { ...cut, ...derived }
 }
 
@@ -159,7 +163,7 @@ export let admit = (
       if (!reserved(k) && !vocab.comp(k)) alien.add(k)
     }
   }
-  if (alien.size) throw new Refused(unknownComps([...alien], teach))
+  if (alien.size) throw new Misfit(unknownComps([...alien], teach))
   if (!trusted) unstamped(bundles, vocab, ignoreStamped)
   return bundles.flatMap((b) => {
     // Identity is reserved structurally, but its declared properties still

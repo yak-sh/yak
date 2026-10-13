@@ -40,7 +40,10 @@ import { isTestAddress } from './lib/bots.ts'
 // for a key its owner mistyped. Nobody's code fell over, and the page that
 // catches one is meant to act on it, since the guide teaches
 // `e.signIn ? location = e.signIn`. A break is what nobody chose: a throw,
-// or a 5xx (`failed` below).
+// or a 5xx (`failed` below). Two 400s are the page's own code wrong, and the
+// door that answers them files them itself (apps.ts `mistaken`): a query the
+// store cannot read, and a write its vocabulary cannot keep (@yaks/graph
+// `misfit`).
 //
 // Where there is no status — a kernel part that relayed a door's no by
 // throwing what it was answered (kernel.ts's catch-all) — the answer's own

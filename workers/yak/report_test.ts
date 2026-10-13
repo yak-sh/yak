@@ -35,6 +35,7 @@ let jeff64 = unique('jeff64')
 let jeff62 = unique('jeff62')
 let jeff63 = unique('jeff63')
 let acme64 = unique('acme64')
+let book65 = unique('book65')
 
 test('a page reports its own breaks, and the agent hears', async () => {
   let k = await kernel()
@@ -269,6 +270,78 @@ test('a refusal the door meant is not a break', async () => {
       told.split('\n').filter((l) => l.startsWith('- ')).length,
       3,
       'the query failure and both page breaks',
+    )
+  } finally {
+    await k.stop()
+  }
+})
+
+// A write the app's own words cannot keep is its page's code wrong, which
+// nobody chose (T-123885): the page still hears the refusal it always has, and
+// the app's errors and listing count it once. A bound the schema opts into
+// refuses what a visitor typed on purpose, and files nothing.
+test("a write the app's own vocabulary refuses is a break", async () => {
+  let k = await kernel()
+  try {
+    let { cookie } = await seed(k, [{
+      slug: book65,
+      apps: ['guests', 'wall'],
+    }])
+    let agent = connector(k, cookie)
+    let app = { space: book65, app: 'guests' }
+    let words = vocabFile({
+      signature: {
+        stars: { type: 'number' },
+        note: { type: 'string', validate: true, maxLength: 8 },
+      },
+    })
+    for (let one of ['guests', 'wall']) {
+      await agent.tool('app_files', {
+        space: book65,
+        app: one,
+        files: [{ path: 'vocab.json', content: words }],
+      })
+      await agent.tool('app_deploy', { space: book65, app: one })
+    }
+    let signer = (on: string) => async (signature: Comp) => {
+      let page = client(k, `${book65}.yaks.app`, on, cookie)
+      let r = await page.post({ entities: [{ signature }] })
+      return { status: r.status, said: await r.json() }
+    }
+    let sign = signer('guests')
+
+    let mistyped = {
+      status: 400,
+      said: {
+        error: { code: 'refused', message: 'signature.stars is a number' },
+      },
+    }
+    assertEquals(await sign({ stars: '5' }), mistyped)
+    assertEquals(await sign({ stars: '4' }), mistyped)
+    assertEquals((await sign({ note: 'far too long' })).status, 400)
+    assertEquals((await sign({ stars: 5, note: 'lovely' })).status, 200)
+
+    let told = await agent.tool('app_errors', app)
+    assertMatch(
+      told,
+      /guests v\d+: POST \/guests\/api\/apply — signature\.stars is a number \(2 times/,
+    )
+    assertEquals(
+      told.split('\n').filter((l) => l.startsWith('- ')).length,
+      1,
+      'the bound a visitor met filed nothing',
+    )
+    assertStringIncludes(
+      await agent.tool('app_list', { space: book65 }),
+      '1 open error',
+    )
+
+    // A page writing words another app is home to writes through that home,
+    // and its mistake is still its own app's break.
+    assertEquals((await signer('wall')({ stars: 'x' })).status, 400)
+    assertMatch(
+      await agent.tool('app_errors', { space: book65, app: 'wall' }),
+      /wall v\d+: POST \/wall\/api\/apply — .*signature\.stars is a number/,
     )
   } finally {
     await k.stop()

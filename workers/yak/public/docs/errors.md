@@ -71,9 +71,14 @@ The codes an endpoint returns, and what each means:
   (<https://yaks.app/docs/components.md>). Show the message; for a pace, send
   the same write again once it has run.
 
-A refusal is somebody's deliberate no, so **none of them is filed as a break.**
-The rule is the status code: a 4xx is a choice someone made, a 5xx or a thrown
-error is not.
+A refusal is somebody's deliberate no, so **none of them is filed as a break**,
+with two exceptions where the no is the page's own code being wrong: a query the
+store cannot read, and a write the app's own `vocab.json` cannot keep (a
+component or property it does not declare, a string where it declares a number,
+a server-owned stamp written back). The page still hears those as `refused` at
+400, and each is also filed as a break in `app_errors`, once for every place and
+message. Otherwise the rule is the status code: a 4xx is a choice someone made,
+a 5xx or a thrown error is not.
 
 ## How a page shows one
 

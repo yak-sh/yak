@@ -12,6 +12,29 @@ export class Refused extends Error {
   }
 }
 
+/** A write that does not fit what the graph keeps: a component or property its
+ * vocabulary does not declare, a value of the wrong type, a server-owned
+ * property, a bundle of the wrong shape. The writer's code is wrong about the
+ * words, which no rule chose, so it says `misfit` beside the refusal: a door
+ * can tell a writer's mistake from a deliberate no (a name somebody holds, a
+ * value a schema bounds). It is still a `Refused`, answered as one. */
+export class Misfit extends Refused {
+  misfit = true
+}
+
+/** Whether a refusal says the write did not fit the graph ({@link Misfit}),
+ * thrown here or relayed from another door's answer.
+ *
+ * ```ts
+ * import { equal } from '@yaks/testing'
+ * equal(misfit(new Misfit('book.pages is a number')), true)
+ * equal(misfit(new Refused('the name is held')), false)
+ * equal(misfit({ error: 'Refused', message: 'm', misfit: true }), true)
+ * ```
+ */
+export let misfit = (refusal: unknown): boolean =>
+  (refusal as { misfit?: unknown } | null)?.misfit === true
+
 /** A refused precondition: which property changed, and what it holds now. The
  * committed value is included so the caller can merge onto it. */
 export class Stale extends Error {

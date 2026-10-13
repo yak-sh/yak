@@ -126,7 +126,7 @@ across processes and does not implement every SQL query feature.
 | `@yaks/graph/identity`   | `mint`, `minted`, `identityEid`, `derivedEid`, identity rules, `resolve`, `substitute`, `isAlias`                                                                                                  |
 | `@yaks/graph/provenance` | `signed`, `actorOf`, `writers`, provenance and mark rules                                                                                                                                          |
 | `@yaks/graph/sha256`     | `sha256`, `token`                                                                                                                                                                                  |
-| `@yaks/graph/errors`     | `Refused`, `Stale`, `status`, `STATUS`                                                                                                                                                             |
+| `@yaks/graph/errors`     | `Refused`, `Misfit`, `misfit`, `Stale`, `status`, `STATUS`                                                                                                                                         |
 | `@yaks/graph/storage`    | Storage and transaction types; `detached` for a committed read transaction                                                                                                                         |
 | `@yaks/graph/call`       | Tool naming, argument, actor, and reference helpers                                                                                                                                                |
 | `@yaks/graph/declared`   | Declared-rule matching, input preparation, and output planning                                                                                                                                     |
@@ -1172,7 +1172,11 @@ Trusted writes admit stamped properties. Computed properties are dropped from
 writes except trusted replicas. Send a patch of writable properties, not a whole
 bundle read back with server-owned stamps. `Refused` reports invalid writes;
 `status(error)` maps named errors to HTTP status codes (`Stale` is 409; an
-unlisted error is 500).
+unlisted error is 500). Every refusal core admission makes, and a malformed
+bundle, is a `Misfit`: a `Refused` carrying `misfit: true`, because the writer's
+code is wrong about the words. A door that relays it tells a writer's mistake
+from a deliberate no with `misfit(error)`; a bound a schema opts into refuses a
+value someone typed, and stays a plain `Refused`.
 
 At a host boundary that serves shipped callers, `ignoreStamped` names the
 stamped properties those callers still send. Admission drops only those
@@ -1252,7 +1256,7 @@ bookkeeping can stay temporary. Ordinary writes and `apply({check: true})`
 receive `false`.
 
 ```ts
-import { graph, Refused, status } from '@yaks/graph'
+import { graph, misfit, Refused, status } from '@yaks/graph'
 import { admitSchema } from '@yaks/graph/schema'
 import { ram } from '@yaks/ram'
 import { loadVocab } from '@yaks/vocab'
@@ -1270,14 +1274,17 @@ const vocab = loadVocab({
   },
 })
 const g = graph({ storage: ram(vocab), vocab, plugins: [admitSchema(vocab)] })
-let refusal = 0
-try {
-  await g.apply([{ entity: { eid: 'b1' }, book: { title: 'D' } }])
-} catch (error) {
-  if (!(error instanceof Refused)) throw error
-  refusal = status(error)
+const refused = async (book: Record<string, unknown>) => {
+  try {
+    await g.apply([{ entity: { eid: 'b1' }, book }])
+  } catch (error) {
+    if (!(error instanceof Refused)) throw error
+    return { status: status(error), misfit: misfit(error) }
+  }
 }
-equal(refusal, 400)
+// A bound the schema opts into is a deliberate no; a word it lacks is a misfit.
+equal(await refused({ title: 'D' }), { status: 400, misfit: false })
+equal(await refused({ pages: 3 }), { status: 400, misfit: true })
 equal(await g.get(['b1']), [])
 await g.apply([{ entity: { eid: 'b1' }, book: { title: 42 } }])
 equal((await g.get(['b1']))[0].book, { title: '42' })

@@ -20,7 +20,7 @@
 // except `$alias`, which is how the graph tells the caller which id its
 // `$name` became.
 
-import { Refused } from './errors.ts'
+import { Misfit } from './errors.ts'
 
 /** An entity's id: a string the client generates (a uuid, or a content hash).
  * A reference property reads back as the target's `eid`, so this is also the
@@ -295,12 +295,12 @@ export let coalesced = (bundles: Bundle[]): Bundle[] => {
  */
 export let formed = (bundles: unknown): Bundle[] => {
   if (!Array.isArray(bundles)) {
-    throw new Refused('a batch is an array of bundles')
+    throw new Misfit('a batch is an array of bundles')
   }
   bundles.forEach((b, i) => {
     let eid = b && typeof b == 'object' ? b.entity?.eid : undefined
     if (typeof eid != 'string' || (!eid && b.$prune !== true)) {
-      throw new Refused(
+      throw new Misfit(
         `bundle ${i} needs an entity: {entity: {eid}} — an eid you mint, or ` +
           `'$name' to have the graph mint one`,
       )
@@ -329,7 +329,7 @@ export let requested = (bundles: Bundle[], answered: string[]): Bundle[] => {
   for (let b of bundles) {
     let alien = Object.keys(b).filter((k) => k.startsWith('$') && !known.has(k))
     if (alien.length) {
-      throw new Refused(
+      throw new Misfit(
         `unknown request${alien.length > 1 ? 's' : ''}: ${
           alien.join(', ')
         } — this graph answers ${[...known].join(', ')}`,

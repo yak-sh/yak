@@ -120,7 +120,7 @@ import { releaseStatus } from './release-status.ts'
 import { pageSpeaks } from './lenses.ts'
 import { appDoc } from './vocab.ts'
 import type { Bundle } from '@yaks/graph'
-import { Refused, Stale, status } from '@yaks/graph/errors'
+import { misfit, Refused, Stale, status } from '@yaks/graph/errors'
 import { token } from '@yaks/graph/sha256'
 import { callStored } from './package-tools.ts'
 import { edits, mode, reads, writes } from '@yaks/member'
@@ -271,6 +271,43 @@ let rejection = (error: unknown, tags: Record<string, string>) =>
     'refused',
     error instanceof Error ? error.message : String(error),
   )
+
+// What the page's own code got wrong, as the store refused it: a break in the
+// app, filed here at its door because the page may catch the refusal and the
+// browser reporter deliberately files no 4xx (unseen.ts `refusal`). The page
+// still hears the refusal as it always has. It names the release the page
+// ran, which client.js sends, else the one serving.
+let mistaken = async (
+  req: Request,
+  env: Env,
+  space: Space,
+  app: App,
+  e: unknown,
+  entrypoint: string,
+) => {
+  try {
+    let raw = req.headers.get('x-yak-version')
+    let version = raw != null && /^[0-9]+$/.test(raw) &&
+        Number.isSafeInteger(Number(raw))
+      ? Number(raw)
+      : await serving(env, space, app)
+    let url = new URL(req.url)
+    await noted(
+      {
+        request: `${req.method} ${url.pathname}${url.search}`,
+        version,
+        message: e instanceof Error ? e.message : String(e),
+      },
+      { env, space, app, request: req, entrypoint },
+    )
+  } catch (why) {
+    caught(why, {
+      request: `report ${entrypoint} failure`,
+      space: space.slug,
+      app: app.slug,
+    })
+  }
+}
 
 // An app's API is a machine door even when the address names no app. Keep
 // its missing answer in the same JSON envelope as every refusal below; the
@@ -1613,34 +1650,10 @@ let api = async (
       )
     } catch (e) {
       // A page's query is app code, even when the store answers its invalid
-      // grammar or unknown word with 400. Record it here: the page may catch
-      // the error, and the browser reporter deliberately ignores 4xx answers.
-      // Other refusals stay quiet; platform failures keep their own reporting.
+      // grammar or unknown word with 400. Other refusals stay quiet; platform
+      // failures keep their own reporting.
       let code = e instanceof Error && 'status' in e ? e.status : status(e)
-      if (code == 400) {
-        try {
-          let raw = req.headers.get('x-yak-version')
-          let version = raw != null && /^[0-9]+$/.test(raw) &&
-              Number.isSafeInteger(Number(raw))
-            ? Number(raw)
-            : await serving(env, space, app)
-          let url = new URL(req.url)
-          await noted(
-            {
-              request: `${req.method} ${url.pathname}${url.search}`,
-              version,
-              message: e instanceof Error ? e.message : String(e),
-            },
-            { env, space, app, request: req, entrypoint: 'query' },
-          )
-        } catch (why) {
-          caught(why, {
-            request: 'report query failure',
-            space: space.slug,
-            app: app.slug,
-          })
-        }
-      }
+      if (code == 400) await mistaken(req, env, space, app, e, 'query')
       return rejection(e, {
         request: 'GET /api/query',
         space: space.slug,
@@ -1756,6 +1769,10 @@ let api = async (
           { status: 202 },
         )
       }
+      // A write the store's words cannot keep is the page's code wrong about
+      // its own vocabulary. Every other no here (a name somebody holds, a
+      // bound the schema sets, access, a pace) was meant.
+      if (misfit(e)) await mistaken(req, env, space, app, e, 'apply')
       return rejection(e, {
         request: 'POST /api/apply',
         space: space.slug,

@@ -47,23 +47,27 @@ export let KERNEL: Record<string, string> = { 'x-yak-kernel': '1' }
 // sentence a caller is owed — a door hands it on as it came, never wrapped in
 // the envelope it travelled in. A body that is not one is the message whole.
 // The original body and status also travel with the error so a catch that
-// answers a JSON client can return the door's refusal intact.
+// answers a JSON client can return the door's refusal intact, and so do the
+// fields the refusal carried: a write that did not fit the store's vocabulary
+// still says `misfit` (@yaks/graph `misfit`).
 export let answered = async (r: Response) => {
   let text = await r.text()
-  let said = refusal(text)
-  return Object.assign(new Error(said?.message ?? text), {
+  let { error, message, ...carried } = refusal(text)
+  return Object.assign(new Error(typeof message == 'string' ? message : text), {
+    ...carried,
     status: r.status,
     body: text,
-    ...(said?.error ? { name: said.error } : {}),
+    ...(typeof error == 'string' ? { name: error } : {}),
   })
 }
 
-let refusal = (text: string): { error?: string; message: string } | null => {
+// A store's `{error, message, …}`, or nothing when the body is not one.
+let refusal = (text: string): Record<string, unknown> => {
   try {
     let said = JSON.parse(text)
-    return typeof said?.message == 'string' ? said : null
+    return typeof said?.message == 'string' ? said : {}
   } catch {
-    return null
+    return {}
   }
 }
 

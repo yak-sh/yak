@@ -560,12 +560,21 @@ expected client refusals unlogged.
 
 ```ts
 import { json, refusal, refuse, Unauthorized } from '@yaks/api'
+import { Misfit } from '@yaks/graph/errors'
 import { equal } from '@yaks/testing'
 
 const error = new Unauthorized('sign in')
 equal(refusal(error), { error: 'Unauthorized', message: 'sign in' })
 equal(refuse(error).status, 401)
 equal(await json({ ready: true }).json(), { ready: true })
+// A write that did not fit the vocabulary is a `Refused` that says so.
+const misfit = new Misfit('book.pages is a number')
+equal(refusal(misfit), {
+  error: 'Refused',
+  message: 'book.pages is a number',
+  misfit: true,
+})
+equal(refuse(misfit).status, 400)
 ```
 
 | Status | Error names                                               |
