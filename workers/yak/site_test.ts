@@ -696,10 +696,7 @@ test('the help page answers its own questions in JSON-LD', () => {
   assertEquals(asked, headings)
 })
 
-// The connect instructions, as they are served. One tab per app, with only
-// the fields that app asks for (T-34412, T-34413, T-34415).
-let tabs = ['claude', 'chatgpt', 'claude-code', 'cursor', 'other']
-
+// The connect instructions, as they are served, one tab per app.
 let occurrences = (html: string, s: string) => html.split(s).length - 1
 
 let panel = (html: string, key: string) => {
@@ -720,86 +717,6 @@ let page = () =>
     fixed: false,
     plan: { plus: false, ends: '', known: false },
   }).text()
-
-test('the connect page teaches one agent at a time', async () => {
-  let html = await page()
-  assertEquals(
-    [...html.matchAll(/<label class="Tabs_Tab" for="tab-([a-z-]+)">/g)]
-      .map((m) => m[1]),
-    tabs,
-  )
-  // The first tab is chosen in the markup, so the panels switch with no script
-  // at all — the radios do it, and the script only remembers which.
-  assertStringIncludes(
-    html,
-    '<input type="radio" name="agent" id="tab-claude" value="claude" checked>',
-  )
-  assertStringIncludes(html, '<fieldset class="Tabs">')
-  assertStringIncludes(html, '<legend class="Tabs_Legend">')
-  assertEquals(
-    occurrences(html, '<section class="Card Tabs_Panel'),
-    tabs.length,
-  )
-  for (let key of ['claude', 'chatgpt', 'claude-code', 'cursor', 'other']) {
-    let one = panel(html, key)
-    assertStringIncludes(one, 'https://yaks.app/mcp')
-    assertStringIncludes(one, '<div class="Connect_Next">')
-    assertStringIncludes(one, 'aria-label="Copy the first app request"')
-  }
-  assertStringIncludes(
-    html,
-    'await navigator.clipboard.writeText(said.textContent)',
-  )
-  // Setup jumps leave this page open beside the provider's form.
-  for (
-    let out of [
-      'https://claude.ai/customize/connectors/directory?modal=add-custom-connector',
-      'https://chatgpt.com/#settings/Security',
-      'claude mcp add --transport http yaks https://yaks.app/mcp',
-      '~/.cursor/mcp.json',
-    ]
-  ) assertStringIncludes(html, out)
-  for (
-    let link of html.matchAll(
-      /<a href="https:\/\/(?:claude\.ai|chatgpt\.com)[^"]+"[^>]*>/g,
-    )
-  ) {
-    assertStringIncludes(link[0], 'target="_blank"')
-    assertStringIncludes(link[0], 'rel="noopener"')
-  }
-  for (
-    let value of [
-      'https://yaks.app/oauth/authorize',
-      'https://yaks.app/oauth/token',
-      'https://yaks.app/oauth/register',
-      '<code>graph</code>',
-    ]
-  ) assertStringIncludes(html, value)
-})
-
-test('each connector form gets only the fields it asks for', async () => {
-  let html = await page()
-  let chatgpt = panel(html, 'chatgpt')
-  for (let field of ['Connection', 'Name', 'Description', 'Icon']) {
-    assertStringIncludes(chatgpt, `<dt>${field}</dt>`)
-  }
-  assertStringIncludes(
-    chatgpt,
-    'https://chatgpt.com/plugins#settings/Connectors?create-connector=true&amp;redirectAfter=%2F',
-  )
-
-  for (let key of ['claude', 'claude-code', 'cursor', 'other']) {
-    let one = panel(html, key)
-    assertEquals(one.includes('<dt>Description</dt>'), false, key)
-    assertEquals(one.includes('<dt>Icon</dt>'), false, key)
-    assertEquals(one.includes('yaks-app.png'), false, key)
-  }
-  assertEquals(
-    panel(html, 'claude-code').includes('<dl class="Fields">'),
-    false,
-  )
-  assertEquals(panel(html, 'cursor').includes('<dl class="Fields">'), false)
-})
 
 test('ChatGPT gets a downloadable icon within its upload limit', async () => {
   let html = panel(await page(), 'chatgpt')

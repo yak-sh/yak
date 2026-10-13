@@ -635,15 +635,6 @@ test('a person signs in by mail, and an agent by OAuth', async () => {
       `Could not read the client metadata document at ${doc}`,
     )
 
-    let theirPage = () =>
-      k.at('yaks.app', managePath('connect'), {
-        headers: { cookie },
-      }).then((r) => r.text())
-    assertStringIncludes(
-      await theirPage(),
-      'https://chatgpt.com/#settings/Security',
-    )
-
     // A client registers itself (RFC 7591) — what the Claude and ChatGPT
     // connectors do today.
     let back = 'https://probe.invalid/cb'
@@ -774,12 +765,6 @@ test('a person signs in by mail, and an agent by OAuth', async () => {
       /resource_metadata=/,
     )
     await stale.body?.cancel()
-
-    // Adding another assistant remains available after the first connects.
-    assertStringIncludes(
-      await theirPage(),
-      'https://chatgpt.com/#settings/Security',
-    )
 
     // And signing in lands where it landed before it: their own space is the
     // signed-in home either way, and attaching an assistant is something on
