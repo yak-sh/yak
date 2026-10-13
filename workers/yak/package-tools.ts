@@ -83,11 +83,18 @@ let published = new Set([
 ])
 export let packageName = (name: string) =>
   published.has(name) ? `store_${name}` : name
+// A package's prose names its tools by the package's names; what the connector
+// hands over (a description, the memory passage) names them as it lists them.
+let mention = new RegExp(`(?<!\\w)(${[...published].join('|')})(?!\\w)`, 'g')
+export let listedIn = (prose: string) => prose.replace(mention, packageName)
 // References belong to the selected store. The connector's graph is a union
 // of apps, so resolving a reference there would pick another app's names or
 // reject a directory entity before the call reaches its own runner.
 let routed = (schema: Record<string, unknown>): Record<string, unknown> => {
   let { ref: _, ...out } = schema
+  if (typeof out.description == 'string') {
+    out.description = listedIn(out.description)
+  }
   if (out.properties) {
     out.properties = Object.fromEntries(
       Object.entries(out.properties as Record<string, Record<string, unknown>>)
@@ -102,6 +109,7 @@ let routed = (schema: Record<string, unknown>): Record<string, unknown> => {
 export let PACKAGE_TOOLS = declarations.map(({ kind, definition, name }) => ({
   ...definition,
   name: packageName(name),
+  description: listedIn(definition.description),
   inputSchema: {
     ...routed(definition.inputSchema ?? {}),
     properties: {

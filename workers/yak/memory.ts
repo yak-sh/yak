@@ -32,6 +32,7 @@ import type { Space } from './directory.ts'
 import type { Env } from './env.ts'
 import { meta } from './meta.ts'
 import { caught } from './defects.ts'
+import { listedIn } from './package-tools.ts'
 
 /**
  * Ranking by meaning: the directory's vectors of the space's own memories,
@@ -95,11 +96,14 @@ export let memories = async (
  *
  * The heading is named after whoever spoke most recently, off the byline the
  * store already answered with — a space is almost always one person, and the
- * entries name anybody else who spoke. So no name is looked up for this.
+ * entries name anybody else who spoke. So no name is looked up for this. The
+ * tools it names are named as the connector lists them.
  */
 export let told = async (env: Env, space: Space): Promise<string> => {
   // One more than the passage shows, so it knows there are more to say
   // without counting them.
   let held = await memories(env, space, { limit: LAST + 1 })
-  return passage({ name: held[0]?.by ?? '', space: space.slug }, held)
+  return listedIn(
+    passage({ name: held[0]?.by ?? '', space: space.slug }, held),
+  )
 }

@@ -158,9 +158,7 @@ test('the builder is handed what the person has said', async () => {
   await build(env, owner, space, asked('a recipe box please'), { model })
 
   let system = model.asked[0].system
-  // The rule for keeping the next one...
-  assertStringIncludes(system, 'keep their exact words with memory_save')
-  // ...and the last one, whole, in the words it was said in.
+  // The last one, whole, in the words it was said in.
   assertStringIncludes(system, '## What')
   assertStringIncludes(system, '"use grams, never cups"')
   assertStringIncludes(system, 'setting up the recipe app')

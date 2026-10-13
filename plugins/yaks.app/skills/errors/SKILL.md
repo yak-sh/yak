@@ -161,7 +161,8 @@ original app store. A new bug also notifies the platform operator by mail.
 
 New breaks are added to the end of the next reply from a tool that changes
 something, under a heading, one line each. A read-only tool (`app_list`,
-`app_versions`, `memory_recall`) says nothing about them and leaves them unseen:
+`app_versions`, `store_memory_recall`) says nothing about them and leaves them
+unseen:
 
     ## unseen errors
     - E-84 2026-08-14T10:02:11.004Z exception recipes v3: page /recipes/ —

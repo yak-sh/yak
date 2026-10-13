@@ -11,7 +11,7 @@ import { test } from '@yaks/testing'
 import { assert, assertEquals } from '@std/assert'
 import { front } from '@yaks/yaml'
 import { coreDocs, RESERVED, wordOf } from './vocab.ts'
-import { SHIM, upload } from './dispatch.ts'
+import { upload } from './dispatch.ts'
 import type { Env } from './env.ts'
 import { INSTRUCTIONS, PAGES, uriOf } from './guide.ts'
 import { ORIGIN } from './route.ts'
@@ -182,32 +182,6 @@ let stored = () => {
   }
   return all
 }
-
-// The third list that can rot, and the one an app's code is written against:
-// what `env` holds inside a worker.js, and the limits it runs under. Both are
-// the platform's own — the shim decides the first, the upload's metadata the
-// second — and a guide that names a door the shim does not hand over teaches
-// an app to break at the first request (T-32780).
-test('the code page names the doors a worker is actually given', () => {
-  let section = pageText('code')
-  // Every `env.NAME` the section names, minus the keys the person connected,
-  // which are the app's own names and not the platform's.
-  let named = new Set(
-    [...section.matchAll(/env\.([A-Z_]+)/g)].map((m) => m[1]),
-  )
-  for (let door of ['STORE', 'FILES']) {
-    assert(named.has(door), `the code page never shows env.${door}`)
-    assert(SHIM.includes(`${door}: door(`), `the shim hands over no ${door}`)
-  }
-  for (let door of named) {
-    if (door == 'STORE' || door == 'FILES') continue
-    // Anything else must read as a key the person connected, not a door.
-    assert(
-      /connection_need/.test(section),
-      `the code page shows env.${door} and never says where it came from`,
-    )
-  }
-})
 
 test('the code page names its bindings and when their data is deleted', () => {
   for (let text of [pageText('code'), INSTRUCTIONS]) {

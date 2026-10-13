@@ -117,9 +117,9 @@ minutes keeps its window for what was said.
 ## Generate audio with a connected model
 
 An app can ask `bytedance-seed/seed-audio-1-0` for an audio clip. Its owner
-first calls `connection_need` for the app with `integration: 'openrouter'` and
-signs in on the space's connections page. The app never receives the OpenRouter
-key. The entry's text is the sound prompt; this model does not use
+first calls `store_connection_need` for the app with `integration: 'openrouter'`
+and signs in on the space's connections page. The app never receives the
+OpenRouter key. The entry's text is the sound prompt; this model does not use
 `using.instructions` or typed questions.
 
     await apply({
@@ -167,11 +167,11 @@ time in the past checks it again. A `wake` can check it later, and
 a builder, since model turns spend the owner's account budget.
 
 A builder written with `staged: {}` builds nothing by itself, so a new prompt
-can be tried on a few rows first. `builder_build` builds it now: `only` names
-the rows to build for, `limit` takes the first few, and a `template`, `provider`
-or `model` tried in place of its own builds a shadow variant that nothing else
-selects. Remove the mark (`staged: null`) to build the rest; a row already built
-with the same prompt is not asked again.
+can be tried on a few rows first. `store_builder_build` builds it now: `only`
+names the rows to build for, `limit` takes the first few, and a `template`,
+`provider` or `model` tried in place of its own builds a shadow variant that
+nothing else selects. Remove the mark (`staged: null`) to build the rest; a row
+already built with the same prompt is not asked again.
 
 ## One call, answered at once
 
@@ -263,13 +263,14 @@ A model's own rate is shared by every app on the platform. A turn that meets it
 is asked again; after three failures in a row the transcript rests as `failed`
 until a new entry asks.
 
-Builder definition edits do not regenerate existing outputs. `builder_build`
-without redo flags builds only new bindings or changed inputs. `outdated: true`
-redoes selected bindings made under an older definition; `rebuild: true` redoes
-every selected binding, including unchanged ones. Both accept `only` and
-`limit`. Try an alternate template or model as a shadow first.
-`.build.outdated=true` finds older definitions; `.built.current=true` keeps
-selecting the chosen take until its binding disappears or another take is
-chosen. A successful redo adds takes, newest chosen by default; `builder_choose`
-chooses a retained earlier output without spending. List all takes with
-`.built.build=<build>&*`; `.chosen` shows the one in use.
+Builder definition edits do not regenerate existing outputs.
+`store_builder_build` without redo flags builds only new bindings or changed
+inputs. `outdated: true` redoes selected bindings made under an older
+definition; `rebuild: true` redoes every selected binding, including unchanged
+ones. Both accept `only` and `limit`. Try an alternate template or model as a
+shadow first. `.build.outdated=true` finds older definitions;
+`.built.current=true` keeps selecting the chosen take until its binding
+disappears or another take is chosen. A successful redo adds takes, newest
+chosen by default; `store_builder_choose` chooses a retained earlier output
+without spending. List all takes with `.built.build=<build>&*`; `.chosen` shows
+the one in use.

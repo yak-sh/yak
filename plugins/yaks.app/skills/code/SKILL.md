@@ -21,9 +21,9 @@ Write one when the app has to do something a page cannot be trusted with, or
 cannot do at all:
 
 - **A key.** An API key in a page is a key you have given away — anyone with the
-  link can read it out of the source. `connection_need` asks the person for one,
-  and the worker calls out with it without ever holding it. This is the reason
-  most workers exist.
+  link can read it out of the source. `store_connection_need` asks the person
+  for one, and the worker calls out with it without ever holding it. This is the
+  reason most workers exist.
 - **A machine calling in.** A webhook, a form post from somewhere else, a cron
   on another service: none of them run your page, so none of them can use the
   client.
@@ -443,10 +443,11 @@ What they do not prove:
 
 ## Keys
 
-    connection_need(app, integration: 'weather', hosts: ['api.weatherapi.com'])
-    connection_list()          → what is connected, and which app reads which
+    store_connection_need(app, owner: space, integration: 'weather',
+      hosts: ['api.weatherapi.com'])
+    store_connection_list(owner: space)  → what is connected, and to which apps
 
-An app never holds a key. `connection_need` says what it needs — a built
+An app never holds a key. `store_connection_need` says what it needs — a built
 integration by name, or a name of your own with the hosts its key may be sent to
 — and the person pastes the key, or signs in, on the space's connections page
 (`yaks.app/manage/connections`). It goes from there to the vault; it is never in
@@ -454,9 +455,9 @@ this chat, the app's data, its history or any tool's answer. Never ask the
 person to paste a key to you, and never invent one.
 
 If the space already has a connected account for that integration,
-`connection_list` shows its connection id and the apps using it. The space's
-owner can attach it to another app with `connection_attach`, naming that app and
-connection id, or select the app under the connection at
+`store_connection_list` shows its connection id and the apps using it. The
+space's owner can attach it to another app with `connection_attach`, naming that
+app and connection id, or select the app under the connection at
 `yaks.app/manage/connections?space=<slug>` and click **Attach to app**.
 Attaching is the owner's grant: the app starts with access for its members only,
 receives a sentinel, and uses the connection's existing scopes. The owner can

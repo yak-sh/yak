@@ -400,7 +400,8 @@ connection_attach:
     Give an app access to one connected connection its space already owns.
     Only the space's owner may do this. The app starts members-only, receives
     a sentinel rather than the credential, and keeps any binding it already
-    asked for. Find the connection id with connection_list. No key or token
+    asked for. Find the connection id with store_connection_list. No key or
+    token
     passes through this tool or its answer. Documentation:
     https://yaks.app/docs/code.
 connection_need:

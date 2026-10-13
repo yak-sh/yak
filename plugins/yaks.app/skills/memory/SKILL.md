@@ -1,14 +1,14 @@
 ---
 name: memory
-description: "What the person said (yaks.app). memory_save and memory_recall: keeping what the person said about how they want things done, in their own words rather than your summary of them — what belongs in a memory, what context is for and what it is not, when to reach for each tool, how a recall is ranked, how a memory differs from the notes an app keeps, and where a document you wrote goes instead: project documents, written into the app's store as entities and found again with search."
+description: "What the person said (yaks.app). store_memory_save and store_memory_recall: keeping what the person said about how they want things done, in their own words rather than your summary of them — what belongs in a memory, what context is for and what it is not, when to reach for each tool, how a recall is ranked, how a memory differs from the notes an app keeps, and where a document you wrote goes instead: project documents, written into the app's store as entities and found again with search."
 ---
 
 # What the person said
 
 A person says how they want things done once — "use grams, never cups" — and
 then says it again next month, to a different agent, because the first
-conversation ended. `memory_save` is where that sentence goes to stop being
-said, and `memory_recall` is how it comes back.
+conversation ended. `store_memory_save` is where that sentence goes to stop
+being said, and `store_memory_recall` is how it comes back.
 
 The rule is one line long: **keep their words, not your summary of them.**
 
@@ -21,7 +21,7 @@ The map is at <https://yaks.app/docs.md>.
 
 Two things go in, and only two:
 
-    memory_save {
+    store_memory_save {
       said: 'use grams, never cups',
       context: 'setting up the recipe app',
       about: 'recipes'
@@ -32,8 +32,8 @@ line somebody needs in order to read that sentence later — what was being talk
 about when they said it. `about` names an app, by slug, where the words were
 about one; leave it out where they were about everything.
 
-That is the whole shape. There is no title, no category, no summary field, and
-nothing for what you concluded from what they said.
+That is all a memory needs, and there is no field for what you concluded from
+what they said.
 
 ## Why verbatim
 
@@ -81,22 +81,21 @@ _how_ rather than _what_: "always show me the link", "keep the pages plain",
 Recall before you build or change anything, and whenever a choice is one they
 might already have made:
 
-    memory_recall { words: 'how should the pages look' }
+    store_memory_recall { said: 'pages' }
 
-Give it a few words describing what you are about to do. Results are ranked by
-meaning where this platform can — the memories nearest to what you are asking
-about, whatever wording either of you used — and by the words themselves
-otherwise. With no `words` at all you get the newest.
+Give it words you expect the memory to hold, not a paraphrase: it answers the
+memories holding all of them, newest first. With no `said` at all you get the
+newest.
 
-Each one comes back whole: the sentence, its context, who said it and when.
-Never a snippet — half of what somebody said is worse than none of it.
+Each one comes back whole: the sentence and its context. Never a snippet — half
+of what somebody said is worse than none of it.
 
 ## They come back with `about`
 
 The newest few come back with `about`, under a heading of their own, beside the
 notes of every app you can reach — so one call at the top of a conversation is
-usually the whole of it. `memory_recall` is for the rest, and for the moment a
-particular question comes up.
+usually the whole of it. `store_memory_recall` is for the rest, and for the
+moment a particular question comes up.
 
 They belong to the space, not to an app. Everyone in the space reads them and
 everyone who may write there can save one, so a thing said to one agent about
@@ -114,7 +113,8 @@ one app is known to every agent working anywhere in that space.
   "use grams, never cups".
 
 When they state a rule for one app, both are right: keep their sentence with
-`memory_save`, and write the rule the app is to be built by into its `NOTES.md`.
+`store_memory_save`, and write the rule the app is to be built by into its
+`NOTES.md`.
 
 ## Project documents
 
@@ -143,8 +143,8 @@ moment it is written — by anyone, in any conversation, including you next week
     graph_show({ ids: ['combat'] })
 
 Give `search` the words that are in the document, not the question you want
-answered: it matches the text as a phrase, ranked, where `memory_recall` ranks
-by meaning. A trailing `*` prefix-matches the last word.
+answered: it matches the text as a phrase, ranked. A trailing `*` prefix-matches
+the last word.
 
 Two small things make that work, and both are ordinary:
 
@@ -160,8 +160,8 @@ They are rows in the app's store like any other, so they travel with the app, a
 member reads them, and whatever they held an hour ago can be put back for thirty
 days.
 
-What they must not be is a memory. `memory_save` is for the person's words and
-nothing else, and a document of yours saved there is your prose carrying their
-authority — handed to the next agent as something they said. When they ask for
-an overview to be kept, both halves are right: keep their sentence with
-`memory_save`, and write the document into the store.
+What they must not be is a memory. `store_memory_save` is for the person's words
+and nothing else, and a document of yours saved there is your prose carrying
+their authority — handed to the next agent as something they said. When they ask
+for an overview to be kept, both halves are right: keep their sentence with
+`store_memory_save`, and write the document into the store.

@@ -158,9 +158,9 @@ limit, and the three places it is handed over.
 ## What the person said
 
 The other half is the person's own words, kept for the whole space:
-`memory_save` keeps a sentence verbatim with a line of context, and
-`memory_recall` finds it again by what it is about. Save what they say the
-moment they say how they want something built or handled.
+`store_memory_save` keeps a sentence verbatim with a line of context, and
+`store_memory_recall` finds it again by the words it holds. Save what they say
+the moment they say how they want something built or handled.
 
 Deeper: <https://yaks.app/docs/memory.md> — the shape of a memory, what context
 is for, and how a recall is ranked.
@@ -170,7 +170,7 @@ is for, and how a recall is ranked.
 An app is pages until you give it a `worker.js`, and then it has a server. Every
 request that is not `/api/...` reaches it first, and anything it answers with a
 404 falls through to the files. `env.STORE` is the app's own store as the person
-looking, and a key the person connected (`connection_need`) arrives as
+looking, and a key the person connected (`store_connection_need`) arrives as
 `env.NAME`, which is the reason to write a worker at all.
 
 A worker and a page's scripts may be TypeScript and may import npm packages:

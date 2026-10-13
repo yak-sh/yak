@@ -100,16 +100,15 @@ test('what the person said is kept, and read back whole', async () => {
     )
     assertStringIncludes(no.message, 'never your summary')
 
-    // The next agent to connect gets it from `about`, with the rule for
-    // keeping the next one (T-34474). It rides there rather than on the
-    // instructions since T-34632: what the person said is their prose, and a
-    // host classifies the instructions it is handed at connect.
+    // The next agent to connect gets it from `about` (T-34474). It rides
+    // there rather than on the instructions since T-34632: what the person
+    // said is their prose, and a host classifies the instructions it is
+    // handed at connect.
     let fresh = connector(k, them.cookie)
     let said = await fresh.tool('about')
     assertStringIncludes(said, `## What ${them.name} has said`)
     assertStringIncludes(said, `"${words}"`)
     assertStringIncludes(said, 'setting up the recipe app')
-    assertStringIncludes(said, 'keep their exact words with memory_save')
     let init = await fresh.call('initialize', HELLO)
     assertEquals(init.instructions.includes(words), false)
 

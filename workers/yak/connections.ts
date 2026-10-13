@@ -756,7 +756,8 @@ let CONNECTIONS: Row[] = [
         space: SPACE,
         app: APP,
         connection: str(
-          'the id of a connected connection owned by this space, from connection_list',
+          'the id of a connected connection owned by this space, from ' +
+            'store_connection_list',
         ),
       },
       required: ['app', 'connection'],

@@ -81,7 +81,7 @@ export let PAGES: Record<string, Page> = {
     'slug': 'memory',
     'title': 'What the person said',
     'description':
-      "memory_save and memory_recall: keeping what the person said about how they want things done, in their own words rather than your summary of them — what belongs in a memory, what context is for and what it is not, when to reach for each tool, how a recall is ranked, how a memory differs from the notes an app keeps, and where a document you wrote goes instead: project documents, written into the app's store as entities and found again with search.",
+      "store_memory_save and store_memory_recall: keeping what the person said about how they want things done, in their own words rather than your summary of them — what belongs in a memory, what context is for and what it is not, when to reach for each tool, how a recall is ranked, how a memory differs from the notes an app keeps, and where a document you wrote goes instead: project documents, written into the app's store as entities and found again with search.",
     'brief': 'the words a person wants remembered',
   },
   'models': {
@@ -371,7 +371,7 @@ export let WORDS: Record<string, Words> = {
   'connection_attach': {
     'title': 'Let an app use an existing connection',
     'description':
-      "Give an app access to one connected connection its space already owns. Only the space's owner may do this. The app starts members-only, receives a sentinel rather than the credential, and keeps any binding it already asked for. Find the connection id with connection_list. No key or token passes through this tool or its answer. Documentation: https://yaks.app/docs/code.",
+      "Give an app access to one connected connection its space already owns. Only the space's owner may do this. The app starts members-only, receives a sentinel rather than the credential, and keeps any binding it already asked for. Find the connection id with store_connection_list. No key or token passes through this tool or its answer. Documentation: https://yaks.app/docs/code.",
   },
   'connection_need': {
     'title': 'Say an app needs a key or a sign-in',
