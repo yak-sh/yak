@@ -660,6 +660,11 @@ test('one read of the bindings still lands each on its own app', async () => {
     { name: 'DB', type: 'd1', resource: 'recipes-db', pending: true },
   ])
   assertEquals(on('garden'), [])
+  // The app asked about is listed alone, and its words say it in full.
+  let one = await call(ctx, 'app_list', { app: 'recipes' })
+  assertStringIncludes(one.text, 'binding: DB (d1) — recipes-db; creation')
+  assertStringIncludes(one.text, 'email ada.recipes@')
+  assertEquals(one.text.includes('/garden/'), false)
 })
 
 test('free custom domains return plan settings before provisioning', async () => {

@@ -594,15 +594,26 @@ test('app_list answers what the month cost', async () => {
     assert((await graph.json()).bytes > 0, 'the store says what it weighs')
 
     // Where the space stands against what it is allowed (T-32758), in the
-    // same answer: nothing here is near a ceiling, so only the value says it.
+    // same answer, in words and as data: nothing here is near a ceiling, so
+    // the line names none.
     assertEquals(space.standing.tier, 'free')
     assertEquals(space.standing.limits.apps, { used: 1, limit: 5 })
     assertEquals(space.standing.limits.requests?.used, 1200)
+    assertStringIncludes(
+      said.text,
+      '1 of 5 apps, 1,200 of 50,000 request units',
+    )
     assert(!said.text.includes('limit'), said.text)
 
-    // And the other address every app has (T-34149): nobody should have to
-    // derive a mailbox from a slug.
+    // The app asked about, in full: its month, and the other address every
+    // app has (T-34149), since nobody should have to derive a mailbox.
     assertEquals(space.apps[0].mailbox, `${metered35}.recipes@yaks.app`)
+    let recipes = await agent.tool('app_list', {
+      space: metered35,
+      app: 'recipes',
+    })
+    assertStringIncludes(recipes, `email ${metered35}.recipes@yaks.app`)
+    assertStringIncludes(recipes, 'this month 1,200 request units, 241 MB')
   } finally {
     await k.stop()
   }
@@ -658,8 +669,9 @@ test('the free tier: a warning once, then the refusals', async () => {
     // look-up leaves it unsaid: only a tool that writes carries the channel.
     let listed = await agent.tool('app_list', { space: brim36 })
     assert(!listed.includes('## ceiling'))
-    // The listing says it too, in a sentence of its own, whenever it is near.
+    // The listing's line for the space names the ceiling it is near.
     assertStringIncludes(listed, '40,500 of 50,000 request units')
+    assertStringIncludes(listed, 'near the limit for request units')
     let files = { space: brim36, app: 'one', op: 'list' }
     let said = await agent.tool('app_files', files)
     assertStringIncludes(said, '## ceiling')

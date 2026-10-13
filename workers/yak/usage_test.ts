@@ -27,9 +27,9 @@ import {
   countedSpend,
   FILES,
   FREE,
+  gauged,
   LETTERS,
   level,
-  nearing,
   PLUS,
   pooled,
   refusedSpend,
@@ -432,17 +432,34 @@ test('the line says every number against its ceiling', () => {
   assertStringIncludes(said, 'App serving pauses at')
 })
 
-test('a space says where it stands only near or at a ceiling, in one sentence', () => {
-  assertEquals(nearing(space({ requests: 39_000 }), 3, NOW), '')
-  let near = nearing(space({ requests: 41_000, emails: 100 }), 3, NOW)
-  assertStringIncludes(near, '41,000 of 50,000 request units')
-  assertStringIncludes(near, '100 of 100 emails')
+test("a space's month is one line, and names a ceiling only near or at it", () => {
+  let line = gauged(
+    space({ requests: 39_000, models: 0.05, realtime: 0.01 }),
+    3,
+    NOW,
+  )
+  for (
+    let said of [
+      '(as of 12:00 UTC)',
+      '3 of 5 apps',
+      '39,000 of 50,000 request units',
+      '0 of 100 emails',
+      '$0.06 of model use and voice ($0.01 of it voice)',
+    ]
+  ) assertStringIncludes(line, said)
+  assert(!line.includes('limit') && !line.includes('\n'), line)
+  let near = gauged(space({ requests: 41_000, emails: 100 }), 3, NOW)
+  assertStringIncludes(near, 'at or near the limit for request units')
+  assertStringIncludes(near, 'emails; plan settings: ')
   assertStringIncludes(near, 'https://yaks.app/manage/billing?space=jeff')
-  assert(!near.includes('of 5 apps'), 'three of five apps is not near')
-  assertEquals(near.split('. ').length, 1)
-  assertStringIncludes(nearing(space(), 5, NOW), '5 of 5 apps')
+  assertStringIncludes(gauged(space(), 5, NOW), 'at the limit for apps;')
   // A comped space has no app ceiling to be near.
-  assertEquals(nearing({ ...space(), slug: 'yourname' }, 50, NOW), '')
+  assert(!gauged({ ...space(), slug: 'yourname' }, 50, NOW).includes('limit'))
+  // Before the month's first sweep, what it reads is no reading at all.
+  let early = gauged(space({ at: '', emails: 3 }), 1, NOW)
+  assertStringIncludes(early, 'request units and app data not read yet')
+  assertStringIncludes(early, '3 of 100 emails')
+  assert(!early.includes('of 50,000'), early)
 })
 
 test('before the first sweep the line says so, not zero', () => {

@@ -82,9 +82,8 @@ an hour, and nothing for speaking. Ten people each hearing three others talk for
 an hour is about $0.03.
 
 Voice spends the same allowance as models: $0.20 a month on a free space, shared
-by the free spaces its owner has, and $3.00 on the Plus plan. `app_list`'s
-structured result says how much of it the month has spent, and how much of that
-was voice. When it is spent, a new call and a new voice are refused (`limit`),
-the voices already heard go quiet within a minute, and everything else in the
-app keeps working. Voice comes back on the 1st, or once the space moves to the
-Plus plan.
+by the free spaces its owner has, and $3.00 on the Plus plan. `app_list` says
+how much of it each space's month has spent, and how much of that was voice.
+When it is spent, a new call and a new voice are refused (`limit`), the voices
+already heard go quiet within a minute, and everything else in the app keeps
+working. Voice comes back on the 1st, or once the space moves to the Plus plan.

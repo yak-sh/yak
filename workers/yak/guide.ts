@@ -237,9 +237,9 @@ compatibility_date, compatibility_flags, vars, d1_databases,
 r2_buckets, durable_objects.bindings with local class_name, migrations,
 vectorize, vpc_services and ai. D1 databases, R2 buckets and Vectorize indexes belong to that app and
 are created at deploy; a new Vectorize index names dimensions and metric, or a
-preset. app_deploy reports unsupported settings and names the bindings.
-Removing a binding keeps its resource and data until the app is
-permanently deleted, including its 30 days in the trash. vpc_services
+preset. app_deploy reports unsupported settings and names the bindings, and
+so does app_list(app). Removing a binding keeps its resource and data until
+the app is permanently deleted, including its 30 days in the trash. vpc_services
 ({binding}) reaches the paths the space owner opened on a machine the space has
 a tunnel to, as env.BINDING.fetch(url); an installed app, or a space with no
 tunnel, is refused it. ai ({binding}) gives the worker env.BINDING.run(model,

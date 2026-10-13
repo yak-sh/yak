@@ -1921,8 +1921,8 @@ test('photo and file uploads enforce space R2 limits from actual bytes', async (
     let listing = await call({ env, dir, person: ADA }, 'app_list', {
       space: 'ada',
     })
-    // Near the ceiling, the listing says so in a sentence (meter.ts
-    // `nearing`), and its value carries the reading whole.
+    // The space's line says where it stands (meter.ts `gauged`), and its
+    // value carries the reading whole.
     assertStringIncludes(
       listing.text,
       `${size(cap - 2)} of ${size(cap)} of photos and files`,

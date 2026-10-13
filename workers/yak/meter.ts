@@ -523,39 +523,66 @@ export let standingOf = (
   }
 }
 
-// Each ceiling as a person reads it. Request units say what happens at the
-// limit because nobody is refused it to their face: visitors are (apps.ts).
-let READ: Record<Ceiling, (g: Gauge) => string> = {
-  apps: (g) => `${count(g.used)} of ${count(g.limit)} apps`,
-  requests: (g) =>
-    `${count(g.used)} of ${count(g.limit)} request units this month ` +
-    '(its apps pause for visitors at the limit)',
-  bytes: (g) => `${size(g.used)} of ${size(g.limit)} of app data`,
-  files: (g) => `${size(g.used)} of ${size(g.limit)} of photos and files`,
-  emails: (g) => `${count(g.used)} of ${count(g.limit)} emails this month`,
-  builds: (g) => `${count(g.used)} of ${count(g.limit)} builds this month`,
-  seconds: (g) =>
-    `${count(g.used)} of ${count(g.limit)} build seconds this month`,
+// Each ceiling as a person reads it: what it is called, and how much of it.
+// Request units say what happens at the limit because nobody is refused them
+// to their face: visitors are (apps.ts).
+let NAME: Record<Ceiling, string> = {
+  apps: 'apps',
+  requests: 'request units (its apps pause for visitors at the limit)',
+  bytes: 'app data',
+  files: 'photos and files',
+  emails: 'emails',
+  builds: 'builds',
+  seconds: 'build seconds',
 }
 
-/** Where a space stands, in one sentence, only when a ceiling is near or
- * reached: each one at four fifths or past it, and where the plan is
- * settled. Nothing otherwise, since nothing needs saying. */
-export let nearing = (
+let READ: Record<Ceiling, (g: Gauge) => string> = {
+  apps: (g) => `${count(g.used)} of ${count(g.limit)} apps`,
+  requests: (g) => `${count(g.used)} of ${count(g.limit)} request units`,
+  bytes: (g) => `${size(g.used)} of ${size(g.limit)} of app data`,
+  files: (g) => `${size(g.used)} of ${size(g.limit)} of photos and files`,
+  emails: (g) => `${count(g.used)} of ${count(g.limit)} emails`,
+  builds: (g) => `${count(g.used)} of ${count(g.limit)} builds`,
+  seconds: (g) => `${count(g.used)} of ${count(g.limit)} build seconds`,
+}
+
+// What only the hourly sweep reads. Before its first reading of the month
+// these are no reading at all, and zero would be a claim (`asOf`).
+let SWEPT: Ceiling[] = ['requests', 'bytes']
+
+/**
+ * Where a space stands this month, in one line: every ceiling it answers to,
+ * what models and voice cost here from the owner's account budget, and, at
+ * four fifths of a ceiling or past it, which ones and where the plan is
+ * settled. The account's budget is shared by its owner's spaces, so the line
+ * says what this one spent and no ceiling of its own.
+ */
+export let gauged = (
   space: Space,
   apps: number,
   now = new Date(),
   env: Host = {},
 ) => {
-  let close = (Object.entries(gauges(space, apps, now)) as [Ceiling, Gauge][])
-    .filter(([, g]) => full(g) >= WARN)
-  if (!close.length) return ''
+  let m = spent(space, now)
+  let read = asOf(m.at)
+  let all = Object.entries(gauges(space, apps, now)) as [Ceiling, Gauge][]
+  let shown = all.filter(([what]) => read || !SWEPT.includes(what))
+  let close = shown.filter(([, g]) => full(g) >= WARN)
   let over = close.filter(([, g]) => full(g) >= 1).length
   let state = !over ? 'near' : over == close.length ? 'at' : 'at or near'
-  return `${space.slug} is ${state} ${
-    close.length == 1 ? 'a limit' : 'its limits'
-  }: ${close.map(([what, g]) => READ[what](g)).join(', ')} — plan settings: ${
-    planSettings(space.slug, env)
+  let voice = m.realtime ? ` (${dollars(m.realtime)} of it voice)` : ''
+  return `This month${read}: ${
+    shown.map(([what, g]) => READ[what](g)).join(', ')
+  }${
+    shown.length < all.length ? ', request units and app data not read yet' : ''
+  }, and ${
+    dollars(used(m, 'models'))
+  } of model use and voice${voice} from the owner's account budget${
+    close.length
+      ? ` — ${state} the limit for ${
+        close.map(([what]) => NAME[what]).join(', ')
+      }; plan settings: ${planSettings(space.slug, env)}`
+      : ''
   }`
 }
 

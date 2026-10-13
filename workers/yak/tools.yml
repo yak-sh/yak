@@ -480,18 +480,19 @@ app_list:
   title: List the person's apps
   description: >-
     What the person already has here, short enough to pass on as it is:
-    every space of theirs and which app its address opens, then each app in
-    a line with its address, its access (public, open or private) and how
-    many errors are still open in it (app_errors lists them). In a space
-    they own, it names every invitation not accepted yet with the day its
-    latest letter went, so "my friend can't get in" starts here (member_add
-    sends another letter, member_remove withdraws one), and counts everyone
-    else with the People page that lists them. A space near or at a limit
-    says so in a sentence. Deleted apps are listed with the days each has
-    left, until app_restore brings it back or the 30 days run out. The
-    structured result carries the rest: each app's email address, version,
-    bindings and month's usage, each space's members and guests, and where
-    it stands against every limit. Documentation: https://yaks.app/docs.
+    every space of theirs and which app its address opens, a line of what
+    its month has counted against each of its limits and what models and
+    voice spent there (and, near or at a limit, where its plan is settled),
+    then each app in a line with its address, its access (public, open or
+    private) and how many errors are still open in it (app_errors lists
+    them). In a space they own, it names every invitation not accepted yet
+    with the day its latest letter went, so "my friend can't get in" starts
+    here (member_add sends another letter, member_remove withdraws one), and
+    counts everyone else; people: true names them. Name an app to list it
+    alone and in full: its email address, version, bindings, month's usage
+    and everyone who can open it. Deleted apps are listed with the days each
+    has left, until app_restore brings it back or the 30 days run out.
+    Documentation: https://yaks.app/docs.
 commands:
   title: List app commands
   description: >-

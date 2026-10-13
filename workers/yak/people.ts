@@ -76,9 +76,18 @@ export let shown = (p: Person) => ({
 /**
  * Who is here, as an assistant passes it on: every invitation not accepted
  * yet, since somebody may be waiting on it, and everyone else as a count and
- * the page that lists them. Nothing when nobody else is here.
+ * the page that lists them, or by name when `named` (the person asked who is
+ * in, or about one app). Nothing when nobody else is here and nobody asked.
  */
-export let aloud = (p: People, me: string, env: Host = {}): string[] => {
+export let aloud = (
+  p: People,
+  me: string,
+  env: Host = {},
+  named = false,
+): string[] => {
+  let but = (held: Person[]) => held.filter((x) => x.person != me)
+  let said = (held: Person[]) =>
+    but(held).map((x) => `${who(x)} (${x.role})`).join(', ')
   let waiting = [
     ...p.invited.map((x) => [x, 'the whole space'] as const),
     ...p.apps.flatMap((a) => a.invited.map((x) => [x, a.app.title] as const)),
@@ -88,8 +97,8 @@ export let aloud = (p: People, me: string, env: Host = {}): string[] => {
     })`
   )
   let others = new Set(
-    [...p.members, ...p.apps.flatMap((a) => a.guests)]
-      .filter((x) => x.person != me).map((x) => x.person),
+    but([...p.members, ...p.apps.flatMap((a) => a.guests)])
+      .map((x) => x.person),
   ).size
   return [
     ...waiting.length
@@ -98,7 +107,17 @@ export let aloud = (p: People, me: string, env: Host = {}): string[] => {
         'letter, member_remove withdraws one',
       ]
       : [],
-    ...others
+    ...named
+      ? [
+        ...but(p.members).length
+          ? [`Members of ${p.space.slug}: ${said(p.members)}`]
+          : [],
+        ...p.apps.filter((a) => but(a.guests).length).map((a) =>
+          `Guests of ${a.app.title}: ${said(a.guests)}`
+        ),
+        ...others ? [] : [`Nobody else is in ${p.space.slug}`],
+      ]
+      : others
       ? [
         `${others} other ${
           others == 1 ? 'person is' : 'people are'

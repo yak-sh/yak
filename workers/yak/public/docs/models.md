@@ -245,8 +245,7 @@ These platform models spend the owner's monthly yaks.app account budget:
 
 Every platform call is weighed by its model's price and spends that budget:
 $0.20, plus $3.00 for each Plus space they own. All their spaces share it. The
-builder and app voice spend it too. `app_list`'s structured result says what
-each space spent.
+builder and app voice spend it too. `app_list` says what each space spent.
 
 `bytedance-seed/seed-audio-1-0` uses the app's connected OpenRouter account.
 OpenRouter bills that account for generated audio at its published rate; it does

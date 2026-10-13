@@ -97,9 +97,10 @@ again for them says they had not accepted yet and sends another letter.
 
 In each space the caller owns, `app_list` names every invitation not accepted
 yet with the day its latest letter went, and counts everyone else. When someone
-says they cannot get in, that is the first thing to read. Its structured result
-lists the members and each app's guests too, and the owner sees them all on the
-People page of their dashboard (yaks.app/manage/people), where a waiting
+says they cannot get in, that is the first thing to read. `app_list(app)` names
+everyone who can open that app, and `app_list(people: true)` names the members
+and each app's guests in every space the caller owns. The owner sees them all on
+the People page of their dashboard (yaks.app/manage/people), where a waiting
 invitation has a button that sends its letter again.
 
 ## One app, or the space

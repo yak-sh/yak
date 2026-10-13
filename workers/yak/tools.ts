@@ -36,7 +36,7 @@ import { declarationOf, keepDeclaration } from './declaration.ts'
 import type { Reload } from '@yaks/platform'
 import { configured, deployWorker } from './deploy_worker.ts'
 import { compiled } from './esbuild.ts'
-import { bindings } from './bindings.ts'
+import { bindingLines, bindings } from './bindings.ts'
 import { broken, mediaTypeOf, type Objects } from '@yaks/blob'
 import { blobPrefix } from './blob-key.ts'
 import { r2Objects, r2RawObjects } from './lib/objects.ts'
@@ -227,10 +227,11 @@ import { scheduleUse } from './used.ts'
 import {
   atCeiling,
   ceilings,
+  count,
   countedSpend,
   free,
+  gauged,
   monthOf,
-  nearing,
   refusedSpend,
   requestUnits,
   size,
@@ -4148,8 +4149,19 @@ let OURS: Row[] = [
       type: 'object',
       properties: {
         space: str(
-          'one space slug to list; omit for every space the caller belongs to',
+          'one space slug to list; omit for every space the caller belongs ' +
+            'to, or with app, the space holding it',
         ),
+        app: str(
+          'one app slug to list in full: its email address, version, ' +
+            "bindings, month's usage and everyone who can open it",
+        ),
+        people: {
+          type: 'boolean',
+          description:
+            'true to name everyone in each space the caller owns, its ' +
+            "members and each app's guests, where the listing counts them",
+        },
       },
     },
     // The listing is one question, so it is asked as one (T-35431): five
@@ -4161,9 +4173,14 @@ let OURS: Row[] = [
     // turn: three spaces of three apps cost 38 round trips and now cost 23,
     // 18 of them at once (tools_test.ts).
     run: async (ctx, args) => {
-      let seats = args.space == null
-        ? await ctx.dir.seats(ctx.person)
-        : await seatIn(ctx, text(args.space, 'space'))
+      // One app asked about is listed alone, in full and with its people
+      // named; naming the app names its space, as every other tool reads it.
+      let named = args.app == null ? null : text(args.app, 'app')
+      let seats = args.space != null
+        ? await seatIn(ctx, text(args.space, 'space'))
+        : named != null
+        ? await seatIn(ctx, (await ownSpace(ctx, named)).slug)
+        : await ctx.dir.seats(ctx.person)
       // An account with no space gains its own. A narrowed credential's
       // `own` names its scope instead, so standing still comes from a seat.
       if (!seats.length) {
@@ -4171,7 +4188,13 @@ let OURS: Row[] = [
         let role = await ctx.dir.role(space, ctx.person)
         if (role) seats = [{ space, role }]
       }
-      let every = await ctx.dir.apps(seats.map((s) => s.space))
+      let whole = await ctx.dir.apps(seats.map((s) => s.space))
+      let every = named == null ? whole : whole.filter((a) => a.slug == named)
+      if (named != null && !every.length) {
+        throw refuse('missing', `no app ${named} in ${seats[0]!.space.slug}`)
+      }
+      let naming = named != null ||
+        (args.people != null && flag(args.people, 'people'))
       // Two lists, because they are two different things to say: what the
       // person has, and what they threw away and can still have back
       // (erase.ts, T-34430).
@@ -4195,16 +4218,22 @@ let OURS: Row[] = [
       )
       let gathered = await people
       let now = new Date()
-      // Two readers, two forms (M-37853). The words are what an assistant
-      // passes on to a person as they are: an app a line, and only what
-      // somebody has to act on besides. The value is everything this listing
-      // knows, for whoever reads structure.
+      // Two readers, two forms (M-37853), and each carries every fact: Claude
+      // on the web documents the words as what its model reads, Claude Code
+      // hands its model the value in their place, and ChatGPT both (sources
+      // on T-123946). The words are what an assistant passes on to a person
+      // as they are: a space's month in a line, an app a line, and what
+      // somebody has to act on besides; the app asked about in full.
       let lines: string[] = []
       let spaces: Listed[] = []
       for (let { space, role } of seats) {
         let mine = every.filter((a) => a.space == space.eid)
         let them = gathered.get(space.eid)
         let apps = mine.filter((a) => !a.trashed)
+        // Everything in the space counts against it, whichever app was asked
+        // about.
+        let alive = whole.filter((a) => a.space == space.eid && !a.trashed)
+          .length
         let at = `https://${spaceHost(ctx.env, space.slug)}/`
         let listed = apps.map((app) => {
           let here = them?.apps.find((a) => a.app.eid == app.eid)
@@ -4266,7 +4295,7 @@ let OURS: Row[] = [
               invited: them.invited.map(shown),
             }
             : {},
-          standing: standingOf(space, apps.length, now, ctx.env),
+          standing: standingOf(space, alive, now, ctx.env),
         })
         let home = apps.find((a) => a.home)
         lines.push(
@@ -4278,13 +4307,27 @@ let OURS: Row[] = [
                 } days left: nothing here answers until space_restore(space: '${space.slug}')`
                 : ''
             }`,
-          ...listed.map((a) =>
+          // Where the space stands this month (T-32758), so the agent knows
+          // before it makes the sixth app, not when the door says no.
+          ...alive ? [gauged(space, alive, now, ctx.env)] : [],
+          ...listed.flatMap((a, i) => [
             `- ${a.title}: ${a.url} — ${a.access}${
               a.errors
                 ? `, ${a.errors} open ${a.errors == 1 ? 'error' : 'errors'}`
                 : ''
-            }`
-          ),
+            }`,
+            ...named == null ? [] : [
+              `  email ${a.mailbox} · version ${a.version} · this month ${
+                a.usage
+                  ? `${count(a.usage.requests)} request units, ${
+                    size(a.usage.bytes)
+                  } of data`
+                  : 'not read yet'
+              }`,
+              ...bindingLines(bound.filter((b) => b.app == apps[i]!.eid))
+                .map((line) => `  ${line}`),
+            ],
+          ]),
           ...listed.length ? [] : ['- no apps yet'],
           ...trash.length
             ? [
@@ -4298,12 +4341,9 @@ let OURS: Row[] = [
             ]
             : [],
           // Who else is here (people.ts): an invitation somebody may be
-          // waiting on, and everyone else as a count and where to see them.
-          ...them ? aloud(them, ctx.person, ctx.env) : [],
-          // Where the space stands, only when a ceiling is near or reached
-          // (T-32758): so the agent knows before it makes the sixth app, not
-          // when the door says no.
-          ...[nearing(space, apps.length, now, ctx.env)].filter(Boolean),
+          // waiting on, and everyone else as a count and where to see them,
+          // or by name when asked.
+          ...them ? aloud(them, ctx.person, ctx.env, naming) : [],
         )
       }
       return {

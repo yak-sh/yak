@@ -182,8 +182,17 @@ test('the owner and their assistant see who is in and who has not accepted', asy
     assert(emails(space.members)!.includes(`${bo.email} editor`))
     assertEquals(emails(space.invited), [`${cy.email} viewer`])
     assertEquals(emails(space.apps[0].guests), [`${ana.email} editor`])
-    // A member reads the apps, not who else was let in.
-    let bos = await connector(k, bo.cookie).answer('app_list')
+    // Asked, the words name them too: everyone in the space, or whoever can
+    // open the one app asked about.
+    let everyone = await his.tool('app_list', { people: true })
+    assertStringIncludes(everyone, `${bo.email} (editor)`)
+    assertStringIncludes(everyone, `Guests of Diary: ${ana.email} (editor)`)
+    let diary = await his.tool('app_list', { app: 'diary' })
+    for (let them of [ana, bo, cy]) assertStringIncludes(diary, them.email)
+    // A member reads the apps, not who else was let in, even asking.
+    let bos = await connector(k, bo.cookie).answer('app_list', {
+      people: true,
+    })
     assert(!bos.text.includes(cy.email) && !bos.text.includes(ana.email))
     let jeffs = (bos.value as { spaces: Listed[] }).spaces
       .find((s) => s.slug == space.slug)!
