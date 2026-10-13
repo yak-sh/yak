@@ -194,11 +194,9 @@ not use of those apps, and adds no activity hop to those reads.
   before committing either pointer, including the retained words and
   borrowed-home declarations the Store accepted; a space rename copies the
   snapshots and app erasure sweeps them. `initialize`, `tools/list` and the
-  schema preparation before a named tool call read no app Store. A release from
-  before snapshots reads its pinned deploy files, translating kept command
-  grammar and reconstructing word homes without a Store fetch or a backfill.
-  Only a deploy can know a retired column is empty, so that file-only reader
-  keeps the declaration until the next deploy records what the Store accepted.
+  schema preparation before a named tool call read no app Store. Every release
+  a pointer selects has a snapshot, so a missing one is a defect the tracker
+  hears about, never a reason to rebuild one from files.
 
 The idle regression is `workers/yak/idle_alarm_workerd_test.ts`, measured
 through the real Store and SQL cursor counters over a synthetic history with

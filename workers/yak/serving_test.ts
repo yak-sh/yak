@@ -37,7 +37,7 @@ import { appStore, directory, stamp, storeName } from './directory.ts'
 import * as dirPart from './directory.ts'
 import { granting, scriptName } from './dispatch.ts'
 import type { Env } from './env.ts'
-import { analytics, dataset } from './testing.ts'
+import { analytics, dataset, declared } from './testing.ts'
 import { emptied, trash, trashSpace } from './erase.ts'
 import { call, type Ctx, wrote } from './tools.ts'
 import { archive, openIn, serve } from './unseen.ts'
@@ -1104,6 +1104,7 @@ let router = async (
       },
     ],
   }, ADA_OWNS)
+  await declared(env, space, (await dir.app(space, 'garden'))!)
   let script = scriptName(storeName(space, app))
   ;(env as { DISPATCH?: unknown }).DISPATCH = {
     get: (name: string) => {

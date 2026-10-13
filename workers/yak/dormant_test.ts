@@ -5,7 +5,7 @@ import { Store } from './graph.ts'
 import { storeOf } from './door.ts'
 import { KERNEL } from './meta.ts'
 import { openIn } from './unseen.ts'
-import { platform, slot } from './testing.ts'
+import { declared, platform, slot } from './testing.ts'
 import type { Wire } from '@yaks/durable-object'
 
 test('trash makes a store dormant across every wake and restore keeps its data', async () => {
@@ -26,6 +26,7 @@ test('trash makes a store dormant across every wake and restore keeps its data',
     }],
   })
   let app = (await dir.app(space, 'held'))!
+  await declared(p.env, space, app)
   let name = storeName(space, app)
   let ask = storeOf(p.env.STORE, name, {
     eid: app.eid,

@@ -5,7 +5,7 @@ import * as dirPart from './directory.ts'
 import { type Door, type Namespace } from './door.ts'
 import type { Env } from './env.ts'
 import { ran, workerBreak } from './dispatch.ts'
-import { keep, platform } from './testing.ts'
+import { declared, keep, platform } from './testing.ts'
 import { call, type Ctx, releaseNotice } from './tools.ts'
 import * as apps from './apps.ts'
 import { r2Objects } from './lib/objects.ts'
@@ -190,6 +190,10 @@ test('updates carry every crossed required source mark but exclude the installed
         },
       },
     ],
+  })
+  await declared(scenario.env, home, (await f.dir.app(home, 'recipes'))!, {
+    vocab: JSON.parse(words),
+    tools: {},
   })
   let deploy = async (n: number, reload?: string) => {
     await f.write(String(n))

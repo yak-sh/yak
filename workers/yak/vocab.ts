@@ -215,13 +215,6 @@ export let grew = (
     }
   })
 
-/** Accepted release declarations reconstructed without Store rows. Retired
- * words stay declared conservatively; a property explicitly declared by a
- * later accepted release takes that release's type. Admission belongs to
- * {@link grew}, when the Store can count the values a change would affect. */
-export let retained = (was: VocabDoc, next: VocabDoc): VocabDoc =>
-  growing(was, next, () => 1, () => {}).doc
-
 let growing = (
   was: VocabDoc,
   next: VocabDoc,

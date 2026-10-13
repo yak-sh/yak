@@ -6,7 +6,7 @@ import { sign } from './lib/token.ts'
 import { directory } from './directory.ts'
 import * as dirPart from './directory.ts'
 import type { Env } from './env.ts'
-import { platform as inMemory } from './testing.ts'
+import { declared, platform as inMemory } from './testing.ts'
 
 let SECRET = 'a probe secret'
 
@@ -58,6 +58,7 @@ export let seeded = async (env: Env, access = 'public') => {
     }],
   }, ADA_OWNS)
   let app = (await dir.app(space, 'cookbook'))!
+  await declared(env, space, app)
   return { dir, space, app }
 }
 

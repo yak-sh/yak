@@ -24,7 +24,6 @@ import { CallError } from '@yaks/tools/errors'
 import { valueIn } from '@yaks/tools/value'
 import { PLATFORM_STORE } from '../../workers/yak/door.ts'
 import type { Swept } from '../../workers/yak/sweep.ts'
-import type { Backfilled } from '../../workers/yak/backfill.ts'
 import type { Asked } from './move.ts'
 import { INVITE, LINK, PLATFORM, SLUG } from '../../workers/yak/route.ts'
 import { COOKIE } from '../../workers/yak/lib/token.ts'
@@ -246,27 +245,6 @@ export let moveIn = (
   said(sent(
     apex(
       `${MOVE}?store=${encodeURIComponent(store)}` +
-        (rehearse ? '&rehearse=1' : ''),
-    ),
-    session,
-    { method: 'POST' },
-  ))
-
-/** One-time (workers/yak/backfill.ts, T-123629): every space, and one space's
- * missing declaration snapshots written, or rehearsed beside its Stores. */
-export let BACKFILL = '/api/declarations'
-
-export let spacesNow = (session: string): Promise<string[]> =>
-  said(sent(apex(BACKFILL), session))
-
-export let backfillIn = (
-  session: string,
-  space: string,
-  rehearse: boolean,
-): Promise<Backfilled[]> =>
-  said(sent(
-    apex(
-      `${BACKFILL}?space=${encodeURIComponent(space)}` +
         (rehearse ? '&rehearse=1' : ''),
     ),
     session,

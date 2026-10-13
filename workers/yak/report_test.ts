@@ -288,6 +288,12 @@ test('a break names the version the app is serving', async () => {
       apps: ['recipes'],
     }])
     let agent = connector(k, cookie)
+    let app = { space: jeff61, app: 'recipes' }
+    await agent.tool('app_files', {
+      ...app,
+      files: [{ path: 'index.html', content: '<h1>Recipes</h1>' }],
+    })
+    await agent.tool('app_deploy', app)
 
     // Serving the app puts its row in the read cache.
     await (await k.at(`${jeff61}.yaks.app`, '/recipes/')).body?.cancel()
@@ -309,7 +315,7 @@ test('a break names the version the app is serving', async () => {
     await (await k.at(`${jeff61}.yaks.app`, '/recipes/api/query?.book'))
       .body?.cancel()
 
-    let told = await agent.tool('app_errors', { space: jeff61, app: 'recipes' })
+    let told = await agent.tool('app_errors', app)
     assertMatch(
       told,
       /recipes v9: page \/recipes\/ — boom is not a function/,

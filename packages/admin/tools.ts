@@ -29,7 +29,6 @@ import { Refused } from './refusal.ts'
 export { Refused } from './refusal.ts'
 import {
   acceptInvite,
-  backfillIn,
   close,
   doomedIn,
   feeNow,
@@ -40,7 +39,6 @@ import {
   rpc,
   setFee,
   setTunnel,
-  spacesNow,
   storeApply,
   storeQuery,
   storesNow,
@@ -494,51 +492,6 @@ export let runs = (
             out,
             stopping: host.stopping,
           }),
-        ),
-      ]
-    }),
-
-    // One-time (T-123629): each space's missing declaration snapshots, written
-    // or rehearsed. A line per app that lacked one, then the counts.
-    admin_declarations: verb(async (call) => {
-      let a = argsOf(call)
-      let rehearse = a.rehearse === true
-      let at = await acting(a)
-      let where = word(a, 'space')
-      let spaces = where ? [where] : await spacesNow(at.bearer)
-      note(`${rehearse ? 'rehearsing' : 'backfilling'} ${spaces.length} spaces`)
-      let apps = 0, lacked = 0, wrote = 0, differ = 0, unread = 0
-      for (let space of spaces) {
-        for (let one of await backfillIn(at.bearer, space, rehearse)) {
-          apps++
-          if (one.had) continue
-          lacked++
-          if (one.wrote) wrote++
-          if (typeof one.store == 'string' && one.store.startsWith('unread')) {
-            unread++
-          } else if (one.store && one.store != 'same') differ++
-          let store = one.store == null
-            ? ''
-            : `  store: ${
-              typeof one.store == 'string'
-                ? one.store
-                : JSON.stringify(one.store)
-            }`
-          out(
-            `${space}/${one.app}  ${one.release}` +
-              `${one.trashed ? '  trashed' : ''}` +
-              `  ${one.wrote ? 'wrote' : 'missing'}${store}`,
-          )
-        }
-      }
-      return [
-        said(
-          call,
-          `${spaces.length} spaces, ${apps} released apps, ${lacked} lacked ` +
-            `a snapshot, ${wrote} written` +
-            (rehearse
-              ? `, ${differ} differ from their Store, ${unread} Stores unread`
-              : ''),
         ),
       ]
     }),

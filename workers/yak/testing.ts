@@ -55,6 +55,18 @@ import { Wire as Wired } from './stream.ts'
 import type { Limiter } from './rate.ts'
 import { sha256 } from './versions.ts'
 import type { Binding as AiBinding } from '@yaks/workers-ai'
+import { type Declaration, keepDeclaration } from './declaration.ts'
+import { type App, releaseOf, type Space } from './directory.ts'
+
+/** What a deploy keeps beside the release it selects, for a fixture that
+ * stamps an app's version instead of deploying: by default no words and no
+ * commands. */
+export let declared = (
+  env: Env,
+  space: Space,
+  app: App,
+  value: Declaration = { vocab: {}, tools: {} },
+) => keepDeclaration(env, space, app, releaseOf(app), value)
 
 // A new test object's installed schema is the production shape, including the
 // host's private tables and embedding queue triggers. Each durable() restores

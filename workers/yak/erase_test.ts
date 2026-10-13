@@ -35,7 +35,7 @@ import { directory } from './directory.ts'
 import * as dirPart from './directory.ts'
 import type { App, Host, Space } from './directory.ts'
 import type { Env } from './env.ts'
-import { ai, platform, sandboxes } from './testing.ts'
+import { ai, declared, platform, sandboxes } from './testing.ts'
 import { named, spending, workbench } from './sandbox.ts'
 import type { Who } from './session.ts'
 import { KERNEL, meta } from './meta.ts'
@@ -464,6 +464,7 @@ test(
         }],
       }, { 'x-yak-person': ADA, 'x-yak-role': 'owner' })
       let app = (await dir.app(space, slug))!
+      await declared(env, space, app)
       // A file of its own, so what the erase takes is visible in the bucket.
       await r2Objects(env.BLOBS).put(
         `ada/${slug}/index.html`,
