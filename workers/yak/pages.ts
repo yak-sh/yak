@@ -1843,12 +1843,12 @@ let clients = (env: Host) => [
       {
         title: 'Mobile App',
         steps: [
-          'Open the sidebar and tap your profile picture.',
-          'Tap <b>Connectors</b> → <b>+</b> → <b>Add custom connector</b>.',
-          'Paste these values:' + fields(
-            field('Name', CONNECTOR.title, 'the name') +
-              field('URL', url(env, '/mcp'), 'the connection URL'),
-          ),
+          'Claude’s help pages only describe adding a connector on ' +
+          'claude.ai or the desktop app, so add yaks.app there first, ' +
+          'using the <b>Web + Desktop</b> steps.',
+          'Then open the Claude app on your phone. Your connector works ' +
+          'there too: in a chat, tap <b>+</b> in the message box, then ' +
+          '<b>Connectors</b>, and make sure yaks.app is switched on.',
         ],
       },
     ],
