@@ -74,6 +74,7 @@ input { text-align: center }
 }
 @layer sections {
 .Code { letter-spacing: .5em; font-size: 1.4rem; font-weight: 700 }
+.Again { margin-top: 0 }
 .Away { font-size: .95rem }
 code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .9rem; background: var(--ground); border-radius: .4rem; padding: .1rem .35rem; overflow-wrap: anywhere }
 .Url code { display: inline-block; padding: .5rem 1rem; border-radius: 999px; background: var(--paper); font-size: .95rem }
@@ -1364,7 +1365,9 @@ export let askEmail = (
 // called and where their apps live are theirs to set on their own space page,
 // once they are standing on it — a question in front of the door is a step
 // somebody has to get past to see anything at all. `why` is the soft refusal,
-// when there was one.
+// when there was one. A code that expired while they looked for the letter, or
+// one that never came, is answered by a second door to the same address: the
+// first step again, without typing it again.
 export let askCode = (
   email: string,
   q: string | null,
@@ -1389,6 +1392,9 @@ export let askCode = (
 <input type="hidden" name="email" value="${esc(email)}">
 <input class="Field Code" name="code" inputmode="numeric" pattern="[0-9]{6}" maxlength="6" required autofocus autocomplete="one-time-code" aria-label="Your six-digit code">
 <button class="Button" type="submit">Sign in</button>
+</form><form class="Again" method="post" action="/login">${carried(q, back)}
+<input type="hidden" name="email" value="${esc(email)}">
+<button class="Button Button-quiet" type="submit">Send a new code</button>
 </form>${home(env)}`,
   )
 

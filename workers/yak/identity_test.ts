@@ -392,7 +392,20 @@ test('a person signs in by mail, and an agent by OAuth', async () => {
     let miss = String((Number(code) + 1) % 1_000_000).padStart(6, '0')
     let wrong = await form(k, '/login/code', { email, code: miss })
     assertEquals(wrong.status, 400)
-    assertMatch(await wrong.text(), /expired or was mistyped/)
+    let refused = await wrong.text()
+    assertMatch(refused, /expired or was mistyped/)
+
+    // Nor is it a dead end: the page's other form asks again for the same
+    // address, and a new code arrives without it being typed again.
+    let again = [
+      ...parseHTML(refused).document.querySelectorAll(
+        'form[action="/login"] input[type="hidden"]',
+      ),
+    ].map((i) => [i.getAttribute('name')!, i.getAttribute('value')!])
+    let before = letters(k, email).length
+    let resent = await form(k, '/login', Object.fromEntries(again))
+    assertEquals(resent.status, 200)
+    code = await mailed(k, email, before)
 
     // The code itself: a session cookie for the whole platform. See Other,
     // because the form is not what to do next.

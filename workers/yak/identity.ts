@@ -138,6 +138,7 @@ export let NO_SEND = 'We could not send your code just now. Try again in a ' +
 // the address, so saying it tells nobody anything about an inbox.
 export let TOO_MANY = 'Too many codes have been asked for from here just ' +
   'now. Try again in a minute.'
+export let NOT_EMAIL = 'That is not an email address. Check it and try again.'
 import { KERNEL, type Meta, meta } from './meta.ts'
 import {
   askAllow,
@@ -716,7 +717,7 @@ export let codeCheck = async (
     email,
     q || null,
     back || null,
-    'That code has expired or was mistyped. Ask for a fresh one?',
+    'That code has expired or was mistyped. Type it again, or send a new one.',
     400,
     env,
   )
@@ -976,7 +977,7 @@ let ours = async (req: Request, env: Env): Promise<Response> => {
     let email = canon(field('email'))
     let back = field('return') || null
     if (!email.includes('@')) {
-      return askEmail(field('q') || null, back, undefined, undefined, 400, env)
+      return askEmail(field('q') || null, back, undefined, NOT_EMAIL, 400, env)
     }
     // A deploy that cannot post a letter says so in one sentence, the way
     // sell.ts answers for a missing secret, rather than minting a code nobody
