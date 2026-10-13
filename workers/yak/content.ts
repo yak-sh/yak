@@ -401,7 +401,7 @@ export let WORDS: Record<string, Words> = {
   'app_list': {
     'title': "List the person's apps",
     'description':
-      "What the person already has here: every app in every space of theirs, with its address, the email address it sends and receives at, the version it is at, how many errors are still open in it, which app is the space's front page, and what the month has cost against what the space is allowed. Deleted apps are listed under Trash with the days each has left, until app_restore brings it back or the 30 days run out. Documentation: https://yaks.app/docs.",
+      "What the person already has here: every app in every space of theirs, with its address, the email address it sends and receives at, the version it is at, its access (public, open or private), how many errors are still open in it (app_errors lists them), which app is the space's front page, and what the month has cost against what the space is allowed. Deleted apps are listed under Trash with the days each has left, until app_restore brings it back or the 30 days run out. Documentation: https://yaks.app/docs.",
   },
   'commands': {
     'title': 'List app commands',

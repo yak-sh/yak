@@ -285,6 +285,8 @@ type Broke = {
   stack?: string | null
   request?: string
   version?: number | null
+  // Occurrences one tracker sample stands for; none means one.
+  hits?: number | null
 }
 type Hit = {
   kind: string
@@ -313,21 +315,53 @@ export type Seen = { app: App; hit: Hit }
 
 let broke = (h: Hit) => h.exception ?? h.error ?? {}
 
-// One line: id, when, the place to open, the deploy, the message. An item
-// written before exceptions carried their own request still reads: its doc's
-// title said the same thing.
-//
-// The place is the file and line where there is one ({@link spot}), the route
-// where there is not — and the line is the only place anyone sees it now that
-// an answer is bundles and nothing carries a second structured copy.
-export let line = ({ app, hit }: Seen) => {
+// Where a break happened, as its line names it: the file and line where there
+// is one ({@link spot}), the route where there is not.
+let where = (hit: Hit) => {
   let e = broke(hit)
-  let id = idOf(hit)
-  let facet = hit.exception ? 'exception' : 'error'
-  let where = spot(e.stack) || e.request || hit.doc?.title || e.code || ''
-  return `- ${id} ${e.at ?? ''} ${facet} ${app.slug}${
-    e.version ? ` v${e.version}` : ''
-  }: ${where} — ${e.message || hit.content?.body || ''}`
+  return spot(e.stack) || e.request || hit.doc?.title || e.code || ''
+}
+
+// What makes two occurrences one break: the same facet at the same place with
+// the same message. A page that threw on every load is one thing to fix.
+let same = (hit: Hit) =>
+  `${hit.exception ? 'exception' : 'error'} ${where(hit)} ${
+    broke(hit).message || hit.content?.body || ''
+  }`
+
+let newest = (a: Seen, b: Seen) =>
+  String(broke(b.hit).at ?? '').localeCompare(String(broke(a.hit).at ?? ''))
+
+/** The occurrences gathered into breaks, newest first: each fold is one
+ * break's occurrences, its newest first. */
+export let folds = (seen: Seen[]): Seen[][] => {
+  let by = new Map<string, Seen[]>()
+  for (let s of [...seen].sort(newest)) {
+    let key = `${s.app.eid} ${same(s.hit)}`
+    by.set(key, [...by.get(key) ?? [], s])
+  }
+  return [...by.values()]
+}
+
+/** How many breaks these occurrences of one app make. */
+export let breaks = (hits: Hit[]) => new Set(hits.map(same)).size
+
+// One line a break: the newest occurrence's id and moment, the facet, the
+// deploy, the place to open and the message, then how often it happened. An
+// item written before exceptions carried their own request still reads: its
+// doc's title said the same thing. The line is the only place anyone sees it
+// now that an answer is bundles and nothing carries a second structured copy;
+// its id archives the whole fold ({@link archive}).
+export let line = (fold: Seen[]) => {
+  let { app, hit } = fold[0]
+  let e = broke(hit)
+  let times = fold.reduce((n, s) => n + (broke(s.hit).hits ?? 1), 0)
+  let first = broke(fold.at(-1)!.hit).at
+  return `- ${idOf(hit)} ${e.at ?? ''} ${
+    hit.exception ? 'exception' : 'error'
+  } ${app.slug}${e.version ? ` v${e.version}` : ''}: ${where(hit)} — ${
+    e.message || hit.content?.body || ''
+  }${times > 1 ? ` (${times} times${first ? ` since ${first}` : ''})` : ''}`
 }
 
 // The place in a stack a person opens to fix it. A break reported from a
@@ -342,6 +376,10 @@ export let line = ({ app, hit }: Seen) => {
 // which for a route that threw is the useful half anyway.
 let AT = /([^\s()]+?):(\d+)(?::\d+)?(?=[^\d/]|$)/
 
+// A release serves its files below `api/assets/<release>/` (asset_url.ts), and
+// the person wrote `app.js`, not that: the place names the file they open.
+let RELEASED = /\/api\/assets\/[0-9a-f-]{36}\//
+
 export let spot = (stack?: string | null) => {
   for (let l of (stack ?? '').split('\n')) {
     let m = AT.exec(l)
@@ -353,7 +391,7 @@ export let spot = (stack?: string | null) => {
       continue
     }
     if (at.protocol != 'https:' && at.protocol != 'http:') continue
-    return `${at.pathname}:${m[2]}`
+    return `${at.pathname.replace(RELEASED, '/')}:${m[2]}`
   }
   return ''
 }
@@ -435,6 +473,7 @@ let trackedHit = (row: Bundle): Hit => {
   let tags = error.tags as Record<string, unknown> | undefined
   let broke = {
     at: error.at,
+    hits: error.hits,
     version: error.version,
     request: tags?.request,
     code: error.code,
@@ -590,8 +629,16 @@ export let archive = async (
   who: Who,
   words: string[],
 ) => {
-  let hits = (await openIn(env, space, app, who, true)).filter((h) =>
-    words.some((w) => named(w, h))
+  let open = await openIn(env, space, app, who, true)
+  // An id names its break, and the line it came off speaks for the whole
+  // fold ({@link line}), so every occurrence of that break goes with it. A
+  // bound stays a bound.
+  let ids = new Set(
+    open.filter((h) => words.some((w) => w == h.entity.eid || w == idOf(h)))
+      .map(same),
+  )
+  let hits = open.filter((h) =>
+    ids.has(same(h)) || words.some((w) => named(w, h))
   )
   if (!hits.length) {
     throw refuse('missing', `nothing open here by ${words.join(', ')}`)
@@ -632,7 +679,7 @@ let ENDS = 'Each is said once. The next deploy closes them, and the new code ' +
 
 export let unseenBlock = (seen: Seen[]) =>
   seen.length
-    ? `\n\n## unseen errors\n${seen.map(line).join('\n')}\n${ENDS}`
+    ? `\n\n## unseen errors\n${folds(seen).map(line).join('\n')}\n${ENDS}`
     : ''
 
 // Where the space stands against its ceilings, said once (T-32758). It rides

@@ -624,7 +624,7 @@ test('the deploy that fixes a break closes it', async () => {
     assertStringIncludes(open, 'weather v1: page /weather/ — failed to load')
     assertStringIncludes(
       await agent.tool('app_list', { space }),
-      '1 open',
+      '1 open error',
     )
 
     // The fix goes out. Nothing archives it by hand.
@@ -637,7 +637,7 @@ test('the deploy that fixes a break closes it', async () => {
     assertStringIncludes(out, 'closed 1 break from other versions')
     assertEquals(await agent.tool('app_errors', app), 'no open errors')
     assert(
-      !(await agent.tool('app_list', { space })).includes('open'),
+      !(await agent.tool('app_list', { space })).includes('open error'),
       'the count follows',
     )
 

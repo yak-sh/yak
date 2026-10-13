@@ -115,10 +115,10 @@ each refusal, and the platform applies the one rule: a 4xx was somebody's choice
 and files nothing.
 
 When a break leaves the person looking at nothing, the page tells them so itself
-— a full-page "Something went wrong. Your assistant has been told." in the
-platform's own colors. Only when the page is bare: under 80 characters of text
-and nothing that draws pixels in it, judged after `load` or two seconds,
-whichever comes first, and only once. A page that painted is left alone.
+— a full-page "Something went wrong. Try reloading the page." in the platform's
+own colors. Only when the page is bare: under 80 characters of text and nothing
+that draws pixels in it, judged after `load` or two seconds, whichever comes
+first, and only once. A page that painted is left alone.
 
 The response headers also name the app's report endpoint as a NEL reporting
 endpoint, so the browser sends network failures that never reached the page at
@@ -165,8 +165,9 @@ something, under a heading, one line each. A read-only tool (`app_list`,
 unseen:
 
     ## unseen errors
-    - E-84 2026-08-14T10:02:11.004Z exception recipes v3: page /recipes/ —
-      boom is not a function
+    - #8c0ac745fe 2026-08-14T10:02:11.004Z exception recipes v3:
+      /recipes/app.js:12 — boom is not a function (3 times since
+      2026-08-14T09:58:40.120Z)
     Each is said once. The next deploy closes them, and the new code reports
     again any it still makes; app_errors(seen: ['all']) closes them without one.
 
@@ -191,9 +192,9 @@ a request threw on the way, what the platform reported — whether or not you ha
 already been told. Open means not archived.
 
 `fixed` accepts the ids you have fixed and archives them, which is what stops
-them showing here and in the unseen block. An id off a line (`E-84`) or a bare
-eid both work; a list, or a single one bare. If nothing matched, the call is
-refused and the message says so — that is how you learn one was already
+them showing here and in the unseen block. An id off a line (`#8c0ac745fe`) or a
+bare eid both work; a list, or a single one bare. If nothing matched, the call
+is refused and the message says so — that is how you learn one was already
 archived.
 
 `seen` archives the same way, for breaks you are done with whether or not you
@@ -211,10 +212,11 @@ can tell whether those are still happening.
 Archiving is a write, so it needs a writer. Reading the list does not: a viewer
 of the space still gets to see what is broken.
 
-Beside the lines it returns the same breaks as data, grouping the ones that
-share an app, a message and a place into one card with a count — a render loop
-that threw twenty times is one thing to fix — and a card names every id in its
-group, so archiving one archives them all.
+Each occurrence is kept, and the occurrences of one break, the same place and
+the same message, are said as one line: the newest one's id and moment, and how
+many times it happened since the first. A render loop that threw twenty times is
+one thing to fix, and archiving the line's id archives all twenty. The place is
+the app's own file and line, `/recipes/app.js:12`, the file you wrote.
 
 You will rarely archive by hand, because **new releases close what the old ones
 broke.** Every `app_deploy`, `app_install` and `app_rollback` archives every
@@ -239,9 +241,13 @@ keeps its last **20**.
 
 A version is a manifest — each path against the sha-256 of its bytes — not a
 copy of the bytes, so a file unchanged across twenty deploys is stored once.
-That is also how a version made by a rollback knows to report `restored v1`: its
-files differ from the version directly below it, and match some earlier version
-exactly.
+That is also how a deploy that puts earlier files back knows to report
+`restored v1`: its files differ from the version directly below it, and match
+some earlier version exactly.
+
+Below the versions, each move of the live pointer is a line of its own, newest
+first: `moved v3 → v2 2026-08-14T11:20:00.000Z by you`, from a deploy, an
+install or an `app_rollback`, and who made it.
 
 Read it when the person says the app used to work, so you name the version they
 mean.

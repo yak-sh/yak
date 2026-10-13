@@ -1328,7 +1328,7 @@ test(
       assertMatch(
         listing.content[0].text,
         new RegExp(
-          `Recipes \\(cookbook\\) v\\d+, 2 open: https:\\/\\/${jeff54}\\.yaks\\.app\\/cookbook\\/`,
+          `Recipes \\(cookbook\\) v\\d+, public, 2 open errors: https:\\/\\/${jeff54}\\.yaks\\.app\\/cookbook\\/`,
         ),
       )
       // Both spaces, oldest first, each app under the one it lives in — and

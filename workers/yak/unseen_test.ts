@@ -4,8 +4,8 @@
 // about. The end-to-end half — a page reporting itself, the mark landing in
 // the app's store — is serving_test.ts and report_test.ts.
 import { test } from '@yaks/testing'
-import { assert } from '@std/assert'
-import { line, named, past } from './unseen.ts'
+import { assert, assertEquals } from '@std/assert'
+import { folds, line, named, past } from './unseen.ts'
 
 let E = 'e0000000-0000-4000-8000-00000000000e'
 
@@ -46,11 +46,44 @@ test('named: an unnumbered break answers to its short handle', () => {
 })
 
 test('line: an app entity is named by its short handle', () => {
-  let said = line({
+  let said = line([{
     app: { eid: 'a1', slug: 'recipes' } as never,
     hit: unnumbered,
-  })
+  }])
   assert(said.startsWith('- #e000000000 '), said)
+})
+
+// A page's throw as the tracker holds it: the place in its stack, at a moment.
+let app = { eid: 'a1', slug: 'chores' } as never
+let threw = (eid: string, at: string, message = 'boom') => ({
+  app,
+  hit: {
+    kind: 'exception',
+    tracked: true,
+    entity: { eid },
+    exception: {
+      at,
+      message,
+      version: 1,
+      stack:
+        'https://me.yaks.app/chores/api/assets/e17c3b8b-1f00-4d66-860e-dabdd641f73e/app.js:5',
+    },
+  },
+})
+
+test('folds: one break however often it happened, newest first', () => {
+  let said = folds([
+    threw('e1000000-0000-4000-8000-000000000000', '2026-10-13T11:31:00Z'),
+    threw('e3000000-0000-4000-8000-000000000000', '2026-10-13T11:40:00Z'),
+    threw('e2000000-0000-4000-8000-000000000000', '2026-10-13T11:39:00Z'),
+    threw('e4000000-0000-4000-8000-000000000000', '2026-10-13T11:00:00Z', 'x'),
+  ]).map(line)
+  assertEquals(said, [
+    '- #e300000000 2026-10-13T11:40:00Z exception chores v1: ' +
+    '/chores/app.js:5 — boom (3 times since 2026-10-13T11:31:00Z)',
+    '- #e400000000 2026-10-13T11:00:00Z exception chores v1: ' +
+    '/chores/app.js:5 — x',
+  ])
 })
 
 test('named: a version bound is up to AND including', () => {

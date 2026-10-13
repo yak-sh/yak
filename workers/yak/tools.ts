@@ -62,6 +62,7 @@ import {
   wordsOf,
 } from './vocab.ts'
 import { withKinds } from './kinds.ts'
+import { mode } from '@yaks/member'
 import type { PropSchema, VocabDoc } from '@yaks/vocab'
 import type { Props, Sheet } from './csv.ts'
 import { MAX, mimeOf, prefixOf } from './files.ts'
@@ -213,7 +214,15 @@ import {
   type Text,
 } from './seed.ts'
 import { Pending, said as sentence } from './writes.ts'
-import { archive, healed, line, serve, trackedIn } from './unseen.ts'
+import {
+  archive,
+  breaks,
+  folds,
+  healed,
+  line,
+  serve,
+  trackedIn,
+} from './unseen.ts'
 import { scheduleUse } from './used.ts'
 import {
   atCeiling,
@@ -3327,6 +3336,19 @@ let OURS: Row[] = [
       }
       let moves = await ctx.dir.switches(app)
       let numbers = new Map(all.map((v) => [v.eid, v.version]))
+      // Who moved it, as the person reads it: "you", or the name they go by
+      // here. An eid is nobody's name.
+      let movers = new Map(
+        await Promise.all(
+          [...new Set(moves.map((m) => m.switched?.by).filter(Boolean))].map(
+            async (by) =>
+              [
+                by,
+                by == ctx.person ? 'you' : await ctx.dir.nameAt(String(by)),
+              ] as const,
+          ),
+        ),
+      )
       // The newest KEEP, and the count says how many there are: an app keeps
       // every version it ever deployed (versions.ts), so the list is a page
       // and the older ones are still there to roll back to by number.
@@ -3349,7 +3371,9 @@ let OURS: Row[] = [
             return `- moved ${
               move.from ? `v${numbers.get(String(move.from))}` : 'undeployed'
             } → v${numbers.get(String(move.to))}` +
-              ` ${move.at} by ${move.by ?? 'unknown'} via ${move.via ?? 'none'}`
+              ` ${move.at}${
+                move.by ? ` by ${movers.get(move.by) ?? 'someone'}` : ''
+              }`
           }),
         ].join('\n'),
         space,
@@ -4079,7 +4103,7 @@ let OURS: Row[] = [
       let seen = await serve(ctx.env, space, who, app, true)
       let said = [
         ...(gone ? [`archived ${gone}`] : []),
-        ...seen.map(line),
+        ...folds(seen).map(line),
       ]
       return { text: said.join('\n') || 'no open errors', space }
     },
@@ -4125,7 +4149,7 @@ let OURS: Row[] = [
       let broken = new Map(
         (await Promise.all(seats.map(async ({ space, role }) => [
           ...await trackedIn(ctx.env, space, asCaller(ctx, role), true),
-        ]))).flat().map(([app, hits]) => [app, hits.length] as const),
+        ]))).flat().map(([app, hits]) => [app, breaks(hits)] as const),
       )
       let lines: string[] = []
       for (let { space, role } of seats) {
@@ -4165,8 +4189,12 @@ let OURS: Row[] = [
           // Said here because this is the listing a person is shown when they
           // ask what they have, and an address nobody is told is no address.
           lines.push(
-            `- ${app.title} (${app.slug}) v${app.version ?? 0}${
-              errors ? `, ${errors} open` : ''
+            `- ${app.title} (${app.slug}) v${app.version ?? 0}, ${
+              mode(app.access)
+            }${
+              errors
+                ? `, ${errors} open ${errors == 1 ? 'error' : 'errors'}`
+                : ''
             }${
               its
                 ? `, ${requestUnits(its)} estimated request units, ${

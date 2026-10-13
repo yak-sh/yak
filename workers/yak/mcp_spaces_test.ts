@@ -132,14 +132,14 @@ test('the front page moves, and only the owner moves it', async () => {
     // and so is its mailbox, the bare space name for the same reason.
     assertStringIncludes(
       listing.content[0].text,
-      `second (second) v0: https://${frontSpace}.yaks.app/ · ${frontSpace}@yaks.app — ` +
+      `second (second) v0, public: https://${frontSpace}.yaks.app/ · ${frontSpace}@yaks.app — ` +
         'the front page',
     )
     // And the other one still stands at a path of its own: being the front
     // page is where an app is, so the listing says it by saying the address.
     assertStringIncludes(
       listing.content[0].text,
-      `first (first) v0: https://${frontSpace}.yaks.app/first/`,
+      `first (first) v0, public: https://${frontSpace}.yaks.app/first/`,
     )
 
     // Cleared: both apps stand at their own addresses, and the space's own
