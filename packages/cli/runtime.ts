@@ -219,6 +219,22 @@ export let runtimePath = (
     ? to + spec.slice(from.length)
     : spec
 
+/// runtimeSource('file:///cache/0/packages/', 'file:///src', 'file:///cache/0') -> 'file:///src/packages/'
+/// runtimeSource('file:///elsewhere/a.ts', 'file:///src', 'file:///cache/0') -> 'file:///elsewhere/a.ts'
+/** The checkout a URL in this runtime's private tree was copied from, the
+ * inverse of {@link runtimePath}: what a plugin running git or a checkout's
+ * tools asks for, since the private tree has no `.git`. */
+export let runtimeSource = (
+  url: string,
+  from: string | undefined = runtimeRoot()
+    ? Deno.env.get('YAK_RUNTIME_FROM')
+    : undefined,
+  to: string | undefined = runtimeRoot()
+    ? Deno.env.get('YAK_RUNTIME_ROOT')
+    : undefined,
+): string =>
+  from && to && url.startsWith(to + '/') ? from + url.slice(to.length) : url
+
 /** Stack traces keep the checkout's source addresses for the code catalog. */
 export let runtimeStack = (
   stack: string,

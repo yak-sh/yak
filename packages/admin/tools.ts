@@ -1,6 +1,6 @@
 // Platform operations run as the selected yaks.app connection. Without --as,
 // connections computes the person's own account, else the oldest sign-in.
-import { fileURLToPath } from 'node:url'
+import { checkout } from './checkout.ts'
 import { basename, dirname } from 'node:path'
 import type { Bundle, Comp, Graph } from '@yaks/graph'
 import { argsOf } from '@yaks/graph/call'
@@ -116,10 +116,6 @@ let website = (at: Account): string => {
   }
   return at.session
 }
-
-// Infrastructure belongs to the platform owner. Its credentials are the
-// box's Wrangler/GitHub logins, independent of a yaks.app account session.
-let root = fileURLToPath(new URL('../../', import.meta.url)).replace(/\/$/, '')
 
 // A platform verb's exit status, as the call's outcome. An interrupt is an
 // expected failure of this invocation; another nonzero status is a defect.
@@ -498,7 +494,7 @@ export let runs = (
 
     admin_deploys: verb(async (call) => {
       await platform(argsOf(call))
-      return [said(call, table(await deploys(root, host.stopping)))]
+      return [said(call, table(await deploys(checkout, host.stopping)))]
     }),
 
     admin_errors: verb(async (call, vault, _keep, graph) => {
@@ -515,7 +511,7 @@ export let runs = (
 
     admin_tail: verb(async (call) => {
       await platform(argsOf(call))
-      return ended('tail', await tail(root, out, note, host.stopping))
+      return ended('tail', await tail(checkout, out, note, host.stopping))
     }),
 
     admin_rollback: verb(async (call) => {
@@ -527,7 +523,7 @@ export let runs = (
       return ended(
         'rollback',
         await rollback(
-          root,
+          checkout,
           word(argsOf(call), 'version'),
           out,
           host.stopping,
@@ -543,7 +539,7 @@ export let runs = (
       }
       return ended(
         'revert',
-        await revert(root, sha, out, note, host.stopping),
+        await revert(checkout, sha, out, note, host.stopping),
       )
     }),
   }

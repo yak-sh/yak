@@ -12,7 +12,7 @@
 // between the two never starts a second build; a look that fails is reported
 // once until a look succeeds again.
 
-import { fileURLToPath } from 'node:url'
+import { checkout } from './checkout.ts'
 import type { Comp, Graph } from '@yaks/graph'
 import { Stale } from '@yaks/graph/errors'
 import type { Host } from '@yaks/host'
@@ -68,14 +68,13 @@ export type Doors = {
 
 type Report = NonNullable<Host['report']>
 
-let root = fileURLToPath(new URL('../../', import.meta.url)).replace(/\/$/, '')
 let SHA = /^[0-9a-f]{40}\b/
 
 /** The box's doors: origin and this checkout's git, wrangler, the hook. */
 export let box = (
   options: Options,
   stopping: AbortSignal,
-  dir = root,
+  dir = checkout,
   go: typeof fetch = fetch,
 ): Doors => {
   let run = (args: string[]) => needGit(dir, args, stopping)
