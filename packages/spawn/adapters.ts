@@ -29,6 +29,9 @@ export type Job = {
   /** the persona it runs with, where its checkout's instruction file does not
    * already say it (@yaks/persona `owed`) */
   persona?: string
+  /** the provider's own id for the conversation this run carries on, where
+   * the session ran before; a first run has none */
+  thread?: string
 }
 
 /** A provider that is run as a command. */
@@ -41,13 +44,13 @@ export type Adapter = {
   file?: string
 }
 
-/** `claude -p --output-format stream-json`. */
+/** `claude -p --output-format stream-json`, carrying on its thread with
+ * `--resume`. */
 export let claude: Adapter = {
   argv: (j) => [
     'claude',
     '-p',
-    '--session-id',
-    j.session,
+    ...(j.thread ? ['--resume', j.thread] : ['--session-id', j.session]),
     '--output-format',
     'stream-json',
     '--verbose', // stream-json in print mode requires it
@@ -74,11 +77,12 @@ let toml = (s: string): string =>
 // instruction file a person keeps comes near a mebibyte.
 let WHOLE = 1 << 20
 
-/** `codex exec --json`. */
+/** `codex exec --json`, carrying on its thread with `codex exec resume`. */
 export let codex: Adapter = {
   argv: (j) => [
     'codex',
     'exec',
+    ...(j.thread ? ['resume'] : []),
     '--json',
     // No approvals and no sandbox: a headless exec has nobody to approve, and
     // the run's worktree is its blast radius (the fleet's posture, 2026-07-17).
@@ -89,6 +93,7 @@ export let codex: Adapter = {
     `project_doc_max_bytes=${WHOLE}`,
     ...(j.persona ? ['-c', `developer_instructions=${toml(j.persona)}`] : []),
     '--',
+    ...(j.thread ? [j.thread] : []),
     j.instruction,
   ],
   read: readers.codex,

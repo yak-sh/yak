@@ -80,15 +80,15 @@ export let spawning =
     let report = o.report ?? ((err: unknown) => console.error('spawn —', err))
     return {
       // The request. A `using` recorded on an `ask` row says what was
-      // served, not what is wanted, and a session that is already running was
-      // started the first time round: either way there is nothing to start.
+      // served, not what is wanted. A session whose run is going is told when
+      // that run ends (./run.ts); one whose run is over carries on its thread.
       spawn_start: async (e) => {
         let entry = await one(host.graph, e.entity.eid)
         if (!entry?.entry || entry.ask) return
         let session = String(comp(entry, 'entry')?.session ?? '')
         if (!session) return
         let row = await one(host.graph, session)
-        if (!row || row[PROCESS]) return
+        if (!row || row[PROCESS] && row[EXIT] == null) return
         start(host.graph, session, opts).catch(report)
       },
       // Kill. A `stop` on an entry only marks the end of a transcript; only

@@ -44,6 +44,7 @@ import { Stale } from '@yaks/graph/errors'
 import { token } from '@yaks/graph/sha256'
 import { effectsIn } from '@yaks/vocab'
 import { actionable, exceptionOf } from '@yaks/tools/fault'
+import { dependents } from '@yaks/task'
 import { active, admitNext, dispatchStatus, queue, swap } from './admission.ts'
 import { type ChildLimits, deliverChild } from './children.ts'
 import { CLAIM } from './comp.ts'
@@ -56,6 +57,7 @@ import {
   type Step,
 } from './react.ts'
 import { seqOf, type TranscriptStatus, usingBefore } from './state.ts'
+import { cleanEnd, requested, waits, wake } from './wake.ts'
 
 /** What a host lends the runner: how a step is taken (./react.ts `Deps`), the
  * bound on children, and who is running it. */
@@ -488,11 +490,7 @@ let about = async (g: Graph, e: Event): Promise<Eid[]> => {
       t.entity.eid
     )
   for (let t of [...tasks]) {
-    for (let rel of ['contains', 'requires']) {
-      for (let x of await g.read(`.${rel}&.edge.to=${t}`)) {
-        tasks.add(String(comp(x, 'edge')?.from))
-      }
-    }
+    for (let from of await dependents(g, t)) tasks.add(from)
   }
   let rows = await g.get([...tasks, ...held], [CLAIM])
   return [
@@ -548,8 +546,10 @@ export let answer = async (
   if (await answering(g, session, r)) await settle(g, session, r)
 }
 
-// A terminal entry, or a claim found by a worker's sweep, identifies the
-// transcript whose locks may be due for release. The guard protects a claim
+// A terminal entry, a held task finishing, or a claim found by a worker's
+// sweep identifies the transcript whose locks may be due for release. A
+// managed run that ended cleanly keeps the ones it is parked on (./wake.ts):
+// its next run is owed, or waits on a dependency. The guard protects a claim
 // that another writer handed to a different session after this read.
 let release = async (g: Graph, e: Event): Promise<void> => {
   let b = await one(g, e.entity.eid, ['entry', CLAIM])
@@ -557,15 +557,19 @@ let release = async (g: Graph, e: Event): Promise<void> => {
     ? b.entity.eid
     : comp(b, 'entry')?.session ?? comp(b, CLAIM)?.session
   if (typeof session != 'string') return
-  let row = await one(g, session, ['process', 'exit'])
+  let row = await one(g, session, ['process', 'exit', STOP_ENTRY])
   if (row?.process && !row.exit) return
   let status = await currentStatus(g, session)
   if (status != 'stopped' && status != 'failed') return
+  let owed = cleanEnd(row) && await requested(g, session)
   for (
     let held of await g.read(
       `.${CLAIM}.session=${session}&.fields=entity.eid`,
     )
   ) {
+    if (owed || cleanEnd(row) && await waits(g, session, held.entity.eid)) {
+      continue
+    }
     try {
       await g.apply([{
         entity: held.entity,
@@ -601,7 +605,13 @@ export let running = (g: Graph, r: Runner): Handlers => ({
     }
     if (thrown) throw thrown
   },
-  ...effectsIn(g.vocab.docs).some((e) => e.name == 'session_release')
+  ...declared(g, 'session_release')
     ? { session_release: (e: Event) => release(g, e) }
     : {},
+  ...declared(g, 'session_wake')
+    ? { session_wake: (e: Event) => wake(g, e.entity.eid) }
+    : {},
 })
+
+let declared = (g: Graph, name: string) =>
+  effectsIn(g.vocab.docs).some((e) => e.name == name)

@@ -189,6 +189,76 @@ through the graph cascade. `reapLeases(storage)` releases claims whose holder is
 no longer a session; the `/service` duty runs it when it starts.
 `session_release` runs when a transcript stops or fails and releases its claims;
 its sweep also finds claims left by transcripts that ended before a worker ran.
+A managed run that ended cleanly keeps the claims it is parked on (see below),
+and lets each go once its task finishes or nothing is left to wait for.
+
+## Parking on a task
+
+A transcript is **parked** on a task when its run is over (a native transcript
+has settled; a managed run's process exited 0 and nobody stopped it) while the
+task it holds still waits on a dependency: a `requires` or `contains` edge to a
+task that has not finished (`@yaks/task` `dependencies`). When a dependency
+finishes, `session_wake` wakes every transcript parked on a task that waits on
+it, the same way for both kinds: it appends an input carrying the `using` in
+force, naming what finished. `session_run` answers that input for a provider a
+host lent a model for, and `@yaks/spawn` answers it by running the command line
+again on the provider's own thread.
+
+News is a dependency that finished after the claim was taken, by somebody other
+than the holder. Each wake is named for the transcript, the task and the
+dependencies it tells of, so the same news is told once. A managed run that ends
+calls `rouse(graph, session)` itself, so a dependency that finished while it ran
+is told at once. `waits(graph, session, task)` says whether a held task still
+waits on something the holder is to be woken for, and
+`unanswered(graph, session)` lists what a transcript was told that its last turn
+or run was not given.
+
+```ts
+import { graph, identityEid } from '@yaks/graph'
+import { edgeDoc, edgeKeywords, edges, link } from '@yaks/edge'
+import { kernel, kernelDoc, kernelKeywords } from '@yaks/kernel'
+import { ram } from '@yaks/ram'
+import { sessionDoc, sessions, transcript, wake } from '@yaks/session'
+import { taskDoc, tasks } from '@yaks/task'
+import { modelDoc } from '@yaks/model'
+import { toolsDoc } from '@yaks/tools/vocab'
+import { loadVocab } from '@yaks/vocab'
+
+const vocab = loadVocab(
+  [kernelDoc, edgeDoc, taskDoc, sessionDoc, toolsDoc, modelDoc],
+  [kernelKeywords, edgeKeywords],
+)
+const p = identityEid('provider', ['claude'])
+const g = graph({
+  storage: ram(vocab),
+  vocab,
+  plugins: [kernel(), edges(vocab), tasks(), sessions()],
+})
+await g.apply([
+  { entity: { eid: p }, provider: { name: 'claude' } },
+  { entity: { eid: 'x' }, task: {} },
+  { entity: { eid: 'y' }, task: {} },
+  link('y', 'requires', 'x'),
+  { entity: { eid: 's' }, session: {} },
+  {
+    entity: { eid: 's:in' },
+    entry: { session: 's' },
+    content: { body: 'work y' },
+    using: { provider: p },
+  },
+  {
+    entity: { eid: 's:out' },
+    entry: { session: 's' },
+    content: { body: 'waiting on x' },
+    output: {},
+  },
+  { entity: { eid: 'y' }, claim: { session: 's' } },
+  { entity: { eid: 'x' }, completed: {} },
+])
+await wake(g, 'x') // what session_wake runs
+const [told] = (await transcript(g, 's')).slice(-1)
+console.log(told.content, told.using) // what finished, and the request for a turn
+```
 
 ## Running a transcript
 
@@ -392,10 +462,10 @@ file (default `~/.claude/settings.json`), replacing an earlier install and
 leaving every other entry alone. A harness runs each hook with the event as JSON
 on stdin.
 
-| Event                       | Command                        | Effect                                                        |
-| --------------------------- | ------------------------------ | ------------------------------------------------------------- |
-| SessionStart, SubagentStart | `yak session context --hook -` | creates the session under the harness's id; prints its claims |
-| SessionEnd                  | `yak session wrap --hook -`    | releases the session's claims                                 |
+| Event                       | Command                        | Effect                                                                    |
+| --------------------------- | ------------------------------ | ------------------------------------------------------------------------- |
+| SessionStart, SubagentStart | `yak session context --hook -` | creates the session under the harness's id; prints its claims             |
+| SessionEnd                  | `yak session wrap --hook -`    | releases the session's claims, except the task a managed run is parked on |
 
 It also writes a PostToolUse HTTP hook posting each tool call to the server's
 hook door, `POST /session/hook` (`@yaks/session/routes`; `server` names the
@@ -500,6 +570,8 @@ The main module exports:
 - execution: `react()`, `settle()`, `running()`, `admitNext()`, `transcript()`,
   `sessionTools()`, and the provider lookups `offers()`, `providerResolver()`
   and `answers()`;
+- parking: `wake()`, `rouse()`, `waits()`, `unanswered()`, `requested()`,
+  `resting()` and `cleanEnd()`;
 - inspection: `statusOf()`, `kindOf()`, `textOf()`, `ordered()`,
   `sessionDerived`, and the bounded transcript functions;
 - identity and rendering: `sessionFor()`, `sessionEid()`, `speaking()`,

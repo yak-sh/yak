@@ -52,23 +52,64 @@ export type DepOpts = {
   relations?: string[]
 }
 
-// The far ends of every edge with any of these relations leading away from
-// `eid`, deduplicated. Read the matching edges together, so one child linked by
-// two relations costs only one read.
-let kidsOf = (tx: Tx, eid: Eid, rels: string[]): Eid[] | Promise<Eid[]> => {
+// The other ends of every edge with any of these relations touching `eid` at
+// `at`, deduplicated: `from` follows edges away from it, `to` edges into it.
+// Read the matching edges together, so one end linked by two relations costs
+// only one read.
+let ends = (
+  tx: Tx,
+  eid: Eid,
+  rels: string[],
+  at: 'from' | 'to',
+): Eid[] | Promise<Eid[]> => {
   if (!rels.length) return []
+  let far = at == 'from' ? 'to' : 'from'
   return after(
-    tx.read(and(eq(`${EDGE}.from`, eid), or(...rels.map(present)))),
+    tx.read(and(eq(`${EDGE}.${at}`, eid), or(...rels.map(present)))),
     (bundles) => {
       let seen = new Set<Eid>()
       for (let b of bundles) {
-        let to = (b[EDGE] as Record<string, unknown> | undefined)?.to
-        if (typeof to == 'string') seen.add(to)
+        let end = (b[EDGE] as Record<string, unknown> | undefined)?.[far]
+        if (typeof end == 'string') seen.add(end)
       }
       return [...seen]
     },
   )
 }
+
+/**
+ * What this task waits on: the far ends of its `requires` and `contains`
+ * edges, settled or not.
+ *
+ * ```ts
+ * import { dependencies } from '@yaks/task'
+ *
+ * // dependencies(graph, 'p') // → ['a', 'b']
+ * ```
+ */
+export let dependencies = (
+  { storage }: Pick<Graph, 'storage'>,
+  eid: Eid,
+  opts: DepOpts = {},
+): Eid[] | Promise<Eid[]> =>
+  ends(detached(storage), eid, opts.relations ?? [REQUIRES, CONTAINS], 'from')
+
+/**
+ * What waits on this task: the near ends of the `requires` and `contains`
+ * edges leading to it, the tasks its finishing may free.
+ *
+ * ```ts
+ * import { dependents } from '@yaks/task'
+ *
+ * // dependents(graph, 'a') // → ['p']
+ * ```
+ */
+export let dependents = (
+  { storage }: Pick<Graph, 'storage'>,
+  eid: Eid,
+  opts: DepOpts = {},
+): Eid[] | Promise<Eid[]> =>
+  ends(detached(storage), eid, opts.relations ?? [REQUIRES, CONTAINS], 'to')
 
 /**
  * How many of this task's children are still unfinished — the calm "3 left"
@@ -90,7 +131,7 @@ export let openDeps = (
 ): number | Promise<number> => {
   let tx = detached(storage)
   return after(
-    kidsOf(tx, eid, opts.relations ?? [REQUIRES, CONTAINS]),
+    ends(tx, eid, opts.relations ?? [REQUIRES, CONTAINS], 'from'),
     (kids) =>
       kids.length == 0 ? 0 : after(tx.get(kids), (bundles) => {
         // Counted by what has settled, so a child the storage does not hold —

@@ -47,6 +47,15 @@ test('a provider is its argv: the thread it is told to be, and -- last', () => {
   assertEquals(unstated, undefined)
 })
 
+test('a run that carries on resumes its thread instead of naming a new one', () => {
+  let again = claude.argv({ ...job, thread: 'T1' })
+  assertEquals(again[again.indexOf('--resume') + 1], 'T1')
+  assert(!again.includes('--session-id'))
+  let more = codex.argv({ ...job, thread: 'T1' })
+  assertEquals(more.slice(0, 4), ['codex', 'exec', 'resume', '--json'])
+  assertEquals(more.slice(-3), ['--', 'T1', '-x fix it'])
+})
+
 test('a persona reaches each provider through its own instruction flag', () => {
   let persona = '# N-1 common\n\n"quoted" \\ and\ttabbed, $was\x7f'
   let said = claude.argv({ ...job, persona })

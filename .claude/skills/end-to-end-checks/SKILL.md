@@ -74,7 +74,13 @@ a loaded box, where any fixed sleep is either too short or wasted.
 - Plugins with outside effects (mail, spawn, harness, connections) do from a
   probe exactly what they do anywhere: send the mail, start the agent. Leave
   them out unless the change is about them; a mail probe gives @yaks/mail
-  `"sender": {"via": "stash"}` and no `pull`. Over a copy of the box's graph,
+  `"sender": {"via": "stash"}` and no `pull`. A spawn probe puts a `yak` shim
+  running your worktree's CLI first on the PATH it starts the worker with, so
+  the agent's hooks reach the probe; tells the agent to use no tools, since its
+  PostToolUse hook posts to the live server; and, once done, removes the run's
+  transcript directory under `~/.claude/projects` and deletes the session the
+  live graph's importer made of it (`yak graph apply` with `$delete` on its
+  eid and its `log`). Over a copy of the box's graph,
   @yaks/git's service and @yaks/persona's `files` act on the checkouts the
   graph names, which are the owner's, so leave those out too.
 - Write and read the probe the same way:

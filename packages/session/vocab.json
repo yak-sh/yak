@@ -586,7 +586,7 @@
       "noun": "session",
       "verb": "wrap",
       "title": "Wrap up a session",
-      "description": "At the end of an agent work session, save the optional brief (its own account of what it did) and release every claim, or work reservation, it still holds. Pass a session id or a hook containing session_id. Returns bundles (JSON objects with entity ids and field groups) for the brief and claim removals. If the session does not exist or no id is supplied, returns nothing and makes no changes.",
+      "description": "At the end of an agent work session, save the optional brief (its own account of what it did) and release every claim, or work reservation, it still holds, except a task a managed run is parked on (one still waiting on a dependency, which wakes the run when it finishes). Pass a session id or a hook containing session_id. Returns bundles (JSON objects with entity ids and field groups) for the brief and claim removals. If the session does not exist or no id is supplied, returns nothing and makes no changes.",
       "input": {
         "session": {
           "type": "string",
@@ -764,10 +764,20 @@
         "exception",
         "exit",
         "interrupted",
-        "failed"
+        "failed",
+        "completed",
+        "cancelled"
       ],
       "sweep": ".claim",
-      "description": "release claims held by a transcript that stopped or failed; a worker also finds claims left by runs that ended while no worker was serving effects"
+      "description": "release claims held by a transcript that stopped or failed, except those a managed run that ended cleanly is parked on: a task still waiting on a dependency, or any while a request waits for its next run. A parked task finishing lets its claim go. A worker also finds claims left by runs that ended while no worker was serving effects"
+    },
+    "session_wake": {
+      "effect": true,
+      "created": [
+        "completed",
+        "cancelled"
+      ],
+      "description": "wake every transcript parked on a task that waits on the one that finished: where its run is over, an input carrying the `using` in force asks for its next turn, which whoever answers that provider runs (the session runner, or @yaks/spawn for a command line)"
     }
   }
 }

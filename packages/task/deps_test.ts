@@ -8,7 +8,7 @@ import { type Bundle, graph } from '@yaks/graph'
 import { kernel } from '@yaks/kernel'
 import { ram } from '@yaks/ram'
 import { loadVocab } from '@yaks/vocab'
-import { done, gated, openDeps } from './deps.ts'
+import { dependencies, dependents, done, gated, openDeps } from './deps.ts'
 import { tasks } from './plugin.ts'
 import { store, team, teamGraph } from './testing.ts'
 
@@ -51,6 +51,19 @@ let seeded = () => {
 test('openDeps counts what has not settled, over both relations', () => {
   // a is open; d is not a task and cannot settle; b and c are finished
   assertEquals(openDeps(seeded(), 'p'), 2)
+})
+
+test('dependencies and dependents walk the same edges both ways', () => {
+  let s = seeded()
+  assertEquals((dependencies(s, 'p') as string[]).toSorted(), [
+    'a',
+    'b',
+    'c',
+    'd',
+  ])
+  assertEquals(dependencies(s, 'p', { relations: ['contains'] }), ['c'])
+  assertEquals(dependents(s, 'a'), ['p'])
+  assertEquals(dependents(s, 'p'), [])
 })
 
 test('a task with no children counts nothing', () => {

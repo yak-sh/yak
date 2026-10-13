@@ -64,10 +64,24 @@ fails (a store locked past its busy timeout) is reported, and the next takes the
 log up where the transcript stands. Unrecognized and invalid JSON lines remain
 in the file and are not entries.
 
-When the process exits, the follower appends a transcript `stop` entry. A
-nonzero exit is recorded with that entry. Writing `stop` on the session entity
-requests termination: SIGTERM to the process group, then SIGKILL after the
-configured grace period. A `stop` on an entry only ends the transcript.
+When the process exits, the follower appends a transcript `stop` entry unless
+the provider printed one after the request it answered. A nonzero exit is
+recorded with that entry.
+
+<a id="carrying-on"></a>
+
+A request written after a run ended (an input carrying `using`) starts the next
+run on the provider's own thread (`claude --resume`, `codex exec resume`, named
+by the `session.id` the provider gave), given everything said to the session
+since its last run. A request written while a run is going starts the next run
+when that one ends. A run that ends cleanly while the task it holds waits on a
+dependency is **parked**: it keeps its claim, its checkout and its log, and the
+dependency finishing asks for its next run through `@yaks/session`'s
+`session_wake`; a dependency that finished while it ran is told as it ends.
+Every other run's checkout and files are taken back when it ends. Writing `stop`
+on the session entity requests termination: SIGTERM to the process group, then
+SIGKILL after the configured grace period. A `stop` on an entry only ends the
+transcript.
 
 <a id="stopping-a-run"></a>
 

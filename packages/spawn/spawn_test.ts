@@ -10,7 +10,8 @@ import { edgeDoc, edgeKeywords, link } from '@yaks/edge'
 import { effectDoc, type Effects, effects, POOL, take } from '@yaks/effects'
 import { modelDoc } from '@yaks/model'
 import { ram } from '@yaks/ram'
-import { sessionDoc, sessions, transcriptUsage } from '@yaks/session'
+import { sessionDoc, sessions, transcriptUsage, wake } from '@yaks/session'
+import type { Adapter } from './adapters.ts'
 import { toolsDoc } from '@yaks/tools/vocab'
 import { loadVocab } from '@yaks/vocab'
 import { launch, processDoc, processes, store } from '@yaks/process'
@@ -357,6 +358,71 @@ test('a restart adopts the run and reads its log on from where it stands', async
     )
     up.abort()
     await duty
+  } finally {
+    Deno.removeSync(where, { recursive: true })
+  }
+})
+
+// A session asked to work `y`, which requires `x`, holding `y`; its fake
+// provider says which thread it was told to carry on, if any.
+let parking = async (where: string) => {
+  let g = tracked()
+  let carrying: Adapter = {
+    ...fake,
+    argv: (j) =>
+      fake.argv({
+        ...j,
+        instruction: j.thread
+          ? `on ${j.thread}: ${j.instruction}`
+          : j.instruction,
+      }),
+  }
+  g.fx.handle(
+    spawning({ adapters: { fake: carrying } })({ graph: g.g }, {
+      dir: where,
+      poll: 5,
+    }),
+  )
+  g.fx.handle({ session_wake: (e) => wake(g.g, e.entity.eid) })
+  let runs = async () =>
+    (await bodies(g.g)).filter((b) => b.startsWith('working: '))
+  let ended = async () => comp((await g.g.get(['S1']))[0], 'exit')?.code === 0
+  await g.g.apply([
+    { entity: { eid: 'x' }, task: {} },
+    { entity: { eid: 'y' }, task: {} },
+    link('y', 'requires', 'x'),
+    ...asking('S1', 'E1', 'work y'),
+    { entity: { eid: 'y' }, claim: { session: 'S1' } },
+  ])
+  let finish = () => g.g.apply([{ entity: { eid: 'x' }, completed: {} }])
+  // The run the finished dependency asked for, carrying on the thread.
+  let carried = async () => {
+    await until(async () => (await runs()).length == 2, 'the run it asked for')
+    let [, again] = await runs()
+    assert(again.startsWith('working: on S1: '), again)
+    await until(ended, 'the second run to end')
+  }
+  return { finish, carried, first: () => until(async () => await ended()) }
+}
+
+test('a run that ends waiting on a dependency carries on its thread when it finishes', async () => {
+  let where = dir()
+  try {
+    let p = await parking(where)
+    await p.first()
+    await p.finish()
+    await p.carried()
+  } finally {
+    Deno.removeSync(where, { recursive: true })
+  }
+})
+
+test('a dependency that finishes while the run goes is told as it ends', async () => {
+  let where = dir()
+  try {
+    let p = await parking(where)
+    await p.finish()
+    await p.carried()
   } finally {
     Deno.removeSync(where, { recursive: true })
   }
