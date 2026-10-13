@@ -643,7 +643,8 @@ export let archive = async (
   if (!hits.length) {
     throw refuse('missing', `nothing open here by ${words.join(', ')}`)
   }
-  return close(env, space, app, who, hits)
+  await close(env, space, app, who, hits)
+  return breaks(hits)
 }
 
 // And fixed by a release, which is how a break usually ends. D-32318 §Errors,
@@ -665,7 +666,10 @@ export let healed = async (
     let was = broke(h).version
     return was == null || was != version
   })
-  return old.length ? close(env, space, app, who, old) : 0
+  if (!old.length) return 0
+  await close(env, space, app, who, old)
+  // Counted as the lines app_errors said them: breaks, not occurrences.
+  return breaks(old)
 }
 
 // The section a tool reply carries: nothing when nothing is unseen. Its last
