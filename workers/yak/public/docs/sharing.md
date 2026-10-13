@@ -60,8 +60,10 @@ nobody's to change again. If the page wants to show who said what, it has to ask
 for a name on the page and save it in its own row.
 
     let who = await me()
-    if (!who.writes) show(`<a href="${who.signIn}">Sign in to post</a>`)
-    else if (!who.person) show('<input name="who" placeholder="Your name">')
+    if (!who.writes) {
+      show(who.signIn ? `<a href="${who.signIn}">Sign in to post</a>`
+                      : 'Only members of this app can post.')
+    } else if (!who.person) show('<input name="who" placeholder="Your name">')
 
 Ask on load, not on refusal — that is the whole reason `me()` exists.
 

@@ -419,7 +419,10 @@ does both, so a guest at the party adds their own photo without signing in; on
 Ask before they pick, not after they wait:
 
     let who = await me()
-    if (!who.writes) show(`<a href="${who.signIn}">Sign in to add one</a>`)
+    if (!who.writes) {
+      show(who.signIn ? `<a href="${who.signIn}">Sign in to add one</a>`
+                      : 'Only members of this app can add one.')
+    }
 
 A refused upload throws an error carrying the platform's own message:
 `sign in to change this app` to a stranger, with `signIn` on it, and, to a

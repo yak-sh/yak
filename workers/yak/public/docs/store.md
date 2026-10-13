@@ -341,8 +341,10 @@ owner's or an editor's to change, whatever the app lets its visitors save.
 Ask on load, not on refusal:
 
     let who = await me()
-    if (!who.writes) show(`<a href="${who.signIn}">Sign in to post</a>`)
-    else if (!who.person) show('<input name="who" placeholder="Your name">')
+    if (!who.writes) {
+      show(who.signIn ? `<a href="${who.signIn}">Sign in to post</a>`
+                      : 'Only members of this app can post.')
+    } else if (!who.person) show('<input name="who" placeholder="Your name">')
 
 Both halves matter, and they are different people. On a `public` app a guest who
 types first is bounced to sign in and comes back to an empty form. On an `open`
