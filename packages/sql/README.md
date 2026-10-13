@@ -725,6 +725,13 @@ equal(compile(parse('.entity.eid=b1'), vocab).params, ['b1'])
 equal(compile(parse('.entity.num=3,4'), vocab).params, [])
 ```
 
+A reference equality drives the statement from its column's index. So does an
+equality at the end of a reference path, `.session.persona.persona.home=P-19`,
+when indexes can answer every hop: it is read from the far end (the personas
+homed at P-19, then the sessions wearing one), as one set the root reference is
+sought in, whatever tests stand beside it. Any other path is read forward, one
+correlated lookup per row.
+
 [Reverse associations](../vocab/README.md#routing-and-references) compile to
 correlated EXISTS or count subqueries, which preserve one outer row per entity.
 `.refs=<eid>` finds backlinks across reference properties, grouping columns by

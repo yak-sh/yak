@@ -210,21 +210,13 @@ export let heirs = async (
       (await Promise.all(reached.map((p) => family(graph, p, '<-')))).flat(),
     ),
   ]
-  // Each read narrows the next, so only a native transcript's entries are
-  // read for its status: the personas homed there, the native transcripts
-  // wearing one (a `using` entry, and no `process` running it outside the
-  // graph), and those at work.
-  let personas = eids(
-    await graph.read(and(
-      present('persona'),
-      eq('persona.home', value(homes)),
-      fields('persona.home'),
-    )),
-  )
-  if (!personas.length) return []
+  // The native transcripts (a `using` entry, and no `process` running it
+  // outside the graph) wearing a persona homed there, then those at work. The
+  // status is a read of its own: in one statement SQLite reads it off every
+  // session the path finds, outside ones included, before the tests beside it.
   let native = eids(
     await graph.read(and(
-      eq(`${SESSION}.persona`, value(personas)),
+      eq(`${SESSION}.persona.persona.home`, value(homes)),
       ...graph.vocab.comp('process') ? [absent('process')] : [],
       present('entries.using'),
       fields(`${SESSION}.persona`),

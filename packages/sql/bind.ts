@@ -63,6 +63,7 @@ import { absent, bare, directive, parse, present } from '@yaks/query/core'
 import type { Assoc, Hop, Presence, Vocab } from '@yaks/vocab/runtime'
 import { Unknown } from '@yaks/vocab/runtime'
 import {
+  among,
   and,
   as,
   type Bind,
@@ -524,9 +525,15 @@ let inSet = (ctx: Ctx, set: Identity): Frag => {
 // A reference equal to any of these eids, compared as the integer ids the
 // column stores. An ordinary entity's id is looked up once in the entity table;
 // a backed entity's is read back out of its eid (./derived.ts), and an eid that
-// is not one of its names nothing.
-let refEq = (ctx: Ctx, comp: string, prop: string, eids: string[]): Frag => {
-  let key = ctx.d.refCol!(comp, prop)
+// is not one of its names nothing. `key` is the column as the statement names
+// it, the joined table's own by default.
+let refEq = (
+  ctx: Ctx,
+  comp: string,
+  prop: string,
+  eids: string[],
+  key = ctx.d.refCol!(comp, prop),
+): Frag => {
   let target = ctx.v.prop(comp, prop)?.ref
   if (
     (!target || !computed(ctx.v, target)) &&
@@ -667,7 +674,8 @@ let single = (ctx: Ctx, hop: Hop, p: Pred): Cond => {
 // A path that dereferences references: a chain of one-to-one lookups through
 // reference properties, ending in a leaf property tested against an operator
 // and a value. Nested correlated scalar subqueries follow the chain without
-// widening the set of candidate rows. Every hop but the last must be a
+// widening the set of candidate rows; an equality indexes can answer is read
+// from the far end instead (`sought`). Every hop but the last must be a
 // reference property.
 //
 // The bare table a correlated subquery reads, asked of the dialect: a dialect
@@ -738,6 +746,82 @@ let chain = (ctx: Ctx, hops: Hop[], start: string): string => {
   return target
 }
 
+// The index that leads with a property and covers every row, by name.
+let leading = (ctx: Ctx, comp: string, prop: string): string | undefined => {
+  let index = ctx.v.indexes(comp).find((i) => i.props[0] == prop && !i.present)
+  return index && `${comp}_${index.props.join('_')}`
+}
+
+// Whether a path's equality can be read from its far end, one index seek per
+// hop: every hop a stored reference into the entity table, and the leaf a
+// stored reference compared with eids (every stored reference is indexed) or
+// an indexed column compared with a value.
+let seekable = (ctx: Ctx, hops: Hop[], p: Pred): boolean => {
+  let leaf = hops.at(-1)!
+  let stored = (h: Hop) =>
+    h.comp != 'entity' && !computed(ctx.v, h.comp) &&
+    ctx.v.prop(h.comp, h.prop)?.computed === false &&
+    !ctx.derived[`${h.comp}.${h.prop}`]
+  return hops.length > 1 && opOf(p) == '' && flat(p.value) != '' &&
+    !!ctx.d.refCol && hops.every(stored) &&
+    hops.slice(0, -1).every((h) => !lands(ctx.v, h.comp, h.prop)) &&
+    (isRef(ctx.v, leaf.comp, leaf.prop)
+      ? !!literals(p.value)?.length
+      : !!leading(ctx, leaf.comp, leaf.prop))
+}
+
+// A predicate's hops forward through the vocabulary, or none where it reads
+// another way (a reverse association, `.kind`) or names nothing.
+let aimed = (ctx: Ctx, c: Pred): Hop[] | undefined => {
+  if (c.path[0] == 'kind' || ctx.v.assoc(c.path[0])) return
+  try {
+    return ctx.v.aim(c.path.join('.'), bare(c))
+  } catch {
+    return
+  }
+}
+
+// A seekable path equality, read from its far end: the rows whose leaf holds
+// the value, then, hop by hop back, the rows whose reference names one of
+// those. Uncorrelated, it is one set, read once, that the root reference is
+// found in through its own index, which can then drive the statement
+// (`indexedRelation`). Read the other way, as `chain` does, the path is a
+// lookup per row that no index can drive, and a broad clause beside it (an
+// absence test's archetype list) reads every row it admits.
+let sought = (ctx: Ctx, hops: Hop[], p: Pred): Cond => {
+  let at = (i: number) => `__s${i}`
+  let rows = (i: number, where: Cond): Query =>
+    select({
+      cols: [col('entity', at(i))],
+      from: raw(`${source(ctx, hops[i].comp)} as "${at(i)}"`),
+      where,
+    })
+  let n = hops.length - 1, leaf = hops[n]
+  let key = inline(col(field(leaf.prop), at(n)))
+  let def = ctx.v.prop(leaf.comp, leaf.prop)!
+  if (def.category != 'ref') {
+    opaque(tagOf(def), 'a filter on it', `${leaf.comp}.${leaf.prop}`)
+  }
+  let test = def.category == 'ref'
+    ? refEq(ctx, leaf.comp, leaf.prop, literals(p.value)!, key)
+    : lowerScalar(ctx, key, '', p.value, tagOf(def), def.affinity == 'text')
+  if (!test) {
+    throw new Unsupported(
+      'this path predicate',
+      `.${leaf.comp}.${leaf.prop} ${p.op}`,
+    )
+  }
+  let set = rows(n, cond(test))
+  for (let i = n - 1; i > 0; i--) {
+    set = rows(i, among(col(field(hops[i].prop), at(i)), set))
+  }
+  let [root] = hops
+  return and(
+    cond(ctx.d.presence(root.comp)),
+    among(raw(refKey(ctx, root.comp, root.prop)), set),
+  )
+}
+
 let path = (ctx: Ctx, hops: Hop[], p: Pred): Cond => {
   let op = opOf(p)
   if (op == 'want') return TRUE
@@ -746,6 +830,7 @@ let path = (ctx: Ctx, hops: Hop[], p: Pred): Cond => {
   let value = flat(p.value)
   if (!reachable(ctx, hops)) return unworn(op, value, hops.at(-1)!.prop)
   ctx.tables.add(root.comp)
+  if (seekable(ctx, hops, p)) return sought(ctx, hops, p)
   let target = chain(ctx, hops, refKey(ctx, root.comp, root.prop))
   let leaf = hops[hops.length - 1]
   // A presence test on the leaf: does the entity the path reached have this
@@ -1895,23 +1980,25 @@ let indexedRelation = (
       }
     }
     for (let c of root ? [] : flattened(clauses)) {
-      if (c.kind != 'pred' || c.not || c.where || c.path.length != 2) continue
-      let [comp, prop] = c.path
+      if (c.kind != 'pred' || c.not || c.where || c.path.length < 2) continue
+      // A seekable path drives from its root reference's index, as a
+      // reference equality one hop long does.
+      let hops = c.path.length > 2 ? aimed(ctx, c) : undefined
+      if (c.path.length > 2 && !(hops && seekable(ctx, hops, c))) continue
+      let [comp, prop] = hops ? [hops[0].comp, hops[0].prop] : c.path
       let p = ctx.v.prop(comp, prop)
       if (
         comp == 'entity' || !p || p.computed || computed(ctx.v, comp) ||
         ctx.derived[`${comp}.${prop}`] || !needs(opOf(c), flat(c.value)) ||
         opOf(c) == EXISTS || opOf(c) == '~'
       ) continue
-      let index = ctx.v.indexes(comp).find((i) =>
-        i.props[0] == prop && !i.present
-      )
+      let index = leading(ctx, comp, prop)
       if (
         !index || !ctx.d.scoped &&
           (ctx.d.table(comp) != `"${comp}"` ||
             source(ctx, comp) != `"${comp}"`)
       ) continue
-      root = { comp, index: `${comp}_${index.props.join('_')}`, pred: c }
+      root = { comp, index, pred: hops ? undefined : c }
       break
     }
   }
@@ -2020,7 +2107,13 @@ let indexedRelation = (
           [],
           'entity',
         ),
-        on: raw(ctx.d.joinOn(root.comp, 'entity')),
+        // Each root row finds its entity by key, and nothing finds the root
+        // through its entity: SQLite would carry an owning set on the entity
+        // (`in (select …)`) over the equality into the root's index, and seek
+        // it once per pair of an indexed value and a member of that set.
+        on: root.index
+          ? raw(`${ctx.d.ownerKey('entity')} = +${ctx.d.ownerKey(root.comp)}`)
+          : raw(ctx.d.joinOn(root.comp, 'entity')),
       },
       ...o.joins.filter((j) => j.source != joining(ctx, root!.comp)).map((
         j,
