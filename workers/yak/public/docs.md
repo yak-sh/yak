@@ -260,9 +260,10 @@ examples.
 
 A refusal returns a code for you and a message for the person, and `client.js`
 throws the message. Every page the platform serves reports its own errors, so a
-break shows up in the app's store and the person's agent hears about it once;
-`app_errors` lists what is still open. Every destructive thing has a way back:
-the 30-day trash, `store_restore`, file history, and `app_rollback`.
+break is kept for the app and the person's agent hears about it once;
+`app_errors` lists what is still open, and `app_list` says how many. Every
+destructive thing has a way back: the 30-day trash, `store_restore`, file
+history, and `app_rollback`.
 
 Deeper: <https://yaks.app/docs/errors.md> — every refusal, app_errors, and
 rolling back.
