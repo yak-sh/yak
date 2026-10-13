@@ -64,6 +64,16 @@ let glued = (value: string, term = false) =>
     ? JSON.stringify(value)
     : value
 
+/** A line's tokens written back as one line: `&` between clauses, nothing
+ * around the `|` that separates two arms. */
+/// joined(['.doc', '.task', '|', '.recipe']) -> '.doc&.task|.recipe'
+export let joined = (segs: string[]) =>
+  segs.reduce(
+    (line, seg, i, all) =>
+      line + (i && seg != '|' && all[i - 1] != '|' ? '&' : '') + seg,
+    '',
+  )
+
 /** A line without the `?` a query string opens with, and any `&` after it. A
  * `?` before a word is the grammar's own (`?doc` asks for a component), so it
  * stays. */
@@ -81,18 +91,16 @@ export let bare = (line: string) =>
  * would.
  */
 export let lined = (search: string): string =>
-  tokens(bare(search)).map((seg) => {
-    if (seg == '|') return seg
-    if (seg.startsWith('(')) return `(${lined(seg.slice(1, -1))})`
-    let m = OPERATOR.exec(seg)
-    if (!m) return glued(plain(seg), true)
-    return `${RIDERS[m[1]] ?? m[1]}${m[2]}${
-      glued(plain(seg.slice(m[0].length)))
-    }`
-  }).reduce(
-    (line, seg, i, all) =>
-      line + (i && seg != '|' && all[i - 1] != '|' ? '&' : '') + seg,
-    '',
+  joined(
+    tokens(bare(search)).map((seg) => {
+      if (seg == '|') return seg
+      if (seg.startsWith('(')) return `(${lined(seg.slice(1, -1))})`
+      let m = OPERATOR.exec(seg)
+      if (!m) return glued(plain(seg), true)
+      return `${RIDERS[m[1]] ?? m[1]}${m[2]}${
+        glued(plain(seg.slice(m[0].length)))
+      }`
+    }),
   )
 
 // The alias this door gives a bundle that names no entity: its own

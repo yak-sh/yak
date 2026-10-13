@@ -42,7 +42,7 @@ import { aggregate } from '@yaks/graph/read'
 import { argsOf } from '@yaks/graph/call'
 import { composed as perEntity } from '@yaks/graph/bundle'
 import { detached } from '@yaks/graph/storage'
-import { parse, stringify } from '@yaks/query'
+import { parse, stringify, tokens } from '@yaks/query'
 import { addressed, wordish } from '@yaks/alias'
 import { barred, openly } from './anon.ts'
 import type { Search } from '@yaks/mcp'
@@ -62,7 +62,7 @@ import {
 } from './tools.ts'
 import { ceiling, serve, unseenBlock } from './unseen.ts'
 import { appVocab, PLATFORM_APART, wordOf } from './vocab.ts'
-import { bare, lined } from './wire.ts'
+import { bare, joined, lined } from './wire.ts'
 import { apex, type Host, hosted } from './host.ts'
 import { refuse } from './tool.ts'
 
@@ -298,11 +298,14 @@ export let named = (ctx: Ctx, said: string, write = false): Promise<Reach> => {
 // The `.in=` rider: which app a read is scoped to. It is the platform's word,
 // not the query grammar's, so it comes off the line before any store sees it —
 // a store knows about components, and which of several stores to ask is a
-// question only this side of the hop can answer.
-let scope = (line: string) => {
-  let segs = bare(line).split('&')
+// question only this side of the hop can answer. It is a clause like any
+// other, so whitespace ends it as `&` does.
+/// scope('.doc .in=recipes') -> { said: 'recipes', line: '.doc' }
+/// scope('.in=me/trip&.doc|.task') -> { said: 'me/trip', line: '.doc|.task' }
+export let scope = (line: string) => {
+  let segs = tokens(bare(line))
   let said = segs.find((s) => /^\.in=/.test(s))?.slice(4)
-  return { said, line: segs.filter((s) => !/^\.in=/.test(s)).join('&') }
+  return { said, line: joined(segs.filter((s) => !/^\.in=/.test(s))) }
 }
 
 // The identity operand list, wherever it appears on a line: `.entity.eid=a,b` — which
