@@ -1,15 +1,39 @@
 // The box shares one signed tracker transport for reads, intake and bug marks.
 // Credentials are read at use time and never reach redirects or error text.
+//
+// The path to the Worker can go bad for one connection while a new one is
+// fine: each connection from the box lands in one of several Cloudflare
+// colos, and the path to some of them loses packets for minutes at a time (a
+// TLS handshake of ten seconds, an answer that never comes). So a request is a
+// few short attempts, each on a connection of its own and each taking its
+// whole answer, never one long wait on a connection gone bad.
 import { derivedEid } from '@yaks/graph/identity'
 import type { Sink } from './report.ts'
 import { sign } from './ticket.ts'
 
 export type Remote = { url?: string; secret?: string }
 
+/** How long one attempt may take to its whole answer, and how many attempts a
+ * request makes: fifteen seconds in all. */
+let WAIT = 5_000, TRIES = 3
+
 /** A failure a timeout caused. It is named as one; any other failure names no
  * cause, since a cause can carry the address or the upstream's body. */
 export let late = (error: unknown) =>
   error instanceof DOMException && error.name == 'TimeoutError'
+
+// One attempt on a connection of its own, closed once the whole answer is in
+// hand. Outside Deno the runtime owns the connections.
+let attempt = async (go: typeof fetch, url: URL, init: RequestInit) => {
+  let client = globalThis.Deno?.createHttpClient({})
+  let own: RequestInit & { client?: Deno.HttpClient } = { ...init, client }
+  try {
+    let response = await go(url, client ? own : init)
+    return new Response(response.body && await response.arrayBuffer(), response)
+  } finally {
+    client?.close()
+  }
+}
 
 export let request = async (
   remote: Remote,
@@ -49,24 +73,26 @@ export let request = async (
   }, remote.secret)
   let headers = new Headers(init.headers)
   headers.set('authorization', `Bearer ${ticket}`)
-  try {
-    return await go(url, {
-      ...init,
-      headers,
-      redirect: 'error',
-      signal: AbortSignal.any([
-        ...init.signal ? [init.signal] : [],
-        AbortSignal.timeout(15_000),
-      ]),
-    })
-  } catch (error) {
-    throw late(error)
-      ? new DOMException(
-        'Remote tracker did not answer in time',
-        'TimeoutError',
-      )
-      : Error('Remote tracker is unavailable')
+  let last: unknown
+  for (let i = 0; i < TRIES; i++) {
+    let wait = AbortSignal.timeout(WAIT)
+    try {
+      return await attempt(go, url, {
+        ...init,
+        headers,
+        redirect: 'error',
+        signal: init.signal ? AbortSignal.any([init.signal, wait]) : wait,
+      })
+    } catch (error) {
+      last = error
+      // The caller's own deadline or stop ends the request; an attempt's own
+      // deadline means another try, on a new connection.
+      if (init.signal?.aborted) break
+    }
   }
+  throw late(last)
+    ? new DOMException('Remote tracker did not answer in time', 'TimeoutError')
+    : Error('Remote tracker is unavailable')
 }
 export let delivery =
   (remote: Remote, go: typeof fetch = fetch): Sink => async (rows) => {
