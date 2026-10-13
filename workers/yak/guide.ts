@@ -314,11 +314,11 @@ for the subject and body, mail {from, to, at, message_id, verified} for the
 envelope — and a page subscribed to it sees it arrive. A letter is a row in the
 store like any other, and its from address is a value on that row. Mail is
 metered both ways against the space's plan, and mail at the person's own domain
-is not offered. mail_list and mail_send are that mailbox as two tools; mail
-asked about with no app named — "check my email" — is the person's own mailbox,
-which whatever mail tool they have connected answers and this one does not, and
-naming an app or its address is what makes it this one. Call guide with page
-mail for the whole thing (${url(env, '/docs/mail.md')}).
+is not offered. mail_list and store_mail_send are that mailbox as two tools;
+mail asked about with no app named — "check my email" — is the person's own
+mailbox, which whatever mail tool they have connected answers and this one does
+not, and naming an app or its address is what makes it this one. Call guide with
+page mail for the whole thing (${url(env, '/docs/mail.md')}).
 
 A store on Plus can take payments without keys or code. The seller connects
 a Stripe account of their own to their space once (space_sell, or the button on

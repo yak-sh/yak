@@ -45,11 +45,11 @@ test('free allowances hold per person, not per space', async () => {
     ])
     let space = `a${tag}4`
     await hers.tool('app_new', { space, slug: 'post', title: 'Post' })
-    await hers.tool('mail_send', {
+    await hers.tool('store_mail_send', {
       space,
       app: 'post',
       to: 'nobody@probe.invalid',
-      title: 'One too many',
+      subject: 'One too many',
       body: 'Nothing to answer.',
     })
     let said = await until(async () => {

@@ -80,12 +80,11 @@ you already have is named by its eid instead, and the same entity receives every
 later letter.
 
 `graph_apply` writes exactly the same rows from your side, which is the way to
-send one without a page open. `mail_send(app, to, title, body)` is those same
-writes in one call — it finds or writes the recipient for you — and
+send one without a page open. `store_mail_send(app, to, subject, body)` is those
+same writes in one call — it finds or writes the recipient for you — and
 `mail_list(app, direction)` reads the mailbox back, newest first. They are an
-APP's mailbox and never a person's own, which is the whole reason they have
-names of their own: "check my email" with no app named is somebody's mail
-account, somewhere else entirely.
+app's mailbox and never a person's own: "check my email" with no app named is
+somebody's mail account, somewhere else entirely.
 
 **`mail.from` is the platform's to set.** It is stamped with the app's own
 address, overwriting whatever was sent, because an address is a claim about who

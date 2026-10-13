@@ -218,7 +218,7 @@ hook to register; the letters are simply in a store you can read.
     subscribe('.mail&?doc', triage)
 
 Nothing about the mailbox itself changes with a front page. `mail_list` reads
-the same rows back from an agent's side, `mail_send` sends from the same
+the same rows back from an agent's side, `store_mail_send` sends from the same
 address, and a space with no front page is named in the refusal when somebody
 writes to it, so the sender knows to write to `<space>.<app>@yaks.app` instead.
 

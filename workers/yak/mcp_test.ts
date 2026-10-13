@@ -123,7 +123,7 @@ test(
         idempotentHint: true,
         openWorldHint: false,
       })
-      assertEquals(hints('mail_send')?.openWorldHint, true)
+      assertEquals(hints('store_mail_send')?.openWorldHint, true)
       // And every one of them promises the same answer (T-37852): bundles,
       // under `result`, which is what each tool returns as structured content.
       // The shape is the generic one (@yaks/mcp `answerSchema`) and not the
@@ -200,16 +200,13 @@ test(
           `Documentation: https://yaks.app/docs/${page}.`,
         )
       }
-      // Both mail tools say which mailbox they are, because the tool list is
-      // where a model with a mail connector beside this one decides what
-      // "check my email" meant (T-34149).
-      for (let name of ['mail_list', 'mail_send']) {
-        assertStringIncludes(says(name), '<space>.<app>@yaks.app')
-        assertStringIncludes(says(name), "not a person's own mailbox")
-      }
+      // The mailbox says which one it is, because the tool list is where a
+      // model with a mail connector beside this one decides what "check my
+      // email" meant (T-34149).
+      assertStringIncludes(says('mail_list'), '<space>.<app>@yaks.app')
+      assertStringIncludes(says('mail_list'), "not a person's own mailbox")
       // And the instructions say the same thing once more, where an agent
       // reads it before it has chosen any tool at all.
-      assertStringIncludes(init.instructions, 'mail_list and mail_send')
       assertStringIncludes(init.instructions, 'check my email')
 
       // The guide the tool descriptions point at, offered as a resource and

@@ -33,6 +33,7 @@ import { accept } from './invite.ts'
 import { narrowed } from './grants.ts'
 import type { Address } from './post.ts'
 import { letters } from './letters.ts'
+import { invokePackage } from './package-tools.ts'
 import type { Graph } from '@yaks/graph'
 import { clock } from './timing.ts'
 import { KERNEL, meta } from './meta.ts'
@@ -97,22 +98,20 @@ test('staging tool URLs and app mail use the same configured host', async () => 
     'test.yaks.fyi is on yaks.fyi',
   )
 
-  let [listing, sending] = letters(ctx)
-  assertStringIncludes(sending.description!, '<space>.<app>@yaks.fyi')
+  let [listing] = letters(ctx)
+  assertStringIncludes(listing.description!, '<space>.<app>@yaks.fyi')
+  let out = await invokePackage(ctx, 'mail_send', {
+    space: 'ada',
+    app: 'recipes',
+    to: 'ana@books.example',
+    subject: 'Dinner',
+    body: 'Bring pudding.',
+  }) as unknown as { mail?: { from: string } }[]
+  assertEquals(out.find((b) => b.mail)?.mail?.from, 'ada.recipes@yaks.fyi')
   // A tool takes the call, its arguments on it, and the graph (@yaks/tools):
-  // these two answer the letters themselves.
+  // mail_list answers the letters themselves.
   let asked = (args: Record<string, unknown>) =>
     [{ entity: { eid: 'c1' }, call: { args } }, {} as Graph] as const
-  let out = await sending.run(
-    ...asked({
-      space: 'ada',
-      app: 'recipes',
-      to: 'ana@books.example',
-      title: 'Dinner',
-      body: 'Bring pudding.',
-    }),
-  ) as unknown as { mail: { from: string } }[]
-  assertEquals(out[0].mail.from, 'ada.recipes@yaks.fyi')
   let sent = await listing.run(
     ...asked({ space: 'ada', app: 'recipes', direction: 'sent' }),
   ) as unknown as { mail: { from: string } }[]

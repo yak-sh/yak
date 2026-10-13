@@ -49,17 +49,20 @@ test("an app's letters, listed and sent through the connector", async () => {
       )
     }
 
-    // And the app writes one of its own. The answer is the letter as applied,
-    // leaving from the app's own address whatever the tool was handed, and
-    // addressed to an entity rather than to a string.
-    let [sent] = JSON.parse(
-      await agent.tool('mail_send', {
+    // And the app writes one of its own. The answer holds the letter as
+    // applied, leaving from the app's own address whatever the tool was
+    // handed, and addressed to an entity rather than to a string.
+    let letterOf = (answer: string) =>
+      (JSON.parse(answer) as Letter[]).find((b) => b.mail)!
+    let sent = letterOf(
+      await agent.tool('store_mail_send', {
         app: 'recipes',
         to: 'ana@books.example',
-        title: 'Thanks for the pudding',
+        subject: 'Thanks for the pudding',
         body: 'It went in **one** sitting.',
+        from: 'someone@else.example',
       }),
-    ) as (Letter & { created: { at: string } })[]
+    ) as Letter & { created: { at: string } }
     assertEquals(sent.mail.from, `${jeff41}.recipes@yaks.app`)
     assertEquals(sent.doc.title, 'Thanks for the pudding')
     assert(sent.deliver!.to, 'the letter names a recipient entity')
@@ -123,14 +126,14 @@ test("an app's letters, listed and sent through the connector", async () => {
 
     // A second letter to the same address hangs off the recipient the app
     // already has, rather than a second row for one person.
-    let [again] = JSON.parse(
-      await agent.tool('mail_send', {
+    let again = letterOf(
+      await agent.tool('store_mail_send', {
         app: 'recipes',
         to: 'ana@books.example',
-        title: 'One more thing',
+        subject: 'One more thing',
         body: 'Bring the tin back.',
       }),
-    ) as Letter[]
+    )
     assertEquals(again.deliver!.to, sent.deliver!.to)
 
     // Only a member sends: the platform tier is the space's, and an app that
@@ -142,11 +145,11 @@ test("an app's letters, listed and sent through the connector", async () => {
     let stranger = connector(k, (await signIn(k)).cookie)
     await assertRejects(
       () =>
-        stranger.tool('mail_send', {
+        stranger.tool('store_mail_send', {
           app: 'recipes',
           space: jeff41,
           to: 'ana@books.example',
-          title: 'Not mine to send',
+          subject: 'Not mine to send',
           body: 'From nobody here.',
         }),
       Error,

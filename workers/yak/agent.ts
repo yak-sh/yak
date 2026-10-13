@@ -7,8 +7,8 @@
 // per tool, so nothing here writes a bundle by hand. What it cannot bring is
 // the platform: space_new, the app_* family, domain_*, member_*, feedback and
 // about are this place's own verbs, and a plugin is how a graph grows verbs.
-// mail_list and mail_send are a second such plugin (letters.ts) — an app's own
-// mailbox, said in the tool list so nobody confuses it with a person's.
+// mail_list is a second such plugin (letters.ts) — an app's own mailbox, said
+// in the tool list so nobody confuses it with a person's.
 // One server lists every tier because all of them are `Tool`s.
 //
 // The graph is A composition, not a database. A person's data lives in one
@@ -50,7 +50,7 @@ import type { Prop, PropSchema, Vocab } from '@yaks/vocab'
 import { META } from './directory.ts'
 import { letters } from './letters.ts'
 import { packageTools } from './package-tools.ts'
-import { PUBLISHED } from './published.ts'
+import { PUBLISHED, sending } from './published.ts'
 import { composed, type Reach, read, vocabAt, written } from './reach.ts'
 import { titling } from './session.ts'
 import {
@@ -248,20 +248,23 @@ export let sugared = (ctx: Ctx, t: Sugar): Tool => ({
 export let platform = (ctx: Ctx): Plugin => {
   let bound = (t: Sugar) =>
     ctx.person || openly(t) ? sugared(ctx, t) : barred(sugared(ctx, t), ctx.env)
+  let signed = (t: Tool) => ctx.person ? t : barred(t, ctx.env)
   return {
     name: 'yak/platform',
     tools: [
       ...TOOLS.map(bound),
       ...PUBLISHED.map((t) => ({ ...bound(t), listed: false })),
-      ...packageTools(ctx).map((t) => ctx.person ? t : barred(t, ctx.env)),
+      ...packageTools(ctx).map(signed),
+      { ...signed(sending(ctx)), listed: false },
     ],
   }
 }
 
 /**
- * The post room's own verbs, as a second plugin (letters.ts): `mail_list` and
- * `mail_send`. They are apart from the table above because they answer the
- * letters themselves as bundles, where every other verb there answers words.
+ * The post room's own verb, as a second plugin (letters.ts): `mail_list`. It
+ * is apart from the table above because it answers the letters themselves as
+ * bundles, where every other verb there answers words. Sending is @yaks/mail's
+ * `mail_send`, among the package tools.
  */
 export let post = (ctx: Ctx): Plugin => ({
   name: 'yak/mail',
@@ -568,9 +571,9 @@ export let reaching = async (
   let storage = held(ctx, reach)
   // The post room is a person's own mailbox work (letters.ts), and it is
   // listed for everybody: a caller who has not signed in has no letters to
-  // list and none to send, and hears that as the sign-in challenge rather than
-  // as two tools that are not there. One roster, one order, whoever is asking
-  // (`platform`, T-34541).
+  // list, and hears that as the sign-in challenge rather than as a tool that
+  // is not there. One roster, one order, whoever is asking (`platform`,
+  // T-34541).
   let plugins = [platform(ctx), post(ctx)]
   let writing = async (bundles: Bundle[], opts?: ApplyOpts) => {
     let asked = (Array.isArray(bundles) ? bundles : [bundles]) as Bundle[]

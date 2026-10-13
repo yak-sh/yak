@@ -22,13 +22,15 @@ import {
   used,
   USES,
 } from '@yaks/connections'
-import type { Bundle, Comp } from '@yaks/graph'
+import type { Bundle, Comp, NamedTool } from '@yaks/graph'
+import { argsOf } from '@yaks/graph/call'
 import { ctxOf, pageOf, rebind } from './connections.ts'
 import { storeName } from './directory.ts'
 import { CWD, TIMEOUT } from './sandbox.ts'
 import { vaulted } from './vault.ts'
 import {
   APP,
+  type Ctx,
   inApp,
   inSpace,
   refuse,
@@ -675,3 +677,37 @@ let BUILDERS: Row[] = [{
  * and unlisted. */
 export let PUBLISHED: Tool[] = [...ROWS, ...MEMORY, ...CONNECTIONS, ...BUILDERS]
   .map(worded)
+
+/**
+ * The listing's `mail_send`, onto @yaks/mail's own (listed as
+ * `store_mail_send`): the subject was called `title`, and the answer was the
+ * letter alone, as bundles rather than words. Unlisted, like the rest.
+ */
+export let sending = (ctx: Ctx): NamedTool => ({
+  name: 'mail_send',
+  description: 'store_mail_send, with its subject called title',
+  applied: true,
+  inputSchema: {
+    type: 'object',
+    properties: {
+      space: SPACE,
+      app: APP,
+      to: str('an email address, or the id of a record with email{address}'),
+      title: str('the subject line'),
+      body: str('the body, as markdown'),
+    },
+    required: ['app', 'to', 'title', 'body'],
+  },
+  run: async (asked) => {
+    let { title, ...args } = argsOf(asked)
+    let made = await invokePackage(ctx, 'mail_send', {
+      ...args,
+      to: text(args.to, 'to'),
+      subject: text(title, 'title'),
+      body: text(args.body, 'body'),
+    })
+    let letter = made.find((b) => b.mail)
+    if (!letter) throw new Error('the letter was not written')
+    return [letter]
+  },
+})

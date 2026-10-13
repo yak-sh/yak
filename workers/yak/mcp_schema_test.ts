@@ -487,7 +487,7 @@ test(
       assertEquals(await named(connector(k)), his)
       assert(his.includes('app_deploy'), 'the platform tools are listed')
       assert(his.includes('graph_apply'), 'so is the write, signed out and in')
-      assert(his.includes('mail_send'), 'and the mailbox')
+      assert(his.includes('store_mail_send'), 'and the mailbox')
       assertEquals(his.filter((n) => n.includes('__')), [], 'no per-app name')
       assertEquals(
         his.some((n) => n.includes('log_run') || n.includes('note')),

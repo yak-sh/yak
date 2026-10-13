@@ -1,35 +1,31 @@
-// An app's letters, as two tools at the agent door (T-34149): `mail_list` and
-// `mail_send`.
+// An app's letters, read at the agent door (T-34149): `mail_list`. Sending
+// is @yaks/mail's own `mail_send`, which the connector lists beside its other
+// store tools (package-tools.ts).
 //
-// They exist for the scoping sentence. A letter is `doc` + `mail` + `deliver`
-// and nothing else, so `graph_apply` could always send one and `.mail` read
-// one back — these add no power. What the generic tier cannot say is which
+// It exists for the scoping sentence. A letter is `doc` + `mail` + `deliver`
+// and nothing else, so `.mail` through `graph_query` could always read one
+// back — this adds no power. What the generic tier cannot say is which
 // mailbox is meant: an agent holding a mail connector beside this one hears
 // "check my email" as the person's own account, and a bundle wire has nowhere
 // to tell it that `<space>.<app>@yaks.app` is a different thing. A tool's name
 // and its description are what a model reads before it chooses, so the
-// sentence lives there ({@link SCOPE}), said by both, and again in the door's
-// instructions (mcp.ts).
+// sentence lives there ({@link SCOPE}), and again in the door's instructions
+// (mcp.ts).
 //
 // The answer is the generic tier's shape: whole bundles, under an output
 // schema derived from the vocabulary the caller's apps declare (@yaks/mcp
 // `bundleSchema`), so a letter reads back the way every other row does.
-//
-// The published `mail_send` translates its title argument to the package's
-// subject and calls the app store's declared tool. The store owns the write,
-// including the sender stamp, member guard, relay rule and month's ceiling.
 import { z } from 'zod'
 import type { Bundle, Tool } from '@yaks/graph'
 import { argsOf } from '@yaks/graph/call'
 import { mailbox } from './directory.ts'
 import { read } from './reach.ts'
 import { apex, type Host } from './host.ts'
-import { invokePackage } from './package-tools.ts'
 import { type Ctx, inApp } from './tools.ts'
 import { refuse } from './tool.ts'
 
 /**
- * The one sentence both tools carry, because the tool list is where a model
+ * The sentence mail_list carries, because the tool list is where a model
  * decides which mailbox somebody meant.
  */
 export let scope = (env: Host = {}) =>
@@ -63,13 +59,6 @@ let side = (said: string, mine: string): string | null =>
     : said == 'received'
     ? `&!deliver.to&.mail.from!=${mine}`
     : null
-
-let str = (v: unknown, what: string): string => {
-  if (typeof v != 'string' || !v.trim()) {
-    throw refuse('arguments', `${what} is required`)
-  }
-  return v.trim()
-}
 
 let num = (v: unknown): number | undefined =>
   typeof v == 'number' && Number.isFinite(v) ? v : undefined
@@ -126,57 +115,9 @@ let listing = (ctx: Ctx): Tool => ({
   },
 })
 
-let sending = (ctx: Ctx): Tool => ({
-  name: 'mail_send',
-  applied: true,
-  title: "Send email from an app's address",
-  // An email to a stranger's inbox: it leaves the platform, and no second
-  // call takes it back.
-  destructive: true,
-  openWorld: true,
-  description:
-    `Send one email from an app's own address to one recipient: an email ` +
-    `address, or the unique id (eid) of a record in the app that has an ` +
-    `email{address} field. Later emails to that person link to the same ` +
-    `record. Creates the recipient record if needed, then the email record, ` +
-    `and returns the email as written: a JSON object with its id and named ` +
-    `groups of fields (components). Delivery is recorded on that email a ` +
-    `moment later as delivered or bounced, so read it back with mail_list. ` +
-    `The body is markdown. ${scope(ctx.env)} Sending ` +
-    `requires a member who may write, even in an app anyone can write to. ` +
-    `Cannot be undone: an email that has been sent cannot be recalled, ` +
-    `which makes this one of the very few things here where a mistake is ` +
-    `final. Documentation: https://yaks.app/docs/mail.`,
-  input: {
-    app: z.string().describe(address(ctx.env)),
-    space: z.string().optional().describe(SPACE),
-    to: z.string().describe(
-      'the recipient: an email address, or the unique id (eid) of a record ' +
-        'in the app with an email{address} field',
-    ),
-    title: z.string().describe('the subject line'),
-    body: z.string().describe('the body, as markdown'),
-  },
-  run: async (call) => {
-    let args = argsOf(call)
-    // TODO: delete this title-to-subject translation in the listing release
-    // that drops the former mail_send contract.
-    let { title, ...input } = args
-    let answer = await invokePackage(ctx, 'mail_send', {
-      ...input,
-      to: str(args.to, 'to'),
-      subject: str(title, 'title'),
-      body: str(args.body, 'body'),
-    })
-    let letter = answer.find((b) => b.mail)
-    if (!letter) throw new Error('the letter was not written')
-    return [letter]
-  },
-})
-
 /**
- * The two mail tools, bound to this caller. They ride the platform plugin
- * (agent.ts) beside the app_* family, since a mailbox is a fact about an app,
- * and they answer bundles where the rest of that family answers words.
+ * The mail tool, bound to this caller. It rides beside the platform plugin
+ * (agent.ts) and the app_* family, since a mailbox is a fact about an app,
+ * and it answers bundles where the rest of that family answers words.
  */
-export let letters = (ctx: Ctx): Tool[] => [listing(ctx), sending(ctx)]
+export let letters = (ctx: Ctx): Tool[] => [listing(ctx)]
