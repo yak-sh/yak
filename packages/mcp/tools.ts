@@ -138,11 +138,22 @@ export let inputSchemaOf = (
   tool: Tool,
 ): { type: 'object'; [key: string]: unknown } =>
   publicToolSchema(
-    tool.inputSchema ?? terse(zodToJsonSchema(z.object(shapeOf(tool)), {
-      target: 'jsonSchema7',
-      $refStrategy: 'none',
-    })) as Json,
+    tool.inputSchema ?? converted(tool),
   ) as { type: 'object'; [key: string]: unknown }
+
+// A Zod `input` map converted once: `core` hands every server over one
+// vocabulary the same map, and a server is built per request.
+let conversions = new WeakMap<object, Json>()
+let converted = (tool: Tool): Json => {
+  let held = tool.input && conversions.get(tool.input)
+  if (held) return held
+  let made = terse(zodToJsonSchema(z.object(shapeOf(tool)), {
+    target: 'jsonSchema7',
+    $refStrategy: 'none',
+  })) as Json
+  if (tool.input) conversions.set(tool.input, made)
+  return made
+}
 
 /** What the generic tier needs in order to describe itself. */
 export type CoreOpts = {
@@ -303,6 +314,41 @@ let zodInput = (
   )
 }
 
+// The write's arguments over one vocabulary read through one `prop`, made
+// once and shared by every server built over them: a server is built per
+// request, and this is the largest schema one has. The bundles a write
+// accepts are this graph's, so the declaration names only "an array of
+// bundles" and the vocabulary fills in what one IS — every component, every
+// writable property and every type (T-34153). No fixed schema could state it:
+// the shape comes from one graph's vocabulary, and a declaration is written
+// before there is a graph. Always `full` — a write tool that leaves a
+// property's type to the reader is a tool an agent guesses at. Most calls
+// neither write nor list the tools, so the bundle schema is built the first
+// time one of them reads it.
+let writes = new WeakMap<Vocab, WeakMap<object, Record<string, z.ZodTypeAny>>>()
+let PLAIN = {}
+let writing = (
+  vocab: Vocab,
+  prop: BundleOpts['prop'],
+  said: { properties?: Record<string, Arg>; required?: string[] },
+): Record<string, z.ZodTypeAny> => {
+  let byProp = writes.get(vocab) ?? new WeakMap()
+  writes.set(vocab, byProp)
+  let held = byProp.get(prop ?? PLAIN)
+  if (held) return held
+  let built: z.ZodTypeAny | undefined
+  let bundles = z.lazy(() =>
+    built ??= z.array(
+      bundleSchema(vocab, { depth: 'full', nulls: true, write: true, prop }),
+    )
+  )
+  let input = zodInput(said)
+  let about = said.properties?.bundles?.description
+  input.bundles = about ? bundles.describe(about) : bundles
+  byProp.set(prop ?? PLAIN, input)
+  return input
+}
+
 /**
  * The generic tier, as tools: `graph_apply`, `graph_query`, `graph_show`,
  * `graph_schema`, and `search` when a {@link Search} was passed —
@@ -315,17 +361,6 @@ let zodInput = (
  */
 export let core = (opts: CoreOpts): Tool[] => {
   let { vocab, prop } = opts
-  // What a write accepts: the same bundle, narrowed to what a client may
-  // write. Always `full` — a write tool that leaves a property's type to the
-  // reader is a tool an agent guesses at (T-34153). It is the largest schema a
-  // server has, and most calls neither write nor list the tools, so it is
-  // built the first time one of them reads it, once.
-  let built: z.ZodTypeAny | undefined
-  let writes = z.lazy(() =>
-    built ??= z.array(
-      bundleSchema(vocab, { depth: 'full', nulls: true, write: true, prop }),
-    )
-  )
   return tier({
     search: opts.search,
     guide: opts.guide,
@@ -357,22 +392,13 @@ export let core = (opts: CoreOpts): Tool[] => {
           },
         }
       }
-      // The bundles a write accepts are this graph's, so the declaration
-      // names only "an array of bundles" and the vocabulary fills in what one
-      // IS — every component, every writable property and every type
-      // (T-34153). No fixed schema could state it: the shape comes from one
-      // graph's vocabulary, and a declaration is written before there is a
-      // graph.
-      let input = zodInput(said)
-      let about = said.properties?.bundles?.description
-      input.bundles = about ? writes.describe(about) : writes
       return {
         ...t,
         // The declaration's JSON Schema is dropped: a tool declares its
         // arguments once, and here that is the Zod above. Declaring both is
         // refused outright (@yaks/vocab `validateToolInput`), and rightly.
         inputSchema: undefined,
-        input,
+        input: writing(vocab, prop, said),
         // How a caller undoes a delete on this server, in its own words,
         // appended to the write's description — because that is where an agent
         // reads it at the moment it is deciding whether to risk the write.

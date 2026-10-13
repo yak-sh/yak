@@ -480,14 +480,24 @@ let spoken = async (
  * - a property two reachable apps spell differently is typed nowhere, since the
  *   store that owns the word is the one that decides.
  */
-export let reading =
-  (clashes: Set<string>) =>
-  (p: Prop, o: { write?: boolean }): z.ZodTypeAny | undefined =>
+export let reading = (clashes: Set<string>): Reader => {
+  let key = [...clashes].sort().join('\n')
+  let held = readers.get(key)
+  if (held) return held
+  let made: Reader = (p, o) =>
     clashes.has(`${p.comp}.${p.prop}`)
       ? z.unknown()
       : p.category == 'ref' && !o.write
       ? z.union([z.string(), z.object({ eid: z.string() }).passthrough()])
       : undefined
+  readers.set(key, made)
+  if (readers.size > 64) readers.delete(readers.keys().next().value!)
+  return made
+}
+type Reader = (p: Prop, o: { write?: boolean }) => z.ZodTypeAny | undefined
+// One reader per set of clashes, so the tool schemas @yaks/mcp derives through
+// it are made once for each vocabulary rather than on every request.
+let readers = new Map<string, Reader>()
 
 // The batch as applied, as `graph_apply` promises it: one bundle per entity,
 // each minted under an alias carrying the name the batch called it by — which
