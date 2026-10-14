@@ -367,8 +367,9 @@ export let asking = (at: Stored): Handlers => {
 }
 
 // How each way a model call fails is answered at the door: the allowance
-// spent, the model busy, a model not offered here (its license unaccepted,
-// @yaks/workers-ai `failure`), and a host with no Workers AI to lend.
+// spent, the model busy, a model not offered here (no model by that name, or
+// its license unaccepted, @yaks/workers-ai `failure`), and a host with no
+// Workers AI to lend.
 let STATUS: Record<string, number> = {
   limit: 429,
   busy: 503,

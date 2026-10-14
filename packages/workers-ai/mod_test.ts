@@ -132,7 +132,7 @@ test("OpenAI's answer shape is read the same", async () => {
   })
 })
 
-test('a rate limit, spent credits and an unaccepted license are expected; any other failure is not', async () => {
+test('a rate limit, spent credits, an unaccepted license and an unknown model are expected; any other failure is not', async () => {
   let busy = binding(new Error('3040: Capacity temporarily exceeded'))
   let e = await assertRejects(() => busy.model(ask([])), ModelError)
   assertEquals(e.code, 'busy')
@@ -147,6 +147,11 @@ test('a rate limit, spent credits and an unaccepted license are expected; any ot
   let unoffered = await assertRejects(() => gated.model(ask([])), ModelError)
   assertEquals(unoffered.code, 'model')
   assertEquals(/agree/.test(unoffered.message), false)
+  let nameless = binding(
+    new Error('5007: No such model @cf/nobody/no-such-model or task'),
+  )
+  let unknown = await assertRejects(() => nameless.model(ask([])), ModelError)
+  assertEquals(unknown.code, 'model')
   let broken = new Error('boom')
   let other = await assertRejects(() => binding(broken).model(ask([])))
   assertEquals(other, broken)
