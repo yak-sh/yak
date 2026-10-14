@@ -1,6 +1,6 @@
 ---
 name: models
-description: "Asking a model (yaks.app). A transcript in the app's own store: a page writes an entry naming a model, the store asks it, and the answer lands beside the ask for any page subscribed to see. Instructions, typed questions answered as rows (a choice, a yes-or-no, a score), one call answered at once through ./api/ai/run or a worker's ai binding, the commands a model may call, who may ask, and how platform and connected models are paid for."
+description: "Asking a model (yaks.app). A transcript in the app's own store: a page writes an entry naming a model, the store asks it, and the answer lands beside the ask for any page subscribed to see. Instructions, typed questions answered as rows (a choice, a yes-or-no, a score), one call answered at once through ./api/ai/run or a worker's ai binding, asking about a picture, the commands a model may call, who may ask, and how platform and connected models are paid for."
 ---
 
 # Asking a model
@@ -197,8 +197,66 @@ their session id automatically; keep instructions and tools stable where their
 meaning has not changed.
 
 The same people may call it as may ask for a turn (below), and the same account
-budget pays. A refusal comes in the envelope every door answers with: `429` past
-the budget, with the sentence that says so, and `503` while the model is busy.
+budget pays. A refusal comes in the envelope every door answers with,
+`{error: {code, message}}`: `400` for a model not offered here, `429` past the
+budget, with the sentence that says so, and `503` while the model is busy. Show
+the person `error.message`.
+
+## Asking about a picture
+
+A model that sees takes the picture inside the question, in the same one call:
+`@cf/meta/llama-4-scout-17b-16e-instruct` reads a message whose `content` is a
+list of parts, the words as a `text` part and the picture as an `image_url` part
+holding a `data:` URL. A transcript's entries are words only, so a picture is
+asked about this way.
+
+Downscale the photo first, as for an upload (`smaller()` on
+[Files and pictures](/docs/files)); 1024 pixels on its long side is plenty for
+the model. Then send the same bytes to both places at once: `upload` keeps the
+picture in the app, and the call asks about it.
+
+    import { apply, upload } from './api/client.js'
+
+    let dataUrl = (blob) => new Promise((ok, no) => {
+      let r = new FileReader()
+      r.onload = () => ok(r.result)
+      r.onerror = () => no(r.error)
+      r.readAsDataURL(blob)
+    })
+
+    let file = input.files[0]
+    let photo = await smaller(file, 1024)
+    let question = 'What is in this photo?'
+    let [kept, res] = await Promise.all([
+      upload(photo, { name: file.name }),
+      fetch('./api/ai/run', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          model: '@cf/meta/llama-4-scout-17b-16e-instruct',
+          input: {
+            messages: [{ role: 'user', content: [
+              { type: 'text', text: question },
+              { type: 'image_url', image_url: { url: await dataUrl(photo) } },
+            ] }],
+            max_tokens: 400,
+          },
+        }),
+      }),
+    ])
+    let said = await res.json()
+    if (!res.ok) throw new Error(said.error.message)
+    await apply({ asked: { photo: kept.eid, question, answer: said.response } })
+
+The answer's words are `response`. Nothing is kept by the call, so the last line
+keeps the question and the answer beside the picture's address, in `asked`, a
+component the app declares in its `vocab.json` as `photo` is declared on the
+files page.
+
+The picture goes only as an `image_url` part. An `image` beside a `prompt` (the
+shape Llama 3.2 Vision takes) is ignored by this model, which then answers as if
+there were no picture. Llama 3.2 Vision itself is not offered here: its license
+has not been accepted for the platform.
 
 ## Commands a model may call
 
@@ -227,11 +285,12 @@ the link — held to the pace every visitor's writes keep, 30 changes a minute.
 
 These platform models spend the owner's monthly yaks.app account budget:
 
-| model                       | for             | per million tokens in | out   |
-| --------------------------- | --------------- | --------------------- | ----- |
-| `@cf/zai-org/glm-5.3-flash` | chat, and tools | $0.15                 | $0.50 |
-| `typesafe/jev`              | typed questions | $0.042                | free  |
-| `@cf/baai/bge-base-en-v1.5` | embeddings      | $0.067                | —     |
+| model                                     | for             | per million tokens in | out   |
+| ----------------------------------------- | --------------- | --------------------- | ----- |
+| `@cf/zai-org/glm-5.3-flash`               | chat, and tools | $0.15                 | $0.50 |
+| `@cf/meta/llama-4-scout-17b-16e-instruct` | pictures        | $0.27                 | $0.85 |
+| `typesafe/jev`                            | typed questions | $0.042                | free  |
+| `@cf/baai/bge-base-en-v1.5`               | embeddings      | $0.067                | —     |
 
 Every platform call is weighed by its model's price and spends that budget:
 $0.20, plus $3.00 for each Plus space they own. All their spaces share it. The
