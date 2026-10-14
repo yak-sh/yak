@@ -152,6 +152,41 @@ test('a read naming only an app says what to read in it', async () => {
   }
 })
 
+// A line naming no component reads what the app keeps, and the store's own
+// rows (its archetypes, its effects queue, who may reach it) stay out of the
+// answer unless the line names one.
+test('a read naming no component answers only what the app keeps', async () => {
+  let k = await kernel()
+  try {
+    let agent = connector(k, (await signIn(k)).cookie)
+    await agent.tool('app_new', { slug: 'list', title: 'list' })
+    await agent.tool('app_files', {
+      app: 'list',
+      files: [{
+        path: 'vocab.json',
+        content: vocabFile({ item: { name: txt } }),
+      }],
+    })
+    await agent.tool('app_deploy', { app: 'list' })
+    await agent.tool('graph_apply', {
+      app: 'list',
+      entities: [{ entity: { eid: '$i' }, item: { name: 'milk' } }],
+    })
+    let read = async (q: string) =>
+      JSON.parse(await agent.tool('graph_query', { q }))
+    for (let q of ['.in=list&.limit=5', '*&.in=list', '.limit=50']) {
+      assertEquals(
+        (await read(q)).map((r: { kind: string }) => r.kind),
+        ['item'],
+        q,
+      )
+    }
+    assert((await read('.archetype&.in=list')).length > 0)
+  } finally {
+    await k.stop()
+  }
+})
+
 // An entity spans apps (T-32699): a read that names no app asks every store
 // the caller can reach and answers one bundle per eid — and only the stores
 // they can reach.

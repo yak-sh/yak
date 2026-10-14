@@ -239,8 +239,8 @@ import {
   mentions,
   named,
   type Names,
-  PLATFORM,
   type Row,
+  screened,
 } from './listing.ts'
 import {
   assemble,
@@ -1565,9 +1565,7 @@ export class Store {
     let subs = subscriptions(g)
     this.#subs = subs
     subs.observe((bundles) => this.#rouse(bundles))
-    // Only an app's store answers a page, and the platform's own two are made
-    // of the rows an app's page is spared.
-    let spared = own ? [] : PLATFORM.filter((w) => vocab.comp(w))
+    let spared = screened((w) => !!vocab.comp(w), own)
     this.#live = sockets(
       this.#naming(subs, spared),
       ctx,
@@ -4152,9 +4150,7 @@ export class Store {
     }
     if (url.searchParams.get('listing') == '1') {
       let own = ownStore(this.#get('name') ?? '')
-      let words = PLATFORM.filter((name) =>
-        this.#vocab.comp(name) && (!own || name.startsWith('_'))
-      )
+      let words = screened((w) => !!this.#vocab.comp(w), own)
       line = asking(line, words, this.#personal)
       url.searchParams.set('q', line)
       request = new Request(url, request)

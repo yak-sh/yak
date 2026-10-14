@@ -40,7 +40,8 @@ export let KERNEL = ['exception', 'error', 'refusal']
 // And the models a store may ask (models.ts `catalogued`) and the commands it
 // answers (graph.ts `#planting`: the app's manifest, and the platform's own
 // `builder_model`): planted in every app's store by the platform, and saved by
-// nobody.
+// nobody. So is who may reach the app (`access`, `grant`): the store keeps it
+// for its own door to read, and app_set and grant are where it is said.
 export let PLATFORM = [
   ...KERNEL,
   'person',
@@ -48,6 +49,8 @@ export let PLATFORM = [
   'model',
   'serves',
   'tool',
+  'access',
+  'grant',
   '_package',
   '_comp',
   '_prop',
@@ -55,6 +58,20 @@ export let PLATFORM = [
   '_before',
   '_vocab',
 ]
+
+// How a store keeps its rows rather than any row it keeps: which component
+// tables each entity spans (@yaks/archetype) and the effects pool's queue
+// (@yaks/effects). Every store keeps them, the platform's own two included, and
+// a line naming no component read them before anything a person saved.
+export let STORAGE = ['archetype', 'retired', 'effect', 'lease', 'provisional']
+
+/** The words a listing in one store leaves out of its question (`asking`), of
+ * those it `has`: its storage everywhere, and the platform's rows in an app's
+ * store. The platform's own two stores are made of those rows, so only their
+ * description pages (`_comp`, …) go there. */
+export let screened = (has: (word: string) => boolean, own: boolean) =>
+  [...STORAGE, ...PLATFORM.filter((w) => !own || w.startsWith('_'))]
+    .filter(has)
 
 export type Row = Record<string, unknown>
 
