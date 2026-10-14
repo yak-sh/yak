@@ -921,10 +921,15 @@ let published = async (
   // and applied when the directory moves the declaration pointer.
   let all = await versions(ctx.dir, standing)
   let version = target?.version ?? (all[0]?.version ?? 0) + 1
+  // And what its declaration is called. A rollback selects a version again,
+  // so it declares under a name of its own: a declaration once written is
+  // never written again, which is what lets discovery keep one
+  // (declaration.ts).
+  let pointer = target ? `${version}-${crypto.randomUUID()}` : String(version)
   // Read the serving release before preparing the next one. This also gives
   // a store first reached during a deploy the declaration to keep on failure.
   await answer(store, '/vocab')
-  let draft = draftStore(ctx.env.STORE, space, app, String(version))
+  let draft = draftStore(ctx.env.STORE, space, app, pointer)
   // The app's own components, if it declares any. A manifest the store
   // refuses fails the release: the words and the tables must agree, and a
   // half-planted vocabulary is what `unknown component` is made of.
@@ -1238,7 +1243,7 @@ let published = async (
     c.time(
       'declare',
       async () =>
-        keepDeclaration(ctx.env, space, stagedApp, String(version), {
+        keepDeclaration(ctx.env, space, stagedApp, pointer, {
           vocab: JSON.parse(await answer(draft, '/vocab')),
           tools: checked,
         }),
@@ -1262,6 +1267,7 @@ let published = async (
         sowed.length > 0,
         reload,
         target,
+        pointer,
       ),
   )
   // What follows a live release asks three different doors and none waits on

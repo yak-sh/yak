@@ -644,6 +644,7 @@ export let record = async (
   seeded = false,
   reload?: Reload,
   target?: Version,
+  declaration = String(version),
 ) => {
   let all = await dir.deploys(app)
   let prior = all.find((v) => v.version == app.version)
@@ -654,7 +655,7 @@ export let record = async (
         entity: { eid: app.eid },
         app: {
           version,
-          declaration: String(version),
+          declaration,
           source: app.source,
           draft: null,
           fence: null,
