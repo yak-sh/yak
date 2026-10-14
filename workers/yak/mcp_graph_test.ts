@@ -118,6 +118,40 @@ test('graph_query answers a count and a tally as their value', async () => {
   }
 })
 
+// A line naming only its app reads nothing, and an empty answer reads as an
+// empty app; the refusal hands over a line that reads what the app keeps.
+test('a read naming only an app says what to read in it', async () => {
+  let k = await kernel()
+  try {
+    let agent = connector(k, (await signIn(k)).cookie)
+    await agent.tool('app_new', { slug: 'chores', title: 'chores' })
+    await agent.tool('app_files', {
+      app: 'chores',
+      files: [{ path: 'vocab.json', content: vocabFile({ chore: {} }) }],
+    })
+    await agent.tool('app_deploy', { app: 'chores' })
+    await agent.tool('graph_apply', {
+      bundles: [{
+        entity: { eid: '$c' },
+        chore: {},
+        doc: { title: 'sweep' },
+      }],
+    })
+    let refused = await assertRejects(
+      () => agent.tool('graph_query', { q: '.in=chores' }),
+      Error,
+    )
+    let line = refused.message.match(/'([^']+&\.in=chores)'/)?.[1]
+    assertEquals(line, '.chore&?doc&.in=chores')
+    let rows = JSON.parse(await agent.tool('graph_query', { q: line }))
+    assertEquals(rows.map((r: { doc: { title: string } }) => r.doc.title), [
+      'sweep',
+    ])
+  } finally {
+    await k.stop()
+  }
+})
+
 // An entity spans apps (T-32699): a read that names no app asks every store
 // the caller can reach and answers one bundle per eid — and only the stores
 // they can reach.

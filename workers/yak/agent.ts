@@ -319,6 +319,21 @@ export let scope = (line: string) => {
   return { said, line: joined(segs.filter((s) => !/^\.in=/.test(s))) }
 }
 
+// `.in=` alone says which app to read and nothing about what: a line with no
+// clause left reads nothing, and an empty answer reads as an empty app. So it
+// is refused with a line that reads what the app keeps.
+let unasked = async (ctx: Ctx, r: Reach, said: string) => {
+  let defs = (await vocabAt(ctx.env, r.space, r.app)).$defs ?? {}
+  let kinds = Object.entries(defs)
+    .filter(([, d]) => !d.tool && !d.rule && !d.extends)
+    .map(([name]) => name)
+  let line = kinds.length ? `.${kinds[0]}&?doc` : '.doc'
+  return `'.in=${said}' says which app to read, not what: a row carries ` +
+    `the components its line names. ${r.app.slug} keeps ` +
+    `${kinds.length ? kinds.join(', ') : 'doc'}, so ` +
+    `'${line}&.in=${said}' reads ${kinds.length ? 'each with its doc' : 'them'}`
+}
+
 // The identity operand list, wherever it appears on a line: `.entity.eid=a,b` — which
 // is what the page's `id=` becomes (wire.ts `lined`) — names a set rather than
 // comparing a property, so its operands are ids and a word among them may be a
@@ -377,6 +392,9 @@ let held = (ctx: Ctx, reach: Reach[]): Storage => {
   let asked = async (q: Query) => {
     let { said, line } = scope(stringify(q))
     let where = said ? [await named(ctx, said)] : reach
+    if (said && !line) {
+      throw refuse('arguments', await unasked(ctx, where[0], said))
+    }
     // An agent's grammar is the page's (guide.md): `id=`, `limit=` and `after=`
     // where the store writes `.entity.eid=`, `.limit=` and `.after=`, and a value
     // written as it reads rather than as a store would parse it. One
