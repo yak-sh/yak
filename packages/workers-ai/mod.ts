@@ -280,6 +280,11 @@ let busy = (e: unknown) =>
 // is paid from, are spent: a ceiling, which asking again meets too.
 let spent = (e: unknown) => /insufficient .*credits/i.test(message(e))
 
+// How the binding says a model waits on its license being accepted for the
+// account (5016, a Llama vision model's): not offered here until someone
+// accepts it, which is the account holder's act, never a caller's.
+let unlicensed = (e: unknown) => /^5016:|prompt 'agree'/.test(message(e))
+
 // What the binding is asked: a chat, or a structured model's questions about
 // the same conversation.
 let input = (req: Request) =>
@@ -314,7 +319,8 @@ let detailed = (e: unknown): unknown => {
 /**
  * What the binding threw, said the way a model's failure is said here: a rate
  * limit is a {@link ModelError} coded `busy`, credits the account has spent
- * one coded `limit`, and a `ModelError` the binding throws itself (one that
+ * one coded `limit`, a model whose license the account has not accepted one
+ * coded `model`, and a `ModelError` the binding throws itself (one that
  * meters it, say) or anything else is passed on as it was thrown. For a host
  * that calls the binding without {@link workersAi}.
  */
@@ -325,6 +331,12 @@ export let failure = (e: unknown): unknown =>
     ? new ModelError('busy', message(e))
     : spent(e)
     ? new ModelError('limit', message(e))
+    : unlicensed(e)
+    ? new ModelError(
+      'model',
+      'This model is not offered here: its license has not been accepted ' +
+        'for this account. Ask another model.',
+    )
     : detailed(e)
 
 // workerd's _parseError drops the upstream body when internalCode exists.

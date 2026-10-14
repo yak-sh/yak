@@ -78,10 +78,12 @@ guarantee a cache hit, nor add caching to a model that does not support it.
 A rate limit or a model at capacity throws `ModelError` with code `busy` and the
 binding's own message. Credits the account has spent (a partner model such as
 Jev is paid from prepaid AI Gateway credits) throw one coded `limit`, a ceiling
-asking again would meet too. An image item throws `ModelError` with code
-`image`, since images are not sent. A `ModelError` the binding throws itself (a
-binding that meters its caller, say) and anything else it throws are passed on
-as they were thrown.
+asking again would meet too. A model gated behind a license the account has not
+accepted (Workers AI's 5016) throws one coded `model`: it is not offered until
+the account holder accepts the license, so the message never tells the caller to
+accept it. An image item throws `ModelError` with code `image`, since images are
+not sent. A `ModelError` the binding throws itself (a binding that meters its
+caller, say) and anything else it throws are passed on as they were thrown.
 
 Tests use a stand-in binding, not paid inference.
 
