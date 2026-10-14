@@ -36,6 +36,24 @@ export let workerReply = async (res: Response, name: string, at: string) => {
   }
 }
 
+// A row as a command answers it: the entity's id, its kind and its
+// components. The store's read also carries its own bookkeeping, the
+// archetype the entity's tables are filed under and the `$` keys (a body's
+// read token, `$was`), and none of it is the row's data. A model reads every
+// field it is handed as data, and may copy it into its next write.
+let said = (row: unknown): unknown => {
+  if (!row || typeof row != 'object' || Array.isArray(row)) return row
+  let out = Object.fromEntries(
+    Object.entries(row).filter(([k]) => !k.startsWith('$')),
+  )
+  let entity = out.entity as Record<string, unknown> | undefined
+  if (entity && 'archetype' in entity) {
+    let { archetype: _, ...rest } = entity
+    out.entity = rest
+  }
+  return out
+}
+
 export let toolsOf = async (
   env: Env,
   space: Space,
@@ -95,7 +113,8 @@ export let commandReply = async (
         return door.worker(path, args)
       },
       query: async (line) => {
-        let rows = await door.query(line)
+        let read = await door.query(line)
+        let rows = Array.isArray(read) ? read.map(said) : read
         let n = Array.isArray(rows) ? rows.length : 1
         return {
           text: `${name}: ${

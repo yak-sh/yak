@@ -377,6 +377,16 @@ test(
         'Lemon cake',
         'Toast',
       ])
+      // A row is said as its data, in the words and as data alike: none of
+      // the store's bookkeeping, which a model reads as a field and copies
+      // into its next write (T-123989).
+      let both = await agent.answer('command', {
+        name: 'find_recipe',
+        args: {},
+      })
+      for (let said of [both.text, JSON.stringify(both.value)]) {
+        assertEquals(/\$was|archetype/.test(said), false, said)
+      }
       // A clause whose argument is left out drops out of the filter line.
       assertEquals((await found({ words: 'lemons' })).map((r) => r.doc.title), [
         'Lemon cake',
