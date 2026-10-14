@@ -142,6 +142,15 @@ then edit it and run `yak restart`, the agent restart door. The file is plain JS
 key in `with` is `{"secret": "NAME"}` and the value lives in the vault
 (`secrets-and-connections`).
 
+Which plugins the box loads is the owner's choice, and one the list leaves out
+is left out on purpose. A plugin can add work to every page and every commit:
+@yaks/inbox's summary is read again after nearly every commit, at about two
+seconds on the web's one read thread, so with it loaded every page on
+tasks.yak.sh waits behind it. When a command or a check you were asked to run
+fails because its plugin isn't loaded (`yak inbox list` answers "has nothing
+called inbox"), that is the answer to report. Adding the plugin to make it pass
+changes what every process on the box pays, and that is the owner's call.
+
 ## Publishing
 
 The family is one release. bin/release.ts writes one version into every
