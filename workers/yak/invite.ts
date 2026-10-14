@@ -33,6 +33,7 @@ import { counted, refusedSpend } from './meter.ts'
 import { closed, invited, lost } from './pages.ts'
 import { INVITE } from './route.ts'
 import { refuse } from './tool.ts'
+import { type Clock, clock } from './timing.ts'
 
 /** Invitations one person may send in an hour. Enough to bring a whole team
  * or a class in at once, few enough that a loop aimed at strangers stops
@@ -121,17 +122,19 @@ export let send = async (
     name?: string
     note?: string
   },
+  c: Clock = clock(),
 ): Promise<boolean> => {
   let { space, app } = o.place
   let host = spaceHost(env, space.slug)
   let what = app
     ? `${app.title} (${host}/${app.slug})`
     : `${space.title} (${host})`
-  let by = await dir.nameAt(o.by)
+  let by = await c.time('by', () => dir.nameAt(o.by))
   let accept = await acceptLink(env.SESSION_SECRET, {
     invite: o.invite,
     to: app ? app.eid : space.eid,
   }, env)
+  let mailed = c.since()
   let sent = await mail(env)({
     to: o.email,
     subject: SUBJECT,
@@ -151,7 +154,9 @@ export let send = async (
     caught(e, { invite: o.invite, space: space.slug })
     return false
   })
+  mailed('mail')
   if (!sent) return false
+  let kept = c.since()
   await Promise.all([
     counted(env, space),
     stamp(env, {
@@ -161,6 +166,7 @@ export let send = async (
       }],
     }),
   ])
+  kept('sent')
   return true
 }
 

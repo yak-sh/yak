@@ -5207,7 +5207,10 @@ let OURS: Row[] = [
       required: ['email'],
     },
     run: async (ctx, args) => {
-      let { space, who } = await owns(ctx, args)
+      // Each wait a named stage on the call's `Server-Timing` (timing.ts):
+      // asking somebody in is a chain of directory reads and a letter.
+      let c = ctx.clock ?? clock()
+      let { space, who } = await c.time('owns', () => owns(ctx, args))
       let email = address(args.email)
       let want = args.role == null ? 'editor' : role(args.role)
       // Read before anything is written: a note too long is a refusal, and a
@@ -5218,6 +5221,7 @@ let OURS: Row[] = [
       // space's own address is its front page or a list of what they may open
       // (T-33040), and neither is the thing they were invited to look at
       // (C-32624 item 4).
+      let seated = c.since()
       let app = args.app == null
         ? null
         : await ctx.dir.app(space, text(args.app, 'app'))
@@ -5246,6 +5250,7 @@ let OURS: Row[] = [
       // because an invitation that named one app and handed over the space was
       // the tool saying one thing and doing another.
       let held = app && await ctx.dir.grant(app, person)
+      seated('person')
       if (app && had) {
         throw refuse(
           'conflict',
@@ -5281,8 +5286,12 @@ let OURS: Row[] = [
       // Anyone else is invited, and nothing is theirs until they accept
       // (invite.ts, T-37880). The letter is counted twice before it goes: on
       // the space's monthly letters, and on the inviter's hour.
-      await allowed(ctx.env, ctx.dir, space, ctx.person)
+      await c.time(
+        'allowed',
+        () => allowed(ctx.env, ctx.dir, space, ctx.person),
+      )
       let to = app ? app.eid : space.eid
+      let invited = c.since()
       let standing = await ctx.dir.invite(to, person)
       let eid = standing?.eid ?? crypto.randomUUID()
       await ctx.dir.apply({
@@ -5292,6 +5301,7 @@ let OURS: Row[] = [
             : { entity: { eid }, invite: { to, person, role: want } },
         ],
       }, vouched(who))
+      invited('invite')
       let sent = await send(ctx.env, ctx.dir, {
         invite: eid,
         place: { space, app },
@@ -5300,7 +5310,7 @@ let OURS: Row[] = [
         by: ctx.person,
         name,
         note,
-      })
+      }, c)
       return {
         // Asked again for somebody who never accepted: that is the news when
         // they say they cannot get in, so the answer says so first.

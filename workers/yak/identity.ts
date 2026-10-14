@@ -126,6 +126,7 @@ import { bound, type Env } from './env.ts'
 import { door } from './invite.ts'
 import { mail, mailable } from './mail.ts'
 import { fault } from './unseen.ts'
+import { clock, timed } from './timing.ts'
 
 // What the sign-in card says when no letter can leave: the deploy's operator
 // reads which secret is missing, and a visitor reads that nothing is wrong
@@ -990,10 +991,13 @@ let ours = async (req: Request, env: Env): Promise<Response> => {
     // Per source, before `mint`, so a loop spends none of any address's
     // letters: the address cap above protects an inbox, this one the
     // platform's mail from somebody asking for a code at every address.
-    if (!await within(env.SIGNIN_RATE, source(req))) {
+    // Each wait a named stage on the answer's `Server-Timing` (timing.ts):
+    // this is the first thing a new person waits on.
+    let c = clock()
+    if (!await c.time('rate', () => within(env.SIGNIN_RATE, source(req)))) {
       return askEmail(field('q') || null, back, undefined, TOO_MANY, 429, env)
     }
-    let code = await mint(meta(env), secret(env), email)
+    let code = await c.time('mint', () => mint(meta(env), secret(env), email))
     if (code) {
       // The letter carries the code and the one click that spends it
       // (link.ts): the same code said as a link, so it lasts the same ten
@@ -1006,14 +1010,15 @@ let ours = async (req: Request, env: Env): Promise<Response> => {
         back: back || undefined,
       }, apex(env))
       try {
-        await mail(env)({
-          to: email,
-          subject: `${code} is your yaks.app code`,
-          body: `Your yaks.app sign-in code is ${code}.\n\n` +
-            `Or sign in with one click: ${link}\n\n` +
-            'It lasts ten minutes. If you did not ask for it, nothing has ' +
-            'happened and you can ignore this.',
-        })
+        await c.time('mail', () =>
+          mail(env)({
+            to: email,
+            subject: `${code} is your yaks.app code`,
+            body: `Your yaks.app sign-in code is ${code}.\n\n` +
+              `Or sign in with one click: ${link}\n\n` +
+              'It lasts ten minutes. If you did not ask for it, nothing has ' +
+              'happened and you can ignore this.',
+          }))
       } catch (e) {
         // The provider refused or the network did: a break for us to read
         // (the same row a thrown one would have filed) and a card the person
@@ -1022,7 +1027,10 @@ let ours = async (req: Request, env: Env): Promise<Response> => {
         return askEmail(field('q') || null, back, undefined, NO_SEND, 503, env)
       }
     }
-    return askCode(email, field('q') || null, back, undefined, undefined, env)
+    return timed(
+      askCode(email, field('q') || null, back, undefined, undefined, env),
+      c,
+    )
   }
 
   if (path == '/login/code' && req.method == 'POST') {
