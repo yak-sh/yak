@@ -62,7 +62,8 @@ for a name on the page and save it in its own row.
     let who = await me()
     if (!who.writes) {
       show(who.signIn ? `<a href="${who.signIn}">Sign in to post</a>`
-                      : 'Only members of this app can post.')
+         : who.invited ? 'Accept the invitation in your email, then come back.'
+         : 'Only members of this app can post.')
     } else if (!who.person) show('<input name="who" placeholder="Your name">')
 
 Ask on load, not on refusal — that is the whole reason `me()` exists.
@@ -101,9 +102,11 @@ letter, signed in with the address it went to. Until then nothing of the space
 is in their reach: it is not in their listing, a bare app name never resolves to
 it, and their agent is told nothing about it. Signed in with that address and
 opening the app, they are told their invitation is waiting in the letter, where
-anyone else would get "Nothing here yet." or a refusal. Calling `member_add`
-again for them says they had not accepted yet and sends another letter.
-`member_remove` withdraws a pending invitation the same way it removes a member.
+anyone else would get "Nothing here yet." or a refusal; on a `public` app,
+`me()` answers the page `invited: true`, so it can tell them before they type.
+Calling `member_add` again for them says they had not accepted yet and sends
+another letter. `member_remove` withdraws a pending invitation the same way it
+removes a member.
 
 In each space the caller owns, `app_list` names every invitation not accepted
 yet with the day its latest letter went, and counts everyone else. When someone

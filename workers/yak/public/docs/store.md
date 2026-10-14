@@ -129,8 +129,8 @@ file twice is one upload and one row. 20 MB is the ceiling.
 
 ### me()
 
-`{person, name, role, reads, writes, signIn}`, returned to anyone — a signed-out
-visitor at a `private` app included, which is the point. Below.
+`{person, name, role, reads, writes, signIn, invited}`, returned to anyone — a
+signed-out visitor at a `private` app included, which is the point. Below.
 
 ## The bundle you save
 
@@ -343,7 +343,8 @@ Ask on load, not on refusal:
     let who = await me()
     if (!who.writes) {
       show(who.signIn ? `<a href="${who.signIn}">Sign in to post</a>`
-                      : 'Only members of this app can post.')
+         : who.invited ? 'Accept the invitation in your email, then come back.'
+         : 'Only members of this app can post.')
     } else if (!who.person) show('<input name="who" placeholder="Your name">')
 
 Both halves matter, and they are different people. On a `public` app a guest who
@@ -361,6 +362,9 @@ What `me()` returns:
 - `signIn` — the platform login page, already carrying this page as its return
   address. `null` once they are in. It is offered even on an `open` app, where
   signing in is not the way through but a named guest may still be wanted.
+- `invited` — `true` when they are signed in, may not write here yet, and the
+  owner has invited them (`member_add`): the one step left is the accept link in
+  the letter yaks.app sent them, which no page can click for them.
 
 ## The byline
 
@@ -529,7 +533,8 @@ directly from `curl`, from another page, or from your own `worker.js` through
 
     GET ./api/me
     → {"person": null, "name": null, "role": null, "reads": true,
-       "writes": false, "signIn": "https://yaks.app/login?return=…"}
+       "writes": false, "signIn": "https://yaks.app/login?return=…",
+       "invited": false}
 
     GET ./api/vocab.json
     → [ {"title": "spine", "$defs": {"entity": {…}, "created": {…}, …}}, …,

@@ -172,12 +172,13 @@ export let store = (base) => {
     query(`${encodeURIComponent(text)}${filter ? `&${filter}` : ''}`)
 
   // Who is looking, before anything is asked of them: `{person, name, role,
-  // reads, writes, signIn}` — `person` null when they are signed out, `name`
-  // what to call them, `writes` whether this app takes a write from them, and
-  // `signIn` where a signed-out visitor signs in. Call it on load and the page
-  // knows
-  // whether to show a sign-in link or a name field, instead of finding out
-  // from a refusal after someone has typed (C-32675 items 5 and 6).
+  // reads, writes, signIn, invited}` — `person` null when they are signed
+  // out, `name` what to call them, `writes` whether this app takes a write
+  // from them, `signIn` where a signed-out visitor signs in, and `invited`
+  // whether an invitation waits in their email to accept. Call it on load and
+  // the page knows whether to show a sign-in link, the invitation or a name
+  // field, instead of finding out from a refusal after someone has typed
+  // (C-32675 items 5 and 6).
   let me = () => ask('me')
 
   // Bytes, in: a File off an `<input type=file>`, a Blob a canvas made. The

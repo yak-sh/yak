@@ -3,7 +3,12 @@
 // address put the inviter's space in the stranger's listing, their agent's
 // instructions, and behind a bare app name their agent would say.
 import { test } from '@yaks/testing'
-import { assert, assertEquals, assertStringIncludes } from '@std/assert'
+import {
+  assert,
+  assertEquals,
+  assertObjectMatch,
+  assertStringIncludes,
+} from '@std/assert'
 import { SUBJECT } from './invite.ts'
 import {
   accepted,
@@ -137,11 +142,16 @@ test('a friend who has not accepted is told the invitation waits', async () => {
         headers: { cookie, 'content-type': 'application/json' },
         body: JSON.stringify({ entities: [{ doc: { title: 'hi' } }] }),
       }).then((r) => r.text())
+    let me = (cookie: string) =>
+      k.at(host, '/diary/api/me', { headers: { cookie } }).then((r) => r.json())
     assertStringIncludes(await page(ana.cookie), 'Your invitation is waiting')
     assertStringIncludes(await write(ana.cookie), 'invitation to this app')
+    // A page asking who is looking hears it too, before she types.
+    assertObjectMatch(await me(ana.cookie), { writes: false, invited: true })
     // Somebody nobody invited learns nothing about the app.
     assertStringIncludes(await page(bo.cookie), 'Nothing here yet')
     assert(!(await write(bo.cookie)).includes('invitation'))
+    assertObjectMatch(await me(bo.cookie), { invited: false })
     // Asked again, the owner hears she never accepted.
     assertStringIncludes(
       await his.tool('member_add', { email: ana.email, app: 'diary' }),
@@ -150,6 +160,7 @@ test('a friend who has not accepted is told the invitation waits', async () => {
 
     await accepted(k, ana.email, ana.cookie)
     assertStringIncludes(await page(ana.cookie), '<h1>Diary</h1>')
+    assertObjectMatch(await me(ana.cookie), { writes: true, invited: false })
   } finally {
     await k.stop()
   }

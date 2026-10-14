@@ -1545,19 +1545,29 @@ let api = async (
   // address — T-32654), `reads`/`writes` are this app's own access answered
   // for this caller, and `signIn` is where a signed-out visitor signs in,
   // holding this page as its return address — null once they are in.
+  // `invited` is what a refusal would tell a signed-in friend the owner let in
+  // (WAITING): their way through is the click in the letter, so the page
+  // can say so before they type rather than offer them nothing (T-124071).
   // Answered to anyone: a stranger learning they must sign in is the point.
   if (path == '/me') {
-    let dir = directory(bound(env.DIRECTORY, dirPart.fetch, env))
+    let person = who.person
     return Response.json({
-      person: who.person,
+      person,
       via: who.via ?? null,
-      name: who.person ? await dir.nameAt(who.person) : null,
+      name: person ? await dir.nameAt(person) : null,
       role: who.role,
       reads: mayRead,
       writes: mayPost,
-      signIn: who.person
+      signIn: person
         ? null
         : signInAt(req.headers.get('referer') || req.url, env),
+      invited: !!person && !mayPost && !!await waiting(
+        dir,
+        space,
+        app,
+        person,
+        mayRead ? 'not_a_writer' : 'not_a_reader',
+      ),
     })
   }
   // The app's platform doors use the same refusals and visitor limits as
