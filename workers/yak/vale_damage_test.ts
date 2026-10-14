@@ -9,7 +9,7 @@ import {
 } from '@std/assert'
 import words from '../../apps/vale/vocab.json' with { type: 'json' }
 import { accepted, client, connector, seed, signIn } from './probe.ts'
-import { workerKernel } from './worker-probe.ts'
+import { serverSource, workerKernel } from './worker-probe.ts'
 
 test('the Mossvale owner turns a hero’s damage off and on', async () => {
   let k = await workerKernel(
@@ -22,7 +22,10 @@ test('the Mossvale owner turns a hero’s damage off and on', async () => {
     await agent.tool('app_new', { ...at, slug: 'vale', title: 'Mossvale' })
     await agent.tool('app_files', {
       ...at,
-      files: [{ path: 'vocab.json', content: JSON.stringify(words) }],
+      files: [
+        { path: 'vocab.json', content: JSON.stringify(words) },
+        serverSource,
+      ],
     })
     await agent.tool('app_deploy', at)
 

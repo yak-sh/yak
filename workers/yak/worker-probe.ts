@@ -3,6 +3,15 @@
 import { SHIM } from './dispatch.ts'
 import { fresh, type Kernel } from './probe.ts'
 
+// The server source a release needs to build a worker at all: a page asks
+// the dispatch namespace only for a release that built one. The namespace
+// below runs the source the kernel was given in its place.
+export let serverSource = {
+  path: 'worker.js',
+  content:
+    'export default { fetch: () => new Response(null, { status: 404 }) }',
+}
+
 export let workerKernel = async (source: URL): Promise<Kernel> => {
   let dir = Deno.makeTempDirSync({ prefix: 'yak-worker-probe-' })
   try {

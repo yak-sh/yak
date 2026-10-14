@@ -1104,13 +1104,12 @@ export let directory = (via: Fetcher | Part, now = false) => {
         .find((s) => s.slug != slug && s.slugs.includes(slug))
       return space ?? null
     },
-    app: async (space: Space, slug: string) => {
-      let row = await one(
-        `.app.space=${space.eid}&.app.slug=${slug}&${ABOUT}`,
-        true,
-      )
-      return row ? appOf(row) : null
-    },
+    // The app at this address, read with the rest of its space's apps: a
+    // request that asks next for the space's front page or an address an app
+    // has left (`home`, `former`) has its answer already (hops.ts `recall`),
+    // so a page view asks the directory about its apps once (T-124006).
+    app: async (space: Space, slug: string) =>
+      (await self.apps(space)).find((app) => app.slug == slug) ?? null,
     // An address the app has left, still pointing at it. A rename moves
     // `app.slug` and keeps the old address in the app's `former`, so the answer
     // is the app of this space that still answers to the address asked for —

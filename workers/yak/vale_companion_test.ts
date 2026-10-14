@@ -4,7 +4,7 @@ import { test } from '@yaks/testing'
 import { assertEquals, assertStringIncludes } from '@std/assert'
 import words from '../../apps/vale/vocab.json' with { type: 'json' }
 import { client, connector, seed } from './probe.ts'
-import { workerKernel } from './worker-probe.ts'
+import { serverSource, workerKernel } from './worker-probe.ts'
 
 test('a Mossvale command becomes a playable objective with queryable progress', async () => {
   let k = await workerKernel(
@@ -17,7 +17,10 @@ test('a Mossvale command becomes a playable objective with queryable progress', 
     await agent.tool('app_new', { ...at, slug: 'vale', title: 'Mossvale' })
     await agent.tool('app_files', {
       ...at,
-      files: [{ path: 'vocab.json', content: JSON.stringify(words) }],
+      files: [
+        { path: 'vocab.json', content: JSON.stringify(words) },
+        serverSource,
+      ],
     })
     await agent.tool('app_deploy', at)
     let page = client(k, 'companionlab.yaks.app', 'vale', who.cookie)
