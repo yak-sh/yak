@@ -4,6 +4,7 @@ import { test } from '@yaks/testing'
 import {
   assert,
   assertEquals,
+  assertRejects,
   assertStringIncludes,
   assertThrows,
 } from '@std/assert'
@@ -767,6 +768,31 @@ test('R2 accounting sweeps without analytics, follows deletion and survives the 
     gauged(space({ files: FILES.plus }, 'plus'), 0, NOW),
     '50 GB of 50 GB of photos and files',
   )
+})
+
+test('a space whose files cannot be listed keeps its figure, and the rest are read', async () => {
+  let { env, files } = platform('files-refused')
+  let dir = directory({ fetch: (r) => dirPart.fetch(r, env) }, true)
+  await dir.apply({
+    entities: [
+      { entity: { eid: '$jeff' }, space: { slug: 'jeff' } },
+      {
+        entity: { eid: '$ada' },
+        space: { slug: 'ada' },
+        meter: { month: '2026-09', files: 70 },
+      },
+    ],
+  }, { 'x-yak-role': 'owner' })
+  files.held.set('jeff/a/photo', new Uint8Array(20))
+  files.held.set('ada/a/photo', new Uint8Array(90))
+  let list = env.BLOBS.list.bind(env.BLOBS)
+  env.BLOBS.list = (options) =>
+    options?.prefix == 'ada/'
+      ? Promise.reject(new Error('list: refused'))
+      : list(options)
+  await assertRejects(() => sweep(env, NOW), Error, 'list: refused')
+  assertEquals((await dir.space('jeff'))!.meter?.files, 20)
+  assertEquals((await dir.space('ada'))!.meter?.files, 70)
 })
 
 test('all quota guidance uses space plan settings without promising a Plus upgrade', () => {

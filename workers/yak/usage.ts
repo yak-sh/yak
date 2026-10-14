@@ -201,8 +201,15 @@ let accountAlert = async (env: Env, usage: Usage) => {
 // figure until a write moves it.
 let held = (app: App) => app.meter?.bytes ?? 0
 
+// The hourly reading has nobody waiting on it, so it waits out a busy bucket
+// for about a minute where an upload gives up within seconds: R2 refuses a
+// list of a prefix that a burst of writes is landing in (10058).
+let SWEEP = { tries: 8, wait: 500 }
+
 // The hourly reading. Returns how many rows it wrote, so a caller (and the
-// log) can say whether it found anything at all.
+// log) can say whether it found anything at all. A space whose files cannot be
+// listed keeps its last figure, every other space is still read, and the first
+// refusal is thrown once the rest has landed, so it is reported.
 export let sweep = async (env: Env, now = new Date()) => {
   let month = monthOf(now)
   let at = now.toISOString()
@@ -217,8 +224,13 @@ export let sweep = async (env: Env, now = new Date()) => {
   let dir = directory(bound(env.DIRECTORY, dirPart.fetch, env))
   let entities: Bundle[] = []
   let turned: Bundle[] = []
+  let refused: unknown[] = []
   for (let space of await dir.all()) {
-    let files = await filesOf(env, space)
+    let files = await filesOf(env, space, SWEEP.tries, SWEEP.wait)
+      .catch((e) => {
+        refused.push(e)
+        return spent(space, now).files ?? 0
+      })
     // R2 accounting does not depend on the analytics credential. Leave the
     // analytics timestamp/month untouched when only storage was measured.
     if (!counts) {
@@ -282,6 +294,7 @@ export let sweep = async (env: Env, now = new Date()) => {
   if (entities.length) await stamp(env, { entities }, { stamp: false })
   let account = answer && accountOf(answer, now)
   if (account) await accountAlert(env, account)
+  if (refused.length) throw refused[0]
   return entities.length + (account ? 1 : 0)
 }
 
@@ -317,12 +330,20 @@ export let full = async (
 // Space-owned R2 objects: live files, uploaded blobs, trash and local history.
 // Shared sha/ pins are platform retention, not attributable physical bytes of
 // one space. The trailing slash prevents a space from counting a slug sibling.
-let fileSizes = async (env: Env, space: Space) => {
+// `tries` and `wait` are `patient`'s: how long a busy bucket is waited out.
+let fileSizes = async (
+  env: Env,
+  space: Space,
+  tries?: number,
+  wait?: number,
+) => {
   let sizes = new Map<string, number>()
   let cursor: string | undefined
   do {
-    let page = await patient(() =>
-      env.BLOBS.list({ prefix: `${space.slug}/`, cursor })
+    let page = await patient(
+      () => env.BLOBS.list({ prefix: `${space.slug}/`, cursor }),
+      tries,
+      wait,
     )
     for (let object of page.objects) sizes.set(object.key, object.size)
     cursor = page.truncated ? page.cursor : undefined
@@ -330,8 +351,14 @@ let fileSizes = async (env: Env, space: Space) => {
   return sizes
 }
 
-export let filesOf = async (env: Env, space: Space) =>
-  [...(await fileSizes(env, space)).values()].reduce((sum, n) => sum + n, 0)
+export let filesOf = async (
+  env: Env,
+  space: Space,
+  tries?: number,
+  wait?: number,
+) =>
+  [...(await fileSizes(env, space, tries, wait)).values()]
+    .reduce((sum, n) => sum + n, 0)
 
 // The files ceiling, at every door that writes them, as `full` is for app
 // data: under the warning line the hourly reading with every byte arriving
