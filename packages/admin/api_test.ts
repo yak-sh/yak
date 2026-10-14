@@ -28,6 +28,7 @@ import {
   linkFor,
   listedOn,
   plain,
+  reconnect,
   renewing,
   rpc,
   saidBy,
@@ -329,6 +330,50 @@ test('a renewed cookie is handed on, and an ordinary answer is quiet', async () 
     }
   }
   renewing(() => {})
+})
+
+// A connection that failed while connecting is sent again; a failure after
+// it may have arrived, so it is thrown on the first try.
+let failing = (fails: Error[]) => {
+  let real = globalThis.fetch
+  let tries = 0
+  globalThis.fetch = (() => {
+    let fail = fails[tries++]
+    return fail ? Promise.reject(fail) : Promise.resolve(fee())
+  }) as unknown as typeof fetch
+  return { tries: () => tries, done: () => void (globalThis.fetch = real) }
+}
+
+let reset = new TypeError(
+  'error sending request for url (https://yaks.app/fee): client error ' +
+    '(Connect): Connection reset by peer (os error 104)',
+)
+
+test('a request that never connected is sent again, and nothing else is', async () => {
+  let pauses = reconnect.pauses
+  reconnect.pauses = [0, 0]
+  let flaky = failing([reset, reset])
+  try {
+    assertEquals((await feeNow('a.token')).bps, 250)
+    assertEquals(flaky.tries(), 3)
+  } finally {
+    flaky.done()
+  }
+  let down = failing([reset, reset, reset])
+  try {
+    await assertRejects(() => feeNow('a.token'), TypeError, '(Connect)')
+    assertEquals(down.tries(), 3)
+  } finally {
+    down.done()
+  }
+  let cut = failing([new TypeError('error reading a body from connection')])
+  try {
+    await assertRejects(() => feeNow('a.token'), TypeError, 'reading a body')
+    assertEquals(cut.tries(), 1)
+  } finally {
+    cut.done()
+    reconnect.pauses = pauses
+  }
 })
 
 test('an expired MCP session is a refusal, not a defect', async () => {

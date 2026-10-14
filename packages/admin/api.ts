@@ -101,9 +101,31 @@ export let timing = {
   say: (line: string) => console.error(line),
 }
 
+// A request that failed while connecting never reached the platform: Deno
+// names the phase, `client error (Connect)`, for a reset, a refused
+// connection, a DNS failure and a broken TLS handshake alike. Sending it
+// again can do nothing twice, whatever its method, so it is sent again after
+// each pause. A failure after connecting may have arrived, and is thrown.
+export let reconnect = { pauses: [200, 1000, 3000] }
+
+let connecting = (err: unknown) =>
+  /\(Connect\)/.test(String((err as Error)?.message ?? err))
+
+let again = async (go: () => Promise<Response>) => {
+  for (let pause of reconnect.pauses) {
+    try {
+      return await go()
+    } catch (err) {
+      if (!connecting(err)) throw err
+    }
+    await new Promise((done) => setTimeout(done, pause))
+  }
+  return go()
+}
+
 // EVERY call this client makes: the account's cookie goes out here, a renewed
-// one is read back here, and `yak --timing` says its line here, so no verb
-// has to think about any of the three.
+// one is read back here, `yak --timing` says its line here, and a failed
+// connection is tried again here, so no verb has to think about any of them.
 let sent = async (
   url: string,
   session?: string,
@@ -115,7 +137,7 @@ let sent = async (
     ...init,
     headers: { ...init.headers, ...(session ? head(session, browser) : {}) },
   }
-  let go = () => fetch(url, asked)
+  let go = () => again(() => fetch(url, asked))
   let r = timing.on && !quiet
     ? await timed(timing.say, go)(new Request(url, asked))
     : await go()
