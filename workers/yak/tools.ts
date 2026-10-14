@@ -798,7 +798,7 @@ let sheetOf = async (
 ): Promise<Sheet> => {
   let mine = wordsOf(appDoc(await answer(store, '/vocab')))
   let words: Record<string, Props> = {}
-  for (let doc of coreDocs) Object.assign(words, wordsOf(doc))
+  for (let doc of coreDocs()) Object.assign(words, wordsOf(doc))
   Object.assign(words, mine)
   if (!(as in words)) {
     throw refuse(
@@ -1176,7 +1176,7 @@ let published = async (
   // A tool is checked against the names, so the names are all this reads: the
   // core every app's store plants, the app's own, and the ones it borrows.
   let words = [
-    ...componentsOf(coreDocs),
+    ...componentsOf(coreDocs()),
     ...componentsOf([appDoc(JSON.parse(taken))]),
     ...Object.keys(JSON.parse(borrowed)),
   ]

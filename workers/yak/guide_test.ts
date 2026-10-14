@@ -10,7 +10,7 @@
 import { test } from '@yaks/testing'
 import { assert, assertEquals } from '@std/assert'
 import { front } from '@yaks/yaml'
-import { coreDocs, RESERVED, wordOf } from './vocab.ts'
+import { coreDocs, reserved, wordOf } from './vocab.ts'
 import { upload } from './dispatch.ts'
 import type { Env } from './env.ts'
 import { INSTRUCTIONS, PAGES, uriOf } from './guide.ts'
@@ -108,7 +108,7 @@ test('the pages print every word vocab.json may not use', () => {
       .find((b) => b.startsWith('    ') && b.includes('call_woken'))
     if (!block) continue
     printed++
-    assertEquals(block.trim().split(/\s+/), RESERVED, p.slug)
+    assertEquals(block.trim().split(/\s+/), reserved(), p.slug)
   }
   assert(printed, 'no page prints the reserved words')
 })
@@ -170,7 +170,7 @@ let entries = () => {
 // component, named the way the page names it, and whether the store owns it.
 let stored = () => {
   let all: Record<string, [string, string, boolean][]> = {}
-  for (let doc of coreDocs) {
+  for (let doc of coreDocs()) {
     for (let [name, s] of Object.entries(doc.$defs ?? {})) {
       if (!s.component) continue
       let props = all[name] ??= []

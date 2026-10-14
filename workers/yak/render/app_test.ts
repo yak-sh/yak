@@ -30,13 +30,13 @@ let bundle = {
 }
 
 test('app Tile resolves by component and keeps the library card DOM', async () => {
-  assertEquals(resolve(registry, bundle, 'List.Tile', vocab), app)
+  assertEquals(resolve(registry, bundle, 'List.Tile', vocab()), app)
   assertEquals(
     resolve(
       registry,
       { entity: bundle.entity, doc: bundle.doc },
       'Tile',
-      vocab,
+      vocab(),
     ),
     undefined,
   )
@@ -60,7 +60,7 @@ test('app Tile resolves by component and keeps the library card DOM', async () =
   )
   assertEquals(signature(card(html)), signature(expected))
 
-  let Entity = entity({ registry, vocab, store: () => bundle })
+  let Entity = entity({ registry, vocab: vocab(), store: () => bundle })
   let mounted = mount(h(Entity, {
     eid: 'app-1',
     view: 'List.Tile',

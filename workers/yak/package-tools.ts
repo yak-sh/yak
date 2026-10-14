@@ -7,6 +7,7 @@ import type { Host } from '@yaks/host'
 import type { Composition } from '@yaks/host/anatomy'
 import { chosen, facetsOf, given, used } from '@yaks/host/config'
 import { selected } from '@yaks/host/documents'
+import { once } from '@yaks/fp'
 import { toolsIn } from '@yaks/vocab/tools'
 import { configs } from './config.ts'
 import { load, vocabFacets } from './load.ts'
@@ -63,10 +64,14 @@ export let storedTools = (
     })
   )
 
-let declarations = (['directory', 'app'] as const).flatMap((kind) =>
-  contributions(kind).flatMap(({ docs }) =>
-    toolsIn(docs).filter((d) => !d.surfaces || d.surfaces.includes('mcp'))
-      .map((definition) => ({ kind, definition, name: definition.name! }))
+// Read from the declarations the first time the connector asks, not when the
+// module loads: most requests an isolate starts for never list a tool.
+let declarations = once(() =>
+  (['directory', 'app'] as const).flatMap((kind) =>
+    contributions(kind).flatMap(({ docs }) =>
+      toolsIn(docs).filter((d) => !d.surfaces || d.surfaces.includes('mcp'))
+        .map((definition) => ({ kind, definition, name: definition.name! }))
+    )
   )
 )
 // These names keep their published argument and answer forms. The package's
@@ -106,28 +111,30 @@ let routed = (schema: Record<string, unknown>): Record<string, unknown> => {
   }
   return out
 }
-export let PACKAGE_TOOLS = declarations.map(({ kind, definition, name }) => ({
-  ...definition,
-  name: packageName(name),
-  description: listedIn(definition.description),
-  inputSchema: {
-    ...routed(definition.inputSchema ?? {}),
-    properties: {
-      ...routed(definition.inputSchema ?? {}).properties as Record<
-        string,
-        unknown
-      >,
-      space: SPACE,
-      // A directory connection's app is already a package argument. It accepts
-      // its slug or id; every app-store tool adds this routing argument.
-      ...(kind == 'app' ? { app: APP } : {}),
+let listed = once(() =>
+  declarations().map(({ kind, definition, name }) => ({
+    ...definition,
+    name: packageName(name),
+    description: listedIn(definition.description),
+    inputSchema: {
+      ...routed(definition.inputSchema ?? {}),
+      properties: {
+        ...routed(definition.inputSchema ?? {}).properties as Record<
+          string,
+          unknown
+        >,
+        space: SPACE,
+        // A directory connection's app is already a package argument. It accepts
+        // its slug or id; every app-store tool adds this routing argument.
+        ...(kind == 'app' ? { app: APP } : {}),
+      },
+      required: [
+        ...definition.inputSchema?.required as string[] ?? [],
+        ...(kind == 'app' ? ['app'] : []),
+      ],
     },
-    required: [
-      ...definition.inputSchema?.required as string[] ?? [],
-      ...(kind == 'app' ? ['app'] : []),
-    ],
-  },
-}))
+  }))
+)
 
 /** One declared tool, through the store's own call ledger and runner. */
 export let invokePackage = async (
@@ -136,7 +143,7 @@ export let invokePackage = async (
   args: Args,
   source?: string,
 ): Promise<Bundle[]> => {
-  let declaration = declarations.find((d) => d.name == name)
+  let declaration = declarations().find((d) => d.name == name)
   if (!declaration) throw refuse('missing', `no store tool ${name}`)
   let { kind, definition } = declaration
   let { space: _, app: appArg, ...input } = args
@@ -207,9 +214,9 @@ export let callStored = async (
 
 /** The declared package tools, bound to this connector caller. */
 export let packageTools = (ctx: Ctx): NamedTool[] =>
-  PACKAGE_TOOLS.map((definition, i) => ({
+  listed().map((definition, i) => ({
     ...definition,
     applied: true,
     run: (call) =>
-      invokePackage(ctx, declarations[i].name, argsOf(call), call.entity.eid),
+      invokePackage(ctx, declarations()[i].name, argsOf(call), call.entity.eid),
   }))

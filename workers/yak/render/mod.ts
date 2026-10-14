@@ -6,11 +6,13 @@ import { define } from '@yaks/render'
 import type { SpacePage } from '../pages.ts'
 import type { Person } from '../people.ts'
 import { platformVocab } from '../vocab.ts'
+import { once } from '@yaks/fp'
 import { app } from './app.ts'
 import { guest, invitation, seat } from './held.ts'
 
 export let registry = define([app, seat, guest, invitation])
-export let vocab = platformVocab()
+// The directory's words, composed when a page first draws a row.
+export let vocab = once(platformVocab)
 
 export let tile = (
   a: SpacePage['apps'][number],
@@ -26,7 +28,7 @@ export let tile = (
       ...(a.home ? { home: {} } : {}),
     },
     'List.Tile',
-    vocab,
+    vocab(),
     { gallery: a.gallery, at, errors },
   )
 
@@ -42,6 +44,6 @@ export let holder = (p: Person) =>
     registry,
     { entity: { eid: p.eid }, ...comps[p.held](p) },
     'List.Tile',
-    vocab,
+    vocab(),
     { name: p.name, email: p.email },
   )

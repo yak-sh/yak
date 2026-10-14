@@ -33,6 +33,7 @@ import {
   type WordsOpts,
 } from '@yaks/host/words'
 import { vocabFacets } from './load.ts'
+import { once } from '@yaks/fp'
 export {
   appsDoc,
   classificationDoc,
@@ -69,10 +70,12 @@ export let storeWords = (kind: StoreKind, own?: VocabDoc[]): Words =>
   composed(configured[kind], own, kind == 'app' ? appOptions : metaOptions)
 
 // Existing readers ask for a store's documents; these are projections of its
-// configuration, shared with the assembly rather than maintained lists.
-export let coreDocs = storeWords('app').docs
-export let platformDocs = storeWords('directory').docs
-export let gitDocs = storeWords('git').docs
+// configuration, shared with the assembly rather than maintained lists. Each is
+// composed when first asked for and kept for the isolate (storeWords), so a
+// cold start composes no vocabulary its request never reads (T-37974).
+export let coreDocs = () => storeWords('app').docs
+export let platformDocs = () => storeWords('directory').docs
+export let gitDocs = () => storeWords('git').docs
 export let platformVocab = (): Vocab => storeWords('directory').vocab
 export let gitVocab = (): Vocab => storeWords('git').vocab
 export let appDerived = (vocab: Vocab, reading: Derived = {}): Derived => ({
@@ -80,32 +83,31 @@ export let appDerived = (vocab: Vocab, reading: Derived = {}): Derived => ({
   ...builds(vocab),
 })
 
-/** The edge verbs the platform's stores understand. */
-export let RELATIONS: string[] = coreDocs.flatMap((d) =>
-  Object.entries(d.$defs ?? {}).filter(([, s]) => s.edge === true).map((
-    [name],
-  ) => name)
-)
 let shapeOf = (s: PropSchema): string =>
   s.enum ? s.enum.join('|') : String(s.type ?? '?')
-export let PLATFORM_APART: string[] = platformDocs.flatMap((doc) =>
-  Object.entries(doc.$defs ?? {})
-)
-  .flatMap(([name, mine]) => {
-    let theirs = storeWords('app').vocab.def(name)?.properties
-    return Object.entries(mine.properties ?? {}).filter(([prop, s]) =>
-      theirs?.[prop] && shapeOf(theirs[prop]) != shapeOf(s)
-    ).map(([prop]) => `${name}.${prop}`)
-  })
+/** The platform's properties shaped otherwise than an app store's. */
+export let platformApart = once((): string[] => {
+  let app = storeWords('app').vocab
+  return platformDocs().flatMap((doc) => Object.entries(doc.$defs ?? {}))
+    .flatMap(([name, mine]) => {
+      let theirs = app.def(name)?.properties
+      return Object.entries(mine.properties ?? {}).filter(([prop, s]) =>
+        theirs?.[prop] && shapeOf(theirs[prop]) != shapeOf(s)
+      ).map(([prop]) => `${name}.${prop}`)
+    })
+})
 export let componentsOf = (docs: VocabDoc[]): string[] =>
   docs.filter((d) => d.reserved !== false).flatMap((d) =>
     Object.entries(d.$defs ?? {}).filter(([, e]) =>
       e?.tool !== true && e?.lens !== true
     ).map(([name]) => name)
   )
-export let RESERVED: string[] = [
-  ...new Set(componentsOf([...coreDocs, ...platformDocs, ...gitDocs])),
-].sort()
+/** Every word the platform says, sorted: a new manifest declares none. */
+export let reserved = once((): string[] =>
+  [
+    ...new Set(componentsOf([...coreDocs(), ...platformDocs(), ...gitDocs()])),
+  ].sort()
+)
 export let EXAMPLE =
   '{"$defs": {"recipe": {"properties": {"serves": {"type": "number"}}}}}'
 export let GUIDE = url({}, '/docs.md')
@@ -467,7 +469,7 @@ export let appDoc = (source: unknown, file = 'vocab.json'): VocabDoc => {
 
 /**
  * A new manifest, refused if it declares a word the platform already says
- * ({@link RESERVED}) — all of them at once, before anything is planted: a
+ * ({@link reserved}) — all of them at once, before anything is planted: a
  * manifest refused one name at a time is probed one deploy at a time, and every
  * probe that got through left a component behind for good (C-32624 item 1).
  * The sentence is the one the guide prints under "The names already taken",
@@ -491,7 +493,7 @@ export let unsaid = (
 ): VocabDoc => {
   let taken = Object.keys(doc.$defs ?? {})
     .filter((n) =>
-      RESERVED.includes(n) && !(n in (held.$defs ?? {})) &&
+      reserved().includes(n) && !(n in (held.$defs ?? {})) &&
       !accepted.includes(n)
     )
   if (taken.length) {

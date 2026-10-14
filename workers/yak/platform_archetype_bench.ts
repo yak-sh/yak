@@ -11,7 +11,10 @@ import { gitDocs, platformDocs } from './vocab.ts'
 const rows = Number(Deno.env.get('BENCH_ROWS') ?? 2000)
 
 for (
-  const [kind, docs] of [['platform', platformDocs], ['git', gitDocs]] as const
+  const [kind, docs] of [['platform', platformDocs()], [
+    'git',
+    gitDocs(),
+  ]] as const
 ) {
   for (const tracked of [false, true]) {
     const data = durable()

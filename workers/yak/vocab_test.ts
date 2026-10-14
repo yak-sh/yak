@@ -23,9 +23,9 @@ import {
   livesIn,
   meant,
   numbered,
-  PLATFORM_APART,
+  platformApart,
   platformVocab,
-  RESERVED,
+  reserved,
   unsaid,
 } from './vocab.ts'
 import { effectsIn, type PropSchema, type VocabDoc } from '@yaks/vocab'
@@ -241,7 +241,7 @@ test('a manifest is refused in the words that fix it', () => {
   // The list is every platform vocabulary's: an app's store, the directory,
   // and the git object store.
   for (let word of ['member', 'edge', 'space', 'commit']) {
-    assertEquals(RESERVED.includes(word), true, word)
+    assertEquals(reserved().includes(word), true, word)
   }
 })
 
@@ -296,7 +296,7 @@ test('the directory and an app spell one word apart: member.role', () => {
   // from access, which it expresses as a grant or the app's mode. So the two
   // stores mean two things by one property, and the MCP door types it nowhere
   // rather than as either (agent.ts `spoken`, T-34273).
-  assertEquals(PLATFORM_APART, ['member.role'])
+  assertEquals(platformApart(), ['member.role'])
   assertEquals(platformVocab().prop('member', 'role')?.values, [
     'owner',
     'editor',

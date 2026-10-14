@@ -61,7 +61,7 @@ import {
   TOOLS,
 } from './tools.ts'
 import { ceiling, serve, unseenBlock } from './unseen.ts'
-import { appVocab, PLATFORM_APART, wordOf } from './vocab.ts'
+import { appVocab, platformApart, wordOf } from './vocab.ts'
 import { bare, joined, lined } from './wire.ts'
 import { apex, type Host, hosted } from './host.ts'
 import { refuse } from './tool.ts'
@@ -475,7 +475,7 @@ let spoken = async (
   }
   let seats = await ctx.dir.seated(ctx.person)
   if (seats.some((s) => s.space.slug == META.space)) {
-    for (let prop of PLATFORM_APART) clashes.add(prop)
+    for (let prop of platformApart()) clashes.add(prop)
   }
   return { vocab: appVocab({ $defs: defs }), clashes }
 }

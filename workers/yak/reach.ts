@@ -52,6 +52,7 @@ import { declarationOf } from './declaration.ts'
 import { compile, lensesIn } from '@yaks/lens'
 import { lensDocAt, spoken as lensSpoken } from './lenses.ts'
 import { appKeywords, appVocab, platformDocs } from './vocab.ts'
+import { once } from '@yaks/fp'
 import { matcher, rows } from '@yaks/match'
 import { parse, tokens } from '@yaks/query'
 import {
@@ -68,21 +69,21 @@ import { sandboxed } from './installed.ts'
 
 // The words the PLATFORM says in every store, including its vocabulary and
 // journal. A word outside this list was declared by an app, which is what
-// makes it the most specific thing said about a row.
-let CORE: Vocab = appVocab()
+// makes it the most specific thing said about a row. Composed on first use.
+let core = once((): Vocab => appVocab())
 
 // The directory has no app-owned vocab.json for `/vocab` to answer: its own
 // words are the documents shipped with the platform. Keep only the words not
 // already in every store, the same shape an app's `/vocab` answers, so routing
 // and alias derivation see `secret.name` and the rest of the directory's own
 // identities without treating shared words as though only it declared them.
-let PLATFORM_WORDS: VocabDoc = {
+let platformWords = once((): VocabDoc => ({
   title: 'platform',
   $defs: Object.fromEntries(
-    platformDocs.flatMap((doc) => Object.entries(doc.$defs ?? {}))
-      .filter(([name]) => !CORE.all.includes(name)),
+    platformDocs().flatMap((doc) => Object.entries(doc.$defs ?? {}))
+      .filter(([name]) => !core().all.includes(name)),
   ),
-}
+}))
 
 // One store in reach: the app, the space it is in, and who the caller is
 // there. `at` is what a bundle names as the component's home.
@@ -379,10 +380,10 @@ let kindFrom = (
   comps: Record<string, unknown>,
   must: string[] = [],
 ): { kind: string; at?: string } => {
-  let own = kinds.filter(([, k]) => k && !CORE.kinds.includes(k))
+  let own = kinds.filter(([, k]) => k && !core().kinds.includes(k))
   let said = own.find(([, k]) => must.includes(k)) ?? own[0]
   return {
-    kind: said?.[1] ?? CORE.kinds.find((k) => k in comps) ?? 'entity',
+    kind: said?.[1] ?? core().kinds.find((k) => k in comps) ?? 'entity',
     at: said?.[0] ?? kinds[0]?.[0],
   }
 }
@@ -683,7 +684,7 @@ export let read = async (
   // A projection reads its properties off the whole merge, wherever they live.
   let named = [...parts.keys()]
   let want = named.length && !every(line) && !p &&
-      named.every((n) => words.has(n) || CORE.all.includes(n))
+      named.every((n) => words.has(n) || core().all.includes(n))
     ? new Set(named)
     : null
   let from = named.length && !p ? [...new Set(named.flatMap(speak))] : reach
@@ -783,7 +784,7 @@ export let vocabAt = async (
   app: App,
   headers: Record<string, string> = {},
 ): Promise<VocabDoc> => {
-  if (at({ space, app }) == META_STORE) return PLATFORM_WORDS
+  if (at({ space, app }) == META_STORE) return platformWords()
   let doc = (await declarationOf(env, space, app)).vocab
   let speaks =
     lensSpoken(new Request('https://store/vocab', { headers })).speaks
@@ -812,13 +813,13 @@ let union = (docs: VocabDoc[]): Vocab => {
   let defs: Record<string, PropSchema> = {}
   for (let doc of docs) {
     for (let [name, schema] of Object.entries(doc.$defs ?? {})) {
-      if (seen.has(name) || CORE.all.includes(name)) continue
+      if (seen.has(name) || core().all.includes(name)) continue
       seen.add(name)
       defs[name] = schema
     }
   }
   return loadVocab(
-    [...CORE.docs, { title: 'space', $defs: defs }],
+    [...core().docs, { title: 'space', $defs: defs }],
     appKeywords,
   )
 }
