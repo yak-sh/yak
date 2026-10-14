@@ -1387,8 +1387,8 @@ export let directory = (via: Fetcher | Part, now = false) => {
     emailAt: async (person: string): Promise<string | null> =>
       (await self.known(person))?.email ?? null,
     // What to call this person anywhere their address must not go: the name
-    // they chose at sign-in, else the front of their address (signin.ts
-    // `nameOf`). An app's store is written this and never the address, so a
+    // they chose in their settings or were invited under, else the front of
+    // their address (signin.ts `nameOf`). An app's store is written this and never the address, so a
     // page that shows its bylines shows names (T-32654).
     nameAt: async (person: string): Promise<string | null> =>
       (await self.known(person))?.name ?? null,

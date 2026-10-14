@@ -673,9 +673,7 @@ export let unique = (name: string) =>
 // log, the cookie back — and the kernel mints their person row and their own
 // space. The first sign-in on a fresh kernel owns the meta space, which is
 // how any directory row comes to be written at all (identity.ts).
-// A person, signed in: the code card asks what to call them the first time
-// (T-32654), so `name` is what a probe answers it — left out, the front of
-// their address is what the platform ends up calling them.
+// A person, signed in through the address and the code, as anyone signs in.
 export let signIn = async (
   k: Pick<Kernel, 'at' | 'host' | 'log' | 'secret'>,
   email = `${unique('probe')}@${k.host}`,

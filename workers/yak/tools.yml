@@ -639,8 +639,9 @@ member_add:
     until they accept with its one click, signed in with that address. note
     puts the person's own line or two at the top of that email, quoted as
     theirs ("the potluck list for Saturday"), which is what gets an
-    invitation opened. name, if you know it, shows beside what they write
-    instead of their address; they can set it at their first sign-in.
+    invitation opened. name, whenever you know it, is what their apps show
+    beside what they write; left out, they go by the front of their address
+    until they change it in their own settings.
     Nothing to install, no account to make first. Only the space owner may
     invite. For an app everyone with the link may write to without signing
     in, set access 'open' (app_set) instead. Inviting someone who already

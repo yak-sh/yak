@@ -145,8 +145,10 @@ link, leave it out and it carries the space's own address, which is its front
 page when it has one and a list of the apps they may open when it does not.
 
 `name` is what to call them — their apps show it beside what they write, so
-nobody sees an address. Left out, their first sign-in asks them. It never
-renames someone who has already chosen.
+nobody sees an address. Pass it whenever the person says who they are inviting:
+left out, they go by the front of their address (`dana` from `dana@example.com`)
+until they change it themselves under Settings at yaks.app/manage/settings. It
+never renames someone who has already chosen.
 
 `note` is the inviter's own message, carried at the top of the letter, quoted
 and attributed to them so nobody reads it as the platform speaking. A line or

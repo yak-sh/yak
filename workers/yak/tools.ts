@@ -5187,7 +5187,8 @@ let OURS: Row[] = [
         ),
         name: str(
           'what to call them: the name their apps show beside what they ' +
-            'write. Leave it out and they are asked at their first sign-in',
+            'write. Leave it out and they go by the front of their address ' +
+            'until they change it in their own settings',
         ),
         note: str(
           "the person's own message to them, placed at the top of the " +
@@ -5229,7 +5230,7 @@ let OURS: Row[] = [
       // What to call them, if the invitation said: it names them in the
       // letter and stands as their name until they choose one themselves
       // (signin.ts `personOf` never renames someone who has). Left out,
-      // their first sign-in asks (T-32654).
+      // they go by the front of their address (T-34236).
       let name = args.name == null
         ? undefined
         : nameOf(text(args.name, 'name'), email)

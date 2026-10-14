@@ -372,12 +372,12 @@ This is a rule about references, not about that one stamp: any property that
 points at an entity comes back with the name when the store knows that entity as
 a person, a property of your own included.
 
-The name is the one they chose at sign-in, or the front of their address if they
-skipped the question. An address is never in the answer: an app's store learns
-names and keeps no address book, so a `public` app answering `.person` to a
-stranger hands out no roster. Anything the store cannot name stays the bare eid
-it always was — and a write still accepts that eid, so a row read and handed
-straight back means the entity it named:
+The name is the one they chose under Settings at yaks.app/manage/settings, or
+the one they were invited under, else the front of their address. An address is
+never in the answer: an app's store learns names and keeps no address book, so a
+`public` app answering `.person` to a stranger hands out no roster. Anything the
+store cannot name stays the bare eid it always was — and a write still accepts
+that eid, so a row read and handed straight back means the entity it named:
 
     let [entry] = await query('.doc.title~=Fig&.created')
     await apply({

@@ -194,8 +194,8 @@ let personAt = async (store: Meta, email: string) =>
 
 // An address is not a name. A person minted before anyone was asked wears
 // their address as `doc.title` (T-32627), so that title reads as no name at
-// all: the next sign-in asks for one, and an app's store never learns an
-// address (T-32654). Nothing has to be rewritten on deploy.
+// all: the next sign-in writes the front of the address in its place, and an
+// app's store never learns an address (T-32654). Nothing has to be rewritten on deploy.
 export let chose = (title?: string | null) =>
   title && !title.includes('@') ? title : null
 
@@ -214,11 +214,11 @@ export let nameAt = async (store: Meta, email: string) =>
 // entity may wear (the mail plugin's address book), so a person is `person` +
 // `email` + a `doc` titled with what to call them, once someone says.
 //
-// `name` is that: what they typed at the sign-in card, or what an invitation
-// called them (tools.ts member_add). It is written only where there is no
-// name yet — an invitation never renames someone who has named themselves —
-// and a person nobody has named keeps no title at all, so the next sign-in
-// knows to ask.
+// `name` is that: what an invitation called them (tools.ts member_add), or
+// the front of their address when they sign in (identity.ts, T-34236). It is
+// written only where there is no name yet — an invitation never renames
+// someone who has one — and a person nobody has named keeps no title until
+// their first sign-in. They change it under Settings (apps.ts `saved`).
 export let personOf = async (store: Meta, email: string, name?: string) => {
   let at = canon(email)
   let row = await personAt(store, at)
