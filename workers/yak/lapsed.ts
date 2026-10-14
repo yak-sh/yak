@@ -145,7 +145,7 @@ let STEPS: Record<string, { name: string; steps: string[] }> = {
   claude: {
     name: 'Claude',
     steps: [
-      'Open Claude’s connectors: https://claude.ai/customize/connectors',
+      "Open Claude's connectors: https://claude.ai/customize/connectors",
       'Find yaks.app and press Connect.',
       'Sign in with this email address when it asks.',
     ],
@@ -153,7 +153,7 @@ let STEPS: Record<string, { name: string; steps: string[] }> = {
   chatgpt: {
     name: 'ChatGPT',
     steps: [
-      'Open ChatGPT’s plugins on the web: https://chatgpt.com/plugins',
+      "Open ChatGPT's plugins on the web: https://chatgpt.com/plugins",
       'Choose yaks.app and connect it.',
       'Sign in with this email address when it asks.',
     ],
