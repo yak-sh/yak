@@ -44,5 +44,7 @@ node_modules.lock/
 /bench/*.results.json
 /bench/*.json.tmp
 
-# The sandbox CLI workspace and launcher, generated for the Worker asset upload.
+# The sandbox CLI workspace and launcher, and the compiler catalog, generated
+# for the Worker asset upload.
 /workers/yak/public/_cli/
+/workers/yak/public/_compiler/

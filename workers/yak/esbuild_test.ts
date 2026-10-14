@@ -7,7 +7,7 @@
 import { test } from '@yaks/testing'
 import { assert, assertEquals, assertRejects } from '@std/assert'
 import type { Answer, Ask } from '@yaks/esbuild'
-import catalog from './.wrangler/packages.json' with { type: 'json' }
+import catalog from './public/_compiler/packages.json' with { type: 'json' }
 import * as apps from './apps.ts'
 import type { Env } from './env.ts'
 import { ADA, platform, seeded, visit } from './serving-probe.ts'

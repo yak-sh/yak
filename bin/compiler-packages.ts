@@ -351,7 +351,10 @@ let remove = (path: string) => {
 }
 
 let repo = fileURLToPath(new URL('../', import.meta.url))
-export let CATALOG = join(repo, 'workers/yak/.wrangler/packages.json')
+// A static asset of the kernel's own version, read by a compile through ASSETS
+// (workers/yak/esbuild.ts), never part of the script every isolate loads.
+export let CATALOG = join(repo, 'workers/yak/public/_compiler/packages.json')
+let MEMO = join(repo, 'workers/yak/.wrangler/transpiled.json')
 
 let materialize = (to: string, value: unknown) => {
   Deno.mkdirSync(dirname(to), { recursive: true })
@@ -396,6 +399,8 @@ if (import.meta.main) {
     Deno.args[2] ??
       (cache
         ? join(cache, 'yak', 'compiler-transpiled.json')
+        : to == CATALOG
+        ? MEMO
         : join(dirname(to), 'transpiled.json')),
   )
 }

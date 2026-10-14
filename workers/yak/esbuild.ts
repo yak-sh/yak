@@ -40,14 +40,19 @@ let CACHE = `${BUILT}.compile.json`
 let MODULE = `${BUILT}.worker.js`
 // Every compile sees the toolkit of the kernel accepting that deploy. Package
 // changes update this kernel's catalog without changing the compiler Worker.
-// It is 2.4 MB of package source, read only when an app compiles, so it is
-// imported then: evaluated at load, it was a fifth of every isolate's start,
-// each waking Store's included (T-123910).
+// It is 2.4 MB of package source, needed only when an app compiles, so it is
+// one of this version's static assets (bin/compiler-packages.ts) read then:
+// in the script, it was 40% of what every isolate loaded and parsed, each
+// waking Store's included (T-123910, T-37974).
 let catalogText: Promise<string> | undefined
-let CATALOG = () =>
-  catalogText ??= import('./.wrangler/packages.json', {
-    with: { type: 'json' },
-  }).then((m) => JSON.stringify(m.default))
+let CATALOG = (env: Env) =>
+  catalogText ??= env.ASSETS.fetch(
+    new Request(url(env, '/_compiler/packages.json')),
+  ).then(async (r) => {
+    if (r.ok) return await r.text()
+    catalogText = undefined
+    throw new Error(`compiler catalog ${r.status}`)
+  })
 
 type Cache = {
   compiler: string
@@ -153,11 +158,9 @@ let asked = async (env: Env, ask: Ask, app: App): Promise<Answer> => {
           'content-type': 'application/json',
           'x-yak-compiler-job': '1',
         },
-        body: `{"ask":${
-          JSON.stringify(ask)
-        },"catalog":${await CATALOG()},"shared":true,"origin":${
-          JSON.stringify(url(env))
-        }}`,
+        body: `{"ask":${JSON.stringify(ask)},"catalog":${await CATALOG(
+          env,
+        )},"shared":true,"origin":${JSON.stringify(url(env))}}`,
       }),
     )
     if (r.ok) return await r.json()
