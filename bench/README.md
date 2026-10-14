@@ -4,11 +4,45 @@ The repository's benchmarks run through
 [@yaks/benchmark](../packages/benchmark/README.md), with one committed baseline
 file per suite. `deno task bench` measures the throughput suite's storage reads
 and patches, `graph.apply`, and warmed relay admission. `deno task bench:check`
-takes fresh measurements and refuses metrics more than **20% higher** than
+takes fresh measurements and refuses any metric past its slack over
 `bench/throughput.baseline.json`, including statement counts.
-`deno task bench:ratchet` explicitly accepts a fresh baseline; review and commit
-its diff. Runs retain raw samples, round medians, commit, runtime, CPU and load
-average in `bench/throughput.results.json`.
+`deno task bench:ratchet` banks a baseline; review and commit its diff. Runs
+retain raw samples, round medians, commit, runtime, CPU and load average in
+`bench/throughput.results.json`.
+
+## Banking a baseline
+
+`bench:ratchet <suite>` measures the suite three times over (`--runs=<n>` for
+another count) and banks each bench's best median. Each bench also banks its own
+slack: twice the spread between those runs' medians, never under 10% (`FLOOR` in
+bench/run.ts, day-to-day drift the runs cannot see) and never over 95%. A
+baseline only moves toward faster: a bench that measured slower keeps its banked
+median. Banking a slower one is the owner's call, made with `--slower`. Bank on
+an idle box; a baseline banked under load is loose for every later check.
+
+## The monitor
+
+Nothing gates on a bench; bench/monitor.ts watches them instead. It checks every
+suite the box measures itself (`SUITES`), measures a regression a second time
+before it counts, and reports a confirmed one to the tracker as a bug: each
+figure over its limit, the run's load, and the commits since the suite's last
+good run. A suite that cannot run (no baseline, a crash, a page that never
+paints) is reported as a failure. @yaks/heal sends both to an agent like any
+other bug. Cron runs it from the main checkout through bin/bench-monitor: every
+suite at 02:23, and every 15 minutes with `--restarted`, which measures `pages`
+once after each change of the live web unit, that is after each `yak restart`.
+What it last saw is kept in `~/.cache/yak/bench/monitor.json`.
+
+## Pages
+
+`pages` (bench/pages.ts) measures tasks.yak.sh as a person gets it: browse's
+home `/` and a task page, each opened cold in a new headless Chrome profile and
+then warm in the same one, against the box's live server. A figure is the time
+from navigation to the frame where the page shows what it is for: home's first
+rows (or the owner's inbox, its threads loaded) or the task's title. A page that
+has not painted in 30 s fails the run. It only reads: the browser refuses every
+request but GET, HEAD and OPTIONS before it leaves. `--url=` and `--task=` after
+`--` point it elsewhere.
 
 Benches run separately from `deno task test` and `deno task check`. The fast
 suite checks fixture correctness and the ratchet's comparison logic. The
@@ -28,11 +62,12 @@ deno task bench:ratchet client-frame
 
 The suites are `client-frame`, `client-rules`, `harness-startup`,
 `harness-streaming`, `harness-worker`, `harness-window`, `harness-switch`,
-`graph-activity`, `session-status`, `web-client`, and `relay-admission`. Each
-writes `bench/<suite>.results.json` and checks `bench/<suite>.baseline.json`. A
-suite without a banked baseline can run; a check refuses until its baseline has
-been explicitly accepted. Take that measurement on an idle box, then review and
-commit its baseline. Do not bank numbers taken on a loaded box.
+`graph-activity`, `session-status`, `web-client`, `relay-admission` and `pages`.
+Each writes `bench/<suite>.results.json` and checks
+`bench/<suite>.baseline.json`. A suite without a banked baseline can run; a
+check refuses until its baseline has been explicitly accepted. Take that
+measurement on an idle box, then review and commit its baseline. Do not bank
+numbers taken on a loaded box.
 
 Arguments after `--` reach the selected suite. For example, compare relay
 admission in a checkout over 200 ticks with:

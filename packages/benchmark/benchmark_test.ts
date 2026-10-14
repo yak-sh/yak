@@ -25,7 +25,9 @@ let fixture = (
   let saved = new Map<string, string>()
   let files: Files = {
     read: (path) => {
-      if (!saved.has(path)) return Promise.reject(new Error(`Missing ${path}`))
+      if (!saved.has(path)) {
+        return Promise.reject(new Deno.errors.NotFound(`Missing ${path}`))
+      }
       return Promise.resolve(saved.get(path)!)
     },
     write: (path, value) => {
@@ -153,6 +155,64 @@ test('baseline acceptance is explicit and check fails closed before collecting',
   equal((await run(f.suite, { ...options, mode: 'check' })).verdict, 'passed')
   await run(f.suite, options)
   equal(f.saved.get('baseline'), accepted)
+})
+
+// What a baseline banks for each bench, as {name: [median, tolerance]}.
+let banked = (f: ReturnType<typeof fixture>) =>
+  Object.fromEntries(
+    JSON.parse(f.saved.get('baseline')!).benches.map((
+      b: { name: string; median: number; tolerance?: number },
+    ) => [b.name, [b.median, b.tolerance]]),
+  )
+let costs = (...values: number[]) => {
+  let at = 0
+  return () => values[at++ % values.length]
+}
+
+test('acceptance only moves a baseline toward better, unless told slower', async () => {
+  let f = fixture()
+  let options = { ...f.options, rounds: 1, mode: 'accept' as const }
+  await run(f.suite, { ...options, tolerance: .2 })
+  f.suite.benches[0].sample = () => 150
+  await run(f.suite, { ...options, tolerance: .2 })
+  equal(banked(f), { work: [100, undefined] })
+  f.suite.benches[0].sample = () => 80
+  await run(f.suite, { ...options, tolerance: .2 })
+  equal(banked(f), { work: [80, undefined] })
+  f.suite.benches[0].sample = () => 150
+  await run(f.suite, { ...options, tolerance: .2, slower: true })
+  equal(banked(f), { work: [150, undefined] })
+  // A baseline from another runtime is no reference: it banks as measured.
+  f.context.runtime = 'upgraded'
+  f.suite.benches[0].sample = () => 170
+  await run(f.suite, { ...options, tolerance: .2 })
+  equal(banked(f), { work: [170, undefined] })
+})
+
+test('repeated runs bank the best median and the slack their spread asks for', async () => {
+  let f = fixture([
+    { name: 'noisy', unit: 'ms', sample: costs(100, 125, 110) },
+    { name: 'steady', unit: 'ms', sample: costs(40, 41, 40) },
+    { name: 'wild', unit: 'ms', sample: costs(10, 30, 20) },
+  ])
+  let options = { ...f.options, rounds: 1 }
+  await run(f.suite, { ...options, mode: 'accept', tolerance: .25, runs: 3 })
+  equal(banked(f), {
+    noisy: [100, .5],
+    steady: [40, .25],
+    wild: [10, .95],
+  })
+  let costing = (...values: number[]) =>
+    values.forEach((v, i) => f.suite.benches[i].sample = () => v)
+  costing(150, 50, 19)
+  equal((await run(f.suite, { ...options, mode: 'check' })).verdict, 'passed')
+  costing(151, 51, 19)
+  let error = await throws(() => run(f.suite, { ...options, mode: 'check' }))
+  let regressed = ok(error instanceof Regressed ? error : null)
+  equal(
+    regressed.result.regressions.map((r) => [r.name, r.limit, r.current]),
+    [['noisy', 150, 151], ['steady', 50, 51]],
+  )
 })
 
 for (let bad of ['null', '{}', '{', '{"version":2}']) {

@@ -1,0 +1,95 @@
+{
+  "version": 1,
+  "suite": "harness-startup",
+  "metric": "median-of-round-medians",
+  "workload": 1,
+  "runtime": "Deno/2.9.1 x86_64-unknown-linux-gnu",
+  "cpu": "Intel(R) Core(TM) i7-8700K CPU @ 3.70GHz",
+  "tolerance": 0.1,
+  "benches": [
+    {
+      "name": "open",
+      "unit": "ms",
+      "better": "lower",
+      "median": 19.6159719999996,
+      "tolerance": 0.421
+    },
+    {
+      "name": "agent",
+      "unit": "ms",
+      "better": "lower",
+      "median": 6.378711999990628,
+      "tolerance": 0.1
+    },
+    {
+      "name": "sessions",
+      "unit": "ms",
+      "better": "lower",
+      "median": 43.625388000000385,
+      "tolerance": 0.177
+    },
+    {
+      "name": "transcriptRead",
+      "unit": "ms",
+      "better": "lower",
+      "median": 78.30572099999699,
+      "tolerance": 0.102
+    },
+    {
+      "name": "close",
+      "unit": "ms",
+      "better": "lower",
+      "median": 8.700565000006463,
+      "tolerance": 0.45
+    },
+    {
+      "name": "remoteReady",
+      "unit": "ms",
+      "better": "lower",
+      "median": 314.87004799999704,
+      "tolerance": 0.1
+    },
+    {
+      "name": "resume",
+      "unit": "ms",
+      "better": "lower",
+      "median": 42.47040599999309,
+      "tolerance": 0.1
+    },
+    {
+      "name": "remoteSessions",
+      "unit": "ms",
+      "better": "lower",
+      "median": 43.152373000004445,
+      "tolerance": 0.1
+    },
+    {
+      "name": "remoteTranscript",
+      "unit": "ms",
+      "better": "lower",
+      "median": 443.6098570000031,
+      "tolerance": 0.1
+    },
+    {
+      "name": "mount",
+      "unit": "ms",
+      "better": "lower",
+      "median": 3.112860000008368,
+      "tolerance": 0.28
+    },
+    {
+      "name": "selectedPaintAfterRead",
+      "unit": "ms",
+      "better": "lower",
+      "median": 0.5102899999910733,
+      "tolerance": 0.257
+    },
+    {
+      "name": "remoteClose",
+      "unit": "ms",
+      "better": "lower",
+      "median": 473.8854940000019,
+      "tolerance": 0.1
+    }
+  ]
+}

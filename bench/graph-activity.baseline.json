@@ -1,0 +1,53 @@
+{
+  "version": 1,
+  "suite": "graph-activity",
+  "metric": "median-of-round-medians",
+  "workload": "[1,\"3000\",\"same-build\"]",
+  "runtime": "Deno/2.9.1 x86_64-unknown-linux-gnu",
+  "cpu": "Intel(R) Core(TM) i7-8700K CPU @ 3.70GHz",
+  "tolerance": 0.1,
+  "benches": [
+    {
+      "name": "absent/apply",
+      "unit": "ns/op",
+      "better": "lower",
+      "median": 30779.277000000016,
+      "tolerance": 0.381
+    },
+    {
+      "name": "absent/query",
+      "unit": "ns/op",
+      "better": "lower",
+      "median": 1639.5526666666835,
+      "tolerance": 0.1
+    },
+    {
+      "name": "uncreated/apply",
+      "unit": "ns/op",
+      "better": "lower",
+      "median": 31105.233666666663,
+      "tolerance": 0.1
+    },
+    {
+      "name": "uncreated/query",
+      "unit": "ns/op",
+      "better": "lower",
+      "median": 1622.5046666666003,
+      "tolerance": 0.1
+    },
+    {
+      "name": "inactive/apply",
+      "unit": "ns/op",
+      "better": "lower",
+      "median": 30199.938999999937,
+      "tolerance": 0.231
+    },
+    {
+      "name": "inactive/query",
+      "unit": "ns/op",
+      "better": "lower",
+      "median": 1645.469999999932,
+      "tolerance": 0.1
+    }
+  ]
+}

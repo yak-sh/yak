@@ -56,6 +56,8 @@ export type Regression = {
   name: string
   unit: string
   baseline: number
+  /** The figure the bench was allowed to reach: its baseline and slack. */
+  limit: number
   current: number
   /** A positive fraction is worse, for either direction. */
   change: number | null
@@ -79,8 +81,14 @@ export type Run = {
 export type Baseline =
   & Pick<Run, 'version' | 'suite' | 'metric' | 'workload' | 'runtime' | 'cpu'>
   & {
+    /** The slack a bench without its own may take. */
     tolerance: number
-    benches: (Workload & { better: Direction; median: number })[]
+    benches: (Workload & {
+      better: Direction
+      median: number
+      /** The slack this bench measured for itself when it was banked. */
+      tolerance?: number
+    })[]
   }
 
 export let value = (n: number): number => {

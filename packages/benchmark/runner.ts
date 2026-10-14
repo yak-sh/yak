@@ -20,6 +20,7 @@ import {
   compare,
   type Coverage,
   covered,
+  incomparable,
   tolerance,
   validate,
 } from './ratchet.ts'
@@ -53,8 +54,16 @@ export type Options = {
   mode?: 'run' | 'check' | 'accept'
   output: string
   baseline?: string
-  /** Required for acceptance; checks use the committed baseline's tolerance. */
+  /** Required for acceptance: the least slack any bench is banked with.
+   * Checks use the baseline's own. */
   tolerance?: number
+  /** Acceptance measures the suite this many times over, banking each bench's
+   * best median and the slack its spread between runs asks for (ratchet.ts
+   * `baseline`). One run banks the suite's tolerance alone. */
+  runs?: number
+  /** Bank a worse median than the baseline's. Without it acceptance only ever
+   * moves a bench toward better. */
+  slower?: boolean
   host?: () => Host | Promise<Host>
   reporters?: Reporters
   files?: Files
@@ -67,11 +76,7 @@ export type Options = {
 }
 export class Regressed extends Error {
   constructor(public result: Run) {
-    super(
-      `${result.regressions.length} benchmarks exceeded tolerance (${
-        result.tolerance! * 100
-      }%)`,
-    )
+    super(`${result.regressions.length} benchmarks exceeded tolerance`)
     this.name = 'Regressed'
   }
 }
@@ -145,9 +150,13 @@ let execute = async (
   if (mode == 'check' && options.tolerance != null) {
     throw new Error('Checks use the baseline tolerance')
   }
+  let repeats = mode == 'accept' ? options.runs ?? 1 : 1
+  if (!Number.isSafeInteger(repeats) || repeats < 1) {
+    throw new Error('Expected a positive integer run count')
+  }
   let store = options.files ?? files
   let base: Baseline | undefined
-  if (mode == 'check' || mode == 'accept' && options.coverage == 'subset') {
+  if (mode != 'run') {
     try {
       base = JSON.parse(await store.read(options.baseline!))
     } catch (error) {
@@ -158,6 +167,73 @@ let execute = async (
     if (mode == 'check' || base !== undefined) validate(base!)
   }
   let context = await (options.host ?? host)()
+  let runs: Run[] = []
+  for (let i = 0; i < repeats; i++) {
+    runs.push(await measure(suite, rounds, context))
+  }
+  let current = runs.at(-1)!
+  current.tolerance = mode == 'accept'
+    ? options.tolerance!
+    : base?.tolerance ?? null
+  if (mode == 'accept') current.verdict = 'accepted'
+  if (base && mode == 'check') {
+    current.regressions = compare(base, current, options.coverage)
+    current.verdict = current.regressions.length
+      ? 'regressed'
+      : covered(base, current)
+      ? 'passed'
+      : 'measured'
+  }
+  // An exact acceptance banks the suite as measured: a baseline banked on
+  // another runtime or workload, or for benches the suite no longer has, is
+  // no reference for it.
+  let previous = !base
+    ? undefined
+    : options.coverage == 'subset'
+    ? base
+    : incomparable(base, current)
+    ? undefined
+    : {
+      ...base,
+      benches: base.benches.filter((b) =>
+        current.benches.some((c) => c.name == b.name)
+      ),
+    }
+  let accepted = mode == 'accept'
+    ? baseline(runs, options.tolerance!, previous, options.slower)
+    : undefined
+  await store.write(options.output, current)
+  if (accepted) await store.write(options.baseline!, accepted)
+  let report: Awaited<ReturnType<Reporters>> = []
+  try {
+    report = await (options.reporters ?? reporters)(context)
+  } catch (error) {
+    console.error('Benchmark reporter factory failed', error)
+  }
+  if (report.length) {
+    // Reporting owns an immutable snapshot, never the ratchet's mutable result.
+    let snapshot = freeze(JSON.parse(JSON.stringify(current)) as Run)
+    // One broken provider cannot keep another from receiving the durable run.
+    let deliveries = await Promise.allSettled(
+      report.map((send) => Promise.resolve().then(() => send(snapshot))),
+    )
+    for (let delivery of deliveries) {
+      if (delivery.status == 'rejected') {
+        console.error('Benchmark reporter failed', delivery.reason)
+      }
+    }
+  }
+  if (current.verdict == 'regressed') throw new Regressed(current)
+  return current
+}
+
+/** One run: every round of every bench, aggregated, with the host's metadata.
+ * The ratchet's verdict is the caller's. */
+let measure = async (
+  suite: Suite | CollectedSuite,
+  rounds: number,
+  context: Host,
+): Promise<Run> => {
   let benches: Result[] = suite.benches.map((b) => ({
     name: b.name,
     unit: b.unit,
@@ -200,7 +276,7 @@ let execute = async (
     )[Math.floor(rounds / 2)]
     b.spans = middle.spans
   }
-  let current: Run = {
+  return {
     version: 1,
     suite: suite.name,
     metric: suite.metric,
@@ -212,49 +288,10 @@ let execute = async (
     load: [...context.load],
     rounds,
     benches,
-    tolerance: mode == 'accept' ? options.tolerance! : base?.tolerance ?? null,
-    verdict: mode == 'accept' ? 'accepted' : 'measured',
+    tolerance: null,
+    verdict: 'measured',
     regressions: [],
   }
-  if (base && mode == 'check') {
-    current.regressions = compare(base, current, options.coverage)
-    current.verdict = current.regressions.length
-      ? 'regressed'
-      : covered(base, current)
-      ? 'passed'
-      : 'measured'
-  }
-  let accepted = mode == 'accept'
-    ? baseline(current, options.tolerance!, base)
-    : undefined
-  await store.write(options.output, current)
-  if (mode == 'accept') {
-    await store.write(
-      options.baseline!,
-      accepted!,
-    )
-  }
-  let report: Awaited<ReturnType<Reporters>> = []
-  try {
-    report = await (options.reporters ?? reporters)(context)
-  } catch (error) {
-    console.error('Benchmark reporter factory failed', error)
-  }
-  if (report.length) {
-    // Reporting owns an immutable snapshot, never the ratchet's mutable result.
-    let snapshot = freeze(JSON.parse(JSON.stringify(current)) as Run)
-    // One broken provider cannot keep another from receiving the durable run.
-    let deliveries = await Promise.allSettled(
-      report.map((send) => Promise.resolve().then(() => send(snapshot))),
-    )
-    for (let delivery of deliveries) {
-      if (delivery.status == 'rejected') {
-        console.error('Benchmark reporter failed', delivery.reason)
-      }
-    }
-  }
-  if (current.verdict == 'regressed') throw new Regressed(current)
-  return current
 }
 
 let freeze = <T>(input: T): T => {

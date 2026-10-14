@@ -1,7 +1,10 @@
 /** The pure ratchet compares compatible suite measurements. A baseline is a
- * value with its own tolerance; accepting it is an explicit runner operation. */
+ * value with its own tolerance; accepting it is an explicit runner operation.
+ * A baseline only moves toward better: banking worse numbers is a separate,
+ * explicit choice (`slower`), never what an ordinary acceptance does. */
 import {
   type Baseline,
+  type Direction,
   type Regression,
   type Run,
   sameNames,
@@ -15,6 +18,30 @@ export let tolerance = (n: number): number => {
   }
   return n
 }
+
+/** A bench's slack is this many times the spread its banking runs showed. */
+export let NOISE = 2
+/** The most slack noise can earn a bench; a tolerance stays under one. */
+export let CAP = .95
+
+/** How far apart repeated medians of one bench fall, as a fraction of the
+ * best of them: the noise a later check has to allow.
+ *
+ * ```ts
+ * import { spread } from '@yaks/benchmark'
+ * import { equal } from '@yaks/testing'
+ *
+ * equal(spread([100, 104, 110], 'lower'), .1)
+ * equal(spread([80, 100], 'higher'), .2)
+ * equal(spread([5], 'lower'), 0)
+ * ```
+ */
+export let spread = (medians: readonly number[], better: Direction): number => {
+  let low = Math.min(...medians.map(value)), high = Math.max(...medians)
+  let best = better == 'lower' ? low : high
+  return best == 0 ? 0 : (high - low) / best
+}
+
 export let validate = (base: Baseline): void => {
   if (
     base.version !== 1 ||
@@ -30,35 +57,75 @@ export let validate = (base: Baseline): void => {
   sameNames(base.benches, base.benches)
   for (let b of base.benches) {
     value(b.median)
+    if (b.tolerance !== undefined) tolerance(b.tolerance)
     if (!['lower', 'higher'].includes(b.better)) {
       throw new Error(`Missing direction: ${b.name}`)
     }
   }
 }
-/** A scoped acceptance retains workloads outside the current observation. */
+
+let KEYS = ['version', 'suite', 'metric', 'workload', 'runtime', 'cpu'] as const
+type Key = typeof KEYS[number]
+/** The first piece of metadata that keeps a run from comparing with a
+ * baseline, or undefined when the two compare. */
+export let incomparable = (
+  base: Pick<Baseline, Key>,
+  current: Pick<Run, Key>,
+): Key | undefined => KEYS.find((key) => base[key] !== current[key])
+
+/** Bank one run, or several repeated runs of one suite, as a baseline. Each
+ * bench banks its best median. Repeated runs also bank each bench's slack:
+ * NOISE times the spread of their medians, never under `allowed` and never
+ * over CAP. With a previous baseline, a bench keeps its banked median where the
+ * new one is worse, unless `slower` says to bank the worse one, and a scoped
+ * acceptance retains the workloads it did not measure. */
 export let baseline = (
-  current: Run,
+  current: Run | readonly Run[],
   allowed: number,
   previous?: Baseline,
+  slower = false,
 ): Baseline => {
-  if (previous) compare(previous, current, 'subset')
+  let runs: readonly Run[] = 'benches' in current ? [current] : current
+  let last = runs.at(-1)
+  if (!last) throw new Error('Expected at least one run to bank')
+  for (let run of runs) {
+    let key = incomparable(last, run)
+    if (key) throw new Error(`Repeated runs differ in ${key}`)
+    sameNames(last.benches, run.benches)
+  }
+  if (previous) compare(previous, last, 'subset')
+  let banked = new Map(previous?.benches.map((b) => [b.name, b]))
   let out: Baseline = {
-    version: current.version,
-    suite: current.suite,
-    metric: current.metric,
-    workload: current.workload,
-    runtime: current.runtime,
-    cpu: current.cpu,
+    version: last.version,
+    suite: last.suite,
+    metric: last.metric,
+    workload: last.workload,
+    runtime: last.runtime,
+    cpu: last.cpu,
     tolerance: tolerance(allowed),
-    benches: current.benches.map((
-      { name, unit, better, median, resolution },
-    ) => ({
-      name,
-      unit,
-      better,
-      median,
-      ...(resolution !== undefined ? { resolution } : {}),
-    })),
+    benches: last.benches.map(({ name, unit, better, resolution }) => {
+      let medians = runs.map((r) =>
+        r.benches.find((b) => b.name == name)!.median
+      )
+      let pick = better == 'lower' ? Math.min : Math.max
+      let old = banked.get(name)
+      let median = old && !slower
+        ? pick(...medians, old.median)
+        : pick(...medians)
+      // Rounded up to a tenth of a percent, so a baseline reads plainly.
+      let noise = Math.ceil(NOISE * spread(medians, better) * 1000) / 1000
+      let slack = runs.length > 1
+        ? Math.min(CAP, Math.max(allowed, noise))
+        : old?.tolerance
+      return {
+        name,
+        unit,
+        better,
+        median,
+        ...(resolution !== undefined ? { resolution } : {}),
+        ...(slack !== undefined ? { tolerance: slack } : {}),
+      }
+    }),
   }
   if (previous) {
     let measured = new Set(out.benches.map((b) => b.name))
@@ -76,6 +143,18 @@ export let covered = (base: Baseline, current: Run): boolean => {
   let banked = new Set(base.benches.map((b) => b.name))
   return current.benches.every((b) => banked.has(b.name))
 }
+/** The figure a banked bench may reach before it has regressed: its median
+ * moved by its own slack, else the baseline's, rounded to its resolution. */
+export let limit = (
+  base: Baseline,
+  b: Baseline['benches'][number],
+): number => {
+  let slack = b.tolerance ?? base.tolerance
+  let most = b.median * (b.better == 'lower' ? 1 + slack : 1 - slack)
+  return b.resolution !== undefined
+    ? Math.round(most / b.resolution) * b.resolution
+    : most
+}
 export let compare = (
   base: Baseline,
   current: Run,
@@ -85,21 +164,11 @@ export let compare = (
     throw new Error(`Unknown benchmark coverage: ${coverage}`)
   }
   validate(base)
-  for (
-    let key of [
-      'version',
-      'suite',
-      'metric',
-      'workload',
-      'runtime',
-      'cpu',
-    ] as const
-  ) {
-    if (base[key] !== current[key]) {
-      throw new Error(
-        `Incomparable ${key}; explicitly accept a baseline on the target box`,
-      )
-    }
+  let key = incomparable(base, current)
+  if (key) {
+    throw new Error(
+      `Incomparable ${key}; explicitly accept a baseline on the target box`,
+    )
   }
   if (coverage == 'exact') sameNames(base.benches, current.benches)
   else sameNames(current.benches, current.benches)
@@ -115,17 +184,13 @@ export let compare = (
     ) {
       throw new Error(`Incomparable unit/direction/resolution: ${b.name}`)
     }
-    let limit = old.median *
-      (b.better == 'lower' ? 1 + base.tolerance : 1 - base.tolerance)
-    if (b.resolution !== undefined) {
-      limit = Math.round(limit / b.resolution) * b.resolution
-    }
-    let failed = b.better == 'lower' ? b.median > limit : b.median < limit
-    if (failed) {
+    let most = limit(base, old)
+    if (b.better == 'lower' ? b.median > most : b.median < most) {
       out.push({
         name: b.name,
         unit: b.unit,
         baseline: old.median,
+        limit: most,
         current: b.median,
         change: old.median == 0
           ? null

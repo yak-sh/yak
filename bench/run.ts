@@ -38,10 +38,18 @@ export let main = async (args = Deno.args): Promise<number> => {
     let suite = name == 'deploy'
       ? await import('./deploy.ts')
       : await import('./app-deploy.ts')
-    let current = await suite.run(options(name, action, 1))
+    // A deploy is timed once per push, on Cloudflare: no repeated runs to
+    // measure its noise, so it keeps a fixed slack.
+    let current = await suite.run(options(name, action, 1, .25))
     console.log(`${name}: ${current?.verdict ?? 'no data (bootstrap)'}`)
     return 0
   }
+  // Acceptance's own flags; everything else reaches the suite.
+  let slower = rest.includes('--slower')
+  let runs = Number(
+    rest.find((a) => a.startsWith('--runs='))?.slice('--runs='.length) ?? 3,
+  )
+  rest = rest.filter((a) => a != '--slower' && !a.startsWith('--runs='))
   let recording = name == 'throughput' && rest.includes('--recording')
   let definition
   let rounds = 3
@@ -73,6 +81,8 @@ export let main = async (args = Deno.args): Promise<number> => {
   }
   let current = await run(definition, {
     ...options(name, action, rounds),
+    runs,
+    slower,
     coverage: recording ? 'subset' : 'exact',
     output: recording
       ? 'bench/apply-recording.results.json'
@@ -83,7 +93,17 @@ export let main = async (args = Deno.args): Promise<number> => {
   console.log(`${name}: ${current.verdict}; load ${current.load.join(', ')}`)
   return 0
 }
-let options = (name: string, action: string, rounds: number): Options => {
+/** The least slack a bench is banked with: day-to-day drift on this box that
+ * the runs banking it cannot see. Each bench's own spread between those runs
+ * may ask for more (@yaks/benchmark `baseline`). */
+export let FLOOR = .1
+
+let options = (
+  name: string,
+  action: string,
+  rounds: number,
+  floor = FLOOR,
+): Options => {
   let mode = action == 'ratchet' ? 'accept' : action
   if (!['run', 'check', 'accept'].includes(mode)) {
     throw new Error(`Unknown action: ${action}`)
@@ -93,7 +113,7 @@ let options = (name: string, action: string, rounds: number): Options => {
     rounds,
     output: `bench/${name}.results.json`,
     baseline: `bench/${name}.baseline.json`,
-    tolerance: mode == 'accept' ? name == 'throughput' ? .2 : .25 : undefined,
+    tolerance: mode == 'accept' ? floor : undefined,
   }
 }
 if (import.meta.main) {
@@ -103,7 +123,8 @@ if (import.meta.main) {
     if (e instanceof Regressed) {
       for (let b of e.result.regressions) {
         console.error(
-          `REGRESSION ${b.name}: ${b.baseline} → ${b.current} ${b.unit}`,
+          `REGRESSION ${b.name}: ${b.baseline} → ${b.current} ${b.unit}, ` +
+            `over its limit of ${b.limit}`,
         )
       }
     }

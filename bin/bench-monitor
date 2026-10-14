@@ -1,0 +1,19 @@
+#!/bin/sh
+# Run the box's bench suites on their own and report a slower one to the
+# tracker (bench/monitor.ts). Cron runs it from the main checkout:
+#
+#   23 2 * * *    bin/bench-monitor              every suite, once a day
+#   */15 * * * *  bin/bench-monitor --restarted  pages, once after a restart
+#
+# each appending to ~/.tasks-bench.log, beside backup's and tidy's logs.
+#
+# Bounded: a run that hangs must not stack under the next one. Not niced: a
+# measurement taken at low priority measures the box's other work.
+set -u
+export PATH="$HOME/.deno/bin:/home/linuxbrew/.linuxbrew/bin:/usr/local/bin:/usr/bin:/bin"
+# systemctl --user, which `--restarted` asks for the live web unit, needs the
+# user manager's address, which cron does not give.
+export XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"
+cd "$(dirname "$0")/.." || exit 1
+exec timeout -k 30 "${YAK_BENCH_TIMEOUT:-7200}" \
+  deno run -A bench/monitor.ts "$@"

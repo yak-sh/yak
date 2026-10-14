@@ -30,7 +30,10 @@ for (let registration of standalone) {
       }),
       reporters: () => [],
       files: {
-        read: (path: string) => Promise.resolve(stored.get(path)!),
+        read: (path: string) =>
+          stored.has(path)
+            ? Promise.resolve(stored.get(path)!)
+            : Promise.reject(new Deno.errors.NotFound(path)),
         write: (path: string, value: unknown) => {
           stored.set(path, JSON.stringify(value))
           return Promise.resolve()

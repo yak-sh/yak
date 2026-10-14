@@ -127,6 +127,16 @@ a baseline only when explicitly requested, with an explicit tolerance. Commit
 and review that file. A missing or malformed baseline fails a check before any
 work runs. A check never changes the baseline or overrides its tolerance.
 
+A baseline only moves toward better. `accept` banks a bench's new median only
+where it beats the banked one; `slower: true` banks a worse one, which is a
+decision about the product, not a measurement. A baseline banked on another
+runtime, CPU or workload version is no reference, and an exact acceptance banks
+the suite as measured. With `runs: n`, acceptance measures the suite n times
+over and banks each bench's best median with a **slack** of its own: `NOISE` (2)
+times the `spread()` of its n medians, never under the explicit tolerance and
+never over `CAP` (0.95). A check holds each bench to its own slack, else the
+baseline's tolerance, and each regression carries the `limit()` it passed.
+
 ```ts
 import { Regressed, run } from '@yaks/benchmark'
 import { equal, ok, throws } from '@yaks/testing'
@@ -192,7 +202,8 @@ try {
 Compatibility includes suite, metric, workload version, runtime, CPU, bench
 names, units, directions and resolution. Equality at the tolerance boundary
 passes. Change the workload version when the corpus or timed boundary changes.
-`baseline()` and `compare()` expose the same ratchet as pure functions.
+`baseline()`, `compare()`, `limit()` and `spread()` expose the same ratchet as
+pure functions.
 
 A bench's optional **resolution** declares its sample precision in the bench's
 unit. It must be finite and positive. The ratchet rounds the tolerance boundary
@@ -303,7 +314,7 @@ try {
 | Subpath  | Exports                                                                                                                                                                                                                                         | Purpose                                            |
 | -------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------- |
 | `.`      | `bench`, `run`, `Regressed`                                                                                                                                                                                                                     | Timed callbacks and JSON runner.                   |
-| `.`      | `median`, `baseline`, `compare`, `Coverage`                                                                                                                                                                                                     | Pure aggregation and ratchet.                      |
+| `.`      | `median`, `baseline`, `compare`, `limit`, `spread`, `Coverage`                                                                                                                                                                                  | Pure aggregation and ratchet.                      |
 | `.`      | `configure`, `host`                                                                                                                                                                                                                             | Process reporter factory and current host context. |
 | `.`      | `Bench`, `TimedBench`, `Iteration`, `TimeUnit`, `Suite`, `CollectedSuite`, `Workload`, `Direction`, `Sample`, `Samples`, `Round`, `Result`, `Run`, `Baseline`, `Regression`, `Host`, `Reporter`, `ReportedRun`, `Reporters`, `Options`, `Files` | Authoring, result, host and effect-boundary types. |
 | `./deno` | `extract`, `DenoReport`                                                                                                                                                                                                                         | Deno JSON import with provenance.                  |

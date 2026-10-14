@@ -3,6 +3,7 @@
 import { type CollectedSuite, host, type Samples } from '@yaks/benchmark'
 import { type DenoReport, extract } from '@yaks/benchmark/deno'
 import { RELAY_ENTITIES } from './names.ts'
+import { suite as pages } from './pages.ts'
 
 let deno = (
   name: string,
@@ -141,6 +142,7 @@ export let standalone: Registration[] = [
     ),
     'us/value',
   ),
+  { baseline: 'bench/pages.baseline.json', suite: pages },
 ]
 
 /** A bench file remains a convenient entry point for the shared CLI. */

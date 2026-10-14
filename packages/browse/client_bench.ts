@@ -1,12 +1,20 @@
 // Read-path baselines: the pure half that runs on every ws message.
 import { rows } from './client.ts'
 import { matchQuery, parseQuery } from './query.ts'
-import { type Change, type Snapshot } from './types.ts'
+import { type Change, learn, type Snapshot } from './types.ts'
+import { docs as kernel } from '@yaks/kernel/vocab'
+import { docs as id } from '@yaks/id/vocab'
+import { docs as doc } from '@yaks/doc/vocab'
+import { docs as task } from '@yaks/task/vocab'
+import { docs as project } from '@yaks/project/vocab'
+import { docs as session } from '@yaks/session/vocab'
 import { standaloneMain } from '../../bench/standalone.ts'
 
 if (import.meta.main) {
   await standaloneMain('web-client')
 } else {
+  // The words a page learns from its server's /vocab before it reads a query.
+  learn([kernel, id, doc, task, project, session].flatMap((d) => d ?? []))
   // Synthetic 2k-task snapshot, one session holding a handful of claims.
   let S = crypto.randomUUID()
   let changes: Change[] = [
