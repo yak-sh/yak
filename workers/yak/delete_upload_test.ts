@@ -1,77 +1,81 @@
-// Deleting an upload, through the whole kernel (probe.ts `kernel`): a page
-// deletes the row at the upload's eid and the bytes leave the bucket with it,
-// unless a row the app keeps still names them. A representation's URL
-// outlives the bytes (@yaks/blob), so it answering 404 is the bucket's word
-// that they are gone.
+// Deleting an upload: a page deletes the row at the upload's eid, and the
+// bytes leave the app's bucket with it, unless a row the app keeps still
+// names them. Read straight off the bucket the platform in memory keeps.
 import { test } from '@yaks/testing'
-import { assert, assertEquals } from '@std/assert'
-import { connector, kernel, seed, signIn, unique } from './probe.ts'
+import { assertEquals } from '@std/assert'
+import * as apps from './apps.ts'
+import { blobPrefix } from './blob-key.ts'
+import { r2Objects } from './lib/objects.ts'
+import { ADA, as, platform, seeded, visit } from './serving-probe.ts'
 
 type File = { eid: string; url: string }
 
 test('deleting an upload deletes its bytes, unless a row still names them', async () => {
-  let k = await kernel()
-  let slug = unique('album')
-  let owner = await seed(k, [{ slug, apps: ['photos'] }])
-  await connector(k, owner.cookie).tool('app_set', {
-    space: slug,
-    app: 'photos',
-    access: 'open',
-  })
-  let stranger = await signIn(k)
-  let host = `${slug}.yaks.app`
-  let as = (cookie: string) => {
+  using scenario = platform()
+  let { env } = scenario
+  let { space, app } = await seeded(env, 'open')
+  let held = (sha: string) =>
+    r2Objects(env.BLOBS).has(blobPrefix(space, app) + sha)
+  let person = async (eid: string) => {
+    let cookie = await as(eid)
     let send = (path: string, body: BodyInit, type: string) =>
-      k.at(host, `/photos/api/${path}`, {
-        method: 'POST',
-        headers: { cookie, 'content-type': type },
-        body,
-      })
+      apps.fetch(
+        visit(`/cookbook/api/${path}`, {
+          method: 'POST',
+          headers: { cookie, 'content-type': type },
+          body,
+        }),
+        env,
+      )
     return {
       upload: async (text: string) =>
         await (await send('blob', text, 'text/plain')).json() as File,
-      apply: (bundles: unknown[]) =>
-        send('apply', JSON.stringify(bundles), 'application/json'),
+      drop: async (eid: string) =>
+        (await send(
+          'apply',
+          JSON.stringify([{ entity: { eid }, $delete: true }]),
+          'application/json',
+        )).status,
+      apply: async (bundles: unknown[]) =>
+        (await send('apply', JSON.stringify(bundles), 'application/json'))
+          .status,
       status: async (url: string) => {
-        let res = await k.at(host, url, { headers: { cookie } })
+        let res = await apps.fetch(visit(url, { headers: { cookie } }), env)
         await res.body?.cancel()
         return res.status
       },
     }
   }
-  let mine = as(owner.cookie), theirs = as(stranger.cookie)
-  let drop = (eid: string) => [{ entity: { eid }, $delete: true }]
-  try {
-    let kept = await mine.upload('the cake')
-    let gone = await theirs.upload('their cake')
+  let ada = await person(ADA)
+  let stranger = await person('b0000000-0000-4000-8000-0000000000b0')
 
-    // On an open app a stranger deletes only what they uploaded.
-    assertEquals((await theirs.apply(drop(kept.eid))).status, 403)
-    assertEquals((await theirs.apply(drop(gone.eid))).status, 200)
-    await k.settled?.()
-    assertEquals(await mine.status(kept.url), 200)
-    assertEquals(await mine.status(gone.url), 404)
-    assertEquals(await mine.status(`/photos/api/blob/${gone.eid}`), 404)
+  let kept = await ada.upload('the cake')
+  let gone = await stranger.upload('their cake')
+  // On an open app a stranger deletes only what they uploaded.
+  assertEquals(await stranger.drop(kept.eid), 403)
+  assertEquals(await stranger.drop(gone.eid), 200)
+  await scenario.settled()
+  assertEquals(await held(kept.eid), true)
+  assertEquals(await held(gone.eid), false)
+  assertEquals(await ada.status(gone.url), 404)
+  assertEquals(await ada.status(`/cookbook/api/blob/${gone.eid}`), 404)
 
-    // A row naming the bytes keeps them past their upload's row.
-    let named = await mine.upload('a generated cake')
-    let use = await mine.apply([{ attachment: { artifact: named.eid } }])
-    assertEquals(use.status, 200)
-    assertEquals((await mine.apply(drop(named.eid))).status, 200)
-    // An owner deletes anyone's.
-    assertEquals((await mine.apply(drop(kept.eid))).status, 200)
-    await k.settled?.()
-    assertEquals(await mine.status(named.url), 200)
-    assertEquals(await mine.status(kept.url), 404)
+  // An attachment naming the bytes keeps them past their upload's row.
+  let named = await ada.upload('a generated cake')
+  assertEquals(await ada.apply([{ attachment: { artifact: named.eid } }]), 200)
+  assertEquals(await ada.drop(named.eid), 200)
+  // An owner deletes anyone's.
+  assertEquals(await ada.drop(kept.eid), 200)
+  await scenario.settled()
+  assertEquals(await held(named.eid), true)
+  assertEquals(await held(kept.eid), false)
 
-    // The same bytes sent again are stored again.
-    assertEquals((await mine.upload('the cake')).url, kept.url)
-    assertEquals(await mine.status(kept.url), 200)
-
-    // A URL left over from a deleted upload is no platform bug.
-    await k.flushReports?.()
-    assert(!JSON.stringify(k.reported ?? []).includes('missing blob'))
-  } finally {
-    await k.stop()
-  }
+  // Bytes nothing names are never served, wherever a copy is left: in a
+  // cache, or in the bucket from before deleting reached it.
+  let key = blobPrefix(space, app) + kept.eid
+  await r2Objects(env.BLOBS).put(key, new TextEncoder().encode('the cake'))
+  assertEquals(await ada.status(kept.url), 404)
+  // …until the same bytes are sent again, and named again.
+  assertEquals((await ada.upload('the cake')).url, kept.url)
+  assertEquals(await ada.status(kept.url), 200)
 })

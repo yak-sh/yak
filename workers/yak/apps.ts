@@ -1264,7 +1264,13 @@ let gave = async (
       },
     })
   }
-  let [found] = await graph.query(`.entity.eid=${eid}`) as {
+  // A representation outlives a deleted upload (@yaks/blob never deletes
+  // one) and Files may still hold the bytes in its cache, so the same read
+  // asks whether a row still names them, and a deleted upload stops here.
+  let rows = await graph.query(
+    `.entity.eid=${eid} .representation|${naming(sha)}`,
+  ) as {
+    entity: { eid: string }
     representation?: {
       scope: string
       address: string
@@ -1272,10 +1278,10 @@ let gave = async (
       name?: string
     }
   }[]
-  let rep = found?.representation
+  let rep = rows.find((r) => r.entity.eid == eid)?.representation
   if (
     !rep || rep.scope != app.eid || rep.address != sha ||
-    !represents(eid, rep)
+    !represents(eid, rep) || !rows.some((r) => r.entity.eid != eid)
   ) return json(404, 'no_such_file')
   let response: Served = {
     mime: rep.media_type,
@@ -1299,16 +1305,11 @@ let gave = async (
     )
     if (bytes.status == 404) {
       await bytes.body?.cancel()
-      // A representation outlives its bytes, since its URL may be cached
-      // (@yaks/blob): bytes nothing names went with their upload
-      // (`delete_upload`), and only bytes a row still names were lost.
-      if ((await graph.query(naming(sha))).length) {
-        caught(new Error(`missing blob ${sha}`), {
-          request: 'GET /api/blob',
-          space: space.slug,
-          app: app.slug,
-        })
-      }
+      caught(new Error(`missing blob ${sha}`), {
+        request: 'GET /api/blob',
+        space: space.slug,
+        app: app.slug,
+      })
       return json(404, 'no_such_file')
     }
     if (![200, 206, 304, 416].includes(bytes.status)) {
