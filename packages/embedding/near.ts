@@ -40,7 +40,7 @@ import {
 } from '@yaks/sql'
 import { TABLE } from './ddl.ts'
 import { hold, ranked } from './held.ts'
-import { candidates } from './native.ts'
+import { admitted, candidates } from './native.ts'
 import { cosine, floats, unpack } from './vector.ts'
 
 /**
@@ -91,7 +91,8 @@ let vectors = (
         from: table('tombstone', 't'),
         where: eq(col('entity', 't'), e('owner')),
       }))),
-      // The pool was drawn from what the screen admits already.
+      // The pool was drawn from what the screen admits already. Without one,
+      // every vector is read, so the screen is read whole once.
       ...(within && !pool ? [among(e('owner'), within)] : []),
     ),
   }))
@@ -114,7 +115,7 @@ export let vectorOf = (
     where: and(
       eq(o('eid'), val(entity)),
       eq(e('model'), val(model)),
-      ...within ? [among(e('owner'), within)] : [],
+      ...within ? [admitted(within, e('owner'))] : [],
     ),
   }))[0]
   return row ? unpack(row.vec as Uint8Array) : null
