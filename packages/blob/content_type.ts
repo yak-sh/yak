@@ -22,7 +22,21 @@ let textual = (mime: string) =>
     'application/vnd.apple.mpegurl',
   ].includes(mime)
 
-let utf8 = (bytes: Uint8Array) => {
+/**
+ * Whether bytes are text: UTF-8 with no control character but tab, line feed
+ * and carriage return.
+ *
+ * ```ts
+ * import { assertEquals } from '@std/assert'
+ * import { utf8 } from '@yaks/blob'
+ *
+ * let bytes = (s: string) => new TextEncoder().encode(s)
+ * assertEquals(utf8(bytes('<h1>Café</h1>\n')), true)
+ * assertEquals(utf8(new Uint8Array([0x89, 0x50, 0x4e, 0x47])), false)
+ * assertEquals(utf8(bytes('a\x00b')), false)
+ * ```
+ */
+export let utf8 = (bytes: Uint8Array) => {
   try {
     let text = new TextDecoder('utf-8', { fatal: true }).decode(bytes)
     // deno-lint-ignore no-control-regex

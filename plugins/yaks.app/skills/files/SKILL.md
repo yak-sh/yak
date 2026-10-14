@@ -25,6 +25,13 @@ previous files, vocabulary and worker serving together.
 bytes, then the live version and whether the draft differs from it: the number
 `app_deploy` takes as `base`.
 
+**Coming back to an app, read it in one call**: `app_files(app, op: 'read')`
+answers every text file in it, each under its path and SHA-256, up to 64 KB in
+all, and names the live version `app_deploy` takes as `base`. `paths: [...]`
+reads just those files. The answer names each file it left out and why: not
+text, no such file, or past the 64 KB. `paths` reads those in another call, and
+`path` reads one whole, as its text alone.
+
 **Every write reports what was stored**, so a file transcribed by hand is
 checked in the call that made it before the app serves it:
 

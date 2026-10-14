@@ -66,6 +66,7 @@ import { mode } from '@yaks/member'
 import type { PropSchema, VocabDoc } from '@yaks/vocab'
 import type { Props, Sheet } from './csv.ts'
 import { MAX, mimeOf, prefixOf, warm } from './files.ts'
+import { perusal, peruse } from './files_read.ts'
 import { drawn, ICON_SVG } from './raster.ts'
 import { failedScript } from './asset_url.ts'
 import { told as notify } from './stream.ts'
@@ -2865,6 +2866,13 @@ let OURS: Row[] = [
             'unless files, content or base64 supplies a write',
         },
         path: str('path relative to the app root, e.g. index.html'),
+        paths: {
+          type: 'array',
+          items: { type: 'string' },
+          description: 'for read: several paths answered in one call, each ' +
+            'with its SHA-256. With neither path nor paths, read answers ' +
+            'every text file in the app',
+        },
         content: str('the file text, for write'),
         base64: str(
           'the file bytes, base64-encoded, instead of content: for a file ' +
@@ -2966,7 +2974,10 @@ let OURS: Row[] = [
           },
         }
       }
-      if (op == 'read') {
+      // One path is that file whole, as its text. Several, or none, is the
+      // app read back in one call (files_read.ts): what an assistant coming
+      // back to an app needs before it changes anything (T-124200).
+      if (op == 'read' && args.path != null && args.paths == null) {
         // One read, not a head and then a read: each is a round trip.
         let bytes = await view.read(
           fileKey(space, edit, text(args.path, 'path')),
@@ -2976,6 +2987,28 @@ let OURS: Row[] = [
           text: decoded(bytes),
           space,
           value: { version: app.version ?? 0 },
+        }
+      }
+      if (op == 'read') {
+        let named = [...list(args.path, 'path'), ...list(args.paths, 'paths')]
+          .map((path) => fileKey(space, edit, path).slice(prefix.length))
+        let paths = named.length
+          ? named
+          : own((await view.list(prefix)).map((k) => k.slice(prefix.length)))
+        let read = await peruse(paths, (path) => view.open(prefix + path))
+        let version = app.version ?? 0
+        return {
+          text: perusal(read, version),
+          space,
+          value: {
+            files: read.files.map(({ path, sha, size }) => ({
+              path,
+              sha,
+              size,
+            })),
+            unread: read.unread,
+            version,
+          },
         }
       }
       if (op == 'delete') {

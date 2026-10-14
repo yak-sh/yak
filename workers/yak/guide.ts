@@ -88,7 +88,8 @@ in a package.json beside index.html, and app_deploy compiles them. Four steps:
 4. Give the person the URL.
 
 app_list is what they already have — every app, its address and what is
-broken in it.
+broken in it. Before changing one, read it back in one call:
+app_files(app, op: 'read') answers every text file in it.
 
 Open pages hear a newer release as a cancelable window yak-release event,
 with detail {version, reload}, where reload is 'optional' or 'required'. The

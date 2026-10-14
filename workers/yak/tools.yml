@@ -121,7 +121,12 @@ app_files:
     and returns its integrity hash. Pass op explicitly unless writing. list
     says each path with its SHA-256, the live version, and whether the draft
     differs from it (as data too: files: [{path, sha}], version and
-    unreleased); read returns the text; delete confirms the path. Replaced or deleted bytes are kept for 30 days.
+    unreleased); read with path returns that file's text, and with paths
+    several files, or with neither every text file in the app, in one call:
+    each under its path and SHA-256, up to 64 KB in all, naming each file
+    left out and why (as data too: files: [{path, sha, size}], unread:
+    [{path, why}] and version). delete confirms the path. Replaced or
+    deleted bytes are kept for 30 days.
     To undo any write, patch, fetch or delete: op: history with path lists
     them newest first (sha256, size, when, by whom), and op: restore puts
     one back, the newest or the one sha or at names; a restore is itself a
