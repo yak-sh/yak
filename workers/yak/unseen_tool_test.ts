@@ -7,6 +7,7 @@ import { KERNEL, metaOf } from './meta.ts'
 import { ADA, platform, seeded } from './serving-probe.ts'
 import { call } from './tools.ts'
 import { brokenIn, noted, serve } from './unseen.ts'
+import type { Who } from './session.ts'
 
 test('app_errors lists a break whose stored stack is null', async () => {
   using p = platform()
@@ -103,7 +104,7 @@ test('brokenIn says each break plainly and leaves it news', async () => {
   using p = platform()
   let { env } = p
   let { space, app } = await seeded(env)
-  let ada = { person: ADA, role: 'owner' }
+  let ada: Who = { person: ADA, role: 'owner' }
   let at = { env, space, app }
   for (let i = 0; i < 3; i++) {
     await noted({ request: 'page /cookbook/', message: 'boom', version: 1 }, at)
