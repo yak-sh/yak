@@ -7,7 +7,6 @@
 // Wire object (stream.ts), which holds a person's open agent stream, and the
 // Builder (build.ts), which holds a space's build conversation.
 import { waitUntil, WorkerEntrypoint } from 'cloudflare:workers'
-import { Sandbox as Workbench } from '@cloudflare/sandbox'
 import type { Caller } from '@yaks/egress'
 import { Builder as Built } from './build.ts'
 import { Store as Stored } from './graph.ts'
@@ -49,11 +48,18 @@ export let Builder = instrument(Built)
 // interception's certificate authority in the container's trust store itself.
 // The class keeps the SDK's name, since the Durable Object binding and its
 // migration are keyed by it.
-export { ContainerProxy } from '@cloudflare/sandbox'
-export class Sandbox extends Workbench<Env> {
+//
+// The SDK is awaited, not imported (T-37974). Its RPC library makes an Error
+// as it loads, and an Error made while the bundle's top-level code is on the
+// stack has V8 collect source positions for that whole function: a second
+// parse of the 3 MB script, about 80 ms of every isolate's start. Awaited, it
+// loads in a microtask with none of the bundle's top level beneath it.
+let sdk = await import('@cloudflare/sandbox')
+export let ContainerProxy = sdk.ContainerProxy
+export class Sandbox extends sdk.Sandbox<Env> {
   override enableInternet = false
   override interceptHttps = true
-  constructor(...made: ConstructorParameters<typeof Workbench<Env>>) {
+  constructor(...made: ConstructorParameters<typeof sdk.Sandbox<Env>>) {
     super(...made)
     this.allowedHosts = egress(made[1])
   }
