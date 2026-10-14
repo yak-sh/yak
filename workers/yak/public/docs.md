@@ -127,11 +127,12 @@ and the view protocol.
 An app asks a model with rows, not a key: a page writes an `entry` in a
 transcript (any entity wearing `session`) with `using { model, instructions }`,
 the app's own store asks the model, and the reply lands in the same transcript
-for any page subscribed to see. `questions` beside the entry are answered by Jev
-as `answer` rows (a choice, a yes-or-no, a score), and a command marked
-`"model": true` is one the model may call. One call answered at once is a post
-to `./api/ai/run`, or `env.AI.run` in a worker. Every call spends the owner's
-monthly account budget, weighed in dollars by the model's price.
+for any page subscribed to see. `questions` beside the entry are answered by the
+`typesafe/jev` model as `answer` rows (a choice, a yes-or-no, a score), and a
+command marked `"model": true` is one the model may call. One call answered at
+once is a post to `./api/ai/run`, or `env.AI.run` in a worker. Every call
+spends the owner's monthly account budget, weighed in dollars by the model's
+price.
 
 Deeper: <https://yaks.app/docs/models.md> — the rows that ask and the rows that
 come back, typed questions, one call at once, who may ask, and the models and
