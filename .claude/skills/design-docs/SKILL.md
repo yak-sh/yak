@@ -164,4 +164,13 @@ anything, put it on the design, and tell the owner the gist with the components
 written out, where you disagree, and the questions that need him. The rest
 stays in the design.
 
+The drafter takes its brief as the requirement. A shape you sketch there
+("names are rows keyed by stable ids") comes back filled in, with new words
+coined to fit it, and it never looks for the package that already owns the
+idea. So the brief carries the owner's words and pointers to what is, not
+your shape. Reading the draft, put every new component beside the vocabulary
+already declared (`grep -l '"component": true' packages/*/vocab.json`) and the
+packages that own the idea; a word the draft added beside an existing one is
+the first thing to cut.
+
 When this skill is wrong or missing something, fix it in the same change.
