@@ -65,7 +65,7 @@ import { withKinds } from './kinds.ts'
 import { mode } from '@yaks/member'
 import type { PropSchema, VocabDoc } from '@yaks/vocab'
 import type { Props, Sheet } from './csv.ts'
-import { MAX, mimeOf, prefixOf } from './files.ts'
+import { MAX, mimeOf, prefixOf, warm } from './files.ts'
 import { drawn, ICON_SVG } from './raster.ts'
 import { failedScript } from './asset_url.ts'
 import { told as notify } from './stream.ts'
@@ -298,7 +298,7 @@ import {
 import { read } from '@yaks/yaml'
 import { viewsTools } from './views.ts'
 import { connectionTools } from './connections.ts'
-import { caught } from './defects.ts'
+import { background, caught } from './defects.ts'
 
 // What a tool IS, and the little kit for saying one, live in tool.ts — below
 // this module, so a domain can say a row without importing the
@@ -1289,6 +1289,13 @@ let published = async (
         caught(e, { tool: 'app_deploy', space: space.slug, app: app.slug })
       } catch { /* the release is already live */ }
     })
+  // The view that follows a release is the person opening what they changed:
+  // its files are asked for once now, so that view finds them cached
+  // (files.ts `warm`). Nobody waits on it.
+  background(
+    after(() => warm(ctx.env, app.eid, release, Object.keys(pinned)))
+      .then(() => {}),
+  )
   let [, , closed = 0] = await Promise.all([
     releaseNotice(store, version, {
       tool: 'app_deploy',

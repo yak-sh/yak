@@ -28,7 +28,7 @@
 import { apex, spaceHost, url as hostUrl } from './host.ts'
 import { r2Objects } from './lib/objects.ts'
 import { BUILD, joining, NOBODY, NOT_A_WRITER, posting } from './build.ts'
-import { at as cachedAt, browserImmutable } from './cache.ts'
+import { browserImmutable } from './cache.ts'
 import {
   apiOut,
   assetMaps,
@@ -37,7 +37,7 @@ import {
   releaseId,
 } from './asset_url.ts'
 import * as files from './files.ts'
-import { keyed, PREFIX, prefixOf, VERSION } from './files.ts'
+import { inside, keyed, prefixOf, VERSION } from './files.ts'
 import { blobPrefix } from './blob-key.ts'
 import {
   type App,
@@ -114,7 +114,6 @@ import {
   whoIs,
 } from './session.ts'
 import { asking } from './identity.ts'
-import { seedy } from './seed.ts'
 import { nameOf } from './signin.ts'
 import { written } from './reach.ts'
 import { borrowed, queried, sources, vocabulary } from './page-graph.ts'
@@ -597,38 +596,6 @@ export let manifesting = (app: App, at: string) => ({
   })),
 })
 
-// The files that are the app's platform manifest rather than its page: the
-// server code the dispatch namespace runs (dispatch.ts), the manifest a
-// deploy reads, the data it seeds the store with (tools.ts, seed.ts), and
-// the notes its person left beside it under either name (standing.ts).
-// Those are the app's inside — the platform reads them out of the blob store,
-// and a member reads them back through `app_files` — so the door that serves
-// the app's pages does not serve them to the web. Before this, `GET
-// /weather/worker.js` answered the whole server source to anyone with the link
-// (C-32869 item 3).
-//
-// The test is on the decoded key, not the path, because `/%77orker.js` names
-// the same file.
-let MANIFEST = new Set([
-  '/worker.js',
-  '/worker.ts',
-  '/wrangler.jsonc',
-  '/wrangler.json',
-  // What app_deploy installs from and pins (esbuild.ts).
-  '/package.json',
-  '/package-lock.json',
-  // Either format of a declaration (tools.ts `spelled`, M-34605): a `.yml`
-  // is the app's inside exactly as much as the `.json` is.
-  '/vocab.json',
-  '/vocab.yml',
-  // The notes file (standing.ts `NOTES`). Written out rather than imported:
-  // standing.ts reaches this module through declared.ts, and a set built at
-  // module top time cannot wait on a cycle.
-  '/NOTES.md',
-])
-
-let inside = (path: string) => MANIFEST.has(path) || seedy(path.slice(1))
-
 // What the browser may keep, and for how long. A new release moves the source
 // pointer, so nothing here may be held past a revalidation: `no-cache` is
 // "ask every time", not "do not store", and with an ETag beside it that ask
@@ -658,35 +625,6 @@ let pageTag = async (page: string) =>
 let unchanged = (req: Request, etag: string) =>
   (req.headers.get('if-none-match') ?? '').split(',')
     .some((t) => t.trim().replace(/^W\//, '') == etag.replace(/^W\//, ''))
-
-// An app's bytes, through the cache (cache.ts): `Files` is a second entrypoint
-// with Cloudflare's cache in front of it, addressed by the app's eid and this
-// path, so a warm edge answers without the bucket being touched. It is the
-// same call for a private app as for a public one — what is cached is the
-// file, and whether this person may have it was decided by `served()` before
-// we got here.
-//
-// Where the hop cannot be taken, `files.door` reads the same bytes in-process.
-let bytes = (
-  env: Env,
-  app: App,
-  prefix: string,
-  path: string,
-  range?: string | null,
-  method = 'GET',
-  source = app.source ?? '',
-) => {
-  let req = new Request(cachedAt(app.eid, path, source), {
-    method,
-    headers: { [PREFIX]: prefix, ...(range ? { range } : {}) },
-  })
-  // Workers Caching strips Range on a miss and requires a full 200 response.
-  // A seek or HEAD goes to the same file door without that cache; ordinary
-  // GETs still fill and read the shared full-file cache.
-  return range || method == 'HEAD'
-    ? files.fetch(req, env)
-    : files.door(env).fetch(req)
-}
 
 let media = async (
   req: Request,
@@ -786,7 +724,16 @@ let asset = async (
   let range = req.method == 'GET' ? req.headers.get('range') : null
   let got = await c.time(
     'bytes',
-    () => bytes(env, app, prefix, path, range, req.method),
+    () =>
+      files.fileBytes(
+        env,
+        app.eid,
+        prefix,
+        path,
+        app.source ?? '',
+        range,
+        req.method,
+      ),
     // Whether that trip stopped at the edge or went on to the bucket, in the
     // same Server-Timing entry as the time it took: a slow `bytes` stage and a
     // fast one are the same call, and this is the word for which happened.
@@ -802,7 +749,7 @@ let asset = async (
       req,
       got,
       keeping(app),
-      () => bytes(env, app, prefix, path),
+      () => files.fileBytes(env, app.eid, prefix, path, app.source ?? ''),
     ) ?? nothingHere(env)
   }
   // A sandboxed page is woven its person's saved keys (installed.ts
@@ -871,7 +818,8 @@ let versionedAsset = async (
   let range = req.method == 'GET' ? req.headers.get('range') : null
   let got = await c.time(
     'bytes',
-    () => bytes(env, app, source, path, range, req.method, source),
+    () =>
+      files.fileBytes(env, app.eid, source, path, source, range, req.method),
     (r) => r.headers.get('cf-cache-status'),
   )
   if (![200, 206, 416].includes(got.status)) {
@@ -886,7 +834,7 @@ let versionedAsset = async (
     req,
     got,
     browserImmutable,
-    () => bytes(env, app, source, path, null, 'GET', source),
+    () => files.fileBytes(env, app.eid, source, path, source),
   ) ?? json(404, 'no_such_file')
 }
 

@@ -17,7 +17,8 @@
 // has to be this Worker.
 import { r2Objects, r2RawObjects } from './lib/objects.ts'
 import { mimeOf, type Objects, rangedOpen } from '@yaks/blob'
-import { blobAt, immutable } from './cache.ts'
+import { at, blobAt, immutable } from './cache.ts'
+import { seedy } from './seed.ts'
 import { releaseFiles } from './release.ts'
 import type { Env, Fetcher } from './env.ts'
 import { BUILT } from './versions.ts'
@@ -105,6 +106,100 @@ export let door = (env: Env): Fetcher => ({
     }
   },
 })
+
+// The files that are the app's platform manifest rather than its page: the
+// server code the dispatch namespace runs (dispatch.ts), the manifest a
+// deploy reads, the data it seeds the store with (tools.ts, seed.ts), and
+// the notes its person left beside it under either name (standing.ts).
+// Those are the app's inside — the platform reads them out of the blob store,
+// and a member reads them back through `app_files` — so the door that serves
+// the app's pages does not serve them to the web. Before this, `GET
+// /weather/worker.js` answered the whole server source to anyone with the link
+// (C-32869 item 3).
+//
+// The test is on the decoded key, not the path, because `/%77orker.js` names
+// the same file.
+let MANIFEST = new Set([
+  '/worker.js',
+  '/worker.ts',
+  '/wrangler.jsonc',
+  '/wrangler.json',
+  // What app_deploy installs from and pins (esbuild.ts).
+  '/package.json',
+  '/package-lock.json',
+  // Either format of a declaration (tools.ts `spelled`, M-34605): a `.yml`
+  // is the app's inside exactly as much as the `.json` is.
+  '/vocab.json',
+  '/vocab.yml',
+  // The notes file (standing.ts `NOTES`). Written out rather than imported:
+  // standing.ts reaches this module through declared.ts, and a set built at
+  // module top time cannot wait on a cycle.
+  '/NOTES.md',
+])
+
+export let inside = (path: string) => MANIFEST.has(path) || seedy(path.slice(1))
+
+// An app file's bytes, through the cache (cache.ts): `Files` is a second
+// entrypoint with Cloudflare's cache in front of it, addressed by the app's
+// eid, this path and its release, so a warm edge answers without the bucket
+// being touched. It is the same call for a private app as for a public one —
+// what is cached is the file, and whether this person may have it was decided
+// by the gateway before it asked.
+//
+// Workers Caching strips Range on a miss and requires a full 200 response.
+// A seek or HEAD goes to the same file door without that cache; ordinary
+// GETs still fill and read the shared full-file cache.
+export let fileBytes = (
+  env: Env,
+  eid: string,
+  prefix: string,
+  path: string,
+  source: string,
+  range?: string | null,
+  method = 'GET',
+) => {
+  let req = new Request(at(eid, path, source), {
+    method,
+    headers: { [PREFIX]: prefix, ...(range ? { range } : {}) },
+  })
+  return range || method == 'HEAD' ? fetch(req, env) : door(env).fetch(req)
+}
+
+// A release's first view comes moments after its deploy: the person opens
+// what they changed. Every address of a new release misses the cache, and a
+// miss goes the long way round (both tiers, this entrypoint, the bucket: most
+// of a second, T-124006). So the deploy asks for the release's files once, as
+// a view would, and the view finds them cached: pages first, at the address a
+// browser opens (`dir/` for `dir/index.html`), then the rest, WARMED of them
+// at most, a few at a time. Only where the cache is (`FILES`): in-process
+// there is nothing to fill.
+let WARMED = 64
+let AT_ONCE = 8
+export let warm = async (
+  env: Env,
+  eid: string,
+  source: string,
+  paths: string[],
+) => {
+  if (!env.FILES) return
+  let INDEX = 'index.html'
+  let page = (path: string) => path == INDEX || path.endsWith(`/${INDEX}`)
+  let address = (path: string) =>
+    new URL(path, 'https://files.invalid/').pathname
+  let asked = [
+    ...paths.filter(page).map((p) => address(p.slice(0, -INDEX.length))),
+    ...paths.filter((p) => !page(p)).map(address).filter((p) => !inside(p)),
+  ].slice(0, WARMED)
+  let next = 0
+  let run = async () => {
+    while (next < asked.length) {
+      let got = await fileBytes(env, eid, source, asked[next++], source)
+      // Read through, never held: the cache keeps what passes it whole.
+      await got.body?.pipeTo(new WritableStream())
+    }
+  }
+  await Promise.all(Array.from({ length: AT_ONCE }, run))
+}
 
 // The gateway calls this only after checking access and resolving the blob's
 // metadata. Range stays a request header: Workers Caching removes it on a
