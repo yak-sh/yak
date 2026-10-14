@@ -18,7 +18,7 @@ test('one-row Store query bills only its answer and lookups, cold and warm', asy
   }
 })
 
-test('directory routing reads one app rather than its space roster', async () => {
+test('directory routing reads its app and front page, not the space roster', async () => {
   let k = workerd()
   let res = await fetch(`${k.base}/__play_cost/?directory-query=1`)
   assertEquals(res.status, 200, await res.clone().text())
@@ -27,7 +27,7 @@ test('directory routing reads one app rather than its space roster', async () =>
   for (let [name, value] of Object.entries(report)) {
     assertEquals(value.cost.written, 0)
     assert(
-      value.cost.read <= (name == 'cold' ? 100 : 75),
+      value.cost.read <= (name == 'cold' ? 220 : 130),
       `${name}: ${value.cost.read} billed rows`,
     )
   }

@@ -18,9 +18,8 @@
 // space whose home app was just named answers its own hostname at once
 // rather than a TTL later. A write that goes around this door — the generic
 // graph tier aimed at (yak, platform) — is seen within the TTL like any
-// change made elsewhere. App rows select Store declarations, so each request
-// reads its space's app roster fresh and uses that one answer for every app it
-// serves. The cache is this part's own — no other module reads it.
+// change made elsewhere. App rows select Store declarations, so they are
+// always read fresh. The cache is this part's own — no other module reads it.
 // The meta space seeds itself on first touch (space `yak`, app `platform`),
 // written as bundles through the store's /apply, so the directory can describe
 // its own store.
@@ -1071,7 +1070,8 @@ let remote = (via: Fetcher): Part => ({
 // `now` makes every read of this client fresh (FRESH above). App rows are
 // always fresh: the app and the homes it borrows from must select declarations
 // written by one directory commit, even when two isolates hold old caches.
-// Address lookups select one app; roster consumers explicitly ask apps().
+// Address lookups select one app, routing the app and the front page;
+// roster consumers explicitly ask apps().
 //
 // A request asks once. The door, the reach it answers over and the tool itself
 // each ask who the caller is and where they sit, and within one request those
@@ -1130,12 +1130,29 @@ export let directory = (via: Fetcher | Part, now = false) => {
         .find((s) => s.slug != slug && s.slugs.includes(slug))
       return space ?? null
     },
-    // The app at this address, read with the rest of its space's apps: a
-    // request that asks next for the space's front page or an address an app
-    // has left (`home`, `former`) has its answer already (hops.ts `recall`),
-    // so a page view asks the directory about its apps once (T-124006).
-    app: async (space: Space, slug: string) =>
-      (await self.apps(space)).find((app) => app.slug == slug) ?? null,
+    app: async (space: Space, slug: string) => {
+      let row = await one(
+        `.app.space=${space.eid}&.app.slug=${slug}&${ABOUT}`,
+        true,
+      )
+      return row ? appOf(row) : null
+    },
+    // What routing a path asks (apps.ts): the app at its address and the
+    // space's front page, whose router may claim the path first. One read
+    // answers both, so a page view asks the directory about its apps once
+    // (T-124006), and it reads those two apps, never the space's roster
+    // (T-65908). With no address, the front page alone.
+    routing: async (space: Space, slug?: string | null) => {
+      let at = `.app.space=${space.eid}`
+      let which = slug
+        ? `((${at}&.app.slug=${slug})|(${at}&.home))`
+        : `${at}&.home`
+      let apps = (await query(`${which}&${ABOUT}`, true)).map(appOf)
+      return {
+        app: apps.find((app) => app.slug == slug) ?? null,
+        home: apps.find((app) => app.home && !app.trashed) ?? null,
+      }
+    },
     // An address the app has left, still pointing at it. A rename moves
     // `app.slug` and keeps the old address in the app's `former`, so the answer
     // is the app of this space that still answers to the address asked for —
@@ -1299,8 +1316,7 @@ export let directory = (via: Fetcher | Part, now = false) => {
     // stays on it so a restore puts the space back exactly as it was, and
     // until then the space is one with no front page — which is the ordinary
     // state and already has an answer everywhere.
-    home: async (space: Space) =>
-      (await self.apps(space)).find((app) => app.home && !app.trashed) ?? null,
+    home: async (space: Space) => (await self.routing(space)).home,
     // A person's membership row: the eid, so an invite can revise or remove
     // the one that stands, and the role, which is the same question asked
     // shorter.

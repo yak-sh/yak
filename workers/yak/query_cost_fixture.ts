@@ -208,6 +208,7 @@ export let directoryCost = async (db: Storage) => {
           },
           doc: { title: `App ${i}` },
           meter: { bytes: i },
+          ...(i == 20 ? { home: { first: '/recipes/*' } } : {}),
         })),
       ]),
     }),
@@ -251,8 +252,9 @@ export let directoryCost = async (db: Storage) => {
       let dir = directory({ fetch: door }, true)
       let account = await dir.space('cost')
       if (!account) throw new Error('missing space')
-      let selected = await dir.app(account, 'recipes')
-      if (selected?.slug != 'recipes') throw new Error('wrong app')
+      let { app, home } = await dir.routing(account, 'recipes')
+      if (app?.slug != 'recipes') throw new Error('wrong app')
+      if (home?.slug != 'other20') throw new Error('wrong front page')
       for (let i = 0; i < 100; i++) await Promise.resolve()
       requests[name] = {
         cost: current,

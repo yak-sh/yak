@@ -2342,20 +2342,20 @@ let saved = async (
 // this is that same rule again at the door, since the graph tier writes the
 // property too and a `/garden/*` an owner wrote in good faith already covers
 // `/garden/api/query`.
+//
+// `home` is the app wearing `home`, globs and all, as routing read it beside
+// the addressed app (directory.ts `routing`), and null for the spaces that
+// have no front page at all.
 let firstly = async (
   env: Env,
-  dir: ReturnType<typeof directory>,
   space: Space,
+  home: App | null,
   req: Request,
   who: Who,
   c: Clock,
 ) => {
   let path = new URL(req.url).pathname
   if (PLATFORM_PATHS.some((p) => covers(p, path))) return null
-  // Which app wears `home`, and its globs with it — one read, cached like
-  // every other directory read, and null for the spaces that have no front
-  // page at all.
-  let home = await c.time('home', () => dir.home(space))
   if (!home || !home.first.some((g) => covers(g, path))) return null
   // The app comes back beside the answer because the answer is the HOME app's
   // and the address is another app's: a page view is counted against whoever
@@ -2522,7 +2522,9 @@ let served = async (req: Request, env: Env, c: Clock): Promise<Response> => {
     if (!who.role) return quota
     await quota.body?.cancel()
   }
-  let app = r.app ? await c.time('app', () => dir.app(space!, r.app!)) : null
+  // The app at the address and the space's front page, in one read: every
+  // rung below that needs the front page (rung 1½, rung 3) has it already.
+  let { app, home } = await c.time('app', () => dir.routing(space!, r.app))
   // In the trash (erase.ts, T-34430): the address is held for it and answers
   // nothing while it waits. Not a 410 and not a redirect — to the web this is
   // an address with nothing at it, which is what a delete has always meant —
@@ -2569,9 +2571,8 @@ let served = async (req: Request, env: Env, c: Clock): Promise<Response> => {
   let path = r.path
   let front = !!app && app.home
   if (!app) {
-    // Which app is home is a directory read, so it happens here, where env
+    // Which app is home is a directory read, so it was read above, where env
     // is, and not in route.ts, which is pure (index.ts `aimed`, same reason).
-    let home = await c.time('home', () => dir.home(space!))
     // No front page at all — the ordinary state of a space, since being the
     // first app claims nothing (tools.ts `app_new`). Rung 4 at the bare
     // address, rung 5's 404 anywhere else: there is no home worker to be the
@@ -2702,7 +2703,7 @@ let served = async (req: Request, env: Env, c: Clock): Promise<Response> => {
   // Nor for a sandboxed page's own request: its token is its app's alone,
   // and the router would be acting as the person who holds it.
   if (!front && !bearing(req) && !paper && !webPath(path)) {
-    let early = await firstly(env, dir, space, req, who, c)
+    let early = await firstly(env, space, home, req, who, c)
     // The answer is the home app's, so it reports as the home app — and is
     // counted as the home app's page view — at the bare hostname, which is
     // where the home app is mounted.

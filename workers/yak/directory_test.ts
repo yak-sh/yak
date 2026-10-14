@@ -203,8 +203,7 @@ test('a release reaches consumer and home through stale isolate caches', async (
   await second.dir.apps(space)
   version = 2
   await tallying(new Map(), async () => {
-    let consumer = await first.dir.app(space, 'consumer')
-    let home = await first.another().home(space)
+    let { app: consumer, home } = await first.dir.routing(space, 'consumer')
     assertEquals([consumer?.declaration, home?.declaration], [
       'consumer-2',
       'home-2',
@@ -218,8 +217,9 @@ test('a release reaches consumer and home through stale isolate caches', async (
       'home-2',
     ])
   })
-  // One read per request answers both the app and the home app.
-  assertEquals(reads, [2, 2])
+  // Every app read reaches the directory: routing's one, then home's and the
+  // app's own.
+  assertEquals(reads, [2, 3])
 })
 
 // A comp is the platform holding one of its own spaces to no ceiling. It is a
