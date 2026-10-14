@@ -262,6 +262,9 @@ export type Role = 'owner' | 'editor' | 'viewer'
 /** A person's place in a space: the space, and what they are in it. */
 export type Seat = { space: Space; role: Role }
 
+/** One app a person is a guest of, and what the grant lets them do. */
+export type Granted = { space: Space; app: App; access: Role }
+
 /** A place one person holds or is offered: a seat in a space, a grant on one
  * app, or an invitation to either, not yet accepted, with when its latest
  * letter went. `on` is the space or app it is in. */
@@ -1086,6 +1089,23 @@ export let directory = (via: Fetcher | Part, now = false) => {
     headers: Record<string, string> = {},
   ): Promise<Bundle[]> =>
     writing(META_STORE, () => door.apply(mutation.entities, headers))
+  // What a filter on one person answers. A filter resolves an eid to an
+  // entity, so a person the meta store has never seen — someone who signed in
+  // before it kept a row — makes the question itself unanswerable: no row,
+  // nothing held. Nobody at all (an empty person, `member` below) holds
+  // nothing either. Both are asked at once, since `seated` is the first step
+  // of every signed-in call (mcp.ts `door`) and each read waited on in turn is
+  // a round trip under every tool; the answer for a person with no row is
+  // never read, and its refusal is nobody's to report.
+  let theirs = async (person: string, line: string, fresh?: boolean) => {
+    if (!person) return []
+    let asked = query(line, fresh)
+    if (!(await one(`.entity.eid=${person}`))) {
+      asked.catch(() => {})
+      return []
+    }
+    return await asked
+  }
   // Named, because two of the questions below are asked in terms of the
   // others: a person's own space is read, minted, and read back.
   let self = {
@@ -1442,24 +1462,10 @@ export let directory = (via: Fetcher | Part, now = false) => {
     // whether this person may address the platform's own store (agent.ts
     // `spoken`), which is a seat in `yak` like any other.
     seated: async (person: string, role?: Role): Promise<Seat[]> => {
-      // A filter resolves an eid to an entity, so a person the meta store has
-      // never seen — someone who signed in before it kept a row — makes the
-      // question itself unanswerable. No row, no memberships. Nobody at all
-      // (an empty person, `member` above) belongs to nothing either.
-      //
-      // Both are asked at once: this is the first step of every signed-in
-      // call (mcp.ts `door`), so each read waited on in turn is a round trip
-      // under every tool. The memberships of a person with no row are never
-      // read, and their refusal is nobody's to report.
-      if (!person) return []
-      let asked = query(
+      let members = await theirs(
+        person,
         `.member.person=${person}${role ? `&.member.role=${role}` : ''}`,
       )
-      if (!(await one(`.entity.eid=${person}`))) {
-        asked.catch(() => {})
-        return []
-      }
-      let members = await asked
       let held = new Map<string, Role>()
       for (let m of members) {
         if (m.member) held.set(idOf(m.member.space), m.member.role)
@@ -1471,6 +1477,32 @@ export let directory = (via: Fetcher | Part, now = false) => {
       return rows
         .filter((r) => r.space)
         .map((r) => ({ space: spaceOf(r), role: held.get(r.entity.eid)! }))
+    },
+    // Every app this person is a guest of, by a grant rather than a seat
+    // (T-37615), with its space and what the grant lets them do: what their
+    // dashboard lists as shared with them (apps.ts `shared`). Fresh, because
+    // that page is often opened right after the click that accepted one.
+    granted: async (person: string): Promise<Granted[]> => {
+      let held = new Map<string, Role>()
+      for (let r of await theirs(person, `.grant.person=${person}`, true)) {
+        if (r.grant) held.set(idOf(r.grant.app), r.grant.access)
+      }
+      if (!held.size) return []
+      // Bare `.entity.eid=`, as in `seated`: the rows are read whole.
+      let apps =
+        (await query(`.entity.eid=${[...held.keys()].join(',')}`, true))
+          .filter((r) => r.app).map(appOf)
+      let ids = [...new Set(apps.map((a) => a.space))]
+      let spaces = new Map(
+        ids.length
+          ? (await query(`.entity.eid=${ids.join(',')}`))
+            .filter((r) => r.space).map((r) => [r.entity.eid, spaceOf(r)])
+          : [],
+      )
+      return apps.flatMap((app) => {
+        let space = spaces.get(app.space)
+        return space ? [{ space, app, access: held.get(app.eid)! }] : []
+      })
     },
     // The next free variant of a derived name: the name itself, else
     // numbered until nothing answers to it. What `own` mints, and what the

@@ -14,6 +14,7 @@ import {
   accepted,
   clickInvite,
   connector,
+  type Kernel,
   kernel,
   letter,
   letters,
@@ -22,6 +23,10 @@ import {
 } from './probe.ts'
 import { HELLO } from './mcp-probe.ts'
 import type { Listed } from './tools.ts'
+
+// A person's dashboard, as their browser opens it.
+let desk = (k: Kernel, cookie: string) =>
+  k.at(k.host, '/manage', { headers: { cookie } }).then((r) => r.text())
 
 test('an invitation reaches nobody until its person accepts it', async () => {
   let k = await kernel()
@@ -88,6 +93,11 @@ test('an invitation reaches nobody until its person accepts it', async () => {
     let after = await reach()
     assertStringIncludes(after.listed, `${mine}.yaks.app`)
     assertStringIncludes(after.files, 'index.html')
+    // Her dashboard lists the space's apps as shared with her.
+    assertStringIncludes(
+      await desk(k, ana.cookie),
+      `href="https://${mine}.yaks.app/notes/"`,
+    )
     // The letter's link still takes her there after it has been used.
     assertEquals(
       await accepted(k, ana.email, ana.cookie),
@@ -171,9 +181,17 @@ test('a friend who has not accepted is told the invitation waits', async () => {
       'had not accepted yet',
     )
 
+    let diary = `href="https://${host}/diary/"`
+    assert(!(await desk(k, ana.cookie)).includes(diary))
+
     await accepted(k, ana.email, ana.cookie)
     assertStringIncludes(await page(ana.cookie), '<h1>Diary</h1>')
     assertObjectMatch(await me(ana.cookie), { writes: true, invited: false })
+    // Her dashboard lists the app she was let into; nobody else's does.
+    let hers = await desk(k, ana.cookie)
+    assertStringIncludes(hers, 'Shared with you')
+    assertStringIncludes(hers, diary)
+    assert(!(await desk(k, bo.cookie)).includes(diary))
   } finally {
     await k.stop()
   }

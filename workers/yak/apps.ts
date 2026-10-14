@@ -2021,6 +2021,40 @@ let manage = async (req: Request, env: Env): Promise<Response> => {
 // Who a dashboard page is drawn for: a person signed in, who owns the space.
 type Owner = Who & { person: string }
 
+// The apps of other people's spaces this person may open (T-124081): each app
+// of a space they hold a seat in and do not own, and each app they are a guest
+// of. What is in the trash opens onto nothing, so it is left out, and an app
+// of a space they own is on that space's own page.
+let shared = async (dir: ReturnType<typeof directory>, person: string) => {
+  let [seats, granted] = await Promise.all([
+    dir.seats(person),
+    dir.granted(person),
+  ])
+  let owned = new Set(
+    seats.filter((s) => s.role == 'owner').map((s) => s.space.eid),
+  )
+  let spaces = seats.map((s) => s.space)
+    .filter((s) => !owned.has(s.eid) && !s.trashed)
+  let seated = (await dir.apps(spaces)).map((app) => ({
+    space: spaces.find((s) => s.eid == app.space)!,
+    app,
+  }))
+  // One row an app, however it was shared: a seat and a grant can both
+  // reach it.
+  let each = new Map([...seated, ...granted].map((g) => [g.app.eid, g]))
+  return [...each.values()]
+    .filter(({ space, app }) =>
+      !owned.has(space.eid) && !space.trashed && !app.trashed &&
+      !kernels(space, app.slug)
+    )
+    .map(({ space, app }) => ({
+      eid: app.eid,
+      slug: app.slug,
+      title: app.title,
+      space: space.slug,
+    }))
+}
+
 // Where a dashboard form lands back: the page that sent it, at the apex.
 let sentFrom = (req: Request, env: Env) => {
   let at = new URL(req.url)
@@ -2087,6 +2121,9 @@ let desk = async (
     fee: rate(await feeOf(dir)),
     name: await dir.nameAt(owner) ?? '',
     agents: await (await identity()).agents(env, owner),
+    // What other people's spaces let this person open, read only for the
+    // page that lists apps.
+    shared: view == 'apps' ? await shared(dir, owner) : undefined,
     // Who is in the space and its apps (people.ts), read only for the page
     // that shows it.
     people: view == 'people'

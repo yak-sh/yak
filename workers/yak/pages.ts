@@ -649,6 +649,9 @@ export type DeskPage = {
   connections?: Connections
   /** who is in the space and its apps, and who has yet to accept */
   people?: People
+  /** the apps of other people's spaces this person may open, each with the
+   * slug of the space it lives in */
+  shared?: (Listed & { space: string })[]
 }
 
 let deskCss = `
@@ -839,6 +842,20 @@ let fixing = (a: DeskPage['apps'][number]) => {
   }</section>`
 }
 
+// What others let this person into: drawn by the same Tile as their own, each
+// with the address it lives at, since none of them lives at this space's.
+let sharedWith = (at: DeskPage, env: Host) =>
+  at.shared?.length
+    ? `<h2 class="Desk_Group">Shared with you</h2><div class="Apps">${
+      at.shared.map((a) => {
+        let host = spaceHost(env, a.space)
+        return tile(a, { at: `https://${host}`, host })
+      }).join('')
+    }</div>`
+    : ''
+
+// The person's apps, then what was shared with them; with none of their own,
+// what was shared comes first, above the way to make one.
 let library = (at: DeskPage, env: Host) => {
   let broken = at.apps.filter((a) => a.errors?.length)
   return `${connectCard(at)}${
@@ -856,8 +873,10 @@ let library = (at: DeskPage, env: Host) => {
             broken.map(fixing).join('')
           }`
           : ''
-      }`
-      : `<section class="Desk_Empty"><h2>Your apps will live here</h2>
+      }${sharedWith(at, env)}`
+      : `${
+        sharedWith(at, env)
+      }<section class="Desk_Empty"><h2>Your apps will live here</h2>
 <div ${
         state(true, !!at.agents?.length)
       }><p>Ask your agent for your first app. Try this:</p>${firstAsk}</div>
