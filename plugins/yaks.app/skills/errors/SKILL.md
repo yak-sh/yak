@@ -106,6 +106,10 @@ catches four things:
   a graph one of them pulled. It listens in the capture phase, because that
   failure fires on the element and does not bubble. This is the one that hurts
   most: a page paints a heading and empty space and nothing else reports it.
+  Before reporting one, it asks the server for that file again. A file that
+  answers was dropped, not missing: the person left the page while it loaded, or
+  their connection fell, and that is not reported. A module script's miss is
+  reported as it comes, since the file that failed may be one it imports.
 - **An unhandled rejection.** Reported as `unhandled rejection: <the reason>`.
 - **A call to one of the app's own `./api/` endpoints that was refused.** It
   wraps `fetch` and watches same-origin responses, passing everything through

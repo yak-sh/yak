@@ -82,6 +82,30 @@
       ? e.target
       : null
 
+  // The page's own fetch, from before the wrapper below.
+  let plain = globalThis.fetch
+
+  // Whether the file is there, asked of the server and not the cache. Only the
+  // answer's status is waited for; its body is let go.
+  let answers = (url) =>
+    plain(url, { cache: 'no-store' }).then((r) => {
+      r.body?.cancel()
+      return r.ok
+    })
+
+  // A load can fail with the file in place: Safari stops every load of a page
+  // the moment the person heads elsewhere, and a stopped stylesheet fires this
+  // same event while the page is still up (T-124011), as does a phone dropping
+  // its connection. So a miss is asked for again, and only one the server
+  // refuses is news. One that answers, or that cannot be asked because the
+  // connection or the page is gone, is not a fault of the app's or ours. A
+  // module's entry answering says nothing of the files it imports, and a page
+  // of an opaque origin cannot read its own server's answer, so those misses
+  // are said as they come.
+  let unasked = (el) =>
+    self.origin == 'null' ||
+    (el.tagName == 'SCRIPT' && el.type == 'module')
+
   addEventListener('error', (e) => {
     let el = missed(e)
     if (el) {
@@ -93,12 +117,18 @@
       // edge injects, blocked in the visitor's browser, is the platform's news
       // and not this app's (T-32487).
       if (where && !mine(where)) return
-      return broke({
-        message: `failed to load ${el.tagName.toLowerCase()}${
-          src ? ` ${src}` : ''
-        }`,
-        url: src || location.href,
-      })
+      let miss = () =>
+        broke({
+          message: `failed to load ${el.tagName.toLowerCase()}${
+            src ? ` ${src}` : ''
+          }`,
+          url: src || location.href,
+        })
+      if (!where || unasked(el)) return miss()
+      return answers(where.href).then(
+        (there) => there ? sorry() : miss(),
+        sorry,
+      )
     }
     broke({
       message: said(e.error) || e.message,
@@ -132,7 +162,6 @@
     }
   }
 
-  let plain = globalThis.fetch
   globalThis.fetch = async (input, init) => {
     // Against the page's base, not its address: the kernel gives every page a
     // `<base>` at the app's own root (apps.ts `based`), so that is what the
