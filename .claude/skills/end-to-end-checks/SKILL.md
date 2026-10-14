@@ -138,8 +138,10 @@ Pages here paint from a socket after `load`, so wait on the thing you expect to
 see. Check behavior the way a person meets it: what text shows, what moves,
 what a click changes (dispatch the event in the expression, then read again).
 The DOM is where a claim gets checked; a picture is how you see whether it
-reads well. `--shot $D/page.png` saves one after the expression runs, and
-`--width 390` lays the page out at phone width first.
+reads well. `--shot $D/page.png` saves one after the expression runs,
+`--width 390` lays the page out at phone width first (1280 gives a 1280×800
+desktop), and `--scheme light` or `dark` paints a page that follows the
+system's scheme in that one.
 
 ## The terminal
 

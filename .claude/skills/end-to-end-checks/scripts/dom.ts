@@ -5,13 +5,15 @@
  * app is checked against; a screenshot is for looking at how it reads.
  *
  *   deno run -A dom.ts <cdp-port> <url> '<expression>' [--wait '<expression>']
- *     [--width <px>] [--shot <file.png>]
+ *     [--width <px>] [--scheme light|dark] [--shot <file.png>]
  *
  * --wait polls its expression (default: document.readyState == 'complete')
  * until it is truthy, up to 15 s, before the main one runs. The expression may
  * return a promise. --width lays the page out that many pixels wide, as a
- * phone (390) or a desktop; --shot saves a PNG of the viewport after the
- * expression has run. The tab is closed afterwards.
+ * phone (390, twice as tall) or a desktop (16:10); --scheme emulates
+ * prefers-color-scheme, so a page that follows the system paints light or
+ * dark; --shot saves a PNG of the viewport after the expression has run. The
+ * tab is closed afterwards.
  *
  * @module
  */
@@ -20,7 +22,7 @@ let [port, url, expr, ...rest] = Deno.args
 if (!port || !url || !expr) {
   console.error(
     "usage: dom.ts <cdp-port> <url> '<expression>' [--wait '<expression>'] " +
-      '[--width <px>] [--shot <file.png>]',
+      '[--width <px>] [--scheme light|dark] [--shot <file.png>]',
   )
   Deno.exit(2)
 }
@@ -31,6 +33,7 @@ let flag = (name: string) => {
 let wait = flag('--wait') ?? "document.readyState == 'complete'"
 let width = flag('--width')
 let shot = flag('--shot')
+let scheme = flag('--scheme')
 
 let base = `http://127.0.0.1:${port}`
 let tab = await (await fetch(`${base}/json/new`, { method: 'PUT' })).json()
@@ -62,12 +65,18 @@ let evaluate = async (expression: string) => {
   return r.result?.result?.value
 }
 
+let phone = Number(width) < 600
 if (width) {
   await send('Emulation.setDeviceMetricsOverride', {
     width: Number(width),
-    height: Math.round(Number(width) * 2),
+    height: Math.round(Number(width) * (phone ? 2 : 0.625)),
     deviceScaleFactor: 1,
-    mobile: Number(width) < 600,
+    mobile: phone,
+  })
+}
+if (scheme) {
+  await send('Emulation.setEmulatedMedia', {
+    features: [{ name: 'prefers-color-scheme', value: scheme }],
   })
 }
 // Navigating here, not through /json/new's query, keeps a URL's own query
