@@ -17,7 +17,7 @@ let uncached = (page: Response) => {
 }
 
 // The hostname is a placeholder for a service binding; the apex is in the
-// path because Workers Caching keys by path, entrypoint and Worker version,
+// path because Workers Caching keys by path and entrypoint,
 // not the request hostname.
 export let at = (env: Host, path: string) =>
   `https://site.invalid/${encodeURIComponent(apex(env))}${path}`

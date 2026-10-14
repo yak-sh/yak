@@ -357,12 +357,21 @@ bucket_name = "yak-model-receipts"
 # Cloudflare's cache, in front of the Files and Site entrypoints. The default
 # gateway remains uncached: on its own this line would cache every route,
 # including tenant and authenticated responses.
+#
+# Shared across Worker versions (T-124006): every commit on main is a version,
+# and a cache keyed by version was emptied for every app by each of them, so
+# the next view of every file paid a full miss (two tiers, the Worker, the
+# bucket: about 600 ms). What Files answers under one address never changes
+# (a release's bytes are immutable), and cache.ts `GENERATION` is how a change
+# to the answer itself moves to new addresses. Site's pages live 30 seconds.
 [cache]
 enabled = true
+cross_version_cache = true
 
 # WHICH entrypoint, and why it is not the one the browser reaches.
 #
-# The cache key is the path, the query, the entrypoint and the Worker version.
+# The cache key is the path, the query and the entrypoint (not the version,
+# above).
 # It is NOT the hostname: Cloudflare treats a Worker as zoneless and gives one
 # Worker one cache across every hostname it answers on. Every space here IS a
 # hostname over a shared path namespace — `alice.yaks.app/recipes/app.js` and
@@ -698,6 +707,7 @@ bucket_name = "yak-blobs-staging"
 
 [env.staging.cache]
 enabled = true
+cross_version_cache = true
 
 [env.staging.exports.default]
 type = "worker"

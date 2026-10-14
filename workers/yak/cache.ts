@@ -4,7 +4,8 @@
 //
 // ── Why the cache is NOT in front of the door the browser reaches ──────────
 //
-// The cache key is the path, the query, the entrypoint and the Worker version.
+// The cache key is the path, the query and the entrypoint, shared across
+// Worker versions (wrangler.toml `cross_version_cache`).
 // It is NOT the hostname — Cloudflare says so plainly, because a Worker is
 // zoneless and one Worker answering `api.example.com` and `api.example.net`
 // wants one cache. For us that rule is a cross-tenant leak: every space is a
@@ -62,11 +63,12 @@ export let browserImmutable = `private, max-age=${YEAR}, immutable`
 // The address the gateway asks the inner entrypoint at, and therefore the
 // cache key. The hostname is a placeholder that never resolves — the request
 // goes over the service binding, not the network — and everything that
-// distinguishes one answer from another is in the path, because the path is
-// what the key is made of:
+// distinguishes one answer from another is in the path and query, because
+// they are what the key is made of:
 //
-//   /<app eid>/<the app's own path>?source=<release source>, or
-//   /blob/<app eid>/<sha>
+//   /<app eid>/<the app's own path>?source=<release source>&g=<generation>,
+//   /blob/<app eid>/<sha>?g=<generation>, or
+//   /__packages/<digest>/<path>?g=<generation>
 //
 // The eid and not the slug, because an app answers at every address it has
 // ever had (`App.slugs`), a rename leaves the old one resolving, and a custom
@@ -75,15 +77,32 @@ export let browserImmutable = `private, max-age=${YEAR}, immutable`
 // app read another's entry. The release source in the query keeps old and new
 // bytes separate when the directory switches its serving pointer.
 export let at = (eid: string, path: string, source = '') =>
-  `https://files.invalid/${eid}${path.startsWith('/') ? '' : '/'}${path}${
-    source ? `?source=${encodeURIComponent(source)}` : ''
-  }`
+  generation(
+    `https://files.invalid/${eid}${path.startsWith('/') ? '' : '/'}${path}${
+      source ? `?source=${encodeURIComponent(source)}` : ''
+    }`,
+  )
 
 // A blob has no mutable file path. Keep its byte cache separate from app
 // files, and name both the app and the content so neither tenant nor upload
 // can reuse another entry.
 export let blobAt = (eid: string, sha: string) =>
-  `https://files.invalid/blob/${eid}/${sha}`
+  generation(`https://files.invalid/blob/${eid}/${sha}`)
+
+// A compiler-owned package file (shared.ts), the same for every app.
+export let packageAt = (path: string) =>
+  generation(`https://files.invalid${path}`)
+
+// What Files answers outlives the Worker version that answered it
+// (wrangler.toml `cross_version_cache`), so a deploy of the platform leaves
+// every app's cached bytes in place. An address's answer is a release's
+// immutable bytes, but how Files frames them (a type, a header, a compiled
+// script) is code: a change to that for addresses already answered bumps this
+// number, which moves every address to a new key and lets the old entries
+// expire unread.
+let GENERATION = 1
+let generation = (address: string) =>
+  `${address}${address.includes('?') ? '&' : '?'}g=${GENERATION}`
 
 // The default, made to stick. Omitting `Cache-Control` is NOT opting out of a
 // cache: Cloudflare applies RFC 9111 heuristic freshness and holds a bare

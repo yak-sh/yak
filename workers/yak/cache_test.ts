@@ -27,9 +27,10 @@ test('two apps at the same path are two cache entries', () => {
   assertStringIncludes(at(A, '/app.js'), A)
   // The path the app knows itself by survives whole, so files.ts can read it
   // back off the front.
-  assertEquals(at(A, '/app.js'), `https://files.invalid/${A}/app.js`)
-  assertEquals(at(A, 'app.js'), `https://files.invalid/${A}/app.js`)
-  assertEquals(at(A, '/'), `https://files.invalid/${A}/`)
+  let path = (address: string) => new URL(address).pathname
+  assertEquals(path(at(A, '/app.js')), `/${A}/app.js`)
+  assertEquals(path(at(A, 'app.js')), `/${A}/app.js`)
+  assertEquals(path(at(A, '/', 'a/.releases/1/x')), `/${A}/`)
 })
 
 test('a door that says nothing is told not to be shared', async () => {

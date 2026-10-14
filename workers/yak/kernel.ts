@@ -84,7 +84,7 @@ import { CallError } from '@yaks/tools/errors'
 import { Stale } from '@yaks/graph/errors'
 import { refused as toolRefusal } from '@yaks/tools/routes'
 import * as apps from './apps.ts'
-import { sealed } from './cache.ts'
+import { packageAt, sealed } from './cache.ts'
 import * as billing from './billing.ts'
 import * as dirPart from './directory.ts'
 import { directory } from './directory.ts'
@@ -136,10 +136,10 @@ let serve = async (req: Request, env: Env, r: Route) => {
     // The canonical origin is common to every app. Files caches compiler
     // assets by content, without a tenant or release discriminator.
     return (await import('./files.ts')).door(env).fetch(
-      new Request(
-        `https://files.invalid${asked}`,
-        { method: req.method, headers: req.headers },
-      ),
+      new Request(packageAt(asked), {
+        method: req.method,
+        headers: req.headers,
+      }),
     )
   }
   if (r.space != null) {
