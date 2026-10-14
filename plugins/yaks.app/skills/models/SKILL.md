@@ -198,9 +198,9 @@ meaning has not changed.
 
 The same people may call it as may ask for a turn (below), and the same account
 budget pays. A refusal comes in the envelope every door answers with,
-`{error: {code, message}}`: `400` for a model not offered here, `429` past the
-budget, with the sentence that says so, and `503` while the model is busy. Show
-the person `error.message`.
+`{error: {code, message}}`: `400` for a model not offered here or an input the
+model refuses, `429` past the budget, with the sentence that says so, and `503`
+while the model is busy. Show the person `error.message`.
 
 ## Asking about a picture
 
