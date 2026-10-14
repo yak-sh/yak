@@ -248,6 +248,7 @@ import { aloud, peopleIn, shown } from './people.ts'
 import {
   addressed,
   BUILT,
+  deployedOver,
   draftFiles,
   draftManifest,
   draftOf,
@@ -1520,16 +1521,7 @@ export let recoverRelease = async (
   if (!live || live.version != report.version) return
   let path = failedScript(report, live, request, mount)
   if (!path) return
-  // A release after a manual rollback can follow a much older live version.
-  // The deployment's own pointer move records which version it replaced.
-  let moves = await ctx.dir.switches(current)
-  let move =
-    moves.filter((row) =>
-      row.switched?.to == live.eid && row.switched?.source == live.source
-    ).sort((a, b) =>
-      String(a.switched?.at).localeCompare(String(b.switched?.at))
-    )[0]
-  let target = all.find((version) => version.eid == move?.switched?.from)
+  let target = deployedOver(all, await ctx.dir.switches(current), live)
   if (!target) return
   let who: Who = { person: null, role: 'owner', administrative: true }
   await released(
@@ -3525,7 +3517,7 @@ let OURS: Row[] = [
           type: 'number',
           description:
             'the version to go back to, from app_versions; left out, the ' +
-            'one before the live one',
+            'one the live version replaced when it went out',
         },
       },
       required: ['app'],
@@ -3533,11 +3525,16 @@ let OURS: Row[] = [
     run: async (ctx, args) => {
       let { space, app, who, store } = await inApp(ctx, args, true)
       let all = await versions(ctx.dir, app)
+      let live = all.find((v) => v.version == app.version)
       let want: Version | undefined
       if (args.version == null) {
-        // The one before the live one: the deploy that broke the page is the
-        // newest, so "put it back" means the one under it.
-        want = all.find((v) => v.version < (app.version ?? 0))
+        // "Put it back" means what was live before this went out. That is
+        // the pointer's history, not the next number down: after a rollback
+        // the next deploy goes out over an older version, and the number
+        // under it is the version the person already left. An app with no
+        // recorded move falls back to the number.
+        want = (live && deployedOver(all, await ctx.dir.switches(app), live)) ??
+          all.find((v) => v.version < (app.version ?? 0))
         if (!want) {
           throw refuse(
             'missing',
@@ -3570,10 +3567,17 @@ let OURS: Row[] = [
         store,
         { target: want },
       )
+      // What was left is kept, and the way to it is said, so the next agent
+      // need not read app_versions to undo this one.
+      let left = live && live.version != version
+        ? `\nv${live.version} is kept: app_rollback(app: '${app.slug}', ` +
+          `version: ${live.version}) brings it back. Saved data is ` +
+          'untouched; store_restore is its way back.'
+        : ''
       return {
         text: `put ${space.slug}/${app.slug} back to v${version}, live ` +
           `now: ${url(space, app, ctx.env)} — ${whatChanged(now, want.files)}` +
-          said,
+          left + said,
         space,
       }
     },

@@ -616,6 +616,35 @@ export let same = (a: Files, b: Files) => {
 // Every version of an app, newest first.
 export let versions = (dir: Directory, app: App) => dir.deploys(app)
 
+type Move = {
+  switched?: {
+    from?: string | null
+    to: string
+    source?: string | null
+    at?: string | null
+  }
+}
+
+/** The version `live` replaced when it went out: the `from` of its own
+ * deploy's pointer move, the earliest move to it from its source. A deploy
+ * made after a rollback goes out over an older version, so the next number
+ * down can be the very version a person already left (`record` writes the
+ * moves). Undefined when no move names `live`, or it replaced nothing. */
+export let deployedOver = (
+  all: Version[],
+  moves: Move[],
+  live: Version,
+): Version | undefined => {
+  let own = moves
+    .filter((m) =>
+      m.switched?.to == live.eid && m.switched.source == live.source
+    )
+    .sort((a, b) =>
+      String(a.switched?.at).localeCompare(String(b.switched?.at))
+    )[0]
+  return all.find((v) => v.eid == own?.switched?.from)
+}
+
 // This deploy written down, and nothing else: no version is ever buried, and
 // the bytes are the daily sweep's to reckon about (`pruned`), not a deploy's —
 // a deploy that pruned its own pins would be deciding about bytes while it is

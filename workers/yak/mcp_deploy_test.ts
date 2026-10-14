@@ -573,6 +573,38 @@ test(
   },
 )
 
+// A deploy after a rollback goes out over the version the rollback restored,
+// and putting it back returns there, never to the version the person left.
+test('a rollback after a rollback returns to what was live', async () => {
+  let k = await kernel()
+  try {
+    let space = unique('backback')
+    let { cookie } = await seed(k, [{ slug: space, apps: ['list'] }])
+    let agent = connector(k, cookie)
+    let app = { space, app: 'list' }
+    let served = async () =>
+      await (await k.at(`${space}.yaks.app`, '/list/')).text()
+    for (let content of ['<h1>good</h1>', '<h1>broken</h1>']) {
+      await agent.tool('app_files', { ...app, path: 'index.html', content })
+      await agent.tool('app_deploy', app)
+    }
+    await agent.tool('app_rollback', app)
+    await agent.tool('app_files', {
+      ...app,
+      path: 'index.html',
+      content: '<h1>broken again</h1>',
+    })
+    await agent.tool('app_deploy', app)
+
+    let back = await agent.tool('app_rollback', app)
+    assertStringIncludes(back, 'back to v1, live now')
+    assertStringIncludes(back, `app_rollback(app: 'list', version: 3)`)
+    assertStringIncludes(await served(), '<h1>good</h1>')
+  } finally {
+    await k.stop()
+  }
+})
+
 // With no token there is nothing to read, and the agent is told so in one
 // sentence rather than handed a failure: the secret is the owner's to set and
 // there is nothing an agent can do about it (README.md).
