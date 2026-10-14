@@ -118,13 +118,18 @@ Chrome gets a profile of its own, under `/tmp` with a short name:
 
 ```sh
 mkdir -p /tmp/cdp-<task>
-TMPDIR=/tmp/cdp-<task> nohup google-chrome --headless=new --remote-debugging-port=<cdp port> \
+TMPDIR=/tmp/cdp-<task> nohup google-chrome --headless=new --disable-quic --remote-debugging-port=<cdp port> \
   --user-data-dir=/tmp/cdp-<task> --no-first-run about:blank > /tmp/cdp-<task>/chrome.log 2>&1 &
 ```
 
 The short path isn't style: Chrome makes a socket inside its profile, and a
 socket path over about 107 bytes kills it at start ("Socket path too long").
-The scratchpad's path is already longer than that.
+The scratchpad's path is already longer than that. Nor is `--disable-quic`:
+from this box, Chrome's HTTP/3 to yaks.app never finishes a page's
+stylesheets, so a live page stays `interactive` and a screenshot hangs.
+
+Launch it in a command of its own. A `pkill -f` later in the same shell line
+matches that line's own text and kills the shell running it.
 
 Then read the page with the helper beside this skill. It opens a tab, waits for
 a condition, evaluates an expression and prints it as JSON:
