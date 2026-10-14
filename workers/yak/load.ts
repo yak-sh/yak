@@ -38,10 +38,11 @@ import * as vocab34 from './facets/attribution-vocab.ts'
 import * as vocab35 from './facets/directory-vocab.ts'
 import * as vocab36 from './facets/git-vocab.ts'
 import * as vocab37 from './facets/kills-vocab.ts'
-import * as vocab38 from './facets/meter-vocab.ts'
-import * as vocab39 from './facets/models-vocab.ts'
-import * as vocab40 from './facets/trash-vocab.ts'
-import * as vocab41 from './facets/wrap-vocab.ts'
+import * as vocab38 from './facets/lapsed-vocab.ts'
+import * as vocab39 from './facets/meter-vocab.ts'
+import * as vocab40 from './facets/models-vocab.ts'
+import * as vocab41 from './facets/trash-vocab.ts'
+import * as vocab42 from './facets/wrap-vocab.ts'
 export let vocabFacets: Record<string, VocabFacet> = {
   '@yaks/alias': vocab0,
   '@yaks/archetype': vocab1,
@@ -81,10 +82,11 @@ export let vocabFacets: Record<string, VocabFacet> = {
   'yak/directory': vocab35,
   'yak/git': vocab36,
   'yak/kills': vocab37,
-  'yak/meter': vocab38,
-  'yak/models': vocab39,
-  'yak/trash': vocab40,
-  'yak/wrap': vocab41,
+  'yak/lapsed': vocab38,
+  'yak/meter': vocab39,
+  'yak/models': vocab40,
+  'yak/trash': vocab41,
+  'yak/wrap': vocab42,
 }
 let facets: Record<string, () => Promise<unknown>> = {
   '@yaks/alias/graph': () => import('@yaks/alias/graph'),
@@ -116,6 +118,7 @@ let facets: Record<string, () => Promise<unknown>> = {
   'yak/git/effects': () => import('./facets/git-effects.ts'),
   'yak/kills/graph': () => import('./facets/kills-graph.ts'),
   'yak/kills/effects': () => import('./facets/kills-effects.ts'),
+  'yak/lapsed/effects': () => import('./facets/lapsed-effects.ts'),
   'yak/meter/graph': () => import('./facets/meter-graph.ts'),
   'yak/meter/effects': () => import('./facets/meter-effects.ts'),
   'yak/models/effects': () => import('./facets/models-effects.ts'),

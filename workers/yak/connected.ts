@@ -25,7 +25,7 @@ export type Agent = {
 /** An outside service holding a grant, as the connections page lists it. */
 export type Service = { name: string; connectedAt: number }
 
-type Clients = Pick<OAuthHelpers, 'listUserGrants'> & {
+export type Clients = Pick<OAuthHelpers, 'listUserGrants'> & {
   // Missing registrations are null; unavailable metadata is undefined. The
   // latter still has a grant and must not disappear during a client outage.
   lookupClient: (id: string) => Promise<ClientInfo | null | undefined>
@@ -110,7 +110,7 @@ let identifier = (oauth: Pick<Clients, 'lookupClient'>) => {
     clients.set(id, client)
     return client
   }
-  return async (grant: GrantSummary) => {
+  return async (grant: Pick<GrantSummary, 'clientId' | 'redirectUri'>) => {
     if (serviceOf(grant.redirectUri)) return
     let host = callback(grant.redirectUri)
     let brand = host.brand
@@ -126,6 +126,23 @@ let identifier = (oauth: Pick<Clients, 'lookupClient'>) => {
       ...(brand ? { brand } : {}),
     }
   }
+}
+
+/**
+ * The listed agent a client's grants stand for, read off what it registered:
+ * the entry `agentsOf` would fold its grants into, or nothing for a service
+ * or a client that is gone. A grant returns to one of its client's callbacks,
+ * and a brand's are all on its own host, so the first one names it.
+ */
+export let agentOf = async (
+  oauth: Pick<Clients, 'lookupClient'>,
+  clientId: string,
+): Promise<Omit<Agent, 'connectedAt'> | undefined> => {
+  let client = await oauth.lookupClient(clientId)
+  if (!client) return
+  return await identifier({ lookupClient: () => Promise.resolve(client) })(
+    { clientId, redirectUri: client.redirectUris[0] },
+  )
 }
 
 export let agentsOf = async (

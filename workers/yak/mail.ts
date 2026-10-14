@@ -109,7 +109,22 @@ export let mailable = (
   env: Pick<Env, 'MAIL_DEV' | 'MAIL_TOKEN' | 'MAIL_ACCOUNT' | 'CF_ACCOUNT'>,
 ) => env.MAIL_DEV == '1' || !!(env.MAIL_TOKEN && account(env))
 
-export let mail = (env: Env): Mail => {
+// What sending reads off the env, so a store's effect, which holds the
+// Worker's bindings as a partial env (graph.ts `Bindings`), sends the same way
+// a request does.
+type Posting = Pick<
+  Env,
+  | 'MAIL_DEV'
+  | 'MAIL_SINK'
+  | 'MAIL_TOKEN'
+  | 'MAIL_ACCOUNT'
+  | 'MAIL_API'
+  | 'CF_ACCOUNT'
+  | 'APEX'
+  | 'LOCAL_DEV'
+>
+
+export let mail = (env: Posting): Mail => {
   let send = env.MAIL_DEV == '1' ? printed() : sending(
     env.MAIL_TOKEN ?? '',
     account(env),

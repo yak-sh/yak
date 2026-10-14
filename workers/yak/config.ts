@@ -229,6 +229,7 @@ export let directoryConfig: Config = {
     'yak/git',
     'yak/wrap',
     'yak/kills',
+    'yak/lapsed',
   ]),
 }
 
@@ -293,5 +294,9 @@ export let domains = {
     vocab: './facets/kills-vocab.ts',
     graph: './facets/kills-graph.ts',
     effects: './facets/kills-effects.ts',
+  },
+  'yak/lapsed': {
+    vocab: './facets/lapsed-vocab.ts',
+    effects: './facets/lapsed-effects.ts',
   },
 }

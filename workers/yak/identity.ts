@@ -66,7 +66,9 @@
 // token lives a year (`opts`), and a public client's refresh is taken even
 // when it carries a `client_secret` it was never issued (`plain`), which is
 // what ChatGPT sends and what used to read to a person as an expired
-// connection. What closes a connector is the person closing it.
+// connection. What closes a connector is the person closing it, and when an
+// assistant comes back with a sign-in that is gone anyway, its person is told
+// how to connect it again (lapsed.ts).
 //
 // The first person ever to sign in owns the meta space: while `yak` has no
 // members at all, this writes `member(yak, person, owner)` (directory.ts
@@ -86,6 +88,7 @@ import {
 } from '@cloudflare/workers-oauth-provider'
 import { cookieValue, opened, seal, verify } from './lib/token.ts'
 import { agentsOf, disconnect, replace, servicesOf } from './connected.ts'
+import { closed, lapse, reconnected, unheld } from './lapsed.ts'
 import {
   consented as handoffConsented,
   consenting as handoffConsenting,
@@ -878,7 +881,16 @@ let ours = async (req: Request, env: Env): Promise<Response> => {
       let login = `/login?return=${encodeURIComponent(back)}`
       return redirect(login, undefined, 303)
     }
-    await disconnect(grants(env), person, field('agent'))
+    let agent = field('agent')
+    if ((await disconnect(grants(env), person, agent)).length) {
+      // They closed it themselves, so a refused refresh is no news to them.
+      background(
+        closed(meta(env), person, agent).then(
+          () => {},
+          (e) => caught(e, { request: 'POST /oauth/agents/disconnect' }),
+        ),
+      )
+    }
     let to = new URL(back, req.url)
     to.searchParams.set('disconnected', '1')
     return redirect(to.href, undefined, 303)
@@ -1220,9 +1232,14 @@ let opts = (env: Env): OAuthProviderOptions<Env> => ({
   refreshTokenTTL: undefined,
   // A re-authorization replaces the person's older grant for that client only
   // now, when the client holds the new grant (connected.ts `replace`).
+  // And connecting an assistant again ends its lapse (lapsed.ts).
   tokenExchangeCallback: async (o) => {
     if (o.grantType == 'authorization_code') {
       await replace(api(env), o.userId, o.grantId)
+      background(
+        reconnected(grants(env), meta(env), o.userId, o.clientId)
+          .catch((e) => caught(e, { request: 'POST /oauth/token' })),
+      )
     }
   },
   scopesSupported: [OAUTH.scope],
@@ -1241,6 +1258,38 @@ let context = () => ({
   waitUntil: () => {},
   passThroughOnException: () => {},
 })
+
+// A token request's form, and the client id and secret it presented: in the
+// form, or as Basic credentials, which carry the id with them. Null when
+// either will not read.
+let presented = async (req: Request) => {
+  let basic = /^Basic\s+(\S+)$/i.exec(req.headers.get('authorization') ?? '')
+  try {
+    let form = new URLSearchParams(await req.clone().text())
+    let named: [string, string | null] = basic
+      ? atob(basic[1]).split(':').map(decodeURIComponent) as [string, string]
+      : [form.get('client_id') ?? '', form.get('client_secret')]
+    return { form, named }
+  } catch {
+    return null
+  }
+}
+
+// A refresh the provider refused, read off what was sent and what came back:
+// when it named a sign-in its person no longer holds, they are told how to
+// connect that assistant again (lapsed.ts). Never in the way of the answer.
+let lapsing = async (
+  env: Env,
+  read: Awaited<ReturnType<typeof presented>>,
+  res: Response,
+) => {
+  let said: unknown = await res.json().catch(() => null)
+  let error = said && typeof said == 'object' && 'error' in said
+    ? said.error
+    : undefined
+  let named = read && unheld(read.form, read.named[0], error)
+  if (named) await lapse(grants(env), meta(env), named.person, named.client)
+}
 
 // A secret a public client was never issued, dropped before the provider sees
 // it (T-34416). ChatGPT registers itself `token_endpoint_auth_method: none`
@@ -1262,21 +1311,12 @@ let plain = async (req: Request, env: Env): Promise<Request> => {
   if (req.method != 'POST' || new URL(req.url).pathname != OAUTH.token) {
     return req
   }
-  let basic = /^Basic\s+(\S+)$/i.exec(req.headers.get('authorization') ?? '')
   // Anything unreadable here is the provider's to refuse, not ours to guess
   // at: a body that will not parse and Basic credentials that are not base64
   // go on untouched and meet the error they have coming.
-  let form: URLSearchParams
-  let named: [string, string | null]
-  try {
-    form = new URLSearchParams(await req.clone().text())
-    named = basic
-      ? atob(basic[1]).split(':').map(decodeURIComponent) as [string, string]
-      : [form.get('client_id') ?? '', form.get('client_secret')]
-  } catch {
-    return req
-  }
-  let [id, secret] = named
+  let read = await presented(req)
+  if (!read) return req
+  let { form, named: [id, secret] } = read
   // Nothing to drop unless a secret was offered at all.
   if (!id || secret == null) return req
   let client = await getOAuthApi<Env>(opts(env), env).lookupClient(id)
@@ -1359,8 +1399,18 @@ export let fetch = async (req: Request, env: Env): Promise<Response> => {
     }
     return Response.json({ sub: who.person, email }, { headers })
   }
+  let sent = await plain(req, env)
+  let read = path == OAUTH.token && req.method == 'POST'
+    ? await presented(sent)
+    : null
   let res = await new OAuthProvider<Env>(opts(env))
-    .fetch(await plain(req, env), env, context() as never)
+    .fetch(sent, env, context() as never)
+  if (read && res.status == 400) {
+    background(
+      lapsing(env, read, res.clone())
+        .catch((e) => caught(e, { request: 'POST /oauth/token' })),
+    )
+  }
   // The provider owns all its metadata; add only the account-discovery door
   // it does not offer a configuration field for.
   if (
