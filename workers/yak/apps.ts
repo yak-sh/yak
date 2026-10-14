@@ -38,7 +38,7 @@ import {
 } from './asset_url.ts'
 import * as files from './files.ts'
 import { inside, keyed, prefixOf, VERSION } from './files.ts'
-import { blobPrefix } from './blob-key.ts'
+import { blobPrefix, naming } from './blob-key.ts'
 import {
   type App,
   appStore,
@@ -985,7 +985,8 @@ let useOf = (sha: string) =>
 
 // Where an app's uploaded bytes live: under the app's own prefix, beside its
 // files, so throwing the app away takes them with it (tools.ts app_delete)
-// and a rename carries them along.
+// and a rename carries them along. Deleting the upload's content row deletes
+// them sooner (facets/app-effects.ts `delete_upload`).
 let blobKey = (space: Space, app: App, sha: string) =>
   blobPrefix(space, app) + sha
 
@@ -1281,11 +1282,16 @@ let gave = async (
     )
     if (bytes.status == 404) {
       await bytes.body?.cancel()
-      caught(new Error(`missing blob ${sha}`), {
-        request: 'GET /api/blob',
-        space: space.slug,
-        app: app.slug,
-      })
+      // A representation outlives its bytes, since its URL may be cached
+      // (@yaks/blob): bytes nothing names went with their upload
+      // (`delete_upload`), and only bytes a row still names were lost.
+      if ((await graph.query(naming(sha))).length) {
+        caught(new Error(`missing blob ${sha}`), {
+          request: 'GET /api/blob',
+          space: space.slug,
+          app: app.slug,
+        })
+      }
       return json(404, 'no_such_file')
     }
     if (![200, 206, 304, 416].includes(bytes.status)) {
@@ -1808,7 +1814,9 @@ let api = async (
   // The file door: bytes in, one content-addressed address out. Uploaded
   // bytes are app data, not the app's own files — a vote page's photo is the
   // visitor's, not the deploy's — so the app's `access` governs both halves:
-  // its write rule the upload, its read rule the download.
+  // its write rule the upload, its read rule the download. Deleting is the
+  // content row's: its bytes follow it out (`delete_upload`), so whoever may
+  // delete that row deletes the file, and this door takes no DELETE.
   if (path == '/blob') {
     if (req.method != 'POST') return json(405, 'method_not_allowed')
     if (!mayPost) return refused()

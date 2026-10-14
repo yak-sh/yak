@@ -29,7 +29,9 @@
 // `upload(file, {name})` is the bytes half: the app's own file door
 // (`POST ./api/blob`), which stores what a page hands it — a File off an
 // input, a Blob a canvas made — under its own SHA-256 and answers the address
-// to put in an `<img src>` and the eid for a row to point at.
+// to put in an `<img src>` and the eid for a row to point at. Deleting the row
+// at that eid (`apply({entity: {eid}, $delete: true})`) deletes the upload,
+// bytes and all.
 //
 // `was(value)` is the precondition half of a write: hash what you read, name
 // it under `$was`, and the store refuses the whole batch if that property has
@@ -186,7 +188,8 @@ export let store = (base) => {
   // (`{photo: {caption, blob: eid}}`) and the url to put in an `<img src>`.
   // Content-addressed, so the same file twice is one upload and one row, and
   // a page may re-send rather than remember. 20 MB is the ceiling; downscale
-  // a photo on the page before you send it.
+  // a photo on the page before you send it. Deleting the row at `eid` deletes
+  // the upload and its bytes.
   let upload = (file, opts = {}) => {
     let name = opts.name ?? file.name ?? ''
     return ask('blob', {

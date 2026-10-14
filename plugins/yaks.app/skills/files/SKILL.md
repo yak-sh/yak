@@ -1,6 +1,6 @@
 ---
 name: files
-description: "Files and pictures (yaks.app). app_deploy's reload and the yak-release event, including a custom notice that keeps unsaved input; app_files — what a write returns, the patch and fetch ops, the history every write keeps and the restore that puts one back, the icon.svg that gives an app an icon on a home screen — then upload() for a file off an <input>: where the bytes are served back from, the attachment and image rows it writes, the 20 MB ceiling and the downscale under it, and a gallery that never shows one picture twice."
+description: "Files and pictures (yaks.app). app_deploy's reload and the yak-release event, including a custom notice that keeps unsaved input; app_files — what a write returns, the patch and fetch ops, the history every write keeps and the restore that puts one back, the icon.svg that gives an app an icon on a home screen — then upload() for a file off an <input>: where the bytes are served back from, the attachment and image rows it writes, deleting an upload and its bytes, the 20 MB ceiling and the downscale under it, and a gallery that never shows one picture twice."
 ---
 
 # Files and pictures
@@ -9,9 +9,9 @@ Files are the one thing an app's store cannot hold directly: you cannot write
 raw bytes into a component the way you write a title or a number. This page
 covers files: how you write the app's own files with `app_files`, then what
 `upload` accepts and returns for the files its visitors send, where those are
-served from, the two rows one upload writes, who may send and who may look, the
-20 MB ceiling and the downscale that gets a phone photo under it — and a gallery
-that does not show the same picture twice.
+served from, the two rows one upload writes, who may send and who may look, how
+to delete one, the 20 MB ceiling and the downscale that gets a phone photo under
+it — and a gallery that does not show the same picture twice.
 
 ## app_files, and what a write returns
 
@@ -448,17 +448,47 @@ member who is only a viewer,
 On an `open` app a signed-out guest's upload has no `created.by` at all. If the
 wall wants a byline, ask them for a name and save it in your own row.
 
-## What deleting removes
+## Deleting an upload
+
+Delete the content row, at the upload's eid, and the upload is gone:
+
+    await apply({ entity: { eid: file.eid }, $delete: true })
+
+Its `attachment` row goes with it, and the platform deletes the bytes right
+after, so `./api/blob/<eid>` and every `file.url` it handed out answer
+`404 no_such_file`. There is no undo. A page listing `.attachment` deletes
+`f.attachment.blob`, not the attachment row's own eid: deleting the attachment
+row alone removes the name and keeps the bytes.
+
+Delete your own row that points at the upload in the same batch, so the page
+never draws a picture that is gone:
+
+    await apply([
+      { entity: { eid: p.entity.eid }, $delete: true },   // your photo row
+      { entity: { eid: p.photo.blob }, $delete: true },   // the upload
+    ])
+
+The bytes stay while another attachment still points at them, by `blob` or by
+`artifact` (a picture a model made is one). Nothing else keeps them: your own
+properties holding the eid are text, and the platform does not read your files
+for `./api/blob/` addresses, so delete or change what still uses an upload
+before you delete it.
+
+Deleted bytes stop counting toward the space's photos-and-files ceiling. An app
+that replaces its uploads (a video rendered again, a photo cropped) deletes the
+ones it no longer uses the same way: list `.blob`, keep the eids its files and
+rows still use, and delete the rest, from a page with `apply` or from the
+assistant with `graph_apply`.
+
+Who may delete an upload is who may delete its row: an owner or editor any
+upload, and on an `open` app, anyone else only what they uploaded. A refused
+delete throws like any refused `apply`. The same bytes sent twice are one
+upload, so deleting it deletes it for everyone who sent it.
 
 Deleting the app (`app_delete`) puts it in the trash and keeps every byte of it
 for 30 days, so `app_restore` brings the uploads back with everything else.
 After that — or straight away, with `forever: true` — the bytes go: every object
-under the app's own prefix, uploads included, and there is no undo. Nothing else
-removes bytes. Tombstoning your `photo` row removes your row. Tombstoning the
-content row at the sha removes the `blob`/`image` row and cascades to the
-`attachment` row naming it — and the bytes stay in the bucket, still served at
-`./api/blob/<eid>` to anyone holding the address, now with no mime or name to
-serve them with. An upload is permanent for the life of the app.
+under the app's own prefix, uploads included, and there is no undo.
 
 ## 20 MB, and the downscale
 

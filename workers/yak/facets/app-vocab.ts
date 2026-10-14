@@ -69,6 +69,15 @@ export let kernelDoc: VocabDoc = {
         revised_prompt: text,
       },
     },
+    // Deleting an upload's content row deletes its bytes too (app-effects.ts),
+    // unless a row the app keeps still names them (apps.ts `naming`). So the
+    // row is the one door for deleting an upload, and whoever may delete the
+    // row (@yaks/member) is who may delete the file.
+    delete_upload: {
+      effect: true,
+      removed: ['blob'],
+      description: 'delete a deleted upload’s bytes once nothing names them',
+    },
   },
 }
 
