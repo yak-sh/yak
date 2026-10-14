@@ -179,16 +179,15 @@ let around = (d: Reading, r: Row) => {
   }
 }
 
-// What a search finds a row by.
+// What a search finds a row by: an app by its space and slug together too.
 let said = (d: Reading, r: Row) =>
   [
     r.entity.eid,
     r.doc?.title,
     r.email?.address,
     r.space?.slug,
-    r.app?.slug,
     r.published?.name,
-    r.app ? slugOf(d, appSpace(r)) : '',
+    r.app ? refOf(d, r).name : '',
   ].filter(Boolean).join(' ').toLowerCase()
 
 // Who is shown: everyone with tests asked for, else nobody's work left out.
@@ -343,7 +342,7 @@ let page = async (d: Reading, dir: Directory, r: Row, env: Env) => {
   }
   return desk(
     d,
-    refOf(d, r).name,
+    (r.app && r.doc?.title) || refOf(d, r).name,
     key,
     drawn(r, 'Directory.Page', ctx) + more,
     `<a class="Desk_Address" href="${PATH}/${key}${tested(d)}">${
@@ -425,5 +424,6 @@ let css = `
 @media (max-width: 700px) {
   .Directory_Row { grid-template-columns: minmax(0, 1fr) }
   .Directory_Uses { grid-template-columns: repeat(2, minmax(0, 1fr)) }
+  .Directory_Facts > div { grid-template-columns: 8rem minmax(0, 1fr) }
 }
 `

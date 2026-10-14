@@ -7,6 +7,7 @@
 
 import { parse } from '@yaks/query'
 import type { Child, Context, H, Renderer } from '@yaks/render'
+import { COMPED } from '../directory.ts'
 import { day } from '../html.ts'
 import { count, dollars, size } from '../meter.ts'
 
@@ -41,7 +42,15 @@ let spend = (s?: Uses['spend']) =>
     : s.limit == null
     ? dollars(s.spent)
     : `${dollars(s.spent)} of ${dollars(s.limit)}`
-let when = (iso?: string | null) => iso ? day(iso) : 'never'
+let when = (iso?: string | null, month: 'long' | 'short' = 'long') =>
+  iso ? day(iso, month) : 'never'
+// What a space pays: the Plus plan, or the Plus plan given (a comp).
+let plan = (b: Record<string, unknown>) =>
+  COMPED.includes(str((b.space as Comp)?.slug))
+    ? 'Plus, comped'
+    : str((b.plan as Comp)?.tier) == 'plus'
+    ? 'Plus'
+    : 'Free'
 
 let tag = <N>(h: H<N>, text: string, warn = false) =>
   h('span', { class: `Apps_Tag${warn ? ' Apps_Tag-warn' : ''}` }, text)
@@ -126,7 +135,7 @@ let person: Renderer = {
       ['Spent', spend(u.spend)],
       ['Storage', size(u.storage ?? 0)],
       ['Apps', count(u.apps ?? 0)],
-      ['Last active', when(u.active)],
+      ['Last active', when(u.active, 'short')],
     ])
   },
 }
@@ -136,20 +145,19 @@ let space: Renderer = {
   match: parse('.space'),
   render: (b, h, ctx) => {
     let u = uses(ctx)
-    let slug = str((b.space as Comp)?.slug)
-    let tier = str((b.plan as Comp)?.tier)
+    let pays = plan(b)
     return row(
       h,
       ctx,
       b.entity.eid,
-      slug,
+      str((b.space as Comp)?.slug),
       str(ctx.address),
-      tags(h, b, u, tier == 'plus' ? 'Plus' : ''),
+      tags(h, b, u, pays == 'Free' ? '' : pays),
       [
         ['Spent', spend(u.spend)],
         ['Storage', size(u.storage ?? 0)],
         ['Apps', count(u.apps ?? 0)],
-        ['Last active', when(u.active)],
+        ['Last active', when(u.active, 'short')],
       ],
     )
   },
@@ -174,7 +182,7 @@ let app: Renderer = {
         ['Requests', count(u.requests ?? 0)],
         ['Storage', size(u.storage ?? 0)],
         ['Version', version ? `v${version}` : 'none'],
-        ['Last active', when(u.active)],
+        ['Last active', when(u.active, 'short')],
       ],
     )
   },
@@ -212,18 +220,13 @@ let spacePage: Renderer = {
   match: parse('.space'),
   render: (b, h, ctx) => {
     let u = uses(ctx)
-    let plan = b.plan as Comp
+    let status = str((b.plan as Comp)?.status)
     let m = (b.meter as Comp) ?? {}
     let address = str(ctx.address)
     let owners = (ctx.owners ?? []) as Ref[]
     return facts(h, [
       ['Address', h('a', { href: `https://${address}/` }, address)],
-      [
-        'Plan',
-        `${str(plan?.tier) == 'plus' ? 'Plus' : 'Free'}${
-          plan?.status ? ` · ${plan.status}` : ''
-        }`,
-      ],
+      ['Plan', `${plan(b)}${status ? ` · ${status}` : ''}`],
       ['Owners', refs(h, ctx, owners)],
       ['Made', day(stamp(b, 'created'))],
       ['Last active', when(u.active)],
