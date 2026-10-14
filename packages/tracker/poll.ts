@@ -28,7 +28,8 @@ export type PollOpts = {
   /** time between polls, in ms (default 30000) */
   every?: number
   /** how long one page of a poll may take before the poll counts as failed,
-   * in ms (default 20000), so every poll settles */
+   * in ms (default: the request's own bound, a minute), so every poll
+   * settles */
   timeout?: number
   /** a failed poll; the next one retries */
   report?: (error: unknown) => void
@@ -62,10 +63,9 @@ export let poll = (
       limit: String(PAGE),
       query: `${query} .order=entity.eid${after ? ` .after=${after}` : ''}`,
     })
-    let signal = AbortSignal.any([
-      stop.signal,
-      AbortSignal.timeout(opts.timeout ?? 20_000),
-    ])
+    let signal = opts.timeout
+      ? AbortSignal.any([stop.signal, AbortSignal.timeout(opts.timeout)])
+      : stop.signal
     let result = await read({ remote }, 'bugs', params, signal, go)
     if (!result.ok) throw Error(result.error)
     return result.value as Bundle[]

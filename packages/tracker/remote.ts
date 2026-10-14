@@ -4,9 +4,11 @@
 // The path to the Worker can go bad for one connection while a new one is
 // fine: each connection from the box lands in one of several Cloudflare
 // colos, and the path to some of them loses packets for minutes at a time (a
-// TLS handshake of ten seconds, an answer that never comes). So a request is a
-// few short attempts, each on a connection of its own and each taking its
-// whole answer, never one long wait on a connection gone bad.
+// TLS handshake of ten seconds, an answer that never comes). The tracker's
+// Durable Object can also stop answering for half a minute while the runtime
+// stalls or moves it. So a request is short attempts for up to a minute, each
+// on a connection of its own, with a ticket of its own, and taking its whole
+// answer, never one long wait on a connection gone bad.
 import { derivedEid } from '@yaks/graph/identity'
 import type { Sink } from './report.ts'
 import { sign } from './ticket.ts'
@@ -14,8 +16,8 @@ import { sign } from './ticket.ts'
 export type Remote = { url?: string; secret?: string }
 
 /** How long one attempt may take to its whole answer, and how many attempts a
- * request makes: fifteen seconds in all. */
-let WAIT = 5_000, TRIES = 3
+ * request makes: a minute in all. */
+let WAIT = 5_000, TRIES = 12
 
 /** A failure a timeout caused. It is named as one; any other failure names no
  * cause, since a cause can carry the address or the upstream's body. */
@@ -61,7 +63,7 @@ export let request = async (
   url.search = params.toString()
   url.hash = ''
   let scope = params.get('scope') ?? 'platform'
-  let ticket = await sign({
+  let claims = {
     scope: scope == 'platform' ? derivedEid('tracker|platform') : scope,
     person: 'box-tracker',
     admin: true,
@@ -69,13 +71,16 @@ export let request = async (
     ...['resolve', 'archive', 'take', 'deployed'].includes(path)
       ? { mark: true }
       : {},
-    exp: Math.floor(Date.now() / 1000) + 60,
-  }, remote.secret)
-  let headers = new Headers(init.headers)
-  headers.set('authorization', `Bearer ${ticket}`)
+  }
   let last: unknown
   for (let i = 0; i < TRIES; i++) {
     let wait = AbortSignal.timeout(WAIT)
+    let ticket = await sign({
+      ...claims,
+      exp: Math.floor(Date.now() / 1000) + 60,
+    }, remote.secret)
+    let headers = new Headers(init.headers)
+    headers.set('authorization', `Bearer ${ticket}`)
     try {
       return await attempt(go, url, {
         ...init,

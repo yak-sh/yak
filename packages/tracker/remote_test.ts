@@ -30,13 +30,22 @@ test('a request whose connection fails or stalls is answered on a new one', asyn
   }
 })
 
+test('a request outlasts a Worker that stops answering for half a minute', async () => {
+  let { go, clients } = worker(...Array(6).fill(0).map(timeout))
+  equal(await bugs(go), [])
+  equal(clients.length, 7)
+})
+
 test('a request that fails every attempt names how', async () => {
+  let down = (
+    failure: () => Error,
+  ) => ((() => Promise.reject(failure())) as typeof fetch)
   equal(
-    await bugs(worker(timeout(), timeout(), timeout()).go),
+    await bugs(down(timeout)),
     'TimeoutError: Remote tracker did not answer in time',
   )
   equal(
-    await bugs(worker(timeout(), timeout(), TypeError('reset')).go),
+    await bugs(down(() => TypeError('reset'))),
     'Error: Remote tracker is unavailable',
   )
 })
