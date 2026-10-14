@@ -509,6 +509,10 @@ let called = async (
   cpuMs?: number,
 ): Promise<Response | null> => {
   if (!env.DISPATCH || !env.SESSION_SECRET) return null
+  // A release that built no worker has none to ask for. Asking anyway was a
+  // lookup of a script nobody uploaded: about 110 ms the first time a name is
+  // asked in a place, which is a release's first view (T-124006).
+  if (app.worker === '') return null
   let store = storeName(space, app)
   let worker
   try {

@@ -43,6 +43,11 @@
           "type": "string",
           "stamped": true
         },
+        "worker": {
+          "type": "string",
+          "stamped": true,
+          "description": "the worker its serving release built, as that release's deploy.worker says: empty when it built none, so a page asks the dispatch namespace for nothing; absent where no release recorded it"
+        },
         "access": {
           "type": "string",
           "enum": [

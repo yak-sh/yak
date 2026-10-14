@@ -197,6 +197,10 @@ export type App = {
   draft?: string | null
   fence?: string | null
   script?: string | null
+  // The worker its release built: empty when it built none, so a page asks
+  // the dispatch namespace for nothing (dispatch.ts `called`); null where no
+  // release recorded it, which asks.
+  worker?: string | null
   title: string
   // Who may read and write its store (T-32504): 'public', 'open', or
   // 'private'. Every app is born with it said (`app_new`); a row without it is
@@ -356,6 +360,7 @@ type Row = {
     draft?: string | null
     fence?: string | null
     script?: string | null
+    worker?: string | null
     access?: Access | null
     store?: string | null
   }
@@ -792,6 +797,7 @@ export let appOf = (r: Row): App => ({
   draft: r.app!.draft ?? null,
   fence: r.app!.fence ?? null,
   script: r.app!.script ?? null,
+  worker: r.app!.worker ?? null,
   access: r.app!.access ?? unsaid(r.entity.eid),
   title: r.doc?.title || r.app!.slug,
   store: r.app!.store ?? null,

@@ -428,7 +428,10 @@ test('worker errors after rollback and an in-flight pointer move name the routed
   current = (await call(f.ctx, 'app_errors', f.args)).text
   assertEquals(current.includes('v1'), true, current)
   await call(f.ctx, 'app_errors', { ...f.args, seen: ['all'] })
-  await ran(env, space, app, new Request('https://ada.yaks.app/recipes/'), {
+  // The stand-in namespace above is the release's worker; these releases have
+  // no server source, so the app is told it built one.
+  let worked = { ...app, worker: 'worker-1' }
+  await ran(env, space, worked, new Request('https://ada.yaks.app/recipes/'), {
     person: ADA,
     role: 'owner',
   })

@@ -165,15 +165,32 @@ export let fileBytes = (
   return range || method == 'HEAD' ? fetch(req, env) : door(env).fetch(req)
 }
 
+// The addresses a browser opens for a release's files, pages first: a page
+// at its directory, the rest at their own encoded paths, never the app's
+// inside, and WARMED of them at most.
+///
+/// warmed(['index.html', 'sub/index.html']) -> ['/', '/sub/']
+/// warmed(['a b.css', 'index.html']) -> ['/', '/a%20b.css']
+/// warmed(['worker.js', 'vocab.json', 'seed.json']) -> []
+let WARMED = 64
+let INDEX = 'index.html'
+export let warmed = (paths: string[]) => {
+  let page = (path: string) => path == INDEX || path.endsWith(`/${INDEX}`)
+  let address = (path: string) =>
+    new URL(path, 'https://files.invalid/').pathname
+  return [
+    ...paths.filter(page).map((p) => address(p.slice(0, -INDEX.length))),
+    ...paths.filter((p) => !page(p)).map(address).filter((p) => !inside(p)),
+  ].slice(0, WARMED)
+}
+
 // A release's first view comes moments after its deploy: the person opens
 // what they changed. Every address of a new release misses the cache, and a
 // miss goes the long way round (both tiers, this entrypoint, the bucket: most
 // of a second, T-124006). So the deploy asks for the release's files once, as
-// a view would, and the view finds them cached: pages first, at the address a
-// browser opens (`dir/` for `dir/index.html`), then the rest, WARMED of them
-// at most, a few at a time. Only where the cache is (`FILES`): in-process
-// there is nothing to fill.
-let WARMED = 64
+// a view would, through the same door at the same addresses (`fileBytes`),
+// and the view finds them cached. A few at a time, and only where the cache
+// is (`FILES`): in-process there is nothing to fill.
 let AT_ONCE = 8
 export let warm = async (
   env: Env,
@@ -182,14 +199,7 @@ export let warm = async (
   paths: string[],
 ) => {
   if (!env.FILES) return
-  let INDEX = 'index.html'
-  let page = (path: string) => path == INDEX || path.endsWith(`/${INDEX}`)
-  let address = (path: string) =>
-    new URL(path, 'https://files.invalid/').pathname
-  let asked = [
-    ...paths.filter(page).map((p) => address(p.slice(0, -INDEX.length))),
-    ...paths.filter((p) => !page(p)).map(address).filter((p) => !inside(p)),
-  ].slice(0, WARMED)
+  let asked = warmed(paths)
   let next = 0
   let run = async () => {
     while (next < asked.length) {

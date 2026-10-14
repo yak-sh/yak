@@ -660,6 +660,7 @@ export let record = async (
           draft: null,
           fence: null,
           script: app.script,
+          worker,
           ...(app.lenses ? { lenses: app.lenses } : {}),
         },
         ...seeded ? { seeded: { at: new Date().toISOString(), version } } : {},

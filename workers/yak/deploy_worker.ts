@@ -123,6 +123,10 @@ export let deployWorker = async (
       ],
     }
   }
+  // Cloudflare's id for what was uploaded, or its script name where the API
+  // answered none: never empty once something is up, since an empty worker
+  // is a release that built none, and its pages ask for no worker at all
+  // (dispatch.ts `called`).
   worker = await upload(
     env,
     target,
@@ -130,7 +134,7 @@ export let deployWorker = async (
     compiled ? { ...config, main: compiled.main } : config,
     bound,
     target == store ? undefined : scriptName(store),
-  )
+  ) || scriptName(target)
   // What its code reads as env.NAME: a first upload is the first script there
   // is to bind the app's connections to (connections.ts). The worker is up
   // either way, so a binding that did not take is ours to hear about.

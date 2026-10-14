@@ -161,8 +161,24 @@ let fixture = async () => {
     }
     return Response.json({ success: true, errors: [], result })
   }) as typeof fetch
+  // The dispatch namespace a page asks for the app's worker, which answers as
+  // a worker that passes to the files; `asked` is every script asked for.
+  let asked: string[] = []
+  let serving = {
+    ...env,
+    DISPATCH: {
+      get: (name: string) => {
+        asked.push(name)
+        return {
+          fetch: () => Promise.resolve(new Response(null, { status: 404 })),
+        }
+      },
+    },
+  } as typeof env
   return {
     env,
+    serving,
+    asked,
     dir,
     app,
     tool,
@@ -261,6 +277,13 @@ test('rollback selects the kept files and worker without uploading or minting a 
     assertEquals(app.script, first.script)
     assertEquals(await k.dir.deploys(app), history)
     assertEquals(k.state.scripts.size, scripts)
+    // The release it went back to built a worker, so its page asks for it.
+    let page = await apps.fetch(
+      new Request('https://ada.yaks.app/cookbook/'),
+      k.serving,
+    )
+    await page.body?.cancel()
+    assertEquals(k.asked.length, 1)
   } finally {
     k.done()
   }
@@ -304,10 +327,12 @@ test('a static app may deploy its browser entry.js', async () => {
     assertEquals(k.resources.size, 0)
     let response = await apps.fetch(
       new Request('https://ada.yaks.app/cookbook/entry.js'),
-      k.env,
+      k.serving,
     )
     assertEquals(response.status, 200)
     assertEquals(await response.text(), 'document.title = "Cookbook"')
+    // It built no worker, so the page asks the dispatch namespace for none.
+    assertEquals(k.asked, [])
   } finally {
     k.done()
   }
