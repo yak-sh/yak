@@ -54,7 +54,10 @@ and setup; this is the map and the feel.
   platform's `settled()` first.
 - **Serving an app**: `apps.ts` serves its files and `./api/*`; `door.ts`
   hands the store the caller's standing, including its access mode
-  (`x-yak-access`). A platform page's parts are `ui-building`'s.
+  (`x-yak-access`). Every HTML page leaving for a browser is woven the
+  platform's inline scripts (`page-script.ts`): the reporter, the release
+  listener, and on the free plan the "Made with yaks.app" badge
+  (`public/badge.js`). A platform page's parts are `ui-building`'s.
 - **The connector**: `mcp.ts` and `tools.ts`, the tools Claude and ChatGPT
   call; `prompts/` and `public/docs/` are what those assistants read.
 - **Spending**: `models.ts` and its allowance, the one budget per account

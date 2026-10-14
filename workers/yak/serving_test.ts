@@ -99,13 +99,33 @@ test('a page is served with its base and its reporter', async () => {
   assertEquals(page.status, 200)
   let html = await page.text()
   assert(html.includes('<base href="/cookbook/">'), html)
-  assertEquals(woven(html).length, 2, html)
+  assertEquals(woven(html).length, 3, html)
   assertStringIncludes(html, 'data-yak-at="/cookbook/" data-yak-version="1"')
   // And the client an app imports is the platform's own file, beside the
   // doors it wraps.
   let js = await apps.fetch(visit('/cookbook/api/client.js'), env)
   assertEquals(js.status, 200)
   assert((await js.text()).includes('export let store ='))
+})
+
+// The badge is the platform's, decided as a page is served: the same file
+// wears it while its space is on the free plan and sheds it on the Plus plan.
+test('a free space wears the badge, and the Plus plan sheds it', async () => {
+  using scenario = platform()
+  let { env, files } = scenario
+  let { space } = await seeded(env)
+  files.held.set(
+    'ada/cookbook/index.html',
+    new TextEncoder().encode('<!doctype html><head></head><body>hi</body>'),
+  )
+  let badged = async () =>
+    (await (await apps.fetch(visit('/cookbook/'), env)).text())
+      .includes('Made with ')
+  assert(await badged(), 'the free plan')
+  await stamp(env, {
+    entities: [{ entity: { eid: space.eid }, plan: { tier: 'plus' } }],
+  })
+  assert(!await badged(), 'the Plus plan')
 })
 
 // A deployed page names its module under its release (asset_url.ts), and the
@@ -1221,11 +1241,11 @@ test('worker HTML carries its reporter without changing its page or headers', as
       )
       let body = await page.text()
       let scripts = woven(body)
-      assertEquals(scripts.length, 2)
-      assertEquals(body.split(`data-yak-at="${at}"`).length - 1, 2)
+      assertEquals(scripts.length, 3)
+      assertEquals(body.split(`data-yak-at="${at}"`).length - 1, 3)
       assertEquals(unwoven(body), html)
-      // The worker's own policy still holds, and lets the platform's two
-      // inline scripts run by their hashes and nothing else.
+      // The worker's own policy still holds, and lets the platform's inline
+      // scripts run by their hashes and nothing else.
       assertEquals(
         page.headers.get('content-security-policy'),
         `${csp} ${(await Promise.all(scripts.map(hashed))).join(' ')}`,
@@ -1237,9 +1257,33 @@ test('worker HTML carries its reporter without changing its page or headers', as
     })
     let page = await k.at('/cookbook/menu')
     let body = await page.text()
-    assertEquals(body.split('data-yak-at="/cookbook/"').length - 1, 2)
+    assertEquals(body.split('data-yak-at="/cookbook/"').length - 1, 3)
     assertEquals(unwoven(body), html)
   }
+})
+
+// A worker that answers with its own page reads it through the files door
+// and hands it on; the platform's scripts are woven into what leaves, once.
+test("a worker's own page runs each platform script once", async () => {
+  let k: Awaited<ReturnType<typeof router>>
+  using made = k = await router(async () =>
+    apps.fetch(
+      visit('/', {
+        headers: {
+          'x-yak-grant': await granting(
+            k.env.SESSION_SECRET!,
+            storeName(k.space, k.app),
+            { person: null, role: null },
+          ),
+        },
+      }),
+      k.env,
+    )
+  )
+  made.put('ada/cookbook/index.html', '<!doctype html><body>own</body>')
+  let scripts = woven(await (await made.at('/cookbook/menu')).text())
+  assert(scripts.length > 0)
+  assertEquals(new Set(scripts).size, scripts.length)
 })
 
 test('worker non-HTML and bodyless answers are not rewritten', async () => {

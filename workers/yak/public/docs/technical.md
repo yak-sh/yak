@@ -177,6 +177,11 @@ the space's own people, signed in, are still served. Operations that exceed a
 limit are refused, but existing apps and data are not deleted. Your assistant
 receives a notice when usage reaches 80% of a limit.
 
+Every page an app serves on the free plan wears a small "Made with yaks.app"
+badge in a corner, linking to yaks.app. The platform adds it as the page is
+served, so the app's files never change, and it keeps clear of the app's buttons
+and fields. The Plus plan removes it.
+
 The email limit counts incoming and outgoing messages, and only sending stops
 when the limit is reached. Incoming messages are still delivered. The count
 resets on the first day of each month.

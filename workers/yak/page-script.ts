@@ -1,5 +1,6 @@
 // The platform's own script in every page an app serves: the reporter
-// (public/report.js) and the release listener (public/release.js), woven into
+// (public/report.js) and the release listener (public/release.js), and the
+// badge (public/badge.js) in a page of a space on the free plan, woven into
 // the page's text rather than named by a `src`. Both must run before the
 // page's own code, which made them blocking scripts, and a blocking script is
 // a round trip the parser waits on before anything paints, on every load,
@@ -10,14 +11,14 @@
 // off the first, and client.js sends the second with every request.
 //
 // A page with a Content-Security-Policy of its own may refuse inline scripts.
-// Its policy is given the scripts' hashes (`admitted`), which lets these two
-// run and nothing else.
+// Its policy is given the scripts' hashes (`admitted`), which lets these run
+// and nothing else.
 import { caught } from './defects.ts'
 
 type Assets = { fetch: (req: Request) => Promise<Response> }
 type Script = { text: string; hash: string }
 
-let FILES = ['/report.js', '/release.js']
+let FILES = ['/report.js', '/release.js', '/badge.js']
 
 let digest = async (text: string) =>
   `'sha256-${
@@ -50,13 +51,19 @@ let scripts = (assets: Assets) => {
   return got
 }
 
-/** The tags for a page mounted at `at`, of release `version`, and the hashes
- * a policy needs to admit them. A page whose scripts could not be read is
- * served without them, and the failure is reported: a page that paints
- * without its reporter beats one that fails. */
-export let pageScript = async (assets: Assets, at: string, version: number) => {
+/** The tags for a page mounted at `at`, of release `version`, wearing the
+ * badge when `badged`, and the hashes a policy needs to admit them. A page
+ * whose scripts could not be read is served without them, and the failure is
+ * reported: a page that paints without its reporter beats one that fails. */
+export let pageScript = async (
+  assets: Assets,
+  at: string,
+  version: number,
+  badged: boolean,
+) => {
   try {
-    let all = await scripts(assets)
+    let [report, release, badge] = await scripts(assets)
+    let all = badged ? [report, release, badge] : [report, release]
     return {
       tags: all.map(({ text }) =>
         `<script data-yak-at="${at}" data-yak-version="${version}">${text}</script>`

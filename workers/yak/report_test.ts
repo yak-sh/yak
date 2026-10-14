@@ -63,8 +63,8 @@ test('a page reports its own breaks, and the agent hears', async () => {
     assertStringIncludes(reporterIn(html), "addEventListener('error'")
     assertEquals(
       html.split('data-yak-at="/recipes/"').length - 1,
-      2,
-      'injected once, beside the release listener',
+      3,
+      'injected once, beside the release listener and the badge',
     )
     assertMatch(
       html,

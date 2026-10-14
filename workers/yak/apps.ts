@@ -136,7 +136,7 @@ import { recoverRelease } from './tools.ts'
 import { ADDRESS } from './route.ts'
 import { caught, refusing } from './defects.ts'
 import { full, fullFiles } from './usage.ts'
-import { refusedVisit } from './meter.ts'
+import { free, refusedVisit } from './meter.ts'
 import { scheduleUse } from './used.ts'
 import { modifying, sha256 } from './versions.ts'
 import { DAYS, NOT_ON, type Stats, stats, statsOf, viewed } from './views.ts'
@@ -371,16 +371,21 @@ let platformFile = (req: Request, env: Env, path: string) =>
 // where the prefix is an address the browser asking cannot reach (T-33040).
 //
 // A page answered with a policy of its own (an app's worker can send one) has
-// that policy admit the two scripts by their hashes (page-script.ts
-// `admitted`), so its own rules hold for everything else. A `<meta>` policy
-// governs only what follows it, and the tags come first.
+// that policy admit the scripts by their hashes (page-script.ts `admitted`),
+// so its own rules hold for everything else. A `<meta>` policy governs only
+// what follows it, and the tags come first.
+//
+// A page of a space on the free plan wears the badge too (public/badge.js,
+// meter.ts `free`): decided as it is served, so every version and release an
+// app serves wears it, and none of their files change.
 let reported = async (
   env: Env,
   at: string,
   page: Response,
   version: number,
+  badged: boolean,
 ) => {
-  let { tags, hashes } = await pageScript(env.ASSETS, at, version)
+  let { tags, hashes } = await pageScript(env.ASSETS, at, version, badged)
   let done = false
   let once = (put: (s: string, o: { html: boolean }) => void) => {
     if (done) return
@@ -756,6 +761,11 @@ let asset = async (
   // A sandboxed page is woven its person's saved keys (installed.ts
   // `stored`) and carries a token for them: it is sent whole every time, and
   // no cache on the way may keep it.
+  //
+  // A page an app's worker asked for (its own `env.FILES`, or the home app's
+  // router passing a path on) reaches the browser inside the worker's answer,
+  // which is woven the platform's scripts on its way out (`served`), so it
+  // gets none here, or the browser would run each of them twice.
   let page = await woven(
     env,
     await got.text(),
@@ -763,6 +773,7 @@ let asset = async (
     bare,
     app,
     sandbox ? await sandbox() : '',
+    bearing(req) ? null : free(space),
   )
   if (sandbox) {
     return new Response(page, {
@@ -783,8 +794,9 @@ let asset = async (
 
 // A page as the browser gets it: the app's address before its own first
 // relative URL, the tags a home screen needs, its release's asset addresses,
-// any tags the caller adds, and the reporter. The weaving is done here rather
-// than behind the cache because the same file is a different document at each
+// any tags the caller adds, and the platform's scripts, wearing the badge when
+// `badged` and left out when it is null. The weaving is done here rather than
+// behind the cache because the same file is a different document at each
 // mount, and one cached copy of the bytes serving every mount beats one copy
 // per mount.
 let woven = async (
@@ -794,15 +806,20 @@ let woven = async (
   bare: string,
   app: App,
   tags: string,
+  badged: boolean | null,
 ) => {
   let own = pinned(at, mapped(original, at, bare, app.source), app)
-  let page = based(at, tags ? intoHead(own, tags) : own)
-  return await (await reported(
-    env,
+  let page = released(
+    new Response(based(at, tags ? intoHead(own, tags) : own)),
+    original,
     at,
-    released(new Response(page), original, at, bare, app.source),
-    app.version ?? 0,
-  )).text()
+    bare,
+    app.source,
+  )
+  if (badged != null) {
+    page = await reported(env, at, page, app.version ?? 0, badged)
+  }
+  return await page.text()
 }
 
 let versionedAsset = async (
@@ -2723,7 +2740,13 @@ let served = async (req: Request, env: Env, c: Clock): Promise<Response> => {
         page.body &&
         page.headers.get('content-type')?.startsWith('text/html')
       ) {
-        page = await reported(env, '/', page, early.app.version ?? 0)
+        page = await reported(
+          env,
+          '/',
+          page,
+          early.app.version ?? 0,
+          free(space),
+        )
       }
       let res = reporting(page, req, '/')
       return sandboxed(early.app) ? walled(res) : res
@@ -2860,7 +2883,7 @@ let served = async (req: Request, env: Env, c: Clock): Promise<Response> => {
     own?.body &&
     own.headers.get('content-type')?.startsWith('text/html')
   ) {
-    own = await reported(env, at, own, app.version ?? 0)
+    own = await reported(env, at, own, app.version ?? 0, free(space))
   }
   let page = own ?? await file!
   // Rung 4, and it is last rather than fourth in the code because rungs 3 and
