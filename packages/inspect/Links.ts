@@ -4,8 +4,9 @@
  * relation they state, read from this end (`requires`, and from the far end
  * `required by`, or the relation's `reversed`); then every other entity whose
  * reference names this one, grouped by the property that does
- * (`comment.target`). Each entity at the far end is named, and linked. One
- * query answers both: `.refs=<eid>`.
+ * (`comment.target`), but for the notes the page draws under their headings.
+ * Each entity at the far end is named, and linked. One query answers both:
+ * `.refs=<eid>`.
  *
  * Edited, it is a table of every link, an edge whose relation a client may
  * write removed by its ×, and one added on the line under it by naming a
@@ -156,10 +157,15 @@ export let Links = ({ e, io, ctx }: Props): JSX.Element | null => {
   let eid = e.entity.eid
   let got = io.ask({ refs: `.refs=${eid}&.limit=${LINKS}` })
   let rels = relations(io)
+  // A note is drawn under its heading, so not again among the links.
+  let noted = new Set(
+    [...notes?.values() ?? []].flat().map((b) => b.entity.eid),
+  )
   let shown = (b: Bundle) =>
     b.edge
       ? !skip.includes(relation(b, rels) ?? '')
-      : !naming(b, eid).some((n) => skip.includes(n))
+      : !noted.has(b.entity.eid) &&
+        !naming(b, eid).some((n) => skip.includes(n))
   let all = rows(got.refs).filter(shown)
   let end = (b: Bundle) => b.edge ? far(b, eid) : b.entity.eid
   let editing = edited(io, eid)

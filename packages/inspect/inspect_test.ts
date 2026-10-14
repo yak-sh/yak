@@ -10,6 +10,7 @@ import { desk, draftDoc, drafts } from '@yaks/draft'
 import { filters } from '@yaks/filter'
 import { docs as fieldDocs } from '@yaks/filter/vocab'
 import { mint } from '@yaks/graph'
+import { matcher } from '@yaks/match'
 import { EDGE_URI, edgeKeywords } from '@yaks/edge'
 import { print } from '@yaks/tui/print'
 import { loadVocab } from '@yaks/vocab'
@@ -82,16 +83,20 @@ let TASK: Bundle = {
   doc: { title: 'task', body: 'Work to be done.' },
 }
 
-// A host that answers each line from `answers` and keeps what was asked and
-// written, over a page graph of the inspector's own, where what is followed
-// is stacked; `draw` hands @yaks/ux a host over it.
+// A host that answers each line from `answers`, or by matching it over a
+// graph of bundles, and keeps what was asked and written, over a page graph of
+// the inspector's own, where what is followed is stacked; `draw` hands
+// @yaks/ux a host over it.
 type Answers =
   | Record<string, Partial<Answer>>
   | ((line: string) => Partial<Answer> | undefined)
+  | Bundle[]
 
 let host = (answers: Answers = {}, edits = true) => {
   let answer = typeof answers == 'function'
     ? answers
+    : Array.isArray(answers)
+    ? (l: string) => ({ rows: matcher(l, vocab)(answers) })
     : (l: string) => answers[l]
   let asked: string[] = []
   let applied: Bundle[][] = []
@@ -264,20 +269,38 @@ test('an entity page, edited, writes a value typed over in place', async () => {
   assertEquals(p.text('.Head_Sub-refused'), "no entity 'T-404'")
 })
 
+// A note on T1 under its task heading, and a comment on T1 that is no note.
+let NOTE: Bundle = {
+  entity: { eid: 'c1' },
+  doc: {
+    title: 'T1 · task: owner should be required',
+    body: 'owner should be required',
+  },
+  comment: { target: 't1' },
+  task: {},
+}
+let SAID: Bundle = {
+  entity: { eid: 'c2' },
+  doc: { title: 'looks right to me', body: 'looks right to me' },
+  comment: { target: 't1' },
+}
+
+test('a comment is drawn once on its page: a note under its heading, any other among the links', () => {
+  using t = host([T1, NOTE, SAID])
+  using p = mount(t.draw(h(t.Door, { e: T1, view: 'Inspect.Page' })))
+  let drawn = (eid: string) =>
+    p.root.querySelectorAll(`a[href="${pagePath(eid)}"]`).length
+  assertEquals(drawn('c1'), 1)
+  assertEquals(drawn('c2'), 1)
+  assert(p.text('[data-facts]').includes('owner should be required'))
+  assertEquals(
+    p.text(`[data-section="Links"] a[href="${pagePath('c2')}"]`),
+    'N-c2',
+  )
+})
+
 test('a note under a heading is a comment on the entity that is an open task', async () => {
-  using t = host({
-    '.comment&.comment.target=t1&.limit=100&*': {
-      rows: [{
-        entity: { eid: 'c1' },
-        doc: {
-          title: 'T1 · task: owner should be required',
-          body: 'owner should be required',
-        },
-        comment: { target: 't1' },
-        task: {},
-      }],
-    },
-  })
+  using t = host([T1, NOTE])
   using p = mount(t.draw(h(t.Door, { e: T1, view: 'Inspect.Page' })))
   assert(p.text('[data-facts]').includes('owner should be required'))
   await edit(p)

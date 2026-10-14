@@ -28,9 +28,11 @@ import { edited, key, me, put, refusal, write } from './state.ts'
 /** How many notes a page reads. */
 export let NOTES = 100
 
-/** The notes left on the entity `eid`, as a query. */
+/** The notes left on the entity `eid`, as a query: the comments on it that
+ * are tasks. A plain comment is not a note; the page draws it among its
+ * links, or a package's page among its comments. */
 export let notesOf = (eid: string): string =>
-  `.comment&.comment.target=${eid}&.limit=${NOTES}&*`
+  `.comment&.task&.comment.target=${eid}&.limit=${NOTES}&*`
 
 /**
  * A note's title: the thing it is about, the heading it was left under, and
@@ -129,9 +131,10 @@ export let useSets = (io: Io, rows: Bundle[]): void => {
   )
 }
 
-/** The notes left on `eid`, and their authors named: a hook. */
+/** The notes left on `eid`, and their authors named: a hook. A graph that
+ * has no tasks holds no notes. */
 export let useNotes = (io: Io, eid: string): Bundle[] => {
-  let got = io.ask({ notes: notesOf(eid) })
+  let got = io.ask(io.vocab.comp('task') ? { notes: notesOf(eid) } : {})
   let notes = rows(got.notes)
   useNamed(io, notes.map((b) => str(b, 'created', 'by')))
   return notes
