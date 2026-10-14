@@ -5209,8 +5209,35 @@ let OURS: Row[] = [
     run: async (ctx, args) => {
       // Each wait a named stage on the call's `Server-Timing` (timing.ts).
       let c = ctx.clock ?? clock()
-      let { space, who } = await c.time('owns', () => owns(ctx, args))
-      let email = address(args.email)
+      // Who the address names is read beside the owner check, since neither
+      // waits on the other (T-124082); a refusal of the caller still comes
+      // first. It is the platform's row for that address, minted with the
+      // invitation below if it has never seen one: the invitation is what
+      // makes the person, and their sign-in later finds this same row by the
+      // same address (signin.ts `addressee`). What to call them, if the
+      // invitation said, names them in the letter and stands as their name
+      // until they choose one themselves; left out, they go by the front of
+      // their address (T-34236).
+      let [owned, named] = await c.time('owns', () =>
+        Promise.allSettled([
+          owns(ctx, args),
+          (async () => {
+            let email = address(args.email)
+            let name = args.name == null
+              ? undefined
+              : nameOf(text(args.name, 'name'), email)
+            return {
+              email,
+              name,
+              them: await addressee(meta(ctx.env), email, name),
+            }
+          })(),
+        ]))
+      if (owned.status == 'rejected') throw owned.reason
+      let { space, who } = owned.value
+      if (named.status == 'rejected') throw named.reason
+      let { email, name, them } = named.value
+      let person = them.eid
       let want = args.role == null ? 'editor' : role(args.role)
       // Read before anything is written: a note too long is a refusal, and a
       // refused invitation mails nothing at all (T-32963).
@@ -5227,37 +5254,22 @@ let OURS: Row[] = [
         throw refuse('missing', `no app ${args.app} in ${space.slug}`)
       }
       let to = app ? app.eid : space.eid
-      // What to call them, if the invitation said: it names them in the
-      // letter and stands as their name until they choose one themselves
-      // (signin.ts `addressee` never renames someone who has). Left out,
-      // they go by the front of their address (T-34236).
-      let name = args.name == null
-        ? undefined
-        : nameOf(text(args.name, 'name'), email)
       // Where they stand here, and whether one more letter may go, asked
-      // together: neither waits on the other (T-124082). Somebody the
-      // platform has never seen stands nowhere, so nothing more is asked of
-      // them. The letter's count is only read here and written below with
-      // the invitation, so a refusal still writes and mails nothing.
+      // together. Somebody the platform has never seen stands nowhere, so
+      // nothing is asked about them. The letter's count is only read here
+      // and written below with the invitation, so a refusal still writes and
+      // mails nothing.
       let [here, counting] = await c.time('read', () =>
         Promise.allSettled([
-          // The platform's row for that address, minted with the invitation
-          // if it has never seen one: the invitation is what makes the
-          // person, and their sign-in later finds this same row by the same
-          // address (signin.ts `addressee`).
-          addressee(meta(ctx.env), email, name).then(async (them) => {
-            let [had, held, standing] = them.fresh ? [] : await Promise.all([
-              ctx.dir.member(space, them.eid),
-              app && ctx.dir.grant(app, them.eid),
-              ctx.dir.invite(to, them.eid),
-            ])
-            return { them, had, held, standing }
-          }),
+          them.fresh ? [] : Promise.all([
+            ctx.dir.member(space, person),
+            app && ctx.dir.grant(app, person),
+            ctx.dir.invite(to, person),
+          ]),
           room(ctx.env, ctx.dir, space, ctx.person),
         ]))
       if (here.status == 'rejected') throw here.reason
-      let { them, had, held, standing } = here.value
-      let person = them.eid
+      let [had, held, standing] = here.value
       if (person == ctx.person && had) {
         throw refuse('arguments', `${email} is you, and you own ${space.slug}`)
       }

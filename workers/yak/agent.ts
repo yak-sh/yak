@@ -146,19 +146,22 @@ export let answered = async (
   // Nobody signed in has no space to be told what is unseen in (anon.ts): the
   // breaks in an app are its members', and a stranger is not one.
   // The breaks and the ceiling are asked of different doors and neither waits
-  // on the other, so they are asked together.
+  // on the other, so they are asked together, each a stage on the call's
+  // `Server-Timing` (timing.ts).
   let space = out.space
+  let c = ctx.clock ?? clock()
   let text = !space || !ctx.person || readOnly
     ? out.text
-    : out.text + (await (ctx.clock ?? clock()).time('unseen', () =>
-      Promise.all([
+    : out.text + (await Promise.all([
+      c.time('breaks', () =>
         ctx.dir.role(space, ctx.person).then(async (role) =>
           unseenBlock(
             await serve(ctx.env, space, { person: ctx.person, role }),
           )
-        ),
-        ceiling(ctx.env, space),
-      ]))).join('')
+        )),
+      c.time('ceiling', () =>
+        ceiling(ctx.env, space)),
+    ])).join('')
   // A call to say it came from, where there is one: the builder runs these
   // same tools in its own loop (builder.ts), with nothing to point at.
   let output = {
