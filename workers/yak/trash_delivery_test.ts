@@ -1,8 +1,7 @@
 import { equal, test } from '@yaks/testing'
 import { type Bundle, type Comp, graph, type Storage } from '@yaks/graph'
-import { effectDoc, effects } from '@yaks/effects'
+import { effects } from '@yaks/effects'
 import { ram } from '@yaks/ram'
-import { loadVocab, pick } from '@yaks/vocab'
 import { platformVocab } from './vocab.ts'
 import { effects as trashEffects } from './facets/trash-effects.ts'
 import type { Namespace } from './door.ts'
@@ -11,10 +10,7 @@ import type { Stored } from './graph.ts'
 // Persistent directory rows, fresh effect registry each incarnation, and a
 // controllable delivery door/clock. No production namespace or wall-clock wait.
 let fixture = () => {
-  let vocab = loadVocab([
-    ...platformVocab().docs,
-    pick(effectDoc, ['effect', 'lease']),
-  ])
+  let vocab = platformVocab()
   let storage = ram(vocab)
   let now = Date.now()
   let failing = false

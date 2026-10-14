@@ -61,6 +61,27 @@ export let sourceOf = (sql: string): string => {
   return name
 }
 
+/** A Store's state over a storage, keeping what the Store hands `waitUntil`:
+ * the effects a write owed run after it answers, and `settled` waits for them,
+ * so a step is billed for the work it caused. */
+export let objectState = (storage: State['storage']) => {
+  let pending = new Set<Promise<unknown>>()
+  return {
+    context: {
+      storage,
+      getWebSockets: () => [],
+      acceptWebSocket: () => {},
+      waitUntil: (work: Promise<unknown>) => {
+        pending.add(work)
+        work.finally(() => pending.delete(work)).catch(() => {})
+      },
+    },
+    settled: async () => {
+      while (pending.size) await Promise.allSettled([...pending])
+    },
+  }
+}
+
 /** The rows a storage's statements cost from now on, by step and source.
  * `step` names what the statements that follow belong to. */
 export let meter = (storage: State['storage']) => {

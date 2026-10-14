@@ -38,6 +38,7 @@ let directory = async (p: ReturnType<typeof platform>) => {
       body: '{}',
     }),
   )
+  await p.settled()
   await meta(p.env).query('.wake')
   return p.object(PLATFORM_STORE)
 }

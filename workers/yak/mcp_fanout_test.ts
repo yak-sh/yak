@@ -51,6 +51,9 @@ test('MCP discovery fetches zero app Stores and a named write fetches only its a
       })
       await agent.tool('app_deploy', { space, app })
     }
+    // A deploy's commit is minted after it answers; what is counted below is
+    // discovery alone.
+    await k.settled!()
     for (let method of ['tools/list', 'initialize', 'tools/list']) {
       fetched.length = 0
       await agent.call(
@@ -84,6 +87,7 @@ test('MCP discovery fetches zero app Stores and a named write fetches only its a
     let before = await commandsOf(agent, { space, app: 'recipes' })
     ok(!JSON.stringify(before).includes('ingredient'))
     await agent.tool('app_deploy', { space, app: 'recipes' })
+    await k.settled!()
     fetched.length = 0
     let after = await commandsOf(agent, { space, app: 'recipes' })
     ok(JSON.stringify(after).includes('ingredient'))

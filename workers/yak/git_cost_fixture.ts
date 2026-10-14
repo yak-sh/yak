@@ -7,7 +7,7 @@ import { GIT_STORE, type Namespace, PLATFORM_STORE, storeOf } from './door.ts'
 import { type Args, call } from './tools.ts'
 import type { Env } from './env.ts'
 import { BODY, held, refAt } from './gitobj.ts'
-import { meter, type Steps } from './release_cost_fixture.ts'
+import { meter, objectState, type Steps } from './release_cost_fixture.ts'
 import { DIR, oid, treeEntries, treeOf } from '@yaks/git'
 import { r2Objects } from './lib/objects.ts'
 import { directoryStanding } from './directory_standing_fixture.ts'
@@ -41,7 +41,7 @@ export let gitPushCost = async (
   bindings: Pick<Env, 'STORE' | 'BLOBS'> & { GIT_COST: Namespace },
   count: number,
 ) => {
-  let context = { storage, getWebSockets: () => [], acceptWebSocket: () => {} }
+  let { context, settled } = objectState(storage)
   let store: Store
   let git = bindings.GIT_COST.get(
     bindings.GIT_COST.idFromName(crypto.randomUUID()),
@@ -89,8 +89,13 @@ export let gitPushCost = async (
     entity: { eid: crypto.randomUUID() },
     member: { space: spaceId, person, role: 'owner' },
   }], KERNEL)
-  let run = (name: string, args: Args) =>
-    call({ env, dir, person }, name, { space: slug, ...args })
+  // The commit a deploy owes is minted by the directory's pool once the
+  // deploy has answered, so a call is done when what it owed is.
+  let run = async (name: string, args: Args) => {
+    let out = await call({ env, dir, person }, name, { space: slug, ...args })
+    await settled()
+    return out
+  }
   await run('app_new', { slug: 'probe', title: 'Probe' })
   let space = (await dir.space(slug))!
   let app = (await dir.app(space, 'probe'))!

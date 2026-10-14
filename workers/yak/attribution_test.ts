@@ -2,7 +2,7 @@ import { test } from '@yaks/testing'
 import { assertEquals, assertRejects } from '@std/assert'
 import { type Bundle, type Comp, graph, Stale, type Storage } from '@yaks/graph'
 import { ram } from '@yaks/ram'
-import { loadVocab, pick } from '@yaks/vocab'
+import { loadVocab } from '@yaks/vocab'
 import { spineDoc } from '@yaks/kernel/vocab'
 import { docDoc } from '@yaks/doc'
 import { attributed, registrationDoc } from './attribution.ts'
@@ -195,10 +195,7 @@ test('directory attribution recovery still fills unfinished signed-in receipts',
       },
     }),
   }
-  let vocab = loadVocab([
-    ...platformVocab().docs,
-    pick(effectDoc, ['effect', 'lease']),
-  ])
+  let vocab = platformVocab()
   let storage = ram(vocab)
   let directory = graph({ vocab, storage })
   await directory.apply([

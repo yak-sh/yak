@@ -64,9 +64,10 @@ let standing = async (env: Env, access: string, trashed = false) => {
 }
 
 // One release, the way a deploy makes one: the bytes pinned, then the row that
-// says the version happened — which is what mints the commit.
+// says the version happened — which owes the commit, minted once the write has
+// answered.
 let deploy = async (
-  env: Env,
+  { env, settled }: ReturnType<typeof platform>,
   app: App,
   version: number,
   files: Record<string, string>,
@@ -79,6 +80,7 @@ let deploy = async (
     await pins(r2Objects(env.BLOBS), 'ada/recipes/').put(manifest[path], bytes)
   }
   await record(dir, WHO, app, version, manifest, '')
+  await settled()
 }
 
 // The Git door receives the whole hostname path, without its query.
@@ -124,11 +126,12 @@ let serving = (env: Env) =>
   })
 
 test('git clones an app at <app>.git, and its history is its deploys', async () => {
-  let { env } = platform(SECRET)
+  let p = platform(SECRET)
+  let { env } = p
   let { dir: listing, space, app } = await standing(env, 'public')
-  await deploy(env, app, 1, { 'index.html': '<h1>hi</h1>\n' })
+  await deploy(p, app, 1, { 'index.html': '<h1>hi</h1>\n' })
   app = (await listing.app(space, 'recipes'))!
-  await deploy(env, app, 2, {
+  await deploy(p, app, 2, {
     'index.html': '<h1>hello</h1>\n',
     'lib/app.js': 'export let go = () => 1\n',
   })
@@ -162,11 +165,12 @@ test('git clones an app at <app>.git, and its history is its deploys', async () 
 })
 
 test('git clones the browser address, with and without its slash', async () => {
-  let { env } = platform(SECRET)
+  let p = platform(SECRET)
+  let { env } = p
   let { app } = await standing(env, 'public')
   // A file at the very address the door now answers: what proves the app is
   // still the one serving its pages.
-  await deploy(env, app, 1, {
+  await deploy(p, app, 1, {
     'index.html': '<h1>hi</h1>\n',
     'info/refs': 'a static file\n',
   })
@@ -195,7 +199,8 @@ test('git clones the browser address, with and without its slash', async () => {
 })
 
 test('the browser address redirects to the repository, query and all', async () => {
-  let { env } = platform(SECRET)
+  let p = platform(SECRET)
+  let { env } = p
   await standing(env, 'public')
   let res = await asked(env, '/recipes/info/refs?service=git-upload-pack', {
     'git-protocol': 'version=2',
@@ -222,7 +227,8 @@ let pkt = (line: string) =>
 // stream — a 200 that stops after the section header, which git reports as
 // `early EOF` and which no status code says anything about.
 test('an app whose bytes are pinned per-app still serves a pack', async () => {
-  let { env } = platform(SECRET)
+  let p = platform(SECRET)
+  let { env } = p
   let { app } = await standing(env, 'public')
   let blobs = r2Objects(env.BLOBS)
   let files = { 'index.html': '<h1>hi</h1>\n' }
@@ -234,6 +240,7 @@ test('an app whose bytes are pinned per-app still serves a pack', async () => {
   }
   let dir = directory({ fetch: (r: Request) => dirPart.fetch(r, env) }, true)
   await record(dir, WHO, app, 1, manifest, '')
+  await p.settled()
 
   let post = async (body: string) => {
     let url = new URL('https://ada.yaks.app/recipes.git/git-upload-pack')
@@ -277,9 +284,10 @@ test('an app whose bytes are pinned per-app still serves a pack', async () => {
 })
 
 test('a private app asks for a credential, and judges the one it gets', async () => {
-  let { env } = platform(SECRET)
+  let p = platform(SECRET)
+  let { env } = p
   let { app } = await standing(env, 'private')
-  await deploy(env, app, 1, { 'index.html': '<h1>hi</h1>\n' })
+  await deploy(p, app, 1, { 'index.html': '<h1>hi</h1>\n' })
   let hers = await tokenFor(env, ADA)
   let his = await tokenFor(env, BEN)
   for (let path of ['/recipes.git/info/refs', '/recipes.git/git-upload-pack']) {
@@ -316,9 +324,10 @@ test('a private app asks for a credential, and judges the one it gets', async ()
 })
 
 test('a trashed app is gone to a credential as much as to nobody', async () => {
-  let { env } = platform(SECRET)
+  let p = platform(SECRET)
+  let { env } = p
   let { app } = await standing(env, 'private', true)
-  await deploy(env, app, 1, { 'index.html': '<h1>hi</h1>\n' })
+  await deploy(p, app, 1, { 'index.html': '<h1>hi</h1>\n' })
   let hers = await tokenFor(env, ADA)
   for (let head of [{}, basic(hers)]) {
     let res = await asked(env, '/recipes.git/info/refs', {
@@ -333,9 +342,10 @@ test('a trashed app is gone to a credential as much as to nobody', async () => {
 })
 
 test('git clones a private app with the token as the password', async () => {
-  let { env } = platform(SECRET)
+  let p = platform(SECRET)
+  let { env } = p
   let { app } = await standing(env, 'private')
-  await deploy(env, app, 1, { 'index.html': '<h1>hi</h1>\n' })
+  await deploy(p, app, 1, { 'index.html': '<h1>hi</h1>\n' })
   let hers = await tokenFor(env, ADA)
 
   let server = serving(env)
@@ -379,7 +389,8 @@ test('git clones a private app with the token as the password', async () => {
 })
 
 test('an app that is not there, and a path that is no repository', async () => {
-  let { env } = platform(SECRET)
+  let p = platform(SECRET)
+  let { env } = p
   await standing(env, 'public')
   let gone = await asked(env, '/nothing.git/info/refs', {
     'git-protocol': 'version=2',
@@ -392,7 +403,8 @@ test('an app that is not there, and a path that is no repository', async () => {
 })
 
 test('the advertisement is served at info/refs on a public app', async () => {
-  let { env } = platform(SECRET)
+  let p = platform(SECRET)
+  let { env } = p
   await standing(env, 'public')
   let res = await asked(env, '/recipes.git/info/refs?service=git-upload-pack', {
     'git-protocol': 'version=2',

@@ -1406,6 +1406,9 @@ let released = async (
     )
   }
   let fence = await fenced(ctx.dir, standing, draft, who)
+  // A committed release clears the fence in its own record (versions.ts
+  // `record`), so only a release that stopped short has one left to lift.
+  let released = false
   try {
     let files = kept
       ? {
@@ -1442,7 +1445,7 @@ let released = async (
         },
       }
     }
-    return await published(
+    let out = await published(
       ctx,
       space,
       { ...standing, draft },
@@ -1456,8 +1459,10 @@ let released = async (
       preserve,
       accepted,
     )
+    released = true
+    return out
   } finally {
-    await unfenced(ctx.dir, standing, fence, who)
+    if (!released) await unfenced(ctx.dir, standing, fence, who)
   }
 }
 

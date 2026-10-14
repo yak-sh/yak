@@ -274,7 +274,7 @@ import { borrows } from './reach.ts'
 import { behind, restartedFor, versionOf } from './running.ts'
 import { type Meta, meta, metaOf, minted } from './meta.ts'
 import { caught, defect, refusing } from './defects.ts'
-import { counts, hop, type Tally, tallying } from './lib/hops.ts'
+import { apart, counts, hop, type Tally, tallying } from './lib/hops.ts'
 import {
   batch,
   BATCHES,
@@ -2710,6 +2710,9 @@ export class Store {
       await this.#planting()
     }
     this.#effectsReady = true
+    // The pass starts as many start-up runs as the pool has slots; the rest
+    // are pending, and run now rather than at the next write.
+    this.#workingEffects()
     this.#embedding()
     this.#put(
       'deployed',
@@ -2958,7 +2961,8 @@ export class Store {
       this.#effectAgain = true
       return
     }
-    this.#effectWork = (async () => {
+    // The pool's work is the store's own, not the request that nudged it.
+    this.#effectWork = apart(async () => {
       do {
         this.#effectAgain = false
         await this.#effects.work(this.#stored(this.#graph).graph)
@@ -3001,7 +3005,7 @@ export class Store {
           'effects',
         )
       }
-    })().catch(async (error) => {
+    }).catch(async (error) => {
       defect(error, { request: 'effect pool', store: this.#name() })
       await this.#arming(
         new Date(Date.now() + Store.RETRY).toISOString(),

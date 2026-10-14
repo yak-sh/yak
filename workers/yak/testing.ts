@@ -987,6 +987,18 @@ export let platform = (
       ringing = null
     })
   }
+  // Every store's waitUntil work, and the alarm delivery under way: what a
+  // write leaves running after it answers, such as the effects it owed.
+  let pending = () => [
+    ...ringing ? [ringing] : [],
+    ...stores.flatMap((ctx) => [...ctx.pending]),
+  ]
+  // Until nothing is left running, including work that work started.
+  let settled = async () => {
+    for (let work = pending(); work.length; work = pending()) {
+      await Promise.allSettled(work)
+    }
+  }
   let closing: Promise<void> | null = null
   let close = () => {
     if (closing) return closing
@@ -994,10 +1006,6 @@ export let platform = (
       for (let ctx of stores) ctx.storage[Symbol.dispose]()
       stores.length = 0
     }
-    let pending = () => [
-      ...ringing ? [ringing] : [],
-      ...stores.flatMap((ctx) => [...ctx.pending]),
-    ]
     // A Durable Object's runtime retains its storage for waitUntil work.
     // An alarm delivery can start such work or call another store before it
     // settles, so closing waits through the active delivery as well.
@@ -1006,9 +1014,7 @@ export let platform = (
       return closing = Promise.resolve()
     }
     return closing = (async () => {
-      for (let work = pending(); work.length; work = pending()) {
-        await Promise.allSettled(work)
-      }
+      await settled()
       release()
     })()
   }
@@ -1021,6 +1027,7 @@ export let platform = (
     builder,
     recovery,
     ring,
+    settled,
     [Symbol.dispose]: () => void close(),
     [Symbol.asyncDispose]: close,
   }

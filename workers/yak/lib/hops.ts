@@ -46,6 +46,11 @@ export let tallying = <T>(tally: Tally, work: () => T): T =>
     return out.finally(close) as T
   })
 
+/** Run `work` outside any request's count. What a store does on its own
+ * after answering (its effect pool) is no request's round trip, though it
+ * starts inside one. */
+export let apart = <T>(work: () => T): T => here.exit(work)
+
 /** One round trip, named. A no-op wherever nobody is counting.
  *
  * `tally` names one outright, for a caller holding the map itself — a test

@@ -470,9 +470,10 @@ test('a deploy says how many round trips it took', async () => {
     { hops: 5, r2: 10 },
   )
   let deploy = await costs('app_deploy', { space: 'ada', app: 'recipes' })
-  // Include the tree and commit's reads that prevent immutable object rewrites.
-  assert(deploy.hops <= 27, JSON.stringify(deploy))
-  assert(deploy.r2 <= 32, JSON.stringify(deploy))
+  // The release's Git commit is the directory's effect, minted after the
+  // deploy has answered, so none of its round trips are the deploy's.
+  assert(deploy.hops <= 21, JSON.stringify(deploy))
+  assert(deploy.r2 <= 11, JSON.stringify(deploy))
   assertEquals(
     (await costs('app_files', {
       space: 'ada',
@@ -507,7 +508,8 @@ test('a deploy says how many round trips it took', async () => {
 // broken in each is the space's tracker's to say. A listing that woke every
 // store spent the month's requests of apps nobody had opened.
 test('a listing asks the directory a fixed number of times', async () => {
-  let { env } = platform('listing-hops-secret')
+  let p = platform('listing-hops-secret')
+  let { env } = p
   let dir = directory({ fetch: (r) => dirPart.fetch(r, env) }, true)
   let ADA = 'a0000000-0000-4000-8000-0000000000ad'
   let setup: Ctx = { env, dir, person: ADA }
@@ -518,6 +520,8 @@ test('a listing asks the directory a fixed number of times', async () => {
     }
   }
   await booted(setup)
+  // What the setup's writes owed runs after them; only the listing is counted.
+  await p.settled()
   let costs = async (name: string, args: Record<string, unknown>) => {
     let c = clock()
     await c.counting(() =>

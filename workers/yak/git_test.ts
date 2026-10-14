@@ -74,9 +74,10 @@ let standing = async (env: Env) => {
 }
 
 // One release: the files in the bucket where a deploy pins them, then the row
-// that says the version happened — which is what wakes the effect.
+// that says the version happened — which owes the effect, run once the write
+// has answered.
 let deploy = async (
-  env: Env,
+  { env, settled }: ReturnType<typeof platform>,
   app: App,
   version: number,
   files: Record<string, string>,
@@ -94,6 +95,7 @@ let deploy = async (
   let space = (await dir.space('ada'))!
   let current = (await dir.app(space, app.slug))!
   await record(dir, WHO, current, version, manifest, '')
+  await settled()
   return manifest
 }
 
@@ -129,9 +131,10 @@ let chain = async (env: Env, git: ReturnType<typeof metaOf>, app: App) => {
 }
 
 test('a deploy mints one commit whose tree is the manifest', async () => {
-  let { env } = platform('a probe secret')
+  let p = platform('a probe secret')
+  let { env } = p
   let { app, git } = await standing(env)
-  let manifest = await deploy(env, app, 1, {
+  let manifest = await deploy(p, app, 1, {
     'index.html': '<h1>hi</h1>\n',
     'lib/app.js': 'export let go = () => 1\n',
   })
@@ -202,7 +205,8 @@ test('the git object store can write down a break of its own', async () => {
 })
 
 test('the next deploy follows the last one and moves the branch', async () => {
-  let { env } = platform('a probe secret')
+  let p = platform('a probe secret')
+  let { env } = p
   // The files the object store is asked to name by their bytes.
   let named: string[] = []
   let ns = env.STORE!
@@ -221,10 +225,10 @@ test('the next deploy follows the last one and moves the branch', async () => {
   }
   let { app, git } = await standing(env)
   let lib = { 'lib/a.js': 'a\n', 'lib/b.js': 'b\n' }
-  await deploy(env, app, 1, { 'index.html': 'one\n', ...lib })
+  await deploy(p, app, 1, { 'index.html': 'one\n', ...lib })
   let first = await headOf(env, app)
   named.length = 0
-  let manifest = await deploy(env, app, 2, { 'index.html': 'two\n', ...lib })
+  let manifest = await deploy(p, app, 2, { 'index.html': 'two\n', ...lib })
   let second = await headOf(env, app)
 
   assert(first && second && first != second, 'the branch moved')
@@ -242,10 +246,11 @@ test('the next deploy follows the last one and moves the branch', async () => {
 })
 
 test('the sweep commits what nothing committed, once', async () => {
-  let { env } = platform('a probe secret')
+  let p = platform('a probe secret')
+  let { env } = p
   let { app, git, platform: dir } = await standing(env)
   for (let v of [1, 2, 3]) {
-    await deploy(env, app, v, { 'index.html': `v${v}\n` })
+    await deploy(p, app, v, { 'index.html': `v${v}\n` })
   }
   let full = await chain(env, git, app)
   assertEquals(full.length, 3)

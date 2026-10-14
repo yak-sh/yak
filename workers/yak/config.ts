@@ -189,7 +189,10 @@ export let directoryConfig: Config = {
     },
     { use: '@yaks/connections', facets: toolFacets },
     '@yaks/secrets',
-    { use: '@yaks/effects', words: ['provisional'] },
+    // The pool's rows: the directory's effects (a deploy's Git commit, trash
+    // delivery) are recorded beside the write and run after it, durably, so
+    // no writer waits on them.
+    { use: '@yaks/effects', words: ['provisional', 'effect', 'lease'] },
     {
       use: '@yaks/tools',
       words: [

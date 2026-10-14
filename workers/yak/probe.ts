@@ -89,6 +89,9 @@ export type Kernel = Door & {
   // In-process HTTP probes can inspect what crossed the tracker queue door.
   reported?: Bundle[]
   flushReports?: () => Promise<void>
+  // And wait for what a request left running after it answered: the
+  // effects a write owed, run by the store's pool.
+  settled?: () => Promise<void>
 }
 
 let want = (name: string) => {
@@ -250,6 +253,7 @@ let boot = async (
       owner: await signIn(door, `owner@${apex()}`),
       reported,
       flushReports: () => reportClock.advance(10_000),
+      settled: p.settled,
       close,
     }
   } catch (e) {

@@ -218,6 +218,10 @@ test('each version of the Worker brings the wrap pass forward, once', async () =
   let LATER = '2031-01-01T05:10:00.000Z'
   let later = () =>
     meta(p.env).apply([{ entity: { eid: ROW }, wake: { at: LATER } }], KERNEL)
+  // The directory's deployment seeds the row, from the start-up runs its pool
+  // works once the pass is done.
+  await meta(p.env).query('.wake')
+  await p.settled()
   await at()
   await later()
   assertEquals(await at(), LATER)
@@ -225,8 +229,10 @@ test('each version of the Worker brings the wrap pass forward, once', async () =
   p.env.CF_VERSION_METADATA = { id: 'v2' }
   await at()
   await p.object(PLATFORM_STORE).alarm()
+  await p.settled()
   assert(await at() < LATER)
   await later()
   await p.object(PLATFORM_STORE).alarm()
+  await p.settled()
   assertEquals(await at(), LATER)
 })

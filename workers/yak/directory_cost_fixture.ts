@@ -8,7 +8,7 @@ import { type Args, call } from './tools.ts'
 import type { Env } from './env.ts'
 import { driver } from '@yaks/durable-object'
 import { by, col, val } from '@yaks/sql'
-import { meter } from './release_cost_fixture.ts'
+import { meter, objectState } from './release_cost_fixture.ts'
 import { directoryStanding } from './directory_standing_fixture.ts'
 
 export let directoryLifecycleCost = async (
@@ -16,7 +16,7 @@ export let directoryLifecycleCost = async (
   bindings: Pick<Env, 'STORE' | 'BLOBS'>,
   history: number,
 ) => {
-  let context = { storage, getWebSockets: () => [], acceptWebSocket: () => {} }
+  let { context, settled } = objectState(storage)
   let store: Store
   let env = {
     ...bindings,
@@ -79,6 +79,7 @@ export let directoryLifecycleCost = async (
     )
   }
   await store.alarm()
+  await settled()
   await storage.deleteAlarm?.()
   // An idle directory retains receipts until its next keyed write. Include
   // expired successful traffic, as well as unrelated graph rows.
@@ -111,12 +112,15 @@ export let directoryLifecycleCost = async (
   let now = Date.now, instant = now() + 11 * 60_000
   Date.now = () => instant
   let m = meter(storage)
+  // A step is billed for what it owed the directory's pool too.
   let run = async (name: string, args: Args) => {
     m.step(name)
-    return await call({ env, dir, person }, name.split(' ')[0], {
+    let out = await call({ env, dir, person }, name.split(' ')[0], {
       space: slug,
       ...args,
     })
+    await settled()
+    return out
   }
   try {
     // admin push on a missing app: failed list, create, upload, release.
@@ -155,6 +159,7 @@ export let directoryLifecycleCost = async (
     await meta.query(`.entity.eid=${space.eid}`)
     m.step('wake alarm')
     await store.alarm()
+    await settled()
     m.step(null)
     return { history, steps: m.steps, top: m.top(20) }
   } finally {

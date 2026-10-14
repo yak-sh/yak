@@ -54,6 +54,7 @@ test('each run reports the kills since the last one, and reads on from there', a
         body: '{}',
       }),
     )
+    await p.settled()
     await meta(p.env).apply([{
       entity: { eid: 'yak-kills' },
       wake: { at: iso('05:00') },
