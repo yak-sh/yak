@@ -3481,12 +3481,18 @@ let OURS: Row[] = [
           `${space.slug}/${app.slug}: ${all.length} ${
             all.length == 1 ? 'version' : 'versions'
           }${all.length > KEEP ? `, newest ${KEEP}` : ''}`,
+          // Each says what it changed over the version it went out over,
+          // which a deploy after a rollback makes older than the number below.
           ...all.slice(0, KEEP).map((v, i) => {
+            let over = deployedOver(all, moves, v)
+            let base = over ?? all[i + 1]
             return `- v${v.version}${
               v.version == app.version ? ' (live)' : ''
             }${v.version == app.published?.version ? ' (offered)' : ''}${
               v.at ? ` ${v.at}` : ''
-            } — ${whatChanged(all[i + 1]?.files ?? null, v.files)}`
+            } — ${whatChanged(base?.files ?? null, v.files)}${
+              over && over != all[i + 1] ? ` (over v${over.version})` : ''
+            }`
           }),
           ...moves.sort((a, b) =>
             String(b.switched?.at).localeCompare(String(a.switched?.at))

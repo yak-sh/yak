@@ -596,6 +596,11 @@ test('a rollback after a rollback returns to what was live', async () => {
     })
     await agent.tool('app_deploy', app)
 
+    // The list says what v3 changed over the version it went out over.
+    assertMatch(
+      await agent.tool('app_versions', app),
+      /- v3 \(live\) \S+ — changed index\.html \(over v1\)/,
+    )
     let back = await agent.tool('app_rollback', app)
     assertStringIncludes(back, 'back to v1, live now')
     assertStringIncludes(back, `app_rollback(app: 'list', version: 3)`)
