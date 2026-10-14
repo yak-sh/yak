@@ -5,14 +5,32 @@ import { sign } from '@yaks/tracker/ticket'
 import type { App, Space } from './directory.ts'
 import type { Env } from './env.ts'
 import type { Who } from './session.ts'
+import { recall, writing } from './lib/hops.ts'
 
-let request = async (
+// The space's tracker is a store like any other to the request's tally
+// (hops.ts): a read asked twice is asked once, until this request writes
+// there, so a read begun early (unseen.ts `foresee`) answers a later one.
+let request = (
   env: Env,
   space: Space,
   who: Who,
   path: string,
   init: RequestInit = {},
 ) => {
+  let store = `tracker ${space.eid}`
+  let send = () => sent(env, space, who, path, init)
+  return init.method == 'POST'
+    ? writing(store, send)
+    : recall(store, path, send)
+}
+
+let sent = async (
+  env: Env,
+  space: Space,
+  who: Who,
+  path: string,
+  init: RequestInit,
+): Promise<unknown> => {
   if (!env.TRACKER || !env.TRACKER_SECRET) throw Error('tracker is unavailable')
   let token = await sign({
     scope: space.eid,

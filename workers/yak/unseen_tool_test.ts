@@ -5,9 +5,11 @@ import { assertEquals, assertStringIncludes } from '@std/assert'
 import { appStore } from './directory.ts'
 import { KERNEL, metaOf } from './meta.ts'
 import { ADA, platform, seeded } from './serving-probe.ts'
-import { call } from './tools.ts'
-import { brokenIn, noted, serve } from './unseen.ts'
+import { call, TOOLS } from './tools.ts'
+import { brokenIn, foresee, noted, serve } from './unseen.ts'
 import type { Who } from './session.ts'
+import { running } from './agent.ts'
+import { tallying } from './lib/hops.ts'
 
 test('app_errors lists a break whose stored stack is null', async () => {
   using p = platform()
@@ -123,4 +125,39 @@ test('brokenIn says each break plainly and leaves it news', async () => {
   )
   // Seen on the dashboard, not yet told: the assistant still hears of both.
   assertEquals((await serve(env, space, ada)).length, 4)
+})
+
+// The connector begins reading what a write's answer will tell as soon as the
+// write knows its space (mcp.ts `ahead`), and the answer is handed that
+// reading: the space's breaks are asked for once (T-124082).
+test("a write's answer reads its space's breaks once", async () => {
+  using p = platform()
+  let { env } = p
+  let { dir, space, app } = await seeded(env)
+  await noted({ request: 'page /cookbook/', message: 'boom', version: 1 }, {
+    env,
+    space,
+    app,
+  })
+  let tracker = env.TRACKER!
+  let asked = 0
+  env.TRACKER = {
+    fetch: (r: Request) => {
+      if (new URL(r.url).pathname == '/query') asked++
+      return tracker.fetch(r)
+    },
+  }
+  let ctx = {
+    env,
+    dir,
+    person: ADA,
+    ahead: (at: typeof space, who: Who) => foresee(env, at, who),
+  }
+  let set = TOOLS.find((t) => t.name == 'app_set')!
+  let [said] = await tallying(
+    new Map(),
+    () => running(ctx, set)({ space: 'ada', app: 'cookbook', title: 'Cook' }),
+  )
+  assertStringIncludes(JSON.stringify(said), 'boom')
+  assertEquals(asked, 1)
 })

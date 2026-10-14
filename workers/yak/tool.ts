@@ -56,6 +56,11 @@ export type Ctx = {
   // a single tool call is its own budget — which is as much as one call could
   // spend anyway, since a command is capped at sandbox.ts `TIMEOUT`.
   spend?: Spend
+  // Told when a caller who writes has entered a space (`inSpace`, `inApp`),
+  // by a door that will tell them what is unseen there once the write is done
+  // (agent.ts `answered`), so that reading can begin beside the write
+  // (unseen.ts `foresee`).
+  ahead?: (space: Space, who: Who) => void
   // The request's stopwatch (timing.ts), when the door keeps one: a write
   // names each round trip it waits on, and mcp.ts puts the marks on the
   // answer as `Server-Timing`, so a slow deploy says which hop was slow.
@@ -287,7 +292,9 @@ export let inSpace = async (
   over = false,
 ) => {
   let space = await spaceOf(ctx, args)
-  return { space, who: await callerIn(ctx, space, write, over) }
+  let who = await callerIn(ctx, space, write, over)
+  if (write) ctx.ahead?.(space, who)
+  return { space, who }
 }
 
 // One named space as a seat — the shape `directory.seats` answers in, so a
@@ -322,6 +329,7 @@ export let inApp = async (
   let who = seat.value
   let { slug, app } = named.value
   if (!app) throw refuse('missing', `no app ${slug} in ${space.slug}`)
+  if (write) ctx.ahead?.(space, who)
   return {
     space,
     app,

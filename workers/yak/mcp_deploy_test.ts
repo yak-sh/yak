@@ -629,14 +629,19 @@ test('the deploy that fixes a break closes it', async () => {
       '1 open error',
     )
 
-    // The fix goes out. Nothing archives it by hand.
+    // Another dies before anyone is told: unseen until the fix goes out.
+    await (await report('failed to load script /weather/w.css')).body?.cancel()
+
+    // The fix goes out. Nothing archives it by hand, and the deploy's own
+    // answer does not tell as unseen what it just closed.
     await agent.tool('app_files', {
       ...app,
       files: [{ path: 'app.js', content: 'document.title = "W"' }],
     })
     let out = await agent.tool('app_deploy', app)
     assertMatch(out, /v2/)
-    assertStringIncludes(out, 'closed 1 break from other versions')
+    assertStringIncludes(out, 'closed 2 breaks from other versions')
+    assert(!out.includes('unseen'), out)
     assertEquals(await agent.tool('app_errors', app), 'no open errors')
     assert(
       !(await agent.tool('app_list', { space })).includes('open error'),

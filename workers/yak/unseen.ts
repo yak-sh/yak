@@ -570,6 +570,13 @@ export let past = (app: { version?: number | null }, h: Hit) => {
 // ({@link trackedIn}) and wakes no app's store. An app's own rows are never
 // news to it: they are breaks from before the tracker, long since offered, or
 // its transcripts' errors, which name no version ({@link past}).
+/** Begin reading what {@link serve} will tell about this space, while a write
+ * there goes on: serve asks again and is handed this reading, unless the
+ * request wrote to the space's tracker in between (app-errors.ts, hops.ts
+ * `recall`). A failure here is serve's to meet when it asks. */
+export let foresee = (env: Env, space: Space, who: Who) =>
+  void trackedIn(env, space, who).catch(() => {})
+
 export let serve = async (
   env: Env,
   space: Space,

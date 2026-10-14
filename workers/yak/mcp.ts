@@ -110,6 +110,7 @@ import { url as hostUrl } from './host.ts'
 import { source, within } from './rate.ts'
 import * as appAddress from './app-address.ts'
 import { opened as unseal, seal } from './lib/token.ts'
+import { foresee } from './unseen.ts'
 
 type Rpc = {
   jsonrpc: '2.0'
@@ -770,6 +771,10 @@ let answered = async (
     person: auth.person,
     who: auth,
     clock: c,
+    // A write's answer ends with what is unseen in its space (agent.ts
+    // `answered`), and this request counts its reads (hops.ts), so that
+    // reading begins as soon as the write knows its space.
+    ahead: (space, who) => foresee(env, space, who),
   }
   // The session id, per the transport: minted at `initialize` and sent back by
   // the client on every later request. It names which of this person's streams
