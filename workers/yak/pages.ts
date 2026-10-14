@@ -695,6 +695,9 @@ let deskCss = `
 .Apps_Path { color: var(--soft-ink); font-size: .85rem }
 .Apps_Tags { display: flex; flex-wrap: wrap; gap: .45rem; margin-top: auto; padding-top: .5rem; font-size: .75rem; color: var(--soft-ink) }
 .Apps_Tag { padding: .1rem .5rem; border-radius: .35rem; background: var(--ground) }
+.Apps.Apps-one { grid-template-columns: minmax(0, 18rem); justify-content: center; margin: 1.5rem 0 0; text-align: left }
+.Apps-one .Apps_Item { min-height: 0 }
+.Apps_Tags:empty { display: none }
 .Apps_Tag-warn { position: relative; background: color-mix(in srgb, var(--warn) 12%, var(--paper)); color: var(--warn); font-weight: 700; text-decoration: none }
 .Fix_List { display: grid; gap: .75rem; margin: 0 0 1rem; padding: 0; list-style: none }
 .Fix_List p { margin: 0; font-size: .9rem }
@@ -842,7 +845,10 @@ let library = (at: DeskPage, env: Host) => {
     at.apps.length
       ? `<div class="Apps">${
         at.apps.map((a) =>
-          tile(a, `https://${spaceHost(env, at.space)}`, a.errors?.length)
+          tile(a, {
+            at: `https://${spaceHost(env, at.space)}`,
+            errors: a.errors?.length,
+          })
         ).join('')
       }</div>${
         broken.length
@@ -1595,21 +1601,56 @@ puts everything back exactly as it was.`
     }</p>${home(env)}`,
   )
 
+/** An invitation as its link may tell it to somebody not yet in: what the
+ * letter said and no more (invite.ts `door`). */
+export type Offer = {
+  /** the address it went to */
+  email: string
+  /** the letter's link, which signing in comes back to */
+  back: string
+  /** who sent its latest letter, by name */
+  by: string | null
+  /** to see, rather than use */
+  see: boolean
+  space: { slug: string; title: string }
+  /** the one app it is to, and whether a visitor may already open it */
+  app: { eid: string; slug: string; title: string; open: boolean } | null
+}
+
 // An invitation opened by somebody who is not signed in as the person it is
-// for (invite.ts): the address it went to, and the one button that mails that
+// for (invite.ts): who invited them to what, the app drawn as the dashboard
+// draws it, the address it went to, and the one button that mails that
 // address a code and brings them back to accept it.
-export let invited = (email: string, back: string, env: Host = {}) =>
-  shell(
+export let invited = (o: Offer, env: Host = {}) => {
+  let host = spaceHost(env, o.space.slug)
+  let what = o.app
+    ? esc(o.app.title || o.app.slug)
+    : `${esc(o.space.title)} at ${esc(host)}`
+  return shell(
     env,
     'You have an invitation',
-    `It was sent to ${esc(email)}. Sign in with that address to accept it.`,
+    `${o.by ? esc(o.by) : 'Someone'} invited you to ${
+      o.see ? 'see' : 'use'
+    } ${what}.`,
     200,
-    `<form method="post" action="/login">${held('email', email)}${
-      held('return', back)
+    `${
+      o.app
+        ? `<div class="Apps Apps-one">${
+          tile(o.app, {
+            at: `https://${host}`,
+            host,
+            icon: o.app.open ? undefined : url(env, '/connector-512.png'),
+          })
+        }</div>`
+        : ''
+    }<form method="post" action="/login">${held('email', o.email)}${
+      held('return', o.back)
     }
+<p>It was sent to ${esc(o.email)}. Sign in with that address to accept it.</p>
 <button class="Button" type="submit">Email me a sign-in code</button>
 </form>${home(env)}`,
   )
+}
 
 // A private app opened by someone invited to it who has not accepted yet: the
 // click in the letter is what is left, and no page of the app may make it for

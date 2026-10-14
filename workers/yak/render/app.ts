@@ -1,7 +1,11 @@
 // The app library's Tile: the worker owns its markup, and each host supplies h.
 // Gallery wording is page context because its visibility depends on the viewer,
-// and so is `at`, the space's own address, on a page that is not there, and
-// `errors`, the count of open ones its owner's dashboard marks.
+// and so is `at`, the space's own address, on a page that is not there,
+// `host`, the space's own host, said before the app's path on a page that is
+// not about that one space, `errors`, the count of open ones its owner's
+// dashboard marks, and `icon`, the picture to wear instead of the app's own,
+// for a viewer the app's own would be refused to (a private app, before they
+// are in).
 //
 // The title is the tile's link, stretched over the whole card, so the error
 // mark can be a link of its own: to where the dashboard says what broke.
@@ -22,7 +26,7 @@ export let app: Renderer = {
       { class: 'Apps_Item' },
       '\n',
       h('img', {
-        src: `${ctx.at ?? ''}/${a.slug}/icon.png`,
+        src: ctx.icon ?? `${ctx.at ?? ''}/${a.slug}/icon.png`,
         width: 44,
         height: 44,
         alt: '',
@@ -38,7 +42,7 @@ export let app: Renderer = {
         },
         h('strong', null, doc?.title || a.slug),
       ),
-      h('span', { class: 'Apps_Path' }, `/${a.slug}`),
+      h('span', { class: 'Apps_Path' }, `${ctx.host ?? ''}/${a.slug}`),
       '\n',
       h(
         'span',

@@ -88,15 +88,16 @@ but does not hand out keys.
 their role, and the answer reports what it was before.
 
 An invitation is pending until its person accepts it, with the one click in the
-letter, signed in with the address it went to. Until then nothing of the space
-is in their reach: it is not in their listing, a bare app name never resolves to
-it, and their agent is told nothing about it. Signed in with that address and
-opening the app, they are told their invitation is waiting in the letter, where
-anyone else would get "Nothing here yet." or a refusal; on a `public` app,
-`me()` answers the page `invited: true`, so it can tell them before they type.
-Calling `member_add` again for them says they had not accepted yet and sends
-another letter. `member_remove` withdraws a pending invitation the same way it
-removes a member.
+letter, signed in with the address it went to. Opened before they sign in, that
+link says what the letter said: who invited them to which app, and the address
+to sign in with. Until then nothing of the space is in their reach: it is not in
+their listing, a bare app name never resolves to it, and their agent is told
+nothing about it. Signed in with that address and opening the app, they are told
+their invitation is waiting in the letter, where anyone else would get "Nothing
+here yet." or a refusal; on a `public` app, `me()` answers the page
+`invited: true`, so it can tell them before they type. Calling `member_add`
+again for them says they had not accepted yet and sends another letter.
+`member_remove` withdraws a pending invitation the same way it removes a member.
 
 In each space the caller owns, `app_list` names every invitation not accepted
 yet with the day its latest letter went, and counts everyone else. When someone

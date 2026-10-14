@@ -110,8 +110,7 @@ test('app Tile escapes every label and attribute once', () => {
       access: text,
       gallery: text,
     },
-    undefined,
-    2,
+    { errors: 2 },
   ))
   assertEquals(
     root.querySelector('.Apps_Open')?.getAttribute('href'),

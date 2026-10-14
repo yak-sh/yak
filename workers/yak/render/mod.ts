@@ -14,11 +14,15 @@ export let registry = define([app, seat, guest, invitation])
 // The directory's words, composed when a page first draws a row.
 export let vocab = once(platformVocab)
 
-export let tile = (
-  a: SpacePage['apps'][number],
-  at?: string,
-  errors?: number,
-) =>
+/** What a page around a tile says about it (render/app.ts). */
+export type Around = {
+  at?: string
+  host?: string
+  errors?: number
+  icon?: string
+}
+
+export let tile = (a: SpacePage['apps'][number], around: Around = {}) =>
   render(
     registry,
     {
@@ -29,7 +33,7 @@ export let tile = (
     },
     'List.Tile',
     vocab(),
-    { gallery: a.gallery, at, errors },
+    { gallery: a.gallery, ...around },
   )
 
 // The row itself, as the directory keeps it, and who it is for beside it.

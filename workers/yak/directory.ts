@@ -408,7 +408,13 @@ type Row = {
   created?: { at?: string }
   member?: { space: Id; person: Id; role: Role }
   grant?: { app: Id; person: Id; access: Role }
-  invite?: { to: Id; person: Id; role: Role; sent?: string | null }
+  invite?: {
+    to: Id
+    person: Id
+    role: Role
+    sent?: string | null
+    by?: Id | null
+  }
   inviting?: { hour?: string | null; sent?: number | null }
   email?: { address: string }
   former?: { slug: string; slugs?: string | null }
@@ -1311,8 +1317,9 @@ export let directory = (via: Fetcher | Part, now = false) => {
       let row = await one(`.invite.to=${to}&.invite.person=${person}`, true)
       return row?.invite ? { eid: row.entity.eid, role: row.invite.role } : null
     },
-    // One invitation by the eid its letter carries. Fresh, because the click
-    // that accepts it is often the second one on the same letter.
+    // One invitation by the eid its letter carries, and who sent its latest
+    // letter, when one went. Fresh, because the click that accepts it is
+    // often the second one on the same letter.
     invitation: async (eid: string) => {
       let row = await one(`.entity.eid=${eid}`, true)
       return row?.invite
@@ -1321,6 +1328,7 @@ export let directory = (via: Fetcher | Part, now = false) => {
           to: idOf(row.invite.to),
           person: idOf(row.invite.person),
           role: row.invite.role,
+          by: row.invite.by ? idOf(row.invite.by) : null,
         }
         : null
     },

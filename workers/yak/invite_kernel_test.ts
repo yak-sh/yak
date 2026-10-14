@@ -66,11 +66,17 @@ test('an invitation reaches nobody until its person accepts it', async () => {
     assertEquals(before.files.includes('index.html'), false)
 
     // A browser signed in as nobody, or as somebody else, accepts nothing:
-    // it is asked to sign in as the address the letter went to.
+    // it is asked to sign in as the address the letter went to, and told what
+    // the letter told, who invited them to what, and no more: the note stays
+    // in the letter.
     for (let cookie of [undefined, jeff.cookie]) {
       let page = await clickInvite(k, ana.email, cookie)
       assertEquals(page.status, 200)
-      assertStringIncludes(await page.text(), ana.email)
+      let said = await page.text()
+      assertStringIncludes(said, ana.email)
+      assertStringIncludes(said, `${mine} invited you to use`)
+      assertStringIncludes(said, `${mine}.yaks.app`)
+      assert(!said.includes('please look'))
     }
     assertEquals((await reach()).listed.includes(`${mine}.yaks.app`), false)
 
@@ -133,6 +139,13 @@ test('a friend who has not accepted is told the invitation waits', async () => {
     await his.tool('app_deploy', { app: 'diary' })
     let [ana, bo] = [await signIn(k), await signIn(k)]
     await his.tool('member_add', { email: ana.email, app: 'diary' })
+    // Her letter's link, opened before she signs in, says who invited her to
+    // which app, and wears the platform's face rather than the private app's
+    // own, which is not hers to see yet.
+    let offer = await (await clickInvite(k, ana.email)).text()
+    assertStringIncludes(offer, `invited you to use Diary.`)
+    assertStringIncludes(offer, `href="https://${host}/diary/"`)
+    assertStringIncludes(offer, '/connector-512.png')
 
     let page = (cookie: string) =>
       k.at(host, '/diary/', { headers: { cookie } }).then((r) => r.text())

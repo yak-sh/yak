@@ -14,6 +14,7 @@
 // with the invited address, and the code letter brings them back here.
 //
 // Owner, 2026-09-22: "oh yes, one-click to accept invite is good".
+import { mode, reads } from '@yaks/member'
 import { opened, seal } from './lib/token.ts'
 import {
   type App,
@@ -102,8 +103,9 @@ let quoted = (said: string) =>
  * by name, since an address is what a letter is sent to and never what a
  * person is called (T-32654). Once it goes it counts on the space's month and
  * stamps the invitation `sent`, which is what its inviter reads back
- * (people.ts). True when it went; a failure to send is reported and answered
- * as false, for the caller to say.
+ * (people.ts), and `by`, which is who its link says invited them (`door`).
+ * True when it went; a failure to send is reported and answered as false, for
+ * the caller to say.
  */
 export let send = async (
   env: Env,
@@ -155,7 +157,7 @@ export let send = async (
     stamp(env, {
       entities: [{
         entity: { eid: o.invite },
-        invite: { sent: new Date().toISOString() },
+        invite: { sent: new Date().toISOString(), by: o.by },
       }],
     }),
   ])
@@ -245,6 +247,13 @@ export let accept = async (
  * The click (`GET /invite?t=`), for whoever is signed in on this browser, or
  * nobody. A mail scanner that fetches every link in a letter has no session,
  * so it is shown the sign-in page and accepts nothing.
+ *
+ * That page says what the letter said and nothing more, since only the letter
+ * carries the link and whoever holds it has read the letter, or a forward of
+ * it: who invited them, by name, to see or use which app (or space) at which
+ * address, and the address it went to. The note stays in the letter, and
+ * nothing inside the app or the space (its own icon when it is private, its
+ * other apps, who else is in it) reaches anyone before they are in.
  */
 export let door = async (
   req: Request,
@@ -273,13 +282,27 @@ export let door = async (
     return holds ? there() : closed(env)
   }
   if (person != invite.person) {
-    let email = await dir.emailAt(invite.person)
+    let [email, by] = await Promise.all([
+      dir.emailAt(invite.person),
+      invite.by ? dir.nameAt(invite.by) : null,
+    ])
     if (!email) return closed(env)
-    return invited(
+    let { space, app } = place
+    return invited({
       email,
-      `${hostUrl(env, INVITE)}?t=${encodeURIComponent(t)}`,
-      env,
-    )
+      back: `${hostUrl(env, INVITE)}?t=${encodeURIComponent(t)}`,
+      by,
+      see: invite.role == 'viewer',
+      space: { slug: space.slug, title: space.title },
+      app: app && {
+        eid: app.eid,
+        slug: app.slug,
+        title: app.title,
+        // Its own picture only where a visitor may already see it: the page
+        // is for somebody not yet in.
+        open: reads(mode(app.access), null),
+      },
+    }, env)
   }
   await accept(dir, invite, place)
   // A seat is a deploy from where they stand: every view the space's apps

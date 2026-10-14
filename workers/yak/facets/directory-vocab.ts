@@ -103,7 +103,8 @@ export let directoryDoc: VocabDoc = {
     // `grant` (reach, the roster, a bare app slug) reads accepted rows and
     // nothing else, with no filter for a new reader to forget. `sent` is when
     // its latest letter went, which is what its inviter asks when the person
-    // says they cannot get in (people.ts).
+    // says they cannot get in (people.ts), and `by` who sent it, which is who
+    // the letter's link names to whoever opens it (pages.ts `invited`).
     invite: {
       component: true,
       type: 'object',
@@ -115,6 +116,7 @@ export let directoryDoc: VocabDoc = {
         person: ref('cascade'),
         role: { type: 'string', enum: ['owner', 'editor', 'viewer'] },
         sent: owned(time),
+        by: owned(ref('keep')),
       },
     },
     // How many invitations this person has sent in the hour it names
