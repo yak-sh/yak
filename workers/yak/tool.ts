@@ -255,24 +255,39 @@ let roleIn = async (ctx: Ctx, space: Space, over: boolean) => {
   return role != 'owner' && over && await admin(ctx) ? 'owner' : role
 }
 
-// The caller in the space: a member reads, an owner or editor writes.
-export let inSpace = async (
-  ctx: Ctx,
-  args: Args,
-  write = false,
-  over = false,
-) => {
+// The space a call names, or the one it means.
+let spaceOf = async (ctx: Ctx, args: Args) => {
   let space = args.space == null
     ? await ownSpace(ctx, args.app)
     : await ctx.dir.space(text(args.space, 'space'))
   if (!space) throw refuse('missing', `no space ${args.space}`)
+  return space
+}
+
+// The caller in the space: a member reads, an owner or editor writes.
+let callerIn = async (
+  ctx: Ctx,
+  space: Space,
+  write: boolean,
+  over: boolean,
+) => {
   let who = asCaller(ctx, await roleIn(ctx, space, over))
   if (over && await admin(ctx)) who.administrative = true
   if (!who.role) throw refuse('access', `not a member of ${space.slug}`)
   if (write && !writes(who.role)) {
     throw refuse('access', `not a writer of ${space.slug}`)
   }
-  return { space, who }
+  return who
+}
+
+export let inSpace = async (
+  ctx: Ctx,
+  args: Args,
+  write = false,
+  over = false,
+) => {
+  let space = await spaceOf(ctx, args)
+  return { space, who: await callerIn(ctx, space, write, over) }
 }
 
 // One named space as a seat — the shape `directory.seats` answers in, so a
@@ -286,15 +301,26 @@ export let seatIn = async (ctx: Ctx, slug: string) => {
   return [{ space, role }]
 }
 
+// The caller's seat and the app are two directory reads with nothing between
+// them, so they go together; a refusal of the caller still comes first.
 export let inApp = async (
   ctx: Ctx,
   args: Args,
   write = false,
   over = false,
 ) => {
-  let { space, who } = await inSpace(ctx, args, write, over)
-  let slug = text(args.app, 'app')
-  let app = await ctx.dir.app(space, slug)
+  let space = await spaceOf(ctx, args)
+  let [seat, named] = await Promise.allSettled([
+    callerIn(ctx, space, write, over),
+    (async () => {
+      let slug = text(args.app, 'app')
+      return { slug, app: await ctx.dir.app(space, slug) }
+    })(),
+  ])
+  if (seat.status == 'rejected') throw seat.reason
+  if (named.status == 'rejected') throw named.reason
+  let who = seat.value
+  let { slug, app } = named.value
   if (!app) throw refuse('missing', `no app ${slug} in ${space.slug}`)
   return {
     space,

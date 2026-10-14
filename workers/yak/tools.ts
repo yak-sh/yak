@@ -246,6 +246,7 @@ import {
 import { allowed, send } from './invite.ts'
 import { aloud, peopleIn, shown } from './people.ts'
 import {
+  addressed,
   BUILT,
   draftFiles,
   draftManifest,
@@ -1872,6 +1873,12 @@ export let wrote = async (
       // (versions.ts `replaced`, T-34508), so the edit can be undone before
       // deploy; the new bytes go out beside that pin, once the old are in hand.
       //
+      // The new bytes are pinned as they are written, without a head first,
+      // since bytes just made are almost never there already. So the next
+      // write over them finds them kept and only notes them, and the release
+      // that takes them only names them (release.ts `staged`): each of those
+      // was a round trip to the bucket in a row, most of a second (T-123988).
+      //
       // The files go out at once: each path's replacement is its own chain of
       // round trips to the bucket with nothing to wait on in another path's, so
       // a three-file write costs one file's time, not three (T-34986). `pin` is
@@ -1882,8 +1889,9 @@ export let wrote = async (
       let pin = c.sum('pin')
       let put = c.sum('put')
       await c.time('files', () =>
-        Promise.all(files.map((f) => {
+        Promise.all(files.map(async (f) => {
           let path = fileKey(space, edit, f.path).slice(prefix.length)
+          let sha = await sha256(new Uint8Array(f.bytes))
           return pin(() =>
             replaced(
               editFiles,
@@ -1892,7 +1900,13 @@ export let wrote = async (
               who.person ?? '',
               at,
               archive,
-              () => put(() => editFiles.put(prefix + path, f.bytes)),
+              () =>
+                put(() =>
+                  Promise.all([
+                    editFiles.put(prefix + path, f.bytes),
+                    blobs.put(addressed(sha), f.bytes),
+                  ])
+                ),
             )
           )
         })))

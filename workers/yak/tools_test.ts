@@ -465,9 +465,10 @@ test('a deploy says how many round trips it took', async () => {
         { path: 'style.css', content: 'h1{color:teal}' },
       ],
     }),
-    // A delta draft checks the draft, deletion marker and legacy source for
-    // each absent path, then writes its bytes and clears its deletion marker.
-    { hops: 5, r2: 10 },
+    // A delta draft asks for each absent path's own bytes, deletion marker
+    // and history at once, then its legacy source, then writes its bytes and
+    // pins them; a marker it found absent is not cleared.
+    { hops: 5, r2: 12 },
   )
   let deploy = await costs('app_deploy', { space: 'ada', app: 'recipes' })
   // The release's Git commit is the directory's effect, minted after the
