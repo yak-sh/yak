@@ -255,7 +255,10 @@ spacing, reading measure, radius and shadow.
 The CSS custom properties use the same names as `Colors`:
 
 - Background and ink: `--bg`, `--surface`, `--card`, `--border`, `--border2`,
-  `--text`, `--muted`, `--dim`.
+  `--text` (what a thing says), `--muted` (what describes it: keys, facts,
+  stamps, ids), `--dim` (only what is not there: a nil, a placeholder, a
+  separator). Every text colour but `--dim` reads at 4.5:1 or better on the
+  three floors, in each scheme.
 - Selection and the primary action: `--accent`; links: `--link`; section titles:
   `--heading`.
 - Dot tones: `--info`, `--active`, `--positive`, `--negative`, `--caution`,
@@ -264,9 +267,10 @@ The CSS custom properties use the same names as `Colors`:
   syntax: `--keyword`, `--string`, `--fn`, `--type`, `--attr`.
 - Chip hues: `--hue-0` through `--hue-5`.
 
-Fonts use `--font` and `--mono`; spacing uses `--gap`, `--radius` and
-`--measure`; raised boxes use `--shadow`. The base CSS derives `--half-gap`,
-`--soft` and the touch target floor `--tap`.
+Fonts use `--font` and `--mono` (what is copied or typed: ids, shas, code); type
+uses `--size` and `--small`, defaulting to 14px and 12px; spacing uses `--gap`,
+`--radius` and `--measure`; raised boxes use `--shadow`. The base CSS derives
+`--half-gap`, `--soft` and the touch target floor `--tap`.
 
 A **skin** supplies CSS replacements by piece name and optional terminal sheet
 replacements (`Skin`). A missing replacement uses the kit's rendering. `ledger`

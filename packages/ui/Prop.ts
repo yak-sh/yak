@@ -36,14 +36,14 @@ export let Prop:
 export let description =
   "A property's value that knows how to be changed, and its editors."
 
-/** The face is ink; what is not there, and a handle, are dim. */
+/** The face is ink; what is not there is dim, and a handle muted. */
 export let sheet = (c: Colors): Sheet => ({
   Prop_Val: { fg: c.text },
   'Prop_Val-nil': { fg: c.dim },
-  Prop_Hand: { fg: c.dim },
+  Prop_Hand: { fg: c.muted },
   'Prop_Tab-on': { fg: c.text, bold: true },
   Prop_Tab: { fg: c.muted },
-  'Prop_Row-none': { fg: c.dim },
+  'Prop_Row-none': { fg: c.muted },
 })
 
 let { Val, Hand, Pop, Tab, Row, Find } = Prop

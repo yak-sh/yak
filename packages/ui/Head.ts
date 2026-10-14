@@ -48,16 +48,16 @@ export let description =
   'The top of a page: its title, what it is, and what is known of it.'
 
 /** A blank line after it; the title ink, what it is muted and folded to the
- * width, the rest dim. */
+ * width, and so are its id, kind and facts. */
 export let sheet = (c: Colors): Sheet => ({
   Head: { gap: true },
   Head_Title: { fg: c.text, spaced: true },
-  Head_Id: { fg: c.dim, bold: false },
-  Head_Kind: { fg: c.dim, bold: false },
+  Head_Id: { fg: c.muted, bold: false },
+  Head_Kind: { fg: c.muted, bold: false },
   Head_Sub: { fg: c.muted, wrap: true },
   'Head_Sub-refused': { fg: c.negative },
-  Head_Facts: { fg: c.dim, spaced: true },
-  Head_Sep: { fg: c.border2 },
+  Head_Facts: { fg: c.muted, spaced: true },
+  Head_Sep: { fg: c.dim },
 })
 
 let { Title, Id, Kind, Sub, Facts } = Head

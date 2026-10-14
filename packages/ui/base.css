@@ -5,11 +5,23 @@
 
 /* What every theme derives the same way: half its gap, a faint wash of its
    text, and the touch-target floor, which grows under a coarse pointer (fat
-   fingers get fat targets, and only there). */
+   fingers get fat targets, and only there).
+
+   And the type every part reads, which a theme may set: --size for what a
+   thing says, --small for the line that describes it, and nothing smaller.
+   Text comes in three inks. --text is what a thing says; --muted is what
+   describes it (a key, a heading over a column, a fact, a stamp, an id, a
+   count), and reads on every floor; --dim is only for what is not there (a
+   nil, a ghost, a placeholder, a disabled step). The mono face is for what a
+   person would copy or type (an id, a sha, code, a raw stored value), never
+   for a label, a moment said the human way, or a count. A part that steps
+   back is muted, small or both; never mono to look quiet, and never dim. */
 :where(:root) {
   --half-gap: calc(var(--gap) / 2);
   --soft: color-mix(in srgb, var(--text) 6%, transparent);
   --tap: 0px;
+  --size: 14px;
+  --small: 12px;
 }
 @media (pointer: coarse) {
   :where(:root) {
@@ -26,7 +38,7 @@
 
 :where(body) {
   margin: 0;
-  font: 14px/1.5 var(--font);
+  font: var(--size)/1.5 var(--font);
   background: var(--bg);
   color: var(--text);
 }
@@ -131,7 +143,7 @@
   color: var(--positive);
 }
 :where(.hljs-comment, .hljs-meta) {
-  color: var(--dim);
+  color: var(--muted);
 }
 :where(.hljs-comment) {
   font-style: italic;

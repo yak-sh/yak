@@ -2,7 +2,7 @@
  * A stretch of a conversation, in order: each `Turns.Turn` is `Who` said it
  * and `Text`, what they said (as much of it as the caller keeps). `Turn-on` is
  * the one the page is about, lit; `Turn-quiet` is one that is not prose (a
- * tool called, what it answered), dim. `Turns.More` says what came before or
+ * tool called, what it answered), muted. `Turns.More` says what came before or
  * after and was left out. A `Who` given an `href` links to the turn, and
  * still reads as who spoke.
  *
@@ -31,15 +31,15 @@ export let description =
   'A stretch of a conversation: who said each turn, and what.'
 
 /** Each turn a line of its own, who first; the lit one bold, a quiet one
- * dim. */
+ * muted. */
 export let sheet = (c: Colors): Sheet => ({
   Turns: { gap: true },
   Turns_Turn: { block: true, spaced: true, row: true },
   'Turns_Turn-on': { bold: true },
-  'Turns_Turn-quiet': { fg: c.dim },
+  'Turns_Turn-quiet': { fg: c.muted },
   Turns_Who: { fg: c.who, width: 10, ellipsis: true },
   Turns_Text: { grow: true, wrap: true },
-  Turns_More: { fg: c.dim },
+  Turns_More: { fg: c.muted },
 })
 
 let { Turn, Who, Text, More } = Turns

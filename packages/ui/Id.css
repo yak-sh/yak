@@ -1,16 +1,16 @@
-/* An identifier (T-123): mono, small, dim, never wrapped. As a link it
-   underlines only under the pointer. */
+/* An identifier (T-123): mono, since it is copied and typed; small and
+   muted; never wrapped. As a link it underlines only under the pointer. */
 .Id {
   font-family: var(--mono);
-  font-size: 11px;
+  font-size: var(--small);
   white-space: nowrap;
-  color: var(--dim);
+  color: var(--muted);
   text-decoration: none;
 }
 .Id:hover,
 .Id-hover {
   text-decoration: underline;
-  color: var(--muted);
+  color: var(--text);
 }
 /* what it names is out of service: present, struck, half there */
 .Id-retired {

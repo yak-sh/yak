@@ -40,7 +40,7 @@ let { Group, Head, Item, Row } = Index
 /** Two groups, one entry where you are and one under the pointer. */
 export let specimens = (): Specimen[] => [
   [
-    'Index, Group, Head, Item, Row, Item-on, Item-hover, Item-prose',
+    'Index, Group, Head, Item, Row, Item-on, Item-hover',
     h(
       Index,
       {},
@@ -55,7 +55,7 @@ export let specimens = (): Specimen[] => [
         Group,
         {},
         h(Head, { href: '#doc' }, '@yaks/doc'),
-        h(Row, {}, h(Item, { href: '#doc', mod: 'prose' }, 'A document'), '2'),
+        h(Row, {}, h(Item, { href: '#doc' }, 'A document'), '2'),
         h(Item, { href: '#doc', mod: 'hover' }, 'doc'),
       ),
     ),

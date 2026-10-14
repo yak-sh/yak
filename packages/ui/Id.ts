@@ -18,8 +18,8 @@ export let description = 'An identifier, one token: T-123.'
 
 /** Dim, and struck when retired. */
 export let sheet = (c: Colors): Sheet => ({
-  Id: { fg: c.dim },
-  'Id-hover': { fg: c.muted, underline: true },
+  Id: { fg: c.muted },
+  'Id-hover': { fg: c.text, underline: true },
   'Id-retired': { fg: c.dim, dim: true, strike: true },
 })
 

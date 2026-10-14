@@ -13,7 +13,7 @@
 .Inbox_Reason,
 .Inbox_Summary,
 .Inbox_Empty {
-  color: var(--dim);
+  color: var(--muted);
   font-weight: normal;
 }
 .Inbox_Thread {
@@ -22,11 +22,11 @@
   align-items: start;
   border-bottom: 1px solid var(--border);
 }
-.Inbox_Reason {
-  font-size: 12px;
+.Inbox_Reason,
+.Inbox_Summary {
+  font-size: var(--small);
 }
 .Inbox_Summary {
-  font-size: 11px;
   margin: 0;
 }
 .Inbox_Detail {
@@ -35,7 +35,6 @@
   background: var(--card);
 }
 .Inbox_Empty {
-  font-size: 13px;
   margin: 0;
   padding-block: var(--half-gap);
 }

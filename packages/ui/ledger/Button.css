@@ -4,7 +4,7 @@
   --ink: var(--accent);
   --line: var(--border2);
   font: inherit;
-  font-size: 12px;
+  font-size: var(--small);
   color: var(--ink);
   background: none;
   border: 1px solid var(--line);
@@ -23,7 +23,7 @@
 }
 /* offers what is not there yet */
 .Button-add {
-  --ink: var(--dim);
+  --ink: var(--muted);
   border-style: dashed;
 }
 .Button-add:hover {
@@ -43,7 +43,7 @@
 }
 /* a glyph that waits for the pointer */
 .Button-quiet {
-  --ink: var(--dim);
+  --ink: var(--muted);
   border-color: transparent;
   padding: 0 4px;
 }

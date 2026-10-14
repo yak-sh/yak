@@ -1,5 +1,5 @@
 /* Things in rows, as a grid: every row a subgrid of it, so the cells line
-   up; hairlines between the rows, dim headings in mono. A column is as wide
+   up; hairlines between the rows, headings small and muted. A column is as wide
    as its widest cell where there is room, and they share the room when there
    is not; what is left over runs past the last. Each cell is one line, cut
    short with an ellipsis, whatever it holds; a number is never cut and sets
@@ -15,7 +15,6 @@
   display: grid;
   grid-template-columns: var(--cols) 1fr;
   min-width: 0;
-  font-size: 13px;
 }
 .Table_Head,
 .Table_Body,
@@ -45,9 +44,8 @@
   white-space: inherit;
 }
 .Table_Heading {
-  font-family: var(--mono);
-  font-size: 11px;
-  color: var(--dim);
+  font-size: var(--small);
+  color: var(--muted);
 }
 .Table_Heading-sorts {
   cursor: pointer;
@@ -68,15 +66,13 @@
 }
 .Table_Cell-num {
   text-align: right;
-  font-family: var(--mono);
-  font-size: 11px;
   font-variant-numeric: tabular-nums;
   color: var(--number);
 }
 .Table_Cell-key {
   font-family: var(--mono);
-  font-size: 11px;
-  color: var(--dim);
+  font-size: var(--small);
+  color: var(--muted);
 }
 .Table_Row-picks {
   cursor: pointer;

@@ -26,8 +26,8 @@ export let description = 'A row of tabs, one of them on.'
  * is raised. */
 export let sheet = (c: Colors): Sheet => ({
   Tabs: { spaced: true },
-  Tabs_Tab: { fg: c.dim, spaced: true },
-  'Tabs_Tab-hover': { fg: c.muted },
+  Tabs_Tab: { fg: c.muted, spaced: true },
+  'Tabs_Tab-hover': { fg: c.text },
   'Tabs_Tab-on': { fg: c.text, bg: c.card },
   Tabs_Badge: { fg: c.bg, bg: c.accent },
 })

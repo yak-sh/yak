@@ -3,7 +3,7 @@
 .Chip {
   --hue: var(--muted);
   font-family: var(--mono);
-  font-size: 11px;
+  font-size: var(--small);
   white-space: nowrap;
   color: var(--hue);
   background: color-mix(in srgb, var(--hue) 12%, transparent);

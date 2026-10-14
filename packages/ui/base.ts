@@ -35,16 +35,16 @@ export let sheet = (c: Colors): Sheet => ({
   'hljs-type': { fg: c.type },
   'hljs-attr': { fg: c.attr },
   'hljs-variable': { fg: c.attr },
-  'hljs-comment': { fg: c.dim, italic: true },
-  'hljs-meta': { fg: c.dim },
+  'hljs-comment': { fg: c.muted, italic: true },
+  'hljs-meta': { fg: c.muted },
   'hljs-deletion': { fg: c.negative },
   Muted: { fg: c.muted },
   Table_Border: { fg: c.dim, dim: true },
   Scrollbar: { fg: c.dim },
-  Panel_Title: { fg: c.dim, bold: true },
+  Panel_Title: { fg: c.muted, bold: true },
   List_Selected: { bg: c.card },
   Entry: { fg: c.text },
-  Entry_Hint: { fg: c.dim, dim: true },
+  Entry_Hint: { fg: c.muted },
 })
 
 // Syntax, as highlight.js marks it up.

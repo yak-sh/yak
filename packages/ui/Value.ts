@@ -27,7 +27,7 @@ export let sheet = (c: Colors): Sheet => ({
   Value: { fg: c.text },
   'Value-num': { fg: c.number },
   'Value-bool': { fg: c.literal },
-  'Value-id': { fg: c.dim },
+  'Value-id': { fg: c.muted },
   'Value-time': { fg: c.time },
   'Value-json': { fg: c.muted },
   'Value-nil': { fg: c.dim, italic: true },

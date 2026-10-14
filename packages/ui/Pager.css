@@ -4,9 +4,8 @@
   display: flex;
   align-items: baseline;
   gap: var(--half-gap);
-  font-family: var(--mono);
-  font-size: 11px;
-  color: var(--dim);
+  font-size: var(--small);
+  color: var(--muted);
   padding: 4px var(--half-gap);
 }
 .Pager_Span {

@@ -1,8 +1,8 @@
 /**
  * Words somebody said, set apart as theirs: the `Text` verbatim, then `By`,
  * the line saying who said them, when and where (its parts kept apart by a
- * dot), and `Note`, what somebody else wrote about them, dim, so it is never
- * read as the words themselves.
+ * dot), and `Note`, what somebody else wrote about them, muted and in
+ * italics, so it is never read as the words themselves.
  *
  * @module
  */
@@ -38,14 +38,14 @@ export let Quote: Part & Record<'Text' | 'By' | 'Note', Part> = Object
 export let description =
   'Words somebody said, verbatim: who said them, when and where.'
 
-/** The words indented under a bar in the accent, the byline dim and apart,
- * the note dimmer still. */
+/** The words indented under a bar in the accent, the byline muted and apart,
+ * the note muted and in italics. */
 export let sheet = (c: Colors): Sheet => ({
   Quote: { gap: true },
   Quote_Text: { fg: c.text, wrap: true, indent: 2 },
-  Quote_By: { fg: c.dim, spaced: true, indent: 2 },
-  Quote_Sep: { fg: c.border2 },
-  Quote_Note: { fg: c.dim, italic: true, wrap: true, indent: 2 },
+  Quote_By: { fg: c.muted, spaced: true, indent: 2 },
+  Quote_Sep: { fg: c.dim },
+  Quote_Note: { fg: c.muted, italic: true, wrap: true, indent: 2 },
 })
 
 let { Text, By, Note } = Quote

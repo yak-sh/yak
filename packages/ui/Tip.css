@@ -1,8 +1,8 @@
-/* A tooltip: one line of small mono text on a raised chip. It never takes
-   the pointer; where it floats is its host's business. */
+/* A tooltip: one line of small text on a raised chip. It never takes the
+   pointer; where it floats is its host's business. */
 .Tip {
   white-space: nowrap;
-  font: 11px var(--mono);
+  font: var(--small) var(--font);
   color: var(--text);
   background: var(--surface);
   border: 1px solid var(--border2);

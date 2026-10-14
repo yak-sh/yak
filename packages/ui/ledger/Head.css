@@ -1,5 +1,5 @@
 /* The top of a page: the title large and ink, with its id and kind small
-   beside it; what it is under it, muted; then the facts, small and dim,
+   beside it; what it is under it, muted; then the facts, small and muted,
    dotted apart. Whatever follows it starts a gap below. */
 .Head {
   display: grid;
@@ -34,9 +34,9 @@ a.Head_Title:hover,
 .Head_Id,
 .Head_Kind {
   font-family: var(--mono);
-  font-size: 11px;
+  font-size: var(--small);
   font-weight: normal;
-  color: var(--dim);
+  color: var(--muted);
 }
 .Head_Sub {
   margin: 0;
@@ -52,11 +52,11 @@ a.Head_Title:hover,
   align-items: baseline;
   gap: 2px var(--half-gap);
   font-family: var(--mono);
-  font-size: 11px;
-  color: var(--dim);
+  font-size: var(--small);
+  color: var(--muted);
 }
 .Head_Sep {
-  color: var(--border2);
+  color: var(--dim);
 }
 /* Ledger: a ruled heading, set like the title of a printed record. */
 .Head_Title {

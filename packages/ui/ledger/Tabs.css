@@ -8,7 +8,7 @@
 }
 .Tabs_Tab {
   font: inherit;
-  color: var(--dim);
+  color: var(--muted);
   text-decoration: none; /* a tab that links reads as a tab */
   background: none;
   border: 1px solid transparent;
@@ -24,7 +24,7 @@
 }
 .Tabs_Tab:hover,
 .Tabs_Tab-hover {
-  color: var(--muted); /* the face alone answers the pointer: no fill */
+  color: var(--text); /* the face alone answers the pointer: no fill */
 }
 .Tabs_Tab-on {
   color: var(--text);

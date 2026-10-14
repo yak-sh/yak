@@ -24,7 +24,7 @@
   max-width: none;
   padding-bottom: var(--half-gap);
   border-bottom: 1px solid var(--border2);
-  font-size: 12px;
+  font-size: var(--small);
   font-weight: 600;
   letter-spacing: 0.1em;
   text-transform: uppercase;

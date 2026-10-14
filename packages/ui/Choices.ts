@@ -27,7 +27,7 @@ export let sheet = (c: Colors): Sheet => ({
   Choices_Item: { block: true, spaced: true },
   'Choices_Item-hover': { bg: c.surface },
   'Choices_Item-on': { bg: c.card, bold: true },
-  Choices_Note: { fg: c.dim },
+  Choices_Note: { fg: c.muted },
 })
 
 let { Item, Text, Note } = Choices

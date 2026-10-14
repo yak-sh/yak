@@ -23,17 +23,16 @@
   align-items: baseline;
   gap: 2px var(--half-gap);
   padding-left: calc(var(--gap) + 3px);
-  font-family: var(--mono);
-  font-size: 11px;
-  color: var(--dim);
+  font-size: var(--small);
+  color: var(--muted);
 }
 .Quote_Sep {
-  color: var(--border2);
+  color: var(--dim);
 }
 .Quote_Note {
   margin: 0;
   padding-left: calc(var(--gap) + 3px);
-  font-size: 12px;
+  font-size: var(--small);
   font-style: italic;
-  color: var(--dim);
+  color: var(--muted);
 }

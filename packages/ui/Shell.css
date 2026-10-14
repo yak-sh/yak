@@ -88,7 +88,7 @@
 }
 .Shell_Count {
   flex: none;
-  font-size: 12px;
+  font-size: var(--small);
   font-weight: 600;
   font-variant-numeric: tabular-nums;
   color: var(--text);

@@ -1,4 +1,4 @@
-/* One thing in a list. Its title line: id and kind small and dim, the title
+/* One thing in a list. Its title line: id and kind small and muted, the title
    taking the room and cut short before it wraps, a note after it, a count at
    the end. With an icon, a sub or an end, the row is the icon, the words (the
    title line over the sub) and the end side by side; the row never wraps, so
@@ -61,10 +61,12 @@ a.Tile:hover,
 }
 .Tile_Id,
 .Tile_Kind {
-  font-family: var(--mono);
-  font-size: 11px;
-  color: var(--dim);
+  font-size: var(--small);
+  color: var(--muted);
   white-space: nowrap;
+}
+.Tile_Id {
+  font-family: var(--mono);
 }
 .Tile_Title {
   min-width: 0;
@@ -81,8 +83,7 @@ a.Tile:hover,
 }
 .Tile_Count {
   margin-left: auto;
-  font-family: var(--mono);
-  font-size: 11px;
+  font-size: var(--small);
   color: var(--number);
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
@@ -92,7 +93,7 @@ a.Tile:hover,
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-size: 12px;
+  font-size: var(--small);
   color: var(--muted);
 }
 .Tile_Sub-negative,

@@ -19,7 +19,7 @@
 .Gallery_Caption {
   padding: 0 2px;
   font-family: var(--mono);
-  font-size: 12px;
+  font-size: var(--small);
   line-height: 1.4;
   color: var(--muted);
   overflow-wrap: anywhere;

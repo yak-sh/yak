@@ -22,10 +22,10 @@ export let description = 'A word or a glyph that does something when pressed.'
 /** A press in a terminal is its word, bracketed by its colour. */
 export let sheet = (c: Colors): Sheet => ({
   Button: { fg: c.accent },
-  'Button-add': { fg: c.dim },
+  'Button-add': { fg: c.muted },
   'Button-danger': { fg: c.negative },
   'Button-go': { fg: c.bg, bg: c.accent, bold: true },
-  'Button-quiet': { fg: c.dim },
+  'Button-quiet': { fg: c.muted },
 })
 
 /** Every variant. */

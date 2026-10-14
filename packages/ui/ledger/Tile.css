@@ -1,4 +1,4 @@
-/* One thing on one line: id and kind small and dim, the title taking the
+/* One thing on one line: id and kind small and muted, the title taking the
    room and cut short before it wraps, a note after it, a count at the end.
    As a link, the whole line is the target. */
 .Tile {
@@ -18,8 +18,8 @@ a.Tile:hover,
 .Tile_Id,
 .Tile_Kind {
   font-family: var(--mono);
-  font-size: 11px;
-  color: var(--dim);
+  font-size: var(--small);
+  color: var(--muted);
   white-space: nowrap;
 }
 .Tile_Title {
@@ -38,7 +38,7 @@ a.Tile:hover,
 .Tile_Count {
   margin-left: auto;
   font-family: var(--mono);
-  font-size: 11px;
+  font-size: var(--small);
   color: var(--number);
   font-variant-numeric: tabular-nums;
   white-space: nowrap;

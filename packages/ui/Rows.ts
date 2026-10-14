@@ -23,10 +23,10 @@ export let Rows: Part & Record<'Item' | 'More', Part> = block('div', 'Rows', {
 /** What it is, in a line. */
 export let description = 'A list of rows, and what was left out.'
 
-/** A nested list is indented; what was left out is dim. */
+/** A nested list is indented; what was left out is muted. */
 export let sheet = (c: Colors): Sheet => ({
   'Rows-nested': { indent: 2 },
-  Rows_More: { fg: c.dim },
+  Rows_More: { fg: c.muted },
 })
 
 let { Item, More } = Rows

@@ -16,10 +16,10 @@
 .Value-time,
 .Value-json {
   font-family: var(--mono);
-  font-size: 11px;
+  font-size: var(--small);
 }
 .Value-id {
-  color: var(--dim);
+  color: var(--muted);
 }
 .Value-time {
   color: var(--time);

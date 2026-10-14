@@ -23,9 +23,9 @@
    handle beside it. */
 .Prop_Hand {
   white-space: nowrap;
-  font-size: 11px;
+  font-size: var(--small);
   font-family: inherit;
-  color: var(--dim);
+  color: var(--muted);
   cursor: pointer;
   background: none;
   border: 0;
@@ -84,7 +84,7 @@
   background: var(--soft);
 }
 .Prop_Row-none {
-  color: var(--dim);
+  color: var(--muted);
 }
 .Prop_Find {
   font: inherit;

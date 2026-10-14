@@ -22,9 +22,8 @@
 .Section_Count,
 .Section_Note {
   font-weight: normal;
-  font-family: var(--mono);
-  font-size: 11px;
-  color: var(--dim);
+  font-size: var(--small);
+  color: var(--muted);
 }
 .Section_Count {
   font-variant-numeric: tabular-nums;
@@ -35,6 +34,6 @@
 .Section_Sub {
   margin: 0;
   color: var(--muted);
-  font-size: 12px;
+  font-size: var(--small);
   max-width: var(--measure);
 }

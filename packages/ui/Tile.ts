@@ -79,7 +79,7 @@ export let Tile:
 export let description =
   'One thing in a list: its icon, title, a line under it, and an end.'
 
-/** The id and the kind are dim beside the title, the sub muted after it; a
+/** The id and the kind are muted beside the title, and the sub after it; a
  * count stands out. A tile is a line of its own even as a link, so its parts
  * stand apart; the one picked is raised, the one under the pointer a little. */
 export let sheet = (c: Colors): Sheet => ({
@@ -90,8 +90,8 @@ export let sheet = (c: Colors): Sheet => ({
   'Tile-head': { bold: true },
   Tile_Text: { spaced: true },
   Tile_Line: { spaced: true },
-  Tile_Id: { fg: c.dim },
-  Tile_Kind: { fg: c.dim },
+  Tile_Id: { fg: c.muted },
+  Tile_Kind: { fg: c.muted },
   Tile_Note: { fg: c.muted, spaced: true },
   Tile_Count: { fg: c.number },
   Tile_Sub: { fg: c.muted },

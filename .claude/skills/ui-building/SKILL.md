@@ -113,6 +113,24 @@ class names (@yaks/tui; packages/tui/theme.ts). Layout the terminal needs
 (grid, ellipsis, alignment, wrapping) belongs in the sheet, so the browser's
 elements stay free of terminal-only attributes.
 
+## How text reads
+
+Most of an entity's page isn't what the thing says. It's what describes it:
+keys, column headings, facts, stamps, ids, counts. When you make one of those
+step back, every lever is in reach at once (smaller, the mono face, the
+palest ink), and each looks right alone. Stacked on every describing part, a
+page goes faint: the information a person came for sits in 11px mono at 2:1,
+and only the title reads.
+
+So the kit keeps one register (packages/ui/base.css, at the top): `--text` for
+what a thing says, `--muted` for what describes it, `--size` and `--small`
+and nothing smaller. A part that steps back is muted, small or both. `--dim`
+is only for what isn't there: a nil, a ghost, a placeholder, a separator. The
+mono face is for what a person copies or types (an id, a sha, code, a raw
+value), never for a label, a time said the human way, or a count. A theme
+holds its side of it: every text colour but `--dim` reads at 4.5:1 or better
+on `--bg`, `--surface` and `--card`, in light and in dark.
+
 ## A UX component
 
 packages/ux/README.md has the model, with `Edit` and `Disclosure` as working
@@ -159,7 +177,7 @@ Draw for a person reading:
 
 - what the thing says or is, first and in full;
 - references by name, not a hash, and no id printed twice;
-- provenance (who made it, which build, which call) as one quiet line;
+- provenance (who made it, which build, which call) as one muted line;
 - editing when the reader asks for it.
 
 A generic property table is a fallback, not a page.
@@ -181,8 +199,12 @@ will:
   and the terminal: each one catches what the others hide.
 - **The app itself:** drive it as a person would, in a browser over CDP and in
   tmux, against a probe server (`end-to-end-checks`). Its `dom.ts` reads the
-  DOM, which is where behavior is checked, and with `--width 390 --shot` gives
-  you a picture at phone width to look at.
+  DOM, which is where behavior is checked, and with `--shot` gives you a
+  picture to look at: `--width 390` at phone width, `--scheme light` or `dark`
+  for each. Look in light first: faint text shows there before anywhere else.
+  Fill the probe with rows copied from the live graph, long titles and old
+  data included; a specimen's tidy sample hides what the owner's rows do to a
+  screen.
 - **Tests:** `deno task test packages/ui` (and `packages/ux`,
   `packages/inspect`) runs the part tests and the guide's checks.
 - **The task:** review of a screen arrives as comments on its task, often

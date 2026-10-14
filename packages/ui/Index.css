@@ -1,5 +1,5 @@
-/* An index: each group a small head, its entries in mono under it, one line
-   each and cut short. Where you are is lit in the accent. Given the room (a
+/* An index: each group a head, its entries under it, one line each and cut
+   short. Where you are is lit in the accent. Given the room (a
    phone's whole width, where a nav stacks over the page) the groups flow
    into columns, so the page is not a long scroll away. */
 .Index {
@@ -26,13 +26,10 @@
   align-content: center; /* the words sit in the middle of a fat target */
 }
 .Index_Head {
-  font-size: 12px;
   font-weight: 600;
   color: var(--heading);
 }
 .Index_Item {
-  font-family: var(--mono);
-  font-size: 12px;
   color: var(--muted);
   padding-left: var(--gap);
 }
@@ -58,10 +55,6 @@
 .Index_Item {
   flex: 1;
   min-width: 0;
-}
-.Index_Item-prose {
-  font-family: var(--font);
-  font-size: inherit;
 }
 .Index_Head {
   display: flex;

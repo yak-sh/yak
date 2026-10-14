@@ -36,8 +36,8 @@ export let description =
 export let sheet = (c: Colors): Sheet => ({
   Section: { gap: true },
   Section_Title: { fg: c.heading, spaced: true },
-  Section_Count: { fg: c.dim, bold: false },
-  Section_Note: { fg: c.dim, bold: false },
+  Section_Count: { fg: c.muted, bold: false },
+  Section_Note: { fg: c.muted, bold: false },
   'Section_Note-refused': { fg: c.negative },
   Section_Sub: { fg: c.muted },
 })

@@ -86,12 +86,12 @@ export let description =
   'Things in rows under column headings, each cell one line.'
 
 /** A grid of rows in a terminal too: every cell one line, cut with an
- * ellipsis, a number set right and prose wrapped; headings dim until they
+ * ellipsis, a number set right and prose wrapped; headings muted until they
  * sort; the row the keyboard is on raised. */
 export let sheet = (c: Colors): Sheet => ({
   Table: { grid: true },
   Table_Row: { row: true },
-  Table_Heading: { fg: c.dim, ellipsis: true },
+  Table_Heading: { fg: c.muted, ellipsis: true },
   'Table_Heading-asc': { fg: c.accent },
   'Table_Heading-desc': { fg: c.accent },
   'Table_Heading-num': { align: 'right' },
@@ -99,7 +99,7 @@ export let sheet = (c: Colors): Sheet => ({
   'Table_Row-hover': { bg: c.surface },
   Table_Cell: { spaced: true, ellipsis: true },
   'Table_Cell-num': { fg: c.number, align: 'right' },
-  'Table_Cell-key': { fg: c.dim },
+  'Table_Cell-key': { fg: c.muted },
   'Table_Cell-prose': { fg: c.muted, wrap: true },
 })
 

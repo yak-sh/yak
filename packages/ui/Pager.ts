@@ -23,9 +23,9 @@ export let Pager: Part & Record<'Span' | 'Step', Part> = block(
 export let description =
   'Where a page of rows sits among them all, and the steps either side.'
 
-/** The span dim, each step in the link colour. */
+/** The span muted, each step in the link colour. */
 export let sheet = (c: Colors): Sheet => ({
-  Pager: { fg: c.dim, spaced: true },
+  Pager: { fg: c.muted, spaced: true },
   Pager_Step: { fg: c.link },
 })
 

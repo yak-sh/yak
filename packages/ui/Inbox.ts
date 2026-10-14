@@ -47,10 +47,10 @@ export let description =
 /** Compact rows, with each control on a line the terminal can select. */
 export let sheet = (c: Colors): Sheet => ({
   Inbox_Heading: { fg: c.heading, bold: true, gap: true },
-  Inbox_Reason: { fg: c.dim },
-  Inbox_Summary: { fg: c.dim },
+  Inbox_Reason: { fg: c.muted },
+  Inbox_Summary: { fg: c.muted },
   Inbox_Detail: { indent: 2 },
-  Inbox_Empty: { fg: c.dim },
+  Inbox_Empty: { fg: c.muted },
   Inbox_Mode: { block: true },
 })
 

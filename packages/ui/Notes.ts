@@ -32,13 +32,13 @@ export let Notes:
 /** What it is, in a line. */
 export let description = 'Notes left on something: who left each, and when.'
 
-/** A note is a line of its own; when is dim, and so is a done one. */
+/** A note is a line of its own; when is muted, and so is a done one. */
 export let sheet = (c: Colors): Sheet => ({
   Notes_Children: { block: true, indent: 2 },
   Notes_Item: { block: true, spaced: true },
-  'Notes_Item-done': { fg: c.dim },
+  'Notes_Item-done': { fg: c.muted },
   Notes_Who: { fg: c.who },
-  Notes_When: { fg: c.dim },
+  Notes_When: { fg: c.muted },
 })
 
 let { Item, Text, Who, When, Children } = Notes

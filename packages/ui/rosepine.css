@@ -3,7 +3,9 @@
    spacing is roomier. Each colour is a light-dark() pair, Rosé Pine Dawn
    then Rosé Pine (main), and the page's color-scheme picks one. The palette
    has no green and two pinks: a part that names a hue where it means a role
-   shows here. rosepine.ts holds the dark colours for a terminal. */
+   shows here. rosepine.ts holds the dark colours for a terminal. Dawn's
+   subtle and its hues are darkened (OKLCH lightness, hue and chroma kept) to
+   read at 5:1 on its base, as every text colour must; pine already does. */
 :root {
   color-scheme: light dark;
   --gap: 1rem;
@@ -23,35 +25,35 @@
   --border2: light-dark(#cecacd, #524f67); /* highlight high */
 
   --text: light-dark(#575279, #e0def4); /* text */
-  --muted: light-dark(#797593, #908caa); /* subtle */
+  --muted: light-dark(#6a6683, #908caa); /* subtle */
   --dim: light-dark(#9893a5, #6e6a86); /* muted */
 
-  --accent: light-dark(#d7827e, #ebbcba); /* rose */
-  --link: light-dark(#907aa9, #c4a7e7); /* iris */
-  --heading: light-dark(#56949f, #9ccfd8); /* foam */
+  --accent: light-dark(#a1524f, #ebbcba); /* rose */
+  --link: light-dark(#75608d, #c4a7e7); /* iris */
+  --heading: light-dark(#33727c, #9ccfd8); /* foam */
 
-  --info: light-dark(#56949f, #9ccfd8); /* foam */
-  --active: light-dark(#d7827e, #ebbcba); /* rose */
+  --info: light-dark(#33727c, #9ccfd8); /* foam */
+  --active: light-dark(#a1524f, #ebbcba); /* rose */
   --positive: light-dark(#286983, #31748f); /* pine */
-  --negative: light-dark(#b4637a, #eb6f92); /* love */
-  --caution: light-dark(#ea9d34, #f6c177); /* gold */
-  --special: light-dark(#907aa9, #c4a7e7); /* iris */
+  --negative: light-dark(#9f5067, #eb6f92); /* love */
+  --caution: light-dark(#945d02, #f6c177); /* gold */
+  --special: light-dark(#75608d, #c4a7e7); /* iris */
 
-  --number: light-dark(#ea9d34, #f6c177); /* gold */
-  --literal: light-dark(#d7827e, #ebbcba); /* rose */
-  --time: light-dark(#56949f, #9ccfd8); /* foam */
-  --who: light-dark(#907aa9, #c4a7e7); /* iris */
+  --number: light-dark(#945d02, #f6c177); /* gold */
+  --literal: light-dark(#a1524f, #ebbcba); /* rose */
+  --time: light-dark(#33727c, #9ccfd8); /* foam */
+  --who: light-dark(#75608d, #c4a7e7); /* iris */
 
   --keyword: light-dark(#286983, #31748f); /* pine */
-  --string: light-dark(#ea9d34, #f6c177); /* gold */
-  --fn: light-dark(#d7827e, #ebbcba); /* rose */
-  --type: light-dark(#56949f, #9ccfd8); /* foam */
-  --attr: light-dark(#907aa9, #c4a7e7); /* iris */
+  --string: light-dark(#945d02, #f6c177); /* gold */
+  --fn: light-dark(#a1524f, #ebbcba); /* rose */
+  --type: light-dark(#33727c, #9ccfd8); /* foam */
+  --attr: light-dark(#75608d, #c4a7e7); /* iris */
 
-  --hue-0: light-dark(#56949f, #9ccfd8); /* foam */
-  --hue-1: light-dark(#ea9d34, #f6c177); /* gold */
-  --hue-2: light-dark(#907aa9, #c4a7e7); /* iris */
+  --hue-0: light-dark(#33727c, #9ccfd8); /* foam */
+  --hue-1: light-dark(#945d02, #f6c177); /* gold */
+  --hue-2: light-dark(#75608d, #c4a7e7); /* iris */
   --hue-3: light-dark(#286983, #31748f); /* pine */
-  --hue-4: light-dark(#d7827e, #ebbcba); /* rose */
-  --hue-5: light-dark(#b4637a, #eb6f92); /* love */
+  --hue-4: light-dark(#a1524f, #ebbcba); /* rose */
+  --hue-5: light-dark(#9f5067, #eb6f92); /* love */
 }

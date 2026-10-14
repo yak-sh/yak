@@ -1,9 +1,9 @@
-/* A moment, said the human way (5 minutes ago): mono, small and dim, out of
-   the way. Its parts run in a row. */
+/* A moment, said the human way (5 minutes ago): small and muted, out of the
+   way, in the face the words around it are in. Its parts run in a row. */
 .Stamp {
-  font-family: var(--mono);
-  font-size: 11px;
-  color: var(--dim);
+  font-size: var(--small);
+  font-variant-numeric: tabular-nums;
+  color: var(--muted);
   display: inline-flex;
   gap: var(--half-gap);
   white-space: nowrap;
