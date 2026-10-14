@@ -11,7 +11,7 @@ import {
   subWindow,
 } from '../../live.ts'
 import { orderOf, parseQuery, windowOf } from '../../query.ts'
-import { block } from '@yaks/ui'
+import { block, Button, Rows } from '@yaks/ui'
 import { menuAt } from '../nav.tsx'
 import { filteredQuery, usePassOf } from '../Filter.tsx'
 import { dragData } from '../drag.ts'
@@ -20,10 +20,7 @@ import { usePage } from '../useQuery.ts'
 import { Id } from './Inline.tsx'
 import { Entity } from '../Entity.tsx'
 import { slot, tileLink, type TileProps, tileTitle } from '../Tile.tsx'
-import { ListFrame } from '../ListFrame.tsx'
 import { SubscriptionFailure } from '../SubscriptionFailure.tsx'
-
-let { Row } = ListFrame
 
 // A canvas as a linear list — every pinned card's target, one summary row
 // each, id chips linking through. The mobile answer to a spatial plane.
@@ -37,27 +34,27 @@ export let List = ({ e }: { e: Ent }) => {
   usePinTargets(ps)
   if (pass.subscription?.state.status == 'failed') {
     return (
-      <ListFrame>
+      <Rows>
         <SubscriptionFailure read={pass.subscription} />
-      </ListFrame>
+      </Rows>
     )
   }
   return (
-    <ListFrame>
+    <Rows>
       {ps
         .toSorted((a, b) => b.z - a.z)
         .filter((p) => pass(p.target))
         .map((p) => (
-          <Row
+          <Rows.Item
             key={p.eid}
             draggable={capable('canvas')}
             onDragStart={(ev: DragEvent) =>
               dragData(ev, p.target, p.view, p.w, p.eid)}
           >
             <Entity eid={p.target} view='List.Tile' />
-          </Row>
+          </Rows.Item>
         ))}
-    </ListFrame>
+    </Rows>
   )
 }
 
@@ -136,9 +133,9 @@ export let QueryList = (
   let failed = boardRead?.state.status == 'failed' ? boardRead : undefined
   if (failed) {
     return (
-      <ListFrame elRef={root}>
+      <Rows elRef={root}>
         <SubscriptionFailure read={failed} />
-      </ListFrame>
+      </Rows>
     )
   }
   let rows: Ent[]
@@ -148,7 +145,7 @@ export let QueryList = (
     rows = boardPost({ eid }, false, page.eids).map(ent)
     if (hot) rows = rows.toSorted(byWarmth(Date.now()))
   } catch {
-    return <ListFrame elRef={root} /> // a bad query already shows itself on the Board face
+    return <Rows elRef={root} /> // a bad query already shows itself on the Board face
   }
   // The member sub is a WINDOW now (live.ts boardLine), so `rows` is a page of
   // the board and not the board. "+N more" counts against the total the server
@@ -156,23 +153,25 @@ export let QueryList = (
   // silent truncation this row exists to prevent. The ephemeral filter is
   // part of this page's query, so the total follows it too.
   return (
-    <ListFrame elRef={root}>
+    <Rows elRef={root}>
       {rows.map((t) => (
         // a feed row dragged onto a canvas spawns the entity as a card
-        <Row
+        <Rows.Item
           key={t.eid}
           draggable={capable('canvas')}
           onDragStart={(ev: DragEvent) => dragData(ev, t.eid, 'Full')}
         >
           <Entity eid={t.eid} view='List.Tile' />
-        </Row>
+        </Rows.Item>
       ))}
       {more > 0 && (
-        <Row mod='more'>
-          <ListFrame.Action onClick={grow}>+{more} more</ListFrame.Action>
-        </Row>
+        <Rows.More>
+          <Button type='button' mod='quiet' onClick={grow}>
+            +{more} more
+          </Button>
+        </Rows.More>
       )}
-    </ListFrame>
+    </Rows>
   )
 }
 

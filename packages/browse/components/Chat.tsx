@@ -8,7 +8,7 @@ import { catalog, type Provider, usingOf } from '../providers.ts'
 import type { Change, Ent } from '../types.ts'
 import { block, Field } from '@yaks/ui'
 import { Entity } from './Entity.tsx'
-import { ListFrame } from './ListFrame.tsx'
+import { Rows } from '@yaks/ui'
 import { liveBlocked, load, providers } from './Run.tsx'
 import { useChatFor, useReferences } from './useQuery.ts'
 
@@ -67,13 +67,13 @@ export let ReferenceList = (
     ? (
       <References>
         <Label>{label}</Label>
-        <ListFrame>
+        <Rows>
           {items.map((item) => (
-            <ListFrame.Row key={item.eid}>
+            <Rows.Item key={item.eid}>
               <ReferenceRow eid={item.eid} />
-            </ListFrame.Row>
+            </Rows.Item>
           ))}
-        </ListFrame>
+        </Rows>
       </References>
     )
     : null

@@ -13,7 +13,7 @@
   --open: var(--info);
   --wip: var(--active);
   --done: var(--positive);
-  --cancelled: var(--dim); /* settled, but not a success: stays muted */
+  --cancelled: var(--muted); /* settled, but not a success: stays muted */
   --requires: var(--hue-5);
   --contains: var(--hue-1);
   --reads: var(--hue-0);
@@ -46,10 +46,11 @@ html {
   background: var(--surface);
 }
 
-/* The mono keepers: badges, edge verbs, and every command, inspector and
-   log surface. Prose everywhere else is var(--font) via body. :where keeps
-   this overridable. */
-:where(.Prio, .Show_Domain, .Show_Project, .Show_Assignee, .Show_Claim, .Show_Mail, .Dependency_Type, .Relate_Verb, .Board_ColName, .Board_Count, .Board_Chips, .Status, .Search_Id, .SessionRow, .Session_Facts, .Entry_Turn, .Entry_Raw, .Session_When, .Session_Err) {
+/* The mono keepers: what a person copies or types (an id, raw bytes, error
+   output, the command line and the commands it offers). Everything else,
+   labels, counts and times included, reads in var(--font) via body, the
+   kit's register (@yaks/ui base.css). :where keeps this overridable. */
+:where(.Search_Id, .Entry_Raw, .Session_Err, .Status_Line, .Status_Name, .Status_Args) {
   font-family: var(--mono);
 }
 
@@ -112,7 +113,7 @@ html {
   margin: 15vh 0 0;
 }
 .Lost_Hint {
-  color: var(--dim);
+  color: var(--muted);
 }
 .Lost_Hint kbd {
   padding: 1px 5px;
@@ -120,36 +121,10 @@ html {
   border-radius: var(--radius);
 }
 
-/* A canvas as a list — the mobile door into the graph. */
-.List {
-  display: grid;
-  gap: var(--half-gap);
-}
-.List_Row {
-  min-width: 0;
-}
-.List_Row:has(> .List_Action) {
-  display: flex;
-  align-items: center;
-  gap: var(--half-gap);
-}
-.List_Row:has(> .List_Action) > :first-child {
-  flex: 1;
-  min-width: 0;
-}
-.List_Action {
-  flex: none;
-  font: inherit;
-  color: var(--dim);
-  background: none;
-  border: 1px solid transparent;
-  border-radius: var(--radius);
-  cursor: pointer;
-}
-.List_Action:hover {
-  color: var(--text);
-  border-color: var(--border2);
-}
+/* A list is the kit's (@yaks/ui Rows): a line a row, close together, and
+   what was left out under them. Each line is lit under the pointer the way
+   a kit Tile is; none is a box. A board's column gives its items their card
+   (.Board_Item). */
 .TileSlot {
   display: inline-flex;
   align-items: center;
@@ -164,24 +139,19 @@ html {
 .ListTile:has(> .TileSlot-body) {
   flex-wrap: wrap;
 }
-/* The loud cap: a board List cuts at 100 rows and says so. */
-.List_Row-more {
-  color: var(--dim);
-  font-family: var(--mono);
-  font-size: 11px;
-  padding: 0 var(--half-gap);
-}
 .ListTile {
   display: flex;
   align-items: center;
   gap: var(--half-gap);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  background: var(--card);
-  padding: var(--half-gap);
+  border-radius: calc(var(--radius) / 2);
+  padding: 2px var(--half-gap);
+  min-height: var(--tap);
   /* the tile IS a link; it must not read as one word-by-word */
   color: inherit;
   text-decoration: none;
+}
+:is(.ListTile, .Row):is(a, [data-href]):hover {
+  background-color: var(--soft);
 }
 .ListTile_Title {
   flex: 1;
@@ -196,8 +166,7 @@ html {
   background: var(--soft);
   border-radius: var(--radius);
   padding: 0 var(--half-gap);
-  font-family: var(--mono);
-  font-size: 11px;
+  font-size: var(--small);
 }
 
 /* The persona editor: three tier sections, rows drag between them. */
@@ -218,26 +187,25 @@ html {
   display: flex;
   align-items: baseline;
   gap: var(--half-gap);
-  font-family: var(--mono);
-  font-size: 11px;
+  font-size: var(--small);
   text-transform: uppercase;
   letter-spacing: 0.08em;
-  color: var(--dim);
+  color: var(--muted);
 }
 .Persona_Count {
-  color: var(--dim);
+  color: var(--muted);
 }
 .Persona_Row {
   min-width: 0;
 }
 .Persona_Empty {
-  color: var(--dim);
-  font-size: 12px;
+  color: var(--muted);
+  font-size: var(--small);
   padding: var(--half-gap);
 }
 .Persona_Lint {
   color: var(--caution);
-  font-size: 12px;
+  font-size: var(--small);
 }
 
 /* The canvas: a pannable, zoomable dot-grid of pinned cards. The camera is a
@@ -418,7 +386,7 @@ html {
 .Card_X,
 .Card_Min {
   font: 14px/1 var(--mono);
-  color: var(--dim);
+  color: var(--muted);
   background: none;
   border: 0;
   padding: 4px 8px;
@@ -518,9 +486,9 @@ html {
   scroll-snap-align: start end;
 }
 .Board_ColName {
-  font-size: 11px;
+  font-size: var(--small);
   text-transform: uppercase;
-  color: var(--dim);
+  color: var(--muted);
   display: flex;
   align-items: center;
   gap: var(--half-gap);
@@ -532,7 +500,7 @@ html {
 }
 .Board_Count {
   margin-left: auto;
-  color: var(--dim);
+  color: var(--muted);
 }
 /* A folded column is one dot-wide lane: the header pivots 90° AROUND THE
    DOT — the dot holds its spot, the name and count swing down under it.
@@ -550,11 +518,11 @@ html {
   transform-origin: calc(var(--half-gap) + 1px + 0.72em / 2) 50%;
   transform: rotate(90deg);
 }
-/* Quick-create: a dim `+` riding the column header (after the count),
+/* Quick-create: a muted `+` riding the column header (after the count),
    and the box it opens under it. Always reachable — never buried under
    a hundred rows. */
 .Board_Add {
-  color: var(--dim);
+  color: var(--muted);
   cursor: pointer;
   user-select: none;
   padding: 0 var(--half-gap);
@@ -595,15 +563,17 @@ html {
   flex-wrap: wrap;
   gap: var(--half-gap);
   align-items: center;
-  font-size: 11px;
+  font-size: var(--small);
 }
 .Board_Chip {
-  color: var(--dim);
+  color: var(--muted);
   background: var(--soft);
   border-radius: var(--radius);
   padding: 0 var(--half-gap);
 }
 .Board_Item {
+  background: var(--card);
+  border-radius: var(--radius);
   cursor: grab;
   min-width: 0; /* grid child: allow shrinking so the row's title can ellipsize */
   /* offscreen rows skip layout/paint entirely; the placeholder height keeps
@@ -615,8 +585,8 @@ html {
   border: 0;
   border-radius: var(--radius);
   background: var(--soft);
-  color: var(--dim);
-  font: 11px var(--mono);
+  color: var(--muted);
+  font-size: var(--small);
   min-height: var(--tap);
   padding: 0 var(--half-gap);
   cursor: pointer;
@@ -625,14 +595,14 @@ html {
   color: var(--text);
 }
 
-/* The board's card for a task, Trello-shaped: dot + wrapping title, then the
-   shared meta line at dense scale. */
+/* A task's or a board's line: dot + wrapping title, then the shared meta
+   line at dense scale. In a board's column it is a Trello-shaped card, the
+   card its item's (.Board_Item). */
 .Row {
   display: grid;
   grid-template-columns: auto 1fr;
   gap: 2px var(--half-gap);
-  border-radius: var(--radius);
-  background: var(--card);
+  border-radius: calc(var(--radius) / 2);
   padding: var(--half-gap);
   /* the tile IS a link; it must not read as one word-by-word */
   color: inherit;
@@ -759,7 +729,7 @@ html {
 }
 .Wake_Exact {
   color: var(--muted);
-  font: 12px var(--mono);
+  font: var(--small) var(--mono);
 }
 .Wake_Outcome {
   display: flex;
@@ -767,7 +737,7 @@ html {
   justify-content: center;
   gap: 0 var(--half-gap);
   color: var(--muted);
-  font-size: 12px;
+  font-size: var(--small);
 }
 .Wake_Status {
   color: var(--wake-state);
@@ -786,8 +756,8 @@ html {
   gap: var(--gap);
 }
 .Wake_Label {
-  color: var(--dim);
-  font-size: 10px;
+  color: var(--muted);
+  font-size: var(--small);
   font-weight: 600;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -826,13 +796,13 @@ html {
 }
 .Chat_Label {
   margin: 0;
-  color: var(--dim);
-  font-size: 10px;
+  color: var(--muted);
+  font-size: var(--small);
   font-weight: 600;
   letter-spacing: 0.08em;
   text-transform: uppercase;
 }
-.Chat_References > .List {
+.Chat_References > .Rows {
   margin-top: var(--half-gap);
 }
 .Chat_Head {
@@ -847,7 +817,7 @@ html {
   background: none;
   color: var(--muted);
   font: inherit;
-  font-size: 11px;
+  font-size: var(--small);
   cursor: pointer;
 }
 .Chat_Start {
@@ -857,7 +827,7 @@ html {
 .Chat_State {
   margin: 0;
   color: var(--muted);
-  font-size: 11px;
+  font-size: var(--small);
 }
 .Chat .Session {
   min-height: 20rem;
@@ -937,8 +907,8 @@ html {
 /* The priority badge — a tinted pill. Tier drives the colour: P0 burns,
    P1 glows, P2 is the quiet default, P3 fades out. */
 .Prio {
-  --pill: var(--dim);
-  font-size: 10px;
+  --pill: var(--muted);
+  font-size: var(--small);
   font-weight: 700;
   white-space: nowrap;
   padding: 0 5px;
@@ -958,7 +928,7 @@ html {
 /* The domain facet chip (Eng, Legal, Ops, …) — a click opens its box. */
 .Show_Domain {
   white-space: nowrap;
-  font-size: 11px;
+  font-size: var(--small);
   color: var(--muted);
   cursor: pointer;
 }
@@ -979,7 +949,7 @@ html {
 .Show_Project,
 .Show_Assignee {
   white-space: nowrap;
-  font-size: 11px;
+  font-size: var(--small);
   color: var(--muted);
   text-decoration: none;
 }
@@ -992,8 +962,8 @@ html {
    so the caret owns the picker. */
 .Show_Caret {
   white-space: nowrap;
-  font-size: 11px;
-  color: var(--dim);
+  font-size: var(--small);
+  color: var(--muted);
   cursor: pointer;
 }
 .Show_Caret:hover {
@@ -1013,7 +983,7 @@ html {
 .Show_Field,
 .Show_Pick {
   font: inherit;
-  font-size: 11px;
+  font-size: var(--small);
   color: var(--text);
   background: var(--surface);
   border: 1px solid var(--accent);
@@ -1028,8 +998,8 @@ html {
 /* What a bounded edge rider did NOT ship — the tail of a hub's neighbourhood,
    said quietly under the sentences it did. */
 .Show_More {
-  font-size: 11px;
-  color: var(--dim);
+  font-size: var(--small);
+  color: var(--muted);
   padding: 2px 0;
 }
 /* The card-context meta line — the board row's grammar on the full card:
@@ -1039,8 +1009,8 @@ html {
   flex-wrap: var(--meta-wrap, wrap);
   align-items: baseline;
   gap: var(--meta-gap, 2px var(--half-gap));
-  font-size: 11px;
-  color: var(--dim);
+  font-size: var(--small);
+  color: var(--muted);
   margin-bottom: var(--meta-margin, var(--half-gap));
 }
 .Show_Meta > :is(.Prop, .Show_Claim, .Stamp) {
@@ -1096,7 +1066,7 @@ html {
 }
 .Show_Meta .Prio {
   background: transparent;
-  font-size: 11px;
+  font-size: var(--small);
   font-weight: 400;
 }
 .Show_Meta .Show_Domain {
@@ -1113,10 +1083,10 @@ html {
   grid-template-columns: max-content minmax(0, 1fr);
   gap: 2px var(--gap);
   margin-bottom: var(--half-gap);
-  font-size: 11px;
+  font-size: var(--small);
 }
 .Show_MailKey {
-  color: var(--dim);
+  color: var(--muted);
 }
 .Show_MailVal {
   color: var(--muted);
@@ -1168,7 +1138,7 @@ html {
    distinct from the calm deps tally above. Carries the free-text reason. */
 .Show_Blocked {
   white-space: nowrap;
-  font-size: 11px;
+  font-size: var(--small);
   color: var(--negative);
 }
 .Show_Blocked .Icon {
@@ -1178,8 +1148,8 @@ html {
    quiet historical tone, pointing to what's current. */
 .Show_Superseded {
   white-space: nowrap;
-  font-size: 11px;
-  color: var(--dim);
+  font-size: var(--small);
+  color: var(--muted);
 }
 .Show_Superseded .Icon {
   vertical-align: -2px;
@@ -1187,7 +1157,7 @@ html {
 /* The session lease badge — who's working this, in the fleet's tone. */
 .Show_Claim {
   white-space: nowrap;
-  font-size: 11px;
+  font-size: var(--small);
   color: var(--special);
 }
 /* The badge links to the claiming session; underline on hover says so. */
@@ -1197,7 +1167,7 @@ html {
 .Show_Claim:hover {
   text-decoration: underline;
 }
-/* Grow an edge by finishing its sentence: dim verb chips, then a search
+/* Grow an edge by finishing its sentence: muted verb chips, then a search
    whose list OVERLAYS (absolute pop) — nothing below it moves. */
 .Relate {
   display: flex;
@@ -1206,7 +1176,7 @@ html {
   margin-top: var(--half-gap);
 }
 .Relate_Verb {
-  font-size: 11px;
+  font-size: var(--small);
   font-family: inherit;
   background: none;
   border: 0;
@@ -1235,7 +1205,7 @@ html {
 }
 .Relate_Find {
   font: inherit;
-  font-size: 12px;
+  font-size: var(--small);
   color: var(--text);
   background: none;
   border: 0;
@@ -1257,7 +1227,7 @@ html {
 .Relate_New {
   padding: 2px 6px;
   cursor: pointer;
-  font-size: 12px;
+  font-size: var(--small);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -1279,8 +1249,8 @@ html {
   margin-top: var(--half-gap);
 }
 .Show_Score {
-  font-size: 11px;
-  color: var(--dim);
+  font-size: var(--small);
+  color: var(--muted);
 }
 /* in a kin row the edge sentence flows inline — the score rides it;
    the grid's gap owns the spacing, not the sentence's own margin */
@@ -1309,8 +1279,8 @@ html {
   align-items: center;
   gap: var(--half-gap);
   margin-top: var(--half-gap);
-  color: var(--dim);
-  font-size: 11px;
+  color: var(--muted);
+  font-size: var(--small);
 }
 .Role_Grid {
   display: grid;
@@ -1323,8 +1293,8 @@ html {
 }
 .Role_Label {
   display: block;
-  color: var(--dim);
-  font-size: 10px;
+  color: var(--muted);
+  font-size: var(--small);
   text-transform: uppercase;
 }
 .Show_Body {
@@ -1370,7 +1340,7 @@ html {
   gap: var(--half-gap);
   padding-left: var(--gap);
   border-bottom: 1px solid var(--border);
-  color: var(--dim); /* the glyph; the input restores its own ink */
+  color: var(--muted); /* the glyph; the input restores its own ink */
 }
 .Search_Line > .Field {
   flex: 1;
@@ -1387,7 +1357,7 @@ html {
   align-items: center;
   padding: var(--half-gap);
   margin-right: var(--half-gap);
-  color: var(--dim);
+  color: var(--muted);
   background: none;
   border: 0;
   border-radius: var(--radius);
@@ -1401,10 +1371,10 @@ html {
    divider so the navigational sections read as the palette's top. */
 .Search_Head {
   padding: var(--half-gap) var(--gap) 2px;
-  font-size: 10px;
+  font-size: var(--small);
   text-transform: uppercase;
   letter-spacing: 0.06em;
-  color: var(--dim);
+  color: var(--muted);
 }
 .Search_Head-demoted {
   margin-top: var(--half-gap);
@@ -1419,7 +1389,7 @@ html {
 }
 .Search_Snip {
   display: block;
-  font-size: 12px;
+  font-size: var(--small);
   color: var(--muted);
   overflow: hidden;
   text-overflow: ellipsis;
@@ -1475,7 +1445,7 @@ html {
 }
 .Keybindings_Close {
   padding: 0 var(--half-gap);
-  color: var(--dim);
+  color: var(--muted);
   background: none;
   border: 0;
   font: inherit;
@@ -1509,7 +1479,6 @@ html {
      narrow card the NAME wins the bar, the glance folds away */
   flex: 0 8 14em;
   min-width: 0;
-  font-size: 12px;
   font-weight: 400; /* the titlebar is bold; the glance is not */
 }
 .Filter > .Field {
@@ -1532,7 +1501,7 @@ html {
 }
 /* the verb is a small label; the name keeps the body's normal size */
 .Dependency_Type {
-  font-size: 11px;
+  font-size: var(--small);
 }
 .Dependency_Type-requires {
   color: var(--requires);
@@ -1545,11 +1514,11 @@ html {
 }
 /* similarity is a derived edge — quieter than the authored ones */
 .Dependency_Type-similar {
-  color: var(--dim);
+  color: var(--muted);
 }
 /* supersession is a historical edge — the same quiet tone as the mark */
 .Dependency_Type-supersedes {
-  color: var(--dim);
+  color: var(--muted);
 }
 
 /* The vim statusbar: NORMAL / -- INSERT -- / the : command line. The side
@@ -1565,7 +1534,7 @@ html {
   min-height: var(--tap);
   background: var(--surface);
   border-top: 1px solid var(--border);
-  font-size: 12px;
+  font-size: var(--small);
   position: relative; /* the hints panel anchors to the bar */
   z-index: 2; /* shell chrome clears sticky content (z1) */
 }
@@ -1591,7 +1560,7 @@ html {
   padding: 0 var(--half-gap);
   border: 0;
   background: none;
-  color: var(--dim);
+  color: var(--muted);
   font: inherit;
   font-size: 16px;
   cursor: pointer;
@@ -1600,7 +1569,7 @@ html {
   color: var(--text);
 }
 .Status_Mode {
-  color: var(--dim);
+  color: var(--muted);
   font-weight: 600;
 }
 .Status_Mode-insert {
@@ -1704,7 +1673,7 @@ html {
   color: var(--muted);
 }
 .Status_About {
-  color: var(--dim);
+  color: var(--muted);
   margin-left: auto;
 }
 .Status_Msg {
@@ -1712,7 +1681,7 @@ html {
 }
 /* "you are …?" — the bar asks once, each candidate a quiet button. */
 .Status_You {
-  color: var(--dim);
+  color: var(--muted);
   display: flex;
   align-items: baseline;
   gap: var(--half-gap);
@@ -1782,7 +1751,7 @@ html {
 }
 .Sync_Age,
 .Sync_When {
-  color: var(--dim);
+  color: var(--muted);
 }
 /* The refusal ledger, opened from the red pill: each refused write, its reason
    and age, dismissable. Anchored above the bar (the bar is the page floor). */
@@ -1826,7 +1795,7 @@ html {
   font: inherit;
   font-size: 16px;
   line-height: 1;
-  color: var(--dim);
+  color: var(--muted);
   background: none;
   border: 0;
   padding: 0;
@@ -1837,7 +1806,7 @@ html {
 }
 .Sync_Summary {
   color: var(--muted);
-  font-size: 11px;
+  font-size: var(--small);
 }
 
 /* An external page's frozen archive, framed in a card. The page brings
@@ -1867,7 +1836,7 @@ html {
   display: flex;
   align-items: center;
   gap: var(--gap);
-  color: var(--dim);
+  color: var(--muted);
 }
 .WebWait_Url {
   overflow-wrap: anywhere;
@@ -1911,7 +1880,7 @@ html {
   text-decoration: none;
 }
 .MediaFile_Size {
-  color: var(--dim);
+  color: var(--muted);
   font-size: 0.85em;
 }
 
@@ -1920,7 +1889,7 @@ pre.Md {
   margin: 0;
   min-width: 0;
   width: 100%;
-  font-size: 12px;
+  font-size: var(--small);
   white-space: pre;
 }
 
@@ -1998,7 +1967,7 @@ a[data-ref]:hover {
   padding: var(--half-gap) var(--gap);
   border-bottom: 1px solid var(--border);
   background: var(--surface);
-  font-size: 12px;
+  font-size: var(--small);
 }
 .SessionManage_Group {
   min-width: 0;
@@ -2020,7 +1989,7 @@ a[data-ref]:hover {
   overflow-wrap: anywhere;
 }
 .SessionManage_Empty {
-  color: var(--dim);
+  color: var(--muted);
 }
 .SessionManage_Input {
   display: grid;
@@ -2035,8 +2004,8 @@ a[data-ref]:hover {
   display: flex;
   align-items: center;
   gap: var(--half-gap);
-  color: var(--dim);
-  font-size: 11px;
+  color: var(--muted);
+  font-size: var(--small);
 }
 .SessionManage_Label select {
   max-width: min(34vw, 12rem);
@@ -2067,15 +2036,15 @@ a[data-ref]:hover {
   border-bottom: 1px solid var(--border);
   background: var(--card);
   color: var(--muted);
-  font-size: 12px;
+  font-size: var(--small);
 }
 .Session_References[open] {
   max-height: min(30dvh, 14rem);
 }
 .Session_ReferencesGist {
-  color: var(--dim);
+  color: var(--muted);
   cursor: pointer;
-  font: 11px var(--mono);
+  font-size: var(--small);
   list-style: none;
   text-transform: uppercase;
 }
@@ -2173,7 +2142,7 @@ a[data-ref]:hover {
 .Split_Empty {
   color: var(--muted);
   padding: var(--gap);
-  font-size: 13px;
+  font-size: var(--small);
 }
 @container (min-width: 50rem) {
   .Split {
@@ -2211,13 +2180,13 @@ a[data-ref]:hover {
 }
 .Session_Context {
   flex: none;
-  font-size: 11px;
-  color: var(--dim);
+  font-size: var(--small);
+  color: var(--muted);
   white-space: nowrap;
 }
 .Session_Stop {
   font: inherit;
-  font-size: 11px;
+  font-size: var(--small);
   color: var(--negative);
   background: none;
   border: 1px solid var(--border2);
@@ -2229,11 +2198,11 @@ a[data-ref]:hover {
 .Session_Stop:hover {
   border-color: var(--negative);
 }
-/* Facts and unordered diagnostics fold behind one dim line. */
+/* Facts and unordered diagnostics fold behind one muted line. */
 .Session_Facts,
 .Session_Diagnostics {
-  font-size: 11px;
-  color: var(--dim);
+  font-size: var(--small);
+  color: var(--muted);
 }
 .Session_Gist {
   cursor: pointer;
@@ -2257,7 +2226,7 @@ a[data-ref]:hover {
   padding-top: 4px;
 }
 .Session_Key {
-  color: var(--dim);
+  color: var(--muted);
 }
 .Session_Val {
   color: var(--muted);
@@ -2266,7 +2235,7 @@ a[data-ref]:hover {
 .Session_Fault {
   margin: 0;
   color: var(--muted);
-  font-size: 12px;
+  font-size: var(--small);
   overflow-wrap: anywhere;
 }
 .Session_Fault-error {
@@ -2286,8 +2255,8 @@ a[data-ref]:hover {
   border: 0;
   border-radius: var(--radius);
   background: var(--soft);
-  color: var(--dim);
-  font: 11px var(--mono);
+  color: var(--muted);
+  font-size: var(--small);
   min-height: var(--tap);
   padding: 0 var(--gap);
   cursor: pointer;
@@ -2320,9 +2289,8 @@ a[data-ref]:hover {
   padding: 0;
   border: 0;
   background: none;
-  font-family: var(--mono);
-  font-size: 11px;
-  color: var(--dim);
+  font-size: var(--small);
+  color: var(--muted);
   cursor: pointer;
   user-select: none;
   opacity: 0;
@@ -2341,8 +2309,8 @@ a[data-ref]:hover {
 .Session_When {
   float: right;
   margin-left: var(--half-gap);
-  font-size: 11px;
-  color: var(--dim);
+  font-size: var(--small);
+  color: var(--muted);
   text-decoration: none;
 }
 .Session_When:hover {
@@ -2351,7 +2319,7 @@ a[data-ref]:hover {
 /* An unparseable line: the bytes stay visible as evidence of a broken stream. */
 .Entry_Raw {
   font-family: var(--mono);
-  font-size: 11px;
+  font-size: var(--small);
   color: var(--caution); /* not JSON: the bytes as the provider wrote them */
   overflow-wrap: anywhere;
 }
@@ -2362,7 +2330,7 @@ a[data-ref]:hover {
   padding: var(--half-gap);
   border: 1px solid var(--border);
   border-radius: 4px;
-  font-size: 11px;
+  font-size: var(--small);
   color: var(--muted);
   white-space: pre-wrap;
   overflow-wrap: anywhere;
@@ -2388,7 +2356,7 @@ a[data-ref]:hover {
   gap: var(--gap);
 }
 .Entry {
-  --entry-font-size: 12px;
+  --entry-font-size: var(--small);
   display: flex;
   align-items: baseline;
   gap: var(--half-gap);
@@ -2451,16 +2419,16 @@ a[data-ref]:hover {
 }
 .Entry-meta {
   display: block;
-  color: var(--dim);
+  color: var(--muted);
   font-family: var(--mono);
-  font-size: 11px;
+  font-size: var(--small);
   overflow-wrap: anywhere;
 }
 /* A speaker is said in words too: a quiet border alone disappears in plain
    terminals and is too easy to miss in a long transcript. */
 .Entry_Speaker {
-  color: var(--dim);
-  font: 11px var(--mono);
+  color: var(--muted);
+  font-size: var(--small);
   margin-bottom: var(--half-gap);
 }
 .Entry-user,
@@ -2480,9 +2448,9 @@ a[data-ref]:hover {
   min-width: 0;
 }
 .Prompt_Gist {
-  color: var(--dim);
+  color: var(--muted);
   cursor: pointer;
-  font: 11px var(--mono);
+  font-size: var(--small);
   list-style: none;
   text-transform: uppercase;
 }
@@ -2522,14 +2490,13 @@ a[data-ref]:hover {
 }
 .Entry_PartName {
   margin-bottom: var(--half-gap);
-  color: var(--dim);
-  font-family: var(--mono);
-  font-size: 11px;
+  color: var(--muted);
+  font-size: var(--small);
 }
-/* The model thinking out loud — dim, skippable. */
+/* The model thinking out loud — muted and italic, skippable. */
 .Entry_Reason {
-  color: var(--dim);
-  font-size: 12px;
+  color: var(--muted);
+  font-size: var(--small);
   font-style: italic;
   overflow-wrap: anywhere;
 }
@@ -2539,8 +2506,8 @@ a[data-ref]:hover {
   display: flex;
   align-items: center;
   gap: var(--half-gap);
-  color: var(--dim);
-  font-size: 11px;
+  color: var(--muted);
+  font-size: var(--small);
 }
 .Entry_Turn::before {
   content: '';
@@ -2549,8 +2516,8 @@ a[data-ref]:hover {
 }
 /* The live tail thinks out loud. */
 .Session_Think {
-  color: var(--dim);
-  font-size: 12px;
+  color: var(--muted);
+  font-size: var(--small);
   animation: SessionPulse 1.6s ease-in-out infinite;
 }
 @keyframes SessionPulse {
@@ -2558,28 +2525,28 @@ a[data-ref]:hover {
     opacity: 0.35;
   }
 }
-/* Provider housekeeping: one dim chip line — the tag names the family,
+/* Provider housekeeping: one muted chip line — the tag names the family,
    the text the gist, ×N how many frames it speaks for. */
 .Entry_Sys {
   display: flex;
   gap: var(--half-gap);
   align-items: baseline;
   min-width: 0;
-  font-size: 12px;
+  font-size: var(--small);
 }
 .Entry_SysTag {
   flex: none;
   color: var(--muted);
 }
 .Entry_SysText {
-  color: var(--dim);
+  color: var(--muted);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 .Entry_SysCount {
   flex: none;
-  color: var(--dim);
+  color: var(--muted);
 }
 /* The run itself went wrong. */
 .Entry_Oops {
@@ -2587,11 +2554,11 @@ a[data-ref]:hover {
   overflow-wrap: anywhere;
 }
 .Session_Err {
-  --err: var(--dim);
+  --err: var(--muted);
 
   margin: var(--half-gap) 0 0;
   padding: var(--half-gap);
-  font-size: 11px;
+  font-size: var(--small);
   color: var(--err);
   white-space: pre-wrap;
   overflow-wrap: anywhere;
@@ -2623,7 +2590,7 @@ a[data-ref]:hover {
 /* A session row: what it is doing, then its own short account. */
 .SessionRow {
   min-width: 0;
-  font-size: 12px;
+  font-size: var(--small);
 }
 .SessionRow_Head {
   display: flex;
@@ -2639,8 +2606,8 @@ a[data-ref]:hover {
 .SessionRow_Meta {
   flex: none;
   margin-left: auto;
-  color: var(--dim);
-  font: 11px var(--mono);
+  color: var(--muted);
+  font-size: var(--small);
 }
 .SessionRow_Title {
   overflow: hidden;
@@ -2677,14 +2644,14 @@ a[data-ref]:hover {
   gap: var(--half-gap);
 }
 .Run_Name {
-  color: var(--dim);
-  font-size: 11px;
+  color: var(--muted);
+  font-size: var(--small);
   min-width: 4rem;
 }
 .Run select {
   flex: 1;
   font: inherit;
-  font-size: 12px;
+  font-size: var(--small);
   color: inherit;
   background: var(--surface);
   border: 1px solid var(--border2);
@@ -2707,7 +2674,7 @@ a[data-ref]:hover {
 .Run_Error {
   margin: 0;
   color: var(--negative);
-  font-size: 11px;
+  font-size: var(--small);
   max-width: 20rem;
   overflow-wrap: anywhere;
 }
@@ -2720,7 +2687,7 @@ a[data-ref]:hover {
   min-width: 0;
   max-width: 100%;
   align-items: center;
-  font-size: 12px;
+  font-size: var(--small);
   color: var(--text);
 }
 .Tray_Pop {
@@ -2756,14 +2723,14 @@ a[data-ref]:hover {
   box-shadow: 0 4px 16px rgb(0 0 0 / 0.3);
 }
 .Tray_Label {
-  color: var(--dim);
-  font-size: 11px;
+  color: var(--muted);
+  font-size: var(--small);
   text-transform: uppercase;
   letter-spacing: 0.04em;
 }
 .Tray_Chevron {
-  color: var(--dim);
-  font-size: 11px;
+  color: var(--muted);
+  font-size: var(--small);
   line-height: 1;
 }
 .Tray_Group {
@@ -2798,7 +2765,7 @@ a[data-ref]:hover {
   min-width: 0;
 }
 .Tray_X {
-  color: var(--dim);
+  color: var(--muted);
   background: none;
   border: 0;
   cursor: pointer;
@@ -2811,7 +2778,7 @@ a[data-ref]:hover {
 }
 .Tray_Hint {
   padding: var(--gap);
-  color: var(--dim);
+  color: var(--muted);
   text-align: center;
 }
 /* The strip is a bar-native button: quiet, no chrome of its own. */
@@ -2882,7 +2849,7 @@ a[data-ref]:hover {
   .ListTile,
   .Row {
     padding: 2px var(--half-gap);
-    font-size: 12px;
+    font-size: var(--small);
   }
   .Row {
     --meta-stamp: none; /* provenance is the full tier's luxury */
@@ -2895,9 +2862,7 @@ a[data-ref]:hover {
   .Row,
   .SessionRow {
     padding: 0 2px;
-    border: 0;
-    background: none;
-    font-size: 11px;
+    font-size: var(--small);
   }
   .Row > .Show_Meta,
   .SessionRow_Brief,
@@ -2934,12 +2899,11 @@ a[data-ref]:hover {
   align-items: baseline;
   gap: var(--half-gap);
   margin: 0;
-  font-family: var(--mono);
-  font-size: 11px;
+  font-size: var(--small);
   font-weight: normal;
   text-transform: uppercase;
   letter-spacing: 0.08em;
-  color: var(--dim);
+  color: var(--muted);
 }
 .Dash_Badge {
   min-width: 1.1em;
@@ -2947,7 +2911,7 @@ a[data-ref]:hover {
   border-radius: 1em;
   background: var(--accent);
   color: var(--bg);
-  font-size: 10px;
+  font-size: var(--small);
   line-height: 1.5;
   font-variant-numeric: tabular-nums;
   text-align: center;
@@ -2958,8 +2922,8 @@ a[data-ref]:hover {
 }
 .Dash_More,
 .Dash_Empty {
-  color: var(--dim);
-  font-size: 11px;
+  color: var(--muted);
+  font-size: var(--small);
 }
 
 /* The tiling container (views/Layout.tsx, D-14718): a container pane is a
@@ -3026,8 +2990,8 @@ a[data-ref]:hover {
   border: 1px solid var(--border2);
   border-radius: var(--radius);
   background: var(--bg);
-  color: var(--dim);
-  font-size: 11px;
+  color: var(--muted);
+  font-size: var(--small);
   line-height: 1.6;
   cursor: pointer;
 }
@@ -3049,20 +3013,19 @@ a[data-ref]:hover {
   border: none;
   background: none;
   color: var(--text);
-  font-size: 12px;
+  font-size: var(--small);
   cursor: pointer;
 }
 .Layout_Row span {
-  color: var(--dim);
-  font-family: var(--mono);
-  font-size: 10px;
+  color: var(--muted);
+  font-size: var(--small);
 }
 .Layout_Row:hover {
   color: var(--accent);
 }
 .Layout_Empty {
   margin: auto;
-  color: var(--dim);
+  color: var(--muted);
 }
 .Quarantine {
   display: flex;
@@ -3092,7 +3055,7 @@ a[data-ref]:hover {
 .Debug {
   display: grid;
   gap: var(--half-gap);
-  font-size: 12px;
+  font-size: var(--small);
 }
 .Debug_Lens {
   display: grid;
@@ -3126,8 +3089,8 @@ a[data-ref]:hover {
   padding-left: var(--half-gap);
 }
 .Debug_Kind {
-  color: var(--dim);
-  font-size: 11px;
+  color: var(--muted);
+  font-size: var(--small);
 }
 .Debug_Props {
   display: grid;
@@ -3136,8 +3099,8 @@ a[data-ref]:hover {
   align-items: baseline;
 }
 .Debug_Key {
-  color: var(--dim);
-  font-size: 11px;
+  color: var(--muted);
+  font-size: var(--small);
 }
 .Debug_Comp {
   color: var(--comp);
@@ -3177,14 +3140,14 @@ a[data-ref]:hover {
 .Debug_Val-num {
   color: var(--hue-2);
 }
-/* The eid a reference stored, trailing its association chip + title: dim
-   and small, the raw uuid beneath the entity it names. */
+/* The eid a reference stored, trailing its association chip + title: muted,
+   small and mono, the raw uuid beneath the entity it names. */
 .Debug_Val-id {
-  color: var(--dim);
-  font-size: 11px;
+  color: var(--muted);
+  font: var(--small) var(--mono);
 }
 .Debug_Status {
-  font-size: 11px;
+  font-size: var(--small);
 }
 .Debug_Status-open {
   color: var(--open);
@@ -3199,7 +3162,7 @@ a[data-ref]:hover {
   color: var(--cancelled);
 }
 .Debug_More {
-  color: var(--dim);
+  color: var(--muted);
 }
 /* The per-component remove × — one on each group's first key, a quiet
    glyph that warms to danger on hover. A deliberate click: it deletes the
@@ -3209,7 +3172,7 @@ a[data-ref]:hover {
   background: none;
   border: 0;
   cursor: pointer;
-  color: var(--dim);
+  color: var(--muted);
   padding: 0 var(--half-gap);
   border-radius: var(--radius);
 }
@@ -3226,11 +3189,11 @@ a[data-ref]:hover {
 }
 .Debug_AddBtn {
   font: inherit;
-  font-size: 11px;
+  font-size: var(--small);
   background: none;
   border: 1px dashed var(--border);
   border-radius: var(--radius);
-  color: var(--dim);
+  color: var(--muted);
   cursor: pointer;
   padding: 2px var(--half-gap);
 }
@@ -3250,7 +3213,7 @@ a[data-ref]:hover {
 }
 .Debug_AddItem {
   font: inherit;
-  font-size: 11px;
+  font-size: var(--small);
   text-align: left;
   background: none;
   border: 0;
@@ -3268,8 +3231,8 @@ a[data-ref]:hover {
   gap: var(--half-gap);
 }
 .Debug_Via {
-  color: var(--dim);
-  font-size: 11px;
+  color: var(--muted);
+  font-size: var(--small);
   white-space: nowrap;
 }
 
