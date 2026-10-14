@@ -35,6 +35,7 @@ import {
 import type { JSONRPCMessage } from '@modelcontextprotocol/server'
 import { type Authenticate, type Handler, json, refuse } from '@yaks/api'
 import type { Actor, Bundle, Graph } from '@yaks/graph'
+import { status } from '@yaks/graph/errors'
 import { namedTool } from '@yaks/graph/call'
 import { SESSION, sessionFor, speaking } from '@yaks/session'
 import { runner } from '@yaks/tools'
@@ -65,6 +66,15 @@ export type MountOptions = Omit<Options, 'actor'> & {
 
 let refused = (message: string, code: number) =>
   json({ error: code == 405 ? 'NotAllowed' : 'Refused', message }, code)
+
+// A refusal is answered here, in its own words. A failure has no answer of
+// its own: it is thrown on to the host, whose watch answers it and reports it
+// with its error (@yaks/api `served`, the yaks.app kernel's catch-all, which
+// hears only what is thrown).
+let refusing = (err: unknown, request: Request): Response => {
+  if (status(err) >= 500) throw err
+  return refuse(err, request)
+}
 
 let ID = 'mcp-session-id'
 let VIA = 'x-via'
@@ -223,7 +233,7 @@ export let mcp = (opts: MountOptions): Handler => {
       if (conn) answer.headers.set(ID, conn.id)
       return answer
     } catch (err) {
-      return refuse(err, request)
+      return refusing(err, request)
     }
   }
   return async (request) => {
@@ -280,7 +290,7 @@ export let mcp = (opts: MountOptions): Handler => {
         callers.delete(request)
       }
     } catch (err) {
-      return refuse(err, request)
+      return refusing(err, request)
     }
   }
 }

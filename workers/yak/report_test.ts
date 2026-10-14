@@ -15,7 +15,6 @@ import {
 } from '@std/assert'
 import { test, tick, until } from '@yaks/testing'
 import type { Bundle, Comp } from '@yaks/graph'
-import { CallError } from '@yaks/tools'
 import {
   client,
   connector,
@@ -748,12 +747,7 @@ let platformBreak = await (async () => {
     }
     let get = env.BLOBS.get.bind(env.BLOBS)
     env.BLOBS.get = (...args) => {
-      if (failing && failing != 'query') {
-        throw new CallError(
-          'arguments',
-          `${failing}: vocab.json: fight.dealt is already text`,
-        )
-      }
+      if (failing == 'bucket') throw new Error('bucket unavailable')
       return get(...args)
     }
   })
@@ -774,8 +768,8 @@ let platformBreak = await (async () => {
       captured,
       cookie,
       app,
-      fail: (method: string) => {
-        failing = method.replace('/', ' ')
+      fail: (what: '' | 'query' | 'bucket') => {
+        failing = what
       },
     }
   } catch (error) {
@@ -829,38 +823,27 @@ test("the platform's own break is ours, not the app's", async () => {
       ),
     )
 
-    // Discovery can fail before a named connector tool begins. The wrapped
-    // initialize, listing and call catches all retain that request's tags.
-    for (let method of ['initialize', 'tools/list', 'tools/call']) {
-      fail(method)
-      let response = await k.at(k.host, '/mcp', {
-        method: 'POST',
-        headers: { cookie, 'content-type': 'application/json' },
-        body: JSON.stringify({
-          jsonrpc: '2.0',
-          id: 1,
-          method,
-          params: method == 'tools/call'
-            ? { name: 'app_list', arguments: {} }
-            : {},
-        }),
-      })
-      assertEquals(response.status, 500)
-      let requestId = response.headers.get('x-request-id')
-      await response.body?.cancel()
-      let latest = captured.filter((row) => row.error).at(-1)!
-      assertEquals(
-        (latest.exception as Comp).value,
-        `Release discovery failed: ${
-          method.replace('/', ' ')
-        }: vocab.json: fight.dealt is already text`,
-      )
-      assertEquals(
-        ((latest.error as Comp).tags as Comp).request,
-        `POST ${k.host}/mcp`,
-      )
-      assertEquals(((latest.error as Comp).tags as Comp).request_id, requestId)
-    }
+    // Discovery can fail before a named connector tool begins: `initialize`
+    // reads what each app in reach says about itself from the bucket, inside
+    // the protocol handler (standing.ts). That failure is ours, reported with
+    // the request's tags, never a 500 the handler answers and nobody hears.
+    fail('bucket')
+    let hello = await k.at(k.host, '/mcp', {
+      method: 'POST',
+      headers: { cookie, 'content-type': 'application/json' },
+      body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'initialize' }),
+    })
+    fail('')
+    assertEquals(hello.status, 500)
+    let helloId = hello.headers.get('x-request-id')
+    await hello.body?.cancel()
+    let latest = captured.filter((row) => row.error).at(-1)!
+    assertEquals((latest.exception as Comp).value, 'bucket unavailable')
+    assertEquals(
+      ((latest.error as Comp).tags as Comp).request,
+      `POST ${k.host}/mcp`,
+    )
+    assertEquals(((latest.error as Comp).tags as Comp).request_id, helloId)
   } finally {
     fail('')
     await k.stop()

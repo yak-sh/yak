@@ -8,7 +8,7 @@ import { assert, assertEquals, assertRejects } from '@std/assert'
 import { FakeTime } from '@std/testing/time'
 import { type Bundle, derivedEid, graph } from '@yaks/graph'
 import { graphDoc } from '@yaks/graph/vocab'
-import { subscriptions, Unauthorized } from '@yaks/api'
+import { served, subscriptions, Unauthorized } from '@yaks/api'
 import { ram } from '@yaks/ram'
 import { sessionDoc } from '@yaks/session'
 import { authenticate as sessionAuth } from '@yaks/session/graph'
@@ -160,6 +160,23 @@ test('a door that refuses to name a caller answers 401', async () => {
   let r = await door(rpc('tools/list'))
   assertEquals(r.status, 401)
   assertEquals((await r.json()).error, 'Unauthorized')
+})
+
+test("a failure before any tool runs is the host's to answer and report", async () => {
+  let broke = new Error('the roster could not be read')
+  let reported: unknown[] = []
+  let door = served(
+    mcp({ graph: shopGraph(), instructions: () => Promise.reject(broke) }),
+    { report: (_, err) => reported.push(err) },
+  )
+  let r = await door(rpc('initialize', {
+    protocolVersion: '2025-06-18',
+    capabilities: {},
+    clientInfo: { name: 'shop', version: '0' },
+  }))
+  assertEquals(r.status, 500)
+  assert(r.headers.get('x-request-id'))
+  assertEquals(reported, [broke])
 })
 
 test('the door refuses what it does not serve', async () => {
