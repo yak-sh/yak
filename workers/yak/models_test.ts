@@ -709,6 +709,15 @@ test('./api/ai/run answers what the model said, and the space pays for it', asyn
   assertEquals(v.asked.length, 2)
 })
 
+test('./api/ai/run answers an input the model refuses as the caller’s, 400', async () => {
+  let schema = "5006: Error: oneOf at '/' not met, 0 matches"
+  let v = await vale(() => Promise.reject(new Error(schema)))
+  let input = { messages: 'hello' }
+  let { status, said } = await v.run({ model: FLASH, input })
+  assertEquals([status, said.error.code], [400, 'bad_request'])
+  assert(said.error.message.includes(schema))
+})
+
 test('./api/ai/run answers a visitor only where the app opens its models', async () => {
   let body = { model: JEV, input: { prompt: 'hi' } }
   let answer = () => ({ response: 'hello' })

@@ -23,7 +23,7 @@ import {
 import { records } from '@yaks/secrets'
 
 import type { VocabDoc } from '@yaks/vocab'
-import { music, said, workersAi } from '@yaks/workers-ai'
+import { music, said, unfit, workersAi } from '@yaks/workers-ai'
 import { artifactStore, objectBlobs } from '@yaks/blob'
 import { resolve } from '@yaks/connections'
 import { gateway as openai } from '@yaks/openai'
@@ -404,6 +404,8 @@ let posted = (
  * here, dispatch.ts `shim`). Asked by whoever may ask the app's models for a
  * turn: its members, or, where its manifest says `"models": "open"`, anyone
  * who may write it, at a visitor's size and pace. Metered like every call.
+ * The input is the caller's, passed whole, so one the model refuses
+ * (@yaks/workers-ai `unfit`) is answered 400 as theirs to correct.
  */
 export let modelRun: Answer = async (
   { env, req, path, space, app, who, refuse, json, visiting },
@@ -456,17 +458,19 @@ export let modelRun: Answer = async (
     if (e instanceof ModelError) {
       return json(STATUS[e.code] ?? 502, e.code, e.message)
     }
+    let why = e instanceof Error ? e.message : String(e)
+    if (unfit(e)) {
+      return json(
+        400,
+        'bad_request',
+        `${asked.model} refused this input: ${why}`,
+      )
+    }
     caught(e, {
       request: 'POST /api/ai/run',
       space: space.slug,
       app: app.slug,
     })
-    return json(
-      502,
-      'model_failed',
-      `${asked.model} did not answer: ${
-        e instanceof Error ? e.message : String(e)
-      }`,
-    )
+    return json(502, 'model_failed', `${asked.model} did not answer: ${why}`)
   }
 }

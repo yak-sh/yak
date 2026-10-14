@@ -85,7 +85,9 @@ accept it. A name Workers AI has no model by (its 5007) throws one coded `model`
 too, with the binding's message. An image item throws `ModelError` with code
 `image`, since images are not sent. A `ModelError` the binding throws itself (a
 binding that meters its caller, say) and anything else it throws are passed on
-as they were thrown.
+as they were thrown. That includes an input the model refuses (5006 and its
+kin), since an input this package builds is a defect; `unfit(e)` tells one
+apart, for a door that passes its caller's input through whole.
 
 Tests use a stand-in binding, not paid inference.
 

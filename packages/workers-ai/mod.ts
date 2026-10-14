@@ -289,6 +289,24 @@ let unlicensed = (e: unknown) => /^5016:|prompt 'agree'/.test(message(e))
 // caller's name, which no account could be answered for.
 let missing = (e: unknown) => /^5007:|no such model/i.test(message(e))
 
+/**
+ * Whether the binding refused the input it was asked with: it fits none of
+ * the model's schemas (5006), carries data of a type the model takes none of
+ * (5004), is too large (3006), or names a LoRA the model cannot run (5005).
+ * {@link failure} passes these on, since an input built here is a defect; a
+ * door that passes its caller's input through whole answers them as the
+ * caller's.
+ *
+ * ```ts
+ * import { unfit } from '@yaks/workers-ai'
+ * import { assertEquals } from '@std/assert'
+ *
+ * assertEquals(unfit(new Error("5006: Error: oneOf at '/' not met")), true)
+ * assertEquals(unfit(new Error('3040: Capacity temporarily exceeded')), false)
+ * ```
+ */
+export let unfit = (e: unknown) => /^(5006|5004|3006|5005):/.test(message(e))
+
 // What the binding is asked: a chat, or a structured model's questions about
 // the same conversation.
 let input = (req: Request) =>
