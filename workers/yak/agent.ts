@@ -144,13 +144,19 @@ export let answered = async (
 ): Promise<Bundle[]> => {
   // Nobody signed in has no space to be told what is unseen in (anon.ts): the
   // breaks in an app are its members', and a stranger is not one.
-  let text = !out.space || !ctx.person || readOnly ? out.text : out.text +
-    unseenBlock(
-      await serve(ctx.env, out.space, {
-        person: ctx.person,
-        role: await ctx.dir.role(out.space, ctx.person),
-      }),
-    ) + await ceiling(ctx.env, out.space)
+  // The breaks and the ceiling are asked of different doors and neither waits
+  // on the other, so they are asked together.
+  let space = out.space
+  let text = !space || !ctx.person || readOnly
+    ? out.text
+    : out.text + (await Promise.all([
+      ctx.dir.role(space, ctx.person).then(async (role) =>
+        unseenBlock(
+          await serve(ctx.env, space, { person: ctx.person, role }),
+        )
+      ),
+      ceiling(ctx.env, space),
+    ])).join('')
   // A call to say it came from, where there is one: the builder runs these
   // same tools in its own loop (builder.ts), with nothing to point at.
   let output = {
