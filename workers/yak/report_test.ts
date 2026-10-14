@@ -13,7 +13,7 @@ import {
   assertMatch,
   assertStringIncludes,
 } from '@std/assert'
-import { test, tick } from '@yaks/testing'
+import { test, tick, until } from '@yaks/testing'
 import type { Bundle, Comp } from '@yaks/graph'
 import { CallError } from '@yaks/tools'
 import {
@@ -589,9 +589,14 @@ let browser = (code: string, page: string, version = 1) => {
     documentElement: body,
     createElement: () => ({ style: {}, setAttribute: () => {} }),
   }
+  // The server refuses each file the page failed to load, which is what makes
+  // the miss news (T-124011); nothing else is ever answered.
+  let gone = new Set<string>()
   let win = {
-    fetch: (_url?: string) =>
-      Promise.reject(new Error('this page fetches nothing')),
+    fetch: (url?: string) =>
+      gone.has(String(url))
+        ? Promise.resolve(new Response(null, { status: 404 }))
+        : Promise.reject(new Error('this page fetches nothing')),
     matchMedia: () => ({ matches: false }),
   }
   new Function(
@@ -618,8 +623,10 @@ let browser = (code: string, page: string, version = 1) => {
     // A file that never loaded, on the element it never loaded into: that
     // event fires on the element and does not bubble, which is why the
     // reporter listens in the capture phase (T-32909).
-    blocked: (tagName: string, src: string) =>
-      ears.error?.forEach((fn) => fn({ target: { tagName, src } })),
+    blocked: (tagName: string, src: string) => {
+      gone.add(src)
+      ears.error?.forEach((fn) => fn({ target: { tagName, src } }))
+    },
     ask: (url: string) => win.fetch(url),
     filed: () =>
       Promise.all(beacons.map(async (b) => JSON.parse(await b.text()))),
@@ -671,6 +678,7 @@ test("the platform's own scripts are never the app's break", async () => {
       failures[0].message,
       '/weather/api/query?.player&.created.by=ada',
     )
+    await until(() => own.drawn.length, { label: 'the soft state' })
     assertEquals(own.drawn.length, 1, 'and the soft state over the shell')
 
     // And what the door makes of everything the two pages sent: one break.
