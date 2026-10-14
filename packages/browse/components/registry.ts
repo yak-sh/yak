@@ -38,6 +38,7 @@ import { useRows } from './subscriptions.ts'
 import { names as edgeNames } from '@yaks/edge'
 import { and, present } from '@yaks/query'
 import { type Ent, idOf, kindOf, statusOf, vocab } from '../types.ts'
+import { entityPath } from '../url.ts'
 import { archetypeTables, rememberArchetype } from '../live_archetypes.ts'
 import { mdInline } from '../md.ts'
 import { Dot } from './Dot.tsx'
@@ -211,7 +212,7 @@ let mount = (e: Ent, view?: string, ctx: Context & Events = {}) => {
     kind: ux.kind,
     name: ux.name,
     when: ux.when,
-    link: (eid: string) => `/${idOf(ent(eid))}`,
+    link: (eid: string) => entityPath(idOf(ent(eid))),
     show: (b: Bundle, view: string, extra: Context = {}) =>
       renderView(ent(b.entity.eid), view, extra),
     get: (eid: string) => row(eid).value ? bundle(ent(eid)) : undefined,

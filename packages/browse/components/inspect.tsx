@@ -28,6 +28,7 @@ import {
 import { parseQuery, type Pred, resolveRefs } from '../query.ts'
 import { findEid } from '../live.ts'
 import { idOf, kindOf, vocab } from '../types.ts'
+import { entityPath } from '../url.ts'
 import { called } from '@yaks/inspect'
 import { bundle, type Entry, extend, registry, renderView } from './registry.ts'
 import { front } from './fields.tsx'
@@ -134,7 +135,7 @@ export let inspectIo: Io = {
     await apply(bs)
   },
   get: (eid) => row(eid).value ? bundle(ent(eid)) : undefined,
-  link: (eid) => `/${idOf(ent(eid))}`,
+  link: (eid) => entityPath(idOf(ent(eid))),
   find: (q) => `/?q=${encodeURIComponent(q)}`,
   go: (href) => navigate(href),
   id: (b) =>
