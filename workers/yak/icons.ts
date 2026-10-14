@@ -11,6 +11,7 @@ import ChevronRight from 'lucide/dist/esm/icons/chevron-right.mjs'
 import CreditCard from 'lucide/dist/esm/icons/credit-card.mjs'
 import Download from 'lucide/dist/esm/icons/download.mjs'
 import ExternalLink from 'lucide/dist/esm/icons/external-link.mjs'
+import Globe from 'lucide/dist/esm/icons/globe.mjs'
 import LayoutGrid from 'lucide/dist/esm/icons/layout-grid.mjs'
 import Plug from 'lucide/dist/esm/icons/plug.mjs'
 import Plus from 'lucide/dist/esm/icons/plus.mjs'
@@ -20,6 +21,7 @@ import Users from 'lucide/dist/esm/icons/users.mjs'
 
 export let icons = {
   'layout-grid': LayoutGrid,
+  globe: Globe,
   bot: Bot,
   plug: Plug,
   users: Users,

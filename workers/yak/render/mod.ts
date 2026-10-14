@@ -2,17 +2,22 @@
 // this door; HTML uses the same portable renderer as a mounted Preact view.
 
 import { render } from '@yaks/html'
-import { define } from '@yaks/render'
+import { type Bundle, type Context, define } from '@yaks/render'
 import type { SpacePage } from '../pages.ts'
 import type { Person } from '../people.ts'
 import { platformVocab } from '../vocab.ts'
 import { once } from '@yaks/fp'
 import { app } from './app.ts'
+import { directory } from './directory.ts'
 import { guest, invitation, seat } from './held.ts'
 
-export let registry = define([app, seat, guest, invitation])
+export let registry = define([app, seat, guest, invitation, ...directory])
 // The directory's words, composed when a page first draws a row.
 export let vocab = once(platformVocab)
+
+/** A directory row, drawn as `view` by whichever renderer here draws it. */
+export let drawn = (b: Bundle, view: string, ctx: Context = {}) =>
+  render(registry, b, view, vocab(), ctx)
 
 /** What a page around a tile says about it (render/app.ts). */
 export type Around = {

@@ -236,6 +236,15 @@ export let pooled = async (
 export let over = (space: Space, m: Meter, what: Limited, more = 0) =>
   used(m, what) + more >= allowance(what, space.tier)
 
+/** One person's budget this month, over every space they own: what models
+ * and voice cost in all of them, against the free budget and each Plus
+ * space's. */
+export let budget = (owned: Space[], now = new Date()): Budget => ({
+  spent: owned.reduce((n, s) => n + used(spent(s, now), 'models'), 0),
+  limit: BUDGET.free +
+    owned.filter((s) => s.tier == 'plus').length * BUDGET.plus,
+})
+
 /** Each owner pays from one budget across every space they own. A shared
  * space must fit every owner's budget, as its free allowances already do. */
 export let budgets = async (
@@ -250,17 +259,12 @@ export let budgets = async (
       limit: BUDGET[space.tier ?? 'free'],
     }]
   }
-  return await Promise.all(owners.map(async (person) => {
-    let spaces = [
+  return await Promise.all(owners.map(async (person) =>
+    budget([
       space,
       ...(await dir.spaces(person, 'owner')).filter((s) => s.eid != space.eid),
-    ]
-    let paid = spaces.filter((s) => s.tier == 'plus').length
-    return {
-      spent: spaces.reduce((n, s) => n + used(spent(s, now), 'models'), 0),
-      limit: BUDGET.free + paid * BUDGET.plus,
-    }
-  }))
+    ], now)
+  ))
 }
 
 /** What stops this spend here, or null to go ahead. */

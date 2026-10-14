@@ -41,7 +41,8 @@
 //     /                       the home page, from ./public
 //     /login, /login/code     identity.ts: the email-code sign-in
 //     /manage, /manage/*      apps.ts: the dashboard, one space's at a time
-//     /invite                 identity.ts: an invitation's one click (invite.ts)
+//     /admin, /admin/*        admin.ts: the directory, for the platform admin
+//     /invite                identity.ts: an invitation's one click (invite.ts)
 //     /connect                identity.ts: the connector page, signed in, and
 //                             the address a person's apps live at
 //     /oauth/*                identity.ts: the OAuth 2.1 door for agents
@@ -83,6 +84,7 @@ import { caught, within } from './defects.ts'
 import { CallError } from '@yaks/tools/errors'
 import { Stale } from '@yaks/graph/errors'
 import { refused as toolRefusal } from '@yaks/tools/routes'
+import * as admin from './admin.ts'
 import * as apps from './apps.ts'
 import { packageAt, sealed } from './cache.ts'
 import * as billing from './billing.ts'
@@ -262,6 +264,9 @@ let serve = async (req: Request, env: Env, r: Route) => {
     let shown = await gallery.answer(req, env, path, dir)
     if (shown) return shown
   }
+  // The platform admin's directory, signed in and uncached like the review.
+  let directed = await admin.answer(req, env, path, dir)
+  if (directed) return directed
   // The documentation (docs.ts, T-37752): the guide's markdown drawn as pages
   // of this site, and the 301s the addresses it moved from answer. Before the
   // assets, which serve the same markdown as files at those pages' `.md`

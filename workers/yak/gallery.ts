@@ -45,7 +45,6 @@ import { opened, seal } from './lib/token.ts'
 import {
   type App,
   type Directory,
-  META,
   type Space,
   stamp,
   url,
@@ -58,7 +57,7 @@ import { GALLERY } from './seo.ts'
 import { foot, head, html, top } from './shell.ts'
 import { type Host, hosted, replyTo, url as siteUrl } from './host.ts'
 import { caught } from './defects.ts'
-import { sessionAt } from './session.ts'
+import { staff } from './admin.ts'
 
 // Where the gallery lives, and where a letter's links land. What the page says
 // about itself — its title and its line — is seo.ts's, beside the same two
@@ -527,15 +526,6 @@ export let owned = async (dir: Directory, space: Space) => {
     if (await dir.role(space, person) == 'owner') return person
   }
   return ''
-}
-
-// Who may answer: an owner of the meta space, by the platform session cookie
-// and nothing else — never a bearer token, which is what an agent holds.
-export let staff = async (req: Request, env: Env, dir: Directory) => {
-  let person = (await sessionAt(req, env.SESSION_SECRET))?.person
-  if (!person) return null
-  let meta = await dir.space(META.space)
-  return meta && await dir.role(meta, person) == 'owner' ? person : ''
 }
 
 // The review address this file answers at the apex. The public listing is

@@ -360,10 +360,12 @@ export type Host = {
 // where the store could name what it points at (listing.ts `named`, T-32733).
 // What the directory wants either way is the id — the same lowering client.ts
 // `where` does on the write side.
-type Id = string | { eid: string }
-let idOf = (v: Id): string => typeof v == 'string' ? v : v.eid
+export type Id = string | { eid: string }
+export let idOf = (v: Id): string => typeof v == 'string' ? v : v.eid
 
-type Row = {
+/** A directory row as a read hands it back: the components the kernel reads,
+ * each optional, since a row is whichever of them it wears. */
+export type Row = {
   switched?: {
     app: string
     from?: string | null
@@ -441,7 +443,10 @@ type Row = {
     by?: Id | null
   }
   inviting?: { hour?: string | null; sent?: number | null }
+  person?: Record<string, unknown>
   email?: { address: string }
+  signed_in?: { at?: string | null; via?: string | null }
+  used?: { at?: string | null }
   former?: { slug: string; slugs?: string | null }
   home?: { first?: string | null }
   doc?: { title?: string }
@@ -460,7 +465,7 @@ type Row = {
     details_submitted?: boolean | null
   }
   meter?: Partial<Meter>
-  notified?: unknown
+  notified?: Record<string, unknown> | null
   tunnel?: {
     id?: string | null
     service?: string | null
@@ -1332,6 +1337,19 @@ export let directory = (via: Fetcher | Part, now = false) => {
     // always works in one space, and a person only ever sees their own.
     all: async (): Promise<Space[]> =>
       (await query(`.space&${SPACE_ABOUT}`)).map(spaceOf),
+    // Every person, space, app and seat there is, each row whole with when it
+    // was made and last used: the platform admin's directory (admin.ts), and
+    // nothing else, asks this. Fresh, since the admin opens it to see what is.
+    census: async () => {
+      let stamps = '?created&?used'
+      let [people, spaces, apps, seats] = await Promise.all([
+        query(`.person&?doc&?email&?signed_in&${stamps}`, true),
+        query(`.space&${SPACE_ABOUT}&${stamps}`, true),
+        query(`.app&${ABOUT}&${stamps}`, true),
+        query('.member', true),
+      ])
+      return { people, spaces, apps, seats }
+    },
     // The app that answers the space's bare hostname, if it has one: the one
     // in this space wearing `home` (T-34227). At most one does — `homing`
     // below is the rule — so the first row is the answer.

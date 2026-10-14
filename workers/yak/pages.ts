@@ -42,16 +42,18 @@ let billButton = (door: string, label: string, target?: string) =>
     esc(label)
   }</button>`
 
-let shell = (
+export let shell = (
   env: Host,
   title: string,
   lead: string | null,
   status: number,
   inner = home(env),
   // Extra response headers, beside content-type — `Retry-After` on the
-  // provisioning page below, nothing else needs one today.
+  // provisioning page below, the admin's no-store on its directory.
   headers: Record<string, string> = {},
   layout = '',
+  // The look of parts only one page draws (admin.ts), after the desk's.
+  css = '',
 ) =>
   new Response(
     `<!doctype html>
@@ -139,7 +141,7 @@ details.Note > summary { color: var(--accent); cursor: pointer }
 .Connect_Path { margin: .9rem 0 .4rem; font-size: 1rem; font-weight: 800 }
 .Connect_Next { margin-top: .9rem; padding-top: .8rem; border-top: 1px solid var(--line) }
 .Connect_Next p { margin: 0 0 .35rem; color: var(--ink); font-weight: 800 }
-${deskCss}
+${deskCss}${css}
 }
 </style>
 </head>
