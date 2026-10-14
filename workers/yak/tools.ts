@@ -929,7 +929,11 @@ let published = async (
   let pointer = target ? `${version}-${crypto.randomUUID()}` : String(version)
   // Read the serving release before preparing the next one. This also gives
   // a store first reached during a deploy the declaration to keep on failure.
-  await answer(store, '/vocab')
+  // Its uses are read beside it, for what this release stops borrowing below.
+  let [, serving] = await Promise.all([
+    answer(store, '/vocab'),
+    answer(store, '/uses'),
+  ])
   let draft = draftStore(ctx.env.STORE, space, app, pointer)
   // The app's own components, if it declares any. A manifest the store
   // refuses fails the release: the words and the tables must agree, and a
@@ -1029,9 +1033,7 @@ let published = async (
     }
     split.mine = { ...split.mine, $defs: defs }
   }
-  let oldUses: Record<string, string> = JSON.parse(
-    await answer(store, '/uses'),
-  )
+  let oldUses: Record<string, string> = JSON.parse(serving)
   let retired: Record<string, Record<string, string[]>> = {}
   if (Object.keys(oldUses).length) {
     let previous = await releasedDoc(ctx, blobs, space, app)
@@ -1124,6 +1126,12 @@ let published = async (
     },
     vouched(who),
   )
+  // The words the candidate accepted, read once for the tools below and the
+  // declaration this release keeps: nothing after this changes them.
+  let [taken, borrowed] = await Promise.all([
+    answer(draft, '/vocab'),
+    answer(draft, '/uses'),
+  ])
   vocabTook('vocab')
   // Check the seed against the candidate words. The store applies it when the
   // directory moves the release pointer; until then the serving rows stay put.
@@ -1169,8 +1177,8 @@ let published = async (
   // core every app's store plants, the app's own, and the ones it borrows.
   let words = [
     ...componentsOf(coreDocs),
-    ...componentsOf([appDoc(JSON.parse(await answer(draft, '/vocab')))]),
-    ...Object.keys(JSON.parse(await answer(draft, '/uses'))),
+    ...componentsOf([appDoc(JSON.parse(taken))]),
+    ...Object.keys(JSON.parse(borrowed)),
   ]
   // And the two tools every kind this app declares is worth (kinds.ts,
   // T-34513), beside whatever the manifest said: an app that declared a recipe
@@ -1243,9 +1251,9 @@ let published = async (
   let [, pinned] = await Promise.all([
     c.time(
       'declare',
-      async () =>
+      () =>
         keepDeclaration(ctx.env, space, stagedApp, pointer, {
-          vocab: JSON.parse(await answer(draft, '/vocab')),
+          vocab: JSON.parse(taken),
           tools: checked,
         }),
     ),
