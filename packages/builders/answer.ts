@@ -20,6 +20,7 @@ import { held, keyed, keyEid, unkeyed } from '@yaks/key'
 import { verify } from '@yaks/kernel'
 import { BUILD, BUILT, ids, OUTPUT_OF, outputOf } from './build.ts'
 import { inputKey } from './key.ts'
+import { step, steps } from './steps.ts'
 
 export type Spec = {
   /** where it lands: its slot's entity, or a link's ends and relation */
@@ -271,119 +272,120 @@ export let answer = async (
 
 /** Write one call's takes. Supply leaves other slot choices alone; a full
  * answer clears choices for slots it omits without deleting old takes. */
-export let outputs = async (
+export let outputs = (
   tx: ReadTx,
   run: Bundle,
   call: Bundle,
   value: unknown,
   vocab: Vocab,
   drop = true,
-): Promise<Bundle[]> => {
-  let source = run.entity.eid
-  let b = comp(run, BUILD)!
-  let args = comp(call, 'call')?.args as { binding: Binding; wiring?: Wiring }
-  // Only a nonedge slot's take key chooses its owner. Links derive from the
-  // siblings this call made; enumeration below changes choices, never ids.
-  let slots = object(value) && Array.isArray(value.outputs)
-    ? value.outputs.flatMap((item) =>
-      object(item) && object(item.components) &&
-        item.components[EDGE] == null && typeof item.slot == 'string'
-        ? [item.slot]
-        : []
-    )
-    : []
-  let owners = await held(
-    tx,
-    OUTPUT_OF,
-    slots.map((slot) => outputOf(source, slot, call.entity.eid)),
-  )
-  let at = new Map(slots.flatMap((slot) => {
-    let owner = owners.get(outputOf(source, slot, call.entity.eid))
-    return owner ? [[slot, owner] as const] : []
-  }))
-  let place = (slot: string) => {
-    if (!at.has(slot)) at.set(slot, crypto.randomUUID())
-    return at.get(slot)!
-  }
-  let specs = parse(value, ids(args.binding), vocab, place, args.wiring ?? {})
-  let eids = specs.map((s) => s.eid)
-  let prior = await tx.get(eids)
-  // The links an earlier answer of this build stated and this one does not.
-  let made = await tx.read(`.${BUILT}.build=${source}&*`)
-  let have = new Map(prior.map((row) => [row.entity.eid, row]))
-  let targets = await tx.get([
-    ...new Set(
-      specs.flatMap((s) => [...s.inputs, ...s.artifact ? [s.artifact] : []]),
-    ),
-  ])
-  let found = new Map(targets.map((row) => [row.entity.eid, row]))
-  // A replay never rewrites a take or changes the person's choice.
-  if (made.some((row) => comp(row, BUILT)?.call == call.entity.eid)) return []
-  let newest = b.call == call.entity.eid
-  let slotsMade = new Set(specs.map((spec) => spec.slot))
-  let writes: Bundle[] = !newest
-    ? []
-    : made.filter((row) =>
-      row.chosen && (drop || slotsMade.has(str(comp(row, BUILT)?.slot)))
-    )
-      .map((row) => ({ entity: row.entity, chosen: null }))
-  for (let spec of specs) {
-    let eid = spec.eid
-    let named = spec.slot
-    let before = comp(have.get(eid), BUILT)
-    if (spec.artifact && !comp(found.get(spec.artifact), 'artifact')) {
-      throw new Error(`${named} names a missing artifact`)
+): Bundle[] | Promise<Bundle[]> =>
+  steps(function* () {
+    let source = run.entity.eid
+    let b = comp(run, BUILD)!
+    let args = comp(call, 'call')?.args as { binding: Binding; wiring?: Wiring }
+    // Only a nonedge slot's take key chooses its owner. Links derive from the
+    // siblings this call made; enumeration below changes choices, never ids.
+    let slots = object(value) && Array.isArray(value.outputs)
+      ? value.outputs.flatMap((item) =>
+        object(item) && object(item.components) &&
+          item.components[EDGE] == null && typeof item.slot == 'string'
+          ? [item.slot]
+          : []
+      )
+      : []
+    let owners = yield* step(held(
+      tx,
+      OUTPUT_OF,
+      slots.map((slot) => outputOf(source, slot, call.entity.eid)),
+    ))
+    let at = new Map(slots.flatMap((slot) => {
+      let owner = owners.get(outputOf(source, slot, call.entity.eid))
+      return owner ? [[slot, owner] as const] : []
+    }))
+    let place = (slot: string) => {
+      if (!at.has(slot)) at.set(slot, crypto.randomUUID())
+      return at.get(slot)!
     }
-    writes.push({
-      entity: { eid },
-      ...spec.components,
-      ...newest ? { chosen: {} } : {},
-      [BUILT]: {
-        build: source,
-        slot: spec.slot,
-        key: b.key,
-        definition: b.definition ?? null,
-        inputs: b.inputs ?? null,
-        call: call.entity.eid,
-        artifact: spec.artifact ?? null,
-      },
-      $was: { [BUILT]: { call: token(before?.call) } },
-    })
-    // A retained link keeps its eid. Legacy links may have no slot or key;
-    // release only a key that still names this link, guarding its owner.
-    let old = str(before?.slot)
-    if (spec.link && before?.build == source && old && old != spec.slot) {
-      let value = outputOf(source, old, call.entity.eid)
-      let [row] = await tx.get([keyEid(OUTPUT_OF, value)])
-      let owner = comp(row, 'key')?.of
-      if (owner != null && owner != eid) {
-        throw new Refused(`${OUTPUT_OF} ${value} is ${owner}'s`)
+    let specs = parse(value, ids(args.binding), vocab, place, args.wiring ?? {})
+    let eids = specs.map((s) => s.eid)
+    let prior = yield* step(tx.get(eids))
+    // The links an earlier answer of this build stated and this one does not.
+    let made = yield* step(tx.read(`.${BUILT}.build=${source}&*`))
+    let have = new Map(prior.map((row) => [row.entity.eid, row]))
+    let targets = yield* step(tx.get([
+      ...new Set(
+        specs.flatMap((s) => [...s.inputs, ...s.artifact ? [s.artifact] : []]),
+      ),
+    ]))
+    let found = new Map(targets.map((row) => [row.entity.eid, row]))
+    // A replay never rewrites a take or changes the person's choice.
+    if (made.some((row) => comp(row, BUILT)?.call == call.entity.eid)) return []
+    let newest = b.call == call.entity.eid
+    let slotsMade = new Set(specs.map((spec) => spec.slot))
+    let writes: Bundle[] = !newest
+      ? []
+      : made.filter((row) =>
+        row.chosen && (drop || slotsMade.has(str(comp(row, BUILT)?.slot)))
+      )
+        .map((row) => ({ entity: row.entity, chosen: null }))
+    for (let spec of specs) {
+      let eid = spec.eid
+      let named = spec.slot
+      let before = comp(have.get(eid), BUILT)
+      if (spec.artifact && !comp(found.get(spec.artifact), 'artifact')) {
+        throw new Error(`${named} names a missing artifact`)
       }
-      if (owner == eid) {
-        writes.push({
-          ...unkeyed(OUTPUT_OF, value),
-          $was: { key: { of: token(eid) } },
-        })
+      writes.push({
+        entity: { eid },
+        ...spec.components,
+        ...newest ? { chosen: {} } : {},
+        [BUILT]: {
+          build: source,
+          slot: spec.slot,
+          key: b.key,
+          definition: b.definition ?? null,
+          inputs: b.inputs ?? null,
+          call: call.entity.eid,
+          artifact: spec.artifact ?? null,
+        },
+        $was: { [BUILT]: { call: token(before?.call) } },
+      })
+      // A retained link keeps its eid. Legacy links may have no slot or key;
+      // release only a key that still names this link, guarding its owner.
+      let old = str(before?.slot)
+      if (spec.link && before?.build == source && old && old != spec.slot) {
+        let value = outputOf(source, old, call.entity.eid)
+        let [row] = yield* step(tx.get([keyEid(OUTPUT_OF, value)]))
+        let owner = comp(row, 'key')?.of
+        if (owner != null && owner != eid) {
+          throw new Refused(`${OUTPUT_OF} ${value} is ${owner}'s`)
+        }
+        if (owner == eid) {
+          writes.push({
+            ...unkeyed(OUTPUT_OF, value),
+            $was: { key: { of: token(eid) } },
+          })
+        }
+      }
+      writes.push(
+        keyed(OUTPUT_OF, eid, outputOf(source, spec.slot, call.entity.eid)),
+      )
+      let citations = yield* step(tx.read(
+        and(eq(`${EDGE}.from`, eid), present('cites')),
+      ))
+      for (let cited of citations) {
+        let to = str(comp(cited, EDGE)?.to)
+        if (to && !spec.inputs.includes(to)) {
+          writes.push({ ...unlink(eid, 'cites', to), verified: null })
+        }
+      }
+      for (let to of spec.inputs) {
+        let target = found.get(to)
+        if (!target) throw new Error(`${named} cites missing input ${to}`)
+        let cite = link(eid, 'cites', to)
+        writes.push({ ...cite, ...verify(cite, target, vocab) })
       }
     }
-    writes.push(
-      keyed(OUTPUT_OF, eid, outputOf(source, spec.slot, call.entity.eid)),
-    )
-    let citations = await tx.read(
-      and(eq(`${EDGE}.from`, eid), present('cites')),
-    )
-    for (let cited of citations) {
-      let to = str(comp(cited, EDGE)?.to)
-      if (to && !spec.inputs.includes(to)) {
-        writes.push({ ...unlink(eid, 'cites', to), verified: null })
-      }
-    }
-    for (let to of spec.inputs) {
-      let target = found.get(to)
-      if (!target) throw new Error(`${named} cites missing input ${to}`)
-      let cite = link(eid, 'cites', to)
-      writes.push({ ...cite, ...verify(cite, target, vocab) })
-    }
-  }
-  return writes
-}
+    return writes
+  })

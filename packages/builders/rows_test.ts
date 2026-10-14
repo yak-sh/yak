@@ -1,6 +1,6 @@
 // Count physical effect writes, not just the runs left after a worker drains.
 import { equal, test } from '@yaks/testing'
-import { type Comp, graph } from '@yaks/graph'
+import { type Bundle, type Comp, graph } from '@yaks/graph'
 import { toolEid } from '@yaks/tools'
 import { effects } from '@yaks/effects'
 import { effectDoc } from '@yaks/effects/vocab'
@@ -14,6 +14,7 @@ import { workshop } from './testing.ts'
 import { plugins } from './graph.ts'
 import { watches } from './effects.ts'
 import { reconcile } from './build.ts'
+import { code } from './code.ts'
 
 let changes = (sql: Driver): number =>
   Number(
@@ -74,43 +75,57 @@ test('ordinary player writes with an immediate builder write zero effect rows', 
 })
 
 // Workerd commits transactionSync as soon as its callback returns. An async
-// plan would commit the player write before the builder's owed call.
+// plan would commit the player write before the builder's owed call, or
+// before the output a code tool answers in place.
 test('matching input changes reconcile inside transactionSync', () => {
   let vocab = workshop([effectDoc])
   let held = durable()
   let db = storage(driver(held), vocab)
   db.install()
-  let g = graph({ storage: db, vocab, plugins: plugins() })
+  let echo = code({
+    name: 'echo',
+    description: 'Say the body back',
+    answer: ({ binding }) => ({
+      outputs: [{
+        slot: 'main',
+        inputs: [binding.entities[0]],
+        components: { doc: { body: binding.vars.body } },
+      }],
+    }),
+  })
+  let here = { vocab, tools: [echo] }
+  let g = graph({ storage: db, vocab, plugins: plugins(null, here) })
+  let builder = (eid: string, tool: string): Bundle => ({
+    entity: { eid },
+    builder: {
+      query: '.doc.title=Source, doc.body=$body',
+      to: toolEid(tool),
+      immediate: true,
+    },
+  })
   g.apply([
     { entity: { eid: toolEid('code') }, tool: { name: 'code' } },
-    {
-      entity: { eid: 'builder' },
-      builder: {
-        query: '.doc.title=Source, doc.body=$body',
-        to: toolEid('code'),
-        immediate: true,
-      },
-    },
+    builder('builder', 'code'),
+    builder('placed', 'echo'),
   ])
-  let [builder] = g.get(['builder']) as import('@yaks/graph').Bundle[]
-  let plan = db.tx((tx) => reconcile(tx, builder, { vocab }))
-  equal(isPromise(plan), false)
-  g.apply((plan as { writes: import('@yaks/graph').Bundle[] }).writes, {
-    trusted: true,
-  })
+  for (let b of g.get(['builder', 'placed']) as Bundle[]) {
+    let plan = db.tx((tx) => reconcile(tx, b, here))
+    equal(isPromise(plan), false)
+    g.apply((plan as { writes: Bundle[] }).writes, { trusted: true })
+  }
+  let read = (q: string) => g.read(`${q}&*`) as Bundle[]
+  let said = () => read('.built&.chosen').map((b) => (b.doc as Comp).body)
   let wrote = g.apply([{
     entity: { eid: 'source' },
     doc: { title: 'Source', body: 'first' },
   }])
   equal(isPromise(wrote), false)
-  let calls = g.read('.call') as import('@yaks/graph').Bundle[]
-  equal(calls.length, 1)
+  // No runner holds either tool: the call waits for one, and the code
+  // answered in place left no output or result record beside its take.
+  equal([read('.call&!execution').length, said()], [1, ['first']])
+  equal(read('.output').length + read('.result').length, 0)
   g.apply([{ entity: { eid: 'source' }, doc: { body: 'second' } }])
-  equal((g.read('.call') as import('@yaks/graph').Bundle[]).length, 2)
+  equal([read('.call&!execution').length, said()], [2, ['second']])
   g.apply([{ entity: { eid: 'source' }, $delete: true }])
-  equal(
-    ((g.read('.build') as import('@yaks/graph').Bundle[])[0].build as Comp)
-      .stale,
-    true,
-  )
+  equal(read('.build&.build.stale=true').length, 2)
 })

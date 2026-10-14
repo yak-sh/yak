@@ -125,7 +125,14 @@ export let shop = async (
   let g = graph({
     storage: db,
     vocab,
-    plugins: [...plugins(), fx, docs(), edges(vocab), keys(vocab), sessions()],
+    plugins: [
+      ...plugins(null, { tools: o.tools, report: o.report }),
+      fx,
+      docs(),
+      edges(vocab),
+      keys(vocab),
+      sessions(),
+    ],
   })
   let run = runner(g, { tools: [modelTool(), ...tools] })
   fx.handle(watches({ ...o, vocab }))

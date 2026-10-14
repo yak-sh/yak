@@ -29,6 +29,7 @@ import { key } from './key.ts'
 import { adapted, modelTool, render } from './model.ts'
 import { build, runs } from './tools.ts'
 import { builderDoc } from './vocab.ts'
+import { code as coded } from './code.ts'
 import { loadTools } from '@yaks/graph/tools'
 
 let comp = (b: Bundle | undefined, name: string): Comp | undefined =>
@@ -73,22 +74,21 @@ let answer = (call: Bundle, body = 'Made'): Bundle[] => [{
     },
   },
 }]
-let code = (revision = '1'): Tool => ({
-  name: 'code',
-  description: 'Build one source',
-  revision,
-  inputSchema: {
-    type: 'object',
-    properties: {
-      binding: { type: 'object' },
-      key: { type: 'string' },
-      template: { type: 'string' },
-      using: { type: 'object' },
-    },
-    required: ['binding', 'key'],
-  },
-  run: (call) => answer(call),
-})
+// The code tool a runner answers calls with: one output citing the first
+// entity of the binding.
+let code = (revision = '1'): Tool =>
+  coded({
+    name: 'code',
+    description: 'Build one source',
+    revision,
+    answer: ({ binding }) => ({
+      outputs: [{
+        slot: 'main',
+        inputs: [String(binding.entities[0])],
+        components: { doc: { body: 'Made' } },
+      }],
+    }),
+  })
 // A code tool whose answer is these outputs, or what a function says they are
 // at the time it is asked.
 let answering = (outputs: unknown[] | (() => unknown[])): Tool => ({
@@ -728,31 +728,32 @@ test('an authored using value and its admitted form have one key', async () => {
 })
 
 test('a malformed output fails without spending automatically again', async () => {
-  let bad: Tool = {
-    ...code(),
-    run: (call) => [{
-      entity: { eid: crypto.randomUUID() },
-      output: {
-        source: call.entity.eid,
-        value: {
-          outputs: [{
-            slot: 'bad',
-            inputs: ['outside'],
-            components: {},
-          }],
-        },
-      },
-    }],
+  let bad = coded({
+    name: 'code',
+    description: 'Cite what the build did not select',
+    answer: () => ({
+      outputs: [{ slot: 'bad', inputs: ['outside'], components: {} }],
+    }),
+  })
+  // Answered by a runner, and answered in place where the builder reconciles.
+  for (let here of [false, true]) {
+    let reported: unknown[] = []
+    let o = here
+      ? { tools: [bad], report: (e: unknown) => reported.push(e) }
+      : {}
+    let { g, runner, failed } = await shop(o, [], here ? [] : [bad])
+    await g.apply([source('a'), builder()])
+    let build = await runOf(g, ['a'])
+    if (!here) await drive(g, runner, build)
+    assertEquals((await rows(g, '.built')).length, 0)
+    assert(comp(await one(g, build), 'build')?.key)
+    assert(comp(await one(g, build), 'failed')?.reason)
+    assert([...failed, ...reported].length > 0)
+    await asking(g, g.vocab)()
+    assertEquals((await calls(g, build)).length, 1)
+    await g.apply([source('a', 'second')])
+    assertEquals((await calls(g, build)).length, 2)
   }
-  let { g, runner, failed } = await shop({}, [], [bad])
-  await g.apply([source('a'), builder()])
-  let build = await runOf(g, ['a'])
-  await drive(g, runner, build)
-  assertEquals((await rows(g, '.built')).length, 0)
-  assert(comp(await one(g, build), 'build')?.key)
-  assert(failed.length > 0)
-  await asking(g, g.vocab)()
-  assertEquals((await calls(g, build)).length, 1)
 })
 
 test('a model reply cut short fails without spending automatically again', async () => {

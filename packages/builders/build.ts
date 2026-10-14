@@ -3,6 +3,7 @@ import { step, steps } from './steps.ts'
 // build; its changing content asks the tool through a fresh recorded call.
 
 import type { Binding, Bundle, Comp, Eid, ReadTx } from '@yaks/graph'
+import { namedTool } from '@yaks/graph/call'
 import { match, reads } from '@yaks/graph/declared'
 import { token } from '@yaks/graph/sha256'
 import { held, keyed } from '@yaks/key'
@@ -11,6 +12,8 @@ import { next } from '@yaks/wake'
 import { definitionKey, inputKey, key, membersOf } from './key.ts'
 import { inputs, queried, sync } from './deps.ts'
 import type { Wiring } from './answer.ts'
+import { answered, type Code } from './code.ts'
+import { toolEid, toolRow } from '@yaks/tools/result'
 
 export let BUILDER = 'builder'
 export let BUILD = 'build'
@@ -30,6 +33,12 @@ export type Options = {
   limit?: number
   rebuild?: boolean
   outdated?: boolean
+  /** the code tools this process answers in place (./code.ts): a build whose
+   * tool is one of these lands its outputs in the reconciliation that plans
+   * it, and any other writes a call for a runner */
+  tools?: Code[]
+  /** hears what an in-place answer threw, but a refusal */
+  report?: (err: unknown) => void
 }
 
 export type Plan = {
@@ -101,6 +110,12 @@ export let outputFor = async (
   let value = outputOf(build, slot, call)
   return (await held(g, OUTPUT_OF, [value])).get(value)
 }
+
+// Whether a tool's stored row says what its code does.
+let standing = (stored: Bundle | undefined, row: Bundle) =>
+  ['name', 'description', 'revision'].every((p) =>
+    (comp(stored, 'tool')?.[p] ?? null) == (comp(row, 'tool')?.[p] ?? null)
+  )
 
 export let current = (build: Comp, built: Comp, chosen: boolean): boolean =>
   chosen && !build.stale && built.call != null &&
@@ -286,6 +301,11 @@ export let reconcile = (
     ))
     if (!ready || !to) return { plans: [], writes: dep }
     let [tool] = yield* step(tx.get([to]))
+    let writes: Bundle[] = [...dep]
+    // A tool answered in place needs no runner to write its row.
+    let here = o.tools?.find((t) => toolEid(namedTool(t).name) == to)
+    let row = here && toolRow(here)
+    if (row && !standing(tool, row)) writes.push(tool = row)
     if (!tool?.tool) throw new Error(`builder tool ${to} is missing`)
     let variant = o.variant ?? 'main'
     chosen ??= yield* step(selected(tx, builder, o.vocab))
@@ -311,7 +331,6 @@ export let reconcile = (
     )
     let plans: Plan[] = []
     let latest = definitionKey(builder, tool)
-    let writes: Bundle[] = [...dep]
     if (definition.definition != latest) {
       writes.push({
         entity: builder.entity,
@@ -389,7 +408,21 @@ export let reconcile = (
           p.using,
           (o.eid ?? mint)(),
         )
-        writes.push(...start(p, before, o.eid))
+        if (!here) {
+          writes.push(...start(p, before, o.eid))
+          continue
+        }
+        // Answered here, a new build takes its id now, since its takes' keys
+        // name it, and its key says no build held the tuple when it was
+        // read: a reconciliation that made it first wins, and this one is
+        // stale.
+        let fresh = p.build.startsWith('$')
+        if (fresh) p.build = (o.eid ?? mint)()
+        let started = start(p, before, o.eid)
+        if (fresh) started[2].$was = { key: { of: null } }
+        writes.push(
+          ...yield* step(answered(tx, started, here, o.vocab, o.report)),
+        )
       }
     }
     for (let old of partial ? [] : left.values()) {

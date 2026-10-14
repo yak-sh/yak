@@ -7,7 +7,7 @@ import { Refused } from '@yaks/graph/errors'
 import { signed } from '@yaks/graph/provenance'
 import { after } from '@yaks/fp'
 import { CallError } from '@yaks/tools/errors'
-import { changing } from './change.ts'
+import { changing, type Here } from './change.ts'
 import { syncOf } from '@yaks/vocab'
 
 export let choosing: Hook = (bundles, tx) => {
@@ -44,7 +44,7 @@ export let choosing: Hook = (bundles, tx) => {
   })
 }
 
-export let choices = (): Plugin => ({
+export let choices = (here: Here = {}): Plugin => ({
   name: '@yaks/builders',
   admission: () => true,
   hooks: {
@@ -64,7 +64,7 @@ export let choices = (): Plugin => ({
           )
         )
       ) return bundles
-      return changing(vocab)(bundles, tx)
+      return changing(vocab, here)(bundles, tx)
     },
   },
 })

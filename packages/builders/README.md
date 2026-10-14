@@ -169,8 +169,53 @@ tool's refusal answered to the model and a request the runner retries do not
 fail the build. `using.tools` names the tools the session is offered
 (@yaks/session), so a builder's model reads and writes the graph through exactly
 the tools its builder names. `builder.to` points at `modelToolEid()` for this
-adapter. The tool runner records the call and result; builders does not execute
-models or code itself.
+adapter. The tool runner records the call and result; builders does not run a
+model itself.
+
+## Code answered in place
+
+A **code tool** is one whose answer is a pure function of what its call asks:
+the frozen binding, template, using and wiring, and nothing else it reads or
+writes. `code({name, description, revision, answer})` makes one from that
+function. A process that holds it in `tools` answers it **in place**: the
+reconciliation that plans a build calls `answer` and writes the build, its call
+and its outputs in the same batch. There is no runner claim, no `result` or
+`output` record, no answer effect, and the call keeps every argument but the
+binding, which is the build's own inputs. An immediate builder's outputs are
+then current in the very write that changed its inputs. The tool's row is
+written where it is missing or says another revision, so no runner is needed.
+
+```ts ignore
+let twice = code({
+  name: 'twice',
+  description: 'Double the number a source holds',
+  revision: '1',
+  answer: ({ binding }) => ({
+    outputs: [{
+      slot: 'main',
+      inputs: [binding.entities[0]],
+      components: { doc: { body: String(Number(binding.vars.n) * 2) } },
+    }],
+  }),
+})
+let here = { tools: [twice] }
+let g = graph({ storage, vocab, plugins: [...plugins(host, here), ...] })
+fx.handle(watches({ ...here, vocab }))
+```
+
+`plugins(host, here)` answers in place where an input write reconciles an
+immediate builder, `watches` and `effects` where a door or a wake does, and
+`build` takes the same options. An answer that throws or breaks the contract
+writes the build's `failed{reason}` under its attempt key, as a refused answer
+does, and `report` in the same options hears it, unless it was a refusal. A
+process without the tool writes the call as ever; `code()`'s `run` is the same
+answer, so a runner holding the tool makes the same outputs.
+
+Per output, a code tool answered by a runner writes about 11 entities in three
+transactions after the plan (the claim; the output, result and execution; the
+take, its key and citations). Answered in place it writes six, all in the
+reconciliation's one batch: the build, its key, its call, the take, its key and
+a citation per input.
 
 `builder build <builder>` reconciles now, independent of `floor`. Without a redo
 flag, a current output is never touched: only new bindings or changed inputs
@@ -209,11 +254,11 @@ next input change or `builder build`.
 
 ## Exports
 
-- `@yaks/builders`: vocabulary, `key`, `buildFor`, `outputFor`, `selected`, and
-  `reconcile`.
+- `@yaks/builders`: vocabulary, `key`, `buildFor`, `outputFor`, `selected`,
+  `reconcile`, and `code`, a code tool answered in place.
 - `@yaks/builders/model`: `modelTool`, `modelToolEid`, and template `render`.
 - `@yaks/builders/graph`: output choice and transactional immediate-builder
-  reconciliation.
+  reconciliation, `plugins(host, here)`.
 - `@yaks/builders/effects`: `watches` and `effects`.
 - `@yaks/builders/tools`: the on-demand `builder build` tool, and `build`, the
   same reconciliation for a host that offers it through a door of its own.

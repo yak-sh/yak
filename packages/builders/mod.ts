@@ -11,6 +11,8 @@ export * from './key.ts'
 export * from './build.ts'
 export { modelTool, modelToolEid, render } from './model.ts'
 
+export { type Answer, type Args, type Code, code } from './code.ts'
+
 export { type Supply, supply } from './supply.ts'
 
 export { preserve } from './preserve.ts'

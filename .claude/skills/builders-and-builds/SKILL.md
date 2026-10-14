@@ -72,6 +72,25 @@ template `Generate one isolated game sound effect. … $description`
 row is built without anyone touching the builder. A builder per row, or a
 script that loops a model over rows, gives up everything below.
 
+## Code answered in place
+
+When what you'd derive is a pure function of the binding (a tile from a
+chunk's grid, a sheet from its tiles, a summary from numbers), it's a code
+tool, and code is cheap: `code({name, description, revision, answer})`
+(packages/builders/code.ts), handed to the process as `tools` in builders'
+options (`plugins(host, here)`, `watches`, `build`). Its builds are answered in the
+reconciliation that plans them, in one batch: no runner, no answer effect, no
+copy of the binding, and an immediate builder's output is current in the very
+write that moved its input. That's the answer to "builders are too heavy for
+this": reaching for an effect or a hand-rolled cache with a version counter
+instead gives up keys, citations, takes and chaining. A process that doesn't
+hold the tool writes the call as before, and `code()`'s `run` answers it the
+same way through a runner.
+
+What still costs: every input write to an immediate builder re-selects the
+whole query, so a builder over thousands of bindings pays for all of them on
+each change.
+
 ## What rebuilds, and why
 
 `build.inputs` hashes the binding's entities and variable values, including

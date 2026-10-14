@@ -9,9 +9,17 @@ import { after, each } from '@yaks/fp'
 import { and, eq, limit, present } from '@yaks/query'
 import type { Vocab } from '@yaks/vocab'
 import { step, steps } from './steps.ts'
-import { reconcile } from './build.ts'
+import { type Options, reconcile } from './build.ts'
 
-export let changing = (vocab: Vocab): Hook => (bundles, tx) => {
+/** What an input write's reconciliation answers in place, and who hears an
+ * in-place answer that threw (./code.ts). */
+export type Here = Pick<Options, 'tools' | 'report'>
+
+export let changing = (vocab: Vocab, here: Here = {}): Hook =>
+(
+  bundles,
+  tx,
+) => {
   if (!vocab.comp('builder_dep')) return bundles
   let changes = bundles.filter((b) =>
     !b.effect && !b.builder_dep && !b.build && !b.call && !b.result &&
@@ -41,7 +49,7 @@ export let changing = (vocab: Vocab): Hook => (bundles, tx) => {
             return deps
           }),
       ),
-      (deps) => deps.length ? apply(bundles, tx, vocab, deps) : bundles,
+      (deps) => deps.length ? apply(bundles, tx, vocab, deps, here) : bundles,
     )
   })
 }
@@ -51,6 +59,7 @@ let apply = (
   tx: Parameters<Hook>[1],
   vocab: Vocab,
   deps: Bundle[],
+  here: Here,
 ) =>
   steps(function* () {
     let builders = (yield* step(tx.get([
@@ -67,8 +76,9 @@ let apply = (
     let writes: Bundle[] = []
     for (let builder of builders) {
       writes.push(
-        ...(yield* step(reconcile(tx, builder, { vocab }, undefined, false)))
-          .writes,
+        ...(yield* step(
+          reconcile(tx, builder, { ...here, vocab }, undefined, false),
+        )).writes,
       )
     }
     if (!writes.length) {
