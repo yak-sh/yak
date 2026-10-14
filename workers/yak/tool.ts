@@ -17,7 +17,14 @@ import { writes } from '@yaks/member'
 import { CallError } from '@yaks/tools/errors'
 import { fill } from '@yaks/yaml'
 import { WORDS } from './content.ts'
-import { appStore, type Directory, META, type Space } from './directory.ts'
+import {
+  type App,
+  appStore,
+  daysLeft,
+  type Directory,
+  META,
+  type Space,
+} from './directory.ts'
 import type { Env } from './env.ts'
 import type { Spend } from './sandbox.ts'
 import type { Caller, Who } from './session.ts'
@@ -220,8 +227,9 @@ export let ownSpace = async (ctx: Ctx, app?: unknown) => {
       // who deleted their `garden` should not be asked which garden they
       // meant. It is still reachable by naming its space, which is what
       // `app_restore` says when two of them spell one slug.
+      // Nor does an app of a space in the trash.
       let here = await ctx.dir.app(space, app)
-      if (here && !here.trashed) holding.push(space)
+      if (here && !here.trashed && !space.trashed) holding.push(space)
     }
     if (holding.length == 1) return holding[0]
     if (holding.length > 1) {
@@ -285,17 +293,54 @@ let callerIn = async (
   return who
 }
 
-export let inSpace = async (
+// Something in the trash (erase.ts) is asleep: its store answers nothing
+// (graph.ts `#sleep`) and its addresses serve nothing, so a door that names
+// it says where it is and the call that brings it back, rather than writing
+// what nothing will serve or relaying a sleeping store's 404. Only the
+// trash's own doors reach past this: app_delete and app_restore for an app
+// (`inBin`), space_delete and space_restore for a space (`spaceBin`).
+let awake = (space: Space, app?: App) => {
+  if (space.trashed) {
+    throw refuse(
+      'conflict',
+      `${space.slug} is in the trash, ${daysLeft(space.trashed)} days ` +
+        `left — space_restore(space: '${space.slug}') brings it back`,
+    )
+  }
+  if (app?.trashed) {
+    throw refuse(
+      'conflict',
+      `${space.slug}/${app.slug} is in the trash, ${
+        daysLeft(app.trashed)
+      } days left — app_restore(space: '${space.slug}', app: ` +
+        `'${app.slug}') brings it back`,
+    )
+  }
+}
+
+let seated = async (
   ctx: Ctx,
   args: Args,
-  write = false,
-  over = false,
+  write: boolean,
+  over: boolean,
+  trash: boolean,
 ) => {
   let space = await spaceOf(ctx, args)
   let who = await callerIn(ctx, space, write, over)
+  if (write && !trash) awake(space)
   if (write) ctx.ahead?.(space, who)
   return { space, who }
 }
+
+// The caller in the space a call names. A write into a space in the trash is
+// refused; reading one still answers (app_list says what is in it).
+export let inSpace = (ctx: Ctx, args: Args, write = false, over = false) =>
+  seated(ctx, args, write, over, false)
+
+/** The caller writing in a space wherever it is, the trash included: the
+ * trash's own doors, space_delete and space_restore. */
+export let spaceBin = (ctx: Ctx, args: Args) =>
+  seated(ctx, args, true, false, true)
 
 // One named space as a seat — the shape `directory.seats` answers in, so a
 // listing over one space and a listing over all of them read the same
@@ -309,12 +354,24 @@ export let seatIn = async (ctx: Ctx, slug: string) => {
 }
 
 // The caller's seat and the app are two directory reads with nothing between
-// them, so they go together; a refusal of the caller still comes first.
-export let inApp = async (
+// them, so they go together; a refusal of the caller still comes first, and
+// the trash next: an app in it, or in a space in it, is refused at every door
+// but its own (`awake`).
+export let inApp = (ctx: Ctx, args: Args, write = false, over = false) =>
+  reached(ctx, args, write, over, false)
+
+/** The app a call names wherever it is, its own trash included: the trash's
+ * own doors, app_delete and app_restore. A space in the trash is still
+ * refused, since space_restore is what brings its apps back. */
+export let inBin = (ctx: Ctx, args: Args, over = false) =>
+  reached(ctx, args, true, over, true)
+
+let reached = async (
   ctx: Ctx,
   args: Args,
-  write = false,
-  over = false,
+  write: boolean,
+  over: boolean,
+  trash: boolean,
 ) => {
   let space = await spaceOf(ctx, args)
   let [seat, named] = await Promise.allSettled([
@@ -329,6 +386,7 @@ export let inApp = async (
   let who = seat.value
   let { slug, app } = named.value
   if (!app) throw refuse('missing', `no app ${slug} in ${space.slug}`)
+  awake(space, trash ? undefined : app)
   if (write) ctx.ahead?.(space, who)
   return {
     space,

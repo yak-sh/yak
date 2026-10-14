@@ -651,6 +651,23 @@ test('an app goes to the trash, and app_restore brings it back', async () => {
       (await assertRejects(() => agent.tool('app_delete', at), Error)).message,
       'is already in the trash',
     )
+    // Every other door that names it says the same and the way back, and
+    // writes nothing: a file, a release, a row.
+    let binned = `${binlab49}/notes is in the trash, 30 days left — ` +
+      `app_restore(space: '${binlab49}', app: 'notes') brings it back`
+    for (
+      let [name, args] of [
+        ['app_files', { ...at, files: [{ path: 'b.html', content: 'b' }] }],
+        ['app_deploy', at],
+        ['graph_query', { ...at, q: '.doc' }],
+      ] as const
+    ) {
+      assertStringIncludes(
+        (await assertRejects(() => agent.tool(name, args), Error)).message,
+        binned,
+        name,
+      )
+    }
 
     // Out, and every one of those answers is the old answer again — including
     // the row nothing touched while it sat there.
@@ -673,6 +690,10 @@ test('an app goes to the trash, and app_restore brings it back', async () => {
     assertStringIncludes(
       (await assertRejects(() => agent.tool('app_restore', at), Error)).message,
       'is not in the trash',
+    )
+    assertEquals(
+      (await agent.tool('app_files', { ...at, op: 'list' })).includes('b.html'),
+      false,
     )
 
     // And `forever` is the other word: no trash, nothing kept, and the
@@ -808,6 +829,24 @@ test(
         )).message,
         'is already in the trash',
       )
+      // Every door that writes in it, or names an app of it, says where it
+      // is and the way back, its apps' own app_restore included.
+      let binned = `${binspace50} is in the trash, 30 days left — ` +
+        `space_restore(space: '${binspace50}') brings it back`
+      for (
+        let [name, args] of [
+          ['app_files', { ...at, files: [{ path: 'b.html', content: 'b' }] }],
+          ['app_deploy', at],
+          ['app_restore', at],
+          ['app_new', { space: binspace50, slug: 'more', title: 'More' }],
+        ] as const
+      ) {
+        assertStringIncludes(
+          (await assertRejects(() => agent.tool(name, args), Error)).message,
+          binned,
+          name,
+        )
+      }
 
       // Out, and every one of those answers is the old answer again — the rows
       // in its apps' stores included, since nothing ever touched them.

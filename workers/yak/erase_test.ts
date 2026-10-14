@@ -15,23 +15,19 @@ import {
   abandoned,
   collected,
   DAILY,
-  daysLeft,
   type Doomed,
   doomed as census,
   door,
-  due,
   erase,
-  GRACE,
   keeping,
   letter,
   LIFE,
   naming,
-  overdue,
   refused,
   ticket,
   ticketed,
 } from './erase.ts'
-import { directory } from './directory.ts'
+import { daysLeft, directory, due, GRACE, overdue } from './directory.ts'
 import * as dirPart from './directory.ts'
 import type { App, Host, Space } from './directory.ts'
 import type { Env } from './env.ts'

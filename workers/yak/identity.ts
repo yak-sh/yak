@@ -97,9 +97,14 @@ import {
   spender,
 } from './handoff.ts'
 export { HANDOFF } from './handoff.ts'
-import { directory, META, type Role, type Space } from './directory.ts'
 import {
   daysLeft,
+  directory,
+  META,
+  type Role,
+  type Space,
+} from './directory.ts'
+import {
   doomed,
   erase,
   keeping,

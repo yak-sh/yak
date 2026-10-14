@@ -318,6 +318,29 @@ export type Sowed = { at: string; version: number }
 // person the sweep erases it as, since they are the one who asked for it gone.
 export type Trashed = { at: string; by: string }
 
+// How long the trash keeps it. Thirty days is the owner's number, and it is
+// the same number `/privacy` says out loud.
+export let GRACE = 30 * 24 * 60 * 60_000
+
+// Days left before the sweep takes it, never below zero — what a person is
+// told, in the unit they would ask in. Trashed a moment ago is thirty.
+export let daysLeft = (t: Trashed, now = Date.now()) =>
+  Math.max(0, Math.ceil((Date.parse(t.at) + GRACE - now) / 86_400_000))
+
+// Whether the trash has run out. A mark with no readable `at` is due —
+// something nothing can count the days of cannot be kept forever on a null.
+export let due = (t: Trashed, now = Date.now()) =>
+  !(Date.parse(t.at) + GRACE > now)
+
+// What the sweep takes: the rows in the trash whose days have run out, and
+// nothing else. Apps or spaces, since both wear the one word — the whole of
+// the selection, as one pure answer, because what a sweep deletes is the part
+// worth holding to a test.
+export let overdue = <T extends { trashed: Trashed | null }>(
+  rows: T[],
+  now = Date.now(),
+) => rows.filter((r) => r.trashed && due(r.trashed, now))
+
 // A hostname a person owns, aimed at one place (platform.rs `Hostname`,
 // T-33037): `serves` is the eid of the space it opens, or of the one app it
 // opens (T-34596). How far provisioning has come, and when that was last read

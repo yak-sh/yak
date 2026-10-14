@@ -42,6 +42,7 @@ import { blobPrefix } from './blob-key.ts'
 import {
   type App,
   appStore,
+  daysLeft,
   directory,
   META,
   type Space,
@@ -91,7 +92,7 @@ import {
 import { allowed, placeOf, send } from './invite.ts'
 import { peopleIn } from './people.ts'
 import { CallError } from '@yaks/tools/errors'
-import { daysLeft, untrash, untrashSpace } from './erase.ts'
+import { untrash, untrashSpace } from './erase.ts'
 import {
   hostOf,
   MANAGE,

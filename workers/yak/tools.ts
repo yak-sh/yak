@@ -75,6 +75,7 @@ import {
   type App,
   appStore,
   clamped,
+  daysLeft,
   directory,
   draftStore,
   folded,
@@ -116,7 +117,6 @@ import { tooLong } from './standing.ts'
 import { pairs, shelf } from './shelf.ts'
 import { meta, minted } from './meta.ts'
 import {
-  daysLeft,
   doomed,
   door,
   erase,
@@ -282,6 +282,7 @@ import {
   asCaller,
   type Ctx,
   inApp,
+  inBin,
   inSpace,
   type Out,
   ownSpace,
@@ -291,6 +292,7 @@ import {
   seatIn,
   type Shape,
   SPACE,
+  spaceBin,
   str,
   text,
   type Tool,
@@ -589,26 +591,23 @@ let titled = (v: unknown) => {
   return s
 }
 
-// The caller as the space's owner: who belongs is the owner's to say. An
-// editor writes the data and the files; they do not hand out keys.
-let owns = async (ctx: Ctx, args: Args) => {
-  let { space, who } = await inSpace(ctx, args, true)
-  if (who.role != 'owner') {
-    throw refuse('access', `not the owner of ${space.slug}`)
-  }
-  return { space, who }
-}
-
-// The caller as the space's owner, on one of its apps. Offering an app to the
-// whole platform is the space's act, not one its editors make: an editor
-// writes the app's files, and publishing hands the code to strangers.
-let ownsApp = async (ctx: Ctx, args: Args) => {
-  let it = await inApp(ctx, args, true)
+// The caller as the space's owner, of what a door found: who belongs is the
+// owner's to say. An editor writes the data and the files; they do not hand
+// out keys.
+let owner = <T extends { space: Space; who: Who }>(it: T) => {
   if (it.who.role != 'owner') {
     throw refuse('access', `not the owner of ${it.space.slug}`)
   }
   return it
 }
+
+let owns = async (ctx: Ctx, args: Args) => owner(await inSpace(ctx, args, true))
+
+// The caller as the space's owner, on one of its apps. Offering an app to the
+// whole platform is the space's act, not one its editors make: an editor
+// writes the app's files, and publishing hands the code to strangers.
+let ownsApp = async (ctx: Ctx, args: Args) =>
+  owner(await inApp(ctx, args, true))
 
 // Asking for the gallery (gallery.ts, T-34476), from either door that takes
 // the word — `app_publish(gallery: true)` and `app_set(gallery: true)`. The
@@ -1640,9 +1639,9 @@ let answer = (
   store.consume(
     path,
     async (r) => {
-      let body = await r.text()
-      if (!r.ok) throw rejected(r.status, body)
-      return body
+      // A store refuses in JSON, and the caller hears its sentence.
+      if (!r.ok) throw rejected(r.status, await sentence(r))
+      return await r.text()
     },
     init,
     headers,
@@ -2461,16 +2460,10 @@ let OURS: Row[] = [
       }
       let moving = to != null && to != space.slug
       if (drop != null) forgotten(space.slug, space.slugs, drop)
-      // The trash holds the address for its thirty days, so a space in it
-      // cannot move off one — and the meta space is the platform.
+      // The meta space is the platform. A space in the trash, whose address
+      // the trash holds, never gets here: `owns` refuses it.
       let no = refused(space, ctx.env)
       if (no) throw refuse('access', no)
-      if (space.trashed) {
-        throw refuse(
-          'conflict',
-          `${space.slug} is in the trash — space_restore(space: '${space.slug}') brings it back, and it can move after that`,
-        )
-      }
       if (moving) {
         let taken = await ctx.dir.space(to!)
         if (taken) throw refuse('conflict', `space ${to} is taken`)
@@ -2599,10 +2592,9 @@ let OURS: Row[] = [
       // tool that guesses which space to destroy from context is a tool that
       // one day guesses wrong (`ownSpace`), and it costs the agent one word
       // it already knows.
-      let { space, who } = await owns(ctx, {
-        ...args,
-        space: slug(args.space, 'space'),
-      })
+      let { space, who } = owner(
+        await spaceBin(ctx, { ...args, space: slug(args.space, 'space') }),
+      )
       let no = refused(space, ctx.env)
       if (no) throw refuse('access', no)
       let forever = args.forever != null && flag(args.forever, 'forever')
@@ -2687,10 +2679,9 @@ let OURS: Row[] = [
       required: ['space'],
     },
     run: async (ctx, args) => {
-      let { space, who } = await owns(ctx, {
-        ...args,
-        space: slug(args.space, 'space'),
-      })
+      let { space, who } = owner(
+        await spaceBin(ctx, { ...args, space: slug(args.space, 'space') }),
+      )
       if (!space.trashed) {
         throw refuse(
           'conflict',
@@ -4122,8 +4113,8 @@ let OURS: Row[] = [
       let forever = args.forever != null && flag(args.forever, 'forever')
       // Admin standing covers reversible trash, never permanent erasure.
       let { space, app, who } = forever
-        ? await ownsApp(ctx, args)
-        : await inApp(ctx, args, true, true)
+        ? owner(await inBin(ctx, args))
+        : await inBin(ctx, args, true)
       // The directory lives in the meta space's own app: deleting it would
       // take every space, app and membership with it, so it is not an app to
       // throw away, whoever owns `yak`.
@@ -4183,7 +4174,7 @@ let OURS: Row[] = [
       required: ['app'],
     },
     run: async (ctx, args) => {
-      let { space, app, who } = await inApp(ctx, args, true, true)
+      let { space, app, who } = await inBin(ctx, args, true)
       if (!app.trashed) {
         throw refuse(
           'conflict',
