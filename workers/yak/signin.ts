@@ -219,29 +219,45 @@ export let nameAt = async (store: Meta, email: string) =>
 // written only where there is no name yet — an invitation never renames
 // someone who has one — and a person nobody has named keeps no title until
 // their first sign-in. They change it under Settings (apps.ts `saved`).
-export let personOf = async (store: Meta, email: string, name?: string) => {
+//
+// `addressee` reads who that is and says what a batch must write to have
+// them: nothing, a name, or the person minted under `$who`, so a caller can
+// write them beside rows that name them (member_add's invitation), in one
+// batch. `personOf` writes it alone.
+export let addressee = async (store: Meta, email: string, name?: string) => {
   let at = canon(email)
   let row = await personAt(store, at)
   if (row) {
-    if (name && !chose(row.doc?.title)) {
-      await apply(store, [{
-        entity: { eid: row.entity.eid },
-        doc: { title: name },
-      }])
+    let eid = row.entity.eid
+    return {
+      eid,
+      fresh: false,
+      write: name && !chose(row.doc?.title)
+        ? [{ entity: { eid }, doc: { title: name } }]
+        : [],
     }
-    return row.entity.eid
   }
   // An eid the batch mints is a `$alias`, and the reply says what it became:
   // a bundle names an existing entity by eid, so a client cannot hand the
   // store a uuid it invented (D-23827).
-  let eid = minted(
-    await apply(store, [{
+  return {
+    eid: '$who',
+    fresh: true,
+    write: [{
       entity: { eid: '$who' },
       ...(name ? { doc: { title: name } } : {}),
       person: {},
       email: { address: at },
-    }]),
-  ).$who
+    }],
+  }
+}
+
+export let personOf = async (store: Meta, email: string, name?: string) => {
+  let who = await addressee(store, email, name)
+  if (!who.write.length) return who.eid
+  let applied = await apply(store, who.write)
+  if (!who.fresh) return who.eid
+  let eid = minted(applied).$who
   if (!eid) throw new Error('the meta store minted no person')
   return eid
 }

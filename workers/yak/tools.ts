@@ -203,7 +203,7 @@ import { globs } from './router.ts'
 import { vocabAt } from './reach.ts'
 import { titling, vouched, type Who } from './session.ts'
 import { type Clock, clock } from './timing.ts'
-import { canon, nameOf, personOf } from './signin.ts'
+import { addressee, canon, nameOf } from './signin.ts'
 import { ACCEPTED, type Door } from './door.ts'
 import {
   type Applying,
@@ -5229,33 +5229,35 @@ let OURS: Row[] = [
       let to = app ? app.eid : space.eid
       // What to call them, if the invitation said: it names them in the
       // letter and stands as their name until they choose one themselves
-      // (signin.ts `personOf` never renames someone who has). Left out,
+      // (signin.ts `addressee` never renames someone who has). Left out,
       // they go by the front of their address (T-34236).
       let name = args.name == null
         ? undefined
         : nameOf(text(args.name, 'name'), email)
       // Where they stand here, and whether one more letter may go, asked
-      // together: neither waits on the other (T-124082). The letter's count
-      // is only read here, and written below beside the invitation, so a
-      // refusal still writes and mails nothing.
+      // together: neither waits on the other (T-124082). Somebody the
+      // platform has never seen stands nowhere, so nothing more is asked of
+      // them. The letter's count is only read here and written below with
+      // the invitation, so a refusal still writes and mails nothing.
       let [here, counting] = await c.time('read', () =>
         Promise.allSettled([
-          // The platform's row for that address, minted if it has never seen
-          // one: the invitation is what makes the person, and their sign-in
-          // later finds this same row by the same address (signin.ts
-          // personOf).
-          personOf(meta(ctx.env), email, name).then(async (person) => {
-            let [had, held, standing] = await Promise.all([
-              ctx.dir.member(space, person),
-              app && ctx.dir.grant(app, person),
-              ctx.dir.invite(to, person),
+          // The platform's row for that address, minted with the invitation
+          // if it has never seen one: the invitation is what makes the
+          // person, and their sign-in later finds this same row by the same
+          // address (signin.ts `addressee`).
+          addressee(meta(ctx.env), email, name).then(async (them) => {
+            let [had, held, standing] = them.fresh ? [] : await Promise.all([
+              ctx.dir.member(space, them.eid),
+              app && ctx.dir.grant(app, them.eid),
+              ctx.dir.invite(to, them.eid),
             ])
-            return { person, had, held, standing }
+            return { them, had, held, standing }
           }),
           room(ctx.env, ctx.dir, space, ctx.person),
         ]))
       if (here.status == 'rejected') throw here.reason
-      let { person, had, held, standing } = here.value
+      let { them, had, held, standing } = here.value
+      let person = them.eid
       if (person == ctx.person && had) {
         throw refuse('arguments', `${email} is you, and you own ${space.slug}`)
       }
@@ -5280,13 +5282,16 @@ let OURS: Row[] = [
       // nobody anything and sends no letter.
       let seat = app ? held : had
       if (seat) {
-        await ctx.dir.apply({
-          entities: [
-            app
-              ? { entity: { eid: seat.eid }, grant: { access: want } }
-              : { entity: { eid: seat.eid }, member: { role: want } },
-          ],
-        }, vouched(who))
+        await Promise.all([
+          ctx.dir.apply({
+            entities: [
+              app
+                ? { entity: { eid: seat.eid }, grant: { access: want } }
+                : { entity: { eid: seat.eid }, member: { role: want } },
+            ],
+          }, vouched(who)),
+          them.write.length && stamp(ctx.env, { entities: them.write }),
+        ])
         let was = held ? held.access : had!.role
         return {
           text: `${email} is now ${an(want)} ${want} of ` +
@@ -5299,20 +5304,20 @@ let OURS: Row[] = [
       }
       // Anyone else is invited, and nothing is theirs until they accept
       // (invite.ts, T-37880). The letter is counted twice before it goes: on
-      // the space's monthly letters, and on the inviter's hour.
+      // the space's monthly letters, and on the inviter's hour, which is
+      // written in the one batch with the invitation and the person it names.
       if (counting.status == 'rejected') throw counting.reason
       let eid = standing?.eid ?? crypto.randomUUID()
       await c.time('invite', () =>
-        Promise.all([
-          stamp(ctx.env, { entities: [counting.value] }),
-          ctx.dir.apply({
-            entities: [
-              standing
-                ? { entity: { eid }, invite: { role: want } }
-                : { entity: { eid }, invite: { to, person, role: want } },
-            ],
-          }, vouched(who)),
-        ]))
+        ctx.dir.stamp({
+          entities: [
+            ...them.write,
+            standing
+              ? { entity: { eid }, invite: { role: want } }
+              : { entity: { eid }, invite: { to, person, role: want } },
+            counting.value,
+          ],
+        }, vouched(who)))
       // The letter goes after the answer (T-124082): posting it was a second
       // of the call, and the answer says nothing that depends on it. One that
       // will not leave is reported where it fails (invite.ts `send`), and
