@@ -3,7 +3,7 @@ name: ui-building
 description: >
   How to build interface here, browser and terminal: @yaks/ui parts, themes,
   @yaks/ux components (editing, picking, disclosure, popovers), entity pages
-  and views (inspector, web canvas, TUI, style guides, /views), and drawing any
+  and views (inspector, browse, TUI, style guides, /views), and drawing any
   entity anywhere through the shared renderers. Use it whenever a change adds
   or changes what a person sees or presses, shows entities in a row, list,
   inbox, panel or detail, restyles anything, touches packages/ui, packages/ux,
