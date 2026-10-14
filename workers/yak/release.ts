@@ -134,11 +134,13 @@ export let staged = async (
   let files = releaseFiles(raw)
   let root = `${prefix}/`
   let space = spaceOf(root)
-  let old = source ? `${source}/` : ''
-  let index: Index = {}
-  if (sparse && old) {
-    index = { ...await pinned(raw, source!) }
-  }
+  // The source's index and the draft's own keys are two reads with nothing
+  // between them, so they go together.
+  let [prior, changed] = await Promise.all([
+    sparse && source ? pinned(raw, source) : null,
+    raw.list(`${work}/`),
+  ])
+  let index: Index = { ...prior }
   let pin = pins(raw, space)
   let put = async (key: string, bytes: Uint8Array) => {
     let path = key.slice(root.length)
@@ -146,7 +148,6 @@ export let staged = async (
     await pin.put(sha, bytes)
     index[path] = { key: addressed(sha), sha }
   }
-  let changed = await raw.list(`${work}/`)
   let present = new Set(changed.map((key) => key.slice(work.length + 1)))
   for (let path of present) {
     if (sparse && path.startsWith('.deleted/') && !present.has(path.slice(9))) {

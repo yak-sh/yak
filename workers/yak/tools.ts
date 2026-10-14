@@ -249,7 +249,7 @@ import {
   BUILT,
   draftFiles,
   draftManifest,
-  editing,
+  draftOf,
   fenced,
   held,
   history,
@@ -1230,11 +1230,21 @@ let published = async (
   // as a manifest of path to the name of their bytes, those bytes pinned
   // beside them, and Cloudflare's name for the script this uploaded. The
   // app's live pointer and its move record commit together.
-  await keepDeclaration(ctx.env, space, stagedApp, String(version), {
-    vocab: JSON.parse(await answer(draft, '/vocab')),
-    tools: checked,
-  })
-  let pinned = await c.time('snapshot', () => files.finish())
+  //
+  // The declaration and the release's index are two writes to the bucket that
+  // nothing selects until `record` moves the pointers, so they go out together:
+  // each is most of a second (T-124005).
+  let [, pinned] = await Promise.all([
+    c.time(
+      'declare',
+      async () =>
+        keepDeclaration(ctx.env, space, stagedApp, String(version), {
+          vocab: JSON.parse(await answer(draft, '/vocab')),
+          tools: checked,
+        }),
+    ),
+    c.time('snapshot', () => files.finish()),
+  ])
   await c.time(
     'record',
     () =>
@@ -1254,36 +1264,32 @@ let published = async (
         target,
       ),
   )
-  await releaseNotice(store, version, {
-    tool: 'app_deploy',
-    space: space.slug,
-    app: app.slug,
-  })
-  if (tooled.views) {
-    try {
-      await viewsMoved(ctx, space)
-    } catch (e) {
+  // What follows a live release asks three different doors and none waits on
+  // another: the store hears its release, connected agents hear a moved view
+  // list, and the tracker closes what earlier versions broke.
+  let after = <T>(work: () => Promise<T>) =>
+    work().catch((e): undefined => {
+      // The release is out; an open break is the softer wrong, and the tracker hears.
       try {
         caught(e, { tool: 'app_deploy', space: space.slug, app: app.slug })
       } catch { /* the release is already live */ }
-    }
-  }
-  // What the versions before this one broke is closed by this one: the code
-  // that produced it is not what serves any more (unseen.ts `healed`,
-  // D-32318 §Errors). The release already happened, so a store that cannot be
-  // asked leaves the breaks open rather than failing a deploy that is live.
-  let closed = 0
-  try {
-    closed = await c.time(
-      'healed',
-      () => healed(ctx.env, space, app, who, version),
-    )
-  } catch (e) {
-    // The release is out; an open break is the softer wrong, and the tracker hears.
-    try {
-      caught(e, { tool: 'app_deploy', space: space.slug, app: app.slug })
-    } catch { /* the release is already live */ }
-  }
+    })
+  let [, , closed = 0] = await Promise.all([
+    releaseNotice(store, version, {
+      tool: 'app_deploy',
+      space: space.slug,
+      app: app.slug,
+    }),
+    tooled.views ? after(() => viewsMoved(ctx, space)) : null,
+    // What the versions before this one broke is closed by this one: the code
+    // that produced it is not what serves any more (unseen.ts `healed`,
+    // D-32318 §Errors). The release already happened, so a store that cannot
+    // be asked leaves the breaks open rather than failing a deploy that is
+    // live.
+    after(() =>
+      c.time('healed', () => healed(ctx.env, space, app, who, version))
+    ),
+  ])
   // A published app's offer does not move with a deploy: publishing is the
   // owner's deliberate act and pins the version strangers install, so an
   // editor's deploy must not change what the whole platform gets. Silence
@@ -1369,6 +1375,7 @@ let released = async (
     expectedVersion?: number
   } = {},
 ): Promise<{ version: number; said: string; review?: DeployReview }> => {
+  let c = ctx.clock ?? clock()
   let standing = await waiting(ctx.dir, space, app, who)
   if (expectedVersion != null && standing.version != expectedVersion) {
     throw refuse('stale', `v${expectedVersion} is no longer live`)
@@ -1381,9 +1388,12 @@ let released = async (
   }
   let blobs = r2RawObjects(ctx.env.BLOBS)
   let kept = target?.source && target.script ? target : undefined
+  // A deploy with no draft releases the source as it stands. It names a draft
+  // nothing has written rather than stamping one, since the fence below holds
+  // edits off either way and guards that none began (T-124005).
   let work = target
     ? kept?.source ?? releaseOf(space, standing)
-    : await editing(ctx.dir, space, standing, who)
+    : standing.draft ?? draftOf(space, standing)
   if (target && !kept) {
     await restore(
       r2Objects(ctx.env.BLOBS),
@@ -1393,7 +1403,7 @@ let released = async (
     )
   }
   let release = kept?.source ?? releaseOf(space, standing)
-  let draft = target ? standing.draft ?? null : standing.draft ?? work
+  let draft = standing.draft ?? null
   if (kept) {
     let held = pins(r2Objects(ctx.env.BLOBS), `${space.slug}/${app.slug}/`)
     await Promise.all(
@@ -1402,7 +1412,7 @@ let released = async (
       }),
     )
   }
-  let fence = await fenced(ctx.dir, standing, draft, who)
+  let fence = await c.time('fence', () => fenced(ctx.dir, standing, draft, who))
   // A committed release clears the fence in its own record (versions.ts
   // `record`), so only a release that stopped short has one left to lift.
   let released = false
@@ -1413,13 +1423,14 @@ let released = async (
         manifest: () => kept.files,
         finish: () => Promise.resolve(kept.files),
       }
-      : await staged(
-        blobs,
-        prefixOf(space, standing),
-        work,
-        release,
-        !target && work.split('/').pop()?.startsWith('delta-v') == true,
-      )
+      : await c.time('staged', () =>
+        staged(
+          blobs,
+          prefixOf(space, standing),
+          work,
+          release,
+          !target && work.split('/').pop()?.startsWith('delta-v') == true,
+        ))
     // The fence holds both the serving pointer and the candidate's edits.
     // Inspect losses before compiling, planting a schema or deploying a worker.
     if (base != null && base < (standing.version ?? 0) && !confirm) {
@@ -1851,24 +1862,33 @@ export let wrote = async (
         let no = tooLong(f.path, f.bytes.byteLength)
         if (no) throw refuse('limit', no)
       }
-      // What each path held goes into its own history first, pinned by its content
-      // (versions.ts `replaced`, T-34508), so the edit can be undone before deploy.
+      // What each path held goes into its own history, pinned by its content
+      // (versions.ts `replaced`, T-34508), so the edit can be undone before
+      // deploy; the new bytes go out beside that pin, once the old are in hand.
       //
-      // The files go out at once: each path's pin-then-put is its own chain of
-      // round trips to the bucket with nothing to wait on in another path's, so a
-      // three-file write costs one file's time, not three (T-34986). `pin` and
-      // `put` are still summed per file — total waiting, which overlaps — and
-      // `files` is the wall clock the batch actually took.
+      // The files go out at once: each path's replacement is its own chain of
+      // round trips to the bucket with nothing to wait on in another path's, so
+      // a three-file write costs one file's time, not three (T-34986). `pin` is
+      // each whole replacement and `put` the write inside it, summed per file —
+      // total waiting, which overlaps — and `files` is the wall clock the batch
+      // actually took.
       let at = new Date()
       let pin = c.sum('pin')
       let put = c.sum('put')
       await c.time('files', () =>
-        Promise.all(files.map(async (f) => {
+        Promise.all(files.map((f) => {
           let path = fileKey(space, edit, f.path).slice(prefix.length)
-          await pin(() =>
-            replaced(editFiles, prefix, path, who.person ?? '', at, archive)
+          return pin(() =>
+            replaced(
+              editFiles,
+              prefix,
+              path,
+              who.person ?? '',
+              at,
+              archive,
+              () => put(() => editFiles.put(prefix + path, f.bytes)),
+            )
           )
-          await put(() => editFiles.put(prefix + path, f.bytes))
         })))
       let paths = files.map((f) =>
         fileKey(space, edit, f.path).slice(prefix.length)
@@ -2968,8 +2988,8 @@ let OURS: Row[] = [
               who.person ?? '',
               new Date(),
               archive,
+              () => editFiles.delete(key),
             )
-            await editFiles.delete(key)
             return {
               text: `deleted ${path} — app_files(app: '${app.slug}', op: ` +
                 `'restore', path: '${path}') brings it back; staged for app_deploy`,

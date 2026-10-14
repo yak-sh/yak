@@ -102,6 +102,12 @@ let delta = (draft: string) => draft.split('/').pop()?.startsWith('delta-v')
 // Old vN drafts are complete copies, readable until their next deploy.
 // Deletions are keys outside the app's file set, so a missing draft file can
 // still mean "read the source" without reviving a deleted path.
+//
+// Bytes of the path's own win over its deletion marker in every reader (this
+// view, `list`, release.ts `staged`, `draftManifest`), so a path's own bytes
+// and its marker are asked for at once, and a write clears a marker beside its
+// put rather than after it, and only where one may be: each is a round trip to
+// the bucket, and the bucket is most of what an edit waits on (T-123988).
 export let draftFiles = (
   blobs: Objects,
   draft: string | null | undefined,
@@ -116,38 +122,27 @@ export let draftFiles = (
   let deleted = (key: string) => gone + path(key)
   let inDraft = (key: string) => key.startsWith(at) && !key.startsWith(gone)
   let known: { own: Set<string>; gone: Set<string> } | undefined
-  let read = async (key: string) => {
-    if (!inDraft(key)) return blobs.read(key)
-    if (known) {
-      if (known.own.has(path(key))) return blobs.read(key)
-      return known.gone.has(path(key)) ? null : blobs.read(original(key))
+  // Whether each path asked about here has a deletion marker, as last seen.
+  let marked = new Map<string, boolean>()
+  let through =
+    <T>(take: (key: string) => Promise<T | null>) =>
+    async (key: string): Promise<T | null> => {
+      if (!inDraft(key)) return take(key)
+      let name = path(key)
+      if (known) {
+        if (known.own.has(name)) return take(key)
+        return known.gone.has(name) ? null : take(original(key))
+      }
+      let [own, gone] = await Promise.all([take(key), blobs.has(deleted(key))])
+      marked.set(name, gone)
+      if (own || gone) return own
+      return take(original(key))
     }
-    let bytes = await blobs.read(key)
-    if (bytes || await blobs.has(deleted(key))) return bytes
-    return blobs.read(original(key))
-  }
+  let read = through((key) => blobs.read(key))
   return {
     read,
-    load: async (key) => {
-      if (!inDraft(key)) return blobs.load(key)
-      if (known) {
-        if (known.own.has(path(key))) return blobs.load(key)
-        return known.gone.has(path(key)) ? null : blobs.load(original(key))
-      }
-      let own = await blobs.load(key)
-      if (own || await blobs.has(deleted(key))) return own
-      return blobs.load(original(key))
-    },
-    open: async (key) => {
-      if (!inDraft(key)) return blobs.open(key)
-      if (known) {
-        if (known.own.has(path(key))) return blobs.open(key)
-        return known.gone.has(path(key)) ? null : blobs.open(original(key))
-      }
-      let own = await blobs.open(key)
-      if (own || await blobs.has(deleted(key))) return own
-      return blobs.open(original(key))
-    },
+    load: through((key) => blobs.load(key)),
+    open: through((key) => blobs.open(key)),
     get: async (key) => {
       let bytes = await read(key)
       if (!bytes) throw new Error(`no object at ${key}`)
@@ -155,20 +150,29 @@ export let draftFiles = (
     },
     has: async (key) => {
       if (!inDraft(key)) return blobs.has(key)
+      let name = path(key)
       if (known) {
-        if (known.own.has(path(key))) return true
-        return !known.gone.has(path(key)) && await blobs.has(original(key))
+        if (known.own.has(name)) return true
+        return !known.gone.has(name) && await blobs.has(original(key))
       }
-      return await blobs.has(key) ||
-        !await blobs.has(deleted(key)) && await blobs.has(original(key))
+      let [own, gone] = await Promise.all([
+        blobs.has(key),
+        blobs.has(deleted(key)),
+      ])
+      marked.set(name, gone)
+      return own || !gone && await blobs.has(original(key))
     },
     put: async (key, bytes) => {
-      await blobs.put(key, bytes)
-      if (inDraft(key)) {
-        await blobs.delete(deleted(key))
-        known?.own.add(path(key))
-        known?.gone.delete(path(key))
-      }
+      if (!inDraft(key)) return blobs.put(key, bytes)
+      let name = path(key)
+      let gone = known ? known.gone.has(name) : marked.get(name) ?? true
+      await Promise.all([
+        blobs.put(key, bytes),
+        gone ? blobs.delete(deleted(key)) : null,
+      ])
+      known?.own.add(name)
+      known?.gone.delete(name)
+      marked.set(name, false)
     },
     // What lies outside the draft goes in one trip; a draft path leaves its
     // deletion marker first, one at a time.
@@ -181,6 +185,7 @@ export let draftFiles = (
         await blobs.delete(key)
         known?.own.delete(path(key))
         known?.gone.add(path(key))
+        marked.set(path(key), true)
       }
     },
     list: async (prefix) => {
@@ -769,9 +774,16 @@ export let history = async (blobs: Objects, prefix: string, path: string) =>
  * before something else takes their place. Nothing at all when the path is
  * empty: a file that did not exist has no previous version.
  *
- * This runs at every door bytes arrive by (tools.ts `wrote`), which is why it
- * is one round trip on a miss and why a log that cannot be read is treated as
- * empty rather than thrown: the write is the thing that must not fail.
+ * This runs at every door bytes arrive by (tools.ts `wrote`), which is why a
+ * log that cannot be read is treated as empty rather than thrown: the write is
+ * the thing that must not fail.
+ *
+ * `next` is that write: what takes the path's place, sent once the bytes it
+ * replaces are in hand. So an edit is two rounds to the bucket whatever it
+ * finds, where each step once waited on the last (T-123988): the bytes and the
+ * log are read together, then the write, the pin and the log go out together.
+ * A pin or log that fails after the write landed loses that entry, not the
+ * write, and the tracker hears.
  */
 export let replaced = async (
   blobs: Objects,
@@ -780,9 +792,13 @@ export let replaced = async (
   by: string,
   at = new Date(),
   archive = prefix,
+  next: () => Promise<unknown> = async () => {},
 ) => {
-  let bytes = await blobs.read(prefix + path)
-  if (!bytes) return null
+  let [bytes, log] = await Promise.all([
+    blobs.read(prefix + path),
+    history(blobs, archive, path),
+  ])
+  if (!bytes) return await next(), null
   let sha = await sha256(bytes)
   let was: Wrote = {
     path,
@@ -791,22 +807,20 @@ export let replaced = async (
     at: at.toISOString(),
     by,
   }
-  // Pinning the bytes and extending the log are two chains with nothing to
-  // wait on in each other, so they go out together: three round trips to the
-  // bucket where there were five (T-34986).
-  await Promise.all([
+  let [written, ...kept] = await Promise.allSettled([
+    next(),
     pins(blobs, archive).put(sha, bytes),
-    (async () => {
-      let all = trimmed(
-        [was, ...await history(blobs, archive, path)],
-        at.getTime(),
-      )
-      await blobs.put(
-        logKey(archive, path),
-        new TextEncoder().encode(JSON.stringify(all)),
-      )
-    })(),
+    blobs.put(
+      logKey(archive, path),
+      new TextEncoder().encode(
+        JSON.stringify(trimmed([was, ...log], at.getTime())),
+      ),
+    ),
   ])
+  if (written.status == 'rejected') throw written.reason
+  for (let k of kept) {
+    if (k.status == 'rejected') caught(k.reason, { request: 'version log' })
+  }
   return was
 }
 

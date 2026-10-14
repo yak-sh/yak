@@ -83,20 +83,12 @@ export let deployWorker = async (
       lines: [...report, ...ids, ...refused, unchanged, ...bindingLines(held)],
     }
   }
+  // A release with no server source has no worker: its script name is its
+  // own and nothing was uploaded under it, so serving finds no script and
+  // answers from the files. The prior release's script stays for a rollback,
+  // and there is nothing to remove (T-124005: removing this release's
+  // never-made script was one call to Cloudflare per deploy, up to 4.6 s).
   if (!has) {
-    if (env.CF_WORKERS_TOKEN) await drop(env, target)
-    else if (held.length) {
-      return {
-        worker,
-        ready: false,
-        lines: [
-          ...report,
-          ...ids,
-          'refused: CF_WORKERS_TOKEN is missing; the prior worker and its bindings are unchanged',
-          ...bindingLines(held),
-        ],
-      }
-    }
     return {
       worker,
       ready: true,

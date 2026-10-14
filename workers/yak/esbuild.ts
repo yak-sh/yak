@@ -377,9 +377,10 @@ export let compiled = async (
     ...notes,
     ...answer.notes,
   ]
-  if (answer.lock != null) {
+  let lock = answer.lock
+  if (lock != null) {
     let was = await read(LOCK)
-    if (!was || new TextDecoder().decode(was) != answer.lock) {
+    if (!was || new TextDecoder().decode(was) != lock) {
       await replaced(
         blobs,
         prefix,
@@ -387,8 +388,8 @@ export let compiled = async (
         who.person ?? '',
         new Date(),
         `${space.slug}/${app.slug}/`,
+        () => blobs.put(prefix + LOCK, encode(lock)),
       )
-      await blobs.put(prefix + LOCK, encode(answer.lock))
     }
     lines.push(
       `${LOCK} pins ${answer.installed.join(', ') || 'nothing'}; the next ` +
