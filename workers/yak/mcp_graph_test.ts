@@ -627,14 +627,17 @@ test('app_list answers what the month cost', async () => {
       bytes: 252_706_816,
       at,
     }
+    // What the sweep read of the space's photos and files: all of them the
+    // app's (held.ts).
+    let files = 5 * 1024 ** 2
     await meta(k).apply([
       {
         entity: { eid: eids[`${metered35}/recipes`] },
-        meter: spent,
+        meter: { ...spent, files },
       },
       {
         entity: { eid: eids[metered35] },
-        meter: spent,
+        meter: { ...spent, files },
       },
     ])
     // A directory write empties the kernel's 30-second read cache
@@ -649,6 +652,16 @@ test('app_list answers what the month cost', async () => {
     let said = await agent.answer('app_list', { space: metered35 })
     let [space] = (said.value as { spaces: Listed[] }).spaces
     assertEquals(space.apps[0].usage, { requests: 1200, bytes: 252_706_816 })
+    // What each app holds of the space's storage (T-124320), against the
+    // space's ceilings, in words and as data.
+    assertEquals(space.apps[0].held, { bytes: 252_706_816, files })
+    assertEquals(space.standing.limits.bytes?.used, 252_706_816)
+    assertEquals(space.standing.limits.files?.used, files)
+    assertStringIncludes(
+      said.text,
+      'holds 241 MB of app data and 5 MB of photos and files',
+    )
+    assertStringIncludes(said.text, '5 MB of 1 GB of photos and files')
 
     // The one number analytics cannot answer: what a store weighs. It comes
     // off the store itself (graph.ts `/graph`), which is where the sweep
@@ -682,7 +695,7 @@ test('app_list answers what the month cost', async () => {
       app: 'recipes',
     })
     assertStringIncludes(recipes, `email ${metered35}.recipes@yaks.app`)
-    assertStringIncludes(recipes, 'this month 1,200 request units, 241 MB')
+    assertStringIncludes(recipes, 'this month 1,200 request units')
   } finally {
     await k.stop()
   }
@@ -793,6 +806,8 @@ test('the free tier: a warning once, then the refusals', async () => {
     let why = (await stopped.json()).error
     assertEquals(why.code, 'space_full')
     assertStringIncludes(why.message, 'of app data')
+    // What the space holds and which app holds it, so the agent can plan.
+    assertStringIncludes(why.message, 'holds 1 GB (big 1 GB)')
 
     await meta(k).apply([{
       entity: { eid: eids[brim36] },

@@ -15,6 +15,7 @@
 // this file counts what each uses and draws the desk around them.
 
 import type { Env } from './env.ts'
+import { type Held, holding } from './held.ts'
 import {
   appOf,
   type Directory,
@@ -76,16 +77,17 @@ let appSpace = (r: Row) => idOf(r.app!.space)
  * What every row uses, counted once over the whole directory. A space: what
  * models and voice cost in it this month, its database and files, its apps
  * and the latest use of it or of any of them. An app: this month's requests,
- * its database and its latest use. A person: their budget over the spaces
- * they own, those spaces' storage and apps, and the later of their last use
- * and last sign-in. A space is a test space when everyone seated in it is a
- * test account, and its apps are test apps.
+ * its database and files and its latest use. A person: their budget over the
+ * spaces they own, those spaces' storage and apps, and the later of their last
+ * use and last sign-in. A space is a test space when everyone seated in it is
+ * a test account, and its apps are test apps.
  */
 export let uses = (c: Census, now = new Date()): Map<string, Uses> => {
   let month = monthOf(now)
   let spaces = new Map(c.spaces.map((r) => [r.entity.eid, spaceOf(r)]))
   let live = c.apps.filter((r) => !r.trashed)
   let appsIn = group(live, appSpace)
+  let everyIn = group(c.apps, appSpace)
   let seatsIn = group(c.seats, seatSpace)
   let seatsOf = group(c.seats, seatPerson)
   let emails = new Map(
@@ -96,13 +98,20 @@ export let uses = (c: Census, now = new Date()): Map<string, Uses> => {
     return seats.length > 0 &&
       seats.every((s) => isTestAddress(emails.get(seatPerson(s)) ?? ''))
   }
+  // What each space holds and each app's share, those in the trash included
+  // (held.ts): app data and photos and files together.
+  let held = new Map(c.spaces.map((r) => {
+    let s = spaces.get(r.entity.eid)!
+    return [s.eid, holding(s, (everyIn.get(s.eid) ?? []).map(appOf))]
+  }))
+  let stored = (h?: Held) => (h?.bytes ?? 0) + (h?.files ?? 0)
   let out = new Map<string, Uses>()
   for (let r of c.spaces) {
     let s = spaces.get(r.entity.eid)!
     let apps = appsIn.get(s.eid) ?? []
     out.set(s.eid, {
       spend: { spent: budget([s], now).spent },
-      storage: (s.meter?.bytes ?? 0) + (s.meter?.files ?? 0),
+      storage: stored(held.get(s.eid)),
       apps: apps.length,
       active: latest(r.used?.at, ...apps.map((a) => a.used?.at)),
       test: tested(s.eid),
@@ -111,7 +120,7 @@ export let uses = (c: Census, now = new Date()): Map<string, Uses> => {
   for (let r of c.apps) {
     out.set(r.entity.eid, {
       requests: r.meter?.month == month ? r.meter.requests ?? 0 : 0,
-      storage: r.meter?.bytes ?? 0,
+      storage: stored(held.get(appSpace(r))?.apps.get(r.app!.slug)),
       active: r.used?.at ?? null,
       test: out.get(appSpace(r))?.test ?? false,
     })

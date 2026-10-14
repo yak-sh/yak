@@ -23,13 +23,13 @@ let census = (): Census => ({
     {
       entity: { eid: 'home' },
       space: { slug: 'ann' },
-      meter: meter({ models: 0.25, realtime: 0.25, bytes: 100, files: 20 }),
+      meter: meter({ models: 0.25, realtime: 0.25, files: 20 }),
     },
     {
       entity: { eid: 'shop' },
       space: { slug: 'shop' },
       plan: { tier: 'plus' },
-      meter: meter({ models: 1, bytes: 1000 }),
+      meter: meter({ models: 1, files: 3 }),
     },
     { entity: { eid: 'lab' }, space: { slug: 'lab' } },
   ],
@@ -43,12 +43,13 @@ let census = (): Census => ({
     {
       entity: { eid: 'a2' },
       app: { slug: 'cart', space: 'shop', version: 1 },
-      meter: { month: '2026-09', requests: 9, bytes: 7 },
+      meter: { month: '2026-09', requests: 9, bytes: 990 },
       used: { at: '2026-10-14T10:00:00Z' },
     },
     {
       entity: { eid: 'a3' },
       app: { slug: 'old', space: 'shop', version: 1 },
+      meter: { bytes: 7, files: 3 },
       trashed: { at: '2026-10-01T00:00:00Z' },
     },
     { entity: { eid: 'a4' }, app: { slug: 'try', space: 'lab', version: 1 } },
@@ -97,6 +98,12 @@ test('a space counts its live apps and its latest use; an app its month', () => 
   })
   assertEquals(u.get('a1')?.requests, 40)
   assertEquals(u.get('a2')?.requests, 0, 'last month is not this month')
+  // What a space holds is its apps' data and its files, an app in the trash
+  // included, and holding is no month's figure.
+  assertEquals(
+    ['a1', 'a2', 'a3'].map((a) => u.get(a)?.storage),
+    [100, 990, 10],
+  )
   assertEquals([u.get('lab')?.test, u.get('a4')?.test], [true, true])
 })
 

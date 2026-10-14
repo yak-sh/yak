@@ -15,6 +15,7 @@ import {
 } from './directory.ts'
 import type { Namespace } from './door.ts'
 import type { Env } from './env.ts'
+import type { Held, Holding } from './held.ts'
 import { mailedTo } from './post.ts'
 import { refuse } from './tool.ts'
 import {
@@ -287,10 +288,11 @@ export let refusedSpend = async (
     : null
 }
 
-let empty = (month: string, built = 0): Meter => ({
+// A month with nothing spent yet. What the space holds (`bytes`, `files`) is
+// not a month's figure, so a new month neither starts it over nor writes it.
+let empty = (month: string, built = 0): Omit<Meter, 'bytes'> => ({
   month,
   ...none(),
-  bytes: 0,
   emails: 0,
   builds: 0,
   models: 0,
@@ -301,12 +303,14 @@ let empty = (month: string, built = 0): Meter => ({
 })
 
 // This month's reading, whatever the row holds — a month behind is nothing
-// spent, and no row at all is the same. `built` is the exception it carries
-// through: a lifetime figure is not started over by a new month.
-export let spent = (space: Space, now = new Date()) =>
+// spent, and no row at all is the same. What it carries through is what is
+// not started over by a new month: `built`, a lifetime figure, and what the
+// space holds (held.ts).
+export let spent = (space: Space, now = new Date()): Meter =>
   thisMonth(space.meter, monthOf(now)) ??
     {
       ...empty(monthOf(now), space.meter?.built ?? 0),
+      bytes: space.meter?.bytes ?? 0,
       files: space.meter?.files ?? 0,
     }
 
@@ -379,13 +383,19 @@ export let refusedVisit = (
 export type Gauge = { used: number; limit: number }
 export type Ceiling = 'apps' | 'requests' | 'bytes' | 'files' | Limited
 
+// What the space held at the sweep's last reading (held.ts says what it holds).
+let reading = (m: Meter): Held => ({ bytes: m.bytes, files: m.files ?? 0 })
+
 // Each ceiling a space answers to this month: apps, request units and app data
 // where its plan limits them, and the allowances every plan carries. The
 // account's dollar budget is checked through `budgets`, not a space's reading.
+// What it holds is the sweep's last reading unless a caller has the space's
+// apps in hand and passes what they hold now (held.ts `holding`).
 export let gauges = (
   space: Space,
   apps: number,
   now = new Date(),
+  held = reading(spent(space, now)),
 ): Partial<Record<Ceiling, Gauge>> => {
   let free = ceilings(space.tier, space.slug)
   let m = spent(space, now)
@@ -394,10 +404,10 @@ export let gauges = (
     ...(free
       ? {
         requests: { used: requestUnits(m), limit: free.requests },
-        bytes: { used: m.bytes, limit: free.bytes },
+        bytes: { used: held.bytes, limit: free.bytes },
       }
       : {}),
-    files: { used: m.files ?? 0, limit: FILES[space.tier ?? 'free'] },
+    files: { used: held.files, limit: FILES[space.tier ?? 'free'] },
     ...Object.fromEntries(LIMITED.map((what) => [what, {
       used: used(m, what),
       limit: allowance(what, space.tier),
@@ -409,8 +419,15 @@ let full = (g: Gauge) => g.used / g.limit
 
 // Where a space stands: nothing to say, near a ceiling, or past one. The
 // sweep watches this for a change, which is what un-tells the agent.
-export let level = (space: Space, apps: number, now = new Date()) => {
-  let worst = Math.max(...Object.values(gauges(space, apps, now)).map(full))
+export let level = (
+  space: Space,
+  apps: number,
+  now = new Date(),
+  held?: Held,
+) => {
+  let worst = Math.max(
+    ...Object.values(gauges(space, apps, now, held)).map(full),
+  )
   return worst >= 1 ? 'over' : worst >= WARN ? 'near' : 'ok'
 }
 
@@ -447,14 +464,15 @@ export let standingOf = (
   apps: number,
   now = new Date(),
   env: Host = {},
+  held?: Held,
 ) => {
   let m = spent(space, now)
   return {
     tier: space.tier ?? 'free',
     month: m.month,
     read: m.at || null,
-    level: level(space, apps, now),
-    limits: gauges(space, apps, now),
+    level: level(space, apps, now, held),
+    limits: gauges(space, apps, now, held),
     models: m.models,
     voice: m.realtime,
     settings: planSettings(space.slug, env),
@@ -485,8 +503,9 @@ let READ: Record<Ceiling, (g: Gauge) => string> = {
 }
 
 // What only the hourly sweep reads. Before its first reading of the month
-// these are no reading at all, and zero would be a claim (`asOf`).
-let SWEPT: Ceiling[] = ['requests', 'bytes']
+// it is no reading at all, and zero would be a claim (`asOf`). What the space
+// holds is no month's figure, so last month's reading still says it.
+let SWEPT: Ceiling[] = ['requests']
 
 /**
  * Where a space stands this month, in one line: every ceiling it answers to,
@@ -500,10 +519,14 @@ export let gauged = (
   apps: number,
   now = new Date(),
   env: Host = {},
+  held?: Held,
 ) => {
   let m = spent(space, now)
   let read = asOf(m.at)
-  let all = Object.entries(gauges(space, apps, now)) as [Ceiling, Gauge][]
+  let all = Object.entries(gauges(space, apps, now, held)) as [
+    Ceiling,
+    Gauge,
+  ][]
   let shown = all.filter(([what]) => read || !SWEPT.includes(what))
   let close = shown.filter(([, g]) => full(g) >= WARN)
   let over = close.filter(([, g]) => full(g) >= 1).length
@@ -511,9 +534,7 @@ export let gauged = (
   let voice = m.realtime ? ` (${dollars(m.realtime)} of it voice)` : ''
   return `This month${read}: ${
     shown.map(([what, g]) => READ[what](g)).join(', ')
-  }${
-    shown.length < all.length ? ', request units and app data not read yet' : ''
-  }, and ${
+  }${shown.length < all.length ? ', request units not read yet' : ''}, and ${
     dollars(used(m, 'models'))
   } of model use and voice${voice} from the owner's account budget${
     close.length
@@ -534,7 +555,7 @@ export let gauged = (
 // signed-in web page's door (billing.ts).
 export let atCeiling = (
   space: Space,
-  what: 'apps' | 'bytes' | 'files' | Spend,
+  what: 'apps' | Spend,
   env: Host = {},
   budget = BUDGET[space.tier ?? 'free'],
 ) => {
@@ -543,18 +564,11 @@ export let atCeiling = (
   // A free allowance is the account's ({@link pooled}), so it is said as the
   // owner's: the space in hand may have spent none of it.
   let shared = tier == 'free' ? ', shared by the free spaces its owner has' : ''
-  // Comped spaces can hit the letter/build allowances, not app/data ceilings.
+  // Comped spaces can hit the letter/build allowances, not the app ceiling.
   let said = {
     apps: () =>
       `${space.slug} is on the ${tier} tier, which is ${free.apps} apps` +
       ` — delete one (app_delete) to make another`,
-    bytes: () =>
-      `${space.slug} is on the ${tier} tier, which is ${
-        size(free.bytes)
-      } of app data — delete what it no longer needs to save more`,
-    files: () =>
-      `${space.slug} is on the ${tier} tier, which is ${size(FILES[tier])}` +
-      ` of photos and files — delete files it no longer needs to upload more`,
     // The one refusal both tiers can hit, and the one a person cannot clear
     // by deleting something: the month is what lifts it. An arrival is never
     // refused — a letter turned away at the door is somebody else's words
@@ -593,11 +607,75 @@ export let atCeiling = (
       `spent — they come back on the 1st, and an app of html, css and js ` +
       `needs none`,
   }[what]()
-  return `${said}. ${
-    tier == 'plus'
+  return `${said}. ${plans(space, env)}`
+}
+
+// Where every refusal ends: the page that describes the plans.
+let plans = (space: Space, env: Host) =>
+  `${
+    space.tier == 'plus'
       ? `Manage usage and plan settings`
       : `The Plus plan allows more. Compare paid plans in settings`
   }: ${planSettings(space.slug, env)}`
+
+/** What one app holds, as a person reads it, leaving out what it holds none
+ * of: `holds 2 MB of app data and 880 MB of photos and files`, or nothing. */
+export let heldAloud = (h: Held) => {
+  let what = [
+    h.bytes ? `${size(h.bytes)} of app data` : '',
+    h.files ? `${size(h.files)} of photos and files` : '',
+  ].filter(Boolean)
+  return what.length ? `holds ${what.join(' and ')}` : ''
+}
+
+/** Each app's share of one stored ceiling, largest first, leaving out the
+ * apps that hold none of it: `openai-math 900 MB, robolab 120 MB`. */
+export let shares = (held: Holding, what: keyof Held) =>
+  [...held.apps].filter(([, h]) => h[what] > 0)
+    .sort(([, a], [, b]) => b[what] - a[what])
+    .map(([slug, h]) => `${slug} ${size(h[what])}`)
+    .join(', ')
+
+/** A line for each stored ceiling the space is near or at, saying each app's
+ * share of it, so the agent can choose what to delete before a write is
+ * refused: `Photos and files by app: openai-math 900 MB, robolab 120 MB`. */
+export let divided = (
+  space: Space,
+  apps: number,
+  held: Holding,
+  now = new Date(),
+) => {
+  let g = gauges(space, apps, now)
+  return (['bytes', 'files'] as const)
+    .filter((what) => g[what] && full(g[what]) >= WARN && shares(held, what))
+    .map((what) =>
+      `${NAME[what][0].toUpperCase()}${NAME[what].slice(1)} by app: ${
+        shares(held, what)
+      }`
+    )
+}
+
+/**
+ * The refusal at a stored ceiling (app data, or photos and files): what the
+ * plan allows, what the space holds and how that divides across its apps, so
+ * the agent can choose what to delete, and where the plans are written.
+ */
+export let atStored = (
+  space: Space,
+  what: 'bytes' | 'files',
+  held: Holding,
+  env: Host = {},
+) => {
+  let tier = space.tier ?? 'free'
+  let limit = what == 'files' ? FILES[tier] : ceilings(space.tier)!.bytes
+  let each = shares(held, what)
+  return `${space.slug} is on the ${tier} tier, which is ${size(limit)} of ${
+    NAME[what]
+  }, and holds ${size(held[what])}${each ? ` (${each})` : ''} — ${
+    what == 'files'
+      ? 'delete files it no longer needs to upload more'
+      : 'delete what it no longer needs to save more'
+  }. ${plans(space, env)}`
 }
 
 /** The refusal at {@link SPACES}: the free spaces a person owns, and what

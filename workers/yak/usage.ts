@@ -21,7 +21,8 @@
 // `durableObjectsStorageGroups` is account-wide, with no per-object dimension,
 // so an app's size is what its own store told the directory when a write last
 // moved it (meter.ts `weighed`). The sweep leaves that figure where it is and
-// adds a space's up from it.
+// adds a space's up from it, and lists the space's photos and files in the
+// bucket, writing what each app's prefix holds on its row (held.ts).
 // The datasets are documented at
 // https://developers.cloudflare.com/durable-objects/observability/metrics-and-analytics/
 // which describes namespace and object metrics. Object ids identify the
@@ -39,13 +40,15 @@ import * as dirPart from './directory.ts'
 import {
   type App,
   directory,
+  type Meter,
   type Space,
   stamp,
   storeName,
 } from './directory.ts'
 import { bound, type Env } from './env.ts'
+import { holding } from './held.ts'
 import {
-  atCeiling,
+  atStored,
   ceilings,
   type Counts,
   FILES,
@@ -196,11 +199,6 @@ let accountAlert = async (env: Env, usage: Usage) => {
   }], KERNEL)
 }
 
-// What an app holds, as its store last told the directory. Not read through
-// `thisMonth`: bytes held are not a month's spending, so a new month keeps the
-// figure until a write moves it.
-let held = (app: App) => app.meter?.bytes ?? 0
-
 // The hourly reading has nobody waiting on it, so it waits out a busy bucket
 // for about a minute where an upload gives up within seconds: R2 refuses a
 // list of a prefix that a burst of writes is landing in (10058).
@@ -226,41 +224,58 @@ export let sweep = async (env: Env, now = new Date()) => {
   let turned: Bundle[] = []
   let refused: unknown[] = []
   for (let space of await dir.all()) {
-    let files = await filesOf(env, space, SWEEP.tries, SWEEP.wait)
+    let apps = await dir.apps(space)
+    let alive = apps.filter((a) => !a.trashed).length
+    // What the space holds, app by app (held.ts). A space whose files cannot
+    // be listed keeps its figures, its apps' too: with no listing, `holding`
+    // reads them off the rows.
+    let sizes = await fileSizes(env, space, SWEEP.tries, SWEEP.wait)
       .catch((e) => {
         refused.push(e)
-        return spent(space, now).files ?? 0
+        return undefined
       })
+    let held = holding(space, apps, sizes)
+    let filesOf = (app: App) => held.apps.get(app.slug)!.files
+    // A space that has just crossed a line — or fallen back under one — has
+    // something new to hear, so the mark that it was told goes (unseen.ts
+    // `ceiling` writes it back). A level that has not moved keeps its mark,
+    // which is what makes the line ride one reply.
+    let was = level(space, alive, now)
+    let moved = (meter: Partial<Meter>) => {
+      let after = { ...space, meter: { ...spent(space, now), ...meter } }
+      return level(after, alive, now) != was
+    }
     // R2 accounting does not depend on the analytics credential. Leave the
     // analytics timestamp/month untouched when only storage was measured.
     if (!counts) {
-      let apps = (await dir.apps(space)).length
-      let meter = { ...spent(space, now), files }
-      let moved =
-        level({ ...space, meter }, apps, now) != level(space, apps, now)
+      let meter = { bytes: held.bytes, files: held.files }
       entities.push({
         entity: { eid: space.eid },
-        meter: { files },
-        ...(moved ? { notified: null } : {}),
+        meter,
+        ...(moved(meter) ? { notified: null } : {}),
       })
+      for (let app of apps) {
+        let files = filesOf(app)
+        if (sizes && files != (app.meter?.files ?? 0)) {
+          entities.push({ entity: { eid: app.eid }, meter: { files } })
+        }
+      }
       continue
     }
-    let total = { ...none(), bytes: 0, files }
-    let apps = await dir.apps(space)
+    let total = { ...none(), bytes: held.bytes, files: held.files }
     for (let app of apps) {
       let name = storeName(space, app)
       let got = counts.get(String(env.STORE.idFromName(name))) ?? none()
       // No `bytes`: the store's own figure stands, and a patch leaves it.
       entities.push({
         entity: { eid: app.eid },
-        meter: { month, ...got, at },
+        meter: { month, ...got, at, ...sizes ? { files: filesOf(app) } : {} },
       })
       total.requests += got.requests
       total.ws_messages += got.ws_messages
       total.ws_hibernated += got.ws_hibernated
       total.rows_read += got.rows_read
       total.rows_written += got.rows_written
-      total.bytes += held(app)
     }
     // The space's own reading: its apps summed, and nothing it spent. What a
     // space spends (letters, builds, models, voice, seconds) is counted where
@@ -273,16 +288,10 @@ export let sweep = async (env: Env, now = new Date()) => {
     if (!thisMonth(space.meter, month)) {
       turned.push({ entity: { eid: space.eid }, spend: { month } })
     }
-    // A space that has just crossed a line — or fallen back under one — has
-    // something new to hear, so the mark that it was told goes (unseen.ts
-    // `ceiling` writes it back). A level that has not moved keeps its mark,
-    // which is what makes the line ride one reply.
-    let after = { ...space, meter: { ...spent(space, now), ...meter } }
-    let moved = level(after, apps.length, now) != level(space, apps.length, now)
     entities.push({
       entity: { eid: space.eid },
       meter,
-      ...(moved ? { notified: null } : {}),
+      ...(moved(meter) ? { notified: null } : {}),
       // Every space is on the free tier until Stripe says otherwise
       // (D-32751); one that already carries a plan keeps it.
       ...(space.tier ? {} : { plan: { tier: 'free' } }),
@@ -320,18 +329,20 @@ export let full = async (
 ) => {
   let free = ceilings(space.tier, space.slug)
   if (!free) return ''
-  let read = thisMonth(space.meter, monthOf(now))?.bytes ?? 0
-  if (read + extra < free.bytes * WARN) return ''
+  if (spent(space, now).bytes + extra < free.bytes * WARN) return ''
   let dir = directory(bound(env.DIRECTORY, dirPart.fetch, env), true)
-  let holding = (await dir.apps(space)).reduce((n, app) => n + held(app), 0)
-  return holding + extra > free.bytes ? atCeiling(space, 'bytes', env) : ''
+  let held = holding(space, await dir.apps(space))
+  return held.bytes + extra > free.bytes
+    ? atStored(space, 'bytes', held, env)
+    : ''
 }
 
-// Space-owned R2 objects: live files, uploaded blobs, trash and local history.
-// Shared sha/ pins are platform retention, not attributable physical bytes of
-// one space. The trailing slash prevents a space from counting a slug sibling.
-// `tries` and `wait` are `patient`'s: how long a busy bucket is waited out.
-let fileSizes = async (
+// Space-owned R2 objects, each key with its size: live files, uploaded blobs,
+// trash and local history. Shared sha/ pins are platform retention, not
+// attributable physical bytes of one space. The trailing slash prevents a
+// space from counting a slug sibling. `tries` and `wait` are `patient`'s: how
+// long a busy bucket is waited out.
+export let fileSizes = async (
   env: Env,
   space: Space,
   tries?: number,
@@ -351,21 +362,13 @@ let fileSizes = async (
   return sizes
 }
 
-export let filesOf = async (
-  env: Env,
-  space: Space,
-  tries?: number,
-  wait?: number,
-) =>
-  [...(await fileSizes(env, space, tries, wait)).values()]
-    .reduce((sum, n) => sum + n, 0)
-
 // The files ceiling, at every door that writes them, as `full` is for app
 // data: under the warning line the hourly reading with every byte arriving
 // added is close enough, and near it R2 itself is read. Listing a space's
 // whole prefix on every upload is what R2 refuses a burst of uploads for
 // (10058). Use actual body sizes, never the caller's Content-Length. Near the
-// line, overwrites spend only growth and duplicates spend none.
+// line, overwrites spend only growth and duplicates spend none. The refusal
+// says what the listing found each app holds, which needs no app's row.
 export let fullFiles = async (
   env: Env,
   space: Space,
@@ -376,7 +379,7 @@ export let fullFiles = async (
   let arriving = writes.reduce((sum, w) => sum + w.bytes, 0)
   if ((spent(space, now).files ?? 0) + arriving < ceiling * WARN) return ''
   let sizes = await fileSizes(env, space)
-  let held = [...sizes.values()].reduce((sum, n) => sum + n, 0)
+  let held = holding(space, [], sizes)
   let delta = 0
   // A batch may repeat a path; parallel puts can finish in either order.
   let incoming = new Map<string, number>()
@@ -386,7 +389,7 @@ export let fullFiles = async (
   for (let [key, bytes] of incoming) {
     delta += bytes - (sizes.get(key) ?? 0)
   }
-  return delta > 0 && held + delta > ceiling
-    ? atCeiling(space, 'files', env)
+  return delta > 0 && held.files + delta > ceiling
+    ? atStored(space, 'files', held, env)
     : ''
 }

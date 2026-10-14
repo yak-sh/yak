@@ -23,7 +23,8 @@ import { bound, type Env } from './env.ts'
 import { sessionAt, vouched, type Who } from './session.ts'
 import { KERNEL, meta, metaOf } from './meta.ts'
 import { told } from './stream.ts'
-import { gauged, level } from './meter.ts'
+import { divided, gauged, level } from './meter.ts'
+import { holding } from './held.ts'
 import { caught, defect } from './defects.ts'
 import { capture, origin, queue } from '@yaks/tracker/report'
 import { errorsAt, errorsIn } from './app-errors.ts'
@@ -737,11 +738,18 @@ export let unseenBlock = (seen: Seen[]) =>
 // space itself, cleared by the hourly sweep when the standing moves
 // (usage.ts). So the agent hears a line when it is news, and not on every
 // reply after. Nothing is said while a space is under 80% of every ceiling.
+// Near a stored one, it also says what each app holds of it (held.ts), since
+// what to delete is the agent's next question. An app in the trash counts
+// against no app ceiling (tools.ts `app_new`), but its data and files count
+// until it is erased.
 export let ceiling = async (env: Env, space: Space) => {
   let apps = await appsOf(env, space)
-  if (space.told || level(space, apps.length) == 'ok') return ''
+  let alive = apps.filter((a) => !a.trashed).length
+  let now = new Date()
+  if (space.told || level(space, alive, now) == 'ok') return ''
   await stamp(env, { entities: [{ entity: { eid: space.eid }, notified: {} }] })
-  return `\n\n## ceiling\n${space.slug}: ${
-    gauged(space, apps.length, new Date(), env)
-  }`
+  return [
+    `\n\n## ceiling\n${space.slug}: ${gauged(space, alive, now, env)}`,
+    ...divided(space, alive, holding(space, apps), now),
+  ].join('\n')
 }

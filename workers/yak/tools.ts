@@ -236,6 +236,7 @@ import {
   countedSpend,
   free,
   gauged,
+  heldAloud,
   monthOf,
   refusedSpend,
   requestUnits,
@@ -244,6 +245,7 @@ import {
   standingOf,
   tooManySpaces,
 } from './meter.ts'
+import { type Held, holding } from './held.ts'
 import { room, send } from './invite.ts'
 import { aloud, peopleIn, shown } from './people.ts'
 import {
@@ -2337,6 +2339,9 @@ export type Listed = {
     errors: number
     home: boolean
     usage: { requests: number; bytes: number } | null
+    // Its share of what the space holds against `standing.limits.bytes` and
+    // `.files`: its data and its photos and files (held.ts).
+    held: Held
     bindings: {
       name: string
       type: string
@@ -2346,7 +2351,7 @@ export type Listed = {
     guests?: Someone[]
     invited?: Someone[]
   }[]
-  trash: { slug: string; title: string; days: number }[]
+  trash: { slug: string; title: string; days: number; held: Held }[]
   members?: Someone[]
   invited?: Someone[]
   standing: ReturnType<typeof standingOf>
@@ -4365,9 +4370,11 @@ let OURS: Row[] = [
         let them = gathered.get(space.eid)
         let apps = mine.filter((a) => !a.trashed)
         // Everything in the space counts against it, whichever app was asked
-        // about.
-        let alive = whole.filter((a) => a.space == space.eid && !a.trashed)
-          .length
+        // about: every app it has against the app ceiling, and what they all
+        // hold, those in the trash too, against the stored ones (held.ts).
+        let theirs = whole.filter((a) => a.space == space.eid)
+        let alive = theirs.filter((a) => !a.trashed).length
+        let hold = holding(space, theirs)
         let at = `https://${spaceHost(ctx.env, space.slug)}/`
         let listed = apps.map((app) => {
           let here = them?.apps.find((a) => a.app.eid == app.eid)
@@ -4389,6 +4396,7 @@ let OURS: Row[] = [
             usage: its
               ? { requests: requestUnits(its), bytes: its.bytes }
               : null,
+            held: hold.apps.get(app.slug)!,
             bindings: bound.filter((b) => b.app == app.eid).map((b) => ({
               name: b.name,
               type: b.type,
@@ -4408,6 +4416,7 @@ let OURS: Row[] = [
           slug: a.slug,
           title: a.title,
           days: daysLeft(a.trashed!),
+          held: hold.apps.get(a.slug)!,
         }))
         spaces.push({
           slug: space.slug,
@@ -4429,7 +4438,7 @@ let OURS: Row[] = [
               invited: them.invited.map(shown),
             }
             : {},
-          standing: standingOf(space, alive, now, ctx.env),
+          standing: standingOf(space, alive, now, ctx.env, hold),
         })
         let home = apps.find((a) => a.home)
         lines.push(
@@ -4443,19 +4452,21 @@ let OURS: Row[] = [
             }`,
           // Where the space stands this month (T-32758), so the agent knows
           // before it makes the sixth app, not when the door says no.
-          ...alive ? [gauged(space, alive, now, ctx.env)] : [],
+          ...alive ? [gauged(space, alive, now, ctx.env, hold)] : [],
           ...listed.flatMap((a, i) => [
-            `- ${a.title}: ${a.url} — ${a.access}${
-              a.errors
-                ? `, ${a.errors} open ${a.errors == 1 ? 'error' : 'errors'}`
-                : ''
+            `- ${a.title}: ${a.url} — ${
+              [
+                a.access,
+                a.errors
+                  ? `${a.errors} open ${a.errors == 1 ? 'error' : 'errors'}`
+                  : '',
+                heldAloud(a.held),
+              ].filter(Boolean).join(', ')
             }`,
             ...named == null ? [] : [
               `  email ${a.mailbox} · version ${a.version} · this month ${
                 a.usage
-                  ? `${count(a.usage.requests)} request units, ${
-                    size(a.usage.bytes)
-                  } of data`
+                  ? `${count(a.usage.requests)} request units`
                   : 'not read yet'
               }`,
               ...bindingLines(bound.filter((b) => b.app == apps[i]!.eid))
@@ -4467,9 +4478,11 @@ let OURS: Row[] = [
             ? [
               `In the trash: ${
                 trash.map((a) =>
-                  `${a.title} (${a.slug}), ${a.days} ${
-                    a.days == 1 ? 'day' : 'days'
-                  } left`
+                  [
+                    `${a.title} (${a.slug})`,
+                    `${a.days} ${a.days == 1 ? 'day' : 'days'} left`,
+                    heldAloud(a.held),
+                  ].filter(Boolean).join(', ')
                 ).join('; ')
               } — app_restore brings one back`,
             ]

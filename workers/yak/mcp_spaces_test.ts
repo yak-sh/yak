@@ -628,7 +628,8 @@ test('an app goes to the trash, and app_restore brings it back', async () => {
       false,
     )
     assertEquals(
-      (saying.value as { spaces: Listed[] }).spaces[0].trash,
+      (saying.value as { spaces: Listed[] }).spaces[0].trash
+        .map(({ slug, title, days }) => ({ slug, title, days })),
       [{ slug: 'notes', title: 'Notes', days: 30 }],
     )
     // And the slug is held for it: a second app here is the one thing a

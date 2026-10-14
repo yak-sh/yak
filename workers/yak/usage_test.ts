@@ -9,14 +9,17 @@ import {
   assertThrows,
 } from '@std/assert'
 import type { Meter, Space, Tier } from './directory.ts'
-import { accountOf, filesOf, full, fullFiles, read, sweep } from './usage.ts'
+import { accountOf, fileSizes, full, fullFiles, read, sweep } from './usage.ts'
+import { holding } from './held.ts'
 import { directory } from './directory.ts'
 import * as dirPart from './directory.ts'
 import { platform } from './testing.ts'
 import { meta } from './meta.ts'
 import type { Env } from './env.ts'
+import type { Host } from './host.ts'
 import {
   atCeiling,
+  atStored,
   BUDGET,
   budgets,
   BUILDS,
@@ -37,6 +40,7 @@ import {
   refusedVisit,
   requestUnits,
   size,
+  type Spend,
   spent,
   WARN,
   weighed,
@@ -409,7 +413,7 @@ test('Plus ceilings are distinct and comped apps/data stay uncapped', () => {
   assert(!/ of [\d,]+ apps/.test(said), said)
   assertEquals(JSON.parse(JSON.stringify(PLUS)).apps, null)
   assertStringIncludes(
-    atCeiling(space({}, 'plus'), 'bytes'),
+    refusal(space({}, 'plus'), 'bytes'),
     'plus tier, which is 10 GB',
   )
 })
@@ -447,17 +451,27 @@ test("a space's month is one line, and names a ceiling only near or at it", () =
   assert(!gauged({ ...space(), slug: 'yourname' }, 50, NOW).includes('limit'))
   // Before the month's first sweep, what it reads is no reading at all.
   let early = gauged(space({ at: '', emails: 3 }), 1, NOW)
-  assertStringIncludes(early, 'request units and app data not read yet')
+  assertStringIncludes(early, 'request units not read yet')
   assertStringIncludes(early, '3 of 100 emails')
   assert(!early.includes('of 50,000'), early)
 })
+
+// Every door's refusal: a stored ceiling's says what the space holds too.
+let refusal = (
+  s: Space,
+  what: 'apps' | 'bytes' | 'files' | Spend,
+  env: Host = {},
+) =>
+  what == 'bytes' || what == 'files'
+    ? atStored(s, what, holding(s, []), env)
+    : atCeiling(s, what, env)
 
 // A refusal points at the page that describes the plans and never at anything
 // that starts a purchase — the agent surface's policy line (C-33033 on
 // D-32751), which is why the assertion is on both halves.
 test('a refusal names the ceiling and where the plans are written', () => {
   for (let what of ['apps', 'bytes', 'emails'] as const) {
-    let said = atCeiling(space(), what)
+    let said = refusal(space(), what)
     assertStringIncludes(said, 'free tier')
     assertStringIncludes(said, 'https://yaks.app/manage/billing?space=jeff')
     assert(!/checkout|subscribe/i.test(said), said)
@@ -633,12 +647,12 @@ test('Plus byte writes use the 10 GB ceiling as the stores last told it; comped 
     await full(env, plus(PLUS.bytes), 1, NOW),
     'plus tier, which is 10 GB',
   )
-  // Near the ceiling, what the store told since the reading is what counts.
+  // Near the ceiling, what the store told since the reading is what counts,
+  // and the refusal says which app holds it.
   await weighed(env, notes.eid, PLUS.bytes + 1)
-  assertStringIncludes(
-    await full(env, plus(PLUS.bytes * 0.9), 0, NOW),
-    'plus tier, which is 10 GB',
-  )
+  let said = await full(env, plus(PLUS.bytes * 0.9), 0, NOW)
+  assertStringIncludes(said, 'plus tier, which is 10 GB of app data')
+  assertStringIncludes(said, 'holds 10 GB (notes 10 GB)')
   assertEquals(
     await full(env, { ...plus(PLUS.bytes), slug: 'yourname' }, PLUS.bytes, NOW),
     '',
@@ -663,7 +677,12 @@ test('R2 files use every page of the space prefix, not a sibling or shared pins'
       cursor: cursor ? undefined : 'next',
     })
   }
-  assertEquals(await filesOf(env, space()), 60)
+  let held = holding(space(), [], await fileSizes(env, space()))
+  assertEquals(held.files, 60)
+  assertEquals(
+    [...held.apps].map(([slug, h]) => [slug, h.files]),
+    [['a', 10], ['b', 20], ['trashed', 30]],
+  )
   assertEquals(calls, [undefined, 'next'])
 })
 
@@ -686,9 +705,12 @@ test('file ceilings use live R2 growth, allow duplicates and shrinking overwrite
       await fullFiles(env, old, [{ key: 'jeff/b/new', bytes: 3 }]),
       '',
     )
+    // The refusal says what the space holds and each app's share of it.
+    let said = await fullFiles(env, old, [{ key: 'jeff/b/new', bytes: 4 }])
+    assertStringIncludes(said, `${size(cap)} of photos and files`)
     assertStringIncludes(
-      await fullFiles(env, old, [{ key: 'jeff/b/new', bytes: 4 }]),
-      `${size(cap)} of photos and files`,
+      said,
+      `holds ${size(cap - 3)} (a ${size(cap - 3)})`,
     )
     assertStringIncludes(
       await fullFiles(env, old, [
@@ -732,16 +754,29 @@ test('R2 accounting sweeps without analytics, follows deletion and survives the 
   let { env, files } = platform('files-sweep')
   let dir = directory({ fetch: (r) => dirPart.fetch(r, env) }, true)
   await dir.apply({
-    entities: [{
-      entity: { eid: '$space' },
-      space: { slug: 'jeff' },
-      meter: { month: '2026-08', requests: 77, emails: 12 },
-    }],
+    entities: [
+      {
+        entity: { eid: '$space' },
+        space: { slug: 'jeff' },
+        meter: { month: '2026-08', requests: 77, emails: 12 },
+      },
+      ...['a', 'b'].map((slug) => ({
+        entity: { eid: `$${slug}` },
+        app: { space: '$space', slug, store: `jeff/${slug}` },
+      })),
+    ],
   }, { 'x-yak-role': 'owner' })
   files.held.set('jeff/a/photo', new Uint8Array(20))
+  files.held.set('jeff/b/blobs/clip', new Uint8Array(5))
   files.held.set('jeff/trash/photo', new Uint8Array(30))
   files.held.set('jeffrey/a/photo', new Uint8Array(100))
   files.held.set('sha/shared', new Uint8Array(100))
+  // What the space and each app hold (T-124320), as the reading left them.
+  let held = async () => {
+    let jeff = (await dir.space('jeff'))!
+    let h = holding(jeff, await dir.apps(jeff))
+    return [h.files, h.apps.get('a')?.files, h.apps.get('b')?.files]
+  }
   let writes = async () =>
     (await meta(env).query('.space.slug=jeff ?created ?updated'))
       .map(({ created, updated }) => ({ created, updated }))
@@ -749,16 +784,16 @@ test('R2 accounting sweeps without analytics, follows deletion and survives the 
   assert((await sweep(env, NOW)) >= 1)
   assertEquals(await writes(), before)
   let got = (await dir.space('jeff'))!
-  assertEquals(got.meter?.files, 50)
+  assertEquals(await held(), [55, 20, 5])
   assertEquals(got.meter?.month, '2026-08')
   assertEquals(got.meter?.requests, 77)
-  assertEquals(spent(got, NOW).files, 50)
+  assertEquals(spent(got, NOW).files, 55)
   assertEquals(spent(got, NOW).requests, 0)
   await countedBuild(env, got, 0, 0, NOW)
-  assertEquals((await dir.space('jeff'))!.meter?.files, 50)
+  assertEquals((await dir.space('jeff'))!.meter?.files, 55)
   files.held.delete('jeff/a/photo')
   await sweep(env, NOW)
-  assertEquals((await dir.space('jeff'))!.meter?.files, 30)
+  assertEquals(await held(), [35, 0, 5])
   assertEquals(level(space({ files: FILES.free * .8 }), 0, NOW), 'near')
   assertEquals(
     level(space({ files: FILES.free, month: '2026-08' }), 0, NOW),
@@ -806,12 +841,12 @@ test('all quota guidance uses space plan settings without promising a Plus upgra
       'models',
     ] as const
   ) {
-    const free = atCeiling(space(), what, { APEX: 'yaks.fyi' })
+    const free = refusal(space(), what, { APEX: 'yaks.fyi' })
     assertStringIncludes(free, 'https://yaks.fyi/manage/billing?space=jeff')
     assertStringIncludes(free, 'Compare paid plans')
     assert(!free.includes('checkout'))
     if (what != 'apps') {
-      const paid = atCeiling(space({}, 'plus'), what)
+      const paid = refusal(space({}, 'plus'), what)
       assertStringIncludes(paid, 'Manage usage and plan settings')
       assert(!paid.includes('Plus lifts'))
       assert(!paid.includes('Compare paid plans'))
