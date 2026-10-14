@@ -108,10 +108,13 @@ let delta = (draft: string) => draft.split('/').pop()?.startsWith('delta-v')
 // and its marker are asked for at once, and a write clears a marker beside its
 // put rather than after it, and only where one may be: each is a round trip to
 // the bucket, and the bucket is most of what an edit waits on (T-123988).
+// A draft the caller has just minted (`fresh`) holds nothing yet, so its
+// first reads go straight to the source.
 export let draftFiles = (
   blobs: Objects,
   draft: string | null | undefined,
   source: string,
+  fresh = false,
 ): Objects => {
   if (!draft || !delta(draft)) return blobs
   let base = `${source}/`
@@ -121,7 +124,9 @@ export let draftFiles = (
   let original = (key: string) => base + path(key)
   let deleted = (key: string) => gone + path(key)
   let inDraft = (key: string) => key.startsWith(at) && !key.startsWith(gone)
-  let known: { own: Set<string>; gone: Set<string> } | undefined
+  let known: { own: Set<string>; gone: Set<string> } | undefined = fresh
+    ? { own: new Set(), gone: new Set() }
+    : undefined
   // Whether each path asked about here has a deletion marker, as last seen.
   let marked = new Map<string, boolean>()
   let through =
@@ -335,14 +340,15 @@ export let working = (
   source: string,
 ) => app.draft ?? source
 
-/** Start this version's draft over the immutable source. */
+/** Start this version's draft over the immutable source. `fresh` says this
+ * call minted it, so nothing is in it yet. */
 export let editing = async (
   dir: Directory,
   space: Space,
   app: App,
   who: Who,
-) => {
-  if (app.draft) return app.draft
+): Promise<{ draft: string; fresh: boolean }> => {
+  if (app.draft) return { draft: app.draft, fresh: false }
   let draft = draftOf(space, app)
   // The directory chooses one before either contender writes its first file.
   try {
@@ -365,10 +371,10 @@ export let editing = async (
       current && current.source == app.source &&
       current.version == app.version &&
       current.draft
-    ) return current.draft
+    ) return { draft: current.draft, fresh: false }
     throw error
   }
-  return draft
+  return { draft, fresh: true }
 }
 
 // Recover the incomplete schema-only drafts the legacy writer opened. A
@@ -422,12 +428,12 @@ export let modifying = async <T>(
   for (let n = 0; n < 3; n++) {
     row = await waiting(dir, space, row, who)
     row = await repairing(blobs, dir, space, row, who, source(row))
-    let draft = await editing(dir, space, row, who)
+    let { draft, fresh } = await editing(dir, space, row, who)
     let result = await act(
       draft,
       row,
       n,
-      draftFiles(blobs, draft, source(row)),
+      draftFiles(blobs, draft, source(row), fresh),
     )
     let after = await waiting(dir, space, row, who)
     if (

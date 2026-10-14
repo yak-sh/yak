@@ -19,7 +19,6 @@ import { r2Objects, r2RawObjects } from './lib/objects.ts'
 import { mimeOf, type Objects, rangedOpen } from '@yaks/blob'
 import { at, blobAt, immutable } from './cache.ts'
 import { seedy } from './seed.ts'
-import { releaseFiles } from './release.ts'
 import type { Env, Fetcher } from './env.ts'
 import { BUILT } from './versions.ts'
 import { drawn, ICON_SVG } from './raster.ts'
@@ -244,7 +243,7 @@ export let fetch = async (req: Request, env: Env): Promise<Response> => {
   let path = url.pathname.replace(/^\/[^/]+/, '') || '/'
   let prefix = req.headers.get(PREFIX)
   if (!prefix || !eid) return missing()
-  let blobs = releaseFiles(r2Objects(env.BLOBS))
+  let blobs = r2Objects(env.BLOBS)
   // One read, not a stat and then a read (T-33176): the bucket is a round trip
   // away, and asking whether the file is there before asking for it paid that
   // trip twice for every file the app serves.

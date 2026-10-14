@@ -1,5 +1,5 @@
 import { assertEquals, assertRejects } from '@std/assert'
-import { test } from '@yaks/testing'
+import { test, until } from '@yaks/testing'
 import { appStore, type Directory, directory, storeName } from './directory.ts'
 import * as dirPart from './directory.ts'
 import { type Door, type Namespace } from './door.ts'
@@ -60,13 +60,19 @@ test('deploy reload marks survive recording, and pointer notices follow the comm
     }),
   }
   f = await fixture({ ...env, STORE } as Env)
+  // The store hears a release after the answer, so each one is awaited.
+  let heard = async (name: string, args: Record<string, unknown>) => {
+    let n = versions.length
+    await call(f.ctx, name, { ...f.args, ...args })
+    await until(() => versions.length > n)
+  }
   await f.write('one')
-  await call(f.ctx, 'app_deploy', f.args)
+  await heard('app_deploy', {})
   await f.write('two')
-  await call(f.ctx, 'app_deploy', { ...f.args, reload: 'optional' })
+  await heard('app_deploy', { reload: 'optional' })
   await f.write('three')
-  await call(f.ctx, 'app_deploy', { ...f.args, reload: 'required' })
-  await call(f.ctx, 'app_rollback', { ...f.args, version: 2 })
+  await heard('app_deploy', { reload: 'required' })
+  await heard('app_rollback', { version: 2 })
   assertEquals((await f.history()).map((v) => v.reload), [
     'required',
     null,
@@ -131,7 +137,7 @@ for (let mode of ['network', 'non-ok']) {
     let f = await fixture({ ...scenario.env, STORE } as Env)
     await f.write('one')
     await call(f.ctx, 'app_deploy', { ...f.args, reload: 'required' })
-    assertEquals(notices, 1)
+    await until(() => notices == 1)
     assertEquals((await f.history()).map((v) => [v.version, v.reload]), [
       [1, 'required'],
     ])

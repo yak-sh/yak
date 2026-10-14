@@ -17,13 +17,37 @@ let complete = (index: Index | null): index is Index =>
     file.sha && file.key == addressed(file.sha)
   )
 
+// A complete index names content addresses only, and a release's bytes never
+// change, so neither does it: an isolate keeps the complete ones it has read,
+// per store, and the next reader of that release (the edit after a deploy, a
+// rollback, a page's file) asks the bucket for its bytes alone. Each read of
+// an index was a round trip in front of the bytes (T-123988). An index still
+// naming a release's own keys can be promoted (`prepare`), so it is read again.
+let HELD = 512
+let held = new WeakMap<Objects, Map<string, Promise<Index | null>>>()
+let indexed = (raw: Objects, prefix: string) => {
+  let kept = held.get(raw) ?? new Map<string, Promise<Index | null>>()
+  held.set(raw, kept)
+  let found = kept.get(prefix)
+  if (found) return found
+  let read = indexOf(raw, prefix)
+  let drop = () => kept.get(prefix) == read && kept.delete(prefix)
+  kept.set(prefix, read)
+  read.then((index) => complete(index) || drop(), drop)
+  for (let old of kept.keys()) {
+    if (kept.size <= HELD) break
+    kept.delete(old)
+  }
+  return read
+}
+
 // A release made before every file was pinned can be promoted in place. The
 // source path stays the same, and the index changes only after every byte has
 // its content address. A repeated call on a promoted release is one read.
 let pinned = async (raw: Objects, source: string): Promise<Index> => {
   let root = `${source}/`
   let space = spaceOf(root)
-  let prior = await indexOf(raw, root)
+  let prior = await indexed(raw, root)
   if (complete(prior)) return prior
   let names = prior
     ? []
@@ -48,7 +72,7 @@ let pinned = async (raw: Objects, source: string): Promise<Index> => {
   return index
 }
 export let prepare = async (raw: Objects, source: string): Promise<Index> => {
-  let prior = await indexOf(raw, `${source}/`)
+  let prior = await indexed(raw, `${source}/`)
   if (complete(prior)) return prior
   let index = await pinned(raw, source)
   await raw.put(source + META, encode(index))
@@ -60,7 +84,7 @@ export let releaseFiles = (blobs: Objects): Objects => {
   let cache = new Map<string, Promise<Index | null>>()
   let index = (prefix: string) => {
     let found = cache.get(prefix)
-    if (!found) cache.set(prefix, found = indexOf(blobs, prefix))
+    if (!found) cache.set(prefix, found = indexed(blobs, prefix))
     return found
   }
   let physical = async (key: string) => {

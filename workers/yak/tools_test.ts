@@ -465,10 +465,10 @@ test('a deploy says how many round trips it took', async () => {
         { path: 'style.css', content: 'h1{color:teal}' },
       ],
     }),
-    // A delta draft asks for each absent path's own bytes, deletion marker
-    // and history at once, then its legacy source, then writes its bytes and
-    // pins them; a marker it found absent is not cleared.
-    { hops: 5, r2: 12 },
+    // The draft this write starts holds nothing yet, so each path asks for
+    // its history and its legacy source at once, then writes its bytes and
+    // pins them; it asks for no bytes or deletion marker of the draft's own.
+    { hops: 5, r2: 8 },
   )
   let deploy = await costs('app_deploy', { space: 'ada', app: 'recipes' })
   // The release's Git commit is the directory's effect, minted after the
@@ -483,6 +483,22 @@ test('a deploy says how many round trips it took', async () => {
     })).r2,
     0,
   )
+  // A release's index names bytes that never change, so once it has been
+  // read, a file of that release costs the bucket its bytes alone.
+  let read = async () => {
+    let c = clock()
+    await c.counting(() =>
+      call({ env, dir, person: ADA, clock: c }, 'app_files', {
+        space: 'ada',
+        app: 'recipes',
+        op: 'read',
+        path: 'index.html',
+      })
+    )
+    return stages(c.header()).r2
+  }
+  await read()
+  assertEquals(await read(), 1)
   let listed = await call(setup, 'app_files', {
     space: 'ada',
     app: 'recipes',

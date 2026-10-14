@@ -4,7 +4,6 @@
 // one.
 import type { VocabDoc } from '@yaks/vocab'
 import type { Tools } from '@yaks/tools/declared'
-import { CallError } from '@yaks/tools/errors'
 import { type App, releaseOf, type Space } from './directory.ts'
 import type { Env } from './env.ts'
 import { r2RawObjects } from './lib/objects.ts'
@@ -66,16 +65,5 @@ export let declarationOf = (
       }
       return new TextDecoder().decode(bytes)
     }),
-  ).then((text): Declaration => JSON.parse(text)).catch((error) => {
-    // Accepted release metadata is not a caller's proposed write, and a
-    // selected release without it is our defect too. A refusal while reading
-    // it is not a 4xx to suppress at the router; preserve the cause and let
-    // the kernel report it to the tracker.
-    if (error instanceof CallError) {
-      throw new Error(`Release discovery failed: ${error.message}`, {
-        cause: error,
-      })
-    }
-    throw error
-  })
+  ).then((text): Declaration => JSON.parse(text))
 }

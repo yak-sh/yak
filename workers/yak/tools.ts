@@ -898,12 +898,38 @@ let published = async (
   let app = { ...standing, source: release }
   let prefix = fileKey(space, app, '')
   let bytesAt = (path: string) => blobs.read(prefix + path)
+  // The reads the compile does not change, sent now and awaited after it,
+  // since each is a round trip of its own and none waits on another
+  // (T-124005): the versions this release follows, the serving release's
+  // words, the app's manifest, and for a release put back whole, whether its
+  // bytes are all still kept (a head each, not the bytes).
+  //
+  // The versions say what this release will be called. Its seed is staged
+  // under that version and applied when the directory moves the declaration
+  // pointer. The serving release is read before the next one is prepared,
+  // which also gives a store first reached during a deploy the declaration to
+  // keep on failure, and its uses beside it, for what this release stops
+  // borrowing below. The manifest is the app's own components, if it declares
+  // any; a manifest the store refuses fails the release: the words and the
+  // tables must agree, and a half-planted vocabulary is what `unknown
+  // component` is made of.
+  let kept = target?.source && target.script ? target : undefined
+  let held = pins(r2Objects(ctx.env.BLOBS), `${space.slug}/${standing.slug}/`)
+  let early = Promise.all([
+    versions(ctx.dir, standing),
+    Promise.all([answer(store, '/vocab'), answer(store, '/uses')]),
+    declaring(blobs, space, app),
+    ...Object.values(kept?.files ?? {}).map(async (sha) => {
+      if (!await held.has(sha)) throw refuse('missing', `no blob for ${sha}`)
+    }),
+  ])
+  // A compile that refuses is the answer; these are read again by nobody.
+  early.catch(() => {})
   let parsed = await configured(bytesAt)
   // Every key under the app, listed once for the compile and the seed. The
   // release index also records any package-lock.json the compile writes.
   let keys = (await blobs.list(prefix)).map((k) => k.slice(prefix.length))
   // Compile in the private release candidate. A failure leaves serving alone.
-  let kept = target?.source && target.script ? target : undefined
   let made = kept ? { lines: [] } : await c.time(
     'compile',
     () =>
@@ -919,29 +945,21 @@ let published = async (
         preserve,
       ),
   )
-  // What this release will be called. Its seed is staged under this version
-  // and applied when the directory moves the declaration pointer.
-  let all = await versions(ctx.dir, standing)
+  // The release's index is complete once the compile has written into it, and
+  // nothing selects it until `record` moves the pointers, so it goes to the
+  // bucket now, beside everything below rather than after it (T-124005).
+  let snapshot = c.time('snapshot', () => files.finish())
+  snapshot.catch(() => {})
+  let [all, [, serving], { file: vocabFile, source }] = await early
   let version = target?.version ?? (all[0]?.version ?? 0) + 1
   // And what its declaration is called. A rollback selects a version again,
   // so it declares under a name of its own: a declaration once written is
   // never written again, which is what lets discovery keep one
   // (declaration.ts).
   let pointer = target ? `${version}-${crypto.randomUUID()}` : String(version)
-  // Read the serving release before preparing the next one. This also gives
-  // a store first reached during a deploy the declaration to keep on failure.
-  // Its uses are read beside it, for what this release stops borrowing below.
-  let [, serving] = await Promise.all([
-    answer(store, '/vocab'),
-    answer(store, '/uses'),
-  ])
   let draft = draftStore(ctx.env.STORE, space, app, pointer)
-  // The app's own components, if it declares any. A manifest the store
-  // refuses fails the release: the words and the tables must agree, and a
-  // half-planted vocabulary is what `unknown component` is made of.
   // The file the app declares its words in — and its name, for every sentence
   // below that tells somebody to go and edit it.
-  let { file: vocabFile, source } = await declaring(blobs, space, app)
   let declaration = appDoc(source ?? {}, vocabFile)
   if (target) accepted = Object.keys(declaration.$defs ?? {})
   // A command was once declared in a file of its own; it is an entry in the
@@ -1134,18 +1152,6 @@ let published = async (
     answer(draft, '/uses'),
   ])
   vocabTook('vocab')
-  // Check the seed against the candidate words. The store applies it when the
-  // directory moves the release pointer; until then the serving rows stay put.
-  let sowed: Sown[] = []
-  let seedTook = c.since()
-  if (!app.seeded) {
-    sowed = await sow(
-      await texts(blobs, prefix, own(keys).filter(seedy)),
-      applying(draft, await byCaller(ctx, who), '/seed'),
-    )
-  }
-  seedTook('seed')
-  let toolsTook = c.since()
   // And the app's own commands (T-32685, T-38021): the manifest's `$defs`
   // entries marked `"tool": true`, read after the components, since a tool may
   // write a word this very release planted. The declaration is replaced whole
@@ -1190,6 +1196,31 @@ let published = async (
     manifest,
     `${space.slug}/${app.slug}`,
   )
+  // What this release declares is now known, and nothing below changes it, so
+  // it goes to the bucket while the seed, the commands and the worker are
+  // staged: nothing selects it until `record` moves the pointers, and a write
+  // to the bucket is most of a second (T-124005).
+  let declare = c.time(
+    'declare',
+    () =>
+      keepDeclaration(ctx.env, space, app, pointer, {
+        vocab: JSON.parse(taken),
+        tools: checked,
+      }),
+  )
+  declare.catch(() => {})
+  // Check the seed against the candidate words. The store applies it when the
+  // directory moves the release pointer; until then the serving rows stay put.
+  let sowed: Sown[] = []
+  let seedTook = c.since()
+  if (!app.seeded) {
+    sowed = await sow(
+      await texts(blobs, prefix, own(keys).filter(seedy)),
+      applying(draft, await byCaller(ctx, who), '/seed'),
+    )
+  }
+  seedTook('seed')
+  let toolsTook = c.since()
   let tooled = JSON.parse(
     await answer(
       draft,
@@ -1244,22 +1275,9 @@ let published = async (
   // What this release IS, kept so one word puts it back (T-32886): the files
   // as a manifest of path to the name of their bytes, those bytes pinned
   // beside them, and Cloudflare's name for the script this uploaded. The
-  // app's live pointer and its move record commit together.
-  //
-  // The declaration and the release's index are two writes to the bucket that
-  // nothing selects until `record` moves the pointers, so they go out together:
-  // each is most of a second (T-124005).
-  let [, pinned] = await Promise.all([
-    c.time(
-      'declare',
-      () =>
-        keepDeclaration(ctx.env, space, stagedApp, pointer, {
-          vocab: JSON.parse(taken),
-          tools: checked,
-        }),
-    ),
-    c.time('snapshot', () => files.finish()),
-  ])
+  // app's live pointer and its move record commit together, once the
+  // declaration and the release's index sent above have landed.
+  let [, pinned] = await Promise.all([declare, snapshot])
   await c.time(
     'record',
     () =>
@@ -1292,17 +1310,21 @@ let published = async (
     })
   // The view that follows a release is the person opening what they changed:
   // its files are asked for once now, so that view finds them cached
-  // (files.ts `warm`). Nobody waits on it.
+  // (files.ts `warm`). And the store tells the pages open on it that a
+  // release went out; the answer says nothing that depends on either, so
+  // nobody waits on them (T-124005).
   background(
     after(() => warm(ctx.env, app.eid, release, Object.keys(pinned)))
       .then(() => {}),
   )
-  let [, , closed = 0] = await Promise.all([
+  background(
     releaseNotice(store, version, {
       tool: 'app_deploy',
       space: space.slug,
       app: app.slug,
     }),
+  )
+  let [, closed = 0] = await Promise.all([
     tooled.views ? after(() => viewsMoved(ctx, space)) : null,
     // What the versions before this one broke is closed by this one: the code
     // that produced it is not what serves any more (unseen.ts `healed`,
@@ -1427,14 +1449,6 @@ let released = async (
   }
   let release = kept?.source ?? releaseOf(space, standing)
   let draft = standing.draft ?? null
-  if (kept) {
-    let held = pins(r2Objects(ctx.env.BLOBS), `${space.slug}/${app.slug}/`)
-    await Promise.all(
-      Object.values(kept.files).map(async (sha) => {
-        if (!await held.get(sha)) throw refuse('missing', `no blob for ${sha}`)
-      }),
-    )
-  }
   let fence = await c.time('fence', () => fenced(ctx.dir, standing, draft, who))
   // A committed release clears the fence in its own record (versions.ts
   // `record`), so only a release that stopped short has one left to lift.
@@ -1739,38 +1753,28 @@ let born = (
   }
 }
 
-// A declaration file of the app's, whichever format it was written in: the
-// `.yml` first — YAML is the warm path (M-34605), and every parser here reads
-// it through the same door as the JSON (@yaks/yaml `read`) — then the `.json`,
-// which every app that already has one keeps. Null where the app declares
-// nothing, which is most apps.
-let spelled = async (
-  blobs: Objects,
-  space: Space,
-  app: App,
-  name: string,
-): Promise<string | null> => {
-  for (let file of [`${name}.yml`, `${name}.json`]) {
-    let key = fileKey(space, app, file)
-    if (await blobs.has(key)) return key
-  }
-  return null
-}
-
 /**
- * The manifest an app declares, as the bytes it is stored in. `file` is what a
- * refusal calls it, since the app may have written either format (`spelled`),
- * and `source` is null where the app declares no words.
+ * The manifest an app declares, as the bytes it is stored in, whichever
+ * format it was written in: the `.yml` first — YAML is the warm path
+ * (M-34605), and every parser here reads it through the same door as the
+ * JSON (@yaks/yaml `read`) — then the `.json`, which every app that already
+ * has one keeps. Both are read at once, since each is a round trip to the
+ * bucket. `file` is what a refusal calls it, and `source` is null where the
+ * app declares no words, which is most apps.
  */
 let declaring = async (
   blobs: Objects,
   space: Space,
   app: App,
 ): Promise<{ file: string; source: string | null }> => {
-  let key = await spelled(blobs, space, app, 'vocab')
-  let file = key?.split('/').pop() ?? 'vocab.json'
-  if (!key) return { file, source: null }
-  return { file, source: decoded(await blobs.get(key)) }
+  let files = ['vocab.yml', 'vocab.json']
+  let read = await Promise.all(
+    files.map((file) => blobs.read(fileKey(space, app, file))),
+  )
+  let at = read.findIndex(Boolean)
+  return at < 0
+    ? { file: 'vocab.json', source: null }
+    : { file: files[at], source: decoded(read[at]!) }
 }
 
 let offeredWords = async (files: Awaited<ReturnType<typeof offered>>) => {
@@ -1880,11 +1884,12 @@ export let wrote = async (
       // (versions.ts `replaced`, T-34508), so the edit can be undone before
       // deploy; the new bytes go out beside that pin, once the old are in hand.
       //
-      // The new bytes are pinned as they are written, without a head first,
-      // since bytes just made are almost never there already. So the next
-      // write over them finds them kept and only notes them, and the release
-      // that takes them only names them (release.ts `staged`): each of those
-      // was a round trip to the bucket in a row, most of a second (T-123988).
+      // The new bytes are pinned once the answer is on its way, without a head
+      // first, since bytes just made are almost never there already. So the
+      // next write over them finds them kept and only notes them, and the
+      // release that takes them only names them (release.ts `staged`). Nothing
+      // waits on that pin: both of those pin whatever they find missing, and a
+      // put to this bucket is most of a second (T-123988).
       //
       // The files go out at once: each path's replacement is its own chain of
       // round trips to the bucket with nothing to wait on in another path's, so
@@ -1907,14 +1912,15 @@ export let wrote = async (
               who.person ?? '',
               at,
               archive,
-              () =>
-                put(() =>
-                  Promise.all([
-                    editFiles.put(prefix + path, f.bytes),
-                    blobs.put(addressed(sha), f.bytes),
-                  ])
+              () => put(() => editFiles.put(prefix + path, f.bytes)),
+            ).then((was) => {
+              background(
+                blobs.put(addressed(sha), f.bytes).catch((e) =>
+                  caught(e, { request: 'pin', app: app.slug })
                 ),
-            )
+              )
+              return was
+            })
           )
         })))
       let paths = files.map((f) =>
@@ -2970,12 +2976,13 @@ let OURS: Row[] = [
         }
       }
       if (op == 'read') {
-        let key = fileKey(space, edit, text(args.path, 'path'))
-        if (!(await view.has(key))) {
-          throw refuse('missing', `no file ${args.path}`)
-        }
+        // One read, not a head and then a read: each is a round trip.
+        let bytes = await view.read(
+          fileKey(space, edit, text(args.path, 'path')),
+        )
+        if (!bytes) throw refuse('missing', `no file ${args.path}`)
         return {
-          text: decoded(await view.get(key)),
+          text: decoded(bytes),
           space,
           value: { version: app.version ?? 0 },
         }
@@ -3110,7 +3117,8 @@ let OURS: Row[] = [
       if (op == 'patch') {
         let path = text(args.path, 'path')
         let key = fileKey(space, edit, path)
-        if (!(await view.has(key))) throw refuse('missing', `no file ${path}`)
+        let was = await view.read(key)
+        if (!was) throw refuse('missing', `no file ${path}`)
         // Empty is a legal replacement — it is how a line is removed — so
         // this asks for a string rather than for something.
         if (typeof args.replace != 'string') {
@@ -3120,7 +3128,7 @@ let OURS: Row[] = [
           )
         }
         let now = new TextEncoder().encode(patched(
-          decoded(await view.get(key)),
+          decoded(was),
           text(args.find, 'find'),
           args.replace,
           key.slice(prefix.length),
@@ -3562,9 +3570,10 @@ let OURS: Row[] = [
           )
         }
       }
-      let blobs = r2Objects(ctx.env.BLOBS)
-      let prefix = fileKey(space, app, '')
-      let now = await manifest(blobs, prefix)
+      // What serves now is the live version's manifest, already in hand; only
+      // an app whose live version is not on record reads its files for it.
+      let now = live?.files ??
+        await manifest(r2Objects(ctx.env.BLOBS), fileKey(space, app, ''))
       let { version, said } = await released(
         ctx,
         space,

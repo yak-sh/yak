@@ -22,8 +22,10 @@ import { scriptName } from './dispatch.ts'
 type Read = (path: string) => Promise<Uint8Array<ArrayBuffer> | null>
 
 export let configured = async (read: Read) => {
-  let jsonc = await read('wrangler.jsonc')
-  let json = await read('wrangler.json')
+  let [jsonc, json] = await Promise.all([
+    read('wrangler.jsonc'),
+    read('wrangler.json'),
+  ])
   let bytes = jsonc ?? json
   let parsed = parse(bytes ? new TextDecoder().decode(bytes) : '{}')
   if (jsonc && json) {

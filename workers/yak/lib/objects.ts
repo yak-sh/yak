@@ -63,9 +63,17 @@ export let counted = (objects: Objects, tally?: Tally): Objects => {
   }
 }
 
+// One store per bucket for the isolate's life: the count is the request's
+// (hops.ts), so nothing in it belongs to a caller, and what a reader keeps
+// about immutable keys (release.ts `indexed`) is kept per store.
+let raw = new WeakMap<Bucket, Objects>()
+
 /** The bucket's physical keys, for staging and sweeping. */
-export let r2RawObjects = (bucket: Bucket): Objects =>
-  counted(bucketObjects(bucket))
+export let r2RawObjects = (bucket: Bucket): Objects => {
+  let objects = raw.get(bucket) ?? counted(bucketObjects(bucket))
+  raw.set(bucket, objects)
+  return objects
+}
 
 /** The app's file keys, resolved through an immutable release index. */
 export let r2Objects = (bucket: Bucket): Objects =>
