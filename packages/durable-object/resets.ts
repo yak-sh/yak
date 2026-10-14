@@ -20,6 +20,7 @@ let RESETS = [
   'Durable Object storage operation exceeded timeout which caused object to be reset',
 ]
 let LIMITS = /exceeded its (CPU time|memory) limit/
+let OPAQUE = /^internal error; reference = [a-z0-9]+$/i
 
 let says = (e: unknown, words: string[]) =>
   e instanceof Error && words.some((said) => e.message.includes(said))
@@ -107,3 +108,18 @@ export let evicted = (e: unknown): boolean =>
  */
 export let killed = (e: unknown): boolean =>
   e instanceof Error && LIMITS.test(e.message)
+
+/**
+ * The runtime failed inside itself and names no cause, only a reference for
+ * Cloudflare to look up. The work is tried again; a failure that persists
+ * through the retries is reported.
+ *
+ * ```ts
+ * import { assertEquals } from '@std/assert'
+ * assertEquals(opaque(new Error('internal error; reference = h1h5n5h0ltksfc1hb4h8qkit')), true)
+ * assertEquals(opaque(new Error('get: internal error; reference = abc')), false)
+ * assertEquals(opaque('internal error; reference = abc'), false)
+ * ```
+ */
+export let opaque = (e: unknown): e is Error =>
+  e instanceof Error && OPAQUE.test(e.message)

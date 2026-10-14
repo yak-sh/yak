@@ -14,7 +14,7 @@ import type { Caller } from '@yaks/egress'
 import { hop, writing } from './lib/hops.ts'
 import { defect } from './defects.ts'
 import { stamp } from './running.ts'
-import { evicted, killed } from '@yaks/durable-object'
+import { evicted, killed, opaque } from '@yaks/durable-object'
 
 // A store reports the statements it ran for this fetch, including any store
 // it asked in turn, and how long it waited to start when this fetch woke it.
@@ -318,8 +318,7 @@ export let storeOf = (ns: Namespace, name: string, app?: Served): Door => {
       rebuildable(init) && options.replayable !== false,
       (e) =>
         evicted(e) ||
-        (consuming && safe && e instanceof Error &&
-          /^internal error; reference = [a-z0-9]+$/i.test(e.message)),
+        (consuming && safe && opaque(e)),
     )
   }
   let send = (

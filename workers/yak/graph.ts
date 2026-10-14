@@ -144,6 +144,7 @@ import {
   type DurableSql,
   type DurableStorage,
   type Hibernation,
+  opaque,
   profile,
   type Sockets,
   sockets,
@@ -1309,12 +1310,18 @@ export class Store {
         Object.entries(handlers).map(([name, run]) => [
           name,
           async (...args: Parameters<typeof run>) => {
-            if ('maintenance' in run && run.maintenance === true) {
-              return this.#maintenance(() => run(...args))
+            try {
+              if ('maintenance' in run && run.maintenance === true) {
+                return await this.#maintenance(() => run(...args))
+              }
+              let result = await run(...args)
+              this.#used(true)
+              return result
+            } catch (e) {
+              // The runtime's own internal error is outside this handler, so
+              // the pool tries it again and reports it only if it persists.
+              throw opaque(e) ? Object.assign(e, { retry: {} }) : e
             }
-            let result = await run(...args)
-            this.#used(true)
-            return result
           },
         ]),
       ))
