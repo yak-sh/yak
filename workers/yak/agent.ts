@@ -48,6 +48,7 @@ import { barred, openly } from './anon.ts'
 import type { Search } from '@yaks/mcp'
 import type { Prop, PropSchema, Vocab } from '@yaks/vocab'
 import { META } from './directory.ts'
+import { clock } from './timing.ts'
 import { letters } from './letters.ts'
 import { packageTools } from './package-tools.ts'
 import { PUBLISHED, sending } from './published.ts'
@@ -149,14 +150,15 @@ export let answered = async (
   let space = out.space
   let text = !space || !ctx.person || readOnly
     ? out.text
-    : out.text + (await Promise.all([
-      ctx.dir.role(space, ctx.person).then(async (role) =>
-        unseenBlock(
-          await serve(ctx.env, space, { person: ctx.person, role }),
-        )
-      ),
-      ceiling(ctx.env, space),
-    ])).join('')
+    : out.text + (await (ctx.clock ?? clock()).time('unseen', () =>
+      Promise.all([
+        ctx.dir.role(space, ctx.person).then(async (role) =>
+          unseenBlock(
+            await serve(ctx.env, space, { person: ctx.person, role }),
+          )
+        ),
+        ceiling(ctx.env, space),
+      ]))).join('')
   // A call to say it came from, where there is one: the builder runs these
   // same tools in its own loop (builder.ts), with nothing to point at.
   let output = {

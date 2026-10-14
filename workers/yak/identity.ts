@@ -130,11 +130,9 @@ import { clock, timed } from './timing.ts'
 
 // What the sign-in card says when no letter can leave: the deploy's operator
 // reads which secret is missing, and a visitor reads that nothing is wrong
-// with their address. The second is the provider's refusal, transient.
+// with their address.
 export let NO_MAIL = 'Sign-in mail is not switched on here yet: this deploy ' +
   'has no MAIL_TOKEN (README, Configuration).'
-export let NO_SEND = 'We could not send your code just now. Try again in a ' +
-  'minute.'
 // Too many codes asked for from one place (rate.ts): about the source, never
 // the address, so saying it tells nobody anything about an inbox.
 export let TOO_MANY = 'Too many codes have been asked for from here just ' +
@@ -165,7 +163,7 @@ import {
 import { canon, guess, mac, mint, nameOf, personOf, spend } from './signin.ts'
 import { RETRY, source, within } from './rate.ts'
 import { type Caller, minted, sessionAt, type Who } from './session.ts'
-import { caught, refusing } from './defects.ts'
+import { background, caught, refusing } from './defects.ts'
 import { sha256 } from '@yaks/graph/sha256'
 
 // What a grant carries and a token gives back: the person, nothing else.
@@ -988,12 +986,12 @@ let ours = async (req: Request, env: Env): Promise<Response> => {
     if (!mailable(env)) {
       return askEmail(field('q') || null, back, undefined, NO_MAIL, 503, env)
     }
-    // Per source, before `mint`, so a loop spends none of any address's
-    // letters: the address cap above protects an inbox, this one the
-    // platform's mail from somebody asking for a code at every address.
     // Each wait a named stage on the answer's `Server-Timing` (timing.ts):
     // this is the first thing a new person waits on.
     let c = clock()
+    // Per source, before `mint`, so a loop spends none of any address's
+    // letters: the address cap above protects an inbox, this one the
+    // platform's mail from somebody asking for a code at every address.
     if (!await c.time('rate', () => within(env.SIGNIN_RATE, source(req)))) {
       return askEmail(field('q') || null, back, undefined, TOO_MANY, 429, env)
     }
@@ -1009,23 +1007,21 @@ let ours = async (req: Request, env: Env): Promise<Response> => {
         q: field('q') || undefined,
         back: back || undefined,
       }, apex(env))
-      try {
-        await c.time('mail', () =>
-          mail(env)({
-            to: email,
-            subject: `${code} is your yaks.app code`,
-            body: `Your yaks.app sign-in code is ${code}.\n\n` +
-              `Or sign in with one click: ${link}\n\n` +
-              'It lasts ten minutes. If you did not ask for it, nothing has ' +
-              'happened and you can ignore this.',
-          }))
-      } catch (e) {
-        // The provider refused or the network did: a break for us to read
-        // (the same row a thrown one would have filed) and a card the person
-        // can act on, instead of a page that says nothing about what to do.
-        await fault(env, 'POST /login', e)
-        return askEmail(field('q') || null, back, undefined, NO_SEND, 503, env)
-      }
+      // The letter goes after the answer (T-124082): posting it was a second
+      // of the wait, the longest in signing up, and the card says nothing
+      // that depends on it. One that will not leave is a break for us to
+      // read, and the card's "Send a new code" is the person's way to ask
+      // again.
+      background(
+        mail(env)({
+          to: email,
+          subject: `${code} is your yaks.app code`,
+          body: `Your yaks.app sign-in code is ${code}.\n\n` +
+            `Or sign in with one click: ${link}\n\n` +
+            'It lasts ten minutes. If you did not ask for it, nothing has ' +
+            'happened and you can ignore this.',
+        }).catch((e) => fault(env, 'POST /login', e)),
+      )
     }
     return timed(
       askCode(email, field('q') || null, back, undefined, undefined, env),

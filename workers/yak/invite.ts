@@ -14,6 +14,8 @@
 // with the invited address, and the code letter brings them back here.
 //
 // Owner, 2026-09-22: "oh yes, one-click to accept invite is good".
+import type { Bundle } from '@yaks/graph'
+import { token } from '@yaks/graph/sha256'
 import { mode, reads } from '@yaks/member'
 import { opened, seal } from './lib/token.ts'
 import {
@@ -33,7 +35,6 @@ import { counted, refusedSpend } from './meter.ts'
 import { closed, invited, lost } from './pages.ts'
 import { INVITE } from './route.ts'
 import { refuse } from './tool.ts'
-import { type Clock, clock } from './timing.ts'
 
 /** Invitations one person may send in an hour. Enough to bring a whole team
  * or a class in at once, few enough that a loop aimed at strangers stops
@@ -70,24 +71,34 @@ export let paced = (
 
 /**
  * What stops one more invitation going out from this person for this space:
- * the space's letters this month (meter.ts), then the inviter's hour, which
- * this one is counted on. Asked before anything is written, so a refused
- * invitation writes and mails nothing at all (T-32963).
+ * the space's letters this month (meter.ts), then the inviter's hour. Both
+ * are read at once and nothing is written: the answer is the inviter's hour
+ * with this invitation counted on it, for the caller to write beside the
+ * invitation, so a refused invitation writes and mails nothing at all
+ * (T-32963).
  */
+export let room = async (
+  env: Env,
+  dir: Directory,
+  space: Space,
+  person: string,
+): Promise<Bundle> => {
+  let [no, held] = await Promise.all([
+    refusedSpend(dir, space, 'emails', env),
+    dir.inviting(person),
+  ])
+  if (no) throw refuse('limit', no)
+  return { entity: { eid: person }, inviting: paced(held) }
+}
+
+/** {@link room}, and the invitation counted on the inviter's hour. */
 export let allowed = async (
   env: Env,
   dir: Directory,
   space: Space,
   person: string,
 ) => {
-  let no = await refusedSpend(dir, space, 'emails', env)
-  if (no) throw refuse('limit', no)
-  await stamp(env, {
-    entities: [{
-      entity: { eid: person },
-      inviting: paced(await dir.inviting(person)),
-    }],
-  })
+  await stamp(env, { entities: [await room(env, dir, space, person)] })
 }
 
 // Their words, marked as theirs: quoted the way a letter quotes, so a reader
@@ -122,19 +133,17 @@ export let send = async (
     name?: string
     note?: string
   },
-  c: Clock = clock(),
 ): Promise<boolean> => {
   let { space, app } = o.place
   let host = spaceHost(env, space.slug)
   let what = app
     ? `${app.title} (${host}/${app.slug})`
     : `${space.title} (${host})`
-  let by = await c.time('by', () => dir.nameAt(o.by))
+  let by = await dir.nameAt(o.by)
   let accept = await acceptLink(env.SESSION_SECRET, {
     invite: o.invite,
     to: app ? app.eid : space.eid,
   }, env)
-  let mailed = c.since()
   let sent = await mail(env)({
     to: o.email,
     subject: SUBJECT,
@@ -154,19 +163,20 @@ export let send = async (
     caught(e, { invite: o.invite, space: space.slug })
     return false
   })
-  mailed('mail')
   if (!sent) return false
-  let kept = c.since()
   await Promise.all([
     counted(env, space),
+    // On the invitation still standing: one withdrawn or accepted while its
+    // letter went stays gone, rather than coming back as a row that names
+    // nobody and nothing (`$was`, @yaks/graph guard.ts).
     stamp(env, {
       entities: [{
         entity: { eid: o.invite },
         invite: { sent: new Date().toISOString(), by: o.by },
+        $was: { invite: { to: token(app ? app.eid : space.eid) } },
       }],
     }),
   ])
-  kept('sent')
   return true
 }
 

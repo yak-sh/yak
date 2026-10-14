@@ -219,6 +219,20 @@ let boot = async (
       },
     }
   }
+  // What a request left running past its answer (defects.ts `background`),
+  // held the way the runtime's waitUntil holds it, so `settled` waits for it.
+  let held = new Set<Promise<void>>()
+  let retain = (work: Promise<void>) => {
+    held.add(work)
+    void work.finally(() => held.delete(work))
+  }
+  let settled = async () => {
+    await p.settled()
+    while (held.size) {
+      await Promise.allSettled(held)
+      await p.settled()
+    }
+  }
   let server = Deno.serve(
     { hostname: '127.0.0.1', port: 0, onListen: () => {} },
     (req) =>
@@ -230,6 +244,7 @@ let boot = async (
             ? emailed(req, handler.email, p.env)
             : handler.fetch(req, p.env),
         reportClock,
+        { retain },
       ),
   )
   let ticking = setInterval(p.ring, 10)
@@ -253,7 +268,7 @@ let boot = async (
       owner: await signIn(door, `owner@${apex()}`),
       reported,
       flushReports: () => reportClock.advance(10_000),
-      settled: p.settled,
+      settled,
       close,
     }
   } catch (e) {
@@ -582,15 +597,18 @@ export let letters = (k: Pick<Kernel, 'log'>, to: string): Letter[] =>
     .map((m) => JSON.parse(m[1]) as Letter)
     .filter((l) => [l.to].flat().includes(to))
 
-// The latest letter to an address that says a thing, waited for — an
-// invitation is sent while the tool is answering (T-32629).
+// The latest letter to an address that says a thing, waited for. A letter
+// leaves after the answer that sent it (T-124082), so what the kernel's
+// requests left running is waited for first, and the latest letter is the
+// one the latest request sent.
 export let letter = async (
-  k: Pick<Kernel, 'log'>,
+  k: Pick<Kernel, 'log' | 'settled'>,
   to: string,
   saying: string,
   after = 0,
-) =>
-  (await until(
+) => {
+  await k.settled?.()
+  return (await until(
     () =>
       letters(k, to).slice(after).findLast((l) =>
         `${l.subject}\n${l.body}`.includes(saying)
@@ -601,6 +619,7 @@ export let letter = async (
       label: `a letter for ${to} saying ${saying}`,
     },
   ))!
+}
 
 // Wait past the letters already received before requesting another sign-in.
 export let mailed = (k: Pick<Kernel, 'log'>, to: string, after = 0) =>

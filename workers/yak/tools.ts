@@ -243,7 +243,7 @@ import {
   standingOf,
   tooManySpaces,
 } from './meter.ts'
-import { allowed, send } from './invite.ts'
+import { room, send } from './invite.ts'
 import { aloud, peopleIn, shown } from './people.ts'
 import {
   addressed,
@@ -5207,8 +5207,7 @@ let OURS: Row[] = [
       required: ['email'],
     },
     run: async (ctx, args) => {
-      // Each wait a named stage on the call's `Server-Timing` (timing.ts):
-      // asking somebody in is a chain of directory reads and a letter.
+      // Each wait a named stage on the call's `Server-Timing` (timing.ts).
       let c = ctx.clock ?? clock()
       let { space, who } = await c.time('owns', () => owns(ctx, args))
       let email = address(args.email)
@@ -5221,16 +5220,13 @@ let OURS: Row[] = [
       // space's own address is its front page or a list of what they may open
       // (T-33040), and neither is the thing they were invited to look at
       // (C-32624 item 4).
-      let seated = c.since()
       let app = args.app == null
         ? null
         : await ctx.dir.app(space, text(args.app, 'app'))
       if (args.app != null && !app) {
         throw refuse('missing', `no app ${args.app} in ${space.slug}`)
       }
-      // The platform's row for that address, minted if it has never seen
-      // one: the invitation is what makes the person, and their sign-in
-      // later finds this same row by the same address (signin.ts personOf).
+      let to = app ? app.eid : space.eid
       // What to call them, if the invitation said: it names them in the
       // letter and stands as their name until they choose one themselves
       // (signin.ts `personOf` never renames someone who has). Left out,
@@ -5238,8 +5234,28 @@ let OURS: Row[] = [
       let name = args.name == null
         ? undefined
         : nameOf(text(args.name, 'name'), email)
-      let person = await personOf(meta(ctx.env), email, name)
-      let had = await ctx.dir.member(space, person)
+      // Where they stand here, and whether one more letter may go, asked
+      // together: neither waits on the other (T-124082). The letter's count
+      // is only read here, and written below beside the invitation, so a
+      // refusal still writes and mails nothing.
+      let [here, counting] = await c.time('read', () =>
+        Promise.allSettled([
+          // The platform's row for that address, minted if it has never seen
+          // one: the invitation is what makes the person, and their sign-in
+          // later finds this same row by the same address (signin.ts
+          // personOf).
+          personOf(meta(ctx.env), email, name).then(async (person) => {
+            let [had, held, standing] = await Promise.all([
+              ctx.dir.member(space, person),
+              app && ctx.dir.grant(app, person),
+              ctx.dir.invite(to, person),
+            ])
+            return { person, had, held, standing }
+          }),
+          room(ctx.env, ctx.dir, space, ctx.person),
+        ]))
+      if (here.status == 'rejected') throw here.reason
+      let { person, had, held, standing } = here.value
       if (person == ctx.person && had) {
         throw refuse('arguments', `${email} is you, and you own ${space.slug}`)
       }
@@ -5249,8 +5265,6 @@ let OURS: Row[] = [
       // data and nothing else in the space. Naming the app is asking for that,
       // because an invitation that named one app and handed over the space was
       // the tool saying one thing and doing another.
-      let held = app && await ctx.dir.grant(app, person)
-      seated('person')
       if (app && had) {
         throw refuse(
           'conflict',
@@ -5286,31 +5300,37 @@ let OURS: Row[] = [
       // Anyone else is invited, and nothing is theirs until they accept
       // (invite.ts, T-37880). The letter is counted twice before it goes: on
       // the space's monthly letters, and on the inviter's hour.
-      await c.time(
-        'allowed',
-        () => allowed(ctx.env, ctx.dir, space, ctx.person),
-      )
-      let to = app ? app.eid : space.eid
-      let invited = c.since()
-      let standing = await ctx.dir.invite(to, person)
+      if (counting.status == 'rejected') throw counting.reason
       let eid = standing?.eid ?? crypto.randomUUID()
-      await ctx.dir.apply({
-        entities: [
-          standing
-            ? { entity: { eid }, invite: { role: want } }
-            : { entity: { eid }, invite: { to, person, role: want } },
-        ],
-      }, vouched(who))
-      invited('invite')
-      let sent = await send(ctx.env, ctx.dir, {
-        invite: eid,
-        place: { space, app },
-        email,
-        role: want,
-        by: ctx.person,
-        name,
-        note,
-      }, c)
+      await c.time('invite', () =>
+        Promise.all([
+          stamp(ctx.env, { entities: [counting.value] }),
+          ctx.dir.apply({
+            entities: [
+              standing
+                ? { entity: { eid }, invite: { role: want } }
+                : { entity: { eid }, invite: { to, person, role: want } },
+            ],
+          }, vouched(who)),
+        ]))
+      // The letter goes after the answer (T-124082): posting it was a second
+      // of the call, and the answer says nothing that depends on it. One that
+      // will not leave is reported where it fails (invite.ts `send`), and
+      // their People list says no letter went (people.ts).
+      background(
+        send(ctx.env, ctx.dir, {
+          invite: eid,
+          place: { space, app },
+          email,
+          role: want,
+          by: ctx.person,
+          name,
+          note,
+        }).then(
+          () => {},
+          (e) => caught(e, { tool: 'member_add', space: space.slug }),
+        ),
+      )
       return {
         // Asked again for somebody who never accepted: that is the news when
         // they say they cannot get in, so the answer says so first.
@@ -5321,16 +5341,12 @@ let OURS: Row[] = [
           (app
             ? `${space.slug}/${app.slug} and nothing else in ${space.slug}`
             : space.slug) +
-          ` — ` +
-          (sent
-            ? `${standing ? 'another letter' : 'the invitation'}${
-              note ? ' and your note are' : ' is'
-            } on its way to them. It is theirs once they accept it from ` +
-              `the letter, signed in with that address; until then nothing ` +
-              `of ${space.slug} is in their reach, and member_remove ` +
-              `withdraws it`
-            : `the invitation could not be mailed just now; ask again ` +
-              `later to send it`),
+          ` — ${standing ? 'another letter' : 'the invitation'}${
+            note ? ' and your note are' : ' is'
+          } on its way to them. It is theirs once they accept it from ` +
+          `the letter, signed in with that address; until then nothing ` +
+          `of ${space.slug} is in their reach, and member_remove ` +
+          `withdraws it`,
         space,
       }
     },
