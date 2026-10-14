@@ -127,9 +127,18 @@ what a thing says, `--muted` for what describes it, `--size` and `--small`
 and nothing smaller. A part that steps back is muted, small or both. `--dim`
 is only for what isn't there: a nil, a ghost, a placeholder, a separator. The
 mono face is for what a person copies or types (an id, a sha, code, a raw
-value), never for a label, a time said the human way, or a count. A theme
-holds its side of it: every text colour but `--dim` reads at 4.5:1 or better
-on `--bg`, `--surface` and `--card`, in light and in dark.
+value), never for a label, a time said the human way, or a count.
+
+A theme holds its side of it in its palette's own colours, each one a value
+the palette publishes (Everforest's palette.md, rosepinetheme.com/palette). A
+light palette's hues are soft on its floor, and a contrast ratio to reach
+pulls you to darken a hex until it passes; the page then reads, and the theme
+is no longer the palette it is named for. So the readable inks come from the
+palette's darker greys: Everforest light's `--text` is Everforest dark's bg1
+and its `--muted` is light's fg, both 4.5:1 or better. The hues stay as the
+palette gives them. Where a part's words still don't read in light, change
+which colour the part gives its words and which its mark (an ink for the
+words, the hue on a dot, a rule or a wash), never the theme's hex.
 
 ## A UX component
 

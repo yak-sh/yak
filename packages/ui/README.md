@@ -257,8 +257,9 @@ The CSS custom properties use the same names as `Colors`:
 - Background and ink: `--bg`, `--surface`, `--card`, `--border`, `--border2`,
   `--text` (what a thing says), `--muted` (what describes it: keys, facts,
   stamps, ids), `--dim` (only what is not there: a nil, a placeholder, a
-  separator). Every text colour but `--dim` reads at 4.5:1 or better on the
-  three floors, in each scheme.
+  separator). A theme's colours are its palette's own; `--text` and `--muted`
+  come from the palette's darker greys so they read on the three floors, and the
+  hues are as the palette gives them.
 - Selection and the primary action: `--accent`; links: `--link`; section titles:
   `--heading`.
 - Dot tones: `--info`, `--active`, `--positive`, `--negative`, `--caution`,
