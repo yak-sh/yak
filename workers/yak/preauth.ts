@@ -59,10 +59,12 @@ let PROTOCOLS = ['2025-06-18', '2025-03-26', '2024-11-05']
 export let spoken = (asked: unknown) =>
   typeof asked == 'string' && PROTOCOLS.includes(asked) ? asked : PROTOCOLS[0]
 
-// A tool with nothing to look up: its whole answer is a text written here,
-// the same words for every caller. What it says about itself is in tools.yml
-// under its name, like every other row (tool.ts `worded`), so the pre-auth
-// list and the signed-in one cannot say different things about one tool.
+// A tool with nothing to look up: its whole answer to a caller who has not
+// signed in is a text written here, the same words for every one of them; its
+// row in tools.ts says what a signed-in caller hears. What it says about
+// itself is in tools.yml under its name, like every other row (tool.ts
+// `worded`), so the pre-auth list and the signed-in one cannot say different
+// things about one tool.
 //
 // Saying one text and reading nothing is the only shape a tool can have before
 // anyone has signed in, and it is what makes the public list safe to serve
@@ -74,19 +76,15 @@ export type Says = {
 
 export let NO_ARGS = { type: 'object' as const, properties: {} }
 
-// What yaks.app is, for an agent that has just met it. It is the one thing to
-// say to someone who cannot do anything else yet: what gets made here, where
-// it lives, and where signing in happens — with the guide, which they can
-// already read.
-export let about = (env: Host = {}): Says => ({
-  name: 'about',
-  text:
-    `yaks.app is a place to make small web apps by asking for one. A yaks app
+// What yaks.app is, for an agent that has just met it: what gets made here
+// and where it lives. Every caller of `about` is told this, signed in or not.
+export let what = (env: Host = {}) =>
+  `yaks.app is a place to make small web apps by asking for one. A yaks app
 is an index.html and whatever files sit beside it — no build step, no
 framework, no install — served live at its own address,
 ${
-      spaceHost(env, 'yourname')
-    }/<app>/. It opens on a phone, it keeps its data in a store
+    spaceHost(env, 'yourname')
+  }/<app>/. It opens on a phone, it keeps its data in a store
 of its own, and it is a link the person can send to somebody.
 
 What people make here is what they would otherwise keep in a note or a
@@ -96,11 +94,19 @@ or open for anyone to write to. It can carry tools of its own, which an agent
 calls the way it calls these, and code of its own that runs on the server.
 
 Every app also has an address of its own, <space>.<app>@${
-      apex(env)
-    } — letters to
+    apex(env)
+  } — letters to
 it land in the app's store, and the app writes from it. That is the app's
 mailbox and never a person's own; mail asked about with no app named is their
-mail account, which is somewhere else entirely.
+mail account, which is somewhere else entirely.`
+
+// `about` for someone who cannot do anything else yet: what yaks.app is, what
+// this endpoint answers signed out, and where signing in happens — with the
+// guide, which they can already read. A signed-in caller is told who they are
+// instead (tools.ts), never these steps, which a model reads as its next one.
+export let about = (env: Host = {}): Says => ({
+  name: 'about',
+  text: `${what(env)}
 
 Signed out, this endpoint already does a fair amount. The guide is here to read:
 ${url(env, '/docs.md')} is the map, and a page per subject sits beside it.

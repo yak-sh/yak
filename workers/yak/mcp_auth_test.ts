@@ -392,12 +392,16 @@ test('the door before anyone signs in', async () => {
     // these two tools carry.
     assert(full.includes('commands') && full.includes('command'))
     assertEquals(full.some((n) => n.includes('log_run')), false)
-    // The same words, and one thing more: the list this door is serving them
-    // and the version naming it (T-34277), which is the answer to "is my tool
-    // list still the tool list". Nobody signed in has a roster to be told
-    // about — the public list is this one tool.
+    // Signed in, `about` says who is asking and what the place is, and never
+    // how to sign in, which a model reads as its next step (T-123990). And
+    // the list this door is serving and the version naming it (T-34277),
+    // which is the answer to "is my tool list still the tool list". Nobody
+    // signed in has a roster to be told about — the public list is this one
+    // tool.
     let { text: ours, value } = await agent.answer('about')
-    assertStringIncludes(ours, said)
+    assertStringIncludes(ours, 'You are signed in as ')
+    assertStringIncludes(ours, 'yaks.app is a place to make small web apps')
+    assertEquals(ours.includes('/login'), false, ours)
     assertMatch(ours, /The tools here right now, roster [0-9a-f]{8}:/)
     for (let name of full) assertStringIncludes(ours, name)
     // And the same as data, which is what a client keeps its list by.

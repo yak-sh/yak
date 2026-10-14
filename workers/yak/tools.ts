@@ -170,8 +170,8 @@ import {
   revoke,
 } from './grants.ts'
 import { GRAPH, mail } from './mail.ts'
-import { PAGES, uriOf, whole } from './guide.ts'
-import { asset, EITHER, NO_ARGS, PUBLIC, publics } from './preauth.ts'
+import { NARROW, PAGES, uriOf, whole } from './guide.ts'
+import { asset, EITHER, NO_ARGS, PUBLIC, publics, what } from './preauth.ts'
 import {
   awake,
   BUDGET,
@@ -310,7 +310,7 @@ export { type Args, type Ctx, inApp, type Out, type Shape, type Tool }
 // list still the list", which a client cannot ask any other way.
 let rostered = (ctx: Ctx) =>
   ctx.roster
-    ? `\n\nThe tools here right now, roster ${ctx.roster.version}:\n` +
+    ? `The tools here right now, roster ${ctx.roster.version}:\n` +
       `${ctx.roster.names.join(', ')}\n\nIf a reply ever says the tool list ` +
       'changed, that is this version moving: reconnect, or call about again ' +
       'to see what is here.'
@@ -324,10 +324,7 @@ let rostered = (ctx: Ctx) =>
 // client caches the instructions at connect and a person's apps move under it,
 // and an app made this morning is one the agent would otherwise not know to
 // put this afternoon's recipe in.
-let said = async (ctx: Ctx) => {
-  let notes = await ctx.standing?.()
-  return notes ? `\n\n${notes}` : ''
-}
+let said = async (ctx: Ctx) => await ctx.standing?.() ?? ''
 
 // How a caller got in, said the way a person would say it (identity.ts
 // `Caller`).
@@ -347,7 +344,7 @@ let whoami = async (ctx: Ctx) => {
   let who = ctx.who
   if (!who) return ''
   let me = await ctx.dir.known(ctx.person)
-  return `\n\nYou are signed in as ${me?.name ?? ctx.person}` +
+  return `You are signed in as ${me?.name ?? ctx.person}` +
     `${me ? ` <${me.email}>` : ''}, ${HOW[who.via]}` +
     `${who.grant ? ` ${who.grant}` : ''}` +
     `${
@@ -5652,10 +5649,10 @@ let OURS: Row[] = [
     },
   },
   // And the tools anybody may call, signed in or not (preauth.ts, T-33030):
-  // each says one fixed text and reads nothing, so the same words serve a
-  // stranger and a member. They are lifted here rather than listed only at
-  // the door, which is what makes the pre-auth list a subset of this one
-  // instead of a second surface that could drift from it.
+  // each says one fixed text to a stranger and reads nothing. They are lifted
+  // here rather than listed only at the door, which is what makes the pre-auth
+  // list a subset of this one instead of a second surface that could drift
+  // from it.
   ...PUBLIC.map((t): Row => ({
     name: t.name,
     input: NO_ARGS,
@@ -5666,18 +5663,28 @@ let OURS: Row[] = [
     // need signing in on one list and not the other. Both schemes, because
     // both work: a token is welcome and none is needed (preauth.ts EITHER).
     security: EITHER,
-    // Signed in, `about` also says who is asking, how they got in and until
-    // when (`whoami`, T-34385), and what this door is listing right now with
-    // the version naming that list (T-34277) — so an agent whose cached list
-    // is old has one call that settles what it has, without reconnecting.
-    // Before signing in the same words are said with neither (preauth.ts): the
-    // public list is one tool, and it is this one. The roster is answered as
-    // data too, since a client keeps its cached list by that version.
-    run: async (ctx) => ({
-      text: publics(ctx.env).find((one) => one.name == t.name)!.text +
-        await whoami(ctx) + await said(ctx) + rostered(ctx),
-      ...ctx.roster ? { value: { roster: ctx.roster } } : {},
-    }),
+    // A stranger hears the fixed text, which ends in how to sign in. A
+    // signed-in caller hears who they are, how they got in and until when
+    // (`whoami`, T-34385), what yaks.app is, how a read reaches their apps,
+    // the apps themselves, and what this door is listing right now with the
+    // version naming that list (T-34277) — so an agent whose cached list is
+    // old has one call that settles what it has, without reconnecting. Never
+    // the sign-in steps: a model reads those as its next step. The roster is
+    // answered as data too, since a client keeps its cached list by that
+    // version.
+    run: async (ctx) =>
+      ctx.person
+        ? {
+          text: [
+            await whoami(ctx),
+            what(ctx.env),
+            NARROW,
+            await said(ctx),
+            rostered(ctx),
+          ].filter(Boolean).join('\n\n'),
+          ...ctx.roster ? { value: { roster: ctx.roster } } : {},
+        }
+        : { text: publics(ctx.env).find((one) => one.name == t.name)!.text },
   })),
   // And the gallery (gallery.ts, T-34478), which is the same list to a
   // stranger and to somebody signed in — a listing is a public page, so there

@@ -78,7 +78,7 @@ test('staging tool URLs and app mail use the same configured host', async () => 
   assertEquals(apps(listed)[0].mailbox, 'ada.recipes@yaks.fyi')
   assertStringIncludes(
     (await call(ctx, 'about', {})).text,
-    'https://yaks.fyi/login',
+    'yourname.yaks.fyi/<app>/',
   )
   await call(ctx, 'app_files', {
     space: 'ada',

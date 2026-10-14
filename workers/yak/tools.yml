@@ -710,13 +710,13 @@ guide:
 about:
   title: What yaks.app is
   description: >-
-    What yaks.app is and what gets made here, in a paragraph: what works
-    signed out, what signing in adds, and where to sign in. Signed in, it
-    also reports who you are signed in as, how (a browser, a connector, a
-    CLI token) and until when, the tools this connector is listing right
-    now, and every app you can reach: its address, what it holds, the notes
-    it keeps and whatever the person has said in that space. Signed out it
-    reads nothing about anybody: the same answer for everyone.
+    What yaks.app is and what gets made here, in a paragraph. Signed out, it
+    adds what works signed out, what signing in adds, and where to sign in,
+    and reads nothing about anybody: the same answer for everyone. Signed in,
+    it adds who you are signed in as, how (a browser, a connector, a CLI
+    token) and until when, the tools this connector is listing right now,
+    and every app you can reach: its address, what it holds, the notes it
+    keeps and whatever the person has said in that space.
 gallery_search:
   title: Search the gallery
   description: >-
