@@ -129,3 +129,21 @@ retained with the task's reproducibility artifact. Delete only its recorded
 `t125306-*` Workers/container applications/namespaces, not registry images. Stop
 local Wrangler proxies first. Delete the scratch app and space as well. T-125362
 tracks the platform's missing supported historical-compiler probe.
+
+## Production verification after landing
+
+`ef1b151c6` reached100% live at2026-10-15T21:31:54Z. The actual production
+`yak-esbuild` service binding, same fixed Job, then returned five warm
+`compiler_total` samples **9.623/10.692/12.442/10.807/9.110s** (median10.692s).
+Full-body walls **11.234/11.586/13.358/12.039/10.325s** (median11.586s). First
+invocation wall24.902s; compile22.345s; parse0.146s, serialize0.091s,
+handler22.584s. Do not attribute the entire first invocation to startup. All
+five warm runs had29group hits, no carried/used work, and no errors. Production
+load differs from the isolated container; these do not replace the controlled
+before/after comparison. Raw rows are `production.jsonl`.
+
+All10scratch compiler Workers, their container applications and namespaces were
+deleted; post-cleanup inventories contain none of their IDs. The503-file scratch
+app was erased forever, followed by its space (`space_delete` with
+`forever:true`). All three loopback proxies were stopped. No registry images
+were deleted. Production deploy/error inspection was performed after landing.
