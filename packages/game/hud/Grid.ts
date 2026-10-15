@@ -53,6 +53,7 @@ export let description =
   'Things in squares framed in their rarity, marked in their corners.'
 export let sheet = (c: Colors): Sheet => ({
   Grid: { spaced: true, wrap: true },
+  Grid_Cell: { spaced: true },
   'Grid_Cell-on': { inverse: true },
   'Grid_Cell-dim': { dim: true },
   'Grid_Cell-empty': { dim: true },
