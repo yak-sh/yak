@@ -81,6 +81,18 @@ let work = (db: Driver, now?: number, daily?: Daily[]) =>
 let copy = (from: Snapshot) =>
   Object.assign(preparedDriver(from), { file: true })
 
+// What `make` does to a database standing in for a file, made empty or as a
+// copy of `from`, kept as a fixture beside what `make` answered. The work a
+// test reads is done here, once, as the file loads, each step from the one
+// before: worked in the test, each of its statements would be compiled afresh
+// on the test's own connection, most of a millisecond.
+let stage = <T>(make: (db: Driver) => T, from?: Snapshot): [Snapshot, T] => {
+  let out!: T
+  return [imaged((db) => void (out = make(db)), from), out]
+}
+// The moment the stages work at.
+let NOW = Date.now()
+
 // A file with a `server_meta` and four tables: `big` holding `tiny.big` rows,
 // `small` one, and `dup` two (all ones in `x`, so a unique index over `big` or
 // `dup` fails), and `note` holding words.
@@ -97,7 +109,6 @@ let files = imaged((db) => {
   rows(db, 'dup', 2, lit(1))
   rows(db, 'note', tiny.fill + 1)
 })
-let file = () => copy(files)
 let index = (on: string, unique = false): CreateIndex => ({
   t: 'create index',
   name: `${on}_x`,
@@ -113,38 +124,59 @@ let drain = (db: Driver) => {
   for (let w; (w = work(db));) if ('error' in w) throw w.error
 }
 
-test('an index over a big table is owed, and one window builds it', () => {
-  using db = file()
-  build(db, [index('big'), index('small')])
+// The file given an index over `big` and one over `small`, and the window
+// after.
+let [indexing] = stage((db) => build(db, [index('big'), index('small')]), files)
+let [indexed, built] = stage((db) => work(db), indexing)
+
+test('an index over a big table is owed, and one over a small one built', () => {
+  using db = copy(indexing)
   assertEquals([has(db, 'big_x'), has(db, 'small_x')], [false, true])
   assertEquals(owed(db).map((w) => w.name), ['big_x'])
-  assertEquals(work(db), { name: 'owed:index:big_x', done: true })
+})
+
+test('one window builds an owed index', () => {
+  assertEquals(built, { name: 'owed:index:big_x', done: true })
+  using db = copy(indexed)
   assertEquals([has(db, 'big_x'), owed(db), work(db)], [true, [], undefined])
 })
 
-test('a window that fails waits an hour, and a dropped table takes its work', () => {
-  using db = file()
-  let now = Date.now()
+// A unique index over `big`, whose rows break it, and the window that fails
+// to build it; then its table dropped, and the window an hour on.
+let [failing, failed] = stage((db) => {
   build(db, [index('big', true)])
-  let failed = work(db, now)
-  assertEquals(failed && 'error' in failed, true)
-  assertEquals(owed(db)[0].next, new Date(now + RETRY).toISOString())
-  assertEquals(work(db, now + 1), undefined)
+  return work(db, NOW)
+}, files)
+let [dropped, retried] = stage((db) => {
   db.query({ t: 'drop', kind: 'table', name: 'big' })
-  assertEquals(work(db, now + RETRY), {
-    name: 'owed:index:big_x',
-    done: true,
-  })
+  return work(db, NOW + RETRY)
+}, failing)
+
+test('a window that fails waits an hour', () => {
+  assertEquals(failed && 'error' in failed, true)
+  using db = copy(failing)
+  assertEquals(owed(db)[0].next, new Date(NOW + RETRY).toISOString())
+  assertEquals(work(db, NOW + 1), undefined)
+})
+
+test('a dropped table takes the index it was owed', () => {
+  assertEquals(retried, { name: 'owed:index:big_x', done: true })
+  using db = copy(dropped)
   assertEquals(owed(db), [])
 })
 
+// Unique indexes over `dup`, whose rows break one, and over `small`.
+let [unbuilt, left] = stage(
+  (db) => build(db, [index('dup', true), index('small', true)]),
+  files,
+)
+
 test('a unique index the rows break is answered unbuilt, and the rest stands', () => {
-  using db = file()
-  let left = build(db, [index('dup', true), index('small', true)])
-  assertEquals([has(db, 'dup_x'), has(db, 'small_x')], [false, true])
   assertEquals(left.map((e) => e.message.split(':')[0]), [
     'dup_x is not built',
   ])
+  using db = copy(unbuilt)
+  assertEquals([has(db, 'dup_x'), has(db, 'small_x')], [false, true])
   assertThrows(() => build(db, [{ ...index('dup', true), cols: [col('y')] }]))
 })
 
@@ -164,15 +196,11 @@ let match = (db: Driver, word: string, fts = 'note_fts') =>
 let notes: Field[] = [{ comp: 'note', prop: 'x' }]
 let adopted = (fields: Field[]) => (db: Driver) =>
   adopt(db, fields, {}, { heal: false, fill: filler(db) })
-// A text index over `note` adopted when the file loads, `n` windows into its
-// fill: the first takes w1 and w2, the second w3, the third finds nothing more
-// and ends it.
-let filling = (n: number) =>
-  imaged((db) => {
-    adopted(notes)(db)
-    for (let i = 0; i < n; i++) work(db)
-  }, files)
-let [adopting, started, filled] = [0, 1, 3].map(filling)
+// A text index over `note`, adopted, then into its fill: the first window
+// takes w1 and w2, the second w3, the third finds nothing more and ends it.
+let [adopting] = stage(adopted(notes), files)
+let [started] = stage((db) => work(db), adopting)
+let [filled] = stage(drain, started)
 
 test('a text index over many rows is owed, and empty until a window fills it', () => {
   using db = copy(adopting)
@@ -243,24 +271,31 @@ for (
     ],
   ] as [string, Stmt, number, string, number[]][]
 ) {
-  test(name, () => {
-    using db = copy(started)
+  let [written] = stage((db) => {
     db.query(stmt)
     for (let i = 0; i < more; i++) work(db)
+  }, started)
+  test(name, () => {
+    using db = copy(written)
     assertEquals(match(db, found), want)
   })
 }
 
-test('a text index filled stands whole, its triggers kept', () => {
+test('a text index filled stands whole', () => {
   using db = copy(filled)
   assertEquals([heal(db, notes, { deep: true }), owed(db)], [[], []])
+})
+
+test('a text index filled keeps its triggers', () => {
+  using db = copy(filled)
   db.query(said(101, 'after'))
   assertEquals(match(db, 'after'), [101])
 })
 
-// A text index over `note` read through the view `big`, adopted when the file
-// loads.
-let scoped = imaged(adopted([{ comp: 'note', prop: 'x', on: 'big' }]), files)
+// A text index over `note` read through the view `big`, adopted, then every
+// window of its fill.
+let [scoped] = stage(adopted([{ comp: 'note', prop: 'x', on: 'big' }]), files)
+let [whole] = stage(drain, scoped)
 
 test('a new text index read through a view is sized by the view, and owed', () => {
   using db = copy(scoped)
@@ -268,34 +303,32 @@ test('a new text index read through a view is sized by the view, and owed', () =
 })
 
 test('a text index read through a view is filled whole', () => {
-  using db = copy(scoped)
-  drain(db)
+  using db = copy(whole)
   assertEquals(match(db, 'w1 OR w2 OR w3', 'big_fts'), [1, 2, 3])
 })
 
-// A write its trigger missed: the index no longer holds every row.
-let drifted = imaged((db) => {
+// A write its trigger missed: the index no longer holds every row. Healed, it
+// is owed a refill, then refilled.
+let [drifted] = stage((db) => {
   adopt(db, notes)
   db.query({ t: 'drop', kind: 'trigger', name: 'note_fts_insert' })
   rows(db, 'note', tiny.fill + 2, lit('missed'), tiny.fill + 2)
 }, files)
+let [refilling, healed] = stage(
+  (db) => heal(db, notes, { fill: filler(db) }),
+  drifted,
+)
+let [refilled] = stage(drain, refilling)
 
 test('a drifted text index is owed a refill, and one filling is left be', () => {
-  using db = copy(drifted)
-  let fill = filler(db)
-  assertEquals(heal(db, notes, { fill }), ['note_fts'])
-  assertEquals([owed(db).map((w) => w.name), heal(db, notes, { fill })], [
-    ['note_fts'],
-    [],
-  ])
+  assertEquals(healed, ['note_fts'])
+  using db = copy(refilling)
+  assertEquals(owed(db).map((w) => w.name), ['note_fts'])
+  assertEquals(heal(db, notes, { fill: filler(db) }), [])
 })
 
-// The drifted index, owed a refill when the file loads.
-let refilling = imaged((db) => heal(db, notes, { fill: filler(db) }), drifted)
-
 test('a drifted text index is refilled in windows', () => {
-  using db = copy(refilling)
-  drain(db)
+  using db = copy(refilled)
   assertEquals(match(db, 'missed'), [tiny.fill + 2])
 })
 
@@ -308,9 +341,9 @@ let did = (db: Driver, at: number, daily: Daily[]) => {
   return names
 }
 
-test('upkeep is done once a day, and one that fails waits an hour', () => {
-  using db = file()
-  let now = Date.now()
+// The file's upkeep, with a check that fails the first time it runs: what
+// was done now, a moment on, an hour on, and a day after that.
+let [, upkept] = stage((db) => {
   let fails = true
   let daily: Daily[] = [statistics, {
     name: 'check',
@@ -318,24 +351,32 @@ test('upkeep is done once a day, and one that fails waits an hour', () => {
       if (fails) throw new Error('not today')
     },
   }]
-  assertEquals(did(db, now, daily), ['daily:statistics', 'daily:check failed'])
+  let first = did(db, NOW, daily)
   fails = false
-  assertEquals(did(db, now + 1, daily), [])
-  assertEquals(did(db, now + RETRY, daily), ['daily:check'])
-  assertEquals(did(db, now + RETRY + DAY, daily), [
-    'daily:statistics',
-    'daily:check',
+  return [first, ...[1, RETRY, RETRY + DAY].map((t) => did(db, NOW + t, daily))]
+}, files)
+
+test('upkeep is done once a day, and one that fails waits an hour', () => {
+  assertEquals(upkept, [
+    ['daily:statistics', 'daily:check failed'],
+    [],
+    ['daily:check'],
+    ['daily:statistics', 'daily:check'],
   ])
 })
 
-test('statistics are due as soon as an index is built', () => {
-  using db = file()
-  let now = Date.now()
-  assertEquals(did(db, now, [statistics]), ['daily:statistics'])
+// The statistics done, then an index built over `big`: what was done each
+// time.
+let [counted, counting] = stage((db) => did(db, NOW, [statistics]), files)
+let [, recounting] = stage((db) => {
   build(db, [index('big')])
-  assertEquals(did(db, now, [statistics]), [
-    'owed:index:big_x',
-    'daily:statistics',
+  return did(db, NOW, [statistics])
+}, counted)
+
+test('statistics are due as soon as an index is built', () => {
+  assertEquals([counting, recounting], [
+    ['daily:statistics'],
+    ['owed:index:big_x', 'daily:statistics'],
   ])
 })
 
@@ -372,8 +413,9 @@ let beside: Stmt[] = [{ ...index('creature'), name: 'creature_x' }, {
 }]
 
 // A file holding five foxes, each `c<i>`, under a vocabulary that also allows
-// hens, with what `beside` puts on their table and a view over it.
-let foxes = (db: Driver) => {
+// hens, with what `beside` puts on their table and a view over it. Then the
+// vocabulary drops hens, and the table's rebuild is owed.
+let [owing] = stage((db) => {
   storage(db, hens, { sizes: tiny }).install()
   rows(db, 'entity', 5, fn('printf', lit('c%d'), col('i')))
   rows(db, 'creature', 5, lit('fox'))
@@ -386,19 +428,14 @@ let foxes = (db: Driver) => {
     },
     ...beside,
   ])
-}
-// The vocabulary drops hens: the table's rebuild is owed, and its windows done
-// when the file loads.
-let refit = (db: Driver) => storage(db, owls, { sizes: tiny }).install(beside)
-// The rebuild `n` windows on: the first two copy c1 to c3 and c4 to c5, the
-// third swaps the names, the next three clear the old rows and drop them.
-let windows = (n: number) =>
-  imaged((db) => {
-    foxes(db)
-    refit(db)
-    for (let i = 0; i < n; i++) work(db)
-  })
-let [owing, copying, copied, swapped, rebuilt] = [0, 1, 2, 3, 6].map(windows)
+  storage(db, owls, { sizes: tiny }).install(beside)
+})
+// The rebuild's windows: the first two copy c1 to c3 and c4 to c5, the third
+// swaps the names, the next three clear the old rows and drop them.
+let [copying] = stage((db) => work(db), owing)
+let [copied] = stage((db) => work(db), copying)
+let [swapped, swap] = stage((db) => work(db), copied)
+let [rebuilt] = stage(drain, swapped)
 
 let aside = (db: Driver) =>
   catalogue(db).filter((o) => o.name.startsWith('_yaks_')).map((o) => o.name)
@@ -472,17 +509,19 @@ let writes: [string, Stmt[], number, [string, number][]][] = [
   ]],
 ]
 for (let [name, stmts, more, want] of writes) {
-  test(name, () => {
-    using db = copy(copying)
+  let [written] = stage((db) => {
     for (let s of stmts) db.query(s)
     for (let i = 0; i < more; i++) work(db)
+  }, copying)
+  test(name, () => {
+    using db = copy(written)
     assertEquals(tally(db, '_yaks_refit_creature'), want)
   })
 }
 
 test('once every row is across, one window swaps the names', () => {
-  using db = copy(copied)
-  assertEquals(work(db), { name: 'owed:refit:creature', done: true })
+  assertEquals(swap, { name: 'owed:refit:creature', done: true })
+  using db = copy(swapped)
   assertEquals(tally(db, 'seen'), [['fox', 5]])
   assertEquals(owed(db).map((w) => w.name), [
     'creature_x',
@@ -491,24 +530,29 @@ test('once every row is across, one window swaps the names', () => {
 })
 
 test('the old rows of a rebuilt table are cleared in windows, then dropped', () => {
-  using db = copy(swapped)
-  drain(db)
+  using db = copy(rebuilt)
   assertEquals([aside(db), owed(db)], [[], []])
 })
 
 test('what stood on the old table stands on the rebuilt one, with its check', () => {
   using db = copy(rebuilt)
-  let s = storage(db, owls, { sizes: tiny })
-  s.tx((tx) => tx.patch([{ entity: { eid: 'after' }, creature: { x: 'owl' } }]))
+  for (let s of [gone(1), back(1)]) db.query(s)
   let logged = db.query(select({ cols: [col('entity')], from: table('log') }))
   assertEquals([logged.length, has(db, 'creature_x')], [1, true])
-  let hen = { entity: { eid: 'hen' }, creature: { x: 'hen' } }
-  assertThrows(() => s.tx((tx) => tx.patch([hen])), Error, 'CHECK')
+  let hen = { ...owl(1), set: { x: lit('hen') } }
+  assertThrows(() => db.query(hen), Error, 'CHECK')
 })
 
-test('a rebuild is given up once the table fits its vocabulary again', () => {
-  using db = copy(copying)
-  assertEquals(aside(db).includes('_yaks_refit_creature'), true)
+// The vocabulary that allows hens again, installed mid-rebuild: what was set
+// aside before it.
+let [refitted, building] = stage((db) => {
+  let was = aside(db)
   storage(db, hens, { sizes: tiny }).install(beside)
+  return was
+}, copying)
+
+test('a rebuild is given up once the table fits its vocabulary again', () => {
+  assertEquals(building.includes('_yaks_refit_creature'), true)
+  using db = copy(refitted)
   assertEquals([aside(db), owed(db)], [[], []])
 })
