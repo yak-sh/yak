@@ -1,469 +1,907 @@
 <!DOCTYPE html>
 <html lang="en">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Recipe Box</title>
-<style>
-  :root {
-    --bg: #33493C; --bg-deep: #273A2F;
-    --card: #FFFDF4; --card-edge: #E8E2CE;
-    --rule-red: #B53A2E; --rule-blue: #B9C9D8;
-    --ink: #2B2A26; --ink-soft: #6E6A5E;
-    --tab: #D9C79A; --tab-active: #F0E3BE;
-    --mono: 'Courier New', Courier, monospace;
-    --serif: Georgia, 'Times New Roman', serif;
-  }
-  * { box-sizing: border-box; }
-  body {
-    margin: 0; min-height: 100vh;
-    background: linear-gradient(var(--bg), var(--bg-deep));
-    background-attachment: fixed;
-    padding: 28px 16px 60px;
-    color: var(--ink);
-  }
-  .wrap { max-width: 640px; margin: 0 auto; }
-  h1 { font-family: var(--serif); font-size: 30px; color: #F4EEDD; margin: 0; letter-spacing: .5px; }
-  .count { font-family: var(--mono); font-size: 12px; color: #C9CFB9; margin: 4px 0 0; }
-  .count a { color: #F0E3BE; }
-  .warn { font-family: var(--mono); font-size: 12px; color: #F3C9A0; margin: 4px 0 0; }
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Recipe Box</title>
+    <style>
+    :root {
+      --bg: #33493C;
+      --bg-deep: #273A2F;
+      --card: #FFFDF4;
+      --card-edge: #E8E2CE;
+      --rule-red: #B53A2E;
+      --rule-blue: #B9C9D8;
+      --ink: #2B2A26;
+      --ink-soft: #6E6A5E;
+      --tab: #D9C79A;
+      --tab-active: #F0E3BE;
+      --mono: 'Courier New', Courier, monospace;
+      --serif: Georgia, 'Times New Roman', serif;
+    }
+    * {
+      box-sizing: border-box;
+    }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background: linear-gradient(var(--bg), var(--bg-deep));
+      background-attachment: fixed;
+      padding: 28px 16px 60px;
+      color: var(--ink);
+    }
+    .wrap {
+      max-width: 640px;
+      margin: 0 auto;
+    }
+    h1 {
+      font-family: var(--serif);
+      font-size: 30px;
+      color: #F4EEDD;
+      margin: 0;
+      letter-spacing: .5px;
+    }
+    .count {
+      font-family: var(--mono);
+      font-size: 12px;
+      color: #C9CFB9;
+      margin: 4px 0 0;
+    }
+    .count a {
+      color: #F0E3BE;
+    }
+    .warn {
+      font-family: var(--mono);
+      font-size: 12px;
+      color: #F3C9A0;
+      margin: 4px 0 0;
+    }
 
-  nav { display: flex; flex-wrap: wrap; gap: 4px; align-items: flex-end; margin-top: 16px; }
-  nav button {
-    font-family: var(--mono); font-size: 12px; cursor: pointer;
-    background: var(--tab); color: var(--ink); border: none;
-    border-radius: 6px 6px 0 0; padding: 6px 12px 5px;
-    box-shadow: inset 0 -3px 4px rgba(0,0,0,.15);
-  }
-  nav button.active {
-    background: var(--tab-active); padding: 9px 14px 7px;
-    box-shadow: 0 -2px 4px rgba(0,0,0,.15);
-  }
-  nav button:focus-visible, .cardbtn:focus-visible, button:focus-visible, input:focus-visible,
-  select:focus-visible, textarea:focus-visible { outline: 2px solid #F0E3BE; outline-offset: 2px; }
-  .shelf { height: 3px; background: var(--tab-active); border-radius: 1px; margin-bottom: 16px; }
+    nav {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 4px;
+      align-items: flex-end;
+      margin-top: 16px;
+    }
+    nav button {
+      font-family: var(--mono);
+      font-size: 12px;
+      cursor: pointer;
+      background: var(--tab);
+      color: var(--ink);
+      border: none;
+      border-radius: 6px 6px 0 0;
+      padding: 6px 12px 5px;
+      box-shadow: inset 0 -3px 4px rgba(0,0,0,.15);
+    }
+    nav button.active {
+      background: var(--tab-active);
+      padding: 9px 14px 7px;
+      box-shadow: 0 -2px 4px rgba(0,0,0,.15);
+    }
+    nav button:focus-visible,
+    .cardbtn:focus-visible,
+    button:focus-visible,
+    input:focus-visible,
+    select:focus-visible,
+    textarea:focus-visible {
+      outline: 2px solid #F0E3BE;
+      outline-offset: 2px;
+    }
+    .shelf {
+      height: 3px;
+      background: var(--tab-active);
+      border-radius: 1px;
+      margin-bottom: 16px;
+    }
 
-  .banner {
-    background: var(--tab-active); border-radius: 3px; padding: 10px 14px; margin-bottom: 14px;
-    font-family: var(--mono); font-size: 13px; display: flex; gap: 12px; align-items: center;
-    justify-content: space-between; flex-wrap: wrap;
-    box-shadow: 0 2px 0 rgba(0,0,0,.3);
-  }
-  .banner button {
-    font-family: var(--mono); font-size: 13px; font-weight: 700; cursor: pointer;
-    background: var(--rule-red); color: #FFF8EE; border: none; border-radius: 3px; padding: 8px 14px;
-  }
+    .banner {
+      background: var(--tab-active);
+      border-radius: 3px;
+      padding: 10px 14px;
+      margin-bottom: 14px;
+      font-family: var(--mono);
+      font-size: 13px;
+      display: flex;
+      gap: 12px;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      box-shadow: 0 2px 0 rgba(0,0,0,.3);
+    }
+    .banner button {
+      font-family: var(--mono);
+      font-size: 13px;
+      font-weight: 700;
+      cursor: pointer;
+      background: var(--rule-red);
+      color: #FFF8EE;
+      border: none;
+      border-radius: 3px;
+      padding: 8px 14px;
+    }
 
-  .searchbox {
-    width: 100%; font-family: var(--mono); font-size: 14px;
-    background: var(--card); color: var(--ink);
-    border: 1px solid var(--card-edge); border-radius: 3px;
-    padding: 10px 12px; margin-bottom: 14px;
-  }
-  .searchbox:focus { outline: 2px solid var(--tab-active); }
+    .searchbox {
+      width: 100%;
+      font-family: var(--mono);
+      font-size: 14px;
+      background: var(--card);
+      color: var(--ink);
+      border: 1px solid var(--card-edge);
+      border-radius: 3px;
+      padding: 10px 12px;
+      margin-bottom: 14px;
+    }
+    .searchbox:focus {
+      outline: 2px solid var(--tab-active);
+    }
 
-  .card {
-    background: var(--card); border: 1px solid var(--card-edge);
-    border-radius: 4px 4px 3px 3px;
-    box-shadow: 0 2px 0 rgba(0,0,0,.25), 0 6px 14px rgba(0,0,0,.25);
-  }
-  .cardlist { display: flex; flex-direction: column; gap: 10px; }
-  .cardbtn { text-align: left; cursor: pointer; padding: 0; display: block; width: 100%; font: inherit; border: 1px solid var(--card-edge); }
-  .cardbtn .t { font-family: var(--serif); font-size: 17px; padding: 12px 16px 8px; display: block; }
-  .cardbtn .r { height: 1px; background: var(--rule-red); opacity: .55; display: block; }
-  .cardbtn .m { font-family: var(--mono); font-size: 12px; color: var(--ink-soft); padding: 6px 16px 10px; display: block; }
+    .card {
+      background: var(--card);
+      border: 1px solid var(--card-edge);
+      border-radius: 4px 4px 3px 3px;
+      box-shadow: 0 2px 0 rgba(0,0,0,.25), 0 6px 14px rgba(0,0,0,.25);
+    }
+    .cardlist {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    .cardbtn {
+      text-align: left;
+      cursor: pointer;
+      padding: 0;
+      display: block;
+      width: 100%;
+      font: inherit;
+      border: 1px solid var(--card-edge);
+    }
+    .cardbtn .t {
+      font-family: var(--serif);
+      font-size: 17px;
+      padding: 12px 16px 8px;
+      display: block;
+    }
+    .cardbtn .r {
+      height: 1px;
+      background: var(--rule-red);
+      opacity: .55;
+      display: block;
+    }
+    .cardbtn .m {
+      font-family: var(--mono);
+      font-size: 12px;
+      color: var(--ink-soft);
+      padding: 6px 16px 10px;
+      display: block;
+    }
 
-  .redrule .a { height: 2px; background: var(--rule-red); opacity: .9; }
-  .redrule .b { height: 1px; background: var(--rule-red); opacity: .5; margin-top: 2px; }
+    .redrule .a {
+      height: 2px;
+      background: var(--rule-red);
+      opacity: .9;
+    }
+    .redrule .b {
+      height: 1px;
+      background: var(--rule-red);
+      opacity: .5;
+      margin-top: 2px;
+    }
 
-  .pad { padding: 12px 22px 0; }
-  .head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; padding: 18px 22px 10px; }
-  .head h2 { margin: 0; font-family: var(--serif); font-size: 24px; line-height: 1.2; }
-  .backbtn { font-family: var(--mono); font-size: 13px; background: none; border: none; color: var(--ink-soft); cursor: pointer; white-space: nowrap; }
-  .meta { margin: 0 0 4px; font-family: var(--mono); font-size: 13px; color: var(--ink-soft); }
-  h3.sec { font-family: var(--serif); font-style: italic; font-weight: 400; font-size: 15px; color: var(--ink-soft); margin: 20px 0 4px; }
-  ul.ing { list-style: none; margin: 0; padding: 0; }
-  ul.ing li { font-family: var(--mono); font-size: 14px; line-height: 1.5; padding: 6px 2px; border-bottom: 1px solid rgba(185,201,216,.45); }
-  ol.steps { margin: 0; padding: 0 0 0 22px; }
-  ol.steps li { font-family: var(--mono); font-size: 14px; line-height: 1.7; padding: 4px 0; }
-  .notes { margin-top: 22px; font-family: var(--mono); font-size: 13px; font-style: italic; color: var(--ink-soft); border-top: 1px dashed var(--rule-blue); padding-top: 10px; }
+    .pad {
+      padding: 12px 22px 0;
+    }
+    .head {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 18px 22px 10px;
+    }
+    .head h2 {
+      margin: 0;
+      font-family: var(--serif);
+      font-size: 24px;
+      line-height: 1.2;
+    }
+    .backbtn {
+      font-family: var(--mono);
+      font-size: 13px;
+      background: none;
+      border: none;
+      color: var(--ink-soft);
+      cursor: pointer;
+      white-space: nowrap;
+    }
+    .meta {
+      margin: 0 0 4px;
+      font-family: var(--mono);
+      font-size: 13px;
+      color: var(--ink-soft);
+    }
+    h3.sec {
+      font-family: var(--serif);
+      font-style: italic;
+      font-weight: 400;
+      font-size: 15px;
+      color: var(--ink-soft);
+      margin: 20px 0 4px;
+    }
+    ul.ing {
+      list-style: none;
+      margin: 0;
+      padding: 0;
+    }
+    ul.ing li {
+      font-family: var(--mono);
+      font-size: 14px;
+      line-height: 1.5;
+      padding: 6px 2px;
+      border-bottom: 1px solid rgba(185,201,216,.45);
+    }
+    ol.steps {
+      margin: 0;
+      padding: 0 0 0 22px;
+    }
+    ol.steps li {
+      font-family: var(--mono);
+      font-size: 14px;
+      line-height: 1.7;
+      padding: 4px 0;
+    }
+    .notes {
+      margin-top: 22px;
+      font-family: var(--mono);
+      font-size: 13px;
+      font-style: italic;
+      color: var(--ink-soft);
+      border-top: 1px dashed var(--rule-blue);
+      padding-top: 10px;
+    }
 
-  .btnrow { display: flex; gap: 10px; margin: 24px 0 22px; }
-  .btn { font-family: var(--mono); font-size: 13px; cursor: pointer; border-radius: 3px; padding: 8px 16px; background: transparent; }
-  .btn.primary { font-size: 14px; font-weight: 700; background: var(--rule-red); color: #FFF8EE; border: none; padding: 10px 18px; }
-  .btn.primary:disabled { opacity: .5; cursor: not-allowed; }
-  .btn.quiet { color: var(--ink-soft); border: 1px solid var(--card-edge); padding: 10px 18px; font-size: 14px; }
-  .btn.edit { color: var(--ink); border: 1px solid var(--ink); }
-  .btn.danger { color: var(--rule-red); border: 1px solid rgba(181,58,46,.4); }
-  .btn.danger.armed { font-weight: 700; background: var(--rule-red); color: #FFF8EE; border: none; }
+    .btnrow {
+      display: flex;
+      gap: 10px;
+      margin: 24px 0 22px;
+    }
+    .btn {
+      font-family: var(--mono);
+      font-size: 13px;
+      cursor: pointer;
+      border-radius: 3px;
+      padding: 8px 16px;
+      background: transparent;
+    }
+    .btn.primary {
+      font-size: 14px;
+      font-weight: 700;
+      background: var(--rule-red);
+      color: #FFF8EE;
+      border: none;
+      padding: 10px 18px;
+    }
+    .btn.primary:disabled {
+      opacity: .5;
+      cursor: not-allowed;
+    }
+    .btn.quiet {
+      color: var(--ink-soft);
+      border: 1px solid var(--card-edge);
+      padding: 10px 18px;
+      font-size: 14px;
+    }
+    .btn.edit {
+      color: var(--ink);
+      border: 1px solid var(--ink);
+    }
+    .btn.danger {
+      color: var(--rule-red);
+      border: 1px solid rgba(181,58,46,.4);
+    }
+    .btn.danger.armed {
+      font-weight: 700;
+      background: var(--rule-red);
+      color: #FFF8EE;
+      border: none;
+    }
 
-  .addbtn {
-    margin-top: 18px; font-family: var(--mono); font-size: 14px; font-weight: 700; cursor: pointer;
-    background: var(--tab-active); color: var(--ink); border: none; border-radius: 3px;
-    padding: 12px 20px; box-shadow: 0 2px 0 rgba(0,0,0,.3);
-  }
+    .addbtn {
+      margin-top: 18px;
+      font-family: var(--mono);
+      font-size: 14px;
+      font-weight: 700;
+      cursor: pointer;
+      background: var(--tab-active);
+      color: var(--ink);
+      border: none;
+      border-radius: 3px;
+      padding: 12px 20px;
+      box-shadow: 0 2px 0 rgba(0,0,0,.3);
+    }
 
-  .empty { padding: 36px 24px; text-align: center; }
-  .empty p.big { font-family: var(--serif); font-size: 18px; margin: 0; }
-  .empty p.small { font-family: var(--mono); font-size: 13px; color: var(--ink-soft); margin-top: 8px; }
+    .empty {
+      padding: 36px 24px;
+      text-align: center;
+    }
+    .empty p.big {
+      font-family: var(--serif);
+      font-size: 18px;
+      margin: 0;
+    }
+    .empty p.small {
+      font-family: var(--mono);
+      font-size: 13px;
+      color: var(--ink-soft);
+      margin-top: 8px;
+    }
 
-  label.fld { font-family: var(--serif); font-style: italic; font-size: 13px; color: var(--ink-soft); display: block; margin: 14px 0 2px; }
-  .fi, .fs, .fa {
-    width: 100%; font-family: var(--mono); font-size: 14px; color: var(--ink);
-    background: transparent; border: none; border-bottom: 1px solid var(--rule-blue);
-    padding: 6px 2px;
-  }
-  .fa { border: 1px solid var(--rule-blue); border-radius: 2px; padding: 8px; line-height: 1.7; resize: vertical; }
-  .title-in { font-family: var(--serif); font-weight: 700; font-size: 22px; width: 100%; background: transparent; border: none; padding: 6px 2px; color: var(--ink); }
-  .row3 { display: flex; gap: 16px; flex-wrap: wrap; }
-  .row3 > div { flex: 1 1 110px; }
-</style>
-</head>
-<body>
-<div class="wrap">
-  <header>
-    <h1>Recipe Box</h1>
-    <p class="count" id="count">Opening the box&hellip;</p>
-    <p class="warn" id="warn" hidden></p>
-  </header>
-  <nav id="tabs" aria-label="Card tabs"></nav>
-  <div class="shelf"></div>
-  <main id="main"></main>
-</div>
-
-<script type="module">
-import { apply, subscribe, me } from './api/client.js';
-
-const CATS = ["Mains","Sides","Soups","Breakfast","Baking","Desserts","Other"];
-const LOCAL_KEY = "recipebox-recipes-v1";
-const $ = (id) => document.getElementById(id);
-
-let recipes = [];            // from the shared store
-let synced = false;          // first snapshot arrived
-let who = null;              // me() answer
-let search = "", editing = null, armedDelete = null;
-let busy = false;
-
-// ---- routing: the hash is the source of truth for tab + open card ----
-// #/            → list, All tab
-// #/tab/Baking  → list, one tab
-// #/card/12     → one card (entity num, falls back to eid)
-let route = { tab: "All", card: null };
-
-function parseHash() {
-  const h = decodeURIComponent(location.hash.replace(/^#\/?/, ""));
-  let m;
-  if ((m = h.match(/^card\/(.+)$/))) return { tab: "All", card: m[1] };
-  if ((m = h.match(/^tab\/(.+)$/))) return { tab: CATS.includes(m[1]) ? m[1] : "All", card: null };
-  return { tab: "All", card: null };
-}
-function tabHash(t) { return t === "All" ? "#/" : "#/tab/" + encodeURIComponent(t); }
-function cardHash(r) { return "#/card/" + encodeURIComponent(r.num != null ? String(r.num) : r.eid); }
-function nav(hash) {
-  if (location.hash === hash || (hash === "#/" && location.hash === "")) { onRoute(); }
-  else location.hash = hash;
-}
-function onRoute() {
-  route = parseHash();
-  editing = null; armedDelete = null;
-  render();
-}
-window.addEventListener("hashchange", onRoute);
-
-function findCard(token) {
-  if (token == null) return null;
-  return recipes.find(r => String(r.num) === token || r.eid === token) || null;
-}
-
-let localCards = [];
-try { localCards = JSON.parse(localStorage.getItem(LOCAL_KEY) || "[]"); } catch (e) {}
-
-function canWrite() { return !who || who.writes; }
-
-function esc(s) {
-  return String(s == null ? "" : s).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
-}
-function warn(msg, signIn) {
-  const w = $("warn");
-  if (!msg) { w.hidden = true; w.textContent = ""; return; }
-  w.hidden = false;
-  w.innerHTML = esc(msg) + (signIn ? ` <a href="${esc(signIn)}" style="color:#F0E3BE">Sign in</a>` : "");
-}
-function fail(e) {
-  warn(e && e.message ? e.message : "Something went wrong.", e && e.signIn);
-}
-
-function toLocal(row) {
-  const r = row.recipe || {};
-  return {
-    eid: row.entity.eid,
-    num: row.entity.num,
-    // doc.title is where a recipe's name lives, and the only place.
-    title: (row.doc && row.doc.title) || "(untitled)",
-    category: CATS.includes(r.category) ? r.category : "Other",
-    servings: r.serves || "",
-    time: r.duration || "",
-    ingredients: r.ingredients ? r.ingredients.split("\n").filter(Boolean) : [],
-    steps: r.steps ? r.steps.split("\n").filter(Boolean) : [],
-    notes: r.notes || "",
-  };
-}
-function toBundle(rec, eid) {
-  return {
-    entity: { eid: eid },
-    doc: { title: rec.title },
-    recipe: {
-      category: rec.category,
-      serves: rec.servings,
-      duration: rec.time,
-      ingredients: rec.ingredients.join("\n"),
-      steps: rec.steps.join("\n"),
-      notes: rec.notes,
-    },
-  };
-}
-function metaLine(r) {
-  const parts = [r.category];
-  if (r.servings) parts.push("serves " + r.servings);
-  if (r.time) parts.push(r.time);
-  return parts.join(" \u00b7 ");
-}
-
-// ---- live store ----
-try {
-  subscribe('.recipe&?doc', (rows) => {
-    recipes = rows.map(toLocal);
-    synced = true;
-    render();
-  });
-} catch (e) { fail(e); }
-
-me().then(w => { who = w; render(); }).catch(() => {});
-
-// ---- actions ----
-async function saveForm() {
-  if (busy) return;
-  const title = $("f-title").value.trim();
-  if (!title) { $("f-title").focus(); return; }
-  const rec = {
-    title,
-    category: $("f-cat").value,
-    servings: $("f-serves").value.trim(),
-    time: $("f-time").value.trim(),
-    ingredients: $("f-ing").value.split("\n").map(x => x.trim()).filter(Boolean),
-    steps: $("f-steps").value.split("\n").map(x => x.trim()).filter(Boolean),
-    notes: $("f-notes").value.trim(),
-  };
-  busy = true; render();
-  try {
-    const isNew = editing === "new";
-    const target = isNew ? "$r" : editing;
-    const res = await apply(toBundle(rec, target));
-    const eid = isNew ? res.aliases["$r"] : editing;
-    editing = null;
-    warn(null);
-    busy = false;
-    // Route to the card; the subscribe snapshot fills in its num shortly.
-    const existing = recipes.find(r => r.eid === eid);
-    nav(existing ? cardHash(existing) : "#/card/" + encodeURIComponent(eid));
-    return;
-  } catch (e) { fail(e); }
-  busy = false; render();
-}
-
-async function tossCard(eid) {
-  if (busy) return;
-  busy = true; render();
-  try {
-    const gone = recipes.find(r => r.eid === eid);
-    await apply({ entity: { eid: eid }, tombstone: {} });
-    armedDelete = null; warn(null);
-    busy = false;
-    nav(tabHash(gone && CATS.includes(gone.category) ? gone.category : "All"));
-    return;
-  } catch (e) { fail(e); }
-  busy = false; render();
-}
-
-async function importLocal() {
-  if (busy || !localCards.length) return;
-  busy = true; render();
-  try {
-    const bundles = localCards.map((c, i) => toBundle({
-      title: c.title || "(untitled)",
-      category: CATS.includes(c.category) ? c.category : "Other",
-      servings: c.servings || "",
-      time: c.time || "",
-      ingredients: c.ingredients || [],
-      steps: c.steps || [],
-      notes: c.notes || "",
-    }, "$m" + i));
-    await apply(bundles);
-    localStorage.removeItem(LOCAL_KEY);
-    localCards = [];
-    warn(null);
-  } catch (e) { fail(e); }
-  busy = false; render();
-}
-
-// ---- rendering ----
-function render() {
-  $("count").innerHTML = countLine();
-  renderTabs();
-  const m = $("main");
-  const open = findCard(route.card);
-  if (editing) m.innerHTML = formHTML();
-  else if (route.card) m.innerHTML = detailHTML(open);
-  else m.innerHTML = listHTML();
-  document.title = open && !editing ? open.title + " \u00b7 Recipe Box" : "Recipe Box";
-  wire();
-}
-
-function countLine() {
-  if (!synced) return "Opening the box\u2026";
-  let s = (recipes.length === 1 ? "1 card in the box" : recipes.length + " cards in the box");
-  if (who && !who.writes) {
-    s += " \u00b7 viewing only";
-    if (who.signIn) s += ` \u2014 <a href="${esc(who.signIn)}">sign in</a> to edit`;
-  }
-  if (busy) s += " \u00b7 saving\u2026";
-  return s;
-}
-
-function renderTabs() {
-  $("tabs").innerHTML = ["All", ...CATS].map(c =>
-    `<button data-tab="${c}" class="${route.tab === c && !route.card ? "active" : ""}">${c}</button>`
-  ).join("");
-}
-
-function listHTML() {
-  const q = search.trim().toLowerCase();
-  const vis = recipes
-    .filter(r => route.tab === "All" || r.category === route.tab)
-    .filter(r => !q || r.title.toLowerCase().includes(q) || r.ingredients.some(i => i.toLowerCase().includes(q)))
-    .sort((a,b) => a.title.localeCompare(b.title));
-
-  let banner = "";
-  if (localCards.length && canWrite() && synced) {
-    banner = `<div class="banner">
-      <span>${localCards.length} card${localCards.length === 1 ? "" : "s"} saved only on this device.</span>
-      <button id="importlocal">Move into the shared box</button>
-    </div>`;
-  }
-
-  let inner;
-  if (!synced) {
-    inner = `<div class="card empty"><p class="big">Opening the box\u2026</p></div>`;
-  } else if (vis.length === 0) {
-    inner = `<div class="card empty">
-      <p class="big">${recipes.length === 0 ? "The box is empty." : "No cards match."}</p>
-      <p class="small">${recipes.length === 0 ? (canWrite() ? "Add your first recipe card below." : "Nothing filed yet.") : "Try a different tab or search."}</p>
-    </div>`;
-  } else {
-    inner = `<div class="cardlist">` + vis.map(r => `
-      <button class="card cardbtn" data-open="${esc(cardHash(r))}">
-        <span class="t">${esc(r.title)}</span>
-        <span class="r"></span>
-        <span class="m">${esc(metaLine(r))} \u00b7 ${r.ingredients.length} ingredients</span>
-      </button>`).join("") + `</div>`;
-  }
-  return banner +
-    `<input id="search" class="searchbox" placeholder="Search by name or ingredient" value="${esc(search)}">
-    ${inner}
-    ${canWrite() ? `<button class="addbtn" id="addnew">+ New recipe card</button>` : ""}`;
-}
-
-function detailHTML(r) {
-  if (!r) {
-    return `<div class="card empty">
-      <p class="big">${synced ? "That card isn't in the box." : "Opening the box\u2026"}</p>
-      <p class="small">${synced ? `<a href="#/" style="color:var(--rule-red)">Back to the box</a>` : ""}</p>
-    </div>`;
-  }
-  return `<div class="card">
-    <div class="head">
-      <h2>${esc(r.title)}</h2>
-      <button class="backbtn" id="back">\u2190 back to box</button>
+    label.fld {
+      font-family: var(--serif);
+      font-style: italic;
+      font-size: 13px;
+      color: var(--ink-soft);
+      display: block;
+      margin: 14px 0 2px;
+    }
+    .fi,
+    .fs,
+    .fa {
+      width: 100%;
+      font-family: var(--mono);
+      font-size: 14px;
+      color: var(--ink);
+      background: transparent;
+      border: none;
+      border-bottom: 1px solid var(--rule-blue);
+      padding: 6px 2px;
+    }
+    .fa {
+      border: 1px solid var(--rule-blue);
+      border-radius: 2px;
+      padding: 8px;
+      line-height: 1.7;
+      resize: vertical;
+    }
+    .title-in {
+      font-family: var(--serif);
+      font-weight: 700;
+      font-size: 22px;
+      width: 100%;
+      background: transparent;
+      border: none;
+      padding: 6px 2px;
+      color: var(--ink);
+    }
+    .row3 {
+      display: flex;
+      gap: 16px;
+      flex-wrap: wrap;
+    }
+    .row3 > div {
+      flex: 1 1 110px;
+    }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <header>
+        <h1>Recipe Box</h1>
+        <p class="count" id="count">Opening the box&hellip;</p>
+        <p class="warn" id="warn" hidden></p>
+      </header>
+      <nav id="tabs" aria-label="Card tabs"></nav>
+      <div class="shelf"></div>
+      <main id="main"></main>
     </div>
-    <div class="redrule"><div class="a"></div><div class="b"></div></div>
-    <div class="pad">
-      <p class="meta">${esc(metaLine(r))}</p>
-      <h3 class="sec">Ingredients</h3>
-      <ul class="ing">${r.ingredients.map(i => `<li>${esc(i)}</li>`).join("")}</ul>
-      <h3 class="sec">Steps</h3>
-      <ol class="steps">${r.steps.map(s => `<li>${esc(s)}</li>`).join("")}</ol>
-      ${r.notes ? `<p class="notes">${esc(r.notes)}</p>` : ""}
-      ${canWrite() ? `<div class="btnrow">
-        <button class="btn edit" id="edit" data-eid="${esc(r.eid)}">Edit card</button>
-        ${armedDelete === r.eid
-          ? `<button class="btn danger armed" id="del" data-eid="${esc(r.eid)}">Really toss it?</button>`
-          : `<button class="btn danger" id="del" data-eid="${esc(r.eid)}">Toss card</button>`}
-      </div>` : `<div style="height:22px"></div>`}
-    </div>
-  </div>`;
-}
 
-function formHTML() {
-  const r = editing === "new"
-    ? { title:"", category: route.tab !== "All" ? route.tab : "Mains", servings:"", time:"", ingredients:[], steps:[], notes:"" }
-    : recipes.find(x => x.eid === editing);
-  if (!r) { editing = null; return listHTML(); }
-  return `<div class="card">
-    <div style="padding:18px 22px 10px">
-      <input id="f-title" class="title-in" placeholder="Recipe name" value="${esc(r.title === "(untitled)" ? "" : r.title)}">
-    </div>
-    <div class="redrule"><div class="a"></div><div class="b"></div></div>
-    <div class="pad" style="padding-bottom:20px">
-      <div class="row3">
-        <div><label class="fld" for="f-cat">Card tab</label>
-          <select id="f-cat" class="fs">${CATS.map(c => `<option ${c === r.category ? "selected" : ""}>${c}</option>`).join("")}</select></div>
-        <div><label class="fld" for="f-serves">Serves</label>
-          <input id="f-serves" class="fi" placeholder="4" value="${esc(r.servings)}"></div>
-        <div><label class="fld" for="f-time">Time</label>
-          <input id="f-time" class="fi" placeholder="45 min" value="${esc(r.time)}"></div>
-      </div>
-      <label class="fld" for="f-ing">Ingredients \u2014 one per line</label>
-      <textarea id="f-ing" class="fa" rows="7" placeholder="2 cups flour&#10;1 tsp salt">${esc(r.ingredients.join("\n"))}</textarea>
-      <label class="fld" for="f-steps">Steps \u2014 one per line</label>
-      <textarea id="f-steps" class="fa" rows="7" placeholder="Preheat oven to 375\u00b0F&#10;Mix dry ingredients">${esc(r.steps.join("\n"))}</textarea>
-      <label class="fld" for="f-notes">Notes</label>
-      <input id="f-notes" class="fi" placeholder="Grandma doubles the vanilla." value="${esc(r.notes)}">
-      <div class="btnrow">
-        <button class="btn primary" id="saveform" ${busy ? "disabled" : ""}>${busy ? "Saving\u2026" : (editing === "new" ? "Add to box" : "Save card")}</button>
-        <button class="btn quiet" id="cancelform">Cancel</button>
-      </div>
-    </div>
-  </div>`;
-}
+    <script type="module">
+    import { apply, me, subscribe } from './api/client.js'
 
-function wire() {
-  document.querySelectorAll("[data-tab]").forEach(b => b.onclick = () => nav(tabHash(b.dataset.tab)));
-  document.querySelectorAll("[data-open]").forEach(b => b.onclick = () => nav(b.dataset.open));
-  const s = $("search");
-  if (s) {
-    s.oninput = () => {
-      search = s.value;
-      const pos = s.selectionStart;
-      render();
-      const s2 = $("search");
-      s2.focus(); s2.setSelectionRange(pos, pos);
-    };
-  }
-  const add = $("addnew"); if (add) add.onclick = () => { editing = "new"; render(); $("f-title").focus(); };
-  const back = $("back"); if (back) back.onclick = () => nav(tabHash(route.tab));
-  const edit = $("edit"); if (edit) edit.onclick = () => { editing = edit.dataset.eid; render(); };
-  const del = $("del");
-  if (del) del.onclick = () => {
-    const eid = del.dataset.eid;
-    if (armedDelete === eid) tossCard(eid);
-    else { armedDelete = eid; render(); }
-  };
-  const sf = $("saveform"); if (sf) sf.onclick = saveForm;
-  const cf = $("cancelform"); if (cf) cf.onclick = () => { editing = null; render(); };
-  const il = $("importlocal"); if (il) il.onclick = importLocal;
-}
+    const CATS = [
+      'Mains',
+      'Sides',
+      'Soups',
+      'Breakfast',
+      'Baking',
+      'Desserts',
+      'Other',
+    ]
+    const LOCAL_KEY = 'recipebox-recipes-v1'
+    const $ = (id) => document.getElementById(id)
 
-onRoute();
-</script>
-</body>
+    let recipes = [] // from the shared store
+    let synced = false // first snapshot arrived
+    let who = null // me() answer
+    let search = '', editing = null, armedDelete = null
+    let busy = false
+
+    // ---- routing: the hash is the source of truth for tab + open card ----
+    // #/            → list, All tab
+    // #/tab/Baking  → list, one tab
+    // #/card/12     → one card (entity num, falls back to eid)
+    let route = { tab: 'All', card: null }
+
+    function parseHash() {
+      const h = decodeURIComponent(location.hash.replace(/^#\/?/, ''))
+      let m
+      if ((m = h.match(/^card\/(.+)$/))) return { tab: 'All', card: m[1] }
+      if ((m = h.match(/^tab\/(.+)$/))) {
+        return { tab: CATS.includes(m[1]) ? m[1] : 'All', card: null }
+      }
+      return { tab: 'All', card: null }
+    }
+    function tabHash(t) {
+      return t === 'All' ? '#/' : '#/tab/' + encodeURIComponent(t)
+    }
+    function cardHash(r) {
+      return '#/card/' + encodeURIComponent(r.num != null ? String(r.num) : r.eid)
+    }
+    function nav(hash) {
+      if (location.hash === hash || (hash === '#/' && location.hash === '')) {
+        onRoute()
+      } else location.hash = hash
+    }
+    function onRoute() {
+      route = parseHash()
+      editing = null
+      armedDelete = null
+      render()
+    }
+    window.addEventListener('hashchange', onRoute)
+
+    function findCard(token) {
+      if (token == null) return null
+      return recipes.find((r) => String(r.num) === token || r.eid === token) || null
+    }
+
+    let localCards = []
+    try {
+      localCards = JSON.parse(localStorage.getItem(LOCAL_KEY) || '[]')
+    } catch (e) {}
+
+    function canWrite() {
+      return !who || who.writes
+    }
+
+    function esc(s) {
+      return String(s == null ? '' : s).replace(
+        /[&<>"']/g,
+        (c) => ({
+          '&': '&amp;',
+          '<': '&lt;',
+          '>': '&gt;',
+          '"': '&quot;',
+          "'": '&#39;',
+        }[c]),
+      )
+    }
+    function warn(msg, signIn) {
+      const w = $('warn')
+      if (!msg) {
+        w.hidden = true
+        w.textContent = ''
+        return
+      }
+      w.hidden = false
+      w.innerHTML = esc(msg) +
+        (signIn
+          ? ` <a href="${esc(signIn)}" style="color:#F0E3BE">Sign in</a>`
+          : '')
+    }
+    function fail(e) {
+      warn(e && e.message ? e.message : 'Something went wrong.', e && e.signIn)
+    }
+
+    function toLocal(row) {
+      const r = row.recipe || {}
+      return {
+        eid: row.entity.eid,
+        num: row.entity.num,
+        // doc.title is where a recipe's name lives, and the only place.
+        title: (row.doc && row.doc.title) || '(untitled)',
+        category: CATS.includes(r.category) ? r.category : 'Other',
+        servings: r.serves || '',
+        time: r.duration || '',
+        ingredients: r.ingredients ? r.ingredients.split('\n').filter(Boolean) : [],
+        steps: r.steps ? r.steps.split('\n').filter(Boolean) : [],
+        notes: r.notes || '',
+      }
+    }
+    function toBundle(rec, eid) {
+      return {
+        entity: { eid: eid },
+        doc: { title: rec.title },
+        recipe: {
+          category: rec.category,
+          serves: rec.servings,
+          duration: rec.time,
+          ingredients: rec.ingredients.join('\n'),
+          steps: rec.steps.join('\n'),
+          notes: rec.notes,
+        },
+      }
+    }
+    function metaLine(r) {
+      const parts = [r.category]
+      if (r.servings) parts.push('serves ' + r.servings)
+      if (r.time) parts.push(r.time)
+      return parts.join(' \u00b7 ')
+    }
+
+    // ---- live store ----
+    try {
+      subscribe('.recipe&?doc', (rows) => {
+        recipes = rows.map(toLocal)
+        synced = true
+        render()
+      })
+    } catch (e) {
+      fail(e)
+    }
+
+    me().then((w) => {
+      who = w
+      render()
+    }).catch(() => {})
+
+    // ---- actions ----
+    async function saveForm() {
+      if (busy) return
+      const title = $('f-title').value.trim()
+      if (!title) {
+        $('f-title').focus()
+        return
+      }
+      const rec = {
+        title,
+        category: $('f-cat').value,
+        servings: $('f-serves').value.trim(),
+        time: $('f-time').value.trim(),
+        ingredients: $('f-ing').value.split('\n').map((x) => x.trim()).filter(
+          Boolean,
+        ),
+        steps: $('f-steps').value.split('\n').map((x) => x.trim()).filter(Boolean),
+        notes: $('f-notes').value.trim(),
+      }
+      busy = true
+      render()
+      try {
+        const isNew = editing === 'new'
+        const target = isNew ? '$r' : editing
+        const res = await apply(toBundle(rec, target))
+        const eid = isNew ? res.aliases['$r'] : editing
+        editing = null
+        warn(null)
+        busy = false
+        // Route to the card; the subscribe snapshot fills in its num shortly.
+        const existing = recipes.find((r) => r.eid === eid)
+        nav(existing ? cardHash(existing) : '#/card/' + encodeURIComponent(eid))
+        return
+      } catch (e) {
+        fail(e)
+      }
+      busy = false
+      render()
+    }
+
+    async function tossCard(eid) {
+      if (busy) return
+      busy = true
+      render()
+      try {
+        const gone = recipes.find((r) => r.eid === eid)
+        await apply({ entity: { eid: eid }, tombstone: {} })
+        armedDelete = null
+        warn(null)
+        busy = false
+        nav(tabHash(gone && CATS.includes(gone.category) ? gone.category : 'All'))
+        return
+      } catch (e) {
+        fail(e)
+      }
+      busy = false
+      render()
+    }
+
+    async function importLocal() {
+      if (busy || !localCards.length) return
+      busy = true
+      render()
+      try {
+        const bundles = localCards.map((c, i) =>
+          toBundle({
+            title: c.title || '(untitled)',
+            category: CATS.includes(c.category) ? c.category : 'Other',
+            servings: c.servings || '',
+            time: c.time || '',
+            ingredients: c.ingredients || [],
+            steps: c.steps || [],
+            notes: c.notes || '',
+          }, '$m' + i)
+        )
+        await apply(bundles)
+        localStorage.removeItem(LOCAL_KEY)
+        localCards = []
+        warn(null)
+      } catch (e) {
+        fail(e)
+      }
+      busy = false
+      render()
+    }
+
+    // ---- rendering ----
+    function render() {
+      $('count').innerHTML = countLine()
+      renderTabs()
+      const m = $('main')
+      const open = findCard(route.card)
+      if (editing) m.innerHTML = formHTML()
+      else if (route.card) m.innerHTML = detailHTML(open)
+      else m.innerHTML = listHTML()
+      document.title = open && !editing
+        ? open.title + ' \u00b7 Recipe Box'
+        : 'Recipe Box'
+      wire()
+    }
+
+    function countLine() {
+      if (!synced) return 'Opening the box\u2026'
+      let s = recipes.length === 1
+        ? '1 card in the box'
+        : recipes.length + ' cards in the box'
+      if (who && !who.writes) {
+        s += ' \u00b7 viewing only'
+        if (who.signIn) {
+          s += ` \u2014 <a href="${esc(who.signIn)}">sign in</a> to edit`
+        }
+      }
+      if (busy) s += ' \u00b7 saving\u2026'
+      return s
+    }
+
+    function renderTabs() {
+      $('tabs').innerHTML = ['All', ...CATS].map((c) =>
+        `<button data-tab="${c}" class="${
+          route.tab === c && !route.card ? 'active' : ''
+        }">${c}</button>`
+      ).join('')
+    }
+
+    function listHTML() {
+      const q = search.trim().toLowerCase()
+      const vis = recipes
+        .filter((r) => route.tab === 'All' || r.category === route.tab)
+        .filter((r) =>
+          !q || r.title.toLowerCase().includes(q) ||
+          r.ingredients.some((i) => i.toLowerCase().includes(q))
+        )
+        .sort((a, b) => a.title.localeCompare(b.title))
+
+      let banner = ''
+      if (localCards.length && canWrite() && synced) {
+        banner = `<div class="banner">
+          <span>${localCards.length} card${
+          localCards.length === 1 ? '' : 's'
+        } saved only on this device.</span>
+          <button id="importlocal">Move into the shared box</button>
+        </div>`
+      }
+
+      let inner
+      if (!synced) {
+        inner =
+          `<div class="card empty"><p class="big">Opening the box\u2026</p></div>`
+      } else if (vis.length === 0) {
+        inner = `<div class="card empty">
+          <p class="big">${
+          recipes.length === 0 ? 'The box is empty.' : 'No cards match.'
+        }</p>
+          <p class="small">${
+          recipes.length === 0
+            ? (canWrite()
+              ? 'Add your first recipe card below.'
+              : 'Nothing filed yet.')
+            : 'Try a different tab or search.'
+        }</p>
+        </div>`
+      } else {
+        inner = `<div class="cardlist">` + vis.map((r) => `
+          <button class="card cardbtn" data-open="${esc(cardHash(r))}">
+            <span class="t">${esc(r.title)}</span>
+            <span class="r"></span>
+            <span class="m">${
+          esc(metaLine(r))
+        } \u00b7 ${r.ingredients.length} ingredients</span>
+          </button>`).join('') + `</div>`
+      }
+      return banner +
+        `<input id="search" class="searchbox" placeholder="Search by name or ingredient" value="${
+          esc(search)
+        }">
+        ${inner}
+        ${
+          canWrite()
+            ? `<button class="addbtn" id="addnew">+ New recipe card</button>`
+            : ''
+        }`
+    }
+
+    function detailHTML(r) {
+      if (!r) {
+        return `<div class="card empty">
+          <p class="big">${
+          synced ? "That card isn't in the box." : 'Opening the box\u2026'
+        }</p>
+          <p class="small">${
+          synced
+            ? `<a href="#/" style="color:var(--rule-red)">Back to the box</a>`
+            : ''
+        }</p>
+        </div>`
+      }
+      return `<div class="card">
+        <div class="head">
+          <h2>${esc(r.title)}</h2>
+          <button class="backbtn" id="back">\u2190 back to box</button>
+        </div>
+        <div class="redrule"><div class="a"></div><div class="b"></div></div>
+        <div class="pad">
+          <p class="meta">${esc(metaLine(r))}</p>
+          <h3 class="sec">Ingredients</h3>
+          <ul class="ing">${
+        r.ingredients.map((i) => `<li>${esc(i)}</li>`).join('')
+      }</ul>
+          <h3 class="sec">Steps</h3>
+          <ol class="steps">${
+        r.steps.map((s) => `<li>${esc(s)}</li>`).join('')
+      }</ol>
+          ${r.notes ? `<p class="notes">${esc(r.notes)}</p>` : ''}
+          ${
+        canWrite()
+          ? `<div class="btnrow">
+            <button class="btn edit" id="edit" data-eid="${
+            esc(r.eid)
+          }">Edit card</button>
+            ${
+            armedDelete === r.eid
+              ? `<button class="btn danger armed" id="del" data-eid="${
+                esc(r.eid)
+              }">Really toss it?</button>`
+              : `<button class="btn danger" id="del" data-eid="${
+                esc(r.eid)
+              }">Toss card</button>`
+          }
+          </div>`
+          : `<div style="height:22px"></div>`
+      }
+        </div>
+      </div>`
+    }
+
+    function formHTML() {
+      const r = editing === 'new'
+        ? {
+          title: '',
+          category: route.tab !== 'All' ? route.tab : 'Mains',
+          servings: '',
+          time: '',
+          ingredients: [],
+          steps: [],
+          notes: '',
+        }
+        : recipes.find((x) => x.eid === editing)
+      if (!r) {
+        editing = null
+        return listHTML()
+      }
+      return `<div class="card">
+        <div style="padding:18px 22px 10px">
+          <input id="f-title" class="title-in" placeholder="Recipe name" value="${
+        esc(r.title === '(untitled)' ? '' : r.title)
+      }">
+        </div>
+        <div class="redrule"><div class="a"></div><div class="b"></div></div>
+        <div class="pad" style="padding-bottom:20px">
+          <div class="row3">
+            <div><label class="fld" for="f-cat">Card tab</label>
+              <select id="f-cat" class="fs">${
+        CATS.map((c) =>
+          `<option ${c === r.category ? 'selected' : ''}>${c}</option>`
+        ).join('')
+      }</select></div>
+            <div><label class="fld" for="f-serves">Serves</label>
+              <input id="f-serves" class="fi" placeholder="4" value="${
+        esc(r.servings)
+      }"></div>
+            <div><label class="fld" for="f-time">Time</label>
+              <input id="f-time" class="fi" placeholder="45 min" value="${
+        esc(r.time)
+      }"></div>
+          </div>
+          <label class="fld" for="f-ing">Ingredients \u2014 one per line</label>
+          <textarea id="f-ing" class="fa" rows="7" placeholder="2 cups flour&#10;1 tsp salt">${
+        esc(r.ingredients.join('\n'))
+      }</textarea>
+          <label class="fld" for="f-steps">Steps \u2014 one per line</label>
+          <textarea id="f-steps" class="fa" rows="7" placeholder="Preheat oven to 375\u00b0F&#10;Mix dry ingredients">${
+        esc(r.steps.join('\n'))
+      }</textarea>
+          <label class="fld" for="f-notes">Notes</label>
+          <input id="f-notes" class="fi" placeholder="Grandma doubles the vanilla." value="${
+        esc(r.notes)
+      }">
+          <div class="btnrow">
+            <button class="btn primary" id="saveform" ${busy ? 'disabled' : ''}>${
+        busy ? 'Saving\u2026' : (editing === 'new' ? 'Add to box' : 'Save card')
+      }</button>
+            <button class="btn quiet" id="cancelform">Cancel</button>
+          </div>
+        </div>
+      </div>`
+    }
+
+    function wire() {
+      document.querySelectorAll('[data-tab]').forEach((b) =>
+        b.onclick = () => nav(tabHash(b.dataset.tab))
+      )
+      document.querySelectorAll('[data-open]').forEach((b) =>
+        b.onclick = () => nav(b.dataset.open)
+      )
+      const s = $('search')
+      if (s) {
+        s.oninput = () => {
+          search = s.value
+          const pos = s.selectionStart
+          render()
+          const s2 = $('search')
+          s2.focus()
+          s2.setSelectionRange(pos, pos)
+        }
+      }
+      const add = $('addnew')
+      if (add) {
+        add.onclick = () => {
+          editing = 'new'
+          render()
+          $('f-title').focus()
+        }
+      }
+      const back = $('back')
+      if (back) back.onclick = () => nav(tabHash(route.tab))
+      const edit = $('edit')
+      if (edit) {
+        edit.onclick = () => {
+          editing = edit.dataset.eid
+          render()
+        }
+      }
+      const del = $('del')
+      if (del) {
+        del.onclick = () => {
+          const eid = del.dataset.eid
+          if (armedDelete === eid) tossCard(eid)
+          else {
+            armedDelete = eid
+            render()
+          }
+        }
+      }
+      const sf = $('saveform')
+      if (sf) sf.onclick = saveForm
+      const cf = $('cancelform')
+      if (cf) {
+        cf.onclick = () => {
+          editing = null
+          render()
+        }
+      }
+      const il = $('importlocal')
+      if (il) il.onclick = importLocal
+    }
+
+    onRoute()
+    </script>
+  </body>
 </html>
