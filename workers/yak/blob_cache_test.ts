@@ -11,8 +11,8 @@ import { state } from './testing.ts'
 import { doorOf } from './door.ts'
 import { KERNEL, metaOf } from './meta.ts'
 import { appVocab } from './vocab.ts'
-import { appStore, storeAt } from './directory.ts'
-import { servableAt } from './cache.ts'
+import { type App, appStore, type Space } from './directory.ts'
+import { representation } from '@yaks/blob'
 import { ADA, ADA_OWNS, as, platform, seeded, visit } from './serving-probe.ts'
 
 test('private app blobs keep the cache behind authorization', async () => {
@@ -186,52 +186,64 @@ test('a dropped representation write never redirects to an absent file', async (
   assertEquals(await graph.query('.representation'), [])
 })
 
+// What the store says about one upload, each way it can.
+let sha = 'a'.repeat(64)
+let { eid, row } = representation('app', sha, 'image/png')
+let overloaded = 'Durable Object is overloaded. Requests queued for too long.'
+let answers = {
+  yes: () => Promise.resolve(row),
+  no: () => Promise.resolve(null),
+  failed: () => Promise.reject(new Error(overloaded)),
+}
+
+// Files keeps a yes to whether an app's bytes are served, and never a no or a
+// failure (files.ts `servedAs`).
 test('a yes to whether a blob is served is kept, a no or a failure is not', async () => {
-  using scenario = platform()
-  let { env } = scenario
-  let { space, app } = await seeded(env, 'public')
-  let upload = await apps.fetch(
-    visit('/cookbook/api/blob', {
-      method: 'POST',
-      headers: { cookie: await as(ADA), 'content-type': 'image/png' },
-      body: new Uint8Array([1, 2, 3]),
-    }),
-    env,
-  )
-  let file: { url: string } = await upload.json()
-  let [sha, rep] = file.url.split('/').slice(-2)
-  let at = storeAt(space, app, env)
-  let ask = (rep: string) =>
-    files.fetch(
-      new Request(servableAt(app.eid, sha, rep), {
-        headers: { [files.STORE]: JSON.stringify(at) },
-      }),
-      env,
-    )
   let kept = (r: Response) =>
     r.headers.get('cache-control')!.startsWith('public')
-  let yes = await ask(rep)
-  assertEquals([(await yes.json()).address, kept(yes)], [sha, true])
-  let no = await ask('0'.repeat(64))
+  let yes = await files.servedAs(answers.yes)
+  assertEquals([yes.status, kept(yes), (await yes.json()).address], [
+    200,
+    true,
+    sha,
+  ])
+  let no = await files.servedAs(answers.no)
   assertEquals([no.status, kept(no)], [404, false])
-  let ns = env.STORE
-  let get = ns.get.bind(ns)
-  ns.get = (id) =>
-    String(id) == at.name
-      ? {
-        fetch: () =>
-          Promise.reject(
-            new Error(
-              'Durable Object is overloaded. Requests queued for too long.',
-            ),
-          ),
-      }
-      : get(id)
-  let failed = await ask(rep)
+  let failed = await files.servedAs(answers.failed)
   assertEquals([failed.status, kept(failed)], [503, false])
+})
+
+// The gateway asks Files first for an app anyone may read, and the store
+// itself for a private app or when Files has no yes; a Files that could not
+// say is a throw, which the gateway answers with a 503 (apps.ts `servedTo`).
+test('the gateway asks Files about an app anyone may read, and the store when Files says no', async () => {
+  let asked = 0
+  let graph = {
+    query: () => {
+      asked++
+      return Promise.resolve([
+        { entity: { eid }, representation: row },
+        { entity: { eid: sha }, blob: {} },
+      ])
+    },
+  }
+  let gateway = (said: keyof typeof answers, access = 'public') =>
+    apps.servedTo(
+      { FILES: { fetch: () => files.servedAs(answers[said]) } } as never,
+      { eid: 'space', slug: 'ada' } as Space,
+      { eid: 'app', slug: 'cookbook', space: 'space', access } as App,
+      graph,
+      sha,
+      eid,
+    )
+  assertEquals([(await gateway('yes'))?.address, asked], [sha, 0])
   assertEquals(
-    String(await files.servableOf(env, app, at, sha, rep).catch((e) => e)),
-    'Error: Durable Object is overloaded. Requests queued for too long.',
+    String(await gateway('failed').catch((e) => e)),
+    `Error: ${overloaded}`,
   )
-  assertEquals((await apps.fetch(visit(file.url), env)).status, 503)
+  assertEquals([(await gateway('no'))?.address, asked], [sha, 1])
+  assertEquals([(await gateway('failed', 'private'))?.address, asked], [
+    sha,
+    2,
+  ])
 })
