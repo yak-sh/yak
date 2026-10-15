@@ -336,6 +336,15 @@ through the connector's graph tier (tool.ts `roleIn`).
   account for probes, to name per command with `--as`.
 - An app's own errors surface through `app_errors` and the unseen block
   (`unseen.ts`).
+- A hang reports nothing from inside. Cloudflare's own record of every
+  invocation (outcome, wall and CPU time, the object it ran in) is Workers
+  observability, read with the cloudflare-api MCP's `telemetry/query`; an
+  event's timestamp is when the invocation ended. Calls to a store that wait
+  with 0 ms CPU, ended by resets saying "instance is no longer active" or
+  "internal error; reference = …", are the runtime stalling that object, not
+  our code. Every app door reads its app row from the directory, so a stalled
+  directory hangs the whole platform; the tracker's minute probe
+  (workers/tracker/monitor.ts `PROBES`) asks such a door and files a bug.
 - Row profiles (packages/durable-object/profile.ts) count SQL statements, not
   invocation events, and their labels follow asynchronous work, timers from a
   socket close included: a repeated `ws close` bucket can be a pending save
