@@ -1784,12 +1784,12 @@ export class Store {
           bundles: Bundle[]
           actor: Actor | null
         }
-        let result = this.#graph.apply(
-          signed(bundles, instrumentActor(actor)),
-          {
-            deferEffects: (run) => effects.push(run),
-          },
-        )
+        // The guard had its say when the deployer staged it (`#seedDoor`).
+        // Whoever's request meets the release, possibly in a later
+        // incarnation, was not the one vouched for, so it lands as staged.
+        let result = this.#asIs(signed(bundles, actor), {
+          deferEffects: (run) => effects.push(run),
+        })
         if (result instanceof Promise) {
           throw new Error('a staged seed must apply synchronously')
         }

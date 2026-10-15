@@ -68,17 +68,21 @@ let owner: Who = { person: ADA, role: 'owner' }
 // The kernel's own namespace, made of Store objects: one per name, kept, so a
 // second call reaches the object the first one wrote to. What the store is
 // told about itself — which app it holds, what its access mode is — rides on
-// each request already (directory.ts `appStore`).
+// each request already (directory.ts `appStore`). `evict` drops every object
+// and keeps its storage, so the next call wakes a new incarnation over it.
 let namespace = () => {
   let held = new Map<string, Store>()
+  let kept = new Map<string, ReturnType<typeof durable>>()
   return {
     idFromName: (n: string) => n,
     get: (id: unknown) => {
       let name = String(id)
       let store = held.get(name)
       if (!store) {
+        let storage = kept.get(name) ?? durable(name)
+        kept.set(name, storage)
         store = new Store({
-          storage: durable(name),
+          storage,
           acceptWebSocket: () => {},
           getWebSockets: () => [],
         })
@@ -86,6 +90,7 @@ let namespace = () => {
       }
       return store
     },
+    evict: () => held.clear(),
   }
 }
 
@@ -417,7 +422,8 @@ test('a candidate seed waits for release and lands once', async () => {
 })
 
 test('a first release seeds its candidate words', async () => {
-  let env = { STORE: namespace() } as unknown as Env
+  let ns = namespace()
+  let env = { STORE: ns } as unknown as Env
   let here = space('first-seed')
   let page = { ...app('page', here.eid), version: 0 }
   let draft = draftStore(env.STORE, here, page, '1')
@@ -432,6 +438,9 @@ test('a first release seeds its candidate words', async () => {
     card: { title: 'hello' },
   }])
   assertEquals(seeded.status, 200, await seeded.text())
+  // The object that checked the seed is gone by the time the release is
+  // served, and with it what the kernel vouched about the deployer.
+  ns.evict()
   let serving = appStore(env.STORE, here, { ...page, version: 1 })
   let rows = await (await serving('/query?q=.card', {}, vouched(owner))).json()
   assertEquals(rows.map((row: { card: { title: string } }) => row.card.title), [
