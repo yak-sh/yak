@@ -292,35 +292,43 @@ test('a spent usage allowance is the provider’s no: one ask, its own code', as
   }
 })
 
-test('HTTP auth and validation, malformed SSE, provider failures and hook defects fail fast', async () => {
-  for (
-    let response of [
-      () => new Response('', { status: 401 }),
-      () => new Response(broken().body, { status: 401 }),
-      () => new Response('', { status: 400 }),
-      () => new Response('data: {bad}\n\n'),
-      () =>
-        sse({
-          type: 'response.failed',
-          response: { error: { code: 'context_length_exceeded' } },
-        }),
-      () => sse({ type: 'response.incomplete' }),
-    ]
-  ) {
-    let calls = 0
-    let client = transport({
-      credentials,
-      pause: () => {
-        throw new Error('must not retry')
-      },
-      fetch: () => {
-        calls++
-        return Promise.resolve(response())
-      },
+// An answer that fails the ask at once: the provider is never asked again.
+let once = async (response: () => Response) => {
+  let calls = 0
+  let client = transport({
+    credentials,
+    pause: () => {
+      throw new Error('must not retry')
+    },
+    fetch: () => {
+      calls++
+      return Promise.resolve(response())
+    },
+  })
+  await assertRejects(() => client.run(req), ResponseError)
+  assertEquals(calls, 1)
+}
+
+test('HTTP auth and validation fail fast', async () => {
+  await once(() => new Response('', { status: 401 }))
+  await once(() => new Response(broken().body, { status: 401 }))
+  await once(() => new Response('', { status: 400 }))
+})
+
+test('malformed SSE fails fast', () =>
+  once(() => new Response('data: {bad}\n\n')))
+
+test('provider failures fail fast', async () => {
+  await once(() =>
+    sse({
+      type: 'response.failed',
+      response: { error: { code: 'context_length_exceeded' } },
     })
-    await assertRejects(() => client.run(req), ResponseError)
-    assertEquals(calls, 1)
-  }
+  )
+  await once(() => sse({ type: 'response.incomplete' }))
+})
+
+test('hook defects fail fast', async () => {
   let client = transport({
     credentials,
     fetch: () => Promise.resolve(complete()),
