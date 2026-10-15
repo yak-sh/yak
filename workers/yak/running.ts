@@ -119,6 +119,16 @@ export let restartedFor = async (
     : null
 }
 
+/** What an object says of its deploys: the version it runs and the one it last
+ * restarted for. */
+export let ran = async (
+  meta: Meta | null | undefined,
+  storage: Restartable['storage'],
+): Promise<{ version: Version | null; restartedFor: Version | null }> => ({
+  version: versionOf(meta),
+  restartedFor: await restartedFor(storage),
+})
+
 /**
  * Restart this object, before it does anything for the request, when its
  * caller runs a later deploy than both the one it runs and the one it last

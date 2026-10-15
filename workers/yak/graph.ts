@@ -272,7 +272,7 @@ import {
   USES,
 } from './door.ts'
 import { borrows } from './reach.ts'
-import { behind, restartedFor, versionOf } from './running.ts'
+import { behind, ran } from './running.ts'
 import { type Meta, meta, metaOf, minted } from './meta.ts'
 import { caught, defect, refusing } from './defects.ts'
 import { apart, counts, hop, type Tally, tallying } from './lib/hops.ts'
@@ -2734,10 +2734,7 @@ export class Store {
   // restarted for (running.ts `behind`): after a deploy, "live at 100%" says where the
   // Worker is, and only the object can say where it is.
   async #running() {
-    return {
-      version: versionOf(this.#bind.CF_VERSION_METADATA),
-      restartedFor: await restartedFor(this.#ctx.storage),
-    }
+    return ran(this.#bind.CF_VERSION_METADATA, this.#ctx.storage)
   }
 
   // ---- the mover (mover.ts, D-45640) ---------------------------------------
