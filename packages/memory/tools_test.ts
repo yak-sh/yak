@@ -532,7 +532,7 @@ test('a host bounds recalls, including named memories, to its space', async () =
 })
 
 test('a host refuses edits and marks outside its memory space', async () => {
-  let { g, a, b, ask, save } = bounded
+  let { g, b, ask } = bounded
   for (let args of [{ id: b }, { on: b }, { on: 's1.1' }]) {
     await assertRejects(
       () => ask('memory_save', { ...args, context: 'changed' }),
@@ -540,10 +540,14 @@ test('a host refuses edits and marks outside its memory space', async () => {
       'no memory:',
     )
   }
-  await save({ id: a, context: 'the recipe app' })
-  assertEquals(part(await read(g, a), 'memory').context, 'the recipe app')
   assertEquals(part(await read(g, b), 'memory').context, undefined)
   assertEquals(part(await read(g, 's1.1'), 'memory'), undefined)
+})
+
+test('a host edits memories in its space', async () => {
+  let { g, a, save } = bounded
+  await save({ id: a, context: 'the recipe app' })
+  assertEquals(part(await read(g, a), 'memory').context, 'the recipe app')
 })
 
 test('a host places speaker marks on memories in its space', async () => {
