@@ -2,9 +2,10 @@ import { test } from '@yaks/testing'
 import { assertEquals, assertThrows } from '@std/assert'
 import { graph, Refused } from '@yaks/graph'
 import { ram } from '@yaks/ram'
-import { and, eq, list } from '@yaks/query'
+import { and, eq, list, present } from '@yaks/query'
 import { loadVocab } from '@yaks/vocab'
 import { spineDoc } from '@yaks/kernel'
+import { as, lit, select } from '@yaks/sql'
 import { archetypeDoc, archetypes } from '@yaks/archetype'
 import { storage } from './mod.ts'
 import { mem } from './testing.ts'
@@ -109,6 +110,43 @@ for (let field of ['doc.title', 'mark.by']) {
     }
   })
 }
+
+// A list naming the empty value asks for a component's row: a computed one is
+// read from its backing, and a backing's entity never wears a stored one.
+let backing = storage(
+  mem(),
+  loadVocab([...vocab.docs, {
+    $defs: {
+      virtual: {
+        component: true,
+        computed: true,
+        properties: { value: { type: 'string' } },
+      },
+    },
+  }]),
+  {
+    backed: {
+      virtual: {
+        tag: '0'.repeat(32),
+        rows: select({ cols: [as(lit(1), 'entity'), as(lit(''), 'value')] }),
+      },
+    },
+  },
+)
+backing.install()
+backing.tx((tx) => tx.patch([{ entity: { eid: 'empty' }, doc: { title: '' } }]))
+test('sqlite: an empty list member reads a computed component from its backing', () => {
+  assertEquals(
+    backing.read(and(eq('virtual.value', list('')))).map((b) => b.virtual),
+    [{ value: '' }],
+  )
+})
+test('sqlite: an empty list member names no value of a component a backing cannot wear', () => {
+  assertEquals(
+    backing.read(and(present('virtual'), eq('doc.title', list('')))),
+    [],
+  )
+})
 
 for (
   let [name, store] of [

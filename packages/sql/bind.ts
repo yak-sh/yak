@@ -360,12 +360,16 @@ let opOf = (p: Pred): string =>
 
 // Whether a test on a property can hold only for an entity wearing its
 // component: presence, a comparison, or an equality or containment with a
-// value. A test for absence (`=` with nothing) and a not-equals hold without
-// it. Every read here is NULL for an entity without the component, which is
-// what lets a caller narrow to the component's rows when this holds.
-let needs = (op: string, value: string): boolean =>
+// value. A test for absence (`=` with nothing, or an empty scalar) and a
+// not-equals hold without it; a list names its values, the empty one included
+// (./ident.ts). Every read here is NULL for an entity without the component,
+// which is what lets a caller narrow to the component's rows when this holds.
+let needs = (op: string, value: Value | null): boolean =>
   op == EXISTS || ['<', '<=', '>', '>='].includes(op) ||
-  ((op == '' || op == '~') && value != '')
+  ((op == '' || op == '~') && !blank(value))
+
+let blank = (value: Value | null): boolean =>
+  !value || (value.kind == 'scalar' || value.kind == 'time') && value.raw == ''
 
 // Whether this query's entities can wear `comp`. The entity table's never wear
 // a computed component, and a backed spine's wear their own and nothing else
@@ -377,7 +381,7 @@ let worn = (ctx: Ctx, comp: string): boolean =>
 
 // The answer to a test on a component the entity cannot wear: false where the
 // test needs it, true where it holds without it.
-let unworn = (op: string, value: string, prop: string): Cond =>
+let unworn = (op: string, value: Value | null, prop: string): Cond =>
   (prop ? needs(op, value) : op == '~' || op == EXISTS) ? FALSE : TRUE
 
 // A qualified path names its component as much as its property:
@@ -590,7 +594,7 @@ let single = (ctx: Ctx, hop: Hop, p: Pred): Cond => {
     // vocabulary's own, so the CLI, the HTTP endpoint and the MCP server all
     // report it identically.
     if (!ctx.v.comp(hop.comp)) throw new Unknown(hop.comp)
-    if (!worn(ctx, hop.comp)) return unworn(op, '', '')
+    if (!worn(ctx, hop.comp)) return unworn(op, null, '')
     let present = op == '~' || op == EXISTS
     if (present && hop.comp == ctx.present) return TRUE
     if (
@@ -620,7 +624,7 @@ let single = (ctx: Ctx, hop: Hop, p: Pred): Cond => {
   // A stored property's presence is a set of component owners, read first
   // (`owned`); it also leaves the outer row's order and tombstone check where
   // every query keeps them.
-  if (!worn(ctx, hop.comp)) return unworn(op, flat(p.value), hop.prop)
+  if (!worn(ctx, hop.comp)) return unworn(op, p.value, hop.prop)
   let stored = ctx.v.prop(hop.comp, hop.prop)
   if (
     op == EXISTS && hop.comp != 'entity' && stored && !stored.computed &&
@@ -681,7 +685,7 @@ let single = (ctx: Ctx, hop: Hop, p: Pred): Cond => {
   // falls back to `created.at`.
   let needsComp = hop.comp != 'entity' &&
     ctx.derived[`${hop.comp}.${hop.prop}`]?.worn !== false &&
-    needs(op, flat(p.value))
+    needs(op, p.value)
   if (!needsComp) return cond(frag)
   // A derived expression is opaque to SQLite's outer-join strength reduction.
   // Name its owning set explicitly; a CASE guard cannot make it seek that set.
@@ -851,8 +855,7 @@ let path = (ctx: Ctx, hops: Hop[], p: Pred): Cond => {
   if (op == 'want') return TRUE
   let root = hops[0]
   chained(ctx.v, hops)
-  let value = flat(p.value)
-  if (!reachable(ctx, hops)) return unworn(op, value, hops.at(-1)!.prop)
+  if (!reachable(ctx, hops)) return unworn(op, p.value, hops.at(-1)!.prop)
   ctx.tables.add(root.comp)
   if (seekable(ctx, hops, p)) return sought(ctx, hops, p)
   let target = chain(ctx, hops, refKey(ctx, root.comp, root.prop))
@@ -897,7 +900,7 @@ let path = (ctx: Ctx, hops: Hop[], p: Pred): Cond => {
   // The narrowing a rooted path keeps: the row must have the component the path
   // starts from, which lets the query planner drive from that component's
   // table.
-  return needs(op, value)
+  return needs(op, p.value)
     ? cond({
       sql: `(${ctx.d.presence(root.comp).sql} and ${frag.sql})`,
       params: frag.params,
@@ -1398,7 +1401,6 @@ let wants = (v: Vocab, backed: Backings, c: Clause): string[] => {
     return [] // a name that does not route: clause() owns the refusal
   }
   if (!hop || op == 'want') return []
-  let value = flat(c.value)
   if (hop.comp == 'entity' && op == '') {
     let set = identity(hop.prop, c.value)
     let eids = set && !set.nums.length ? set.eids : []
@@ -1408,7 +1410,7 @@ let wants = (v: Vocab, backed: Backings, c: Clause): string[] => {
     )
   }
   if (!computed(v, hop.comp)) return []
-  return (hop.prop ? needs(op, value) : op == '~' || op == EXISTS)
+  return (hop.prop ? needs(op, c.value) : op == '~' || op == EXISTS)
     ? [hop.comp]
     : []
 }
@@ -1602,7 +1604,7 @@ let implied = (ctx: Ctx, c: Clause): string[] => {
   let [comp, prop] = c.path
   return comp != 'entity' && ctx.v.prop(comp, prop) &&
       ctx.derived[`${comp}.${prop}`]?.worn !== false &&
-      needs(opOf(c), flat(c.value))
+      needs(opOf(c), c.value)
     ? [comp]
     : []
 }
@@ -1979,7 +1981,7 @@ let indexedRelation = (
                 joining(ctx, c.path[0]) == j.source &&
                 (c.path.length == 1
                   ? opOf(c) == EXISTS
-                  : needs(opOf(c), flat(c.value)))
+                  : needs(opOf(c), c.value))
               )
               return {
                 how: must ? 'cross' : 'left',
@@ -2003,7 +2005,7 @@ let indexedRelation = (
       !c.where && c.path.length == 2 && c.path[0] != 'entity' &&
       ctx.v.prop(c.path[0], c.path[1])?.category == 'ref' &&
       !ctx.v.prop(c.path[0], c.path[1])?.computed &&
-      !ctx.derived[c.path.join('.')] && needs(opOf(c), flat(c.value))
+      !ctx.derived[c.path.join('.')] && needs(opOf(c), c.value)
     )
     if (scalar && ctx.d.owned) {
       for (let c of flattened(clauses)) {
@@ -2032,7 +2034,7 @@ let indexedRelation = (
       let p = ctx.v.prop(comp, prop)
       if (
         comp == 'entity' || !p || p.computed || computed(ctx.v, comp) ||
-        ctx.derived[`${comp}.${prop}`] || !needs(opOf(c), flat(c.value)) ||
+        ctx.derived[`${comp}.${prop}`] || !needs(opOf(c), c.value) ||
         opOf(c) == EXISTS || opOf(c) == '~'
       ) continue
       let index = leading(ctx, comp, prop)
@@ -2165,7 +2167,7 @@ let indexedRelation = (
             flattened(clauses).some((c) =>
               c.kind == 'pred' && !c.not && !c.where && c.path.length == 2 &&
               joining(ctx, c.path[0]) == j.source &&
-              needs(opOf(c), flat(c.value))
+              needs(opOf(c), c.value)
             )
           ? 'cross'
           : 'left',
@@ -2207,7 +2209,7 @@ let indexedRelation = (
           how: flattened(clauses).some((c) =>
               c.kind == 'pred' && !c.not && !c.where &&
               c.path.length == 2 && joining(ctx, c.path[0]) == j.source &&
-              needs(opOf(c), flat(c.value))
+              needs(opOf(c), c.value)
             )
             ? 'cross'
             : 'left',
