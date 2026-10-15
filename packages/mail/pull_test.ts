@@ -288,21 +288,21 @@ let pulled = (stop?: AbortController) => {
   return { go, messages: () => messages }
 }
 
+let ended = await club()
 test('service: an already-ended signal is one complete pull', async () => {
-  let g = await club()
-  let at = pulled()
-  let options = {
-    domain,
-    pull: { url: 'https://inbox.example', token: 't' },
+  // Each tray asked once, the last of them before the service answers.
+  let asked: string[] = []
+  let go = (url: string) => {
+    asked.push(new URL(url).pathname)
+    return Promise.resolve(new Response('[]'))
   }
   await service(
-    { graph: g },
-    options,
+    { graph: ended },
+    { domain, pull: { url: 'https://inbox.example', token: 't' } },
     AbortSignal.abort(),
-    (pull, stop) => edge(pull, at.go, stop),
+    (pull, stop) => edge(pull, go, stop),
   )
-  assertEquals(at.messages(), 1)
-  assertEquals((await mails(g)).length, 1)
+  assertEquals(asked, ['/messages', '/requests'])
 })
 
 test('service: a timed-out pull is tried again', async () => {

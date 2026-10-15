@@ -45,6 +45,9 @@ let got = (
 
 let comp = (b: Bundle | undefined, name: string) => b?.[name] as Comp
 
+// One seeded club for the cases that only read it.
+let club = await seeded()
+
 // The graph with an id door that answers — what @yaks/id contributes to a host
 // that composes it, said here so this package's tests need no dependency on it:
 // an id it knows is its entity, and one written its way that it does not know
@@ -61,7 +64,7 @@ let knowing = (graph: Book, ids: Record<string, Eid>): Book => ({
 })
 
 test('wearer: the address book, read backwards', async () => {
-  let { g } = await seeded()
+  let { g } = club
   assertEquals(await wearer(g, 'ana@books.example'), ana)
   // Canonical at your own domain, so a spelling Cloudflare would bounce still
   // finds its owner; a stranger is nobody at all.
@@ -70,7 +73,7 @@ test('wearer: the address book, read backwards', async () => {
 })
 
 test('known: the letter a Message-ID names', async () => {
-  let { g } = await seeded()
+  let { g } = club
   assertEquals(await known(g, 'a1@x.example'), 'e-first')
   assertEquals(await known(g, 'nobody@x.example'), null)
   // No id is not an id nobody has: it must never match the letters carrying none.
@@ -78,7 +81,7 @@ test('known: the letter a Message-ID names', async () => {
 })
 
 test('named: the id grammar is the address grammar', async () => {
-  let { g } = await seeded()
+  let { g } = club
   let book = knowing(g, { 'S-31': sender })
   assertEquals(await named(book, 'S-31@books.example', domain), sender)
   // Somebody else's domain is somebody else's namespace.
@@ -87,7 +90,7 @@ test('named: the id grammar is the address grammar', async () => {
 })
 
 test('routed: the book wins, the id grammar catches the rest', async () => {
-  let { g } = await seeded()
+  let { g } = club
   let book = knowing(g, { 'S-31': sender })
   assertEquals(await routed(book, 'ana@books.example', domain), ana)
   assertEquals(await routed(book, 'S-31@books.example', domain), sender)
@@ -95,7 +98,7 @@ test('routed: the book wins, the id grammar catches the rest', async () => {
 })
 
 test('arrived: a letter, with both lookups answered', async () => {
-  let { g } = await seeded()
+  let { g } = club
   let receive = arrived({ graph: g, domain, triage: pile })
   let bundles = await receive(
     got({
@@ -120,7 +123,7 @@ test('arrived: a letter, with both lookups answered', async () => {
 })
 
 test('arrived: a stranger writes to the triage pile', async () => {
-  let { g } = await seeded()
+  let { g } = club
   let receive = arrived({ graph: g, domain, triage: pile })
   let bundles = await receive(
     got({ from: 'bo@elsewhere.com', subject: 'hello' }),
@@ -167,7 +170,7 @@ for (
 }
 
 test('arrived: the same Message-ID lands once', async () => {
-  let { g } = await seeded()
+  let { g } = club
   let receive = arrived({ graph: g, domain })
   let m = got({ subject: 'Is there soup?', 'message-id': '<a1@x.example>' })
   assertEquals(await receive(m), [])
@@ -175,8 +178,9 @@ test('arrived: the same Message-ID lands once', async () => {
   assert((await receive(got({ subject: 'no id' }))).length == 1)
 })
 
+let recording = await seeded()
 test('arrived: what it records is what an arrival is — no ask to send', async () => {
-  let { g } = await seeded()
+  let { g } = recording
   let bundles = await arrived({ graph: g, domain })(
     got({ from: 'ana@books.example', subject: 'hi' }, 'ana@books.example'),
   )
