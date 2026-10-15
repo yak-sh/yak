@@ -6,7 +6,7 @@
 // session's, the process's, the provider and model entities a request names,
 // and the task and project whose persona a run is owed.
 
-import { type Graph, graph, identityEid } from '@yaks/graph'
+import { type Bundle, type Graph, graph, identityEid } from '@yaks/graph'
 import { edgeDoc, edgeKeywords, link } from '@yaks/edge'
 import { loadVocab, type Vocab } from '@yaks/vocab'
 import { ram } from '@yaks/ram'
@@ -60,14 +60,14 @@ export let tracked = (): { g: Graph; fx: ReturnType<typeof effects> } => {
   return { g, fx }
 }
 
-/** A graph over an empty store with the session plugin alone: a write is
- * numbered into its transcript and kept, and no effect follows it. */
-export let bare = (): Graph =>
-  graph({
-    storage: ram(host, { number: true }),
-    vocab: host,
-    plugins: [sessions()],
-  })
+/** A graph with the session plugin alone, over a store holding `rows` as the
+ * writes that answered them left it: a write is numbered into its transcript
+ * and kept, and no effect follows it. */
+export let bare = (rows: Bundle[] = []): Graph => {
+  let storage = ram(host, { number: true })
+  if (rows.length) storage.tx((tx) => tx.patch(rows))
+  return graph({ storage, vocab: host, plugins: [sessions()] })
+}
 
 /** The fake provider, printing claude's output format: the shipped reader
  * under test, driven by a shell script that needs no model (./fake.sh). */

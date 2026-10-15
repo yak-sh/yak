@@ -369,10 +369,39 @@ test('a restart adopts the run and reads its log on from where it stands', async
   }
 })
 
-// A session asked to work `y`, which requires `x`, holding `y`. Its provider
-// starts no process: what it was told to carry on is kept in `started`.
-let parking = async (end?: Bundle[]) => {
-  let g = { g: bare() }
+// A session asked to work `y`, which requires `x`, holding `y`, applied once
+// as the module loads with what follows it, and laid into a graph of each
+// test's own. Its provider starts no process: what it was told to carry on is
+// kept in `started`.
+let image = async (...batches: Bundle[][]): Promise<Bundle[]> => {
+  let g = bare()
+  let rows: Bundle[] = []
+  for (let b of batches) rows.push(...await g.apply(b))
+  return rows
+}
+let asked = [
+  { entity: { eid: 'x' }, task: {} },
+  { entity: { eid: 'y' }, task: {} },
+  link('y', 'requires', 'x'),
+  ...asking('S1', 'E1', 'work y'),
+  { entity: { eid: 'S1' }, session: { id: 'S1' }, process: { pid: 1 } },
+  { entity: { eid: 'y' }, claim: { session: 'S1' } },
+]
+const over = [{ entity: { eid: 'S1' }, exit: { code: 0 } }]
+// x completes, after the claim on y was taken
+let finished = [{ entity: { eid: 'x' }, completed: {} }]
+// The run over and its turn ended, then x finished; or x finished while the
+// run goes.
+let PARKED = await image(asked, [...over, {
+  entity: { eid: 'E1:end' },
+  entry: { session: 'S1' },
+  ask: { through: 'E1' },
+  stop: {},
+}], finished)
+let GOING = await image(asked, finished)
+
+let parking = (rows: Bundle[]) => {
+  let g = { g: bare(rows) }
   let { launch, started, first } = launching()
   let stopping = new AbortController()
   let opts = {
@@ -386,26 +415,14 @@ let parking = async (end?: Bundle[]) => {
     dir: '/none',
     signal: stopping.signal,
   } satisfies Opts
-  await g.g.apply([
-    { entity: { eid: 'x' }, task: {} },
-    { entity: { eid: 'y' }, task: {} },
-    link('y', 'requires', 'x'),
-    ...asking('S1', 'E1', 'work y'),
-    { entity: { eid: 'S1' }, session: { id: 'S1' }, process: { pid: 1 } },
-    { entity: { eid: 'y' }, claim: { session: 'S1' } },
-    ...end ?? [],
-  ])
   return {
     g: g.g,
     opts,
     started,
     first,
     stopping,
-    // x completes: what `session_wake` runs
-    finish: async () => {
-      await g.g.apply([{ entity: { eid: 'x' }, completed: {} }])
-      await wake(g.g, 'x')
-    },
+    // what `session_wake` runs for x's completing
+    wake: () => wake(g.g, 'x'),
     // the run it asked for is started by the request that carries it
     request: async () => {
       let [asked] = await g.g.read(
@@ -422,17 +439,10 @@ let parking = async (end?: Bundle[]) => {
   }
 }
 
-const over = [{ entity: { eid: 'S1' }, exit: { code: 0 } }]
-
 test('a run that ends waiting on a dependency carries on its thread when it finishes', async () => {
-  let p = await parking([...over, {
-    entity: { eid: 'E1:end' },
-    entry: { session: 'S1' },
-    ask: { through: 'E1' },
-    stop: {},
-  }])
+  let p = parking(PARKED)
   p.stopping.abort()
-  await p.finish()
+  await p.wake()
   await p.request()
   let [agent, thread, instruction] = await p.first
   assertEquals([agent, thread], ['agent', 'S1'])
@@ -440,8 +450,8 @@ test('a run that ends waiting on a dependency carries on its thread when it fini
 })
 
 test('a dependency that finishes while the run goes is told as it ends', async () => {
-  let p = await parking()
-  await p.finish()
+  let p = parking(GOING)
+  await p.wake()
   assertEquals(p.started, [])
   // the run ends: its log is read to the end, and it is told as it goes
   await p.g.apply(over)

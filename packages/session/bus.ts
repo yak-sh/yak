@@ -91,23 +91,37 @@ let native = async (g: Graph, session: Bundle): Promise<boolean> => {
   return using.length > 0 && !ended
 }
 
-/** One pass over native sessions. A failed append leaves the item unmarked, so
- * the next pass can retry it. `attention` wakes the effects role's runner. */
-export let feed = async (g: Graph): Promise<number> => {
-  if (!g.vocab.comp('notified')) return 0
-  let count = 0
+/** A line a native transcript is owed: the item, what is said of it, and the
+ * session it is said to. */
+export type Due = { session: Eid; item: Bundle; line: string }
+
+/** What one pass over native sessions owes them, read and not yet said: the
+ * lines {@link feed} appends. */
+export let due = async (g: Graph): Promise<Due[]> => {
+  if (!g.vocab.comp('notified')) return []
+  let out: Due[] = []
   for (let id of await candidates(g)) {
     let [session] = await g.get([id])
     if (!session || !await native(g, session)) continue
-    for (let { item, line } of await pending(g, id)) {
-      let entry: Bundle = {
-        entity: { eid: derivedEid(`session bus ${id} ${item.entity.eid}`) },
-        entry: { session: id },
-        content: { body: line },
-        attention: {},
-      }
-      if (await deliver(g, null, item, entry)) count++
+    for (let said of await pending(g, id)) out.push({ session: id, ...said })
+  }
+  return out
+}
+
+/** One pass over native sessions: each line {@link due} is appended as an
+ * input. A failed append leaves the item unmarked, so the next pass can retry
+ * it, and an item another session was given first is not said twice.
+ * `attention` wakes the effects role's runner. */
+export let feed = async (g: Graph): Promise<number> => {
+  let count = 0
+  for (let { session, item, line } of await due(g)) {
+    let entry: Bundle = {
+      entity: { eid: derivedEid(`session bus ${session} ${item.entity.eid}`) },
+      entry: { session },
+      content: { body: line },
+      attention: {},
     }
+    if (await deliver(g, null, item, entry)) count++
   }
   return count
 }

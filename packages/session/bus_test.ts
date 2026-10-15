@@ -2,7 +2,7 @@
 // caller as a reply, through the graph interfaces both use.
 
 import { assertEquals } from '@std/assert'
-import { graph, type Storage } from '@yaks/graph'
+import { type Bundle, type Graph, graph, type Storage } from '@yaks/graph'
 import { processDoc } from '@yaks/process'
 import { kernelDoc } from '@yaks/kernel/vocab'
 import { docDoc } from '@yaks/doc'
@@ -15,7 +15,7 @@ import { ram } from '@yaks/ram'
 import { toolsDoc } from '@yaks/tools/vocab'
 import { loadVocab } from '@yaks/vocab'
 import { test, until } from '@yaks/testing'
-import { feed, heard, reply } from './bus.ts'
+import { due, feed, heard, reply } from './bus.ts'
 import { sessionDoc } from './comp.ts'
 import { sessionDerived, statusComputed } from './status.ts'
 import { sessions } from './plugin.ts'
@@ -40,6 +40,18 @@ let bare = (store: Storage = memory(), woke?: (eid: string) => void) => {
   let fx = effects(vocab)
   fx.handle({ session_run: (e) => woke?.(e.entity.eid) })
   return graph({ vocab, storage: store, plugins: [sessions(), fx] })
+}
+// What a test starts from, applied through the graph once as the module loads,
+// and the rows it left laid into a store of each test's own.
+let image = async (...batches: Bundle[][]): Promise<Bundle[]> => {
+  let g = bare()
+  let rows: Bundle[] = []
+  for (let b of batches) rows.push(...await g.apply(b, { trusted: true }))
+  return rows
+}
+let laid = (rows: Bundle[], store: Storage = memory()) => {
+  store.tx((tx) => tx.patch(rows))
+  return store
 }
 let fresh = async (
   store: Storage = memory(),
@@ -124,38 +136,50 @@ test('an outside caller receives what was addressed to its session once', async 
   assertEquals(await reply(g, call), [])
 })
 
-test('a hooked session hears at its hook, never through a subagent or a tool reply', async () => {
-  let g = bare()
-  await g.apply([
-    { entity: { eid: 'outside' }, session: { id: 'outside' } },
-    {
-      entity: { eid: 'letter' },
-      mail: { from: 'a@example.com', to: 'b@example.com' },
-      deliver: { to: 'outside' },
-      doc: { title: 'A letter' },
-    },
-  ], { trusted: true })
-  let letter = async () => !!(await g.get(['letter']))[0].notified
-  let call = { entity: { eid: 'call' }, created: { via: 'outside' } }
-  assertEquals(await heard(g, { session_id: 'outside', agent_id: 'fork' }), {})
-  assertEquals(await letter(), false)
-  let said = await heard(g, {
+// An outside session and a letter delivered to it, before its harness reports
+// to the hook door and after.
+let letter = (eid: string, title: string): Bundle => ({
+  entity: { eid },
+  mail: { from: 'a@example.com', to: 'b@example.com' },
+  deliver: { to: 'outside' },
+  doc: { title },
+})
+let POSTED = await image([
+  { entity: { eid: 'outside' }, session: { id: 'outside' } },
+  letter('letter', 'A letter'),
+])
+let HOOKED = await image([
+  { entity: { eid: 'outside' }, session: { id: 'outside' }, hooked: {} },
+  letter('later', 'A later letter'),
+])
+let fork = { session_id: 'outside', agent_id: 'fork' }
+// Whether an item was said to the session it was for.
+let said = async (g: Graph, eid: string) =>
+  (await g.get([eid]))[0].notified != null
+
+test('a session hears at its own hook, never through a subagent', async () => {
+  let g = bare(laid(POSTED))
+  assertEquals(await heard(g, fork), {})
+  assertEquals(await said(g, 'letter'), false)
+  let told = await heard(g, {
     session_id: 'outside',
     hook_event_name: 'PostToolUse',
   }) as { hookSpecificOutput: { additionalContext: string } }
   assertEquals(
-    said.hookSpecificOutput.additionalContext.includes('A letter'),
+    told.hookSpecificOutput.additionalContext.includes('A letter'),
     true,
   )
-  assertEquals(await letter(), true)
-  await g.apply([{
-    entity: { eid: 'later' },
-    mail: { from: 'a@example.com', to: 'b@example.com' },
-    deliver: { to: 'outside' },
-    doc: { title: 'A later letter' },
-  }], { trusted: true })
+  assertEquals(await said(g, 'letter'), true)
+  // and from then on it is a hooked session
+  assertEquals(!!(await g.get(['outside']))[0].hooked, true)
+})
+
+test('a hooked session hears nothing through a tool reply, only at its hook', async () => {
+  let g = bare(laid(HOOKED))
+  let call = { entity: { eid: 'call' }, created: { via: 'outside' } }
   assertEquals(await reply(g, call), [])
-  assertEquals(await heard(g, { session_id: 'outside', agent_id: 'fork' }), {})
+  assertEquals(await heard(g, fork), {})
+  assertEquals(await said(g, 'later'), false)
   assertEquals(
     JSON.stringify(await heard(g, { session_id: 'outside' })).includes(
       'A later letter',
@@ -261,8 +285,6 @@ let correspond = async (g: Awaited<ReturnType<typeof fresh>>, by: string) => {
     $actor: { by: 'person' },
   }])
 }
-let said = async (g: Awaited<ReturnType<typeof fresh>>, eid: string) =>
-  (await g.get([eid]))[0].notified != null
 
 for (
   let [name, store] of [['RAM', memory], ['SQLite', lite]] as const
@@ -296,43 +318,53 @@ for (
     assertEquals(await said(g, 'answer-gone'), false)
     assertEquals((await reply(g, call)).length, 0)
   })
+}
+
+// A project whose persona two native transcripts wear, one at work with a
+// knock of its own and one at rest, and news held for the project.
+let HELD = await image([
+  { entity: { eid: 'p' }, project: {} },
+  { entity: { eid: 'operator' }, persona: { home: 'p' } },
+  {
+    entity: { eid: 'native' },
+    session: { id: 'native', persona: 'operator' },
+  },
+  {
+    entity: { eid: 'start' },
+    entry: { session: 'native' },
+    content: { body: 'start' },
+    using: {},
+  },
+  {
+    entity: { eid: 'knock' },
+    knock: { target: 'native' },
+    doc: { body: 'child finished' },
+  },
+  { entity: { eid: 'resting' }, session: { persona: 'operator' } },
+  {
+    entity: { eid: 'asked' },
+    entry: { session: 'resting' },
+    content: { body: 'look into it' },
+    using: {},
+  },
+  {
+    entity: { eid: 'answered' },
+    entry: { session: 'resting' },
+    output: { source: 'asked' },
+    content: { body: 'done' },
+  },
+  { entity: { eid: 'news' }, knock: { target: 'p' }, doc: { body: 'bug' } },
+])
+
+for (
+  let [name, store] of [['RAM', memory], ['SQLite', lite]] as const
+) {
   test(`${name}: what is held for a project is fed to its transcript at work, never one at rest`, async () => {
-    let g = bare(store())
-    await g.apply([
-      { entity: { eid: 'p' }, project: {} },
-      { entity: { eid: 'operator' }, persona: { home: 'p' } },
-      {
-        entity: { eid: 'native' },
-        session: { id: 'native', persona: 'operator' },
-      },
-      {
-        entity: { eid: 'start' },
-        entry: { session: 'native' },
-        content: { body: 'start' },
-        using: {},
-      },
-      {
-        entity: { eid: 'knock' },
-        knock: { target: 'native' },
-        doc: { body: 'child finished' },
-      },
-      { entity: { eid: 'resting' }, session: { persona: 'operator' } },
-      {
-        entity: { eid: 'asked' },
-        entry: { session: 'resting' },
-        content: { body: 'look into it' },
-        using: {},
-      },
-      {
-        entity: { eid: 'answered' },
-        entry: { session: 'resting' },
-        output: { source: 'asked' },
-        content: { body: 'done' },
-      },
-      { entity: { eid: 'news' }, knock: { target: 'p' }, doc: { body: 'bug' } },
-    ], { trusted: true })
-    assertEquals(await feed(g), 2) // its own knock, and the project's news
-    assertEquals(await said(g, 'news'), true)
-    assertEquals((await g.read('.entry.session=resting')).length, 2)
+    let g = graph({ vocab, storage: laid(HELD, store()) })
+    // its own knock, and the project's news
+    assertEquals(
+      (await due(g)).map(({ session, item }) => [session, item.entity.eid]),
+      [['native', 'knock'], ['native', 'news']],
+    )
   })
 }
