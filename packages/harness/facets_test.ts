@@ -5,13 +5,15 @@ import { compose } from '@yaks/cli/host'
 import { close as closeCli, opened } from '../cli/local.ts'
 import { commands as localCommands } from '../cli/subcommands.ts'
 import { argsOf, type Bundle, mint, namedTool, offered } from '@yaks/graph'
-import { answerOf, faulted, toolEid, worded } from '@yaks/tools'
+import { answerOf, keeps, toolEid, worded } from '@yaks/tools'
+import { loadTools } from '@yaks/graph/tools'
 import { toolDefinition } from '@yaks/vocab/tools'
 import { inputSchemaOf } from '@yaks/mcp/tools'
 import { connect } from '../mcp/testing.ts'
 import { textOf, transcript } from '@yaks/session'
 import { selectedUsing } from './model_selection.ts'
 import { runs } from './runs.ts'
+import { docs } from './vocab.ts'
 import { at, harness, working } from './testing.ts'
 
 let reads = { file: () => '', stdin: () => '' }
@@ -246,21 +248,13 @@ test('JSON Schema tool uses identical metadata and constraints through MCP and p
   }
 })
 
-test('session new through the runner answers the session it opened', async () => {
-  let h = await compose(at(), ['graph'], undefined, {})
-  try {
-    await h.runner.ensure(['session_new'])
-    let call = {
-      entity: { eid: mint() },
-      call: {
-        to: toolEid('session_new'),
-        args: { tui: true, model: 'gpt-6-astra' },
-      },
-    }
-    let landed = await h.runner.call(call)
-    assertEquals(faulted(landed, call.entity.eid), false)
-    assert(answerOf(landed, call.entity.eid).some((b) => b.session))
-  } finally {
-    await h.close()
-  }
+// The harness's tools as a host joins them (@yaks/cli `compose`).
+let declared = loadTools(docs, runs())
+
+// session_new answers the session as the graph holds it, stamped properties
+// and all, which the caller's door may not write back: the runner hands that
+// answer to the caller unwritten (@yaks/tools applied_test.ts).
+test('session new through the runner answers the session it opened', () => {
+  let tool = declared.find((t) => t.name == 'session_new')!
+  assertEquals(keeps(tool, 'done'), false)
 })

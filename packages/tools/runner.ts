@@ -187,6 +187,19 @@ export type Runner = {
   ) => Promise<Bundle[]>
 }
 
+/** Whether the runner writes what `tool` answered, ending in `state`, or
+ * hands the answer back as the tool built it. A read-only tool's answer is
+ * entities that already exist, and writing them would patch every row the
+ * query found and move its `updated` stamp; an applied tool's host has written
+ * its own. So the runner writes only its bookkeeping for either. A failure is
+ * written whatever the tool was: an error is worth recording. */
+export let keeps = (
+  tool: Pick<Tool, 'readOnly' | 'applied'>,
+  state: string,
+): boolean =>
+  (!tool.readOnly && !tool.applied) || state == 'failed' ||
+  state == 'interrupted'
+
 /**
  * Build a runner over a graph.
  *
@@ -389,26 +402,18 @@ export let runner = (g: Graph, opts: Opts): Runner => {
     let id = call.entity.eid
     let started = now()
     held.set(id, { call, started })
-    // Writing the answer. A read-only tool's answer is not a write — its
-    // bundles are entities that already exist, and applying them would patch
-    // every row the query found and move its `updated` stamp — so a read
-    // writes only the runner's bookkeeping and returns the answer as the tool
-    // built it. An applied tool's host has already handled the answer, so it
-    // also writes only bookkeeping here. A failure is written either way:
-    // an error is worth recording
-    // whatever the tool was. A rehearsal's answer is what a write would have
-    // been, and is not written either.
+    // Writing the answer, where `keeps` says to. A rehearsal's answer is what
+    // a write would have been, and is not written either.
     let land = async (
       made: Bundle[],
       state: string,
-      keeps = (!tool.readOnly && !tool.applied) || state == 'failed' ||
-        state == 'interrupted',
+      keep = keeps(tool, state),
       code?: string,
     ): Promise<Bundle[]> => {
       let ended = ending(call, started, state, made)
       if (unrecorded) return [...made, ...ended]
       let bundles = [
-        ...(keeps ? made : []),
+        ...(keep ? made : []),
         ...ended,
         ...code ? [{ entity: { eid: id }, interrupted: { code } }] : [],
       ]
@@ -420,7 +425,7 @@ export let runner = (g: Graph, opts: Opts): Runner => {
         () => g.apply(bundles, trusted ? { trusted } : undefined),
         (e) => opts.report?.(e, call, tool.name),
       )
-      return keeps ? landed : [...made, ...landed]
+      return keep ? landed : [...made, ...landed]
     }
     let wrote: Bundle[] = []
     let answered: Bundle[]
@@ -430,12 +435,9 @@ export let runner = (g: Graph, opts: Opts): Runner => {
         tool,
         g,
         opts,
-        async (made, state, keeps, code) => {
-          let out = await land(made, state, keeps, code)
-          if (
-            state == 'done' && !tool.readOnly && !tool.applied &&
-            keeps !== false
-          ) {
+        async (made, state, keep, code) => {
+          let out = await land(made, state, keep, code)
+          if (state == 'done' && keeps(tool, state) && keep !== false) {
             wrote = answerOf(out, id)
           }
           return out

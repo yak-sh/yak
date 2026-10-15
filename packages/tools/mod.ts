@@ -41,6 +41,7 @@ export {
   WORDS,
 } from './result.ts'
 export {
+  keeps,
   type Opts,
   reconcile,
   type Reply,
