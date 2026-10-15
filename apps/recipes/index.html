@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Recipe Box</title>
     <link rel="stylesheet" href="./photos.css">
+    <link rel="stylesheet" href="./cooking.css">
     <style>
     :root {
       --bg: #33493C;
@@ -394,11 +395,20 @@
       <nav id="tabs" aria-label="Card tabs"></nav>
       <div class="shelf"></div>
       <main id="main"></main>
+      <div id="cooking"></div>
     </div>
 
     <script type="module">
     import { apply, me, subscribe } from './api/client.js'
     import { renderPhotos, wirePhotos } from './photos.js'
+    import { cookingHTML, watchCooking, wireCooking } from './cooking.js'
+    let cookingRows = []
+    let stopCooking = () => {}
+    function renderCooking() {
+      const root = $('cooking')
+      root.innerHTML = cookingHTML(cookingRows, who, recipes)
+      wireCooking(cookingRows, who, fail, root, recipes)
+    }
     let photos = null
     window.addEventListener('beforeunload', (e) => {
       if (photos?.api.hasUnsaved()) {
@@ -564,6 +574,15 @@
 
     me().then((w) => {
       who = w
+      stopCooking()
+      stopCooking = watchCooking(
+        (rows) => {
+          cookingRows = rows
+          renderCooking()
+        },
+        fail,
+        who,
+      )
       render()
     }).catch(fail)
 
@@ -675,6 +694,7 @@
         ? open.title + ' \u00b7 Recipe Box'
         : 'Recipe Box'
       wire()
+      renderCooking()
       if (open) {
         if (!photos) {
           const root = renderPhotos(open.eid, [], canWrite())

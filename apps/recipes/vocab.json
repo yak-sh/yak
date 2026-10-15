@@ -42,6 +42,83 @@
           "type": "number"
         }
       }
+    },
+    "cooking": {
+      "description": "A person\u2019s saved cooking session. Created.by owns the session; completed marks it finished.",
+      "floor": "person",
+      "properties": {}
+    },
+    "cook_recipe": {
+      "description": "A recipe captured once for a cooking session, retained as history even if the source recipe changes.",
+      "floor": "person",
+      "properties": {
+        "session": {
+          "type": "string",
+          "ref": "cooking",
+          "death": "cascade"
+        },
+        "recipe": {
+          "type": "string",
+          "ref": "recipe",
+          "death": "keep"
+        },
+        "ord": {
+          "type": "number"
+        },
+        "title": {
+          "type": "string"
+        },
+        "ingredients": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "cook_step": {
+      "description": "An instruction captured for a cooking session in interleaved order; doc.title names its timer and completed records progress.",
+      "floor": "person",
+      "properties": {
+        "session": {
+          "type": "string",
+          "ref": "cooking",
+          "death": "cascade"
+        },
+        "recipe": {
+          "type": "string",
+          "ref": "cook_recipe",
+          "death": "cascade"
+        },
+        "ord": {
+          "type": "number"
+        },
+        "text": {
+          "type": "string"
+        },
+        "seconds": {
+          "type": "number"
+        }
+      }
+    },
+    "timer": {
+      "description": "A cooking step\u2019s persisted clock: due while running, remaining seconds while paused. Expiry is derived from the deadline.",
+      "floor": "person",
+      "properties": {
+        "due": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "remaining": {
+          "type": "number"
+        }
+      }
+    },
+    "cook_pick": {
+      "edge": true,
+      "description": "A person\u2019s intended recipe selection for their next cooking session.",
+      "floor": "person",
+      "properties": {}
     }
   },
   "blob": {

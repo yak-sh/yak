@@ -1,0 +1,185 @@
+.cooking {
+  background: #fffef9;
+  border-radius: .65rem;
+  padding: 1.25rem;
+  margin-block: 2rem;
+  color: var(--ink);
+  background: var(--card);
+  border: 1px solid var(--card-edge);
+  border-radius: 4px;
+  padding: 20px;
+}
+.cooking header p {
+  color: #68695d;
+  line-height: 1.5;
+}
+.cooking h2,
+.cooking h3 {
+  margin-bottom: .4rem;
+}
+.cooking button,
+.cooking input {
+  font: inherit;
+}
+.cooking button {
+  min-height: 2.75rem;
+  padding: .5rem .85rem;
+  border: 1px solid #bcb9a8;
+  border-radius: .4rem;
+  background: #f6f4ea;
+  color: #292a25;
+  cursor: pointer;
+}
+.cooking button:hover:not(:disabled) {
+  background: #e9eddc;
+}
+.cooking button:disabled {
+  opacity: .55;
+  cursor: default;
+}
+.cooking :focus-visible {
+  outline: 3px solid #6b8155;
+  outline-offset: 3px;
+}
+.cooking fieldset {
+  border: 1px solid #d9d6c9;
+  border-radius: .5rem;
+  padding: 1rem;
+  margin-block: 1rem;
+}
+.cook-choice {
+  display: inline-flex;
+  gap: .4rem;
+  align-items: center;
+  margin: .4rem 1rem .8rem 0;
+}
+.cook-choice input,
+.cook-step-check input {
+  width: 1.25rem;
+  height: 1.25rem;
+  accent-color: #567747;
+  flex-shrink: 0;
+}
+.cook-error {
+  color: #922b25;
+  border: 1px solid #c96359;
+  background: #fff0e8;
+  padding: .8rem;
+  border-radius: .4rem;
+  white-space: pre-wrap;
+}
+.cook-sign-in {
+  border-left: 3px solid #718157;
+  padding: .7rem 1rem;
+  background: #f4f4e9;
+}
+.cook-session {
+  margin-block: 1.5rem;
+  border: 1px solid #d9d6c9;
+  border-radius: .65rem;
+  padding: 1.2rem;
+  background: #fffef9;
+}
+.cook-session > header {
+  margin-bottom: 1rem;
+}
+.cook-session.is-complete {
+  border-color: #a1b18f;
+}
+.cook-session summary {
+  cursor: pointer;
+  padding-block: .6rem;
+  font-weight: 600;
+}
+.cook-ingredients {
+  padding-inline-start: 1.4rem;
+}
+.cook-ingredients li {
+  padding-block: .4rem;
+  line-height: 1.5;
+}
+.cook-recipe-name {
+  display: block;
+  font-size: .78rem;
+  font-weight: 700;
+  color: #626f4e;
+  letter-spacing: .03em;
+  margin-bottom: .2rem;
+}
+.cook-steps {
+  padding-inline-start: 1.6rem;
+}
+.cook-step {
+  padding: 1rem 0;
+  border-top: 1px solid #e4e0d4;
+}
+.cook-step-check {
+  display: flex;
+  align-items: start;
+  gap: .7rem;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.cook-step.is-complete .cook-step-check {
+  color: #6b7063;
+}
+.cook-step.is-complete .cook-step-check > span {
+  text-decoration: line-through;
+}
+.cook-timer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: .6rem;
+  margin: .8rem 0 0 2rem;
+}
+.cook-timer-name {
+  flex: 1 0 100%;
+  font-size: .8rem;
+  color: #6f7064;
+  overflow-wrap: anywhere;
+}
+.cook-clock {
+  font-variant-numeric: tabular-nums;
+  font-size: 1.2rem;
+  font-weight: 700;
+  min-width: 4.2rem;
+}
+.cook-clock.is-expired {
+  color: #a13e21;
+}
+.cook-seconds {
+  display: flex;
+  gap: .5rem;
+  flex-wrap: wrap;
+  align-items: end;
+  flex: 1 0 100%;
+}
+.cook-seconds label {
+  font-size: .8rem;
+  display: flex;
+  flex-direction: column;
+  gap: .3rem;
+}
+.cook-seconds input {
+  box-sizing: border-box;
+  width: 10rem;
+  min-height: 2.75rem;
+  padding: .4rem .6rem;
+  border: 1px solid #bbb8a9;
+  border-radius: .3rem;
+  background: white;
+  color: #292a25;
+}
+@media (max-width: 540px) {
+  .cook-session {
+    padding: .8rem;
+  }
+  .cook-timer {
+    margin-left: 0;
+  }
+  .cook-steps {
+    padding-inline-start: 1.2rem;
+  }
+}
