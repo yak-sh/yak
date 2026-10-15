@@ -143,59 +143,71 @@ let callers: Array<{
   },
 ]
 
+// Which failures are retried, and how often, is `retried`'s. Each caller below
+// is sent one eviction, for what it makes of the sends: a fresh stub and a
+// request built again each time.
+test('retried: every eviction is sent again, three sends at most', async () => {
+  for (let failure of failures) {
+    for (let errors of runs(failure)) {
+      let sent = 0
+      let call = () =>
+        retried(() => {
+          let error = errors[sent++]
+          if (error) throw error
+          return 'ok'
+        })
+      if (fails(errors)) {
+        assertEquals(await assertRejects(call), errors.at(-1))
+      } else assertEquals(await call(), 'ok')
+      assertEquals(sent, sends(errors))
+    }
+  }
+})
+
 for (let caller of callers) {
-  test(
-    caller.path + ': a fresh stub and request each send, three at most',
-    async () => {
-      for (let failure of failures) {
-        for (let errors of runs(failure)) {
-          let gets = 0
-          let seen: Request[] = []
-          let ns: Namespace = {
-            idFromName: (name) => {
-              assertEquals(
-                name,
-                caller.binding == 'BUILDER' ? space.eid : who.person,
-              )
-              return name
-            },
-            get: () => {
-              gets++
-              let calls = 0
-              return {
-                fetch: async (req) => {
-                  assertEquals(++calls, 1, 'never reuse a failed stub')
-                  seen.push(req)
-                  assertEquals(req.url, caller.path)
-                  assertEquals(await req.text(), caller.body)
-                  for (let [key, value] of Object.entries(caller.headers)) {
-                    assertEquals(req.headers.get(key), value)
-                  }
-                  if (caller.path.endsWith('/ws')) {
-                    assertEquals(req.headers.has('x-yak-kernel'), false)
-                  }
-                  let error = errors[seen.length - 1]
-                  if (error) throw error
-                  return Response.json({ frames: [], line: 'changed' })
-                },
-              }
-            },
-          }
-          let { env } = platform('test', { [caller.binding]: ns })
-          if (fails(errors)) {
-            assertEquals(
-              await assertRejects(() => caller.run(env)),
-              errors.at(-1),
-            )
-          } else {
-            await caller.run(env)
-          }
-          assertEquals(gets, sends(errors))
-          assertEquals(new Set(seen).size, gets)
-        }
-      }
+  // The env is taken once; each run swaps the namespace behind it.
+  let current: Namespace
+  let { env } = platform('test', {
+    [caller.binding]: {
+      idFromName: (name: string) => current.idFromName(name),
+      get: (id: unknown) => current.get(id as never),
     },
-  )
+  })
+  test(caller.path + ': a fresh stub and request each send', async () => {
+    let errors = [flagged()]
+    let seen: Request[] = []
+    let gets = 0
+    current = {
+      idFromName: (name) => {
+        assertEquals(name, caller.binding == 'BUILDER' ? space.eid : who.person)
+        return name
+      },
+      get: () => {
+        gets++
+        let calls = 0
+        return {
+          fetch: async (req) => {
+            assertEquals(++calls, 1, 'never reuse a failed stub')
+            seen.push(req)
+            assertEquals(req.url, caller.path)
+            assertEquals(await req.text(), caller.body)
+            for (let [key, value] of Object.entries(caller.headers)) {
+              assertEquals(req.headers.get(key), value)
+            }
+            if (caller.path.endsWith('/ws')) {
+              assertEquals(req.headers.has('x-yak-kernel'), false)
+            }
+            let error = errors[seen.length - 1]
+            if (error) throw error
+            return Response.json({ frames: [], line: 'changed' })
+          },
+        }
+      },
+    }
+    await caller.run(env)
+    assertEquals(gets, 2)
+    assertEquals(new Set(seen).size, 2)
+  })
 }
 
 let methods: Array<{ method: keyof Box; args: unknown[]; result: unknown }> = [
@@ -221,8 +233,8 @@ for (let { method, args, result } of methods) {
   test(
     'sandbox ' + method + ': fresh stub, intact arguments, bounded retry',
     async () => {
-      for (let failure of failures) {
-        for (let errors of runs(failure)) {
+      {
+        for (let errors of runs(flagged)) {
           let gets = 0
           let calls = 0
           let ns: Sandboxes = {
