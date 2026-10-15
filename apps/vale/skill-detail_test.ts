@@ -16,7 +16,7 @@ type Hero = ReturnType<typeof hero>
 let page = (s: Hero, id: string) => drawn(skillDetail(s, id))
 let text = (s: Hero, id: string) => page(s, id).textContent!
 let line = (s: Hero, id: string, name: string) =>
-  [...page(s, id).querySelectorAll('.ValeStats_Stat')].find((l) =>
+  [...page(s, id).querySelectorAll('.Stats_Stat')].find((l) =>
     l.textContent!.startsWith(name)
   )
 
@@ -49,7 +49,7 @@ test('skill details show bonuses and the hero changes with current gear', () => 
     new RegExp(`Health ${hp} → ${Math.round(hp * 1.1)}`),
   )
   assertEquals(
-    !!line(s, 'heft', 'Attack ')?.querySelector('.ValeStats_Better'),
+    !!line(s, 'heft', 'Attack ')?.querySelector('.Stats_Better'),
     true,
   )
   assertMatch(text(hero('sword1'), 'heft'), /No listed hero stats change/)
@@ -62,7 +62,7 @@ test('skill details show bonuses and the hero changes with current gear', () => 
       'momentum',
       'Attack interval',
     )
-      ?.querySelector('.ValeStats_Better'),
+      ?.querySelector('.Stats_Better'),
     true,
   )
 })
@@ -78,7 +78,7 @@ test('skill details compare ability effects and cooldowns without changing the h
     ),
   )
   assertEquals(
-    !!line(s, 'bulwark', 'Cooldown')?.querySelector('.ValeStats_Better'),
+    !!line(s, 'bulwark', 'Cooldown')?.querySelector('.Stats_Better'),
     true,
   )
   assertMatch(text(s, 'earthbreaker'), /1\.5 s Stun/)

@@ -1,6 +1,6 @@
 /* The Character tab (character.ts): the hero's likeness, their level on a
    badge hung from its frame, beside their name and the xp to the next level;
-   under them, the numbers they fight by (ValeStats); beside it all, or under
+   under them, the numbers they fight by (Stats); beside it all, or under
    it on a narrow panel, their look to change (Make.css), the two split as
    a list and its detail are (Split.css). The likeness is drawn at the size
    it shows (portrait.ts), against the sky. */

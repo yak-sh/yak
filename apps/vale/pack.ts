@@ -1,7 +1,7 @@
 // The hero's pack, drawn into their panel's Bag tab: what they wear in each
 // slot (how they fight in it is the Character tab's), everything else they
 // carry, and by a village's fire, the rack of plain arms anyone may take
-// to try, each a grid of squares (kit/ValeGrid.ts), as a bag in a good game
+// to try, each a grid of squares (@yaks/game/hud), as a bag in a good game
 // is. Each piece of gear is its own, its picture framed in its rarity's
 // colour (rarity.ts) with its tier in a corner, or in red the level it needs,
 // faded until the hero has it; everything else is a stack of its kind, how
@@ -33,7 +33,7 @@ import {
 import { canWear, rack as rackKinds } from './gear.ts'
 import { glyph } from './glyphs.ts'
 import { ITEMS, type Thing } from './items.ts'
-import { ValeGrid } from './kit/ValeGrid.ts'
+import { Grid } from '@yaks/game/hud'
 import { type Piece, piece, RARITIES, tint } from './rarity.ts'
 import { icon } from './sprites.ts'
 import type { Page } from './panel.ts'
@@ -44,7 +44,7 @@ import { cards, heard, type Tip, tipProps } from './tip.ts'
 import { hint, mark, part, picture } from './tile.ts'
 import { split } from './ui/split.ts'
 
-let { Cell, Picture, Label, Name, Tier, Need, Count } = ValeGrid
+let { Cell, Picture, Label, Name, Tier, Need, Count } = Grid
 
 export type Acts = {
   wear: (slot: Slot, item?: string) => void
@@ -189,7 +189,7 @@ export let pack = (panel: Page, acts: Acts) => {
   let at = (from: From, key: string) =>
     picked?.from == from && picked.key == key
 
-  // A thing in its square (kit/ValeGrid.ts), picked from `from` by `key`,
+  // A thing in its square (@yaks/game/hud), picked from `from` by `key`,
   // framed in its rarity, a legendary's alight; `mod` says how else it
   // stands.
   let cell = (
@@ -343,12 +343,12 @@ export let pack = (panel: Page, acts: Acts) => {
         { class: 'Pack' },
         part(
           'In your bag',
-          bag.length ? el(ValeGrid, {}, bag) : hint('Your bag is empty.'),
+          bag.length ? el(Grid, {}, bag) : hint('Your bag is empty.'),
         ),
         f.rack && part(
           'By the fire: plain arms for anyone to try',
           el(
-            ValeGrid,
+            Grid,
             {},
             rackKinds().map((k) =>
               carry(
@@ -362,7 +362,7 @@ export let pack = (panel: Page, acts: Acts) => {
         ),
       ),
       [
-        el(ValeGrid, { mod: 'wide' }, SLOTS.map((sl) => slot(s, sl))),
+        el(Grid, { mod: 'wide' }, SLOTS.map((sl) => slot(s, sl))),
         card(s, f),
       ],
       picked ? `${picked.from}:${picked.key}` : null,

@@ -27,7 +27,7 @@ import type { Glyph } from './glyphs.ts'
 import type { Sheet } from './play.ts'
 import type { Stat } from './rarity.ts'
 import { type Boon, formOf, SKILLS } from './skills.ts'
-import { ValeStats } from './kit/ValeStats.ts'
+import { Stats } from '@yaks/game/hud'
 import { mark, part } from './tile.ts'
 
 type Hero = Pick<Sheet, 'lvl' | 'learned' | 'worn'>
@@ -99,7 +99,7 @@ let compared = (now: AbilityLine[], was?: AbilityLine[]) =>
     let words = line.parts.map((p) => typeof p == 'string' ? p : number(p))
     return stat(
       iconOf(line.key),
-      ...(was && !before ? [h(ValeStats.Better, {}, words)] : words),
+      ...(was && !before ? [h(Stats.Better, {}, words)] : words),
     )
   })
 

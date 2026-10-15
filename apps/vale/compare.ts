@@ -1,6 +1,6 @@
 // The shared gear display: an item's named stats, the hero's resulting
 // numbers with a piece equipped, and current-to-result comparisons, each a
-// line of ValeStats. A number that would change reads from what it is to
+// line of Stats. A number that would change reads from what it is to
 // what it would be, the new one Better or Worse; nothing else is coloured.
 // The bag, comparison tip, crafting station, skills and character sheet use
 // these names.
@@ -11,7 +11,7 @@ import { type Slot, sortOf, tierName } from './arms.ts'
 import { hands, kitOf, twins, type Worn } from './gear.ts'
 import { type Glyph, glyph } from './glyphs.ts'
 import { ITEMS } from './items.ts'
-import { ValeStats } from './kit/ValeStats.ts'
+import { Stats } from '@yaks/game/hud'
 import type { Sheet } from './play.ts'
 import { GEAR_STATS, GRADES, type Piece, type Stat, tint } from './rarity.ts'
 import { blowOf, type Held, maxHp } from './rules.ts'
@@ -168,23 +168,23 @@ export let stat = (
   ...words: ComponentChildren[]
 ): JSX.Element =>
   h(
-    ValeStats.Stat,
+    Stats.Stat,
     {},
-    h(ValeStats.Mark, {
+    h(Stats.Mark, {
       'aria-hidden': 'true',
       dangerouslySetInnerHTML: { __html: glyph(mark) },
     }),
-    h(ValeStats.Words, {}, ...words),
+    h(Stats.Words, {}, ...words),
   )
 
 /** Lines of numbers, in two columns where there is room for them. */
 export let stats = (lines: ComponentChildren, two = false): JSX.Element =>
-  h(ValeStats, { mod: two && 'two' }, lines)
+  h(Stats, { mod: two && 'two' }, lines)
 
 // Which way a number going from `a` to `b` goes, where it moves: the better
 // way (more of it, or less where less is better) or the worse.
 let way = (more: boolean, a: number, b: number) =>
-  a == b ? null : (more ? b > a : b < a) ? ValeStats.Better : ValeStats.Worse
+  a == b ? null : (more ? b > a : b < a) ? Stats.Better : Stats.Worse
 
 /** `text`, saying the number `b` that `a` would become, Better or Worse as
  * it goes, and ink where it stays.
@@ -195,8 +195,8 @@ let way = (more: boolean, a: number, b: number) =>
  * import { renderToString } from 'preact-render-to-string'
  * let read = (more: boolean, a: number, b: number) =>
  *   renderToString(h('b', {}, toward(more, a, b, String(b))))
- * assertEquals(read(true, 1, 2), '<b><em class="ValeStats_Better">2</em></b>')
- * assertEquals(read(false, 1, 2), '<b><em class="ValeStats_Worse">2</em></b>')
+ * assertEquals(read(true, 1, 2), '<b><em class="Stats_Better">2</em></b>')
+ * assertEquals(read(false, 1, 2), '<b><em class="Stats_Worse">2</em></b>')
  * assertEquals(read(true, 2, 2), '<b>2</b>')
  * ```
  */

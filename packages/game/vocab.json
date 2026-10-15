@@ -1,0 +1,121 @@
+{
+  "$vocabulary": {
+    "https://yak.sh/vocab/core": true
+  },
+  "title": "game",
+  "description": "Page-only browser game controls. Pure rules declare no state.",
+  "$defs": {
+    "Controls": {
+      "component": true,
+      "type": "object",
+      "sync": "none",
+      "durable": "connection",
+      "description": "Controlled input state on a consumer-named entity. All keys, gestures and preferences live here; a remount reads the same row.",
+      "properties": {
+        "move": {
+          "type": "array",
+          "items": {
+            "type": "number"
+          },
+          "description": "move coordinates; absent when no pointer or click"
+        },
+        "look": {
+          "type": "array",
+          "items": {
+            "type": "number"
+          },
+          "description": "look coordinates; absent when no pointer or click"
+        },
+        "orbit": {
+          "type": "array",
+          "items": {
+            "type": "number"
+          },
+          "description": "orbit coordinates; absent when no pointer or click"
+        },
+        "pointer": {
+          "type": "array",
+          "items": {
+            "type": "number"
+          },
+          "description": "pointer coordinates; absent when no pointer or click"
+        },
+        "click": {
+          "type": "array",
+          "items": {
+            "type": "number"
+          },
+          "description": "click coordinates; absent when no pointer or click"
+        },
+        "pressAt": {
+          "type": "array",
+          "items": {
+            "type": "number"
+          },
+          "description": "pressAt coordinates; absent when no pointer or click"
+        },
+        "held": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "held input codes or action bindings"
+        },
+        "pressed": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "pressed input codes or action bindings"
+        },
+        "pad": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "pad input codes or action bindings"
+        },
+        "swapped": {
+          "type": "boolean",
+          "description": "swapped browser control state"
+        },
+        "strafe": {
+          "type": "boolean",
+          "description": "strafe browser control state"
+        },
+        "hideCursor": {
+          "type": "boolean",
+          "description": "hideCursor browser control state"
+        },
+        "locking": {
+          "type": "boolean",
+          "description": "locking browser control state"
+        },
+        "focused": {
+          "type": "boolean",
+          "description": "focused browser control state"
+        },
+        "looked": {
+          "type": "boolean",
+          "description": "looked browser control state"
+        },
+        "zoom": {
+          "type": "number",
+          "description": "wheel delta since the last frame"
+        },
+        "stick": {
+          "type": "object",
+          "description": "stick gesture state, interpreted by the browser controls"
+        },
+        "drags": {
+          "type": "object",
+          "description": "drags gesture state, interpreted by the browser controls"
+        },
+        "mouse": {
+          "type": "object",
+          "description": "mouse gesture state, interpreted by the browser controls"
+        }
+      }
+    }
+  }
+}

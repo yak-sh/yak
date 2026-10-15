@@ -1,4 +1,4 @@
-/* The bag and rack, grids of squares (kit/ValeGrid.css), scroll in the left
+/* The bag and rack, grids of squares (@yaks/game/hud), scroll in the left
    pane; worn slots head the right pane, above the selected item and its
    comparison. */
 .Pack {
@@ -14,4 +14,14 @@
   margin: 0;
   font-size: 0.85rem;
   color: var(--faint);
+}
+
+/* Vale's inventory pictures use its own sprite and glyph parts. */
+.Grid_Picture .Sprite {
+  width: 2.2rem;
+  height: 2.2rem;
+}
+.Grid_Picture .Glyph {
+  width: 1.4rem;
+  height: 1.4rem;
 }

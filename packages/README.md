@@ -541,9 +541,9 @@ grouped approximately by function, **not** by dependency order.
   runner loads every test module into one runtime, runs the examples beside the
   code (fenced blocks and `///` doctests) as tests, and leaves out a file that
   passed while nothing it depends on has changed.
-- **[@yaks/game](./game)** — deterministic game rules over values: randomness,
-  progression, paths, combat, timed effects and peer motion. Safe in a worker;
-  each game owns its graph and world.
+- **[@yaks/game](./game)** — game rules, browser controls and HUD parts over
+  values: randomness, progression, paths, combat, timed effects and peer motion.
+  Its root is safe in a worker; each game owns its graph and world.
 - **[@yaks/stage](./stage)** — Three.js presentation over supplied values:
   renderer and frame loop, voxel materials and rigs, effects, cameras, picking
   and positional sound; no graph or game-world dependencies.

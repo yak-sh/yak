@@ -61,11 +61,11 @@ test('upgrade ranges use the compact text and the icons of finished gear', () =>
         side(0),
         side(low),
         side(high),
-      )).querySelectorAll('.ValeStats_Stat'),
+      )).querySelectorAll('.Stats_Stat'),
     ].find((l) => l.textContent!.startsWith(statName(stat)))!
     ok(line, stat)
     ok(line.textContent!.endsWith(` → ${text}`), line.textContent!)
-    ok(line.querySelector('.ValeStats_Mark svg'), `${stat} has its icon`)
+    ok(line.querySelector('.Stats_Mark svg'), `${stat} has its icon`)
   }
 })
 
@@ -87,7 +87,7 @@ test('a number is coloured only where it would change, Better or Worse as it goe
     equal(
       [...ems].map((
         e,
-      ) => [e.className.replace('ValeStats_', ''), e.textContent]),
+      ) => [e.className.replace('Stats_', ''), e.textContent]),
       marks,
       `${now} → ${low}-${high}`,
     )

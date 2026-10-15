@@ -1,3 +1,4 @@
+import { derivedEid } from '@yaks/graph/identity'
 // Mossvale, a little voxel RPG that whoever is here plays together. This is
 // the page: it grows the ground round home's fire off its own thread
 // (grown.ts) while it opens the store and asks who you are and which of your
@@ -186,8 +187,18 @@ let typing = false
 // The keyboard is someone else's while a name or a line is written, or while
 // someone is talked to.
 let elsewhere = () => typing || h.talking || chat.typing
-let hands = listen(canvas, glass, elsewhere)
 let uiState = pageState(undefined, opening.client)
+let controlId = derivedEid(`Controls|${uiState.owner}`)
+let hands = listen(canvas, glass, elsewhere, {
+  get: () => ({
+    entity: { eid: controlId },
+    Controls: uiState.row(controlId)
+      .Controls as import('@yaks/game/controls').ControlsBundle['Controls'],
+  }),
+  onChange: (b) => {
+    uiState.mutate([b as import('@yaks/graph').Bundle])
+  },
+})
 let h = hud(glass, hands.press, elsewhere, uiState)
 let marks = overlay(h.layer, camera, h.under)
 let chat = chatbox(
@@ -888,7 +899,7 @@ let loop = frameLoop((t, dt, elapsed) => {
   w.tick(now / 1000, dt)
   depth(camera, w.fog)
   if (playing && net.hero) {
-    let i = hands.read()
+    let i = hands.read(dt)
     camera.updateMatrixWorld()
     mouseRay.setFromCamera(new THREE.Vector2(...hands.pointer()), camera)
     i.point = groundRay(

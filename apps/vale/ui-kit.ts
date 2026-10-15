@@ -7,9 +7,8 @@ import * as toast from './kit/ValeToast.ts'
 import * as orb from './kit/ValeOrb.ts'
 import * as recording from './kit/ValeRecording.ts'
 import * as compass from './kit/ValeCompass.ts'
-import * as stats from './kit/ValeStats.ts'
+import { kit as game } from '@yaks/game/hud'
 import * as badge from './kit/ValeBadge.ts'
-import * as grid from './kit/ValeGrid.ts'
 import { skin, theme } from './skin.ts'
 
 export { ValeMeter } from './kit/ValeMeter.ts'
@@ -18,9 +17,8 @@ export { ValeToast } from './kit/ValeToast.ts'
 export { ValeOrb } from './kit/ValeOrb.ts'
 export { ValeRecording } from './kit/ValeRecording.ts'
 export { ValeCompass } from './kit/ValeCompass.ts'
-export { ValeStats } from './kit/ValeStats.ts'
+export { Grid, Stats, Stick } from '@yaks/game/hud'
 export { ValeBadge } from './kit/ValeBadge.ts'
-export { ValeGrid } from './kit/ValeGrid.ts'
 
 export let kit: Kit = {
   ValeRecording: {
@@ -53,23 +51,13 @@ export let kit: Kit = {
     Component: compass.ValeCompass,
     css: new URL('./kit/ValeCompass.css', import.meta.url),
   },
-  ValeStats: {
-    ...stats,
-    Component: stats.ValeStats,
-    css: new URL('./kit/ValeStats.css', import.meta.url),
-  },
   ValeBadge: {
     ...badge,
     Component: badge.ValeBadge,
     css: new URL('./kit/ValeBadge.css', import.meta.url),
   },
-  ValeGrid: {
-    ...grid,
-    Component: grid.ValeGrid,
-    css: new URL('./kit/ValeGrid.css', import.meta.url),
-  },
 }
-export let kits = { vale: kit }
+export let kits = { game, vale: kit }
 export let composition: Composition = {
   kits: { ...base, ...kits },
   theme,

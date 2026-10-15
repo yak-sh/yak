@@ -58,10 +58,10 @@ let lines = () => {
         say('end off its row', tile)
       }
     }
-    for (let grid of list.querySelectorAll('.ValeGrid')) {
-      let cells = [...grid.querySelectorAll(':scope > .ValeGrid_Cell')]
+    for (let grid of list.querySelectorAll('.Grid')) {
+      let cells = [...grid.querySelectorAll(':scope > .Grid_Cell')]
         .filter(shown).map(box)
-      let [a] = cells, g = box(grid), wide = grid.matches('.ValeGrid-wide')
+      let [a] = cells, g = box(grid), wide = grid.matches('.Grid-wide')
       seen[name] += cells.length
       if (
         cells.length > 1 && cells.filter((c) => near(c.top, a.top)).length < 2
@@ -83,7 +83,7 @@ let lines = () => {
     }
     for (let glyph of list.querySelectorAll('svg.Glyph')) {
       let head = glyph.closest('h1, h2, h3, summary, b, button, li, label')
-      if (!head || glyph.closest('.Tile, .ValeGrid_Cell') || !shown(glyph)) {
+      if (!head || glyph.closest('.Tile, .Grid_Cell') || !shown(glyph)) {
         continue
       }
       let near = words(head)
@@ -104,7 +104,7 @@ let still = () => {
     [
       e,
       ...e.querySelectorAll(
-        '.Rarity, .Tile_Icon, .Tile_Title, .ValeGrid_Picture, .ValeGrid_Name',
+        '.Rarity, .Tile_Icon, .Tile_Title, .Grid_Picture, .Grid_Name',
       ),
     ].map((x) => {
       let c = getComputedStyle(x)

@@ -9,6 +9,10 @@
   },
   "imports": {
     "@yaks/game": "./mod.ts",
-    "@yaks/game/rules": "./mod.ts"
+    "@yaks/game/rules": "./mod.ts",
+    "@yaks/game/controls": "./controls.ts",
+    "@yaks/game/hud": "./hud.ts",
+    "@yaks/game/vocab": "./vocab.ts",
+    "@yaks/game/ui": "./ui.ts"
   }
 }

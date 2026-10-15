@@ -9,11 +9,12 @@ import { derivedEid, mint } from '@yaks/graph/identity'
 import { parse } from '@yaks/query'
 import { loadVocab } from '@yaks/vocab'
 import { kitDocs } from '@yaks/ux'
+import { docs as gameDocs } from '@yaks/game/vocab'
 import { ux as base } from '@yaks/ux/ui'
 import { selected, selection, ux } from './ux-kit.ts'
 
 /** Base declarations are composed once, not copied into Vale's vocabulary. */
-export let pageDocs = () => kitDocs({ ...base, ...ux })
+export let pageDocs = () => [...kitDocs({ ...base, ...ux }), ...gameDocs]
 let query = (eid: string) => `.entity.eid=${JSON.stringify(eid)}`
 
 /** One controller per page; owner can be supplied again for a named instance. */

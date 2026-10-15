@@ -4,6 +4,11 @@
 // since the last frame, and how far the view was dragged.
 
 import { cursor, type Point } from '@yaks/stage/aim'
+import {
+  type ControlsBundle,
+  listen as controls,
+  movement as axes,
+} from '@yaks/game/controls'
 
 export type Intent = {
   /** World point beneath the mouse, filled by the stage before simulation. */
@@ -94,401 +99,61 @@ let TURNS: Record<string, number> = {
   ArrowRight: 1,
 }
 
-let KEY_TURN = 6
-
-/** Arrows turn the camera and hero together; A/D turn or strafe according to
- * the setting. Movement axes are resolved against the chosen view or hero
- * heading by the frame. Both mouse buttons add forward motion. Diagonals are
- * no faster.
- *
- * ```ts
- * import { assertEquals } from '@std/assert'
- * assertEquals(movement(['KeyA'], true), {
- *   move: [-1, 0], turn: 0, faceMove: false,
- * })
- * assertEquals(movement(['KeyA'], false), {
- *   move: [0, 0], turn: -6, faceMove: false,
- * })
- * assertEquals(movement(['ArrowLeft'], true), {
- *   move: [0, 0], turn: -6, faceMove: false,
- * })
- * assertEquals(movement(['ArrowRight', 'KeyA'], true), {
- *   move: [-1, 0], turn: 6, faceMove: false,
- * })
- * assertEquals(movement([], true, [1, 0]), {
- *   move: [1, 0], turn: 0, faceMove: true,
- * })
- * assertEquals(movement([], false, undefined, true), {
- *   move: [0, 1], turn: 0, faceMove: false,
- * })
- * ```
- */
 export let movement = (
   held: Iterable<string>,
   strafe: boolean,
   stick?: [number, number],
   mouseWalk = false,
-): Pick<Intent, 'move' | 'turn' | 'faceMove'> => {
-  let x = 0, y = 0, keyTurn = 0
-  for (let code of held) {
-    if (TURNS[code]) keyTurn += TURNS[code]
-    let a = AXES[code]
-    if (a) {
-      if (a[0] && !strafe) keyTurn += a[0]
-      else x += a[0]
-      y += a[1]
-    }
-  }
-  if (stick) x += stick[0], y += stick[1]
-  if (mouseWalk) y++
-  let len = Math.hypot(x, y)
-  if (len > 1) [x, y] = [x / len, y / len]
-  return {
-    move: [x, y],
-    turn: Math.max(-1, Math.min(1, keyTurn)) * KEY_TURN,
-    faceMove: !!stick && Math.hypot(...stick) > 0.01,
-  }
-}
+) => axes(held, strafe, stick, mouseWalk, { axes: AXES, turns: TURNS })
+export { lookDrag, mouseButtons } from '@yaks/game/controls'
 
-let STICK = 56
-
-/** A nonstick touch uses the look hand; mouse buttons may
- * swap their roles in the menu. */
-export let lookDrag = (button: number, type: string, swapped: boolean) =>
-  type == 'touch' || button == (swapped ? 0 : 2)
-
-// A mouse has one pointer even while two buttons are down. Its second press
-// and first release arrive as mouse events, without a pointerdown or pointerup.
-export let mouseButtons = () => {
-  let buttons = 0, far = 0, chorded = false
-  let bit = (button: number) => button == 0 ? 1 : button == 2 ? 2 : 0
-  return {
-    down: (button: number) => {
-      let b = bit(button)
-      if (!b) return
-      if (!buttons) far = 0, chorded = false
-      buttons |= b
-      if (buttons == 3) chorded = true
-    },
-    move: (mask: number, distance: number) => {
-      if (!buttons) return
-      far += distance
-      if (mask & 3) buttons = mask & 3
-      if (buttons == 3) chorded = true
-    },
-    up: (button: number): Action | undefined => {
-      let b = bit(button)
-      if (!(buttons & b)) return
-      buttons &= ~b
-      return !chorded && far < 8 ? button == 0 ? 'strike' : 'dodge' : undefined
-    },
-    walk: () => buttons == 3,
-    chorded: () => chorded,
-    active: () => buttons != 0,
-    cancel: () => {
-      buttons = far = 0
-      chorded = false
-    },
-  }
-}
-
-/** Listen on `stage` and the window. `busy` says when the keyboard belongs
- * to something else (a name being typed); the thumbstick is drawn in
- * `glass`, resting in its corner until a thumb lands. */
+/** Mossvale alone names its verbs, screen projection and graph entity. */
 export let listen = (
   stage: HTMLElement,
   glass: HTMLElement,
   busy: () => boolean,
+  state: { get: () => ControlsBundle; onChange: (b: ControlsBundle) => void },
 ) => {
-  let held = new Set<string>()
-  let pressed = new Set<Action>()
-  let orbit: [number, number] = [0, 0]
-  let looked = false
-  let zoom = 0
-  let pointer: [number, number] | null = null
-  let click: [number, number] | undefined
-  let pressAt: [number, number] | undefined
-  let swapped = false
-  let strafe = false
-  let hideCursor = true
-  try {
-    swapped = localStorage.getItem('mossvale.drag.swap') == '1'
-    strafe = localStorage.getItem('mossvale.keys.strafe') == '1'
-    hideCursor = localStorage.getItem('mossvale.drag.hideCursor') != '0'
-  } catch { /* this page keeps its setting */ }
-  let isLook = (button: number, type: string) => lookDrag(button, type, swapped)
-  let stick:
-    | { id: number; x: number; y: number; dx: number; dy: number }
-    | null = null
-  let drags = new Map<
-    number,
-    { x: number; y: number; far: number; button: number; type: string }
-  >()
-  let mouse = mouseButtons()
-  let locking = false
-  let locked = () => document.pointerLockElement == stage
-  let unlock = () => {
-    if (locked()) document.exitPointerLock()
-  }
-  let cancelMouse = () => {
-    mouse.cancel()
-    for (let [id, d] of drags) if (d.type == 'mouse') drags.delete(id)
-    looked = false
-  }
-  document.addEventListener('pointerlockchange', () => {
-    locking = false
-    if (locked()) {
-      // A quick release can precede the browser granting the request.
-      if (!hideCursor || !mouse.active()) unlock()
-    } else cancelMouse()
+  let hands = controls(stage, glass, busy, {
+    ...state,
+    keys: KEYS,
+    axes: AXES,
+    turns: TURNS,
+    tap: { 0: 'strike', 2: 'dodge' },
+    gamepad: {
+      move: [0, 1],
+      look: [2, 3],
+      buttons: {
+        0: 'jump',
+        1: 'dodge',
+        2: 'strike',
+        3: 'talk',
+        4: 'ability1',
+        5: 'ability2',
+        6: 'drink',
+        7: 'ability3',
+        9: 'snap',
+      },
+    },
+    cursor: (x, y, locked) =>
+      cursor(x, y, innerWidth, globalThis.innerHeight ?? innerWidth, locked),
   })
-  document.addEventListener('pointerlockerror', () => {
-    locking = false // A refused lock leaves the captured drag usable.
-  })
-  addEventListener('keydown', (e) => {
-    if (e.code != 'Escape' || !locked()) return
-    e.stopImmediatePropagation()
-    cancelMouse()
-    unlock()
-  }, { capture: true })
-
-  let base = document.createElement('div')
-  base.className = 'Stick'
-  let knob = document.createElement('div')
-  knob.className = 'Stick_Knob'
-  base.append(knob)
-  glass.append(base)
-  let rest = () => {
-    base.classList.add('Stick-rest')
-    base.style.transform = ''
-    knob.style.transform = ''
-  }
-  rest()
-
-  addEventListener('keydown', (e) => {
-    if (busy() || e.metaKey || e.ctrlKey) return
-    if (AXES[e.code] || TURNS[e.code] || KEYS[e.code]) e.preventDefault()
-    if (e.repeat) return
-    held.add(e.code)
-    let a = KEYS[e.code]
-    if (a) pressed.add(a)
-  })
-  addEventListener('keyup', (e) => held.delete(e.code))
-  addEventListener('blur', () => {
-    held.clear()
-    pressed.clear()
-    orbit = [0, 0]
-    looked = false
-    zoom = 0
-    mouse.cancel()
-    unlock()
-    for (let id of drags.keys()) {
-      if (stage.hasPointerCapture(id)) stage.releasePointerCapture(id)
-    }
-    drags.clear()
-    stick = null
-    rest()
-  })
-
-  stage.addEventListener('contextmenu', (e) => e.preventDefault())
-  stage.addEventListener('pointerdown', (e) => {
-    pointer = [e.clientX, e.clientY]
-    if (e.button == 0) {
-      pressAt = cursor(
-        ...pointer,
-        innerWidth,
-        globalThis.innerHeight ?? innerWidth,
-        locked(),
-      )
-    }
-    if (!document.pointerLockElement) stage.setPointerCapture(e.pointerId)
-    if (e.pointerType == 'mouse') {
-      mouse.down(e.button)
-      if (
-        mouse.active() && hideCursor && !locked() && stage.requestPointerLock
-      ) {
-        locking = true
-        // Older browsers return void; newer ones also reject a promise.
-        stage.requestPointerLock()?.catch(() => {
-          locking = false
-        })
-      }
-    }
-    if (e.pointerType == 'touch' && !stick && e.clientX < innerWidth * 0.45) {
-      stick = { id: e.pointerId, x: e.clientX, y: e.clientY, dx: 0, dy: 0 }
-      base.classList.remove('Stick-rest')
-      base.style.transform = `translate(${e.clientX}px, ${e.clientY}px)`
-      knob.style.transform = ''
-      return
-    }
-    drags.set(e.pointerId, {
-      x: e.clientX,
-      y: e.clientY,
-      far: 0,
-      button: e.button,
-      type: e.pointerType,
-    })
-  })
-  stage.addEventListener('mousedown', (e) => {
-    if (mouse.active()) mouse.down(e.button)
-    if (mouse.chorded()) looked = false
-  })
-  addEventListener('mouseup', (e) => {
-    let action = mouse.up(e.button)
-    if (action) {
-      pressed.add(action)
-      if (action == 'strike') click = pressAt
-    }
-    if (!mouse.active()) {
-      for (let [id, d] of drags) if (d.type == 'mouse') drags.delete(id)
-      unlock()
-    }
-  })
-  stage.addEventListener('mousemove', (e) => {
-    if (!locked() || !mouse.active()) return
-    mouse.move(e.buttons, Math.hypot(e.movementX, e.movementY))
-    orbit[0] -= e.movementX * 0.006
-    orbit[1] += e.movementY * 0.006
-    let d = [...drags.values()].find((d) => d.type == 'mouse')
-    if (d && !mouse.chorded() && isLook(d.button, d.type)) looked = true
-  })
-  stage.addEventListener('pointermove', (e) => {
-    if (e.pointerType == 'mouse' && locked()) return
-    pointer = [e.clientX, e.clientY]
-    if (stick?.id == e.pointerId) {
-      let dx = e.clientX - stick.x, dy = e.clientY - stick.y
-      let d = Math.hypot(dx, dy)
-      let k = d > STICK ? STICK / d : 1
-      stick.dx = (dx * k) / STICK
-      stick.dy = (dy * k) / STICK
-      knob.style.transform = `translate(${dx * k}px, ${dy * k}px)`
-      return
-    }
-    let d = drags.get(e.pointerId)
-    if (!d) return
-    let mx = e.pointerType == 'touch' ? e.clientX - d.x : e.movementX
-    let my = e.pointerType == 'touch' ? e.clientY - d.y : e.movementY
-    d.far += Math.hypot(mx, my)
-    if (e.pointerType == 'mouse') {
-      mouse.move(e.buttons, Math.hypot(mx, my))
-      if (mouse.chorded()) looked = false
-    }
-    d.x = e.clientX
-    d.y = e.clientY
-    let k = e.pointerType == 'touch' ? 0.009 : 0.006
-    orbit[0] -= mx * k
-    orbit[1] += my * k
-    if (!mouse.chorded() && isLook(d.button, d.type)) looked = true
-  })
-  let up = (e: PointerEvent) => {
-    if (stick?.id == e.pointerId) {
-      stick = null
-      rest()
-      return
-    }
-    let d = drags.get(e.pointerId)
-    drags.delete(e.pointerId)
-    if (e.pointerType == 'mouse') {
-      if (e.type == 'pointercancel') mouse.cancel()
-      else {
-        let action = mouse.up(e.button)
-        if (action) {
-          pressed.add(action)
-          if (action == 'strike') click = pressAt
-        }
-      }
-      if (!mouse.active()) unlock()
-      return
-    }
-    // Touch and pen use their pointer release; a tap on the right of a phone
-    // is a blow too, where the thumb already is.
-    if (d && d.far < 8 && e.type == 'pointerup') {
-      if (d.button == 0) pressed.add('strike')
-      if (d.button == 2) pressed.add('dodge')
-    }
-  }
-  stage.addEventListener('pointerup', up)
-  stage.addEventListener('pointercancel', up)
-  stage.addEventListener('lostpointercapture', (e) => {
-    if (e.pointerType == 'mouse' && (locking || locked())) return
-    // Chrome drops capture when the second mouse button goes down.
-    if (e.pointerType == 'mouse' && mouse.active() && e.buttons & 3) {
-      if (!document.pointerLockElement) stage.setPointerCapture(e.pointerId)
-      return
-    }
-    drags.delete(e.pointerId)
-    if (e.pointerType == 'mouse') mouse.cancel()
-    if (stick?.id == e.pointerId) {
-      stick = null
-      rest()
-    }
-  })
-  stage.addEventListener('wheel', (e) => {
-    e.preventDefault()
-    zoom += Math.sign(e.deltaY)
-  }, { passive: false })
-
   return {
-    /** press an action from a button on the screen */
-    press: (a: Action) => pressed.add(a),
-    swapped: () => swapped,
-    swap: () => {
-      swapped = !swapped
-      try {
-        localStorage.setItem('mossvale.drag.swap', swapped ? '1' : '0')
-      } catch { /* this page keeps its setting */ }
-    },
-    pointer: (): [number, number] =>
-      pointer ? cursor(...pointer, innerWidth, innerHeight, locked()) : [0, 0],
-    hidesCursor: () => hideCursor,
-    hideCursor: () => {
-      hideCursor = !hideCursor
-      if (!hideCursor) unlock()
-      try {
-        localStorage.setItem(
-          'mossvale.drag.hideCursor',
-          hideCursor ? '1' : '0',
-        )
-      } catch { /* this page keeps its setting */ }
-    },
-    strafes: () => strafe,
-    strafe: () => {
-      strafe = !strafe
-      try {
-        localStorage.setItem('mossvale.keys.strafe', strafe ? '1' : '0')
-      } catch { /* this page keeps its setting */ }
-    },
-    read: (): Intent => {
-      let axes = movement(
-        busy() ? [] : held,
-        strafe,
-        stick ? [stick.dx, -stick.dy] : undefined,
-        mouse.walk(),
-      )
-      let out: Intent = {
-        ...axes,
-        pick: click,
-        jump: pressed.has('jump') || (!busy() && held.has('Space')),
-        strike: pressed.has('strike'),
-        ability: [1, 2, 3].find((n) => pressed.has(`ability${n}` as Action)) ??
-          0,
-        dodge: pressed.has('dodge'),
-        talk: pressed.has('talk'),
-        gather: pressed.has('gather'),
-        drink: pressed.has('drink'),
-        snap: pressed.has('snap'),
-        mic: pressed.has('mic'),
-        orbit: [orbit[0], orbit[1]],
-        look: !mouse.chorded() && (looked ||
-          [...drags.values()].some((d) => isLook(d.button, d.type))),
-        zoom,
+    ...hands,
+    read: (dt = 1 / 60): Intent => {
+      let i = hands.read(dt)
+      return {
+        ...i,
+        jump: i.actions.includes('jump') || i.held.includes('jump'),
+        strike: i.actions.includes('strike'),
+        ability: [1, 2, 3].find((n) => i.actions.includes(`ability${n}`)) ?? 0,
+        dodge: i.actions.includes('dodge'),
+        talk: i.actions.includes('talk'),
+        gather: i.actions.includes('gather'),
+        drink: i.actions.includes('drink'),
+        snap: i.actions.includes('snap'),
+        mic: i.actions.includes('mic'),
       }
-      pressed.clear()
-      click = undefined
-      orbit = [0, 0]
-      looked = false
-      zoom = 0
-      return out
     },
   }
 }

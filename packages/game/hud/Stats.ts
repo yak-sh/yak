@@ -8,7 +8,7 @@ import { block, type Colors, type Specimen } from '@yaks/ui'
 import type { Sheet } from '@yaks/tui/theme'
 import { h } from 'preact'
 
-export let ValeStats = block('div', 'ValeStats', {
+export let Stats = block('div', 'Stats', {
   Stat: 'span',
   Mark: 'span',
   Words: 'span',
@@ -18,12 +18,12 @@ export let ValeStats = block('div', 'ValeStats', {
 export let description =
   'Numbers, a line each, coloured only where one would change.'
 export let sheet = (c: Colors): Sheet => ({
-  ValeStats_Stat: { block: true, spaced: true },
-  ValeStats_Mark: { fg: c.muted },
-  ValeStats_Better: { fg: c.positive },
-  ValeStats_Worse: { fg: c.negative },
+  Stats_Stat: { block: true, spaced: true },
+  Stats_Mark: { fg: c.muted },
+  Stats_Better: { fg: c.positive },
+  Stats_Worse: { fg: c.negative },
 })
-let { Stat, Mark, Words, Better, Worse } = ValeStats
+let { Stat, Mark, Words, Better, Worse } = Stats
 let line = (mark: string, ...words: unknown[]) =>
   h(
     Stat,
@@ -35,7 +35,7 @@ export let specimens = (): Specimen[] => [
   [
     'A piece’s own',
     h(
-      ValeStats,
+      Stats,
       {},
       line('⚔', '1.84× Weapon power'),
       line('♥', '+10 Health'),
@@ -44,7 +44,7 @@ export let specimens = (): Specimen[] => [
   [
     'two: what would change, Better and Worse',
     h(
-      ValeStats,
+      Stats,
       { mod: 'two' },
       line('⚔', 'Attack 13 → ', h(Better, {}, '14')),
       line('◷', 'Attack interval 0.50 s → ', h(Worse, {}, '0.52 s')),

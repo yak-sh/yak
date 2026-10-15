@@ -3,10 +3,14 @@
   "version": "0.2.10",
   "exports": {
     ".": "./mod.ts",
-    "./rules": "./mod.ts"
+    "./rules": "./mod.ts",
+    "./controls": "./controls.ts",
+    "./hud": "./hud.ts",
+    "./vocab": "./vocab.ts",
+    "./ui": "./ui.ts"
   },
   "license": "Apache-2.0",
-  "description": "Game rules over values: deterministic randomness, progression, motion, paths, attacks and timed effects, without a graph or a game world.",
+  "description": "Game rules, browser controls and HUD parts over values, without a graph or a game world.",
   "publish": {
     "exclude": [
       "browser.json"

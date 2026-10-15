@@ -1,24 +1,24 @@
 /* Numbers, a line each: the mark a letter's size beside the words, which
    wrap under themselves; one changing reads in ink to its new number, in
    green for better and red for worse. Two columns share what room there is. */
-.ValeStats {
+.Stats {
   display: grid;
   gap: 0.2rem 0.7rem;
   min-width: 0;
-  font-size: 0.85rem;
+  font-size: var(--small);
   line-height: 1.3;
   color: var(--text);
 }
-.ValeStats-two {
+.Stats-two {
   grid-template-columns: repeat(auto-fit, minmax(min(100%, 11rem), 1fr));
 }
-.ValeStats_Stat {
+.Stats_Stat {
   display: flex;
   align-items: flex-start;
   gap: 0.3rem;
   min-width: 0;
 }
-.ValeStats_Mark {
+.Stats_Mark {
   flex: none;
   display: grid;
   place-items: center;
@@ -30,17 +30,17 @@
     height: 1.1em;
   }
 }
-.ValeStats_Words {
+.Stats_Words {
   min-width: 0;
   overflow-wrap: anywhere;
 }
-.ValeStats_Better,
-.ValeStats_Worse {
+.Stats_Better,
+.Stats_Worse {
   font-style: normal;
 }
-.ValeStats_Better {
+.Stats_Better {
   color: var(--positive);
 }
-.ValeStats_Worse {
+.Stats_Worse {
   color: var(--negative);
 }

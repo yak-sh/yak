@@ -125,7 +125,7 @@ test('character stats have icons and conditional stats follow equipped gear', ()
     for (let [s, extras] of [[sheet, []], [fast, ['twin', 'speed']]] as const) {
       view.show(s, look)
       let n = numbers(s, s.worn)
-      let lines = [...body.querySelectorAll('.ValeStats_Stat')]
+      let lines = [...body.querySelectorAll('.Stats_Stat')]
       let shown = (k: string) => {
         let l = LINES.find((l) => l.k == k)!
         return lines.find((line) => line.textContent == said(l, n[l.k]))

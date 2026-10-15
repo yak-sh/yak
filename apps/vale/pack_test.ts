@@ -160,8 +160,8 @@ test('unmet level requirements are visible in the bag before inspection and cann
       let cell = body.querySelector<HTMLElement>(
         '[data-pick="bag:candidate"]',
       )!
-      assertEquals(cell.classList.contains('ValeGrid_Cell-dim'), locked, kind)
-      assertEquals(!!cell.querySelector('.ValeGrid_Need'), locked, kind)
+      assertEquals(cell.classList.contains('Grid_Cell-dim'), locked, kind)
+      assertEquals(!!cell.querySelector('.Grid_Need'), locked, kind)
       assertEquals(
         !!cell.getAttribute('aria-label')?.includes('Requires level'),
         locked,
