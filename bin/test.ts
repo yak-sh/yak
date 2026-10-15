@@ -121,7 +121,13 @@ export let runtime = (shared: string = denoDir()) => ({
     // the code it was the first to call: a third of what a test between 0.5
     // and 1 ms took, paid by whichever test came first. Compiled whole, the
     // run takes as long.
-    '--v8-flags=--no-lazy',
+    //
+    // Source positions with it. Deno reads the source positions of the
+    // functions on the stack whenever an error is made, and V8 keeps none
+    // until asked: the first error made in or under a function had it parse
+    // that function again, 0.3 to 0.6 ms for the first refusal through the
+    // query parser, paid by whichever test refused first.
+    '--v8-flags=--no-lazy,--no-enable-lazy-source-positions',
     '--preload',
     new URL('./test-runtime.ts', import.meta.url).pathname,
   ],
