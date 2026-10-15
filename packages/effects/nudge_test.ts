@@ -4,7 +4,7 @@ import { type Bundle, type Comp, graph } from '@yaks/graph'
 import { ram } from '@yaks/ram'
 import { equal, test, throws } from '@yaks/testing'
 import { loadVocab, pick } from '@yaks/vocab'
-import { FakeTime } from '@std/testing/time'
+import { stub } from '@std/testing/mock'
 import { effectDoc } from './pool.ts'
 import { effects } from './registry.ts'
 
@@ -24,6 +24,7 @@ let host = (max = 2, refuse = false) => {
       .flatMap((b) => b.effect ? [(b.effect as Comp).attempts as number] : [])
   let fx = effects(vocab, {
     singleOwner: true,
+    now: () => 0,
     max,
     mint: () => `run-${++id}`,
     write: (bs) => g.apply(bs, { trusted: true }),
@@ -82,7 +83,13 @@ let notified = async (
   mixed = false,
   deferred = false,
 ) => {
-  using time = new FakeTime(0)
+  // This checks completion, not timer scheduling: make the drain's zero-delay
+  // yield a microtask, then await the host's actual lifetime promises.
+  using _timer = stub(globalThis, 'setTimeout', (run, ms) => {
+    equal(ms, 0)
+    queueMicrotask(run as () => void)
+    return 0 as unknown as ReturnType<typeof setTimeout>
+  })
   await h.fx.work(h.g, undefined, 0)
   let queued: (() => void | Promise<void>)[] = []
   await h.g.apply(mixed ? h.seed : h.seed.slice(0, 1), {
@@ -93,12 +100,8 @@ let notified = async (
   await h.first.promise
   let during = h.facts()
   h.gate.resolve()
-  for (let n = 0; n < 100 && !h.facts().done; n++) {
-    await Promise.resolve()
-    time.tick(0)
-  }
-  if (h.held.length && !h.facts().done) throw Error('host work never settled')
   await Promise.all(h.held)
+  if (h.held.length && !h.facts().done) throw Error('host work never settled')
   return { during, after: h.facts(), ...(deferred ? { before } : {}) }
 }
 for (let mixed of [false, true]) {
