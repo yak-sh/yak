@@ -185,6 +185,55 @@ let secret = 'test-only'
 let upstream = trackerDoor(remote, platform, secret)
 let config = { remote: { url: 'https://tracker.test', secret } }
 let go = ((url, init) => upstream(new Request(url, init))) as typeof fetch
+
+// The box's letters: what people wrote to the platform's addresses, and what
+// left for them afterwards. Every listing below reads them, as the tool does.
+let box = loadVocab([docDoc, marksDoc, mailDoc])
+let mailbox = graph({ storage: ram(box), vocab: box })
+let ago = (h: number) => new Date(now - h * hour).toISOString()
+let got = (eid: string, from: string, h: number, more = {}) => ({
+  entity: { eid },
+  doc: { title: `from ${eid}` },
+  mail: { from, to: 'hello@yaks.app', at: ago(h), verified: true },
+  ...more,
+})
+let sent = (eid: string, h: number, mail: object, more = {}) => ({
+  entity: { eid },
+  doc: { title: `to ${eid}` },
+  mail: { from: 'hello@bot.yak.sh', ...mail },
+  deliver: { tried: ago(h) },
+  delivered: { at: ago(h) },
+  ...more,
+})
+await mailbox.apply([
+  // Relayed feedback answers to the person who wrote it.
+  got('ann', 'hello@bot.yak.sh', 5, {
+    mail: {
+      from: 'hello@bot.yak.sh',
+      to: 'task@bot.yak.sh',
+      reply_address: 'Ann@Example.com',
+      at: ago(5),
+      verified: true,
+    },
+  }),
+  got('bob', 'bob@example.com', 1),
+  got('carl', 'carl@example.com', 2, { archived: {} }),
+  got('fay', 'fay@example.com', 4),
+  got('notice', 'noreply@notify.cloudflare.com', 1),
+  got('ours', 'hello@bot.yak.sh', 1),
+  got('dee', 'dee@example.com', 10 * 24),
+  got('eve', 'eve@example.com', 1, {
+    mail: { from: 'eve@example.com', to: 'ann@example.com', at: ago(1) },
+  }),
+], { trusted: true })
+await mailbox.apply([
+  sent('ann-answer', 3, { to: 'ann@example.com', reply_to: 'ann' }),
+  sent('fay-later', 0.25, { to: 'fay@example.com', reply_to: 'fay' }),
+  sent('fay-answer', 0.5, { to: 'fay@example.com', reply_to: 'fay' }),
+  // A letter to bob that is not a reply answers nothing.
+  sent('bob-notice', 0.5, { to: 'bob@example.com' }),
+], { trusted: true })
+
 let listed = async (
   since?: string,
   options = config,
@@ -193,6 +242,7 @@ let listed = async (
   let said: string[] = [], noted: string[] = []
   await errors(since, options, (l) => said.push(l), (l) => noted.push(l), {
     fetch,
+    graph: mailbox,
   })
   return { said, noted }
 }
@@ -244,62 +294,9 @@ test('errors times the fixes resolved in its window and the longest open bug', (
   assertMatch(open, new RegExp(`^Open longest: \\d+d\\d*h? \\(${ids[108]} `))
 })
 
-// The box's letters: what people wrote to the platform's addresses, and what
-// left for them afterwards.
-let box = loadVocab([docDoc, marksDoc, mailDoc])
-let mailbox = graph({ storage: ram(box), vocab: box })
-let ago = (h: number) => new Date(now - h * hour).toISOString()
-let got = (eid: string, from: string, h: number, more = {}) => ({
-  entity: { eid },
-  doc: { title: `from ${eid}` },
-  mail: { from, to: 'hello@yaks.app', at: ago(h), verified: true },
-  ...more,
-})
-let sent = (eid: string, h: number, mail: object, more = {}) => ({
-  entity: { eid },
-  doc: { title: `to ${eid}` },
-  mail: { from: 'hello@bot.yak.sh', ...mail },
-  deliver: { tried: ago(h) },
-  delivered: { at: ago(h) },
-  ...more,
-})
-await mailbox.apply([
-  // Relayed feedback answers to the person who wrote it.
-  got('ann', 'hello@bot.yak.sh', 5, {
-    mail: {
-      from: 'hello@bot.yak.sh',
-      to: 'task@bot.yak.sh',
-      reply_address: 'Ann@Example.com',
-      at: ago(5),
-      verified: true,
-    },
-  }),
-  got('bob', 'bob@example.com', 1),
-  got('carl', 'carl@example.com', 2, { archived: {} }),
-  got('fay', 'fay@example.com', 4),
-  got('notice', 'noreply@notify.cloudflare.com', 1),
-  got('ours', 'hello@bot.yak.sh', 1),
-  got('dee', 'dee@example.com', 10 * 24),
-  got('eve', 'eve@example.com', 1, {
-    mail: { from: 'eve@example.com', to: 'ann@example.com', at: ago(1) },
-  }),
-], { trusted: true })
-await mailbox.apply([
-  sent('ann-answer', 3, { to: 'ann@example.com', reply_to: 'ann' }),
-  sent('fay-later', 0.25, { to: 'fay@example.com', reply_to: 'fay' }),
-  sent('fay-answer', 0.5, { to: 'fay@example.com', reply_to: 'fay' }),
-  // A letter to bob that is not a reply answers nothing.
-  sent('bob-notice', 0.5, { to: 'bob@example.com' }),
-], { trusted: true })
-
-test('errors times the first answer to each person who wrote in its window', async () => {
-  let said: string[] = []
-  await errors(undefined, config, (l) => said.push(l), () => {}, {
-    fetch: go,
-    graph: mailbox,
-  })
-  let after = said.slice(
-    said.findIndex((l) => l.startsWith('Open longest')) + 1,
+test('errors times the first answer to each person who wrote in its window', () => {
+  let after = all.said.slice(
+    all.said.findIndex((l) => l.startsWith('Open longest')) + 1,
   )
   assertMatch(
     after[0],

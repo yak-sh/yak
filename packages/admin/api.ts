@@ -16,6 +16,7 @@
 // The platform's own names are imported, never retyped: `PLATFORM` from the
 // router, `COOKIE` from the token. A drift on either side is a type error
 // rather than a puzzling 401.
+import { sleep } from '@yaks/fp'
 import type { Bundle, Comp } from '@yaks/graph'
 import { timed } from '@yaks/api/timing'
 import { type Registered, registration } from '@yaks/connections'
@@ -105,8 +106,9 @@ export let timing = {
 // names the phase, `client error (Connect)`, for a reset, a refused
 // connection, a DNS failure and a broken TLS handshake alike. Sending it
 // again can do nothing twice, whatever its method, so it is sent again after
-// each pause. A failure after connecting may have arrived, and is thrown.
-export let reconnect = { pauses: [200, 1000, 3000] }
+// each pause, which `sleep` spends. A failure after connecting may have
+// arrived, and is thrown.
+export let reconnect = { pauses: [200, 1000, 3000], sleep }
 
 let connecting = (err: unknown) =>
   /\(Connect\)/.test(String((err as Error)?.message ?? err))
@@ -118,7 +120,7 @@ let again = async (go: () => Promise<Response>) => {
     } catch (err) {
       if (!connecting(err)) throw err
     }
-    await new Promise((done) => setTimeout(done, pause))
+    await reconnect.sleep(pause)
   }
   return go()
 }

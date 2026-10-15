@@ -350,29 +350,32 @@ let reset = new TypeError(
 )
 
 test('a request that never connected is sent again, and nothing else is', async () => {
-  let pauses = reconnect.pauses
-  reconnect.pauses = [0, 0]
+  let was = { ...reconnect }, paused: number[] = []
+  Object.assign(reconnect, {
+    pauses: [1, 2],
+    sleep: (ms: number) => Promise.resolve(void paused.push(ms)),
+  })
   let flaky = failing([reset, reset])
   try {
     assertEquals((await feeNow('a.token')).bps, 250)
-    assertEquals(flaky.tries(), 3)
+    assertEquals([flaky.tries(), paused.splice(0)], [3, [1, 2]])
   } finally {
     flaky.done()
   }
   let down = failing([reset, reset, reset])
   try {
     await assertRejects(() => feeNow('a.token'), TypeError, '(Connect)')
-    assertEquals(down.tries(), 3)
+    assertEquals([down.tries(), paused.splice(0)], [3, [1, 2]])
   } finally {
     down.done()
   }
   let cut = failing([new TypeError('error reading a body from connection')])
   try {
     await assertRejects(() => feeNow('a.token'), TypeError, 'reading a body')
-    assertEquals(cut.tries(), 1)
+    assertEquals([cut.tries(), paused], [1, []])
   } finally {
     cut.done()
-    reconnect.pauses = pauses
+    Object.assign(reconnect, was)
   }
 })
 
