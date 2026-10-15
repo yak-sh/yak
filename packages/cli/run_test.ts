@@ -285,6 +285,29 @@ test('a word a cached table lacks is asked past the cache before it is an app', 
   assertEquals(asked, [])
 })
 
+test('an argument a cached schema lacks is read against the server\u2019s list once', async () => {
+  let ship = (props: string[]): Command => ({
+    name: 'ship',
+    description: '',
+    inputSchema: {
+      type: 'object',
+      properties: Object.fromEntries(props.map((p) => [p, { type: 'string' }])),
+    },
+    run: (args) => (args.into ? 7 : 0),
+  })
+  let fresh: boolean[] = []
+  let more: Opts['more'] = (_c, o) => {
+    fresh.push(!!o?.fresh)
+    return [ship(o?.fresh ? ['app', 'into'] : ['app'])]
+  }
+  assertEquals(await ran([], ['ship', '--into=web'], { more }), 7)
+  assertEquals(fresh, [false, true])
+  // Still unknown on the server's own list: refused, after one extra ask.
+  fresh = []
+  assertEquals(await ran([], ['ship', '--nope=1'], { more }), 2)
+  assertEquals(fresh, [false, true])
+})
+
 test('`yak command` builds the command call, with the app it was given', async () => {
   assertEquals(
     await ran(appTools, [

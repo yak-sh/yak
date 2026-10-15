@@ -557,9 +557,22 @@ export let cli = async (
     let invoked = await opts.invoke?.(found.verb, at)
     if (invoked !== undefined) return invoked
     try {
+      // A held list is trusted for what it holds, never for what it lacks: a
+      // line its tool's cached schema refuses (an argument added since) is
+      // read against the server's list once before it is refused.
+      let given = await argsFor(found.verb, found.args, c.reads).catch(
+        async (e) => {
+          let held = extra?.includes(found!.verb) && !asked
+          if (!(e instanceof Usage) || !held) throw e
+          let again = commandFor(await fetched(true), rest)
+          if (!again) throw e
+          found = again
+          return await argsFor(again.verb, again.args, c.reads)
+        },
+      )
       return await found.verb.run(
         {
-          ...await argsFor(found.verb, found.args, c.reads),
+          ...given,
           ...Object.fromEntries(
             (found.verb.globals ?? []).flatMap((name) =>
               said[name] === undefined ? [] : [[name, said[name]]]
