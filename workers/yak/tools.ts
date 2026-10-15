@@ -278,6 +278,7 @@ import {
   when,
   working,
 } from './versions.ts'
+import { appTag, purge } from './purge.ts'
 import { within } from './rate.ts'
 import {
   admin,
@@ -1471,7 +1472,18 @@ let released = async (
   }
   let release = kept?.source ?? releaseOf(space, standing)
   let draft = standing.draft ?? null
+  let reviewing = base != null && base < (standing.version ?? 0) && !confirm
   let fence = await c.time('fence', () => fenced(ctx.dir, standing, draft, who))
+  // The app's pages leave the edge as the release begins, beside its work
+  // rather than after it: Site keeps none of a fenced app's pages
+  // (page-cache.ts `keep`), so the commit purges nothing of the app's
+  // (facets/pages-graph.ts), and the answer waits only on this.
+  let purged = reviewing ? Promise.resolve() : purge(
+    ctx.env.SITE,
+    [appTag(standing.eid)],
+  ).catch((e) =>
+    caught(e, { request: 'release purge', space: space.slug, app: app.slug })
+  )
   // A committed release clears the fence in its own record (versions.ts
   // `record`), so only a release that stopped short has one left to lift.
   let released = false
@@ -1492,7 +1504,7 @@ let released = async (
         ))
     // The fence holds both the serving pointer and the candidate's edits.
     // Inspect losses before compiling, planting a schema or deploying a worker.
-    if (base != null && base < (standing.version ?? 0) && !confirm) {
+    if (reviewing && base != null) {
       let live = (await versions(ctx.dir, standing))
         .find((v) => v.version == standing.version)
       if (!live) throw refuse('missing', `no live v${standing.version}`)
@@ -1527,6 +1539,7 @@ let released = async (
       accepted,
     )
     released = true
+    await c.time('purge', () => purged)
     return out
   } finally {
     if (!released) await unfenced(ctx.dir, standing, fence, who)

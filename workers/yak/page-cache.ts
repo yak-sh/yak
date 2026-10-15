@@ -120,8 +120,8 @@ export let shareable = (req: Request) => {
 /** An answer Site may keep: which app it was a page of (none, for a space's
  * own 404), for the gateway's count, and the tags its purge names. An app
  * mid-release (its fence up, versions.ts `fenced`) had its pages purged as
- * the release began, and its commit purges nothing more
- * (facets/pages-graph.ts), so a page of it kept now would outlive the
+ * the release began (tools.ts `released`), and its commit purges nothing
+ * more (facets/pages-graph.ts), so a page of it kept now would outlive the
  * release: it passes, and only for now. */
 export let keep = (
   page: Response,
