@@ -131,12 +131,12 @@ test('a public page is answered from the edge after its first view', async () =>
   assertStringIncludes(first.body, '<base href="/cookbook/">')
   assertStringIncludes(first.body, 'Made with ')
   // Changed under it with no directory write, the kept page is what answers,
-  // and no directory read was made for it.
+  // and the app was not read for it.
   put('two')
   let again = await open()
   assertEquals(again.cache, 'HIT')
   assertEquals(again.body, first.body)
-  assert(!/\bapp;|\bspace;/.test(again.timing), again.timing)
+  assert(!/\bapp;/.test(again.timing), again.timing)
   assertEquals(again.res.headers.get('cache-control'), 'public, no-cache')
   for (let name of ['cache-tag', 'x-yak-seen', 'x-yak-browser-cache', 'age']) {
     assertEquals(again.res.headers.get(name), null, name)

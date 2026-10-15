@@ -47,6 +47,7 @@ export let workerMove = (
 export let workerRule: Rule = {
   mark: 'yak/store/app-worker/1',
   stores: [PLATFORM_STORE],
+  live: 'all',
   find: '.app !app.worker&*',
   move: workerMove,
 }

@@ -2523,13 +2523,19 @@ let served = async (
       : nothingAt(url.pathname, env)
   }
   // A page any visitor could be sent is answered from Site's cache, with no
-  // directory read at all.
+  // wait on the directory. The space is read meanwhile, from this isolate's
+  // memory when it is warm: a page Site passes needs it next, and so pays
+  // the longer of the two rather than both.
+  let dir = directory(bound(env.DIRECTORY, dirPart.fetch, env), edge)
+  let reading = c.time('space', () => dir.space(r.space!))
   if (!edge) {
     let page = await asked(req, env, c)
-    if (page) return page
+    if (page) {
+      reading.catch(() => {})
+      return page
+    }
   }
-  let dir = directory(bound(env.DIRECTORY, dirPart.fetch, env), edge)
-  let space = await c.time('space', () => dir.space(r.space!))
+  let space = await reading
   // Not a space here — but it may be where one used to be (T-34658): a rename
   // moves `space.slug` and keeps the old subdomain pointing at it, whole path
   // and query, the way a renamed app's old path does one level down. A
