@@ -13,7 +13,7 @@ for (let repair of [false, true]) {
       ? 'a schema-only legacy draft recovers its original files on edit'
       : 'a source-less app keeps every original byte through a schema draft',
     async () => {
-      using p = platform('draft-test-secret')
+      await using p = platform('draft-test-secret')
       let { dir, app } = await seeded(p.env)
       let ctx: Ctx = { env: p.env, dir, person: ADA }
       let tool = (op: string, more: Record<string, unknown> = {}) =>

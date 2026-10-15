@@ -51,7 +51,7 @@ let words = {
 }
 
 test('a page invokes declared commands as its owner; the command door refuses an editor', async () => {
-  using p = platform()
+  await using p = platform()
   let { env } = p
   let { dir, space, app } = await seeded(env, 'private')
   await dir.apply({

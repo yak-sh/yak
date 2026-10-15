@@ -43,13 +43,13 @@ test('platform disposal waits for store work before releasing storage', async ()
     assertEquals((await post('/apply', note)).status, 200)
     await until(() => asked > 0)
     let { storage } = p.states.get(name)!
-    p[Symbol.dispose]()
+    let closing = p[Symbol.asyncDispose]()
     // The request ended, but its deferred vector must still be able to land.
     assertEquals(storage.sql.exec('select 1 as alive').toArray(), [{
       alive: 1,
     }])
     release()
-    await p[Symbol.asyncDispose]()
+    await closing
     assertThrows(
       () => storage.sql.exec('select 1'),
       Error,

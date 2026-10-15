@@ -66,7 +66,7 @@ let spaces = async () => {
 
 test('the platform’s owner sweeps every store, one at a time', async () => {
   let { scenario, door } = await spaces()
-  using _ = scenario
+  await using _ = scenario
   let listed = await door(JEFF)
   let handles = listed.body.map((s: sweep.Swept) => s.store)
   assertEquals(handles, [...new Set(handles)])
@@ -86,7 +86,7 @@ test('the platform’s owner sweeps every store, one at a time', async () => {
 
 test('nobody else sweeps', async () => {
   let { scenario, door } = await spaces()
-  using _ = scenario
+  await using _ = scenario
   assertEquals((await door(ADA)).status, 403)
   assertEquals(
     (await door(ADA, '?store=ada/notes.abc123&rehearse=1', 'POST')).status,

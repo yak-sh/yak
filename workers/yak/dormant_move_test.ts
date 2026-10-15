@@ -18,7 +18,7 @@ import * as sweep from './sweep.ts'
 import type { Rule } from './mover.ts'
 
 let fixture = async () => {
-  using p = platform('dormant mover secret')
+  await using p = platform('dormant mover secret')
   let dir = directory({ fetch: (r) => directoryFetch(r, p.env) }, true)
   let space = await dir.own('dormant-mover-owner', 'asleep')
   await dir.apply({

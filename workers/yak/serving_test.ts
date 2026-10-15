@@ -105,7 +105,7 @@ await pageScript(ASSETS, '/', 0, true)
 // ---- the tests -------------------------------------------------------------
 
 test('a page is served with its base and its reporter', async () => {
-  using scenario = platform()
+  await using scenario = platform()
   let { env, files } = scenario
   await seeded(env)
   files.held.set(
@@ -143,7 +143,7 @@ test('a free space wears the badge, and the Plus plan sheds it', async () => {
 // client, and at the client's own address, which is where the client reads its
 // door from (public/client.js `import.meta.url`).
 test("a release's module imports the client by the page's own path", async () => {
-  using scenario = platform()
+  await using scenario = platform()
   let { env, files } = scenario
   let { app } = await seeded(env)
   let release = crypto.randomUUID()
@@ -171,7 +171,7 @@ test("a release's module imports the client by the page's own path", async () =>
 })
 
 test('a new release serves its files beside the old cached release', async () => {
-  using scenario = platform()
+  await using scenario = platform()
   let { env, files } = scenario
   let { app } = await seeded(env)
   let old = `ada/.releases/${app.eid}/old`
@@ -241,7 +241,7 @@ test('a new release serves its files beside the old cached release', async () =>
 })
 
 test('an app worker query can read a connected peer position', async () => {
-  using scenario = platform()
+  await using scenario = platform()
   let { env, object, states } = scenario
   let { space, app } = await seeded(env)
   let name = storeName(space, app)
@@ -300,7 +300,7 @@ test('an app worker query can read a connected peer position', async () => {
 })
 
 test('an app worker can send a stored query as one encoded filter', async () => {
-  using scenario = platform()
+  await using scenario = platform()
   let { env } = scenario
   await seeded(env)
   let title = 'Smith & Wren'
@@ -330,7 +330,7 @@ test('an app worker can send a stored query as one encoded filter', async () => 
 })
 
 test('an app serves audio and video with byte ranges', async () => {
-  using scenario = platform()
+  await using scenario = platform()
   let { env, files } = scenario
   await seeded(env)
   let bytes = new Uint8Array([0, 1, 2, 3, 4, 5])
@@ -404,7 +404,7 @@ test('an app serves audio and video with byte ranges', async () => {
 })
 
 test('an app is installable: the five tags, the icon, the manifest', async () => {
-  using scenario = platform()
+  await using scenario = platform()
   let { env, files } = scenario
   await seeded(env)
   files.held.set(
@@ -519,7 +519,7 @@ test('an app that wrote an icon.svg and no icon.png is served the svg drawn', as
 })
 
 test("an app's own colours, set through app_set, win over the platform's", async () => {
-  using scenario = platform()
+  await using scenario = platform()
   let { env, files } = scenario
   let { dir } = await seeded(env)
   files.held.set(
@@ -554,7 +554,7 @@ test("an app's own colours, set through app_set, win over the platform's", async
 })
 
 test('a refresh after the page changes is sent the page, and one before is not', async () => {
-  using scenario = platform()
+  await using scenario = platform()
   let { env, files } = scenario
   let { dir } = await seeded(env)
   files.held.set(
@@ -583,7 +583,7 @@ test('a refresh after the page changes is sent the page, and one before is not',
 
 test('a page view is one data point, and it names no visitor', async () => {
   let seen = dataset()
-  using scenario = platform({ VIEWS: seen })
+  await using scenario = platform({ VIEWS: seen })
   let { env, files } = scenario
   let { app } = await seeded(env)
   files.held.set(
@@ -645,7 +645,7 @@ let rowsFor = (sql: string) =>
 test("/api/stats answers the app's own people, and nobody else", async () => {
   let api = analytics(rowsFor)
   try {
-    using scenario = platform({
+    await using scenario = platform({
       CF_ACCOUNT: 'acc0unt',
       CF_ANALYTICS_TOKEN: 'a token',
     })
@@ -676,7 +676,7 @@ test("/api/stats answers the app's own people, and nobody else", async () => {
 })
 
 test('/api/stats with no analytics token is a sentence, not a failure', async () => {
-  using scenario = platform()
+  await using scenario = platform()
   let { env } = scenario
   await seeded(env)
   let door = await apps.fetch(
@@ -726,7 +726,7 @@ let wireFixture = async () => {
 let wireScene = await wireFixture()
 
 test('the page wire: apply, query and search round-trip', async () => {
-  using _scenario = wireScene.scenario
+  await using _scenario = wireScene.scenario
   let { env, eli, space, app } = wireScene
   let page = client(env, await as(ADA))
 
@@ -871,7 +871,7 @@ test('the page wire: apply, query and search round-trip', async () => {
 })
 
 test('a store tells the directory its size within the storage allowance step', async () => {
-  using scenario = platform()
+  await using scenario = platform()
   let { env, states } = scenario
   let { dir, space, app } = await seeded(env)
   assertEquals(app.meter, null)
@@ -891,7 +891,7 @@ test('a store tells the directory its size within the storage allowance step', a
 })
 
 test('a bulk load is NDJSON in and NDJSON out, refusal and all', async () => {
-  using scenario = platform()
+  await using scenario = platform()
   let { env } = scenario
   await seeded(env)
   let cookie = await as(ADA)
@@ -948,7 +948,7 @@ test('a bulk load is NDJSON in and NDJSON out, refusal and all', async () => {
 })
 
 test('a subscription is that query still answering', async () => {
-  using scenario = platform()
+  await using scenario = platform()
   let { env, object, sockets } = scenario
   await seeded(env)
   let name = 'ada/cookbook.aaa111'
@@ -985,7 +985,7 @@ test('a subscription is that query still answering', async () => {
 })
 
 test('an open app takes a write from nobody, and a public one does not', async () => {
-  using open = platform()
+  await using open = platform()
   await seeded(open.env, 'open')
   let stranger = client(open.env)
   let wrote = await stranger.apply([
@@ -998,7 +998,7 @@ test('an open app takes a write from nobody, and a public one does not', async (
 
   // The same write on a `public` app is the member guard's no, said in the
   // sentence a page shows its person.
-  using shut = platform()
+  await using shut = platform()
   await seeded(shut.env, 'public')
   let no = await apps.fetch(
     visit('/cookbook/api/apply', {
@@ -1014,7 +1014,7 @@ test('an open app takes a write from nobody, and a public one does not', async (
 })
 
 test('a break is the platform writing about the app, not in it', async () => {
-  using scenario = platform()
+  await using scenario = platform()
   let { env } = scenario
   let { space, app } = await seeded(env, 'private')
   // The report door takes anyone: a break belongs to whoever was looking.
@@ -1043,7 +1043,7 @@ test('a break is the platform writing about the app, not in it', async () => {
 })
 
 test('draft edits leave served breaks open until deployment', async () => {
-  using scenario = platform()
+  await using scenario = platform()
   let { env } = scenario
   let { space, app } = await seeded(env)
   let who = { person: ADA, role: 'owner' as const }
@@ -1070,7 +1070,7 @@ test('draft edits leave served breaks open until deployment', async () => {
 })
 
 test('seen closes a whole deploy at once (T-34338)', async () => {
-  using scenario = platform()
+  await using scenario = platform()
   let { env } = scenario
   let { space, app } = await seeded(env)
   let who = { person: ADA, role: 'owner' as const }
@@ -1089,7 +1089,7 @@ test('seen closes a whole deploy at once (T-34338)', async () => {
 })
 
 test('DELETE / empties the app store and bears it again', async () => {
-  using scenario = platform()
+  await using scenario = platform()
   let { env, object, files } = scenario
   let { space, app } = await seeded(env)
   let page = client(env, await as(ADA))
@@ -1175,7 +1175,7 @@ let router = async (
     },
   }
   return {
-    [Symbol.dispose]: () => scenario[Symbol.dispose](),
+    [Symbol.asyncDispose]: () => scenario[Symbol.asyncDispose](),
     env,
     dir,
     space,
@@ -1211,7 +1211,7 @@ test('worker HTML carries its reporter without changing its page or headers', as
       'menu',
     ]
   ) {
-    using k = await router(() =>
+    await using k = await router(() =>
       new Response(
         new ReadableStream({
           start(c) {
@@ -1300,7 +1300,7 @@ test('worker non-HTML and bodyless answers are not rewritten', async () => {
       [null, 200, 'text/html'],
     ] as const
   ) {
-    using k = await router(() =>
+    await using k = await router(() =>
       new Response(body, {
         status,
         headers: { 'content-type': type, 'x-menu': 'today' },
@@ -1318,7 +1318,7 @@ test('worker non-HTML and bodyless answers are not rewritten', async () => {
 test('monthly visit quota stops all app serving before dispatch or files', async () => {
   for (let tier of ['free', 'plus'] as const) {
     let calls = 0
-    using k = await router(() => {
+    await using k = await router(() => {
       calls++
       return new Response('the router')
     }, ['/garden/*'])
@@ -1392,7 +1392,7 @@ test('monthly visit quota stops all app serving before dispatch or files', async
 })
 
 test("a stranger's reads are held to a rate per source, a member's are not", async () => {
-  using k = await router()
+  await using k = await router()
   let spent = 0
   k.env.API_RATE = { limit: () => Promise.resolve({ success: ++spent <= 2 }) }
   let from = (cookie?: string) =>
@@ -1417,7 +1417,9 @@ test("a stranger's reads are held to a rate per source, a member's are not", asy
 })
 
 test('rung 1: a platform path never reaches an app', async () => {
-  using k = await router(() => new Response('the router', { status: 200 }))
+  await using k = await router(() =>
+    new Response('the router', { status: 200 })
+  )
   // The store doors are the kernel's, under an app's slug and at the home
   // app's bare root alike: a home worker that answers everything else does not
   // answer these.
@@ -1431,7 +1433,9 @@ test('rung 1: a platform path never reaches an app', async () => {
 })
 
 test("rung 2: an app's slug wins over the home app", async () => {
-  using k = await router(() => new Response('the router', { status: 200 }))
+  await using k = await router(() =>
+    new Response('the router', { status: 200 })
+  )
   k.put('ada/garden/index.html', '<!doctype html><body>garden</body>')
   let page = await k.at('/garden/')
   assertEquals(page.status, 200)
@@ -1442,7 +1446,7 @@ test("rung 2: an app's slug wins over the home app", async () => {
 })
 
 test("rung 3: the home app's files answer the bare hostname", async () => {
-  using k = await router()
+  await using k = await router()
   k.put('ada/cookbook/index.html', '<!doctype html><body>cookbook</body>')
   k.put('ada/cookbook/photo.png', 'not really a png')
   assertEquals(await (await k.at('/photo.png')).text(), 'not really a png')
@@ -1453,13 +1457,13 @@ test("rung 3: the home app's files answer the bare hostname", async () => {
 
 test("rung 4: the space's index is `/`'s last word", async () => {
   // A home app with a front page keeps `/`.
-  using k = await router()
+  await using k = await router()
   k.put('ada/cookbook/index.html', '<!doctype html><body>cookbook</body>')
   assert((await (await k.at('/')).text()).includes('cookbook'))
 
   // Without one, `/` is the index — the space EXISTS, so its own address is a
   // door and not a 404 — while a path under it is still nothing.
-  using bare = await router()
+  await using bare = await router()
   let listed = await bare.at('/')
   assertEquals(listed.status, 200)
   assert((await listed.text()).includes('href="/garden/"'))
@@ -1468,14 +1472,16 @@ test("rung 4: the space's index is `/`'s last word", async () => {
   // A home worker that passes on `/` (its 404 is the pass verdict) leaves the
   // index to answer, and one that owns it wins: the index is what is left when
   // neither half of the home app has anything there.
-  using passing = await router(() => new Response('no', { status: 404 }))
+  await using passing = await router(() => new Response('no', { status: 404 }))
   assert((await (await passing.at('/')).text()).includes('href="/garden/"'))
-  using own = await router(() => new Response('the router', { status: 200 }))
+  await using own = await router(() =>
+    new Response('the router', { status: 200 })
+  )
   assertEquals(await (await own.at('/')).text(), 'the router')
 })
 
 test('rung 5: everything else is the home worker, else 404', async () => {
-  using k = await router((req) =>
+  await using k = await router((req) =>
     new Response(`ran ${new URL(req.url).pathname}`)
   )
   // Its files do not shadow it: the worker is asked first, exactly as it is
@@ -1486,7 +1492,7 @@ test('rung 5: everything else is the home worker, else 404', async () => {
     assertEquals(await (await k.at(path)).text(), `ran ${path}`, path)
   }
   // And where the worker passes, its files answer behind it.
-  using some = await router((req) =>
+  await using some = await router((req) =>
     new URL(req.url).pathname == '/menu'
       ? new Response('the menu')
       : new Response('no', { status: 404 })
@@ -1495,7 +1501,7 @@ test('rung 5: everything else is the home worker, else 404', async () => {
   assertEquals(await (await some.at('/menu')).text(), 'the menu')
   assertEquals(await (await some.at('/photo.png')).text(), 'not really a png')
   // No worker and no file is the 404 at the end of the order.
-  using plain = await router()
+  await using plain = await router()
   assertEquals((await plain.at('/nothing.txt')).status, 404)
 })
 
@@ -1516,7 +1522,7 @@ let fronted = async (
 
 test('rung 1½: a `first` glob hands the path to the home worker', async () => {
   let seen: string[] = []
-  using k = await fronted((req) => {
+  await using k = await fronted((req) => {
     seen.push(new URL(req.url).pathname)
     return new Response('the router')
   })
@@ -1527,12 +1533,12 @@ test('rung 1½: a `first` glob hands the path to the home worker', async () => {
 })
 
 test("rung 1½: the router's 404 passes, and the app answers", async () => {
-  using k = await fronted(() => new Response('no', { status: 404 }))
+  await using k = await fronted(() => new Response('no', { status: 404 }))
   assertStringIncludes(await (await k.at('/garden/print')).text(), 'garden')
 })
 
 test('rung 1½: a router that throws is skipped, and written on the home app', async () => {
-  using k = await fronted(() => {
+  await using k = await fronted(() => {
     throw new Error('the router fell over')
   })
   assertStringIncludes(await (await k.at('/garden/print')).text(), 'garden')
@@ -1549,7 +1555,7 @@ test('rung 1½: a router that throws is skipped, and written on the home app', a
 test(
   'rung 1½: a router that hangs is skipped when its patience runs out',
   async () => {
-    using k = await fronted(() => new Promise<Response>(() => {}))
+    await using k = await fronted(() => new Promise<Response>(() => {}))
     assertStringIncludes(await (await k.at('/garden/print')).text(), 'garden')
     let open = await openIn(k.env, k.space, k.app, OWNER, true)
     assertEquals(open.length, 1)
@@ -1558,7 +1564,7 @@ test(
 )
 
 test('rung 1½: a glob over a store door never takes it', async () => {
-  using k = await fronted(() => new Response('the router'))
+  await using k = await fronted(() => new Response('the router'))
   // `/garden/*` covers `/garden/api/…` by its own shape, and the store doors
   // are the kernel's however the property is written (router.ts
   // PLATFORM_PATHS).
@@ -1570,7 +1576,7 @@ test('rung 1½: a glob over a store door never takes it', async () => {
 
 test('rung 1½: the router acts as the caller, not as the app it fronts', async () => {
   let env: Env
-  using k = await fronted(async () => {
+  await using k = await fronted(async () => {
     let asked = await apps.fetch(visit('/garden/api/query?.doc'), env)
     return new Response(String(asked.status))
   })
@@ -1588,7 +1594,7 @@ test('rung 1½: the router acts as the caller, not as the app it fronts', async 
 test("rung 1½: the router's own onward request is not intercepted again", async () => {
   let env: Env
   let ran = 0
-  using k = await router(async (req) => {
+  await using k = await router(async (req) => {
     ran++
     // The grant the kernel handed it, forwarded — which is what the router's
     // own `env.STORE`/`env.FILES` calls carry (dispatch.ts shim). A request
@@ -1619,7 +1625,7 @@ test("rung 1½: the router's own onward request is not intercepted again", async
 // is not a stranger's business — and to the owner it is the one page that says
 // where the app went and how long they have.
 test('an app in the trash serves nothing, and says so to its owner', async () => {
-  using k = await router()
+  await using k = await router()
   k.put('ada/garden/index.html', '<!doctype html><body>garden</body>')
   let garden = (await k.dir.app(k.space, 'garden'))!
   assertEquals((await k.at('/garden/')).status, 200)
@@ -1645,7 +1651,7 @@ test('an app in the trash serves nothing, and says so to its owner', async () =>
 // it comes back. The restore itself is a form on that space's own page: no
 // assistant, no script, one POST.
 test("a trashed front page is nobody's, and the owner restores it there", async () => {
-  using k = await router()
+  await using k = await router()
   k.put('ada/cookbook/index.html', '<!doctype html><body>cookbook</body>')
   k.put('ada/garden/index.html', '<!doctype html><body>garden</body>')
   let stores = k.env.STORE, opened: string[] = []
@@ -1698,7 +1704,7 @@ test("a trashed front page is nobody's, and the owner restores it there", async 
 // owner is the exception, and the page they get carries the one button that
 // brings the space back.
 test('a space in the trash serves nothing, and its owner restores it', async () => {
-  using k = await router()
+  await using k = await router()
   k.put('ada/cookbook/index.html', '<!doctype html><body>cookbook</body>')
   k.put('ada/garden/index.html', '<!doctype html><body>garden</body>')
   assertEquals((await k.at('/')).status, 200)
@@ -1770,7 +1776,7 @@ test('env.APP: a private app is written by its own worker, and by nobody else', 
       }),
       env,
     )
-  using k = await router(async (req) => {
+  await using k = await router(async (req) => {
     let url = new URL(req.url)
     if (url.pathname == '/rsvp') {
       // The check comes first, and its refusal says nothing else.
@@ -1834,7 +1840,7 @@ test('env.APP: a private app is written by its own worker, and by nobody else', 
 // does inside an app worker's own call (files.ts `door`), the page and the
 // upload are still served, whoever asks.
 test('a page and an upload are served where the cache hop is refused', async () => {
-  using scenario = platform()
+  await using scenario = platform()
   let { env, files } = scenario
   await seeded(env)
   files.held.set(
@@ -1872,7 +1878,7 @@ test('a page and an upload are served where the cache hop is refused', async () 
 })
 
 test('photo and file uploads enforce space R2 limits from actual bytes', async () => {
-  using scenario = platform()
+  await using scenario = platform()
   let { env, files } = scenario
   let { dir, space, app } = await seeded(env)
   let cookie = await as(ADA)
