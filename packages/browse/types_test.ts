@@ -17,11 +17,15 @@ import {
 import { assertEquals } from '@std/assert'
 
 test('the current vocabulary carries no representation suffixes', () => {
-  for (let [comp, props] of Object.entries({ ...comps, ...stamped })) {
-    for (let prop of Object.keys(props)) {
-      assertEquals(prop.endsWith('_eid'), false, `${comp}.${prop}`)
+  let suffixed: string[] = []
+  for (let by of [comps, stamped]) {
+    for (let comp in by) {
+      for (let prop in by[comp]) {
+        if (prop.endsWith('_eid')) suffixed.push(`${comp}.${prop}`)
+      }
     }
   }
+  assertEquals(suffixed, [])
 })
 
 // The death words come from the host's vocabulary, one per reference: a

@@ -8,6 +8,7 @@
 // after checking the handle it would print resolves, because a suggestion
 // routing nowhere costs a reader who is already confused a second wrong
 // try. That is the whole reason this is cheap and safe to add.
+import { CLOSE, score } from '@yaks/names'
 
 // What a candidate is compared by: the handle to print, plus the words a
 // caller might have been reaching for. `named` says the title IS a name
@@ -19,46 +20,6 @@ export type Handle = {
   title?: string
   named?: boolean
 }
-
-// Levenshtein, one row at a time — a genuine algorithm, over an alias or a
-// title word, so the naive table is the right size.
-let dist = (a: string, b: string) => {
-  let row = [...Array(b.length + 1).keys()]
-  for (let i = 1; i <= a.length; i++) {
-    let prev = row[0]
-    row[0] = i
-    for (let j = 1; j <= b.length; j++) {
-      let swap = row[j]
-      row[j] = Math.min(
-        row[j] + 1,
-        row[j - 1] + 1,
-        prev + (a[i - 1] == b[j - 1] ? 0 : 1),
-      )
-      prev = swap
-    }
-  }
-  return row[b.length]
-}
-
-let norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, '')
-
-// What a containment is WORTH, 0 when it doesn't hold. Containment earns
-// its place because edit distance alone reads a longer name as a stranger
-// — `tasks` against the title `Task Graph` is the reported shape. Two
-// gates keep it from firing on coincidence: the shorter word must COVER
-// most of the longer (else `jef` sits inside every title about
-// jeff@yak.sh), and a PREFIX outranks a word merely spelled inside,
-// because a prefix is how a name gets abbreviated — `task` opens `Task
-// Graph`, where `asks` is only letters found in `tasks`.
-let within = (a: string, b: string) => {
-  let [short, long] = a.length < b.length ? [a, b] : [b, a]
-  if (short.length < 3 || !long.includes(short)) return 0
-  if (short.length * 2 < long.length) return 0
-  return long.startsWith(short) ? 0.9 : 0.7
-}
-let score = (a: string, b: string): number =>
-  !a || !b ? 0 : a == b ? 1 : within(a, b) ||
-    1 - dist(a, b) / Math.max(a.length, b.length)
 
 // What a candidate answers to, and what each answer is worth. An ALIAS is
 // the handle — the thing a caller types — so it carries full weight; a
@@ -75,32 +36,35 @@ let score = (a: string, b: string): number =>
 //
 // A title that is not a NAME sits out entirely: a task reads "Tasks: add
 // cancelled state…", which opens with the word and means nothing by it.
+//
+// A word answers once, at the most it is worth: a project's alias is often
+// its title, and a one-word title its own first word.
 let answers = (h: Handle): [string, number][] => {
   let title = h.named ? h.title ?? '' : ''
-  return [
+  let words: [string, number][] = [
     [h.alias ?? '', 1],
     [title, 0.95],
     [title.split(/\s+/)[0] ?? '', 0.85],
   ]
+  return words.filter(([w], i) => words.findIndex(([x]) => x == w) == i)
 }
 
+// Each word is scored the way @yaks/names scores a typed name: containment
+// that covers most of the longer word, else edit distance. That is what
+// reaches `Task Graph` from `tasks`, and leaves `jef` inside every title
+// about jeff@yak.sh a coincidence.
 let closeness = (v: string, h: Handle) =>
-  Math.max(...answers(h).map(([w, worth]) => worth * score(v, norm(w))))
+  Math.max(...answers(h).map(([w, worth]) => worth * score(v, w)))
 
-// Close enough to be worth a reader's second try. Below this the guess is
-// noise, and silence is the more useful answer.
-let CLOSE = 0.6
-
-// The best candidate for `v`, or nothing when none is close. A tie goes
-// to the one carrying an ALIAS: two entities wear the name `Task Graph`
-// — the project and the board over it — and the aliased one is the one
-// somebody decided should be addressable by name.
+// The best candidate for `v`, or nothing when none is close enough to be
+// worth a reader's second try. A tie goes to the one carrying an ALIAS: two
+// entities wear the name `Task Graph` — the project and the board over it —
+// and the aliased one is the one somebody decided should be addressable by
+// name.
 export let nearest = <T extends Handle>(v: string, of: T[]) => {
-  let typed = norm(v)
-  if (!typed) return
   let handled = (h: Handle) => (h.alias ? 1 : 0)
   let best = of
-    .map((h) => [h, closeness(typed, h)] as const)
+    .map((h) => [h, closeness(v, h)] as const)
     .sort(([a, x], [b, y]) => y - x || handled(b) - handled(a))[0]
   return best && best[1] >= CLOSE ? best[0] : undefined
 }

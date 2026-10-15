@@ -78,11 +78,13 @@ test('following an entity opens its page on either pointer kind', () => {
   }
 })
 
+// A card's body, and a link inside it, read once as the file loads.
+let card = parseHTML(
+  '<div id="body"></div><a id="link"><span id="inside"></span></a>',
+)
 test('a card menu leaves nested controls and links to themselves', () => {
   let priorElement = Object.getOwnPropertyDescriptor(globalThis, 'Element')
-  let { document, window } = parseHTML(
-    '<div id="body"></div><a id="link"><span id="inside"></span></a>',
-  )
+  let { document, window } = card
   Object.defineProperty(globalThis, 'Element', {
     value: window.Element,
     configurable: true,

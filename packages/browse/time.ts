@@ -66,9 +66,12 @@ let cronField = (
   return { set, all }
 }
 
-// The bound keeps a never-matching pattern ('0 9 30 2 *') an error instead
-// of a scan: four years covers every leap-year date.
+// Four years covers every leap-year date, so a pattern that can fire does
+// within the bound.
 let CRON_DAYS = 1462
+
+// The most days each month runs to, February's in a leap year.
+let LONGEST = [31, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31]
 
 let cronNext = (fields: string[], now: number): number | null => {
   let [mi, h, dom, mo, dow] = [
@@ -79,6 +82,12 @@ let cronNext = (fields: string[], now: number): number | null => {
     cronField(fields[4], 0, 7),
   ]
   if (!mi || !h || !dom || !mo || !dow) return null
+  // A date no admitted month reaches never comes ('0 9 30 2 *'), unless a
+  // restricted weekday may fire in its place.
+  let earliest = Math.min(...dom.set)
+  if (dow.all && [...mo.set].every((m) => LONGEST[m - 1] < earliest)) {
+    return null
+  }
   // Cron speaks minutes: at-or-after rounds up to the next whole minute,
   // keeping an exact boundary (:00.000) a match for its own tick.
   let t0 = new Date(Math.ceil(now / 60_000) * 60_000)
@@ -86,7 +95,13 @@ let cronNext = (fields: string[], now: number): number | null => {
   let hours = [...h.set].sort((a, b) => a - b)
   for (let day = 0; day < CRON_DAYS; day++) {
     let d = new Date(t0.getFullYear(), t0.getMonth(), t0.getDate() + day)
-    if (!mo.set.has(d.getMonth() + 1)) continue
+    // A month the pattern never names is passed over whole: on to its last
+    // day, and the loop steps into the next month.
+    if (!mo.set.has(d.getMonth() + 1)) {
+      let last = new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate()
+      day += last - d.getDate()
+      continue
+    }
     // Standard cron: both restricted = either matches; else the one rules.
     let dayOk = !dom.all && !dow.all
       ? dom.set.has(d.getDate()) || dow.set.has(d.getDay())

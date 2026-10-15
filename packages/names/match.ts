@@ -11,10 +11,27 @@
 // no meaning in a typed name ('le-guin' and 'Le Guin' find the same entity).
 let norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, '')
 
+// What two names share at either end costs no edit, so only the middle between
+// is measured: `harnes` against `harness` is one insertion, found without a
+// table.
+let middle = (a: string, b: string): [string, string] => {
+  let i = 0
+  while (i < a.length && i < b.length && a[i] == b[i]) i++
+  let j = 0
+  while (
+    j < a.length - i && j < b.length - i &&
+    a[a.length - 1 - j] == b[b.length - 1 - j]
+  ) j++
+  return [a.slice(i, a.length - j), b.slice(i, b.length - j)]
+}
+
 // Levenshtein distance, one row at a time — over a single name, so the naive
 // table is the right size.
-let dist = (a: string, b: string) => {
-  let row = [...Array(b.length + 1).keys()]
+let dist = (x: string, y: string) => {
+  let [a, b] = middle(x, y)
+  if (!a || !b) return a.length + b.length
+  let row: number[] = []
+  for (let j = 0; j <= b.length; j++) row.push(j)
   for (let i = 1; i <= a.length; i++) {
     let prev = row[0]
     row[0] = i

@@ -10,6 +10,11 @@ test('the same name scores 1, however it is written', () => {
   assertEquals(score('', 'Le Guin'), 0)
 })
 
+test('a misspelling costs one edit per letter wrong, of the longer name', () => {
+  assertEquals(score('kitten', 'sitting'), 1 - 3 / 7)
+  assertEquals(score('crayonblom', 'crayonbloom'), 1 - 1 / 11)
+})
+
 test('a prefix outranks a word merely spelled inside', () => {
   assert(score('earth', 'Earthsea') > score('sea', 'Earthsea'))
   // a two-letter word inside a name is coincidence, not a reach
