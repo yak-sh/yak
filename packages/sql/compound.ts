@@ -40,7 +40,11 @@ export type Arm = [comp: string, props: string[]]
  * component cost one term rather than two. */
 export let arms = (refs: [string, string][]): Arm[] => {
   let by = new Map<string, string[]>()
-  for (let [comp, prop] of refs) by.set(comp, [...(by.get(comp) ?? []), prop])
+  for (let [comp, prop] of refs) {
+    let props = by.get(comp)
+    if (props) props.push(prop)
+    else by.set(comp, [prop])
+  }
   return [...by]
 }
 

@@ -1005,34 +1005,44 @@ let refsUnion = (ctx: Ctx, r: Refs): Cond => {
     throw new Unsupported('.refs', 'only .refs=<id> compiles')
   }
   if (ctx.spine) throw new Unsupported('.refs', `over ${ctx.spine} entities`)
-  return inRefs(ctx, ctx.v.refProps(), r.value)
+  return inRefs(ctx, refGroups(ctx.v), r.value)
 }
 
-// The rows from which some reference property among `refs` points at `value`:
-// one `in` per group of terms, each term a table's reference columns combined
-// with OR, cut to what one compound SELECT may carry (compound.ts). An empty
-// `refs` selects nothing.
-let inRefs = (ctx: Ctx, refs: [string, string][], value: string): Cond => {
-  if (!refs.length) return FALSE
+// A vocabulary's reference properties by table, cut to what one compound
+// SELECT may carry (compound.ts). They are fixed for a vocabulary, so they are
+// grouped once rather than on every backlink read.
+let refArms = new WeakMap<Vocab, Arm[][]>()
+let refGroups = (v: Vocab): Arm[][] => {
+  let held = refArms.get(v)
+  if (!held) refArms.set(v, held = cut(arms(v.refProps()), ARMS))
+  return held
+}
+
+// The rows from which some reference property among `groups` points at
+// `value`: one `in` per group of terms, each term a table's reference columns
+// combined with OR. No reference properties select nothing.
+let inRefs = (ctx: Ctx, groups: Arm[][], value: string): Cond => {
+  if (!groups[0].length) return FALSE
   // Bind the target once, not once per reference column:
-  // a wide vocabulary must still fit the runtime's 100-parameter limit.
+  // a wide vocabulary must still fit the runtime's 100-parameter limit. Each
+  // term joins the target and compares its columns to the joined id, which
+  // still seeks each column's index. A scalar subquery per column would look
+  // the target up, through its visibility scope, once per column.
   let name = '__refs_target'
   while (ctx.v.comp(name)) name += '_'
   let target = `with "${name}" as (select id from ${
     source(ctx, 'entity')
   } where eid = ?)`
-  let at = `(select id from "${name}")`
   let sub = ([c, props]: Arm) =>
-    `select ${ctx.d.ownerKey(c)} from ${ctx.d.table(c)} where ` +
-    props.map((p) => `${refKey(ctx, c, p)} = ${at}`).join(' or ')
+    `select ${ctx.d.ownerKey(c)} from "${name}" join ${ctx.d.table(c)} on ` +
+    props.map((p) => `${refKey(ctx, c, p)} = "${name}".id`).join(' or ')
   let alias = '__refs_entity'
-  let groups = cut(arms(refs), ARMS).map((group) =>
+  let where = render(or(...groups.map((group) =>
     cond({
       sql: `"${alias}".id in (${group.map(sub).join(' union ')})`,
       params: [],
     })
-  )
-  let where = render(or(...groups)).sql
+  ))).sql
   return cond({
     sql: `${ctx.d.ownerKey('entity')} in (${target} select "${alias}".id from ${
       source(ctx, 'entity')

@@ -491,8 +491,8 @@ test('.refs= groups its arms and cuts them to what a compound may carry', () => 
   assertEquals(compile(parse('.refs=a1|.refs=a2'), wide).params, ['a1', 'a2'])
   assert(
     sql.includes(
-      '"pair"."left" = (select id from "__refs_target") or ' +
-        '"pair"."right" = (select id from "__refs_target")',
+      '"pair"."left" = "__refs_target".id or ' +
+        '"pair"."right" = "__refs_target".id',
     ),
     sql,
   )
