@@ -613,6 +613,8 @@ let backgroundColorOf = (app: App) =>
 // several, and the smallest icon larger than the device wants is the one
 // scaled, so one square file serves every device. Every other platform reads
 // the manifest's `icons` instead, at the address the manifest link names.
+// `mobile-web-app-capable` is the standard word for the same (Chrome warns
+// on the Apple one alone), and the Apple one stays for iOS Safari.
 // `apple-mobile-web-app-capable` is what makes iOS open the page as a window
 // rather than a browser tab at all, and `apple-mobile-web-app-status-bar-
 // style` is the one Apple still reads past `theme-color` for its own status
@@ -643,6 +645,9 @@ export let pinned = (at: string, page: string, app: App) => {
     (declares(page, 'meta', 'name', 'theme-color')
       ? ''
       : `<meta name="theme-color" content="${themeColorOf(app)}">`) +
+    (declares(page, 'meta', 'name', 'mobile-web-app-capable')
+      ? ''
+      : '<meta name="mobile-web-app-capable" content="yes">') +
     (declares(page, 'meta', 'name', 'apple-mobile-web-app-capable')
       ? ''
       : '<meta name="apple-mobile-web-app-capable" content="yes">') +

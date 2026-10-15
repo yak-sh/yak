@@ -18,6 +18,7 @@ import {
 let ICON = '<link rel="apple-touch-icon" href="/cookbook/icon.png">'
 let MANIFEST = '<link rel="manifest" href="/cookbook/manifest.webmanifest">'
 let CAPABLE = '<meta name="apple-mobile-web-app-capable" content="yes">'
+let MOBILE = '<meta name="mobile-web-app-capable" content="yes">'
 let STATUS_BAR =
   '<meta name="apple-mobile-web-app-status-bar-style" content="default">'
 let PLATFORM_META = `<meta name="theme-color" content="${PLATFORM_THEME}">`
@@ -39,6 +40,7 @@ test('a page with none of the five tags is given all of them, in its head', () =
   assert(out.includes(MANIFEST), out)
   assert(out.includes(PLATFORM_META), out)
   assert(out.includes(CAPABLE), out)
+  assert(out.includes(MOBILE), out)
   assert(out.includes(STATUS_BAR), out)
   // Inside the head, where the parser reads them.
   assert(out.indexOf(ICON) < out.indexOf('</head>'), out)
@@ -80,7 +82,7 @@ test('a page that declares all five is untouched', () => {
   let mine = '<link rel="apple-touch-icon-precomposed" href="logo.png">' +
     "<link rel='manifest' href='app.webmanifest'>" +
     '<meta name="theme-color" content="#000">' +
-    '<meta name="apple-mobile-web-app-capable" content="yes">' +
+    MOBILE + CAPABLE +
     '<meta name="apple-mobile-web-app-status-bar-style" content="black">'
   assertEquals(pinned('/cookbook/', page(mine), app('Cookbook')), page(mine))
   // And a `rel`/`name` that merely mentions the word is not a declaration.
