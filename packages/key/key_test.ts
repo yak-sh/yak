@@ -152,13 +152,24 @@ test('a client-minted entity claiming a held value is refused', () => {
   )
 })
 
-test('a value is free again once what it named is gone', () => {
+// A library where b1 already holds Dune's isbn, stated through the key.
+let dune = () => {
   let g = books(libraryGraph())
   sync(g.apply([keyed('isbn', 'b1', DUNE)]))
-  sync(g.apply([{ entity: { eid: 'b1' }, $delete: true }]))
-  assertEquals(read(g, '.isbn'), [])
-  sync(g.apply([keyed('isbn', 'b2', DUNE)]))
-  assertEquals(read(g, '.key.of=b2'), [keyEid('isbn', DUNE)])
+  return g
+}
+
+let dying = dune()
+test('a key dies with what it named', () => {
+  sync(dying.apply([{ entity: { eid: 'b1' }, $delete: true }]))
+  assertEquals(read(dying, '.isbn'), [])
+})
+
+let freed = dune()
+sync(freed.apply([{ entity: { eid: 'b1' }, $delete: true }]))
+test('a value is free again once what it named is gone', () => {
+  sync(freed.apply([keyed('isbn', 'b2', DUNE)]))
+  assertEquals(read(freed, '.key.of=b2'), [keyEid('isbn', DUNE)])
 })
 
 test('a retired value can be claimed again', () => {
@@ -265,14 +276,17 @@ test('an ordinary conflict refuses the entire batch', () => {
   assertEquals(g.read('*'), before)
 })
 
-test('a transfer guards the holder observed before the transaction', () => {
+// Two graphs over one store: the rival holds Dune's isbn on b1, and moves it
+// to b3 while the other graph's transfer is between its mint and its
+// transaction.
+let racing = () => {
   let storage = store()
   let rival = books(libraryGraph(storage))
   sync(rival.apply([
     { entity: { eid: 'b3' }, book: { title: 'Rival' } },
     keyed('isbn', 'b1', DUNE),
   ]))
-  let before: Bundle[] = []
+  let race = { before: [] as Bundle[] }
   let g = graph({
     storage,
     vocab: library,
@@ -285,12 +299,18 @@ test('a transfer guards the holder observed before the transaction', () => {
             { entity: { eid: 'b1' }, $delete: true },
             keyed('isbn', 'b3', DUNE),
           ]))
-          before = rival.read('*') as Bundle[]
+          race.before = rival.read('*') as Bundle[]
           return bundles
         },
       },
     }],
   })
+  return { g, race }
+}
+
+let raced = racing()
+test('a transfer guards the holder observed before the transaction', () => {
+  let { g, race } = raced
   let err = assertThrows(() =>
     sync(g.apply([
       { entity: { eid: 'b1' }, $delete: true },
@@ -298,7 +318,7 @@ test('a transfer guards the holder observed before the transaction', () => {
       keyed('isbn', 'b2', DUNE),
     ])), Stale)
   assertEquals([err.comp, err.prop, err.current], ['key', 'of', 'b3'])
-  assertEquals(g.read('*'), before)
+  assertEquals(g.read('*'), race.before)
   assertEquals(read(g, '.key.of=b3'), [keyEid('isbn', DUNE)])
   assertEquals(read(g, '.isbn'), [keyEid('isbn', DUNE)])
 })
