@@ -201,28 +201,32 @@ test('unsigned canary reveals its grouped receipt', async () => {
   await object.alarm()
   equal(await read(w, receipt), { arrived: true })
 })
+// A canary delivered and grouped, and one published to an object from before
+// content-hash eids, which admits UUID entities only.
+let grouping = setup()
+let groupingReceipt = await publish(grouping.w, grouping.url)
+await grouping.object.ingest(grouping.sent[0])
+await grouping.object.alarm()
+let uuidOnly = setup()
+let admits = uuidOnly.object.ingest
+let uuids = Error('old object only admits UUID entities')
+uuidOnly.object.ingest = (rows) =>
+  rows.some((row) => !row.entity.eid.includes('-'))
+    ? Promise.reject(uuids)
+    : admits(rows)
+let uuidOnlyReceipt = await publish(uuidOnly.w, uuidOnly.url)
 test('canary waits for the object to run the deployed bundle', async () => {
-  let { sent, object, w, url } = setup()
-  let receipt = await publish(w, url)
-  await object.ingest(sent[0])
-  await object.alarm()
+  let { object, w } = grouping
   for (let runs of [null, 'b'.repeat(64)]) {
     object.runs = runs
-    equal(await read(w, receipt), { arrived: false })
+    equal(await read(w, groupingReceipt), { arrived: false })
   }
   object.runs = hash
-  equal(await read(w, receipt), { arrived: true })
+  equal(await read(w, groupingReceipt), { arrived: true })
 })
 test('canary cannot declare a UUID-only object ready for content hashes', async () => {
-  let { sent, object, w, url } = setup()
-  let ingest = object.ingest
-  object.ingest = (rows) => {
-    if (rows.some((row) => !row.entity.eid.includes('-'))) {
-      return Promise.reject(Error('old object only admits UUID entities'))
-    }
-    return ingest(rows)
-  }
-  let receipt = await publish(w, url)
+  let { sent, object, w } = uuidOnly
+  let receipt = uuidOnlyReceipt
   let acknowledged = false, retried = false
   await w.queue([{
     body: sent[0],

@@ -920,7 +920,7 @@ export let lasting = (
     TRACKER_SECRET: secret,
     TRACKER: {
       fetch: (request: Request) => {
-        let scope = scopeOf(request)
+        let scope = scopeOf(new URL(request.url))
         if (!scope) {
           return Promise.resolve(
             Response.json({ error: 'tracker scope required' }, {

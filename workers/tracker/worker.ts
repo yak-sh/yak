@@ -57,8 +57,7 @@ export let canary = (
   rows.push({ entity: { eid: bugEid('', fault) }, archived: {} })
   return rows
 }
-export let scopeOf = (request: Request) => {
-  let url = new URL(request.url)
+export let scopeOf = (url: URL) => {
   let scope = url.searchParams.get('scope')
   return scope == 'platform'
     ? platform
@@ -92,10 +91,10 @@ export let worker = (
   }
   return {
     fetch: async (request: Request): Promise<Response> => {
-      let scope = scopeOf(request)
+      let url = new URL(request.url)
+      let scope = scopeOf(url)
       if (!scope) return json({ error: 'tracker global scope required' }, 400)
       try {
-        let url = new URL(request.url)
         if (url.pathname == '/canary') {
           if (scope != platform) return json({ error: 'platform only' }, 403)
           let hash = url.searchParams.get('hash')
@@ -124,29 +123,28 @@ export let worker = (
               admin: true,
               exp: Date.now() / 1000 + 60,
             }, env.TRACKER_SECRET)
+            let object = env.TRACKERS.getByName(platform)
+            let headers = { authorization: `Bearer ${signed}` }
+            // An object moves to a new version minutes after this Worker, so
+            // the canary has arrived only once the object runs this bundle too.
+            // An object from before the route answers 404 and is not there yet.
+            // That is asked first, so a deploy's wait asks for nothing more.
+            let bundle = await object.fetch(
+              new Request('https://tracker.internal/bundle', { headers }),
+            )
+            if (!bundle.ok || (await bundle.json()).hash != hash) {
+              return json({ arrived: false })
+            }
             let query = new URL('https://tracker.internal/query')
             query.searchParams.set(
               'q',
               `.entity.eid=${eid} .error.fault="tracker-canary|${hash}" .error.bug .limit=1`,
             )
-            let object = env.TRACKERS.getByName(platform)
-            let headers = { authorization: `Bearer ${signed}` }
             let response = await object.fetch(new Request(query, { headers }))
             if (!response.ok) {
               return json({ error: 'tracker unavailable' }, 503)
             }
-            if ((await response.json()).length != 1) {
-              return json({ arrived: false })
-            }
-            // An object moves to a new version minutes after this Worker, so
-            // the canary has arrived only once the object runs this bundle too.
-            // An object from before the route answers 404 and is not there yet.
-            let bundle = await object.fetch(
-              new Request('https://tracker.internal/bundle', { headers }),
-            )
-            return json({
-              arrived: bundle.ok && (await bundle.json()).hash == hash,
-            })
+            return json({ arrived: (await response.json()).length == 1 })
           }
           if (request.method != 'POST') {
             return json({ error: 'canary method denied' }, 405)
@@ -178,8 +176,11 @@ export let worker = (
         // The object can be reset, or the connection to it lost, under a
         // call; each send takes a fresh stub and the same body. Every door is
         // a read or a write keyed by its eids, so a send that landed before
-        // its answer was lost lands the same way again.
-        let body = request.body && await request.arrayBuffer()
+        // its answer was lost lands the same way again. Only GET and HEAD
+        // carry no body; asking `request.body` instead makes a stream to read.
+        let body = request.method == 'GET' || request.method == 'HEAD'
+          ? null
+          : await request.arrayBuffer()
         return await retried(
           () =>
             env.TRACKERS.getByName(scope).fetch(new Request(request, { body })),

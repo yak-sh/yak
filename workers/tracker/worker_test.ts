@@ -92,14 +92,14 @@ let marked = async (failures: Error[]) => {
   )
   return [response.status, bodies, sent.length]
 }
-let lost = () => Error('Network connection lost.')
+// What a send to the object meets: its connection lost, the object reset,
+// and a failure no resend mends.
+let lost = Error('Network connection lost.')
+let reset = Object.assign(Error('reset'), { retryable: true })
+let broken = Error('boot failed')
 
 test('a mark lost or reset on its way to the object is sent again', async () => {
-  let reset = Object.assign(Error('reset'), { retryable: true })
-  equal(await marked([lost(), reset]), [200, Array(3).fill('{"bug":"b"}'), 0])
-  equal(
-    (await marked(Array.from({ length: backoff.pauses.length + 1 }, lost)))[0],
-    503,
-  )
-  equal(await marked([Error('boot failed')]), [503, ['{"bug":"b"}'], 1])
+  equal(await marked([lost, reset]), [200, Array(3).fill('{"bug":"b"}'), 0])
+  equal((await marked(Array(backoff.pauses.length + 1).fill(lost)))[0], 503)
+  equal(await marked([broken]), [503, ['{"bug":"b"}'], 1])
 })
