@@ -7,10 +7,10 @@
 // (`pageAt`), so two spaces never share a key and one app mounted at two
 // addresses keeps two pages. On a miss Site serves the address as an
 // anonymous visitor would be served it (apps.ts `edged`), and keeps it only
-// when it is the same answer for everyone: a public app's own file or its
-// 404, with no worker of its own, no sandbox, no router claiming the path and
-// no cookie, or a space's 404 where no app answers. Anything else is a pass,
-// kept as briefly as a page.
+// when it is the same answer for everyone: the own file or 404 of an app
+// anyone may read (public or open), with no worker of its own, no sandbox, no
+// router claiming the path and no cookie, or a space's 404 where no app
+// answers. Anything else is a pass, kept as briefly as a page.
 //
 // The gateway remembers, as briefly, every address Site passed and every app
 // it served itself whose pages are never kept (`unkept`: a private app's, a

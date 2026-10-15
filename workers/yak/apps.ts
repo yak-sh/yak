@@ -2717,11 +2717,12 @@ let served = async (
   // the page afresh and never shows a token in the address bar. On an app
   // that is not sandboxed the segment names nothing.
   let walls = sandboxed(app)
-  // Site keeps a public app's own files and nothing else: a private app's
-  // pages are its members', a sandboxed page carries its visitor's token, and
-  // an app's worker may answer each visitor differently. Nor does the gateway
-  // ask Site about such an app's other addresses for a while.
-  if (walls || app.access != 'public' || app.worker !== '') {
+  // Site keeps the own files of an app anyone may read (public or open) and
+  // nothing else: a private app's pages are its members', a sandboxed page
+  // carries its visitor's token, and an app's worker may answer each visitor
+  // differently. Nor does the gateway ask Site about such an app's other
+  // addresses for a while.
+  if (walls || mode(app.access) == 'private' || app.worker !== '') {
     if (edge) return passed()
     unkept(req, env, bare)
   }

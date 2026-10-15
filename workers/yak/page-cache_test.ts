@@ -194,6 +194,18 @@ test('a page made private leaves the edge, and its members are served it', async
   assertEquals(cache.pages(), 0)
 })
 
+test('an open app is kept as a public one is', async () => {
+  let { scenario, env, app, open } = await cookbook()
+  using _ = scenario
+  await stamp(env, {
+    entities: [{ entity: { eid: app.eid }, app: { access: 'open' } }],
+  })
+  assertEquals((await open()).cache, 'MISS')
+  let again = await open()
+  assertEquals(again.cache, 'HIT')
+  assertStringIncludes(again.res.headers.get('cache-control')!, 'private')
+})
+
 test("a sandboxed page and a worker's page are never kept", async () => {
   for (
     let patch of [
