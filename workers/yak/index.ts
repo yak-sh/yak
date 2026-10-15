@@ -130,17 +130,13 @@ export class Files extends WorkerEntrypoint {
 // calls it through the SITE binding, for every write that changes a page.
 export class Site extends WorkerEntrypoint {
   declare env: Env
-  declare ctx: { cache?: Purging; exports?: { Files?: Env['FILES'] } }
+  declare ctx: { cache?: Purging }
 
   fetch(req: Request): Promise<Response> {
     return entry(
       this.env,
       'Site fetch',
-      () =>
-        sitePart.fetch(req, {
-          ...this.env,
-          FILES: this.env.FILES && this.ctx.exports?.Files || this.env.FILES,
-        }),
+      () => sitePart.fetch(req, this.env),
       req,
     )
   }
@@ -252,19 +248,8 @@ export class ModelHost extends WorkerEntrypoint {
 // door's, is a defect we hear about. The queue is Workers Builds telling us a
 // build of this Worker failed (builds.ts).
 export default {
-  // A self service binding is routed as a fresh Worker invocation, through
-  // the regional cache tier, even though the gateway's isolate is already
-  // running this version. A loopback keeps the same entrypoint/cache key and
-  // purge scope, without taking that remote route on a miss.
-  fetch: (req: Request, env: Env, ctx?: {
-    exports?: { Files?: Env['FILES']; Site?: Env['SITE'] }
-  }) =>
-    entry(env, 'gateway fetch', () =>
-      handler.fetch(req, {
-        ...env,
-        FILES: env.FILES && ctx?.exports?.Files || env.FILES,
-        SITE: env.SITE && ctx?.exports?.Site || env.SITE,
-      }), req),
+  fetch: (req: Request, env: Env) =>
+    entry(env, 'gateway fetch', () => handler.fetch(req, env), req),
   email: (message: Inbound, env: Env, ctx?: Lent) =>
     entry(
       env,
