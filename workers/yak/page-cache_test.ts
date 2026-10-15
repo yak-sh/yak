@@ -207,3 +207,25 @@ test('a page of an app mid-release is not kept, and nor is its pass', async () =
   assertEquals(await (await g.get())!.text(), '<body>one</body>')
   assertEquals(g.site.held.size, 1)
 })
+
+// Site's render clock is useful only when this view actually ran it.
+for (let status of ['MISS', 'EXPIRED', 'BYPASS', 'HIT', 'UPDATING', 'STALE']) {
+  test(`a page ${status} reports only its own inner work`, async () => {
+    let c = clock()
+    let env = {
+      SITE: {
+        fetch: async () => {
+          let r = await kept(keep(page('one'), space, app))
+          r.headers.set('cf-cache-status', status)
+          r.headers.set('server-timing', 'site_space;dur=19, site_total;dur=31')
+          return r
+        },
+      },
+    } as unknown as Env
+    await asked(new Request('https://ada.yaks.app/cookbook/'), env, c)
+    assertEquals(
+      c.header().includes('site_space;dur=19'),
+      ['MISS', 'EXPIRED', 'BYPASS'].includes(status),
+    )
+  })
+}

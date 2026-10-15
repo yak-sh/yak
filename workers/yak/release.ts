@@ -2,6 +2,7 @@
 // the bytes' content address (versions.ts `addressed`), and a deploy writes
 // that index, beside what its compile made, before the app row selects it.
 import type { Objects } from '@yaks/blob'
+import { elapsed } from './lib/hops.ts'
 import { addressed, type Files, own, sha256 } from './versions.ts'
 import { encode, type Index, indexOf, META } from './release_index.ts'
 
@@ -29,7 +30,7 @@ let indexAt = (raw: Objects, prefix: string) => {
   let all = cache(raw)
   let found = all.get(prefix)
   if (found) return found
-  let read = indexOf(raw, prefix)
+  let read = elapsed('index_wait', () => indexOf(raw, prefix))
   let drop = () => all.get(prefix) == read && all.delete(prefix)
   all.set(prefix, read)
   read.then((index) => index || drop(), drop)

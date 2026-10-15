@@ -2,7 +2,7 @@
 // name over the `BLOBS` binding, with every trip counted on the request's
 // tally (hops.ts), which the request reports as `r2;dur=<n>`.
 import { type Bucket, bucketObjects, type Objects } from '@yaks/blob'
-import { hop, type Tally } from './hops.ts'
+import { elapsed, hop, type Tally } from './hops.ts'
 import { releaseFiles } from '../release.ts'
 
 /**
@@ -25,40 +25,40 @@ export let counted = (objects: Objects, tally?: Tally): Objects => {
   return {
     has: (key) => {
       trip('has')
-      return objects.has(key)
+      return elapsed('r2_wait', () => objects.has(key))
     },
     put: (key, bytes) => {
       trip('put')
-      return objects.put(key, bytes)
+      return elapsed('r2_wait', () => objects.put(key, bytes))
     },
     read: (key) => {
       trip('read')
-      return objects.read(key)
+      return elapsed('r2_wait', () => objects.read(key))
     },
     load: (key) => {
       trip('load')
-      return objects.load(key)
+      return elapsed('r2_wait', () => objects.load(key))
     },
     get: (key) => {
       trip('get')
-      return objects.get(key)
+      return elapsed('r2_wait', () => objects.get(key))
     },
     open: (key) => {
       trip('open')
-      return objects.open(key)
+      return elapsed('r2_wait', () => objects.open(key))
     },
     // No keys is no call: the bucket is never asked.
     delete: (keys) => {
       if ([keys].flat().length) trip('delete')
-      return objects.delete(keys)
+      return elapsed('r2_wait', () => objects.delete(keys))
     },
     list: (prefix) => {
       trip('list')
-      return objects.list(prefix)
+      return elapsed('r2_wait', () => objects.list(prefix))
     },
     uploaded: (prefix) => {
       trip('list')
-      return objects.uploaded(prefix)
+      return elapsed('r2_wait', () => objects.uploaded(prefix))
     },
   }
 }

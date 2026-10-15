@@ -80,7 +80,7 @@ export let clock = () => {
     // threaded down to them (hops.ts): run the whole request in here and
     // everything it awaits lands on this clock's tally.
     counting: <T>(work: () => T) => tallying(tally, work),
-    header: () => {
+    header: (prefix = '') => {
       let { hops, r2 } = counts(tally)
       return [
         ...marks,
@@ -89,9 +89,14 @@ export let clock = () => {
         `stmts;dur=${tally.get('stmts') ?? 0}`,
         ...(tally.has('rows') ? [`rows;dur=${tally.get('rows')}`] : []),
         ...(tally.has('wake') ? [`wake;dur=${tally.get('wake')}`] : []),
+        ...['r2_wait', 'index_wait'].flatMap((name) =>
+          tally.has(name) ? [`${name};dur=${tally.get(name)}`] : []
+        ),
         `r2;dur=${r2}`,
         `total;dur=${Date.now() - born}`,
-      ].join(', ')
+      ].map((mark) => mark.replace(/(^|, )(\w+);/g, `$1${prefix}$2;`)).join(
+        ', ',
+      )
     },
   }
 }
@@ -99,10 +104,10 @@ export let clock = () => {
 // The header onto a response. A 101 carries the runtime's own socket and no
 // Response constructor here can copy it, so a socket keeps its handshake
 // untouched — the same rule apps.ts `reporting` reads.
-export let timed = (res: Response, c: Clock) => {
+export let timed = (res: Response, c: Clock, prefix = '') => {
   if (res.status == 101) return res
   let headers = new Headers(res.headers)
-  headers.set('server-timing', c.header())
+  headers.set('server-timing', c.header(prefix))
   return new Response(res.body, {
     status: res.status,
     statusText: res.statusText,

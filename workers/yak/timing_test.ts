@@ -26,3 +26,15 @@ test('worker Server-Timing preserves native compiler durations', () => {
     true,
   )
 })
+
+test('an inner serving clock names its phases apart from the gateway', () => {
+  let c = clock()
+  c.include('file_total;dur=9, file_config;dur=3')
+  assertEquals(
+    timed(new Response('ok'), c, 'site_').headers.get('server-timing')!
+      .startsWith(
+        'site_file_total;dur=9, site_file_config;dur=3, site_hops;dur=0',
+      ),
+    true,
+  )
+})

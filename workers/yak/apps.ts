@@ -857,6 +857,13 @@ let asset = async (
     // fast one are the same call, and this is the word for which happened.
     (r) => r.headers.get('cf-cache-status'),
   )
+  if (
+    !['HIT', 'UPDATING', 'STALE'].includes(
+      got.headers.get('cf-cache-status') ?? '',
+    )
+  ) {
+    c.include(got.headers.get('server-timing'))
+  }
   // A folder asked for without its slash is sent to it (files.ts `resolve`),
   // keeping the query: the location is relative, so it holds at any mount.
   let to = got.status == 307 ? got.headers.get('location') : null
@@ -888,16 +895,17 @@ let asset = async (
   // which is woven the platform's scripts on its way out (`served`), so it
   // gets none here, or the browser would run each of them twice.
   let base = files.baseOf(at, got.headers.get(files.FILE) ?? '', !!app.rooted)
-  let page = await woven(
-    env,
-    await got.text(),
-    at,
-    bare,
-    app,
-    sandbox ? await sandbox() : '',
-    badge(req, space),
-    base,
-  )
+  let page = await c.time('render', async () =>
+    woven(
+      env,
+      await got.text(),
+      at,
+      bare,
+      app,
+      sandbox ? await sandbox() : '',
+      badge(req, space),
+      base,
+    ))
   if (sandbox) {
     return new Response(page, {
       status: got.status,
@@ -2717,9 +2725,16 @@ let firstly = async (
 /** An address as Site keeps it (page-cache.ts): served to nobody, fresh. */
 export let edged = async (req: Request, env: Env) => {
   let copied = false
-  let answer = await served(req, env, clock(), true, () => {
-    copied = true
-  })
+  let c = clock()
+  let answer = await c.counting(async () =>
+    timed(
+      await served(req, env, c, true, () => {
+        copied = true
+      }),
+      c,
+      'site_',
+    )
+  )
   if (copied) answer.headers.set('x-yak-directory-copy', '1')
   return answer
 }

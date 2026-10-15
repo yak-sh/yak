@@ -131,3 +131,17 @@ export let reported = (tally: Tally): Record<string, string> => {
     ...header('wake'),
   }
 }
+
+/** Waiting on internal I/O, accumulated on this request's own tally. */
+export let elapsed = async <T>(
+  name: string,
+  work: () => Promise<T>,
+): Promise<T> => {
+  let tally = here.getStore()
+  let at = Date.now()
+  try {
+    return await work()
+  } finally {
+    hop(name, Date.now() - at, tally)
+  }
+}

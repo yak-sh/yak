@@ -1,3 +1,4 @@
+import { type Clock, clock, timed } from './timing.ts'
 // The cached half of serving an app's files and blobs: bytes out of R2, and
 // whether the app's rows still name an upload's bytes. This part knows an
 // app's eid, the R2 prefix its bytes live under, its store, and their address.
@@ -485,7 +486,12 @@ let told = (said: string | null): StoreAt | null => {
 // The inner door. The gateway has already decided this request may be served;
 // everything here is about which bytes.
 //
-export let fetch = async (req: Request, env: Env): Promise<Response> => {
+export let fetch = (req: Request, env: Env): Promise<Response> => {
+  let c = clock()
+  return c.counting(async () => timed(await fileFetch(req, env, c), c, 'file_'))
+}
+
+let fileFetch = async (req: Request, env: Env, c: Clock): Promise<Response> => {
   let url = new URL(req.url)
   if (url.pathname.startsWith('/' + shared.PREFIX)) {
     return shared.fetch(req, env)
@@ -501,7 +507,7 @@ export let fetch = async (req: Request, env: Env): Promise<Response> => {
   let prefix = req.headers.get(PREFIX)
   if (!prefix || !eid) return missing()
   let blobs = r2Objects(env.BLOBS)
-  let config = await configOf(blobs, prefix)
+  let config = await c.time('config', () => configOf(blobs, prefix))
   let root = rootOf(prefix, config)
   // Decoded, so a key is the name the file was put under; a malformed escape
   // throws, and the router reports it.
@@ -548,11 +554,12 @@ export let fetch = async (req: Request, env: Env): Promise<Response> => {
     }
     return file ? served(file, type, at.slice(1)) : missing()
   }
-  let found = await resolve(
-    at,
-    (p) => blobs.load(`${root}${p}`),
-    config.assets?.not_found_handling,
-  )
+  let found = await c.time('resolve', () =>
+    resolve(
+      at,
+      (p) => blobs.load(`${root}${p}`),
+      config.assets?.not_found_handling,
+    ))
   if (found && 'to' in found) {
     return new Response(null, {
       status: 307,

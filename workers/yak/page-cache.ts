@@ -211,6 +211,14 @@ export let asked = async (req: Request, env: Env, c: Clock) => {
       site.fetch(new Request(key, { headers: pick ? { [PICK]: pick } : {} })),
     (r) => r.headers.get('cf-cache-status'),
   )
+  // A hit carries the old render's timing, not work done for this view.
+  if (
+    !['HIT', 'UPDATING', 'STALE'].includes(
+      got.headers.get('cf-cache-status') ?? '',
+    )
+  ) {
+    c.include(got.headers.get('server-timing'))
+  }
   let said = got.headers.get(SEEN)
   if (!said) {
     await got.body?.cancel()
