@@ -2,7 +2,8 @@ import { test } from '@yaks/testing'
 import { assert, assertEquals } from '@std/assert'
 import { h } from 'preact'
 import type { Bundle } from '@yaks/graph'
-import { mount } from './testing.ts'
+import { print } from '@yaks/tui/print'
+import { dress } from './sheet.ts'
 import { type Context, panels, type UIAgent } from './panels.ts'
 
 let panel = panels.find((p) => p.title == 'Context usage')!
@@ -24,15 +25,15 @@ let context = (
   session,
   sessions: [],
 })
-let text = async (rows: Bundle[]) => {
-  let ctx = context(() => Promise.resolve(rows), 's')
-  let ui = await mount(() => h(panel.Render, { ...ctx, rows }), 70, 10)
-  try {
-    return ui.text()
-  } finally {
-    ui.free()
-  }
-}
+// What a panel shows, painted once in the harness's dress, colors aside.
+let shown = (
+  panel: (typeof panels)[number],
+  ctx: Context & { rows: Bundle[] },
+) =>
+  // deno-lint-ignore no-control-regex -- the painter's words, not its colors
+  print(h(panel.Render, ctx), 70, dress).replace(/\x1b\[[0-9;]*m/g, '')
+let text = (rows: Bundle[]) =>
+  shown(panel, { ...context(() => Promise.resolve(rows), 's'), rows })
 
 test('context panel reads only the selected transcript, including its inherited prefix', async () => {
   let calls: string[] = []
@@ -45,11 +46,11 @@ test('context panel reads only the selected transcript, including its inherited 
   assertEquals(calls, [])
   assertEquals(await panel.read(context(read, 'child')), rows)
   assertEquals(calls, ['child'])
-  assert((await text(rows)).includes('Input context: 12 tokens'))
+  assert((text(rows)).includes('Input context: 12 tokens'))
 })
 
-test('context panel uses latest reported ask in transcript order, not totals or sequence order', async () => {
-  let rendered = await text([
+test('context panel uses latest reported ask in transcript order, not totals or sequence order', () => {
+  let rendered = text([
     row('inherited', 90, {
       input_tokens: 900,
       output_tokens: 70,
@@ -76,14 +77,14 @@ test('context panel uses latest reported ask in transcript order, not totals or 
   assert(!rendered.includes('999'))
 })
 
-test('context panel handles unavailable and optional usage without carrying old counts forward', async () => {
+test('context panel handles unavailable and optional usage without carrying old counts forward', () => {
   for (let rows of [[], [row('pending', 1)]]) {
-    let rendered = await text(rows)
+    let rendered = text(rows)
     assert(rendered.includes('Input context: unavailable'))
     assert(!rendered.includes('Output:'))
     assert(!rendered.includes('Cached:'))
   }
-  let rendered = await text([
+  let rendered = text([
     row('old', 1, { input_tokens: 55, output_tokens: 7, cached_tokens: 5 }),
     row('new', 2, { input_tokens: 0 }),
   ])
@@ -91,13 +92,13 @@ test('context panel handles unavailable and optional usage without carrying old 
   assert(!rendered.includes('Output:'))
   assert(!rendered.includes('Cached:'))
   assert(
-    (await text([row('partial', 1, { output_tokens: 4 })])).includes(
+    (text([row('partial', 1, { output_tokens: 4 })])).includes(
       'Input context: unavailable',
     ),
   )
 })
 
-test('sidebar labels keep names and indicators without redundant status text', async () => {
+test('sidebar labels keep names and indicators without redundant status text', () => {
   let child = 'child:abcdef01-2345-6789-abcd-0123456789ab'
   let sessions: Bundle[] = [
     { entity: { eid: child }, session: { id: child, status: 'settled' } },
@@ -107,29 +108,19 @@ test('sidebar labels keep names and indicators without redundant status text', a
     },
   ]
   let p = panels.find((p) => p.title == 'Sessions')!
-  let ui = await mount(
-    () =>
-      h(p.Render, {
-        ...context(() => Promise.resolve([]), child),
-        rows: sessions,
-        sessions,
-      }),
-    80,
-    10,
-  )
-  try {
-    let shown = ui.text()
-    assert(shown.includes('abcdef01'), shown)
-    assert(!shown.includes('child:'), shown)
-    assert(!/\b(settled|running|wip)\b/.test(shown), shown)
-    assert(shown.includes('● abcdef01'), shown)
-    assert(shown.includes('Meaningful name'), shown)
-  } finally {
-    ui.free()
-  }
+  let ui = shown(p, {
+    ...context(() => Promise.resolve([]), child),
+    rows: sessions,
+    sessions,
+  })
+  assert(ui.includes('abcdef01'), ui)
+  assert(!ui.includes('child:'), ui)
+  assert(!/\b(settled|running|wip)\b/.test(ui), ui)
+  assert(ui.includes('● abcdef01'), ui)
+  assert(ui.includes('Meaningful name'), ui)
 })
 
-test('context panel compacts displayed counts without changing usage', async () => {
+test('context panel compacts displayed counts without changing usage', () => {
   const usage = {
     input_tokens: 273000,
     output_tokens: 1200,
@@ -138,7 +129,7 @@ test('context panel compacts displayed counts without changing usage', async () 
     reasoning_tokens: 1000,
   }
   const before = JSON.stringify(usage)
-  const rendered = await text([row('large', 1, usage)])
+  const rendered = text([row('large', 1, usage)])
   assert(rendered.includes('Input context: 273k tokens'))
   assert(rendered.includes('Output: 1.2k tokens'))
   assert(rendered.includes('Cached: 1m tokens'))

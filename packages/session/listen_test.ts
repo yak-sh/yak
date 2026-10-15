@@ -31,28 +31,33 @@ test('an item is one line, whitespace folded, naming what it points at', () => {
   )
 })
 
-// A read that answers every query with the same rows, and an apply that keeps
-// what it was handed.
-let heard = async (rows: Bundle[], session: string) => {
-  let lines: string[] = []
+// A graph that answers every query with the rows `rows` holds at the time, and
+// whose apply keeps what it was handed.
+let ears = loadVocab([docDoc, sessionDoc, {
+  $defs: {
+    comment: {
+      component: true,
+      type: 'object',
+      properties: { target: { type: 'string' } },
+    },
+    notified: { component: true, type: 'object', properties: {} },
+  },
+}], [idKeywords])
+let stub = (rows: () => Bundle[]) => {
   let applied: Bundle[] = []
   let graph = {
-    vocab: loadVocab([docDoc, sessionDoc, {
-      $defs: {
-        comment: {
-          component: true,
-          type: 'object',
-          properties: { target: { type: 'string' } },
-        },
-        notified: { component: true, type: 'object', properties: {} },
-      },
-    }], [idKeywords]),
+    vocab: ears,
     get: () => [],
     apply: (bundles: Bundle[]) => (applied.push(...bundles), bundles),
-    read: (q: unknown) => typeof q == 'string' ? [] : rows,
+    read: (q: unknown) => typeof q == 'string' ? [] : rows(),
   } as unknown as Graph
+  return { graph, marked: () => applied.map((b) => b.entity.eid) }
+}
+let heard = async (rows: Bundle[], session: string) => {
+  let lines: string[] = []
+  let { graph, marked } = stub(() => rows)
   await hear(graph, null, session, (line) => lines.push(line))
-  return { lines, marked: applied.map((b) => b.entity.eid) }
+  return { lines, marked: marked() }
 }
 
 test('what the session wrote itself is never said, and what is said is marked', async () => {
@@ -238,14 +243,18 @@ for (
   test(what, async () => equal(await hears(session), [...heard]))
 }
 
-test('a held item may reach a native transcript at work of its project or of one above it', async () => {
-  let [atP, atSub] = await desk.get(['reply-ended-1', 'reply-ended-2'])
-  equal(await heirs(desk, [atP]), ['busy'])
-  equal((await heirs(desk, [atSub])).sort(), ['busy', 'busy-sub'])
-  equal(await heirs(desk, await desk.get(['knock-p'])), ['busy'])
-  equal(await heirs(desk, await desk.get(['to-hello'])), ['busy'])
-  equal(await heirs(desk, await desk.get(['to-loose'])), [])
-})
+for (
+  let [item, may, what] of [
+    ['reply-ended-1', ['busy'], 'a letter held for a project'],
+    ['reply-ended-2', ['busy', 'busy-sub'], 'a letter held for a sub-project'],
+    ['knock-p', ['busy'], 'a knock at a project'],
+    ['to-hello', ['busy'], 'a letter to an address filed under a project'],
+    ['to-loose', [], 'a letter to an address filed nowhere'],
+  ] as const
+) {
+  test(`${what} may reach only native transcripts at work of its project or of one above it`, async () =>
+    equal((await heirs(desk, await desk.get([item]))).sort(), [...may]))
+}
 
 // A project whose persona two native transcripts wear, one at rest and one
 // mid-turn, news and a letter held for it, and a knock at the one at rest.
@@ -264,32 +273,53 @@ await rest.apply([
   },
 ])
 
-test('a native transcript at rest hears only what is addressed to it, never what is held for its project', async () => {
-  let heard = async (s: string) =>
-    (await pending(rest, s)).map(({ item }) => item.entity.eid).sort()
-  equal(await heard('resting'), ['nudge'])
-  equal(await heard('working'), ['alert', 'news'])
-})
+let resting = async (s: string) =>
+  (await pending(rest, s)).map(({ item }) => item.entity.eid).sort()
+test('a native transcript at rest hears only what is addressed to it, never what is held for its project', async () =>
+  equal(await resting('resting'), ['nudge']))
+test('a native transcript at work hears what is held for its project', async () =>
+  equal(await resting('working'), ['alert', 'news']))
 
 test('a listener told once waits for something to say, says it and ends', async () => {
-  let g = office()
-  await g.apply([{ entity: { eid: 'me' }, session: { id: 'me' } }])
+  let reply: Bundle = {
+    entity: { eid: 'c1' },
+    comment: { target: 't' },
+    doc: { title: '', body: 'a reply' },
+  }
+  let rows: Bundle[] = []
+  let { graph, marked } = stub(() => rows)
   let lines: string[] = []
-  let waiting = Promise.withResolvers<void>()
-  let again = Promise.withResolvers<void>()
-  let ended = listen(g, null, 'me', {
+  let waits = 0
+  await listen(graph, null, 'me', {
     out: (line) => lines.push(line),
-    every: () => (waiting.resolve(), again.promise),
+    // the first wait ends with the reply there to read; a second is a fault
+    every: () =>
+      waits++
+        ? Promise.reject(new Error('it said something and kept listening'))
+        : Promise.resolve(void (rows = [reply])),
     once: true,
   })
-  await waiting.promise // a read with nothing to say, and it waits
-  await g.apply([{
+  equal([waits, lines.length, marked()], [1, 1, ['c1']])
+})
+
+// A session with a knock waiting for it.
+let waiting = office()
+await waiting.apply([
+  { entity: { eid: 'me' }, session: { id: 'me' } },
+  {
     entity: { eid: 'mail' },
     knock: { target: 'me' },
     doc: { body: 'a reply' },
-  }])
-  again.resolve()
-  await ended
+  },
+])
+
+test('a listener told once says what waits for it, marks it said and ends', async () => {
+  let lines: string[] = []
+  await listen(waiting, null, 'me', {
+    out: (line) => lines.push(line),
+    every: () => Promise.reject(new Error('it waited with something to say')),
+    once: true,
+  })
   equal(lines.length, 1)
-  equal((await g.get(['mail']))[0].notified != null, true)
+  equal((await waiting.get(['mail']))[0].notified != null, true)
 })

@@ -21,8 +21,10 @@ let own = (c: Colors): Sheet => ({
   Session_Selected: { bg: c.card },
 })
 
-export let dress: Sheet = {
+// Frozen, so the painter composes it with its widgets' defaults once rather
+// than on every paint (@yaks/tui's `compose`).
+export let dress: Sheet = Object.freeze({
   ...sheet({ kits, theme: everforest }),
   ...generic.sheet(everforest.colors),
   ...own(everforest.colors),
-}
+})

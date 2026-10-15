@@ -121,22 +121,24 @@ test('model catalog retries a dropped connection and classifies an outage', asyn
   }
 })
 
+// Two model rows, one with a window of its own.
+let models = loadVocab([modelDoc])
+let row = (name: string, context?: number) => ({
+  entity: { eid: identityEid('model', [name]) },
+  model: { name, ...context ? { context } : {} },
+})
+let rows = graph({ storage: ram(models), vocab: models })
+await rows.apply([row('gpt-6.1-sol', 1_000_000), row('gpt-6-astra')])
+
 test('a catalog gives a model row its window, unless the row has its own', async () => {
-  let vocab = loadVocab([modelDoc])
-  let g = graph({ storage: ram(vocab), vocab })
-  let row = (name: string, context?: number) => ({
-    entity: { eid: identityEid('model', [name]) },
-    model: { name, ...context ? { context } : {} },
-  })
-  await g.apply([row('gpt-6.1-sol', 1_000_000), row('gpt-6-astra')])
-  let listed = await windows(g, [
+  let listed = await windows(rows, [
     { name: 'gpt-6.1-sol', context: 272_000 },
     { name: 'gpt-6-astra', context: 272_000 },
     { name: 'unseen', context: 64_000 },
   ])
   assertEquals(listed.map((m) => m.context), [1_000_000, 272_000, 64_000])
-  let rows = await g.get(listed.map((m) => identityEid('model', [m.name])))
-  assertEquals(rows.map((b) => (b.model as { context?: number }).context), [
+  let kept = await rows.get(listed.map((m) => identityEid('model', [m.name])))
+  assertEquals(kept.map((b) => (b.model as { context?: number }).context), [
     1_000_000,
     272_000,
   ])
