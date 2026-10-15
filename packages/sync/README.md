@@ -126,10 +126,13 @@ equal(trouble[2].reverted, false)
 link.close()
 ```
 
-A batch containing a deletion waits for the server in its entirety. Deletion has
-no local inverse; an accepted response supplies the tombstones. The inverse
-patches for optimistic writes affect touched properties and do not implement
-general conflict resolution for overlapping writes.
+A batch containing a deletion waits for the server in its entirety. Its
+page-only and peer components are applied through the local graph only after the
+durable deletion is accepted; peer components then leave over the socket. A
+refusal or unknown outcome applies neither companion. Deletion has no local
+inverse; an accepted response supplies the tombstones. The inverse patches for
+optimistic writes affect touched properties and do not implement general
+conflict resolution for overlapping writes.
 
 `apply(bundles)` returns the server-applied bundles while keeping optimistic
 local visibility. It uses the same queue and reconciliation as the plugin's

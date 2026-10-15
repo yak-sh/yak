@@ -25,7 +25,7 @@
 
 import type { Bundle, Eid, Graph, Plugin } from '@yaks/graph'
 import { after } from '@yaks/fp'
-import { dead } from '@yaks/graph/bundle'
+import { comps, dead } from '@yaks/graph/bundle'
 import {
   ACK,
   asked,
@@ -44,7 +44,7 @@ import {
   WriteRefused,
   WriteUnknown,
 } from './outbound.ts'
-import { outward, relayed } from './tier.ts'
+import { outward, relayed, syncOf } from './tier.ts'
 import { pacer } from './pace.ts'
 import { type Mine, saying } from './saying.ts'
 import { land } from './inbound.ts'
@@ -206,7 +206,7 @@ export let sync = (graph: Graph, opts: SyncOpts): Sync => {
         headers: opts.headers,
         report,
         held,
-      }).then((result) => {
+      }).then(async (result) => {
         if (result.settled || held) {
           release?.(!held && !!result.applied?.length)
         }
@@ -216,7 +216,23 @@ export let sync = (graph: Graph, opts: SyncOpts): Sync => {
         if (result.error) {
           throw result.error
         }
-        return result.applied
+        // A held deletion deferred the whole caller batch. The HTTP door
+        // admits only server components, so its accepted answer cannot carry
+        // the page/peer half. Apply that half now through the ordinary graph
+        // hooks: page values stay local and peer values use their socket.
+        let companions = held
+          ? bundles.flatMap((b) => {
+            if (dead(b)) return []
+            let own = Object.fromEntries(
+              comps(b).filter(([name]) =>
+                syncOf(graph.vocab, name) != 'server'
+              ),
+            )
+            return Object.keys(own).length ? [{ entity: b.entity, ...own }] : []
+          })
+          : []
+        let local = companions.length ? await graph.apply(companions) : []
+        return [...result.applied ?? [], ...local]
       })
     ).catch((error) => {
       if (
