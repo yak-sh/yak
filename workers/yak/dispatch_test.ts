@@ -343,15 +343,17 @@ test('a command failure is captured once across worker and caller', () =>
     })
   }))
 
+// A signed-in visitor's session, made once.
+let token = await sign({
+  person: 'p1',
+  space: space.eid,
+  exp: Math.floor(Date.now() / 1000) + 600,
+  via: crypto.randomUUID(),
+}, SECRET)
+
 test('an app failure names the signed-in person who saw it, and nobody else', () =>
   tracked(async () => {
     let env = envOf(mirror(503).get)
-    let token = await sign({
-      person: 'p1',
-      space: space.eid,
-      exp: Math.floor(Date.now() / 1000) + 600,
-      via: crypto.randomUUID(),
-    }, SECRET)
     let seenBy = async (req: Request) => {
       wrote = []
       await workerBreak(env, space, app, req, new Error('worker fell over'))
@@ -631,8 +633,9 @@ test("a worker that throws is the app's break, and is filed here", async () => {
 // A person's app breaking may be the platform's doing, so the platform's
 // tracker records it too, as its own occurrence; a probe's space is left out.
 test("a person's app break is the platform's to look at too", async () => {
+  let fell = new Error('worker fell over')
   wrote = []
-  await ran(envOf(mirror(503).get), space, app, visit(), who)
+  await workerBreak(envOf(mirror().get), space, app, visit(), fell)
   let [platform] = shared()
   assertEquals(shared().length, 1)
   assert(platform.entity.eid != kept()[0].entity.eid)
@@ -644,7 +647,7 @@ test("a person's app break is the platform's to look at too", async () => {
   assertEquals([tags.source, tags.space, tags.app], ['app', 'jeff', 'recipes'])
   let probe = { ...space, eid: 's-probe', slug: 'probe' }
   let env = {
-    ...envOf(mirror(503).get),
+    ...envOf(mirror().get),
     STORE: {
       idFromName: (n: string) => n,
       get: () => ({
@@ -658,7 +661,7 @@ test("a person's app break is the platform's to look at too", async () => {
     },
   } as unknown as Env
   wrote = []
-  await ran(env, probe, app, visit(), who)
+  await workerBreak(env, probe, app, visit(), fell)
   let account = (kept()[0].error as { tags: { account?: string } }).tags.account
   assertEquals([kept().length, shared().length, account], [1, 0, 'test'])
 })
@@ -754,58 +757,60 @@ test('the shim gives the app its doors and keeps the grant', async () => {
   }
 })
 
+// The shim loaded as the module it is, over a worker module given as text: both
+// are data: modules, so nothing is written to disk.
+let loaded = (worker: string) => {
+  let data = (code: string) =>
+    'data:text/javascript;base64,' + btoa(unescape(encodeURIComponent(code)))
+  return import(
+    data(SHIM.replaceAll(`"./${WORKER}"`, JSON.stringify(data(worker))))
+  )
+}
+
+// The worker the door test runs the shim over, loaded once.
+let { default: doors } = await loaded(`export default {
+    async fetch(req, env) {
+      let said = []
+      for (let r of [
+        await env.FILES.fetch(req),
+        await env.FILES.fetch(new URL('/style.css?v=2', req.url)),
+        await env.STORE.fetch(new Request(new URL('/recipes/api/query?.doc', req.url), { method: 'POST', body: 'x' })),
+      ]) said.push(await r.text())
+      return Response.json(said)
+    },
+}`)
+
 // A door takes what a Fetcher takes: the request the worker was handed, a
 // URL, or a Request of its own, whose method and body go with it. A URL
 // names a place on the host, so an app at `/recipes/` and a home app at the
 // bare hostname reach the same file.
 test('a door takes a Request or a URL as a Fetcher does', async () => {
-  let dir = Deno.makeTempDirSync({ prefix: 'yak-shim-' })
-  try {
-    Deno.writeTextFileSync(`${dir}/entry.js`, SHIM)
-    Deno.writeTextFileSync(
-      `${dir}/worker.js`,
-      `export default {
-        async fetch(req, env) {
-          let said = []
-          for (let r of [
-            await env.FILES.fetch(req),
-            await env.FILES.fetch(new URL('/style.css?v=2', req.url)),
-            await env.STORE.fetch(new Request(new URL('/recipes/api/query?.doc', req.url), { method: 'POST', body: 'x' })),
-          ]) said.push(await r.text())
-          return Response.json(said)
-        },
-      }`,
-    )
-    let { default: shim } = await import(`file://${dir}/entry.js`)
-    let kernel = {
-      fetch: async (r: Request) =>
-        new Response(
-          [
-            r.method,
-            new URL(r.url).pathname + new URL(r.url).search,
-            await r.text(),
-          ]
-            .join(' '),
-        ),
-    }
-    let visit = (url: string) =>
-      shim.fetch(
-        new Request(url, { headers: { 'x-yak-app': 'recipes' } }),
-        { KERNEL: kernel },
-        {},
-      ).then((r: Response) => r.json())
-    assertEquals(await visit('https://jeff.yaks.app/recipes/style.css'), [
-      'GET /recipes/style.css ',
-      'GET /recipes/style.css?v=2 ',
-      'POST /recipes/api/query?.doc x',
-    ])
-    assertEquals(
-      (await visit('https://jeff.yaks.app/style.css'))[0],
-      'GET /recipes/style.css ',
-    )
-  } finally {
-    Deno.removeSync(dir, { recursive: true })
+  let kernel = {
+    fetch: async (r: Request) =>
+      new Response(
+        [
+          r.method,
+          new URL(r.url).pathname + new URL(r.url).search,
+          await r.text(),
+        ]
+          .join(' '),
+      ),
   }
+  let visit = (url: string) =>
+    doors.fetch(
+      new Request(url, { headers: { 'x-yak-app': 'recipes' } }),
+      { KERNEL: kernel },
+      {},
+    ).then((r: Response) => r.json())
+  assertEquals(await visit('https://jeff.yaks.app/recipes/style.css'), [
+    'GET /recipes/style.css ',
+    'GET /recipes/style.css?v=2 ',
+    'POST /recipes/api/query?.doc x',
+  ])
+  assertEquals(
+    (await visit('https://jeff.yaks.app/style.css'))[0],
+    'GET /recipes/style.css ',
+  )
 })
 
 test('a vpc_services name is a door to the kernel as the app, never a binding', async () => {
