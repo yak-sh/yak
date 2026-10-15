@@ -1,5 +1,5 @@
 import { test } from '@yaks/testing'
-import { assertEquals, assertThrows } from '@std/assert'
+import { assertEquals, assertIsError } from '@std/assert'
 import { artifactDoc } from '@yaks/blob'
 import { loadVocab, pick } from '@yaks/vocab'
 import { toolsDoc } from '@yaks/tools'
@@ -15,6 +15,14 @@ import { at } from './testing.ts'
 let { vocab } = await words(at())
 let projectionVocab = loadVocab([projection])
 let runtimeVocab = loadVocab([pick(toolsDoc, ['refusal']), runtime])
+// What loading the runtime projection alone answers.
+let alone = (() => {
+  try {
+    loadVocab([runtime])
+  } catch (error) {
+    return error
+  }
+})()
 
 test('package JSON declarations preserve artifact references and compose with the rest', () => {
   assertEquals(artifactDoc, artifact)
@@ -39,8 +47,8 @@ test('frontend and projection vocabularies stay separate from stored backend fie
   assertEquals(projectionVocab.prop('prop', 'ref')?.scalar, 'text')
   // The projection extends the tools declaration; it cannot declare a second
   // refusal of its own or silently omit the component.
-  assertThrows(
-    () => loadVocab([runtime]),
+  assertIsError(
+    alone,
     Error,
     "'refusal' extends a component no document declares",
   )

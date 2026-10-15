@@ -116,8 +116,8 @@ for (
     ['several', 2, 'person-1'],
   ] as const
 ) {
+  let ask = await named(count)
   test(`tool name resolution: ${outcome}`, async () => {
-    let ask = await named(count)
     for (let readOnly of [true, false]) {
       for (let who of ['Ada', ['Ada']]) {
         if (!refusal) {
@@ -169,8 +169,8 @@ for (let shell of ['empty', 'deleted']) {
 }
 
 for (let shell of ['absent', 'empty', 'deleted']) {
+  let ask = await named(0, shell, false, 'entity')
   test(`a write refuses unresolved word refs with ${shell} identity`, async () => {
-    let ask = await named(0, shell, false, 'entity')
     let word = shell == 'absent' ? 'Nobodyhere' : 'Ada'
     let error = await assertRejects(() => ask(word), CallError)
     let failure = await assertRejects(
