@@ -101,6 +101,10 @@ export type Opts = {
   birth?: number
   /** how long a stopped run has after TERM before KILL (ms, default 10_000) */
   grace?: number
+  /** how a command is started (default @yaks/process `launch`): the one
+   * place a run touches the machine's processes, so a host that starts them
+   * another way, or a test that starts none, lends its own */
+  launch?: typeof launch
   /** mint an entry's eid (default a uuid) */
   mint?: () => string
   /** where a failure that has nobody to throw at goes */
@@ -367,7 +371,7 @@ export let start = async (
   // Placed before the child writes a line: a log cleaned since the last run
   // is new, and its lines are numbered on from where the transcript stands.
   let t = await tail(g, paths(session, o).out, { session })
-  let run = await launch(store(g), {
+  let run = await (o.launch ?? launch)(store(g), {
     command: argv[0],
     args: argv.slice(1),
     cwd,

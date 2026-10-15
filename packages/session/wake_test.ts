@@ -6,21 +6,18 @@
 
 import { assert, assertEquals } from '@std/assert'
 import { type Bundle, type Comp, graph, identityEid } from '@yaks/graph'
-import { storage } from '@yaks/sqlite'
-import { mem } from '../sqlite/testing.ts'
-import { effectDoc, effects } from '@yaks/effects'
+import { ram } from '@yaks/ram'
+import { effectDoc, type Event } from '@yaks/effects'
 import { loadVocab } from '@yaks/vocab'
-import { edgeDoc, edgeEid, edgeKeywords, edges, link } from '@yaks/edge'
-import { kernel, kernelDoc, kernelKeywords } from '@yaks/kernel'
-import { taskDoc, tasks } from '@yaks/task'
+import { edgeDoc, edgeEid, edgeKeywords, link } from '@yaks/edge'
+import { kernelDoc, kernelKeywords } from '@yaks/kernel'
+import { taskDoc } from '@yaks/task'
 import { processDoc } from '@yaks/process'
-import { type Model, modelDoc } from '@yaks/model'
+import { modelDoc } from '@yaks/model'
 import { toolsDoc } from '@yaks/tools/vocab'
 import { sessionDoc } from './comp.ts'
-import { sessions } from './plugin.ts'
 import { transcript } from './react.ts'
-import { sessionDerived, textOf } from './status.ts'
-import { answers } from './providers.ts'
+import { statusComputed, textOf } from './status.ts'
 import { running } from './run.ts'
 import { runs } from './tools.ts'
 import { rouse } from './wake.ts'
@@ -35,69 +32,70 @@ let vocab = loadVocab([
   processDoc,
   edgeDoc,
   taskDoc,
-  { $defs: { worker: { component: true, type: 'object', properties: {} } } },
 ], [kernelKeywords, edgeKeywords])
 
 let P = identityEid('provider', ['fake'])
 let CLI = identityEid('provider', ['claude'])
 let M = identityEid('model', ['fake-1'])
 
-// One worker over a fresh store: the runner lent a model that answers `done`
-// and counts what it was asked, `y` waiting on `x` and `z`.
-let world = async () => {
-  let s = storage(mem(), vocab, { derived: sessionDerived(vocab) })
-  s.install()
-  let asked: string[] = []
-  let model: Model = (req) => {
-    asked.push(JSON.stringify(req.items))
-    return Promise.resolve({
-      id: `r${asked.length}`,
-      model: req.model,
-      items: [{ kind: 'assistant', text: 'done' }],
-    })
-  }
-  let fx = effects(vocab, {
-    owner: 'w1',
-    write: (b) => g.apply(b, { trusted: true }),
-  })
+// One graph in memory, `y` waiting on `x` and `z`, and the handlers a host
+// lends the commit's effects: called with the event a commit would raise, since
+// the pool that raises them is not what is under test.
+let world = async (...setup: Bundle[][]) => {
   let g = graph({
-    storage: s,
+    storage: ram(vocab, { computed: statusComputed }),
     vocab,
-    plugins: [kernel(), edges(vocab), tasks(), sessions(), fx],
   })
-  fx.handle(running(g, {
+  let h = running(g, {
     holder: 'w1',
-    model,
+    model: () => Promise.reject(new Error('no turn is taken here')),
     tools: [],
-    answers: answers(g, {}, model),
-  }))
+  })
   await g.apply([
-    { entity: { eid: 'w1' }, worker: {} },
-    { entity: { eid: P }, provider: { name: 'fake' } },
-    {
-      entity: { eid: CLI },
-      provider: { name: 'claude', transport: 'process' },
-    },
-    { entity: { eid: M }, model: { name: 'fake-1' } },
     { entity: { eid: 'x' }, task: {} },
     { entity: { eid: 'y' }, task: {} },
     { entity: { eid: 'z' }, task: {} },
     link('y', 'requires', 'x'),
     link('y', 'contains', 'z'),
+    ...setup.flat(),
   ], { trusted: true })
-  await fx.work(g)
-  let idle = () => fx.idle()
-  let claim = async (task: string) =>
-    ((await g.get([task]))[0].claim as Comp | undefined)?.session
-  return { g, asked, idle, claim }
+  let fire = (name: string, kind: Event['kind'], e: Partial<Event>) =>
+    h[name](
+      { kind, name: '', ...e } as Event,
+      undefined!,
+      undefined!,
+      undefined!,
+    )
+  return {
+    g,
+    // a task finished: the commit's `session_wake`
+    finish: async (task: string) => {
+      await g.apply([{ entity: { eid: task }, completed: {} }])
+      await fire('session_wake', 'changed', { entity: { eid: task } })
+    },
+    // a dependency link, or a dependency with it, went away
+    drop: async (eid: string, edge?: Comp) => {
+      await g.apply([{ entity: { eid }, $delete: true }])
+      await fire('session_wake', 'removed', {
+        entity: { eid },
+        before: edge && { entity: { eid }, edge },
+      })
+    },
+    // a terminal entry landed: the commit's `session_release`
+    release: (entry: string) =>
+      fire('session_release', 'created', { entity: { eid: entry } }),
+    claim: async (task: string) =>
+      ((await g.get([task]))[0].claim as Comp | undefined)?.session,
+  }
 }
 
 let entries = async (g: ReturnType<typeof graph>, session: string) =>
   (await transcript(g, session)).map(textOf)
 
 test('a native transcript parked on a task takes a turn when a dependency finishes', async () => {
-  let w = await world()
-  await w.g.apply([
+  let w = await world([
+    { entity: { eid: P }, provider: { name: 'fake' } },
+    { entity: { eid: M }, model: { name: 'fake-1' } },
     { entity: { eid: 's1' }, session: { id: 's1' } },
     {
       entity: { eid: 's1:in' },
@@ -105,25 +103,33 @@ test('a native transcript parked on a task takes a turn when a dependency finish
       content: { body: 'work y' },
       using: { provider: P, model: M },
     },
+    {
+      entity: { eid: 's1:out' },
+      entry: { session: 's1' },
+      content: { body: 'done' },
+      ask: { through: 's1:in' },
+      output: {},
+    },
     { entity: { eid: 'y' }, claim: { session: 's1' } },
   ])
-  await w.idle()
-  assertEquals(w.asked.length, 1)
-  await w.g.apply([{ entity: { eid: 'x' }, completed: {} }])
-  await w.idle()
-  assertEquals(w.asked.length, 2)
-  // The turn is told which dependency finished.
-  assert(w.asked[1].includes('#x'), w.asked[1])
+  await w.finish('x')
+  let [turn] = (await transcript(w.g, 's1')).slice(-1)
+  // The turn asked for carries the `using` in force, and says which finished.
+  assertEquals((turn.using as Comp).provider, P)
+  assert(textOf(turn).includes('#x'), textOf(turn))
   // Told once: rousing it again says nothing new.
   let before = (await entries(w.g, 's1')).length
   await rouse(w.g, 's1')
-  await w.idle()
   assertEquals((await entries(w.g, 's1')).length, before)
 })
 
 // A managed run as @yaks/spawn leaves it: asked through a command-line
 // provider, its process over with `code`, its provider's stop read in.
 let managed = (session: string, code: number): Bundle[] => [
+  {
+    entity: { eid: CLI },
+    provider: { name: 'claude', transport: 'process' },
+  },
   { entity: { eid: session }, session: { id: session }, process: { pid: 1 } },
   {
     entity: { eid: `${session}:in` },
@@ -144,95 +150,98 @@ let ending = (session: string, eid: string, through: string): Bundle[] => [{
   stop: {},
 }]
 
-test('a managed run that ends waiting on a dependency is parked, and woken by it', async () => {
-  let w = await world()
-  await w.g.apply(managed('m1', 0))
-  await w.idle()
+// A run the news asked for, over: its request, and the line that ends it.
+let rerun = (n: number): Bundle[] => [
+  {
+    entity: { eid: `m1:r${n}` },
+    entry: { session: 'm1' },
+    content: { body: 'again' },
+    using: { provider: CLI },
+  },
+  ...ending('m1', `m1:r${n}:end`, `m1:r${n}`),
+]
+
+// Tasks the holder finished itself: news to nobody.
+let doneBy = (...tasks: string[]): Bundle[] =>
+  tasks.map((eid) => ({ entity: { eid }, completed: { by: 'm1' } }))
+
+let last = async (w: Awaited<ReturnType<typeof world>>) =>
+  textOf((await transcript(w.g, 'm1')).at(-1)!)
+
+test('a managed run that ends waiting on a dependency is parked', async () => {
+  let w = await world(managed('m1', 0))
+  await w.release('m1:end')
   assertEquals(await w.claim('y'), 'm1')
-  await w.g.apply([{ entity: { eid: 'x' }, completed: {} }])
-  await w.idle()
+})
+
+test('a managed run parked on a task is woken when a dependency finishes', async () => {
+  let w = await world(managed('m1', 0))
+  await w.finish('x')
   let [wake] = (await transcript(w.g, 'm1')).slice(-1)
   assertEquals((wake.using as Comp).provider, CLI)
   assert(textOf(wake).includes('#x'))
-  // The run it asks for ends, still waiting on z, and keeps the claim.
-  let end = async (eid: string) => {
-    let asked = (await transcript(w.g, 'm1')).filter((b) => b.using).at(-1)!
-    await w.g.apply(ending('m1', eid, asked.entity.eid))
-    await w.idle()
-  }
-  await end('m1:second')
+})
+
+test('a woken run that ends still waiting on a dependency keeps its claim', async () => {
+  let w = await world(managed('m1', 0), doneBy('x'), rerun(2))
+  await w.release('m1:r2:end')
   assertEquals(await w.claim('y'), 'm1')
-  await w.g.apply([{ entity: { eid: 'z' }, completed: {} }])
-  await w.idle()
-  assert(textOf((await transcript(w.g, 'm1')).at(-1)!).includes('#z'))
-  // The last run ends with nothing left to wait on, and lets go.
-  await end('m1:third')
+})
+
+test('a dependency that finishes after a wake is told on its own', async () => {
+  let w = await world(managed('m1', 0), doneBy('x'), rerun(2))
+  await w.finish('z')
+  let said = await last(w)
+  assert(said.includes('#z') && !said.includes('#x'), said)
+})
+
+test('the last run ends with nothing left to wait on, and lets go', async () => {
+  let w = await world(managed('m1', 0), doneBy('x', 'z'), rerun(2))
+  await w.release('m1:r2:end')
   assertEquals(await w.claim('y'), undefined)
 })
 
+test('a dependency link going away after the dependency finished tells nothing', async () => {
+  let w = await world(managed('m1', 0), doneBy('z'))
+  let told = (await entries(w.g, 'm1')).length
+  await w.drop(edgeEid('y', 'contains', 'z'), { from: 'y', to: 'z' })
+  assertEquals((await entries(w.g, 'm1')).length, told)
+})
+
 test('a managed run parked on a task is woken when a dependency link goes away', async () => {
-  let w = await world()
-  await w.g.apply(managed('m1', 0))
-  await w.idle()
-  let said = async () => textOf((await transcript(w.g, 'm1')).at(-1)!)
-  // z is done before its link goes: nothing new to tell.
-  await w.g.apply([{ entity: { eid: 'z' }, completed: {} }])
-  await w.idle()
-  let told = await said()
-  await w.g.apply([{
-    entity: { eid: edgeEid('y', 'contains', 'z') },
-    $delete: true,
-  }])
-  await w.idle()
-  assertEquals(await said(), told)
-  // x is still open when y stops waiting on it.
-  let asked = (await transcript(w.g, 'm1')).filter((b) => b.using).at(-1)!
-  await w.g.apply(ending('m1', 'm1:second', asked.entity.eid))
-  await w.idle()
-  assertEquals(await w.claim('y'), 'm1')
-  await w.g.apply([{
-    entity: { eid: edgeEid('y', 'requires', 'x') },
-    $delete: true,
-  }])
-  await w.idle()
+  let w = await world(managed('m1', 0))
+  await w.drop(edgeEid('y', 'requires', 'x'), { from: 'y', to: 'x' })
   let [wake] = (await transcript(w.g, 'm1')).slice(-1)
   assertEquals((wake.using as Comp).provider, CLI)
   assert(textOf(wake).includes('no longer waits on #x'), textOf(wake))
 })
 
 test('a managed run parked on a task is woken when a dependency it waits on is deleted', async () => {
-  let w = await world()
-  await w.g.apply(managed('m1', 0))
-  await w.idle()
+  let w = await world(managed('m1', 0))
   assertEquals(await w.claim('y'), 'm1')
   // The link goes with x: only what the commit found says which ends it had.
-  await w.g.apply([{ entity: { eid: 'x' }, $delete: true }])
-  await w.idle()
+  await w.drop('x', { from: 'y', to: 'x' })
   let [wake] = (await transcript(w.g, 'm1')).slice(-1)
   assertEquals((wake.using as Comp).provider, CLI)
   assert(textOf(wake).includes('no longer waits on #x'), textOf(wake))
 })
 
 test('a managed run that failed lets go of the task it was waiting on', async () => {
-  let w = await world()
-  await w.g.apply(managed('m1', 3))
-  await w.idle()
+  let w = await world(managed('m1', 3))
+  await w.release('m1:end')
   assertEquals(await w.claim('y'), undefined)
 })
 
 test('a parked task finished by somebody else lets its claim go', async () => {
-  let w = await world()
-  await w.g.apply(managed('m1', 0))
-  await w.idle()
+  let w = await world(managed('m1', 0))
   await w.g.apply([{ entity: { eid: 'y' }, cancelled: {} }])
-  await w.idle()
+  await w.release('y')
   assertEquals(await w.claim('y'), undefined)
 })
 
 test('a managed run wrapping up keeps the task it is parked on', async () => {
-  let w = await world()
-  await w.g.apply([
-    ...managed('m1', 0).slice(0, 3),
+  let w = await world([
+    ...managed('m1', 0).slice(0, 4),
     { entity: { eid: 'x' }, claim: { session: 'm1' } },
   ])
   let said = await runs({ vocab }).session_wrap!(

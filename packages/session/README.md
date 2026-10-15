@@ -219,11 +219,11 @@ transcript was told that its last turn or run was not given.
 
 ```ts
 import { graph, identityEid } from '@yaks/graph'
-import { edgeDoc, edgeKeywords, edges, link } from '@yaks/edge'
-import { kernel, kernelDoc, kernelKeywords } from '@yaks/kernel'
+import { edgeDoc, edgeKeywords, link } from '@yaks/edge'
+import { kernelDoc, kernelKeywords } from '@yaks/kernel'
 import { ram } from '@yaks/ram'
-import { sessionDoc, sessions, transcript, wake } from '@yaks/session'
-import { taskDoc, tasks } from '@yaks/task'
+import { sessionDoc, transcript, wake } from '@yaks/session'
+import { taskDoc } from '@yaks/task'
 import { modelDoc } from '@yaks/model'
 import { toolsDoc } from '@yaks/tools/vocab'
 import { loadVocab } from '@yaks/vocab'
@@ -233,11 +233,7 @@ const vocab = loadVocab(
   [kernelKeywords, edgeKeywords],
 )
 const p = identityEid('provider', ['claude'])
-const g = graph({
-  storage: ram(vocab),
-  vocab,
-  plugins: [kernel(), edges(vocab), tasks(), sessions()],
-})
+const g = graph({ storage: ram(vocab), vocab })
 await g.apply([
   { entity: { eid: p }, provider: { name: 'claude' } },
   { entity: { eid: 'x' }, task: {} },

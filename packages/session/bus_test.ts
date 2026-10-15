@@ -12,7 +12,6 @@ import { notifyDoc } from '@yaks/notify/vocab'
 import { personaDoc } from '@yaks/persona/vocab'
 import { projectDoc } from '@yaks/project/vocab'
 import { ram } from '@yaks/ram'
-import { storage } from '@yaks/sqlite'
 import { toolsDoc } from '@yaks/tools/vocab'
 import { loadVocab } from '@yaks/vocab'
 import { test, until } from '@yaks/testing'
@@ -21,7 +20,7 @@ import { sessionDoc } from './comp.ts'
 import { sessionDerived, statusComputed } from './status.ts'
 import { sessions } from './plugin.ts'
 import { service } from './service.ts'
-import { mem } from '../sqlite/testing.ts'
+import { preparedStore } from '../sqlite/testing.ts'
 
 let vocab = loadVocab([
   kernelDoc,
@@ -35,18 +34,18 @@ let vocab = loadVocab([
   toolsDoc,
 ])
 let memory = () => ram(vocab, { computed: statusComputed })
-let lite = () => {
-  let s = storage(mem(), vocab, { derived: sessionDerived(vocab) })
-  s.install()
-  return s
+let derived = sessionDerived(vocab)
+let lite = () => preparedStore(vocab, { derived })
+let bare = (store: Storage = memory(), woke?: (eid: string) => void) => {
+  let fx = effects(vocab)
+  fx.handle({ session_run: (e) => woke?.(e.entity.eid) })
+  return graph({ vocab, storage: store, plugins: [sessions(), fx] })
 }
 let fresh = async (
   store: Storage = memory(),
   woke?: (eid: string) => void,
 ) => {
-  let fx = effects(vocab)
-  fx.handle({ session_run: (e) => woke?.(e.entity.eid) })
-  let g = graph({ vocab, storage: store, plugins: [sessions(), fx] })
+  let g = bare(store, woke)
   await g.apply([
     { entity: { eid: 'native' }, session: { id: 'native' } },
     { entity: { eid: 'outside' }, session: { id: 'outside' } },
@@ -126,7 +125,16 @@ test('an outside caller receives what was addressed to its session once', async 
 })
 
 test('a hooked session hears at its hook, never through a subagent or a tool reply', async () => {
-  let g = await fresh()
+  let g = bare()
+  await g.apply([
+    { entity: { eid: 'outside' }, session: { id: 'outside' } },
+    {
+      entity: { eid: 'letter' },
+      mail: { from: 'a@example.com', to: 'b@example.com' },
+      deliver: { to: 'outside' },
+      doc: { title: 'A letter' },
+    },
+  ], { trusted: true })
   let letter = async () => !!(await g.get(['letter']))[0].notified
   let call = { entity: { eid: 'call' }, created: { via: 'outside' } }
   assertEquals(await heard(g, { session_id: 'outside', agent_id: 'fork' }), {})

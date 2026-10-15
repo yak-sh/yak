@@ -7,20 +7,26 @@ import { test } from '@yaks/testing'
 import { assert, assertEquals } from '@std/assert'
 import { type Bundle, type Comp, graph } from '@yaks/graph'
 import { edgeDoc, edgeKeywords, link } from '@yaks/edge'
-import { effectDoc, type Effects, effects, POOL, take } from '@yaks/effects'
+import {
+  effectDoc,
+  type Effects,
+  effects,
+  type Event,
+  POOL,
+  take,
+} from '@yaks/effects'
 import { modelDoc } from '@yaks/model'
 import { ram } from '@yaks/ram'
 import { sessionDoc, sessions, transcriptUsage, wake } from '@yaks/session'
-import type { Adapter } from './adapters.ts'
 import { toolsDoc } from '@yaks/tools/vocab'
 import { loadVocab } from '@yaks/vocab'
 import { launch, processDoc, processes, store } from '@yaks/process'
 import { spawning } from './effects.ts'
 import { adopting } from './service.ts'
 import { checkoutDoc } from '@yaks/git/vocab'
-import { checkoutOf, down, start } from './run.ts'
+import { checkoutOf, down, follow, type Opts, start } from './run.ts'
 import { sessionEnv } from '@yaks/session'
-import { asking, fake, tracked, until } from './testing.ts'
+import { asking, fake, launching, tracked, until } from './testing.ts'
 import { spawnDoc } from './vocab.ts'
 
 let comp = (b: Bundle | undefined, name: string) =>
@@ -363,67 +369,85 @@ test('a restart adopts the run and reads its log on from where it stands', async
   }
 })
 
-// A session asked to work `y`, which requires `x`, holding `y`; its fake
-// provider says which thread it was told to carry on, if any.
-let parking = async (where: string) => {
+// A session asked to work `y`, which requires `x`, holding `y`. Its provider
+// starts no process: what it was told to carry on is kept in `started`.
+let parking = async (end?: Bundle[]) => {
   let g = tracked()
-  let carrying: Adapter = {
-    ...fake,
-    argv: (j) =>
-      fake.argv({
-        ...j,
-        instruction: j.thread
-          ? `on ${j.thread}: ${j.instruction}`
-          : j.instruction,
-      }),
-  }
-  g.fx.handle(
-    spawning({ adapters: { fake: carrying } })({ graph: g.g }, {
-      dir: where,
-      poll: 5,
-    }),
-  )
-  g.fx.handle({ session_wake: (e) => wake(g.g, e.entity.eid) })
-  let runs = async () =>
-    (await bodies(g.g)).filter((b) => b.startsWith('working: '))
-  let ended = async () => comp((await g.g.get(['S1']))[0], 'exit')?.code === 0
+  let { launch, started, first } = launching()
+  let stopping = new AbortController()
+  let opts = {
+    adapters: {
+      fake: {
+        ...fake,
+        argv: (j) => ['agent', String(j.thread), j.instruction],
+      },
+    },
+    launch,
+    dir: '/none',
+    signal: stopping.signal,
+  } satisfies Opts
   await g.g.apply([
     { entity: { eid: 'x' }, task: {} },
     { entity: { eid: 'y' }, task: {} },
     link('y', 'requires', 'x'),
     ...asking('S1', 'E1', 'work y'),
+    { entity: { eid: 'S1' }, session: { id: 'S1' }, process: { pid: 1 } },
     { entity: { eid: 'y' }, claim: { session: 'S1' } },
+    ...end ?? [],
   ])
-  let finish = () => g.g.apply([{ entity: { eid: 'x' }, completed: {} }])
-  // The run the finished dependency asked for, carrying on the thread.
-  let carried = async () => {
-    await until(async () => (await runs()).length == 2, 'the run it asked for')
-    let [, again] = await runs()
-    assert(again.startsWith('working: on S1: '), again)
-    await until(ended, 'the second run to end')
+  return {
+    g: g.g,
+    opts,
+    started,
+    first,
+    stopping,
+    // x completes: what `session_wake` runs
+    finish: async () => {
+      await g.g.apply([{ entity: { eid: 'x' }, completed: {} }])
+      await wake(g.g, 'x')
+    },
+    // the run it asked for is started by the request that carries it
+    request: async () => {
+      let [asked] = await g.g.read(
+        '.entry.session=S1&.using&.order=-entry.seq&.limit=1',
+      )
+      await spawning(opts)({ graph: g.g, stopping: stopping.signal })
+        .spawn_start!(
+          { entity: asked.entity } as Event,
+          undefined!,
+          undefined!,
+          undefined!,
+        )
+    },
   }
-  return { finish, carried, first: () => until(async () => await ended()) }
 }
 
+const over = [{ entity: { eid: 'S1' }, exit: { code: 0 } }]
+
 test('a run that ends waiting on a dependency carries on its thread when it finishes', async () => {
-  let where = dir()
-  try {
-    let p = await parking(where)
-    await p.first()
-    await p.finish()
-    await p.carried()
-  } finally {
-    Deno.removeSync(where, { recursive: true })
-  }
+  let p = await parking([...over, {
+    entity: { eid: 'E1:end' },
+    entry: { session: 'S1' },
+    ask: { through: 'E1' },
+    stop: {},
+  }])
+  p.stopping.abort()
+  await p.finish()
+  await p.request()
+  let [agent, thread, instruction] = await p.first
+  assertEquals([agent, thread], ['agent', 'S1'])
+  assert(instruction.includes('has finished'), instruction)
 })
 
 test('a dependency that finishes while the run goes is told as it ends', async () => {
-  let where = dir()
-  try {
-    let p = await parking(where)
-    await p.finish()
-    await p.carried()
-  } finally {
-    Deno.removeSync(where, { recursive: true })
-  }
+  let p = await parking()
+  await p.finish()
+  assertEquals(p.started, [])
+  // the run ends: its log is read to the end, and it is told as it goes
+  await p.g.apply(over)
+  await follow(p.g, 'S1', fake.read, p.opts, { through: 'E1' })
+  p.stopping.abort()
+  assertEquals(p.started.length, 1)
+  assertEquals(p.started[0].slice(0, 2), ['agent', 'S1'])
+  assert(p.started[0][2].includes('has finished'), p.started[0][2])
 })

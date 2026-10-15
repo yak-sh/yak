@@ -19,7 +19,7 @@ import { kernelDoc } from '@yaks/kernel/vocab'
 import { taskDoc } from '@yaks/task'
 import { sessionDoc, sessions } from '@yaks/session'
 import { toolsDoc } from '@yaks/tools/vocab'
-import { processDoc, processes } from '@yaks/process'
+import { type launch, processDoc, processes } from '@yaks/process'
 import { claude } from './adapters.ts'
 import { spawnDoc } from './vocab.ts'
 import type { Adapter } from './adapters.ts'
@@ -105,5 +105,34 @@ export let until = async <T>(
     if (v) return v
     if (Date.now() >= deadline) throw new Error(`until: timed out on ${label}`)
     await new Promise((go) => setTimeout(go, 10))
+  }
+}
+
+/** A `launch` (@yaks/spawn `Opts`) that starts nothing: the session's row says
+ * it runs, as a started process leaves it. The commands it was given are kept
+ * in `started`, and `first` settles with the first of them, for a test whose
+ * run is started by a handler nobody awaits. */
+export let launching = (): {
+  launch: typeof launch
+  started: string[][]
+  first: Promise<string[]>
+} => {
+  let started: string[][] = []
+  let { promise: first, resolve } = Promise.withResolvers<string[]>()
+  return {
+    started,
+    first,
+    launch: async (store, spec, o = {}) => {
+      let eid = String(o.eid)
+      let argv = [spec.command, ...spec.args ?? []]
+      await store.apply([{
+        entity: { eid },
+        process: { pid: 1, command: spec.command },
+        exit: null,
+      }])
+      started.push(argv)
+      resolve(argv)
+      return { eid, pid: 1, done: new Promise(() => {}), elapsed: () => 0 }
+    },
   }
 }
