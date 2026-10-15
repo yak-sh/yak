@@ -139,7 +139,9 @@ export let keep = (
  * read (public or open) and nothing else. A private app's pages are its
  * members', a sandboxed page carries its visitor's token, and an app's worker
  * may answer each visitor differently. */
-export let keepable = (app: Pick<App, 'access' | 'worker' | 'installed'>) =>
+export let keepable = (
+  app: Pick<App, 'access' | 'worker'> & Partial<Pick<App, 'installed'>>,
+) =>
   !sandboxed(app as App) && mode(app.access) != 'private' &&
   app.worker === ''
 

@@ -80,8 +80,10 @@ test('an open app is kept as a public one is', () => {
 })
 
 test("a sandboxed page and a worker's page are never kept", () => {
-  let sandboxed = { installed: { sandboxed: new Date().toISOString() } }
-  assert(!keepable({ access: 'public', worker: '', ...sandboxed } as never))
+  let sandboxed = {
+    installed: { of: null, version: 1, sandboxed: new Date().toISOString() },
+  }
+  assert(!keepable({ access: 'public', worker: '', ...sandboxed }))
   assert(!keepable({ access: 'public', worker: 'app-script' }))
 })
 
