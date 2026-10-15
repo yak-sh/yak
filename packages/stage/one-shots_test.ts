@@ -3,10 +3,11 @@ import { test } from '@yaks/testing'
 import { assertEquals } from '@std/assert'
 import { oneShots, recorded, type Voice } from './samples.ts'
 
+// A clip of 100 samples a second: a sample is 10 ms.
 let clip = (...channels: number[][]) =>
   ({
     numberOfChannels: channels.length,
-    sampleRate: 1000,
+    sampleRate: 100,
     length: channels[0].length,
     getChannelData: (ch: number) => new Float32Array(channels[ch]),
   }) as AudioBuffer
@@ -60,16 +61,16 @@ test('a generated step plays from its onset for one step, excluding later taps',
   try {
     // Silence in every channel; a quiet attack in the right channel, then
     // another tap 120 ms later and a long silent tail.
-    let left = Array(2530).fill(0), right = [...left]
-    right.fill(0.25, 920, 950)
-    left.fill(0.5, 1040, 1070)
+    let left = Array(253).fill(0), right = [...left]
+    right.fill(0.25, 92, 95)
+    left.fill(0.5, 104, 107)
     let voice = recorded(clip(left, right), quiet, 0.25, 'step')
     voice.play(into)
     assertEquals(starts, [[ctx.currentTime, 0.92, 0.1]])
     assertEquals(voice.dur, 0.1)
     // A short sound is not padded to the event's maximum duration.
     recorded(clip([0, 0, 0.1, 0.2, 0, 0]), quiet, 1, 'step').play(into)
-    assertEquals(starts[1], [ctx.currentTime, 0.002, 0.002])
+    assertEquals(starts[1], [ctx.currentTime, 0.02, 0.02])
   } finally {
     if (original) {
       Object.defineProperty(globalThis, 'AudioBufferSourceNode', original)

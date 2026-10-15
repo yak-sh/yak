@@ -5,27 +5,32 @@ import { test } from '@yaks/testing'
 import { assertEquals } from '@std/assert'
 import { instances } from './instances.ts'
 
-test('ordinary geometry template is shared between chunks and disposed after both leave', async () => {
+// Instances over a scene of their own, counting the templates they ask for.
+let walls = () => {
   let scene = new THREE.Scene(), material = new THREE.MeshBasicMaterial()
-  let calls = 0
+  let asked = { calls: 0 }
   let shared = instances(
     scene,
     material,
     () => {
-      calls++
-      return Promise.resolve(
-        new THREE.SphereGeometry(1, 4, 2),
-      )
+      asked.calls++
+      return Promise.resolve(new THREE.SphereGeometry(1, 4, 2))
     },
     (kind, seed, turn, near) => `${kind}:${seed}:${turn}:${near}`,
     (kind) => kind.split('#')[0],
   )
-  let placed = (x: number) => [{
-    kind: 'wall#plaster',
-    seed: 0,
-    turn: 0,
-    at: [x, 5, 64] as [number, number, number],
-  }]
+  return { scene, shared, asked }
+}
+
+let placed = (x: number) => [{
+  kind: 'wall#plaster',
+  seed: 0,
+  turn: 0,
+  at: [x, 5, 64] as [number, number, number],
+}]
+
+test('ordinary geometry template is shared between chunks and disposed after both leave', async () => {
+  let { scene, shared, asked } = walls()
   let a = shared.prepare(placed(64), true)
   let b = shared.prepare(placed(80), true)
   await Promise.all([a.ready, b.ready])
@@ -33,7 +38,7 @@ test('ordinary geometry template is shared between chunks and disposed after bot
   b.draw('b')
   a.release()
   b.release()
-  assertEquals(calls, 1)
+  assertEquals(asked.calls, 1)
   let mesh = scene.children[0] as THREE.InstancedMesh
   assertEquals(mesh.count, 2)
   let disposed = 0
@@ -44,15 +49,19 @@ test('ordinary geometry template is shared between chunks and disposed after bot
   shared.drop('b')
   assertEquals(scene.children.length, 0)
   assertEquals(disposed, 1)
+})
+
+test('an invalidated family asks for its template again while a chunk still draws it', async () => {
+  let { shared, asked } = walls()
+  let a = shared.prepare(placed(64), true)
+  await a.ready
+  a.draw('a')
+  a.release()
   shared.invalidate(new Set(['wall']))
   let c = shared.prepare(placed(96), true)
   await c.ready
-  c.draw('c')
-  c.release()
-  assertEquals(calls, 2)
-  shared.drop('c')
+  assertEquals(asked.calls, 2)
   shared.dispose()
-  material.dispose()
 })
 
 test('a template finishing after disposal releases its geometry without drawing', async () => {

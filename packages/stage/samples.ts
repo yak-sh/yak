@@ -28,23 +28,22 @@ export let audible = (buffer: AudioBuffer): Audible => {
   )
   let peak = 0
   for (let data of channels) {
-    for (let value of data) {
-      peak = Math.max(peak, Math.abs(value))
+    for (let i = 0; i < data.length; i++) {
+      peak = Math.max(peak, Math.abs(data[i]))
     }
   }
   // Ignore codec noise, but keep quiet clips and their attack and decay.
   let threshold = Math.max(0.0001, peak * 0.01)
-  let first = buffer.length, last = -1
-  for (let data of channels) {
-    for (let i = 0; i < data.length; i++) {
-      if (Math.abs(data[i]) < threshold) continue
-      first = Math.min(first, i)
-      last = Math.max(last, i)
-    }
-  }
-  let found = {
-    offset: last < 0 ? 0 : first / buffer.sampleRate,
-    dur: last < 0 ? 0 : (last + 1 - first) / buffer.sampleRate,
+  let heard = (i: number) =>
+    channels.some((data) => Math.abs(data[i]) >= threshold)
+  // The sound runs from the first sample heard to the last, each found by
+  // walking in from its end of the clip.
+  let first = 0, last = buffer.length - 1
+  while (first <= last && !heard(first)) first++
+  while (last > first && !heard(last)) last--
+  let found = first > last ? { offset: 0, dur: 0 } : {
+    offset: first / buffer.sampleRate,
+    dur: (last + 1 - first) / buffer.sampleRate,
   }
   bounds.set(buffer, found)
   return found
