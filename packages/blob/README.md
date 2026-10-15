@@ -306,9 +306,17 @@ holds the parts in memory for a bucket with no multipart of its own.
 
 ```ts
 import { equal } from '@yaks/testing'
-import { addressOf, type Bucket, bucketObjects, fold, START } from '@yaks/blob'
+import { type Bucket, bucketObjects, fold, START } from '@yaks/blob'
 import { memoryMultipart, parts } from '@yaks/blob'
 
+// One chunk is enough for these tiny parts; no HTTP response is needed.
+let stream = (bytes: Uint8Array) =>
+  new ReadableStream<Uint8Array>({
+    start(controller) {
+      controller.enqueue(bytes)
+      controller.close()
+    },
+  })
 let held = new Map<string, Uint8Array>()
 let now = <T>(v: T) => Promise.resolve(v)
 let bucket: Bucket = {
@@ -320,7 +328,7 @@ let bucket: Bucket = {
       b
         ? {
           etag: '',
-          body: new Response(b).body!,
+          body: stream(b),
           arrayBuffer: () => now(b.slice().buffer),
         }
         : null,
@@ -332,28 +340,37 @@ let bucket: Bucket = {
     now({
       truncated: false,
       objects: [...held].filter(([k]) => k.startsWith(prefix))
-        .map(([key, b]) => ({ key, size: b.length, uploaded: new Date() })),
+        .map(([key, b]) => ({ key, size: b.length, uploaded: new Date(0) })),
     }),
 }
 let file = new Uint8Array(150).fill(7)
-let sha = await addressOf(file)
-let up = parts(bucketObjects(bucket), memoryMultipart(bucket.put), {
+let sha = fold(START, file, file.length)
+let objects = bucketObjects(bucket)
+let multipart = memoryMultipart(bucket.put)
+let at = {
   key: sha,
   sha,
   ledger: 'uploads/',
   part: 64,
-})
+}
+let up = parts(objects, multipart, at)
 let send = (n: number) => {
   let bytes = file.slice((n - 1) * 64, n * 64)
   let from = fold(START, file.slice(0, (n - 1) * 64))
-  return up.put(n, new Response(bytes).body!, bytes.length, from)
+  return up.put(n, stream(bytes), bytes.length, from)
 }
 equal((await up.post(150)).need, [1, 2, 3])
 await send(3) // and then the connection drops
+up = parts(objects, multipart, at) // a new request resumes from the ledger
 equal((await up.post(150)).need, [1, 2])
-await send(1)
-await send(2)
-equal((await up.post(150)).whole?.bytes, 150)
+await Promise.all([send(1), send(2)])
+equal(await up.post(150), {
+  part: 64,
+  need: [],
+  whole: { bytes: 150, head: file, made: true },
+})
+equal(await objects.list('uploads/'), [])
+equal(await objects.list(''), [sha])
 equal(held.get(sha), file)
 ```
 
