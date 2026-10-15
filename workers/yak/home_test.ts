@@ -177,23 +177,21 @@ test('connected pages show the named client and put setup behind a disclosure', 
 })
 
 test('new app tells an agent with no web link what to ask, not an empty list', async () => {
-  let { document } = parseHTML(
-    await block({
-      view: 'new',
-      agents: [{
-        id: 'claude-code',
-        brand: 'claude-code',
-        name: 'Claude Code',
-        connectedAt: 1,
-      }],
-    }),
-  )
-  let start = document.querySelector('.Desk_Start')!
-  assert(!start.hasAttribute('hidden'))
-  assert(start.querySelector('.Agents')!.hasAttribute('hidden'))
-  let ask = start.querySelector('.Copy')!
-  assert(!ask.closest('[hidden]'))
-  assertStringIncludes(ask.textContent!, 'chat history')
+  let page = await block({
+    view: 'new',
+    agents: [{
+      id: 'claude-code',
+      brand: 'claude-code',
+      name: 'Claude Code',
+      connectedAt: 1,
+    }],
+  })
+  // Whether an element is hidden is its opening tag's; no document is parsed.
+  let hidden = (cls: string) =>
+    /\shidden\b/.test(page.match(new RegExp(`<\\w+ class="${cls}[^>]*>`))![0])
+  assert(!hidden('Desk_Start'))
+  assert(hidden('Agents'))
+  assertStringIncludes(page, 'chat history')
 })
 
 // Who visited (views.ts, T-34497): the owner's block, drawn straight. What
