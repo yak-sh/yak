@@ -2291,8 +2291,8 @@ export let subscriptions = (graph: Graph, opts: {
         pending.delete(sink)
         for (let sub of held.get(sink)?.values() ?? []) forget(sub)
         held.delete(sink)
-        // Every value this connection was relaying stops being true when the
-        // connection goes.
+        // Connection-lifetime values leave with their writer. Timed values
+        // remain available for another writer until their own expiry.
         return after(saves.drop(sink), () => {
           let off = peers.drop(sink)
           if (off.length) return peerChange(off)

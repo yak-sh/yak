@@ -76,13 +76,51 @@ test('selected peer values follow writes, takeover, clear and drop', () => {
   assertEquals(relay.values(['p1', 'p2']), [{
     entity: { eid: 'p1' },
     browsing: { x: 3 },
+    typing: { who: 'Ada' },
   }])
   relay.write('two', [{ entity: { eid: 'p1' }, browsing: null }])
-  assertEquals(relay.values(['p1']), [])
+  assertEquals(relay.values(['p1']), [{
+    entity: { eid: 'p1' },
+    typing: { who: 'Ada' },
+  }])
   relay.write('two', [{ entity: { eid: 'p1' }, typing: { who: 'Ada' } }])
   assertEquals(relay.values(['p1'])[0].typing, { who: 'Ada' })
   clock.tick(5001)
   assertEquals(relay.values(['p1']), [])
+  relay.close()
+})
+
+test('timed peer values survive disconnect for takeover without extending expiry', () => {
+  let clock = stopped()
+  let expired: Bundle[] = []
+  let relay = relaying<string>(
+    shopVocab,
+    (batch) => expired.push(...batch),
+    clock.timer,
+  )
+  relay.write('one', [
+    { entity: { eid: 'p1' }, browsing: { x: 1 }, typing: { who: 'Ada' } },
+    { entity: { eid: 'p2' }, typing: { who: 'Bea' } },
+  ])
+  clock.tick(1000)
+  assertEquals(relay.drop('one'), [{ entity: { eid: 'p1' }, browsing: null }])
+  assertEquals(relay.holds('one'), [])
+  assertEquals(relay.snapshot('two', () => true), [
+    { entity: { eid: 'p1' }, typing: { who: 'Ada' } },
+    { entity: { eid: 'p2' }, typing: { who: 'Bea' } },
+  ])
+  relay.write('two', [{ entity: { eid: 'p1' }, typing: { who: 'Cara' } }])
+  relay.drop('one')
+  clock.tick(4000)
+  assertEquals(expired, [{ entity: { eid: 'p2' }, typing: null }])
+  assertEquals(relay.values(), [{
+    entity: { eid: 'p1' },
+    typing: { who: 'Cara' },
+  }])
+  assertEquals(relay.drop('two'), [])
+  clock.tick(1000)
+  assertEquals(relay.values(), [])
+  assertEquals(expired[1], { entity: { eid: 'p1' }, typing: null })
   relay.close()
 })
 

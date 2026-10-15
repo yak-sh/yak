@@ -424,12 +424,19 @@ equal(await subs.snapshot('.cursor'), [])
 await subs.drop(reader)
 ```
 
-Without `save`, relayed values stay outside storage. A component's **save
-query** selects the stored entities whose latest relayed value should be stored.
-For example, `save: '.player (!position | .updated.at<="30s ago")'` saves only
-stored players with no position yet or an update at least thirty seconds old. It
-does not inspect the incoming value. A stored entity that never matches is never
-saved, including an explicit clear.
+Without `save`, relayed values stay outside storage. A `durable: 'connection'`
+value clears when its writer disconnects. A duration such as `durable: '5s'`
+remains available until that time after the latest write, even if its writer
+disconnects. Another connection can take over by writing the same component;
+that write restarts the duration. This lets an elected simulation owner hand off
+its latest value without storing it.
+
+A component's **save query** selects the stored entities whose latest relayed
+value should be stored. For example,
+`save: '.player (!position | .updated.at<="30s ago")'` saves only stored players
+with no position yet or an update at least thirty seconds old. It does not
+inspect the incoming value. A stored entity that never matches is never saved,
+including an explicit clear.
 
 The server checks on arrival and after relevant stored facts change. A relative
 time condition is checked every second only while the stored entity satisfies

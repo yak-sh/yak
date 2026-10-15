@@ -13,11 +13,12 @@
 // three things are possible that a plain broadcast cannot do:
 //
 //   a subscriber that connects late is sent what is already there
-//   a connection that closes clears every value it still holds
+//   a connection that closes clears its connection-lifetime values; a timed
+//   value remains available for takeover until its own expiry
 //   a value with a duration clears itself, its timer restarted on each write
 //
-// All three send the same thing — a `{comp: null}` bundle to the other
-// connections — so this file implements it once.
+// A clear, disconnect or expiry sends the same `{comp: null}` bundle to
+// the other connections when the value ends.
 //
 // A write from another connection takes a value over, so a close clears only
 // what its connection said last. That is what lets a page move to a new
@@ -70,8 +71,8 @@ export type Relay<C> = {
   values: (ids?: Iterable<Eid>) => Bundle[]
   /** Held rows whose reference names one of these entities. */
   referencing: (comp: string, prop: string, targets: Iterable<Eid>) => Bundle[]
-  /** A connection went away: forget it, and return the nulls to forward for
-   * what it still held. */
+  /** A connection went away: clear its connection-lifetime values. Timed
+   * values remain available until expiry or takeover. Return the clears. */
   drop: (conn: C) => Bundle[]
   /** Cancel every timer — for a shutdown, so nothing is left running. */
   close: () => void
@@ -103,7 +104,7 @@ export let relay = <C>(
 ): Relay<C> => {
   // key → the connection that said it last, and the value as it now stands:
   // null when it was adopted after a lost memory, and only its key is known.
-  let held = new Map<string, { conn: C; patch: Comp | null }>()
+  let held = new Map<string, { conn?: C; patch: Comp | null }>()
   let byEntity = new Map<Eid, Set<string>>()
   // A reference kept by peers needs the same reverse lookup as a stored one.
   let refs = new Map<string, Set<Eid>>()
@@ -136,7 +137,7 @@ export let relay = <C>(
   let forget = (k: string) => {
     cancel(k)
     let was = held.get(k)
-    if (was) saying.get(was.conn)?.delete(k)
+    if (was?.conn !== undefined) saying.get(was.conn)?.delete(k)
     held.delete(k)
     let [eid, comp] = split(k)
     if (was?.patch) index(eid, comp, was.patch, false)
@@ -147,7 +148,9 @@ export let relay = <C>(
 
   let hold = (conn: C, k: string, patch: Comp | null) => {
     let was = held.get(k)
-    if (was && was.conn !== conn) saying.get(was.conn)?.delete(k)
+    if (was?.conn !== undefined && was.conn !== conn) {
+      saying.get(was.conn)?.delete(k)
+    }
     let [eid, comp] = split(k)
     if (was?.patch) index(eid, comp, was.patch, false)
     let keys = byEntity.get(eid) ?? new Set<string>()
@@ -210,7 +213,7 @@ export let relay = <C>(
       let value = held.get(k)
       if (!value) continue
       let { conn, patch } = value
-      if (mine === conn || patch == null) continue
+      if ((mine !== undefined && mine === conn) || patch == null) continue
       let [eid, comp] = split(k)
       if (!sees(eid)) continue
       let b = out.get(eid) ?? { entity: { eid } }
@@ -246,8 +249,20 @@ export let relay = <C>(
     drop: (conn) => {
       let mine = [...saying.get(conn) ?? []]
       saying.delete(conn)
-      for (let k of mine) forget(k)
-      return mine.map((k) => cleared(...split(k)))
+      let out: Bundle[] = []
+      for (let k of mine) {
+        let [, comp] = split(k)
+        // A duration owns its lifetime, not its writer's socket. Retain no
+        // reference to the closed connection while its existing timer runs.
+        if (ms(durableOf(vocab, comp)) != null && timers.has(k)) {
+          let value = held.get(k)
+          if (value) delete value.conn
+        } else {
+          forget(k)
+          out.push(cleared(...split(k)))
+        }
+      }
+      return out
     },
     close: () => {
       for (let off of timers.values()) off()
