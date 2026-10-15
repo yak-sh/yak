@@ -70,8 +70,10 @@ store cannot read, and a write the app's own `vocab.json` cannot keep (a
 component or property it does not declare, a string where it declares a number,
 a server-owned stamp written back). The page still hears those as `refused` at
 400, and each is also filed as a break in `app_errors`, once for every place and
-message. Otherwise the rule is the status code: a 4xx is a choice someone made,
-a 5xx or a thrown error is not.
+message. Only the page's own request is filed: the same no to a request from
+anywhere else (curl, an agent's own fetch, another site) is that caller's to
+read. Otherwise the rule is the status code: a 4xx is a choice someone made, a
+5xx or a thrown error is not.
 
 ## How a page shows one
 
