@@ -168,17 +168,28 @@ test('a persona link going away owes a pass only where it touched what was said'
   equal(await moves(gone('elsewhere', 'note'), g.storage, said), false)
 })
 
-test('a deleted persona link keeps only its ends, and deleted words no persona says owe nothing', async () => {
-  let { g, queued, clear } = fixture()
-  await g.apply([
+// A persona carrying a note, and an entry no persona says, set up beside the
+// tests so each one times only its deletion.
+let carrying = async () => {
+  let f = fixture()
+  await f.g.apply([
     { entity: { eid: 'persona' }, persona: {} },
     { entity: { eid: 'note' }, memory: {}, doc: { body: 'said' } },
     { entity: { eid: 'entry' }, content: { body: 'long' } },
     link('persona', 'contains', 'note'),
   ])
-  await clear()
+  return { ...f, owed: await f.queued() }
+}
+let [wordsGone, linkGone] = [await carrying(), await carrying()]
+
+test('deleted words no persona says owe nothing', async () => {
+  let { g, queued, owed } = wordsGone
   await g.apply([{ entity: { eid: 'entry' }, $delete: true }])
-  equal(await queued(), [])
+  equal(await queued(), owed)
+})
+
+test('a deleted persona link keeps only its ends', async () => {
+  let { g, queued } = linkGone
   await g.apply([{
     entity: { eid: edgeEid('persona', 'contains', 'note') },
     $delete: true,
