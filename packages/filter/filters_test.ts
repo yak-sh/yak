@@ -71,9 +71,9 @@ test('typing offers what can come next, and the keys walk and take it', () => {
   assertEquals(f.text('q'), '.task.status=done')
 })
 
+let typed = kept()
+field({}, typed).type('q', '.task .st')
 test('what is typed is the draft: another page shows it, and not its list', () => {
-  let typed = kept()
-  field({}, typed).type('q', '.task .st')
   let next = field({}, typed)
   assertEquals(next.text('q'), '.task .st')
   assertEquals(next.row('q')?.cands, [])
@@ -128,16 +128,20 @@ test('Enter takes a word to where it reads whole, then keeps it', () => {
   assertEquals(f.text('q'), '.task.', 'Tab reads on')
 })
 
+let closing = field()
+closing.type('q', '.task .st')
 test('a closed list leaves every key to its host', () => {
-  let f = field()
-  f.type('q', '.task .st')
-  assertEquals(f.press('q', 'Escape'), true)
-  assertEquals(f.row('q')?.cands, [])
+  assertEquals(closing.press('q', 'Escape'), true)
+  assertEquals(closing.row('q')?.cands, [])
   for (let key of ['Escape', 'Enter', 'Tab', 'ArrowUp']) {
-    assertEquals(f.press('q', key), false, key)
+    assertEquals(closing.press('q', key), false, key)
   }
-  f.set('q', '.task .st')
-  assertEquals(f.press('q', 'Tab'), false, 'a host-put line offers nothing')
+})
+
+let hosted = field()
+test('a host-put line offers nothing', () => {
+  hosted.set('q', '.task .st')
+  assertEquals(hosted.press('q', 'Tab'), false)
 })
 
 test('a source that answers later lands its list unless typing moved on', async () => {

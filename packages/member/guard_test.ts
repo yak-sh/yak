@@ -420,8 +420,9 @@ test('a writer paces each entity separately, including an owner', () => {
   assertEquals((s.read('.line') as Bundle[]).length, 4)
 })
 
+let batching = opened()
 test('one batch writes distinct paced entities', () => {
-  let s = opened()
+  let s = batching
   sync(
     guarded(s, ids.list).apply([line('l1'), line('l2')].map((b) => ({
       ...b,

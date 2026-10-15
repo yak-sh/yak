@@ -36,56 +36,91 @@ let apply = async (g: Graph, bundles: Bundle[]) =>
 let body = async (g: Graph): Promise<unknown> =>
   ((await g.get(['draft']))[0].doc as { body?: unknown }).body
 
+let shown = async (g: Graph) =>
+  (await ask(g, 'graph_show', { ids: ['draft'] }))[0]
+
 for (let kind of ['doc', 'design', 'persona']) {
+  let showing = fresh(kind)
+  test(`${kind} bodies show a read token of the body`, async () => {
+    assertEquals((await shown(showing)).$was!.doc.body, token('first'))
+  })
+
+  let replacing = fresh(kind)
+  let first = await shown(replacing)
   test(`${kind} bodies use the read token for whole replacements`, async () => {
-    let g = fresh(kind)
-    let [read] = await ask(g, 'graph_show', { ids: ['draft'] })
-    assertEquals(read.$was!.doc.body, token('first'))
-    await apply(g, [{
-      entity: read.entity,
+    await apply(replacing, [{
+      entity: first.entity,
       doc: { body: 'second' },
-      $was: read.$was,
+      $was: first.$was,
     }])
-    let stale = await assertRejects(
+    assertEquals(await body(replacing), 'second')
+  })
+
+  let replaced = fresh(kind)
+  let stale = await shown(replaced)
+  await apply(replaced, [{
+    entity: stale.entity,
+    doc: { body: 'second' },
+    $was: stale.$was,
+  }])
+  test(`${kind} bodies refuse a replacement under a stale read token`, async () => {
+    let refused = await assertRejects(
       () =>
-        apply(g, [{
-          entity: read.entity,
+        apply(replaced, [{
+          entity: stale.entity,
           doc: { title: 'lost', body: 'third' },
-          $was: read.$was,
+          $was: stale.$was,
         }]),
       Stale,
     )
-    assertEquals(stale.current, 'second')
-    assertEquals(stale.was, token('second'))
-    assertEquals((await g.get(['draft']))[0].doc, {
+    assertEquals(refused.current, 'second')
+    assertEquals(refused.was, token('second'))
+    assertEquals((await replaced.get(['draft']))[0].doc, {
       title: 'draft',
       body: 'second',
     })
   })
 
+  let blind = fresh(kind)
   test(`${kind} bodies still accept replacements without a read token`, async () => {
-    let g = fresh(kind)
-    await apply(g, [{ entity: { eid: 'draft' }, doc: { body: 'blind' } }])
-    assertEquals(await body(g), 'blind')
+    await apply(blind, [{ entity: { eid: 'draft' }, doc: { body: 'blind' } }])
+    assertEquals(await body(blind), 'blind')
   })
 }
 
-test('a query body token guards clearing and reports concurrent text', async () => {
-  let g = fresh()
-  let [read] = await ask(g, 'graph_query', { q: '.doc&*' })
-  assertEquals(read.$was!.doc.body, token('first'))
-  await apply(g, [{
-    entity: read.entity,
+let queried = async (g: Graph) =>
+  (await ask(g, 'graph_query', { q: '.doc&*' }))[0]
+
+let reading = fresh()
+test('a query reads a body token', async () => {
+  assertEquals((await queried(reading)).$was!.doc.body, token('first'))
+})
+
+let clearing = fresh()
+let cleared = await queried(clearing)
+test('a query body token guards clearing', async () => {
+  await apply(clearing, [{
+    entity: cleared.entity,
     doc: { body: null },
-    $was: read.$was,
+    $was: cleared.$was,
   }])
-  assertEquals(await body(g), null)
+  assertEquals(await body(clearing), null)
+})
+
+let concurrent = fresh()
+let before = await queried(concurrent)
+await apply(concurrent, [{
+  entity: before.entity,
+  doc: { body: null },
+  $was: before.$was,
+}])
+test('a query body token reports a concurrent clearing', async () => {
   let stale = await assertRejects(
     () =>
-      apply(g, [{
-        entity: read.entity,
+      apply(concurrent, [{
+        entity: before.entity,
         doc: { body: 'lost' },
-        $was: read.$was,
+        $was: before.$was,
       }]),
     Stale,
   )
@@ -93,15 +128,21 @@ test('a query body token guards clearing and reports concurrent text', async () 
   assertEquals(stale.was, null)
 })
 
+let firstWords: Bundle = {
+  entity: { eid: 'draft' },
+  doc: { body: 'first' },
+  $was: { doc: { body: null } },
+}
+let absent = fresh('doc', null)
 test('an absent body can be guarded when writing its first words', async () => {
-  let g = fresh('doc', null)
-  let write: Bundle = {
-    entity: { eid: 'draft' },
-    doc: { body: 'first' },
-    $was: { doc: { body: null } },
-  }
-  await apply(g, [write])
-  let stale = await assertRejects(() => apply(g, [write]), Stale)
+  await apply(absent, [firstWords])
+  assertEquals(await body(absent), 'first')
+})
+
+let written = fresh('doc', null)
+await apply(written, [firstWords])
+test('a guard on an absent body refuses once words are written', async () => {
+  let stale = await assertRejects(() => apply(written, [firstWords]), Stale)
   assertEquals(stale.current, 'first')
 })
 
@@ -112,19 +153,31 @@ test('a title projection cannot witness the body it did not read', async () => {
   assertEquals(read.$was?.doc?.body, undefined)
 })
 
-test('a replica accepts a witnessed body and its later committed replacement', async () => {
-  let source = fresh()
-  let copy = fresh()
-  await source.apply([{ entity: { eid: 'draft' }, doc: { body: 'first' } }])
+// A source and its replica, the replica holding what the source first said.
+let replicated = async (body: string) => {
+  let source = fresh(), copy = fresh()
+  await source.apply([{ entity: { eid: 'draft' }, doc: { body } }])
+  return { source, copy }
+}
+let mirror = async ({ source, copy }: { source: Graph; copy: Graph }) =>
   await copy.apply(await source.get(['draft']), {
     trusted: true,
     replica: true,
   })
-  assertEquals(await body(copy), 'first')
-  await source.apply([{ entity: { eid: 'draft' }, doc: { body: 'second' } }])
-  await copy.apply(await source.get(['draft']), {
-    trusted: true,
-    replica: true,
-  })
-  assertEquals(await body(copy), 'second')
+
+let witnessed = await replicated('first')
+test('a replica accepts a witnessed body', async () => {
+  await mirror(witnessed)
+  assertEquals(await body(witnessed.copy), 'first')
+})
+
+let later = await replicated('first')
+await mirror(later)
+await later.source.apply([{
+  entity: { eid: 'draft' },
+  doc: { body: 'second' },
+}])
+test('a replica accepts a later committed replacement', async () => {
+  await mirror(later)
+  assertEquals(await body(later.copy), 'second')
 })

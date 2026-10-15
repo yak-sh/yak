@@ -3,7 +3,7 @@
 
 import { test } from '@yaks/testing'
 import { assertEquals, assertStringIncludes, assertThrows } from '@std/assert'
-import { Refused } from '@yaks/graph'
+import { type Bundle, Refused } from '@yaks/graph'
 import { loadVocab } from '@yaks/vocab'
 import { unroutable } from './guard.ts'
 import { team, teamGraph } from './testing.ts'
@@ -60,24 +60,32 @@ test("the statuses a board may name are the vocabulary's ladder's", () => {
   assertEquals(unroutable('.task.status=wip', leased), null)
 })
 
-test('the graph refuses the bad board and keeps the good one', () => {
+// A team graph, installed, holding `bundles`.
+let holding = (...bundles: Bundle[][]) => {
   let { g } = teamGraph()
   g.install()
-  g.apply(board('.task.status=open'))
-  assertEquals((g.read('.board&*') as unknown[]).length, 1)
+  for (let b of bundles) g.apply(b)
+  return g
+}
 
-  assertThrows(() => g.apply(board('.task.status=complete')), Refused)
+let empty = holding()
+test('the graph keeps a good board', () => {
+  empty.apply(board('.task.status=open'))
+  assertEquals((empty.read('.board&*') as unknown[]).length, 1)
+})
+
+let good = holding(board('.task.status=open'))
+test('the graph refuses the bad board and keeps the good one', () => {
+  assertThrows(() => good.apply(board('.task.status=complete')), Refused)
   // refused whole: the doc patch in the same batch did not land either
-  let after = g.read('.board&*') as { board?: { query?: string } }[]
+  let after = good.read('.board&*') as { board?: { query?: string } }[]
   assertEquals(after[0].board?.query, '.task.status=open')
 })
 
+let dropped = holding(board('.task.status=open'))
 test('dropping a board states no query and is never refused', () => {
-  let { g } = teamGraph()
-  g.install()
-  g.apply(board('.task.status=open'))
-  g.apply([{ entity: { eid: 'b1' }, board: null }])
-  assertEquals((g.read('.board&*') as unknown[]).length, 0)
+  dropped.apply([{ entity: { eid: 'b1' }, board: null }])
+  assertEquals((dropped.read('.board&*') as unknown[]).length, 0)
 })
 
 test('qualified filing properties no longer belong to task', () => {
@@ -86,24 +94,21 @@ test('qualified filing properties no longer belong to task', () => {
   }
 })
 
+let micro = holding([{
+  entity: { eid: 'micro' },
+  doc: { title: 'one step' },
+  task: {},
+}])
 test('a bare microtask stores presence, never a supplied status', () => {
-  let { g } = teamGraph()
-  g.install()
-  g.apply([{
-    entity: { eid: 'micro' },
-    doc: { title: 'one step' },
-    task: {},
-  }])
-  g.apply([{ entity: { eid: 'micro' }, task: { status: 'done' } }])
-  let [b] = g.read('.task&*') as import('@yaks/graph').Bundle[]
+  micro.apply([{ entity: { eid: 'micro' }, task: { status: 'done' } }])
+  let [b] = micro.read('.task&*') as Bundle[]
   assertEquals(b.task, { status: 'open' })
   assertEquals(b.filed, undefined)
 })
 
+let filing = holding()
 test('filing stores separately and a bare priority query orders filed tasks', () => {
-  let { g } = teamGraph()
-  g.install()
-  g.apply([
+  filing.apply([
     {
       entity: { eid: 'later' },
       task: {},
@@ -112,9 +117,9 @@ test('filing stores separately and a bare priority query orders filed tasks', ()
     { entity: { eid: 'first' }, task: {}, filed: { priority: 0 } },
     { entity: { eid: 'micro' }, task: {} },
   ])
-  let rows = g.read(
+  let rows = filing.read(
     '.filed.priority>=0 .order=filed.priority ?task',
-  ) as import('@yaks/graph').Bundle[]
+  ) as Bundle[]
   assertEquals(rows.map((b) => b.entity.eid), ['first', 'later'])
   assertEquals(rows[1].task, { status: 'open' })
   assertEquals(rows[1].filed, { priority: 2, domain: 'Eng' })

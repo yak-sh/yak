@@ -123,9 +123,10 @@ test('concat splits values and consumes sources, with explicit separators and li
   for (let error of concatFailures) ok(error instanceof Error)
 })
 
-test('scatter gathers by property name or inverted map value and preserves input schemas', async () => {
-  roundtrip(
-    [{ scatter: { from: 'aliases', to: 'input', keyword: 'short' } }],
+test(
+  'scatter gathers by property name and preserves input schemas',
+  roundtripCase(
+    document([{ scatter: { from: 'aliases', to: 'input', keyword: 'short' } }]),
     {
       aliases: { limit: 'n' },
       input: { limit: { type: 'number' }, all: { type: 'boolean' } },
@@ -136,23 +137,28 @@ test('scatter gathers by property name or inverted map value and preserves input
         all: { type: 'boolean' },
       },
     },
-  )
-  roundtrip(
-    [{
-      scatter: { from: 'aliases', to: 'input', keyword: 'short', key: 'value' },
-    }],
+  ),
+)
+
+let inverted = document([{
+  scatter: { from: 'aliases', to: 'input', keyword: 'short', key: 'value' },
+}])
+test(
+  'scatter gathers by inverted map value',
+  roundtripCase(
+    inverted,
     { aliases: { n: 'limit' }, input: { limit: { type: 'number' } } },
     { input: { limit: { type: 'number', short: 'n' } } },
-  )
-  let lens = document([{
-    scatter: { from: 'aliases', to: 'input', keyword: 'short', key: 'value' },
-  }])
-  await throws(() => lens.put({ aliases: { n: 'missing' }, input: {} }))
+  ),
+)
+
+test('scatter refuses a missing target, a held keyword and a shared value', async () => {
+  await throws(() => inverted.put({ aliases: { n: 'missing' }, input: {} }))
   await throws(() =>
-    lens.put({ aliases: { n: 'limit' }, input: { limit: { short: 'x' } } })
+    inverted.put({ aliases: { n: 'limit' }, input: { limit: { short: 'x' } } })
   )
   await throws(() =>
-    lens.get({ input: { a: { short: 'n' }, b: { short: 'n' } } })
+    inverted.get({ input: { a: { short: 'n' }, b: { short: 'n' } } })
   )
 })
 

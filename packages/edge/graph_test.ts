@@ -8,12 +8,19 @@ import { compile, type Extension, Unsupported } from '@yaks/sql'
 import { extend } from './graph.ts'
 import { blog } from './testing.ts'
 
-let sql = (line: string, ext: Extension[] = extend({ vocab: blog })) =>
+let composed = extend({ vocab: blog })
+let sql = (line: string, ext: Extension[] = composed) =>
   compile(parse(line), blog, { extend: ext }).sql
 
-test('a host composing the package compiles .edges and a relation walk', () => {
+test('a host composing the package compiles .edges', () => {
   assertEquals(sql('.post&.edges'), sql('.post'))
+})
+
+test('a host composing the package compiles a relation walk', () => {
   assertEquals(sql('.cites[<=3]->p1').includes('with recursive'), true)
+})
+
+test('a host without the package refuses .edges and a relation walk', () => {
   assertThrows(() => sql('.post&.edges', []), Unsupported)
   assertThrows(() => sql('.cites[<=3]->p1', []), Unsupported)
 })
