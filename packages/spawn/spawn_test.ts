@@ -33,7 +33,7 @@ import {
   start,
 } from './run.ts'
 import { sessionEnv } from '@yaks/session'
-import { asking, bare, fake, tracked, until } from './testing.ts'
+import { asking, bare, fake, host, tracked, until } from './testing.ts'
 import { spawnDoc } from './vocab.ts'
 
 let comp = (b: Bundle | undefined, name: string) =>
@@ -409,7 +409,9 @@ let GOING = await image(asked, finished)
 
 let JOB = (await jobOf(bare(GOING), 'S1'))!
 let parking = (rows: Bundle[]) => {
-  let g = { g: bare(rows) }
+  let storage = ram(host, { number: true })
+  storage.tx((tx) => tx.patch(rows))
+  let g = { g: graph({ storage, vocab: host, plugins: [sessions()] }) }
   let started: string[][] = []
   let opts = {
     adapters: {
@@ -423,6 +425,9 @@ let parking = (rows: Bundle[]) => {
     g: g.g,
     opts,
     started,
+    // The process observer has recorded its exit; graph admission is not
+    // part of finishing this transcript's turn.
+    exited: () => storage.tx((tx) => tx.patch(over)),
     // what `session_wake` runs for x's completing
     wake: () => wake(g.g, 'x'),
     // The same command preparation start() uses, before the process and
@@ -454,7 +459,7 @@ test('a dependency that finishes while the run goes is told as it ends', async (
   assertEquals(p.started, [])
   // After the final log bytes, follow() finishes the turn and tells it
   // what completed while it ran, before preparing the next command.
-  await p.g.apply(over)
+  p.exited()
   assertEquals(await finish(p.g, 'S1', {}, 'E1'), true)
   await p.request()
   assertEquals(p.started.length, 1)
