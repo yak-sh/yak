@@ -12,7 +12,7 @@
 // Rows a player earns (a fall, a find, a gathering, a quest step) are written
 // through `keep`, which sends them at once; the page's graph shows them
 // before the store answers, so nothing on screen waits.
-import { FIGURE_BUILDS, FIGURE_ROWS, useFigures } from "./figure.ts";
+import { FIGURE_BUILDS, FIGURE_ROWS, useFigures } from './figure.ts'
 import {
   type Client,
   client,
@@ -20,84 +20,84 @@ import {
   type Watch,
   WriteRefused,
   WriteUnknown,
-} from "@yaks/client";
-import { comp, num, str } from "./bundle.ts";
-import { loadVocab, type VocabDoc } from "@yaks/vocab";
-import { areaOf, looksOf, placeOf, REACH } from "./area.ts";
-import { writer } from "./chat.ts";
-import { watchDesigns } from "./design-watch.ts";
-import { SPAWN_FAILURES, SPAWN_KINDS, useSpawnKinds } from "./spawn.ts";
-import { groupOf } from "./party-state.ts";
-import type { Tools } from "./slash.ts";
-import { SIZE } from "./levels.ts";
-import { type Look, lookOf } from "./make.ts";
-import { type Place, placeOf as savedPlace } from "./place.ts";
-import { once as read } from "./once.ts";
-import { pageDocs } from "./page-state.ts";
-import { toolEid } from "@yaks/tools/result";
+} from '@yaks/client'
+import { comp, num, str } from './bundle.ts'
+import { loadVocab, type VocabDoc } from '@yaks/vocab'
+import { areaOf, looksOf, placeOf, REACH } from './area.ts'
+import { writer } from './chat.ts'
+import { watchDesigns } from './design-watch.ts'
+import { SPAWN_FAILURES, SPAWN_KINDS, useSpawnKinds } from './spawn.ts'
+import { groupOf } from './party-state.ts'
+import type { Tools } from './slash.ts'
+import { SIZE } from './levels.ts'
+import { type Look, lookOf } from './make.ts'
+import { type Place, placeOf as savedPlace } from './place.ts'
+import { once as read } from './once.ts'
+import { pageDocs } from './page-state.ts'
+import { toolEid } from '@yaks/tools/result'
 
-export type Bundle = NonNullable<ReturnType<Client["ent"]>>;
+export type Bundle = NonNullable<ReturnType<Client['ent']>>
 
 /** One component of a row, or nothing: the fields are read with `num` and
  * `str`, which take what the store holds and default what it does not. */
 
 /** Who is looking, as the app's door answers it. */
 export type Me = {
-  person: string | null;
-  name: string | null;
-  role: string | null;
-  reads: boolean;
-  writes: boolean;
-  signIn: string | null;
-};
+  person: string | null
+  name: string | null
+  role: string | null
+  reads: boolean
+  writes: boolean
+  signIn: string | null
+}
 
 /** A hero's look and saved position, as the gate lists a person's heroes
  * and the world and chat show anyone's. */
-export type Hero = Look & { eid: string; position: Place | null };
+export type Hero = Look & { eid: string; position: Place | null }
 
 // The store's words include this app's vocabulary and the platform's. A
 // failed request waits for the store to recover before the page opens a client.
 export let vocabulary = async (base: URL) =>
   loadVocab([
-    ...await read<VocabDoc>(new URL("vocab.json", base)),
+    ...await read<VocabDoc>(new URL('vocab.json', base)),
     ...pageDocs(),
-  ]);
+  ])
 
 /** A hero, off their player row and their newest look row. */
 let heroOf = (b: Bundle, look?: Bundle): Hero => ({
   eid: b.entity.eid,
-  ...lookOf(comp(look, "look")),
-  position: savedPlace(b, "position"),
-});
+  ...lookOf(comp(look, 'look')),
+  position: savedPlace(b, 'position'),
+})
 
 // Each hero's newest look row, by hero.
 let newest = (rows: Bundle[]) => {
-  let by = new Map<string, Bundle>();
+  let by = new Map<string, Bundle>()
   for (let b of rows) {
-    let l = comp(b, "look"), p = str(l.player), had = by.get(p);
-    if (!had || num(l.at) >= num(comp(had, "look").at)) by.set(p, b);
+    let l = comp(b, 'look'), p = str(l.player), had = by.get(p)
+    if (!had || num(l.at) >= num(comp(had, 'look').at)) by.set(p, b)
   }
-  return by;
-};
+  return by
+}
 
 // Which hero this tab plays.
-let HERO = "mossvale.hero";
+let HERO = 'mossvale.hero'
 let tab = {
   get: (): string | null => {
     try {
-      return sessionStorage.getItem(HERO);
+      return sessionStorage.getItem(HERO)
     } catch {
-      return null;
+      return null
     }
   },
   set: (eid: string) => {
     try {
-      sessionStorage.setItem(HERO, eid);
+      sessionStorage.setItem(HERO, eid)
     } catch { /* a tab that cannot keep it asks again after a reload */ }
   },
-};
+}
 
-export type Net = ReturnType<ReturnType<typeof connect>["world"]>;
+export type Net = ReturnType<ReturnType<typeof connect>['world']>
 
 /** Open the store. World queries start after its designs have arrived. */
 export let connect = (
@@ -105,26 +105,26 @@ export let connect = (
   vocab: ReturnType<typeof loadVocab>,
   opts: ClientOpts = {},
 ) => {
-  let report: NonNullable<ClientOpts["report"]> = opts.report ??
+  let report: NonNullable<ClientOpts['report']> = opts.report ??
     ((e) =>
       console.warn(
-        "mossvale store:",
+        'mossvale store:',
         e.refused?.message ?? String(e.error),
         JSON.stringify(e.sent).slice(0, 300),
-      ));
+      ))
   let c = client(vocab, [], {
     ...opts,
-    url: base.href.replace(/\/$/, ""),
+    url: base.href.replace(/\/$/, ''),
     vault: false,
     wireVault: false,
     report,
-  });
+  })
   // A bag watch knows gatherings without their place, including while the
   // next area's watch is loading. Every known gathering spends its node.
-  let gathered = c.watch(".gathered", { remote: false });
-  let skew = 0;
-  let now = () => Date.now() + skew;
-  let hero: string | null = null;
+  let gathered = c.watch('.gathered', { remote: false })
+  let skew = 0
+  let now = () => Date.now() + skew
+  let hero: string | null = null
 
   // A fire-and-forget effect: both local admission and a held server write
   // can refuse. Report either without breaking the game loop.
@@ -135,102 +135,102 @@ export let connect = (
       if (
         !(error instanceof WriteRefused) && !(error instanceof WriteUnknown)
       ) {
-        report({ sent: batch, error, reverted: false });
+        report({ sent: batch, error, reverted: false })
       }
-    };
-    try {
-      let result = c.mutate(batch);
-      if (result instanceof Promise) void result.catch(refused);
-    } catch (error) {
-      refused(error);
     }
-  };
+    try {
+      let result = c.mutate(batch)
+      if (result instanceof Promise) void result.catch(refused)
+    } catch (error) {
+      refused(error)
+    }
+  }
 
-  let lookQuery = "";
-  let lookWatch: Watch | null = null;
-  let lookBy = new Map<string, Bundle>();
-  let area: ReturnType<typeof areaOf>;
+  let lookQuery = ''
+  let lookWatch: Watch | null = null
+  let lookBy = new Map<string, Bundle>()
+  let area: ReturnType<typeof areaOf>
   // The stored world rows of each tile in the area, and the players and
   // creatures moving through it. The remote watches bring rows here; the
   // local view also sees a write this page just made, before the server adds
   // it to a remote watch's members.
-  let tiles = new Map<number, Watch>();
-  let near: Watch;
-  let nearby: Watch;
+  let tiles = new Map<number, Watch>()
+  let near: Watch
+  let nearby: Watch
   let pending: { area: typeof area; watch: Watch; off: () => void } | null =
-    null;
+    null
   // Watch the tiles of one area and no others. A tile the page keeps is never
   // asked for again, so walking on reads only the rows of the tiles it enters.
   let hold = (to: typeof area) => {
-    let keep = new Set(to.tiles.map((t) => t.key));
+    let keep = new Set(to.tiles.map((t) => t.key))
     for (let [key, watch] of tiles) {
-      if (keep.has(key)) continue;
-      watch.close();
-      tiles.delete(key);
+      if (keep.has(key)) continue
+      watch.close()
+      tiles.delete(key)
     }
     for (let t of to.tiles) {
-      if (!tiles.has(t.key)) tiles.set(t.key, c.watch(t.query));
+      if (!tiles.has(t.key)) tiles.set(t.key, c.watch(t.query))
     }
-  };
-  let fightLevel = "";
-  let fightWatch: Watch | null = null;
+  }
+  let fightLevel = ''
+  let fightWatch: Watch | null = null
   let follow = (x: number, z: number) => {
-    let level = placeOf(x, z).level;
+    let level = placeOf(x, z).level
     if (level != fightLevel) {
-      fightWatch?.close();
-      fightLevel = level;
-      fightWatch = c.watch(`.fight.level=${JSON.stringify(level)}&*`);
+      fightWatch?.close()
+      fightLevel = level
+      fightWatch = c.watch(`.fight.level=${JSON.stringify(level)}&*`)
     }
-    let next = areaOf(x, z, REACH);
+    let next = areaOf(x, z, REACH)
     if (next.key == (pending?.area.key ?? area.key)) {
-      syncLooks();
-      return;
+      syncLooks()
+      return
     }
-    pending?.off();
-    pending?.watch.close();
-    pending = null;
+    pending?.off()
+    pending?.watch.close()
+    pending = null
     if (next.key == area.key) {
-      hold(area);
-      syncLooks();
-      return;
+      hold(area)
+      syncLooks()
+      return
     }
-    hold(next);
-    let watch = c.watch(next.moving);
+    hold(next)
+    let watch = c.watch(next.moving)
     let swap = () => {
-      if (!watch.ready || pending?.watch != watch) return;
-      pending.off();
-      near.close();
-      nearby.close();
-      near = watch;
-      nearby = c.watch(next.query, { remote: false });
-      area = next;
-      pending = null;
-      syncLooks();
-    };
-    pending = { area: next, watch, off: watch.subscribe(swap) };
-    swap();
-  };
-  let selected = new Map<string, { held: Bundle[]; rows: Bundle[] }>();
+      if (!watch.ready || pending?.watch != watch) return
+      pending.off()
+      near.close()
+      nearby.close()
+      near = watch
+      nearby = c.watch(next.query, { remote: false })
+      area = next
+      pending = null
+      syncLooks()
+    }
+    pending = { area: next, watch, off: watch.subscribe(swap) }
+    swap()
+  }
+  let selected = new Map<string, { held: Bundle[]; rows: Bundle[] }>()
   let rows = (name: string): Bundle[] => {
-    let held = nearby.value, was = selected.get(name);
-    if (was?.held == held) return was.rows;
-    let found = held.filter((b) => b[name]);
-    selected.set(name, { held, rows: found });
-    return found;
-  };
+    let held = nearby.value, was = selected.get(name)
+    if (was?.held == held) return was.rows
+    let found = held.filter((b) => b[name])
+    selected.set(name, { held, rows: found })
+    return found
+  }
   let syncLooks = () => {
-    let query = looksOf(area, hero ?? undefined);
-    if (query == lookQuery) return;
-    lookWatch?.close();
-    lookQuery = query;
-    lookWatch = c.watch(query);
-  };
-  let own: Record<string, Watch> = {};
-  let chosen: Watch | null = null;
-  let spawnFailures: Watch | null = null;
+    let query = looksOf(area, hero ?? undefined)
+    if (query == lookQuery) return
+    lookWatch?.close()
+    lookQuery = query
+    lookWatch = c.watch(query)
+  }
+  let own: Record<string, Watch> = {}
+  let chosen: Watch | null = null
+  let spawnFailures: Watch | null = null
   let followHero = (eid: string) => {
-    for (let w of Object.values(own)) w.close();
-    let q = JSON.stringify(eid);
+    for (let w of Object.values(own)) w.close()
+    let q = JSON.stringify(eid)
     own = {
       slain: c.watch(`.slain.by=${q}`),
       item: c.watch(`.item.owner=${q}&?gathered&?crafted`),
@@ -249,20 +249,20 @@ export let connect = (
       teleport_request: c.watch(
         `.teleport_request.player=${q}&?created&?completed&.order=-created.at&.limit=10`,
       ),
-    };
-  };
+    }
+  }
 
-  let none: Bundle[] = [];
+  let none: Bundle[] = []
 
   let ready = (w: Watch): Promise<void> =>
     w.ready ? Promise.resolve() : new Promise((done) => {
       let off = w.subscribe(() => {
         if (w.ready) {
-          off();
-          done();
+          off()
+          done()
         }
-      });
-    });
+      })
+    })
 
   // A design family is a store query: the rows wearing every component
   // `names` says, with each of `also` they wear. A page starts with its rows
@@ -274,29 +274,29 @@ export let connect = (
     also: string[] = [],
   ): Promise<void> => {
     let watch = c.watch(
-      [...names.map((n) => `.${n}`), ...also.map((n) => `?${n}`)].join(" "),
-    );
-    watchDesigns(watch, [...names, ...also], use);
-    return ready(watch);
-  };
+      [...names.map((n) => `.${n}`), ...also.map((n) => `?${n}`)].join(' '),
+    )
+    watchDesigns(watch, [...names, ...also], use)
+    return ready(watch)
+  }
 
   // One indexed watch holds the looks of this hero and nearby heroes. Its
   // answer is cached across area changes so a new watch need not flash the
   // creation colours while it loads.
   let lookFor = (eid: string) => {
-    syncLooks();
-    let current = newest(lookWatch?.value ?? none);
-    for (let [id, b] of current) lookBy.set(id, b);
-    return lookBy.get(eid);
-  };
+    syncLooks()
+    let current = newest(lookWatch?.value ?? none)
+    for (let [id, b] of current) lookBy.set(id, b)
+    return lookBy.get(eid)
+  }
 
   // A one-time read uses the app's query door. It does not add a subscription
   // to the page's hibernating socket while the gate or a distant name loads.
   let once = (query: string): Promise<Bundle[]> => {
-    let url = new URL("query", base);
-    url.search = query.split("&").map(encodeURIComponent).join("&");
-    return read<Bundle>(url);
-  };
+    let url = new URL('query', base)
+    url.search = query.split('&').map(encodeURIComponent).join('&')
+    return read<Bundle>(url)
+  }
 
   // The page and an agent use the same declared app command, with the same
   // caller and access checks. The selected hero is the page's default player.
@@ -305,71 +305,71 @@ export let connect = (
     args: Record<string, unknown>,
     submit?: (bundles: Bundle[]) => Promise<boolean>,
   ): Promise<string> => {
-    let eid = crypto.randomUUID();
+    let eid = crypto.randomUUID()
     let watch = c.watch(
       `.result.call=${eid}&?content|.output.source=${eid}&?content&?refusal&?exception`,
-    );
+    )
     try {
       let bundles: Bundle[] = [{
         entity: { eid },
         call: {
           to: toolEid(name),
           args: {
-            ...(hero && name != "spawn" ? { player: hero } : {}),
+            ...(hero && name != 'spawn' ? { player: hero } : {}),
             ...args,
           },
         },
-      }];
+      }]
       if (submit) {
         if (!await submit(bundles)) {
-          throw new Error("Command was not acknowledged. Your draft is kept.");
+          throw new Error('Command was not acknowledged. Your draft is kept.')
         }
-      } else await c.mutate(bundles);
+      } else await c.mutate(bundles)
       return await new Promise<string>((resolve, reject) => {
-        let off = () => {};
+        let off = () => {}
         let answer = (rows: Bundle[]) => {
-          let row = rows.find((b) => b.result);
-          if (!row) return;
-          off();
-          let text = str(comp(row, "content").body) || `${name} completed.`;
+          let row = rows.find((b) => b.result)
+          if (!row) return
+          off()
+          let text = str(comp(row, 'content').body) || `${name} completed.`
           if (rows.some((b) => b.refusal || b.exception)) {
-            reject(new Error(text));
-          } else resolve(text);
-        };
-        off = watch.subscribe(answer);
-        answer(watch.value);
-      });
+            reject(new Error(text))
+          } else resolve(text)
+        }
+        off = watch.subscribe(answer)
+        answer(watch.value)
+      })
     } finally {
-      watch.close();
+      watch.close()
     }
-  };
+  }
 
-  let glimpsed = new Map<string, Hero | null>();
-  let asking = new Map<string, Promise<{ hero: Hero | null; by: string }>>();
+  let glimpsed = new Map<string, Hero | null>()
+  let asking = new Map<string, Promise<{ hero: Hero | null; by: string }>>()
   let about = (eid: string): Promise<{ hero: Hero | null; by: string }> => {
-    let pending = asking.get(eid);
-    if (pending) return pending;
+    let pending = asking.get(eid)
+    if (pending) return pending
     let read = async () => {
-      let b = c.ent(eid);
+      let b = c.ent(eid)
       if (!b?.player || !b.created) {
         b =
           (await once(`.entity.eid=${JSON.stringify(eid)}&.player&?created&*`))[
             0
           ] ??
-            b;
+            b
       }
-      let looks = await once(`.look.player=${JSON.stringify(eid)}&*`);
-      let look = newest(looks).get(eid);
-      if (look) lookBy.set(eid, look);
-      let found = b?.player ? heroOf(b, look ?? lookBy.get(eid)) : null;
-      glimpsed.set(eid, found);
-      return { hero: found, by: writer(b) };
-    };
-    let result = read();
-    asking.set(eid, result);
-    void result.catch(() => asking.delete(eid));
-    return result;
-  };
+      let looks = await once(`.look.player=${JSON.stringify(eid)}&*`)
+      let look = newest(looks).get(eid)
+      if (look) lookBy.set(eid, look)
+      let found = b?.player ? heroOf(b, look ?? lookBy.get(eid)) : null
+      glimpsed.set(eid, found)
+      return { hero: found, by: writer(b) }
+    }
+    let result = read()
+    asking.set(eid, result)
+    void result.catch(() => asking.delete(eid))
+    return result
+  }
 
   let net = {
     client: c,
@@ -378,45 +378,45 @@ export let connect = (
     designs,
     /** Keep the world rows and moving players near this point. */
     follow,
-    players: () => rows("player"),
+    players: () => rows('player'),
     fights: () => fightWatch?.value ?? [],
     /** the eid of the hero this tab plays, once there is one */
     get hero() {
-      return hero;
+      return hero
     },
     /** the hero this tab played before a reload, if it remembers one */
     played: tab.get,
     /** play this hero in this tab */
     choose: (eid: string) => {
-      hero = eid;
-      tab.set(eid);
-      chosen?.close();
-      chosen = c.watch(`.entity.eid=${JSON.stringify(eid)}&?created&*`);
-      followHero(eid);
-      syncLooks();
+      hero = eid
+      tab.set(eid)
+      chosen?.close()
+      chosen = c.watch(`.entity.eid=${JSON.stringify(eid)}&?created&*`)
+      followHero(eid)
+      syncLooks()
     },
     /** the heroes a person made, once the store has answered */
     heroes: async (person: string): Promise<Hero[]> => {
       let players = await once(
         `.player&.created.by=${JSON.stringify(person)}&*`,
-      );
-      let ids = players.map((b) => b.entity.eid);
-      let looks: Bundle[] = [];
+      )
+      let ids = players.map((b) => b.entity.eid)
+      let looks: Bundle[] = []
       // Each temporary query fits beside the page's other subscriptions.
       for (let i = 0; i < ids.length; i += 20) {
-        looks.push(...await once(`.look.player=${ids.slice(i, i + 20)}`));
+        looks.push(...await once(`.look.player=${ids.slice(i, i + 20)}`))
       }
-      let by = newest(looks);
-      for (let [id, b] of by) lookBy.set(id, b);
-      return players.map((b) => heroOf(b, by.get(b.entity.eid)));
+      let by = newest(looks)
+      for (let [id, b] of by) lookBy.set(id, b)
+      return players.map((b) => heroOf(b, by.get(b.entity.eid)))
     },
     /** a hero as they look now, or null while the store holds no row of
      * theirs */
     who: (eid: string): Hero | null => {
-      let b = c.ent(eid);
-      if (b?.player) return heroOf(b, lookFor(eid));
-      if (eid && !asking.has(eid)) void about(eid);
-      return glimpsed.get(eid) ?? null;
+      let b = c.ent(eid)
+      if (b?.player) return heroOf(b, lookFor(eid))
+      if (eid && !asking.has(eid)) void about(eid)
+      return glimpsed.get(eid) ?? null
     },
     /** One named hero beyond the page's area, including their newest look
      * and the person who made them. */
@@ -424,12 +424,12 @@ export let connect = (
     /** The party a named hero belongs to, from steps written by that hero's
      * owner even when they are beyond the page's world watch. */
     partyOf: async (eid: string): Promise<string> => {
-      let { by } = await about(eid);
-      if (!by) return "";
+      let { by } = await about(eid)
+      if (!by) return ''
       let rows = await once(
         `.party_step.player=${JSON.stringify(eid)}&?created&*`,
-      );
-      return groupOf(rows, eid, by);
+      )
+      return groupOf(rows, eid, by)
     },
     /** Whether the hero this tab remembers is still in the store. */
     known: async (eid: string): Promise<boolean> =>
@@ -441,11 +441,11 @@ export let connect = (
       !!chosen?.ready && Object.values(own).every((w) => w.ready),
     /** Wait for the selected hero and every row that shapes their sheet. */
     settle: async (): Promise<void> => {
-      if (chosen) await Promise.all([chosen, ...Object.values(own)].map(ready));
+      if (chosen) await Promise.all([chosen, ...Object.values(own)].map(ready))
     },
     /** the falls everyone has written */
-    falls: (): Bundle[] => rows("slain"),
-    spawned: (): Bundle[] => rows("spawned"),
+    falls: (): Bundle[] => rows('slain'),
+    spawned: (): Bundle[] => rows('spawned'),
     spawnFailures: (): Bundle[] => spawnFailures?.value ?? none,
     /** the nodes everyone has gathered */
     gathered: (): Bundle[] => gathered.value,
@@ -453,43 +453,43 @@ export let connect = (
     command,
     /** The commands this caller may discover, as the app door decides. */
     commands: async (): Promise<Tools> => {
-      let r = await fetch(new URL("commands", base));
-      if (!r.ok) throw new Error(`Commands unavailable (${r.status})`);
-      return await r.json();
+      let r = await fetch(new URL('commands', base))
+      if (!r.ok) throw new Error(`Commands unavailable (${r.status})`)
+      return await r.json()
     },
     /** this frame's changes that stay on the page or go to the peers */
     move: (bundles: Bundle[]) => {
-      if (bundles.length) c.mutate(bundles);
+      if (bundles.length) c.mutate(bundles)
     },
     /** make a hero and play it in this tab */
     create: (look: Look) => {
-      let eid = crypto.randomUUID();
-      net.choose(eid);
+      let eid = crypto.randomUUID()
+      net.choose(eid)
       keep({ entity: { eid }, player: {} }, {
         entity: { eid: crypto.randomUUID() },
         look: { player: eid, ...lookOf(look), at: now() },
-      });
-      return eid;
+      })
+      return eid
     },
     /** change how the hero this tab plays looks: a row of its own, sent
      * now, since a visitor may only add rows */
     restyle: (look: Look) => {
-      if (!hero) return;
+      if (!hero) return
       keep({
         entity: { eid: crypto.randomUUID() },
         look: { player: hero, ...lookOf(look), at: now() },
-      });
+      })
     },
     /** who is looking, and the store's clock against ours */
     me: async (): Promise<Me> => {
-      let t0 = Date.now();
-      let r = await fetch(new URL("me", base)).catch(() => null);
-      let t1 = Date.now();
-      let date = Date.parse(r?.headers.get("date") ?? "");
+      let t0 = Date.now()
+      let r = await fetch(new URL('me', base)).catch(() => null)
+      let t1 = Date.now()
+      let date = Date.parse(r?.headers.get('date') ?? '')
       // The header is to the second: trust it only past a second's doubt.
       if (date) {
-        let off = date + 500 - (t0 + t1) / 2;
-        if (Math.abs(off) > 1500) skew = off;
+        let off = date + 500 - (t0 + t1) / 2
+        if (Math.abs(off) > 1500) skew = off
       }
       if (r?.status == 404) {
         return {
@@ -499,9 +499,9 @@ export let connect = (
           reads: true,
           writes: true,
           signIn: null,
-        };
+        }
       }
-      let body = r?.ok ? await r.json() : {};
+      let body = r?.ok ? await r.json() : {}
       return {
         person: body.person ?? null,
         name: body.name ?? null,
@@ -509,54 +509,54 @@ export let connect = (
         reads: body.reads ?? true,
         writes: body.writes ?? true,
         signIn: body.signIn ?? null,
-      };
+      }
     },
-  };
-  let opened = false;
+  }
+  let opened = false
   return {
     client: c,
     close: () => {
-      fightWatch?.close();
-      c.close();
+      fightWatch?.close()
+      c.close()
     },
     figures: () => {
-      let watch = c.watch(FIGURE_ROWS, { evaluate: "server" });
-      let builds = c.watch(FIGURE_BUILDS, { evaluate: "server" });
+      let watch = c.watch(FIGURE_ROWS, { evaluate: 'server' })
+      let builds = c.watch(FIGURE_BUILDS, { evaluate: 'server' })
       let install = () => {
-        if (!watch.ready || !builds.ready) return;
-        let rows = new Map(watch.value.map((row) => [row.entity.eid, row]));
+        if (!watch.ready || !builds.ready) return
+        let rows = new Map(watch.value.map((row) => [row.entity.eid, row]))
         for (let row of builds.value) {
-          let prior = rows.get(row.entity.eid);
+          let prior = rows.get(row.entity.eid)
           rows.set(row.entity.eid, {
             ...prior,
             ...row,
-            built: { ...comp(prior, "built"), ...comp(row, "built") },
-          });
+            built: { ...comp(prior, 'built'), ...comp(row, 'built') },
+          })
         }
-        useFigures([...rows.values()]);
-      };
-      watchDesigns(watch, ["figure", "built"], install);
-      watchDesigns(builds, ["built", "build"], install);
-      return Promise.all([ready(watch), ready(builds)]).then(() => {});
+        useFigures([...rows.values()])
+      }
+      watchDesigns(watch, ['figure', 'built'], install)
+      watchDesigns(builds, ['built', 'build'], install)
+      return Promise.all([ready(watch), ready(builds)]).then(() => {})
     },
     spawnKinds: () => {
-      let watch = c.watch(SPAWN_KINDS, { evaluate: "server" });
-      spawnFailures = c.watch(SPAWN_FAILURES, { evaluate: "server" });
-      watchDesigns(watch, ["built", "build", "spawned"], useSpawnKinds);
-      return Promise.all([ready(watch), ready(spawnFailures)]).then(() => {});
+      let watch = c.watch(SPAWN_KINDS, { evaluate: 'server' })
+      spawnFailures = c.watch(SPAWN_FAILURES, { evaluate: 'server' })
+      watchDesigns(watch, ['built', 'build', 'spawned'], useSpawnKinds)
+      return Promise.all([ready(watch), ready(spawnFailures)]).then(() => {})
     },
     designs,
     me: net.me,
     heroes: net.heroes,
     world: () => {
       if (!opened) {
-        area = areaOf(SIZE / 2, SIZE / 2, REACH);
-        hold(area);
-        near = c.watch(area.moving);
-        nearby = c.watch(area.query, { remote: false });
-        opened = true;
+        area = areaOf(SIZE / 2, SIZE / 2, REACH)
+        hold(area)
+        near = c.watch(area.moving)
+        nearby = c.watch(area.query, { remote: false })
+        opened = true
       }
-      return net;
+      return net
     },
-  };
-};
+  }
+}
