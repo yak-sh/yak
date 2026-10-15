@@ -13,7 +13,7 @@ import {
   cloudflareProvider,
   type Sandboxes,
 } from '@yaks/machine/cloudflare'
-import { retried } from './door.ts'
+import { backoff, retried } from './door.ts'
 import { listen, rostered, told } from './stream.ts'
 
 let space: Space = {
@@ -38,16 +38,20 @@ let failures = [
   () => new Error('Durable Object reset because its code was updated'),
   () => new Error('Durable Object reset because a newer deploy reached it: b'),
 ]
-// Each failure once, twice and three times running, then an unrelated error
+// Each failure once and up to every pause running, then an unrelated error
 // that must not retry. A call fails when every send it made failed.
 let runs = (failure: () => Error) => [
-  [failure()],
-  [failure(), failure()],
-  [failure(), failure(), failure()],
+  ...backoff.pauses.map((_, n) => Array.from({ length: n + 1 }, failure)),
+  [failure(), ...backoff.pauses.map(failure)],
   [new Error('bad')],
 ]
 let sends = (errors: Error[]) =>
-  errors[0].message == 'bad' ? 1 : Math.min(errors.length + 1, 3)
+  errors[0].message == 'bad'
+    ? 1
+    : Math.min(errors.length + 1, backoff.pauses.length + 1)
+// The pauses between sends are recorded here, never slept.
+let paused: number[] = []
+backoff.wait = (ms) => Promise.resolve(void paused.push(ms))
 let fails = (errors: Error[]) => sends(errors) == errors.length
 let upgrade = () =>
   new Request('https://ada.yaks.app/api/build', {
@@ -146,10 +150,11 @@ let callers: Array<{
 // Which failures are retried, and how often, is `retried`'s. Each caller below
 // is sent one eviction, for what it makes of the sends: a fresh stub and a
 // request built again each time.
-test('retried: every eviction is sent again, three sends at most', async () => {
+test('retried: every eviction is sent again after a pause, once per pause', async () => {
   for (let failure of failures) {
     for (let errors of runs(failure)) {
       let sent = 0
+      paused.length = 0
       let call = () =>
         retried(() => {
           let error = errors[sent++]
@@ -160,6 +165,7 @@ test('retried: every eviction is sent again, three sends at most', async () => {
         assertEquals(await assertRejects(call), errors.at(-1))
       } else assertEquals(await call(), 'ok')
       assertEquals(sent, sends(errors))
+      assertEquals(paused, backoff.pauses.slice(0, sent - 1))
     }
   }
 })

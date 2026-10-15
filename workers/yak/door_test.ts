@@ -2,10 +2,21 @@
 // anything else it throws through untouched.
 import { test } from '@yaks/testing'
 import { assertEquals, assertRejects } from '@std/assert'
-import { ACCEPTED, APP_JSON, doorOf, type Namespace, storeOf } from './door.ts'
+import {
+  ACCEPTED,
+  APP_JSON,
+  backoff,
+  doorOf,
+  type Namespace,
+  storeOf,
+} from './door.ts'
 import { retry as retryWrite } from './write-log.ts'
 import { counts, tallying } from './lib/hops.ts'
 import { metaOf } from './meta.ts'
+
+// The pauses between a call's sends are recorded here, never slept.
+let paused: number[] = []
+backoff.wait = (ms) => Promise.resolve(void paused.push(ms))
 
 test('a request sums statement counts from each store response', async () => {
   let tally = new Map<string, number>()
@@ -78,13 +89,17 @@ test('an interrupted recovery command is not silently sent again', async () => {
   assertEquals(n.seen.length, 1)
 })
 
-test('a bodiless GET is sent three times at most; other errors throw', async () => {
+test('a bodiless GET is sent again once per pause at most; other errors throw', async () => {
   let n = ns([flagged(), gone(), 'ok'])
   assertEquals(await (await storeOf(n, 'jeff')('/query')).text(), 'ok')
   assertEquals(n.seen.length, 3)
-  let evicting = ns([gone(), gone(), gone(), 'unexpected retry'])
+  let sends = backoff.pauses.length + 1
+  let evicting = ns([
+    ...Array.from({ length: sends }, gone),
+    'unexpected retry',
+  ])
   await assertRejects(() => storeOf(evicting, 'jeff')('/query'))
-  assertEquals(evicting.seen.length, 3)
+  assertEquals(evicting.seen.length, sends)
   let other = ns([new Error('boot failed')])
   await assertRejects(() => storeOf(other, 'jeff')('/query'), Error, 'boot')
   assertEquals(other.seen.length, 1)
@@ -141,6 +156,7 @@ let brokenBody = (error: Error) => {
 
 test('a Store read retries a failed body, even after receiving bytes', async () => {
   let attempts = 0
+  paused.length = 0
   let store = storeOf({
     idFromName: (name) => name,
     get: () => ({
@@ -156,7 +172,7 @@ test('a Store read retries a failed body, even after receiving bytes', async () 
     entity: { eid: 'kept' },
     recipe: {},
   }])
-  assertEquals(attempts, 2)
+  assertEquals([attempts, paused], [2, backoff.pauses.slice(0, 1)])
 })
 
 test('a Store write retries a failed body with the same key and body', async () => {

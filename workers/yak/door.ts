@@ -15,6 +15,7 @@ import { hop, writing } from './lib/hops.ts'
 import { defect } from './defects.ts'
 import { stamp } from './running.ts'
 import { evicted, killed, opaque } from '@yaks/durable-object'
+import { sleep } from '@yaks/fp'
 
 // A store reports the statements it ran for this fetch, including any store
 // it asked in turn, and how long it waited to start when this fetch woke it.
@@ -240,26 +241,36 @@ export let thrown = async (r: Response): Promise<Response> => {
   return r
 }
 
-// How many times a replayable call is sent before its failure stands, as
-// Cloudflare's guidance for a Durable Object's retryable errors has it. An
-// object restarts once for each newer deploy that reaches it (running.ts
-// `behind`), and each restart fails what it had in flight: a call cut off by
-// one deploy's restart can have its retry cut off by the next one's when two
-// land seconds apart.
-let ATTEMPTS = 3
+// The pauses before a replayable call is sent again, one per resend, backing
+// off as Cloudflare's guidance for a Durable Object's retryable errors has
+// it. An object restarts once for each newer deploy that reaches it
+// (running.ts `behind`), and each restart fails what it had in flight: a call
+// cut off by one deploy's restart can have its retry cut off by the next
+// one's when two land seconds apart. The runtime's own internal error can
+// refuse calls into a store for seconds while the store answers others, and
+// sends milliseconds apart all meet it (T-124639). `wait` spends a pause, half
+// of it or more, so calls that failed together do not return together; a
+// test replaces it.
+export let backoff = {
+  pauses: [100, 500, 2000],
+  wait: (ms: number) => sleep(ms / 2 + Math.random() * ms / 2),
+}
 
-/** Send one replayable call again while it fails in words `retry` knows, up
- * to `ATTEMPTS` sends. The last failure propagates unchanged. */
+/** Send one replayable call again while it fails in words `retry` knows,
+ * pausing before each resend, once per `backoff` pause. The last failure
+ * propagates unchanged. */
 export let retried = async <T>(
   send: () => T | Promise<T>,
   replayable = true,
   retry: (error: unknown) => boolean = evicted,
 ): Promise<T> => {
-  for (let sent = 1;; sent++) {
+  for (let sent = 0;; sent++) {
     try {
       return await send()
     } catch (e) {
-      if (!retry(e) || !replayable || sent >= ATTEMPTS) throw e
+      let pause = backoff.pauses[sent]
+      if (!retry(e) || !replayable || pause == null) throw e
+      await backoff.wait(pause)
     }
   }
 }
