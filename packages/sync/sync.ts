@@ -196,7 +196,8 @@ export let sync = (graph: Graph, opts: SyncOpts): Sync => {
   // a refusal has nothing to revert and an unanswered request has nothing to
   // keep pinned.
   let send = (bundles: Bundle[], held = false) => {
-    if (!outward(bundles, graph.vocab).length) return
+    let sent = outward(bundles, graph.vocab)
+    if (!sent.length) return
     let release = opts.replica?.protect(bundles.map((b) => b.entity.eid))
     let answer = queue(() =>
       exchange(bundles, {
@@ -206,13 +207,12 @@ export let sync = (graph: Graph, opts: SyncOpts): Sync => {
         headers: opts.headers,
         report,
         held,
+        sent,
       }).then(async (result) => {
         if (result.settled || held) {
           release?.(!held && !!result.applied?.length)
         }
-        if (result.refused) {
-          throw new WriteRefused(outward(bundles, graph.vocab), result.refused)
-        }
+        if (result.refused) throw new WriteRefused(sent, result.refused)
         if (result.error) {
           throw result.error
         }
@@ -238,7 +238,7 @@ export let sync = (graph: Graph, opts: SyncOpts): Sync => {
       if (
         !(error instanceof WriteRefused) && !(error instanceof WriteUnknown)
       ) {
-        report({ sent: outward(bundles, graph.vocab), error, reverted: false })
+        report({ sent, error, reverted: false })
       }
       throw error
     })

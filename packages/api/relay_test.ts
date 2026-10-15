@@ -211,13 +211,26 @@ test('a live query reads the current peer value and loses it on disconnect', asy
   assertEquals(await ask(), [])
 })
 
-test('a late subscriber is told what the peers are already saying', () => {
+// A shop holding b1 (or nothing, when `empty`), and `n` subscribers to
+// `query` whose opening frames are taken: what the relay cases start from.
+let watching = (
+  n: number,
+  query = '.book',
+  { empty = false, timer }: { empty?: boolean; timer?: Timer } = {},
+) => {
   let graph = shop()
-  graph.apply([{ entity: { eid: 'b1' }, book: { price: 12 } }])
-  let subs = subscriptions(graph)
-  let one = ear()
-  subs.open(one.to, 's', '.book')
-  one.take()
+  if (!empty) graph.apply([{ entity: { eid: 'b1' }, book: { price: 12 } }])
+  let subs = subscriptions(graph, { timer })
+  let ears = Array.from({ length: n }, ear)
+  for (let e of ears) subs.open(e.to, 's', query)
+  for (let e of ears) e.take()
+  return { graph, subs, ears }
+}
+type Timer = ReturnType<typeof stopped>['timer']
+
+let late = watching(1)
+test('a late subscriber is told what the peers are already saying', () => {
+  let { subs, ears: [one] } = late
   subs.relay(one.to, [{ entity: { eid: 'b1' }, browsing: { x: 4, y: 4 } }])
 
   let three = ear()
@@ -229,13 +242,9 @@ test('a late subscriber is told what the peers are already saying', () => {
 })
 
 for (let query of ['.book', '.book&.order=book.price']) {
+  let joining = watching(2, query, { empty: true })
   test(`an entity joining ${query} brings what the peers already say of it`, () => {
-    let graph = shop()
-    let subs = subscriptions(graph)
-    let one = ear(), two = ear()
-    subs.open(one.to, 's', query)
-    subs.open(two.to, 's', query)
-    one.take(), two.take()
+    let { graph, subs, ears: [one, two] } = joining
     // Said before b1 is in anybody's set, and not said again.
     subs.relay(two.to, [{ entity: { eid: 'b1' }, browsing: { x: 1, y: 2 } }])
     assertEquals(one.take(), [])
@@ -248,27 +257,21 @@ for (let query of ['.book', '.book&.order=book.price']) {
   })
 }
 
+let closing = watching(2)
+closing.subs.relay(closing.ears[0].to, [{
+  entity: { eid: 'b1' },
+  browsing: { x: 2, y: 2 },
+}])
+closing.ears[1].take()
 test('a closed connection stops saying everything it was saying', () => {
-  let graph = shop()
-  graph.apply([{ entity: { eid: 'b1' }, book: { price: 12 } }])
-  let subs = subscriptions(graph)
-  let one = ear(), two = ear()
-  subs.open(one.to, 's', '.book')
-  subs.open(two.to, 's', '.book')
-  one.take(), two.take()
-  subs.relay(one.to, [{ entity: { eid: 'b1' }, browsing: { x: 2, y: 2 } }])
-  two.take()
-
+  let { subs, ears: [one, two] } = closing
   subs.drop(one.to)
   assertEquals(relayed(two.take()), [{ entity: { eid: 'b1' }, browsing: null }])
 })
 
+let takenOver = watching(3)
 test('a value another connection took over outlives the first closing', () => {
-  let graph = shop()
-  graph.apply([{ entity: { eid: 'b1' }, book: { price: 12 } }])
-  let subs = subscriptions(graph)
-  let one = ear(), two = ear(), three = ear()
-  for (let e of [one, two, three]) subs.open(e.to, 's', '.book')
+  let { subs, ears: [one, two, three] } = takenOver
   subs.relay(one.to, [{ entity: { eid: 'b1' }, browsing: { x: 1, y: 1 } }])
   subs.relay(two.to, [{ entity: { eid: 'b1' }, browsing: { x: 2 } }])
   three.take()
@@ -282,16 +285,11 @@ test('a value another connection took over outlives the first closing', () => {
   ])
 })
 
+let lasting = stopped()
+let durable = watching(2, '.book', { timer: lasting.timer })
 test('a durable duration clears itself, and each write restarts it', () => {
-  let clock = stopped()
-  let graph = shop()
-  graph.apply([{ entity: { eid: 'b1' }, book: { price: 12 } }])
-  let subs = subscriptions(graph, { timer: clock.timer })
-  let one = ear(), two = ear()
-  subs.open(one.to, 's', '.book')
-  subs.open(two.to, 's', '.book')
-  one.take(), two.take()
-
+  let clock = lasting
+  let { subs, ears: [one, two] } = durable
   subs.relay(one.to, [{ entity: { eid: 'b1' }, typing: { who: 'ada' } }])
   two.take()
   clock.tick(4000)
