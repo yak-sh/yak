@@ -275,24 +275,23 @@ export let parts = (
       if (!/^[0-9a-f]{64}$/.test(from)) {
         throw new Wrong(`part ${n} needs the hash state it starts from`)
       }
+      // The part goes to the bucket and through the hash side by side. A
+      // stream the bucket reads through JavaScript, hashing as it passes,
+      // sends a part at a third of the speed (T-124790).
       let hash = hasher(from)
-      // The part hashed as the bucket reads it.
-      let reader = body.getReader()
-      let passing = new ReadableStream<Uint8Array>({
-        pull: async (out) => {
-          let read = await reader.read()
-          if (read.done) return out.close()
-          let value = read.value
-          hash.add(value)
-          out.enqueue(value)
-        },
-        cancel: (why) => reader.cancel(why),
-      })
+      let [kept, read] = body.tee()
+      let reader = read.getReader()
+      let hashed = (async () => {
+        for (let got; !(got = await reader.read()).done;) hash.add(got.value)
+      })()
+      hashed.catch(() => {})
       let sent
       try {
         sent = await bucket.resumeMultipartUpload(key, t.id)
-          .uploadPart(n, fixed(passing, length))
+          .uploadPart(n, fixed(kept, length))
+        await hashed
       } catch (e) {
+        await reader.cancel().catch(() => {})
         lost(e)
         await drop(await book(), t)
         throw new Gone(`the upload of ${sha} has expired`)
