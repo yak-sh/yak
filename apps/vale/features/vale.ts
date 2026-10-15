@@ -2,7 +2,7 @@
 // levels' own: Birchmere's birches and mere and its village of birch,
 // Clovermead's clover, Fernwood's ferns and its turf-roofed hamlet,
 // Elderglade's elders, Greypine's grey pines, Wolfden's hollow and dens.
-import { fbm, lerp, smooth } from '../rand.ts'
+import { fbm, lerp, smooth } from '@yaks/game'
 import { bump, type Feature, Top, village } from './kit.ts'
 
 let BASE: Record<string, Feature> = {

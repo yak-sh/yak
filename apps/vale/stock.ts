@@ -27,7 +27,7 @@ import { dens } from './homes.ts'
 import { ITEMS } from './items.ts'
 import { hopsOf, levelOf, LEVELS } from './levels.ts'
 import type { Giver } from './quests.ts'
-import { hashOf, stream } from './rand.ts'
+import { hashOf, stream } from '@yaks/game'
 import { RARITIES } from './rarity.ts'
 import { type Held, SPOILS, worth } from './rules.ts'
 

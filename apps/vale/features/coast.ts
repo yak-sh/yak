@@ -3,7 +3,7 @@
 // strand, dunes, shore pines and shacks; Saltreach's salt pans, tide line and white bluffs; Shellstrand's
 // shell isles and sea pinks; Stormhead's surf, its wind-bent moor and the
 // light on its head.
-import { fbm, lerp, smooth } from '../rand.ts'
+import { fbm, lerp, smooth } from '@yaks/game'
 import { HILLS } from './hills.ts'
 import {
   bump,

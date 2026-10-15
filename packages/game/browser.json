@@ -1,0 +1,14 @@
+{
+  "_": "Game rules are pure values, safe in both a browser and a worker.",
+  "compilerOptions": {
+    "lib": [
+      "dom",
+      "esnext"
+    ],
+    "strict": true
+  },
+  "imports": {
+    "@yaks/game": "./mod.ts",
+    "@yaks/game/rules": "./mod.ts"
+  }
+}

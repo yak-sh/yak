@@ -4,7 +4,7 @@
 // crusted pans, white chalk and saltworks; Shellstrand's shells, sea pinks
 // and the great conch; Stormhead's wind-bent trees and its lighthouse.
 import { ball, box, key, unkey, type Vox } from '../mesh.ts'
-import { noise, stream } from '../rand.ts'
+import { noise, stream } from '@yaks/game'
 import { boulders, type Kind, type Model, pickOf, TIMBER } from './kit.ts'
 
 // A fishing boat, bow to the north, sitting `y0` voxels down: a painted

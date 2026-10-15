@@ -10,7 +10,7 @@
 // @ts-types="npm:@types/three@^0.186.0"
 import * as THREE from 'three'
 import type { Intent } from './input.ts'
-import { clamp } from './rand.ts'
+import { clamp } from '@yaks/game'
 import { type Building, walled } from './solid.ts'
 import { floorUnder, roofOver, type Vale } from './terrain.ts'
 

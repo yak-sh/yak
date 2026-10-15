@@ -28,7 +28,7 @@ import { type Life, lifeOf } from './lives.ts'
 import { LEVELS, type Spot } from './levels.ts'
 import type { Vec } from './mesh.ts'
 import { type Giver, GIVERS, type Quest } from './quests.ts'
-import { hashOf, stream } from './rand.ts'
+import { hashOf, stream } from '@yaks/game'
 import { eidOf } from './villager-id.ts'
 export { eidOf }
 import { originOf, spotOf } from './regions.ts'

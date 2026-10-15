@@ -5,7 +5,7 @@
 // Elderglade's elders and the Elder, Greypine's grey pines and watchtower,
 // and Wolfden's dark pines, bones and dens.
 import { ball, box, key, type Vox } from '../mesh.ts'
-import { noise, rand, stream } from '../rand.ts'
+import { noise, rand, stream } from '@yaks/game'
 import {
   boulders,
   canopy,

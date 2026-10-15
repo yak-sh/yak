@@ -3,7 +3,7 @@
 // down its volcano; Cinderreach's black flats and vents; Ashkeep's keep, its
 // gate and its cold cone; the Maw itself, the scorch before it and the cone
 // that spits.
-import { fbm, smooth } from '../rand.ts'
+import { fbm, smooth } from '@yaks/game'
 import type { Prop } from '../terrain.ts'
 import { HILLS } from './hills.ts'
 import { bump, type Feature, Top, village as makeVillage, wide } from './kit.ts'

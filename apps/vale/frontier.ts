@@ -2,7 +2,7 @@
 // name, terrain family and places, so every page grows the same frontier.
 import { isA } from './features.ts'
 import type { Level, Place } from './levels.ts'
-import { fbm, hash, rand } from './rand.ts'
+import { fbm, hash, rand } from '@yaks/game'
 
 let ROOTS = [
   'Alder',

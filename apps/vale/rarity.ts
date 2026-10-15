@@ -14,7 +14,7 @@
 import { type Slot, tierRange } from './arms.ts'
 import type { Glyph } from './glyphs.ts'
 import { ITEMS, type Thing } from './items.ts'
-import { hashOf, stream } from './rand.ts'
+import { hashOf, stream } from '@yaks/game'
 
 export type Rarity = 'common' | 'uncommon' | 'rare' | 'epic' | 'legendary'
 
@@ -125,7 +125,7 @@ export let pick = (odds: number[], r: number): Rarity => {
  *
  * ```ts
  * import { assertAlmostEquals } from '@std/assert'
- * import { stream } from './rand.ts'
+ * import { stream } from '@yaks/game'
  * let r = stream(7), n = 10000
  * let seen = Object.fromEntries(RARITIES.map((x) => [x, 0]))
  * for (let i = 0; i < n; i++) seen[dropped(r(), 12)]++
@@ -144,7 +144,7 @@ export let dropped = (r: number, lvl: number, boss = false, find = 0) =>
  *
  * ```ts
  * import { assert } from '@std/assert'
- * import { stream } from './rand.ts'
+ * import { stream } from '@yaks/game'
  * let fine = (lvl: number) => {
  *   let r = stream(3), n = 0
  *   for (let i = 0; i < 5000; i++) n += +(made(r(), lvl, 1) != 'common')

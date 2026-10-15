@@ -25,7 +25,7 @@
 
 import { landLevel } from './danger.ts'
 import { HOPS } from './levels.ts'
-import { need } from './progress.ts'
+import { need } from '@yaks/game'
 import * as vale from './quests/vale.ts'
 import * as marsh from './quests/marsh.ts'
 import * as coast from './quests/coast.ts'

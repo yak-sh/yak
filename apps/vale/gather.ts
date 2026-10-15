@@ -9,7 +9,7 @@
 // its node's trade. A low trade level makes harder nodes slow and less useful.
 import { isA } from './features.ts'
 import { hopsOf, levelOf } from './levels.ts'
-import { hashOf, rand, uuidOf } from './rand.ts'
+import { hashOf, rand, uuidOf } from '@yaks/game'
 import { fallOf } from './rules.ts'
 import { FORMATION, type Natural, NATURE } from './nature.ts'
 import { nearby, originOf, regionOf } from './regions.ts'

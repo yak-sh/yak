@@ -2,7 +2,7 @@
 // surface, with the surface's rock as its ceiling. The short unroofed mouth
 // joins that floor to the land outside without a portal or a second world.
 import { spotOf } from './regions.ts'
-import { fbm, lerp, smooth } from './rand.ts'
+import { fbm, lerp, smooth } from '@yaks/game'
 
 export type Cave = {
   floor: number

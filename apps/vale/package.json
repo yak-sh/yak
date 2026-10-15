@@ -15,6 +15,7 @@
     "@yaks/graph": "platform",
     "@yaks/query": "platform",
     "@yaks/render": "platform",
-    "@yaks/ui": "platform"
+    "@yaks/ui": "platform",
+    "@yaks/game": "platform"
   }
 }

@@ -1,6 +1,5 @@
-// Randomness every page agrees on. The vale is built from these numbers, not
-// sent: two players on two phones grow the same hills and the same trees
-// because they hash the same coordinates.
+// Randomness every page agrees on: the same seed and coordinates yield the
+// same world without sending it between players.
 
 /** A 32-bit hash of up to three integers.
  *

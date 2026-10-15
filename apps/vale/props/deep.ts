@@ -4,7 +4,7 @@
 // great geode; Shardvault's pale caps, its shards taller than trees and the
 // arch of its vault.
 import { ball, box, key, type Vox } from '../mesh.ts'
-import { noise, rand, stream } from '../rand.ts'
+import { noise, rand, stream } from '@yaks/game'
 import { type Kind, type Model, pickOf, TIMBER } from './kit.ts'
 
 // A toadstool the size of a tree, its cap one of `caps`.

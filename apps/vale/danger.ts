@@ -5,7 +5,7 @@
 import { GRADE, tierOf } from './arms.ts'
 import { type Beast, BEASTS, type Combat, type Fighter } from './beasts.ts'
 import { hopsOf } from './levels.ts'
-import { maxHp, need, power } from './progress.ts'
+import { maxHp, need, power } from '@yaks/game'
 
 export let landLevel = (hops: number): number => Math.min(60, 1 + 7 * hops)
 

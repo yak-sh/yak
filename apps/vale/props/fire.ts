@@ -3,7 +3,7 @@
 // lava falling down its volcano; Cinderreach's vents; Ashkeep's tower, walls,
 // gate and banners; the Maw's obsidian and the thorn that grows out of it.
 import { ball, box, key, type Vox } from '../mesh.ts'
-import { noise, rand, stream } from '../rand.ts'
+import { noise, rand, stream } from '@yaks/game'
 import { boulders, type Kind, type Model, pickOf } from './kit.ts'
 
 let EMBER = [0xff7a2a, 0xffa040, 0xe0501a]

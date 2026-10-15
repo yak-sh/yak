@@ -3,7 +3,7 @@
 // white with rime and its stockaded holt; Frostpine's deep spruce and the
 // woodcutters' clearing; Icefall's frozen fall, crevasses and fields of
 // ice; Whitepeak's peak, cornices and high snow.
-import { fbm, lerp, smooth } from '../rand.ts'
+import { fbm, lerp, smooth } from '@yaks/game'
 import type { Prop } from '../terrain.ts'
 import {
   bump,

@@ -15,7 +15,7 @@ import { ABILITIES, does, GIVES, OFF, useAbilities } from './abilities.ts'
 import { DESIGN_BUDGET, fits, price } from './ability-design.ts'
 import { effect } from './ability-effects.ts'
 import { rows } from './abilities_fixture.ts'
-import { uuidOf } from './rand.ts'
+import { uuidOf } from '@yaks/game'
 import { formOf, SKILLS } from './skills.ts'
 import words from './vocab.json' with { type: 'json' }
 

@@ -3,7 +3,7 @@
 // A panel of any shape shows the square whole across its shorter side, and
 // the ground beyond it along its longer side.
 import { LEVELS, SIZE, type Spot } from './levels.ts'
-import { clamp } from './rand.ts'
+import { clamp } from '@yaks/game'
 
 export type Box = [number, number, number]
 

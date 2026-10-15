@@ -39,7 +39,7 @@ import {
   useThemes,
 } from './levels.ts'
 import { bulk, halfOf, KINDS, raisedOf, useBuildingKinds } from './props.ts'
-import { clamp, fbm, hash, lerp, rand, smooth } from './rand.ts'
+import { clamp, fbm, hash, lerp, rand, smooth } from '@yaks/game'
 import {
   type Blend,
   blend,

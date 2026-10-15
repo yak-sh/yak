@@ -27,7 +27,7 @@ import {
 } from './mapview.ts'
 import type { Panel } from './panel.ts'
 import type { Frame } from './play.ts'
-import { clamp } from './rand.ts'
+import { clamp } from '@yaks/game'
 import { tint } from './rarity.ts'
 import { originOf, regionOf } from './regions.ts'
 import { hint } from './tile.ts'

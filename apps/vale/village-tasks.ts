@@ -1,7 +1,7 @@
 // Vale reads a sibling app's completed village tasks at the page boundary.
 // The selected hero and all villager behavior stay in Vale; this module reads
 // only the completion rows the task app owns, through its documented store.
-import { uuidOf } from './rand.ts'
+import { uuidOf } from '@yaks/game'
 
 export let WELCOME = uuidOf('village-task/pip/welcome')
 

@@ -5,7 +5,7 @@ import * as THREE from 'three'
 import type { bits } from './fx.ts'
 import { halo } from './halo.ts'
 import { GRADES, type Rarity } from './rarity.ts'
-import { hashOf } from './rand.ts'
+import { hashOf } from '@yaks/game'
 import type { Seen } from './work.ts'
 
 let LOOK: Record<

@@ -4,7 +4,7 @@
 // Heatherfell's heather, the stones on its fell and its scree; Oldwall's wall,
 // bracken and autumn wood; Kingsbarrow's barrow, its moor of graves and the
 // old king's hall; Giantsteps' stair of basalt and its columns.
-import { fbm, lerp, smooth } from '../rand.ts'
+import { fbm, lerp, smooth } from '@yaks/game'
 import type { Prop } from '../terrain.ts'
 import {
   bump,

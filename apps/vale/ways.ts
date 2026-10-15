@@ -16,7 +16,7 @@ import {
   type Spot,
 } from './levels.ts'
 import { boundaryAt, lie } from './regions.ts'
-import { clamp, fbm, lerp } from './rand.ts'
+import { clamp, fbm, lerp } from '@yaks/game'
 
 /** Ground at or under this height, in metres, is shore: sand, never dry. */
 export let SHORE = 5

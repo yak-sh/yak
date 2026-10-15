@@ -1,5 +1,5 @@
-// The scale a hero grows on. XP already earned keeps its meaning; the
-// numbers used in combat stay small enough to read across sixty levels.
+// A level curve with small combat numbers. Kept stable so experience already
+// earned keeps its meaning when a game adopts these rules.
 
 export let need = (lvl: number): number => Math.round(80 * (lvl - 1) ** 2.4)
 

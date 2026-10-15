@@ -200,7 +200,8 @@
     "./packages/tracker",
     "./packages/timing",
     "./packages/inbox",
-    "./packages/host"
+    "./packages/host",
+    "./packages/game"
   ],
   "exclude": [
     "packages/workerd/conform.ts",

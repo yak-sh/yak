@@ -3,7 +3,7 @@
 // pool; Palmwell's palm grove, caravan camp and golden dunes; Sunscar's great
 // dunes, the bones in them, the buried town and the scar; Redmesa's red rock,
 // buttes and spring; Tombsands' necropolis, sunken tomb, dunes and cliffs.
-import { fbm, lerp, smooth } from '../rand.ts'
+import { fbm, lerp, smooth } from '@yaks/game'
 import type { Prop } from '../terrain.ts'
 import { HILLS } from './hills.ts'
 import {

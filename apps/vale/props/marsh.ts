@@ -4,7 +4,7 @@
 // dig; the Sunken Kirk's bell tower, graves, yews and crypt; Bogheart's moss,
 // Granny Rush's hut and the briar's root; Sporefen's ink caps and puffballs.
 import { ball, box, key, type Vox } from '../mesh.ts'
-import { noise, rand, stream } from '../rand.ts'
+import { noise, rand, stream } from '@yaks/game'
 import { canopy, type Kind, type Model, OLD, pickOf, TIMBER } from './kit.ts'
 
 let reed = (seed: number): Model => {

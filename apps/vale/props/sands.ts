@@ -5,7 +5,7 @@
 // buried town and the glass of the scar; Redmesa's hoodoos, its arch and its
 // cottonwoods; Tombsands' pyramid, obelisks, tombs, urns and the colossus.
 import { ball, box, key, type Vox } from '../mesh.ts'
-import { noise, rand, stream } from '../rand.ts'
+import { noise, rand, stream } from '@yaks/game'
 import {
   boulders,
   canopy,

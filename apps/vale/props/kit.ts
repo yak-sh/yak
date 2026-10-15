@@ -2,7 +2,7 @@
 // few shapes more than one land builds from (a canopy, a heap of boulders).
 import type { Raised } from '../buildings/kit.ts'
 import { ball, key, unkey, type Vec, type Vox } from '../mesh.ts'
-import { noise, stream } from '../rand.ts'
+import { noise, stream } from '@yaks/game'
 import type { Craft } from '../trades.ts'
 
 /** A prop's voxels, how big each is, in metres, and where voxel (0, 0, 0)'s

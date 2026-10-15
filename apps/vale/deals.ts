@@ -16,7 +16,7 @@ import { comp, num, str } from './bundle.ts'
 import type { Bundle, Me, Net } from './net.ts'
 import type { Sheet } from './play.ts'
 import { type Giver, GIVERS } from './quests.ts'
-import { uuidOf } from './rand.ts'
+import { uuidOf } from '@yaks/game'
 import { itemLevel } from './rarity.ts'
 import {
   type Book,

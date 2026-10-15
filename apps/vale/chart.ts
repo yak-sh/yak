@@ -7,7 +7,7 @@
 import { type Palette, paletteOf } from './ground.ts'
 import { levelOf } from './levels.ts'
 import { bulk, KINDS } from './props.ts'
-import { clamp } from './rand.ts'
+import { clamp } from '@yaks/game'
 import {
   CHUNK,
   type Patch,

@@ -1,7 +1,7 @@
 // What every land's kinds of place are made with: what tops the ground, a
 // kind of place, and the shapes more than one land uses.
 import type { Prop } from '../terrain.ts'
-import { smooth } from '../rand.ts'
+import { smooth } from '@yaks/game'
 
 /** What a column is topped with. */
 export let Top = {

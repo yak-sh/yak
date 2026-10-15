@@ -9,8 +9,8 @@ import { beastId, BEASTS } from './beasts.ts'
 import type { Fighter } from './beasts.ts'
 import type { Bundle } from './net.ts'
 import type { Quest } from './quests.ts'
-import { need, power } from './progress.ts'
-import { hashOf, noise, stream } from './rand.ts'
+import { need, power } from '@yaks/game'
+import { hashOf, noise, stream } from '@yaks/game'
 import { dropped, type Rarity } from './rarity.ts'
 
 /** The xp a level of experience takes, counted from nothing. A creature's
@@ -30,7 +30,7 @@ import { dropped, type Rarity } from './rarity.ts'
  * assertEquals(levelOf(need(61)), 60)
  * ```
  */
-export { maxHp, need, power } from './progress.ts'
+export { maxHp, need, power } from '@yaks/game'
 
 /** The highest level a hero reaches. */
 export let TOP = 60

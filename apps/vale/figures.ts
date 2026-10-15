@@ -34,7 +34,7 @@ import {
   stride,
   topple,
 } from './parts.ts'
-import { lerp } from './rand.ts'
+import { lerp } from '@yaks/game'
 import { flash, soft } from './soft.ts'
 import { LAND } from './strike.ts'
 

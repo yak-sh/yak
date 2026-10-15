@@ -2,7 +2,7 @@
 // each level's own: Glowcap's blue caps and its houses in their stems;
 // Gleamdeep's violet caps, its amethyst and the great geode; Shardvault's
 // pale caps, its shards and its vault.
-import { fbm } from '../rand.ts'
+import { fbm } from '@yaks/game'
 import {
   bump,
   type Feature,

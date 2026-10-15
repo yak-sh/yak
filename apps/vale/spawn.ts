@@ -9,7 +9,7 @@ import { comp, str } from './bundle.ts'
 import type { Home } from './homes.ts'
 import type { Bundle } from './net.ts'
 import { QUESTS } from './quests.ts'
-import { hashOf } from './rand.ts'
+import { hashOf } from '@yaks/game'
 import { entriesOf, killsOf, levelOf, xpOf } from './rules.ts'
 
 /** Three metres ahead, in the same yaw convention as play.ts. */

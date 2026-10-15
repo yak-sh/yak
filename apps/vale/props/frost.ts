@@ -5,7 +5,7 @@
 // stumps; Icefall's frozen fall; Whitepeak's cairn and flags on the top and
 // the hut in the high snow.
 import { ball, box, key, type Vox } from '../mesh.ts'
-import { noise, stream } from '../rand.ts'
+import { noise, stream } from '@yaks/game'
 import { boulders, type Kind, type Model, pickOf, TIMBER } from './kit.ts'
 
 let SNOW = 0xf1f4f6

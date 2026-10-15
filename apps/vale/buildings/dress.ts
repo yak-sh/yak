@@ -4,7 +4,7 @@
 // A village names its dress (features/kit.ts), and every building in it is
 // raised in that.
 import { FOUND, TIMBER } from '../props/kit.ts'
-import { rand } from '../rand.ts'
+import { rand } from '@yaks/game'
 import { type Dress, type Paint, shade } from './kit.ts'
 
 let mod = (n: number, m: number) => ((n % m) + m) % m

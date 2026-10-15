@@ -3,7 +3,7 @@
 // woods; Fenhollow's fen of cotton grass and peat, and the dig in its ruins;
 // the Sunken Kirk and its churchyard; Bogheart's bog and the briar's root;
 // Sporefen's fen and its wood of ink caps and puffballs.
-import { fbm, lerp, smooth } from '../rand.ts'
+import { fbm, lerp, smooth } from '@yaks/game'
 import type { Prop } from '../terrain.ts'
 import { DEEP } from './deep.ts'
 import { HILLS } from './hills.ts'

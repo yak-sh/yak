@@ -4,7 +4,7 @@
 // towers, autumn oaks and bracken; Kingsbarrow's barrow door, hall posts and
 // throne; Giantsteps' basalt columns.
 import { ball, box, key, type Vox } from '../mesh.ts'
-import { noise, stream } from '../rand.ts'
+import { noise, stream } from '@yaks/game'
 import { canopy, type Kind, type Model, OLD, pickOf, TIMBER } from './kit.ts'
 
 let heather = (seed: number): Model => {

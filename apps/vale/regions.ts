@@ -16,7 +16,7 @@
 // every lattice cell grows another named region.
 import { type Feature, FEATURES } from './features.ts'
 import { levelAt, levelOf, LEVELS, SIZE, type Spot } from './levels.ts'
-import { fbm, hashOf, lerp, smooth } from './rand.ts'
+import { fbm, hashOf, lerp, smooth } from '@yaks/game'
 
 /** A place of a level where it lies in the world: its level, its name, its
  * kind, its feature, and its middle in metres; its shape's noise salt; and

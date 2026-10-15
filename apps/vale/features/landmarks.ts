@@ -1,7 +1,7 @@
 // Valleys and castles beyond the authored lands. They are places, so their
 // shape and their standing stones grow from the same world position on every
 // page and at every terrain detail.
-import { fbm, lerp, smooth } from '../rand.ts'
+import { fbm, lerp, smooth } from '@yaks/game'
 import type { Prop } from '../terrain.ts'
 import { type Feature, Top } from './kit.ts'
 
