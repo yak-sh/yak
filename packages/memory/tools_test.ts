@@ -144,12 +144,22 @@ test('a topic is its name, and a name said twice is one topic', async () => {
   )
 })
 
-test("a name holding another topic's words, or held by them, is refused", async () => {
+// Graphs of topics, each written once at load: the cases below only ask.
+let topical = async (briefs: [string, string][]) => {
   let g = fresh()
-  await write(
-    g,
-    await ask('topic_new', { name: 'market design', body: 'the market' }, g),
-  )
+  for (let [name, body] of briefs) {
+    await write(g, await ask('topic_new', { name, body }, g))
+  }
+  return g
+}
+let market = await topical([['market design', 'the market']])
+let subjects = await topical([
+  ['testing', 'what a test checks'],
+  ['naming', 'one thing, one name'],
+])
+
+test("a name holding another topic's words, or held by them, is refused", async () => {
+  let g = market
   for (let name of ['economic market design', 'markets', 'design']) {
     await assertRejects(
       () => ask('topic_new', { name, body: 'the same' }, g),
@@ -164,15 +174,7 @@ test("a name holding another topic's words, or held by them, is refused", async 
 })
 
 test('find answers the topics holding the words, else every one by name', async () => {
-  let g = fresh()
-  for (
-    let [name, body] of [['testing', 'what a test checks'], [
-      'naming',
-      'one thing, one name',
-    ]]
-  ) {
-    await write(g, await ask('topic_new', { name, body }, g))
-  }
+  let g = subjects
   let names = (bs: Bundle[]) => bs.map((b) => part(b, 'topic').name)
   assertEquals(names(await ask('topic_find', {}, g)), ['naming', 'testing'])
   assertEquals(names(await ask('topic_find', { said: 'check' }, g)), [
@@ -230,7 +232,9 @@ test('the words are marked where their speaker first said them', async () => {
   )
 })
 
-test('source is where a person said the words, never a quote of them', async () => {
+// A quote of Jeff's words, older than the entry where he said them, written
+// once at load: a source only reads.
+let quoted = await (async () => {
   let g = fresh()
   await writers(g)
   await write(g, [{
@@ -238,6 +242,11 @@ test('source is where a person said the words, never a quote of them', async () 
     doc: { body: 'Jeff says: "always commit your changes"' },
   }], agent)
   await write(g, [said('s1', 1, 'ok. always commit\nyour  changes')], jeff)
+  return g
+})()
+
+test('source is where a person said the words, never a quote of them', async () => {
+  let g = quoted
   let source = (said: string) => ask('memory_source', { said, by: 'jeff' }, g)
   assertEquals(eids(await source('always commit your changes')), ['s1.1'])
   await assertRejects(() => source('Jeff says'), Refused, 'nothing jeff wrote')
@@ -316,11 +325,23 @@ test('feedback names who gave it, or says only that somebody did', async () => {
   assertEquals(await by(''), {})
 })
 
-test('a patch leaves alone what the line left out', async () => {
+// One memory in a graph of its own beside a project, saved at load, so each
+// case below times only the save it is about.
+let kept = async (args: Record<string, unknown> = {}) => {
   let g = fresh()
   await write(g, [{ entity: { eid: 'p19' }, project: {} }])
-  await save({ said: 'use grams, never cups', title: 'measurements' }, g)
-  let [m] = await marks(g)
+  let [m] = eids(await save({ said: 'use grams, never cups', ...args }, g))
+  return { g, m }
+}
+let titled = await kept({ title: 'measurements' })
+let [unknowing, knowing, moved] = [await kept(), await kept(), await kept()]
+// The words `moved` held when they were read, and then replaced by a save
+// that passed their token.
+let stale = witnessed(await read(moved.g, moved.m)).$was!.doc.body
+await save({ id: moved.m, said: 'use cups', was: stale }, moved.g)
+
+test('a patch leaves alone what the line left out', async () => {
+  let { g, m } = titled
   await save({ id: m, scope: 'p19', context: 'the recipe app' }, g)
   assertEquals(part(await read(g, m), 'doc'), {
     title: 'measurements',
@@ -331,21 +352,25 @@ test('a patch leaves alone what the line left out', async () => {
 })
 
 test('the words are not replaced by somebody who never read them', async () => {
-  let g = fresh()
-  await save({ said: 'use grams, never cups' }, g)
-  let [m] = await marks(g)
+  let { g, m } = unknowing
   await assertRejects(
     () => ask('memory_save', { id: m, said: 'use cups' }, g),
     Refused,
     unread(m),
   )
-  // With the token that came back on the read, it lands.
+})
+
+test('with the token that came back on a read, new words land', async () => {
+  let { g, m } = knowing
   let was = witnessed(await read(g, m)).$was!.doc.body
   await save({ id: m, said: 'use cups', was }, g)
   assertEquals(part(await read(g, m), 'doc').body, 'use cups')
-  // And a token for words that have since moved is refused, whole.
+})
+
+test('a token for words that have since moved is refused, whole', async () => {
+  let { g, m } = moved
   await assertRejects(
-    () => save({ id: m, said: 'use spoons', was }, g),
+    () => save({ id: m, said: 'use spoons', was: stale }, g),
     Error,
     'has moved since it was read',
   )
@@ -360,11 +385,18 @@ test('a memory this graph does not hold is said so', async () => {
   )
 })
 
-test('a recall answers whole memories, each wearing its token', async () => {
+// Two memories, the older a correction, saved once at load: a recall only
+// reads.
+let recalled = await (async () => {
   let g = fresh()
   await write(g, [{ entity: { eid: 'jeff' }, person: { name: 'Jeff' } }])
   await save({ said: 'use grams, never cups', feedback: 'jeff' }, g)
   await save({ said: 'always commit your changes' }, g)
+  return g
+})()
+
+test('a recall answers whole memories, each wearing its token', async () => {
+  let g = recalled
   let out = await ask('memory_recall', {}, g)
   // The newest words first.
   assertEquals(out.map((b) => heard(b).said), [
@@ -514,13 +546,17 @@ test('a host refuses edits and marks outside its memory space', async () => {
   assertEquals(part(await read(g, 's1.1'), 'memory'), undefined)
 })
 
-test('a host places speaker marks only on memories in its space', async () => {
-  let { g, ada, a, b, save } = bounded
+test('a host places speaker marks on memories in its space', async () => {
+  let { g, ada, a, save } = bounded
   let [marked] = await save({ said: 'use grams', feedback: 'jeff' })
   assertEquals(marked.entity.eid, a)
   let memory = part(await read(g, a), 'memory')
   assertEquals([memory.space, memory.by], [ada, 'jeff'])
   assertEquals(part(await read(g, a), 'created').by, 'jeff')
+})
+
+test('a host places no speaker marks outside its space', async () => {
+  let { g, ada, a, b, save } = bounded
   // The other space and the unscoped transcript both hold these words;
   // neither is a place this host may mark them.
   let [kept] = await save({ said: 'never use cups', feedback: 'jeff' })

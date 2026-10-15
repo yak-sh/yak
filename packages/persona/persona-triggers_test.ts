@@ -257,17 +257,37 @@ test('archiving what holds no checkout starts no pass', async () => {
   equal(await archive(g, said, 'note', true), false)
 })
 
-test('putting a project with a repository away, or bringing it back, owes persona files', async () => {
-  let { g, queued } = fixture()
-  await g.apply([
-    { entity: { eid: 'project' }, project: {}, repo: { repository: 'repo' } },
-    { entity: { eid: 'plain' }, project: {} },
+// A project with a repository and one without, archived or not, set up beside
+// the tests with nothing owed yet, so each times only the one move it makes.
+let projects = async (archived: Comp | null) => {
+  let f = fixture()
+  await f.g.apply([
+    {
+      entity: { eid: 'project' },
+      project: {},
+      repo: { repository: 'repo' },
+      archived,
+    },
+    { entity: { eid: 'plain' }, project: {}, archived },
   ])
-  for (let [archived, owed] of [[{}, 1], [null, 2]] as const) {
-    await g.apply([
-      { entity: { eid: 'project' }, archived },
-      { entity: { eid: 'plain' }, archived },
-    ])
-    equal((await queued()).length, owed)
-  }
+  await f.clear()
+  return f
+}
+let [active, shelved] = [await projects(null), await projects({})]
+let shelve = (g: Graph, archived: Comp | null) =>
+  g.apply([
+    { entity: { eid: 'project' }, archived },
+    { entity: { eid: 'plain' }, archived },
+  ])
+
+test('putting a project with a repository away owes persona files', async () => {
+  let { g, queued } = active
+  await shelve(g, {})
+  equal((await queued()).length, 1)
+})
+
+test('bringing a project with a repository back owes persona files', async () => {
+  let { g, queued } = shelved
+  await shelve(g, null)
+  equal((await queued()).length, 1)
 })

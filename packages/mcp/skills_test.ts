@@ -356,10 +356,10 @@ let httpSkills = (() => {
   return { files, request, reads: () => reads, path, encoder }
 })()
 
-test('HTTP tool exchanges do not read skills, while discovery stays fresh in both eras', async () => {
-  let { files, request, reads, path, encoder } = httpSkills
-  // Each era uses this preparation boundary before dispatching its request.
-  for (let opening of ['initialize', 'server/discover']) {
+// Each era uses this preparation boundary before dispatching its request.
+for (let opening of ['initialize', 'server/discover']) {
+  test(`HTTP tool exchanges do not read skills, while discovery stays fresh in the ${opening} era`, async () => {
+    let { files, request, reads, path, encoder } = httpSkills
     files.clear()
     let initial = await request(opening)
     assert(initial.capabilities.resources)
@@ -393,5 +393,5 @@ test('HTTP tool exchanges do not read skills, while discovery stays fresh in bot
     assert(fresh.resources.has('skill://skills/repo/testing/SKILL.md'))
     // New files appear on the next exchange, not in an earlier snapshot.
     assert(!initial.prompts.has('skill:testing'))
-  }
-})
+  })
+}
