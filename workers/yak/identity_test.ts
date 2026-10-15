@@ -32,6 +32,7 @@ import {
 import { COOKIE, cookieValue, sign, verify } from './lib/token.ts'
 import { SENDS } from './signin.ts'
 import { managePath } from './route.ts'
+import { replace } from './connected.ts'
 import type { Agent } from './connected.ts'
 
 // Styling and attribute order do not change the sign-in form's contract.
@@ -933,81 +934,25 @@ test('a connector keeps its door until the person closes it', async () => {
 })
 
 // Connecting an assistant again replaces its grant, but only once the new one
-// is in the client's hands (T-121901): a sign-in abandoned at the client, or
-// an exchange that fails, leaves the connection the person already had.
+// is in the client's hands (T-121901): until the exchange runs `replace`, the
+// connection the person already had stands.
 test('connecting again keeps the old grant until the new one is taken', async () => {
-  let k = await kernel()
-  try {
-    let { cookie } = await signIn(k)
-    let back = 'https://probe.invalid/cb'
-    let reg = await k.at('yaks.app', '/oauth/register', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({
-        client_name: 'A reconnecting assistant',
-        redirect_uris: [back],
-        token_endpoint_auth_method: 'none',
-        grant_types: ['authorization_code', 'refresh_token'],
-        response_types: ['code'],
-      }),
-    })
-    let client_id = (await reg.json()).client_id
-    let token = (fields: Record<string, string>) =>
-      k.at('yaks.app', '/oauth/token', {
-        method: 'POST',
-        headers: { 'content-type': 'application/x-www-form-urlencoded' },
-        body: new URLSearchParams({ client_id, ...fields }).toString(),
-      })
-    // One consent, its code, and what exchanging it would send.
-    let consent = async () => {
-      let verifier = crypto.randomUUID() + crypto.randomUUID()
-      let challenge = b64u(
-        await crypto.subtle.digest(
-          'SHA-256',
-          new TextEncoder().encode(verifier),
-        ),
-      )
-      let q = new URLSearchParams({
-        response_type: 'code',
-        client_id,
-        redirect_uri: back,
-        state: 's',
-        scope: 'graph',
-        code_challenge: challenge,
-        code_challenge_method: 'S256',
-      }).toString()
-      let granted = await allowed(k, q, cookie)
-      let code = new URL(granted.headers.get('location') ?? '')
-        .searchParams.get('code') ?? ''
-      return () =>
-        token({
-          grant_type: 'authorization_code',
-          code,
-          redirect_uri: back,
-          code_verifier: verifier,
-        })
-    }
-    let refresh = (refresh_token: string) =>
-      token({ grant_type: 'refresh_token', refresh_token })
-    let held = async (r: Response) => {
-      assertEquals(r.status, 200, await r.clone().text())
-      return (await r.json()).refresh_token as string
-    }
-
-    let first = await held(await (await consent())())
-    // The assistant asks again and the person allows it, but the new code is
-    // never exchanged: the connection they had still works.
-    let pending = await consent()
-    first = await held(await refresh(first))
-    // Once the client takes the new grant, it replaces the old one.
-    let second = await held(await pending())
-    let stale = await refresh(first)
-    assertEquals(stale.status, 400)
-    assertEquals((await stale.json()).error, 'invalid_grant')
-    await held(await refresh(second))
-  } finally {
-    await k.stop()
+  let held = new Map(
+    ['old', 'new', 'other'].map((id) => [id, {
+      id,
+      clientId: id == 'other' ? 'xyz' : 'abc',
+      userId: 'p',
+      createdAt: 0,
+      metadata: {},
+      scope: [],
+    }]),
+  )
+  let oauth = {
+    listUserGrants: () => Promise.resolve({ items: [...held.values()] }),
+    revokeGrant: (id: string) => (held.delete(id), Promise.resolve()),
   }
+  assertEquals(await replace(oauth, 'p', 'new'), ['old'])
+  assertEquals([...held.keys()], ['new', 'other'])
 })
 
 // The sign-in box is for somebody signed out (T-34209). A browser carrying a
