@@ -32,7 +32,7 @@ let BATCH = 100
 let LIMITED = 1134
 // How long a refused batch waits before each try again: a token comes back
 // every twelve seconds, so the last wait spans one. A writer waits through
-// all of them; past the last, the pages keep their short lifetime (cache.ts
+// all of them; past the last, the pages keep their short lifetime (site.ts
 // `KEPT`) and the failure is reported.
 let WAITS = [1_000, 4_000, 12_000]
 

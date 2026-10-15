@@ -9,7 +9,7 @@
 // the address must be what it wrote: app_deploy, app_set and the rest answer
 // only once their purge has. Every door writes the directory through here, so
 // none has to remember to. A purge lost to a crash between the two leaves a
-// page no longer than its short lifetime (cache.ts `KEPT`).
+// page no longer than its short lifetime (page-cache.ts `KEPT`).
 import type { Bundle, Hook, Plugin, Tx } from '@yaks/graph'
 import type { Options } from './store.ts'
 import { APP_PARTS, idOf, SPACE_PARTS, spaceOf } from '../directory.ts'
