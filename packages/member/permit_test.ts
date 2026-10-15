@@ -248,13 +248,18 @@ test('permission requires a live stored target and obeys mode and mark floors', 
   await assertRejects(async () => await f.apply(person, mark()), Denied)
 })
 
-test('a completion does not accept client stamps or forged actors', async () => {
-  let f = await fixture()
+let forging = fixture()
+test('a completion does not accept forged actors', async () => {
   await assertRejects(async () =>
-    await f.apply({ by: actors.stranger }, {
+    await forging.apply({ by: actors.stranger }, {
       ...mark(),
       $actor: person,
     }), Denied)
+})
+
+let stamping = fixture()
+test('a completion does not accept client stamps, and the server stamps it', async () => {
+  let f = stamping
   await assertRejects(
     async () =>
       await f.apply(person, {
@@ -277,19 +282,26 @@ test('a completion does not accept client stamps or forged actors', async () => 
   })
 })
 
-test('companion permission follows the target current ownership', async () => {
-  let f = await fixture()
-  let next = { by: crypto.randomUUID(), via: crypto.randomUUID() }
+// A fixture whose hero has passed from its owner to `next`.
+let next = { by: crypto.randomUUID(), via: crypto.randomUUID() }
+let passed = async () => {
+  let f = fixture()
   await f.g.apply(
-    signed([{
-      entity: { eid: 'hero' },
-      created: next,
-    }], owner),
+    signed([{ entity: { eid: 'hero' }, created: next }], owner),
     { trusted: true, stamp: false },
   )
-  await assertRejects(async () => await f.apply(person, mark()), Denied)
-  await f.apply(next, mark())
-  assertEquals((await f.read()).completed, {
+  return f
+}
+
+let former = await passed()
+test('companion permission leaves the target former owner', async () => {
+  await assertRejects(async () => await former.apply(person, mark()), Denied)
+})
+
+let current = await passed()
+test('companion permission follows the target current ownership', async () => {
+  await current.apply(next, mark())
+  assertEquals((await current.read()).completed, {
     at: '2026-10-02T00:00:00Z',
     ...next,
   })

@@ -9,42 +9,45 @@ import type { Bundle } from './bundle.ts'
 
 for (let async of [false, true]) {
   for (let veto of [false, true]) {
-    test(`beforeWrite: independent batches require unanimous guards (${async}, ${veto})`, async () => {
-      let base = memory()
-      let writes: number[] = [], seen: number[] = [], journal: Bundle[] = []
-      let counted: Storage = {
-        ...base,
-        tx: (body) =>
-          base.tx((tx) =>
-            body({
-              ...tx,
-              patch: (bs) => {
-                let docs = bs.filter((b) => b.doc)
-                if (docs.length) writes.push(docs.length)
-                return tx.patch(bs)
-              },
-            })
-          ),
-      }
-      let g = graph({ storage: async ? slow(counted) : counted, vocab: books })
-      await g.apply([{ entity: { eid: 'dead' }, doc: { title: 'gone' } }])
-      await g.apply([{ entity: { eid: 'dead' }, tombstone: {} }])
-      writes.length = 0
-      g.use({
-        name: 'independent',
-        beforeWrite: () =>
-          Object.assign((bs: Bundle[]) => {
-            seen.push(bs.length)
-            return bs.map((b) => ({ ...b, doc: { title: 'rewritten' } }))
-          }, { independent: true }),
-        hooks: {
-          journal: (bs) => {
-            journal = bs
-            return bs
-          },
+    // A graph holding a dead entity, whose independent guard rewrites every
+    // doc, counting the docs each storage write carries; with `veto`, an
+    // ordered guard beside it.
+    let base = memory()
+    let writes: number[] = [], seen: number[] = [], journal: Bundle[] = []
+    let counted: Storage = {
+      ...base,
+      tx: (body) =>
+        base.tx((tx) =>
+          body({
+            ...tx,
+            patch: (bs) => {
+              let docs = bs.filter((b) => b.doc)
+              if (docs.length) writes.push(docs.length)
+              return tx.patch(bs)
+            },
+          })
+        ),
+    }
+    let g = graph({ storage: async ? slow(counted) : counted, vocab: books })
+    await g.apply([{ entity: { eid: 'dead' }, doc: { title: 'gone' } }])
+    await g.apply([{ entity: { eid: 'dead' }, tombstone: {} }])
+    writes.length = 0
+    g.use({
+      name: 'independent',
+      beforeWrite: () =>
+        Object.assign((bs: Bundle[]) => {
+          seen.push(bs.length)
+          return bs.map((b) => ({ ...b, doc: { title: 'rewritten' } }))
+        }, { independent: true }),
+      hooks: {
+        journal: (bs) => {
+          journal = bs
+          return bs
         },
-      })
-      if (veto) g.use({ name: 'ordered', beforeWrite: () => (bs) => bs })
+      },
+    })
+    if (veto) g.use({ name: 'ordered', beforeWrite: () => (bs) => bs })
+    test(`beforeWrite: independent batches require unanimous guards (${async}, ${veto})`, async () => {
       let out = g.apply(['a', 'dead', 'b'].map((eid) => ({
         entity: { eid },
         doc: { title: 'input' },
@@ -105,28 +108,32 @@ for (let async of [false, true]) {
     assertEquals(journal, [{ pages: 2 }, { pages: 3 }, null, { pages: 4 }])
   })
 
+  // A publisher, its book, the book's review and a bookmark on the
+  // publisher, and a guard that checks what the second operation sees.
+  let press = graph({
+    storage: async ? slow(memory()) : memory(),
+    vocab: books,
+  })
+  await press.apply([
+    { entity: { eid: 'p' }, doc: { title: 'publisher' } },
+    { entity: { eid: 'b' }, book: { publisher: 'p' } },
+    { entity: { eid: 'r' }, review: { book: 'b' } },
+    { entity: { eid: 'm' }, bookmark: { of: 'p' } },
+  ])
+  let calls = 0
+  press.use({
+    name: 'prefix',
+    beforeWrite: () => (bs, tx) =>
+      after(tx.get(['b', 'm']), (found) => {
+        if (calls++ == 1) {
+          assertEquals(comp(found[0], 'book').publisher, null)
+          assertEquals(found[1].bookmark, undefined)
+        }
+        return bs
+      }),
+  })
   test(`beforeWrite: death, releases and detaches precede the next check (${async})`, async () => {
-    let storage = async ? slow(memory()) : memory()
-    let g = graph({ storage, vocab: books })
-    await g.apply([
-      { entity: { eid: 'p' }, doc: { title: 'publisher' } },
-      { entity: { eid: 'b' }, book: { publisher: 'p' } },
-      { entity: { eid: 'r' }, review: { book: 'b' } },
-      { entity: { eid: 'm' }, bookmark: { of: 'p' } },
-    ])
-    let calls = 0
-    g.use({
-      name: 'prefix',
-      beforeWrite: () => (bs, tx) =>
-        after(tx.get(['b', 'm']), (found) => {
-          if (calls++ == 1) {
-            assertEquals(comp(found[0], 'book').publisher, null)
-            assertEquals(found[1].bookmark, undefined)
-          }
-          return bs
-        }),
-    })
-    let out = await g.apply([
+    let out = await press.apply([
       { entity: { eid: 'p' }, tombstone: {} },
       { entity: { eid: 'b' }, tombstone: {} },
       { entity: { eid: 'r' }, review: { stars: 4 } }, // already a casualty

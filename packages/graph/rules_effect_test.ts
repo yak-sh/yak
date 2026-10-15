@@ -64,45 +64,46 @@ test('a stored trigger ignores unrelated edits and observes another trigger writ
   assertEquals(seen, [['b1', { pages: 412 }, now, librarian]])
 })
 
-test('effect rules share a frozen view and resources, before hooks', () => {
-  let one = graph({ storage: memory(), vocab: books })
-  one.apply([{ entity: { eid: 'b1' }, book: { status: 'stocked' } }])
-  let seen: string[] = []
-  let calls = 0
-  let shelves: unknown[] = []
-  one.use({
-    name: 'shelf',
-    resources: { Shelf: () => ({ number: ++calls }) },
-    rules: [
-      {
-        phase: 'effect',
-        match: '*book, #Shelf',
-        produce: { book: { status: 'sold' } },
-        run: ({ Shelf }) => {
-          shelves.push(Shelf)
-          seen.push('sell')
-        },
-      },
-      {
-        phase: 'effect',
-        match: '*book, book.status=stocked, #Shelf',
-        run: ({ Shelf }) => {
-          shelves.push(Shelf)
-          seen.push('stocked')
-        },
-      },
-    ],
-    hooks: {
-      effect: (b) => {
-        seen.push('hook')
-        assertEquals(comp(held(one), 'book').status, 'sold')
-        return b
+// A shelf whose two effect rules and hook record the order they ran in.
+let shelved = graph({ storage: memory(), vocab: books })
+shelved.apply([{ entity: { eid: 'b1' }, book: { status: 'stocked' } }])
+let order: string[] = []
+let calls = 0
+let shelves: unknown[] = []
+shelved.use({
+  name: 'shelf',
+  resources: { Shelf: () => ({ number: ++calls }) },
+  rules: [
+    {
+      phase: 'effect',
+      match: '*book, #Shelf',
+      produce: { book: { status: 'sold' } },
+      run: ({ Shelf }) => {
+        shelves.push(Shelf)
+        order.push('sell')
       },
     },
-  })
-  let out = one.apply([{ entity: { eid: 'b1' }, book: { pages: 412 } }])
+    {
+      phase: 'effect',
+      match: '*book, book.status=stocked, #Shelf',
+      run: ({ Shelf }) => {
+        shelves.push(Shelf)
+        order.push('stocked')
+      },
+    },
+  ],
+  hooks: {
+    effect: (b) => {
+      order.push('hook')
+      assertEquals(comp(held(shelved), 'book').status, 'sold')
+      return b
+    },
+  },
+})
+test('effect rules share a frozen view and resources, before hooks', () => {
+  let out = shelved.apply([{ entity: { eid: 'b1' }, book: { pages: 412 } }])
   assert(!isPromise(out))
-  assertEquals(seen, ['sell', 'stocked', 'hook'])
+  assertEquals(order, ['sell', 'stocked', 'hook'])
   assertEquals(calls, 1)
   assert(shelves[0] === shelves[1])
   assertEquals(comp(out[0], 'book'), { pages: 412, status: 'sold' })
@@ -179,15 +180,18 @@ test('effect rules do not observe checks or refused writes', () => {
   assertEquals(held(one), undefined)
 })
 
-test('unrelated edits do not load stored views for checked effect rules', () => {
+// A graph holding b1 that counts the entity reads its storage answers, and
+// what an unrelated edit read before any rule was installed; then a checked
+// effect rule about bookmarks, counting its runs.
+let shelf = () => {
   let base = memory()
-  let reads = 0
+  let count = { reads: 0, observed: 0, ordinary: 0 }
   let one = graph({
     vocab: books,
     storage: {
       ...base,
       get: (eids, names) => {
-        if (eids.length) reads++
+        if (eids.length) count.reads++
         return base.get(eids, names)
       },
       tx: (body) =>
@@ -195,7 +199,7 @@ test('unrelated edits do not load stored views for checked effect rules', () => 
           body({
             ...tx,
             get: (eids, names) => {
-              if (eids.length) reads++
+              if (eids.length) count.reads++
               return tx.get(eids, names)
             },
           })
@@ -207,24 +211,34 @@ test('unrelated edits do not load stored views for checked effect rules', () => 
     book: { pages: 412 },
     doc: { title: 'Dune' },
   }])
-  reads = 0
+  count.reads = 0
   one.apply([{ entity: { eid: 'b1' }, doc: { title: 'First edit' } }])
-  let ordinary = reads
-  let observed = 0
+  count.ordinary = count.reads
   one.use({
     name: 'shelf',
     rules: [{
       phase: 'effect',
       match: '.book, *bookmark',
       run: () => {
-        observed++
+        count.observed++
       },
     }],
   })
-  reads = 0
+  count.reads = 0
+  return { one, count }
+}
+
+let unrelated = shelf()
+test('unrelated edits do not load stored views for checked effect rules', () => {
+  let { one, count } = unrelated
   one.apply([{ entity: { eid: 'b1' }, doc: { title: 'Second edit' } }])
-  assertEquals(reads, ordinary)
-  assertEquals(observed, 0)
+  assertEquals(count.reads, count.ordinary)
+  assertEquals(count.observed, 0)
+})
+
+let related = shelf()
+test('a checked effect rule observes a write it matches', () => {
+  let { one, count } = related
   one.apply([{ entity: { eid: 'b1' }, bookmark: { of: 'b1' } }])
-  assertEquals(observed, 1)
+  assertEquals(count.observed, 1)
 })
