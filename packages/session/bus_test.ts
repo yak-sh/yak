@@ -13,7 +13,7 @@ import { personaDoc } from '@yaks/persona/vocab'
 import { projectDoc } from '@yaks/project/vocab'
 import { ram } from '@yaks/ram'
 import { toolsDoc } from '@yaks/tools/vocab'
-import { loadVocab } from '@yaks/vocab'
+import { loadVocab, type VocabDoc } from '@yaks/vocab'
 import { test, until } from '@yaks/testing'
 import { due, feed, heard, reply } from './bus.ts'
 import { pendingItems } from './listen.ts'
@@ -146,21 +146,42 @@ let letter = (eid: string, title: string): Bundle => ({
   deliver: { to: 'outside' },
   doc: { title },
 })
-let POSTED = await image([
-  { entity: { eid: 'outside' }, session: { id: 'outside' } },
-  letter('letter', 'A letter'),
+// Each listener owns a private graph. Its fixed history is admitted once,
+// before the test calls the real hook and tool-reply doors. These outside
+// callers have no native process, persona or project to listen on behalf of.
+let words = (doc: VocabDoc, ...names: string[]): VocabDoc => ({
+  $defs: Object.fromEntries(names.map((name) => [name, doc.$defs![name]])),
+})
+let hookVocab = loadVocab([
+  words(kernelDoc, 'entity', 'created', 'updated'),
+  words(docDoc, 'doc'),
+  words(sessionDoc, 'session', 'hooked', 'entry', 'using'),
+  words(mailDoc, 'mail', 'deliver', 'notified'),
 ])
-let HOOKED = await image([
-  { entity: { eid: 'outside' }, session: { id: 'outside' }, hooked: {} },
-  letter('later', 'A later letter'),
-])
+let outside = (rows: Bundle[]) =>
+  graph({
+    vocab: hookVocab,
+    storage: laid(rows, ram(hookVocab, { computed: statusComputed })),
+  })
+let POSTED = outside(
+  await image([
+    { entity: { eid: 'outside' }, session: { id: 'outside' } },
+    letter('letter', 'A letter'),
+  ]),
+)
+let HOOKED = outside(
+  await image([
+    { entity: { eid: 'outside' }, session: { id: 'outside' }, hooked: {} },
+    letter('later', 'A later letter'),
+  ]),
+)
 let fork = { session_id: 'outside', agent_id: 'fork' }
 // Whether an item was said to the session it was for.
 let said = async (g: Graph, eid: string) =>
   (await g.get([eid]))[0].notified != null
 
 test('a session hears at its own hook, never through a subagent', async () => {
-  let g = bare(laid(POSTED))
+  let g = POSTED
   assertEquals(await heard(g, fork), {})
   assertEquals(await said(g, 'letter'), false)
   // a subagent's own tool reply, which wears the session's id, takes nothing
@@ -181,7 +202,7 @@ test('a session hears at its own hook, never through a subagent', async () => {
 })
 
 test('a hooked session hears nothing through a tool reply, only at its hook', async () => {
-  let g = bare(laid(HOOKED))
+  let g = HOOKED
   let call = { entity: { eid: 'call' }, created: { via: 'outside' } }
   assertEquals(await reply(g, call), [])
   assertEquals(await heard(g, fork), {})
@@ -362,8 +383,25 @@ let HELD = await image([
   { entity: { eid: 'news' }, knock: { target: 'p' }, doc: { body: 'bug' } },
 ])
 
+// This fixture holds knocks, not mail: keep the graph's real transcript and
+// project rules without installing unrelated letter delivery paths.
+let heldVocab = loadVocab([
+  words(kernelDoc, 'entity', 'created', 'updated'),
+  words(docDoc, 'doc'),
+  words(notifyDoc, 'knock'),
+  words(toolsDoc, 'content', 'output'),
+  words(mailDoc, 'notified'),
+  words(personaDoc, 'persona'),
+  words(projectDoc, 'project'),
+  words(sessionDoc, 'session', 'entry', 'using', 'claim'),
+])
+let held = graph({
+  vocab: heldVocab,
+  storage: laid(HELD, ram(heldVocab, { computed: statusComputed })),
+})
+
 test('RAM: what is held for a project is fed to its transcript at work, never one at rest', async () => {
-  let g = graph({ vocab, storage: laid(HELD) })
+  let g = held
   assertEquals(
     (await due(g)).map(({ session, item }) => [session, item.entity.eid]),
     [['native', 'knock'], ['native', 'news']],
