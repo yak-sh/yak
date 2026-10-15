@@ -2,14 +2,11 @@
 // vocabulary door passes a Store refusal through to its caller.
 import { test } from '@yaks/testing'
 import { assertEquals } from '@std/assert'
-import { type App, appStore, directory, type Space } from './directory.ts'
-import * as dirPart from './directory.ts'
+import type { App, Space } from './directory.ts'
 import type { Env } from './env.ts'
-import { KERNEL, metaOf } from './meta.ts'
+import { USES } from './door.ts'
 import { queried, vocabulary } from './page-graph.ts'
-import { vouched, type Who } from './session.ts'
-import { platform } from './testing.ts'
-import { call } from './tools.ts'
+import type { Who } from './session.ts'
 
 let space = { slug: 'page-words' } as Space
 let app = {
@@ -47,37 +44,14 @@ test('page vocabulary preserves a Store refusal', async () => {
 })
 
 test('a page query of its own words reaches its store once', async () => {
-  let { env } = platform('page-graph-secret')
-  let ADA = 'a0000000-0000-4000-8000-0000000000ad'
-  let dir = directory({ fetch: (r) => dirPart.fetch(r, env) }, true)
-  let ctx = { env, dir, person: ADA }
-  await call(ctx, 'space_new', { slug: 'ada', title: 'Ada' })
-  await call(ctx, 'app_new', { space: 'ada', slug: 'notes', title: 'Notes' })
-  let [ada] = await dir.spaces(ADA)
-  let [notes] = await dir.apps(ada)
-  let store = appStore(env.STORE, ada, notes)
-  await store('/vocab', { method: 'POST', body: '{}' }, KERNEL)
-  let owner = { person: ADA, role: 'owner' } as Who
-  await metaOf(store, vouched(owner)).apply([{
-    entity: { eid: '$n' },
-    doc: { title: 'Hi' },
-  }])
   let asked: string[] = []
-  let counted = {
-    ...env,
-    STORE: {
-      idFromName: (name: string) => env.STORE.idFromName(name),
-      get: (id: unknown) => ({
-        fetch: (req: Request) => {
-          asked.push(new URL(req.url).pathname)
-          return env.STORE.get(id).fetch(req)
-        },
-      }),
-    },
-  } as Env
-  assertEquals(titles(await queried(counted, ada, notes, owner, '.doc')), [
-    'Hi',
-  ])
+  let env = stub((req) => {
+    asked.push(new URL(req.url).pathname)
+    return Response.json([{ entity: { eid: 'n' }, doc: { title: 'Hi' } }], {
+      headers: { [USES]: '{}' },
+    })
+  })
+  assertEquals(titles(await queried(env, space, app, who, '.doc')), ['Hi'])
   assertEquals(asked, ['/query'])
 })
 
