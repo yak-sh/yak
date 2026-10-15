@@ -269,20 +269,29 @@ let site = (ctx: Ctx, owner = ctx.owner ?? ctx.d.ownerKey('entity')): Site => ({
     raw(`${source(ctx, comp)} as "${as.replaceAll('"', '""')}"`),
 })
 
-let identifiers = (ctx: Ctx, texts: string[]): Set<string> => {
+// The first `prefix` and a number that names nothing the texts, the
+// vocabulary or a shared table already name: a fresh alias. The texts are
+// searched for the candidate itself rather than read into every name they
+// hold, which costs as much as the statement is long on every read. A name
+// found inside a longer one is passed over too, so a few free names may be
+// skipped and a taken one never reused.
+let fresh = (
+  ctx: Ctx,
+  texts: string[],
+  prefix: string,
+  next = 0,
+): string => {
   let names = new Set(ctx.v.all.map((name) => name.toLowerCase()))
-  for (
-    let text of [
-      ...texts,
-      ctx.d.spine,
-      ...[...ctx.shared.values()].map((r) => r.cte.name),
-    ]
-  ) {
-    for (let name of text.match(/[A-Za-z_][A-Za-z_0-9]*/g) ?? []) {
-      names.add(name.toLowerCase())
-    }
+  let text = [
+    ...texts,
+    ctx.d.spine,
+    ...[...ctx.shared.values()].map((r) => r.cte.name),
+  ].join('\n').toLowerCase()
+  let name = prefix + next
+  while (names.has(name.toLowerCase()) || text.includes(name.toLowerCase())) {
+    name = prefix + ++next
   }
-  return names
+  return name
 }
 
 // Reuse bindings without asking each consumer to manage a CTE namespace.
@@ -292,10 +301,12 @@ let share = (ctx: Ctx, query: Query): Source => {
   let found = ctx.shared.get(query)
   if (found) return found.source
   let rendered = render(query)
-  let names = identifiers(ctx, [rendered.sql])
-  let prefix = `__shared_${ctx.d.name.replace(/[^A-Za-z_0-9]/g, '_')}_`
-  let next = ctx.shared.size, name = prefix + next
-  while (names.has(name.toLowerCase())) name = prefix + ++next
+  let name = fresh(
+    ctx,
+    [rendered.sql],
+    `__shared_${ctx.d.name.replace(/[^A-Za-z_0-9]/g, '_')}_`,
+    ctx.shared.size,
+  )
   let source = table(name)
   ctx.shared.set(query, {
     source,
@@ -490,6 +501,20 @@ let lowerScalar = (
   return null
 }
 
+// A derived read is an expression, often a large one, where a stored read is a
+// column: a test that names it twice (a list's null guard, a range's bounds)
+// would have SQLite prepare and evaluate it twice. Read into a row of its own,
+// it is written and evaluated once.
+let once = (expr: string, lower: (c: string) => Frag | null): Frag | null => {
+  let frag = lower(expr)
+  if (!frag || frag.sql.indexOf(expr) == frag.sql.lastIndexOf(expr)) return frag
+  let read = lower('"__once"."v"')
+  return read && {
+    sql: `(select ${read.sql} from (select ${expr} as "v") as "__once")`,
+    params: read.params,
+  }
+}
+
 // The entity table's identity columns as one set lookup, the list bound as one
 // parameter however long it is (the dialect's `among`), with a second term for
 // the numbers a `.entity.num=` or a human-readable id named. An operand list that
@@ -631,14 +656,13 @@ let single = (ctx: Ctx, hop: Hop, p: Pred): Cond => {
   if (!refs && op != EXISTS) {
     opaque(read.tag, 'a filter on it', `${hop.comp}.${hop.prop}`)
   }
-  let frag = refs ? refEq(ctx, hop.comp, hop.prop, values!) : lowerScalar(
-    ctx,
-    read.expr,
-    op,
-    p.value,
-    read.tag,
-    read.textAffinity,
-  )
+  let lower = (c: string) =>
+    lowerScalar(ctx, c, op, p.value, read.tag, read.textAffinity)
+  let frag = refs
+    ? refEq(ctx, hop.comp, hop.prop, values!)
+    : ctx.derived[`${hop.comp}.${hop.prop}`]
+    ? once(read.expr, lower)
+    : lower(read.expr)
   if (!frag) {
     throw new Unsupported('this predicate', `.${hop.comp}.${hop.prop} ${p.op}`)
   }
@@ -860,7 +884,10 @@ let path = (ctx: Ctx, hops: Hop[], p: Pred): Cond => {
   if (op != EXISTS) {
     opaque(read.tag, 'a filter on it', `${leaf.comp}.${leaf.prop}`)
   }
-  let frag = lowerScalar(ctx, read.expr, op, p.value, read.tag)
+  let lower = (c: string) => lowerScalar(ctx, c, op, p.value, read.tag)
+  let frag = ctx.derived[`${leaf.comp}.${leaf.prop}`]
+    ? once(read.expr, lower)
+    : lower(read.expr)
   if (!frag) {
     throw new Unsupported(
       'this path predicate',
@@ -1912,11 +1939,13 @@ let indexedRelation = (
         let s = rel(from, o)
         let eids = [...new Set(set.eids)]
         let known = set.clause && ctx.identities.get(set.clause)
-        let names = identifiers(ctx, [render(s).sql])
-        let prefix = `__named_${ctx.d.name.replace(/[^A-Za-z_0-9]/g, '_')}_`
-        let next = 0, name = prefix + next
-        while (names.has(name.toLowerCase())) name = prefix + ++next
-        let named = `"${name}"`
+        let named = `"${
+          fresh(
+            ctx,
+            [render(s).sql],
+            `__named_${ctx.d.name.replace(/[^A-Za-z_0-9]/g, '_')}_`,
+          )
+        }"`
         return {
           ...s,
           where: s.where && known ? holding(s.where, known) : s.where,
