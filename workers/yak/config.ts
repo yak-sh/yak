@@ -228,8 +228,8 @@ export let directoryConfig: Config = {
     { use: 'yak/pages', facets: ['graph'] },
     { use: 'yak/attribution', words: ['browser', 'attribute_writes'] },
     'yak/git',
-    'yak/wrap',
-    'yak/kills',
+    { use: 'yak/wrap', facets: ['graph'] },
+    { use: 'yak/kills', facets: ['graph'] },
     'yak/lapsed',
   ]),
 }
@@ -262,7 +262,10 @@ export let domains = {
     vocab: './facets/app-vocab.ts',
     effects: './facets/app-effects.ts',
   },
-  'yak/directory': { vocab: './facets/directory-vocab.ts' },
+  'yak/directory': {
+    vocab: './facets/directory-vocab.ts',
+    effects: './facets/directory-effects.ts',
+  },
   'yak/trash': {
     vocab: './facets/trash-vocab.ts',
     graph: './facets/trash-graph.ts',
@@ -271,7 +274,6 @@ export let domains = {
   'yak/meter': {
     vocab: './facets/meter-vocab.ts',
     graph: './facets/meter-graph.ts',
-    effects: './facets/meter-effects.ts',
   },
   'yak/pages': { graph: './facets/pages-graph.ts' },
   'yak/attribution': {
@@ -287,16 +289,8 @@ export let domains = {
     graph: './facets/git-graph.ts',
     effects: './facets/git-effects.ts',
   },
-  'yak/wrap': {
-    vocab: './facets/wrap-vocab.ts',
-    graph: './facets/wrap-graph.ts',
-    effects: './facets/wrap-effects.ts',
-  },
-  'yak/kills': {
-    vocab: './facets/kills-vocab.ts',
-    graph: './facets/kills-graph.ts',
-    effects: './facets/kills-effects.ts',
-  },
+  'yak/wrap': { graph: './facets/wrap-graph.ts' },
+  'yak/kills': { graph: './facets/kills-graph.ts' },
   'yak/lapsed': {
     vocab: './facets/lapsed-vocab.ts',
     effects: './facets/lapsed-effects.ts',

@@ -4,6 +4,5 @@ export let docs: VocabDoc[] = [{
   reserved: false,
   $defs: {
     git_mint: { effect: true, created: ['deploy'] },
-    git_install: { effect: true, start: true },
   },
 }]

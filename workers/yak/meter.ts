@@ -1,6 +1,6 @@
 // A space's allowances, counted spends and metered model/mail providers.
 // facets/meter-graph.ts owns the transactional spend rule and hourly sweep;
-// facets/meter-effects.ts seeds the directory's recurring usage schedule.
+// facets/directory-effects.ts seeds the directory's recurring usage schedule.
 import type { Host } from './host.ts'
 import { planSettings } from './route.ts'
 import type { Sender } from '@yaks/mail'

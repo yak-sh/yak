@@ -1,4 +1,4 @@
-// The directory's trash declarations and release start-up work.
+// The directory's trash declarations.
 import type { VocabDoc } from '@yaks/vocab'
 export let docs: VocabDoc[] = [{
   $defs: {
@@ -14,4 +14,4 @@ export let docs: VocabDoc[] = [{
       description: 'deliver current app or space dormancy until acknowledged',
     },
   },
-}, { reserved: false, $defs: { trash_install: { effect: true, start: true } } }]
+}]

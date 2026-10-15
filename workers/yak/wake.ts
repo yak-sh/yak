@@ -34,30 +34,45 @@ export type Wake = Bundle & { wake: Schedule }
 /** The job a directory wake asks its plugin to do when `fired` is written. */
 export { sweepDoc } from './facets/sweep-vocab.ts'
 
-/** Seed missing schedule rows without resetting a wake already held. */
+// A missing row as it is first written: at its first instant, unless it says
+// its own, and only if nobody wrote it first.
+let sown = (row: Wake, now: number): Bundle => {
+  let every = row.wake.every
+  let at = row.wake.at !== undefined
+    ? row.wake.at
+    : every
+    ? next(every, span(every) == null ? now - 1 : now)
+    : null
+  return { ...row, $was: { entity: { num: null } }, wake: { ...row.wake, at } }
+}
+
+/** Seed missing schedule rows without resetting a wake already held: one
+ * read and one write for all of them, and a row at a time only when another
+ * writer seeded one first. */
 export let seeded = async (
-  graph: Pick<Graph, 'read' | 'apply'>,
+  graph: Pick<Graph, 'get' | 'apply'>,
   rows: Wake[],
   now: number,
 ): Promise<void> => {
-  for (let row of rows) {
-    let eid = row.entity.eid
-    if ((await graph.read(`.entity.eid=${eid}`)).length) continue
-    let every = row.wake.every
-    let at = row.wake.at !== undefined
-      ? row.wake.at
-      : every
-      ? next(every, span(every) == null ? now - 1 : now)
-      : null
-    try {
-      await graph.apply([{
-        ...row,
-        $was: { entity: { num: null } },
-        wake: { ...row.wake, at },
-      }])
-    } catch (error) {
-      // A concurrent heartbeat seeded the row first. Its occurrence wins.
-      if (!(error instanceof Stale)) throw error
+  let held = new Set(
+    (await graph.get(rows.map((row) => row.entity.eid)))
+      .filter((b) => !b.tombstone).map((b) => b.entity.eid),
+  )
+  let missing = rows.filter((row) => !held.has(row.entity.eid))
+    .map((row) => sown(row, now))
+  if (!missing.length) return
+  try {
+    await graph.apply(missing)
+  } catch (error) {
+    if (!(error instanceof Stale)) throw error
+    // A concurrent heartbeat seeded a row first. Its occurrence wins, and
+    // each other row is still seeded.
+    for (let row of missing) {
+      try {
+        await graph.apply([row])
+      } catch (error) {
+        if (!(error instanceof Stale)) throw error
+      }
     }
   }
 }

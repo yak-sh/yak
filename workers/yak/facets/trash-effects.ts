@@ -1,22 +1,13 @@
-// Trash dormancy notification and the directory’s daily collection schedule.
+// Trash dormancy notification.
 import type { Bundle } from '@yaks/graph'
 import { delivered } from '../trash.ts'
 import type { Handlers } from '@yaks/effects'
 import type { Options } from './store.ts'
-import { seeded } from '../wake.ts'
-import { DAILY } from '../trash.ts'
 
 export let effects = (_host: unknown, options: Options): Handlers => {
   let at = options.store
   if (!at.meta) return {}
   return {
-    trash_install: async () => {
-      await seeded(at.graph, [{
-        entity: { eid: 'yak-trash' },
-        wake: { every: DAILY, note: 'Collect expired yaks.app trash' },
-        sweep: { kind: 'trash' },
-      }], Date.now())
-    },
     ...(at.env.STORE
       ? {
         notify_trash: async (event, tx, _write, attempt) => {

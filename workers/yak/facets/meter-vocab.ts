@@ -1,4 +1,4 @@
-// The directory's meter declarations and release start-up work.
+// The directory's meter declarations.
 import type { VocabDoc } from '@yaks/vocab'
 export let docs: VocabDoc[] = [{
   $defs: {
@@ -27,4 +27,4 @@ export let docs: VocabDoc[] = [{
       },
     },
   },
-}, { reserved: false, $defs: { meter_install: { effect: true, start: true } } }]
+}]

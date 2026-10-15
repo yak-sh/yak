@@ -336,4 +336,11 @@ export let servingDoc: VocabDoc = {
     },
   },
 }
-export let docs: VocabDoc[] = [directoryDoc, sweepDoc, useDoc, servingDoc]
+export let docs: VocabDoc[] = [
+  directoryDoc,
+  sweepDoc,
+  useDoc,
+  servingDoc,
+  // The release's start-up work that seeds the schedules (directory-effects.ts).
+  { reserved: false, $defs: { sweep_install: { effect: true, start: true } } },
+]
