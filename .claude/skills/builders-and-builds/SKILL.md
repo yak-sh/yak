@@ -247,11 +247,16 @@ When this skill is wrong or missing something, fix it in the same change.
 ## Shipping code a browser imports
 
 Builder execution and the app compiler are different doors. A package with a
-`browser.json` enters the toolkit catalog through `bin/compiler-packages.ts`;
+`browser.json` enters the toolkit catalog through `bin/compiler-packages.ts`.
+List browser-only subpaths in `entries` (for example `"./controls"`); its
+`imports` map is for type checking and does not add catalog entries. List CSS
+and other runtime assets in `resources` globs (for example `"hud/*.css"`);
 its browser exports and source closure travel with each compiler job
 (`packages/esbuild/README.md`, "Toolkit packages"). Land the package and its
 consumer together, then wait for the main Worker release containing that catalog
-to serve production (`yak admin deploys --as admin@bot.yak.sh`) before pushing
+to serve production (`yak admin deploys --as admin@bot.yak.sh`), then read
+`https://yaks.app/_compiler/packages.json` and confirm the package's generated
+`package.json` exports and `resources` contain the new subpaths and styles before pushing
 the app from a clean main checkout. The compiler container needs no separate
 rebuild for a toolkit source change. See `yaks-app` for platform rollout and
 `apps/<app>/README.md` for the app's deploy command.

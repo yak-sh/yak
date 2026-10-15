@@ -1,5 +1,5 @@
 {
-  "_": "Game rules are pure values, safe in both a browser and a worker.",
+  "_": "Pure rules stay worker-safe; controls and HUD are browser-only entries.",
   "compilerOptions": {
     "lib": [
       "dom",
@@ -14,5 +14,14 @@
     "@yaks/game/hud": "./hud.ts",
     "@yaks/game/vocab": "./vocab.ts",
     "@yaks/game/ui": "./ui.ts"
-  }
+  },
+  "entries": [
+    ".",
+    "./rules",
+    "./controls",
+    "./hud"
+  ],
+  "resources": [
+    "hud/*.css"
+  ]
 }
