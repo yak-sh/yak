@@ -330,7 +330,7 @@ export let BOUNDARIES = [
   'yak/store/vale-creature-prompt/16',
   'yak/store/vale-figure-prompt/17',
   // The directory's `written` rows, which drafts and file histories became
-  // (written.ts, carried.ts).
+  // (written.ts).
   'yak/store/written/1',
 ]
 

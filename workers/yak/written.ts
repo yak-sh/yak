@@ -27,19 +27,16 @@ import { Stale } from '@yaks/graph/errors'
 import { mint } from '@yaks/graph/identity'
 import { token } from '@yaks/graph/sha256'
 import type { App, Directory, Space } from './directory.ts'
-import { adopted, old } from './carried.ts'
-import { caught } from './defects.ts'
-import { filesOf, prepare, promoted, viewOf } from './release.ts'
+import { filesAt, viewOf } from './release.ts'
 import { vouched, type Who } from './session.ts'
 import { refuse } from './tool.ts'
-import { indexOf, META } from './release_index.ts'
+import { META } from './release_index.ts'
 import {
   addressed,
   type Files,
   GRACE,
   KEEP,
   LANES,
-  latest,
   type Pinner,
   SHA,
   versions,
@@ -97,9 +94,9 @@ export let draftRoot = (app: Pick<App, 'eid'>) => `.drafts/${app.eid}`
 
 /** The files the serving release names, path to sha; none for an app never
  * released. A release's index never changes, so this is read once per
- * isolate (release.ts `indexed`). */
+ * isolate (release.ts `filesAt`). */
 export let served = async (raw: Objects, app: App): Promise<Files> =>
-  app.source ? filesOf(await prepare(raw, app.source)) : {}
+  app.source ? await filesAt(raw, app.source) : {}
 
 /** An app's draft as a write or a read finds it. */
 export type Draft = {
@@ -110,52 +107,22 @@ export type Draft = {
   /** the draft's own writes */
   rows: Written[]
   view: Objects
-  /** the app as it stands, its draft among its files' rows */
-  app: App
 }
 
-/**
- * An app as it stands once its files are in the shape a write keeps them: one
- * still served in place from its own prefix given a release (release.ts
- * `promoted`), and a draft still kept as its own bytes, its edits over those
- * same files, moved into rows (carried.ts `adopted`). Each happens once, on
- * the first touch or the daily sweep; one that crossed another write reads
- * the app again and goes round. An app made since has a source from its
- * first deploy, so this costs it nothing.
- */
-export let current = async (
-  raw: Objects,
-  dir: Directory,
-  space: Space,
-  app: App,
-): Promise<App> => {
-  for (let n = 0;; n++) {
-    try {
-      if (!app.source && (app.version || old(app))) {
-        app = await promoted(raw, dir, `${space.slug}/${app.slug}/`, app)
-      }
-      return old(app) ? await adopted(raw, dir, app) : app
-    } catch (e) {
-      if (!(e instanceof Stale) || n >= 4) throw e
-      app = await latest(dir, space, app)
-    }
-  }
-}
-
+/** An app's draft as it stands: the serving release's files with the
+ * draft's own writes laid over them. */
 export let drafting = async (
   raw: Objects,
   dir: Directory,
-  space: Space,
   app: App,
 ): Promise<Draft> => {
-  app = await current(raw, dir, space, app)
   let [base, rows] = await Promise.all([
     served(raw, app),
     app.draft ? dir.written(app, app.draft) : Promise.resolve([]),
   ])
   let files = overlaid(base, rows)
   let root = draftRoot(app)
-  return { root, files, rows, view: viewOf(raw, root, files), app }
+  return { root, files, rows, view: viewOf(raw, root, files) }
 }
 
 /** One path a write changes: to new bytes, to a sha already stored (a restore,
@@ -197,8 +164,7 @@ export let modifying = async <T>(
   for (let n = 0; n < 5; n++) {
     row = await waiting(dir, space, row, who)
     try {
-      let draft = await drafting(raw, dir, space, row)
-      row = draft.app
+      let draft = await drafting(raw, dir, row)
       let { changes, value } = await act(draft, row, n)
       // A batch naming one path twice keeps the last, as a person would
       // expect.
@@ -342,42 +308,18 @@ export let pruned = async (
         )
         .map((source) => space + source.slice(source.indexOf('/') + 1)),
     )
-    let namedFiles = new Set<string>()
-    let legacy: string[] = []
     await lanes(LANES)([...sources], async (source) => {
-      namedFiles.add(source + META)
-      // A release made before releases had an index gets one here, its bytes
-      // given their addresses (release.ts `prepare`), so its own keys go
-      // below like any stage's. One that cannot is reported and kept.
-      let index = await indexOf(blobs, `${source}/`)
-      if (!index) {
-        try {
-          index = await prepare(blobs, source)
-        } catch (e) {
-          caught(e, { request: 'index release', app: app.eid })
-          return void legacy.push(`${source}/`)
-        }
-      }
-      for (let file of Object.values(index)) {
-        namedFiles.add(file.key.startsWith(SHA) ? file.key : space + file.key)
-        if (file.sha) named.add(file.sha)
+      for (let sha of Object.values(await filesAt(blobs, source))) {
+        named.add(sha)
       }
     })
+    // A stage holds nothing but the index of each release, so any other key
+    // there, or the index of a release nothing names, goes once a day old.
+    let indexes = new Set([...sources].map((source) => source + META))
     await blobs.delete(
       Object.entries(await blobs.uploaded(stage)).filter(([key, landed]) =>
-        !namedFiles.has(key) &&
-        !legacy.some((source) => key.startsWith(source)) &&
-        now - landed >= GRACE
+        !indexes.has(key) && now - landed >= GRACE
       ).map(([key]) => key),
-    )
-    // What is left of drafts kept as their own bytes, once nothing reads them.
-    // No write puts a key there any more, so none is in flight.
-    let drafts = `${space}.drafts/${app.eid}/`
-    let active = old(app) ? `${app.draft}/` : null
-    await blobs.delete(
-      (await blobs.list(drafts)).filter((key) =>
-        !(active && key.startsWith(active))
-      ),
     )
     let paths = new Map<string, Written[]>()
     for (let row of await dir.written(app)) {

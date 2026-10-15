@@ -12,10 +12,7 @@ import {
 import { platform } from './testing.ts'
 import * as dirPart from './directory.ts'
 import { call, type Ctx } from './tools.ts'
-import { r2RawObjects } from './lib/objects.ts'
-import { histories, vacated } from './carried.ts'
-import { addressed, pinned, sha256 } from './versions.ts'
-import { drafting } from './written.ts'
+import { addressed, sha256 } from './versions.ts'
 
 let ADA = 'a0000000-0000-4000-8000-0000000000ad'
 let encode = (text: string) => new TextEncoder().encode(text)
@@ -126,58 +123,4 @@ test('two writers at once lose neither write', async () => {
   for (let text of ['left', 'right']) {
     assertStringIncludes(past, await sha(text))
   }
-})
-
-test('an old history log becomes rows once, and answers as it did', async () => {
-  await using p = platform('written-carry')
-  let { dir, files, read, app } = await made(p)
-  // An app served in place, its page as the last logged write left it, and
-  // the log that write kept: newest first, the bytes each write replaced,
-  // the oldest still under the app's own per-app key.
-  let raw = r2RawObjects(p.env.BLOBS)
-  let prefix = 'ada/notes/'
-  await raw.put(`${prefix}page.html`, encode('three'))
-  await dir.stamp({
-    entities: [{ entity: { eid: (await app()).eid }, app: { version: 1 } }],
-  })
-  await raw.put(addressed(await sha('two')), encode('two'))
-  await raw.put(pinned(prefix, await sha('one')), encode('one'))
-  let log = [
-    { sha: await sha('two'), size: 3, at: '2026-10-02T00:00:00.000Z', by: ADA },
-    { sha: await sha('one'), size: 3, at: '2026-10-01T00:00:00.000Z', by: ADA },
-  ]
-  await raw.put(`${prefix}history/page.html.json`, encode(JSON.stringify(log)))
-  let draft = await drafting(raw, dir, (await dir.space('ada'))!, await app())
-  let carry = () =>
-    histories(
-      raw,
-      dir,
-      prefix,
-      draft.app,
-      () => Promise.resolve(draft.files),
-      new Set(),
-      10,
-    )
-  assertEquals(await carry(), 1)
-  assertEquals(await carry(), 0)
-  // The copies it served in place go; its release holds the bytes, and what
-  // a page uploaded stays.
-  await raw.put(`${prefix}blobs/${'0'.repeat(64)}`, encode('photo'))
-  assertEquals(await vacated(raw, prefix, draft.app), 1)
-  assertEquals(await raw.has(`${prefix}page.html`), false)
-  assertEquals(await raw.has(`${prefix}blobs/${'0'.repeat(64)}`), true)
-  assertEquals(await read('page.html'), 'three')
-  assertEquals(await raw.has(addressed(await sha('one'))), true)
-  let past = (await files('history', { path: 'page.html' })).text
-  for (let text of ['one', 'two', 'three']) {
-    assertStringIncludes(past, await sha(text))
-  }
-  // What the page held on each day, as the log said.
-  let on = async (at: string) => {
-    await files('restore', { path: 'page.html', at })
-    return await read('page.html')
-  }
-  assertEquals(await on('2026-10-01T12:00:00.000Z'), 'two')
-  assertEquals(await on('2026-09-30T00:00:00.000Z'), 'one')
-  assertEquals(await on('2026-10-03T00:00:00.000Z'), 'three')
 })

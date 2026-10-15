@@ -194,7 +194,7 @@ export let answer = async (at: Arrived): Promise<Response | null> => {
       // pack breaks mid-stream — which is a clone that fails after the
       // commits are already minted. gitobj.ts `placed` mints with this same
       // prefix, so the door reads what the commit was written from.
-      bodies(r2Objects(env.BLOBS), `${space.slug}/${app.slug}/`),
+      bodies(r2Objects(env.BLOBS)),
     ),
   )
 }

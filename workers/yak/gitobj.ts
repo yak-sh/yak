@@ -124,8 +124,8 @@ export let graphOf = (ns: Namespace): Writes =>
  * {@link BODY} and read from there first. Serving a pack reads through this
  * same door (@yaks/git `objects`), which is why it is exported.
  */
-export let bodies = (blobs: Objects, prefix: string): Bytes => {
-  let app = pins(blobs, prefix)
+export let bodies = (blobs: Objects): Bytes => {
+  let app = pins(blobs)
   return {
     has: async (sha) => await blobs.has(BODY + sha) || await app.has(sha),
     get: async (sha) => await blobs.read(BODY + sha) ?? await app.get(sha),
@@ -231,7 +231,7 @@ let landing = async (
   let repo: Repo = {
     refs: writes(dir),
     objects: graphOf(env.STORE),
-    bytes: bodies(r2Objects(env.BLOBS), at.prefix),
+    bytes: bodies(r2Objects(env.BLOBS)),
   }
   return {
     repo,

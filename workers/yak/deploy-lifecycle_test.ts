@@ -179,7 +179,7 @@ test('updates carry every crossed required source mark but exclude the installed
   ) {
     let bytes = new TextEncoder().encode(text)
     files[path] = await sha256(bytes)
-    await pins(blobs, 'ada/recipes/').put(files[path], bytes)
+    await pins(blobs).put(files[path], bytes)
     await blobs.put(`ada/recipes/${path}`, bytes)
   }
   await f.dir.apply({

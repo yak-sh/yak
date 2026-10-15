@@ -3,25 +3,25 @@
 //
 //   deno task app-grep [rg flags] PATTERN [space/app/... | sha]
 //
-// Each match prints as `space/app/path:line: text`, or `sha/<sha>:line: text`
-// for bytes a kept version names. A path after the pattern narrows the search
-// to one space or app, or to the kept bytes, as it would for rg.
+// Each match prints as `sha/<sha>:line: text` for an app's bytes, or as the
+// key it matched under for anything else. A path after the pattern narrows the
+// search, as it would for rg.
 //
-// An app's files are objects in the R2 bucket yak-blobs, keyed
-// `<space>/<app>/<path>` (workers/yak/files.ts `prefixOf`, `keyed`). Every
-// version an app deployed, and every draft edit it replaced, is a manifest
-// naming its files' bytes by SHA-256, pinned once for the whole bucket at
-// `sha/<sha>` (versions.ts `addressed`), so those are copied too: a rollback
-// serves them again. Which version names a sha is the directory's to say
-// (`deploy.files`). The bucket holds two more things, and neither is code:
-// what people uploaded, at `<space>/<app>/blobs/<sha>` (apps.ts `blobKey`), and
-// the objects under `git/` (gitobj.ts), which name the same bytes again.
+// An app's files are objects in the R2 bucket yak-blobs, stored once for the
+// whole bucket under their SHA-256 at `sha/<sha>` (workers/yak/versions.ts
+// `addressed`). A release's index, `<space>/.releases/<app eid>/<uuid>.json`,
+// names which sha each path is; a draft's paths are the directory's `written`
+// rows (written.ts), and every version's are its `deploy.files`. So a sha
+// match is code that a draft, a release or a kept version holds. The bucket
+// holds two more things, and neither is code: what people uploaded, at
+// `<space>/<app>/blobs/<sha>` (apps.ts `blobKey`), and the objects under `git/`
+// (gitobj.ts), which name the same bytes again.
 //
 // It reads production and never writes to it: the token is 1Password's
 // "cloudflare user read-only", and the only calls are a listing and a get. The
 // copies live under ~/.cache/yak-apps and are kept between runs. Each run
-// lists the bucket, gets only the keys whose etag moved, removes the copy of a
-// key the bucket no longer has, and hands the rest to rg.
+// lists the bucket, gets only the keys whose etag moved, removes every copy of
+// a key the bucket no longer has, and hands the rest to rg.
 
 let ACCOUNT = '0f9613dfd3f0451df0bd0f12a1372ea3' // workers/yak/wrangler.toml
 let BUCKET = 'yak-blobs' // the BLOBS binding in workers/yak/wrangler.toml
@@ -125,6 +125,15 @@ let read = (): Etags => {
   }
 }
 
+// Every copy on disk, by its key.
+let copies = async function* (root: string, at = ''): AsyncGenerator<string> {
+  for await (let e of Deno.readDir(`${root}/${at}`)) {
+    let key = at ? `${at}/${e.name}` : e.name
+    if (e.isDirectory) yield* copies(root, key)
+    else yield key
+  }
+}
+
 // Brings the copies up to the bucket. A key that fails is never recorded at
 // its new etag, so the next run tries it again.
 let synced = async () => {
@@ -152,6 +161,15 @@ let synced = async () => {
   for (let key of dropped) {
     await Deno.remove(`${FILES}/${key}`).catch(() => {})
     delete had[key]
+  }
+  // A copy the etags never recorded (a run cut off before it wrote them) is
+  // gone from the bucket all the same when no listing names it.
+  let named = new Set(objs.map((o) => o.key))
+  for await (let key of copies(FILES)) {
+    if (!named.has(key)) {
+      await Deno.remove(`${FILES}/${key}`)
+      dropped.push(key)
+    }
   }
   Deno.writeTextFileSync(ETAGS, JSON.stringify(had))
   console.error(

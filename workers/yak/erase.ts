@@ -59,8 +59,6 @@
 // other order would leave a billable custom hostname and a bucket full of
 // bytes with nothing left pointing at them.
 import { r2Objects, r2RawObjects } from './lib/objects.ts'
-import { promoted } from './release.ts'
-import { caught } from './defects.ts'
 import { receiptPrefix, uploadPrefix } from './blob-key.ts'
 import type { Bundle } from '@yaks/graph'
 import { token } from '@yaks/graph/sha256'
@@ -70,7 +68,6 @@ import { componentsOf } from './vocab.ts'
 import { isTestAddress } from './lib/bots.ts'
 import {
   CENSUS,
-  IDLE,
   idleSpaces,
   inactive,
   PROTECTED,
@@ -106,9 +103,8 @@ import { vouched, type Who } from './session.ts'
 import { storeOf } from './door.ts'
 import { answered } from './meta.ts'
 import { ending } from './billing.ts'
-import { moved, own, type Pinner, SHA, versions } from './versions.ts'
-import { drafting, pruned, served } from './written.ts'
-import { entries, histories, old, oldPaths, vacated } from './carried.ts'
+import { own, type Pinner, versions } from './versions.ts'
+import { drafting, pruned } from './written.ts'
 import { refuse } from './tool.ts'
 
 // An hour to walk over to the inbox and read the letter. Longer than a
@@ -329,15 +325,9 @@ export let emptied = async (
   who: Who,
 ) => {
   let dir = directory(bound(env.DIRECTORY, dirPart.fetch, env))
-  // Counted where they are: an app going is not first carried into the shape
-  // a write keeps files in (carried.ts).
-  let raw = r2RawObjects(env.BLOBS)
-  let files = await oldPaths(
-    raw,
-    under(space, app),
-    app,
-    Object.keys(await served(raw, app)),
-  ) ?? own(Object.keys((await drafting(raw, dir, space, app)).files))
+  let files = own(
+    Object.keys((await drafting(r2RawObjects(env.BLOBS), dir, app)).files),
+  )
   // The app's own code, which is not in the bucket: a script left in the
   // dispatch namespace would still answer at an address nothing stands at.
   if (env.CF_WORKERS_TOKEN) {
@@ -351,7 +341,6 @@ export let emptied = async (
   await deleteBindings(env, app)
   await swept(env, under(space, app))
   await swept(env, `${space.slug}/.releases/${app.eid}/`)
-  await swept(env, `${space.slug}/.drafts/${app.eid}/`)
   await swept(env, `${space.slug}/.declarations/${app.eid}/`)
   await swept(env, receiptPrefix(app))
   await swept(env, uploadPrefix(app))
@@ -714,11 +703,6 @@ let retitled = async (
   if (entities.length) await dir.apply({ entities })
 }
 
-// How many old history logs one sweep carries into rows (carried.ts): each
-// is a read, a few puts at most and a delete, so a run stays well inside a
-// scheduled invocation's limits, and the rest wait for tomorrow.
-let LOGS = 2000
-
 export let collected = async (env: Env, now = new Date()) => {
   let dir = directory(bound(env.DIRECTORY, dirPart.fetch, env), true)
   let idle = new Set(await abandoned(env, now))
@@ -731,7 +715,7 @@ export let collected = async (env: Env, now = new Date()) => {
   // the list on purpose — the erasure above is what frees its bytes, not its
   // mark — and so is the platform's own space, which is skipped for erasure and
   // holds pins like any other.
-  let standing: (Pinner & { space: Space })[] = []
+  let standing: Pinner[] = []
   for (let space of await dir.all()) {
     // Never the directory itself, whatever its row says: the app that holds
     // every space on the platform is not one a sweep may erase (`refused`
@@ -779,7 +763,7 @@ export let collected = async (env: Env, now = new Date()) => {
     }
     for (let app of apps) {
       if (!went.has(app.eid)) {
-        standing.push({ prefix: under(space, app), app, space })
+        standing.push({ prefix: under(space, app), app })
       }
     }
   }
@@ -788,72 +772,19 @@ export let collected = async (env: Env, now = new Date()) => {
   // It rides here rather than on every write because the rule needs to see the
   // whole bucket at once, and rather than only on a deploy because an app that
   // stopped deploying would then keep its pins forever.
-  let blobs = r2Objects(env.BLOBS)
-  // An app still served in place from its own prefix gets a release first
-  // (release.ts `promoted`), so its next edit and deploy name shas. One app
-  // that cannot be promoted is reported and left for tomorrow's run.
-  let promotions = 0
-  let raw = r2RawObjects(env.BLOBS)
-  for (let one of standing) {
-    if (one.prefix == `${META.space}/${META.app}/`) continue
-    try {
-      let app = await promoted(raw, dir, one.prefix, one.app)
-      if (app.source != one.app.source) promotions++
-      one.app = app
-    } catch (e) {
-      caught(e, { request: 'promote', app: one.app.eid })
-    }
-  }
-  // First the pins the old per-app key still holds, carried into that one key
-  // space (versions.ts `moved`) — before the mark, so nothing is marked out of
-  // a key space the sweep does not read.
-  let carried = 0
-  for (let { prefix } of standing) carried += await moved(blobs, prefix)
-  // Then each app's files in the shape a write keeps them now (carried.ts):
-  // a draft kept as its own bytes becomes `written` rows, and so does each
-  // old history log, a bounded number a run, and the copies an app once
-  // served in place keeps beside its release go. One app that cannot be carried
-  // is reported and left for tomorrow's run. The mark below reads each app as
-  // it now stands, so a release made here names its files today.
-  let logs = 0
-  let vacancies = 0
-  let have = new Set(
-    Object.keys(await raw.uploaded(SHA)).map((key) => key.slice(SHA.length)),
+  let unpinned = await pruned(
+    dir,
+    r2RawObjects(env.BLOBS),
+    standing,
+    now.getTime(),
   )
-  for (let one of standing) {
-    if (one.prefix == `${META.space}/${META.app}/`) continue
-    try {
-      if (old(one.app)) {
-        one.app = (await drafting(raw, dir, one.space, one.app)).app
-      }
-      vacancies += await vacated(raw, one.prefix, one.app)
-      logs += await histories(
-        raw,
-        dir,
-        one.prefix,
-        one.app,
-        async () => (await drafting(raw, dir, one.space, one.app)).files,
-        have,
-        LOGS - logs,
-      )
-    } catch (e) {
-      caught(e, { request: 'carry', app: one.app.eid })
-    }
-  }
-  let unpinned = await pruned(dir, raw, standing, now.getTime())
   if (gone) console.log(`yak-trash: ${gone} erased at ${now.toISOString()}`)
-  if (promotions) console.log(`yak-trash: ${promotions} apps given a release`)
-  if (carried) console.log(`yak-trash: ${carried} pins carried to sha/`)
-  if (logs) console.log(`yak-trash: ${logs} history logs carried to rows`)
-  if (vacancies) {
-    console.log(`yak-trash: ${vacancies} files served in place let go`)
-  }
   if (unpinned) console.log(`yak-trash: ${unpinned} pinned blobs let go`)
   return gone
 }
 
-// No app store is woken by the preview. File history records the original
-// edit's time and author, which a platform copy or rename does not change.
+// No app store is woken by the preview. A file write is a `written` row, which
+// keeps the edit's own time and author whoever stamped the row.
 export let abandoned = async (env: Env, now = new Date(), only?: string) => {
   let rows = await meta(env).query(CENSUS) as unknown as Row[]
   let eligible = new Set(idleSpaces(rows, now.getTime()))
@@ -874,27 +805,14 @@ export let abandoned = async (env: Env, now = new Date(), only?: string) => {
       let writes = await meta(env).query(
         `(${
           refs.slice(i, i + 5).map((eid) => `.refs=${eid}`).join(' | ')
-        }) ?created ?used`,
+        }) ?created ?used ?written`,
       ) as unknown as Row[]
       used = !inactive(
-        writes.filter((row) => row.used || row.created?.by || row.created?.via),
+        writes.filter((row) =>
+          row.used || row.created?.by || row.created?.via || row.written?.by
+        ),
         now.getTime(),
       )
-    }
-    if (used) continue
-    // A write is a `written` row, which the references above already count;
-    // what the old history logs say counts until carried.ts has moved them.
-    let blobs = r2RawObjects(env.BLOBS)
-    for (let app of apps) {
-      let prefix = `${space.slug}/${app.slug}/`
-      for (let key of await blobs.list(`${prefix}history/`)) {
-        let edits = await entries(blobs, key)
-        used ||= edits.some((edit) =>
-          edit.by && !(Date.parse(edit.at) <= now.getTime() - IDLE)
-        )
-        if (used) break
-      }
-      if (used) break
     }
     if (!used) result.push(space.eid)
   }

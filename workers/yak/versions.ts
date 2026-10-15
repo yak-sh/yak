@@ -72,8 +72,8 @@ export let GRACE = 24 * 60 * 60_000
 
 // How many bucket calls a pass over many keys keeps in flight. One request
 // holds six open at a time and queues the rest, so six is the most that helps.
-// One at a time, the daily sweep's reads of every history log ran end to end
-// for minutes, long enough for a deploy to cut it off (T-123781).
+// One at a time, the daily sweep's reads ran end to end for minutes, long
+// enough for a deploy to cut it off (T-123781).
 export let LANES = 6
 
 /** Where a compiled page script is kept, by its source's path (esbuild.ts):
@@ -83,7 +83,7 @@ export let BUILT = 'esbuild/'
 export let releaseOf = (space: { slug: string }, app: App) =>
   `${space.slug}/.releases/${app.eid}/${crypto.randomUUID()}`
 
-export let latest = async (dir: Directory, space: Space, app: App) => {
+let latest = async (dir: Directory, space: Space, app: App) => {
   // Reuse the addressed app's request-local read until a directory write
   // invalidates it. A rename or reused slug still resolves by identity.
   let current = await dir.app(space, app.slug)
@@ -166,12 +166,10 @@ export let unfenced = async (
 }
 
 // What the platform keeps beside an app's files, under the app's own prefix:
-// the bytes a page uploaded (apps.ts `blobKey`), the history logs carried.ts
-// has not yet moved (`history/`), the page scripts a deploy compiled
-// (`esbuild/`), and — until `moved` has emptied it — the pins that used to live
-// per app. None is a file anyone wrote, so none is listed or carried by an
-// install.
-let KEPT = ['blobs/', 'versions/', 'history/', BUILT]
+// the bytes a page uploaded (apps.ts `blobKey`) and the page scripts a deploy
+// compiled (`esbuild/`). Neither is a file anyone wrote, so neither is listed
+// or carried by an install.
+let KEPT = ['blobs/', BUILT]
 
 let kept = (path: string) => KEPT.some((k) => path.startsWith(k))
 
@@ -194,11 +192,6 @@ export let SHA = 'sha/'
 /** Where bytes with this address are pinned, for the whole bucket. */
 export let addressed = (sha: string) => SHA + sha
 
-// Where bytes were pinned, per app. Read-only from here on: `pins` falls back
-// to it so an app not yet carried across still answers, and `moved` is what
-// empties it.
-export let pinned = (prefix: string, sha: string) => `${prefix}versions/${sha}`
-
 /**
  * The pin store: @yaks/blob's three addressed verbs (packages/blob/store.ts)
  * over the same bucket the app's own files live in, so a caller pinning bytes
@@ -208,19 +201,10 @@ export let pinned = (prefix: string, sha: string) => `${prefix}versions/${sha}`
  * because the sweep needs `list`, `uploaded` and `delete` over these same
  * objects and the addressed interface has none of them — one adapter over one
  * bucket seam beats two clients of one binding disagreeing about what is in it.
- *
- * `prefix` is the app's own, and is read for the old key only: `put` writes the
- * global key alone, and `has`/`get` try it first and fall back, which is what
- * keeps a rollback working for an app the migration has not reached. A hit on
- * the global key costs exactly what the old key cost, so nothing pays for the
- * fallback but a miss.
  */
-export let pins = (blobs: Objects, prefix: string): Pins => ({
-  has: async (sha) =>
-    await blobs.has(addressed(sha)) || await blobs.has(pinned(prefix, sha)),
-  get: async (sha) =>
-    await blobs.read(addressed(sha)) ?? await blobs.read(pinned(prefix, sha)) ??
-      undefined,
+export let pins = (blobs: Objects): Pins => ({
+  has: (sha) => blobs.has(addressed(sha)),
+  get: async (sha) => await blobs.read(addressed(sha)) ?? undefined,
   // The address is the content, so bytes already there are the bytes being
   // written: one head, and a put only where there is nothing.
   put: async (sha, bytes) => {
@@ -386,46 +370,4 @@ export let record = async (
       },
     ],
   }, vouched(who))
-}
-
-/**
- * The old per-app pins carried into the one key space, and the old keys let go
- * (D-34942 §Migration). It rides the same daily wake the sweep does (erase.ts
- * `collected`) and runs before it, so nothing is ever marked from a key space
- * the sweep no longer reads.
- *
- * Idempotent and resumable, because each object is its own step: bytes already
- * at the global key mean the copy is done and only the old key is left to drop,
- * and an object still under `versions/` means the pass that should have carried
- * it did not finish. So a run that dies halfway leaves the rest for tomorrow,
- * and a run over an app already carried costs one listing and nothing else.
- *
- * The bytes are re-addressed before they are trusted. An old key was written by
- * `sha256` of its own bytes and should agree, but this is the one moment those
- * bytes become an object other apps will read, so a key that lies about its
- * content is left exactly where it is rather than published under a name it
- * does not have.
- *
- * `dry` counts what a run would carry and writes nothing.
- */
-export let moved = async (blobs: Objects, prefix: string, dry = false) => {
-  let at = `${prefix}versions/`
-  let carried = 0
-  for (let key of await blobs.list(at)) {
-    let sha = key.slice(at.length)
-    if (dry) {
-      carried++
-      continue
-    }
-    if (!(await blobs.has(addressed(sha)))) {
-      let bytes = await blobs.get(key)
-      if (await sha256(bytes) != sha) continue
-      await blobs.put(addressed(sha), bytes)
-      // Proven there before the only copy of it goes.
-      if (!(await blobs.has(addressed(sha)))) continue
-    }
-    await blobs.delete(key)
-    carried++
-  }
-  return carried
 }

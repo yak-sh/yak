@@ -61,6 +61,22 @@ import { sweep } from './usage.ts'
 import { FREE, free, monthOf, PLUS, size } from './meter.ts'
 import { ADA, ADA_OWNS, as, platform, seeded, visit } from './serving-probe.ts'
 import { addressed, sha256 } from './versions.ts'
+import { staged } from './release.ts'
+import { r2RawObjects } from './lib/objects.ts'
+
+// A release a deploy finished: each file's bytes at their address, and its
+// index naming them.
+let released = async (
+  env: Env,
+  source: string,
+  files: Record<string, string>,
+) => {
+  let release = staged(r2RawObjects(env.BLOBS), {}, source)
+  for (let [path, text] of Object.entries(files)) {
+    await release.files.put(`${source}/${path}`, new TextEncoder().encode(text))
+  }
+  await release.finish()
+}
 
 // The app's own graph, driven the way `public/client.js` drives it.
 let client = (env: Env, cookie?: string) => {
@@ -145,14 +161,13 @@ test('a free space wears the badge, and the Plus plan sheds it', async () => {
 // door from (public/client.js `import.meta.url`).
 test("a release's module imports the client by the page's own path", async () => {
   await using scenario = platform()
-  let { env, files } = scenario
+  let { env } = scenario
   let { app } = await seeded(env)
   let release = crypto.randomUUID()
   let source = `ada/.releases/${app.eid}/${release}`
-  files.held.set(
-    `${source}/app.js`,
-    new TextEncoder().encode("import { query } from './api/client.js'"),
-  )
+  await released(env, source, {
+    'app.js': "import { query } from './api/client.js'",
+  })
   await stamp(env, {
     entities: [{ entity: { eid: app.eid }, app: { source } }],
   })
@@ -173,18 +188,21 @@ test("a release's module imports the client by the page's own path", async () =>
 
 test('a new release serves its files beside the old cached release', async () => {
   await using scenario = platform()
-  let { env, files } = scenario
+  let { env } = scenario
   let { app } = await seeded(env)
   let old = `ada/.releases/${app.eid}/old`
   let next = `ada/.releases/${app.eid}/next`
-  let bytes = (s: string) => new TextEncoder().encode(s)
-  files.held.set(`${old}/app.css`, bytes('old'))
-  files.held.set(`${next}/app.css`, bytes('new'))
-  files.held.set(`${next}/added.css`, bytes('added'))
-  files.held.set(`${old}/main.ts`, bytes('let n: number = 1'))
-  files.held.set(`${old}/esbuild/main.ts`, bytes('compiled old'))
-  files.held.set(`${next}/main.ts`, bytes('let n: number = 2'))
-  files.held.set(`${next}/esbuild/main.ts`, bytes('compiled next release'))
+  await released(env, old, {
+    'app.css': 'old',
+    'main.ts': 'let n: number = 1',
+    'esbuild/main.ts': 'compiled old',
+  })
+  await released(env, next, {
+    'app.css': 'new',
+    'added.css': 'added',
+    'main.ts': 'let n: number = 2',
+    'esbuild/main.ts': 'compiled next release',
+  })
   let cache = new Map<string, Response>()
   let misses = 0
   env.FILES = {

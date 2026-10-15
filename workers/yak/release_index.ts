@@ -3,7 +3,7 @@
 import type { Objects } from '@yaks/blob'
 
 export let META = '.json'
-export type File = { key: string; sha?: string }
+export type File = { key: string; sha: string }
 export type Index = Record<string, File>
 
 export let encode = (index: Index) =>

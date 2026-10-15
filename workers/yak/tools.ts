@@ -41,7 +41,7 @@ import { bindingLines, bindings } from './bindings.ts'
 import { broken, mediaTypeOf, type Objects } from '@yaks/blob'
 import { blobPrefix } from './blob-key.ts'
 import { r2Objects, r2RawObjects } from './lib/objects.ts'
-import { filesOf, prepare, staged, viewOf } from './release.ts'
+import { filesAt, staged, viewOf } from './release.ts'
 import { isTestAddress } from './lib/bots.ts'
 import { fullFiles } from './usage.ts'
 import { TOOLS_EXAMPLE, viewsOf } from '@yaks/tools/declared'
@@ -277,10 +277,8 @@ import {
   waiting,
   whatChanged,
 } from './versions.ts'
-import { old } from './carried.ts'
 import {
   type Change,
-  current,
   type Draft,
   drafting,
   heldAt,
@@ -743,7 +741,6 @@ let homesIn = async (ctx: Ctx, space: Space, slug: string, app?: App) => {
 let releasedDoc = async (
   ctx: Ctx,
   blobs: Objects,
-  space: Space,
   app: App,
 ): Promise<VocabDoc> => {
   if (!app.version) return {}
@@ -751,7 +748,7 @@ let releasedDoc = async (
   if (!at) throw refuse('missing', `no v${app.version} of ${app.slug}`)
   let file = ['vocab.yml', 'vocab.json'].find((name) => at.files[name])
   if (!file) return {}
-  let bytes = await pins(blobs, fileKey(space, app, '')).get(at.files[file])
+  let bytes = await pins(blobs).get(at.files[file])
   if (!bytes) throw refuse('missing', `no blob for ${at.files[file]}`)
   return appDoc(decoded(bytes), file)
 }
@@ -929,7 +926,7 @@ let published = async (
   // must agree, and a half-planted vocabulary is what `unknown component` is
   // made of.
   let kept = target?.source && target.script ? target : undefined
-  let held = pins(r2Objects(ctx.env.BLOBS), `${space.slug}/${standing.slug}/`)
+  let held = pins(r2Objects(ctx.env.BLOBS))
   let early = Promise.all([
     versions(ctx.dir, standing),
     declaring(blobs, space, app),
@@ -1058,7 +1055,7 @@ let published = async (
       Promise.all(
         all.filter((one) =>
           one.eid != app.eid && !one.trashed && !sandboxed(one)
-        ).map((one) => releasedDoc(ctx, blobs, space, one)),
+        ).map((one) => releasedDoc(ctx, blobs, one)),
       )
     )
   // A home release may withdraw a property its borrower still declares.
@@ -1099,7 +1096,7 @@ let published = async (
   let oldUses: Record<string, string> = JSON.parse(serving)
   let retired: Record<string, Record<string, string[]>> = {}
   if (Object.keys(oldUses).length) {
-    let previous = await releasedDoc(ctx, blobs, space, app)
+    let previous = await releasedDoc(ctx, blobs, app)
     let gone = Object.entries(oldUses).flatMap(([name, slug]) =>
       Object.keys(previous.$defs?.[name]?.properties ?? {})
         .filter((prop) => !(prop in (manifest.$defs?.[name]?.properties ?? {})))
@@ -1481,9 +1478,6 @@ let released = async (
     )
   }
   let blobs = r2RawObjects(ctx.env.BLOBS)
-  // A draft still kept as its own bytes moves into rows before the fence
-  // names it (written.ts `current`).
-  standing = await current(blobs, ctx.dir, space, standing)
   let kept = target?.source && target.script ? target : undefined
   let release = kept?.source ?? releaseOf(space, standing)
   let draft = standing.draft ?? null
@@ -1518,7 +1512,7 @@ let released = async (
         blobs,
         target ? target.files : (await c.time(
           'staged',
-          () => drafting(blobs, ctx.dir, space, standing),
+          () => drafting(blobs, ctx.dir, standing),
         )).files,
         release,
       )
@@ -1635,7 +1629,7 @@ let offered = async (ctx: Ctx, from: { space: Space; app: App }) => {
     )
   }
   let files = version.source
-    ? filesOf(await prepare(r2RawObjects(ctx.env.BLOBS), version.source))
+    ? await filesAt(r2RawObjects(ctx.env.BLOBS), version.source)
     : version.files
   return Object.fromEntries(
     Object.entries(files).filter(([path]) => transferable(path)),
@@ -2605,13 +2599,6 @@ let OURS: Row[] = [
             `${to}/.declarations/${app.eid}/`,
           ),
         )
-        keys.push(
-          ...await laid(
-            blobs,
-            `${space.slug}/.drafts/${app.eid}/`,
-            `${to}/.drafts/${app.eid}/`,
-          ),
-        )
       }
       let entities: Bundle[] = [{
         entity: { eid: space.eid },
@@ -2621,18 +2608,10 @@ let OURS: Row[] = [
       }]
       if (moving) {
         entities.push(
-          // A draft is rows (written.ts), named by no address; only one
-          // still kept as bytes of its own moves (carried.ts).
-          ...apps.filter((app) => app.source || old(app)).map((app) => ({
+          // A draft is rows (written.ts), named by no address.
+          ...apps.filter((app) => app.source).map((app) => ({
             entity: { eid: app.eid },
-            app: {
-              ...(app.source
-                ? { source: app.source.replace(`${space.slug}/`, `${to}/`) }
-                : {}),
-              ...(old(app)
-                ? { draft: app.draft!.replace(`${space.slug}/`, `${to}/`) }
-                : {}),
-            },
+            app: { source: app.source!.replace(`${space.slug}/`, `${to}/`) },
           })),
         )
       }
@@ -3032,8 +3011,7 @@ let OURS: Row[] = [
       // The draft names every file it holds by sha (written.ts), so listing,
       // comparing and finding a file read no bytes; only a file asked for
       // whole is read, from its content address.
-      let draft = () =>
-        c.time('draft', () => drafting(blobs, ctx.dir, space, app))
+      let draft = () => c.time('draft', () => drafting(blobs, ctx.dir, app))
       let at = (d: Draft, path: string) => `${d.root}/${path}`
       if (op == 'list') {
         let [d, all] = await Promise.all([draft(), versions(ctx.dir, app)])
@@ -3580,12 +3558,7 @@ let OURS: Row[] = [
       if (!(Number.isSafeInteger(from) && from >= 1)) {
         throw refuse('arguments', `part: ${args.part} — a whole number from 1`)
       }
-      let draft = await drafting(
-        r2RawObjects(ctx.env.BLOBS),
-        ctx.dir,
-        space,
-        app,
-      )
+      let draft = await drafting(r2RawObjects(ctx.env.BLOBS), ctx.dir, app)
       let files = await texts(
         draft.view,
         `${draft.root}/`,

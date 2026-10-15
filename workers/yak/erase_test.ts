@@ -328,7 +328,7 @@ let idlePreview = await (async () => {
             space: slug,
             slug: 'notes',
             access: 'private',
-            draft: `${slug}/.drafts/notes`,
+            draft: `${slug}-draft`,
           },
           created: { at: old, by: person },
         },
@@ -344,17 +344,21 @@ let idlePreview = await (async () => {
     entity: { eid: 'quiet-app' },
     meter: { requests: 100, rows_written: 100, at: now.toISOString() },
   }], KERNEL)
-  // Platform copying changes R2 upload dates without anybody editing a file.
-  await r2Objects(p.env.BLOBS).put(
-    'quiet/notes/NOTES.md',
-    new TextEncoder().encode('Platform copy'),
-  )
-  await r2Objects(p.env.BLOBS).put(
-    'quiet/notes/history/NOTES.md.json',
-    new TextEncoder().encode(JSON.stringify([
-      { at: now.toISOString(), by: '' },
-      { at: old, by: person },
-    ])),
+  // An edit somebody made before the idle window began is no use now.
+  await g.apply(
+    [{
+      entity: { eid: 'quiet-edit' },
+      written: {
+        app: 'quiet-app',
+        path: 'NOTES.md',
+        sha: 'a'.repeat(64),
+        at: old,
+        by: person,
+      },
+      created: { at: old, by: person },
+    }],
+    KERNEL,
+    { stamp: false },
   )
   await g.apply([{
     entity: { eid: 'platform-reference' },
@@ -461,10 +465,10 @@ test(
       }, { 'x-yak-person': ADA, 'x-yak-role': 'owner' })
       let app = (await dir.app(space, slug))!
       await declared(env, space, app)
-      // A file of its own, so what the erase takes is visible in the bucket.
+      // Bytes of its own, so what the erase takes is visible in the bucket.
       await r2Objects(env.BLOBS).put(
-        `ada/${slug}/index.html`,
-        new TextEncoder().encode(`<h1>${slug}</h1>`),
+        `ada/${slug}/blobs/${'0'.repeat(64)}`,
+        new TextEncoder().encode(`${slug} photo`),
       )
       await r2Objects(env.BLOBS).put(
         receiptPrefix(app) + 'recording',
@@ -494,17 +498,9 @@ test(
     )
     assertEquals((await dir.apps(space)).map((a) => a.slug), ['live', 'fresh'])
     // The bytes went with the row, and only that app's.
-    // The one kept serves from the release it was given (release.ts
-    // `promoted`).
     let keys = await r2Objects(env.BLOBS).list('ada/')
     assertEquals(keys.some((k) => k.startsWith('ada/old/')), false)
-    let kept = (await dir.app(space, 'fresh'))!
-    assertEquals(
-      new TextDecoder().decode(
-        (await r2Objects(env.BLOBS).read(`${kept.source}/index.html`))!,
-      ),
-      '<h1>fresh</h1>',
-    )
+    assertEquals(keys.some((k) => k.startsWith('ada/fresh/')), true)
     assertEquals(await r2Objects(env.BLOBS).list(receiptPrefix(old)), [])
     assertEquals(
       await r2Objects(env.BLOBS).has(receiptPrefix(fresh) + 'recording'),

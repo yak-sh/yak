@@ -1822,7 +1822,7 @@ let api = async (
     let version = value == null || !/^[0-9]+$/.test(value) ? NaN : Number(value)
     if (!Number.isSafeInteger(version)) return json(400, 'invalid_version')
     try {
-      return Response.json(await releaseStatus(env, dir, space, app, version), {
+      return Response.json(await releaseStatus(env, dir, app, version), {
         headers: { 'cache-control': 'no-store' },
       })
     } catch (e) {

@@ -10,8 +10,7 @@ import { test } from '@yaks/testing'
 import { assert, assertEquals } from '@std/assert'
 import type { Objects } from '@yaks/blob'
 import { counted } from './lib/objects.ts'
-import { prepare, releaseFiles, staged } from './release.ts'
-import { encode } from './release_index.ts'
+import { releaseFiles, staged } from './release.ts'
 import type { Tally } from './lib/hops.ts'
 import * as dirPart from './directory.ts'
 import type { App, Directory, Space } from './directory.ts'
@@ -25,10 +24,7 @@ import {
   type Files,
   GRACE,
   KEEP,
-  moved,
-  pinned,
   type Pinner,
-  pins,
   record,
   SHA,
   sha256,
@@ -287,26 +283,6 @@ test('pruning keeps the bytes the serving release names', async () => {
   assertEquals(await text(`${current}/esbuild/app.js`), 'compiled')
 })
 
-test('a release kept from before indexes gets one and still answers', async () => {
-  let { blobs, clock } = memory()
-  let { dir } = directory()
-  clock.now = Date.now() - 2 * GRACE
-  let v1 = 'jeff/.releases/a1/v1'
-  await blobs.put(`${v1}/index.html`, bytes('<h1>v1</h1>'))
-  await dir.apply({
-    entities: [{
-      entity: { eid: 'v1-deploy' },
-      deploy: { app: APP.eid, version: 1, files: '{}', source: v1 },
-    }],
-  })
-  await pruned(dir, blobs, [{ prefix: PREFIX, app: { ...APP, source: v1 } }])
-  assertEquals(await blobs.list(`${v1}/`), [])
-  assertEquals(
-    new TextDecoder().decode(await releaseFiles(blobs).get(`${v1}/index.html`)),
-    '<h1>v1</h1>',
-  )
-})
-
 test('published releases keep versioned bytes after newer deploys', async () => {
   let { blobs, clock } = memory()
   let { dir } = directory()
@@ -321,15 +297,10 @@ test('published releases keep versioned bytes after newer deploys', async () => 
       [failed, 'failed code'],
     ]
   ) {
-    await blobs.put(`${source}/esbuild/app.js`, bytes(value))
-    if (source != old) await prepare(blobs, source)
+    let release = staged(blobs, {}, source)
+    await release.files.put(`${source}/esbuild/app.js`, bytes(value))
+    await release.finish()
   }
-  await blobs.put(
-    old + '.json',
-    encode({
-      'esbuild/app.js': { key: '.releases/a1/old/esbuild/app.js' },
-    }),
-  )
   await dir.apply({
     entities: [
       {
@@ -349,7 +320,6 @@ test('published releases keep versioned bytes after newer deploys', async () => 
     }]),
     1,
   )
-  assertEquals(await blobs.has(`${old}/esbuild/app.js`), true)
   assertEquals(
     new TextDecoder().decode(
       await releaseFiles(blobs).get(`${old}/esbuild/app.js`),
@@ -361,18 +331,6 @@ test('published releases keep versioned bytes after newer deploys', async () => 
   assertEquals(
     await blobs.has(addressed(await sha256(bytes('failed code')))),
     false,
-  )
-  await prepare(blobs, old)
-  await pruned(dir, blobs, [{
-    prefix: PREFIX,
-    app: { ...APP, source: current },
-  }])
-  assertEquals(await blobs.has(`${old}/esbuild/app.js`), false)
-  assertEquals(
-    new TextDecoder().decode(
-      await releaseFiles(blobs).get(`${old}/esbuild/app.js`),
-    ),
-    'old code',
   )
 })
 
@@ -526,31 +484,15 @@ test('a blob lives while anything names it, and a day besides', async () => {
     'v1 is past the page and still restorable',
   )
 
-  // What the sweep costs an app: its staged releases, what is left of drafts
-  // kept as bytes, and the stored blobs; no read at all.
+  // What the sweep costs an app: a listing of its staged releases and one of
+  // the stored blobs; no read at all.
   let cost = trips()
-  assertEquals(cost.list - before.list, 3)
+  assertEquals(cost.list - before.list, 2)
   assertEquals(cost.read - before.read, 0)
   assertEquals(cost.delete - before.delete, 1)
 })
 
 // ---- one key space for the whole bucket (T-34953, D-34942) -----------------
-
-test('a pin at the old per-app key is read until it is carried', async () => {
-  let { blobs } = memory()
-  // The bucket as it stands before the migration: bytes under the app's own
-  // `versions/` prefix, and nothing at all under `sha/`.
-  let sha = await sha256(bytes('<h1>one</h1>'))
-  await blobs.put(pinned(PREFIX, sha), bytes('<h1>one</h1>'))
-  assertEquals(await blobs.list(SHA), [])
-
-  let store = pins(blobs, PREFIX)
-  assert(await store.has(sha), 'the fallback finds it')
-  assertEquals(
-    new TextDecoder().decode((await store.get(sha))!),
-    '<h1>one</h1>',
-  )
-})
 
 // The mark set is the bucket's: an object one app has stopped naming may be
 // the very file another app serves, so a sweep that saw one app at a time
@@ -577,34 +519,6 @@ test('the sweep keeps a sha another app still names', async () => {
     await pruned(dir, blobs, [{ prefix: theirs, app: THEIRS }], Date.now()),
     1,
   )
-})
-
-test('the migration carries the old key across, once', async () => {
-  let { blobs } = memory()
-  let one = await sha256(bytes('<h1>one</h1>'))
-  let two = await sha256(bytes('<h1>two</h1>'))
-  await blobs.put(pinned(PREFIX, one), bytes('<h1>one</h1>'))
-  await blobs.put(pinned(PREFIX, two), bytes('<h1>two</h1>'))
-
-  // A dry run counts what a run would carry and writes nothing at all.
-  assertEquals(await moved(blobs, PREFIX, true), 2)
-  assertEquals(await blobs.list(SHA), [])
-  assertEquals((await blobs.list(`${PREFIX}versions/`)).length, 2)
-
-  assertEquals(await moved(blobs, PREFIX), 2)
-  assertEquals(await blobs.list(SHA), [addressed(one), addressed(two)].sort())
-  assertEquals(await blobs.list(`${PREFIX}versions/`), [])
-  // Idempotent: a pass over an app already carried has nothing to do.
-  assertEquals(await moved(blobs, PREFIX), 0)
-
-  // Resumable, because each object is its own step: an old key whose bytes are
-  // already global is only a key to drop, and a key that lies about its content
-  // is left exactly where it is rather than published under a name it has not.
-  await blobs.put(pinned(PREFIX, one), bytes('<h1>one</h1>'))
-  let liar = 'd'.repeat(64)
-  await blobs.put(pinned(PREFIX, liar), bytes('not what the key says'))
-  assertEquals(await moved(blobs, PREFIX), 1)
-  assertEquals(await blobs.list(`${PREFIX}versions/`), [pinned(PREFIX, liar)])
 })
 
 test('what one version did to the one before it', () => {

@@ -8,7 +8,6 @@ import type { App, Directory, Space } from './directory.ts'
 import { storeName } from './directory.ts'
 import type { Objects } from '@yaks/blob'
 import { pins } from './versions.ts'
-import { prefixOf } from './files.ts'
 import type { Mark, Rule } from './mover.ts'
 
 export let declaredLenses = (doc: VocabDoc): boolean =>
@@ -177,7 +176,7 @@ export let pageSpeaks = async (
     let file = ['vocab.yml', 'vocab.json'].find((f) => deploy.files[f])
     let doc: VocabDoc = {}
     if (file) {
-      let bytes = await pins(blobs, `${prefixOf(space, app)}/`).get(
+      let bytes = await pins(blobs).get(
         deploy.files[file],
       )
       if (!bytes) throw new Error(`no vocabulary for page version ${n}`)

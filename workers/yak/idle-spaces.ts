@@ -27,10 +27,12 @@ export type Row = {
   published?: unknown
   created?: { at?: string; by?: Ref | null; via?: string | null }
   used?: { at?: string }
+  written?: { at?: string | null; by?: Ref | null }
 }
 let id = (ref: Ref) => typeof ref == 'string' ? ref : ref.eid
 let quiet = (row: Row, cutoff: number) => {
-  if (!(Date.parse(row.created?.at ?? '') <= cutoff)) return false
+  let at = row.written?.at ?? row.created?.at ?? ''
+  if (!(Date.parse(at) <= cutoff)) return false
   return !row.used || Date.parse(row.used.at ?? '') <= cutoff
 }
 

@@ -89,7 +89,7 @@ let deploy = async (
     let bytes = utf8.encode(body)
     let sha = await sha256(bytes)
     manifest[path] = sha
-    await pins(blobs, 'ada/recipes/').put(sha, bytes)
+    await pins(blobs).put(sha, bytes)
   }
   // Each deploy is a new request; record guards the snapshot it was given.
   let space = (await dir.space('ada'))!

@@ -1,7 +1,7 @@
 // Immutable release pairs are shared; the app row in the gateway stays fresh.
 import { type Reload, reloadLevel } from '@yaks/platform'
 import type { VocabDoc } from '@yaks/vocab'
-import { type App, type Directory, type Space } from './directory.ts'
+import { type App, type Directory } from './directory.ts'
 import type { Env } from './env.ts'
 import { r2Objects } from './lib/objects.ts'
 import { pins, type Version } from './versions.ts'
@@ -14,7 +14,6 @@ let filesOf = (v: Version) =>
 export let releaseStatus = async (
   env: Env,
   dir: Directory,
-  space: Space,
   app: App,
   version: number,
 ) => {
@@ -34,7 +33,7 @@ export let releaseStatus = async (
       let newFiles = filesOf(next)
       // Restored identical bytes need neither vocabulary reads nor a notice.
       if (oldFiles == newFiles) return undefined
-      let blobs = pins(r2Objects(env.BLOBS), `${space.slug}/${app.slug}/`)
+      let blobs = pins(r2Objects(env.BLOBS))
       let vocab = async (v: Version): Promise<VocabDoc> => {
         let file = ['vocab.yml', 'vocab.json'].find((p) => v.files[p])
         if (!file) return {}
