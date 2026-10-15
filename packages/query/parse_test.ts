@@ -219,9 +219,22 @@ test('| is OR, looser than the AND of adjacent terms; ( ) groups', () => {
     parse('(.t~="a|b"|.c=3)'),
     and(or(contains('t', 'a|b'), eq('c', '3'))),
   )
-  assertThrows(() => parse('.a=1|'), Error, 'empty alternative')
-  assertThrows(() => parse('(.a=1'), Error, 'unclosed group')
 })
+
+// A refusal is a SyntaxError naming what the query needs instead. Each row: a
+// query, and what its refusal says.
+let refused = (rows: [string, string][]) => {
+  for (let [q, said] of rows) {
+    test(`${q} is refused: ${said}`, () => {
+      assertThrows(() => parse(q), SyntaxError, said)
+    })
+  }
+}
+
+refused([
+  ['.a=1|', 'empty alternative'],
+  ['(.a=1', 'unclosed group'],
+])
 
 test('a directive shapes the whole query, wherever it is written', () => {
   let a = present('a')
@@ -354,21 +367,26 @@ test('list of ranges', () => {
 // The bracket binds to the path and each clause says what it accepts: the
 // walk takes one depth cap, nothing else takes any — an unknown qualifier is
 // refused by name, never dropped.
-test('qualifiers', () => {
-  assertThrows(() => parse('.status[<=3]=open'), Error, 'no qualifier')
-  assertThrows(() => parse('.doc[x]'), Error, 'no qualifier')
-  assertThrows(() => parse('.order[k=v]=hot'), Error, 'no qualifier')
-  assertThrows(() => parse('.requires[<=0]->X'), Error, 'at least one')
-  assertThrows(() => parse('.requires[<=]->X'), Error, 'one depth cap')
-  assertThrows(() => parse('.requires[3]->X'), Error, 'one depth cap')
-  assertThrows(() => parse('.requires[<=3,<=4]->X'), Error, 'one depth cap')
-  assertThrows(() => parse('.requires[]->X'), Error, 'empty qualifier')
-  assertThrows(() => parse('.requires[<=3->X'), Error, 'unclosed bracket')
-  assertThrows(() => parse('.requires->'), Error, 'one entity')
-  assertThrows(() => parse('.requires->a,b'), Error, 'one entity')
-  assertThrows(() => parse('.edges[a,b,c]'), Error, 'one edge type')
-  assertThrows(() => parse('.edges[<=3]'), Error, 'one edge type')
-  // whitespace inside the bracket is the bracket's own
+refused([
+  ['.status[<=3]=open', 'no qualifier'],
+  ['.doc[x]', 'no qualifier'],
+  ['.order[k=v]=hot', 'no qualifier'],
+  ['.requires[<=0]->X', 'at least one'],
+  ['.requires[<=]->X', 'one depth cap'],
+  ['.requires[3]->X', 'one depth cap'],
+  ['.requires[<=3,<=4]->X', 'one depth cap'],
+  ['.requires[]->X', 'empty qualifier'],
+  ['.requires[<=3->X', 'unclosed bracket'],
+  ['.requires->', 'one entity'],
+  ['.requires->a,b', 'one entity'],
+  ['.edges[a,b,c]', 'one edge type'],
+  ['.edges[<=3]', 'one edge type'],
+  // a kept release's suffix excuses no bracket
+  ['.drill[foo]!', 'no qualifier'],
+  ['.doc[foo]?', 'no qualifier'],
+])
+
+test('whitespace inside the bracket is the bracket’s own', () => {
   assertEquals(
     parse('.edges[referenced, entry.session]'),
     and(edges({ select: { type: 'referenced', via: ['entry', 'session'] } })),
@@ -398,35 +416,35 @@ test('refusals', () => {
   assertThrows(() => parse('?doc[x]'), Error, 'not a clause')
 })
 
-test('kept release suffixes share the prefix forms at the parser', () => {
-  for (
-    let [old, now] of [
-      ['.drill!', '.drill'],
-      ['.drill!&.doc?', '.drill&?doc'],
-      ['.loan?', '?loan'],
-      ['.doc.title!', '.doc.title'],
-      ['.refs!', '.refs'],
-      ['.count!', '.count'],
-      ['.edges!', '.edges'],
-      ['.edges[cites]!', '.edges[cites]'],
-      ['(.drill!|.doc!)&?created', '(.drill|.doc)&?created'],
-      ['.drill!,.doc!', '.drill,.doc'],
-      ['.doc.title="Wow!"&.drill!', '.doc.title="Wow!"&.drill'],
-      ['.doc.title=Wow!&.drill!', '.doc.title=Wow!&.drill'],
-      ['.comments!.doc.title=Wow!&.drill!', '.comments!.doc.title=Wow!&.drill'],
-    ]
-  ) {
+// Kept app releases still send suffix presence and optional forms; each reads
+// as the prefix form it has now, in a strict query too.
+for (
+  let [old, now] of [
+    ['.drill!', '.drill'],
+    ['.drill!&.doc?', '.drill&?doc'],
+    ['.loan?', '?loan'],
+    ['.doc.title!', '.doc.title'],
+    ['.refs!', '.refs'],
+    ['.count!', '.count'],
+    ['.edges!', '.edges'],
+    ['.edges[cites]!', '.edges[cites]'],
+    ['(.drill!|.doc!)&?created', '(.drill|.doc)&?created'],
+    ['.drill!,.doc!', '.drill,.doc'],
+    ['.doc.title="Wow!"&.drill!', '.doc.title="Wow!"&.drill'],
+    ['.doc.title=Wow!&.drill!', '.doc.title=Wow!&.drill'],
+    ['.comments!.doc.title=Wow!&.drill!', '.comments!.doc.title=Wow!&.drill'],
+  ]
+) {
+  test(`a kept release's ${old} reads as ${now}`, () => {
     for (let opts of [{}, { text: false }]) {
-      assertEquals(parse(old, opts), parse(now, opts), old)
+      assertEquals(parse(old, opts), parse(now, opts))
     }
-  }
-  assertThrows(() => parse('.drill[foo]!'), SyntaxError, 'no qualifier')
-  assertThrows(() => parse('.doc[foo]?'), SyntaxError, 'no qualifier')
-})
+  })
+}
 
 // Other spellings are refused by their accepted form.
-test('an old spelling is refused by the one it has now', () => {
-  let said: [string, string][] = [
+refused(
+  [
     ['assignee!', '.assignee'],
     ['loan?', '?loan'],
     ['.assignee!=', '.assignee'],
@@ -438,15 +456,11 @@ test('an old spelling is refused by the one it has now', () => {
     ['+!.created', '+!created'],
     ['+.doc.title=$x', '+doc.title=$x'],
     ['.refs=', '!refs'],
-  ]
-  for (let [old, now] of said) {
-    assertThrows(
-      () => parse(`.task ${old}`),
-      SyntaxError,
-      `${old} is written ${now}`,
-    )
-  }
-})
+  ].map(([old, now]): [string, string] => [
+    `.task ${old}`,
+    `${old} is written ${now}`,
+  ]),
+)
 
 // A reserved word without its bracket is just a raw path here — validating it
 // is schema. `.reaches=X` is an ordinary predicate, not a traversal.
