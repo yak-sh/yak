@@ -51,6 +51,11 @@ export type Config = {
   // `./api/ai/run`, metered against the owner's account budget, and never the
   // account's own Workers AI binding.
   ai?: { binding: string }
+  // The folder of the app's files its addresses serve, Cloudflare's own
+  // `assets.directory`: a build's `dist` beside the source that made it. Only
+  // what is inside it is on the web (files.ts `rootOf`); the rest stays the
+  // app's, read back through app_files. Absent, the app's root is served.
+  assets?: { directory?: string }
 }
 export type Parsed = { config: Config; report: string[]; refused: string[] }
 export type Request = {
@@ -73,6 +78,7 @@ export let HONORED = [
   'vectorize',
   'vpc_services',
   'ai',
+  'assets',
 ]
 
 let REFUSED: Record<string, string> = {
@@ -93,6 +99,26 @@ let object = (v: unknown): v is Record<string, unknown> =>
 
 let strings = (v: unknown): v is string[] =>
   Array.isArray(v) && v.every((s) => typeof s == 'string')
+
+// A folder of the app as a config names it, without its `./` or its last
+// slash, and '' for the app's root; null for anything that is not one.
+///
+/// folder('./dist/') -> 'dist'
+/// folder('site/public') -> 'site/public'
+/// folder('.') -> ''
+/// folder('../elsewhere') -> null
+/// folder('/dist') -> null
+export let folder = (v: unknown) => {
+  if (typeof v != 'string') return null
+  let path = v.replace(/^(?:\.\/)+/, '').replace(/\/+$/, '')
+  if (path == '' || path == '.') return ''
+  let parts = path.split('/')
+  return parts.every((p) =>
+      /^[A-Za-z0-9_.-]+$/.test(p) && p != '.' && p != '..'
+    )
+    ? path
+    : null
+}
 
 let line = (value: string) =>
   value.replaceAll('\r', '\\r').replaceAll('\n', '\\n')
@@ -289,6 +315,22 @@ export let allowlist = (value: unknown): Parsed => {
       found.push({ binding: row.binding })
     }
     config.vpc_services = found
+  }
+  if ('assets' in value) {
+    if (!object(value.assets)) {
+      no('assets', 'expected an object: { "directory": "dist" }')
+    } else {
+      keys(value.assets, ['directory'], 'assets.')
+      if ('directory' in value.assets) {
+        let dir = folder(value.assets.directory)
+        if (dir == null) {
+          no(
+            'assets.directory',
+            'expected a folder of the app, such as dist, with no .. in it',
+          )
+        } else config.assets = dir ? { directory: dir } : {}
+      }
+    }
   }
   if ('ai' in value) {
     if (!object(value.ai)) no('ai', 'expected an object: { "binding": "AI" }')

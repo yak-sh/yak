@@ -63,6 +63,7 @@ type Cache = {
   source?: Files
   main?: string
   flags?: string[]
+  served?: string
 }
 
 /** What the compile step hands the rest of the release. */
@@ -85,10 +86,12 @@ let samePlan = (
   main: string | undefined,
   flags: string[],
   compiler: string,
+  served: string | undefined,
 ) => {
   if (
     !old?.plan || !old.source || !source || old.compiler != compiler ||
-    old.main != main || JSON.stringify(old.flags) != JSON.stringify(flags)
+    old.main != main || JSON.stringify(old.flags) != JSON.stringify(flags) ||
+    old.served != served
   ) {
     return false
   }
@@ -215,6 +218,7 @@ export let compiled = async (
   let source = manifest()
   let has = new Set(paths)
   let main = sourceOf(config, (p) => has.has(p))
+  let served = config.assets?.directory
   let compiler = ctx.env.CF_VERSION_METADATA?.id ?? 'local'
   let old: Cache | null = null
   let saved = await read(CACHE)
@@ -237,6 +241,7 @@ export let compiled = async (
         main,
         config.compatibility_flags ?? [],
         compiler,
+        served,
       )
       ? old!.plan!
       : await plan({
@@ -244,6 +249,7 @@ export let compiled = async (
         read,
         main,
         flags: config.compatibility_flags,
+        served,
       })
   } catch (e) {
     if (e instanceof Unplanned) throw refuse('arguments', e.message)
@@ -420,6 +426,7 @@ export let compiled = async (
     source: manifest() ?? undefined,
     main,
     flags: config.compatibility_flags ?? [],
+    served,
   }
   await blobs.put(prefix + CACHE, encode(JSON.stringify(cache)))
   await drop(

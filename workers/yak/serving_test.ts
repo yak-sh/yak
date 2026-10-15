@@ -2012,3 +2012,80 @@ test('an open visitor cannot choose generated media, and the editor browser can'
   let chosen = await metaOf(store).query('.built.current=true', KERNEL)
   assertEquals(chosen[0].entity.eid, first)
 })
+
+// A build's pages (T-124410): every HTML file answers at the address a static
+// host gives it, and a page that is not there is the app's own 404.html.
+let site = async (written: Record<string, string>) => {
+  let scenario = platform()
+  await seeded(scenario.env)
+  for (let [path, body] of Object.entries(written)) {
+    scenario.files.held.set(
+      `ada/cookbook/${path}`,
+      new TextEncoder().encode(body),
+    )
+  }
+  return {
+    [Symbol.dispose]: () => scenario[Symbol.dispose](),
+    at: (path: string) => apps.fetch(visit(`/cookbook${path}`), scenario.env),
+  }
+}
+let doc = (text: string) => `<!doctype html><head></head><body>${text}</body>`
+
+test("a build's pages answer at their own addresses", async () => {
+  using s = await site({
+    'index.html': doc('home'),
+    'about.html': doc('about'),
+    'docs/index.html': doc('docs'),
+    '404.html': doc('lost'),
+    'style.css': 'body {}',
+  })
+  let text = async (path: string) => {
+    let r = await s.at(path)
+    return [r.status, await r.text()] as const
+  }
+  assertStringIncludes((await text('/about'))[1], 'about')
+  assertStringIncludes((await text('/about.html'))[1], 'about')
+  assertStringIncludes((await text('/docs/'))[1], 'docs')
+  // A folder without its slash is sent to it, query and all.
+  let folder = await s.at('/docs?q=1')
+  assertEquals(folder.status, 307)
+  assertEquals(folder.headers.get('location'), 'docs/?q=1')
+  // A page that is not there is the app's 404, woven like any page.
+  let [status, lost] = await text('/nowhere/at/all')
+  assertEquals(status, 404)
+  assertStringIncludes(lost, 'lost')
+  assertStringIncludes(lost, '<base href="/cookbook/">')
+  assertEquals((await text('/gone.html'))[0], 404)
+  // A missing file is still no page.
+  let css = await s.at('/gone.css')
+  assertEquals(css.status, 404)
+  assert(!(await css.text()).includes('lost'))
+})
+
+test('an app without a 404.html still opens its index at a route', async () => {
+  using s = await site({ 'index.html': doc('home') })
+  let route = await s.at('/recipes/42')
+  assertEquals(route.status, 200)
+  assertStringIncludes(await route.text(), 'home')
+})
+
+test('assets.directory serves a folder of the app, and nothing beside it', async () => {
+  using s = await site({
+    'wrangler.jsonc': '{ "assets": { "directory": "./dist" } }',
+    'index.html': doc('the source page'),
+    'src/main.ts': 'export {}',
+    'dist/index.html': doc('the build'),
+    'dist/about/index.html': doc('built about'),
+    'dist/assets/app.js': 'console.log(1)',
+  })
+  assertStringIncludes(await (await s.at('/')).text(), 'the build')
+  assertStringIncludes(await (await s.at('/about/')).text(), 'built about')
+  let js = await s.at('/assets/app.js')
+  assertEquals(js.status, 200)
+  assertMatch(js.headers.get('content-type') ?? '', /javascript/)
+  for (let path of ['/src/main.ts', '/dist/index.html', '/wrangler.jsonc']) {
+    let r = await s.at(path)
+    assertEquals(r.status, 404, path)
+    assert(!(await r.text()).includes('the source page'), path)
+  }
+})

@@ -745,7 +745,22 @@ let asset = async (
     // fast one are the same call, and this is the word for which happened.
     (r) => r.headers.get('cf-cache-status'),
   )
-  if (![200, 206, 416].includes(got.status)) {
+  // A folder asked for without its slash is sent to it (files.ts `resolve`),
+  // keeping the query: the location is relative, so it holds at any mount.
+  let to = got.status == 307 ? got.headers.get('location') : null
+  if (to) {
+    await got.body?.cancel()
+    return new Response(null, {
+      status: 307,
+      headers: {
+        location: to + new URL(req.url).search,
+        'cache-control': keeping(app),
+      },
+    })
+  }
+  // The app's own 404.html answering a page that is not there.
+  let lost = got.status == 404 && got.headers.has(files.FILE)
+  if (![200, 206, 416].includes(got.status) && !lost) {
     await got.body?.cancel()
     return await unwritten(req, env, app, path, bare) ?? nothingHere(env)
   }
@@ -777,7 +792,14 @@ let asset = async (
   )
   if (sandbox) {
     return new Response(page, {
+      status: got.status,
       headers: { 'content-type': type, 'cache-control': 'private, no-store' },
+    })
+  }
+  if (lost) {
+    return new Response(req.method == 'HEAD' ? null : page, {
+      status: 404,
+      headers: { 'content-type': type, 'cache-control': keeping(app) },
     })
   }
   let headers = {

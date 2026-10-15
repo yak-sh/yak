@@ -131,6 +131,17 @@ test('a page script compiles when it is TypeScript or imports a declared package
   ])
 })
 
+test('only the pages of the served folder are compiled', async () => {
+  let files = {
+    'index.html': PAGE('./src/main.tsx'),
+    'src/main.tsx': `let n: number = 1\nexport {}`,
+    'dist/index.html': PAGE('./ui.ts'),
+    'dist/ui.ts': `let n: number = 1\nexport {}`,
+  }
+  let p = await plan({ ...app(files), served: 'dist' })
+  assertEquals(p?.ask.pages, ['dist/ui.ts'])
+})
+
 test('a deploy reads shared modules once across its entries', async () => {
   let files = {
     'worker.js': "import { n } from './shared.ts'\nexport default { n }",

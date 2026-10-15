@@ -50,7 +50,7 @@ import {
   url,
 } from './directory.ts'
 import type { Env } from './env.ts'
-import { keyed, prefixOf } from './files.ts'
+import { configOf, keyed, prefixOf, rootOf } from './files.ts'
 import { type Letter, REPLY_TO } from './mail.ts'
 import { esc } from './pages.ts'
 import { GALLERY } from './seo.ts'
@@ -279,9 +279,10 @@ export let pictured = (html: string, at: string) => {
 export let pictureOf = async (env: Env, space: Space, app: App) => {
   let chosen = screenshot(space, app, env)
   if (chosen) return chosen
-  let bytes = await r2Objects(env.BLOBS).read(
-    keyed(prefixOf(space, app), '/'),
-  )
+  let blobs = r2Objects(env.BLOBS)
+  let prefix = prefixOf(space, app)
+  let root = rootOf(prefix, await configOf(blobs, prefix))
+  let bytes = await blobs.read(keyed(root, '/'))
   return bytes
     ? pictured(new TextDecoder().decode(bytes), url(space, app, env))
     : ''

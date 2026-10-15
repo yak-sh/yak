@@ -16,13 +16,13 @@
 // default entrypoint, so no request from the internet arrives here — a caller
 // has to be this Worker.
 import { r2Objects, r2RawObjects } from './lib/objects.ts'
-import { mimeOf, type Objects, rangedOpen } from '@yaks/blob'
+import { type Loaded, mimeOf, type Objects, rangedOpen } from '@yaks/blob'
 import { at, blobAt, immutable } from './cache.ts'
 import { seedy } from './seed.ts'
 import type { Env, Fetcher } from './env.ts'
 import { BUILT } from './versions.ts'
 import { drawn, ICON_SVG } from './raster.ts'
-import { parse, WORKER } from './wrangler_app.ts'
+import { type Config, parse, WORKER } from './wrangler_app.ts'
 import * as shared from './shared.ts'
 
 /** The ceiling on bytes entering an app, through upload or app_files fetch. */
@@ -58,11 +58,18 @@ export let prefixOf = (
   app: { slug: string; source?: string | null },
 ) => app.source ?? `${space.slug}/${app.slug}`
 
-// A path behind no file whose last segment names no file type is a route, not
-// a miss (T-32769): `/recipes/42` is the page asking to be opened at a place,
-// so the app's own index.html answers it. Anything with an extension is a file
-// that is not there — a missing stylesheet must never answer HTML.
+// Which file answered, told back to the gateway: its path inside the served
+// folder (`about/index.html`, `404.html`), which is where the page's own
+// relative URLs start from.
+export let FILE = 'x-yak-file'
+
+// A path whose last segment names no file type is a page's address, not a
+// file's: `/about` may be about.html, and a path behind no page at all is a
+// route (T-32769), `/recipes/42` asking the app's index.html to open at a
+// place. Anything with an extension is a file, and a missing stylesheet must
+// never answer HTML.
 let pretty = (path: string) => !path.split('/').pop()!.includes('.')
+let page = (path: string) => pretty(path) || /\.html?$/i.test(path)
 
 // A release never gains a file after its source is selected. A later release
 // gets a different key, so its file can answer after this 404 was cached.
@@ -72,18 +79,74 @@ let missing = () =>
     headers: { 'content-type': 'text/plain; charset=utf-8', ...immutable },
   })
 
-// The app-relative path of its server source: `main` out of either wrangler
-// file, `worker.js` where it names none. Both files are asked for at
-// once — an app carries at most one, so the miss is unavoidable and paying for
-// it twice over is not.
-let mainOf = async (blobs: Objects, prefix: string) => {
-  let [jsonc, json] = await Promise.all([
+// What serving reads of an app's wrangler config: its server source (`main`,
+// never served) and the folder its addresses serve (`assets.directory`). Both
+// files are asked for at once; an app carries at most one, so the miss is
+// unavoidable and paying for it twice over is not. A release never changes,
+// so an isolate keeps what it read of one; anything else is read each time.
+let RELEASED = /\/\.releases\/[^/]+\/[^/]+$/
+let KEPT_CONFIGS = 512
+let configs = new Map<string, Promise<Config>>()
+export let configOf = (blobs: Objects, prefix: string): Promise<Config> => {
+  let kept = configs.get(prefix)
+  if (kept) return kept
+  let read = Promise.all([
     blobs.read(`${prefix}/wrangler.jsonc`),
     blobs.read(`${prefix}/wrangler.json`),
-  ])
-  let config = jsonc ?? json
-  if (!config) return WORKER
-  return parse(new TextDecoder().decode(config)).config.main ?? WORKER
+  ]).then(([jsonc, json]) => {
+    let bytes = jsonc ?? json
+    return bytes ? parse(new TextDecoder().decode(bytes)).config : {}
+  })
+  if (!RELEASED.test(prefix)) return read
+  configs.set(prefix, read)
+  read.catch(() => configs.delete(prefix))
+  for (let old of configs.keys()) {
+    if (configs.size <= KEPT_CONFIGS) break
+    configs.delete(old)
+  }
+  return read
+}
+
+/** Where an app's served files live: its folder `assets.directory` names,
+ * else its root. Nothing outside it answers a request. */
+export let rootOf = (prefix: string, config: Config) =>
+  config.assets?.directory ? `${prefix}/${config.assets.directory}` : prefix
+
+type Found = { path: string; file: Loaded; status: 200 | 404 }
+
+/**
+ * Which file answers a path of the served folder, as a static host answers a
+ * build's pages: the file itself, a folder's index.html, and a page's address
+ * without its extension (`/about` is about.html). A folder asked for without
+ * its slash is sent to it (`{to}`), so about/index.html's relative URLs
+ * resolve inside about/. A page that is not there is the app's 404.html,
+ * answered 404; without one, a route answers the app's index.html. `load`
+ * reads a path of the folder.
+ */
+export let resolve = async (
+  path: string,
+  load: (path: string) => Promise<Loaded | null>,
+): Promise<Found | { to: string } | null> => {
+  let first = async (paths: string[], status: 200 | 404 = 200) => {
+    for (let p of paths) {
+      let file = await load(p)
+      if (file) return { path: p.slice(1), file, status }
+    }
+    return null
+  }
+  let own = path.endsWith('/')
+    ? [`${path}index.html`]
+    : pretty(path)
+    ? [path, `${path}.html`]
+    : [path]
+  let found = await first(own)
+  if (found) return found
+  if (pretty(path) && !path.endsWith('/') && await load(`${path}/index.html`)) {
+    return { to: `${encodeURIComponent(path.split('/').pop()!)}/` }
+  }
+  if (!page(path)) return null
+  return await first(['/404.html'], 404) ??
+    (pretty(path) ? await first(['/index.html']) : null)
 }
 
 // The gateway's way in: the `FILES` binding, so Cloudflare's cache answers
@@ -198,7 +261,15 @@ export let warm = async (
   paths: string[],
 ) => {
   if (!env.FILES) return
-  let asked = warmed(paths)
+  // A file's address is its path inside the served folder, and a file
+  // outside that folder has none.
+  let dir = (await configOf(r2Objects(env.BLOBS), source)).assets?.directory
+  let asked = warmed(
+    dir
+      ? paths.filter((p) => p.startsWith(`${dir}/`))
+        .map((p) => p.slice(dir.length + 1))
+      : paths,
+  )
   let next = 0
   let run = async () => {
     while (next < asked.length) {
@@ -244,32 +315,32 @@ export let fetch = async (req: Request, env: Env): Promise<Response> => {
   let prefix = req.headers.get(PREFIX)
   if (!prefix || !eid) return missing()
   let blobs = r2Objects(env.BLOBS)
-  // One read, not a stat and then a read (T-33176): the bucket is a round trip
-  // away, and asking whether the file is there before asking for it paid that
-  // trip twice for every file the app serves.
-  let key = keyed(prefix, path)
+  let config = await configOf(blobs, prefix)
+  let root = rootOf(prefix, config)
+  // Decoded, so a key is the name the file was put under; a malformed escape
+  // throws, and the router reports it.
+  let at = decodeURIComponent(path)
+  let key = keyed(root, path)
   // Server source is not a public asset, even when `main` names a nested build
   // output. apps.ts `MANIFEST` already refuses the default `/worker.js` at the
   // gateway; this covers the configured path, which only the config names.
-  // Started here and awaited after the file, so the lookup rides in the same
-  // round trip as the bytes rather than in front of every script an app serves.
-  let script = SCRIPT.test(key)
-  let source = script ? mainOf(blobs, prefix) : null
+  if (key == keyed(prefix, `/${config.main ?? WORKER}`)) return missing()
   let type = mimeOf(key)
   let resource = path.startsWith('/__packages/')
-  let built = script || resource
+  // A compiled page script is kept by its source's path from the app's root
+  // (esbuild.ts), whatever folder is served.
+  let built = SCRIPT.test(key)
+    ? `${prefix}/${BUILT}${key.slice(prefix.length + 1)}`
+    : resource
     ? keyed(prefix, `/${BUILT}${path.slice(1)}`)
     : null
   if (
     (req.method == 'HEAD' || req.headers.has('range')) &&
     !pretty(path) && !type.startsWith('text/html')
   ) {
-    if (source && key == keyed(prefix, `/${await source}`)) {
-      return missing()
-    }
     let compiled = built ? await blobs.open(built) : null
     let object = compiled ?? await blobs.open(key)
-    if (!object) return path == ICON ? icon(env, blobs, prefix, eid) : missing()
+    if (!object) return path == ICON ? icon(env, blobs, root, eid) : missing()
     return rangedOpen(object, req, {
       'content-type': compiled && !resource ? mimeOf('compiled.js') : type,
       [VERSION]: object.version,
@@ -279,19 +350,27 @@ export let fetch = async (req: Request, env: Env): Promise<Response> => {
   // A page script the deploy compiled serves in its source's place, as
   // JavaScript whatever its extension (esbuild.ts): `<script type="module"
   // src="main.ts">` gets main.ts compiled. Asked for beside the source, in the
-  // same round trip.
-  let made = built ? blobs.load(built) : null
-  let file = await blobs.load(key)
-  if (source && key == keyed(prefix, `/${await source}`)) return missing()
-  let compiled = await made
-  if (compiled) return served(compiled, resource ? type : mimeOf('compiled.js'))
-  if (!file && path == ICON) return icon(env, blobs, prefix, eid)
-  if (!file && pretty(path)) {
-    key = keyed(prefix, '/')
-    file = await blobs.load(key)
+  // same round trip. One read, not a stat and then a read (T-33176): the
+  // bucket is a round trip away.
+  if (built) {
+    let [compiled, file] = await Promise.all([
+      blobs.load(built),
+      blobs.load(key),
+    ])
+    if (compiled) {
+      return served(compiled, resource ? type : mimeOf('compiled.js'))
+    }
+    return file ? served(file, type, at.slice(1)) : missing()
   }
-  if (!file) return missing()
-  return served(file, mimeOf(key))
+  let found = await resolve(at, (p) => blobs.load(`${root}${p}`))
+  if (found && 'to' in found) {
+    return new Response(null, {
+      status: 307,
+      headers: { location: found.to, ...immutable },
+    })
+  }
+  if (!found) return path == ICON ? icon(env, blobs, root, eid) : missing()
+  return served(found.file, mimeOf(found.path), found.path, found.status)
 }
 
 // An app's icon.png, where it wrote none, is its icon.svg drawn (raster.ts).
@@ -346,14 +425,18 @@ let blob = async (req: Request, env: Env, path: string) => {
 let SCRIPT = /\.(?:js|mjs|ts|mts|tsx|jsx)$/
 
 let served = (
-  file: { bytes: Uint8Array<ArrayBuffer>; version: string },
+  file: Loaded,
   type: string,
+  path?: string,
+  status = 200,
 ) =>
   new Response(file.bytes, {
+    status,
     headers: {
       'content-type': type,
       'content-length': String(file.bytes.byteLength),
       [VERSION]: file.version,
+      ...(path == null ? {} : { [FILE]: path }),
       ...immutable,
     },
   })

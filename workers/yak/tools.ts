@@ -932,6 +932,17 @@ let published = async (
   // Every key under the app, listed once for the compile and the seed. The
   // release index also records any package-lock.json the compile writes.
   let keys = (await blobs.list(prefix)).map((k) => k.slice(prefix.length))
+  // The folder the app's addresses serve has to hold something, or every
+  // address would answer nothing.
+  let dir = parsed.config.assets?.directory
+  if (dir && !keys.some((k) => k.startsWith(`${dir}/`))) {
+    throw refuse(
+      'arguments',
+      `wrangler's assets.directory is ${dir}, and ${dir} holds no files: ` +
+        `ship the build into it (sandbox_ship with into: "${dir}") or name ` +
+        'the folder it is in',
+    )
+  }
   // Compile in the private release candidate. A failure leaves serving alone.
   let made = kept ? { lines: [] } : await c.time(
     'compile',

@@ -37,6 +37,9 @@ export type App = {
   main?: string
   /** Its compatibility flags (`nodejs_compat` changes how it compiles). */
   flags?: string[]
+  /** The folder its pages are served from, when not its root (a build's
+   * `dist`): only HTML inside it is a page whose scripts are compiled. */
+  served?: string
 }
 
 /** What the compiler is handed: the text of every file a build reads, and
@@ -236,7 +239,11 @@ export let plan = async (app: App): Promise<Plan | null> => {
   // no import map at all, since none reaches a worker.
   let loads = new Map<string, string[][]>()
   let started = new Set<string>()
-  for (let page of app.paths.filter((p) => /\.html?$/i.test(p))) {
+  let served = app.served ? `${app.served}/` : ''
+  let pagesOf = app.paths.filter((p) =>
+    /\.html?$/i.test(p) && p.startsWith(served)
+  )
+  for (let page of pagesOf) {
     let html = await text(page) ?? ''
     for (let entry of loaded(page, html)) {
       loads.set(entry, [...loads.get(entry) ?? [], mapped(html)])
