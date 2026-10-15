@@ -195,8 +195,11 @@ test('implicit-cache upstreams keep append-only input and deterministic tools wi
   }
 })
 
-test('Alibaba chat streams calls, text and reported usage with explicit caching and session affinity', async () => {
+// Alibaba through chat: a model whose upstream streams text, one call in two
+// pieces, and the usage it reports, and records each request's body.
+let alibaba = () => {
   let seen: { messages: Input[]; tools: unknown; session_id: string }[] = []
+  let deltas: string[] = []
   let model = responses({
     key: () => 'fake',
     fetch: (url, init) => {
@@ -242,7 +245,6 @@ test('Alibaba chat streams calls, text and reported usage with explicit caching 
       ]))
     },
   })
-  let deltas: string[] = []
   let req: Request = {
     model: 'qwen/qwen3-max',
     instructions: 'Stable',
@@ -251,6 +253,11 @@ test('Alibaba chat streams calls, text and reported usage with explicit caching 
     tools: declared(),
     onText: (d) => deltas.push(d.text),
   }
+  return { model, req, seen, deltas }
+}
+
+test('Alibaba chat streams calls, text and reported usage with explicit caching and session affinity', async () => {
+  let { model, req, seen, deltas } = alibaba()
   let reply = await model(req)
   assertEquals(deltas, ['Checking'])
   assertEquals(reply.items, [
@@ -269,10 +276,17 @@ test('Alibaba chat streams calls, text and reported usage with explicit caching 
     blocks(seen[0].messages).filter((p) => p.cache_control).length,
     2,
   )
+})
+
+// The first turn, asked once at load.
+let turned = alibaba()
+let turn = await turned.model(turned.req)
+test('Alibaba chat keeps the next turn append-only, with the tools as they were', async () => {
+  let { model, req, seen } = turned
   await model({
     ...req,
     tools: declared(true),
-    items: [...req.items, ...reply.items, {
+    items: [...req.items, ...turn.items, {
       kind: 'result',
       id: 'tool-1',
       output: 'Found',

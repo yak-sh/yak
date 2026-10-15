@@ -17,57 +17,61 @@ let stream = (events: unknown[]) =>
       'data: [DONE]\n\n',
   )
 
-for (let speech of [false, true]) {
-  test(`OpenRouter ${speech ? 'speech' : 'chat'} checkpoints before paid submission and recovers failed delivery without POST`, async () => {
-    let name = speech ? 'vendor/speech' : 'vendor/music'
-    let saved: MediaReceipt | undefined
-    let steps: string[] = [], posts = 0, fail = true
-    let bytes = new TextEncoder().encode('ID3tune')
-    let storage: ArtifactStore = (bytes, mediaType) =>
-      Promise.resolve({
-        address: 'fixture',
-        size: bytes.length,
-        media_type: mediaType,
-      })
-    let options = {
-      key: () => 'fixture',
-      speech: speech ? [name] : [],
-      media: {
-        store: (...args: Parameters<typeof storage>) => {
-          steps.push('delivery')
-          if (fail) return Promise.reject(new Error('storage unavailable'))
-          return storage(...args)
-        },
+let unavailable = new Error('storage unavailable')
+let bytes = new TextEncoder().encode('ID3tune')
+
+// A media model whose one paid answer is checkpointed, and whose artifact
+// storage fails until `heal()`. Every step it takes is said in `steps`.
+let rig = (speech: boolean) => {
+  let name = speech ? 'vendor/speech' : 'vendor/music'
+  let saved: MediaReceipt | undefined
+  let steps: string[] = [], fail = true
+  let at = { posts: 0 }
+  let storage: ArtifactStore = (bytes, mediaType) =>
+    Promise.resolve({
+      address: 'fixture',
+      size: bytes.length,
+      media_type: mediaType,
+    })
+  let model = responses({
+    key: () => 'fixture',
+    speech: speech ? [name] : [],
+    media: {
+      store: (...args: Parameters<typeof storage>) => {
+        steps.push('delivery')
+        if (fail) return Promise.reject(unavailable)
+        return storage(...args)
       },
-      receipts: {
-        read: () => Promise.resolve(saved),
-        save: (receipt: MediaReceipt) => {
-          saved = structuredClone(receipt)
-          steps.push(receipt.complete === false ? 'partial' : 'receipt')
-          return Promise.resolve()
-        },
+    },
+    receipts: {
+      read: () => Promise.resolve(saved),
+      save: (receipt: MediaReceipt) => {
+        saved = structuredClone(receipt)
+        steps.push(receipt.complete === false ? 'partial' : 'receipt')
+        return Promise.resolve()
       },
-      fetch: (url: string | URL | globalThis.Request) => {
-        if (String(url).includes('/generation?')) {
-          steps.push('cost')
-          return Promise.resolve(Response.json({ data: { total_cost: 0.04 } }))
-        }
-        posts++
-        steps.push('post')
-        return Promise.resolve(
-          speech
-            ? new Response(bytes, {
-              headers: { 'x-generation-id': 'generation' },
-            })
-            : stream([{
-              id: 'generation',
-              choices: [{ delta: { audio: { data: btoa('ID3tune') } } }],
-            }]),
-        )
-      },
-    }
-    let model = responses(options)
-    let req = {
+    },
+    fetch: (url: string | URL | globalThis.Request) => {
+      if (String(url).includes('/generation?')) {
+        steps.push('cost')
+        return Promise.resolve(Response.json({ data: { total_cost: 0.04 } }))
+      }
+      at.posts++
+      steps.push('post')
+      return Promise.resolve(
+        speech
+          ? new Response(bytes, {
+            headers: { 'x-generation-id': 'generation' },
+          })
+          : stream([{
+            id: 'generation',
+            choices: [{ delta: { audio: { data: btoa('ID3tune') } } }],
+          }]),
+      )
+    },
+  })
+  let ask = () =>
+    model({
       ...request(name),
       onSubmit: async () => {
         await Promise.resolve()
@@ -79,28 +83,40 @@ for (let speech of [false, true]) {
         steps.push('ack')
       },
       onReceipt: (receipt: MediaReceipt) => {
-        assertEquals(saved, receipt)
+        // What is kept by now is what is handed on, compared as the JSON it
+        // is: a structural compare of a whole receipt costs most of a test.
+        assertEquals(JSON.stringify(saved), JSON.stringify(receipt))
         steps.push('checkpoint')
         return Promise.resolve()
       },
-    }
-    await assertRejects(
-      () => model(req),
-      Error,
-      'Could not persist generated media',
-    )
-    assertEquals(steps.slice(0, 3), ['submit', 'post', 'ack'])
-    assertEquals(saved?.complete, true)
-    assertEquals(saved?.provider, 'openrouter')
-    assertEquals(steps.at(-1), 'delivery')
-    fail = false
-    let reply = await model.recover!('original-ask')
+    })
+  let heal = () => void (fail = false)
+  return { model, ask, heal, steps, at, saved: () => saved }
+}
+
+for (let speech of [false, true]) {
+  let kind = speech ? 'speech' : 'chat'
+  test(`OpenRouter ${kind} checkpoints before paid submission`, async () => {
+    let r = rig(speech)
+    await assertRejects(r.ask, Error, 'Could not persist generated media')
+    assertEquals(r.steps.slice(0, 3), ['submit', 'post', 'ack'])
+    assertEquals(r.saved()?.complete, true)
+    assertEquals(r.saved()?.provider, 'openrouter')
+    assertEquals(r.steps.at(-1), 'delivery')
+  })
+
+  // A delivery that failed after its receipt was kept.
+  let failed = rig(speech)
+  await failed.ask().catch(() => {})
+  test(`OpenRouter ${kind} recovers failed delivery without POST`, async () => {
+    failed.heal()
+    let reply = await failed.model.recover!('original-ask')
     assertEquals(reply.id, 'generation')
     assertEquals(reply.artifacts?.[0].size, bytes.length)
     assertEquals(reply.cost, 0.04)
-    assertEquals(posts, 1)
-    assertEquals(await model.recover!('original-ask'), reply)
-    assertEquals(posts, 1)
+    assertEquals(failed.at.posts, 1)
+    assertEquals(await failed.model.recover!('original-ask'), reply)
+    assertEquals(failed.at.posts, 1)
   })
 }
 
