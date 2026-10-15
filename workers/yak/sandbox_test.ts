@@ -126,10 +126,15 @@ let bench = async (answer: (cmd: string) => Ran | void = () => {}) => {
 }
 
 test('the machine tools write, run and read, and a ship copies out', async () => {
-  // The build leaves a .js and a .wasm in pkg/, and the glob finds both.
+  // The build leaves a .js and a .wasm in pkg/, which the globs find, and a
+  // site in dist/, a page per route and its assets, which the listing walks.
   let { ctx, box, env, space } = await bench((cmd) =>
-    cmd.startsWith('ls -1d')
-      ? { stdout: 'pkg/chess.js\npkg/chess_bg.wasm\n' }
+    cmd.startsWith('find ')
+      ? {
+        stdout: cmd.includes('./dist')
+          ? '0\t./dist\tabout/index.html\n0\t./dist\t_astro/app.js\n'
+          : '0\t./pkg/chess.js\t\n1\t./pkg/chess_bg.wasm\t\n',
+      }
       : { stdout: 'Finished `release` profile', stderr: 'warning: unused' }
   )
 
@@ -165,6 +170,14 @@ test('the machine tools write, run and read, and a ship copies out', async () =>
   })
   assertStringIncludes(shipped.text, 'shipped 2 files')
   assertStringIncludes(shipped.text, 'chess.js, chess_bg.wasm')
+  // The site keeps its folders, under the folder of the app it was sent to.
+  box.files.set('/workspace/dist/about/index.html', '<h1>About</h1>')
+  box.files.set('/workspace/dist/_astro/app.js', 'boot()')
+  await tool('sandbox_ship').run(ctx, {
+    app: 'chess',
+    paths: ['dist'],
+    into: 'site',
+  })
   await tool('app_deploy').run(ctx, { app: 'chess' })
 
   // The release serves them — the .wasm as application/wasm, whole (files.ts
@@ -181,6 +194,10 @@ test('the machine tools write, run and read, and a ship copies out', async () =>
   )
   assertEquals(wasm.headers.get('content-type'), 'application/wasm')
   assertEquals(await wasm.text(), WASM)
+  let site = (path: string) =>
+    apps.fetch(new Request(`https://ada.yaks.app/chess/site/${path}`), env)
+  assertStringIncludes(await (await site('about/')).text(), '<h1>About</h1>')
+  assertEquals(await (await site('_astro/app.js')).text(), 'boot()')
 
   // Every one of those touched the same container, under the space's own id.
   assertEquals([...box.alive], [named(space, ADA)])
@@ -206,7 +223,7 @@ test('sandbox_exec, as the directory listed it, runs its cmd and answers as sand
 
 test('a ship that matches nothing says what to look at', async () => {
   let { ctx } = await bench((cmd) =>
-    cmd.startsWith('ls -1d') ? { stdout: '', exitCode: 2 } : {}
+    cmd.startsWith('find ') ? { stdout: '', exitCode: 1 } : {}
   )
   let said = await assertRejects(() =>
     tool('sandbox_ship').run(ctx, { app: 'chess', paths: ['pkg/*.wasm'] })

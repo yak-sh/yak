@@ -94,6 +94,7 @@ import {
 import * as dirPart from './directory.ts'
 import { latestSpeaks } from './lenses.ts'
 import { sandboxed, sandboxing } from './installed.ts'
+import { appFolder, landed, listing, sandboxPath } from './ship.ts'
 import {
   listCommands,
   reachChanged,
@@ -2103,24 +2104,6 @@ let capped = (said: string) =>
     ? `${said.slice(0, CAP)}\n… and ${said.length - CAP} more characters`
     : said
 
-// A path this may hand to a shell for globbing: what a path and a glob are
-// made of, and nothing a shell reads as punctuation. It is tidiness rather
-// than a boundary — the sandbox is the caller's own and sandbox_shell runs
-// anything in it — and it keeps one `ls` from becoming three commands.
-let SHIP = /^[A-Za-z0-9._\-/*?[\]]+$/
-
-let shipPath = (v: unknown) => {
-  let said = text(v, 'paths')
-  if (!SHIP.test(said) || said.split('/').includes('..')) {
-    throw refuse(
-      'arguments',
-      `paths: ${said} — a path inside the sandbox, e.g. pkg/app.wasm or ` +
-        'pkg/*.js',
-    )
-  }
-  return said
-}
-
 // The machine tools (@yaks/harness), declared there once and listed here as
 // sandbox_<name>, run on this space's container (sandbox.ts
 // `workbench`). The door adds the space to each one's arguments, says
@@ -3244,36 +3227,47 @@ let OURS: Row[] = [
         app: APP,
         paths: {
           type: 'array',
-          items: str('a path or glob in the sandbox, e.g. pkg/*.wasm'),
-          description: 'the files to copy into the app; a glob may name ' +
-            'several',
+          items: str(
+            'a file, folder or glob in the sandbox, e.g. dist or ' +
+              'pkg/*.wasm',
+          ),
+          description: 'what to copy into the app: a folder copies the ' +
+            'files inside it, and a file or glob match lands under its own ' +
+            'name, keeping the folders below the one its matches share',
         },
+        into: str(
+          'a folder of the app to copy into, e.g. dist; left out, the ' +
+            'files land at the app root',
+        ),
       },
       required: ['app', 'paths'],
     },
     run: async (ctx, args) => {
       let { space, app, who } = await inApp(ctx, args, true)
-      let asked = list(args.paths, 'paths').map(shipPath)
+      let asked = list(args.paths, 'paths').map(sandboxPath)
       if (!asked.length) {
         throw refuse('arguments', 'paths: at least one file to copy in')
       }
+      let into = args.into == null ? '' : appFolder(text(args.into, 'into'))
       let files = await bench(ctx, space, async ({ provider, ref }) => {
-        // One `ls` expands every glob at once, so a batch of artifacts costs
-        // one command rather than one each.
-        let found = await provider.exec(ref, `ls -1d -- ${asked.join(' ')}`)
-        let paths = found.stdout.split('\n').map((l) => l.trim()).filter(
-          Boolean,
-        )
-        if (!paths.length) {
+        // One listing expands every glob and walks every folder at once, so
+        // a whole build costs one command rather than one per path.
+        let found = await provider.exec(ref, listing(asked))
+        let landings = landed(asked, found.stdout, into)
+        if (!landings.length) {
           throw refuse(
             'missing',
             `nothing in the sandbox matches ${asked.join(', ')} — ` +
               'sandbox_shell `ls` to see what the build left',
           )
         }
+        // A file two paths both named is read once and lands at each.
+        let to = Map.groupBy(landings, (l) => l.from)
         let files = []
-        for await (let file of provider.export(ref, paths)) {
-          files.push({ path: file.path.split('/').pop()!, bytes: file.bytes })
+        for await (let file of provider.export(ref, [...to.keys()])) {
+          for (let l of to.get(file.path) ?? []) {
+            files.push({ path: l.to, bytes: file.bytes })
+          }
         }
         return files
       })
@@ -3282,7 +3276,7 @@ let OURS: Row[] = [
         text: `shipped ${paths.length} ${
           paths.length == 1 ? 'file' : 'files'
         } → ${url(space, app, ctx.env)}: ${
-          paths.join(', ')
+          capped(paths.join(', '))
         }; staged for app_deploy`,
         space,
       }

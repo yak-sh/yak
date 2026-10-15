@@ -257,7 +257,8 @@ with pinned Rust, Python, Go and Zig toolchains — zig cc is its C and C++
 compiler — plus wasm-bindgen and wasm-opt; sandbox_shell names the versions,
 and anything else installs for the session with apt or a package manager), then
 sandbox_ship the artifact — pkg/*.wasm, pkg/*.js — into the app, where it is
-served beside index.html and the page imports it. Its files are gone when the
+served beside index.html and the page imports it; a build's folder (dist)
+ships whole, keeping its subfolders. Its files are gone when the
 build ends; only what you ship survives. Every second
 the container is awake is charged to the space, so plan the build, run it
 once, and ship.

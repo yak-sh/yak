@@ -12,8 +12,9 @@ export class ContainerProbe extends DurableObject {
   async setSleepAfter(after) {
     await this.ctx.storage.put('sleep', after)
   }
+  // Every command answers as a ship's listing of one built file (ship.ts).
   exec(_command, _opts) {
-    return { stdout: 'pkg/app.wasm\n', stderr: '', exitCode: 0 }
+    return { stdout: '0\t./pkg/app.wasm\t\n', stderr: '', exitCode: 0 }
   }
   async startProcess(command, opts) {
     if (

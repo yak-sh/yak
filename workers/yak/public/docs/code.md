@@ -686,6 +686,20 @@ none of it costs the next build anything.
 **The container is destroyed when the build ends**, and everything you put in it
 goes with it. Only what `sandbox_ship` copied into the app survives.
 
+**A ship keeps a build's folders.** Name a file, a folder or a glob in the
+sandbox. A folder copies every file inside it, so a site built into `dist/`
+lands where its pages look for it:
+
+    sandbox_ship(app, paths: ['dist'])
+      dist/index.html        → index.html
+      dist/about/index.html  → about/index.html
+      dist/_astro/app.js     → _astro/app.js
+
+A file, or what a glob matched, lands under its own name below the folder its
+matches share, so `pkg/*.wasm` lands beside `index.html` and `dist/*` lands as
+`dist` does. `into: 'dist'` puts the lot under that folder of the app instead of
+its root. Two different files landing on one path are refused.
+
 **Its network reaches the package registries and nothing else**: crates.io,
 PyPI, npm, the Go module proxy, Ubuntu's archive, and yaks.app itself. Any other
 address is refused, so a build fetches what it needs from a registry, not from a
