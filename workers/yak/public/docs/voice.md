@@ -21,9 +21,13 @@ app: joining a call, speaking, hearing, and what it costs.
 
 An app needs no key and no server of its own for voice. Its pages talk through
 the app's own door, `./api/rtc/`, which the platform keeps open onto Cloudflare
-Realtime. The WebRTC half is a package the page imports:
+Realtime. The WebRTC half is a toolkit package the page imports. Name it in
+the app's `package.json` with the version `"platform"`, and the deploy compiles
+the page script with it (code.md):
 
-    import { join, microphone } from 'https://esm.sh/jsr/@yaks/rtc@0.2.5'
+    {"dependencies": {"@yaks/rtc": "platform", "@yaks/client": "platform"}}
+
+    import { join, microphone } from '@yaks/rtc'
 
 ## Speaking
 
