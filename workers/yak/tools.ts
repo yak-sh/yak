@@ -915,24 +915,20 @@ let published = async (
   let bytesAt = (path: string) => blobs.read(prefix + path)
   // The reads the compile does not change, sent now and awaited after it,
   // since each is a round trip of its own and none waits on another
-  // (T-124005): the versions this release follows, the serving release's
-  // words, the app's manifest, and for a release put back whole, whether its
-  // bytes are all still kept (a head each, not the bytes).
+  // (T-124005): the versions this release follows, the app's manifest, and
+  // for a release put back whole, whether its bytes are all still kept (a
+  // head each, not the bytes).
   //
   // The versions say what this release will be called. Its seed is staged
   // under that version and applied when the directory moves the declaration
-  // pointer. The serving release is read before the next one is prepared,
-  // which also gives a store first reached during a deploy the declaration to
-  // keep on failure, and its uses beside it, for what this release stops
-  // borrowing below. The manifest is the app's own components, if it declares
-  // any; a manifest the store refuses fails the release: the words and the
-  // tables must agree, and a half-planted vocabulary is what `unknown
-  // component` is made of.
+  // pointer. The manifest is the app's own components, if it declares any; a
+  // manifest the store refuses fails the release: the words and the tables
+  // must agree, and a half-planted vocabulary is what `unknown component` is
+  // made of.
   let kept = target?.source && target.script ? target : undefined
   let held = pins(r2Objects(ctx.env.BLOBS), `${space.slug}/${standing.slug}/`)
   let early = Promise.all([
     versions(ctx.dir, standing),
-    Promise.all([answer(store, '/vocab'), answer(store, '/uses')]),
     declaring(blobs, space, app),
     ...Object.values(kept?.files ?? {}).map(async (sha) => {
       if (!await held.has(sha)) throw refuse('missing', `no blob for ${sha}`)
@@ -940,6 +936,22 @@ let published = async (
   ])
   // A compile that refuses is the answer; these are read again by nobody.
   early.catch(() => {})
+  // And the serving release's words, read before the next one is prepared,
+  // which also gives a store first reached during a deploy the declaration
+  // to keep on failure, and its uses beside it, for what this release stops
+  // borrowing below. They wake the app store, which a compile refused before
+  // the compiler is asked never needs: they go beside the compiler's round
+  // trip, or once nothing needs compiling.
+  let servingWords: Promise<[string, string]> | undefined
+  let readServing = () => {
+    servingWords ??= Promise.all([
+      answer(store, '/vocab'),
+      answer(store, '/uses'),
+    ])
+    servingWords.catch(() => {})
+    return servingWords
+  }
+  if (kept) readServing()
   let parsed = await configured(bytesAt)
   // Every key under the app, listed once for the compile and the seed. The
   // release index also records any package-lock.json the compile writes.
@@ -969,6 +981,7 @@ let published = async (
         blobs,
         files.manifest,
         preserve,
+        readServing,
       ),
   )
   // The release's index is complete once the compile has written into it, and
@@ -976,7 +989,10 @@ let published = async (
   // bucket now, beside everything below rather than after it (T-124005).
   let snapshot = c.time('snapshot', () => files.finish())
   snapshot.catch(() => {})
-  let [all, [, serving], { file: vocabFile, source }] = await early
+  let [[all, { file: vocabFile, source }], [, serving]] = await Promise.all([
+    early,
+    readServing(),
+  ])
   let version = target?.version ?? (all[0]?.version ?? 0) + 1
   // And what its declaration is called. A rollback selects a version again,
   // so it declares under a name of its own: a declaration once written is

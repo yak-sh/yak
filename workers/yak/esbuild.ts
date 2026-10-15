@@ -197,7 +197,8 @@ let asked = async (env: Env, ask: Ask, app: App): Promise<Answer> => {
 /**
  * Compile what this release of the app needs compiled, refusing the release
  * when it cannot be. `config` is the app's parsed wrangler config, and `keys`
- * every key under the app, from its root.
+ * every key under the app, from its root. `meanwhile` starts what the caller
+ * reads beside the compiler's round trip, once nothing before it has refused.
  */
 export let compiled = async (
   ctx: Ctx,
@@ -209,6 +210,7 @@ export let compiled = async (
   files = r2Objects(ctx.env.BLOBS),
   manifest: () => Files | null = () => null,
   retained = false,
+  meanwhile: () => void = () => {},
 ): Promise<Compiled> => {
   let blobs = files
   let prefix = `${prefixOf(space, app)}/`
@@ -306,6 +308,7 @@ export let compiled = async (
     }
     let no = await refusedSpend(ctx.dir, space, 'seconds', ctx.env)
     if (no) throw refuse('limit', no)
+    meanwhile()
     let began = Date.now()
     try {
       answer = await asked(ctx.env, pending, app)
