@@ -12,7 +12,7 @@
 // A figure is made when someone arrives and dropped when they go; each frame
 // moves it to where the frame says it is, smoothing what arrives in steps (a
 // peer's position comes when their page sends it, not on this page's beat).
-import { labels } from './status.ts'
+import { labels } from '@yaks/game'
 // @ts-types="npm:@types/three@^0.186.0"
 import * as THREE from 'three'
 import { ABILITIES } from './abilities.ts'

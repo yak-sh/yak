@@ -1,5 +1,6 @@
 // The companion's shared choices and walk, plus the page's view of its
 // persisted state. The scheduled app worker owns every world-changing tick.
+import { advance as advancePath } from '@yaks/game'
 import { writer } from './chat.ts'
 import { GATHER, LODES, naturalEid, nodeLife } from './gather.ts'
 import { type Natural, NATURE } from './nature.ts'
@@ -93,30 +94,7 @@ export let advance = (
   path: [number, number, number][],
   dt: number,
 ): { at: [number, number, number]; path: typeof path; speed: number } => {
-  let left = Math.max(0, dt) * 2
-  let at = from
-  while (path.length && left > 0) {
-    let to = path[0]
-    let d = Math.hypot(to[0] - at[0], to[2] - at[2])
-    if (d < 0.15) {
-      at = to
-      path = path.slice(1)
-    } else {
-      let k = Math.min(1, left / d)
-      at = [
-        at[0] + (to[0] - at[0]) * k,
-        at[1] + (to[1] - at[1]) * k,
-        at[2] + (to[2] - at[2]) * k,
-      ]
-      left -= d * k
-      if (k == 1) path = path.slice(1)
-    }
-  }
-  return {
-    at,
-    path,
-    speed: dt > 0 ? Math.hypot(at[0] - from[0], at[2] - from[2]) / dt : 0,
-  }
+  return advancePath(from, path, dt, 2, 0.15)
 }
 
 export type Companion = ReturnType<typeof companion>

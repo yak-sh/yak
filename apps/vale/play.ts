@@ -41,15 +41,8 @@ import {
   refreshed,
   type Status,
 } from './status.ts'
-import {
-  type Area,
-  areas,
-  following,
-  planted,
-  pulse,
-  received,
-  within,
-} from './areas.ts'
+import { following, pulse, received, within } from '@yaks/game'
+import { type Area, areas, planted } from './areas.ts'
 import { type Slot, SLOTS } from './arms.ts'
 import { FIGURES, sizeOf } from './figure.ts'
 import { fighter, foeOf } from './danger.ts'
@@ -110,7 +103,8 @@ import {
   walk,
 } from './sim.ts'
 import { canLearn, formOf, learnedOf, pointsOf, skilled } from './skills.ts'
-import { aimFor, aimOf, aims, FLIGHT, LAND, landOf, takenBy } from './strike.ts'
+import { arrivals, ownerOf, shotFlight } from '@yaks/game'
+import { aimFor, aimOf, aims, LAND, landOf, takenBy } from './strike.ts'
 import { stepPush, stride } from './stride.ts'
 import { regionOf, spotOf } from './regions.ts'
 import { destinationOf, nextTeleport, resumed } from './teleport.ts'
@@ -357,6 +351,9 @@ let LUNGE = 0.6
 let RIPOSTE = 1200
 // How long a legendary's rally takes to come back, in ms.
 let RALLY = 60_000
+/** Shot speed in metres per second, chosen by Mossvale's weapons. */
+let FLIGHT = { arrow: 30, bolt: 18 }
+
 // The blows of an ability that lands more than once land this far apart. A
 // boss is held a third as long. (How long a ward lasts and how many times a
 // bleed lands are the abilities', abilities.ts.)
@@ -1136,11 +1133,7 @@ export let game = (
           : rest(v, h.home, h.roam, h.seed, now, shelter)
         // Who moves it: of the players near its home whose pages play, the
         // first by eid.
-        let owner = ''
-        for (let [who, sp] of spots) {
-          if (!sp.awake || dist(sp, home) > ACTIVE) continue
-          if (!owner || who < owner) owner = who
-        }
+        let owner = ownerOf(spots, home, ACTIVE)
         // Peers show the individual blow from its sender's combat events.
         if (!fallen && hpNow < wasHp) hitAt.set(eid, now)
         if (owner == me && !fallen) {
@@ -1653,19 +1646,16 @@ export let game = (
         let flies = !a || a.shape == 'one' || a.shape == 'burst'
           ? k.shot
           : undefined
-        let ms = flies
-          ? (Math.hypot(to[0] - body.x, to[2] - body.z) / FLIGHT[flies]) * 1000
-          : 0
-        for (let i = 0; flies && i < (a?.shots ?? 1); i++) {
-          let r = i ? (a?.far ?? 0) * Math.sqrt(Math.random()) : 0
-          let t = Math.random() * Math.PI * 2
+        let flight = flies
+          ? shotFlight(at(body), to, FLIGHT[flies], a?.shots ?? 1, a?.far ?? 0)
+          : { ms: 0, shots: [] }
+        let ms = flight.ms
+        for (let shot of flight.shots) {
           events.push({
             type: 'shot',
-            kind: flies,
+            kind: flies!,
             flame: doing == 'blaze',
-            from: at(body),
-            to: [to[0] + Math.cos(t) * r, to[1], to[2] + Math.sin(t) * r],
-            ms: ms * (1 + i * 0.07),
+            ...shot,
           })
         }
         if (a?.shape == 'burst') {
@@ -1744,15 +1734,15 @@ export let game = (
       }
       // Blows arriving. One an ability struck that fells what it lands on is
       // that ability's killing blow.
-      blows = blows.filter((b) => {
-        if (b.lands > now) return true
+      let arriving = arrivals(blows, now)
+      blows = arriving.pending
+      for (let b of arriving.due) {
         let m = mobs.find((m) => m.eid == b.eid)
         if (m && !m.down) {
           land(m, b.dmg, b.great, b.held, b.by)
           if (m.down && b.by) went(b.by, 'kill')
         }
-        return false
-      })
+      }
 
       ground = [...fought.areas, ...otherFights.flatMap((f) => f.areas)]
       for (let area of ground) {

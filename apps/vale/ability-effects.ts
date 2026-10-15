@@ -1,10 +1,9 @@
 // An ability's effects are plain data shared by combat, descriptions and
 // skill forms. The Store keeps their allowed shapes in the app vocabulary.
 
-import type { AreaEffect } from './areas.ts'
+import type { AreaEffect as GroundEffect } from '@yaks/game'
 
-export type Effect =
-  | AreaEffect
+type Direct =
   | { kind: 'damage'; scale: number; hits?: number; sure?: boolean }
   | { kind: 'bleed'; scale: number }
   | { kind: 'stun'; ms: number }
@@ -28,6 +27,13 @@ export type Effect =
     share: number
     ms: number
   }
+
+export type Ground = Extract<
+  Direct,
+  { kind: 'damage' | 'heal' | 'dot' | 'hot' | 'buff' | 'debuff' }
+>
+export type AreaEffect = GroundEffect<Ground> & { kind: 'area' }
+export type Effect = Direct | AreaEffect
 
 export type Kind = Effect['kind']
 

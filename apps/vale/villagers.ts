@@ -15,6 +15,7 @@
 // what they say and shows when a hero talks to them, and where the land's
 // people went is news its people talk about. A decision Jev could not make
 // leaves them on their routine: at home. Their daily rhythm is derived in the page; only human dialogue asks a model.
+import { along } from '@yaks/game'
 import type { Bundle } from '@yaks/graph'
 import { token } from '@yaks/graph/sha256'
 import { toolEid } from '@yaks/tools/result'
@@ -789,22 +790,6 @@ let spot = (
 }
 
 let dist = (a: Vec, b: Vec) => Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2])
-
-let along = (path: Vec[], metres: number): Vec => {
-  for (let i = 1; i < path.length; i++) {
-    let span = dist(path[i - 1], path[i])
-    if (metres < span && span) {
-      let k = metres / span, a = path[i - 1], b = path[i]
-      return [
-        a[0] + (b[0] - a[0]) * k,
-        a[1] + (b[1] - a[1]) * k,
-        a[2] + (b[2] - a[2]) * k,
-      ]
-    }
-    metres -= span
-  }
-  return path.at(-1)!
-}
 
 // The light and the people share one twenty-minute day. Work fills the day;
 // a visit to the inn follows, then home for the night.

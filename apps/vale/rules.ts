@@ -3,6 +3,8 @@
 // leaves, where a quest stands. Nothing here touches the page or the network,
 // so every page reaches the same answer from the same rows. What there is to
 // fight, carry and do is data of its own: beasts.ts, items.ts, quests.ts.
+import { blow as rolled, through as reduced } from '@yaks/game'
+export { fallOf, hpOf } from '@yaks/game'
 import { spoil, tierOf } from './arms.ts'
 import { comp, num, str } from './bundle.ts'
 import { beastId, BEASTS } from './beasts.ts'
@@ -102,11 +104,14 @@ export let blowOf = (
  * assertEquals(blow(12, 0.8, false, 0.1).great, true)
  * ```
  */
-export let blow = (might: number, roll: number, sure = false, luck = 0) => {
-  let great = sure || roll > 0.88 - luck
-  let base = might * (0.8 + (roll % 0.1) * 4)
-  return { dmg: Math.round(base * (great ? 1.8 : 1)), great }
-}
+export let blow = (might: number, roll: number, sure = false, luck = 0) =>
+  rolled(might, roll, {
+    sure,
+    luck,
+    greatAt: 0.88,
+    greatScale: 1.8,
+    spread: 0.2,
+  })
 
 /** Armour turns a share of each bite, without making a foe's weak attacks
  * harmless. Each point helps, but the next helps less.
@@ -119,7 +124,7 @@ export let blow = (might: number, roll: number, sure = false, luck = 0) => {
  * ```
  */
 export let through = (dmg: number, armour: number): number =>
-  Math.max(1, Math.round(dmg * 100 / (100 + 5 * armour)))
+  reduced(dmg, armour, 5, 1)
 
 /** A higher-level creature's bite outruns a hero's defenses; armor and a
  * matching level bring it back within reach. */
@@ -140,41 +145,6 @@ export type Slain = {
   lvl?: number
 }
 
-/**
- * When a creature last fell, and whether it is still down. A fall is the
- * first slain row after it was last up; every row within its respawn of that
- * one is somebody else's share of the same fall.
- *
- * ```ts
- * import { seedDesigns } from './designs_fixture.ts'
- * seedDesigns()
- * import { assertEquals } from '@std/assert'
- * let rows = [{ at: 1000 }, { at: 1500 }]
- * assertEquals(fallOf(rows, 20, 10000), { down: true, fell: 1000 })
- * assertEquals(fallOf(rows, 20, 30000), { down: false, fell: 1000 })
- * assertEquals(fallOf([...rows, { at: 40000 }], 20, 45000), {
- *   down: true,
- *   fell: 40000,
- * })
- * assertEquals(fallOf([], 20, 0), { down: false, fell: 0 })
- * assertEquals(fallOf([{ at: 1000 }], () => 30, 30000).down, true)
- * assertEquals(fallOf([{ at: 1000 }], () => 30, 31000).down, false)
- * ```
- */
-export let fallOf = (
-  rows: { at: number }[],
-  respawn: number | ((at: number) => number),
-  now: number,
-): { down: boolean; fell: number } => {
-  let back = (at: number) =>
-    at + (typeof respawn == 'number' ? respawn : respawn(at)) * 1000
-  let fell = 0
-  for (let r of [...rows].sort((a, b) => a.at - b.at)) {
-    if (!fell || r.at >= back(fell)) fell = r.at
-  }
-  return { down: !!fell && now < back(fell), fell }
-}
-
 /** What one player has dealt one creature in one of its lives, and until
  * when their blows hold it still, in ms. A player's `fight` component lists
  * one for each creature they are hurting. */
@@ -182,29 +152,6 @@ export type Dealt = { foe: string; life: number; dmg: number; held: number }
 
 /** Every player's dealings, each saying whose it is. */
 export type Dealing = Dealt & { by: string }
-
-/** A creature's hit points: its most, less what every player has dealt it in
- * this life.
- *
- * ```ts
- * import { seedDesigns } from './designs_fixture.ts'
- * seedDesigns()
- * import { assertEquals } from '@std/assert'
- * let d = (by: string, dmg: number, life = 5) => ({ by, foe: 'c1', life, dmg, held: 0 })
- * assertEquals(hpOf('c1', 32, 5, [d('a', 10), d('b', 4)]), 18)
- * assertEquals(hpOf('c1', 32, 9, [d('a', 10), d('b', 4)]), 32) // a new life starts whole
- * ```
- */
-export let hpOf = (
-  eid: string,
-  most: number,
-  life: number,
-  dealt: Dealing[],
-): number => {
-  let n = 0
-  for (let d of dealt) if (d.foe == eid && d.life == life) n += d.dmg
-  return Math.max(0, most - n)
-}
 
 /** Who a creature is after: the player who has dealt it most in this life.
  *

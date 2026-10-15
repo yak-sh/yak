@@ -16,7 +16,19 @@ import {
   type Spot,
 } from './levels.ts'
 import { boundaryAt, lie } from './regions.ts'
-import { clamp, fbm, lerp } from '@yaks/game'
+import {
+  alongCourse as along,
+  clearOfCourse as clearOf,
+  type Course,
+  course as sampleCourse,
+  fbm,
+  lerp,
+  nearCourse as near,
+  offCourse as off,
+  partCourse as part,
+} from '@yaks/game'
+
+export { along, clearOf, type Course, near, off }
 
 /** Ground at or under this height, in metres, is shore: sand, never dry. */
 export let SHORE = 5
@@ -45,17 +57,7 @@ export let VILLAGE_REACH = 48
 
 let norm = (x: number, z: number) => Math.sqrt(x * x + z * z)
 
-/** A way from `a` to `b` that wobbles as a trodden one does, by up to `wob`
- * metres, but for its last `straight` metres; its middle sampled every
- * metre. */
-export type Course = {
-  a: Spot
-  dx: number
-  dz: number
-  xs: Float64Array
-  zs: Float64Array
-  box: [number, number, number, number]
-}
+/** A trodden course, with Mossvale's seeded wobble and straight approach. */
 export let course = (
   a: Spot,
   b: Spot,
@@ -63,77 +65,14 @@ export let course = (
   wob = 7,
   straight = 0,
 ): Course => {
-  let dx = b[0] - a[0], dz = b[1] - a[1], len = Math.hypot(dx, dz) || 1
-  let n = Math.ceil(len) + 1
+  let len = Math.hypot(b[0] - a[0], b[1] - a[1]) || 1
   let bend = Math.max(0.01, 1 - straight / len)
-  let xs = new Float64Array(n), zs = new Float64Array(n)
-  for (let i = 0; i < n; i++) {
-    let t = i / (n - 1)
-    let w = (fbm(t * 6, a[0] + b[0], 21 + s, 2) - 0.5) * wob *
-      Math.sin(Math.PI * Math.min(1, t / bend))
-    xs[i] = a[0] + dx * t - (dz / len) * w
-    zs[i] = a[1] + dz * t + (dx / len) * w
-  }
-  let box: Course['box'] = [
-    Math.min(...xs),
-    Math.min(...zs),
-    Math.max(...xs),
-    Math.max(...zs),
-  ]
-  return { a, dx, dz, xs, zs, box }
-}
-
-let part = (c: Course, lo: number, hi = c.xs.length): Course => {
-  let xs = c.xs.slice(lo, hi), zs = c.zs.slice(lo, hi)
-  return {
-    a: [xs[0], zs[0]],
-    dx: xs.at(-1)! - xs[0],
-    dz: zs.at(-1)! - zs[0],
-    xs,
-    zs,
-    box: [Math.min(...xs), Math.min(...zs), Math.max(...xs), Math.max(...zs)],
-  }
-}
-
-/** Whether (x, z) may lie within `r` metres of a course: it does not when it
- * lies further than that outside the box round the course's middle. */
-export let near = ({ box }: Course, x: number, z: number, r: number) =>
-  x > box[0] - r && x < box[2] + r && z > box[1] - r && z < box[3] + r
-
-/** Whether a whole rectangular plot clears a path by `room` metres. */
-export let clearOf = (
-  c: Course,
-  x: number,
-  z: number,
-  w: number,
-  d: number,
-  room: number,
-) =>
-  !near(c, x, z, Math.max(w, d) + room) ||
-  !c.xs.some((a, i) =>
-    Math.hypot(
-      Math.max(0, Math.abs(a - x) - w),
-      Math.max(0, Math.abs(c.zs[i] - z) - d),
-    ) < room + 0.5
-  )
-
-/** How far along a course (x, z) lies, from 0 at its start to 1 at its
- * end. */
-export let along = (c: Course, x: number, z: number) =>
-  clamp(
-    ((x - c.a[0]) * c.dx + (z - c.a[1]) * c.dz) / (c.dx * c.dx + c.dz * c.dz),
-    0,
-    1,
-  )
-
-/** How far (x, z) is from a course's middle `t` of the way along it, in
- * metres. */
-export let off = (c: Course, x: number, z: number, t: number) => {
-  let f = t * (c.xs.length - 1)
-  let i = Math.min(c.xs.length - 2, Math.floor(f)), u = f - i
-  return norm(
-    x - (c.xs[i] + (c.xs[i + 1] - c.xs[i]) * u),
-    z - (c.zs[i] + (c.zs[i + 1] - c.zs[i]) * u),
+  return sampleCourse(
+    a,
+    b,
+    (t) =>
+      (fbm(t * 6, a[0] + b[0], 21 + s, 2) - 0.5) * wob *
+      Math.sin(Math.PI * Math.min(1, t / bend)),
   )
 }
 

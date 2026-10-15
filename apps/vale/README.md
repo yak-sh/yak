@@ -53,8 +53,11 @@ before their exact source snapshots are removed.
 Vale ships source files and `package.json`; the map has no shipped images. The
 platform compiler compiles `main.ts` and its module worker at deploy. Toolkit
 dependencies marked `platform` come from the current source packages shipped
-with that compiler, not an older registry release. Preact, signals, Three.js and
-marked are ordinary npm dependencies.
+with that compiler, not an older registry release. `@yaks/game` owns the
+value-only rules (randomness, progression, effects, combat, paths, targeting,
+shots, ownership and remote motion); Vale reads its graph and supplies its own
+world, designs and policies. Its vocabulary and saved rows do not move. Preact,
+signals, Three.js and marked are ordinary npm dependencies.
 
 The grammar, completion, drafts, network client, Markdown and voice packages
 join the same compiled page runtime. The creature-build subscription uses server

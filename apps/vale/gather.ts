@@ -10,7 +10,7 @@
 import { isA } from './features.ts'
 import { hopsOf, levelOf } from './levels.ts'
 import { hashOf, rand, uuidOf } from '@yaks/game'
-import { fallOf } from './rules.ts'
+import { fallOf } from '@yaks/game'
 import { FORMATION, type Natural, NATURE } from './nature.ts'
 import { nearby, originOf, regionOf } from './regions.ts'
 import {
