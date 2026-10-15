@@ -1078,38 +1078,39 @@ let refusedWith = (message: string) =>
       ]).then(() => null, (e) => e),
   ).then(({ out }) => out as Error)
 
-test("the app's own code failing to load is the agent's to fix", async () => {
-  for (
-    let message of [
-      'Uncaught SyntaxError: missing ) after argument list\n  at worker.js:117:27\n',
-      'Uncaught TypeError: x is not a function\n  at f (lib/util.js:3:9)\n  at worker.js:1:8',
-      'Uncaught Error: No such module "lib/gone.js".\n  imported from "worker.js"',
-      "Uncaught SyntaxError: The requested module './worker.js' does not provide an export named 'default'\n  at __yak_entry.js:1:7\n",
-      "Uncaught SyntaxError: The requested module './util.js' does not provide an export named 'y'\n  at lib/util.js:1:9",
-    ]
-  ) {
+// Each refusal, by what its first line names: the app's own file is the
+// agent's to fix (a CallError), the wrapper or no module at all is ours.
+let theirs = [
+  'Uncaught SyntaxError: missing ) after argument list\n  at worker.js:117:27\n',
+  'Uncaught TypeError: x is not a function\n  at f (lib/util.js:3:9)\n  at worker.js:1:8',
+  'Uncaught Error: No such module "lib/gone.js".\n  imported from "worker.js"',
+  "Uncaught SyntaxError: The requested module './worker.js' does not provide an export named 'default'\n  at __yak_entry.js:1:7\n",
+  "Uncaught SyntaxError: The requested module './util.js' does not provide an export named 'y'\n  at lib/util.js:1:9",
+]
+let ours = [
+  'Uncaught SyntaxError: Unexpected token\n  at __yak_entry.js:4:1',
+  'Uncaught Error: No such module "worker.js".\n  imported from "__yak_entry.js"',
+  "Uncaught SyntaxError: The requested module './gone.js' does not provide an export named 'default'\n  at __yak_entry.js:1:7",
+  'Uncaught SyntaxError',
+  'Invalid binding',
+]
+for (let message of theirs) {
+  let line = message.split('\n')[0]
+  test(`the app's own code failing to load is the agent's to fix: ${line}`, async () => {
     let e = await refusedWith(message)
     assert(e instanceof CallError, message)
     assertEquals(e.code, 'arguments')
-    assert(e.message.includes(message.split('\n')[0]), e.message)
-  }
-})
-
-test('a load failure in the wrapper, or naming no module, is ours', async () => {
-  for (
-    let message of [
-      'Uncaught SyntaxError: Unexpected token\n  at __yak_entry.js:4:1',
-      'Uncaught Error: No such module "worker.js".\n  imported from "__yak_entry.js"',
-      "Uncaught SyntaxError: The requested module './gone.js' does not provide an export named 'default'\n  at __yak_entry.js:1:7",
-      'Uncaught SyntaxError',
-      'Invalid binding',
-    ]
-  ) {
+    assert(e.message.includes(line), e.message)
+  })
+}
+for (let message of ours) {
+  let line = message.split('\n')[0]
+  test(`a load failure in the wrapper, or naming no module, is ours: ${line}`, async () => {
     let e = await refusedWith(message)
     assert(!(e instanceof CallError), message)
-    assert(e.message.includes(message.split('\n')[0]), e.message)
-  }
-})
+    assert(e.message.includes(line), e.message)
+  })
+}
 
 // ── A worker of more than one file, wasm included (T-34263) ────────────────
 //
