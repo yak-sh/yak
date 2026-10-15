@@ -487,12 +487,20 @@ import { equal } from '@yaks/testing'
 
 const { port1, port2 } = new MessageChannel()
 const frames: Frame[] = []
-const client = portLink(port1, { frame: (frame) => frames.push(frame) })
+let delivered = () => {}
+const received = new Promise<void>((resolve) => delivered = resolve)
+const client = portLink(port1, {
+  frame: (frame) => {
+    frames.push(frame)
+    delivered()
+  },
+})
 const server = portLink(port2, { receive: (_method, value) => value })
 try {
-  equal(await client.request('echo', { title: 'Dune' }), { title: 'Dune' })
+  const echoed = client.request('echo', { title: 'Dune' }, { timeout: null })
   server.frame({ id: 'books', bundles: [] })
-  await client.request('echo', undefined, { timeout: null })
+  equal(await echoed, { title: 'Dune' })
+  await received
   equal(frames, [{ id: 'books', bundles: [] }])
   equal(client.stats.frames, 1)
 } finally {
