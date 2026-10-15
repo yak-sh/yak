@@ -118,6 +118,10 @@ equal(render(insert('book', { title: 'Dune' })).params, ['Dune'])
 equal(render(among(col('id'), each([1, 2, 3]))).params, [])
 let many = Array.from({ length: 1000 }, (_, i) => i)
 equal(render(among(col('id'), each(many))).params, [JSON.stringify(many)])
+// A host that keeps prepared statements by their text binds every one.
+equal(render(among(col('id'), each([1, 2, 3])), { reuse: true }).params, [
+  '[1,2,3]',
+])
 
 let schema = render({
   t: 'create table',

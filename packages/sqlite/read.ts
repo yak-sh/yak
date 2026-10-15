@@ -17,6 +17,7 @@ import type { Prop, Vocab } from '@yaks/vocab'
 import {
   among,
   and,
+  array,
   as,
   type Backings,
   type BindOpts,
@@ -493,11 +494,13 @@ let kinded = (driver: Driver, vocab: Vocab, rows: Row[]): Row[] => {
 
 // Which tables hold a row for any owner. VALUES has no compound-SELECT arm
 // limit, so a wide sparse vocabulary still takes one presence statement.
-// Globally empty tables short-circuit before the owners are walked.
+// Globally empty tables short-circuit before the owners are walked. Every
+// table names the owners, so they are one array: written out, they would be
+// prepared again for each table and for each different set of owners.
 let worn = new WeakMap<Vocab, Map<string, Source>>()
 let probe = (vocab: Vocab, names: string[], owners: number[]): Select =>
   select({
-    with: [{ name: 'owners', q: each(owners), materialized: true }],
+    with: [{ name: 'owners', q: array(owners), materialized: true }],
     cols: [as(col('column1', 'worn'), 'name')],
     from: at(
       at(worn, vocab, () => new Map()),
@@ -964,8 +967,8 @@ export let get = (
   let numbered = !!vocab.prop('entity', 'num')
   // Bound parameter count and SQL-cache size; gather a component per set,
   // never every component per entity (a 1,000-entry transcript is otherwise
-  // tens of thousands of queries). A JSON array uses one bind and one stable
-  // prepared statement shape regardless of cardinality (SQLite 3.38+).
+  // tens of thousands of queries). A set of owners is a collection (@yaks/sql
+  // `each`), written the way the host reads one cheapest.
   // Materialize the selected ids once: re-running a window subquery
   // for each component could select different owners under a concurrent writer.
   // Keep caller order and duplicate semantics.

@@ -27,10 +27,10 @@ export function location() {
 }
 
 /** A driver that prepares every statement afresh: no layer gets a private
- * cache. */
+ * cache. It writes the statements the box's driver runs (../driver.ts). */
 export let perCall = (db: Database): Driver => ({
   query: (s) => {
-    let { sql, params } = render(s)
+    let { sql, params } = render(s, { reuse: true })
     let stmt = db.prepare(sql)
     try {
       return stmt.all(...params)

@@ -19,7 +19,9 @@ export let driver = (
 ): Driver => {
   let query = (s: Stmt): Row[] => {
     opts.before?.(s)
-    let rendered = render(s), { sql, params } = rendered
+    // Each statement is kept by its text (./native.ts `prepared`), and a list
+    // costs no rows here: every collection binds as one JSON array.
+    let rendered = render(s, { reuse: true }), { sql, params } = rendered
     let at = context()
     let c = at?.channel ?? peek(d)
     if (!c) return run(sql, params)

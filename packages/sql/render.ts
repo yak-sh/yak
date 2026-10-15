@@ -17,6 +17,8 @@
 // deeper than 1000, and a delete's reverse read asks thousands.
 
 import {
+  array,
+  bounded,
   type Column,
   type Cte,
   type Expr,
@@ -33,8 +35,9 @@ import {
 } from './ast.ts'
 
 // What one rendering accumulates: the parameters in the order their `?`s were
-// written, and whether values are being written as literals instead.
-type Ctx = { params: Param[]; inline: boolean }
+// written, whether values are being written as literals instead, and whether
+// the host keeps its statements by their text (`render`'s `reuse`).
+type Ctx = { params: Param[]; inline: boolean; reuse?: boolean }
 
 /** An identifier, quoted. */
 export let q = (name: string): string => `"${name.replaceAll('"', '""')}"`
@@ -113,17 +116,20 @@ let compound = (e: Expr): boolean =>
 // component, asked thousands of times a session) renders only what changed
 // since: the part holding its bound values. A leaf is cheaper to write than to
 // look up, and short text is not worth keeping.
-let seen = new WeakMap<object, string>()
+// A host that reuses statements writes collections its own way, and keeps its
+// text apart.
+let seen = [new WeakMap<object, string>(), new WeakMap<object, string>()]
 let LEAF = new Set(['col', 'val', 'lit', 'star', 'table'])
 let kept =
   <N extends { t: string }>(write: (n: N, c: Ctx) => string) =>
   (n: N, c: Ctx): string => {
     if (c.inline || LEAF.has(n.t)) return write(n, c)
-    let text = seen.get(n)
+    let texts = seen[c.reuse ? 1 : 0]
+    let text = texts.get(n)
     if (text != null) return text
     let bound = c.params.length
     text = write(n, c)
-    if (c.params.length == bound && text.length >= 64) seen.set(n, text)
+    if (c.params.length == bound && text.length >= 64) texts.set(n, text)
     return text
   }
 
@@ -162,7 +168,11 @@ let expr: (e: Expr, c: Ctx) => string = kept((e: Expr, c: Ctx): string => {
       return `${operand(e.e, c)} is ${e.not ? 'not ' : ''}null`
     case 'in':
       return `${operand(e.e, c)} in (${
-        Array.isArray(e.set) ? list(e.set, c) : query(e.set, c)
+        Array.isArray(e.set)
+          ? list(e.set, c)
+          : e.set.t == 'each'
+          ? written(e.set.list, c) ?? query(array(e.set.list), c)
+          : query(e.set, c)
       })`
     case 'exists':
       return `exists (${query(e.q, c)})`
@@ -243,8 +253,22 @@ let tail = (
   (s.limit ? ` limit ${expr(s.limit, c)}` : '') +
   (s.offset ? ` offset ${expr(s.offset, c)}` : '')
 
+// A collection's members as VALUES rows, unless its host reads it cheaper as
+// one JSON array: one too large to write out, or any on a host that reuses
+// statements by their text (./ast.ts `each`).
+let written = (list: readonly Param[], c: Ctx): string | undefined =>
+  !c.reuse && bounded(list)
+    ? `values ${list.map((v) => `(${literal(v)})`).join(', ')}`
+    : undefined
+
 let query: (s: Query, c: Ctx) => string = kept((s: Query, c: Ctx) => {
   if (s.t == 'raw') return expr(s, c)
+  if (s.t == 'each') {
+    let rows = written(s.list, c)
+    return rows
+      ? `select "column1" as "value" from (${rows})`
+      : query(array(s.list), c)
+  }
   if (s.t == 'values') {
     return `values ${s.rows.map((r) => `(${list(r, c)})`).join(', ')}`
   }
@@ -425,11 +449,14 @@ let stmt = (s: Stmt, c: Ctx): string => {
 
 // The same accumulator, writing values as literals: what a statement SQLite
 // stores as text needs, since nothing will be bound to it when it runs.
-let lit = (c: Ctx): Ctx => c.inline ? c : { params: c.params, inline: true }
+let lit = (c: Ctx): Ctx =>
+  c.inline ? c : { params: c.params, inline: true, reuse: c.reuse }
 
 /**
  * A statement, or an expression, as the text SQLite runs and the parameters
- * it binds.
+ * it binds. `reuse` is for a host that keeps prepared statements by their
+ * text: every collection (`each`) is bound as one JSON array, so a
+ * statement's text is the same whatever its members.
  *
  * ```ts
  * import { col, eq, render, val } from '@yaks/sql'
@@ -443,8 +470,11 @@ let lit = (c: Ctx): Ctx => c.inline ? c : { params: c.params, inline: true }
  * // s.sql == 'select "v" from "meta" where "k" = ?', s.params == ['epoch']
  * ```
  */
-export let render = (node: Stmt | Expr): Raw => {
-  let c: Ctx = { params: [], inline: false }
+export let render = (
+  node: Stmt | Expr,
+  opts: { reuse?: boolean } = {},
+): Raw => {
+  let c: Ctx = { params: [], inline: false, reuse: opts.reuse }
   let sql = isExpr(node) ? expr(node, c) : stmt(node, c)
   return raw(
     sql,

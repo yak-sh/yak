@@ -1096,14 +1096,18 @@ let holding = (where: Cond, known: Cond): Cond =>
 // those selections keeps a sparse FTS/vector hit list from scanning the spine
 // when statistics still describe a small store.
 let selection = (ctx: Ctx, test: Cond): Query | undefined => {
-  if (test.t == 'in' && !Array.isArray(test.set) && test.set.t == 'select') {
-    let first = test.set.cols?.[0]
-    if (!first || render(test.e).sql != ctx.d.ownerKey('entity')) return
-    let name = first.t == 'as' || first.t == 'col' ? first.name : undefined
+  if (
+    test.t == 'in' && !Array.isArray(test.set) &&
+    (test.set.t == 'select' || test.set.t == 'each')
+  ) {
+    let set = test.set
+    if (render(test.e).sql != ctx.d.ownerKey('entity')) return
+    let first = set.t == 'each' ? col('value') : set.cols?.[0]
+    let name = first?.t == 'as' || first?.t == 'col' ? first.name : undefined
     if (!name) return
     return select({
       cols: [as(col(name, '__selected'), 'id')],
-      from: from(test.set, '__selected'),
+      from: from(set, '__selected'),
       distinct: true,
     })
   }

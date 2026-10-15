@@ -130,7 +130,7 @@ export type Op =
   | '->>'
 
 /** A query: what a subquery, a CTE, an `in` and an `insert … select` take. */
-export type Query = Select | Compound | Values | Raw
+export type Query = Select | Compound | Values | Raw | Each
 
 export type Select = {
   t: 'select'
@@ -160,6 +160,9 @@ export type Compound = {
 }
 
 export type Values = { t: 'values'; rows: Expr[][] }
+
+/** A collection, written the way its host reads one cheapest ({@link each}). */
+export type Each = { t: 'each'; list: readonly Param[] }
 
 /** What a query reads from: a table (a table-valued function when it has
  * `args`), or a query of its own. */
@@ -531,19 +534,45 @@ export let unionAll = (...parts: Query[]): Compound => ({
   parts,
 })
 
-/** A collection as a query with one `value` column. Bounded collections use
- * literal VALUES, costing no virtual rows; others use one JSON parameter,
- * respecting a host's bound-parameter ceiling regardless of collection size. */
-export let each = (list: readonly Param[]): Query =>
-  bounded(list)
-    ? select({
-      cols: [as(col('column1'), 'value')],
-      from: from({ t: 'values', rows: list.map((v) => [lit(v)]) }),
-    })
-    : select({
-      cols: [col('value')],
-      from: call('json_each', [val(JSON.stringify(list))]),
-    })
+/** A collection as one JSON parameter, a query with one `value` column. Its
+ * text is the same whatever its members, so a host keeps one prepared
+ * statement for all of them, and it is cheap to prepare however many times a
+ * statement names it. A Durable Object bills each member as a row read.
+ *
+ * ```ts
+ * import { array, render } from '@yaks/sql'
+ *
+ * render(array([1, 2])).sql // 'select "value" from "json_each"(?)'
+ * ```
+ */
+export let array = (list: readonly Param[]): Query =>
+  select({
+    cols: [col('value')],
+    from: call('json_each', [val(JSON.stringify(list))]),
+  })
+
+/** A collection as a query with one `value` column, written the way its host
+ * reads one cheapest. A bounded collection is literal VALUES, costing a
+ * Durable Object no virtual rows, and any other is an {@link array},
+ * respecting a host's bound-parameter ceiling. A host that keeps prepared
+ * statements by their text renders with `reuse` ({@link render}), and every
+ * collection is an array: written out, each different set of members is a
+ * statement to prepare. SQLite copies literal VALUES into every reference
+ * while it prepares, so a collection a statement names many times is an
+ * {@link array} on any host.
+ *
+ * ```ts
+ * import { each, render } from '@yaks/sql'
+ *
+ * render(each(['a', 'b'])).sql
+ * // `select "column1" as "value" from (values ('a'), ('b'))`
+ * render(each(['a', 'b']), { reuse: true }).sql
+ * // 'select "value" from "json_each"(?)'
+ * ```
+ */
+export let each = (list: readonly Param[]): Each => ({ t: 'each', list })
+
+let encoder = new TextEncoder()
 
 /** Whether a finite collection fits in literal SQL without changing the
  * values JSON would supply. Larger collections and strings containing NUL
@@ -557,7 +586,7 @@ export let bounded = (
   for (let v of list) {
     if (typeof v == 'string') {
       if (v.length > 4096 || v.includes('\0')) return false
-      bytes += new TextEncoder().encode(v).length + 4 +
+      bytes += encoder.encode(v).length + 4 +
         (v.match(/'/g)?.length ?? 0)
     } else if (
       v == null || typeof v == 'boolean' ||
@@ -588,9 +617,8 @@ export let spelled = (list: readonly unknown[]): list is number[] =>
   list.length > 0 && list.length <= 512 &&
   list.every((v) => Number.isSafeInteger(v))
 
-/** `e` is one of `list`, read the way that costs fewest rows: one value is an
- * equality, bounded collections are literal VALUES, and others bind once as
- * JSON ({@link each}).
+/** `e` is one of `list`: one value is an equality, and any other list is a
+ * collection ({@link each}).
  *
  * ```ts
  * import { col, oneOf, render, select, table } from '@yaks/sql'
@@ -603,11 +631,7 @@ export let spelled = (list: readonly unknown[]): list is number[] =>
  * ```
  */
 export let oneOf = (e: Expr, list: readonly Param[]): Expr =>
-  list.length == 1
-    ? eq(e, val(list[0]))
-    : bounded(list)
-    ? among(e, { t: 'values', rows: list.map((v) => [lit(v)]) })
-    : among(e, each(list))
+  list.length == 1 ? eq(e, val(list[0])) : among(e, each(list))
 
 /** Rows written as objects, each value bound: the first row's keys are the
  * columns.
