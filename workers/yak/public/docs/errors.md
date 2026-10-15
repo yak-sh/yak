@@ -45,14 +45,11 @@ The codes an endpoint returns, and what each means:
   `subscribe()` in `client.js` does this correctly; a hand-rolled socket usually
   forgot.
 - **`no_bytes`** — 400. An upload with an empty body.
-- **`too_large`** — 413. One upload over 20 MB, or over 2 MB from a visitor to
-  an `open` app. Downscale the picture on the page before sending it.
-- **`visit_too_large`** — 413. A visitor to an `open` app sent more than 16 KB
-  in one write. Send it in smaller pieces; the owner and editors are not held to
-  this.
-- **`too_many_writes`** — 429. A visitor to an `open` app wrote more than 30
-  times in a minute. Wait a moment and send again
-  (<https://yaks.app/docs/sharing.md>).
+- **`too_large`** — 413. An upload bigger than the app takes: the `maxLength`
+  its `vocab.json` says under `"blob"`. Downscale the picture on the page before
+  sending it (<https://yaks.app/docs/files.md>).
+- **`unsupported_media_type`** — 415. An upload of a type the app does not take:
+  its bytes are not one of the types `"blob"` lists in its `vocab.json`.
 - **`no_such_file`** — 404. `blob/<eid>` where the eid is not a sha-256, or
   names bytes this app does not hold.
 - **`space_full`** — 413. The space is at its app data ceiling (1 GB on Free, 10

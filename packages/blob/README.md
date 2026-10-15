@@ -86,6 +86,7 @@ use the same driver so their writes participate in the same transaction.
 | `Objects`, `Opened`, `Loaded`, `bucketObjects`                                                    | A bucket keyed by name: read, delete, list               |
 | `parts`, `Multipart`, `Assembly`, `memoryMultipart`, `sized`, `Gone`, `Wrong`, `MOST`, `MiB`      | Resumable uploads in parts, checked against their hash   |
 | `hasher`, `fold`, `START`                                                                         | SHA-256 carried from one piece of bytes to the next      |
+| `Accepts`, `acceptsErrors`, `fits`, `takes`, `taken`                                              | Which blobs an application takes, by size and media type |
 | `blobRead`, `hydrate`                                                                             | SQL and post-read text resolution                        |
 | `Artifact`, `ArtifactStore`, `addressOf`, `keep`, `artifactStore`, `artifactBytes`, `artifactDoc` | Artifact storage, verified reads and declarations        |
 | `Size`, `sizeOf`, `mediaTypeOf`, `contentType`, `mediaType`, `matchesMediaType`, `mimeOf`         | Image dimensions, signatures and media types             |
@@ -292,7 +293,8 @@ of R2's binding). Its **ledger** is empty objects under `ledger` whose keys
 record the upload under way and each part that landed, which R2's binding has no
 call to list. So an upload cut short resumes: `post(bytes)` says which parts are
 still `need`ed, beginning the upload if none is under way, and once none are it
-assembles them and answers the `whole`: its length and first bytes.
+assembles them and answers the `whole`: its length and first bytes, and `made`
+when that `post` assembled it rather than finding it kept already.
 
 `put(n, body, length, from)` keeps part `n`, hashing it as it passes on from
 `from`, the SHA-256 **state** the bytes before it leave (`START` for the first).
@@ -363,6 +365,17 @@ in, so a part size is too.
 `hasher(from?)` hashes bytes a piece at a time with `add`; `end()` answers the
 state after them, and `end(total)` the finished digest, `total` being every byte
 hashed since `START`. `fold(from, bytes, total?)` is the same over one buffer.
+
+## Which blobs are taken
+
+`Accepts` is what an application takes as a blob, in JSON Schema's words for a
+string of bytes: `maxLength`, the most bytes one may hold, and
+`contentMediaType`, one media type or a list, where `image/*` is a range.
+`acceptsErrors(said)` says what is wrong with a declaration,
+`fits(accepts,
+bytes)` checks a size, and `takes(accepts, type)` checks the type
+read off the bytes (`contentType`), never the one an upload declares. Nothing
+declared takes everything.
 
 ## Reading it back
 

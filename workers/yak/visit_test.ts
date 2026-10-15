@@ -1,9 +1,8 @@
 // A visitor to an open app, through the page's own door (T-37881, T-37896):
-// they add rows, change only their own, never touch the shop's prices or say
-// an order was paid, and send at a visitor's size and pace. The owner is not
-// held to any of it.
+// they add rows, change only their own, and never touch the shop's prices or
+// say an order was paid. The owner is not held to any of it.
 import { test } from '@yaks/testing'
-import { assert, assertEquals, assertStringIncludes } from '@std/assert'
+import { assertEquals, assertStringIncludes } from '@std/assert'
 import { client, connector, kernel, seed, signedIn, unique } from './probe.ts'
 
 let fair67 = unique('fair67')
@@ -76,42 +75,6 @@ test(
         await status(kim, { entity: { eid: 'kims' }, $delete: true }),
         200,
       )
-
-      // A visitor's write is a visitor's size.
-      let big = await anybody.post([{
-        entity: { eid: 'big' },
-        doc: { title: 'x', body: 'x'.repeat(20_000) },
-      }])
-      assertEquals(big.status, 413)
-      assertEquals((await big.json()).error.code, 'visit_too_large')
-      assertEquals(
-        await status(owner, { ...entry, doc: { body: 'x'.repeat(20_000) } }),
-        200,
-      )
-
-      // And a visitor's pace: thirty a minute, then the door says wait.
-      let paced = 0
-      for (let i = 0; i < 40 && !paced; i++) {
-        let r = await anybody.post([{
-          entity: { eid: `n${i}` },
-          doc: { title: 'n' },
-        }])
-        if (r.status == 429) {
-          paced = i
-          assertEquals((await r.json()).error.code, 'too_many_writes')
-        } else await r.body?.cancel()
-      }
-      assert(paced, 'thirty-one writes in a minute were never refused')
-      // The owner writes on, uncounted.
-      for (let i = 0; i < 5; i++) {
-        assertEquals(
-          await status(owner, {
-            entity: { eid: `o${i}` },
-            doc: { title: 'o' },
-          }),
-          200,
-        )
-      }
     } finally {
       await k.stop()
     }

@@ -141,10 +141,6 @@ export type Env = {
     }): void
   }
   ANALYTICS_API?: string
-  // How often a visitor may write to an `open` app (apps.ts `visiting`,
-  // wrangler.toml `ratelimits`). Absent only in the in-memory harness; under
-  // `wrangler dev` it counts like the deployed one.
-  VISITS?: Limiter
   // The per-source ceilings on the doors a stranger can knock on (rate.ts,
   // wrangler.toml `[[ratelimits]]`): sign-in code requests, OAuth client
   // registration, anonymous connector calls, anonymous feedback, and anonymous

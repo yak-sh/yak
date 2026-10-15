@@ -92,7 +92,7 @@ test('an interrupted upload sends only the parts it lacks', async () => {
   equal(await up.post(file.length), {
     part: 64,
     need: [],
-    whole: { bytes: 150, head: file },
+    whole: { bytes: 150, head: file, made: true },
   })
   equal(held.get(key), file)
   equal(ledger(), [])

@@ -69,8 +69,10 @@ import {
   selling,
 } from './sell.ts'
 import {
+  type Accepts,
   addressed,
   contentType,
+  fits,
   Gone,
   mimeOf,
   parts,
@@ -80,8 +82,11 @@ import {
   servedVia as fencedVia,
   type Size,
   sizeOf,
+  taken,
+  takes,
   Wrong,
 } from '@yaks/blob'
+import { declarationOf } from './declaration.ts'
 import { KERNEL, type Meta, metaOf, minted } from './meta.ts'
 import { Pending } from './writes.ts'
 import { batched, lined, receipt } from './wire.ts'
@@ -143,7 +148,7 @@ import { recoverRelease } from './tools.ts'
 import { ADDRESS } from './route.ts'
 import { caught, refusing } from './defects.ts'
 import { full, fullFiles } from './usage.ts'
-import { free, refusedVisit } from './meter.ts'
+import { free, refusedVisit, size } from './meter.ts'
 import { scheduleBy } from './used.ts'
 import { modifying, sha256 } from './versions.ts'
 import {
@@ -207,7 +212,6 @@ export type Asked = {
   who: Who
   refuse: (what?: string) => Promise<Response>
   json: (status: number, code: string, says?: string) => Response
-  visiting: (bytes: number) => Promise<Response | null>
 }
 
 /** An app door, or null when the path belongs elsewhere. */
@@ -231,11 +235,8 @@ let SAYS: Record<string, string> = {
   not_a_reader: 'sign in to see this app',
   no_bytes: 'an upload needs a body: post the file itself',
   upload_gone: 'that upload is no longer under way — begin it again',
-  too_large: 'that file is too big to send — try a smaller one',
-  too_many_writes: 'that is a lot of changes in one minute — wait a moment ' +
-    'and try again',
-  visit_too_large: 'that is too much to send to this app at once — send it ' +
-    'in smaller pieces, or ask its owner to make you an editor',
+  too_large: 'that file is bigger than this app takes',
+  unsupported_media_type: 'this app does not take that kind of file',
   no_such_file: 'no file at that address in this app',
   // What the store said no to — an unknown component, a `$was` that moved, a
   // dead entity. Its own sentence rides in `message`; this is the fallback.
@@ -1022,26 +1023,6 @@ let flooding = (space: Space, app: App) => {
   return ++hit.n > RATE
 }
 
-// A visitor to an `open` app: somebody its access lets write and no level
-// does (T-37896). The store keeps them to new rows and their own (@yaks/member
-// guard); this door keeps them to a pace and a size, since every row they add
-// is held on the owner's bytes. Owners and editors are not counted — it is
-// their app.
-//
-//   VISIT_BATCH   one write, as sent: a guest book entry is a few hundred bytes
-//   VISIT_UPLOAD  one upload: a phone photo, downscaled on the page
-//   30 a minute   writes and uploads together, per visitor per app, where a
-//                 visitor is a signed-in person or else an IP (wrangler.toml
-//                 `VISITS`, Cloudflare's own counter at the edge)
-export let VISIT_BATCH = 16 * 1024
-export let VISIT_UPLOAD = 2 * 1024 * 1024
-
-let visiting = async (req: Request, env: Env, app: App, who: Who) => {
-  if (writes(who.role)) return null
-  let key = `${app.eid} ${who.person ?? source(req)}`
-  return await within(env.VISITS, key) ? null : json(429, 'too_many_writes')
-}
-
 let pathOf = (url: unknown) => {
   try {
     return new URL(String(url)).pathname
@@ -1106,14 +1087,6 @@ let broken = (body: string) => {
   })
 }
 
-// The ceiling on one upload. A store is not a drive: a page downscales a
-// photo before it sends it (the guide's five lines), and 20 MB of anything
-// else is not what someone meant to put in an app's graph. Exported because
-// `app_files` fetch pulls a file off the web into the same store and must
-// stop in the same place (tools.ts, T-34337).
-export { MAX } from './files.ts'
-import { MAX } from './files.ts'
-
 // The bytes' own name (versions.ts `sha256`, the content address a version's
 // manifest is made of) is the object's key and the entity's eid here, so the
 // same photo sent twice is one object and one row.
@@ -1154,9 +1127,53 @@ let nameSent = (req: Request) => {
 }
 
 /**
+ * A blob the app does not take (`"blob"` in its vocab.json, @yaks/blob
+ * `Accepts`): bigger than it says, or of a type it does not list, read off the
+ * bytes. Nothing declared takes everything; the limits are its author's.
+ */
+export class Untaken extends Error {
+  status: number
+  code: string
+  constructor(status: number, code: string, says: string) {
+    super(says)
+    this.status = status
+    this.code = code
+  }
+}
+
+/** What the app takes as a blob, from the release serving it. */
+export let acceptsOf = async (env: Env, space: Space, app: App) =>
+  (await declarationOf(env, space, app)).vocab.blob as Accepts | undefined
+
+// Refused, when `bytes` bytes, or bytes read as `type`, are not taken.
+let admit = (a: Accepts | undefined, bytes: number, type?: string) => {
+  if (!fits(a, bytes)) {
+    throw new Untaken(
+      413,
+      'too_large',
+      `this app takes files of at most ${size(a!.maxLength!)}`,
+    )
+  }
+  if (type != null && !takes(a, type)) {
+    throw new Untaken(
+      415,
+      'unsupported_media_type',
+      `this app takes ${taken(a)}, and this file is ${type}`,
+    )
+  }
+}
+
+// Untaken, as a page reads it.
+let untaken = (e: unknown) => {
+  if (e instanceof Untaken) return json(e.status, e.code, e.message)
+  throw e
+}
+
+/**
  * Bytes into the app's bucket, and the rows that name them there — the
  * write half of an upload, without a request anywhere in it, because bytes
- * arrive by other doors too (inbox.ts: a letter's attachments).
+ * arrive by other doors too (inbox.ts: a letter's attachments). Bytes the app
+ * does not take (`accepts`) throw {@link Untaken} before any are kept.
  *
  * The object lands in the bucket first and the rows are only returned, because
  * a row pointing at nothing is the failure a reader sees, while bytes nobody
@@ -1171,12 +1188,16 @@ export let filed = async (
   bytes: Uint8Array<ArrayBuffer>,
   mime: string,
   name: string,
+  accepts?: Accepts,
 ): Promise<File> => {
+  admit(accepts, bytes.byteLength)
   let sha = await sha256(bytes)
+  let file = await described(graph, app, sha, bytes, mime, name)
+  admit(accepts, bytes.byteLength, file.mime)
   let blobs = r2Objects(env.BLOBS)
   let key = blobKey(space, app, sha)
   if (!(await blobs.has(key))) await blobs.put(key, bytes)
-  return described(graph, app, sha, bytes, mime, name)
+  return file
 }
 
 /** Kept bytes, and the rows that name them. */
@@ -1296,13 +1317,12 @@ let took = async (
   app: App,
   store: Door,
   headers: Record<string, string>,
-  max = MAX,
 ) => {
-  let sent = Number(req.headers.get('content-length') ?? 0)
-  if (sent > max) return json(413, 'too_large')
+  let accepts = await acceptsOf(env, space, app)
+  // A header is a claim, so the bytes are measured again once read (`filed`).
+  admit(accepts, Number(req.headers.get('content-length') ?? 0))
   let bytes = new Uint8Array(await req.arrayBuffer())
   if (!bytes.byteLength) return json(400, 'no_bytes')
-  if (bytes.byteLength > max) return json(413, 'too_large')
   let stopped = await fullFiles(env, space, [{
     key: blobKey(space, app, await sha256(bytes)),
     bytes: bytes.byteLength,
@@ -1317,6 +1337,7 @@ let took = async (
     bytes,
     mimeSent(req),
     nameSent(req),
+    accepts,
   )
   return recorded(graph, file, bytes.byteLength, {
     request: 'POST /api/blob',
@@ -1342,11 +1363,12 @@ export let PART = 8 * 1024 * 1024
 //                                        bytes before it leave
 //
 // Every call is safe to send again, so a page that lost its connection, or
-// its tab, asks where it stands and sends what is missing. The ceiling and
-// the space's room are checked against the size it declares, and the parts'
-// states must chain to the address before they are assembled, so what lands
-// is what it said. `writer` is whom the rows are written as, asked only when
-// there are rows to write.
+// its tab, asks where it stands and sends what is missing. What the app takes
+// and the space's room are checked against the size it declares, and the
+// parts' states must chain to the address before they are assembled, so what
+// lands is what it said. Its type is read off the whole once assembled, and a
+// whole the app does not take is deleted again. `writer` is whom the rows are
+// written as, asked only when there are rows to write.
 let inParts = async (
   req: Request,
   env: Env,
@@ -1355,7 +1377,6 @@ let inParts = async (
   store: Door,
   writer: () => Promise<Record<string, string>>,
   path: string,
-  max = MAX,
 ) => {
   let [sha, n, ...rest] = path.split('/')
   if (!/^[0-9a-f]{64}$/.test(sha) || rest.length) {
@@ -1388,7 +1409,8 @@ let inParts = async (
     }
     let bytes = Number(said.bytes)
     if (!(Number.isInteger(bytes) && bytes > 0)) return json(400, 'no_bytes')
-    if (bytes > max) return json(413, 'too_large')
+    let accepts = await acceptsOf(env, space, app)
+    admit(accepts, bytes)
     // Bytes the app already holds count nothing (usage.ts `fullFiles`).
     let stopped = await fullFiles(env, space, [{ key, bytes }])
     if (stopped) return json(413, 'space_full', stopped)
@@ -1408,6 +1430,12 @@ let inParts = async (
       name,
       whole.bytes,
     )
+    try {
+      admit(accepts, whole.bytes, file.mime)
+    } catch (e) {
+      if (whole.made) await r2Objects(env.BLOBS).delete(key)
+      throw e
+    }
     return recorded(graph, file, whole.bytes, {
       request: 'POST /api/blob/<sha>',
       space: space.slug,
@@ -1416,7 +1444,7 @@ let inParts = async (
   } catch (e) {
     if (e instanceof Gone) return json(409, 'upload_gone', e.message)
     if (e instanceof Wrong) return json(400, 'refused', e.message)
-    throw e
+    return untaken(e)
   }
 }
 
@@ -1849,23 +1877,8 @@ let api = async (
       invited: await invitedHere(dir, space, app, person, mayRead, mayPost),
     })
   }
-  // The app's platform doors use the same refusals and visitor limits as
-  // its store doors.
-  let visit = async (bytes: number) =>
-    !writes(who.role) && bytes > VISIT_BATCH
-      ? json(413, 'visit_too_large')
-      : await visiting(req, env, app, who)
-  let asked: Asked = {
-    env,
-    req,
-    path,
-    space,
-    app,
-    who,
-    refuse: refused,
-    json,
-    visiting: visit,
-  }
+  // The app's platform doors use the same refusals as its store doors.
+  let asked: Asked = { env, req, path, space, app, who, refuse: refused, json }
   let mine = await stats(asked) ?? await connection(asked) ??
     await envDoor(asked) ?? await fetchDoor(asked) ?? await reach(asked) ??
     await modelRun(asked) ?? await recovery(asked) ?? await voice(asked)
@@ -1995,8 +2008,6 @@ let api = async (
     if (req.method != 'POST') return json(405, 'method_not_allowed')
     if (!mayPost) return refused()
     let body = await req.text()
-    let held = await visit(body.length)
-    if (held) return held
     // The free tier's byte ceiling (T-32758). Data costs money to hold, so
     // this is a refusal — one the page shows in the platform's own sentence,
     // the way it shows every other.
@@ -2092,21 +2103,15 @@ let api = async (
   if (path == '/blob') {
     if (req.method != 'POST') return json(405, 'method_not_allowed')
     if (!mayPost) return refused()
-    let paced = await visiting(req, env, app, who)
-    if (paced) return paced
-    return took(req, env, space, app, store, {
+    return await took(req, env, space, app, store, {
       ...headers,
       ...(await named(env, who, app)),
-    }, writes(who.role) ? MAX : VISIT_UPLOAD)
+    }).catch(untaken)
   }
   if (
     path.startsWith('/blob/') && (req.method == 'POST' || req.method == 'PUT')
   ) {
     if (!mayPost) return refused()
-    if (req.method == 'POST') {
-      let paced = await visiting(req, env, app, who)
-      if (paced) return paced
-    }
     return inParts(
       req,
       env,
@@ -2115,7 +2120,6 @@ let api = async (
       store,
       async () => ({ ...headers, ...(await named(env, who, app)) }),
       path.slice('/blob/'.length),
-      writes(who.role) ? MAX : VISIT_UPLOAD,
     )
   }
   if (path.startsWith('/blob/')) {

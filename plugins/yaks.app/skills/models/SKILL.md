@@ -279,7 +279,7 @@ An app that wants its visitors to ask too says so at the top of its
     { "models": "open", "$defs": { … } }
 
 Then anyone who may write the app may ask, which on an `open` app is anyone with
-the link — held to the pace every visitor's writes keep, 30 changes a minute.
+the link, and every turn they ask for spends the owner's budget.
 
 ## The models, and what they cost
 

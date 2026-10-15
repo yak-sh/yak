@@ -58,8 +58,13 @@ export class Gone extends Error {}
 /** A part, or a whole, that is not what it was said to be. */
 export class Wrong extends Error {}
 
-/** What a finished upload holds: its length and its first bytes. */
-export type Whole = { bytes: number; head: Uint8Array<ArrayBuffer> }
+/** What a finished upload holds: its length and its first bytes, and `made`
+ * when this `post` assembled it rather than finding it kept already. */
+export type Whole = {
+  bytes: number
+  head: Uint8Array<ArrayBuffer>
+  made?: boolean
+}
 
 /** Where an upload stands: the size of every part but the last, the parts
  * still to send, and the whole once none are. */
@@ -227,7 +232,7 @@ export let parts = (
     let done = await whole()
     if (!done) throw new Error(`no object at ${key} once assembled`)
     await drop(held, t)
-    return done
+    return { ...done, made: true }
   }
 
   return {

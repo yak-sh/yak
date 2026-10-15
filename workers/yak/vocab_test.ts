@@ -148,6 +148,18 @@ test('a manifest that is not a document is refused', () => {
   assertEquals(Object.keys(appDoc(undefined).$defs ?? {}), [])
 })
 
+// Which files an app takes is said about the app, beside `$defs`, and kept on
+// the document its doors read; a declaration that says nothing sensible is
+// refused at the deploy, not discovered at an upload.
+test('a manifest says which files the app takes', () => {
+  let blob = { maxLength: 1024, contentMediaType: ['image/*'] }
+  assertEquals(appDoc({ blob }).blob, blob)
+  assertStringIncludes(
+    assertThrows(() => appDoc({ blob: { maxLength: '1 MB' } }), Error).message,
+    'vocab.json: "blob": maxLength is a whole number of bytes',
+  )
+})
+
 // YAML is the warm path, and a vocab.json keeps working because YAML reads it
 // (@yaks/yaml, M-34605). The two formats of the file are the same manifest;
 // which one an app wrote is what a refusal has to name.

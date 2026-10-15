@@ -43,7 +43,7 @@ import PostalMime, { type Email } from 'postal-mime'
 import { link } from '@yaks/edge'
 import type { Bundle } from '@yaks/graph'
 import { type Head, inbound, verdict } from '@yaks/mail'
-import { filed } from './apps.ts'
+import { acceptsOf, filed, Untaken } from './apps.ts'
 import * as dirPart from './directory.ts'
 import { type App, appStore, directory, type Space } from './directory.ts'
 import { bound, type Env, type Inbound } from './env.ts'
@@ -150,9 +150,10 @@ let read = (m: Inbound, mail: Email): Head => ({
 })
 
 // A letter's attachments, filed where an app's own uploads are (apps.ts
-// `filed`) and hung off the letter with a `contains` edge: the letter contains
-// them, and the edge's eid is derived from that sentence, so the same letter
-// filed twice states the same link once.
+// `filed`), as far as the app takes them (`"blob"` in its vocab.json), and
+// hung off the letter with a `contains` edge: the letter contains them, and
+// the edge's eid is derived from that sentence, so the same letter filed
+// twice states the same link once.
 let carried = async (
   env: Env,
   space: Space,
@@ -162,11 +163,15 @@ let carried = async (
   of: string,
 ) => {
   let out: Bundle[] = []
+  let accepts = mail.attachments.length
+    ? await acceptsOf(env, space, app)
+    : undefined
   for (let a of mail.attachments) {
     let bytes = typeof a.content == 'string'
       ? new TextEncoder().encode(a.content)
       : new Uint8Array(a.content as ArrayBuffer)
     if (!bytes.byteLength) continue
+    // An attachment the app does not take is left off; the letter still lands.
     let file = await filed(
       env,
       space,
@@ -175,8 +180,12 @@ let carried = async (
       bytes,
       a.mimeType || 'application/octet-stream',
       a.filename ?? '',
-    )
-    out.push(...file.bundles, link(of, 'contains', file.use))
+      accepts,
+    ).catch((e) => {
+      if (e instanceof Untaken) return null
+      throw e
+    })
+    if (file) out.push(...file.bundles, link(of, 'contains', file.use))
   }
   return out
 }

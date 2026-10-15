@@ -419,12 +419,12 @@ export let refusal = (
  * an answer back rather than a transcript (the worker's `ai` binding posts
  * here, dispatch.ts `shim`). Asked by whoever may ask the app's models for a
  * turn: its members, or, where its manifest says `"models": "open"`, anyone
- * who may write it, at a visitor's size and pace. Metered like every call.
+ * who may write it. Metered like every call.
  * The input is the caller's, passed whole, so one the model refuses
  * (@yaks/workers-ai `unfit`) is answered 400 as theirs to correct.
  */
 export let modelRun: Answer = async (
-  { env, req, path, space, app, who, refuse, json, visiting },
+  { env, req, path, space, app, who, refuse, json },
 ) => {
   if (path != '/ai/run') return null
   if (req.method != 'POST') return json(405, 'method_not_allowed')
@@ -445,8 +445,6 @@ export let modelRun: Answer = async (
         )
         : refuse()
     }
-    let held = await visiting(body.length)
-    if (held) return held
   }
   let asked = posted(body)
   if (!asked) {

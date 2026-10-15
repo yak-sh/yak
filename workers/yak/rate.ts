@@ -3,8 +3,7 @@
 // the connector anonymously, sending feedback anonymously, and reading an
 // open or public app's data. Each door has its own Workers Rate Limiting
 // binding (wrangler.toml `[[ratelimits]]`, where the numbers live), keyed by
-// the address Cloudflare saw the request come from. A visitor writing to an
-// open app is held the same way, per app (apps.ts `visiting`, `VISITS`).
+// the address Cloudflare saw the request come from.
 //
 // The per-address cap on sign-in letters (signin.ts SENDS) stays: that one
 // protects an inbox from a stranger, this one protects the platform from a

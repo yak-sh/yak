@@ -218,7 +218,6 @@ the build ends, and everything in it with it.
 
 These limits apply to both plans:
 
-- **20 MB** is the largest single file or upload.
 - **20 versions** of an app are kept to roll back to.
 - An app's own `worker.js` gets **50 ms of CPU** and **50 outgoing requests**
   per request. Waiting for an external API does not count toward CPU time.

@@ -127,7 +127,8 @@ Accepts a `File` off an `<input type=file>` or any `Blob`, POSTs the bytes to
 bytes are a picture that declares its size (png, jpeg, gif, webp). `mime` is the
 blob's own `type`; `name` defaults to `file.name` and is sent percent-encoded.
 The bytes are stored under their SHA-256, so `eid` is that hash and the same
-file twice is one upload and one row. 20 MB is the ceiling. A file of 16 MiB or
+file twice is one upload and one row. Which files the app takes, by size and
+type, is its `vocab.json`'s to say ([files](./files.md)). A file of 16 MiB or
 more goes up in parts, several at once, and resumes where it stopped: uploading
 the same file again sends only the parts that had not arrived
 ([files](./files.md)).
@@ -627,7 +628,8 @@ message alone:
 `e.signIn` is set only when signing in is the way through, and it already holds
 this page as its return address. The codes from these endpoints: `not_a_reader`,
 `not_a_writer` (401 to a stranger, 403 to a member who may not), `too_large`,
-`no_bytes`, `space_full`, `no_such_file`, `method_not_allowed`, `not_found`.
+`unsupported_media_type`, `no_bytes`, `space_full`, `no_such_file`,
+`method_not_allowed`, `not_found`.
 
 A refusal from the store — an unknown component, a property that does not exist,
 a bundle that does not parse — is plain text with a 400, so the message the

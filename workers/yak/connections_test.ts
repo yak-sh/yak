@@ -406,7 +406,6 @@ let asks = async (
       who,
       refuse: () => Promise.resolve(new Response(null, { status: 403 })),
       json: (status) => new Response(null, { status }),
-      visiting: () => Promise.resolve(null),
     }
     return (await own(at) ?? await envDoor(at) ?? await fetchDoor(at))!
   }
@@ -602,7 +601,6 @@ test(
         who: { person: null, role },
         refuse: () => Promise.resolve(new Response(null, { status: 403 })),
         json: (status) => new Response(null, { status }),
-        visiting: () => Promise.resolve(null),
       }
       return (await envDoor(at) ?? await fetchDoor(at))!
     }

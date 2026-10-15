@@ -68,7 +68,6 @@ import type { PropSchema, VocabDoc } from '@yaks/vocab'
 import type { Props, Sheet } from './csv.ts'
 import {
   configOf,
-  MAX,
   mimeOf,
   prefixOf,
   servesSaid,
@@ -2157,9 +2156,7 @@ export let patched = (
  * A file off the web, for `op: fetch` to write into an app — so vendoring a
  * library is one call and not a transcription of minified code (T-34337).
  *
- * https only: an app is made of bytes somebody can vouch for. The ceiling is
- * the platform's own (files.ts MAX), refused on the `content-length` before
- * the body is read and again on the body itself, since a header is a claim.
+ * https only: an app is made of bytes somebody can vouch for.
  */
 export let fetched = async (said: string) => {
   let at: URL
@@ -2174,13 +2171,9 @@ export let fetched = async (said: string) => {
       `url: https only, not ${at.protocol.replace(':', '')}`,
     )
   }
-  let big = (n: number) => `${at} is ${size(n)} — ${size(MAX)} at most`
   let r = await fetch(at)
   if (!r.ok) throw refuse('arguments', `${at} answered ${r.status}`)
-  let claim = Number(r.headers.get('content-length') ?? 0)
-  if (claim > MAX) throw refuse('limit', big(claim))
   let bytes = new Uint8Array(await r.arrayBuffer())
-  if (bytes.byteLength > MAX) throw refuse('limit', big(bytes.byteLength))
   return {
     bytes,
     // What the response said it is, without its parameters. An app serves

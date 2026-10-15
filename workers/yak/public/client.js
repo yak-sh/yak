@@ -390,9 +390,9 @@ export let store = (base) => {
   // door answers `{eid, url, mime, bytes}` — the eid to point a row at
   // (`{photo: {caption, blob: eid}}`) and the url to put in an `<img src>`.
   // Content-addressed, so the same file twice is one upload and one row, and
-  // a page may re-send rather than remember. 20 MB is the ceiling; downscale
-  // a photo on the page before you send it. Deleting the row at `eid` deletes
-  // the upload and its bytes.
+  // a page may re-send rather than remember. Which files are taken is the
+  // app's `vocab.json` to say (`"blob"`); downscale a photo on the page before
+  // you send it. Deleting the row at `eid` deletes the upload and its bytes.
   //
   // A file of `SPLIT` bytes or more goes up in parts: the door says the part
   // size and the parts it still needs, those go `LANES` at a time, and asking

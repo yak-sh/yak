@@ -30,10 +30,9 @@ import { refuse } from './tool.ts'
 
 export type Entry = { path: string; bytes: Uint8Array<ArrayBuffer> }
 
-// The most one drop may unpack to. The same 20 MB apps.ts puts on one upload,
-// for the same reason — an app's files are pages, not an archive — and here it
-// is counted on the way out of the decompressor, so a small zip that claims to
-// be a large one is refused by what it actually produces.
+// The most one drop may unpack to: an app's files are pages, not an archive.
+// It is counted on the way out of the decompressor, so a small zip that claims
+// to be a large one is refused by what it produces.
 export let MAX = 20 * 1024 * 1024
 
 let LOCAL = 0x04034b50

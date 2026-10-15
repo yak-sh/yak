@@ -807,8 +807,8 @@ let NO_PITR =
  *            the letter is not held to anything; a draft is ordinary data.
  *   using    the ask for a model's turn, which the space pays for (D-40545):
  *            its members' to make, unless the app's manifest says
- *            `"models": "open"` ({@link floorsOf}), and then its visitors keep
- *            the pace every write of theirs keeps (apps.ts `visiting`).
+ *            `"models": "open"` ({@link floorsOf}), and then anyone's who may
+ *            write it.
  *   builder  an instruction that starts model turns at the account's expense.
  *            Only an editor may write its settings, even in an open app.
  */

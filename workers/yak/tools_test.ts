@@ -11,7 +11,6 @@ import {
   assertStringIncludes,
   assertThrows,
 } from '@std/assert'
-import { MAX } from './apps.ts'
 import {
   call,
   type Ctx,
@@ -332,18 +331,6 @@ test('a fetch takes https, a live answer, and nothing over the ceiling', async (
   await served(
     () => new Response('nope', { status: 404 }),
     () => refuses('answered 404', 'https://cdnjs.example/gone.js'),
-  )
-  // A header is a claim, so it is refused on the claim and on the bytes.
-  await served(
-    () =>
-      new Response('small', {
-        headers: { 'content-length': String(MAX + 1) },
-      }),
-    () => refuses('20 MB at most', 'https://cdnjs.example/huge.js'),
-  )
-  await served(
-    () => new Response(new Uint8Array(MAX + 1)),
-    () => refuses('20 MB at most', 'https://cdnjs.example/lying.js'),
   )
 })
 

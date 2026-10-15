@@ -30,11 +30,6 @@ and editors change anything, as ever. A shared list that visitors tick off
 together is therefore a list whose ticks are rows of their own, one per tick,
 rather than an edit to somebody else's item.
 
-A visitor is also held to a visitor's size and pace: 16 KB in one write, 2 MB in
-one upload, and 30 writes and uploads a minute to one app, counted per signed-in
-person or, signed out, per address. Past that the answer is 413
-`visit_too_large` or 429 `too_many_writes` (<https://yaks.app/docs/errors.md>).
-
 Three of the platform's own words stay out of a visitor's reach whatever the
 access: `product` is written by the owner and editors, an `order`'s properties
 only by the platform (<https://yaks.app/docs/selling.md>), and the ask to send a

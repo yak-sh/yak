@@ -14,7 +14,7 @@ import {
   type Vocab,
   type VocabDoc,
 } from '@yaks/vocab'
-import { blobKeywords } from '@yaks/blob'
+import { acceptsErrors, blobKeywords } from '@yaks/blob'
 import { edgeKeywords } from '@yaks/edge'
 import { keyKeywords } from '@yaks/key'
 import { floored, memberKeywords, permitted } from '@yaks/member'
@@ -391,12 +391,14 @@ export let OPENS: Record<string, string> = {
  * `.yml` (tools.ts `spelled`), and the sentence has to name the file they are
  * looking at.
  *
- * `"tools": false`, `"models": "open"` and `"rtc": "open"` are the words a
- * manifest says about itself rather than about a component, so each is lifted
- * off and carried on the document. `tools: false` synthesizes no tools for its
- * kinds (kinds.ts, T-34513); a boolean tells it from a component named
- * `tools`, which is an object of properties like any other. The other two are
- * each {@link OPENS}: who may spend the owner's account budget through the app.
+ * `"tools": false`, `"models": "open"`, `"rtc": "open"` and `"blob"` are the
+ * words a manifest says about itself rather than about a component, so each is
+ * lifted off and carried on the document. `tools: false` synthesizes no tools
+ * for its kinds (kinds.ts, T-34513); a boolean tells it from a component named
+ * `tools`, which is an object of properties like any other. `models` and `rtc`
+ * are each {@link OPENS}: who may spend the owner's account budget through the
+ * app. `blob` is which uploads the app takes (@yaks/blob `Accepts`), checked
+ * where bytes come in (apps.ts `took`, `inParts`; inbox.ts).
  *
  * A `$defs` entry marked `"tool": true` is one of the app's commands, not a
  * component: it is left out here and read by @yaks/tools/declared `parseTools`, so a
@@ -428,9 +430,15 @@ export let appDoc = (source: unknown, file = 'vocab.json'): VocabDoc => {
       )
     }
   }
+  if (held.blob !== undefined) {
+    let wrong = acceptsErrors(held.blob)
+    if (wrong.length) {
+      throw refuse('arguments', `${file}: "blob": ${wrong.join('; ')}`)
+    }
+  }
   let body = Object.fromEntries(
     Object.entries(held).filter(([k]) =>
-      !(k == 'tools' && off !== undefined) && !(k in OPENS)
+      !(k == 'tools' && off !== undefined) && !(k in OPENS) && k != 'blob'
     ),
   )
   let keys = Object.keys(body)
@@ -456,6 +464,7 @@ export let appDoc = (source: unknown, file = 'vocab.json'): VocabDoc => {
   }
   if (off !== undefined) doc = { ...doc, tools: off }
   for (let [word] of opens) doc = { ...doc, [word]: held[word] }
+  if (held.blob !== undefined) doc = { ...doc, blob: held.blob }
   let errs = [...storable(doc), ...floored(doc)]
   if (errs.length) throw refuse('arguments', `${file}: ${errs.join('; ')}`)
   // A companion can be supplied by the platform, so resolve permission names

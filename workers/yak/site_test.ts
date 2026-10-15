@@ -636,7 +636,7 @@ test('the terms leave every price to the pricing page', () => {
       '</section>',
     )[0],
   )
-  assert(!/\d/.test(costs.replace('20 MB', '')), `a figure in: ${costs}`)
+  assert(!/\d/.test(costs), `a figure in: ${costs}`)
   assert(!/\bnothing\b/i.test(costs), 'the terms still say it costs nothing')
   assertStringIncludes(costs, '/pricing')
 })

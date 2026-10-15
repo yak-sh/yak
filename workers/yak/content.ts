@@ -60,7 +60,7 @@ export let PAGES: Record<string, Page> = {
     'slug': 'files',
     'title': 'Files and pictures',
     'description':
-      "app_deploy's reload and the yak-release event, including a custom notice that keeps unsaved input; app_files — what a write returns, the patch and fetch ops, the history every write keeps and the restore that puts one back, the icon.svg that gives an app an icon on a home screen — then upload() for a file off an <input>: where the bytes are served back from, the attachment and image rows it writes, a big file sent in parts that resumes where it stopped, deleting an upload and its bytes, the 20 MB ceiling and the downscale under it, and a gallery that never shows one picture twice.",
+      "app_deploy's reload and the yak-release event, including a custom notice that keeps unsaved input; app_files — what a write returns, the patch and fetch ops, the history every write keeps and the restore that puts one back, the icon.svg that gives an app an icon on a home screen — then upload() for a file off an <input>: where the bytes are served back from, the attachment and image rows it writes, a big file sent in parts that resumes where it stopped, deleting an upload and its bytes, the vocab.json word that says which files the app takes, the downscale, and a gallery that never shows one picture twice.",
     'brief':
       'files, releases, yak-release, reload, uploads, big files in parts, resuming, deleting them, pictures',
   },

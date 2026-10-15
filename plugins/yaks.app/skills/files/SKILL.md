@@ -1,6 +1,6 @@
 ---
 name: files
-description: "Files and pictures (yaks.app). app_deploy's reload and the yak-release event, including a custom notice that keeps unsaved input; app_files — what a write returns, the patch and fetch ops, the history every write keeps and the restore that puts one back, the icon.svg that gives an app an icon on a home screen — then upload() for a file off an <input>: where the bytes are served back from, the attachment and image rows it writes, a big file sent in parts that resumes where it stopped, deleting an upload and its bytes, the 20 MB ceiling and the downscale under it, and a gallery that never shows one picture twice."
+description: "Files and pictures (yaks.app). app_deploy's reload and the yak-release event, including a custom notice that keeps unsaved input; app_files — what a write returns, the patch and fetch ops, the history every write keeps and the restore that puts one back, the icon.svg that gives an app an icon on a home screen — then upload() for a file off an <input>: where the bytes are served back from, the attachment and image rows it writes, a big file sent in parts that resumes where it stopped, deleting an upload and its bytes, the vocab.json word that says which files the app takes, the downscale, and a gallery that never shows one picture twice."
 ---
 
 # Files and pictures
@@ -10,8 +10,9 @@ raw bytes into a component the way you write a title or a number. This page
 covers files: how you write the app's own files with `app_files`, then what
 `upload` accepts and returns for the files its visitors send, where those are
 served from, the two rows one upload writes, who may send and who may look, how
-to delete one, the 20 MB ceiling and the downscale that gets a phone photo under
-it — and a gallery that does not show the same picture twice.
+to delete one, how the app says which files it takes and the downscale that
+makes a phone photo quick to send — and a gallery that does not show the same
+picture twice.
 
 ## app_files, and what a write returns
 
@@ -51,9 +52,8 @@ saying how many matches there were, so lengthen `find` until it names one place.
 An empty `replace` removes the text. It is the cheap fix for the one line that
 came out wrong, where the alternative is re-sending the whole file.
 
-**`op: fetch` writes a URL's body to a path** — `path` and `url`, https only,
-under the same 20 MB ceiling. It is how a third-party library is vendored into
-the app rather than transcribed:
+**`op: fetch` writes a URL's body to a path** — `path` and `url`, https only. It
+is how a third-party library is vendored into the app rather than transcribed:
 
     app_files(app, op: 'fetch', path: 'chess.js',
               url: 'https://cdnjs.cloudflare.com/…/chess.min.js')
@@ -501,8 +501,10 @@ them. The first part starts from SHA-256's own initial value
 state follows on from the one before it and the last ends at the address, so the
 bytes kept are the bytes the address names; parts that do not are dropped with a
 `400`, as is a part of the wrong length. `409 upload_gone` says the upload is no
-longer under way (seven days passed): POST again to begin it anew. The ceilings
-are checked against `bytes`, with the same `too_large` and `space_full`.
+longer under way (seven days passed): POST again to begin it anew. The space's
+room and the most bytes the app takes are checked against `bytes` when it
+begins, with the same `space_full` and `too_large`, and the type the app takes
+once it is whole, with the same `415`.
 
 Deployed audio and video files use media types from their extensions: `.mp4`,
 `.m4v`, `.mov`, `.webm`, `.mp3`, `.m4a`, `.aac`, `.wav`, `.ogg`, `.flac`, and
@@ -579,13 +581,33 @@ for 30 days, so `app_restore` brings the uploads back with everything else.
 After that — or straight away, with `forever: true` — the bytes go: every object
 under the app's own prefix, uploads included, and there is no undo.
 
-## 20 MB, and the downscale
+## Which files the app takes, and the downscale
 
-**One upload is 20 MB at most.** The upload endpoint refuses twice — once on the
-`content-length` before it reads anything, once on the bytes it got — with
-`413`, code `too_large`, and a message a guest can act on: "that file is too big
-to send — try a smaller one". An empty body is a 400, code `no_bytes`. A phone
-photo is routinely over the ceiling, so downscale before you send:
+yaks.app puts no size or type of its own on an upload; the one bound is the
+space's room for photos and files. Which files an app takes is for its author to
+decide, in its `vocab.json`, in JSON Schema's own words for a file's bytes:
+
+    {
+      "blob": { "maxLength": 10485760, "contentMediaType": "image/*" },
+      "$defs": { … }
+    }
+
+- `maxLength` is the most bytes one file may hold.
+- `contentMediaType` is what it may be: one media type, or a list of them
+  (`["image/*", "application/pdf"]`), where `image/*` takes every kind of
+  picture, the way an `<input accept>` does.
+
+Leave either out and anything is taken. The type is read off the bytes, never
+off the name or what the upload says it is, so a web page called `cake.png` is
+not a picture. A file too big is refused `413`, code `too_large`, before any of
+it is read; one of another type `415`, code `unsupported_media_type`. Each
+carries a message a guest can act on: "this app takes image/*, and this file is
+application/pdf". In parts, the size is checked when it begins and the type once
+it is whole. A letter's attachments are held to the same words, and one the app
+does not take is left off the letter. An empty body is a 400, code `no_bytes`.
+
+A phone photo is several megabytes, so a page that shows pictures downscales
+them before it sends them, to be quick to send and to show:
 
     // A picture, at most 1600px on its long side, as a jpeg.
     let smaller = async (file, max = 1600) => {
@@ -609,9 +631,9 @@ attachment row will have none. And resized bytes are new bytes: a downscale that
 picks a different `max` or `quality` next time hashes differently and uploads
 again, so pick your numbers once and leave them alone.
 
-A second `413` is possible on a free-tier space out of room — code `space_full`,
-with a message naming the space; nothing about the file will fix that one. There
-is no server-side resizing, so the page's downscale is the whole of it.
+A `413` with code `space_full` says the space is out of room, with a message
+naming the space; nothing about the file will fix that one. There is no
+server-side resizing, so the page's downscale is the whole of it.
 
 ## Dropping files, and more than one
 

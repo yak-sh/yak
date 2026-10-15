@@ -9,6 +9,7 @@
 import { test } from '@yaks/testing'
 import { assert, assertEquals, assertMatch } from '@std/assert'
 import { browser, connector, kernel, seed, unique } from './probe.ts'
+import { START } from '@yaks/blob'
 
 // The client module the kernel serves, loaded the way a page loads it.
 let served = async (
@@ -263,24 +264,6 @@ test('the file door: a page uploads bytes and gets an address', async () => {
       1,
     )
 
-    // Over the ceiling, refused with a sentence a person can act on. Sent at
-    // the wire: a page would never build this, and the door must not read it.
-    let over = await k.at(`${jeff5}.yaks.app`, '/photos/api/blob', {
-      method: 'POST',
-      headers: { cookie: them.cookie, 'content-type': 'image/png' },
-      body: new Uint8Array(21 * 1024 * 1024),
-    })
-    assertEquals(over.status, 413)
-    let said = await over.json()
-    assertEquals(said.error.code, 'too_large')
-    // The code is the developer's half; the sentence is read by a guest at
-    // the party through `show(e.message)`, so it asks them for a smaller
-    // photo and leaves the downscale recipe to the guide (C-32706 item 3).
-    assertEquals(
-      said.error.message,
-      'that file is too big to send — try a smaller one',
-    )
-
     // A stranger on a `public` app may look at the bytes and may not add any:
     // the write rule is the app's own, and the refusal says where to sign in.
     let strangers = mod.store(`${anyone.origin}/photos/api/`)
@@ -297,16 +280,61 @@ test('the file door: a page uploads bytes and gets an address', async () => {
     // On an `open` app, though, a stranger is a writer: the door that lets
     // anyone with the link save a row lets them put a photo beside it.
     let agent = connector(k, them.cookie)
-    await agent.tool('app_set', {
-      space: jeff5,
-      app: 'photos',
-      access: 'open',
-    })
+    let photos = { space: jeff5, app: 'photos' }
+    await agent.tool('app_set', { ...photos, access: 'open' })
     let theirs: File = await strangers.upload(
       new File([new Uint8Array([1, 2, 3])], 'theirs.bin'),
     )
     assert(theirs.eid != file.eid)
     assertEquals(theirs.mime, 'application/octet-stream')
+
+    // The app says which files it takes, in its vocab.json, and every upload
+    // is held to it: its size, and its type as read off the bytes, whatever
+    // the upload calls it.
+    await agent.tool('app_files', {
+      ...photos,
+      files: [{
+        path: 'vocab.json',
+        content: JSON.stringify({
+          blob: { maxLength: 4096, contentMediaType: 'image/*' },
+        }),
+      }],
+    })
+    await agent.tool('app_deploy', photos)
+    let page = new TextEncoder().encode('<h1>hi</h1>')
+    let said = (f: Blob) => store.upload(f).catch((e: Error) => e.message)
+    assertEquals(
+      await said(new File([page], 'cake.png', { type: 'image/png' })),
+      'this app takes image/*, and this file is application/octet-stream',
+    )
+    assertEquals(
+      await said(new File([new Uint8Array(4097)], 'big.png')),
+      'this app takes files of at most 4 KB',
+    )
+    assertEquals((await store.upload(new File([jpg], 'ok.jpg'))).eid, shot.eid)
+    // In parts too: too big when it begins, and the wrong type once whole,
+    // when the bytes it made are deleted again, so it begins anew.
+    let parts = (sha: string, init: RequestInit) =>
+      k.at(`${jeff5}.yaks.app`, `/photos/api/blob/${sha}`, {
+        ...init,
+        headers: { cookie: them.cookie, ...init.headers },
+      })
+    let begin = (sha: string, bytes: number) =>
+      parts(sha, { method: 'POST', body: JSON.stringify({ bytes }) })
+    assertEquals((await begin('a'.repeat(64), 4097)).status, 413)
+    let sha = await hex(page)
+    assertEquals(await (await begin(sha, page.length)).json(), {
+      part: 8 * 1024 * 1024,
+      need: [1],
+    })
+    let sent = await parts(`${sha}/1`, {
+      method: 'PUT',
+      headers: { 'x-yak-state': START, 'content-length': `${page.length}` },
+      body: page,
+    })
+    assertEquals(sent.status, 200, await sent.text())
+    assertEquals((await begin(sha, page.length)).status, 415)
+    assertEquals((await (await begin(sha, page.length)).json()).need, [1])
   } finally {
     await mine.stop()
     await anyone.stop()
