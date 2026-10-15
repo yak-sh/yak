@@ -203,3 +203,29 @@ test('Cloudflare observes active containers and returns detached process data', 
     { id: 'finished', status: 'completed', exitCode: 0 },
   ])
 })
+
+test('Cloudflare lends a container already reaching the hosts it was given', async () => {
+  let reached: string[][] = []
+  let box = {
+    setSleepAfter: () => {},
+    setAllowedHosts: async (hosts: string[]) => {
+      await Promise.resolve()
+      reached.push(hosts)
+    },
+  } as unknown as Box
+  let ns = { idFromName: (name: string) => name, get: () => box }
+  await cloudflareProvider(ns, { hosts: ['a.test', 'b.test'] }).request!({
+    id: 'mine',
+  })
+  equal(reached, [['a.test', 'b.test']])
+  await cloudflareProvider(ns).request!({ id: 'mine' })
+  equal(reached.length, 1)
+  let failures: string[] = []
+  box.setAllowedHosts = () => Promise.reject(new Error('down'))
+  let lent = await cloudflareProvider(ns, {
+    hosts: ['a.test'],
+    failed: (_, what) => failures.push(what),
+  }).request!({ id: 'mine' })
+  equal(lent.cwd, '/workspace')
+  equal(failures, ['hosts'])
+})

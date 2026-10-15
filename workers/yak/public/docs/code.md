@@ -703,11 +703,12 @@ with `into`, makes that folder hold exactly what this ships: each file an
 earlier build left there is deleted, into its history like any delete.
 
 **Its network reaches the package registries and nothing else**: crates.io,
-PyPI, npm, the Go module proxy, Ubuntu's archive, and yaks.app itself. Any other
-address is refused, so a build fetches what it needs from a registry, not from a
-URL. A scaffolder that downloads its template from GitHub (`npm create astro`)
-cannot; one that carries its templates in its package (`npm create vite`,
-`npx sv create`) can, and otherwise write the template's few files yourself.
+PyPI, npm, the Go module proxy, Ubuntu's archive, yaks.app itself, and your
+space's own address (`<space>.yaks.app`). Any other address is refused, so a
+build fetches what it needs from a registry, not from a URL. A scaffolder that
+downloads its template from GitHub (`npm create astro`) cannot; one that carries
+its templates in its package (`npm create vite`, `npx sv create`) can, and
+otherwise write the template's few files yourself.
 
 **One sandbox at a time.** Your sandbox is private to you in each space, and one
 person holds one awake at a time on the free plan, two on the Plus plan. A
@@ -761,6 +762,9 @@ a folder of files builds in the sandbox and serves as built:
        sandbox_ship(app, paths: ['site/src'], into: 'src')
        sandbox_ship(app, paths: ['site/package.json', 'site/package-lock.json'])
 
+   A sandbox that slept starts empty. It gets the app back, images and all, by
+   cloning what the app last released:
+   `git clone https://x:$YAKS_TOKEN@<space>.yaks.app/<app>.git`.
 3. Name the folder the app serves in `wrangler.jsonc`:
    `{"assets": {"directory": "dist"}}`, so `dist/index.html` is the app's front
    page and the source is not on the web

@@ -823,12 +823,13 @@ test("the month of sandbox time is the account's, and it refuses", async () => {
   )
 })
 
-test('a sandbox reaches the registries and this platform, and nothing else', () => {
-  let hosts = egress({ APEX: 'yaks.fyi' })
+test('a sandbox reaches the registries, this platform and its own space, and nothing else', () => {
+  let hosts = egress({ APEX: 'yaks.fyi' }, 'pat')
   for (let host of ['static.crates.io', 'pypi.org', 'registry.npmjs.org']) {
     assert(hosts.includes(host), host)
   }
   assert(hosts.includes('yaks.fyi'))
+  assertEquals(hosts.filter((h) => h.endsWith('.yaks.fyi')), ['pat.yaks.fyi'])
   assert(hosts.every((h) => !h.includes('*')), 'no wildcard reaches further')
   assertEquals(REGISTRIES.includes('github.com'), false)
 })

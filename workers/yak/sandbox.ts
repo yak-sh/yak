@@ -62,7 +62,7 @@ export { CWD, NAP, SLEEP, TIMEOUT } from '@yaks/machine/cloudflare'
 import type { Space, Tier } from './directory.ts'
 import { retried } from './door.ts'
 import { type Grant, type Kv, ledger, mint, tokenOf } from './grants.ts'
-import { type Host, url } from './host.ts'
+import { type Host, spaceHost, url } from './host.ts'
 import { refuse } from './tool.ts'
 import { caught } from './defects.ts'
 import type { Workspaces } from './workspaces.ts'
@@ -114,7 +114,11 @@ export let HOST = sandboxHost()
  * toolchains install from, Ubuntu's archive for apt, and this platform, which
  * the `yaks` CLI inside it talks to. Everything else is refused at the
  * container's edge (index.ts `Sandbox`), so a command cannot mail what it
- * reads to somebody else's server, or be anybody's crawler. */
+ * reads to somebody else's server, or be anybody's crawler.
+ *
+ * A space's own sandbox also reaches the space's own address, so a fresh one
+ * can clone an app to rebuild it and fetch the page it shipped. Only its own:
+ * another space's open app takes anyone's writes. */
 export let REGISTRIES = [
   // Rust: the crates index and downloads, and rustup's targets.
   'crates.io',
@@ -135,9 +139,10 @@ export let REGISTRIES = [
   'security.ubuntu.com',
 ]
 
-export let egress = (env: Host = {}) => [
+export let egress = (env: Host = {}, space?: string) => [
   ...REGISTRIES,
   new URL(sandboxHost(env)).hostname,
+  ...space ? [spaceHost(env, space)] : [],
 ]
 
 /** How long the grant in the container's environment lives, in hours: the
@@ -358,8 +363,9 @@ export let workbench = async (
   let provider = cloudflareProvider(env.SANDBOX, {
     retry: retried,
     env: () => spend.signing ??= signed(env, space, person),
-    sleepError: (e) =>
-      caught(e, { request: 'sandbox sleep', space: space.slug }),
+    hosts: egress(env, space.slug),
+    failed: (e, what) =>
+      caught(e, { request: `sandbox ${what}`, space: space.slug }),
   })
   let ref = { id: named(space, person) }
   let source = { id: shared(space) }

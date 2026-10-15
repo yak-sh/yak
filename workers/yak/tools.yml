@@ -148,7 +148,7 @@ sandbox_shell:
     one a WASI layer runs); Deno 2.9.1, and the image's Node and Bun. The
     command runs as root, so `apt-get install -y <pkg>`, cargo, pip, npm and
     go get install anything for that build. Its network reaches the package
-    registries and this platform, nothing else. sandbox_write writes source
+    registries, this platform and the space's own address, nothing else. sandbox_write writes source
     in; sandbox_ship copies a built artifact into the app. It is signed in as
     the person: `yak` is installed with $YAKS_TOKEN and $YAKS_HOST set, so
     `yak <tool>` and curl call these same tools, on a short-lived token
