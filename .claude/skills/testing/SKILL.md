@@ -105,7 +105,10 @@ stronger.
   runs it: a test case over 1 ms fails unless bench/test-budget.json lists it,
   a listed one fails past its record (times the list's slack), and so does a
   platform's wall clock on the gate. Nothing joins the list: a new or renamed
-  test is held to 1 ms. `--write` takes off what got fast and lowers the
+  test is held to 1 ms. Getting a kernel test under it pulls you to drop the
+  checks that "only exist across the door". Nearly every one is a decision some
+  function makes (who may see or delete what, which version serves): move it
+  there, extracting the function if it's inline, and drop nothing. `--write` takes off what got fast and lowers the
   records; `--from=<dir>` does it from a gate's kept times (its `suite-timings`
   artifact). A time over the line is measured again with each file loaded a
   second time in the same runtime, so a test that can't run twice fails there.
