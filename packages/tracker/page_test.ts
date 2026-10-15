@@ -1,7 +1,7 @@
 // The page reporter (page.js) as a page runs it: a fresh copy is run as a
 // classic script over a stand-in window, a resource error is fired at its
-// capture listener, and what it asked the server and what it sent to the
-// report door are read.
+// capture listener or a fetch is made through its wrapper, and what it asked
+// the server and what it sent to the report door are read.
 import { equal, test } from '@yaks/testing'
 
 let at = 'https://ada.yaks.app/cookbook/'
@@ -11,9 +11,9 @@ let code = await Deno.readTextFile(new URL('./page.js', import.meta.url))
 
 type El = { tagName: string; href?: string; src?: string; type?: string }
 
-// Fire `el`'s failed load at a page whose server answers each address with
-// the status `files` gives it, or drops the connection for any other.
-let load = async (el: El, files: Record<string, number>) => {
+// A page whose server answers each address with the status `files` gives it,
+// or drops the connection for any other.
+let page = (files: Record<string, number>) => {
   let asked: string[] = []
   let sent: Blob[] = []
   let heard = new Map<string, (e: unknown) => unknown>()
@@ -23,6 +23,8 @@ let load = async (el: El, files: Record<string, number>) => {
       return Promise.resolve(new Response(null, { status: 204 }))
     }
     asked.push(url)
+    // A page that stopped waiting hears why: fetch rejects with the reason.
+    if (init?.signal?.aborted) return Promise.reject(init.signal.reason)
     return url in files
       ? Promise.resolve(new Response('body', { status: files[url] }))
       : Promise.reject(new TypeError('Load failed'))
@@ -33,7 +35,7 @@ let load = async (el: El, files: Record<string, number>) => {
     origin: new URL(at).origin,
     fetch: server,
   }
-  let page = {
+  let scope = {
     document: {
       currentScript: { dataset: { yakAt: '/cookbook/', yakVersion: '5' } },
       baseURI: at,
@@ -52,14 +54,30 @@ let load = async (el: El, files: Record<string, number>) => {
     setTimeout: () => 0,
     clearTimeout: () => {},
   }
-  new Function(...Object.keys(page), code)(...Object.values(page))
-  // The listener answers with its handling, settled once the miss is filed
-  // or let go.
-  await heard.get('error')!({ target: el })
-  let said = await Promise.all(
-    sent.map(async (b) => JSON.parse(await b.text()).message),
-  )
-  return { asked, said }
+  new Function(...Object.keys(scope), code)(...Object.values(scope))
+  let said = () =>
+    Promise.all(sent.map(async (b) => JSON.parse(await b.text()).message))
+  return { win, heard, asked, said }
+}
+
+// Fire `el`'s failed load. The listener answers with its handling, settled
+// once the miss is filed or let go.
+let load = async (el: El, files: Record<string, number>) => {
+  let p = page(files)
+  await p.heard.get('error')!({ target: el })
+  return { asked: p.asked, said: await p.said() }
+}
+
+// The page fetches `url`: what its caller heard, and what was filed.
+let call = async (
+  url: string,
+  files: Record<string, number>,
+  signal?: AbortSignal,
+) => {
+  let p = page(files)
+  let heard = await p.win.fetch(url, { signal })
+    .then((r) => r.status, (e) => e?.message ?? e)
+  return { heard, said: await p.said() }
 }
 
 let link = { tagName: 'LINK', href: file }
@@ -83,3 +101,28 @@ test("a module's miss is reported unasked: its imports may be missing", async ()
     { asked: [], said: [`failed to load script ${src}`] },
   )
 })
+
+let release = `${at}api/release?version=5`
+
+test('a fetch the server fails is reported', async () =>
+  equal(await call(release, { [release]: 500 }), {
+    heard: 500,
+    said: ['500 /cookbook/api/release: body'],
+  }))
+
+test('a fetch that never had an answer is its caller’s, not a report', async () =>
+  equal(await call(release, {}), { heard: 'Load failed', said: [] }))
+
+test('a fetch the page gave up waiting for is reported', async () => {
+  let late = new DOMException('timed out', 'TimeoutError')
+  equal(await call(release, {}, AbortSignal.abort(late)), {
+    heard: 'timed out',
+    said: ['/cookbook/api/release: timed out'],
+  })
+})
+
+test('a fetch the page aborted is not a report', async () =>
+  equal(await call(release, {}, AbortSignal.abort('stale')), {
+    heard: 'stale',
+    said: [],
+  }))

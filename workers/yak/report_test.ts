@@ -584,13 +584,16 @@ let browser = (code: string, page: string, version = 1) => {
     createElement: () => ({ style: {}, setAttribute: () => {} }),
   }
   // The server refuses each file the page failed to load, which is what makes
-  // the miss news (T-124011); nothing else is ever answered.
+  // the miss news (T-124011); nothing else is ever answered, and a page that
+  // stops waiting hears why.
   let gone = new Set<string>()
   let win = {
-    fetch: (url?: string) =>
-      gone.has(String(url))
+    fetch: (url?: string, init?: RequestInit) =>
+      init?.signal?.aborted
+        ? Promise.reject(init.signal.reason)
+        : gone.has(String(url))
         ? Promise.resolve(new Response(null, { status: 404 }))
-        : Promise.reject(new Error('this page fetches nothing')),
+        : Promise.reject(new TypeError('Load failed')),
     matchMedia: () => ({ matches: false }),
   }
   new Function(
@@ -621,7 +624,13 @@ let browser = (code: string, page: string, version = 1) => {
       gone.add(src)
       ears.error?.forEach((fn) => fn({ target: { tagName, src } }))
     },
-    ask: (url: string) => win.fetch(url),
+    // The page asks and gives up waiting for the answer.
+    late: (url: string) =>
+      win.fetch(url, {
+        signal: AbortSignal.abort(
+          new DOMException('timed out', 'TimeoutError'),
+        ),
+      }),
     filed: () =>
       Promise.all(beacons.map(async (b) => JSON.parse(await b.text()))),
     drawn,
@@ -663,10 +672,10 @@ test("the platform's own scripts are never the app's break", async () => {
       `failed to load script https://${jeff63}.yaks.app/weather/app.js`,
     )
 
-    // An abort includes the filter that stalled, without exposing query
-    // strings from other API doors in the exception store.
+    // A query the page gave up on includes the filter that stalled, without
+    // exposing query strings from other API doors in the exception store.
     let query = browser(code, page)
-    await query.ask(`${page}api/query?.player&.created.by=ada`).catch(() => {})
+    await query.late(`${page}api/query?.player&.created.by=ada`).catch(() => {})
     let failures = await query.filed()
     assertStringIncludes(
       failures[0].message,

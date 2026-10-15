@@ -193,9 +193,15 @@
       }
       return r
     } catch (e) {
-      if (mine(where)) {
+      // A fetch that rejects never had an answer. One the page gave up waiting
+      // for is a door too slow, and news. Any other is the connection
+      // dropping, the person leaving, or the page's own abort, none of them
+      // the app's fault or ours (release.js checks again later). The caller
+      // hears it either way, and one it leaves uncaught reaches
+      // `unhandledrejection` above.
+      if (mine(where) && e?.name == 'TimeoutError') {
         broke({ message: `${asked(where)}: ${said(e)}`, url: location.href })
-      }
+      } else if (mine(where)) crumb('fetch', `${where.pathname}: ${said(e)}`)
       throw e
     }
   }
