@@ -38,7 +38,7 @@ import {
 } from './asset_url.ts'
 import * as files from './files.ts'
 import { inside, keyed, prefixOf, VERSION } from './files.ts'
-import { blobPrefix, naming } from './blob-key.ts'
+import { blobPrefix, servable } from './blob-key.ts'
 import {
   type Access,
   type App,
@@ -1352,28 +1352,12 @@ let gave = async (
       },
     })
   }
-  // A representation outlives a deleted upload (@yaks/blob never deletes
-  // one) and Files may still hold the bytes in its cache, so the same read
-  // asks whether a row still names them, and a deleted upload stops here.
+  // Whether the bytes are served at all is the store's to say (`servable`).
   // That read is the store's, one per request, so the reader's browser keeps
   // what it was given: a page that loads its images on every view asks the
   // store once, not on every view, and no shared cache answers anyone else.
-  let rows = await graph.query(
-    `.entity.eid=${eid} .representation|${naming(sha)}`,
-  ) as {
-    entity: { eid: string }
-    representation?: {
-      scope: string
-      address: string
-      media_type: string
-      name?: string
-    }
-  }[]
-  let rep = rows.find((r) => r.entity.eid == eid)?.representation
-  if (
-    !rep || rep.scope != app.eid || rep.address != sha ||
-    !represents(eid, rep) || !rows.some((r) => r.entity.eid != eid)
-  ) return json(404, 'no_such_file')
+  let rep = await servable((q) => graph.query(q), app, sha, eid)
+  if (!rep) return json(404, 'no_such_file')
   let response: Served = {
     mime: rep.media_type,
     name: rep.name,

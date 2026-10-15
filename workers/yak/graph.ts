@@ -827,6 +827,26 @@ export let floorsOf = (manifest: VocabDoc): Floors =>
     ? Object.fromEntries(Object.entries(FLOORS).filter(([k]) => k != 'using'))
     : FLOORS
 
+/** The write guard an app's store holds every writer to: @yaks/member's rule,
+ * over this platform's floors as the app's manifest leaves them
+ * ({@link floorsOf}). `level` is the standing the door vouched for a writer,
+ * and `ignore` the grant rows that standing has outlived. So an open app's
+ * visitor adds rows and changes or deletes only their own (an upload's content
+ * row, and so its bytes, included), and its owner any. */
+export let appGuard = (
+  app: string,
+  vocab: Vocab,
+  manifest: VocabDoc,
+  standing: Pick<Parameters<typeof members>[0], 'level' | 'ignore'>,
+): Plugin =>
+  members({
+    app,
+    vocab,
+    instrument: instrumentEid,
+    floors: floorsOf(manifest),
+    ...standing,
+  })
+
 /** The id a mirrored grant is filed under: one per (app, person), derived, so
  * the same vouch lands on one row however often it is said. */
 export let grantEid = (app: string, person: string): string =>
@@ -2083,11 +2103,7 @@ export class Store {
    * which of this platform's words ask a level of their own (`FLOORS`).
    */
   #guarding(app: string, vocab: Vocab, manifest: VocabDoc): Plugin {
-    let plugin = members({
-      app,
-      vocab,
-      instrument: instrumentEid,
-      floors: floorsOf(manifest),
+    let plugin = appGuard(app, vocab, manifest, {
       level: (who) =>
         who ? this.#vouched.get(who)?.level ?? undefined : undefined,
       ignore: this.#staleGrant,
