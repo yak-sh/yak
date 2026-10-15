@@ -121,8 +121,6 @@ export type Door = {
 export let IDEMPOTENCY = 'idempotency-key'
 /** Word names vouched for by a previously accepted immutable release. */
 export let ACCEPTED = 'x-yak-accepted'
-/** The app's published JSON write form, vouched for by its HTTP door. */
-export let APP_JSON = 'x-yak-app-json'
 /** The words an app uses from other homes (its `/uses`), said beside the
  * answer to a page's query (graph.ts `#paged`, page-graph.ts `queried`). */
 export let USES = 'x-yak-uses'
@@ -130,7 +128,6 @@ export let USES = 'x-yak-uses'
 let VOUCH = [
   IDEMPOTENCY,
   ACCEPTED,
-  APP_JSON,
   'x-store',
   'x-yak-app',
   'x-yak-space',

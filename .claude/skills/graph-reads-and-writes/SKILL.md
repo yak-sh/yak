@@ -61,8 +61,9 @@ keeps its own copy casts it in or keeps ghosts.
   The vocabulary is the contract every reader relies on, so the fix is a
   declaration (`vocabulary`), not a bundle shaped to slip past it.
 - An untrusted write naming a stamped property is refused with its name and
-  server-owned reason. A host's `ignoreStamped` policy drops only the properties
-  its shipped callers still send; it grants no authority to write stamps.
+  server-owned reason. The identity is the exception: it is the row's address,
+  so `{entity: row.entity, …}` copied from a read lands, and its stamps
+  (`entity.num`, `entity.archetype`) are dropped.
 
 ## Show what you read: `$was`
 

@@ -66,58 +66,21 @@ test('a server-owned property is refused, and admitted when trusted', () => {
     let [ok] = one({ entity: { eid: 'b1' }, created: { at } }, true)
     assertEquals(ok.created, { at })
   }
-  let identities = loadVocab({
-    $defs: {
-      entity: {
-        component: true,
-        wire: false,
-        properties: { archetype: { type: 'string', stamped: true } },
-      },
-    },
-  })
-  let sent = [{ entity: { eid: 'b1', archetype: 'forged' } }]
-  assertThrows(
-    () => admit(sent, identities),
-    Refused,
-    'entity.archetype is server-owned',
-  )
-  assertEquals(admit(sent, identities, true), sent)
+})
+
+test('an identity copied from a read is the address, and its stamps are dropped', () => {
+  let sent = [{ entity: { eid: 'b1', num: 7 }, book: { pages: 3 } }]
+  assertEquals(admit(sent, books), [{
+    entity: { eid: 'b1' },
+    book: { pages: 3 },
+  }])
+  assertEquals(sent[0].entity.num, 7)
+  assertEquals(admit(sent, books, true), sent)
 })
 
 test('a bundle of nothing but server-owned properties is refused', () => {
   assertThrows(
     () => one({ entity: { eid: 'b1' }, created: { at: 'now' } }),
-    Refused,
-    'created.at is server-owned',
-  )
-})
-
-test('a host compatibility policy drops only its named stamped properties', () => {
-  let sent = [{
-    entity: { eid: 'b1', num: 7 },
-    created: { at: 'now' },
-    book: { pages: 3 },
-  }]
-  let ignored = ['entity.num', 'created.at']
-  assertEquals(admit(sent, books, false, undefined, false, ignored), [{
-    entity: { eid: 'b1' },
-    book: { pages: 3 },
-  }])
-  assertEquals(sent[0].entity.num, 7)
-  assertEquals(sent[0].created.at, 'now')
-  assertEquals(
-    admit(
-      [{ entity: { eid: 'b1' }, created: { at: 'now' } }],
-      books,
-      false,
-      undefined,
-      false,
-      ignored,
-    ),
-    [],
-  )
-  assertThrows(
-    () => admit(sent, books, false, undefined, false, ['entity.num']),
     Refused,
     'created.at is server-owned',
   )

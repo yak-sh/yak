@@ -44,19 +44,14 @@ let serverOwned = (name: string, prop: string): never => {
 }
 
 /** Check what an untrusted caller named before normalization can remove or
- * replace it. Identity is structural, but its declared properties have the
- * same ownership as every other component's. */
-export let unstamped = (
-  bundles: Bundle[],
-  vocab: Vocab,
-  ignored: readonly string[] = [],
-): Bundle[] => {
+ * replace it. The identity is not checked: it is the row's address, which no
+ * client writes (`wire: false`), so a stamp it carries (`entity.archetype`) is
+ * the read identity sent back whole, and {@link admit} drops it. */
+export let unstamped = (bundles: Bundle[], vocab: Vocab): Bundle[] => {
   for (let b of bundles) {
-    for (let [name, patch] of [['entity', b.entity] as const, ...comps(b)]) {
+    for (let [name, patch] of comps(b)) {
       for (let k of Object.keys(patch ?? {})) {
-        if (vocab.prop(name, k)?.stamped && !ignored.includes(`${name}.${k}`)) {
-          serverOwned(name, k)
-        }
+        if (vocab.prop(name, k)?.stamped) serverOwned(name, k)
       }
     }
   }
@@ -146,8 +141,6 @@ export let known = (bundles: Bundle[], vocab: Vocab): Bundle[] =>
  * decision, never a client's. `teach` ends the refusal of an undeclared
  * component (@yaks/vocab `unknownComps`). A `replica` (trusted) keeps the
  * computed values its source sent.
- * A host may name `ignoreStamped` properties its shipped callers still send;
- * those are dropped without granting the caller authority to write them.
  */
 export let admit = (
   bundles: Bundle[],
@@ -155,7 +148,6 @@ export let admit = (
   trusted = false,
   teach?: string,
   replica = false,
-  ignoreStamped: readonly string[] = [],
 ): Bundle[] => {
   let alien = new Set<string>()
   for (let b of bundles) {
@@ -164,10 +156,10 @@ export let admit = (
     }
   }
   if (alien.size) throw new Misfit(unknownComps([...alien], teach))
-  if (!trusted) unstamped(bundles, vocab, ignoreStamped)
+  if (!trusted) unstamped(bundles, vocab)
   return bundles.flatMap((b) => {
-    // Identity is reserved structurally, but its declared properties still
-    // belong to the server (for example entity.archetype).
+    // The identity's stamps are the store's (entity.archetype, entity.num),
+    // and arrive only with an identity copied from a read.
     if (!trusted) {
       for (let k of Object.keys(b.entity)) {
         if (!vocab.prop('entity', k)?.stamped) continue

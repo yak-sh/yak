@@ -22,8 +22,7 @@ import {
 import { PAGES, uriOf } from './guide.ts'
 import { PROMPTS } from './prompts.ts'
 import { sha256 } from './versions.ts'
-import { facing, GUIDE, HELLO, minted } from './mcp-probe.ts'
-import { APP_JSON } from './door.ts'
+import { facing, GUIDE, minted } from './mcp-probe.ts'
 
 // The paths an app_files listing names: each file's line, before its sha,
 // and not the last line, which says what is live.
@@ -747,29 +746,20 @@ test(
       assertEquals(stamped.length, 1)
       assert(stamped[0].created, 'naming a stamp asks for it back')
 
-      // The app JSON compatibility vouch is the host's, never a connector
-      // request header. The same copied identity at this door is refused.
-      let forged = connector({
-        ...k,
-        at: (at, path, init = {}) =>
-          k.at(at, path, {
-            ...init,
-            headers: { ...init.headers, [APP_JSON]: '1' },
-          }),
-      }, await signedIn(k, person))
-      await forged.call('initialize', HELLO)
-      await assertRejects(
-        () =>
-          forged.tool('graph_apply', {
-            bundles: [{
-              entity: { ...hit.entity, archetype: 'a-client-cannot-pick-this' },
-              $app: 'recipes',
-              doc: { title: 'Unwritten' },
-            }],
-          }),
-        Error,
-        'entity.archetype is server-owned',
+      // An identity copied from a read is the row's address. The archetype
+      // it carries is the store's, so the write lands and the store keeps
+      // its own.
+      await agent.tool('graph_apply', {
+        bundles: [{
+          entity: { ...hit.entity, archetype: 'a-client-cannot-pick-this' },
+          $app: 'recipes',
+          doc: { title: "Grandma's lemon cake" },
+        }],
+      })
+      let [kept] = JSON.parse(
+        await agent.tool('graph_query', { q: `id=${cake}` }),
       )
+      assert(kept.entity.archetype != 'a-client-cannot-pick-this')
 
       // A seed cannot date itself: the refusal names the store-owned stamp
       // and leaves the whole row unwritten (T-95272).
@@ -1021,20 +1011,9 @@ test(
       ])
       // Once the old name holds nothing, the next deploy drops it: the rename
       // is finished and the store answers one word (T-38052).
-      await assertRejects(
-        () =>
-          agent.tool('graph_apply', {
-            bundles: [{
-              entity: notes[0].entity,
-              note: { text: null, body: 'wrote it' },
-            }],
-          }),
-        Error,
-        'entity.archetype is server-owned',
-      )
       await agent.tool('graph_apply', {
         bundles: [{
-          entity: { eid: notes[0].entity.eid },
+          entity: notes[0].entity,
           note: { text: null, body: 'wrote it' },
         }],
       })

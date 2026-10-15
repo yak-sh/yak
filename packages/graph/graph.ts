@@ -150,10 +150,6 @@ export type ApplyOpts = {
   parent?: string
   /** the caller is trusted server code: server-owned properties are accepted */
   trusted?: boolean
-  /** Stamped properties a host's shipped callers still send, named comp.prop.
-   * Untrusted writes drop these properties instead of refusing them; this
-   * host-owned compatibility policy grants no authority to write stamps. */
-  ignoreStamped?: readonly string[]
   /** Whether core provenance and mark rules run (default: true). Trusted
    * server code may pass false to correct stored metadata without replacing
    * existing provenance. Plugin rules and hooks, validation, journaling and effects
@@ -1250,7 +1246,7 @@ export let graph = (opts: Options): Graph => {
       [
         // Normalization may rewrite server-owned fields; it cannot hide that
         // an untrusted caller explicitly asked to write one.
-        (b: Bundle[]) => o.trusted ? b : unstamped(b, vocab, o.ignoreStamped),
+        (b: Bundle[]) => o.trusted ? b : unstamped(b, vocab),
         actors,
         // Every id the batch names — a bundle's own, a reference's —
         // resolved the way a read and a tool's arguments resolve theirs, so a
@@ -1298,7 +1294,6 @@ export let graph = (opts: Options): Graph => {
                   o.trusted,
                   opts.teach,
                   o.replica,
-                  o.ignoreStamped,
                 ),
                 (b) => referring(b, outsideRead(), [], true),
               ),

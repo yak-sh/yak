@@ -1023,7 +1023,6 @@ test('normalization cannot hide an explicit stamped write', () => {
   for (
     let [sent, property] of [
       [{ entity: { eid: 'b1' }, created: { at: 'now' } }, 'created.at'],
-      [{ entity: { eid: 'b1', num: 7 }, doc: { title: 'Dune' } }, 'entity.num'],
     ] as [Bundle, string][]
   ) {
     assertThrows(() => g.apply([sent]), Refused, `${property} is server-owned`)

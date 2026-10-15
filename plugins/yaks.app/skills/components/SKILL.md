@@ -297,9 +297,9 @@ carries those stamps, so write back only the properties you mean to change:
 
     created.at is server-owned (stamped); only trusted writers may write it
 
-An app's JSON write door ignores `entity.archetype` carried back in the identity
-of a row it read. The store derives that property; the supplied value is never
-written.
+The identity is the exception: a row's `entity` is its address, so a write may
+carry the identity it read, `{entity: row.entity, …}`. Its `entity.archetype` is
+the store's, and the value sent is dropped.
 
 ## What an unwritten property reads back as
 

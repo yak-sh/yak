@@ -1170,17 +1170,15 @@ properties, and checks vocabulary types and enum values. An ordinary write to a
 naming the property and explaining that only trusted writers may write it.
 Trusted writes admit stamped properties. Computed properties are dropped from
 writes except trusted replicas. Send a patch of writable properties, not a whole
-bundle read back with server-owned stamps. `Refused` reports invalid writes;
-`status(error)` maps named errors to HTTP status codes (`Stale` is 409; an
-unlisted error is 500). Every refusal core admission makes, and a malformed
+bundle read back with server-owned stamps. The identity is the exception: it is
+the row's address, so a write may carry the identity it read, and its stamps
+(`entity.num`, `entity.archetype`) are dropped. `Refused` reports invalid
+writes; `status(error)` maps named errors to HTTP status codes (`Stale` is 409;
+an unlisted error is 500). Every refusal core admission makes, and a malformed
 bundle, is a `Misfit`: a `Refused` carrying `misfit: true`, because the writer's
 code is wrong about the words. A door that relays it tells a writer's mistake
 from a deliberate no with `misfit(error)`; a bound a schema opts into refuses a
 value someone typed, and stays a plain `Refused`.
-
-At a host boundary that serves shipped callers, `ignoreStamped` names the
-stamped properties those callers still send. Admission drops only those
-properties without granting authority to write them:
 
 ```ts
 import { graph } from './mod.ts'
@@ -1188,10 +1186,10 @@ import { books, memory } from './testing.ts'
 import { equal } from '@yaks/testing'
 
 let g = graph({ vocab: books, storage: memory() })
-let sent = [{ entity: { eid: 'b1', num: 7 }, doc: { title: 'Dune' } }]
-await g.apply(sent, { ignoreStamped: ['entity.num'] })
-equal((await g.get(['b1']))[0].entity.num, 1) // the store's own number
-equal(sent[0].entity.num, 7)
+let [read] = await g.apply([{ entity: { eid: 'b1' }, doc: { title: 'Dune' } }])
+await g.apply([{ entity: { ...read.entity, num: 7 }, doc: { title: 'Dune!' } }])
+let [row] = await g.get(['b1'])
+equal([row.entity.num, row.doc.title], [1, 'Dune!']) // the store's own number
 ```
 
 `admitSchema(vocab)` adds full JSON Schema checks for properties with

@@ -2,7 +2,7 @@
 // anything else it throws through untouched.
 import { test } from '@yaks/testing'
 import { assertEquals, assertRejects } from '@std/assert'
-import { ACCEPTED, APP_JSON, doorOf, type Namespace, storeOf } from './door.ts'
+import { ACCEPTED, doorOf, type Namespace, storeOf } from './door.ts'
 import { backoff } from '@yaks/durable-object'
 import { retry as retryWrite } from './write-log.ts'
 import { counts, tallying } from './lib/hops.ts'
@@ -217,7 +217,7 @@ test('an opaque body failure does not replay a Store write', async () => {
 
 test('the store door strips a visitor administrative claim and carries only its own vouch', async () => {
   for (
-    let header of ['x-yak-administrative', 'x-yak-observe', ACCEPTED, APP_JSON]
+    let header of ['x-yak-administrative', 'x-yak-observe', ACCEPTED]
   ) {
     let seen: (string | null)[] = []
     let door = doorOf((req) => {

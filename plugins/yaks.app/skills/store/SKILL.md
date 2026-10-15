@@ -200,9 +200,9 @@ write whose `$was` was read before the delete is dropped.
 A row you read can be handed back as a patch without its stamps: the fields a
 read adds, `kind` and `rank`, are dropped on the way in, and a reference that
 came back as `{eid, name}` writes as the eid it named. A stamp (`created.at`,
-`completed.via`) is the server's, and a write naming one is refused. The app's
-JSON write door ignores `entity.archetype` in a returned identity; the store
-derives it instead of writing the supplied value.
+`completed.via`) is the server's, and a write naming one is refused. The
+identity can be handed back whole: its `entity.archetype` is the store's, and
+the value sent is dropped.
 
 ### Only one of you wins: `$was`
 
