@@ -7,11 +7,12 @@ import { broken, sizeOf } from '@yaks/blob'
 import { test } from '@yaks/testing'
 import { draw } from './draw.ts'
 
-await initWasm(
-  await Deno.readFile(
-    createRequire(import.meta.url).resolve('@resvg/resvg-wasm/index_bg.wasm'),
-  ),
-)
+// Once a runtime, as index.ts starts it: resvg refuses a second start, and
+// this file may be loaded twice in one (--twice, packages/testing/main.ts).
+let g = globalThis as { resvg?: Promise<void> }
+await (g.resvg ??= Deno.readFile(
+  createRequire(import.meta.url).resolve('@resvg/resvg-wasm/index_bg.wasm'),
+).then(initWasm))
 
 let posted = (svg: string, query = '') =>
   draw(new Request(`https://raster/${query}`, { method: 'POST', body: svg }))

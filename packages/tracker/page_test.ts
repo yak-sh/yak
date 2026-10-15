@@ -7,7 +7,6 @@ let at = 'https://ada.yaks.app/cookbook/'
 let file = `${at}api/assets/80230632-aacf-41d8-8e97-f2477f05e38c/styles.css?v=5`
 // Named beside this file, so a change to the reporter runs these again.
 let page = new URL('./page.js', import.meta.url)
-let n = 0
 
 type El = { tagName: string; href?: string; src?: string; type?: string }
 
@@ -47,7 +46,8 @@ let load = async (el: El, files: Record<string, number>) => {
   g.addEventListener = (type: string, on: (e: unknown) => void) =>
     heard.set(type, on)
   try {
-    await import(`${page.href}?${n++}`)
+    // A copy of its own, even when this file is loaded again (--twice).
+    await import(`${page.href}?${crypto.randomUUID()}`)
     heard.get('error')!({ target: el })
     await tick()
     await tick()
