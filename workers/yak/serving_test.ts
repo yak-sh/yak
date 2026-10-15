@@ -1435,6 +1435,48 @@ test("a stranger's reads are held to a rate per source, a member's are not", asy
   assertEquals(spent, 3, 'a member spent the stranger allowance')
 })
 
+test("a stranger past the rate still gets the app's files and images", async () => {
+  await using scenario = platform()
+  let { env } = scenario
+  let { app } = await seeded(env)
+  let upload = await apps.fetch(
+    visit('/cookbook/api/blob', {
+      method: 'POST',
+      headers: {
+        cookie: await as(ADA),
+        'content-type': 'application/octet-stream',
+      },
+      body: new Uint8Array([1, 2, 3]),
+    }),
+    env,
+  )
+  let { url, eid }: { url: string; eid: string } = await upload.json()
+  let release = crypto.randomUUID()
+  let source = `ada/.releases/${app.eid}/${release}`
+  await released(env, source, { 'app.js': 'export let n = 1' })
+  await stamp(env, {
+    entities: [{ entity: { eid: app.eid }, app: { source } }],
+  })
+  env.API_RATE = { limit: () => Promise.resolve({ success: false }) }
+  let from = (path: string) =>
+    apps.fetch(
+      visit(path, { headers: { 'cf-connecting-ip': '203.0.113.9' } }),
+      env,
+    )
+  for (
+    let [path, want] of [
+      [url, 200],
+      [`/cookbook/api/blob/${eid}`, 302],
+      [`/cookbook/api/assets/${release}/app.js`, 200],
+      ['/cookbook/api/query?.doc', 429],
+    ] as const
+  ) {
+    let res = await from(path)
+    assertEquals(res.status, want, path)
+    await res.body?.cancel()
+  }
+})
+
 test('rung 1: a platform path never reaches an app', async () => {
   await using k = await router(() =>
     new Response('the router', { status: 200 })

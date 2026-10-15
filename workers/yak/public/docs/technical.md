@@ -227,7 +227,8 @@ These limits apply to both plans:
   codes**, register **10 connector clients**, make **60 connector tool calls**
   and send **1 piece of feedback** a minute, and make **300 requests a minute**
   for an app's data. Past that the answer is HTTP 429 with `Retry-After: 60`.
-  Signed-in people are not counted.
+  Signed-in people are not counted, and neither are an app's pages, files and
+  uploaded images.
 
 ## Current limitations
 

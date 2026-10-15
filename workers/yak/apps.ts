@@ -1474,12 +1474,14 @@ export let servedTo = async (
     : await read()
 }
 
-/** Whether a request reads a blob by its address (`/api/blob/<sha>` or
- * `/api/blob/<sha>/<representation>`): bytes, not the app's data. */
+/** Whether a request reads one of the app's files by its address: an upload
+ * (`/api/blob/<sha>` or `/api/blob/<sha>/<representation>`) or a release's
+ * asset (`/api/assets/<release>/<path>`). Bytes, not the app's data. */
 let fileRead = (req: Request, path: string) =>
   (req.method == 'GET' || req.method == 'HEAD') &&
-  path.startsWith('/api/blob/') &&
-  !!addressed(path.slice('/api/blob/'.length))
+  (path.startsWith('/api/blob/')
+    ? !!addressed(path.slice('/api/blob/'.length))
+    : !!assetPath(path.slice('/api'.length)))
 
 // The bare hash is the current attachment; the second path segment names an
 // immutable representation. Only the bare address reads mutable metadata.
@@ -3145,9 +3147,10 @@ let served = async (
     // meter counts. Not the space's people, and not the app's own worker,
     // which is already somebody's request.
     //
-    // A file read by its address is a static file, like the app's own pages,
-    // which the rate never counted: a page of three hundred thumbnails is one
-    // stranger's ordinary visit, and a refused image is a broken page.
+    // A file read by its address, an upload or a release's asset, is a static
+    // file, like the app's own pages, which the rate never counted: a page of
+    // three hundred thumbnails is one stranger's ordinary visit, and a refused
+    // image is a broken page.
     if (
       !itself && !who.person && !fileRead(req, path) &&
       !await within(env.API_RATE, source(req))
