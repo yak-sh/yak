@@ -121,18 +121,17 @@ export let pick = (odds: number[], r: number): Rarity => {
 
 /** The rarity of a piece a creature of level `lvl` leaves, `r` in [0, 1).
  *
- * Over many falls, each rarity comes about as often as its odds say.
+ * Over many falls, each rarity comes as often as its odds say
+ * (rarity_test.ts), and a boss never leaves a common one.
  *
  * ```ts
- * import { assertAlmostEquals } from '@std/assert'
- * import { stream } from '@yaks/game'
- * let r = stream(7), n = 10000
- * let seen = Object.fromEntries(RARITIES.map((x) => [x, 0]))
- * for (let i = 0; i < n; i++) seen[dropped(r(), 12)]++
- * let odds = oddsOf(11 / 59)
- * RARITIES.forEach((x, i) =>
- *   assertAlmostEquals(seen[x] / n, odds[i], 0.006 + odds[i] * 0.08)
- * )
+ * import { assertEquals } from '@std/assert'
+ * assertEquals([0.5, 0.8, 0.995].map((r) => dropped(r, 12)), [
+ *   'common',
+ *   'uncommon',
+ *   'legendary',
+ * ])
+ * assertEquals(dropped(0, 12, true), 'uncommon')
  * ```
  */
 export let dropped = (r: number, lvl: number, boss = false, find = 0) =>
@@ -143,14 +142,10 @@ export let dropped = (r: number, lvl: number, boss = false, find = 0) =>
  * are, a dozen levels past it as fine as what the last lands leave.
  *
  * ```ts
- * import { assert } from '@std/assert'
- * import { stream } from '@yaks/game'
- * let fine = (lvl: number) => {
- *   let r = stream(3), n = 0
- *   for (let i = 0; i < 5000; i++) n += +(made(r(), lvl, 1) != 'common')
- *   return n
- * }
- * assert(fine(13) > fine(1) * 1.4)
+ * import { assertEquals } from '@std/assert'
+ * // The roll that makes a common piece at the recipe's own level makes a
+ * // fine one a dozen levels past it.
+ * assertEquals([made(0.65, 1, 1), made(0.65, 13, 1)], ['common', 'uncommon'])
  * ```
  */
 export let made = (r: number, lvl: number, least: number) =>
