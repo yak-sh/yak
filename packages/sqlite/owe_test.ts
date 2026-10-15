@@ -164,18 +164,18 @@ let match = (db: Driver, word: string, fts = 'note_fts') =>
 let notes: Field[] = [{ comp: 'note', prop: 'x' }]
 let adopted = (fields: Field[]) => (db: Driver) =>
   adopt(db, fields, {}, { heal: false, fill: filler(db) })
-// A text index over `note`, `n` windows into its fill: the first takes w1 and
-// w2, the second w3, the third finds nothing more and ends it.
+// A text index over `note` adopted when the file loads, `n` windows into its
+// fill: the first takes w1 and w2, the second w3, the third finds nothing more
+// and ends it.
 let filling = (n: number) =>
   imaged((db) => {
     adopted(notes)(db)
     for (let i = 0; i < n; i++) work(db)
   }, files)
-let [started, filled] = [1, 3].map(filling)
+let [adopting, started, filled] = [0, 1, 3].map(filling)
 
 test('a text index over many rows is owed, and empty until a window fills it', () => {
-  using db = file()
-  adopted(notes)(db)
+  using db = copy(adopting)
   assertEquals(
     [match(db, 'w1'), owed(db).map((w) => w.name)],
     [[], ['note_fts']],
@@ -258,22 +258,19 @@ test('a text index filled stands whole, its triggers kept', () => {
   assertEquals(match(db, 'after'), [101])
 })
 
+// A text index over `note` read through the view `big`, adopted when the file
+// loads.
+let scoped = imaged(adopted([{ comp: 'note', prop: 'x', on: 'big' }]), files)
+
 test('a new text index read through a view is sized by the view, and owed', () => {
-  using db = file()
-  adopted(scopedFields)(db)
+  using db = copy(scoped)
   assertEquals(owed(db).map((w) => w.name), ['big_fts'])
 })
-
-let scopedFields: Field[] = [{ comp: 'note', prop: 'x', on: 'big' }]
-let scoped = imaged(adopted(scopedFields), files)
 
 test('a text index read through a view is filled whole', () => {
   using db = copy(scoped)
   drain(db)
-  assertEquals(
-    ['w1', 'w2', 'w3'].flatMap((w) => match(db, w, 'big_fts')),
-    [1, 2, 3],
-  )
+  assertEquals(match(db, 'w1 OR w2 OR w3', 'big_fts'), [1, 2, 3])
 })
 
 // A write its trigger missed: the index no longer holds every row.
@@ -293,9 +290,11 @@ test('a drifted text index is owed a refill, and one filling is left be', () => 
   ])
 })
 
+// The drifted index, owed a refill when the file loads.
+let refilling = imaged((db) => heal(db, notes, { fill: filler(db) }), drifted)
+
 test('a drifted text index is refilled in windows', () => {
-  using db = copy(drifted)
-  heal(db, notes, { fill: filler(db) })
+  using db = copy(refilling)
   drain(db)
   assertEquals(match(db, 'missed'), [tiny.fill + 2])
 })
@@ -388,9 +387,9 @@ let foxes = (db: Driver) => {
     ...beside,
   ])
 }
-// The vocabulary drops hens: the table's rebuild is owed.
+// The vocabulary drops hens: the table's rebuild is owed, and its windows done
+// when the file loads.
 let refit = (db: Driver) => storage(db, owls, { sizes: tiny }).install(beside)
-let standing = imaged(foxes)
 // The rebuild `n` windows on: the first two copy c1 to c3 and c4 to c5, the
 // third swaps the names, the next three clear the old rows and drop them.
 let windows = (n: number) =>
@@ -399,7 +398,7 @@ let windows = (n: number) =>
     refit(db)
     for (let i = 0; i < n; i++) work(db)
   })
-let [copying, copied, swapped, rebuilt] = [1, 2, 3, 6].map(windows)
+let [owing, copying, copied, swapped, rebuilt] = [0, 1, 2, 3, 6].map(windows)
 
 let aside = (db: Driver) =>
   catalogue(db).filter((o) => o.name.startsWith('_yaks_')).map((o) => o.name)
@@ -412,8 +411,7 @@ let tally = (db: Driver, from: string) =>
   })).map((r) => Object.values(r))
 
 test('a big table whose check moved is owed a rebuild beside itself', () => {
-  using db = copy(standing)
-  refit(db)
+  using db = copy(owing)
   assertEquals(owed(db).map((w) => w.name), ['creature'])
   assertEquals(aside(db).includes('_yaks_refit_creature'), true)
 })
