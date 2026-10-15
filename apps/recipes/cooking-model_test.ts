@@ -2,7 +2,9 @@ import { equal, test, throws } from '@yaks/testing'
 import {
   cookingIngredients,
   formatSeconds,
+  ownsSession,
   parseDuration,
+  refId,
   roundRobin,
   snapshotSession,
   timerChange,
@@ -194,4 +196,15 @@ test('Cooking choice alias is idempotent and recreates the same relation without
   equal(chosenAgain[0].entity.eid, firstChoice[0].entity.eid)
   equal(chosenAgain[0].edge, { from: person, to: recipe })
   equal((await pickGraph.read(`.cook_pick&.edge.from=${person}`)).length, 1)
+})
+
+test('Cooking ownership reads public expanded person references and fails closed', () => {
+  equal(refId({ eid: 'cook', name: 'Cook' }), 'cook')
+  equal(
+    ownsSession({ created: { by: { eid: 'cook', name: 'Cook' } } }, 'cook'),
+    true,
+  )
+  equal(ownsSession({ created: { by: 'cook' } }, 'cook'), true)
+  equal(ownsSession({ created: { by: { eid: 'other' } } }, 'cook'), false)
+  equal(ownsSession({}, undefined), false)
 })

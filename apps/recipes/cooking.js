@@ -1,7 +1,12 @@
-import { apply, me, subscribe, was } from './api/client.js'
+// The platform serves this module beside the page, not inside the repository.
+const { apply, me, subscribe, was } = await import(
+  new URL('./api/client.js', import.meta.url).href
+)
 import {
   cookingIngredients,
   formatSeconds,
+  ownsSession,
+  refId,
   snapshotSession,
   timerChange,
   timerRemaining,
@@ -23,11 +28,8 @@ const escape = (v) =>
       '"': '&quot;',
       "'": '&#39;',
     })[c])
-// The public store expands references to people as {eid, name}.
-const refId = (ref) => typeof ref === 'string' ? ref : ref?.eid
 const personId = (who) => typeof who === 'string' ? who : who?.person
-const own = (session, who) =>
-  !!personId(who) && refId(session?.created?.by) === personId(who)
+const own = (session, who) => ownsSession(session, personId(who))
 const writable = (who) => !!personId(who) && who?.writes !== false
 const cleanups = new WeakMap()
 let lastError = ''
@@ -183,7 +185,7 @@ export function cookingHTML(rows, who, recipes = []) {
   )
   let html =
     `<section class="cooking" aria-label="Live cooking"><header><h2>Cook together</h2>
-    <p>Choose recipes, then work through their interleaved steps. Timers and progress follow you across devices.</p></header>
+    <p>Choose recipes, then work through their interleaved steps. Timers and progress follow you across devices.</p><p>Each timer uses the first duration written in its step (the upper end of a range). Check it before starting; use the duration buttons to adjust it. This page must be open to show an elapsed timer.</p></header>
     <p class="cook-error" role="alert" data-cook-error ${
       lastError ? '' : 'hidden'
     }>${escape(lastError)}</p>`

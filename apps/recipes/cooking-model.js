@@ -1,6 +1,12 @@
 // Pure live-cooking model. Recipe inputs are already-decoded local objects.
 // These rows are frozen session history, never a recipe-authoring model.
 
+/** Public store person references include the display name; stored values are eids. */
+export const refId = (ref) => typeof ref === 'string' ? ref : ref?.eid
+
+export const ownsSession = (session, person) =>
+  !!person && refId(session?.created?.by) === person
+
 /** Interleave lists without losing the order within any list. */
 export function roundRobin(lists) {
   const result = []
