@@ -151,7 +151,12 @@ let OUTGREW = 507
 /** The compiler, over the binding. A failure of the compiler itself is ours,
  * reported and refused in a sentence: a compile too big for the compiler, or
  * a compiler that could not be reached. */
-let asked = async (env: Env, ask: Ask, app: App): Promise<Answer> => {
+let asked = async (
+  env: Env,
+  ask: Ask,
+  app: App,
+  clock?: Ctx['clock'],
+): Promise<Answer> => {
   let r: Response
   try {
     r = await env.ESBUILD!.fetch(
@@ -166,6 +171,7 @@ let asked = async (env: Env, ask: Ask, app: App): Promise<Answer> => {
         )},"shared":true,"origin":${JSON.stringify(url(env))}}`,
       }),
     )
+    clock?.include(r.headers.get('server-timing'))
     if (r.ok) return await r.json()
     if (r.status != OUTGREW) {
       throw new Error(
@@ -371,7 +377,7 @@ export let compiled = async (
     meanwhile()
     let began = Date.now()
     try {
-      answer = await asked(ctx.env, pending, app)
+      answer = await asked(ctx.env, pending, app, ctx.clock)
     } finally {
       took = (Date.now() - began) / 1000
       await countedSpend(ctx.env, space, 0, Math.max(1, Math.ceil(took)))

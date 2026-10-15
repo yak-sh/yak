@@ -14,6 +14,7 @@
 //
 // An app with no TypeScript and no package.json plans nothing, without a
 // file read, and its deploy is the one it always was.
+import type { Timing } from './timing.ts'
 import {
   packageOf,
   type Read,
@@ -60,6 +61,8 @@ export type Ask = {
 /** What the compiler answers. Any `errors` mean nothing it made may be used;
  * each is a line an agent can act on. */
 export type Answer = {
+  /** Compiler wall-clock milliseconds, when timing was requested. */
+  timing?: Timing
   /** The compiled worker: one ES module, uploaded under `main`. */
   worker?: { main: string; code: string }
   /** Each compiled page script, by the entry's own path. */

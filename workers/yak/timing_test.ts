@@ -14,3 +14,15 @@ test('worker Server-Timing names wall time total', () => {
     'hops;dur=0, stmts;dur=0, r2;dur=0, total;dur=41',
   )
 })
+
+test('worker Server-Timing preserves native compiler durations', () => {
+  let c = clock()
+  c.include('compiler_total;dur=123.456, compiler_parse;dur=2.001')
+  let res = timed(new Response('ok'), c)
+  assertEquals(
+    res.headers.get('server-timing')!.startsWith(
+      'compiler_total;dur=123.456, compiler_parse;dur=2.001, ',
+    ),
+    true,
+  )
+})

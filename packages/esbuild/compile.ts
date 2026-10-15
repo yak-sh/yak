@@ -22,6 +22,7 @@ import * as npm from './npm.ts'
 import { type Answer, type Ask, dependencies } from './plan.ts'
 import { said } from './said.ts'
 import { external, shared } from './shared.ts'
+import { header, phase, type Report, type Timing } from './timing.ts'
 import { homes } from './home.ts'
 import { type Catalog, located, type Seed, seed } from './platform.ts'
 export type { Catalog, Toolkit } from './platform.ts'
@@ -152,11 +153,36 @@ export let compile = async (
   ask: Ask,
   catalog: Catalog = {},
   origin = 'https://yaks.app',
-  options: { shared?: boolean; get?: typeof fetch } = {},
+  options: { shared?: boolean; get?: typeof fetch; timing?: boolean } = {},
 ): Promise<Answer> => {
+  let timing: Timing | undefined = options.timing
+    ? {
+      install: 0,
+      worker: 0,
+      carried: 0,
+      used: 0,
+      groups: 0,
+      cache: 0,
+      pages: 0,
+      total: 0,
+      hits: 0,
+      misses: 0,
+    }
+    : undefined
+  let report: Report | undefined = timing
+    ? (name, ms) => {
+      timing![name] += ms
+    }
+    : undefined
+  let total = phase(report, 'total')
+  let done = (answer: Answer) => {
+    total()
+    return answer
+  }
   origin = origin.replace(/\/$/, '')
   let tarballs: Record<string, string> = {}
   let answer: Answer = {
+    ...(timing ? { timing } : {}),
     pages: {},
     assets: {},
     tarballs,
@@ -166,6 +192,7 @@ export let compile = async (
   }
   let fs: npm.Files
   let setup: Seed
+  let installing = phase(report, 'install')
   try {
     setup = seed(ask.files, catalog)
     answer.assets = options.shared === false || ask.worker || !ask.pages.length
@@ -174,7 +201,10 @@ export let compile = async (
     fs = new npm.Files(setup.files)
     Object.assign(answer, await install(fs, ask, setup, catalog, options.get))
   } catch (e) {
-    return { ...answer, errors: said(e) }
+    installing()
+    return done({ ...answer, errors: said(e) })
+  } finally {
+    installing()
   }
   let locate = (entry: string | URL) => {
     for (let [path, source] of Object.entries(located(setup.files, entry))) {
@@ -203,44 +233,56 @@ export let compile = async (
     }
   }
   if (ask.worker) {
-    let { entry, flags } = ask.worker
-    let main = compiledName(entry)
-    let code = await built(
-      entry,
-      // A workerd module name is not a URL. Its file URL is a logical
-      // identity, not a hosted asset address; a page keeps its browser's URL.
-      new URL(main, 'file:///'),
-      { node: flags.includes('nodejs_compat') },
-      unlinked(ask, main),
-    )
-    if (code != null) answer.worker = { main, code }
+    let finish = phase(report, 'worker')
+    try {
+      let { entry, flags } = ask.worker
+      let main = compiledName(entry)
+      let code = await built(
+        entry,
+        // A workerd module name is not a URL. Its file URL is a logical
+        // identity, not a hosted asset address; a page keeps its browser's URL.
+        new URL(main, 'file:///'),
+        { node: flags.includes('nodejs_compat') },
+        unlinked(ask, main),
+      )
+      if (code != null) answer.worker = { main, code }
+    } finally {
+      finish()
+    }
   }
   let urls: Record<string, string> = {}
   if (ask.pages.length && options.shared !== false) {
     try {
-      let modules = await shared(fs, setup, catalog, origin, ask.pages)
+      let modules = await shared(fs, setup, catalog, origin, ask.pages, {
+        timing: report,
+      })
       answer.shared = modules.files
       Object.assign(tarballs, modules.tarballs)
       urls = modules.urls
     } catch (e) {
       if (e instanceof Stopped) throw e
-      return { ...answer, errors: [...answer.errors, ...said(e)] }
+      return done({ ...answer, errors: [...answer.errors, ...said(e)] })
     }
   }
   // A page's npm package module is served from its package's home.
-  let home = homes((name) => fs.tarball(name), origin)
-  for (let entry of ask.pages) {
-    let code = await built(entry, entry, {
-      minify: true,
-      moved: home.moved,
-      ...options.shared !== false ? { external: external(urls) } : {},
-      // What a package written for bundlers asks of its environment.
-      define: { 'process.env.NODE_ENV': '"production"' },
-    }, unfetched(ask, entry))
-    if (code != null) answer.pages[entry] = code
+  let pages = phase(report, 'pages')
+  try {
+    let home = homes((name) => fs.tarball(name), origin)
+    for (let entry of ask.pages) {
+      let code = await built(entry, entry, {
+        minify: true,
+        moved: home.moved,
+        ...options.shared !== false ? { external: external(urls) } : {},
+        // What a package written for bundlers asks of its environment.
+        define: { 'process.env.NODE_ENV': '"production"' },
+      }, unfetched(ask, entry))
+      if (code != null) answer.pages[entry] = code
+    }
+    Object.assign(tarballs, home.tarballs)
+  } finally {
+    pages()
   }
-  Object.assign(tarballs, home.tarballs)
-  return answer
+  return done(answer)
 }
 
 /** The compiler's server: a {@link Job} in, its {@link Answer} out, and 507
@@ -249,11 +291,28 @@ export let compile = async (
 export default {
   fetch: async (req: Request): Promise<Response> => {
     if (req.method != 'POST') return new Response('POST a job', { status: 405 })
+    let began = performance.now()
     let { ask, catalog, origin, shared } = await req.json() as Job
+    let parsed = performance.now() - began
     try {
-      return Response.json(
-        await compile(ask, catalog, origin, { shared: shared === true }),
-      )
+      let answer = await compile(ask, catalog, origin, {
+        shared: shared === true,
+        timing: true,
+      })
+      let at = performance.now()
+      let body = JSON.stringify(answer)
+      let serialized = performance.now() - at
+      return new Response(body, {
+        headers: {
+          'content-type': 'application/json',
+          'server-timing': [
+            header(answer.timing!),
+            `compiler_parse;dur=${parsed.toFixed(3)}`,
+            `compiler_serialize;dur=${serialized.toFixed(3)}`,
+            `compiler_request;dur=${(performance.now() - began).toFixed(3)}`,
+          ].join(', '),
+        },
+      })
     } catch (e) {
       if (e instanceof Stopped) return new Response(e.message, { status: 507 })
       throw e

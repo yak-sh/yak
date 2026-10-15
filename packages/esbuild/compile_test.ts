@@ -1,4 +1,4 @@
-import { equal, match, test } from '@yaks/testing'
+import { equal, match, ok, test } from '@yaks/testing'
 import { parse } from 'es-module-lexer/js'
 import { bundle, Stopped } from './bundle.ts'
 import compiler, { compile, type Job } from './compile.ts'
@@ -98,7 +98,14 @@ let post = async (job: Job): Promise<Answer> => {
     }),
   )
   equal(res.status, 200)
-  return res.json()
+  let got: Answer = await res.json()
+  ok(got.timing)
+  let header = res.headers.get('server-timing')!
+  for (let phase of ['total', 'parse', 'serialize', 'request']) {
+    ok(header.includes(`compiler_${phase};dur=`))
+  }
+  equal(header.includes('compiler_hits;dur='), false)
+  return got
 }
 
 let posted = async () => {
@@ -107,6 +114,7 @@ let posted = async () => {
     post({ ...job, shared: undefined }),
   ])
   equal(got.errors, [])
+  ok(got.timing!.total >= got.timing!.pages)
   let urls = imports(got.pages['main.ts'])
   equal(urls.length, 1)
   match(
@@ -120,18 +128,24 @@ let posted = async () => {
   equal((await run(bundled.pages['main.ts'])).out, '2production')
 
   let [second, newer] = await Promise.all([
-    compile({
-      files: {
-        'package.json': JSON.stringify({
-          dependencies: { '@yaks/extra': 'platform' },
-        }),
-        'other/main.ts': "export { n } from '@yaks/extra'",
+    compile(
+      {
+        files: {
+          'package.json': JSON.stringify({
+            dependencies: { '@yaks/extra': 'platform' },
+          }),
+          'other/main.ts': "export { n } from '@yaks/extra'",
+        },
+        pages: ['other/main.ts'],
       },
-      pages: ['other/main.ts'],
-    }, extra),
+      extra,
+      undefined,
+      { timing: true },
+    ),
     compile(job.ask, changed),
   ])
   equal(second.errors, [])
+  ok(second.timing!.hits > 0)
   for (let [path, code] of Object.entries(got.shared!)) {
     equal(second.shared![path], code)
   }
@@ -251,13 +265,16 @@ let npm = async () => {
       },
       stage,
       'https://yaks.app',
-      { get },
+      { get, timing: true },
     )
   let [first, second] = await Promise.all([
     pinned('1.0.0', one),
     pinned('2.0.0', all),
   ])
   equal([first.errors, second.errors], [[], []])
+  ok(first.timing!.carried > 0)
+  ok(first.timing!.used > 0)
+  ok(first.timing!.hits + first.timing!.misses > 0)
   equal((await run(first.pages['main.ts'], first.shared)).one, 1)
   let got = await run(second.pages['main.ts'], second.shared)
   equal([got.one, got.keys], [2, ['idle', 'state']])
@@ -292,6 +309,7 @@ test("a worker keeps its runtime's imports and bundles the rest", async () => {
     catalog,
   )
   equal(got.errors, [])
+  equal(got.timing, undefined)
   equal(got.worker!.main, 'worker.js')
   equal(imports(got.worker!.code), ['cloudflare:workers', 'node:buffer'])
 })
@@ -432,3 +450,19 @@ let sharedBeside = async () => {
   equal(staged, url)
   equal(await served(got, url, get), WASM)
 }
+
+test('failed installation retains compiler timing', async () => {
+  let got = await compile(
+    {
+      files: { 'package.json': '{' },
+      pages: [],
+    },
+    {},
+    undefined,
+    { timing: true },
+  )
+  ok(got.errors.length)
+  ok(got.timing!.install > 0)
+  ok(got.timing!.total >= got.timing!.install)
+  equal(got.timing!.pages, 0)
+})

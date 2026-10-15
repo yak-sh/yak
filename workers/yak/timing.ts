@@ -66,6 +66,11 @@ export let clock = () => {
         mark(name, Date.now() - at, out === undefined ? null : said?.(out))
       }
     },
+    // Timings from a trusted internal service, already named for that service.
+    // Keep its native-runtime CPU durations, not the Worker's I/O-only clock.
+    include: (header: string | null) => {
+      if (header) marks.push(header)
+    },
     // A stage that is not one call: `since()` hands back the marker.
     since: () => {
       let at = Date.now()

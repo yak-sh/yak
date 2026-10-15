@@ -12,6 +12,7 @@ import { packageOf } from './graph.ts'
 import { homes } from './home.ts'
 import type { Files } from './npm.ts'
 import { type Catalog, located, type Seed } from './platform.ts'
+import { phase, type Report } from './timing.ts'
 import { used } from './used.ts'
 
 let singletons = ['preact', '@preact/signals', '@preact/signals-core']
@@ -147,6 +148,7 @@ let carried = async (
   stops: string[],
   catalog: Catalog,
   setup: Seed,
+  timing?: Report,
 ): Promise<Carried> => {
   let toolkits = Object.keys(setup.platform)
   let npm = toolkits.some((name) =>
@@ -162,6 +164,7 @@ let carried = async (
     ),
   }
   let files = [...new Set(Object.values(consumers).flat())]
+  let graph = phase(timing, 'carried')
   try {
     let { inputs } = await bundle(
       fs,
@@ -169,12 +172,19 @@ let carried = async (
       { define: production.define, graph: true },
     )
     let { entries, uses } = common(inputs!, consumers, new Set(stops))
-    let names = await used(
-      fs,
-      files,
-      Object.assign({}, ...Object.values(entries)),
-      production,
-    )
+    graph()
+    let trimmed = phase(timing, 'used')
+    let names
+    try {
+      names = await used(
+        fs,
+        files,
+        Object.assign({}, ...Object.values(entries)),
+        production,
+      )
+    } finally {
+      trimmed()
+    }
     let modules = Object.fromEntries(
       Object.entries(entries).map(([name, specs]) => [
         name,
@@ -187,24 +197,27 @@ let carried = async (
   } catch (e) {
     if (e instanceof Stopped) throw e
     return { modules: {}, uses: {} }
+  } finally {
+    graph()
   }
 }
 
 /** Compile browser toolkit packages, Preact, Signals and the npm packages more
  * than one of the pages' consumers imports, per source/dependency identity.
  * All returned paths live under the host's `__packages/` root. */
-export let shared = async (
+let builds = async (
   fs: Files,
   setup: Seed,
   catalog: Catalog,
   origin: string,
   pages: string[] = [],
+  options: { timing?: Report } = {},
 ): Promise<Shared> => {
   let names = Object.keys(setup.platform)
   for (let name of singletons) {
     if (fs.read(`node_modules/${name}/package.json`) != null) names.push(name)
   }
-  let npm = await carried(fs, pages, names, catalog, setup)
+  let npm = await carried(fs, pages, names, catalog, setup, options.timing)
   names.push(...Object.keys(npm.modules))
   let has = new Set(names)
   let deps = (name: string) => {
@@ -239,7 +252,9 @@ export let shared = async (
       for (let [path, source] of Object.entries(catalog[name]?.files ?? {})) {
         sources[`node_modules/${name}/${path}`] = source
       }
-      for (let [path, text] of Object.entries(catalog[name]?.resources ?? {})) {
+      for (
+        let [path, text] of Object.entries(catalog[name]?.resources ?? {})
+      ) {
         resources[`resources/${name}/${path}`] = text
       }
     }
@@ -294,8 +309,16 @@ export let shared = async (
         path,
         files.read(path),
       ]))
+    let caching = phase(options.timing, 'cache')
     let cached = held.get(key)
-    if (cached && cached.fingerprint == await fingerprint(cached.reads)) {
+    let hit
+    try {
+      hit = cached && cached.fingerprint == await fingerprint(cached.reads)
+    } finally {
+      caching()
+    }
+    options.timing?.(hit ? 'hits' : 'misses', 1)
+    if (cached && hit) {
       held.delete(key)
       held.set(key, cached)
       Object.assign(result.files, cached.files)
@@ -334,7 +357,8 @@ export let shared = async (
       if (!path.endsWith('.js')) continue
       for (let imp of parse(text)[0]) {
         if (
-          imp.n?.startsWith('.') && !(imp.n.replace(/^\.\//, '') in built.files)
+          imp.n?.startsWith('.') &&
+          !(imp.n.replace(/^\.\//, '') in built.files)
         ) {
           throw new Error(
             `${group.join(', ')} imports ${imp.n}, which names no emitted file`,
@@ -356,10 +380,12 @@ export let shared = async (
       ...built.files,
       ...resources,
       // Distinct packages with identical code still own distinct module state.
-      'modules.json': JSON.stringify(Object.fromEntries(specs.map((spec, i) => [
-        spec,
-        `entry-${i}.js`,
-      ]))),
+      'modules.json': JSON.stringify(
+        Object.fromEntries(specs.map((spec, i) => [
+          spec,
+          `entry-${i}.js`,
+        ])),
+      ),
     }
     let hash = await digest(sorted(outputs))
     let prefix = `__packages/${hash}/`
@@ -387,6 +413,30 @@ export let shared = async (
     Object.assign(result.tarballs, compiled.tarballs)
   }
   return result
+}
+
+/** Compile shared groups. `groups` excludes carried/used, and includes the
+ * `cache` subset; the callback also reports group cache hit/miss counts. */
+export let shared = async (
+  fs: Files,
+  setup: Seed,
+  catalog: Catalog,
+  origin: string,
+  pages: string[] = [],
+  options: { timing?: Report } = {},
+): Promise<Shared> => {
+  if (!options.timing) return await builds(fs, setup, catalog, origin, pages)
+  let at = performance.now(), discovery = 0
+  try {
+    return await builds(fs, setup, catalog, origin, pages, {
+      timing: (name, value) => {
+        if (name == 'carried' || name == 'used') discovery += value
+        options.timing!(name, value)
+      },
+    })
+  } finally {
+    options.timing('groups', Math.max(0, performance.now() - at - discovery))
+  }
 }
 
 /** Replace a browser package import, refusing a toolkit import that cannot be
