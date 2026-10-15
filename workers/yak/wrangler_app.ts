@@ -321,28 +321,31 @@ export let allowlist = (value: unknown): Parsed => {
     config.vpc_services = found
   }
   if ('assets' in value) {
-    if (!object(value.assets)) {
+    let assets = value.assets
+    if (!object(assets)) {
       no('assets', 'expected an object: { "directory": "dist" }')
     } else {
-      keys(value.assets, ['directory', 'not_found_handling'], 'assets.')
-      let handling = NOT_FOUND.find((n) => n == value.assets.not_found_handling)
+      keys(assets, ['directory', 'not_found_handling'], 'assets.')
+      let handling = NOT_FOUND.find((n) => n == assets.not_found_handling)
       if (handling) config.assets = { not_found_handling: handling }
-      else if ('not_found_handling' in value.assets) {
+      else if ('not_found_handling' in assets) {
         no(
           'assets.not_found_handling',
           `expected one of ${NOT_FOUND.join(', ')}`,
         )
       }
-      if ('directory' in value.assets) {
-        let dir = folder(value.assets.directory)
+      if ('directory' in assets) {
+        let dir = folder(assets.directory)
         if (dir == null) {
           no(
             'assets.directory',
             'expected a folder of the app, such as dist, with no .. in it',
           )
-        } else {config.assets = dir
+        } else {
+          config.assets = dir
             ? { ...config.assets, directory: dir }
-            : config.assets ?? {}}
+            : config.assets ?? {}
+        }
       }
     }
   }
