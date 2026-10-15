@@ -269,7 +269,7 @@ let boot = async (
   try {
     return {
       ...door,
-      owner: await signIn(door, `owner@${apex()}`),
+      owner: await signIn({ ...door, settled }, `owner@${apex()}`),
       reported,
       flushReports: () => reportClock.advance(10_000),
       settled,
@@ -601,37 +601,49 @@ export let letters = (k: Pick<Kernel, 'log'>, to: string): Letter[] =>
     .map((m) => JSON.parse(m[1]) as Letter)
     .filter((l) => [l.to].flat().includes(to))
 
-// The latest letter to an address that says a thing, waited for. A letter
-// leaves after the answer that sent it (T-124082), so what the kernel's
-// requests left running is waited for first, and the latest letter is the
-// one the latest request sent.
-export let letter = async (
+// What `find` reads off the log, waited for. A letter leaves after the answer
+// that sent it (T-124082), so what the kernel's requests left running is
+// waited for first: a kernel in memory then holds the letter already, and
+// only a kernel in another process (workerd) is polled for it.
+let posted = async <T>(
+  k: Pick<Kernel, 'settled'>,
+  find: () => T,
+  label: string,
+) => {
+  await k.settled?.()
+  return until(find, { timeout: 20_000, poll: 100, label })
+}
+
+// The latest letter to an address that says a thing, waited for: the one the
+// latest request sent.
+export let letter = (
   k: Pick<Kernel, 'log' | 'settled'>,
   to: string,
   saying: string,
   after = 0,
-) => {
-  await k.settled?.()
-  return (await until(
+) =>
+  posted(
+    k,
     () =>
       letters(k, to).slice(after).findLast((l) =>
         `${l.subject}\n${l.body}`.includes(saying)
       ),
-    {
-      timeout: 20_000,
-      poll: 100,
-      label: `a letter for ${to} saying ${saying}`,
-    },
-  ))!
-}
+    `a letter for ${to} saying ${saying}`,
+  )
 
-// Wait past the letters already received before requesting another sign-in.
-export let mailed = (k: Pick<Kernel, 'log'>, to: string, after = 0) =>
-  until(
+// The code in the latest letter to an address, past the letters already
+// received before requesting another sign-in.
+export let mailed = (
+  k: Pick<Kernel, 'log' | 'settled'>,
+  to: string,
+  after = 0,
+) =>
+  posted(
+    k,
     () =>
       /\b(\d{6})\b/.exec(letters(k, to).slice(after).at(-1)?.subject ?? '')
         ?.[1] ?? '',
-    { timeout: 20_000, poll: 100, label: `a letter for ${to}` },
+    `a letter for ${to}`,
   )
 
 // An invitation's one click, the way its person makes it (invite.ts): the link
@@ -698,7 +710,7 @@ export let unique = (name: string) =>
 // how any directory row comes to be written at all (identity.ts).
 // A person, signed in through the address and the code, as anyone signs in.
 export let signIn = async (
-  k: Pick<Kernel, 'at' | 'host' | 'log' | 'secret'>,
+  k: Pick<Kernel, 'at' | 'host' | 'log' | 'secret' | 'settled'>,
   email = `${unique('probe')}@${k.host}`,
 ): Promise<Person> => {
   let form = (path: string, fields: Record<string, string>) =>
