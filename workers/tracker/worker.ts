@@ -7,6 +7,7 @@ import { sha256 } from '@yaks/graph/sha256'
 import { bugEid } from '@yaks/tracker'
 import { sign } from './auth.ts'
 import { capture, caught, origin, queue } from '@yaks/tracker/report'
+import { evicted, lost, retried } from '@yaks/durable-object'
 import { platform } from './core.ts'
 import { consume, type Message } from './queue.ts'
 import { json } from './door.ts'
@@ -174,7 +175,17 @@ export let worker = (
           await env.ERRORS.send(rows)
           return json({ eid: rows[0].entity.eid })
         }
-        return await env.TRACKERS.getByName(scope).fetch(request)
+        // The object can be reset, or the connection to it lost, under a
+        // call; each send takes a fresh stub and the same body. Every door is
+        // a read or a write keyed by its eids, so a send that landed before
+        // its answer was lost lands the same way again.
+        let body = request.body && await request.arrayBuffer()
+        return await retried(
+          () =>
+            env.TRACKERS.getByName(scope).fetch(new Request(request, { body })),
+          true,
+          (error) => evicted(error) || lost(error),
+        )
       } catch (error) {
         await report(error, 'fetch', request)
         return json({ error: 'tracker temporarily unavailable' }, 503)

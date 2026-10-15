@@ -211,6 +211,10 @@ a transaction. `evicted(error)` is a reset a caller should send again for, and
 `killed(error)` a kill for the CPU or memory limit, which no code of the object
 sees. `opaque(error)` is the runtime's own internal error, which names only a
 reference: the work is tried again, and reported if it keeps failing.
+`lost(error)` is the connection to the object dropped under a call, which the
+runtime names in words alone. `retried(send, replayable, retry)` sends a call
+again while it fails in words `retry` knows (`evicted` by default), pausing
+before each resend as `backoff` says.
 
 ```ts
 import { assertEquals } from '@std/assert'
@@ -231,16 +235,17 @@ assertEquals(moved(error) && replaced(reset), true)
 
 The package has one import path, `@yaks/durable-object`:
 
-| Export                                                  | Purpose                                            |
-| ------------------------------------------------------- | -------------------------------------------------- |
-| `storage(ctx.storage, vocab, base?)`                    | Creates an `@yaks/sqlite` `Store`                  |
-| `driver(ctx.storage, observe?)`                         | Creates the underlying synchronous SQLite `Driver` |
-| `profile(emit)`                                         | Aggregates cursor costs into bounded summaries     |
-| `sockets(subs, ctx)`                                    | Returns `accept`, `message`, `close`, and `wake`   |
-| `prohibited`, `reserved`                                | Identify internal runtime tables                   |
-| `moved`, `replaced`, `evicted`, `killed`, `opaque`      | Tell a reset of this instance from a failure       |
-| `DurableStorage`, `DurableSql`, `SqlCursor`, `SqlValue` | Structural storage types                           |
-| `Hibernation`, `Wire`, `Sockets`, `Store`               | Structural socket and store types                  |
+| Export                                                  | Purpose                                             |
+| ------------------------------------------------------- | --------------------------------------------------- |
+| `storage(ctx.storage, vocab, base?)`                    | Creates an `@yaks/sqlite` `Store`                   |
+| `driver(ctx.storage, observe?)`                         | Creates the underlying synchronous SQLite `Driver`  |
+| `profile(emit)`                                         | Aggregates cursor costs into bounded summaries      |
+| `sockets(subs, ctx)`                                    | Returns `accept`, `message`, `close`, and `wake`    |
+| `prohibited`, `reserved`                                | Identify internal runtime tables                    |
+| `moved`, `replaced`, `evicted`, `killed`, `opaque`      | Tell a reset of this instance from a failure        |
+| `lost`, `retried`, `backoff`                            | Send a call again when the object was reset or lost |
+| `DurableStorage`, `DurableSql`, `SqlCursor`, `SqlValue` | Structural storage types                            |
+| `Hibernation`, `Wire`, `Sockets`, `Store`               | Structural socket and store types                   |
 
 The store exposes `ddl`, `grown`, `install`, `read`, `rows`, `get`, and `tx`.
 Base options include derived expressions, SQL extensions, a fixed `now`, schema

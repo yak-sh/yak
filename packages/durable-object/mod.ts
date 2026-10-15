@@ -57,7 +57,17 @@ export {
   type SqlValue,
 } from './sql.ts'
 export { storage, type Store } from './store.ts'
-export { evicted, killed, moved, opaque, type Own, replaced } from './resets.ts'
+export {
+  backoff,
+  evicted,
+  killed,
+  lost,
+  moved,
+  opaque,
+  type Own,
+  replaced,
+  retried,
+} from './resets.ts'
 export { profile, type Summary } from './profile.ts'
 export {
   type Hibernation,

@@ -11,6 +11,8 @@
 // code caused: a storage operation over its timeout, or a kill for the CPU or
 // memory limit.
 
+import { sleep } from '@yaks/fp'
+
 let MOVED = [
   'Durable Object instance is no longer active',
   'Durable Object reset because',
@@ -20,6 +22,7 @@ let RESETS = [
   'Durable Object storage operation exceeded timeout which caused object to be reset',
 ]
 let LIMITS = /exceeded its (CPU time|memory) limit/
+let LOST = /Network connection lost/
 let OPAQUE = /^internal error; reference = [a-z0-9]+$/i
 
 let says = (e: unknown, words: string[]) =>
@@ -123,3 +126,64 @@ export let killed = (e: unknown): boolean =>
  */
 export let opaque = (e: unknown): e is Error =>
   e instanceof Error && OPAQUE.test(e.message)
+
+/**
+ * The connection to the object dropped under a call. The runtime names it in
+ * words alone, with no `retryable` flag to go by, and the call is sent again.
+ *
+ * ```ts
+ * import { assertEquals } from '@std/assert'
+ * assertEquals(lost(new Error('Network connection lost.')), true)
+ * assertEquals(lost(new Error('boot failed')), false)
+ * ```
+ */
+export let lost = (e: unknown): boolean =>
+  e instanceof Error && LOST.test(e.message)
+
+// The pauses before a replayable call is sent again, one per resend, backing
+// off as Cloudflare's guidance for a Durable Object's retryable errors has
+// it. An object restarts for each newer deploy that reaches it, and each
+// restart fails what it had in flight: a call cut off by one deploy's restart
+// can have its retry cut off by the next one's when two land seconds apart.
+// The runtime's own internal error can refuse calls into an object for seconds
+// while it answers others, and sends milliseconds apart all meet it. `wait`
+// spends a pause, half of it or more, so calls that failed together do not
+// return together; a test replaces it.
+export let backoff: { pauses: number[]; wait: (ms: number) => Promise<void> } =
+  {
+    pauses: [100, 500, 2000],
+    wait: (ms) => sleep(ms / 2 + Math.random() * ms / 2),
+  }
+
+/**
+ * Send one replayable call again while it fails in words `retry` knows,
+ * pausing before each resend, once per `backoff` pause. The last failure
+ * propagates unchanged.
+ *
+ * ```ts
+ * import { assertEquals } from '@std/assert'
+ * backoff.wait = () => Promise.resolve()
+ * let sends = 0
+ * let send = () => {
+ *   if (++sends < 3) throw new Error('Network connection lost.')
+ *   return 'answered'
+ * }
+ * assertEquals(await retried(send, true, lost), 'answered')
+ * assertEquals(sends, 3)
+ * ```
+ */
+export let retried = async <T>(
+  send: () => T | Promise<T>,
+  replayable = true,
+  retry: (error: unknown) => boolean = evicted,
+): Promise<T> => {
+  for (let sent = 0;; sent++) {
+    try {
+      return await send()
+    } catch (e) {
+      let pause = backoff.pauses[sent]
+      if (!retry(e) || !replayable || pause == null) throw e
+      await backoff.wait(pause)
+    }
+  }
+}

@@ -2,14 +2,8 @@
 // anything else it throws through untouched.
 import { test } from '@yaks/testing'
 import { assertEquals, assertRejects } from '@std/assert'
-import {
-  ACCEPTED,
-  APP_JSON,
-  backoff,
-  doorOf,
-  type Namespace,
-  storeOf,
-} from './door.ts'
+import { ACCEPTED, APP_JSON, doorOf, type Namespace, storeOf } from './door.ts'
+import { backoff } from '@yaks/durable-object'
 import { retry as retryWrite } from './write-log.ts'
 import { counts, tallying } from './lib/hops.ts'
 import { metaOf } from './meta.ts'

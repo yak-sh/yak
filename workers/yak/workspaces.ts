@@ -5,7 +5,7 @@
 import { DurableObject } from 'cloudflare:workers'
 import { cloudflareProvider } from '@yaks/machine/cloudflare'
 import { afterCompiles, copies } from './sandbox-copies.ts'
-import { retried } from './door.ts'
+import { retried } from '@yaks/durable-object'
 import type { Env } from './env.ts'
 import { TIMEOUT } from './sandbox.ts'
 import { r2RawObjects } from './lib/objects.ts'

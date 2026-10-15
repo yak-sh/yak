@@ -13,7 +13,7 @@ import {
   cloudflareProvider,
   type Sandboxes,
 } from '@yaks/machine/cloudflare'
-import { backoff, retried } from './door.ts'
+import { backoff, retried } from '@yaks/durable-object'
 import { listen, rostered, told } from './stream.ts'
 
 let space: Space = {
