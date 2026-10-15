@@ -1,6 +1,6 @@
 // Clock probes stay on the page socket, even while a query awaits its ack.
 import { assert, assertEquals } from '@std/assert'
-import { test, until } from '@yaks/testing'
+import { test } from '@yaks/testing'
 import { installPair, made, Pair } from '../../packages/workerd/testing.ts'
 import { pageSocket } from './page-socket.ts'
 import type { Env } from './env.ts'
@@ -11,6 +11,7 @@ test('page clock replies are direct epoch samples with no store traffic or ack d
   let own = new Pair()[1]
   Object.assign(own, { close: () => {} })
   let reads = 0
+  let reread = Promise.withResolvers<void>()
   let space = { slug: 'clocks' } as Space
   let app = { eid: 'page', slug: 'page', access: 'public', version: 1 } as App
   let who = { person: null, role: null }
@@ -27,7 +28,13 @@ test('page clock replies are direct epoch samples with no store traffic or ack d
             )
           }
           reads++
-          return Promise.resolve(Response.json([]))
+          if (reads == 2) reread.resolve()
+          // Only the decoded query answer matters here, not body streaming.
+          return Promise.resolve({
+            ok: true,
+            status: 200,
+            json: () => Promise.resolve([]),
+          } as Response)
         },
       }),
     },
@@ -41,7 +48,15 @@ test('page clock replies are direct epoch samples with no store traffic or ack d
       { uses: {}, reach: [{ space, app, who }] },
     )
     let front = made.at(-1)![1]
-    Object.assign(front, { close: () => {} })
+    let sent = front.send
+    let next = Promise.withResolvers<void>()
+    Object.assign(front, {
+      close: () => {},
+      send: (data: string) => {
+        sent(data)
+        next.resolve()
+      },
+    })
     let probe = (clock: number) => {
       let before = Date.now()
       let count = front.sent.length
@@ -60,19 +75,24 @@ test('page clock replies are direct epoch samples with no store traffic or ack d
     }
     probe(0)
     assertEquals(reads, 0)
+    next = Promise.withResolvers<void>()
     front.emit(
       'message',
       JSON.stringify({ subscribe: '.doc', id: 'page', acks: true }),
     )
-    await until(() => front.sent.length == 2)
+    await next.promise
+    assertEquals(front.sent.length, 2)
     let snapshot = front.sent[1]
     assertEquals(typeof snapshot.ack, 'string')
     own.emit('message', JSON.stringify({ bundles: [] }))
-    await until(() => reads == 2)
+    await reread.promise
+    assertEquals(reads, 2)
     assertEquals(front.sent.length, 2)
     probe(123.5)
+    next = Promise.withResolvers<void>()
     front.emit('message', JSON.stringify({ ack: snapshot.ack }))
-    await until(() => front.sent.length == 4)
+    await next.promise
+    assertEquals(front.sent.length, 4)
     assertEquals(front.sent[3].id, 'page')
     front.emit('close')
   } finally {

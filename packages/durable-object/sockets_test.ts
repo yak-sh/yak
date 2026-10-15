@@ -141,10 +141,19 @@ test('hibernating clock probes do not recover attachments or touch subscriptions
 })
 
 test('a hibernating clock reply bypasses a held acknowledgement and preserves it', () => {
-  let ctx = hibernation()
-  let [g, live] = instance(store(), ctx)
   let ws = wire()
-  ctx.live.push(ws)
+  let g = graph({ storage: ram(shop), vocab: shop })
+  // Small subscriptions stay on the attachment: no SQLite fixture is needed.
+  let storage = new Proxy({}, {
+    get: () => {
+      throw new Error('small clock subscription touched durable storage')
+    },
+  }) as ReturnType<typeof durable>
+  let live = sockets(subscriptions(g), {
+    storage,
+    acceptWebSocket: () => {},
+    getWebSockets: () => [ws],
+  })
   send(live, ws, { subscribe: '.kind=product', id: 'p', acks: true })
   let [first] = ws.sent.splice(0)
   g.apply([{ entity: { eid: 'p1' }, product: { price: 3 } }])
