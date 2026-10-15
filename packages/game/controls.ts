@@ -33,10 +33,10 @@ export type ControlsState = {
   zoom: number
   pointer: [number, number] | null
   click: [number, number] | null
-  pressAt: [number, number] | null
+  press_at: [number, number] | null
   swapped: boolean
   strafe: boolean
-  hideCursor: boolean
+  hide_cursor: boolean
   locking: boolean
   focused: boolean
   stick: { id: number; x: number; y: number; dx: number; dy: number } | null
@@ -58,10 +58,10 @@ export let initial = (): ControlsState => ({
   zoom: 0,
   pointer: null,
   click: null,
-  pressAt: null,
+  press_at: null,
   swapped: false,
   strafe: false,
-  hideCursor: true,
+  hide_cursor: true,
   locking: false,
   focused: true,
   stick: null,
@@ -313,7 +313,7 @@ export let listen = (
     s.locking = false
     if (locked()) {
       // A quick release can precede the browser granting the request.
-      if (!s.hideCursor || !mouse.active()) unlock()
+      if (!s.hide_cursor || !mouse.active()) unlock()
     } else cancelMouse()
   })
   on(document, 'pointerlockerror', () => {
@@ -391,13 +391,13 @@ export let listen = (
   on(stage, 'pointerdown', (e) => {
     s.pointer = [e.clientX, e.clientY]
     if (e.button == 0) {
-      s.pressAt = options.cursor(...s.pointer, locked())
+      s.press_at = options.cursor(...s.pointer, locked())
     }
     if (!document.pointerLockElement) stage.setPointerCapture(e.pointerId)
     if (e.pointerType == 'mouse') {
       mouse.down(e.button)
       if (
-        mouse.active() && s.hideCursor && !locked() && stage.requestPointerLock
+        mouse.active() && s.hide_cursor && !locked() && stage.requestPointerLock
       ) {
         s.locking = true
         // Older browsers return void; newer ones also reject a promise.
@@ -426,7 +426,7 @@ export let listen = (
     let action = mouse.up(e.button)
     if (action !== undefined) {
       pressButton(action)
-      if (action == 0) s.click = s.pressAt
+      if (action == 0) s.click = s.press_at
     }
     if (!mouse.active()) {
       for (let [id, d] of drags) if (d.type == 'mouse') drags.delete(id)
@@ -482,7 +482,7 @@ export let listen = (
         let action = mouse.up(e.button)
         if (action !== undefined) {
           pressButton(action)
-          if (action == 0) s.click = s.pressAt
+          if (action == 0) s.click = s.press_at
         }
       }
       if (!mouse.active()) unlock()
@@ -527,11 +527,11 @@ export let listen = (
       transaction(() =>
         s.pointer ? options.cursor(...s.pointer, locked()) : [0, 0]
       ),
-    hidesCursor: () => transaction(() => s.hideCursor),
+    hidesCursor: () => transaction(() => s.hide_cursor),
     hideCursor: () =>
       transaction(() => {
-        s.hideCursor = !s.hideCursor
-        if (!s.hideCursor) unlock()
+        s.hide_cursor = !s.hide_cursor
+        if (!s.hide_cursor) unlock()
       }),
     strafes: () => transaction(() => s.strafe),
     strafe: () =>

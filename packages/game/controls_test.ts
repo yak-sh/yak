@@ -325,14 +325,14 @@ probeTest(
     p.hands.hideCursor()
     equal(p.row().Controls?.swapped, true)
     equal(p.row().Controls?.strafe, true)
-    equal(p.row().Controls?.hideCursor, false)
+    equal(p.row().Controls?.hide_cursor, false)
     ok(p.changes.every((b) => b.entity.eid == 'test-consumer:pilot-controls'))
     let replacement = {
       entity: { eid: 'another-consumer:controls' },
       Controls: {
         swapped: false,
         strafe: false,
-        hideCursor: true,
+        hide_cursor: true,
         held: ['KeyW'],
         pressed: ['external-action'],
       },
@@ -626,7 +626,7 @@ probeTest(
       equal(again.swapped(), true)
       equal(again.strafes(), true)
       again.hideCursor()
-      equal(p.row().Controls?.hideCursor, true)
+      equal(p.row().Controls?.hide_cursor, true)
     } finally {
       again.dispose()
     }
@@ -643,7 +643,7 @@ for (let contract of ['preferences', 'held', 'remount'] as const) {
   front.mutate([{
     entity: { eid },
     Controls: contract == 'remount'
-      ? { hideCursor: false, strafe: true, swapped: false }
+      ? { hide_cursor: false, strafe: true, swapped: false }
       : {},
   }])
   let state = {

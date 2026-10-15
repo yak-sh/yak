@@ -47,12 +47,12 @@
           },
           "description": "click coordinates; absent when no pointer or click"
         },
-        "pressAt": {
+        "press_at": {
           "type": "array",
           "items": {
             "type": "number"
           },
-          "description": "pressAt coordinates; absent when no pointer or click"
+          "description": "press_at coordinates; absent when no pointer or click"
         },
         "held": {
           "type": "array",
@@ -83,9 +83,9 @@
           "type": "boolean",
           "description": "strafe browser control state"
         },
-        "hideCursor": {
+        "hide_cursor": {
           "type": "boolean",
-          "description": "hideCursor browser control state"
+          "description": "hide_cursor browser control state"
         },
         "locking": {
           "type": "boolean",
