@@ -250,22 +250,15 @@ test('slash completion uses caret/token ranges and the host lookup', async () =>
   assertEquals((await suggestions('/spawn b', 8, {})).cands, [])
 })
 
-test('slash completion rejects invalid prefixes', async () => {
-  for (
-    let invalid of [
-      '',
-      'hello /sp',
-      ' /sp',
-      '//sp',
-      '/unknown b',
-      '/mood nope ',
-      '/teleport --bad x ',
-      '/teleport --x=nope --',
-      '/teleport --to --',
-    ]
-  ) {
-    assertEquals((await suggestions(invalid)).cands, [], invalid)
+// Each line completes to nothing.
+let refused = async (...lines: string[]) => {
+  for (let line of lines) {
+    assertEquals((await suggestions(line)).cands, [], line)
   }
+}
+
+test('slash completion rejects text that does not open with a slash', async () => {
+  await refused('', 'hello /sp', ' /sp')
   assertEquals(await suggestions('/sp', 0), {
     from: 0,
     to: 0,
@@ -273,6 +266,15 @@ test('slash completion rejects invalid prefixes', async () => {
     whole: false,
   })
 })
+
+test('slash completion rejects unknown commands', () =>
+  refused('//sp', '/unknown b'))
+
+test('slash completion rejects options the command does not take', () =>
+  refused('/teleport --bad x ', '/teleport --to --'))
+
+test('slash completion rejects values the command refuses', () =>
+  refused('/mood nope ', '/teleport --x=nope --'))
 
 test('slash descriptions take the rest declared by the command', async () => {
   let tools: Tools = {

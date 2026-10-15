@@ -317,7 +317,8 @@ test('legacy command copy stays until server receipt and survives a refused send
   }
 })
 
-test('migration preserves edits a kept page makes while the store receipt waits', async () => {
+// The store holds the first draft write until the gate opens.
+let waiting = (() => {
   let net = remote(),
     by = mint(),
     vault = vaultStash([saved(by, 'precious')]),
@@ -327,6 +328,10 @@ test('migration preserves edits a kept page makes while the store receipt waits'
     if (!rows.some((b) => b.draft)) return mutate(rows)
     return ++writes == 1 ? gate.promise.then(() => mutate(rows)) : mutate(rows)
   }
+  return { net, by, vault, gate }
+})()
+test('migration preserves edits a kept page makes while the store receipt waits', async () => {
+  let { net, by, vault, gate } = waiting
   let host = commandField(net, () => by, empty, {
     vault,
     stash: storage(),
@@ -380,94 +385,60 @@ test('command draft emergency stashes do not cross app installations', async () 
   }
 })
 
-test('migration keeps hosted recovery and independent legacy source text', async () => {
+// A store already holding the person's chat draft as 'hosted', a page stash
+// keeping `kept` under the key `at` names, and the old vault holding `legacy`:
+// one per case, made as the file loads, so a case times the migration alone.
+let hosted = (at: (by: string) => string, kept: object, legacy?: string) => {
   let net = remote(), by = mint(), stash = storage()
   net.client.mutate([{
     entity: { eid: draftEid(by, 'chat') },
     draft: { by, place: 'chat', text: 'hosted' },
     typed: { over: '' },
   }])
-  stash.setItem(
-    `vale:commands:vale:${by}:draft:chat`,
-    JSON.stringify({ text: 'hosted local', over: 'hosted', rev: 1 }),
-  )
-  let host = commandField(net, () => by, empty, {
-    vault: vaultStash([saved(by, 'legacy')]),
-    stash,
-    pace: 0,
-  })
+  stash.setItem(at(by), JSON.stringify(kept))
+  let vault = legacy == null ? false as const : vaultStash([saved(by, legacy)])
+  return { net, by, stash, vault }
+}
+// The page's text once migrated, and the store's once it has taken it.
+let migrated = async (
+  { net, by, stash, vault }: ReturnType<typeof hosted>,
+  text: string,
+) => {
+  let host = commandField(net, () => by, empty, { vault, stash, pace: 0 })
   try {
     await host.ready
-    equal(host.drafts.text('chat'), 'legacyhosted local')
+    equal(host.drafts.text('chat'), text)
     await tick()
-    equal(
-      comp(net.client.ent(draftEid(by, 'chat')), 'draft').text,
-      'legacyhosted local',
-    )
+    equal(comp(net.client.ent(draftEid(by, 'chat')), 'draft').text, text)
   } finally {
     host.close()
     net.client.close()
   }
-})
+}
 
+let independent = hosted(
+  (by) => `vale:commands:vale:${by}:draft:chat`,
+  { text: 'hosted local', over: 'hosted', rev: 1 },
+  'legacy',
+)
+test('migration keeps hosted recovery and independent legacy source text', () =>
+  migrated(independent, 'legacyhosted local'))
+
+let ancestor = hosted(
+  (by) => `vale:commands:${by}:draft:chat`,
+  { text: 'new source', over: 'old source', rev: 1 },
+  'old source tail',
+)
 test('legacy emergency changes use their imported vault ancestor and preserve hosted text', async () => {
-  let net = remote(), by = mint(), stash = storage()
-  net.client.mutate([{
-    entity: { eid: draftEid(by, 'chat') },
-    draft: { by, place: 'chat', text: 'hosted' },
-    typed: { over: '' },
-  }])
-  stash.setItem(
-    `vale:commands:${by}:draft:chat`,
-    JSON.stringify({ text: 'new source', over: 'old source', rev: 1 }),
-  )
-  let host = commandField(net, () => by, empty, {
-    vault: vaultStash([saved(by, 'old source tail')]),
-    stash,
-    pace: 0,
-  })
-  try {
-    await host.ready
-    equal(host.drafts.text('chat'), 'new source tailhosted')
-    await tick()
-    equal(
-      comp(net.client.ent(draftEid(by, 'chat')), 'draft').text,
-      'new source tailhosted',
-    )
-    equal(stash.length, 0)
-  } finally {
-    host.close()
-    net.client.close()
-  }
+  await migrated(ancestor, 'new source tailhosted')
+  equal(ancestor.stash.length, 0)
 })
 
+let sourceless = hosted(
+  (by) => `vale:commands:${by}:draft:chat`,
+  { text: 'private typed', over: 'hosted', rev: 1 },
+)
 test('a legacy emergency copy without its vault source cannot cancel hosted text', async () => {
-  let net = remote(), by = mint(), stash = storage()
-  net.client.mutate([{
-    entity: { eid: draftEid(by, 'chat') },
-    draft: { by, place: 'chat', text: 'hosted' },
-    typed: { over: '' },
-  }])
-  stash.setItem(
-    `vale:commands:${by}:draft:chat`,
-    JSON.stringify({ text: 'private typed', over: 'hosted', rev: 1 }),
-  )
-  let host = commandField(net, () => by, empty, {
-    vault: false,
-    stash,
-    pace: 0,
-  })
-  try {
-    await host.ready
-    equal(host.drafts.text('chat'), 'private typedhosted')
-    await tick()
-    equal(
-      comp(net.client.ent(draftEid(by, 'chat')), 'draft').text,
-      'private typedhosted',
-    )
-    equal(stash.length, 0)
-  } finally {
-    host.close()
-    net.client.close()
-  }
+  await migrated(sourceless, 'private typedhosted')
+  equal(sourceless.stash.length, 0)
 })

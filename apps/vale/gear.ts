@@ -79,7 +79,39 @@ export let hands = (worn: Worn, last: Hand): Worn => {
 }
 
 /** What each slot holds, for a hero who knows `known` (skills.ts
- * `learnedOf`).
+ * `learnedOf`). An empty row takes a slot off, and what is not in the bag is
+ * not worn. A bow wants both hands: the later choice wins.
+ *
+ * ```ts
+ * import { seedItems } from './items_fixture.ts'
+ * seedItems()
+ * import { assertEquals } from '@std/assert'
+ * type Row = [string, string, number]
+ * let bag = [
+ *   { eid: 's', kind: 'sword1', n: 1 },
+ *   { eid: 'b', kind: 'bow1', n: 1 },
+ *   { eid: 'h', kind: 'shield1', n: 1 },
+ * ]
+ * let worn = (...rows: Row[]) =>
+ *   Object.fromEntries(
+ *     Object.entries(
+ *       wornOf(rows.map(([slot, item, at]) => ({ slot, item, at })), bag, 60),
+ *     ).map(([s, h]) => [s, h!.kind]),
+ *   )
+ * assertEquals(worn(['main', 's', 1], ['off', 'h', 2]), {
+ *   main: 'sword1',
+ *   off: 'shield1',
+ * })
+ * assertEquals(worn(['main', 's', 1], ['main', '', 2]), {})
+ * assertEquals(worn(['main', 'gone', 1]), {})
+ * assertEquals(worn(['off', 'h', 1], ['main', 'b', 2]), { main: 'bow1' })
+ * assertEquals(worn(['main', 'b', 1], ['off', 'h', 2]), { off: 'shield1' })
+ * ```
+ *
+ * A second dagger goes in the other hand only for a hero who knows Twin
+ * daggers, chosen since they learned it, beside a dagger in the first.
+ * Forgetting it by a fire puts the dagger back in the bag, and learning it
+ * again leaves it there until it is chosen again.
  *
  * ```ts
  * import { seedItems } from './items_fixture.ts'
@@ -89,8 +121,6 @@ export let hands = (worn: Worn, last: Hand): Worn => {
  * type Row = [string, string, number]
  * let bag = [
  *   { eid: 's', kind: 'sword1', n: 1 },
- *   { eid: 'b', kind: 'bow1', n: 1 },
- *   { eid: 'h', kind: 'shield1', n: 1 },
  *   { eid: 'd', kind: 'dagger2', n: 1 },
  *   { eid: 'e', kind: 'dagger1', n: 1 },
  * ]
@@ -100,28 +130,13 @@ export let hands = (worn: Worn, last: Hand): Worn => {
  *       wornOf(rows.map(([slot, item, at]) => ({ slot, item, at })), bag, 60, known),
  *     ).map(([s, h]) => [s, h!.kind]),
  *   )
- * let worn = wear([])
- * assertEquals(worn(['main', 's', 1], ['off', 'h', 2]), {
- *   main: 'sword1',
- *   off: 'shield1',
- * })
- * // An empty row takes it off; what is not in the bag is not worn.
- * assertEquals(worn(['main', 's', 1], ['main', '', 2]), {})
- * assertEquals(worn(['main', 'gone', 1]), {})
- * // A bow wants both hands: the later choice wins.
- * assertEquals(worn(['off', 'h', 1], ['main', 'b', 2]), { main: 'bow1' })
- * assertEquals(worn(['main', 'b', 1], ['off', 'h', 2]), { off: 'shield1' })
- * // A second dagger goes in the other hand only for a hero who knows Twin
- * // daggers, chosen since they learned it, beside a dagger in the first.
  * let twin = wear([{ skill: 'twin', at: 5 }])
  * let pair: Row[] = [['main', 'd', 6], ['off', 'e', 7]]
  * assertEquals(twin(...pair), { main: 'dagger2', off: 'dagger1' })
- * assertEquals(worn(...pair), { main: 'dagger2' })
+ * assertEquals(wear([])(...pair), { main: 'dagger2' })
  * assertEquals(twin(['main', 'd', 1], ['off', 'e', 2]), { main: 'dagger2' })
  * assertEquals(twin(['main', 's', 6], ['off', 'e', 7]), { main: 'sword1' })
  * assertEquals(twin(['main', 'd', 6], ['off', 'd', 7]), { main: 'dagger2' })
- * // Forgetting it by a fire puts the dagger back in the bag, and learning it
- * // again leaves it there until it is chosen again.
  * let learns = (at: number) =>
  *   ['keen', 'cuts', 'twin'].map((skill, i) => ({ skill, at: at + i }))
  * let knows = (respecs: number[], ...rows: Learned[]) =>

@@ -101,10 +101,12 @@ export let commandField = (
       // Leave empty state rows so bound inputs also clear on sign-out.
       let rows = local.read('.Completion')
       for (let row of rows) fields.dismiss(row.entity.eid)
-      local.mutate(rows.map(({ entity }) => ({
-        entity,
-        Completion: { caret: 0, from: 0, to: 0, cands: [], pick: 0 },
-      })))
+      if (rows.length) {
+        local.mutate(rows.map(({ entity }) => ({
+          entity,
+          Completion: { caret: 0, from: 0, to: 0, cands: [], pick: 0 },
+        })))
+      }
       owner = next
       let d = next ? desks.get(next) : undefined
       if (next && !d) {

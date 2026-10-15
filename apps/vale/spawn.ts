@@ -26,11 +26,10 @@ export let ROAM = 6
  * The creature a word names, by eid: its eid, its alias (beast:boar), the
  * alias's last word (boar), or its name (Bristleboar). `beasts` are the
  * store's `beast_design` rows and `keys` its alias keys, `key{of, value}`.
- * Nothing when no creature answers; a word two creatures answer to throws,
- * since the alias tells them apart.
+ * Nothing when no creature answers.
  *
  * ```ts
- * import { assertEquals, assertThrows } from '@std/assert'
+ * import { assertEquals } from '@std/assert'
  * let beasts = [
  *   { entity: { eid: 'b1' }, beast_design: { name: 'Bristleboar' } },
  *   { entity: { eid: 'b2' }, beast_design: { name: 'Bog slime' } },
@@ -46,7 +45,21 @@ export let ROAM = 6
  *   ['b1', 'b1', 'b1', 'b1'],
  * )
  * assertEquals([named('beast:bogslime'), named('wyrm')], ['b2', null])
- * assertThrows(() => named('bog slime'), Error, 'use its alias')
+ * ```
+ *
+ * A word two creatures answer to throws, since the alias tells them apart.
+ *
+ * ```ts
+ * import { assertThrows } from '@std/assert'
+ * let slime = (eid: string) => ({
+ *   entity: { eid },
+ *   beast_design: { name: 'Bog slime' },
+ * })
+ * assertThrows(
+ *   () => creatureNamed('bog slime', [slime('b2'), slime('b3')], []),
+ *   Error,
+ *   'use its alias',
+ * )
  * ```
  */
 export let creatureNamed = (
