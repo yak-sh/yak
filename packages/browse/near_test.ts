@@ -26,6 +26,9 @@ let fleet = [
 // ticket every time. A name outranks a sentence that merely starts with it.
 test('nearest: a ticket opening with the word loses to the thing named by it', () => {
   let graph = [
+    // same name, no handle: the aliased one is the one somebody decided
+    // should be addressable by name, wherever it sits
+    { id: 'B-5', title: 'Task Graph', named: true },
     ...fleet,
     T(
       'T-801',
@@ -37,9 +40,6 @@ test('nearest: a ticket opening with the word loses to the thing named by it', (
       'board-notifications-phase-1-read-tracking-notification-cente',
       'Board notifications Phase 1: read-tracking + notification center',
     ),
-    // same name, no handle: the aliased one is the one somebody decided
-    // should be addressable by name
-    { id: 'B-5', title: 'Task Graph', named: true },
   ]
   assertEquals(nearest('tasks', graph)?.id, 'P-19')
   assertEquals(nearest('task', graph)?.id, 'P-19')

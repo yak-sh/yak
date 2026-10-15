@@ -82,9 +82,11 @@ test('following an entity opens its page on either pointer kind', () => {
 let card = parseHTML(
   '<div id="body"></div><a id="link"><span id="inside"></span></a>',
 )
+let cardBody = card.document.querySelector('#body')!
+let inLink = card.document.querySelector('#inside')!
 test('a card menu leaves nested controls and links to themselves', () => {
   let priorElement = Object.getOwnPropertyDescriptor(globalThis, 'Element')
-  let { document, window } = card
+  let { window } = card
   Object.defineProperty(globalThis, 'Element', {
     value: window.Element,
     configurable: true,
@@ -103,13 +105,13 @@ test('a card menu leaves nested controls and links to themselves', () => {
   }
 
   try {
-    let body = event(document.querySelector('#body')!)
+    let body = event(cardBody)
     cardMenuAt(e)(body as unknown as MouseEvent)
     assertEquals(body.handled(), [true, true])
     assertEquals(menu.value?.eid, e.eid)
 
     menu.value = null
-    let link = event(document.querySelector('#inside')!)
+    let link = event(inLink)
     cardMenuAt(e)(link as unknown as MouseEvent)
     assertEquals(link.handled(), [false, false])
     assertEquals(menu.value, null)

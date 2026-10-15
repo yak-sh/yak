@@ -60,13 +60,18 @@ let closeness = (v: string, h: Handle) =>
 // worth a reader's second try. A tie goes to the one carrying an ALIAS: two
 // entities wear the name `Task Graph` — the project and the board over it —
 // and the aliased one is the one somebody decided should be addressable by
-// name.
+// name. Otherwise the first one met keeps it. One pass, since the pool is
+// the whole graph.
 export let nearest = <T extends Handle>(v: string, of: T[]) => {
-  let handled = (h: Handle) => (h.alias ? 1 : 0)
-  let best = of
-    .map((h) => [h, closeness(v, h)] as const)
-    .sort(([a, x], [b, y]) => y - x || handled(b) - handled(a))[0]
-  return best && best[1] >= CLOSE ? best[0] : undefined
+  let best: [T, number] | undefined
+  for (let h of of) {
+    let c = closeness(v, h)
+    if (c < CLOSE) continue
+    if (!best || c > best[1] || c == best[1] && h.alias && !best[0].alias) {
+      best = [h, c]
+    }
+  }
+  return best?.[0]
 }
 
 // The offer, spelled as the caller should type it: 'home' (P-19, Task
