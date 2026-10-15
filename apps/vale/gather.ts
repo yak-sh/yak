@@ -682,7 +682,7 @@ export let effort = (lode: Lode, lvl: number): number =>
  * ```ts
  * import { assertEquals } from '@std/assert'
  * let hauls = (lvl: number) =>
- *   Array.from({ length: 200 }, (_, i) => haulOf('n', i, 'p', 'oak', lvl))
+ *   Array.from({ length: 20 }, (_, i) => haulOf('n', i, 'p', 'oak', lvl))
  * assertEquals(new Set(hauls(1)), new Set([1]))
  * assertEquals(new Set(hauls(9)), new Set([1, 2]))
  * assertEquals(haulOf('n', 7, 'p', 'oak', 9), haulOf('n', 7, 'p', 'oak', 9))

@@ -11,6 +11,7 @@ import type { Bundle } from './net.ts'
 import { QUESTS } from './quests.ts'
 import { hashOf } from '@yaks/game'
 import { entriesOf, killsOf, levelOf, xpOf } from './rules.ts'
+import { nameOf } from './target.ts'
 
 /** Three metres ahead, in the same yaw convention as play.ts. */
 export let frontOf = (at: { x: number; z: number }, yaw: number) => ({
@@ -20,11 +21,6 @@ export let frontOf = (at: { x: number; z: number }, yaw: number) => ({
 
 /** How far a spawned creature wanders from where it was put, in metres. */
 export let ROAM = 6
-
-// A name as the commands compare names, case and punctuation aside
-// (target.ts).
-let plain = (text: string) =>
-  text.toLocaleLowerCase().replace(/[^\p{L}\p{N}]/gu, '')
 
 /**
  * The creature a word names, by eid: its eid, its alias (beast:boar), the
@@ -61,17 +57,17 @@ export let creatureNamed = (
   let eids = new Set(beasts.map((b) => b.entity.eid))
   let w = word.trim()
   if (eids.has(w)) return w
-  let want = plain(w)
+  let want = nameOf(w)
   if (!want) return null
   let aliased = keys.flatMap((k) => {
     let { of, value } = comp(k, 'key')
     return typeof of == 'string' && eids.has(of) && typeof value == 'string' &&
-        [value, value.split(':').at(-1)!].some((v) => plain(v) == want)
+        [value, value.split(':').at(-1)!].some((v) => nameOf(v) == want)
       ? [of]
       : []
   })
   let titled = beasts
-    .filter((b) => plain(String(comp(b, 'beast_design').name ?? '')) == want)
+    .filter((b) => nameOf(String(comp(b, 'beast_design').name ?? '')) == want)
     .map((b) => b.entity.eid)
   let found = [...new Set([...aliased, ...titled])]
   if (found.length > 1) {

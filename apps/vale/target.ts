@@ -9,8 +9,13 @@ import { eidOf } from './villager-id.ts'
 export type Target = { level: string } | { eid: string }
 export type Query = (line: string) => Promise<Bundle[]>
 
-let nameOf = (text: string) =>
-  text.toLocaleLowerCase().replace(/[^\p{L}\p{N}]/gu, '')
+// What a name drops: all but letters and digits, in any script. Built as the
+// module loads, since reading its classes is the costly part.
+let UNNAMED = /[^\p{L}\p{N}]/gu
+
+/** A name as the commands compare names, case and punctuation aside. */
+export let nameOf = (text: string) =>
+  text.toLocaleLowerCase().replace(UNNAMED, '')
 let eid = (text: string) =>
   /^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/i.test(text)
 let look = (b: Bundle) => comp(b, 'look')

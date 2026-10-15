@@ -25,13 +25,14 @@ export function roundRobin(lists) {
 /** Parse the first explicit duration in seconds; null means set it manually. */
 export function parseDuration(text) {
   const normalized = String(text).toLowerCase()
+    .replace(/–/g, '-').replace(/—/g, '-')
     .replace(/½/g, ' 1/2').replace(/¼/g, ' 1/4').replace(/¾/g, ' 3/4')
     .replace(/\bhalf\s+(?:an?\s+)?/g, '0.5 ')
     .replace(/\ban?\s+(?=(?:hour|minute|second)\b)/g, '1 ')
   const number = '(?:\\d+\\s+\\d+/\\d+|\\d+/\\d+|\\d+(?:\\.\\d+)?)'
   const unit = '(?:hours?|hrs?|h|minutes?|mins?|m|seconds?|secs?|s)'
   const pattern = new RegExp(
-    `(${number})(?:\\s*(?:-|–|—|to)\\s*(${number}))?\\s*(${unit})\\b`,
+    `(${number})(?:\\s*(?:-|to)\\s*(${number}))?\\s*(${unit})\\b`,
     'g',
   )
   const value = (word) => {

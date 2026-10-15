@@ -232,7 +232,7 @@ test('slash completion flags and enum/ref values roundtrip in both forms', async
   )
 })
 
-test('slash completion uses caret/token ranges and rejects invalid prefixes', async () => {
+test('slash completion uses caret/token ranges and the host lookup', async () => {
   let calls: [string, string][] = []
   let look: Lookup = {
     ids: (comp, prefix) => {
@@ -245,11 +245,12 @@ test('slash completion uses caret/token ranges and rejects invalid prefixes', as
   assertEquals([result.from, result.to], [7, 8])
   assertEquals(finish(text, result, 'boar'), '/spawn boar --extra')
   assertEquals(calls, [['beast_design', 'b']])
-  assertEquals([...(await suggestions('/spawn ')).cands].length, 2)
-  assertEquals([
-    (await suggestions('/spawn ')).from,
-    (await suggestions('/spawn ')).to,
-  ], [7, 7])
+  let next = await suggestions('/spawn ')
+  assertEquals([next.cands.length, next.from, next.to], [2, 7, 7])
+  assertEquals((await suggestions('/spawn b', 8, {})).cands, [])
+})
+
+test('slash completion rejects invalid prefixes', async () => {
   for (
     let invalid of [
       '',
@@ -271,7 +272,6 @@ test('slash completion uses caret/token ranges and rejects invalid prefixes', as
     cands: [],
     whole: false,
   })
-  assertEquals((await suggestions('/spawn b', 8, {})).cands, [])
 })
 
 test('slash descriptions take the rest declared by the command', async () => {

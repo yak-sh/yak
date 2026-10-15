@@ -70,30 +70,35 @@ export type Sight = {
  *
  * ```ts
  * import { assert, assertAlmostEquals, assertEquals } from '@std/assert'
+ * // A villager held for `secs` seconds, 20 steps a second, read at any time
+ * // in between.
  * let run = (walk: number | null, at: number, talk: boolean, secs: number) => {
  *   let g = { body: 0, eye: 0, wait: 0 }
  *   let heed = { x: 5 * Math.sin(at), z: 5 * Math.cos(at), talk }
  *   let s = { x: 0, z: 0, walk, heed }
- *   for (let i = 0; i < secs * 20; i++) g = gaze(g, s, 0.05)
- *   return g
+ *   let held = [g]
+ *   for (let i = 0; i < secs * 20; i++) held.push(g = gaze(g, s, 0.05))
+ *   return (t: number) => held[Math.round(t * 20)]
  * }
  * // Walking, they face the way they walk and look ahead.
- * let g = run(2, -1, false, 2)
- * assertEquals(g.body, 2)
- * assertAlmostEquals(neck(g.eye, 2), 0, 0.01)
+ * let walking = run(2, -1, false, 2)
+ * assertEquals(walking(2).body, 2)
+ * assertAlmostEquals(neck(walking(2).eye, 2), 0, 0.01)
  * // Standing, they turn their head to a hero beside them, not their body,
  * // and it eases there.
- * assertEquals(run(null, 1, false, 2).body, 0)
- * assertAlmostEquals(neck(run(null, 1, false, 2).eye, 0), 1, 0.01)
- * assert(neck(run(null, 1, false, 0.1).eye, 0) < 0.5)
+ * let beside = run(null, 1, false, 2)
+ * assertEquals(beside(2).body, 0)
+ * assertAlmostEquals(neck(beside(2).eye, 0), 1, 0.01)
+ * assert(neck(beside(0.1).eye, 0) < 0.5)
  * // A hero behind them: the head turns as far as a neck goes; a while later
  * // the body turns, slowly, until it faces them.
- * assertEquals(run(null, 3, false, 1).body, 0)
- * assertAlmostEquals(neck(run(null, 3, false, 1).eye, 0), 1.2, 0.05)
- * assert(run(null, 3, false, 2.5).body < 1)
- * assertAlmostEquals(run(null, 3, false, 6).body, 3, 0.1)
+ * let behind = run(null, 3, false, 6)
+ * assertEquals(behind(1).body, 0)
+ * assertAlmostEquals(neck(behind(1).eye, 0), 1.2, 0.05)
+ * assert(behind(2.5).body < 1)
+ * assertAlmostEquals(behind(6).body, 3, 0.1)
  * // Talking to them, they turn to face them.
- * assertAlmostEquals(run(null, 2, true, 1).body, 2, 0.1)
+ * assertAlmostEquals(run(null, 2, true, 1)(1).body, 2, 0.1)
  * ```
  */
 export let gaze = (g: Gaze, s: Sight, dt: number): Gaze => {
