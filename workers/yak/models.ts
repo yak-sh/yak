@@ -396,6 +396,22 @@ let posted = (
   }
 }
 
+/** How `./api/ai/run` answers a call that threw: the status, code and message
+ * for a refusal that is the caller's or the account's to hear, or nothing for
+ * a failure that is ours (a break, answered 502). An input the model refuses
+ * (@yaks/workers-ai `unfit`) is 400, theirs to correct. */
+export let refusal = (
+  e: unknown,
+  model: string,
+): [number, string, string] | null => {
+  if (e instanceof ModelError) return [STATUS[e.code] ?? 502, e.code, e.message]
+  if (unfit(e)) {
+    let why = e instanceof Error ? e.message : String(e)
+    return [400, 'bad_request', `${model} refused this input: ${why}`]
+  }
+  return null
+}
+
 /**
  * `./api/ai/run`: one call to a model, answered with what the model said, as
  * Workers AI says it, out of any envelope AI Gateway put it in (@yaks/workers-ai
@@ -455,17 +471,9 @@ export let modelRun: Answer = async (
       ),
     )
   } catch (e) {
-    if (e instanceof ModelError) {
-      return json(STATUS[e.code] ?? 502, e.code, e.message)
-    }
+    let no = refusal(e, asked.model)
+    if (no) return json(...no)
     let why = e instanceof Error ? e.message : String(e)
-    if (unfit(e)) {
-      return json(
-        400,
-        'bad_request',
-        `${asked.model} refused this input: ${why}`,
-      )
-    }
     caught(e, {
       request: 'POST /api/ai/run',
       space: space.slug,

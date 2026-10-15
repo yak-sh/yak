@@ -36,6 +36,7 @@ import type { VocabDoc } from '@yaks/vocab'
 import { embeds, platform } from './testing.ts'
 import * as apps from './apps.ts'
 import { ctxOf } from './connections.ts'
+import { refusal } from './models.ts'
 import { as as signedIn, visit } from './serving-probe.ts'
 import { test, until } from '@yaks/testing'
 import { hosting } from './inference.ts'
@@ -709,13 +710,12 @@ test('./api/ai/run answers what the model said, and the space pays for it', asyn
   assertEquals(v.asked.length, 2)
 })
 
-test('./api/ai/run answers an input the model refuses as the caller’s, 400', async () => {
+test('./api/ai/run answers an input the model refuses as the caller’s, 400', () => {
   let schema = "5006: Error: oneOf at '/' not met, 0 matches"
-  let v = await vale(() => Promise.reject(new Error(schema)))
-  let input = { messages: 'hello' }
-  let { status, said } = await v.run({ model: FLASH, input })
-  assertEquals([status, said.error.code], [400, 'bad_request'])
-  assert(said.error.message.includes(schema))
+  let [status, code, message] = refusal(new Error(schema), FLASH)!
+  assertEquals([status, code], [400, 'bad_request'])
+  assert(message.includes(schema))
+  assertEquals(refusal(new Error('upstream down'), FLASH), null)
 })
 
 test('./api/ai/run answers a visitor only where the app opens its models', async () => {
