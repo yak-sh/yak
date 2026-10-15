@@ -40,6 +40,9 @@ export type Options = {
   retain?: number
 }
 
+/** The part of a graph a bug's letters are read and written through. */
+export type Desk = Pick<Graph, 'vocab' | 'get' | 'read' | 'apply'>
+
 let openedAt = (row: Bundle) =>
   str(comp(row, 'regressed').at || comp(row, 'created').at)
 
@@ -94,7 +97,7 @@ let receipt = (row: Bundle): Bundle => ({
 
 /** A bug's opening or regression owns one letter, including across retries. */
 export let notify = async (
-  g: Graph,
+  g: Desk,
   eid: string,
   options: Options,
 ): Promise<void> => {
@@ -147,7 +150,7 @@ export let notify = async (
 
 // A bug's name and page: its human id where the store keeps one, or its
 // global eid on the side the tracker web reads it from.
-let address = (g: Graph, row: Bundle, options: Options) => {
+let address = (g: Desk, row: Bundle, options: Options) => {
   let eid = row.entity.eid
   let name = row.entity.num && !options.side ? human(g.vocab)(row) : eid
   let path = options.side
@@ -165,7 +168,7 @@ let address = (g: Graph, row: Bundle, options: Options) => {
  * before it reopens says nothing new. Only a bug that has a thread hears: one
  * that opened unannounced stays quiet. */
 export let follow = async (
-  g: Graph,
+  g: Desk,
   eid: string,
   options: Options,
 ): Promise<void> => {

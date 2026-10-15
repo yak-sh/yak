@@ -1,8 +1,11 @@
 import { test } from '@yaks/testing'
-import { assert, assertEquals } from '@std/assert'
+import { assert, assertEquals, assertRejects } from '@std/assert'
 import type { Bundle, Comp } from '@yaks/graph'
-import { clubhouse, noon } from './testing.ts'
+import { effects } from '@yaks/effects'
+import { club, clubhouse, committed, noon } from './testing.ts'
 import { message } from './send.ts'
+import { DELIVER, MAIL } from './comp.ts'
+import { type Mailbox, mailbox } from './plugin.ts'
 import { arrived } from './arrive.ts'
 import { stash } from './stash.ts'
 import { Unsent } from '@yaks/host/senders'
@@ -12,13 +15,13 @@ let letter = 'e-potluck'
 
 // A club with one member who has an address on file.
 let seeded = async (refuse?: string) => {
-  let club = clubhouse({ refuse })
-  await club.g.apply([{
+  let rig = clubhouse({ refuse })
+  await rig.g.apply([{
     entity: { eid: ana },
     person: { name: 'Ana' },
     email: { address: 'ana@books.example' },
   }])
-  return club
+  return rig
 }
 
 let comp = (b: Bundle | undefined, name: string) =>
@@ -26,6 +29,36 @@ let comp = (b: Bundle | undefined, name: string) =>
 
 let read = async (g: { read: (q: string) => unknown }, eid: string) =>
   ((await g.read(`.entity.eid=${eid}`)) as Bundle[])[0]
+
+// The club's people and a letter, asking to go as `ask` says, at the sending
+// handler's boundary: the rows committed, and the handler the mail plugin
+// gives the club's registry, rigged with `rig`. Each `go()` is one try at the
+// letter, as the pool makes them.
+let posting = (
+  rig: Omit<Mailbox, 'effects'>,
+  ask: Record<string, Comp> = { [DELIVER]: { to: ana } },
+) => {
+  let { tx, write } = committed([{
+    entity: { eid: ana },
+    email: { address: 'ana@books.example' },
+  }, {
+    entity: { eid: 'p-bo' },
+    email: { address: 'bo@elsewhere.com' },
+  }, {
+    entity: { eid: letter },
+    doc: { title: 'hi', body: 'hi' },
+    mail: { from: 'hello@books.example' },
+    ...ask,
+  }])
+  let fx = effects(club)
+  mailbox({ now: noon, ...rig, effects: fx })
+  let run = fx.slots().find((s) => s.id == 'mail_post')!.run!
+  let event = { kind: 'created' as const, entity: { eid: letter }, name: MAIL }
+  return {
+    go: async () => void await run(event, tx, write),
+    row: async () => (await tx.get([letter]))[0],
+  }
+}
 
 // A settled letter, prepared once for readers of its envelope and outcome.
 let sentClub = await seeded()
@@ -58,14 +91,11 @@ test('a letter that asks to go, goes — and says so', async () => {
 })
 
 test('a letter with no ask is kept, not sent', async () => {
-  let { g, post } = await seeded()
-  await g.apply([{
-    entity: { eid: letter },
-    doc: { title: 'A draft', body: 'later' },
-    mail: { from: 'hello@books.example' },
-  }])
+  let post = stash()
+  let { go, row } = posting({ sender: post }, {})
+  await go()
   assertEquals(post.sent.length, 0)
-  assertEquals(comp(await read(g, letter), 'delivered'), undefined)
+  assertEquals(comp(await row(), 'delivered'), undefined)
 })
 
 let unaddressedClub = await seeded()
@@ -118,48 +148,42 @@ test('a transport that refuses writes the reason it gave', async () => {
   )
 })
 
-// A club whose transport drops the first `drops` sends before they leave.
-let dropping = async (drops: number) => {
+// A letter whose transport drops the first `drops` sends before they leave: a
+// try that never left fails, so the pool hands the letter over again.
+let dropping = (drops: number) => {
   let post = stash()
-  let club = clubhouse({
-    pool: true,
-    sender: {
-      send: (m) =>
-        drops-- > 0
-          ? Promise.reject(new Unsent('not sent: tls handshake eof', 0))
-          : post.send(m),
-    },
-  })
-  await club.g.apply([{
-    entity: { eid: ana },
-    person: { name: 'Ana' },
-    email: { address: 'ana@books.example' },
-  }, {
-    entity: { eid: letter },
-    doc: { title: 'hi', body: 'hi' },
-    mail: { from: 'hello@books.example' },
-    deliver: { to: ana },
-  }])
-  await club.fx.work(club.g)
-  let row = await read(club.g, letter)
-  await club.fx.stop()
-  return { post, row }
+  return {
+    post,
+    ...posting({
+      sender: {
+        send: (m) =>
+          drops-- > 0
+            ? Promise.reject(new Unsent('not sent: tls handshake eof', 0))
+            : post.send(m),
+      },
+    }),
+  }
 }
 
 test('a letter that never left goes on the next try, not bounced', async () => {
-  let { post, row } = await dropping(1)
+  let { post, go, row } = dropping(1)
+  await assertRejects(go, Unsent)
+  await go()
+  let sent = await row()
   assertEquals(post.sent.length, 1)
-  assertEquals(comp(row, 'delivered')?.at, '2026-09-05T12:00:00.000Z')
-  assertEquals(comp(row, 'bounced'), undefined)
-  assertEquals(comp(row, 'deliver')?.waiting ?? null, null)
+  assertEquals(comp(sent, 'delivered')?.at, '2026-09-05T12:00:00.000Z')
+  assertEquals(comp(sent, 'bounced'), undefined)
+  assertEquals(comp(sent, 'deliver')?.waiting ?? null, null)
 })
 
 test('a letter that never leaves waits, owed, for the sweep', async () => {
-  let { post, row } = await dropping(Infinity)
+  let { post, go, row } = dropping(Infinity)
+  await assertRejects(go, Unsent)
+  let kept = await row()
   assertEquals(post.sent.length, 0)
-  assertEquals(comp(row, 'bounced'), undefined)
-  assertEquals(comp(row, 'deliver')?.tried ?? null, null)
-  assertEquals(comp(row, 'deliver')?.waiting, 'not sent: tls handshake eof')
+  assertEquals(comp(kept, 'bounced'), undefined)
+  assertEquals(comp(kept, 'deliver')?.tried ?? null, null)
+  assertEquals(comp(kept, 'deliver')?.waiting, 'not sent: tls handshake eof')
 })
 
 test('a reply threads on what the answered letter went out as', async () => {
@@ -200,17 +224,15 @@ test('an answer to a letter we sent threads onto it', async () => {
   assertEquals(comp(answer, 'mail')?.reply_to, letter)
 })
 
+// What the mail plugin makes of a batch before the graph takes it.
 test('the address is canonical however it was written', async () => {
-  let { g } = await seeded()
-  await g.apply([{
+  let { normalize } = mailbox({ domain: 'books.example' }).hooks!
+  let [cy] = await normalize!([{
     entity: { eid: 'p-cy' },
     person: { name: 'Cy' },
     email: { address: 'Cy_Rus@Books.Example' },
-  }])
-  assertEquals(
-    comp(await read(g, 'p-cy'), 'email')?.address,
-    'cyrus@books.example',
-  )
+  }], committed([]).tx)
+  assertEquals(comp(cy, 'email')?.address, 'cyrus@books.example')
 })
 
 test('message: the composition, without a transport anywhere', () => {
@@ -235,46 +257,25 @@ test('message: the composition, without a transport anywhere', () => {
 
 // Local delivery: the domain is the graph's own namespace, so a letter to it
 // has arrived by being written.
-let inhouse = async () => {
-  let club = clubhouse({ local: 'books.example' })
-  await club.g.apply([
-    {
-      entity: { eid: ana },
-      person: { name: 'Ana' },
-      email: { address: 'ana@books.example' },
-    },
-    {
-      entity: { eid: 'p-bo' },
-      person: { name: 'Bo' },
-      email: { address: 'bo@elsewhere.com' },
-    },
-  ])
-  return club
+let inhouse = async (to: string) => {
+  let post = stash()
+  let { go, row } = posting({ sender: post, local: 'books.example' }, {
+    [DELIVER]: { to },
+  })
+  await go()
+  return { post, sent: await row() }
 }
 
 test('a letter to an address the graph owns never reaches the transport', async () => {
-  let { g, post } = await inhouse()
-  await g.apply([{
-    entity: { eid: letter },
-    doc: { title: 'Soup', body: 'there is soup' },
-    mail: { from: 'club@books.example' },
-    deliver: { to: ana },
-  }])
+  let { post, sent } = await inhouse(ana)
   assertEquals(post.sent.length, 0)
-  let sent = await read(g, letter)
   assertEquals(comp(sent, 'delivered'), { at: noon() })
   // The envelope is still denormalized: where it went is data, not a lookup.
   assertEquals(comp(sent, 'mail')?.to, 'ana@books.example')
 })
 
 test('a letter out of the house still rides the transport', async () => {
-  let { g, post } = await inhouse()
-  await g.apply([{
-    entity: { eid: letter },
-    doc: { title: 'Soup', body: 'there is soup' },
-    mail: { from: 'club@books.example' },
-    deliver: { to: 'p-bo' },
-  }])
+  let { post, sent } = await inhouse('p-bo')
   assertEquals(post.last()?.to, 'bo@elsewhere.com')
-  assertEquals(comp(await read(g, letter), 'mail')?.message_id, 'stash-1')
+  assertEquals(comp(sent, 'mail')?.message_id, 'stash-1')
 })

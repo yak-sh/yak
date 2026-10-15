@@ -1,7 +1,16 @@
 // Tracker tests use graph admission and queries, with no filesystem or Worker.
 // External references use UUIDs or commit hashes: absent word names are refused
 // even in trusted writes, while global eids need no local catalog record.
-import { type Graph, graph, type Storage } from '@yaks/graph'
+import {
+  type Bundle,
+  detached,
+  type Graph,
+  graph,
+  type Storage,
+} from '@yaks/graph'
+import { comps } from '@yaks/graph/bundle'
+import { Refused } from '@yaks/graph/errors'
+import { guard } from '@yaks/graph/guard'
 import { loadVocab } from '@yaks/vocab'
 import { kernelDoc, kernelKeywords } from '@yaks/kernel'
 import { toolsDoc } from '@yaks/tools/vocab'
@@ -43,4 +52,31 @@ export let fixture = (
   })
   if (fx) fx.handle(effects({ graph: adapt(g) }, options))
   return g
+}
+
+/** The graph as a trusted handler reads and writes it, without the pipeline
+ * around its store: a write is refused for a component or value the
+ * vocabulary cannot hold and lands once each `$was` it carries holds, as
+ * `apply()` checks them, and is not stamped. For cases that exercise a
+ * handler's own reads and writes; {@link fixture} is the graph whole. */
+export let bare = (
+  storage: Storage = ram(vocab, { computed }),
+): Pick<Graph, 'vocab' | 'get' | 'read' | 'apply'> => {
+  let tx = detached(storage)
+  return {
+    vocab,
+    get: tx.get,
+    read: tx.read,
+    apply: async (rows: Bundle[]) => {
+      let wrong = rows.flatMap((b) =>
+        comps(b).flatMap(([name, c]) =>
+          c ? vocab.check(name, c, { stamped: true }) : []
+        )
+      )
+      if (wrong.length) throw new Refused(wrong.join('; '))
+      await guard(rows, tx, vocab)
+      await tx.patch(rows)
+      return tx.get(rows.map((b) => b.entity.eid))
+    },
+  }
 }

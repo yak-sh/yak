@@ -106,6 +106,7 @@
     self.origin == 'null' ||
     (el.tagName == 'SCRIPT' && el.type == 'module')
 
+  // A miss is answered with its handling, settled once it is said or let go.
   addEventListener('error', (e) => {
     let el = missed(e)
     if (el) {

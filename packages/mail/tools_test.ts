@@ -12,7 +12,7 @@ import {
 } from '@yaks/graph'
 import { clubhouse } from './testing.ts'
 import type { Options } from './options.ts'
-import { reSubject, runs } from './tools.ts'
+import { reSubject, runs, sides } from './tools.ts'
 import type { Host } from '@yaks/host'
 
 let call = mint()
@@ -208,15 +208,20 @@ test('a reply to an arrival goes to its author, from the desk it came to', async
   assertEquals((await g.get(['a1']))[0].archived, undefined)
 })
 
-test('a reply to a relayed letter goes to whom it says to answer', async () => {
-  let { g, post } = await club()
-  await g.apply([arrival('f1', {
-    from: 'hello@bot.example',
-    reply_address: 'ana@elsewhere.example',
-  })])
-  await did(g, 'mail_reply', { letter: 'f1', body: 'Fixed, thank you.' })
-  assertEquals(post.last()?.to, 'ana@elsewhere.example')
-})
+// Which address a reply is aimed at is `sides`'s; the reply to an arrival
+// above follows that address to the transport.
+test('a reply to a relayed letter goes to whom it says to answer', () =>
+  equal(
+    sides(arrival('f1', {
+      from: 'hello@bot.example',
+      reply_address: 'ana@elsewhere.example',
+    })),
+    {
+      arrived: true,
+      far: 'ana@elsewhere.example',
+      from: 'hello@books.example',
+    },
+  ))
 
 let outgoing = await club()
 await outgoing.g.apply([
@@ -238,16 +243,16 @@ test('a reply to your own letter goes to whom you wrote it', async () => {
   assertEquals(landed.find((b) => b.entity.eid == 'a1'), undefined)
 })
 
+let orphaned = (await club()).g
+await orphaned.apply([{
+  entity: { eid: 'a1' },
+  doc: { title: 'Orphan' },
+  mail: { to: 'hello@books.example', message_id: 'm1' },
+}])
 test('a letter nobody can answer is refused rather than misdelivered', async () => {
-  let { g } = await club()
-  await g.apply([{
-    entity: { eid: 'a1' },
-    doc: { title: 'Orphan' },
-    mail: { to: 'hello@books.example', message_id: 'm1' },
-  }])
   // No `from` on an arrival: the near miss is our own desk, so this refuses.
   await assertRejects(
-    () => ask(g, 'mail_reply', { letter: 'a1', body: 'hi' }),
+    () => ask(orphaned, 'mail_reply', { letter: 'a1', body: 'hi' }),
     Error,
     'names nobody to answer',
   )

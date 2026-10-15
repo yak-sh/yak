@@ -30,7 +30,7 @@ import {
 } from '@yaks/ui'
 import { Disclosure, disclosureAt, isOpen } from '@yaks/ux'
 import { comp, type Crumb, type Frame, str } from './model.ts'
-import { count, headline, place, sha, thrown, whom } from './brief.ts'
+import { count, figure, headline, place, sha, thrown, whom } from './brief.ts'
 import { spread, tags, type Tally } from './spread.ts'
 import { Histogram } from './Histogram.ts'
 import {
@@ -326,7 +326,7 @@ let BugPage = ({ e, io, got }: Props): JSX.Element => {
           Section.Count,
           {},
           errors.length < hits
-            ? `${errors.length} kept of ${hits.toLocaleString('en-US')}`
+            ? `${errors.length} kept of ${figure(hits)}`
             : count(errors.length, 'occurrence'),
         ),
       ),

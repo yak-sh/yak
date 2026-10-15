@@ -7,7 +7,6 @@ import { assert, assertEquals, assertRejects } from '@std/assert'
 import {
   type Bundle,
   type Comp,
-  detached,
   graph,
   type ReadTx,
   type Storage,
@@ -19,7 +18,7 @@ import { loadVocab } from '@yaks/vocab'
 import { effects } from './effects.ts'
 import type { Transport } from './options.ts'
 import { mailbox } from './plugin.ts'
-import { club, noon } from './testing.ts'
+import { club, committed, noon } from './testing.ts'
 import { type Sender, sending } from './send.ts'
 import { stash } from './stash.ts'
 import type { Host } from '@yaks/host'
@@ -79,24 +78,19 @@ let read = async (g: { read: (q: string) => unknown }, eid: string) =>
 
 // Committed letters at the handler boundary keep sender checks independent
 // of the pool's scheduling and startup work.
-let lentTx = detached(ram(pooled))
-lentTx.patch([ana])
+let lent = committed([ana], pooled)
 let handOver = async (code: Handlers, eid: string) => {
-  lentTx.patch([letter(eid)])
-  let write = async (rows: Bundle[]) => {
-    let written = await lentTx.patch(rows)
-    return lentTx.get(written.map((entity) => entity.eid))
-  }
+  lent.tx.patch([letter(eid)])
   await code.mail_post(
     {
       kind: 'created',
       name: 'deliver',
       entity: { eid },
     },
-    lentTx,
-    write,
+    lent.tx,
+    lent.write,
   )
-  return (await lentTx.get([eid]))[0]
+  return (await lent.tx.get([eid]))[0]
 }
 
 test('a host sender delivers once and records its receipt', async () => {
@@ -142,7 +136,7 @@ test('an unavailable host sender waits and can arrive on the next attempt', asyn
     Error,
     'no sender called',
   )
-  let [waiting] = await lentTx.get(['lent-late'])
+  let [waiting] = await lent.tx.get(['lent-late'])
   assertEquals(waiting.deliver, {
     to: 'p-ana',
     waiting: 'no sender called "platform"',
@@ -162,7 +156,7 @@ test('inherited object names cannot select a host sender', async () => {
     Error,
     'no sender called "constructor"',
   )
-  let [kept] = await lentTx.get(['lent-unknown'])
+  let [kept] = await lent.tx.get(['lent-unknown'])
   assertEquals((kept.deliver as Comp).tried, undefined)
   assertEquals(kept.bounced, undefined)
 })
@@ -348,9 +342,6 @@ test('a letter handed over and never settled is not handed over again', async ()
 })
 
 // The sending handler's boundary: committed rows and a durable write callback.
-let orderedStore = ram(pooled)
-let orderedTx = detached(orderedStore)
-orderedTx.patch([ana])
 let orderingEvent = {
   kind: 'created' as const,
   entity: { eid: 'e-one' },
@@ -358,20 +349,16 @@ let orderingEvent = {
 }
 test('the letter is marked tried before the transport sees it', async () => {
   let at: unknown[] = []
-  orderedTx.remove([{ eid: 'e-one' }])
-  orderedTx.patch([letter('e-one')])
+  let { tx, write } = committed([ana, letter('e-one')], pooled)
   await sending({
     now: noon,
     sender: {
       send: async () => {
-        at.push(((await orderedTx.get(['e-one']))[0].deliver as Comp).tried)
+        at.push(((await tx.get(['e-one']))[0].deliver as Comp).tried)
         return { id: 'r-1' }
       },
     },
-  })(orderingEvent, orderedTx, async (rows) => {
-    let written = await orderedTx.patch(rows)
-    return orderedTx.get(written.map((entity) => entity.eid))
-  })
+  })(orderingEvent, tx, write)
   assertEquals(at, [noon()])
 })
 

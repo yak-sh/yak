@@ -76,6 +76,32 @@ let letterIn = async (graph: Graph, said: unknown): Promise<Bundle> => {
 export let reSubject = (said: string): string =>
   `Re: ${said.replace(/^(\s*(re|fwd?):\s*)+/i, '').trim()}`
 
+/** A letter's two sides as a reply to it sees them. An arrival — a letter
+ * with a Message-ID that never asked to be sent; one of ours carries
+ * `deliver`, and has a Message-ID too once the transport gave it one — is
+ * answered at whom it says to answer, its Reply-To, else its author, and from
+ * the address it was delivered to. Our own letter is answered to its
+ * recipient, from the address it went out from. */
+export let sides = (letter: Bundle): {
+  /** whether it arrived here */
+  arrived: boolean
+  /** the far side: an arrival's address, or our letter's recipient's eid */
+  far: string
+  /** the address a reply goes from, this side of the thread */
+  from: string
+} => {
+  let mail = comp(letter, MAIL)
+  let deliver = comp(letter, DELIVER)
+  let arrived = !!prop(mail, 'message_id') && !deliver
+  return arrived
+    ? {
+      arrived,
+      far: prop(mail, 'reply_address') || prop(mail, 'from'),
+      from: prop(mail, 'to'),
+    }
+    : { arrived, far: prop(deliver, 'to'), from: prop(mail, 'from') }
+}
+
 // The far side's address as an entity, since `deliver.to` names a recipient
 // rather than a string: whoever already has that address, else a new `email`
 // row for it. That is what makes the address book grow by use instead of by
@@ -266,33 +292,23 @@ export let runs = (
     ]
   },
 
-  // The reply goes to the far side — whom an arrival says to answer (its
-  // Reply-To, else its author), or our own sent letter's recipient — and never to a fallback between the two: the wrong
-  // choice here is this graph's own address, so a reply that quietly went
-  // there would look sent without being sent. An arrival is a letter with a
-  // Message-ID that never asked to be sent: one of ours carries `deliver`, and
-  // has a Message-ID too once the transport gave it one.
+  // The reply goes to the far side ({@link sides}) and never to a fallback
+  // between an arrival's and ours: the wrong choice here is this graph's own
+  // address, so a reply that quietly went there would look sent without
+  // being sent.
   mail_reply: async (call, graph): Promise<Bundle[]> => {
     let args = argsOf(call)
     let letter = await letterIn(graph, args.letter)
-    let mail = comp(letter, MAIL)!
-    let arrived = !!prop(mail, 'message_id') && !comp(letter, DELIVER)
+    let { arrived, far: answered, from } = sides(letter)
     let far = arrived
-      ? await recipientOf(
-        graph,
-        prop(mail, 'reply_address') || prop(mail, 'from'),
-        options.domain,
-      )
-      : { to: prop(comp(letter, DELIVER), 'to'), made: [] as Bundle[] }
+      ? await recipientOf(graph, answered, options.domain)
+      : { to: answered, made: [] as Bundle[] }
     if (!far.to) {
       throw new CallError(
         'reply',
         'cannot reply: that letter names nobody to answer — send a fresh mail',
       )
     }
-    // The address it goes from: the one an arrival was delivered to, or the
-    // one our own letter went out from. Either way, this side of the thread.
-    let from = arrived ? prop(mail, 'to') : prop(mail, 'from')
     let attention = arrived
       ? await attentionOf(graph, call, await threadOf(graph, letter), letter)
       : undefined
@@ -363,7 +379,7 @@ export let runs = (
 
   mail_check: async (call, graph) => {
     // An arrival is a letter with a Message-ID that never asked to be sent
-    // (see mail_reply), and one with no sender has nobody to answer.
+    // (see `sides`), and one with no sender has nobody to answer.
     let orphans = await graph.read(
       and(
         present(`${MAIL}.message_id`),

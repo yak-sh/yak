@@ -7,7 +7,8 @@ import { late, type Remote, request as upstream } from './remote.ts'
 export type Options = { remote?: Remote }
 let uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
-type Read =
+/** What a read answered: its value, or the refusal and the status it is. */
+export type Read =
   | { ok: true; value: unknown }
   | { ok: false; error: string; status: number }
 let refused = (error: string, status: number): Read => ({

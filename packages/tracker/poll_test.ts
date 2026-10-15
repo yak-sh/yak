@@ -1,6 +1,9 @@
-// The Worker is a fetch double: it pages its bugs by eid and records marks.
-import { equal, test, until } from '@yaks/testing'
-import { poll } from './poll.ts'
+// The Worker is a double at its doors: it pages its bugs by eid and records
+// marks; which door a mark goes to is `marking`'s (./remote.ts). A poll that
+// fails or hangs is asked through the signed transport, which is what names
+// its failure.
+import { clock, equal, test } from '@yaks/testing'
+import { type Doors, poll, type Polled, signed } from './poll.ts'
 
 let worker = (count: number) => {
   let bugs = Array.from({ length: count }, (_, i) => ({
@@ -8,67 +11,83 @@ let worker = (count: number) => {
     bug: { fault: `f${i}` },
   }))
   let marks: string[] = []
-  let go = ((input: URL | Request | string, init?: RequestInit) => {
-    let url = new URL(String(input))
-    if (url.pathname.endsWith('/bugs')) {
-      let q = url.searchParams.get('query') ?? ''
-      let after = q.match(/\.after=(\S+)/)?.[1] ?? ''
-      let limit = Number(url.searchParams.get('limit'))
-      return Promise.resolve(Response.json(
-        bugs.filter((b) => b.entity.eid > after).slice(0, limit),
-      ))
-    }
-    marks.push(`${url.pathname.split('/').pop()} ${init?.body}`)
-    return Promise.resolve(Response.json({ ok: true }))
-  }) as typeof fetch
-  return { go, marks }
+  let doors: Doors = {
+    bugs: (params) => {
+      let after = params.get('query')?.match(/\.after=(\S+)/)?.[1] ?? ''
+      let limit = Number(params.get('limit'))
+      return Promise.resolve({
+        ok: true,
+        value: bugs.filter((b) => b.entity.eid > after).slice(0, limit),
+      })
+    },
+    mark: (bug, name, task) => {
+      marks.push([name, bug, task].filter(Boolean).join(' '))
+      return Promise.resolve(true)
+    },
+  }
+  return { doors, marks }
 }
 let remote = { url: 'https://tracker.example', secret: 'test' }
 
+// The poll once it has answered or failed, as its subscribers hear it.
+let polled = (open: Polled) =>
+  new Promise<Polled>((done) => {
+    let off = open.subscribe(() => {
+      off()
+      done(open)
+    })
+  })
+
 test('a poll answers every page of the platform tracker, and marks reach it', async () => {
-  let { go, marks } = worker(230)
-  let polled = poll(remote, '.bug', { go })
-  await until(() => polled.ready)
-  equal(polled.value.length, 230)
-  await polled.mutate([
+  let { doors, marks } = worker(230)
+  let open = await polled(poll(remote, '.bug', { doors }))
+  equal(open.value.length, 230)
+  await open.mutate([
     { entity: { eid: 'a' }, resolved: {} },
     { entity: { eid: 'b' }, archived: {} },
     { entity: { eid: 'c' }, doc: { title: 'no mark' } },
+    { entity: { eid: 'd' }, taken: { task: 'T-7' } },
   ])
-  equal(marks, ['resolve {"bug":"a"}', 'archive {"bug":"b"}'])
-  polled.close()
+  equal(marks, ['resolved a', 'archived b', 'taken d T-7'])
+  open.close()
 })
 
 test('a failed poll is reported and leaves the answer not ready', async () => {
   let failures: unknown[] = []
-  let polled = poll(remote, '.bug', {
-    go: (() =>
-      Promise.resolve(new Response('', { status: 500 }))) as typeof fetch,
-    report: (error) =>
-      failures.push(error),
-  })
-  await until(() => failures.length > 0)
-  equal(polled.ready, false)
-  polled.close()
+  let open = await polled(poll(remote, '.bug', {
+    doors: signed(
+      remote,
+      (() =>
+        Promise.resolve(new Response('', { status: 500 }))) as typeof fetch,
+    ),
+    report: (error) => failures.push(error),
+  }))
+  equal([open.ready, failures.map(String)], [false, [
+    'Error: Remote tracker refused the read (500)',
+  ]])
+  open.close()
 })
 
 test('a poll that hangs settles as failed, and says it timed out', async () => {
   let failures: unknown[] = []
-  let polled = poll(remote, '.bug', {
+  let time = clock()
+  // A fetch that never answers, until its signal gives up on it.
+  let hang = ((_: unknown, init?: RequestInit) =>
+    new Promise((_, fail) => {
+      let signal = init!.signal!
+      if (signal.aborted) fail(signal.reason)
+      signal.addEventListener('abort', () => fail(signal.reason))
+    })) as typeof fetch
+  let hung = polled(poll(remote, '.bug', {
     timeout: 5,
-    go: ((_: unknown, init?: RequestInit) =>
-      new Promise((_, fail) =>
-        init?.signal?.addEventListener('abort', () =>
-          fail(init.signal!.reason))
-      )) as typeof fetch,
-    report: (error) =>
-      failures.push(error),
-  })
-  let heard = 0
-  polled.subscribe(() => heard++)
-  await until(() => heard > 0)
-  equal([polled.ready, failures.map(String)], [false, [
+    timer: (fn, ms) => time.after(ms, fn),
+    doors: signed(remote, hang),
+    report: (error) => failures.push(error),
+  }))
+  await time.advance(5)
+  let open = await hung
+  equal([open.ready, failures.map(String)], [false, [
     'Error: Remote tracker did not answer in time',
   ]])
-  polled.close()
+  open.close()
 })

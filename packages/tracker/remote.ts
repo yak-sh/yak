@@ -121,6 +121,20 @@ export let delivery =
 // The Worker's door for each mark, by the mark's name.
 let doors = { resolved: 'resolve', archived: 'archive', taken: 'take' }
 
+/// marking('a', 'resolved') -> { door: 'resolve', body: '{"bug":"a"}' }
+/// marking('b', 'archived') -> { door: 'archive', body: '{"bug":"b"}' }
+/// marking('d', 'taken', 'T-7') -> { door: 'take', body: '{"bug":"d","task":"T-7"}' }
+/** The Worker's door a mark goes to, and what it says there: the bug, and
+ * with `taken` the fixer's `task`. */
+export let marking = (
+  bug: string,
+  name: keyof typeof doors,
+  task?: string,
+): { door: string; body: string } => ({
+  door: doors[name],
+  body: JSON.stringify(task ? { bug, task } : { bug }),
+})
+
 /** Mark a Worker copy, returning false when the Worker does not hold it. A
  * `taken` mark names the fixer's `task`. */
 export let mark = async (
@@ -130,24 +144,25 @@ export let mark = async (
   go: typeof fetch = fetch,
   task?: string,
 ): Promise<boolean> => {
+  let { door, body } = marking(bug, name, task)
   let response = await request(
     remote,
-    doors[name],
+    door,
     new URLSearchParams({ scope: 'platform' }),
     {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify(task ? { bug, task } : { bug }),
+      body,
     },
     go,
   )
   if (response.status == 404) {
-    let body = await response.json().catch(() => null)
-    if (body?.error == 'bug not found') return false
+    let answer = await response.json().catch(() => null)
+    if (answer?.error == 'bug not found') return false
     // A Worker whose deploy has not reached its object yet answers a new door
     // as no route, while the box already sends it.
-    if (body?.error == 'tracker route not found') {
-      throw Error(`Remote tracker has no ${doors[name]} door (404)`)
+    if (answer?.error == 'tracker route not found') {
+      throw Error(`Remote tracker has no ${door} door (404)`)
     }
   } else {
     await response.body?.cancel()

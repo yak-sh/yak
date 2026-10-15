@@ -1,9 +1,16 @@
-// Notification occasions run through effect handlers in an in-memory graph.
+// Notification occasions run through their handlers over a bare store: the
+// handlers' own reads and writes, admitted and guarded as the graph would,
+// without the pipeline around them. That the declared effects run these
+// handlers is ./effects_test.ts's.
 import { equal, ok, test } from '@yaks/testing'
-import { type Bundle, type Graph, graph } from '@yaks/graph'
-import { ram } from '@yaks/ram'
-import { fixture, vocab } from './fixture_test.ts'
-import { effects } from './effects.ts'
+import type { Bundle } from '@yaks/graph'
+import { bare } from './fixture_test.ts'
+import {
+  type Desk,
+  follow as followed,
+  notify,
+  type Options,
+} from './effects.ts'
 import { comp, str } from './model.ts'
 
 let options = {
@@ -24,42 +31,21 @@ let bug = (eid = crypto.randomUUID()): Bundle => ({
 })
 // Effect inputs have already been stamped. The declared-effects test covers
 // intake and the generic mark rules; these cases exercise the handler's writes.
-let put = (g: Graph, rows: Bundle[]) =>
+let put = (g: Desk, rows: Bundle[]) =>
   g.apply(rows, { trusted: true, stamp: false })
-let handlers = new WeakMap<Graph, ReturnType<typeof effects>>()
-let handler = (g: Graph) => {
-  let found = handlers.get(g)
-  if (!found) handlers.set(g, found = effects({ graph: g }, options))
-  return found
-}
-let replay = (g: Graph, row: Bundle, name = 'bug') =>
-  handler(g).bug_notify(
-    {
-      entity: row.entity,
-      name,
-      kind: 'created',
-    },
-    g,
-    (rows) => put(g, rows),
-  )
-let letters = (g: Graph) => g.read('.mail *')
+let replay = (g: Desk, row: Bundle, more: Options = {}) =>
+  notify(g, row.entity.eid, { ...options, ...more })
+let follow = (g: Desk, row: Bundle) => followed(g, row.entity.eid, options)
+let letters = (g: Desk) => g.read('.mail *')
 
-let check = (name: string, run: (g: Graph) => Promise<void>) => {
-  let g = fixture()
-  test(name, () => run(g))
-}
+let check = (name: string, run: (g: Desk) => Promise<void>) =>
+  test(name, () => run(bare()))
 
-// These openings are already stamped; notification writes need no additional
-// provenance setup. The generic mark rules are checked through intake elsewhere.
-let opening = graph({ vocab, storage: ram(vocab), provenance: false })
-let first = bug(), second = bug()
-await put(opening, [first, second])
-handler(opening)
-
-test(
+check(
   'two bugs opening in one minute each get an immediate letter',
-  async () => {
-    let g = opening, a = first, b = second
+  async (g) => {
+    let a = bug(), b = bug()
+    await put(g, [a, b])
     await Promise.all([replay(g, a), replay(g, b)])
     let mail = await g.read('.mail')
     equal(mail.length, 2)
@@ -149,13 +135,6 @@ check(
   },
 )
 
-let follow = (g: Graph, row: Bundle) =>
-  handler(g).bug_follow(
-    { entity: row.entity, name: 'resolved', kind: 'created' },
-    g,
-    (rows) => put(g, rows),
-  )
-
 check('a regression and a resolve answer the opening letter', async (g) => {
   let row = bug()
   await put(g, [row])
@@ -172,7 +151,7 @@ check('a regression and a resolve answer the opening letter', async (g) => {
     resolved: null,
     regressed: { at: '2026-10-02T00:02:00Z' },
   }])
-  await replay(g, row, 'regressed')
+  await replay(g, row)
   let later = (await letters(g)).filter((m) =>
     m.entity.eid != opening.entity.eid
   )
@@ -195,14 +174,15 @@ check('a fixer taking the bug is said once per opening', async (g) => {
     (await letters(g)).map((m) => str(comp(m, 'doc').body)).slice(1)
   await take('2026-10-02T00:01:00Z')
   await take('2026-10-02T00:01:30Z')
-  equal((await said()).length, 1)
-  ok((await said())[0].includes('A fixer started on it'))
-  ok((await said())[0].includes('working T-7'))
+  let [word, ...more] = await said()
+  equal(more.length, 0)
+  ok(word.includes('A fixer started on it'), word)
+  ok(word.includes('working T-7'), word)
   await put(g, [{
     entity: row.entity,
     regressed: { at: '2026-10-02T00:02:00Z' },
   }])
-  await replay(g, row, 'regressed')
+  await replay(g, row)
   await follow(g, row)
   equal((await said()).filter((b) => b.includes('fixer')).length, 1)
   await take('2026-10-02T00:03:00Z')
@@ -233,7 +213,7 @@ check('replayed bug effects and wakes keep the same letter', async (g) => {
   await replay(g, row)
   await put(g, [{ entity: row.entity, fired: {} }])
   await replay(g, row)
-  await replay(g, row, 'fired')
+  await replay(g, row)
   equal((await letters(g)).map((m) => m.entity.eid), [letter.entity.eid])
 })
 
@@ -271,31 +251,28 @@ check(
   },
 )
 
-test('archived bugs never notify, repeats do not create another letter', async () => {
-  let g = fixture(), row = bug()
-  await put(g, [{ ...row, archived: {} }])
-  await replay(g, row)
-  equal((await letters(g)).length, 0)
-  let pushed = 0
-  let stream = fixture({
-    notify: () => {
-      pushed++
-    },
-  })
-  await put(stream, [{ ...row, archived: {} }])
-  equal(pushed, 0)
-})
-
-test('space openings still use their notify stream', async () => {
+// A space's openings go to its stream instead of a letter.
+let streamed = async (g: Desk, row: Bundle) => {
   let pushed: Bundle[] = []
-  let g = fixture({
-    notify: (bugs) => {
-      pushed.push(...bugs)
-    },
-  })
+  await replay(g, row, { notify: (bugs) => void pushed.push(...bugs) })
+  return pushed.map((b) => b.entity.eid)
+}
+
+check(
+  'archived bugs never notify, repeats do not create another letter',
+  async (g) => {
+    let row = { ...bug(), archived: {} }
+    await put(g, [row])
+    await replay(g, row)
+    equal((await letters(g)).length, 0)
+    equal(await streamed(g, row), [])
+  },
+)
+
+check('space openings still use their notify stream', async (g) => {
   let row = bug()
   await put(g, [row])
-  equal(pushed.map((b) => b.entity.eid), [row.entity.eid])
+  equal(await streamed(g, row), [row.entity.eid])
   equal((await letters(g)).length, 0)
   ok(!(await g.get([row.entity.eid]))[0].notified)
 })
@@ -329,12 +306,6 @@ let source = (row: Bundle, from: string): Bundle => ({
   entity: { eid: crypto.randomUUID() },
   error: { at, bug: row.entity.eid, tags: { source: from } },
 })
-let platform = (g: Graph, row: Bundle) =>
-  effects({ graph: g }, { ...options, forwarded: ['box'] }).bug_notify(
-    { entity: row.entity, name: 'bug', kind: 'created' },
-    g,
-    (rows) => put(g, rows),
-  )
 
 check('a bug forwarded by the box gets its letter only there', async (g) => {
   let boxed = bug(), mixed = bug()
@@ -345,8 +316,8 @@ check('a bug forwarded by the box gets its letter only there', async (g) => {
     source(mixed, 'box'),
     source(mixed, 'yaks.app'),
   ])
-  await platform(g, boxed)
-  await platform(g, mixed)
+  await replay(g, boxed, { forwarded: ['box'] })
+  await replay(g, mixed, { forwarded: ['box'] })
   equal(
     (await letters(g)).map((m) => comp(m, 'mail').target),
     [mixed.entity.eid],
@@ -360,11 +331,7 @@ check(
     let row = bug()
     row.entity = { ...row.entity, num: 7 }
     await put(g, [row])
-    await effects({ graph: g }, { ...options, side: 'yaks.app' }).bug_notify(
-      { entity: row.entity, name: 'bug', kind: 'created' },
-      g,
-      (rows) => put(g, rows),
-    )
+    await replay(g, row, { side: 'yaks.app' })
     let [letter] = await letters(g)
     let { title, body } = comp(letter, 'doc') as Record<string, string>
     let eid = row.entity.eid

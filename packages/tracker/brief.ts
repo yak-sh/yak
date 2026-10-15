@@ -82,11 +82,19 @@ export let moment = (at: string): string =>
     hour12: false,
   })
 
+// Made once: a number's `toLocaleString('en-US')` builds a formatter on every
+// call, which a letter that counts a few things paid for each time.
+let digits = new Intl.NumberFormat('en-US')
+
+/// figure(1200) -> '1,200'
+/** A number with its thousands marked, as people read it. */
+export let figure = (n: number): string => digits.format(n)
+
 /// count(1, 'hit') -> '1 hit'
 /// count(1200, 'hit') -> '1,200 hits'
 /** A count and its noun, plural past one. */
 export let count = (n: number, noun: string): string =>
-  `${n.toLocaleString('en-US')} ${noun}${n == 1 ? '' : 's'}`
+  `${figure(n)} ${noun}${n == 1 ? '' : 's'}`
 
 /// whom(2, 'person') -> '2 people'
 /// whom(1, 'person') -> '1 person'
@@ -100,7 +108,7 @@ export let whom = (people: number, account: string | null | undefined) =>
   account == 'test'
     ? 'test accounts only'
     : people
-    ? people == 1 ? '1 person' : `${people.toLocaleString('en-US')} people`
+    ? people == 1 ? '1 person' : `${figure(people)} people`
     : account == 'person'
     ? "a person's space, no signed-in person recorded"
     : 'no person recorded'

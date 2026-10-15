@@ -1,12 +1,13 @@
-// The page reporter (page.js) as a page runs it: a fresh copy is loaded under
-// a stand-in window, a resource error is fired at its capture listener, and
-// what it asked the server and what it sent to the report door are read.
-import { equal, test, tick } from '@yaks/testing'
+// The page reporter (page.js) as a page runs it: a fresh copy is run as a
+// classic script over a stand-in window, a resource error is fired at its
+// capture listener, and what it asked the server and what it sent to the
+// report door are read.
+import { equal, test } from '@yaks/testing'
 
 let at = 'https://ada.yaks.app/cookbook/'
 let file = `${at}api/assets/80230632-aacf-41d8-8e97-f2477f05e38c/styles.css?v=5`
 // Named beside this file, so a change to the reporter runs these again.
-let page = new URL('./page.js', import.meta.url)
+let code = await Deno.readTextFile(new URL('./page.js', import.meta.url))
 
 type El = { tagName: string; href?: string; src?: string; type?: string }
 
@@ -14,53 +15,50 @@ type El = { tagName: string; href?: string; src?: string; type?: string }
 // the status `files` gives it, or drops the connection for any other.
 let load = async (el: El, files: Record<string, number>) => {
   let asked: string[] = []
-  let said: string[] = []
-  let heard = new Map<string, (e: unknown) => void>()
-  let keep = {
-    document: globalThis.document,
-    location: Object.getOwnPropertyDescriptor(globalThis, 'location'),
-    fetch: globalThis.fetch,
-    error: console.error,
-    listen: globalThis.addEventListener,
-  }
-  let g = globalThis as Record<string, unknown>
-  g.document = {
-    currentScript: { dataset: { yakAt: '/cookbook/', yakVersion: '5' } },
-    baseURI: at,
-    readyState: 'complete',
-    body: { innerText: 'A cookbook with plenty on the page. '.repeat(4) },
-  }
-  Object.defineProperty(globalThis, 'location', {
-    value: new URL(at),
-    configurable: true,
-  })
-  g.fetch = async (url: string, init?: RequestInit) => {
+  let sent: Blob[] = []
+  let heard = new Map<string, (e: unknown) => unknown>()
+  let server = (url: string, init?: RequestInit) => {
     if (url.endsWith('/api/report')) {
-      said.push(JSON.parse(await (init?.body as Blob).text()).message)
-      return new Response(null, { status: 204 })
+      sent.push(init?.body as Blob)
+      return Promise.resolve(new Response(null, { status: 204 }))
     }
     asked.push(url)
-    if (!(url in files)) throw new TypeError('Load failed')
-    return new Response('body', { status: files[url] })
+    return url in files
+      ? Promise.resolve(new Response('body', { status: files[url] }))
+      : Promise.reject(new TypeError('Load failed'))
   }
-  g.addEventListener = (type: string, on: (e: unknown) => void) =>
-    heard.set(type, on)
-  try {
-    // A copy of its own, even when this file is loaded again (--twice).
-    await import(`${page.href}?${crypto.randomUUID()}`)
-    heard.get('error')!({ target: el })
-    await tick()
-    await tick()
-  } finally {
-    g.document = keep.document
-    Reflect.deleteProperty(globalThis, 'location')
-    if (keep.location) {
-      Object.defineProperty(globalThis, 'location', keep.location)
-    }
-    g.fetch = keep.fetch
-    console.error = keep.error
-    g.addEventListener = keep.listen
+  // The window the script runs in: `fetch` is whatever the window holds by
+  // then, as a page's own global is.
+  let win: { origin: string; fetch: typeof server } = {
+    origin: new URL(at).origin,
+    fetch: server,
   }
+  let page = {
+    document: {
+      currentScript: { dataset: { yakAt: '/cookbook/', yakVersion: '5' } },
+      baseURI: at,
+      readyState: 'complete',
+      body: { innerText: 'A cookbook with plenty on the page. '.repeat(4) },
+    },
+    location: new URL(at),
+    navigator: {},
+    self: win,
+    globalThis: win,
+    fetch: (url: string, init?: RequestInit) => win.fetch(url, init),
+    addEventListener: (type: string, on: (e: unknown) => unknown) =>
+      heard.set(type, on),
+    removeEventListener: () => {},
+    // The soft state's wait, which these cases leave undrawn.
+    setTimeout: () => 0,
+    clearTimeout: () => {},
+  }
+  new Function(...Object.keys(page), code)(...Object.values(page))
+  // The listener answers with its handling, settled once the miss is filed
+  // or let go.
+  await heard.get('error')!({ target: el })
+  let said = await Promise.all(
+    sent.map(async (b) => JSON.parse(await b.text()).message),
+  )
   return { asked, said }
 }
 
