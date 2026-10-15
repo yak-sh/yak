@@ -8,6 +8,21 @@ let at = 'https://ada.yaks.app/cookbook/'
 let file = `${at}api/assets/80230632-aacf-41d8-8e97-f2477f05e38c/styles.css?v=5`
 // Named beside this file, so a change to the reporter runs these again.
 let code = await Deno.readTextFile(new URL('./page.js', import.meta.url))
+// The globals a page gives it. The script is compiled once, as the file
+// loads; each page runs a fresh copy, closures and all.
+let globals = [
+  'document',
+  'location',
+  'navigator',
+  'self',
+  'globalThis',
+  'fetch',
+  'addEventListener',
+  'removeEventListener',
+  'setTimeout',
+  'clearTimeout',
+] as const
+let reporter = new Function(...globals, code)
 
 type El = { tagName: string; href?: string; src?: string; type?: string }
 
@@ -54,7 +69,7 @@ let page = (files: Record<string, number>) => {
     setTimeout: () => 0,
     clearTimeout: () => {},
   }
-  new Function(...Object.keys(scope), code)(...Object.values(scope))
+  reporter(...globals.map((name) => scope[name]))
   let said = () =>
     Promise.all(sent.map(async (b) => JSON.parse(await b.text()).message))
   return { win, heard, asked, said }

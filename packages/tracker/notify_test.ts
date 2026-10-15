@@ -36,20 +36,20 @@ let letters = (g: Desk) => g.read('.mail *')
 let check = (name: string, run: (g: Desk) => Promise<void>) =>
   test(name, () => run(bare()))
 
-check(
-  'two bugs opening in one minute each get an immediate letter',
-  async (g) => {
-    let a = bug(), b = bug()
-    await put(g, [a, b])
-    await Promise.all([replay(g, a), replay(g, b)])
-    let mail = await g.read('.mail')
-    equal(mail.length, 2)
-    equal(
-      mail.map((m) => comp(m, 'mail').target).sort(),
-      [a.entity.eid, b.entity.eid].sort(),
-    )
-  },
-)
+// Two bugs that opened in the same minute.
+let pair = bare()
+let [a, b] = [bug(), bug()]
+await put(pair, [a, b])
+
+test('two bugs opening in one minute each get an immediate letter', async () => {
+  await Promise.all([replay(pair, a), replay(pair, b)])
+  let mail = await pair.read('.mail')
+  equal(mail.length, 2)
+  equal(
+    mail.map((m) => comp(m, 'mail').target).sort(),
+    [a.entity.eid, b.entity.eid].sort(),
+  )
+})
 
 check(
   'a letter names its bug and carries its essentials and web link',
