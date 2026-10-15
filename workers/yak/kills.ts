@@ -101,8 +101,8 @@ let WHAT: Record<string, string> = {
 // One occurrence per minute an object was killed in, on the version it ran.
 // The message names what was killed and how, so a CPU kill and a memory kill
 // are two bugs; the object's name rides as its tag.
-let reported = ({ dimensions: d, sum }: Kill) =>
-  defect(
+let reported = (report: typeof defect) => ({ dimensions: d, sum }: Kill) =>
+  report(
     new Error(
       `a Durable Object's ${WHAT[d.type] ?? d.type} was killed: ${d.status}`,
     ),
@@ -115,12 +115,14 @@ let reported = ({ dimensions: d, sum }: Kill) =>
     d.scriptVersion ? { commit: d.scriptVersion } : {},
   )
 
-/** Read the kills since `through` and report each. Answers how far it read,
- * for the next run to read on from, or null when it read nothing. */
+/** Read the kills since `through` and report each, to the tracker unless a
+ * `report` is given. Answers how far it read, for the next run to read on
+ * from, or null when it read nothing. */
 export let swept = async (
   env: Env,
   through: string | null | undefined,
   now: number,
+  report: typeof defect = defect,
 ): Promise<string | null> => {
   let window = span(through, now)
   if (!window || !env.CF_ANALYTICS_TOKEN) return null
@@ -131,6 +133,6 @@ export let swept = async (
   })
   let kills = said(answer)?.viewer?.accounts?.[0]
     ?.durableObjectsInvocationsAdaptiveGroups ?? []
-  kills.forEach(reported)
+  kills.forEach(reported(report))
   return window.until
 }
