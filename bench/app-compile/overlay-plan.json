@@ -1,0 +1,36 @@
+[
+  {
+    "slot": "7",
+    "worker": "t125306-c7",
+    "sha": "e7155012e",
+    "rev": "instrumented-baseline",
+    "image": "registry.cloudflare.com/0f9613dfd3f0451df0bd0f12a1372ea3/yak-esbuild:inputs-f9232f19399bb7ed3da7cb0330075cc64c2c89a2f03d7501a1eec96fc3ed0622",
+    "compileSha256": "b7aa7bf40a879f06972f839b252fc3910fcb5e333cdd91ae522c032ab8fd5757",
+    "overlay": {
+      "compile.ts": "b7aa7bf40a879f06972f839b252fc3910fcb5e333cdd91ae522c032ab8fd5757",
+      "plan.ts": "99a93da069161df0f14bc1f89eddec5e31b0366486bf9a3968cf02571ea778e0",
+      "shared.ts": "f8fb241661678e7157232bc8f836ca5400ca7f8b18351a2a5fd8909ba24b3d1a",
+      "npm.ts": "265c5c395b558e049449459e055fdb98b09ababfdf61a8ea037bc4f05676d561",
+      "timing.ts": "ba36121953be34121ba75ef3d6bb27c4870114ee3d62ec7b31711e1cfde21002"
+    },
+    "app": "a0386055-1d6c-429a-97cf-26254a010ec3",
+    "namespace": "50578281af684f25a53f6a6bbf192124"
+  },
+  {
+    "slot": "8",
+    "worker": "t125306-c8",
+    "sha": "dab2f864fe31d5da9b8488a626d548978a50dc6e",
+    "rev": "instrumented-fixed",
+    "image": "registry.cloudflare.com/0f9613dfd3f0451df0bd0f12a1372ea3/yak-esbuild:inputs-f9232f19399bb7ed3da7cb0330075cc64c2c89a2f03d7501a1eec96fc3ed0622",
+    "compileSha256": "b7aa7bf40a879f06972f839b252fc3910fcb5e333cdd91ae522c032ab8fd5757",
+    "overlay": {
+      "compile.ts": "b7aa7bf40a879f06972f839b252fc3910fcb5e333cdd91ae522c032ab8fd5757",
+      "plan.ts": "99a93da069161df0f14bc1f89eddec5e31b0366486bf9a3968cf02571ea778e0",
+      "shared.ts": "a2d6768730ace722a9c4b25b10e9d4760e9a2bbf4e5385ac589d230fabbcc151",
+      "npm.ts": "3fbb14d38835e8d7e272bd8b3e0db2255d1bcd25acccdefb19e7e8faceb8106d",
+      "timing.ts": "ba36121953be34121ba75ef3d6bb27c4870114ee3d62ec7b31711e1cfde21002"
+    },
+    "app": "a033df48-002c-4a5b-bb3b-6d7424596de6",
+    "namespace": "363d08aa5d1d40e384d9887c12126a14"
+  }
+]
