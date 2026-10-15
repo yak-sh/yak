@@ -204,6 +204,12 @@ class_name = "Sandbox"
 name = "WORKSPACES"
 class_name = "Workspaces"
 
+# The one object every purge of Site's cache goes through (index.ts `Purger`),
+# since Cloudflare keeps one purge budget for the whole account (purge.ts).
+[[durable_objects.bindings]]
+name = "PURGER"
+class_name = "Purger"
+
 [[migrations]]
 tag = "v1"
 new_sqlite_classes = ["Store"]
@@ -223,6 +229,10 @@ new_sqlite_classes = ["Sandbox"]
 [[migrations]]
 tag = "v5"
 new_sqlite_classes = ["Workspaces"]
+
+[[migrations]]
+tag = "v6"
+new_sqlite_classes = ["Purger"]
 
 # The container uses a prebuilt registry image. Its tag is the toolchain
 # Dockerfile's hash; sandbox_test.ts checks its SDK against package.json.
@@ -630,6 +640,10 @@ class_name = "Sandbox"
 name = "WORKSPACES"
 class_name = "Workspaces"
 
+[[env.staging.durable_objects.bindings]]
+name = "PURGER"
+class_name = "Purger"
+
 [[env.staging.migrations]]
 tag = "v1"
 new_sqlite_classes = ["Store"]
@@ -649,6 +663,10 @@ new_sqlite_classes = ["Sandbox"]
 [[env.staging.migrations]]
 tag = "v5"
 new_sqlite_classes = ["Workspaces"]
+
+[[env.staging.migrations]]
+tag = "v6"
+new_sqlite_classes = ["Purger"]
 
 [[env.staging.containers]]
 class_name = "Sandbox"

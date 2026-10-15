@@ -280,6 +280,7 @@ import {
   working,
 } from './versions.ts'
 import { appTag, purge } from './purge.ts'
+import { keepable } from './page-cache.ts'
 import { within } from './rate.ts'
 import {
   admin,
@@ -1478,9 +1479,10 @@ let released = async (
   // The app's pages leave the edge as the release begins, beside its work
   // rather than after it: Site keeps none of a fenced app's pages
   // (page-cache.ts `keep`), so the commit purges nothing of the app's
-  // (facets/pages-graph.ts), and the answer waits only on this.
-  let purged = reviewing ? Promise.resolve() : purge(
-    ctx.env.SITE,
+  // (facets/pages-graph.ts), and the answer waits only on this. An app whose
+  // pages Site never keeps has none to purge.
+  let purged = reviewing || !keepable(standing) ? Promise.resolve() : purge(
+    ctx.env,
     [appTag(standing.eid)],
   ).catch((e) =>
     caught(e, { request: 'release purge', space: space.slug, app: app.slug })

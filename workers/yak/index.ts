@@ -6,7 +6,12 @@
 // may live in a different Worker from the one that binds it, and so are the
 // Wire object (stream.ts), which holds a person's open agent stream, and the
 // Builder (build.ts), which holds a space's build conversation.
-import { env, waitUntil, WorkerEntrypoint } from 'cloudflare:workers'
+import {
+  DurableObject,
+  env,
+  waitUntil,
+  WorkerEntrypoint,
+} from 'cloudflare:workers'
 import type { Caller } from '@yaks/egress'
 import { Builder as Built } from './build.ts'
 import { Store as Stored } from './graph.ts'
@@ -21,7 +26,7 @@ import { swapped } from './sandbox.ts'
 export { WorkspaceStore as Workspaces } from './workspaces.ts'
 import { outbound } from './outbound.ts'
 import * as sitePart from './site.ts'
-import type { Purged } from './purge.ts'
+import { type Purged, purger } from './purge.ts'
 import { hosting } from './inference.ts'
 import type { Inference, InferenceReceipt, Mark } from '@yaks/model'
 
@@ -116,8 +121,8 @@ export class Files extends WorkerEntrypoint {
 //
 // `purge` is how a page leaves that cache (purge.ts): an RPC, which the cache
 // never answers, and the only place a purge of Site's own cache can be made,
-// since a purge reaches just the entrypoint that calls it. The directory
-// calls it through the SITE binding after a write that changes a page.
+// since a purge reaches just the entrypoint that calls it. The Purger below
+// calls it through the SITE binding, for every write that changes a page.
 export class Site extends WorkerEntrypoint {
   declare env: Env
   declare ctx: { cache?: Purging }
@@ -152,6 +157,19 @@ export class Site extends WorkerEntrypoint {
 
 // What the runtime lends an entrypoint whose cache is on (wrangler.toml).
 type Purging = { purge(o: { tags: string[] }): Promise<Purged> }
+
+// The one object every purge goes through (purge.ts `purge`): Cloudflare keeps
+// one purge budget for the whole account, so it is spent in one place, and
+// the tags owed while a purge waits for its token ride with it. Site's
+// `purge` is called as a method of the binding, never through `call` or
+// `apply`: an RPC stub answers every property as a method of the far side.
+export class Purger extends DurableObject<Env> {
+  #purge = purger({ purge: (tags) => this.env.SITE!.purge!(tags) })
+
+  purge(tags: string[]): Promise<void> {
+    return this.#purge(tags)
+  }
+}
 
 // An app's worker calling out (outbound.ts): the namespace's outbound Worker,
 // yak-out (outbound/), hands each fetch back here with the CALLER dispatch.ts

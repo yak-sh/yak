@@ -6,13 +6,14 @@
 // `purge(tags)` RPC, which never goes through its cache.
 //
 // Cloudflare holds a whole account to its free tier's purge rate whatever the
-// plan: a burst of about 25, then 5 a minute, shared by every Worker on the
-// account (measured 2026-10-14, a refusal is error 1134). A purge carries up
-// to 100 tags, so writers' tags ride together: one purge is in flight at a
-// time, and every tag owed while it flies goes in the next one, among the
-// writers in one isolate: the directory, whose writes they follow
+// plan: a bucket of 25, a token back every twelve seconds, shared by every
+// Worker on the account (developers.cloudflare.com/workers/cache/purge/; a
+// refusal is error 1134). So every purge goes through one Durable Object, the
+// Purger (index.ts), which keeps the account's bucket: a purge waits for a
+// token rather than spend a refusal, and every tag owed while it waits rides
+// with it, up to 100 a purge. The directory, whose writes they follow
 // (facets/pages-graph.ts), and a release, which purges its app as it raises
-// its fence (tools.ts `released`).
+// its fence (tools.ts `released`), send theirs there.
 //
 // An acknowledged purge has not reached every cache yet. Over about ninety
 // deploys measured from the box, four times a page kept in a colo other than
@@ -35,22 +36,47 @@ export let spaceTag = (eid: string) => `space:${eid}`
 
 // One purge's tags at most (Cloudflare's operations per request).
 let BATCH = 100
+// The account's bucket, as Cloudflare keeps it.
+let BUCKET = 25
+let REFILL = 12_000
 // The refusal that means "too many, wait".
 let LIMITED = 1134
-// How long a refused batch waits before each try again: a token comes back
-// every twelve seconds, so the last wait spans one. A writer waits through
-// all of them; past the last, the pages keep their short lifetime
-// (page-cache.ts `KEPT`) and the failure is reported.
-let WAITS = [1_000, 4_000, 12_000]
+// How many refusals a tag takes before it is given up on. A refusal means
+// the bucket is emptier than the Purger knew (a new Purger starts it full),
+// and it waits a token out before trying again; past the last, the pages
+// keep their short lifetime (page-cache.ts `KEPT`) and the failure is
+// reported.
+let TRIES = 3
 
 let sleep = (ms: number) => new Promise<void>((done) => setTimeout(done, ms))
 
 /** A purge refused, and why. */
 export class Unpurged extends Error {}
 
+// Tags owed together, and the writers waiting on them.
+type Round = {
+  tags: Set<string>
+  done: PromiseWithResolvers<void>
+  refused: number
+}
+let round = (): Round => ({
+  tags: new Set(),
+  done: Promise.withResolvers(),
+  refused: 0,
+})
+// A round going again takes in the one owed since, and settles it with its own.
+let merge = (r: Round, later: Round | null) => {
+  if (!later) return r
+  for (let tag of later.tags) r.tags.add(tag)
+  r.done.promise.then(later.done.resolve, later.done.reject)
+  return r
+}
+
 /**
  * Purges for one Site: `purge(tags)` resolves once those tags are gone from
- * the cache, sharing a batch with every tag owed beside them.
+ * the cache, sharing a purge with every tag owed beside them. One purge is in
+ * flight at a time, each spends a token of the bucket, and with none left the
+ * next waits for one.
  *
  * ```ts
  * import { purger } from './purge.ts'
@@ -75,55 +101,72 @@ export class Unpurged extends Error {}
  * assertEquals(sent, [['app:a'], ['app:b', 'app:c']])
  * ```
  */
-export let purger = (site: Purges, wait = sleep) => {
-  let owed = new Set<string>()
-  let next: Promise<void> | null = null
-  let flying: Promise<unknown> = Promise.resolve()
-  let send = async (tags: string[]) => {
-    for (let at = 0; at < tags.length; at += BATCH) {
-      let batch = tags.slice(at, at + BATCH)
-      for (let tries = 0;; tries++) {
-        let said = await site.purge(batch)
-        if (said.success) break
-        if (
-          tries == WAITS.length ||
-          !said.errors.some((e) => e.code == LIMITED)
-        ) {
-          throw new Unpurged(
-            `purge of ${batch.length} tags refused: ${
-              said.errors.map((e) => `${e.code} ${e.message}`).join('; ')
-            }`,
-          )
-        }
-        await wait(WAITS[tries])
+export let purger = (site: Purges, wait = sleep, now = Date.now) => {
+  let owed: Round | null = null
+  let flying = false
+  let tokens = BUCKET, at = now()
+  let token = async () => {
+    for (;;) {
+      let t = now()
+      tokens = Math.min(BUCKET, tokens + (t - at) / REFILL)
+      at = t
+      if (tokens >= 1) return void tokens--
+      await wait((1 - tokens) * REFILL)
+    }
+  }
+  let send = async (r: Round) => {
+    let batch = [...r.tags].slice(0, BATCH)
+    let said = await site.purge(batch)
+    if (said.success) { for (let tag of batch) r.tags.delete(tag) }
+    else {
+      let limited = said.errors.some((e) => e.code == LIMITED)
+      if (limited) tokens = 0
+      if (!limited || ++r.refused == TRIES) {
+        throw new Unpurged(
+          `purge of ${batch.length} tags refused: ${
+            said.errors.map((e) => `${e.code} ${e.message}`).join('; ')
+          }`,
+        )
       }
     }
+    if (r.tags.size) owed = merge(r, owed)
+    else r.done.resolve()
+  }
+  // Writers in one turn share the first purge, and everything owed while a
+  // purge flies or waits for its token shares the next.
+  let fly = async () => {
+    await null
+    while (owed) {
+      await token()
+      let r = owed
+      owed = null
+      await send(r).catch((e) => r.done.reject(e))
+    }
+    flying = false
   }
   return (tags: string[]): Promise<void> => {
     if (!tags.length) return Promise.resolve()
-    for (let tag of tags) owed.add(tag)
-    return next ??= flying.then(() => {
-      let tags = [...owed]
-      owed.clear()
-      next = null
-      let sent = send(tags)
-      flying = sent.catch(() => {})
-      return sent
-    })
+    owed ??= round()
+    for (let tag of tags) owed.tags.add(tag)
+    if (!flying) {
+      flying = true
+      void fly()
+    }
+    return owed.done.promise
   }
 }
 
-// One purger per Site binding, so writers in one object share its batches.
-let purgers = new WeakMap<object, ReturnType<typeof purger>>()
+/** The Purger binding: the one Durable Object every purge goes through. */
+export type Purgers = {
+  idFromName(name: string): unknown
+  get(id: unknown): { purge(tags: string[]): Promise<void> }
+}
 
-/** Purge `tags` from `site`'s cache. A Site with no purge has no cache (a
- * test run, `wrangler dev`), so there is nothing to do. */
-export let purge = (site: Partial<Purges> | undefined, tags: string[]) => {
-  if (!site?.purge || !tags.length) return Promise.resolve()
-  let p = purgers.get(site)
-  // Called as a method of the binding, never through `call` or `apply`: an
-  // RPC stub answers every property as a method of the far side, so
-  // `purge.call` asks Site for a method named `call`.
-  if (!p) purgers.set(site, p = purger({ purge: (tags) => site.purge!(tags) }))
-  return p(tags)
+/** Purge `tags` from Site's cache, through the Purger. Where Site has no
+ * cache (a test run, `wrangler dev`) none is bound, so there is nothing to
+ * do. */
+export let purge = (env: { PURGER?: Purgers }, tags: string[]) => {
+  let { PURGER } = env
+  if (!PURGER || !tags.length) return Promise.resolve()
+  return PURGER.get(PURGER.idFromName('purger')).purge(tags)
 }

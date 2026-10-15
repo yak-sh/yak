@@ -120,11 +120,8 @@ export let plugins = (_host: unknown, options: Options): Plugin[] => {
   let effect: Hook = Object.assign(
     async (applied: Bundle[], tx: Tx) => {
       let { env, meta } = options.store
-      if (!meta || !env.SITE?.purge) return applied
-      await purge(
-        env.SITE,
-        await owed(applied, async (eids) => await tx.get(eids)),
-      )
+      if (!meta || !env.PURGER) return applied
+      await purge(env, await owed(applied, async (eids) => await tx.get(eids)))
       return applied
     },
     { keys: [...PARTS, 'tombstone'] },
