@@ -37,6 +37,7 @@ import {
   type Fetch,
   outward,
   type Report,
+  stays,
   type Sync,
   sync,
   type Timer,
@@ -330,10 +331,14 @@ export let client = (
         let ready = (opts.signal ?? (<T>(value: T) => ({ value })))(
           wire!.ready(id),
         )
+        // A local match shows once the server's answer vouches for it, or
+        // when it is this page's own row, which no server ever answers for.
         let read = () =>
           server
             ? cache.answer(id)
-            : local!.value.filter((b) => cache.includes(id, b.entity.eid))
+            : local!.value.filter((b) =>
+              cache.includes(id, b.entity.eid) || stays(vocab, b)
+            )
         let value = (opts.signal ?? (<T>(value: T) => ({ value })))(read())
         let reduced = (opts.signal ?? (<T>(value: T) => ({ value })))(
           cache.reduced(id),

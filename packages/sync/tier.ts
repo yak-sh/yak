@@ -65,6 +65,39 @@ let writable = (vocab: Vocab, name: string, patch: Comp): Comp => {
   )
 }
 
+// A component that holds nothing but the stamps this node's graph wrote: the
+// server writes its own, so there is nothing in it for a server to keep.
+let stampsOnly = (vocab: Vocab, name: string, held: Comp | null) =>
+  !!held && Object.keys(held).length > 0 &&
+  !Object.keys(writable(vocab, name, held)).length
+
+/**
+ * Whether a row is this node's own: it holds a component that stays here, and
+ * nothing a server keeps besides the stamps this graph wrote on it. No server
+ * ever answers for such a row, so a watch that waits for the server's answer
+ * would never show it.
+ *
+ * ```ts
+ * import { equal } from '@yaks/testing'
+ * import { loadVocab } from '@yaks/vocab'
+ * import { stays } from '@yaks/sync'
+ * let open = { type: 'boolean' }
+ * let v = loadVocab({ $defs: {
+ *   doc: { component: true, properties: { title: { type: 'string' } } },
+ *   Panel: { component: true, sync: 'none', properties: { open } },
+ * } })
+ * equal(stays(v, { entity: { eid: 'm' }, Panel: { open: true } }), true)
+ * equal(stays(v, { entity: { eid: 'm' }, Panel: {}, doc: {} }), false)
+ * ```
+ */
+export let stays = (vocab: Vocab, b: Bundle): boolean => {
+  let held = comps(b)
+  return held.some(([name]) => !outbound(vocab, name)) &&
+    held.every(([name, c]) =>
+      !outbound(vocab, name) || stampsOnly(vocab, name, c)
+    )
+}
+
 // One committed list of bundles, reduced to the components with one given
 // `sync` value: the bundles the caller passed in, carrying the properties a
 // client is allowed to write. A bundle with nothing left in it is dropped.

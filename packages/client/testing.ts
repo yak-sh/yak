@@ -12,6 +12,7 @@
 
 import { IDBFactory } from 'fake-indexeddb'
 import type { Bundle } from '@yaks/graph'
+import type { Vocab } from '@yaks/vocab'
 import type { Connect, Trouble } from '@yaks/sync'
 import { box, type Fake, pair, type Server } from '../sync/testing.ts'
 import { type Client, client, type ClientOpts } from './client.ts'
@@ -20,6 +21,7 @@ import type { Vault } from './vault.ts'
 
 export {
   box,
+  boxDoc,
   COOK,
   type Fake,
   pair,
@@ -45,10 +47,15 @@ export type Box = Client & {
   idle: () => Promise<void>
 }
 
-/** A client over the recipe box. Given a server, its `fetch` and its socket
- * are pointed at that server in this same process; without one, it is a graph
- * in this page alone. Nothing is stored unless the caller passes a vault. */
-export let boxClient = (srv?: Server, opts: ClientOpts = {}): Box => {
+/** A client over the recipe box, or over a page's own words beside it. Given a
+ * server, its `fetch` and its socket are pointed at that server in this same
+ * process; without one, it is a graph in this page alone. Nothing is stored
+ * unless the caller passes a vault. */
+export let boxClient = (
+  srv?: Server,
+  opts: ClientOpts = {},
+  vocab: Vocab = box,
+): Box => {
   let trouble: Trouble[] = []
   let timers: (() => void)[] = []
   let opening: Promise<unknown> = Promise.resolve()
@@ -72,7 +79,7 @@ export let boxClient = (srv?: Server, opts: ClientOpts = {}): Box => {
     return c
   }
 
-  let c = client(box, [], {
+  let c = client(vocab, [], {
     vault: false,
     ...opts,
     url: srv ? 'http://box.test' : undefined,

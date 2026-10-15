@@ -8,7 +8,7 @@ import { assertEquals } from '@std/assert'
 import { type Bundle, transient } from '@yaks/graph'
 import { loadVocab } from '@yaks/vocab'
 import { client } from './client.ts'
-import { box, boxClient, pair, server, titles } from './testing.ts'
+import { box, boxClient, boxDoc, pair, server, titles } from './testing.ts'
 import type { Hold, Make } from './watch.ts'
 
 let subscribes = (sent: unknown[] | undefined): unknown[] | undefined =>
@@ -342,6 +342,35 @@ test('different options and query text never collapse into one watch', async () 
   assertEquals(subscribes(c.socket()?.sent)?.length, 4)
   c.close()
   assertEquals(c.watches.size(), 0)
+})
+
+// A page keeps its own state (an open panel, a completion's caret) in words
+// that never leave it, through the client it shares with its store, and the
+// store need not know those words at all (Mossvale's panels and completion).
+let mine = {
+  component: true,
+  sync: 'none',
+  durable: 'connection',
+  properties: { at: { type: 'string' } },
+}
+let page = loadVocab([boxDoc, { $defs: { Panels: mine, Completion: mine } }])
+
+test("a remote watch shows the page's own rows, which no server answers", async () => {
+  let c = boxClient(server(), {}, page)
+  let shows = async (query: string, row: Bundle) => {
+    let w = c.watch(query)
+    let heard: number[] = []
+    w.subscribe((rows) => heard.push(rows.length))
+    await c.idle()
+    c.mutate([row])
+    await c.idle()
+    return [heard.at(-1), w.value.length]
+  }
+  let menu = { entity: { eid: 'hero/menu' }, Panels: { at: 'bag' } }
+  assertEquals(await shows('.entity.eid="hero/menu"', menu), [1, 1])
+  let chat = { entity: { eid: 'chat' }, Completion: { at: '/w' } }
+  assertEquals(await shows('.Completion', chat), [1, 1])
+  c.close()
 })
 
 test('cached results do not make a new or disconnected remote watch ready', async () => {

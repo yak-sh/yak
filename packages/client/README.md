@@ -268,6 +268,12 @@ subscription. Text is not normalized. Each caller gets an independent handle;
 the last handle to close releases the shared subscription. `client.close()`
 closes all handles.
 
+A remote watch shows a local match once the server's answer includes it, with
+one exception: a row that is the page's own. A row whose components are all
+`sync: none`, apart from the stamps the page's graph wrote, is one no server
+ever answers for (@yaks/sync `stays`), so it shows at once and changes as the
+page writes it, even when the server refuses the query.
+
 For remote watches, `ready` remains false until the first server result has been
 applied, even when cached rows are visible. An empty result also makes it true.
 Disconnects and refusals make it false; a successful result after reconnecting

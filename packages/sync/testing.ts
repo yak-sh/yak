@@ -18,7 +18,8 @@ import type { Connect, Socket, Timer } from './socket.ts'
 import { type Sync, sync } from './sync.ts'
 import type { Trouble } from './outbound.ts'
 
-let doc: VocabDoc = {
+/** The recipe-box vocabulary as written, for a test that adds words to it. */
+export let boxDoc: VocabDoc = {
   $defs: {
     entity: {
       component: true,
@@ -109,7 +110,7 @@ let doc: VocabDoc = {
 }
 
 /** The recipe-box vocabulary this package's tests read and write against. */
-export let box: Vocab = loadVocab(doc)
+export let box: Vocab = loadVocab(boxDoc)
 
 /** A graph over a fresh map. `adopt` is what a client store needs: the numbers
  * come from the server, not from this map. */

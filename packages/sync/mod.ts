@@ -100,6 +100,7 @@ export {
   local,
   outbound,
   outward,
+  stays,
   stored,
   syncOf,
 } from './tier.ts'
