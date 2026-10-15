@@ -70,7 +70,7 @@ import {
 import { type MemoryResolver, memoryResolver } from './resolver.ts'
 import { type LiveClient, liveClient, quiet } from './live_client.ts'
 import type { Socket } from '@yaks/sync'
-import type { Bundle } from '@yaks/graph'
+import type { Bundle, Entity } from '@yaks/graph'
 import { normalizeChanges } from './props.ts'
 import * as idb from './idb.ts'
 import { bundlesOf, changesOf, yakLine } from './wire.ts'
@@ -85,7 +85,7 @@ import { dead } from '@yaks/graph/bundle'
 // keyof and lose them); the same open index signature is intersected back on so
 // a plugin's comp reaches the cache as `unknown` (D-18663 seam 2, T-12765).
 export type Comps =
-  & { entity?: { eid: string; num: number; archetype?: string } }
+  & { entity?: Entity }
   & Omit<EntCore, 'eid' | 'num' | 'kind' | 'refs' | 'kids'>
   & { [comp: string]: Record<string, unknown> | undefined }
 
@@ -732,9 +732,8 @@ let indexId = (eid: string, r?: Comps) => {
 
 let unindexId = (eid: string, r?: Comps) => {
   if (!r) return
-  if (r.entity && numEids.get(r.entity.num) == eid) {
-    numEids.delete(r.entity.num)
-  }
+  let num = r.entity?.num
+  if (num && numEids.get(num) == eid) numEids.delete(num)
   let a = aliasOf(r)
   if (a && aliasEids.get(a.name) == a.eid) aliasEids.delete(a.name)
   let hex = eid.replaceAll('-', '').toLowerCase()

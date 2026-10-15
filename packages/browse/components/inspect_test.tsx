@@ -30,10 +30,10 @@ test("a view's own page state, set through the inspector's io, redraws it", asyn
 })
 
 // The page an inspector view's link to `b` opens, held until it is `b`'s own.
-let opens = async (b: Bundle) => {
+// `b` is the cache's row and the wire's bundle at once.
+let opens = async (b: Comps & Bundle) => {
   let eid = b.entity.eid
-  // A numberless entity is stored as it arrives; Comps still demands a num.
-  cache.value = { [eid]: b as Comps }
+  cache.value = { [eid]: b }
   clearResolved()
   let wire = host(() => ({ bundles: [b] }))
   let mounted = mount(h(Page, { at: inspectIo.link(eid) }))
