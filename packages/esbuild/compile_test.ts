@@ -270,7 +270,14 @@ let npm = async () => {
 }
 
 test('the server compiles a posted job into one module per page', async () => {
-  await Promise.all([posted(), singletons(), independent(), npm()])
+  await Promise.all([
+    posted(),
+    singletons(),
+    independent(),
+    npm(),
+    beside(),
+    sharedBeside(),
+  ])
 })
 
 test("a worker keeps its runtime's imports and bundles the rest", async () => {
@@ -371,7 +378,8 @@ let viewer = {
 let from = (code: string, at: string) =>
   run(code.replaceAll('import.meta.url', JSON.stringify(at)))
 
-test("an npm package's files are served beside the module that names them", async () => {
+// A page script's own package, and a shared one.
+let beside = async () => {
   let { get } = registry({ viewer: { '1.0.0': viewer } })
   let files = {
     'package.json': JSON.stringify({ dependencies: { viewer: '1.0.0' } }),
@@ -388,9 +396,9 @@ test("an npm package's files are served beside the module that names them", asyn
     '__packages/viewer/libs/draco/wrapper.js',
     '__packages/viewer/package.json',
   ])
-})
+}
 
-test("a shared npm package's files are served beside its shared module", async () => {
+let sharedBeside = async () => {
   let { get } = registry({ viewer: { '1.0.0': viewer } })
   let stage: Catalog = {
     '@yaks/stage': {
@@ -420,4 +428,4 @@ test("a shared npm package's files are served beside its shared module", async (
   let entry = utf8(shared[`${dir}entry-0.js`])
   let { url } = await from(entry, `https://yaks.app/${dir}entry-0.js`)
   equal(url, `https://yaks.app/${wasm}`)
-})
+}
