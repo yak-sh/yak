@@ -223,9 +223,13 @@ export let fileBytes = (
   range?: string | null,
   method = 'GET',
 ) => {
+  // A folder's redirect is the browser's to follow (apps.ts `asset`): the
+  // binding would follow it here and answer the folder's page at the address
+  // without its slash.
   let req = new Request(at(eid, path, source), {
     method,
     headers: { [PREFIX]: prefix, ...(range ? { range } : {}) },
+    redirect: 'manual',
   })
   return range || method == 'HEAD' ? fetch(req, env) : door(env).fetch(req)
 }

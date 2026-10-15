@@ -39,6 +39,11 @@ test('a page uses release assets whose bytes survive deploy and rollback', async
           },
           { path: 'images/bg.svg', content: `<svg>${version}</svg>` },
           {
+            path: 'docs/index.html',
+            content: '<link rel="stylesheet" href="../styles/main.css">' +
+              '<h1>docs</h1>',
+          },
+          {
             path: 'scripts/main.js',
             content:
               `import './chunk.js'; new Worker(new URL('./worker.js', import.meta.url)); /*${version}*/`,
@@ -72,6 +77,14 @@ test('a page uses release assets whose bytes survive deploy and rollback', async
     assertStringIncludes(first, `"/page/api/assets/${release1}/scripts/":`)
     assertStringIncludes(first, '<a href="./next.html">')
     assertStringIncludes(first, '<form action="./api/apply">')
+    // A page in a folder is sent to its folder's address by the bound files
+    // door too, and resolves from there into the same release.
+    let folder = await at('/page/docs', { redirect: 'manual' })
+    assertEquals(folder.status, 307)
+    assertEquals(folder.headers.get('location'), 'docs/')
+    let docs = await (await at('/page/docs/')).text()
+    assertStringIncludes(docs, '<base href="/page/docs/">')
+    assertStringIncludes(docs, `href="${css1}"`)
     let custom = await (await at('/page/custom.html')).text()
     assertStringIncludes(custom, '<base href="https://cdn.example/">')
     assertStringIncludes(custom, '<script src="./scripts/main.js">')
