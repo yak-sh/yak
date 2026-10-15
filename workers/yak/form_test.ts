@@ -5,34 +5,38 @@ import { assertEquals, assertRejects } from '@std/assert'
 import { gathered } from './bytes.ts'
 import { parts } from './form.ts'
 
-let sent = async (form: FormData, size: number, cut = 0) => {
-  let whole = new Response(form)
-  let bytes = new Uint8Array(await whole.arrayBuffer())
+// A serialized request is fixture input; the subject reads its parts. A fixed
+// delimiter also makes every chunk edge reproducible (the short chunks below
+// split it, the headers and the body's boundary-like text).
+let boundary = 'yak-test-boundary'
+let encoded = new TextEncoder().encode([
+  `--${boundary}`,
+  'Content-Disposition: form-data; name="file"; filename="index.html"',
+  'Content-Type: text/html',
+  '',
+  '<h1>hi</h1>\r\n--not the end',
+  `--${boundary}`,
+  'Content-Disposition: form-data; name="slug"',
+  '',
+  'greeting',
+  `--${boundary}--`,
+  '',
+].join('\r\n'))
+let sent = (size: number, cut = 0) => {
+  let bytes = encoded
   bytes = bytes.subarray(0, bytes.length - cut)
-  let at = 0
   return new Request('https://jeff.yaks.app/deploy', {
     method: 'POST',
-    headers: { 'content-type': whole.headers.get('content-type') ?? '' },
+    headers: { 'content-type': `multipart/form-data; boundary=${boundary}` },
     body: new ReadableStream({
-      pull: (c) => {
-        if (at >= bytes.length) return c.close()
-        c.enqueue(bytes.slice(at, at += size))
+      start: (c) => {
+        for (let at = 0; at < bytes.length; at += size) {
+          c.enqueue(bytes.subarray(at, at + size))
+        }
+        c.close()
       },
     }),
   })
-}
-
-let form = () => {
-  let it = new FormData()
-  // A body that holds a line break and two dashes, as a boundary starts.
-  it.set(
-    'file',
-    new File(['<h1>hi</h1>\r\n--not the end'], 'index.html', {
-      type: 'text/html',
-    }),
-  )
-  it.set('slug', 'greeting')
-  return it
 }
 
 let text = async (body: AsyncIterable<Uint8Array<ArrayBuffer>>) =>
@@ -41,7 +45,7 @@ let text = async (body: AsyncIterable<Uint8Array<ArrayBuffer>>) =>
 test('a form comes apart into its parts, whatever its chunks', async () => {
   for (let size of [5, 4096]) {
     let got = []
-    for await (let part of parts(await sent(form(), size))) {
+    for await (let part of parts(sent(size))) {
       got.push([part.name, part.filename, part.type, await text(part.body)])
     }
     assertEquals(got, [
@@ -53,7 +57,7 @@ test('a form comes apart into its parts, whatever its chunks', async () => {
 
 test('a part left unread is passed over', async () => {
   let got = []
-  for await (let part of parts(await sent(form(), 3))) {
+  for await (let part of parts(sent(3))) {
     if (part.name == 'slug') got.push(await text(part.body))
   }
   assertEquals(got, ['greeting'])
@@ -62,7 +66,7 @@ test('a part left unread is passed over', async () => {
 test('a form cut short is refused', async () => {
   await assertRejects(
     async () => {
-      for await (let part of parts(await sent(form(), 7, 10))) {
+      for await (let part of parts(sent(7, 10))) {
         await text(part.body)
       }
     },
