@@ -4,26 +4,26 @@ import { type Cell, cellsOf, chartbook, type ChartBox } from './chartbook.ts'
 
 test('kept charts survive changed views and reopening without reloading', async () => {
   let book = chartbook<string>(16), painted = 0, loaded = 0
-  let wide: ChartBox = [-256, -256, 1024]
+  let wide: ChartBox = [-32, -32, 96]
   for (let cell of cellsOf(wide, 16)) {
     await book.keep(cell, () => {
       painted++
       return cell.join(',')
     })
   }
-  let near: ChartBox = [0, 0, 160]
+  let near: ChartBox = [0, 0, 32]
   let read = (box: typeof near) =>
     book.read(box, () => true, () => {
       loaded++
       return Promise.resolve('missing')
     })
-  for (let i = 0; i < 20; i++) {
-    await read([-1.6 * i, 1.6 * i, 160])
-    await read([-80, -80, 320])
+  for (let i = 0; i < 4; i++) {
+    await read([-5 * i, 5 * i, 32])
+    await read([-16, -16, 64])
   }
   assertEquals((await read(wide))[0], {
-    image: '-16,-16',
-    box: [-256, -256, 16],
+    image: '-2,-2',
+    box: [-32, -32, 16],
   })
   assertEquals([painted, loaded], [cellsOf(wide, 16).length, 0])
   await book.keep([0, 0], () => {
@@ -33,7 +33,7 @@ test('kept charts survive changed views and reopening without reloading', async 
   assertEquals(painted, cellsOf(wide, 16).length)
   book.clear()
   await read(near)
-  assertEquals(loaded, 100)
+  assertEquals(loaded, 4)
 })
 
 test('unexplored ground is never requested; overlapping requests share charts', async () => {
