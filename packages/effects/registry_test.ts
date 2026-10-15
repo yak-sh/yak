@@ -257,18 +257,46 @@ test('an async handler makes that one apply a promise', async () => {
 // A pattern registration: any query over what the batch committed, with
 // nothing derived into the graph to trigger it.
 
+// A registry whose pattern logs what `said` says of each firing, with `seed`
+// written at load: a case times only the write it is about.
+let patterned = (
+  pattern: string,
+  said: (e: Event) => string,
+  ...seed: Bundle[][]
+) => {
+  let f = fixture()
+  f.fx.on(pattern, (e) => f.seen.push(said(e)))
+  for (let batch of seed) f.apply(batch)
+  return f
+}
+let subject = (e: Event) => e.entity.eid
+let lonely = '.post, !comments'
+let remark = { entity: { eid: 'c1' }, comment: { text: 'hi', post: 'p1' } }
+
+let born = patterned(lonely, subject)
 test('a pattern fires where this batch made it hold', () => {
-  let { fx, seen, apply } = fixture()
-  fx.on('.post, !comments', (e) => seen.push(e.entity.eid))
-  apply([post('p1')])
-  assertEquals(seen, ['p1'])
+  born.apply([post('p1')])
+  assertEquals(born.seen, ['p1'])
+})
+
+let other = patterned(lonely, subject, [post('p1')])
+test('a pattern fires only for what this batch is about', () => {
   // p1 still has no comments, but this batch is not about p1.
-  apply([post('p2')])
-  assertEquals(seen, ['p1', 'p2'])
-  // and now it has one, so it is not what the pattern is about any more
-  apply([{ entity: { eid: 'c1' }, comment: { text: 'hi', post: 'p1' } }])
-  apply([post('p1', { title: 'Again' })])
-  assertEquals(seen, ['p1', 'p2'])
+  other.apply([post('p2')])
+  assertEquals(other.seen, ['p1', 'p2'])
+})
+
+let answered = patterned(
+  lonely,
+  subject,
+  [post('p1')],
+  [post('p2')],
+  [remark],
+)
+test('a pattern that stopped holding fires no more', () => {
+  // p1 has a comment now, so it is not what the pattern is about any more
+  answered.apply([post('p1', { title: 'Again' })])
+  assertEquals(answered.seen, ['p1', 'p2'])
 })
 
 test('a pattern is a query, not a property subscription', () => {
@@ -315,15 +343,18 @@ test('a word this vocabulary has no entry for says nothing, or nothing at all', 
   assertEquals(fx.slots().length, 2)
 })
 
+let pair = '$p .post; .comment, comment.post=$p'
+let bound = (e: Event) => String(e.vars?.p)
+let half = patterned(pair, bound)
+test('a pattern over two entities waits while one holds', () => {
+  half.apply([post('p1')])
+  assertEquals(half.seen, [])
+})
+
+let both = patterned(pair, bound, [post('p1')])
 test('a pattern over two entities fires once both hold', () => {
-  let { fx, seen, apply } = fixture()
-  fx.on('$p .post; .comment, comment.post=$p', (e) => {
-    seen.push(String(e.vars?.p))
-  })
-  apply([post('p1')])
-  assertEquals(seen, [])
-  apply([{ entity: { eid: 'c1' }, comment: { post: 'p1' } }])
-  assertEquals(seen, ['p1'])
+  both.apply([{ entity: { eid: 'c1' }, comment: { post: 'p1' } }])
+  assertEquals(both.seen, ['p1'])
 })
 
 test('a collected pattern carries its members', () => {
@@ -416,17 +447,23 @@ test('matching a create batch visits its bundles linearly', () => {
   assert(visits <= 8 * size, `${visits} visits for ${size} bundles`)
 })
 
-test('a declared effect is owed only while its active query matches', async () => {
-  let g = declaring({
-    watch: { effect: true, created: ['created'], active: '.subscriber' },
-  })
-  await g.apply([post('p1')])
-  assertEquals((await g.read('.effect')).length, 0)
-  await g.apply([{
+let watching = {
+  watch: { effect: true, created: ['created'], active: '.subscriber' },
+}
+let idle = declaring(watching)
+test('a declared effect is owed nothing while its active query matches none', async () => {
+  await idle.apply([post('p1')])
+  assertEquals((await idle.read('.effect')).length, 0)
+})
+
+let active = declaring(watching)
+await active.apply([post('p1')])
+test('a declared effect is owed once its active query matches', async () => {
+  await active.apply([{
     entity: { eid: 's1' },
     subscriber: { email: 'one@example.com' },
   }])
-  assertEquals((await g.read('.effect')).length, 1)
+  assertEquals((await active.read('.effect')).length, 1)
 })
 
 // The commit has already owed a run; only writes to that run are measured.
