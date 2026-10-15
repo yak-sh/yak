@@ -1,3 +1,4 @@
+import { copyOf, publicDirectory } from './directory-copy.ts'
 // The app-serving part: `<space>.yaks.app/<app>/…` — the deploy seam's first
 // hosted implementation (D-32318 §v1 sequencing). One fetch handler: it
 // reads the hostname and path (route.ts), resolves the space and app through
@@ -2714,7 +2715,14 @@ let firstly = async (
 }
 
 /** An address as Site keeps it (page-cache.ts): served to nobody, fresh. */
-export let edged = (req: Request, env: Env) => served(req, env, clock(), true)
+export let edged = async (req: Request, env: Env) => {
+  let copied = false
+  let answer = await served(req, env, clock(), true, () => {
+    copied = true
+  })
+  if (copied) answer.headers.set('x-yak-directory-copy', '1')
+  return answer
+}
 
 export let fetch = (req: Request, env: Env): Promise<Response> => {
   let c = clock()
@@ -2729,7 +2737,7 @@ export let fetch = (req: Request, env: Env): Promise<Response> => {
     let res = await browsing(
       req,
       env,
-      (req) => served(req, env, c),
+      (r) => served(r, env, c, false, undefined, req),
       !pagePath(new URL(req.url).pathname) && !bearing(req) &&
         !req.headers.has('authorization'),
     )
@@ -2786,6 +2794,8 @@ let served = async (
   env: Env,
   c: Clock,
   edge = false,
+  copied: () => void = () => {},
+  visitor = req,
 ): Promise<Response> => {
   let url = new URL(req.url)
   let r = route(hostOf(req, env), url.pathname, env)
@@ -2798,10 +2808,14 @@ let served = async (
   // wait on the directory. The space is read meanwhile, from this isolate's
   // memory when it is warm: a page Site passes needs it next, and so pays
   // the longer of the two rather than both.
-  let dir = directory(bound(env.DIRECTORY, dirPart.fetch, env), edge)
+  let direct = bound(env.DIRECTORY, dirPart.fetch, env)
+  let serving = edge
+    ? publicDirectory(direct, copyOf(env), undefined, copied)
+    : direct
+  let dir = directory(serving, edge)
   let reading = c.time('space', () => dir.space(r.space!))
   if (!edge) {
-    let page = await asked(req, env, c)
+    let page = await asked(visitor, env, c)
     if (page) {
       reading.catch(() => {})
       return page
@@ -2994,6 +3008,9 @@ let served = async (
   // carries its visitor's token, and an app's worker may answer each visitor
   // differently. Nor does the gateway ask Site about such an app's other
   // addresses for a while.
+  if (edge && 'stale' in serving && serving.stale && app.access != 'public') {
+    return passed()
+  }
   if (!keepable(app)) {
     if (edge) return passed()
     unkept(req, env, bare)
@@ -3263,7 +3280,13 @@ let served = async (
     return edge ? passed() : await index(req, env, dir, space)
   }
   // Site's page is counted by the gateway that sends it (page-cache.ts).
-  if (edge) return keep(reporting(page, req, at), space, app)
+  if (edge) {
+    let answer = keep(reporting(page, req, at), space, app)
+    if ('stale' in serving && serving.stale) {
+      answer.headers.set('x-yak-directory-copy', '1')
+    }
+    return answer
+  }
   // Count the page served (views.ts, T-34496). Last, once, and only for
   // what an app answered: the `/api/` doors returned above, a file that is not
   // HTML is not a page, and the platform's own pages — the space index, the

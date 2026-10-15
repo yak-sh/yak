@@ -1,3 +1,4 @@
+import type { ServingCopies } from './directory-copy.ts'
 // The kernel's bindings (wrangler.toml), typed structurally — the slice each
 // binding is asked for, mirroring @cloudflare/workers-types — so `deno check`
 // reads the Worker without the package and nothing under src/ learns a
@@ -252,6 +253,8 @@ export type Env = {
   IDENTITY?: Fetcher
   MCP?: Fetcher
   BILLING?: Fetcher
+  // Independent public-only read fallback, never a source of signed-in standing.
+  SERVING_COPY?: ServingCopies
   DIRECTORY?: Fetcher
   APPS?: Fetcher
   // The one binding that is not a part waiting to be split out: `Files` is a

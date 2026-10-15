@@ -1,3 +1,8 @@
+import {
+  ServingCopy,
+  type ServingCopyState,
+  ServingCopyUnavailable,
+} from './serving-copy.ts'
 // The kernel Worker's entry: the router (kernel.ts) as the runtime loads it.
 // What is here is what only the runtime can load — the Durable Object classes
 // each binding names, the Sandbox container, the Files, Site and Outbound
@@ -254,3 +259,52 @@ export default {
   queue: (batch: Parameters<typeof builds>[0], env: Env) =>
     entry(env, 'build queue', () => builds(batch, env)),
 }
+
+// Independent of yak/platform: only a missed directory deadline reads here.
+class PublicDirectoryStore extends DurableObject<Env> {
+  #copy: ServingCopy
+  constructor(
+    ctx: ConstructorParameters<typeof DurableObject<Env>>[0],
+    env: Env,
+  ) {
+    super(ctx, env)
+    this.#copy = new ServingCopy({
+      persistence: {
+        read: () => {
+          ctx.storage.sql.exec(
+            'CREATE TABLE IF NOT EXISTS copy (id INTEGER PRIMARY KEY, body TEXT)',
+          )
+          let [row] = ctx.storage.sql.exec<{ body: string }>(
+            'SELECT body FROM copy WHERE id = 1',
+          ).toArray()
+          return row ? JSON.parse(row.body) as ServingCopyState : undefined
+        },
+        write: (state) => {
+          ctx.storage.sql.exec(
+            'INSERT OR REPLACE INTO copy (id, body) VALUES (1, ?)',
+            JSON.stringify(state),
+          )
+        },
+      },
+    })
+  }
+  begin() {
+    return this.#copy.begin()
+  }
+  finish(revision: number) {
+    return this.#copy.finish(revision)
+  }
+  put(revision: number, key: string, body: string) {
+    return this.#copy.put(revision, key, body)
+  }
+  get(key: string) {
+    try {
+      return this.#copy.get(key)
+    } catch (e) {
+      if (e instanceof ServingCopyUnavailable) return null
+      throw e
+    }
+  }
+}
+
+export let PublicDirectory = instrument(PublicDirectoryStore)

@@ -1,3 +1,4 @@
+import { possiblePerson } from './directory-copy.ts'
 // An app's public pages, kept in Cloudflare's cache at the Site entrypoint
 // (T-124419). Every page view used to read the directory twice before a byte
 // was sent; a kept page is answered with none of that.
@@ -109,10 +110,10 @@ export let visitor = (url: string): Request | null => {
 /** Whether a request could be answered by a kept page: a read with nothing
  * that makes it one visitor's (a grant, a bearer, a byte range), and not an
  * app's `/api/` or a sandboxed page's token path, which never are. */
-export let shareable = (req: Request) => {
-  let path = new URL(req.url).pathname
+export let shareable = (req: Request, path = new URL(req.url).pathname) => {
   return (req.method == 'GET' || req.method == 'HEAD') &&
-    !req.headers.has('authorization') && !req.headers.has('range') &&
+    !possiblePerson(req) && !req.headers.has('authorization') &&
+    !req.headers.has('range') &&
     !req.headers.has('upgrade') && !bearing(req) &&
     !/^(?:\/[^/]+)?\/(?:api\/|_web(?:\/|$))/.test(path) && !path.includes('/~')
 }
@@ -190,8 +191,10 @@ export let kept = async (answer: Response) => {
  * when Site passed and the gateway serves it itself. */
 export let asked = async (req: Request, env: Env, c: Clock) => {
   let site = env.SITE
-  if (!site || !shareable(req)) return null
-  let host = hostOf(req, env), path = new URL(req.url).pathname
+  if (!site) return null
+  let path = new URL(req.url).pathname
+  if (!shareable(req, path)) return null
+  let host = hostOf(req, env)
   let mount = req.headers.get(MOUNT)
   let key = pageAt(host, path, mount)
   // The app this path could be: the one its first segment names, or the

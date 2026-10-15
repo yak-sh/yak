@@ -1,3 +1,4 @@
+import { copyOf, publicDirectory } from './directory-copy.ts'
 // The pages the Site entrypoint keeps in Cloudflare's cache (wrangler.toml):
 // the apex's two pages drawn from directory listings, each for at most thirty
 // seconds, and every public page an app serves (page-cache.ts), keyed by the
@@ -38,7 +39,13 @@ let checksum = async (body: string) =>
 
 export let fetch = async (req: Request, env: Env): Promise<Response> => {
   let asked = req.method == 'GET' ? visitor(req.url) : null
-  if (asked) return await kept(await edged(asked, env))
+  if (asked) {
+    let page = await edged(asked, env)
+    let copied = page.headers.has('x-yak-directory-copy')
+    page.headers.delete('x-yak-directory-copy')
+    let answer = await kept(page)
+    return copied ? uncached(answer) : answer
+  }
   let root = `/${encodeURIComponent(apex(env))}`
   let path = new URL(req.url).pathname
   if (
@@ -47,7 +54,11 @@ export let fetch = async (req: Request, env: Env): Promise<Response> => {
     !path.startsWith(`${root}/`)
   ) return uncached(lost(env))
   path = path.slice(root.length)
-  let dir = directory(bound(env.DIRECTORY, dirPart.fetch, env))
+  let serving = publicDirectory(
+    bound(env.DIRECTORY, dirPart.fetch, env),
+    req.headers.has('x-yak-no-copy') ? undefined : copyOf(env),
+  )
+  let dir = directory(serving)
   let page: Response
   if (path == '/gallery') {
     page = gallery.page(
@@ -64,6 +75,7 @@ export let fetch = async (req: Request, env: Env): Promise<Response> => {
   ) {
     return uncached(page)
   }
+  if ('stale' in serving && serving.stale) return uncached(page)
   let body = await page.text()
   let headers = new Headers(page.headers)
   headers.delete('content-length')

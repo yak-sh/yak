@@ -771,3 +771,19 @@ id = "667f6be792cb4941b4faace195e6c726"
 binding = "VAULT"
 database_name = "yak-vault-staging"
 database_id = "8ffd95b7-15cb-4068-9030-7fc5b511eefa"
+
+[[durable_objects.bindings]]
+name = "SERVING_COPY"
+class_name = "PublicDirectory"
+
+[[migrations]]
+tag = "v7"
+new_sqlite_classes = ["PublicDirectory"]
+
+[[env.staging.durable_objects.bindings]]
+name = "SERVING_COPY"
+class_name = "PublicDirectory"
+
+[[env.staging.migrations]]
+tag = "v7"
+new_sqlite_classes = ["PublicDirectory"]

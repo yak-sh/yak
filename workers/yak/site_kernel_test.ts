@@ -217,7 +217,7 @@ test('the apex answers the crawler and the model', async () => {
   }
 })
 
-test('the public site subrequest preserves deployment version overrides without forwarding credentials', async () => {
+test('the anonymous site subrequest preserves deployment version overrides without forwarding credentials', async () => {
   let wanted = '12345678-1234-1234-1234-123456789abc'
   let override = `yak="${wanted}"`
   let seen: Headers[] = []
@@ -247,8 +247,6 @@ test('the public site subrequest preserves deployment version overrides without 
             'Cloudflare-Workers-Version-Overrides': override,
             'cache-control': 'no-cache',
             'if-none-match': '"site-validator"',
-            authorization: 'Bearer unrelated',
-            cookie: 'unrelated=yes',
           },
         })
         assertEquals(response.headers.get('x-yak-version'), wanted)

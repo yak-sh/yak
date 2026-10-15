@@ -1,3 +1,4 @@
+import { copyOf, EPOCH } from './directory-copy.ts'
 import { statements } from '@yaks/sqlite'
 import { recovering } from './models.ts'
 import { attributed } from './attribution.ts'
@@ -611,6 +612,7 @@ export type Bindings = Partial<Env> & {
 // eviction, and this is smaller than asking @yaks/graph to hold configuration
 // as data.
 type Word =
+  | 'directory-revision'
   | 'name'
   | 'vocab'
   | 'uses'
@@ -915,6 +917,8 @@ export class Store {
   #route!: Handler
   #auth!: Authenticate
   #meta!: Meta
+  #copyWrite = new AsyncLocalStorage<number>()
+  #copyBatch = new AsyncLocalStorage<number>()
   #bind: Bindings
   // The mover's rules (mover.ts `RULES`), and the ones whose batch failed in
   // this incarnation: those wait for the next one, which fixed code arrives
@@ -1459,6 +1463,25 @@ export class Store {
             ...(own ? [] : [describing]),
 
             // The Store lowers incoming bundles and lends the caller's standing.
+            ...(meta && this.#bind.SERVING_COPY
+              ? [{
+                name: 'yak/serving-fence',
+                hooks: {
+                  commit: (bundles: Bundle[]) => {
+                    let revision = this.#copyWrite.getStore()
+                    if (revision === -1) return bundles
+                    if (
+                      revision == null ||
+                      revision < Number(this.#get('directory-revision') ?? 0)
+                    ) {
+                      throw new Error('Directory write lost its serving fence')
+                    }
+                    this.#put('directory-revision', String(revision))
+                    return bundles
+                  },
+                },
+              }]
+              : []),
             this.#lowering,
             ...options.plugins ?? [],
             this.#vouching,
@@ -1519,8 +1542,38 @@ export class Store {
           }
         }
         let apply = g.apply, admit = g.admit
-        g.apply = (bundles, opts) => trusted(opts, () => apply(bundles, opts))
-        g.admit = (bundles, opts) => trusted(opts, () => admit(bundles, opts))
+        g.apply = (bundles, opts) => {
+          let batch = meta ? this.#copyBatch.getStore() : undefined
+          if (batch != null) {
+            return this.#copyWrite.run(
+              batch,
+              () => trusted(opts, () => apply(bundles, opts)),
+            )
+          }
+          let copy = meta && !opts?.check ? copyOf(this.#bind) : undefined
+          if (!copy) {
+            return this.#copyWrite.run(
+              -1,
+              () => trusted(opts, () => apply(bundles, opts)),
+            )
+          }
+          // Effects may themselves write the directory and acquire a newer
+          // fence. Only explicit synchronous mover batches reuse an epoch.
+          return copy.begin().then((revision) =>
+            this.#copyWrite.run(revision, async () => {
+              let out = await trusted(opts, () => apply(bundles, opts))
+              // Failure leaves the independent copy fenced; never resurrect it on
+              // rollback or lose the directory's successful authoritative write.
+              await copy.finish(revision)
+              return out
+            })
+          )
+        }
+        g.admit = (bundles, opts) =>
+          this.#copyWrite.run(
+            -1,
+            () => trusted(opts, () => admit(bundles, opts)),
+          )
         return g
       },
       ready: (made) => {
@@ -2897,6 +2950,8 @@ export class Store {
         let vocabWas = this.#get('vocab')
         try {
           let m = this.#mover(held, rule)
+          let copy = name == PLATFORM_STORE ? copyOf(this.#bind) : undefined
+          let revision = await copy?.begin()
           let plan = this.#tx(() => batch(m, rule, was, SIZE))
           if (plan.forward.length) {
             if (!this.#bind.ERRORS) {
@@ -2906,11 +2961,19 @@ export class Store {
               await this.#bind.ERRORS.send([record])
             }
           }
-          s = this.#tx(() => {
-            let s = step(m, rule, was, SIZE, now, plan)
-            this.#put(rule.mark, JSON.stringify(s))
-            return s
-          })
+          s = this.#copyBatch.run(revision ?? -1, () =>
+            this.#tx(() => {
+              if (revision != null) {
+                if (
+                  revision < Number(this.#get('directory-revision') ?? 0)
+                ) throw new Error('Mover lost its serving fence')
+                this.#put('directory-revision', String(revision))
+              }
+              let s = step(m, rule, was, SIZE, now, plan)
+              this.#put(rule.mark, JSON.stringify(s))
+              return s
+            }))
+          if (revision != null) await copy!.finish(revision)
         } catch (e) {
           this.#kv.clear()
           this.#halted.add(rule.mark)
@@ -3994,7 +4057,10 @@ export class Store {
       let store = this.#get('name') ?? ''
       if (new URL(request.url).searchParams.get('rehearse') == '1') {
         let rules = this.#moves().flatMap((rule) =>
-          rehearse(this.#mover([], rule), [rule], SIZE)
+          this.#copyBatch.run(
+            -1,
+            () => rehearse(this.#mover([], rule), [rule], SIZE),
+          )
         )
         this.#kv.clear()
         return Response.json({ store, rules })
@@ -4140,6 +4206,20 @@ export class Store {
   // answered here, off the raw rows, in the shape every door on this platform
   // says it in. A line that does not parse is answered 400.
   #asked = served(async (request) => {
+    // Capture before any yield: a read begun before a mutation cannot fill the
+    // copy at the newer revision, even if its response arrives afterwards.
+    let revision =
+      this.#get('name') == PLATFORM_STORE && this.#bind.SERVING_COPY
+        ? this.#get('directory-revision') ?? '0'
+        : null
+    let answer = await this.#directoryAsked(request)
+    if (revision == null) return answer
+    let headers = new Headers(answer.headers)
+    headers.set(EPOCH, revision)
+    return new Response(answer.body, { status: answer.status, headers })
+  }, { route: () => '/query' })
+
+  #directoryAsked = async (request: Request): Promise<Response> => {
     let url = new URL(request.url)
     let line = url.searchParams.get('q') ?? ''
     let text = formatted(line)
@@ -4179,7 +4259,7 @@ export class Store {
       line,
       this.#callerRead(request),
     )
-  }, { route: () => '/query' })
+  }
 
   // The word a row is named by. `kind` is not a property and no client can
   // derive it: it is the most specific component this vocabulary says the
@@ -4485,6 +4565,9 @@ export class Store {
   // word is what says which vocabulary it speaks.
   async #erase(): Promise<Response> {
     let name = this.#get('name') ?? ''
+    if (name == PLATFORM_STORE) {
+      throw new Refused('The directory cannot be erased')
+    }
     // The pages watching this app are watching nothing now. `close` is the
     // runtime's own on a server-side socket; @yaks/durable-object's `Wire` names
     // only what it sends, so the method is asked for structurally here.
@@ -4521,6 +4604,9 @@ export class Store {
    * rides a turn of the loop behind it.
    */
   async #recovery(request: Request): Promise<Response> {
+    if (request.method != 'GET' && this.#get('name') == PLATFORM_STORE) {
+      throw new Refused('The directory cannot be restored through the app door')
+    }
     let s = this.#ctx.storage
     try {
       if (request.method != 'POST') {

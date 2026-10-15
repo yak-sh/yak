@@ -1,3 +1,4 @@
+import { EPOCH } from './directory-copy.ts'
 // The directory part (D-32318 §The meta-space): spaces, apps, and members
 // are entities in the meta-space's store — the Store object named
 // yak/platform, a graph on the platform's own vocabulary (vocab.ts
@@ -728,7 +729,17 @@ export let over = (store: Meta) => {
 export let fetch = (
   req: Request,
   env: { STORE: Namespace },
-): Promise<Response> => over(metaStore(env))(req)
+): Promise<Response> => {
+  // The serving-copy reader needs the revision captured beside the actual
+  // directory read, not a revision fetched after the answer. Bypass part's TTL.
+  if (req.method == 'GET' && req.headers.get(EPOCH) == '1') {
+    let q = new URL(req.url).searchParams.get('q') ?? ''
+    return storeOf(env.STORE, PLATFORM_STORE)(
+      `/query?q=${encodeURIComponent(q)}`,
+    )
+  }
+  return over(metaStore(env))(req)
+}
 
 // A write the kernel makes ABOUT the directory rather than for a person: the
 // hourly meter (usage.ts), a letter counted as it goes or arrives (meter.ts
