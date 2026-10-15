@@ -1288,8 +1288,29 @@ let took = async (
   })
 }
 
+/** Whether the bytes are served at all, which is the store's to say
+ * (`servable`). For an app anyone may read, Files keeps a yes (files.ts
+ * `servedAs`), so a burst of image reads is not a burst of store reads; a no
+ * from it, and every read of a private or sandboxed app's, is asked here as
+ * the reader. A store that could not say throws. */
+export let servedTo = async (
+  env: Env,
+  space: Space,
+  app: App,
+  graph: Pick<Meta, 'query'>,
+  sha: string,
+  eid: string,
+) => {
+  let read = () => servable((q) => graph.query(q), app, sha, eid)
+  return !sandboxed(app) && mode(app.access) != 'private'
+    ? await files.servableOf(env, app, storeAt(space, app, env), sha, eid) ??
+      await read()
+    : await read()
+}
+
 // The bare hash is the current attachment; the second path segment names an
 // immutable representation. Only the bare address reads mutable metadata.
+// The reader's browser keeps what it was given.
 let gave = async (
   req: Request,
   env: Env,
@@ -1384,18 +1405,9 @@ let gave = async (
       },
     })
   }
-  // Whether the bytes are served at all is the store's to say (`servable`).
-  // For an app anyone may read, Files keeps a yes (files.ts `serves`), so a
-  // burst of image reads is not a burst of store reads; a no from it, and
-  // every read of a private or sandboxed app's, is asked here as the reader.
-  // The reader's browser keeps what it was given.
-  let read = () => servable((q) => graph.query(q), app, sha, eid)
   let rep
   try {
-    rep = !sandboxed(app) && mode(app.access) != 'private'
-      ? await files.servableOf(env, app, storeAt(space, app, env), sha, eid) ??
-        await read()
-      : await read()
+    rep = await servedTo(env, space, app, graph, sha, eid)
   } catch (e) {
     caught(e, { request: 'GET /api/blob', space: space.slug, app: app.slug })
     return json(503, 'blob_unavailable')

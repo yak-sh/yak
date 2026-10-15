@@ -390,20 +390,29 @@ let SERVED = 'public, max-age=30'
 // no is not kept, and the gateway asks for itself as before. A store that
 // fails is answered with what it threw, never kept, and the gateway reports
 // it.
-let serves = async (req: Request, env: Env, path: string) => {
+let serves = (req: Request, env: Env, path: string) => {
   let match = /^\/servable\/([^/]+)\/([0-9a-f]{64})\/([0-9a-f-]+)$/.exec(path)
   let store = told(req.headers.get(STORE))
-  let no = (status: number, body: unknown = null) =>
-    Response.json(body, {
-      status,
-      headers: { 'cache-control': 'private, no-store' },
-    })
-  if (!match || !store) return no(400)
+  if (!match || !store) return Promise.resolve(no(400))
   let [, app, sha, rep] = match
   let graph = metaOf(storeOf(env.STORE, store.name, store.app))
+  return servedAs(() => servable((q) => graph.query(q), { eid: app }, sha, rep))
+}
+
+let no = (status: number, body: unknown = null) =>
+  Response.json(body, {
+    status,
+    headers: { 'cache-control': 'private, no-store' },
+  })
+
+/** Files' answer to whether bytes are served, given the store's: a yes the
+ * cache may keep, a no or a failure it may not. */
+export let servedAs = async (
+  ask: () => Promise<Representation | null>,
+): Promise<Response> => {
   let found
   try {
-    found = await servable((q) => graph.query(q), { eid: app }, sha, rep)
+    found = await ask()
   } catch (e) {
     let { name, message } = e as Error
     return no(503, { error: name, message })
