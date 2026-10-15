@@ -176,12 +176,16 @@ test('worker command replacement updates loading evidence without invoking a run
   assertEquals(snapshot.commands, [])
 })
 
+let lazyCapture = workerAnatomy({ plugins: ['fixture'] })
+lazyCapture.composition.declarations(words.docs, words)
+lazyCapture.composition.effects(new Map([['note_seen', 'fixture']]), true)
+lazyCapture.graph([])
+lazyCapture.commands({}, [tool])
+// As above: the initial composition is projected here, as fixture setup.
+lazyCapture.read()
+
 test('worker anatomy keeps package tools lazy despite runner wrappers', () => {
-  let capture = workerAnatomy({ plugins: ['fixture'] })
-  capture.composition.declarations(words.docs, words)
-  capture.composition.effects(new Map([['note_seen', 'fixture']]), true)
-  capture.graph([])
-  capture.commands({}, [tool])
+  let capture = lazyCapture
   let before = capture.read()
   assertEquals(before.tools.find((t) => t.name == 'note_list')?.loaded, false)
   assertEquals(

@@ -33,9 +33,13 @@ let recorded = () => {
   return { rows, time, env }
 }
 
-let storm = Object.assign(new TypeError('storm'), {
-  stack: 'TypeError: storm\n    at failed (app.ts:1:1)',
-})
+// A failure with its stack already said: a report reads the stack, and
+// formatting a fresh one is the runtime's work, not what these check.
+let said = <E extends Error>(e: E) =>
+  Object.assign(e, {
+    stack: `${e.name}: ${e.message}\n    at failed (app.ts:1:1)`,
+  })
+let storm = said(new TypeError('storm'))
 
 test('platform repeats reach tracker with hit counts and catch tags', async () => {
   let { rows, time, env } = recorded()
@@ -135,7 +139,7 @@ test('a door keeps a refusal or relayed answer at its status and throws its own 
       return thrown
     }
   }
-  let broke = new TypeError('fell over')
+  let broke = said(new TypeError('fell over'))
   let answers = await within(env, {}, () =>
     [
       new Refused('no'),
@@ -143,7 +147,7 @@ test('a door keeps a refusal or relayed answer at its status and throws its own 
       Object.assign(new Error('relayed'), { status: 403 }),
       Object.assign(new Error('stalled'), { name: 'Refused', status: 503 }),
       new Pending('kept'),
-      Object.assign(new Error('store fell over'), { status: 500 }),
+      said(Object.assign(new Error('store fell over'), { status: 500 })),
       broke,
     ].map(door), time)
   equal(answers, [400, 404, 403, 503, 202, 500, broke])

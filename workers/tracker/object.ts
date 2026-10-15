@@ -41,7 +41,7 @@ import {
   printOf,
   schema,
 } from '@yaks/sqlite'
-import { col, eq, render, select, table, val } from '@yaks/sql'
+import { col, type Driver, eq, render, select, table, val } from '@yaks/sql'
 import {
   reserveTrace,
   TRACE_CEILING,
@@ -113,7 +113,11 @@ export class Tracker {
   #config: Config
   #traceTail = Promise.resolve()
   #traceDropped = 0
-  #traceMeta = () => meta(driver(this.ctx.storage))
+  // One driver over this instance's storage: making one runs its pragma, so
+  // a boot or a trace admission made three or four for nothing.
+  #driver?: Driver
+  #sql = () => this.#driver ??= driver(this.ctx.storage)
+  #traceMeta = () => meta(this.#sql())
   constructor(
     public ctx: State,
     public env: Settings = {},
@@ -148,7 +152,7 @@ export class Tracker {
   }
   #mailReady = false
   #traceStorage = () => {
-    let sql = driver(this.ctx.storage), kept = meta(sql)
+    let sql = this.#sql(), kept = meta(sql)
     let tables = sql.query(select({
       cols: [col('name')],
       from: table('sqlite_schema'),
@@ -177,7 +181,7 @@ export class Tracker {
       if (install) await this.#mail()
       return this.tracker
     }
-    let sql = driver(this.ctx.storage)
+    let sql = this.#sql()
     let saved = install
       ? storage(this.ctx.storage, vocab, {
         ...options,
@@ -319,7 +323,7 @@ export class Tracker {
         // atomically. Schema setup follows that durable reservation: even a
         // failed installation may have billed writes and cannot refund it.
         this.ctx.storage.transactionSync(() => {
-          let sql = driver(this.ctx.storage)
+          let sql = this.#sql()
           let exists = sql.query(select({
             cols: [col('name')],
             from: table('sqlite_schema'),

@@ -142,7 +142,15 @@ test("a stale script gets this release's wrapper and keeps its own modules", asy
   assertEquals(await bytes(form, 'src/lib.wasm'), WASM)
   assertEquals((form.get('src/lib.wasm') as File).type, 'application/wasm')
   assertEquals(scripts.jeff_recipes.tags, [WRAP])
-  // A second pass finds nothing left to do.
+})
+
+test('a pass after it finds nothing left to do', async () => {
+  let scripts: Record<string, Script> = {
+    jeff_recipes: {
+      modules: { '__yak_entry.js': ENC.encode(OLD) },
+      tags: [WRAP],
+    },
+  }
   let again = await account(scripts, () => rewrapped(env))
   assertEquals(again.out, { rewrapped: 0, failed: 0, left: 0 })
   assertEquals(again.writes, [])

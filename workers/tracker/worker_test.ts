@@ -7,9 +7,17 @@ import { backoff } from '@yaks/durable-object'
 
 backoff.wait = () => Promise.resolve()
 
+// The object's failure as its stub hands it over, its stack already said: a
+// report reads the stack, and formatting a fresh one is the runtime's work,
+// not what these check.
+let unavailable = () =>
+  Object.assign(Error('tracker object unavailable'), {
+    stack: 'Error: tracker object unavailable\n    at fetch (object.ts:1:1)',
+  })
+
 let fixture = (fetch?: Stub['fetch']) => {
   let sent: Bundle[][] = []
-  let fail = () => Promise.reject(Error('tracker object unavailable'))
+  let fail = () => Promise.reject(unavailable())
   let stub: Stub = {
     fetch: fetch ?? fail,
     ingest: fail,
