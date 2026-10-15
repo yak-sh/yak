@@ -174,15 +174,21 @@ A property with `validate: true` asks a schema plugin to check its full JSON
 Schema. An array may declare `tree: { key: 'name', parent: 'parent' }`: unique
 string keys and parents appearing earlier in the array. `admitSchema` from
 [@yaks/graph/schema](../graph/README.md#admission-and-schema-checks) implements
-these checks. SQLite binary JSON storage and filtering limits belong to
+these checks, refusing a write that fails one; its `tree` says whether an array
+is such a tree. SQLite binary JSON storage and filtering limits belong to
 [@yaks/sql](../sql/README.md).
 
 ```ts
 import { graph } from '@yaks/graph'
-import { admitSchema } from '@yaks/graph/schema'
+import { admitSchema, tree } from '@yaks/graph/schema'
 import { ram } from '@yaks/ram'
 import { loadVocab } from '@yaks/vocab'
 import { equal, throws } from '@yaks/testing'
+
+const root = { name: 'root' }
+const leaf = { name: 'leaf', parent: 'root' }
+equal(tree([root, leaf], 'name', 'parent'), true)
+equal(tree([leaf, root], 'name', 'parent'), false)
 
 const v = loadVocab({
   $defs: {
@@ -206,24 +212,11 @@ const v = loadVocab({
     },
   },
 })
-const g = graph({ vocab: v, storage: ram(v) })
-g.use(admitSchema(v))
-await g.apply([{
-  entity: { eid: 'd1' },
-  drawing: {
-    nodes: [{ name: 'root' }, { name: 'leaf', parent: 'root' }],
-  },
-}])
-await throws(() =>
-  g.apply([{
-    entity: { eid: 'd1' },
-    drawing: {
-      nodes: [{ name: 'leaf', parent: 'missing' }],
-    },
-  }]), 'parents must precede')
-equal((await g.get(['d1']))[0].drawing, {
-  nodes: [{ name: 'root' }, { name: 'leaf', parent: 'root' }],
-})
+const g = graph({ vocab: v, storage: ram(v), plugins: [admitSchema(v)] })
+await throws(
+  () => g.apply([{ entity: { eid: 'd1' }, drawing: { nodes: [leaf] } }]),
+  'parents must precede',
+)
 ```
 
 ## Routing and references
