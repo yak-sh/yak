@@ -14,6 +14,8 @@ deciding does not:
   packages from the registry and builds each entry with native esbuild. It is
   handed every file it reads and holds no binding and no secret.
 
+And `./unpack`, the host's when it fills an npm package's home (below).
+
 An **ask** (`Ask`) is what a compile is handed: the text of every file it reads,
 and the entries to build. An **answer** (`Answer`) is what it returns: one
 module per entry, the lock, and any errors, each a line an agent can act on.
@@ -210,20 +212,23 @@ the like), never an image or a binary.
 
 ## A package's files
 
-A page that bundles an npm package gets the package's files, whole and as bytes:
-a `.wasm`, a font, an image, a worker script. The `import.meta.url` of a package
-module names that module's place among them, so
-`new URL('./draco_decoder.wasm', import.meta.url)` resolves to the file as
-shipped, and a folder named from it holds its siblings. A page script's packages
-are `Answer.assets` under `__packages/<name>/<path>`. A shared npm package's
-files travel in its group, under `resources/<name>/<path>`, beside the emitted
-module. A build emits the files of each package it read a module of, apart from
-what only tools read (`.d.ts`, `.map`, `.md`) and a path no host serves (`%`,
-`?`, `#`, `\`). Toolkit packages are not among them: their resources come from
-the catalog.
+A page that bundles an npm package reaches the package's files as shipped: a
+`.wasm`, a font, an image, a worker script. They are served from the package's
+**home**, `__packages/<sha256>/` on `origin`, where the SHA-256 names the
+registry tarball they come out of, so every app and every compile that pins
+that release shares one home. The `import.meta.url` of a package module names
+its own file in its home, so `new URL('./draco_decoder.wasm', import.meta.url)`
+resolves to the file as shipped, and a folder named from it holds its siblings.
+That holds for a page script's own packages and for shared ones alike. Toolkit
+packages have no home: their resources come from the catalog.
 
-A file's body (`Body`) is its text, or `{base64}` for bytes, since an answer is
-JSON; `bytesOf` and `bodyOf` convert. Bytes are never decoded as text.
+A compile carries none of a package's files. `Answer.tarballs` maps the SHA-256
+of each home the compiled code names to the tarball that fills it, and the host
+keeps that note. The host fills a home a file at a time, the first time a page
+asks for one: `unpacked(tarball, path)`, from `./unpack`, reads the registry's
+tarball as it streams in and answers the file's bytes, every path the tarball
+holds, and its SHA-256, which must be the home's name before the bytes are
+served. A home is served like the shared modules, immutable.
 
 ## The lock
 

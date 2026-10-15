@@ -9,9 +9,9 @@ import { parse } from 'es-module-lexer/js'
 import { bundle, type Options, packaged, Stopped } from './bundle.ts'
 import { type Common, common } from './common.ts'
 import { packageOf } from './graph.ts'
+import { homes } from './home.ts'
 import type { Files } from './npm.ts'
-import { type Catalog, located, packed, type Seed, urlOf } from './platform.ts'
-import type { Body } from './plan.ts'
+import { type Catalog, located, type Seed } from './platform.ts'
 import { used } from './used.ts'
 
 let singletons = ['preact', '@preact/signals', '@preact/signals-core']
@@ -21,17 +21,19 @@ let production: Options = {
   define: { 'process.env.NODE_ENV': '"production"' },
 }
 
-type Shared = { files: Record<string, Body>; urls: Record<string, string> }
+/** Shared modules by path, the URL of each specifier, and the tarball each
+ * npm package home they name is filled from, by its SHA-256. */
+type Shared = {
+  files: Record<string, string>
+  urls: Record<string, string>
+  tarballs: Record<string, string>
+}
 type Cached = Shared & { reads: string[]; fingerprint: string }
 let held = new Map<string, Cached>()
 let bytes = 0
 let LIMIT = 16 << 20
 let size = (group: Shared) =>
-  Object.values(group.files).reduce(
-    (sum, body) =>
-      sum + (typeof body == 'string' ? body : body.base64).length * 2,
-    0,
-  )
+  Object.values(group.files).reduce((sum, text) => sum + text.length * 2, 0)
 let keep = (key: string, group: Cached) => {
   if (held.has(key)) {
     bytes -= size(held.get(key)!)
@@ -218,7 +220,7 @@ export let shared = async (
       ]),
     ].filter((dep) => has.has(dep)).sort()
   }
-  let result: Shared = { files: {}, urls: {} }
+  let result: Shared = { files: {}, urls: {}, tarballs: {} }
   for (let group of groups(names, deps)) {
     let own = new Set(group)
     // Each entry by specifier, and the entry modules written here, by path.
@@ -298,6 +300,7 @@ export let shared = async (
       held.set(key, cached)
       Object.assign(result.files, cached.files)
       Object.assign(result.urls, cached.urls)
+      Object.assign(result.tarballs, cached.tarballs)
       continue
     }
     reads.clear()
@@ -306,13 +309,11 @@ export let shared = async (
       `entry-${i}`,
       entries[spec],
     ]))
+    // An npm package module is served from its package's home.
+    let home = homes((name) => fs.tarball(name), origin)
     let built = await bundle(files, points, {
       ...production,
-      // A package module's own address is where its group serves its package.
-      moved: (path) =>
-        packageOf(path.slice('node_modules/'.length))! in setup.platform
-          ? undefined
-          : urlOf('./resources/' + path.slice('node_modules/'.length)),
+      moved: home.moved,
       external: (spec) => {
         let name = packageOf(spec)
         if (!name || !name.startsWith('@yaks/') && !has.has(name)) return
@@ -351,14 +352,9 @@ export let shared = async (
         }
       }
     }
-    let outputs: Record<string, Body> = {
+    let outputs: Record<string, string> = {
       ...built.files,
       ...resources,
-      ...packed(
-        fs,
-        built.packages,
-        (name, path) => `resources/${name}/${path}`,
-      ),
       // Distinct packages with identical code still own distinct module state.
       'modules.json': JSON.stringify(Object.fromEntries(specs.map((spec, i) => [
         spec,
@@ -378,6 +374,7 @@ export let shared = async (
         spec,
         `${origin}/${prefix}entry-${i}.js`,
       ])),
+      tarballs: home.tarballs,
     }
     let paths = [...reads].sort()
     keep(key, {
@@ -387,6 +384,7 @@ export let shared = async (
     })
     Object.assign(result.files, compiled.files)
     Object.assign(result.urls, compiled.urls)
+    Object.assign(result.tarballs, compiled.tarballs)
   }
   return result
 }

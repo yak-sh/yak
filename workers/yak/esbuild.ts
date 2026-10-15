@@ -21,7 +21,7 @@
 // nothing here has moved: the last release's worker and pages still serve.
 import type { Answer, Ask, Plan } from '@yaks/esbuild'
 import type { Objects } from '@yaks/blob'
-import { bytesOf, plan, Unplanned } from '@yaks/esbuild'
+import { plan, Unplanned } from '@yaks/esbuild'
 import type { App, Space } from './directory.ts'
 import type { Module } from './dispatch.ts'
 import type { Env } from './env.ts'
@@ -33,7 +33,7 @@ import { type Ctx, refuse } from './tool.ts'
 import { BUILT, type Files, own, sha256 } from './versions.ts'
 import { type Config, sourceOf } from './wrangler_app.ts'
 import { url } from './host.ts'
-import { valid as sharedPath } from './shared.ts'
+import { fillable, noted, valid as sharedPath } from './shared.ts'
 
 export let LOCK = 'package-lock.json'
 let CACHE = `${BUILT}.compile.json`
@@ -195,13 +195,14 @@ let asked = async (env: Env, ask: Ask, app: App): Promise<Answer> => {
 }
 
 /** Validate the compiler's resources before writing any of its output. An
- * app-owned path, or an invalid shared path, leaves all files untouched. */
+ * app-owned path, an invalid shared path or package home, or a file that is
+ * not text, leaves all files untouched. */
 export let writeResources = async (
-  blobs: Pick<Objects, 'put'>,
+  blobs: Pick<Objects, 'put' | 'has'>,
   prefix: string,
   paths: string[],
   assets: string[],
-  answer: Pick<Answer, 'pages' | 'assets' | 'shared'>,
+  answer: Pick<Answer, 'pages' | 'assets' | 'shared' | 'tarballs'>,
 ) => {
   // Shared modules are platform assets, never owned or swept by an app.
   // Upload them before selecting this release; older releases keep referring
@@ -210,6 +211,23 @@ export let writeResources = async (
     if (!sharedPath(path)) {
       throw refuse('arguments', `invalid compiler shared resource: ${path}`)
     }
+  }
+  for (let [sha256, tarball] of Object.entries(answer.tarballs ?? {})) {
+    if (!fillable(sha256, tarball)) {
+      throw refuse('arguments', `invalid compiler package home: ${tarball}`)
+    }
+  }
+  // A file is text. A compiler of another release may answer one in another
+  // form, and writing that as text would keep a wrong file at an immutable
+  // shared address, so nothing is written.
+  let bodies = { ...answer.pages, ...answer.assets, ...answer.shared }
+  if (Object.values(bodies).some((body) => typeof body != 'string')) {
+    throw refuse(
+      'unavailable',
+      'the compiler answered in a form this platform does not read; the ' +
+        'draft remains private and the last release still serves — ' +
+        'app_deploy again',
+    )
   }
   for (let path of assets) {
     if (
@@ -226,14 +244,15 @@ export let writeResources = async (
   }
   await Promise.all(
     Object.entries({ ...answer.pages, ...answer.assets }).map(([path, code]) =>
-      blobs.put(prefix + BUILT + path, bytesOf(code))
+      blobs.put(prefix + BUILT + path, encode(code))
     ),
   )
-  await Promise.all(
-    Object.entries(answer.shared ?? {}).map(([path, code]) =>
-      blobs.put(path, bytesOf(code))
+  await Promise.all([
+    ...Object.entries(answer.shared ?? {}).map(([path, code]) =>
+      blobs.put(path, encode(code))
     ),
-  )
+    noted(blobs, answer.tarballs ?? {}),
+  ])
 }
 
 /**

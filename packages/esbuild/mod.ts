@@ -1,7 +1,9 @@
 // @yaks/esbuild: an app's code, and compiling the parts of it a runtime cannot
 // load as written. The module graph (./graph.ts) is how a host finds what an
 // entry reaches; the plan (./plan.ts) is what a deploy must compile; the
-// compile itself is `./compile` (./compile.ts), which starts native esbuild.
+// compile itself is `./compile` (./compile.ts), which starts native esbuild;
+// and a package's home (./home.ts) is where a host serves an npm package's
+// files from, filled out of its registry tarball by `./unpack` (./unpack.ts).
 export {
   modules,
   packageOf,
@@ -21,9 +23,6 @@ export {
   type Answer,
   type App,
   type Ask,
-  type Body,
-  bodyOf,
-  bytesOf,
   dependencies,
   loaded,
   mapped,
@@ -31,3 +30,4 @@ export {
   plan,
   Unplanned,
 } from './plan.ts'
+export { homeOf, REGISTRY, type Tarball } from './home.ts'

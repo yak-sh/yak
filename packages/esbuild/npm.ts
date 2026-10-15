@@ -6,122 +6,53 @@
 // first time a build reads it, so a compile holds what its builds read.
 import { Gunzip } from 'fflate'
 import { maxSatisfying } from 'semver'
+import { REGISTRY, sha256, type Tarball } from './home.ts'
+import { rooted, untar } from './tar.ts'
 
-/** Where packages come from. */
-export let REGISTRY = 'https://registry.npmjs.org'
+export { REGISTRY }
 
 // How long the registry has to answer, in ms.
 let WAIT = 30_000
 
 // The files of a package a build can read: its text, as worker-bundler kept
-// it. A build reads nothing else (an image or a binary is never compiled in),
-// so `read` and `list` answer these; `whole` answers the rest as bytes.
+// it. A build reads nothing else (an image or a binary is never compiled in);
+// a page fetches those from the package's home (./home.ts).
 let TEXT = /\.(?:[cm]?[jt]sx?|json|md|txt|css|html|ya?ml|toml|xml|svg|map|py)$/i
 let NAMED =
   /^(?:license|readme|changelog|package\.json|tsconfig\.json|\.npmignore|\.gitignore)/i
 let text = (path: string) =>
   TEXT.test(path) || NAMED.test(path.slice(path.lastIndexOf('/') + 1))
 
-// What only tooling reads, and a page never fetches.
-let TOOLING = /\.(?:d\.[cm]?ts|map|md)$/i
-
 let decode = (bytes: Uint8Array) => new TextDecoder().decode(bytes)
-
-// A NUL-terminated field of a tar header.
-let field = (head: Uint8Array, at: number, length: number) => {
-  let bytes = head.subarray(at, at + length)
-  let end = bytes.indexOf(0)
-  return decode(end < 0 ? bytes : bytes.subarray(0, end))
-}
-
-// An entry's path: a ustar header's prefix joined to its name.
-let named = (head: Uint8Array) => {
-  let name = field(head, 0, 100)
-  let ustar = field(head, 257, 6) == 'ustar' && field(head, 263, 2) == '00'
-  let prefix = ustar ? field(head, 345, 155) : ''
-  return (prefix ? `${prefix}/${name}` : name).replace(/^(?:\.\/)+/, '')
-}
 
 // How much tarball to inflate at a time.
 let STEP = 1 << 16
 
 /**
  * Walk a gzipped tarball's entries in order, inflating a slice at a time and
- * never the whole: `each` sees an entry's path, size and whether it is a
- * regular file, and answers true to be handed its bytes; `take` gets them, and
- * ends the walk by answering true.
+ * never the whole: `each` and `take` are ./tar.ts `untar`'s.
  */
 let walk = (
   tgz: Uint8Array,
   each: (path: string, size: number, file: boolean) => boolean,
   take: (path: string, bytes: Uint8Array) => boolean | void,
 ) => {
-  let head = new Uint8Array(512)
-  let filled = 0, left = 0, pad = 0, at = 0, stop = false
-  let path = '', body: Uint8Array | null = null
-  let done = () => {
-    if (body) stop = !!take(path, body)
-    body = null
-  }
-  let inflate = new Gunzip((chunk) => {
-    let i = 0
-    while (i < chunk.length && !stop) {
-      let n
-      if (left) {
-        n = Math.min(left, chunk.length - i)
-        body?.set(chunk.subarray(i, i + n), at)
-        at += n
-        left -= n
-        if (!left) done()
-      } else if (pad) {
-        n = Math.min(pad, chunk.length - i)
-        pad -= n
-      } else {
-        n = Math.min(512 - filled, chunk.length - i)
-        head.set(chunk.subarray(i, i + n), filled)
-        filled += n
-        if (filled == 512) {
-          filled = 0
-          if (head.every((b) => b == 0)) stop = true
-          else {
-            path = named(head)
-            let size = parseInt(field(head, 124, 12).trim(), 8) || 0
-            let wants = each(path, size, head[156] == 48 || head[156] == 0)
-            body = wants ? new Uint8Array(size) : null
-            left = size
-            pad = (512 - size % 512) % 512
-            at = 0
-            if (!size) done()
-          }
-        }
-      }
-      i += n
-    }
-  })
+  let push = untar(each, take)
+  let stop = false
+  let inflate = new Gunzip((chunk) => void (stop ||= push(chunk)))
   for (let i = 0; i < tgz.length && !stop; i += STEP) {
     inflate.push(tgz.subarray(i, i + STEP), i + STEP >= tgz.length)
   }
 }
 
-// The directory every file of a tarball sits in (npm's `package/`), which
-// installing strips, or '' when they share none.
-let rooted = (paths: string[]) => {
-  let root: string | undefined
-  for (let path of paths) {
-    let slash = path.indexOf('/')
-    if (
-      slash <= 0 ||
-      (root ??= path.slice(0, slash + 1)) != path.slice(0, slash + 1)
-    ) {
-      return ''
-    }
-  }
-  return root ?? ''
+/** An installed package: its tarball, where that came from, and the text
+ * files it holds, by path from the package's own directory. */
+type Packed = {
+  tgz: Uint8Array
+  from?: Tarball
+  root: string
+  holds: Set<string>
 }
-
-/** An installed package: its tarball, and the text files it holds, by path
- * from the package's own directory. */
-type Packed = { tgz: Uint8Array; root: string; holds: Set<string> }
 
 let PACKAGE = /^node_modules\/(?:@[^/]+\/)?[^/]+\//
 
@@ -158,19 +89,10 @@ export class Files {
     return out
   }
 
-  /** Every file an installed package ships, raw, by path from its directory,
-   * apart from what only tooling reads (types, source maps, documents). The
-   * ones a build cannot read (`read` answers text) are still here, as bytes. */
-  whole(name: string): Record<string, Uint8Array> {
-    let pack = this.#packages.get(`node_modules/${name}/`)
-    let out: Record<string, Uint8Array> = {}
-    if (!pack) return out
-    walk(
-      pack.tgz,
-      (at, _, file) => file && at.startsWith(pack.root) && !TOOLING.test(at),
-      (at, bytes) => void (out[at.slice(pack.root.length)] = bytes),
-    )
-    return out
+  /** The registry tarball an installed package came out of, when it came
+   * out of one. */
+  tarball(name: string): Tarball | undefined {
+    return this.#packages.get(`node_modules/${name}/`)?.from
   }
 
   write(path: string, content: string) {
@@ -196,8 +118,8 @@ export class Files {
   }
 
   /** Install a package from its gzipped tarball, as `node_modules/<name>/`,
-   * reading only its package.json now. */
-  hold(name: string, tgz: Uint8Array) {
+   * reading only its package.json now, and `from` where it came from. */
+  hold(name: string, tgz: Uint8Array, from?: Tarball) {
     let files: string[] = []
     let holds: string[] = []
     let manifests: Record<string, string> = {}
@@ -213,6 +135,7 @@ export class Files {
     if (manifest != null) this.#files.set(dir + 'package.json', manifest)
     this.#packages.set(dir, {
       tgz,
+      from,
       root,
       holds: new Set(holds.map((path) => path.slice(root.length))),
     })
@@ -306,7 +229,8 @@ export let install = async (
         if (!t.ok) {
           throw new Error(`its tarball answered ${t.status} (${tarball})`)
         }
-        fs.hold(name, new Uint8Array(await t.arrayBuffer()))
+        let tgz = new Uint8Array(await t.arrayBuffer())
+        fs.hold(name, tgz, { url: tarball, sha256: await sha256(tgz) })
         await Promise.all(
           Object.entries(release.dependencies ?? {}).map(([dep, r]) =>
             one(dep, r)

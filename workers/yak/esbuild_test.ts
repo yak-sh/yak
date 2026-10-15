@@ -459,6 +459,23 @@ test('with no compiler bound, a deploy that needs one is refused in a sentence',
   )
 })
 
+// A gzipped npm tarball of these files, the way npm packs one.
+let tgz = async (files: Record<string, Uint8Array<ArrayBuffer>>) => {
+  let encode = (text: string) => new TextEncoder().encode(text)
+  let blocks = Object.entries(files).flatMap(([path, body]) => {
+    let head = new Uint8Array(512)
+    head.set(encode(`package/${path}`))
+    head.set(encode(body.length.toString(8).padStart(11, '0')), 124)
+    head[156] = 48
+    return [head, body, new Uint8Array((512 - body.length % 512) % 512)]
+  })
+  let tar = new Blob([...blocks, new Uint8Array(1024)]).stream()
+  return new Uint8Array(
+    await new Response(tar.pipeThrough(new CompressionStream('gzip')))
+      .arrayBuffer(),
+  )
+}
+
 test('package assets serve with their MIME and survive reuse and rollback', async () => {
   let css = '.Button { color: red }'
   let shared = (version: string) => `__packages/${version.repeat(64)}/kit.js`
@@ -466,8 +483,17 @@ test('package assets serve with their MIME and survive reuse and rollback', asyn
   let second = shared('b')
   let pageCode = (path: string) =>
     `export { n } from 'https://yaks.app/${path}'`
+  // An npm package's home, which a compile names and the door fills from the
+  // registry's tarball the first time a page asks for one of its files.
+  let wasm = new Uint8Array([0, 97, 115, 109, 1, 0, 0, 0, 255])
+  let tarball = await tgz({ 'package.json': new Uint8Array(2), 'a.wasm': wasm })
+  let home = await sha256(tarball)
+  let registry = 'https://registry.npmjs.org/viewer/-/viewer-1.0.0.tgz'
+  // A home its tarball is not.
+  let other = 'e'.repeat(64)
   await using s = await scenario((ask) => ({
     ...compiles(ask),
+    tarballs: { [home]: registry, [other]: registry },
     pages: Object.fromEntries(ask.pages.map((entry) => [
       entry,
       pageCode(ask.files['main.ts'].includes('= 2') ? second : first),
@@ -486,9 +512,21 @@ test('package assets serve with their MIME and survive reuse and rollback', asyn
   }))
   let publicAsset = (path: string, init: RequestInit = {}) =>
     handler.fetch(new Request(`https://yaks.app/${path}`, init), s.env)
+  let fetched: string[] = []
+  let was = globalThis.fetch
+  globalThis.fetch = ((input: string | Request, init?: RequestInit) => {
+    let r = new Request(input, init)
+    if (r.url != registry) return was(r)
+    fetched.push(r.url)
+    return Promise.resolve(new Response(tarball))
+  }) as typeof fetch
+  let bytes = async (path: string) =>
+    new Uint8Array(await (await publicAsset(path)).arrayBuffer())
   let absent = await publicAsset(first)
   assertEquals(absent.status, 404)
   assertEquals(absent.headers.get('cache-control'), 'private, no-store')
+  assertEquals((await publicAsset(`__packages/${home}/a.wasm`)).status, 404)
+  assertEquals(fetched, [])
   await s.write({
     'index.html': PAGE,
     'main.ts': 'let n: number = 1',
@@ -516,6 +554,12 @@ test('package assets serve with their MIME and survive reuse and rollback', asyn
   assertEquals(await sharedPart.text(), 'export')
   assertEquals((await publicAsset(first, { method: 'POST' })).status, 405)
   assertEquals((await publicAsset('sha/' + 'a'.repeat(64))).status, 404)
+  assertEquals(await bytes(`__packages/${home}/a.wasm`), wasm)
+  assertEquals(await bytes(`__packages/${home}/a.wasm`), wasm)
+  assertEquals((await publicAsset(`__packages/${home}/b.wasm`)).status, 404)
+  assertEquals((await publicAsset(`__packages/${home}.json`)).status, 404)
+  assertEquals(fetched, [registry])
+  assertEquals((await publicAsset(`__packages/${other}/a.wasm`)).status, 500)
   let path = '__packages/@yaks/kit/Button.css'
   assertEquals(await s.served(path), {
     type: 'text/css; charset=utf-8',
@@ -573,6 +617,7 @@ test('compiler assets cannot replace an app-owned path', async () => {
   let files = new Map([[prefix + path, app]])
   let writes: string[] = []
   let blobs = {
+    has: (key: string) => Promise.resolve(files.has(key)),
     put: (key: string, bytes: Uint8Array<ArrayBuffer>) => {
       writes.push(key)
       files.set(key, bytes)

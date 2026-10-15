@@ -3,11 +3,13 @@
   "version": "0.2.10",
   "exports": {
     ".": "./mod.ts",
-    "./compile": "./compile.ts"
+    "./compile": "./compile.ts",
+    "./unpack": "./unpack.ts"
   },
   "license": "Apache-2.0",
   "description": "Compiles an app's TypeScript and npm imports: the module graph of its files, what a deploy must compile, and the compile itself with native esbuild, which yaks.app runs in a container.",
   "imports": {
+    "@noble/hashes": "npm:@noble/hashes@2.4.0",
     "@std/assert": "jsr:@std/assert@^1.0.0",
     "es-module-lexer": "npm:es-module-lexer@2.3.2",
     "esbuild": "npm:esbuild@0.28.1",

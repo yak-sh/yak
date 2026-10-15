@@ -19,7 +19,9 @@ let tgz = (files: Record<string, string | Uint8Array>) => {
   blocks.push(new Uint8Array(1024))
   let tar = new Uint8Array(blocks.reduce((n, b) => n + b.length, 0))
   blocks.reduce((at, b) => (tar.set(b, at), at + b.length), 0)
-  return gzipSync(tar)
+  // Packed at no particular time, so a release is the same bytes every time
+  // it is fetched, as a registry's is.
+  return gzipSync(tar, { mtime: 0 })
 }
 
 /** A registry of these packages, name to version to its files, answering

@@ -2,7 +2,8 @@ import { equal, match, test } from '@yaks/testing'
 import { parse } from 'es-module-lexer/js'
 import { bundle, Stopped } from './bundle.ts'
 import compiler, { compile, type Job } from './compile.ts'
-import { type Answer, type Ask, type Body, bytesOf } from './plan.ts'
+import type { Answer, Ask } from './plan.ts'
+import { unpacked } from './unpack.ts'
 import { type Catalog, seed } from './platform.ts'
 import { Files } from './npm.ts'
 import { registry } from './registry_fixture_test.ts'
@@ -36,7 +37,6 @@ let worker = (source: string, flags: string[] = []): Ask => ({
   pages: [],
 })
 
-let utf8 = (body: Body) => new TextDecoder().decode(bytesOf(body))
 let imports = (code: string) => parse(code)[0].map((i) => i.n).sort()
 let run = (code: string, shared: Answer['shared'] = {}) => {
   let urls = new Map<string, string>()
@@ -50,7 +50,7 @@ let run = (code: string, shared: Answer['shared'] = {}) => {
       if (!(path in shared)) continue
       let child = urls.get(path)
       if (!child) {
-        child = encode(rewrite(utf8(shared[path]), url.href)) +
+        child = encode(rewrite(shared[path], url.href)) +
           `#${encodeURIComponent(path)}`
         urls.set(path, child)
       }
@@ -370,13 +370,25 @@ let viewer = {
   'index.js':
     "export let url = new URL('./decoder.wasm', import.meta.url).href",
   'decoder.wasm': WASM,
-  'libs/draco/wrapper.js': 'self.draco = 1',
-  'index.d.ts': 'export let url: string',
 }
 
-// The module with its `import.meta.url` said to be `at`, run.
-let from = (code: string, at: string) =>
-  run(code.replaceAll('import.meta.url', JSON.stringify(at)))
+// What the address a compiled module computed serves, as a host fills its
+// package's home: the file, out of the tarball the answer names for it.
+let served = async (got: Answer, url: string, get: typeof fetch) => {
+  let [, sha, path] = new URL(url).pathname
+    .match(/^\/__packages\/([0-9a-f]{64})\/(.+)$/)!
+  let tarball = await get(got.tarballs![sha])
+  let { sha256, paths, bytes } = await unpacked(tarball.body!, path)
+  equal(sha256, sha)
+  equal(paths.sort(), Object.keys(viewer).sort())
+  return bytes
+}
+
+// The answer's files, apart from the compiled modules: no package's file.
+let carried = (got: Answer) =>
+  Object.keys({ ...got.assets, ...got.shared }).filter((path) =>
+    !/\.js$|\/modules\.json$/.test(path)
+  )
 
 // A page script's own package, and a shared one.
 let beside = async () => {
@@ -387,15 +399,9 @@ let beside = async () => {
   }
   let got = await compile({ files, pages: ['main.ts'] }, {}, undefined, { get })
   equal(got.errors, [])
-  let { url } = await from(got.pages['main.ts'], 'https://app.test/main.js')
-  let path = new URL(url).pathname.slice(1)
-  equal(bytesOf(got.assets[path]), WASM)
-  equal(Object.keys(got.assets).sort(), [
-    '__packages/viewer/decoder.wasm',
-    '__packages/viewer/index.js',
-    '__packages/viewer/libs/draco/wrapper.js',
-    '__packages/viewer/package.json',
-  ])
+  equal(carried(got), [])
+  let { url } = await run(got.pages['main.ts'])
+  equal(await served(got, url, get), WASM)
 }
 
 let sharedBeside = async () => {
@@ -421,11 +427,8 @@ let sharedBeside = async () => {
     get,
   })
   equal(got.errors, [])
-  let shared = got.shared!
-  let wasm = Object.keys(shared).find((p) => p.endsWith('/decoder.wasm'))!
-  let dir = wasm.slice(0, wasm.indexOf('resources/'))
-  equal(bytesOf(shared[wasm]), WASM)
-  let entry = utf8(shared[`${dir}entry-0.js`])
-  let { url } = await from(entry, `https://yaks.app/${dir}entry-0.js`)
-  equal(url, `https://yaks.app/${wasm}`)
+  equal(carried(got), [])
+  let { url, staged } = await run(got.pages['main.ts'], got.shared)
+  equal(staged, url)
+  equal(await served(got, url, get), WASM)
 }

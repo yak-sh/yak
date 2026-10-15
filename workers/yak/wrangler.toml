@@ -539,6 +539,9 @@ fflate = "./node_modules/fflate/esm/browser.js"
 # @yaks/esbuild parses an app's module graph at deploy (packages/esbuild/graph.ts).
 "es-module-lexer/js" = "./node_modules/es-module-lexer/dist/lexer.asm.js"
 "sucrase" = "./node_modules/sucrase/dist/esm/index.js"
+# And hashes an npm tarball as it streams in, filling a package's home
+# (packages/esbuild/unpack.ts, shared.ts).
+"@noble/hashes/sha2.js" = "./node_modules/@noble/hashes/sha2.js"
 # @yaks/vocab validates a tool's arguments with @cfworker/json-schema, which
 # interprets a schema rather than compiling it to code the runtime refuses.
 "@cfworker/json-schema" = "./node_modules/@cfworker/json-schema/dist/esm/index.js"

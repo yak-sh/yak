@@ -22,15 +22,8 @@ import * as npm from './npm.ts'
 import { type Answer, type Ask, dependencies } from './plan.ts'
 import { said } from './said.ts'
 import { external, shared } from './shared.ts'
-import {
-  ASSETS,
-  type Catalog,
-  located,
-  packed,
-  type Seed,
-  seed,
-  urlOf,
-} from './platform.ts'
+import { homes } from './home.ts'
+import { type Catalog, located, type Seed, seed } from './platform.ts'
 export type { Catalog, Toolkit } from './platform.ts'
 export { Stopped } from './bundle.ts'
 
@@ -161,9 +154,12 @@ export let compile = async (
   origin = 'https://yaks.app',
   options: { shared?: boolean; get?: typeof fetch } = {},
 ): Promise<Answer> => {
+  origin = origin.replace(/\/$/, '')
+  let tarballs: Record<string, string> = {}
   let answer: Answer = {
     pages: {},
     assets: {},
+    tarballs,
     installed: [],
     notes: [],
     errors: [],
@@ -196,13 +192,7 @@ export let compile = async (
   ) => {
     try {
       locate(at)
-      let { code, warnings, packages } = await bundle(fs, entry, options)
-      if (options.moved) {
-        Object.assign(
-          answer.assets,
-          packed(fs, packages, (name, path) => `${ASSETS}${name}/${path}`),
-        )
-      }
+      let { code, warnings } = await bundle(fs, entry, options)
       answer.errors.push(...checked(entry, code, why))
       answer.notes.push(...warnings.map((w) => `${entry}: ${w}`))
       return code
@@ -228,35 +218,28 @@ export let compile = async (
   let urls: Record<string, string> = {}
   if (ask.pages.length && options.shared !== false) {
     try {
-      let modules = await shared(
-        fs,
-        setup,
-        catalog,
-        origin.replace(/\/$/, ''),
-        ask.pages,
-      )
+      let modules = await shared(fs, setup, catalog, origin, ask.pages)
       answer.shared = modules.files
+      Object.assign(tarballs, modules.tarballs)
       urls = modules.urls
     } catch (e) {
       if (e instanceof Stopped) throw e
       return { ...answer, errors: [...answer.errors, ...said(e)] }
     }
   }
+  // A page's npm package module is served from its package's home.
+  let home = homes((name) => fs.tarball(name), origin)
   for (let entry of ask.pages) {
-    // A package module's own address is where the page serves its package.
-    let up = '../'.repeat(entry.split('/').length - 1)
     let code = await built(entry, entry, {
       minify: true,
-      moved: (path) =>
-        packageOf(path.slice('node_modules/'.length))! in setup.platform
-          ? undefined
-          : urlOf(up + ASSETS + path.slice('node_modules/'.length)),
+      moved: home.moved,
       ...options.shared !== false ? { external: external(urls) } : {},
       // What a package written for bundlers asks of its environment.
       define: { 'process.env.NODE_ENV': '"production"' },
     }, unfetched(ask, entry))
     if (code != null) answer.pages[entry] = code
   }
+  Object.assign(tarballs, home.tarballs)
   return answer
 }
 

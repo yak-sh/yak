@@ -44,6 +44,7 @@
     "npm:@modelcontextprotocol/sdk@^1.29.0": "1.29.0_@cfworker+json-schema@4.1.1_zod@3.25.76",
     "npm:@modelcontextprotocol/server@2.2.0": "2.2.0",
     "npm:@napi-rs/canvas@0.1.80": "0.1.80",
+    "npm:@noble/hashes@2.4.0": "2.4.0",
     "npm:@preact/signals-core@^1.14.0": "1.14.4",
     "npm:@preact/signals@^2.9.0": "2.9.4_preact@10.29.7__preact-render-to-string@6.7.0_preact-render-to-string@6.7.0__preact@10.29.7",
     "npm:@resvg/resvg-wasm@2.6.2": "2.6.2",
@@ -757,6 +758,9 @@
         "@napi-rs/canvas-linux-x64-musl",
         "@napi-rs/canvas-win32-x64-msvc"
       ]
+    },
+    "@noble/hashes@2.4.0": {
+      "integrity": "sha512-X5XaVWZIBCT7HHZGm5I7ZQXDwLG+bGXuSrMQAW+7Zvl87h1kmc1ZB1VSRJcpUfoUrGQp4Fkoxm5kZ+Ms+aW+eA=="
     },
     "@poppinss/colors@4.1.6": {
       "integrity": "sha512-H9xkIdFswbS8n1d6vmRd8+c10t2Qe+rZITbbDHHkQixH5+2x1FDGmi/0K+WgWiqQFKPSlIYB7jlH6Kpfn6Fleg==",
@@ -2103,6 +2107,7 @@
       "packages/esbuild": {
         "dependencies": [
           "jsr:@std/assert@1",
+          "npm:@noble/hashes@2.4.0",
           "npm:es-module-lexer@2.3.2",
           "npm:esbuild@0.28.1",
           "npm:fflate@0.8.3",
@@ -2509,6 +2514,7 @@
             "npm:@jsr/std__yaml@1.2.0",
             "npm:@modelcontextprotocol/core@2.2.0",
             "npm:@modelcontextprotocol/server@2.2.0",
+            "npm:@noble/hashes@2.4.0",
             "npm:@resvg/resvg-wasm@2.6.2",
             "npm:croner@10.0.1",
             "npm:es-module-lexer@2.3.2",
