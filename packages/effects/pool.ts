@@ -133,9 +133,6 @@ let head = (handler: string, cursor?: Eid) => {
   return cursor ? and(...q.clauses, cursorAfter(cursor)) : q
 }
 
-// One pass, then out. Already aborted, so one serves every call.
-let ONCE = AbortSignal.abort()
-
 /** The most attempts a run gets where its declaration does not say: the
  * first, and two more. */
 export let TRIES = 3
@@ -1072,7 +1069,10 @@ export let pool = (ctx: Ctx, opts: Partial<PoolOpts> = {}): Pool => {
       }
     },
     startup,
-    work: async (g, signal = ONCE, options = Infinity) => {
+    // Without a signal, one pass, then out. Each call makes its own: on
+    // workerd a signal belongs to the Durable Object that made it, and one
+    // made as the module loads stops the Worker starting at all.
+    work: async (g, signal = AbortSignal.abort(), options = Infinity) => {
       let requested = typeof options == 'number' ? { passes: options } : options
       let passes = requested.passes ?? Infinity
       graph = g
