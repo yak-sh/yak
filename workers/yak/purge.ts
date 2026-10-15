@@ -9,9 +9,16 @@
 // plan: a burst of about 25, then 5 a minute, shared by every Worker on the
 // account (measured 2026-10-14, a refusal is error 1134). A purge carries up
 // to 100 tags, so writers' tags ride together: one purge is in flight at a
-// time, and every tag owed while it flies goes in the next one. Run where one
-// object owes them all — the directory, whose writes they follow
-// (facets/pages-graph.ts) — that is every purge the platform sends.
+// time, and every tag owed while it flies goes in the next one, among the
+// writers in one isolate: the directory, whose writes they follow
+// (facets/pages-graph.ts), and a release, which purges its app as it raises
+// its fence (tools.ts `released`).
+//
+// An acknowledged purge has not reached every cache yet. Over about ninety
+// deploys measured from the box, four times a page kept in a colo other than
+// the purge's still answered a second or more after the purge was
+// acknowledged (T-124483); its short lifetime (page-cache.ts `KEPT`) bounds
+// it.
 
 /** What Cloudflare answers a purge with. */
 export type Purged = {
