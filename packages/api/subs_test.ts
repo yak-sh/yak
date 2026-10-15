@@ -1339,37 +1339,36 @@ test('local ordered windows query members and births, refill from unseen rows af
   assertEquals(reads, [window])
 })
 
-test('underfilled local windows use commit facts and send only edited members', () => {
-  let g = shop()
-  g.apply(
-    Array.from(
-      { length: 5 },
-      (_, i) => ({
+// A window with room over three books, put in the store before it opens, and
+// one commit to it: the window reads the commit's own facts, never asks
+// again, and sends the member the commit touched alone.
+let underfilled: [string, Bundle, (f: Frame) => string[] | undefined][] = [
+  ['a born member', { entity: { eid: 'new-under' }, book: { price: 1 } }, ids],
+  ['an edited member', { entity: { eid: 'underC' }, book: { price: 20 } }, ids],
+  [
+    'a member that left',
+    { entity: { eid: 'underC' }, book: null },
+    (f) => f.gone,
+  ],
+]
+for (let [what, change, sent] of underfilled) {
+  test(`underfilled local windows use commit facts and send only ${what}`, () => {
+    let g = shop(), reads: string[] = []
+    g.storage.tx((tx) =>
+      tx.patch(Array.from({ length: 3 }, (_, i) => ({
         entity: { eid: 'under' + String.fromCharCode(65 + i) },
         book: { price: i },
-      }),
-    ),
-  )
-  let seen: string[][] = [],
-    read = g.read.bind(g),
-    spy: Graph = {
+      })))
+    )
+    let spy: Graph = {
       ...g,
-      read: (q, o) => {
-        let rows = read(q, o) as Bundle[]
-        seen.push(rows.map((b) => b.entity.eid))
-        return rows
-      },
+      read: (q, o) => (reads.push(String(q)), g.read(q, o)),
     }
-  let s = subscriptions(spy), e = ear()
-  s.open(e.to, 'under', '.book&.order=book.price&.limit=10')
-  e.take()
-  seen = []
-  g.apply([{ entity: { eid: 'new-under' }, book: { price: 3 } }])
-  assertEquals(seen, [])
-  assertEquals(e.take().map(ids), [['new-under']])
-  g.apply([{ entity: { eid: 'underC' }, book: { price: 20 } }])
-  assertEquals(e.take().map(ids), [['underC']])
-  g.apply([{ entity: { eid: 'underC' }, book: null }])
-  assertEquals(e.take().map((f) => f.gone), [['underC']])
-  assertEquals(seen, [])
-})
+    let s = subscriptions(spy), e = ear()
+    s.open(e.to, 'under', '.book&.order=book.price&.limit=10')
+    e.take()
+    reads = []
+    g.apply([change])
+    assertEquals([reads, e.take().map(sent)], [[], [[change.entity.eid]]])
+  })
+}

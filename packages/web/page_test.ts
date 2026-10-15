@@ -6,8 +6,8 @@ import { assert } from '@std/assert'
 
 let here = new URL('.', import.meta.url)
 
-test('the mobile viewport does not scale the app shell', async () => {
-  let html = await Deno.readTextFile(new URL('index.html', here))
+test('the mobile viewport does not scale the app shell', () => {
+  let html = Deno.readTextFileSync(new URL('index.html', here))
   let viewport = html.match(/<meta\s+name="viewport"\s+content="([^"]+)"/)
   assert(viewport, 'index.html has no viewport metadata')
   let content = new Set(viewport[1].split(',').map((part) => part.trim()))
